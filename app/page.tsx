@@ -2,7 +2,12 @@
 
 // Landing — public marketing. Single hero: "We apply. You interview."
 // 3 feature cards, trust strip, pricing strip, footer.
-// Per Teal-UI §4.1 + 03-teal-ui-reference.md §1 (monochrome teal, no amber).
+//
+// Dark brand surface (electric-lime accent on near-black) — matches the
+// signed-in app (:root is dark; see app/globals.css + styles/tokens.css).
+// Surfaces use `bg-bg-card` (--surface), text uses the ink-* scale (light on
+// dark). Do NOT hardcode bg-white here — the app is dark by default, so a
+// white panel renders light ink on white = invisible (the bug this replaced).
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -15,14 +20,13 @@ import {
 import { Logo } from '../components/chrome/Logo';
 import { PageContainer } from '../components/ui/PageContainer';
 import { RoboButton } from '../components/ui/RoboButton';
-import { Card } from '../components/ui/Card';
 
 export default function LandingPage() {
   const t = useTranslations('landing');
   const tCommon = useTranslations('common');
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-bg-page">
       {/* Header */}
       <header className="border-b border-ink-line bg-bg-page">
         <PageContainer
@@ -40,13 +44,19 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="relative">
+      <section className="relative overflow-hidden">
+        {/* Ambient brand wash behind the hero (accent + violet radial glows). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{ background: 'var(--grad-page-wash)' }}
+        />
         <PageContainer
           maxWidth="content"
-          className="flex flex-col items-center text-center"
+          className="relative z-10 flex flex-col items-center text-center !pt-20 !pb-24 md:!pt-28 md:!pb-32"
         >
           <h1
-            className="mt-6 text-4xl font-bold text-ink-900 md:mt-12 md:text-6xl lg:text-7xl"
+            className="text-4xl font-bold text-ink-900 md:text-6xl lg:text-7xl"
             style={{ letterSpacing: '-0.025em', lineHeight: 1.05 }}
           >
             {t('headline')}
@@ -140,8 +150,8 @@ function FeatureCard({
   body: string;
 }) {
   return (
-    <Card padding="hero" className="text-left">
-      <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-accent-50">
+    <div className="group rounded-lg border border-ink-line-soft bg-bg-card p-8 text-left transition duration-200 hover:-translate-y-0.5 hover:border-accent-text hover:shadow-cta">
+      <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent-50">
         {icon}
       </div>
       <h3
@@ -151,7 +161,7 @@ function FeatureCard({
         {title}
       </h3>
       <p className="mt-2 text-sm leading-relaxed text-ink-700">{body}</p>
-    </Card>
+    </div>
   );
 }
 
@@ -166,8 +176,8 @@ function PricingPill({
     <div
       className={
         highlighted
-          ? 'rounded-sm border border-accent-text bg-white px-5 py-4 text-sm font-semibold text-accent-text shadow-cta'
-          : 'rounded-sm border border-ink-line bg-white px-5 py-4 text-sm text-ink-700'
+          ? 'rounded-md border border-accent-text bg-accent-50 px-5 py-4 text-sm font-semibold text-accent-text shadow-cta'
+          : 'rounded-md border border-ink-line bg-bg-card px-5 py-4 text-sm text-ink-700'
       }
     >
       {label}
