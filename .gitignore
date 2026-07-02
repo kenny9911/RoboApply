@@ -5,6 +5,8 @@ node_modules/
 .env
 .env.local
 .env*.local
+# timestamped .env backups (contain live credentials — never commit)
+.env.bak*
 .DS_Store
 next-env.d.ts
 .tsbuildinfo
