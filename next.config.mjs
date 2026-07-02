@@ -22,6 +22,25 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.r2.cloudflarestorage.com', pathname: '/**' },
     ],
   },
+  async redirects() {
+    // Logged-in `/` → /home. This duplicates proxy.ts's root rule on purpose:
+    // on Vercel's production router the proxy is never invoked for the bare
+    // root path (even with '/' listed explicitly in its matcher — verified
+    // against the deployed functions-config manifest), so the redirect
+    // silently didn't fire in prod while working in `next dev`. A config
+    // redirect compiles into the routes-manifest and runs in Vercel's routing
+    // layer before any page, immune to the proxy quirk. Cookie PRESENCE is
+    // the condition (same signal the proxy uses) — an invalid session still
+    // lands on /home and gets bounced to /login by the client auth check.
+    return [
+      {
+        source: '/',
+        has: [{ type: 'cookie', key: 'ra_session_token' }],
+        destination: '/home',
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     // Dev only — proxy /api/* to local backend so the cookie path stays
     // same-origin and the client can use relative URLs.
