@@ -1,8 +1,9 @@
 {
   "name": "roboapply",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
-  "description": "RoboApply — AI candidate-facing job-application app (Next.js frontend + Express API, deployed on Vercel).",
+  "description": "RoboApply \u2014 AI candidate-facing job-application app (Next.js frontend + Express API, deployed on Vercel).",
   "engines": {
     "node": ">=22.12.0"
   },

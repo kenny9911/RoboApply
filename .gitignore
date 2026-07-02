@@ -22,3 +22,5 @@ interview-agent/dist/
 # Runtime logs (created by LoggerService on boot)
 logs/
 *.tsbuildinfo
+.vercel
+.env*

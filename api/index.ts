@@ -1,4 +1,4 @@
-// api/index.mts — Vercel Serverless Function entry for the RoboApply API.
+// api/index.ts — Vercel Serverless Function entry for the RoboApply API.
 //
 // Vercel builds a root-level /api directory as Serverless Functions even for a
 // Next.js framework project. `vercel.json` rewrites `/api/v1/:path*` to this
@@ -10,14 +10,15 @@
 // (`prisma generate && tsc -p server/tsconfig.json && next build`), so this
 // tiny function file only re-exports it — no heavy TS graph is bundled here.
 //
-// MUST be `.mts`, not `.ts`: the root package.json has no `"type": "module"`
-// (postcss.config.js is CJS), so a compiled `api/index.js` is classified as
-// CommonJS by Node and its ESM `import` crashes the function at boot
-// ("Cannot use import statement outside a module" — every API route 500'd).
-// `.mts` compiles to `.mjs`, which Node always runs as ESM. The companion
-// half of the fix is vercel.json's includeFiles: "server/**" (not just
-// server/dist/**) so server/package.json — whose only job is to mark
-// server/dist/**.js as ESM — actually ships inside the function bundle.
+// ESM invariants (every prod API route 500'd at boot until these held —
+// "Cannot use import statement outside a module"):
+//  - The ROOT package.json must carry `"type": "module"` so the compiled
+//    /var/task/api/index.js (which keeps this ESM `import`) is classified as
+//    ESM by Node. (An `.mts` entry is NOT an alternative — vercel.json's
+//    `functions` pattern doesn't match .mts in the api/ directory.)
+//  - vercel.json includeFiles must be "server/**" (not just server/dist/**)
+//    so server/package.json — whose only job is marking server/dist/**.js as
+//    ESM — actually ships inside the function bundle.
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — resolved at build time from the compiled server output.
