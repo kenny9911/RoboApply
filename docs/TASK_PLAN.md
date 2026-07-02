@@ -56,7 +56,7 @@ Legend: ✅ done in this first cut · ⏳ next · ⬜ later / needs deploy or cr
 ## Phase 7 — Follow-ups (see ENGINEERING_PLAN §6) ⬜
 - ⬜ Verify Stripe event parity vs the old shared endpoint.
 - ⬜ (Optional) Port `requestAudit` + `requestClassification` for RoboApply usage analytics.
-- ⬜ (Optional) Re-enable `pdf-to-img`/`canvas` OCR on a canvas-capable host.
+- ✅ Re-enable `pdf-to-img` OCR — v6 no longer needs native cairo `canvas` (uses `pdfjs-dist` + prebuilt `@napi-rs/canvas`), so it's installed in the root deps and the ambient shim is removed.
 - ⬜ Decide LLM-settings (`SystemLLMKey`/`AppConfig`) ownership at DB-split time.
 
 ## Phase 8 — Database split ⬜ (see ENGINEERING_PLAN §7)

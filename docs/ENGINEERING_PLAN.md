@@ -95,11 +95,13 @@ ESM import extensions, and keeps the function file trivial.
 | **Next middleware** | n/a | `proxy.ts` matcher excludes **all** `/api/*` so it never touches webhooks/SSE |
 | **Function limits** | n/a | `vercel.json`: `maxDuration: 300`, `memory: 2048`, `includeFiles: server/dist/**`; enable Fluid Compute (Pro) |
 
-Native-dep note: `pdf-to-img` (needs native `canvas`) is only reached via a
-graceful `await import()` in a `try/catch` OCR fallback. It is **excluded** from
-the build (ambient shim in `server/src/types/shims.d.ts`), so text-PDF parsing
-works and scanned-image OCR degrades cleanly. Re-add it (with a canvas-capable
-host) if scanned-PDF OCR becomes required.
+Native-dep note: `pdf-to-img` is reached via `await import()` in a `try/catch`
+OCR fallback (`PDFService.extractTextWithVision`). Early versions needed native
+cairo `canvas` and were excluded via an ambient shim; `pdf-to-img` v6 instead
+uses `pdfjs-dist` + `@napi-rs/canvas` (prebuilt per-platform Skia binaries, no
+system libraries), which is serverless-safe, so it is now a normal root
+dependency and the shim is gone. The binding is a literal `require` per
+platform, so `@vercel/nft` traces the linux binary into the function bundle.
 
 ---
 
@@ -113,8 +115,9 @@ split:
 - `server/src/cron/handlers.ts` — Vercel-Cron HTTP endpoints reusing the same
   sweep service functions the node-cron scheduler calls.
 - `server/src/roboapply/routes/stripeWebhook.ts` — self-contained webhook.
-- `server/src/types/shims.d.ts` + `types/pdf-parse.d.ts` — ambient decls the
-  import-closure copier couldn't see.
+- `server/src/types/pdf-parse.d.ts` — ambient decl the import-closure copier
+  couldn't see. (`shims.d.ts` held a `pdf-to-img` shim until the package was
+  installed for real; removed.)
 - `api/index.ts` — Vercel function entry.
 - `prisma.config.ts` (root) + `server/prisma/schema.prisma` (generates client to
   `server/src/generated/prisma`).
@@ -158,8 +161,8 @@ directly — no action needed for RoboApply.
 4. **Prisma keepalive/pool on Fluid Compute.** `max:1` + no keepalive is the
    safe serverless default; tune upward if Fluid warm-instance reuse makes a
    small pool beneficial.
-5. **OCR fallback.** Re-enable `pdf-to-img` + `canvas` on a canvas-capable host
-   if scanned-image resume OCR is required (see §3).
+5. **OCR fallback.** ~~Re-enable `pdf-to-img` + `canvas` on a canvas-capable
+   host~~ Done — `pdf-to-img` v6 is serverless-safe and installed (see §3).
 6. **Cron duration.** Any sweep that can exceed 300s must page/batch its work
    (return early, let the next tick continue) — see `cron/handlers.ts`.
 
