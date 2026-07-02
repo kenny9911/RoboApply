@@ -11,6 +11,7 @@ import { screen, fireEvent, within } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState, buildAuthValue, buildFakeUser } from '../utils/mockAuth';
 import { raV2Api } from '../../lib/api/v2';
+import { QUEUE_REVIEW_ENABLED } from '../../lib/jobApplying';
 
 // Sidebar now reads useAuth() to decide whether to show the admin-only /admin
 // nav entry. Point it at the shared mock fixture (default user role 'seeker'
@@ -60,12 +61,19 @@ describe('Sidebar (V3)', () => {
     expect(screen.getByRole('link', { name: /Admin/i })).toBeInTheDocument();
   });
 
-  it('renders the 6 Workspace nav links + the Preferences settings link', () => {
+  it('renders the Workspace nav links + the Preferences settings link', () => {
     renderWithProviders(<Sidebar />);
     expect(screen.getByRole('link', { name: /Today/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: /Review queue/i }),
-    ).toBeInTheDocument();
+    // Review queue is hidden while QUEUE_REVIEW_ENABLED is off for launch.
+    if (QUEUE_REVIEW_ENABLED) {
+      expect(
+        screen.getByRole('link', { name: /Review queue/i }),
+      ).toBeInTheDocument();
+    } else {
+      expect(
+        screen.queryByRole('link', { name: /Review queue/i }),
+      ).not.toBeInTheDocument();
+    }
     expect(
       screen.getByRole('link', { name: /Resume builder/i }),
     ).toBeInTheDocument();
@@ -127,7 +135,7 @@ describe('Sidebar (V3)', () => {
     expect(screen.getByLabelText(/Primary/i)).toBeInTheDocument();
   });
 
-  it('wires the /queue badge to the live pendingCount from useQueue()', async () => {
+  it.runIf(QUEUE_REVIEW_ENABLED)('wires the /queue badge to the live pendingCount from useQueue()', async () => {
     renderWithProviders(<Sidebar />);
     const queueLink = screen.getByRole('link', { name: /Review queue/i });
     // The stub fixture ships 2 pending queue items.
@@ -157,7 +165,7 @@ describe('Sidebar (V3)', () => {
     expect(within(pipeline).queryByText(/\d/)).not.toBeInTheDocument();
   });
 
-  it('hides the queue badge entirely when pendingCount is 0', async () => {
+  it.runIf(QUEUE_REVIEW_ENABLED)('hides the queue badge entirely when pendingCount is 0', async () => {
     vi.spyOn(raV2Api.queue, 'list').mockResolvedValue({
       items: [],
       pendingCount: 0,

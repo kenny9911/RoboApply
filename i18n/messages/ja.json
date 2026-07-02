@@ -1712,6 +1712,11 @@
       "playful": "あなたが眠っている間にコーヒーを淹れました。{scanned} 件の求人をスキャンし、{matched} 件がマッチ、{autoApplied} 件を自動応募しました。さらに {queued} 件があなたの承認を待っています。",
       "formal": "夜間に {scanned} 件の求人を確認しました。{matched} 件がマッチ基準を満たしています。{autoApplied} 件の応募を提出済みで、{queued} 件が承認待ちです。"
     },
+    "sub_noqueue": {
+      "direct": "{scanned} 件の求人をスキャンし、{matched} 件があなたの基準を満たしました。{autoApplied} 件は自動応募済みです。",
+      "playful": "あなたが眠っている間にコーヒーを淹れました。{scanned} 件の求人をスキャンし、{matched} 件がマッチ、{autoApplied} 件を自動応募しました。",
+      "formal": "夜間に {scanned} 件の求人を確認しました。{matched} 件がマッチ基準を満たしています。{autoApplied} 件の応募を提出済みです。"
+    },
     "stats": {
       "autoApplied": "自動応募済み",
       "whileYouSlept": "睡眠中に",

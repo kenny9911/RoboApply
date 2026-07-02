@@ -1712,6 +1712,11 @@
       "playful": "趁你睡覺時我煮好了咖啡。掃描了 {scanned} 個職缺，{matched} 個媒合成功，{autoApplied} 個已自動應徵。還有 {queued} 個在等你點頭。",
       "formal": "隔夜共審閱 {scanned} 個職缺，{matched} 個達到媒合門檻。已提交 {autoApplied} 份申請；{queued} 份等待你審核。"
     },
+    "sub_noqueue": {
+      "direct": "掃描了 {scanned} 個職缺，{matched} 個達到你的門檻，{autoApplied} 個已自動應徵。",
+      "playful": "趁你睡覺時我煮好了咖啡。掃描了 {scanned} 個職缺，{matched} 個媒合成功，{autoApplied} 個已自動應徵。",
+      "formal": "隔夜共審閱 {scanned} 個職缺，{matched} 個達到媒合門檻。已提交 {autoApplied} 份申請。"
+    },
     "stats": {
       "autoApplied": "已自動應徵",
       "whileYouSlept": "趁你睡覺",

@@ -9,6 +9,7 @@
 
 import { useTranslations } from 'next-intl';
 import { StatStrip, Stat } from '../primitives';
+import { QUEUE_REVIEW_ENABLED } from '../../../lib/jobApplying';
 import type { RAAgentStats } from '../../../lib/api/v2';
 
 interface Props {
@@ -22,7 +23,7 @@ export function TodayStatStrip({ stats, loading }: Props) {
   if (loading || !stats) {
     return (
       <div className="stat-strip" aria-busy="true">
-        {Array.from({ length: 4 }).map((_, i) => (
+        {Array.from({ length: QUEUE_REVIEW_ENABLED ? 4 : 3 }).map((_, i) => (
           <div className="stat" key={i}>
             <div
               className="animate-pulse"
@@ -67,7 +68,9 @@ export function TodayStatStrip({ stats, loading }: Props) {
             : undefined
         }
       />
-      <Stat label={t('stats.inQueue')} value={stats.inQueue} />
+      {QUEUE_REVIEW_ENABLED ? (
+        <Stat label={t('stats.inQueue')} value={stats.inQueue} />
+      ) : null}
     </StatStrip>
   );
 }

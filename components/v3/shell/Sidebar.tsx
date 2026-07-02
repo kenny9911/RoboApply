@@ -25,7 +25,10 @@ import { useState, type ReactNode } from 'react';
 import { useQueue } from '../../../hooks/useQueue';
 import { useAgentStats } from '../../../hooks/useActivity';
 import { useAuth } from '../../../lib/auth/useAuth';
-import { useJobApplyingEnabled } from '../../../lib/jobApplying';
+import {
+  QUEUE_REVIEW_ENABLED,
+  useJobApplyingEnabled,
+} from '../../../lib/jobApplying';
 import { cn } from '../../../lib/utils';
 import { BrandLogo } from './BrandLogo';
 import { OrbCard } from './OrbCard';
@@ -178,13 +181,16 @@ export function Sidebar({ className }: { className?: string } = {}) {
   // job-applying is enabled. Treating `null` (still loading) as "hide" avoids
   // flashing those items in a disabled deploy.
   const showJobApply = useJobApplyingEnabled() === true;
-  const workspace = showJobApply ? WORKSPACE : WORKSPACE.filter((i) => !i.jobApply);
+  const workspace = (
+    showJobApply ? WORKSPACE : WORKSPACE.filter((i) => !i.jobApply)
+  ).filter((i) => QUEUE_REVIEW_ENABLED || i.href !== '/queue');
   const settings = showJobApply ? SETTINGS : SETTINGS.filter((i) => !i.jobApply);
 
   // Live badge counts. useQueue shares its cache with the /queue page (locale
   // is part of the key); useAgentStats shares with the OrbCard below, so
-  // neither adds a request beyond what the rail already makes.
-  const { data: queueData } = useQueue();
+  // neither adds a request beyond what the rail already makes. The queue fetch
+  // is suppressed entirely while the surface is hidden for launch.
+  const { data: queueData } = useQueue({ enabled: QUEUE_REVIEW_ENABLED });
   const { data: statsData } = useAgentStats();
   const queuePending = queueData?.pendingCount ?? 0;
   const todayNew = statsData?.stats.matchedAboveThreshold ?? 0;

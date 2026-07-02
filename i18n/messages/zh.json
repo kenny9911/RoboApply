@@ -1712,6 +1712,11 @@
       "playful": "趁你睡觉时我煮好了咖啡。扫描了 {scanned} 个职位，{matched} 个匹配，{autoApplied} 个已自动投递。还有 {queued} 个在等你点头。",
       "formal": "隔夜共审阅 {scanned} 个职位，{matched} 个达到匹配门槛。已提交 {autoApplied} 份申请；{queued} 份等待你审批。"
     },
+    "sub_noqueue": {
+      "direct": "扫描了 {scanned} 个职位，{matched} 个达到你的门槛，{autoApplied} 个已自动投递。",
+      "playful": "趁你睡觉时我煮好了咖啡。扫描了 {scanned} 个职位，{matched} 个匹配，{autoApplied} 个已自动投递。",
+      "formal": "隔夜共审阅 {scanned} 个职位，{matched} 个达到匹配门槛。已提交 {autoApplied} 份申请。"
+    },
     "stats": {
       "autoApplied": "已自动投递",
       "whileYouSlept": "趁你睡觉",

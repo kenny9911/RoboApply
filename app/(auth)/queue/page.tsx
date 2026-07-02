@@ -14,9 +14,14 @@
 //   empty   → EmptyState "Queue clear …"
 //   else    → QueueCard ×N
 //
-// All data flows through useQueue() → raV2Api.queue.* (stub today). The shell
-// (Sidebar + Topbar + .main-inner wrapper) is provided by (auth)/layout.tsx —
-// this page renders the inner content only.
+// All data flows through useQueue() → raV2Api.queue.* (real backend by
+// default; stub only in tests). The shell (Sidebar + Topbar + .main-inner
+// wrapper) is provided by (auth)/layout.tsx — this page renders the inner
+// content only.
+//
+// HIDDEN FOR LAUNCH: QUEUE_REVIEW_ENABLED (lib/jobApplying.ts) is false — nav
+// entries are filtered out and JobApplyingGate redirects /queue → /home, so
+// this page is unreachable until the flag flips back.
 
 import { useTranslations } from 'next-intl';
 import { useQueue } from '../../../hooks/useQueue';

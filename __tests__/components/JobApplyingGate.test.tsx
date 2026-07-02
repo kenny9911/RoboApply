@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState, buildAuthValue } from '../utils/mockAuth';
+import { QUEUE_REVIEW_ENABLED } from '../../lib/jobApplying';
 
 vi.mock('../../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: unknown }) => children,
@@ -92,6 +93,21 @@ describe('JobApplyingGate', () => {
     expect(replace).not.toHaveBeenCalled();
     expect(screen.getByTestId('child')).toBeInTheDocument();
   });
+
+  it.runIf(!QUEUE_REVIEW_ENABLED)(
+    'flag ON + /queue → redirects to /home (queue hidden for launch)',
+    () => {
+      mockAuthState.value = buildAuthValue({ jobApplyingEnabled: true });
+      pathnameRef.current = '/queue';
+      renderWithProviders(
+        <JobApplyingGate>
+          <Child />
+        </JobApplyingGate>,
+      );
+      expect(replace).toHaveBeenCalledWith('/home');
+      expect(screen.queryByTestId('child')).not.toBeInTheDocument();
+    },
+  );
 
   it('loading (null, status=loading) + hidden route → holds (no content, no redirect)', () => {
     mockAuthState.value = buildAuthValue({ jobApplyingEnabled: null, status: 'loading' });

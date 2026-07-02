@@ -30,7 +30,11 @@ import { useQuery } from '@tanstack/react-query';
 import { raV2Api } from '../../../lib/api/v2';
 import type { SearchRunResponse } from '../../../lib/api/v2';
 import { IconSearch, IconArrow } from '../primitives/Iconset';
-import { isJobApplyRoute, useJobApplyingEnabled } from '../../../lib/jobApplying';
+import {
+  isJobApplyRoute,
+  QUEUE_REVIEW_ENABLED,
+  useJobApplyingEnabled,
+} from '../../../lib/jobApplying';
 
 // ── context ──────────────────────────────────────────────────────────
 interface PaletteCtx {
@@ -48,7 +52,7 @@ export function useCommandPalette(): PaletteCtx {
 
 const PANEL_BG = 'var(--surface)';
 
-// Quick-nav targets (mirrors the sidebar IA).
+// Quick-nav targets (mirrors the sidebar IA, including the launch-hidden /queue).
 const NAV_TARGETS: { href: string; labelKey: string }[] = [
   { href: '/home', labelKey: 'today' },
   { href: '/queue', labelKey: 'queue' },
@@ -57,7 +61,7 @@ const NAV_TARGETS: { href: string; labelKey: string }[] = [
   { href: '/tracker', labelKey: 'pipeline' },
   { href: '/activity', labelKey: 'activity' },
   { href: '/preferences', labelKey: 'preferences' },
-];
+].filter((n) => QUEUE_REVIEW_ENABLED || n.href !== '/queue');
 
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);

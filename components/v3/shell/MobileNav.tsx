@@ -16,7 +16,10 @@ import {
   IconSparkle,
   IconStack,
 } from '../primitives/Iconset';
-import { useJobApplyingEnabled } from '../../../lib/jobApplying';
+import {
+  QUEUE_REVIEW_ENABLED,
+  useJobApplyingEnabled,
+} from '../../../lib/jobApplying';
 
 const ITEMS: { href: string; labelKey: string; icon: ReactNode; match: (p: string) => boolean; jobApply?: boolean }[] = [
   { href: '/home', labelKey: 'today', icon: <IconHome size={18} />, match: (p) => p === '/home' || p.startsWith('/home/'), jobApply: true },
@@ -31,7 +34,9 @@ export function MobileNav() {
   const t = useTranslations('nav_v3');
   // Hide the auto-apply tabs unless job-applying is known to be enabled.
   const showJobApply = useJobApplyingEnabled() === true;
-  const items = showJobApply ? ITEMS : ITEMS.filter((i) => !i.jobApply);
+  const items = (showJobApply ? ITEMS : ITEMS.filter((i) => !i.jobApply)).filter(
+    (i) => QUEUE_REVIEW_ENABLED || i.href !== '/queue',
+  );
 
   return (
     <nav

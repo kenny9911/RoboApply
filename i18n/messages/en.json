@@ -1712,6 +1712,11 @@
       "playful": "Brewed coffee while you slept. {scanned} listings scanned, {matched} matched, {autoApplied} auto-applied. {queued} more are waiting for your green light.",
       "formal": "{scanned} listings reviewed overnight. {matched} met the match threshold. {autoApplied} applications submitted; {queued} awaiting your approval."
     },
+    "sub_noqueue": {
+      "direct": "{scanned} jobs scanned, {matched} cleared your threshold, {autoApplied} auto-applied.",
+      "playful": "Brewed coffee while you slept. {scanned} listings scanned, {matched} matched, {autoApplied} auto-applied.",
+      "formal": "{scanned} listings reviewed overnight. {matched} met the match threshold. {autoApplied} applications submitted."
+    },
     "stats": {
       "autoApplied": "Auto-applied",
       "whileYouSlept": "while you slept",

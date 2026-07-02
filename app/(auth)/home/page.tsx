@@ -25,6 +25,7 @@ import { PageHeader } from '../../../components/v3/primitives';
 import { TodayStatStrip, MatchFeed } from '../../../components/v3/today';
 import { useAgentStats } from '../../../hooks/useActivity';
 import { useDcTheme, toneFor, type ToneKey } from '../../../lib/dcTheme';
+import { QUEUE_REVIEW_ENABLED } from '../../../lib/jobApplying';
 
 /** Map the dcTheme tone enum → the proto's copy register key. */
 function toneVariant(tone: ToneKey): 'direct' | 'playful' | 'formal' {
@@ -83,7 +84,9 @@ export default function HomePage() {
       </>
     );
 
-  const sub = t(`sub.${variant}`, {
+  // While /queue is hidden for launch the sub copy must not tease a review
+  // queue the user can't visit — the *_noqueue variants drop that clause.
+  const sub = t(QUEUE_REVIEW_ENABLED ? `sub.${variant}` : `sub_noqueue.${variant}`, {
     scanned,
     matched,
     autoApplied,

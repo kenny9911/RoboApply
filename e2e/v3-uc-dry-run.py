@@ -36,6 +36,11 @@ APP = "http://localhost:3611"
 SHOTS = Path("/tmp/v3-uc-shots")
 SHOTS.mkdir(exist_ok=True)
 
+# Mirrors QUEUE_REVIEW_ENABLED in lib/jobApplying.ts — the /queue surface is
+# hidden for launch. Flip both together to restore the queue checks (UC-04/05,
+# nav items, the "In your queue" hero stat, zh nav label).
+QUEUE_ENABLED = False
+
 
 # ----- assertion + console-error infrastructure (carried from v2) ------
 
@@ -217,9 +222,15 @@ def uc01(page: Page) -> None:
     # Tweaks/Replay are <button>. Require at least the 6 workspace ones.
     assert_(nav_count >= 6, f"Sidebar renders ≥6 workspace nav links (got {nav_count})", "UC-V3-01")
 
-    for label in ["Today", "Review queue", "Resume builder", "Mock interview", "Pipeline", "Activity log"]:
+    nav_labels = ["Today", "Resume builder", "Mock interview", "Pipeline", "Activity log"]
+    if QUEUE_ENABLED:
+        nav_labels.insert(1, "Review queue")
+    for label in nav_labels:
         present = page.locator(f'aside.side a.nav-item:has-text("{label}")').count() > 0
         assert_(present, f"Nav item '{label}' present", "UC-V3-01")
+    if not QUEUE_ENABLED:
+        absent = page.locator('aside.side a.nav-item:has-text("Review queue")').count() == 0
+        assert_(absent, "Nav item 'Review queue' hidden for launch", "UC-V3-01")
 
     # Orb card shows the Sent / Replies / Saved numbers (numeric, not em-dash).
     orb_vals = page.locator("aside.side .orb-card .orb-stats .v").all_text_contents()
@@ -231,12 +242,13 @@ def uc01(page: Page) -> None:
     # Clicking each nav item routes + highlights (aria-current=page) + the
     # Topbar breadcrumb's .now reflects the page.
     routes = [
-        ("/queue", "Review queue"),
         ("/resumes", "Resume builder"),
         ("/tracker", "Pipeline"),
         ("/activity", "Activity log"),
         ("/home", "Today"),
     ]
+    if QUEUE_ENABLED:
+        routes.insert(0, ("/queue", "Review queue"))
     for href, label in routes:
         link = page.locator(f'aside.side a.nav-item:has-text("{label}")').first
         link.click()
@@ -347,17 +359,23 @@ def uc03(page: Page) -> None:
     )
     page.wait_for_timeout(600)
 
-    # 4 hero stats with the documented labels.
-    labels = ["Auto-applied", "Scanned overnight", "Matched", "In your queue"]
+    # Hero stats with the documented labels ("In your queue" hidden for launch).
+    labels = ["Auto-applied", "Scanned overnight", "Matched"]
+    if QUEUE_ENABLED:
+        labels.append("In your queue")
     for lbl in labels:
         present = page.locator(f'.stat-strip .stat .k:has-text("{lbl}")').count() > 0
         assert_(present, f"Stat '{lbl}' renders", "UC-V3-03")
+    if not QUEUE_ENABLED:
+        absent = page.locator('.stat-strip .stat .k:has-text("In your queue")').count() == 0
+        assert_(absent, "Stat 'In your queue' hidden for launch", "UC-V3-03")
 
     # Each stat value is numeric (driven by orbStats).
+    expected_stats = 4 if QUEUE_ENABLED else 3
     stat_vals = page.locator(".stat-strip .stat .v").all_text_contents()
     numeric = [v for v in stat_vals if re.search(r"\d", v)]
-    assert_(len(numeric) >= 4,
-            f"All 4 hero stats render numbers (got {stat_vals})",
+    assert_(len(numeric) >= expected_stats,
+            f"All {expected_stats} hero stats render numbers (got {stat_vals})",
             "UC-V3-03")
 
     shot(page, "03-today-statstrip")
@@ -1447,8 +1465,12 @@ def uc21(page: Page, ctx: BrowserContext) -> None:
 
     # Nav renders Chinese workspace section + item labels (from zh.json nav_v3).
     nav_text = page.locator("aside.side .nav").first.text_content() or ""
-    # "工作区" = Workspace, "今日" = Today, "待审队列" = Review queue.
-    for zh in ["工作区", "今日", "待审队列", "进度看板"]:
+    # "工作区" = Workspace, "今日" = Today, "待审队列" = Review queue (hidden
+    # for launch), "进度看板" = Pipeline.
+    zh_labels = ["工作区", "今日", "进度看板"]
+    if QUEUE_ENABLED:
+        zh_labels.insert(2, "待审队列")
+    for zh in zh_labels:
         present = zh in nav_text
         assert_(present, f"Sidebar renders Chinese '{zh}'", "UC-V3-21")
 
@@ -1557,8 +1579,11 @@ def main() -> int:
         # The stub queue store is per-page (each document load re-clones the
         # fixture — verified), so UC-04 draining its page's queue does NOT affect
         # UC-05's fresh page. Natural numeric order is therefore safe.
-        run("UC-V3-04", uc04)
-        run("UC-V3-05", uc05)
+        if QUEUE_ENABLED:
+            run("UC-V3-04", uc04)
+            run("UC-V3-05", uc05)
+        else:
+            print("\n   [SKIP] UC-V3-04 / UC-V3-05 — /queue hidden for launch (QUEUE_ENABLED=False)")
 
         # UC-06 exercises the create flow (and returns the created id), but the
         # editor UCs (07/08/09) deliberately open a FIXTURE resume instead: a

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState, buildAuthValue } from '../utils/mockAuth';
+import { QUEUE_REVIEW_ENABLED } from '../../lib/jobApplying';
 
 // MobileNav now reads useAuth() (via useJobApplyingEnabled) to gate the
 // auto-apply tabs. Point it at the shared mock fixture (default: enabled).
@@ -37,10 +38,15 @@ describe('MobileNav (V3)', () => {
     mockAuthState.value = buildAuthValue();
   });
 
-  it('renders exactly 5 Workspace link items', () => {
+  it('renders the Workspace link items (Review queue hidden for launch)', () => {
     renderWithProviders(<MobileNav />);
     const links = screen.getAllByRole('link');
-    expect(links.length).toBe(5);
+    expect(links.length).toBe(QUEUE_REVIEW_ENABLED ? 5 : 4);
+    if (!QUEUE_REVIEW_ENABLED) {
+      expect(
+        screen.queryByRole('link', { name: /Review queue/i }),
+      ).not.toBeInTheDocument();
+    }
   });
 
   it('marks the active item with aria-current when on /home', () => {

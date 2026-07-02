@@ -7,9 +7,14 @@
 
 import { useTranslations } from 'next-intl';
 import { PrefHeader, PrefGroup, PrefRow, Toggle, Segmented } from '../controls';
+import { QUEUE_REVIEW_ENABLED } from '../../../../lib/jobApplying';
 import type { RAPreferences } from '../../../../lib/api/v2';
 
-const EVENT_IDS = ['newMatch90', 'queueReview', 'appSent', 'response', 'interview'] as const;
+// queueReview is hidden while the /queue surface is off for launch; the stored
+// preference (and its i18n keys) survive untouched for re-enable.
+const EVENT_IDS = (
+  ['newMatch90', 'queueReview', 'appSent', 'response', 'interview'] as const
+).filter((id) => QUEUE_REVIEW_ENABLED || id !== 'queueReview');
 const CHANNELS = ['email', 'push', 'sms'] as const;
 
 export function NotifSection({

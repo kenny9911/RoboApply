@@ -37,6 +37,20 @@ export function isJobApplyRoute(pathname: string): boolean {
   );
 }
 
+/** LAUNCH KILL SWITCH: the /queue Review-queue surface is hidden for launch —
+ *  its backend can't yet deliver what the UI promises ("Send now" flips a DB
+ *  status without submitting anywhere, and the matcher can't populate the
+ *  queue). Flip to `true` to restore the nav entries, the /queue route, the
+ *  home-hero queue copy, and the queue-review notification row; the tests
+ *  keyed to this constant flip back automatically. */
+export const QUEUE_REVIEW_ENABLED = false;
+
+/** True when `pathname` is the Review-queue surface (gated separately from the
+ *  JOB_APPLYING_ENABLED master switch by QUEUE_REVIEW_ENABLED). */
+export function isQueueRoute(pathname: string): boolean {
+  return pathname === '/queue' || pathname.startsWith('/queue/');
+}
+
 /**
  * Client hook: is the job-applying surface enabled?
  *   `true`  → show it · `false` → hide it · `null` → still loading /auth/me

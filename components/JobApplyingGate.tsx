@@ -19,7 +19,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth/AuthProvider';
 import {
   isJobApplyRoute,
+  isQueueRoute,
   JOB_APPLY_OFF_LANDING,
+  QUEUE_REVIEW_ENABLED,
   useJobApplyingEnabled,
 } from '../lib/jobApplying';
 
@@ -32,6 +34,11 @@ export function JobApplyingGate({ children }: { children: ReactNode }) {
   const onHiddenRoute = isJobApplyRoute(pathname);
   // Block (and redirect) only when we positively know the flag is OFF.
   const blocking = enabled === false && onHiddenRoute;
+  // /queue is additionally hidden for launch (QUEUE_REVIEW_ENABLED). When the
+  // master switch is OFF `blocking` wins (→ /mock-interview, unchanged); when
+  // it's ON, direct hits/bookmarks to /queue bounce to /home instead.
+  const queueBlocked =
+    !QUEUE_REVIEW_ENABLED && enabled === true && isQueueRoute(pathname);
   // Hold rendering on a hidden route ONLY while the session is still resolving
   // (status === 'loading'), so a disabled deploy never flashes Today/Queue/
   // Pipeline/Activity before redirecting. Once auth has resolved, `enabled` is
@@ -44,9 +51,10 @@ export function JobApplyingGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (blocking) router.replace(JOB_APPLY_OFF_LANDING);
-  }, [blocking, router]);
+    else if (queueBlocked) router.replace('/home');
+  }, [blocking, queueBlocked, router]);
 
-  if (blocking || holding) {
+  if (blocking || queueBlocked || holding) {
     return (
       <div
         className="dark-canvas v3-root"
