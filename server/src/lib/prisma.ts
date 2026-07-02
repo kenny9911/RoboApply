@@ -233,6 +233,21 @@ const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 75;
 
 function createPrismaClient() {
+  // Fail fast on a missing connection string. Without this guard, `new Pool`
+  // receives `connectionString: undefined` and pg silently falls back to
+  // libpq defaults (localhost:5432), so the FIRST query — not startup —
+  // surfaces a cryptic `Invalid \`prisma.user.findUnique()\` invocation`
+  // (really an ECONNREFUSED, 40 frames deep). A clear boot-time error saves
+  // that whole debugging detour. See .env.example for the expected keys.
+  const runtimeUrl = pickRuntimeUrl();
+  if (!runtimeUrl) {
+    throw new Error(
+      'DATABASE_URL is not set — RoboApply cannot connect to a database. ' +
+        'Set DATABASE_URL (and DIRECT_DATABASE_URL) in your .env; see .env.example. ' +
+        '(For the GoHire brand, DATABASE_URL_LIGHTARK is also accepted.)',
+    );
+  }
+
   // v7 uses driver adapters. We pass a long-lived pg.Pool to PrismaPg so
   // connection management lives at the app layer. Pool sizing tuned for
   // Neon: keep idle connections warm for 10 minutes (the previous v6 URL
@@ -240,7 +255,7 @@ function createPrismaClient() {
   // idle timeout — pg's default 10s killed warm connections). `keepAlive`
   // ensures the TCP socket survives Neon's idle disconnect.
   const pool = new Pool({
-    connectionString: pickRuntimeUrl(),
+    connectionString: runtimeUrl,
     // On Vercel serverless, every function instance is short-lived and there
     // may be many concurrent instances — a big per-instance pool exhausts
     // Neon's connection budget fast. Cap at 1 (rely on Neon's pgbouncer pooler

@@ -215,6 +215,21 @@ export class LLMService {
     const cred = resolveProviderCredential(providerType);
     const model = this.resolveDefaults().model;
     const extra = this.buildExtra(cred.tuning, cred.baseUrl);
+    // Fail loudly on a missing credential. Every provider below except ollama
+    // requires a key; without this guard an empty string flows into the SDK
+    // client, which sends `Authorization: Bearer ` (empty token) — the upstream
+    // 401 then surfaces as a misleading downstream error (e.g. resume-upload
+    // `parse_failed`). Seen in practice when the SystemLLMKey DB row can't be
+    // decrypted (FIELD_ENCRYPTION_KEY mismatch after a DB migration) AND the
+    // provider's env fallback var is unset.
+    if (!cred.apiKey?.trim() && providerType.toLowerCase() !== 'ollama') {
+      throw new Error(
+        `No API key resolved for LLM provider "${providerType}" ` +
+          `(system DB key absent or undecryptable — check FIELD_ENCRYPTION_KEY — ` +
+          `and the provider's env fallback key is unset). ` +
+          `Re-save the key in admin LLM settings or set the env var.`,
+      );
+    }
     switch (providerType.toLowerCase()) {
       case 'openai':
         return new OpenAIProvider(cred.apiKey, model, extra);
