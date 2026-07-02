@@ -3,10 +3,10 @@
   "framework": "nextjs",
   "buildCommand": "prisma generate && tsc -p server/tsconfig.json && next build",
   "functions": {
-    "api/index.ts": {
+    "api/index.mts": {
       "maxDuration": 300,
       "memory": 2048,
-      "includeFiles": "server/dist/**"
+      "includeFiles": "server/**"
     }
   },
   "rewrites": [
