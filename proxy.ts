@@ -10,14 +10,15 @@
 //    `/jobs`, `/insights`).
 //
 // 2. **V2 default landing flip** — `/mission` was the V1 daily driver; V2
-//    moves the daily driver to `/home`. When a logged-in user hits `/` or
+//    moves the daily driver to `/home`. When a logged-in user hits
 //    `/mission` we redirect to `/home`. `/mission` stays reachable via
 //    direct deep-link from email or bookmark — it just stops being the
 //    default landing. Per CTO ruling 03-frontend-architecture.md §0.
 //
-// Note: V1 public routes (`/`, `/login`, `/signup`) only redirect when the
-// user already has a session. Unauthenticated visitors still see the
-// landing page.
+// Note: the marketing landing page (`/`) is ALWAYS served, session or not
+// (2026-07-03: `/` was dropped from the authed → /home bounce so logged-in
+// users can still view the landing page). `/login` and `/signup` are
+// likewise never redirected here.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME } from './lib/config';
@@ -25,10 +26,10 @@ import { SESSION_COOKIE_NAME } from './lib/config';
 // they're unit-testable without the Edge runtime (lib/proxyPaths.ts).
 import { isProtectedPath } from './lib/proxyPaths';
 
-/** Paths that, when a user has a session, should bounce to /home. The
- *  landing page (`/`) is bounced too — a logged-in user opening the marketing
- *  page expects to be inside the app. */
-const REDIRECT_TO_HOME_WHEN_AUTHED = new Set<string>(['/', '/mission']);
+/** Paths that, when a user has a session, should bounce to /home. Only the
+ *  V1 daily driver — the landing page (`/`) deliberately stays visible to
+ *  logged-in users. */
+const REDIRECT_TO_HOME_WHEN_AUTHED = new Set<string>(['/mission']);
 
 export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
