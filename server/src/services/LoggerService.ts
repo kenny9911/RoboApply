@@ -226,12 +226,25 @@ class LoggerService extends EventEmitter {
     // value still wins (e.g. LOG_LEVEL=WARN to quiet the dev server).
     const defaultLevel = process.env.NODE_ENV === 'production' ? 'INFO' : 'DEBUG';
     this.logLevel = this.parseLogLevel(process.env.LOG_LEVEL || defaultLevel);
-    this.fileLoggingEnabled = process.env.FILE_LOGGING !== 'false';
+    // No file logging on Vercel: /var/task (the cwd) is read-only, so the
+    // mkdir below crashed the serverless function at module load (this class
+    // is constructed at import time). Console output is captured by Vercel's
+    // log drain anyway — file streams add nothing there.
+    this.fileLoggingEnabled = process.env.FILE_LOGGING !== 'false' && !process.env.VERCEL;
     this.logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
     this.currentDate = this.getDateString();
-    
+
     if (this.fileLoggingEnabled) {
-      this.initializeLogFiles();
+      try {
+        this.initializeLogFiles();
+      } catch (err) {
+        // A logger that can't open its files must never take the app down —
+        // degrade to console-only (still captured by any platform log drain).
+        this.fileLoggingEnabled = false;
+        console.warn(
+          `LoggerService: file logging disabled (${err instanceof Error ? err.message : String(err)})`,
+        );
+      }
     }
   }
 
