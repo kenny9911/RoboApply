@@ -28,6 +28,20 @@ import type { CookieOptions } from 'express';
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 
 /**
+ * RoboApply's session cookie name — deliberately NOT `session_token`.
+ *
+ * RoboHire dev uses `session_token`, and browser cookies are host-scoped,
+ * not port-scoped: on `localhost` every dev app shares one cookie jar. Since
+ * the 2026-07 DB split, a RoboHire session row no longer exists in
+ * RoboApply's database, so a shared cookie name meant a stale RoboHire (or
+ * pre-split RoboApply) cookie passed the proxy's presence check, then 401'd
+ * on /auth/me and bounced the user to /login in a loop. A distinct name makes
+ * the two apps' sessions invisible to each other. Must match
+ * SESSION_COOKIE_NAME in the frontend's lib/config.ts.
+ */
+export const SESSION_COOKIE_NAME = 'ra_session_token';
+
+/**
  * Build the options for `res.cookie(...)` on an auth-related cookie
  * (session_token today; any future seeker-app auth cookies should reuse
  * this helper). Pass `extra` to override or add fields — `maxAge`,

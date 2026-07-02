@@ -10,9 +10,13 @@ export const API_BASE: string =
     ? process.env.NEXT_PUBLIC_API_URL
     : '';
 
-// Cookie name shared with the backend (see backend/src/seeker/routes/auth.ts).
-// RoboApply re-uses the seeker auth surface — the engine room is the same.
-export const SESSION_COOKIE_NAME = 'session_token';
+// Cookie name shared with the backend — must match SESSION_COOKIE_NAME in
+// server/src/lib/cookieOptions.ts. Deliberately NOT `session_token`: RoboHire
+// dev uses that name, and cookies are host-scoped (not port-scoped), so on
+// localhost the two apps shared one cookie jar. Since the DB split a RoboHire
+// session is invalid here — the shared name caused a redirect-to-login loop
+// whenever a stale RoboHire / pre-split cookie was present.
+export const SESSION_COOKIE_NAME = 'ra_session_token';
 
 /**
  * Build a URL into the RoboHire recruiter / marketing SPA. Used to bounce

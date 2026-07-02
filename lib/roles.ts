@@ -1,11 +1,13 @@
 // Role access rules for the RoboApply (candidate) app.
 //
-// RoboHire and RoboApply share one User table + one `session_token` cookie
-// (COOKIE_DOMAIN=.robohire.io in prod). So a signed-in RoboHire recruiter can
-// land on RoboApply with a valid session. They must NOT use the candidate app
-// — they're bounced to the robohire.io/job-seeker bridge. Everyone else is
-// allowed in: job-seekers (role 'seeker'), GoHire candidates / resume holders
-// (role 'candidate'), and admins (who may use both apps interchangeably).
+// Historical note: RoboHire and RoboApply used to share one User table + one
+// `session_token` cookie. Since the 2026-07 split, RoboApply has its own
+// database AND its own cookie name (`ra_session_token` — see lib/config.ts),
+// so a RoboHire session no longer authenticates here. The role gate below
+// still applies to accounts copied over with recruiter roles: recruiters must
+// NOT use the candidate app — they're bounced to the robohire.io/job-seeker
+// bridge. Everyone else is allowed in: job-seekers (role 'seeker'), GoHire
+// candidates / resume holders (role 'candidate'), and admins.
 
 // RoboHire recruiter-side roles. The default `user` role is recruiter-side.
 // `sales` / `customer_success` are internal RoboHire staff seats and belong in

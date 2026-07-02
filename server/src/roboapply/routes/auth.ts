@@ -20,6 +20,7 @@ import { rateLimit, requireAuth } from '../../middleware/auth.js';
 import {
   buildCookieOptions,
   buildClearCookieOptions,
+  SESSION_COOKIE_NAME,
 } from '../../lib/cookieOptions.js';
 import { logger } from '../../services/LoggerService.js';
 import seekerAuthService, {
@@ -37,7 +38,6 @@ import prisma from '../../lib/prisma.js';
 
 const router = Router();
 
-const SESSION_COOKIE_NAME = 'session_token';
 const SESSION_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const resolvedSameSite = (() => {

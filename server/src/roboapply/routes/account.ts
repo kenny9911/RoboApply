@@ -21,6 +21,7 @@ import { Router, type Request, type Response } from 'express';
 // profile (usage queries by userId; delete updates 0 profile rows; password is
 // on the User row).
 import { requireAuth } from '../../middleware/auth.js';
+import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import {
   seekerAuthService,
   SeekerWrongPasswordError,
@@ -134,7 +135,7 @@ router.post('/password', requireAuth, async (req: Request, res: Response) => {
     }
     // Keep the caller's current session alive; revoke the rest.
     const keepSessionToken =
-      (req.cookies?.session_token as string | undefined) ||
+      (req.cookies?.[SESSION_COOKIE_NAME] as string | undefined) ||
       (req.headers['x-session-token'] as string | undefined) ||
       null;
     await seekerAuthService.changePassword({
@@ -172,7 +173,7 @@ router.post('/password', requireAuth, async (req: Request, res: Response) => {
 router.post('/signout-all', requireAuth, async (req: Request, res: Response) => {
   try {
     const count = await seekerAuthService.revokeAllSessions(req.user!.id);
-    res.clearCookie('session_token');
+    res.clearCookie(SESSION_COOKIE_NAME);
     return res.json({ success: true, data: { revoked: count } });
   } catch (err) {
     logger.error('RA_ACCOUNT', 'POST /signout-all failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
@@ -259,7 +260,7 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
     // R2 artifact cleanup (out of scope here).
     await prisma.seekerProfile.updateMany({ where: { userId }, data: { deletedAt: new Date() } });
     await seekerAuthService.revokeAllSessions(userId);
-    res.clearCookie('session_token');
+    res.clearCookie(SESSION_COOKIE_NAME);
     logger.warn('RA_ACCOUNT', 'account soft-deleted (GDPR)', { userId, email: userEmail }, req.requestId);
     return res.json({ success: true, data: { ok: true, deactivated: true } });
   } catch (err) {

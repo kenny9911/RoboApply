@@ -7,6 +7,7 @@ import { setCurrentUserId, setCurrentUserName } from '../lib/requestContext.js';
 import { logger } from '../services/LoggerService.js';
 import { evaluateSubscriptionGate } from '../lib/subscriptionGate.js';
 import { resolveGraceDaysForUser } from '../lib/subscriptionGraceConfig.js';
+import { SESSION_COOKIE_NAME } from '../lib/cookieOptions.js';
 // Import auth types to extend Express
 import '../types/auth.js';
 
@@ -293,7 +294,7 @@ export async function requireAuth(
     let isSessionToken = false;
     let isApiKey = false;
     let tokenSource: 'api_key' | 'authorization' | 'cookie' | 'session_header' | 'query' | null = null;
-    const cookieSessionToken = req.cookies?.session_token as string | undefined;
+    const cookieSessionToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
     const headerSessionToken = typeof req.headers['x-session-token'] === 'string'
       ? req.headers['x-session-token']
       : undefined;
@@ -444,7 +445,7 @@ export async function optionalAuth(
     let isSessionToken = false;
     let isApiKey = false;
     let tokenSource: 'api_key' | 'authorization' | 'cookie' | 'session_header' | null = null;
-    const cookieSessionToken = req.cookies?.session_token as string | undefined;
+    const cookieSessionToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
     const headerSessionToken = typeof req.headers['x-session-token'] === 'string'
       ? req.headers['x-session-token']
       : undefined;
