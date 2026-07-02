@@ -61,5 +61,10 @@ export const config = {
   // Exclude ALL /api/* — those paths are served by the Express serverless
   // function (via vercel.json rewrites), never by the Next.js app, so the
   // proxy must not touch them (raw-body webhooks + SSE would break otherwise).
-  matcher: ['/((?!_next/|_static/|favicon.ico|api/).*)'],
+  //
+  // '/' is listed EXPLICITLY: on Vercel's production router the unnamed-group
+  // pattern requires a non-empty first segment, so it matches /mission but
+  // NOT the bare root — the logged-in `/` → /home redirect silently never
+  // fired in prod (while `next dev` matched it fine).
+  matcher: ['/', '/((?!_next/|_static/|favicon.ico|api/).*)'],
 };
