@@ -5,9 +5,18 @@
 // (which forwards to localhost:4607). In production it's set to the
 // fully-qualified API host (e.g. https://api.robohire.io).
 
+// A localhost API base in a PRODUCTION bundle is always a misconfiguration
+// (the dev default baked at build time, or a dev .env pasted into the deploy
+// platform's env settings) — the deployed site would try to call the
+// VISITOR'S machine and every request would die on CORS ("Failed to fetch").
+// Guard against it explicitly: production falls back to same-origin relative
+// URLs, which the vercel.json rewrite routes to the API function.
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+const isLocalhostApiUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(rawApiUrl);
+
 export const API_BASE: string =
-  process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV !== 'development'
-    ? process.env.NEXT_PUBLIC_API_URL
+  rawApiUrl && process.env.NODE_ENV !== 'development' && !isLocalhostApiUrl
+    ? rawApiUrl
     : '';
 
 // Cookie name shared with the backend — must match SESSION_COOKIE_NAME in

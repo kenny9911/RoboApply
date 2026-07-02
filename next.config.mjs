@@ -3,7 +3,17 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4607',
+    // Dev-only default. NEVER default to localhost in a production build:
+    // Vercel builds without NEXT_PUBLIC_API_URL used to bake
+    // `http://localhost:4607` into the client bundle, so the deployed site
+    // fetched the DEVELOPER'S machine (CORS-blocked "Failed to fetch" on
+    // every API call). In production the API is same-origin via the
+    // vercel.json rewrite (/api/v1/* → api/index), so an empty API_BASE
+    // (relative URLs) is exactly right — only set NEXT_PUBLIC_API_URL in
+    // prod if the API genuinely lives on another host.
+    NEXT_PUBLIC_API_URL:
+      process.env.NEXT_PUBLIC_API_URL ??
+      (process.env.NODE_ENV === 'development' ? 'http://localhost:4607' : ''),
   },
   images: {
     remotePatterns: [
