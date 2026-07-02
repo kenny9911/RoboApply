@@ -1,0 +1,237 @@
+/* ============================================================================
+ * RoboApply — Auth (login / signup) surface
+ *
+ * A consumer-facing split screen: a brand/value-prop hero on the left
+ * (desktop only) and a clean form card on the right. Built entirely on the V3
+ * bare tokens (var(--bg) / var(--surface) / var(--accent) / var(--accent-text)
+ * / --shadow-* …), so it inherits the dark-default + light-mode flip and the
+ * data-accent swap automatically — no per-theme overrides needed here.
+ * ========================================================================== */
+
+.auth-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+@media (min-width: 1024px) {
+  .auth-split { grid-template-columns: 1.05fr 1fr; }
+}
+
+/* ── Brand / value-prop side (desktop only) ──────────────────────────────── */
+.auth-brand {
+  display: none;
+  position: relative;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 44px 48px;
+  overflow: hidden;
+  border-right: 1px solid var(--rule-soft);
+  background:
+    radial-gradient(120% 120% at 6% 2%, var(--accent-soft) 0%, transparent 44%),
+    radial-gradient(130% 130% at 100% 100%, var(--violet-soft) 0%, transparent 50%),
+    linear-gradient(168deg, var(--surface) 0%, var(--bg-2) 58%, var(--bg) 100%);
+}
+@media (min-width: 1024px) { .auth-brand { display: flex; } }
+
+/* a soft brand orb drifting behind the hero copy */
+.auth-brand__glow {
+  position: absolute;
+  inset: auto -140px -180px auto;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  background: var(--grad-orb);
+  filter: blur(26px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.auth-brand__inner {
+  position: relative;
+  z-index: 1;
+  margin: auto 0;
+  max-width: 470px;
+}
+
+.auth-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 18px;
+}
+
+.auth-headline {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: clamp(40px, 4.4vw, 60px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  margin: 0;
+}
+.auth-headline em {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent-text);
+}
+
+.auth-lead {
+  margin: 20px 0 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-2);
+  max-width: 448px;
+}
+
+.auth-features {
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14.5px;
+  color: var(--text-2);
+}
+.auth-feature__dot {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  flex: none;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.auth-brand__foot {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+  margin: 0;
+}
+
+/* ── Form side ───────────────────────────────────────────────────────────── */
+.auth-pane {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 22px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 402px;
+  animation: authCardIn var(--dur-slow) var(--ease-standard) both;
+}
+@keyframes authCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* compact brand mark — only shown on mobile, where the brand panel is hidden */
+.auth-card__brand { display: flex; margin-bottom: 30px; }
+@media (min-width: 1024px) { .auth-card__brand { display: none; } }
+
+.auth-title {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  margin: 0;
+}
+.auth-subtitle {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.auth-form {
+  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field { display: flex; flex-direction: column; gap: 7px; }
+.auth-field__label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.auth-field__input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
+}
+.auth-field__input::placeholder { color: var(--muted-2); }
+.auth-field__input:focus {
+  border-color: var(--accent-text);
+  box-shadow: var(--shadow-focus);
+}
+.auth-field__input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  transition: background-color 9999s ease-out;
+}
+
+.auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.36);
+  color: var(--robo-danger);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.auth-error svg { flex: none; margin-top: 1px; }
+
+/* full-width, taller CTA built on the canonical .btn.primary */
+.btn.auth-submit {
+  width: 100%;
+  justify-content: center;
+  height: 47px;
+  margin-top: 2px;
+  font-size: 14.5px;
+  border-radius: var(--r-md);
+}
+.btn.auth-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.auth-switch {
+  margin: 22px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.auth-switch a {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.auth-switch a:hover { text-decoration: underline; }

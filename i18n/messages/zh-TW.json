@@ -1,0 +1,2986 @@
+{
+  "app": {
+    "name": "RoboApply",
+    "tagline": "我們幫你投遞,你只管面試。"
+  },
+  "common": {
+    "loading": "載入中…",
+    "sign_in": "登入",
+    "sign_out": "登出",
+    "save": "儲存",
+    "saving": "儲存中…",
+    "cancel": "取消",
+    "close": "關閉",
+    "back": "返回",
+    "continue": "繼續",
+    "retry": "重試",
+    "saved": "已儲存。",
+    "coming_soon": "我還在準備中。等你的代理接好之後，這個功能就會啟用。",
+    "language": "語言"
+  },
+  "nav": {
+    "mission": "任務中心",
+    "apps": "應徵紀錄",
+    "settings": "設定",
+    "home": "首頁",
+    "resume_builder": "履歷工坊",
+    "tracker": "進度追蹤器",
+    "job_search": "職缺搜尋",
+    "mock_interview": "模擬面試",
+    "career_insights": "職涯洞察",
+    "all_tools": "更多工具",
+    "all_tools_coming_soon": "更多工具與整合將於 V2.1 上線。",
+    "referrals": "內部推薦",
+    "referrals_coming_soon": "內部推薦功能將於 V2.1 上線。",
+    "support": "客服支援"
+  },
+  "nav_v3": {
+    "brand_tagline": "你的 AI 求職助手",
+    "section_workspace": "工作區",
+    "section_settings": "設定",
+    "today": "今日",
+    "queue": "待審佇列",
+    "resumes": "履歷工坊",
+    "interview": "模擬面試",
+    "pipeline": "進度看板",
+    "activity": "活動記錄",
+    "badge_new_count": "新增 {count}",
+    "badge_new": "新",
+    "replay_onboarding": "重看新手導覽",
+    "tweaks": "偏好微調",
+    "preferences": "偏好設定",
+    "onboarding": "新手導覽",
+    "agent_state": "助手 · {mode}",
+    "aggr_chill": "保守",
+    "aggr_balanced": "平衡",
+    "aggr_intense": "全自動",
+    "stat_sent": "已投遞",
+    "stat_replies": "回覆",
+    "stat_saved": "已省",
+    "status_scan": "正在掃描 Lever、Greenhouse、Ashby…",
+    "status_tailor": "正在為最佳媒合量身打造你的履歷",
+    "status_cover": "正在撰寫求職信",
+    "status_crosscheck": "正在將職缺描述與你的作品集交叉比對",
+    "status_timer": "等待自動應徵計時",
+    "status_idle": "閒置 · 佇列已清空 ✓",
+    "status_index": "正在為新發布的職缺建立索引",
+    "status_rescore": "正在重新評分過期的媒合",
+    "search_aria": "搜尋職缺與公司",
+    "search_placeholder": "搜尋職缺、公司…",
+    "notifications": "通知",
+    "account": "帳戶",
+    "admin": "管理後台",
+    "theme_to_dark": "切換至深色模式",
+    "theme_to_light": "切換至淺色模式",
+    "theme_to_warm": "切換至暖色模式",
+    "plans": "方案與點數"
+  },
+  "palette": {
+    "aria": "命令選擇區",
+    "placeholder": "搜尋職缺、公司，或快速跳轉…",
+    "group_nav": "前往",
+    "group_jobs": "職缺",
+    "searching": "搜尋中…",
+    "empty": "沒有結果。試試公司或職位名稱。"
+  },
+  "home": {
+    "eyebrow": "ROBOAPPLY · 首頁",
+    "page_title": "首頁",
+    "error": {
+      "eyebrow": "儀表板",
+      "quote": "暫時無法載入你的儀表板,讓我再試一次……",
+      "retry": "再試一次"
+    },
+    "goal": {
+      "eyebrow": "下一個職涯目標:",
+      "edit_cta": "編輯目標",
+      "empty_cta": "設定你的職涯目標 →",
+      "empty_subtitle": "告訴我職位、目標日期和薪資範圍,我就能據此規劃搜尋。",
+      "field_title": "目標職位",
+      "field_date": "目標日期",
+      "field_date_empty": "尚未設定",
+      "field_salary": "薪資範圍",
+      "days_left": "{count, plural, one {⏳ 還剩 {count} 天} other {⏳ 還剩 {count} 天}}",
+      "modal": {
+        "title": "編輯職涯目標",
+        "subtitle": "三個快速欄位。你隨時都能修改。",
+        "field_title": "目標職位名稱",
+        "field_date": "目標日期",
+        "field_salary": "目標薪資範圍",
+        "hint_title": "你想放在搜尋列上的那個標題。",
+        "hint_date": "選擇你希望拿到錄取通知的月份。",
+        "hint_salary": "金額以美元計。留空即可略過。",
+        "placeholder_title": "例如 AI 軟體工程師",
+        "placeholder_salary_min": "最低",
+        "placeholder_salary_max": "最高",
+        "errors": {
+          "missing_title": "請先為目標填寫名稱。",
+          "invalid_salary": "薪資欄位必須是數字。",
+          "min_above_max": "最低薪資不能高於最高薪資。",
+          "generic": "無法儲存目標,請稍後再試。"
+        }
+      }
+    },
+    "ring": {
+      "caption": "份已送出申請",
+      "goal_label": "目標:",
+      "tip_under": "本週進度略微落後。再加把勁就能達標。",
+      "tip_on_target": "進度剛好。穩住就贏,把佇列保持滿載。",
+      "tip_over": "已超出目標。喘口氣——挑最有把握的那幾個。"
+    },
+    "funnel": {
+      "title": "求職流程管線",
+      "range_label": "顯示結果:{range}",
+      "stages": {
+        "bookmarked": "已收藏",
+        "applied": "已申請",
+        "interviewing": "面試中",
+        "negotiating": "談判中"
+      }
+    },
+    "week": {
+      "title": "本週",
+      "today_aria": "今天,{date}",
+      "day_filter_coming_soon": "按日篩選將於 V2.1 推出。"
+    },
+    "recent": {
+      "title": "最新的 {title} 職缺",
+      "title_fallback": "媒合",
+      "subtitle": "近 30 天內發布的新職缺,依最新優先排序。",
+      "empty_title": "目前還沒有新的媒合。",
+      "empty_body": "設定或細化你的目標職位名稱,我就會在這裡推薦新職缺。",
+      "card": {
+        "open_aria": "開啟職缺:{title}"
+      }
+    },
+    "priorities": {
+      "title": "優先事項",
+      "empty": "你都處理完了。明天我會再幫你標出新的。",
+      "row": {
+        "next_step": "下一步:推進至「{status}」",
+        "status": {
+          "applying": "申請中",
+          "accepted": "已錄取",
+          "rejected": "已婉拒",
+          "withdrawn": "已撤回"
+        }
+      }
+    },
+    "upgrade": {
+      "eyebrow": "ROBOAPPLY+",
+      "headline": "申請量提升 10 倍",
+      "bullet_keywords": "每個職缺的核心關鍵字",
+      "bullet_ai_search": "跨招聘平台的 AI 職缺搜尋",
+      "bullet_autoapply": "可監督的大規模自動申請",
+      "cta": "升級到 RoboApply+"
+    }
+  },
+  "tracker": {
+    "eyebrow": "ROBOAPPLY · 追蹤器",
+    "page_title": "求職追蹤器",
+    "subtitle": "已收藏、應徵中、已應徵、面試中 —— 所有職缺,一處管理。",
+    "tabs": {
+      "jobs": "職缺",
+      "people": "聯絡人",
+      "companies": "公司"
+    },
+    "funnel": {
+      "bookmarked": "已收藏",
+      "applying": "應徵中",
+      "applied": "已應徵",
+      "interviewing": "面試中",
+      "negotiating": "談判中",
+      "accepted": "已錄取"
+    },
+    "status": {
+      "bookmarked": "已收藏",
+      "applying": "應徵中",
+      "applied": "已應徵",
+      "interviewing": "面試中",
+      "negotiating": "談判中",
+      "accepted": "已錄取",
+      "rejected": "已婉拒",
+      "withdrawn": "已撤回"
+    },
+    "columns": {
+      "position": "職位",
+      "company": "公司",
+      "max_salary": "最高薪資",
+      "location": "地點",
+      "status": "狀態",
+      "date_saved": "收藏日期",
+      "deadline": "截止日期",
+      "date_applied": "應徵日期",
+      "follow_up": "追蹤日期",
+      "excitement": "期待程度"
+    },
+    "selected_count": "已選取 {count} 項",
+    "search_placeholder": "搜尋你的追蹤器…",
+    "view": {
+      "list": "清單",
+      "grid": "格狀"
+    },
+    "showing_count": "顯示 {n} 筆項目",
+    "add_job_cta": "+ 新增職缺",
+    "filter_aria": "篩選",
+    "empty": {
+      "title": "這個分類還沒有內容。",
+      "body": "從 /search 收藏一個職缺開始吧。",
+      "cta": "前往職缺搜尋 →"
+    },
+    "empty_cell": "—",
+    "row_menu_aria": "列操作",
+    "row_menu": {
+      "edit": "編輯",
+      "delete": "刪除"
+    },
+    "row_menu_open": "開啟操作",
+    "excitement_aria": "評價期待程度 {n} / 5",
+    "excitement_clear": "清除評分",
+    "add_modal": {
+      "title": "新增職缺到追蹤器",
+      "mode_url": "從網址新增",
+      "mode_url_hint": "貼上職缺的網址。V2.1 將支援自動擷取;目前請手動填寫欄位。",
+      "mode_manual": "手動新增",
+      "mode_manual_hint": "填寫基本資料,其餘可稍後補充。",
+      "field_url": "職缺網址",
+      "field_url_placeholder": "https://stripe.com/jobs/listing/...",
+      "field_title": "職位名稱",
+      "field_title_placeholder": "資深產品經理",
+      "field_company": "公司",
+      "field_company_placeholder": "Stripe",
+      "field_location": "地點",
+      "field_location_placeholder": "紐約市 · 混合辦公",
+      "field_max_salary": "最高薪資",
+      "field_max_salary_placeholder": "260000",
+      "field_status": "初始狀態",
+      "submit": "新增到追蹤器",
+      "submitting": "新增中…",
+      "error_title_required": "請先填寫職位名稱再儲存。",
+      "error_company_required": "請先填寫公司名稱再儲存。",
+      "error_generic": "無法新增職缺,請重試。"
+    },
+    "status_editor": {
+      "label": "變更狀態"
+    },
+    "deadline_editor": {
+      "label": "設定截止日期"
+    },
+    "follow_up_editor": {
+      "label": "設定追蹤日期"
+    },
+    "people": {
+      "coming_soon_title": "聯絡人追蹤將在 V2.1 上線",
+      "coming_soon_body": "你將可以連同對應的職缺一起記錄招募人員、用人主管與推薦人。在此之前,可在職缺列的備註欄裡記下相關資訊。"
+    },
+    "companies": {
+      "coming_soon_title": "公司追蹤將在 V2.1 上線",
+      "coming_soon_body": "你想任職公司的關注清單 —— 將與聯絡人功能一同推出。"
+    }
+  },
+  "search": {
+    "eyebrow": "ROBOAPPLY · 職缺搜尋",
+    "page_title": "職缺搜尋",
+    "bar": {
+      "title_placeholder": "職位名稱(例如 AI 工程師)",
+      "location_placeholder": "城市、郵遞區號或遠端",
+      "submit_aria": "執行搜尋",
+      "saved_dropdown_aria": "已儲存的搜尋"
+    },
+    "filters": {
+      "sort": "排序方式",
+      "date_posted": "發布時間",
+      "remote": "遠端",
+      "salary": "薪資",
+      "more": "全部篩選條件",
+      "sort_options": {
+        "relevance": "相關度",
+        "recent": "最新發布",
+        "salary_desc": "薪資最高",
+        "match_desc": "媒合最佳"
+      },
+      "date_options": {
+        "today": "最近 24 小時",
+        "7d": "最近 7 天",
+        "30d": "最近 30 天",
+        "any": "不限時間"
+      },
+      "salary_options": {
+        "any": "不限薪資",
+        "120k": "$120k+",
+        "150k": "$150k+",
+        "180k": "$180k+",
+        "200k": "$200k+",
+        "250k": "$250k+"
+      },
+      "remote_options": {
+        "any": "不限",
+        "remote": "遠端",
+        "hybrid": "混合",
+        "onsite": "現場"
+      },
+      "clear": "清除",
+      "apply": "套用"
+    },
+    "results": {
+      "count": "{count, plural, =0 {無職缺} =1 {1 個職缺} other {# 個職缺}}",
+      "count_plus": "{count, plural, =0 {無職缺} =1 {1 個職缺} other {#+ 個職缺}}",
+      "empty_title": "沒有符合的結果。試著放寬篩選條件。",
+      "empty_body": "去掉一個篩選標籤或擴大地點範圍。種子索引收錄了 50 個職缺,薪資橫跨 $120k–$300k。",
+      "loading": "正在搜尋索引…",
+      "select_a_job": "選擇一個職缺以查看詳情。"
+    },
+    "saved": {
+      "label": "已儲存",
+      "empty": "尚無已儲存的搜尋",
+      "save_current": "將目前搜尋另存為…",
+      "save_placeholder": "為這次搜尋命名",
+      "save_cta": "儲存",
+      "delete_aria": "刪除已儲存的搜尋",
+      "apply_aria": "執行這條已儲存的搜尋"
+    }
+  },
+  "jobs": {
+    "eyebrow": "ROBOAPPLY · 職缺詳情",
+    "page_title": "職缺詳情",
+    "breadcrumb_search": "搜尋",
+    "back": "返回搜尋",
+    "header": {
+      "just_now": "剛剛",
+      "posted": "{time} 發布",
+      "posted_days": "{n} 天前發布",
+      "posted_today": "今天發布"
+    },
+    "actions": {
+      "apply": "申請 →",
+      "save": "收藏職缺",
+      "saved": "已收藏 ✓",
+      "create_resume": "建立履歷"
+    },
+    "sections": {
+      "about": "職缺介紹",
+      "requirements": "任職要求",
+      "responsibilities": "工作職責",
+      "benefits": "福利待遇"
+    },
+    "offers": {
+      "title": "這份職缺提供",
+      "job_type": "工作類型",
+      "career_level": "職級",
+      "education_level": "學歷要求",
+      "salary": "薪資",
+      "any": "不限",
+      "employment": {
+        "full_time": "全職",
+        "contract": "約聘",
+        "part_time": "兼職",
+        "internship": "實習"
+      },
+      "work_type": {
+        "remote": "遠端",
+        "hybrid": "混合",
+        "onsite": "現場"
+      }
+    },
+    "keywords": {
+      "title": "熱門關鍵字",
+      "empty": "這個職缺的關鍵字還在彙整中，請稍後再來看。",
+      "premium_headline": "解鎖熱門關鍵字",
+      "premium_body": "看看招募團隊真正在意的技能——只在 RoboApply+ 提供。",
+      "premium_cta": "升級到 RoboApply+"
+    },
+    "match": {
+      "title": "媒合分數",
+      "match_label": "媒合",
+      "tier": {
+        "strong": "強力媒合",
+        "good": "適配",
+        "stretch": "挑戰",
+        "long_shot": "差距較大"
+      },
+      "empty": "尚無媒合分數。"
+    },
+    "apply_modal": {
+      "title": "你想以哪種方式申請？",
+      "body": "選擇處理這次申請的方式。",
+      "track_title": "僅追蹤",
+      "track_body": "在追蹤器中標記為已申請。你仍需在公司網站上完成申請。",
+      "autoapply_title": "透過 Greenhouse 自動申請",
+      "autoapply_body": "隨 V1 引擎推出——你的代理會在早上 9 點調整並送出。",
+      "autoapply_coming_soon": "透過 V1 引擎的自動申請即將上線",
+      "external_title": "開啟外部申請頁面",
+      "external_body": "將在新分頁開啟 {url}。我們會在追蹤器中標記為已申請。",
+      "confirm": "繼續",
+      "cancel": "取消"
+    },
+    "not_found_title": "這個職缺已從我們的索引中下架",
+    "not_found_body": "可能已關閉，或連結已失效。回到搜尋再試一次吧。",
+    "loading": "正在載入職缺…"
+  },
+  "insights": {
+    "eyebrow": "ROBOAPPLY · 職涯洞察",
+    "page_title": "職涯洞察",
+    "subtitle": "你目前的位置、進展如何，以及本週我會建議你做的事。",
+    "card_eyebrow": "每週洞察 · {date}",
+    "refresh_cta": "重新整理洞察",
+    "refresh_loading": "正在產生…",
+    "refresh_recent": "最近才剛重新整理過，請稍後再試。",
+    "past_heading": "過往週次",
+    "past_empty": "等你累積一週的追蹤器活動後，我就會提供第一份每週洞察。繼續應徵吧。",
+    "empty_title": "過幾天再回來查看你的第一份洞察。",
+    "empty_body": "我需要一週的追蹤器活動資料才能派上用場。開始應徵，週日就會有東西給你。",
+    "cited_label": "引用",
+    "loading": "正在分析你的這一週…",
+    "metrics": {
+      "applications": "應徵數",
+      "interviews": "面試數",
+      "offers": "錄取數",
+      "weeks_to_offer": "距錄取週數",
+      "weeks_to_offer_unknown": "—",
+      "skills_observed": "觀察到的熱門技能"
+    }
+  },
+  "resumes_v2": {
+    "eyebrow": "ROBOAPPLY · 履歷",
+    "page_title": "履歷工作室",
+    "subtitle": "選擇一個起點,或繼續編輯最近的履歷。",
+    "menu": {
+      "trigger": "選單",
+      "help": "說明",
+      "sort": "排序",
+      "filter": "篩選"
+    },
+    "tiles": {
+      "new_resume": {
+        "title": "新增履歷",
+        "description": "從空白頁開始。"
+      },
+      "from_jd": {
+        "title": "從職缺說明開始",
+        "description": "貼上 JD,我會為你量身打造履歷。"
+      },
+      "from_template": {
+        "title": "從範本開始",
+        "description": "挑選一個 ATS 友善的版面開始。"
+      },
+      "cover_letter": {
+        "title": "新增求職信",
+        "description": "為指定職缺草擬一封求職信。"
+      }
+    },
+    "recent": {
+      "title": "最近的履歷",
+      "search_placeholder": "搜尋履歷",
+      "sort_label": "排序方式",
+      "sort": {
+        "last_edited": "最近編輯",
+        "name_az": "名稱(A → Z)",
+        "match_desc": "媒合度(高 → 低)"
+      },
+      "view": {
+        "list": "清單",
+        "grid": "格狀",
+        "list_aria": "清單檢視",
+        "grid_aria": "格狀檢視"
+      },
+      "empty": {
+        "title": "尚無履歷。",
+        "body": "從上方的入口開始,建立你的第一份履歷。"
+      },
+      "no_match": "沒有符合搜尋的履歷。",
+      "row_menu": {
+        "trigger": "開啟選單",
+        "open": "開啟",
+        "duplicate": "複製",
+        "delete": "刪除"
+      }
+    },
+    "match_label": "媒合度:{pct}%",
+    "match_unknown": "媒合度:—",
+    "edited_label": "編輯於:{date}",
+    "kind": {
+      "base": "基礎履歷",
+      "tailored_for_jd": "客製版",
+      "from_template": "範本版",
+      "cover_letter": "求職信"
+    },
+    "new": {
+      "breadcrumb_back": "履歷工作室",
+      "breadcrumb_current": "新增履歷",
+      "blank": {
+        "title": "新增空白履歷",
+        "subtitle": "為它取個名字,稍後可在編輯器中填寫內容。",
+        "name_label": "履歷名稱",
+        "name_placeholder": "例如:主履歷",
+        "submit": "建立履歷",
+        "submitting": "建立中…"
+      },
+      "from_jd": {
+        "title": "從職缺說明開始",
+        "subtitle": "貼上 JD,我們會為你建立一份客製履歷。",
+        "name_label": "履歷名稱",
+        "name_placeholder": "例如:Stripe 資深產品經理客製版",
+        "jd_label": "職缺說明",
+        "jd_placeholder": "在此貼上完整的職缺說明…",
+        "submit": "建立客製履歷",
+        "submitting": "客製中…",
+        "hint_no_base": "我們會以你最近的履歷為基礎。"
+      },
+      "from_template": {
+        "title": "從範本開始",
+        "subtitle": "挑選一個版面,接著再編輯內容。",
+        "name_label": "履歷名稱",
+        "name_placeholder": "例如:ATS 友善履歷",
+        "submit": "從範本建立",
+        "submitting": "建立中…",
+        "templates": {
+          "ats": {
+            "title": "ATS 友善",
+            "description": "單欄、無花俏排版,設計上能被清楚解析。"
+          },
+          "modern": {
+            "title": "現代風",
+            "description": "雙欄版面,帶有細緻的強調色。"
+          },
+          "creative": {
+            "title": "創意風",
+            "description": "更大膽的字體與色彩,適合設計與產品職位。"
+          },
+          "classic": {
+            "title": "經典風",
+            "description": "穩重的單欄版面,適用於任何產業。"
+          }
+        }
+      },
+      "cover_letter": {
+        "title": "新增求職信",
+        "subtitle": "我們會根據你貼上的 JD 草擬一封求職信。",
+        "name_label": "求職信名稱",
+        "name_placeholder": "例如:求職信 — Stripe 資深 PM",
+        "jd_label": "職缺說明",
+        "jd_placeholder": "在此貼上完整的職缺說明…",
+        "submit": "建立求職信",
+        "submitting": "草擬中…"
+      },
+      "errors": {
+        "name_required": "請先為它取個名字。",
+        "jd_required": "請先貼上職缺說明。",
+        "create_failed": "無法建立你的履歷,請稍後再試。"
+      },
+      "unknown_mode_title": "選擇一個起點",
+      "unknown_mode_body": "請從 /resumes 選擇四種建立方式之一。"
+    },
+    "detail": {
+      "breadcrumb_back": "履歷工作室",
+      "loading": "正在載入你的履歷…",
+      "not_found_title": "找不到這份履歷。",
+      "not_found_body": "它可能已被刪除,或者你沒有存取權限。請回到履歷工作室。",
+      "kind_label": "類型",
+      "placeholder_title": "你的客製履歷編輯器將於 V2.1 推出",
+      "placeholder_body": "目前你可以保留這份草稿、複製或刪除它。完整的編輯器 — 以區塊為基礎、含 ATS 評分與並排比對 — 將於下一版推出。",
+      "tailored_for": "為 {company} — {title} 客製",
+      "download_cta": "下載為 PDF",
+      "download_tooltip": "V2.1 可用",
+      "duplicate_cta": "複製",
+      "delete_cta": "刪除",
+      "preview_title": "履歷預覽",
+      "delete": {
+        "title": "刪除這份履歷?",
+        "body": "此操作會將這份履歷從你的資料庫永久移除。請在下方輸入履歷名稱以確認。",
+        "input_label": "輸入履歷名稱以確認",
+        "mismatch_hint": "與履歷名稱不一致。",
+        "cancel": "取消",
+        "confirm": "刪除履歷",
+        "confirming": "刪除中…",
+        "error": "無法刪除這份履歷,請重試。"
+      }
+    },
+    "errors": {
+      "load_failed": "無法載入你的履歷,請稍後再試。"
+    }
+  },
+  "resumes": {
+    "eyebrow": "履歷工坊 · AI 調校",
+    "title_lead": "寫一份",
+    "title_accent": "你自己都想錄用",
+    "title_after": "的履歷。",
+    "subtitle": "從零開始、拖入舊履歷,或從 LinkedIn 匯入。我會逐句打磨,再為你鎖定的每個職缺量身打造一份新副本。",
+    "create": {
+      "scratch": {
+        "title": "從零開始",
+        "desc": "乾淨的範本,每一行都有 AI 輔助。最適合職涯早期或重新出發的你。",
+        "meta": "約 10 分鐘 · 最適合初次撰寫者"
+      },
+      "file": {
+        "title": "上傳履歷",
+        "desc": "拖入 PDF 或 DOCX。我會讀取、整理結構,並標記建議改寫的句子。",
+        "meta": "PDF · DOCX · Apple Pages"
+      },
+      "linkedin": {
+        "title": "從 LinkedIn 匯入",
+        "desc": "將你的 LinkedIn 個人檔案匯出為 PDF 並拖入。我會整理結構,並標記建議改寫的句子。",
+        "meta": "儲存為 PDF · 再上傳"
+      },
+      "default_name": {
+        "scratch": "未命名草稿",
+        "file": "已匯入的履歷",
+        "linkedin": "LinkedIn 匯入"
+      }
+    },
+    "section": {
+      "title": "你的履歷",
+      "count": "{count} 個版本"
+    },
+    "card": {
+      "base": "基礎版 —— 未針對職缺客製",
+      "edited": "編輯於 {when}",
+      "score_unit": "/100",
+      "delete": "刪除履歷"
+    },
+    "tip": {
+      "label": "提醒 · 職場新鮮人",
+      "body": "經驗有限不是問題。我會把課堂專案、駭客松、接案與業餘專案翻譯成聽起來像真實工作的要點。在每一行使用「初階 → 資深」轉換。"
+    },
+    "empty": {
+      "title_lead": "還沒有",
+      "title_accent": "履歷",
+      "sub": "先建立第一份 —— 從零開始、上傳,或從 LinkedIn 匯入 —— 我會逐句幫你打磨。",
+      "cta": "從零開始"
+    },
+    "error": {
+      "title": "無法載入你的履歷",
+      "sub": "擷取履歷庫時出了點問題,請稍後再試。",
+      "retry": "重試"
+    },
+    "ingest": {
+      "scratch": {
+        "template": "範本",
+        "template_v": "乾淨、單欄、ATS 友善",
+        "sections": "區段",
+        "sections_v": "摘要 · 經歷 · 學歷 · 技能 · 專案",
+        "ai": "AI 已開啟",
+        "ai_v": "逐行優化 —— 改進、精簡、擴寫、調整語氣",
+        "ready": "就緒",
+        "ready_v": "未命名草稿"
+      },
+      "import": {
+        "read": "已讀取",
+        "identity": "身分資訊",
+        "identity_v": "姓名 · 電子郵件 · 所在地",
+        "experience": "工作經歷",
+        "experience_v": "2 段經歷 · 共 6 條要點",
+        "education": "學歷背景",
+        "education_v": "學位 · 學校 · 年份",
+        "skills": "技能",
+        "skills_v": "已擷取 8 個標籤",
+        "cleaned": "已整理",
+        "cleaned_v": "刪除 4 個弱動詞,標記 2 行待改寫"
+      }
+    },
+    "import": {
+      "title": {
+        "scratch": "開始一份新履歷",
+        "file": "上傳履歷",
+        "linkedin": "從 LinkedIn 匯入"
+      },
+      "badge": {
+        "scratch": "新建",
+        "file": "上傳",
+        "linkedin": "匯入"
+      },
+      "template": {
+        "classic": "經典 · ATS 友善",
+        "modern": "現代 · 雙欄",
+        "editorial": "雜誌風 · 粗襯線"
+      },
+      "scratch_hint": "選擇一個範本。之後可隨時切換 —— 內容會跟著你走。",
+      "drop": {
+        "title": "把履歷拖到這裡",
+        "sub": "PDF、DOCX 或 Apple Pages —— 我會解析結構",
+        "ready": "可以解析了"
+      },
+      "linkedin": {
+        "steps_title": "匯出你的 LinkedIn 個人檔案",
+        "step1": "在 LinkedIn 開啟你的個人檔案",
+        "step2": "點擊「更多」按鈕,然後選擇「儲存為 PDF」",
+        "step3": "在下方上傳下載好的 PDF",
+        "upload_title": "將 LinkedIn PDF 拖到這裡",
+        "upload_sub": "你從個人檔案儲存的那份 PDF",
+        "ready": "已就緒,可匯入",
+        "or": "或",
+        "url_label": "有公開個人檔案?也可以改為貼上網址",
+        "placeholder": "linkedin.com/in/your-handle",
+        "hint": "貼上你的公開 LinkedIn 網址。我會擷取經歷、學歷、技能和連結。"
+      },
+      "ingest_title": {
+        "scratch": "正在準備你的草稿",
+        "parse": "正在讀取你的履歷"
+      },
+      "working": "處理中…",
+      "done": {
+        "title_scratch": "草稿已就緒",
+        "title_import": "匯入完成",
+        "body_scratch": "我們一起開始填寫吧,我會在右側欄陪著你。",
+        "body_import": "履歷已解析。我標記了 2 條偏弱的要點 —— 已在編輯器中標示。"
+      },
+      "cancel": "取消",
+      "create_draft": "建立草稿",
+      "parse_with_ai": "用 AI 解析",
+      "open_editor": "開啟編輯器",
+      "error": "建立履歷失敗,請重試。",
+      "errors": {
+        "invalid_url": "這看起來不是 LinkedIn 個人檔案網址。請檢查後重試。",
+        "fetch_failed": "無法連線 LinkedIn 擷取該個人檔案。請改為上傳你的 LinkedIn PDF。",
+        "profile_empty": "該個人檔案可匯入的內容不足。請改為上傳你的 LinkedIn PDF。",
+        "url_import_not_configured": "此處暫不支援 LinkedIn 網址匯入 —— 請改為上傳你的 LinkedIn PDF。",
+        "parse_failed": "我無法讀取該檔案。請重新匯出為 PDF 後再試。",
+        "unsupported_format": "不支援該檔案類型。請上傳 PDF 或 DOCX。",
+        "file_too_large": "檔案過大,上限為 15 MB。",
+        "file_required": "請先選擇一個檔案。"
+      },
+      "demo_file_name": "resume-2024.pdf",
+      "demo_file_size": "184 KB"
+    },
+    "delete": {
+      "title": "刪除這份履歷?",
+      "body": "這將從你的履歷庫中永久刪除這份履歷。如需確認,請在下方輸入履歷名稱。",
+      "input_label": "輸入履歷名稱以確認",
+      "mismatch_hint": "與履歷名稱不一致。",
+      "cancel": "取消",
+      "confirm": "刪除履歷",
+      "confirming": "正在刪除…"
+    }
+  },
+  "resumeGate": {
+    "title": "先新增你的履歷即可開始",
+    "subtitle": "RoboApply 會根據你的履歷客製化應徵內容、計算職缺媒合度並進行模擬面試。上傳一份即可解鎖你的儀表板。",
+    "cta": "上傳履歷",
+    "uploading": "正在讀取並解析你的履歷…",
+    "formats": "PDF、DOCX 或 TXT · 最大 15 MB",
+    "error": "讀取檔案時發生錯誤，請再試一次。",
+    "error_too_large": "該檔案超過 15 MB，請改用較小的檔案。",
+    "error_format": "不支援的格式，請使用 PDF、DOCX 或 TXT 檔案。",
+    "error_empty": "無法在該檔案中找到任何文字，請改用文字版 PDF（而非掃描影像）。",
+    "or_build": "或從零開始建立一份"
+  },
+  "resumeEditor": {
+    "common": {
+      "cancel": "取消",
+      "close": "關閉"
+    },
+    "toolbar": {
+      "back": "履歷",
+      "rename": "履歷名稱",
+      "saved": "已儲存所有變更",
+      "saving": "儲存中…",
+      "save_error": "無法儲存 — 正在重試",
+      "strength": "強度",
+      "coach": "教練",
+      "hide_coach": "隱藏教練",
+      "download": "下載",
+      "tailor": "為職缺客製化",
+      "delete": "刪除"
+    },
+    "section": {
+      "identity": "個人資訊",
+      "summary": "摘要",
+      "experience": "工作經歷",
+      "education": "教育背景",
+      "skills": "技能"
+    },
+    "field": {
+      "full_name": "姓名",
+      "title": "職稱",
+      "email": "電子郵件",
+      "phone": "電話",
+      "location": "所在地",
+      "links": "連結",
+      "ai": "AI"
+    },
+    "summary": {
+      "placeholder": "用兩句話推銷自己。先說你交付過什麼以及帶來的影響。",
+      "give_rewrites": "給我 3 個改寫版本",
+      "rewriting": "改寫中…",
+      "char_hint": "{count} 字元 · 建議 240–320",
+      "option": "版本 {n}",
+      "use_this": "用這個",
+      "keep_current": "保留目前"
+    },
+    "action": {
+      "improve": {
+        "label": "優化文字",
+        "desc": "更有力的動詞,更精煉的表達"
+      },
+      "metrics": {
+        "label": "補充數據",
+        "desc": "標出應該放數字的地方"
+      },
+      "shorten": {
+        "label": "精簡",
+        "desc": "刪去冗贅 — 保留重點"
+      },
+      "expand": {
+        "label": "補充背景",
+        "desc": "補上「所以呢」和「怎麼做的」"
+      },
+      "confident": {
+        "label": "更有自信",
+        "desc": "「我主導」而非「我協助」"
+      },
+      "junior": {
+        "label": "初階 → 專業",
+        "desc": "重新表述校園 / 實習經歷"
+      }
+    },
+    "bullet": {
+      "flag": "教練標記了這條 — 動詞含糊、缺少數據。試試「優化文字」或「補充數據」。"
+    },
+    "rewrite": {
+      "rewriting": "改寫中",
+      "suggested": "改寫建議",
+      "accept": "採用",
+      "regenerate": "重新產生",
+      "discard": "捨棄",
+      "error": "改寫沒有成功,請重試。"
+    },
+    "experience": {
+      "hint": "將滑鼠移到任一條目上即可使用內嵌 AI",
+      "add_role": "+ 新增職位",
+      "add_bullet": "+ 新增條目 · 或貼上你自己的內容",
+      "editing": "編輯中",
+      "title_placeholder": "職稱",
+      "company_placeholder": "公司",
+      "location_placeholder": "地點",
+      "start_placeholder": "開始",
+      "end_placeholder": "結束"
+    },
+    "education": {
+      "add": "+ 新增教育經歷",
+      "school_placeholder": "學校",
+      "degree_placeholder": "學位",
+      "detail_placeholder": "亮點 — 榮譽、專案、GPA"
+    },
+    "skills": {
+      "suggest": "根據你的條目推薦技能",
+      "add": "+ 新增技能",
+      "placeholder": "技能名稱",
+      "remove": "移除 {skill}",
+      "suggested": "根據你的條目推薦",
+      "dismiss_suggestions": "忽略"
+    },
+    "young": {
+      "head": "工作經驗有限?我可以新增一個區塊,把非工作經歷轉化成履歷語言。",
+      "class_project": {
+        "label": "課程專案",
+        "desc": "當作正式成果來呈現"
+      },
+      "hackathon": {
+        "label": "黑客松",
+        "desc": "48 小時 · 你做出了什麼"
+      },
+      "side_project": {
+        "label": "業餘專案",
+        "desc": "開源 / 個人專案"
+      },
+      "volunteer": {
+        "label": "志工服務",
+        "desc": "真的算 — 別擔心"
+      },
+      "freelance": {
+        "label": "接案工作",
+        "desc": "獨立客戶工作"
+      },
+      "leadership": {
+        "label": "學生領導經歷",
+        "desc": "社團、學生會、組織"
+      }
+    },
+    "preview": {
+      "label": "即時預覽",
+      "page": "1 頁"
+    },
+    "paper": {
+      "your_name": "你的姓名"
+    },
+    "coach": {
+      "label": "你的教練 · 上線中",
+      "sub": "正在邊看你打字邊盯著",
+      "hide": "隱藏教練",
+      "next": "下一條 →",
+      "tips": {
+        "metrics_good": "你的要點帶有真實數據。在整份履歷中保持這種量化的表達。",
+        "metrics_missing": "大多數要點沒有量化指標。為最重要的 3 條加上數字——招募人員只會略讀成果。",
+        "summary_long": "你的摘要太長了。精簡到兩句有力的話——招募人員最先略讀這裡。",
+        "summary_tight": "你的摘要很精煉。用最有力、最貼合職缺的一句話開頭。",
+        "summary_missing": "還沒有摘要部分。在最上方用兩句話為下面的內容定下基調——補上一段。",
+        "weak_verbs": "發現 {count} 處較弱的開頭(如「responsible for」「helped with」)。點擊 ✦,用展現主導性的動詞重寫。",
+        "strong_verbs": "通篇動詞有力——沒有出現「responsible for」或「helped with」。保持下去。",
+        "no_bullets": "這份履歷還沒有任何要點。把經歷拆分成以成果為導向的要點。",
+        "too_many_bullets": "這裡的要點太多了。每段經歷精簡到最有力的 3–5 條,讓最出色的工作脫穎而出。",
+        "good_density": "密度剛好。點擊任意要點上的 ✦ 來打磨它,或用「為職缺客製化」針對某個具體職缺。"
+      }
+    },
+    "tailor": {
+      "eyebrow": "客製化",
+      "title_pick": "選擇要客製化的職缺",
+      "title_analyzing_lead": "正在分析職缺描述",
+      "title_analyzing_accent": "和",
+      "title_analyzing_after": "你的履歷…",
+      "title_review_lead": "這是我為以下職缺建議的改動:",
+      "title_done": "客製化版本已產生",
+      "source_label": "從你的 ROBOAPPLY 媒合結果中選擇",
+      "loading_jobs": "正在載入你的媒合結果…",
+      "no_jobs": "尚無媒合結果 — 改為在下方貼上職缺描述。",
+      "fit": "適配度",
+      "or": "或",
+      "paste_toggle": "貼上其他職缺描述",
+      "paste_placeholder": "在此貼上職缺描述 — 職稱、公司、完整說明",
+      "analyze_paste": "分析貼上的職缺描述 →",
+      "pasted_company": "貼上的職缺",
+      "pasted_role": "自訂",
+      "analyzing": {
+        "read_jd": "通讀完整職缺描述",
+        "cross_check": "比對你的條目",
+        "find_gaps": "尋找關鍵字缺口",
+        "draft": "草擬針對性改寫",
+        "rescore": "重新評估適配度"
+      },
+      "before": "改前",
+      "after": "改後",
+      "note": "{count} 處針對性改動。不想要的可以關掉 — 我只會套用勾選的。",
+      "kind": {
+        "rewrite": "改寫",
+        "add": "新增",
+        "reorder": "調整順序",
+        "trim": "精簡"
+      },
+      "pick_hint": "選擇一個職缺以繼續",
+      "pick_different": "← 換一個職缺",
+      "apply": "套用 {count} 處改動",
+      "back_to_editor": "返回編輯器",
+      "open_copy": "開啟客製化版本",
+      "done_title": "客製化版本已儲存",
+      "done_body": "新的履歷版本「{name}」已加入你的履歷庫。你的基礎履歷保持不變。",
+      "done_body_paste": "你的客製化改動已就緒。你的基礎履歷保持不變。",
+      "error": "客製化履歷失敗,請重試。"
+    },
+    "download": {
+      "eyebrow": "匯出",
+      "title": "下載為…",
+      "recommended": "推薦",
+      "error": "匯出失敗，請重試。",
+      "pdf": {
+        "label": "PDF",
+        "desc": "投遞最佳 — 像素級精準、對 ATS 友善"
+      },
+      "docx": {
+        "label": "DOCX",
+        "desc": "Word 文件 — 可編輯、對 ATS 友善"
+      },
+      "txt": {
+        "label": "純文字",
+        "desc": "複製貼上到網頁表單"
+      },
+      "md": {
+        "label": "Markdown",
+        "desc": "用於你的 GitHub 或個人網站"
+      }
+    },
+    "state": {
+      "loading": "正在載入你的履歷…",
+      "error_title": "無法載入這份履歷。",
+      "error_body": "它可能已被刪除,或連結有誤。",
+      "back": "返回所有履歷"
+    },
+    "delete": {
+      "title": "刪除這份履歷?",
+      "body": "這將從你的履歷庫中永久刪除這份履歷。如需確認,請在下方輸入履歷名稱。",
+      "input_label": "輸入履歷名稱以確認",
+      "mismatch_hint": "與履歷名稱不一致。",
+      "cancel": "取消",
+      "confirm": "刪除履歷",
+      "confirming": "正在刪除…"
+    }
+  },
+  "landing": {
+    "headline": "我們負責投遞，你只管面試。",
+    "subheadline": "AI 代理在夜裡搜尋職缺、為每份應徵起草求職信、早上 9 點投遞，再用電子郵件告訴你發生了什麼。",
+    "cta_get_started": "立即開始 →",
+    "cta_sign_in": "登入",
+    "features": {
+      "scout_title": "整夜搜尋",
+      "scout_body": "在你熟睡時掃描 Greenhouse 與 Lever 的職缺版。只有符合你意向的職缺才會被篩選出來。",
+      "tailor_title": "起草求職信",
+      "tailor_body": "每次應徵都附上一封真正的求職信 —— 以你的履歷為依據，絕不憑空捏造。",
+      "submit_title": "9 點準時投遞",
+      "submit_body": "你有 2 小時的預覽時段。不想投的直接略過，其餘的由代理為你送出。"
+    },
+    "trust_strip": "僅自動投遞 Greenhouse + Lever 的職缺 · 不灌水、不亂投 · 隨時可暫停。",
+    "pricing": {
+      "title": "免費就夠用，想要更多再升級。",
+      "free": "免費 · 每天 3 次應徵",
+      "premium": "Premium · $19/月 · 每天 15 次應徵",
+      "premium_plus": "Premium+ · $49/月 · 每天 30 次應徵"
+    },
+    "footer_note": "© RoboApply。由求職者打造，為求職者服務。"
+  },
+  "auth": {
+    "login": {
+      "title": "歡迎回來",
+      "subtitle": "登入你的 RoboApply 任務。",
+      "email": "電子郵件",
+      "password": "密碼",
+      "submit": "登入",
+      "submitting": "登入中…",
+      "no_account": "還沒有帳號?",
+      "signup_cta": "建立帳號",
+      "error_generic": "登入失敗。請檢查電子郵件與密碼後重試。"
+    },
+    "signup": {
+      "title": "建立你的帳號",
+      "subtitle": "60 秒開啟免動手的求職之旅。",
+      "email": "電子郵件",
+      "password": "密碼",
+      "name": "你的姓名",
+      "submit": "註冊",
+      "submitting": "正在建立帳號…",
+      "has_account": "已經有帳號了?",
+      "login_cta": "登入",
+      "error_generic": "建立帳號失敗，請重試。"
+    },
+    "brand": {
+      "eyebrow": "AI 求職助手",
+      "headline": "找工作，<em>快人一步</em>。",
+      "lead": "RoboApply 幫你優化履歷、進行擬真 AI 模擬面試，並把每一次投遞集中管理——讓你專注於拿下心儀的 offer。",
+      "feature_resume": "ATS 友善的客製履歷",
+      "feature_interview": "擬真 AI 模擬面試",
+      "feature_track": "投遞記錄集中管理"
+    }
+  },
+  "onboarding": {
+    "brand_sub": "你的 AI 求職獵手",
+    "skip": "略過 →",
+    "upload": {
+      "title": "讓我看看你的",
+      "title_accent": "履歷",
+      "lead": "我只需要這個就能開始。讀過一遍後,我就再也不會推薦不合適的職缺給你了。",
+      "drop_title": "拖入履歷,或點擊選擇檔案",
+      "drop_sub": "支援 PDF、DOC/DOCX、TXT、MD,最大 15 MB",
+      "ingest_title": "我讀到的資訊",
+      "reading": "正在讀取…",
+      "error": "我無法讀取這份履歷。請換一個 PDF 或 DOCX 檔案,或選擇其他檔案再試。",
+      "received": "{size} · 正在上傳並解析…"
+    },
+    "resumeSelect": {
+      "title": "我該讀哪一份",
+      "title_accent": "履歷",
+      "title_after": "?",
+      "lead": "選一份最能代表你方向的履歷 —— 我讀完之後我們就開始。",
+      "upload_new": "上傳新履歷",
+      "paste_text": "貼上履歷文字",
+      "primary_badge": "主履歷",
+      "last_edited": "最近編輯於 {date}",
+      "continue": "用這份履歷繼續",
+      "linkedin_import": "從 LinkedIn 匯入",
+      "linkedin_placeholder": "https://www.linkedin.com/in/你的個人檔案",
+      "paste_placeholder": "把履歷文字貼在這裡 —— 純文字或 Markdown 都可以。",
+      "paste_name": "貼上的履歷",
+      "paste_submit": "使用這段文字",
+      "back": "← 返回",
+      "retry": "再試一次",
+      "pick_existing": "選擇既有履歷",
+      "paste_instead": "改為貼上文字",
+      "formats": "PDF · DOC/DOCX · TXT · MD",
+      "error_file_too_large": "檔案太大了(上限 15 MB)。換一個小一點的檔案試試。",
+      "error_unsupported_format": "我無法讀取這個格式。支援 PDF、DOC/DOCX、TXT 或 MD。",
+      "error_parse_failed": "我無法讀取這份履歷。換一個檔案,或直接貼上文字。"
+    },
+    "chat": {
+      "title": "一起設定你的求職方向",
+      "composer_placeholder": "告訴我你在找什麼 —— 職缺、地點、薪資、底線都可以…",
+      "send": "送出",
+      "opening_prompt_hint": "我根據你的履歷擬了這段開場白 —— 可以直接送出,也可以改成你自己的話。",
+      "skeleton_ingest": "正在讀取你的履歷…",
+      "status_searching_internal": "正在搜尋站內職缺…",
+      "status_searching_external": "正在查找最新的外部職缺…",
+      "status_scoring": "正在用你的履歷為職缺評分…",
+      "tray_title": "目前我記下的",
+      "tray_edit_prefix": "對了,關於{field}…",
+      "tray_dismiss": "關閉",
+      "card_match": "{score}% 匹配",
+      "card_via": "來自 {publisher}",
+      "card_save": "收藏",
+      "card_saved": "已收藏",
+      "card_pass": "略過",
+      "card_passed": "已略過",
+      "card_apply": "查看原職缺",
+      "wrap_cta": "帶我去看我的配對",
+      "restore_notice": "已接續上次的對話。",
+      "superseded_notice": "這段對話已在其他視窗繼續 —— 請重新整理以同步。",
+      "error_turn_failed": "這則訊息沒有送出。",
+      "error_retry": "重試",
+      "error_daily_limit": "今天重新開始導引的次數有點多了 —— 明天再來,或先略過直接進入應用程式。",
+      "progress_resume": "履歷",
+      "progress_chat": "對話",
+      "progress_matches": "配對",
+      "progress_done": "完成",
+      "fields": {
+        "targetRoles": "目標職缺",
+        "seniority": "職級",
+        "workModes": "工作型態",
+        "salary": "薪資",
+        "employmentTypes": "僱用型態",
+        "industriesTarget": "目標產業",
+        "industriesAvoid": "避開產業",
+        "companyStages": "公司階段",
+        "companySizes": "公司規模",
+        "locations": "地點",
+        "mustHaves": "必要條件",
+        "dealbreakers": "底線"
+      },
+      "values": {
+        "remote": "遠端",
+        "hybrid": "混合",
+        "onsite": "現場",
+        "full_time": "全職",
+        "contract": "約聘",
+        "part_time": "兼職",
+        "internship": "實習"
+      }
+    }
+  },
+  "mission": {
+    "page_title": "任務中心",
+    "briefing": {
+      "eyebrow": "AI 簡報 · {day} · {time}",
+      "loading": "正在連接你的代理…",
+      "empty_quote": "我還在準備中。明早 7 點為你發出第一份簡報。",
+      "empty_first_run": "早安。這是上工第一天 —— 我會在夜裡掃描招聘看板,明早 7 點呈上首份名單。"
+    },
+    "today": {
+      "heading": "今天的投遞",
+      "count": "{count} 項待投",
+      "submits_at": "{time} 自動投遞 —— 在那之前可一鍵略過",
+      "empty": "早晨很安靜。昨夜沒有符合你標準、值得排入佇列的新職缺。我會繼續留意。"
+    },
+    "yesterday": {
+      "heading": "昨天的投遞",
+      "empty": "昨天沒有投遞。"
+    },
+    "week": {
+      "heading": "本週回顧",
+      "summary": "已投遞 {applied} · 招募者查看 {views} · {invites} 個面試{invites, plural, one {邀請} other {邀請}}",
+      "empty": "本週還沒有動靜。"
+    },
+    "rail": {
+      "today_runs": "今天的投遞"
+    },
+    "run": {
+      "match_score": "媒合度 {score}",
+      "apply_early": "立即投遞",
+      "skip": "略過",
+      "undo": "撤回({hours} 小時內)",
+      "open_detail": "查看 →"
+    },
+    "status": {
+      "queued": "排隊中",
+      "previewing": "預覽中",
+      "submitted": "已投遞",
+      "skipped": "你已略過",
+      "failed": "失敗",
+      "undone": "已撤回"
+    },
+    "counts": {
+      "submitted": "已投遞",
+      "previewing": "預覽中",
+      "skipped": "已略過",
+      "failed": "失敗"
+    },
+    "pause": {
+      "cta": "暫停我的代理",
+      "resume": "恢復代理",
+      "paused": "你的代理已暫停。",
+      "paused_until": "暫停至 {iso}",
+      "modal_title": "要暫停多久?",
+      "modal_description": "你可以隨時恢復。已投遞的履歷不會被撤回。",
+      "option_24h": "24 小時",
+      "option_24h_hint": "最常用 —— 處理今天剩下的事務,明天再繼續。",
+      "option_7d": "7 天",
+      "option_7d_hint": "出差、專注週,或暫時不想看求職。",
+      "option_indefinite": "無限期",
+      "option_indefinite_hint": "直到你回來手動恢復為止。",
+      "cancel": "取消",
+      "confirm": "暫停我的代理",
+      "error": "我無法暫停你的代理。請再試一次。"
+    },
+    "actions": {
+      "skipped_toast": "好的 —— 我不會投遞 {company}。",
+      "undo_toast": "已為你撤回對 {company} 的申請。",
+      "applied_early_toast": "正在為你投遞 {company} 的申請。",
+      "error": "操作未完成。請再試一次。"
+    }
+  },
+  "apps": {
+    "back_to_mission": "任務中心",
+    "loading": "正在載入紀錄…",
+    "not_found_title": "找不到這次應徵。",
+    "not_found_body": "可能已被移除,或你沒有權限。返回任務中心試試。",
+    "chat": {
+      "intro_eyebrow": "我為什麼挑這個",
+      "intro_body": "以下是我挑這個職缺的理由,以及我代你提交了什麼。",
+      "match_eyebrow": "媒合分析",
+      "match_caption": "你的背景與這個職位的契合程度",
+      "match_score": "整體媒合度",
+      "tech_eyebrow": "技術棧",
+      "tech_caption": "JD 所列出的項目,以及你履歷上的技能對照",
+      "tech_required": "必備條件",
+      "tech_user_has": "你的履歷上有",
+      "yes": "是",
+      "no": "否",
+      "claims_eyebrow": "陳述核對",
+      "claims_caption": "我寫下的每一項具體陳述都對應到你履歷中的某一句話",
+      "claims_passed": "已通過",
+      "claims_failed": "無依據",
+      "prompt_eyebrow": "我使用的提示詞",
+      "prompt_body": "我把這段發給了 {model}。system prompt 設定規則;user prompt 提供職缺 + 你的履歷。",
+      "prompt_show": "顯示提示詞",
+      "prompt_hide": "隱藏提示詞",
+      "prompt_loading": "正在取得提示詞…",
+      "letter_eyebrow": "求職信",
+      "letter_body": "這是我提交的求職信。內容皆以你的履歷為依據 —— 每項具體陳述都可驗證。",
+      "diff_eyebrow": "我提交的履歷版本",
+      "diff_body": "你的主履歷與我提交版本之間的差異。新增的部分已標示;沒有任何憑空捏造的內容。"
+    },
+    "detail": {
+      "status_badge": "狀態",
+      "location": "地點",
+      "salary": "薪資",
+      "posted": "發布於",
+      "match": "媒合度",
+      "open_external": "在求職平台開啟",
+      "bookmark": "收藏",
+      "withdraw": "撤回應徵"
+    }
+  },
+  "settings": {
+    "page_title": "設定",
+    "intent": {
+      "heading": "你的求職意向",
+      "subtitle": "隨時都能編輯。明早的掃描會使用新版本。",
+      "save": "儲存變更",
+      "saved": "收到。明早的掃描會用這版意向,今天的佇列維持不變。",
+      "save_error": "儲存失敗,請重試。",
+      "current_label": "目前內容",
+      "version_hint": "第 {version} 版 · 最後更新 {iso}"
+    },
+    "tier": {
+      "heading": "方案與帳單",
+      "current": "目前方案:{tier}。",
+      "cap_hint": "每天最多申請 {cap} 次。",
+      "manage": "管理帳單",
+      "manage_unavailable": "帳單入口尚未上線,啟用後我會立即呈現給你。"
+    },
+    "pause_schedule": {
+      "heading": "暫停排程",
+      "enabled": "自動申請已啟用。",
+      "disabled": "自動申請已暫停。",
+      "toggle_aria": "切換自動申請"
+    },
+    "tone": {
+      "heading": "求職信語氣調校",
+      "premium_only": "僅限 Premium+ —— 升級後即可啟用。",
+      "subtitle": "想讓你的代理在求職信中強調什麼?可以是範例、用字遣詞,或要避免的內容。",
+      "placeholder": "以影響數據開頭。每段只寫一句。絕不使用「熱愛」這個詞。",
+      "save": "儲存語氣"
+    },
+    "account": {
+      "heading": "帳號",
+      "email_label": "電子郵件",
+      "sign_out": "登出",
+      "delete_account": "刪除我的帳號",
+      "delete_modal_title": "確定要刪除你的 RoboApply 帳號嗎?",
+      "delete_modal_body": "這會立即停止代理並移除你的資料。已送出的申請仍會留在各招聘平台上。請輸入你的電子郵件以確認。",
+      "delete_confirm_label": "輸入 {email} 以確認",
+      "delete_confirm_placeholder": "your@email.com",
+      "delete_cancel": "取消",
+      "delete_confirm": "刪除帳號",
+      "delete_in_progress": "刪除中…",
+      "delete_error": "刪除未能完成。請重試或聯絡客服。"
+    }
+  },
+  "preferences": {
+    "loading": "正在載入你的偏好設定…",
+    "rail": {
+      "eyebrow": "偏好設定",
+      "title": "求職規則",
+      "hunt_active": "求職進行中",
+      "hunt_active_sub": "智慧代理正在背景為你工作",
+      "hunt_paused": "求職已暫停",
+      "hunt_paused_sub": "不會再投出新的應徵",
+      "pause": "暫停求職",
+      "resume": "繼續求職"
+    },
+    "nav": {
+      "identity": "身分資料",
+      "hunt": "求職目標",
+      "agent": "代理行為",
+      "notif": "通知",
+      "integ": "整合",
+      "privacy": "隱私與封鎖",
+      "plan": "方案與用量",
+      "danger": "危險操作區"
+    },
+    "savebar": {
+      "unsaved": "有未儲存的變更",
+      "discard": "捨棄",
+      "save": "儲存變更",
+      "saving": "儲存中…"
+    },
+    "identity": {
+      "eyebrow": "01 · 身分資料",
+      "title_before": "你是",
+      "title_em": "誰",
+      "title_after": "。",
+      "sub": "這是我為你起草每一份應徵、代你發送每一則回覆時所依據的真實來源。",
+      "group_profile": "個人檔案",
+      "upload_photo": "上傳相片",
+      "photo_hint": "PNG、JPG · 方形效果最佳",
+      "full_name": "全名",
+      "pronouns": "稱謂代名詞",
+      "pronouns_sub": "選填 — 用於求職信中代名詞的一致性",
+      "pronouns_other": "其他",
+      "pronouns_none": "不願透露",
+      "years_exp": "年資",
+      "new_grad": "社會新鮮人",
+      "years_suffix": " 年",
+      "group_contact": "聯絡方式",
+      "email": "電子郵件",
+      "phone": "電話",
+      "location": "所在地",
+      "location_ph": "城市、州/省",
+      "group_links": "連結",
+      "linkedin": "LinkedIn",
+      "github": "GitHub",
+      "portfolio": "作品集 / 網站",
+      "group_default_resume": "預設履歷",
+      "resume_base": "基礎版",
+      "no_resumes": "尚無履歷 — 請先在履歷產生器中建立一份。"
+    },
+    "hunt": {
+      "eyebrow": "02 · 求職目標",
+      "title_before": "我正在為你",
+      "title_em": "尋找",
+      "title_after": "的目標。",
+      "sub": "收緊篩選條件可呈現更少、更精準的媒合;放寬則可撒更大的網。",
+      "plain_label": "用白話說 · 代理每次執行都會讀它",
+      "plain_l1": "{stages} 階段公司的 {roles} 職位",
+      "plain_l2": "{cities} 的 {modes}",
+      "plain_l3": "${min}k–{max}k 基本薪資 · {count} 個產業",
+      "plain_l4": "必備:{items}",
+      "plain_l5": "絕對條件:{items}",
+      "any_stage": "任意階段",
+      "none": "無",
+      "mode_remote_word": "遠端",
+      "mode_hybrid_word": "混合",
+      "mode_onsite_word": "現場",
+      "group_intent": "意向陳述",
+      "intent_label": "白話描述",
+      "intent_sub": "自由填寫 — 當職缺看起來相似時作為打破平手的依據",
+      "group_role": "職位",
+      "titles_label": "你想要的職稱",
+      "titles_sub": "新增多種說法 — 我會全部媒合",
+      "titles_ph": "輸入職稱,按逗號確認",
+      "seniority_label": "資歷",
+      "seniority_sub": "鎖定 {level} 及以上職位",
+      "group_location": "地點",
+      "work_mode_label": "工作模式",
+      "mode_remote": "遠端",
+      "mode_remote_desc": "任何地點、任何時區",
+      "mode_hybrid": "混合",
+      "mode_hybrid_desc": "每週進辦公室 2–3 天",
+      "mode_onsite": "現場",
+      "mode_onsite_desc": "每週進辦公室 5 天",
+      "cities_label": "城市或地區",
+      "cities_sub": "外加遠端友善的地點",
+      "cities_ph": "新增城市",
+      "group_comp": "薪酬",
+      "salary_label": "基本薪資範圍",
+      "salary_sub": "${min}k–${max}k · 我會篩掉低於 {min}k 的職缺",
+      "salary_min": "最低基本薪資",
+      "salary_max": "最高基本薪資",
+      "salary_median": "{level} 中位數:$215k",
+      "group_company": "公司",
+      "stage_label": "階段",
+      "stage_sub": "選擇你想加入公司生命週期的哪個階段",
+      "headcount_label": "團隊規模",
+      "group_industry": "產業",
+      "industries_target_label": "目標產業",
+      "industries_target_sub": "我會優先呈現這些產業的職缺",
+      "industries_avoid_label": "要避開的產業",
+      "industries_avoid_sub": "硬性封鎖 — 永不顯示",
+      "industries_avoid_ph": "新增產業",
+      "group_hard_rules": "硬性規則",
+      "musthaves_label": "必備條件",
+      "musthaves_sub": "缺少這些的職缺會被自動略過",
+      "musthaves_ph": "新增必備條件",
+      "dealbreakers_label": "絕對條件",
+      "dealbreakers_sub": "若職缺描述提及這些 — 直接略過,毫無例外",
+      "dealbreakers_ph": "新增絕對條件",
+      "work_auth_label": "工作許可",
+      "auth_citizen": "美國公民 — 無需擔保",
+      "auth_pr": "美國永久居民",
+      "auth_h1b": "需要 H1-B 擔保",
+      "auth_opt": "需要 OPT 延期",
+      "auth_eu": "歐盟 / 英國公民",
+      "auth_other": "其他"
+    },
+    "agent": {
+      "eyebrow": "03 · 代理行為",
+      "title_before": "我應該有多",
+      "title_em": "積極",
+      "title_after": "。",
+      "sub": "大多數人都從中間檔起步,等前 5 份應徵順利回來後再往上調。",
+      "current_mode": "目前模式",
+      "mode_manual": "手動",
+      "mode_manual_desc": "我起草,你審核每一次發送。完全不自動投遞。",
+      "mode_balanced": "平衡",
+      "mode_balanced_desc": "我對 ≥ 90 的媒合自動投遞,其餘交給你審核。",
+      "mode_aggressive": "全自動",
+      "mode_aggressive_desc": "每個 ≥ 80 的媒合都會投出。有風險的我會先標記。",
+      "stat_sent": "每週發送",
+      "stat_saved": "已節省",
+      "stat_replies": "回覆",
+      "group_mode": "模式",
+      "behaviour_label": "自動投遞行為",
+      "group_thresholds": "門檻",
+      "threshold_label": "媒合門檻",
+      "threshold_sub": "只顯示得分 ≥ {score} 的媒合 — 在此設定下約每天 {count} 個新職位",
+      "cap_label": "每日應徵上限",
+      "cap_sub": "招募人員會注意到投遞量的激增 — 每天 {count} 份算是{tone}",
+      "cap_suffix": " / 天",
+      "cap_conservative": "保守",
+      "cap_sweet": "最佳區間",
+      "cap_pushing": "偏激進",
+      "quiet_label": "勿擾時段",
+      "quiet_sub": "我會照常工作,但不會在這個時段留下任何時間戳記",
+      "quiet_start": "勿擾開始",
+      "quiet_end": "勿擾結束",
+      "group_automations": "智慧自動化",
+      "auto_decline_label": "自動婉拒無關的招募人員來信",
+      "auto_decline_sub": "若職缺不在你的篩選範圍內,我會代你禮貌回絕",
+      "auto_schedule_label": "自動安排首輪面試",
+      "auto_schedule_sub": "當招募人員傳來行事曆連結時,我會從你的空檔中挑選最佳時段",
+      "pause_interviews_label": "進行中面試達 3 場以上時暫停求職",
+      "pause_interviews_sub": "別讓自己分身乏術 — 先讓目前的流程跑完",
+      "rescore_label": "每週重新評分",
+      "rescore_sub": "隨著你的履歷不斷完善,我會依你目前的檔案重新排序過期的媒合",
+      "group_coach": "教練",
+      "coach_label": "教練話量",
+      "coach_sub": "你的 AI 副駕應該有多健談",
+      "coach_silent": "安靜",
+      "coach_nudges": "適度提醒",
+      "coach_loud": "健談"
+    },
+    "notif": {
+      "eyebrow": "04 · 通知",
+      "title_before": "什麼時候該",
+      "title_em": "拍拍你的肩膀",
+      "title_after": "。",
+      "sub": "預設情況下我很安靜。隨著你越來越信任代理,再逐項開啟。",
+      "group_channels": "管道",
+      "channel_email": "電子郵件",
+      "channel_email_sub": "發送到你的帳號電子郵件",
+      "channel_push": "推播",
+      "channel_push_sub": "瀏覽器 + 行動 App",
+      "channel_sms": "簡訊",
+      "group_matrix": "需要通知我的事項",
+      "col_email": "郵件",
+      "col_push": "推播",
+      "col_sms": "簡訊",
+      "event_newMatch90_label": "新媒合 ≥ 90",
+      "event_newMatch90_sub": "出現高契合度的新職缺",
+      "event_queueReview_label": "佇列需要審核",
+      "event_queueReview_sub": "有一筆自動投遞即將發送",
+      "event_appSent_label": "應徵已發送",
+      "event_appSent_sub": "安靜的確認回條",
+      "event_response_label": "雇主的回覆",
+      "event_response_sub": "招募人員或招募主管回覆了",
+      "event_interview_label": "面試已安排",
+      "event_interview_sub": "行事曆時段已預訂",
+      "group_digest": "摘要",
+      "digest_label": "摘要頻率",
+      "digest_sub": "彙整我做了哪些事,不逐項提醒",
+      "digest_off": "關閉",
+      "digest_daily": "每天早上 7 點",
+      "digest_weekly": "每週一"
+    },
+    "integ": {
+      "eyebrow": "05 · 整合",
+      "title_before": "把我接入",
+      "title_em": "你的工具組",
+      "title_after": "。",
+      "sub": "我接入得越多,你就越不用費心盯著。我能從 Gmail 抓取回覆、在你的行事曆上安排面試,並在 Slack 裡提醒你。",
+      "loading": "正在載入整合…",
+      "connected": "已連接",
+      "connect": "連接",
+      "disconnect": "中斷連接"
+    },
+    "privacy": {
+      "eyebrow": "06 · 隱私與封鎖",
+      "title_before": "誰能",
+      "title_em": "看到你",
+      "title_after": "。",
+      "sub": "隱身模式預設開啟。你目前的雇主永遠看不到你;被你封鎖公司的招募人員也永遠聯絡不到你。",
+      "group_visibility": "可見度",
+      "visibility_label": "個人檔案可見度",
+      "visibility_sub": "誰能在主動搜尋中找到你",
+      "vis_stealth": "隱身",
+      "vis_matched": "僅媒合的公司",
+      "vis_everyone": "所有人",
+      "group_blocklist": "公司封鎖名單",
+      "blocked_label": "自動封鎖",
+      "blocked_sub": "這些公司永遠看不到你的個人檔案或應徵",
+      "reason_employer": "目前雇主 · 自動",
+      "reason_byyou": "由你新增",
+      "remove": "移除",
+      "add_company": "+ 新增要封鎖的公司",
+      "add_ph": "公司名稱",
+      "add_confirm": "新增",
+      "blocked_recruiters_label": "已封鎖的招募人員",
+      "blocked_recruiters_sub": "已封鎖 {count} 名招募人員,他們無法聯絡你",
+      "manage_list": "管理名單 →",
+      "group_data": "你的資料",
+      "export_label": "匯出全部資料",
+      "export_sub": "所有應徵、草稿、逐字稿和履歷,以 JSON + PDF 格式匯出",
+      "download_archive": "下載封存檔",
+      "retention_label": "資料保留",
+      "retention_sub": "我保留面試逐字稿和草稿的時間長度",
+      "retention_30": "30 天",
+      "retention_90": "90 天",
+      "retention_365": "1 年",
+      "retention_forever": "永久"
+    },
+    "plan": {
+      "eyebrow": "07 · 方案與用量",
+      "title_before": "你目前使用的是",
+      "title_after": "。",
+      "sub": "隨時可取消、隨時可暫停。不會因為你去度個假,求職就停下來。",
+      "usage_apps": "應徵 · 本月",
+      "usage_hours": "已節省時間 · 累計 42 小時",
+      "usage_replies": "回覆 · 14% 回覆率",
+      "usage_mock": "模擬面試",
+      "group_plans": "方案",
+      "free_name": "免費版",
+      "free_billing": "永久免費",
+      "free_b1": "每週 10 份應徵",
+      "free_b2": "僅手動模式",
+      "free_b3": "無 AI 客製",
+      "free_b4": "內含履歷產生器",
+      "pro_name": "專業版",
+      "per_month": "每月",
+      "popular": "熱門",
+      "pro_b1": "無限應徵",
+      "pro_b2": "全部 AI 功能",
+      "pro_b3": "模擬面試(無限次)",
+      "pro_b4": "依職缺客製履歷",
+      "pro_b5": "電子郵件 + 行事曆整合",
+      "premium_name": "尊享版",
+      "premium_b1": "包含專業版全部功能",
+      "premium_b2": "禮賓服務:真人每週審核你最佳的 3 份草稿",
+      "premium_b3": "薪資談判腳本",
+      "premium_b4": "貼身入門引導",
+      "current_plan": "目前方案",
+      "downgrade": "降級",
+      "upgrade": "升級 →",
+      "switch": "切換",
+      "group_billing": "帳單",
+      "payment_label": "付款方式",
+      "payment_sub": "尾號 4242 的 Visa 卡",
+      "update_card": "更新卡片",
+      "next_bill_label": "下次扣款",
+      "next_bill_sub": "$19.00 · 2026 年 6 月 14 日",
+      "view_invoices": "檢視發票"
+    },
+    "danger": {
+      "eyebrow": "08 · 危險操作區",
+      "title_before": "這些是",
+      "title_em": "不可逆",
+      "title_after": "的按鈕。",
+      "sub": "它們不會問兩遍 — 好吧,其實會問兩遍。但你還是應該想清楚。",
+      "pause_title": "暫停求職",
+      "pause_desc": "我會停止掃描、投遞和回覆。你的資料會保留。你可以隨時繼續。",
+      "pause_btn": "暫時暫停",
+      "resume_btn": "繼續求職",
+      "reset_title": "將偏好還原為預設值",
+      "reset_desc": "清空本頁的所有設定。履歷和應徵會保留。",
+      "reset_btn": "重設偏好",
+      "delete_data_title": "刪除所有應徵資料",
+      "delete_data_desc": "清除你的媒合紀錄、佇列、活動記錄和流程看板。帳號保留。",
+      "delete_data_btn": "刪除應徵資料",
+      "delete_data_confirm": "這會清除你的媒合紀錄、佇列、活動記錄和流程看板。你的帳號和履歷會保留。",
+      "delete_account_title": "刪除我的帳號",
+      "delete_account_desc": "清除一切:履歷、應徵、逐字稿、整合。無法復原。",
+      "delete_account_btn": "刪除帳號",
+      "delete_account_confirm": "這會清除一切 — 履歷、應徵、逐字稿、整合。此操作無法復原。",
+      "confirm_note": "這是一個佔位操作 — 目前不會真正刪除任何內容。",
+      "cancel": "取消"
+    }
+  },
+  "errors": {
+    "not_found_title": "404",
+    "not_found_body": "找不到這個頁面。",
+    "error_title": "發生錯誤",
+    "error_body": "我們已記錄這個問題。你可以重試或返回首頁。",
+    "try_again": "重試",
+    "go_home": "返回首頁"
+  },
+  "queue": {
+    "eyebrow": "{count, plural, one {# 項待審} other {# 項待審}}",
+    "title": "在我送出前 ",
+    "titleAccent": "先看一眼",
+    "titleAfter": "。",
+    "sub": "每一份在倒數計時結束後我都會自動投遞。你可以編輯求職信、跳過，或立即送出——你說了算。",
+    "fitPill": "{score} 媒合度",
+    "draftBy": "求職信草稿 · 由 RoboApply 撰寫",
+    "edit": "編輯",
+    "sendNow": "立即送出",
+    "sending": "傳送中…",
+    "editAndSend": "編輯並送出",
+    "skip": "跳過",
+    "skipping": "跳過中…",
+    "actionError": "沒有成功，請再試一次。",
+    "loading": "正在載入你的待審佇列…",
+    "countdown": {
+      "minutes": "{minutes} 分鐘後自動投遞",
+      "hours": "{hours} 小時後自動投遞",
+      "hoursMinutes": "{hours} 小時 {minutes} 分鐘後自動投遞",
+      "lessThanMinute": "不到 1 分鐘後自動投遞",
+      "now": "正在自動投遞…",
+      "scheduled": "已排定自動投遞",
+      "title": "倒數計時結束後我會自動投遞——除非你先採取行動。"
+    },
+    "empty": {
+      "title": "佇列",
+      "titleAccent": "已清空",
+      "sub": "當新的職缺超過你的門檻時就會出現在這裡。我會先草擬每一份並保留，等你審核後再送出。"
+    },
+    "error": {
+      "title": "無法載入佇列",
+      "body": "我這邊出了點小狀況。你的草稿都很安全——請再試一次。",
+      "retry": "再試一次"
+    },
+    "editCover": {
+      "title": "編輯求職信",
+      "subtitle": "應徵 {company} 的 {title}",
+      "fieldLabel": "求職信（支援 Markdown）",
+      "hint": "支援 Markdown。我會原樣送出這段文字。",
+      "tooLong": "太長了——請控制在 {max} 個字元以內。",
+      "error": "儲存失敗，請再試一次。",
+      "cancel": "取消",
+      "save": "儲存求職信",
+      "saving": "儲存中…"
+    }
+  },
+  "today": {
+    "eyebrow": "即時 · {time}",
+    "match": "媒合度",
+    "whyFits": "我為什麼覺得這個適合你",
+    "thinking": "正在研究這個職缺…",
+    "noReasoning": "這個職缺我還沒有詳細的判斷。",
+    "matchesTitle": "今日媒合 · 依契合度排序",
+    "appliedBanner": "已應徵。求職信、客製化履歷和篩選問題答案均已提交。",
+    "passedBanner": "已從你的推薦流中移除。我會從中學習，略過類似的職缺。",
+    "headline": {
+      "direct": {
+        "before": "{count} 份申請",
+        "accent": "已送出",
+        "after": "（趁夜）。"
+      },
+      "playful": {
+        "before": "我上了一整晚的",
+        "accent": "夜班",
+        "after": "☕"
+      },
+      "formal": {
+        "before": "隔夜",
+        "accent": "總結",
+        "after": "。"
+      }
+    },
+    "sub": {
+      "direct": "掃描了 {scanned} 個職缺，{matched} 個達到你的門檻，{autoApplied} 個已自動應徵。最強的幾個已進入佇列——由你決定。",
+      "playful": "趁你睡覺時我煮好了咖啡。掃描了 {scanned} 個職缺，{matched} 個媒合成功，{autoApplied} 個已自動應徵。還有 {queued} 個在等你點頭。",
+      "formal": "隔夜共審閱 {scanned} 個職缺，{matched} 個達到媒合門檻。已提交 {autoApplied} 份申請；{queued} 份等待你審核。"
+    },
+    "stats": {
+      "autoApplied": "已自動應徵",
+      "whileYouSlept": "趁你睡覺",
+      "scanned": "隔夜掃描",
+      "matched": "媒合 ≥ 80",
+      "matchedDelta": "{count} 個超過標準線",
+      "inQueue": "在你的佇列中"
+    },
+    "posted": {
+      "justNow": "剛剛",
+      "hoursAgo": "{count} 小時前",
+      "daysAgo": "{count} 天前"
+    },
+    "tier": {
+      "strong": "高度媒合",
+      "good": "良好媒合",
+      "stretch": "有挑戰",
+      "longShot": "機會較小"
+    },
+    "tag": {
+      "stretch": "挑戰型職缺"
+    },
+    "work": {
+      "remote": "遠端",
+      "hybrid": "混合辦公",
+      "onsite": "現場辦公"
+    },
+    "status": {
+      "applied": "✓ 已應徵",
+      "passed": "✕ 已略過",
+      "queued": "◆ 佇列中"
+    },
+    "facet": {
+      "salaryFit": "薪資契合",
+      "salaryWithinBand": "在你的期望區間內",
+      "salaryBelowBand": "低於你的期望區間",
+      "skillOverlap": "技能重疊",
+      "skillValue": "涵蓋 {pct}% 的 JD 技能",
+      "riskFlag": "風險提示",
+      "riskNone": "未發現重大風險"
+    },
+    "actions": {
+      "applyNow": "立即應徵",
+      "applying": "應徵中…",
+      "schedule": "排程自動應徵",
+      "pass": "略過",
+      "undo": "復原",
+      "viewJd": "查看職缺描述 ↗",
+      "refresh": "重新整理",
+      "filters": "篩選"
+    },
+    "empty": {
+      "title": "全部處理完畢，",
+      "accent": "很棒。",
+      "sub": "目前沒有超過你門檻的新媒合。我會繼續掃描，一有新職缺就放到這裡。"
+    },
+    "error": {
+      "title": "無法載入你的",
+      "accent": "媒合",
+      "sub": "我這邊出了點小問題。你的推薦流都安全——請重試。",
+      "retry": "重試"
+    }
+  },
+  "activity": {
+    "eyebrow": "最近 7 天",
+    "title": "我代你做的",
+    "titleAccent": "每一件事",
+    "titleAfter": "。",
+    "sub": "每一次投遞、草擬、婉拒與默默做出的決定，都有跡可循。沒有黑箱。",
+    "loading": "正在載入你的活動記錄…",
+    "stats": {
+      "hoursSaved": "節省時數",
+      "thisWeek": "本週",
+      "appsSent": "已投遞",
+      "replies": "回覆",
+      "replyRate": "{percent}%",
+      "draftsWritten": "已草擬"
+    },
+    "empty": {
+      "title": "目前還沒有",
+      "titleAccent": "記錄",
+      "sub": "等我開始代你投遞、客製化履歷和處理訊息後，每一步操作都會顯示在這裡——並附上我的理由。"
+    },
+    "error": {
+      "title": "無法載入你的活動記錄",
+      "body": "我這邊出了點小狀況。你的歷史記錄都安全無虞——請重試。",
+      "retry": "再試一次"
+    }
+  },
+  "pipeline": {
+    "eyebrow": "{count} 個進行中的對話",
+    "loading": "正在載入你的流程看板…",
+    "headline": {
+      "direct": {
+        "before": "看看每一個",
+        "accent": "對話",
+        "after": "進展如何。"
+      },
+      "playful": {
+        "before": "你手上所有",
+        "accent": "正在推進",
+        "after": "的機會 ✨"
+      },
+      "formal": {
+        "before": "流程",
+        "accent": "總覽",
+        "after": "。"
+      }
+    },
+    "sub": {
+      "direct": "自動同步收件匣回覆與行事曆邀約。拖曳卡片，或使用其狀態選單，即可在 {columns} 個階段之間移動。",
+      "playful": "我會根據你的收件匣與行事曆保持同步。拖曳卡片即可推進它，也可以從選單裡選擇新的階段。",
+      "formal": "各階段會根據收件匣回覆與行事曆邀約自動更新。拖曳卡片或使用其狀態控制項即可重新分配。"
+    },
+    "columns": {
+      "saved": "已收藏",
+      "applied": "已應徵",
+      "interview": "面試中",
+      "offer": "offer"
+    },
+    "column": {
+      "aria": "{name} 階段，{count} 項"
+    },
+    "card": {
+      "drag_hint": "可拖曳卡片——拖到其他階段，或使用狀態選單",
+      "move_label": "將 {role} 移動到其他階段",
+      "untitled_company": "未命名公司",
+      "untitled_role": "未命名職位"
+    },
+    "when": {
+      "follow_up": "{date} 跟進",
+      "applied": "{ago}應徵",
+      "saved": "{ago}收藏"
+    },
+    "ago": {
+      "now": "剛剛",
+      "minutes": "{n} 分鐘前",
+      "hours": "{n} 小時前",
+      "days": "{n} 天前",
+      "weeks": "{n} 週前"
+    },
+    "empty": {
+      "saved": "還沒有收藏——收藏一個職缺，它就會出現在這裡。",
+      "applied": "目前沒有進行中的應徵。",
+      "interview": "還沒有安排面試。",
+      "offer": "還沒有 offer——一旦拿到我會替你慶祝 ✨"
+    },
+    "empty_board": {
+      "title": "你的流程看板",
+      "accent": "空空如也",
+      "body": "當你收藏或應徵職缺後，它們會出現在這裡，讓你在同一處追蹤每一個對話。"
+    },
+    "error": {
+      "title": "無法載入你的流程看板",
+      "body": "我這邊出了點小問題。你的資料是安全的——請重試。",
+      "retry": "重試"
+    }
+  },
+  "mock": {
+    "setup": {
+      "eyebrow": "模擬面試 · {count} 個職位",
+      "title": "反覆練習，直到 ",
+      "titleAccent": "習以為常",
+      "titleAfter": "。",
+      "sub": "選職缺、選面試官、選風格，我來陪你過招。你的教練會在一旁即時給你提示。",
+      "loading": "正在載入面試訓練場…",
+      "startError": "無法開始這場面試，請再試一次。",
+      "creditCost": "消耗 {n} 點",
+      "creditsRemaining": "剩餘 {n} 點",
+      "insufficientCredits": "這場面試需要 {required} 點，你目前只有 {balance} 點。請儲值後繼續。",
+      "getCredits": "取得點數",
+      "recent": {
+        "label": "接著上次繼續",
+        "count": "{count} 筆最近紀錄",
+        "with": "面試官：{name}",
+        "replay": "回看這場 →",
+        "showMore": "展開較早的 {count} 筆",
+        "showLess": "收合",
+        "deleteAria": "刪除錄影",
+        "deleteConfirm": "刪除這筆錄影？",
+        "delete": "刪除",
+        "cancel": "取消"
+      },
+      "role": {
+        "title": "選擇職缺",
+        "sub": "搜尋或瀏覽 {count} 個真實職位方向",
+        "searchPlaceholder": "例如：資深產品經理、iOS、機器學習…",
+        "more": "還有 {count} 個 — 請細化搜尋",
+        "tabBrowse": "瀏覽職位",
+        "tabPaste": "貼上職位描述",
+        "jdPlaceholder": "貼上完整的職位描述 —— 職稱、職責、任職要求。我會把它改寫成一份面試綱要。",
+        "jdHint": "貼上完整的職位描述 —— 我會把它整理成結構化的面試綱要，並據此設計問題。",
+        "jdCount": "{count} 個字元",
+        "jdTooShort": "再多補充一些 —— 把職責與任職要求也貼上，綱要才會更準確。",
+        "categories": {
+          "engineering-devops": "工程與 DevOps",
+          "product-design": "產品與設計",
+          "data-ai-analytics": "資料、AI 與分析",
+          "marketing-content": "行銷與內容",
+          "sales-customer-success": "業務與客戶成功",
+          "finance-accounting": "財務與會計",
+          "healthcare-life-sciences": "醫療與生命科學",
+          "people-ops-trades": "人資、營運與技術職"
+        },
+        "roles": {
+          "frontend-engineer": "前端工程師",
+          "backend-engineer": "後端工程師",
+          "full-stack-engineer": "全端工程師",
+          "mobile-engineer-ios-android": "行動應用工程師（iOS/Android）",
+          "devops-platform-engineer": "DevOps / 平台工程師",
+          "site-reliability-engineer": "網站可靠性工程師（SRE）",
+          "security-engineer": "資安工程師",
+          "engineering-manager": "工程主管",
+          "product-manager": "產品經理",
+          "senior-product-manager": "資深產品經理",
+          "technical-program-manager": "技術專案經理",
+          "product-designer": "產品設計師",
+          "ux-researcher": "UX 研究員",
+          "ux-ui-designer": "UX/UI 設計師",
+          "brand-visual-designer": "品牌 / 視覺設計師",
+          "data-analyst": "資料分析師",
+          "data-scientist": "資料科學家",
+          "data-engineer": "資料工程師",
+          "machine-learning-engineer": "機器學習工程師",
+          "analytics-engineer": "分析工程師",
+          "business-intelligence-analyst": "商業智慧分析師（BI）",
+          "ai-research-scientist": "AI / 研究科學家",
+          "digital-marketing-manager": "數位行銷經理",
+          "content-marketer-copywriter": "內容行銷 / 文案",
+          "seo-specialist": "SEO 專員",
+          "social-media-manager": "社群媒體經理",
+          "growth-marketer": "成長行銷專員",
+          "brand-manager": "品牌經理",
+          "public-relations-specialist": "公關專員",
+          "account-executive": "業務專員",
+          "sales-development-rep-sdr": "業務開發代表（SDR）",
+          "solutions-sales-engineer": "解決方案 / 售前工程師",
+          "customer-success-manager": "客戶成功經理",
+          "account-manager": "客戶經理",
+          "customer-support-specialist": "客戶支援專員",
+          "sales-manager": "業務經理",
+          "financial-analyst": "財務分析師",
+          "accountant": "會計人員",
+          "controller": "財務主管",
+          "investment-equity-analyst": "投資 / 股票分析師",
+          "fp-a-manager": "FP&A 經理",
+          "auditor": "稽核員",
+          "tax-advisor": "稅務顧問",
+          "registered-nurse": "護理師",
+          "medical-doctor-physician": "醫師",
+          "pharmacist": "藥師",
+          "clinical-research-associate": "臨床研究專員",
+          "healthcare-administrator": "醫務管理人員",
+          "medical-laboratory-scientist": "醫事檢驗師",
+          "physical-therapist": "物理治療師",
+          "hr-business-partner": "人資業務夥伴（HRBP）",
+          "technical-recruiter": "技術招募專員",
+          "project-manager": "專案經理",
+          "operations-manager": "營運經理",
+          "supply-chain-logistics-manager": "供應鏈 / 物流經理",
+          "electrician": "電氣技師",
+          "skilled-tradesperson-hvac-welding": "技術技工（HVAC/焊接）"
+        }
+      },
+      "interviewer": {
+        "title": "選擇面試官",
+        "sub": "風格迥異的面試官——選擇你想練習的挑戰。"
+      },
+      "difficulty": {
+        "easy": "簡單",
+        "medium": "中等",
+        "hard": "困難"
+      },
+      "type": {
+        "title": "選擇形式",
+        "sub": "單場練習，或串連成完整一輪",
+        "minutes": "{minutes} 分鐘",
+        "recommendedBadge": "推薦",
+        "recommendedFor": "為「{role}」推薦",
+        "allFormats": "全部形式",
+        "forThisRole": "適配此職位"
+      },
+      "format": {
+        "title": "你將以什麼方式出場",
+        "sub": "視訊更貼近真實面試，語音適合熱身。",
+        "video": {
+          "title": "視訊通話",
+          "tag": "推薦",
+          "desc": "開鏡頭，面對面。我會評估你的眼神交流、臨場表現，以及你如何應對沉默。",
+          "b1": "自我子母畫面",
+          "b2": "眼神與臨場表現評分",
+          "b3": "錄製以便回看"
+        },
+        "voice": {
+          "title": "僅語音",
+          "tag": "低壓力",
+          "desc": "純音訊——像電話面試。適合在開鏡頭前先理清表達結構。",
+          "b1": "無需鏡頭",
+          "b2": "專注於你所說的內容",
+          "b3": "僅文字紀錄回看"
+        }
+      },
+      "launch": {
+        "role": "職缺",
+        "interviewer": "面試官",
+        "format": "形式",
+        "mode": "模式",
+        "pickRole": "請選擇職缺",
+        "pickInterviewer": "請選擇面試官",
+        "pickType": "請選擇形式",
+        "modeVideo": "📹 視訊通話",
+        "modeVoice": "🎤 僅語音",
+        "start": "開始面試",
+        "starting": "正在開始…",
+        "language": "語言",
+        "roleFromJd": "（來自你的職位描述）"
+      },
+      "langDuration": {
+        "title": "語言與時長",
+        "sub": "選擇我用哪種語言面試你,以及這場面試的時長。",
+        "languageLabel": "面試語言",
+        "durationLabel": "時長"
+      },
+      "error": {
+        "title": "無法載入面試訓練場",
+        "body": "我這邊出了點小問題，請稍後再試。",
+        "retry": "重試"
+      },
+      "preview": {
+        "title": "市場職位要求",
+        "sub": "這場面試將考察的內容 —— 依據真實招聘平台的在招職位生成。",
+        "empty": "選擇一個職位或貼上職位描述，選好面試官與面試類型，然後預覽驅動問題的職位要求。",
+        "loading": "正在取得即時職位要求…",
+        "error": "暫時無法預覽 —— 你的面試仍會針對該職位量身打造。",
+        "retry": "重試",
+        "previewBtn": "預覽 →",
+        "summaryLabel": "職位概述",
+        "skillsLabel": "必備技能",
+        "respLabel": "核心職責",
+        "signalsLabel": "成功訊號",
+        "questionsLabel": "開場問題範例",
+        "sourcesLabel": "來自真實在招職位",
+        "sourcesGeneric": "基於該職位的市場輪廓生成。",
+        "fromJd": "依據你貼上的職位描述"
+      },
+      "personas": {
+        "maya": {
+          "role": "溫暖型招募官",
+          "blurb": "親切健談，用溫和的追問引出你的故事。沒有套路，沒有壓力。",
+          "style": "從容不迫的節奏 · 開放式提問 · 反思式傾聽 · 鼓勵為主 · 絕不對立",
+          "company": "高成長公司人才合夥人"
+        },
+        "june": {
+          "role": "創辦人",
+          "blurb": "對使命充滿熱情，平易近人。想知道你是否真心在意——為什麼是這件事，為什麼是現在。",
+          "style": "友善而充滿活力 · 價值觀與動機優先 · 「為什麼選這家公司？」· 溫暖但會試探一次誠意",
+          "company": "早期創業公司創辦人兼CEO"
+        },
+        "nova": {
+          "role": "領域探勘者",
+          "blurb": "好奇心強、節奏明快。在整個領域裡跳躍穿梭——「還有什麼別的選擇？」",
+          "style": "廣度優先 · 對比各種方案 · 緊跟趨勢 · 橫向跳轉，從不深挖",
+          "company": "全球顧問公司總監"
+        },
+        "priya": {
+          "role": "行為面試官",
+          "blurb": "STAR法則的嚴格執行者。「說說你曾經……」一直問到你的故事有真實的行動和結果為止。",
+          "style": "以故事為本 · 嚴格執行STAR · 耐心追問 · 衝突與失敗情境 · 區分「我們」與「你」",
+          "company": "大型消費品牌人資主管"
+        },
+        "rex": {
+          "role": "難題拋投手",
+          "blurb": "拋給你一個從沒見過的問題，觀察你如何拆解——重點不是答案。",
+          "style": "橫向思維 · 估算與假設題 · 出聲推理 · 答到一半改一個條件",
+          "company": "大廠與顧問式面試官"
+        },
+        "diaz": {
+          "role": "實幹型主管",
+          "blurb": "親自做過這份工作、沉穩的帶兵主管。不斷追問「你具體做了什麼？」",
+          "style": "沉穩平和 · 實踐重於理論 · 「一個真實案例，一步步說」· 區分實幹者與空談者",
+          "company": "一線實踐主管 / 親力親為型經理"
+        },
+        "atlas": {
+          "role": "全才架構師",
+          "blurb": "見識過領域每個角落的資深通才。繪製你的能力版圖，探查盲區。",
+          "style": "廣度優先 · 跨領域 · 繪製全景版圖 · 跳到下一領域以暴露盲點",
+          "company": "大型科技公司傑出工程師"
+        },
+        "bishop": {
+          "role": "用人標準把關者",
+          "blurb": "想聽的是失敗的故事、你輸掉的衝突，以及你擔責的證據——而不是高光剪輯。",
+          "style": "領導力準則 · 極重責任擔當 · 要求談失敗與衝突 · 不信彩排過的答案 · 「你做了什麼？」",
+          "company": "高成長公司招募總監"
+        },
+        "okonkwo": {
+          "role": "問題架構師",
+          "blurb": "嚴謹的案例面試官，不斷移動目標。只在乎你在壓力下如何思考。",
+          "style": "第一性原理切入 · 結構化拆解 · 層層加碼約束 · 質詢假設 · 在模糊中保持鎮定",
+          "company": "頂級策略顧問公司合夥人"
+        },
+        "kai": {
+          "role": "白板老將",
+          "blurb": "熱衷邊界情況，往下挖三層。想知道你當時的確切決策，以及它失靈的那個案例。",
+          "style": "技術深度 · 安靜停頓 · 「把當時發生的事原原本本講一遍」· 對機制刨根問底",
+          "company": "大規模基礎設施團隊資深技術專家"
+        },
+        "voss": {
+          "role": "質疑型副總",
+          "blurb": "對每個說法都提出反駁。要的是故事背後的指標，而不是感覺。",
+          "style": "犀利 · 多疑 · 數字優先 · 「你怎麼知道？」· 只接受有證據支撐的深度",
+          "company": "副總裁級高管面試官"
+        },
+        "lena": {
+          "role": "表達教練",
+          "blurb": "在乎你能否把重點講清楚。會要你把複雜的事用簡單的話說明白。",
+          "style": "聽眾優先 · 「當我是外行，講給我聽」 · 看重一句俐落的結論 · 抓出術語堆砌與離題",
+          "company": "帶過數百位高階主管的溝通主管"
+        },
+        "mirae": {
+          "role": "快節奏面試組",
+          "blurb": "每兩分鐘跳一個題目，計時毫不留情。你能保持敏銳、隨機應變嗎？",
+          "style": "話題快速切換 · 限時作答 · 高張力節奏 · 看重應變與沉著",
+          "company": "大廠終面面試組主席"
+        },
+        "osei": {
+          "role": "文化守門人",
+          "blurb": "想看你在艱難時刻如何對待他人。會請你談談把團隊放在勝負之前的那一次。",
+          "style": "價值觀見於行動 · 協作與共融的故事 · 「團隊當時的感受如何？」 · 溫暖卻不放過細節",
+          "company": "重視價值觀公司的人資長"
+        },
+        "devi": {
+          "role": "思辨夥伴",
+          "blurb": "丟給你一道開放題，再和你一起解。在乎你如何定義問題、如何推理，而不是答案本身。",
+          "style": "協作式推理 · 「我們一起想辦法」 · 推你重新框定問題 · 看重思考過程而非標準答案",
+          "company": "和你出聲一起推理的產品策略師"
+        },
+        "amara": {
+          "role": "市場製圖師",
+          "blurb": "橫掃各個市場與領域，尋找你的廣度，以及你能拉出的關聯。",
+          "style": "跨產業 · 繪製整個市場版圖 · 「還有誰做得好？」 · 串連不同領域的想法",
+          "company": "橫跨數十個產業的成長顧問"
+        },
+        "sterling": {
+          "role": "主管氣場",
+          "blurb": "資深、嚴格、從容不迫。要你先給出主管摘要——再俐落地拿出佐證。",
+          "style": "正式而沉穩 · 結論先行 · 被追問時依然精簡 · 考驗沉著與用詞精準",
+          "company": "《財星》500大董事層級主管"
+        },
+        "tariq": {
+          "role": "壓力測試官",
+          "blurb": "又快又猛地施壓，搶話、把你的答案反丟回來。看的是你能不能穩住。",
+          "style": "連珠炮式提問 · 打斷並質疑 · 故意唱反調 · 考驗的是定力，而不只是答案",
+          "company": "高風險交易室面試關卡"
+        }
+      },
+      "archetype": {
+        "warmup": "暖場",
+        "behavioral": "行為面試",
+        "breadth": "廣度探勘",
+        "potential": "問題解決",
+        "depth": "深度鑽研",
+        "communication": "溝通表達",
+        "pressure": "高壓應對"
+      },
+      "types": {
+        "screening": {
+          "label": "電話初篩",
+          "sub": "背景、匹配度、動機、到職條件——進入正式面試前的第一道關"
+        },
+        "behavioral": {
+          "label": "行為面試（STAR）",
+          "sub": "真實過往案例：當責、衝突、失敗、影響力、領導力"
+        },
+        "technical": {
+          "label": "現場編程 / 技術面",
+          "sub": "在共享編輯器中即時解題：資料結構、演算法、正確性"
+        },
+        "system": {
+          "label": "系統 / 架構設計",
+          "sub": "端到端設計大規模系統，論證擴展性與取捨權衡"
+        },
+        "case": {
+          "label": "案例 / 商業問題",
+          "sub": "開放式商業問題：建立框架、運用數據、提出建議"
+        },
+        "culture": {
+          "label": "價值觀 / 文化契合",
+          "sub": "價值觀契合、動機、工作風格、模糊情境下的正直度"
+        },
+        "panel": {
+          "label": "小組面試 / 綜合輪次",
+          "sub": "如多位面試官聯合提問般，快速覆蓋多項能力面向"
+        },
+        "take_home": {
+          "label": "帶回任務答辯",
+          "sub": "為自主完成的專案答辯並延伸：設計選型、取捨權衡、擴展性"
+        },
+        "debugging": {
+          "label": "除錯 / 程式碼審查",
+          "sub": "診斷有缺陷的程式，或審查現有程式碼 / PR"
+        },
+        "incident_sre": {
+          "label": "故障處置 / SRE 情境",
+          "sub": "處置線上生產故障：止血恢復、命令列排障、事後檢討"
+        },
+        "sql_analytics": {
+          "label": "SQL / 數據分析實作",
+          "sub": "針對真實資料表動手寫查詢，並解讀指標邏輯"
+        },
+        "product_sense": {
+          "label": "產品感 / 執行力",
+          "sub": "開放式產品設計與指標命題：建框架、定用戶、排優先級、看度量"
+        },
+        "portfolio": {
+          "label": "作品集 / 過往作品審視",
+          "sub": "講解真實過往作品：流程、決策、個人貢獻、最終成效"
+        },
+        "design_critique": {
+          "label": "設計評析 / 白板設計",
+          "sub": "現場點評一款應用或設計，或就新命題草擬解決方案"
+        },
+        "research_design": {
+          "label": "使用者研究方案設計",
+          "sub": "現場設計一項研究方案，或評析一份有瑕疵的研究計畫"
+        },
+        "sales_roleplay": {
+          "label": "模擬銷售電話 / 角色扮演",
+          "sub": "面對扮演客戶，實戰需求挖掘、陌生開發或異議處理"
+        },
+        "pitch_demo": {
+          "label": "方案宣講 / 產品演示",
+          "sub": "向決策方做客製化演示或宣講，並應對現場質疑"
+        },
+        "account_strategy": {
+          "label": "客戶經營 / 客戶成功案例",
+          "sub": "分析客戶，制定導入、留存與增購擴展方案"
+        },
+        "modeling_test": {
+          "label": "財務建模 / Excel 實作",
+          "sub": "搭建並壓力測試 LBO / 三表 / DCF / FP&A 模型並答辯"
+        },
+        "finance_technical": {
+          "label": "金融專業問答",
+          "sub": "會計、估值、交易機制，以及一套投資邏輯"
+        },
+        "clinical_scenario": {
+          "label": "臨床情境",
+          "sub": "推演真實病患 / 病房情境：評估、釐清優先級、適時上報"
+        },
+        "situational_judgement": {
+          "label": "情境判斷測驗（SJT）",
+          "sub": "對職場兩難情境排序或口述，考察操守、專業度與判斷力"
+        },
+        "practical_skills": {
+          "label": "實作技能 / 技術工種測試",
+          "sub": "邊操作邊講解：工藝手法、安全規範、規程合規、故障診斷"
+        },
+        "teaching_demo": {
+          "label": "試教",
+          "sub": "進行一段微型授課，帶動學員，再為教學思路答辯"
+        },
+        "ops_case": {
+          "label": "營運 / 流程案例",
+          "sub": "診斷流程或供應鏈中斷，排定改善優先級"
+        },
+        "presentation": {
+          "label": "簡報演講面試",
+          "sub": "準備並發表一場結構化簡報，隨後應對提問挑戰"
+        },
+        "leadership_strategy": {
+          "label": "領導力 / 策略",
+          "sub": "面向管理與高階主管職位：團隊建設、願景，以及 90 天計畫"
+        },
+        "reference_check": {
+          "label": "背景調查 / 資歷核驗",
+          "sub": "核驗階段深入查證過往業績、可靠度與資歷"
+        }
+      },
+      "showAll": "查看全部 {count} 個",
+      "showFewer": "收起"
+    },
+    "live": {
+      "loading": "正在為你布置面試間…",
+      "backToSetup": "← 返回設定",
+      "livePill": "進行中",
+      "modeVideo": "📹 視訊",
+      "modeVoice": "🎤 語音",
+      "progress": "第 {current} / {total} 題",
+      "aiInterviewer": "AI 面試官",
+      "state": {
+        "asking": "提問中…",
+        "listening": "聆聽中",
+        "thinking": "思考中",
+        "speaking": "說話中"
+      },
+      "questionNum": "第 {current} / {total} 題",
+      "showHint": "顯示提示",
+      "hideHint": "隱藏提示",
+      "coachHint": "教練提示",
+      "skip": "略過 →",
+      "skipped": "（已略過）",
+      "you": "你",
+      "youName": "你 · {name}",
+      "youRole": "{role} · 你",
+      "micOpen": "麥克風已開啟——正在錄製回答",
+      "micOpenShort": "麥克風開啟",
+      "micReady": "麥克風就緒",
+      "waitForQuestion": "等問題問完再回答",
+      "composerPlaceholder": "說出來、打出來，或兩者都行。⌘+Enter 送出。",
+      "composerLabel": "你的回答",
+      "coachLive": "你的教練 · 即時",
+      "dismiss": "關閉",
+      "transcript": "即時紀錄",
+      "transcriptEmpty": "你們對話時，文字紀錄會出現在這裡…",
+      "autoSaved": "已自動儲存",
+      "endEarly": "提前結束面試",
+      "ending": "正在收尾…",
+      "controls": {
+        "camOn": "📹 鏡頭開",
+        "camOff": "📹 鏡頭關",
+        "mic": "🎤 麥克風",
+        "mute": "⏸ 靜音",
+        "restart": "↻ 重來",
+        "submitNext": "送出並下一題",
+        "submitFinish": "送出並結束",
+        "submitting": "傳送中…"
+      },
+      "cam": {
+        "requesting": "正在請求鏡頭…",
+        "requestingSub": "請查看瀏覽器的提示",
+        "denied": "鏡頭已被封鎖",
+        "deniedSub": "請在瀏覽器設定中允許，然後",
+        "tryAgain": "重試",
+        "unavailable": "鏡頭無法使用",
+        "unavailableSub": "將以語音模式繼續",
+        "off": "鏡頭已關閉",
+        "turnOn": "開啟",
+        "allow": "點擊以允許鏡頭",
+        "enable": "啟用"
+      },
+      "expired": {
+        "title": "這場面試已過期",
+        "body": "我找不到這場面試——可能已經結束，或連結已失效。重新開始一場吧。",
+        "cta": "開始新面試"
+      }
+    },
+    "report": {
+      "eyebrow": "本場完成 · {minutes} 分鐘",
+      "eyebrowScoring": "正在評分",
+      "eyebrowFallback": "模擬面試 · 報告",
+      "title": "你已經 ",
+      "titleAccent": "非常",
+      "titleAfter": " 接近了。",
+      "sub": "依照面試官會使用的評分標準打分。再調整兩點，你就能進入前 20%。",
+      "loading": "正在依評分標準評估你的回答…",
+      "loadingTitle": "正在 ",
+      "loadingTitleAccent": "了解狀況",
+      "loadingTitleAfter": "…",
+      "overall": "總分",
+      "deltaUp": "較上一場 +{delta}",
+      "deltaDown": "較上一場 −{delta}",
+      "strengths": "優勢",
+      "keepThese": "保持這些",
+      "sharpen": "待加強之處",
+      "topN": "前 {count} 項",
+      "actions": {
+        "runAgain": "再來一次",
+        "pickSetup": "換一種設定",
+        "download": "下載紀錄",
+        "share": "分享給朋友"
+      },
+      "error": {
+        "title": "無法載入這份",
+        "titleAccent": "報告",
+        "body": "評分時出了點問題。你的回答是安全的——請重試。",
+        "retry": "重試",
+        "back": "返回設定"
+      }
+    }
+  },
+  "ie": {
+    "setup": {
+      "eyebrow": "AI 模擬面試",
+      "title": "與",
+      "titleAccent": "即時 AI 面試官練習",
+      "sub": "依你的目標職位量身打造的即時語音面試。結束後可取得錄影、逐字稿與評分報告。",
+      "loading": "載入中…",
+      "error": {
+        "title": "無法載入設定",
+        "body": "發生問題，請再試一次。",
+        "retry": "重試"
+      },
+      "startError": "無法開始面試，請再試一次。",
+      "starting": "開始中…",
+      "start": "開始面試",
+      "roleLabel": "目標職位",
+      "rolePlaceholder": "例如：資深產品經理",
+      "interviewerLabel": "面試官",
+      "typeLabel": "面試類型",
+      "minutes": "分鐘",
+      "formatLabel": "形式與細節",
+      "mode": {
+        "voice": "語音",
+        "video": "視訊"
+      },
+      "modeShort": {
+        "voice": "語音",
+        "video": "視訊"
+      },
+      "languageLabel": "語言",
+      "durationLabel": "時長",
+      "advancedLabel": "進階設定",
+      "difficulty": "難度",
+      "tone": "語氣",
+      "tones": {
+        "warm": "親和",
+        "neutral": "中性",
+        "formal": "正式",
+        "skeptical": "審慎",
+        "friendly": "友善"
+      },
+      "pacing": "節奏",
+      "pacings": {
+        "relaxed": "輕鬆",
+        "standard": "標準",
+        "brisk": "緊湊"
+      },
+      "focusAreas": "重點領域",
+      "focusPlaceholder": "以逗號分隔，例如：領導力、系統設計",
+      "allowQuestions": "允許我在最後向面試官提問"
+    },
+    "live": {
+      "loading": "正在準備面試…",
+      "ending": "正在結束…",
+      "expired": {
+        "title": "此工作階段無法使用",
+        "body": "可能已結束或過期，請開始新的面試。",
+        "cta": "新增面試"
+      },
+      "recording": "錄製中",
+      "live": "直播",
+      "state": {
+        "speaking": "說話中…",
+        "listening": "聆聽中…",
+        "thinking": "思考中…",
+        "connecting": "連線中…",
+        "waiting": "準備開始…"
+      },
+      "interviewer": "面試官",
+      "you": "你",
+      "transcript": "即時字幕",
+      "transcriptEmpty": "你說話時，逐字稿會顯示在這裡。",
+      "cameraOff": "鏡頭已關閉",
+      "muteMic": "靜音",
+      "unmuteMic": "取消靜音",
+      "stopCam": "關閉鏡頭",
+      "startCam": "開啟鏡頭",
+      "endInterview": "結束面試",
+      "agentJoining": "正在為你接通面試官…",
+      "agentSlow": "面試官加入較慢。若持續如此，請確認面試語音 agent 已部署並正在執行。",
+      "reconnecting": "正在重新連線…",
+      "connectionLostTitle": "連線已中斷",
+      "connectionLostBody": "面試仍在進行中——重新加入即可從中斷處繼續，也可以現在結束並查看報告。",
+      "rejoin": "重新加入面試",
+      "endAnyway": "結束面試",
+      "poorConnection": "網路狀況不佳",
+      "micDeniedTitle": "需要麥克風權限",
+      "micDeniedBody": "無法使用你的麥克風，面試官將聽不到你說話。請在瀏覽器中允許使用麥克風後再試一次。",
+      "micRetry": "再試一次",
+      "deviceFailure": "你的麥克風或鏡頭發生問題。請檢查裝置設定——面試官可能聽不到或看不到你。",
+      "interviewerUnavailableTitle": "面試官暫時無法加入",
+      "interviewerUnavailableBody": "目前無法讓 AI 面試官進入房間。這通常只是暫時的，請稍後再試。",
+      "retry": "再試一次",
+      "coach": {
+        "currentQuestion": "目前的問題",
+        "awaitingQuestion": "正在等待面試官提問…",
+        "showHint": "顯示提示",
+        "hideHint": "隱藏提示",
+        "coachHint": "教練提示",
+        "thinking": "思考中…",
+        "noHint": "放輕鬆，照你的方式回答就好——你做得到。",
+        "coachLive": "你的教練 · 即時",
+        "dismiss": "關閉",
+        "listeningFor": "他們想聽到的是",
+        "answerTime": "時間",
+        "pace": "語速",
+        "fillers": "贅詞",
+        "specifics": "具體度",
+        "coachMode": "教練",
+        "on": "開",
+        "off": "關",
+        "coachModeHint": "回答時即時給你提示與提醒。想要真實臨場感就關閉即可。"
+      }
+    },
+    "report": {
+      "title": "面試報告",
+      "error": "無法載入報告。",
+      "loading": "正在載入報告…",
+      "newInterview": "新增面試",
+      "processing": "正在產生結果——錄影與評分稍後顯示。",
+      "refresh": "重新整理",
+      "refreshing": "重新整理中…",
+      "overall": "綜合分數",
+      "noScore": "尚無評分。",
+      "strengths": "優勢",
+      "gaps": "待加強",
+      "recording": "錄影",
+      "transcript": "逐字稿",
+      "download": "下載",
+      "analysisPending": "正在產生你的詳細分析，最多需要一分鐘。",
+      "dim": {
+        "structure": "結構",
+        "specificity": "具體性",
+        "communication": "表達",
+        "confidence": "自信",
+        "roleFit": "職位契合度"
+      },
+      "recommendations": {
+        "title": "行動計畫",
+        "sub": "具體改進步驟",
+        "pending": "正在產生你的個人化行動計畫…",
+        "unavailable": "本次面試暫無行動計畫。",
+        "empty": "暫無改進建議——本次表現全面且出色。",
+        "exampleLabel": "改寫範例",
+        "drill": "練習",
+        "priority": {
+          "high": "高優先級",
+          "medium": "中優先級",
+          "low": "低優先級"
+        }
+      },
+      "questionBreakdown": {
+        "title": "逐題分析",
+        "count": "{count} 題",
+        "pending": "正在產生逐題分析…",
+        "unavailable": "本次面試暫無逐題分析。",
+        "answerSummaryLabel": "你的回答",
+        "analysisLabel": "表現分析",
+        "correctionLabel": "糾正與改進",
+        "suggestionLabel": "具體建議",
+        "modelAnswerLabel": "參考答案",
+        "keyQuoteLabel": "你的原話",
+        "missed": "本次面試未涵蓋此題。",
+        "offScript": "即興題目",
+        "rating": {
+          "strong": "優秀",
+          "adequate": "達標",
+          "weak": "需改進",
+          "missed": "未作答"
+        }
+      }
+    }
+  },
+  "choosePlan": {
+    "title": "選擇你的方案",
+    "subtitle": "挑個方案開始吧——用 AI 模擬面試練習。隨時都能更換或取消。",
+    "loading": "正在載入方案…",
+    "error": "方案載入失敗。",
+    "retry": "重試",
+    "continueFree": "先略過——繼續使用免費版",
+    "selectFree": "免費開始",
+    "selectPaid": "選擇 {plan}",
+    "blurb": {
+      "free": "每月 1 次模擬面試，先來試試看。",
+      "starter": "每月 10 次模擬面試——每週穩定練習。",
+      "growth": "每月 28 次模擬面試——正式上場前每天練。"
+    },
+    "welcome": "歡迎加入 RoboApply",
+    "creditsHint": "1 點 = 一場 20 分鐘的模擬面試。",
+    "checkoutFailed": "無法開始結帳，請重試。"
+  },
+  "account": {
+    "eyebrow": "你的帳戶",
+    "title": "帳戶與",
+    "titleAccent": "帳單",
+    "loading": "正在載入你的帳戶…",
+    "nav": {
+      "profile": "資料",
+      "billing": "帳單",
+      "usage": "使用情況",
+      "security": "安全"
+    },
+    "error": {
+      "title": "無法載入你的帳戶",
+      "body": "擷取你的資料和帳單時發生錯誤，請重試。",
+      "retry": "重試"
+    },
+    "profile": {
+      "title": "帳戶資訊",
+      "displayName": "顯示名稱",
+      "memberSince": "註冊於 {date}",
+      "verified": "已驗證",
+      "edit": "編輯",
+      "save": "儲存",
+      "cancel": "取消"
+    },
+    "credits": {
+      "title": "模擬面試點數",
+      "unit": "點",
+      "note": "1 點 = 一場 20 分鐘的模擬面試。時間較短或較長的場次將按比例扣點。"
+    },
+    "region": {
+      "label": "地區",
+      "intl": "國際（美元）",
+      "cn": "中國（人民幣）"
+    },
+    "billing": {
+      "title": "訂閱與帳單",
+      "manage": "管理帳單",
+      "invoices": "檢視發票",
+      "cancel": "取消訂閱",
+      "viewHistory": "查看帳單記錄",
+      "summaryNote": "在安全的客戶入口中管理你的付款方式、發票與帳單記錄。",
+      "current": {
+        "renews": "{date} 續訂 · 按月計費",
+        "cancelsAt": "將於 {date} 取消",
+        "expiresAt": "將於 {date} 到期——續訂以繼續使用",
+        "status": {
+          "active": "有效",
+          "pastDue": "逾期",
+          "canceled": "已取消"
+        }
+      },
+      "history": {
+        "heading": "帳單記錄",
+        "subtitle": "你的發票與收據。",
+        "back": "返回帳戶",
+        "title": "發票",
+        "empty": "尚無發票。",
+        "loading": "載入中…",
+        "error": "無法載入帳單記錄。",
+        "download": "下載",
+        "paid": "已付款",
+        "pending": "處理中",
+        "failed": "失敗",
+        "card": "信用卡"
+      },
+      "checkout": {
+        "success": "你的訂閱已生效，歡迎加入！",
+        "cancel": "結帳已取消——你的方案未變更。",
+        "dismiss": "關閉"
+      },
+      "explore": {
+        "title": "想要更多練習機會？",
+        "sub": "比較免費版、Starter 與 Growth——隨時可升級。",
+        "cta": "檢視所有方案 →",
+        "titleMax": "你正在使用我們的頂級方案 🎉",
+        "subMax": "你已擁有我們提供的最多練習點數。隨時可比較方案。",
+        "ctaMax": "比較方案 →"
+      }
+    },
+    "plan": {
+      "free": "免費",
+      "premium": "進階",
+      "premiumPlus": "進階+",
+      "perMonth": "/月",
+      "dailyCap": "每天 {n} 次操作",
+      "mostPopular": "最受歡迎",
+      "current": "目前方案",
+      "upgrade": "升級",
+      "downgrade": "降級",
+      "comingSoon": "即將推出",
+      "starter": "入門版",
+      "growth": "進階版",
+      "freeForever": "永久免費",
+      "freePrice": "免費",
+      "subscribe": "立即訂閱",
+      "subscribeAlipay": "使用支付寶付款",
+      "creditsCap": "每月 {n} 點",
+      "feature": {
+        "mockInterviews": "模擬面試",
+        "resumeTailors": "履歷客製",
+        "coverLetters": "求職信",
+        "careerInsights": "職涯洞察",
+        "priorityMatching": "優先媒合",
+        "dedicatedCoach": "專屬教練",
+        "everythingFree": "包含免費版全部功能",
+        "everythingPremium": "包含進階版全部功能",
+        "unlimitedInsights": "無限職涯洞察",
+        "earlyAccessModels": "搶先體驗模型",
+        "prioritySupport": "優先支援",
+        "creditsMonthly": "每月 {n} 點模擬面試點數",
+        "fullReports": "完整的 AI 面試報告",
+        "allInterviewTypes": "所有面試類型與面試官",
+        "everythingStarter": "包含入門版全部功能",
+        "toneSteering": "面試官語氣調校"
+      }
+    },
+    "usage": {
+      "title": "使用情況",
+      "byDate": "你的活動 · 最近 30 天",
+      "byFeature": "今天 · 依功能",
+      "actionCount": "{count} 次操作",
+      "meter": "{used} / {cap}",
+      "tierCap": "{tier} · 每天 {cap} 次",
+      "resetNote": "每天 UTC 午夜重設 · {tier} = 每天 {cap} 次",
+      "heatLess": "少",
+      "heatMore": "多",
+      "recent": "最近活動",
+      "recentItem": "{count}× {feature}"
+    },
+    "security": {
+      "title": "安全",
+      "changePassword": "變更密碼",
+      "changeSuccess": "你的密碼已更新。",
+      "currentPassword": "目前密碼",
+      "newPassword": "新密碼",
+      "confirmPassword": "確認新密碼",
+      "sessions": "工作階段",
+      "signOutEverywhere": "登出所有裝置",
+      "signOutNote": "登出所有裝置和瀏覽器。你需要在各處重新登入。",
+      "oauthNote": "你使用 {provider} 登入，無需變更密碼。",
+      "strength": {
+        "weak": "強度 · 弱",
+        "fair": "強度 · 普通",
+        "good": "強度 · 良好",
+        "strong": "強度 · 強"
+      },
+      "error": {
+        "tooShort": "密碼至少需要 8 個字元。",
+        "mismatch": "兩次輸入的密碼不一致。",
+        "wrongPassword": "目前密碼不正確。",
+        "noPassword": "此帳戶未設定密碼。",
+        "weakPassword": "請選擇更強的密碼。",
+        "rateLimited": "嘗試次數過多——請稍後再試。",
+        "generic": "無法更新你的密碼，請重試。"
+      }
+    },
+    "danger": {
+      "title": "危險區域",
+      "deleteAccount": "刪除帳戶",
+      "deleteDescription": "永久刪除你的帳戶、履歷資料、面試錄影和訂閱。此操作無法復原。",
+      "confirmEmailLabel": "確認你的電子郵件",
+      "confirmEmailHint": "輸入 {email} 以確認。",
+      "reasonLabel": "原因",
+      "reasonPlaceholder": "告訴我們你離開的原因（必填）",
+      "cancel": "取消",
+      "delete": "刪除我的帳戶",
+      "error": {
+        "mismatch": "電子郵件與你的帳戶不符。",
+        "reasonRequired": "請告訴我們你離開的原因。",
+        "generic": "無法刪除你的帳戶，請重試。"
+      }
+    }
+  },
+  "admin": {
+    "eyebrow": "營運控制台",
+    "title": "利潤與",
+    "titleAccent": "訊號",
+    "loading": "載入中…",
+    "topCost": "成本最高",
+    "estimated": "估算",
+    "estimatedNote": "STT、TTS 和流出成本為估算值，非實測。",
+    "export": {
+      "csv": "匯出 CSV",
+      "refresh": "重新整理"
+    },
+    "range": {
+      "today": "今天",
+      "7d": "7天",
+      "30d": "30天",
+      "custom": "自訂",
+      "customTitle": "自訂範圍",
+      "from": "從",
+      "to": "至",
+      "apply": "套用"
+    },
+    "pager": {
+      "prev": "上一頁",
+      "next": "下一頁"
+    },
+    "tabs": {
+      "overview": "總覽",
+      "users": "使用者",
+      "sessions": "工作階段",
+      "rateCard": "費率卡"
+    },
+    "kpi": {
+      "activeUsers": "活躍使用者",
+      "sessions": "工作階段數",
+      "cost": "LLM + 媒體成本",
+      "revenue": "收入 · MRR",
+      "margin": "毛利率",
+      "costPerUser": "每位活躍使用者成本",
+      "payingUsers": "{n} 付費"
+    },
+    "chart": {
+      "costVsRevenue": "成本與收入",
+      "costByFeature": "依功能成本",
+      "costByModality": "依類型成本",
+      "legend": {
+        "cost": "成本",
+        "revenue": "收入"
+      },
+      "netMargin": "淨利潤 · {amount}（{pct}）"
+    },
+    "modality": {
+      "llm": "LLM 詞元",
+      "stt": "語音轉文字",
+      "tts": "文字轉語音",
+      "image": "圖像生成",
+      "egress": "錄製流出"
+    },
+    "users": {
+      "search": "依電子郵件搜尋…",
+      "filter": {
+        "all": "全部",
+        "free": "免費",
+        "premium": "進階",
+        "premiumPlus": "進階+"
+      },
+      "col": {
+        "user": "使用者",
+        "tier": "方案",
+        "mrr": "MRR",
+        "cost": "區間成本",
+        "margin": "利潤",
+        "sessions": "工作階段",
+        "lastActive": "最近活躍"
+      },
+      "empty": "沒有符合 {query} 的使用者。",
+      "pagination": "第 {from}–{to} 項，共 {total} 項"
+    },
+    "detail": {
+      "eyebrow": "使用者 · {email}",
+      "titleAccent": "狀況",
+      "back": "所有使用者",
+      "summary": "成本 {cost} · 收費 {revenue} → 利潤 {margin}（{pct}）",
+      "lifetimeCost": "累計成本",
+      "periodCost": "本區間成本",
+      "lifetimeRevenue": "累計收入",
+      "dailyCost": "每日成本 · 最近 30 天",
+      "avgDaily": "平均 {amount}/天",
+      "costByFeature": "依功能成本",
+      "interviewSessions": "面試工作階段",
+      "setPlan": "設定方案",
+      "renews": "{date} 續訂",
+      "col": {
+        "feature": "功能",
+        "calls": "次數",
+        "cost": "成本",
+        "pctSpend": "佔支出比",
+        "split": "STT/TTS/LLM"
+      }
+    },
+    "setPlan": {
+      "title": "設定方案",
+      "tier": "方案",
+      "customPrice": "自訂價格（選填）",
+      "reason": "原因",
+      "reasonRequired": "必須填寫原因。",
+      "cancel": "取消",
+      "confirm": "確認",
+      "success": "方案已更新。"
+    },
+    "sessions": {
+      "empty": "此區間沒有工作階段。",
+      "col": {
+        "date": "日期",
+        "user": "使用者",
+        "role": "職位",
+        "duration": "時長",
+        "blueprint": "藍圖",
+        "liveLlm": "即時-LLM",
+        "stt": "STT",
+        "tts": "TTS",
+        "eval": "評估",
+        "coach": "輔導",
+        "total": "合計",
+        "status": "狀態"
+      },
+      "status": {
+        "completed": "已完成",
+        "inProgress": "進行中",
+        "failed": "失敗",
+        "billed": "已計費"
+      }
+    },
+    "session": {
+      "eyebrow": "工作階段成本",
+      "title": "工作階段成本明細",
+      "stage": {
+        "blueprint": "藍圖",
+        "liveLlm": "即時-LLM",
+        "stt": "STT",
+        "tts": "TTS",
+        "eval": "評估",
+        "coach": "輔導"
+      },
+      "col": {
+        "stage": "階段",
+        "model": "模型",
+        "usage": "用量",
+        "unitRate": "單價",
+        "cost": "成本"
+      }
+    },
+    "rateCard": {
+      "title": "費率卡",
+      "llm": "LLM 各模型費率",
+      "speech": "語音費率",
+      "media": "媒體費率",
+      "note": "用於估算成本的參考費率 · 在 admin-config 中編輯",
+      "editSoon": "編輯費率 · 即將推出",
+      "col": {
+        "model": "模型",
+        "inputRate": "輸入 $/1M",
+        "outputRate": "輸出 $/1M",
+        "provider": "供應商",
+        "perMin": "每分鐘",
+        "perGb": "每 GB",
+        "perImage": "每張圖"
+      }
+    },
+    "empty": {
+      "title": "此區間沒有",
+      "titleAccent": "活動",
+      "reset": "重設為 30 天"
+    },
+    "notAuthorized": {
+      "title": "無",
+      "titleAccent": "權限",
+      "sub": "此控制台僅供管理員使用。"
+    },
+    "error": {
+      "title": "無法載入此檢視",
+      "body": "擷取資料時發生錯誤，請重試。",
+      "retry": "重試"
+    }
+  },
+  "plans": {
+    "eyebrow": "方案與點數",
+    "title": "練到你",
+    "titleAccent": "無可阻擋",
+    "subtitle": "每個方案都包含 AI 模擬面試。升級可獲得更多點數與完整的面試報告。",
+    "loading": "正在載入方案…",
+    "error": {
+      "title": "無法載入方案",
+      "body": "擷取價格時發生錯誤，請重試。",
+      "retry": "重試"
+    },
+    "notice": {
+      "paymentsUnavailable": "你所在地區暫不支援付費方案——你可以繼續使用免費方案練習。"
+    },
+    "cta": {
+      "upgradeTo": "升級至 {plan}",
+      "switchTo": "切換至 {plan}",
+      "yourFreePlan": "目前方案",
+      "alipaySwitchNote": "如需更換方案，請先取消，再於結帳時重新訂閱。"
+    },
+    "credits": {
+      "title": "點數如何使用",
+      "explainer": "1 點 = 一場 20 分鐘的模擬面試。時間較短或較長將按比例計費，點數會在每個計費月開始時重置。"
+    },
+    "faq": {
+      "title": "常見問題",
+      "q1": "什麼是點數？",
+      "a1": "1 點可換取一場 20 分鐘的 AI 模擬面試，結束後附上完整報告。隨時都能用來練習。",
+      "q2": "沒用完的點數會怎樣？",
+      "a2": "每個方案都會在每個計費月開始時重置點數。未使用的點數不會累積至下月，所以要勤加練習！",
+      "q3": "可以變更或取消方案嗎？",
+      "a3": "可以——你可以隨時在帳戶中升級、降級或取消。變更將於目前計費月結束時生效。",
+      "q4": "支援哪些付款方式？",
+      "a4": "國際使用者可透過 Stripe 使用主流信用卡，中國使用者可使用支付寶。系統會自動偵測你的地區——也可用上方的切換按鈕手動變更。",
+      "q5": "我的面試資料是否保密？",
+      "a5": "是的。你的錄音與報告僅屬於你，絕不會與雇主或其他使用者分享。"
+    },
+    "checkout": {
+      "failed": "無法開始結帳。請重試，或在上方切換你的付款地區。"
+    }
+  }
+}

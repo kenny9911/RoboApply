@@ -1,0 +1,2986 @@
+{
+  "app": {
+    "name": "RoboApply",
+    "tagline": "We apply. You interview."
+  },
+  "common": {
+    "loading": "Loading…",
+    "sign_in": "Sign in",
+    "sign_out": "Sign out",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "back": "Back",
+    "continue": "Continue",
+    "retry": "Try again",
+    "saved": "Saved.",
+    "coming_soon": "I'm getting set up. This will work once your agent is wired in.",
+    "language": "Language"
+  },
+  "nav": {
+    "mission": "Mission",
+    "apps": "Applications",
+    "settings": "Settings",
+    "home": "Home",
+    "resume_builder": "Resume Builder",
+    "tracker": "Tracker",
+    "job_search": "Job Search",
+    "mock_interview": "Mock Interview",
+    "career_insights": "Career Insights",
+    "all_tools": "All Tools",
+    "all_tools_coming_soon": "More tools and integrations arrive in V2.1.",
+    "referrals": "Referrals",
+    "referrals_coming_soon": "Referrals arrive in V2.1.",
+    "support": "Support"
+  },
+  "nav_v3": {
+    "brand_tagline": "YOUR AI JOB HUNTER",
+    "section_workspace": "Workspace",
+    "section_settings": "Settings",
+    "today": "Today",
+    "queue": "Review queue",
+    "resumes": "Resume builder",
+    "interview": "Mock interview",
+    "pipeline": "Pipeline",
+    "activity": "Activity log",
+    "badge_new_count": "{count} new",
+    "badge_new": "NEW",
+    "replay_onboarding": "Replay onboarding",
+    "tweaks": "Tweaks",
+    "preferences": "Preferences",
+    "onboarding": "Onboarding",
+    "agent_state": "Agent · {mode}",
+    "aggr_chill": "chill",
+    "aggr_balanced": "balanced",
+    "aggr_intense": "full auto",
+    "stat_sent": "Sent",
+    "stat_replies": "Replies",
+    "stat_saved": "Saved",
+    "status_scan": "Scanning Lever, Greenhouse, Ashby…",
+    "status_tailor": "Tailoring your resume for the best match",
+    "status_cover": "Drafting a cover letter",
+    "status_crosscheck": "Cross-checking the JD against your portfolio",
+    "status_timer": "Waiting for the auto-apply timer",
+    "status_idle": "Idle · queue clear ✓",
+    "status_index": "Indexing new postings",
+    "status_rescore": "Re-scoring stale matches",
+    "search_aria": "Search jobs and companies",
+    "search_placeholder": "Search jobs, companies…",
+    "notifications": "Notifications",
+    "account": "Account",
+    "admin": "Admin",
+    "theme_to_dark": "Switch to dark mode",
+    "theme_to_light": "Switch to light mode",
+    "theme_to_warm": "Switch to warm mode",
+    "plans": "Plans & credits"
+  },
+  "palette": {
+    "aria": "Command palette",
+    "placeholder": "Search jobs, companies, or jump to…",
+    "group_nav": "Go to",
+    "group_jobs": "Jobs",
+    "searching": "Searching…",
+    "empty": "No results. Try a company or role."
+  },
+  "home": {
+    "eyebrow": "ROBOAPPLY · HOME",
+    "page_title": "Home",
+    "error": {
+      "eyebrow": "DASHBOARD",
+      "quote": "I couldn't pull your dashboard. Let me retry…",
+      "retry": "Try again"
+    },
+    "goal": {
+      "eyebrow": "NEXT CAREER GOAL:",
+      "edit_cta": "Edit Goals",
+      "empty_cta": "Set your career goal →",
+      "empty_subtitle": "Tell me the role, target date, and salary range so I can shape the search.",
+      "field_title": "Target title",
+      "field_date": "Target date",
+      "field_date_empty": "Not set",
+      "field_salary": "Salary range",
+      "days_left": "{count, plural, one {⏳ {count} day left} other {⏳ {count} days left}}",
+      "modal": {
+        "title": "Edit career goal",
+        "subtitle": "Three quick fields. You can change them any time.",
+        "field_title": "Target job title",
+        "field_date": "Target date",
+        "field_salary": "Target salary range",
+        "hint_title": "The headline you'd put on the search.",
+        "hint_date": "Pick the month you want an offer by.",
+        "hint_salary": "Numbers in USD. Leave blank to skip.",
+        "placeholder_title": "e.g. AI Software Engineer",
+        "placeholder_salary_min": "Min",
+        "placeholder_salary_max": "Max",
+        "errors": {
+          "missing_title": "Give the goal a title first.",
+          "invalid_salary": "Salary fields should be numbers.",
+          "min_above_max": "Min salary can't be higher than max.",
+          "generic": "Couldn't save the goal. Try again in a moment."
+        }
+      }
+    },
+    "ring": {
+      "caption": "applications sent",
+      "goal_label": "Goal:",
+      "tip_under": "You're a bit under pace this week. One more push gets you to target.",
+      "tip_on_target": "On pace. Steady wins this. Keep the queue full.",
+      "tip_over": "Above target. Take a beat — pick the highest-conviction ones."
+    },
+    "funnel": {
+      "title": "Job Search Pipeline",
+      "range_label": "Displaying results: {range}",
+      "stages": {
+        "bookmarked": "Bookmarked",
+        "applied": "Applied",
+        "interviewing": "Interviewing",
+        "negotiating": "Negotiating"
+      }
+    },
+    "week": {
+      "title": "This Week",
+      "today_aria": "Today, {date}",
+      "day_filter_coming_soon": "Day filter coming in V2.1."
+    },
+    "recent": {
+      "title": "Recent {title} jobs",
+      "title_fallback": "matched",
+      "subtitle": "Fresh roles in the last 30 days, ranked newest first.",
+      "empty_title": "No new matches yet.",
+      "empty_body": "Set or refine your goal title and I'll surface fresh roles here.",
+      "card": {
+        "open_aria": "Open job: {title}"
+      }
+    },
+    "priorities": {
+      "title": "Priorities",
+      "empty": "You're all caught up. I'll flag something tomorrow.",
+      "row": {
+        "next_step": "Next Step: Move to {status}",
+        "status": {
+          "applying": "Applying",
+          "accepted": "Accepted",
+          "rejected": "Rejected",
+          "withdrawn": "Withdrawn"
+        }
+      }
+    },
+    "upgrade": {
+      "eyebrow": "ROBOAPPLY+",
+      "headline": "Apply to 10× more jobs",
+      "bullet_keywords": "Top keywords for every job",
+      "bullet_ai_search": "AI Job Search across boards",
+      "bullet_autoapply": "Auto-apply at scale, supervised",
+      "cta": "Upgrade to RoboApply+"
+    }
+  },
+  "tracker": {
+    "eyebrow": "ROBOAPPLY · TRACKER",
+    "page_title": "Job Tracker",
+    "subtitle": "Bookmarked, applying, applied, interviewing — every job, in one place.",
+    "tabs": {
+      "jobs": "Jobs",
+      "people": "People",
+      "companies": "Companies"
+    },
+    "funnel": {
+      "bookmarked": "Bookmarked",
+      "applying": "Applying",
+      "applied": "Applied",
+      "interviewing": "Interviewing",
+      "negotiating": "Negotiating",
+      "accepted": "Accepted"
+    },
+    "status": {
+      "bookmarked": "Bookmarked",
+      "applying": "Applying",
+      "applied": "Applied",
+      "interviewing": "Interviewing",
+      "negotiating": "Negotiating",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
+    },
+    "columns": {
+      "position": "Job Position",
+      "company": "Company",
+      "max_salary": "Max Salary",
+      "location": "Location",
+      "status": "Status",
+      "date_saved": "Date Saved",
+      "deadline": "Deadline",
+      "date_applied": "Date Applied",
+      "follow_up": "Follow Up",
+      "excitement": "Excitement"
+    },
+    "selected_count": "{count} selected",
+    "search_placeholder": "Search your tracker…",
+    "view": {
+      "list": "List",
+      "grid": "Grid"
+    },
+    "showing_count": "Showing {n} entries",
+    "add_job_cta": "+ Add Job",
+    "filter_aria": "Filter",
+    "empty": {
+      "title": "Nothing in this bucket yet.",
+      "body": "Bookmark a job from /search to get started.",
+      "cta": "Go to Job Search →"
+    },
+    "empty_cell": "—",
+    "row_menu_aria": "Row actions",
+    "row_menu": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "row_menu_open": "Open actions",
+    "excitement_aria": "Rate excitement {n} of 5",
+    "excitement_clear": "Clear rating",
+    "add_modal": {
+      "title": "Add a job to your tracker",
+      "mode_url": "From URL",
+      "mode_url_hint": "Paste a job posting URL. We'll scrape it in V2.1; for now, fill in the manual fields.",
+      "mode_manual": "Manual",
+      "mode_manual_hint": "Type the basics. You can add the rest later.",
+      "field_url": "Job URL",
+      "field_url_placeholder": "https://stripe.com/jobs/listing/...",
+      "field_title": "Job title",
+      "field_title_placeholder": "Senior Product Manager",
+      "field_company": "Company",
+      "field_company_placeholder": "Stripe",
+      "field_location": "Location",
+      "field_location_placeholder": "New York, NY · Hybrid",
+      "field_max_salary": "Max salary",
+      "field_max_salary_placeholder": "260000",
+      "field_status": "Initial status",
+      "submit": "Add to tracker",
+      "submitting": "Adding…",
+      "error_title_required": "Add a job title before saving.",
+      "error_company_required": "Add a company before saving.",
+      "error_generic": "Couldn't add the job. Try again."
+    },
+    "status_editor": {
+      "label": "Change status"
+    },
+    "deadline_editor": {
+      "label": "Set deadline"
+    },
+    "follow_up_editor": {
+      "label": "Set follow-up"
+    },
+    "people": {
+      "coming_soon_title": "People tracking is coming in V2.1",
+      "coming_soon_body": "You'll be able to log recruiters, hiring managers, and references alongside the jobs they're attached to. For now, jot notes into the job row's notes cell."
+    },
+    "companies": {
+      "coming_soon_title": "Companies tracking is coming in V2.1",
+      "coming_soon_body": "Watchlists for the companies you want to work at — coming alongside People."
+    }
+  },
+  "search": {
+    "eyebrow": "ROBOAPPLY · JOB SEARCH",
+    "page_title": "Job Search",
+    "bar": {
+      "title_placeholder": "Job title (e.g. AI Engineer)",
+      "location_placeholder": "City, ZIP, or Remote",
+      "submit_aria": "Run search",
+      "saved_dropdown_aria": "Saved searches"
+    },
+    "filters": {
+      "sort": "Sort by",
+      "date_posted": "Date Posted",
+      "remote": "Remote",
+      "salary": "Salary",
+      "more": "All Filters",
+      "sort_options": {
+        "relevance": "Relevance",
+        "recent": "Most recent",
+        "salary_desc": "Highest salary",
+        "match_desc": "Best match"
+      },
+      "date_options": {
+        "today": "Last 24 hours",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "any": "Any time"
+      },
+      "salary_options": {
+        "any": "Any salary",
+        "120k": "$120k+",
+        "150k": "$150k+",
+        "180k": "$180k+",
+        "200k": "$200k+",
+        "250k": "$250k+"
+      },
+      "remote_options": {
+        "any": "Any",
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "On-site"
+      },
+      "clear": "Clear",
+      "apply": "Apply"
+    },
+    "results": {
+      "count": "{count, plural, =0 {No jobs} =1 {1 Job} other {# Jobs}}",
+      "count_plus": "{count, plural, =0 {No jobs} =1 {1 Job} other {#+ Jobs}}",
+      "empty_title": "No matches. Try widening your filters.",
+      "empty_body": "Drop a chip or broaden the location. The seeded index has 50 roles spanning $120k–$300k.",
+      "loading": "Searching the index…",
+      "select_a_job": "Select a job to see the detail."
+    },
+    "saved": {
+      "label": "Saved",
+      "empty": "No saved searches yet",
+      "save_current": "Save current as…",
+      "save_placeholder": "Name this search",
+      "save_cta": "Save",
+      "delete_aria": "Delete saved search",
+      "apply_aria": "Run this saved search"
+    }
+  },
+  "jobs": {
+    "eyebrow": "ROBOAPPLY · JOB DETAIL",
+    "page_title": "Job detail",
+    "breadcrumb_search": "Search",
+    "back": "Back to Search",
+    "header": {
+      "just_now": "Just now",
+      "posted": "Posted {time}",
+      "posted_days": "Posted {n}d ago",
+      "posted_today": "Posted today"
+    },
+    "actions": {
+      "apply": "Apply →",
+      "save": "Save Job",
+      "saved": "Saved ✓",
+      "create_resume": "Create Resume"
+    },
+    "sections": {
+      "about": "About the Position",
+      "requirements": "Requirements",
+      "responsibilities": "Responsibilities",
+      "benefits": "Benefits"
+    },
+    "offers": {
+      "title": "What This Job Offers",
+      "job_type": "Job Type",
+      "career_level": "Career Level",
+      "education_level": "Education Level",
+      "salary": "Salary",
+      "any": "Any",
+      "employment": {
+        "full_time": "Full-time",
+        "contract": "Contract",
+        "part_time": "Part-time",
+        "internship": "Internship"
+      },
+      "work_type": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "On-site"
+      }
+    },
+    "keywords": {
+      "title": "Top Keywords",
+      "empty": "We're still mining keywords for this role. Check back later.",
+      "premium_headline": "Unlock Top Keywords",
+      "premium_body": "See the skills hiring teams actually look for in this role — only on RoboApply+.",
+      "premium_cta": "Upgrade to RoboApply+"
+    },
+    "match": {
+      "title": "Match Score",
+      "match_label": "match",
+      "tier": {
+        "strong": "Strong match",
+        "good": "Good fit",
+        "stretch": "Stretch",
+        "long_shot": "Long shot"
+      },
+      "empty": "Score not available yet."
+    },
+    "apply_modal": {
+      "title": "How would you like to apply?",
+      "body": "Pick how you'd like to handle this application.",
+      "track_title": "Track only",
+      "track_body": "Add to your Tracker as Applied. You'll still need to apply on the company site.",
+      "autoapply_title": "Auto-apply via Greenhouse",
+      "autoapply_body": "Coming with the V1 engine — your agent will tailor + submit at 9am.",
+      "autoapply_coming_soon": "Auto-apply coming via V1 engine",
+      "external_title": "Open external apply page",
+      "external_body": "Opens {url} in a new tab. We'll mark it as Applied in your tracker.",
+      "confirm": "Continue",
+      "cancel": "Cancel"
+    },
+    "not_found_title": "That job is gone from our index",
+    "not_found_body": "It may have closed, or the link is stale. Head back to Search and try again.",
+    "loading": "Loading the job…"
+  },
+  "insights": {
+    "eyebrow": "ROBOAPPLY · CAREER INSIGHTS",
+    "page_title": "Career Insights",
+    "subtitle": "Where you are, how you're moving, and what I'd do this week.",
+    "card_eyebrow": "WEEKLY INSIGHT · {date}",
+    "refresh_cta": "Refresh insights",
+    "refresh_loading": "Generating…",
+    "refresh_recent": "Already refreshed recently. Try again later.",
+    "past_heading": "Past weeks",
+    "past_empty": "I'll have your first weekly insight once you've got a week of activity. Keep applying.",
+    "empty_title": "Come back in a few days for your first insight.",
+    "empty_body": "I need a week of tracker activity to be useful. Start applying and I'll have something Sunday.",
+    "cited_label": "Cited",
+    "loading": "Looking at your week…",
+    "metrics": {
+      "applications": "Applications",
+      "interviews": "Interviews",
+      "offers": "Offers",
+      "weeks_to_offer": "Weeks to offer",
+      "weeks_to_offer_unknown": "—",
+      "skills_observed": "Top skills observed"
+    }
+  },
+  "resumes_v2": {
+    "eyebrow": "ROBOAPPLY · RESUMES",
+    "page_title": "Resume Builder",
+    "subtitle": "Pick a starting point or revisit a recent resume.",
+    "menu": {
+      "trigger": "Menu",
+      "help": "Help",
+      "sort": "Sort",
+      "filter": "Filter"
+    },
+    "tiles": {
+      "new_resume": {
+        "title": "New Resume",
+        "description": "Start from a blank page."
+      },
+      "from_jd": {
+        "title": "Start from a job description",
+        "description": "Paste a JD — I'll tailor your resume to it."
+      },
+      "from_template": {
+        "title": "Start from a template",
+        "description": "Pick an ATS-friendly layout to begin from."
+      },
+      "cover_letter": {
+        "title": "New Cover Letter",
+        "description": "Draft a cover letter for a specific role."
+      }
+    },
+    "recent": {
+      "title": "Recent Resumes",
+      "search_placeholder": "Search Resumes",
+      "sort_label": "Sort by",
+      "sort": {
+        "last_edited": "Last edited",
+        "name_az": "Name (A → Z)",
+        "match_desc": "Match (high → low)"
+      },
+      "view": {
+        "list": "List",
+        "grid": "Grid",
+        "list_aria": "List view",
+        "grid_aria": "Grid view"
+      },
+      "empty": {
+        "title": "No resumes yet.",
+        "body": "Start with one of the tiles above to create your first resume."
+      },
+      "no_match": "No resumes match your search.",
+      "row_menu": {
+        "trigger": "Open menu",
+        "open": "Open",
+        "duplicate": "Duplicate",
+        "delete": "Delete"
+      }
+    },
+    "match_label": "Match: {pct}%",
+    "match_unknown": "Match: —",
+    "edited_label": "Edited: {date}",
+    "kind": {
+      "base": "Base resume",
+      "tailored_for_jd": "Tailored",
+      "from_template": "Template",
+      "cover_letter": "Cover Letter"
+    },
+    "new": {
+      "breadcrumb_back": "Resume Builder",
+      "breadcrumb_current": "New Resume",
+      "blank": {
+        "title": "New blank resume",
+        "subtitle": "Give it a name. You'll be able to fill in content in the editor.",
+        "name_label": "Resume name",
+        "name_placeholder": "e.g. Master Resume",
+        "submit": "Create resume",
+        "submitting": "Creating…"
+      },
+      "from_jd": {
+        "title": "Start from a job description",
+        "subtitle": "Paste the JD and we'll create a tailored resume.",
+        "name_label": "Resume name",
+        "name_placeholder": "e.g. For Stripe — Sr Product Manager",
+        "jd_label": "Job description",
+        "jd_placeholder": "Paste the full job description here…",
+        "submit": "Create tailored resume",
+        "submitting": "Tailoring…",
+        "hint_no_base": "We'll base this on your most recent resume."
+      },
+      "from_template": {
+        "title": "Start from a template",
+        "subtitle": "Pick a layout. You'll edit the content next.",
+        "name_label": "Resume name",
+        "name_placeholder": "e.g. ATS-Friendly Resume",
+        "submit": "Create from template",
+        "submitting": "Creating…",
+        "templates": {
+          "ats": {
+            "title": "ATS-Friendly",
+            "description": "Single-column, no fancy formatting — designed to parse cleanly."
+          },
+          "modern": {
+            "title": "Modern",
+            "description": "A two-column layout with subtle accents."
+          },
+          "creative": {
+            "title": "Creative",
+            "description": "Bolder type and color — for design + product roles."
+          },
+          "classic": {
+            "title": "Classic",
+            "description": "Conservative single-column — safe for any industry."
+          }
+        }
+      },
+      "cover_letter": {
+        "title": "New Cover Letter",
+        "subtitle": "We'll draft a cover letter against the JD you paste.",
+        "name_label": "Cover letter name",
+        "name_placeholder": "e.g. Cover Letter — Stripe Sr PM",
+        "jd_label": "Job description",
+        "jd_placeholder": "Paste the full job description here…",
+        "submit": "Create cover letter",
+        "submitting": "Drafting…"
+      },
+      "errors": {
+        "name_required": "Please give it a name.",
+        "jd_required": "Paste the job description first.",
+        "create_failed": "Couldn't create your resume. Try again in a minute."
+      },
+      "unknown_mode_title": "Pick a starting point",
+      "unknown_mode_body": "Choose one of the four creation modes from /resumes."
+    },
+    "detail": {
+      "breadcrumb_back": "Resume Builder",
+      "loading": "Loading your resume…",
+      "not_found_title": "Can't find that resume.",
+      "not_found_body": "It may have been deleted, or you may not have permission. Head back to Resume Builder.",
+      "kind_label": "Kind",
+      "placeholder_title": "Your tailored resume editor is coming in V2.1",
+      "placeholder_body": "For now, you can keep this draft, duplicate it, or delete it. The full editor — block-based, ATS-scored, with side-by-side diff — ships in the next release.",
+      "tailored_for": "Tailored for {company} — {title}",
+      "download_cta": "Download as PDF",
+      "download_tooltip": "Available in V2.1",
+      "duplicate_cta": "Duplicate",
+      "delete_cta": "Delete",
+      "preview_title": "Resume preview",
+      "delete": {
+        "title": "Delete this resume?",
+        "body": "This permanently removes the resume from your library. To confirm, type the resume's name below.",
+        "input_label": "Type the resume name to confirm",
+        "mismatch_hint": "That doesn't match the resume name.",
+        "cancel": "Cancel",
+        "confirm": "Delete resume",
+        "confirming": "Deleting…",
+        "error": "Couldn't delete that resume. Try again."
+      }
+    },
+    "errors": {
+      "load_failed": "Couldn't load your resumes. Try again in a minute."
+    }
+  },
+  "resumes": {
+    "eyebrow": "Resume builder · AI-tuned",
+    "title_lead": "Write the resume ",
+    "title_accent": "you'd hire",
+    "title_after": ".",
+    "subtitle": "Start from scratch, drag in an old one, or pull from LinkedIn. I'll sharpen every line, then tailor a fresh copy for each job you target.",
+    "create": {
+      "scratch": {
+        "title": "Start from scratch",
+        "desc": "A clean template with AI on every line. Best if you're early in your career or starting fresh.",
+        "meta": "~10 min · Best for first-time builders"
+      },
+      "file": {
+        "title": "Upload a resume",
+        "desc": "Drop a PDF or DOCX. I'll read it, structure it, and flag the lines I'd rewrite.",
+        "meta": "PDF · DOCX · Apple Pages"
+      },
+      "linkedin": {
+        "title": "Import from LinkedIn",
+        "desc": "Export your LinkedIn profile to PDF and drop it in. I'll structure it and flag the lines I'd rewrite.",
+        "meta": "Save to PDF · then upload"
+      },
+      "default_name": {
+        "scratch": "Untitled draft",
+        "file": "Imported resume",
+        "linkedin": "LinkedIn import"
+      }
+    },
+    "section": {
+      "title": "Your resumes",
+      "count": "{count} versions"
+    },
+    "card": {
+      "base": "Base — not tailored to a job",
+      "edited": "Edited {when}",
+      "score_unit": "/100",
+      "delete": "Delete resume"
+    },
+    "tip": {
+      "label": "FYI · Young careers",
+      "body": "Limited experience is not a problem. I'll translate class projects, hackathons, freelance gigs, and side projects into bullets that sound like the real thing. Use Translate junior → pro on every line."
+    },
+    "empty": {
+      "title_lead": "No resumes ",
+      "title_accent": "yet",
+      "sub": "Create your first one — from scratch, an upload, or your LinkedIn — and I'll sharpen it line by line.",
+      "cta": "Start from scratch"
+    },
+    "error": {
+      "title": "Couldn't load your resumes",
+      "sub": "Something went wrong fetching your library. Try again in a moment.",
+      "retry": "Try again"
+    },
+    "ingest": {
+      "scratch": {
+        "template": "Template",
+        "template_v": "Clean, single-column, ATS-safe",
+        "sections": "Sections",
+        "sections_v": "Summary · Experience · Education · Skills · Projects",
+        "ai": "AI on",
+        "ai_v": "Every line — improve, shorten, expand, refine tone",
+        "ready": "Ready",
+        "ready_v": "Untitled draft"
+      },
+      "import": {
+        "read": "Read",
+        "identity": "Identity",
+        "identity_v": "Name · email · location",
+        "experience": "Experience",
+        "experience_v": "2 roles · 6 bullets total",
+        "education": "Education",
+        "education_v": "Degree · school · years",
+        "skills": "Skills",
+        "skills_v": "8 tags extracted",
+        "cleaned": "Cleaned",
+        "cleaned_v": "Stripped 4 weak verbs, flagged 2 lines for rewrite"
+      }
+    },
+    "import": {
+      "title": {
+        "scratch": "Start a fresh resume",
+        "file": "Upload a resume",
+        "linkedin": "Import from LinkedIn"
+      },
+      "badge": {
+        "scratch": "NEW",
+        "file": "UPLOAD",
+        "linkedin": "IMPORT"
+      },
+      "template": {
+        "classic": "Classic · ATS-safe",
+        "modern": "Modern · Two-col",
+        "editorial": "Editorial · Bold serif"
+      },
+      "scratch_hint": "Pick a template. You can switch later — content travels with you.",
+      "drop": {
+        "title": "Drop your resume here",
+        "sub": "PDF, DOCX, or Apple Pages — I'll parse the structure",
+        "ready": "ready to parse"
+      },
+      "linkedin": {
+        "steps_title": "Export your LinkedIn profile",
+        "step1": "Open your profile on LinkedIn",
+        "step2": "Click the More button, then Save to PDF",
+        "step3": "Upload the downloaded PDF below",
+        "upload_title": "Drop your LinkedIn PDF here",
+        "upload_sub": "The PDF you saved from your profile",
+        "ready": "ready to import",
+        "or": "or",
+        "url_label": "Have a public profile? Paste its URL instead",
+        "placeholder": "linkedin.com/in/your-handle",
+        "hint": "Paste your public LinkedIn URL. I'll fetch experience, education, skills, and links."
+      },
+      "ingest_title": {
+        "scratch": "Preparing your draft",
+        "parse": "Reading your resume"
+      },
+      "working": "Working…",
+      "done": {
+        "title_scratch": "Draft ready",
+        "title_import": "Imported cleanly",
+        "body_scratch": "Let's start filling it out together. I'll be in the right margin.",
+        "body_import": "Resume parsed. I flagged 2 weak bullets — they're highlighted in the editor."
+      },
+      "cancel": "Cancel",
+      "create_draft": "Create draft",
+      "parse_with_ai": "Parse with AI",
+      "open_editor": "Open editor",
+      "error": "Couldn't create that resume. Try again.",
+      "errors": {
+        "invalid_url": "That doesn't look like a LinkedIn profile URL. Check the link and try again.",
+        "fetch_failed": "Couldn't reach LinkedIn to fetch that profile. Try uploading your LinkedIn PDF instead.",
+        "profile_empty": "That profile didn't have enough to import. Try uploading your LinkedIn PDF instead.",
+        "url_import_not_configured": "LinkedIn URL import isn't available here — upload your LinkedIn PDF instead.",
+        "parse_failed": "I couldn't read that file. Try exporting it again as a PDF.",
+        "unsupported_format": "That file type isn't supported. Upload a PDF or DOCX.",
+        "file_too_large": "That file is too large. The limit is 15 MB.",
+        "file_required": "Please choose a file first."
+      },
+      "demo_file_name": "resume-2024.pdf",
+      "demo_file_size": "184 KB"
+    },
+    "delete": {
+      "title": "Delete this resume?",
+      "body": "This permanently removes the resume from your library. To confirm, type the resume's name below.",
+      "input_label": "Type the resume name to confirm",
+      "mismatch_hint": "That doesn't match the resume name.",
+      "cancel": "Cancel",
+      "confirm": "Delete resume",
+      "confirming": "Deleting…"
+    }
+  },
+  "resumeGate": {
+    "title": "Add your résumé to get started",
+    "subtitle": "RoboApply tailors applications, scores job matches, and runs mock interviews from your résumé. Upload one to unlock your dashboard.",
+    "cta": "Upload résumé",
+    "uploading": "Reading and parsing your résumé…",
+    "formats": "PDF, DOCX, or TXT · up to 15 MB",
+    "error": "Something went wrong reading that file. Please try again.",
+    "error_too_large": "That file is over 15 MB. Try a smaller file.",
+    "error_format": "Unsupported format. Use a PDF, DOCX, or TXT file.",
+    "error_empty": "We couldn't find any text in that file. Try a text-based PDF (not a scanned image).",
+    "or_build": "Or build one from scratch"
+  },
+  "resumeEditor": {
+    "common": {
+      "cancel": "Cancel",
+      "close": "Close"
+    },
+    "toolbar": {
+      "back": "Resumes",
+      "rename": "Resume name",
+      "saved": "All changes saved",
+      "saving": "Saving…",
+      "save_error": "Couldn't save — retrying",
+      "strength": "Strength",
+      "coach": "Coach",
+      "hide_coach": "Hide coach",
+      "download": "Download",
+      "tailor": "Tailor for a job",
+      "delete": "Delete"
+    },
+    "section": {
+      "identity": "Identity",
+      "summary": "Summary",
+      "experience": "Experience",
+      "education": "Education",
+      "skills": "Skills"
+    },
+    "field": {
+      "full_name": "Full name",
+      "title": "Title",
+      "email": "Email",
+      "phone": "Phone",
+      "location": "Location",
+      "links": "Links",
+      "ai": "AI"
+    },
+    "summary": {
+      "placeholder": "A two-sentence pitch. Lead with what you've shipped and the impact.",
+      "give_rewrites": "Give me 3 rewrites",
+      "rewriting": "Rewriting…",
+      "char_hint": "{count} chars · aim 240–320",
+      "option": "Option {n}",
+      "use_this": "Use this",
+      "keep_current": "Keep current"
+    },
+    "action": {
+      "improve": {
+        "label": "Improve writing",
+        "desc": "Stronger verbs, tighter prose"
+      },
+      "metrics": {
+        "label": "Add metrics",
+        "desc": "Surface where numbers should go"
+      },
+      "shorten": {
+        "label": "Shorten",
+        "desc": "Cut filler — keep impact"
+      },
+      "expand": {
+        "label": "Expand with context",
+        "desc": "Add the \"so what\" and the \"how\""
+      },
+      "confident": {
+        "label": "Sound more confident",
+        "desc": "\"I led\" not \"I helped with\""
+      },
+      "junior": {
+        "label": "Translate junior → pro",
+        "desc": "Reframe school / intern work"
+      }
+    },
+    "bullet": {
+      "flag": "Coach flagged this — vague verbs, no metrics. Try Improve or Add metrics."
+    },
+    "rewrite": {
+      "rewriting": "Rewriting",
+      "suggested": "Suggested rewrite",
+      "accept": "Accept",
+      "regenerate": "Regenerate",
+      "discard": "Discard",
+      "error": "That rewrite didn't go through. Try again."
+    },
+    "experience": {
+      "hint": "Hover any bullet for inline AI",
+      "add_role": "+ Add role",
+      "add_bullet": "+ Add bullet · or paste your own",
+      "editing": "Editing",
+      "title_placeholder": "Role title",
+      "company_placeholder": "Company",
+      "location_placeholder": "Location",
+      "start_placeholder": "Start",
+      "end_placeholder": "End"
+    },
+    "education": {
+      "add": "+ Add education",
+      "school_placeholder": "School",
+      "degree_placeholder": "Degree",
+      "detail_placeholder": "Highlights — honors, projects, GPA"
+    },
+    "skills": {
+      "suggest": "Suggest skills from your bullets",
+      "add": "+ Add skill",
+      "placeholder": "Skill name",
+      "remove": "Remove {skill}",
+      "suggested": "Suggested from your bullets",
+      "dismiss_suggestions": "Dismiss"
+    },
+    "young": {
+      "head": "Limited work experience? I can add a section that translates non-job stuff into resume language.",
+      "class_project": {
+        "label": "Class project",
+        "desc": "Reframe as shipped work"
+      },
+      "hackathon": {
+        "label": "Hackathon",
+        "desc": "48 hrs · what you built"
+      },
+      "side_project": {
+        "label": "Side project",
+        "desc": "Open source / personal"
+      },
+      "volunteer": {
+        "label": "Volunteer work",
+        "desc": "Counts — really"
+      },
+      "freelance": {
+        "label": "Freelance gig",
+        "desc": "Independent client work"
+      },
+      "leadership": {
+        "label": "Student leadership",
+        "desc": "Clubs, councils, orgs"
+      }
+    },
+    "preview": {
+      "label": "LIVE PREVIEW",
+      "page": "1 page"
+    },
+    "paper": {
+      "your_name": "Your Name"
+    },
+    "coach": {
+      "label": "YOUR COACH · live",
+      "sub": "Watching as you type",
+      "hide": "Hide coach",
+      "next": "Next tip →",
+      "tips": {
+        "metrics_good": "Your bullets carry real numbers. Keep that quantified voice across the whole resume.",
+        "metrics_missing": "Most bullets have no metric. Add a number to your top 3 — recruiters skim for impact.",
+        "summary_long": "Your summary runs long. Cut it to two sharp sentences — recruiters skim this first.",
+        "summary_tight": "Your summary is tight. Lead with your strongest, most role-relevant line.",
+        "summary_missing": "No summary section yet. Two sentences up top frame everything below — add one.",
+        "weak_verbs": "Found {count} weak opener(s) like \"responsible for\" / \"helped with\". Click ✦ to rewrite them with ownership verbs.",
+        "strong_verbs": "Strong verbs throughout — no \"responsible for\" or \"helped with\" anywhere. Keep it.",
+        "no_bullets": "This resume has no bullet points yet. Break experience into outcome-led bullets.",
+        "too_many_bullets": "A lot of bullets here. Trim to the 3–5 strongest per role so the best work stands out.",
+        "good_density": "Good density. Click ✦ on any bullet to sharpen it, or Tailor to target a specific job."
+      }
+    },
+    "tailor": {
+      "eyebrow": "TAILOR",
+      "title_pick": "Pick a job to tailor for",
+      "title_analyzing_lead": "Analyzing the JD",
+      "title_analyzing_accent": "and",
+      "title_analyzing_after": "your resume…",
+      "title_review_lead": "Here's what I'd change for",
+      "title_done": "Tailored copy created",
+      "source_label": "PICK FROM YOUR ROBOAPPLY MATCHES",
+      "loading_jobs": "Loading your matches…",
+      "no_jobs": "No matches yet — paste a job description below instead.",
+      "fit": "FIT",
+      "or": "OR",
+      "paste_toggle": "Paste a different job description",
+      "paste_placeholder": "Paste the JD here — title, company, full description",
+      "analyze_paste": "Analyze pasted JD →",
+      "pasted_company": "Pasted JD",
+      "pasted_role": "Custom",
+      "analyzing": {
+        "read_jd": "Reading the full JD",
+        "cross_check": "Cross-checking your bullets",
+        "find_gaps": "Finding keyword gaps",
+        "draft": "Drafting targeted rewrites",
+        "rescore": "Re-scoring fit"
+      },
+      "before": "BEFORE",
+      "after": "AFTER",
+      "note": "{count} targeted changes. Toggle any you don't want — I'll only apply the checked ones.",
+      "kind": {
+        "rewrite": "REWRITE",
+        "add": "ADD",
+        "reorder": "REORDER",
+        "trim": "TRIM"
+      },
+      "pick_hint": "Pick a job to continue",
+      "pick_different": "← Pick a different job",
+      "apply": "Apply {count} changes",
+      "back_to_editor": "Back to editor",
+      "open_copy": "Open tailored copy",
+      "done_title": "Tailored copy saved",
+      "done_body": "A new resume version, {name}, is in your library. Your base resume is untouched.",
+      "done_body_paste": "Your tailored changes are ready. Your base resume is untouched.",
+      "error": "Couldn't tailor that resume. Try again."
+    },
+    "download": {
+      "eyebrow": "EXPORT",
+      "title": "Download as…",
+      "recommended": "RECOMMENDED",
+      "error": "That export didn't go through. Try again.",
+      "pdf": {
+        "label": "PDF",
+        "desc": "Best for applying — pixel-perfect, ATS-safe"
+      },
+      "docx": {
+        "label": "DOCX",
+        "desc": "Word document — editable, ATS-safe"
+      },
+      "txt": {
+        "label": "Plain text",
+        "desc": "Copy-paste into web forms"
+      },
+      "md": {
+        "label": "Markdown",
+        "desc": "For your GitHub or personal site"
+      }
+    },
+    "state": {
+      "loading": "Loading your resume…",
+      "error_title": "We couldn't load this resume.",
+      "error_body": "It may have been deleted, or the link is wrong.",
+      "back": "Back to all resumes"
+    },
+    "delete": {
+      "title": "Delete this resume?",
+      "body": "This permanently removes the resume from your library. To confirm, type the resume's name below.",
+      "input_label": "Type the resume name to confirm",
+      "mismatch_hint": "That doesn't match the resume name.",
+      "cancel": "Cancel",
+      "confirm": "Delete resume",
+      "confirming": "Deleting…"
+    }
+  },
+  "landing": {
+    "headline": "We apply. You interview.",
+    "subheadline": "An AI agent that scouts jobs at night, drafts every cover letter, submits at 9am, and emails you what happened.",
+    "cta_get_started": "Start →",
+    "cta_sign_in": "Sign in",
+    "features": {
+      "scout_title": "Scouts overnight",
+      "scout_body": "Greenhouse and Lever boards, scanned while you sleep. Only jobs that match your intent get through.",
+      "tailor_title": "Drafts cover letters",
+      "tailor_body": "Every application gets a real cover letter — anchored in your resume, never invented from thin air.",
+      "submit_title": "Submits at 9am",
+      "submit_body": "You get a 2-hour preview window. Skip what you don't want. The agent sends the rest."
+    },
+    "trust_strip": "Auto-applies to Greenhouse + Lever jobs · No spam, no junk applications · Pause anytime.",
+    "pricing": {
+      "title": "Free until you want more.",
+      "free": "Free · 3 apps/day",
+      "premium": "Premium · $19/mo · 15 apps/day",
+      "premium_plus": "Premium+ · $49/mo · 30 apps/day"
+    },
+    "footer_note": "© RoboApply. Built by candidates, for candidates."
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to your RoboApply mission.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "no_account": "Don't have an account?",
+      "signup_cta": "Create one",
+      "error_generic": "We couldn’t sign you in. Check your email and password, then try again."
+    },
+    "signup": {
+      "title": "Create your account",
+      "subtitle": "60 seconds to a hands-free job search.",
+      "email": "Email",
+      "password": "Password",
+      "name": "Your name",
+      "submit": "Sign up",
+      "submitting": "Creating account…",
+      "has_account": "Already have an account?",
+      "login_cta": "Sign in",
+      "error_generic": "We couldn’t create your account. Please try again."
+    },
+    "brand": {
+      "eyebrow": "AI JOB-SEARCH COPILOT",
+      "headline": "Get hired <em>faster</em>.",
+      "lead": "RoboApply tailors your resume, runs realistic AI mock interviews, and keeps every application in one place — so you can focus on landing the offer.",
+      "feature_resume": "Tailored, ATS-ready resumes",
+      "feature_interview": "Realistic AI mock interviews",
+      "feature_track": "Every application in one place"
+    }
+  },
+  "onboarding": {
+    "brand_sub": "YOUR AI JOB HUNTER",
+    "skip": "Skip →",
+    "upload": {
+      "title": "Show me your",
+      "title_accent": "resume",
+      "lead": "That's all I need to get started. One read and I'll stop showing you bad-fit roles forever.",
+      "drop_title": "Drop your resume, or click to browse",
+      "drop_sub": "PDF, DOC/DOCX, TXT or MD — up to 15 MB",
+      "ingest_title": "What I picked up",
+      "reading": "Reading…",
+      "error": "I couldn't read that resume. Try a PDF or DOCX, or pick another file.",
+      "received": "{size} · uploading & parsing…"
+    },
+    "resumeSelect": {
+      "title": "Which resume should I",
+      "title_accent": "read",
+      "title_after": "?",
+      "lead": "Pick the one that best reflects where you're headed — I'll read it and we'll take it from there.",
+      "upload_new": "Upload a new resume",
+      "paste_text": "Paste resume text",
+      "primary_badge": "Primary",
+      "last_edited": "Last edited {date}",
+      "continue": "Continue with this resume",
+      "linkedin_import": "Import from LinkedIn",
+      "linkedin_placeholder": "https://www.linkedin.com/in/your-profile",
+      "paste_placeholder": "Paste your resume text here — plain text or markdown both work.",
+      "paste_name": "Pasted resume",
+      "paste_submit": "Use this text",
+      "back": "← Back",
+      "retry": "Try again",
+      "pick_existing": "Pick an existing resume",
+      "paste_instead": "Paste text instead",
+      "formats": "PDF · DOC/DOCX · TXT · MD",
+      "error_file_too_large": "That file is too large (15 MB max). Try a smaller export.",
+      "error_unsupported_format": "I can't read that format. PDF, DOC/DOCX, TXT or MD all work.",
+      "error_parse_failed": "I couldn't read that resume. Try another file, or paste the text instead."
+    },
+    "chat": {
+      "title": "Let's set up your hunt",
+      "composer_placeholder": "Tell me what you're hunting — roles, places, salary, dealbreakers…",
+      "send": "Send",
+      "opening_prompt_hint": "I drafted this opener from your resume — edit it or just hit send.",
+      "skeleton_ingest": "Reading your resume…",
+      "status_searching_internal": "Searching our job index…",
+      "status_searching_external": "Checking fresh external postings…",
+      "status_scoring": "Scoring matches against your resume…",
+      "tray_title": "What I've got so far",
+      "tray_edit_prefix": "Actually, about {field}…",
+      "tray_dismiss": "Dismiss",
+      "card_match": "{score}% match",
+      "card_via": "via {publisher}",
+      "card_save": "Save",
+      "card_saved": "Saved",
+      "card_pass": "Pass",
+      "card_passed": "Passed",
+      "card_apply": "Open posting",
+      "wrap_cta": "Take me to my matches",
+      "restore_notice": "Picked up where we left off.",
+      "superseded_notice": "This conversation continued in another window — refresh to catch up.",
+      "error_turn_failed": "That didn't go through.",
+      "error_retry": "Retry",
+      "error_daily_limit": "You've restarted onboarding a few times today — come back tomorrow, or skip straight into the app.",
+      "progress_resume": "Resume",
+      "progress_chat": "Chat",
+      "progress_matches": "Matches",
+      "progress_done": "Done",
+      "fields": {
+        "targetRoles": "Roles",
+        "seniority": "Seniority",
+        "workModes": "Work mode",
+        "salary": "Salary",
+        "employmentTypes": "Employment",
+        "industriesTarget": "Industries",
+        "industriesAvoid": "Avoiding",
+        "companyStages": "Company stage",
+        "companySizes": "Company size",
+        "locations": "Locations",
+        "mustHaves": "Must-haves",
+        "dealbreakers": "Dealbreakers"
+      },
+      "values": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "On-site",
+        "full_time": "Full-time",
+        "contract": "Contract",
+        "part_time": "Part-time",
+        "internship": "Internship"
+      }
+    }
+  },
+  "mission": {
+    "page_title": "Mission Control",
+    "briefing": {
+      "eyebrow": "AI BRIEFING · {day} · {time}",
+      "loading": "Connecting to your agent…",
+      "empty_quote": "I'm getting set up. First briefing tomorrow at 7am.",
+      "empty_first_run": "Good morning. First day on the job — I'll scan boards overnight and have your first picks ready tomorrow at 7am."
+    },
+    "today": {
+      "heading": "Today's runs",
+      "count": "{count} queued",
+      "submits_at": "Submits at {time} — skip until then with one tap",
+      "empty": "Quiet morning. Nothing cleared your bar overnight worth queuing. I'll keep watching."
+    },
+    "yesterday": {
+      "heading": "Yesterday's submissions",
+      "empty": "Nothing went out yesterday."
+    },
+    "week": {
+      "heading": "This week so far",
+      "summary": "{applied} applied · {views} recruiter views · {invites} interview {invites, plural, one {invite} other {invites}}",
+      "empty": "No activity yet this week."
+    },
+    "rail": {
+      "today_runs": "Today's runs"
+    },
+    "run": {
+      "match_score": "Match {score}",
+      "apply_early": "Apply early",
+      "skip": "Skip",
+      "undo": "Undo ({hours}h)",
+      "open_detail": "Open →"
+    },
+    "status": {
+      "queued": "Queued",
+      "previewing": "Previewing",
+      "submitted": "Submitted",
+      "skipped": "Skipped by you",
+      "failed": "Failed",
+      "undone": "Withdrawn"
+    },
+    "counts": {
+      "submitted": "Submitted",
+      "previewing": "Previewing",
+      "skipped": "Skipped",
+      "failed": "Failed"
+    },
+    "pause": {
+      "cta": "Pause my agent",
+      "resume": "Resume agent",
+      "paused": "Your agent is paused.",
+      "paused_until": "Paused until {iso}",
+      "modal_title": "Pause for how long?",
+      "modal_description": "You can resume any time. Nothing already submitted will be withdrawn.",
+      "option_24h": "24 hours",
+      "option_24h_hint": "Most common — handle the rest of your day and resume tomorrow.",
+      "option_7d": "7 days",
+      "option_7d_hint": "Travel, focus week, anything off the table for a while.",
+      "option_indefinite": "Indefinitely",
+      "option_indefinite_hint": "Until you come back and resume by hand.",
+      "cancel": "Cancel",
+      "confirm": "Pause my agent",
+      "error": "I couldn't pause your agent. Try again."
+    },
+    "actions": {
+      "skipped_toast": "Got it — I won't submit {company}.",
+      "undo_toast": "Withdrew your application to {company}.",
+      "applied_early_toast": "Sending your application to {company} now.",
+      "error": "That didn't go through. Try again."
+    }
+  },
+  "apps": {
+    "back_to_mission": "Mission",
+    "loading": "Loading the receipts…",
+    "not_found_title": "Can't find that application.",
+    "not_found_body": "It may have been removed, or you may not have permission. Head back to Mission Control.",
+    "chat": {
+      "intro_eyebrow": "WHY I PICKED THIS",
+      "intro_body": "Here's why I picked this job and what I submitted on your behalf.",
+      "match_eyebrow": "MATCH BREAKDOWN",
+      "match_caption": "How your background lines up against this role",
+      "match_score": "Overall match",
+      "tech_eyebrow": "TECH STACK",
+      "tech_caption": "What the JD called out, and what's on your resume",
+      "tech_required": "Required",
+      "tech_user_has": "On your resume",
+      "yes": "Yes",
+      "no": "No",
+      "claims_eyebrow": "CLAIM CHECKER",
+      "claims_caption": "Every concrete claim I wrote is anchored to a line in your resume",
+      "claims_passed": "Passed",
+      "claims_failed": "No anchor",
+      "prompt_eyebrow": "THE PROMPT I USED",
+      "prompt_body": "I sent this to {model}. The system prompt sets the rules; the user prompt gives the job + your resume.",
+      "prompt_show": "Show me the prompt",
+      "prompt_hide": "Hide the prompt",
+      "prompt_loading": "Fetching the prompt…",
+      "letter_eyebrow": "COVER LETTER",
+      "letter_body": "This is the letter I submitted. It's anchored to your resume — every concrete claim is verifiable.",
+      "diff_eyebrow": "RESUME I SENT",
+      "diff_body": "Diff between your master resume and the version I submitted. Additions are highlighted; nothing is invented."
+    },
+    "detail": {
+      "status_badge": "Status",
+      "location": "Location",
+      "salary": "Salary",
+      "posted": "Posted",
+      "match": "Match",
+      "open_external": "Open on job board",
+      "bookmark": "Bookmark",
+      "withdraw": "Withdraw application"
+    }
+  },
+  "settings": {
+    "page_title": "Settings",
+    "intent": {
+      "heading": "Your intent",
+      "subtitle": "Edit this anytime. Tomorrow morning's sweep will use the new text.",
+      "save": "Save changes",
+      "saved": "Got it. Tomorrow's sweep will use this. Today's queue is locked in.",
+      "save_error": "I couldn't save that. Try again.",
+      "current_label": "Currently set",
+      "version_hint": "Version {version} · last updated {iso}"
+    },
+    "tier": {
+      "heading": "Plan and billing",
+      "current": "You're on {tier}.",
+      "cap_hint": "Up to {cap} applications per day.",
+      "manage": "Manage billing",
+      "manage_unavailable": "Billing portal isn't live yet. I'll surface it as soon as it's enabled."
+    },
+    "pause_schedule": {
+      "heading": "Pause schedule",
+      "enabled": "Auto-apply is enabled.",
+      "disabled": "Auto-apply is paused.",
+      "toggle_aria": "Toggle auto-apply"
+    },
+    "tone": {
+      "heading": "Cover letter tone steering",
+      "premium_only": "Premium+ only — upgrade to enable.",
+      "subtitle": "Anything specific you want your agent to emphasize in cover letters? Examples, phrasing, things to avoid.",
+      "placeholder": "Lead with the impact metric. Use one sentence per paragraph. Never use the word 'passionate'.",
+      "save": "Save tone"
+    },
+    "account": {
+      "heading": "Account",
+      "email_label": "Email",
+      "sign_out": "Sign out",
+      "delete_account": "Delete my account",
+      "delete_modal_title": "Delete your RoboApply account?",
+      "delete_modal_body": "This stops the agent immediately and removes your data. Submitted applications stay with the boards themselves. To confirm, type your email.",
+      "delete_confirm_label": "Confirm by typing {email}",
+      "delete_confirm_placeholder": "your@email.com",
+      "delete_cancel": "Cancel",
+      "delete_confirm": "Delete account",
+      "delete_in_progress": "Deleting…",
+      "delete_error": "I couldn't complete the deletion. Try again or contact support."
+    }
+  },
+  "preferences": {
+    "loading": "Loading your preferences…",
+    "rail": {
+      "eyebrow": "PREFERENCES",
+      "title": "Hunt rules",
+      "hunt_active": "Hunt active",
+      "hunt_active_sub": "Agent is working in the background",
+      "hunt_paused": "Hunt paused",
+      "hunt_paused_sub": "No new applications will be sent",
+      "pause": "Pause hunt",
+      "resume": "Resume hunt"
+    },
+    "nav": {
+      "identity": "Identity",
+      "hunt": "Job target",
+      "agent": "Agent behavior",
+      "notif": "Notifications",
+      "integ": "Integrations",
+      "privacy": "Privacy & blocklist",
+      "plan": "Plan & usage",
+      "danger": "Danger zone"
+    },
+    "savebar": {
+      "unsaved": "Unsaved changes",
+      "discard": "Discard",
+      "save": "Save changes",
+      "saving": "Saving…"
+    },
+    "identity": {
+      "eyebrow": "01 · IDENTITY",
+      "title_before": "Who",
+      "title_em": "you are",
+      "title_after": ".",
+      "sub": "This is the source of truth for every application I draft and every reply I send on your behalf.",
+      "group_profile": "Profile",
+      "upload_photo": "Upload photo",
+      "photo_hint": "PNG, JPG · square works best",
+      "full_name": "Full name",
+      "pronouns": "Pronouns",
+      "pronouns_sub": "Optional — used in cover letter pronoun consistency",
+      "pronouns_other": "Other",
+      "pronouns_none": "Prefer not to say",
+      "years_exp": "Years of experience",
+      "new_grad": "New grad",
+      "years_suffix": " yrs",
+      "group_contact": "Contact",
+      "email": "Email",
+      "phone": "Phone",
+      "location": "Location",
+      "location_ph": "City, State",
+      "group_links": "Links",
+      "linkedin": "LinkedIn",
+      "github": "GitHub",
+      "portfolio": "Portfolio / website",
+      "group_default_resume": "Default resume",
+      "resume_base": "Base",
+      "no_resumes": "No resumes yet — create one in the resume builder."
+    },
+    "hunt": {
+      "eyebrow": "02 · JOB TARGET",
+      "title_before": "What I'm",
+      "title_em": "hunting",
+      "title_after": "for you.",
+      "sub": "Tighten the filter to surface fewer, better matches. Loosen it when you want to cast wider.",
+      "plain_label": "IN PLAIN ENGLISH · agent reads this every run",
+      "plain_l1": "{roles} roles at {stages} companies",
+      "plain_l2": "{modes} in {cities}",
+      "plain_l3": "${min}k–{max}k base · {count} industries",
+      "plain_l4": "Must-have: {items}",
+      "plain_l5": "Dealbreakers: {items}",
+      "any_stage": "any stage",
+      "none": "none",
+      "mode_remote_word": "remote",
+      "mode_hybrid_word": "hybrid",
+      "mode_onsite_word": "on-site",
+      "group_intent": "Intent statement",
+      "intent_label": "Plain language",
+      "intent_sub": "Free-form — used as a tiebreaker when listings look similar",
+      "group_role": "Role",
+      "titles_label": "Titles you want",
+      "titles_sub": "Add variations — I'll match all of them",
+      "titles_ph": "Add title, comma to confirm",
+      "seniority_label": "Seniority",
+      "seniority_sub": "Targeting {level}+ roles",
+      "group_location": "Location",
+      "work_mode_label": "Work mode",
+      "mode_remote": "Remote",
+      "mode_remote_desc": "Anywhere, any timezone",
+      "mode_hybrid": "Hybrid",
+      "mode_hybrid_desc": "2–3 days in office",
+      "mode_onsite": "On-site",
+      "mode_onsite_desc": "5 days in office",
+      "cities_label": "Cities or regions",
+      "cities_sub": "Plus remote-friendly locations",
+      "cities_ph": "Add city",
+      "group_comp": "Compensation",
+      "salary_label": "Base salary range",
+      "salary_sub": "${min}k–${max}k · I'll filter out anything below {min}k",
+      "salary_min": "Minimum base salary",
+      "salary_max": "Maximum base salary",
+      "salary_median": "Median for {level}: $215k",
+      "group_company": "Company",
+      "stage_label": "Stage",
+      "stage_sub": "Pick where you want to be in a company's lifecycle",
+      "headcount_label": "Headcount",
+      "group_industry": "Industry",
+      "industries_target_label": "Target industries",
+      "industries_target_sub": "I'll surface roles in these first",
+      "industries_avoid_label": "Industries to avoid",
+      "industries_avoid_sub": "Hard blocklist — never shown",
+      "industries_avoid_ph": "Add industry",
+      "group_hard_rules": "Hard rules",
+      "musthaves_label": "Must-haves",
+      "musthaves_sub": "Roles missing these are skipped automatically",
+      "musthaves_ph": "Add must-have",
+      "dealbreakers_label": "Dealbreakers",
+      "dealbreakers_sub": "If a JD mentions these — skipped, no question",
+      "dealbreakers_ph": "Add dealbreaker",
+      "work_auth_label": "Work authorization",
+      "auth_citizen": "US Citizen — no sponsorship needed",
+      "auth_pr": "US Permanent Resident",
+      "auth_h1b": "Need H1-B sponsorship",
+      "auth_opt": "Need OPT extension",
+      "auth_eu": "EU / UK citizen",
+      "auth_other": "Other"
+    },
+    "agent": {
+      "eyebrow": "03 · AGENT BEHAVIOR",
+      "title_before": "How",
+      "title_em": "aggressive",
+      "title_after": "I should be.",
+      "sub": "Most people start in the middle and dial up after the first 5 applications come back clean.",
+      "current_mode": "CURRENT MODE",
+      "mode_manual": "Manual",
+      "mode_manual_desc": "I draft. You review every send. Zero auto-applies.",
+      "mode_balanced": "Balanced",
+      "mode_balanced_desc": "I auto-apply to ≥ 90 matches. You review the rest.",
+      "mode_aggressive": "Full auto",
+      "mode_aggressive_desc": "Every match ≥ 80 ships. I flag anything risky first.",
+      "stat_sent": "SENT / WK",
+      "stat_saved": "SAVED",
+      "stat_replies": "REPLIES",
+      "group_mode": "Mode",
+      "behaviour_label": "Auto-apply behaviour",
+      "group_thresholds": "Thresholds",
+      "threshold_label": "Match threshold",
+      "threshold_sub": "Only show matches scoring ≥ {score} — about {count} new roles/day at this setting",
+      "cap_label": "Daily application cap",
+      "cap_sub": "Recruiters notice volume spikes — {count}/day is {tone}",
+      "cap_suffix": " / day",
+      "cap_conservative": "conservative",
+      "cap_sweet": "the sweet spot",
+      "cap_pushing": "pushing it",
+      "quiet_label": "Quiet hours",
+      "quiet_sub": "I'll work but won't time-stamp anything in this window",
+      "quiet_start": "Quiet hours start",
+      "quiet_end": "Quiet hours end",
+      "group_automations": "Smart automations",
+      "auto_decline_label": "Auto-decline irrelevant recruiter pings",
+      "auto_decline_sub": "If the role is outside your filter, I send a polite no on your behalf",
+      "auto_schedule_label": "Auto-schedule first-round interviews",
+      "auto_schedule_sub": "When a recruiter sends a calendar link, I pick the best slot from your free time",
+      "pause_interviews_label": "Pause hunt when 3+ active interviews",
+      "pause_interviews_sub": "Don't spread yourself thin — let the current pipeline play out",
+      "rescore_label": "Re-score matches weekly",
+      "rescore_sub": "As your resume evolves, I re-rank stale matches to your current profile",
+      "group_coach": "Coach",
+      "coach_label": "Coach loudness",
+      "coach_sub": "How chatty your AI co-pilot should be",
+      "coach_silent": "Silent",
+      "coach_nudges": "Nudges",
+      "coach_loud": "Loud"
+    },
+    "notif": {
+      "eyebrow": "04 · NOTIFICATIONS",
+      "title_before": "When I should",
+      "title_em": "tap your shoulder",
+      "title_after": ".",
+      "sub": "By default I'm quiet. Turn things on as you trust the agent more.",
+      "group_channels": "Channels",
+      "channel_email": "Email",
+      "channel_email_sub": "Sent to your account email",
+      "channel_push": "Push",
+      "channel_push_sub": "Browser + mobile app",
+      "channel_sms": "SMS",
+      "group_matrix": "What to notify me about",
+      "col_email": "EMAIL",
+      "col_push": "PUSH",
+      "col_sms": "SMS",
+      "event_newMatch90_label": "New match ≥ 90",
+      "event_newMatch90_sub": "Fresh strong-fit role drops in",
+      "event_queueReview_label": "Queue needs review",
+      "event_queueReview_sub": "An auto-apply is about to send",
+      "event_appSent_label": "Application sent",
+      "event_appSent_sub": "Quiet confirmation receipts",
+      "event_response_label": "Response from employer",
+      "event_response_sub": "Recruiter or hiring manager replied",
+      "event_interview_label": "Interview scheduled",
+      "event_interview_sub": "Calendar slot booked",
+      "group_digest": "Digest",
+      "digest_label": "Summary frequency",
+      "digest_sub": "A roll-up of what I did, no individual pings",
+      "digest_off": "Off",
+      "digest_daily": "Daily 7am",
+      "digest_weekly": "Weekly Mon"
+    },
+    "integ": {
+      "eyebrow": "05 · INTEGRATIONS",
+      "title_before": "Plug me",
+      "title_em": "into your stack",
+      "title_after": ".",
+      "sub": "The more I'm connected, the less you need to babysit. I can fetch responses from Gmail, schedule on your Calendar, and ping you in Slack.",
+      "loading": "Loading integrations…",
+      "connected": "Connected",
+      "connect": "Connect",
+      "disconnect": "Disconnect"
+    },
+    "privacy": {
+      "eyebrow": "06 · PRIVACY & BLOCKLIST",
+      "title_before": "Who can",
+      "title_em": "see you",
+      "title_after": ".",
+      "sub": "Stealth mode is on by default. Your current employer never sees you. Recruiters at companies you've blocked never reach you.",
+      "group_visibility": "Visibility",
+      "visibility_label": "Profile visibility",
+      "visibility_sub": "Who can find you in inbound searches",
+      "vis_stealth": "Stealth",
+      "vis_matched": "Matched companies only",
+      "vis_everyone": "Everyone",
+      "group_blocklist": "Company blocklist",
+      "blocked_label": "Auto-blocked",
+      "blocked_sub": "These never see your profile or applications",
+      "reason_employer": "CURRENT EMPLOYER · auto",
+      "reason_byyou": "BY YOU",
+      "remove": "Remove",
+      "add_company": "+ Add a company to block",
+      "add_ph": "Company name",
+      "add_confirm": "Add",
+      "blocked_recruiters_label": "Blocked recruiters",
+      "blocked_recruiters_sub": "{count} recruiters blocked from contacting you",
+      "manage_list": "Manage list →",
+      "group_data": "Your data",
+      "export_label": "Export everything",
+      "export_sub": "All applications, drafts, transcripts, and resumes as JSON + PDF",
+      "download_archive": "Download archive",
+      "retention_label": "Data retention",
+      "retention_sub": "How long I keep transcripts of interviews and drafts",
+      "retention_30": "30 days",
+      "retention_90": "90 days",
+      "retention_365": "1 year",
+      "retention_forever": "Forever"
+    },
+    "plan": {
+      "eyebrow": "07 · PLAN & USAGE",
+      "title_before": "You're on",
+      "title_after": ".",
+      "sub": "Cancel anytime. Pause anytime. The hunt doesn't stop just because you took a vacation.",
+      "usage_apps": "APPLICATIONS · THIS MONTH",
+      "usage_hours": "HOURS SAVED · LIFETIME 42h",
+      "usage_replies": "REPLIES · 14% RATE",
+      "usage_mock": "MOCK INTERVIEWS",
+      "group_plans": "Plans",
+      "free_name": "Free",
+      "free_billing": "forever",
+      "free_b1": "10 applications / week",
+      "free_b2": "Manual mode only",
+      "free_b3": "No AI tailor",
+      "free_b4": "Resume builder included",
+      "pro_name": "Pro",
+      "per_month": "per month",
+      "popular": "POPULAR",
+      "pro_b1": "Unlimited applications",
+      "pro_b2": "All AI features",
+      "pro_b3": "Mock interview (unlimited)",
+      "pro_b4": "Resume tailor per job",
+      "pro_b5": "Email + Calendar integration",
+      "premium_name": "Premium",
+      "premium_b1": "Everything in Pro",
+      "premium_b2": "Concierge: a real human reviews top 3 drafts/week",
+      "premium_b3": "Salary negotiation script",
+      "premium_b4": "White-glove onboarding",
+      "current_plan": "Current plan",
+      "downgrade": "Downgrade",
+      "upgrade": "Upgrade →",
+      "switch": "Switch",
+      "group_billing": "Billing",
+      "payment_label": "Payment method",
+      "payment_sub": "Visa ending in 4242",
+      "update_card": "Update card",
+      "next_bill_label": "Next bill",
+      "next_bill_sub": "$19.00 · June 14, 2026",
+      "view_invoices": "View invoices"
+    },
+    "danger": {
+      "eyebrow": "08 · DANGER ZONE",
+      "title_before": "The",
+      "title_em": "one-way",
+      "title_after": "buttons.",
+      "sub": "These don't ask twice — well, actually they ask twice. But you should still be sure.",
+      "pause_title": "Pause the hunt",
+      "pause_desc": "I'll stop scanning, applying, and replying. Your data stays. You can resume any time.",
+      "pause_btn": "Pause for now",
+      "resume_btn": "Resume the hunt",
+      "reset_title": "Reset preferences to defaults",
+      "reset_desc": "Wipes all settings on this page. Resumes and applications remain.",
+      "reset_btn": "Reset preferences",
+      "delete_data_title": "Delete all application data",
+      "delete_data_desc": "Clears your match history, queue, activity log, and pipeline. Account stays.",
+      "delete_data_btn": "Delete application data",
+      "delete_data_confirm": "This clears your match history, queue, activity log, and pipeline. Your account and resumes stay.",
+      "delete_account_title": "Delete my account",
+      "delete_account_desc": "Wipes everything. Resumes, applications, transcripts, integrations. Can't be undone.",
+      "delete_account_btn": "Delete account",
+      "delete_account_confirm": "This wipes everything — resumes, applications, transcripts, integrations. This can't be undone.",
+      "confirm_note": "This is a stub action — nothing is deleted yet.",
+      "cancel": "Cancel"
+    }
+  },
+  "errors": {
+    "not_found_title": "404",
+    "not_found_body": "We couldn't find that page.",
+    "error_title": "Something went wrong",
+    "error_body": "We've logged the issue. You can try again or head back home.",
+    "try_again": "Try again",
+    "go_home": "Go home"
+  },
+  "queue": {
+    "eyebrow": "{count, plural, one {# pending review} other {# pending review}}",
+    "title": "Read these before ",
+    "titleAccent": "I send 'em",
+    "titleAfter": ".",
+    "sub": "I'll auto-submit each one when its timer runs out. Edit the cover, skip it, or fire now — you're the boss.",
+    "fitPill": "{score} fit",
+    "draftBy": "Draft cover · written by RoboApply",
+    "edit": "Edit",
+    "sendNow": "Send now",
+    "sending": "Sending…",
+    "editAndSend": "Edit & send",
+    "skip": "Skip",
+    "skipping": "Skipping…",
+    "actionError": "That didn't go through. Give it another try.",
+    "loading": "Loading your review queue…",
+    "countdown": {
+      "minutes": "Auto-applies in {minutes}m",
+      "hours": "Auto-applies in {hours}h",
+      "hoursMinutes": "Auto-applies in {hours}h {minutes}m",
+      "lessThanMinute": "Auto-applies in <1m",
+      "now": "Auto-applying now…",
+      "scheduled": "Auto-apply scheduled",
+      "title": "I'll submit this automatically when the timer runs out — unless you act first."
+    },
+    "empty": {
+      "title": "Queue ",
+      "titleAccent": "clear",
+      "sub": "New matches land here when they cross your threshold. I'll draft each one and hold it for your review before sending."
+    },
+    "error": {
+      "title": "Couldn't load the queue",
+      "body": "Something hiccuped on my end. Your drafts are safe — try again.",
+      "retry": "Try again"
+    },
+    "editCover": {
+      "title": "Edit cover letter",
+      "subtitle": "For {title} at {company}",
+      "fieldLabel": "Cover letter (markdown)",
+      "hint": "Markdown supported. I'll send this exact text.",
+      "tooLong": "Too long — keep it under {max} characters.",
+      "error": "Couldn't save. Try again.",
+      "cancel": "Cancel",
+      "save": "Save cover",
+      "saving": "Saving…"
+    }
+  },
+  "today": {
+    "eyebrow": "Live · {time}",
+    "match": "match",
+    "whyFits": "Why I think this fits",
+    "thinking": "Reading the role…",
+    "noReasoning": "I don't have a detailed read on this one yet.",
+    "matchesTitle": "Today's matches · sorted by fit",
+    "appliedBanner": "Sent. Cover, tailored resume, and screening answers submitted.",
+    "passedBanner": "Removed from your feed. I'll learn from this and skip similar roles.",
+    "headline": {
+      "direct": {
+        "before": "{count} applications",
+        "accent": "shipped",
+        "after": "overnight."
+      },
+      "playful": {
+        "before": "I worked the",
+        "accent": "night shift",
+        "after": "☕"
+      },
+      "formal": {
+        "before": "Overnight",
+        "accent": "summary",
+        "after": "."
+      }
+    },
+    "sub": {
+      "direct": "{scanned} jobs scanned, {matched} cleared your threshold, {autoApplied} auto-applied. The strongest are queued — your call.",
+      "playful": "Brewed coffee while you slept. {scanned} listings scanned, {matched} matched, {autoApplied} auto-applied. {queued} more are waiting for your green light.",
+      "formal": "{scanned} listings reviewed overnight. {matched} met the match threshold. {autoApplied} applications submitted; {queued} awaiting your approval."
+    },
+    "stats": {
+      "autoApplied": "Auto-applied",
+      "whileYouSlept": "while you slept",
+      "scanned": "Scanned overnight",
+      "matched": "Matched ≥ 80",
+      "matchedDelta": "{count} above bar",
+      "inQueue": "In your queue"
+    },
+    "posted": {
+      "justNow": "just now",
+      "hoursAgo": "{count}h ago",
+      "daysAgo": "{count}d ago"
+    },
+    "tier": {
+      "strong": "Strong match",
+      "good": "Good match",
+      "stretch": "Stretch",
+      "longShot": "Long shot"
+    },
+    "tag": {
+      "stretch": "Stretch role"
+    },
+    "work": {
+      "remote": "Remote",
+      "hybrid": "Hybrid",
+      "onsite": "On-site"
+    },
+    "status": {
+      "applied": "✓ Applied",
+      "passed": "✕ Passed",
+      "queued": "◆ In queue"
+    },
+    "facet": {
+      "salaryFit": "Salary fit",
+      "salaryWithinBand": "Within your band",
+      "salaryBelowBand": "Below your band",
+      "skillOverlap": "Skill overlap",
+      "skillValue": "{pct}% of JD skills",
+      "riskFlag": "Risk flag",
+      "riskNone": "No major risks flagged"
+    },
+    "actions": {
+      "applyNow": "Apply now",
+      "applying": "Applying…",
+      "schedule": "Schedule auto-apply",
+      "pass": "Pass",
+      "undo": "Undo",
+      "viewJd": "View JD ↗",
+      "refresh": "Refresh",
+      "filters": "Filters"
+    },
+    "empty": {
+      "title": "All caught up,",
+      "accent": "nice.",
+      "sub": "No fresh matches above your threshold right now. I'll keep scanning and drop new ones here the moment they land."
+    },
+    "error": {
+      "title": "Couldn't load your",
+      "accent": "matches",
+      "sub": "Something hiccuped on my end. Your feed is safe — try again.",
+      "retry": "Try again"
+    }
+  },
+  "activity": {
+    "eyebrow": "Last 7 days",
+    "title": "Everything ",
+    "titleAccent": "I did",
+    "titleAfter": " on your behalf.",
+    "sub": "Receipts for every application, draft, decline, and quiet decision. No black box.",
+    "loading": "Loading your activity log…",
+    "stats": {
+      "hoursSaved": "Hours saved",
+      "thisWeek": "this week",
+      "appsSent": "Apps sent",
+      "replies": "Replies",
+      "replyRate": "{percent}%",
+      "draftsWritten": "Drafts written"
+    },
+    "empty": {
+      "title": "Nothing logged",
+      "titleAccent": "yet",
+      "sub": "Once I start applying, tailoring, and triaging on your behalf, every action shows up here — with my reasoning."
+    },
+    "error": {
+      "title": "Couldn't load your activity",
+      "body": "Something hiccuped on my end. Your history is safe — try again.",
+      "retry": "Try again"
+    }
+  },
+  "pipeline": {
+    "eyebrow": "{count} active conversations",
+    "loading": "Loading your pipeline…",
+    "headline": {
+      "direct": {
+        "before": "Where each",
+        "accent": "conversation",
+        "after": "stands."
+      },
+      "playful": {
+        "before": "Every",
+        "accent": "thread",
+        "after": "you've got going ✨"
+      },
+      "formal": {
+        "before": "Pipeline",
+        "accent": "overview",
+        "after": "."
+      }
+    },
+    "sub": {
+      "direct": "Synced automatically from inbox replies and calendar invites. Drag a card — or use its status menu — to move it across the {columns} stages.",
+      "playful": "I keep this in sync from your inbox and calendar. Drag a card to nudge it along, or pick a new stage from its menu.",
+      "formal": "Stages update automatically from inbox replies and calendar invites. Reassign a card by dragging it or via its status control."
+    },
+    "columns": {
+      "saved": "Saved",
+      "applied": "Applied",
+      "interview": "Interview",
+      "offer": "Offer"
+    },
+    "column": {
+      "aria": "{name} stage, {count} items"
+    },
+    "card": {
+      "drag_hint": "Draggable card — drag to another stage or use the status menu",
+      "move_label": "Move {role} to a different stage",
+      "untitled_company": "Untitled company",
+      "untitled_role": "Untitled role"
+    },
+    "when": {
+      "follow_up": "Follow up {date}",
+      "applied": "Applied {ago}",
+      "saved": "Saved {ago}"
+    },
+    "ago": {
+      "now": "just now",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "days": "{n}d",
+      "weeks": "{n}w"
+    },
+    "empty": {
+      "saved": "Nothing saved yet — bookmark a role and it'll wait here.",
+      "applied": "No applications in flight.",
+      "interview": "No interviews booked — yet.",
+      "offer": "No offers yet — I'll celebrate when one lands ✨"
+    },
+    "empty_board": {
+      "title": "Your pipeline is",
+      "accent": "empty",
+      "body": "Once you save or apply to roles, they'll show up here so you can track every conversation in one place."
+    },
+    "error": {
+      "title": "Couldn't load your pipeline",
+      "body": "Something hiccuped on my end. Your data is safe — try again.",
+      "retry": "Try again"
+    }
+  },
+  "mock": {
+    "setup": {
+      "eyebrow": "Mock interview · {count} roles",
+      "title": "Practice. Until ",
+      "titleAccent": "it's boring",
+      "titleAfter": ".",
+      "sub": "Pick a role, pick an interviewer, pick a vibe. I'll run the gauntlet. Your coach watches from your side and feeds you nudges live.",
+      "loading": "Loading the interview gym…",
+      "startError": "Couldn't start that session. Give it another try.",
+      "creditCost": "Costs {n} credits",
+      "creditsRemaining": "{n} credits left",
+      "insufficientCredits": "This interview needs {required} credits but you have {balance}. Top up to continue.",
+      "getCredits": "Get credits",
+      "recent": {
+        "label": "Pick up where you left off",
+        "count": "{count} recent",
+        "with": "with {name}",
+        "replay": "Replay session →",
+        "showMore": "Show {count} earlier",
+        "showLess": "Show fewer",
+        "deleteAria": "Delete recording",
+        "deleteConfirm": "Delete this recording?",
+        "delete": "Delete",
+        "cancel": "Cancel"
+      },
+      "role": {
+        "title": "Pick a role",
+        "sub": "Search or browse {count} live tracks",
+        "searchPlaceholder": "e.g. Senior PM, iOS, ML…",
+        "more": "+ {count} more — refine your search",
+        "tabBrowse": "Browse roles",
+        "tabPaste": "Paste a JD",
+        "jdPlaceholder": "Paste the full job description — title, responsibilities, requirements. I'll rewrite it into an interview brief.",
+        "jdHint": "Paste the full JD — I'll rewrite it into a structured interview brief and ground the questions in it.",
+        "jdCount": "{count} characters",
+        "jdTooShort": "Add a bit more — paste the responsibilities and requirements so the brief is accurate.",
+        "categories": {
+          "engineering-devops": "Engineering & DevOps",
+          "product-design": "Product & Design",
+          "data-ai-analytics": "Data, AI & Analytics",
+          "marketing-content": "Marketing & Content",
+          "sales-customer-success": "Sales & Customer Success",
+          "finance-accounting": "Finance & Accounting",
+          "healthcare-life-sciences": "Healthcare & Life Sciences",
+          "people-ops-trades": "People, Ops & Trades"
+        },
+        "roles": {
+          "frontend-engineer": "Frontend Engineer",
+          "backend-engineer": "Backend Engineer",
+          "full-stack-engineer": "Full-Stack Engineer",
+          "mobile-engineer-ios-android": "Mobile Engineer (iOS/Android)",
+          "devops-platform-engineer": "DevOps / Platform Engineer",
+          "site-reliability-engineer": "Site Reliability Engineer",
+          "security-engineer": "Security Engineer",
+          "engineering-manager": "Engineering Manager",
+          "product-manager": "Product Manager",
+          "senior-product-manager": "Senior Product Manager",
+          "technical-program-manager": "Technical Program Manager",
+          "product-designer": "Product Designer",
+          "ux-researcher": "UX Researcher",
+          "ux-ui-designer": "UX/UI Designer",
+          "brand-visual-designer": "Brand / Visual Designer",
+          "data-analyst": "Data Analyst",
+          "data-scientist": "Data Scientist",
+          "data-engineer": "Data Engineer",
+          "machine-learning-engineer": "Machine Learning Engineer",
+          "analytics-engineer": "Analytics Engineer",
+          "business-intelligence-analyst": "Business Intelligence Analyst",
+          "ai-research-scientist": "AI / Research Scientist",
+          "digital-marketing-manager": "Digital Marketing Manager",
+          "content-marketer-copywriter": "Content Marketer / Copywriter",
+          "seo-specialist": "SEO Specialist",
+          "social-media-manager": "Social Media Manager",
+          "growth-marketer": "Growth Marketer",
+          "brand-manager": "Brand Manager",
+          "public-relations-specialist": "Public Relations Specialist",
+          "account-executive": "Account Executive",
+          "sales-development-rep-sdr": "Sales Development Rep (SDR)",
+          "solutions-sales-engineer": "Solutions / Sales Engineer",
+          "customer-success-manager": "Customer Success Manager",
+          "account-manager": "Account Manager",
+          "customer-support-specialist": "Customer Support Specialist",
+          "sales-manager": "Sales Manager",
+          "financial-analyst": "Financial Analyst",
+          "accountant": "Accountant",
+          "controller": "Controller",
+          "investment-equity-analyst": "Investment / Equity Analyst",
+          "fp-a-manager": "FP&A Manager",
+          "auditor": "Auditor",
+          "tax-advisor": "Tax Advisor",
+          "registered-nurse": "Registered Nurse",
+          "medical-doctor-physician": "Medical Doctor / Physician",
+          "pharmacist": "Pharmacist",
+          "clinical-research-associate": "Clinical Research Associate",
+          "healthcare-administrator": "Healthcare Administrator",
+          "medical-laboratory-scientist": "Medical Laboratory Scientist",
+          "physical-therapist": "Physical Therapist",
+          "hr-business-partner": "HR Business Partner",
+          "technical-recruiter": "Technical Recruiter",
+          "project-manager": "Project Manager",
+          "operations-manager": "Operations Manager",
+          "supply-chain-logistics-manager": "Supply Chain / Logistics Manager",
+          "electrician": "Electrician",
+          "skilled-tradesperson-hvac-welding": "Skilled Tradesperson (HVAC/Welding)"
+        }
+      },
+      "interviewer": {
+        "title": "Pick your interviewer",
+        "sub": "Distinct interviewer styles — pick the challenge you want to practice."
+      },
+      "difficulty": {
+        "easy": "EASY",
+        "medium": "MEDIUM",
+        "hard": "HARD"
+      },
+      "type": {
+        "title": "Pick the format",
+        "sub": "Run one or chain a full loop",
+        "minutes": "{minutes} min",
+        "recommendedBadge": "Recommended",
+        "recommendedFor": "Recommended for {role}",
+        "allFormats": "All formats",
+        "forThisRole": "For this role"
+      },
+      "format": {
+        "title": "How you'll show up",
+        "sub": "Video gets you ready for the real thing. Voice is fine for warm-ups.",
+        "video": {
+          "title": "Video call",
+          "tag": "RECOMMENDED",
+          "desc": "Camera on, face-to-face. I'll score your eye contact, presence, and how you handle the silence.",
+          "b1": "Self-view PIP",
+          "b2": "Eye-contact & presence score",
+          "b3": "Recorded for replay"
+        },
+        "voice": {
+          "title": "Voice only",
+          "tag": "LOW-PRESSURE",
+          "desc": "Audio only — like a phone screen. Good for working out structure before turning the camera on.",
+          "b1": "No camera needed",
+          "b2": "Focus on what you say",
+          "b3": "Transcript-only replay"
+        }
+      },
+      "launch": {
+        "role": "Role",
+        "interviewer": "Interviewer",
+        "format": "Format",
+        "mode": "Mode",
+        "pickRole": "Pick a role",
+        "pickInterviewer": "Pick an interviewer",
+        "pickType": "Pick a format",
+        "modeVideo": "📹 Video call",
+        "modeVoice": "🎤 Voice only",
+        "start": "Start interview",
+        "starting": "Starting…",
+        "language": "Language",
+        "roleFromJd": "(from your JD)"
+      },
+      "langDuration": {
+        "title": "Language & duration",
+        "sub": "Pick the language I'll interview you in and how long we'll run.",
+        "languageLabel": "Interview language",
+        "durationLabel": "Duration"
+      },
+      "error": {
+        "title": "Couldn't load the interview gym",
+        "body": "Something hiccuped on my end. Try again in a moment.",
+        "retry": "Try again"
+      },
+      "preview": {
+        "title": "Market job requirements",
+        "sub": "What this interview will screen for — grounded in live job-board postings.",
+        "empty": "Pick a role or paste a JD, choose an interviewer and a type, then preview the requirements driving your questions.",
+        "loading": "Pulling live requirements…",
+        "error": "Preview unavailable — your interview will still be tailored to this role.",
+        "retry": "Try again",
+        "previewBtn": "Preview →",
+        "summaryLabel": "Role summary",
+        "skillsLabel": "Must-have skills",
+        "respLabel": "Core responsibilities",
+        "signalsLabel": "Success signals",
+        "questionsLabel": "Sample opening questions",
+        "sourcesLabel": "Drawn from live postings",
+        "sourcesGeneric": "Based on a market profile for this role.",
+        "fromJd": "Grounded in your pasted JD"
+      },
+      "personas": {
+        "maya": {
+          "role": "The Warm Recruiter",
+          "blurb": "Conversational and kind. Draws out your story with gentle follow-ups. No tricks, no pressure.",
+          "style": "Calm, unhurried pace · open-ended questions · reflective listening · encouraging · never adversarial",
+          "company": "Talent Partner at a high-growth scale-up"
+        },
+        "june": {
+          "role": "The Founder",
+          "blurb": "Mission-obsessed and personable. Wants to know if you genuinely care — why this, why now.",
+          "style": "Friendly and energetic · values- and motivation-first · 'why this company?' · warm but tests sincerity once",
+          "company": "Founder & CEO of an early-stage startup"
+        },
+        "nova": {
+          "role": "The Field Surveyor",
+          "blurb": "Curious and fast-moving. Hops across the whole landscape — 'what else is out there?'",
+          "style": "Wide-ranging · compare-the-alternatives · trend-aware · pivots sideways, never drills",
+          "company": "Principal at a global consulting firm"
+        },
+        "priya": {
+          "role": "The Behavioral Probe",
+          "blurb": "STAR-method enforcer. 'Tell me about a time…' until your story has a real action and result.",
+          "style": "Story-based · STAR enforcement · patient follow-ups · conflict & failure scenarios · separates 'we' from 'you'",
+          "company": "People Lead at a large consumer brand"
+        },
+        "rex": {
+          "role": "The Curveball",
+          "blurb": "Hands you a problem you've never seen and watches how you break it down — not the answer.",
+          "style": "Lateral thinking · estimation & hypotheticals · reason-out-loud · changes one constraint mid-answer",
+          "company": "Big-tech & consulting-style interview loop"
+        },
+        "diaz": {
+          "role": "The Hands-On Operator",
+          "blurb": "Calm working-manager who's done the job. Keeps asking 'what did YOU specifically do?'",
+          "style": "Even-keeled · practice-over-theory · 'one real example, step by step' · separates doers from describers",
+          "company": "Working Practice Lead / hands-on manager"
+        },
+        "atlas": {
+          "role": "The Renaissance Architect",
+          "blurb": "Senior generalist who's seen every corner of the field. Maps your coverage, probes the gaps.",
+          "style": "Breadth-first · cross-domain · landscape-mapping · exposes blank spots by jumping to the next area",
+          "company": "Distinguished Engineer at a major tech firm"
+        },
+        "bishop": {
+          "role": "The Hiring-Bar Director",
+          "blurb": "Wants the failure story, the conflict you lost, and proof you owned it — not the highlight reel.",
+          "style": "Leadership-principles · ownership-obsessed · demands failure & conflict · distrusts rehearsed answers · 'what did YOU do?'",
+          "company": "Hiring Director at a high-growth scale-up"
+        },
+        "okonkwo": {
+          "role": "The Problem Architect",
+          "blurb": "Rigorous case interviewer who keeps moving the goalposts. Cares only how you think under pressure.",
+          "style": "First-principles framing · structured decomposition · escalating constraints · probes assumptions · composure under ambiguity",
+          "company": "Partner at a top-tier strategy firm"
+        },
+        "kai": {
+          "role": "The Whiteboard Veteran",
+          "blurb": "Loves edge cases, digs three levels down. Wants the exact decision and the case where it broke.",
+          "style": "Technical depth · quiet pauses · 'walk me through exactly what happened' · relentless on the mechanism",
+          "company": "Senior Staff Engineer on a large-scale infra team"
+        },
+        "voss": {
+          "role": "The Skeptical VP",
+          "blurb": "Pushes back on every claim. Demands the metric behind the story, not the vibe.",
+          "style": "Pointed · skeptical · numbers-first · 'how do you know that?' · accepts only evidence-backed depth",
+          "company": "VP-level executive interviewer"
+        },
+        "lena": {
+          "role": "The Clarity Coach",
+          "blurb": "Cares how clearly you land the point. Will ask you to explain the hard thing simply.",
+          "style": "Audience-first · 'explain it like I'm new' · rewards a clean headline · catches jargon and rambling",
+          "company": "Comms lead who's coached hundreds of execs"
+        },
+        "mirae": {
+          "role": "The Rapid Panel",
+          "blurb": "Jumps topics every two minutes and keeps the clock running. Can you stay sharp and adapt?",
+          "style": "Fast topic-switching · time-boxed answers · high tempo · rewards adaptability and poise",
+          "company": "Final-round panel chair at a big-tech firm"
+        },
+        "osei": {
+          "role": "The Culture Steward",
+          "blurb": "Looks for how you treat people when it's hard. Asks for the time you put the team over the win.",
+          "style": "Values-in-action · collaboration and inclusion stories · 'how did the team feel?' · warm but probing",
+          "company": "Head of People at a values-driven company"
+        },
+        "devi": {
+          "role": "The Thought Partner",
+          "blurb": "Hands you an open problem and works it WITH you. Cares how you frame and reason, not the answer.",
+          "style": "Collaborative reasoning · 'let's figure it out together' · nudges your framing · thinking over the right answer",
+          "company": "Product strategist who reasons out loud with you"
+        },
+        "amara": {
+          "role": "The Market Cartographer",
+          "blurb": "Sweeps across markets and disciplines, hunting for range and the connections you can draw.",
+          "style": "Cross-industry · maps the whole market · 'who else does this well?' · connects ideas across domains",
+          "company": "Growth advisor across dozens of industries"
+        },
+        "sterling": {
+          "role": "The Executive Presence",
+          "blurb": "Senior, exacting, unhurried. Wants the executive summary first — then the proof, crisply.",
+          "style": "Formal and polished · headline-first · concise under scrutiny · tests poise and precision of language",
+          "company": "Board-level operator at a Fortune 500"
+        },
+        "tariq": {
+          "role": "The Pressure Tester",
+          "blurb": "Pushes hard and fast, talks over you, flips your answer back. Watching whether you hold steady.",
+          "style": "Rapid-fire · interrupts and challenges · plays devil's advocate · tests composure, not just answers",
+          "company": "High-stakes trading-desk interview loop"
+        }
+      },
+      "archetype": {
+        "warmup": "Warm-up",
+        "behavioral": "Behavioral",
+        "breadth": "Breadth",
+        "potential": "Problem-solving",
+        "depth": "Deep-dive",
+        "communication": "Communication",
+        "pressure": "Pressure"
+      },
+      "types": {
+        "screening": {
+          "label": "Phone Screen",
+          "sub": "Background, fit, motivation, logistics — the gate before the loop"
+        },
+        "behavioral": {
+          "label": "Behavioral (STAR)",
+          "sub": "Real past stories: ownership, conflict, failure, influence, leadership"
+        },
+        "technical": {
+          "label": "Live Coding / Technical",
+          "sub": "Real-time problem solving in a shared editor: data structures, algorithms, correctness"
+        },
+        "system": {
+          "label": "System / Architecture Design",
+          "sub": "Design a large-scale system end to end; defend scale & trade-offs"
+        },
+        "case": {
+          "label": "Case / Business Problem",
+          "sub": "Open business problem: structure, data, recommendation"
+        },
+        "culture": {
+          "label": "Values / Culture Fit",
+          "sub": "Values alignment, motivation, working style, integrity under ambiguity"
+        },
+        "panel": {
+          "label": "Panel / Mixed Loop",
+          "sub": "Rapid-fire mix across competencies, as a multi-interviewer panel would"
+        },
+        "take_home": {
+          "label": "Take-Home Defense",
+          "sub": "Defend & extend a self-paced project: design choices, trade-offs, scaling"
+        },
+        "debugging": {
+          "label": "Debugging / Code Review",
+          "sub": "Diagnose a broken program or critique existing code/PR"
+        },
+        "incident_sre": {
+          "label": "Incident / SRE Scenario",
+          "sub": "Triage a live production incident: stabilize, command-line, post-mortem"
+        },
+        "sql_analytics": {
+          "label": "SQL / Analytics Exercise",
+          "sub": "Hands-on queries + metric reasoning against real tables"
+        },
+        "product_sense": {
+          "label": "Product Sense / Execution",
+          "sub": "Open product design prompt + metrics: structure, users, prioritize, measure"
+        },
+        "portfolio": {
+          "label": "Portfolio / Past-Work Review",
+          "sub": "Walk through real past work: process, decisions, contribution, impact"
+        },
+        "design_critique": {
+          "label": "Design Critique / Whiteboard",
+          "sub": "Critique an app or design live, or sketch a solution to a fresh prompt"
+        },
+        "research_design": {
+          "label": "UX Research Study Design",
+          "sub": "Design a study on the spot or critique a flawed research plan"
+        },
+        "sales_roleplay": {
+          "label": "Mock Sales Call / Role-Play",
+          "sub": "Live discovery, cold call, or escalation against a role-played counterpart"
+        },
+        "pitch_demo": {
+          "label": "Pitch / Demo Presentation",
+          "sub": "Deliver a tailored demo or pitch to a stakeholder panel, then field pushback"
+        },
+        "account_strategy": {
+          "label": "Account / Success Case",
+          "sub": "Analyze an account and build an onboarding/retention/expansion plan"
+        },
+        "modeling_test": {
+          "label": "Financial Modeling / Excel",
+          "sub": "Build or stress an LBO / 3-statement / DCF / FP&A model and defend it"
+        },
+        "finance_technical": {
+          "label": "Finance Technical Q&A",
+          "sub": "Accounting, valuation, deal mechanics, and an investment thesis"
+        },
+        "clinical_scenario": {
+          "label": "Clinical Scenario",
+          "sub": "Reason through a realistic patient/unit situation: assess, prioritize, escalate"
+        },
+        "situational_judgement": {
+          "label": "Situational Judgement (SJT)",
+          "sub": "Ranked/spoken workplace dilemmas testing ethics, professionalism, judgment"
+        },
+        "practical_skills": {
+          "label": "Practical Skills / Trade Test",
+          "sub": "Narrated hands-on task: technique, safety, code compliance, diagnosis"
+        },
+        "teaching_demo": {
+          "label": "Teaching Demo",
+          "sub": "Deliver a short lesson, engage learners, then defend your approach"
+        },
+        "ops_case": {
+          "label": "Operations / Process Case",
+          "sub": "Diagnose a process or supply-chain disruption; prioritize improvements"
+        },
+        "presentation": {
+          "label": "Presentation Interview",
+          "sub": "Prepare and deliver a structured presentation, then field challenge"
+        },
+        "leadership_strategy": {
+          "label": "Leadership / Strategy",
+          "sub": "Team-building, vision, and a 90-day plan for leadership & exec roles"
+        },
+        "reference_check": {
+          "label": "Reference / Credentialing",
+          "sub": "Verification-stage probing of track record, reliability, and credentials"
+        }
+      },
+      "showAll": "Show all {count}",
+      "showFewer": "Show fewer"
+    },
+    "live": {
+      "loading": "Setting up your room…",
+      "backToSetup": "← Back to setup",
+      "livePill": "LIVE",
+      "modeVideo": "📹 Video",
+      "modeVoice": "🎤 Voice",
+      "progress": "Question {current} of {total}",
+      "aiInterviewer": "AI Interviewer",
+      "state": {
+        "asking": "asking…",
+        "listening": "listening",
+        "thinking": "thinking",
+        "speaking": "Speaking"
+      },
+      "questionNum": "Question {current} / {total}",
+      "showHint": "Show hint",
+      "hideHint": "Hide hint",
+      "coachHint": "COACH HINT",
+      "skip": "Skip →",
+      "skipped": "(skipped)",
+      "you": "You",
+      "youName": "You · {name}",
+      "youRole": "{role} · You",
+      "micOpen": "Mic open — recording answer",
+      "micOpenShort": "Mic open",
+      "micReady": "Mic ready",
+      "waitForQuestion": "Wait for the question to finish",
+      "composerPlaceholder": "Speak it, type it, or do both. ⌘+Enter to send.",
+      "composerLabel": "Your answer",
+      "coachLive": "YOUR COACH · live",
+      "dismiss": "Dismiss",
+      "transcript": "Live transcript",
+      "transcriptEmpty": "Transcript appears here as you both talk…",
+      "autoSaved": "Auto-saved",
+      "endEarly": "End interview early",
+      "ending": "Wrapping up…",
+      "controls": {
+        "camOn": "📹 Cam on",
+        "camOff": "📹 Cam off",
+        "mic": "🎤 Mic",
+        "mute": "⏸ Mute",
+        "restart": "↻ Restart",
+        "submitNext": "Submit & next",
+        "submitFinish": "Submit & finish",
+        "submitting": "Sending…"
+      },
+      "cam": {
+        "requesting": "Asking for camera…",
+        "requestingSub": "Check the browser prompt",
+        "denied": "Camera blocked",
+        "deniedSub": "Allow in browser settings, then",
+        "tryAgain": "Try again",
+        "unavailable": "Camera not available",
+        "unavailableSub": "Continuing in voice mode",
+        "off": "Camera off",
+        "turnOn": "Turn on",
+        "allow": "Tap to allow camera",
+        "enable": "Enable"
+      },
+      "expired": {
+        "title": "This session expired",
+        "body": "I couldn't find that interview — it may have already ended or the link is stale. Start a fresh one.",
+        "cta": "Start a new interview"
+      }
+    },
+    "report": {
+      "eyebrow": "Session complete · {minutes} min",
+      "eyebrowScoring": "Grading your run",
+      "eyebrowFallback": "Mock interview · report",
+      "title": "You're ",
+      "titleAccent": "almost",
+      "titleAfter": " there.",
+      "sub": "Scored against the rubric your interviewer would use. Two tweaks and you're in the top 20%.",
+      "loading": "Scoring your answers against the rubric…",
+      "loadingTitle": "Reading ",
+      "loadingTitleAccent": "the room",
+      "loadingTitleAfter": "…",
+      "overall": "Overall",
+      "deltaUp": "+{delta} vs last session",
+      "deltaDown": "−{delta} vs last session",
+      "strengths": "Strengths",
+      "keepThese": "Keep these",
+      "sharpen": "Sharpen these",
+      "topN": "Top {count}",
+      "actions": {
+        "runAgain": "Run it again",
+        "pickSetup": "Pick a different setup",
+        "download": "Download transcript",
+        "share": "Share with a friend"
+      },
+      "error": {
+        "title": "Couldn't load that ",
+        "titleAccent": "report",
+        "body": "Something hiccuped while grading. Your answers are safe — try again.",
+        "retry": "Try again",
+        "back": "Back to setup"
+      }
+    }
+  },
+  "ie": {
+    "setup": {
+      "eyebrow": "AI MOCK INTERVIEW",
+      "title": "Practice with a",
+      "titleAccent": "live AI interviewer",
+      "sub": "A real-time voice interview tailored to your role. Get a recording, a transcript, and a scored report.",
+      "loading": "Loading…",
+      "error": {
+        "title": "Couldn't load the setup",
+        "body": "Something went wrong. Please try again.",
+        "retry": "Retry"
+      },
+      "startError": "Couldn't start the interview. Please try again.",
+      "starting": "Starting…",
+      "start": "Start interview",
+      "roleLabel": "Target role",
+      "rolePlaceholder": "e.g. Senior Product Manager",
+      "interviewerLabel": "Interviewer",
+      "typeLabel": "Interview type",
+      "minutes": "min",
+      "formatLabel": "Format & details",
+      "mode": {
+        "voice": "Voice",
+        "video": "Video"
+      },
+      "modeShort": {
+        "voice": "Voice",
+        "video": "Video"
+      },
+      "languageLabel": "Language",
+      "durationLabel": "Duration",
+      "advancedLabel": "Advanced characteristics",
+      "difficulty": "Difficulty",
+      "tone": "Tone",
+      "tones": {
+        "warm": "Warm",
+        "neutral": "Neutral",
+        "formal": "Formal",
+        "skeptical": "Skeptical",
+        "friendly": "Friendly"
+      },
+      "pacing": "Pacing",
+      "pacings": {
+        "relaxed": "Relaxed",
+        "standard": "Standard",
+        "brisk": "Brisk"
+      },
+      "focusAreas": "Focus areas",
+      "focusPlaceholder": "comma-separated, e.g. leadership, system design",
+      "allowQuestions": "Let me ask the interviewer questions at the end"
+    },
+    "live": {
+      "loading": "Preparing your interview…",
+      "ending": "Wrapping up…",
+      "expired": {
+        "title": "This session isn't available",
+        "body": "It may have ended or expired. Start a new interview.",
+        "cta": "New interview"
+      },
+      "recording": "Recording",
+      "live": "Live",
+      "state": {
+        "speaking": "Speaking…",
+        "listening": "Listening…",
+        "thinking": "Thinking…",
+        "connecting": "Connecting…",
+        "waiting": "Waiting to begin…"
+      },
+      "interviewer": "Interviewer",
+      "you": "You",
+      "transcript": "Live transcript",
+      "transcriptEmpty": "The transcript will appear here as you talk.",
+      "cameraOff": "Camera off",
+      "muteMic": "Mute mic",
+      "unmuteMic": "Unmute",
+      "stopCam": "Stop camera",
+      "startCam": "Start camera",
+      "endInterview": "End interview",
+      "agentJoining": "Connecting you with your interviewer…",
+      "agentSlow": "Your interviewer is taking a moment to join. If this persists, make sure the interview voice agent is deployed and running.",
+      "reconnecting": "Reconnecting…",
+      "connectionLostTitle": "Connection lost",
+      "connectionLostBody": "Your interview is still open — rejoin to pick up where you left off, or end it now to get your report.",
+      "rejoin": "Rejoin interview",
+      "endAnyway": "End interview",
+      "poorConnection": "Poor connection",
+      "micDeniedTitle": "Microphone access needed",
+      "micDeniedBody": "We couldn't access your microphone, so the interviewer wouldn't be able to hear you. Allow microphone access in your browser, then try again.",
+      "micRetry": "Try again",
+      "deviceFailure": "There's a problem with your microphone or camera. Check your device settings — the interviewer may not hear or see you.",
+      "interviewerUnavailableTitle": "Your interviewer isn't available",
+      "interviewerUnavailableBody": "We couldn't bring the AI interviewer into the room. This is usually temporary — try again in a moment.",
+      "retry": "Try again",
+      "coach": {
+        "currentQuestion": "Current question",
+        "awaitingQuestion": "Waiting for the interviewer's question…",
+        "showHint": "Show hint",
+        "hideHint": "Hide hint",
+        "coachHint": "COACH HINT",
+        "thinking": "Thinking…",
+        "noHint": "Just answer naturally — you've got this.",
+        "coachLive": "YOUR COACH · LIVE",
+        "dismiss": "Dismiss",
+        "listeningFor": "They're listening for",
+        "answerTime": "Time",
+        "pace": "Pace",
+        "fillers": "Fillers",
+        "specifics": "Specifics",
+        "coachMode": "Coach",
+        "on": "ON",
+        "off": "OFF",
+        "coachModeHint": "Live hints and nudges while you answer. Turn off for a real-feel run."
+      }
+    },
+    "report": {
+      "title": "Interview report",
+      "error": "Couldn't load the report.",
+      "loading": "Loading your report…",
+      "newInterview": "New interview",
+      "processing": "Finalizing your interview — the recording and score will appear shortly.",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "overall": "Overall",
+      "noScore": "No score yet.",
+      "strengths": "Strengths",
+      "gaps": "Sharpen these",
+      "recording": "Recording",
+      "transcript": "Transcript",
+      "download": "Download",
+      "analysisPending": "Your detailed analysis is being generated — this can take up to a minute.",
+      "dim": {
+        "structure": "Structure",
+        "specificity": "Specificity",
+        "communication": "Communication",
+        "confidence": "Confidence",
+        "roleFit": "Role fit"
+      },
+      "recommendations": {
+        "title": "Action plan",
+        "sub": "Concrete steps to improve",
+        "pending": "Your personalised action plan is being generated…",
+        "unavailable": "Action plan not available for this session.",
+        "empty": "No recommendations — a strong, well-rounded session.",
+        "exampleLabel": "Example rewrite",
+        "drill": "Drill",
+        "priority": {
+          "high": "High priority",
+          "medium": "Medium priority",
+          "low": "Low priority"
+        }
+      },
+      "questionBreakdown": {
+        "title": "Question-by-question review",
+        "count": "{count, plural, one {# question} other {# questions}}",
+        "pending": "Your detailed question review is being generated…",
+        "unavailable": "Detailed question review not available for this session.",
+        "answerSummaryLabel": "Your answer",
+        "analysisLabel": "Analysis",
+        "correctionLabel": "What to fix",
+        "suggestionLabel": "How to improve",
+        "modelAnswerLabel": "Model answer",
+        "keyQuoteLabel": "What you said",
+        "missed": "This question wasn't reached in the interview.",
+        "offScript": "Unplanned question",
+        "rating": {
+          "strong": "Strong",
+          "adequate": "Adequate",
+          "weak": "Needs work",
+          "missed": "Not covered"
+        }
+      }
+    }
+  },
+  "choosePlan": {
+    "title": "Choose your plan",
+    "subtitle": "Pick a plan to get started — practice interviews with AI. You can change or cancel anytime.",
+    "loading": "Loading plans…",
+    "error": "Couldn't load plans.",
+    "retry": "Retry",
+    "continueFree": "Skip for now — continue with Free",
+    "selectFree": "Start free",
+    "selectPaid": "Choose {plan}",
+    "blurb": {
+      "free": "1 practice interview a month to try things out.",
+      "starter": "10 mock interviews a month — steady weekly practice.",
+      "growth": "28 mock interviews a month — daily reps before the real thing."
+    },
+    "welcome": "You're in — welcome to RoboApply",
+    "creditsHint": "1 credit = one 20-minute mock interview.",
+    "checkoutFailed": "We couldn't start checkout. Please try again."
+  },
+  "account": {
+    "eyebrow": "YOUR ACCOUNT",
+    "title": "Account &",
+    "titleAccent": "billing",
+    "loading": "Loading your account…",
+    "nav": {
+      "profile": "Profile",
+      "billing": "Billing",
+      "usage": "Usage",
+      "security": "Security"
+    },
+    "error": {
+      "title": "We couldn't load your account",
+      "body": "Something went wrong fetching your profile and billing. Please try again.",
+      "retry": "Retry"
+    },
+    "profile": {
+      "title": "Account information",
+      "displayName": "Display name",
+      "memberSince": "Member since {date}",
+      "verified": "verified",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "credits": {
+      "title": "Mock-interview credits",
+      "unit": "credits",
+      "note": "1 credit = a 20-minute mock interview. Shorter or longer sessions are charged proportionally."
+    },
+    "region": {
+      "label": "Region",
+      "intl": "International (USD)",
+      "cn": "China (RMB)"
+    },
+    "billing": {
+      "title": "Subscription & billing",
+      "manage": "Manage billing",
+      "invoices": "View invoices",
+      "cancel": "Cancel plan",
+      "viewHistory": "View billing history",
+      "summaryNote": "Manage your payment method, invoices, and billing history in the secure customer portal.",
+      "current": {
+        "renews": "Renews {date} · billed monthly",
+        "cancelsAt": "Cancels on {date}",
+        "expiresAt": "Expires on {date} — renew to continue",
+        "status": {
+          "active": "Active",
+          "pastDue": "Past due",
+          "canceled": "Canceled"
+        }
+      },
+      "history": {
+        "heading": "Billing history",
+        "subtitle": "Your invoices and receipts.",
+        "back": "Back to account",
+        "title": "Invoices",
+        "empty": "No invoices yet.",
+        "loading": "Loading…",
+        "error": "Couldn't load billing history.",
+        "download": "Download",
+        "paid": "Paid",
+        "pending": "Pending",
+        "failed": "Failed",
+        "card": "Card"
+      },
+      "checkout": {
+        "success": "Your subscription is now active. Welcome aboard!",
+        "cancel": "Checkout was canceled — your plan hasn't changed.",
+        "dismiss": "Dismiss"
+      },
+      "explore": {
+        "title": "Want more practice runs?",
+        "sub": "Compare Free, Starter, and Growth — upgrade anytime.",
+        "cta": "View all plans →",
+        "titleMax": "You're on our top plan 🎉",
+        "subMax": "You've got the most practice credits we offer. Compare anytime.",
+        "ctaMax": "Compare plans →"
+      }
+    },
+    "plan": {
+      "free": "Free",
+      "premium": "Premium",
+      "premiumPlus": "Premium+",
+      "perMonth": "/mo",
+      "dailyCap": "{n} actions per day",
+      "mostPopular": "Most popular",
+      "current": "Current plan",
+      "upgrade": "Upgrade",
+      "downgrade": "Downgrade",
+      "comingSoon": "Coming soon",
+      "starter": "Starter",
+      "growth": "Growth",
+      "freeForever": "Free forever",
+      "freePrice": "Free",
+      "subscribe": "Subscribe",
+      "subscribeAlipay": "Pay with Alipay",
+      "creditsCap": "{n} credits / month",
+      "feature": {
+        "mockInterviews": "Mock interviews",
+        "resumeTailors": "Resume tailoring",
+        "coverLetters": "Cover letters",
+        "careerInsights": "Career insights",
+        "priorityMatching": "Priority matching",
+        "dedicatedCoach": "Dedicated coach",
+        "everythingFree": "Everything in Free",
+        "everythingPremium": "Everything in Premium",
+        "unlimitedInsights": "Unlimited insights",
+        "earlyAccessModels": "Early-access models",
+        "prioritySupport": "Priority support",
+        "creditsMonthly": "{n} mock-interview credits / month",
+        "fullReports": "Full AI interview reports",
+        "allInterviewTypes": "All interview types & interviewers",
+        "everythingStarter": "Everything in Starter",
+        "toneSteering": "Interviewer tone steering"
+      }
+    },
+    "usage": {
+      "title": "Usage",
+      "byDate": "Your activity · last 30 days",
+      "byFeature": "Today · by feature",
+      "actionCount": "{count} actions",
+      "meter": "{used} of {cap}",
+      "tierCap": "{tier} · {cap}/day",
+      "resetNote": "Resets daily at midnight UTC · {tier} = {cap}/day",
+      "heatLess": "Less",
+      "heatMore": "More",
+      "recent": "Recent activity",
+      "recentItem": "{count}× {feature}"
+    },
+    "security": {
+      "title": "Security",
+      "changePassword": "Change password",
+      "changeSuccess": "Your password has been updated.",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm new password",
+      "sessions": "Sessions",
+      "signOutEverywhere": "Sign out everywhere",
+      "signOutNote": "Sign out of all devices and browsers. You'll need to sign in again everywhere.",
+      "oauthNote": "You sign in with {provider}; there's no password to change.",
+      "strength": {
+        "weak": "Strength · Weak",
+        "fair": "Strength · Fair",
+        "good": "Strength · Good",
+        "strong": "Strength · Strong"
+      },
+      "error": {
+        "tooShort": "Password must be at least 8 characters.",
+        "mismatch": "Passwords don't match.",
+        "wrongPassword": "Your current password is incorrect.",
+        "noPassword": "This account has no password set.",
+        "weakPassword": "Please choose a stronger password.",
+        "rateLimited": "Too many attempts — please try again shortly.",
+        "generic": "We couldn't update your password. Please try again."
+      }
+    },
+    "danger": {
+      "title": "Danger zone",
+      "deleteAccount": "Delete account",
+      "deleteDescription": "Permanently delete your account, resume data, interview recordings, and subscription. This cannot be undone.",
+      "confirmEmailLabel": "Confirm your email",
+      "confirmEmailHint": "Type {email} to confirm.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Tell us why you're leaving (required)",
+      "cancel": "Cancel",
+      "delete": "Delete my account",
+      "error": {
+        "mismatch": "The email doesn't match your account email.",
+        "reasonRequired": "Please tell us why you're leaving.",
+        "generic": "We couldn't delete your account. Please try again."
+      }
+    }
+  },
+  "admin": {
+    "eyebrow": "OPERATOR CONSOLE",
+    "title": "Profit &",
+    "titleAccent": "signal",
+    "loading": "Loading…",
+    "topCost": "top cost",
+    "estimated": "estimated",
+    "estimatedNote": "STT, TTS and egress costs are modeled, not metered.",
+    "export": {
+      "csv": "Export CSV",
+      "refresh": "Refresh"
+    },
+    "range": {
+      "today": "Today",
+      "7d": "7d",
+      "30d": "30d",
+      "custom": "Custom",
+      "customTitle": "Custom range",
+      "from": "From",
+      "to": "To",
+      "apply": "Apply"
+    },
+    "pager": {
+      "prev": "Prev",
+      "next": "Next"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users",
+      "sessions": "Sessions",
+      "rateCard": "Rate card"
+    },
+    "kpi": {
+      "activeUsers": "Active users",
+      "sessions": "Sessions",
+      "cost": "LLM + media cost",
+      "revenue": "Revenue · MRR",
+      "margin": "Gross margin",
+      "costPerUser": "Cost / active user",
+      "payingUsers": "{n} paying"
+    },
+    "chart": {
+      "costVsRevenue": "Cost vs revenue",
+      "costByFeature": "Cost by feature",
+      "costByModality": "Cost by modality",
+      "legend": {
+        "cost": "Cost",
+        "revenue": "Revenue"
+      },
+      "netMargin": "Net margin · {amount} ({pct})"
+    },
+    "modality": {
+      "llm": "LLM tokens",
+      "stt": "STT",
+      "tts": "TTS",
+      "image": "Image gen",
+      "egress": "Recording egress"
+    },
+    "users": {
+      "search": "Search by email…",
+      "filter": {
+        "all": "All",
+        "free": "Free",
+        "premium": "Premium",
+        "premiumPlus": "Premium+"
+      },
+      "col": {
+        "user": "User",
+        "tier": "Tier",
+        "mrr": "MRR",
+        "cost": "Period cost",
+        "margin": "Margin",
+        "sessions": "Sessions",
+        "lastActive": "Last active"
+      },
+      "empty": "No users match {query}.",
+      "pagination": "{from}–{to} of {total}"
+    },
+    "detail": {
+      "eyebrow": "USER · {email}",
+      "titleAccent": "standing",
+      "back": "All users",
+      "summary": "Costing {cost} · Paying {revenue} → Margin {margin} ({pct})",
+      "lifetimeCost": "Lifetime cost",
+      "periodCost": "This period cost",
+      "lifetimeRevenue": "Lifetime revenue",
+      "dailyCost": "Daily cost · last 30d",
+      "avgDaily": "avg {amount}/day",
+      "costByFeature": "Cost by feature",
+      "interviewSessions": "Interview sessions",
+      "setPlan": "Set plan",
+      "renews": "Renews {date}",
+      "col": {
+        "feature": "Feature",
+        "calls": "Calls",
+        "cost": "Cost",
+        "pctSpend": "% of spend",
+        "split": "STT/TTS/LLM"
+      }
+    },
+    "setPlan": {
+      "title": "Set plan",
+      "tier": "Tier",
+      "customPrice": "Custom price (optional)",
+      "reason": "Reason",
+      "reasonRequired": "A reason is required.",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "success": "Plan updated."
+    },
+    "sessions": {
+      "empty": "No sessions in this range.",
+      "col": {
+        "date": "Date",
+        "user": "User",
+        "role": "Role",
+        "duration": "Dur",
+        "blueprint": "Blueprint",
+        "liveLlm": "Live-LLM",
+        "stt": "STT",
+        "tts": "TTS",
+        "eval": "Eval",
+        "coach": "Coach",
+        "total": "Total",
+        "status": "Status"
+      },
+      "status": {
+        "completed": "Completed",
+        "inProgress": "In progress",
+        "failed": "Failed",
+        "billed": "Billed"
+      }
+    },
+    "session": {
+      "eyebrow": "SESSION COST",
+      "title": "Session cost breakdown",
+      "stage": {
+        "blueprint": "Blueprint",
+        "liveLlm": "Live-LLM",
+        "stt": "STT",
+        "tts": "TTS",
+        "eval": "Evaluation",
+        "coach": "Coach"
+      },
+      "col": {
+        "stage": "Stage",
+        "model": "Model",
+        "usage": "Usage",
+        "unitRate": "Unit rate",
+        "cost": "Cost"
+      }
+    },
+    "rateCard": {
+      "title": "Rate card",
+      "llm": "LLM per-model rates",
+      "speech": "Speech rates",
+      "media": "Media rates",
+      "note": "Reference rates used to model cost · edit in admin-config",
+      "editSoon": "Edit rates · soon",
+      "col": {
+        "model": "Model",
+        "inputRate": "Input $/1M",
+        "outputRate": "Output $/1M",
+        "provider": "Provider",
+        "perMin": "per min",
+        "perGb": "per GB",
+        "perImage": "per image"
+      }
+    },
+    "empty": {
+      "title": "No activity in this",
+      "titleAccent": "window",
+      "reset": "Reset to 30d"
+    },
+    "notAuthorized": {
+      "title": "Not",
+      "titleAccent": "authorized",
+      "sub": "This console is available to administrators only."
+    },
+    "error": {
+      "title": "Couldn't load this view",
+      "body": "Something went wrong fetching the data. Try again.",
+      "retry": "Retry"
+    }
+  },
+  "plans": {
+    "eyebrow": "PLANS & CREDITS",
+    "title": "Practice until you're",
+    "titleAccent": "unstoppable",
+    "subtitle": "Every plan includes AI mock interviews. Upgrade for more credits and the full interview report.",
+    "loading": "Loading plans…",
+    "error": {
+      "title": "We couldn't load the plans",
+      "body": "Something went wrong fetching pricing. Please try again.",
+      "retry": "Retry"
+    },
+    "notice": {
+      "paymentsUnavailable": "Paid plans aren't available in your region yet — you can keep practicing on Free."
+    },
+    "cta": {
+      "upgradeTo": "Upgrade to {plan}",
+      "switchTo": "Switch to {plan}",
+      "yourFreePlan": "Your plan",
+      "alipaySwitchNote": "To change plans, cancel and re-subscribe at checkout."
+    },
+    "credits": {
+      "title": "How credits work",
+      "explainer": "1 credit = one 20-minute mock interview. Shorter or longer sessions are charged proportionally, and your credits refill at the start of each billing month."
+    },
+    "faq": {
+      "title": "Questions, answered",
+      "q1": "What is a credit?",
+      "a1": "One credit gives you a 20-minute AI mock interview with a full report afterward. Use them whenever you want to practice.",
+      "q2": "What happens to credits I don't use?",
+      "a2": "Each plan refills your credits at the start of every billing month. Unused credits don't roll over, so practice often!",
+      "q3": "Can I change or cancel my plan?",
+      "a3": "Yes — upgrade, downgrade, or cancel anytime from your account. Changes take effect at the end of your current billing month.",
+      "q4": "Which payment methods can I use?",
+      "a4": "We accept major cards via Stripe internationally, and Alipay for users in China. Your region is detected automatically — switch it with the toggle above.",
+      "q5": "Is my interview data private?",
+      "a5": "Yes. Your recordings and reports are yours alone and are never shared with employers or other users."
+    },
+    "checkout": {
+      "failed": "We couldn't start checkout. Please try again, or switch your payment region above."
+    }
+  }
+}

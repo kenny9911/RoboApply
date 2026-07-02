@@ -1,0 +1,253 @@
+/* ===================================================================== */
+/* RoboApply — legacy token compatibility shim (V3, 2026-05-28)           */
+/* ===================================================================== */
+/*                                                                        */
+/*  V3 is DARK-ONLY. The canonical token set (--bg / --surface / --accent */
+/*  / --mono / …) lives on `:root` in app/globals.css, transcribed from   */
+/*  the prototype (RoboApply_V3/RoboApply.html). This file no longer       */
+/*  defines the old light "Cool Graphite" --robo-* palette — that layer is */
+/*  DELETED per docs/roboapply/v3/00-design-system.md §5.                  */
+/*                                                                        */
+/*  What remains here is a thin COMPATIBILITY SHIM: the `--robo-*` names   */
+/*  that tailwind.config.ts still references (bg-page, ink-900, accent-700,*/
+/*  teal-*, shadow-cta, rounded-pill, font-*, …) are re-pointed at the V3  */
+/*  dark tokens so legacy V2 markup keeps compiling AND flips to the V3    */
+/*  dark palette automatically — exactly what the old `.dark-canvas main`  */
+/*  retint block did, but now from :root so the whole app is dark and the  */
+/*  wrapper class can go away. Screen lanes delete the V2 markup that uses  */
+/*  these in Wave 1–3; until then, nothing breaks.                         */
+/*                                                                        */
+/*  New V3 code should use the bare token names (--bg, --accent, …) and    */
+/*  the .v3-* / prototype component classes, NOT these --robo-* aliases.   */
+/* ===================================================================== */
+
+:root {
+  /* === Fonts (re-pointed: JetBrains Mono is now the mono slot) === */
+  --robo-font-display: var(--sans);
+  --robo-font-body: var(--sans);
+  --robo-font-mono: var(--mono);
+
+  /* === Surfaces → V3 dark === */
+  --robo-bg-page: var(--bg);
+  --robo-bg-card: var(--surface);
+  --robo-bg-muted: var(--surface-2);
+  --robo-bg-dim: rgba(7, 7, 13, 0.62);
+
+  /* === Internal zinc stops → dark-canvas neutrals (kept; a few comps ref) === */
+  --robo-zinc-50:  var(--surface-3);
+  --robo-zinc-100: var(--surface-2);
+  --robo-zinc-150: var(--surface-2);
+  --robo-zinc-200: var(--rule);
+  --robo-zinc-300: var(--rule);
+  --robo-zinc-400: var(--muted-2);
+  --robo-zinc-500: var(--muted);
+  --robo-zinc-600: var(--muted);
+  --robo-zinc-700: var(--text-2);
+  --robo-zinc-800: var(--text-2);
+  --robo-zinc-900: var(--text);
+  --robo-zinc-950: var(--text);
+
+  /* === Accent → V3 accent (swaps with [data-accent]) === */
+  --robo-accent-900: var(--accent);
+  --robo-accent-700: var(--accent);
+  --robo-accent-600: var(--accent);
+  --robo-accent-500: var(--accent);
+  --robo-accent-200: var(--accent-soft);
+  --robo-accent-100: var(--accent-soft);
+  --robo-accent-50:  var(--accent-soft);
+
+  /* === Brand gradient → V3 accent→violet === */
+  --robo-grad-accent: var(--grad-brand);
+  --robo-grad-accent-soft: linear-gradient(135deg, var(--accent-soft) 0%, var(--violet-soft) 100%);
+  --robo-grad-accent-dim: linear-gradient(135deg, var(--accent-soft) 0%, var(--violet-soft) 100%);
+
+  /* Cyan companion */
+  --robo-cyan-500: var(--cyan);
+  --robo-cyan-400: var(--cyan);
+
+  /* === Legacy teal-* tokens (rebound to accent for compat) === */
+  --robo-teal-900: var(--accent);
+  --robo-teal-700: var(--accent);
+  --robo-teal-500: var(--accent);
+  --robo-teal-200: var(--accent-soft);
+  --robo-teal-50:  var(--accent-soft);
+
+  /* === Indigo (deprecated → accent) === */
+  --robo-indigo-700: var(--accent);
+
+  /* === Ink → V3 text scale === */
+  --robo-ink-900: var(--text);
+  --robo-ink-700: var(--text-2);
+  --robo-ink-500: var(--muted);
+  --robo-ink-300: var(--muted-2);
+  --robo-line: var(--rule);
+  --robo-line-soft: var(--rule-soft);
+
+  /* === Semantic === */
+  --robo-success: var(--ok);
+  --robo-warn:    var(--warn);
+  --robo-danger:  #ef4444;
+
+  /* === Shadows → V3 dark glows === */
+  --robo-shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 6px 16px rgba(0, 0, 0, 0.28);
+  --robo-shadow-lift:
+    0 4px 16px rgba(0, 0, 0, 0.5),
+    0 24px 48px rgba(0, 0, 0, 0.42);
+  --robo-shadow-cta: var(--shadow-cta);
+  --robo-shadow-glow: var(--shadow-ring);
+  --robo-shadow-focus: var(--shadow-focus);
+
+  /* === Radii → V3 scale === */
+  --robo-radius-xs: var(--r-sm);
+  --robo-radius-sm: var(--r-sm);
+  --robo-radius-md: var(--r-md);
+  --robo-radius-lg: var(--r-lg);
+  --robo-radius-pill: var(--r-pill);
+
+  /* === Motion === */
+  --robo-duration-fast: var(--dur-fast);
+  --robo-duration-base: var(--dur-base);
+  --robo-duration-slow: var(--dur-slow);
+  --robo-ease-standard: var(--ease-standard);
+  --robo-ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
+  --robo-ease-linear: linear;
+
+  /* === Streaming cursor === */
+  --robo-cursor-color: var(--accent);
+  --robo-cursor-blink: 1s;
+
+  /* === V2 component tokens (still referenced by surviving V2 components) === */
+  --robo-funnel-active-bg:       var(--accent-soft);
+  --robo-funnel-active-border:   var(--accent);
+  --robo-funnel-inactive-bg:     var(--surface-2);
+  --robo-funnel-inactive-ink:    var(--muted);
+  --robo-star-filled:            var(--accent);
+  --robo-star-empty:             var(--rule);
+  --robo-gauge-track:            var(--rule);
+  --robo-gauge-fill:             var(--accent);
+  --robo-gauge-fill-strong:      var(--ok);
+  --robo-gauge-fill-good:        var(--accent);
+  --robo-gauge-fill-stretch:     var(--warn);
+  --robo-gauge-fill-long-shot:   var(--muted-2);
+  --robo-premium-gate-bg:        rgba(7, 7, 13, 0.78);
+  --robo-premium-gate-blur:      8px;
+  --robo-today-pill-bg:          var(--accent);
+  --robo-today-pill-ink:         var(--accent-ink);
+  --robo-upgrade-card-bg:        var(--accent);
+  --robo-upgrade-card-ink:       var(--accent-ink);
+  --robo-upgrade-card-ink-soft:  color-mix(in srgb, var(--accent-ink) 78%, transparent);
+
+  /* ── DEPRECATED aliases (kept for migration only) ── */
+  --robo-ink-brand: var(--text);
+  --robo-ink-strong: var(--text);
+  --robo-ink-muted: var(--muted);
+  --robo-ink-faint: var(--muted-2);
+  --robo-ink-line: var(--rule);
+  --robo-ink-line-soft: var(--rule-soft);
+  --robo-bg-page-soft: var(--bg-2);
+  --robo-bg-surface: var(--surface);
+  --robo-bg-surface-cool: var(--surface-2);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ * Ported util classes (renamed from the old --robo-* names but kept
+ * under their original class names where still referenced). They now
+ * resolve from the V3 :root tokens.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Eyebrow label */
+.robo-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Table / tabular header caption */
+.robo-table-caption {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+/* Tabular numerics */
+.robo-tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Agent streaming cursor — accent vertical bar, blinks at 1Hz. */
+.robo-cursor::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--robo-cursor-color);
+  animation: robo-cursor-blink var(--robo-cursor-blink) steps(1, start) infinite;
+}
+@keyframes robo-cursor-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* Agent "thinking" shimmer. */
+.robo-thinking {
+  position: relative;
+  overflow: hidden;
+}
+.robo-thinking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-soft) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: robo-thinking-shimmer 2.4s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+@keyframes robo-thinking-shimmer {
+  0%   { transform: translateX(-100%); }
+  60%  { transform: translateX(100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* iOS-safe-area helper */
+.robo-bottom-nav {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+/* Slider thumb polish — both Webkit and Gecko. */
+.robo-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--rule);
+  cursor: pointer;
+}
+.robo-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}

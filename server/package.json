@@ -1,0 +1,8 @@
+{
+  "name": "roboapply-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RoboApply standalone API — Express backend (roboapply routes + interview-engine) compiled to dist/ and served on Vercel via /api/index.ts.",
+  "//": "No dependencies here on purpose — all runtime deps live in the root package.json and resolve up the tree. This package.json exists only to mark server/dist/**.js as ESM ('type':'module') for NodeNext output."
+}

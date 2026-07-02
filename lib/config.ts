@@ -1,0 +1,35 @@
+// Shared runtime config.
+//
+// `API_BASE` follows the project rule (CLAUDE.md "Frontend API Calls"): in
+// dev we leave it empty so relative `/api/v1/...` paths hit Next's rewrite
+// (which forwards to localhost:4607). In production it's set to the
+// fully-qualified API host (e.g. https://api.robohire.io).
+
+export const API_BASE: string =
+  process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV !== 'development'
+    ? process.env.NEXT_PUBLIC_API_URL
+    : '';
+
+// Cookie name shared with the backend (see backend/src/seeker/routes/auth.ts).
+// RoboApply re-uses the seeker auth surface — the engine room is the same.
+export const SESSION_COOKIE_NAME = 'session_token';
+
+/**
+ * Build a URL into the RoboHire recruiter / marketing SPA. Used to bounce
+ * RoboHire recruiters out of the candidate app to the /job-seeker bridge.
+ * Resolution order: explicit NEXT_PUBLIC_ROBOHIRE_URL → derive from the api
+ * host in prod (api.robohire.io → robohire.io) → localhost:3607 in dev.
+ */
+export function getRoboHireUrl(path = '/'): string {
+  const explicit = process.env.NEXT_PUBLIC_ROBOHIRE_URL;
+  let origin: string;
+  if (explicit) {
+    origin = explicit.replace(/\/+$/, '');
+  } else if (API_BASE && API_BASE.includes('//api.')) {
+    origin = API_BASE.replace('//api.', '//');
+  } else {
+    origin = 'http://localhost:3607';
+  }
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  return `${origin}${suffix}`;
+}

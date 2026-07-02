@@ -1,0 +1,22 @@
+.next/
+out/
+node_modules/
+*.log
+.env
+.env.local
+.env*.local
+.DS_Store
+next-env.d.ts
+.tsbuildinfo
+.turbo/
+coverage/
+
+# Backend server build output + generated Prisma client (regenerated on install)
+server/dist/
+server/src/generated/
+interview-agent/dist/
+.vercel/
+
+# Runtime logs (created by LoggerService on boot)
+logs/
+*.tsbuildinfo

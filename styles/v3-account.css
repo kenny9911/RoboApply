@@ -1,0 +1,91 @@
+/* styles/v3-account.css
+ *
+ * Scoped styles for the /account page (User Account + Billing). Mirrors the
+ * convention of the other per-feature V3 css files (v3-resume.css,
+ * v3-preferences.css), imported once from app/globals.css.
+ *
+ * Everything else on the page is inline-styled against the token set; this
+ * file holds only the bits that need a media query or a pseudo-class
+ * (responsive plan grid, input focus ring, the danger-tinted button).
+ */
+
+/* Plan comparison grid — 3-up on desktop, single column ≤900px. */
+.ra-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.ra-plan-grid .ra-plan-cta {
+  width: 100%;
+  justify-content: center;
+}
+@media (max-width: 900px) {
+  .ra-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Usage two-up grid — by-date + by-feature side by side, stacks ≤900px. */
+.ra-usage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .ra-usage-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* PlanCatalog "Most popular" badge — white text must stay WCAG-AA legible.
+ * The dark-theme --violet (#8B5BFF) is ~4.17:1 with #fff (just under AA), so the
+ * dark default uses a darker violet (#6d28d9 ≈ 5.8:1). The light/warm --violet
+ * tokens already clear AA with white, so those themes keep the token. */
+.ra-plan-pop {
+  background: #6d28d9;
+}
+html[data-theme='light'] .ra-plan-pop,
+html[data-theme='warm'] .ra-plan-pop {
+  background: var(--violet);
+}
+
+/* /plans FAQ — native <details>/<summary> disclosure. Hide the default
+ * triangle, flip the ＋ marker to − when open, and give the summary an
+ * accessible focus ring on keyboard nav. */
+.ra-plans-faq summary::-webkit-details-marker {
+  display: none;
+}
+.ra-plans-faq[open] > summary > span:last-child {
+  visibility: hidden;
+  position: relative;
+}
+.ra-plans-faq[open] > summary > span:last-child::after {
+  content: '−';
+  visibility: visible;
+  position: absolute;
+  right: 0;
+}
+.ra-plans-faq > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Account form inputs — accent focus ring (matches the prototype). */
+.ra-account-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* Danger-tinted button (delete account). The Btn primitive has no danger
+ * variant, so we tint the base .btn here at the call site (.ra-btn-danger). */
+.btn.ra-btn-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn.ra-btn-danger:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}

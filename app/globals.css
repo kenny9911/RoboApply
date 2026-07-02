@@ -1,0 +1,922 @@
+@import '../styles/tokens.css';
+@import '../styles/v3.css';
+@import '../styles/v3-resume.css';
+@import '../styles/v3-preferences.css';
+@import '../styles/v3-account.css';
+@import '../styles/auth.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════
+ * RoboApply V3 — design tokens (dark-only)
+ *
+ * Transcribed verbatim from RoboApply_V3/RoboApply.html :root, refined per
+ * docs/roboapply/v3/00-design-system.md §1–5. Near-black blue-tinted canvas,
+ * electric lime primary, plasma violet secondary, cyan + pink alternates
+ * swapped via `data-accent` (the dcTheme attribute). A unitless `--density`
+ * multiplier drives dense-row padding. Space Grotesk (UI) + Instrument Serif
+ * (accent italic) + JetBrains Mono (labels/numbers).
+ *
+ * The whole app is dark — these tokens live on :root (not gated behind a
+ * wrapper). A `--dc-*` compatibility shim (bottom of this block) keeps the
+ * reused dc/AiOrb + dc/TweaksPanel working until they're re-themed to the
+ * bare names. The legacy light Cool-Graphite `--robo-*` palette is deleted;
+ * styles/tokens.css now only re-points those names at these dark tokens for
+ * the surviving V2 markup.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* base — near-black with a hint of blue */
+  --bg:           #0A0B10;
+  --bg-2:         #11121A;
+  --surface:      #181923;
+  --surface-2:    #1F212E;
+  --surface-3:    #272938;
+  --rule:         #2A2D3D;
+  --rule-soft:    #20222F;
+
+  /* text */
+  --text:         #F4F4F7;
+  --text-2:       #B5B7C4;
+  --muted:        #7C7E91;
+  --muted-2:      #4E5163;
+
+  /* accents — electric */
+  --lime:         #C9FF3B;
+  --lime-glow:    rgba(201, 255, 59, 0.45);
+  --lime-soft:    rgba(201, 255, 59, 0.12);
+  --violet:       #8B5BFF;
+  --violet-glow:  rgba(139, 91, 255, 0.5);
+  --violet-soft:  rgba(139, 91, 255, 0.14);
+  --cyan:         #4ED8FF;
+  --pink:         #FF6B9D;
+
+  /* status */
+  --ok:           #4ADE80;
+  --ok-soft:      rgba(74, 222, 128, 0.14);
+  --warn:         #FFB547;
+  --warn-soft:    rgba(255, 181, 71, 0.14);
+
+  /* type */
+  --sans:  var(--font-space-grotesk), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --mono:  var(--font-jetbrains-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* density multiplier — set from data-density by the (auth) layout effect:
+   * 0.7 compact · 1 regular · 1.2 comfy. */
+  --density: 1;
+
+  /* primary accent — swappable via data-accent (default lime) */
+  --accent:       var(--lime);
+  --accent-glow:  var(--lime-glow);
+  --accent-soft:  var(--lime-soft);
+  --accent-ink:   #0A0B10;   /* text/icon color that sits ON the accent */
+  /* --accent-text — the accent when used as FOREGROUND (link/eyebrow/icon
+   * stroke/active-tab text/1px border) on the page background. In dark it IS
+   * the electric accent (full strength reads fine on near-black). In light it
+   * is re-pointed to a deep, AA-legible sibling (html[data-theme='light'] …
+   * blocks below), because the electric fill is near-invisible on white.
+   * Resolves lazily against the element's --accent, so it follows data-accent
+   * automatically. Repoint accent-as-foreground call sites to this, NOT
+   * --accent (which stays the FILL). */
+  --accent-text:  var(--accent);
+
+  /* radii (observed in the prototype) */
+  --r-pill: 99px;
+  --r-sm:   9px;
+  --r-md:   12px;
+  --r-lg:   14px;
+  --r-xl:   16px;
+  --r-2xl:  18px;
+
+  /* shadows / glows — no neutral drop shadows; depth = rule + accent glow */
+  --shadow-cta:   0 4px 18px -6px var(--accent-glow);
+  --shadow-lift:  0 6px 30px -16px var(--accent-glow);
+  --shadow-ring:  0 0 0 1px var(--accent), 0 12px 40px -16px var(--accent-glow);
+  --shadow-focus: 0 0 0 4px var(--accent-soft);
+
+  /* motion */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* the agent-character gradients (recurring recipes, tokenized) */
+  --grad-brand:   linear-gradient(135deg, var(--accent) 0%, var(--violet) 100%);
+  --grad-orb:
+    radial-gradient(circle at 30% 30%, var(--accent) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, var(--violet) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, var(--cyan) 0%, transparent 70%);
+  --grad-tri:     linear-gradient(90deg, var(--accent) 0%, var(--violet) 50%, var(--cyan) 100%);
+  --grad-page-wash:
+    radial-gradient(ellipse 800px 600px at 85% -10%, var(--accent-soft), transparent 60%),
+    radial-gradient(ellipse 600px 800px at 0% 100%, var(--violet-soft), transparent 60%);
+
+  color-scheme: dark;
+}
+
+/* Accent picker — driven by `data-accent` on the (auth) wrapper (dcTheme).
+ * --violet / --cyan / --pink keep their literal values regardless; only the
+ * --accent* slot moves. */
+[data-accent='lime'] {
+  --accent: var(--lime);
+  --accent-glow: var(--lime-glow);
+  --accent-soft: var(--lime-soft);
+  --accent-ink: #0A0B10;
+}
+[data-accent='violet'] {
+  --accent: var(--violet);
+  --accent-glow: var(--violet-glow);
+  --accent-soft: var(--violet-soft);
+  --accent-ink: #FFFFFF;
+}
+[data-accent='cyan'] {
+  --accent: var(--cyan);
+  --accent-glow: rgba(78, 216, 255, 0.5);
+  --accent-soft: rgba(78, 216, 255, 0.14);
+  --accent-ink: #0A0B10;
+}
+[data-accent='pink'] {
+  --accent: var(--pink);
+  --accent-glow: rgba(255, 107, 157, 0.45);
+  --accent-soft: rgba(255, 107, 157, 0.14);
+  --accent-ink: #FFFFFF;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * LIGHT THEME — Brand Teal-Blue on Cool Paper (logo-derived: NAVY ink +
+ * CYAN/TEAL accent). Replaces the prior electric-lime-on-cream scheme.
+ * ALL rules below are html[data-theme='light']-scoped ONLY. :root + the
+ * unscoped dark [data-accent] blocks are byte-identical, untouched.
+ *
+ * Contrast pairs WCAG-verified (sRGB-linearised, not eyeballed), on BOTH
+ * #FFFFFF surface AND #F7F9FB bg: text 15.62/14.80; text-2 8.10/7.68;
+ * muted 5.81/5.50. Default fill #0F6F87 + white ink 5.76:1; default
+ * --accent-text 6.96/6.59. Every accent fill carries WHITE ink (uniform).
+ * ───────────────────────────────────────────────────────────────────── */
+html[data-theme='light'] {
+  /* base — cool pressed paper; surface is the BRIGHTEST plane (lifts off bg) */
+  --bg:           #F7F9FB;
+  --bg-2:         #EEF2F6;
+  --surface:      #FFFFFF;
+  --surface-2:    #F3F6F9;
+  --surface-3:    #E6ECF1;
+  --rule:         #DCE3EA;
+  --rule-soft:    #E8EDF2;
+
+  /* text — slate-navy ink (logo 'Robo' family) on cool paper (never pure #000) */
+  --text:         #1A2433;   /* 15.62:1 / #FFF · 14.80:1 / bg — AAA */
+  --text-2:       #465064;   /* 8.10:1 / #FFF · 7.68:1 / bg — AAA */
+  --muted:        #5B6678;   /* 5.81:1 / #FFF · 5.50:1 / bg — AA on BOTH */
+  --muted-2:      #8793A4;   /* 3.12:1 — AA-large / decorative / disabled / placeholder ONLY */
+
+  /* literal hue tokens — REPOINTED off the electric brand values. This is the
+   * lime-leak fix: --grad-brand/--grad-orb/--grad-tri are ALSO redefined below,
+   * but these literals back any mesh/brand surface that still references them. */
+  --lime:         #0F766E;                       /* TEAL — electric #C9FF3B never appears on light */
+  --lime-glow:    rgba(15, 118, 110, 0.20);
+  --lime-soft:    rgba(15, 118, 110, 0.10);
+  --violet:       #3949AB;                        /* INDIGO — repointed from #7C3AED */
+  --violet-glow:  rgba(57, 73, 171, 0.20);
+  --violet-soft:  rgba(57, 73, 171, 0.10);
+  --cyan:         #0E7490;                         /* SKY CYAN-BLUE — repointed from #4ED8FF */
+  --pink:         #AD4028;                         /* TERRACOTTA CORAL — repointed from #FF6B9D */
+
+  /* status — verified on white AND the #F7F9FB bg */
+  --ok:           #15803D;   /* 5.02:1 / #FFF · 4.75:1 / bg — AA */
+  --ok-soft:      rgba(21, 128, 61, 0.10);
+  --warn:         #B45309;   /* 5.02:1 / #FFF · 4.76:1 / bg — AA */
+  --warn-soft:    rgba(180, 83, 9, 0.10);
+
+  /* DEFAULT accent slot (no data-accent) — brand teal-blue, WHITE ink */
+  --accent:       #0F6F87;
+  --accent-glow:  rgba(11, 98, 117, 0.20);
+  --accent-soft:  rgba(15, 111, 135, 0.10);
+  --accent-ink:   #FFFFFF;   /* white ink ON teal-blue fill — 5.76:1 (AA all sizes) */
+  --accent-text:  #0B6275;   /* FOREGROUND sibling: links/eyebrows/1px borders/icon strokes — 6.96:1 / #FFF · 6.59:1 / bg */
+
+  /* depth = neutral cool-grey drop shadow keyed to slate ink, NEVER accent glow */
+  --shadow-cta:   0 1px 2px rgba(26, 36, 51, 0.06), 0 8px 20px -8px rgba(26, 36, 51, 0.16);
+  --shadow-lift:  0 2px 4px rgba(26, 36, 51, 0.05), 0 14px 36px -14px rgba(26, 36, 51, 0.18);
+  --shadow-ring:  0 0 0 1px var(--rule), 0 10px 30px -14px rgba(26, 36, 51, 0.20);
+  --shadow-focus: 0 0 0 4px var(--accent-soft);   /* keep accent-tinted focus halo */
+
+  /* page wash — cool two-blob signature; ≤6% so paper never stains (teal TR + navy BL) */
+  --grad-page-wash:
+    radial-gradient(ellipse 900px 640px at 88% -12%, rgba(15, 111, 135, 0.06), transparent 62%),
+    radial-gradient(ellipse 680px 820px at -4% 104%, rgba(22, 54, 90, 0.05), transparent 62%);
+
+  /* brand gradients — REDEFINED explicitly in the light scope (do NOT rely on
+   * the literal-token cascade) so the orb + brand chrome go navy+teal, never
+   * lime→violet. The opaque navy core in --grad-orb is what makes the orb a
+   * real sphere on white (the card never shows through). */
+  --grad-brand:   linear-gradient(135deg, #0F6F87 0%, #16365A 100%);   /* teal → logo navy */
+  --grad-orb:
+    radial-gradient(circle at 30% 26%, #5BE1FF 0%, rgba(91, 225, 255, 0) 42%),   /* cyan specular highlight, upper-left */
+    radial-gradient(circle at 68% 70%, #1AA6C7 0%, rgba(26, 166, 199, 0) 55%),   /* teal mid-bloom, lower-right */
+    radial-gradient(circle at 50% 50%, #16365A 0%, #102A47 100%);                /* OPAQUE navy core — no card shows through */
+  --grad-tri:     linear-gradient(90deg, #0F6F87 0%, #16365A 50%, #0E7490 100%); /* teal → navy → cyan (all cool) */
+
+  /* Re-point the --robo-* shim aliases that the dark theme bound to the FILL
+   * accent but that render as FOREGROUND (cursor bar, filled star, score gauge)
+   * — on a light plane they must use the deep sibling or they vanish. */
+  --robo-cursor-color:      var(--accent-text);
+  --robo-star-filled:       var(--accent-text);
+  --robo-gauge-fill:        var(--accent-text);
+  --robo-gauge-fill-good:   var(--accent-text);
+  --robo-gauge-fill-strong: #15803D;   /* ok-green, text-grade */
+  --robo-gauge-fill-stretch:#B45309;   /* warn, text-grade */
+  --robo-danger:            #DC2626;   /* 4.83:1 / #FFF · 4.58:1 / bg — AA */
+
+  color-scheme: light;
+}
+
+/* Per-accent slots for LIGHT — DESCENDANT combinator (data-accent is on the
+ * inner (auth) wrapper, data-theme on <html>). UNIFORM INK: EVERY slot carries
+ * WHITE ink on its fill (no dark/white flip — eliminates the call-site hazard
+ * where code hardcodes white-on-accent). Each re-points --accent-soft/-glow +
+ * the deep --accent-text foreground sibling.
+ *
+ * ⚠ SLOT-KEY NAME ≠ RENDERED HUE ON LIGHT (deliberate; do NOT "fix" back to the
+ *   name or hues will collide): 'lime'→TEAL, 'violet'→INDIGO, 'cyan'→SKY-CYAN-
+ *   BLUE, 'pink'→CORAL. The data-attribute keys stay stable so dark is untouched. */
+
+/* data-accent='lime' renders TEAL (electric yellow-green NEVER appears on light) */
+html[data-theme='light'] [data-accent='lime'] {
+  --accent:      #0F766E;
+  --accent-soft: rgba(15, 118, 110, 0.10);
+  --accent-glow: rgba(15, 118, 110, 0.20);
+  --accent-ink:  #FFFFFF;                       /* 5.47:1 on fill — AA */
+  --accent-text: #0B6E66;                       /* 6.11:1 / #FFF · 5.79:1 / bg */
+}
+/* data-accent='violet' renders INDIGO / navy-blue (logo navy family — strongest slot) */
+html[data-theme='light'] [data-accent='violet'] {
+  --accent:      #3949AB;
+  --accent-soft: rgba(57, 73, 171, 0.10);
+  --accent-glow: rgba(57, 73, 171, 0.20);
+  --accent-ink:  #FFFFFF;                       /* 7.73:1 on fill — AAA */
+  --accent-text: #3344A0;                       /* 8.48:1 / #FFF · 8.04:1 / bg — AAA */
+}
+/* data-accent='cyan' renders SKY CYAN-BLUE (brighter/bluer than the default teal) */
+html[data-theme='light'] [data-accent='cyan'] {
+  --accent:      #0E7490;
+  --accent-soft: rgba(14, 116, 144, 0.12);
+  --accent-glow: rgba(12, 106, 133, 0.20);
+  --accent-ink:  #FFFFFF;                       /* 5.36:1 on fill — AA */
+  --accent-text: #0C6A85;                       /* 6.15:1 / #FFF · 5.83:1 / bg */
+}
+/* data-accent='pink' renders TERRACOTTA CORAL (the one warm note; WHITE ink,
+ *   vs dark-mode's DARK ink — read var(--accent-ink), never a white literal) */
+html[data-theme='light'] [data-accent='pink'] {
+  --accent:      #AD4028;
+  --accent-soft: rgba(173, 64, 40, 0.10);
+  --accent-glow: rgba(168, 64, 31, 0.18);
+  --accent-ink:  #FFFFFF;                       /* 5.93:1 on fill — AA */
+  --accent-text: #A8401F;                       /* 6.14:1 / #FFF · 5.82:1 / bg */
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * WARM THEME — Anthropic "Clay on Cream" (cream paper + clay/coral accent +
+ * espresso ink). A third sibling of the LIGHT scope; same structure, warmer
+ * palette. ALL rules below are html[data-theme='warm']-scoped ONLY. :root, the
+ * dark [data-accent] blocks, and every light block are untouched.
+ *
+ * Contrast pairs WCAG-verified (sRGB-linearised, not eyeballed), on BOTH
+ * #FCFAF4 surface AND #F4F0E6 bg: text 14.21/13.03; text-2 7.35/6.74;
+ * muted 5.42/4.97. Default fill #B0573A + white ink 4.92:1; default
+ * --accent-text 5.86/5.38. Every accent fill carries WHITE ink (uniform),
+ * mirroring the light scope's uniform-ink invariant.
+ * ───────────────────────────────────────────────────────────────────── */
+html[data-theme='warm'] {
+  /* base — warm pressed cream; surface is the BRIGHTEST plane (book white) */
+  --bg:           #F4F0E6;
+  --bg-2:         #ECE6D8;
+  --surface:      #FCFAF4;
+  --surface-2:    #F4EFE3;
+  --surface-3:    #E9E1D0;
+  --rule:         #E2D9C7;
+  --rule-soft:    #ECE4D4;
+
+  /* text — espresso ink on cream (never pure #000) */
+  --text:         #2B2722;   /* 14.21:1 / surf · 13.03:1 / bg — AAA */
+  --text-2:       #5A5249;   /* 7.35:1 / surf · 6.74:1 / bg — AAA/AA */
+  --muted:        #6E665A;   /* 5.42:1 / surf · 4.97:1 / bg — AA on BOTH */
+  --muted-2:      #948B7B;   /* 3.23:1 — AA-large / decorative / disabled / placeholder ONLY */
+
+  /* literal hue tokens — REPOINTED off the electric brand values to a warm,
+   * earthy Anthropic family. --grad-brand/--grad-orb/--grad-tri are ALSO
+   * redefined below, but these literals back any mesh/brand surface that still
+   * references them. Electric lime/violet/cyan/pink NEVER appear on warm. */
+  --lime:         #A8543A;                        /* CLAY (was electric #C9FF3B) */
+  --lime-glow:    rgba(168, 84, 58, 0.20);
+  --lime-soft:    rgba(168, 84, 58, 0.10);
+  --violet:       #6E4A6B;                        /* AUBERGINE / PLUM (was #8B5BFF) */
+  --violet-glow:  rgba(110, 74, 107, 0.20);
+  --violet-soft:  rgba(110, 74, 107, 0.10);
+  --cyan:         #3F7A66;                        /* SAGE-TEAL (was #4ED8FF) */
+  --pink:         #B0526A;                        /* DUSTY ROSE (was #FF6B9D) */
+
+  /* status — warm-tuned, verified on cream surface AND bg */
+  --ok:           #4F7536;   /* 5.12:1 / surf · 4.70:1 / bg — AA */
+  --ok-soft:      rgba(79, 117, 54, 0.12);
+  --warn:         #A85E0B;   /* 4.71:1 / surf · 4.32:1 / bg — AA */
+  --warn-soft:    rgba(168, 94, 11, 0.12);
+
+  /* DEFAULT accent slot (no data-accent) — Anthropic clay, WHITE ink */
+  --accent:       #B0573A;
+  --accent-glow:  rgba(176, 87, 58, 0.22);
+  --accent-soft:  rgba(176, 87, 58, 0.10);
+  --accent-ink:   #FFFFFF;   /* white ink ON clay fill — 4.92:1 (AA all sizes) */
+  --accent-text:  #9C4A2E;   /* FOREGROUND sibling: links/eyebrows/1px borders/icon strokes — 5.86:1 / surf · 5.38:1 / bg */
+
+  /* depth = warm-grey drop shadow keyed to espresso ink, NEVER accent glow */
+  --shadow-cta:   0 1px 2px rgba(43, 39, 34, 0.06), 0 8px 20px -8px rgba(43, 39, 34, 0.16);
+  --shadow-lift:  0 2px 4px rgba(43, 39, 34, 0.05), 0 14px 36px -14px rgba(43, 39, 34, 0.18);
+  --shadow-ring:  0 0 0 1px var(--rule), 0 10px 30px -14px rgba(43, 39, 34, 0.20);
+  --shadow-focus: 0 0 0 4px var(--accent-soft);   /* keep accent-tinted focus halo */
+
+  /* page wash — warm two-blob signature; ≤6% so cream never muddies (clay TR + aubergine BL) */
+  --grad-page-wash:
+    radial-gradient(ellipse 900px 640px at 88% -12%, rgba(176, 87, 58, 0.06), transparent 62%),
+    radial-gradient(ellipse 680px 820px at -4% 104%, rgba(110, 74, 107, 0.05), transparent 62%);
+
+  /* brand gradients — REDEFINED explicitly in the warm scope so the orb + brand
+   * chrome go clay+espresso, never lime→violet. The opaque espresso core in
+   * --grad-orb is what makes the orb a real sphere on cream (card never shows). */
+  --grad-brand:   linear-gradient(135deg, #B0573A 0%, #6E3B2A 100%);   /* clay → deep espresso */
+  --grad-orb:
+    radial-gradient(circle at 30% 26%, #F4CDA6 0%, rgba(244, 205, 166, 0) 42%),   /* warm peach specular, upper-left */
+    radial-gradient(circle at 68% 70%, #C2754E 0%, rgba(194, 117, 78, 0) 55%),    /* clay mid-bloom, lower-right */
+    radial-gradient(circle at 50% 50%, #4A3326 0%, #33221A 100%);                 /* OPAQUE espresso core — no card shows through */
+  --grad-tri:     linear-gradient(90deg, #B0573A 0%, #6E4A6B 50%, #3F7A66 100%);  /* clay → aubergine → sage (all warm/earthy) */
+
+  /* Re-point the --robo-* shim aliases that render as FOREGROUND (cursor bar,
+   * filled star, score gauge) — on cream they must use the deep sibling. */
+  --robo-cursor-color:      var(--accent-text);
+  --robo-star-filled:       var(--accent-text);
+  --robo-gauge-fill:        var(--accent-text);
+  --robo-gauge-fill-good:   var(--accent-text);
+  --robo-gauge-fill-strong: #4F7536;   /* ok-green, text-grade */
+  --robo-gauge-fill-stretch:#A85E0B;   /* warn, text-grade */
+  --robo-danger:            #C0392B;   /* 5.21:1 / surf · 4.78:1 / bg — AA */
+
+  color-scheme: light;
+}
+
+/* Per-accent slots for WARM — DESCENDANT combinator (data-accent on the inner
+ * (auth) wrapper, data-theme on <html>). UNIFORM WHITE INK on every fill.
+ *
+ * ⚠ SLOT-KEY NAME ≠ RENDERED HUE ON WARM (deliberate; mirrors the light scope):
+ *   'lime'→CLAY, 'violet'→AUBERGINE, 'cyan'→SAGE-TEAL, 'pink'→DUSTY-ROSE. The
+ *   data-attribute keys stay stable so dark + light are untouched. */
+html[data-theme='warm'] [data-accent='lime'] {
+  --accent:      #A8543A;                       /* CLAY — 5.26:1 white-ink */
+  --accent-soft: rgba(168, 84, 58, 0.10);
+  --accent-glow: rgba(168, 84, 58, 0.20);
+  --accent-ink:  #FFFFFF;
+  --accent-text: #9A4A2E;                       /* 5.93:1 / surf · 5.44:1 / bg */
+}
+html[data-theme='warm'] [data-accent='violet'] {
+  --accent:      #6E4A6B;                       /* AUBERGINE — 7.36:1 white-ink (strongest) */
+  --accent-soft: rgba(110, 74, 107, 0.10);
+  --accent-glow: rgba(110, 74, 107, 0.20);
+  --accent-ink:  #FFFFFF;
+  --accent-text: #674363;                       /* 7.86:1 / surf · 7.21:1 / bg — AAA */
+}
+html[data-theme='warm'] [data-accent='cyan'] {
+  --accent:      #3F7A66;                       /* SAGE-TEAL — 5.02:1 white-ink */
+  --accent-soft: rgba(63, 122, 102, 0.12);
+  --accent-glow: rgba(63, 122, 102, 0.20);
+  --accent-ink:  #FFFFFF;
+  --accent-text: #377059;                       /* 5.55:1 / surf · 5.09:1 / bg */
+}
+html[data-theme='warm'] [data-accent='pink'] {
+  --accent:      #B0526A;                       /* DUSTY ROSE — 4.93:1 white-ink */
+  --accent-soft: rgba(176, 82, 106, 0.10);
+  --accent-glow: rgba(176, 82, 106, 0.18);
+  --accent-ink:  #FFFFFF;
+  --accent-text: #A0455C;                       /* 5.75:1 / surf · 5.27:1 / bg */
+}
+
+/* .dc-pill on light — the soft tint + a mid-strength border + deep FOREGROUND
+ * text. KEEP (do NOT let pills fall through to the bare .dc-pill rule, which
+ * colors text in the FILL). Broadened to warm — token-only, identical. */
+html[data-theme='light'] .dc-pill,
+html[data-theme='warm'] .dc-pill {
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--text-2));
+  color: var(--accent-text);
+}
+
+/* ── ORB on light — give .dc-spin a SOLID logo-navy disc so the sphere edge is
+ * unmistakable on paper (#16365A = 12.28:1 vs white) and the screen-blend
+ * highlight overlay survives. The .iv-live reset is MANDATORY: there is no
+ * existing `.iv-live .dc-spin` rule and the .iv-live token re-pin does NOT
+ * reset background-color, so without this reset the navy disc would cascade
+ * into the mock-interview cockpit orb on its dark stage. */
+html[data-theme='light'] .dc-spin {
+  background-color: #16365A;   /* logo-navy disc — opaque sphere base on paper */
+}
+html[data-theme='warm'] .dc-spin {
+  background-color: #3A2A20;   /* espresso disc — opaque sphere base on cream */
+}
+html[data-theme='light'] .iv-live .dc-spin,
+html[data-theme='warm'] .iv-live .dc-spin {
+  background-color: transparent;   /* cockpit orb keeps its dark neon sphere — no disc */
+}
+
+/* ── Legacy retint INVERSION for light ──
+ * The .dark-canvas block further down (unguarded) force-paints .bg-white → the
+ * dark --surface, sets color-scheme:dark on native controls, and uses
+ * white-alpha muted overlays. These light overrides out-specify it (extra
+ * html[data-theme] segment) so paper panels stay white and controls render
+ * light. Mirrors the dark retint structure 1:1. */
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main {
+  background: var(--bg);
+  color: var(--text);
+}
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .bg-white:not(#resume-preview-root) {
+  background-color: var(--surface);   /* paper → themed surface (white on light, book-white on warm) */
+  color: var(--text);
+}
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .bg-bg-card .bg-bg-card,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .bg-bg-card .bg-white:not(#resume-preview-root),
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .bg-white:not(#resume-preview-root) .bg-bg-card,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .bg-white:not(#resume-preview-root) .bg-white:not(#resume-preview-root),
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .dc-panel .dc-panel,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .dc-panel .bg-bg-card,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main .dc-card .dc-card {
+  background-color: var(--surface-2);          /* nested wells: themed mid-grey, not dark */
+}
+/* bg-bg-muted overlays — the base (.dark-canvas) rule uses white-alpha, which is
+ * invisible on a pale plane, so each light scheme re-tints with its own ink-alpha:
+ * cool slate on light, warm espresso on warm. */
+html[data-theme='light'] .dark-canvas main .bg-bg-muted\/30 { background-color: rgba(27,34,48,0.03); color: var(--text); }
+html[data-theme='light'] .dark-canvas main .bg-bg-muted\/40 { background-color: rgba(27,34,48,0.04); color: var(--text); }
+html[data-theme='light'] .dark-canvas main .bg-bg-muted\/50 { background-color: rgba(27,34,48,0.05); color: var(--text); }
+html[data-theme='light'] .dark-canvas main .bg-bg-muted\/60 { background-color: rgba(27,34,48,0.06); color: var(--text); }
+html[data-theme='warm'] .dark-canvas main .bg-bg-muted\/30 { background-color: rgba(43,39,34,0.03); color: var(--text); }
+html[data-theme='warm'] .dark-canvas main .bg-bg-muted\/40 { background-color: rgba(43,39,34,0.04); color: var(--text); }
+html[data-theme='warm'] .dark-canvas main .bg-bg-muted\/50 { background-color: rgba(43,39,34,0.05); color: var(--text); }
+html[data-theme='warm'] .dark-canvas main .bg-bg-muted\/60 { background-color: rgba(43,39,34,0.06); color: var(--text); }
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main input,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main textarea,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main select { color-scheme: light; }
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main input::placeholder,
+html:is([data-theme='light'], [data-theme='warm']) .dark-canvas main textarea::placeholder { color: var(--muted); }
+
+/* Resume paper + #fff modal panels are already #FFFFFF; on light they share
+ * the canvas hue family, so give them a hairline + lift to stay distinct from
+ * the warm bg. (Resume paper stays white in BOTH themes — see opt-outs.) */
+html:is([data-theme='light'], [data-theme='warm']) #resume-preview-root {
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Mock-interview LIVE cockpit (.iv-live) stays on its dark neon stage in BOTH
+ * themes — its screen-blend white textures + neon radial stops are designed on
+ * near-black and wash out on paper, and the hero ink would vanish. Re-pin the
+ * bare tokens to the dark values within the cockpit so every descendant reads
+ * dark; --accent-text goes back to the electric fill (legible on the dark stage). */
+html:is([data-theme='light'], [data-theme='warm']) .iv-live {
+  --bg: #0A0B10; --bg-2: #11121A; --surface: #181923; --surface-2: #1F212E;
+  --surface-3: #272938; --rule: #2A2D3D; --rule-soft: #20222F;
+  --text: #F4F4F7; --text-2: #B5B7C4; --muted: #7C7E91; --muted-2: #4E5163;
+  --accent-text: var(--accent);
+  color-scheme: dark;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Gradient-clipped accent text (.dc-accent-text): run between the deep legible
+ * siblings so the clipped text stays readable on paper (was lime→violet). Each
+ * pale scheme ends on its own deep secondary — indigo on light, aubergine on warm. */
+html[data-theme='light'] .dc-accent-text {
+  background-image: linear-gradient(135deg, var(--accent-text), #3344A0);   /* accent-text → indigo-text end (8.48:1) */
+}
+html[data-theme='warm'] .dc-accent-text {
+  background-image: linear-gradient(135deg, var(--accent-text), #674363);   /* accent-text → aubergine-text end (7.86:1) */
+}
+
+/* Keyboard focus ring — draw in the deep legible sibling, not the electric fill.
+ * (Under .iv-live the cockpit re-pins --accent-text to the electric value, so
+ * its focus rings stay neon.) */
+html:is([data-theme='light'], [data-theme='warm']) :focus-visible {
+  outline-color: var(--accent-text);
+}
+
+/* ── Base reset + global type ── */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;            /* proto base — was 15px */
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100vh;
+  background-image: var(--grad-page-wash);
+  background-attachment: fixed;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Focus ring — accent halo. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--sans);
+  color: var(--text);
+  letter-spacing: -0.022em;
+  font-weight: 700;
+}
+h1 { font-weight: 700; }
+
+/* CJK locale overrides — loosen the tight tracking/leading for CJK glyphs. */
+html[lang='zh'] body,
+html[lang='zh-TW'] body,
+html[lang='ja'] body {
+  letter-spacing: 0.01em;
+  line-height: 1.7;
+}
+html[lang='zh'] h1,
+html[lang='zh-TW'] h1,
+html[lang='ja'] h1,
+html[lang='zh'] h2,
+html[lang='zh-TW'] h2,
+html[lang='ja'] h2,
+html[lang='zh'] h3,
+html[lang='zh-TW'] h3,
+html[lang='ja'] h3 {
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * --dc-* COMPATIBILITY SHIM
+ *
+ * components/dc/AiOrb.tsx + components/dc/TweaksPanel.tsx (the KEEP list —
+ * the orb is the brand element, the panel is the accent/density/tone control)
+ * read --dc-* vars. Map them to the V3 bare names so they work day one;
+ * re-theming them to bare names is a cheap follow-up, not a blocker.
+ * ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --dc-bg:            var(--bg);
+  --dc-bg-2:          var(--bg-2);
+  --dc-surface:       var(--surface);
+  --dc-surface-2:     var(--surface-2);
+  --dc-card-nested:   var(--bg);
+  --dc-card-nested-2: var(--bg-2);
+  --dc-edge:          var(--rule);
+  --dc-edge-2:        var(--surface-3);
+
+  --dc-ink:    var(--text);
+  --dc-ink-2:  var(--text-2);
+  --dc-ink-3:  var(--muted);
+  --dc-ink-4:  var(--muted-2);
+
+  --dc-lime:    var(--lime);
+  --dc-violet:  var(--violet);
+  --dc-cyan:    var(--cyan);
+  --dc-pink:    var(--pink);
+
+  --dc-accent:      var(--accent);
+  --dc-accent-2:    var(--accent);
+  --dc-accent-ink:  var(--accent-ink);
+  --dc-accent-soft: var(--accent-soft);
+  --dc-accent-glow: var(--shadow-ring);
+  --dc-secondary:   var(--violet);
+  --dc-secondary-2: var(--violet);
+
+  --dc-glow-lime:   0 0 0 1px var(--lime-soft), 0 12px 32px -10px var(--lime-glow);
+  --dc-glow-violet: 0 0 0 1px var(--violet-soft), 0 12px 32px -10px var(--violet-glow);
+
+  --dc-grad-orb: var(--grad-orb);
+  --dc-grad-mesh:
+    radial-gradient(at 12% 18%, var(--accent-soft), transparent 50%),
+    radial-gradient(at 80% 22%, var(--violet-soft), transparent 55%),
+    radial-gradient(at 75% 82%, var(--accent-soft), transparent 55%),
+    radial-gradient(at 18% 80%, var(--violet-soft), transparent 60%);
+
+  --dc-r-sm: var(--r-md);
+  --dc-r:    var(--r-2xl);
+  --dc-r-lg: var(--r-xl);
+  --dc-r-xl: 28px;
+
+  --dc-row-y: 10px;
+  --dc-stack-y: 24px;
+}
+
+/* dc/* text + orb helpers (kept; the orb animations are reused by AiOrb). */
+.dc-display    { font-family: var(--sans); font-weight: 700; letter-spacing: -0.04em; line-height: 0.95; }
+.dc-display-xl { font-size: clamp(2.75rem, 6.5vw, 5.5rem); }
+.dc-display-lg { font-size: clamp(2.25rem, 5vw, 4rem); }
+.dc-display-md { font-size: clamp(1.75rem, 3.6vw, 2.75rem); }
+.dc-serif      { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+.dc-mono       { font-family: var(--mono); }
+
+.dc-accent-text {
+  background-image: linear-gradient(135deg, var(--accent), var(--violet));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+@keyframes dc-orb-spin   { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes dc-ring-pulse {
+  0%   { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.5);  opacity: 0; }
+}
+@keyframes dc-ticker-blink { 0%, 60%, 100% { opacity: 1; } 80% { opacity: 0.2; } }
+@keyframes dc-wave-bounce  { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+@keyframes dc-shimmer      { 0% { transform: translateX(-100%); } 100% { transform: translateX(110%); } }
+@keyframes dc-orb-breathe  { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+
+.dc-ring         { animation: dc-ring-pulse 2.4s ease-out infinite; }
+.dc-ring-d1      { animation-delay: 0.0s; }
+.dc-ring-d2      { animation-delay: 0.8s; }
+.dc-ring-d3      { animation-delay: 1.6s; }
+.dc-spin         { animation: dc-orb-spin 14s linear infinite; }
+.dc-breathe      { animation: dc-orb-breathe 4.5s ease-in-out infinite; }
+.dc-tick         { animation: dc-ticker-blink 1.4s ease-in-out infinite; }
+.dc-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-soft) 50%, transparent 100%);
+  animation: dc-shimmer 3.2s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-ring, .dc-spin, .dc-breathe, .dc-tick, .dc-shimmer::before {
+    animation: none !important;
+  }
+}
+
+/* Surface helpers (kept — referenced by reused dc components / V2 stragglers). */
+.dc-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2xl);
+  color: var(--text);
+}
+.dc-card-2 {
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2xl);
+  color: var(--text);
+}
+.dc-panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-xl);
+  color: var(--text);
+}
+.dc-nested-card {
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2xl);
+  color: var(--text);
+  transition: border-color 160ms ease;
+}
+.dc-nested-card:hover {
+  background: var(--bg-2);
+  border-color: var(--surface-3);
+}
+.dc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dc-glow-edge {
+  box-shadow: var(--shadow-ring);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * LEGACY V2 RETINT — the (auth) layout still wraps every authenticated
+ * route in `.dark-canvas` (and `.v3-root`). V2 pages not yet replaced by a
+ * V3 screen lane use Tailwind utilities (bg-white / bg-bg-* / text-ink-* /
+ * accent-* …) which now resolve to the V3 dark tokens via the tokens.css
+ * shim — but a handful of literal `bg-white` panels + nested-card patterns
+ * still need an explicit retint so legacy markup reads dark. These rules are
+ * deleted in Wave 3 once the screen lanes land. Opt-outs:
+ *   • #resume-preview-root — the resume paper is intentionally white.
+ *   • inline style={{ background:'#fff' }} — modal panels (CLAUDE.md rule).
+ * ═══════════════════════════════════════════════════════════════════ */
+.dark-canvas {
+  background: var(--bg);
+  color: var(--text);
+}
+.dark-canvas main {
+  background: var(--bg);
+  color: var(--text);
+}
+.dark-canvas main .bg-white:not(#resume-preview-root) {
+  background-color: var(--surface);
+  color: var(--text);
+}
+.dark-canvas main .bg-bg-card .bg-bg-card,
+.dark-canvas main .bg-bg-card .bg-white:not(#resume-preview-root),
+.dark-canvas main .bg-white:not(#resume-preview-root) .bg-bg-card,
+.dark-canvas main .bg-white:not(#resume-preview-root) .bg-white:not(#resume-preview-root),
+.dark-canvas main .dc-panel .dc-panel,
+.dark-canvas main .dc-panel .bg-bg-card,
+.dark-canvas main .dc-card .dc-card {
+  background-color: var(--bg);
+}
+.dark-canvas main .bg-bg-muted\/30 { background-color: rgba(255,255,255,0.03); color: var(--text); }
+.dark-canvas main .bg-bg-muted\/40 { background-color: rgba(255,255,255,0.04); color: var(--text); }
+.dark-canvas main .bg-bg-muted\/50 { background-color: rgba(255,255,255,0.05); color: var(--text); }
+.dark-canvas main .bg-bg-muted\/60 { background-color: rgba(255,255,255,0.06); color: var(--text); }
+.dark-canvas main .border-zinc-200 { border-color: var(--rule); }
+.dark-canvas main hr { border-color: var(--rule); }
+.dark-canvas main input,
+.dark-canvas main textarea,
+.dark-canvas main select { color-scheme: dark; }
+.dark-canvas main input::placeholder,
+.dark-canvas main textarea::placeholder { color: var(--muted-2); }
+
+/* ═══════════════════════════════════════════════════════════════════
+ * VIBRANT SCOPE (Mock Interview, V2-era) — kept until Lane G re-skins the
+ * interview surface to V3 .iv-* classes. Layered on top; apply via
+ * `.vibrant-scope` on the layout wrapper.
+ * ═══════════════════════════════════════════════════════════════════ */
+.vibrant-scope {
+  --vb-bg: var(--bg);
+  --vb-surface: var(--surface);
+  --vb-ink: var(--text);
+  --vb-ink-2: var(--text-2);
+  --vb-muted: var(--muted);
+  --vb-hero-ink: var(--bg-2);
+
+  --vb-violet: #8b5cf6;
+  --vb-violet-deep: #6d28d9;
+  --vb-pink: #ec4899;
+  --vb-pink-deep: #be185d;
+  --vb-cyan: #06b6d4;
+  --vb-cyan-deep: #0891b2;
+  --vb-lime: #84cc16;
+  --vb-orange: #f97316;
+  --vb-amber: #f59e0b;
+
+  --vb-violet-soft: var(--violet-soft);
+  --vb-pink-soft:   rgba(236, 72, 153, 0.14);
+  --vb-cyan-soft:   rgba(6, 182, 212, 0.14);
+  --vb-lime-soft:   var(--lime-soft);
+  --vb-orange-soft: rgba(249, 115, 22, 0.14);
+
+  --vb-grad-hero:    linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #f97316 100%);
+  --vb-grad-violet:  linear-gradient(135deg, #8b5cf6, #ec4899);
+  --vb-grad-cyan:    linear-gradient(135deg, #06b6d4, #8b5cf6);
+  --vb-grad-lime:    linear-gradient(135deg, #84cc16, #06b6d4);
+  --vb-grad-orange:  linear-gradient(135deg, #f97316, #ec4899);
+  --vb-grad-meshA:   radial-gradient(at 30% 20%, rgba(139, 92, 246, 0.45) 0px, transparent 50%),
+                     radial-gradient(at 80% 10%, rgba(236, 72, 153, 0.35) 0px, transparent 50%),
+                     radial-gradient(at 75% 80%, rgba(249, 115, 22, 0.35) 0px, transparent 60%),
+                     radial-gradient(at 20% 80%, rgba(6, 182, 212, 0.30) 0px, transparent 55%);
+
+  --vb-radius-sm: 12px;
+  --vb-radius:    20px;
+  --vb-radius-lg: 28px;
+  --vb-radius-xl: 36px;
+
+  --vb-shadow-glow:    0 0 0 1px rgba(139, 92, 246, 0.12),
+                       0 12px 24px -8px rgba(139, 92, 246, 0.32),
+                       0 32px 56px -24px rgba(236, 72, 153, 0.25);
+  --vb-shadow-pop:     0 1px 2px rgba(0, 0, 0, 0.4),
+                       0 12px 28px -12px rgba(0, 0, 0, 0.45);
+  --vb-shadow-card:    0 1px 2px rgba(0, 0, 0, 0.4),
+                       0 4px 16px -6px rgba(0, 0, 0, 0.28);
+}
+.vibrant-scope .vibrant-page {
+  background: var(--vb-bg);
+  color: var(--vb-ink);
+}
+.vibrant-scope .vibrant-display {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+.vibrant-scope .vibrant-display-xl { font-size: clamp(2.5rem, 6vw, 5rem); }
+.vibrant-scope .vibrant-display-lg { font-size: clamp(2rem, 4.5vw, 3.5rem); }
+
+@keyframes vb-mesh-shift {
+  0%   { background-position: 0% 0%, 100% 0%, 70% 100%, 0% 80%; }
+  50%  { background-position: 20% 30%, 80% 10%, 60% 70%, 30% 90%; }
+  100% { background-position: 0% 0%, 100% 0%, 70% 100%, 0% 80%; }
+}
+@keyframes vb-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(2.2); }
+}
+@keyframes vb-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes vb-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.vb-mesh-bg {
+  background: var(--vb-grad-meshA);
+  background-size: 180% 180%, 160% 160%, 200% 200%, 170% 170%;
+  animation: vb-mesh-shift 22s ease-in-out infinite;
+}
+.vb-pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: vb-pulse 1.8s ease-in-out infinite;
+}
+.vb-shimmer-track {
+  position: relative;
+  overflow: hidden;
+}
+.vb-shimmer-track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  animation: vb-shimmer 3.2s linear infinite;
+  pointer-events: none;
+}
+.vb-float { animation: vb-float 4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vb-mesh-bg,
+  .vb-pulse-dot::after,
+  .vb-shimmer-track::before,
+  .vb-float { animation: none !important; }
+}
+
+/* Resume-builder accent scope (V2-era) — kept until Lane F re-skins the
+ * editor. With the accent now bound globally to --accent, this only needs to
+ * survive as a no-op marker; the teal override is dropped (V3 is one accent
+ * system swapped via Tweaks). */
+.resume-builder-scope {
+  /* intentionally empty — V3 uses the global accent. Class retained so the
+   * (auth) layout's pathname-based className doesn't reference a missing rule. */
+}
+
+/* Print: collapse the chrome, dump only the resume. */
+@media print {
+  body {
+    background: #fff !important;
+  }
+  aside[aria-label='Primary'],
+  nav[aria-label='Mobile'],
+  .side,
+  .topbar,
+  .sticky.top-0,
+  .builder-no-print {
+    display: none !important;
+  }
+  #resume-preview-root {
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+}
