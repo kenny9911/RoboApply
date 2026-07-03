@@ -13,14 +13,17 @@
   },
   "dependencies": {
     "@livekit/agents": "1.4.5",
-    "@livekit/agents-plugin-silero": "1.4.5",
     "@livekit/agents-plugin-livekit": "1.4.5",
     "@livekit/agents-plugin-openai": "1.4.5",
+    "@livekit/agents-plugin-silero": "1.4.5",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {
+    "@livekit/rtc-ffi-bindings-darwin-arm64": "^0.12.60"
   }
 }

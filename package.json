@@ -8,7 +8,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "concurrently --kill-others --kill-signal SIGINT \"npm run dev:server\" \"npm run dev:web\"",
+    "dev": "concurrently --kill-others --kill-signal SIGINT \"npm run dev:server\" \"npm run dev:web\" \"./scripts/dev-interview-agent.sh\"",
     "dev:web": "next dev -p 3611",
     "dev:server": "tsx watch server/src/app.ts",
     "dev:interview-agent": "npm --prefix interview-agent run dev",
