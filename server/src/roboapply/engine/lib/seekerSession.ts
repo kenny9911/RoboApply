@@ -15,10 +15,11 @@
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
 import prisma from '../../../lib/prisma.js';
+import { parseDurationSeconds } from '../../../lib/parseDuration.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'development-secret-change-in-production';
-const JWT_EXPIRES_IN = parseInt(process.env.JWT_EXPIRES_IN || '604800', 10); // 7 days
-const SESSION_EXPIRES_IN = parseInt(process.env.SESSION_EXPIRES_IN || '2592000', 10); // 30 days
+const JWT_EXPIRES_IN = parseDurationSeconds(process.env.JWT_EXPIRES_IN, 604800); // 7 days
+const SESSION_EXPIRES_IN = parseDurationSeconds(process.env.SESSION_EXPIRES_IN, 2592000); // 30 days
 
 export interface SeekerTokenPayload {
   userId: string;
