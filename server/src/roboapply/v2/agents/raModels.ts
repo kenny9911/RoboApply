@@ -9,9 +9,13 @@
 //
 // Format note — these are OpenRouter model SLUGS (the backend runs in
 // `LLM_PROVIDER=openrouter` mode). Two durable rules:
-//   1. KEEP the `anthropic/` prefix — OpenRouter routes on it (it is also a
-//      recognised direct-mode prefix; see DIRECT_PROVIDER_PREFIXES in
-//      services/llm/LLMService.ts). Stripping it breaks OpenRouter routing.
+//   1. KEEP the `openrouter/` OUTER prefix. A bare `anthropic/…` slug is a
+//      recognised DIRECT-provider prefix (DIRECT_PROVIDER_PREFIXES in
+//      services/llm/LLMService.ts) and pins the call to Anthropic's NATIVE
+//      API regardless of providerMode — which 404s on these dotted slugs
+//      (native ids are dashed, e.g. claude-sonnet-4-6). The `openrouter/`
+//      prefix is stripped by normalizeModel, leaving the real OpenRouter id.
+//      Same failure class as the 2026-06-24 google/ default-model outage.
 //   2. Copy each slug VERBATIM from openrouter.ai/anthropic — OpenRouter
 //      versions Anthropic models with DOTS (`claude-opus-4.8`,
 //      `claude-sonnet-4.6`, `claude-haiku-4.5`), NOT dashes. Don't hand-write.
@@ -24,10 +28,10 @@
 // (RA_V2_*_MODEL) still wins at runtime (see each agent's pick*Model()).
 
 /** Highest-capability / highest-cost tier — deep resume rewrites, cover letters. */
-export const RA_MODEL_OPUS = 'anthropic/claude-opus-4.8';
+export const RA_MODEL_OPUS = 'openrouter/anthropic/claude-opus-4.8';
 
 /** Balanced narrative + scoring tier — career insights, match scoring, standard tailoring. */
-export const RA_MODEL_SONNET = 'anthropic/claude-sonnet-4.6';
+export const RA_MODEL_SONNET = 'openrouter/anthropic/claude-sonnet-4.6';
 
 /** Cheapest / fastest tier — JD parsing, keyword extraction, lightweight rewrites, mock interview. */
-export const RA_MODEL_HAIKU = 'anthropic/claude-haiku-4.5';
+export const RA_MODEL_HAIKU = 'openrouter/anthropic/claude-haiku-4.5';

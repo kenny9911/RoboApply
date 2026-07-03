@@ -109,7 +109,7 @@ const FREE_TIER_WATERMARK = '\n\n— Sent via RoboApply (free tier)';
 // env-overridable defaults — see pickModelForTier(). Resolved at CALL TIME
 // (not module-load) so dotenv values apply regardless of ESM import order.
 const MODEL_PAID_DEFAULT = 'anthropic/claude-opus-4.7';
-const MODEL_FREE_DEFAULT = 'anthropic/claude-sonnet-4.6';
+const MODEL_FREE_DEFAULT = 'openrouter/anthropic/claude-sonnet-4.6';
 
 // Cover letter target length window.
 const MIN_COVER_LETTER_WORDS = 200;

@@ -96,7 +96,7 @@ export interface RoboApplyDigestOutput {
 // Default model. Used when the env override is unset. Resolved at CALL TIME
 // (not module-load) so it picks up dotenv values regardless of ESM import
 // order — the backend's `dotenv.config()` runs after this module is hoisted.
-const MODEL_DIGEST_DEFAULT = 'anthropic/claude-sonnet-4.6';
+const MODEL_DIGEST_DEFAULT = 'openrouter/anthropic/claude-sonnet-4.6';
 
 function digestModel(): string {
   return process.env.RA_DIGEST_MODEL?.trim() || MODEL_DIGEST_DEFAULT;
