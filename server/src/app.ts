@@ -58,6 +58,14 @@ import { logger } from './services/LoggerService.js';
 
 const app = express();
 
+// Behind Vercel's edge proxy (and any Node host fronted by one), the real
+// client IP arrives in `x-forwarded-for`; without this Express reports the
+// proxy's constant socket address for EVERY request, so the IP-keyed auth
+// rate limiter (middleware/auth.ts `rateLimit`) bucketed all users together
+// and could 429 legitimate logins under concurrency. Trusting the proxy makes
+// `req.ip` the actual client address so the limiter is per-user again.
+app.set('trust proxy', true);
+
 // ─── CORS ───────────────────────────────────────────────────────────────
 // Same-origin in production (the Next.js app and this API share roboapply.io
 // via a Vercel rewrite), but we still allowlist the apex + api subdomain and
