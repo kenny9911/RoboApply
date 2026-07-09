@@ -65,6 +65,7 @@ function normalizeCode(
     case 'auth_expired':
       return 'auth_expired';
     case 'ACCOUNT_DISABLED':
+    case 'account_disabled':
       return 'account_disabled';
     case 'SUBSCRIPTION_LOCKED':
       return 'subscription_locked';

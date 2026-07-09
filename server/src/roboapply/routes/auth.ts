@@ -25,6 +25,7 @@ import {
 import { logger } from '../../services/LoggerService.js';
 import seekerAuthService, {
   SeekerAccountDeletedError,
+  SeekerAccountDisabledError,
   SeekerEmailTakenError,
   SeekerInvalidCredentialsError,
   SeekerNotSeekerAccountError,
@@ -200,6 +201,13 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
         success: false,
         code: 'account_deleted',
         error: 'This account has been deleted',
+      });
+    }
+    if (err instanceof SeekerAccountDisabledError) {
+      return res.status(403).json({
+        success: false,
+        code: 'account_disabled',
+        error: 'This account has been suspended. Contact support if you believe this is an error.',
       });
     }
     if (err instanceof SeekerInvalidCredentialsError) {

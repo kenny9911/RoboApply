@@ -88,6 +88,13 @@ export class SeekerAccountDeletedError extends Error {
   }
 }
 
+export class SeekerAccountDisabledError extends Error {
+  constructor() {
+    super('This account has been suspended. Contact support if you believe this is an error.');
+    this.name = 'SeekerAccountDisabledError';
+  }
+}
+
 export class SeekerInvalidCredentialsError extends Error {
   constructor() {
     super('Invalid email or password');
@@ -209,6 +216,7 @@ async function login(input: SeekerLoginInput): Promise<SeekerAuthResult> {
       email: true,
       name: true,
       role: true,
+      isActive: true,
       passwordHash: true,
       subscriptionTier: true,
       market: true,
@@ -227,8 +235,37 @@ async function login(input: SeekerLoginInput): Promise<SeekerAuthResult> {
   const isValid = await bcrypt.compare(password, user.passwordHash);
   if (!isValid) throw new SeekerInvalidCredentialsError();
 
-  if (!user.seekerProfile) throw new SeekerNotSeekerAccountError();
-  if (user.seekerProfile.deletedAt) throw new SeekerAccountDeletedError();
+  // Hard admin-disable gate — mirror the recruiter AuthService.login and the
+  // requireAuth middleware so a suspended account is rejected cleanly HERE with
+  // a clear message, instead of getting a session cookie and then being
+  // silently bounced by /me's 401 (which the client swallows).
+  if (user.isActive === false) throw new SeekerAccountDisabledError();
+
+  // Admins use the RoboApply candidate product but never went through the
+  // seeker signup funnel, so they have no SeekerProfile. requireSeekerProfile
+  // (/me) lazily provisions one for them — but login runs BEFORE /me is ever
+  // reached, so without the same bypass an admin can never obtain a session
+  // (403 not_a_seeker_account). Provision on demand to keep login and the /me
+  // gate symmetric. `upsert` is race-safe against the parallel /me calls the
+  // shell fires on load.
+  let seekerProfile = user.seekerProfile;
+  if (!seekerProfile && user.role === 'admin') {
+    seekerProfile = await prisma.seekerProfile.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, source: 'admin' },
+      update: {},
+      select: {
+        id: true,
+        source: true,
+        readinessScore: true,
+        locale: true,
+        deletedAt: true,
+      },
+    });
+  }
+
+  if (!seekerProfile) throw new SeekerNotSeekerAccountError();
+  if (seekerProfile.deletedAt) throw new SeekerAccountDeletedError();
 
   const session = await createSeekerSession(user.id);
   const token = generateJwt({ id: user.id, email: user.email });
@@ -240,14 +277,14 @@ async function login(input: SeekerLoginInput): Promise<SeekerAuthResult> {
       name: user.name,
       role: user.role,
       subscriptionTier: user.subscriptionTier,
-      locale: normalizeLocale(user.seekerProfile.locale),
+      locale: normalizeLocale(seekerProfile.locale),
       market: user.market,
     },
     seekerProfile: {
-      id: user.seekerProfile.id,
-      source: user.seekerProfile.source,
-      readinessScore: user.seekerProfile.readinessScore,
-      locale: user.seekerProfile.locale,
+      id: seekerProfile.id,
+      source: seekerProfile.source,
+      readinessScore: seekerProfile.readinessScore,
+      locale: seekerProfile.locale,
     },
     token,
     sessionToken: session.token,
