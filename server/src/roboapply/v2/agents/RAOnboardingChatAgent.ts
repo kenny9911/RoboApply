@@ -66,7 +66,15 @@ export const RA_ONBOARDING_CHAT_MODEL = RA_MODEL_SONNET;
 const ENV_MODEL = 'RA_V2_ONBOARDING_CHAT_MODEL';
 
 export function pickOnboardingChatModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_ONBOARDING_CHAT_MODEL;
+  const raw = process.env[ENV_MODEL]?.trim() || RA_ONBOARDING_CHAT_MODEL;
+  // This agent hits OpenRouter's Anthropic-Messages endpoint DIRECTLY (see
+  // buildClient) — it never passes through LLMService.normalizeModel, so the
+  // `openrouter/` OUTER routing prefix that raModels.ts carries (added in
+  // a83482b; correct for the LLMService-routed agents that strip it) must be
+  // stripped here. OpenRouter's own slug is `anthropic/claude-sonnet-4.6`;
+  // shipping `openrouter/anthropic/…` is an unknown-model error that fails
+  // every turn and surfaces as the catalog apology.
+  return raw.replace(/^openrouter\//, '');
 }
 
 const CHAT_TEMPERATURE = 0.5;
