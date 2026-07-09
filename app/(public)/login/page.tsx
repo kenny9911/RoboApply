@@ -33,7 +33,19 @@ export default function LoginPage() {
     try {
       await login({ email, password });
       const me = await refresh();
-      const next = params?.get('next');
+      // login() resolved (200 + session cookie set), but if the follow-up /me
+      // didn't yield a session (transient 5xx/network, or an account the /me
+      // gate rejects) DON'T treat it as success: surface an error and stay on
+      // the form instead of redirecting into the app on null-`me` defaults.
+      if (!me) {
+        setError(t('error_generic'));
+        return;
+      }
+      // Only honour a same-origin relative `next` — reject absolute URLs and
+      // protocol-relative ("//evil.com") / backslash tricks so a crafted
+      // ?next= can't turn the post-login redirect into an open redirect.
+      const rawNext = params?.get('next');
+      const next = rawNext && /^\/(?![/\\])/.test(rawNext) ? rawNext : null;
       const hasResume = !!me?.onboardingState?.completedSteps?.includes('resume');
       // When job-applying is off, the auto-apply onboarding + Today home are
       // gone: returning users land on Mock Interview, new users on the Resume
