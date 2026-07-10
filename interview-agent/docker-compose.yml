@@ -1,0 +1,21 @@
+# RoboApply Interview Engine — voice worker, one-command run/scale.
+#
+#   docker compose up -d --build            # one worker
+#   docker compose up -d --scale worker=3   # three workers, auto-load-balanced
+#                                           # by LiveKit Cloud (same agent name)
+#
+# No ports are published on purpose: the worker only dials out, and the health
+# endpoint is consumed by the image's own HEALTHCHECK. Publish 8081 manually if
+# you want to poke GET /worker from the host.
+
+services:
+  worker:
+    build: .
+    image: roboapply-interview-agent
+    env_file:
+      - .env.local
+    restart: unless-stopped
+    # SIGTERM starts a graceful drain: running interviews finish, new ones are
+    # rejected. Give a stopping container time to let a full interview end
+    # before docker escalates to SIGKILL.
+    stop_grace_period: 65m

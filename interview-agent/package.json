@@ -1,15 +1,14 @@
 {
-  "name": "robohire-interview-agent",
+  "name": "roboapply-interview-agent",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "RoboHire Interview Engine — LiveKit voice worker (Node/TS). The metadata-driven AI interviewer.",
+  "description": "RoboApply Interview Engine \u2014 LiveKit voice worker (Node/TS). The metadata-driven AI interviewer.",
   "scripts": {
     "build": "tsc",
     "dev": "npm run build && node dist/main.js dev",
     "start": "node dist/main.js start",
-    "console": "npm run build && node dist/main.js console",
-    "download-files": "npm run build && node dist/main.js download-files"
+    "console": "npm run build && node dist/main.js console"
   },
   "dependencies": {
     "@livekit/agents": "1.4.5",
@@ -24,5 +23,8 @@
   },
   "optionalDependencies": {
     "@livekit/rtc-ffi-bindings-darwin-arm64": "^0.12.60"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

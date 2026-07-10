@@ -1,0 +1,38 @@
+# Render recipe for the RoboApply interview voice worker.
+# Import via Render Dashboard → Blueprints (point at the repo), or copy the
+# service definition into an existing render.yaml at the repo root.
+#
+# Private service (pserv): no public URL — the worker only dials out.
+# Set the env vars marked sync:false in the dashboard after the first import.
+
+services:
+  - type: pserv
+    name: roboapply-interview-agent
+    runtime: docker
+    rootDir: interview-agent
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    # Render's standard maximum. SIGTERM → graceful drain; interviews longer
+    # than 300s at deploy time are cut — deploy off-peak.
+    maxShutdownDelaySeconds: 300
+    autoDeploy: false
+    scaling:
+      minInstances: 1
+      maxInstances: 4
+      targetCPUPercent: 60
+      targetMemoryPercent: 60
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: LIVEKIT_AGENT_CALLBACK_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: INTERVIEW_ENGINE_AGENT_NAME
+        value: RoboApply-Interview
+      - key: WORKER_NUM_IDLE_PROCESSES
+        value: "1"

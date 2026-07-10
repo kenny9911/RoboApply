@@ -1,0 +1,32 @@
+# systemd unit — RoboApply interview voice worker on any Linux VPS.
+# The ONLY host class (besides Kubernetes) that can honor a full-length drain:
+# TimeoutStopSec below waits up to 2h for running interviews to finish.
+#
+#   sudo cp roboapply-interview-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now roboapply-interview-agent
+#
+# Assumes the repo at /opt/roboapply with `npm ci && npm run build` done in
+# interview-agent/ (node >= 22), and env in /opt/roboapply/interview-agent/.env
+
+[Unit]
+Description=RoboApply Interview Engine voice worker (LiveKit agent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=roboapply
+WorkingDirectory=/opt/roboapply/interview-agent
+ExecStart=/usr/bin/node dist/main.js start
+Restart=always
+RestartSec=5
+# SIGTERM → SDK graceful drain (finish live interviews, reject new ones).
+KillSignal=SIGTERM
+TimeoutStopSec=7200
+# Health endpoint (production mode): http://127.0.0.1:8081/  → 200/503
+Environment=WORKER_HEALTH_PORT=8081
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

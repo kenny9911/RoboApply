@@ -1,0 +1,63 @@
+# Kubernetes recipe — RoboApply interview voice worker.
+# Long terminationGracePeriodSeconds is the point: K8s is the managed-host
+# class that can wait out a full interview on rollout (Fly/Render cap at 300s).
+#
+#   kubectl create secret generic interview-agent-env --from-env-file=.env.local
+#   kubectl apply -f k8s.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roboapply-interview-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: roboapply-interview-agent }
+  template:
+    metadata:
+      labels: { app: roboapply-interview-agent }
+    spec:
+      # Drain window: running interviews finish before the pod is killed.
+      terminationGracePeriodSeconds: 5400
+      containers:
+        - name: worker
+          image: roboapply-interview-agent:latest # push to your registry
+          envFrom:
+            - secretRef: { name: interview-agent-env }
+          env:
+            - { name: WORKER_NUM_IDLE_PROCESSES, value: "1" }
+          ports:
+            - { containerPort: 8081, name: health }
+          readinessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }
+---
+# Scale on CPU well under the worker's own loadThreshold (0.7), with a long
+# scale-down window because draining workers exit slowly.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: roboapply-interview-agent
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: roboapply-interview-agent
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 50 }
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 3600

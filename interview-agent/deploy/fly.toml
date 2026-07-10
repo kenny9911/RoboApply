@@ -1,0 +1,44 @@
+# Fly.io recipe for the RoboApply interview voice worker.
+#
+#   cd interview-agent && cp deploy/fly.toml .   # fly resolves paths from cwd
+#   fly launch --no-deploy --copy-config --name roboapply-interview-agent
+#   fly secrets set LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... \
+#     LIVEKIT_AGENT_CALLBACK_SECRET=... OPENAI_API_KEY=...
+#   fly deploy
+#   fly scale count 2          # scale = more machines, LiveKit load-balances
+#
+# NO [http_service]/[services] section on purpose: the worker needs no public
+# ports, and without a services section Fly's auto-stop never applies — the
+# machine stays up. The [[checks]] block probes the SDK's local health server
+# and is required for the bluegreen strategy.
+
+app = "roboapply-interview-agent"
+primary_region = "sin"
+
+# Fly's hard maximum is 300s. SIGTERM starts a graceful drain (running
+# interviews continue, new ones are rejected) but interviews longer than this
+# window WILL be cut on a redeploy — deploy off-peak, and rely on bluegreen so
+# the new worker is registered before the old one drains.
+kill_signal = "SIGTERM"
+kill_timeout = "300s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  strategy = "bluegreen"
+
+[env]
+  WORKER_NUM_IDLE_PROCESSES = "1"   # prewarm 1 job proc on a small VM
+
+[[checks]]
+  name = "worker-health"
+  type = "tcp"
+  port = 8081
+  interval = "10s"
+  timeout = "2s"
+  grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"    # ~0.13 core + ~100MB per live session; 2GB ≈ up to ~10
