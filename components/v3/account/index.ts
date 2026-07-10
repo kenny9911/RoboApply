@@ -37,3 +37,5 @@ export {
   DangerZone,
   scorePassword,
 } from './security';
+
+export { DeleteAccountModal } from './deleteAccountModal';

@@ -1645,16 +1645,9 @@
       "reset_title": "將偏好還原為預設值",
       "reset_desc": "清空本頁的所有設定。履歷和應徵會保留。",
       "reset_btn": "重設偏好",
-      "delete_data_title": "刪除所有應徵資料",
-      "delete_data_desc": "清除你的媒合紀錄、佇列、活動記錄和流程看板。帳號保留。",
-      "delete_data_btn": "刪除應徵資料",
-      "delete_data_confirm": "這會清除你的媒合紀錄、佇列、活動記錄和流程看板。你的帳號和履歷會保留。",
       "delete_account_title": "刪除我的帳號",
       "delete_account_desc": "清除一切:履歷、應徵、逐字稿、整合。無法復原。",
-      "delete_account_btn": "刪除帳號",
-      "delete_account_confirm": "這會清除一切 — 履歷、應徵、逐字稿、整合。此操作無法復原。",
-      "confirm_note": "這是一個佔位操作 — 目前不會真正刪除任何內容。",
-      "cancel": "取消"
+      "delete_account_btn": "刪除帳號"
     }
   },
   "errors": {

@@ -102,4 +102,37 @@ describe('/preferences screen', () => {
       'Remote staff PM, climate.',
     );
   });
+
+  it('Danger zone: real delete-account modal, no data-wipe stub row', async () => {
+    renderWithProviders(<PreferencesPage />);
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByRole('button', { name: /Danger zone/i }),
+        ).toBeInTheDocument();
+      },
+      { timeout: 4000 },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Danger zone/i }));
+
+    // The data-only wipe row is hidden until a real endpoint exists (its old
+    // confirm was a stub that deleted nothing).
+    expect(screen.queryByText(/Delete all application data/i)).not.toBeInTheDocument();
+
+    // "Delete account" opens the shared real confirm modal (same as /account):
+    // type-your-email + reason, not the old close-only stub.
+    fireEvent.click(screen.getByRole('button', { name: /Delete account$/ }));
+    expect(screen.getByText('Confirm your email')).toBeInTheDocument();
+    expect(screen.getByText('Reason')).toBeInTheDocument();
+
+    // A wrong email is rejected locally — nothing is deleted.
+    fireEvent.change(screen.getByPlaceholderText('jane@example.com'), {
+      target: { value: 'wrong@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete my account' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/match your account email/i);
+    });
+  });
 });

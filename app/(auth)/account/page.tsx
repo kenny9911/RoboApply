@@ -20,7 +20,6 @@ import Link from 'next/link';
 
 import { PageHeader } from '../../../components/v3/primitives/PageHeader';
 import { Btn } from '../../../components/v3/primitives/Btn';
-import { Modal } from '../../../components/v3/primitives/Modal';
 import { IconCheck, IconX } from '../../../components/v3/primitives/Iconset';
 import {
   SectionNav,
@@ -35,6 +34,7 @@ import {
   RecentActivityList,
   SecurityCard,
   DangerZone,
+  DeleteAccountModal,
   type AccountSectionId,
   type RecentActivityItem,
 } from '../../../components/v3/account';
@@ -44,7 +44,6 @@ import {
   useBillingPlan,
   useCancelPlan,
   useChangePassword,
-  useDeleteAccount,
   usePortal,
   useSignOutAll,
   useUpdateName,
@@ -73,7 +72,6 @@ export default function AccountPage() {
   const updateName = useUpdateName();
   const changePassword = useChangePassword();
   const signOutAll = useSignOutAll();
-  const deleteAccount = useDeleteAccount();
   const portal = usePortal();
   const cancelPlan = useCancelPlan();
 
@@ -99,11 +97,8 @@ export default function AccountPage() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [securityResetKey, setSecurityResetKey] = useState(0);
 
-  // ── Delete-account modal ───────────────────────────────────────────
+  // ── Delete-account modal (shared component owns the whole handshake) ─
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
-  const [deleteReason, setDeleteReason] = useState('');
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const labels: Record<AccountSectionId, string> = {
     profile: t('nav.profile'),
@@ -251,30 +246,6 @@ export default function AccountPage() {
     });
   };
 
-  const onConfirmDelete = () => {
-    setDeleteError(null);
-    if (deleteConfirmEmail.trim().toLowerCase() !== profile.email.trim().toLowerCase()) {
-      setDeleteError(t('danger.error.mismatch'));
-      return;
-    }
-    if (!deleteReason.trim()) {
-      setDeleteError(t('danger.error.reasonRequired'));
-      return;
-    }
-    deleteAccount.mutate(deleteConfirmEmail.trim(), {
-      onSuccess: () => {
-        auth.clear();
-        setDeleteOpen(false);
-        router.replace('/login');
-      },
-      onError: (err) => {
-        const raw = err instanceof RoboApiError ? (err.payload as any)?.code : undefined;
-        if (raw === 'confirm_email_mismatch') setDeleteError(t('danger.error.mismatch'));
-        else setDeleteError(t('danger.error.generic'));
-      },
-    });
-  };
-
   // ── Derived display values ──────────────────────────────────────────
   const memberSinceLabel = formatMemberSince(locale, profile.memberSince, t);
   const tierLabelText = tierLabel(t, usage.tier);
@@ -365,104 +336,12 @@ export default function AccountPage() {
       <SecLabel>{t('danger.title')}</SecLabel>
       <DangerZone onRequestDelete={() => setDeleteOpen(true)} />
 
-      {/* ── Delete-account confirm modal ── */}
-      <Modal
+      {/* ── Delete-account confirm modal (shared with /preferences §08) ── */}
+      <DeleteAccountModal
         open={deleteOpen}
-        onClose={() => {
-          if (!deleteAccount.isPending) setDeleteOpen(false);
-        }}
-        title={t('danger.deleteAccount')}
-        description={t('danger.deleteDescription')}
-        maxWidth="md"
-        footer={
-          <>
-            <Btn variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleteAccount.isPending}>
-              {t('danger.cancel')}
-            </Btn>
-            <Btn
-              className="ra-btn-danger"
-              onClick={onConfirmDelete}
-              disabled={deleteAccount.isPending}
-            >
-              {t('danger.delete')}
-            </Btn>
-          </>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <label
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: '11px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--muted)',
-                fontWeight: 600,
-              }}
-            >
-              {t('danger.confirmEmailLabel')}
-            </label>
-            <p style={{ fontSize: '12.5px', color: 'var(--text-2)', margin: 0 }}>
-              {t('danger.confirmEmailHint', { email: profile.email })}
-            </p>
-            <input
-              value={deleteConfirmEmail}
-              onChange={(e) => setDeleteConfirmEmail(e.target.value)}
-              autoComplete="off"
-              className="ra-account-input"
-              placeholder={profile.email}
-              style={{
-                background: 'var(--bg)',
-                border: '1px solid var(--rule)',
-                borderRadius: 9,
-                padding: '10px 12px',
-                color: 'var(--text)',
-                fontFamily: 'var(--mono)',
-                fontSize: '13px',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <label
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: '11px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--muted)',
-                fontWeight: 600,
-              }}
-            >
-              {t('danger.reasonLabel')}
-            </label>
-            <textarea
-              value={deleteReason}
-              onChange={(e) => setDeleteReason(e.target.value)}
-              rows={3}
-              className="ra-account-input"
-              placeholder={t('danger.reasonPlaceholder')}
-              style={{
-                background: 'var(--bg)',
-                border: '1px solid var(--rule)',
-                borderRadius: 9,
-                padding: '10px 12px',
-                color: 'var(--text)',
-                fontFamily: 'var(--sans)',
-                fontSize: '13px',
-                resize: 'vertical',
-              }}
-            />
-          </div>
-
-          {deleteError ? (
-            <p role="alert" style={{ color: 'var(--danger)', fontSize: '12.5px', margin: 0 }}>
-              {deleteError}
-            </p>
-          ) : null}
-        </div>
-      </Modal>
+        onClose={() => setDeleteOpen(false)}
+        email={profile.email}
+      />
     </>
   );
 }

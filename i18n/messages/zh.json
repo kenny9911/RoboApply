@@ -1645,16 +1645,9 @@
       "reset_title": "将偏好恢复为默认",
       "reset_desc": "清空本页的所有设置。简历和申请会保留。",
       "reset_btn": "重置偏好",
-      "delete_data_title": "删除所有申请数据",
-      "delete_data_desc": "清除你的匹配历史、队列、动态日志和流程看板。账户保留。",
-      "delete_data_btn": "删除申请数据",
-      "delete_data_confirm": "这会清除你的匹配历史、队列、动态日志和流程看板。你的账户和简历会保留。",
       "delete_account_title": "删除我的账户",
       "delete_account_desc": "清除一切:简历、申请、文字记录、集成。无法撤销。",
-      "delete_account_btn": "删除账户",
-      "delete_account_confirm": "这会清除一切 — 简历、申请、文字记录、集成。此操作无法撤销。",
-      "confirm_note": "这是一个占位操作 — 目前不会真正删除任何内容。",
-      "cancel": "取消"
+      "delete_account_btn": "删除账户"
     }
   },
   "errors": {

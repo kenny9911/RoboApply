@@ -1645,16 +1645,9 @@
       "reset_title": "Reset preferences to defaults",
       "reset_desc": "Wipes all settings on this page. Resumes and applications remain.",
       "reset_btn": "Reset preferences",
-      "delete_data_title": "Delete all application data",
-      "delete_data_desc": "Clears your match history, queue, activity log, and pipeline. Account stays.",
-      "delete_data_btn": "Delete application data",
-      "delete_data_confirm": "This clears your match history, queue, activity log, and pipeline. Your account and resumes stay.",
       "delete_account_title": "Delete my account",
       "delete_account_desc": "Wipes everything. Resumes, applications, transcripts, integrations. Can't be undone.",
-      "delete_account_btn": "Delete account",
-      "delete_account_confirm": "This wipes everything — resumes, applications, transcripts, integrations. This can't be undone.",
-      "confirm_note": "This is a stub action — nothing is deleted yet.",
-      "cancel": "Cancel"
+      "delete_account_btn": "Delete account"
     }
   },
   "errors": {

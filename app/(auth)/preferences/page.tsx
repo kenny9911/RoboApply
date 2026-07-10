@@ -282,6 +282,7 @@ export default function PreferencesPage() {
             huntActive={huntActive}
             onPauseToggle={toggleHunt}
             onReset={discard}
+            accountEmail={email}
           />
         )}
       </div>

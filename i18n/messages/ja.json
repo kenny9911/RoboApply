@@ -1645,16 +1645,9 @@
       "reset_title": "環境設定をデフォルトにリセット",
       "reset_desc": "このページのすべての設定を消去します。履歴書と応募は残ります。",
       "reset_btn": "環境設定をリセット",
-      "delete_data_title": "すべての応募データを削除",
-      "delete_data_desc": "マッチ履歴、キュー、アクティビティログ、パイプラインを消去します。アカウントは残ります。",
-      "delete_data_btn": "応募データを削除",
-      "delete_data_confirm": "マッチ履歴、キュー、アクティビティログ、パイプラインを消去します。アカウントと履歴書は残ります。",
       "delete_account_title": "アカウントを削除",
       "delete_account_desc": "すべてを消去します。履歴書、応募、文字起こし、連携。元に戻せません。",
-      "delete_account_btn": "アカウントを削除",
-      "delete_account_confirm": "すべてを消去します — 履歴書、応募、文字起こし、連携。この操作は元に戻せません。",
-      "confirm_note": "これはスタブ操作です — まだ何も削除されません。",
-      "cancel": "キャンセル"
+      "delete_account_btn": "アカウントを削除"
     }
   },
   "errors": {
