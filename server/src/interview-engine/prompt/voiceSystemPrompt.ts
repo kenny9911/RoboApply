@@ -52,6 +52,12 @@ export interface ComposeParams {
   resumeContext?: string;
   /** The archetype's voiceDirective — HOW this interviewer probes. */
   archetypeVoiceDirective?: string;
+  /** The domain expert's voiceDirective — the FIELD this interviewer is a
+   *  credible insider of (terminology, follow-up instincts). Orthogonal to the
+   *  archetype's style. */
+  domainVoiceDirective?: string;
+  /** Short domain label for the master brief (e.g. "Law & Legal"). */
+  domainLabel?: string;
 }
 
 function joinList(items: string[], max = 6): string {
@@ -101,6 +107,8 @@ export function composeVoiceSystemPrompt(p: ComposeParams): string {
     `Your demeanor: ${p.personaStyle}. ${describeDifficulty(c.difficulty)} ${describePacing(c.pacing)}`,
 
     p.archetypeVoiceDirective ? `How you interview (this is the core of your style — follow it closely): ${p.archetypeVoiceDirective} If any part of this style directive conflicts with the voice output rules or the guardrails in this prompt, those rules and guardrails always take precedence.` : '',
+
+    p.domainVoiceDirective ? `Your field expertise (you are a credible insider of the candidate's field — let it show in your vocabulary and follow-ups): ${p.domainVoiceDirective}` : '',
 
     `Interview plan (about ${p.durationMinutes} minutes total): ${bp.strategy.overview || 'Open to build rapport, spend the core probing real examples, then close and invite questions.'}${phasePlan ? ` Plan: ${phasePlan}.` : ''} Manage your time so you cover the key areas and leave a moment to wrap up. You may receive system notes about elapsed time during the interview — silently obey them when planning your remaining questions.`,
 
@@ -227,7 +235,7 @@ export function composeMasterBrief(p: ComposeParams): string {
 
   return `# Interviewer brief — ${p.personaName}, ${p.personaRole}
 
-**Role:** ${p.role || 'target role'} · **Type:** ${p.typeLabel} · **Language:** ${LANGUAGE_NAMES[normalizeLocale(p.language)].en} · **Duration:** ${p.durationMinutes}m · **Difficulty:** ${c.difficulty}/5 · **Tone:** ${c.tone}
+**Role:** ${p.role || 'target role'} · **Type:** ${p.typeLabel}${p.domainLabel ? ` · **Domain lens:** ${p.domainLabel}` : ''} · **Language:** ${LANGUAGE_NAMES[normalizeLocale(p.language)].en} · **Duration:** ${p.durationMinutes}m · **Difficulty:** ${c.difficulty}/5 · **Tone:** ${c.tone}
 
 ## Role requirements
 ${bp.requirements.roleSummary}

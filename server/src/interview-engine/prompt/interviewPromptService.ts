@@ -13,6 +13,7 @@ import { logger } from '../../services/LoggerService.js';
 import { searchJobRequirements, formatWebEvidence } from '../webSearch.js';
 import { getArchetype } from '../catalog/interviewArchetypes.js';
 import { getFormat } from '../catalog/interviewFormats.js';
+import { resolveDomainExpert, type DomainExpertPlaybook } from '../catalog/domainExperts.js';
 import { interviewBlueprintAgent, inferRoleFromJd, type InterviewBlueprint } from './InterviewBlueprintAgent.js';
 import {
   composeVoiceSystemPrompt,
@@ -52,6 +53,10 @@ export interface PromptGenerationInput {
   resumeContext?: string;
   /** Pasted job description — AUTHORITATIVE for requirements when present. */
   jdText?: string;
+  /** Explicit domain-expert key (law/finance/hardware/…). When absent the
+   *  domain is classified from role + JD; unclassifiable roles get no domain
+   *  lens (pre-domain-layer behavior). */
+  domainKey?: string;
   questionCount?: number;
   requestId?: string;
   signal?: AbortSignal;
@@ -70,8 +75,14 @@ export const JOB_BOARD_DOMAINS = [
 
 /** Blueprint + provenance: the heuristic fallback is flagged so the composer
  *  never speaks its hardcoded-English seed questions verbatim in a non-English
- *  session (the persisted blueprint keeps the flag for forensics). */
-export type GeneratedBlueprint = InterviewBlueprint & { isFallback?: boolean };
+ *  session (the persisted blueprint keeps the flag for forensics). The resolved
+ *  domain rides INSIDE the blueprint JSON so it persists on the session row
+ *  with zero schema change and the evaluation stage can grade through the same
+ *  domain lens the interview was designed with. */
+export type GeneratedBlueprint = InterviewBlueprint & {
+  isFallback?: boolean;
+  domain?: { key: string; label: string };
+};
 
 export interface PromptGenerationResult {
   systemPrompt: string;
@@ -147,11 +158,17 @@ export class InterviewPromptService {
     const startedAt = Date.now();
     const { requestId, signal } = input;
 
+    // 0) Domain expert (deterministic classify from role + JD, or explicit key).
+    //    Resolved ONCE here so question design, the live voice prompt, and the
+    //    persisted blueprint all carry the same domain lens.
+    const domain = resolveDomainExpert(input.domainKey, input.role, input.jdText);
+
     // 1) Market research (best-effort; JD-aware — see researchMarket).
     const { webEvidence, webSources } = await this.researchMarket(input);
 
     // 2) Blueprint (one structured agent call), heuristic fallback on throw.
-    const blueprint = await this.runBlueprint(input, webEvidence);
+    const blueprint = await this.runBlueprint(input, webEvidence, domain);
+    if (domain) blueprint.domain = { key: domain.key, label: domain.labelEn };
 
     // 3) Deterministic compose.
     const composeParams: ComposeParams = {
@@ -168,6 +185,8 @@ export class InterviewPromptService {
       candidateName: input.candidateName,
       resumeContext: input.resumeContext,
       archetypeVoiceDirective: getArchetype(input.archetype).voiceDirective,
+      domainVoiceDirective: domain?.voiceDirective,
+      domainLabel: domain?.labelEn,
     };
     const systemPrompt = composeVoiceSystemPrompt(composeParams);
     const openingInstruction = composeOpeningInstruction(composeParams);
@@ -180,6 +199,7 @@ export class InterviewPromptService {
       role: input.role,
       typeLabel: input.typeLabel,
       language: input.language,
+      domain: domain?.key ?? 'general',
       durationMinutes: input.durationMinutes,
       questionCount: blueprint.questions.length,
       webSourceCount: webSources.length,
@@ -202,16 +222,27 @@ export class InterviewPromptService {
     webSources: Array<{ title: string; url: string }>;
     groundedOn: 'jd' | 'market' | 'role';
     inferredRole: string;
+    domain: { key: string; label: string } | null;
   }> {
+    // Same domain resolution as generate() so the preview's questions come from
+    // the same expert lens the launched session will use.
+    const domain = resolveDomainExpert(input.domainKey, input.role, input.jdText);
     const { webEvidence, webSources } = await this.researchMarket(input);
-    const blueprint = await this.runBlueprint(input, webEvidence);
+    const blueprint = await this.runBlueprint(input, webEvidence, domain);
     const groundedOn: 'jd' | 'market' | 'role' = input.jdText?.trim()
       ? 'jd'
       : webSources.length
         ? 'market'
         : 'role';
     const inferredRole = (input.role ?? '').trim() || inferRoleFromJd(input.jdText ?? '');
-    return { requirements: blueprint.requirements, questions: blueprint.questions, webSources, groundedOn, inferredRole };
+    return {
+      requirements: blueprint.requirements,
+      questions: blueprint.questions,
+      webSources,
+      groundedOn,
+      inferredRole,
+      domain: domain ? { key: domain.key, label: domain.labelEn } : null,
+    };
   }
 
   // ─── Shared stages ────────────────────────────────────────────────────────
@@ -249,7 +280,11 @@ export class InterviewPromptService {
   /** Stage 2: one structured blueprint call; heuristic fallback on any throw.
    *  Only the fallback path carries `isFallback` — agent blueprints are
    *  already generated in the session language. */
-  private async runBlueprint(input: PromptGenerationInput, webEvidence: string): Promise<GeneratedBlueprint> {
+  private async runBlueprint(
+    input: PromptGenerationInput,
+    webEvidence: string,
+    domain: DomainExpertPlaybook | null,
+  ): Promise<GeneratedBlueprint> {
     try {
       return await interviewBlueprintAgent.run(
         {
@@ -261,6 +296,8 @@ export class InterviewPromptService {
           personaStyle: input.personaStyle,
           archetypeDirective: getArchetype(input.archetype).blueprintDirective,
           typeFormatDirective: getFormat(input.typeId)?.blueprintDirective,
+          domainDirective: domain?.blueprintDirective,
+          domainDeepDiveTopics: domain?.deepDiveTopics,
           difficultyDirective: `Difficulty ${input.characteristics.difficulty}/5.`,
           pacingDirective: `Pacing ${input.characteristics.pacing}.`,
           mustCoverTopics: input.characteristics.mustCoverTopics,
@@ -270,7 +307,11 @@ export class InterviewPromptService {
           webEvidence,
           jdText: input.jdText,
           resumeContext: input.resumeContext,
-          questionCount: input.questionCount ?? 6,
+          // Scale the plan with the clock: ~1 question per 5 minutes, clamped to
+          // the blueprint agent's 4..10 band. A 15-min screen plans 4; a 60-min
+          // deep dive plans 10 instead of leaving the live LLM to improvise
+          // beyond a fixed 6-question seed.
+          questionCount: input.questionCount ?? Math.max(4, Math.min(10, Math.round(input.durationMinutes / 5))),
         },
         { requestId: input.requestId, locale: input.language, signal: input.signal },
       );

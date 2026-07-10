@@ -8,6 +8,7 @@
 import { interviewSessionService } from '../sessions/InterviewSessionService.js';
 import { findPersona } from '../catalog/interviewCatalog.js';
 import type { InterviewArchetype } from '../catalog/interviewArchetypes.js';
+import { getDomainExpert } from '../catalog/domainExperts.js';
 import { interviewCoachAgent, type CoachMode, type CoachTip } from './InterviewCoachAgent.js';
 
 /** What the coach should push the candidate toward, per archetype. One line each;
@@ -56,6 +57,12 @@ export const interviewCoachService = {
       const archetype = (persona?.archetype ?? 'behavioral') as InterviewArchetype;
       const archetypeFocus = COACH_DIRECTIVES[archetype] ?? COACH_DIRECTIVES.behavioral;
 
+      // Domain lens: the blueprint JSON carries the domain resolved at create
+      // time (see interviewPromptService) — the coach's field context uses the
+      // expert's summary so nudges speak the candidate's professional language.
+      const bp = (session.blueprint ?? {}) as { domain?: { key?: unknown } };
+      const domainExpert = getDomainExpert(typeof bp.domain?.key === 'string' ? bp.domain.key : null);
+
       const tip = await interviewCoachAgent.run(
         {
           mode: req.mode,
@@ -65,6 +72,7 @@ export const interviewCoachService = {
           personaName: persona?.name ?? 'the interviewer',
           personaRole: persona?.role ?? '',
           archetypeFocus,
+          domainFocus: domainExpert ? `${domainExpert.labelEn}: ${domainExpert.summary}` : undefined,
           language: session.language || 'en',
         },
         { requestId: req.requestId, signal: req.signal },

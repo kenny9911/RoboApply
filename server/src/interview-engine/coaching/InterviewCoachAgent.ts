@@ -38,6 +38,10 @@ export interface CoachAgentInput {
   personaRole: string;
   /** One line describing what THIS archetype's coach should push toward. */
   archetypeFocus: string;
+  /** Optional domain-expert note — what authentic evidence looks like in the
+   *  candidate's field (from domainExperts.ts), so a finance nudge says
+   *  "name the multiple" while a nursing nudge says "lead with patient safety". */
+  domainFocus?: string;
   /** BCP-47 interview language — the tip MUST be written in this language. */
   language: string;
 }
@@ -97,6 +101,7 @@ Honor the COACH FOCUS — it tells you what this interviewer most rewards.`;
       `ROLE: ${input.role || 'the role'}`,
       `INTERVIEWER: ${input.personaName}${input.personaRole ? ` — ${input.personaRole}` : ''}`,
       `COACH FOCUS: ${input.archetypeFocus}`,
+      ...(input.domainFocus ? [`FIELD CONTEXT (what authentic evidence looks like in this field): ${input.domainFocus.slice(0, 500)}`] : []),
       `CURRENT QUESTION: ${input.question || '(the interviewer is opening the conversation)'}`,
     ];
     if (input.mode === 'nudge') {

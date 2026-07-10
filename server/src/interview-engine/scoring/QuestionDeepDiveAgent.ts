@@ -123,7 +123,7 @@ Write all human-facing text in the interview language as instructed at the very 
     );
     if (input.evaluationLens) {
       parts.push(
-        `## Interviewer archetype: ${clip(input.archetypeLabel, 60) || 'standard'}\nJudge each answer through this interviewer's lens — what THIS interviewer was probing for and rewards:\n${clip(input.evaluationLens, 1000)}`,
+        `## Interviewer archetype: ${clip(input.archetypeLabel, 60) || 'standard'}\nJudge each answer through this interviewer's lens — what THIS interviewer was probing for and rewards:\n${clip(input.evaluationLens, 2400)}`,
       );
     }
 

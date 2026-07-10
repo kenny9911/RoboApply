@@ -29,6 +29,7 @@ import { questionDeepDiveAgent } from './QuestionDeepDiveAgent.js';
 import { recommendationsAgent } from './RecommendationsAgent.js';
 import { findPersona } from '../catalog/interviewCatalog.js';
 import { getArchetype } from '../catalog/interviewArchetypes.js';
+import { getDomainExpert } from '../catalog/domainExperts.js';
 
 export interface EvaluationResult {
   richReport: RichInterviewReport;
@@ -83,9 +84,14 @@ function extractBlueprint(session: InterviewSession): {
   questions: BlueprintQuestion[];
   requirementsSummary: string;
   focusAreas: string[];
+  domainKey: string | null;
 } {
   const bp = (session.blueprint ?? {}) as Record<string, unknown>;
   const questions = Array.isArray(bp.questions) ? (bp.questions as BlueprintQuestion[]) : [];
+  // The domain lens rides inside the blueprint JSON (written at create time by
+  // interviewPromptService) — read it back so grading matches question design.
+  const domainRaw = (bp.domain ?? null) as { key?: unknown } | null;
+  const domainKey = domainRaw && typeof domainRaw.key === 'string' ? domainRaw.key : null;
 
   const req = (bp.requirements ?? {}) as Record<string, unknown>;
   const reqBits: string[] = [];
@@ -101,7 +107,7 @@ function extractBlueprint(session: InterviewSession): {
     ? (strat.focusAreas.filter((s) => typeof s === 'string') as string[])
     : [];
 
-  return { questions, requirementsSummary, focusAreas };
+  return { questions, requirementsSummary, focusAreas, domainKey };
 }
 
 /** NEVER THROWS. */
@@ -116,14 +122,20 @@ export async function runInterviewEvaluation(
   const candidateName = session.candidateName ?? '';
   const role = session.role ?? '';
   const interviewType = session.interviewType ?? 'behavioral';
-  const { questions, requirementsSummary, focusAreas } = extractBlueprint(session);
+  const { questions, requirementsSummary, focusAreas, domainKey } = extractBlueprint(session);
 
   // Resolve the interviewer archetype from the persona so the report grades and
   // frames feedback through the SAME lens the interview was conducted in (e.g. a
   // 'depth' interview penalizes high-level answers; a 'potential' one grades
   // reasoning quality over correctness). Defaults safely when persona is unknown.
   const playbook = getArchetype(findPersona(session.personaId ?? '')?.archetype);
-  const evaluationLens = playbook.evaluationLens;
+  // Domain lens: the same field-expert playbook that shaped the questions also
+  // shapes the grading — appended so the archetype lens keeps precedence on
+  // style while the domain lens adds field-authenticity judgment.
+  const domainExpert = getDomainExpert(domainKey);
+  const evaluationLens = domainExpert
+    ? `${playbook.evaluationLens}\n\nDomain lens (${domainExpert.labelEn}): ${domainExpert.evaluationLens}`
+    : playbook.evaluationLens;
   const archetypeLabel = playbook.labelEn;
   const primaryDimensions = playbook.primaryDimensions;
 
@@ -200,6 +212,23 @@ export async function runInterviewEvaluation(
 
   // Re-assert sequential questionIndex (defensive — parseOutput already assigns).
   questionAnalysis.forEach((q, i) => { q.questionIndex = i; });
+
+  // Archetype-weighted headline: the agent's parse-time reconcile guards the
+  // overall against the EQUAL-weight breakdown mean, which silently neutralizes
+  // the archetype's primaryDimensions (a depth interview should weight
+  // specificity). Recompute the headline here — primary dimensions count
+  // double — so the lens the interview was conducted in actually moves the
+  // number. Per-dimension values (the LLM's judgment) are untouched.
+  if (holistic.breakdown.length === DIMENSION_KEYS.length && primaryDimensions.length) {
+    let weightSum = 0;
+    let acc = 0;
+    for (const b of holistic.breakdown) {
+      const w = primaryDimensions.includes(b.key) ? 2 : 1;
+      weightSum += w;
+      acc += b.value * w;
+    }
+    if (weightSum > 0) holistic.overall = Math.round(acc / weightSum);
+  }
 
   // ── Phase 2: concrete recommendations, grounded in weak/missed questions ──
   const weakOrMissed = questionAnalysis.filter((q) => q.missed || q.score < 60);

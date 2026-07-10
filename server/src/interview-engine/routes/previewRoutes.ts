@@ -8,7 +8,7 @@
 // posture and degrades to a sensible role-based brief if everything fails.
 //
 //   POST /requirements/preview   { role?, jdText?, interviewType?, personaId?, language? }
-//        → { requirements, webSources, sampleQuestions, inferredRole?, groundedOn }
+//        → { requirements, webSources, sampleQuestions, inferredRole?, groundedOn, domain }
 //
 // NOT mounted on the external /v1 (X-API-Key) surface — internal UI only.
 
@@ -56,6 +56,9 @@ router.post('/requirements/preview', requireAuth, async (req: Request, res: Resp
       sampleQuestions: result.questions.slice(0, 3).map((q) => q.q),
       inferredRole: result.inferredRole || undefined,
       groundedOn: result.groundedOn,
+      // Domain-expert lens the session will be designed and graded with
+      // (null ⇒ generic). Lets the UI show "Legal expert panel joined".
+      domain: result.domain,
     });
   } catch (err) {
     return handleEngineError(res, 'preview', err, { userId: req.user?.id });

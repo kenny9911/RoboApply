@@ -7,6 +7,7 @@
 
 import type { InterviewArchetype } from './interviewArchetypes.js';
 import { getArchetypeCatalog } from './interviewArchetypes.js';
+import { getDomainCatalog } from './domainExperts.js';
 import { formatsAsTypes } from './interviewFormats.js';
 
 export interface InterviewPersona {
@@ -77,5 +78,5 @@ export const DEFAULT_PERSONA: InterviewPersona =
 export const DEFAULT_TYPE: InterviewTypeDef = findType('behavioral') ?? INTERVIEW_TYPES[0];
 
 export function getCatalog() {
-  return { personas: INTERVIEW_PERSONAS, types: INTERVIEW_TYPES, archetypes: getArchetypeCatalog() };
+  return { personas: INTERVIEW_PERSONAS, types: INTERVIEW_TYPES, archetypes: getArchetypeCatalog(), domains: getDomainCatalog() };
 }

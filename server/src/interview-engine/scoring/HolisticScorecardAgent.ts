@@ -133,7 +133,7 @@ Rules:
     if (input.evaluationLens) {
       const dims = input.primaryDimensions?.length ? ` Weight these dimensions most heavily: ${input.primaryDimensions.join(', ')}.` : '';
       parts.push(
-        `## Interviewer archetype: ${clip(input.archetypeLabel, 60) || 'standard'}\nThis interview was conducted in a specific style — grade and frame ALL feedback through this lens:\n${clip(input.evaluationLens, 1000)}${dims}`,
+        `## Interviewer archetype: ${clip(input.archetypeLabel, 60) || 'standard'}\nThis interview was conducted in a specific style — grade and frame ALL feedback through this lens:\n${clip(input.evaluationLens, 2400)}${dims}`,
       );
     }
     if (input.requirementsSummary) parts.push(`## Role requirements (for role-fit)\n${clip(input.requirementsSummary, 1400)}`);

@@ -67,6 +67,11 @@ export interface BlueprintAgentInput {
   archetypeDirective?: string;
   /** The interview FORMAT's blueprintDirective — the STRUCTURE of the exercise (WHAT). */
   typeFormatDirective?: string;
+  /** The DOMAIN expert's blueprintDirective — the SUBSTANCE of the field
+   *  (law/finance/hardware/…), third orthogonal dimension beside archetype+format. */
+  domainDirective?: string;
+  /** The domain expert's sub-areas worth probing (threads into the brief). */
+  domainDeepDiveTopics?: string[];
   difficultyDirective: string;
   pacingDirective: string;
   mustCoverTopics: string[];
@@ -127,6 +132,7 @@ Rules:
 - Phases' minutes must sum to roughly the total duration.
 - Questions must be specific to the interview TYPE and the role, ordered as they would actually be asked, matching the persona's voice and difficulty.
 - The Interview FORMAT block (when present) and the Interviewing approach (archetype) block are ORTHOGONAL and BOTH binding: the FORMAT dictates the exercise STRUCTURE / deliverable / how it unfolds (a live role-play's turns, a take-home defense, a clinical scenario, a financial model build, a portfolio walkthrough), while the archetype dictates HOW the interviewer probes and grades. Every question must satisfy BOTH — the correct format/structure AND the archetype's probing style.
+- The Domain expert brief (when present) is a THIRD orthogonal, binding dimension: it dictates the SUBSTANCE — the field's real competencies, terminology, scenario ingredients, and what authentic evidence looks like. Ground every question, idealSignal, and probeIfWeak in that domain reality; never fall back to generic questions when a domain brief is provided.
 - adaptationRules make the interview adaptive (probe weak answers, raise the bar on strong ones).
 - Keep every string concise. Output ONLY the JSON object.`;
   }
@@ -147,6 +153,12 @@ Rules:
     if (input.typeFormatDirective) {
       parts.push(
         `## Interview format (defines the STRUCTURE of the exercise — design the questions to FIT this format)\n${clip(input.typeFormatDirective, 1000)}`,
+      );
+    }
+    if (input.domainDirective) {
+      const topics = (input.domainDeepDiveTopics ?? []).filter(Boolean).slice(0, 9);
+      parts.push(
+        `## Domain expert brief (defines the SUBSTANCE of the field — ground every question in this domain's reality)\n${clip(input.domainDirective, 1400)}${topics.length ? `\nDomain sub-areas worth probing: ${topics.join('; ')}.` : ''}`,
       );
     }
     if (input.focusAreas.length) parts.push(`## Focus areas (weight these)\n${input.focusAreas.map((f) => `- ${f}`).join('\n')}`);

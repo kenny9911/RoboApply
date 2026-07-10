@@ -104,7 +104,7 @@ Write all prose in the interview language as instructed at the very top of this 
     );
     if (input.evaluationLens) {
       parts.push(
-        `## Interviewer archetype: ${clip(input.archetypeLabel, 60) || 'standard'}\nThis interview tested a specific dimension — make the action plan target exactly what THIS interviewer rewards and penalizes:\n${clip(input.evaluationLens, 1000)}`,
+        `## Interviewer archetype: ${clip(input.archetypeLabel, 60) || 'standard'}\nThis interview tested a specific dimension — make the action plan target exactly what THIS interviewer rewards and penalizes:\n${clip(input.evaluationLens, 2400)}`,
       );
     }
 
