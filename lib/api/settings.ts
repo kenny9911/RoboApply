@@ -43,13 +43,6 @@ export function getBillingPortal() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Account
-// ---------------------------------------------------------------------------
-
-export function deleteAccount(input: { confirmEmail: string }) {
-  return roboApi.post<{ scheduled: true }>(
-    '/api/v1/roboapply/settings/account/delete',
-    input,
-  );
-}
+// Account deletion lives in lib/api/account.ts (accountApi.deleteAccount →
+// /api/v1/roboapply/account/delete), which the account page uses. The server
+// also keeps /settings/account/delete wired to the same flow for old clients.

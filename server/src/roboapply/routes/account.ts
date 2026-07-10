@@ -260,8 +260,7 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
     // (SeekerAccountPurgeService, cron /api/v1/cron/account-purge) performs
     // the hard purge after the retention window: R2 interview artifacts +
     // resume originals first, then the User row (Prisma cascades).
-    await prisma.seekerProfile.updateMany({ where: { userId }, data: { deletedAt: new Date() } });
-    await seekerAuthService.revokeAllSessions(userId);
+    await seekerAuthService.softDeleteAccount(userId);
     res.clearCookie(SESSION_COOKIE_NAME);
     logger.warn('RA_ACCOUNT', 'account soft-deleted (GDPR)', { userId, email: userEmail }, req.requestId);
     return res.json({ success: true, data: { ok: true, deactivated: true } });

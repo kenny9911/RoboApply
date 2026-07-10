@@ -4059,7 +4059,11 @@ model SeekerProfile {
   /// Defaults applied at read-time by routes/profile.ts when null.
   notificationPreferences Json?
 
-  /// Soft-delete marker. Hard-delete runs via SeekerDeletionService after 7d.
+  /// Soft-delete marker (stamped by the account-delete routes via
+  /// SeekerAuthService.softDeleteAccount; makes login throw). Hard-delete runs
+  /// via the nightly SeekerAccountPurgeService sweep once the retention window
+  /// (default 30d, ACCOUNT_PURGE_RETENTION_DAYS) elapses: R2 artifacts first,
+  /// then the User row (cascade).
   deletedAt              DateTime?
   deletionConfirmationId String?   @unique
   deletionEmailSentAt    DateTime?

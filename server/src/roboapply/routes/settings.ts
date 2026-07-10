@@ -14,13 +14,16 @@
 //                                   Settings tier/billing card.
 //   POST  /billing/portal         — Stripe customer portal redirect URL
 //                                   (V1: returns 503 when not configured).
-//   POST  /account/delete         — GDPR delete confirm flow. V1 stub
-//                                   returns 501 not_implemented so the
-//                                   modal can surface a "coming soon" copy.
+//   POST  /account/delete         — GDPR delete confirm flow: soft-disable +
+//                                   session revoke (same shared flow as
+//                                   account.ts POST /delete); the nightly
+//                                   account-purge cron hard-purges later.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireSeekerProfile } from '../engine/middleware/seekerAuth.js';
+import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
+import { seekerAuthService } from '../engine/services/SeekerAuthService.js';
 import {
   updateSettings,
   getMissionForUser,
@@ -286,20 +289,30 @@ router.post(
         error: 'confirmEmail must match the signed-in account email',
       });
     }
-    // V1 stub: log intent + return 501. Actual purge flow (cron sweep +
-    // storage cleanup) lands in V1.1. Surfacing 501 lets the modal show
-    // a "coming soon" copy rather than pretending the request succeeded.
-    logger.warn(
-      'ROBOAPPLY_SETTINGS',
-      'GDPR delete requested (V1 stub)',
-      { userId: req.user!.id, email: userEmail },
-      req.requestId,
-    );
-    return res.status(501).json({
-      success: false,
-      code: 'not_implemented',
-      error: 'GDPR delete flow ships in V1.1. Request logged.',
-    });
+    // Same shared soft-delete as account.ts POST /delete: stamp
+    // SeekerProfile.deletedAt (login then throws SeekerAccountDeletedError)
+    // and revoke every session. The nightly account-purge sweep
+    // (SeekerAccountPurgeService, cron /api/v1/cron/account-purge) hard-purges
+    // R2 artifacts + the User row after the retention window.
+    try {
+      await seekerAuthService.softDeleteAccount(req.user!.id);
+      res.clearCookie(SESSION_COOKIE_NAME);
+      logger.warn(
+        'ROBOAPPLY_SETTINGS',
+        'account soft-deleted (GDPR)',
+        { userId: req.user!.id, email: userEmail },
+        req.requestId,
+      );
+      return res.json({ success: true, data: { ok: true, deactivated: true } });
+    } catch (err) {
+      logger.error(
+        'ROBOAPPLY_SETTINGS',
+        'POST /account/delete failed',
+        { error: err instanceof Error ? err.message : String(err) },
+        req.requestId,
+      );
+      return res.status(500).json({ success: false, code: 'delete_failed', error: 'Failed to delete account' });
+    }
   },
 );
 

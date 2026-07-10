@@ -328,11 +328,30 @@ async function revokeAllSessions(userId: string): Promise<number> {
   return res.count;
 }
 
+/**
+ * GDPR soft-delete, shared by both account-delete routes (roboapply/routes/
+ * account.ts and settings.ts): stamp SeekerProfile.deletedAt — login then
+ * throws SeekerAccountDeletedError — and revoke every session. The nightly
+ * account-purge sweep (SeekerAccountPurgeService) hard-deletes storage
+ * artifacts + the User row once the retention window elapses. The deletedAt
+ * stamp is first-write-wins (`deletedAt: null` guard) so a repeat call can
+ * never reset the retention clock; callers treat repeats as success.
+ */
+async function softDeleteAccount(userId: string): Promise<{ profilesMarked: number; sessionsRevoked: number }> {
+  const { count: profilesMarked } = await prisma.seekerProfile.updateMany({
+    where: { userId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  const sessionsRevoked = await revokeAllSessions(userId);
+  return { profilesMarked, sessionsRevoked };
+}
+
 export const seekerAuthService = {
   signup,
   login,
   changePassword,
   revokeAllSessions,
+  softDeleteAccount,
   normalizeLocale,
 };
 
