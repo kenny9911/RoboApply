@@ -58,8 +58,8 @@
   color: var(--text);
   box-shadow: inset 2px 0 0 var(--accent-text);
 }
-.pref-nav-item.danger { color: #FF6B6B; margin-top: 8px; }
-.pref-nav-item.danger:hover { background: rgba(255, 107, 107, 0.08); }
+.pref-nav-item.danger { color: var(--danger); margin-top: 8px; }
+.pref-nav-item.danger:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .pref-nav-ic {
   font-family: var(--mono);
   font-size: 13px;
@@ -69,7 +69,7 @@
   color: var(--muted);
 }
 .pref-nav-item.active .pref-nav-ic { color: var(--accent-text); }
-.pref-nav-item.danger .pref-nav-ic { color: #FF6B6B; }
+.pref-nav-item.danger .pref-nav-ic { color: var(--danger); }
 
 .pref-rail-foot {
   margin-top: auto;
@@ -230,8 +230,7 @@
 }
 .pref-toggle.on {
   background: var(--accent);
-  border-color: var(--accent-text);
-  box-shadow: 0 0 12px var(--accent-glow);
+  border-color: var(--accent-text);   /* declutter: glow dropped — the fill flips */
 }
 .pref-toggle-thumb {
   position: absolute;
@@ -353,7 +352,6 @@
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
-  box-shadow: 0 2px 8px -2px var(--accent-glow);
 }
 
 /* Slider */
@@ -377,7 +375,6 @@
   border-radius: 50%;
   background: white;
   border: 2px solid var(--accent-text);
-  box-shadow: 0 0 10px var(--accent-glow);
   cursor: grab;
 }
 .pref-slider input[type="range"]::-moz-range-thumb {
@@ -385,7 +382,6 @@
   border-radius: 50%;
   background: white;
   border: 2px solid var(--accent-text);
-  box-shadow: 0 0 10px var(--accent-glow);
   cursor: grab;
 }
 .pref-slider-val {
@@ -481,7 +477,6 @@
 .pref-check.on .pref-check-box {
   background: var(--accent);
   border-color: var(--accent-text);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .pref-check-body { min-width: 0; }
 .pref-check-label {
@@ -517,7 +512,7 @@
   font-size: 24px;
   display: grid; place-items: center;
   font-family: var(--mono);
-  box-shadow: 0 8px 28px -8px var(--accent-glow);
+  box-shadow: 0 6px 18px -12px var(--accent-glow);   /* declutter: softened */
 }
 
 .pref-resume-picker {
@@ -540,12 +535,12 @@
 }
 .pref-resume-mini {
   height: 110px;
-  background: #F2EFE4;
+  background: var(--paper-bg-2);
   border-radius: 6px;
   padding: 12px;
   margin-bottom: 10px;
   font-family: 'Times New Roman', serif;
-  color: #1B1815;
+  color: var(--paper-ink);
   overflow: hidden;
 }
 .pref-resume-name {
@@ -670,8 +665,7 @@
 .pref-mode:hover { border-color: var(--text-2); }
 .pref-mode.on {
   border-color: var(--accent-text);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--accent-soft);   /* declutter: halo dropped — border + fill select */
 }
 .pref-mode-check {
   position: absolute; top: 10px; right: 10px;
@@ -721,7 +715,6 @@
   top: 13px; height: 6px;
   background: linear-gradient(90deg, var(--accent), var(--violet));
   border-radius: 99px;
-  box-shadow: 0 0 10px var(--accent-glow);
 }
 .pref-salary-track input[type="range"] {
   appearance: none;
@@ -739,7 +732,6 @@
   border: 2px solid var(--accent-text);
   cursor: grab;
   pointer-events: auto;
-  box-shadow: 0 0 12px var(--accent-glow);
 }
 .pref-salary-track input[type="range"]::-moz-range-thumb {
   width: 20px; height: 20px;
@@ -748,7 +740,6 @@
   border: 2px solid var(--accent-text);
   cursor: grab;
   pointer-events: auto;
-  box-shadow: 0 0 12px var(--accent-glow);
 }
 .pref-salary-vals {
   display: flex; align-items: center; gap: 10px;
@@ -872,8 +863,7 @@
 .pref-aggr:hover { border-color: var(--text-2); transform: translateY(-1px); }
 .pref-aggr.on {
   border-color: var(--accent-text);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--accent-soft);   /* declutter: halo dropped — border + fill select */
 }
 .pref-aggr-ic {
   display: inline-block;
@@ -1079,7 +1069,6 @@
 .pref-usage-bar .fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--violet));
-  box-shadow: 0 0 6px var(--accent-glow);
 }
 
 .pref-plans {
@@ -1167,8 +1156,8 @@
   border-radius: 12px;
   padding: 18px 22px;
 }
-.pref-danger.warn { border-color: rgba(255, 181, 71, 0.3); }
-.pref-danger.danger { border-color: rgba(255, 107, 107, 0.3); background: rgba(255, 107, 107, 0.04); }
+.pref-danger.warn { border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+.pref-danger.danger { border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: color-mix(in srgb, var(--danger) 4%, transparent); }
 .pref-danger-title {
   font-size: 15px;
   font-weight: 700;
@@ -1182,14 +1171,14 @@
   max-width: 540px;
 }
 .pref-btn-danger {
-  background: rgba(255, 107, 107, 0.1);
-  border-color: rgba(255, 107, 107, 0.3);
-  color: #FF6B6B;
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--danger);
 }
 .pref-btn-danger:hover {
-  background: rgba(255, 107, 107, 0.18);
-  border-color: #FF6B6B;
-  color: #FF6B6B;
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1205,7 +1194,7 @@
   border-radius: 14px;
   padding: 12px 18px;
   display: flex; align-items: center; gap: 24px;
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 18px 50px -16px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 12px 32px -20px var(--accent-glow);   /* declutter: softened */
   z-index: 60;
   animation: slide-up 0.25s ease;
 }
@@ -1244,5 +1233,16 @@
   .pref-mood-stats { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 18px; }
   .pref-notif-head, .pref-notif-row {
     grid-template-columns: 1fr 60px 60px 60px;
+  }
+}
+
+/* Reduced-motion: stop the remaining pref loops (status/save-bar blinks stay
+ * semantic in the default experience but must respect the OS preference; the
+ * mood orb is decorative). One-shot entrances (slide-up) are left alone. */
+@media (prefers-reduced-motion: reduce) {
+  .pref-status-dot.on,
+  .pref-mood-orb,
+  .pref-savebar-dot {
+    animation: none !important;
   }
 }

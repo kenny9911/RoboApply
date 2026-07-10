@@ -34,11 +34,14 @@ const THEMES: { id: ThemeKey; label: string; description: string }[] = [
   { id: 'warm',  label: 'Warm',  description: 'Anthropic clay on cream. Soft and editorial.' },
 ];
 
+// Swatch hexes MUST match the canonical dark accent tokens in app/globals.css
+// (:root --lime/--violet/--cyan/--pink) — literals are required here because
+// they're string-concatenated with an alpha suffix (`${primary}1a`) below.
 const ACCENTS: { id: AccentKey; label: string; primary: string; secondary: string }[] = [
-  { id: 'lime',   label: 'Electric Lime',   primary: '#c6ff3a', secondary: '#b691ff' },
-  { id: 'violet', label: 'Plasma Violet',   primary: '#b691ff', secondary: '#67e8f9' },
-  { id: 'cyan',   label: 'Liquid Cyan',     primary: '#67e8f9', secondary: '#c6ff3a' },
-  { id: 'pink',   label: 'Hot Pink',        primary: '#ff7ad9', secondary: '#b691ff' },
+  { id: 'lime',   label: 'Electric Lime',   primary: '#C9FF3B', secondary: '#8B5BFF' },
+  { id: 'violet', label: 'Plasma Violet',   primary: '#8B5BFF', secondary: '#4ED8FF' },
+  { id: 'cyan',   label: 'Liquid Cyan',     primary: '#4ED8FF', secondary: '#C9FF3B' },
+  { id: 'pink',   label: 'Hot Pink',        primary: '#FF6B9D', secondary: '#8B5BFF' },
 ];
 
 const DENSITIES: { id: DensityKey; label: string; description: string }[] = [

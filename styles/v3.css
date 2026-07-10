@@ -60,9 +60,8 @@
     linear-gradient(135deg, var(--accent) 0%, var(--violet) 100%);
   display: grid; place-items: center;
   position: relative;
-  box-shadow:
-    0 0 0 1px var(--rule),
-    0 6px 22px -6px var(--accent-glow);
+  /* declutter: glow dropped — static chrome keeps only the hairline ring */
+  box-shadow: 0 0 0 1px var(--rule);
 }
 .brand-mark::before {
   content: '';
@@ -140,7 +139,6 @@
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
-  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* ─── AI ORB CARD (the agent character) ─── */
@@ -160,6 +158,7 @@
   border-radius: 50%;
   background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
   filter: blur(20px);
+  opacity: 0.5;   /* declutter: halved — the orb stays the hero, not its halo */
   pointer-events: none;
 }
 .orb-row {
@@ -325,7 +324,6 @@
   position: absolute; top: -3px; right: -3px;
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .avatar {
   width: 36px; height: 36px;
@@ -365,10 +363,10 @@
   margin-bottom: 14px;
 }
 .page-h .eyebrow .dot {
+  /* declutter: static dot — the perpetual blink + glow were decorative
+   * (semantic blinks live on REC/mic/agent-live indicators only) */
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  animation: blink 1.4s ease infinite;
 }
 .page-h h1 {
   font-family: var(--sans);
@@ -377,13 +375,23 @@
    * single line in every supported language across desktop/tablet widths.
    * The min (22px) keeps even the longest English string one-line at the
    * narrowest non-mobile width; .page-h flex-wrap drops the sub below so the
-   * title always has the full content width to itself. */
+   * title always has the full content width to itself.
+   * Wrapping is ALLOWED (was white-space: nowrap, which clipped long
+   * localized headlines between 760–1100px): the clamp above still renders
+   * current strings one-line, and text-wrap: balance keeps any overflow
+   * wrap looking intentional instead of orphaning one word.
+   * min-width: fit-content preserves the original flex behavior — the title
+   * claims its full single-line width when it fits (pushing .sub below via
+   * flex-wrap, exactly as before) and only wraps once even the full content
+   * width can't hold one line. */
   font-size: clamp(22px, 2.6vw, 40px);
   line-height: 0.96;
   letter-spacing: -0.045em;
   margin: 0;
   max-width: none;
-  white-space: nowrap;
+  min-width: fit-content;
+  white-space: normal;
+  text-wrap: balance;
 }
 .page-h h1 em {
   font-family: var(--serif);
@@ -426,12 +434,16 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   overflow: hidden;
   transition: border-color .15s;
 }
-.stat:hover { border-color: var(--rule); }
+/* real hover (was a no-op prototype leftover: var(--rule) → var(--rule)) —
+ * a quiet accent tint, matching the border-on-interaction pattern. */
+.stat:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--rule)); }
 .stat.hero {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent) 100%);
+  /* was a same-color "gradient" (accent → accent); now a real subtle ramp
+   * toward the violet companion (~22% mix) so the hero card has depth. */
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 78%, var(--violet)) 100%);
   color: var(--accent-ink);
   border-color: var(--accent);
-  box-shadow: 0 6px 26px -10px var(--accent-glow);
+  box-shadow: 0 4px 16px -12px var(--accent-glow);   /* declutter: softened */
 }
 .stat.hero .k, .stat.hero .v { color: var(--accent-ink); }
 .stat.hero .delta { color: var(--accent-ink); opacity: 0.75; }
@@ -538,9 +550,10 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .match:hover {
   border-color: var(--accent-text);
   transform: translateY(-1px);
-  box-shadow: 0 6px 30px -16px var(--accent-glow);
+  box-shadow: 0 4px 20px -16px var(--accent-glow);   /* declutter: softened */
 }
-.match.expanded { border-color: var(--accent-text); box-shadow: 0 0 0 1px var(--accent), 0 12px 40px -16px var(--accent-glow); }
+/* declutter: the 0 0 0 1px accent ring double-outlined the accent border. */
+.match.expanded { border-color: var(--accent-text); box-shadow: 0 8px 28px -18px var(--accent-glow); }
 
 .match-top {
   display: grid;
@@ -563,6 +576,12 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   border: 1px solid var(--rule);
   position: relative;
 }
+/* Company-avatar tile gradients — INTENTIONALLY literal (decision 2026-07-10,
+ * theme-declutter pass): fixed identity colors assigned per company
+ * (data-color 0–4, like app-icon colors) that must stay stable across themes.
+ * Tokenizing the start stops (--pink/--cyan/--ok/--warn/--violet) would break
+ * the gradients under light/warm, where those tokens repoint to terracotta/
+ * sage/etc. while the darker end stops have no token siblings. */
 .logo[data-color="0"] { background: linear-gradient(135deg, #FF6B9D 0%, #FF4D7E 100%); color: white; }
 .logo[data-color="1"] { background: linear-gradient(135deg, #4ED8FF 0%, #2E9BFF 100%); color: white; }
 .logo[data-color="2"] { background: linear-gradient(135deg, #4ADE80 0%, #2BB870 100%); color: white; }
@@ -613,7 +632,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .score-donut .fill {
   fill: none; stroke: var(--accent-text); stroke-width: 5;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 6px var(--accent-glow));
+  filter: drop-shadow(0 0 3px var(--accent-glow));   /* declutter: softened (one per list row) */
 }
 .score-donut .num {
   font-family: var(--sans);
@@ -767,7 +786,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   position: absolute; top: 0; left: 0; right: 0;
   height: 3px;
   background: linear-gradient(90deg, var(--accent) 0%, var(--violet) 50%, var(--cyan) 100%);
-  opacity: 0.7;
+  opacity: 0.5;   /* declutter: quieter signature stripe */
 }
 .queue-card:hover { border-color: var(--accent-text); }
 
@@ -803,13 +822,12 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   display: inline-flex; align-items: center; gap: 8px;
   letter-spacing: -0.005em;
   font-weight: 600;
-  box-shadow: 0 0 14px -4px var(--accent-glow);
 }
 .countdown .blip {
+  /* declutter: static dot (was a perpetual blink + glow); the accent border
+   * + mono timer already say "armed". */
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
-  animation: blink 1s ease infinite;
 }
 
 .draft {
@@ -871,7 +889,6 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   color: var(--accent-ink);
   display: grid; place-items: center;
   flex-shrink: 0;
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .qcheck .key { font-family: var(--mono); font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 2px; font-weight: 600; }
 .qcheck .val { color: var(--text); font-weight: 500; }
@@ -924,9 +941,10 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   background: var(--bg);
   border: 2px solid var(--rule);
 }
-.log-entry.success::before { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-.log-entry.action::before  { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
-.log-entry.violet::before  { background: var(--violet); border-color: var(--violet); box-shadow: 0 0 10px var(--violet-glow); }
+/* declutter: timeline dots keep their status color, glows dropped. */
+.log-entry.success::before { background: var(--ok); border-color: var(--ok); }
+.log-entry.action::before  { background: var(--accent); border-color: var(--accent); }
+.log-entry.violet::before  { background: var(--violet); border-color: var(--violet); }
 .log-entry.note::before    { background: var(--bg); border-color: var(--rule); }
 
 .log-time {
@@ -1071,7 +1089,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .onboard-step strong { color: var(--text); font-weight: 600; }
 .onboard-step .pip-row { display: inline-flex; gap: 4px; margin-left: 10px; vertical-align: middle; }
 .onboard-step .pip { width: 22px; height: 3px; border-radius: 2px; background: var(--rule); display: inline-block; }
-.onboard-step .pip.on { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.onboard-step .pip.on { background: var(--accent); }
 
 .onboard-main { flex: 1; display: grid; place-items: center; padding: 30px; }
 .onboard-card { max-width: 760px; width: 100%; text-align: center; }
@@ -1134,7 +1152,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   color: var(--accent-ink);
   display: grid; place-items: center;
   margin: 0 auto 16px;
-  box-shadow: 0 8px 28px -8px var(--accent-glow);
+  box-shadow: 0 6px 18px -12px var(--accent-glow);   /* declutter: softened */
 }
 .upload-zone h3 {
   font-size: 19px; font-weight: 600; margin: 0 0 6px;
@@ -1252,8 +1270,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .ai-callout {
   margin-top: 26px; padding: 18px 22px;
   background: var(--surface);
-  border: 1px solid var(--accent-text);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  border: 1px solid var(--accent-text);   /* declutter: halo ring dropped — border alone outlines */
   border-radius: 14px;
   font-size: 14px; color: var(--text);
   text-align: left;
@@ -1336,8 +1353,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .agg-options label:hover { border-color: var(--text-2); }
 .agg-options label.active {
   border-color: var(--accent-text);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--accent-soft);   /* declutter: halo dropped — border + fill select */
 }
 .agg-options label .radio {
   width: 18px; height: 18px;
@@ -1351,7 +1367,6 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .agg-options label.active .radio {
   border-color: var(--accent);
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .agg-options label.active .radio::after {
   content: '';
@@ -1373,7 +1388,6 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .progress-bar .fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--violet));
-  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* helpers */
@@ -1438,8 +1452,8 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 }
 .iv-recent-del:hover {
   color: var(--pink);
-  background: rgba(255, 107, 157, 0.1);
-  border-color: rgba(255, 107, 157, 0.3);
+  background: color-mix(in srgb, var(--pink) 10%, transparent);
+  border-color: color-mix(in srgb, var(--pink) 30%, transparent);
 }
 /* Inline variant — denser, for the compact collapsed rows. */
 .iv-recent-del--inline { width: 22px; height: 22px; }
@@ -1453,7 +1467,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   border: 1px solid var(--rule); background: transparent;
   transition: color .15s, background .15s, border-color .15s;
 }
-.iv-recent-confirm-yes { color: var(--pink); border-color: rgba(255, 107, 157, 0.4); }
+.iv-recent-confirm-yes { color: var(--pink); border-color: color-mix(in srgb, var(--pink) 40%, transparent); }
 .iv-recent-confirm-yes:hover { color: var(--bg); background: var(--pink); border-color: var(--pink); }
 .iv-recent-confirm-no { color: var(--text-2); }
 .iv-recent-confirm-no:hover { color: var(--text); border-color: var(--muted); }
@@ -1596,8 +1610,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
-  font-weight: 600;
-  box-shadow: 0 4px 16px -6px var(--accent-glow);
+  font-weight: 600;   /* declutter: glow dropped — the solid fill selects */
 }
 .iv-role-chip.more {
   background: transparent;
@@ -1834,7 +1847,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .iv-persona.active {
   border-color: var(--accent-text);
   background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 14px 40px -16px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-soft);   /* declutter: big glow dropped, halo kept */
 }
 .iv-persona.active::before {
   content: '';
@@ -1846,9 +1859,14 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   width: 52px; height: 52px;
   border-radius: 50%;
   flex-shrink: 0;
+  /* declutter: paused at rest (3–6 cards spinning forever was the single
+   * noisiest setup-page element); spins again on hover / selection. */
   animation: orb-rotate 6s linear infinite;
+  animation-play-state: paused;
   position: relative;
 }
+.iv-persona:hover .iv-persona-orb,
+.iv-persona.active .iv-persona-orb { animation-play-state: running; }
 .iv-persona-orb::before {
   content: ''; position: absolute; inset: 4px;
   border-radius: 50%; background: var(--bg);
@@ -1913,7 +1931,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   width: 11px; height: 4px; border-radius: 2px;
   background: var(--surface-3);
 }
-.iv-dpip.on { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+.iv-dpip.on { background: var(--accent); }
 .iv-persona-style {
   font-family: var(--mono);
   font-size: 10.5px;
@@ -1965,7 +1983,6 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   border-radius: 6px;
   padding: 2px 7px;
   white-space: nowrap;
-  box-shadow: 0 2px 10px -4px var(--accent-glow);
 }
 .iv-persona-rec { margin-left: 8px; }
 /* "Show all / Show fewer" toggle under the collapsed format/interviewer grids. */
@@ -2024,7 +2041,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .iv-format-card:hover { border-color: var(--text-2); transform: translateY(-1px); }
 .iv-format-card.active {
   border-color: var(--accent-text);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 14px 40px -16px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-soft);   /* declutter: big glow dropped, halo kept */
 }
 .iv-format-card.active::before {
   content: ''; position: absolute;
@@ -2038,12 +2055,12 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   display: grid; place-items: center;
   color: var(--accent-ink);
   background: var(--accent);
-  box-shadow: 0 6px 22px -6px var(--accent-glow);
+  box-shadow: 0 4px 12px -8px var(--accent-glow);   /* declutter: softened */
 }
 .iv-format-icon-voice {
   background: var(--violet);
   color: white;
-  box-shadow: 0 6px 22px -6px var(--violet-glow);
+  box-shadow: 0 4px 12px -8px var(--violet-glow);   /* declutter: softened */
 }
 .iv-format-body { flex: 1; min-width: 0; }
 .iv-format-head {
@@ -2107,7 +2124,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   gap: 24px;
   box-shadow:
     0 0 0 3px var(--accent-soft),
-    0 18px 48px -18px var(--accent-glow);
+    0 12px 32px -20px var(--accent-glow);   /* declutter: hero kept, glow softened */
   z-index: 4;
 }
 .iv-launch-summary {
@@ -2160,9 +2177,9 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .iv-live-pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 9px;
-  background: rgba(255, 80, 80, 0.14);
-  border: 1px solid #FF5050;
-  color: #FF5050;
+  background: var(--live-soft);
+  border: 1px solid var(--live);
+  color: var(--live);
   border-radius: 99px;
   font-weight: 700;
   font-size: 10.5px;
@@ -2170,8 +2187,8 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 }
 .iv-live-pill .rec {
   width: 7px; height: 7px; border-radius: 50%;
-  background: #FF5050;
-  box-shadow: 0 0 8px #FF5050;
+  background: var(--live);
+  box-shadow: 0 0 8px var(--live);
   animation: blink 1.2s ease infinite;
 }
 .iv-live-meta { color: var(--text); font-weight: 600; letter-spacing: 0; font-family: var(--sans); font-size: 12.5px; }
@@ -2369,8 +2386,8 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 }
 .iv-mic-dot {
   width: 7px; height: 7px; border-radius: 50%;
-  background: #FF5050;
-  box-shadow: 0 0 8px #FF5050;
+  background: var(--live);
+  box-shadow: 0 0 8px var(--live);
   animation: blink 1s ease infinite;
 }
 
@@ -2413,7 +2430,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   height: 32px;
   padding: 0 10px;
   margin: 0;
-  background: rgba(10, 11, 16, 0.6);
+  background: var(--overlay-dim);
   border: 0;
   border-radius: 8px;
   gap: 2px;
@@ -2450,8 +2467,8 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   box-shadow: 0 0 0 2px var(--accent-soft), 0 0 40px var(--accent-glow);
 }
 .iv-video-tile.you.speaking {
-  border-color: #FF5050;
-  box-shadow: 0 0 0 2px rgba(255, 80, 80, 0.3), 0 0 40px rgba(255, 80, 80, 0.4);
+  border-color: var(--live);
+  box-shadow: 0 0 0 2px var(--live-ring), 0 0 40px var(--live-glow);
 }
 
 .iv-vt-canvas {
@@ -2595,7 +2612,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   top: 14px; left: 14px;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 10px;
-  background: rgba(10, 11, 16, 0.72);
+  background: var(--overlay-deep);
   border: 1px solid var(--rule);
   border-radius: 99px;
   font-family: var(--mono);
@@ -2614,7 +2631,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   top: 14px; right: 14px;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 10px;
-  background: rgba(10, 11, 16, 0.72);
+  background: var(--overlay-deep);
   border: 1px solid var(--rule);
   border-radius: 99px;
   font-family: var(--mono);
@@ -2635,8 +2652,8 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   animation: blink 1.2s ease infinite;
 }
 .iv-vt-state-pill .dot.listening {
-  background: #FF5050;
-  box-shadow: 0 0 8px #FF5050;
+  background: var(--live);
+  box-shadow: 0 0 8px var(--live);
   animation: blink 1s ease infinite;
 }
 
@@ -2645,7 +2662,7 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   position: absolute;
   bottom: 14px; left: 14px;
   padding: 8px 12px;
-  background: rgba(10, 11, 16, 0.72);
+  background: var(--overlay-deep);
   border: 1px solid var(--rule);
   border-radius: 9px;
   z-index: 4;
@@ -2681,14 +2698,14 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   background: var(--accent-soft);
   border: 1px solid var(--accent-text);
   border-radius: 12px;
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 8px 24px -8px var(--accent-glow);
+  box-shadow: 0 8px 24px -12px var(--accent-glow);   /* declutter: halo dropped (fill + border outline) */
   animation: slide-in 0.3s ease;
   position: relative;
 }
 .iv-coach.careful {
   background: var(--warn-soft);
   border-color: var(--warn);
-  box-shadow: 0 0 0 3px var(--warn-soft);
+  box-shadow: none;
 }
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(-8px); }
@@ -2913,7 +2930,6 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
 .iv-bk-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--violet));
-  box-shadow: 0 0 10px var(--accent-glow);
 }
 .iv-bk-v {
   font-family: var(--mono);
@@ -2940,8 +2956,8 @@ html[lang='ja'] .page-h h1 em { letter-spacing: 0; }
   border-radius: 16px;
   padding: 22px;
 }
-.iv-results-card.good { border-color: rgba(74, 222, 128, 0.4); }
-.iv-results-card.gap  { border-color: rgba(255, 181, 71, 0.4); }
+.iv-results-card.good { border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.iv-results-card.gap  { border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .iv-results-card-head {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 16px;

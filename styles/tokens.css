@@ -21,6 +21,65 @@
 /*  the .v3-* / prototype component classes, NOT these --robo-* aliases.   */
 /* ===================================================================== */
 
+/* ─────────────────────────────────────────────────────────────────
+ * V3 SUPPLEMENTAL TOKENS (2026-07-10, theme-declutter pass)
+ *
+ * These would ideally live with the canonical tokens on :root in
+ * app/globals.css; they are defined here because globals.css is owned by a
+ * concurrent session. tokens.css is @imported first from globals.css, so
+ * these resolve globally exactly like the canonical set.
+ * ───────────────────────────────────────────────────────────────── */
+:root {
+  /* Recording / live-mic red — REC pill, hot-mic dot, "you speaking" tile
+   * ring. Used ONLY inside the always-dark .iv-live cockpit + video tiles
+   * (globals.css re-pins that stage dark in every theme), so these carry NO
+   * light/warm overrides on purpose. */
+  --live:      #FF5050;
+  --live-soft: rgba(255, 80, 80, 0.14);
+  --live-ring: rgba(255, 80, 80, 0.3);
+  --live-glow: rgba(255, 80, 80, 0.4);
+
+  /* Scrim overlays painted over video-tile content (badges / name plates /
+   * compact mic) — keyed to the dark --bg #0A0B10. Cockpit-only; constant
+   * across themes for the same reason as --live. */
+  --overlay-deep: rgba(10, 11, 16, 0.72);
+  --overlay-dim:  rgba(10, 11, 16, 0.6);
+
+  /* Semantic danger for destructive actions. components/v3/admin/*,
+   * account/security.tsx and v3-account.css already referenced
+   * var(--danger)/var(--danger-soft) WITHOUT a definition (they silently
+   * degraded to currentColor); v3-preferences.css hardcoded #FF6B6B. One
+   * token now backs all of them. Theme overrides below. */
+  --danger:      #FF6B6B;
+  --danger-soft: rgba(255, 107, 107, 0.1);
+
+  /* Resume "paper" palette — the ONE deliberately non-themed light surface
+   * (.rb-paper preview, .rb-mini / .rb-template-thumb / .pref-resume-mini
+   * thumbnails). The paper stays warm-white in every theme BY DESIGN; do not
+   * add light/warm overrides for these. */
+  --paper-bg:     #FAFAF6;   /* full paper sheet */
+  --paper-bg-2:   #F2EFE4;   /* aged-paper thumbnails */
+  --paper-ink:    #1B1815;   /* headings / primary ink */
+  --paper-body:   #3C3631;   /* body copy */
+  --paper-muted:  #847C6E;   /* meta / contact lines */
+  --paper-faint:  #B7AE9D;   /* separators */
+  --paper-rust:   #6B1C0E;   /* rust accent (titles) */
+  --paper-accent: #D14328;   /* brighter rust (mini-preview name) */
+}
+
+/* Theme-scoped values for the supplemental tokens that DO flip (danger only —
+ * live/overlay/paper are intentionally constant, see above). Mirrors the
+ * html[data-theme] scoping app/globals.css uses; values match its
+ * --robo-danger overrides (#DC2626 light / #C0392B warm, both WCAG-AA). */
+html[data-theme='light'] {
+  --danger:      #DC2626;
+  --danger-soft: rgba(220, 38, 38, 0.08);
+}
+html[data-theme='warm'] {
+  --danger:      #C0392B;
+  --danger-soft: rgba(192, 57, 43, 0.08);
+}
+
 :root {
   /* === Fonts (re-pointed: JetBrains Mono is now the mono slot) === */
   --robo-font-display: var(--sans);

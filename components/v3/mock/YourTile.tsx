@@ -190,8 +190,8 @@ export function YourTile({
         <span
           className="iv-mic-dot"
           style={{
-            background: active ? '#FF5050' : 'var(--muted)',
-            boxShadow: active ? '0 0 8px #FF5050' : 'none',
+            background: active ? 'var(--live)' : 'var(--muted)',
+            boxShadow: active ? '0 0 8px var(--live)' : 'none',
           }}
         />
         {active ? t('live.micOpenShort') : t('live.micReady')}
