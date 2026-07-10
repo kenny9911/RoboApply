@@ -31,6 +31,7 @@ import type {
   SignOutAllResponse,
   StripeRedirect,
   UpdateNameResponse,
+  WipeDataResponse,
 } from '../lib/api/account';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -129,6 +130,23 @@ export function useDeleteAccount(): UseMutationResult<
 > {
   return useMutation({
     mutationFn: (confirmEmail: string) => accountApi.deleteAccount(confirmEmail),
+  });
+}
+
+/** Clear application data only (match history / queue / activity / pipeline).
+ *  The account + résumés survive and the user stays signed in, so on success we
+ *  just invalidate every V2/V3 data cache (tracker, matches, activity, queue,
+ *  pipeline board, …) so the now-empty state repaints — no sign-out/redirect. */
+export function useWipeData(): UseMutationResult<WipeDataResponse, Error, void> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => accountApi.wipeData(),
+    onSuccess: () => {
+      // Prefix-invalidate the two RoboApply candidate namespaces — covers
+      // ['v2','tracker'|'home'], ['v3','today'|'activity'|'queue'|'pipeline'].
+      qc.invalidateQueries({ queryKey: ['v2'] });
+      qc.invalidateQueries({ queryKey: ['v3'] });
+    },
   });
 }
 

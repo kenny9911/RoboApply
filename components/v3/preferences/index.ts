@@ -4,6 +4,7 @@
 
 export { SaveBar } from './SaveBar';
 export { IntegrationCard } from './IntegrationCard';
+export { WipeDataModal } from './WipeDataModal';
 export * from './controls';
 
 export { IdentitySection } from './sections/IdentitySection';

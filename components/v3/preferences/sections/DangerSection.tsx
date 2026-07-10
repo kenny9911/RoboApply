@@ -1,18 +1,23 @@
 'use client';
 
-// §08 Danger zone — pause hunt, reset preferences to defaults, delete account.
-// "Delete my account" opens the shared DeleteAccountModal (the real flow:
-// type-your-email confirm → accountApi.deleteAccount soft-delete + nightly
-// hard-purge → sign-out → /login) — the same modal /account uses.
-// A "delete all application data" row (data-only wipe, account stays) is
-// deliberately absent: no server endpoint exists yet, and destructive buttons
-// don't ship as stubs. Pause toggles huntActive (mirrors the rail pause
-// button); Reset restores the server-canonical preferences and clears dirty
-// (handled by the parent via `onReset`).
+// §08 Danger zone — pause hunt, reset preferences to defaults, delete all
+// application data, delete account. The two destructive deletes each open a
+// real confirm modal (solid panel per the CLAUDE.md rule):
+//   • "Delete all application data" → WipeDataModal (data-only wipe:
+//     accountApi.wipeData → POST /account/wipe-data clears match history /
+//     queue / activity / pipeline; account + résumés stay; user stays signed
+//     in → success receipt + cache refetch).
+//   • "Delete my account" → the shared DeleteAccountModal (type-your-email
+//     confirm → accountApi.deleteAccount soft-delete + nightly hard-purge →
+//     sign-out → /login) — the same modal /account uses.
+// Pause toggles huntActive (mirrors the rail pause button); Reset restores the
+// server-canonical preferences and clears dirty (handled by the parent via
+// `onReset`).
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PrefHeader } from '../controls';
+import { WipeDataModal } from '../WipeDataModal';
 import { DeleteAccountModal } from '../../account';
 
 type Tone = 'warn' | 'danger';
@@ -62,6 +67,7 @@ export function DangerSection({
   accountEmail: string;
 }) {
   const t = useTranslations('preferences');
+  const [wipeOpen, setWipeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
@@ -93,6 +99,13 @@ export function DangerSection({
           onClick={onReset}
         />
         <DangerRow
+          title={t('danger.delete_data_title')}
+          desc={t('danger.delete_data_desc')}
+          btn={t('danger.delete_data_btn')}
+          tone="danger"
+          onClick={() => setWipeOpen(true)}
+        />
+        <DangerRow
           title={t('danger.delete_account_title')}
           desc={t('danger.delete_account_desc')}
           btn={t('danger.delete_account_btn')}
@@ -101,6 +114,8 @@ export function DangerSection({
           onClick={() => setDeleteOpen(true)}
         />
       </div>
+
+      <WipeDataModal open={wipeOpen} onClose={() => setWipeOpen(false)} />
 
       <DeleteAccountModal
         open={deleteOpen}

@@ -10,6 +10,8 @@
 //   GET  /usage     — own usage by date + feature vs tier allowance (COUNTS
 //                     ONLY — never exposes internal cost/margin to the user)
 //   POST /delete    — GDPR delete (soft-disable + session revoke + audit)
+//   POST /wipe-data — clear application data only (match history / queue /
+//                     activity / pipeline); account, profile + résumés stay
 //
 // V1 namespace (imports engine freely). Importing v2/lib/raFeatureCatalog is
 // allowed (the boundary only restricts what v2 itself imports).
@@ -29,6 +31,7 @@ import {
 } from '../engine/services/SeekerAuthService.js';
 import prisma from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
+import { wipeSeekerApplicationData } from '../services/SeekerAccountDataWipeService.js';
 import { resolveTimeZone, sqlLocalTime } from '../../lib/timeBuckets.js';
 import { getRateCard, tierDailyCap } from '../../lib/rateCard.js';
 import { featureForSku } from '../v2/lib/raFeatureCatalog.js';
@@ -267,6 +270,28 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
   } catch (err) {
     logger.error('RA_ACCOUNT', 'POST /delete failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
     return res.status(500).json({ success: false, code: 'delete_failed', error: 'Failed to delete account' });
+  }
+});
+
+// ─── POST /wipe-data (clear application data only — account + résumés stay) ────
+router.post('/wipe-data', requireAuth, async (req: Request, res: Response) => {
+  try {
+    // Light "you meant this" guard so a bare/accidental POST can't wipe data.
+    // The client sends `confirm: true` only after its type-to-confirm gate
+    // passes; unlike /delete this endpoint clears data the user still owns
+    // (account + résumés survive), so no identity re-proof is required.
+    if (req.body?.confirm !== true) {
+      return res.status(400).json({
+        success: false,
+        code: 'confirm_required',
+        error: 'confirm must be true to wipe application data',
+      });
+    }
+    const summary = await wipeSeekerApplicationData(req.user!.id);
+    return res.json({ success: true, data: summary });
+  } catch (err) {
+    logger.error('RA_ACCOUNT', 'POST /wipe-data failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
+    return res.status(500).json({ success: false, code: 'wipe_failed', error: 'Failed to clear application data' });
   }
 });
 

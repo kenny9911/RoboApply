@@ -5,7 +5,7 @@
 // envelope (returns `data`) and throws `RoboApiError` (.code / .message) on
 // failure. The two backend bases:
 //
-//   /api/v1/roboapply/account   profile · password · sign-out-all · usage · delete
+//   /api/v1/roboapply/account   profile · password · sign-out-all · usage · delete · wipe-data
 //   /api/v1/roboapply/billing   plan · checkout · portal · cancel
 //
 // Stripe-redirect endpoints (checkout / portal) return `{ url }`; the caller
@@ -60,6 +60,16 @@ export interface SignOutAllResponse {
 export interface DeleteAccountResponse {
   ok: true;
   deactivated: true;
+}
+
+/** Per-table removal counts from a data-only wipe (POST /account/wipe-data).
+ *  Clears application data (match history / queue / activity / pipeline);
+ *  account, profile, and résumés survive. */
+export interface WipeDataResponse {
+  trackerEntries: number;
+  matchScores: number;
+  runs: number;
+  digests: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -199,6 +209,10 @@ export const accountApi = {
     roboApi.get<AccountUsageResponse>(`${ACCOUNT_BASE}/usage${usageQuery(params)}`),
   deleteAccount: (confirmEmail: string) =>
     roboApi.post<DeleteAccountResponse>(`${ACCOUNT_BASE}/delete`, { confirmEmail }),
+  /** Clear application data only (match history / queue / activity / pipeline).
+   *  Account + résumés survive; the caller stays signed in. */
+  wipeData: () =>
+    roboApi.post<WipeDataResponse>(`${ACCOUNT_BASE}/wipe-data`, { confirm: true }),
 
   // billing
   plan: (region?: 'cn' | 'other') =>

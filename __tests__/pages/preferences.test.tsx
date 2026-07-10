@@ -103,7 +103,7 @@ describe('/preferences screen', () => {
     );
   });
 
-  it('Danger zone: real delete-account modal, no data-wipe stub row', async () => {
+  it('Danger zone: data-wipe row opens a real type-to-confirm modal', async () => {
     renderWithProviders(<PreferencesPage />);
 
     await waitFor(
@@ -116,9 +116,37 @@ describe('/preferences screen', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Danger zone/i }));
 
-    // The data-only wipe row is hidden until a real endpoint exists (its old
-    // confirm was a stub that deleted nothing).
-    expect(screen.queryByText(/Delete all application data/i)).not.toBeInTheDocument();
+    // The data-only wipe row is back now that the /account/wipe-data endpoint
+    // exists (before opening the modal its title is the only match).
+    expect(screen.getByText('Delete all application data')).toBeInTheDocument();
+
+    // Its button opens the REAL confirm modal — a type-to-confirm gate, not the
+    // old close-only stub.
+    fireEvent.click(screen.getByRole('button', { name: 'Delete application data' }));
+    expect(screen.getByText(/Type WIPE to confirm/i)).toBeInTheDocument();
+
+    // A wrong keyword is rejected locally — nothing is cleared, no request fires.
+    fireEvent.change(screen.getByPlaceholderText('WIPE'), {
+      target: { value: 'nope' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear application data' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Type WIPE exactly to confirm/i);
+    });
+  });
+
+  it('Danger zone: delete-account row opens the shared real confirm modal', async () => {
+    renderWithProviders(<PreferencesPage />);
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByRole('button', { name: /Danger zone/i }),
+        ).toBeInTheDocument();
+      },
+      { timeout: 4000 },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Danger zone/i }));
 
     // "Delete account" opens the shared real confirm modal (same as /account):
     // type-your-email + reason, not the old close-only stub.
