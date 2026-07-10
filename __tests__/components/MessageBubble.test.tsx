@@ -6,16 +6,18 @@ import { render, screen } from '@testing-library/react';
 import { MessageBubble } from '../../components/chat/MessageBubble';
 
 describe('MessageBubble', () => {
-  it('role="ai": renders children with white bg + ink-line-soft border', () => {
+  it('role="ai": renders children with themed surface bg + ink-line-soft border', () => {
     const { container } = render(
       <MessageBubble role="ai">
         <p>AI response</p>
       </MessageBubble>,
     );
     expect(screen.getByText(/AI response/i)).toBeInTheDocument();
-    // Inner panel
-    const inner = container.querySelector('.bg-white');
+    // Inner panel — bg-bg-card (--surface), NOT literal bg-white: the bubble
+    // also renders on /onboarding, outside the .dark-canvas retint scope.
+    const inner = container.querySelector('.bg-bg-card');
     expect(inner).not.toBeNull();
+    expect(inner!.className).not.toMatch(/bg-white/);
     expect(inner!.className).toMatch(/border-ink-line-soft/);
   });
 
