@@ -11,7 +11,9 @@
 // Two-phase report: finalize() persists a deterministic score instantly, then a
 // background LLM pass enriches it (localized prose, recommendations, per-question
 // analysis). We poll until `reportPending` clears (or give up after a cap so a
-// legacy session doesn't poll forever).
+// legacy session doesn't poll forever). Once polling gives up, a persistent
+// "refresh analysis" affordance stays: re-fetching the report also triggers the
+// server's lazy re-enrichment, so a stuck report can self-heal on demand.
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -97,6 +99,13 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
 
   const s = report.session;
   const enrichPending = !!s.reportPending && !gaveUp;
+  // Polling gave up with the analysis (or an advertised recording) still
+  // missing — offer a manual retry instead of a dead end. The refetch also
+  // fires the backend's lazy re-enrichment.
+  const stalled =
+    gaveUp &&
+    s.status === 'completed' &&
+    (!!s.reportPending || (s.recordingAvailable && !report.recordingUrl));
   const breakdown = (s.breakdown ?? []).map((b) => {
     const ck = canonicalDimKey(b.key);
     return { key: ck ? t(`report.dim.${ck}`) : b.key, value: b.value, note: b.note };
@@ -120,6 +129,15 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
       {s.status === 'completed' && enrichPending && (
         <div style={{ border: '1px solid var(--accent-text)', background: 'var(--accent-soft)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span aria-busy="true">{t('report.analysisPending')}</span>
+        </div>
+      )}
+
+      {stalled && (
+        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <span>{t('report.analysisStalled')}</span>
+          <Btn variant="default" onClick={() => void refresh()}>
+            {refreshing ? t('report.refreshing') : t('report.refreshAnalysis')}
+          </Btn>
         </div>
       )}
 

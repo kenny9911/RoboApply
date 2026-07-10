@@ -63,6 +63,28 @@ export function computeParticipationDurationSec(
     : sec;
 }
 
+// ─── Recording artifact metadata ───────────────────────────────────────────
+
+/** MIME type for the Egress recording. Voice mode records audioOnly, so the
+ *  MP4 container holds no video track — 'audio/mp4', not 'video/mp4' (which
+ *  would misdescribe the artifact in downloads and playback metadata). */
+export function recordingMimeForMode(mode: string): 'audio/mp4' | 'video/mp4' {
+  return mode === 'voice' ? 'audio/mp4' : 'video/mp4';
+}
+
+// ─── Expiry reconciliation (cron sweep) ────────────────────────────────────
+
+export type ReconcileAction = 'finalize' | 'expire' | 'skip';
+
+/** What the expiry sweep does with a stranded (past-expiresAt, quiet) session:
+ *  ingested transcript turns exist → finalize, so the user still gets a report
+ *  (and the cost ledger is written); no turns → 'expired' (nothing to score).
+ *  Terminal states are never touched. */
+export function decideReconcileAction(status: string, turnCount: number): ReconcileAction {
+  if (status !== 'created' && status !== 'live' && status !== 'finalizing') return 'skip';
+  return turnCount > 0 ? 'finalize' : 'expire';
+}
+
 // ─── liveMetrics blob ──────────────────────────────────────────────────────
 
 /** Shape of InterviewSession.liveMetrics. All parts optional — the column is

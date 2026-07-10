@@ -71,6 +71,8 @@ import {
   computeParticipationDurationSec,
   asLiveMetrics,
   capTail,
+  decideReconcileAction,
+  recordingMimeForMode,
   sanitizeClientEvents,
   sanitizeMetricEvents,
   summarizeMetricEvents,
@@ -102,10 +104,35 @@ export class InterviewInsufficientCreditsError extends Error {
   }
 }
 
-const MAX_TRANSCRIPT_TURNS = 1000;
+// Sized for the 120-minute max session at a brisk voice cadence (~20 turns a
+// minute across both speakers) so the head-trim never eats a real interview.
+const MAX_TRANSCRIPT_TURNS = 2400;
 // Grace window between room deletion (= worker shutdown) and the finalize
 // transcript re-read, so the worker's fire-and-forget final flush can land.
-const TRANSCRIPT_FLUSH_GRACE_MS = 1500;
+// The worker's shutdown drain retries for up to ~12s (8 × 1.5s); 4s covers
+// the common first-attempt delivery without stalling the webhook-triggered
+// finalize paths, and the post-score recheck in finalize() catches slower
+// stragglers.
+const TRANSCRIPT_FLUSH_GRACE_MS = 4000;
+// getReport: recordingKey means egress STARTED; the R2 object only exists once
+// egress finishes writing. Past this window after session end with no object,
+// the recording is treated as permanently absent (stop advertising it).
+const RECORDING_LANDING_GRACE_MS = 10 * 60_000;
+// Lazy re-enrichment on report reads: a 'completed' session whose report is
+// still version 'deterministic' after this long has lost its fire-and-forget
+// _enrichReport (deploy/restart in the window). Re-fired on read, at most
+// REENRICH_MAX_ATTEMPTS times — the counter lives INSIDE the report JSON
+// (report.enrichAttempts), so no schema change.
+const REENRICH_MIN_AGE_MS = 2 * 60_000;
+const REENRICH_MAX_ATTEMPTS = 3;
+// Reconciliation sweep: a stranded row must be quiet this long (no transcript
+// ingest / lifecycle write bumping updatedAt) before the sweep touches it — an
+// ACTIVE long interview can legitimately outlive expiresAt, but its ~4s
+// transcript flushes keep updatedAt fresh.
+const RECONCILE_QUIET_MS = 10 * 60_000;
+// Bound each reconcile sweep; finalize's flush grace makes each finalization
+// cost seconds, and the cron re-runs soon anyway.
+const RECONCILE_BATCH_SIZE = 25;
 
 export interface CreateSessionInput {
   userId: string;
@@ -333,11 +360,19 @@ export class InterviewSessionService {
 
       // Plan the recording key now, but START egress in the BACKGROUND so a slow
       // or unconfigured Egress service never blocks the candidate from joining.
-      let recordingKey: string | null = null;
+      // recordingKey is deliberately NOT persisted here: the row would advertise
+      // a recording (serialize's recordingAvailable, getReport's presign) that a
+      // failed egress start never writes. startRecordingInBackground persists
+      // key + mime only once egress actually starts; the egress_ended webhook
+      // (handleEgressEnded) stays the completion source of truth.
       if (isRecordingEnabled() && interviewR2Storage.isConfigured()) {
-        recordingKey = interviewR2Storage.recordingKey(session.id, 'mp4');
         recording = true;
-        void this.startRecordingInBackground(session.id, session.roomName, recordingKey, mode === 'voice');
+        void this.startRecordingInBackground(
+          session.id,
+          session.roomName,
+          interviewR2Storage.recordingKey(session.id, 'mp4'),
+          mode,
+        );
       }
 
       await prisma.interviewSession.update({
@@ -347,8 +382,6 @@ export class InterviewSessionService {
           // undefined (not null) when the race timed out — a late-resolving
           // dispatch id persisted by the hook above must not be wiped here.
           agentDispatchId: agentDispatchId ?? undefined,
-          recordingKey: recordingKey ?? session.recordingKey,
-          recordingMimeType: recordingKey ? 'video/mp4' : session.recordingMimeType,
         },
       });
     } else {
@@ -442,12 +475,21 @@ export class InterviewSessionService {
     }
   }
 
-  /** Start Egress recording out-of-band; persist the egressId when it returns. */
-  private async startRecordingInBackground(sessionId: string, roomName: string, filepath: string, audioOnly: boolean): Promise<void> {
+  /** Start Egress recording out-of-band. recordingKey/mime are persisted HERE,
+   *  only once egress has actually started — a failed start leaves them unset
+   *  so the session never advertises a recording that was never written. */
+  private async startRecordingInBackground(sessionId: string, roomName: string, filepath: string, mode: InterviewMode): Promise<void> {
     try {
-      const rec = await startRoomRecording({ roomName, filepath, audioOnly });
+      const rec = await startRoomRecording({ roomName, filepath, audioOnly: mode === 'voice' });
       if (rec) {
-        await prisma.interviewSession.update({ where: { id: sessionId }, data: { egressId: rec.egressId } });
+        await prisma.interviewSession.update({
+          where: { id: sessionId },
+          data: {
+            egressId: rec.egressId,
+            recordingKey: rec.filepath,
+            recordingMimeType: recordingMimeForMode(mode),
+          },
+        });
       }
     } catch (err) {
       logger.warn('INTERVIEW_ENGINE_SESSION', 'background recording start failed', {
@@ -651,14 +693,20 @@ export class InterviewSessionService {
   async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string }): Promise<void> {
     const where = params.egressId ? { egressId: params.egressId } : params.roomName ? { roomName: params.roomName } : null;
     if (!where) return;
-    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, recordingKey: true } });
+    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true } });
     if (!session) return;
+    // This webhook is the completion source of truth: a non-empty file result
+    // means the recording really exists in R2, so backfill recordingKey if the
+    // background-start persist was lost (restart between egress start and the
+    // DB write). Mime follows the session mode — voice egress is audioOnly.
+    const producedFile = typeof params.sizeBytes === 'number' && params.sizeBytes > 0;
     await prisma.interviewSession.update({
       where: { id: session.id },
       data: {
         recordingBytes: typeof params.sizeBytes === 'number' ? params.sizeBytes : undefined,
         recordingDurationSec: typeof params.durationSec === 'number' ? params.durationSec : undefined,
-        recordingMimeType: 'video/mp4',
+        recordingKey: session.recordingKey ?? (producedFile ? interviewR2Storage.recordingKey(session.id, 'mp4') : undefined),
+        recordingMimeType: session.recordingKey || producedFile ? recordingMimeForMode(session.mode) : undefined,
       },
     });
     // Meter the recording's egress + storage cost (no-op until a rate is set).
@@ -713,6 +761,39 @@ export class InterviewSessionService {
     // Tear down the room (best-effort; releases the worker).
     await deleteInterviewRoom(session.roomName);
 
+    const readTurns = async (): Promise<TranscriptTurn[] | null> => {
+      try {
+        const fresh = await prisma.interviewSession.findUnique({
+          where: { id: sessionId },
+          select: { transcript: true },
+        });
+        return fresh ? sortTurnsByTs(asTranscript(fresh.transcript)) : null;
+      } catch (err) {
+        logger.warn('INTERVIEW_ENGINE_SESSION', 'transcript re-read failed', {
+          sessionId, error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    };
+
+    // Persist transcript to R2 (best-effort) — JSON + plaintext sidecar.
+    // Callable twice: the late-turn recheck below re-uploads so the R2
+    // artifacts always match the scored transcript.
+    const uploadTranscript = async (t: TranscriptTurn[]): Promise<{ key: string | null; text: string }> => {
+      const text = renderTranscriptText(t, session.candidateName ?? 'Candidate');
+      if (!interviewR2Storage.isConfigured() || t.length === 0) return { key: null, text };
+      try {
+        const jsonKey = interviewR2Storage.transcriptJsonKey(sessionId);
+        const txtKey = interviewR2Storage.transcriptTextKey(sessionId);
+        await interviewR2Storage.putObject({ key: jsonKey, body: JSON.stringify({ sessionId, turns: t }, null, 2), contentType: 'application/json' });
+        await interviewR2Storage.putObject({ key: txtKey, body: text, contentType: 'text/plain; charset=utf-8' });
+        return { key: jsonKey, text };
+      } catch (err) {
+        logger.warn('INTERVIEW_ENGINE_SESSION', 'transcript R2 upload failed', { sessionId, error: err instanceof Error ? err.message : String(err) });
+        return { key: null, text };
+      }
+    };
+
     // Room deletion triggers worker shutdown, whose final transcript flush is
     // a fire-and-forget POST that can land AFTER our pre-claim snapshot was
     // read — scoring that snapshot would silently drop the last answer(s).
@@ -720,40 +801,35 @@ export class InterviewSessionService {
     // batches from different flushes can arrive interleaved out of order.
     await sleep(TRANSCRIPT_FLUSH_GRACE_MS);
     let turns = sortTurnsByTs(asTranscript(session.transcript));
-    try {
-      const fresh = await prisma.interviewSession.findUnique({
-        where: { id: sessionId },
-        select: { transcript: true },
-      });
-      if (fresh) turns = sortTurnsByTs(asTranscript(fresh.transcript));
-    } catch (err) {
-      logger.warn('INTERVIEW_ENGINE_SESSION', 'transcript re-read failed; scoring pre-claim snapshot', {
-        sessionId, error: err instanceof Error ? err.message : String(err),
-      });
-    }
-
-    // Persist transcript to R2 (best-effort) — JSON + plaintext sidecar.
-    let transcriptKey: string | null = session.transcriptKey;
-    let transcriptText: string | null = null;
-    if (interviewR2Storage.isConfigured() && turns.length > 0) {
-      try {
-        const jsonKey = interviewR2Storage.transcriptJsonKey(sessionId);
-        const txtKey = interviewR2Storage.transcriptTextKey(sessionId);
-        transcriptText = renderTranscriptText(turns, session.candidateName ?? 'Candidate');
-        await interviewR2Storage.putObject({ key: jsonKey, body: JSON.stringify({ sessionId, turns }, null, 2), contentType: 'application/json' });
-        await interviewR2Storage.putObject({ key: txtKey, body: transcriptText, contentType: 'text/plain; charset=utf-8' });
-        transcriptKey = jsonKey;
-      } catch (err) {
-        logger.warn('INTERVIEW_ENGINE_SESSION', 'transcript R2 upload failed', { sessionId, error: err instanceof Error ? err.message : String(err) });
-      }
-    } else {
-      transcriptText = renderTranscriptText(turns, session.candidateName ?? 'Candidate');
-    }
+    const reread = await readTurns();
+    if (reread) turns = reread;
 
     // Score.
     const persona = session.personaId ? findPersona(session.personaId) : undefined;
     const difficulty = (session.characteristics as any)?.difficulty ?? (persona ? persona.difficulty * 1.6 : 3);
-    const score = scoreTranscript(turns, Math.round(difficulty), session.language);
+    let score = scoreTranscript(turns, Math.round(difficulty), session.language);
+    let uploaded = await uploadTranscript(turns);
+
+    // LATE-TURN RECHECK: the worker's shutdown drain retries for up to ~12s —
+    // longer than the flush grace — and ingest still accepts turns while we
+    // hold 'finalizing'. One re-read before committing 'completed'; if turns
+    // landed during scoring/upload, redo the (cheap, deterministic) score and
+    // the R2 transcript artifacts on the fresh read. LLM enrichment gets the
+    // fresh turns too.
+    const recheck = await readTurns();
+    if (recheck && recheck.length > turns.length) {
+      logger.info('INTERVIEW_ENGINE_SESSION', 'late transcript turns landed during scoring; re-scored', {
+        sessionId, turnsBefore: turns.length, turnsAfter: recheck.length,
+      });
+      turns = recheck;
+      score = scoreTranscript(turns, Math.round(difficulty), session.language);
+      const redo = await uploadTranscript(turns);
+      // A failed re-upload must not discard the first upload's key.
+      uploaded = { key: redo.key ?? uploaded.key, text: redo.text };
+    }
+
+    const transcriptKey: string | null = uploaded.key ?? session.transcriptKey;
+    const transcriptText: string | null = uploaded.text;
 
     // Bill PARTICIPATION (transcript ts span), not wall-clock: a no-show who
     // connected and never spoke must not be billed the 15+ min the room's
@@ -820,7 +896,8 @@ export class InterviewSessionService {
    * Background LLM enrichment: runs the multi-agent evaluation and PATCHes the
    * flat report columns + the rich `report` JSON. NEVER THROWS — a failure
    * leaves the deterministic report in place. Not resumable across a process
-   * restart (acceptable: matching progress has the same restart semantics).
+   * restart, but a report stranded that way self-heals: maybeReenrichOnRead
+   * re-fires this (attempt-capped) from the next report read.
    */
   private async _enrichReport(
     sessionId: string,
@@ -882,6 +959,139 @@ export class InterviewSessionService {
       await writeMockInterviewLedger(sessionId);
       logger.endRequest(reqId, 'success', 200);
     }
+  }
+
+  /**
+   * Lazy re-enrichment, fired from report reads: when a 'completed' session's
+   * report is still deterministic-only well past finalize, the fire-and-forget
+   * _enrichReport was lost (deploy/restart in the window) — re-fire it so a
+   * stuck report self-heals on the next visit. The attempt counter lives inside
+   * the report JSON (report.enrichAttempts, no schema change) and the claim is
+   * a single guarded UPDATE, so concurrent reads (report-page poll + a second
+   * tab) elect exactly one re-enricher: the first claim bumps updatedAt, which
+   * fails the age condition for the losers. Best-effort; never throws upward.
+   */
+  private async maybeReenrichOnRead(session: InterviewSession): Promise<void> {
+    if (session.status !== 'completed') return;
+    const report = (session.report ?? {}) as Record<string, unknown>;
+    if (report.version === '2') return; // enrichment already landed
+    const attempts = typeof report.enrichAttempts === 'number' ? report.enrichAttempts : 0;
+    if (attempts >= REENRICH_MAX_ATTEMPTS) return;
+    if (Date.now() - session.updatedAt.getTime() < REENRICH_MIN_AGE_MS) return;
+
+    const claimed = await prisma.$executeRawUnsafe(
+      `UPDATE "InterviewSession"
+          SET report = jsonb_set(COALESCE(report, '{}'::jsonb), '{enrichAttempts}',
+                                 to_jsonb(COALESCE((report->>'enrichAttempts')::int, 0) + 1)),
+              "updatedAt" = now()
+        WHERE id = $1
+          AND status = 'completed'
+          AND COALESCE(report->>'version', '') <> '2'
+          AND COALESCE((report->>'enrichAttempts')::int, 0) < $2::int
+          AND "updatedAt" < now() - ($3::int * interval '1 millisecond')`,
+      session.id,
+      REENRICH_MAX_ATTEMPTS,
+      REENRICH_MIN_AGE_MS,
+    );
+    if (claimed !== 1) return;
+
+    const turns = sortTurnsByTs(asTranscript(session.transcript));
+    // Reuse the deterministic score finalize stored in report.score; recompute
+    // only if the blob is unusable (legacy/foreign shape).
+    const stored = report.score as InterviewScore | undefined;
+    const persona = session.personaId ? findPersona(session.personaId) : undefined;
+    const difficulty = (session.characteristics as any)?.difficulty ?? (persona ? persona.difficulty * 1.6 : 3);
+    const score = stored && typeof stored.overall === 'number'
+      ? stored
+      : scoreTranscript(turns, Math.round(difficulty), session.language);
+
+    logger.info('INTERVIEW_ENGINE_SESSION', 'stuck report detected on read; re-firing enrichment', {
+      sessionId: session.id, attempt: attempts + 1, turns: turns.length,
+    });
+    // _enrichReport never throws; its ledger write is idempotent per session.
+    void this._enrichReport(session.id, session, turns, score, session.durationSec ?? null).catch((err) => {
+      logger.error('INTERVIEW_ENGINE_SESSION', 'lazy re-enrich crashed', {
+        sessionId: session.id, error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  // ─── Expiry reconciliation (cron sweep) ────────────────────────────────────
+
+  /**
+   * Finalize-or-expire sessions stranded past expiresAt. The three normal end
+   * paths (candidate /end, room_finished webhook, worker 'ended' lifecycle)
+   * can ALL be missed — browser died, webhook dropped, process restarted — and
+   * nothing else ever transitions the row, so ingested transcript turns never
+   * become a report. Sessions with turns run the normal finalize path (report,
+   * R2 artifacts, credit ledger); turn-less sessions are marked 'expired'.
+   * Stuck 'finalizing' rows are released back to 'live' first so finalize()'s
+   * atomic claim can re-run them. The updatedAt quiet-window keeps the sweep
+   * away from genuinely active sessions (their ~4s transcript flushes bump
+   * updatedAt) and from an in-flight finalize. Idempotent; called from the
+   * cron surface (server/src/cron/handlers.ts).
+   */
+  async reconcileExpiredSessions(now = new Date()): Promise<{ scanned: number; finalized: number; expired: number }> {
+    const quietBefore = new Date(now.getTime() - RECONCILE_QUIET_MS);
+    const rows = await prisma.interviewSession.findMany({
+      where: {
+        status: { in: ['created', 'live', 'finalizing'] },
+        expiresAt: { lt: now },
+        updatedAt: { lt: quietBefore },
+      },
+      select: { id: true, status: true, transcript: true, endedAt: true },
+      orderBy: { expiresAt: 'asc' },
+      take: RECONCILE_BATCH_SIZE,
+    });
+
+    let finalized = 0;
+    let expired = 0;
+    for (const row of rows) {
+      const turnCount = Array.isArray(row.transcript) ? row.transcript.length : 0;
+      const action = decideReconcileAction(row.status, turnCount);
+      try {
+        if (action === 'finalize') {
+          // finalize() refuses to claim 'finalizing' rows (its idempotency
+          // guard) — a quiet-for-10-min 'finalizing' means the process died
+          // mid-finalize, so release the claim first. Guarded on status AND
+          // the quiet window so a live finalize is never yanked back.
+          if (row.status === 'finalizing') {
+            const released = await prisma.interviewSession.updateMany({
+              where: { id: row.id, status: 'finalizing', updatedAt: { lt: quietBefore } },
+              data: { status: 'live' },
+            });
+            if (released.count !== 1) continue;
+          }
+          await this.finalize(row.id);
+          finalized += 1;
+          logger.info('INTERVIEW_ENGINE_SESSION', 'reconciler finalized stranded session', {
+            sessionId: row.id, fromStatus: row.status, turns: turnCount,
+          });
+        } else if (action === 'expire') {
+          // Status-guarded so a concurrent legitimate transition wins.
+          const res = await prisma.interviewSession.updateMany({
+            where: { id: row.id, status: row.status },
+            data: { status: 'expired', endedAt: row.endedAt ?? now },
+          });
+          if (res.count === 1) {
+            expired += 1;
+            logger.info('INTERVIEW_ENGINE_SESSION', 'reconciler expired stranded session', {
+              sessionId: row.id, fromStatus: row.status,
+            });
+          }
+        }
+      } catch (err) {
+        logger.error('INTERVIEW_ENGINE_SESSION', 'reconcile failed for session', {
+          sessionId: row.id, fromStatus: row.status, error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    if (rows.length > 0) {
+      logger.info('INTERVIEW_ENGINE_SESSION', 'reconcile sweep complete', {
+        scanned: rows.length, finalized, expired,
+      });
+    }
+    return { scanned: rows.length, finalized, expired };
   }
 
   // ─── Live usage ingest (worker callback) ──────────────────────────────────
@@ -956,14 +1166,40 @@ export class InterviewSessionService {
     transcriptUrl: string | null;
   }> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+
+    // Self-healing: re-fire the LLM enrichment for reports stuck at the
+    // deterministic version (a deploy/restart killed the fire-and-forget
+    // _enrichReport). Guarded + attempt-capped inside; never blocks the read.
+    void this.maybeReenrichOnRead(session).catch((err) => {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'lazy re-enrich check failed', {
+        sessionId: session.id, error: err instanceof Error ? err.message : String(err),
+      });
+    });
+
     let recordingUrl: string | null = null;
     let transcriptUrl: string | null = null;
     if (session.recordingKey) {
-      recordingUrl = await interviewR2Storage.presignGet({
-        key: session.recordingKey,
-        fileName: `interview-${session.id}.mp4`,
-        contentType: session.recordingMimeType ?? 'video/mp4',
-      });
+      // recordingKey means egress STARTED; the object only exists once egress
+      // finishes writing. Presign only what actually exists — never a dead
+      // link. While the recording may still land (session ended recently) keep
+      // advertising it so the report page's poll loop waits; once the landing
+      // grace has passed with no object, stop advertising (in-memory only:
+      // headObject also nulls on transient R2 errors, so never persist this).
+      const head = await interviewR2Storage.headObject(session.recordingKey);
+      if (head) {
+        const ext = session.recordingMimeType === 'audio/mp4' ? 'm4a' : 'mp4';
+        recordingUrl = await interviewR2Storage.presignGet({
+          key: session.recordingKey,
+          fileName: `interview-${session.id}.${ext}`,
+          contentType: session.recordingMimeType ?? 'video/mp4',
+        });
+      } else {
+        const terminal = session.status === 'completed' || session.status === 'failed' || session.status === 'expired';
+        const endedMs = (session.endedAt ?? session.updatedAt)?.getTime() ?? Date.now();
+        if (terminal && Date.now() - endedMs > RECORDING_LANDING_GRACE_MS) {
+          session.recordingKey = null; // serializer → recordingAvailable: false
+        }
+      }
     }
     if (session.transcriptKey) {
       transcriptUrl = await interviewR2Storage.presignGet({

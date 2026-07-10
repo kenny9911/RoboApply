@@ -23,8 +23,29 @@ import {
   runRenewalReminderSweep,
   runFridayNudgeSweep,
 } from '../roboapply/services/RoboApplyBillingReminderService.js';
+import { interviewSessionService } from '../interview-engine/sessions/InterviewSessionService.js';
 
 const router = Router();
+
+/**
+ * Interview-engine expiry reconciliation, piggybacked on the existing frequent
+ * jobs (no dedicated vercel.json cron entry): finalize-or-expire sessions
+ * stranded past expiresAt so their ingested transcripts still become reports.
+ * Rides BOTH the catchup sweep (every 15 min, but only 9-15 UTC) and the
+ * hourly digest job, which covers the hours catchup doesn't run. Idempotent,
+ * cheap when nothing is stranded (one indexed query), and best-effort — it
+ * never fails the host job.
+ */
+async function reconcileInterviewSessions() {
+  try {
+    return await interviewSessionService.reconcileExpiredSessions();
+  } catch (err) {
+    logger.error('ROBOAPPLY_CRON', 'interview session reconcile threw', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 
 function requireCron(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env.CRON_SECRET;
@@ -68,19 +89,30 @@ router.get(
   }),
 );
 
-// 2. Digest fanout (service filters by user-local 07:00).
-router.get('/digest', job('digest', () => composeAndSendDigestsForLocalHour({})));
+// 2. Digest fanout (service filters by user-local 07:00). Also hosts the
+//    interview-session reconciler for the hours the catchup sweep doesn't run.
+router.get(
+  '/digest',
+  job('digest', async () => {
+    const digests = await composeAndSendDigestsForLocalHour({});
+    const interviewReconcile = await reconcileInterviewSessions();
+    return { digests, interviewReconcile };
+  }),
+);
 
 // 3. Submitter (service filters by user-local 09:00).
 router.get('/submitter', job('submitter', () => submitDueRunsAll({})));
 
-// 4. Catchup sweep — submit due + hard-fail stale previewing runs.
+// 4. Catchup sweep — submit due + hard-fail stale previewing runs. The most
+//    frequent cron (every 15 min in its window), so the interview-session
+//    reconciler rides here too.
 router.get(
   '/catchup',
   job('catchup', async () => {
     const submit = await submitDueRunsAll({});
     const hardFail = await catchupHardFailStaleRuns({});
-    return { submit, hardFail };
+    const interviewReconcile = await reconcileInterviewSessions();
+    return { submit, hardFail, interviewReconcile };
   }),
 );
 
