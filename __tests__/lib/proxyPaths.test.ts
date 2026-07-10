@@ -16,7 +16,7 @@ describe('proxyPaths.isProtectedPath', () => {
   });
 
   it('protects the other authenticated surfaces', () => {
-    for (const p of ['/home', '/resumes', '/mock-interview', '/onboarding', '/choose-plan', '/preferences']) {
+    for (const p of ['/home', '/resumes', '/mock-interview', '/onboarding', '/choose-plan', '/preferences', '/account', '/admin']) {
       expect(isProtectedPath(p)).toBe(true);
     }
   });

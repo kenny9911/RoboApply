@@ -293,15 +293,34 @@ router.get(
   },
 );
 
-/** POST /api/v1/roboapply/auth/logout */
+/**
+ * POST /api/v1/roboapply/auth/logout
+ *
+ * Deliberately UNAUTHENTICATED. Logout's contract is "make this browser
+ * signed out", and that must work even when the session is already dead.
+ * The edge proxy only checks that the session cookie EXISTS, so a browser
+ * holding a stale cookie (session row revoked/expired — e.g. every session
+ * from before the 2026-07 DB split) can reach protected pages while every
+ * API call 401s. A requireAuth-gated logout 401'd too and could never clear
+ * that dead cookie, leaving the browser stuck in the broken state. The api
+ * client's stale-session recovery (lib/api/client.ts) relies on this route
+ * to shed the cookie before bouncing to /login.
+ *
+ * Safety: invalidation is by exact token (idempotent deleteMany) — a caller
+ * can only revoke a token it already possesses, and clearing a cookie
+ * reveals nothing.
+ */
 router.post(
   '/logout',
-  requireAuth,
-  requireSeekerProfile,
   async (req: Request, res: Response) => {
     try {
-      if (req.sessionToken) {
-        await invalidateSeekerSession(req.sessionToken);
+      const cookieToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+      const headerToken = typeof req.headers['x-session-token'] === 'string'
+        ? req.headers['x-session-token']
+        : undefined;
+      const token = cookieToken ?? headerToken;
+      if (token) {
+        await invalidateSeekerSession(token);
       }
       res.clearCookie(SESSION_COOKIE_NAME, clearSessionCookieOptions());
       return res.status(204).send();

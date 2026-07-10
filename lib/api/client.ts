@@ -10,6 +10,7 @@
 
 import { API_BASE } from '../config';
 import { LOCALE_COOKIE } from '../localeConfig';
+import { isProtectedPath } from '../proxyPaths';
 
 export type RoboErrorCode =
   | 'auth_expired'
@@ -62,6 +63,10 @@ function normalizeCode(
   switch (code) {
     case 'INVALID_TOKEN':
     case 'NO_AUTH':
+    // Backend requireAuth's "no token at all" code. On a protected page that
+    // still means "this browser is not signed in" — same recovery as a dead
+    // session, so it must not fall through to 'unknown'.
+    case 'AUTH_REQUIRED':
     case 'auth_expired':
       return 'auth_expired';
     case 'ACCOUNT_DISABLED':
@@ -93,6 +98,53 @@ function normalizeCode(
       if (status && status >= 500) return 'server_error';
       return 'unknown';
   }
+}
+
+// ─── Stale-session recovery ─────────────────────────────────────────────────
+//
+// The edge proxy (proxy.ts) can only check that the session cookie EXISTS —
+// it has no DB at the edge to validate it. A browser holding a dead session
+// (row revoked or expired server-side; every pre-DB-split cookie is like
+// this) therefore still reaches protected pages, where EVERY api call 401s:
+// onboarding never bootstraps, resume uploads surface as parse failures, and
+// nothing tells the user to sign back in. The (auth) shell's AuthGate only
+// covers its own subtree, and only at mount.
+//
+// This is the global safety net: the first `auth_expired` that surfaces on a
+// protected route drops the dead credentials and hard-navigates to /login
+// with a return path. Guarded because a stranded page tends to fire a burst
+// of parallel 401s (auth/me + session + resumes + config…).
+let authExpiredRecoveryFired = false;
+
+function recoverFromExpiredSession(): void {
+  if (authExpiredRecoveryFired) return;
+  authExpiredRecoveryFired = true;
+
+  // Drop the localStorage bearer fallback too — left in place it would ride
+  // along on every request after re-login and mask the fresh cookie.
+  try {
+    window.localStorage.removeItem('auth_token');
+  } catch {
+    // Storage unavailable (private mode) — the cookie clear below still runs.
+  }
+
+  // Clear the dead cookie so the edge proxy stops treating the browser as
+  // signed in. Logout is deliberately sessionless server-side (see
+  // server/src/roboapply/routes/auth.ts) so this works with an invalid
+  // token; keepalive lets it survive the navigation below. Fire-and-forget:
+  // worst case the cookie lingers and the next 401 lands back here.
+  try {
+    void fetch(`${API_BASE}/api/v1/roboapply/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // fetch itself threw (very old browser) — proceed to the redirect.
+  }
+
+  const { pathname, search } = window.location;
+  window.location.assign(`/login?next=${encodeURIComponent(pathname + search)}`);
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -189,7 +241,7 @@ export async function request<T>(
   }
 
   if (!res.ok || data?.success === false) {
-    throw new RoboApiError(
+    const error = new RoboApiError(
       data?.error ?? `HTTP ${res.status}`,
       {
         code: data?.code,
@@ -197,6 +249,17 @@ export async function request<T>(
         payload: data,
       },
     );
+    // Dead/absent session on a page that requires one → force re-login.
+    // Public pages (landing, /login itself) just see the rejection: their
+    // logged-out rendering is the correct outcome there.
+    if (
+      error.code === 'auth_expired' &&
+      typeof window !== 'undefined' &&
+      isProtectedPath(window.location.pathname)
+    ) {
+      recoverFromExpiredSession();
+    }
+    throw error;
   }
   return (data?.data ?? data) as T;
 }

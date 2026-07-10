@@ -20,7 +20,8 @@
 // Skip POSTs /onboarding/skip then always routes /home.
 //
 // This route stays OUTSIDE the (auth) route group (fullscreen overlay, no
-// Sidebar/Topbar); auth is enforced by proxy.ts.
+// Sidebar/Topbar); auth is enforced by proxy.ts (cookie presence only) plus
+// the AuthGate in ./layout.tsx (real session validity via /auth/me).
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';

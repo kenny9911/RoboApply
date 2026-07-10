@@ -7,7 +7,8 @@
 // same destination after payment.
 //
 // Top-level route (outside (auth)/(public)) → fullscreen, no Sidebar. Auth is
-// enforced by proxy.ts (/choose-plan is in PROTECTED_PREFIXES). The plan grid is
+// enforced by proxy.ts (cookie presence; /choose-plan is in
+// PROTECTED_PREFIXES) plus the AuthGate in ./layout.tsx. The plan grid is
 // the SHARED <PlanCatalog mode="post-signup"> — the exact same cards the in-app
 // /plans page renders, so a user who skips here sees identical pricing later.
 // i18n: choosePlan.* for page chrome; account.plan.* / plans.* reused by the

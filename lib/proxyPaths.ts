@@ -29,6 +29,13 @@ export const PROTECTED_PREFIXES = [
   '/onboarding',
   '/choose-plan',
   '/plans',
+  // (auth)-shell members that were missing from this list. The client-side
+  // AuthGate already bounced logged-out visitors there, but the edge proxy
+  // AND the api client's stale-session recovery (lib/api/client.ts) both
+  // consult this list — it is the single source of truth for "requires a
+  // session".
+  '/account',
+  '/admin',
 ] as const;
 
 /** True when `pathname` is exactly a protected prefix or nested under one. */
