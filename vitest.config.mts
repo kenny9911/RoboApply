@@ -30,6 +30,11 @@ export default defineConfig({
       '**/*.test.ts',
       '**/*.test.tsx',
     ],
-    exclude: ['node_modules/**', '.next/**', 'dist/**'],
+    // '**/node_modules/**' (not 'node_modules/**'): the interview-agent
+    // sub-package carries its own node_modules whose shipped *.test.ts files
+    // the bare pattern doesn't exclude — the sweep then fails on third-party
+    // snapshots. interview-agent's own sources are excluded too: they target
+    // the worker's nodenext/ESM world, not this jsdom config.
+    exclude: ['**/node_modules/**', '.next/**', 'dist/**', 'interview-agent/**'],
   },
 });

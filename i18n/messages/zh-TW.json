@@ -786,7 +786,8 @@
       "summary": "摘要",
       "experience": "工作經歷",
       "education": "教育背景",
-      "skills": "技能"
+      "skills": "技能",
+      "other": "其他區塊"
     },
     "field": {
       "full_name": "姓名",
@@ -833,7 +834,8 @@
       }
     },
     "bullet": {
-      "flag": "教練標記了這條 — 動詞含糊、缺少數據。試試「優化文字」或「補充數據」。"
+      "flag": "教練標記了這條 — 動詞含糊、缺少數據。試試「優化文字」或「補充數據」。",
+      "placeholder": "描述你做了什麼——以動詞開頭，以成果收尾"
     },
     "rewrite": {
       "rewriting": "改寫中",
@@ -962,7 +964,17 @@
       "done_title": "客製化版本已儲存",
       "done_body": "新的履歷版本「{name}」已加入你的履歷庫。你的基礎履歷保持不變。",
       "done_body_paste": "你的客製化改動已就緒。你的基礎履歷保持不變。",
-      "error": "客製化履歷失敗,請重試。"
+      "error": "客製化履歷失敗,請重試。",
+      "manual_toggle": "指定目標公司——或貼上職缺描述",
+      "company_label": "公司",
+      "company_placeholder": "公司名稱",
+      "role_label": "職稱",
+      "role_placeholder": "職稱（選填）",
+      "analyze_manual": "為此目標客製 →",
+      "manual_hint": "沒有職缺描述？我會只根據你的履歷，朝該公司與職稱方向調整。",
+      "version_name_label": "儲存為",
+      "estimated": "估算值",
+      "citation_warning": "草稿中的部分數字無法在你的履歷中核實——套用前請仔細檢查這些修改。"
     },
     "download": {
       "eyebrow": "匯出",
@@ -1000,6 +1012,25 @@
       "cancel": "取消",
       "confirm": "刪除履歷",
       "confirming": "正在刪除…"
+    },
+    "extra": {
+      "hint": "保留自你的原始履歷——以純文字編輯",
+      "heading_placeholder": "區塊標題",
+      "body_placeholder": "區塊內容（Markdown）"
+    },
+    "entry": {
+      "move_up": "上移",
+      "move_down": "下移",
+      "remove": "移除"
+    },
+    "analyzer": {
+      "title": "履歷檢查",
+      "empty": "沒有發現問題——你的履歷狀態很好。",
+      "severity": {
+        "critical": "嚴重",
+        "recommended": "建議",
+        "optional": "可選"
+      }
     }
   },
   "landing": {
@@ -2509,6 +2540,15 @@
         "on": "開",
         "off": "關",
         "coachModeHint": "回答時即時給你提示與提醒。想要真實臨場感就關閉即可。"
+      },
+      "autoRejoinTitle": "連線中斷——正在重新連線",
+      "autoRejoinBody": "我們正在自動將你帶回面試。請稍候——如果失敗，你仍可手動重新加入。",
+      "agentQualityPoor": "面試官的網路連線不穩定",
+      "enableAudio": "點擊開啟聲音",
+      "quality": {
+        "good": "網路良好",
+        "fair": "網路一般",
+        "poor": "網路不佳"
       }
     },
     "report": {
@@ -2567,7 +2607,9 @@
           "weak": "需改進",
           "missed": "未作答"
         }
-      }
+      },
+      "analysisStalled": "詳細分析產生時間比預期久。",
+      "refreshAnalysis": "重新整理分析"
     }
   },
   "choosePlan": {

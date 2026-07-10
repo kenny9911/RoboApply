@@ -786,7 +786,8 @@
       "summary": "概要",
       "experience": "職務経歴",
       "education": "学歴",
-      "skills": "スキル"
+      "skills": "スキル",
+      "other": "その他のセクション"
     },
     "field": {
       "full_name": "氏名",
@@ -833,7 +834,8 @@
       }
     },
     "bullet": {
-      "flag": "コーチが指摘しました — 動詞が曖昧で数値がありません。「文章を改善」か「数値を追加」を試してください。"
+      "flag": "コーチが指摘しました — 動詞が曖昧で数値がありません。「文章を改善」か「数値を追加」を試してください。",
+      "placeholder": "実績を書く — 動詞で始めて成果で締める"
     },
     "rewrite": {
       "rewriting": "書き直し中",
@@ -962,7 +964,17 @@
       "done_title": "最適化版を保存しました",
       "done_body": "新しい履歴書バージョン「{name}」がライブラリに追加されました。元の履歴書はそのままです。",
       "done_body_paste": "最適化した変更の準備ができました。元の履歴書はそのままです。",
-      "error": "履歴書の最適化に失敗しました。もう一度お試しください。"
+      "error": "履歴書の最適化に失敗しました。もう一度お試しください。",
+      "manual_toggle": "企業を指定 — または求人票を貼り付け",
+      "company_label": "会社名",
+      "company_placeholder": "会社名",
+      "role_label": "職種",
+      "role_placeholder": "職種（任意）",
+      "analyze_manual": "このターゲットに合わせる →",
+      "manual_hint": "求人票がなくても大丈夫 — レジュメの内容だけで会社と職種に合わせます。",
+      "version_name_label": "保存名",
+      "estimated": "推定値",
+      "citation_warning": "この下書きの一部の数値はレジュメと照合できませんでした — 適用前に変更内容をよく確認してください。"
     },
     "download": {
       "eyebrow": "エクスポート",
@@ -1000,6 +1012,25 @@
       "cancel": "キャンセル",
       "confirm": "履歴書を削除",
       "confirming": "削除中…"
+    },
+    "extra": {
+      "hint": "元のレジュメから保持 — テキストとして編集できます",
+      "heading_placeholder": "セクション見出し",
+      "body_placeholder": "セクション内容（Markdown）"
+    },
+    "entry": {
+      "move_up": "上へ移動",
+      "move_down": "下へ移動",
+      "remove": "削除"
+    },
+    "analyzer": {
+      "title": "レジュメチェック",
+      "empty": "問題は見つかりませんでした — 良い仕上がりです。",
+      "severity": {
+        "critical": "重大",
+        "recommended": "推奨",
+        "optional": "任意"
+      }
     }
   },
   "landing": {
@@ -2509,6 +2540,15 @@
         "on": "オン",
         "off": "オフ",
         "coachModeHint": "回答中にリアルタイムでヒントを送ります。本番さながらに試すならオフに。"
+      },
+      "autoRejoinTitle": "接続が切断されました — 再接続中",
+      "autoRejoinBody": "自動的に面接へ再接続しています。しばらくお待ちください。失敗した場合は手動で再参加できます。",
+      "agentQualityPoor": "面接官側の接続が不安定です",
+      "enableAudio": "タップして音声を有効にする",
+      "quality": {
+        "good": "接続良好",
+        "fair": "接続はやや不安定",
+        "poor": "接続不良"
       }
     },
     "report": {
@@ -2567,7 +2607,9 @@
           "weak": "要改善",
           "missed": "未回答"
         }
-      }
+      },
+      "analysisStalled": "詳細分析の生成に通常より時間がかかっています。",
+      "refreshAnalysis": "分析を更新"
     }
   },
   "choosePlan": {

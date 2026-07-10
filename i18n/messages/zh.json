@@ -786,7 +786,8 @@
       "summary": "概述",
       "experience": "工作经历",
       "education": "教育背景",
-      "skills": "技能"
+      "skills": "技能",
+      "other": "其他部分"
     },
     "field": {
       "full_name": "姓名",
@@ -833,7 +834,8 @@
       }
     },
     "bullet": {
-      "flag": "教练标记了这条 — 动词含糊、缺少数据。试试「优化文字」或「补充数据」。"
+      "flag": "教练标记了这条 — 动词含糊、缺少数据。试试「优化文字」或「补充数据」。",
+      "placeholder": "描述你做了什么——以动词开头，以成果收尾"
     },
     "rewrite": {
       "rewriting": "改写中",
@@ -962,7 +964,17 @@
       "done_title": "定制版已保存",
       "done_body": "新的简历版本「{name}」已加入你的简历库。你的基础简历保持不变。",
       "done_body_paste": "你的定制改动已就绪。你的基础简历保持不变。",
-      "error": "定制简历失败,请重试。"
+      "error": "定制简历失败,请重试。",
+      "manual_toggle": "指定目标公司——或粘贴职位描述",
+      "company_label": "公司",
+      "company_placeholder": "公司名称",
+      "role_label": "职位",
+      "role_placeholder": "职位（可选）",
+      "analyze_manual": "为此目标定制 →",
+      "manual_hint": "没有职位描述？我会只根据你的简历，朝该公司与职位方向调整。",
+      "version_name_label": "保存为",
+      "estimated": "估算值",
+      "citation_warning": "草稿中的部分数字无法在你的简历中核实——套用前请仔细检查这些修改。"
     },
     "download": {
       "eyebrow": "导出",
@@ -1000,6 +1012,25 @@
       "cancel": "取消",
       "confirm": "删除简历",
       "confirming": "正在删除…"
+    },
+    "extra": {
+      "hint": "保留自你的原始简历——以纯文本编辑",
+      "heading_placeholder": "区块标题",
+      "body_placeholder": "区块内容（Markdown）"
+    },
+    "entry": {
+      "move_up": "上移",
+      "move_down": "下移",
+      "remove": "移除"
+    },
+    "analyzer": {
+      "title": "简历检查",
+      "empty": "没有发现问题——你的简历状态很好。",
+      "severity": {
+        "critical": "严重",
+        "recommended": "建议",
+        "optional": "可选"
+      }
     }
   },
   "landing": {
@@ -2509,6 +2540,15 @@
         "on": "开",
         "off": "关",
         "coachModeHint": "作答时实时提示与点拨。想要真实感，就关掉它。"
+      },
+      "autoRejoinTitle": "连接中断——正在重新连接",
+      "autoRejoinBody": "我们正在自动将你带回面试。请稍候——如果失败，你还可以手动重新加入。",
+      "agentQualityPoor": "面试官的网络连接不稳定",
+      "enableAudio": "点击开启声音",
+      "quality": {
+        "good": "网络良好",
+        "fair": "网络一般",
+        "poor": "网络不佳"
       }
     },
     "report": {
@@ -2567,7 +2607,9 @@
           "weak": "需改进",
           "missed": "未作答"
         }
-      }
+      },
+      "analysisStalled": "详细分析生成时间比预期长。",
+      "refreshAnalysis": "刷新分析"
     }
   },
   "choosePlan": {

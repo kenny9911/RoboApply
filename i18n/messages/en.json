@@ -786,7 +786,8 @@
       "summary": "Summary",
       "experience": "Experience",
       "education": "Education",
-      "skills": "Skills"
+      "skills": "Skills",
+      "other": "Other sections"
     },
     "field": {
       "full_name": "Full name",
@@ -833,7 +834,8 @@
       }
     },
     "bullet": {
-      "flag": "Coach flagged this — vague verbs, no metrics. Try Improve or Add metrics."
+      "flag": "Coach flagged this — vague verbs, no metrics. Try Improve or Add metrics.",
+      "placeholder": "Describe what you did — start with a verb, end with impact"
     },
     "rewrite": {
       "rewriting": "Rewriting",
@@ -962,7 +964,17 @@
       "done_title": "Tailored copy saved",
       "done_body": "A new resume version, {name}, is in your library. Your base resume is untouched.",
       "done_body_paste": "Your tailored changes are ready. Your base resume is untouched.",
-      "error": "Couldn't tailor that resume. Try again."
+      "error": "Couldn't tailor that resume. Try again.",
+      "manual_toggle": "Target a specific company — or paste a JD",
+      "company_label": "Company",
+      "company_placeholder": "Company name",
+      "role_label": "Job title",
+      "role_placeholder": "Job title (optional)",
+      "analyze_manual": "Tailor for this target →",
+      "manual_hint": "No JD? I'll tailor toward the company and title using only your resume.",
+      "version_name_label": "Save as",
+      "estimated": "estimated",
+      "citation_warning": "Some numbers in this draft couldn't be verified against your resume — review the changes carefully before applying."
     },
     "download": {
       "eyebrow": "EXPORT",
@@ -1000,6 +1012,25 @@
       "cancel": "Cancel",
       "confirm": "Delete resume",
       "confirming": "Deleting…"
+    },
+    "extra": {
+      "hint": "Preserved from your original resume — edit as plain text",
+      "heading_placeholder": "Section heading",
+      "body_placeholder": "Section content (markdown)"
+    },
+    "entry": {
+      "move_up": "Move up",
+      "move_down": "Move down",
+      "remove": "Remove"
+    },
+    "analyzer": {
+      "title": "Resume check",
+      "empty": "No issues found — your resume looks sharp.",
+      "severity": {
+        "critical": "Critical",
+        "recommended": "Recommended",
+        "optional": "Optional"
+      }
     }
   },
   "landing": {
@@ -2509,6 +2540,15 @@
         "on": "ON",
         "off": "OFF",
         "coachModeHint": "Live hints and nudges while you answer. Turn off for a real-feel run."
+      },
+      "autoRejoinTitle": "Connection lost — reconnecting",
+      "autoRejoinBody": "We're bringing you back into your interview automatically. Hang tight — if this doesn't work you'll be able to rejoin manually.",
+      "agentQualityPoor": "Interviewer's connection is degraded",
+      "enableAudio": "Tap to enable audio",
+      "quality": {
+        "good": "Good connection",
+        "fair": "Fair connection",
+        "poor": "Poor connection"
       }
     },
     "report": {
@@ -2567,7 +2607,9 @@
           "weak": "Needs work",
           "missed": "Not covered"
         }
-      }
+      },
+      "analysisStalled": "The detailed analysis is taking longer than expected.",
+      "refreshAnalysis": "Refresh analysis"
     }
   },
   "choosePlan": {
