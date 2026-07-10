@@ -9,7 +9,8 @@
 //
 // Pipeline (smoothest full-duplex): Silero VAD-based turn detection +
 // preemptive generation + tuned endpointing/interruption thresholds.
-// STT (Deepgram Nova-3) → LLM → TTS (OpenAI tts-1).
+// STT (Deepgram Nova-3) → LLM (per metadata; control-plane default) → TTS via
+// the LiveKit Inference gateway (OpenAI tts-1 as the local floor).
 //
 // This file ONLY defines the agent (default export). The worker is launched
 // from main.ts via cli.runApp, which points `ServerOptions.agent` at this file
@@ -62,6 +63,14 @@ const SHUTDOWN_DRAIN_GAP_MS = 1_500;
 // timeouts handle abandonment, not the interviewer's voice.
 const NUDGE_MIN_GAP_MS = 60_000;
 const NUDGE_MAX_PER_SESSION = 3;
+
+// Abandoned-room teardown. A candidate who drops (or closes the tab) and never
+// returns must not hold the worker slot + room until the overtime hard-stop
+// (up to planned duration + 4 min): give them a rejoin grace window, then shut
+// the job down (the shutdown callbacks drain the transcript and fire the
+// 'ended' lifecycle → the control plane finalizes and deletes the room). 90s
+// comfortably covers a page refresh or a network-interface switch.
+const ABANDON_GRACE_MS = 90_000;
 
 /** Subset of InterviewRoomMetadata the worker reads (kept in sync with
  *  backend/src/interview-engine/types.ts). */
@@ -226,8 +235,8 @@ export default defineAgent({
     // 2) Build the session. Tuned for natural full duplex:
     //  - preemptiveGeneration: start drafting the reply before the candidate
     //    fully stops → lower perceived latency.
-    //  - MultilingualModel turn detector: wait for a *meaning*-complete turn so
-    //    we don't cut the candidate off mid-thought.
+    //  - VAD end-of-turn detection (see turnDetection below for why not the
+    //    semantic turn detector).
     //  - minInterruptionDuration: the candidate must speak ~0.5s to barge in, so
     //    a stray "mhm"/cough doesn't stop the interviewer.
     //  - min/maxEndpointingDelay: snappy but patient end-of-turn detection,
@@ -424,7 +433,74 @@ export default defineAgent({
       }
     });
 
-    // 3c) Observable time management. The system prompt tells the model to
+    // 3c) Session close/error visibility. The SDK closes the WHOLE AgentSession
+    //     on a single unrecoverable pipeline error (see buildStt), and a closed
+    //     session otherwise looks like an interviewer who just went mute: the
+    //     'ended' lifecycle only fires when the JOB shuts down, so nothing
+    //     reaches the control plane until room timeouts. Log every pipeline
+    //     error, and on an unexpected close POST an 'error' lifecycle event —
+    //     the backend's lifecycle handler ignores unknown events gracefully
+    //     (never 500s), so this is pure telemetry, never load-bearing.
+    session.on(voice.AgentSessionEventTypes.Error, (ev) => {
+      const err = ev.error as { message?: string; recoverable?: boolean } | undefined;
+      serror(`pipeline error (recoverable=${err?.recoverable ?? 'unknown'}):`, ev.error);
+    });
+    const EXPECTED_CLOSE_REASONS = new Set<string>([
+      voice.CloseReason.USER_INITIATED, // our own session.close() paths (overtime, abandonment)
+      voice.CloseReason.JOB_SHUTDOWN, // normal job teardown
+      voice.CloseReason.PARTICIPANT_DISCONNECTED, // candidate left — the abandon timer owns teardown
+    ]);
+    session.on(voice.AgentSessionEventTypes.Close, (ev) => {
+      const reason = String(ev.reason ?? 'unknown');
+      if (EXPECTED_CLOSE_REASONS.has(reason)) {
+        slog(`session closed (${reason})`);
+        return;
+      }
+      const message = ev.error instanceof Error ? ev.error.message : ev.error ? String(ev.error) : undefined;
+      serror(`session closed UNEXPECTEDLY: reason=${reason}${message ? ` error=${message}` : ''}`);
+      void post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/lifecycle`, {
+        event: 'error',
+        reason,
+        ...(message ? { message } : {}),
+      });
+    });
+
+    // 3d) Abandoned-room teardown. closeOnDisconnect is disabled at start() so
+    //     a deliberate-looking disconnect (page refresh/tab close both send
+    //     CLIENT_INITIATED) doesn't instantly kill the pipeline — the client's
+    //     rejoin flow needs a LIVE agent to return to. In exchange the worker
+    //     owns abandonment: candidate gone past the grace window → close the
+    //     session and shut the job down instead of holding the room until the
+    //     overtime hard-stop.
+    let abandonTimer: NodeJS.Timeout | null = null;
+    // Candidate identities are minted as `candidate-${sessionId}` by the
+    // control plane; anything else (hidden egress, ops) never arms the timer.
+    const isCandidate = (identity: string): boolean => identity.startsWith('candidate-');
+    ctx.room.on('participantDisconnected', (p) => {
+      if (!isCandidate(p.identity)) return;
+      slog(`candidate disconnected — closing in ${ABANDON_GRACE_MS / 1000}s unless they rejoin`);
+      if (abandonTimer) clearTimeout(abandonTimer);
+      abandonTimer = setTimeout(() => {
+        abandonTimer = null;
+        void (async () => {
+          slog('candidate never returned — closing abandoned session');
+          try {
+            await session.close();
+          } catch (err) {
+            swarn('abandoned-session close failed:', err);
+          }
+          ctx.shutdown('candidate_abandoned');
+        })();
+      }, ABANDON_GRACE_MS);
+    });
+    ctx.room.on('participantConnected', (p) => {
+      if (!isCandidate(p.identity) || !abandonTimer) return;
+      clearTimeout(abandonTimer);
+      abandonTimer = null;
+      slog('candidate rejoined — abandonment timer cancelled');
+    });
+
+    // 3e) Observable time management. The system prompt tells the model to
     //     "manage your time" but an LLM has no clock — these timers inject
     //     non-spoken system notes at fixed fractions of the planned duration so
     //     pacing decisions are grounded in actual elapsed time. Cleared on
@@ -434,6 +510,10 @@ export default defineAgent({
     ctx.addShutdownCallback(async () => {
       for (const t of timeManagementTimers) clearTimeout(t);
       timeManagementTimers.length = 0;
+      if (abandonTimer) {
+        clearTimeout(abandonTimer);
+        abandonTimer = null;
+      }
       if (metricsFlushTimer) {
         clearInterval(metricsFlushTimer);
         metricsFlushTimer = null;
@@ -478,7 +558,11 @@ export default defineAgent({
     // 4) Connect, start, and greet.
     await ctx.connect();
     const agent = new voice.Agent({ instructions: systemPrompt });
-    await session.start({ agent, room: ctx.room });
+    // closeOnDisconnect defaults to TRUE and closes the session the instant the
+    // candidate disconnects with CLIENT_INITIATED — which a mid-interview page
+    // refresh sends — leaving a rejoining candidate with a mute agent. Disabled:
+    // the abandonment grace timer (3d) owns candidate-gone teardown instead.
+    await session.start({ agent, room: ctx.room, inputOptions: { closeOnDisconnect: false } });
 
     // The greeting must NOT be interruptible — otherwise the candidate's mic
     // picking up the agent's own voice (or any noise) cuts it off immediately.
@@ -577,7 +661,13 @@ export default defineAgent({
           slog('overtime hard-stop: closing spoken, session closed');
         } catch (err) {
           swarn('overtime wrap-up failed; leaving teardown to room timeouts:', err);
+          return;
         }
+        // Release the job too: shutdown drains transcripts and fires 'ended',
+        // so the control plane finalizes + deletes the room — the candidate's
+        // client sees ROOM_DELETED and routes to the report instead of sitting
+        // in a silent room with a closed pipeline.
+        ctx.shutdown('overtime_hard_stop');
       })();
     });
 

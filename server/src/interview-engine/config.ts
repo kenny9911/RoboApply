@@ -82,10 +82,13 @@ export function getAgentCallbackSecret(): string | null {
  * The agent worker name the interview engine dispatches. DELIBERATELY separate
  * from the shared `LIVEKIT_AGENT_NAME` (which is "Agent Alex" in this repo) so
  * the interview worker never collides with Agent Alex's LiveKit registration.
- * The Node worker (interview-agent/) must register this SAME name.
+ * The Node worker (interview-agent/) must register this SAME name. The default
+ * MUST stay 'RoboApply-Interview' — the deployed contract; a stale
+ * 'RoboHire-Interview' fallback once dispatched interviews to nobody on the
+ * shared LiveKit project (silent-room outage, 2026-07-03).
  */
 export function getInterviewAgentName(): string {
-  return process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboHire-Interview';
+  return process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboApply-Interview';
 }
 
 // ─── R2 / S3 ────────────────────────────────────────────────────────────

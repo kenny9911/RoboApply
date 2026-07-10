@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { RoboApiError } from '../../../lib/api/client';
+import { raV2Api } from '../../../lib/api/v2';
 import { useCredits } from '../../../hooks/useAccount';
 
 import { useMockCatalog } from '../../../hooks/useMockV3';
@@ -43,6 +44,10 @@ import {
 } from '../../../lib/api/interviewEngine';
 
 const DEFAULT_DURATION_MINUTES = 30;
+
+// The blueprint agent clips résumé context to 2000 chars server-side — sending
+// more just bloats the create body.
+const RESUME_CONTEXT_MAX_CHARS = 2000;
 
 function relativeWhen(iso: string | null): string {
   if (!iso) return '';
@@ -76,6 +81,28 @@ export default function MockSetupPage() {
 
   const catalogQuery = useMockCatalog();
   const catalog = catalogQuery.data?.catalog;
+
+  // Résumé context for the blueprint prompt (the interviewer tailors question
+  // targeting to it). Fetched in the background at page load — never inside
+  // launch(), which must stay instant — and strictly best-effort: no résumé
+  // (or a failed fetch) simply omits it from the create body.
+  const [resumeContext, setResumeContext] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { resumes } = await raV2Api.resumes.list();
+        // Primary résumé preferred; the list is lastEditedAt-desc, so the
+        // fallback is the most recently edited one.
+        const pick = resumes.find((r) => r.isPrimary) ?? resumes[0];
+        if (!pick) return;
+        const { resume } = await raV2Api.resumes.get(pick.id);
+        const md = resume.resumeMarkdown?.trim();
+        if (!cancelled && md) setResumeContext(md.slice(0, RESUME_CONTEXT_MAX_CHARS));
+      } catch { /* best-effort — interview setup works without a résumé */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Recent sessions come from the engine (completed voice interviews), mapped to
   // the strip's shape using the catalog for display names.
@@ -220,6 +247,9 @@ export default function MockSetupPage() {
         language,
         durationMinutes,
         candidateName: user?.name ?? undefined,
+        // Whatever the background fetch has by now — a still-pending fetch is
+        // simply omitted rather than delaying the launch.
+        resumeContext: resumeContext ?? undefined,
       };
       const { session } = await interviewEngineApi.create(body);
       router.push(`/mock-interview/${session.id}`);

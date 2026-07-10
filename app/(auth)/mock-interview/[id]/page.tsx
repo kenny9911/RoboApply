@@ -10,7 +10,8 @@
 // Disconnect ≠ end: the backend keeps 'live' sessions rejoinable (re-mints a
 // token, re-dispatches a missing agent), so only a deliberate End/Back or a
 // server-side termination finalizes — finalizing on a WiFi blip would score
-// and bill a half-run interview.
+// and bill a half-run interview. An unexpected drop first gets ONE automatic
+// rejoin attempt; only if that fails does the manual Rejoin screen appear.
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -43,6 +44,13 @@ import {
   LiveBar, InterviewerTile, YourTile, LiveTranscript, type AiState,
   useLiveCoach, LiveQuestionCard, LiveCoachNudge, CoachMeters, CoachToggle,
 } from '../../../../components/v3/mock';
+// Imported directly (not via the ./mock barrel) so non-live pages don't pull
+// livekit-client into their bundles.
+import {
+  classifyDisconnect,
+  qualityLevel,
+  type QualityLevel,
+} from '../../../../components/v3/mock/liveConnection';
 import {
   interviewEngineApi,
   postClientEvents,
@@ -53,8 +61,17 @@ import {
 import type { RAMockInterviewer, RAMockTurn } from '../../../../lib/api/v2/types';
 
 type Phase =
-  | 'loading' | 'ready' | 'micDenied' | 'agentUnavailable' | 'connectionLost'
-  | 'error' | 'ended';
+  | 'loading' | 'ready' | 'micDenied' | 'agentUnavailable' | 'reconnecting'
+  | 'connectionLost' | 'error' | 'ended';
+
+// One automatic rejoin per disconnect episode: the short delay lets a flapping
+// network settle before re-minting a token, and the single-attempt cap means a
+// genuinely dead connection lands on the manual screen instead of looping.
+const AUTO_REJOIN_DELAY_MS = 1_500;
+// connection() reports agentDispatched=false on a mere 8s dispatch TIMEOUT —
+// the dispatch usually still lands moments later (the backend persists the
+// late dispatch id). Re-check once before declaring the interviewer gone.
+const AGENT_DISPATCH_RETRY_DELAY_MS = 3_000;
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -67,15 +84,6 @@ const FALLBACK_INTERVIEWER: RAMockInterviewer = {
   id: 'interviewer', name: 'Interviewer', role: '', blurb: '', difficulty: 2,
   palette: ['#4ED8FF', '#8B5BFF'], company: '', style: '', archetype: 'behavioral',
 };
-
-// Reasons that mean the SERVER ended the session — the interview is genuinely
-// over and finishing (finalize → report) is correct. Everything else (signal
-// closed, network loss, unknown) gets the rejoin screen instead.
-const SERVER_ENDED_REASONS: ReadonlySet<DisconnectReason> = new Set([
-  DisconnectReason.ROOM_DELETED,
-  DisconnectReason.PARTICIPANT_REMOVED,
-  DisconnectReason.SERVER_SHUTDOWN,
-]);
 
 // Probe the mic BEFORE mounting the room: the session auto-connects with
 // audio, so a denied/absent mic would otherwise yield a silent one-way
@@ -141,6 +149,18 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   const interviewer: RAMockInterviewer =
     catalogQuery.data?.catalog.interviewers.find((i) => i.id === session?.personaId) ?? FALLBACK_INTERVIEWER;
 
+  // agentDispatched=false is often a false negative (8s server-side dispatch
+  // timeout, not a failed dispatch), so re-fetch once before treating it as
+  // terminal — the retry reads the late-persisted dispatch id.
+  const fetchConnection = useCallback(async (): Promise<IEConnection> => {
+    const { connection: c } = await interviewEngineApi.connection(id);
+    if (c.agentDispatched !== false) return c;
+    trackEvent('agent_dispatch_retry');
+    await new Promise((r) => { window.setTimeout(r, AGENT_DISPATCH_RETRY_DELAY_MS); });
+    const { connection: retried } = await interviewEngineApi.connection(id);
+    return retried;
+  }, [id, trackEvent]);
+
   useEffect(() => {
     // Run EXACTLY once. connection() dispatches the AI interviewer into the
     // room, so a double-invocation (React StrictMode runs effects twice in dev,
@@ -153,9 +173,9 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     connectRef.current = true;
     (async () => {
       try {
-        const [{ session: s }, { connection: c }] = await Promise.all([
+        const [{ session: s }, c] = await Promise.all([
           interviewEngineApi.get(id),
-          interviewEngineApi.connection(id),
+          fetchConnection(),
         ]);
         // connection() stamps startedAt server-side, but this session snapshot
         // raced it — approximate with "now" so the timer starts at zero; a
@@ -179,7 +199,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
         setPhase('error');
       }
     })();
-  }, [id, trackEvent]);
+  }, [id, trackEvent, fetchConnection]);
 
   const finish = useCallback(async (toReport: boolean, intentional = true) => {
     if (endingRef.current) return;
@@ -197,31 +217,25 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     router.push(toReport ? `/mock-interview/${id}/report` : '/mock-interview');
   }, [id, router, trackEvent, flushEvents]);
 
-  // Reason-aware disconnect: deliberate end or server termination → finalize
-  // as before; anything else (network loss, signal closed, unknown) → offer a
-  // rejoin instead of ending + billing the session.
-  const handleDisconnected = useCallback((reason?: DisconnectReason) => {
-    if (endingRef.current) return;
-    trackEvent('disconnected', {
-      reason: reason !== undefined ? DisconnectReason[reason] ?? String(reason) : 'unknown',
-    });
-    if (intentionalEndRef.current || (reason !== undefined && SERVER_ENDED_REASONS.has(reason))) {
-      void finish(true, intentionalEndRef.current);
-      return;
-    }
-    setPhase('connectionLost');
-  }, [finish, trackEvent]);
+  // One automatic reacquire per disconnect episode (reset on successful
+  // rejoin). The timer is cleared on unmount so a navigation away doesn't
+  // trigger a stray reconnect.
+  const autoRejoinUsedRef = useRef(false);
+  const autoRejoinTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (autoRejoinTimerRef.current !== null) window.clearTimeout(autoRejoinTimerRef.current);
+  }, []);
 
   // Re-mint a token (the backend re-dispatches a missing agent for 'live'
   // sessions) and re-enter via a key bump — never through the initial effect,
   // whose connectRef one-shot guard exists to prevent double agent dispatch.
-  const reacquire = useCallback(async (isRejoin: boolean) => {
+  const reacquire = useCallback(async (isRejoin: boolean, auto = false) => {
     if (busyRef.current || endingRef.current) return;
     busyRef.current = true;
     setBusy(true);
-    if (isRejoin) trackEvent('rejoin_attempt');
+    if (isRejoin) trackEvent('rejoin_attempt', { auto });
     try {
-      const { connection: c } = await interviewEngineApi.connection(id);
+      const c = await fetchConnection();
       setConnection(c);
       if (c.agentDispatched === false) { setPhase('agentUnavailable'); return; }
       // True elapsed across refresh/rejoin comes from the server's startedAt.
@@ -234,7 +248,10 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
         setPhase('micDenied');
         return;
       }
-      if (isRejoin) trackEvent('rejoin_success');
+      if (isRejoin) trackEvent('rejoin_success', { auto });
+      // Recovery closes the disconnect episode — the next drop gets its own
+      // automatic attempt.
+      autoRejoinUsedRef.current = false;
       setRoomKey((k) => k + 1);
       setPhase('ready');
     } catch {
@@ -251,12 +268,44 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
           setPhase('error');
           return;
         }
-      } catch { /* offline — stay on the current screen */ }
+      } catch { /* offline */ }
+      // The automatic attempt must never strand the user on the transient
+      // 'reconnecting' screen — hand over to the manual Rejoin screen.
+      if (auto) setPhase('connectionLost');
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [id, router, trackEvent]);
+  }, [id, router, trackEvent, fetchConnection]);
+
+  // Reason-aware disconnect: deliberate end or server termination → finalize
+  // as before; anything else (network loss, signal closed, unknown) → try ONE
+  // automatic rejoin, then offer the manual screen — never end + bill the
+  // session on a drop.
+  const handleDisconnected = useCallback((reason?: DisconnectReason) => {
+    if (endingRef.current) return;
+    trackEvent('disconnected', {
+      reason: reason !== undefined ? DisconnectReason[reason] ?? String(reason) : 'unknown',
+    });
+    if (classifyDisconnect(reason, intentionalEndRef.current) === 'finalize') {
+      void finish(true, intentionalEndRef.current);
+      return;
+    }
+    if (!autoRejoinUsedRef.current) {
+      autoRejoinUsedRef.current = true;
+      setPhase('reconnecting');
+      autoRejoinTimerRef.current = window.setTimeout(() => {
+        autoRejoinTimerRef.current = null;
+        void reacquire(true, true);
+      }, AUTO_REJOIN_DELAY_MS);
+      return;
+    }
+    // A duplicate disconnect signal while the auto attempt is pending or in
+    // flight must not yank the UI to the manual screen — the attempt itself
+    // routes to 'ready' or 'connectionLost' when it resolves.
+    if (autoRejoinTimerRef.current !== null || busyRef.current) return;
+    setPhase('connectionLost');
+  }, [finish, trackEvent, reacquire]);
 
   const retryMic = useCallback(async () => {
     if (busyRef.current || endingRef.current) return;
@@ -303,6 +352,16 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
           <Btn variant="primary" onClick={() => void reacquire(false)} disabled={busy}>{t('live.retry')}</Btn>
           <Btn as="a" href="/mock-interview">{t('live.expired.cta')}</Btn>
         </div>
+      </CenterMsg>
+    );
+  }
+  if (phase === 'reconnecting') {
+    // Transient — the automatic reacquire either remounts the room ('ready')
+    // or falls through to the manual 'connectionLost' screen.
+    return (
+      <CenterMsg>
+        <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.autoRejoinTitle')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 0', maxWidth: 440 }}>{t('live.autoRejoinBody')}</p>
       </CenterMsg>
     );
   }
@@ -394,6 +453,40 @@ function CenterMsg({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ─── Connection quality indicator ──────────────────────────────────────────
+
+// good stays visually quiet (no alarm during a healthy interview); fair warns,
+// poor alarms.
+const QUALITY_TONE: Record<QualityLevel, { bar: string; text: string; border: string; bg: string }> = {
+  good: { bar: '#34d399', text: 'var(--text-2)', border: 'var(--rule)', bg: 'var(--surface)' },
+  fair: { bar: '#f59e0b', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.45)', bg: 'rgba(245, 158, 11, 0.12)' },
+  poor: { bar: '#ef4444', text: '#ef4444', border: 'rgba(239, 68, 68, 0.45)', bg: 'rgba(239, 68, 68, 0.12)' },
+};
+
+function QualityPill({ level, label }: { level: QualityLevel; label: string }) {
+  const tone = QUALITY_TONE[level];
+  const lit = level === 'good' ? 3 : level === 'fair' ? 2 : 1;
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+        border: `1px solid ${tone.border}`, background: tone.bg, color: tone.text,
+      }}
+    >
+      <span aria-hidden style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2 }}>
+        {[5, 8, 11].map((h, i) => (
+          <span
+            key={h}
+            style={{ width: 3, height: h, borderRadius: 1, background: i < lit ? tone.bar : 'var(--rule)' }}
+          />
+        ))}
+      </span>
+      {label}
+    </span>
+  );
+}
+
 // ─── In-room stage (LiveKit room context) ─────────────────────────────────
 
 function RoomStage({
@@ -417,7 +510,12 @@ function RoomStage({
   const [agentJoined, setAgentJoined] = useState(false);
   const [agentSlow, setAgentSlow] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
-  const [poorQuality, setPoorQuality] = useState(false);
+  // Persistent 3-level indicator for the LOCAL uplink, plus a separate flag for
+  // the interviewer's (remote agent's) side — a struggling agent sounds like
+  // "the app broke" unless it's labeled as a connection problem.
+  const [localQuality, setLocalQuality] = useState<QualityLevel | null>(null);
+  const [agentDegraded, setAgentDegraded] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const segMapRef = useRef<Map<string, RAMockTurn>>(new Map());
 
   // Coach Mode — on by default (this is a practice tool), persisted per browser.
@@ -465,12 +563,16 @@ function RoomStage({
       if (s === ConnectionState.Reconnecting || s === ConnectionState.SignalReconnecting) {
         if (reconnectStartRef.current === null) {
           reconnectStartRef.current = Date.now();
-          onEvent('reconnecting');
+          // `state` distinguishes a full RTC reconnect from a signal-only one.
+          onEvent('reconnecting', { state: s });
+          console.info(`[interview] reconnecting (${s})`);
         }
         setReconnecting(true);
       } else if (s === ConnectionState.Connected) {
         if (reconnectStartRef.current !== null) {
-          onEvent('reconnected', { offlineMs: Date.now() - reconnectStartRef.current });
+          const offlineMs = Date.now() - reconnectStartRef.current;
+          onEvent('reconnected', { offlineMs });
+          console.info(`[interview] reconnected after ${offlineMs}ms`);
           reconnectStartRef.current = null;
         }
         setReconnecting(false);
@@ -480,21 +582,62 @@ function RoomStage({
     return () => { room.off(RoomEvent.ConnectionStateChanged, onState); };
   }, [room, onEvent]);
 
-  // Local connection quality → persistent 'poor connection' pill. Unknown is
-  // ignored (no reading yet, not a recovery).
+  // Connection quality — LOCAL and REMOTE (agent) participants both. Every
+  // transition is logged (identity, from→to; trackEvent stamps the ts) so
+  // "was that interview laggy" is answerable server-side, plus console.info
+  // for live debugging. Unknown is ignored (no reading yet, not a transition).
   const poorRef = useRef(false);
+  const qualityMapRef = useRef<Map<string, QualityLevel>>(new Map());
   useEffect(() => {
     const onQuality = (quality: ConnectionQuality, participant: Participant) => {
-      if (!participant.isLocal) return;
-      if (quality === ConnectionQuality.Unknown) return;
-      const poor = quality === ConnectionQuality.Poor || quality === ConnectionQuality.Lost;
-      if (poor === poorRef.current) return;
-      poorRef.current = poor;
-      setPoorQuality(poor);
-      onEvent(poor ? 'quality_poor' : 'quality_recovered');
+      const level = qualityLevel(quality);
+      if (level === null) return;
+      const key = participant.identity || (participant.isLocal ? 'local' : 'remote');
+      const prev = qualityMapRef.current.get(key) ?? null;
+      if (prev === level) return;
+      qualityMapRef.current.set(key, level);
+      onEvent('quality_change', {
+        identity: participant.identity, isLocal: participant.isLocal, from: prev, to: level,
+      });
+      console.info(
+        `[interview] connection quality ${key}${participant.isLocal ? ' (local)' : ' (agent)'}: ${prev ?? 'unknown'} → ${level}`,
+      );
+      if (participant.isLocal) {
+        setLocalQuality(level);
+        // Boundary events kept alongside quality_change — existing dashboards
+        // read quality_poor/quality_recovered.
+        const poor = level === 'poor';
+        if (poor !== poorRef.current) {
+          poorRef.current = poor;
+          onEvent(poor ? 'quality_poor' : 'quality_recovered');
+        }
+      } else {
+        setAgentDegraded(level === 'poor');
+      }
     };
     room.on(RoomEvent.ConnectionQualityChanged, onQuality);
     return () => { room.off(RoomEvent.ConnectionQualityChanged, onQuality); };
+  }, [room, onEvent]);
+
+  // Audio autoplay unlock. This page auto-connects with no user gesture, so a
+  // mid-interview refresh can leave remote audio blocked by the browser's
+  // autoplay policy — the agent speaks, the candidate hears nothing, and
+  // nothing looks wrong. Surface a tap-to-enable button that satisfies the
+  // gesture requirement via room.startAudio().
+  useEffect(() => {
+    const onAudioStatus = () => {
+      const blocked = !room.canPlaybackAudio;
+      setAudioBlocked(blocked);
+      if (blocked) onEvent('audio_blocked');
+    };
+    if (!room.canPlaybackAudio) setAudioBlocked(true);
+    room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioStatus);
+    return () => { room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioStatus); };
+  }, [room, onEvent]);
+  const unlockAudio = useCallback(() => {
+    room.startAudio()
+      .then(() => { setAudioBlocked(false); onEvent('audio_unlocked'); })
+      .catch(() => { /* keep the button — the next tap retries */ });
   }, [room, onEvent]);
 
   // Agent-joined detection: voice-assistant state leaves connecting/disconnected
@@ -555,17 +698,30 @@ function RoomStage({
         onBack={onBack}
       />
 
-      {poorQuality && (
-        <div role="status" style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
-          <span
+      {(localQuality !== null || agentDegraded) && (
+        <div role="status" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          {localQuality !== null && (
+            <QualityPill level={localQuality} label={t(`live.quality.${localQuality}`)} />
+          )}
+          {agentDegraded && (
+            <QualityPill level="poor" label={t('live.agentQualityPoor')} />
+          )}
+        </div>
+      )}
+
+      {audioBlocked && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={unlockAudio}
             style={{
-              padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
-              border: '1px solid rgba(245, 158, 11, 0.45)', background: 'rgba(245, 158, 11, 0.12)',
-              color: '#f59e0b',
+              padding: '10px 20px', borderRadius: 999, fontSize: 14, fontWeight: 700,
+              border: '1px solid rgba(239, 68, 68, 0.55)', background: 'rgba(239, 68, 68, 0.14)',
+              color: 'var(--text)', cursor: 'pointer',
             }}
           >
-            {t('live.poorConnection')}
-          </span>
+            {t('live.enableAudio')}
+          </button>
         </div>
       )}
 
