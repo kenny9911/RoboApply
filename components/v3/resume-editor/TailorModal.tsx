@@ -2,14 +2,18 @@
 
 // TailorModal — the "Tailor for a job" flow (.rb-modal). Source:
 // RoboApply_V3/resume-editor.jsx TailorModal. Four steps:
-//   pick      → choose a job from your matches (search.run) OR paste a JD
+//   pick      → choose a job from your matches (search.run) OR name a manual
+//               target: company (required) + title (optional) + JD (optional —
+//               when absent the tailor targets company+title alone)
 //   analyzing → animated step list while resumes.tailorDiff runs
-//   review    → before/after match score + per-change toggles
-//   done      → resumes.create({ kind:'tailored_for_jd' }) materialized
+//   review    → before/after match score (labeled when estimated) +
+//               per-change toggles + editable version name + a citation-guard
+//               warning when numbers in the draft couldn't all be verified
+//   done      → tailored variant materialized
 //
 // The diff comes from `resumes.tailorDiff` (does NOT create the variant). On
-// apply we create the tailored variant via `resumes.create` and hand the new
-// id back so the page can offer "Open tailored copy".
+// apply, `resumes.tailorApply` persists exactly the previewed markdown (no
+// second LLM run) with the user's version name and the company/title lineage.
 //
 // Modal panel uses a LITERAL solid background (CLAUDE.md rule) — the .rb-modal
 // backdrop keeps its dim tint.
@@ -53,24 +57,37 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
     id: string | null;
     company: string;
     role: string;
+    targetCompany?: string;
+    targetTitle?: string;
   } | null>(null);
   const [diff, setDiff] = useState<RATailorDiff | null>(null);
   // The agent's tailored markdown from the preview — persisted on Apply, so the
   // saved variant is exactly what was shown (no second LLM re-tailor).
   const [tailoredMarkdown, setTailoredMarkdown] = useState<string | null>(null);
+  const [citationGuardPassed, setCitationGuardPassed] = useState(true);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
-  const [pasteOpen, setPasteOpen] = useState(false);
+  // Manual target lane — company (drives targeting even without a JD),
+  // optional title, optional pasted JD.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualCompany, setManualCompany] = useState('');
+  const [manualTitle, setManualTitle] = useState('');
   const [pasted, setPasted] = useState('');
+  // Editable name for the saved version, pre-filled from the diff target.
+  const [versionName, setVersionName] = useState('');
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
   const jobs: RAJobListItem[] = searchData?.jobs ?? [];
+  const manualReady =
+    manualCompany.trim().length > 0 || pasted.trim().length >= 30;
 
   async function start(picked: {
     id: string | null;
     company: string;
     role: string;
     jdText?: string;
+    targetCompany?: string;
+    targetTitle?: string;
   }) {
     setJob(picked);
     setStep('analyzing');
@@ -79,11 +96,17 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
       const res = await tailorDiff.mutateAsync(
         picked.id
           ? { targetJobId: picked.id }
-          : { jdText: picked.jdText ?? '' },
+          : {
+              jdText: picked.jdText?.trim() ? picked.jdText : undefined,
+              targetCompany: picked.targetCompany?.trim() || undefined,
+              targetTitle: picked.targetTitle?.trim() || undefined,
+            },
       );
       setDiff(res.diff);
       setTailoredMarkdown(res.tailoredResumeMarkdown ?? null);
+      setCitationGuardPassed(res.citationGuardPassed !== false);
       setAccepted(new Set(res.diff.changes.map((c) => c.id)));
+      setVersionName(`${resumeName} · ${res.diff.companyName}`);
       setStep('review');
     } catch {
       setError(true);
@@ -105,15 +128,18 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
     setError(false);
     try {
       // Persist exactly the previewed tailored markdown, honoring the user's
-      // per-change toggles — for BOTH a real job and a pasted JD, with no
+      // per-change toggles — for BOTH a real job and a manual target, with no
       // second LLM call (and no double charge). Deselected reversible changes
-      // are reverted server-side from `acceptedChangeIds`.
+      // are reverted server-side from `acceptedChangeIds`. Company/title ride
+      // along as lineage for manual (no saved job) targets.
       const res = await applyMut.mutateAsync({
         tailoredResumeMarkdown: tailoredMarkdown,
         changes: diff.changes,
         acceptedChangeIds: [...accepted],
         targetJobId: diff.jobId ?? undefined,
-        name: `${resumeName} · ${diff.companyName}`,
+        targetCompany: job?.targetCompany,
+        targetTitle: job?.targetTitle,
+        name: versionName.trim() || `${resumeName} · ${diff.companyName}`,
       });
       setCreatedId(res.resume.id);
       setStep('done');
@@ -228,12 +254,28 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
               <button
                 type="button"
                 className="rb-tailor-paste-toggle"
-                onClick={() => setPasteOpen((o) => !o)}
+                onClick={() => setManualOpen((o) => !o)}
               >
-                {pasteOpen ? '−' : '+'} {t('tailor.paste_toggle')}
+                {manualOpen ? '−' : '+'} {t('tailor.manual_toggle')}
               </button>
-              {pasteOpen ? (
-                <div style={{ marginTop: 12 }}>
+              {manualOpen ? (
+                <div className="rb-tailor-manual">
+                  <div className="rb-tailor-manual-row">
+                    <input
+                      className="rb-tailor-input"
+                      value={manualCompany}
+                      placeholder={t('tailor.company_placeholder')}
+                      aria-label={t('tailor.company_label')}
+                      onChange={(e) => setManualCompany(e.target.value)}
+                    />
+                    <input
+                      className="rb-tailor-input"
+                      value={manualTitle}
+                      placeholder={t('tailor.role_placeholder')}
+                      aria-label={t('tailor.role_label')}
+                      onChange={(e) => setManualTitle(e.target.value)}
+                    />
+                  </div>
                   <textarea
                     className="rb-textarea"
                     placeholder={t('tailor.paste_placeholder')}
@@ -241,22 +283,31 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                     onChange={(e) => setPasted(e.target.value)}
                     rows={5}
                   />
-                  <button
-                    type="button"
-                    className="btn primary"
-                    style={{ marginTop: 10 }}
-                    disabled={pasted.trim().length < 30}
-                    onClick={() =>
-                      start({
-                        id: null,
-                        company: t('tailor.pasted_company'),
-                        role: t('tailor.pasted_role'),
-                        jdText: pasted,
-                      })
-                    }
-                  >
-                    {t('tailor.analyze_paste')}
-                  </button>
+                  <div className="rb-tailor-manual-foot">
+                    <button
+                      type="button"
+                      className="btn primary"
+                      disabled={!manualReady}
+                      onClick={() =>
+                        start({
+                          id: null,
+                          company:
+                            manualCompany.trim() || t('tailor.pasted_company'),
+                          role: manualTitle.trim() || t('tailor.pasted_role'),
+                          jdText: pasted,
+                          targetCompany: manualCompany.trim() || undefined,
+                          targetTitle: manualTitle.trim() || undefined,
+                        })
+                      }
+                    >
+                      {t('tailor.analyze_manual')}
+                    </button>
+                    {!pasted.trim() ? (
+                      <span className="rb-tailor-manual-hint">
+                        {t('tailor.manual_hint')}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
             </>
@@ -292,6 +343,12 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
 
           {step === 'review' && diff ? (
             <>
+              {!citationGuardPassed ? (
+                <div className="rb-guard-warn" role="alert">
+                  <span aria-hidden="true">⚠</span>
+                  <span>{t('tailor.citation_warning')}</span>
+                </div>
+              ) : null}
               <div className="rb-tailor-summary">
                 <div className="rb-tailor-summary-meta">
                   <div className="rb-tailor-summary-co">
@@ -310,6 +367,7 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                   <div className="rb-tailor-score-shift">
                     <div className="rb-tailor-score-before">
                       <span className="rb-tailor-score-num">
+                        {diff.estimated ? '~' : ''}
                         {diff.matchBefore}
                       </span>
                       <span className="rb-tailor-score-lbl">
@@ -319,12 +377,16 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                     <div className="rb-tailor-arrow">→</div>
                     <div className="rb-tailor-score-after">
                       <span className="rb-tailor-score-num">
+                        {diff.estimated ? '~' : ''}
                         {diff.matchAfter}
                       </span>
                       <span className="rb-tailor-score-lbl">
                         {t('tailor.after')}
                       </span>
                     </div>
+                    {diff.estimated ? (
+                      <span className="rb-est-pill">{t('tailor.estimated')}</span>
+                    ) : null}
                   </div>
                 </div>
                 <div className="rb-tailor-summary-note">
@@ -341,6 +403,19 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                     onToggle={() => toggle(c.id)}
                   />
                 ))}
+              </div>
+
+              <div className="rb-version-name">
+                <label className="rb-version-name-lbl" htmlFor="rb-version-name">
+                  {t('tailor.version_name_label')}
+                </label>
+                <input
+                  id="rb-version-name"
+                  className="rb-tailor-input"
+                  value={versionName}
+                  onChange={(e) => setVersionName(e.target.value)}
+                  maxLength={200}
+                />
               </div>
             </>
           ) : null}
@@ -382,7 +457,9 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
               >
                 {createdId
                   ? t('tailor.done_body', {
-                      name: `${resumeName} · ${job?.company ?? ''}`,
+                      name:
+                        versionName.trim() ||
+                        `${resumeName} · ${job?.company ?? ''}`,
                     })
                   : t('tailor.done_body_paste')}
               </p>

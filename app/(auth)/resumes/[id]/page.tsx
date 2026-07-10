@@ -23,12 +23,17 @@
 //   • Tailor: `useResumeTailorDiff` + `useCreateResumeMutation`.
 //   • Coach: `useResumeCoachTips`.
 //
-// Contract gap: `StructuredResume` (lib/resumeStructure) round-trips Identity /
-// Summary / Experience / Education / Skills only — it has no Projects field, so
-// the editor is scoped to those 5 sections to avoid silently dropping a
-// Projects section on the next save. The prototype's Projects section is out of
-// scope until either the parser gains projects support or the contract adds a
-// structured field. (Reported.)
+// Sections: Identity / Summary / Experience / Education / Skills are fully
+// structured; any other `##` section (Projects, Certifications, Languages…)
+// round-trips through `StructuredResume.extraSections` and renders below as
+// an editable heading + raw-markdown card — nothing is dropped on save.
+//
+// Autosave rehydration: `usePatchResumeMutation.onSuccess` writes the PATCH
+// response back into the detail cache, which changes `resume` identity. The
+// hydration effect therefore guards: it only re-parses server markdown when
+// it differs from what this editor last serialized (first load / external
+// change) — an autosave echo never clobbers in-flight keystrokes or remounts
+// rows.
 //
 // Layout: the (auth) layout wraps children in `.main-inner` (padded, max-width
 // 1180). The editor is a full-bleed split, so we break out of that padding with
@@ -76,7 +81,6 @@ import {
   DownloadModal,
   YOUNG_HELPERS,
 } from '../../../../components/v3/resume-editor';
-import { IconEdit } from '../../../../components/v3/primitives';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -107,13 +111,30 @@ export default function ResumeEditorPage({
 
   const lastSerializedRef = useRef('');
   const skipNextAutoSaveRef = useRef(true);
+  // Which resume id the editor state was hydrated from.
+  const hydratedIdRef = useRef<string | null>(null);
+  // True while `structured` differs from the last-serialized markdown.
+  const dirtyRef = useRef(false);
+  // One-shot focus request for a freshly inserted bullet (consumed by
+  // BulletRow's mount — a ref, so setting it never re-renders).
+  const pendingBulletFocusRef = useRef<{ expId: string; idx: number } | null>(
+    null,
+  );
 
-  // Hydrate from server on first load.
+  // Hydrate from server — first load, resume switch, or a REAL external
+  // content change. Autosave echoes (the PATCH response carrying exactly what
+  // we just serialized) and refetches racing local edits are ignored so
+  // typing is never interrupted and row ids/focus survive.
   useEffect(() => {
     if (!resume) return;
+    const sameDoc = hydratedIdRef.current === resume.id;
+    if (sameDoc && resume.resumeMarkdown === lastSerializedRef.current) return;
+    if (sameDoc && dirtyRef.current) return;
+    hydratedIdRef.current = resume.id;
     setStructured(parseResumeMarkdown(resume.resumeMarkdown));
     setResumeName(resume.name);
     lastSerializedRef.current = resume.resumeMarkdown;
+    dirtyRef.current = false;
     skipNextAutoSaveRef.current = true;
   }, [resume]);
 
@@ -125,16 +146,23 @@ export default function ResumeEditorPage({
       return;
     }
     const serialized = serializeResumeMarkdown(structured);
-    if (serialized === lastSerializedRef.current) return;
+    dirtyRef.current = serialized !== lastSerializedRef.current;
+    if (!dirtyRef.current) return;
 
     setSaveState('saving');
     const handle = setTimeout(async () => {
+      // Pre-commit before the PATCH resolves: the mutation's onSuccess writes
+      // the response into the query cache, and the hydration effect compares
+      // against this ref — committing after the await would race that effect.
+      const prev = lastSerializedRef.current;
+      lastSerializedRef.current = serialized;
+      dirtyRef.current = false;
       try {
-        const next = await patch.mutateAsync({ resumeMarkdown: serialized });
-        lastSerializedRef.current = serialized;
+        await patch.mutateAsync({ resumeMarkdown: serialized });
         setSaveState('saved');
-        void next;
       } catch {
+        lastSerializedRef.current = prev;
+        dirtyRef.current = true;
         setSaveState('error');
       }
     }, 1200);
@@ -157,15 +185,35 @@ export default function ResumeEditorPage({
 
   // Strength meter — the resume analyzer's 0..100 score (drops as issues
   // accrue, climbs as the user fixes bullets). The meter moves live as edits
-  // land.
-  const strength = useMemo(() => {
-    if (!structured) return 0;
+  // land; the full report backs the toolbar's issue popover.
+  const analysis = useMemo(() => {
+    if (!structured) return null;
     try {
-      return analyzeResume(structured).score;
+      return analyzeResume(structured);
     } catch {
-      return resume?.matchScoreCached ?? 72;
+      return null;
     }
-  }, [structured, resume]);
+  }, [structured]);
+  const strength = analysis?.score ?? resume?.matchScoreCached ?? 72;
+
+  // Analyzer anchors → editor section DOM ids (exp-<id> passes through: the
+  // experience cards carry that id directly).
+  const jumpToIssue = useCallback((anchor?: string) => {
+    if (!anchor) return;
+    const sectionMap: Record<string, string> = {
+      'section-contact': 'identity',
+      'section-target': 'identity',
+      'section-summary': 'summary',
+      'section-experience': 'experience',
+      'section-education': 'education',
+      'section-skills': 'skills',
+    };
+    const domId = anchor.startsWith('exp-') ? anchor : sectionMap[anchor];
+    if (!domId) return;
+    document
+      .getElementById(domId)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   // ── structured mutators ──
   const updateStructured = useCallback(
@@ -213,17 +261,102 @@ export default function ResumeEditorPage({
       if (!cur) return cur;
       return {
         ...cur,
+        experiences: cur.experiences.map((e) => {
+          if (e.id !== expId) return e;
+          pendingBulletFocusRef.current = { expId, idx: e.bullets.length };
+          return { ...e, bullets: [...e.bullets, ''] };
+        }),
+      };
+    });
+  }, []);
+
+  /** Enter inside a bullet — insert an empty bullet directly below it. */
+  const insertBulletBelow = useCallback((expId: string, idx: number) => {
+    setStructured((cur) => {
+      if (!cur) return cur;
+      pendingBulletFocusRef.current = { expId, idx: idx + 1 };
+      return {
+        ...cur,
         experiences: cur.experiences.map((e) =>
-          e.id !== expId ? e : { ...e, bullets: [...e.bullets, ''] },
+          e.id !== expId
+            ? e
+            : {
+                ...e,
+                bullets: [
+                  ...e.bullets.slice(0, idx + 1),
+                  '',
+                  ...e.bullets.slice(idx + 1),
+                ],
+              },
         ),
       };
     });
   }, []);
 
+  const removeBullet = useCallback(
+    (expId: string, idx: number, opts?: { focusPrev?: boolean }) => {
+      setStructured((cur) => {
+        if (!cur) return cur;
+        if (opts?.focusPrev && idx > 0) {
+          pendingBulletFocusRef.current = { expId, idx: idx - 1 };
+        }
+        return {
+          ...cur,
+          experiences: cur.experiences.map((e) =>
+            e.id !== expId
+              ? e
+              : { ...e, bullets: e.bullets.filter((_, i) => i !== idx) },
+          ),
+        };
+      });
+    },
+    [],
+  );
+
+  const moveBullet = useCallback(
+    (expId: string, idx: number, dir: -1 | 1) => {
+      setStructured((cur) => {
+        if (!cur) return cur;
+        return {
+          ...cur,
+          experiences: cur.experiences.map((e) => {
+            if (e.id !== expId) return e;
+            const to = idx + dir;
+            if (to < 0 || to >= e.bullets.length) return e;
+            const bullets = [...e.bullets];
+            [bullets[idx], bullets[to]] = [bullets[to], bullets[idx]];
+            return { ...e, bullets };
+          }),
+        };
+      });
+    },
+    [],
+  );
+
   const addExperience = useCallback(() => {
     setStructured((cur) =>
       cur ? { ...cur, experiences: [...cur.experiences, blankExperience()] } : cur,
     );
+  }, []);
+
+  const removeExperience = useCallback((expId: string) => {
+    setStructured((cur) =>
+      cur
+        ? { ...cur, experiences: cur.experiences.filter((e) => e.id !== expId) }
+        : cur,
+    );
+  }, []);
+
+  const moveExperience = useCallback((expId: string, dir: -1 | 1) => {
+    setStructured((cur) => {
+      if (!cur) return cur;
+      const idx = cur.experiences.findIndex((e) => e.id === expId);
+      const to = idx + dir;
+      if (idx < 0 || to < 0 || to >= cur.experiences.length) return cur;
+      const experiences = [...cur.experiences];
+      [experiences[idx], experiences[to]] = [experiences[to], experiences[idx]];
+      return { ...cur, experiences };
+    });
   }, []);
 
   const updateEducationField = useCallback(
@@ -244,6 +377,54 @@ export default function ResumeEditorPage({
   const addEducation = useCallback(() => {
     setStructured((cur) =>
       cur ? { ...cur, education: [...cur.education, blankEducation()] } : cur,
+    );
+  }, []);
+
+  const removeEducation = useCallback((eduId: string) => {
+    setStructured((cur) =>
+      cur
+        ? { ...cur, education: cur.education.filter((ed) => ed.id !== eduId) }
+        : cur,
+    );
+  }, []);
+
+  const moveEducation = useCallback((eduId: string, dir: -1 | 1) => {
+    setStructured((cur) => {
+      if (!cur) return cur;
+      const idx = cur.education.findIndex((ed) => ed.id === eduId);
+      const to = idx + dir;
+      if (idx < 0 || to < 0 || to >= cur.education.length) return cur;
+      const education = [...cur.education];
+      [education[idx], education[to]] = [education[to], education[idx]];
+      return { ...cur, education };
+    });
+  }, []);
+
+  // Extra (unclassified) sections — heading + raw markdown, preserved
+  // verbatim by lib/resumeStructure. Editable as plain text.
+  const updateExtraSection = useCallback(
+    (extraId: string, patch: { heading?: string; markdown?: string }) => {
+      setStructured((cur) => {
+        if (!cur) return cur;
+        return {
+          ...cur,
+          extraSections: cur.extraSections.map((x) =>
+            x.id !== extraId ? x : { ...x, ...patch },
+          ),
+        };
+      });
+    },
+    [],
+  );
+
+  const removeExtraSection = useCallback((extraId: string) => {
+    setStructured((cur) =>
+      cur
+        ? {
+            ...cur,
+            extraSections: cur.extraSections.filter((x) => x.id !== extraId),
+          }
+        : cur,
     );
   }, []);
 
@@ -283,6 +464,8 @@ export default function ResumeEditorPage({
           onRename={setResumeName}
           saveState={saveState}
           strength={strength}
+          report={analysis}
+          onJumpToIssue={jumpToIssue}
           coachOpen={coachOpen}
           onToggleCoach={() => setCoachOpen((o) => !o)}
           onDownload={() => setDownloadOpen(true)}
@@ -383,8 +566,8 @@ export default function ResumeEditorPage({
               onAdd={addExperience}
               anchorId="experience"
             >
-              {structured.experiences.map((e) => (
-                <div key={e.id} className="rb-exp">
+              {structured.experiences.map((e, expIdx) => (
+                <div key={e.id} id={`exp-${e.id}`} className="rb-exp">
                   <div className="rb-exp-head">
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <input
@@ -452,13 +635,20 @@ export default function ResumeEditorPage({
                         </span>
                       </div>
                     </div>
-                    <span
-                      className="btn ghost"
-                      style={{ padding: '5px 9px', fontSize: 11.5, cursor: 'default' }}
-                      aria-hidden="true"
-                    >
-                      <IconEdit size={12} /> {t('experience.editing')}
-                    </span>
+                    <EntryControls
+                      onMoveUp={
+                        expIdx > 0 ? () => moveExperience(e.id, -1) : undefined
+                      }
+                      onMoveDown={
+                        expIdx < structured.experiences.length - 1
+                          ? () => moveExperience(e.id, 1)
+                          : undefined
+                      }
+                      onRemove={() => removeExperience(e.id)}
+                      moveUpLabel={t('entry.move_up')}
+                      moveDownLabel={t('entry.move_down')}
+                      removeLabel={t('entry.remove')}
+                    />
                   </div>
                   <div className="rb-bullets">
                     {e.bullets.map((b, i) => (
@@ -466,6 +656,22 @@ export default function ResumeEditorPage({
                         key={`${e.id}-${i}`}
                         text={b}
                         onAccept={(text) => updateBullet(e.id, i, text)}
+                        onChange={(text) => updateBullet(e.id, i, text)}
+                        onAddBelow={() => insertBulletBelow(e.id, i)}
+                        onRemove={(opts) => removeBullet(e.id, i, opts)}
+                        onMoveUp={i > 0 ? () => moveBullet(e.id, i, -1) : undefined}
+                        onMoveDown={
+                          i < e.bullets.length - 1
+                            ? () => moveBullet(e.id, i, 1)
+                            : undefined
+                        }
+                        requestFocus={
+                          pendingBulletFocusRef.current?.expId === e.id &&
+                          pendingBulletFocusRef.current?.idx === i
+                        }
+                        onFocusHandled={() => {
+                          pendingBulletFocusRef.current = null;
+                        }}
                         runRewrite={(body) => rewrite.mutateAsync(body)}
                         targetJobId={resume.targetJobId}
                       />
@@ -518,7 +724,7 @@ export default function ResumeEditorPage({
               onAdd={addEducation}
               anchorId="education"
             >
-              {structured.education.map((ed) => (
+              {structured.education.map((ed, eduIdx) => (
                 <div key={ed.id} className="rb-edu">
                   <div className="rb-edu-head">
                     <input
@@ -529,6 +735,20 @@ export default function ResumeEditorPage({
                         updateEducationField(ed.id, 'school', ev.target.value)
                       }
                       style={inlineInput()}
+                    />
+                    <EntryControls
+                      onMoveUp={
+                        eduIdx > 0 ? () => moveEducation(ed.id, -1) : undefined
+                      }
+                      onMoveDown={
+                        eduIdx < structured.education.length - 1
+                          ? () => moveEducation(ed.id, 1)
+                          : undefined
+                      }
+                      onRemove={() => removeEducation(ed.id)}
+                      moveUpLabel={t('entry.move_up')}
+                      moveDownLabel={t('entry.move_down')}
+                      removeLabel={t('entry.remove')}
                     />
                     <span className="rb-edu-when">
                       <input
@@ -588,6 +808,47 @@ export default function ResumeEditorPage({
                 onClearSuggestions={() => setSkillSuggestions([])}
               />
             </EditorSection>
+
+            {/* Extra sections — unclassified `##` blocks (Projects,
+                Certifications…) preserved from the source markdown. Edited as
+                heading + raw markdown; full structural editing not needed to
+                keep them lossless. */}
+            {structured.extraSections.length > 0 ? (
+              <EditorSection
+                eyebrow="06"
+                title={t('section.other')}
+                subtitle={t('extra.hint')}
+                anchorId="extra-sections"
+              >
+                {structured.extraSections.map((x) => (
+                  <div key={x.id} className="rb-extra">
+                    <div className="rb-extra-head">
+                      <input
+                        className="rb-extra-heading"
+                        value={x.heading}
+                        placeholder={t('extra.heading_placeholder')}
+                        onChange={(ev) =>
+                          updateExtraSection(x.id, { heading: ev.target.value })
+                        }
+                      />
+                      <EntryControls
+                        onRemove={() => removeExtraSection(x.id)}
+                        removeLabel={t('entry.remove')}
+                      />
+                    </div>
+                    <textarea
+                      className="rb-textarea rb-extra-body"
+                      value={x.markdown}
+                      placeholder={t('extra.body_placeholder')}
+                      rows={Math.min(10, x.markdown.split('\n').length + 1)}
+                      onChange={(ev) =>
+                        updateExtraSection(x.id, { markdown: ev.target.value })
+                      }
+                    />
+                  </div>
+                ))}
+              </EditorSection>
+            ) : null}
           </div>
 
           {/* RIGHT — paper preview */}
@@ -657,6 +918,62 @@ export default function ResumeEditorPage({
         }}
       />
     </div>
+  );
+}
+
+/** Quiet hover-revealed entry controls (reorder + remove) for experience /
+ *  education / extra-section cards. Buttons only render for legal moves. */
+function EntryControls({
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+  moveUpLabel,
+  moveDownLabel,
+  removeLabel,
+}: {
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onRemove: () => void;
+  moveUpLabel?: string;
+  moveDownLabel?: string;
+  removeLabel: string;
+}) {
+  return (
+    <span className="rb-entry-actions">
+      {moveUpLabel ? (
+        <button
+          type="button"
+          className="rb-entry-btn"
+          title={moveUpLabel}
+          aria-label={moveUpLabel}
+          disabled={!onMoveUp}
+          onClick={onMoveUp}
+        >
+          ↑
+        </button>
+      ) : null}
+      {moveDownLabel ? (
+        <button
+          type="button"
+          className="rb-entry-btn"
+          title={moveDownLabel}
+          aria-label={moveDownLabel}
+          disabled={!onMoveDown}
+          onClick={onMoveDown}
+        >
+          ↓
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className="rb-entry-btn"
+        title={removeLabel}
+        aria-label={removeLabel}
+        onClick={onRemove}
+      >
+        ✕
+      </button>
+    </span>
   );
 }
 

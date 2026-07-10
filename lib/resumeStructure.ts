@@ -9,6 +9,12 @@
 // double-asterisk titles, dashed contact, em-dashed dates) so existing
 // fixture resumes — and resumes pasted by users — open without surprise.
 //
+// Unknown `##` sections (Projects, Certifications, Languages, Awards…) are
+// NOT dropped: they round-trip through `extraSections` verbatim, each pinned
+// to the known block it followed in the source so relative order survives
+// serialize. Experience/education location lines (`*City, ST*` under the
+// entry head) parse back into `location` — symmetric with the serializer.
+//
 // All pure. No React, no I/O. Test from vitest.
 
 // ─────────────────────────────────────────────────────────────────────
@@ -43,6 +49,24 @@ export interface StructuredEducation {
   bullets: string[];
 }
 
+/** The four `##` blocks the structured editor understands. */
+export type KnownSectionKind = 'summary' | 'experiences' | 'education' | 'skills';
+
+/** A `##` section the structured editor does NOT model (Projects,
+ *  Certifications, Languages…). Preserved verbatim so the first autosave
+ *  after an upload can never destroy it. */
+export interface StructuredExtraSection {
+  id: string;
+  /** Original heading text, case preserved (e.g. "Projects"). */
+  heading: string;
+  /** Raw markdown body of the section, verbatim. Edited as plain text. */
+  markdown: string;
+  /** The known block this section followed in the source document — the
+   *  serializer re-emits it right after that block, so the original relative
+   *  order holds. null = appeared before any known section. */
+  anchor: KnownSectionKind | null;
+}
+
 export interface StructuredResume {
   contact: StructuredContact;
   targetTitle: string;
@@ -50,6 +74,7 @@ export interface StructuredResume {
   experiences: StructuredExperience[];
   education: StructuredEducation[];
   skills: string[];
+  extraSections: StructuredExtraSection[];
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -61,7 +86,9 @@ function newId(prefix: string): string {
 }
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
-const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/;
+// Leading "(" included — otherwise "(555) 987-6543" parses as "555) 987-6543",
+// leaving a stray "(" in the tagline that re-accumulates across autosaves.
+const PHONE_RE = /(\+?\(?\d[\d\s().-]{7,}\d)/;
 const URL_RE =
   /(?:https?:\/\/)?(?:www\.)?(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s|·,]*)?/g;
 
@@ -79,6 +106,24 @@ function splitDateRange(s: string): { startDate: string; endDate: string } {
   const m = norm.match(/^(.+?)\s*-\s*(.+)$/);
   if (m) return { startDate: m[1].trim(), endDate: m[2].trim() };
   return { startDate: norm, endDate: '' };
+}
+
+/** The serializer writes entry locations as a lone italic line under the
+ *  entry head (`*San Francisco, CA*`). Read that back — symmetric round-trip. */
+function extractLocationLine(rest: string[]): { location: string; rest: string[] } {
+  for (let i = 0; i < rest.length; i++) {
+    const trimmed = rest[i].trim();
+    if (!trimmed) continue;
+    const italic = trimmed.match(/^\*([^*]+)\*$/) ?? trimmed.match(/^_([^_]+)_$/);
+    if (italic) {
+      return {
+        location: italic[1].trim(),
+        rest: [...rest.slice(0, i), ...rest.slice(i + 1)],
+      };
+    }
+    break; // only the first non-blank line can be the location
+  }
+  return { location: '', rest };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -106,7 +151,9 @@ function splitSections(md: string): {
     if (h2) {
       sawFirstH2 = true;
       if (current) sections.push(current);
-      current = { heading: h2[1].toLowerCase(), body: [] };
+      // Original case preserved — classifySection lowercases; unknown
+      // sections re-emit the heading verbatim.
+      current = { heading: h2[1], body: [] };
       continue;
     }
     if (current) {
@@ -140,8 +187,11 @@ function parseContactFromPreamble(preamble: string[]): {
   // Remove the email before scanning for URLs — otherwise the email's own
   // domain (e.g. "126.com" inside "user@126.com") is mis-detected as a link,
   // appended to the contact line on serialize, and re-extracted on the next
-  // parse, accumulating without bound across autosaves.
-  const urlSearchText = emailMatch ? rest.split(emailMatch[0]).join(' ') : rest;
+  // parse, accumulating without bound across autosaves. Emphasis markers are
+  // blanked too: the contact line's closing `*`/`_` would otherwise be
+  // captured into the last link's path and grow by one every round-trip.
+  const urlSearchText = (emailMatch ? rest.split(emailMatch[0]).join(' ') : rest)
+    .replace(/[*_]/g, ' ');
   const emailDomain = emailMatch
     ? (emailMatch[0].split('@')[1] || '').toLowerCase()
     : '';
@@ -177,19 +227,24 @@ function parseContactFromPreamble(preamble: string[]): {
   // leaked into the contact line as repeated standalone tokens; without this
   // they'd survive as a junk "target title" instead of as junk links.
   if (emailDomain) tagline = tagline.split(emailDomain).join(' ');
-  tagline = tagline
-    .replace(/[·|]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/[,;\-–—]/g, ' ')
-    .trim();
 
-  // Location heuristic — pick a leftover "City, State" or "City, Country" chunk.
+  // Location heuristic — pick a leftover "City, State" or "City, Country"
+  // chunk. Stripped from the tagline BEFORE punctuation collapses below;
+  // stripping after (the old order) de-commas "Seattle, WA" first, so the
+  // replace misses and the city re-accumulates in the title every autosave.
   let location = '';
   const locMatch = rest.match(/([A-Z][A-Za-z\s]+,\s*[A-Za-z]{2,})/);
   if (locMatch && !links.some((l) => l.includes(locMatch[1]))) {
     location = locMatch[1].trim();
-    tagline = tagline.replace(location, '').replace(/\s+/g, ' ').trim();
+    tagline = tagline.split(location).join(' ');
   }
+
+  tagline = tagline
+    .replace(/[·|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[,;\-–—]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   return {
     contact: {
@@ -203,7 +258,7 @@ function parseContactFromPreamble(preamble: string[]): {
   };
 }
 
-function classifySection(heading: string): keyof StructuredResume | null {
+function classifySection(heading: string): KnownSectionKind | null {
   const h = heading.trim().toLowerCase();
   if (/^summary|^professional summary|^profile|^about/.test(h)) return 'summary';
   if (
@@ -289,14 +344,15 @@ function parseExperienceBlock(body: string[]): StructuredExperience[] {
       title = headLine;
     }
 
-    const { bullets } = parseBulletsAndHeading(rest);
+    const { location, rest: restNoLoc } = extractLocationLine(rest);
+    const { bullets } = parseBulletsAndHeading(restNoLoc);
     const { startDate, endDate } = splitDateRange(dateRange);
 
     out.push({
       id: newId('exp'),
       company: stripWrappers(company),
       title: stripWrappers(title),
-      location: '',
+      location,
       startDate,
       endDate,
       bullets,
@@ -364,7 +420,7 @@ function parseEducationBlock(body: string[]): StructuredEducation[] {
       }
     }
 
-    const rest = lines.slice(1);
+    const { location, rest } = extractLocationLine(lines.slice(1));
     const { bullets } = parseBulletsAndHeading(rest);
     const { startDate, endDate } = splitDateRange(dateRange);
 
@@ -372,7 +428,7 @@ function parseEducationBlock(body: string[]): StructuredEducation[] {
       id: newId('edu'),
       degree: stripWrappers(degree),
       school: stripWrappers(school),
-      location: '',
+      location,
       startDate,
       endDate,
       bullets,
@@ -419,6 +475,12 @@ export function parseResumeMarkdown(md: string): StructuredResume {
   let experiences: StructuredExperience[] = [];
   let education: StructuredEducation[] = [];
   let skills: string[] = [];
+  const extraSections: StructuredExtraSection[] = [];
+
+  // Anchor extras to the last KNOWN section seen, so serialize can put them
+  // back at (approximately) the same spot in the document.
+  let lastKnown: KnownSectionKind | null = null;
+  let extraIdx = 0;
 
   for (const sec of sections) {
     const kind = classifySection(sec.heading);
@@ -434,7 +496,18 @@ export function parseResumeMarkdown(md: string): StructuredResume {
       education = parseEducationBlock(sec.body);
     } else if (kind === 'skills') {
       skills = parseSkillsBlock(sec.body);
+    } else {
+      // Unknown section — preserve verbatim rather than dropping it.
+      extraSections.push({
+        // Index-based id: deterministic across re-parses so React keys hold.
+        id: `extra_${extraIdx++}`,
+        heading: sec.heading.trim(),
+        markdown: sec.body.join('\n').replace(/^\n+/, '').replace(/\s+$/, ''),
+        anchor: lastKnown,
+      });
+      continue; // extras don't advance the known-section anchor
     }
+    lastKnown = kind;
   }
 
   return {
@@ -444,6 +517,7 @@ export function parseResumeMarkdown(md: string): StructuredResume {
     experiences,
     education,
     skills,
+    extraSections,
   };
 }
 
@@ -473,12 +547,29 @@ export function serializeResumeMarkdown(s: StructuredResume): string {
   if (contactBits.length) lines.push(`*${contactBits.join(' · ')}*`);
   lines.push('');
 
+  // Extra (unknown) sections re-emit verbatim right after the known block
+  // they followed in the source, so relative order survives the round-trip.
+  const extras = s.extraSections ?? [];
+  const emitExtras = (anchor: KnownSectionKind | null) => {
+    for (const x of extras) {
+      if (x.anchor !== anchor) continue;
+      lines.push(`## ${x.heading.trim() || 'Section'}`);
+      lines.push('');
+      const body = x.markdown.replace(/^\n+/, '').replace(/\s+$/, '');
+      if (body) lines.push(body);
+      lines.push('');
+    }
+  };
+
+  emitExtras(null);
+
   if (s.summary.trim()) {
     lines.push('## Summary');
     lines.push('');
     lines.push(s.summary.trim());
     lines.push('');
   }
+  emitExtras('summary');
 
   if (s.experiences.length) {
     lines.push('## Experience');
@@ -495,6 +586,7 @@ export function serializeResumeMarkdown(s: StructuredResume): string {
       lines.push('');
     }
   }
+  emitExtras('experiences');
 
   if (s.education.length) {
     lines.push('## Education');
@@ -511,6 +603,7 @@ export function serializeResumeMarkdown(s: StructuredResume): string {
       lines.push('');
     }
   }
+  emitExtras('education');
 
   if (s.skills.length) {
     lines.push('## Skills');
@@ -518,6 +611,7 @@ export function serializeResumeMarkdown(s: StructuredResume): string {
     lines.push(s.skills.filter((sk) => sk.trim()).join(' · '));
     lines.push('');
   }
+  emitExtras('skills');
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
@@ -534,6 +628,7 @@ export function blankStructuredResume(): StructuredResume {
     experiences: [],
     education: [],
     skills: [],
+    extraSections: [],
   };
 }
 

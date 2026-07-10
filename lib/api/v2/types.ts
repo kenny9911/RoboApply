@@ -791,8 +791,13 @@ export interface ResumeRewriteBody {
 export interface ResumeTailorDiffBody {
   /** pick from matches… */
   targetJobId?: string;
-  /** …or paste a raw JD (one of the two is required) */
+  /** …or paste a raw JD… */
   jdText?: string;
+  /** …or name a manual target: company (drives the tailor even without a JD)
+   *  plus an optional title. One of targetJobId / jdText / targetCompany is
+   *  required. */
+  targetCompany?: string;
+  targetTitle?: string;
 }
 
 /** Partial preferences update; only changed fields are sent (mirror the SaveBar). */
@@ -1223,6 +1228,10 @@ export interface ResumeTailorDiffResponse {
   /** The agent's tailored markdown the diff was computed from — pass it back to
    *  tailorApply so Apply persists exactly the preview (no LLM re-run). */
   tailoredResumeMarkdown?: string;
+  /** False when the tailor agent's CitationGuard could not trace every number
+   *  in the draft back to the base resume — the UI shows a review warning.
+   *  Optional for back-compat with older payloads (absent = no verdict). */
+  citationGuardPassed?: boolean;
 }
 
 /** V3 — persist a tailor preview as a new tailored variant. */
@@ -1233,6 +1242,9 @@ export interface ResumeTailorApplyBody {
    *  reversible change (rewrite/add) is reverted before persisting. */
   acceptedChangeIds?: string[] | null;
   targetJobId?: string;
+  /** Manual-target lineage (no saved job) — persisted on the variant's meta. */
+  targetCompany?: string;
+  targetTitle?: string;
   name?: string;
 }
 

@@ -435,8 +435,10 @@ router.post('/:id/tailor-diff', requireAuth, async (req: Request, res: Response)
 // POST /:id/tailor-apply — persist a tailor PREVIEW as a new tailored variant.
 // Deterministic: no LLM re-run and no new charge (the tailor was billed at
 // /tailor-diff). Body: { tailoredResumeMarkdown, changes?, acceptedChangeIds?,
-// targetJobId?, name? }. `acceptedChangeIds` (omitted = accept all) reverts the
-// deselected reversible changes in the tailored markdown before persisting.
+// targetJobId?, targetCompany?, targetTitle?, name? }. `acceptedChangeIds`
+// (omitted = accept all) reverts the deselected reversible changes in the
+// tailored markdown before persisting. targetCompany/targetTitle carry the
+// manual-target lineage when there is no saved job.
 router.post('/:id/tailor-apply', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
@@ -445,6 +447,8 @@ router.post('/:id/tailor-apply', requireAuth, async (req: Request, res: Response
       changes?: unknown;
       acceptedChangeIds?: unknown;
       targetJobId?: string;
+      targetCompany?: string;
+      targetTitle?: string;
       name?: string;
     };
     const resume = await raResumeService.applyTailoredMarkdown(userId, req.params.id, {
@@ -454,6 +458,8 @@ router.post('/:id/tailor-apply', requireAuth, async (req: Request, res: Response
         ? (body.acceptedChangeIds as string[])
         : null,
       targetJobId: typeof body.targetJobId === 'string' ? body.targetJobId : undefined,
+      targetCompany: typeof body.targetCompany === 'string' ? body.targetCompany : undefined,
+      targetTitle: typeof body.targetTitle === 'string' ? body.targetTitle : undefined,
       name: typeof body.name === 'string' ? body.name : undefined,
     });
     return res.status(201).json({ resume });

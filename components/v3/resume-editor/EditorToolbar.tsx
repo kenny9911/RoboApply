@@ -7,11 +7,15 @@
 //
 // The title is an inline editable input styled to look like text (the page
 // debounce-PATCHes the rename). The strength meter is derived display state
-// the page owns.
+// the page owns — clicking it opens the AnalyzerPanel issue list (the WHY
+// behind the number, with click-to-fix jumps).
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Btn, IconSparkle, IconArrow, IconBolt, IconUpload, IconTrash } from '../primitives';
+import { AnalyzerPanel } from './AnalyzerPanel';
+import type { AnalyzerReport } from '../../../lib/resumeAnalyzer';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -21,6 +25,10 @@ interface Props {
   saveState: SaveState;
   /** 0..100 resume strength. */
   strength: number;
+  /** Full analyzer report backing the meter; null while structured is unset. */
+  report?: AnalyzerReport | null;
+  /** Scroll to the section an analyzer issue points at. */
+  onJumpToIssue?: (anchor?: string) => void;
   coachOpen: boolean;
   onToggleCoach: () => void;
   onDownload: () => void;
@@ -34,6 +42,8 @@ export function EditorToolbar({
   onRename,
   saveState,
   strength,
+  report,
+  onJumpToIssue,
   coachOpen,
   onToggleCoach,
   onDownload,
@@ -42,6 +52,7 @@ export function EditorToolbar({
   onBack,
 }: Props) {
   const t = useTranslations('resumeEditor');
+  const [issuesOpen, setIssuesOpen] = useState(false);
 
   const savedLabel =
     saveState === 'saving'
@@ -78,12 +89,34 @@ export function EditorToolbar({
           >
             {savedLabel}
           </span>
-          <span className="rb-strength">
-            <span className="rb-strength-lbl">{t('toolbar.strength')}</span>
-            <span className="rb-strength-bar">
-              <span className="fill" style={{ width: `${strength}%` }} />
-            </span>
-            <span className="rb-strength-num">{strength}</span>
+          <span className="rb-analyzer-wrap">
+            <button
+              type="button"
+              className="rb-strength rb-strength-btn"
+              onClick={() => setIssuesOpen((o) => !o)}
+              disabled={!report}
+              aria-expanded={issuesOpen}
+              title={t('analyzer.title')}
+            >
+              <span className="rb-strength-lbl">{t('toolbar.strength')}</span>
+              <span className="rb-strength-bar">
+                <span className="fill" style={{ width: `${strength}%` }} />
+              </span>
+              <span className="rb-strength-num">{strength}</span>
+              {report && report.counts.total > 0 ? (
+                <span className="rb-strength-issues">{report.counts.total}</span>
+              ) : null}
+            </button>
+            {issuesOpen && report ? (
+              <AnalyzerPanel
+                report={report}
+                onJump={(anchor) => {
+                  onJumpToIssue?.(anchor);
+                  setIssuesOpen(false);
+                }}
+                onClose={() => setIssuesOpen(false)}
+              />
+            ) : null}
           </span>
         </div>
       </div>

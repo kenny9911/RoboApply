@@ -90,6 +90,10 @@ export interface ResumeTailorDiffResult {
    *  so "Apply" persists exactly this (per the user's selections) without a
    *  second LLM re-tailor. */
   tailoredResumeMarkdown: string;
+  /** The tailor agent's CitationGuard verdict — false when a number in the
+   *  draft couldn't be traced back to the base resume. The UI warns (does not
+   *  block apply). True on the deterministic fallback path (base unchanged). */
+  citationGuardPassed: boolean;
 }
 
 export interface ResumeCoachTipsResult {
@@ -106,6 +110,10 @@ export interface RewriteInput {
 export interface TailorDiffInput {
   targetJobId?: string;
   jdText?: string;
+  /** Manual target lane — company/title context when tailoring without a
+   *  saved job. Company alone is enough to drive the tailor (no JD). */
+  targetCompany?: string;
+  targetTitle?: string;
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────
@@ -699,19 +707,24 @@ export class RAResumeAIService {
 
   // ── tailorDiff ──
   async tailorDiff(userId: string, id: string, body: TailorDiffInput, locale?: string): Promise<ResumeTailorDiffResult> {
-    if (!body || (!body.targetJobId && !body.jdText)) {
-      throw new RewriteValidationError('targetJobId or jdText is required');
+    const manualCompany = (body?.targetCompany ?? '').trim();
+    const manualTitle = (body?.targetTitle ?? '').trim();
+    if (!body || (!body.targetJobId && !body.jdText && !manualCompany)) {
+      throw new RewriteValidationError('targetJobId, jdText or targetCompany is required');
     }
 
     const variant = await this.loadOwnedVariant(userId, id);
     const baseMd = variant.resumeMarkdown ?? '';
 
-    // Resolve job context + cached base score.
-    let companyName = 'Pasted JD';
-    let roleTitle = 'Target role';
+    // Resolve job context + cached base score. The manual lane (company +
+    // optional title, JD optional) mirrors the jdText path — company/title
+    // become the agent's target context and the diff's display names.
+    let companyName = manualCompany || 'Pasted JD';
+    let roleTitle = manualTitle || 'Target role';
     let jobId: string | null = null;
-    let jobTitle = 'Target role';
+    let jobTitle = manualTitle || 'Target role';
     let jobDescription = body.jdText ?? '';
+    let targetCompanyName: string | undefined = manualCompany || undefined;
     let parsedJD: { qualifications?: string; responsibilities?: string; benefits?: string } | undefined;
     let cachedBase: number | null = null;
 
@@ -720,6 +733,7 @@ export class RAResumeAIService {
       if (job) {
         jobId = job.id;
         companyName = job.companyName ?? companyName;
+        targetCompanyName = job.companyName ?? targetCompanyName;
         roleTitle = job.title ?? roleTitle;
         jobTitle = job.title ?? jobTitle;
         jobDescription = job.descriptionPlain ?? job.description ?? '';
@@ -748,10 +762,12 @@ export class RAResumeAIService {
     }
 
     const requestId = getCurrentRequestId() ?? undefined;
-    const seed = `${id}:${jobId ?? (body.jdText ?? '').slice(0, 32)}`;
+    const seed = `${id}:${jobId ?? `${body.jdText ?? ''}${manualCompany}${manualTitle}`.slice(0, 32)}`;
     let agentSucceeded = false;
     let tailoredMd = baseMd;
     let changeSummary = '';
+    // Fallback path returns the base unchanged — trivially guard-clean.
+    let citationGuardPassed = true;
 
     try {
       const agent = new RAResumeTailorAgent();
@@ -759,6 +775,7 @@ export class RAResumeAIService {
         {
           baseResumeMarkdown: baseMd,
           jobTitle,
+          companyName: targetCompanyName,
           jobDescription,
           parsedJD,
           complexity: 'standard',
@@ -768,6 +785,7 @@ export class RAResumeAIService {
       if (out && out.tailoredResumeMarkdown && out.tailoredResumeMarkdown.trim()) {
         tailoredMd = out.tailoredResumeMarkdown;
         changeSummary = out.changeSummary ?? '';
+        citationGuardPassed = out.citationGuardPassed;
         agentSucceeded = true;
       }
     } catch (err) {
@@ -845,9 +863,10 @@ export class RAResumeAIService {
       resumeId: id,
       jobId,
       agentSucceeded,
+      citationGuardPassed,
       changeCount: changes.length,
     });
-    return { diff, tailoredResumeMarkdown: tailoredMd };
+    return { diff, tailoredResumeMarkdown: tailoredMd, citationGuardPassed };
   }
 
   // ── coachTips ──  (FREE — deterministic, no LLM, no debit)

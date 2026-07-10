@@ -41,6 +41,9 @@ export interface RAResumeTailorParsedJD {
 export interface RAResumeTailorInput {
   baseResumeMarkdown: string;
   jobTitle: string;
+  /** Target company — set for saved jobs AND for the manual company/title
+   *  lane (which may carry no jobDescription at all). */
+  companyName?: string;
   jobDescription: string;
   parsedJD?: RAResumeTailorParsedJD;
   complexity: RAResumeTailorComplexity;
@@ -237,7 +240,17 @@ Output ONLY the JSON object.`;
   protected formatInput(input: RAResumeTailorInput): string {
     const parts: string[] = [];
     parts.push(`Complexity: ${input.complexity}`);
-    parts.push(`## Target job\nTitle: ${clipString(input.jobTitle, 240)}\n\nDescription:\n${clipString(input.jobDescription, 6_000)}`);
+    const targetLines = [`Title: ${clipString(input.jobTitle, 240)}`];
+    if (input.companyName) {
+      targetLines.push(`Company: ${clipString(input.companyName, 200)}`);
+    }
+    const description = clipString(input.jobDescription, 6_000);
+    parts.push(
+      `## Target job\n${targetLines.join('\n')}\n\nDescription:\n${
+        description ||
+        '(No job description provided — tailor toward the company and title above using only what the base resume demonstrates.)'
+      }`,
+    );
     if (input.parsedJD) {
       const pj = input.parsedJD;
       const blocks: string[] = [];

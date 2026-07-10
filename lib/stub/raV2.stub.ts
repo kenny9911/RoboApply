@@ -1327,8 +1327,8 @@ export const stubApi: RaV2Api = {
           code: 'not_found',
         });
       }
-      if (!body.targetJobId && !body.jdText) {
-        throw new RoboApiError('targetJobId or jdText is required', {
+      if (!body.targetJobId && !body.jdText && !body.targetCompany?.trim()) {
+        throw new RoboApiError('targetJobId, jdText or targetCompany is required', {
           status: 422,
           code: 'unknown',
         });
@@ -1343,12 +1343,17 @@ export const stubApi: RaV2Api = {
           diff.companyName = job.companyName;
           diff.roleTitle = job.title;
         }
-      } else if (body.jdText) {
+      } else {
+        // Manual target / pasted JD — mirror the backend's naming.
         diff.jobId = null;
-        diff.companyName = 'Pasted JD';
-        diff.roleTitle = 'Target role';
+        diff.companyName = body.targetCompany?.trim() || 'Pasted JD';
+        diff.roleTitle = body.targetTitle?.trim() || 'Target role';
       }
-      return { diff, tailoredResumeMarkdown: resume.resumeMarkdown };
+      return {
+        diff,
+        tailoredResumeMarkdown: resume.resumeMarkdown,
+        citationGuardPassed: true,
+      };
     },
 
     async tailorApply(

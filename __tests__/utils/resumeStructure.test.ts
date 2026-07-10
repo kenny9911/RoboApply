@@ -31,6 +31,45 @@ AI-focused software engineer with 6 years building production ML systems. Shippe
 Python · PyTorch · vLLM · LLM evaluation
 `;
 
+// A realistic uploaded resume: known sections interleaved with sections the
+// structured editor does not model. These must survive the round-trip.
+const MULTI_SECTION = `# Mina Chang
+*Platform Engineer · mina.chang@example.com · (555) 987-6543 · Seattle, WA · github.com/minachang*
+
+## Summary
+
+Platform engineer with 8 years across infra and developer tooling.
+
+## Experience
+
+### Cascade Labs · Platform Engineer · 05/2019 – Present
+*San Francisco, CA*
+- Cut CI wall-clock time 42% by sharding the test matrix across 60 runners.
+- Led the migration of 200+ services to a shared deploy pipeline.
+
+## Projects
+
+- **Realtime dashboard** — open-source Grafana alternative, 1.2k stars.
+- **cli-forge** — scaffolding tool used by 3 internal teams.
+
+## Certifications
+
+- AWS Certified Solutions Architect — Associate (2021)
+- CKA: Certified Kubernetes Administrator (2022)
+
+## Education
+
+### University of Washington · BS Computer Science · 09/2011 – 06/2015
+
+## Skills
+
+Kubernetes · Terraform · Go · TypeScript
+
+## Languages
+
+English (native) · Mandarin (fluent)
+`;
+
 describe('resumeStructure', () => {
   it('parses Teal-style markdown into structured fields', () => {
     const s = parseResumeMarkdown(SAMPLE);
@@ -77,6 +116,53 @@ describe('resumeStructure', () => {
     expect(formatDateString('present', 'YYYY')).toBe('Present');
     expect(formatDateString('', 'MM/YYYY')).toBe('');
     expect(formatDateString('Apr 2022', 'MM/YYYY')).toBe('Apr 2022');
+  });
+
+  it('preserves unknown sections (Projects / Certifications) through parse → serialize', () => {
+    const s = parseResumeMarkdown(MULTI_SECTION);
+    expect(s.extraSections.map((x) => x.heading)).toEqual([
+      'Projects',
+      'Certifications',
+      'Languages',
+    ]);
+    expect(s.extraSections[0].markdown).toContain('Realtime dashboard');
+    expect(s.extraSections[1].markdown).toContain('AWS Certified');
+
+    const md = serializeResumeMarkdown(s);
+    expect(md).toContain('## Projects');
+    expect(md).toContain('## Certifications');
+    expect(md).toContain('## Languages');
+    expect(md).toContain('Realtime dashboard');
+    expect(md).toContain('AWS Certified');
+
+    // Relative order survives: Projects/Certifications stay after Experience
+    // and before Education; Languages (after Skills) stays last.
+    expect(md.indexOf('## Experience')).toBeLessThan(md.indexOf('## Projects'));
+    expect(md.indexOf('## Projects')).toBeLessThan(md.indexOf('## Certifications'));
+    expect(md.indexOf('## Certifications')).toBeLessThan(md.indexOf('## Education'));
+    expect(md.indexOf('## Skills')).toBeLessThan(md.indexOf('## Languages'));
+  });
+
+  it('round-trip is byte-stable after the first whitespace normalization', () => {
+    const once = serializeResumeMarkdown(parseResumeMarkdown(MULTI_SECTION));
+    const twice = serializeResumeMarkdown(parseResumeMarkdown(once));
+    expect(twice).toBe(once);
+  });
+
+  it('experience and education location lines survive the round-trip', () => {
+    const s = parseResumeMarkdown(MULTI_SECTION);
+    expect(s.experiences[0].location).toBe('San Francisco, CA');
+
+    s.education[0].location = 'Taipei, Taiwan';
+    const md = serializeResumeMarkdown(s);
+    expect(md).toContain('*San Francisco, CA*');
+    expect(md).toContain('*Taipei, Taiwan*');
+
+    const s2 = parseResumeMarkdown(md);
+    expect(s2.experiences[0].location).toBe('San Francisco, CA');
+    expect(s2.education[0].location).toBe('Taipei, Taiwan');
+    // The location line must not leak into the bullets.
+    expect(s2.experiences[0].bullets).toEqual(s.experiences[0].bullets);
   });
 
   it('analyzer rewards quantified bullets with a higher score', () => {

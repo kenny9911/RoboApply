@@ -4,11 +4,10 @@
 // the current StructuredResume (parsed from resumeMarkdown). Source:
 // RoboApply_V3/resume-editor.jsx ResumePaper.
 //
-// The proto carried a Projects section; StructuredResume (lib/resumeStructure)
-// round-trips Identity / Summary / Experience / Education / Skills only — so
-// the editor + preview are scoped to those 5 sections to avoid losing data on
-// save (see the page's contract note). Bullets / summary render via the V3
-// Markdown primitive so any inline markup reads.
+// Renders the 5 structured sections plus every preserved extra section
+// (Projects, Certifications… — see StructuredResume.extraSections), so the
+// preview matches what serializes to the server. Bullets / summary / extras
+// render via the V3 Markdown primitive so any inline markup reads.
 
 import { useTranslations } from 'next-intl';
 
@@ -24,12 +23,32 @@ function dateRange(start: string, end: string): string {
 
 export function ResumePaper({ resume }: { resume: StructuredResume }) {
   const t = useTranslations('resumeEditor');
-  const { contact, targetTitle, summary, experiences, education, skills } =
-    resume;
+  const {
+    contact,
+    targetTitle,
+    summary,
+    experiences,
+    education,
+    skills,
+    extraSections,
+  } = resume;
 
   const contactBits = [contact.email, contact.phone, contact.location].filter(
     Boolean,
   );
+
+  // Extras render at the same spots the serializer emits them (right after
+  // the known block they followed in the source), so preview ≈ export.
+  const extrasFor = (anchor: 'summary' | 'experiences' | 'education' | 'skills' | null) =>
+    extraSections.map((x) =>
+      x.anchor === anchor && (x.markdown.trim() || x.heading.trim()) ? (
+        <PaperSection key={x.id} title={x.heading}>
+          <div className="rb-paper-text">
+            <Markdown>{x.markdown}</Markdown>
+          </div>
+        </PaperSection>
+      ) : null,
+    );
 
   return (
     <div className="rb-paper">
@@ -44,6 +63,8 @@ export function ResumePaper({ resume }: { resume: StructuredResume }) {
         ) : null}
       </div>
 
+      {extrasFor(null)}
+
       {summary ? (
         <PaperSection title={t('section.summary')}>
           <div className="rb-paper-text">
@@ -51,6 +72,7 @@ export function ResumePaper({ resume }: { resume: StructuredResume }) {
           </div>
         </PaperSection>
       ) : null}
+      {extrasFor('summary')}
 
       {experiences.length ? (
         <PaperSection title={t('section.experience')}>
@@ -84,6 +106,7 @@ export function ResumePaper({ resume }: { resume: StructuredResume }) {
           ))}
         </PaperSection>
       ) : null}
+      {extrasFor('experiences')}
 
       {education.length ? (
         <PaperSection title={t('section.education')}>
@@ -114,12 +137,14 @@ export function ResumePaper({ resume }: { resume: StructuredResume }) {
           ))}
         </PaperSection>
       ) : null}
+      {extrasFor('education')}
 
       {skills.length ? (
         <PaperSection title={t('section.skills')}>
           <div className="rb-paper-text">{skills.join(' · ')}</div>
         </PaperSection>
       ) : null}
+      {extrasFor('skills')}
     </div>
   );
 }

@@ -431,6 +431,9 @@ export class RAResumeService {
       changes?: RATailorChange[];
       acceptedChangeIds?: string[] | null;
       targetJobId?: string;
+      /** Manual-target lineage (tailored without a saved job). */
+      targetCompany?: string;
+      targetTitle?: string;
       name?: string;
     },
   ): Promise<RAResumeVariantView> {
@@ -460,6 +463,13 @@ export class RAResumeService {
         jobLabel = `${job.companyName} — ${job.title}`;
       }
     }
+    // Manual-target lineage: with no saved job, the typed company/title still
+    // name the variant and persist as meta so the lineage isn't lost.
+    const targetCompany = (body.targetCompany ?? '').trim().slice(0, 200);
+    const targetTitle = (body.targetTitle ?? '').trim().slice(0, 200);
+    if (!jobLabel && targetCompany) {
+      jobLabel = targetTitle ? `${targetCompany} — ${targetTitle}` : targetCompany;
+    }
     const name = (body.name?.trim() || (jobLabel ? `Tailored — ${jobLabel}` : `Tailored — ${base.name}`)).slice(0, 200);
 
     const created = await p.rAResumeVariant.create({
@@ -475,6 +485,19 @@ export class RAResumeService {
         matchScoreCached: null,
         sourceKind: 'tailored',
         lastEditedAt: new Date(),
+        // parsedData is the variant's only JSON column; tailored variants
+        // never carry an upload parse, so the namespaced key can't collide
+        // with ParsedResume output. No schema change.
+        ...(targetCompany || targetTitle
+          ? {
+              parsedData: {
+                tailorTarget: {
+                  company: targetCompany || null,
+                  title: targetTitle || null,
+                },
+              },
+            }
+          : {}),
       },
     });
     logger.info('RA_V2_RESUME', 'tailored variant applied from preview (no re-run)', {
