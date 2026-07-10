@@ -256,8 +256,10 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
     const userId = req.user!.id;
     // Soft-disable: SeekerProfile.deletedAt makes login throw
     // SeekerAccountDeletedError; revoke every session so the account is
-    // immediately inaccessible. A nightly sweep performs the hard purge +
-    // R2 artifact cleanup (out of scope here).
+    // immediately inaccessible. The nightly account-purge sweep
+    // (SeekerAccountPurgeService, cron /api/v1/cron/account-purge) performs
+    // the hard purge after the retention window: R2 interview artifacts +
+    // resume originals first, then the User row (Prisma cascades).
     await prisma.seekerProfile.updateMany({ where: { userId }, data: { deletedAt: new Date() } });
     await seekerAuthService.revokeAllSessions(userId);
     res.clearCookie(SESSION_COOKIE_NAME);

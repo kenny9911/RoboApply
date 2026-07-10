@@ -24,6 +24,7 @@ import {
   runFridayNudgeSweep,
 } from '../roboapply/services/RoboApplyBillingReminderService.js';
 import { interviewSessionService } from '../interview-engine/sessions/InterviewSessionService.js';
+import { runAccountPurgeSweep } from '../roboapply/services/SeekerAccountPurgeService.js';
 
 const router = Router();
 
@@ -132,5 +133,10 @@ router.get('/billing-renewal-reminder', job('billing-renewal-reminder', () => ru
 
 // 7. Billing: Friday "prep for next week" nudge.
 router.get('/billing-friday-nudge', job('billing-friday-nudge', () => runFridayNudgeSweep({})));
+
+// 8. Nightly GDPR account purge — R2 interview artifacts + resume originals
+//    first, then the User row (cascades), for accounts soft-deleted past the
+//    retention window. See SeekerAccountPurgeService.
+router.get('/account-purge', job('account-purge', () => runAccountPurgeSweep({})));
 
 export default router;

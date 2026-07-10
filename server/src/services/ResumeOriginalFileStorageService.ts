@@ -266,23 +266,38 @@ class ResumeOriginalFileStorageService {
     };
   }
 
-  async deleteFile(ref: ResumeOriginalFileRef, requestId?: string): Promise<void> {
-    const provider = normalizeProvider(ref.provider);
+  /**
+   * Best-effort delete of a stored original. Never throws. Returns true when
+   * the object is confirmed gone (deleted, already missing, or nothing was
+   * ever stored) and false when a live key could not be removed — the
+   * account-purge sweep keeps the DB row in that case so the pointer to the
+   * object survives for a retry.
+   */
+  async deleteFile(ref: ResumeOriginalFileRef, requestId?: string): Promise<boolean> {
     const key = ref.key?.trim();
-    if (!provider || !key) {
-      return;
+    if (!key) {
+      return true; // no stored object referenced — vacuously clean
+    }
+    const provider = normalizeProvider(ref.provider);
+    if (!provider) {
+      logger.warn('RESUME_STORAGE', 'Cannot delete original resume file: unknown provider', {
+        key,
+        provider: ref.provider ?? null,
+      }, requestId);
+      return false;
     }
 
     if (provider === 'local') {
       try {
         await fs.rm(path.join(this.localDir, key), { force: true });
+        return true;
       } catch (error) {
         logger.warn('RESUME_STORAGE', 'Failed to remove local original resume file', {
           key,
           error: error instanceof Error ? error.message : String(error),
         }, requestId);
+        return false;
       }
-      return;
     }
 
     try {
@@ -290,11 +305,13 @@ class ResumeOriginalFileStorageService {
         Bucket: this.getS3Bucket(),
         Key: key,
       }));
+      return true;
     } catch (error) {
       logger.warn('RESUME_STORAGE', 'Failed to remove S3 original resume file', {
         key,
         error: error instanceof Error ? error.message : String(error),
       }, requestId);
+      return false;
     }
   }
 

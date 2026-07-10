@@ -13,6 +13,11 @@
 //                                       runs past plannedSubmitAt + 6h).
 //   5. 0 3 * * 0  UTC                  → weekly RoboApplyCoverLetterCache
 //                                       cleanup (delete rows past expiresAt).
+//   6. 0 6 * * *  UTC                  → billing renewal reminder (T-5d).
+//   7. 0 16 * * 5 UTC                  → Friday "prep for next week" nudge.
+//   8. 0 4 * * *  UTC                  → GDPR account purge (hard-delete
+//                                       accounts soft-deleted past retention:
+//                                       R2 artifacts first, then User rows).
 //
 // All cron expressions overridable via env (see DEFAULT_* constants below).
 // Kill switch: ROBOAPPLY_CRON_DISABLED=true → no tasks register at all.
@@ -29,6 +34,7 @@ import { authorAllQueuedRuns } from '../services/RoboApplyAuthorService.js';
 import { submitDueRunsAll, catchupHardFailStaleRuns } from '../services/RoboApplySubmitterService.js';
 import { composeAndSendDigestsForLocalHour } from '../services/RoboApplyDigestService.js';
 import { runRenewalReminderSweep, runFridayNudgeSweep } from '../services/RoboApplyBillingReminderService.js';
+import { runAccountPurgeSweep } from '../services/SeekerAccountPurgeService.js';
 
 // ─── Defaults ───────────────────────────────────────────────────────────
 
@@ -39,6 +45,7 @@ const DEFAULT_CATCHUP_CRON = '*/15 9-15 * * *'; // every 15 min from 09:15–15:
 const DEFAULT_CACHE_CLEANUP_CRON = '0 3 * * 0'; // Sunday 03:00 UTC
 const DEFAULT_RENEWAL_REMINDER_CRON = '0 6 * * *'; // 06:00 UTC daily — T-5d renewal reminders
 const DEFAULT_FRIDAY_NUDGE_CRON = '0 16 * * 5'; // Fri 16:00 UTC — weekly prep nudge
+const DEFAULT_ACCOUNT_PURGE_CRON = '0 4 * * *'; // 04:00 UTC daily — GDPR hard-purge sweep
 
 // In-memory dedup so a per-mission submitter doesn't race the catchup sweep
 // already fired this hour. The submitter/digest services have their own
@@ -232,6 +239,26 @@ export function startRoboApplyCron(): void {
         scanned: r?.scanned ?? 0,
         sent: r?.sent ?? 0,
         skipped: r?.skipped ?? 0,
+        failed: r?.failed ?? 0,
+      });
+    },
+  );
+
+  // ── 8. Nightly GDPR account purge — daily 04:00 UTC ───────────────────
+  registerCron(
+    'account_purge',
+    process.env.ROBOAPPLY_ACCOUNT_PURGE_CRON || DEFAULT_ACCOUNT_PURGE_CRON,
+    tz,
+    async () => {
+      const r = await runAccountPurgeSweep({}).catch((err) => {
+        logger.error('ROBOAPPLY_CRON', 'account purge threw', { error: err instanceof Error ? err.message : String(err) });
+        return null;
+      });
+      logger.info('ROBOAPPLY_CRON', 'account purge cycle complete', {
+        scanned: r?.scanned ?? 0,
+        purged: r?.purged ?? 0,
+        blocked: r?.blocked ?? 0,
+        unsafeRole: r?.unsafeRole ?? 0,
         failed: r?.failed ?? 0,
       });
     },

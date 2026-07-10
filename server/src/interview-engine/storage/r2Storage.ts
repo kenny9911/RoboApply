@@ -68,28 +68,40 @@ export class InterviewR2Storage {
     );
   }
 
-  /** Best-effort single-object delete. A missing object is a no-op, not an error. */
-  async deleteObject(key: string): Promise<void> {
-    if (!this.isConfigured()) return;
+  /**
+   * Best-effort single-object delete. A missing object is a no-op, not an
+   * error (S3 delete is idempotent). Returns false — never throws — when the
+   * delete could not be confirmed (unconfigured storage or a request error),
+   * so sweeps can hold DB rows that still point at live objects.
+   */
+  async deleteObject(key: string): Promise<boolean> {
+    if (!this.isConfigured()) return false;
     try {
       const { client, bucket } = this.resolve();
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      return true;
     } catch (err) {
       logger.warn('INTERVIEW_ENGINE_R2', 'deleteObject failed', {
         key,
         error: err instanceof Error ? err.message : String(err),
       });
+      return false;
     }
   }
 
   /**
    * Remove every R2 artifact for a session (recording + transcript json/txt +
-   * report). Best-effort per object — a partial failure never throws, so the
-   * caller can still delete the DB row. Pass any DB-stored keys (recordingKey /
+   * report). Best-effort per object — a partial failure never throws, so a
+   * user-initiated delete can still drop the DB row. Returns per-object
+   * counts; the account-purge sweep treats failed > 0 as "keep the DB row and
+   * retry next run" instead. Pass any DB-stored keys (recordingKey /
    * transcriptKey) as `extraKeys` in case they ever diverge from the defaults.
    */
-  async deleteSessionArtifacts(sessionId: string, extraKeys: Array<string | null | undefined> = []): Promise<void> {
-    if (!this.isConfigured()) return;
+  async deleteSessionArtifacts(
+    sessionId: string,
+    extraKeys: Array<string | null | undefined> = [],
+  ): Promise<{ attempted: number; failed: number }> {
+    if (!this.isConfigured()) return { attempted: 0, failed: 0 };
     const keys = new Set<string>([
       this.recordingKey(sessionId, 'mp4'),
       this.transcriptJsonKey(sessionId),
@@ -97,7 +109,8 @@ export class InterviewR2Storage {
       this.reportKey(sessionId),
       ...extraKeys.filter((k): k is string => typeof k === 'string' && k.length > 0),
     ]);
-    await Promise.all([...keys].map((k) => this.deleteObject(k)));
+    const results = await Promise.all([...keys].map((k) => this.deleteObject(k)));
+    return { attempted: keys.size, failed: results.filter((ok) => !ok).length };
   }
 
   async getObjectText(key: string): Promise<string | null> {
