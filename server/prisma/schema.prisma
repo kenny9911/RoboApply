@@ -5130,7 +5130,11 @@ model RACareerGoal {
 model RAJob {
   id                     String    @id @default(cuid())
   externalId             String
-  /// 'greenhouse' | 'lever' | 'seed' | 'manual' | 'jsearch'
+  /// 'greenhouse' | 'lever' | 'seed' | 'manual' | 'jsearch' | 'robohire' | 'gohire'
+  /// robohire/gohire rows are materialized by the cross-bank search agent team
+  /// (RACrossBankSearchService) from the recruiter Job banks. externalId = the
+  /// recruiter Job.id; @@unique([externalId, sourceBoard]) keeps the two banks'
+  /// Job.id spaces collision-free. No DDL — sourceBoard is a plain String.
   sourceBoard            String
   applyUrl               String
 

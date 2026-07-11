@@ -670,7 +670,9 @@ export type DeductionSku =
   | 'ra_cover_letter'          // RACoverLetterAgent — Opus/Sonnet, $0.15/$0.03
   | 'ra_insight'               // RACareerInsightAgent — Sonnet, ~$0.015/call
   | 'ra_jd_parse'              // RAJDParseAgent — Sonnet, ~$0.01/call (V2.1)
-  | 'ra_onboarding_turn';      // Onboarding-chat turn (Haiku extract + Sonnet stream) — success-only, ~$0.015/turn
+  | 'ra_onboarding_turn'       // Onboarding-chat turn (Haiku extract + Sonnet stream) — success-only, ~$0.015/turn
+  | 'ra_crossbank_score'       // Cross-bank search — RAJobMatchScorerAgent per (resume,bank-job) pair — Sonnet, ~$0.018/call (audit-only, free_tier)
+  | 'ra_crossbank_insight';    // Cross-bank search — RACrossBankInsightAgent portfolio narrative — Sonnet, ~$0.01/call (audit-only, free_tier)
 
 export type DeductionSource = 'plan' | 'overage' | 'free_tier' | 'byok';
 

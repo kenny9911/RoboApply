@@ -21,6 +21,7 @@ import activityRouter from './activity.js';
 import integrationsRouter from './integrations.js';
 import mockRouter from './mock.js';
 import onboardingRouter from './onboarding.js';
+import discoverRouter from './discover.js';
 import adminRouter from './admin.js';
 
 const router = Router();
@@ -37,6 +38,8 @@ router.use('/activity', activityRouter);
 router.use('/integrations', integrationsRouter);
 router.use('/mock', mockRouter);
 router.use('/onboarding', onboardingRouter);
+// Cross-bank job-search agent team — searches RoboHire + GoHire banks.
+router.use('/discover', discoverRouter);
 // Admin analytics + profitability console (admin-gated inside the router).
 router.use('/admin', adminRouter);
 

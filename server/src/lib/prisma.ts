@@ -232,43 +232,34 @@ function isTransientDbError(err: unknown): boolean {
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 75;
 
-function createPrismaClient() {
-  // Fail fast on a missing connection string. Without this guard, `new Pool`
-  // receives `connectionString: undefined` and pg silently falls back to
-  // libpq defaults (localhost:5432), so the FIRST query — not startup —
-  // surfaces a cryptic `Invalid \`prisma.user.findUnique()\` invocation`
-  // (really an ECONNREFUSED, 40 frames deep). A clear boot-time error saves
-  // that whole debugging detour. See .env.example for the expected keys.
-  const runtimeUrl = pickRuntimeUrl();
+/**
+ * Build a fully-extended Prisma client against an ARBITRARY connection string.
+ *
+ * Extracted from createPrismaClient() so the cross-bank job-search feature can
+ * open read-only clients against the RoboHire / GoHire banks (separate physical
+ * Postgres, identical schema) that share this exact pool sizing + retry +
+ * guard chain. `keepalive` defaults OFF here (bank clients are read-mostly and
+ * must be Vercel-safe); the active-brand singleton opts back in below.
+ *
+ * Throws only on an empty connection string (a clear, immediate error beats a
+ * localhost:5432 fallback surfacing 40 frames deep on the first query).
+ */
+export function createPrismaClientForUrl(
+  rawUrl: string,
+  opts?: { keepalive?: boolean },
+): ExtendedPrismaClient {
+  const runtimeUrl = cleanConnectionString(rawUrl);
   if (!runtimeUrl) {
-    throw new Error(
-      'DATABASE_URL is not set — RoboApply cannot connect to a database. ' +
-        'Set DATABASE_URL (and DIRECT_DATABASE_URL) in your .env; see .env.example. ' +
-        '(For the GoHire brand, DATABASE_URL_LIGHTARK is also accepted.)',
-    );
+    throw new Error('createPrismaClientForUrl: empty connection string');
   }
 
   // v7 uses driver adapters. We pass a long-lived pg.Pool to PrismaPg so
-  // connection management lives at the app layer. Pool sizing tuned for
-  // Neon: keep idle connections warm for 10 minutes (the previous v6 URL
-  // had pool_timeout=15s but that was Prisma's own queue timeout, not pg's
-  // idle timeout — pg's default 10s killed warm connections). `keepAlive`
-  // ensures the TCP socket survives Neon's idle disconnect.
+  // connection management lives at the app layer. Pool sizing tuned for Neon
+  // (see createPrismaClient's original notes): max 1 on Vercel serverless,
+  // 90s idle to survive scale-to-zero, keepAlive on the socket.
   const pool = new Pool({
     connectionString: runtimeUrl,
-    // On Vercel serverless, every function instance is short-lived and there
-    // may be many concurrent instances — a big per-instance pool exhausts
-    // Neon's connection budget fast. Cap at 1 (rely on Neon's pgbouncer pooler
-    // for cross-instance sharing). Non-serverless hosts keep the warm pool.
     max: process.env.VERCEL ? 1 : 10,
-    // Neon's scale-to-zero suspends the compute after idle. If we hold
-    // sockets longer than the suspend window, the kernel keeps them in
-    // ESTABLISHED state while the backend is gone — the next query then
-    // either inherits a dead socket (P1017) or, worse, the whole pool
-    // wedges with 10 stale sockets while new requests queue on
-    // connectionTimeoutMillis. 90s aligns with the keepalive interval so
-    // any client that misses a keepalive gets recycled before the next
-    // suspend window opens.
     idleTimeoutMillis: 90_000,
     connectionTimeoutMillis: 30_000,
     keepAlive: true,
@@ -276,7 +267,7 @@ function createPrismaClient() {
 
   // pg.Pool emits 'error' on idle clients that die. Silence the default
   // crash behavior — pg has already removed the dead client from the pool,
-  // and our $allOperations retry below will recover the in-flight query.
+  // and the $allOperations retry below recovers the in-flight query.
   pool.on('error', () => {});
 
   const adapter = new PrismaPg(pool);
@@ -286,9 +277,7 @@ function createPrismaClient() {
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
 
-  // Keep an idle connection alive against Neon. Defaults to ON in
-  // production but can be forced via PRISMA_KEEPALIVE_ENABLED=true in dev.
-  if (shouldEnableKeepalive()) {
+  if (opts?.keepalive) {
     const keepaliveMs = parseKeepaliveMs();
     setInterval(async () => {
       try {
@@ -299,6 +288,39 @@ function createPrismaClient() {
     }, keepaliveMs).unref();
   }
 
+  return applyExtensions(baseClient);
+}
+
+/**
+ * Active-brand singleton path. The fail-fast missing-URL error and
+ * keepalive-by-default behaviour are preserved verbatim; the pool/adapter/
+ * extension mechanics now live in createPrismaClientForUrl so the cross-bank
+ * clients share one byte-identical setup.
+ */
+function createPrismaClient() {
+  // Fail fast on a missing connection string. Without this guard, `new Pool`
+  // receives `connectionString: undefined` and pg silently falls back to
+  // libpq defaults (localhost:5432), so the FIRST query — not startup —
+  // surfaces a cryptic `Invalid \`prisma.user.findUnique()\` invocation`
+  // (really an ECONNREFUSED, 40 frames deep). See .env.example for the keys.
+  const runtimeUrl = pickRuntimeUrl();
+  if (!runtimeUrl) {
+    throw new Error(
+      'DATABASE_URL is not set — RoboApply cannot connect to a database. ' +
+        'Set DATABASE_URL (and DIRECT_DATABASE_URL) in your .env; see .env.example. ' +
+        '(For the GoHire brand, DATABASE_URL_LIGHTARK is also accepted.)',
+    );
+  }
+  return createPrismaClientForUrl(runtimeUrl, { keepalive: shouldEnableKeepalive() });
+}
+
+/**
+ * The three $extends guards — transient-error-retry, role-invariant-guard,
+ * seeker-append-only-guard — applied identically to every client (the
+ * active-brand singleton AND every cross-bank client). Byte-identical to the
+ * original inline chain; extracted only so both construction paths share it.
+ */
+function applyExtensions(baseClient: PrismaClient) {
   return baseClient.$extends({
     name: 'transient-error-retry',
     query: {
@@ -440,7 +462,12 @@ function createPrismaClient() {
   });
 }
 
-type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
+// Exported so the cross-bank client map (raBankClients.ts) can type its
+// clients. Based on applyExtensions (not createPrismaClient) to avoid a
+// circular type: createPrismaClientForUrl annotates its return as
+// ExtendedPrismaClient, and createPrismaClient returns that — anchoring the
+// alias on the un-annotated applyExtensions breaks the cycle. Identical type.
+export type ExtendedPrismaClient = ReturnType<typeof applyExtensions>;
 
 // Transaction-callback parameter type for the extended client. Use this in
 // helper signatures that previously accepted `Prisma.TransactionClient` —
@@ -486,5 +513,16 @@ export const prisma = global.prisma || createPrismaClient();
 if (process.env.NODE_ENV !== 'production') {
   global.prisma = prisma;
 }
+
+/**
+ * The cleaned pooled connection string the active-brand singleton is bound to.
+ * Exported so raBankClients.ts can detect when a cross-bank URL points at the
+ * SAME physical DB as the singleton and reuse it instead of opening a 2nd pool.
+ */
+export function activeRuntimeUrl(): string | undefined {
+  return pickRuntimeUrl();
+}
+
+export { cleanConnectionString };
 
 export default prisma;

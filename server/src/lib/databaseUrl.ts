@@ -68,3 +68,46 @@ export function resolveDirectDatabaseUrl(): string | undefined {
   }
   return process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Cross-bank job-search (RoboApply candidate side). The candidate app reads
+// recruiter `Job`/`Company` rows out of BOTH banks at once, regardless of
+// which brand it runs as, so it needs explicit per-bank URLs rather than the
+// single active-brand URL the resolvers above return.
+//
+// Fallbacks keep local dev + single-brand deploys working with NO new env:
+//   - RoboHire bank → DATABASE_URL_ROBOHIRE, else DATABASE_URL when the active
+//     brand IS robohire (its own DB already holds the RoboHire Job bank).
+//   - GoHire bank   → DATABASE_URL_GOHIRE, else DATABASE_URL_LIGHTARK, else
+//     DATABASE_URL when the active brand IS gohire.
+// `undefined` = that bank is not configured → the search round degrades to the
+// other bank (see raBankClients.isBankEnabled).
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Active brand as a bank id (robohire default). */
+export function activeBank(): DbBrand {
+  return resolveDbBrand() === 'gohire' ? 'gohire' : 'robohire';
+}
+
+export function resolveRoboHireDatabaseUrl(): string | undefined {
+  return (
+    process.env.DATABASE_URL_ROBOHIRE ||
+    (resolveDbBrand() === 'robohire' ? process.env.DATABASE_URL : undefined)
+  );
+}
+
+export function resolveGoHireDatabaseUrl(): string | undefined {
+  return (
+    process.env.DATABASE_URL_GOHIRE ||
+    process.env.DATABASE_URL_LIGHTARK ||
+    (resolveDbBrand() === 'gohire' ? process.env.DATABASE_URL : undefined)
+  );
+}
+
+export function resolveDirectRoboHireDatabaseUrl(): string | undefined {
+  return process.env.DIRECT_DATABASE_URL_ROBOHIRE || resolveRoboHireDatabaseUrl();
+}
+
+export function resolveDirectGoHireDatabaseUrl(): string | undefined {
+  return process.env.DIRECT_DATABASE_URL_GOHIRE || resolveGoHireDatabaseUrl();
+}
