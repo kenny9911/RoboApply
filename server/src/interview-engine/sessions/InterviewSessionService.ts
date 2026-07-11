@@ -503,6 +503,18 @@ export class InterviewSessionService {
     const blueprint = (session.blueprint ?? {}) as Record<string, unknown>;
     const openingInstruction = typeof blueprint.openingInstruction === 'string' ? blueprint.openingInstruction : `Greet the candidate and begin the ${session.interviewType} interview.`;
     const openingLine = typeof blueprint.openingLine === 'string' ? blueprint.openingLine : '';
+    // A blank openingLine (legacy rows generated before openingLine was persisted)
+    // makes the worker greet via the LLM path instead of the deterministic line.
+    // That path is resilient now (client-side TTS FallbackAdapter + greeting
+    // watchdog), so it's no longer a silence risk — but recomputing the
+    // deterministic line here would need the persona name (not available at this
+    // call site) and could speak a placeholder, so we log it instead of guessing.
+    if (!openingLine) {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'session has no deterministic openingLine — worker will greet via LLM', {
+        sessionId: session.id,
+        language: session.language,
+      });
+    }
     return {
       kind: 'interview-engine',
       sessionId: session.id,

@@ -34,7 +34,7 @@ const LANG = (process.argv[2] || 'en').trim();
 const URL = process.env.LIVEKIT_URL?.trim();
 const KEY = process.env.LIVEKIT_API_KEY?.trim();
 const SECRET = process.env.LIVEKIT_API_SECRET?.trim();
-const AGENT_NAME = process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboHire-Interview';
+const AGENT_NAME = process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboApply-Interview';
 const CALLBACK_BASE = process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() || 'http://localhost:4607';
 if (!URL || !KEY || !SECRET) {
   console.error('Missing LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env.local');

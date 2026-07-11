@@ -8,12 +8,14 @@
     "build": "tsc",
     "dev": "npm run build && node dist/main.js dev",
     "start": "node dist/main.js start",
-    "console": "npm run build && node dist/main.js console"
+    "console": "npm run build && node dist/main.js console",
+    "verify:greeting": "node verify-greeting.mjs",
+    "verify:voices": "node verify-voices.mjs"
   },
   "dependencies": {
-    "@livekit/agents": "1.4.5",
-    "@livekit/agents-plugin-openai": "1.4.5",
-    "@livekit/agents-plugin-silero": "1.4.5",
+    "@livekit/agents": "1.5.1",
+    "@livekit/agents-plugin-openai": "1.5.1",
+    "@livekit/agents-plugin-silero": "1.5.1",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {

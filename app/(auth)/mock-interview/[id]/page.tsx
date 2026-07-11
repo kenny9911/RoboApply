@@ -489,6 +489,13 @@ function QualityPill({ level, label }: { level: QualityLevel; label: string }) {
 
 // ─── In-room stage (LiveKit room context) ─────────────────────────────────
 
+// Audio-ready handshake with the interview worker. The worker holds its opening
+// greeting until it receives this one-shot signal on this topic, so the greeting
+// is never spoken into a browser output the autoplay policy has muted. Reliable
+// delivery (not lossy) — the worker only greets once.
+const IE_DATA_TOPIC = 'ie';
+const READY_PACKET = new TextEncoder().encode(JSON.stringify({ type: 'client_ready' }));
+
 function RoomStage({
   session, connection, interviewer, onEnd, onBack, onEvent,
 }: {
@@ -502,7 +509,7 @@ function RoomStage({
   const t = useTranslations('ie');
   const { user } = useAuth();
   const room = useRoomContext();
-  const { state, audioTrack } = useVoiceAssistant();
+  const { state } = useVoiceAssistant();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
 
   const video = connection.mode === 'video';
@@ -619,26 +626,49 @@ function RoomStage({
     return () => { room.off(RoomEvent.ConnectionQualityChanged, onQuality); };
   }, [room, onEvent]);
 
-  // Audio autoplay unlock. This page auto-connects with no user gesture, so a
-  // mid-interview refresh can leave remote audio blocked by the browser's
-  // autoplay policy — the agent speaks, the candidate hears nothing, and
-  // nothing looks wrong. Surface a tap-to-enable button that satisfies the
-  // gesture requirement via room.startAudio().
+  // Audio autoplay unlock + worker greeting handshake. This page auto-connects
+  // with NO user gesture, so on a fresh document load (refresh / deep-link / new
+  // tab / Safari) the browser autoplay policy blocks remote audio — the agent
+  // would speak into a muted output and the candidate would hear nothing, with
+  // nothing looking wrong. Two parts:
+  //   (1) proactively call room.startAudio() — a no-op grant where the browser
+  //       already allows playback, so the common case unlocks with zero delay;
+  //   (2) once playback is CONFIRMED unlocked, publish a one-shot `client_ready`
+  //       message. The worker holds its greeting until it arrives, so the
+  //       opening is never lost to a muted output. A blocked browser shows the
+  //       enable-audio overlay, whose tap both unlocks AND fires the signal.
+  const readySentRef = useRef(false);
+  const signalReady = useCallback(() => {
+    if (readySentRef.current) return;
+    if (room.state !== ConnectionState.Connected || !room.canPlaybackAudio) return;
+    readySentRef.current = true;
+    room.localParticipant
+      .publishData(READY_PACKET, { reliable: true, topic: IE_DATA_TOPIC })
+      .then(() => onEvent('client_ready'))
+      .catch(() => { readySentRef.current = false; /* not ready yet — a later event retries */ });
+  }, [room, onEvent]);
   useEffect(() => {
-    const onAudioStatus = () => {
+    const sync = () => {
       const blocked = !room.canPlaybackAudio;
       setAudioBlocked(blocked);
       if (blocked) onEvent('audio_blocked');
+      else signalReady();
     };
-    if (!room.canPlaybackAudio) setAudioBlocked(true);
-    room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioStatus);
-    return () => { room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioStatus); };
-  }, [room, onEvent]);
+    // Proactively unlock where the browser permits it; on a blocked browser this
+    // rejects and the enable-audio overlay drives the unlock via unlockAudio.
+    room.startAudio().catch(() => { /* blocked — overlay takes over */ }).finally(sync);
+    room.on(RoomEvent.AudioPlaybackStatusChanged, sync);
+    room.on(RoomEvent.ConnectionStateChanged, sync);
+    return () => {
+      room.off(RoomEvent.AudioPlaybackStatusChanged, sync);
+      room.off(RoomEvent.ConnectionStateChanged, sync);
+    };
+  }, [room, onEvent, signalReady]);
   const unlockAudio = useCallback(() => {
     room.startAudio()
-      .then(() => { setAudioBlocked(false); onEvent('audio_unlocked'); })
-      .catch(() => { /* keep the button — the next tap retries */ });
-  }, [room, onEvent]);
+      .then(() => { setAudioBlocked(false); onEvent('audio_unlocked'); signalReady(); })
+      .catch(() => { /* keep the overlay — the next tap retries */ });
+  }, [room, onEvent, signalReady]);
 
   // Agent-joined detection: voice-assistant state leaves connecting/disconnected
   // once the worker is in the room and talking/listening.
@@ -710,14 +740,30 @@ function RoomStage({
       )}
 
       {audioBlocked && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+        // BLOCKING overlay, not a small pill: while the browser autoplay policy
+        // has audio muted the candidate would otherwise see the interviewer
+        // animate to "speaking" and hear nothing (the avatar state tracks the
+        // agent, not local playback), masking the failure. Covering the stage
+        // forces the one tap that unlocks audio AND signals the worker to greet.
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          onClick={unlockAudio}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 80,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 16, padding: 24, textAlign: 'center',
+            background: 'rgba(0, 0, 0, 0.62)', backdropFilter: 'blur(4px)', cursor: 'pointer',
+          }}
+        >
+          <div aria-hidden style={{ fontSize: 44, lineHeight: 1 }}>🔊</div>
           <button
             type="button"
-            onClick={unlockAudio}
+            onClick={(e) => { e.stopPropagation(); unlockAudio(); }}
             style={{
-              padding: '10px 20px', borderRadius: 999, fontSize: 14, fontWeight: 700,
-              border: '1px solid rgba(239, 68, 68, 0.55)', background: 'rgba(239, 68, 68, 0.14)',
-              color: 'var(--text)', cursor: 'pointer',
+              padding: '14px 28px', borderRadius: 999, fontSize: 16, fontWeight: 700,
+              border: '1px solid rgba(239, 68, 68, 0.55)', background: 'rgba(239, 68, 68, 0.16)',
+              color: '#fff', cursor: 'pointer',
             }}
           >
             {t('live.enableAudio')}

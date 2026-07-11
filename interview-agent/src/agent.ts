@@ -17,7 +17,7 @@
 // so job subprocesses import the default export.
 
 import { config as loadEnv } from 'dotenv';
-import { inference, voice, defineAgent, type JobContext, type JobProcess } from '@livekit/agents';
+import { inference, tts, voice, defineAgent, type JobContext, type JobProcess } from '@livekit/agents';
 import * as silero from '@livekit/agents-plugin-silero';
 import * as openai from '@livekit/agents-plugin-openai';
 
@@ -71,6 +71,21 @@ const NUDGE_MAX_PER_SESSION = 3;
 // 'ended' lifecycle → the control plane finalizes and deletes the room). 90s
 // comfortably covers a page refresh or a network-interface switch.
 const ABANDON_GRACE_MS = 90_000;
+
+// Audio-ready handshake. The candidate's browser auto-connects with NO user
+// gesture, so on a fresh document load (refresh / deep-link / new tab / Safari)
+// the browser autoplay policy blocks remote audio until the user interacts —
+// and WebRTC audio is real-time, not buffered, so a greeting spoken into that
+// blocked window is LOST while every later turn is fine (the classic "no voice
+// when the interview started"). The client publishes a one-shot `client_ready`
+// data message on this topic once playback is CONFIRMED unlocked (see the
+// mock-interview page); the worker holds the greeting until it arrives. Fail
+// OPEN after the timeout so an old/instrumented client (or a blocked data
+// channel) still gets greeted rather than sitting in silence. Tunable for ops
+// (and for local `console` runs, which have no browser client).
+const CLIENT_DATA_TOPIC = 'ie';
+const CLIENT_READY_TIMEOUT_MS =
+  Number.parseInt(process.env.WORKER_CLIENT_READY_TIMEOUT_MS ?? '', 10) || 12_000;
 
 /** Subset of InterviewRoomMetadata the worker reads (kept in sync with
  *  backend/src/interview-engine/types.ts). */
@@ -152,23 +167,43 @@ function buildTts(voiceMeta: RoomMeta['voice'], sessionId?: string) {
   // LiveKit Inference gateway — the SAME gateway used for STT/LLM, so it needs
   // only LIVEKIT_* creds (no provider API key, no extra plugin). The catalog
   // sends a 'provider/model' id (e.g. 'cartesia/sonic-3'), a provider voice id,
-  // and a short language code. A server-side gateway `fallback` covers a runtime
-  // provider error; the local OpenAI tts-1 floor below covers a construction
-  // error — together a session is never mute.
+  // and a short language code.
   const model = voiceMeta?.model?.trim();
   const voiceId = voiceMeta?.voiceId?.trim();
   const language = voiceMeta?.languageCode?.trim() || undefined;
 
-  // Any 'provider/model' id → gateway TTS. (Legacy bare ids without a slash —
-  // e.g. the old 'tts' — fall through to the OpenAI floor.)
+  // LOCAL last-resort floor: OpenAI tts-1 (multilingual). It backs the gateway
+  // primary via the FallbackAdapter below and shares NO failure mode with the
+  // LiveKit Inference gateway, so it stays up when the gateway (or a specific
+  // provider voice) is down. Built DEFENSIVELY, and with the key read from the
+  // LIVE env at call time: the plugin otherwise captures process.env.OPENAI_API_KEY
+  // at IMPORT time (before this module's loadEnv in dev), and an unset key throws
+  // at construction — passing it explicitly reads what loadEnv has since
+  // populated. A genuinely-absent key yields NO floor (gateway alone) rather than
+  // crashing every session (main.ts warns about this at boot).
+  const openaiKey = process.env.OPENAI_API_KEY?.trim() || undefined;
+  const floorVoice = voiceId && OPENAI_VOICES.has(voiceId) ? voiceId : 'nova';
+  let floor: openai.TTS | null = null;
+  try {
+    floor = new openai.TTS({
+      model: 'tts-1',
+      voice: floorVoice as openai.TTSVoices,
+      ...(openaiKey ? { apiKey: openaiKey } : {}),
+    });
+  } catch (err) {
+    console.warn(`[interview-agent] session_id=${sessionId ?? 'unknown'} OpenAI TTS floor unavailable (OPENAI_API_KEY?):`, err instanceof Error ? err.message : err);
+  }
+
+  // Any 'provider/model' id → gateway TTS as the PRIMARY. (Legacy bare ids
+  // without a slash — e.g. the old 'tts' — use the floor alone.)
   if (model && model.includes('/')) {
     try {
-      return new inference.TTS({
+      const primary = new inference.TTS({
         model,
         ...(voiceId ? { voice: voiceId } : {}),
         ...(language ? { language } : {}),
-        // Server-side gateway failover (gateway-valid providers only — OpenAI is
-        // NOT an Inference TTS provider, it's the LOCAL floor below). ElevenLabs
+        // SERVER-SIDE gateway failover (gateway-valid providers only — OpenAI is
+        // NOT an Inference TTS provider, it's the LOCAL floor above). ElevenLabs
         // 'Rachel' is a guaranteed premade multilingual voice. The fallback entry
         // has no top-level `language` field, but `extraKwargs` is forwarded to
         // the provider verbatim (gateway `extra` payload) and ElevenLabs honors
@@ -180,15 +215,34 @@ function buildTts(voiceMeta: RoomMeta['voice'], sessionId?: string) {
           ...(language ? { extraKwargs: { language_code: language } } : {}),
         }],
       });
+      // CLIENT-SIDE failover via the SDK's FallbackAdapter. `inference.TTS`
+      // opens the gateway WS LAZILY at stream() time, so a rejected model /
+      // unknown voiceId / provider error throws MID-TURN — never at construction
+      // — so the try/catch here can't catch it and (pre-fix) the base stream
+      // silently closed with ZERO frames: the interviewer's text committed to the
+      // transcript but the turn was MUTE, and after a few such turns the SDK's
+      // unrecoverable-TTS-error counter hard-closed the whole session. The
+      // FallbackAdapter watches for that zero-frame/error completion (which the
+      // server-side `fallback` above does NOT cover — that only handles a
+      // provider error the gateway itself sees) and fails over to the local
+      // OpenAI floor, so a turn is never mute. maxRetryPerTTS:0 → fail over on
+      // the FIRST gateway error (no multi-second retry dead-air before the
+      // greeting). Because audio then always plays, the session's TTS error
+      // counter resets each turn and never trips the session-close path.
+      // If the floor couldn't be built (no OPENAI_API_KEY), use the gateway
+      // alone — same reach as before this hardening, minus the never-mute
+      // guarantee (already surfaced by the warn above + the boot check).
+      return floor ? new tts.FallbackAdapter({ ttsInstances: [primary, floor], maxRetryPerTTS: 0 }) : primary;
     } catch (err) {
       console.warn(`[interview-agent] session_id=${sessionId ?? 'unknown'} inference.TTS init failed; using OpenAI floor:`, err);
     }
   }
 
-  // Local last-resort floor: OpenAI tts-1 (multilingual, needs only
-  // OPENAI_API_KEY which the worker already has). Never let a session go mute.
-  const chosen = voiceId && OPENAI_VOICES.has(voiceId) ? voiceId : 'nova';
-  return new openai.TTS({ model: 'tts-1', voice: chosen as openai.TTSVoices });
+  // Legacy/bare id, or gateway construction failed → the floor if we have one.
+  if (floor) return floor;
+  // No usable gateway path AND no floor: a session with no TTS is unavoidable —
+  // surface WHY loudly instead of returning a broken pipeline.
+  throw new Error('no TTS available: gateway voice unusable and OPENAI_API_KEY unset');
 }
 
 export default defineAgent({
@@ -233,13 +287,13 @@ export default defineAgent({
       console.error(`[interview-agent] session_id=${sessionId} ${msg}`, ...rest);
 
     // 2) Build the session. Tuned for natural full duplex:
-    //  - preemptiveGeneration: start drafting the reply before the candidate
-    //    fully stops → lower perceived latency.
+    //  - preemptiveGeneration: draft the reply (LLM only) before the candidate
+    //    fully stops → lower perceived latency (preemptiveTts stays off).
     //  - VAD end-of-turn detection (see turnDetection below for why not the
     //    semantic turn detector).
-    //  - minInterruptionDuration: the candidate must speak ~0.5s to barge in, so
-    //    a stray "mhm"/cough doesn't stop the interviewer.
-    //  - min/maxEndpointingDelay: snappy but patient end-of-turn detection,
+    //  - interruption: barge-in needs ~0.6s of speech AND ≥2 transcribed words,
+    //    so a stray "mhm"/cough/echo doesn't stop the interviewer.
+    //  - endpointing min/maxDelay: snappy but patient end-of-turn detection,
     //    widened for CJK (see endpointingFor).
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,
@@ -256,13 +310,31 @@ export default defineAgent({
         // pause doesn't strand the conversation. Thresholds are per-language
         // (CJK pauses run longer — see endpointingFor). (ms)
         endpointing: endpointingFor(meta.stt?.language ?? meta.language ?? 'en'),
-        // Require ~0.6s of real speech to interrupt the agent, so brief noise or
-        // residual echo doesn't cut it off mid-sentence. (ms)
-        interruption: { enabled: true, minDuration: 600 },
-        // Draft the reply (and start TTS) before the candidate fully stops →
-        // lower perceived latency.
-        preemptiveGeneration: { enabled: true, preemptiveTts: true },
+        // Barge-in gate. minDuration=600ms of speech energy AND minWords=2
+        // TRANSCRIBED words are both required to interrupt the interviewer, so a
+        // one-word backchannel ("yeah"/"right"/"mhm") or a near-silent AEC echo
+        // tail can't truncate a turn mid-sentence and leave it looking mute.
+        // (The adaptive backchannel classifier is off in prod without the
+        // inference EOT endpoint, so minWords is the real content guard here;
+        // Inference STT streams word-aligned transcripts, so minWords is honored.)
+        interruption: { enabled: true, minDuration: 600, minWords: 2 },
+        // Draft the reply preemptively (LLM only) before the candidate fully
+        // stops → lower perceived latency. preemptiveTts stays FALSE: with
+        // preemptive TTS on, a speculative turn is synthesized then discarded
+        // when the turn re-confirms (or when a mid-session system note mutates
+        // the chat context — see injectSystemNote), multiplying gateway TTS
+        // sessions and the transient-error surface for no audible benefit.
+        preemptiveGeneration: { enabled: true, preemptiveTts: false },
       },
+    });
+
+    // Did the interviewer's audio actually START playing? `await session.say()`
+    // resolves even when TTS produced ZERO frames (the SpeechHandle settles on
+    // both success and error), so this is the only reliable signal that the
+    // greeting/turn was truly audible — it drives the greeting watchdog below.
+    let heardAgentAudio = false;
+    session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
+      if (ev.newState === 'speaking') heardAgentAudio = true;
     });
 
     // 3) Transcript + lifecycle forwarding to the control plane (secret-gated).
@@ -557,12 +629,42 @@ export default defineAgent({
 
     // 4) Connect, start, and greet.
     await ctx.connect();
+
+    // Audio-ready handshake (see CLIENT_READY_TIMEOUT_MS). Attach the listener
+    // BEFORE session.start()/greet so a `client_ready` published during the
+    // candidate's join is never missed. The promise resolves once — a
+    // `client_ready` message on our topic flips it; the greeting races it
+    // against a fail-open timeout below.
+    let clientReadyResolve: (v: 'ready') => void = () => {};
+    const clientReadyPromise = new Promise<'ready'>((res) => { clientReadyResolve = res; });
+    const onClientData = (payload: Uint8Array, _p?: unknown, _k?: unknown, topic?: string): void => {
+      if (topic && topic !== CLIENT_DATA_TOPIC) return;
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(payload)) as { type?: string };
+        if (msg?.type === 'client_ready') clientReadyResolve('ready');
+      } catch {
+        // Non-JSON / unrelated app data — ignore.
+      }
+    };
+    ctx.room.on('dataReceived', onClientData);
+
     const agent = new voice.Agent({ instructions: systemPrompt });
     // closeOnDisconnect defaults to TRUE and closes the session the instant the
     // candidate disconnects with CLIENT_INITIATED — which a mid-interview page
     // refresh sends — leaving a rejoining candidate with a mute agent. Disabled:
     // the abandonment grace timer (3d) owns candidate-gone teardown instead.
     await session.start({ agent, room: ctx.room, inputOptions: { closeOnDisconnect: false } });
+
+    // Hold the greeting until the candidate's browser confirms audio playback is
+    // unlocked — otherwise the opening streams into a muted <audio> element and
+    // is lost (see CLIENT_DATA_TOPIC). Bounded + fail-open: an old client that
+    // never signals still gets greeted after the timeout rather than dead air.
+    const readyState = await Promise.race([
+      clientReadyPromise,
+      sleep(CLIENT_READY_TIMEOUT_MS).then(() => 'timeout' as const),
+    ]);
+    ctx.room.off('dataReceived', onClientData);
+    slog(`client audio-ready: ${readyState}`);
 
     // The greeting must NOT be interruptible — otherwise the candidate's mic
     // picking up the agent's own voice (or any noise) cuts it off immediately.
@@ -571,6 +673,7 @@ export default defineAgent({
     // never depends on the LLM producing a first turn, so the candidate ALWAYS
     // hears an opening. addToChatCtx records it as the interviewer's turn so the
     // model continues the conversation naturally instead of greeting again.
+    const greetingStartAt = Date.now();
     try {
       if (openingLine) {
         await session.say(openingLine, { allowInterruptions: false, addToChatCtx: true });
@@ -590,11 +693,34 @@ export default defineAgent({
       }
     }
 
+    // Greeting watchdog. say() resolving is NOT proof of audio (it settles even
+    // on a zero-frame TTS miss), so if the agent never reached the 'speaking'
+    // state the opening was silent — re-issue it ONCE. The client-side
+    // FallbackAdapter should make this rare; addToChatCtx:false so a re-issue
+    // after a missed state signal never double-records the greeting turn.
+    if (!heardAgentAudio) {
+      swarn('greeting produced no audible frames (never reached speaking) — re-issuing once');
+      try {
+        if (openingLine) {
+          await session.say(openingLine, { allowInterruptions: false, addToChatCtx: false });
+        } else {
+          await session.generateReply({ instructions: opening, allowInterruptions: false });
+        }
+      } catch (err) {
+        serror('greeting re-issue failed:', err);
+      }
+    }
+
     // 'started' lifecycle: the agent's join time is otherwise unknowable
     // server-side (the control plane only sees dispatch, not the greeting).
+    // joinMs is measured to the START of the greeting (the true join path) —
+    // NOT after playout, which the greeting's audio duration would otherwise
+    // inflate — with the greeting's own duration reported separately.
     void post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/lifecycle`, {
       event: 'started',
-      joinMs: Date.now() - entryAt,
+      joinMs: greetingStartAt - entryAt,
+      greetingMs: Date.now() - greetingStartAt,
+      clientReady: readyState,
       greeting: openingLine ? 'deterministic' : 'llm',
     });
 

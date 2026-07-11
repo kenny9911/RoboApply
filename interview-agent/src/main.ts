@@ -91,6 +91,12 @@ const jobMemoryLimitMB = Number.parseInt(process.env.WORKER_JOB_MEMORY_LIMIT_MB 
 // killing live interview job subprocesses with it. 60 (~10 min) rides out a
 // LiveKit Cloud blip while sessions keep running on their own room sockets.
 const maxRetry = Number.parseInt(process.env.WORKER_MAX_RETRY ?? '', 10) || 60;
+// Graceful drain window on SIGTERM (production `start`). As of agents 1.5.0 the
+// SDK default is ONE HOUR — deliberately long so a live interview is never cut
+// mid-sentence by a redeploy — which can stall fast rollouts. Left at the SDK
+// default unless WORKER_DRAIN_TIMEOUT_MS is set, so ops can shorten it when a
+// fast deploy matters more than the tail of an in-flight interview. (ms)
+const drainTimeoutMs = Number.parseInt(process.env.WORKER_DRAIN_TIMEOUT_MS ?? '', 10) || undefined;
 
 const lkHost = (() => {
   try { return new URL(process.env.LIVEKIT_URL!).host; } catch { return process.env.LIVEKIT_URL; }
@@ -100,7 +106,7 @@ console.info(
   `health=${healthHost ?? 'sdk-default'}:${healthPort ?? 'sdk-default(prod 8081)'} node=${process.version} ` +
   `idle_procs=${numIdleProcesses ?? 'sdk-default'} load_threshold=${loadThreshold ?? 'sdk-default'} ` +
   `job_mem_warn_mb=${jobMemoryWarnMB}${jobMemoryLimitMB ? ` job_mem_limit_mb=${jobMemoryLimitMB}` : ''} ` +
-  `max_retry=${maxRetry}`,
+  `max_retry=${maxRetry} drain_timeout_ms=${drainTimeoutMs ?? 'sdk-default(1h)'}`,
 );
 
 cli.runApp(
@@ -114,5 +120,6 @@ cli.runApp(
     jobMemoryWarnMB,
     ...(jobMemoryLimitMB ? { jobMemoryLimitMB } : {}),
     maxRetry,
+    ...(drainTimeoutMs ? { drainTimeout: drainTimeoutMs } : {}),
   }),
 );
