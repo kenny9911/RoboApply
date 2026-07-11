@@ -253,26 +253,25 @@
   font-weight: 400;
   font-size: 1.06em;
 }
-/* CJK human voice — NEVER a skewed serif (faux-italic hanzi/kana was the
- * loudest dated signal on the page). Each script gets its native UPRIGHT
- * "human" face: Kaiti (楷体) for Chinese — the traditional spoken-voice
- * face in print — Mincho for Japanese, Myeongjo for Korean; graceful
- * fallback to the sans stack. font-synthesis: none (landing root)
- * guarantees no synthetic oblique survives. */
+/* CJK human voice — ONE typeface family with the machine line (founder
+ * direction: mixing CJK script faces reads as inconsistent; never skew).
+ * Same sans stack, differentiated by WEIGHT (Light vs Bold — the Apple
+ * China display convention: PingFang/Hiragino/YaHei/Noto Light) plus a
+ * warm temperature shift and the accent dot. font-synthesis: none on the
+ * landing root guarantees no synthetic oblique/bold ever appears. */
 .serif-human:lang(zh),
 .serif-human:lang(zh-TW),
 .serif-human:lang(zh-Hant),
 .serif-human:lang(ja),
 .serif-human:lang(ko) {
+  font-family: var(--sans);
   font-style: normal;
-  font-size: 1em;
+  font-weight: 300;
+  font-size: 0.96em;
   line-height: 1.12;
+  letter-spacing: 0.01em;
   color: color-mix(in srgb, var(--text) 88%, var(--accent) 12%);
 }
-.serif-human:lang(zh) { font-family: 'Kaiti SC', 'STKaiti', 'KaiTi', 'Noto Serif SC', var(--sans); }
-.serif-human:lang(zh-TW), .serif-human:lang(zh-Hant) { font-family: 'Kaiti TC', 'BiauKai', 'DFKai-SB', 'Noto Serif TC', var(--sans); }
-.serif-human:lang(ja) { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif; }
-.serif-human:lang(ko) { font-family: 'Apple Myungjo', 'Nanum Myeongjo', 'Noto Serif KR', serif; }
 
 /* Stat numbers glow like the caret at night; the morning scope mutes it. */
 .stat-number { text-shadow: 0 0 22px var(--accent-glow); }
