@@ -64,6 +64,13 @@ export interface QuestionAnalysisItem {
   missed: boolean;
   /** The question text — verbatim as asked, or the blueprint text when missed. */
   question: string;
+  /**
+   * Candidate-facing "why the interviewer asked this" — what competency/signal
+   * the question is really probing for. Grounded in the blueprint intent +
+   * idealSignal (safe to reveal; the interviewer's probeIfWeak playbook is NOT).
+   * Empty string if the agent couldn't infer it.
+   */
+  intent: string;
   /** 1-3 sentence paraphrase of what the candidate said. Empty when missed. */
   answerSummary: string;
   /** Optional short verbatim quote (<=160 chars). */
@@ -76,6 +83,13 @@ export interface QuestionAnalysisItem {
   suggestion: string;
   /** Reference answer grounded in THIS candidate's context (a guideline, not a script). */
   modelAnswer: string;
+  /**
+   * Concrete, tactical tips the candidate can act on next time — the sharp
+   * professional/technical pointers (e.g. name a specific pattern, cite a
+   * metric, use the right term of art). 0-4 short items; distinct from the
+   * single-sentence `suggestion` in that these are checklist-style specifics.
+   */
+  tips: string[];
   rating: QuestionRating;
   score: number; // 0-100
   /** Optional short signal chips, e.g. ["no metric","good STAR"]. Max 4. */

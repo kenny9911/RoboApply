@@ -4,10 +4,12 @@
 // section the user asked for. For each planned blueprint question (plus any
 // off-script questions the interviewer improvised), it aligns the candidate's
 // answer in the transcript and produces:
+//   intent            — WHY the interviewer asked this (what signal they probe)
 //   analysis  (分析) — what the answer demonstrated vs. the ideal signal
 //   correction(纠正) — the specific gap or error
 //   suggestion(建议) — concrete, forward-looking advice
 //   modelAnswer       — a reference answer grounded in THIS candidate's context
+//   tips              — sharp, tactical professional/technical pointers
 // All prose is NATIVE in the session's interview language (BaseAgent locale).
 //
 // An unparseable response THROWS (the orchestrator catches and records the
@@ -74,9 +76,20 @@ export class QuestionDeepDiveAgent extends BaseAgent<DeepDiveInput, DeepDiveOutp
 
   protected getMaxTokens(): number | undefined {
     // One coaching analysis per planned question (often 8-12 items, each with
-    // multiple prose fields). 4000 truncated the JSON array on longer
-    // interviews — worse on reasoning models. Billed on actual usage.
-    return 12000;
+    // multiple prose fields — now also `intent` + a `tips` list, which grew the
+    // per-item payload). 4000 truncated the JSON array on longer interviews —
+    // worse on reasoning models — so headroom matters: a truncated array fails
+    // to parse and the whole section degrades. Billed on actual usage.
+    return 18000;
+  }
+
+  protected getReasoningMaxTokens(): number | undefined {
+    // The default model is always-thinking (over OpenRouter, reasoning tokens
+    // count toward getMaxTokens). Without a cap, reasoning can consume the whole
+    // budget and the JSON array truncates → parseOutput throws → the section
+    // degrades to "unavailable". Cap reasoning so the enlarged intent+tips array
+    // keeps ≥12k tokens of guaranteed answer headroom. Mirrors HolisticScorecardAgent.
+    return 6000;
   }
 
   protected getAgentPrompt(): string {
@@ -88,12 +101,14 @@ Return STRICT JSON only (no prose, no code fences) — a single JSON array:
     "blueprintIndex": <integer 0-based, or null for an off-script question the interviewer improvised>,
     "missed": <true if this planned question was never asked or answered, else false>,
     "question": "<the question as actually asked; for a missed item, the planned question text>",
+    "intent": "<why THIS interviewer asked this — the competency/signal they were probing for, in plain candidate-facing language so the candidate understands the purpose. Ground it in the provided intent/idealSignal when available; infer it for off-script questions. Never reveal the interviewer's follow-up traps.>",
     "answerSummary": "<1-3 sentences summarizing what the candidate actually said; empty string if missed>",
     "keyQuote": "<a short verbatim candidate quote, or omit the field>",
     "analysis": "<what the answer demonstrated vs. the question's ideal signal, citing the candidate's actual words>",
     "correction": "<the specific gap or error; empty string ONLY if the answer was strong>",
     "suggestion": "<concrete, forward-looking advice for next time>",
     "modelAnswer": "<what a strong answer would contain, grounded in THIS candidate's context — a guideline, not a script to memorize>",
+    "tips": ["<2-4 sharp, tactical pointers the candidate can act on — the professional/technical specifics: name the exact pattern/term/tool, the metric to cite, the framework to structure with. Each a short imperative phrase.>", "..."],
     "rating": "strong" | "adequate" | "weak" | "missed",
     "score": <integer 0-100>,
     "tags": ["<short signal, e.g. 'no metric'>", "..."]
@@ -107,9 +122,11 @@ Alignment rules:
 - If the transcript ends with "${TRANSCRIPT_TRUNCATION_MARKER}", the interview continued beyond the visible text: do NOT mark the remaining blueprint questions as missed — omit them entirely. Only grade what you can see.
 
 Anti-genericness rules (every item must obey):
+- "intent" explains the interviewer's purpose in one sentence the candidate can learn from, e.g.: "They're testing whether you can weigh trade-offs under real constraints, not just recall a definition." Never restate the question; never say "to assess your skills".
 - "correction" names the missing element concretely. Banned phrasings: "too vague", "be more specific", "needs more detail". Required style, e.g.: "You said 'we improved performance' but gave no baseline, no metric, and never said what YOU did versus the team."
 - "suggestion" is actionable, e.g.: "Re-answer in 90 seconds naming one metric (before → after) and one tool you personally used."
 - "modelAnswer" reuses the candidate's real context (their named project / tool / domain), not a placeholder.
+- "tips" are the sharpest professional/technical specifics — the exact term of art, pattern name, metric, or framework the candidate should have reached for. e.g. for a systems answer: "Say 'idempotent consumer' and mention the dedup key"; "Anchor scale with a real QPS/latency number"; "Structure with STAR so the Result is explicit." Return [] only for a flawless answer with nothing to add.
 
 Scoring bands: 80-100 strong, 60-79 adequate, 40-59 weak, 0-39 missed or fundamentally wrong. "rating" must match the band ("missed" only when the question was not asked/answered).
 Cover every blueprint question. Cap total items at 12; if more than 10 were planned, prioritize the ones actually asked plus the 2-3 most important missed ones.
@@ -174,18 +191,21 @@ Write all human-facing text in the interview language as instructed at the very 
 
       const keyQuote = clip(r.keyQuote, 160);
       const tags = strArr(r.tags, 4, 40);
+      const tips = strArr(r.tips, 4, 200);
 
       items.push({
         questionIndex: items.length,
         blueprintIndex,
         missed,
         question,
+        intent: clip(r.intent, 400),
         answerSummary: missed ? '' : clip(r.answerSummary, 500),
         ...(keyQuote ? { keyQuote } : {}),
         analysis: clip(r.analysis, 800),
         correction: clip(r.correction, 600),
         suggestion: clip(r.suggestion, 600),
         modelAnswer: clip(r.modelAnswer, 800),
+        tips,
         rating,
         score,
         ...(tags.length ? { tags } : {}),

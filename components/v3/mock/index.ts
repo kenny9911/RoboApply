@@ -41,3 +41,4 @@ export { RecommendationsCard } from './RecommendationsCard';
 export { QuestionBreakdownSection } from './QuestionBreakdownSection';
 export { QuestionBreakdownItem } from './QuestionBreakdownItem';
 export { RatingChip } from './RatingChip';
+export { TranscriptViewer, groupTranscript } from './TranscriptViewer';

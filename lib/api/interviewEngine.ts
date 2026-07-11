@@ -72,12 +72,18 @@ export interface IEQuestionAnalysisItem {
   blueprintIndex: number | null;
   missed: boolean;
   question: string;
+  /** Why the interviewer asked this — the signal they were probing for. May be
+   *  '' on legacy reports generated before this field existed. */
+  intent?: string;
   answerSummary: string;
   keyQuote?: string;
   analysis: string;
   correction: string;
   suggestion: string;
   modelAnswer: string;
+  /** Sharp, tactical professional/technical pointers. May be absent/[] on
+   *  legacy reports or a flawless answer. */
+  tips?: string[];
   rating: IEQuestionRating;
   score: number;
   tags?: string[];

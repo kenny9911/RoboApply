@@ -77,6 +77,24 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
       </summary>
 
       <div style={{ padding: '4px 16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Why they asked — the interviewer's intent. Shown first (even for a
+            missed question) so the candidate learns the purpose behind it. */}
+        {item.intent ? (
+          <div
+            style={{
+              background: 'var(--accent-soft)',
+              border: '1px solid var(--accent-text)',
+              borderRadius: 10,
+              padding: '12px 14px',
+            }}
+          >
+            {sectionLabel(t('report.questionBreakdown.intentLabel'))}
+            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+              <Markdown block>{item.intent}</Markdown>
+            </div>
+          </div>
+        ) : null}
+
         {/* Missed → single explanatory note; otherwise the candidate's words. */}
         {item.missed ? (
           <div style={{ fontSize: 13, color: 'var(--text-2)', fontStyle: 'italic' }}>
@@ -141,6 +159,27 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
             <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.suggestion}</Markdown>
             </div>
+          </div>
+        ) : null}
+
+        {/* Pro tips — the sharp, tactical professional/technical pointers. */}
+        {item.tips && item.tips.length ? (
+          <div
+            style={{
+              background: 'var(--ok-soft)',
+              border: '1px solid var(--ok)',
+              borderRadius: 10,
+              padding: '12px 14px',
+            }}
+          >
+            {sectionLabel(t('report.questionBreakdown.tipsLabel'))}
+            <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {item.tips.map((tip, i) => (
+                <li key={i} style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+                  <Markdown>{tip}</Markdown>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 

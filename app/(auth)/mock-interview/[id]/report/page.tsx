@@ -25,6 +25,7 @@ import {
   ResultsGrid,
   RecommendationsCard,
   QuestionBreakdownSection,
+  TranscriptViewer,
 } from '../../../../../components/v3/mock';
 import { canonicalDimKey } from '../../../../../lib/mock/dimensionLabels';
 import { interviewEngineApi, type IEReport } from '../../../../../lib/api/interviewEngine';
@@ -161,23 +162,8 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* Transcript */}
-      {report.transcript.length > 0 && (
-        <div style={{ marginTop: 24, border: '1px solid var(--rule)', borderRadius: 'var(--r-xl, 16px)', padding: 20, background: 'var(--surface)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{t('report.transcript')}</div>
-            {report.transcriptUrl && <a href={report.transcriptUrl} style={{ fontSize: 13, color: 'var(--accent, #3B84E2)' }}>{t('report.download')}</a>}
-          </div>
-          {report.transcript.filter((tr) => !tr.interim).map((turn, i) => (
-            <div key={i} style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: turn.role === 'candidate' ? 'var(--accent, #3B84E2)' : 'var(--text-2)' }}>
-                {turn.role === 'candidate' ? t('live.you') : t('live.interviewer')}
-              </span>
-              <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text)' }}>{turn.text}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Transcript — grouped into Q&A exchanges, collapsed behind a toggle. */}
+      <TranscriptViewer turns={report.transcript} transcriptUrl={report.transcriptUrl} />
 
       <div style={{ display: 'flex', gap: 12, marginTop: 28, paddingBottom: 40 }}>
         <Btn variant="primary" as="a" href="/mock-interview">{t('report.newInterview')}</Btn>
