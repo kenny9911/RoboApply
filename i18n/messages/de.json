@@ -46,13 +46,13 @@
       "lang_label": "Sprache ändern"
     },
     "hero": {
-      "eyebrow": "DEIN KI-AGENT FÜR DIE JOBSUCHE · NACHTSCHICHT 23:00 → 09:00",
+      "eyebrow": "Dein KI-Bewerbungsagent · arbeitet, während du schläfst",
       "headline_machine": "Wir bewerben",
       "headline_human": "Du überzeugst",
-      "subheadline": "RoboApply ist der KI-Agent für deine Jobsuche: Er findet Stellen, die wirklich passen, bewertet sie an deinem echten Lebenslauf und schreibt Anschreiben, in denen jede Aussage Zeile für Zeile durch deine echte Erfahrung belegt ist – dann legt er dir alles zur Freigabe vor. Ohne dich geht nichts raus.",
-      "cta_primary": "Schick den Agenten auf Schicht",
+      "subheadline": "RoboApply ist der KI-Agent für deine Jobsuche: Er findet Stellen, die wirklich passen, bewertet sie an deinem echten Lebenslauf und schreibt Anschreiben, in denen jede Aussage Zeile für Zeile durch deine echte Erfahrung belegt ist – dann legt er dir alles zur Freigabe vor.",
+      "cta_primary": "Kostenlos starten",
       "cta_secondary": "Sieh dir eine Beispiel-Schicht an",
-      "reassure": "GRATIS-PLAN · OHNE KREDITKARTE · AUTOPILOT IM EARLY ACCESS",
+      "reassure": "Gratis-Plan · Keine Karte nötig · Autopilot im Early Access",
       "log": {
         "aria": "Beispiel-Protokoll einer Nachtschicht: Der Agent scannt um 23:04 Live-Jobbörsen, gleicht Stellen mit deinem Lebenslauf und deinen Zielen ab, schreibt über Nacht Anschreiben mit belegten Aussagen, legt zwölf Bewerbungen in die Warteschlange, öffnet um 7:00 dein Prüffenster, in dem du zwei stoppst und zehn freigibst, schickt die zehn freigegebenen um 9:00 raus und mailt um 9:02 einen Morgenreport, der dich ans Interview-Training erinnert.",
         "title": "roboapply — overnight.log",
@@ -104,7 +104,10 @@
             "msg": "Morgenreport verschickt · jetzt Interview üben"
           }
         }
-      }
+      },
+      "strip_summary": "23:00 → 09:00 · 12 Entwürfe · 10 von dir freigegeben · 0 ohne dich gesendet",
+      "strip_scroll": "so läuft eine Schicht",
+      "sub_emphasis": "Ohne dich geht nichts raus."
     },
     "problem": {
       "eyebrow": "WARUM BOTS VERLIEREN",

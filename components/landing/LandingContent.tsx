@@ -106,12 +106,13 @@ export function LandingContent() {
           maxWidth="wide"
           className="flex h-16 items-center justify-between gap-3 !py-0"
         >
-          <Logo />
+          {/* Wordmark, not the white-boxed bitmap — the accent square echoes
+              the caret motif. */}
+          <span className="landing-wordmark">
+            <span aria-hidden className="wordmark-square" />
+            RoboApply
+          </span>
           <div className="flex items-center gap-2.5 sm:gap-4">
-            <span className="hidden h-7 items-center gap-2 rounded-pill border border-ink-line bg-bg-card px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-700 lg:inline-flex">
-              <span aria-hidden className="live-dot" />
-              {t('header.status_chip')}
-            </span>
             <LanguageMenu label={t('header.lang_label')} />
             <ThemeToggle />
             <Link
@@ -122,8 +123,7 @@ export function LandingContent() {
             </Link>
             <Link
               href="/onboarding"
-              className="cta-primary hidden !h-9 !px-4 !text-[13px] md:inline-flex"
-              style={{ borderRadius: 'var(--r-sm)' }}
+              className="cta-primary hidden !h-10 !rounded-[10px] !px-4 !text-[13px] md:inline-flex"
             >
               {t('header.cta')}
             </Link>
@@ -133,37 +133,26 @@ export function LandingContent() {
 
       <main>
         {/* ── Hero — the overnight.log ─────────────────────────── */}
-        <section className="relative overflow-hidden">
+        <section className="hero-fold hero-base relative overflow-hidden">
           <div aria-hidden className="hero-grid pointer-events-none absolute inset-0 z-0" />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 z-0"
-            style={{ background: 'var(--grad-page-wash)' }}
-          />
+          <div aria-hidden className="hero-wash pointer-events-none absolute inset-0 z-0" />
+          <div className="hero-fold-body relative z-10 w-full">
           <PageContainer
             maxWidth="wide"
-            className="relative z-10 !pt-14 !pb-16 md:!pt-24 md:!pb-28"
+            className="w-full !pt-12 !pb-16 md:!pt-16 md:!pb-20"
           >
             <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
               {/* Left — pitch */}
               <div>
                 <p
-                  className="anim-rise font-mono text-[11px] uppercase tracking-[0.16em] text-accent-text md:text-xs"
-                  style={{
-                    textShadow: '0 0 12px var(--accent-glow)',
-                    animationDelay: '.05s',
-                  }}
+                  className="anim-rise hero-eyebrow"
+                  style={{ animationDelay: '.05s' }}
                 >
                   {t('hero.eyebrow')}
                 </p>
                 <h1
-                  className="anim-rise mt-5 font-bold text-ink-900"
-                  style={{
-                    fontSize: 'clamp(2.5rem, 6.5vw, 4.6rem)',
-                    lineHeight: 1.04,
-                    letterSpacing: '-0.03em',
-                    animationDelay: '.15s',
-                  }}
+                  className="anim-rise hero-h1 mt-5 font-bold text-ink-900"
+                  style={{ animationDelay: '.15s' }}
                 >
                   <span className="block">
                     {t('hero.headline_machine')}
@@ -175,10 +164,13 @@ export function LandingContent() {
                   </span>
                 </h1>
                 <p
-                  className="anim-rise mt-6 max-w-[54ch] text-base leading-relaxed text-ink-700 md:text-xl"
+                  className="anim-rise mt-6 max-w-[52ch] text-base leading-relaxed text-ink-700 md:text-lg"
                   style={{ animationDelay: '.28s' }}
                 >
                   {t('hero.subheadline')}
+                </p>
+                <p className="anim-rise sub-emph" style={{ animationDelay: '.34s' }}>
+                  {t('hero.sub_emphasis')}
                 </p>
                 <div
                   className="anim-rise mt-8 flex flex-wrap items-center gap-x-6 gap-y-4 md:mt-9"
@@ -198,7 +190,7 @@ export function LandingContent() {
                   </a>
                 </div>
                 <p
-                  className="anim-rise mt-5 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-500"
+                  className="anim-rise mt-5 text-[13px] text-ink-500"
                   style={{ animationDelay: '.48s' }}
                 >
                   {t('hero.reassure')}
@@ -222,17 +214,24 @@ export function LandingContent() {
                   style={{ animationDelay: '.55s' }}
                 >
                   <div className="mb-4 flex items-center justify-between border-b border-ink-line-soft pb-3">
-                    <span className="font-mono text-xs text-ink-500">
-                      {t('hero.log.title')}
+                    <span className="flex items-center">
+                      <span aria-hidden className="log-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                      <span className="font-mono text-xs text-ink-500">
+                        {t('hero.log.title')}
+                      </span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-accent-text">
+                    <span className="sample-chip">
                       <span aria-hidden className="live-dot" />
                       {t('hero.log.live')}
                     </span>
                   </div>
                   <div aria-hidden="true">
                     {LOG_LINES.map(({ key, variant }, i) => {
-                      const delay = `${(1 + i * 0.42).toFixed(2)}s`;
+                      const delay = `${(0.9 + i * 0.22).toFixed(2)}s`;
                       return (
                         <div
                           key={key}
@@ -254,7 +253,7 @@ export function LandingContent() {
                     {/* Caret row — the agent never clocks out */}
                     <div
                       className="log-line grid grid-cols-[2.9rem_auto_1fr] items-baseline gap-x-3 py-[5px] min-[421px]:grid-cols-[3.2rem_auto_1fr]"
-                      style={{ animationDelay: '4.8s' }}
+                      style={{ animationDelay: '3.1s' }}
                     >
                       <span />
                       <span
@@ -271,6 +270,18 @@ export function LandingContent() {
               </div>
             </div>
           </PageContainer>
+          </div>
+          {/* Dawn line — closes the fold with the consent receipt + scroll cue */}
+          <div className="hero-strip">
+            <PageContainer maxWidth="wide" className="!py-0">
+              <div className="hero-strip-row">
+                <span className="truncate">{t('hero.strip_summary')}</span>
+                <a href="#how">
+                  {t('hero.strip_scroll')} <span aria-hidden>↓</span>
+                </a>
+              </div>
+            </PageContainer>
+          </div>
         </section>
 
         {/* ── 01 · Why bots are losing — the stats band ──────────── */}

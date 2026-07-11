@@ -1049,13 +1049,13 @@
       "lang_label": "Change language"
     },
     "hero": {
-      "eyebrow": "YOUR AI JOB-SEARCH AGENT · NIGHT SHIFT 23:00 → 09:00",
+      "eyebrow": "Your AI job-search agent · works while you sleep",
       "headline_machine": "We apply",
       "headline_human": "You interview",
-      "subheadline": "RoboApply is an AI agent for your job search: it scouts openings that actually fit, scores them against your real resume, and drafts cover letters it can cite line by line back to your real experience — then stages everything for your approval. Nothing sends without you.",
-      "cta_primary": "Put the agent on shift",
+      "subheadline": "It scouts real fits overnight, scores them against your actual resume, and drafts cover letters that cite your real experience — then stages everything for your approval.",
+      "cta_primary": "Start free",
       "cta_secondary": "See a sample shift",
-      "reassure": "FREE PLAN · NO CARD REQUIRED · AUTOPILOT IN EARLY ACCESS",
+      "reassure": "Free plan · No card required · Autopilot in early access",
       "log": {
         "aria": "Sample overnight activity log: the agent scans live job boards at 23:04, matches openings against your resume and intent, drafts citation-checked cover letters through the night, stages twelve applications, opens your review window at 7:00 where you veto two and approve ten, sends the approved ten at 9:00, and emails a morning digest at 9:02 pointing you to interview practice.",
         "title": "roboapply — overnight.log",
@@ -1107,7 +1107,10 @@
             "msg": "morning report sent · now go practice the interview"
           }
         }
-      }
+      },
+      "strip_summary": "23:00 → 09:00 · 12 drafted · 10 approved by you · 0 sent without you",
+      "strip_scroll": "how a shift runs",
+      "sub_emphasis": "Nothing sends without you."
     },
     "problem": {
       "eyebrow": "WHY BOTS ARE LOSING",

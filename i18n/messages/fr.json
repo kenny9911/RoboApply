@@ -46,13 +46,13 @@
       "lang_label": "Changer de langue"
     },
     "hero": {
-      "eyebrow": "TON AGENT IA DE RECHERCHE D'EMPLOI · SERVICE DE NUIT 23:00 → 09:00",
+      "eyebrow": "Ton agent IA pour l'emploi · il travaille pendant que tu dors",
       "headline_machine": "On postule",
       "headline_human": "Tu passes l'entretien",
-      "subheadline": "RoboApply est un agent IA pour ta recherche d'emploi : il repère les offres qui te correspondent vraiment, les score sur ton vrai CV, et rédige des lettres de motivation qu'il peut sourcer ligne par ligne dans ta vraie expérience — puis met tout en attente de ta validation. Rien ne part sans toi.",
-      "cta_primary": "Mets ton agent au boulot",
+      "subheadline": "RoboApply est un agent IA pour ta recherche d'emploi : il repère les offres qui te correspondent vraiment, les score sur ton vrai CV, et rédige des lettres de motivation qu'il peut sourcer ligne par ligne dans ta vraie expérience — puis met tout en attente de ta validation.",
+      "cta_primary": "Commence gratuitement",
       "cta_secondary": "Regarde un service type",
-      "reassure": "PLAN GRATUIT · SANS CARTE BANCAIRE · AUTOPILOTE EN ACCÈS ANTICIPÉ",
+      "reassure": "Plan gratuit · Sans carte · Pilote automatique en accès anticipé",
       "log": {
         "aria": "Exemple de journal d'activité nocturne : l'agent scanne les job boards en direct à 23:04, matche les offres avec ton CV et ta cible, rédige des lettres de motivation sourcées pendant la nuit, met douze candidatures en file d'attente, ouvre ta fenêtre de contrôle à 7:00 où tu en recales deux et en valides dix, envoie les dix validées à 9:00, puis t'envoie un rapport du matin à 9:02 qui t'oriente vers l'entraînement à l'entretien.",
         "title": "roboapply — overnight.log",
@@ -104,7 +104,10 @@
             "msg": "rapport du matin envoyé · file t'entraîner à l'entretien"
           }
         }
-      }
+      },
+      "strip_summary": "23:00 → 09:00 · 12 brouillons · 10 approuvées par toi · 0 envoyée sans toi",
+      "strip_scroll": "comment se déroule un service",
+      "sub_emphasis": "Rien ne part sans toi."
     },
     "problem": {
       "eyebrow": "POURQUOI LES BOTS PERDENT",

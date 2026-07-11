@@ -46,13 +46,13 @@
       "lang_label": "Mudar idioma"
     },
     "hero": {
-      "eyebrow": "SEU AGENTE DE IA PARA EMPREGO · PLANTÃO NOTURNO 23:00 → 09:00",
+      "eyebrow": "Seu agente de IA para vagas · trabalha enquanto você dorme",
       "headline_machine": "A candidatura é nossa",
       "headline_human": "A entrevista é sua",
-      "subheadline": "O RoboApply é um agente de IA para a sua busca de emprego: ele garimpa vagas que combinam de verdade, dá nota a cada uma com base no seu currículo real e escreve cartas de apresentação que citam, linha por linha, a sua experiência — depois deixa tudo pronto para a sua aprovação. Nada é enviado sem você.",
-      "cta_primary": "Coloque o agente de plantão",
+      "subheadline": "O RoboApply é um agente de IA para a sua busca de emprego: ele garimpa vagas que combinam de verdade, dá nota a cada uma com base no seu currículo real e escreve cartas de apresentação que citam, linha por linha, a sua experiência — depois deixa tudo pronto para a sua aprovação.",
+      "cta_primary": "Comece grátis",
       "cta_secondary": "Veja um plantão de exemplo",
-      "reassure": "PLANO GRÁTIS · SEM CARTÃO · PILOTO AUTOMÁTICO EM ACESSO ANTECIPADO",
+      "reassure": "Plano grátis · Sem cartão · Piloto automático em acesso antecipado",
       "log": {
         "aria": "Exemplo de registro da atividade noturna: o agente varre painéis de vagas ao vivo às 23:04, cruza as vagas com o seu currículo e o que você busca, escreve cartas de apresentação com citações verificadas ao longo da madrugada, deixa doze candidaturas preparadas, abre a sua janela de revisão às 7:00, onde você veta duas e aprova dez, envia as dez aprovadas às 9:00 e manda um resumo matinal por e-mail às 9:02, apontando o treino de entrevista como próximo passo.",
         "title": "roboapply — overnight.log",
@@ -104,7 +104,10 @@
             "msg": "resumo da manhã enviado · agora é treinar pra entrevista"
           }
         }
-      }
+      },
+      "strip_summary": "23:00 → 09:00 · 12 rascunhos · 10 aprovadas por você · 0 enviadas sem você",
+      "strip_scroll": "como funciona um plantão",
+      "sub_emphasis": "Nada é enviado sem você."
     },
     "problem": {
       "eyebrow": "POR QUE OS ROBÔS ESTÃO PERDENDO",

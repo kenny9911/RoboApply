@@ -46,13 +46,13 @@
       "lang_label": "Cambiar idioma"
     },
     "hero": {
-      "eyebrow": "TU AGENTE DE IA PARA BUSCAR TRABAJO · TURNO NOCTURNO 23:00 → 09:00",
+      "eyebrow": "Tu agente de IA para buscar trabajo · trabaja mientras duermes",
       "headline_machine": "Nosotros postulamos",
       "headline_human": "Tú, a la entrevista",
-      "subheadline": "RoboApply es un agente de IA para tu búsqueda de empleo: rastrea vacantes que de verdad encajan contigo, las califica contra tu CV real y redacta cartas de presentación con cada afirmación citada, línea por línea, de tu experiencia real — y luego deja todo listo para tu aprobación. Nada se envía sin ti.",
-      "cta_primary": "Pon al agente en turno",
+      "subheadline": "RoboApply es un agente de IA para tu búsqueda de empleo: rastrea vacantes que de verdad encajan contigo, las califica contra tu CV real y redacta cartas de presentación con cada afirmación citada, línea por línea, de tu experiencia real — y luego deja todo listo para tu aprobación.",
+      "cta_primary": "Empieza gratis",
       "cta_secondary": "Ver un turno de ejemplo",
-      "reassure": "PLAN GRATIS · SIN TARJETA · PILOTO AUTOMÁTICO EN ACCESO ANTICIPADO",
+      "reassure": "Plan gratis · Sin tarjeta · Piloto automático en acceso anticipado",
       "log": {
         "aria": "Ejemplo de registro de actividad nocturna: el agente escanea portales de empleo en vivo a las 23:04, cruza las vacantes con tu CV y tu objetivo, redacta cartas de presentación con citas verificadas durante la noche, deja doce postulaciones en cola, abre tu ventana de revisión a las 7:00, donde vetas dos y apruebas diez, envía las diez aprobadas a las 9:00 y manda a las 9:02 un resumen matutino que te apunta a la práctica de entrevistas.",
         "title": "roboapply — overnight.log",
@@ -104,7 +104,10 @@
             "msg": "resumen matutino enviado · ahora practica la entrevista"
           }
         }
-      }
+      },
+      "strip_summary": "23:00 → 09:00 · 12 borradores · 10 aprobadas por ti · 0 enviadas sin ti",
+      "strip_scroll": "cómo funciona un turno",
+      "sub_emphasis": "Nada se envía sin ti."
     },
     "problem": {
       "eyebrow": "POR QUÉ LOS BOTS ESTÁN PERDIENDO",
