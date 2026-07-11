@@ -11,7 +11,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useDcTheme } from '../../lib/dcTheme';
+import { DEFAULT_THEME, useDcTheme } from '../../lib/dcTheme';
 
 function SunIcon() {
   return (
@@ -51,13 +51,16 @@ function MoonIcon() {
 
 export function ThemeToggle() {
   const t = useTranslations('landing.header');
-  const { theme, set } = useDcTheme();
-  const isDark = theme === 'dark';
+  const { theme, set, hydrated } = useDcTheme();
+  // Until mounted, use the server's DEFAULT theme so the icon/label match the
+  // SSR'd HTML; the provider already holds the persisted theme while hydrating.
+  const isDark = (hydrated ? theme : DEFAULT_THEME.theme) === 'dark';
 
   return (
     <button
       type="button"
-      onClick={() => set('theme', isDark ? 'warm' : 'dark')}
+      // Toggle relative to the REAL current theme, never the pre-mount placeholder.
+      onClick={() => set('theme', theme === 'dark' ? 'warm' : 'dark')}
       aria-label={isDark ? t('theme_to_light') : t('theme_to_dark')}
       title={isDark ? t('theme_to_light') : t('theme_to_dark')}
       className="inline-flex h-9 w-9 items-center justify-center rounded-pill border border-ink-line text-ink-700 transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-accent-text"

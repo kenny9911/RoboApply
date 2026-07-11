@@ -10,7 +10,7 @@
 
 import { FireIcon, MoonIcon, SunIcon } from '@heroicons/react/24/outline';
 import { useTranslations } from 'next-intl';
-import { type ThemeKey, useDcTheme } from '../../../lib/dcTheme';
+import { DEFAULT_THEME, type ThemeKey, useDcTheme } from '../../../lib/dcTheme';
 
 const NEXT: Record<ThemeKey, ThemeKey> = {
   dark: 'light',
@@ -27,7 +27,10 @@ const NEXT_LABEL_KEY: Record<ThemeKey, string> = {
 export function ThemeToggle({ className = 'icon-btn' }: { className?: string }) {
   const t = useTranslations('nav_v3');
   const theme = useDcTheme();
-  const current = theme.theme;
+  // Until mounted, render the server's DEFAULT theme so the icon/label match the
+  // SSR'd HTML (the provider already holds the persisted theme on first client
+  // render — see dcTheme `hydrated`). Post-mount, swap to the real theme.
+  const current = theme.hydrated ? theme.theme : DEFAULT_THEME.theme;
   const label = t(NEXT_LABEL_KEY[current]);
   const iconStyle = { width: 15, height: 15 } as const;
 
@@ -35,7 +38,8 @@ export function ThemeToggle({ className = 'icon-btn' }: { className?: string }) 
     <button
       type="button"
       className={className}
-      onClick={() => theme.set('theme', NEXT[current])}
+      // Toggle relative to the REAL current theme, never the pre-mount placeholder.
+      onClick={() => theme.set('theme', NEXT[theme.theme])}
       aria-label={label}
       title={label}
     >

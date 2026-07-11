@@ -55,6 +55,17 @@ export interface DcThemeState {
 interface DcThemeContextValue extends DcThemeState {
   set: <K extends keyof DcThemeState>(key: K, value: DcThemeState[K]) => void;
   reset: () => void;
+  /**
+   * False during SSR and the client's FIRST render, true after mount. Because
+   * the provider seeds its state from localStorage in the useState initializer
+   * (no-CSS-flash — see readInitialDcTheme), `theme` already holds the persisted
+   * value while hydrating, which differs from the server's DEFAULT_THEME. Any
+   * consumer that renders theme-CONDITIONAL markup (an icon, an aria-label) must
+   * gate it on `hydrated` — using DEFAULT_THEME until true — or React reports a
+   * hydration mismatch. CSS-only consumers (data-theme / data-* attributes) are
+   * unaffected and don't need this.
+   */
+  hydrated: boolean;
 }
 
 export const DEFAULT_THEME: DcThemeState = {
@@ -105,6 +116,10 @@ function readInitialDcTheme(): DcThemeState {
 
 export function DcThemeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DcThemeState>(readInitialDcTheme);
+  // Flips true after the first client render so consumers can reveal
+  // theme-conditional markup without mismatching the server's DEFAULT_THEME.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -136,8 +151,8 @@ export function DcThemeProvider({ children }: { children: ReactNode }) {
   const reset = useCallback(() => setState(DEFAULT_THEME), []);
 
   const value = useMemo<DcThemeContextValue>(
-    () => ({ ...state, set, reset }),
-    [state, set, reset],
+    () => ({ ...state, set, reset, hydrated }),
+    [state, set, reset, hydrated],
   );
 
   return <DcThemeContext.Provider value={value}>{children}</DcThemeContext.Provider>;
@@ -151,6 +166,7 @@ export function useDcTheme(): DcThemeContextValue {
       ...DEFAULT_THEME,
       set: () => undefined,
       reset: () => undefined,
+      hydrated: false,
     };
   }
   return ctx;
