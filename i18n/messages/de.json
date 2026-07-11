@@ -504,5 +504,72 @@
     "error_body": "Wir haben den Fehler protokolliert. Versuch es nochmal oder geh zurück zur Startseite.",
     "try_again": "Nochmal versuchen",
     "go_home": "Zur Startseite"
+  },
+  "ie": {
+    "report": {
+      "title": "Interview-Bericht",
+      "error": "Der Bericht konnte nicht geladen werden.",
+      "loading": "Dein Bericht wird geladen…",
+      "newInterview": "Neues Interview",
+      "processing": "Dein Interview wird abgeschlossen – Aufnahme und Bewertung erscheinen gleich.",
+      "refresh": "Aktualisieren",
+      "refreshing": "Wird aktualisiert…",
+      "overall": "Gesamtbewertung",
+      "noScore": "Noch keine Bewertung.",
+      "strengths": "Stärken",
+      "gaps": "Daran arbeiten",
+      "recording": "Aufnahme",
+      "transcript": "Transkript",
+      "transcriptView": "Transkript anzeigen",
+      "transcriptHide": "Transkript ausblenden",
+      "transcriptCount": "{count, plural, one {# Gesprächsrunde} other {# Gesprächsrunden}}",
+      "download": "Herunterladen",
+      "analysisPending": "Deine detaillierte Analyse wird erstellt – das kann bis zu einer Minute dauern.",
+      "dim": {
+        "structure": "Struktur",
+        "specificity": "Konkretheit",
+        "communication": "Kommunikation",
+        "confidence": "Selbstsicherheit",
+        "roleFit": "Passung zur Rolle"
+      },
+      "recommendations": {
+        "title": "Aktionsplan",
+        "sub": "Konkrete Schritte zur Verbesserung",
+        "pending": "Dein personalisierter Aktionsplan wird erstellt…",
+        "unavailable": "Für diese Sitzung ist kein Aktionsplan verfügbar.",
+        "empty": "Keine Empfehlungen – eine starke, rundum gelungene Sitzung.",
+        "exampleLabel": "Beispiel-Umformulierung",
+        "drill": "Üben",
+        "priority": {
+          "high": "Hohe Priorität",
+          "medium": "Mittlere Priorität",
+          "low": "Niedrige Priorität"
+        }
+      },
+      "questionBreakdown": {
+        "title": "Frage-für-Frage-Analyse",
+        "count": "{count, plural, one {# Frage} other {# Fragen}}",
+        "pending": "Deine detaillierte Fragenanalyse wird erstellt…",
+        "unavailable": "Detaillierte Fragenanalyse für diese Sitzung nicht verfügbar.",
+        "intentLabel": "Warum diese Frage gestellt wurde",
+        "answerSummaryLabel": "Deine Antwort",
+        "analysisLabel": "Analyse",
+        "correctionLabel": "Was du korrigieren solltest",
+        "suggestionLabel": "Wie du dich verbesserst",
+        "tipsLabel": "Profi-Tipps",
+        "modelAnswerLabel": "Musterantwort",
+        "keyQuoteLabel": "Was du gesagt hast",
+        "missed": "Diese Frage kam im Interview nicht vor.",
+        "offScript": "Spontane Frage",
+        "rating": {
+          "strong": "Stark",
+          "adequate": "Solide",
+          "weak": "Ausbaufähig",
+          "missed": "Nicht behandelt"
+        }
+      },
+      "analysisStalled": "Die detaillierte Analyse dauert länger als erwartet.",
+      "refreshAnalysis": "Analyse aktualisieren"
+    }
   }
 }

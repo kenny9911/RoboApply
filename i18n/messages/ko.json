@@ -504,5 +504,72 @@
     "error_body": "문제는 기록해 뒀어요. 다시 시도하거나 홈으로 돌아가세요.",
     "try_again": "다시 시도",
     "go_home": "홈으로"
+  },
+  "ie": {
+    "report": {
+      "title": "면접 리포트",
+      "error": "리포트를 불러오지 못했어요.",
+      "loading": "리포트를 불러오는 중…",
+      "newInterview": "새 면접",
+      "processing": "면접을 마무리하고 있어요. 녹음과 점수가 곧 표시돼요.",
+      "refresh": "새로고침",
+      "refreshing": "새로고침 중…",
+      "overall": "종합 점수",
+      "noScore": "아직 점수가 없어요.",
+      "strengths": "강점",
+      "gaps": "개선할 점",
+      "recording": "녹음",
+      "transcript": "대화 기록",
+      "transcriptView": "대화 기록 보기",
+      "transcriptHide": "대화 기록 숨기기",
+      "transcriptCount": "{count}개 대화",
+      "download": "다운로드",
+      "analysisPending": "상세 분석을 생성하고 있어요. 최대 1분 정도 걸릴 수 있어요.",
+      "dim": {
+        "structure": "구성",
+        "specificity": "구체성",
+        "communication": "전달력",
+        "confidence": "자신감",
+        "roleFit": "직무 적합성"
+      },
+      "recommendations": {
+        "title": "실행 계획",
+        "sub": "개선을 위한 구체적인 단계",
+        "pending": "맞춤형 실행 계획을 생성하고 있어요…",
+        "unavailable": "이 세션에 대한 실행 계획이 없어요.",
+        "empty": "개선할 점이 없어요. 전반적으로 훌륭한 세션이었어요.",
+        "exampleLabel": "수정 예시",
+        "drill": "연습",
+        "priority": {
+          "high": "높은 우선순위",
+          "medium": "중간 우선순위",
+          "low": "낮은 우선순위"
+        }
+      },
+      "questionBreakdown": {
+        "title": "질문별 분석",
+        "count": "{count}개 질문",
+        "pending": "질문별 상세 분석을 생성하고 있어요…",
+        "unavailable": "이 세션에 대한 질문별 상세 분석이 없어요.",
+        "intentLabel": "이 질문의 의도",
+        "answerSummaryLabel": "내 답변",
+        "analysisLabel": "분석",
+        "correctionLabel": "고칠 점",
+        "suggestionLabel": "개선 방법",
+        "tipsLabel": "전문가 팁",
+        "modelAnswerLabel": "모범 답안",
+        "keyQuoteLabel": "내가 한 말",
+        "missed": "이 질문은 면접에서 다루지 않았어요.",
+        "offScript": "즉흥 질문",
+        "rating": {
+          "strong": "우수",
+          "adequate": "양호",
+          "weak": "개선 필요",
+          "missed": "다루지 않음"
+        }
+      },
+      "analysisStalled": "상세 분석이 예상보다 오래 걸리고 있어요.",
+      "refreshAnalysis": "분석 새로고침"
+    }
   }
 }

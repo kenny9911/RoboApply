@@ -504,5 +504,72 @@
     "error_body": "Já registramos o problema. Você pode tentar de novo ou voltar para o início.",
     "try_again": "Tentar de novo",
     "go_home": "Voltar ao início"
+  },
+  "ie": {
+    "report": {
+      "title": "Relatório da entrevista",
+      "error": "Não foi possível carregar o relatório.",
+      "loading": "Carregando seu relatório…",
+      "newInterview": "Nova entrevista",
+      "processing": "Finalizando sua entrevista — a gravação e a pontuação aparecerão em breve.",
+      "refresh": "Atualizar",
+      "refreshing": "Atualizando…",
+      "overall": "Pontuação geral",
+      "noScore": "Ainda sem pontuação.",
+      "strengths": "Pontos fortes",
+      "gaps": "A melhorar",
+      "recording": "Gravação",
+      "transcript": "Transcrição",
+      "transcriptView": "Ver transcrição",
+      "transcriptHide": "Ocultar transcrição",
+      "transcriptCount": "{count, plural, one {# interação} other {# interações}}",
+      "download": "Baixar",
+      "analysisPending": "Sua análise detalhada está sendo gerada — pode levar até um minuto.",
+      "dim": {
+        "structure": "Estrutura",
+        "specificity": "Detalhamento",
+        "communication": "Comunicação",
+        "confidence": "Confiança",
+        "roleFit": "Adequação à vaga"
+      },
+      "recommendations": {
+        "title": "Plano de ação",
+        "sub": "Passos concretos para melhorar",
+        "pending": "Seu plano de ação personalizado está sendo gerado…",
+        "unavailable": "Nenhum plano de ação disponível para esta sessão.",
+        "empty": "Sem recomendações — uma sessão sólida e completa.",
+        "exampleLabel": "Exemplo de reformulação",
+        "drill": "Praticar",
+        "priority": {
+          "high": "Prioridade alta",
+          "medium": "Prioridade média",
+          "low": "Prioridade baixa"
+        }
+      },
+      "questionBreakdown": {
+        "title": "Análise pergunta a pergunta",
+        "count": "{count, plural, one {# pergunta} other {# perguntas}}",
+        "pending": "Sua análise detalhada das perguntas está sendo gerada…",
+        "unavailable": "Análise detalhada das perguntas não disponível para esta sessão.",
+        "intentLabel": "Por que perguntaram isso",
+        "answerSummaryLabel": "Sua resposta",
+        "analysisLabel": "Análise",
+        "correctionLabel": "O que corrigir",
+        "suggestionLabel": "Como melhorar",
+        "tipsLabel": "Dicas de especialista",
+        "modelAnswerLabel": "Resposta modelo",
+        "keyQuoteLabel": "O que você disse",
+        "missed": "Esta pergunta não chegou a ser feita na entrevista.",
+        "offScript": "Pergunta improvisada",
+        "rating": {
+          "strong": "Sólida",
+          "adequate": "Adequada",
+          "weak": "A melhorar",
+          "missed": "Sem resposta"
+        }
+      },
+      "analysisStalled": "A análise detalhada está demorando mais que o esperado.",
+      "refreshAnalysis": "Atualizar análise"
+    }
   }
 }

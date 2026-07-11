@@ -504,5 +504,72 @@
     "error_body": "On a consigné le problème. Tu peux réessayer ou revenir à l'accueil.",
     "try_again": "Réessayer",
     "go_home": "Retour à l'accueil"
+  },
+  "ie": {
+    "report": {
+      "title": "Rapport d'entretien",
+      "error": "Impossible de charger le rapport.",
+      "loading": "Chargement de ton rapport…",
+      "newInterview": "Nouvel entretien",
+      "processing": "Finalisation de ton entretien — l'enregistrement et la note s'afficheront bientôt.",
+      "refresh": "Actualiser",
+      "refreshing": "Actualisation…",
+      "overall": "Note globale",
+      "noScore": "Pas encore de note.",
+      "strengths": "Points forts",
+      "gaps": "À travailler",
+      "recording": "Enregistrement",
+      "transcript": "Transcription",
+      "transcriptView": "Voir la transcription",
+      "transcriptHide": "Masquer la transcription",
+      "transcriptCount": "{count, plural, one {# échange} other {# échanges}}",
+      "download": "Télécharger",
+      "analysisPending": "Ton analyse détaillée est en cours de génération — cela peut prendre jusqu'à une minute.",
+      "dim": {
+        "structure": "Structure",
+        "specificity": "Précision",
+        "communication": "Communication",
+        "confidence": "Assurance",
+        "roleFit": "Adéquation au poste"
+      },
+      "recommendations": {
+        "title": "Plan d'action",
+        "sub": "Des étapes concrètes pour progresser",
+        "pending": "Ton plan d'action personnalisé est en cours de génération…",
+        "unavailable": "Aucun plan d'action disponible pour cette session.",
+        "empty": "Aucune recommandation — une session solide et complète.",
+        "exampleLabel": "Exemple de reformulation",
+        "drill": "S'entraîner",
+        "priority": {
+          "high": "Priorité haute",
+          "medium": "Priorité moyenne",
+          "low": "Priorité basse"
+        }
+      },
+      "questionBreakdown": {
+        "title": "Analyse question par question",
+        "count": "{count, plural, one {# question} other {# questions}}",
+        "pending": "Ton analyse détaillée des questions est en cours de génération…",
+        "unavailable": "Analyse détaillée des questions non disponible pour cette session.",
+        "intentLabel": "Pourquoi cette question",
+        "answerSummaryLabel": "Ta réponse",
+        "analysisLabel": "Analyse",
+        "correctionLabel": "À corriger",
+        "suggestionLabel": "Comment progresser",
+        "tipsLabel": "Conseils de pro",
+        "modelAnswerLabel": "Réponse modèle",
+        "keyQuoteLabel": "Ce que tu as dit",
+        "missed": "Cette question n'a pas été abordée pendant l'entretien.",
+        "offScript": "Question improvisée",
+        "rating": {
+          "strong": "Solide",
+          "adequate": "Correcte",
+          "weak": "À améliorer",
+          "missed": "Non traitée"
+        }
+      },
+      "analysisStalled": "L'analyse détaillée prend plus de temps que prévu.",
+      "refreshAnalysis": "Actualiser l'analyse"
+    }
   }
 }

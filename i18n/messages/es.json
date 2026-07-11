@@ -504,5 +504,72 @@
     "error_body": "Ya registramos el problema. Puedes intentar de nuevo o volver al inicio.",
     "try_again": "Intentar de nuevo",
     "go_home": "Ir al inicio"
+  },
+  "ie": {
+    "report": {
+      "title": "Informe de la entrevista",
+      "error": "No se pudo cargar el informe.",
+      "loading": "Cargando tu informe…",
+      "newInterview": "Nueva entrevista",
+      "processing": "Finalizando tu entrevista — la grabación y la puntuación aparecerán en breve.",
+      "refresh": "Actualizar",
+      "refreshing": "Actualizando…",
+      "overall": "Puntuación global",
+      "noScore": "Aún no hay puntuación.",
+      "strengths": "Fortalezas",
+      "gaps": "A mejorar",
+      "recording": "Grabación",
+      "transcript": "Transcripción",
+      "transcriptView": "Ver transcripción",
+      "transcriptHide": "Ocultar transcripción",
+      "transcriptCount": "{count, plural, one {# intercambio} other {# intercambios}}",
+      "download": "Descargar",
+      "analysisPending": "Se está generando tu análisis detallado — puede tardar hasta un minuto.",
+      "dim": {
+        "structure": "Estructura",
+        "specificity": "Concreción",
+        "communication": "Comunicación",
+        "confidence": "Confianza",
+        "roleFit": "Adecuación al puesto"
+      },
+      "recommendations": {
+        "title": "Plan de acción",
+        "sub": "Pasos concretos para mejorar",
+        "pending": "Se está generando tu plan de acción personalizado…",
+        "unavailable": "No hay plan de acción disponible para esta sesión.",
+        "empty": "Sin recomendaciones — una sesión sólida y completa.",
+        "exampleLabel": "Ejemplo de reformulación",
+        "drill": "Practicar",
+        "priority": {
+          "high": "Prioridad alta",
+          "medium": "Prioridad media",
+          "low": "Prioridad baja"
+        }
+      },
+      "questionBreakdown": {
+        "title": "Análisis pregunta por pregunta",
+        "count": "{count, plural, one {# pregunta} other {# preguntas}}",
+        "pending": "Se está generando tu análisis detallado de preguntas…",
+        "unavailable": "Análisis detallado de preguntas no disponible para esta sesión.",
+        "intentLabel": "Por qué te lo preguntaron",
+        "answerSummaryLabel": "Tu respuesta",
+        "analysisLabel": "Análisis",
+        "correctionLabel": "Qué corregir",
+        "suggestionLabel": "Cómo mejorar",
+        "tipsLabel": "Consejos de experto",
+        "modelAnswerLabel": "Respuesta modelo",
+        "keyQuoteLabel": "Lo que dijiste",
+        "missed": "Esta pregunta no se llegó a plantear en la entrevista.",
+        "offScript": "Pregunta improvisada",
+        "rating": {
+          "strong": "Sólida",
+          "adequate": "Adecuada",
+          "weak": "Mejorable",
+          "missed": "Sin responder"
+        }
+      },
+      "analysisStalled": "El análisis detallado está tardando más de lo previsto.",
+      "refreshAnalysis": "Actualizar análisis"
+    }
   }
 }
