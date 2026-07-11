@@ -4,6 +4,7 @@
 @import '../styles/v3-preferences.css';
 @import '../styles/v3-account.css';
 @import '../styles/auth.css';
+@import '../styles/landing.css';
 
 @tailwind base;
 @tailwind components;

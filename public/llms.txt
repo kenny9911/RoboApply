@@ -1,0 +1,16 @@
+# RoboApply
+
+> RoboApply (https://www.roboapply.io) is an AI job-search agent for candidates. It finds job openings that match the user's stated intent, scores them against the user's actual resume with written reasons, tailors resumes, drafts cover letters that must cite the user's real experience line-by-line (a citation check enforced in code — no invented claims), and stages every application in a review hold the user can veto before anything is sent. It also includes a live AI mock-interview studio: real-time voice interviews with 18 interviewer personas, 28 interview formats, and 18 professional domain playbooks (software, AI/ML, law, finance, healthcare, hardware, and more), followed by a graded report with per-question corrections, transcript, and recording. Available in 9 languages: English, Spanish, Portuguese, French, German, Japanese, Korean, Simplified Chinese, Traditional Chinese.
+
+Key facts:
+- Category: AI job application agent + AI interview practice (candidate-side).
+- Consent-first: nothing is submitted without the user's explicit approval; daily application volume is hard-capped; full autopilot is opt-in early access.
+- Pricing: Free ($0 — full toolkit + 1 mock interview/month), Starter ($15/month — 10 mock interviews), Growth ($29/month — 28 mock interviews). 1 credit = one 20-minute interview, billed by the second. Card internationally; Alipay in China.
+- Interview practice: full-duplex live voice AI interviewer, native-accent voices in 9 languages, live coaching nudges, camera-on mode, two-phase evaluation reports.
+- Resume tools: LinkedIn/PDF import, AI bullet rewrites, job-description tailoring with reviewable diffs, PDF/DOCX export with CJK support.
+- Privacy: resumes/recordings are never shared with employers; account deletion performs a real data wipe.
+
+## Pages
+- [Home (English)](https://www.roboapply.io/): product overview, how it works, pricing, FAQ.
+- Localized: https://www.roboapply.io/zh (简体中文), /zh-TW (繁體中文), /ja (日本語), /ko (한국어), /es (Español), /fr (Français), /pt (Português), /de (Deutsch).
+- [Sign up](https://www.roboapply.io/signup)

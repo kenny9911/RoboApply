@@ -1,0 +1,505 @@
+{
+  "common": {
+    "loading": "Lädt…",
+    "sign_in": "Anmelden",
+    "sign_out": "Abmelden",
+    "save": "Speichern",
+    "saving": "Speichert…",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "back": "Zurück",
+    "continue": "Weiter",
+    "retry": "Nochmal versuchen",
+    "saved": "Gespeichert.",
+    "coming_soon": "Ich richte mich gerade ein. Das hier funktioniert, sobald dein Agent verkabelt ist.",
+    "language": "Sprache"
+  },
+  "nav": {
+    "mission": "Mission",
+    "apps": "Bewerbungen",
+    "settings": "Einstellungen",
+    "home": "Start",
+    "resume_builder": "Lebenslauf-Builder",
+    "tracker": "Tracker",
+    "job_search": "Jobsuche",
+    "mock_interview": "Mock-Interview",
+    "career_insights": "Karriere-Insights",
+    "all_tools": "Alle Tools",
+    "all_tools_coming_soon": "Mehr Tools und Integrationen kommen mit V2.1.",
+    "referrals": "Empfehlungen",
+    "referrals_coming_soon": "Empfehlungen kommen mit V2.1.",
+    "support": "Support"
+  },
+  "landing": {
+    "meta": {
+      "title": "KI-Bewerbungsagent & KI-Interview-Training | RoboApply",
+      "description": "RoboApply ist dein KI-Bewerbungsagent: findet passende Jobs, schreibt belegte Anschreiben zur Freigabe und trainiert dich im Live-KI-Interview. Kostenlos starten.",
+      "ogTitle": "RoboApply – Wir bewerben. Du überzeugst.",
+      "ogDescription": "Dein KI-Agent matcht Jobs mit deinem echten Lebenslauf, entwirft Bewerbungen, die du vor dem Versand freigibst, und trainiert dich in Live-KI-Mock-Interviews in 9 Sprachen. Starte kostenlos.",
+      "keywords": "KI-Bewerbungsagent, automatisch bewerben, KI Anschreiben, KI Interview-Training, Bewerbung KI, Lebenslauf KI, Vorstellungsgespräch üben mit KI, KI Mock Interview, Jobsuche automatisieren"
+    },
+    "header": {
+      "status_chip": "EARLY ACCESS",
+      "cta": "Kostenlos starten",
+      "theme_to_light": "In den Morgenmodus wechseln",
+      "theme_to_dark": "In den Nachtmodus wechseln",
+      "lang_label": "Sprache ändern"
+    },
+    "hero": {
+      "eyebrow": "DEIN KI-AGENT FÜR DIE JOBSUCHE · NACHTSCHICHT 23:00 → 09:00",
+      "headline_machine": "Wir bewerben",
+      "headline_human": "Du überzeugst",
+      "subheadline": "RoboApply ist der KI-Agent für deine Jobsuche: Er findet Stellen, die wirklich passen, bewertet sie an deinem echten Lebenslauf und schreibt Anschreiben, in denen jede Aussage Zeile für Zeile durch deine echte Erfahrung belegt ist – dann legt er dir alles zur Freigabe vor. Ohne dich geht nichts raus.",
+      "cta_primary": "Schick den Agenten auf Schicht",
+      "cta_secondary": "Sieh dir eine Beispiel-Schicht an",
+      "reassure": "GRATIS-PLAN · OHNE KREDITKARTE · AUTOPILOT IM EARLY ACCESS",
+      "log": {
+        "aria": "Beispiel-Protokoll einer Nachtschicht: Der Agent scannt um 23:04 Live-Jobbörsen, gleicht Stellen mit deinem Lebenslauf und deinen Zielen ab, schreibt über Nacht Anschreiben mit belegten Aussagen, legt zwölf Bewerbungen in die Warteschlange, öffnet um 7:00 dein Prüffenster, in dem du zwei stoppst und zehn freigibst, schickt die zehn freigegebenen um 9:00 raus und mailt um 9:02 einen Morgenreport, der dich ans Interview-Training erinnert.",
+        "title": "roboapply — overnight.log",
+        "live": "BEISPIEL-SCHICHT",
+        "lines": {
+          "l1": {
+            "time": "23:04",
+            "tag": "SCOUT",
+            "msg": "scannt Live-Jobbörsen · 1.284 neue Anzeigen"
+          },
+          "l2": {
+            "time": "23:51",
+            "tag": "MATCH",
+            "msg": "41 passen zu deinen Zielen · bewertet an deinem Lebenslauf"
+          },
+          "l3": {
+            "time": "01:13",
+            "tag": "DRAFT",
+            "msg": "Anschreiben 03/12 · jede Aussage im Lebenslauf belegt"
+          },
+          "l4": {
+            "time": "02:47",
+            "tag": "DRAFT",
+            "msg": "Anschreiben 09/12 · null erfundene Angaben"
+          },
+          "l5": {
+            "time": "04:19",
+            "tag": "QUEUE",
+            "msg": "12 in der Warteschlange · nichts verschickt sich selbst"
+          },
+          "l6": {
+            "time": "07:00",
+            "tag": "HOLD",
+            "msg": "Prüffenster offen · Veto gegen alles möglich"
+          },
+          "l7": {
+            "time": "08:58",
+            "tag": "HOLD",
+            "msg": "du hast 2 gestoppt · 10 freigegeben"
+          },
+          "l8": {
+            "time": "09:00",
+            "tag": "SUBMIT",
+            "msg": "10 Bewerbungen raus · dein Name, deine Worte"
+          },
+          "l9": {
+            "time": "09:02",
+            "tag": "DIGEST",
+            "msg": "Morgenreport verschickt · jetzt Interview üben"
+          }
+        }
+      }
+    },
+    "problem": {
+      "eyebrow": "WARUM BOTS VERLIEREN",
+      "title": "Wer auf Masse spielt, verliert.",
+      "sub": "KI hat das Recruiting geflutet. In einem Test von Business Insider kam ein Massenbewerbungs-Bot auf 6% Rücklauf – Recruiter merken das –, während Bewerbungen, die ein Mensch geprüft und freigegeben hat, durchgehend besser abschneiden. Die Lösung ist nicht mehr Masse. Sondern ein besserer Agent, bei dem du das letzte Wort hast.",
+      "stats": {
+        "s1": {
+          "value": "242",
+          "label": "Bewerbungen konkurrieren heute im Schnitt um eine einzige Unternehmensstelle"
+        },
+        "s2": {
+          "value": "+400%",
+          "label": "mehr Bewerbungen fluten Recruiter, seit KI-Massenbewerbungen boomen"
+        },
+        "s3": {
+          "value": "41%",
+          "label": "der Jobsuchenden glauben, dass nicht mal ein Viertel ihrer Bewerbungen je ein Mensch liest"
+        }
+      },
+      "source": "Quellen: The Interview Guys (242) · Greenhouse via Fortune (+400%) · Umfragen unter Jobsuchenden, 2025–2026 (41%)"
+    },
+    "how": {
+      "eyebrow": "SO LÄUFT EINE SCHICHT",
+      "title": "Eine Nacht, von Anfang bis Ende.",
+      "sub": "Leg deine Ziele einmal fest. Der Agent arbeitet die Stunden, die du nicht arbeiten solltest – und gibt dir das Steuer in den Momenten, die zählen.",
+      "steps": {
+        "s1": {
+          "time": "23:04",
+          "tag": "SCOUT",
+          "title": "Er jagt, während du schläfst",
+          "body": "Der Agent durchkämmt Live-Jobbörsen und filtert hart nach deinen Vorgaben – Rolle, Level, Stack, Ort, Gehalt. Was nicht passt, fliegt raus, bevor du es überhaupt siehst."
+        },
+        "s2": {
+          "time": "01:30",
+          "tag": "DRAFT",
+          "title": "Er schreibt mit Belegen",
+          "body": "Für jeden Treffer ein zugeschnittener Lebenslauf und ein echtes Anschreiben – und jede Aussage im Anschreiben muss eine Zeile aus deinem echten Werdegang zitieren. Erfundene Erfahrung kommt nicht durch: Der Zitat-Check ist im Code verankert."
+        },
+        "s3": {
+          "time": "07:00",
+          "tag": "HOLD",
+          "title": "Das Veto liegt bei dir",
+          "body": "Alles wartet im Prüffenster. Geh die Warteschlange beim Kaffee durch, öffne jeden Entwurf, überspring alles, was sich falsch anfühlt. Nichts geht je in deinem Namen raus – ohne dein Okay."
+        },
+        "s4": {
+          "time": "09:00",
+          "tag": "SUBMIT",
+          "title": "Um 9:00 raus – dann beginnt die echte Vorbereitung",
+          "body": "Freigegebene Bewerbungen gehen raus, wenn der Tag der Recruiter beginnt – unter deinem Namen, mit deinen Worten. Ein Tap von dir – oder ganz hands-off, während der Autopilot im Early Access ausrollt. Danach landet der Report in deinem Postfach – und das Interview-Studio ist einen Tap entfernt."
+        }
+      }
+    },
+    "loop": {
+      "eyebrow": "DER KOMPLETTE LOOP",
+      "title": "Ein Agent. Die ganze Suche.",
+      "sub": "Alles zwischen „Ich brauche einen Job“ und „Ich habe unterschrieben“ lebt an einem Ort – und derselbe Agent trägt deinen Kontext durch jeden Schritt.",
+      "cards": {
+        "match": {
+          "tag": "MATCH",
+          "title": "Matching, das deinen Lebenslauf liest",
+          "body": "Jeder Job bekommt einen KI-Match-Score mit ausformulierten Gründen, berechnet an deinem echten Lebenslauf – kein Keyword-Bingo. Ändert sich dein Lebenslauf, aktualisieren sich die Scores."
+        },
+        "resume": {
+          "tag": "RESUME",
+          "title": "Ein Lebenslauf, der sich selbst umschreibt",
+          "body": "Importiere aus LinkedIn oder PDF, lass die KI schwache Bulletpoints umschreiben, schneide alles per nachvollziehbarem Diff auf jede Stellenanzeige zu – und exportiere ein sauberes PDF oder DOCX."
+        },
+        "apply": {
+          "tag": "APPLY",
+          "chip": "AUTOPILOT · EARLY ACCESS",
+          "title": "Bewerbungen mit eingebauter Freigabe",
+          "body": "Anschreiben mit Zitat-Check, eine Warteschlange, ein Prüf-Stopp mit Vetorecht, harte Tageslimits. Der komplette Hands-off-Autopilot rollt gerade im Early Access aus – der Freigabe-Layer kam zuerst. Mit Absicht."
+        },
+        "studio": {
+          "tag": "STUDIO",
+          "title": "Ein Interviewer, an dem du üben kannst",
+          "body": "Ein Live-Voice-KI-Interviewer mit 18 Fach-Playbooks und 28 Formaten – vom Phone Screen über System Design bis zum Case Interview – der dich so bewertet, wie es das echte Panel tun wird."
+        }
+      }
+    },
+    "studio": {
+      "eyebrow": "DIE ZWEITE HALBZEIT",
+      "title_machine": "Wir holen dir das Interview",
+      "title_human": "dann machen wir dich fit",
+      "sub": "63% der Jobsuchenden hatten im echten Bewerbungsprozess schon einen KI-Interviewer vor sich (Greenhouse, 2026). Übe gegen unseren – so viele Runden du willst, ganz ohne schiefe Blicke, bis sich das echte Gespräch vertraut anfühlt.",
+      "features": {
+        "f1": {
+          "title": "Er redet – und unterbricht – wie ein Mensch",
+          "body": "Full-Duplex-Live-Voice: Der Interviewer hakt nach, hält dagegen und stellt Rückfragen in Echtzeit – in 9 Sprachen, mit muttersprachlichen Stimmen."
+        },
+        "f2": {
+          "title": "18 Fach-Playbooks statt Quizkarten",
+          "body": "Jura, Finance, Healthcare, Hardware, KI/ML und mehr – er fragt, was Insider wirklich fragen, und bewertet durch dieselbe Brille."
+        },
+        "f3": {
+          "title": "Er macht Hausaufgaben, bevor ihr euch trefft",
+          "body": "Der Interviewer recherchiert die aktuellen Marktanforderungen für genau deine Rolle und Stellenanzeige – und baut daraus einen Interviewplan, maßgeschneidert auf deinen Lebenslauf."
+        },
+        "f4": {
+          "title": "Ein Report, der deine nächste Antwort verändert",
+          "body": "Scores pro Dimension, Korrekturen zu jeder Frage mit stärkeren Antwortvorschlägen, ein komplettes Transkript und eine abspielbare Aufnahme – nach jeder Session."
+        },
+        "f5": {
+          "title": "Ein Coach im Ohr – wenn du willst",
+          "body": "Optionale Live-Hinweise, wenn du abschweifst, der Frage ausweichst oder das Wichtigste am Ende versteckst. Der Kamera-Modus bringt echten Videocall-Druck dazu."
+        }
+      },
+      "report": {
+        "header": "session-042 — Report",
+        "overall_label": "GESAMT",
+        "overall": "82",
+        "rows": {
+          "r1": {
+            "k": "Klarheit",
+            "v": "86"
+          },
+          "r2": {
+            "k": "Tiefe",
+            "v": "78"
+          },
+          "r3": {
+            "k": "Struktur",
+            "v": "84"
+          }
+        },
+        "quote": "„Fang mit der Zahl an – die 40% Kostensenkung hast du ganz ans Ende deiner Antwort gepackt.“",
+        "quote_label": "Korrektur pro Frage"
+      },
+      "cta": "Kostenloses Übungsinterview starten"
+    },
+    "rules": {
+      "eyebrow": "BETRIEBSREGELN",
+      "title": "Fest im Code, nicht im Kleingedruckten.",
+      "sub": "Das sind keine Einstellungen, die in irgendeinem Menü vergraben sind. So ist der Agent gebaut – damit sich das, was im Postfach eines Recruiters landet, nie wie Bot-Spam liest.",
+      "file": "guarantees.conf — schreibgeschützt",
+      "badge": "ERZWUNGEN",
+      "ok": "OK",
+      "items": {
+        "r1_head": "Nur echte Anschreiben",
+        "r1_body": "jede Aussage in jedem Anschreiben muss deinen echten Lebenslauf zitieren – erfundene Erfahrung wird im Code geblockt.",
+        "r2_head": "Der Prüf-Stopp",
+        "r2_body": "nichts geht raus ohne Vorschaufenster mit Vetorecht – Bewerbung für Bewerbung.",
+        "r3_head": "Ziel-Filter",
+        "r3_body": "Jobs, die deine Vorgaben verfehlen – Level, Stack, Ort, Gehalt –, erreichen deine Warteschlange nie.",
+        "r4_head": "Kein Gießkannenprinzip",
+        "r4_body": "das Tagesvolumen ist hart gedeckelt; jede Bewerbung ist bewusst gesetzt – dein Name bleibt glaubwürdig.",
+        "r5_head": "Sauber aussteigen",
+        "r5_body": "pausiere den Agenten mit einem Klick – und Konto löschen heißt wirklich löschen, kein Soft-Delete."
+      }
+    },
+    "pricing": {
+      "eyebrow": "PLÄNE",
+      "title": "Starte kostenlos. Upgrade, wenn's läuft.",
+      "sub": "Jeder Plan enthält den ganzen Agenten – Lebenslauf-KI, Job-Matching, den Tracker und den Freigabe-Layer. Bezahlte Pläne heißen vor allem: mehr Interview-Training.",
+      "unit": "INTERVIEWS / MONAT",
+      "credit_note": "1 Credit = ein 20-minütiges Mock-Interview, sekundengenau abgerechnet. Credits füllen sich monatlich auf. Zahlung per Karte – in China auch per Alipay.",
+      "tiers": {
+        "free": {
+          "code": "TIER-0",
+          "name": "Free",
+          "rate": "1",
+          "price": "$0",
+          "per": "",
+          "note": "Das komplette Toolkit, plus ein bewertetes Mock-Interview pro Monat.",
+          "cta": "Kostenlos starten",
+          "unit": "INTERVIEW / MONAT"
+        },
+        "starter": {
+          "code": "TIER-1",
+          "name": "Starter",
+          "rate": "10",
+          "price": "$15",
+          "per": "/Monat",
+          "badge": "EMPFOHLEN",
+          "note": "Der Takt für die ernsthafte Suche: üben vor jedem echten Interview.",
+          "cta": "Mit Starter loslegen",
+          "unit": "INTERVIEWS / MONAT"
+        },
+        "growth": {
+          "code": "TIER-2",
+          "name": "Growth",
+          "rate": "28",
+          "price": "$29",
+          "per": "/Monat",
+          "note": "All-in: tägliche Runden, bis das Angebot unterschrieben ist.",
+          "cta": "Mit Growth loslegen",
+          "unit": "INTERVIEWS / MONAT"
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "FRAGEN & ANTWORTEN",
+      "title": "Was Jobsuchende uns fragen.",
+      "items": {
+        "q1": {
+          "q": "Was ist RoboApply?",
+          "a": "RoboApply ist ein KI-Agent für die Jobsuche. Er findet Stellen, die zu deinen Zielen passen, bewertet sie an deinem echten Lebenslauf, schneidet deine Unterlagen zu, schreibt Anschreiben mit Zitat-Check und legt jede Bewerbung zur Freigabe vor – und ein Live-KI-Interviewer bereitet dich auf die Interviews vor, die daraus entstehen."
+        },
+        "q2": {
+          "q": "Bewirbt sich RoboApply ohne meine Erlaubnis?",
+          "a": "Nein. Zustimmung ist hier Architektur, keine Einstellung: Bewerbungen gehen grundsätzlich erst nach deiner ausdrücklichen Freigabe raus, das Tagesvolumen ist hart gedeckelt, und der Hands-off-Autopilot läuft als Opt-in im Early Access. Nichts wird in deinem Namen abgeschickt – ohne dein Okay."
+        },
+        "q3": {
+          "q": "Fliegen KI-geschriebene Anschreiben bei Recruitern auf?",
+          "a": "Generische KI-Anschreiben: ja. RoboApplys Anschreiben sind schon im Bauplan anders: Jede Aussage muss eine Zeile aus deinem echten Lebenslauf zitieren – der Zitat-Check ist im Code verankert, erfundene Erfahrung geht also nie raus. Und du prüfst und gibst jedes Anschreiben frei, bevor es irgendwohin geht."
+        },
+        "q4": {
+          "q": "Kann ich ein Vorstellungsgespräch wirklich mit einer KI üben?",
+          "a": "Ja – mit einem Live-Voice-Interviewer, der redet, nachhakt und unterbricht wie ein Mensch. Wähl aus 28 Formaten und 18 Fach-Playbooks (Software, Jura, Finanzen, Healthcare und mehr), führe das Interview in einer von 9 Sprachen und bekomm einen bewerteten Report mit Korrekturen zu jeder Frage, Transkript und Aufnahme."
+        },
+        "q5": {
+          "q": "Was unterscheidet RoboApply von Auto-Apply-Bots wie LazyApply?",
+          "a": "Volumen-Bots schicken massenhaft raus, ohne Urteil – in einem Test von Business Insider kam ein Massenbewerbungs-Bot auf 6% Rücklauf, und Recruiter merken das. RoboApply behält dein Urteil im Prozess: Prüf-Stopp, Anschreiben mit Zitat-Check, harte Limits. Und es schließt den Loop, den sonst niemand schließt: Derselbe Agent, der sich für dich bewirbt, macht dich auch fürs Interview fit."
+        },
+        "q6": {
+          "q": "Was kostet RoboApply?",
+          "a": "Das Kern-Toolkit ist für immer kostenlos, plus ein Mock-Interview pro Monat. Starter kostet $15/Monat mit 10 Übungsinterviews; Growth $29/Monat mit 28. Ein Credit ist eine 20-Minuten-Session, sekundengenau abgerechnet und monatlich aufgefüllt. Zahlung per Karte, in China auch per Alipay."
+        },
+        "q7": {
+          "q": "Welche Sprachen spricht RoboApply?",
+          "a": "Neun: Englisch, Spanisch, Portugiesisch, Französisch, Deutsch, Japanisch, Koreanisch sowie vereinfachtes und traditionelles Chinesisch. Übungsinterviews funktionieren heute schon in allen neun Sprachen – die Stimme des Interviewers ebenso wie dein bewerteter Report. Das Interface ist in Englisch, Japanisch und beiden Chinesisch-Varianten vollständig lokalisiert – die übrigen Sprachen rollen gerade aus."
+        },
+        "q8": {
+          "q": "Sind meine Daten sicher – und kann ich sie wirklich löschen?",
+          "a": "Dein Lebenslauf, deine Transkripte und Aufnahmen gehören dir; nichts davon wird mit Arbeitgebern geteilt. Jede KI-Aktion landet in einem transparenten Nutzungsprotokoll – und Konto löschen heißt wirklich löschen: ein Klick, alles weg. Kein Soft-Delete, der deine Daten heimlich behält."
+        }
+      }
+    },
+    "final": {
+      "chip": "EARLY ACCESS · GRATIS STARTEN",
+      "title_machine": "Dein Agent ist bereit",
+      "title_human": "wenn du es bist",
+      "sub": "Drei Minuten Setup: Lebenslauf rein, Ziele gesetzt, Agent gebrieft. Und das Interview-Studio ist schon jetzt offen – starte dein erstes Übungsinterview kostenlos.",
+      "cta": "Kostenlos starten"
+    },
+    "sticky": {
+      "cta": "Kostenlos starten",
+      "note": "Ohne Kreditkarte"
+    },
+    "footer": {
+      "status": "SYSTEM NOMINAL · FREIGABE-LAYER ERZWUNGEN",
+      "note": "© RoboApply. Gebaut von Bewerbenden, für Bewerbende.",
+      "tagline": "Der KI-Agent für die Jobsuche, bei dem du das letzte Wort hast.",
+      "lang_title": "RoboApply in deiner Sprache"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Willkommen zurück",
+      "subtitle": "Melde dich bei deiner RoboApply-Mission an.",
+      "email": "E-Mail",
+      "password": "Passwort",
+      "submit": "Anmelden",
+      "submitting": "Anmeldung läuft…",
+      "no_account": "Noch kein Konto?",
+      "signup_cta": "Jetzt erstellen",
+      "error_generic": "Anmeldung fehlgeschlagen. Prüf E-Mail und Passwort und versuch es nochmal."
+    },
+    "signup": {
+      "title": "Erstell dein Konto",
+      "subtitle": "60 Sekunden bis zur Jobsuche, die von allein läuft.",
+      "email": "E-Mail",
+      "password": "Passwort",
+      "name": "Dein Name",
+      "submit": "Registrieren",
+      "submitting": "Konto wird erstellt…",
+      "has_account": "Schon ein Konto?",
+      "login_cta": "Anmelden",
+      "error_generic": "Wir konnten dein Konto nicht erstellen. Versuch es bitte nochmal."
+    },
+    "brand": {
+      "eyebrow": "KI-COPILOT FÜR DIE JOBSUCHE",
+      "headline": "Schneller zur <em>Zusage</em>.",
+      "lead": "RoboApply schneidet deinen Lebenslauf zu, führt realistische KI-Mock-Interviews und hält jede Bewerbung an einem Ort – damit du dich voll darauf konzentrieren kannst, die Zusage zu holen.",
+      "feature_resume": "Zugeschnittene, ATS-fertige Lebensläufe",
+      "feature_interview": "Realistische KI-Mock-Interviews",
+      "feature_track": "Jede Bewerbung an einem Ort"
+    }
+  },
+  "onboarding": {
+    "brand_sub": "DEIN KI-JOBJÄGER",
+    "skip": "Überspringen →",
+    "upload": {
+      "title": "Zeig mir deinen",
+      "title_accent": "Lebenslauf",
+      "lead": "Mehr brauche ich nicht, um loszulegen. Einmal lesen – und ich zeige dir nie wieder Jobs, die nicht passen.",
+      "drop_title": "Zieh deinen Lebenslauf hier rein – oder klick zum Auswählen",
+      "drop_sub": "PDF, DOC/DOCX, TXT oder MD – bis 15 MB",
+      "ingest_title": "Das habe ich rausgelesen",
+      "reading": "Lese…",
+      "error": "Ich konnte den Lebenslauf nicht lesen. Versuch ein PDF oder DOCX – oder wähl eine andere Datei.",
+      "received": "{size} · lade hoch & lese aus…"
+    },
+    "resumeSelect": {
+      "title": "Welchen Lebenslauf soll ich",
+      "title_accent": "lesen",
+      "title_after": "?",
+      "lead": "Wähl den, der am besten zeigt, wo du hinwillst – ich lese ihn, und von da aus legen wir los.",
+      "upload_new": "Neuen Lebenslauf hochladen",
+      "paste_text": "Lebenslauf-Text einfügen",
+      "primary_badge": "Primär",
+      "last_edited": "Zuletzt bearbeitet {date}",
+      "continue": "Mit diesem Lebenslauf weiter",
+      "linkedin_import": "Aus LinkedIn importieren",
+      "linkedin_placeholder": "https://www.linkedin.com/in/dein-profil",
+      "paste_placeholder": "Füg deinen Lebenslauf-Text hier ein – reiner Text oder Markdown, beides geht.",
+      "paste_name": "Eingefügter Lebenslauf",
+      "paste_submit": "Diesen Text verwenden",
+      "back": "← Zurück",
+      "retry": "Nochmal versuchen",
+      "pick_existing": "Vorhandenen Lebenslauf wählen",
+      "paste_instead": "Lieber Text einfügen",
+      "formats": "PDF · DOC/DOCX · TXT · MD",
+      "error_file_too_large": "Die Datei ist zu groß (max. 15 MB). Versuch einen kleineren Export.",
+      "error_unsupported_format": "Dieses Format kann ich nicht lesen. PDF, DOC/DOCX, TXT oder MD gehen alle.",
+      "error_parse_failed": "Ich konnte den Lebenslauf nicht lesen. Versuch eine andere Datei – oder füg den Text direkt ein."
+    },
+    "chat": {
+      "title": "Lass uns deine Jagd aufsetzen",
+      "composer_placeholder": "Sag mir, was du jagst – Rollen, Orte, Gehalt, No-Gos…",
+      "send": "Senden",
+      "opening_prompt_hint": "Diesen Auftakt habe ich aus deinem Lebenslauf entworfen – bearbeite ihn oder schick ihn einfach ab.",
+      "skeleton_ingest": "Lese deinen Lebenslauf…",
+      "status_searching_internal": "Durchsuche unseren Job-Index…",
+      "status_searching_external": "Prüfe frische externe Anzeigen…",
+      "status_scoring": "Bewerte Treffer an deinem Lebenslauf…",
+      "tray_title": "Was ich bisher habe",
+      "tray_edit_prefix": "Nochmal zu {field}…",
+      "tray_dismiss": "Verwerfen",
+      "card_match": "{score}% Match",
+      "card_via": "via {publisher}",
+      "card_save": "Merken",
+      "card_saved": "Gemerkt",
+      "card_pass": "Passt nicht",
+      "card_passed": "Aussortiert",
+      "card_apply": "Anzeige öffnen",
+      "wrap_cta": "Zeig mir meine Matches",
+      "restore_notice": "Wir machen da weiter, wo wir aufgehört haben.",
+      "superseded_notice": "Dieses Gespräch lief in einem anderen Fenster weiter – lade neu, um aufzuholen.",
+      "error_turn_failed": "Das ist nicht durchgegangen.",
+      "error_retry": "Nochmal",
+      "error_daily_limit": "Du hast das Onboarding heute ein paar Mal neu gestartet – komm morgen wieder oder spring direkt in die App.",
+      "progress_resume": "Lebenslauf",
+      "progress_chat": "Chat",
+      "progress_matches": "Matches",
+      "progress_done": "Fertig",
+      "fields": {
+        "targetRoles": "Rollen",
+        "seniority": "Level",
+        "workModes": "Arbeitsmodus",
+        "salary": "Gehalt",
+        "employmentTypes": "Anstellung",
+        "industriesTarget": "Branchen",
+        "industriesAvoid": "Vermeiden",
+        "companyStages": "Unternehmensphase",
+        "companySizes": "Unternehmensgröße",
+        "locations": "Orte",
+        "mustHaves": "Must-haves",
+        "dealbreakers": "No-Gos"
+      },
+      "values": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "Vor Ort",
+        "full_time": "Vollzeit",
+        "contract": "Freelance",
+        "part_time": "Teilzeit",
+        "internship": "Praktikum"
+      }
+    }
+  },
+  "choosePlan": {
+    "title": "Wähl deinen Plan",
+    "subtitle": "Wähl einen Plan und leg los – Interviews üben mit KI. Wechseln oder kündigen kannst du jederzeit.",
+    "loading": "Lade Pläne…",
+    "error": "Pläne konnten nicht geladen werden.",
+    "retry": "Nochmal versuchen",
+    "continueFree": "Erstmal überspringen – mit Free weitermachen",
+    "selectFree": "Kostenlos starten",
+    "selectPaid": "{plan} wählen",
+    "blurb": {
+      "free": "1 Übungsinterview pro Monat, um alles auszuprobieren.",
+      "starter": "10 Mock-Interviews pro Monat – konstantes Training, Woche für Woche.",
+      "growth": "28 Mock-Interviews pro Monat – tägliche Runden vor dem Ernstfall."
+    },
+    "welcome": "Du bist drin – willkommen bei RoboApply",
+    "creditsHint": "1 Credit = ein 20-minütiges Mock-Interview.",
+    "checkoutFailed": "Wir konnten den Checkout nicht starten. Versuch es bitte nochmal."
+  },
+  "errors": {
+    "not_found_title": "404",
+    "not_found_body": "Diese Seite konnten wir nicht finden.",
+    "error_title": "Etwas ist schiefgelaufen",
+    "error_body": "Wir haben den Fehler protokolliert. Versuch es nochmal oder geh zurück zur Startseite.",
+    "try_again": "Nochmal versuchen",
+    "go_home": "Zur Startseite"
+  }
+}

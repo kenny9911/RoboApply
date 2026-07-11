@@ -1,0 +1,505 @@
+{
+  "common": {
+    "loading": "Carregando…",
+    "sign_in": "Entrar",
+    "sign_out": "Sair",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "back": "Voltar",
+    "continue": "Continuar",
+    "retry": "Tentar de novo",
+    "saved": "Salvo.",
+    "coming_soon": "Ainda estou me instalando por aqui. Isso vai funcionar assim que o seu agente estiver conectado.",
+    "language": "Idioma"
+  },
+  "nav": {
+    "mission": "Missão",
+    "apps": "Candidaturas",
+    "settings": "Configurações",
+    "home": "Início",
+    "resume_builder": "Criador de Currículo",
+    "tracker": "Acompanhamento",
+    "job_search": "Busca de Vagas",
+    "mock_interview": "Entrevista Simulada",
+    "career_insights": "Insights de Carreira",
+    "all_tools": "Todas as Ferramentas",
+    "all_tools_coming_soon": "Mais ferramentas e integrações chegam na V2.1.",
+    "referrals": "Indicações",
+    "referrals_coming_soon": "As indicações chegam na V2.1.",
+    "support": "Suporte"
+  },
+  "landing": {
+    "meta": {
+      "title": "IA que se candidata a vagas e simula entrevistas | RoboApply",
+      "description": "RoboApply: a IA que se candidata a vagas por você. Encontra empregos compatíveis, escreve cartas verificadas e treina você em entrevistas simuladas. Comece grátis.",
+      "ogTitle": "RoboApply — A candidatura é nossa. A entrevista é sua.",
+      "ogDescription": "Seu agente de IA cruza as vagas com o seu currículo de verdade, prepara candidaturas que você aprova antes de qualquer envio e te treina com entrevistas simuladas ao vivo em 9 idiomas. Comece grátis.",
+      "keywords": "candidatar-se a vagas automaticamente, IA que se candidata por você, agente de IA para emprego, simulação de entrevista com IA, entrevista simulada com IA, carta de apresentação com IA, criador de currículo com IA, vagas remotas, automação de busca de emprego"
+    },
+    "header": {
+      "status_chip": "ACESSO ANTECIPADO",
+      "cta": "Comece grátis",
+      "theme_to_light": "Mudar para o modo manhã",
+      "theme_to_dark": "Mudar para o modo noite",
+      "lang_label": "Mudar idioma"
+    },
+    "hero": {
+      "eyebrow": "SEU AGENTE DE IA PARA EMPREGO · PLANTÃO NOTURNO 23:00 → 09:00",
+      "headline_machine": "A candidatura é nossa",
+      "headline_human": "A entrevista é sua",
+      "subheadline": "O RoboApply é um agente de IA para a sua busca de emprego: ele garimpa vagas que combinam de verdade, dá nota a cada uma com base no seu currículo real e escreve cartas de apresentação que citam, linha por linha, a sua experiência — depois deixa tudo pronto para a sua aprovação. Nada é enviado sem você.",
+      "cta_primary": "Coloque o agente de plantão",
+      "cta_secondary": "Veja um plantão de exemplo",
+      "reassure": "PLANO GRÁTIS · SEM CARTÃO · PILOTO AUTOMÁTICO EM ACESSO ANTECIPADO",
+      "log": {
+        "aria": "Exemplo de registro da atividade noturna: o agente varre painéis de vagas ao vivo às 23:04, cruza as vagas com o seu currículo e o que você busca, escreve cartas de apresentação com citações verificadas ao longo da madrugada, deixa doze candidaturas preparadas, abre a sua janela de revisão às 7:00, onde você veta duas e aprova dez, envia as dez aprovadas às 9:00 e manda um resumo matinal por e-mail às 9:02, apontando o treino de entrevista como próximo passo.",
+        "title": "roboapply — overnight.log",
+        "live": "PLANTÃO DE EXEMPLO",
+        "lines": {
+          "l1": {
+            "time": "23:04",
+            "tag": "SCOUT",
+            "msg": "varrendo painéis ao vivo · 1.284 vagas novas"
+          },
+          "l2": {
+            "time": "23:51",
+            "tag": "MATCH",
+            "msg": "41 combinam com a sua busca · nota com base no seu currículo"
+          },
+          "l3": {
+            "time": "01:13",
+            "tag": "DRAFT",
+            "msg": "carta de apresentação 03/12 · cada afirmação citada do seu currículo"
+          },
+          "l4": {
+            "time": "02:47",
+            "tag": "DRAFT",
+            "msg": "carta de apresentação 09/12 · zero afirmações inventadas"
+          },
+          "l5": {
+            "time": "04:19",
+            "tag": "QUEUE",
+            "msg": "12 na fila · nada se envia sozinho"
+          },
+          "l6": {
+            "time": "07:00",
+            "tag": "HOLD",
+            "msg": "janela de revisão aberta · vete o que quiser"
+          },
+          "l7": {
+            "time": "08:58",
+            "tag": "HOLD",
+            "msg": "você vetou 2 · aprovou 10"
+          },
+          "l8": {
+            "time": "09:00",
+            "tag": "SUBMIT",
+            "msg": "10 candidaturas na rua · seu nome, suas palavras"
+          },
+          "l9": {
+            "time": "09:02",
+            "tag": "DIGEST",
+            "msg": "resumo da manhã enviado · agora é treinar pra entrevista"
+          }
+        }
+      }
+    },
+    "problem": {
+      "eyebrow": "POR QUE OS ROBÔS ESTÃO PERDENDO",
+      "title": "O jogo do volume tem carta marcada.",
+      "sub": "A IA inundou os processos seletivos. Num teste do Business Insider, um robô de candidatura em massa ficou em 6% de taxa de resposta — recrutador percebe — enquanto candidaturas revisadas e aprovadas por um humano rendem consistentemente mais. A saída não é mais volume. É um agente melhor, com o seu julgamento no controle.",
+      "stats": {
+        "s1": {
+          "value": "242",
+          "label": "candidatos disputam hoje a mesma vaga corporativa, em média"
+        },
+        "s2": {
+          "value": "+400%",
+          "label": "mais candidaturas inundando os recrutadores desde que a candidatura em massa com IA explodiu"
+        },
+        "s3": {
+          "value": "41%",
+          "label": "dos candidatos acreditam que menos de um quarto das suas candidaturas chega a ser lido por um humano"
+        }
+      },
+      "source": "Fontes: The Interview Guys (242) · Greenhouse via Fortune (+400%) · pesquisas com candidatos, 2025–2026 (41%)"
+    },
+    "how": {
+      "eyebrow": "COMO FUNCIONA UM PLANTÃO",
+      "title": "Uma noite, do início ao fim.",
+      "sub": "Defina o que você busca uma única vez. O agente trabalha nas horas em que você não deveria — e devolve o controle para você nos momentos que importam.",
+      "steps": {
+        "s1": {
+          "time": "23:04",
+          "tag": "SCOUT",
+          "title": "Ele caça enquanto você dorme",
+          "body": "O agente varre painéis de vagas ao vivo e filtra com rigor pelo que você definiu — cargo, senioridade, stack, localização, salário. Vaga fora do perfil é descartada antes mesmo de chegar até você."
+        },
+        "s2": {
+          "time": "01:30",
+          "tag": "DRAFT",
+          "title": "Ele escreve com provas",
+          "body": "Um currículo ajustado e uma carta de apresentação de verdade para cada vaga compatível — e cada afirmação da carta precisa citar uma linha do seu histórico real. Experiência inventada não passa: a checagem de citações é aplicada no código."
+        },
+        "s3": {
+          "time": "07:00",
+          "tag": "HOLD",
+          "title": "O veto é seu",
+          "body": "Tudo espera numa janela de revisão. Passe o olho na fila enquanto toma café, abra qualquer rascunho, pule o que não parecer certo. Nada sai em seu nome sem o seu OK."
+        },
+        "s4": {
+          "time": "09:00",
+          "tag": "SUBMIT",
+          "title": "Na rua às 9:00 — e aí começa o preparo de verdade",
+          "body": "As candidaturas aprovadas saem no início do expediente do recrutador, com o seu nome e as suas palavras — com um toque seu, ou sem mexer um dedo conforme o acesso antecipado do piloto automático avança. Depois, o resumo chega no seu e-mail — e o estúdio de entrevistas fica a um toque de distância."
+        }
+      }
+    },
+    "loop": {
+      "eyebrow": "O CICLO COMPLETO",
+      "title": "Um agente. A busca inteira.",
+      "sub": "Tudo o que existe entre “preciso de um emprego” e “assinei a proposta” mora num lugar só — e o mesmo agente leva o seu contexto do começo ao fim.",
+      "cards": {
+        "match": {
+          "tag": "MATCH",
+          "title": "Compatibilidade que lê o seu currículo",
+          "body": "Cada vaga ganha uma nota de compatibilidade da IA com os motivos por escrito, calculada sobre o seu currículo de verdade — nada de bingo de palavras-chave. As notas se atualizam quando o currículo muda."
+        },
+        "resume": {
+          "tag": "RESUME",
+          "title": "Um currículo que se reescreve sozinho",
+          "body": "Importe do LinkedIn ou de um PDF, deixe a IA reescrever os trechos fracos, ajuste para qualquer descrição de vaga com um diff revisável — e exporte um PDF ou DOCX limpo."
+        },
+        "apply": {
+          "tag": "APPLY",
+          "chip": "PILOTO AUTOMÁTICO · ACESSO ANTECIPADO",
+          "title": "Candidaturas com camada de consentimento",
+          "body": "Cartas com citações verificadas, fila de preparação, janela de revisão com direito a veto, teto diário rígido. O piloto automático total está chegando em acesso antecipado — a camada de consentimento veio primeiro, de propósito."
+        },
+        "studio": {
+          "tag": "STUDIO",
+          "title": "Um entrevistador para você enfrentar",
+          "body": "Um entrevistador de IA com voz ao vivo, 18 playbooks de área e 28 formatos — de triagem por telefone a system design e entrevista de case — que avalia você do jeito que a banca de verdade vai avaliar."
+        }
+      }
+    },
+    "studio": {
+      "eyebrow": "O SEGUNDO TEMPO",
+      "title_machine": "A gente consegue a entrevista",
+      "title_human": "e te prepara para vencer",
+      "sub": "63% dos candidatos já encararam um entrevistador de IA em processos seletivos reais (Greenhouse, 2026). Ensaie contra o nosso — repetições ilimitadas, sem julgamento, até a entrevista de verdade parecer familiar.",
+      "features": {
+        "f1": {
+          "title": "Ele fala — e interrompe — como gente",
+          "body": "Voz ao vivo em full-duplex: o entrevistador sonda, contesta e emenda a próxima pergunta em tempo real, em 9 idiomas com vozes de sotaque nativo."
+        },
+        "f2": {
+          "title": "18 playbooks de área, zero decoreba",
+          "body": "Direito, finanças, saúde, hardware, IA/ML e mais — ele pergunta o que quem é de dentro pergunta de verdade, e avalia pela mesma régua."
+        },
+        "f3": {
+          "title": "Ele faz a lição de casa antes de te encontrar",
+          "body": "O entrevistador pesquisa as exigências atuais do mercado para o seu cargo exato e a descrição da vaga, e monta um roteiro de entrevista sob medida em cima do seu currículo."
+        },
+        "f4": {
+          "title": "Um relatório que muda a sua próxima resposta",
+          "body": "Nota por dimensão, correção pergunta a pergunta com sugestões de respostas mais fortes, transcrição completa e gravação para reassistir depois de cada sessão."
+        },
+        "f5": {
+          "title": "Um coach no seu ouvido — se você quiser",
+          "body": "Toques ao vivo opcionais quando você enrola, foge da pergunta ou enterra a informação que importa. O modo com câmera adiciona a pressão real de uma videochamada."
+        }
+      },
+      "report": {
+        "header": "session-042 — relatório",
+        "overall_label": "GERAL",
+        "overall": "82",
+        "rows": {
+          "r1": {
+            "k": "Clareza",
+            "v": "86"
+          },
+          "r2": {
+            "k": "Profundidade",
+            "v": "78"
+          },
+          "r3": {
+            "k": "Estrutura",
+            "v": "84"
+          }
+        },
+        "quote": "“Abra com a métrica — você enterrou a redução de 40% nos custos lá no fim da resposta.”",
+        "quote_label": "correção por pergunta"
+      },
+      "cta": "Faça uma entrevista simulada grátis"
+    },
+    "rules": {
+      "eyebrow": "REGRAS DE OPERAÇÃO",
+      "title": "Gravado no código, não nas letras miúdas.",
+      "sub": "Não são configurações escondidas num menu. É assim que o agente foi construído — para que o que cai na caixa de entrada do recrutador nunca pareça spam de robô.",
+      "file": "guarantees.conf — somente leitura",
+      "badge": "EM VIGOR",
+      "ok": "OK",
+      "items": {
+        "r1_head": "Só cartas de verdade",
+        "r1_body": "cada afirmação de cada carta precisa citar o seu currículo real — experiência inventada é bloqueada em código.",
+        "r2_head": "A janela de revisão",
+        "r2_body": "nada é enviado sem uma prévia que você pode vetar, candidatura por candidatura.",
+        "r3_head": "Filtro de objetivo",
+        "r3_body": "vagas fora do que você definiu — senioridade, stack, localização, salário — nunca chegam à sua fila.",
+        "r4_head": "Nada de atirar para todo lado",
+        "r4_body": "o volume diário tem teto fixo; cada candidatura é pensada, para o seu nome continuar sendo levado a sério.",
+        "r5_head": "Saída limpa",
+        "r5_body": "pause o agente com um clique — e excluir a conta é limpeza de verdade, não uma exclusão de fachada que guarda seus dados."
+      }
+    },
+    "pricing": {
+      "eyebrow": "PLANOS",
+      "title": "Comece grátis. Faça upgrade quando estiver dando certo.",
+      "sub": "Todos os planos incluem o agente completo — IA de currículo, compatibilidade de vagas, acompanhamento de candidaturas e a camada de consentimento. Os planos pagos dão mais treino de entrevista.",
+      "unit": "ENTREVISTAS / MÊS",
+      "credit_note": "1 crédito = uma entrevista simulada de 20 minutos, cobrada por segundo. Os créditos renovam todo mês. Pague com cartão — ou com Alipay na China.",
+      "tiers": {
+        "free": {
+          "code": "TIER-0",
+          "name": "Grátis",
+          "rate": "1",
+          "price": "$0",
+          "per": "",
+          "note": "O kit de ferramentas completo, mais uma entrevista simulada com nota todo mês.",
+          "cta": "Comece grátis",
+          "unit": "ENTREVISTA / MÊS"
+        },
+        "starter": {
+          "code": "TIER-1",
+          "name": "Starter",
+          "rate": "10",
+          "price": "$15",
+          "per": "/mês",
+          "badge": "RECOMENDADO",
+          "note": "Ritmo de busca pra valer: treine antes de cada entrevista real.",
+          "cta": "Assine o Starter",
+          "unit": "ENTREVISTAS / MÊS"
+        },
+        "growth": {
+          "code": "TIER-2",
+          "name": "Growth",
+          "rate": "28",
+          "price": "$29",
+          "per": "/mês",
+          "note": "Modo intensivo: repetição diária até a proposta assinada.",
+          "cta": "Assine o Growth",
+          "unit": "ENTREVISTAS / MÊS"
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "DÚVIDAS RESPONDIDAS",
+      "title": "O que os candidatos nos perguntam.",
+      "items": {
+        "q1": {
+          "q": "O que é o RoboApply?",
+          "a": "O RoboApply é um agente de IA para busca de emprego. Ele encontra vagas alinhadas com o que você busca, dá nota a cada uma com base no seu currículo real, ajusta seus documentos, escreve cartas de apresentação com citações verificadas e deixa cada candidatura pronta para a sua aprovação — depois, um entrevistador de IA ao vivo te ajuda a treinar para as entrevistas que vierem."
+        },
+        "q2": {
+          "q": "O RoboApply se candidata a vagas sem a minha permissão?",
+          "a": "Não. O consentimento é a arquitetura, não uma configuração: as candidaturas só saem depois da sua aprovação explícita, o volume diário tem teto fixo e o piloto automático completo é acesso antecipado opcional. Nada é enviado em seu nome sem o seu OK."
+        },
+        "q3": {
+          "q": "Cartas de apresentação escritas por IA são detectadas pelos recrutadores?",
+          "a": "As genéricas, sim. As cartas do RoboApply são diferentes por construção: cada afirmação precisa citar uma linha do seu currículo real — a checagem de citações é aplicada no código, então experiência inventada nunca sai daqui. E você revisa e aprova cada carta antes de ela ir a qualquer lugar."
+        },
+        "q4": {
+          "q": "Dá mesmo para treinar uma entrevista de emprego com IA?",
+          "a": "Dá — com um entrevistador por voz, ao vivo, que fala, sonda e interrompe como uma pessoa. Escolha entre 28 formatos e 18 playbooks de área (software, direito, finanças, saúde e mais), entreviste em qualquer um de 9 idiomas e receba um relatório com nota, correções por pergunta, transcrição e gravação."
+        },
+        "q5": {
+          "q": "Qual a diferença entre o RoboApply e robôs de candidatura automática como o LazyApply?",
+          "a": "Robôs de volume disparam em massa sem critério — num teste do Business Insider, um robô de candidatura em massa ficou em 6% de taxa de resposta, e recrutador percebe. O RoboApply mantém o seu julgamento no controle, com janela de revisão, cartas com citações verificadas e limites rígidos — e fecha o ciclo que ninguém mais fecha: o mesmo agente que se candidata também te prepara para a entrevista."
+        },
+        "q6": {
+          "q": "Quanto custa o RoboApply?",
+          "a": "O kit essencial é grátis para sempre, com uma entrevista simulada por mês. O Starter custa $15/mês com 10 entrevistas de treino; o Growth, $29/mês com 28. Um crédito é uma sessão de 20 minutos cobrada por segundo, renovada todo mês. Pague com cartão — ou com Alipay na China."
+        },
+        "q7": {
+          "q": "Quais idiomas o RoboApply fala?",
+          "a": "Nove: inglês, espanhol, português, francês, alemão, japonês, coreano e chinês simplificado e tradicional. As entrevistas de treino funcionam hoje nos nove idiomas — a voz do entrevistador e o seu relatório com nota. A interface está totalmente traduzida em inglês, japonês e nas duas variantes do chinês, e os demais idiomas estão sendo liberados agora."
+        },
+        "q8": {
+          "q": "Meus dados estão seguros — e dá para apagar tudo mesmo?",
+          "a": "Seu currículo, suas transcrições e gravações são seus; nada é compartilhado com empregadores. Cada ação da IA fica registrada num extrato de uso transparente, e excluir a conta é uma limpeza real, em um clique, que apaga seus dados — não uma exclusão de fachada que os mantém guardados."
+        }
+      }
+    },
+    "final": {
+      "chip": "ACESSO ANTECIPADO · GRÁTIS PARA COMEÇAR",
+      "title_machine": "Seu agente está pronto",
+      "title_human": "quando você estiver",
+      "sub": "Três minutos de configuração: currículo importado, objetivo definido, agente instruído. E o estúdio de entrevistas já está aberto — faça a sua primeira sessão de treino grátis.",
+      "cta": "Comece grátis"
+    },
+    "sticky": {
+      "cta": "Comece grátis",
+      "note": "Sem cartão de crédito"
+    },
+    "footer": {
+      "status": "SISTEMA NOMINAL · CAMADA DE CONSENTIMENTO EM VIGOR",
+      "note": "© RoboApply. Feito por candidatos, para candidatos.",
+      "tagline": "O agente de IA para busca de emprego com o seu julgamento no controle.",
+      "lang_title": "RoboApply no seu idioma"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Que bom te ver de novo",
+      "subtitle": "Entre na sua missão RoboApply.",
+      "email": "E-mail",
+      "password": "Senha",
+      "submit": "Entrar",
+      "submitting": "Entrando…",
+      "no_account": "Ainda não tem conta?",
+      "signup_cta": "Crie a sua",
+      "error_generic": "Não conseguimos te conectar. Confira o e-mail e a senha e tente de novo."
+    },
+    "signup": {
+      "title": "Crie sua conta",
+      "subtitle": "60 segundos para tirar a busca de emprego das suas mãos.",
+      "email": "E-mail",
+      "password": "Senha",
+      "name": "Seu nome",
+      "submit": "Criar conta",
+      "submitting": "Criando conta…",
+      "has_account": "Já tem uma conta?",
+      "login_cta": "Entrar",
+      "error_generic": "Não conseguimos criar sua conta. Tente de novo, por favor."
+    },
+    "brand": {
+      "eyebrow": "COPILOTO DE IA PARA BUSCA DE EMPREGO",
+      "headline": "Consiga emprego <em>mais rápido</em>.",
+      "lead": "O RoboApply ajusta o seu currículo, roda entrevistas simuladas de IA realistas e mantém cada candidatura num lugar só — para você focar em fechar a proposta.",
+      "feature_resume": "Currículos sob medida, prontos para ATS",
+      "feature_interview": "Entrevistas simuladas de IA realistas",
+      "feature_track": "Cada candidatura num lugar só"
+    }
+  },
+  "onboarding": {
+    "brand_sub": "SEU CAÇA-VAGAS COM IA",
+    "skip": "Pular →",
+    "upload": {
+      "title": "Me mostra o seu",
+      "title_accent": "currículo",
+      "lead": "Só preciso disso pra começar. Uma lida e eu nunca mais te mostro vaga que não tem a ver com você.",
+      "drop_title": "Solte seu currículo aqui, ou clique para procurar",
+      "drop_sub": "PDF, DOC/DOCX, TXT ou MD — até 15 MB",
+      "ingest_title": "O que eu captei",
+      "reading": "Lendo…",
+      "error": "Não consegui ler esse currículo. Tente um PDF ou DOCX, ou escolha outro arquivo.",
+      "received": "{size} · enviando e analisando…"
+    },
+    "resumeSelect": {
+      "title": "Qual currículo eu devo",
+      "title_accent": "ler",
+      "title_after": "?",
+      "lead": "Escolha o que melhor mostra para onde você quer ir — eu leio e a gente continua dali.",
+      "upload_new": "Enviar um currículo novo",
+      "paste_text": "Colar texto do currículo",
+      "primary_badge": "Principal",
+      "last_edited": "Última edição {date}",
+      "continue": "Continuar com este currículo",
+      "linkedin_import": "Importar do LinkedIn",
+      "linkedin_placeholder": "https://www.linkedin.com/in/seu-perfil",
+      "paste_placeholder": "Cole o texto do seu currículo aqui — texto puro ou markdown, os dois funcionam.",
+      "paste_name": "Currículo colado",
+      "paste_submit": "Usar este texto",
+      "back": "← Voltar",
+      "retry": "Tentar de novo",
+      "pick_existing": "Escolher um currículo existente",
+      "paste_instead": "Prefiro colar o texto",
+      "formats": "PDF · DOC/DOCX · TXT · MD",
+      "error_file_too_large": "Esse arquivo é grande demais (máx. 15 MB). Tente uma versão menor.",
+      "error_unsupported_format": "Não consigo ler esse formato. PDF, DOC/DOCX, TXT ou MD funcionam.",
+      "error_parse_failed": "Não consegui ler esse currículo. Tente outro arquivo, ou cole o texto."
+    },
+    "chat": {
+      "title": "Vamos montar a sua caçada",
+      "composer_placeholder": "Me conta o que você está caçando — cargos, cidades, salário, o que é inegociável…",
+      "send": "Enviar",
+      "opening_prompt_hint": "Rascunhei essa abertura a partir do seu currículo — edite à vontade ou só aperte enviar.",
+      "skeleton_ingest": "Lendo seu currículo…",
+      "status_searching_internal": "Buscando no nosso índice de vagas…",
+      "status_searching_external": "Conferindo vagas novas lá fora…",
+      "status_scoring": "Dando nota às vagas com base no seu currículo…",
+      "tray_title": "O que eu já tenho até agora",
+      "tray_edit_prefix": "Na verdade, sobre {field}…",
+      "tray_dismiss": "Ignorar",
+      "card_match": "{score}% compatível",
+      "card_via": "via {publisher}",
+      "card_save": "Salvar",
+      "card_saved": "Salva",
+      "card_pass": "Dispensar",
+      "card_passed": "Dispensada",
+      "card_apply": "Abrir vaga",
+      "wrap_cta": "Me leva para as minhas vagas",
+      "restore_notice": "Retomando de onde a gente parou.",
+      "superseded_notice": "Esta conversa continuou em outra janela — atualize para acompanhar.",
+      "error_turn_failed": "Essa mensagem não foi.",
+      "error_retry": "Tentar de novo",
+      "error_daily_limit": "Você recomeçou o onboarding algumas vezes hoje — volte amanhã, ou pule direto para o app.",
+      "progress_resume": "Currículo",
+      "progress_chat": "Conversa",
+      "progress_matches": "Vagas",
+      "progress_done": "Pronto",
+      "fields": {
+        "targetRoles": "Cargos",
+        "seniority": "Senioridade",
+        "workModes": "Modelo de trabalho",
+        "salary": "Salário",
+        "employmentTypes": "Contratação",
+        "industriesTarget": "Setores",
+        "industriesAvoid": "Evitando",
+        "companyStages": "Estágio da empresa",
+        "companySizes": "Tamanho da empresa",
+        "locations": "Locais",
+        "mustHaves": "Indispensáveis",
+        "dealbreakers": "Eliminatórios"
+      },
+      "values": {
+        "remote": "Remoto",
+        "hybrid": "Híbrido",
+        "onsite": "Presencial",
+        "full_time": "Tempo integral",
+        "contract": "Contrato",
+        "part_time": "Meio período",
+        "internship": "Estágio"
+      }
+    }
+  },
+  "choosePlan": {
+    "title": "Escolha seu plano",
+    "subtitle": "Escolha um plano para começar — entrevistas de treino com IA. Dá para mudar ou cancelar quando quiser.",
+    "loading": "Carregando planos…",
+    "error": "Não deu para carregar os planos.",
+    "retry": "Tentar de novo",
+    "continueFree": "Pular por enquanto — continuar no Grátis",
+    "selectFree": "Comece grátis",
+    "selectPaid": "Escolher {plan}",
+    "blurb": {
+      "free": "1 entrevista de treino por mês para experimentar.",
+      "starter": "10 entrevistas simuladas por mês — treino semanal constante.",
+      "growth": "28 entrevistas simuladas por mês — repetição diária antes da de verdade."
+    },
+    "welcome": "Você está dentro — boas-vindas ao RoboApply",
+    "creditsHint": "1 crédito = uma entrevista simulada de 20 minutos.",
+    "checkoutFailed": "Não conseguimos iniciar o pagamento. Tente de novo, por favor."
+  },
+  "errors": {
+    "not_found_title": "404",
+    "not_found_body": "Não encontramos essa página.",
+    "error_title": "Algo deu errado",
+    "error_body": "Já registramos o problema. Você pode tentar de novo ou voltar para o início.",
+    "try_again": "Tentar de novo",
+    "go_home": "Voltar ao início"
+  }
+}

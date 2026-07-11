@@ -5,17 +5,12 @@
 // pages/500.tsx so they bypass this layout entirely. The `dynamic =
 // 'force-dynamic'` directive below applies to all App Router pages.
 
-import { cookies, headers } from 'next/headers';
 import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 import './globals.css';
 
-import {
-  DEFAULT_LOCALE,
-  LOCALE_COOKIE,
-  isLocale,
-  loadMessages,
-} from '../lib/i18n';
+import { loadMessages } from '../lib/i18n';
+import { resolveLocale } from '../lib/serverLocale';
 import { Providers } from './providers';
 
 // Fonts are SELF-HOSTED via `next/font/local` (woff2 in ./fonts/, downloaded
@@ -125,6 +120,7 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata = {
+  metadataBase: new URL('https://www.roboapply.io'),
   title: 'RoboApply',
   description:
     'We apply. You interview. Drop your resume, tell us what you want, and let our AI run the search overnight.',
@@ -136,26 +132,6 @@ export const metadata = {
 };
 
 export const dynamic = 'force-dynamic';
-
-async function resolveLocale(): Promise<string> {
-  try {
-    const cookieStore = await cookies();
-    const cookieLocale = cookieStore.get(LOCALE_COOKIE)?.value;
-    if (isLocale(cookieLocale)) return cookieLocale;
-    const headersList = await headers();
-    const acceptLang = headersList.get('accept-language') ?? '';
-    for (const tag of acceptLang
-      .split(',')
-      .map((t) => t.split(';')[0].trim())) {
-      if (isLocale(tag)) return tag;
-      const short = tag.split('-')[0];
-      if (isLocale(short)) return short;
-    }
-  } catch {
-    /* prerender context — fall through */
-  }
-  return DEFAULT_LOCALE;
-}
 
 export default async function RootLayout({
   children,

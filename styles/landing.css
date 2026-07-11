@@ -1,0 +1,382 @@
+/* ═══════════════════════════════════════════════════════════════════
+ * landing — "Night Shift / Overnight Log" v2
+ *
+ * Scoped styles for components/landing/LandingContent.tsx only.
+ *
+ * TWO APPEARANCES:
+ *   dark          → the agent's night (V3 :root electric tokens as-is)
+ *   light / warm  → the human's MORNING: the block at the bottom re-points
+ *                   the V3 base tokens on .landing-root to the Anthropic
+ *                   clay-on-cream palette (mirrors globals.css html[data-
+ *                   theme='warm']), so the landing renders warm whether the
+ *                   app theme is 'light' or 'warm'. Everything below
+ *                   consumes tokens — no literal colors outside soft alpha
+ *                   tints derived from the token companions.
+ *
+ * CSS-only motion; one orchestrated hero reveal; reduced-motion safe.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* ── keyframes ─────────────────────────────────────────────────── */
+@keyframes ra-rise  { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes ra-line  { from { opacity: 0; transform: translateY(6px);  } to { opacity: 1; transform: none; } }
+@keyframes ra-caret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes ra-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-glow); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes ra-flash { 0% { background: var(--accent-soft); } 100% { background: transparent; } }
+
+.anim-rise { animation: ra-rise 0.6s var(--ease-standard) both; }
+.log-line  { animation: ra-line 0.45s var(--ease-standard) both; }
+.caret     { animation: ra-caret 1.1s steps(1) infinite; }
+.live-dot  {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--accent);
+  animation: ra-pulse 2.4s var(--ease-standard) infinite;
+}
+.log-flash {
+  animation:
+    ra-line 0.45s var(--ease-standard) both,
+    ra-flash 1.4s var(--ease-standard) both;
+  border-radius: 6px;
+}
+
+/* Optional below-fold depth: scroll-driven rise where supported (Safari
+ * ignores @supports, reduced-motion excluded, never gates visibility). */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .scroll-rise {
+      animation: ra-rise 0.6s var(--ease-standard) both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+  }
+}
+
+/* ── chrome / atmosphere ───────────────────────────────────────── */
+/* Header glass — token-derived so it flips with the theme. */
+.landing-header {
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 0%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 0%, #000 30%, transparent 78%);
+}
+
+.landing-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  background-size: 180px 180px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>");
+}
+
+/* Receipt panels (overnight.log, interview report) — night: deep void
+ * shadow; morning: soft paper lift (overridden in the scope below). */
+.log-panel {
+  background: var(--bg-2);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.8);
+}
+
+/* Text selection carries the agent's accent. */
+.landing-root ::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ── type voices ───────────────────────────────────────────────── */
+/* Human voice — Instrument Serif italic, sized up 6% to optically match
+ * its sibling grotesk. CJK locales fall back to taller system serifs;
+ * compensate line-height so the two-voice headline doesn't blow apart. */
+.serif-human {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.06em;
+}
+.serif-human:lang(ja),
+.serif-human:lang(zh),
+.serif-human:lang(zh-TW),
+.serif-human:lang(zh-Hant),
+.serif-human:lang(ko) {
+  line-height: 1.12;
+}
+
+/* Stat numbers glow like the caret at night; the morning scope mutes it. */
+.stat-number { text-shadow: 0 0 22px var(--accent-glow); }
+
+/* ── CTA recipes ───────────────────────────────────────────────── */
+.cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  height: 3.5rem;
+  padding: 0 2rem;
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-cta);
+  transition:
+    filter var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-standard);
+}
+.cta-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.cta-primary:active { transform: translateY(0); }
+.cta-primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.cta-quiet {
+  font-family: var(--mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-2);
+  transition: color var(--dur-base) var(--ease-standard);
+}
+.cta-quiet:hover { color: var(--accent-text); }
+.cta-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.cta-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 3rem;
+  width: 100%;
+  border-radius: var(--r-md);
+  border: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text);
+  transition:
+    color var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard);
+}
+.cta-outline:hover { border-color: var(--accent); color: var(--accent-text); }
+.cta-outline:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── log tag chips ─────────────────────────────────────────────── */
+/* Tints are color-mix'd off the hue tokens so they re-point automatically
+ * in the morning scope (cyan→sage, pink→dusty rose, …). */
+.log-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.log-tag--scout  { background: color-mix(in srgb, var(--cyan) 12%, transparent); color: var(--cyan); }
+.log-tag--match  { background: var(--accent-soft); color: var(--accent-text); }
+.log-tag--draft  { background: var(--violet-soft); color: var(--violet); }
+.log-tag--queue  { background: var(--surface-2); color: var(--text-2); }
+.log-tag--hold   { background: var(--warn-soft); color: var(--warn); }
+.log-tag--submit { background: var(--accent); color: var(--accent-ink); text-shadow: none; }
+.log-tag--digest { background: color-mix(in srgb, var(--pink) 12%, transparent); color: var(--pink); }
+
+/* Early-access chip (loop card 3) — warn-tinted, deliberately honest. */
+.early-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 7px;
+  border-radius: 99px;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  background: var(--warn-soft);
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+/* ── interview report receipt ──────────────────────────────────── */
+.report-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.report-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* ── sticky mobile CTA — thumb zone ────────────────────────────── */
+.landing-sticky-cta {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* Where scroll-driven animations exist, the bar stays off-screen over the
+ * hero (which has its own full-width CTA) and slides in as you scroll.
+ * Fallback (old browsers / reduced motion): always visible. */
+@keyframes ra-sticky-in {
+  from { opacity: 0; transform: translateY(110%); }
+  to   { opacity: 1; transform: none; }
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-sticky-cta {
+      animation: ra-sticky-in 1ms var(--ease-standard) both;
+      animation-timeline: scroll(root block);
+      animation-range: 240px 560px;
+    }
+  }
+}
+
+/* ── anchors under the sticky header ───────────────────────────── */
+#how, #studio, #pricing, #faq { scroll-margin-top: 96px; }
+
+/* ── reduced motion: everything both-filled, content always visible ── */
+@media (prefers-reduced-motion: reduce) {
+  .anim-rise,
+  .log-line,
+  .log-flash,
+  .scroll-rise { animation: none; }
+  .caret { animation: none; opacity: 1; }
+  .live-dot { animation: none; }
+  .cta-primary:hover { transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * MORNING SCOPE — the landing's light appearance is the Anthropic
+ * "clay on cream" palette for BOTH app themes 'light' and 'warm'
+ * (values mirror globals.css html[data-theme='warm']; keep in sync).
+ * Re-declared on .landing-root so styles/tokens.css --robo-* aliases and
+ * every var() below resolve against these for the landing subtree only —
+ * the in-app 'light' (teal on cool paper) is untouched elsewhere.
+ * ═══════════════════════════════════════════════════════════════════ */
+html:is([data-theme='light'], [data-theme='warm']) .landing-root {
+  /* base — warm pressed cream */
+  --bg:           #F4F0E6;
+  --bg-2:         #ECE6D8;
+  --surface:      #FCFAF4;
+  --surface-2:    #F4EFE3;
+  --surface-3:    #E9E1D0;
+  --rule:         #E2D9C7;
+  --rule-soft:    #ECE4D4;
+
+  /* text — espresso ink on cream */
+  --text:         #2B2722;
+  --text-2:       #5A5249;
+  --muted:        #6E665A;
+  --muted-2:      #948B7B;
+
+  /* hue tokens — earthy repoints (chips/tints follow automatically) */
+  --lime:         #A8543A;
+  --lime-glow:    rgba(168, 84, 58, 0.20);
+  --lime-soft:    rgba(168, 84, 58, 0.10);
+  --violet:       #6E4A6B;
+  --violet-glow:  rgba(110, 74, 107, 0.20);
+  --violet-soft:  rgba(110, 74, 107, 0.10);
+  --cyan:         #3F7A66;
+  --pink:         #B0526A;
+
+  /* status */
+  --ok:           #4F7536;
+  --ok-soft:      rgba(79, 117, 54, 0.12);
+  --warn:         #A85E0B;
+  --warn-soft:    rgba(168, 94, 11, 0.12);
+
+  /* accent — Anthropic clay, WHITE ink; deep sibling for foreground */
+  --accent:       #B0573A;
+  --accent-glow:  rgba(176, 87, 58, 0.22);
+  --accent-soft:  rgba(176, 87, 58, 0.10);
+  --accent-ink:   #FFFFFF;
+  --accent-text:  #9C4A2E;
+
+  /* depth = warm-grey ink shadows, never accent glow */
+  --shadow-cta:   0 1px 2px rgba(43, 39, 34, 0.06), 0 8px 20px -8px rgba(43, 39, 34, 0.16);
+  --shadow-lift:  0 2px 4px rgba(43, 39, 34, 0.05), 0 14px 36px -14px rgba(43, 39, 34, 0.18);
+  --shadow-ring:  0 0 0 1px var(--rule), 0 10px 30px -14px rgba(43, 39, 34, 0.20);
+  --shadow-focus: 0 0 0 4px var(--accent-soft);
+
+  /* page wash — clay TR + aubergine BL, ≤6% so cream never muddies */
+  --grad-page-wash:
+    radial-gradient(ellipse 900px 640px at 88% -12%, rgba(176, 87, 58, 0.06), transparent 62%),
+    radial-gradient(ellipse 680px 820px at -4% 104%, rgba(110, 74, 107, 0.05), transparent 62%);
+
+  /* ⚠ Re-declare the --robo-* aliases the landing markup consumes. The
+   * :root aliases in styles/tokens.css (--robo-bg-page: var(--bg), …) are
+   * eagerly substituted ON html at computed-value time, so descendants
+   * inherit the flattened LIGHT literals — re-pointing --bg above cannot
+   * reach them. Declaring the same aliases here substitutes against THIS
+   * scope's warm tokens. (Found via the design-panel review: hero/pricing
+   * bands rendered cool slate while bg-2 bands went warm.) */
+  --robo-bg-page: var(--bg);
+  --robo-bg-page-soft: var(--bg-2);
+  --robo-bg-card: var(--surface);
+  --robo-bg-muted: var(--surface-2);
+  --robo-ink-900: var(--text);
+  --robo-ink-700: var(--text-2);
+  --robo-ink-500: var(--muted);
+  --robo-ink-300: var(--muted-2);
+  --robo-ink-line: var(--rule);
+  --robo-ink-line-soft: var(--rule-soft);
+  --robo-line: var(--rule);
+  --robo-line-soft: var(--rule-soft);
+  --robo-shadow-lift: var(--shadow-lift);
+  --robo-shadow-cta: var(--shadow-cta);
+  --robo-shadow-glow: var(--shadow-ring);
+  --robo-shadow-focus: var(--shadow-focus);
+  --robo-accent-500: var(--accent);
+  --robo-accent-100: var(--accent-soft);
+  --robo-accent-50: var(--accent-soft);
+
+  /* brand gradients — clay + espresso (Logo orb etc.) */
+  --grad-brand:   linear-gradient(135deg, #B0573A 0%, #6E3B2A 100%);
+  --grad-orb:
+    radial-gradient(circle at 30% 26%, #F4CDA6 0%, rgba(244, 205, 166, 0) 42%),
+    radial-gradient(circle at 68% 70%, #C2754E 0%, rgba(194, 117, 78, 0) 55%),
+    radial-gradient(circle at 50% 50%, #4A3326 0%, #33221A 100%);
+  --grad-tri:     linear-gradient(90deg, #B0573A 0%, #6E4A6B 50%, #3F7A66 100%);
+
+  color-scheme: light;
+}
+
+/* Morning-specific softenings: paper never glows. */
+html:is([data-theme='light'], [data-theme='warm']) .landing-root .log-panel {
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+}
+html:is([data-theme='light'], [data-theme='warm']) .landing-root .stat-number {
+  text-shadow: none;
+}
+html:is([data-theme='light'], [data-theme='warm']) .landing-root .landing-grain {
+  opacity: 0.05; /* reads as paper tooth on cream */
+}
+html:is([data-theme='light'], [data-theme='warm']) .landing-root .report-bar-fill {
+  box-shadow: none;
+}

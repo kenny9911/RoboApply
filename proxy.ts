@@ -45,14 +45,26 @@ export function proxy(req: NextRequest) {
 
   // 2. Auth gate for protected paths
   if (isProtectedPath(pathname)) {
-    if (hasSession) return NextResponse.next();
+    if (hasSession) return next(req, pathname);
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = '/login';
     loginUrl.searchParams.set('next', pathname + search);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return next(req, pathname);
+}
+
+/**
+ * Pass the request through with an `x-pathname` header attached. Server
+ * layouts/pages can't read the URL from `headers()` otherwise; the localized
+ * landing routes (`/es`, `/ja`, …) rely on it to resolve <html lang> + the
+ * message bundle from the path (see lib/serverLocale.ts).
+ */
+function next(req: NextRequest, pathname: string) {
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-pathname', pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

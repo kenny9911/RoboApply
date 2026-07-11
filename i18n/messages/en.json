@@ -1034,26 +1034,325 @@
     }
   },
   "landing": {
-    "headline": "We apply. You interview.",
-    "subheadline": "An AI agent that scouts jobs at night, drafts every cover letter, submits at 9am, and emails you what happened.",
-    "cta_get_started": "Start →",
-    "cta_sign_in": "Sign in",
-    "features": {
-      "scout_title": "Scouts overnight",
-      "scout_body": "Greenhouse and Lever boards, scanned while you sleep. Only jobs that match your intent get through.",
-      "tailor_title": "Drafts cover letters",
-      "tailor_body": "Every application gets a real cover letter — anchored in your resume, never invented from thin air.",
-      "submit_title": "Submits at 9am",
-      "submit_body": "You get a 2-hour preview window. Skip what you don't want. The agent sends the rest."
+    "meta": {
+      "title": "AI Job Application Agent & AI Mock Interviews | RoboApply",
+      "description": "RoboApply is an AI job-search agent: it finds jobs that fit, scores them against your resume, drafts citation-checked cover letters for your approval — then a live AI interviewer preps you to win the offer. Free to start. 9 languages.",
+      "ogTitle": "RoboApply — We apply. You interview.",
+      "ogDescription": "Your AI agent matches jobs to your real resume, drafts applications you approve before anything sends, and preps you with live AI mock interviews in 9 languages. Start free.",
+      "keywords": "AI job application agent, auto apply to jobs, AI applies to jobs for you, AI mock interview practice, AI interview practice, AI cover letter generator, AI resume builder, job search automation"
     },
-    "trust_strip": "Auto-applies to Greenhouse + Lever jobs · No spam, no junk applications · Pause anytime.",
+    "header": {
+      "status_chip": "EARLY ACCESS",
+      "cta": "Start free",
+      "theme_to_light": "Switch to morning mode",
+      "theme_to_dark": "Switch to night mode",
+      "lang_label": "Change language"
+    },
+    "hero": {
+      "eyebrow": "YOUR AI JOB-SEARCH AGENT · NIGHT SHIFT 23:00 → 09:00",
+      "headline_machine": "We apply",
+      "headline_human": "You interview",
+      "subheadline": "RoboApply is an AI agent for your job search: it scouts openings that actually fit, scores them against your real resume, and drafts cover letters it can cite line by line back to your real experience — then stages everything for your approval. Nothing sends without you.",
+      "cta_primary": "Put the agent on shift",
+      "cta_secondary": "See a sample shift",
+      "reassure": "FREE PLAN · NO CARD REQUIRED · AUTOPILOT IN EARLY ACCESS",
+      "log": {
+        "aria": "Sample overnight activity log: the agent scans live job boards at 23:04, matches openings against your resume and intent, drafts citation-checked cover letters through the night, stages twelve applications, opens your review window at 7:00 where you veto two and approve ten, sends the approved ten at 9:00, and emails a morning digest at 9:02 pointing you to interview practice.",
+        "title": "roboapply — overnight.log",
+        "live": "SAMPLE SHIFT",
+        "lines": {
+          "l1": {
+            "time": "23:04",
+            "tag": "SCOUT",
+            "msg": "scanning live boards · 1,284 new postings"
+          },
+          "l2": {
+            "time": "23:51",
+            "tag": "MATCH",
+            "msg": "41 fit your intent · scored against your resume"
+          },
+          "l3": {
+            "time": "01:13",
+            "tag": "DRAFT",
+            "msg": "cover letter 03/12 · every claim cited to your resume"
+          },
+          "l4": {
+            "time": "02:47",
+            "tag": "DRAFT",
+            "msg": "cover letter 09/12 · zero invented claims"
+          },
+          "l5": {
+            "time": "04:19",
+            "tag": "QUEUE",
+            "msg": "12 staged · nothing sends itself"
+          },
+          "l6": {
+            "time": "07:00",
+            "tag": "HOLD",
+            "msg": "review window open · veto anything"
+          },
+          "l7": {
+            "time": "08:58",
+            "tag": "HOLD",
+            "msg": "you vetoed 2 · approved 10"
+          },
+          "l8": {
+            "time": "09:00",
+            "tag": "SUBMIT",
+            "msg": "10 applications out · your name, your words"
+          },
+          "l9": {
+            "time": "09:02",
+            "tag": "DIGEST",
+            "msg": "morning report sent · now go practice the interview"
+          }
+        }
+      }
+    },
+    "problem": {
+      "eyebrow": "WHY BOTS ARE LOSING",
+      "title": "The volume game is rigged.",
+      "sub": "AI flooded hiring. In one Business Insider test, a mass-apply bot got a 6% response rate — recruiters can tell — while human-reviewed, human-approved applications consistently do better. The fix isn't more volume. It's a better agent, with your judgment in the loop.",
+      "stats": {
+        "s1": {
+          "value": "242",
+          "label": "applicants now compete for the average corporate opening"
+        },
+        "s2": {
+          "value": "+400%",
+          "label": "more applications flooding recruiters since AI mass-apply took off"
+        },
+        "s3": {
+          "value": "41%",
+          "label": "of job seekers believe under a quarter of their applications are ever read by a human"
+        }
+      },
+      "source": "Sources: The Interview Guys (242) · Greenhouse via Fortune (+400%) · candidate surveys, 2025–2026 (41%)"
+    },
+    "how": {
+      "eyebrow": "HOW A SHIFT RUNS",
+      "title": "One night, start to finish.",
+      "sub": "Set your intent once. The agent works the hours you shouldn't — and hands you the controls at the moments that matter.",
+      "steps": {
+        "s1": {
+          "time": "23:04",
+          "tag": "SCOUT",
+          "title": "It hunts while you sleep",
+          "body": "The agent sweeps live job boards and filters hard against your stated intent — role, level, stack, location, salary. Wrong-fit postings are rejected before you ever see them."
+        },
+        "s2": {
+          "time": "01:30",
+          "tag": "DRAFT",
+          "title": "It writes with receipts",
+          "body": "A tailored resume and a real cover letter for every match — and every claim in the letter must cite a line from your actual history. Invented experience can't get through: the citation check is enforced in code."
+        },
+        "s3": {
+          "time": "07:00",
+          "tag": "HOLD",
+          "title": "You hold the veto",
+          "body": "Everything waits in a review window. Skim the queue over coffee, open any draft, skip anything that feels off. Nothing is ever sent in your name without your OK."
+        },
+        "s4": {
+          "time": "09:00",
+          "tag": "SUBMIT",
+          "title": "Out by 9:00 — then the real prep starts",
+          "body": "Approved applications go out at the start of a recruiter's day, under your name and your words — one tap from you, or hands-free as autopilot early access rolls out. Then the digest hits your inbox, and the interview studio is one tap away."
+        }
+      }
+    },
+    "loop": {
+      "eyebrow": "THE FULL LOOP",
+      "title": "One agent. The whole search.",
+      "sub": "Everything between “I need a job” and “I signed” lives in one place — and the same agent carries your context through all of it.",
+      "cards": {
+        "match": {
+          "tag": "MATCH",
+          "title": "Matching that reads your resume",
+          "body": "Every job gets an AI match score with written reasons, computed against your actual resume — not keyword bingo. Scores refresh when your resume changes."
+        },
+        "resume": {
+          "tag": "RESUME",
+          "title": "A resume that rewrites itself",
+          "body": "Import from LinkedIn or PDF, let AI rewrite weak bullets, tailor to any job description with a reviewable diff — then export a clean PDF or DOCX."
+        },
+        "apply": {
+          "tag": "APPLY",
+          "chip": "AUTOPILOT · EARLY ACCESS",
+          "title": "Applications with a consent layer",
+          "body": "Citation-checked cover letters, a staging queue, a review hold you can veto, hard daily caps. Full hands-off autopilot is rolling out in early access — the consent layer shipped first, on purpose."
+        },
+        "studio": {
+          "tag": "STUDIO",
+          "title": "An interviewer to practice against",
+          "body": "A live voice AI interviewer with 18 domain playbooks and 28 formats — phone screens to system design to case interviews — that grades you the way the real panel will."
+        }
+      }
+    },
+    "studio": {
+      "eyebrow": "THE SECOND HALF",
+      "title_machine": "We get you the interview",
+      "title_human": "then we get you ready",
+      "sub": "63% of job seekers have already faced an AI interviewer in real hiring (Greenhouse, 2026). Rehearse against ours — unlimited, judgment-free reps until the real one feels familiar.",
+      "features": {
+        "f1": {
+          "title": "It talks — and interrupts — like a person",
+          "body": "Full-duplex live voice: the interviewer probes, pushes back, and follows up in real time, in 9 languages with native-accent voices."
+        },
+        "f2": {
+          "title": "18 domain playbooks, not trivia decks",
+          "body": "Law, finance, healthcare, hardware, AI/ML and more — it asks what insiders actually ask, and grades through the same lens."
+        },
+        "f3": {
+          "title": "It does homework before you meet",
+          "body": "The interviewer researches current market requirements for your exact role and job description, then builds a custom interview plan around your resume."
+        },
+        "f4": {
+          "title": "A report that changes your next answer",
+          "body": "Dimension scores, per-question corrections with stronger suggested answers, a full transcript, and a replayable recording after every session."
+        },
+        "f5": {
+          "title": "A coach in your ear — if you want one",
+          "body": "Optional live nudges when you ramble, dodge the question, or bury the lede. Camera-on mode adds real video-call pressure."
+        }
+      },
+      "report": {
+        "header": "session-042 — report",
+        "overall_label": "OVERALL",
+        "overall": "82",
+        "rows": {
+          "r1": {
+            "k": "Clarity",
+            "v": "86"
+          },
+          "r2": {
+            "k": "Depth",
+            "v": "78"
+          },
+          "r3": {
+            "k": "Structure",
+            "v": "84"
+          }
+        },
+        "quote": "“Lead with the metric — you buried the 40% cost reduction at the end of your answer.”",
+        "quote_label": "per-question correction"
+      },
+      "cta": "Run a free practice interview"
+    },
+    "rules": {
+      "eyebrow": "OPERATING RULES",
+      "title": "Hard-coded, not fine print.",
+      "sub": "These aren't settings buried in a menu. They're how the agent is built — so what lands in a recruiter's inbox never reads like bot spam.",
+      "file": "guarantees.conf — read-only",
+      "badge": "ENFORCED",
+      "ok": "OK",
+      "items": {
+        "r1_head": "Real letters only",
+        "r1_body": "every claim in every cover letter must cite your actual resume — invented experience is blocked in code.",
+        "r2_head": "The review hold",
+        "r2_body": "nothing submits without a preview window you can veto, application by application.",
+        "r3_head": "Intent filter",
+        "r3_body": "jobs that miss your stated targets — level, stack, location, salary — never reach your queue.",
+        "r4_head": "No spray-and-pray",
+        "r4_body": "daily volume is hard-capped; every application is deliberate, so your name stays credible.",
+        "r5_head": "Leave cleanly",
+        "r5_body": "pause the agent in one click — and account deletion is a real wipe, not a soft-delete."
+      }
+    },
     "pricing": {
-      "title": "Free until you want more.",
-      "free": "Free · 3 apps/day",
-      "premium": "Premium · $19/mo · 15 apps/day",
-      "premium_plus": "Premium+ · $49/mo · 30 apps/day"
+      "eyebrow": "PLANS",
+      "title": "Start free. Upgrade when it's working.",
+      "sub": "Every plan includes the whole agent — resume AI, job matching, the tracker, and the consent layer. Paid plans buy more interview practice.",
+      "unit": "INTERVIEWS / MO",
+      "credit_note": "1 credit = one 20-minute mock interview, billed by the second. Credits refill monthly. Pay by card — or Alipay in China.",
+      "tiers": {
+        "free": {
+          "code": "TIER-0",
+          "name": "Free",
+          "rate": "1",
+          "price": "$0",
+          "per": "",
+          "note": "The full toolkit, plus one graded mock interview every month.",
+          "cta": "Start free",
+          "unit": "INTERVIEW / MO"
+        },
+        "starter": {
+          "code": "TIER-1",
+          "name": "Starter",
+          "rate": "10",
+          "price": "$15",
+          "per": "/mo",
+          "badge": "RECOMMENDED",
+          "note": "Serious-search cadence: practice before every real interview.",
+          "cta": "Start Starter",
+          "unit": "INTERVIEWS / MO"
+        },
+        "growth": {
+          "code": "TIER-2",
+          "name": "Growth",
+          "rate": "28",
+          "price": "$29",
+          "per": "/mo",
+          "note": "All-in: daily reps until the offer is signed.",
+          "cta": "Start Growth",
+          "unit": "INTERVIEWS / MO"
+        }
+      }
     },
-    "footer_note": "© RoboApply. Built by candidates, for candidates."
+    "faq": {
+      "eyebrow": "QUESTIONS, ANSWERED",
+      "title": "What job seekers ask us.",
+      "items": {
+        "q1": {
+          "q": "What is RoboApply?",
+          "a": "RoboApply is an AI job-search agent. It finds openings that match your intent, scores them against your actual resume, tailors your documents, drafts citation-checked cover letters, and stages every application for your approval — then a live AI interviewer helps you practice for the interviews that come back."
+        },
+        "q2": {
+          "q": "Will RoboApply apply to jobs without my permission?",
+          "a": "No. Consent is the architecture, not a setting: applications only ever go out after your explicit approval, daily volume is hard-capped, and hands-free autopilot is opt-in early access. Nothing is submitted in your name without your OK."
+        },
+        "q3": {
+          "q": "Do AI-written cover letters get flagged by recruiters?",
+          "a": "Generic AI letters do. RoboApply's letters are different by construction: every claim must cite a line from your real resume — the citation check is enforced in code, so invented experience never ships. And you review and approve each letter before it goes anywhere."
+        },
+        "q4": {
+          "q": "Can I really practice a job interview with an AI?",
+          "a": "Yes — with a live voice interviewer that talks, probes, and interrupts like a person. Choose from 28 formats and 18 domain playbooks (software, law, finance, healthcare and more), interview in any of 9 languages, and get a graded report with per-question corrections, a transcript, and a recording."
+        },
+        "q5": {
+          "q": "How is RoboApply different from auto-apply bots like LazyApply?",
+          "a": "Volume bots mass-submit without judgment — in one Business Insider test, a mass-apply bot got a 6% response rate, and recruiters can tell. RoboApply keeps your judgment in the loop with a review hold, citation-checked letters, and hard caps, and it closes the loop nobody else does: the same agent that applies also preps you for the interview."
+        },
+        "q6": {
+          "q": "How much does RoboApply cost?",
+          "a": "Free forever for the core toolkit plus one mock interview a month. Starter is $15/month with 10 practice interviews; Growth is $29/month with 28. A credit is a 20-minute session billed by the second, refilled monthly. Pay by card, or Alipay in China."
+        },
+        "q7": {
+          "q": "What languages does RoboApply speak?",
+          "a": "Nine: English, Spanish, Portuguese, French, German, Japanese, Korean, and Simplified and Traditional Chinese. Practice interviews work in all nine today — the interviewer's voice and your graded report. The interface is fully localized in English, Japanese, and both Chinese variants, with the remaining languages rolling out now."
+        },
+        "q8": {
+          "q": "Is my data safe — and can I actually delete it?",
+          "a": "Your resume, transcripts, and recordings are yours; nothing is shared with employers. Every AI action is logged to a transparent usage ledger, and account deletion is a real one-click wipe that purges your data — not a soft-delete that keeps it around."
+        }
+      }
+    },
+    "final": {
+      "chip": "EARLY ACCESS · FREE TO START",
+      "title_machine": "Your agent is ready",
+      "title_human": "when you are",
+      "sub": "Three minutes of setup: resume in, intent set, agent briefed. And the interview studio is open right now — run your first practice session free.",
+      "cta": "Start free"
+    },
+    "sticky": {
+      "cta": "Start free",
+      "note": "No card required"
+    },
+    "footer": {
+      "status": "SYSTEM NOMINAL · CONSENT LAYER ENFORCED",
+      "note": "© RoboApply. Built by candidates, for candidates.",
+      "tagline": "The AI job-search agent with your judgment in the loop.",
+      "lang_title": "RoboApply in your language"
+    }
   },
   "auth": {
     "login": {

@@ -6,7 +6,7 @@
 //
 // The lightweight locale CONSTANTS (LOCALES / RoboLocale / DEFAULT_LOCALE /
 // LOCALE_COOKIE / isLocale / READY_LOCALES) live in `./localeConfig` so client
-// code can import them WITHOUT dragging the four message bundles below into
+// code can import them WITHOUT dragging the message bundles below into
 // the browser JS bundle. This module additionally owns `loadMessages`, the
 // only piece that imports the (heavy) JSON — it is consumed server-side from
 // app/layout.tsx.
@@ -35,24 +35,58 @@ import enMessages from '../i18n/messages/en.json';
 import zhMessages from '../i18n/messages/zh.json';
 import zhTwMessages from '../i18n/messages/zh-TW.json';
 import jaMessages from '../i18n/messages/ja.json';
+import koMessages from '../i18n/messages/ko.json';
+import esMessages from '../i18n/messages/es.json';
+import frMessages from '../i18n/messages/fr.json';
+import ptMessages from '../i18n/messages/pt.json';
+import deMessages from '../i18n/messages/de.json';
 
-const EN: Record<string, unknown> = JSON.parse(JSON.stringify(enMessages));
-const ZH: Record<string, unknown> = JSON.parse(JSON.stringify(zhMessages));
-const ZH_TW: Record<string, unknown> = JSON.parse(JSON.stringify(zhTwMessages));
-const JA: Record<string, unknown> = JSON.parse(JSON.stringify(jaMessages));
+type Messages = Record<string, unknown>;
 
-// Locales with a fully-translated bundle today. The remaining LOCALES
-// (es / fr / pt / de) fall back to `en` until their bundles land — and are
-// hidden from the UI switcher via READY_LOCALES in ./localeConfig.
-const MESSAGES: Record<RoboLocale, Record<string, unknown>> = {
+function clone(bundle: unknown): Messages {
+  return JSON.parse(JSON.stringify(bundle));
+}
+
+/**
+ * Deep-merge a (possibly partial) locale bundle over the English base, so
+ * every locale can ship incrementally: translated namespaces win, anything
+ * missing falls back to `en` key-by-key instead of erroring at render time.
+ * Arrays and scalars are replaced wholesale; only plain objects recurse.
+ */
+function mergeOverEn(base: Messages, override: Messages): Messages {
+  const out: Messages = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const prev = out[key];
+    if (
+      value &&
+      prev &&
+      typeof value === 'object' &&
+      typeof prev === 'object' &&
+      !Array.isArray(value) &&
+      !Array.isArray(prev)
+    ) {
+      out[key] = mergeOverEn(prev as Messages, value as Messages);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+const EN: Messages = clone(enMessages);
+
+/** Every non-EN bundle is merged over EN — full bundles are unaffected,
+ *  partial bundles (ko/es/fr/pt/de today) degrade gracefully to English. */
+const MESSAGES: Record<RoboLocale, Messages> = {
   en: EN,
-  zh: ZH,
-  'zh-TW': ZH_TW,
-  ja: JA,
-  es: EN,
-  fr: EN,
-  pt: EN,
-  de: EN,
+  zh: mergeOverEn(EN, clone(zhMessages)),
+  'zh-TW': mergeOverEn(EN, clone(zhTwMessages)),
+  ja: mergeOverEn(EN, clone(jaMessages)),
+  ko: mergeOverEn(EN, clone(koMessages)),
+  es: mergeOverEn(EN, clone(esMessages)),
+  fr: mergeOverEn(EN, clone(frMessages)),
+  pt: mergeOverEn(EN, clone(ptMessages)),
+  de: mergeOverEn(EN, clone(deMessages)),
 };
 
 export function loadMessages(
