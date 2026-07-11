@@ -144,6 +144,19 @@ export class IntegrationProviderNotFoundError extends Error {
   }
 }
 
+/** Thrown when a provider has no real OAuth credentials configured. The
+ *  pre-launch behaviour was a "persisted demo-connect" (flip connected + a
+ *  derived account label) — silent fake success telling production users
+ *  Gmail/LinkedIn/… were live while nothing was wired. connect() now refuses
+ *  until <PROVIDER>_CLIENT_ID creds exist; the route maps this to
+ *  503 { error: 'integration_unavailable' }. */
+export class IntegrationUnavailableError extends Error {
+  constructor(provider: string) {
+    super(`Integration ${provider} has no OAuth credentials configured`);
+    this.name = 'IntegrationUnavailableError';
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Merge helpers
 // ─────────────────────────────────────────────────────────────────────
@@ -220,9 +233,10 @@ class RAIntegrationsService {
     return { integrations };
   }
 
-  /** Connect a provider. With no OAuth creds configured this is a persisted
-   *  demo-connect: flip `connected`, derive + store an account label. The row
-   *  persists across reloads (real DB) — the contract behavior. */
+  /** Connect a provider. PRODUCTION HONESTY GATE: refuses when the provider
+   *  has no real OAuth creds — a "connected" state must never be persisted
+   *  for a provider that cannot actually sync (the old demo-connect did
+   *  exactly that). */
   async connect(
     userId: string,
     provider: RAIntegrationProvider,
@@ -230,13 +244,16 @@ class RAIntegrationsService {
   ): Promise<IntegrationResponse> {
     const entry = INTEGRATION_CATALOG.find((c) => c.provider === provider);
     if (!entry) throw new IntegrationProviderNotFoundError(provider);
+    if (!hasOauthCreds(provider)) {
+      throw new IntegrationUnavailableError(provider);
+    }
 
     const account = deriveAccount(provider, user);
     const now = new Date();
 
-    // Persisted demo-connect. No tokens stored (no real OAuth here) — leave
-    // accessToken/refreshToken/expiresAt null. `connectedAt` reflects the
-    // demo connect so the row reads truthfully.
+    // Creds exist → record the connection. TODO(oauth): the real authorize +
+    // callback + token exchange replaces deriveAccount; until then no tokens
+    // are stored (accessToken/refreshToken/expiresAt stay null).
     const row = await prisma.rAIntegration.upsert({
       where: { userId_provider: { userId, provider } },
       create: {
@@ -254,10 +271,10 @@ class RAIntegrationsService {
       select: { connected: true, account: true },
     });
 
-    logger.info('RA_V2_INTEGRATIONS', 'connect (demo)', {
+    logger.info('RA_V2_INTEGRATIONS', 'connect', {
       userId,
       provider,
-      hasOauthCreds: hasOauthCreds(provider),
+      hasOauthCreds: true,
     });
 
     return {

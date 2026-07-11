@@ -82,44 +82,12 @@ export function PlanSection({
         sub={t('plan.sub')}
       />
 
-      {/* Usage stats (static display in the stub) */}
-      <div className="pref-usage">
-        <div className="pref-usage-stat">
-          <div className="pref-usage-num">
-            14
-            <span style={{ fontSize: 14, color: 'var(--muted)' }}> / ∞</span>
-          </div>
-          <div className="pref-usage-lbl">{t('plan.usage_apps')}</div>
-          <div className="pref-usage-bar">
-            <div className="fill" style={{ width: '45%' }} />
-          </div>
-        </div>
-        <div className="pref-usage-stat">
-          <div className="pref-usage-num">
-            11.5<span style={{ fontSize: 14, color: 'var(--muted)' }}>h</span>
-          </div>
-          <div className="pref-usage-lbl">{t('plan.usage_hours')}</div>
-          <div className="pref-usage-bar">
-            <div className="fill" style={{ width: '68%' }} />
-          </div>
-        </div>
-        <div className="pref-usage-stat">
-          <div className="pref-usage-num">
-            3<span style={{ fontSize: 14, color: 'var(--muted)' }}> / 22</span>
-          </div>
-          <div className="pref-usage-lbl">{t('plan.usage_replies')}</div>
-          <div className="pref-usage-bar">
-            <div className="fill" style={{ width: '14%' }} />
-          </div>
-        </div>
-        <div className="pref-usage-stat">
-          <div className="pref-usage-num">∞</div>
-          <div className="pref-usage-lbl">{t('plan.usage_mock')}</div>
-          <div className="pref-usage-bar">
-            <div className="fill" style={{ width: '100%', background: 'var(--ok)' }} />
-          </div>
-        </div>
-      </div>
+      {/* Usage strip removed for launch: the previous version displayed
+          FABRICATED per-user numbers (14 apps / 11.5h saved / 3-22 replies)
+          hardcoded from the design prototype — invented metrics shown as
+          real. Reinstate only when fed by the real activity aggregate
+          (activity.orbStats: sent / replies / hoursSavedLifetime) and the
+          real credit balance. */}
 
       <PrefGroup label={t('plan.group_plans')}>
         <div className="pref-plans">

@@ -21,8 +21,8 @@ import { logger } from '../../../services/LoggerService.js';
 import {
   raIntegrationsService,
   isRAIntegrationProvider,
-  hasOauthCreds,
   IntegrationProviderNotFoundError,
+  IntegrationUnavailableError,
 } from '../services/RAIntegrationsService.js';
 
 const router = Router();
@@ -60,17 +60,8 @@ router.post(
       // instead build the provider's OAuth authorize URL here and return it for
       // the client to redirect to; the callback route would exchange the code,
       // store accessToken/refreshToken/expiresAt, and resolve the real account.
-      // No such creds exist in this environment, so we fall through to the
-      // service's persisted demo-connect (marks connected + derives an account,
-      // which survives reloads via the real DB — the contract behavior).
-      if (hasOauthCreds(provider)) {
-        logger.info('RA_V2_INTEGRATIONS', 'oauth creds present (unimplemented)', {
-          userId,
-          provider,
-        });
-        // Intentionally not implemented — see TODO above. Demo-connect for now.
-      }
-
+      // Providers WITHOUT creds are refused by the service (no more silent
+      // demo-connect) and surface as 503 integration_unavailable below.
       const result = await raIntegrationsService.connect(userId, provider, {
         email: req.user?.email,
         name: req.user?.name,
@@ -79,6 +70,9 @@ router.post(
     } catch (err) {
       if (err instanceof IntegrationProviderNotFoundError) {
         return res.status(400).json({ error: 'invalid_provider' });
+      }
+      if (err instanceof IntegrationUnavailableError) {
+        return res.status(503).json({ error: 'integration_unavailable' });
       }
       logger.error('RA_V2_INTEGRATIONS', 'connect failed', {
         userId: req.user?.id,

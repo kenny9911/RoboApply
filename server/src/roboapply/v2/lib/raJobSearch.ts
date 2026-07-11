@@ -75,6 +75,9 @@ export function buildRAJobSearchWhere(
   if (!input.includeArchived) {
     where.archivedAt = null;
   }
+  // Universal: the 'seed' demo corpus (fake postings, dead applyUrls) is never
+  // user-visible — mirrors the onboarding lane's deliberate exclusion.
+  where.sourceBoard = { not: 'seed' };
 
   // q — tokenised OR-match against normalized title / company / description.
   // Tokens of length ≥2 are required; short particles ("a", "i", "of") are

@@ -40,7 +40,10 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     const p = prisma as any;
 
     const row = await p.rAJob.findUnique({ where: { id: jobId } });
-    if (!row) {
+    // Seed demo rows are never user-visible — even by direct id, even when
+    // archived (fake postings with dead applyUrls). Real archived jobs stay
+    // viewable so tracker deep-links keep working.
+    if (!row || row.sourceBoard === 'seed') {
       return res.status(404).json({ error: 'not_found' });
     }
 

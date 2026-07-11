@@ -207,6 +207,15 @@ describe('preMatchCandidates: cross-bank dedup + alsoOnBank', () => {
     expect(res.coverageSet).toHaveLength(1);
     expect(res.coverageSet[0].alsoOnBank).not.toBeNull();
   });
+  it('drops recruiter-side test rows with no resolvable company (e.g. 测试简历匹配)', () => {
+    const testRow = job({ id: 'tst', title: '测试简历匹配' });
+    testRow.company.companyName = '';
+    const res = preMatchCandidates({
+      rows: [testRow], plan, signals, draft: {}, resumeTokens: new Set(), scorerBudget: 8, aggressiveness: 'balanced',
+    });
+    expect(res.coverageSet).toHaveLength(0);
+  });
+
   it('drops dealbreaker-company rows', () => {
     const rows = [job({ id: 'x' })];
     const res = preMatchCandidates({

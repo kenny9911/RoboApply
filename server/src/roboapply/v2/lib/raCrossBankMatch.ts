@@ -411,6 +411,10 @@ export function preMatchCandidates(input: PreMatchInput): PreMatchResult {
   const scored: PreMatchedCandidate[] = [];
 
   for (const row of input.rows) {
+    // Data-quality guard: a bank row with no resolvable company name is almost
+    // always a recruiter-side test posting (seen live: 「测试简历匹配」 with an
+    // empty company in the GoHire bank). Never surface it to candidates.
+    if (!row.company.companyName.trim()) continue;
     if (isDealbroken(row, input.draft)) continue;
     const ps = computePreScore(row, input.plan, input.signals, input.resumeTokens, now);
     if (ps.preScore < PRE_FLOOR) continue;

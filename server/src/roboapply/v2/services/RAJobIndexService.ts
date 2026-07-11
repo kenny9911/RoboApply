@@ -14,7 +14,15 @@ export type RAWorkType = 'remote' | 'hybrid' | 'onsite';
 export type RAEmploymentType = 'full_time' | 'contract' | 'part_time' | 'internship';
 export type RADatePosted = 'today' | '7d' | '30d' | 'any';
 export type RASortBy = 'relevance' | 'recent' | 'salary_desc' | 'match_desc';
-export type RASourceBoard = 'greenhouse' | 'lever' | 'seed' | 'manual' | 'jsearch';
+// robohire/gohire = cross-bank search agent team materializations.
+export type RASourceBoard =
+  | 'greenhouse'
+  | 'lever'
+  | 'seed'
+  | 'manual'
+  | 'jsearch'
+  | 'robohire'
+  | 'gohire';
 export type RASalaryPeriod = 'year' | 'hour' | 'month';
 
 export interface RAJobView {
@@ -133,7 +141,11 @@ export class RAJobIndexService {
     const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
     const offset = params.cursor ? Math.max(0, parseInt(params.cursor, 10) || 0) : 0;
 
-    const where: any = { archivedAt: null };
+    // sourceBoard 'seed' = the demo fixture corpus (fake postings with dead
+    // applyUrls) — excluded defensively here, matching the onboarding lane's
+    // deliberate exclusion (RAOnboardingRecommendService), so an un-archived
+    // seed row can never leak into user-visible search/home results.
+    const where: any = { archivedAt: null, sourceBoard: { not: 'seed' } };
     if (params.q && params.q.trim()) {
       const tokens = params.q
         .toLowerCase()

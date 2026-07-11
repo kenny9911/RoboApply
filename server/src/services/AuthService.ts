@@ -168,6 +168,14 @@ const DEMO_USER: PublicUser = {
 };
 const DEMO_PASSWORD = 'demo1234';
 
+/** The demo login/lookup paths are DEV-ONLY. In production a hardcoded
+ *  credential pair must never authenticate — the demo branch only fired when
+ *  the DB was unreachable, which meant a DB outage silently opened a
+ *  synthetic account. Gated for launch. */
+function demoAccountEnabled(): boolean {
+  return process.env.NODE_ENV !== 'production';
+}
+
 // ── Password reset email i18n ───────────────────────────────
 interface ResetEmailText {
   subject: string;
@@ -652,8 +660,8 @@ class AuthService {
         where: { email: email.toLowerCase() },
       });
     } catch (dbError) {
-      // Database not available, allow demo user fallback
-      if (email.toLowerCase() === DEMO_USER.email && password === DEMO_PASSWORD) {
+      // Database not available — demo fallback is DEV-ONLY (never in prod).
+      if (demoAccountEnabled() && email.toLowerCase() === DEMO_USER.email && password === DEMO_PASSWORD) {
         const token = this.generateToken({ ...DEMO_USER, passwordHash: null } as any);
         const sessionToken = this.generateSessionToken();
         return { user: await this.buildPublicUser(DEMO_USER), token, sessionToken };
@@ -829,7 +837,7 @@ class AuthService {
 
       if (!user) {
         // Fallback to demo user if DB has no match
-        if (id === DEMO_USER.id) return this.buildPublicUser(DEMO_USER);
+        if (demoAccountEnabled() && id === DEMO_USER.id) return this.buildPublicUser(DEMO_USER);
         return null;
       }
 
@@ -841,7 +849,7 @@ class AuthService {
       return publicUser;
     } catch {
       // Database not available, fallback to demo user
-      if (id === DEMO_USER.id) return this.buildPublicUser(DEMO_USER);
+      if (demoAccountEnabled() && id === DEMO_USER.id) return this.buildPublicUser(DEMO_USER);
       return null;
     }
   }
