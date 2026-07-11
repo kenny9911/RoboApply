@@ -69,8 +69,8 @@ const JOB_SELECT = {
   niceToHave: true,
   benefits: true,
   location: true,
-  locationCity: true,
-  locationCountry: true,
+  // NB: the recruiter `Job` model has NO locationCity/locationCountry columns
+  // (those live only on RAJob). We derive city from `location` below. [review FIX-4]
   workType: true,
   employmentType: true,
   experienceLevel: true,
@@ -112,8 +112,10 @@ function normalizeBankJobRow(bank: BankId, raw: Record<string, unknown>): BankJo
       niceToHave: str(raw.niceToHave),
       benefits: str(raw.benefits),
       location: str(raw.location),
-      locationCity: str(raw.locationCity),
-      locationCountry: str(raw.locationCountry),
+      // Job has no city/country columns — derive city from the first comma
+      // token of `location` (feeds the dedup fingerprint + RAJob mirror).
+      locationCity: str(raw.location)?.split(',')[0]?.trim() || null,
+      locationCountry: null,
       workType: str(raw.workType),
       employmentType: str(raw.employmentType),
       experienceLevel: str(raw.experienceLevel),

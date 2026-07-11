@@ -10,6 +10,7 @@
 // so they are treated as SOFT boosts, never hard gates. A signal-empty bank
 // degrades ranking, never recall.
 
+import { createHash } from 'node:crypto';
 import { jobFingerprint } from './raOnboardingDraft.js';
 import { normalizeForSearch } from './raJobSearch.js';
 import type {
@@ -487,11 +488,25 @@ export function reserveScorerBudgetByTier(
   for (const t of ['core', 'adjacent', 'stretch'] as const)
     byTier[t].sort((a, b) => b.preScore - a.preScore);
 
+  // Guaranteed stretch floor (spec MIN_STRETCH_SCORED). [review FIX-1]
+  const stretchFloor = Math.min(MIN_STRETCH_SCORED, byTier.stretch.length, budget);
   const quota = {
     core: Math.round(budget * split.core),
     adjacent: Math.round(budget * split.adjacent),
-    stretch: Math.max(Math.round(budget * split.stretch), Math.min(MIN_STRETCH_SCORED, byTier.stretch.length)),
+    stretch: Math.max(Math.round(budget * split.stretch), stretchFloor),
   };
+  // Rounding can oversubscribe (e.g. balanced/16 → 10+4+3 = 17 > 16). Trim the
+  // excess from adjacent, then core, never dropping below the stretch floor, so
+  // the summed quotas never exceed budget and the trailing slice can't evict a
+  // guaranteed-stretch pick.
+  let over = quota.core + quota.adjacent + quota.stretch - budget;
+  while (over > 0) {
+    if (quota.adjacent > 0) quota.adjacent--;
+    else if (quota.core > 0) quota.core--;
+    else if (quota.stretch > stretchFloor) quota.stretch--;
+    else break;
+    over--;
+  }
 
   const picked: PreMatchedCandidate[] = [];
   const takeFrom = (t: 'core' | 'adjacent' | 'stretch', n: number) => {
@@ -499,9 +514,10 @@ export function reserveScorerBudgetByTier(
     picked.push(...rows);
     byTier[t] = byTier[t].slice(rows.length);
   };
+  // Take the stretch floor FIRST so it survives even if core/adjacent are full.
+  takeFrom('stretch', quota.stretch);
   takeFrom('core', quota.core);
   takeFrom('adjacent', quota.adjacent);
-  takeFrom('stretch', quota.stretch);
 
   // Spill remaining budget to whoever has the highest-preScore leftovers.
   const leftover = [...byTier.core, ...byTier.adjacent, ...byTier.stretch].sort(
@@ -596,6 +612,30 @@ export function normalizeSalaryPeriod(
 
 export function bankDisplayName(bank: BankId): string {
   return bank === 'robohire' ? 'RoboHire' : 'GoHire';
+}
+
+/**
+ * Hash of the exact job fields the Sonnet scorer consumes. Cross-bank RAJob
+ * mirrors are RE-materialized every run from a live recruiter DB whose JD can
+ * change in place (same Job.id → same RAJob.id), so the match-score cache must
+ * invalidate when the JD content changes — resumeContentHash alone can't see a
+ * JD edit. Stored in the RAJobMatchScore explanation JSON (no schema change);
+ * the cross-bank cache read gates on it. [review FIX-0]
+ */
+export function jobScoringContentHash(job: {
+  title: string;
+  description: string | null;
+  qualifications: string | null;
+  hardRequirements: string | null;
+  benefits: string | null;
+}): string {
+  const parts = [
+    job.title ?? '',
+    job.description ?? '',
+    [job.qualifications, job.hardRequirements].filter(Boolean).join('\n\n'),
+    job.benefits ?? '',
+  ].join('');
+  return createHash('sha256').update(parts, 'utf8').digest('hex');
 }
 
 export function synthesizeApplyUrl(bank: BankId, jobId: string): string {

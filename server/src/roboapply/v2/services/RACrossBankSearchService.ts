@@ -31,8 +31,10 @@ import {
   normalizeTokens,
   freshnessCutoff,
   normalizeSalaryPeriod,
+  normalizeWorkMode,
   bankDisplayName,
   synthesizeApplyUrl,
+  jobScoringContentHash,
   DEFAULT_SCORER_BUDGET,
   SCORER_CONCURRENCY,
   SCORE_FLOOR,
@@ -211,9 +213,21 @@ export class RACrossBankSearchService {
           where: { userId: input.userId, resumeVariantId: variant.id, jobId: { in: raJobIds } },
           select: { jobId: true, score: true, explanation: true, resumeContentHashAtScore: true },
         });
+        // Current job-content hash per materialized RAJob id, so an in-place JD
+        // edit (same Job.id) invalidates a stale score. [review FIX-0]
+        const jobHashById = new Map<string, string>();
+        for (const c of toScore) {
+          jobHashById.set(raJobIdByKey.get(`${c.bank}:${c.job.id}`)!, jobScoringContentHash(c.job));
+        }
         for (const row of cached) {
           const decision = evaluateCachedScore(row, variant.resumeContentHash, locale);
-          if (decision.fresh) cacheRows[row.jobId] = { score: row.score, explanation: row.explanation };
+          const exp = (row.explanation ?? {}) as Record<string, unknown>;
+          const cachedJobHash = (exp.crossBank as Record<string, unknown> | undefined)?.jobContentHash;
+          const jobUnchanged =
+            typeof cachedJobHash === 'string' && cachedJobHash === jobHashById.get(row.jobId);
+          if (decision.fresh && jobUnchanged) {
+            cacheRows[row.jobId] = { score: row.score, explanation: row.explanation };
+          }
         }
       }
 
@@ -385,6 +399,9 @@ export class RACrossBankSearchService {
       }, input.requestId);
       return zeroResult(banksSwept, banksDegraded);
     } finally {
+      // Attribute the round's full platform cost exactly once (safe {clear} —
+      // all concurrent LLM calls have settled by here). [review FIX-6]
+      await this.billRoundCost(input);
       logger.info(TAG, 'cross-bank round complete', {
         userId: input.userId,
         banksSwept,
@@ -411,7 +428,7 @@ export class RACrossBankSearchService {
       requiredCoverage: cand.requiredCoverage,
       keywordCoverage: cand.keywordCoverage,
       preferredOverlap: cand.preferredOverlap,
-      inviteScaleOffset: Number.parseInt(process.env.RA_CROSSBANK_INVITE_OFFSET ?? '', 10) || 0,
+      inviteScaleOffset: inviteScaleOffset(),
     });
     return {
       cand,
@@ -447,7 +464,7 @@ export class RACrossBankSearchService {
       companyName: cand.company.companyName,
       companyLogoUrl: cand.company.companyLogoUrl,
       location: cand.job.location,
-      workType: cand.job.workType ?? 'onsite',
+      workType: normalizeWorkMode(cand.job.workType),
       salaryMin: cand.job.salaryMin,
       salaryMax: cand.job.salaryMax,
       salaryCurrency: cand.job.salaryCurrency ?? 'USD',
@@ -482,6 +499,8 @@ export class RACrossBankSearchService {
     res: { score: number; summary: string; strengths: string[]; gaps: string[]; keywordsMatched: string[]; keywordsMissing: string[] },
     locale: string,
   ): Promise<void> {
+    // Same inviteScaleOffset as buildScoredRow so the stored odds match the
+    // card's odds exactly. [review FIX-3]
     const odds = computeAcceptanceOdds({
       llmScore: res.score,
       inviteBar: cand.inviteBar,
@@ -489,6 +508,7 @@ export class RACrossBankSearchService {
       requiredCoverage: cand.requiredCoverage,
       keywordCoverage: cand.keywordCoverage,
       preferredOverlap: cand.preferredOverlap,
+      inviteScaleOffset: inviteScaleOffset(),
     });
     const explanation = {
       strengths: res.strengths,
@@ -499,6 +519,8 @@ export class RACrossBankSearchService {
       promptVersion: SCORER_PROMPT_VERSION,
       crossBank: {
         bank: cand.bank,
+        // Job-content hash so an in-place JD edit invalidates this cache row. [FIX-0]
+        jobContentHash: jobScoringContentHash(cand.job),
         inviteBar: cand.inviteBar,
         barIsDefault: cand.barIsDefault,
         requiredCoverage: cand.requiredCoverage,
@@ -527,13 +549,18 @@ export class RACrossBankSearchService {
     });
   }
 
+  /**
+   * Per-call audit row. Carries NO platformCostUsd — costPatchFromTally returns
+   * the CUMULATIVE running tally, so stamping it on every concurrent scorer call
+   * would over-count the round's cost N-fold. The full round cost is attributed
+   * exactly once by billRoundCost() at the end. [review FIX-6]
+   */
   private async bill(
     sku: 'ra_crossbank_score' | 'ra_crossbank_insight',
     input: CrossBankDiscoverInput,
     raJobId: string | null,
     bank: BankId | null,
   ): Promise<void> {
-    const patch = costPatchFromTally(input.requestId);
     await writeDeductionLog({
       userId: input.userId,
       sku,
@@ -541,8 +568,26 @@ export class RACrossBankSearchService {
       units: 1,
       requestId: input.requestId ?? null,
       ...(raJobId ? { relatedEntityType: 'ra_job', relatedEntityId: raJobId } : {}),
+      metadata: { source: 'roboapply_v2_crossbank', ...(bank ? { bank } : {}) },
+    }).catch(() => undefined);
+  }
+
+  /**
+   * One cost-attribution row at end-of-round with the FULL round platform cost.
+   * Safe to {clear:true} here — called once, after all concurrent scorer/insight
+   * calls have settled, so there is no interleaved read-then-clear race.
+   */
+  private async billRoundCost(input: CrossBankDiscoverInput): Promise<void> {
+    const patch = costPatchFromTally(input.requestId, { clear: true });
+    if (!patch.platformCostUsd) return;
+    await writeDeductionLog({
+      userId: input.userId,
+      sku: 'ra_crossbank_score',
+      source: 'free_tier',
+      units: 0,
+      requestId: input.requestId ?? null,
       platformCostUsd: patch.platformCostUsd,
-      metadata: { ...(patch.metadata ?? {}), source: 'roboapply_v2_crossbank', ...(bank ? { bank } : {}) },
+      metadata: { ...(patch.metadata ?? {}), source: 'roboapply_v2_crossbank', rollup: true },
     }).catch(() => undefined);
   }
 
@@ -564,15 +609,26 @@ export class RACrossBankSearchService {
   }
 
   private async loadDraft(p: any, userId: string): Promise<import('../types/onboarding.js').OnboardingDraftPreferences> {
+    // Best-effort: the candidate's most-recent onboarding session carries the
+    // draft prefs (draftPreferences JSON on RAOnboardingSession). Empty is fine
+    // — the explorer degrades to resume-derived signals.
     try {
-      const row = await p.rAOnboardingState?.findUnique?.({ where: { userId }, select: { draftPreferences: true } });
+      const row = await p.rAOnboardingSession.findFirst({
+        where: { userId },
+        orderBy: { updatedAt: 'desc' },
+        select: { draftPreferences: true },
+      });
       const dp = row?.draftPreferences;
-      if (dp && typeof dp === 'object') return dp as any;
+      if (dp && typeof dp === 'object' && !Array.isArray(dp)) return dp as any;
     } catch {
       /* best-effort */
     }
     return {};
   }
+}
+
+function inviteScaleOffset(): number {
+  return Number.parseInt(process.env.RA_CROSSBANK_INVITE_OFFSET ?? '', 10) || 0;
 }
 
 function localeCountry(locale: string): string {

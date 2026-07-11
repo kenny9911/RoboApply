@@ -15,36 +15,45 @@ import { requireAuth } from '../lib/raAuth.js';
 import { getRequestLocale } from '../lib/raLocale.js';
 import { getCurrentRequestId } from '../../../lib/requestContext.js';
 import { logger } from '../../../services/LoggerService.js';
+import { prisma } from '../../../lib/prisma.js';
 import { raCrossBankSearchService } from '../services/RACrossBankSearchService.js';
 
 const router = Router();
 
-// Simple in-memory per-user daily cap (mirrors the mission daily-cap pattern).
-// Bounds the LLM spend of an inherently expensive endpoint. Resets on restart;
-// a durable cap can move to the DB later.
-const DAILY_CAP = Number.parseInt(process.env.RA_CROSSBANK_DAILY_CAP ?? '', 10) || 25;
-const runCounts = new Map<string, { day: string; n: number }>();
+// Durable per-user daily cap on this expensive endpoint. Backed by counting
+// today's cross-bank deduction rows (one insight + N score rows per run) rather
+// than an in-memory Map — the latter resets on every serverless cold start and
+// is per-instance, so it can't actually bound spend on Vercel. [review FIX-5]
+// The cap is expressed in LLM CALLS/day (≈ runs × ~10); tune via env.
+const DAILY_CALL_CAP = Number.parseInt(process.env.RA_CROSSBANK_DAILY_CALL_CAP ?? '', 10) || 400;
 
-function dayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+function startOfUtcDay(): Date {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-function checkAndBumpCap(userId: string): boolean {
-  const today = dayKey();
-  const cur = runCounts.get(userId);
-  if (!cur || cur.day !== today) {
-    runCounts.set(userId, { day: today, n: 1 });
-    return true;
+async function overDailyCap(userId: string): Promise<boolean> {
+  try {
+    const p = prisma as any;
+    const used = await p.usageDeductionLog.count({
+      where: {
+        userId,
+        sku: { in: ['ra_crossbank_score', 'ra_crossbank_insight'] },
+        createdAt: { gte: startOfUtcDay() },
+      },
+    });
+    return used >= DAILY_CALL_CAP;
+  } catch {
+    // If the count query fails, fail OPEN (don't block the user) — the
+    // service's own scorer budget still bounds per-run cost.
+    return false;
   }
-  if (cur.n >= DAILY_CAP) return false;
-  cur.n += 1;
-  return true;
 }
 
 router.post('/run', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    if (!checkAndBumpCap(userId)) {
+    if (await overDailyCap(userId)) {
       return res.status(429).json({ error: 'rate_limited' });
     }
 
@@ -93,4 +102,4 @@ router.post('/run', requireAuth, async (req: Request, res: Response) => {
 });
 
 export default router;
-export const __test = { checkAndBumpCap, runCounts };
+export const __test = { overDailyCap, startOfUtcDay };

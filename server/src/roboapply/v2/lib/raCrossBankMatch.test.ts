@@ -235,6 +235,24 @@ describe('reserveScorerBudgetByTier', () => {
   it('returns nothing for a zero budget', () => {
     expect(reserveScorerBudgetByTier([], 0, 'balanced')).toHaveLength(0);
   });
+
+  it('never oversubscribes the budget yet keeps a stretch pick even when core+adjacent are plentiful [review FIX-1]', () => {
+    const mk = (id: string, tier: PreMatchedCandidate['tier'], pre: number): PreMatchedCandidate => ({
+      bank: 'robohire', job: job({ id }).job, company: { companyName: 'A', companyLogoUrl: null },
+      retrievedVia: 'title', preScore: pre, tier, requiredCoverage: 1, keywordCoverage: 1, preferredOverlap: 0,
+      projectedScore: 80, inviteBar: 60, barIsDefault: true, fingerprint: id, alsoOnBank: null, recency01: 1,
+      missingRequiredTags: [], missingRequiredKeywords: [],
+    });
+    // Balanced/16: quotas would be 10 core + 4 adj + 3 stretch = 17 > 16 pre-fix.
+    const set = [
+      ...Array.from({ length: 40 }, (_, i) => mk(`c${i}`, 'core', 99 - i)),
+      ...Array.from({ length: 40 }, (_, i) => mk(`a${i}`, 'adjacent', 59 - i)),
+      ...Array.from({ length: 40 }, (_, i) => mk(`s${i}`, 'stretch', 19 - i)),
+    ];
+    const picked = reserveScorerBudgetByTier(set, 16, 'balanced');
+    expect(picked.length).toBe(16); // exactly budget, never 17
+    expect(picked.filter((c) => c.tier === 'stretch').length).toBeGreaterThanOrEqual(3); // floor survives
+  });
 });
 
 describe('mapWithConcurrency', () => {
