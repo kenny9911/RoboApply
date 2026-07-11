@@ -13,6 +13,13 @@
 
 export type {
   RaV2Api,
+  DiscoverRunBody,
+  CrossBankDiscoverResponse,
+  DiscoverJobCard,
+  CrossBankCoverageStats,
+  BankId,
+  AcceptanceBand,
+  MatchTier,
   // Re-export the major shapes so call sites don't need a second import
   // when they only need the API + the shape of one of its arguments.
   RACareerGoal,

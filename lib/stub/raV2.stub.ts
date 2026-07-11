@@ -1817,6 +1817,30 @@ export const stubApi: RaV2Api = {
       return { passed: true };
     },
   },
+  discover: {
+    async run() {
+      await delay('slow');
+      return {
+        recommended: [],
+        explore: [],
+        coverage: {
+          banksSwept: ['robohire', 'gohire'],
+          banksDegraded: [],
+          totalRetrieved: 0,
+          materialized: 0,
+          recommendedCount: 0,
+          exploreCount: 0,
+          droppedTwins: 0,
+          metSolidTarget: false,
+          perBank: {},
+        },
+        insight: null,
+        banksSwept: ['robohire', 'gohire'],
+        scorer: { callsUsed: 0, cacheHits: 0, budget: 16 },
+        zeroResults: true,
+      };
+    },
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────

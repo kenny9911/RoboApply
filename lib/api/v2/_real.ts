@@ -88,6 +88,8 @@ import type {
   OnboardingSkipResponse,
   OnboardingPassBody,
   OnboardingPassResponse,
+  DiscoverRunBody,
+  CrossBankDiscoverResponse,
 } from './types';
 
 const BASE = '/api/v1/roboapply/v2';
@@ -356,5 +358,9 @@ export const realApi: RaV2Api = {
       ),
     pass: (body: OnboardingPassBody) =>
       roboApi.post<OnboardingPassResponse>(`${BASE}/onboarding/pass`, body),
+  },
+  discover: {
+    run: (body?: DiscoverRunBody) =>
+      roboApi.post<CrossBankDiscoverResponse>(`${BASE}/discover/run`, body ?? {}),
   },
 };

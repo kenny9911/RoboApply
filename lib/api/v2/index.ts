@@ -39,6 +39,13 @@ export const isStubApi: boolean = useStub;
 // `import type { RaV2Api, ... } from '@/lib/api/v2'`.
 export type {
   RaV2Api,
+  DiscoverRunBody,
+  CrossBankDiscoverResponse,
+  DiscoverJobCard,
+  CrossBankCoverageStats,
+  BankId,
+  AcceptanceBand,
+  MatchTier,
   RACareerGoal,
   RAJob,
   RAJobListItem,

@@ -897,8 +897,9 @@ export interface OnboardingJobCard {
   matchScore: number;
   /** 1–2 sentences, in-locale, markdown-inline. Render sanitized. */
   whyMatched: string;
-  source: 'internal' | 'jsearch';
-  /** e.g. "LinkedIn", "104人力銀行" → rendered "via {publisher}". */
+  /** 'robohire'|'gohire' cards come from the cross-bank search agent team. */
+  source: 'internal' | 'jsearch' | 'robohire' | 'gohire';
+  /** e.g. "LinkedIn", "104人力銀行", "RoboHire", "GoHire" → "via {publisher}". */
   sourcePublisher?: string;
   /** External only; open `_blank` with `rel="noopener nofollow"`. */
   applyUrl?: string;
@@ -1263,10 +1264,78 @@ export interface ResumeCoachTipsResponse {
 // Both `realApi` (Wave-4 fetch-backed) and `stubApi` (Wave-2 in-memory)
 // implement this. F2-F5 import via `lib/api/v2/index.ts` only.
 
+// ─── Cross-bank discovery (the search agent team) ────────────────────────
+export type BankId = 'robohire' | 'gohire';
+export type AcceptanceBand = 'strong' | 'on_the_bar' | 'reach' | 'bar_unset';
+export type MatchTier = 'recommended' | 'adjacent' | 'stretch';
+
+export interface DiscoverJobCard {
+  id: string;
+  title: string;
+  companyName: string;
+  companyLogoUrl: string | null;
+  location: string | null;
+  workType: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+  salaryPeriod: 'month' | 'year' | 'week' | 'hour' | null;
+  postedAt: string | null;
+  isBookmarked: boolean;
+  matchScoreCached: number | null;
+  matchScore: number;
+  acceptanceOdds: number;
+  acceptanceBand: AcceptanceBand;
+  inviteBar: number;
+  barIsDefault: boolean;
+  aboveBar: boolean;
+  requiredCoverage: number;
+  matchTier: MatchTier;
+  whyMatched: string;
+  raiseOdds: string | null;
+  source: BankId;
+  sourcePublisher: string;
+  alsoOnBank: BankId | null;
+  applyUrl: string;
+  isExternal: true;
+}
+
+export interface CrossBankCoverageStats {
+  banksSwept: string[];
+  banksDegraded: string[];
+  totalRetrieved: number;
+  materialized: number;
+  recommendedCount: number;
+  exploreCount: number;
+  droppedTwins: number;
+  metSolidTarget: boolean;
+  perBank: Record<string, { retrieved: number; recommended: number }>;
+}
+
+export interface DiscoverRunBody {
+  resumeVariantId?: string | null;
+  aggressiveness?: 'balanced' | 'coverage' | 'precision';
+  limit?: number;
+}
+
+export interface CrossBankDiscoverResponse {
+  recommended: DiscoverJobCard[];
+  explore: DiscoverJobCard[];
+  coverage: CrossBankCoverageStats;
+  insight: { portfolioSummary: string } | null;
+  banksSwept: string[];
+  scorer: { callsUsed: number; cacheHits: number; budget: number };
+  zeroResults: boolean;
+}
+
 export interface RaV2Api {
   goal: {
     get(): Promise<GoalGetResponse>;
     upsert(patch: GoalUpsertBody): Promise<GoalUpsertResponse>;
+  };
+  /** Cross-bank job-search agent team — searches RoboHire + GoHire banks. */
+  discover: {
+    run(body?: DiscoverRunBody): Promise<CrossBankDiscoverResponse>;
   };
   tracker: {
     list(params?: TrackerListParams): Promise<TrackerListResponse>;
