@@ -21,6 +21,7 @@ RoboApply ships 9 locales (`lib/localeConfig.ts` LOCALES): en, zh, zh-TW, ja, ko
    - the HARD RULES (below),
    - a structured-output schema: `{landing: object, extras?: object, notes: string}` (adapt field names to the namespaces being synced).
 3. Validate + apply with `scripts/apply_translations.py <journal.jsonl|output-file>` — it enforces exact key-tree match vs EN and the machine-voice invariants before writing any file. Adapt its namespace lists if syncing something other than landing.
+   ⚠ Resumed-workflow journals accumulate one result line per locale across ALL runs — first occurrence wins in the script, which may be a STALE early run translated from older EN copy. The strict key-tree check usually rejects stale entries (they miss keys added since), but if EN keys didn't change between runs, verify a few fixed strings on disk after applying rather than trusting the summary. Locale detection must use content charset, never the agent's notes (notes routinely mention other locale codes).
 4. If a locale's landing translation is new: add it to `SEO_READY_LOCALES` (lib/localeConfig.ts) so it joins the hreflang cluster + sitemap and its `/{locale}` page flips from noindex to index; add it to `READY_LOCALES` to appear in the in-app switcher.
 5. Run `npx vitest run __tests__/pages/landing.test.tsx`, then verify one locale over HTTP: `curl -s localhost:3611/ja | grep '<html lang'`.
 

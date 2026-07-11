@@ -64,6 +64,7 @@ export const SEO_READY_LOCALES: readonly RoboLocale[] = [
   'zh',
   'zh-TW',
   'ja',
+  'ko',
   'es',
   'fr',
   'pt',
