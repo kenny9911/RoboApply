@@ -40,7 +40,7 @@ const MALE = { model: 'elevenlabs/eleven_turbo_v2_5', voiceId: 'JBFqnCBsd6RMkjVD
 const VOICES = [
   { locale: 'en',    g: 'female', model: 'cartesia/sonic-3',             voiceId: '694f9389-aac1-45b6-b726-9d9369183238', lang: 'en', text: 'Hello, thanks for joining today.' },
   { locale: 'zh',    g: 'female', model: 'cartesia/sonic-3',             voiceId: 'e90c6678-f0d3-4767-9883-5d0ecf5894a8', lang: 'zh', text: '你好，感谢你今天参加面试。' },
-  { locale: 'zh-TW', g: 'female', model: 'elevenlabs/eleven_turbo_v2_5', voiceId: 'r6qgCCGI7RWKXCagm158',                 lang: 'zh', text: '你好，謝謝你今天來參加面試。' },
+  { locale: 'zh-TW', g: 'female', model: 'elevenlabs/eleven_turbo_v2_5', voiceId: 'fQj4gJSexpu8RDE2Ii5m',                 lang: 'zh', text: '你好，謝謝你今天來參加面試。' },
   { locale: 'ja',    g: 'female', model: 'cartesia/sonic-3',             voiceId: '2b568345-1d48-4047-b25f-7baccf842eb0', lang: 'ja', text: 'こんにちは、本日はよろしくお願いします。' },
   { locale: 'ko',    g: 'female', model: 'cartesia/sonic-3',             voiceId: '29e5f8b4-b953-4160-848f-40fae182235b', lang: 'ko', text: '안녕하세요, 오늘 참여해 주셔서 감사합니다.' },
   { locale: 'es',    g: 'female', model: 'cartesia/sonic-3',             voiceId: '694f9389-aac1-45b6-b726-9d9369183238', lang: 'es', text: 'Hola, gracias por acompañarnos hoy.' },

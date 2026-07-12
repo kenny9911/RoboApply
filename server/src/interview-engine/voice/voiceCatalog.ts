@@ -11,9 +11,15 @@
 //   • Default: Cartesia `sonic-3` — genuinely native en/zh(Mandarin)/ja/ko and
 //     the lowest latency on the gateway (~90ms TTFB).
 //   • Exception zh-TW: Cartesia has only ONE Mainland Mandarin, which sounds
-//     Mainland to a Taiwanese listener — so Traditional/Taiwan uses an
-//     ElevenLabs Taiwan-native voice (also gateway-billed, no key). The Taiwan
-//     accent comes from the VOICE + the Traditional-character prompt text;
+//     Mainland to a Taiwanese listener — so Traditional/Taiwan uses ElevenLabs
+//     'Yu' (fQj4gJSexpu8RDE2Ii5m), a native youthful Taiwan-accent FEMALE voice
+//     (also gateway-billed, no key). CAUTION: the gateway serves only ElevenLabs
+//     DEFAULT/curated voices — of the ~20 ElevenLabs "Taiwan Mandarin" library
+//     voices, ONLY 'Yu' is gateway-accepted; every other (incl. the former
+//     'Anna Su' r6qgCCGI7RWKXCagm158) is REJECTED mid-turn → silent OpenAI-floor
+//     fallback speaking generic Mandarin. Never swap in another Taiwan library id
+//     without first probing it (interview-agent/verify-voices.mjs zh-TW). The
+//     Taiwan accent comes from the VOICE + the Traditional-character prompt text;
 //     languageCode is the single gateway Mandarin code 'zh'.
 //   • es/fr/pt/de FEMALE currently ride the multilingual English Cartesia voice
 //     with the locale's language code (no verified native per-locale Cartesia id
@@ -101,7 +107,7 @@ const VOICE_DEFAULTS: Record<SupportedLocale, { female: ResolvedVoice; male: Res
     male:   maleDefault('zh', '普通话 · 男声 · 多语音色'),
   },
   'zh-TW': {
-    female: { provider: 'elevenlabs', model: 'elevenlabs/eleven_turbo_v2_5', voiceId: 'r6qgCCGI7RWKXCagm158',                 languageCode: 'zh', label: '國語 · 台灣 · 女聲' },
+    female: { provider: 'elevenlabs', model: 'elevenlabs/eleven_turbo_v2_5', voiceId: 'fQj4gJSexpu8RDE2Ii5m',                 languageCode: 'zh', label: '國語 · 台灣 · 女聲' },
     male:   maleDefault('zh', '國語 · 男聲 · 多語音色'),
   },
   ja: {
