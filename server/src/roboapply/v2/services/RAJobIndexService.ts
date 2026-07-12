@@ -14,13 +14,16 @@ export type RAWorkType = 'remote' | 'hybrid' | 'onsite';
 export type RAEmploymentType = 'full_time' | 'contract' | 'part_time' | 'internship';
 export type RADatePosted = 'today' | '7d' | '30d' | 'any';
 export type RASortBy = 'relevance' | 'recent' | 'salary_desc' | 'match_desc';
-// robohire/gohire = cross-bank search agent team materializations.
+// jsearch/activejobs/linkedin = external RapidAPI providers (onboarding external
+// round). robohire/gohire = cross-bank search agent team materializations.
 export type RASourceBoard =
   | 'greenhouse'
   | 'lever'
   | 'seed'
   | 'manual'
   | 'jsearch'
+  | 'activejobs'
+  | 'linkedin'
   | 'robohire'
   | 'gohire';
 export type RASalaryPeriod = 'year' | 'hour' | 'month';

@@ -21,6 +21,9 @@
 // The RAPID_API_KEY value is never logged and never echoed anywhere.
 
 import { logger } from '../../../services/LoggerService.js';
+import type { ExternalJobNormalized } from './raExternalJobTypes.js';
+
+export type { ExternalJobNormalized } from './raExternalJobTypes.js';
 
 const BASE_URL = 'https://jsearch.p.rapidapi.com';
 const RAPIDAPI_HOST = 'jsearch.p.rapidapi.com';
@@ -30,41 +33,11 @@ const CACHE_MAX_ENTRIES = 200;
 const BREAKER_COOLDOWN_MS = 60 * 60 * 1000;
 const DEFAULT_DAILY_BUDGET = 300;
 
-/**
- * Normalized external job. Self-contained type — downstream code (the blend /
- * prefilter in RAOnboardingRecommendService) maps this onto RAJob.
- *
- * Work-type / employment-type semantics (critic findings E7 + R4): the JSearch
- * /search payload carries NO hybrid/onsite signal — only `job_is_remote` is
- * trustworthy, and ONLY when it is `true`. Non-remote and null values are
- * UNKNOWN, never "onsite": downstream hard filters must null-pass these
- * instead of dropping every TW/hybrid row.
- */
-export interface ExternalJobNormalized {
-  externalId: string; // `jsearch:${job_id}`
-  title: string;
-  company: string;
-  companyLogoUrl: string | null;
-  location: string | null;
-  locationCity: string | null;
-  locationCountry: string | null;
-  /** 'remote' only when job_is_remote === true; everything else is 'unknown'. */
-  workType: 'remote' | 'unknown';
-  /** 'full_time' | 'contract' | 'part_time' | 'internship'; null = unknown (null-pass). */
-  employmentType: string | null;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  /** Inferred from the REQUEST country, only when a salary is present. Never USD-default. */
-  salaryCurrency: string | null;
-  salaryPeriod: string | null;
-  /** ISO datetime. Fallback chain ends at fetch time, so never null. */
-  postedAt: string;
-  applyUrl: string | null;
-  applyIsDirect: boolean;
-  description: string;
-  /** "LinkedIn", "104人力銀行", … — rendered as "via X" attribution. */
-  sourcePublisher: string | null;
-}
+// ExternalJobNormalized now lives in raExternalJobTypes.ts (shared across all
+// providers). Work-type / employment-type semantics (critic findings E7 + R4):
+// the JSearch /search payload carries NO hybrid/onsite signal — only
+// `job_is_remote` is trustworthy, and ONLY when it is `true`. Non-remote and
+// null values are UNKNOWN, never "onsite".
 
 export interface JSearchSearchParams {
   query: string;
@@ -214,6 +187,7 @@ export function normalizeJSearchJob(
 
   return deepClean({
     externalId: `jsearch:${j.job_id}`,
+    sourceBoard: 'jsearch' as const,
     title: j.job_title,
     company: j.employer_name,
     companyLogoUrl: typeof j.employer_logo === 'string' ? j.employer_logo : null,
@@ -431,7 +405,14 @@ export async function searchJSearchJobs(
   if (params.datePosted && params.datePosted !== 'all') search.set('date_posted', params.datePosted);
   if (params.workFromHome === true) search.set('work_from_home', 'true');
   if (params.employmentTypes?.trim()) search.set('employment_types', params.employmentTypes.trim());
-  const url = `${BASE_URL}/search?${search.toString()}`;
+  // OpenWeb Ninja versioned the search endpoint: the legacy `/search` (page-
+  // based) is no longer published on the current listing and 404s at the proxy
+  // ("Endpoint '/search' does not exist"). `/search-v2` is the live endpoint —
+  // same job-field schema, but the jobs array is nested under `data.jobs`
+  // (classic `/search` returned a bare `data[]`). `num_pages` still expands the
+  // result set (10 jobs/page); `page`/`country`/`date_posted`/`work_from_home`/
+  // `employment_types`/`language` are unchanged. Verified live 2026-07-13.
+  const url = `${BASE_URL}/search-v2?${search.toString()}`;
 
   const headers = {
     'x-rapidapi-key': apiKey,
@@ -491,7 +472,7 @@ export async function searchJSearchJobs(
     }
 
     const body = (await response.json().catch(() => null)) as
-      | { status?: string; data?: unknown[] }
+      | { status?: string; data?: { jobs?: unknown[] } | unknown[] }
       | null;
 
     // JSearch can return `"status":"ERROR"` inside an HTTP 200 — treat as failure.
@@ -504,8 +485,32 @@ export async function searchJSearchJobs(
       return null;
     }
 
+    // /search-v2 nests the array under `data.jobs`; tolerate the legacy bare
+    // `data[]` shape too so a future/rolled-back listing keeps working.
+    const nestedJobs = (body.data as { jobs?: unknown[] })?.jobs;
+    const rawJobs: unknown[] = Array.isArray(nestedJobs)
+      ? nestedJobs
+      : Array.isArray(body.data)
+        ? (body.data as unknown[])
+        : [];
+
+    // status==='OK' but the jobs array is under an unrecognized key ⇒ the
+    // endpoint's response shape drifted (a silent [] would masquerade as a
+    // genuinely empty market at info level). Surface it so alerting can catch it.
+    if (!Array.isArray(nestedJobs) && !Array.isArray(body.data)) {
+      logger.warn('RA_V2_JSEARCH_SHAPE_UNRECOGNIZED', 'JSearch OK envelope but no jobs array found', {
+        requestId: opts?.requestId,
+        query: params.query.slice(0, 120),
+        topLevelKeys: Object.keys(body).slice(0, 12),
+        dataKeys:
+          body.data && typeof body.data === 'object'
+            ? Object.keys(body.data as Record<string, unknown>).slice(0, 12)
+            : typeof body.data,
+      });
+    }
+
     const fetchedAt = new Date();
-    const jobs = (Array.isArray(body.data) ? body.data : [])
+    const jobs = rawJobs
       .map((j) => normalizeJSearchJob(j, { country: params.country, fetchedAt }))
       .filter((j): j is ExternalJobNormalized => j !== null);
 

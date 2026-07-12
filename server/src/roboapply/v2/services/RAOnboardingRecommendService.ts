@@ -45,7 +45,15 @@ import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../../lib/deductionCost.js';
-import { jsearchProvider, type ExternalJobNormalized } from '../lib/raJobProviders.js';
+import {
+  searchAllProviders,
+  enabledExternalProviders,
+  EXTERNAL_SOURCE_BOARDS,
+  EXTERNAL_SOURCE_BOARD_SET,
+  type ExternalJobNormalized,
+  type ExternalSearchParams,
+  type AggregateSearchResult,
+} from '../lib/raJobProviders.js';
 import { normalizeForSearch } from '../lib/raJobSearch.js';
 import { jobFingerprint, marketDefaultsForLocale } from '../lib/raOnboardingDraft.js';
 import { getMessages } from '../lib/raOnboardingMessages.js';
@@ -256,18 +264,23 @@ export function passesPrefilter(
     if (!types.includes(c.employmentType as never)) return false;
   }
 
-  // Salary floor — null salary passes; currency/period mismatch skips.
+  // Salary floor — null salary passes; currency/period mismatch or an UNKNOWN
+  // row period skips the comparison. A null row period must NOT be coerced to
+  // 'year': external feeds (e.g. a Fantastic Jobs WEEK/DAY posting, or a JSearch
+  // row with no period) carry a salary amount but no representable period, and
+  // comparing a weekly figure against an annual floor would wrongly drop it.
   const floor = draft.salary?.min;
   if (floor != null && floor > 0) {
     const rowSalary = c.salaryMax ?? c.salaryMin;
     if (rowSalary != null) {
       const draftCurrency = draft.salary?.currency ?? null;
       const draftPeriod = draft.salary?.period ?? 'year';
-      const rowPeriod = c.salaryPeriod ?? 'year';
+      const rowPeriod = c.salaryPeriod; // no ?? 'year' — unknown period ⇒ skip
       if (
         draftCurrency != null &&
         c.salaryCurrency != null &&
         draftCurrency === c.salaryCurrency &&
+        rowPeriod != null &&
         draftPeriod === rowPeriod
       ) {
         stats.salaryCompared += 1;
@@ -316,6 +329,7 @@ export class RAOnboardingRecommendService {
     let internalCandidates = 0;
     let externalCandidates = 0;
     let dedupDropped = 0;
+    let externalAgg: AggregateSearchResult | null = null;
 
     try {
       // Resume variant — without markdown there is nothing to score against.
@@ -327,12 +341,12 @@ export class RAOnboardingRecommendService {
         : null;
       if (!variant?.resumeMarkdown) return result;
 
-      // Lazy staleness sweep — jsearch links expire; archived rows drop out
-      // of the internal corpus via the archivedAt filter below.
+      // Lazy staleness sweep — external apply links expire; archived rows drop
+      // out of the internal corpus via the archivedAt filter below.
       try {
         await p.rAJob.updateMany({
           where: {
-            sourceBoard: 'jsearch',
+            sourceBoard: { in: [...EXTERNAL_SOURCE_BOARDS] },
             archivedAt: null,
             postedAt: { lt: new Date(Date.now() - JSEARCH_STALE_DAYS * 86_400_000) },
           },
@@ -369,35 +383,58 @@ export class RAOnboardingRecommendService {
       }
 
       // ── External fetch kicked off first; internal scoring overlaps (E9b) ──
-      const externalEnabled = input.allowJSearch && jsearchProvider.isEnabled();
-      let externalPromise: Promise<ExternalJobNormalized[] | null> = Promise.resolve(null);
+      // Fan out across every enabled provider (JSearch + Active Jobs DB +
+      // LinkedIn) in parallel; the merged list is ordered so direct-apply
+      // sources win the fingerprint dedup below. `jsearchCalls` stays 0/1 as an
+      // external-ROUND marker (the per-session cap counts rounds, not provider
+      // calls — see MAX_JSEARCH_PER_SESSION); each provider self-budgets.
+      const externalProvidersActive = input.allowJSearch ? enabledExternalProviders() : [];
+      const externalEnabled = externalProvidersActive.length > 0;
+      let externalPromise: Promise<AggregateSearchResult | null> = Promise.resolve(null);
       if (externalEnabled) {
         emit({ type: 'status', key: 'searching_external' });
         result.externalQuery = plan.external.query;
-        result.jsearchCalls = 1; // conservative: counted per attempted fetch
-        externalPromise = jsearchProvider.search(
-          {
-            query: plan.external.query,
-            country: plan.external.country,
-            language: plan.external.language,
-            datePosted: plan.external.datePosted ?? 'month',
-            workFromHome: plan.external.workFromHome,
-            employmentTypes: plan.external.employmentTypes,
-          },
-          { requestId: input.requestId, signal: input.signal },
-        );
+        result.jsearchCalls = 1; // conservative: one external round (any providers)
+        const externalParams: ExternalSearchParams = {
+          query: plan.external.query,
+          country: plan.external.country,
+          language: plan.external.language,
+          datePosted: plan.external.datePosted ?? 'month',
+          workFromHome: plan.external.workFromHome,
+          employmentTypes: plan.external.employmentTypes,
+          // Fantastic Jobs wants a structured title + location (its title_filter
+          // ANDs every word, so the market-language "role place" blob would
+          // over-constrain). Feed it the English role query + location instead.
+          titleQuery: plan.internal.q || plan.external.query,
+          locationText: plan.internal.location || undefined,
+        };
+        externalPromise = searchAllProviders(externalParams, {
+          requestId: input.requestId,
+          signal: input.signal,
+          providers: externalProvidersActive,
+        });
       }
 
       // ── Internal candidates (direct prisma query — E6, seed exclusion — R1) ──
       emit({ type: 'status', key: 'searching_internal' });
       const includeSeed = process.env.RA_ONBOARDING_INCLUDE_SEED_JOBS === 'true';
       const tokens = queryTokens(plan.internal.q);
+      // Boards to exclude from the internal corpus query. Seed fiction is always
+      // out (unless explicitly opted in). When a fresh external fetch ran this
+      // round, also exclude the external boards: those jobs arrive fresh from the
+      // providers, so skipping their prior materializations prevents a stale
+      // aggregator twin from beating a fresh direct-apply row in dedup and stops
+      // external rows being re-scored as internal. On internal-only rounds we
+      // KEEP them — they are the fallback inventory when no provider is queried.
+      const excludedBoards: string[] = [];
+      if (!includeSeed) excludedBoards.push('seed');
+      if (externalEnabled) excludedBoards.push(...EXTERNAL_SOURCE_BOARDS);
       const where: any = {
         archivedAt: null,
         ...(input.excludeJobIds.length > 0
           ? { id: { notIn: input.excludeJobIds.slice(0, 200) } }
           : {}),
-        ...(includeSeed ? {} : { sourceBoard: { not: 'seed' } }),
+        ...(excludedBoards.length > 0 ? { sourceBoard: { notIn: excludedBoards } } : {}),
       };
       if (tokens.length > 0) {
         const orClauses: any[] = [];
@@ -467,8 +504,9 @@ export class RAOnboardingRecommendService {
           companyName: row.companyName ?? '',
           description: row.descriptionPlain ?? row.description ?? '',
           workType: row.workType ?? 'onsite',
-          // jsearch rows store 'onsite' for unknown — never trust it (R4).
-          workTypeKnown: row.sourceBoard !== 'jsearch' || row.workType === 'remote',
+          // External rows store 'onsite' for unknown — never trust it (R4);
+          // only workType === 'remote' is a trusted signal for any external board.
+          workTypeKnown: !EXTERNAL_SOURCE_BOARD_SET.has(row.sourceBoard) || row.workType === 'remote',
           employmentType: row.employmentType ?? null,
           salaryMin: row.salaryMin ?? null,
           salaryMax: row.salaryMax ?? null,
@@ -529,7 +567,7 @@ export class RAOnboardingRecommendService {
               exp?.strengths,
               input.locale,
             ),
-            isExternal: row.sourceBoard === 'jsearch',
+            isExternal: EXTERNAL_SOURCE_BOARD_SET.has(row.sourceBoard),
             postedAt: row.postedAt ?? null,
           });
         } else if (decision.scoreOnly) {
@@ -548,15 +586,11 @@ export class RAOnboardingRecommendService {
       const reserve = externalEnabled ? Math.min(EXTERNAL_SCORE_RESERVE, input.scorerBudget) : 0;
       const internalFreshCap = Math.max(0, input.scorerBudget - reserve);
       const internalToScore = internalNeedingFresh.slice(0, internalFreshCap);
-      const internalScoringPromise = this.scoreRows(
-        internalToScore,
-        variant,
-        input,
-        false,
-      );
+      const internalScoringPromise = this.scoreRows(internalToScore, variant, input);
 
-      // ── External candidates ──
-      const externalJobs = (await externalPromise) ?? [];
+      // ── External candidates (merged across all enabled providers) ──
+      externalAgg = await externalPromise;
+      const externalJobs = externalAgg?.jobs ?? [];
       const externalPool: ExternalJobNormalized[] = [];
       const externalFp = new Set<string>();
       for (const e of externalJobs) {
@@ -657,7 +691,6 @@ export class RAOnboardingRecommendService {
         externalNeedingFresh.slice(0, Math.max(0, externalBudgetLeft)),
         variant,
         input,
-        true,
       );
       result.scorerCallsUsed += externalScored.attempted;
       scored.push(...externalScored.scored);
@@ -674,7 +707,7 @@ export class RAOnboardingRecommendService {
           row,
           score: cached.score,
           whyMatched: getMessages(input.locale).whyMatchedFallback,
-          isExternal: row.sourceBoard === 'jsearch',
+          isExternal: EXTERNAL_SOURCE_BOARD_SET.has(row.sourceBoard),
           postedAt: row.postedAt ?? null,
         });
       }
@@ -730,7 +763,10 @@ export class RAOnboardingRecommendService {
         surfaced: result.cards.length,
         internalSurfaced: result.cards.filter((c) => !c.isExternal).length,
         externalSurfaced: result.cards.filter((c) => c.isExternal).length,
-        jsearchBilled: result.jsearchCalls,
+        externalRoundBilled: result.jsearchCalls,
+        externalProvidersQueried: externalAgg?.providersQueried ?? [],
+        externalProvidersWithResults: externalAgg?.providersWithResults ?? [],
+        externalCountsByProvider: externalAgg?.countsByProvider ?? {},
         salaryFilterApplied: result.salaryFilterApplied,
         durationMs: Date.now() - startedAt,
       });
@@ -785,7 +821,7 @@ export class RAOnboardingRecommendService {
                 exp?.strengths,
                 locale,
               ),
-              isExternal: row.sourceBoard === 'jsearch',
+              isExternal: EXTERNAL_SOURCE_BOARD_SET.has(row.sourceBoard),
               postedAt: row.postedAt ?? null,
             },
             bookmarked.has(jobId),
@@ -812,7 +848,6 @@ export class RAOnboardingRecommendService {
     rows: any[],
     variant: { id: string; resumeMarkdown: string; resumeContentHash: string | null },
     input: RecommendRoundInput,
-    isExternal: boolean,
   ): Promise<{ scored: ScoredCandidate[]; attempted: number }> {
     if (rows.length === 0) return { scored: [], attempted: 0 };
     const p = prisma as any;
@@ -906,7 +941,14 @@ export class RAOnboardingRecommendService {
             row,
             score: out.score,
             whyMatched: composeWhyMatched(out.summary, out.strengths, input.locale),
-            isExternal,
+            // Derive per-row from the row's own board, not a batch-wide flag: a
+            // previously-materialized external job (jsearch/activejobs/linkedin)
+            // can re-enter through the internal query and be freshly scored — it
+            // must still render as an external card (source + applyUrl), not
+            // 'internal'. (The internal batch is filtered to non-external boards
+            // when a fresh external fetch ran this round; on internal-only
+            // rounds external rows legitimately arrive here.)
+            isExternal: EXTERNAL_SOURCE_BOARD_SET.has(row.sourceBoard),
             postedAt: row.postedAt ?? null,
           };
         } catch (err) {
@@ -959,9 +1001,9 @@ export class RAOnboardingRecommendService {
     };
     return p.rAJob.upsert({
       where: {
-        externalId_sourceBoard: { externalId: e.externalId, sourceBoard: 'jsearch' },
+        externalId_sourceBoard: { externalId: e.externalId, sourceBoard: e.sourceBoard },
       },
-      create: { externalId: e.externalId, sourceBoard: 'jsearch', ...data },
+      create: { externalId: e.externalId, sourceBoard: e.sourceBoard, ...data },
       update: data,
     });
   }
@@ -989,7 +1031,10 @@ export class RAOnboardingRecommendService {
       matchScoreCached: s.score,
       matchScore: s.score,
       whyMatched: s.whyMatched,
-      source: s.isExternal ? 'jsearch' : 'internal',
+      // isExternal ⟺ sourceBoard ∈ {jsearch, activejobs, linkedin} (all in the
+      // card `source` union), so the cast is safe. Bank rows (robohire/gohire)
+      // are not isExternal here and surface as 'internal' in the onboarding feed.
+      source: s.isExternal ? (row.sourceBoard as OnboardingJobCard['source']) : 'internal',
       isExternal: s.isExternal,
     };
     if (s.isExternal) {

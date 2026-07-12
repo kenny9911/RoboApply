@@ -58,7 +58,18 @@ export type RAJobTier = 'strong' | 'good' | 'stretch' | 'long_shot';
 
 export type RADatePosted = 'today' | '7d' | '30d' | 'any';
 
-export type RASourceBoard = 'greenhouse' | 'lever' | 'seed' | 'manual';
+export type RASourceBoard =
+  | 'greenhouse'
+  | 'lever'
+  | 'seed'
+  | 'manual'
+  // External RapidAPI providers (onboarding external round).
+  | 'jsearch'
+  | 'activejobs'
+  | 'linkedin'
+  // Cross-bank search agent team materializations.
+  | 'robohire'
+  | 'gohire';
 
 export type RASalaryPeriod = 'year' | 'hour' | 'month';
 
@@ -897,8 +908,9 @@ export interface OnboardingJobCard {
   matchScore: number;
   /** 1–2 sentences, in-locale, markdown-inline. Render sanitized. */
   whyMatched: string;
-  /** 'robohire'|'gohire' cards come from the cross-bank search agent team. */
-  source: 'internal' | 'jsearch' | 'robohire' | 'gohire';
+  /** 'jsearch'|'activejobs'|'linkedin' = external RapidAPI providers;
+   *  'robohire'|'gohire' cards come from the cross-bank search agent team. */
+  source: 'internal' | 'jsearch' | 'activejobs' | 'linkedin' | 'robohire' | 'gohire';
   /** e.g. "LinkedIn", "104人力銀行", "RoboHire", "GoHire" → "via {publisher}". */
   sourcePublisher?: string;
   /** External only; open `_blank` with `rel="noopener nofollow"`. */

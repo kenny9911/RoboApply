@@ -143,9 +143,10 @@ export interface OnboardingJobCard {
   matchScore: number;
   /** 1–2 sentences, in-locale, from scorer summary+strengths. */
   whyMatched: string;
-  /** 'robohire'|'gohire' rows are materialized by the cross-bank search agent
+  /** 'jsearch'|'activejobs'|'linkedin' = external RapidAPI providers;
+   *  'robohire'|'gohire' rows are materialized by the cross-bank search agent
    *  team (RACrossBankSearchService) and surface in the same feed. */
-  source: 'internal' | 'jsearch' | 'robohire' | 'gohire';
+  source: 'internal' | 'jsearch' | 'activejobs' | 'linkedin' | 'robohire' | 'gohire';
   /** "LinkedIn", "104人力銀行", "RoboHire", "GoHire" → rendered "via X". */
   sourcePublisher?: string;
   /** External only; open _blank rel="noopener nofollow". */
