@@ -646,7 +646,7 @@ export function synthesizeApplyUrl(bank: BankId, jobId: string): string {
   const base =
     bank === 'robohire'
       ? process.env.ROBOHIRE_PUBLIC_JOB_BASE_URL?.replace(/\/$/, '') || 'https://www.robohire.io'
-      : process.env.GOHIRE_PUBLIC_JOB_BASE_URL?.replace(/\/$/, '') || 'https://www.gohire.io';
+      : process.env.GOHIRE_PUBLIC_JOB_BASE_URL?.replace(/\/$/, '') || 'https://www.gohire.top';
   return `${base}/jobs/${jobId}`;
 }
 
