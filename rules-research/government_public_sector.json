@@ -1,0 +1,338 @@
+{
+  "cluster": "government_public_sector",
+  "label": "Government & Public Sector",
+  "rules": [
+    {
+      "id": "gov-citizenship",
+      "text_en": "Require citizenship of the hiring jurisdiction for civil-service, sworn, and security-designated positions.",
+      "text_zh": "公务、宣誓及涉密指定职位要求候选人具有任职辖区公民身份。",
+      "category": "work_authorization",
+      "kind": "knockout",
+      "rationale": "Statutory in most countries for civil service (US 5 CFR federal competitive service, TW 公務人員任用法, JP 国家公務員法 interpretation).",
+      "appliesTo": "civil service, sworn, security-designated roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful where statute requires it; applying citizenship screens to non-designated contractor/support roles is unlawful discrimination in most jurisdictions."
+      }
+    },
+    {
+      "id": "gov-dual-nationality",
+      "text_en": "Disqualify candidates holding foreign nationality for positions where law forbids dual nationals (e.g., Taiwan public office under 國籍法§20), unless renounced before appointment.",
+      "text_zh": "法律禁止双重国籍任职的职位（如台湾国籍法第20条规范的公职），持外国国籍且未于就任前放弃者不得任用。",
+      "category": "work_authorization",
+      "kind": "knockout",
+      "rationale": "Statutory bar; discovered dual nationality after appointment voids the position and claws back pay.",
+      "appliesTo": "public office, sensitive agency roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Strictly statute-scoped; do not extend to SOE commercial subsidiaries where the law doesn't apply."
+      }
+    },
+    {
+      "id": "gov-civil-exam",
+      "text_en": "Require passage of the applicable civil-service examination (國家考試/公務人員考試, 公務員試験, or merit-system equivalent) for career civil-service appointments.",
+      "text_zh": "常任文官职位要求通过相应公务人员考试（国家考试、公务员试验或同等功绩制考选）。",
+      "category": "compliance_licensure",
+      "kind": "knockout",
+      "rationale": "Merit-system appointment is exam-gated in Taiwan, Japan, Korea, and much of Europe; no exam, no appointment.",
+      "appliesTo": "career civil service",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-security-clearance",
+      "text_en": "Require eligibility for (or an active) security clearance at the level the position demands, including the background investigation and foreign-contacts review.",
+      "text_zh": "要求候选人具备职位所需等级的安全查核资格（或现持有效查核），包括背景调查与涉外关系审查。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Clearance eligibility gates defense, intelligence, and critical-infrastructure roles; active clearances carry large time-to-productivity value.",
+      "appliesTo": "defense, intelligence, critical infrastructure",
+      "legality": {
+        "status": "safe",
+        "notes": "US adjudicative guidelines (SEAD-4) govern; contractors must not pre-screen on protected traits under cover of 'clearability' guesses."
+      }
+    },
+    {
+      "id": "gov-corruption-record",
+      "text_en": "Permanently disqualify candidates convicted of corruption, bribery, or misappropriation of public funds (貪污治罪條例 or equivalents).",
+      "text_zh": "因贪污、贿赂或侵占公款（贪污治罪条例或同等法律）被定罪的候选人，永久不得任用。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Statutory lifetime bars for public trust; also applied by SOEs and government contractors voluntarily.",
+      "appliesTo": "all public roles",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-debarment-lists",
+      "text_en": "Screen candidates for procurement and grants roles against debarment/exclusion lists (SAM.gov, World Bank, national blacklists) and disqualify listed persons.",
+      "text_zh": "采购与拨款岗位候选人须比对停权/除名名单（SAM.gov、世界银行、各国黑名单），在列者不予录用。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Hiring an excluded person into procurement voids awards and triggers audit findings.",
+      "appliesTo": "procurement, grants, contracting roles",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-revolving-door",
+      "text_en": "Do not consider former officials still within their post-employment cooling-off period for roles lobbying or contracting with their former agency (旋轉門條款).",
+      "text_zh": "仍处于离职后回避期（旋转门条款）内的前官员，不得担任面向其原机关的游说或承揽岗位。",
+      "category": "conflict_of_interest",
+      "kind": "knockout",
+      "rationale": "Revolving-door statutes (TW 公務員服務法§16, US 18 USC 207, JP 再就職規制) criminalize premature representation; the employer inherits the violation.",
+      "appliesTo": "government-facing commercial roles",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-political-neutrality",
+      "text_en": "Require candidates for career civil-service roles to accept political-neutrality restrictions on partisan activity while employed.",
+      "text_zh": "常任文官候选人须接受在职期间的行政中立限制（不得从事特定党派活动）。",
+      "category": "culture_workstyle",
+      "kind": "knockout",
+      "rationale": "Statutory condition of service (TW 公務人員行政中立法, US Hatch Act, UK Civil Service Code).",
+      "appliesTo": "career civil service",
+      "legality": {
+        "status": "safe",
+        "notes": "This restricts conduct in office; screening applicants by their political OPINIONS remains unlawful."
+      }
+    },
+    {
+      "id": "gov-military-service-status",
+      "text_en": "Verify that male Taiwanese candidates have completed or been lawfully exempted from mandatory military service before appointment.",
+      "text_zh": "台湾男性候选人须于任用前完成兵役义务或依法免役，并经核实。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Unresolved conscription blocks onboarding and travel; agencies and SOEs verify 退伍令/免役证明 at document check.",
+      "appliesTo": "Taiwan male hires",
+      "legality": {
+        "status": "safe",
+        "notes": "Verification of legal status is lawful; using service branch or rank as a class filter is not."
+      }
+    },
+    {
+      "id": "gov-veteran-preference",
+      "text_en": "Apply statutory veteran preference points or interview guarantees where the jurisdiction mandates them.",
+      "text_zh": "在法定退伍军人优待地区，依法给予加分或面试保障。",
+      "category": "compliance_licensure",
+      "kind": "preference",
+      "rationale": "US federal/state veteran preference and similar schemes are mandatory process rules, not optional preferences.",
+      "appliesTo": "US public hiring and equivalents",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-residency",
+      "text_en": "Require residency within the jurisdiction (or relocation within six months) for local-government positions where charter rules demand it.",
+      "text_zh": "地方政府职位依组织章程要求候选人为辖区居民，或于六个月内迁入。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Municipal charters commonly require employee residency for tax-base and emergency-response reasons.",
+      "appliesTo": "local government",
+      "legality": {
+        "status": "caution",
+        "notes": "Lawful where charters authorize it; some US states preempt municipal residency rules — verify locally."
+      }
+    },
+    {
+      "id": "gov-police-fitness",
+      "text_en": "Require candidates for sworn law-enforcement and firefighting roles to pass the validated physical ability test and medical standard for the role.",
+      "text_zh": "警察与消防等宣誓职位要求通过经效度验证的体能测验及岗位医疗标准。",
+      "category": "health_safety",
+      "kind": "knockout",
+      "rationale": "Emergency-response duties have validated physical standards; failure is a lawful, job-related disqualifier.",
+      "appliesTo": "sworn/uniformed roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Tests must be validated and applied uniformly; unvalidated strength tests with disparate impact have lost in court (US Title VII)."
+      }
+    },
+    {
+      "id": "gov-academy-age-window",
+      "text_en": "Apply the statutory age window for police/military academy intake where national law sets one.",
+      "text_zh": "警察/军事院校招收依国家法律规定的年龄区间执行。",
+      "category": "compliance_licensure",
+      "kind": "knockout",
+      "rationale": "Many jurisdictions statutorily set academy entry ages (pension math and training investment); this is the narrow lawful age case.",
+      "appliesTo": "academy intake",
+      "legality": {
+        "status": "caution",
+        "notes": "Lawful ONLY where statute sets it (US: LEO maximum-entry ages authorized by statute; TW: 警察特考年齡上限). Never generalize to civilian roles."
+      }
+    },
+    {
+      "id": "gov-child-protection",
+      "text_en": "Disqualify candidates listed on sex-offender or child-abuse registries for any role with access to minors, schools, or care facilities.",
+      "text_zh": "凡列入性犯罪或儿虐资料库的候选人，不得担任任何接触未成年人、学校或照护机构的职务。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Statutory in education and care sectors (TW 教師法/兒少權法 checks, US state laws, UK DBS barred lists).",
+      "appliesTo": "schools, childcare, care facilities",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-teacher-license",
+      "text_en": "Require a valid teaching certificate (教師證/state license/QTS) for classroom positions in public education.",
+      "text_zh": "公立教育体系授课职位要求持有有效教师证（教師證/州执照/QTS）。",
+      "category": "compliance_licensure",
+      "kind": "knockout",
+      "rationale": "Classroom appointment is license-gated; substitutes/adjuncts have separate defined tracks.",
+      "appliesTo": "public education teaching",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-financial-disclosure",
+      "text_en": "Require candidates for senior or procurement-sensitive posts to accept pre-appointment financial disclosure and conflict-of-interest vetting.",
+      "text_zh": "高阶或采购敏感职位候选人须接受任用前财产申报与利益冲突审查。",
+      "category": "conflict_of_interest",
+      "kind": "knockout",
+      "rationale": "Disclosure regimes (TW 公職人員財產申報法, US OGE-278) are conditions of appointment; refusal ends candidacy.",
+      "appliesTo": "senior/procurement posts",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-foreign-influence",
+      "text_en": "Disqualify candidates with unreported foreign-government employment, funding, or talent-program participation for research and security-sensitive roles.",
+      "text_zh": "研究与安全敏感岗位排除存在未申报外国政府雇佣、资助或人才计划参与经历的候选人。",
+      "category": "conflict_of_interest",
+      "kind": "knockout",
+      "rationale": "Research-security rules (US NSPM-33, allied equivalents) treat undisclosed foreign ties as disqualifying integrity events.",
+      "appliesTo": "research, security-sensitive roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Anchor on NON-DISCLOSURE and specific programs, not national origin — origin-based screening is unlawful and has produced wrongful-prosecution scandals."
+      }
+    },
+    {
+      "id": "gov-drug-free",
+      "text_en": "Require passing a pre-employment drug test for safety-sensitive and federal drug-free-workplace positions.",
+      "text_zh": "安全敏感及联邦无毒品工作场所计划适用职位，要求通过入职前药物检测。",
+      "category": "health_safety",
+      "kind": "knockout",
+      "rationale": "Mandated for US federal workforce categories and safety-sensitive public roles.",
+      "appliesTo": "safety-sensitive public roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Cannabis rules diverge sharply by state/country; several US states bar testing for off-duty cannabis in non-safety roles."
+      }
+    },
+    {
+      "id": "gov-degree-authentication",
+      "text_en": "Require foreign degrees to pass credential authentication (駐外館處驗證/NACES evaluation) before qualification ranking.",
+      "text_zh": "国外学历须完成认证（驻外馆处验证/NACES评估）后方可列入资格审查。",
+      "category": "education",
+      "kind": "knockout",
+      "rationale": "Public hiring uses formal credential authentication pipelines; unverified foreign degrees cannot be ranked.",
+      "appliesTo": "all public roles",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-grade-mapping",
+      "text_en": "Require prior grade/step equivalence or minimum years-in-grade for lateral transfers into ranked civil-service positions.",
+      "text_zh": "平调进入有官等职等序列的职位，要求原官职等对应或最低年资。",
+      "category": "experience",
+      "kind": "knockout",
+      "rationale": "Grade systems (職等, GS levels) legally constrain lateral entry; out-of-band hires void appointments.",
+      "appliesTo": "civil-service laterals",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-soe-tenure",
+      "text_en": "Prefer candidates with prior state-owned-enterprise or regulated-utility tenure for SOE management roles interfacing with supervising ministries.",
+      "text_zh": "国营事业管理岗位优先考虑具备国营事业或受监管公用事业年资、熟悉主管机关往来的候选人。",
+      "category": "experience",
+      "kind": "preference",
+      "rationale": "Ministry-facing governance (board papers, audit committees, legislative Q&A) is a distinct skill set.",
+      "appliesTo": "SOE management",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-public-records-conduct",
+      "text_en": "Disqualify candidates with verifiable public-records evidence of conduct incompatible with public trust (e.g., court-documented fraud judgments), after individual review.",
+      "text_zh": "经个案审查，公共记录（如法院欺诈判决）证实存在与公共信任不相容行为的候选人，不予录用。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Public-trust positions apply a higher documented-conduct bar than private employers.",
+      "appliesTo": "public-trust positions",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-language-official",
+      "text_en": "Require professional proficiency in the jurisdiction's official language(s), including formal written drafting for policy roles.",
+      "text_zh": "要求候选人具备辖区官方语言的专业能力，政策岗位并须具备公文书写能力。",
+      "category": "language_communication",
+      "kind": "knockout",
+      "rationale": "公文/formal drafting is a distinct tested skill in East Asian civil services and bilingual jurisdictions.",
+      "appliesTo": "policy/administrative roles",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-contractor-badging",
+      "text_en": "For embedded-contractor roles, require the candidate to satisfy the agency's badging and suitability standards, including the criminal-history matrix the agency applies.",
+      "text_zh": "驻点承揽人员须符合机关门禁与适任性标准，包括机关适用的犯罪记录审查基准。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Contractors failing agency suitability cannot enter the site regardless of employer-side screening.",
+      "appliesTo": "embedded contractors",
+      "legality": {
+        "status": "safe",
+        "notes": ""
+      }
+    },
+    {
+      "id": "gov-union-activity",
+      "text_en": "Do not consider candidates with a history of union organizing or labor-dispute participation.",
+      "text_zh": "不考虑曾参与工会组织或劳资争议的候选人。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "A rule some employers (public contractors and SOE vendors included) privately request; included solely as a guardrail example the assistant must refuse.",
+      "appliesTo": "all",
+      "legality": {
+        "status": "prohibited",
+        "notes": "Unlawful nearly everywhere: US NLRA §8(a)(3), TW 工會法§35 (unfair labor practice), EU/UK. No lawful reframe — refuse; legitimate concerns about disruption are handled through conduct rules applied to all employees."
+      }
+    }
+  ],
+  "matchSuccessInsights": [
+    "Statutory gates (exam passage, citizenship, clearance eligibility, license) are binary and non-negotiable — public-sector searches succeed by verifying gate documents at intake, before any competency assessment.",
+    "An already-active security clearance or completed agency suitability determination is worth months of onboarding time; track clearance status as a first-class field for defense/contractor placements.",
+    "Grade/step equivalence (職等/GS mapping) silently kills lateral placements — map the candidate's current grade to the target position before proposing.",
+    "Revolving-door and cooling-off periods are the most-missed conflict screen when placing ex-officials into vendors; always compute the restriction window from the separation date.",
+    "For SOEs, ministry-facing governance experience predicts success better than private-sector scale — a candidate who has survived legislative questioning and state audits ramps immediately."
+  ]
+}
