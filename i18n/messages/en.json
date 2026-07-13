@@ -2097,6 +2097,13 @@
       "riskFlag": "Risk flag",
       "riskNone": "No major risks flagged"
     },
+    "detail": {
+      "description": "Job description",
+      "responsibilities": "Responsibilities",
+      "qualifications": "Qualifications",
+      "benefits": "Benefits",
+      "viewOriginal": "View original posting ↗"
+    },
     "actions": {
       "applyNow": "Apply now",
       "applying": "Applying…",
@@ -2104,6 +2111,7 @@
       "pass": "Pass",
       "undo": "Undo",
       "viewJd": "View JD ↗",
+      "viewDetail": "View detail",
       "refresh": "Refresh",
       "filters": "Filters"
     },

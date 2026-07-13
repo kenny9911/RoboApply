@@ -2105,7 +2105,8 @@
       "undo": "元に戻す",
       "viewJd": "求人票を見る ↗",
       "refresh": "更新",
-      "filters": "フィルター"
+      "filters": "フィルター",
+      "viewDetail": "詳細を見る"
     },
     "empty": {
       "title": "すべて対応済みです、",
@@ -2117,6 +2118,13 @@
       "accent": "マッチング",
       "sub": "こちら側で問題が発生しました。フィードは安全です——もう一度お試しください。",
       "retry": "もう一度試す"
+    },
+    "detail": {
+      "description": "仕事内容",
+      "responsibilities": "担当業務",
+      "qualifications": "応募資格",
+      "benefits": "待遇・福利厚生",
+      "viewOriginal": "元の求人ページを開く ↗"
     }
   },
   "activity": {

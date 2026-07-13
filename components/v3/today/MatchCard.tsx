@@ -25,10 +25,12 @@ import {
   IconBolt,
   IconClock,
   IconCheck,
+  IconFile,
 } from '../primitives';
 import { useJobDetail } from '../../../hooks/useJobDetail';
 import { useJobScore } from '../../../hooks/useTodayMatches';
 import type { RAJobListItem } from '../../../lib/api/v2';
+import { JobDetailModal } from './JobDetailModal';
 import {
   cardStatusFromTracker,
   deriveFacets,
@@ -74,6 +76,10 @@ export function MatchCard({
   appliedNow,
 }: Props) {
   const t = useTranslations('today');
+
+  // Full-detail modal (the real posting: description / responsibilities /
+  // qualifications / benefits + a link to the original listing).
+  const [detailOpen, setDetailOpen] = useState(false);
 
   // Deterministic score for the donut (lazy, cached).
   const scoreQuery = useJobScore(job.id, resumeVariantId);
@@ -266,14 +272,31 @@ export function MatchCard({
                 <Btn variant="ghost" onClick={onPass}>
                   {t('actions.pass')}
                 </Btn>
-                {/* V3 folds job detail into this inline expand — the old
-                    /jobs/[id] route was removed, so there's no "View JD"
-                    link target. The expanded card IS the detail. */}
               </>
             )}
+            {/* Always available (any status): open the full posting — real JD,
+                responsibilities, qualifications, benefits + a link to the
+                original listing — in a modal. */}
+            <Btn
+              variant="ghost"
+              icon={<IconFile size={13} />}
+              onClick={() => setDetailOpen(true)}
+            >
+              {t('actions.viewDetail')}
+            </Btn>
           </div>
         </div>
       ) : null}
+
+      <JobDetailModal
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        job={detail.data?.job ?? null}
+        loading={detail.isLoading}
+        applied={status === 'applied'}
+        applying={applying}
+        onApply={() => onApply(job.id, resumeVariantId)}
+      />
     </div>
   );
 }

@@ -2105,7 +2105,8 @@
       "undo": "撤销",
       "viewJd": "查看职位描述 ↗",
       "refresh": "刷新",
-      "filters": "筛选"
+      "filters": "筛选",
+      "viewDetail": "查看详情"
     },
     "empty": {
       "title": "全部处理完毕，",
@@ -2117,6 +2118,13 @@
       "accent": "匹配",
       "sub": "我这边出了点小问题。你的推荐流都安全——请重试。",
       "retry": "重试"
+    },
+    "detail": {
+      "description": "职位描述",
+      "responsibilities": "岗位职责",
+      "qualifications": "任职要求",
+      "benefits": "福利待遇",
+      "viewOriginal": "查看原始招聘信息 ↗"
     }
   },
   "activity": {

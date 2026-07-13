@@ -2105,7 +2105,8 @@
       "undo": "復原",
       "viewJd": "查看職缺描述 ↗",
       "refresh": "重新整理",
-      "filters": "篩選"
+      "filters": "篩選",
+      "viewDetail": "查看詳情"
     },
     "empty": {
       "title": "全部處理完畢，",
@@ -2117,6 +2118,13 @@
       "accent": "媒合",
       "sub": "我這邊出了點小問題。你的推薦流都安全——請重試。",
       "retry": "重試"
+    },
+    "detail": {
+      "description": "職位描述",
+      "responsibilities": "工作職責",
+      "qualifications": "應徵條件",
+      "benefits": "福利待遇",
+      "viewOriginal": "查看原始職缺 ↗"
     }
   },
   "activity": {
