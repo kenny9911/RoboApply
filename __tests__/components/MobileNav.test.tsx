@@ -54,8 +54,8 @@ describe('MobileNav (V3)', () => {
     renderWithProviders(<MobileNav />);
     const today = screen.getByRole('link', { name: /Today/i });
     expect(today).toHaveAttribute('aria-current', 'page');
-    const pipeline = screen.getByRole('link', { name: /Pipeline/i });
-    expect(pipeline).not.toHaveAttribute('aria-current');
+    const tracker = screen.getByRole('link', { name: /Tracker/i });
+    expect(tracker).not.toHaveAttribute('aria-current');
   });
 
   it('Mock interview lights up on a /mock-interview subroute', () => {
@@ -77,7 +77,7 @@ describe('MobileNav (V3)', () => {
     expect(links.length).toBe(2); // Resume builder + Mock interview only
     expect(screen.queryByRole('link', { name: /Today/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Review queue/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Pipeline/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Tracker/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Resume builder/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Mock interview/i })).toBeInTheDocument();
   });

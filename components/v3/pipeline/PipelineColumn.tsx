@@ -18,6 +18,7 @@ interface Props {
   count: number;
   draggingId: string | null;
   onMove: (id: string, status: RATrackerStatus) => void;
+  onDelete: (id: string) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }
@@ -28,6 +29,7 @@ export function PipelineColumn({
   count,
   draggingId,
   onMove,
+  onDelete,
   onDragStart,
   onDragEnd,
 }: Props) {
@@ -82,6 +84,7 @@ export function PipelineColumn({
             key={entry.id}
             entry={entry}
             onMove={onMove}
+            onDelete={onDelete}
             dragging={draggingId === entry.id}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}

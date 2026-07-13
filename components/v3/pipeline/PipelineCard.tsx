@@ -15,6 +15,7 @@
 import { useTranslations } from 'next-intl';
 import type { RATrackerEntryView, RATrackerStatus } from '../../../lib/api/v2';
 import { PIPELINE_COLUMNS } from './columns';
+import { IconTrash } from '../primitives/Iconset';
 
 export const PIPELINE_DND_MIME = 'application/x-roboapply-tracker-id';
 
@@ -22,6 +23,8 @@ interface Props {
   entry: RATrackerEntryView;
   /** Move this entry to a new column/status (drag drop or select change). */
   onMove: (id: string, status: RATrackerStatus) => void;
+  /** Soft-delete this entry (removes the card from the board). */
+  onDelete: (id: string) => void;
   /** Marks the card visually while it's the drag source. */
   dragging: boolean;
   onDragStart: (id: string) => void;
@@ -54,6 +57,7 @@ function resolveDisplay(entry: RATrackerEntryView): {
 export function PipelineCard({
   entry,
   onMove,
+  onDelete,
   dragging,
   onDragStart,
   onDragEnd,
@@ -105,40 +109,70 @@ export function PipelineCard({
       >
         <span className="when">{when}</span>
 
-        {/* Accessible status control — the keyboard/touch path to move a card.
-            Styled compactly; click/keyboard never navigates (stopPropagation). */}
-        <label
-          style={{ display: 'inline-flex', alignItems: 'center' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span className="sr-only">
-            {t('card.move_label', { role: role || company })}
-          </span>
-          <select
-            value={entry.status}
-            onChange={(e) => onMove(entry.id, e.target.value as RATrackerStatus)}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          {/* Accessible status control — the keyboard/touch path to move a card.
+              Styled compactly; click/keyboard never navigates (stopPropagation). */}
+          <label
+            style={{ display: 'inline-flex', alignItems: 'center' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="sr-only">
+              {t('card.move_label', { role: role || company })}
+            </span>
+            <select
+              value={entry.status}
+              onChange={(e) => onMove(entry.id, e.target.value as RATrackerStatus)}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: '9.5px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                fontWeight: 600,
+                color: 'var(--muted)',
+                background: 'var(--surface-2)',
+                border: '1px solid var(--rule)',
+                borderRadius: '6px',
+                padding: '3px 5px',
+                cursor: 'pointer',
+              }}
+            >
+              {PIPELINE_COLUMNS.map((col) => (
+                <option key={col.status} value={col.status}>
+                  {t(`columns.${col.labelKey}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* Delete (soft) — never triggers drag or the apply-URL link. */}
+          <button
+            type="button"
+            className="pipe-card-del"
+            aria-label={t('card.delete_label', { role: role || company })}
+            title={t('card.delete_label', { role: role || company })}
             onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onDelete(entry.id);
+            }}
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '9.5px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '24px',
+              height: '24px',
               color: 'var(--muted)',
               background: 'var(--surface-2)',
               border: '1px solid var(--rule)',
               borderRadius: '6px',
-              padding: '3px 5px',
               cursor: 'pointer',
             }}
           >
-            {PIPELINE_COLUMNS.map((col) => (
-              <option key={col.status} value={col.status}>
-                {t(`columns.${col.labelKey}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+            <IconTrash size={13} />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ import type { RATrackerEntryView, RATrackerStatus } from '../../../lib/api/v2';
 import {
   usePipelineBoard,
   usePatchPipelineStatus,
+  useDeletePipelineEntry,
 } from '../../../hooks/usePipelineBoard';
 import { PIPELINE_COLUMNS, columnIndexForStatus } from './columns';
 import { PipelineColumn } from './PipelineColumn';
@@ -25,6 +26,7 @@ export function PipelineBoard() {
   const t = useTranslations('pipeline');
   const { data, isLoading, isError, refetch, isFetching } = usePipelineBoard();
   const patchStatus = usePatchPipelineStatus();
+  const deleteEntry = useDeletePipelineEntry();
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   // Bucket the visible (non-hidden) entries into their columns.
@@ -57,6 +59,14 @@ export function PipelineBoard() {
     const current = data?.entries.find((e) => e.id === id);
     if (current && current.status === status) return;
     patchStatus.mutate({ id, status });
+  }
+
+  function handleDelete(id: string) {
+    setDraggingId(null);
+    if (typeof window !== 'undefined' && !window.confirm(t('card.delete_confirm'))) {
+      return;
+    }
+    deleteEntry.mutate({ id });
   }
 
   // ── Loading ────────────────────────────────────────────────────────────
@@ -165,6 +175,7 @@ export function PipelineBoard() {
           count={counts[idx]}
           draggingId={draggingId}
           onMove={handleMove}
+          onDelete={handleDelete}
           onDragStart={setDraggingId}
           onDragEnd={() => setDraggingId(null)}
         />

@@ -42,6 +42,7 @@
     "queue": "Review queue",
     "resumes": "Resume builder",
     "interview": "Mock interview",
+    "tracker": "Tracker",
     "pipeline": "Pipeline",
     "activity": "Activity log",
     "badge_new_count": "{count} new",
@@ -2190,6 +2191,8 @@
     "card": {
       "drag_hint": "Draggable card — drag to another stage or use the status menu",
       "move_label": "Move {role} to a different stage",
+      "delete_label": "Remove {role} from the board",
+      "delete_confirm": "Remove this application from your board? You can add the job again later.",
       "untitled_company": "Untitled company",
       "untitled_role": "Untitled role"
     },
@@ -2957,8 +2960,11 @@
     "titleAccent": "billing",
     "loading": "Loading your account…",
     "nav": {
+      "overview": "Overview",
+      "plans": "Plans",
       "profile": "Profile",
       "billing": "Billing",
+      "orders": "Orders & Invoices",
       "usage": "Usage",
       "security": "Security"
     },

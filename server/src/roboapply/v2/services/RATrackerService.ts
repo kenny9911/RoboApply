@@ -200,7 +200,7 @@ export class RATrackerService {
         ? [params.status]
         : null;
 
-    const where: any = { userId };
+    const where: any = { userId, deletedAt: null };
     if (statusFilter && statusFilter.length > 0) {
       where.status = { in: statusFilter };
     }
@@ -224,7 +224,7 @@ export class RATrackerService {
       p.rATrackerEntry.count({ where }),
       p.rATrackerEntry.groupBy({
         by: ['status'],
-        where: { userId },
+        where: { userId, deletedAt: null },
         _count: { _all: true },
       }),
     ]);
@@ -251,7 +251,7 @@ export class RATrackerService {
 
   async getById(userId: string, id: string): Promise<RATrackerEntryView> {
     const p = prisma as any;
-    const row = await p.rATrackerEntry.findFirst({ where: { id, userId } });
+    const row = await p.rATrackerEntry.findFirst({ where: { id, userId, deletedAt: null } });
     if (!row) throw new TrackerNotFoundError();
     const job = row.jobId ? await p.rAJob.findUnique({ where: { id: row.jobId } }) : null;
     return toView(row, job);
@@ -263,8 +263,10 @@ export class RATrackerService {
       throw new TrackerInvalidInputError('Missing jobId or externalSnapshot');
     }
     if (body.jobId) {
+      // Only a live (non-soft-deleted) row blocks re-adding — a deleted entry
+      // must not 409 the same job forever.
       const collide = await p.rATrackerEntry.findFirst({
-        where: { userId, jobId: body.jobId },
+        where: { userId, jobId: body.jobId, deletedAt: null },
       });
       if (collide) throw new TrackerDuplicateError();
     }
@@ -309,7 +311,7 @@ export class RATrackerService {
 
   async patch(userId: string, id: string, body: TrackerPatchInput): Promise<RATrackerEntryView> {
     const p = prisma as any;
-    const existing = await p.rATrackerEntry.findFirst({ where: { id, userId } });
+    const existing = await p.rATrackerEntry.findFirst({ where: { id, userId, deletedAt: null } });
     if (!existing) throw new TrackerNotFoundError();
     const data: any = {};
     if (body.status !== undefined) data.status = body.status;
@@ -335,12 +337,16 @@ export class RATrackerService {
     return toView(row, job);
   }
 
+  /** Soft delete: stamp `deletedAt` so the entry drops out of every read path
+   *  (board/list, counts, get, patch, bulk, and the duplicate check) while the
+   *  row is retained for recovery/audit. Idempotent — a second delete is a
+   *  no-op since the already-deleted row is filtered out below. */
   async delete(userId: string, id: string): Promise<void> {
     const p = prisma as any;
-    const existing = await p.rATrackerEntry.findFirst({ where: { id, userId } });
+    const existing = await p.rATrackerEntry.findFirst({ where: { id, userId, deletedAt: null } });
     if (!existing) throw new TrackerNotFoundError();
-    await p.rATrackerEntry.delete({ where: { id } });
-    logger.info('RA_V2_TRACKER', 'tracker entry deleted', { userId, entryId: id });
+    await p.rATrackerEntry.update({ where: { id }, data: { deletedAt: new Date() } });
+    logger.info('RA_V2_TRACKER', 'tracker entry soft-deleted', { userId, entryId: id });
   }
 
   async bulk(userId: string, body: TrackerBulkInput): Promise<{ updated: number; entries: RATrackerEntryView[] }> {
@@ -349,7 +355,7 @@ export class RATrackerService {
       return { updated: 0, entries: [] };
     }
     const existing = await p.rATrackerEntry.findMany({
-      where: { id: { in: body.ids }, userId },
+      where: { id: { in: body.ids }, userId, deletedAt: null },
     });
     const existingIds = new Set(existing.map((e: any) => e.id));
     // Spec §5.2 — entire op rejected if any id not owner-owned. The route
@@ -408,7 +414,9 @@ export class RATrackerService {
     },
   ): Promise<RATrackerEntryView> {
     const p = prisma as any;
-    const existing = await p.rATrackerEntry.findFirst({ where: { userId, jobId } });
+    // Ignore a soft-deleted prior entry so save/apply after a delete creates a
+    // fresh live row instead of resurrecting the tombstone.
+    const existing = await p.rATrackerEntry.findFirst({ where: { userId, jobId, deletedAt: null } });
     const job = await p.rAJob.findUnique({ where: { id: jobId } });
     if (!job) throw new TrackerNotFoundError();
 

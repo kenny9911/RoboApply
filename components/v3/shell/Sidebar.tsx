@@ -7,9 +7,10 @@
 //
 // IA from docs/roboapply/v3/01-ia-and-routes.md §1 + the prototype app.jsx:
 //   Workspace: Today /home · Review queue /queue · Resume builder /resumes ·
-//              Mock interview /mock-interview (NEW) · Pipeline /tracker ·
-//              Activity log /activity
-//   Settings:  Replay onboarding · Tweaks · Preferences /preferences
+//              Mock interview /mock-interview (NEW) · Tracker /tracker
+//              (board + activity log as two tabs)
+//   Settings:  Replay onboarding · Tweaks (admin-only) · Preferences
+//              /preferences
 //
 // Active-state: exact match, or prefix match for routes with sub-routes
 // (/resumes/[id] lights Resume builder; /mock-interview/[id] lights Mock
@@ -39,7 +40,6 @@ import {
   IconFile,
   IconSparkle,
   IconStack,
-  IconClock,
   IconSettings,
   IconBolt,
 } from '../primitives/Iconset';
@@ -109,19 +109,14 @@ const WORKSPACE: NavLink[] = [
     notif: true,
   },
   {
+    // Umbrella "Tracker" entry — the /tracker page hosts two tabs: the pipeline
+    // board (进度看板) and the agent activity log (活动记录, /tracker/activity).
+    // Folds what used to be two separate sidebar items into one.
     kind: 'link',
     href: '/tracker',
-    labelKey: 'pipeline',
+    labelKey: 'tracker',
     icon: <IconStack size={15} />,
     match: (p) => p === '/tracker' || p.startsWith('/tracker/'),
-    jobApply: true,
-  },
-  {
-    kind: 'link',
-    href: '/activity',
-    labelKey: 'activity',
-    icon: <IconClock size={15} />,
-    match: (p) => p === '/activity' || p.startsWith('/activity/'),
     jobApply: true,
   },
 ];
@@ -143,15 +138,10 @@ const SETTINGS: NavEntry[] = [
     match: (p) => p === '/preferences' || p.startsWith('/preferences/'),
   },
   {
-    // Subscription plans + mock-interview credits. Not job-apply-gated — the
-    // mock-interview product (and its billing) is available with auto-apply off.
-    kind: 'link',
-    href: '/plans',
-    labelKey: 'plans',
-    icon: <IconBolt size={15} />,
-    match: (p) => p === '/plans' || p.startsWith('/plans/'),
-  },
-  {
+    // Unified Account area — profile, plans/upgrade, billing, orders & invoices,
+    // usage, and security all live here as tabs (folds in the old /plans entry).
+    // Not job-apply-gated: the mock-interview product + its billing are
+    // available with auto-apply off.
     kind: 'link',
     href: '/account',
     labelKey: 'account',
@@ -184,7 +174,9 @@ export function Sidebar({ className }: { className?: string } = {}) {
   const workspace = (
     showJobApply ? WORKSPACE : WORKSPACE.filter((i) => !i.jobApply)
   ).filter((i) => QUEUE_REVIEW_ENABLED || i.href !== '/queue');
-  const settings = showJobApply ? SETTINGS : SETTINGS.filter((i) => !i.jobApply);
+  const settings = (showJobApply ? SETTINGS : SETTINGS.filter((i) => !i.jobApply))
+    // 偏好微调 (Tweaks) is an admin-only affordance — regular seekers never see it.
+    .filter((i) => isAdmin || i.kind !== 'action' || i.id !== 'tweaks');
 
   // Live badge counts. useQueue shares its cache with the /queue page (locale
   // is part of the key); useAgentStats shares with the OrbCard below, so

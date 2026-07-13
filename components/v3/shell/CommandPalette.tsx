@@ -58,8 +58,8 @@ const NAV_TARGETS: { href: string; labelKey: string }[] = [
   { href: '/queue', labelKey: 'queue' },
   { href: '/resumes', labelKey: 'resumes' },
   { href: '/mock-interview', labelKey: 'interview' },
-  { href: '/tracker', labelKey: 'pipeline' },
-  { href: '/activity', labelKey: 'activity' },
+  { href: '/tracker', labelKey: 'tracker' },
+  { href: '/tracker/activity', labelKey: 'activity' },
   { href: '/preferences', labelKey: 'preferences' },
 ].filter((n) => QUEUE_REVIEW_ENABLED || n.href !== '/queue');
 
