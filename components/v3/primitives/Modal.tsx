@@ -9,11 +9,14 @@
 // dark + light. The backdrop keeps a translucent dim tint.
 //
 // ESC closes; backdrop click closes; clicking inside the panel does not. Locks
-// page scroll while open. position:fixed overlay (SSR-safe, no portal hop).
+// page scroll while open. Rendered through a portal on <body> (SSR-safe via a
+// mounted gate) so the fixed overlay is never trapped or clipped by an ancestor
+// with a transform / filter / overflow (e.g. the Today .match card).
 // This mirrors components/ui/Modal.tsx but in the V3 dark palette.
 
 import type { ReactNode } from 'react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { cn } from '../../../lib/utils';
 import { IconX } from './Iconset';
@@ -62,6 +65,17 @@ export function Modal({
   className,
 }: Props) {
   const tCommon = useTranslations('common');
+
+  // Render into a portal on <body> so the fixed overlay escapes any ancestor
+  // with a transform / filter / overflow:hidden. The Today match card
+  // (.match) has BOTH overflow:hidden and a :hover translateY transform, which
+  // otherwise (a) clip the modal into the card and (b) re-root position:fixed
+  // to the card instead of the viewport — the modal then rendered trapped
+  // inside the card and flickered as the hover transform transitioned on/off.
+  // Mounted-gate keeps createPortal SSR-safe (document only exists client-side).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -79,9 +93,9 @@ export function Modal({
     };
   }, [open, handleKey]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -145,6 +159,7 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
