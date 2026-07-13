@@ -15,6 +15,7 @@ import {
   Slider,
   Select,
 } from '../controls';
+import { useAgentStats } from '../../../../hooks/useActivity';
 import type { RAPreferences, RAAggressiveness } from '../../../../lib/api/v2';
 
 // Fixed secondary-tint orb recipes per aggressiveness (literal per design
@@ -33,6 +34,14 @@ export function AgentSection({
   set: (path: string, value: unknown) => void;
 }) {
   const t = useTranslations('preferences');
+
+  // Real agent activity for the mood card (shared, cached aggregate — same
+  // source the /home OrbCard uses). Replaces the prototype's hardcoded
+  // 14 sent / 11h saved / 3 replies numbers, which showed as the user's own.
+  const { data: agentStats } = useAgentStats();
+  const stats = agentStats?.stats;
+  const fmtStat = (n: number | undefined) =>
+    n === undefined ? '—' : new Intl.NumberFormat().format(n);
 
   const aggrMeta: Record<RAAggressiveness, { ic: string; name: string; desc: string }> = {
     manual: { ic: '◌', name: t('agent.mode_manual'), desc: t('agent.mode_manual_desc') },
@@ -93,15 +102,19 @@ export function AgentSection({
         </div>
         <div className="pref-mood-stats">
           <div>
-            <div className="pref-mood-stat">14</div>
+            <div className="pref-mood-stat">{fmtStat(stats?.sent)}</div>
             <div className="pref-mood-statlbl">{t('agent.stat_sent')}</div>
           </div>
           <div>
-            <div className="pref-mood-stat">11h</div>
+            <div className="pref-mood-stat">
+              {stats?.hoursSaved === undefined
+                ? '—'
+                : `${Math.round(stats.hoursSaved)}h`}
+            </div>
             <div className="pref-mood-statlbl">{t('agent.stat_saved')}</div>
           </div>
           <div>
-            <div className="pref-mood-stat">3</div>
+            <div className="pref-mood-stat">{fmtStat(stats?.replies)}</div>
             <div className="pref-mood-statlbl">{t('agent.stat_replies')}</div>
           </div>
         </div>

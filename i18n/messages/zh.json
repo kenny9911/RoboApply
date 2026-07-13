@@ -668,13 +668,13 @@
         "identity": "身份信息",
         "identity_v": "姓名 · 邮箱 · 所在地",
         "experience": "工作经历",
-        "experience_v": "2 段经历 · 共 6 条要点",
+        "experience_v": "职位 · 头衔 · 日期",
         "education": "教育背景",
         "education_v": "学位 · 学校 · 年份",
         "skills": "技能",
-        "skills_v": "已提取 8 个标签",
+        "skills_v": "技能 · 工具 · 关键词",
         "cleaned": "已清理",
-        "cleaned_v": "删除 4 个弱动词,标记 2 行待改写"
+        "cleaned_v": "措辞 · 格式优化"
       }
     },
     "import": {

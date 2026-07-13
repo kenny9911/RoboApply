@@ -668,13 +668,13 @@
         "identity": "Identity",
         "identity_v": "Name · email · location",
         "experience": "Experience",
-        "experience_v": "2 roles · 6 bullets total",
+        "experience_v": "Roles · titles · dates",
         "education": "Education",
         "education_v": "Degree · school · years",
         "skills": "Skills",
-        "skills_v": "8 tags extracted",
+        "skills_v": "Skills · tools · keywords",
         "cleaned": "Cleaned",
-        "cleaned_v": "Stripped 4 weak verbs, flagged 2 lines for rewrite"
+        "cleaned_v": "Phrasing · formatting polish"
       }
     },
     "import": {

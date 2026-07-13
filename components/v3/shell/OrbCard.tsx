@@ -14,45 +14,26 @@
 //
 // `--density` doesn't touch this card; the status line + numbers always show.
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAgentStats } from '../../../hooks/useActivity';
 import { useDcTheme } from '../../../lib/dcTheme';
 import { AiOrb } from '../../dc/AiOrb';
 
-// The live status lines the agent cycles through. Client-side flavor (the
-// server may pin a `currentAction`, which we prefer when present).
-const STATUS_LINE_KEYS = [
-  'status_scan',
-  'status_tailor',
-  'status_cover',
-  'status_crosscheck',
-  'status_timer',
-  'status_idle',
-  'status_index',
-  'status_rescore',
-] as const;
-
 export function OrbCard() {
   const t = useTranslations('nav_v3');
   const theme = useDcTheme();
-  const [idx, setIdx] = useState(0);
 
   // Aggregate for the 3-up stats. Cheap + cacheable; shared with Today /
   // Activity / Preferences via W0-A's useAgentStats hook.
   const { data } = useAgentStats();
   const stats = data?.stats;
 
-  useEffect(() => {
-    const id = setInterval(
-      () => setIdx((i) => (i + 1) % STATUS_LINE_KEYS.length),
-      3200,
-    );
-    return () => clearInterval(id);
-  }, []);
-
-  // Server-pinned action wins over the cycling client line.
-  const liveLine = stats?.currentAction ?? t(STATUS_LINE_KEYS[idx]);
+  // Live status line: show the agent's real, server-pinned action when there
+  // is one; otherwise a truthful idle state. (This used to cycle invented
+  // "scanning / tailoring / drafting a cover letter" lines on a timer, which
+  // faked live activity even when the agent was completely idle — removed so
+  // the orb never claims work it isn't doing.)
+  const liveLine = stats?.currentAction ?? t('status_idle');
   const fmt = (n: number | undefined) =>
     n === undefined ? '—' : new Intl.NumberFormat().format(n);
 

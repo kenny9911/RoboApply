@@ -668,13 +668,13 @@
         "identity": "本人情報",
         "identity_v": "氏名 · メールアドレス · 所在地",
         "experience": "職歴",
-        "experience_v": "2件の職務 · 計6つの箇条書き",
+        "experience_v": "役職 · 肩書き · 期間",
         "education": "学歴",
         "education_v": "学位 · 学校 · 在学年",
         "skills": "スキル",
-        "skills_v": "8個のタグを抽出",
+        "skills_v": "スキル · ツール · キーワード",
         "cleaned": "整理済み",
-        "cleaned_v": "弱い動詞を4つ削除し、2行を書き直し対象として指摘"
+        "cleaned_v": "表現 · 書式の調整"
       }
     },
     "import": {

@@ -78,7 +78,9 @@ export function Topbar() {
 
         <button type="button" className="icon-btn" aria-label={t('notifications')}>
           <IconBell size={15} />
-          <span className="badge" aria-hidden="true" />
+          {/* Removed a hardcoded unread-glow badge (<span className="badge" />)
+              that rendered unconditionally with no notifications feed behind it
+              — it implied unread notifications to every user at all times. */}
         </button>
 
         <span className="avatar" aria-hidden="true">

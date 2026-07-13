@@ -130,14 +130,12 @@ export function PlanSection({
         </div>
       </PrefGroup>
 
-      <PrefGroup label={t('plan.group_billing')}>
-        <PrefRow label={t('plan.payment_label')} sub={t('plan.payment_sub')}>
-          <Btn>{t('plan.update_card')}</Btn>
-        </PrefRow>
-        <PrefRow label={t('plan.next_bill_label')} sub={t('plan.next_bill_sub')}>
-          <Btn>{t('plan.view_invoices')}</Btn>
-        </PrefRow>
-      </PrefGroup>
+      {/* Billing group removed for launch: it displayed a FABRICATED saved card
+          ("Visa ending in 4242") and next-bill line ("$19.00 · June 14, 2026")
+          hardcoded from the design prototype, with non-functional Update-card /
+          View-invoices buttons. Real payment method + invoices live on the
+          account/billing surface (useBillingPlan → Stripe portal). Reinstate
+          here only when wired to that real data. */}
     </>
   );
 }

@@ -668,13 +668,13 @@
         "identity": "身分資訊",
         "identity_v": "姓名 · 電子郵件 · 所在地",
         "experience": "工作經歷",
-        "experience_v": "2 段經歷 · 共 6 條要點",
+        "experience_v": "職位 · 頭銜 · 日期",
         "education": "學歷背景",
         "education_v": "學位 · 學校 · 年份",
         "skills": "技能",
-        "skills_v": "已擷取 8 個標籤",
+        "skills_v": "技能 · 工具 · 關鍵字",
         "cleaned": "已整理",
-        "cleaned_v": "刪除 4 個弱動詞,標記 2 行待改寫"
+        "cleaned_v": "措辭 · 格式優化"
       }
     },
     "import": {
