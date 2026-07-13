@@ -1,0 +1,601 @@
+{
+  "cluster": "core_cross_industry",
+  "label": "Cross-industry core",
+  "rules": [
+    {
+      "id": "core-wa-01",
+      "text_en": "Candidate is legally authorized to work in the country of employment on or before the start date, verifiable via work permit, residency status, or (US) I-9/E-Verify documentation.",
+      "text_zh": "候选人在入职日期前拥有在雇佣所在国合法工作的资格，可通过工作许可、居留身份或（美国）I-9/E-Verify 文件核验。",
+      "category": "work_authorization",
+      "kind": "knockout",
+      "rationale": "The single most common and defensible knockout worldwide; a legal prerequisite to any employment relationship.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful everywhere when applied uniformly. Ask 'Are you authorized to work in {country}?' — do not probe citizenship, national origin, or visa category beyond authorization itself."
+      }
+    },
+    {
+      "id": "core-wa-02",
+      "text_en": "If the client does not sponsor work visas, candidates who answer yes to 'Will you now or in the future require employer sponsorship to work in {country}?' are screened out.",
+      "text_zh": "若客户不提供工作签证担保，对『现在或将来是否需要雇主担保才能在该国工作』回答『是』的候选人将被筛除。",
+      "category": "work_authorization",
+      "kind": "knockout",
+      "rationale": "Sponsorship costs, quotas (e.g., H-1B lottery), and timeline risk are legitimate budget constraints; this is the standard second question of the US work-authorization pair.",
+      "appliesTo": "all roles at clients without sponsorship budget",
+      "legality": {
+        "status": "caution",
+        "notes": "Lawful in the US/EU only if applied consistently to every candidate. Becomes national-origin or citizenship-status discrimination (US INA §1324b) if applied selectively or used against already-authorized groups such as green-card holders, refugees, or asylees."
+      }
+    },
+    {
+      "id": "core-wa-03",
+      "text_en": "'Citizens only' or 'no foreigners' requirement, absent a specific statute or government-contract mandate (e.g., export controls such as ITAR/EAR, security clearance) that legally requires citizenship for the role.",
+      "text_zh": "在没有法律或政府合同明确要求（如 ITAR/EAR 出口管制、安全许可）的情况下，规定『仅限本国公民／不招外国人』。",
+      "category": "work_authorization",
+      "kind": "knockout",
+      "rationale": "Clients often request citizens-only filters for convenience; without a legal mandate this is unlawful discrimination, not a screening criterion.",
+      "appliesTo": "all roles (narrow legal-mandate exception)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "US INA §1324b bars citizenship-status discrimination against protected work-authorized classes; EU law bars nationality discrimination against EU citizens; Taiwan ESA §5 covers 籍贯/出生地. Refuse and reframe: require unrestricted work authorization (core-wa-01), citing the specific statute if a genuine mandate exists."
+      }
+    },
+    {
+      "id": "core-edu-01",
+      "text_en": "Candidate holds at least the stated minimum degree (e.g., bachelor's) in a relevant or adjacent field, or equivalent practical experience where the client accepts a stated experience substitute (e.g., 4 extra years in-domain).",
+      "text_zh": "候选人至少持有职位要求的最低学历（如学士）且专业相关或相近，或在客户接受的情况下以约定的同等实务经验替代（如额外 4 年本领域经验）。",
+      "category": "education",
+      "kind": "knockout",
+      "rationale": "Baseline qualification filter verifiable from the resume; the 'or equivalent experience' clause preserves pool size and legal defensibility.",
+      "appliesTo": "all roles with a degree threshold",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful when job-related. US Griggs doctrine requires business necessity if the requirement screens out protected groups; the skills-first trend is removing degree walls from roles where competency tests exist."
+      }
+    },
+    {
+      "id": "core-edu-02",
+      "text_en": "Claimed degrees are verifiable with the issuing institution or an authoritative registry (e.g., US National Student Clearinghouse, PRC 学信网/CHESICC, Taiwan MOE); unverifiable, unaccredited, or diploma-mill credentials fail screening.",
+      "text_zh": "所声称的学历可通过颁发院校或权威登记机构核验（如美国 National Student Clearinghouse、中国学信网、台湾教育主管机关）；无法核验、非认证院校或『文凭工厂』学历不通过筛选。",
+      "category": "education",
+      "kind": "knockout",
+      "rationale": "Roughly a third of applicants misstate education and 57% of US employers verify it; verification converts a claim into evidence.",
+      "appliesTo": "all roles where a degree is required or scored",
+      "legality": {
+        "status": "safe",
+        "notes": "Verification of claimed credentials is lawful worldwide; obtain candidate consent where data-protection law requires (GDPR, PRC PIPL)."
+      }
+    },
+    {
+      "id": "core-edu-03",
+      "text_en": "Preference for graduates of a named university tier (e.g., QS top 100, PRC 985/211/双一流, Ivy League) used only as a soft ranking signal — never as an automatic rejection of other graduates.",
+      "text_zh": "对指定院校层级（如 QS 前 100、985/211/双一流、常春藤）毕业生的偏好只能作为加分参考，绝不能自动淘汰其他院校毕业生。",
+      "category": "education",
+      "kind": "preference",
+      "rationale": "School-tier filters are among the most requested and least predictive criteria; keeping them advisory preserves pool quality and compliance.",
+      "appliesTo": "campus and early-career hiring",
+      "legality": {
+        "status": "caution",
+        "notes": "PRC MOHRSS/MOE forbid advertising school-tier (985/211) restrictions in recruitment notices; in the US/EU tier filters carry adverse-impact and socioeconomic-bias risk. Reframe: specific competencies, portfolios, or assessment scores."
+      }
+    },
+    {
+      "id": "core-exp-01",
+      "text_en": "Candidate shows at least N years of experience directly relevant to the role's core function, computed from resume employment dates rather than the candidate's own total.",
+      "text_zh": "候选人具备至少 N 年与职位核心职能直接相关的经验，按简历任职日期计算，而非采信候选人自报年限。",
+      "category": "experience",
+      "kind": "knockout",
+      "rationale": "The most common competency proxy; date arithmetic makes it LLM-verifiable. Set N at the true minimum — every extra year shrinks the pool without adding signal.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful. Keep minimums honest and job-related; inflated minimums quietly proxy for seniority and price, not ability."
+      }
+    },
+    {
+      "id": "core-exp-02",
+      "text_en": "Cap on total years of experience (e.g., 'no more than 7 years', rejecting candidates as 'overqualified').",
+      "text_zh": "对总经验年限设置上限（如『不超过 7 年』，或以『资历过高』为由拒绝）。",
+      "category": "experience",
+      "kind": "knockout",
+      "rationale": "Clients request caps to control cost and perceived flight risk, but a cap functions as an age filter and screens out mentorship-capable hires.",
+      "appliesTo": "all roles (flag whenever requested)",
+      "legality": {
+        "status": "caution",
+        "notes": "Experience caps disproportionately exclude workers 40+ — US ADEA exposure (Kleber v. CareFusion litigation; EEOC scrutiny of 'overqualified' rationales), EU age-discrimination directives, Taiwan ESA §5 (age). Reframe: define the seniority band by responsibilities and the posted salary range, and assess level-fit motivation in interview."
+      }
+    },
+    {
+      "id": "core-exp-03",
+      "text_en": "Explicit age limits or ranges (e.g., 'under 35', '25-40 years old', screening by date of birth or graduation year).",
+      "text_zh": "明确的年龄限制或区间（如『35 岁以下』『25-40 岁』，或按出生日期、毕业年份筛选）。",
+      "category": "experience",
+      "kind": "knockout",
+      "rationale": "The most common prohibited request in Greater-China briefs (the '35 岁门槛'); age predicts neither performance nor tenure.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "US ADEA protects 40+; EU Directive 2000/78 bans age discrimination in both directions; Taiwan ESA §5 lists age (fines NT$300k-1.5M); PRC regulators are actively cracking down on the 35-year threshold. Refuse and reframe: stamina concerns → objective workload disclosure; cost concerns → salary band; adaptability concerns → skills assessment."
+      }
+    },
+    {
+      "id": "core-sta-01",
+      "text_en": "Average tenure across the last three permanent positions is at least ~2 years, with no more than two voluntary exits shorter than 12 months in the past five years; contract/project roles, layoffs, and company closures are excluded before scoring.",
+      "text_zh": "最近三份正式工作的平均在职时长不低于约 2 年，且过去五年内主动离职且任职不满 12 个月的经历不超过两段；合同制/项目制岗位、裁员及公司倒闭在计分前剔除。",
+      "category": "stability",
+      "kind": "preference",
+      "rationale": "Tenure floors are the standard job-hopping screen; excluding involuntary and contract separations removes most false negatives while keeping the flight-risk signal.",
+      "appliesTo": "permanent hires, especially ramp-heavy and client-facing roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful but blunt: uncorrected, it penalizes layoff survivors, startup employees, contractors, and caregivers. Keep it a weighted preference or interview probe rather than a hard knockout."
+      }
+    },
+    {
+      "id": "core-sta-02",
+      "text_en": "Employment gaps longer than six months within the past five years are flagged for a factual explanation at screening; the explanation is scored, the gap itself is never auto-rejected.",
+      "text_zh": "过去五年内超过六个月的职业空窗期在初筛时标记并请候选人事实性说明；评估的是说明内容，空窗期本身绝不自动淘汰。",
+      "category": "stability",
+      "kind": "preference",
+      "rationale": "Gaps correlate with caregiving, illness, layoffs, and education — not ability; the informative signal is whether the account is coherent and skills stayed current.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Gap-based auto-rejection disparately impacts caregivers (a gender proxy), people with past illness or disability, and veterans; treat as indirect-discrimination exposure in the EU/UK. Ask for the account; do not demand medical or family detail."
+      }
+    },
+    {
+      "id": "core-sta-03",
+      "text_en": "Requiring candidates to be currently employed ('no unemployed applicants', 'must be employed at time of application').",
+      "text_zh": "要求候选人目前在职（『不考虑待业者』『申请时必须在职』）。",
+      "category": "stability",
+      "kind": "knockout",
+      "rationale": "Clients equate current employment with market validation, but it mostly re-screens the gap signal while excluding layoffs and returners.",
+      "appliesTo": "all roles (flag whenever requested)",
+      "legality": {
+        "status": "caution",
+        "notes": "Advertising exclusion of the unemployed is unlawful in NJ, Oregon, and DC and restricted elsewhere; high adverse-impact risk generally. Reframe: skills currency — core skill used in a real project within the last 18-24 months, verifiable from resume or work sample."
+      }
+    },
+    {
+      "id": "core-sta-04",
+      "text_en": "Screening on marital status, children, or childbearing plans (e.g., 'married with children preferred', asking 已婚已育, requiring answers about family planning).",
+      "text_zh": "以婚姻状况、子女情况或生育计划作为筛选条件（如『已婚已育优先』、询问婚育情况或家庭计划）。",
+      "category": "stability",
+      "kind": "knockout",
+      "rationale": "Clients frame this as a retention/stability screen ('she won't leave for maternity'); it is explicitly illegal in the core markets and predicts nothing.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "PRC Women's Rights and Interests Protection Law (2023) expressly bans asking women's marital/childbearing status (fines RMB 10k-50k); Taiwan ESA §5 lists marital status; sex/marital-status discrimination laws apply across the EU and many US states. Refuse and reframe: retention concern → verified tenure history (core-sta-01); coverage concern → explicit schedule/travel requirements any candidate may accept."
+      }
+    },
+    {
+      "id": "core-bgi-01",
+      "text_en": "Criminal-history review occurs only at the stage local law allows (post-conditional-offer in many jurisdictions) and considers only job-related convictions, weighing offense nature, recency, and role risk (e.g., embezzlement convictions for treasury access).",
+      "text_zh": "犯罪记录审查仅在当地法律允许的阶段进行（多数辖区为有条件录用之后），且仅评估与岗位相关的定罪，综合考量罪名性质、时间远近与岗位风险（如财务岗位相关的挪用/侵占定罪）。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Converts criminal screening from a legal liability into a defensible, individualized assessment tied to actual role risk.",
+      "appliesTo": "all roles subject to background checks",
+      "legality": {
+        "status": "caution",
+        "notes": "US: 37+ states and 150+ localities have ban-the-box; 15 states (CA, CO, CT, HI, IL, MA, MD, ME, MN, NJ, NM, OR, RI, VT, WA) extend it to private employers; Texas added a statewide law in Sept 2025; EEOC Green factors require individualized assessment; FCRA pre-adverse-action steps apply. EU: spent-conviction and GDPR limits. Taiwan/PRC: request criminal-record certificates only where a statute authorizes it (childcare, security, finance)."
+      }
+    },
+    {
+      "id": "core-bgi-02",
+      "text_en": "Blanket exclusion of anyone with any criminal record, or asking about criminal history on the initial application.",
+      "text_zh": "一律排除任何有犯罪记录的候选人，或在初始申请阶段询问犯罪记录。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "A frequent client request that is both illegal in many jurisdictions and overbroad — it screens on stigma rather than role risk.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "Application-stage criminal questions violate ban-the-box laws in 15 US states and 22+ localities covering private employers; blanket bans create US Title VII disparate-impact liability (EEOC 2012 guidance) and breach EU proportionality rules. Reframe to core-bgi-01: post-offer, job-related, individualized."
+      }
+    },
+    {
+      "id": "core-bgi-03",
+      "text_en": "Material resume misrepresentation — employment dates off by more than ~3 months, inflated titles, or invented employers — confirmed by background check or references is a terminal knockout after the candidate is given a chance to correct honest errors.",
+      "text_zh": "简历重大不实——任职日期虚报超过约 3 个月、职位头衔夸大或虚构雇主——经背景调查或证明人核实确认后一票否决；应先给候选人更正无心之失的机会。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Surveys show 40-70% of workers admit some resume embellishment; dates and titles are the most common verified discrepancies and the cleanest integrity signal.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Integrity-based rejection is lawful everywhere. In the US follow FCRA pre-adverse-action and dispute procedures; document the discrepancy."
+      }
+    },
+    {
+      "id": "core-bgi-04",
+      "text_en": "A fabricated degree, diploma-mill credential, or forged certificate discovered at any stage is an automatic rejection and a do-not-hire flag, regardless of role performance signals.",
+      "text_zh": "在任何阶段发现伪造学历、『文凭工厂』文凭或伪造证书，一律自动拒绝并列入不予录用名单，不论其他表现如何。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Credential forgery is deliberate fraud, not embellishment; it survives as a terminal rule in every jurisdiction and industry.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful everywhere; in regulated sectors employers may be obligated to reject and sometimes to report."
+      }
+    },
+    {
+      "id": "core-bgi-05",
+      "text_en": "Reference checks with at least two professional referees (former direct manager preferred) must corroborate employment, role scope, and stated achievements; a reference materially contradicting the candidate's claims is a knockout, while employer no-comment policies are not held against the candidate.",
+      "text_zh": "至少两名职业证明人（优先前直属主管）须能印证任职经历、职责范围及所述业绩；证明人证词与候选人陈述存在重大矛盾即否决；前雇主『仅确认在职』的政策不得归咎于候选人。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "References are the cheapest triangulation of scope inflation; the rule distinguishes contradiction (disqualifying) from silence (neutral).",
+      "appliesTo": "finalist-stage candidates, all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful with candidate consent. Many employers restrict references to dates/title for defamation reasons — treat non-answers as neutral, not negative."
+      }
+    },
+    {
+      "id": "core-bgi-06",
+      "text_en": "Candidate consents to lawful, role-proportionate background screening (US: FCRA-compliant standalone disclosure; EU: GDPR-proportionate scope; PRC: PIPL consent); refusal to consent ends the process.",
+      "text_zh": "候选人同意接受合法且与岗位相称的背景调查（美国：符合 FCRA 的独立披露；欧盟：符合 GDPR 的适度范围；中国大陆：符合个保法的同意）；拒绝同意即终止流程。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Verification is impossible without consent; refusal at offer stage is a standard, binary, defensible endpoint.",
+      "appliesTo": "all roles where checks are policy",
+      "legality": {
+        "status": "safe",
+        "notes": "Safe only when the check itself is lawful and proportionate to the role — the consent knockout cannot launder an overbroad check."
+      }
+    },
+    {
+      "id": "core-bgi-07",
+      "text_en": "Public social-media review is limited to publicly visible, job-related conduct (threats, harassment, hate speech, confidentiality breaches), performed late in the funnel by a reviewer outside the decision chain who reports only policy-relevant findings.",
+      "text_zh": "社交媒体审查仅限公开可见且与岗位相关的行为（威胁、骚扰、仇恨言论、泄密），在流程后段由决策链之外的审查人执行，且只向决策者报告与政策相关的发现。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Egregious public conduct is a legitimate risk screen, but unstructured profile browsing exposes decision-makers to protected-class information.",
+      "appliesTo": "client-facing, brand-sensitive, and trust roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Never request passwords or account access (banned in 25+ US states). Several states protect lawful off-duty conduct and political activity; EU GDPR requires proportionality and candidate notification. The firewall reviewer pattern is the compliant design."
+      }
+    },
+    {
+      "id": "core-bgi-08",
+      "text_en": "Candidates on the client's documented do-not-rehire list, or previously terminated by the client for cause, are excluded; former employees who left in good standing and are marked rehire-eligible may be fast-tracked as boomerang hires.",
+      "text_zh": "列入客户书面『不再录用』名单或曾被客户因过错解雇的候选人不予考虑；正常离职且标记为可再雇佣的前员工可作为『回流人才』优先推进。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Rehire flags encode the client's own verified experience — the highest-signal history available — in both directions.",
+      "appliesTo": "all roles at clients maintaining rehire records",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful when entries are accurate, documented, and cause-based. Stale, retaliatory, or protected-activity-related entries create blacklisting/defamation liability (several US states have blacklisting statutes); audit the list periodically."
+      }
+    },
+    {
+      "id": "core-bgi-09",
+      "text_en": "Verified termination for cause or a failed probation at a previous employer is a flag requiring interview explanation; it becomes a knockout only when the cause is integrity-related (fraud, harassment, data theft) or directly repeats the role's core risk.",
+      "text_zh": "经核实曾因过错被前雇主解雇或试用期未通过者，标记并要求在面试中说明；仅当原因涉及诚信（舞弊、骚扰、窃取数据）或与本岗位核心风险直接重合时才构成否决。",
+      "category": "background_integrity",
+      "kind": "knockout",
+      "rationale": "Termination stories are often disputed and context-heavy; reserving the knockout for verified integrity causes keeps the rule fair and defensible.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Verify with documents or references, not rumor — former employers speak cautiously for legal reasons, and some jurisdictions restrict reliance on unproven allegations."
+      }
+    },
+    {
+      "id": "core-lic-01",
+      "text_en": "Role-mandated licenses or certifications (e.g., CPA, PE, RN, securities registration 证券从业资格, required driving-license class) are active and verifiable with the issuing body at offer time, or obtainable before start where the regulator allows.",
+      "text_zh": "岗位法定执照或证书（如注册会计师、专业工程师、注册护士、证券从业资格、要求的驾照类别）在录用时有效且可向发证机构核验，或在监管允许时于入职前取得。",
+      "category": "compliance_licensure",
+      "kind": "knockout",
+      "rationale": "Where law conditions the work on a license, the license is the job; this is the least contestable knockout after work authorization.",
+      "appliesTo": "regulated and licensed roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful and often mandatory. Verify against the primary source (licensing board registry), not certificate images. A lapsed-but-renewable credential is a flag with a deadline, not an automatic knockout."
+      }
+    },
+    {
+      "id": "core-lic-02",
+      "text_en": "The required license or certification is in good standing — no active suspensions, revocations, or unresolved disciplinary proceedings on the regulator's public record.",
+      "text_zh": "所需执照或证书状态良好——发证机构公开记录中无生效中的暂停、吊销或未决纪律处分。",
+      "category": "compliance_licensure",
+      "kind": "knockout",
+      "rationale": "An active license with hidden discipline is a compliance trap; good-standing status is binary and primary-source verifiable.",
+      "appliesTo": "regulated and licensed roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful; disciplinary history that was fully resolved long ago may deserve individualized review rather than reflex rejection."
+      }
+    },
+    {
+      "id": "core-hse-01",
+      "text_en": "For safety-critical roles, candidate passes a post-offer, job-related physical-ability or medical examination applied uniformly to every entrant in the same role.",
+      "text_zh": "对安全关键岗位，候选人须通过录用后进行、与岗位相关、对同岗位所有录用者统一实施的体能或医学检查。",
+      "category": "health_safety",
+      "kind": "knockout",
+      "rationale": "Physical capability matters where safety is real (driving, lifting, heights); the post-offer, uniform, job-related framing is what keeps it legal.",
+      "appliesTo": "safety-critical, physical, and driving roles",
+      "legality": {
+        "status": "caution",
+        "notes": "US ADA: medical exams only after a conditional offer, job-related, consistent across entrants, with reasonable accommodation considered. PRC/Taiwan: routine 入职体检 is customary but scope-limited (see core-hse-02)."
+      }
+    },
+    {
+      "id": "core-hse-02",
+      "text_en": "Pre-offer medical inquiries, pregnancy tests, or carrier/genetic-status screening (e.g., hepatitis B 乙肝携带, genetic tests) used as hiring criteria.",
+      "text_zh": "将录用前医学询问、妊娠检测或携带者/基因状态筛查（如乙肝携带、基因检测）作为录用条件。",
+      "category": "health_safety",
+      "kind": "knockout",
+      "rationale": "Still a common Greater-China client request (pregnancy tests, HBV panels in 入职体检); explicitly illegal and medically irrelevant to nearly all roles.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "PRC: pregnancy tests in onboarding physicals expressly banned (Women's Protection Law 2023) and HBV-carrier discrimination banned since 2010 rules; US ADA bans pre-offer medical inquiries and GINA bans genetic screening; EU treats health data as GDPR special-category. Reframe: post-offer job-related exam (core-hse-01) only where safety-critical."
+      }
+    },
+    {
+      "id": "core-hse-03",
+      "text_en": "Where lawful and required by policy or regulation (e.g., US DOT-regulated positions, safety-sensitive plant roles), candidate passes a pre-employment drug and alcohol screen.",
+      "text_zh": "在合法且政策或法规要求的情况下（如美国交通部监管岗位、安全敏感的工厂岗位），候选人须通过入职前药物与酒精检测。",
+      "category": "health_safety",
+      "kind": "knockout",
+      "rationale": "A standard, binary safety knockout in transport, manufacturing, and healthcare; keep the panel matched to the actual role risk.",
+      "appliesTo": "safety-sensitive and regulated roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Cannabis carve-outs are spreading: CA, NY, WA, NJ and others restrict testing or adverse action for lawful off-duty cannabis; EU jurisdictions rarely permit blanket testing. Federal-mandate roles (DOT/FAA) override state carve-outs."
+      }
+    },
+    {
+      "id": "core-hse-04",
+      "text_en": "Restricting the role to one gender or stating gender priority (e.g., 'male only' for travel-heavy or physical work, 'female only' for reception, 限男性/限女性).",
+      "text_zh": "将岗位限定单一性别或声明性别优先（如出差多或体力岗位『限男性』、前台『限女性』）。",
+      "category": "health_safety",
+      "kind": "knockout",
+      "rationale": "Usually rationalized as physical-demand or client-preference logic; the lawful version is stating the demand itself and letting any candidate accept it.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "US Title VII (BFOQ is an extremely narrow exception), EU equal-treatment directives, PRC Employment Promotion Law and Women's Protection Law ban male-only/male-priority recruitment, Taiwan 性别工作平等法 and ESA §5. Refuse and reframe: 'must lift 25 kg', '60% overnight travel', 'rotating night shifts' — objective requirements open to all."
+      }
+    },
+    {
+      "id": "core-coi-01",
+      "text_en": "Candidate discloses all concurrent employment, consulting, and side businesses before offer; continuing an active engagement with a direct competitor, or any undisclosed engagement discovered later, is disqualifying unless the client grants a written waiver.",
+      "text_zh": "候选人须在录用前披露所有兼职、顾问及副业；入职后仍在直接竞争对手处任职，或事后发现未披露的兼职，除非客户书面豁免，否则不予录用或终止流程。",
+      "category": "conflict_of_interest",
+      "kind": "knockout",
+      "rationale": "The screen is on disclosure and competitive conflict, not on having a side project; nondisclosure is the integrity failure.",
+      "appliesTo": "all professional roles; strictest for access-to-IP roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Disclosure requirements are lawful; blanket moonlighting bans collide with lawful-off-duty-conduct protections (e.g., California Labor Code §96(k)). Tie any restriction to conflict, confidentiality, or performance — not to outside work per se."
+      }
+    },
+    {
+      "id": "core-coi-02",
+      "text_en": "Candidate discloses family or significant financial relationships with the client's employees (especially anyone in the hiring or reporting chain), vendors, or customers; a concealed conflict discovered later is terminal, while disclosed ones are managed (e.g., reporting-line change).",
+      "text_zh": "候选人须披露与客户员工（尤其招聘或汇报链条中的人员）、供应商或客户之间的亲属或重大经济关系；事后发现隐瞒即终止，如实披露的冲突则通过管理化解（如调整汇报线）。",
+      "category": "conflict_of_interest",
+      "kind": "knockout",
+      "rationale": "Anti-nepotism screens protect procurement and management integrity; punishing concealment rather than the relationship keeps the rule proportionate.",
+      "appliesTo": "all roles; strictest for procurement, finance, and people-manager roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Conflict-based rules are lawful; blanket no-spouse/no-relative bans risk marital-status discrimination claims where that status is protected (several US states, Taiwan ESA §5). Manage disclosed conflicts instead of auto-rejecting."
+      }
+    },
+    {
+      "id": "core-coi-03",
+      "text_en": "Candidate certifies in writing that no enforceable non-compete, non-solicit, or garden-leave obligation blocks performing this role or starting by the required date; a blocking obligation that counsel cannot clear is disqualifying for the timeline.",
+      "text_zh": "候选人书面确认不存在可执行的竞业限制、禁止招揽或『花园假期』义务以致无法履行本岗位职责或按期入职；法务无法化解的阻断性义务即不符合本次时间要求。",
+      "category": "conflict_of_interest",
+      "kind": "knockout",
+      "rationale": "Protects the client from tortious-interference exposure and start-date slippage; certification converts a hidden legal risk into a screening fact.",
+      "appliesTo": "senior, sales, and IP-sensitive roles",
+      "legality": {
+        "status": "caution",
+        "notes": "Enforceability varies sharply: void for most workers in California and several US states; the FTC's 2024 national ban was vacated in litigation; PRC 竞业限制 is enforceable when compensated; EU varies by member state. Have counsel review rather than auto-rejecting anyone with a clause on paper."
+      }
+    },
+    {
+      "id": "core-coi-04",
+      "text_en": "Client-designated hands-off lists (do not actively source from named customers, partners, or affiliates) are applied at the sourcing stage only; candidates from those companies who apply on their own are evaluated on merit.",
+      "text_zh": "客户指定的『禁猎名单』（不得主动从指定客户、合作伙伴或关联公司挖人）仅在寻访阶段执行；这些公司中自主投递的候选人仍按能力正常评估。",
+      "category": "conflict_of_interest",
+      "kind": "preference",
+      "rationale": "Protects commercial relationships without becoming an unlawful hiring boycott; the sourcing/application distinction is the compliance line.",
+      "appliesTo": "agency and RPO sourcing for the client",
+      "legality": {
+        "status": "caution",
+        "notes": "Unilateral client instructions are generally lawful; agreements BETWEEN companies not to hire each other's staff (naked no-poach) are criminal antitrust violations in the US and illegal in the EU. Never encode a cross-company no-hire pact as a rule."
+      }
+    },
+    {
+      "id": "core-cmp-01",
+      "text_en": "After the role's pay range is shared, the candidate's stated salary expectation falls within the approved band (typically no more than 10-15% above band maximum for negotiation headroom).",
+      "text_zh": "在告知职位薪酬范围后，候选人的期望薪资落在核定范围内（通常不超过范围上限的 10-15%，以保留谈判空间）。",
+      "category": "compensation",
+      "kind": "knockout",
+      "rationale": "Compensation misalignment is the top late-funnel failure and offer-decline reason; screening expectations against a disclosed band settles it early.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Asking expectations is lawful everywhere; pay-transparency laws (CO, CA, NY, WA, IL and others; EU Pay Transparency Directive effective June 2026) increasingly require disclosing the range first — share the band, then ask."
+      }
+    },
+    {
+      "id": "core-cmp-02",
+      "text_en": "Requiring candidates to disclose current or past salary, or anchoring offers to salary history.",
+      "text_zh": "要求候选人披露当前或历史薪资，或以薪资历史作为定薪依据。",
+      "category": "compensation",
+      "kind": "knockout",
+      "rationale": "A habitual client request that is now illegal across much of the US and the EU and perpetuates pay inequity.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "Banned by 17+ US statewide laws plus many localities (CA, NY, CO, CT, IL, MA, NJ, WA...) — no asking, searching public records, or relying on history; the EU Pay Transparency Directive bans pay-history questions union-wide (transposition due June 2026). Reframe: expectations against a disclosed band (core-cmp-01)."
+      }
+    },
+    {
+      "id": "core-avl-01",
+      "text_en": "Candidate can start within the client's required window (e.g., ≤30/60/90 days), with the stated notice period, garden leave, and any relocation logistics already counted in.",
+      "text_zh": "候选人能在客户要求的窗口内到岗（如 ≤30/60/90 天），且已将离职通知期、『花园假期』及搬迁安排计算在内。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Notice periods of 1-3 months are standard in EU/Greater-China markets; screening on realistic start date prevents late-stage timeline collapses.",
+      "appliesTo": "all roles with a hard start date",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful. Compare against market-standard notice in the candidate's jurisdiction before treating a long notice period as evasion."
+      }
+    },
+    {
+      "id": "core-avl-02",
+      "text_en": "Candidate lives within commuting distance of the work site or commits in writing to relocate at the agreed cost split by start date, and accepts the stated onsite/hybrid pattern (e.g., 3 days per week onsite).",
+      "text_zh": "候选人居住在工作地点通勤范围内，或书面承诺按约定费用安排在入职日前完成搬迁，并接受规定的到岗/混合办公模式（如每周到岗 3 天）。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Onsite pattern and location feasibility are among the top four real-world knockouts; written relocation commitment separates intent from wish.",
+      "appliesTo": "onsite and hybrid roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful when screening ability to comply. Avoid zip-code/postcode prestige filters that redline protected communities, and remember disability accommodation can modify onsite patterns."
+      }
+    },
+    {
+      "id": "core-avl-03",
+      "text_en": "Candidate confirms willingness and ability to travel at the stated percentage (e.g., up to 40%), including overnight and international travel where specified, with passport validity where relevant.",
+      "text_zh": "候选人确认愿意并能够按规定比例出差（如最高 40%），包括指定的过夜及国际差旅，涉及国际差旅时护照须在有效期内。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Travel tolerance stated as a precise percentage is binary, verifiable in interview, and prevents first-quarter attrition in field roles.",
+      "appliesTo": "field, sales, consulting, and multi-site roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful when the percentage reflects the real job. State it precisely; disability or religious accommodation may adjust specific trips, not the requirement itself."
+      }
+    },
+    {
+      "id": "core-avl-04",
+      "text_en": "Candidate confirms availability for the stated schedule — nights, weekends, rotating shifts, statutory-holiday coverage, or on-call rotations — as listed in the job description.",
+      "text_zh": "候选人确认可按职位说明中列明的班次安排工作——夜班、周末、轮班、法定节假日值班或随叫随到轮值。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Schedule feasibility is a core high-volume knockout; asking availability (not reasons) keeps it clean.",
+      "appliesTo": "shift-based, retail, healthcare, and operations roles",
+      "legality": {
+        "status": "caution",
+        "notes": "US Title VII religious accommodation applies (Groff v. DeJoy 2023 raised the employer's undue-hardship bar); EU working-time rules limit patterns. Ask 'can you work this schedule?' — never why not."
+      }
+    },
+    {
+      "id": "core-avl-05",
+      "text_en": "Requiring local household registration, birthplace, or regional origin (e.g., 本地户口 only, excluding candidates from a named province or region).",
+      "text_zh": "要求本地户籍、出生地或地域出身（如『仅限本地户口』、排除特定省份或地区的候选人）。",
+      "category": "availability_logistics",
+      "kind": "knockout",
+      "rationale": "Clients frame hukou/origin filters as stability or logistics screens; the lawful screen is commuting/relocation feasibility, not origin.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "PRC courts recognize regional-origin discrimination (地域歧视) as an equal-employment violation (Employment Promotion Law; 2019 Zhejiang ruling) and MOHRSS restricts hukou-restrictive ads; Taiwan ESA §5 lists 籍贯 and 出生地. Reframe: commuting-distance or relocation commitment (core-avl-02)."
+      }
+    },
+    {
+      "id": "core-lng-01",
+      "text_en": "Candidate demonstrates the stated working proficiency in each required language (e.g., CEFR B2/C1, JLPT N2, TOEIC 800+, HSK 5), evidenced by a recognized test score or by completing a structured interview conducted in that language.",
+      "text_zh": "候选人具备每种所需语言的规定工作水平（如 CEFR B2/C1、JLPT N2、托业 800+、HSK 5），以权威考试成绩或以该语言完成结构化面试为证。",
+      "category": "language_communication",
+      "kind": "knockout",
+      "rationale": "Language thresholds anchored to test frameworks or an in-language interview are objectively verifiable and portable across markets.",
+      "appliesTo": "roles with real cross-language communication needs",
+      "legality": {
+        "status": "safe",
+        "notes": "Lawful when the level matches actual job communication needs (EEOC national-origin guidance); requiring fluency beyond the job's needs — or penalizing accents that don't impair communication — is national-origin exposure."
+      }
+    },
+    {
+      "id": "core-lng-02",
+      "text_en": "'Native speaker only' requirements for a language.",
+      "text_zh": "『仅限母语者』的语言要求。",
+      "category": "language_communication",
+      "kind": "knockout",
+      "rationale": "'Native' screens on birthplace and national origin, not on the actual communication ability the client cares about.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "Treated as national-origin discrimination by the US EEOC and UK/EU equality guidance; Taiwan ESA §5 covers 出生地/语言. Reframe: 'C2/full professional proficiency, verified by test or in-language interview' (core-lng-01)."
+      }
+    },
+    {
+      "id": "core-cul-01",
+      "text_en": "Workstyle and values alignment is scored only against defined, job-related behavioral anchors (e.g., candidate gives a concrete example of acting on critical feedback) using structured interview evidence — never on interviewer gut feel or 'beer test' similarity.",
+      "text_zh": "工作风格与价值观匹配仅依据明确、与岗位相关的行为锚点评分（如候选人举出根据批评性反馈改进的具体事例），采用结构化面试证据——绝不凭面试官直觉或『合得来』的相似性。",
+      "category": "culture_workstyle",
+      "kind": "preference",
+      "rationale": "Unstructured 'culture fit' is the main bias vector left in modern funnels; behavioral anchors make the same construct measurable and defensible.",
+      "appliesTo": "all roles",
+      "legality": {
+        "status": "safe",
+        "notes": "Safe when anchored to job-related behaviors with consistent scoring; free-form fit judgments invite disparate-treatment claims and homogeneity."
+      }
+    },
+    {
+      "id": "core-cul-02",
+      "text_en": "Requiring acceptance of schedules that exceed statutory working-hour limits (e.g., '996' — 9am-9pm, six days a week) as a hiring condition.",
+      "text_zh": "将接受超出法定工时上限的作息（如『996』——早 9 晚 9、每周 6 天）作为录用条件。",
+      "category": "culture_workstyle",
+      "kind": "knockout",
+      "rationale": "Still a live expectation in parts of tech and startups; encoding it as a screening rule makes the client party to an unlawful term.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "PRC Supreme People's Court and MOHRSS jointly declared 996 unlawful (2021); EU Working Time Directive caps average weekly hours at 48; US FLSA requires overtime pay for non-exempt staff. Reframe: disclose lawful overtime, on-call rotations, or crunch periods explicitly and screen on informed acceptance."
+      }
+    },
+    {
+      "id": "core-cul-03",
+      "text_en": "Screening on appearance, height, weight, attractiveness, or requiring photos with applications (e.g., 形象好气质佳, height ≥165cm, headshot mandatory).",
+      "text_zh": "以外貌、身高、体重、颜值筛选，或要求随简历提交照片（如『形象好气质佳』『身高 165cm 以上』、必须附照片）。",
+      "category": "culture_workstyle",
+      "kind": "knockout",
+      "rationale": "Common in Greater-China and service-industry briefs; appearance criteria encode gender, age, and disability bias with no performance signal.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "Taiwan ESA §5 explicitly lists 容貌 and 五官 (fines NT$300k-1.5M); height/weight rules carry US disparate-impact liability and are directly banned in Michigan, NYC (2023) and other jurisdictions; PRC regulators flag appearance-based ads. Reframe: post-hire grooming/dress standards, or a genuine job-related physical requirement stated objectively."
+      }
+    },
+    {
+      "id": "core-cul-04",
+      "text_en": "Screening on zodiac sign, Chinese zodiac year, blood type, or fortune-telling criteria (星座, 属相/生肖, 血型, 命理/八字).",
+      "text_zh": "以星座、属相/生肖、血型或命理/八字作为筛选条件。",
+      "category": "culture_workstyle",
+      "kind": "knockout",
+      "rationale": "Requested surprisingly often in Greater-China and Japan/Korea briefs as a 'personality' proxy; it has zero validity and is now expressly illegal in Taiwan.",
+      "appliesTo": "all roles (refuse whenever requested)",
+      "legality": {
+        "status": "prohibited",
+        "notes": "Taiwan ESA §5 explicitly lists 星座 and 血型 as protected traits (fines NT$300k-1.5M); blood-type screening is condemned as discrimination in Japan (ブラッドタイプ・ハラスメント) and has no lawful basis elsewhere. Refuse and reframe: validated personality assessments or structured behavioral interviews (core-cul-01)."
+      }
+    }
+  ],
+  "matchSuccessInsights": [
+    "Keep hard knockouts to 3-5 per role. The universally defensible set is: work authorization, legally mandated licensure, location/schedule feasibility, and salary-band fit. Every additional knockout must earn its pool shrinkage — knockout-heavy screens filter out roughly half of applicants before a human ever looks.",
+    "A rule only belongs in automated screening if it is binary, job-related, and verifiable from evidence an LLM can inspect — resume date arithmetic, credential registry lookups, test scores, or an explicit yes/no answer. Anything requiring judgment (gap quality, termination context, culture fit) should emit a flag for the interview loop, not a rejection.",
+    "Stability rules generate the most false negatives of any category: tenure floors and gap screens punish layoffs, contractors, and caregivers. Excluding involuntary and contract separations before scoring, and scoring the explanation rather than the gap, preserves most of the flight-risk signal at a fraction of the adverse-impact cost.",
+    "Integrity knockouts (fabricated degrees, falsified dates or titles, reference contradictions) are the safest terminal rules in every jurisdiction. With roughly a third of candidates misstating education and 40-70% admitting some embellishment, primary-source verification of finalists is the highest-ROI check in the funnel.",
+    "The requests an assistant must refuse cluster into demographic proxies — age caps ('under 35'), gender or marital/childbearing screens, appearance/photo demands, hukou/birthplace filters, and 星座/血型 criteria. Each has a lawful reframe (seniority band + salary range, objective workload disclosure, verified tenure history, commuting feasibility, validated assessments). Penalties are concrete: NT$300k-1.5M per violation in Taiwan, RMB 10k-50k in the PRC, and uncapped disparate-impact exposure in the US/EU.",
+    "Compensation misalignment is the top late-funnel failure mode. Disclose the band early (already mandatory in CO/CA/NY/WA/IL and EU-wide from June 2026), screen expectations against it, and never collect salary history — banned in 17+ US states and soon across the EU.",
+    "Criminal-history screening is a timing problem more than a content problem: 15 US states plus 22+ localities bar asking before an offer or interview stage, and the EEOC requires individualized, job-related assessment. Moving the same check later in the funnel converts a legal liability into a defensible rule with almost no loss of protection.",
+    "US/EU rules fail mostly on process and disparate impact (FCRA notices, GDPR proportionality, adverse-impact statistics); Greater-China rules fail mostly on explicit statutory lists (Taiwan ESA §5's eighteen protected traits, PRC women's-rights and hukou rules). The assistant should therefore localize legality flags by hiring country, not apply a single global standard."
+  ]
+}
