@@ -176,6 +176,18 @@ function cleanConnectionString(raw: string | undefined): string | undefined {
     const u = new URL(raw);
     const dropParams = ['pgbouncer', 'connection_limit', 'pool_timeout', 'socket_timeout', 'schema'];
     for (const p of dropParams) u.searchParams.delete(p);
+    // pg-connection-string (pg v8.15+) prints a SECURITY WARNING on every pool
+    // construction when sslmode is one of the libpq aliases it currently remaps
+    // to `verify-full` — 'prefer', 'require', 'verify-ca'. We already run under
+    // full verification today (these connections succeed), so pin the explicit
+    // `verify-full` the warning asks for: identical behaviour now, no console
+    // spam, and immune to the weaker libpq semantics pg v9 will switch these
+    // aliases to. 'disable' / 'no-verify' / an already-explicit 'verify-full'
+    // are left untouched.
+    const sslmode = u.searchParams.get('sslmode');
+    if (sslmode === 'require' || sslmode === 'prefer' || sslmode === 'verify-ca') {
+      u.searchParams.set('sslmode', 'verify-full');
+    }
     return u.toString();
   } catch {
     return raw;
@@ -272,9 +284,32 @@ export function createPrismaClientForUrl(
 
   const adapter = new PrismaPg(pool);
 
+  // Route Prisma's error/warn logs through EVENTS instead of letting the client
+  // print them straight to stdout. The transient-error-retry $extends layer
+  // below transparently recovers "Server has closed the connection" (P1017) on
+  // a fresh pool connection — but Prisma's built-in logger fires on the FIRST
+  // failure, BEFORE our retry runs, so with plain stdout logging every
+  // successfully-retried query still spat a scary multi-line `prisma:error`
+  // block (Neon idle-suspend / laptop-sleep drops the whole idle pool at once,
+  // so a burst of concurrent queries each logged one). The $on('error') handler
+  // swallows exactly the errors the retry layer handles — same isTransientDbError
+  // predicate — and prints everything else unchanged.
+  const isDev = process.env.NODE_ENV === 'development';
   const baseClient = new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+    log: [
+      { level: 'error', emit: 'event' },
+      { level: 'warn', emit: 'event' },
+    ],
+  });
+
+  baseClient.$on('error', (e) => {
+    if (isTransientDbError({ message: e.message })) return; // retried by the $extends layer
+    console.error('prisma:error', e.message);
+  });
+  baseClient.$on('warn', (e) => {
+    // Match the previous config: warnings only surfaced in development.
+    if (isDev) console.warn('prisma:warn', e.message);
   });
 
   if (opts?.keepalive) {
