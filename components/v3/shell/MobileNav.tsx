@@ -26,7 +26,7 @@ const ITEMS: { href: string; labelKey: string; icon: ReactNode; match: (p: strin
   { href: '/queue', labelKey: 'queue', icon: <IconList size={18} />, match: (p) => p.startsWith('/queue'), jobApply: true },
   { href: '/resumes', labelKey: 'resumes', icon: <IconFile size={18} />, match: (p) => p.startsWith('/resumes') },
   { href: '/mock-interview', labelKey: 'interview', icon: <IconSparkle size={18} />, match: (p) => p.startsWith('/mock-interview') },
-  { href: '/tracker', labelKey: 'pipeline', icon: <IconStack size={18} />, match: (p) => p.startsWith('/tracker'), jobApply: true },
+  { href: '/tracker', labelKey: 'tracker', icon: <IconStack size={18} />, match: (p) => p.startsWith('/tracker'), jobApply: true },
 ];
 
 export function MobileNav() {

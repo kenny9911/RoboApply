@@ -42,6 +42,7 @@
     "queue": "待审队列",
     "resumes": "简历工坊",
     "interview": "模拟面试",
+    "tracker": "求职进度",
     "pipeline": "进度看板",
     "activity": "活动记录",
     "badge_new_count": "新增 {count}",
@@ -2190,6 +2191,8 @@
     "card": {
       "drag_hint": "可拖动卡片——拖到其他阶段，或使用状态菜单",
       "move_label": "将 {role} 移动到其他阶段",
+      "delete_label": "将 {role} 从看板移除",
+      "delete_confirm": "从看板移除这条投递记录？之后可以重新添加该职位。",
       "untitled_company": "未命名公司",
       "untitled_role": "未命名职位"
     },
@@ -2957,8 +2960,11 @@
     "titleAccent": "账单",
     "loading": "正在加载你的账户…",
     "nav": {
+      "overview": "概览",
+      "plans": "套餐",
       "profile": "资料",
       "billing": "账单",
+      "orders": "订单与发票",
       "usage": "使用情况",
       "security": "安全"
     },

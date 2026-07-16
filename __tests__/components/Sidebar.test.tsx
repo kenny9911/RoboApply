@@ -80,30 +80,44 @@ describe('Sidebar (V3)', () => {
     expect(
       screen.getByRole('link', { name: /Mock interview/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Pipeline/i })).toBeInTheDocument();
+    // Tracker is the single umbrella entry (board + activity log live as tabs
+    // on /tracker now) — there is no longer a separate "Activity log" link.
+    expect(screen.getByRole('link', { name: /Tracker/i })).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /Activity log/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole('link', { name: /Activity log/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Preferences/i }),
     ).toBeInTheDocument();
   });
 
-  it('renders the Plans & credits settings link, active on /plans', () => {
-    pathnameRef.current = '/plans';
+  it('renders the single Account settings link, active on /account and its sub-routes', () => {
+    pathnameRef.current = '/account/plans';
     renderWithProviders(<Sidebar />);
-    const plans = screen.getByRole('link', { name: /Plans & credits/i });
-    expect(plans).toHaveAttribute('href', '/plans');
-    expect(plans).toHaveAttribute('aria-current', 'page');
+    // Plans folded into the unified Account area — there is no separate
+    // "Plans & credits" sidebar link anymore.
+    expect(screen.queryByRole('link', { name: /Plans & credits/i })).not.toBeInTheDocument();
+    const account = screen.getByRole('link', { name: /Account/i });
+    expect(account).toHaveAttribute('href', '/account');
+    expect(account).toHaveAttribute('aria-current', 'page');
   });
 
-  it('keeps the Plans & credits link when job-applying is OFF (not auto-apply-gated)', () => {
+  it('keeps the Account link when job-applying is OFF (not auto-apply-gated)', () => {
     mockAuthState.value = buildAuthValue({ jobApplyingEnabled: false });
     renderWithProviders(<Sidebar />);
-    expect(screen.getByRole('link', { name: /Plans & credits/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Account/i })).toBeInTheDocument();
   });
 
-  it('renders Tweaks and Replay onboarding as buttons (not links)', () => {
+  it('gates Tweaks to admins: hidden for a seeker, shown for an admin (both as buttons, not links)', () => {
+    // Default seeker: Replay onboarding still shows, but Tweaks is admin-only.
+    const { unmount } = renderWithProviders(<Sidebar />);
+    expect(
+      screen.getByRole('button', { name: /Replay onboarding/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tweaks/i })).not.toBeInTheDocument();
+    unmount();
+
+    mockAuthState.value = buildAuthValue({ user: buildFakeUser({ role: 'admin' }) });
     renderWithProviders(<Sidebar />);
     expect(screen.getByRole('button', { name: /Tweaks/i })).toBeInTheDocument();
     expect(
@@ -128,7 +142,8 @@ describe('Sidebar (V3)', () => {
     expect(resumes).toHaveAttribute('aria-current', 'page');
   });
 
-  it('opens the Tweaks panel when the Tweaks button is clicked', () => {
+  it('opens the Tweaks panel when the (admin-only) Tweaks button is clicked', () => {
+    mockAuthState.value = buildAuthValue({ user: buildFakeUser({ role: 'admin' }) });
     renderWithProviders(<Sidebar />);
     fireEvent.click(screen.getByRole('button', { name: /Tweaks/i }));
     // TweaksPanel renders its heading when open.
@@ -155,14 +170,14 @@ describe('Sidebar (V3)', () => {
     expect(within(link).getByText('NEW')).toBeInTheDocument();
   });
 
-  it('carries no fake numeric badges on Resume builder / Pipeline', async () => {
+  it('carries no fake numeric badges on Resume builder / Tracker', async () => {
     renderWithProviders(<Sidebar />);
     // Let the live badge queries settle so the assertion isn't vacuous.
     await screen.findByText('12 new');
     const resumes = screen.getByRole('link', { name: /Resume builder/i });
-    const pipeline = screen.getByRole('link', { name: /Pipeline/i });
+    const tracker = screen.getByRole('link', { name: /Tracker/i });
     expect(within(resumes).queryByText(/\d/)).not.toBeInTheDocument();
-    expect(within(pipeline).queryByText(/\d/)).not.toBeInTheDocument();
+    expect(within(tracker).queryByText(/\d/)).not.toBeInTheDocument();
   });
 
   it.runIf(QUEUE_REVIEW_ENABLED)('hides the queue badge entirely when pendingCount is 0', async () => {
@@ -185,8 +200,7 @@ describe('Sidebar (V3)', () => {
     // Auto-apply nav links are gone.
     expect(screen.queryByRole('link', { name: /Today/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Review queue/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Pipeline/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Activity log/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Tracker/i })).not.toBeInTheDocument();
     // The Tweaks + Replay onboarding settings actions are gone.
     expect(screen.queryByRole('button', { name: /Tweaks/i })).not.toBeInTheDocument();
     expect(

@@ -243,8 +243,9 @@ def uc01(page: Page) -> None:
     # Topbar breadcrumb's .now reflects the page.
     routes = [
         ("/resumes", "Resume builder"),
-        ("/tracker", "Pipeline"),
-        ("/activity", "Activity log"),
+        # Pipeline + Activity log are now the two tabs of one "Tracker" entry.
+        ("/tracker", "Tracker"),
+        ("/tracker/activity", "Tracker"),
         ("/home", "Today"),
     ]
     if QUEUE_ENABLED:
@@ -851,7 +852,7 @@ def uc10(page: Page) -> None:
 def uc11(page: Page) -> None:
     header("UC-V3-11 — Activity log")
     msgs = capture_console(page)
-    safe_goto(page, f"{APP}/activity")
+    safe_goto(page, f"{APP}/tracker/activity")
     wait_shell(page)
     page.wait_for_selector(".log .log-day", timeout=20_000)
     page.wait_for_timeout(900)

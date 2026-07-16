@@ -24,8 +24,8 @@ const CRUMB_MAP: { test: (p: string) => boolean; section: string; page: string }
   { test: (p) => p.startsWith('/queue'), section: 'section_workspace', page: 'queue' },
   { test: (p) => p.startsWith('/resumes'), section: 'section_workspace', page: 'resumes' },
   { test: (p) => p.startsWith('/mock-interview'), section: 'section_workspace', page: 'interview' },
-  { test: (p) => p.startsWith('/tracker'), section: 'section_workspace', page: 'pipeline' },
-  { test: (p) => p.startsWith('/activity'), section: 'section_workspace', page: 'activity' },
+  { test: (p) => p.startsWith('/tracker'), section: 'section_workspace', page: 'tracker' },
+  { test: (p) => p.startsWith('/activity'), section: 'section_workspace', page: 'tracker' },
   { test: (p) => p.startsWith('/preferences'), section: 'section_settings', page: 'preferences' },
   { test: (p) => p.startsWith('/onboarding'), section: 'section_settings', page: 'onboarding' },
 ];

@@ -42,6 +42,7 @@
     "queue": "待審佇列",
     "resumes": "履歷工坊",
     "interview": "模擬面試",
+    "tracker": "求職進度",
     "pipeline": "進度看板",
     "activity": "活動記錄",
     "badge_new_count": "新增 {count}",
@@ -2190,6 +2191,8 @@
     "card": {
       "drag_hint": "可拖曳卡片——拖到其他階段，或使用狀態選單",
       "move_label": "將 {role} 移動到其他階段",
+      "delete_label": "將 {role} 從看板移除",
+      "delete_confirm": "從看板移除這筆投遞紀錄？之後可以重新新增該職位。",
       "untitled_company": "未命名公司",
       "untitled_role": "未命名職位"
     },
@@ -2957,8 +2960,11 @@
     "titleAccent": "帳單",
     "loading": "正在載入你的帳戶…",
     "nav": {
+      "overview": "總覽",
+      "plans": "方案",
       "profile": "資料",
       "billing": "帳單",
+      "orders": "訂單與發票",
       "usage": "使用情況",
       "security": "安全"
     },

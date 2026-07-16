@@ -42,6 +42,7 @@
     "queue": "確認キュー",
     "resumes": "履歴書ビルダー",
     "interview": "模擬面接",
+    "tracker": "進捗管理",
     "pipeline": "パイプライン",
     "activity": "アクティビティログ",
     "badge_new_count": "新着 {count}",
@@ -2190,6 +2191,8 @@
     "card": {
       "drag_hint": "ドラッグ可能なカード——別のステージへドラッグするか、ステータスメニューを使用してください",
       "move_label": "{role} を別のステージへ移動",
+      "delete_label": "{role} をボードから削除",
+      "delete_confirm": "この応募をボードから削除しますか？この求人は後で再度追加できます。",
       "untitled_company": "企業名未設定",
       "untitled_role": "職種未設定"
     },
@@ -2957,8 +2960,11 @@
     "titleAccent": "請求",
     "loading": "アカウントを読み込んでいます…",
     "nav": {
+      "overview": "概要",
+      "plans": "プラン",
       "profile": "プロフィール",
       "billing": "請求",
+      "orders": "注文と請求書",
       "usage": "利用状況",
       "security": "セキュリティ"
     },

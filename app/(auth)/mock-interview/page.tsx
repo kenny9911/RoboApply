@@ -407,7 +407,7 @@ export default function MockSetupPage() {
           <span style={{ fontSize: 13.5, color: 'var(--text)' }}>
             {t('setup.insufficientCredits', { required: insufficientCredits.required, balance: insufficientCredits.balance })}
           </span>
-          <Link href="/account#billing" style={{ textDecoration: 'none' }}>
+          <Link href="/account/plans" style={{ textDecoration: 'none' }}>
             <Btn variant="primary">{t('setup.getCredits')}</Btn>
           </Link>
         </div>

@@ -111,3 +111,43 @@ export function usePatchPipelineStatus() {
     },
   });
 }
+
+/**
+ * Soft-delete a tracker entry (server stamps `deletedAt`; the row is retained
+ * but hidden from every read). Optimistic: the card vanishes from the board
+ * immediately and its column count drops by one, rolling back if the write
+ * fails. On settle we refetch so the board re-syncs with the server.
+ */
+export function useDeletePipelineEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) => raV2Api.tracker.delete(id),
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: pipelineKeys.board() });
+      const prev = qc.getQueryData<PipelineBoardData>(pipelineKeys.board());
+      if (prev) {
+        const removed = prev.entries.find((e) => e.id === id);
+        const nextCounts = { ...prev.statusCounts };
+        if (removed) {
+          nextCounts[removed.status] = Math.max(
+            0,
+            (nextCounts[removed.status] ?? 0) - 1,
+          );
+        }
+        qc.setQueryData<PipelineBoardData>(pipelineKeys.board(), {
+          ...prev,
+          entries: prev.entries.filter((e) => e.id !== id),
+          statusCounts: nextCounts,
+          total: Math.max(0, prev.total - (removed ? 1 : 0)),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(pipelineKeys.board(), ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.board() });
+    },
+  });
+}

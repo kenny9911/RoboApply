@@ -6,7 +6,7 @@
 //   GET    /:id       — single entry (owner-only; 404 otherwise)
 //   POST   /          — create (jobId OR externalSnapshot required)
 //   PATCH  /:id       — partial update
-//   DELETE /:id       — hard delete (per spec §5.2)
+//   DELETE /:id       — soft delete (stamps deletedAt; hidden from all reads)
 //   POST   /bulk      — bulk status / excitement / deadline patch
 
 import { Router, type Request, type Response } from 'express';
