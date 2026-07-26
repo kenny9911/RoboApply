@@ -28,12 +28,22 @@ and the per-iteration cookie re-plant. Only the walk is new, and it is
 organized by destination rather than by use-case number, because the IA is now
 the thing under test.
 
-Auth: proxy.ts only checks that the session cookie is PRESENT, never validating
-it in stub mode. So we plant a dummy `session_token` + seed
-`localStorage.auth_token` the same way — no real /api/auth/login.
+Auth: proxy.ts only checks the session cookie is PRESENT, so a planted cookie
+clears the edge. But `NEXT_PUBLIC_USE_STUB_API` only swaps the **v2 data
+layer** (lib/api/v2) — AuthProvider still calls the REAL
+/api/v1/seeker/auth/me, and AuthGate bounces to /login when that 401s. There
+is no auth stub, and deliberately so: an env-gated auth bypass in product code
+is one misconfigured deploy away from being a production hole.
 
-Pre-req: the dev server is up on :3611 in stub mode
-(`NEXT_PUBLIC_USE_STUB_API=true` in .env.local). No backend required.
+So this walk needs a real session token. Get one from a browser you are already
+logged into (Application → Cookies → session_token) and pass it in:
+
+    RA_SESSION=<token> python3 e2e/ia-dry-run.py
+
+Pre-reqs: dev server on :3611 (override with RA_APP), the API reachable, and
+RA_SESSION set. Without RA_SESSION the walk runs the PUBLIC groups only
+(landing, login, signup, redirects, theme, i18n, console) and reports the
+authenticated groups as SKIPPED rather than silently passing.
 
 Run from the repo root:
   python3 e2e/ia-dry-run.py
@@ -44,13 +54,14 @@ otherwise.
 """
 
 import re
+import os
 import sys
 import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, Page, BrowserContext
 
-APP = "http://localhost:3611"
+APP = os.environ.get("RA_APP", "http://localhost:3611")
 SHOTS = Path("/tmp/ra-ia-shots")
 SHOTS.mkdir(exist_ok=True)
 
@@ -198,14 +209,16 @@ def header(label: str, subtitle: str = "") -> None:
         print(f"   ({subtitle})")
 
 
-# ----- session bootstrap (stub mode — presence-only cookie) ------------
+# ----- session bootstrap --------------------------------------------------
 #
-# Stub mode ignores the token value entirely; proxy.ts only checks the cookie
-# exists. So plant a fixed dummy value, never a real login. The localStorage
-# seed mirrors the cookie (roboApi never reads it in stub mode — harmless noise
-# that keeps the real-backend swap path honest).
+# proxy.ts checks only that `session_token` EXISTS, so any value clears the
+# edge. AuthGate then calls the real /auth/me, which is what actually decides
+# whether the authenticated groups can run — see the module docstring.
 
-STUB_TOKEN = "stub-ia"
+# A real token when RA_SESSION is set; otherwise a dummy that clears proxy.ts
+# but will not survive AuthGate. AUTHED tells the walk which groups can run.
+STUB_TOKEN = os.environ.get("RA_SESSION", "stub-ia")
+AUTHED = bool(os.environ.get("RA_SESSION"))
 
 
 def set_session_cookie(ctx: BrowserContext) -> None:
@@ -286,10 +299,15 @@ def preflight(page: Page) -> bool:
     except Exception:
         pass
     if "/login" in page.url:
-        print("\n   PREFLIGHT FAILED — /jobs bounced to /login.")
-        print("   The planted cookie clears proxy.ts (presence-only), but AuthGate")
-        print("   calls the real /auth/me and it 401s. Run the dev server in stub")
-        print("   mode:  NEXT_PUBLIC_USE_STUB_API=true in .env.local, then restart.")
+        if not AUTHED:
+            print("\n   /jobs bounced to /login and RA_SESSION is not set.")
+            print("   Running the PUBLIC groups only; authenticated groups are SKIPPED.")
+            print("   To walk the whole product, pass a real session token:")
+            print("     RA_SESSION=<session_token> python3 e2e/ia-dry-run.py")
+            return False
+        print("\n   PREFLIGHT FAILED — /jobs bounced to /login with RA_SESSION set.")
+        print("   The token is expired or belongs to another environment. Grab a")
+        print("   fresh session_token cookie from a logged-in browser and retry.")
     else:
         print(f"\n   PREFLIGHT FAILED — the shell never mounted (url={page.url}).")
     shot(page, "preflight-FAILED")
@@ -432,12 +450,20 @@ def group_c(page: Page) -> None:
     header("C — Old links (308s)", "a 404 on the first click after signup is not recoverable")
     msgs = capture_console(page)
 
+    # Assert the FIRST HOP, not the settled URL. Every destination except "/"
+    # is auth-gated, so following the chain without a session lands on /login
+    # and a perfectly good 308 reads as a broken redirect.
     for src, dest in REDIRECTS:
-        if not safe_goto(page, f"{APP}{src}"):
-            assert_(False, f"{src} loads", "C")
+        try:
+            resp = page.request.get(f"{APP}{src}", max_redirects=0)
+        except Exception as e:
+            assert_(False, f"{src} responds ({type(e).__name__})", "C")
             continue
-        landed = page.url.replace(APP, "").split("?")[0].rstrip("/") or "/"
-        assert_(landed == dest, f"{src} → {dest} (got {landed})", "C")
+        status = resp.status
+        loc = (resp.headers.get("location") or "").replace(APP, "").split("?")[0]
+        loc = loc.rstrip("/") or "/"
+        assert_(status in (307, 308) and loc == dest,
+                f"{src} → {dest} (got {status} → {loc or 'no Location'})", "C")
 
     errs = real_errs(msgs)
     assert_(len(errs) == 0, f"zero real console errors (got {len(errs)})", "C")
@@ -647,10 +673,16 @@ def group_j(page: Page) -> None:
     header("J — Theme", "ruling R3: warm theme and the accent picker are deleted")
     msgs = capture_console(page)
 
-    if not safe_goto(page, f"{APP}/jobs"):
-        assert_(False, "GET /jobs loads", "J")
+    # The landing page carries the same toggle and writes the same
+    # <html data-theme>, so this group needs no session.
+    target = "/jobs" if AUTHED else "/"
+    if not safe_goto(page, f"{APP}{target}"):
+        assert_(False, f"GET {target} loads", "J")
         return
-    wait_shell(page)
+    if AUTHED:
+        wait_shell(page)
+    else:
+        page.wait_for_selector("h1", timeout=20_000)
 
     # Light is the default (R3). A fresh context has no stored preference.
     theme = page.evaluate("() => document.documentElement.getAttribute('data-theme')")
@@ -665,13 +697,21 @@ def group_j(page: Page) -> None:
     # Dark is first-class, not an afterthought: the toggle must actually flip.
     toggle = page.get_by_role("button", name=re.compile("switch to dark", re.I))
     if toggle.count() >= 1:
+        toggle.first.wait_for(state="visible", timeout=10_000)
         toggle.first.click()
-        page.wait_for_timeout(300)
-        after = page.evaluate("() => document.documentElement.getAttribute('data-theme')")
+        # Poll rather than sleep: the toggle is gated on `hydrated` (it renders
+        # a theme-conditional icon and aria-label), so a click on a cold load
+        # can land before the handler is live.
+        after = "light"
+        for _ in range(40):
+            after = page.evaluate("() => document.documentElement.getAttribute('data-theme')")
+            if after == "dark":
+                break
+            page.wait_for_timeout(100)
         assert_(after == "dark", f"The theme toggle reaches dark (got {after!r})", "J")
         shot(page, "j-dark")
     else:
-        assert_(False, "A theme toggle is present in the topbar", "J")
+        assert_(False, "A theme toggle is present", "J")
 
     errs = real_errs(msgs)
     assert_(len(errs) == 0, f"zero real console errors (got {len(errs)})", "J")
@@ -687,11 +727,15 @@ def group_k(page: Page, ctx: BrowserContext) -> None:
     msgs = capture_console(page)
 
     set_locale_cookie(ctx, "zh")
-    if not safe_goto(page, f"{APP}/jobs"):
-        assert_(False, "GET /jobs loads under zh", "K")
+    target = "/jobs" if AUTHED else "/"
+    if not safe_goto(page, f"{APP}{target}"):
+        assert_(False, f"GET {target} loads under zh", "K")
         return
-    wait_shell(page)
-    shot(page, "k-zh-jobs")
+    if AUTHED:
+        wait_shell(page)
+    else:
+        page.wait_for_selector("h1", timeout=20_000)
+    shot(page, "k-zh")
 
     text = visible_text(page)
     # A literal dotted path is what a renamed namespace ships in nine languages
@@ -702,9 +746,14 @@ def group_k(page: Page, ctx: BrowserContext) -> None:
 
     # The nav genuinely swapped language rather than falling through to the
     # English deep-merge base.
-    rail = " ".join(a.inner_text() for a in page.locator(NAV_ITEM).all())
-    has_cjk = bool(re.search(r"[一-鿿]", rail))
-    assert_(has_cjk, f"Nav renders Chinese under zh (rail={rail!r})", "K")
+    if AUTHED:
+        sample = " ".join(a.inner_text() for a in page.locator(NAV_ITEM).all())
+        label = "Nav"
+    else:
+        sample = page.locator("h1").first.inner_text()
+        label = "Hero"
+    has_cjk = bool(re.search(r"[一-鿿]", sample))
+    assert_(has_cjk, f"{label} renders Chinese under zh (got {sample[:60]!r})", "K")
 
     errs = real_errs(msgs)
     assert_(len(errs) == 0, f"zero real console errors (got {len(errs)})", "K")
@@ -718,8 +767,12 @@ def group_l() -> None:
     header("L — Console-error trap (aggregate)")
     console_checks = [r for r in results if "console errors" in r["check"]]
     failed = [r for r in console_checks if r["status"] == "FAIL"]
-    assert_(len(console_checks) >= 8,
-            f"Console-error trap ran on every group ({len(console_checks)} checks)", "L")
+    ran = {r["uc"] for r in results if r["status"] != "SKIP" and r["uc"] != "L"}
+    covered = {r["uc"] for r in console_checks}
+    missing = sorted(ran - covered)
+    assert_(not missing,
+            f"Console-error trap ran on every group that ran "
+            f"({len(console_checks)}/{len(ran)}; uncovered={missing or 'none'})", "L")
     assert_(len(failed) == 0,
             f"No group emitted a React/runtime console error ({len(failed)} offending groups)", "L")
     if failed:
@@ -789,20 +842,33 @@ def main() -> int:
         seed_local_storage(pf)
         ok = preflight(pf)
         pf.close()
-        if not ok:
+        if not ok and AUTHED:
             browser.close()
             print("\nOVERALL: FAIL ✗ (preflight — nothing was walked)")
             return 1
 
         # ── ordered walk ──
-        run("A", group_a)
-        run("B", group_b)
+        #
+        # Without a session, A/B/D/E/F/G/H need a mounted app shell and cannot
+        # run. They are recorded as SKIPPED rather than quietly omitted, so the
+        # summary never reads as full coverage when it is not. C (redirects),
+        # J (theme), K (i18n) and L (console) are public and always run.
+        if ok:
+            run("A", group_a)
+            run("B", group_b)
+            run("D", group_d)
+            run("E", group_e)
+            run("F", group_f)
+            run("G", group_g)
+            run("H", group_h)
+        else:
+            for g in ("A", "B", "D", "E", "F", "G", "H"):
+                results.append({
+                    "uc": g,
+                    "check": "authenticated group — set RA_SESSION to walk it",
+                    "status": "SKIP",
+                })
         run("C", group_c)
-        run("D", group_d)
-        run("E", group_e)
-        run("F", group_f)
-        run("G", group_g)
-        run("H", group_h)
         run("J", group_j)
         # K needs the ctx to swap the locale cookie.
         run("K", lambda pg: group_k(pg, ctx), locale_group=True)
@@ -825,20 +891,31 @@ def main() -> int:
     total_checks = 0
     for group in sorted(by_group):
         checks = by_group[group]
-        pass_n = sum(1 for c in checks if c["status"] == "PASS")
-        total = len(checks)
+        skipped = [c for c in checks if c["status"] == "SKIP"]
+        graded = [c for c in checks if c["status"] != "SKIP"]
+        pass_n = sum(1 for c in graded if c["status"] == "PASS")
+        total = len(graded)
         total_pass += pass_n
         total_checks += total
-        if pass_n != total:
+        if total and pass_n != total:
             overall_pass = False
-        bar = "✓" if pass_n == total else "✗"
-        print(f"{bar} {group} — {GROUP_NAMES.get(group, '')}: {pass_n}/{total}")
+        if skipped and not graded:
+            bar = "–"
+            print(f"{bar} {group} — {GROUP_NAMES.get(group, '')}: SKIPPED")
+        else:
+            bar = "✓" if pass_n == total else "✗"
+            print(f"{bar} {group} — {GROUP_NAMES.get(group, '')}: {pass_n}/{total}")
         for c in checks:
-            mark = "  ✓" if c["status"] == "PASS" else "  ✗"
+            mark = "  –" if c["status"] == "SKIP" else ("  ✓" if c["status"] == "PASS" else "  ✗")
             print(f"   {mark} {c['check']}")
 
-    group_total = len(by_group)
-    group_green = sum(1 for g in by_group if all(c["status"] == "PASS" for c in by_group[g]))
+    graded_groups = [g for g in by_group if any(c["status"] != "SKIP" for c in by_group[g])]
+    group_total = len(graded_groups)
+    group_green = sum(
+        1 for g in graded_groups
+        if all(c["status"] == "PASS" for c in by_group[g] if c["status"] != "SKIP")
+    )
+    skipped_groups = [g for g in by_group if g not in graded_groups]
 
     print()
     if bugs_filed:
@@ -848,6 +925,8 @@ def main() -> int:
         print()
 
     print(f"Groups green: {group_green}/{group_total}")
+    if skipped_groups:
+        print(f"Groups SKIPPED (no RA_SESSION): {', '.join(sorted(skipped_groups))}")
     print(f"Assertions: {total_pass}/{total_checks} passed")
     print(f"Screenshots: {SHOTS}")
     print(f"OVERALL: {'PASS ✓' if overall_pass else 'FAIL ✗'}")
