@@ -25,7 +25,7 @@ interface Props {
 const SEVERITY_ORDER: AnalyzerSeverity[] = ['critical', 'recommended', 'optional'];
 
 export function AnalyzerPanel({ report, onJump, onClose }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
 
   const sorted: AnalyzerIssue[] = SEVERITY_ORDER.flatMap((sev) =>
     report.issues.filter((i) => i.severity === sev),

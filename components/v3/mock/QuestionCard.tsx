@@ -28,7 +28,7 @@ export function QuestionCard({
   onToggleHint,
   onSkip,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <div className="iv-question" key={index}>
       <div className="iv-question-num">

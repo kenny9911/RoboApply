@@ -27,7 +27,7 @@ function prefersReducedMotion(): boolean {
 }
 
 export function IngestRecap({ rows }: Props) {
-  const t = useTranslations('onboarding');
+  const t = useTranslations('jobs.setup');
   const [visibleCount, setVisibleCount] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -68,12 +68,12 @@ export function IngestRecap({ rows }: Props) {
         >
           <path d="M12 2 9 9l-7 3 7 3 3 7 3-7 7-3-7-3-3-7Z" />
         </svg>
-        {t('upload.ingest_title')}
+        {t('upload_ingest_title')}
       </div>
 
       {rows === null ? (
         // Skeleton while the bootstrap is in flight.
-        <div aria-label={t('chat.skeleton_ingest')}>
+        <div aria-label={t('reading_resume')}>
           {[0, 1, 2].map((i) => (
             <div key={i} className="ingest-row pending">
               <div className="ic">
@@ -110,7 +110,7 @@ export function IngestRecap({ rows }: Props) {
               <div className="ic">
                 <div className="spinner" />
               </div>
-              <div>{t('upload.reading')}</div>
+              <div>{t('upload_reading')}</div>
             </div>
           ) : null}
         </>

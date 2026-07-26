@@ -1,6 +1,6 @@
 'use client';
 
-// §08 Danger zone — pause hunt, reset preferences to defaults, delete all
+// Settings § Danger zone — reset preferences to defaults, delete all
 // application data, delete account. The two destructive deletes each open a
 // real confirm modal (solid panel per the CLAUDE.md rule):
 //   • "Delete all application data" → WipeDataModal (data-only wipe:
@@ -9,10 +9,14 @@
 //     in → success receipt + cache refetch).
 //   • "Delete my account" → the shared DeleteAccountModal (type-your-email
 //     confirm → accountApi.deleteAccount soft-delete + nightly hard-purge →
-//     sign-out → /login) — the same modal /account uses.
-// Pause toggles huntActive (mirrors the rail pause button); Reset restores the
-// server-canonical preferences and clears dirty (handled by the parent via
-// `onReset`).
+//     sign-out → /login).
+// Reset restores the server-canonical preferences and clears dirty (handled by
+// the parent via `onReset`).
+//
+// The "Pause hunt" row is GONE: it toggled `huntActive`, the on/off switch for
+// the background auto-apply engine, and auto-apply is deleted (rulings R1).
+// There is no longer a process to pause — the user opens /jobs when they want
+// jobs.
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -56,17 +60,13 @@ function DangerRow({
 }
 
 export function DangerSection({
-  huntActive,
-  onPauseToggle,
   onReset,
   accountEmail,
 }: {
-  huntActive: boolean;
-  onPauseToggle: () => void;
   onReset: () => void;
   accountEmail: string;
 }) {
-  const t = useTranslations('preferences');
+  const t = useTranslations('settings');
   const [wipeOpen, setWipeOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -79,13 +79,6 @@ export function DangerSection({
       />
 
       <div className="pref-danger-list">
-        <DangerRow
-          title={t('danger.pause_title')}
-          desc={t('danger.pause_desc')}
-          btn={huntActive ? t('danger.pause_btn') : t('danger.resume_btn')}
-          tone="warn"
-          onClick={onPauseToggle}
-        />
         <DangerRow
           title={t('danger.reset_title')}
           desc={t('danger.reset_desc')}

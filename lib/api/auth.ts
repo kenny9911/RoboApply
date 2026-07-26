@@ -35,9 +35,6 @@ export interface MeResponse {
     step?: OnboardingStep;
     completedSteps?: OnboardingStep[];
   };
-  /** Deploy-time master switch for the auto-apply product surface (backend
-   *  JOB_APPLYING_ENABLED). Absent on older backends → treated as enabled. */
-  jobApplyingEnabled?: boolean;
 }
 
 export interface AuthSessionResponse {

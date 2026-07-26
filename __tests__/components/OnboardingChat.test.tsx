@@ -92,7 +92,7 @@ describe('OnboardingChat — terminal-session error notices', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent(/another window/i);
       expect(
-        screen.queryByRole('button', { name: /Retry/i }),
+        screen.queryByRole('button', { name: /Try again/i }),
       ).not.toBeInTheDocument();
     },
   );
@@ -105,7 +105,7 @@ describe('OnboardingChat — terminal-session error notices', () => {
     });
     renderChat(chat);
 
-    fireEvent.click(screen.getByRole('button', { name: /Retry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Try again/i }));
     expect(chat.sendMessage).toHaveBeenCalledWith('hello');
   });
 });

@@ -556,7 +556,16 @@ html[lang='ja'] .page-h h1 {
 }
 @keyframes expand { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
-.ai-reasoning {
+/* The "Why you fit" block on an expanded job card.
+ *
+ * Was `.ai-reasoning`, and it led with `.ai-avatar` — a 28px slot holding a
+ * rotating multi-hue orb, the agent's "face". Ruling D4 removes every cue that
+ * a character exists and C9 removes every speaker, so the orb went first and
+ * the slot was left behind rendering an empty tinted square beside the text.
+ * An empty box is not neutrality; it is a face-shaped hole. Both are gone. The
+ * block is named for what it contains, because that is all that is left: the
+ * evidence, with no one delivering it. */
+.why-fits {
   display: flex; gap: var(--sp-3);
   padding: var(--sp-4);
   background: var(--bg);
@@ -565,22 +574,12 @@ html[lang='ja'] .page-h h1 {
   margin-bottom: var(--sp-3);
   position: relative;
 }
-/* Was a rotating multi-hue orb (the agent's "face"). Ruling D4 removes every
- * cue that a character exists, so this is now a flat icon slot. */
-.ai-reasoning .ai-avatar {
-  width: 28px; height: 28px;
-  flex-shrink: 0;
-  border-radius: var(--r-sm);
-  background: var(--action-subtle);
-  color: var(--action);
-  display: grid; place-items: center;
-}
-.ai-reasoning .txt {
+.why-fits .txt {
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   color: var(--text);
 }
-.ai-reasoning .txt .lbl {
+.why-fits .txt .lbl {
   font-size: var(--fs-label);
   letter-spacing: var(--ls-label);
   color: var(--action);

@@ -85,7 +85,7 @@ export function BulletRow({
   runRewrite,
   targetJobId,
 }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const [active, setActive] = useState<RAResumeRewriteAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);

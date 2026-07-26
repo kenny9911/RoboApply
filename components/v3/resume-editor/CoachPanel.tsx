@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function CoachPanel({ tips, onClose }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {

@@ -28,6 +28,30 @@ interface ProvidersProps {
   messages: Record<string, unknown>;
 }
 
+/**
+ * Make a missing translation loud in development and harmless in production.
+ *
+ * next-intl does NOT throw on a missing key — `lib/i18n.ts` deep-merges each
+ * locale over English, and with no `onError` the library falls back to
+ * rendering the literal dotted path. So a renamed namespace with one stale
+ * call site ships the string `jobs.headline` to production, in nine languages,
+ * and neither `next build` nor `vitest` sees anything wrong (ruling C30).
+ *
+ * Two defences, and this is the second:
+ *   • `scripts/check-copy.mjs` reads every `t('…')` literal and fails the build
+ *     if it does not resolve in en.json. That catches the static cases.
+ *   • This throws in development for everything static analysis cannot see —
+ *     a key built from a template literal, or a namespace chosen at runtime.
+ *
+ * Production only logs. A user reading a rejection-adjacent screen should see
+ * an imperfect string, never a crashed page, and the same event is already
+ * failing the build for whoever is about to deploy.
+ */
+function onIntlError(error: unknown): void {
+  if (process.env.NODE_ENV === 'development') throw error;
+  console.error('[i18n]', error);
+}
+
 export function Providers({ children, locale, messages }: ProvidersProps) {
   // Memoize so React Query state survives across navigation. One client per
   // tab is the recommended pattern from the next.js docs.
@@ -63,6 +87,7 @@ export function Providers({ children, locale, messages }: ProvidersProps) {
         locale={locale}
         messages={safeMessages as any}
         timeZone="UTC"
+        onError={onIntlError}
       >
         <AuthProvider>
           <ThemeProvider>{children}</ThemeProvider>

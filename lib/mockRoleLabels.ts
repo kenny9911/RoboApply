@@ -36,7 +36,7 @@ export interface MockRoleLabelHelpers {
 
 /** Hook returning localizers for catalog category names and role titles. */
 export function useMockRoleLabels(): MockRoleLabelHelpers {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const localizeCategory = (name: string): string => {
     const key = `setup.role.categories.${slugifyMockRole(name)}`;
     return t.has(key) ? t(key) : name;

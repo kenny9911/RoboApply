@@ -1,70 +1,72 @@
 'use client';
 
-// MobileNav — the V3 bottom bar for < md (the prototype is desktop-only; this
-// is the small extra the design spec flags). Same Workspace IA as the sidebar,
-// condensed to icon + label. Active item gets the accent treatment. The 248px
-// grid sidebar is hidden below md by the (auth) layout; this takes its place.
+// MobileNav — the fixed bottom bar below 760px, where styles/v3.css hides the
+// 248px rail.
+//
+// It renders DESTINATIONS, the same array the Sidebar renders: same four
+// items, same labels, same order, same routes. That is the point of the bar —
+// it IS the information architecture (ruling D3). If something does not fit
+// here, it is not a destination; Settings, Billing and Sign out live in the
+// AvatarMenu in the Topbar, which is present at every width.
+//
+// Labels are sentence case at --fs-label. (The 9px uppercase mono they used to
+// be — below the 12px floor, in the case that destroys word-shape cues, at the
+// size where the reader most needs them — died with the type system in
+// deb1edc; this file only has to not bring it back.)
+//
+// New here: an explicit 44×44 floor per tab. The bar used to size itself from
+// its contents, so the tap target was whatever the icon plus the label
+// happened to add up to in the user's locale — and the bottom row of a phone
+// screen is the one place a 4px miss costs a wrong destination.
+//
+// The QUEUE_REVIEW_ENABLED / job-applying filtering is gone: a bar whose item
+// count depended on a server flag could not be the IA.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
-import {
-  IconHome,
-  IconList,
-  IconFile,
-  IconSparkle,
-  IconStack,
-} from '../primitives/Iconset';
-import {
-  QUEUE_REVIEW_ENABLED,
-  useJobApplyingEnabled,
-} from '../../../lib/jobApplying';
-
-const ITEMS: { href: string; labelKey: string; icon: ReactNode; match: (p: string) => boolean; jobApply?: boolean }[] = [
-  { href: '/home', labelKey: 'today', icon: <IconHome size={18} />, match: (p) => p === '/home' || p.startsWith('/home/'), jobApply: true },
-  { href: '/queue', labelKey: 'queue', icon: <IconList size={18} />, match: (p) => p.startsWith('/queue'), jobApply: true },
-  { href: '/resumes', labelKey: 'resumes', icon: <IconFile size={18} />, match: (p) => p.startsWith('/resumes') },
-  { href: '/mock-interview', labelKey: 'interview', icon: <IconSparkle size={18} />, match: (p) => p.startsWith('/mock-interview') },
-  { href: '/tracker', labelKey: 'pipeline', icon: <IconStack size={18} />, match: (p) => p.startsWith('/tracker'), jobApply: true },
-];
+import { DESTINATIONS } from './Sidebar';
 
 export function MobileNav() {
   const pathname = usePathname() ?? '';
-  const t = useTranslations('nav_v3');
-  // Hide the auto-apply tabs unless job-applying is known to be enabled.
-  const showJobApply = useJobApplyingEnabled() === true;
-  const items = (showJobApply ? ITEMS : ITEMS.filter((i) => !i.jobApply)).filter(
-    (i) => QUEUE_REVIEW_ENABLED || i.href !== '/queue',
-  );
+  const t = useTranslations('nav');
 
   return (
     <nav
-      aria-label="Mobile"
+      aria-label={t('aria_primary')}
       className="v3-mobile-nav robo-bottom-nav fixed inset-x-0 bottom-0 z-30 items-stretch"
       style={{
         background: 'var(--surface)',
         borderTop: '1px solid var(--rule)',
       }}
     >
-      {items.map((item) => {
-        const active = item.match(pathname);
+      {DESTINATIONS.map(({ href, labelKey, Icon, match }) => {
+        const active = match(pathname);
         return (
           <Link
-            key={item.href}
-            href={item.href}
+            key={href}
+            href={href}
             aria-current={active ? 'page' : undefined}
-            className="flex flex-1 flex-col items-center justify-center gap-1 py-2.5"
-            style={{ color: active ? 'var(--action)' : 'var(--text-muted)' }}
+            className="flex flex-1 flex-col items-center justify-center gap-1 px-1 py-2"
+            // 44px is the floor for a tap target; the bar sits above the home
+            // indicator on iOS, so the padding-bottom is the safe area.
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+              color: active ? 'var(--action)' : 'var(--text-muted)',
+            }}
           >
-            {item.icon}
+            <Icon size={18} />
             <span
               style={{
                 fontSize: 'var(--fs-label)',
                 fontWeight: 600,
+                textAlign: 'center',
+                lineHeight: 1.2,
               }}
             >
-              {t(item.labelKey)}
+              {t(labelKey)}
             </span>
           </Link>
         );

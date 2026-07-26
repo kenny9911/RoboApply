@@ -48,7 +48,7 @@ interface Props {
 }
 
 export function FormatPicker({ value, onChange }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <section className="iv-step">
       <div className="iv-step-head">

@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function QuestionBreakdownSection({ items, enrichmentPending }: Props) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
 
   // null → enrichment hasn't produced this section. [] → nothing to show.
   const showPlaceholder = items === null;

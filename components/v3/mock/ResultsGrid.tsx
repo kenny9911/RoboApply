@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function ResultsGrid({ strengths, gaps }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <div className="iv-results-grid">
       <div className="iv-results-card good">

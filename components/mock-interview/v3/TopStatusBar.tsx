@@ -41,7 +41,7 @@ export function TopStatusBar({
   elapsedSec,
   currentIndex,
   total,
-  backHref = '/mock-interview',
+  backHref = '/practice',
 }: Props) {
   return (
     <header className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-5 py-4 md:px-8 md:py-5">

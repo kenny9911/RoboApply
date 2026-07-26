@@ -1,20 +1,15 @@
 'use client';
 
-// §04 Notifications — channels (email/push/sms), a per-event × per-channel
-// matrix, and digest frequency. All preferences-owned. The matrix keys are the
-// 5 events the proto defines: newMatch90, queueReview, appSent, response,
-// interview.
+// Settings § Notifications — channels (email/push/sms), a per-event ×
+// per-channel matrix, and digest frequency. All preferences-owned.
 
 import { useTranslations } from 'next-intl';
 import { PrefHeader, PrefGroup, PrefRow, Toggle, Segmented } from '../controls';
-import { QUEUE_REVIEW_ENABLED } from '../../../../lib/jobApplying';
 import type { RAPreferences } from '../../../../lib/api/v2';
 
-// queueReview is hidden while the /queue surface is off for launch; the stored
-// preference (and its i18n keys) survive untouched for re-enable.
-const EVENT_IDS = (
-  ['newMatch90', 'queueReview', 'appSent', 'response', 'interview'] as const
-).filter((id) => QUEUE_REVIEW_ENABLED || id !== 'queueReview');
+// `queueReview` is dropped: the review queue it notified about is deleted
+// (rulings R1). The stored preference is simply never read.
+const EVENT_IDS = ['newMatch90', 'appSent', 'response', 'interview'] as const;
 const CHANNELS = ['email', 'push', 'sms'] as const;
 
 export function NotifSection({
@@ -24,7 +19,7 @@ export function NotifSection({
   p: RAPreferences;
   set: (path: string, value: unknown) => void;
 }) {
-  const t = useTranslations('preferences');
+  const t = useTranslations('settings');
 
   const events = EVENT_IDS.map((id) => ({
     id,

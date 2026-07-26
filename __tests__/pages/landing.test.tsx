@@ -1,10 +1,15 @@
-// Landing page — public marketing ("night shift / overnight log" v2).
+// Landing page — public marketing ("the gap report" v3).
 //
-// We verify the rendered hero copy + CTA hrefs, the stats band, the shift
-// timeline, the full-loop grid (incl. the honest EARLY ACCESS chip), the
-// interview-studio spotlight, the operating-rules panel, the REAL pricing
-// tiers (mock-interview credit plans), the GEO FAQ, and the crawlable
-// footer locale links — all against the real en.json bundle.
+// We verify the rendered hero copy + CTA hrefs, the stats band, the four
+// steps, the loop grid, the interview-prep spotlight, the limits panel, the
+// REAL pricing tiers (practice-interview credit plans), the GEO FAQ, and the
+// crawlable footer locale links — all against the real en.json bundle.
+//
+// The last test is the one that matters most: ruling R1 retired auto-apply,
+// so no auto-apply vocabulary may reappear on the public page. That is a
+// truth claim about the product, not a style preference — a marketing page
+// that promises submission the product cannot perform is the defect the
+// whole overhaul exists to remove.
 
 import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
@@ -31,23 +36,25 @@ import {
 } from '../../lib/localeConfig';
 
 describe('Landing page', () => {
-  it('renders hero headline + consent subheadline (translated)', () => {
+  it('renders the R2 hero headline + subheadline (translated)', () => {
     renderWithProviders(<LandingContent />);
-    // Two-voice h1 (machine grotesk + human serif spans) must still compute
-    // the canonical accessible name — accent periods included.
+    // Ruling R2: ONE sentence, one i18n key. The old two-span machine/human
+    // h1 carried the retired "We apply. You interview." tagline.
     expect(
       screen.getByRole('heading', {
-        name: /We apply\s*\.\s*You interview\s*\./i,
+        name: /Find out why you're not getting interviews\./i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Nothing sends without you/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/We read 1,000\+ open roles/i),
+    ).toBeInTheDocument();
   });
 
-  it('primary CTAs link to /onboarding (header, hero, studio, pricing, final, sticky)', () => {
+  it('primary CTAs link to /signup (header, hero, studio, pricing, final, sticky)', () => {
     renderWithProviders(<LandingContent />);
     const ctas = screen
       .getAllByRole('link')
-      .filter((a) => a.getAttribute('href') === '/onboarding');
+      .filter((a) => a.getAttribute('href') === '/signup');
     expect(ctas.length).toBeGreaterThanOrEqual(6);
   });
 
@@ -57,83 +64,84 @@ describe('Landing page', () => {
     expect(signin).toHaveAttribute('href', '/login');
   });
 
-  it('renders the overnight log panel (sr summary + LIVE feed)', () => {
+  it('renders the gap-report panel (sr summary + sample label)', () => {
     renderWithProviders(<LandingContent />);
-    // The animated log body is aria-hidden; the sr-only summary carries it.
-    expect(
-      screen.getByText(/Sample overnight activity log/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/overnight\.log/i)).toBeInTheDocument();
+    // The animated body is aria-hidden; the sr-only summary carries it.
+    expect(screen.getByText(/A sample gap report/i)).toBeInTheDocument();
+    expect(screen.getByText(/roboapply — gap report/i)).toBeInTheDocument();
   });
 
   it('renders the why-bots-lose stats band with citable numbers', () => {
     renderWithProviders(<LandingContent />);
     expect(
-      screen.getByRole('heading', { name: /The volume game is rigged\./i }),
+      screen.getByRole('heading', { name: /More applications is not the answer\./i }),
     ).toBeInTheDocument();
     expect(screen.getByText('242')).toBeInTheDocument();
     expect(screen.getByText('+400%')).toBeInTheDocument();
     expect(screen.getByText('41%')).toBeInTheDocument();
   });
 
-  it('renders the shift timeline steps as headings', () => {
+  it('renders the four verbs as step headings (find, understand, fix, practice)', () => {
     renderWithProviders(<LandingContent />);
     expect(
-      screen.getByRole('heading', { name: /It hunts while you sleep/i }),
+      screen.getByRole('heading', { name: /It reads the market/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /It writes with receipts/i }),
+      screen.getByRole('heading', { name: /It names the gap/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /You hold the veto/i }),
+      screen.getByRole('heading', { name: /You fix the resume/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /then the real prep starts/i }),
+      screen.getByRole('heading', { name: /Then you practice the interview/i }),
     ).toBeInTheDocument();
   });
 
-  it('renders the full-loop grid with the honest EARLY ACCESS chip', () => {
+  it('renders the loop grid, and the apply card says the user applies', () => {
     renderWithProviders(<LandingContent />);
     expect(
-      screen.getByRole('heading', { name: /Matching that reads your resume/i }),
+      screen.getByRole('heading', { name: /Jobs ranked by how well you fit/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /A resume that rewrites itself/i }),
+      screen.getByRole('heading', { name: /A resume you can actually fix/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: /Applications with a consent layer/i,
+        name: /Every application, and what happened to it/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/AUTOPILOT · EARLY ACCESS/i)).toBeInTheDocument();
+    // Said on the loop card and again in the FAQ — both are load-bearing.
+    expect(
+      screen.getAllByText(/You apply on the company's site/i).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('renders the interview-studio spotlight with the report receipt', () => {
     renderWithProviders(<LandingContent />);
     expect(
       screen.getByRole('heading', {
-        name: /We get you the interview\s*\.\s*then we get you ready\s*\./i,
+        name: /Getting the interview is half of it\s*\.\s*This is the other half\s*\./i,
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: /18 domain playbooks, not trivia decks/i,
+        name: /18 field playbooks, not trivia lists/i,
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/session-042/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/you buried the 40% cost reduction/i),
+      screen.getByText(/The 40% cost cut arrived at the end of your answer/i),
     ).toBeInTheDocument();
   });
 
-  it('renders the operating rules (guarantees.conf) panel', () => {
+  it('renders the limits panel, led by "nothing is sent for you"', () => {
     renderWithProviders(<LandingContent />);
     expect(
-      screen.getByRole('heading', { name: /Hard-coded, not fine print\./i }),
+      screen.getByRole('heading', { name: /Four things we do not do\./i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/guarantees\.conf/i)).toBeInTheDocument();
-    expect(screen.getByText(/Real letters only/i)).toBeInTheDocument();
-    expect(screen.getByText(/The review hold/i)).toBeInTheDocument();
+    expect(screen.getByText(/limits\.txt/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is sent for you/i)).toBeInTheDocument();
+    expect(screen.getByText(/The score is not a prediction/i)).toBeInTheDocument();
   });
 
   it('renders the REAL pricing plans (mock-interview credits)', () => {
@@ -145,8 +153,8 @@ describe('Landing page', () => {
     expect(
       screen.getByRole('heading', { name: 'Growth' }),
     ).toBeInTheDocument();
-    // Credits + prices — must match /plans (mockInterviewPlans.ts), NOT the
-    // retired $19/$49 apps-per-day tiers.
+    // Credits + prices — must match the billing catalog
+    // (mockInterviewPlans.ts), NOT the retired $19/$49 apps-per-day tiers.
     expect(screen.getByText('10')).toBeInTheDocument();
     expect(screen.getByText('28')).toBeInTheDocument();
     expect(screen.getByText('$0')).toBeInTheDocument();
@@ -161,12 +169,12 @@ describe('Landing page', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: /Will RoboApply apply to jobs without my permission\?/i,
+        name: /Does RoboApply apply to jobs for me\?/i,
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: /How much does RoboApply cost\?/i,
+        name: /How much does it cost\?/i,
       }),
     ).toBeInTheDocument();
   });
@@ -183,5 +191,21 @@ describe('Landing page', () => {
     expect(links.map((a) => a.getAttribute('href')).sort()).toEqual(
       SEO_READY_LOCALES.map((l) => localePath(l)).sort(),
     );
+  });
+
+  it('never promises auto-apply anywhere on the page (ruling R1)', () => {
+    const { container } = renderWithProviders(<LandingContent />);
+    const text = container.textContent ?? '';
+    for (const banned of [
+      /auto-?appl/i,
+      /autopilot/i,
+      /review hold/i,
+      /consent layer/i,
+      /we apply/i,
+      /while you sleep/i,
+      /night shift/i,
+    ]) {
+      expect(text).not.toMatch(banned);
+    }
   });
 });

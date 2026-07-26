@@ -9,7 +9,7 @@
 //   • loading / empty / error states
 //
 // Data comes from `useTodayMatches` (search.run + resolved resume variant).
-// Every string is `t()` under the `today` namespace.
+// Every string is `t()` under the `jobs` namespace.
 
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
@@ -23,7 +23,7 @@ import {
 import { MatchCard } from './MatchCard';
 
 export function MatchFeed() {
-  const t = useTranslations('today');
+  const t = useTranslations('jobs');
   const { feed, resumeVariantId } = useTodayMatches();
   const applyMutation = useApplyJob();
   const passMutation = usePassMatch();

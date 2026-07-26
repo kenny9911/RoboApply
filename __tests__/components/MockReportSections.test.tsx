@@ -51,13 +51,16 @@ describe('RecommendationsCard', () => {
         <RecommendationsCard recommendations={[REC]} />
       </IntlWrapper>,
     );
-    expect(screen.getByText('Action plan')).toBeInTheDocument();
+    expect(screen.getByText('What to do next')).toBeInTheDocument();
     expect(screen.getByText('Quantify your impact')).toBeInTheDocument();
-    expect(screen.getByText('High priority')).toBeInTheDocument();
+    expect(screen.getByText('Do this first')).toBeInTheDocument();
     expect(screen.getByText(/single metric/i)).toBeInTheDocument();
     expect(screen.getByText('Example rewrite')).toBeInTheDocument();
-    expect(screen.getByText('Drill')).toBeInTheDocument();
-    expect(screen.getByText('Role fit')).toBeInTheDocument(); // linkedDimension label
+    expect(screen.getByText('Practice this')).toBeInTheDocument();
+    // The report's five scores are now questions, not analyst nouns (C16).
+    expect(
+      screen.getByText('Did you answer the whole question?'),
+    ).toBeInTheDocument(); // linkedDimension label
   });
 
   it('shows the pending note when enrichment has not landed', () => {
@@ -66,7 +69,7 @@ describe('RecommendationsCard', () => {
         <RecommendationsCard recommendations={null} enrichmentPending />
       </IntlWrapper>,
     );
-    expect(screen.getByText(/action plan is being generated/i)).toBeInTheDocument();
+    expect(screen.getByText(/next steps are being written/i)).toBeInTheDocument();
   });
 
   it('shows the empty note for a flawless session', () => {
@@ -75,7 +78,7 @@ describe('RecommendationsCard', () => {
         <RecommendationsCard recommendations={[]} />
       </IntlWrapper>,
     );
-    expect(screen.getByText(/No recommendations/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing to change/i)).toBeInTheDocument();
   });
 });
 
@@ -86,15 +89,15 @@ describe('QuestionBreakdownSection', () => {
         <QuestionBreakdownSection items={[QUESTION]} />
       </IntlWrapper>,
     );
-    expect(screen.getByText('Question-by-question review')).toBeInTheDocument();
+    expect(screen.getByText('Question by question')).toBeInTheDocument();
     expect(screen.getByText('Tell me about a hard technical decision.')).toBeInTheDocument();
     // section labels resolve from the ie.report.questionBreakdown.* bundle
     expect(screen.getByText('Why they asked this')).toBeInTheDocument();
-    expect(screen.getByText('Analysis')).toBeInTheDocument();
+    expect(screen.getByText('What happened')).toBeInTheDocument();
     expect(screen.getByText('What to fix')).toBeInTheDocument();
-    expect(screen.getByText('How to improve')).toBeInTheDocument();
-    expect(screen.getByText('Pro tips')).toBeInTheDocument();
-    expect(screen.getByText('Model answer')).toBeInTheDocument();
+    expect(screen.getByText('How to fix it')).toBeInTheDocument();
+    expect(screen.getByText('Extra notes')).toBeInTheDocument();
+    expect(screen.getByText('A stronger answer')).toBeInTheDocument();
     // the user's asks render their LLM content: intent, feedback, tips
     expect(screen.getByText(/weigh trade-offs under constraints/i)).toBeInTheDocument();
     expect(screen.getByText(/never said what alternatives/i)).toBeInTheDocument();
@@ -117,7 +120,7 @@ describe('QuestionBreakdownSection', () => {
         <QuestionBreakdownSection items={null} enrichmentPending />
       </IntlWrapper>,
     );
-    expect(screen.getByText(/question review is being generated/i)).toBeInTheDocument();
+    expect(screen.getByText(/question-by-question review is being written/i)).toBeInTheDocument();
   });
 });
 
@@ -153,16 +156,16 @@ describe('TranscriptViewer', () => {
       </IntlWrapper>,
     );
     // Collapsed: toggle + count visible, verbatim turns hidden.
-    expect(screen.getByRole('button', { name: /view transcript/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /show the transcript/i })).toBeInTheDocument();
     expect(screen.getByText('2 exchanges')).toBeInTheDocument();
     expect(screen.queryByText('A race condition in checkout.')).not.toBeInTheDocument();
     // Download affordance is present even while collapsed.
     expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute('href', 'https://example.com/t.txt');
 
-    fireEvent.click(screen.getByRole('button', { name: /view transcript/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show the transcript/i }));
 
     // Expanded: verbatim turns + speaker labels render, toggle flips to Hide.
-    expect(screen.getByRole('button', { name: /hide transcript/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /hide the transcript/i })).toBeInTheDocument();
     expect(screen.getByText('A race condition in checkout.')).toBeInTheDocument();
     expect(screen.getByText('What was your hardest bug?')).toBeInTheDocument();
     expect(screen.queryByText('partial…')).not.toBeInTheDocument();
@@ -187,7 +190,7 @@ describe('TranscriptViewer', () => {
       </IntlWrapper>,
     );
     // No exchanges to toggle, but the file is still downloadable.
-    expect(screen.queryByRole('button', { name: /view transcript/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /show the transcript/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute('href', 'https://example.com/t.txt');
   });
 });

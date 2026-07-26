@@ -7,8 +7,8 @@
 //
 //   .app grid → 248px Sidebar (md+) + scrollable .main with a sticky Topbar.
 //   < md → the Sidebar is hidden and a MobileNav bottom bar takes over.
-//   The live mock-interview session is a focused fullscreen mode → no
-//   Sidebar/Topbar (the screen owns its own LiveBar + back link).
+//   A live practice interview is a focused fullscreen mode → no Sidebar/Topbar
+//   (the screen owns its own LiveBar + back link).
 //
 // Theme wiring: none, here. Appearance is a single light/dark bit written to
 // <html data-theme> by lib/theme's provider, so the shell needs no data-* of
@@ -28,21 +28,20 @@ import { Sidebar, Topbar, MobileNav, CommandPaletteProvider } from '../../compon
 import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
 import { ResumeGate } from '../../components/ResumeGate';
-import { JobApplyingGate } from '../../components/JobApplyingGate';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
 
-  // Live mock-interview session = focused fullscreen (no shell). Setup +
-  // report keep the shell so the user can navigate away mid-flow. Mirrors the
-  // V2 detection: /mock-interview/[id] but NOT /report and NOT /custom/.
-  const isMockInterviewLive =
-    /^\/mock-interview\/[^/]+($|\/$)/.test(pathname) &&
+  // A live practice interview = focused fullscreen (no shell). Setup + report
+  // keep the shell so the user can navigate away mid-flow: /practice/[id] but
+  // NOT /report and NOT /custom/.
+  const isPracticeLive =
+    /^\/practice\/[^/]+($|\/$)/.test(pathname) &&
     !pathname.endsWith('/report') &&
     !pathname.includes('/custom/');
 
   // Fullscreen live interview — no grid, no shell.
-  const shell = isMockInterviewLive ? (
+  const shell = isPracticeLive ? (
     <div className="dark-canvas v3-root min-h-screen">
       <main className="min-h-screen">{children}</main>
     </div>
@@ -68,26 +67,24 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     </CommandPaletteProvider>
   );
 
-  // Four gates wrap the shell, outermost first:
+  // Three gates wrap the shell, outermost first:
   //   1. AuthGate — redirects UNauthenticated visitors to /login (?next=… round
   //      trip). The client-side backstop for soft navigations (e.g. the logo
-  //      <Link>) and for any request the edge proxy doesn't gate; without it a
-  //      logged-out user lands on a protected route and JobApplyingGate hangs
-  //      on an infinite spinner (blank page).
+  //      <Link>) and for any request the edge proxy doesn't gate.
   //   2. RoboApplyAccessGate — bounces confirmed RoboHire recruiters to the
   //      /job-seeker bridge (role check); everyone else falls through.
-  //   3. JobApplyingGate — when JOB_APPLYING_ENABLED is off, redirects the
-  //      hidden auto-apply routes (/home, /queue, /tracker, /activity) to the
-  //      Mock Interview home so direct links can't reach a hidden screen.
-  //   4. ResumeGate — for authenticated candidates with ZERO résumés, blocks
-  //      every authed page (except /resumes + live mock-interview) with an
+  //   3. ResumeGate — for authenticated candidates with ZERO résumés, blocks
+  //      every authed page (except /resume + a live practice interview) with an
   //      upload prompt, so the rest of the app always has a résumé to work on.
+  //
+  // There used to be a fourth, JobApplyingGate, redirecting /home, /queue,
+  // /tracker and /activity when JOB_APPLYING_ENABLED was off. All four routes
+  // are gone and so is the flag (ruling C33) — /jobs IS the product, so there
+  // is nothing left to gate.
   return (
     <AuthGate>
       <RoboApplyAccessGate>
-        <JobApplyingGate>
-          <ResumeGate>{shell}</ResumeGate>
-        </JobApplyingGate>
+        <ResumeGate>{shell}</ResumeGate>
       </RoboApplyAccessGate>
     </AuthGate>
   );

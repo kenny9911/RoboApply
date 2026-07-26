@@ -33,12 +33,73 @@ const nextConfig = {
     // file — logged-in visitors to `/` were sent to /home and, on a stale
     // session, bounced on to /login, never seeing the landing page. proxy.ts
     // is now the single source of truth for root routing and deliberately does
-    // NOT bounce `/`. If you ever want `/` → /home for authed users again,
-    // make the change in proxy.ts (REDIRECT_TO_HOME_WHEN_AUTHED) only — not
-    // here — so the two never diverge. Note the Vercel quirk that motivated
-    // the config copy: the proxy may not fire for the bare root on prod, so a
-    // proxy-only root bounce can behave differently in dev vs prod.
-    return [];
+    // NOT bounce `/`. Note the Vercel quirk that motivated the config copy: the
+    // proxy may not fire for the bare root on prod, so a proxy-only root bounce
+    // can behave differently in dev vs prod.
+    //
+    // 2026-07-26 update: proxy.ts no longer routes anything. Its
+    // REDIRECT_TO_HOME_WHEN_AUTHED set (the `/mission` → `/home` bounce) is
+    // deleted — it pointed at a route that no longer exists, and it was the
+    // second copy of the router the DO-NOT-RE-ADD note above was written about.
+    // proxy.ts now only gates auth and stamps x-pathname. THIS FUNCTION is the
+    // only destination router in the app. Keep it that way.
+    //
+    // ── The 2026 information architecture (OVERHAUL_RULINGS R1/D2) ──────────
+    //
+    // Four destinations: /jobs · /resume · /applications · /practice, plus a
+    // /settings page behind the avatar menu. Everything below is a route this
+    // app once had. They are permanent (308) because the moves are permanent:
+    // pre-launch, nobody has these bookmarked, but the landing page, old
+    // emails, the sitemap and nine locale bundles all still point at some of
+    // them, and a 404 on the first click after signup is not recoverable.
+    //
+    // Destination rules, so a future addition lands in the right column:
+    //   • a renamed screen goes to its rename (/home → /jobs);
+    //   • a DELETED screen goes to the destination that answers the same
+    //     question (/queue was a list of jobs → /jobs; /activity and /insights
+    //     were both "what happened to my applications" → /applications);
+    //   • a setup or account screen goes to /settings;
+    //   • a V1 shell route goes to the marketing page at `/`.
+    const permanent = true;
+    return [
+      // Renamed destinations. `:id` and `:path*` carry the deep links.
+      { source: '/home', destination: '/jobs', permanent },
+      { source: '/tracker', destination: '/applications', permanent },
+      { source: '/resumes', destination: '/resume', permanent },
+      { source: '/resumes/:id', destination: '/resume/:id', permanent },
+      { source: '/mock-interview', destination: '/practice', permanent },
+      { source: '/mock-interview/:path*', destination: '/practice/:path*', permanent },
+
+      // Deleted screens, folded into the destination that answers the same
+      // question. /queue held jobs the agent had staged; auto-apply is dead
+      // (R1) and the jobs themselves live on /jobs.
+      { source: '/queue', destination: '/jobs', permanent },
+      { source: '/activity', destination: '/applications', permanent },
+      { source: '/insights', destination: '/applications', permanent },
+      { source: '/search', destination: '/jobs', permanent },
+
+      // Setup and account screens. Settings is ONE page with sections, so all
+      // three former routes land on the same URL rather than on fragments —
+      // the page opens on "Your search", which is what /preferences was.
+      { source: '/preferences', destination: '/settings', permanent },
+      { source: '/plans', destination: '/settings', permanent },
+      { source: '/account', destination: '/settings', permanent },
+      // /account/billing/history moved under /settings; the sub-tree catch-all
+      // must come AFTER the exact /account rule above.
+      { source: '/account/billing/history', destination: '/settings/billing/history', permanent },
+      { source: '/account/:path*', destination: '/settings', permanent },
+
+      // The signup funnel's two interstitials. Both are deleted: plan choice
+      // moved into /settings and the setup chat became a panel in the /jobs
+      // filter bar (C21), so a new account goes straight to the product.
+      { source: '/choose-plan', destination: '/jobs', permanent },
+      { source: '/onboarding', destination: '/jobs', permanent },
+
+      // V1 shell routes. Neither had a V2 successor; the marketing page is the
+      // honest landing for a link this old.
+      { source: '/mission', destination: '/', permanent },
+      { source: '/apps', destination: '/', permanent },
+    ];
   },
   async rewrites() {
     // Dev only — proxy /api/* to local backend so the cookie path stays

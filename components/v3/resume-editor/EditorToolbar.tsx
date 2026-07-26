@@ -51,7 +51,7 @@ export function EditorToolbar({
   onDelete,
   onBack,
 }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const [issuesOpen, setIssuesOpen] = useState(false);
 
   const savedLabel =

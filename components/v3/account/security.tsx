@@ -32,7 +32,7 @@ export function scorePassword(pw: string): 0 | 1 | 2 | 3 | 4 {
 }
 
 export function PasswordStrengthMeter({ password }: { password: string }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const score = scorePassword(password);
 
   const labels: Record<1 | 2 | 3 | 4, string> = {
@@ -150,7 +150,7 @@ export function SecurityCard({
   onSignOutEverywhere,
   resetKey,
 }: SecurityCardProps) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -263,7 +263,7 @@ export function SecurityCard({
 // ─────────────────────────────────────────────────────────────────────
 
 export function DangerZone({ onRequestDelete }: { onRequestDelete: () => void }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   return (
     <div
       style={{

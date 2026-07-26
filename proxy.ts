@@ -1,24 +1,31 @@
 // roboapply/proxy.ts
 //
 // Edge proxy (Next.js 16 renamed the `middleware` file convention to `proxy`).
-// Two responsibilities:
+// Two responsibilities, and deliberately no third:
 //
 // 1. **Auth gate** — every authenticated page redirects to /login with a
-//    `?next=` round-trip when the session cookie is missing. Protected
-//    prefixes include the V1 holdovers (`/mission`, `/apps`, `/settings`)
-//    AND the V2 surface (`/home`, `/resumes`, `/tracker`, `/search`,
-//    `/jobs`, `/insights`).
+//    `?next=` round-trip when the session cookie is missing. The protected
+//    surface is the four destinations (`/jobs`, `/resume`, `/applications`,
+//    `/practice`) plus `/settings` and `/admin`. The list itself lives in
+//    lib/proxyPaths.ts, which is also read by the API client's stale-session
+//    recovery — see the note there before editing it.
 //
-// 2. **V2 default landing flip** — `/mission` was the V1 daily driver; V2
-//    moves the daily driver to `/home`. When a logged-in user hits
-//    `/mission` we redirect to `/home`. `/mission` stays reachable via
-//    direct deep-link from email or bookmark — it just stops being the
-//    default landing. Per CTO ruling 03-frontend-architecture.md §0.
+// 2. **x-pathname** — stamp the request path onto a header so server layouts
+//    can read it (see `next()` below).
 //
-// Note: the marketing landing page (`/`) is ALWAYS served, session or not
-// (2026-07-03: `/` was dropped from the authed → /home bounce so logged-in
-// users can still view the landing page). `/login` and `/signup` are
-// likewise never redirected here.
+// **This file does NOT route destinations.** It used to: a
+// `REDIRECT_TO_HOME_WHEN_AUTHED = new Set(['/mission'])` sent authed visitors
+// to `/home`, the V1→V2 default-landing flip. That set is deleted (ruling C29).
+// `/home` no longer exists, and more importantly it was a SECOND router living
+// beside the one in next.config.mjs — exactly the duplication the DO-NOT-RE-ADD
+// note in `next.config.mjs`'s `redirects()` was written about, after the two
+// copies silently reversed a product decision (5d19a7a vs 706aac1). Every
+// destination redirect now lives in `next.config.mjs redirects()` and only
+// there. Do not add a second one here.
+//
+// The marketing landing page (`/`) is ALWAYS served, session or not, so a
+// logged-in user can still read it. `/login` and `/signup` are likewise never
+// redirected here.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME } from './lib/config';
@@ -26,24 +33,11 @@ import { SESSION_COOKIE_NAME } from './lib/config';
 // they're unit-testable without the Edge runtime (lib/proxyPaths.ts).
 import { isProtectedPath } from './lib/proxyPaths';
 
-/** Paths that, when a user has a session, should bounce to /home. Only the
- *  V1 daily driver — the landing page (`/`) deliberately stays visible to
- *  logged-in users. */
-const REDIRECT_TO_HOME_WHEN_AUTHED = new Set<string>(['/mission']);
-
 export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const hasSession = !!req.cookies.get(SESSION_COOKIE_NAME)?.value;
 
-  // 1. Authed default-landing redirect: / and /mission → /home
-  if (hasSession && REDIRECT_TO_HOME_WHEN_AUTHED.has(pathname)) {
-    const homeUrl = req.nextUrl.clone();
-    homeUrl.pathname = '/home';
-    homeUrl.search = '';
-    return NextResponse.redirect(homeUrl);
-  }
-
-  // 2. Auth gate for protected paths
+  // Auth gate for protected paths.
   if (isProtectedPath(pathname)) {
     if (hasSession) return next(req, pathname);
     const loginUrl = req.nextUrl.clone();
@@ -75,8 +69,9 @@ export const config = {
   // proxy must not touch them (raw-body webhooks + SSE would break otherwise).
   //
   // '/' is listed EXPLICITLY: on Vercel's production router the unnamed-group
-  // pattern requires a non-empty first segment, so it matches /mission but
-  // NOT the bare root — the logged-in `/` → /home redirect silently never
-  // fired in prod (while `next dev` matched it fine).
+  // pattern requires a non-empty first segment, so it matches /settings but NOT
+  // the bare root. The root is not protected, so this costs one no-op pass —
+  // but the localized landing pages need their x-pathname header, and that is
+  // what the explicit entry buys.
   matcher: ['/', '/((?!_next/|_static/|favicon.ico|api/).*)'],
 };

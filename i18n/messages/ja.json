@@ -1,9 +1,6 @@
 {
-  "app": {
-    "name": "RoboApply",
-    "tagline": "応募はおまかせ。あなたは面接に集中。"
-  },
   "common": {
+    "app_name": "RoboApply",
     "loading": "読み込み中…",
     "sign_in": "ログイン",
     "sign_out": "ログアウト",
@@ -12,2071 +9,101 @@
     "cancel": "キャンセル",
     "close": "閉じる",
     "back": "戻る",
-    "continue": "続ける",
-    "retry": "再試行",
+    "continue": "次へ",
+    "retry": "もう一度試す",
     "saved": "保存しました。",
-    "coming_soon": "ただいま準備中です。エージェントの設定が完了すると、この機能をご利用いただけます。",
-    "language": "言語"
+    "language": "言語",
+    "not_available": "この機能はまだ使えません。"
   },
   "nav": {
-    "mission": "ミッションコントロール",
-    "apps": "応募履歴",
-    "settings": "設定",
-    "home": "ホーム",
-    "resume_builder": "履歴書ビルダー",
-    "tracker": "トラッカー",
-    "job_search": "求人検索",
-    "mock_interview": "模擬面接",
-    "career_insights": "キャリアインサイト",
-    "all_tools": "すべてのツール",
-    "all_tools_coming_soon": "さらなるツールと連携機能はV2.1で登場します。",
-    "referrals": "リファラル",
-    "referrals_coming_soon": "リファラル機能はV2.1で登場します。",
-    "support": "サポート"
-  },
-  "nav_v3": {
-    "brand_tagline": "あなたの AI 求人ハンター",
-    "section_workspace": "ワークスペース",
-    "section_settings": "設定",
-    "today": "今日",
-    "queue": "確認キュー",
-    "resumes": "履歴書ビルダー",
-    "interview": "模擬面接",
-    "pipeline": "パイプライン",
-    "activity": "アクティビティログ",
-    "badge_new_count": "新着 {count}",
-    "badge_new": "NEW",
-    "replay_onboarding": "オンボーディングを再生",
-    "tweaks": "微調整",
-    "preferences": "環境設定",
-    "onboarding": "オンボーディング",
-    "agent_state": "エージェント · {mode}",
-    "aggr_chill": "ゆったり",
-    "aggr_balanced": "バランス",
-    "aggr_intense": "フルオート",
-    "stat_sent": "送信済み",
-    "stat_replies": "返信",
-    "stat_saved": "節約",
-    "status_scan": "Lever、Greenhouse、Ashby をスキャン中…",
-    "status_tailor": "最適なマッチングに向けて履歴書を最適化中",
-    "status_cover": "カバーレターを作成中",
-    "status_crosscheck": "求人内容とあなたのポートフォリオを照合中",
-    "status_timer": "自動応募タイマーを待機中",
-    "status_idle": "アイドル · キューはクリア ✓",
-    "status_index": "新着求人をインデックス中",
-    "status_rescore": "古いマッチングを再スコアリング中",
+    "aria_primary": "メインナビゲーション",
+    "brand_home": "RoboApply — 求人へ",
+    "jobs": "求人",
+    "resume": "履歴書",
+    "applications": "応募",
+    "practice": "面接対策",
+    "admin": "管理",
+    "badge_no_reply": "10日間返信なしが{count}件",
     "search_aria": "求人と企業を検索",
     "search_placeholder": "求人、企業を検索…",
-    "notifications": "通知",
-    "account": "アカウント",
-    "admin": "管理",
-    "theme_to_dark": "ダークモードに切り替え",
-    "theme_to_light": "ライトモードに切り替え",
-    "theme_to_warm": "ウォームモードに切り替え",
-    "plans": "プランとクレジット"
-  },
-  "palette": {
-    "aria": "コマンドパレット",
-    "placeholder": "求人や企業を検索、またはジャンプ…",
-    "group_nav": "移動先",
-    "group_jobs": "求人",
-    "searching": "検索中…",
-    "empty": "結果がありません。企業名や職種でお試しください。"
-  },
-  "home": {
-    "eyebrow": "ROBOAPPLY · ホーム",
-    "page_title": "ホーム",
-    "error": {
-      "eyebrow": "ダッシュボード",
-      "quote": "ダッシュボードを読み込めませんでした。もう一度試します……",
-      "retry": "再試行"
-    },
-    "goal": {
-      "eyebrow": "次のキャリア目標:",
-      "edit_cta": "目標を編集",
-      "empty_cta": "キャリア目標を設定する →",
-      "empty_subtitle": "職種、目標日、給与レンジを教えていただければ、それに合わせて検索を組み立てます。",
-      "field_title": "目標の職種",
-      "field_date": "目標日",
-      "field_date_empty": "未設定",
-      "field_salary": "給与レンジ",
-      "days_left": "{count, plural, one {⏳ 残り {count} 日} other {⏳ 残り {count} 日}}",
-      "modal": {
-        "title": "キャリア目標を編集",
-        "subtitle": "3つの簡単な項目です。いつでも変更できます。",
-        "field_title": "目標の職種名",
-        "field_date": "目標日",
-        "field_salary": "目標の給与レンジ",
-        "hint_title": "検索の見出しに掲げたいタイトルです。",
-        "hint_date": "内定を得たい月を選んでください。",
-        "hint_salary": "金額はUSDです。空欄の場合はスキップします。",
-        "placeholder_title": "例:AIソフトウェアエンジニア",
-        "placeholder_salary_min": "最低",
-        "placeholder_salary_max": "最高",
-        "errors": {
-          "missing_title": "まず目標にタイトルを付けてください。",
-          "invalid_salary": "給与の項目は数字で入力してください。",
-          "min_above_max": "最低給与は最高給与より高くできません。",
-          "generic": "目標を保存できませんでした。少し時間をおいて再度お試しください。"
-        }
-      }
-    },
-    "ring": {
-      "caption": "件の応募を送信",
-      "goal_label": "目標:",
-      "tip_under": "今週は少しペースが遅れています。もうひと押しで目標に届きます。",
-      "tip_on_target": "順調なペースです。着実さが勝ちにつながります。キューを満たし続けましょう。",
-      "tip_over": "目標を上回っています。ひと息ついて、最も確度の高いものを選びましょう。"
-    },
-    "funnel": {
-      "title": "求職パイプライン",
-      "range_label": "表示中の結果:{range}",
-      "stages": {
-        "bookmarked": "ブックマーク済み",
-        "applied": "応募済み",
-        "interviewing": "面接中",
-        "negotiating": "条件交渉中"
-      }
-    },
-    "week": {
-      "title": "今週",
-      "today_aria": "本日、{date}",
-      "day_filter_coming_soon": "日別フィルターはV2.1で提供予定です。"
-    },
-    "recent": {
-      "title": "最新の{title}求人",
-      "title_fallback": "マッチした",
-      "subtitle": "過去30日間に掲載された新着求人を、新しい順に並べています。",
-      "empty_title": "まだ新しいマッチはありません。",
-      "empty_body": "目標の職種名を設定または調整していただければ、ここに新着求人を表示します。",
-      "card": {
-        "open_aria": "求人を開く:{title}"
-      }
-    },
-    "priorities": {
-      "title": "優先事項",
-      "empty": "すべて対応済みです。明日また何かお知らせします。",
-      "row": {
-        "next_step": "次のステップ:「{status}」へ進める",
-        "status": {
-          "applying": "応募中",
-          "accepted": "承諾済み",
-          "rejected": "不採用",
-          "withdrawn": "取り下げ済み"
-        }
-      }
-    },
-    "upgrade": {
-      "eyebrow": "ROBOAPPLY+",
-      "headline": "応募数を10倍に",
-      "bullet_keywords": "求人ごとの重要キーワード",
-      "bullet_ai_search": "求人サイト横断のAI求人検索",
-      "bullet_autoapply": "監督付きの大規模な自動応募",
-      "cta": "RoboApply+ にアップグレード"
-    }
-  },
-  "tracker": {
-    "eyebrow": "ROBOAPPLY · トラッカー",
-    "page_title": "求人トラッカー",
-    "subtitle": "ブックマーク、応募中、応募済み、面接中 —— すべての求人を、一か所で管理。",
-    "tabs": {
-      "jobs": "求人",
-      "people": "人物",
-      "companies": "企業"
-    },
-    "funnel": {
-      "bookmarked": "ブックマーク済み",
-      "applying": "応募中",
-      "applied": "応募済み",
-      "interviewing": "面接中",
-      "negotiating": "条件交渉中",
-      "accepted": "内定"
-    },
-    "status": {
-      "bookmarked": "ブックマーク済み",
-      "applying": "応募中",
-      "applied": "応募済み",
-      "interviewing": "面接中",
-      "negotiating": "条件交渉中",
-      "accepted": "内定",
-      "rejected": "不採用",
-      "withdrawn": "辞退"
-    },
-    "columns": {
-      "position": "職種",
-      "company": "企業",
-      "max_salary": "上限給与",
-      "location": "勤務地",
-      "status": "ステータス",
-      "date_saved": "保存日",
-      "deadline": "締切",
-      "date_applied": "応募日",
-      "follow_up": "フォローアップ",
-      "excitement": "志望度"
-    },
-    "selected_count": "{count}件を選択中",
-    "search_placeholder": "トラッカーを検索…",
-    "view": {
-      "list": "リスト",
-      "grid": "グリッド"
-    },
-    "showing_count": "{n}件を表示中",
-    "add_job_cta": "+ 求人を追加",
-    "filter_aria": "フィルター",
-    "empty": {
-      "title": "このバケットにはまだ何もありません。",
-      "body": "/search から求人をブックマークして始めましょう。",
-      "cta": "求人検索へ →"
-    },
-    "empty_cell": "—",
-    "row_menu_aria": "行の操作",
-    "row_menu": {
-      "edit": "編集",
-      "delete": "削除"
-    },
-    "row_menu_open": "操作を開く",
-    "excitement_aria": "志望度を5段階中{n}で評価",
-    "excitement_clear": "評価をクリア",
-    "add_modal": {
-      "title": "トラッカーに求人を追加",
-      "mode_url": "URLから",
-      "mode_url_hint": "求人ページのURLを貼り付けてください。V2.1で自動取得に対応します。現在は各項目を手動で入力してください。",
-      "mode_manual": "手動入力",
-      "mode_manual_hint": "基本情報を入力してください。残りは後から追加できます。",
-      "field_url": "求人URL",
-      "field_url_placeholder": "https://stripe.com/jobs/listing/...",
-      "field_title": "職種名",
-      "field_title_placeholder": "シニアプロダクトマネージャー",
-      "field_company": "企業",
-      "field_company_placeholder": "Stripe",
-      "field_location": "勤務地",
-      "field_location_placeholder": "ニューヨーク · ハイブリッド",
-      "field_max_salary": "上限給与",
-      "field_max_salary_placeholder": "260000",
-      "field_status": "初期ステータス",
-      "submit": "トラッカーに追加",
-      "submitting": "追加中…",
-      "error_title_required": "保存する前に職種名を入力してください。",
-      "error_company_required": "保存する前に企業名を入力してください。",
-      "error_generic": "求人を追加できませんでした。もう一度お試しください。"
-    },
-    "status_editor": {
-      "label": "ステータスを変更"
-    },
-    "deadline_editor": {
-      "label": "締切を設定"
-    },
-    "follow_up_editor": {
-      "label": "フォローアップを設定"
-    },
-    "people": {
-      "coming_soon_title": "人物トラッキングはV2.1で登場します",
-      "coming_soon_body": "リクルーターや採用担当者、推薦者を、関連する求人と並べて記録できるようになります。それまでは、求人行のメモ欄に書き留めておいてください。"
-    },
-    "companies": {
-      "coming_soon_title": "企業トラッキングはV2.1で登場します",
-      "coming_soon_body": "働きたい企業のウォッチリスト —— 人物トラッキングと同時に登場します。"
-    }
-  },
-  "search": {
-    "eyebrow": "ROBOAPPLY · 求人検索",
-    "page_title": "求人検索",
-    "bar": {
-      "title_placeholder": "職種(例:AI エンジニア)",
-      "location_placeholder": "都市、郵便番号、またはリモート",
-      "submit_aria": "検索を実行",
-      "saved_dropdown_aria": "保存した検索条件"
-    },
-    "filters": {
-      "sort": "並び替え",
-      "date_posted": "掲載日",
-      "remote": "リモート",
-      "salary": "給与",
-      "more": "すべてのフィルター",
-      "sort_options": {
-        "relevance": "関連度",
-        "recent": "新着順",
-        "salary_desc": "給与が高い順",
-        "match_desc": "マッチング順"
-      },
-      "date_options": {
-        "today": "過去 24 時間",
-        "7d": "過去 7 日間",
-        "30d": "過去 30 日間",
-        "any": "期間を指定しない"
-      },
-      "salary_options": {
-        "any": "給与を指定しない",
-        "120k": "$120k+",
-        "150k": "$150k+",
-        "180k": "$180k+",
-        "200k": "$200k+",
-        "250k": "$250k+"
-      },
-      "remote_options": {
-        "any": "指定なし",
-        "remote": "リモート",
-        "hybrid": "ハイブリッド",
-        "onsite": "出社"
-      },
-      "clear": "クリア",
-      "apply": "適用"
-    },
-    "results": {
-      "count": "{count, plural, =0 {求人なし} =1 {1 件の求人} other {# 件の求人}}",
-      "count_plus": "{count, plural, =0 {求人なし} =1 {1 件の求人} other {#+ 件の求人}}",
-      "empty_title": "該当する求人がありません。フィルターを広げてみてください。",
-      "empty_body": "条件のタグを 1 つ外すか、勤務地の範囲を広げてください。シードインデックスには $120k〜$300k の 50 件の求人が登録されています。",
-      "loading": "インデックスを検索しています…",
-      "select_a_job": "求人を選択すると詳細が表示されます。"
-    },
-    "saved": {
-      "label": "保存済み",
-      "empty": "保存した検索条件はまだありません",
-      "save_current": "現在の条件を保存…",
-      "save_placeholder": "この検索条件に名前を付ける",
-      "save_cta": "保存",
-      "delete_aria": "保存した検索条件を削除",
-      "apply_aria": "この保存した検索条件を実行"
+    "account_menu": "アカウント",
+    "settings": "設定",
+    "billing": "お支払い",
+    "sign_out": "ログアウト",
+    "theme_to_dark": "ダークに切り替え",
+    "theme_to_light": "ライトに切り替え",
+    "palette": {
+      "aria": "検索して移動",
+      "placeholder": "求人や企業を検索、ページへ移動…",
+      "group_nav": "移動先",
+      "group_jobs": "求人",
+      "searching": "検索中…",
+      "empty": "見つかりませんでした。企業名か職種名で試してください。"
     }
   },
   "jobs": {
-    "eyebrow": "ROBOAPPLY · 求人詳細",
-    "page_title": "求人詳細",
-    "breadcrumb_search": "検索",
-    "back": "検索に戻る",
-    "header": {
-      "just_now": "たった今",
-      "posted": "{time}に掲載",
-      "posted_days": "{n}日前に掲載",
-      "posted_today": "本日掲載"
+    "page_title": "求人",
+    "headline": "{count, plural, =0 {条件に合う求人はまだありません。} other {条件に合う求人が#件あります。}}",
+    "headlineLoading": "条件に合う求人。",
+    "sub": "{time}に更新。",
+    "read_count": "{since}以降に新しい求人票を{scanned}件読みました。読む価値があるのは{worth}件です。",
+    "matchesTitle": "合う順に並べた求人",
+    "fit": {
+      "great": "とても合う",
+      "good": "よく合う",
+      "possible": "可能性あり",
+      "unlikely": "合いにくい"
     },
-    "actions": {
-      "apply": "応募 →",
-      "save": "求人を保存",
-      "saved": "保存済み ✓",
-      "create_resume": "履歴書を作成"
+    "tag": {
+      "possible": "可能性あり"
     },
-    "sections": {
-      "about": "職務内容について",
-      "requirements": "応募要件",
-      "responsibilities": "職務内容",
-      "benefits": "福利厚生"
-    },
-    "offers": {
-      "title": "この求人が提供するもの",
-      "job_type": "雇用形態",
-      "career_level": "キャリアレベル",
-      "education_level": "学歴要件",
-      "salary": "給与",
-      "any": "指定なし",
-      "employment": {
-        "full_time": "正社員",
-        "contract": "契約社員",
-        "part_time": "パートタイム",
-        "internship": "インターンシップ"
-      },
-      "work_type": {
-        "remote": "リモート",
-        "hybrid": "ハイブリッド",
-        "onsite": "出社"
+    "score": {
+      "label": "適合スコア",
+      "unit": "{score} / 100",
+      "explainer": "{score} / 100 — 履歴書とこの求人票がどれだけ合っているか",
+      "disclaimer": "これは採用される確率ではありません。",
+      "empty": "この求人の適合スコアはまだありません。",
+      "rubric_title": "スコアの内訳",
+      "rubric": {
+        "title_level": "職種と役職レベル — 35",
+        "skills": "求められるスキル — 30",
+        "industry": "この業界での経験 — 15",
+        "location_pay_visa": "勤務地・給与・ビザ — 10",
+        "career_moves": "これまでのキャリアの進み方 — 10"
       }
     },
-    "keywords": {
-      "title": "重要キーワード",
-      "empty": "この求人のキーワードはまだ抽出中です。しばらくしてからご確認ください。",
-      "premium_headline": "重要キーワードをアンロック",
-      "premium_body": "採用チームが実際に求めているスキルを確認しましょう——RoboApply+ 限定です。",
-      "premium_cta": "RoboApply+ にアップグレード"
-    },
-    "match": {
-      "title": "マッチングスコア",
-      "match_label": "マッチ",
-      "tier": {
-        "strong": "強くマッチ",
-        "good": "好相性",
-        "stretch": "チャレンジ",
-        "long_shot": "ギャップ大"
-      },
-      "empty": "スコアはまだ利用できません。"
-    },
-    "apply_modal": {
-      "title": "どの方法で応募しますか？",
-      "body": "この応募の進め方を選択してください。",
-      "track_title": "記録のみ",
-      "track_body": "トラッカーに「応募済み」として追加します。実際の応募は企業のサイトで行う必要があります。",
-      "autoapply_title": "Greenhouse 経由で自動応募",
-      "autoapply_body": "V1 エンジンとともに登場——エージェントが午前9時に内容を調整して送信します。",
-      "autoapply_coming_soon": "V1 エンジンによる自動応募は近日公開",
-      "external_title": "外部の応募ページを開く",
-      "external_body": "{url} を新しいタブで開きます。トラッカーには「応募済み」として記録します。",
-      "confirm": "続ける",
-      "cancel": "キャンセル"
-    },
-    "not_found_title": "この求人はインデックスから削除されました",
-    "not_found_body": "募集が終了したか、リンクが古くなっている可能性があります。検索に戻ってもう一度お試しください。",
-    "loading": "求人を読み込んでいます…"
-  },
-  "insights": {
-    "eyebrow": "ROBOAPPLY · キャリアインサイト",
-    "page_title": "キャリアインサイト",
-    "subtitle": "あなたの現在地、進捗状況、そして今週おすすめの取り組みをお伝えします。",
-    "card_eyebrow": "週次インサイト · {date}",
-    "refresh_cta": "インサイトを更新",
-    "refresh_loading": "生成中…",
-    "refresh_recent": "最近更新したばかりです。しばらくしてからもう一度お試しください。",
-    "past_heading": "過去の週",
-    "past_empty": "1週間分のトラッカー活動が貯まったら、最初の週次インサイトをお届けします。応募を続けてください。",
-    "empty_title": "数日後に、最初のインサイトを見にもう一度お越しください。",
-    "empty_body": "お役に立つには1週間分のトラッカー活動が必要です。応募を始めれば、日曜日には何かお届けできます。",
-    "cited_label": "引用",
-    "loading": "今週のデータを分析しています…",
-    "metrics": {
-      "applications": "応募数",
-      "interviews": "面接数",
-      "offers": "オファー",
-      "weeks_to_offer": "オファーまでの週数",
-      "weeks_to_offer_unknown": "—",
-      "skills_observed": "観測された主要スキル"
-    }
-  },
-  "resumes_v2": {
-    "eyebrow": "ROBOAPPLY · 履歴書",
-    "page_title": "履歴書ビルダー",
-    "subtitle": "出発点を選ぶか、最近の履歴書を再編集しましょう。",
-    "menu": {
-      "trigger": "メニュー",
-      "help": "ヘルプ",
-      "sort": "並べ替え",
-      "filter": "フィルター"
-    },
-    "tiles": {
-      "new_resume": {
-        "title": "新規履歴書",
-        "description": "白紙から作成します。"
-      },
-      "from_jd": {
-        "title": "求人情報から始める",
-        "description": "JD を貼り付けてください。それに合わせて履歴書を最適化します。"
-      },
-      "from_template": {
-        "title": "テンプレートから始める",
-        "description": "ATS に適したレイアウトを選んで始めましょう。"
-      },
-      "cover_letter": {
-        "title": "新規カバーレター",
-        "description": "特定の求人向けにカバーレターを作成します。"
-      }
-    },
-    "recent": {
-      "title": "最近の履歴書",
-      "search_placeholder": "履歴書を検索",
-      "sort_label": "並べ替え",
-      "sort": {
-        "last_edited": "最終編集",
-        "name_az": "名前(A → Z)",
-        "match_desc": "マッチング(高 → 低)"
-      },
-      "view": {
-        "list": "リスト",
-        "grid": "グリッド",
-        "list_aria": "リスト表示",
-        "grid_aria": "グリッド表示"
-      },
-      "empty": {
-        "title": "まだ履歴書がありません。",
-        "body": "上部のタイルのいずれかから、最初の履歴書を作成しましょう。"
-      },
-      "no_match": "検索に一致する履歴書がありません。",
-      "row_menu": {
-        "trigger": "メニューを開く",
-        "open": "開く",
-        "duplicate": "複製",
-        "delete": "削除"
-      }
-    },
-    "match_label": "マッチング:{pct}%",
-    "match_unknown": "マッチング:—",
-    "edited_label": "編集日:{date}",
-    "kind": {
-      "base": "ベース履歴書",
-      "tailored_for_jd": "最適化版",
-      "from_template": "テンプレート",
-      "cover_letter": "カバーレター"
-    },
-    "new": {
-      "breadcrumb_back": "履歴書ビルダー",
-      "breadcrumb_current": "新規履歴書",
-      "blank": {
-        "title": "新規の白紙履歴書",
-        "subtitle": "名前を付けてください。内容はエディターで入力できます。",
-        "name_label": "履歴書名",
-        "name_placeholder": "例:メイン履歴書",
-        "submit": "履歴書を作成",
-        "submitting": "作成中…"
-      },
-      "from_jd": {
-        "title": "求人情報から始める",
-        "subtitle": "JD を貼り付けると、最適化された履歴書を作成します。",
-        "name_label": "履歴書名",
-        "name_placeholder": "例:Stripe 向け — シニアプロダクトマネージャー",
-        "jd_label": "求人情報",
-        "jd_placeholder": "ここに求人情報の全文を貼り付けてください…",
-        "submit": "最適化履歴書を作成",
-        "submitting": "最適化中…",
-        "hint_no_base": "最新の履歴書をベースに作成します。"
-      },
-      "from_template": {
-        "title": "テンプレートから始める",
-        "subtitle": "レイアウトを選びます。内容は次のステップで編集します。",
-        "name_label": "履歴書名",
-        "name_placeholder": "例:ATS 対応履歴書",
-        "submit": "テンプレートから作成",
-        "submitting": "作成中…",
-        "templates": {
-          "ats": {
-            "title": "ATS 対応",
-            "description": "1 カラムで装飾を抑えた、きれいに解析されるよう設計されたレイアウト。"
-          },
-          "modern": {
-            "title": "モダン",
-            "description": "控えめなアクセントを添えた 2 カラムのレイアウト。"
-          },
-          "creative": {
-            "title": "クリエイティブ",
-            "description": "より大胆な書体と色使い — デザインやプロダクト系の職種向け。"
-          },
-          "classic": {
-            "title": "クラシック",
-            "description": "落ち着いた 1 カラム — どの業界でも安心して使えます。"
-          }
-        }
-      },
-      "cover_letter": {
-        "title": "新規カバーレター",
-        "subtitle": "貼り付けていただいた JD に基づいてカバーレターを作成します。",
-        "name_label": "カバーレター名",
-        "name_placeholder": "例:カバーレター — Stripe シニア PM",
-        "jd_label": "求人情報",
-        "jd_placeholder": "ここに求人情報の全文を貼り付けてください…",
-        "submit": "カバーレターを作成",
-        "submitting": "作成中…"
-      },
-      "errors": {
-        "name_required": "まず名前を付けてください。",
-        "jd_required": "先に求人情報を貼り付けてください。",
-        "create_failed": "履歴書を作成できませんでした。少し時間をおいて再試行してください。"
-      },
-      "unknown_mode_title": "出発点を選んでください",
-      "unknown_mode_body": "/resumes から 4 つの作成モードのいずれかを選んでください。"
-    },
-    "detail": {
-      "breadcrumb_back": "履歴書ビルダー",
-      "loading": "履歴書を読み込んでいます…",
-      "not_found_title": "その履歴書が見つかりません。",
-      "not_found_body": "削除されたか、アクセス権限がない可能性があります。履歴書ビルダーに戻ってください。",
-      "kind_label": "種類",
-      "placeholder_title": "最適化履歴書エディターは V2.1 で登場します",
-      "placeholder_body": "今のところ、このドラフトの保持・複製・削除ができます。ブロックベースで ATS スコア付き、並列差分表示にも対応した完全版エディターは次回リリースで提供されます。",
-      "tailored_for": "{company} — {title} 向けに最適化",
-      "download_cta": "PDF としてダウンロード",
-      "download_tooltip": "V2.1 で利用可能",
-      "duplicate_cta": "複製",
-      "delete_cta": "削除",
-      "preview_title": "履歴書プレビュー",
-      "delete": {
-        "title": "この履歴書を削除しますか?",
-        "body": "この操作はライブラリから履歴書を完全に削除します。確認のため、下に履歴書名を入力してください。",
-        "input_label": "確認のため履歴書名を入力",
-        "mismatch_hint": "履歴書名と一致しません。",
-        "cancel": "キャンセル",
-        "confirm": "履歴書を削除",
-        "confirming": "削除中…",
-        "error": "その履歴書を削除できませんでした。再試行してください。"
-      }
-    },
-    "errors": {
-      "load_failed": "履歴書を読み込めませんでした。少し時間をおいて再試行してください。"
-    }
-  },
-  "resumes": {
-    "eyebrow": "履歴書ビルダー · AIチューニング",
-    "title_lead": "あなたが採用したくなる",
-    "title_accent": "履歴書",
-    "title_after": "を作りましょう。",
-    "subtitle": "ゼロから始める、古い履歴書をドラッグする、またはLinkedInから取り込む。私が一行ずつ磨き上げ、応募する求人ごとに最適化したコピーを作成します。",
-    "create": {
-      "scratch": {
-        "title": "ゼロから作成",
-        "desc": "すべての行にAIが付くクリーンなテンプレート。キャリア初期の方や、新たに作り直したい方に最適です。",
-        "meta": "約10分 · 初めて作成する方に最適"
-      },
-      "file": {
-        "title": "履歴書をアップロード",
-        "desc": "PDFまたはDOCXをドロップしてください。読み取って構造化し、書き直したほうがよい箇所を指摘します。",
-        "meta": "PDF · DOCX · Apple Pages"
-      },
-      "linkedin": {
-        "title": "LinkedInから取り込み",
-        "desc": "LinkedInのプロフィールをPDFに書き出してドロップしてください。構造化し、書き直したほうがよい箇所を指摘します。",
-        "meta": "PDFに保存 · そしてアップロード"
-      },
-      "default_name": {
-        "scratch": "無題の下書き",
-        "file": "取り込んだ履歴書",
-        "linkedin": "LinkedIn取り込み"
-      }
-    },
-    "section": {
-      "title": "あなたの履歴書",
-      "count": "{count} 件のバージョン"
-    },
-    "card": {
-      "base": "ベース —— 求人向けに最適化されていません",
-      "edited": "{when} に編集",
-      "score_unit": "/100",
-      "delete": "履歴書を削除"
-    },
-    "tip": {
-      "label": "ヒント · キャリアが浅い方へ",
-      "body": "経験が少なくても問題ありません。授業のプロジェクト、ハッカソン、フリーランスの仕事、サイドプロジェクトを、実務のように聞こえる箇条書きに翻訳します。各行で「ジュニア → プロ」変換をお使いください。"
-    },
-    "empty": {
-      "title_lead": "まだ履歴書が",
-      "title_accent": "ありません",
-      "sub": "最初の1通を作成しましょう —— ゼロから、アップロード、またはLinkedInから —— 一行ずつ磨き上げます。",
-      "cta": "ゼロから作成"
-    },
-    "error": {
-      "title": "履歴書を読み込めませんでした",
-      "sub": "ライブラリの取得中に問題が発生しました。しばらくしてからもう一度お試しください。",
-      "retry": "再試行"
-    },
-    "ingest": {
-      "scratch": {
-        "template": "テンプレート",
-        "template_v": "クリーン・単一カラム・ATSセーフ",
-        "sections": "セクション",
-        "sections_v": "サマリー · 職歴 · 学歴 · スキル · プロジェクト",
-        "ai": "AIオン",
-        "ai_v": "すべての行で —— 改善・短縮・拡張・トーン調整",
-        "ready": "準備完了",
-        "ready_v": "無題の下書き"
-      },
-      "import": {
-        "read": "読み取り済み",
-        "identity": "本人情報",
-        "identity_v": "氏名 · メールアドレス · 所在地",
-        "experience": "職歴",
-        "experience_v": "役職 · 肩書き · 期間",
-        "education": "学歴",
-        "education_v": "学位 · 学校 · 在学年",
-        "skills": "スキル",
-        "skills_v": "スキル · ツール · キーワード",
-        "cleaned": "整理済み",
-        "cleaned_v": "表現 · 書式の調整"
-      }
-    },
-    "import": {
-      "title": {
-        "scratch": "新しい履歴書を始める",
-        "file": "履歴書をアップロード",
-        "linkedin": "LinkedInから取り込み"
-      },
-      "badge": {
-        "scratch": "新規",
-        "file": "アップロード",
-        "linkedin": "取り込み"
-      },
-      "template": {
-        "classic": "クラシック · ATSセーフ",
-        "modern": "モダン · 2カラム",
-        "editorial": "エディトリアル · 太字セリフ"
-      },
-      "scratch_hint": "テンプレートを選んでください。後から切り替え可能です —— 内容はそのまま引き継がれます。",
-      "drop": {
-        "title": "ここに履歴書をドロップ",
-        "sub": "PDF、DOCX、またはApple Pages —— 構造を解析します",
-        "ready": "解析の準備ができました"
-      },
-      "linkedin": {
-        "steps_title": "LinkedInのプロフィールを書き出す",
-        "step1": "LinkedInでプロフィールを開く",
-        "step2": "「その他」ボタンをクリックし、「PDFとして保存」を選択",
-        "step3": "ダウンロードしたPDFを下にアップロード",
-        "upload_title": "LinkedInのPDFをここにドロップ",
-        "upload_sub": "プロフィールから保存したPDF",
-        "ready": "取り込み準備完了",
-        "or": "または",
-        "url_label": "公開プロフィールがありますか?URLを貼り付けることもできます",
-        "placeholder": "linkedin.com/in/your-handle",
-        "hint": "公開LinkedInのURLを貼り付けてください。職歴・学歴・スキル・リンクを取得します。"
-      },
-      "ingest_title": {
-        "scratch": "下書きを準備しています",
-        "parse": "履歴書を読み取っています"
-      },
-      "working": "処理中…",
-      "done": {
-        "title_scratch": "下書きの準備ができました",
-        "title_import": "きれいに取り込めました",
-        "body_scratch": "一緒に記入を始めましょう。右側の余白でサポートします。",
-        "body_import": "履歴書を解析しました。弱い箇条書きを2つ指摘しました —— エディター内でハイライト表示されています。"
-      },
-      "cancel": "キャンセル",
-      "create_draft": "下書きを作成",
-      "parse_with_ai": "AIで解析",
-      "open_editor": "エディターを開く",
-      "error": "履歴書を作成できませんでした。もう一度お試しください。",
-      "errors": {
-        "invalid_url": "LinkedInのプロフィールURLではないようです。リンクを確認してもう一度お試しください。",
-        "fetch_failed": "LinkedInに接続してプロフィールを取得できませんでした。代わりにLinkedInのPDFをアップロードしてください。",
-        "profile_empty": "そのプロフィールには取り込める情報が十分にありませんでした。代わりにLinkedInのPDFをアップロードしてください。",
-        "url_import_not_configured": "ここではLinkedInのURL取り込みは利用できません —— 代わりにLinkedInのPDFをアップロードしてください。",
-        "parse_failed": "そのファイルを読み取れませんでした。PDFとして書き出し直してお試しください。",
-        "unsupported_format": "そのファイル形式には対応していません。PDFまたはDOCXをアップロードしてください。",
-        "file_too_large": "ファイルが大きすぎます。上限は15MBです。",
-        "file_required": "まずファイルを選択してください。"
-      },
-      "demo_file_name": "resume-2024.pdf",
-      "demo_file_size": "184 KB"
-    },
-    "delete": {
-      "title": "この履歴書を削除しますか?",
-      "body": "この操作で履歴書がライブラリから完全に削除されます。確認のため、下に履歴書の名前を入力してください。",
-      "input_label": "確認のため履歴書名を入力",
-      "mismatch_hint": "履歴書の名前と一致しません。",
-      "cancel": "キャンセル",
-      "confirm": "履歴書を削除",
-      "confirming": "削除中…"
-    }
-  },
-  "resumeGate": {
-    "title": "履歴書を追加して始めましょう",
-    "subtitle": "RoboApply は、あなたの履歴書をもとに応募内容を最適化し、求人とのマッチング度を算出し、模擬面接を実施します。1 件アップロードすると、ダッシュボードが利用可能になります。",
-    "cta": "履歴書をアップロード",
-    "uploading": "履歴書を読み込んで解析しています…",
-    "formats": "PDF、DOCX、または TXT · 最大 15 MB",
-    "error": "そのファイルの読み込み中に問題が発生しました。もう一度お試しください。",
-    "error_too_large": "そのファイルは 15 MB を超えています。より小さいファイルをお試しください。",
-    "error_format": "サポートされていない形式です。PDF、DOCX、または TXT ファイルをご利用ください。",
-    "error_empty": "そのファイルからテキストを検出できませんでした。テキストベースの PDF（スキャン画像ではないもの）をお試しください。",
-    "or_build": "または、ゼロから作成する"
-  },
-  "resumeEditor": {
-    "common": {
-      "cancel": "キャンセル",
-      "close": "閉じる"
-    },
-    "toolbar": {
-      "back": "履歴書",
-      "rename": "履歴書名",
-      "saved": "すべての変更を保存しました",
-      "saving": "保存中…",
-      "save_error": "保存できませんでした — 再試行中",
-      "strength": "強度",
-      "coach": "コーチ",
-      "hide_coach": "コーチを非表示",
-      "download": "ダウンロード",
-      "tailor": "求人に合わせて最適化",
-      "delete": "削除"
-    },
-    "section": {
-      "identity": "基本情報",
-      "summary": "概要",
-      "experience": "職務経歴",
-      "education": "学歴",
-      "skills": "スキル",
-      "other": "その他のセクション"
-    },
-    "field": {
-      "full_name": "氏名",
-      "title": "肩書き",
-      "email": "メールアドレス",
-      "phone": "電話番号",
-      "location": "所在地",
-      "links": "リンク",
-      "ai": "AI"
-    },
-    "summary": {
-      "placeholder": "2文で自分をアピールしましょう。まず成し遂げた成果とそのインパクトから始めてください。",
-      "give_rewrites": "書き直し案を3つ作成",
-      "rewriting": "書き直し中…",
-      "char_hint": "{count} 文字 · 目安は 240〜320",
-      "option": "案 {n}",
-      "use_this": "これを使う",
-      "keep_current": "現状のまま"
-    },
-    "action": {
-      "improve": {
-        "label": "文章を改善",
-        "desc": "より力強い動詞、より引き締まった表現"
-      },
-      "metrics": {
-        "label": "数値を追加",
-        "desc": "数字を入れるべき箇所を提示"
-      },
-      "shorten": {
-        "label": "短くする",
-        "desc": "無駄を削る — インパクトは残す"
-      },
-      "expand": {
-        "label": "背景を補足",
-        "desc": "「だから何か」と「どうやったか」を追加"
-      },
-      "confident": {
-        "label": "より自信ある表現に",
-        "desc": "「手伝った」ではなく「主導した」"
-      },
-      "junior": {
-        "label": "初級 → プロ仕様に",
-        "desc": "学校 / インターンの経験を言い換え"
-      }
-    },
-    "bullet": {
-      "flag": "コーチが指摘しました — 動詞が曖昧で数値がありません。「文章を改善」か「数値を追加」を試してください。",
-      "placeholder": "実績を書く — 動詞で始めて成果で締める"
-    },
-    "rewrite": {
-      "rewriting": "書き直し中",
-      "suggested": "書き直し案",
-      "accept": "採用",
-      "regenerate": "再生成",
-      "discard": "破棄",
-      "error": "書き直しに失敗しました。もう一度お試しください。"
-    },
-    "experience": {
-      "hint": "いずれかの項目にカーソルを合わせるとインラインAIが使えます",
-      "add_role": "+ 職歴を追加",
-      "add_bullet": "+ 項目を追加 · または自分で貼り付け",
-      "editing": "編集中",
-      "title_placeholder": "肩書き",
-      "company_placeholder": "企業",
-      "location_placeholder": "所在地",
-      "start_placeholder": "開始",
-      "end_placeholder": "終了"
-    },
-    "education": {
-      "add": "+ 学歴を追加",
-      "school_placeholder": "学校名",
-      "degree_placeholder": "学位",
-      "detail_placeholder": "ハイライト — 受賞歴、プロジェクト、GPA"
-    },
-    "skills": {
-      "suggest": "あなたの項目からスキルを提案",
-      "add": "+ スキルを追加",
-      "placeholder": "スキル名",
-      "remove": "{skill} を削除",
-      "suggested": "あなたの項目からの提案",
-      "dismiss_suggestions": "閉じる"
-    },
-    "young": {
-      "head": "職務経験が少ないですか？仕事以外の経験を履歴書向けの表現に変換するセクションを追加できます。",
-      "class_project": {
-        "label": "授業のプロジェクト",
-        "desc": "成果物として言い換え"
-      },
-      "hackathon": {
-        "label": "ハッカソン",
-        "desc": "48時間 · 何を作ったか"
-      },
-      "side_project": {
-        "label": "サイドプロジェクト",
-        "desc": "オープンソース / 個人開発"
-      },
-      "volunteer": {
-        "label": "ボランティア活動",
-        "desc": "ちゃんと評価されます — 本当に"
-      },
-      "freelance": {
-        "label": "フリーランスの仕事",
-        "desc": "独立したクライアント業務"
-      },
-      "leadership": {
-        "label": "学生時代のリーダー経験",
-        "desc": "サークル、学生会、団体"
-      }
-    },
-    "preview": {
-      "label": "ライブプレビュー",
-      "page": "1 ページ"
-    },
-    "paper": {
-      "your_name": "あなたの名前"
-    },
-    "coach": {
-      "label": "あなたのコーチ · オンライン",
-      "sub": "入力をリアルタイムで確認中",
-      "hide": "コーチを非表示",
-      "next": "次のヒント →",
-      "tips": {
-        "metrics_good": "箇条書きに具体的な数字が入っています。履歴書全体でこの定量的な表現を保ちましょう。",
-        "metrics_missing": "ほとんどの箇条書きに数値がありません。上位3つに数字を加えましょう——採用担当者は成果をざっと見ます。",
-        "summary_long": "概要が長すぎます。鋭い2文に絞りましょう——採用担当者はまずここを流し読みします。",
-        "summary_tight": "概要は簡潔です。最も強く、職務に関連する一文で書き始めましょう。",
-        "summary_missing": "まだ概要セクションがありません。冒頭の2文が以降すべての枠組みになります——追加しましょう。",
-        "weak_verbs": "「responsible for」「helped with」のような弱い書き出しが {count} 件あります。✦ をクリックして、主体性のある動詞に書き換えましょう。",
-        "strong_verbs": "全体を通して力強い動詞が使われています——「responsible for」も「helped with」もどこにもありません。この調子で。",
-        "no_bullets": "この履歴書にはまだ箇条書きがありません。経験を成果中心の箇条書きに分けましょう。",
-        "too_many_bullets": "箇条書きが多すぎます。各職務で最も強い3〜5項目に絞り、最良の実績を際立たせましょう。",
-        "good_density": "ちょうどよい情報量です。各箇条書きの ✦ をクリックして磨くか、「求人に合わせて最適化」で特定の求人に合わせましょう。"
-      }
-    },
-    "tailor": {
-      "eyebrow": "最適化",
-      "title_pick": "最適化する求人を選択",
-      "title_analyzing_lead": "求人票を分析中",
-      "title_analyzing_accent": "と",
-      "title_analyzing_after": "あなたの履歴書…",
-      "title_review_lead": "以下の求人向けに提案する変更点です:",
-      "title_done": "最適化版を作成しました",
-      "source_label": "ROBOAPPLY のマッチングから選択",
-      "loading_jobs": "マッチングを読み込み中…",
-      "no_jobs": "まだマッチングがありません — 代わりに下に求人票を貼り付けてください。",
-      "fit": "適合度",
-      "or": "または",
-      "paste_toggle": "別の求人票を貼り付け",
-      "paste_placeholder": "ここに求人票を貼り付け — 職種、企業、説明全文",
-      "analyze_paste": "貼り付けた求人票を分析 →",
-      "pasted_company": "貼り付けた求人",
-      "pasted_role": "カスタム",
-      "analyzing": {
-        "read_jd": "求人票を最後まで読む",
-        "cross_check": "あなたの項目と照合",
-        "find_gaps": "キーワードの不足を発見",
-        "draft": "ターゲットを絞った書き直しを起草",
-        "rescore": "適合度を再採点"
-      },
-      "before": "変更前",
-      "after": "変更後",
-      "note": "{count} 件のターゲットを絞った変更です。不要なものはオフにできます — チェックした分だけ適用します。",
-      "kind": {
-        "rewrite": "書き直し",
-        "add": "追加",
-        "reorder": "並べ替え",
-        "trim": "短縮"
-      },
-      "pick_hint": "続けるには求人を選択してください",
-      "pick_different": "← 別の求人を選ぶ",
-      "apply": "{count} 件の変更を適用",
-      "back_to_editor": "エディターに戻る",
-      "open_copy": "最適化版を開く",
-      "done_title": "最適化版を保存しました",
-      "done_body": "新しい履歴書バージョン「{name}」がライブラリに追加されました。元の履歴書はそのままです。",
-      "done_body_paste": "最適化した変更の準備ができました。元の履歴書はそのままです。",
-      "error": "履歴書の最適化に失敗しました。もう一度お試しください。",
-      "manual_toggle": "企業を指定 — または求人票を貼り付け",
-      "company_label": "会社名",
-      "company_placeholder": "会社名",
-      "role_label": "職種",
-      "role_placeholder": "職種（任意）",
-      "analyze_manual": "このターゲットに合わせる →",
-      "manual_hint": "求人票がなくても大丈夫 — レジュメの内容だけで会社と職種に合わせます。",
-      "version_name_label": "保存名",
-      "estimated": "推定値",
-      "citation_warning": "この下書きの一部の数値はレジュメと照合できませんでした — 適用前に変更内容をよく確認してください。"
-    },
-    "download": {
-      "eyebrow": "エクスポート",
-      "title": "形式を選んでダウンロード…",
-      "recommended": "おすすめ",
-      "error": "エクスポートに失敗しました。もう一度お試しください。",
-      "pdf": {
-        "label": "PDF",
-        "desc": "応募に最適 — ピクセル単位で正確、ATS対応"
-      },
-      "docx": {
-        "label": "DOCX",
-        "desc": "Word文書 — 編集可能、ATS対応"
-      },
-      "txt": {
-        "label": "プレーンテキスト",
-        "desc": "Webフォームにコピー＆ペースト"
-      },
-      "md": {
-        "label": "Markdown",
-        "desc": "GitHubや個人サイト向け"
-      }
-    },
-    "state": {
-      "loading": "履歴書を読み込み中…",
-      "error_title": "この履歴書を読み込めませんでした。",
-      "error_body": "削除されたか、リンクが正しくない可能性があります。",
-      "back": "すべての履歴書に戻る"
-    },
-    "delete": {
-      "title": "この履歴書を削除しますか?",
-      "body": "この操作で履歴書がライブラリから完全に削除されます。確認のため、下に履歴書の名前を入力してください。",
-      "input_label": "確認のため履歴書名を入力",
-      "mismatch_hint": "履歴書の名前と一致しません。",
-      "cancel": "キャンセル",
-      "confirm": "履歴書を削除",
-      "confirming": "削除中…"
-    },
-    "extra": {
-      "hint": "元のレジュメから保持 — テキストとして編集できます",
-      "heading_placeholder": "セクション見出し",
-      "body_placeholder": "セクション内容（Markdown）"
-    },
-    "entry": {
-      "move_up": "上へ移動",
-      "move_down": "下へ移動",
-      "remove": "削除"
-    },
-    "analyzer": {
-      "title": "レジュメチェック",
-      "empty": "問題は見つかりませんでした — 良い仕上がりです。",
-      "severity": {
-        "critical": "重大",
-        "recommended": "推奨",
-        "optional": "任意"
-      }
-    }
-  },
-  "landing": {
-    "meta": {
-      "title": "AI自動応募とAI模擬面接｜転職AIエージェント RoboApply",
-      "description": "RoboApplyは転職AIエージェントです。希望に合う求人を探し、職務経歴書と照合してスコアリング。根拠付きのカバーレターを下書きし、あなたの承認後にのみ応募します。AI模擬面接で本番対策まで。無料で開始、9言語対応。",
-      "ogTitle": "RoboApply — 応募は私たちが。面接はあなたが。",
-      "ogDescription": "AIエージェントが実際の職務経歴書に基づいて求人をマッチングし、応募書類を下書き。送信前に必ずあなたが承認します。9言語対応のAI模擬面接で本番準備まで。無料で始められます。",
-      "keywords": "AI 自動応募,AI 模擬面接,転職 AI エージェント,職務経歴書 AI,カバーレター AI,AI 面接練習,AI 求人マッチング,転職活動 自動化"
-    },
-    "header": {
-      "status_chip": "早期アクセス",
-      "cta": "無料で始める",
-      "theme_to_light": "朝モードに切り替える",
-      "theme_to_dark": "夜モードに切り替える",
-      "lang_label": "言語を変更"
-    },
-    "hero": {
-      "eyebrow": "あなたの転職AIエージェント · 眠っている間も稼働",
-      "headline_machine": "応募は私たちが",
-      "headline_human": "面接はあなたが",
-      "subheadline": "RoboApplyは、転職活動のためのAIエージェントです。本当に合う求人だけを探し出し、実際の職務経歴書と照合してスコアリング。あなたの経歴に一行ずつ根拠を示せるカバーレターを下書きし、すべてを承認待ちの状態でお見せします。",
-      "cta_primary": "無料で始める",
-      "cta_secondary": "シフトのサンプルを見る",
-      "reassure": "無料プラン · カード登録不要 · オートパイロットは早期アクセス",
-      "log": {
-        "aria": "夜間アクティビティログのサンプル:エージェントは23時4分に求人ボードをスキャンし、職務経歴書と希望条件に求人を照合。夜通し根拠チェック済みのカバーレターを下書きして12件を承認待ちに並べ、朝7時にレビューウィンドウを開きます。あなたが2件を却下して10件を承認すると、9時に承認分を送信し、9時2分には面接練習を案内する朝のダイジェストをメールでお届けします。",
-        "title": "roboapply — overnight.log",
-        "live": "SAMPLE SHIFT",
-        "lines": {
-          "l1": {
-            "time": "23:04",
-            "tag": "SCOUT",
-            "msg": "求人ボードをスキャン中 · 新着 1,284 件"
-          },
-          "l2": {
-            "time": "23:51",
-            "tag": "MATCH",
-            "msg": "希望条件に合致 41 件 · 職務経歴書と照合してスコア化"
-          },
-          "l3": {
-            "time": "01:13",
-            "tag": "DRAFT",
-            "msg": "カバーレター 03/12 · 全主張に経歴の根拠付き"
-          },
-          "l4": {
-            "time": "02:47",
-            "tag": "DRAFT",
-            "msg": "カバーレター 09/12 · 創作された経歴ゼロ"
-          },
-          "l5": {
-            "time": "04:19",
-            "tag": "QUEUE",
-            "msg": "12 件を承認待ちへ · 勝手には送信しない"
-          },
-          "l6": {
-            "time": "07:00",
-            "tag": "HOLD",
-            "msg": "レビューウィンドウ開始 · すべて拒否可能"
-          },
-          "l7": {
-            "time": "08:58",
-            "tag": "HOLD",
-            "msg": "あなたが 2 件を却下 · 10 件を承認"
-          },
-          "l8": {
-            "time": "09:00",
-            "tag": "SUBMIT",
-            "msg": "10 件を応募送信 · あなたの名前、あなたの言葉で"
-          },
-          "l9": {
-            "time": "09:02",
-            "tag": "DIGEST",
-            "msg": "朝のレポート送信済み · 次は面接練習へ"
-          }
-        }
-      },
-      "strip_summary": "23:00 → 09:00 · 下書き 12 · あなたが承認 10 · 承認なしの送信 0",
-      "strip_scroll": "シフトの流れを見る",
-      "sub_emphasis": "あなたの承認なしには、何も送信されません。"
-    },
-    "problem": {
-      "eyebrow": "ボットが負ける理由",
-      "title": "物量作戦は、もう通用しません。",
-      "sub": "AIの登場で採用市場は応募であふれました。Business Insiderのある検証では、大量自動応募ボットの返信率は6%——採用担当者は見分けています。一方、人間がレビューして承認した応募は、一貫してそれを上回る成果を出しています。必要なのは量ではありません。あなたの判断を組み込んだ、より優れたエージェントです。",
-      "stats": {
-        "s1": {
-          "value": "242",
-          "label": "平均的な企業求人1件に集まる応募者の数"
-        },
-        "s2": {
-          "value": "+400%",
-          "label": "AI大量応募の台頭以降、採用担当者に押し寄せる応募の増加率"
-        },
-        "s3": {
-          "value": "41%",
-          "label": "「応募書類が人間に読まれるのは4分の1未満」と考える求職者の割合"
-        }
-      },
-      "source": "出典:The Interview Guys(242) · Fortune誌報道のGreenhouse採用データ(+400%) · 求職者調査、2025–2026(41%)"
-    },
-    "how": {
-      "eyebrow": "一晩のシフトの流れ",
-      "title": "一晩の流れ、最初から最後まで。",
-      "sub": "希望条件は一度設定するだけ。エージェントはあなたが働くべきでない時間に働き、肝心な場面では必ずあなたに操作を委ねます。",
-      "steps": {
-        "s1": {
-          "time": "23:04",
-          "tag": "SCOUT",
-          "title": "眠っている間に、探し出す",
-          "body": "エージェントは求人ボードを巡回し、職種・レベル・技術スタック・勤務地・年収という希望条件で厳しくフィルタリングします。条件に合わない求人は、あなたの目に入る前に除外されます。"
-        },
-        "s2": {
-          "time": "01:30",
-          "tag": "DRAFT",
-          "title": "根拠を添えて、書く",
-          "body": "マッチした求人ごとに、調整済みの職務経歴書と本物のカバーレターを作成。レター内のすべての主張には、実際の経歴からの引用が必須です。創作された経験は通れません——この引用チェックはコードで強制されています。"
-        },
-        "s3": {
-          "time": "07:00",
-          "tag": "HOLD",
-          "title": "拒否権は、あなたの手に",
-          "body": "すべてはレビューウィンドウで待機します。コーヒーを片手にキューへ目を通し、気になる下書きを開き、違和感のあるものはスキップ。あなたのOKなしに、あなたの名前で送信されることは決してありません。"
-        },
-        "s4": {
-          "time": "09:00",
-          "tag": "SUBMIT",
-          "title": "9時に送信——そして本番の準備へ",
-          "body": "承認済みの応募は、採用担当者の一日が始まる時間に、あなたの名前とあなたの言葉で送信されます。必要なのは、あなたのワンタップ——早期アクセスで展開中のオートパイロットなら、完全おまかせも可能です。その後、ダイジェストが受信箱に届き、面接スタジオはそこからワンタップです。"
-        }
-      }
-    },
-    "loop": {
-      "eyebrow": "転職の全ループ",
-      "title": "ひとつのエージェントで、転職のすべてを。",
-      "sub": "「仕事を探そう」から「内定を承諾した」まで、すべてがひとつの場所に。同じエージェントが、その全行程であなたの文脈を引き継ぎます。",
-      "cards": {
-        "match": {
-          "tag": "MATCH",
-          "title": "職務経歴書を読み込むマッチング",
-          "body": "すべての求人に、理由の説明付きAIマッチスコア。キーワードの数合わせではなく、実際の職務経歴書に基づいて算出します。経歴書を更新すれば、スコアも更新されます。"
-        },
-        "resume": {
-          "tag": "RESUME",
-          "title": "自ら書き換わる職務経歴書",
-          "body": "LinkedInやPDFから取り込み、弱い箇条書きはAIが書き直し。求人票に合わせた調整は差分で確認でき、仕上がりはきれいなPDFまたはDOCXで出力できます。"
-        },
-        "apply": {
-          "tag": "APPLY",
-          "chip": "オートパイロット · 早期アクセス",
-          "title": "承認レイヤー付きの自動応募",
-          "body": "根拠チェック済みのカバーレター、承認待ちキュー、拒否できるレビュー保留、1日あたりの厳格な上限。完全おまかせのオートパイロットは早期アクセスで展開中——承認レイヤーを先に出したのは、意図してのことです。"
-        },
-        "studio": {
-          "tag": "STUDIO",
-          "title": "練習相手になるAI面接官",
-          "body": "18の専門領域プレイブックと28の面接形式を備えた、リアルタイム音声のAI面接官。電話スクリーニングからシステム設計、ケース面接まで、本番の面接官と同じ基準で採点します。"
-        }
-      }
-    },
-    "studio": {
-      "eyebrow": "後半戦",
-      "title_machine": "面接までは、私たちが",
-      "title_human": "その先の準備も、ここで",
-      "sub": "求職者の63%は、実際の採用選考ですでにAI面接官と対面しています(Greenhouse、2026年)。まずは当社のAI面接官を相手にリハーサルを。本番がいつもの相手に思えるまで、何度でも、評価を気にせず練習できます。",
-      "features": {
-        "f1": {
-          "title": "人のように話し、人のように割り込む",
-          "body": "全二重のリアルタイム音声。面接官はその場で深掘りし、反論し、追い質問を重ねます。ネイティブの発音による9言語対応です。"
-        },
-        "f2": {
-          "title": "一問一答集ではない、18の専門領域プレイブック",
-          "body": "法務、金融、医療、ハードウェア、AI/MLなど。その業界の面接官が実際に聞くことを質問し、同じ視点で採点します。"
-        },
-        "f3": {
-          "title": "会う前に、下調べを済ませてくる",
-          "body": "面接官はあなたの職種と求人票に対する最新の市場要件を調査し、職務経歴書に合わせた専用の面接プランを組み立てます。"
-        },
-        "f4": {
-          "title": "次の回答が変わるレポート",
-          "body": "評価軸ごとのスコア、より強い模範回答を添えた設問別の指摘、全文の文字起こし、再生できる録音。毎セッション後に届きます。"
-        },
-        "f5": {
-          "title": "望むなら、耳元にコーチを",
-          "body": "話が長い、質問から逃げている、結論が後回し——そんな瞬間にリアルタイムで合図を送るオプション機能です。カメラONモードなら、実際のビデオ面接の緊張感まで再現します。"
-        }
-      },
-      "report": {
-        "header": "session-042 — レポート",
-        "overall_label": "総合",
-        "overall": "82",
-        "rows": {
-          "r1": {
-            "k": "明瞭さ",
-            "v": "86"
-          },
-          "r2": {
-            "k": "深さ",
-            "v": "78"
-          },
-          "r3": {
-            "k": "構成",
-            "v": "84"
-          }
-        },
-        "quote": "「数字から切り出しましょう——40%のコスト削減という成果が、回答の最後に埋もれていました。」",
-        "quote_label": "設問別の指摘"
-      },
-      "cta": "無料でAI模擬面接を試す"
-    },
-    "rules": {
-      "eyebrow": "動作ルール",
-      "title": "ハードコード済み。注意書きではありません。",
-      "sub": "メニューの奥に埋もれた設定ではありません。エージェントの作りそのものです——だからこそ、採用担当者の受信箱に届くものが、ボットのスパムのように読まれることは決してありません。",
-      "file": "guarantees.conf — 読み取り専用",
-      "badge": "ENFORCED",
-      "ok": "OK",
-      "items": {
-        "r1_head": "本物のレターのみ",
-        "r1_body": "すべてのカバーレターの全主張に、実際の職務経歴書からの引用が必須。経歴の創作はコードでブロックされます。",
-        "r2_head": "レビュー保留",
-        "r2_body": "あなたが1件ずつ拒否できるプレビューなしには、何も送信されません。",
-        "r3_head": "希望条件フィルター",
-        "r3_body": "レベル・技術スタック・勤務地・年収。指定した条件を外れた求人は、あなたのキューに届きません。",
-        "r4_head": "乱れ打ちはしない",
-        "r4_body": "1日の応募数には厳格な上限。1件1件が意図を持った応募だから、あなたの名前の信用が守られます。",
-        "r5_head": "やめるときも、きれいに",
-        "r5_body": "エージェントはワンクリックで一時停止。アカウント削除は形だけの論理削除ではなく、データを本当に消去します。"
-      }
-    },
-    "pricing": {
-      "eyebrow": "料金プラン",
-      "title": "まずは無料で。手応えが出たらアップグレード。",
-      "sub": "どのプランにもエージェントの全機能——職務経歴書AI、求人マッチング、応募トラッカー、承認レイヤー——が含まれます。有料プランで増えるのは、面接練習の回数です。",
-      "unit": "面接回数 / 月",
-      "credit_note": "1クレジット=20分の模擬面接1回分。利用は秒単位で計算され、クレジットは毎月補充されます。支払いはカード、中国ではAlipayも利用できます。",
-      "tiers": {
-        "free": {
-          "code": "TIER-0",
-          "name": "無料",
-          "rate": "1",
-          "price": "$0",
-          "per": "",
-          "note": "全ツールに加え、採点付きの模擬面接が毎月1回。",
-          "cta": "無料で始める",
-          "unit": "面接回数 / 月"
-        },
-        "starter": {
-          "code": "TIER-1",
-          "name": "スターター",
-          "rate": "10",
-          "price": "$15",
-          "per": "/月",
-          "badge": "おすすめ",
-          "note": "本気の転職活動のペースに。本番の面接前に、毎回練習を。",
-          "cta": "スターターで始める",
-          "unit": "面接回数 / 月"
-        },
-        "growth": {
-          "code": "TIER-2",
-          "name": "グロース",
-          "rate": "28",
-          "price": "$29",
-          "per": "/月",
-          "note": "全力モード。内定を承諾する日まで、毎日練習。",
-          "cta": "グロースで始める",
-          "unit": "面接回数 / 月"
-        }
-      }
-    },
-    "faq": {
-      "eyebrow": "よくある質問",
-      "title": "求職者の皆さんが、私たちに尋ねること。",
-      "items": {
-        "q1": {
-          "q": "RoboApplyとは何ですか?",
-          "a": "RoboApplyは転職AIエージェントです。希望条件に合う求人を見つけ、実際の職務経歴書と照合してスコアリングし、応募書類を求人ごとに調整。根拠チェック済みのカバーレターを下書きし、すべての応募をあなたの承認待ちとして提示します。そして面接の連絡が返ってきたら、リアルタイムのAI面接官が練習相手になります。"
-        },
-        "q2": {
-          "q": "RoboApplyが勝手に応募することはありますか?",
-          "a": "ありません。承認は設定項目ではなく、設計そのものです。応募はあなたの明示的な承認の後にのみ送信され、1日の応募数には厳格な上限があり、完全おまかせのオートパイロットはオプトイン制の早期アクセスです。あなたのOKなしに、あなたの名前で送信されるものは何ひとつありません。"
-        },
-        "q3": {
-          "q": "AIが書いたカバーレターは採用担当者に見抜かれませんか?",
-          "a": "ありきたりなAIレターは見抜かれます。RoboApplyのレターは作りから違います。すべての主張に実際の職務経歴書の記述への引用が必須で、この引用チェックはコードで強制されているため、創作された経歴は決して送信されません。しかも各レターは、送信前に必ずあなたがレビューして承認します。"
-        },
-        "q4": {
-          "q": "AI相手に本当に面接練習ができますか?",
-          "a": "できます。人のように話し、深掘りし、割り込んでくるリアルタイム音声の面接官です。28の面接形式と18の専門領域プレイブック(ソフトウェア、法務、金融、医療など)から選び、9言語のいずれでも面接可能。設問別の指摘、文字起こし、録音の付いた採点レポートが受け取れます。"
-        },
-        "q5": {
-          "q": "LazyApplyのような自動応募ボットと何が違いますか?",
-          "a": "物量型ボットは判断なしに大量送信します。Business Insiderのある検証では、この種の大量応募ボットの返信率は6%——採用担当者には分かります。RoboApplyはレビュー保留、根拠チェック済みのレター、厳格な上限で、あなたの判断をループに組み込みます。さらに、他のどこにもないループの完結——応募したのと同じエージェントが、面接の準備まで担当します。"
-        },
-        "q6": {
-          "q": "RoboApplyの料金はいくらですか?",
-          "a": "コアツール一式と月1回の模擬面接は、ずっと無料です。スターターは月額$15で面接練習10回、グロースは月額$29で28回。1クレジットは20分のセッション1回分で秒単位で計算され、毎月補充されます。支払いはカード、中国ではAlipayが使えます。"
-        },
-        "q7": {
-          "q": "RoboApplyは何語に対応していますか?",
-          "a": "9言語です。英語、スペイン語、ポルトガル語、フランス語、ドイツ語、日本語、韓国語、中国語(簡体字・繁体字)。模擬面接は、AI面接官の音声も採点レポートも含めて、今すでに9言語すべてで利用できます。インターフェースは英語、日本語、中国語(簡体字・繁体字)に完全対応しており、残りの言語も順次展開中です。"
-        },
-        "q8": {
-          "q": "データは安全ですか?本当に削除できますか?",
-          "a": "職務経歴書、文字起こし、録音はあなたのものです。企業側に共有されることはありません。AIのすべての動作は透明な利用台帳に記録され、アカウント削除はワンクリックでデータを完全に消去します。残しておくだけの形式的な削除ではありません。"
-        }
-      }
-    },
-    "final": {
-      "chip": "早期アクセス · 無料で開始",
-      "title_machine": "エージェントの準備は、整いました",
-      "title_human": "あなたの準備が整ったら、いつでも",
-      "sub": "設定は3分。職務経歴書を取り込み、希望条件を決めて、エージェントに引き継ぐだけ。そして面接スタジオは、今この瞬間から開いています——最初の模擬面接は、無料でどうぞ。",
-      "cta": "無料で始める"
-    },
-    "sticky": {
-      "cta": "無料で始める",
-      "note": "カード登録不要"
-    },
-    "footer": {
-      "status": "システム正常 · 承認レイヤー常時適用",
-      "note": "© RoboApply. 求職者がつくった、求職者のためのサービス。",
-      "tagline": "あなたの判断をループに組み込んだ、転職AIエージェント。",
-      "lang_title": "お使いの言語でRoboApplyを"
-    }
-  },
-  "auth": {
-    "login": {
-      "title": "おかえりなさい",
-      "subtitle": "RoboApply のミッションにログインしましょう。",
-      "email": "メールアドレス",
-      "password": "パスワード",
-      "submit": "ログイン",
-      "submitting": "ログインしています…",
-      "no_account": "アカウントをお持ちではありませんか?",
-      "signup_cta": "アカウントを作成",
-      "error_generic": "ログインできませんでした。メールアドレスとパスワードをご確認のうえ、再試行してください。"
-    },
-    "signup": {
-      "title": "アカウントを作成",
-      "subtitle": "60秒で、手間いらずの求職活動を始めましょう。",
-      "email": "メールアドレス",
-      "password": "パスワード",
-      "name": "お名前",
-      "submit": "新規登録",
-      "submitting": "アカウントを作成しています…",
-      "has_account": "すでにアカウントをお持ちですか?",
-      "login_cta": "ログイン",
-      "error_generic": "アカウントを作成できませんでした。もう一度お試しください。"
-    },
-    "brand": {
-      "eyebrow": "AI 就活コパイロット",
-      "headline": "もっと<em>早く</em>内定へ。",
-      "lead": "RoboApply が履歴書を最適化し、リアルな AI 模擬面接を行い、応募状況を一元管理。あなたは内定の獲得に集中できます。",
-      "feature_resume": "ATS 対応の最適化履歴書",
-      "feature_interview": "リアルな AI 模擬面接",
-      "feature_track": "応募をまとめて管理"
-    }
-  },
-  "onboarding": {
-    "brand_sub": "あなたのAI求人ハンター",
-    "skip": "スキップ →",
-    "upload": {
-      "title": "あなたの",
-      "title_accent": "履歴書",
-      "lead": "始めるにはこれだけで十分です。一度読み込めば、相性の悪い求人をお見せすることは二度とありません。",
-      "drop_title": "履歴書をドロップするか、クリックして選択してください",
-      "drop_sub": "PDF・DOC/DOCX・TXT・MD(最大15MB)に対応しています",
-      "ingest_title": "読み取った内容",
-      "reading": "読み取り中…",
-      "error": "この履歴書を読み取れませんでした。PDFまたはDOCXファイルをお試しいただくか、別のファイルを選択してください。",
-      "received": "{size} · アップロード・解析中…"
-    },
-    "resumeSelect": {
-      "title": "どの",
-      "title_accent": "履歴書",
-      "title_after": "を読みましょうか?",
-      "lead": "いまの方向性をいちばん表している履歴書を選んでください。読み込んだらすぐに始めます。",
-      "upload_new": "新しい履歴書をアップロード",
-      "paste_text": "履歴書のテキストを貼り付け",
-      "primary_badge": "メイン",
-      "last_edited": "最終編集: {date}",
-      "continue": "この履歴書で続ける",
-      "linkedin_import": "LinkedInからインポート",
-      "linkedin_placeholder": "https://www.linkedin.com/in/あなたのプロフィール",
-      "paste_placeholder": "ここに履歴書のテキストを貼り付けてください。プレーンテキストでもMarkdownでも構いません。",
-      "paste_name": "貼り付けた履歴書",
-      "paste_submit": "このテキストを使う",
-      "back": "← 戻る",
-      "retry": "もう一度試す",
-      "pick_existing": "既存の履歴書を選ぶ",
-      "paste_instead": "代わりにテキストを貼り付ける",
-      "formats": "PDF · DOC/DOCX · TXT · MD",
-      "error_file_too_large": "ファイルが大きすぎます(上限15MB)。小さいファイルでお試しください。",
-      "error_unsupported_format": "この形式は読み取れません。PDF・DOC/DOCX・TXT・MDに対応しています。",
-      "error_parse_failed": "この履歴書を読み取れませんでした。別のファイルを試すか、テキストを貼り付けてください。"
-    },
-    "chat": {
-      "title": "転職の方向性を一緒に決めましょう",
-      "composer_placeholder": "探しているものを教えてください —— 職種、勤務地、給与、譲れない条件など…",
-      "send": "送信",
-      "opening_prompt_hint": "履歴書をもとに書き出しを用意しました。そのまま送っても、自分の言葉に直してもOKです。",
-      "skeleton_ingest": "履歴書を読み取っています…",
-      "status_searching_internal": "求人インデックスを検索中…",
-      "status_searching_external": "最新の外部求人を確認中…",
-      "status_scoring": "履歴書と照らしてスコアリング中…",
-      "tray_title": "ここまでに伺った条件",
-      "tray_edit_prefix": "やっぱり、{field}について…",
-      "tray_dismiss": "閉じる",
-      "card_match": "マッチ度 {score}%",
-      "card_via": "{publisher} 経由",
-      "card_save": "保存",
-      "card_saved": "保存済み",
-      "card_pass": "見送る",
-      "card_passed": "見送り済み",
-      "card_apply": "求人を開く",
-      "wrap_cta": "マッチした求人を見る",
-      "restore_notice": "前回の続きから再開しました。",
-      "superseded_notice": "この会話は別のウィンドウで続いています。再読み込みしてください。",
-      "error_turn_failed": "メッセージを送信できませんでした。",
-      "error_retry": "再試行",
-      "error_daily_limit": "本日はオンボーディングのやり直し回数が上限に達しました。明日もう一度お試しいただくか、スキップしてアプリへお進みください。",
-      "progress_resume": "履歴書",
-      "progress_chat": "チャット",
-      "progress_matches": "マッチ",
-      "progress_done": "完了",
-      "fields": {
-        "targetRoles": "職種",
-        "seniority": "役職レベル",
-        "workModes": "働き方",
-        "salary": "給与",
-        "employmentTypes": "雇用形態",
-        "industriesTarget": "希望業界",
-        "industriesAvoid": "避けたい業界",
-        "companyStages": "企業ステージ",
-        "companySizes": "企業規模",
-        "locations": "勤務地",
-        "mustHaves": "必須条件",
-        "dealbreakers": "NG条件"
-      },
-      "values": {
-        "remote": "リモート",
-        "hybrid": "ハイブリッド",
-        "onsite": "出社",
-        "full_time": "正社員",
-        "contract": "契約",
-        "part_time": "パートタイム",
-        "internship": "インターン"
-      }
-    }
-  },
-  "mission": {
-    "page_title": "ミッションコントロール",
-    "briefing": {
-      "eyebrow": "AI ブリーフィング · {day} · {time}",
-      "loading": "エージェントに接続しています…",
-      "empty_quote": "ただいま準備中です。最初のブリーフィングは明日の午前7時にお届けします。",
-      "empty_first_run": "おはようございます。稼働初日です —— 夜間に求人サイトをスキャンし、明日の午前7時に最初の候補をご用意します。"
-    },
-    "today": {
-      "heading": "本日の応募",
-      "count": "{count} 件がキュー待ち",
-      "submits_at": "{time} に応募します —— それまでならワンタップでスキップできます",
-      "empty": "静かな朝です。昨夜はキューに入れる価値のある、基準を満たした新着求人はありませんでした。引き続き注視します。"
-    },
-    "yesterday": {
-      "heading": "昨日の応募",
-      "empty": "昨日は応募はありませんでした。"
-    },
-    "week": {
-      "heading": "今週のこれまで",
-      "summary": "応募 {applied} 件 · 採用担当者の閲覧 {views} 件 · 面接の招待 {invites} {invites, plural, one {件} other {件}}",
-      "empty": "今週はまだアクティビティがありません。"
-    },
-    "rail": {
-      "today_runs": "本日の応募"
-    },
-    "run": {
-      "match_score": "マッチ度 {score}",
-      "apply_early": "今すぐ応募",
-      "skip": "スキップ",
-      "undo": "取り消す(残り {hours} 時間)",
-      "open_detail": "開く →"
-    },
-    "status": {
-      "queued": "キュー待ち",
-      "previewing": "プレビュー中",
-      "submitted": "応募済み",
-      "skipped": "あなたがスキップしました",
-      "failed": "失敗",
-      "undone": "取り下げ済み"
-    },
-    "counts": {
-      "submitted": "応募済み",
-      "previewing": "プレビュー中",
-      "skipped": "スキップ済み",
-      "failed": "失敗"
-    },
-    "pause": {
-      "cta": "エージェントを一時停止",
-      "resume": "エージェントを再開",
-      "paused": "エージェントは一時停止中です。",
-      "paused_until": "{iso} まで一時停止",
-      "modal_title": "どのくらい一時停止しますか?",
-      "modal_description": "いつでも再開できます。すでに応募済みのものが取り下げられることはありません。",
-      "option_24h": "24時間",
-      "option_24h_hint": "最も一般的です —— 今日の残りを片付けて、明日再開しましょう。",
-      "option_7d": "7日間",
-      "option_7d_hint": "出張、集中したい週、しばらく手を止めたいときに。",
-      "option_indefinite": "無期限",
-      "option_indefinite_hint": "戻ってきて手動で再開するまで。",
-      "cancel": "キャンセル",
-      "confirm": "エージェントを一時停止",
-      "error": "エージェントを一時停止できませんでした。もう一度お試しください。"
-    },
-    "actions": {
-      "skipped_toast": "了解しました —— {company} には応募しません。",
-      "undo_toast": "{company} への応募を取り下げました。",
-      "applied_early_toast": "{company} へ応募を送信しています。",
-      "error": "処理できませんでした。もう一度お試しください。"
-    }
-  },
-  "apps": {
-    "back_to_mission": "ミッションコントロール",
-    "loading": "記録を読み込んでいます…",
-    "not_found_title": "その応募が見つかりません。",
-    "not_found_body": "削除されたか、アクセス権限がない可能性があります。ミッションコントロールに戻ってください。",
-    "chat": {
-      "intro_eyebrow": "なぜこれを選んだか",
-      "intro_body": "この求人を選んだ理由と、あなたに代わって提出した内容をご説明します。",
-      "match_eyebrow": "マッチング分析",
-      "match_caption": "あなたの経歴がこの職種にどれだけ合致しているか",
-      "match_score": "総合マッチ度",
-      "tech_eyebrow": "技術スタック",
-      "tech_caption": "求人票で求められた内容と、あなたの履歴書に記載されている内容",
-      "tech_required": "必須条件",
-      "tech_user_has": "あなたの履歴書に記載",
-      "yes": "あり",
-      "no": "なし",
-      "claims_eyebrow": "記載内容チェック",
-      "claims_caption": "私が書いた具体的な記述はすべて、あなたの履歴書の一文に紐づいています",
-      "claims_passed": "確認済み",
-      "claims_failed": "根拠なし",
-      "prompt_eyebrow": "使用したプロンプト",
-      "prompt_body": "これを {model} に送信しました。システムプロンプトでルールを設定し、ユーザープロンプトで求人とあなたの履歴書を渡します。",
-      "prompt_show": "プロンプトを表示",
-      "prompt_hide": "プロンプトを非表示",
-      "prompt_loading": "プロンプトを取得しています…",
-      "letter_eyebrow": "カバーレター",
-      "letter_body": "これは私が提出したカバーレターです。あなたの履歴書に基づいており、具体的な記述はすべて検証可能です。",
-      "diff_eyebrow": "提出した履歴書",
-      "diff_body": "あなたのマスター履歴書と、私が提出したバージョンの差分です。追加部分はハイライト表示されており、創作された内容は一切ありません。"
-    },
-    "detail": {
-      "status_badge": "ステータス",
-      "location": "勤務地",
-      "salary": "給与",
-      "posted": "掲載日",
-      "match": "マッチ度",
-      "open_external": "求人サイトで開く",
-      "bookmark": "ブックマーク",
-      "withdraw": "応募を取り下げる"
-    }
-  },
-  "settings": {
-    "page_title": "設定",
-    "intent": {
-      "heading": "あなたの希望条件",
-      "subtitle": "いつでも編集できます。明朝のスキャンには新しい内容が使われます。",
-      "save": "変更を保存",
-      "saved": "了解しました。明朝のスキャンにはこの内容を使います。本日のキューは確定済みです。",
-      "save_error": "保存できませんでした。もう一度お試しください。",
-      "current_label": "現在の設定",
-      "version_hint": "バージョン {version} · 最終更新 {iso}"
-    },
-    "tier": {
-      "heading": "プランと請求",
-      "current": "現在のプラン:{tier}。",
-      "cap_hint": "1日あたり最大 {cap} 件まで応募できます。",
-      "manage": "請求を管理",
-      "manage_unavailable": "請求ポータルはまだ公開されていません。利用可能になり次第すぐにご案内します。"
-    },
-    "pause_schedule": {
-      "heading": "一時停止スケジュール",
-      "enabled": "自動応募は有効です。",
-      "disabled": "自動応募は一時停止中です。",
-      "toggle_aria": "自動応募を切り替え"
-    },
-    "tone": {
-      "heading": "カバーレターのトーン調整",
-      "premium_only": "Premium+ 限定 —— 有効にするにはアップグレードしてください。",
-      "subtitle": "カバーレターでエージェントに強調してほしいことはありますか?例文、言い回し、避けたい表現など。",
-      "placeholder": "成果の数値から書き始める。1段落につき1文。「情熱的」という言葉は決して使わない。",
-      "save": "トーンを保存"
-    },
-    "account": {
-      "heading": "アカウント",
-      "email_label": "メールアドレス",
-      "sign_out": "ログアウト",
-      "delete_account": "アカウントを削除",
-      "delete_modal_title": "RoboApply アカウントを削除しますか?",
-      "delete_modal_body": "これによりエージェントが直ちに停止し、あなたのデータが削除されます。送信済みの応募は各求人サイト側に残ります。確認のためメールアドレスを入力してください。",
-      "delete_confirm_label": "{email} を入力して確認",
-      "delete_confirm_placeholder": "your@email.com",
-      "delete_cancel": "キャンセル",
-      "delete_confirm": "アカウントを削除",
-      "delete_in_progress": "削除中…",
-      "delete_error": "削除を完了できませんでした。もう一度お試しいただくか、サポートにお問い合わせください。"
-    }
-  },
-  "preferences": {
-    "loading": "環境設定を読み込んでいます…",
-    "rail": {
-      "eyebrow": "環境設定",
-      "title": "求人ルール",
-      "hunt_active": "求人探索中",
-      "hunt_active_sub": "エージェントがバックグラウンドで稼働しています",
-      "hunt_paused": "求人探索を一時停止中",
-      "hunt_paused_sub": "新しい応募は送信されません",
-      "pause": "探索を一時停止",
-      "resume": "探索を再開"
-    },
-    "nav": {
-      "identity": "基本情報",
-      "hunt": "求人ターゲット",
-      "agent": "エージェントの挙動",
-      "notif": "通知",
-      "integ": "連携",
-      "privacy": "プライバシーとブロック",
-      "plan": "プランと使用状況",
-      "danger": "危険な操作"
-    },
-    "savebar": {
-      "unsaved": "未保存の変更があります",
-      "discard": "破棄",
-      "save": "変更を保存",
-      "saving": "保存中…"
-    },
-    "identity": {
-      "eyebrow": "01 · 基本情報",
-      "title_before": "あなたが",
-      "title_em": "誰か",
-      "title_after": "。",
-      "sub": "これは、私が作成するすべての応募と、あなたに代わって送るすべての返信の拠り所となる情報です。",
-      "group_profile": "プロフィール",
-      "upload_photo": "写真をアップロード",
-      "photo_hint": "PNG、JPG · 正方形が最適です",
-      "full_name": "氏名",
-      "pronouns": "代名詞",
-      "pronouns_sub": "任意 — カバーレターの代名詞の統一に使用します",
-      "pronouns_other": "その他",
-      "pronouns_none": "回答しない",
-      "years_exp": "経験年数",
-      "new_grad": "新卒",
-      "years_suffix": " 年",
-      "group_contact": "連絡先",
-      "email": "メールアドレス",
-      "phone": "電話番号",
-      "location": "所在地",
-      "location_ph": "都市、都道府県",
-      "group_links": "リンク",
-      "linkedin": "LinkedIn",
-      "github": "GitHub",
-      "portfolio": "ポートフォリオ / ウェブサイト",
-      "group_default_resume": "デフォルトの履歴書",
-      "resume_base": "ベース",
-      "no_resumes": "履歴書がまだありません — 履歴書ビルダーで作成してください。"
-    },
-    "hunt": {
-      "eyebrow": "02 · 求人ターゲット",
-      "title_before": "あなたのために",
-      "title_em": "探している",
-      "title_after": "条件。",
-      "sub": "フィルターを絞ると、数は少なくても質の高いマッチが表示されます。広く探したいときは緩めてください。",
-      "plain_label": "わかりやすく言うと · エージェントは実行ごとにこれを読みます",
-      "plain_l1": "{stages} の企業の {roles} 職種",
-      "plain_l2": "{cities} の {modes}",
-      "plain_l3": "${min}k–{max}k の基本給 · {count} 業界",
-      "plain_l4": "必須:{items}",
-      "plain_l5": "絶対条件:{items}",
-      "any_stage": "ステージ不問",
-      "none": "なし",
-      "mode_remote_word": "リモート",
-      "mode_hybrid_word": "ハイブリッド",
-      "mode_onsite_word": "出社",
-      "group_intent": "希望条件の記述",
-      "intent_label": "自由記述",
-      "intent_sub": "自由記述 — 求人が似ている場合の優先判断に使用します",
-      "group_role": "職種",
-      "titles_label": "希望する職種名",
-      "titles_sub": "表記のバリエーションを追加してください — すべてマッチさせます",
-      "titles_ph": "職種名を入力し、カンマで確定",
-      "seniority_label": "シニアリティ",
-      "seniority_sub": "{level} 以上の職種を対象にしています",
-      "group_location": "勤務地",
-      "work_mode_label": "勤務形態",
-      "mode_remote": "リモート",
-      "mode_remote_desc": "場所もタイムゾーンも自由",
-      "mode_hybrid": "ハイブリッド",
-      "mode_hybrid_desc": "週 2〜3 日出社",
-      "mode_onsite": "出社",
-      "mode_onsite_desc": "週 5 日出社",
-      "cities_label": "都市または地域",
-      "cities_sub": "リモート対応の勤務地も含む",
-      "cities_ph": "都市を追加",
-      "group_comp": "報酬",
-      "salary_label": "基本給の範囲",
-      "salary_sub": "${min}k–${max}k · {min}k を下回る求人は除外します",
-      "salary_min": "最低基本給",
-      "salary_max": "最高基本給",
-      "salary_median": "{level} の中央値:$215k",
-      "group_company": "企業",
-      "stage_label": "ステージ",
-      "stage_sub": "企業の成長段階のどこに加わりたいかを選択してください",
-      "headcount_label": "従業員数",
-      "group_industry": "業界",
-      "industries_target_label": "対象の業界",
-      "industries_target_sub": "これらの業界の求人を優先的に表示します",
-      "industries_avoid_label": "避けたい業界",
-      "industries_avoid_sub": "完全ブロック — 表示されません",
-      "industries_avoid_ph": "業界を追加",
-      "group_hard_rules": "絶対ルール",
-      "musthaves_label": "必須条件",
-      "musthaves_sub": "これらを満たさない求人は自動的にスキップされます",
-      "musthaves_ph": "必須条件を追加",
-      "dealbreakers_label": "絶対条件",
-      "dealbreakers_sub": "求人票にこれらが含まれていれば — 問答無用でスキップします",
-      "dealbreakers_ph": "絶対条件を追加",
-      "work_auth_label": "就労資格",
-      "auth_citizen": "米国市民 — スポンサー不要",
-      "auth_pr": "米国永住者",
-      "auth_h1b": "H1-B スポンサーが必要",
-      "auth_opt": "OPT 延長が必要",
-      "auth_eu": "EU / 英国市民",
-      "auth_other": "その他"
-    },
-    "agent": {
-      "eyebrow": "03 · エージェントの挙動",
-      "title_before": "私はどれくらい",
-      "title_em": "積極的",
-      "title_after": "であるべきか。",
-      "sub": "ほとんどの方は中間から始め、最初の 5 件の応募が問題なく返ってきたら強めます。",
-      "current_mode": "現在のモード",
-      "mode_manual": "手動",
-      "mode_manual_desc": "私が下書きし、送信は毎回あなたが確認します。自動応募は一切しません。",
-      "mode_balanced": "バランス",
-      "mode_balanced_desc": "≥ 90 のマッチには自動応募し、それ以外はあなたが確認します。",
-      "mode_aggressive": "フルオート",
-      "mode_aggressive_desc": "≥ 80 のマッチはすべて送信。リスクがあるものは先に知らせます。",
-      "stat_sent": "週あたり送信",
-      "stat_saved": "節約",
-      "stat_replies": "返信",
-      "group_mode": "モード",
-      "behaviour_label": "自動応募の挙動",
-      "group_thresholds": "しきい値",
-      "threshold_label": "マッチのしきい値",
-      "threshold_sub": "スコア ≥ {score} のマッチのみ表示 — この設定では 1 日あたり約 {count} 件の新しい求人",
-      "cap_label": "1 日あたりの応募上限",
-      "cap_sub": "採用担当者は応募数の急増に気づきます — 1 日 {count} 件は{tone}です",
-      "cap_suffix": " / 日",
-      "cap_conservative": "控えめ",
-      "cap_sweet": "ちょうど良いライン",
-      "cap_pushing": "やや攻めすぎ",
-      "quiet_label": "サイレント時間帯",
-      "quiet_sub": "作業は続けますが、この時間帯にはタイムスタンプを残しません",
-      "quiet_start": "サイレント開始",
-      "quiet_end": "サイレント終了",
-      "group_automations": "スマート自動化",
-      "auto_decline_label": "無関係な採用担当者からの連絡を自動で辞退",
-      "auto_decline_sub": "求人があなたのフィルター外であれば、私が代わりに丁寧にお断りします",
-      "auto_schedule_label": "一次面接を自動でスケジュール",
-      "auto_schedule_sub": "採用担当者からカレンダーリンクが届いたら、あなたの空き時間から最適な枠を選びます",
-      "pause_interviews_label": "進行中の面接が 3 件以上のときは探索を一時停止",
-      "pause_interviews_sub": "手を広げすぎないように — まずは今のパイプラインを進めましょう",
-      "rescore_label": "毎週マッチを再スコアリング",
-      "rescore_sub": "履歴書の更新に合わせて、古いマッチをあなたの現在のプロフィールに再ランクします",
-      "group_coach": "コーチ",
-      "coach_label": "コーチの発言量",
-      "coach_sub": "あなたの AI コーパイロットがどれくらい話すか",
-      "coach_silent": "サイレント",
-      "coach_nudges": "ひとこと",
-      "coach_loud": "おしゃべり"
-    },
-    "notif": {
-      "eyebrow": "04 · 通知",
-      "title_before": "私が",
-      "title_em": "あなたに声をかける",
-      "title_after": "タイミング。",
-      "sub": "デフォルトでは静かにしています。エージェントを信頼できるようになったら、項目ごとにオンにしてください。",
-      "group_channels": "チャネル",
-      "channel_email": "メール",
-      "channel_email_sub": "アカウントのメールアドレスに送信",
-      "channel_push": "プッシュ",
-      "channel_push_sub": "ブラウザ + モバイルアプリ",
-      "channel_sms": "SMS",
-      "group_matrix": "通知してほしい項目",
-      "col_email": "メール",
-      "col_push": "プッシュ",
-      "col_sms": "SMS",
-      "event_newMatch90_label": "新しいマッチ ≥ 90",
-      "event_newMatch90_sub": "高い適合度の新しい求人が出ました",
-      "event_queueReview_label": "キューの確認が必要",
-      "event_queueReview_sub": "自動応募がまもなく送信されます",
-      "event_appSent_label": "応募を送信しました",
-      "event_appSent_sub": "静かな送信確認の受領通知",
-      "event_response_label": "雇用主からの返信",
-      "event_response_sub": "採用担当者または採用マネージャーが返信しました",
-      "event_interview_label": "面接が設定されました",
-      "event_interview_sub": "カレンダーの枠が予約されました",
-      "group_digest": "ダイジェスト",
-      "digest_label": "サマリーの頻度",
-      "digest_sub": "私が行ったことのまとめ。個別の通知はしません",
-      "digest_off": "オフ",
-      "digest_daily": "毎日 午前 7 時",
-      "digest_weekly": "毎週 月曜"
-    },
-    "integ": {
-      "eyebrow": "05 · 連携",
-      "title_before": "私を",
-      "title_em": "あなたのツール群",
-      "title_after": "につないでください。",
-      "sub": "つながりが多いほど、あなたが手をかける必要は減ります。Gmail から返信を取得し、カレンダーで面接を調整し、Slack で通知できます。",
-      "loading": "連携を読み込んでいます…",
-      "connected": "接続済み",
-      "connect": "接続",
-      "disconnect": "接続を解除"
-    },
-    "privacy": {
-      "eyebrow": "06 · プライバシーとブロック",
-      "title_before": "誰が",
-      "title_em": "あなたを見られる",
-      "title_after": "か。",
-      "sub": "ステルスモードはデフォルトでオンです。現在の雇用主に見られることはありません。あなたがブロックした企業の採用担当者から連絡が来ることもありません。",
-      "group_visibility": "公開範囲",
-      "visibility_label": "プロフィールの公開範囲",
-      "visibility_sub": "受信検索で誰があなたを見つけられるか",
-      "vis_stealth": "ステルス",
-      "vis_matched": "マッチした企業のみ",
-      "vis_everyone": "全員",
-      "group_blocklist": "企業ブロックリスト",
-      "blocked_label": "自動ブロック",
-      "blocked_sub": "これらの企業はあなたのプロフィールや応募を見られません",
-      "reason_employer": "現在の雇用主 · 自動",
-      "reason_byyou": "あなたが追加",
-      "remove": "削除",
-      "add_company": "+ ブロックする企業を追加",
-      "add_ph": "企業名",
-      "add_confirm": "追加",
-      "blocked_recruiters_label": "ブロックした採用担当者",
-      "blocked_recruiters_sub": "{count} 名の採用担当者があなたへの連絡をブロックされています",
-      "manage_list": "リストを管理 →",
-      "group_data": "あなたのデータ",
-      "export_label": "すべてエクスポート",
-      "export_sub": "すべての応募、下書き、文字起こし、履歴書を JSON + PDF でエクスポート",
-      "download_archive": "アーカイブをダウンロード",
-      "retention_label": "データ保持",
-      "retention_sub": "面接の文字起こしと下書きを保持する期間",
-      "retention_30": "30 日",
-      "retention_90": "90 日",
-      "retention_365": "1 年",
-      "retention_forever": "無期限"
-    },
-    "plan": {
-      "eyebrow": "07 · プランと使用状況",
-      "title_before": "現在のプランは",
-      "title_after": "です。",
-      "sub": "いつでも解約・一時停止できます。あなたが休暇を取ったからといって、探索は止まりません。",
-      "usage_apps": "応募 · 今月",
-      "usage_hours": "節約した時間 · 累計 42 時間",
-      "usage_replies": "返信 · 返信率 14%",
-      "usage_mock": "模擬面接",
-      "group_plans": "プラン",
-      "free_name": "無料",
-      "free_billing": "ずっと無料",
-      "free_b1": "週 10 件の応募",
-      "free_b2": "手動モードのみ",
-      "free_b3": "AI による調整なし",
-      "free_b4": "履歴書ビルダーを含む",
-      "pro_name": "Pro",
-      "per_month": "月額",
-      "popular": "人気",
-      "pro_b1": "応募無制限",
-      "pro_b2": "すべての AI 機能",
-      "pro_b3": "模擬面接(無制限)",
-      "pro_b4": "求人ごとの履歴書調整",
-      "pro_b5": "メール + カレンダー連携",
-      "premium_name": "Premium",
-      "premium_b1": "Pro のすべての機能",
-      "premium_b2": "コンシェルジュ:担当者が毎週上位 3 件の下書きを確認",
-      "premium_b3": "給与交渉のスクリプト",
-      "premium_b4": "手厚いオンボーディング",
-      "current_plan": "現在のプラン",
-      "downgrade": "ダウングレード",
-      "upgrade": "アップグレード →",
-      "switch": "切り替え",
-      "group_billing": "請求",
-      "payment_label": "支払い方法",
-      "payment_sub": "末尾 4242 の Visa",
-      "update_card": "カードを更新",
-      "next_bill_label": "次回請求",
-      "next_bill_sub": "$19.00 · 2026 年 6 月 14 日",
-      "view_invoices": "請求書を表示"
-    },
-    "danger": {
-      "eyebrow": "08 · 危険な操作",
-      "title_before": "これらは",
-      "title_em": "後戻りできない",
-      "title_after": "ボタンです。",
-      "sub": "二度は聞きません — いえ、実は二度確認します。それでも、よく考えてください。",
-      "pause_title": "探索を一時停止",
-      "pause_desc": "スキャン、応募、返信を停止します。データはそのまま残ります。いつでも再開できます。",
-      "pause_btn": "今は一時停止",
-      "resume_btn": "探索を再開",
-      "reset_title": "環境設定をデフォルトにリセット",
-      "reset_desc": "このページのすべての設定を消去します。履歴書と応募は残ります。",
-      "reset_btn": "環境設定をリセット",
-      "delete_data_title": "すべての応募データを削除",
-      "delete_data_desc": "マッチ履歴、キュー、アクティビティログ、パイプラインを消去します。アカウントは残ります。",
-      "delete_data_btn": "応募データを削除",
-      "delete_data_confirm": "マッチ履歴、キュー、アクティビティログ、パイプラインを消去します。アカウントと履歴書は残ります。",
-      "delete_data_confirm_label": "確認",
-      "delete_data_confirm_hint": "確認するには {keyword} と入力してください。",
-      "delete_data_confirm_keyword": "消去",
-      "delete_data_confirm_cta": "応募データを消去",
-      "delete_data_confirm_error": "確認するには {keyword} と正確に入力してください。",
-      "delete_data_cancel": "キャンセル",
-      "delete_data_error": "データを消去できませんでした。もう一度お試しください。",
-      "delete_data_success": "完了 — {count} 件を消去しました。アカウントと履歴書はそのままです。",
-      "delete_data_done": "完了",
-      "delete_account_title": "アカウントを削除",
-      "delete_account_desc": "すべてを消去します。履歴書、応募、文字起こし、連携。元に戻せません。",
-      "delete_account_btn": "アカウントを削除"
-    }
-  },
-  "errors": {
-    "not_found_title": "404",
-    "not_found_body": "そのページが見つかりませんでした。",
-    "error_title": "問題が発生しました",
-    "error_body": "問題を記録しました。もう一度お試しいただくか、ホームに戻ってください。",
-    "try_again": "再試行",
-    "go_home": "ホームに戻る"
-  },
-  "queue": {
-    "eyebrow": "{count, plural, one {# 件のレビュー待ち} other {# 件のレビュー待ち}}",
-    "title": "送信する前に ",
-    "titleAccent": "ご確認ください",
-    "titleAfter": "。",
-    "sub": "タイマーが切れると、それぞれを自動的に送信します。カバーレターを編集したり、スキップしたり、今すぐ送信したり——決めるのはあなたです。",
-    "fitPill": "マッチ度 {score}",
-    "draftBy": "カバーレターの下書き · RoboApply が作成",
-    "edit": "編集",
-    "sendNow": "今すぐ送信",
-    "sending": "送信中…",
-    "editAndSend": "編集して送信",
-    "skip": "スキップ",
-    "skipping": "スキップ中…",
-    "actionError": "うまくいきませんでした。もう一度お試しください。",
-    "loading": "レビューキューを読み込んでいます…",
-    "countdown": {
-      "minutes": "{minutes}分後に自動応募します",
-      "hours": "{hours}時間後に自動応募します",
-      "hoursMinutes": "{hours}時間{minutes}分後に自動応募します",
-      "lessThanMinute": "1分以内に自動応募します",
-      "now": "自動応募中…",
-      "scheduled": "自動応募を予約しました",
-      "title": "タイマーが切れると自動的に送信します——先に操作しない限り。"
-    },
-    "empty": {
-      "title": "キューは",
-      "titleAccent": "空です",
-      "sub": "新しいマッチがしきい値を超えると、ここに表示されます。それぞれの下書きを作成し、送信前にあなたのレビューのために保留します。"
-    },
-    "error": {
-      "title": "キューを読み込めませんでした",
-      "body": "こちら側で問題が発生しました。下書きは安全です——もう一度お試しください。",
-      "retry": "もう一度試す"
-    },
-    "editCover": {
-      "title": "カバーレターを編集",
-      "subtitle": "{company} の {title} 向け",
-      "fieldLabel": "カバーレター（Markdown）",
-      "hint": "Markdown に対応しています。このテキストをそのまま送信します。",
-      "tooLong": "長すぎます——{max}文字以内にしてください。",
-      "error": "保存できませんでした。もう一度お試しください。",
-      "cancel": "キャンセル",
-      "save": "カバーレターを保存",
-      "saving": "保存中…"
-    }
-  },
-  "today": {
-    "eyebrow": "ライブ · {time}",
-    "match": "マッチ度",
-    "whyFits": "この求人がマッチすると考える理由",
-    "thinking": "求人内容を確認しています…",
-    "noReasoning": "この求人についてはまだ詳しい分析がありません。",
-    "matchesTitle": "本日のマッチング · 適合度順",
-    "appliedBanner": "応募しました。カバーレター、最適化した履歴書、スクリーニング回答をすべて提出しました。",
-    "passedBanner": "フィードから削除しました。これを学習し、類似の求人はスキップします。",
-    "headline": {
-      "direct": {
-        "before": "{count} 件の応募を",
-        "accent": "完了",
-        "after": "（夜間に）。"
-      },
-      "playful": {
-        "before": "夜通し",
-        "accent": "夜勤",
-        "after": "☕"
-      },
-      "formal": {
-        "before": "夜間の",
-        "accent": "サマリー",
-        "after": "。"
-      }
-    },
-    "sub": {
-      "direct": "{scanned} 件の求人をスキャンし、{matched} 件があなたの基準を満たしました。{autoApplied} 件は自動応募済みです。最有力候補はキューに入っています——あなたの判断にお任せします。",
-      "playful": "あなたが眠っている間にコーヒーを淹れました。{scanned} 件の求人をスキャンし、{matched} 件がマッチ、{autoApplied} 件を自動応募しました。さらに {queued} 件があなたの承認を待っています。",
-      "formal": "夜間に {scanned} 件の求人を確認しました。{matched} 件がマッチ基準を満たしています。{autoApplied} 件の応募を提出済みで、{queued} 件が承認待ちです。"
-    },
-    "sub_noqueue": {
-      "direct": "{scanned} 件の求人をスキャンし、{matched} 件があなたの基準を満たしました。{autoApplied} 件は自動応募済みです。",
-      "playful": "あなたが眠っている間にコーヒーを淹れました。{scanned} 件の求人をスキャンし、{matched} 件がマッチ、{autoApplied} 件を自動応募しました。",
-      "formal": "夜間に {scanned} 件の求人を確認しました。{matched} 件がマッチ基準を満たしています。{autoApplied} 件の応募を提出済みです。"
-    },
-    "stats": {
-      "autoApplied": "自動応募済み",
-      "whileYouSlept": "睡眠中に",
-      "scanned": "夜間にスキャン",
-      "matched": "マッチ ≥ 80",
-      "matchedDelta": "{count} 件が基準超え",
-      "inQueue": "キュー内"
+    "gap": {
+      "missing_label": "求人票にあって、履歴書に書かれていない項目です:",
+      "overlap_label": "一致している点:",
+      "none_missing": "求人票が求めるもので、履歴書に欠けているものはありません。",
+      "fix_cta": "履歴書を直す"
+    },
+    "whyFits": "合っている理由",
+    "thinking": "求人票を読んでいます…",
+    "noReasoning": "この求人の詳しい読み取りはまだありません。",
+    "evidence": "求人票を最後まで読み、履歴書と照らし合わせました。",
+    "trail": {
+      "label": "この求人で行ったこと",
+      "saved": "保存済み",
+      "tailored": "履歴書を調整済み",
+      "practiced": "練習済み",
+      "applied": "応募済み"
+    },
+    "filter": {
+      "title": "表示",
+      "great_only": "とても合う求人だけ",
+      "good_and_better": "よく合う以上",
+      "everything": "すべて",
+      "hidden_count": "合いにくい求人{count}件を隠しています。",
+      "show_them": "表示する。",
+      "search_everywhere": "他の求人サイトも探す",
+      "search_everywhere_sub": "RoboApply以外の求人サイトも読みます。",
+      "setup_cta": "どんな仕事を探しているか教えてください"
     },
     "posted": {
       "justNow": "たった今",
-      "hoursAgo": "{count} 時間前",
-      "daysAgo": "{count} 日前"
-    },
-    "tier": {
-      "strong": "高マッチ",
-      "good": "良好なマッチ",
-      "stretch": "チャレンジ",
-      "longShot": "可能性は低め"
-    },
-    "tag": {
-      "stretch": "チャレンジ求人"
+      "hoursAgo": "{count}時間前",
+      "daysAgo": "{count}日前"
     },
     "work": {
       "remote": "リモート",
@@ -2084,197 +111,758 @@
       "onsite": "出社"
     },
     "status": {
-      "applied": "✓ 応募済み",
-      "passed": "✕ スキップ",
-      "queued": "◆ キュー内"
+      "applied": "応募済み",
+      "notInterested": "興味なし",
+      "saved": "あとで見る"
     },
     "facet": {
-      "salaryFit": "給与の適合",
-      "salaryWithinBand": "希望範囲内",
-      "salaryBelowBand": "希望範囲を下回る",
-      "skillOverlap": "スキルの一致",
-      "skillValue": "JD スキルの {pct}% をカバー",
-      "riskFlag": "リスクフラグ",
-      "riskNone": "重大なリスクは見つかりませんでした"
-    },
-    "actions": {
-      "applyNow": "今すぐ応募",
-      "applying": "応募中…",
-      "schedule": "自動応募をスケジュール",
-      "pass": "スキップ",
-      "undo": "元に戻す",
-      "viewJd": "求人票を見る ↗",
-      "refresh": "更新",
-      "filters": "フィルター",
-      "viewDetail": "詳細を見る"
-    },
-    "empty": {
-      "title": "すべて対応済みです、",
-      "accent": "お見事。",
-      "sub": "現在、基準を超える新しいマッチはありません。引き続きスキャンを続け、新しい求人が見つかり次第ここに表示します。"
-    },
-    "error": {
-      "title": "読み込めませんでした、あなたの",
-      "accent": "マッチング",
-      "sub": "こちら側で問題が発生しました。フィードは安全です——もう一度お試しください。",
-      "retry": "もう一度試す"
+      "salaryFit": "給与",
+      "salaryWithinBand": "希望した範囲の中",
+      "salaryBelowBand": "希望した範囲より下",
+      "skillOverlap": "一致するスキル",
+      "skillValue": "求人票が挙げるスキルの{pct}%",
+      "riskFlag": "確認したい点",
+      "riskNone": "気になる点はありません"
     },
     "detail": {
-      "description": "仕事内容",
-      "responsibilities": "担当業務",
-      "qualifications": "応募資格",
-      "benefits": "待遇・福利厚生",
-      "viewOriginal": "元の求人ページを開く ↗"
-    }
-  },
-  "activity": {
-    "eyebrow": "過去 7 日間",
-    "title": "あなたに代わって行った",
-    "titleAccent": "すべて",
-    "titleAfter": "の記録です。",
-    "sub": "応募、ドラフト作成、辞退、そして静かな判断まで、すべての記録が残ります。ブラックボックスはありません。",
-    "loading": "アクティビティログを読み込んでいます…",
-    "stats": {
-      "hoursSaved": "節約できた時間",
-      "thisWeek": "今週",
-      "appsSent": "応募数",
-      "replies": "返信",
-      "replyRate": "{percent}%",
-      "draftsWritten": "作成したドラフト"
+      "description": "求人票",
+      "responsibilities": "担当する仕事",
+      "qualifications": "求められること",
+      "benefits": "待遇",
+      "viewOriginal": "企業サイトで求人票を読む"
     },
+    "actions": {
+      "applyOnSite": "企業サイトで応募する",
+      "applying": "企業サイトを開いています…",
+      "saveForLater": "あとで見る",
+      "notInterested": "興味なし",
+      "didntApply": "応募していません",
+      "markApplied": "応募済みにする",
+      "undo": "取り消す",
+      "viewDetail": "求人を見る",
+      "refresh": "新しい求人を確認",
+      "filters": "絞り込む",
+      "practice": "この求人で練習する",
+      "tailorResume": "この求人に合わせて履歴書を調整する"
+    },
+    "appliedOnSiteBanner": "「応募済み」に移しました。代わりに送信したものはありません。応募は企業サイトで行ってください。",
+    "notInterestedBanner": "一覧から外しました。",
     "empty": {
-      "title": "まだ記録は",
-      "titleAccent": "ありません",
-      "sub": "あなたに代わって応募・最適化・仕分けを始めると、すべての操作が理由とともにここに表示されます。"
+      "title": "条件に合う求人はまだありません。",
+      "accent": "",
+      "sub": "探している仕事を教えるか、履歴書を追加すると、合う求人がここに並びます。"
     },
     "error": {
-      "title": "アクティビティを読み込めませんでした",
-      "body": "こちらで問題が発生しました。履歴は安全に保管されています——もう一度お試しください。",
+      "title": "求人一覧を読み込めませんでした。",
+      "accent": "",
+      "sub": "データは消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
       "retry": "もう一度試す"
+    },
+    "setup": {
+      "title": "どんな仕事を探しているか教えてください",
+      "sub": "細かく伝えるほど、読む求人は少なくなります。内容はあとから変更できます。",
+      "resume_title": "読み込む履歴書を選んでください",
+      "resume_lead": "次に就きたい仕事にいちばん近いものを選んでください。",
+      "resume_upload_new": "新しい履歴書をアップロード",
+      "resume_paste_text": "履歴書のテキストを貼り付け",
+      "resume_primary_badge": "メインの履歴書",
+      "resume_last_edited": "最終更新 {date}",
+      "resume_continue": "この履歴書を使う",
+      "resume_pick_existing": "登録済みの履歴書から選ぶ",
+      "resume_paste_instead": "代わりにテキストを貼り付ける",
+      "resume_paste_placeholder": "履歴書のテキストをここに貼り付けてください。書式なしのテキストで大丈夫です。",
+      "resume_paste_name": "貼り付けた履歴書",
+      "resume_paste_submit": "このテキストを使う",
+      "resume_back": "戻る",
+      "resume_retry": "もう一度試す",
+      "resume_formats": "PDF、DOC、DOCX、TXT、MD",
+      "resume_linkedin_import": "LinkedInから取り込む",
+      "resume_linkedin_placeholder": "https://www.linkedin.com/in/your-profile",
+      "upload_title": "履歴書を追加",
+      "upload_lead": "一度読み込むだけで、受けるつもりのない求人は出なくなります。",
+      "upload_drop_title": "履歴書をここにドロップ、またはクリックして選択",
+      "upload_drop_sub": "PDF、DOC、DOCX、TXT、MD — 15MBまで",
+      "upload_received": "{size} · アップロードして読み込んでいます…",
+      "upload_ingest_title": "履歴書に書かれている内容",
+      "upload_reading": "読み込み中…",
+      "upload_error": "この履歴書は読み取れませんでした。PDFかDOCXを試すか、別のファイルを選んでください。",
+      "reading_resume": "履歴書を読んでいます…",
+      "status_searching_internal": "求人データを検索しています…",
+      "status_searching_external": "他の求人サイトの新着を確認しています…",
+      "status_scoring": "求人と履歴書を比べています…",
+      "composer_placeholder": "職種、勤務地、給与、受けたくない条件…",
+      "send": "送信",
+      "opening_prompt_hint": "この文章は履歴書から書き起こしたものです。編集しても、そのまま送っても構いません。",
+      "tray_title": "ここまでに伝えた内容",
+      "tray_edit_prefix": "{field}を変更…",
+      "tray_dismiss": "閉じる",
+      "wrap_cta": "求人を見る",
+      "restore_notice": "前回の続きから再開しました。",
+      "superseded_notice": "この設定は別のウィンドウで続きが行われました。再読み込みすると反映されます。",
+      "error_turn_failed": "メッセージを送れませんでした。もう一度送ってください。",
+      "error_retry": "もう一度試す",
+      "error_daily_limit": "今日は設定を何度もやり直しています。明日また試すか、そのまま求人一覧へ進んでください。",
+      "error_parse_failed": "この履歴書は読み取れませんでした。別のファイルを試すか、テキストを貼り付けてください。",
+      "error_file_too_large": "このファイルは15MBを超えています。もっと小さいファイルを試してください。",
+      "error_unsupported_format": "この形式は読み取れません。PDF、DOC、DOCX、TXT、MDが使えます。",
+      "card_fit": "{score} / 100",
+      "card_via": "掲載元: {publisher}",
+      "card_save": "あとで見る",
+      "card_saved": "保存しました",
+      "card_not_interested": "興味なし",
+      "card_removed": "外しました",
+      "card_apply": "求人票を読む",
+      "progress_resume": "履歴書",
+      "progress_chat": "設定",
+      "progress_matches": "求人",
+      "progress_done": "完了",
+      "skip": "スキップ",
+      "fields": {
+        "targetRoles": "職種名",
+        "seniority": "役職レベル",
+        "workModes": "リモートか出社か",
+        "salary": "給与",
+        "employmentTypes": "雇用形態",
+        "industriesTarget": "希望する業界",
+        "industriesAvoid": "避けたい業界",
+        "companyStages": "企業のステージ",
+        "companySizes": "企業の規模",
+        "locations": "勤務地",
+        "mustHaves": "必須条件",
+        "dealbreakers": "受けない条件"
+      },
+      "values": {
+        "remote": "リモート",
+        "hybrid": "ハイブリッド",
+        "onsite": "出社",
+        "full_time": "正社員",
+        "contract": "業務委託",
+        "part_time": "パートタイム",
+        "internship": "インターン"
+      }
     }
   },
-  "pipeline": {
-    "eyebrow": "進行中の会話 {count} 件",
-    "loading": "パイプラインを読み込んでいます…",
-    "headline": {
-      "direct": {
-        "before": "それぞれの",
-        "accent": "会話",
-        "after": "の状況をひと目で。"
+  "resume": {
+    "eyebrow": "履歴書",
+    "title_lead": "採用したくなる",
+    "title_accent": "履歴書",
+    "title_after": "を書く。",
+    "subtitle": "白紙から書く、今ある履歴書をアップロードする、LinkedInから取り込む。そのあと、応募先ごとに調整したコピーを作れます。",
+    "common": {
+      "cancel": "キャンセル",
+      "close": "閉じる"
+    },
+    "gate": {
+      "title": "まず履歴書を追加してください",
+      "subtitle": "履歴書はすべての土台です。追加すると、求人、適合スコア、面接対策が動き始めます。",
+      "cta": "履歴書をアップロード",
+      "uploading": "履歴書を読んでいます…",
+      "formats": "PDF、DOCX、TXT · 15MBまで",
+      "error": "このファイルは読み取れませんでした。もう一度試すか、別のファイルを選んでください。",
+      "error_too_large": "このファイルは15MBを超えています。もっと小さいファイルを試してください。",
+      "error_format": "この形式は読み取れません。PDF、DOCX、TXTのいずれかを使ってください。",
+      "error_empty": "このファイルから文字を読み取れませんでした。スキャン画像ではなく、テキストのPDFを試してください。",
+      "or_build": "白紙から書くこともできます"
+    },
+    "create": {
+      "scratch": {
+        "title": "白紙から書く",
+        "desc": "行ごとに書き方の助けが出るテンプレートです。経験がまだ浅い方に向いています。",
+        "meta": "約10分"
       },
-      "playful": {
-        "before": "進行中の",
-        "accent": "やりとり",
-        "after": "がすべてここに ✨"
+      "file": {
+        "title": "履歴書をアップロード",
+        "desc": "PDFかDOCXをドロップしてください。読み取って項目に整理し、弱い行に印を付けます。",
+        "meta": "PDF · DOCX · Apple Pages"
       },
-      "formal": {
-        "before": "パイプライン",
-        "accent": "概要",
-        "after": "。"
+      "linkedin": {
+        "title": "LinkedInから取り込む",
+        "desc": "LinkedInのプロフィールをPDFで保存してドロップしてください。同じように読み取り、印を付けます。",
+        "meta": "PDFで保存してアップロード"
+      },
+      "default_name": {
+        "scratch": "無題の下書き",
+        "file": "アップロードした履歴書",
+        "linkedin": "LinkedInから取り込み"
       }
     },
-    "sub": {
-      "direct": "受信トレイの返信とカレンダーの招待から自動的に同期されます。カードをドラッグするか、ステータスメニューを使って、{columns} 個のステージ間を移動できます。",
-      "playful": "受信トレイとカレンダーから自動で同期しています。カードをドラッグして次に進めたり、メニューから新しいステージを選んだりできます。",
-      "formal": "各ステージは受信トレイの返信とカレンダーの招待から自動的に更新されます。カードをドラッグするか、ステータスコントロールから再割り当てしてください。"
+    "library": {
+      "title": "履歴書一覧",
+      "count": "{count}件のバージョン"
+    },
+    "card": {
+      "base": "メインの履歴書 — 求人には合わせていません",
+      "edited": "{when}に編集",
+      "score_unit": "/100",
+      "delete": "履歴書を削除",
+      "versions_used": "バージョン {used} / {cap} を使用中"
+    },
+    "tip": {
+      "label": "経験がまだ浅い方へ",
+      "body": "職務経験が少なくても問題ありません。授業の課題、ハッカソン、フリーランスの仕事、個人開発は、どれも実績の行になります。学生時代とインターンの経験は、各行で「学生・インターン経験を書き直す」を使ってください。"
+    },
+    "empty": {
+      "title_lead": "登録された履歴書は",
+      "title_accent": "まだありません",
+      "sub": "白紙、アップロード、LinkedInのいずれかで最初の1通を作ると、すべての行が点検されます。",
+      "cta": "白紙から書く"
+    },
+    "error": {
+      "title": "履歴書を読み込めませんでした。",
+      "sub": "データは消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+      "retry": "もう一度試す"
+    },
+    "ingest": {
+      "scratch": {
+        "template": "テンプレート",
+        "template_v": "1段組み・装飾なし・読み取りソフトが読みやすい形",
+        "sections": "項目",
+        "sections_v": "要約 · 職歴 · 学歴 · スキル · プロジェクト",
+        "ai": "書き方の助け",
+        "ai_v": "すべての行で — 改善、短縮、追記、トーン変更",
+        "ready": "準備完了",
+        "ready_v": "無題の下書き"
+      },
+      "import": {
+        "read": "読み取り",
+        "identity": "本人情報",
+        "identity_v": "氏名 · メール · 所在地",
+        "experience": "職歴",
+        "experience_v": "会社 · 役職 · 期間",
+        "education": "学歴",
+        "education_v": "学位 · 学校 · 年",
+        "skills": "スキル",
+        "skills_v": "スキル · ツール · キーワード",
+        "cleaned": "整形",
+        "cleaned_v": "表現と行間"
+      }
+    },
+    "import": {
+      "title": {
+        "scratch": "新しい履歴書を作る",
+        "file": "履歴書をアップロード",
+        "linkedin": "LinkedInから取り込む"
+      },
+      "badge": {
+        "scratch": "新規",
+        "file": "アップロード",
+        "linkedin": "取り込み"
+      },
+      "template": {
+        "classic": "クラシック · 1段組み",
+        "modern": "モダン · 2段組み",
+        "editorial": "エディトリアル · 明朝"
+      },
+      "scratch_hint": "テンプレートを選んでください。あとから変えても、書いた内容はそのまま移ります。",
+      "drop": {
+        "title": "履歴書をここにドロップ",
+        "sub": "PDF、DOCX、Apple Pages",
+        "ready": "読み取る準備ができました"
+      },
+      "linkedin": {
+        "steps_title": "LinkedInのプロフィールをPDFで保存します",
+        "step1": "LinkedInで自分のプロフィールを開く",
+        "step2": "「その他」から「PDFとして保存」を選ぶ",
+        "step3": "そのPDFを下からアップロードする",
+        "upload_title": "LinkedInのPDFをここにドロップ",
+        "upload_sub": "プロフィールから保存したPDF",
+        "ready": "取り込む準備ができました",
+        "or": "または",
+        "url_label": "公開プロフィールなら、URLを貼り付けてください",
+        "placeholder": "linkedin.com/in/your-handle",
+        "hint": "公開しているLinkedInのURLを貼り付けてください。職歴、学歴、スキル、リンクを取り込みます。"
+      },
+      "ingest_title": {
+        "scratch": "下書きを用意しています",
+        "parse": "履歴書を読んでいます"
+      },
+      "working": "処理中…",
+      "done": {
+        "title_scratch": "下書きができました",
+        "title_import": "取り込みました",
+        "body_scratch": "エディタを開いて書き始めてください。行ごとの助言は右側に出ます。",
+        "body_import": "履歴書を読み取りました。弱い実績行が2つ、エディタ上で強調されています。"
+      },
+      "cancel": "キャンセル",
+      "create_draft": "下書きを作る",
+      "parse_with_ai": "このファイルを読む",
+      "open_editor": "エディタを開く",
+      "error": "履歴書を作成できませんでした。もう一度試してください。",
+      "errors": {
+        "invalid_url": "LinkedInのプロフィールURLではありません。リンクを確認してもう一度試してください。",
+        "fetch_failed": "LinkedInに接続できませんでした。代わりにLinkedInのPDFをアップロードしてください。",
+        "profile_empty": "このプロフィールには取り込める情報が足りませんでした。代わりにLinkedInのPDFをアップロードしてください。",
+        "url_import_not_configured": "URLからの取り込みはここでは使えません。代わりにLinkedInのPDFをアップロードしてください。",
+        "parse_failed": "このファイルは読み取れませんでした。PDFで書き出し直してもう一度試してください。",
+        "unsupported_format": "この形式は読み取れません。PDFかDOCXをアップロードしてください。",
+        "file_too_large": "このファイルは大きすぎます。上限は15MBです。",
+        "file_required": "先にファイルを選んでください。"
+      },
+      "demo_file_name": "resume-2024.pdf",
+      "demo_file_size": "184 KB"
+    },
+    "toolbar": {
+      "back": "履歴書一覧",
+      "rename": "履歴書の名前",
+      "saved": "すべて保存済み",
+      "saving": "保存中…",
+      "save_error": "まだ保存できていません — 再試行中",
+      "strength": "完成度",
+      "coach": "行の点検",
+      "hide_coach": "行の点検を隠す",
+      "download": "ダウンロード",
+      "tailor": "求人に合わせる",
+      "delete": "削除"
+    },
+    "section": {
+      "identity": "本人情報",
+      "summary": "要約",
+      "experience": "職歴",
+      "education": "学歴",
+      "skills": "スキル",
+      "other": "その他の項目"
+    },
+    "field": {
+      "full_name": "氏名",
+      "title": "肩書き",
+      "email": "メール",
+      "phone": "電話",
+      "location": "所在地",
+      "links": "リンク",
+      "ai": "書き直す"
+    },
+    "summary": {
+      "placeholder": "2文で。作り上げたものと、それが何を変えたかから書き始めてください。",
+      "give_rewrites": "書き直し案を3つ出す",
+      "rewriting": "書き直しています…",
+      "char_hint": "{count}文字 · 240〜320文字が目安",
+      "option": "案{n}",
+      "use_this": "これを使う",
+      "keep_current": "今のままにする"
+    },
+    "action": {
+      "improve": {
+        "label": "文章を良くする",
+        "desc": "強い動詞に、短く"
+      },
+      "metrics": {
+        "label": "数字を足す",
+        "desc": "数字が入る場所を示します"
+      },
+      "shorten": {
+        "label": "短くする",
+        "desc": "無駄を削り、結果は残します"
+      },
+      "expand": {
+        "label": "背景を足す",
+        "desc": "どうやったか、なぜ重要だったかを書きます"
+      },
+      "confident": {
+        "label": "断定的にする",
+        "desc": "「手伝った」ではなく「主導した」"
+      },
+      "junior": {
+        "label": "学生・インターン経験を書き直す",
+        "desc": "仕事として通じる言い方にします"
+      }
+    },
+    "bullet": {
+      "flag": "この行には数字がなく、動詞もあいまいです。「文章を良くする」か「数字を足す」を試してください。",
+      "placeholder": "何をしたか — 動詞で始めて、結果で終える"
+    },
+    "rewrite": {
+      "rewriting": "書き直し中",
+      "suggested": "書き直しの案",
+      "accept": "これを使う",
+      "regenerate": "別の案を出す",
+      "discard": "破棄する",
+      "error": "書き直せませんでした。もう一度試してください。"
+    },
+    "experience": {
+      "hint": "行にカーソルを合わせると書き直せます",
+      "add_role": "職歴を追加",
+      "add_bullet": "行を追加、または自分で貼り付け",
+      "editing": "編集中",
+      "title_placeholder": "役職名",
+      "company_placeholder": "会社名",
+      "location_placeholder": "勤務地",
+      "start_placeholder": "開始",
+      "end_placeholder": "終了"
+    },
+    "education": {
+      "add": "学歴を追加",
+      "school_placeholder": "学校名",
+      "degree_placeholder": "学位",
+      "detail_placeholder": "表彰、研究、成績"
+    },
+    "skills": {
+      "suggest": "実績行からスキルを挙げる",
+      "add": "スキルを追加",
+      "placeholder": "スキル名",
+      "remove": "{skill}を削除",
+      "suggested": "実績行から見つかったもの",
+      "dismiss_suggestions": "閉じる"
+    },
+    "young": {
+      "head": "職務経験が少ない場合は、学生時代や個人の活動を履歴書の言葉に直す項目を追加してください。",
+      "class_project": {
+        "label": "授業の課題",
+        "desc": "作り上げた仕事として書きます"
+      },
+      "hackathon": {
+        "label": "ハッカソン",
+        "desc": "48時間 · 作ったもの"
+      },
+      "side_project": {
+        "label": "個人プロジェクト",
+        "desc": "オープンソースや趣味の開発"
+      },
+      "volunteer": {
+        "label": "ボランティア",
+        "desc": "これも実績になります"
+      },
+      "freelance": {
+        "label": "フリーランスの仕事",
+        "desc": "報酬を受けた案件"
+      },
+      "leadership": {
+        "label": "学生団体での役割",
+        "desc": "サークル、学生会、団体"
+      }
+    },
+    "preview": {
+      "label": "プレビュー",
+      "page": "1ページ"
+    },
+    "paper": {
+      "your_name": "氏名"
+    },
+    "coach": {
+      "label": "行の点検",
+      "sub": "入力しながら実行されます",
+      "hide": "行の点検を隠す",
+      "next": "次の指摘",
+      "tips": {
+        "metrics_good": "実績行に具体的な数字が入っています。履歴書全体で続けてください。",
+        "metrics_missing": "ほとんどの行に数字がありません。上位3行に数字を足してください。",
+        "summary_long": "要約が長すぎます。2文に切り詰めてください。",
+        "summary_tight": "要約は簡潔です。希望する仕事にいちばん近い一文から始めてください。",
+        "summary_missing": "要約がまだありません。冒頭の2文が、その下の内容すべての枠組みになります。",
+        "weak_verbs": "「担当した」「手伝った」のような弱い動詞で始まる行が{count}件あります。自分がやったと言い切れる動詞に書き直してください。",
+        "strong_verbs": "弱い書き出しはどこにもありません。この調子で。",
+        "no_bullets": "この履歴書にはまだ実績行がありません。各職歴を、結果で終わる行に分けてください。",
+        "too_many_bullets": "行が多すぎます。職歴ごとに強い3〜5行だけ残してください。",
+        "good_density": "分量は適切です。1行だけ書き直すことも、履歴書全体を1つの求人に合わせることもできます。"
+      }
+    },
+    "citation": {
+      "group_label": "ここにある数字は、すべて履歴書に書かれていたものです。",
+      "tap_hint": "印の付いた行をタップすると、出どころが表示されます。",
+      "source": "履歴書より — {section}、{line}行目",
+      "blocked_title": "履歴書に見つからない数字が1行あります。ダウンロードの前に直すか、その行を削除してください。",
+      "edit_line": "行を編集",
+      "remove_line": "行を削除",
+      "warning": "この下書きの数字の一部は履歴書にありません。このバージョンを使う前に確認してください。"
+    },
+    "tailor": {
+      "eyebrow": "調整",
+      "title_pick": "合わせる求人を選んでください",
+      "title_analyzing_lead": "求人票と",
+      "title_analyzing_accent": "履歴書を",
+      "title_analyzing_after": "読んでいます…",
+      "title_review_lead": "変更点:",
+      "title_done": "調整したコピーを作成しました",
+      "source_label": "自分の求人から選ぶ",
+      "loading_jobs": "求人を読み込んでいます…",
+      "no_jobs": "求人がまだありません。代わりに下に求人票を貼り付けてください。",
+      "fit": "適合",
+      "or": "または",
+      "paste_toggle": "別の求人票を貼り付ける",
+      "paste_placeholder": "求人票をここに貼り付けてください — 職種、企業名、本文すべて",
+      "analyze_paste": "この求人票を読む",
+      "pasted_company": "貼り付けた求人票",
+      "pasted_role": "カスタム",
+      "analyzing": {
+        "read_jd": "求人票を最後まで読んでいます",
+        "cross_check": "履歴書の実績行と照らし合わせています",
+        "find_gaps": "求人票にあって履歴書にない言葉を探しています",
+        "draft": "変更案を書いています",
+        "rescore": "適合スコアを付け直しています"
+      },
+      "before": "変更前",
+      "after": "変更後",
+      "note": "変更は{count}件です。不要なものはチェックを外してください。チェックしたものだけが反映されます。",
+      "kind": {
+        "rewrite": "書き直し",
+        "add": "追加",
+        "reorder": "並べ替え",
+        "trim": "削除"
+      },
+      "pick_hint": "求人を選ぶと次へ進めます",
+      "pick_different": "別の求人を選ぶ",
+      "apply": "{count}件の変更を反映する",
+      "back_to_editor": "エディタに戻る",
+      "open_copy": "調整したコピーを開く",
+      "done_title": "調整したコピーを保存しました",
+      "done_body": "新しいバージョン「{name}」を一覧に追加しました。メインの履歴書は変わっていません。",
+      "done_body_paste": "調整したバージョンができました。メインの履歴書は変わっていません。",
+      "error": "この履歴書は調整できませんでした。もう一度試してください。",
+      "manual_toggle": "代わりに企業名と職種名を指定する",
+      "company_label": "企業名",
+      "company_placeholder": "会社の名前",
+      "role_label": "職種名",
+      "role_placeholder": "職種名（任意）",
+      "analyze_manual": "この企業と職種に合わせる",
+      "manual_hint": "求人票がない場合は、企業名、職種名、履歴書だけを使って調整します。",
+      "version_name_label": "名前を付けて保存",
+      "estimated": "推定",
+      "citation_warning": "この下書きの数字の一部は履歴書にありません。反映する前に確認してください。"
+    },
+    "download": {
+      "eyebrow": "ダウンロード",
+      "title": "形式を選んでください",
+      "recommended": "おすすめ",
+      "error": "ダウンロードできませんでした。もう一度試してください。",
+      "pdf": {
+        "label": "PDF",
+        "desc": "読み取りソフトが読めるPDF — 応募にはこれが最適です"
+      },
+      "docx": {
+        "label": "DOCX",
+        "desc": "Wordでそのまま編集できるファイル"
+      },
+      "txt": {
+        "label": "テキスト",
+        "desc": "Webの入力欄に貼り付ける用"
+      },
+      "md": {
+        "label": "Markdown",
+        "desc": "GitHubや個人サイト用"
+      },
+      "scanner_preview": "応募先のソフトが読み取る内容"
+    },
+    "state": {
+      "loading": "履歴書を読み込んでいます…",
+      "error_title": "この履歴書を読み込めませんでした。",
+      "error_body": "削除された可能性があります。リンクが間違っていることもあります。",
+      "back": "履歴書一覧に戻る"
+    },
+    "delete": {
+      "title": "この履歴書を削除しますか？",
+      "body": "一覧から完全に削除されます。確認のため、下に名前を入力してください。",
+      "input_label": "確認のため履歴書の名前を入力",
+      "mismatch_hint": "履歴書の名前と一致しません。",
+      "cancel": "キャンセル",
+      "confirm": "履歴書を削除",
+      "confirming": "削除しています…",
+      "error": "この履歴書は削除できませんでした。もう一度試してください。"
+    },
+    "extra": {
+      "hint": "元の履歴書から引き継いだ内容です — テキストとして編集できます",
+      "heading_placeholder": "見出し",
+      "body_placeholder": "本文"
+    },
+    "entry": {
+      "move_up": "上へ",
+      "move_down": "下へ",
+      "remove": "削除"
+    },
+    "analyzer": {
+      "title": "履歴書の点検",
+      "empty": "直すところはありません。読みやすい履歴書です。",
+      "severity": {
+        "critical": "必ず直す",
+        "recommended": "直したほうがよい",
+        "optional": "任意"
+      }
+    }
+  },
+  "applications": {
+    "page_title": "応募",
+    "eyebrow": "進行中{count}件",
+    "headline": "どこに応募して、どうなりましたか？",
+    "sub": "カードをドラッグするか、段階メニューを使うと、{columns}段階の間で移せます。返信や日程の招待が届くと自動で移動します。",
+    "loading": "応募状況を読み込んでいます…",
+    "view": {
+      "by_stage": "段階で見る",
+      "by_date": "日付で見る"
     },
     "columns": {
       "saved": "保存済み",
       "applied": "応募済み",
-      "interview": "面接",
-      "offer": "オファー"
+      "first_call": "一次面談",
+      "interviewing": "面接中",
+      "final_round": "最終面接",
+      "offer": "内定",
+      "rejected": "不採用"
     },
     "column": {
-      "aria": "{name} ステージ、{count} 件"
+      "aria": "{name}、{count}件"
+    },
+    "outcome": {
+      "label": "終わり方",
+      "they_said_no": "企業から断られた",
+      "i_withdrew": "自分から辞退した",
+      "job_pulled": "募集が取り下げられた"
+    },
+    "follow_up": {
+      "row": "{count, plural, other {10日間返信のない企業が#社あります。}}",
+      "write_cta": "催促の文面を書く",
+      "grounding": "求人票と履歴書をもとに書いています。",
+      "open_mail": "メールアプリで開く"
+    },
+    "insight": {
+      "title": "今週のまとめ",
+      "sub": "何が起きたか、次に何をするか。",
+      "empty": "応募を1週間続けると、ここに書けることが出てきます。",
+      "refresh": "更新する",
+      "refreshing": "更新中…",
+      "refresh_recent": "つい先ほど更新しました。しばらくしてからもう一度お試しください。",
+      "metrics": {
+        "applications": "応募",
+        "interviews": "面接",
+        "offers": "内定",
+        "weeks_to_offer": "経過週数",
+        "unknown": "—",
+        "skills_observed": "よく出てきたスキル"
+      }
     },
     "card": {
-      "drag_hint": "ドラッグ可能なカード——別のステージへドラッグするか、ステータスメニューを使用してください",
-      "move_label": "{role} を別のステージへ移動",
-      "untitled_company": "企業名未設定",
-      "untitled_role": "職種未設定"
+      "drag_hint": "このカードを別の段階にドラッグするか、段階メニューを使ってください",
+      "move_label": "{role}を別の段階へ移す",
+      "untitled_company": "企業名なし",
+      "untitled_role": "職種名なし"
     },
     "when": {
-      "follow_up": "{date} にフォローアップ",
+      "follow_up": "{date}に連絡",
       "applied": "{ago}に応募",
       "saved": "{ago}に保存"
     },
     "ago": {
       "now": "たった今",
-      "minutes": "{n}分前",
-      "hours": "{n}時間前",
-      "days": "{n}日前",
-      "weeks": "{n}週間前"
+      "minutes": "{n}分",
+      "hours": "{n}時間",
+      "days": "{n}日",
+      "weeks": "{n}週"
     },
     "empty": {
-      "saved": "まだ保存はありません——求人をブックマークすると、ここに表示されます。",
-      "applied": "進行中の応募はありません。",
-      "interview": "まだ面接の予定はありません。",
-      "offer": "まだオファーはありません——届いたら一緒にお祝いします ✨"
+      "saved": "保存した求人はまだありません。保存するとここに残ります。",
+      "applied": "応募はまだありません。",
+      "first_call": "一次面談の予定はまだありません。",
+      "interviewing": "面接の予定はまだありません。",
+      "final_round": "最終面接はまだありません。",
+      "offer": "内定はまだありません。",
+      "rejected": "不採用はありません。"
     },
     "empty_board": {
-      "title": "あなたのパイプラインは",
-      "accent": "空っぽです",
-      "body": "求人を保存したり応募したりすると、ここに表示され、すべての会話を一か所で管理できます。"
+      "title": "ここにはまだ",
+      "accent": "何もありません",
+      "body": "求人を保存するか応募すると、その後どうなったかとあわせてここに並びます。"
     },
     "error": {
-      "title": "パイプラインを読み込めませんでした",
-      "body": "こちらで問題が発生しました。データは安全です——もう一度お試しください。",
-      "retry": "再試行"
+      "title": "応募状況を読み込めませんでした。",
+      "body": "データは消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+      "retry": "もう一度試す"
+    },
+    "add": {
+      "cta": "求人を追加",
+      "title": "他で見つけた求人を追加する",
+      "field_url": "求人票のリンク",
+      "field_url_placeholder": "https://example.com/jobs/1234",
+      "field_title": "職種名",
+      "field_title_placeholder": "シニアプロダクトマネージャー",
+      "field_company": "企業名",
+      "field_company_placeholder": "Stripe",
+      "field_location": "勤務地",
+      "field_location_placeholder": "東京都 · ハイブリッド",
+      "field_status": "段階",
+      "submit": "追加する",
+      "submitting": "追加しています…",
+      "error_title_required": "先に職種名を入力してください。",
+      "error_company_required": "先に企業名を入力してください。",
+      "error_generic": "この求人は追加できませんでした。もう一度試してください。"
+    },
+    "activity": {
+      "eyebrow": "過去7日間",
+      "title": "これまでに",
+      "titleAccent": "起きたこと",
+      "titleAfter": "のすべて。",
+      "sub": "応募、下書き、変更のすべてを、日付付きで表示します。",
+      "loading": "履歴を読み込んでいます…",
+      "stats": {
+        "appsSent": "応募",
+        "replies": "返信",
+        "replyRate": "{percent}%",
+        "draftsWritten": "書いた下書き",
+        "thisWeek": "今週"
+      },
+      "empty": {
+        "title": "記録は",
+        "titleAccent": "まだありません",
+        "sub": "保存、調整、応募をすると、それぞれの操作が日付付きでここに並びます。"
+      },
+      "error": {
+        "title": "履歴を読み込めませんでした。",
+        "body": "データは消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+        "retry": "もう一度試す"
+      }
     }
   },
-  "mock": {
+  "practice": {
     "setup": {
-      "eyebrow": "模擬面接 · {count} 職種",
-      "title": "練習を重ねて、",
-      "titleAccent": "退屈になるまで",
+      "eyebrow": "面接対策 · {count}職種",
+      "title": "練習を重ねて",
+      "titleAccent": "当たり前にする",
       "titleAfter": "。",
-      "sub": "職種を選び、面接官を選び、雰囲気を選んでください。私が本番さながらに進めます。コーチが横で見守り、リアルタイムでヒントを送ります。",
-      "loading": "面接トレーニング場を読み込んでいます…",
-      "startError": "そのセッションを開始できませんでした。もう一度お試しください。",
-      "creditCost": "{n} クレジットを消費します",
-      "creditsRemaining": "残り {n} クレジット",
-      "insufficientCredits": "この面接には {required} クレジットが必要ですが、残高は {balance} クレジットです。続けるにはチャージしてください。",
-      "getCredits": "クレジットを取得",
+      "sub": "職種、面接官、形式を選んでください。面接官が質問し、答えている間に横に指摘が出ます。",
+      "loading": "面接対策を読み込んでいます…",
+      "startError": "この面接を開始できませんでした。もう一度試してください。",
+      "creditCost": "{n}クレジット消費",
+      "creditsRemaining": "残り{n}クレジット",
+      "insufficientCredits": "この面接には{required}クレジット必要ですが、残りは{balance}クレジットです。続けるにはクレジットを追加してください。",
+      "getCredits": "クレジットを追加",
+      "brief_line": "面接官は{topic}について把握しています。",
+      "first_free": "最初の本番形式の練習面接は無料です。",
       "recent": {
-        "label": "前回の続きから始める",
-        "count": "最近 {count} 件",
-        "with": "面接官：{name}",
-        "replay": "セッションを再生 →",
-        "showMore": "過去 {count} 件を表示",
-        "showLess": "折りたたむ",
-        "deleteAria": "録音を削除",
-        "deleteConfirm": "この録音を削除しますか？",
+        "label": "続きから始める",
+        "count": "最近{count}件",
+        "with": "{name}と",
+        "replay": "この記録をもう一度再生する",
+        "showMore": "過去の{count}件を表示",
+        "showLess": "表示を減らす",
+        "deleteAria": "記録を削除",
+        "deleteConfirm": "この記録を削除しますか？",
         "delete": "削除",
         "cancel": "キャンセル"
       },
       "role": {
-        "title": "職種を選ぶ",
-        "sub": "{count} 件の実在ポジションを検索・閲覧",
-        "searchPlaceholder": "例：シニアPM、iOS、ML…",
-        "more": "他 {count} 件 — 検索を絞り込んでください",
-        "tabBrowse": "職種を選ぶ",
+        "title": "職種を選んでください",
+        "sub": "{count}職種から検索または一覧で選べます",
+        "searchPlaceholder": "シニアPM、iOS、機械学習…",
+        "more": "他{count}件 — 検索で絞り込んでください",
+        "tabBrowse": "職種一覧",
         "tabPaste": "求人票を貼り付け",
-        "jdPlaceholder": "完全な求人票を貼り付けてください —— 職種名・職務内容・応募要件。面接用のブリーフに書き換えます。",
-        "jdHint": "完全な求人票を貼り付けてください —— 構造化された面接ブリーフに整理し、それに基づいて質問を作成します。",
-        "jdCount": "{count} 文字",
-        "jdTooShort": "もう少し追加してください —— 職務内容と応募要件も貼り付けると、ブリーフがより正確になります。",
+        "jdPlaceholder": "求人票をすべて貼り付けてください — 職種、担当する仕事、求められること。質問はここから作られます。",
+        "jdHint": "求人票をすべて貼り付けてください。求められている内容から質問を作ります。",
+        "jdCount": "{count}文字",
+        "jdTooShort": "もう少し追加してください。担当する仕事と求められることを貼り付けると、質問が正確になります。",
         "categories": {
-          "engineering-devops": "エンジニアリング & DevOps",
-          "product-design": "プロダクト & デザイン",
-          "data-ai-analytics": "データ・AI・アナリティクス",
-          "marketing-content": "マーケティング & コンテンツ",
-          "sales-customer-success": "営業 & カスタマーサクセス",
-          "finance-accounting": "ファイナンス & 経理",
-          "healthcare-life-sciences": "ヘルスケア & ライフサイエンス",
+          "engineering-devops": "エンジニアリングとDevOps",
+          "product-design": "プロダクトとデザイン",
+          "data-ai-analytics": "データ・AI・分析",
+          "marketing-content": "マーケティングとコンテンツ",
+          "sales-customer-success": "営業とカスタマーサクセス",
+          "finance-accounting": "財務と会計",
+          "healthcare-life-sciences": "医療とライフサイエンス",
           "people-ops-trades": "人事・オペレーション・技能職"
         },
         "roles": {
           "frontend-engineer": "フロントエンドエンジニア",
           "backend-engineer": "バックエンドエンジニア",
           "full-stack-engineer": "フルスタックエンジニア",
-          "mobile-engineer-ios-android": "モバイルエンジニア（iOS/Android）",
+          "mobile-engineer-ios-android": "モバイルエンジニア（iOS / Android）",
           "devops-platform-engineer": "DevOps / プラットフォームエンジニア",
-          "site-reliability-engineer": "サイト信頼性エンジニア（SRE）",
+          "site-reliability-engineer": "サイトリライアビリティエンジニア",
           "security-engineer": "セキュリティエンジニア",
           "engineering-manager": "エンジニアリングマネージャー",
           "product-manager": "プロダクトマネージャー",
@@ -2282,7 +870,7 @@
           "technical-program-manager": "テクニカルプログラムマネージャー",
           "product-designer": "プロダクトデザイナー",
           "ux-researcher": "UXリサーチャー",
-          "ux-ui-designer": "UX/UIデザイナー",
+          "ux-ui-designer": "UX / UIデザイナー",
           "brand-visual-designer": "ブランド / ビジュアルデザイナー",
           "data-analyst": "データアナリスト",
           "data-scientist": "データサイエンティスト",
@@ -2299,718 +887,796 @@
           "brand-manager": "ブランドマネージャー",
           "public-relations-specialist": "広報スペシャリスト",
           "account-executive": "アカウントエグゼクティブ",
-          "sales-development-rep-sdr": "セールスデベロップメント担当（SDR）",
+          "sales-development-rep-sdr": "セールス開発担当（SDR）",
           "solutions-sales-engineer": "ソリューション / セールスエンジニア",
           "customer-success-manager": "カスタマーサクセスマネージャー",
           "account-manager": "アカウントマネージャー",
-          "customer-support-specialist": "カスタマーサポートスペシャリスト",
+          "customer-support-specialist": "カスタマーサポート担当",
           "sales-manager": "営業マネージャー",
-          "financial-analyst": "ファイナンシャルアナリスト",
-          "accountant": "経理担当者（会計）",
-          "controller": "コントローラー（経理管理職）",
+          "financial-analyst": "財務アナリスト",
+          "accountant": "会計担当",
+          "controller": "経理責任者",
           "investment-equity-analyst": "投資 / 株式アナリスト",
           "fp-a-manager": "FP&Aマネージャー",
-          "auditor": "監査人",
+          "auditor": "監査担当",
           "tax-advisor": "税務アドバイザー",
-          "registered-nurse": "正看護師",
+          "registered-nurse": "看護師",
           "medical-doctor-physician": "医師",
           "pharmacist": "薬剤師",
           "clinical-research-associate": "臨床開発モニター（CRA）",
-          "healthcare-administrator": "医療事務管理者",
+          "healthcare-administrator": "医療機関の運営管理者",
           "medical-laboratory-scientist": "臨床検査技師",
           "physical-therapist": "理学療法士",
           "hr-business-partner": "HRビジネスパートナー",
-          "technical-recruiter": "技術系リクルーター",
+          "technical-recruiter": "技術職の採用担当",
           "project-manager": "プロジェクトマネージャー",
           "operations-manager": "オペレーションマネージャー",
-          "supply-chain-logistics-manager": "サプライチェーン / ロジスティクスマネージャー",
+          "supply-chain-logistics-manager": "サプライチェーン / 物流マネージャー",
           "electrician": "電気工事士",
-          "skilled-tradesperson-hvac-welding": "技能工（HVAC／溶接）"
+          "skilled-tradesperson-hvac-welding": "技能職（空調・溶接）"
         }
       },
       "interviewer": {
-        "title": "面接官を選ぶ",
-        "sub": "個性の異なる面接官——練習したい挑戦を選んでください。"
+        "title": "面接官を選んでください",
+        "sub": "それぞれ聞き方が違います。練習したい相手を選んでください。"
       },
       "difficulty": {
         "easy": "やさしい",
         "medium": "ふつう",
-        "hard": "むずかしい"
+        "hard": "きびしい"
       },
       "type": {
-        "title": "形式を選ぶ",
-        "sub": "単発で行うか、フルループでつなげるか",
-        "minutes": "{minutes} 分",
+        "title": "形式を選んでください",
+        "sub": "1つだけでも、続けて何本でも行えます",
+        "minutes": "{minutes}分",
         "recommendedBadge": "おすすめ",
-        "recommendedFor": "{role} におすすめ",
+        "recommendedFor": "{role}におすすめ",
         "allFormats": "すべての形式",
         "forThisRole": "この職種向け"
       },
       "format": {
-        "title": "どのように臨むか",
-        "sub": "動画は本番への備えになります。ウォームアップなら音声でも十分です。",
+        "title": "どう参加しますか",
+        "sub": "本番に近いのはビデオです。ウォームアップなら音声だけでも十分です。",
         "video": {
-          "title": "ビデオ通話",
+          "title": "ビデオ面接",
           "tag": "おすすめ",
-          "desc": "カメラをオンにして対面で。アイコンタクト、存在感、沈黙への対応を採点します。",
-          "b1": "セルフビューのPIP",
-          "b2": "アイコンタクト・存在感スコア",
-          "b3": "再生用に録画"
+          "desc": "カメラを付けて対面で行います。目線、雰囲気、間の取り方まで記録されます。",
+          "b1": "自分の映像が隅に表示されます",
+          "b2": "目線と雰囲気も記録されます",
+          "b3": "録画されるのであとから見返せます"
         },
         "voice": {
           "title": "音声のみ",
-          "tag": "プレッシャー低め",
-          "desc": "音声のみ——電話面接のような感覚。カメラをオンにする前に構成を整えるのに最適です。",
-          "b1": "カメラ不要",
-          "b2": "話す内容に集中",
-          "b3": "文字起こしのみの再生"
+          "tag": "負担が軽い",
+          "desc": "電話のように音声だけで行います。カメラを付ける前に話の組み立てを整えるのに向いています。",
+          "b1": "カメラは不要です",
+          "b2": "話す内容に集中できます",
+          "b3": "記録は文字起こしのみ"
         }
       },
       "launch": {
         "role": "職種",
         "interviewer": "面接官",
         "format": "形式",
-        "mode": "モード",
-        "pickRole": "職種を選んでください",
-        "pickInterviewer": "面接官を選んでください",
-        "pickType": "形式を選んでください",
-        "modeVideo": "📹 ビデオ通話",
-        "modeVoice": "🎤 音声のみ",
-        "start": "面接を開始",
+        "mode": "ビデオか音声か",
+        "pickRole": "職種を選ぶ",
+        "pickInterviewer": "面接官を選ぶ",
+        "pickType": "形式を選ぶ",
+        "modeVideo": "ビデオ面接",
+        "modeVoice": "音声のみ",
+        "start": "面接を始める",
         "starting": "開始しています…",
         "language": "言語",
-        "roleFromJd": "（あなたの求人票より）"
-      },
-      "langDuration": {
-        "title": "言語と所要時間",
-        "sub": "面接で使う言語と、面接の所要時間を選んでください。",
-        "languageLabel": "面接の言語",
-        "durationLabel": "所要時間"
-      },
-      "error": {
-        "title": "面接トレーニング場を読み込めませんでした",
-        "body": "こちらで不具合が発生しました。少し経ってからもう一度お試しください。",
-        "retry": "再試行"
-      },
-      "preview": {
-        "title": "市場の求人要件",
-        "sub": "この面接で評価する項目 —— 実際の求人サイトの掲載内容に基づいています。",
-        "empty": "職種を選ぶか求人票を貼り付け、面接官とタイプを選んでから、質問の土台となる要件をプレビューしましょう。",
-        "loading": "最新の要件を取得しています…",
-        "error": "プレビューを表示できません —— 面接はこの職種に合わせて作成されます。",
-        "retry": "再試行",
-        "previewBtn": "プレビュー →",
-        "summaryLabel": "職務概要",
-        "skillsLabel": "必須スキル",
-        "respLabel": "主な職務",
-        "signalsLabel": "評価ポイント",
-        "questionsLabel": "想定される冒頭の質問",
-        "sourcesLabel": "実際の求人情報より",
-        "sourcesGeneric": "この職種の市場プロファイルに基づいています。",
-        "fromJd": "貼り付けた求人票に基づく"
-      },
-      "personas": {
-        "maya": {
-          "role": "温かみのあるリクルーター",
-          "blurb": "親しみやすく会話的。やさしい掘り下げであなたのストーリーを引き出します。駆け引きも、プレッシャーもなし。",
-          "style": "落ち着いたゆったりペース · オープンな質問 · 反映的傾聴 · 励まし重視 · 決して対立しない",
-          "company": "急成長スタートアップのタレントパートナー"
-        },
-        "june": {
-          "role": "創業者",
-          "blurb": "ミッションに情熱を注ぎ、人当たりも良い。あなたが本気で関心を持っているか——なぜこれを、なぜ今かを知りたがります。",
-          "style": "フレンドリーで活力的 · 価値観と動機を最優先 · 「なぜこの会社？」· 温かいが一度だけ本気度を試す",
-          "company": "アーリーステージ企業の創業者兼CEO"
-        },
-        "nova": {
-          "role": "フィールド調査官",
-          "blurb": "好奇心旺盛でテンポが速い。分野全体を飛び回ります——「他に何があるか？」",
-          "style": "幅広く展開 · 代替案を比較 · トレンドに敏感 · 横へ展開し、深掘りはしない",
-          "company": "グローバルコンサルティングファームのプリンシパル"
-        },
-        "priya": {
-          "role": "行動深掘りインタビュアー",
-          "blurb": "STAR法を徹底させる人。「〜したときの話を」と、あなたのストーリーに本物の行動と結果が出るまで掘り下げます。",
-          "style": "ストーリー中心 · STARを徹底 · 粘り強い掘り下げ · 対立と失敗の場面 · 「私たち」と「あなた」を切り分ける",
-          "company": "大手消費財ブランドのピープルリード"
-        },
-        "rex": {
-          "role": "変化球の使い手",
-          "blurb": "見たこともない問題を投げかけ、答えではなく、どう分解するかを観察します。",
-          "style": "水平思考 · 概算と仮説問題 · 声に出して推論 · 回答の途中で条件を一つ変える",
-          "company": "大手テック・コンサル型の面接官"
-        },
-        "diaz": {
-          "role": "現場叩き上げのマネージャー",
-          "blurb": "自らこの仕事をこなしてきた、落ち着いたプレイングマネージャー。「あなたは具体的に何をしたか？」と問い続けます。",
-          "style": "安定して穏やか · 理論より実践 · 「実例を一つ、ステップごとに」· 実行者と語り手を見分ける",
-          "company": "現場実務リード／プレイングマネージャー"
-        },
-        "atlas": {
-          "role": "博識なアーキテクト",
-          "blurb": "分野の隅々まで見てきたシニアゼネラリスト。あなたのカバー範囲を地図化し、空白を探ります。",
-          "style": "幅広さ優先 · 領域横断 · 全体像をマッピング · 次の領域へ飛んで空白をあぶり出す",
-          "company": "大手テック企業のディスティングイッシュドエンジニア"
-        },
-        "bishop": {
-          "role": "採用基準の番人",
-          "blurb": "聞きたいのは失敗談、負けた対立、そして当事者として責任を持った証拠——ハイライト集ではありません。",
-          "style": "リーダーシップ原則 · オーナーシップを徹底重視 · 失敗と対立を必ず尋ねる · 練習された回答を疑う · 「あなたは何をしたか？」",
-          "company": "急成長スタートアップの採用ディレクター"
-        },
-        "okonkwo": {
-          "role": "問題設計者",
-          "blurb": "ゴールを動かし続ける厳格なケース面接官。プレッシャー下での思考だけを見ています。",
-          "style": "第一原理で枠組み化 · 構造的に分解 · 制約を段階的に強化 · 前提を問い質す · 曖昧さの中でも冷静",
-          "company": "トップ戦略ファームのパートナー"
-        },
-        "kai": {
-          "role": "ホワイトボードの猛者",
-          "blurb": "エッジケースを好み、三段階深く掘り下げる。あなたが下した正確な判断と、それが破綻したケースを知りたがります。",
-          "style": "技術的深さ · 静かな間 · 「何が起きたか正確に説明して」· 仕組みを徹底追及",
-          "company": "大規模インフラチームのシニアスタッフエンジニア"
-        },
-        "voss": {
-          "role": "懐疑的なVP",
-          "blurb": "あらゆる主張に切り返します。求めるのはストーリーの裏付けとなる数字であって、雰囲気ではありません。",
-          "style": "鋭い · 懐疑的 · 数字を最優先 · 「なぜそう言える？」· 証拠に裏打ちされた深さのみ受け入れる",
-          "company": "VPクラスのエグゼクティブ面接官"
-        },
-        "lena": {
-          "role": "伝え方コーチ",
-          "blurb": "要点をどれだけ明快に届けられるかを重視します。難しいことをやさしく説明するよう求めてきます。",
-          "style": "聞き手目線 · 「初心者にもわかるように」· 端的な結論を評価 · 専門用語と冗長さを見逃さない",
-          "company": "数百人の経営層を指導してきた広報リード"
-        },
-        "mirae": {
-          "role": "テンポの速いパネル司会",
-          "blurb": "二分おきに話題を切り替え、時間を厳しく管理します。集中を保ち、柔軟に対応できますか？",
-          "style": "次々と話題を転換 · 時間制限つきの回答 · ハイテンポ · 適応力と落ち着きを評価",
-          "company": "大手テック企業の最終選考パネルの議長"
-        },
-        "osei": {
-          "role": "カルチャーの守り手",
-          "blurb": "苦しい場面で人にどう接するかを見ています。勝ちよりチームを優先したときの話を尋ねます。",
-          "style": "価値観を行動で示す · 協働と包摂のエピソード · 「チームはどう感じた？」· 温かいが鋭く掘り下げる",
-          "company": "価値観を大切にする企業のピープル責任者"
-        },
-        "devi": {
-          "role": "思考のパートナー",
-          "blurb": "答えの決まっていない問題を渡し、あなたと一緒に解いていきます。答えではなく、どう枠組み化し、どう考えるかを重視します。",
-          "style": "協働で推論 · 「一緒に考えてみよう」· 枠組みをそっと導く · 正解より思考のプロセス",
-          "company": "声に出して一緒に考えるプロダクト戦略家"
-        },
-        "amara": {
-          "role": "市場の地図描き",
-          "blurb": "市場と分野を横断して見渡し、視野の広さと描き出せるつながりを探します。",
-          "style": "業界横断 · 市場全体を地図化 · 「他に得意な人は？」· 領域を越えてアイデアをつなぐ",
-          "company": "数十の業界に通じたグロースアドバイザー"
-        },
-        "sterling": {
-          "role": "エグゼクティブの風格",
-          "blurb": "シニアで、厳格で、急がない。まず要点をまとめ、それから簡潔に根拠を求めます。",
-          "style": "格式高く洗練 · 結論から先に · 厳しい視線の下でも簡潔 · 落ち着きと言葉の的確さを試す",
-          "company": "フォーチュン500企業の役員クラスの実務家"
-        },
-        "tariq": {
-          "role": "プレッシャーの試し手",
-          "blurb": "強く速く押し込み、あなたの言葉に被せ、回答をそっくり投げ返します。動じずにいられるかを見ています。",
-          "style": "矢継ぎ早 · 遮り、切り返す · あえて反対の立場を取る · 答えだけでなく冷静さを試す",
-          "company": "緊張感の高いトレーディングデスクの面接ループ"
-        }
-      },
-      "archetype": {
-        "warmup": "ウォームアップ",
-        "behavioral": "行動面接",
-        "breadth": "幅広さ",
-        "potential": "問題解決",
-        "depth": "深掘り",
-        "communication": "コミュニケーション",
-        "pressure": "プレッシャー"
-      },
-      "types": {
-        "screening": {
-          "label": "電話スクリーニング",
-          "sub": "経歴・適性・志望動機・条件確認——本選考前の最初の関門"
-        },
-        "behavioral": {
-          "label": "行動面接（STAR）",
-          "sub": "実体験エピソード：当事者意識・対立・失敗・影響力・リーダーシップ"
-        },
-        "technical": {
-          "label": "ライブコーディング / 技術面接",
-          "sub": "共有エディタでのリアルタイム問題解決：データ構造・アルゴリズム・正確性"
-        },
-        "system": {
-          "label": "システム / アーキテクチャ設計",
-          "sub": "大規模システムをエンドツーエンドで設計し、スケールとトレードオフを論証"
-        },
-        "case": {
-          "label": "ケース面接 / ビジネス課題",
-          "sub": "オープンなビジネス課題：構造化・データ分析・提言"
-        },
-        "culture": {
-          "label": "価値観 / カルチャーフィット",
-          "sub": "価値観の一致・動機・働き方・曖昧な状況での誠実さ"
-        },
-        "panel": {
-          "label": "パネル面接 / 複合ループ",
-          "sub": "複数の面接官によるパネルさながら、各能力を矢継ぎ早に横断"
-        },
-        "take_home": {
-          "label": "持ち帰り課題のディフェンス",
-          "sub": "自主制作したプロジェクトを弁護し発展：設計判断・トレードオフ・スケーリング"
-        },
-        "debugging": {
-          "label": "デバッグ / コードレビュー",
-          "sub": "不具合のあるプログラムを診断、または既存コード／PRをレビュー"
-        },
-        "incident_sre": {
-          "label": "障害対応 / SRE シナリオ",
-          "sub": "本番障害をトリアージ：安定化・コマンドライン対応・ポストモーテム"
-        },
-        "sql_analytics": {
-          "label": "SQL / 分析エクササイズ",
-          "sub": "実テーブルへのクエリ実装と指標の読み解き"
-        },
-        "product_sense": {
-          "label": "プロダクトセンス / 実行力",
-          "sub": "オープンなプロダクト設計＋指標：構造化・ユーザー・優先順位・計測"
-        },
-        "portfolio": {
-          "label": "ポートフォリオ / 過去実績レビュー",
-          "sub": "実際の過去作品を解説：プロセス・意思決定・貢献・インパクト"
-        },
-        "design_critique": {
-          "label": "デザイン批評 / ホワイトボード",
-          "sub": "アプリやデザインをその場で批評、または新題に対し解を描き出す"
-        },
-        "research_design": {
-          "label": "UXリサーチ設計",
-          "sub": "その場で調査を設計、または不備のある調査計画を批評"
-        },
-        "sales_roleplay": {
-          "label": "模擬商談 / ロールプレイ",
-          "sub": "演じる相手を前にヒアリング・コールド営業・エスカレーション対応"
-        },
-        "pitch_demo": {
-          "label": "ピッチ / デモプレゼン",
-          "sub": "意思決定者へカスタマイズしたデモ／提案を行い、反論に応答"
-        },
-        "account_strategy": {
-          "label": "アカウント / カスタマーサクセス事例",
-          "sub": "アカウントを分析し、オンボーディング・継続・拡大の戦略を立案"
-        },
-        "modeling_test": {
-          "label": "財務モデリング / Excel",
-          "sub": "LBO／三表／DCF／FP&Aモデルを構築・ストレス検証し弁護"
-        },
-        "finance_technical": {
-          "label": "ファイナンス専門Q&A",
-          "sub": "会計・バリュエーション・ディール実務、そして投資仮説"
-        },
-        "clinical_scenario": {
-          "label": "臨床シナリオ",
-          "sub": "現実的な患者・病棟状況を推論：評価・優先順位付け・エスカレーション"
-        },
-        "situational_judgement": {
-          "label": "状況判断テスト（SJT）",
-          "sub": "職場のジレンマを順位付け・口述し、倫理・プロ意識・判断力を測る"
-        },
-        "practical_skills": {
-          "label": "実技テスト / 技能試験",
-          "sub": "実演しながら解説：技法・安全・規格適合・診断"
-        },
-        "teaching_demo": {
-          "label": "模擬授業",
-          "sub": "短い授業を実演し受講者を引き込み、指導法を弁護"
-        },
-        "ops_case": {
-          "label": "オペレーション / 業務プロセス課題",
-          "sub": "プロセスやサプライチェーンの停滞を診断し、改善の優先順位を決定"
-        },
-        "presentation": {
-          "label": "プレゼン面接",
-          "sub": "構造化したプレゼンを準備・発表し、質疑に応答"
-        },
-        "leadership_strategy": {
-          "label": "リーダーシップ / 戦略",
-          "sub": "管理職・経営層向け：チームづくり・ビジョン・90日プラン"
-        },
-        "reference_check": {
-          "label": "リファレンスチェック / 資格確認",
-          "sub": "確認段階で実績・信頼性・資格を掘り下げて検証"
-        }
-      },
-      "showAll": "すべて表示（{count}）",
-      "showFewer": "折りたたむ"
-    },
-    "live": {
-      "loading": "ルームを準備しています…",
-      "backToSetup": "← 設定に戻る",
-      "livePill": "ライブ",
-      "modeVideo": "📹 ビデオ",
-      "modeVoice": "🎤 音声",
-      "progress": "全 {total} 問中 {current} 問目",
-      "aiInterviewer": "AI 面接官",
-      "state": {
-        "asking": "質問中…",
-        "listening": "聞いています",
-        "thinking": "考え中",
-        "speaking": "発話中"
-      },
-      "questionNum": "{current} / {total} 問目",
-      "showHint": "ヒントを表示",
-      "hideHint": "ヒントを非表示",
-      "coachHint": "コーチのヒント",
-      "skip": "スキップ →",
-      "skipped": "（スキップ済み）",
-      "you": "あなた",
-      "youName": "あなた · {name}",
-      "youRole": "{role} · あなた",
-      "micOpen": "マイクがオン——回答を録音中",
-      "micOpenShort": "マイクがオン",
-      "micReady": "マイク準備完了",
-      "waitForQuestion": "質問が終わるまでお待ちください",
-      "composerPlaceholder": "話しても、入力しても、両方でもOK。⌘+Enter で送信。",
-      "composerLabel": "あなたの回答",
-      "coachLive": "あなたのコーチ · ライブ",
-      "dismiss": "閉じる",
-      "transcript": "ライブ文字起こし",
-      "transcriptEmpty": "お二人が話すと、ここに文字起こしが表示されます…",
-      "autoSaved": "自動保存しました",
-      "endEarly": "面接を途中で終了",
-      "ending": "まとめています…",
-      "controls": {
-        "camOn": "📹 カメラオン",
-        "camOff": "📹 カメラオフ",
-        "mic": "🎤 マイク",
-        "mute": "⏸ ミュート",
-        "restart": "↻ やり直し",
-        "submitNext": "送信して次へ",
-        "submitFinish": "送信して終了",
-        "submitting": "送信中…"
-      },
-      "cam": {
-        "requesting": "カメラへのアクセスを要求中…",
-        "requestingSub": "ブラウザの確認メッセージをご確認ください",
-        "denied": "カメラがブロックされています",
-        "deniedSub": "ブラウザの設定で許可してから、",
-        "tryAgain": "再試行",
-        "unavailable": "カメラを利用できません",
-        "unavailableSub": "音声モードで続行します",
-        "off": "カメラがオフ",
-        "turnOn": "オンにする",
-        "allow": "タップしてカメラを許可",
-        "enable": "有効にする"
-      },
-      "expired": {
-        "title": "このセッションは期限切れです",
-        "body": "その面接が見つかりませんでした——すでに終了したか、リンクが古くなっている可能性があります。新しく始めましょう。",
-        "cta": "新しい面接を開始"
-      }
-    },
-    "report": {
-      "eyebrow": "セッション完了 · {minutes} 分",
-      "eyebrowScoring": "あなたの面接を採点中",
-      "eyebrowFallback": "模擬面接 · レポート",
-      "title": "あと",
-      "titleAccent": "もう少し",
-      "titleAfter": "です。",
-      "sub": "面接官が使う評価基準で採点しました。2つ調整すれば、上位20%に入れます。",
-      "loading": "評価基準に沿って回答を採点しています…",
-      "loadingTitle": "場の",
-      "loadingTitleAccent": "空気を読んでいます",
-      "loadingTitleAfter": "…",
-      "overall": "総合",
-      "deltaUp": "前回比 +{delta}",
-      "deltaDown": "前回比 −{delta}",
-      "strengths": "強み",
-      "keepThese": "この調子で",
-      "sharpen": "磨くべき点",
-      "topN": "上位 {count} 件",
-      "actions": {
-        "runAgain": "もう一度行う",
-        "pickSetup": "別の設定を選ぶ",
-        "download": "文字起こしをダウンロード",
-        "share": "友達に共有"
-      },
-      "error": {
-        "title": "その",
-        "titleAccent": "レポート",
-        "body": "採点中に不具合が発生しました。回答は保存されています——もう一度お試しください。",
-        "retry": "再試行",
-        "back": "設定に戻る"
-      }
-    }
-  },
-  "ie": {
-    "setup": {
-      "eyebrow": "AI 模擬面接",
-      "title": "AI面接官と",
-      "titleAccent": "練習する",
-      "sub": "あなたの志望職種に合わせたリアルタイム音声面接。終了後に録音・文字起こし・スコアレポートが手に入ります。",
-      "loading": "読み込み中…",
-      "error": {
-        "title": "設定を読み込めませんでした",
-        "body": "問題が発生しました。もう一度お試しください。",
-        "retry": "再試行"
-      },
-      "startError": "面接を開始できませんでした。もう一度お試しください。",
-      "starting": "開始中…",
-      "start": "面接を開始",
-      "roleLabel": "対象の職種",
-      "rolePlaceholder": "例：シニアプロダクトマネージャー",
-      "interviewerLabel": "面接官",
-      "typeLabel": "面接の種類",
-      "minutes": "分",
-      "formatLabel": "形式と詳細",
-      "mode": {
-        "voice": "音声",
-        "video": "ビデオ"
+        "roleFromJd": "（貼り付けた求人票から）"
       },
       "modeShort": {
         "voice": "音声",
         "video": "ビデオ"
       },
-      "languageLabel": "言語",
-      "durationLabel": "所要時間",
-      "advancedLabel": "詳細設定",
-      "difficulty": "難易度",
-      "tone": "トーン",
-      "tones": {
-        "warm": "温かい",
-        "neutral": "中立",
-        "formal": "フォーマル",
-        "skeptical": "懐疑的",
-        "friendly": "フレンドリー"
+      "langDuration": {
+        "title": "言語と長さ",
+        "sub": "面接の言語と、行う時間を選んでください。",
+        "languageLabel": "面接の言語",
+        "durationLabel": "長さ"
       },
-      "pacing": "ペース",
-      "pacings": {
-        "relaxed": "ゆったり",
-        "standard": "標準",
-        "brisk": "テンポ良く"
+      "error": {
+        "title": "面接対策を読み込めませんでした。",
+        "body": "データは消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+        "retry": "もう一度試す"
       },
-      "focusAreas": "重点領域",
-      "focusPlaceholder": "カンマ区切り。例：リーダーシップ、システム設計",
-      "allowQuestions": "最後に面接官へ質問することを許可する"
+      "preview": {
+        "title": "この職種で求められること",
+        "sub": "実際の求人票をもとに、この面接で扱う内容をまとめました。",
+        "empty": "職種を選ぶか求人票を貼り付け、面接官と形式を選ぶと、質問の内容が表示されます。",
+        "loading": "掲載中の求人票を読んでいます…",
+        "error": "この事前情報は表示できません。面接自体はこの職種向けに作られます。",
+        "retry": "もう一度試す",
+        "previewBtn": "表示する",
+        "summaryLabel": "この職種の要点",
+        "skillsLabel": "求められるスキル",
+        "respLabel": "担当する仕事",
+        "signalsLabel": "重視される点",
+        "questionsLabel": "冒頭の質問の例",
+        "sourcesLabel": "掲載中の求人票より",
+        "sourcesGeneric": "この職種の一般的な内容にもとづいています。",
+        "fromJd": "貼り付けた求人票より"
+      },
+      "personas": {
+        "maya": {
+          "role": "穏やかな採用担当",
+          "blurb": "会話するように、やさしく掘り下げます。ひっかけはありません。",
+          "style": "落ち着いた進行 · 自由に答えられる質問 · よく聞く · 励ます · 対立しない",
+          "company": "急成長企業の採用担当"
+        },
+        "june": {
+          "role": "創業者",
+          "blurb": "事業への思いを重視します。なぜこの会社か、なぜ今かを知りたがります。",
+          "style": "気さくで速い · まず動機を聞く · 答えの本気度を試す",
+          "company": "創業まもない企業の創業者兼CEO"
+        },
+        "nova": {
+          "role": "広く見渡す面接官",
+          "blurb": "好奇心が強く、話が速い。分野全体を横断して、他に何があるかを聞きます。",
+          "style": "話題が広い · 他の選択肢と比べる · 動向に詳しい · 深掘りより横展開",
+          "company": "外資系コンサルティングファームのプリンシパル"
+        },
+        "priya": {
+          "role": "行動を聞く面接官",
+          "blurb": "実際に起きた場面を、行動と結果がはっきりするまで聞きます。",
+          "style": "経験談中心 · 状況・行動・結果 · 粘り強い追加質問 · 対立と失敗 · 自分の働きとチームの働きを分ける",
+          "company": "大手消費者ブランドの人事責任者"
+        },
+        "rex": {
+          "role": "初見の問題を出す面接官",
+          "blurb": "見たことのない問題を渡し、どう分解するかを見ます。",
+          "style": "答えのない問題 · 概算と仮定 · 声に出して考える · 途中で条件を1つ変える",
+          "company": "大手テック・コンサルの面接プロセス"
+        },
+        "diaz": {
+          "role": "現場のマネージャー",
+          "blurb": "同じ仕事を経験してきた落ち着いたマネージャー。あなた自身が何をしたかを繰り返し聞きます。",
+          "style": "冷静 · 理論より実務 · 実例を1つ、手順どおりに",
+          "company": "現場に立つチームリーダー"
+        },
+        "atlas": {
+          "role": "全体を見る設計者",
+          "blurb": "経験豊富なジェネラリスト。知識の範囲を確かめ、飛ばした部分を突いてきます。",
+          "style": "まず広さ · 領域をまたぐ · 次の領域へ移りながら弱点を見つける",
+          "company": "大手テック企業の上級エンジニア"
+        },
+        "bishop": {
+          "role": "採用基準を守る面接官",
+          "blurb": "失敗、負けた議論、そして自分で引き受けた証拠を求めます。",
+          "style": "当事者意識 · 失敗と対立を聞く · 用意した答えを疑う · あなたは何をしたか",
+          "company": "急成長企業の採用責任者"
+        },
+        "okonkwo": {
+          "role": "ケース面接官",
+          "blurb": "厳密で、問題の条件を変え続けます。重圧の中での考え方を見ます。",
+          "style": "原理原則から · 構造的に分解 · 条件を厳しくする · 前提を問う",
+          "company": "大手戦略ファームのパートナー"
+        },
+        "kai": {
+          "role": "技術を深く掘る面接官",
+          "blurb": "3段階下まで掘ります。どう判断したか、どこで壊れたかを求めます。",
+          "style": "技術の深さ · 沈黙の間 · 実際に何が起きたかを順に説明させる",
+          "company": "大規模インフラチームのシニアスタッフエンジニア"
+        },
+        "voss": {
+          "role": "疑ってかかる役員",
+          "blurb": "主張のすべてに反論します。話の裏にある数字を求めます。",
+          "style": "鋭い · 疑ってかかる · まず数字 · なぜそう言えるのか",
+          "company": "役員クラスの面接官"
+        },
+        "lena": {
+          "role": "伝わり方を見る面接官",
+          "blurb": "要点がどれだけ明確に届くかを重視します。難しいことを簡単に説明させます。",
+          "style": "聞き手が先 · 初めての人に説明させる · 明快な一文目を評価 · 話の脱線を見逃さない",
+          "company": "経営層を何百人も指導してきた広報責任者"
+        },
+        "mirae": {
+          "role": "速いパネル面接官",
+          "blurb": "2分ごとに話題を変え、時間を計り続けます。",
+          "style": "話題が速く変わる · 回答に時間制限 · テンポが速い · 素早い切り替えを評価",
+          "company": "大手テック企業の最終面接パネル責任者"
+        },
+        "osei": {
+          "role": "価値観を見る面接官",
+          "blurb": "苦しい場面での人への接し方を見ます。チームを優先した経験を聞きます。",
+          "style": "行動に表れた価値観 · 協働の経験 · チームはどう感じたか · 温かいが踏み込む",
+          "company": "価値観を重んじる企業の人事責任者"
+        },
+        "devi": {
+          "role": "一緒に考える面接官",
+          "blurb": "答えのない問題を渡し、一緒に取り組みます。どう組み立てるかを見ます。",
+          "style": "一緒に考える · 組み立て方を促す · 答えより考え方を重視",
+          "company": "声に出して一緒に考えるプロダクト戦略担当"
+        },
+        "amara": {
+          "role": "市場を見渡す面接官",
+          "blurb": "市場や分野を横断し、視野の広さと結び付ける力を見ます。",
+          "style": "業界横断 · 市場を整理する · 他に誰がうまくやっているか · 発想をつなげる",
+          "company": "複数業界を担当するグロースアドバイザー"
+        },
+        "sterling": {
+          "role": "経営層の面接官",
+          "blurb": "上位職で、要求が高く、急ぎません。まず結論、次に根拠を求めます。",
+          "style": "形式的 · 結論から · 追及されても簡潔 · 正確さを試す",
+          "company": "大企業の役員クラスの実務責任者"
+        },
+        "tariq": {
+          "role": "圧迫面接官",
+          "blurb": "強く速く追い込み、話にかぶせ、答えをそのまま返してきます。",
+          "style": "矢継ぎ早の質問 · さえぎって反論する · 逆の立場から論じる · 冷静さを試す",
+          "company": "重圧の強いトレーディング部門の面接プロセス"
+        }
+      },
+      "archetype": {
+        "warmup": "ウォームアップ",
+        "behavioral": "過去の場面",
+        "breadth": "視野の広さ",
+        "potential": "問題解決",
+        "depth": "深さ",
+        "communication": "伝え方",
+        "pressure": "重圧"
+      },
+      "types": {
+        "screening": {
+          "label": "電話面談",
+          "sub": "本番の面接の前に聞かれる、経歴、志望動機、条件面の質問"
+        },
+        "behavioral": {
+          "label": "過去の場面",
+          "sub": "実際の経験談: 当事者意識、対立、失敗、周囲を動かした話、人を率いた話"
+        },
+        "technical": {
+          "label": "ライブコーディング",
+          "sub": "共有エディタで、話しながら問題を解きます"
+        },
+        "system": {
+          "label": "システム設計",
+          "sub": "大規模なシステムを端から端まで設計し、選択の理由を説明します"
+        },
+        "case": {
+          "label": "ビジネスケース",
+          "sub": "答えのない事業課題を、整理し、データを使い、判断します"
+        },
+        "culture": {
+          "label": "価値観と働き方",
+          "sub": "何を大切にし、どう働き、判断に迷う場面でどう動くか"
+        },
+        "panel": {
+          "label": "パネル面接",
+          "sub": "複数の面接官が同席したときのように、話題が次々と変わります"
+        },
+        "take_home": {
+          "label": "課題の説明",
+          "sub": "自分で取り組んだ課題を説明し、さらに発展させます"
+        },
+        "debugging": {
+          "label": "不具合調査とコードレビュー",
+          "sub": "壊れている箇所を見つける、または他の人のコードをレビューします"
+        },
+        "incident_sre": {
+          "label": "障害対応",
+          "sub": "本番障害に対応します。まず止め、その後で経緯を説明します"
+        },
+        "sql_analytics": {
+          "label": "SQLと分析",
+          "sub": "実際のテーブルに対してクエリを書き、指標について説明します"
+        },
+        "product_sense": {
+          "label": "プロダクト感覚",
+          "sub": "プロダクトを設計し、成功を判断する指標を選びます"
+        },
+        "portfolio": {
+          "label": "実績のレビュー",
+          "sub": "実際の仕事を順に説明します: 進め方、判断、自分の担当、結果"
+        },
+        "design_critique": {
+          "label": "デザインレビュー",
+          "sub": "その場でプロダクトを評価する、または新しいお題に案を描きます"
+        },
+        "research_design": {
+          "label": "調査設計",
+          "sub": "その場で調査を設計する、または既存の設計の問題点を指摘します"
+        },
+        "sales_roleplay": {
+          "label": "商談のロールプレイ",
+          "sub": "買い手役を相手にした実演の商談です"
+        },
+        "pitch_demo": {
+          "label": "デモまたは提案",
+          "sub": "複数の相手にデモや提案を行い、その場で質問を受けます"
+        },
+        "account_strategy": {
+          "label": "顧客戦略",
+          "sub": "担当顧客の状況を読み、維持と拡大の計画を立てます"
+        },
+        "modeling_test": {
+          "label": "財務モデリング",
+          "sub": "モデルを作る、または負荷をかけて検証し、内容を説明します"
+        },
+        "finance_technical": {
+          "label": "財務の専門質問",
+          "sub": "会計、企業価値評価、取引の仕組み、投資判断の考え方"
+        },
+        "clinical_scenario": {
+          "label": "臨床の場面",
+          "sub": "現実的な患者の状況に対応します: 評価し、優先順位を付け、報告します"
+        },
+        "situational_judgement": {
+          "label": "職場での判断",
+          "sub": "倫理、専門職としての姿勢、判断力を問う職場の難しい場面"
+        },
+        "practical_skills": {
+          "label": "実技の確認",
+          "sub": "手を動かす作業を説明します: 手順、安全、規格、原因の特定"
+        },
+        "teaching_demo": {
+          "label": "模擬授業",
+          "sub": "短い授業を行い、そのやり方を選んだ理由を説明します"
+        },
+        "ops_case": {
+          "label": "オペレーションのケース",
+          "sub": "業務や供給の問題を診断し、最初に直すものを選びます"
+        },
+        "presentation": {
+          "label": "プレゼンテーション",
+          "sub": "構成のある発表を準備して行い、その後の質問に答えます"
+        },
+        "leadership_strategy": {
+          "label": "リーダーシップと戦略",
+          "sub": "チームづくり、方向づけ、最初の90日間の計画"
+        },
+        "reference_check": {
+          "label": "経歴と資格の確認",
+          "sub": "選考終盤で聞かれる、実績、信頼性、資格についての質問"
+        }
+      },
+      "showAll": "{count}件すべて表示",
+      "showFewer": "表示を減らす"
     },
     "live": {
-      "loading": "面接を準備しています…",
-      "ending": "終了しています…",
-      "expired": {
-        "title": "このセッションは利用できません",
-        "body": "終了または期限切れの可能性があります。新しい面接を開始してください。",
-        "cta": "新しい面接"
-      },
+      "loading": "面接ルームを準備しています…",
+      "backToSetup": "設定に戻る",
+      "livePill": "実施中",
+      "live": "実施中",
       "recording": "録画中",
-      "live": "ライブ",
+      "modeVideo": "ビデオ",
+      "modeVoice": "音声",
+      "progress": "質問 {current} / {total}",
+      "aiInterviewer": "面接官",
+      "interviewer": "面接官",
       "state": {
-        "speaking": "話しています…",
-        "listening": "聞いています…",
-        "thinking": "考えています…",
+        "asking": "質問中…",
+        "listening": "聞いています",
+        "thinking": "考えています",
+        "speaking": "話しています",
         "connecting": "接続中…",
         "waiting": "開始を待っています…"
       },
-      "interviewer": "面接官",
+      "questionNum": "質問 {current} / {total}",
+      "showHint": "ヒントを表示",
+      "hideHint": "ヒントを隠す",
+      "coachHint": "ヒント",
+      "skip": "スキップ",
+      "skipped": "（スキップ）",
       "you": "あなた",
-      "transcript": "リアルタイム字幕",
-      "transcriptEmpty": "話すと、ここに文字起こしが表示されます。",
+      "youName": "あなた · {name}",
+      "youRole": "{role} · あなた",
+      "micOpen": "マイクは録音中です",
+      "micOpenShort": "マイク録音中",
+      "micReady": "マイク準備完了",
+      "waitForQuestion": "質問が終わるまでお待ちください",
+      "composerPlaceholder": "話しても、入力しても、両方でも構いません。Command + Enterで送信。",
+      "composerLabel": "あなたの回答",
+      "coachLive": "回答中の指摘",
+      "dismiss": "閉じる",
+      "transcript": "文字起こし",
+      "transcriptEmpty": "話し始めると、ここに文字起こしが表示されます。",
+      "autoSaved": "自動保存されています",
+      "endEarly": "面接を途中で終える",
+      "ending": "終了処理中…",
       "cameraOff": "カメラオフ",
-      "muteMic": "ミュート",
+      "muteMic": "マイクをミュート",
       "unmuteMic": "ミュート解除",
       "stopCam": "カメラを停止",
       "startCam": "カメラを開始",
-      "endInterview": "面接を終了",
+      "endInterview": "面接を終える",
       "agentJoining": "面接官に接続しています…",
-      "agentSlow": "面接官の参加に時間がかかっています。続く場合は、面接の音声エージェントがデプロイされ稼働しているか確認してください。",
+      "agentSlow": "面接官の参加に時間がかかっています。1分待っても始まらない場合は、いったん終了して新しく始めてください。",
+      "agentQualityPoor": "面接官側の接続が不安定です。",
+      "enableAudio": "タップして音声を有効にする",
       "reconnecting": "再接続しています…",
-      "connectionLostTitle": "接続が切断されました",
-      "connectionLostBody": "面接はまだ継続中です。再参加すれば途中から続けられます。今すぐ終了してレポートを確認することもできます。",
-      "rejoin": "面接に再参加",
-      "endAnyway": "面接を終了",
-      "poorConnection": "接続が不安定です",
-      "micDeniedTitle": "マイクへのアクセスが必要です",
-      "micDeniedBody": "マイクを使用できないため、面接官にあなたの声が届きません。ブラウザでマイクの使用を許可してから、もう一度お試しください。",
-      "micRetry": "再試行",
-      "deviceFailure": "マイクまたはカメラに問題が発生しています。デバイス設定を確認してください。面接官に声や映像が届いていない可能性があります。",
-      "interviewerUnavailableTitle": "面接官が参加できません",
-      "interviewerUnavailableBody": "AI 面接官をルームに接続できませんでした。多くの場合は一時的な問題です。少し待ってからもう一度お試しください。",
-      "retry": "再試行",
+      "connectionLostTitle": "接続が切れました",
+      "connectionLostBody": "面接はまだ開いています。再参加すると続きから始められます。今すぐ終えてレポートを受け取ることもできます。",
+      "autoRejoinTitle": "接続が切れました — 再接続中",
+      "autoRejoinBody": "面接に戻しています。うまくいかない場合は、手動で再参加できます。",
+      "rejoin": "面接に再参加する",
+      "endAnyway": "面接を終える",
+      "poorConnection": "接続が不安定",
+      "micDeniedTitle": "マイクの許可が必要です",
+      "micDeniedBody": "マイクに接続できないため、面接官に声が届きません。ブラウザでマイクを許可してから、もう一度試してください。",
+      "micRetry": "もう一度試す",
+      "deviceFailure": "マイクまたはカメラに問題があります。端末の設定を確認してください。面接官に声や映像が届いていない可能性があります。",
+      "interviewerUnavailableTitle": "面接官が参加できませんでした",
+      "interviewerUnavailableBody": "面接官をルームに入れられませんでした。多くの場合は一時的なものです。少し待ってからもう一度試してください。",
+      "retry": "もう一度試す",
+      "quality": {
+        "good": "接続は良好",
+        "fair": "接続はまずまず",
+        "poor": "接続が不安定"
+      },
+      "controls": {
+        "camOn": "カメラオン",
+        "camOff": "カメラオフ",
+        "mic": "マイク",
+        "mute": "ミュート",
+        "restart": "やり直す",
+        "submitNext": "送信して次へ",
+        "submitFinish": "送信して終える",
+        "submitting": "送信中…"
+      },
+      "cam": {
+        "requesting": "カメラの許可を求めています…",
+        "requestingSub": "ブラウザの確認に答えてください",
+        "denied": "カメラがブロックされています",
+        "deniedSub": "ブラウザの設定で許可してから、",
+        "tryAgain": "もう一度試す",
+        "unavailable": "カメラが見つかりません",
+        "unavailableSub": "音声のみで続けます",
+        "off": "カメラオフ",
+        "turnOn": "オンにする",
+        "allow": "タップしてカメラを許可",
+        "enable": "オンにする"
+      },
+      "expired": {
+        "title": "このセッションは終了しています",
+        "body": "この面接は終了しているか、リンクが古くなっています。新しく始めてください。",
+        "cta": "新しい面接を始める"
+      },
       "coach": {
-        "currentQuestion": "現在の質問",
-        "awaitingQuestion": "面接官の質問を待っています…",
+        "currentQuestion": "今の質問",
+        "awaitingQuestion": "次の質問を待っています…",
         "showHint": "ヒントを表示",
-        "hideHint": "ヒントを非表示",
-        "coachHint": "コーチのヒント",
-        "thinking": "考え中…",
-        "noHint": "自然に答えれば大丈夫。きっとうまくいきます。",
-        "coachLive": "あなたのコーチ · ライブ",
+        "hideHint": "ヒントを隠す",
+        "coachHint": "ヒント",
+        "thinking": "考えています…",
+        "noHint": "自分の言葉で答えてください。",
+        "coachLive": "回答中の指摘",
         "dismiss": "閉じる",
-        "listeningFor": "面接官が注目しているポイント",
+        "listeningFor": "相手が聞きたいこと",
         "answerTime": "時間",
-        "pace": "ペース",
-        "fillers": "口ぐせ",
+        "pace": "話す速さ",
+        "fillers": "つなぎ言葉",
         "specifics": "具体性",
-        "coachMode": "コーチ",
+        "coachMode": "指摘",
         "on": "オン",
         "off": "オフ",
-        "coachModeHint": "回答中にリアルタイムでヒントを送ります。本番さながらに試すならオフに。"
-      },
-      "autoRejoinTitle": "接続が切断されました — 再接続中",
-      "autoRejoinBody": "自動的に面接へ再接続しています。しばらくお待ちください。失敗した場合は手動で再参加できます。",
-      "agentQualityPoor": "面接官側の接続が不安定です",
-      "enableAudio": "タップして音声を有効にする",
-      "quality": {
-        "good": "接続良好",
-        "fair": "接続はやや不安定",
-        "poor": "接続不良"
+        "coachModeHint": "回答中に短い指摘が出ます。本番に近づけたいときはオフにしてください。"
       }
     },
     "report": {
       "title": "面接レポート",
-      "error": "レポートを読み込めませんでした。",
-      "loading": "レポートを読み込み中…",
+      "eyebrow": "セッション終了 · {minutes}分",
+      "eyebrowScoring": "回答を採点しています",
+      "eyebrowFallback": "練習面接 · レポート",
+      "sub": "実際の面接官と同じ観点で採点しました。",
+      "loading": "レポートを読み込んでいます…",
+      "loadingTitle": "あなたの",
+      "loadingTitleAccent": "回答を読んでいます",
+      "loadingTitleAfter": "…",
+      "error": "このレポートを読み込めませんでした。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
       "newInterview": "新しい面接",
-      "processing": "結果を作成しています。録音とスコアはまもなく表示されます。",
+      "processing": "仕上げています。録画と採点はまもなくここに表示されます。",
       "refresh": "更新",
       "refreshing": "更新中…",
-      "overall": "総合スコア",
-      "noScore": "まだスコアがありません。",
-      "strengths": "強み",
-      "gaps": "改善点",
-      "recording": "録音",
+      "overall": "総合",
+      "noScore": "採点はまだありません。",
+      "deltaUp": "前回より+{delta}",
+      "deltaDown": "前回より−{delta}",
+      "strengths": "うまくいった点",
+      "keepThese": "続けたい点",
+      "sharpen": "直す点",
+      "topN": "上位{count}件",
+      "recording": "録画",
       "transcript": "文字起こし",
       "transcriptView": "文字起こしを表示",
       "transcriptHide": "文字起こしを隠す",
-      "transcriptCount": "{count} 件のやり取り",
+      "transcriptCount": "{count, plural, other {#往復}}",
       "download": "ダウンロード",
-      "analysisPending": "詳細な分析を生成しています。最大1分ほどかかります。",
+      "analysisPending": "詳しい講評を書いています。1分ほどかかることがあります。",
+      "analysisStalled": "詳しい講評に想定より時間がかかっています。",
+      "refreshAnalysis": "講評を更新する",
       "dim": {
-        "structure": "構成力",
-        "specificity": "具体性",
-        "communication": "コミュニケーション",
-        "confidence": "自信",
-        "roleFit": "職務適合性"
+        "structure": "話を順序立てて伝えられましたか？",
+        "specificity": "具体的な数字を挙げられましたか？",
+        "communication": "回答の長さは適切でしたか？",
+        "confidence": "自信を持って話せましたか？",
+        "roleFit": "質問のすべてに答えられましたか？"
+      },
+      "actions": {
+        "runAgain": "もう一度行う",
+        "pickSetup": "別の設定で行う",
+        "download": "文字起こしをダウンロード",
+        "share": "友人に共有する"
       },
       "recommendations": {
-        "title": "アクションプラン",
-        "sub": "具体的な改善ステップ",
-        "pending": "パーソナライズされたアクションプランを生成中…",
-        "unavailable": "このセッションのアクションプランはありません。",
-        "empty": "改善提案はありません。全体的に優れたセッションでした。",
-        "exampleLabel": "書き換え例",
-        "drill": "練習",
+        "title": "次にやること",
+        "sub": "具体的な手順を、順番に",
+        "pending": "次の手順を書いています…",
+        "unavailable": "このセッションでは次の手順を表示できません。",
+        "empty": "変えるところはありません。良いセッションでした。",
+        "exampleLabel": "書き直しの例",
+        "drill": "これを練習する",
         "priority": {
-          "high": "優先度：高",
-          "medium": "優先度：中",
-          "low": "優先度：低"
+          "high": "最初にやる",
+          "medium": "次にやる",
+          "low": "あとでやる"
         }
       },
       "questionBreakdown": {
-        "title": "設問別フィードバック",
-        "count": "{count} 問",
-        "pending": "設問別フィードバックを生成中…",
-        "unavailable": "このセッションの設問別分析はありません。",
-        "intentLabel": "この質問の意図",
+        "title": "質問ごとの講評",
+        "count": "{count, plural, other {#問}}",
+        "pending": "質問ごとの講評を書いています…",
+        "unavailable": "このセッションでは質問ごとの講評を表示できません。",
+        "intentLabel": "この質問の狙い",
         "answerSummaryLabel": "あなたの回答",
-        "analysisLabel": "回答分析",
-        "correctionLabel": "改善すべき点",
-        "suggestionLabel": "具体的な改善策",
-        "tipsLabel": "実践のヒント",
-        "modelAnswerLabel": "模範解答",
+        "analysisLabel": "何が起きたか",
+        "correctionLabel": "直す点",
+        "suggestionLabel": "直し方",
+        "tipsLabel": "補足",
+        "modelAnswerLabel": "より良い回答例",
         "keyQuoteLabel": "あなたの発言",
-        "missed": "この質問は面接で扱われませんでした。",
-        "offScript": "アドリブ質問",
+        "missed": "この質問には到達しませんでした。",
+        "offScript": "予定外の質問",
         "rating": {
-          "strong": "優秀",
-          "adequate": "合格",
+          "strong": "良い",
+          "adequate": "まずまず",
           "weak": "要改善",
           "missed": "未回答"
         }
-      },
-      "analysisStalled": "詳細分析の生成に通常より時間がかかっています。",
-      "refreshAnalysis": "分析を更新"
+      }
     }
   },
-  "choosePlan": {
-    "title": "プランを選択",
-    "subtitle": "プランを選んで始めましょう——AIで面接練習ができます。いつでも変更・解約いただけます。",
-    "loading": "プランを読み込んでいます…",
-    "error": "プランを読み込めませんでした。",
-    "retry": "再試行",
-    "continueFree": "今はスキップ——無料プランで続ける",
-    "selectFree": "無料で始める",
-    "selectPaid": "{plan} を選ぶ",
-    "blurb": {
-      "free": "月1回の模擬面接で、まずはお試しを。",
-      "starter": "月10回の模擬面接——毎週コツコツ練習。",
-      "growth": "月28回の模擬面接——本番前に毎日トレーニング。"
-    },
-    "welcome": "ようこそ RoboApply へ",
-    "creditsHint": "1 クレジット = 20 分の模擬面接 1 回。",
-    "checkoutFailed": "決済を開始できませんでした。もう一度お試しください。"
-  },
-  "account": {
-    "eyebrow": "アカウント",
-    "title": "アカウントと",
-    "titleAccent": "請求",
-    "loading": "アカウントを読み込んでいます…",
+  "settings": {
+    "title": "設定",
+    "loading": "設定を読み込んでいます…",
     "nav": {
-      "profile": "プロフィール",
-      "billing": "請求",
-      "usage": "利用状況",
-      "security": "セキュリティ"
+      "search": "探している仕事",
+      "resume": "履歴書",
+      "notif": "通知",
+      "appearance": "表示",
+      "billing": "プランとお支払い",
+      "account": "アカウント",
+      "danger": "取り消せない操作"
+    },
+    "savebar": {
+      "unsaved": "保存していない変更があります",
+      "discard": "破棄する",
+      "save": "変更を保存",
+      "saving": "保存中…"
     },
     "error": {
-      "title": "アカウントを読み込めませんでした",
-      "body": "プロフィールと請求情報の取得中に問題が発生しました。もう一度お試しください。",
-      "retry": "再試行"
+      "title": "設定を読み込めませんでした。",
+      "body": "データは消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+      "retry": "もう一度試す"
+    },
+    "appearance": {
+      "title": "表示",
+      "sub": "このアプリの見た目です。設定はこの端末にのみ保存されます。",
+      "group": "テーマ",
+      "theme_label": "ライトかダークか",
+      "theme_sub": "夜はダークのほうが目が楽です。それ以外は変わりません。",
+      "light": "ライト",
+      "dark": "ダーク"
+    },
+    "identity": {
+      "eyebrow": "アカウント",
+      "title_before": "ここに登録されている",
+      "title_em": "あなたの情報",
+      "title_after": "。",
+      "sub": "応募も、求人に合わせた履歴書も、すべてこの情報から作られます。",
+      "group_profile": "プロフィール",
+      "upload_photo": "写真をアップロード",
+      "photo_hint": "PNGまたはJPG · 正方形が最適です",
+      "full_name": "氏名",
+      "pronouns": "呼び方",
+      "pronouns_sub": "任意 — カバーレターの表現をそろえるために使います",
+      "pronouns_other": "その他",
+      "pronouns_none": "答えない",
+      "years_exp": "経験年数",
+      "new_grad": "新卒",
+      "years_suffix": "年",
+      "group_contact": "連絡先",
+      "email": "メール",
+      "phone": "電話",
+      "location": "所在地",
+      "location_ph": "市区町村、都道府県",
+      "group_links": "リンク",
+      "linkedin": "LinkedIn",
+      "github": "GitHub",
+      "portfolio": "ポートフォリオまたはWebサイト",
+      "group_default_resume": "メインの履歴書",
+      "resume_base": "メイン",
+      "no_resumes": "履歴書がまだありません。「履歴書」から作成してください。"
+    },
+    "hunt": {
+      "eyebrow": "探している仕事",
+      "title_before": "どんな仕事を",
+      "title_em": "探しているか",
+      "title_after": "教えてください。",
+      "sub": "細かく伝えるほど、読む求人は少なくなります。もっと見たいときは条件をゆるめてください。",
+      "plain_label": "言葉にすると",
+      "plain_l1": "{stages}企業の{roles}",
+      "plain_l2": "{cities}で{modes}",
+      "plain_l3": "基本給 ${min}k〜{max}k · 業界{count}件",
+      "plain_l4": "必須条件: {items}",
+      "plain_l5": "受けない条件: {items}",
+      "any_stage": "ステージ問わず",
+      "none": "なし",
+      "mode_remote_word": "リモート",
+      "mode_hybrid_word": "ハイブリッド",
+      "mode_onsite_word": "出社",
+      "group_intent": "自分の言葉で",
+      "intent_label": "次にやりたいこと",
+      "intent_sub": "自由記述 — 似た求人が並んだときの判断に使います",
+      "group_role": "職種",
+      "titles_label": "希望する職種名",
+      "titles_sub": "受けてもよい表記も足してください",
+      "titles_ph": "職種名を入力してカンマ",
+      "seniority_label": "役職レベル",
+      "seniority_sub": "{level}以上を対象にしています",
+      "group_location": "勤務地",
+      "work_mode_label": "リモートか出社か",
+      "mode_remote": "リモート",
+      "mode_remote_desc": "場所も時差も問わない",
+      "mode_hybrid": "ハイブリッド",
+      "mode_hybrid_desc": "週2〜3日は出社",
+      "mode_onsite": "出社",
+      "mode_onsite_desc": "週5日出社",
+      "cities_label": "都市または地域",
+      "cities_sub": "リモート採用のある地域も含みます",
+      "cities_ph": "都市を追加",
+      "group_comp": "給与",
+      "salary_label": "基本給の範囲",
+      "salary_sub": "${min}k〜${max}k · {min}k未満は表示しません",
+      "salary_min": "基本給の下限",
+      "salary_max": "基本給の上限",
+      "salary_median": "{level}の市場中央値: $215k",
+      "group_company": "企業",
+      "stage_label": "ステージ",
+      "stage_sub": "どの段階の企業に入りたいか",
+      "headcount_label": "企業の規模",
+      "group_industry": "業界",
+      "industries_target_label": "希望する業界",
+      "industries_target_sub": "優先して表示します",
+      "industries_avoid_label": "避けたい業界",
+      "industries_avoid_sub": "表示しません",
+      "industries_avoid_ph": "業界を追加",
+      "group_hard_rules": "絶対条件",
+      "musthaves_label": "必須条件",
+      "musthaves_sub": "これがない求人は表示しません",
+      "musthaves_ph": "必須条件を追加",
+      "dealbreakers_label": "受けない条件",
+      "dealbreakers_sub": "求人票にこれがあれば表示しません",
+      "dealbreakers_ph": "条件を追加",
+      "work_auth_label": "就労ビザの支援が必要ですか？",
+      "auth_citizen": "いいえ — すでにこの国で働けます",
+      "auth_pr": "いいえ — 永住権があります",
+      "auth_h1b": "はい — H-1Bの支援が必要です",
+      "auth_opt": "はい — OPTの延長が必要です",
+      "auth_eu": "いいえ — EUまたは英国の市民です",
+      "auth_other": "その他"
+    },
+    "notif": {
+      "eyebrow": "通知",
+      "title_before": "いつ",
+      "title_em": "連絡するか",
+      "title_after": "。",
+      "sub": "初期状態ではすべてオフです。必要なものだけオンにしてください。",
+      "group_channels": "送り先",
+      "channel_email": "メール",
+      "channel_email_sub": "アカウントのメールアドレスに送ります",
+      "channel_push": "プッシュ通知",
+      "channel_push_sub": "ブラウザとモバイルアプリ",
+      "channel_sms": "SMS",
+      "group_matrix": "送る内容",
+      "col_email": "メール",
+      "col_push": "プッシュ",
+      "col_sms": "SMS",
+      "event_newMatch90_label": "とても合う求人が出たとき",
+      "event_newMatch90_sub": "条件によく合う新しい求人",
+      "event_appSent_label": "応募済みにしたとき",
+      "event_appSent_sub": "短い確認",
+      "event_response_label": "企業から返信があったとき",
+      "event_response_sub": "採用担当や現場責任者からの返信",
+      "event_interview_label": "面接の予定が入ったとき",
+      "event_interview_sub": "日時が決まったとき",
+      "group_digest": "まとめ",
+      "digest_label": "頻度",
+      "digest_sub": "個別に送らず、まとめて1通にします",
+      "digest_off": "オフ",
+      "digest_daily": "毎日 午前7時",
+      "digest_weekly": "毎週月曜日"
+    },
+    "privacy": {
+      "eyebrow": "プライバシー",
+      "title_before": "あなたのデータと",
+      "title_em": "表示しない企業",
+      "title_after": "。",
+      "sub": "ブロックした企業の求人は表示されません。データはあなたのものです。書き出すことも削除することもできます。",
+      "group_blocklist": "求人を表示したくない企業",
+      "blocked_label": "ブロック中",
+      "blocked_sub": "これらの企業の求人は表示されません",
+      "reason_employer": "現在の勤務先",
+      "reason_byyou": "自分で追加",
+      "remove": "削除",
+      "add_company": "ブロックする企業を追加",
+      "add_ph": "会社名",
+      "add_confirm": "追加",
+      "blocked_recruiters_label": "ブロック中の採用担当",
+      "blocked_recruiters_sub": "{count}人の採用担当から連絡が届きません",
+      "manage_list": "一覧を管理",
+      "group_data": "あなたのデータ",
+      "export_label": "すべてダウンロード",
+      "export_sub": "応募、下書き、文字起こし、履歴書",
+      "download_archive": "ダウンロード",
+      "retention_label": "保存する期間",
+      "retention_sub": "面接の文字起こしと下書きを保存しておく期間",
+      "retention_30": "30日",
+      "retention_90": "90日",
+      "retention_365": "1年",
+      "retention_forever": "ずっと保存"
     },
     "profile": {
       "title": "アカウント情報",
       "displayName": "表示名",
-      "memberSince": "{date} に登録",
+      "memberSince": "{date}に登録",
       "verified": "確認済み",
       "edit": "編集",
       "save": "保存",
       "cancel": "キャンセル"
     },
     "credits": {
-      "title": "模擬面接クレジット",
+      "title": "練習面接のクレジット",
       "unit": "クレジット",
-      "note": "1 クレジット = 20 分の模擬面接です。これより短いまたは長いセッションは時間に応じて課金されます。"
+      "note": "1クレジットは20分の練習面接です。短いセッションと長いセッションは時間に応じて消費されます。"
     },
     "region": {
       "label": "地域",
-      "intl": "海外（米ドル）",
+      "intl": "海外（USD）",
       "cn": "中国（人民元）"
     },
     "billing": {
-      "title": "サブスクリプションと請求",
-      "manage": "請求を管理",
-      "invoices": "請求書を表示",
+      "title": "プランとお支払い",
+      "sub": "今のプラン、変更できるプラン、領収書の場所です。",
+      "checkout_failed": "決済ページを開けませんでした。もう一度試すか、別のカードをお使いください。",
+      "payments_unavailable": "決済はまだ利用できません。今のプランはそのまま使えます。",
+      "manage": "お支払いを管理",
+      "invoices": "請求書を見る",
       "cancel": "プランを解約",
-      "viewHistory": "請求履歴を表示",
-      "summaryNote": "支払い方法、請求書、請求履歴は安全なカスタマーポータルで管理できます。",
+      "viewHistory": "支払い履歴を見る",
+      "summaryNote": "お支払い方法、請求書、領収書は決済事業者の安全なページで管理されます。",
       "current": {
-        "renews": "{date} に更新 · 月額請求",
-        "cancelsAt": "{date} に解約",
-        "expiresAt": "{date} に期限が切れます — 続けるには更新してください",
+        "renews": "{date}に更新 · 月払い",
+        "cancelsAt": "{date}に終了",
+        "expiresAt": "{date}に終了しました — 続けるには更新してください",
         "status": {
-          "active": "有効",
-          "pastDue": "支払い遅延",
+          "active": "利用中",
+          "pastDue": "支払い期限切れ",
           "canceled": "解約済み"
         }
       },
       "history": {
-        "heading": "請求履歴",
+        "heading": "支払い履歴",
         "subtitle": "請求書と領収書です。",
-        "back": "アカウントに戻る",
+        "back": "設定に戻る",
         "title": "請求書",
         "empty": "請求書はまだありません。",
         "loading": "読み込み中…",
-        "error": "請求履歴を読み込めませんでした。",
+        "error": "支払い履歴を読み込めませんでした。もう一度試してください。",
         "download": "ダウンロード",
         "paid": "支払い済み",
         "pending": "処理中",
@@ -3018,131 +1684,514 @@
         "card": "カード"
       },
       "checkout": {
-        "success": "サブスクリプションが有効になりました。ようこそ！",
-        "cancel": "チェックアウトがキャンセルされました — プランは変更されていません。",
+        "success": "プランが有効になりました。",
+        "cancel": "決済を中止しました。プランは変わっていません。",
         "dismiss": "閉じる"
-      },
-      "explore": {
-        "title": "もっと練習しませんか？",
-        "sub": "Free・Starter・Growth を比較——いつでもアップグレードできます。",
-        "cta": "すべてのプランを見る →",
-        "titleMax": "最上位プランをご利用中です 🎉",
-        "subMax": "ご提供する中で最も多い練習クレジットをお持ちです。いつでも比較できます。",
-        "ctaMax": "プランを比較 →"
       }
     },
     "plan": {
       "free": "無料",
       "premium": "プレミアム",
       "premiumPlus": "プレミアム+",
-      "perMonth": "/月",
-      "dailyCap": "1日あたり {n} 回",
-      "mostPopular": "人気",
-      "current": "現在のプラン",
-      "upgrade": "アップグレード",
-      "downgrade": "ダウングレード",
-      "comingSoon": "近日公開",
       "starter": "スターター",
       "growth": "グロース",
-      "freeForever": "ずっと無料",
+      "perMonth": "/月",
+      "dailyCap": "1日{n}回まで",
+      "mostPopular": "いちばん選ばれています",
+      "current": "利用中のプラン",
+      "upgrade": "アップグレード",
+      "downgrade": "下のプランに変更",
+      "comingSoon": "まだ使えません",
+      "freeForever": "無料",
       "freePrice": "無料",
-      "subscribe": "申し込む",
-      "subscribeAlipay": "Alipay で支払う",
-      "creditsCap": "月 {n} クレジット",
+      "subscribe": "登録する",
+      "subscribeAlipay": "Alipayで支払う",
+      "creditsCap": "月{n}クレジット",
+      "select_free": "無料で始める",
+      "select_paid": "{plan}を選ぶ",
+      "cta": {
+        "upgradeTo": "{plan}に上げる",
+        "switchTo": "{plan}に切り替える",
+        "yourFreePlan": "利用中のプラン",
+        "alipaySwitchNote": "プランを変更するには、解約してから決済画面で登録し直してください。"
+      },
+      "credits_explainer": "1クレジットは20分の練習面接1回です。短いセッションと長いセッションは時間に応じて消費され、クレジットは請求月の初めに戻ります。",
       "feature": {
-        "mockInterviews": "模擬面接",
-        "resumeTailors": "履歴書の最適化",
+        "mockInterviews": "練習面接",
+        "resumeTailors": "求人に合わせた履歴書",
         "coverLetters": "カバーレター",
-        "careerInsights": "キャリアインサイト",
-        "priorityMatching": "優先マッチング",
-        "dedicatedCoach": "専任コーチ",
+        "priorityMatching": "求人の採点が速い",
         "everythingFree": "無料プランのすべて",
         "everythingPremium": "プレミアムのすべて",
-        "unlimitedInsights": "無制限のインサイト",
-        "earlyAccessModels": "先行アクセスモデル",
-        "prioritySupport": "優先サポート",
-        "creditsMonthly": "月 {n} 回分の模擬面接クレジット",
-        "fullReports": "完全な AI 面接レポート",
-        "allInterviewTypes": "すべての面接タイプと面接官",
-        "everythingStarter": "スタータープランのすべて",
-        "toneSteering": "面接官のトーン調整"
+        "prioritySupport": "サポートの返答が速い",
+        "creditsMonthly": "練習面接クレジット 月{n}回分",
+        "fullReports": "面接レポートの全文",
+        "allInterviewTypes": "すべての形式とすべての面接官",
+        "everythingStarter": "スターターのすべて",
+        "toneSteering": "面接官の口調を選べる"
       }
     },
     "usage": {
       "title": "利用状況",
-      "byDate": "あなたのアクティビティ · 過去30日",
-      "byFeature": "今日 · 機能別",
-      "actionCount": "{count} 件の操作",
+      "byDate": "過去30日間の利用",
+      "byFeature": "今日の機能別",
+      "actionCount": "{count}回",
       "meter": "{used} / {cap}",
-      "tierCap": "{tier} · 1日 {cap} 回",
-      "resetNote": "毎日UTC午前0時にリセット · {tier} = 1日 {cap} 回",
+      "tierCap": "{tier} · 1日{cap}回",
+      "resetNote": "毎日UTC午前0時にリセット · {tier}は1日{cap}回まで",
       "heatLess": "少",
       "heatMore": "多",
-      "recent": "最近のアクティビティ",
-      "recentItem": "{count}× {feature}"
+      "recent": "最近の操作",
+      "recentItem": "{feature} {count}回"
     },
     "security": {
       "title": "セキュリティ",
       "changePassword": "パスワードを変更",
-      "changeSuccess": "パスワードを更新しました。",
+      "changeSuccess": "パスワードを変更しました。",
       "currentPassword": "現在のパスワード",
       "newPassword": "新しいパスワード",
-      "confirmPassword": "新しいパスワード（確認）",
-      "sessions": "セッション",
-      "signOutEverywhere": "すべての端末からサインアウト",
-      "signOutNote": "すべての端末とブラウザからサインアウトします。各所で再度サインインが必要です。",
-      "oauthNote": "{provider} でサインインしているため、変更するパスワードはありません。",
+      "confirmPassword": "新しいパスワードの確認",
+      "sessions": "ログイン中の端末",
+      "signOutEverywhere": "すべての端末からログアウト",
+      "signOutNote": "すべての端末とブラウザからログアウトします。どの端末でもログインし直す必要があります。",
+      "oauthNote": "{provider}でログインしているため、変更するパスワードはありません。",
       "strength": {
-        "weak": "強度 · 弱",
-        "fair": "強度 · 普通",
-        "good": "強度 · 良好",
-        "strong": "強度 · 強"
+        "weak": "強度 · 弱い",
+        "fair": "強度 · ふつう",
+        "good": "強度 · 良い",
+        "strong": "強度 · とても強い"
       },
       "error": {
         "tooShort": "パスワードは8文字以上にしてください。",
-        "mismatch": "パスワードが一致しません。",
-        "wrongPassword": "現在のパスワードが正しくありません。",
+        "mismatch": "2つのパスワードが一致しません。",
+        "wrongPassword": "現在のパスワードが違います。",
         "noPassword": "このアカウントにはパスワードが設定されていません。",
-        "weakPassword": "より強力なパスワードを選んでください。",
-        "rateLimited": "試行回数が多すぎます — しばらくしてからお試しください。",
-        "generic": "パスワードを更新できませんでした。もう一度お試しください。"
+        "weakPassword": "もっと強いパスワードにしてください。",
+        "rateLimited": "試行回数が多すぎます。1分ほど待ってからもう一度試してください。",
+        "generic": "パスワードを変更できませんでした。もう一度試してください。"
       }
     },
     "danger": {
-      "title": "危険ゾーン",
+      "eyebrow": "取り消せない操作",
+      "title_before": "取り消せない",
+      "title_em": "操作",
+      "title_after": "。",
+      "sub": "どれも実行前に確認します。確認したあとは元に戻せません。",
+      "reset_title": "設定をリセット",
+      "reset_desc": "このページの内容をすべて初期状態に戻します。履歴書と応募は残ります。",
+      "reset_btn": "設定をリセット",
+      "delete_data_title": "求人データを削除",
+      "delete_data_desc": "求人一覧と応募を削除します。アカウントと履歴書は残ります。",
+      "delete_data_btn": "求人データを削除",
+      "delete_data_confirm": "求人一覧、応募、履歴を削除します。アカウントと履歴書は残ります。",
+      "delete_data_confirm_label": "確認",
+      "delete_data_confirm_hint": "確認のため{keyword}と入力してください。",
+      "delete_data_confirm_keyword": "DELETE",
+      "delete_data_confirm_cta": "求人データを削除",
+      "delete_data_confirm_error": "確認のため{keyword}と正確に入力してください。",
+      "delete_data_cancel": "キャンセル",
+      "delete_data_error": "データを削除できませんでした。もう一度試してください。",
+      "delete_data_success": "{count}件を削除しました。アカウントと履歴書はそのままです。",
+      "delete_data_done": "完了",
+      "delete_account_title": "アカウントを削除",
+      "delete_account_desc": "履歴書、応募、文字起こし、録画をすべて削除します。元には戻せません。",
+      "delete_account_btn": "アカウントを削除",
+      "title": "取り消せない操作",
       "deleteAccount": "アカウントを削除",
-      "deleteDescription": "アカウント、履歴書データ、面接録画、サブスクリプションを完全に削除します。この操作は取り消せません。",
-      "confirmEmailLabel": "メールアドレスを確認",
-      "confirmEmailHint": "{email} を入力して確認してください。",
+      "deleteDescription": "アカウント、履歴書、面接の録画、契約中のプランを削除します。元には戻せません。",
+      "confirmEmailLabel": "メールアドレスの確認",
+      "confirmEmailHint": "確認のため{email}と入力してください。",
       "reasonLabel": "理由",
-      "reasonPlaceholder": "退会の理由を教えてください（必須）",
+      "reasonPlaceholder": "退会する理由を書いてください（必須）",
       "cancel": "キャンセル",
-      "delete": "アカウントを削除",
+      "delete": "アカウントを削除する",
       "error": {
-        "mismatch": "メールアドレスがアカウントと一致しません。",
-        "reasonRequired": "退会の理由を教えてください。",
-        "generic": "アカウントを削除できませんでした。もう一度お試しください。"
+        "mismatch": "このアカウントのメールアドレスと一致しません。",
+        "reasonRequired": "退会する理由を書いてください。",
+        "generic": "アカウントを削除できませんでした。もう一度試してください。"
       }
     }
   },
+  "auth": {
+    "login": {
+      "title": "おかえりなさい",
+      "subtitle": "RoboApplyにログインします。",
+      "email": "メール",
+      "password": "パスワード",
+      "submit": "ログイン",
+      "submitting": "ログインしています…",
+      "no_account": "アカウントをお持ちでないですか？",
+      "signup_cta": "アカウントを作る",
+      "error_generic": "メールアドレスとパスワードが一致しませんでした。両方を確認してもう一度試してください。"
+    },
+    "signup": {
+      "title": "アカウントを作る",
+      "subtitle": "履歴書を追加して、実際に狙える求人を確かめてください。",
+      "email": "メール",
+      "password": "パスワード",
+      "name": "お名前",
+      "submit": "登録する",
+      "submitting": "アカウントを作成しています…",
+      "has_account": "すでにアカウントをお持ちですか？",
+      "login_cta": "ログイン",
+      "error_generic": "アカウントを作成できませんでした。もう一度試して、それでも失敗する場合は別のメールアドレスをお使いください。"
+    },
+    "brand": {
+      "tagline": "面接に進めない理由が分かります",
+      "eyebrow": "面接に進めない理由が分かります",
+      "headline": "もっと<em>早く</em>採用される。",
+      "lead": "RoboApplyは履歴書を読み、実際に狙える求人を示し、足りないものをそのまま名指しし、面接の準備まで整えます。",
+      "feature_resume": "読み取りソフトが読める履歴書",
+      "feature_interview": "受け答えする練習面接",
+      "feature_track": "応募をひとつの場所に"
+    }
+  },
+  "landing": {
+    "meta": {
+      "title": "面接に進めない理由 | RoboApply",
+      "description": "RoboApplyは履歴書を読み、1,000件以上の求人を読み、実際に狙えるものを示し、足りないものを名指しします。そのあと、話すAI面接官が本番の準備を整えます。無料で始められます。9言語対応。",
+      "ogTitle": "RoboApply — 面接に進めない理由が分かります",
+      "ogDescription": "履歴書を入れるだけ。実際に狙える求人、それぞれで足りないもの、そして話すAI面接官との練習まで。無料で始められます。",
+      "keywords": "面接に進めない, 履歴書 添削 AI, 履歴書 不足 分析, 自分に合う求人, AI 模擬面接, 面接練習 AI, 履歴書 キーワード, 転職 求人検索"
+    },
+    "header": {
+      "status_chip": "先行公開",
+      "cta": "無料で始める",
+      "theme_to_light": "ライトに切り替え",
+      "theme_to_dark": "ダークに切り替え",
+      "lang_label": "言語を変更"
+    },
+    "hero": {
+      "eyebrow": "履歴書を読む · 市場を読む · 足りないものを言う",
+      "headline": "面接に進めない理由が分かります。",
+      "subheadline": "履歴書を入れるだけ。1,000件以上の求人を読み、実際に狙えるものを示し、足りないものをそのまま名指しします。",
+      "sub_emphasis": "応募するのはあなたです。その前に、求人票が何を求めているかをお伝えします。",
+      "cta_primary": "無料で始める",
+      "cta_secondary": "求人の読み方を見る",
+      "reassure": "無料プラン · カード不要 · 企業に代わりに送信することは一切ありません",
+      "log": {
+        "aria": "不足レポートの例です。決済分野で6年の経験がある履歴書を読み、1,284件の求人票を読み、41件を合う求人として並べ、足りないものを挙げます。Kubernetesは12件の求人票にあり履歴書にはありません。9件はチームを率いた経験を求めていますが、履歴書は「手伝った」と書いています。6件は保有していない資格が必要なため除外されます。最上位の求人は100点中87点で、数字が必要な実績行が3件あり、面接官が聞く可能性の高い質問が6件挙げられています。",
+        "title": "roboapply — 不足レポート",
+        "live": "サンプル",
+        "lines": {
+          "l1": {
+            "time": "01",
+            "tag": "読取",
+            "msg": "履歴書 · 決済インフラ6年"
+          },
+          "l2": {
+            "time": "02",
+            "tag": "読取",
+            "msg": "求人票1,284件を読了"
+          },
+          "l3": {
+            "time": "03",
+            "tag": "順位",
+            "msg": "41件が経験に合う · うち6件はとても合う"
+          },
+          "l4": {
+            "time": "04",
+            "tag": "不足",
+            "msg": "Kubernetes: 12件にあり、履歴書になし"
+          },
+          "l5": {
+            "time": "05",
+            "tag": "不足",
+            "msg": "9件がチームを率いた経験を要求、履歴書は「手伝った」"
+          },
+          "l6": {
+            "time": "06",
+            "tag": "除外",
+            "msg": "6件は保有していない資格が必要 · 除外"
+          },
+          "l7": {
+            "time": "07",
+            "tag": "上位",
+            "msg": "最上位は87 / 100 · 採用される確率ではありません"
+          },
+          "l8": {
+            "time": "08",
+            "tag": "修正",
+            "msg": "数字のない実績行が3件 · それぞれ指摘"
+          },
+          "l9": {
+            "time": "09",
+            "tag": "準備",
+            "msg": "この面接官が聞く可能性の高い質問6件"
+          }
+        }
+      },
+      "strip_summary": "求人票1,284件を読了 · 41件が合う · 6件はとても合う · 足りないものはすべて名指し",
+      "strip_scroll": "仕組み"
+    },
+    "problem": {
+      "eyebrow": "たくさん応募しても通らなくなった理由",
+      "title": "応募数を増やしても答えにはなりません。",
+      "sub": "AIが採用の現場を埋め尽くし、採用担当はそれに気づいています。Business Insiderの検証では、大量応募ツールの返信率は6%でした。同じ履歴書を同じ壁に投げ続けても結果は変わりません。変わるのは、求人票が何を求めていて、履歴書がそれを書けているかを知ったときです。",
+      "stats": {
+        "s1": {
+          "value": "242",
+          "label": "1つの求人に応募する人数の平均"
+        },
+        "s2": {
+          "value": "+400%",
+          "label": "大量応募ツールの普及後、採用担当に届く応募数の増加"
+        },
+        "s3": {
+          "value": "41%",
+          "label": "自分の応募のうち人が読むのは4分の1未満だと考える求職者の割合"
+        }
+      },
+      "source": "出典: The Interview Guys（242）· Greenhouse / Fortune（+400%）· 求職者調査 2025〜2026年（41%）"
+    },
+    "how": {
+      "eyebrow": "仕組み",
+      "title": "見つける。理解する。直す。練習する。",
+      "sub": "履歴書を一度追加するだけです。そのあとはひとつの問いだけを扱います。この求人票が求めていて、あなたが書けていないことは何か。",
+      "steps": {
+        "s1": {
+          "time": "01",
+          "tag": "見つける",
+          "title": "市場を読みます",
+          "body": "掲載中の求人票を大量に読み、履歴書と比べます。希望から外れた求人が一覧に届くことはありません。"
+        },
+        "s2": {
+          "time": "02",
+          "tag": "理解する",
+          "title": "足りないものを言います",
+          "body": "求人ごとに、いちばん大事な一文が先に出ます。求人票はKubernetesを2回求めていて、履歴書には一度も出てこない、といった具合です。その下に100点満点の適合スコアと、その数字が何であって何でないかを示す一文が並びます。"
+        },
+        "s3": {
+          "time": "03",
+          "tag": "直す",
+          "title": "履歴書を直します",
+          "body": "1つの求人に合わせたコピーを作り、変更点を並べて確認します。下書きのすべての数字は履歴書のどこかの行にたどれる必要があり、たどれないうちはダウンロードできません。"
+        },
+        "s4": {
+          "time": "04",
+          "tag": "練習する",
+          "title": "そして面接を練習します",
+          "body": "その求人票と履歴書を把握した音声の面接官が、その面接で聞かれそうなことを尋ねます。レポート、文字起こし、録画が残ります。"
+        }
+      }
+    },
+    "loop": {
+      "eyebrow": "全体の流れ",
+      "title": "履歴書から内定まで、ひとつの場所で。",
+      "sub": "見つけた求人が足りないものを示し、それが履歴書の修正になり、その修正が練習の質問になります。各段階が次につながります。",
+      "cards": {
+        "match": {
+          "tag": "見つける",
+          "title": "どれだけ合うかで並ぶ求人",
+          "body": "すべての求人を実際の履歴書と照らして読み、4段階のどれかに置きます。とても合う、よく合う、可能性あり、合いにくい。理由はキーワードの数ではなく、普通の言葉で書かれます。"
+        },
+        "resume": {
+          "tag": "直す",
+          "title": "本当に直せる履歴書",
+          "body": "LinkedInやPDFから取り込み、弱い行を書き直し、1つの求人に合わせたコピーを変更点付きで作り、読み取りソフトが読めるPDFで書き出せます。"
+        },
+        "apply": {
+          "tag": "記録",
+          "title": "すべての応募と、その後",
+          "body": "応募は企業サイトで行います。求人は自動で「応募済み」に移り、一次面談、面接中、最終面接、内定、不採用のどこで止まったかが一目で分かります。"
+        },
+        "studio": {
+          "tag": "練習する",
+          "title": "練習相手になる面接官",
+          "body": "18分野の面接手引きと28の形式（電話面談、システム設計、ケース面接など）を持つ音声の面接官が、本番と同じ観点で採点します。"
+        }
+      }
+    },
+    "studio": {
+      "eyebrow": "後半戦",
+      "title_machine": "面接に進むのは半分",
+      "title_human": "残り半分がここ",
+      "sub": "求職者の63%が、実際の採用選考でAI面接官と話しています（Greenhouse、2026年）。こちらの面接官とは、誰にも見られずに何度でも練習できます。",
+      "features": {
+        "f1": {
+          "title": "人のように話し、割り込みます",
+          "body": "音声で対話します。追加で質問し、反論し、話にかぶせます。9言語をそれぞれの自然な声で。"
+        },
+        "f2": {
+          "title": "18分野の面接手引き。用語集ではありません",
+          "body": "法務、金融、医療、ハードウェア、AIなど。その分野の人が実際に聞くことを聞き、同じ観点で採点します。"
+        },
+        "f3": {
+          "title": "会う前に求人を読みます",
+          "body": "あなたの職種の最新の求人票と、貼り付けた求人票を読み、履歴書に沿って質問を組み立てます。"
+        },
+        "f4": {
+          "title": "次の回答が変わるレポート",
+          "body": "5つの平易な問いへの答え、質問ごとの修正点とより良い回答例、全文の文字起こし、録画が残ります。"
+        },
+        "f5": {
+          "title": "希望すれば、回答中に指摘が出ます",
+          "body": "話が長くなったとき、質問をかわしたとき、要点が埋もれたときに短い指摘が出ます。カメラを付ければ本番のビデオ面接に近い緊張感になります。"
+        }
+      },
+      "report": {
+        "header": "session-042 — レポート",
+        "overall_label": "総合",
+        "overall": "82",
+        "rows": {
+          "r1": {
+            "k": "話を順序立てて伝えた",
+            "v": "86"
+          },
+          "r2": {
+            "k": "具体的な数字を挙げた",
+            "v": "78"
+          },
+          "r3": {
+            "k": "質問のすべてに答えた",
+            "v": "84"
+          }
+        },
+        "quote": "「数字を先に出してください。コスト40%削減が回答の最後に来ていました。」",
+        "quote_label": "1つの質問、1つの修正点"
+      },
+      "cta": "無料で練習面接を受ける"
+    },
+    "rules": {
+      "eyebrow": "このプロダクトがしないこと",
+      "title": "しないことが4つあります。",
+      "sub": "これは切り替えられる設定ではありません。プロダクトの作りそのものです。",
+      "file": "limits.txt — 読み取り専用",
+      "badge": "固定",
+      "ok": "OK",
+      "items": {
+        "r1_head": "代わりに送信しません",
+        "r1_body": "応募も、メッセージも、返信も、あなたの名前で送られることはありません。応募は企業サイトで行い、求人は自動で「応募済み」に移ります。",
+        "r2_head": "経験を作りません",
+        "r2_body": "求人に合わせた下書きのすべての数字は、履歴書のどこかの行にたどれる必要があります。たどれない数字があるうちは、直すか削除するまでダウンロードできません。",
+        "r3_head": "スコアは予測ではありません",
+        "r3_body": "適合スコアは、履歴書と求人票がどれだけ合っているかを示します。採用される確率ではなく、そのことをスコアのたびに明記します。",
+        "r4_head": "きれいに辞められます",
+        "r4_body": "アカウントを削除すると本当に削除されます。履歴書、応募、文字起こし、録画のすべてです。"
+      }
+    },
+    "pricing": {
+      "eyebrow": "プラン",
+      "title": "無料で始めて、効果が出てから払う。",
+      "sub": "どのプランでもプロダクト全体を使えます。求人の照合、不足レポート、履歴書エディタ、応募の管理。有料プランで増えるのは練習面接の回数です。",
+      "unit": "面接 / 月",
+      "credit_note": "1クレジットは20分の練習面接1回で、秒単位で計算されます。クレジットは毎月戻ります。カード、または中国ではAlipayで支払えます。",
+      "tiers": {
+        "free": {
+          "code": "TIER-0",
+          "name": "無料",
+          "rate": "1",
+          "price": "$0",
+          "per": "",
+          "note": "プロダクト全体に加えて、採点付きの練習面接が月1回。",
+          "cta": "無料で始める",
+          "unit": "面接 / 月"
+        },
+        "starter": {
+          "code": "TIER-1",
+          "name": "スターター",
+          "rate": "10",
+          "price": "$15",
+          "per": "/月",
+          "badge": "いちばん選ばれています",
+          "note": "本番の面接ごとに練習できる回数です。",
+          "cta": "スターターを始める",
+          "unit": "面接 / 月"
+        },
+        "growth": {
+          "code": "TIER-2",
+          "name": "グロース",
+          "rate": "28",
+          "price": "$29",
+          "per": "/月",
+          "note": "決まるまで毎日練習できます。",
+          "cta": "グロースを始める",
+          "unit": "面接 / 月"
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "よくある質問",
+      "title": "求職者からよく聞かれること。",
+      "items": {
+        "q1": {
+          "q": "RoboApplyとは何ですか？",
+          "a": "RoboApplyは履歴書を読み、掲載中の求人票を読み、求人ごとに2つのことをお伝えします。履歴書がその求人にどれだけ合っているかと、求人票が求めているのに履歴書に書かれていないことは何かです。そのうえで履歴書を直し、話すAI面接官と面接の練習ができます。"
+        },
+        "q2": {
+          "q": "RoboApplyが代わりに応募してくれますか？",
+          "a": "いいえ。あなたの名前で企業に送られるものは一切ありません。企業サイトを開いてご自身で応募してください。求人は自動で「応募済み」に移り、気が変わった場合はワンタップで戻せます。"
+        },
+        "q3": {
+          "q": "100点満点のスコアは何を意味しますか？",
+          "a": "履歴書とその求人票がどれだけ合っているかを示します。職種と役職レベル、求められるスキル、その業界での経験、勤務地と給与とビザ、これまでのキャリアの進み方が対象です。採用される確率ではありませんし、そう見せることもありません。"
+        },
+        "q4": {
+          "q": "AIと本当に面接の練習ができますか？",
+          "a": "できます。人のように話し、追加で質問し、割り込む音声の面接官が相手です。28の形式と18分野の面接手引き（ソフトウェア、法務、金融、医療など）から選べ、9言語で面接でき、質問ごとの修正点が付いたレポート、文字起こし、録画を受け取れます。"
+        },
+        "q5": {
+          "q": "大量に応募してくれるツールと何が違いますか？",
+          "a": "そうしたツールは同じ履歴書をより多く送ります。Business Insiderの検証では、大量応募ツールの返信率は6%でした。RoboApplyは逆です。求人の数を絞り、1件ずつきちんと読み、足りない言葉を名指しして、応募する前に直せるようにします。そして同じプロダクトが面接の準備まで行います。"
+        },
+        "q6": {
+          "q": "料金はいくらですか？",
+          "a": "中核となる機能はずっと無料で、練習面接が月1回付きます。スターターは月$15で練習面接10回、グロースは月$29で28回です。1クレジットは20分のセッションで秒単位で計算され、毎月戻ります。カード、または中国ではAlipayで支払えます。"
+        },
+        "q7": {
+          "q": "RoboApplyは何語に対応していますか？",
+          "a": "9言語です。英語、スペイン語、ポルトガル語、フランス語、ドイツ語、日本語、韓国語、簡体字中国語、繁体字中国語。練習面接はレポートも含めて9言語すべてで今すぐ使えます。画面表示は英語、日本語、簡体字・繁体字中国語で全訳済みで、残りも順次対応中です。"
+        },
+        "q8": {
+          "q": "データは安全ですか。削除できますか？",
+          "a": "履歴書、文字起こし、録画はあなたのものです。企業に共有されることはありません。アカウントを削除すると、隠すのではなく本当に削除されます。"
+        }
+      }
+    },
+    "final": {
+      "chip": "先行公開 · 無料で始められます",
+      "title_machine": "足りないものが分かります。",
+      "title_human": "必要なのはアップロード1回だけ",
+      "sub": "履歴書を追加し、探している仕事を伝えると、最初の不足レポートが読めます。練習面接は今すぐ使えて、最初の1回は無料です。",
+      "cta": "無料で始める"
+    },
+    "sticky": {
+      "cta": "無料で始める",
+      "note": "カード不要"
+    },
+    "footer": {
+      "status": "企業に代わりに送信することはありません",
+      "note": "© RoboApply. 求職者がつくった、求職者のためのプロダクト。",
+      "tagline": "面接に進めない理由が分かります。",
+      "lang_title": "RoboApplyを自分の言語で"
+    }
+  },
+  "errors": {
+    "not_found_title": "このページは存在しません",
+    "not_found_body": "URLが間違っているか、ページが移動した可能性があります。求人一覧から始めてください。",
+    "error_title": "このページの一部を読み込めませんでした",
+    "error_body": "保存した内容は消えていません。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+    "try_again": "もう一度試す",
+    "go_home": "求人へ"
+  },
   "admin": {
-    "eyebrow": "オペレーターコンソール",
-    "title": "利益と",
-    "titleAccent": "シグナル",
+    "eyebrow": "運用コンソール",
+    "title": "コストと",
+    "titleAccent": "収益",
     "loading": "読み込み中…",
     "topCost": "最大コスト",
-    "estimated": "概算",
-    "estimatedNote": "STT・TTS・送出コストは実測ではなく概算です。",
+    "estimated": "推定",
+    "estimatedNote": "音声認識、音声合成、転送量のコストは実測ではなく推計です。",
     "export": {
-      "csv": "CSV をエクスポート",
+      "csv": "CSVを書き出す",
       "refresh": "更新"
     },
     "range": {
       "today": "今日",
       "7d": "7日",
       "30d": "30日",
-      "custom": "カスタム",
-      "customTitle": "カスタム範囲",
+      "custom": "期間指定",
+      "customTitle": "期間を指定",
       "from": "開始",
       "to": "終了",
       "apply": "適用"
@@ -3155,21 +2204,21 @@
       "overview": "概要",
       "users": "ユーザー",
       "sessions": "セッション",
-      "rateCard": "レートカード"
+      "rateCard": "単価表"
     },
     "kpi": {
       "activeUsers": "アクティブユーザー",
-      "sessions": "セッション数",
-      "cost": "LLM + メディアコスト",
+      "sessions": "セッション",
+      "cost": "モデルとメディアのコスト",
       "revenue": "収益 · MRR",
       "margin": "粗利率",
-      "costPerUser": "アクティブユーザー単価",
-      "payingUsers": "{n} 件の有料"
+      "costPerUser": "コスト / アクティブユーザー",
+      "payingUsers": "有料{n}人"
     },
     "chart": {
-      "costVsRevenue": "コスト対収益",
+      "costVsRevenue": "コストと収益",
       "costByFeature": "機能別コスト",
-      "costByModality": "種別コスト",
+      "costByModality": "種類別コスト",
       "legend": {
         "cost": "コスト",
         "revenue": "収益"
@@ -3177,14 +2226,14 @@
       "netMargin": "純利益 · {amount}（{pct}）"
     },
     "modality": {
-      "llm": "LLM トークン",
+      "llm": "モデルのトークン",
       "stt": "音声認識",
       "tts": "音声合成",
       "image": "画像生成",
-      "egress": "録画送出"
+      "egress": "録画の転送量"
     },
     "users": {
-      "search": "メールで検索…",
+      "search": "メールアドレスで検索…",
       "filter": {
         "all": "すべて",
         "free": "無料",
@@ -3196,58 +2245,58 @@
         "tier": "プラン",
         "mrr": "MRR",
         "cost": "期間コスト",
-        "margin": "利益",
+        "margin": "粗利",
         "sessions": "セッション",
-        "lastActive": "最終アクティブ"
+        "lastActive": "最終利用"
       },
-      "empty": "{query} に一致するユーザーはいません。",
-      "pagination": "{total} 件中 {from}–{to} 件"
+      "empty": "{query}に一致するユーザーはいません。",
+      "pagination": "{from}〜{to} / {total}"
     },
     "detail": {
       "eyebrow": "ユーザー · {email}",
-      "titleAccent": "状況",
-      "back": "すべてのユーザー",
-      "summary": "コスト {cost} · 支払い {revenue} → 利益 {margin}（{pct}）",
+      "titleAccent": "収支の状況",
+      "back": "ユーザー一覧",
+      "summary": "コスト {cost} · 支払い {revenue} → 粗利 {margin}（{pct}）",
       "lifetimeCost": "累計コスト",
-      "periodCost": "今期コスト",
+      "periodCost": "この期間のコスト",
       "lifetimeRevenue": "累計収益",
       "dailyCost": "日次コスト · 過去30日",
       "avgDaily": "平均 {amount}/日",
       "costByFeature": "機能別コスト",
       "interviewSessions": "面接セッション",
       "setPlan": "プランを設定",
-      "renews": "{date} に更新",
+      "renews": "{date}に更新",
       "col": {
         "feature": "機能",
-        "calls": "回数",
+        "calls": "呼び出し",
         "cost": "コスト",
-        "pctSpend": "支出比",
-        "split": "STT/TTS/LLM"
+        "pctSpend": "支出に占める割合",
+        "split": "音声認識/音声合成/モデル"
       }
     },
     "setPlan": {
       "title": "プランを設定",
       "tier": "プラン",
-      "customPrice": "カスタム価格（任意）",
+      "customPrice": "個別価格（任意）",
       "reason": "理由",
-      "reasonRequired": "理由は必須です。",
+      "reasonRequired": "理由の入力は必須です。",
       "cancel": "キャンセル",
       "confirm": "確定",
       "success": "プランを更新しました。"
     },
     "sessions": {
-      "empty": "この範囲にセッションはありません。",
+      "empty": "この期間にセッションはありません。",
       "col": {
         "date": "日付",
         "user": "ユーザー",
-        "role": "役割",
+        "role": "職種",
         "duration": "時間",
-        "blueprint": "ブループリント",
-        "liveLlm": "ライブLLM",
-        "stt": "STT",
-        "tts": "TTS",
+        "blueprint": "設計",
+        "liveLlm": "対話モデル",
+        "stt": "音声認識",
+        "tts": "音声合成",
         "eval": "評価",
-        "coach": "コーチ",
+        "coach": "指摘",
         "total": "合計",
         "status": "状態"
       },
@@ -3260,17 +2309,17 @@
     },
     "session": {
       "eyebrow": "セッションコスト",
-      "title": "セッションコスト内訳",
+      "title": "セッションコストの内訳",
       "stage": {
-        "blueprint": "ブループリント",
-        "liveLlm": "ライブLLM",
-        "stt": "STT",
-        "tts": "TTS",
+        "blueprint": "設計",
+        "liveLlm": "対話モデル",
+        "stt": "音声認識",
+        "tts": "音声合成",
         "eval": "評価",
-        "coach": "コーチ"
+        "coach": "指摘"
       },
       "col": {
-        "stage": "ステージ",
+        "stage": "段階",
         "model": "モデル",
         "usage": "使用量",
         "unitRate": "単価",
@@ -3278,77 +2327,36 @@
       }
     },
     "rateCard": {
-      "title": "レートカード",
-      "llm": "LLM モデル別レート",
-      "speech": "音声レート",
-      "media": "メディアレート",
-      "note": "コスト概算に使う参照レート · admin-config で編集",
-      "editSoon": "レート編集 · 近日公開",
+      "title": "単価表",
+      "llm": "モデル別の単価",
+      "speech": "音声の単価",
+      "media": "メディアの単価",
+      "note": "コスト推計に使う参照単価 · admin-configで編集",
+      "editSoon": "単価の編集はまだできません",
       "col": {
         "model": "モデル",
-        "inputRate": "入力 $/1M",
-        "outputRate": "出力 $/1M",
-        "provider": "プロバイダー",
+        "inputRate": "入力 $/100万",
+        "outputRate": "出力 $/100万",
+        "provider": "提供元",
         "perMin": "1分あたり",
         "perGb": "1GBあたり",
         "perImage": "1枚あたり"
       }
     },
     "empty": {
-      "title": "この期間に",
-      "titleAccent": "アクティビティなし",
-      "reset": "30日にリセット"
+      "title": "この期間には",
+      "titleAccent": "活動がありません",
+      "reset": "30日に戻す"
     },
     "notAuthorized": {
       "title": "権限が",
       "titleAccent": "ありません",
-      "sub": "このコンソールは管理者のみ利用できます。"
+      "sub": "このコンソールは管理者専用です。"
     },
     "error": {
-      "title": "このビューを読み込めませんでした",
-      "body": "データの取得中に問題が発生しました。もう一度お試しください。",
-      "retry": "再試行"
-    }
-  },
-  "plans": {
-    "eyebrow": "プランとクレジット",
-    "title": "練習を重ねて",
-    "titleAccent": "無敵に",
-    "subtitle": "すべてのプランに AI 模擬面接が含まれます。アップグレードでより多くのクレジットと完全な面接レポートが手に入ります。",
-    "loading": "プランを読み込み中…",
-    "error": {
-      "title": "プランを読み込めませんでした",
-      "body": "価格の取得中に問題が発生しました。もう一度お試しください。",
-      "retry": "再試行"
-    },
-    "notice": {
-      "paymentsUnavailable": "お住まいの地域では有料プランをまだご利用いただけません。無料プランで練習を続けられます。"
-    },
-    "cta": {
-      "upgradeTo": "{plan} にアップグレード",
-      "switchTo": "{plan} に変更",
-      "yourFreePlan": "現在のプラン",
-      "alipaySwitchNote": "プランを変更するには、一度解約してから決済時に再登録してください。"
-    },
-    "credits": {
-      "title": "クレジットの仕組み",
-      "explainer": "1 クレジット = 20 分の模擬面接 1 回。短い／長いセッションは比例して消費され、クレジットは毎請求月の開始時に補充されます。"
-    },
-    "faq": {
-      "title": "よくある質問",
-      "q1": "クレジットとは何ですか？",
-      "a1": "1 クレジットで 20 分の AI 模擬面接を 1 回受けられ、終了後に完全なレポートが届きます。練習したいときにいつでもお使いください。",
-      "q2": "使わなかったクレジットはどうなりますか？",
-      "a2": "各プランは毎請求月の開始時にクレジットを補充します。未使用分は翌月に繰り越されないので、こまめに練習しましょう！",
-      "q3": "プランの変更や解約はできますか？",
-      "a3": "はい——アカウントからいつでもアップグレード・ダウングレード・解約できます。変更は現在の請求月の終了時に反映されます。",
-      "q4": "どの支払い方法が使えますか？",
-      "a4": "海外では Stripe による主要なカード、中国では Alipay をご利用いただけます。地域は自動判定されます——上のトグルで切り替えられます。",
-      "q5": "面接データは非公開ですか？",
-      "a5": "はい。録画とレポートはあなただけのもので、雇用主や他のユーザーと共有されることはありません。"
-    },
-    "checkout": {
-      "failed": "決済を開始できませんでした。もう一度お試しいただくか、上で支払い地域を切り替えてください。"
+      "title": "この画面を読み込めませんでした。",
+      "body": "もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
+      "retry": "もう一度試す"
     }
   }
 }

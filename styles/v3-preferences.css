@@ -1198,6 +1198,59 @@
   }
 }
 
+/* 760px is the breakpoint where v3.css drops the 248px app sidebar and the
+ * MobileNav bottom bar takes over. Below it, a 220px section rail beside the
+ * body leaves ~150px of usable width on a 375px phone, so the rail stops being
+ * a column and becomes a horizontal scroller above the content.
+ *
+ * This is load-bearing, not polish: /settings is the ONLY route holding plan
+ * changes, cancellation and account deletion (rulings D2), and until this file
+ * had a rule here a phone user could not reach any of them. Cancelling a
+ * subscription must work on the device the subscription was bought on. */
+@media (max-width: 760px) {
+  .pref {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .pref-rail {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding: var(--sp-4) 0 0;
+    gap: var(--sp-3);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .pref-rail-head { padding: 0 var(--sp-4); }
+  .pref-nav {
+    flex-direction: row;
+    gap: var(--sp-1);
+    overflow-x: auto;
+    padding: 0 var(--sp-4) var(--sp-3);
+    /* Momentum scrolling without a visible scrollbar eating a row of pixels. */
+    scrollbar-width: none;
+  }
+  .pref-nav::-webkit-scrollbar { display: none; }
+  .pref-nav-item {
+    white-space: nowrap;
+    /* 44px is the tap-target floor; the vertical rail's height was 36px. */
+    min-height: 44px;
+  }
+  /* The danger entry's top margin separated it from the list vertically; in a
+   * row it would push the item out of line instead. */
+  .pref-nav-item.danger { margin-top: 0; }
+  .pref-body {
+    padding: var(--sp-5) var(--sp-4) calc(var(--sp-8) + var(--sp-8));
+  }
+  .pref-checkgrid { grid-template-columns: 1fr !important; }
+  .pref-usage { grid-template-columns: 1fr; }
+  .pref-resume-picker { grid-template-columns: 1fr; }
+  /* Four columns of channel toggles do not fit; the matrix scrolls instead of
+   * crushing the event label to two characters. */
+  .pref-notif-grid { overflow-x: auto; }
+  .pref-notif-head, .pref-notif-row { min-width: 420px; }
+}
+
 /* No prefers-reduced-motion block: the two infinite blinks it existed to
  * suppress (.pref-status-dot.on, .pref-savebar-dot) no longer animate, and
  * the mood orb they shared it with is deleted. The one remaining animation

@@ -25,7 +25,7 @@ interface Props {
 const VISIBLE_LIMIT = 3;
 
 export function RecentSessionsStrip({ sessions, onReplay, onDelete }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const [expanded, setExpanded] = useState(false);
   // The session currently asking "Delete this recording?" (one at a time).
   const [confirmId, setConfirmId] = useState<string | null>(null);

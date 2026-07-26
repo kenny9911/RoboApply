@@ -26,8 +26,8 @@ describe('PreferenceTray', () => {
       />,
     );
     expect(screen.getByText(/Senior Backend Engineer/)).toBeInTheDocument();
-    // Enum values are localized (en bundle: remote → "Remote").
-    expect(screen.getByText(/Remote/)).toBeInTheDocument();
+    // Enum values are localized (en bundle: jobs.setup.values.remote → "Remote").
+    expect(screen.getByRole('button', { name: /Remote or office\s*: Remote/ })).toBeInTheDocument();
   });
 
   it('suppresses fields listed as unconfirmed (R7)', () => {
@@ -79,7 +79,7 @@ describe('PreferenceTray', () => {
         onEditField={onEditField}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Work mode/ }));
-    expect(onEditField).toHaveBeenCalledWith('Work mode');
+    fireEvent.click(screen.getByRole('button', { name: /Remote or office/ }));
+    expect(onEditField).toHaveBeenCalledWith('Remote or office');
   });
 });

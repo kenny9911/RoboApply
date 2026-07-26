@@ -26,7 +26,7 @@ function orbBackground(p: RAMockInterviewer): string {
 }
 
 export function InterviewerTile({ interviewer, aiState, video }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const speaking = aiState === 'asking';
 
   if (video) {

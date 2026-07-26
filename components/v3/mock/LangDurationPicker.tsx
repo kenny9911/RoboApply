@@ -43,7 +43,7 @@ export function LangDurationPicker({
   onDurationChange,
   typeMinutes,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
 
   const durations = Array.from(
     new Set([...BASE_DURATIONS, ...(typeMinutes ? [typeMinutes] : [])]),

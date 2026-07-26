@@ -38,7 +38,7 @@ export function HuntSection({
   seniorityIndex: number;
   setSeniorityIndex: (i: number) => void;
 }) {
-  const t = useTranslations('preferences');
+  const t = useTranslations('settings');
   const seniorityLabels = options.seniorityLabels;
 
   // Live "in plain English" translation — recomputed from the working draft.

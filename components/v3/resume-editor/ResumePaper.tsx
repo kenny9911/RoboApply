@@ -22,7 +22,7 @@ function dateRange(start: string, end: string): string {
 }
 
 export function ResumePaper({ resume }: { resume: StructuredResume }) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const {
     contact,
     targetTitle,

@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function CoachNudge({ tip, onDismiss }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <div className={`iv-coach ${tip.kind === 'careful' ? 'careful' : ''}`}>
       <div className="iv-coach-orb" />

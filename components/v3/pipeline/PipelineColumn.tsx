@@ -31,7 +31,7 @@ export function PipelineColumn({
   onDragStart,
   onDragEnd,
 }: Props) {
-  const t = useTranslations('pipeline');
+  const t = useTranslations('applications');
   const [isOver, setIsOver] = useState(false);
 
   function handleDrop(e: React.DragEvent) {

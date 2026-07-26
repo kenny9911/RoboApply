@@ -30,7 +30,7 @@ export function LiveControls({
   onRestart,
   onSubmit,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <div className="iv-controls">
       {video ? (

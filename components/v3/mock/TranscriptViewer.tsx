@@ -60,7 +60,7 @@ const turnLabel = (text: string, color: string) => (
 );
 
 export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: Props) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   const [open, setOpen] = useState(defaultOpen);
 
   const exchanges = groupTranscript(turns);

@@ -1,16 +1,23 @@
 // components/v3/pipeline/columns.ts
 //
-// The Pipeline board's column model — the single place the `RATrackerStatus` →
-// kanban-column mapping is defined (IA `01-ia-and-routes.md` §8). The prototype
-// (`views.jsx` TrackerView) shows four columns: Saved · Applied · Interview ·
-// Offer. Each column is keyed by ONE canonical status so a drag target writes
-// an unambiguous `tracker.patch({ status })`; additional statuses fold into a
-// column for display + counts only (e.g. `applying` shows under Applied,
-// `accepted` under Offer).
+// The /applications board column model — the single place the
+// `RATrackerStatus` → column mapping is defined. Each column is keyed by ONE
+// canonical status so a drag target writes an unambiguous
+// `tracker.patch({ status })`; additional statuses fold into a column for
+// display + counts only (e.g. `applying` shows under Applied, `accepted`
+// under Offer).
+//
+// COPY: `labelKey` resolves under `applications.columns.*`. Ruling C1 fixes
+// the user-facing ladder at seven rungs — Saved · Applied · First call ·
+// Interviewing · Final round · Offer · Rejected — and en.json carries all
+// seven today. Only four render, because `RATrackerStatus` has no
+// `first_call` / `final_round` member yet; adding them is the data change
+// C32 enumerates (RATrackerService ALL_STATUSES, routes/tracker VALID_STATUSES,
+// lib/api/v2/types, this file, lib/stub/raV2.stub).
 //
 // Terminal statuses (`rejected`, `withdrawn`) are NOT shown on the board — the
-// board tracks *active* conversations, matching the prototype's "N active
-// conversations" eyebrow. They're still counted out of the board total.
+// board tracks jobs still in progress, matching the "N in progress" eyebrow.
+// They're still counted out of the board total.
 
 import type { RATrackerStatus } from '../../../lib/api/v2';
 
@@ -18,7 +25,7 @@ import type { RATrackerStatus } from '../../../lib/api/v2';
 export interface PipelineColumnDef {
   /** Stable key + the status written when a card is dropped here. */
   status: RATrackerStatus;
-  /** i18n key suffix under the `pipeline.columns.*` namespace. */
+  /** i18n key suffix under `applications.columns.*`. */
   labelKey: string;
   /** Tone class appended to `.pipe-head` (drives the accent hairline/color). */
   tone: '' | 'accent' | 'violet' | 'warn';
@@ -36,7 +43,7 @@ export const PIPELINE_COLUMNS: PipelineColumnDef[] = [
   },
   {
     status: 'interviewing',
-    labelKey: 'interview',
+    labelKey: 'interviewing',
     tone: 'accent',
     members: ['interviewing'],
   },

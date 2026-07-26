@@ -14,7 +14,7 @@ import { useTranslations } from 'next-intl';
 import { DEFAULT_THEME, useTheme } from '../../../lib/theme';
 
 export function ThemeToggle({ className = 'icon-btn' }: { className?: string }) {
-  const t = useTranslations('nav_v3');
+  const t = useTranslations('nav');
   const { theme, toggle, hydrated } = useTheme();
   // Until mounted, render the server's DEFAULT theme so the icon/label match the
   // SSR'd HTML (the provider already holds the persisted theme on first client

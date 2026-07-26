@@ -32,10 +32,6 @@ interface AuthContextValue {
   user: RoboUserSummary | null;
   profile: MeResponse['profile'] | null;
   onboardingState: MeResponse['onboardingState'] | null;
-  /** Master switch for the auto-apply product surface (backend
-   *  JOB_APPLYING_ENABLED, via /auth/me). `null` while the session is still
-   *  loading; defaults to `true` for backends that don't send the field. */
-  jobApplyingEnabled: boolean | null;
   refresh: () => Promise<MeResponse | null>;
   setSession: (data: MeResponse) => void;
   clear: () => void;
@@ -50,17 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [onboardingState, setOnboardingState] = useState<
     MeResponse['onboardingState'] | null
   >(null);
-  // `null` until /me resolves so gates can tell "unknown" from "disabled".
-  const [jobApplyingEnabled, setJobApplyingEnabled] = useState<boolean | null>(
-    null,
-  );
 
   const setSession = useCallback((data: MeResponse) => {
     setUser(data.user);
     setProfile(data.profile);
     setOnboardingState(data.onboardingState);
-    // Absent (older backend) → enabled, preserving prior behavior.
-    setJobApplyingEnabled(data.jobApplyingEnabled ?? true);
     setStatus('authenticated');
   }, []);
 
@@ -68,7 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setOnboardingState(null);
-    setJobApplyingEnabled(null);
     setStatus('unauthenticated');
   }, []);
 
@@ -76,9 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Do NOT pre-check for the session cookie on the client: `session_token`
     // is httpOnly (backend/src/lib/cookieOptions.ts), so it is invisible to
     // document.cookie. A client-side cookie probe ALWAYS reports "absent" and
-    // would make us clear() the session for every user — which left
-    // `jobApplyingEnabled` permanently null and hung the Today/Queue/Tracker/
-    // Activity routes on the JobApplyingGate spinner (the blank-page bug).
+    // would make us clear() the session for every user — signing out every
+    // visitor on every load (the blank-page bug).
     // Instead always call /auth/me: the httpOnly cookie rides along via the
     // client's `credentials: 'include'`, and the response (200 vs 401/403) is
     // the source of truth for authenticated vs unauthenticated.
@@ -102,7 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       onboardingState,
-      jobApplyingEnabled,
       refresh,
       setSession,
       clear,
@@ -112,7 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       onboardingState,
-      jobApplyingEnabled,
       refresh,
       setSession,
       clear,

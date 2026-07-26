@@ -18,7 +18,7 @@ export function SaveBar({
   onDiscard: () => void;
   onSave: () => void;
 }) {
-  const t = useTranslations('preferences');
+  const t = useTranslations('settings');
   return (
     <div className="pref-savebar" role="region" aria-label={t('savebar.unsaved')}>
       <div className="pref-savebar-meta">

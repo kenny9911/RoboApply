@@ -1,59 +1,61 @@
 'use client';
 
-// Topbar — the sticky header (.topbar). Left: breadcrumbs (mono uppercase,
-// derived from the pathname). Right (.top-actions): the ⌘K search trigger (a
-// button styled as an input that opens the CommandPalette), a notification
-// bell with a glow badge, and the avatar monogram (gradient --grad-brand).
+// Topbar — the sticky header (.topbar). Left: the page name. Right
+// (.top-actions): the ⌘K search trigger, the theme toggle, the language
+// switcher, and the AvatarMenu.
 //
-// Breadcrumbs come from a route→crumb map mirroring the prototype's `crumbs`
-// table; the live (last) segment gets the `.now` highlight.
+// The crumb is one level now. Two levels only ever said "Workspace / Today",
+// and with four destinations the section half carried no information — it was
+// the same word on five of six screens. CRUMB_MAP has an entry for every route
+// the shell renders; an unmatched path renders NO crumb rather than silently
+// falling back to "Workspace", which is how /plans, /account and /admin all
+// used to breadcrumb as a section they were not in.
+//
+// The notification bell is gone. It had no feed behind it and no click
+// handler — a control that cannot do anything is the same species of claim as
+// the fabricated stat strip.
+//
+// Mobile: the topbar renders at every width, which is what makes the
+// AvatarMenu (Settings / Billing / Sign out) reachable on a phone at all. The
+// 240px search field collapses to an icon button below 760px so the row still
+// fits on a 375px screen.
 
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Fragment } from 'react';
-import { useAuth } from '../../../lib/auth/AuthProvider';
 import { useCommandPalette } from './CommandPalette';
+import { AvatarMenu } from './AvatarMenu';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
-import { IconSearch, IconBell } from '../primitives/Iconset';
+import { IconSearch } from '../primitives/Iconset';
 
-// Route prefix → [sectionKey, pageKey] (keys into nav_v3). Order matters:
-// longest/most-specific prefixes first.
-const CRUMB_MAP: { test: (p: string) => boolean; section: string; page: string }[] = [
-  { test: (p) => p.startsWith('/home'), section: 'section_workspace', page: 'today' },
-  { test: (p) => p.startsWith('/queue'), section: 'section_workspace', page: 'queue' },
-  { test: (p) => p.startsWith('/resumes'), section: 'section_workspace', page: 'resumes' },
-  { test: (p) => p.startsWith('/mock-interview'), section: 'section_workspace', page: 'interview' },
-  { test: (p) => p.startsWith('/tracker'), section: 'section_workspace', page: 'pipeline' },
-  { test: (p) => p.startsWith('/activity'), section: 'section_workspace', page: 'activity' },
-  { test: (p) => p.startsWith('/preferences'), section: 'section_settings', page: 'preferences' },
-  { test: (p) => p.startsWith('/onboarding'), section: 'section_settings', page: 'onboarding' },
+/** Route prefix → key in the `nav` namespace. Most-specific prefix first;
+ *  every route the (auth) shell renders has an entry. */
+const CRUMB_MAP: { test: (p: string) => boolean; page: string }[] = [
+  // /settings/billing/history is the invoice list — it belongs to Billing, and
+  // must be tested before the plain /settings prefix.
+  { test: (p) => p.startsWith('/settings/billing'), page: 'billing' },
+  { test: (p) => p === '/settings' || p.startsWith('/settings/'), page: 'settings' },
+  { test: (p) => p === '/jobs' || p.startsWith('/jobs/'), page: 'jobs' },
+  { test: (p) => p === '/resume' || p.startsWith('/resume/'), page: 'resume' },
+  { test: (p) => p === '/applications' || p.startsWith('/applications/'), page: 'applications' },
+  { test: (p) => p === '/practice' || p.startsWith('/practice/'), page: 'practice' },
+  { test: (p) => p === '/admin' || p.startsWith('/admin/'), page: 'admin' },
 ];
 
 export function Topbar() {
   const pathname = usePathname() ?? '';
-  const t = useTranslations('nav_v3');
-  const { user } = useAuth();
+  const t = useTranslations('nav');
   const palette = useCommandPalette();
 
   const crumb = CRUMB_MAP.find((c) => c.test(pathname));
-  const parts: string[] = crumb
-    ? [t(crumb.section), t(crumb.page)]
-    : [t('section_workspace')];
-
-  const monogram = (() => {
-    const src = user?.name?.trim() || user?.email?.trim() || '';
-    if (!src) return 'AA';
-    const bits = src.split(/[\s@.]+/).filter(Boolean);
-    if (bits.length >= 2) return (bits[0][0] + bits[1][0]).toUpperCase();
-    return src.slice(0, 2).toUpperCase();
-  })();
+  const parts: string[] = crumb ? [t(crumb.page)] : [];
 
   return (
     <div className="topbar">
       <div className="crumbs">
         {parts.map((c, i, arr) => (
-          <Fragment key={i}>
+          <Fragment key={c}>
             <span className={i === arr.length - 1 ? 'now' : undefined}>{c}</span>
             {i < arr.length - 1 ? <span className="sep">/</span> : null}
           </Fragment>
@@ -63,7 +65,7 @@ export function Topbar() {
       <div className="top-actions">
         <button
           type="button"
-          className="search"
+          className="search max-[760px]:hidden"
           onClick={palette.open}
           aria-label={t('search_aria')}
         >
@@ -72,20 +74,23 @@ export function Topbar() {
           <kbd>⌘K</kbd>
         </button>
 
+        {/* Same action, phone width. Two elements rather than one that reflows,
+         *  because .search is a 240px input-shaped button and an icon button is
+         *  a different control, not a narrower one. */}
+        <button
+          type="button"
+          className="icon-btn hidden max-[760px]:grid"
+          onClick={palette.open}
+          aria-label={t('search_aria')}
+        >
+          <IconSearch size={15} />
+        </button>
+
         <ThemeToggle />
 
         <LanguageSwitcher />
 
-        <button type="button" className="icon-btn" aria-label={t('notifications')}>
-          <IconBell size={15} />
-          {/* Removed a hardcoded unread-glow badge (<span className="badge" />)
-              that rendered unconditionally with no notifications feed behind it
-              — it implied unread notifications to every user at all times. */}
-        </button>
-
-        <span className="avatar" aria-hidden="true">
-          {monogram}
-        </span>
+        <AvatarMenu />
       </div>
     </div>
   );

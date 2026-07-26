@@ -2,8 +2,8 @@
 
 // Signup — the consumer-facing form card on the right of the auth split screen
 // (the brand hero is rendered by (public)/layout.tsx). Presentation only: the
-// auth data flow (signup → refresh → jobApplyingEnabled routing) is unchanged
-// from the placeholder.
+// auth data flow (signup → refresh → /jobs) is unchanged from the placeholder
+// apart from the destination.
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -33,10 +33,12 @@ export default function SignupPage() {
     try {
       await signup({ email, password, name: name || undefined });
       await refresh();
-      // New users pick a plan first (Free / Starter / Growth). The plan step
-      // then forwards to onboarding (or the Resume Builder when job-applying is
-      // off) — its own routing mirrors the jobApplyingEnabled logic.
-      router.replace('/choose-plan');
+      // Straight into the product. The two interstitials that used to sit here
+      // are deleted: /choose-plan asked for a payment decision before the user
+      // had seen a single job, and /onboarding asked a chat's worth of setup
+      // questions before showing anything. Plans live in /settings, and setup
+      // is a panel in the /jobs filter bar (ruling C21).
+      router.replace('/jobs');
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : t('error_generic'));
     } finally {

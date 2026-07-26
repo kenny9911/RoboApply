@@ -269,7 +269,7 @@ export function ProfileCard({
   saving,
   onSaveName,
 }: ProfileCardProps) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name ?? '');
   const inputRef = useRef<HTMLInputElement>(null);

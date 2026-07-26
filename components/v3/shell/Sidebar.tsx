@@ -1,228 +1,175 @@
 'use client';
 
-// Sidebar — the 248px V3 nav rail (.side). Top→bottom: BrandLogo, then the
-// primary nav (6 Workspace items + a Settings group). Every entry is a link;
-// the two button-shaped Settings actions (Tweaks, Replay onboarding) are gone
-// — Tweaks opened the deleted accent/density/tone panel, and onboarding replay
-// was a hard nav to /onboarding nobody asked for from the rail.
+// Sidebar — the 248px nav rail (.side). Top→bottom: BrandLogo, then ONE nav
+// group of four destinations, then the admin entry for role === 'admin'.
 //
-// IA from docs/roboapply/v3/01-ia-and-routes.md §1 + the prototype app.jsx:
-//   Workspace: Today /home · Review queue /queue · Resume builder /resumes ·
-//              Mock interview /mock-interview (NEW) · Pipeline /tracker ·
-//              Activity log /activity
-//   Settings:  Preferences /preferences · Plans /plans · Account /account
+// IA per ruling R1/D2/D3 + C14. Four destinations, each named for the question
+// the user says out loud:
 //
-// Active-state: exact match, or prefix match for routes with sub-routes
-// (/resumes/[id] lights Resume builder; /mock-interview/[id] lights Mock
-// interview). Badges (Wave 3): /queue shows the live pendingCount from
-// useQueue(); /home shows matchedAboveThreshold from the shared orbStats
-// query. Both hide at 0. /mock-interview keeps a static translated "NEW" pill.
+//   /jobs          Jobs            "what should I apply to?"
+//   /resume        Resume          "is my resume good enough?"
+//   /applications  Applications    "where did I apply, and what happened?"
+//   /practice      Interview prep  "am I ready to talk to them?"
+//
+// The Workspace / Settings section headers are gone: with four items there is
+// nothing to file, and the two headers were 40% of the rail's vocabulary.
+// Settings, Billing and Sign out moved to the AvatarMenu in the Topbar, which
+// is the only place they were ever reachable on a phone.
+//
+// DESTINATIONS is exported and consumed by MobileNav, because the mobile bar
+// IS the IA (D3): same four, same labels, same order, by construction rather
+// than by two lists agreeing today and drifting next month.
+//
+// Deleted here: /home (Today), /queue (Review queue), /tracker (Pipeline),
+// /activity (Activity log), /preferences, /plans, /account, the static "NEW"
+// pill on mock interview, and the JOB_APPLYING_ENABLED filtering that hid half
+// the rail — auto-apply is dead (R1), so there is no surface left to gate.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
-import { useQueue } from '../../../hooks/useQueue';
-import { useAgentStats } from '../../../hooks/useActivity';
+import { useMemo, type ComponentType } from 'react';
 import { useAuth } from '../../../lib/auth/useAuth';
-import {
-  QUEUE_REVIEW_ENABLED,
-  useJobApplyingEnabled,
-} from '../../../lib/jobApplying';
+import { usePipelineBoard } from '../../../hooks/usePipelineBoard';
+import type { RATrackerEntryView } from '../../../lib/api/v2';
 import { cn } from '../../../lib/utils';
 import { BrandLogo } from './BrandLogo';
 import {
-  IconHome,
-  IconList,
+  IconSearch,
   IconFile,
-  IconSparkle,
   IconStack,
-  IconClock,
-  IconSettings,
+  IconSparkle,
   IconBolt,
+  type IconProps,
 } from '../primitives/Iconset';
 
-/** Badge sources. 'queue' / 'today-new' are live counts (hidden when 0);
- *  'new' is the static translated NEW pill. */
-type NavBadge = 'queue' | 'today-new' | 'new';
-
-interface NavLink {
-  kind: 'link';
+export interface Destination {
   href: string;
+  /** Key into the `nav` namespace. Route, nav label and namespace share a name. */
   labelKey: string;
-  icon: ReactNode;
+  Icon: ComponentType<IconProps>;
   match: (p: string) => boolean;
-  /** Badge at the right edge. Omit for no badge. */
-  badge?: NavBadge;
-  /** Glowing notif treatment when not active (live badges also need count > 0). */
-  notif?: boolean;
-  /** Part of the auto-apply surface — hidden when JOB_APPLYING_ENABLED is off. */
-  jobApply?: boolean;
 }
 
-const WORKSPACE: NavLink[] = [
+/** The IA. Order is the order on both the rail and the mobile bar. */
+export const DESTINATIONS: Destination[] = [
   {
-    kind: 'link',
-    href: '/home',
-    labelKey: 'today',
-    icon: <IconHome size={15} />,
-    match: (p) => p === '/home' || p.startsWith('/home/'),
-    badge: 'today-new',
-    notif: true,
-    jobApply: true,
+    href: '/jobs',
+    labelKey: 'jobs',
+    Icon: IconSearch,
+    match: (p) => p === '/jobs' || p.startsWith('/jobs/'),
   },
   {
-    kind: 'link',
-    href: '/queue',
-    labelKey: 'queue',
-    icon: <IconList size={15} />,
-    match: (p) => p === '/queue' || p.startsWith('/queue/'),
-    badge: 'queue',
-    notif: true,
-    jobApply: true,
+    href: '/resume',
+    labelKey: 'resume',
+    Icon: IconFile,
+    match: (p) => p === '/resume' || p.startsWith('/resume/'),
   },
   {
-    kind: 'link',
-    href: '/resumes',
-    labelKey: 'resumes',
-    icon: <IconFile size={15} />,
-    match: (p) => p === '/resumes' || p.startsWith('/resumes/'),
+    href: '/applications',
+    labelKey: 'applications',
+    Icon: IconStack,
+    match: (p) => p === '/applications' || p.startsWith('/applications/'),
   },
   {
-    kind: 'link',
-    href: '/mock-interview',
-    labelKey: 'interview',
-    icon: <IconSparkle size={15} />,
-    match: (p) => p === '/mock-interview' || p.startsWith('/mock-interview/'),
-    badge: 'new',
-    notif: true,
-  },
-  {
-    kind: 'link',
-    href: '/tracker',
-    labelKey: 'pipeline',
-    icon: <IconStack size={15} />,
-    match: (p) => p === '/tracker' || p.startsWith('/tracker/'),
-    jobApply: true,
-  },
-  {
-    kind: 'link',
-    href: '/activity',
-    labelKey: 'activity',
-    icon: <IconClock size={15} />,
-    match: (p) => p === '/activity' || p.startsWith('/activity/'),
-    jobApply: true,
+    href: '/practice',
+    labelKey: 'practice',
+    Icon: IconSparkle,
+    match: (p) => p === '/practice' || p.startsWith('/practice/'),
   },
 ];
 
-const SETTINGS: NavLink[] = [
-  {
-    kind: 'link',
-    href: '/preferences',
-    labelKey: 'preferences',
-    icon: <IconSettings size={15} />,
-    match: (p) => p === '/preferences' || p.startsWith('/preferences/'),
-  },
-  {
-    // Subscription plans + mock-interview credits. Not job-apply-gated — the
-    // mock-interview product (and its billing) is available with auto-apply off.
-    kind: 'link',
-    href: '/plans',
-    labelKey: 'plans',
-    icon: <IconBolt size={15} />,
-    match: (p) => p === '/plans' || p.startsWith('/plans/'),
-  },
-  {
-    kind: 'link',
-    href: '/account',
-    labelKey: 'account',
-    icon: <IconFile size={15} />,
-    match: (p) => p === '/account' || p.startsWith('/account/'),
-  },
-];
-
-/** Admin-only entry, rendered after the Settings group when role === 'admin'. */
-const ADMIN_LINK: NavLink = {
-  kind: 'link',
+/** Admin-only entry, rendered after the four destinations. Not a destination —
+ *  it is a separate tool, and it never appears on the mobile bar. */
+const ADMIN: Destination = {
   href: '/admin',
   labelKey: 'admin',
-  icon: <IconBolt size={15} />,
+  Icon: IconBolt,
   match: (p) => p === '/admin' || p.startsWith('/admin/'),
 };
 
+/** Ruling C11: the one number worth interrupting someone for. */
+const NO_REPLY_DAYS = 10;
+
+/**
+ * How many applications have had no reply in 10+ days.
+ *
+ * There is no reply event in the data model — nothing writes "they emailed
+ * back". What the tracker does record is the stage the user last moved a row
+ * to, so an entry still sitting in `applied` N days after `dateApplied` is one
+ * nobody has heard from. Any real reply (a call, a rejection, an offer) moves
+ * the row out of `applied` and out of this count. This is the same derivation
+ * C38 sanctions for the row on /applications ("computed from tracker rows"),
+ * and the two must not drift — see the handoff note about hoisting it into a
+ * shared hook once /applications renders its own follow-up row.
+ */
+export function countAwaitingReply(
+  entries: readonly RATrackerEntryView[],
+  now: number = Date.now(),
+): number {
+  const cutoff = now - NO_REPLY_DAYS * 24 * 60 * 60 * 1000;
+  return entries.filter(
+    (e) =>
+      e.status === 'applied' &&
+      e.dateApplied !== null &&
+      Date.parse(e.dateApplied) <= cutoff,
+  ).length;
+}
+
 export function Sidebar({ className }: { className?: string } = {}) {
   const pathname = usePathname() ?? '';
-  const t = useTranslations('nav_v3');
+  const t = useTranslations('nav');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Master switch: hide the auto-apply surface (Today/Queue/Pipeline/Activity)
-  // unless we positively know job-applying is enabled. Treating `null` (still
-  // loading) as "hide" avoids flashing those items in a disabled deploy.
-  const showJobApply = useJobApplyingEnabled() === true;
-  const workspace = (
-    showJobApply ? WORKSPACE : WORKSPACE.filter((i) => !i.jobApply)
-  ).filter((i) => QUEUE_REVIEW_ENABLED || i.href !== '/queue');
-  const settings = showJobApply ? SETTINGS : SETTINGS.filter((i) => !i.jobApply);
+  // Shares the TanStack cache entry with /applications and PipelineBoard, so
+  // on the Applications screen the badge costs nothing and everywhere else it
+  // is one read the user is about to need anyway.
+  const { data: board } = usePipelineBoard();
+  const noReply = useMemo(
+    () => countAwaitingReply(board?.entries ?? []),
+    [board],
+  );
 
-  // Live badge counts. useQueue shares its cache with the /queue page (locale
-  // is part of the key); useAgentStats shares with Today / Activity /
-  // Preferences, so neither adds a request beyond what the rail already makes.
-  // The queue fetch is suppressed entirely while the surface is hidden for
-  // launch.
-  const { data: queueData } = useQueue({ enabled: QUEUE_REVIEW_ENABLED });
-  const { data: statsData } = useAgentStats();
-  const queuePending = queueData?.pendingCount ?? 0;
-  const todayNew = statsData?.stats.matchedAboveThreshold ?? 0;
-
-  function badgeText(badge: NavBadge | undefined): string | null {
-    switch (badge) {
-      case 'queue':
-        return queuePending > 0 ? String(queuePending) : null;
-      case 'today-new':
-        return todayNew > 0 ? t('badge_new_count', { count: todayNew }) : null;
-      case 'new':
-        return t('badge_new');
-      default:
-        return null;
-    }
-  }
-
-  function renderLink(item: NavLink) {
+  function renderLink(item: Destination) {
     const active = item.match(pathname);
-    const badge = badgeText(item.badge);
-    // Live badges only glow while they actually have something to show.
-    const liveBadge = item.badge === 'queue' || item.badge === 'today-new';
-    const notif = item.notif && (!liveBadge || badge !== null);
+    // The only badge in the rail. Hidden at 0 — a zero badge is decoration.
+    const badge = item.href === '/applications' && noReply > 0 ? noReply : null;
+    const { Icon } = item;
     return (
       <Link
+        key={item.href}
         href={item.href}
-        className={cn('nav-item', notif && !active && 'notif')}
+        className={cn('nav-item', badge !== null && !active && 'notif')}
         aria-current={active ? 'page' : undefined}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-          {item.icon}
+          <Icon size={15} />
           {t(item.labelKey)}
         </span>
-        {badge ? <span className="count">{badge}</span> : null}
+        {badge !== null ? (
+          <>
+            <span className="count" aria-hidden="true">
+              {badge}
+            </span>
+            {/* The bare number is unreadable out of context; screen readers get
+             *  the sentence instead. */}
+            <span className="sr-only">
+              {t('badge_no_reply', { count: badge })}
+            </span>
+          </>
+        ) : null}
       </Link>
     );
   }
 
   return (
-    <aside className={cn('side', className)} aria-label="Primary">
+    <aside className={cn('side', className)} aria-label={t('aria_primary')}>
       <BrandLogo />
 
       <nav className="nav">
-        <div className="nav-section">{t('section_workspace')}</div>
-        {workspace.map((item) => (
-          <div key={item.href}>{renderLink(item)}</div>
-        ))}
-        <div className="nav-section">{t('section_settings')}</div>
-        {settings.map((item) => (
-          <div key={item.href}>{renderLink(item)}</div>
-        ))}
-        {isAdmin ? <div key={ADMIN_LINK.href}>{renderLink(ADMIN_LINK)}</div> : null}
+        {DESTINATIONS.map(renderLink)}
+        {isAdmin ? renderLink(ADMIN) : null}
       </nav>
     </aside>
   );

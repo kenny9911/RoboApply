@@ -34,7 +34,6 @@ import seekerProfileService from '../engine/services/SeekerProfileService.js';
 import { invalidateSeekerSession } from '../engine/lib/seekerSession.js';
 import { requireSeekerProfile } from '../engine/middleware/seekerAuth.js';
 import { getMissionForUser } from '../services/RoboApplyMissionService.js';
-import { isJobApplyingEnabled } from '../lib/featureFlags.js';
 import prisma from '../../lib/prisma.js';
 
 const router = Router();
@@ -274,11 +273,11 @@ router.get(
           profile,
           mission,
           onboardingState,
-          // Deploy-time master switch for the auto-apply product surface. The
-          // frontend reads this to hide Today/Queue/Pipeline/Activity and land
-          // users on Resume Builder + Mock Interview when off. Single source of
-          // truth — the Next.js app cannot read the backend's .env directly.
-          jobApplyingEnabled: isJobApplyingEnabled(),
+          // There used to be a `jobApplyingEnabled` field here, mirroring the
+          // JOB_APPLYING_ENABLED env var so the frontend could hide the
+          // auto-apply surface. Auto-apply is gone (ruling R1), the four
+          // destinations are unconditional, and the env var is removed from
+          // the deploy — so the field would only be a switch nothing reads.
         },
       });
     } catch (err) {

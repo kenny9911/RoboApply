@@ -45,7 +45,7 @@ function StatusChip({ status, label }: { status: string; label: string }) {
 }
 
 function Row({ inv }: { inv: BillingInvoice }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const locale = useLocale();
   const statusLabel = inv.status.toLowerCase() === 'paid' ? t('billing.history.paid')
     : inv.status.toLowerCase() === 'open' || inv.status.toLowerCase() === 'pending' ? t('billing.history.pending')
@@ -77,7 +77,7 @@ function Row({ inv }: { inv: BillingInvoice }) {
 }
 
 export function BillingHistoryView() {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const q = useBillingHistory();
 
   if (q.isLoading) {

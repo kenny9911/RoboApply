@@ -35,13 +35,13 @@ function SparkMark() {
 }
 
 export function AuthBrandMark({ className }: { className?: string }) {
-  const t = useTranslations('nav_v3');
+  const t = useTranslations('auth.brand');
   return (
     <span className={cn('brand', className)} aria-label="RoboApply">
       <SparkMark />
       <span className="brand-name">
         RoboApply
-        <small>{t('brand_tagline')}</small>
+        <small>{t('tagline')}</small>
       </span>
     </span>
   );

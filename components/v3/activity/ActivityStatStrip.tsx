@@ -12,7 +12,7 @@
 // product reads a mailbox. What survives is the two counts backed by real rows,
 // which is why the props narrow to `RAMeasuredStats`.
 //
-// All captions are i18n strings under the `activity` namespace.
+// All captions are i18n strings under `applications.activity.*`.
 
 import { useTranslations } from 'next-intl';
 import { StatStrip, Stat } from '../primitives';
@@ -24,7 +24,7 @@ interface Props {
 }
 
 export function ActivityStatStrip({ stats, loading }: Props) {
-  const t = useTranslations('activity');
+  const t = useTranslations('applications');
 
   if (loading || !stats) {
     return (
@@ -58,8 +58,8 @@ export function ActivityStatStrip({ stats, loading }: Props) {
 
   return (
     <StatStrip>
-      <Stat hero label={t('stats.appsSent')} value={stats.sent} />
-      <Stat label={t('stats.draftsWritten')} value={stats.draftsWritten} />
+      <Stat hero label={t('activity.stats.appsSent')} value={stats.sent} />
+      <Stat label={t('activity.stats.draftsWritten')} value={stats.draftsWritten} />
     </StatStrip>
   );
 }

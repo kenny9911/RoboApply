@@ -102,7 +102,7 @@ function statusLabel(t: (k: string) => string, status: string): string {
 // ─── CreditsCard ──────────────────────────────────────────────────────────────
 
 export function CreditsCard({ credits }: { credits: BillingPlanResponse['credits'] }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const allot = credits.periodAllotment ?? 0;
   const pct = allot > 0 ? Math.max(0, Math.min(100, (credits.balance / allot) * 100)) : 0;
   return (
@@ -138,7 +138,7 @@ interface CurrentPlanCardProps {
 }
 
 export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, canceling }: CurrentPlanCardProps) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const locale = useLocale();
   const { current } = plan;
   const price = current.amountMinor != null && current.currency
@@ -190,7 +190,7 @@ export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, can
 // ─── RegionToggle ─────────────────────────────────────────────────────────────
 
 export function RegionToggle({ region, onChange }: { region: 'cn' | 'other'; onChange: (r: 'cn' | 'other') => void }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const opt = (val: 'cn' | 'other', label: string) => {
     const active = region === val;
     return (
@@ -221,14 +221,14 @@ export function RegionToggle({ region, onChange }: { region: 'cn' | 'other'; onC
 // ─── BillingHistoryLink ───────────────────────────────────────────────────────
 
 export function BillingHistoryLink() {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   return (
     <Panel style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-2)', fontSize: '13px' }}>
         <span style={{ color: 'var(--text-muted)' }}><IconFile size={16} /></span>
         {t('billing.summaryNote')}
       </div>
-      <Link href="/account/billing/history" style={{ textDecoration: 'none' }}>
+      <Link href="/settings/billing/history" style={{ textDecoration: 'none' }}>
         <Btn variant="ghost">{t('billing.viewHistory')} →</Btn>
       </Link>
     </Panel>

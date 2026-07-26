@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function ResultsTop({ overall, delta, breakdown }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <div className="iv-results-top">
       <div className="iv-results-score">

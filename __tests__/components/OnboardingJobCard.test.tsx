@@ -1,7 +1,7 @@
-// OnboardingJobCard — "via {publisher}" attribution renders for external
+// OnboardingJobCard — "from {publisher}" attribution renders for external
 // (jsearch) cards only; external apply links carry target="_blank" +
 // rel="noopener nofollow"; whyMatched renders through the sanitized Markdown
-// primitive (XSS guard); Save/Pass fire the callbacks.
+// primitive (XSS guard); "Save for later" / "Not interested" fire the callbacks.
 
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
@@ -35,7 +35,7 @@ function makeJob(overrides: Partial<CardData> = {}): CardData {
 const noop = () => {};
 
 describe('OnboardingJobCard', () => {
-  it('renders title, company, and match score', () => {
+  it("renders title, company, and fit score", () => {
     renderWithProviders(
       <OnboardingJobCard
         job={makeJob()}
@@ -47,10 +47,10 @@ describe('OnboardingJobCard', () => {
     );
     expect(screen.getByText('Senior Backend Engineer')).toBeInTheDocument();
     expect(screen.getByText(/Acme Fintech/)).toBeInTheDocument();
-    expect(screen.getByText(/84% match/)).toBeInTheDocument();
+    expect(screen.getByText(/84 \/ 100/)).toBeInTheDocument();
   });
 
-  it('shows "via {publisher}" for external cards only', () => {
+  it('shows "from {publisher}" for external cards only', () => {
     const { unmount } = renderWithProviders(
       <OnboardingJobCard
         job={makeJob({
@@ -65,7 +65,7 @@ describe('OnboardingJobCard', () => {
         onPass={noop}
       />,
     );
-    expect(screen.getByText(/via 104人力銀行/)).toBeInTheDocument();
+    expect(screen.getByText(/from 104人力銀行/)).toBeInTheDocument();
     unmount();
 
     renderWithProviders(
@@ -95,7 +95,7 @@ describe('OnboardingJobCard', () => {
         onPass={noop}
       />,
     );
-    const link = screen.getByRole('link', { name: /Open posting/i });
+    const link = screen.getByRole('link', { name: /Read the posting/i });
     expect(link).toHaveAttribute('href', 'https://example.com/apply/1');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener nofollow');
@@ -147,9 +147,9 @@ describe('OnboardingJobCard', () => {
         onPass={onPass}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save for later/i }));
     expect(onSave).toHaveBeenCalledWith(job);
-    fireEvent.click(screen.getByRole('button', { name: /^Pass$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Not interested/i }));
     expect(onPass).toHaveBeenCalledWith(job);
   });
 });

@@ -1,25 +1,29 @@
 'use client';
 
-// Landing — public marketing. "NIGHT SHIFT / OVERNIGHT LOG", v2.
+// Landing — public marketing. "THE GAP REPORT", v3.
 //
-// The page reads as one overnight run of the agent, 23:04 → 09:02: a live
-// "overnight.log" terminal in the hero (nine timestamped lines, a lime flash
-// on the 09:00 SUBMIT, a caret that never stops blinking), a why-bots-lose
-// stats band, the shift timeline, a full-loop feature grid, the interview
-// studio spotlight (report-card receipt), trust as a read-only
-// guarantees.conf panel, real pricing (mock-interview credit plans), an
-// always-visible FAQ written for AI-engine extraction, and a final "your
-// agent clocks in tonight" band.
+// Positioned on the gap, not on fit (ruling R2): the H1 asks the question the
+// visitor already says out loud — "why am I not getting interviews?" — and the
+// page answers it by showing the work. The hero panel is a nine-line gap
+// report (resume read → postings read → ranked → the words that are missing →
+// the fit score with its disclaimer → the bullets with no number → the
+// questions the panel will ask). It is a SAMPLE, labelled as one.
 //
-// Two type voices carry the promise: everything the machine does is
-// JetBrains Mono / Space Grotesk; everything human ("You interview.",
-// "tonight.") is Instrument Serif italic. Headline sentence periods are
-// accent-colored — the agent's cursor as a typographic tic.
+// What this page must never do (ruling R1): claim the product submits
+// anything to an employer. The overnight activity log, the review-hold
+// language, the autopilot chips, the "We apply. You interview." tagline and
+// the guarantees list were all removed in wave 5 — the product opens the
+// employer's own posting and the user applies there.
 //
-// THEMES — dark is the agent's night (V3 electric tokens); light/warm are
-// the human's morning: styles/landing.css re-points the V3 base tokens on
-// .landing-root to the Anthropic clay-on-cream palette for BOTH light and
-// warm, so the landing has exactly two appearances. Copy is 100% i18n
+// Sections: 01 why applying more stopped working (stats band) · 02 how it
+// works (find → understand → fix → practice) · 03 the whole loop · 04 the
+// interview prep spotlight (report receipt) · 05 the four things we do not do
+// · 06 pricing (practice-interview credits) · 07 an always-visible FAQ
+// written for AI-engine extraction · a final band.
+//
+// THEMES — two appearances only, light and dark (ruling R3 deleted `warm` and
+// the accent picker). styles/landing.css re-points the base tokens on
+// .landing-root to the warm clay-on-cream palette in light. Copy is 100% i18n
 // (`landing` + `common`). Motion is CSS-only with a reduced-motion fallback.
 
 import Link from 'next/link';
@@ -44,8 +48,10 @@ type TagVariant =
   | 'submit'
   | 'digest';
 
-// Hero log rows: i18n key ↔ chip variant. Times/tags live in i18n but stay
-// ASCII in every locale (machine voice).
+// Hero gap-report rows: i18n key ↔ chip variant. The step numbers and tags
+// live in i18n but stay ASCII in every locale (machine voice). The `variant`
+// names are legacy chip colours, not claims — l8's `submit` variant only means
+// "the flashing row", and nothing on this page submits anything.
 const LOG_LINES: ReadonlyArray<{ key: string; variant: TagVariant }> = [
   { key: 'l1', variant: 'scout' },
   { key: 'l2', variant: 'match' },
@@ -81,7 +87,7 @@ const REPORT_ROWS = [
   { key: 'r3', width: '84%' },
 ] as const;
 
-const RULES = ['r1', 'r2', 'r3', 'r4', 'r5'] as const;
+const RULES = ['r1', 'r2', 'r3', 'r4'] as const;
 
 const TIERS = [
   { key: 'free', featured: false },
@@ -122,7 +128,7 @@ export function LandingContent() {
               {tCommon('sign_in')}
             </Link>
             <Link
-              href="/onboarding"
+              href="/signup"
               className="cta-primary hidden !h-10 !rounded-[10px] !px-4 !text-[13px] md:inline-flex"
             >
               {t('header.cta')}
@@ -132,7 +138,7 @@ export function LandingContent() {
       </header>
 
       <main>
-        {/* ── Hero — the overnight.log ─────────────────────────── */}
+        {/* ── Hero — the gap report ────────────────────────────── */}
         <section className="hero-fold hero-base relative overflow-hidden">
           <div aria-hidden className="hero-grid pointer-events-none absolute inset-0 z-0" />
           <div aria-hidden className="hero-wash pointer-events-none absolute inset-0 z-0" />
@@ -150,18 +156,15 @@ export function LandingContent() {
                 >
                   {t('hero.eyebrow')}
                 </p>
+                {/* Ruling R2: ONE sentence, one string. The old two-span
+                    machine/human split ("We apply." / "You interview.") was
+                    the retired auto-apply tagline — and a headline split
+                    across two keys cannot be translated as one sentence. */}
                 <h1
                   className="anim-rise hero-h1 mt-5 font-bold text-ink-900"
                   style={{ animationDelay: '.15s' }}
                 >
-                  <span className="block">
-                    {t('hero.headline_machine')}
-                    <span className="text-accent-text">.</span>
-                  </span>{' '}
-                  <span className="serif-human block">
-                    {t('hero.headline_human')}
-                    <span className="text-accent-text">.</span>
-                  </span>
+                  {t('hero.headline')}
                 </h1>
                 <p
                   className="anim-rise mt-6 max-w-[52ch] text-base leading-relaxed text-ink-700 md:text-lg"
@@ -177,7 +180,7 @@ export function LandingContent() {
                   style={{ animationDelay: '.4s' }}
                 >
                   <Link
-                    href="/onboarding"
+                    href="/signup"
                     className="cta-primary w-full sm:w-auto"
                   >
                     {t('hero.cta_primary')}
@@ -250,7 +253,7 @@ export function LandingContent() {
                         </div>
                       );
                     })}
-                    {/* Caret row — the agent never clocks out */}
+                    {/* Caret row */}
                     <div
                       className="log-line grid grid-cols-[2.9rem_auto_1fr] items-baseline gap-x-3 py-[5px] min-[421px]:grid-cols-[3.2rem_auto_1fr]"
                       style={{ animationDelay: '3.1s' }}
@@ -428,9 +431,6 @@ export function LandingContent() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <Tag variant={variant} label={t(`loop.cards.${key}.tag`)} />
-                    {key === 'apply' && (
-                      <span className="early-chip">{t('loop.cards.apply.chip')}</span>
-                    )}
                   </div>
                   <h3
                     className="mt-4 text-lg font-semibold text-ink-900 md:text-xl"
@@ -495,7 +495,7 @@ export function LandingContent() {
                 </div>
 
                 <Link
-                  href="/onboarding"
+                  href="/signup"
                   className="cta-outline scroll-rise mt-8 !w-auto px-6"
                 >
                   {t('studio.cta')}
@@ -685,13 +685,13 @@ export function LandingContent() {
                   <div className="flex-1" />
                   {featured ? (
                     <Link
-                      href="/onboarding"
+                      href="/signup"
                       className="cta-primary mt-8 w-full !h-12 !text-sm"
                     >
                       {t(`pricing.tiers.${key}.cta`)}
                     </Link>
                   ) : (
-                    <Link href="/onboarding" className="cta-outline mt-8">
+                    <Link href="/signup" className="cta-outline mt-8">
                       {t(`pricing.tiers.${key}.cta`)}
                     </Link>
                   )}
@@ -768,7 +768,7 @@ export function LandingContent() {
               {t('final.sub')}
             </p>
             <Link
-              href="/onboarding"
+              href="/signup"
               className="cta-primary scroll-rise mt-9 w-full sm:w-auto"
             >
               {t('final.cta')}
@@ -816,7 +816,7 @@ export function LandingContent() {
       {/* ── Sticky mobile CTA — thumb zone ─────────────────────── */}
       <div className="landing-sticky-cta md:hidden">
         <div className="flex items-center gap-3">
-          <Link href="/onboarding" className="cta-primary !h-12 flex-1 !text-[15px]">
+          <Link href="/signup" className="cta-primary !h-12 flex-1 !text-[15px]">
             {t('sticky.cta')}
           </Link>
           <span className="font-mono text-[10px] uppercase leading-tight tracking-[0.08em] text-ink-500">

@@ -7,23 +7,21 @@ import type { MetadataRoute } from 'next';
 
 import { SITE_URL } from '../lib/seo';
 
+// The four destinations plus the two non-destination authed surfaces — the
+// same list as PROTECTED_PREFIXES in lib/proxyPaths.ts, and it should stay that
+// way: "requires a session" and "not worth crawling" are the same set here.
+// The pre-2026 routes (/home, /tracker, /resumes, /queue, /activity, /account,
+// /preferences, /mock-interview, /plans, /choose-plan, /onboarding, /mission,
+// /apps) are gone; next.config.mjs redirects() 308s each one, and a crawler
+// following a stale link lands on a path this list already covers.
 const APP_PATHS = [
   '/api/',
-  '/home',
-  '/tracker',
-  '/resumes',
-  '/queue',
-  '/activity',
-  '/admin',
-  '/account',
-  '/preferences',
-  '/mock-interview',
-  '/plans',
-  '/choose-plan',
-  '/onboarding',
-  '/mission',
-  '/apps',
+  '/jobs',
+  '/resume',
+  '/applications',
+  '/practice',
   '/settings',
+  '/admin',
 ];
 
 export default function robots(): MetadataRoute.Robots {

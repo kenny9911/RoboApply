@@ -75,9 +75,7 @@ function PlanCard({
   onSelectFree: () => void;
   onCancel: () => void;
 }) {
-  const t = useTranslations('account');
-  const tp = useTranslations('plans');
-  const tc = useTranslations('choosePlan');
+  const t = useTranslations('settings');
   const locale = useLocale();
   const { region, current } = plan;
 
@@ -152,15 +150,15 @@ function PlanCard({
 
     // The user's active tier (in-app only). Free shows "Your plan", paid "Current plan".
     if (isCurrent) {
-      return <Btn className="ra-plan-cta" disabled>{isFree ? tp('cta.yourFreePlan') : t('plan.current')}</Btn>;
+      return <Btn className="ra-plan-cta" disabled>{isFree ? t('plan.cta.yourFreePlan') : t('plan.current')}</Btn>;
     }
 
     // ── Post-signup welcome moment: no current-tier logic ──
     if (mode === 'post-signup') {
       if (isFree) {
-        return <Btn className="ra-plan-cta" variant="ghost" disabled={busy} onClick={onSelectFree}>{tc('selectFree')}</Btn>;
+        return <Btn className="ra-plan-cta" variant="ghost" disabled={busy} onClick={onSelectFree}>{t('plan.select_free')}</Btn>;
       }
-      const label = region.method === 'alipay' ? t('plan.subscribeAlipay') : tc('selectPaid', { plan: tierLabel(t, item.key) });
+      const label = region.method === 'alipay' ? t('plan.subscribeAlipay') : t('plan.select_paid', { plan: tierLabel(t, item.key) });
       return (
         <Btn className="ra-plan-cta" variant={recommended ? 'violet' : 'primary'} disabled={busy}
           onClick={() => onSelectPaid(item.key as 'starter' | 'growth')} icon={<IconBolt size={15} />}>
@@ -187,7 +185,7 @@ function PlanCard({
     if (region.method === 'alipay') {
       return (
         <Btn className="ra-plan-cta" variant={recommended ? 'violet' : 'primary'} disabled={busy}
-          title={isDowngrade ? tp('cta.alipaySwitchNote') : undefined}
+          title={isDowngrade ? t('plan.cta.alipaySwitchNote') : undefined}
           onClick={() => onSelectPaid(item.key as 'starter' | 'growth')} icon={<IconBolt size={15} />}>
           {t('plan.subscribeAlipay')}
         </Btn>
@@ -196,9 +194,9 @@ function PlanCard({
 
     const label =
       targetRank > currentRank
-        ? tp('cta.upgradeTo', { plan: tierLabel(t, item.key) })
+        ? t('plan.cta.upgradeTo', { plan: tierLabel(t, item.key) })
         : isDowngrade
-          ? tp('cta.switchTo', { plan: tierLabel(t, item.key) })
+          ? t('plan.cta.switchTo', { plan: tierLabel(t, item.key) })
           : t('plan.subscribe');
     return (
       <Btn className="ra-plan-cta" variant={isDowngrade ? 'ghost' : recommended ? 'violet' : 'primary'} disabled={busy}

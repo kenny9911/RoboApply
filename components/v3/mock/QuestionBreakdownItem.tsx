@@ -23,7 +23,7 @@ const sectionLabel = (text: string) => (
 );
 
 export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   const [open, setOpen] = useState(defaultOpen);
   const num = String(item.questionIndex + 1).padStart(2, '0');
 

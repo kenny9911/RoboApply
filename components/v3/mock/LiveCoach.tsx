@@ -183,7 +183,7 @@ export function LiveQuestionCard({
   hintOpen: boolean;
   onToggleHint: () => void;
 }) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   return (
     <div className="iv-question" style={{ marginTop: 12 }}>
       <div className="iv-question-num">{t('live.coach.currentQuestion')}</div>
@@ -212,7 +212,7 @@ export function LiveQuestionCard({
 
 // ── Right stage: the live coach nudge (YOUR COACH · LIVE) ──────────────────────
 export function LiveCoachNudge({ tip, onDismiss }: { tip: IECoachTip; onDismiss: () => void }) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   return (
     <div className={`iv-coach ${tip.kind === 'careful' ? 'careful' : ''}`} style={{ marginTop: 12 }}>
       <div className="iv-coach-orb" />
@@ -248,7 +248,7 @@ function Stat({ label, value, tone, icon }: { label: string; value: string; tone
 }
 
 export function CoachMeters({ metrics, listeningFor }: { metrics: CoachMetrics; listeningFor: string[] }) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   const answering = metrics.seconds > 0;
   return (
     <div className="iv-cmeters">
@@ -293,7 +293,7 @@ export function CoachMeters({ metrics, listeningFor }: { metrics: CoachMetrics; 
 
 // ── Coach Mode toggle (controls row) ──────────────────────────────────────────
 export function CoachToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   return (
     <button
       type="button"

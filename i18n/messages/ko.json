@@ -1,5 +1,6 @@
 {
   "common": {
+    "app_name": "RoboApply",
     "loading": "불러오는 중…",
     "sign_in": "로그인",
     "sign_out": "로그아웃",
@@ -11,208 +12,2021 @@
     "continue": "계속",
     "retry": "다시 시도",
     "saved": "저장했어요.",
-    "coming_soon": "아직 준비 중이에요. 에이전트 연결이 끝나면 바로 쓸 수 있어요.",
-    "language": "언어"
+    "language": "언어",
+    "not_available": "아직 사용할 수 없어요."
   },
   "nav": {
-    "mission": "미션",
-    "apps": "지원 현황",
+    "aria_primary": "기본 내비게이션",
+    "brand_home": "RoboApply — 채용공고로 이동",
+    "jobs": "채용공고",
+    "resume": "이력서",
+    "applications": "지원 현황",
+    "practice": "면접 준비",
+    "admin": "관리자",
+    "badge_no_reply": "10일째 답 없음 {count}건",
+    "search_aria": "공고와 회사 검색",
+    "search_placeholder": "공고, 회사 검색…",
+    "account_menu": "내 계정",
     "settings": "설정",
-    "home": "홈",
-    "resume_builder": "이력서 빌더",
-    "tracker": "트래커",
-    "job_search": "공고 검색",
-    "mock_interview": "모의면접",
-    "career_insights": "커리어 인사이트",
-    "all_tools": "전체 도구",
-    "all_tools_coming_soon": "더 많은 도구와 연동 기능이 V2.1에서 추가돼요.",
-    "referrals": "친구 추천",
-    "referrals_coming_soon": "친구 추천은 V2.1에서 열려요.",
-    "support": "고객 지원"
+    "billing": "결제",
+    "sign_out": "로그아웃",
+    "theme_to_dark": "어두운 화면으로",
+    "theme_to_light": "밝은 화면으로",
+    "palette": {
+      "aria": "검색하고 이동하기",
+      "placeholder": "공고나 회사를 검색하거나 페이지로 이동…",
+      "group_nav": "이동",
+      "group_jobs": "채용공고",
+      "searching": "검색 중…",
+      "empty": "찾지 못했어요. 회사 이름이나 직무 이름으로 검색해 보세요."
+    }
+  },
+  "jobs": {
+    "page_title": "채용공고",
+    "headline": "{count, plural, =0 {아직 맞는 공고가 없어요.} other {나에게 맞는 공고가 #건 있어요.}}",
+    "headlineLoading": "나에게 맞는 공고.",
+    "sub": "{time}에 업데이트했어요.",
+    "read_count": "{since} 이후 올라온 공고 {scanned}건을 읽었어요. 그중 {worth}건이 볼 만해요.",
+    "matchesTitle": "잘 맞는 순서로 정리한 공고",
+    "fit": {
+      "great": "아주 잘 맞음",
+      "good": "잘 맞음",
+      "possible": "가능성 있음",
+      "unlikely": "맞기 어려움"
+    },
+    "tag": {
+      "possible": "가능성 있음"
+    },
+    "score": {
+      "label": "적합 점수",
+      "unit": "{score} / 100",
+      "explainer": "{score} / 100 — 내 이력서와 이 공고가 얼마나 맞는지",
+      "disclaimer": "이건 합격 확률이 아니에요.",
+      "empty": "이 공고의 적합 점수는 아직 없어요.",
+      "rubric_title": "점수에 들어가는 항목",
+      "rubric": {
+        "title_level": "직무와 직급 — 35",
+        "skills": "회사가 요구하는 기술 — 30",
+        "industry": "이 업계에서의 경험 — 15",
+        "location_pay_visa": "근무지, 급여, 비자 — 10",
+        "career_moves": "지금까지 경력이 움직인 방향 — 10"
+      }
+    },
+    "gap": {
+      "missing_label": "공고에는 있는데 이력서에는 없는 항목이에요:",
+      "overlap_label": "맞아떨어지는 부분:",
+      "none_missing": "공고가 요구하는 것 중 이력서에 빠진 건 없어요.",
+      "fix_cta": "이력서에서 고치기"
+    },
+    "whyFits": "잘 맞는 이유",
+    "thinking": "공고를 읽는 중…",
+    "noReasoning": "이 공고를 자세히 읽은 결과는 아직 없어요.",
+    "evidence": "공고를 끝까지 읽고 이력서와 대조했어요.",
+    "trail": {
+      "label": "이 공고에서 한 일",
+      "saved": "저장함",
+      "tailored": "이력서 맞춤",
+      "practiced": "연습함",
+      "applied": "지원함"
+    },
+    "filter": {
+      "title": "보기",
+      "great_only": "아주 잘 맞는 공고만",
+      "good_and_better": "잘 맞는 공고 이상",
+      "everything": "전체",
+      "hidden_count": "덜 맞는 공고 {count}건을 숨기고 있어요.",
+      "show_them": "보여주세요.",
+      "search_everywhere": "다른 곳도 찾기",
+      "search_everywhere_sub": "RoboApply 밖의 채용 사이트도 읽어요.",
+      "setup_cta": "어떤 일을 찾고 있는지 알려주세요"
+    },
+    "posted": {
+      "justNow": "방금",
+      "hoursAgo": "{count}시간 전",
+      "daysAgo": "{count}일 전"
+    },
+    "work": {
+      "remote": "재택",
+      "hybrid": "혼합",
+      "onsite": "사무실 출근"
+    },
+    "status": {
+      "applied": "지원함",
+      "notInterested": "관심 없음",
+      "saved": "나중에 보기"
+    },
+    "facet": {
+      "salaryFit": "급여",
+      "salaryWithinBand": "원하는 범위 안",
+      "salaryBelowBand": "원하는 범위보다 낮음",
+      "skillOverlap": "맞아떨어지는 기술",
+      "skillValue": "공고가 적은 기술의 {pct}%",
+      "riskFlag": "확인할 점",
+      "riskNone": "걸리는 점 없음"
+    },
+    "detail": {
+      "description": "공고 내용",
+      "responsibilities": "맡게 될 일",
+      "qualifications": "회사가 요구하는 것",
+      "benefits": "복리후생",
+      "viewOriginal": "회사 사이트에서 공고 읽기"
+    },
+    "actions": {
+      "applyOnSite": "회사 사이트에서 지원",
+      "applying": "회사 사이트를 여는 중…",
+      "saveForLater": "나중에 보기",
+      "notInterested": "관심 없음",
+      "didntApply": "지원하지 않았어요",
+      "markApplied": "지원함으로 표시",
+      "undo": "되돌리기",
+      "viewDetail": "공고 보기",
+      "refresh": "새 공고 확인",
+      "filters": "거르기",
+      "practice": "이 공고로 연습하기",
+      "tailorResume": "이 공고에 맞춰 이력서 다듬기"
+    },
+    "appliedOnSiteBanner": "'지원함'으로 옮겼어요. 대신 보낸 건 없어요. 지원은 회사 사이트에서 직접 해요.",
+    "notInterestedBanner": "목록에서 뺐어요.",
+    "empty": {
+      "title": "아직 맞는 공고가 없어요.",
+      "accent": "",
+      "sub": "어떤 일을 찾는지 알려주거나 이력서를 올리면, 맞는 공고가 여기에 나와요."
+    },
+    "error": {
+      "title": "공고 목록을 불러오지 못했어요.",
+      "accent": "",
+      "sub": "잃어버린 건 없어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+      "retry": "다시 시도"
+    },
+    "setup": {
+      "title": "어떤 일을 찾고 있는지 알려주세요",
+      "sub": "자세히 알려줄수록 읽어야 할 공고가 줄어요. 나중에 언제든 바꿀 수 있어요.",
+      "resume_title": "읽어들일 이력서를 골라주세요",
+      "resume_lead": "다음에 하고 싶은 일에 가장 가까운 이력서를 골라주세요.",
+      "resume_upload_new": "새 이력서 올리기",
+      "resume_paste_text": "이력서 내용 붙여넣기",
+      "resume_primary_badge": "기본 이력서",
+      "resume_last_edited": "마지막 수정 {date}",
+      "resume_continue": "이 이력서 사용",
+      "resume_pick_existing": "이미 있는 이력서에서 고르기",
+      "resume_paste_instead": "대신 내용 붙여넣기",
+      "resume_paste_placeholder": "이력서 내용을 여기에 붙여넣어 주세요. 서식 없는 글도 괜찮아요.",
+      "resume_paste_name": "붙여넣은 이력서",
+      "resume_paste_submit": "이 내용 사용",
+      "resume_back": "뒤로",
+      "resume_retry": "다시 시도",
+      "resume_formats": "PDF, DOC, DOCX, TXT, MD",
+      "resume_linkedin_import": "LinkedIn에서 가져오기",
+      "resume_linkedin_placeholder": "https://www.linkedin.com/in/your-profile",
+      "upload_title": "이력서 올리기",
+      "upload_lead": "한 번만 읽으면, 절대 가지 않을 공고는 더 보이지 않아요.",
+      "upload_drop_title": "이력서를 여기에 놓거나 눌러서 고르세요",
+      "upload_drop_sub": "PDF, DOC, DOCX, TXT, MD — 15MB까지",
+      "upload_received": "{size} · 올리고 읽는 중…",
+      "upload_ingest_title": "이력서에 적힌 내용",
+      "upload_reading": "읽는 중…",
+      "upload_error": "이 이력서를 읽지 못했어요. PDF나 DOCX로 시도하거나 다른 파일을 골라주세요.",
+      "reading_resume": "이력서를 읽는 중…",
+      "status_searching_internal": "공고 데이터를 찾는 중…",
+      "status_searching_external": "다른 곳의 새 공고를 확인하는 중…",
+      "status_scoring": "공고와 이력서를 비교하는 중…",
+      "composer_placeholder": "직무, 지역, 급여, 받아들일 수 없는 조건…",
+      "send": "보내기",
+      "opening_prompt_hint": "이 문장은 이력서를 읽고 쓴 거예요. 고쳐도 되고 그대로 보내도 돼요.",
+      "tray_title": "지금까지 말한 내용",
+      "tray_edit_prefix": "{field} 바꾸기…",
+      "tray_dismiss": "닫기",
+      "wrap_cta": "공고 보기",
+      "restore_notice": "지난번에 멈춘 곳부터 이어서 해요.",
+      "superseded_notice": "이 설정은 다른 창에서 이어졌어요. 새로고침하면 반영돼요.",
+      "error_turn_failed": "메시지를 보내지 못했어요. 다시 보내주세요.",
+      "error_retry": "다시 시도",
+      "error_daily_limit": "오늘 설정을 여러 번 다시 시작했어요. 내일 다시 오거나, 공고 목록으로 바로 가주세요.",
+      "error_parse_failed": "이 이력서를 읽지 못했어요. 다른 파일로 시도하거나 내용을 붙여넣어 주세요.",
+      "error_file_too_large": "이 파일은 15MB가 넘어요. 더 작은 파일로 시도해 주세요.",
+      "error_unsupported_format": "이 형식은 읽을 수 없어요. PDF, DOC, DOCX, TXT, MD를 쓸 수 있어요.",
+      "card_fit": "{score} / 100",
+      "card_via": "출처 {publisher}",
+      "card_save": "나중에 보기",
+      "card_saved": "저장함",
+      "card_not_interested": "관심 없음",
+      "card_removed": "뺐어요",
+      "card_apply": "공고 읽기",
+      "progress_resume": "이력서",
+      "progress_chat": "설정",
+      "progress_matches": "공고",
+      "progress_done": "완료",
+      "skip": "건너뛰기",
+      "fields": {
+        "targetRoles": "직무 이름",
+        "seniority": "직급",
+        "workModes": "재택 또는 출근",
+        "salary": "급여",
+        "employmentTypes": "고용 형태",
+        "industriesTarget": "원하는 업계",
+        "industriesAvoid": "피하고 싶은 업계",
+        "companyStages": "회사 단계",
+        "companySizes": "회사 규모",
+        "locations": "지역",
+        "mustHaves": "꼭 필요한 조건",
+        "dealbreakers": "받아들일 수 없는 조건"
+      },
+      "values": {
+        "remote": "재택",
+        "hybrid": "혼합",
+        "onsite": "사무실 출근",
+        "full_time": "정규직",
+        "contract": "계약직",
+        "part_time": "시간제",
+        "internship": "인턴"
+      }
+    }
+  },
+  "resume": {
+    "eyebrow": "이력서",
+    "title_lead": "채용하고 싶어지는",
+    "title_accent": "이력서",
+    "title_after": "를 만들어요.",
+    "subtitle": "빈 문서에서 시작하거나, 지금 쓰는 이력서를 올리거나, LinkedIn에서 가져오세요. 그다음 공고마다 맞춘 사본을 만들 수 있어요.",
+    "common": {
+      "cancel": "취소",
+      "close": "닫기"
+    },
+    "gate": {
+      "title": "먼저 이력서를 올려주세요",
+      "subtitle": "이력서가 모든 기능의 바탕이에요. 올리면 공고, 적합 점수, 면접 준비가 함께 움직이기 시작해요.",
+      "cta": "이력서 올리기",
+      "uploading": "이력서를 읽는 중…",
+      "formats": "PDF, DOCX, TXT · 15MB까지",
+      "error": "이 파일을 읽지 못했어요. 다시 시도하거나 다른 파일을 골라주세요.",
+      "error_too_large": "이 파일은 15MB가 넘어요. 더 작은 파일로 시도해 주세요.",
+      "error_format": "이 형식은 읽을 수 없어요. PDF, DOCX, TXT 중 하나를 써주세요.",
+      "error_empty": "이 파일에서 글자를 찾지 못했어요. 스캔 이미지 말고 글자가 들어간 PDF로 시도해 주세요.",
+      "or_build": "아니면 처음부터 새로 쓰기"
+    },
+    "create": {
+      "scratch": {
+        "title": "처음부터 쓰기",
+        "desc": "줄마다 도움말이 붙는 깔끔한 서식이에요. 경력이 짧을 때 좋아요.",
+        "meta": "약 10분"
+      },
+      "file": {
+        "title": "이력서 올리기",
+        "desc": "PDF나 DOCX를 놓아주세요. 읽어서 항목으로 정리하고 약한 줄에 표시해요.",
+        "meta": "PDF · DOCX · Apple Pages"
+      },
+      "linkedin": {
+        "title": "LinkedIn에서 가져오기",
+        "desc": "LinkedIn 프로필을 PDF로 저장해서 놓아주세요. 똑같이 읽고 표시해요.",
+        "meta": "PDF로 저장한 뒤 올리기"
+      },
+      "default_name": {
+        "scratch": "제목 없는 초안",
+        "file": "올린 이력서",
+        "linkedin": "LinkedIn 가져오기"
+      }
+    },
+    "library": {
+      "title": "내 이력서",
+      "count": "{count}개 버전"
+    },
+    "card": {
+      "base": "기본 이력서 — 특정 공고에 맞추지 않음",
+      "edited": "{when}에 수정",
+      "score_unit": "/100",
+      "delete": "이력서 삭제",
+      "versions_used": "버전 {used} / {cap} 사용 중"
+    },
+    "tip": {
+      "label": "경력이 짧다면",
+      "body": "경력이 적어도 괜찮아요. 수업 과제, 해커톤, 프리랜스 작업, 개인 프로젝트 모두 실제 성과 줄이 돼요. 학교와 인턴 경험은 줄마다 '학교와 인턴 경험 다시 쓰기'를 써보세요."
+    },
+    "empty": {
+      "title_lead": "아직 등록된",
+      "title_accent": "이력서가 없어요",
+      "sub": "처음부터 쓰거나, 올리거나, LinkedIn에서 가져와 첫 이력서를 만들면 모든 줄을 점검해요.",
+      "cta": "처음부터 쓰기"
+    },
+    "error": {
+      "title": "이력서를 불러오지 못했어요.",
+      "sub": "잃어버린 건 없어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+      "retry": "다시 시도"
+    },
+    "ingest": {
+      "scratch": {
+        "template": "서식",
+        "template_v": "한 단, 장식 없음, 읽기 프로그램이 읽기 쉬운 형태",
+        "sections": "항목",
+        "sections_v": "요약 · 경력 · 학력 · 기술 · 프로젝트",
+        "ai": "도움말",
+        "ai_v": "모든 줄에서 — 다듬기, 줄이기, 늘리기, 어조 바꾸기",
+        "ready": "준비 완료",
+        "ready_v": "제목 없는 초안"
+      },
+      "import": {
+        "read": "읽음",
+        "identity": "인적 사항",
+        "identity_v": "이름 · 이메일 · 지역",
+        "experience": "경력",
+        "experience_v": "회사 · 직함 · 기간",
+        "education": "학력",
+        "education_v": "학위 · 학교 · 연도",
+        "skills": "기술",
+        "skills_v": "기술 · 도구 · 키워드",
+        "cleaned": "정리함",
+        "cleaned_v": "표현과 줄 간격"
+      }
+    },
+    "import": {
+      "title": {
+        "scratch": "새 이력서 시작",
+        "file": "이력서 올리기",
+        "linkedin": "LinkedIn에서 가져오기"
+      },
+      "badge": {
+        "scratch": "새로 만들기",
+        "file": "올리기",
+        "linkedin": "가져오기"
+      },
+      "template": {
+        "classic": "클래식 · 한 단",
+        "modern": "모던 · 두 단",
+        "editorial": "에디토리얼 · 명조"
+      },
+      "scratch_hint": "서식을 골라주세요. 나중에 바꿔도 쓴 내용은 그대로 옮겨가요.",
+      "drop": {
+        "title": "이력서를 여기에 놓아주세요",
+        "sub": "PDF, DOCX, Apple Pages",
+        "ready": "읽을 준비가 됐어요"
+      },
+      "linkedin": {
+        "steps_title": "LinkedIn 프로필을 PDF로 저장해요",
+        "step1": "LinkedIn에서 내 프로필 열기",
+        "step2": "더 보기를 누르고 PDF로 저장 선택",
+        "step3": "그 PDF를 아래에서 올리기",
+        "upload_title": "LinkedIn PDF를 여기에 놓아주세요",
+        "upload_sub": "프로필에서 저장한 PDF",
+        "ready": "가져올 준비가 됐어요",
+        "or": "또는",
+        "url_label": "공개 프로필이면 주소를 붙여넣어도 돼요",
+        "placeholder": "linkedin.com/in/your-handle",
+        "hint": "공개된 LinkedIn 주소를 붙여넣어 주세요. 경력, 학력, 기술, 링크를 가져와요."
+      },
+      "ingest_title": {
+        "scratch": "초안을 준비하는 중",
+        "parse": "이력서를 읽는 중"
+      },
+      "working": "처리 중…",
+      "done": {
+        "title_scratch": "초안이 준비됐어요",
+        "title_import": "가져왔어요",
+        "body_scratch": "편집기를 열고 채워 넣어 주세요. 줄마다 나오는 도움말은 오른쪽에 있어요.",
+        "body_import": "이력서를 읽었어요. 약한 성과 줄 두 개를 편집기에서 표시해 뒀어요."
+      },
+      "cancel": "취소",
+      "create_draft": "초안 만들기",
+      "parse_with_ai": "이 파일 읽기",
+      "open_editor": "편집기 열기",
+      "error": "이력서를 만들지 못했어요. 다시 시도해 주세요.",
+      "errors": {
+        "invalid_url": "LinkedIn 프로필 주소가 아니에요. 링크를 확인하고 다시 시도해 주세요.",
+        "fetch_failed": "LinkedIn에 연결하지 못했어요. 대신 LinkedIn PDF를 올려주세요.",
+        "profile_empty": "이 프로필에는 가져올 내용이 부족했어요. 대신 LinkedIn PDF를 올려주세요.",
+        "url_import_not_configured": "주소로 가져오기는 여기서 쓸 수 없어요. 대신 LinkedIn PDF를 올려주세요.",
+        "parse_failed": "이 파일을 읽지 못했어요. PDF로 다시 내보낸 뒤 한 번 더 시도해 주세요.",
+        "unsupported_format": "이 파일 형식은 읽을 수 없어요. PDF나 DOCX를 올려주세요.",
+        "file_too_large": "이 파일은 너무 커요. 한도는 15MB예요.",
+        "file_required": "먼저 파일을 골라주세요."
+      },
+      "demo_file_name": "resume-2024.pdf",
+      "demo_file_size": "184 KB"
+    },
+    "toolbar": {
+      "back": "이력서 전체",
+      "rename": "이력서 이름",
+      "saved": "모든 변경 사항 저장됨",
+      "saving": "저장 중…",
+      "save_error": "아직 저장되지 않았어요 — 다시 시도 중",
+      "strength": "완성도",
+      "coach": "줄 점검",
+      "hide_coach": "줄 점검 숨기기",
+      "download": "내려받기",
+      "tailor": "공고에 맞추기",
+      "delete": "삭제"
+    },
+    "section": {
+      "identity": "인적 사항",
+      "summary": "요약",
+      "experience": "경력",
+      "education": "학력",
+      "skills": "기술",
+      "other": "그 밖의 항목"
+    },
+    "field": {
+      "full_name": "이름",
+      "title": "직함",
+      "email": "이메일",
+      "phone": "전화",
+      "location": "지역",
+      "links": "링크",
+      "ai": "다시 쓰기"
+    },
+    "summary": {
+      "placeholder": "두 문장으로 써주세요. 만들어 낸 것과 그것이 바꾼 결과부터 시작하세요.",
+      "give_rewrites": "다시 쓴 문장 3개 보기",
+      "rewriting": "다시 쓰는 중…",
+      "char_hint": "{count}자 · 240~320자를 권해요",
+      "option": "{n}번 안",
+      "use_this": "이걸로 하기",
+      "keep_current": "지금 것 그대로 두기"
+    },
+    "action": {
+      "improve": {
+        "label": "문장 다듬기",
+        "desc": "더 힘 있는 동사로, 더 짧게"
+      },
+      "metrics": {
+        "label": "숫자 넣기",
+        "desc": "숫자가 들어갈 자리를 짚어줘요"
+      },
+      "shorten": {
+        "label": "줄이기",
+        "desc": "군더더기를 덜고 결과는 남겨요"
+      },
+      "expand": {
+        "label": "맥락 넣기",
+        "desc": "어떻게 했고 왜 중요했는지 써요"
+      },
+      "confident": {
+        "label": "더 단정적으로",
+        "desc": "'도왔다'가 아니라 '이끌었다'"
+      },
+      "junior": {
+        "label": "학교와 인턴 경험 다시 쓰기",
+        "desc": "일로 통하는 표현으로 바꿔요"
+      }
+    },
+    "bullet": {
+      "flag": "이 줄에는 숫자가 없고 동사도 모호해요. '문장 다듬기'나 '숫자 넣기'를 써보세요.",
+      "placeholder": "무엇을 했는지 — 동사로 시작해서 결과로 끝내기"
+    },
+    "rewrite": {
+      "rewriting": "다시 쓰는 중",
+      "suggested": "다시 쓴 문장",
+      "accept": "이걸로 하기",
+      "regenerate": "다른 문장 보기",
+      "discard": "버리기",
+      "error": "다시 쓰지 못했어요. 다시 시도해 주세요."
+    },
+    "experience": {
+      "hint": "줄 위에 마우스를 올리면 다시 쓸 수 있어요",
+      "add_role": "경력 추가",
+      "add_bullet": "줄 추가하거나 직접 붙여넣기",
+      "editing": "수정 중",
+      "title_placeholder": "직함",
+      "company_placeholder": "회사",
+      "location_placeholder": "지역",
+      "start_placeholder": "시작",
+      "end_placeholder": "종료"
+    },
+    "education": {
+      "add": "학력 추가",
+      "school_placeholder": "학교",
+      "degree_placeholder": "학위",
+      "detail_placeholder": "수상, 연구, 성적"
+    },
+    "skills": {
+      "suggest": "성과 줄에서 기술 찾기",
+      "add": "기술 추가",
+      "placeholder": "기술 이름",
+      "remove": "{skill} 삭제",
+      "suggested": "성과 줄에서 찾은 것",
+      "dismiss_suggestions": "닫기"
+    },
+    "young": {
+      "head": "경력이 적다면, 학교와 개인 활동을 이력서 표현으로 옮기는 항목을 넣어보세요.",
+      "class_project": {
+        "label": "수업 과제",
+        "desc": "만들어 낸 일로 씁니다"
+      },
+      "hackathon": {
+        "label": "해커톤",
+        "desc": "48시간 · 만든 것"
+      },
+      "side_project": {
+        "label": "개인 프로젝트",
+        "desc": "오픈소스나 취미 작업"
+      },
+      "volunteer": {
+        "label": "봉사 활동",
+        "desc": "이것도 경력이 돼요"
+      },
+      "freelance": {
+        "label": "프리랜스 작업",
+        "desc": "보수를 받은 일"
+      },
+      "leadership": {
+        "label": "학생 활동 리더",
+        "desc": "동아리, 학생회, 단체"
+      }
+    },
+    "preview": {
+      "label": "미리 보기",
+      "page": "1쪽"
+    },
+    "paper": {
+      "your_name": "이름"
+    },
+    "coach": {
+      "label": "줄 점검",
+      "sub": "쓰는 동안 함께 돌아가요",
+      "hide": "줄 점검 숨기기",
+      "next": "다음 지적",
+      "tips": {
+        "metrics_good": "성과 줄에 실제 숫자가 들어 있어요. 이력서 전체에서 이어가 주세요.",
+        "metrics_missing": "대부분의 줄에 숫자가 없어요. 위에서 세 줄에 숫자를 넣어주세요.",
+        "summary_long": "요약이 길어요. 두 문장으로 줄여주세요.",
+        "summary_tight": "요약이 간결해요. 원하는 일에 가장 가까운 문장으로 시작하세요.",
+        "summary_missing": "아직 요약이 없어요. 맨 위 두 문장이 그 아래 모든 내용의 틀이 돼요.",
+        "weak_verbs": "'담당했다', '도왔다' 같은 약한 동사로 시작하는 줄이 {count}개 있어요. 내가 했다고 말할 수 있는 동사로 다시 써주세요.",
+        "strong_verbs": "약한 시작이 하나도 없어요. 이대로 가면 돼요.",
+        "no_bullets": "이 이력서에는 아직 성과 줄이 없어요. 경력마다 결과로 끝나는 줄로 나눠주세요.",
+        "too_many_bullets": "줄이 많아요. 경력마다 가장 강한 3~5줄만 남겨주세요.",
+        "good_density": "분량은 알맞아요. 줄 하나만 다시 쓸 수도 있고, 이력서 전체를 한 공고에 맞출 수도 있어요."
+      }
+    },
+    "citation": {
+      "group_label": "여기 있는 숫자는 모두 이력서에서 가져왔어요.",
+      "tap_hint": "표시된 줄을 누르면 어디서 왔는지 볼 수 있어요.",
+      "source": "이력서 — {section}, {line}번째 줄",
+      "blocked_title": "이력서에서 찾을 수 없는 숫자가 한 줄에 있어요. 내려받기 전에 고치거나 그 줄을 빼주세요.",
+      "edit_line": "줄 수정",
+      "remove_line": "줄 삭제",
+      "warning": "이 초안의 숫자 일부가 이력서에 없어요. 이 버전을 쓰기 전에 확인해 주세요."
+    },
+    "tailor": {
+      "eyebrow": "맞춤",
+      "title_pick": "맞출 공고를 골라주세요",
+      "title_analyzing_lead": "공고와",
+      "title_analyzing_accent": "이력서를",
+      "title_analyzing_after": "읽는 중…",
+      "title_review_lead": "달라지는 부분:",
+      "title_done": "맞춘 사본을 만들었어요",
+      "source_label": "내 공고 중에서 고르기",
+      "loading_jobs": "공고를 불러오는 중…",
+      "no_jobs": "아직 공고가 없어요. 대신 아래에 공고 내용을 붙여넣어 주세요.",
+      "fit": "적합도",
+      "or": "또는",
+      "paste_toggle": "다른 공고 붙여넣기",
+      "paste_placeholder": "공고를 여기에 붙여넣어 주세요 — 직무, 회사, 본문 전체",
+      "analyze_paste": "이 공고 읽기",
+      "pasted_company": "붙여넣은 공고",
+      "pasted_role": "직접 입력",
+      "analyzing": {
+        "read_jd": "공고를 끝까지 읽는 중",
+        "cross_check": "이력서의 성과 줄과 대조하는 중",
+        "find_gaps": "공고에는 있고 이력서에는 없는 표현을 찾는 중",
+        "draft": "바꿀 내용을 쓰는 중",
+        "rescore": "적합 점수를 다시 매기는 중"
+      },
+      "before": "이전",
+      "after": "이후",
+      "note": "바꿀 내용이 {count}개예요. 원하지 않는 항목은 체크를 풀어주세요. 체크한 것만 반영돼요.",
+      "kind": {
+        "rewrite": "다시 쓰기",
+        "add": "추가",
+        "reorder": "순서 바꾸기",
+        "trim": "덜어내기"
+      },
+      "pick_hint": "공고를 고르면 다음으로 갈 수 있어요",
+      "pick_different": "다른 공고 고르기",
+      "apply": "{count}개 반영하기",
+      "back_to_editor": "편집기로 돌아가기",
+      "open_copy": "맞춘 사본 열기",
+      "done_title": "맞춘 사본을 저장했어요",
+      "done_body": "새 버전 '{name}'을 목록에 넣었어요. 기본 이력서는 그대로예요.",
+      "done_body_paste": "맞춘 버전이 준비됐어요. 기본 이력서는 그대로예요.",
+      "error": "이 이력서를 맞추지 못했어요. 다시 시도해 주세요.",
+      "manual_toggle": "대신 회사와 직무 이름으로 맞추기",
+      "company_label": "회사",
+      "company_placeholder": "회사 이름",
+      "role_label": "직무 이름",
+      "role_placeholder": "직무 이름(선택)",
+      "analyze_manual": "이 회사와 직무에 맞추기",
+      "manual_hint": "공고가 없으면 회사, 직무 이름, 이력서만으로 맞춰요.",
+      "version_name_label": "다른 이름으로 저장",
+      "estimated": "추정",
+      "citation_warning": "이 초안의 숫자 일부가 이력서에 없어요. 반영하기 전에 확인해 주세요."
+    },
+    "download": {
+      "eyebrow": "내려받기",
+      "title": "어떤 형식으로 받을까요",
+      "recommended": "추천",
+      "error": "내려받지 못했어요. 다시 시도해 주세요.",
+      "pdf": {
+        "label": "PDF",
+        "desc": "읽기 프로그램이 읽을 수 있는 PDF — 지원할 때 가장 좋아요"
+      },
+      "docx": {
+        "label": "DOCX",
+        "desc": "워드에서 계속 고칠 수 있는 파일"
+      },
+      "txt": {
+        "label": "일반 텍스트",
+        "desc": "웹 입력창에 붙여넣을 때"
+      },
+      "md": {
+        "label": "마크다운",
+        "desc": "GitHub이나 개인 사이트에 쓸 때"
+      },
+      "scanner_preview": "회사 프로그램이 읽는 내용"
+    },
+    "state": {
+      "loading": "이력서를 불러오는 중…",
+      "error_title": "이 이력서를 불러오지 못했어요.",
+      "error_body": "삭제됐을 수도 있고, 주소가 잘못됐을 수도 있어요.",
+      "back": "이력서 전체로 돌아가기"
+    },
+    "delete": {
+      "title": "이 이력서를 삭제할까요?",
+      "body": "목록에서 완전히 지워져요. 확인하려면 아래에 이름을 입력해 주세요.",
+      "input_label": "확인을 위해 이력서 이름 입력",
+      "mismatch_hint": "이력서 이름과 맞지 않아요.",
+      "cancel": "취소",
+      "confirm": "이력서 삭제",
+      "confirming": "삭제하는 중…",
+      "error": "이 이력서를 삭제하지 못했어요. 다시 시도해 주세요."
+    },
+    "extra": {
+      "hint": "원래 이력서에서 그대로 가져온 내용이에요 — 글로 고칠 수 있어요",
+      "heading_placeholder": "항목 제목",
+      "body_placeholder": "항목 내용"
+    },
+    "entry": {
+      "move_up": "위로",
+      "move_down": "아래로",
+      "remove": "삭제"
+    },
+    "analyzer": {
+      "title": "이력서 점검",
+      "empty": "고칠 곳이 없어요. 깔끔하게 읽혀요.",
+      "severity": {
+        "critical": "꼭 고치기",
+        "recommended": "고치는 게 좋음",
+        "optional": "선택"
+      }
+    }
+  },
+  "applications": {
+    "page_title": "지원 현황",
+    "eyebrow": "진행 중 {count}건",
+    "headline": "어디에 지원했고, 어떻게 됐나요?",
+    "sub": "카드를 끌거나 단계 메뉴를 쓰면 {columns}개 단계 사이로 옮길 수 있어요. 답장과 일정 초대가 오면 알아서 옮겨가요.",
+    "loading": "지원 현황을 불러오는 중…",
+    "view": {
+      "by_stage": "단계별",
+      "by_date": "날짜별"
+    },
+    "columns": {
+      "saved": "저장함",
+      "applied": "지원함",
+      "first_call": "1차 통화",
+      "interviewing": "면접 중",
+      "final_round": "최종 면접",
+      "offer": "합격",
+      "rejected": "불합격"
+    },
+    "column": {
+      "aria": "{name}, {count}건"
+    },
+    "outcome": {
+      "label": "어떻게 끝났는지",
+      "they_said_no": "회사가 거절했어요",
+      "i_withdrew": "내가 그만뒀어요",
+      "job_pulled": "채용이 취소됐어요"
+    },
+    "follow_up": {
+      "row": "{count, plural, other {10일째 답이 없는 회사가 #곳이에요.}}",
+      "write_cta": "확인 메일 쓰기",
+      "grounding": "공고와 이력서를 바탕으로 썼어요.",
+      "open_mail": "메일 앱에서 열기"
+    },
+    "insight": {
+      "title": "이번 주",
+      "sub": "무슨 일이 있었고, 다음에 무엇을 할지.",
+      "empty": "일주일쯤 지원하면 여기에 쓸 내용이 생겨요.",
+      "refresh": "새로 계산",
+      "refreshing": "계산하는 중…",
+      "refresh_recent": "방금 전에 새로 계산했어요. 잠시 뒤에 다시 시도해 주세요.",
+      "metrics": {
+        "applications": "지원",
+        "interviews": "면접",
+        "offers": "합격",
+        "weeks_to_offer": "지난 주 수",
+        "unknown": "—",
+        "skills_observed": "가장 자주 나온 기술"
+      }
+    },
+    "card": {
+      "drag_hint": "이 카드를 다른 단계로 끌거나 단계 메뉴를 써주세요",
+      "move_label": "{role}을 다른 단계로 옮기기",
+      "untitled_company": "회사 이름 없음",
+      "untitled_role": "직무 이름 없음"
+    },
+    "when": {
+      "follow_up": "{date}에 확인",
+      "applied": "{ago}에 지원",
+      "saved": "{ago}에 저장"
+    },
+    "ago": {
+      "now": "방금",
+      "minutes": "{n}분",
+      "hours": "{n}시간",
+      "days": "{n}일",
+      "weeks": "{n}주"
+    },
+    "empty": {
+      "saved": "저장한 공고가 없어요. 저장하면 여기에 남아요.",
+      "applied": "아직 지원한 곳이 없어요.",
+      "first_call": "잡힌 1차 통화가 없어요.",
+      "interviewing": "잡힌 면접이 없어요.",
+      "final_round": "최종 면접이 없어요.",
+      "offer": "아직 합격이 없어요.",
+      "rejected": "불합격은 없어요."
+    },
+    "empty_board": {
+      "title": "여기에는 아직",
+      "accent": "아무것도 없어요",
+      "body": "공고를 저장하거나 지원하면, 그 뒤에 어떻게 됐는지와 함께 여기에 나와요."
+    },
+    "error": {
+      "title": "지원 현황을 불러오지 못했어요.",
+      "body": "잃어버린 건 없어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+      "retry": "다시 시도"
+    },
+    "add": {
+      "cta": "공고 추가",
+      "title": "다른 곳에서 찾은 공고 추가하기",
+      "field_url": "공고 링크",
+      "field_url_placeholder": "https://example.com/jobs/1234",
+      "field_title": "직무 이름",
+      "field_title_placeholder": "시니어 프로덕트 매니저",
+      "field_company": "회사",
+      "field_company_placeholder": "Stripe",
+      "field_location": "지역",
+      "field_location_placeholder": "서울 · 혼합 근무",
+      "field_status": "단계",
+      "submit": "추가하기",
+      "submitting": "추가하는 중…",
+      "error_title_required": "먼저 직무 이름을 넣어주세요.",
+      "error_company_required": "먼저 회사를 넣어주세요.",
+      "error_generic": "이 공고를 추가하지 못했어요. 다시 시도해 주세요."
+    },
+    "activity": {
+      "eyebrow": "지난 7일",
+      "title": "지금까지",
+      "titleAccent": "일어난 일",
+      "titleAfter": " 전부예요.",
+      "sub": "지원, 초안, 수정 하나하나를 날짜와 함께 보여줘요.",
+      "loading": "기록을 불러오는 중…",
+      "stats": {
+        "appsSent": "지원",
+        "replies": "답장",
+        "replyRate": "{percent}%",
+        "draftsWritten": "쓴 초안",
+        "thisWeek": "이번 주"
+      },
+      "empty": {
+        "title": "아직 남은",
+        "titleAccent": "기록이 없어요",
+        "sub": "저장하고, 맞추고, 지원하면 모든 단계가 날짜와 함께 여기에 쌓여요."
+      },
+      "error": {
+        "title": "기록을 불러오지 못했어요.",
+        "body": "잃어버린 건 없어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+        "retry": "다시 시도"
+      }
+    }
+  },
+  "practice": {
+    "setup": {
+      "eyebrow": "면접 준비 · 직무 {count}개",
+      "title": "연습해서",
+      "titleAccent": "당연한 일로 만들어요",
+      "titleAfter": ".",
+      "sub": "직무, 면접관, 형식을 골라주세요. 면접관이 묻고, 답하는 동안 옆에 짚어주는 말이 나와요.",
+      "loading": "면접 준비를 불러오는 중…",
+      "startError": "이 면접을 시작하지 못했어요. 다시 시도해 주세요.",
+      "creditCost": "크레딧 {n}개 사용",
+      "creditsRemaining": "크레딧 {n}개 남음",
+      "insufficientCredits": "이 면접에는 크레딧 {required}개가 필요한데 {balance}개가 남아 있어요. 계속하려면 크레딧을 채워주세요.",
+      "getCredits": "크레딧 받기",
+      "brief_line": "면접관이 {topic}에 대해 파악하고 있어요.",
+      "first_free": "첫 정식 연습 면접은 무료예요.",
+      "recent": {
+        "label": "멈춘 곳부터 이어서",
+        "count": "최근 {count}건",
+        "with": "{name}와 함께",
+        "replay": "이 기록 다시 재생",
+        "showMore": "이전 {count}건 보기",
+        "showLess": "간단히 보기",
+        "deleteAria": "기록 삭제",
+        "deleteConfirm": "이 기록을 삭제할까요?",
+        "delete": "삭제",
+        "cancel": "취소"
+      },
+      "role": {
+        "title": "직무를 골라주세요",
+        "sub": "직무 {count}개를 검색하거나 둘러볼 수 있어요",
+        "searchPlaceholder": "시니어 PM, iOS, 머신러닝…",
+        "more": "{count}개 더 — 검색으로 좁혀주세요",
+        "tabBrowse": "직무 둘러보기",
+        "tabPaste": "공고 붙여넣기",
+        "jdPlaceholder": "공고 전체를 붙여넣어 주세요 — 직무, 맡게 될 일, 요구 사항. 질문은 여기서 만들어져요.",
+        "jdHint": "공고 전체를 붙여넣어 주세요. 요구 사항을 바탕으로 질문을 만들어요.",
+        "jdCount": "{count}자",
+        "jdTooShort": "조금만 더 넣어주세요. 맡게 될 일과 요구 사항까지 붙여넣으면 질문이 정확해져요.",
+        "categories": {
+          "engineering-devops": "엔지니어링과 DevOps",
+          "product-design": "프로덕트와 디자인",
+          "data-ai-analytics": "데이터, AI, 분석",
+          "marketing-content": "마케팅과 콘텐츠",
+          "sales-customer-success": "영업과 고객 성공",
+          "finance-accounting": "재무와 회계",
+          "healthcare-life-sciences": "의료와 생명과학",
+          "people-ops-trades": "인사, 운영, 기능직"
+        },
+        "roles": {
+          "frontend-engineer": "프런트엔드 엔지니어",
+          "backend-engineer": "백엔드 엔지니어",
+          "full-stack-engineer": "풀스택 엔지니어",
+          "mobile-engineer-ios-android": "모바일 엔지니어(iOS/Android)",
+          "devops-platform-engineer": "DevOps / 플랫폼 엔지니어",
+          "site-reliability-engineer": "사이트 신뢰성 엔지니어",
+          "security-engineer": "보안 엔지니어",
+          "engineering-manager": "엔지니어링 매니저",
+          "product-manager": "프로덕트 매니저",
+          "senior-product-manager": "시니어 프로덕트 매니저",
+          "technical-program-manager": "테크니컬 프로그램 매니저",
+          "product-designer": "프로덕트 디자이너",
+          "ux-researcher": "UX 리서처",
+          "ux-ui-designer": "UX/UI 디자이너",
+          "brand-visual-designer": "브랜드 / 비주얼 디자이너",
+          "data-analyst": "데이터 분석가",
+          "data-scientist": "데이터 사이언티스트",
+          "data-engineer": "데이터 엔지니어",
+          "machine-learning-engineer": "머신러닝 엔지니어",
+          "analytics-engineer": "애널리틱스 엔지니어",
+          "business-intelligence-analyst": "BI 분석가",
+          "ai-research-scientist": "AI / 리서치 사이언티스트",
+          "digital-marketing-manager": "디지털 마케팅 매니저",
+          "content-marketer-copywriter": "콘텐츠 마케터 / 카피라이터",
+          "seo-specialist": "SEO 전문가",
+          "social-media-manager": "소셜미디어 매니저",
+          "growth-marketer": "그로스 마케터",
+          "brand-manager": "브랜드 매니저",
+          "public-relations-specialist": "홍보 전문가",
+          "account-executive": "어카운트 이그제큐티브",
+          "sales-development-rep-sdr": "영업 개발 담당(SDR)",
+          "solutions-sales-engineer": "솔루션 / 세일즈 엔지니어",
+          "customer-success-manager": "고객 성공 매니저",
+          "account-manager": "어카운트 매니저",
+          "customer-support-specialist": "고객 지원 담당",
+          "sales-manager": "영업 매니저",
+          "financial-analyst": "재무 분석가",
+          "accountant": "회계 담당",
+          "controller": "재무 관리 책임자",
+          "investment-equity-analyst": "투자 / 주식 분석가",
+          "fp-a-manager": "FP&A 매니저",
+          "auditor": "감사 담당",
+          "tax-advisor": "세무 자문",
+          "registered-nurse": "간호사",
+          "medical-doctor-physician": "의사",
+          "pharmacist": "약사",
+          "clinical-research-associate": "임상연구 담당(CRA)",
+          "healthcare-administrator": "의료기관 운영 관리자",
+          "medical-laboratory-scientist": "임상병리사",
+          "physical-therapist": "물리치료사",
+          "hr-business-partner": "HR 비즈니스 파트너",
+          "technical-recruiter": "기술직 채용 담당",
+          "project-manager": "프로젝트 매니저",
+          "operations-manager": "운영 매니저",
+          "supply-chain-logistics-manager": "공급망 / 물류 매니저",
+          "electrician": "전기 기사",
+          "skilled-tradesperson-hvac-welding": "기능직(공조·용접)"
+        }
+      },
+      "interviewer": {
+        "title": "면접관을 골라주세요",
+        "sub": "저마다 묻는 방식이 달라요. 연습하고 싶은 상대를 골라주세요."
+      },
+      "difficulty": {
+        "easy": "쉬움",
+        "medium": "보통",
+        "hard": "어려움"
+      },
+      "type": {
+        "title": "형식을 골라주세요",
+        "sub": "하나만 해도 되고, 여러 개를 이어서 해도 돼요",
+        "minutes": "{minutes}분",
+        "recommendedBadge": "추천",
+        "recommendedFor": "{role}에 추천",
+        "allFormats": "모든 형식",
+        "forThisRole": "이 직무용"
+      },
+      "format": {
+        "title": "어떤 모습으로 참여할까요",
+        "sub": "실제에 가까운 건 화상이에요. 몸을 풀 때는 음성만으로도 충분해요.",
+        "video": {
+          "title": "화상 면접",
+          "tag": "추천",
+          "desc": "카메라를 켜고 얼굴을 보며 진행해요. 눈맞춤, 분위기, 잠깐의 침묵까지 기록돼요.",
+          "b1": "내 모습이 구석에 보여요",
+          "b2": "눈맞춤과 분위기도 기록돼요",
+          "b3": "녹화되니까 나중에 다시 볼 수 있어요"
+        },
+        "voice": {
+          "title": "음성만",
+          "tag": "부담이 적음",
+          "desc": "전화처럼 소리로만 해요. 카메라를 켜기 전에 말의 구조를 다듬기 좋아요.",
+          "b1": "카메라가 필요 없어요",
+          "b2": "말하는 내용에 집중할 수 있어요",
+          "b3": "기록은 대화록만 남아요"
+        }
+      },
+      "launch": {
+        "role": "직무",
+        "interviewer": "면접관",
+        "format": "형식",
+        "mode": "화상 또는 음성",
+        "pickRole": "직무 고르기",
+        "pickInterviewer": "면접관 고르기",
+        "pickType": "형식 고르기",
+        "modeVideo": "화상 면접",
+        "modeVoice": "음성만",
+        "start": "면접 시작",
+        "starting": "시작하는 중…",
+        "language": "언어",
+        "roleFromJd": "(붙여넣은 공고에서)"
+      },
+      "modeShort": {
+        "voice": "음성",
+        "video": "화상"
+      },
+      "langDuration": {
+        "title": "언어와 길이",
+        "sub": "면접에 쓸 언어와 진행 시간을 골라주세요.",
+        "languageLabel": "면접 언어",
+        "durationLabel": "길이"
+      },
+      "error": {
+        "title": "면접 준비를 불러오지 못했어요.",
+        "body": "잃어버린 건 없어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+        "retry": "다시 시도"
+      },
+      "preview": {
+        "title": "이 직무에서 요구하는 것",
+        "sub": "지금 올라온 공고를 바탕으로, 이 면접에서 다룰 내용을 정리했어요.",
+        "empty": "직무를 고르거나 공고를 붙여넣고, 면접관과 형식을 고르면 어떤 질문이 나올지 볼 수 있어요.",
+        "loading": "올라온 공고를 읽는 중…",
+        "error": "이 미리 보기는 표시할 수 없어요. 면접은 이 직무에 맞춰 그대로 만들어져요.",
+        "retry": "다시 시도",
+        "previewBtn": "보여주세요",
+        "summaryLabel": "이 직무를 한마디로",
+        "skillsLabel": "요구하는 기술",
+        "respLabel": "맡게 될 일",
+        "signalsLabel": "중요하게 보는 점",
+        "questionsLabel": "첫 질문 예시",
+        "sourcesLabel": "지금 올라온 공고에서",
+        "sourcesGeneric": "이 직무의 일반적인 내용을 바탕으로 했어요.",
+        "fromJd": "붙여넣은 공고에서"
+      },
+      "personas": {
+        "maya": {
+          "role": "편안한 채용 담당자",
+          "blurb": "대화하듯 부드럽게 이야기를 끌어내요. 함정은 없어요.",
+          "style": "차분한 진행 · 열린 질문 · 잘 들어줌 · 격려함 · 몰아세우지 않음",
+          "company": "빠르게 크는 회사의 채용 담당자"
+        },
+        "june": {
+          "role": "창업자",
+          "blurb": "무엇을 하려는 회사인지 중요하게 봐요. 왜 이 회사인지, 왜 지금인지 묻습니다.",
+          "style": "친근하고 빠름 · 동기부터 물음 · 답이 진심인지 확인함",
+          "company": "초기 단계 회사의 창업자 겸 대표"
+        },
+        "nova": {
+          "role": "넓게 훑는 면접관",
+          "blurb": "호기심이 많고 빨라요. 분야 전체를 오가며 또 무엇이 있는지 물어요.",
+          "style": "폭넓은 주제 · 다른 선택지와 비교 · 흐름에 밝음 · 깊이보다 넓이",
+          "company": "글로벌 컨설팅 회사의 프린시펄"
+        },
+        "priya": {
+          "role": "행동을 묻는 면접관",
+          "blurb": "실제로 있었던 상황을, 행동과 결과가 분명해질 때까지 물어요.",
+          "style": "경험담 중심 · 상황, 행동, 결과 · 끈질긴 추가 질문 · 갈등과 실패 · 내가 한 일과 팀이 한 일을 나눔",
+          "company": "대형 소비재 브랜드의 인사 책임자"
+        },
+        "rex": {
+          "role": "처음 보는 문제를 주는 면접관",
+          "blurb": "본 적 없는 문제를 건네고, 어떻게 쪼개는지 지켜봐요.",
+          "style": "정답 없는 문제 · 어림셈과 가정 · 소리 내어 생각하기 · 중간에 조건 하나를 바꿈",
+          "company": "빅테크와 컨설팅의 면접 절차"
+        },
+        "diaz": {
+          "role": "현장 매니저",
+          "blurb": "같은 일을 해 본 차분한 매니저예요. 정확히 무엇을 했는지 계속 물어요.",
+          "style": "차분함 · 이론보다 실무 · 실제 사례 하나를 순서대로",
+          "company": "직접 일하는 팀 리더"
+        },
+        "atlas": {
+          "role": "전체를 보는 설계자",
+          "blurb": "경험 많은 제너럴리스트예요. 아는 범위를 훑고, 건너뛴 곳을 짚어요.",
+          "style": "넓이부터 · 여러 영역을 오감 · 다음 영역으로 넘어가며 빈틈을 찾음",
+          "company": "대형 테크 회사의 최상위 엔지니어"
+        },
+        "bishop": {
+          "role": "채용 기준을 지키는 면접관",
+          "blurb": "실패, 졌던 논쟁, 그리고 스스로 책임졌다는 증거를 원해요.",
+          "style": "주인의식 · 실패와 갈등을 물음 · 외운 답을 의심함 · 당신이 무엇을 했는지",
+          "company": "빠르게 크는 회사의 채용 총괄"
+        },
+        "okonkwo": {
+          "role": "케이스 면접관",
+          "blurb": "엄격하고, 문제 조건을 계속 바꿔요. 압박 속에서 어떻게 생각하는지 봅니다.",
+          "style": "원칙에서 출발 · 구조적으로 쪼갬 · 조건을 좁혀감 · 전제를 되물음",
+          "company": "최상위 전략 컨설팅 회사의 파트너"
+        },
+        "kai": {
+          "role": "기술을 깊게 파는 면접관",
+          "blurb": "세 단계 아래까지 파고들어요. 정확히 어떤 결정을 했고 어디서 깨졌는지 묻습니다.",
+          "style": "기술적 깊이 · 조용한 침묵 · 실제로 무슨 일이 있었는지 순서대로 설명하게 함",
+          "company": "대규모 인프라 팀의 시니어 스태프 엔지니어"
+        },
+        "voss": {
+          "role": "의심 많은 임원",
+          "blurb": "모든 주장에 반박해요. 이야기 뒤에 있는 숫자를 원합니다.",
+          "style": "날카로움 · 의심함 · 숫자가 먼저 · 그걸 어떻게 아는지",
+          "company": "임원급 면접관"
+        },
+        "lena": {
+          "role": "전달력을 보는 면접관",
+          "blurb": "요점이 얼마나 분명하게 닿는지를 봐요. 어려운 것을 쉽게 설명하게 합니다.",
+          "style": "듣는 사람이 먼저 · 처음 듣는 사람에게 설명하기 · 깔끔한 첫 문장에 점수 · 말이 늘어지면 짚어냄",
+          "company": "임원 수백 명을 지도한 커뮤니케이션 책임자"
+        },
+        "mirae": {
+          "role": "빠른 패널 면접관",
+          "blurb": "2분마다 주제를 바꾸고 시간을 계속 재요.",
+          "style": "주제가 빠르게 바뀜 · 답변 시간 제한 · 빠른 속도 · 잘 바꿔 타면 높게 봄",
+          "company": "대형 테크 회사의 최종 면접 패널 진행자"
+        },
+        "osei": {
+          "role": "가치관을 보는 면접관",
+          "blurb": "힘든 순간에 사람을 어떻게 대하는지 봐요. 팀을 앞세운 경험을 묻습니다.",
+          "style": "행동으로 드러난 가치관 · 협업 사례 · 팀은 어떻게 느꼈는지 · 따뜻하지만 파고듦",
+          "company": "가치관을 중시하는 회사의 인사 총괄"
+        },
+        "devi": {
+          "role": "함께 생각하는 면접관",
+          "blurb": "정답 없는 문제를 건네고 같이 풀어요. 문제를 어떻게 세우는지를 봅니다.",
+          "style": "같이 추론하기 · 문제 세우는 방식을 살짝 밀어줌 · 답보다 사고 과정",
+          "company": "소리 내어 함께 생각하는 프로덕트 전략가"
+        },
+        "amara": {
+          "role": "시장을 훑는 면접관",
+          "blurb": "여러 시장과 분야를 오가며, 시야의 넓이와 연결하는 힘을 봐요.",
+          "style": "여러 업계를 넘나듦 · 시장을 정리함 · 누가 또 잘하는지 · 생각을 이어 붙임",
+          "company": "여러 업계를 맡는 성장 자문"
+        },
+        "sterling": {
+          "role": "경영진 면접관",
+          "blurb": "직급이 높고 요구가 까다로우며 서두르지 않아요. 결론부터, 그다음 근거를 원합니다.",
+          "style": "격식 있음 · 결론부터 · 캐물어도 간결하게 · 정확성을 시험함",
+          "company": "대기업의 이사회급 실무 책임자"
+        },
+        "tariq": {
+          "role": "압박 면접관",
+          "blurb": "세고 빠르게 밀어붙이고, 말을 끊고, 답을 그대로 되돌려줘요.",
+          "style": "질문이 연달아 옴 · 끊고 반박함 · 반대편에서 논쟁함 · 침착함을 시험함",
+          "company": "압박이 큰 트레이딩 부서의 면접 절차"
+        }
+      },
+      "archetype": {
+        "warmup": "몸풀기",
+        "behavioral": "지난 상황",
+        "breadth": "폭",
+        "potential": "문제 해결",
+        "depth": "깊이",
+        "communication": "전달력",
+        "pressure": "압박"
+      },
+      "types": {
+        "screening": {
+          "label": "전화 면담",
+          "sub": "본 면접 전에 묻는 경력, 지원 동기, 실무 조건 질문"
+        },
+        "behavioral": {
+          "label": "지난 상황",
+          "sub": "실제 경험담: 주인의식, 갈등, 실패, 설득, 사람을 이끈 일"
+        },
+        "technical": {
+          "label": "라이브 코딩",
+          "sub": "공유 편집기에서 말로 설명하며 문제를 풀어요"
+        },
+        "system": {
+          "label": "시스템 설계",
+          "sub": "큰 시스템을 끝에서 끝까지 설계하고 선택의 이유를 설명해요"
+        },
+        "case": {
+          "label": "비즈니스 케이스",
+          "sub": "정답 없는 사업 문제를 구조로 잡고, 데이터를 쓰고, 결정해요"
+        },
+        "culture": {
+          "label": "가치관과 일하는 방식",
+          "sub": "무엇을 중요하게 여기고, 어떻게 일하며, 애매할 때 어떻게 움직이는지"
+        },
+        "panel": {
+          "label": "패널 면접",
+          "sub": "여러 면접관이 한꺼번에 묻듯 주제가 빠르게 섞여요"
+        },
+        "take_home": {
+          "label": "과제 설명",
+          "sub": "혼자 해낸 과제를 설명하고 한 걸음 더 발전시켜요"
+        },
+        "debugging": {
+          "label": "버그 찾기와 코드 리뷰",
+          "sub": "무엇이 깨졌는지 찾거나, 다른 사람의 코드를 리뷰해요"
+        },
+        "incident_sre": {
+          "label": "장애 대응",
+          "sub": "실서비스 장애를 처리해요. 먼저 막고, 그다음 무슨 일이었는지 설명해요"
+        },
+        "sql_analytics": {
+          "label": "SQL과 분석",
+          "sub": "실제 테이블에 질의를 쓰고 지표를 설명해요"
+        },
+        "product_sense": {
+          "label": "프로덕트 감각",
+          "sub": "제품을 설계하고, 잘됐는지 알려줄 숫자를 골라요"
+        },
+        "portfolio": {
+          "label": "지난 작업 리뷰",
+          "sub": "실제 작업을 짚어가며 설명해요: 과정, 결정, 내가 맡은 부분, 결과"
+        },
+        "design_critique": {
+          "label": "디자인 리뷰",
+          "sub": "그 자리에서 제품을 평가하거나, 새 과제에 안을 그려요"
+        },
+        "research_design": {
+          "label": "리서치 설계",
+          "sub": "즉석에서 조사를 설계하거나, 기존 설계의 허점을 찾아요"
+        },
+        "sales_roleplay": {
+          "label": "영업 통화 역할극",
+          "sub": "구매자 역할을 맡은 상대와 실제처럼 통화해요"
+        },
+        "pitch_demo": {
+          "label": "데모 또는 제안",
+          "sub": "여러 사람 앞에서 데모나 제안을 하고, 이어서 질문을 받아요"
+        },
+        "account_strategy": {
+          "label": "고객 전략",
+          "sub": "맡은 고객의 상황을 읽고, 유지하고 키울 계획을 세워요"
+        },
+        "modeling_test": {
+          "label": "재무 모델링",
+          "sub": "모델을 만들거나 부하를 걸어보고 내용을 설명해요"
+        },
+        "finance_technical": {
+          "label": "재무 전문 질문",
+          "sub": "회계, 기업가치 평가, 거래 구조, 투자 관점"
+        },
+        "clinical_scenario": {
+          "label": "임상 상황",
+          "sub": "현실적인 환자 상황을 다뤄요: 평가하고, 우선순위를 정하고, 보고해요"
+        },
+        "situational_judgement": {
+          "label": "직장에서의 판단",
+          "sub": "윤리, 전문가로서의 태도, 판단력을 묻는 직장 속 곤란한 상황"
+        },
+        "practical_skills": {
+          "label": "실기 확인",
+          "sub": "손으로 하는 작업을 설명해요: 기법, 안전, 규정, 원인 파악"
+        },
+        "teaching_demo": {
+          "label": "수업 시연",
+          "sub": "짧은 수업을 하고, 왜 그렇게 가르쳤는지 설명해요"
+        },
+        "ops_case": {
+          "label": "운영 케이스",
+          "sub": "공정이나 공급 문제를 진단하고, 먼저 고칠 것을 고릅니다"
+        },
+        "presentation": {
+          "label": "발표",
+          "sub": "짜임새 있는 발표를 준비해서 하고, 이어서 질문을 받아요"
+        },
+        "leadership_strategy": {
+          "label": "리더십과 전략",
+          "sub": "팀을 만들고, 방향을 정하고, 첫 90일을 계획해요"
+        },
+        "reference_check": {
+          "label": "경력과 자격 확인",
+          "sub": "막바지에 묻는 성과, 신뢰도, 자격에 대한 질문"
+        }
+      },
+      "showAll": "{count}개 모두 보기",
+      "showFewer": "간단히 보기"
+    },
+    "live": {
+      "loading": "면접 방을 준비하는 중…",
+      "backToSetup": "설정으로 돌아가기",
+      "livePill": "진행 중",
+      "live": "진행 중",
+      "recording": "녹화 중",
+      "modeVideo": "화상",
+      "modeVoice": "음성",
+      "progress": "질문 {current} / {total}",
+      "aiInterviewer": "면접관",
+      "interviewer": "면접관",
+      "state": {
+        "asking": "묻는 중…",
+        "listening": "듣는 중",
+        "thinking": "생각하는 중",
+        "speaking": "말하는 중",
+        "connecting": "연결하는 중…",
+        "waiting": "시작을 기다리는 중…"
+      },
+      "questionNum": "질문 {current} / {total}",
+      "showHint": "힌트 보기",
+      "hideHint": "힌트 숨기기",
+      "coachHint": "힌트",
+      "skip": "건너뛰기",
+      "skipped": "(건너뜀)",
+      "you": "나",
+      "youName": "나 · {name}",
+      "youRole": "{role} · 나",
+      "micOpen": "마이크가 켜져 있고 답변이 녹음되고 있어요",
+      "micOpenShort": "마이크 켜짐",
+      "micReady": "마이크 준비됨",
+      "waitForQuestion": "질문이 끝날 때까지 기다려 주세요",
+      "composerPlaceholder": "말해도 되고, 입력해도 되고, 둘 다 해도 돼요. Command + Enter로 보내요.",
+      "composerLabel": "내 답변",
+      "coachLive": "답하는 동안 짚어주는 말",
+      "dismiss": "닫기",
+      "transcript": "실시간 대화록",
+      "transcriptEmpty": "두 사람이 말하기 시작하면 여기에 대화록이 나와요.",
+      "autoSaved": "자동으로 저장돼요",
+      "endEarly": "면접 먼저 끝내기",
+      "ending": "마무리하는 중…",
+      "cameraOff": "카메라 꺼짐",
+      "muteMic": "마이크 끄기",
+      "unmuteMic": "마이크 켜기",
+      "stopCam": "카메라 끄기",
+      "startCam": "카메라 켜기",
+      "endInterview": "면접 끝내기",
+      "agentJoining": "면접관에게 연결하는 중…",
+      "agentSlow": "면접관이 들어오는 데 시간이 걸리고 있어요. 1분이 지나도 시작되지 않으면 끝내고 새로 시작해 주세요.",
+      "agentQualityPoor": "면접관 쪽 연결이 좋지 않아요.",
+      "enableAudio": "눌러서 소리 켜기",
+      "reconnecting": "다시 연결하는 중…",
+      "connectionLostTitle": "연결이 끊겼어요",
+      "connectionLostBody": "면접은 아직 열려 있어요. 다시 들어오면 멈춘 곳부터 이어갈 수 있고, 지금 끝내고 리포트를 받아도 돼요.",
+      "autoRejoinTitle": "연결이 끊겼어요 — 다시 연결하는 중",
+      "autoRejoinBody": "면접으로 다시 데려가고 있어요. 잘 안 되면 직접 다시 들어올 수 있어요.",
+      "rejoin": "면접에 다시 들어가기",
+      "endAnyway": "면접 끝내기",
+      "poorConnection": "연결 상태 나쁨",
+      "micDeniedTitle": "마이크 권한이 필요해요",
+      "micDeniedBody": "마이크에 연결하지 못해서 면접관이 목소리를 들을 수 없어요. 브라우저에서 마이크를 허용한 뒤 다시 시도해 주세요.",
+      "micRetry": "다시 시도",
+      "deviceFailure": "마이크나 카메라에 문제가 있어요. 기기 설정을 확인해 주세요. 면접관에게 소리나 화면이 닿지 않을 수 있어요.",
+      "interviewerUnavailableTitle": "면접관이 들어오지 못했어요",
+      "interviewerUnavailableBody": "면접관을 방에 넣지 못했어요. 대개 일시적인 문제예요. 잠시 뒤에 다시 시도해 주세요.",
+      "retry": "다시 시도",
+      "quality": {
+        "good": "연결 상태 좋음",
+        "fair": "연결 상태 보통",
+        "poor": "연결 상태 나쁨"
+      },
+      "controls": {
+        "camOn": "카메라 켜짐",
+        "camOff": "카메라 꺼짐",
+        "mic": "마이크",
+        "mute": "음소거",
+        "restart": "다시 시작",
+        "submitNext": "보내고 다음으로",
+        "submitFinish": "보내고 끝내기",
+        "submitting": "보내는 중…"
+      },
+      "cam": {
+        "requesting": "카메라 권한을 요청하는 중…",
+        "requestingSub": "브라우저 안내에 답해 주세요",
+        "denied": "카메라가 막혀 있어요",
+        "deniedSub": "브라우저 설정에서 허용한 뒤,",
+        "tryAgain": "다시 시도",
+        "unavailable": "카메라를 찾지 못했어요",
+        "unavailableSub": "음성만으로 이어가요",
+        "off": "카메라 꺼짐",
+        "turnOn": "켜기",
+        "allow": "눌러서 카메라 허용하기",
+        "enable": "켜기"
+      },
+      "expired": {
+        "title": "이 세션은 끝났어요",
+        "body": "이 면접은 이미 끝났거나 링크가 오래됐어요. 새로 시작해 주세요.",
+        "cta": "새 면접 시작"
+      },
+      "coach": {
+        "currentQuestion": "지금 질문",
+        "awaitingQuestion": "다음 질문을 기다리는 중…",
+        "showHint": "힌트 보기",
+        "hideHint": "힌트 숨기기",
+        "coachHint": "힌트",
+        "thinking": "생각하는 중…",
+        "noHint": "자기 말로 답해 주세요.",
+        "coachLive": "답하는 동안 짚어주는 말",
+        "dismiss": "닫기",
+        "listeningFor": "상대가 듣고 싶어 하는 것",
+        "answerTime": "시간",
+        "pace": "말하는 속도",
+        "fillers": "군말",
+        "specifics": "구체성",
+        "coachMode": "짚어주기",
+        "on": "켬",
+        "off": "끔",
+        "coachModeHint": "답하는 동안 짧게 짚어줘요. 실제처럼 해보고 싶으면 꺼두세요."
+      }
+    },
+    "report": {
+      "title": "면접 리포트",
+      "eyebrow": "세션 완료 · {minutes}분",
+      "eyebrowScoring": "답변을 채점하는 중",
+      "eyebrowFallback": "연습 면접 · 리포트",
+      "sub": "실제 면접관이 보는 기준으로 채점했어요.",
+      "loading": "리포트를 불러오는 중…",
+      "loadingTitle": "답변을",
+      "loadingTitleAccent": "읽는 중",
+      "loadingTitleAfter": "…",
+      "error": "이 리포트를 불러오지 못했어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+      "newInterview": "새 면접",
+      "processing": "마무리하는 중이에요. 녹화와 점수가 곧 여기에 나와요.",
+      "refresh": "새로고침",
+      "refreshing": "새로고침하는 중…",
+      "overall": "종합",
+      "noScore": "아직 점수가 없어요.",
+      "deltaUp": "지난번보다 +{delta}",
+      "deltaDown": "지난번보다 −{delta}",
+      "strengths": "잘한 점",
+      "keepThese": "이어갈 점",
+      "sharpen": "고칠 점",
+      "topN": "상위 {count}개",
+      "recording": "녹화",
+      "transcript": "대화록",
+      "transcriptView": "대화록 보기",
+      "transcriptHide": "대화록 숨기기",
+      "transcriptCount": "{count, plural, other {주고받은 말 #번}}",
+      "download": "내려받기",
+      "analysisPending": "자세한 총평을 쓰는 중이에요. 1분쯤 걸릴 수 있어요.",
+      "analysisStalled": "자세한 총평이 예상보다 오래 걸리고 있어요.",
+      "refreshAnalysis": "총평 새로고침",
+      "dim": {
+        "structure": "이야기를 순서대로 전했나요?",
+        "specificity": "실제 숫자를 말했나요?",
+        "communication": "답변 길이가 알맞았나요?",
+        "confidence": "확신 있게 말했나요?",
+        "roleFit": "질문에 끝까지 답했나요?"
+      },
+      "actions": {
+        "runAgain": "한 번 더 하기",
+        "pickSetup": "다른 설정으로 하기",
+        "download": "대화록 내려받기",
+        "share": "친구에게 공유하기"
+      },
+      "recommendations": {
+        "title": "다음에 할 일",
+        "sub": "구체적인 순서대로",
+        "pending": "다음 단계를 쓰는 중…",
+        "unavailable": "이 세션에서는 다음 단계를 볼 수 없어요.",
+        "empty": "바꿀 게 없어요. 좋은 세션이었어요.",
+        "exampleLabel": "다시 쓴 예시",
+        "drill": "이걸 연습하기",
+        "priority": {
+          "high": "먼저 하기",
+          "medium": "다음에 하기",
+          "low": "나중에 하기"
+        }
+      },
+      "questionBreakdown": {
+        "title": "질문별 총평",
+        "count": "{count, plural, other {질문 #개}}",
+        "pending": "질문별 총평을 쓰는 중…",
+        "unavailable": "이 세션에서는 질문별 총평을 볼 수 없어요.",
+        "intentLabel": "이 질문을 한 이유",
+        "answerSummaryLabel": "내 답변",
+        "analysisLabel": "무슨 일이 있었는지",
+        "correctionLabel": "고칠 점",
+        "suggestionLabel": "고치는 방법",
+        "tipsLabel": "덧붙이는 말",
+        "modelAnswerLabel": "더 나은 답변",
+        "keyQuoteLabel": "내가 한 말",
+        "missed": "이 질문까지는 가지 못했어요.",
+        "offScript": "예정에 없던 질문",
+        "rating": {
+          "strong": "좋음",
+          "adequate": "무난함",
+          "weak": "보완 필요",
+          "missed": "답하지 않음"
+        }
+      }
+    }
+  },
+  "settings": {
+    "title": "설정",
+    "loading": "설정을 불러오는 중…",
+    "nav": {
+      "search": "내가 찾는 일",
+      "resume": "이력서",
+      "notif": "알림",
+      "appearance": "화면",
+      "billing": "요금제와 결제",
+      "account": "계정",
+      "danger": "되돌릴 수 없는 작업"
+    },
+    "savebar": {
+      "unsaved": "저장하지 않은 변경 사항이 있어요",
+      "discard": "버리기",
+      "save": "변경 사항 저장",
+      "saving": "저장 중…"
+    },
+    "error": {
+      "title": "설정을 불러오지 못했어요.",
+      "body": "잃어버린 건 없어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+      "retry": "다시 시도"
+    },
+    "appearance": {
+      "title": "화면",
+      "sub": "이 앱이 보이는 방식이에요. 이 설정은 지금 쓰는 기기에만 저장돼요.",
+      "group": "테마",
+      "theme_label": "밝게 또는 어둡게",
+      "theme_sub": "밤에는 어두운 화면이 눈에 편해요. 그 밖에 달라지는 건 없어요.",
+      "light": "밝게",
+      "dark": "어둡게"
+    },
+    "identity": {
+      "eyebrow": "계정",
+      "title_before": "여기에 등록된",
+      "title_em": "내 정보",
+      "title_after": "예요.",
+      "sub": "모든 지원과 공고에 맞춘 이력서가 이 정보에서 만들어져요.",
+      "group_profile": "프로필",
+      "upload_photo": "사진 올리기",
+      "photo_hint": "PNG 또는 JPG · 정사각형이 가장 잘 맞아요",
+      "full_name": "이름",
+      "pronouns": "호칭",
+      "pronouns_sub": "선택 — 자기소개서 표현을 일관되게 맞추는 데 써요",
+      "pronouns_other": "그 밖의 것",
+      "pronouns_none": "밝히지 않기",
+      "years_exp": "경력 연차",
+      "new_grad": "신입",
+      "years_suffix": "년",
+      "group_contact": "연락처",
+      "email": "이메일",
+      "phone": "전화",
+      "location": "지역",
+      "location_ph": "시, 도",
+      "group_links": "링크",
+      "linkedin": "LinkedIn",
+      "github": "GitHub",
+      "portfolio": "포트폴리오 또는 웹사이트",
+      "group_default_resume": "기본 이력서",
+      "resume_base": "기본",
+      "no_resumes": "아직 이력서가 없어요. 이력서 화면에서 하나 만들어 주세요."
+    },
+    "hunt": {
+      "eyebrow": "내가 찾는 일",
+      "title_before": "어떤 일을",
+      "title_em": "찾고 있는지",
+      "title_after": "알려주세요.",
+      "sub": "자세히 알려줄수록 읽어야 할 공고가 줄어요. 더 보고 싶으면 조건을 느슨하게 해주세요.",
+      "plain_label": "말로 하면",
+      "plain_l1": "{stages} 회사의 {roles}",
+      "plain_l2": "{cities}에서 {modes}",
+      "plain_l3": "기본급 ${min}k~{max}k · 업계 {count}개",
+      "plain_l4": "꼭 필요한 조건: {items}",
+      "plain_l5": "받아들일 수 없는 조건: {items}",
+      "any_stage": "단계 상관없이",
+      "none": "없음",
+      "mode_remote_word": "재택",
+      "mode_hybrid_word": "혼합 근무",
+      "mode_onsite_word": "사무실 출근",
+      "group_intent": "내 말로",
+      "intent_label": "다음에 하고 싶은 일",
+      "intent_sub": "자유롭게 적어주세요 — 비슷한 공고 둘 중 하나를 고를 때 써요",
+      "group_role": "직무",
+      "titles_label": "원하는 직무 이름",
+      "titles_sub": "받아들일 만한 다른 표기도 넣어주세요",
+      "titles_ph": "직무 이름을 넣고 쉼표",
+      "seniority_label": "직급",
+      "seniority_sub": "{level} 이상을 보고 있어요",
+      "group_location": "근무지",
+      "work_mode_label": "재택 또는 출근",
+      "mode_remote": "재택",
+      "mode_remote_desc": "어디서든, 어느 시간대든",
+      "mode_hybrid": "혼합",
+      "mode_hybrid_desc": "주 2~3일 출근",
+      "mode_onsite": "사무실 출근",
+      "mode_onsite_desc": "주 5일 출근",
+      "cities_label": "도시 또는 지역",
+      "cities_sub": "재택으로 채용하는 지역도 함께 봐요",
+      "cities_ph": "도시 추가",
+      "group_comp": "급여",
+      "salary_label": "기본급 범위",
+      "salary_sub": "${min}k~${max}k · {min}k 아래는 보이지 않아요",
+      "salary_min": "기본급 하한",
+      "salary_max": "기본급 상한",
+      "salary_median": "{level} 시장 중간값: $215k",
+      "group_company": "회사",
+      "stage_label": "단계",
+      "stage_sub": "어느 단계의 회사에 가고 싶은지",
+      "headcount_label": "회사 규모",
+      "group_industry": "업계",
+      "industries_target_label": "원하는 업계",
+      "industries_target_sub": "먼저 보여줘요",
+      "industries_avoid_label": "피하고 싶은 업계",
+      "industries_avoid_sub": "보이지 않아요",
+      "industries_avoid_ph": "업계 추가",
+      "group_hard_rules": "절대 조건",
+      "musthaves_label": "꼭 필요한 조건",
+      "musthaves_sub": "이게 없는 공고는 보이지 않아요",
+      "musthaves_ph": "꼭 필요한 조건 추가",
+      "dealbreakers_label": "받아들일 수 없는 조건",
+      "dealbreakers_sub": "공고에 이 내용이 있으면 보이지 않아요",
+      "dealbreakers_ph": "조건 추가",
+      "work_auth_label": "회사의 비자 지원이 필요한가요?",
+      "auth_citizen": "아니요 — 이미 일할 수 있어요",
+      "auth_pr": "아니요 — 영주권이 있어요",
+      "auth_h1b": "네 — H-1B 지원이 필요해요",
+      "auth_opt": "네 — OPT 연장이 필요해요",
+      "auth_eu": "아니요 — EU 또는 영국 시민이에요",
+      "auth_other": "그 밖의 경우"
+    },
+    "notif": {
+      "eyebrow": "알림",
+      "title_before": "언제",
+      "title_em": "알림을 받을지",
+      "title_after": " 정해요.",
+      "sub": "처음에는 모두 꺼져 있어요. 원하는 것만 켜주세요.",
+      "group_channels": "받는 곳",
+      "channel_email": "이메일",
+      "channel_email_sub": "계정 이메일로 보내요",
+      "channel_push": "푸시 알림",
+      "channel_push_sub": "브라우저와 모바일 앱",
+      "channel_sms": "문자 메시지",
+      "group_matrix": "보낼 내용",
+      "col_email": "이메일",
+      "col_push": "푸시",
+      "col_sms": "문자",
+      "event_newMatch90_label": "아주 잘 맞는 공고가 올라올 때",
+      "event_newMatch90_sub": "나에게 잘 맞는 새 공고",
+      "event_appSent_label": "지원함으로 표시할 때",
+      "event_appSent_sub": "짧은 확인 알림",
+      "event_response_label": "회사가 답장할 때",
+      "event_response_sub": "채용 담당자나 팀 책임자가 보낸 답장",
+      "event_interview_label": "면접 일정이 잡힐 때",
+      "event_interview_sub": "시간이 정해졌을 때",
+      "group_digest": "모아 보기",
+      "digest_label": "주기",
+      "digest_sub": "따로따로 보내지 않고 한 번에 모아 보내요",
+      "digest_off": "끔",
+      "digest_daily": "매일 오전 7시",
+      "digest_weekly": "매주 월요일"
+    },
+    "privacy": {
+      "eyebrow": "개인정보",
+      "title_before": "내 데이터와",
+      "title_em": "차단한 회사",
+      "title_after": "예요.",
+      "sub": "차단한 회사의 공고는 보이지 않아요. 데이터는 내 것이고, 내려받거나 지울 수 있어요.",
+      "group_blocklist": "공고를 보고 싶지 않은 회사",
+      "blocked_label": "차단함",
+      "blocked_sub": "이 회사들의 공고는 보이지 않아요",
+      "reason_employer": "지금 다니는 회사",
+      "reason_byyou": "직접 추가함",
+      "remove": "삭제",
+      "add_company": "차단할 회사 추가",
+      "add_ph": "회사 이름",
+      "add_confirm": "추가",
+      "blocked_recruiters_label": "차단한 채용 담당자",
+      "blocked_recruiters_sub": "채용 담당자 {count}명이 연락할 수 없어요",
+      "manage_list": "목록 관리",
+      "group_data": "내 데이터",
+      "export_label": "전부 내려받기",
+      "export_sub": "지원 내역, 초안, 대화록, 이력서",
+      "download_archive": "내려받기",
+      "retention_label": "보관 기간",
+      "retention_sub": "면접 대화록과 초안을 얼마나 보관할지",
+      "retention_30": "30일",
+      "retention_90": "90일",
+      "retention_365": "1년",
+      "retention_forever": "계속 보관"
+    },
+    "profile": {
+      "title": "계정 정보",
+      "displayName": "표시 이름",
+      "memberSince": "{date}에 가입",
+      "verified": "확인됨",
+      "edit": "수정",
+      "save": "저장",
+      "cancel": "취소"
+    },
+    "credits": {
+      "title": "연습 면접 크레딧",
+      "unit": "크레딧",
+      "note": "크레딧 1개는 20분짜리 연습 면접이에요. 더 짧거나 긴 세션은 시간에 비례해서 써요."
+    },
+    "region": {
+      "label": "지역",
+      "intl": "해외(USD)",
+      "cn": "중국(위안)"
+    },
+    "billing": {
+      "title": "요금제와 결제",
+      "sub": "지금 쓰는 요금제, 바꿀 수 있는 요금제, 영수증이 있는 곳이에요.",
+      "checkout_failed": "결제 화면을 열지 못했어요. 다시 시도하거나 다른 카드를 써주세요.",
+      "payments_unavailable": "결제는 아직 준비되지 않았어요. 지금 요금제는 그대로 쓸 수 있어요.",
+      "manage": "결제 관리",
+      "invoices": "청구서 보기",
+      "cancel": "구독 해지",
+      "viewHistory": "결제 내역 보기",
+      "summaryNote": "결제 수단, 청구서, 영수증은 결제 회사의 안전한 페이지에 있어요.",
+      "current": {
+        "renews": "{date}에 갱신 · 월 결제",
+        "cancelsAt": "{date}에 종료",
+        "expiresAt": "{date}에 종료됐어요 — 계속하려면 갱신해 주세요",
+        "status": {
+          "active": "이용 중",
+          "pastDue": "결제 기한 지남",
+          "canceled": "해지됨"
+        }
+      },
+      "history": {
+        "heading": "결제 내역",
+        "subtitle": "청구서와 영수증이에요.",
+        "back": "설정으로 돌아가기",
+        "title": "청구서",
+        "empty": "아직 청구서가 없어요.",
+        "loading": "불러오는 중…",
+        "error": "결제 내역을 불러오지 못했어요. 다시 시도해 주세요.",
+        "download": "내려받기",
+        "paid": "결제됨",
+        "pending": "처리 중",
+        "failed": "실패",
+        "card": "카드"
+      },
+      "checkout": {
+        "success": "요금제가 켜졌어요.",
+        "cancel": "결제를 취소했어요. 요금제는 그대로예요.",
+        "dismiss": "닫기"
+      }
+    },
+    "plan": {
+      "free": "무료",
+      "premium": "프리미엄",
+      "premiumPlus": "프리미엄+",
+      "starter": "스타터",
+      "growth": "그로스",
+      "perMonth": "/월",
+      "dailyCap": "하루 {n}회",
+      "mostPopular": "가장 많이 골라요",
+      "current": "지금 쓰는 요금제",
+      "upgrade": "올리기",
+      "downgrade": "아래 요금제로 내리기",
+      "comingSoon": "아직 사용할 수 없어요",
+      "freeForever": "무료",
+      "freePrice": "무료",
+      "subscribe": "구독하기",
+      "subscribeAlipay": "Alipay로 결제",
+      "creditsCap": "월 {n}크레딧",
+      "select_free": "무료로 시작",
+      "select_paid": "{plan} 고르기",
+      "cta": {
+        "upgradeTo": "{plan}으로 올리기",
+        "switchTo": "{plan}으로 바꾸기",
+        "yourFreePlan": "지금 쓰는 요금제",
+        "alipaySwitchNote": "요금제를 바꾸려면 해지한 뒤 결제 화면에서 다시 구독해 주세요."
+      },
+      "credits_explainer": "크레딧 1개는 20분짜리 연습 면접 한 번이에요. 더 짧거나 긴 세션은 시간에 비례해서 쓰고, 크레딧은 결제 달이 시작될 때 다시 채워져요.",
+      "feature": {
+        "mockInterviews": "연습 면접",
+        "resumeTailors": "공고에 맞춘 이력서",
+        "coverLetters": "자기소개서",
+        "priorityMatching": "공고 채점이 더 빠름",
+        "everythingFree": "무료 요금제의 모든 기능",
+        "everythingPremium": "프리미엄의 모든 기능",
+        "prioritySupport": "더 빠른 지원",
+        "creditsMonthly": "연습 면접 크레딧 월 {n}개",
+        "fullReports": "면접 리포트 전문",
+        "allInterviewTypes": "모든 형식과 모든 면접관",
+        "everythingStarter": "스타터의 모든 기능",
+        "toneSteering": "면접관의 말투 고르기"
+      }
+    },
+    "usage": {
+      "title": "사용량",
+      "byDate": "지난 30일 활동",
+      "byFeature": "오늘, 기능별",
+      "actionCount": "{count}회",
+      "meter": "{used} / {cap}",
+      "tierCap": "{tier} · 하루 {cap}회",
+      "resetNote": "매일 UTC 자정에 초기화 · {tier}는 하루 {cap}회까지",
+      "heatLess": "적음",
+      "heatMore": "많음",
+      "recent": "최근 활동",
+      "recentItem": "{feature} {count}회"
+    },
+    "security": {
+      "title": "보안",
+      "changePassword": "비밀번호 변경",
+      "changeSuccess": "비밀번호를 바꿨어요.",
+      "currentPassword": "현재 비밀번호",
+      "newPassword": "새 비밀번호",
+      "confirmPassword": "새 비밀번호 확인",
+      "sessions": "로그인한 기기",
+      "signOutEverywhere": "모든 기기에서 로그아웃",
+      "signOutNote": "모든 기기와 브라우저에서 로그아웃해요. 어디서든 다시 로그인해야 해요.",
+      "oauthNote": "{provider}로 로그인해서 바꿀 비밀번호가 없어요.",
+      "strength": {
+        "weak": "안전도 · 약함",
+        "fair": "안전도 · 보통",
+        "good": "안전도 · 좋음",
+        "strong": "안전도 · 아주 좋음"
+      },
+      "error": {
+        "tooShort": "비밀번호는 8자 이상이어야 해요.",
+        "mismatch": "두 비밀번호가 서로 달라요.",
+        "wrongPassword": "현재 비밀번호가 맞지 않아요.",
+        "noPassword": "이 계정에는 비밀번호가 설정돼 있지 않아요.",
+        "weakPassword": "더 안전한 비밀번호를 골라주세요.",
+        "rateLimited": "시도가 너무 많아요. 1분 뒤에 다시 시도해 주세요.",
+        "generic": "비밀번호를 바꾸지 못했어요. 다시 시도해 주세요."
+      }
+    },
+    "danger": {
+      "eyebrow": "되돌릴 수 없는 작업",
+      "title_before": "되돌릴 수 없는",
+      "title_em": "작업",
+      "title_after": "이에요.",
+      "sub": "모두 실행 전에 한 번 확인해요. 확인한 뒤에는 되돌릴 수 없어요.",
+      "reset_title": "설정 초기화",
+      "reset_desc": "이 화면의 내용을 모두 처음 상태로 돌려요. 이력서와 지원 내역은 그대로예요.",
+      "reset_btn": "설정 초기화",
+      "delete_data_title": "공고 데이터 삭제",
+      "delete_data_desc": "공고 목록과 지원 내역을 지워요. 계정과 이력서는 그대로예요.",
+      "delete_data_btn": "공고 데이터 삭제",
+      "delete_data_confirm": "공고 목록, 지원 내역, 기록을 지워요. 계정과 이력서는 그대로예요.",
+      "delete_data_confirm_label": "확인",
+      "delete_data_confirm_hint": "확인하려면 {keyword}를 입력해 주세요.",
+      "delete_data_confirm_keyword": "DELETE",
+      "delete_data_confirm_cta": "공고 데이터 삭제",
+      "delete_data_confirm_error": "확인하려면 {keyword}를 정확히 입력해 주세요.",
+      "delete_data_cancel": "취소",
+      "delete_data_error": "데이터를 지우지 못했어요. 다시 시도해 주세요.",
+      "delete_data_success": "{count}건을 지웠어요. 계정과 이력서는 그대로예요.",
+      "delete_data_done": "완료",
+      "delete_account_title": "계정 삭제",
+      "delete_account_desc": "이력서, 지원 내역, 대화록, 녹화를 모두 지워요. 되돌릴 수 없어요.",
+      "delete_account_btn": "계정 삭제",
+      "title": "되돌릴 수 없는 작업",
+      "deleteAccount": "계정 삭제",
+      "deleteDescription": "계정, 이력서, 면접 녹화, 구독을 지워요. 되돌릴 수 없어요.",
+      "confirmEmailLabel": "이메일 확인",
+      "confirmEmailHint": "확인하려면 {email}을 입력해 주세요.",
+      "reasonLabel": "이유",
+      "reasonPlaceholder": "떠나는 이유를 적어주세요(필수)",
+      "cancel": "취소",
+      "delete": "내 계정 삭제",
+      "error": {
+        "mismatch": "이 계정의 이메일과 맞지 않아요.",
+        "reasonRequired": "떠나는 이유를 적어주세요.",
+        "generic": "계정을 지우지 못했어요. 다시 시도해 주세요."
+      }
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "다시 오셨네요",
+      "subtitle": "RoboApply에 로그인해요.",
+      "email": "이메일",
+      "password": "비밀번호",
+      "submit": "로그인",
+      "submitting": "로그인하는 중…",
+      "no_account": "아직 계정이 없나요?",
+      "signup_cta": "계정 만들기",
+      "error_generic": "이메일과 비밀번호가 맞지 않아요. 둘 다 확인하고 다시 시도해 주세요."
+    },
+    "signup": {
+      "title": "계정 만들기",
+      "subtitle": "이력서를 올리고, 실제로 갈 수 있는 공고를 확인해 보세요.",
+      "email": "이메일",
+      "password": "비밀번호",
+      "name": "이름",
+      "submit": "가입하기",
+      "submitting": "계정을 만드는 중…",
+      "has_account": "이미 계정이 있나요?",
+      "login_cta": "로그인",
+      "error_generic": "계정을 만들지 못했어요. 다시 시도해 보고, 계속 안 되면 다른 이메일을 써주세요."
+    },
+    "brand": {
+      "tagline": "면접에 못 가는 이유를 확인하세요",
+      "eyebrow": "면접에 못 가는 이유를 확인하세요",
+      "headline": "더 <em>빠르게</em> 취업하세요.",
+      "lead": "RoboApply는 이력서를 읽고, 실제로 갈 수 있는 공고를 보여주고, 무엇이 빠졌는지 그대로 짚어주고, 면접까지 준비시켜요.",
+      "feature_resume": "읽기 프로그램이 읽을 수 있는 이력서",
+      "feature_interview": "말이 오가는 연습 면접",
+      "feature_track": "모든 지원을 한곳에"
+    }
   },
   "landing": {
     "meta": {
-      "title": "AI 자동 지원 · AI 모의면접 · 자소서 AI | AI 취업 에이전트 RoboApply",
-      "description": "RoboApply는 AI 취업 에이전트예요. 조건에 맞는 공고를 찾아 이력서 기준으로 점수를 매기고, 근거를 검증한 자기소개서 초안까지 준비해요. 전송은 항상 내 승인 후에만 — 라이브 AI 모의면접으로 면접 연습까지. 무료로 시작하세요.",
-      "ogTitle": "RoboApply — 지원은 저희가. 면접은 당신이.",
-      "ogDescription": "AI 에이전트가 실제 이력서에 맞는 공고를 찾아 점수를 매기고, 내가 승인한 지원서만 보내요. 9개 언어 라이브 AI 모의면접으로 면접 연습까지. 무료로 시작하세요.",
-      "keywords": "AI 자동 지원, AI 모의면접, AI 취업 에이전트, 자소서 AI, 면접 연습 AI, 이력서 AI, AI 면접 준비, 자기소개서 AI"
+      "title": "면접에 못 가는 이유 | RoboApply",
+      "description": "RoboApply는 이력서를 읽고, 1,000건이 넘는 공고를 읽고, 실제로 갈 수 있는 공고를 보여주고, 무엇이 빠졌는지 그대로 짚어줘요. 그다음 말하는 AI 면접관이 준비를 도와요. 무료로 시작할 수 있고 9개 언어를 지원해요.",
+      "ogTitle": "RoboApply — 면접에 못 가는 이유를 확인하세요",
+      "ogDescription": "이력서를 올려보세요. 실제로 갈 수 있는 공고, 각 공고에서 빠진 것, 그리고 말하는 AI 면접관과의 연습까지. 무료로 시작하세요.",
+      "keywords": "면접 못 가는 이유, 이력서 분석 AI, 이력서 첨삭, 나에게 맞는 채용공고, AI 모의면접, 면접 연습 AI, 이력서 키워드, 이직 준비"
     },
     "header": {
       "status_chip": "얼리 액세스",
-      "cta": "무료로 시작하기",
-      "theme_to_light": "아침 모드로 전환",
-      "theme_to_dark": "야간 모드로 전환",
-      "lang_label": "언어 변경"
+      "cta": "무료로 시작",
+      "theme_to_light": "밝은 화면으로",
+      "theme_to_dark": "어두운 화면으로",
+      "lang_label": "언어 바꾸기"
     },
     "hero": {
-      "eyebrow": "당신의 AI 구직 에이전트 · 당신이 자는 동안에도 일해요",
-      "headline_machine": "지원은 저희가",
-      "headline_human": "면접은 당신이",
-      "subheadline": "RoboApply는 구직을 통째로 맡는 AI 에이전트예요. 진짜 맞는 공고만 찾아내고, 실제 이력서와 대조해 점수를 매기고, 한 줄 한 줄 실제 경력에서 근거를 인용하는 자기소개서 초안까지 써 둬요.",
-      "cta_primary": "무료로 시작하기",
-      "cta_secondary": "야근 일지 샘플 보기",
-      "reassure": "무료 플랜 · 카드 등록 불필요 · 오토파일럿은 얼리 액세스",
+      "eyebrow": "이력서를 읽고 · 시장을 읽고 · 빠진 것을 말해요",
+      "headline": "면접에 못 가는 이유를 확인하세요.",
+      "subheadline": "이력서를 올려보세요. 1,000건이 넘는 공고를 읽고, 실제로 갈 수 있는 공고를 보여주고, 무엇이 빠졌는지 그대로 짚어줘요.",
+      "sub_emphasis": "지원은 직접 하세요. 그전에 공고가 무엇을 원하는지 알려드려요.",
+      "cta_primary": "무료로 시작",
+      "cta_secondary": "공고를 어떻게 읽는지 보기",
+      "reassure": "무료 요금제 · 카드 필요 없음 · 회사에 대신 보내는 일은 절대 없어요",
       "log": {
-        "aria": "야간 근무 활동 로그 샘플: 에이전트가 23:04에 실시간 채용 보드를 스캔하고, 조건과 이력서에 맞춰 공고를 매칭하고, 밤새 근거 검증을 거친 자기소개서 초안을 쓰고, 지원서 12건을 대기열에 올려요. 7:00에 검토 시간이 열리면 당신이 2건을 거부하고 10건을 승인하고, 9:00에 승인된 10건이 발송되고, 9:02에 면접 연습을 안내하는 모닝 리포트가 이메일로 도착해요.",
-        "title": "roboapply — overnight.log",
-        "live": "SAMPLE SHIFT",
+        "aria": "부족한 점 리포트 예시예요. 결제 분야 경력 6년인 이력서를 읽고, 공고 1,284건을 읽고, 41건을 맞는 공고로 정리한 뒤 빠진 것을 짚어요. Kubernetes는 공고 12건에 있는데 이력서에는 없어요. 9건은 팀을 이끈 경험을 요구하지만 이력서에는 도왔다고 적혀 있어요. 6건은 없는 자격이 필요해서 뺐어요. 가장 잘 맞는 공고는 100점 중 87점이고, 숫자가 필요한 성과 줄이 3개이며, 면접관이 물을 가능성이 높은 질문 6개를 보여줘요.",
+        "title": "roboapply — 부족한 점 리포트",
+        "live": "예시",
         "lines": {
           "l1": {
-            "time": "23:04",
-            "tag": "SCOUT",
-            "msg": "실시간 채용 보드 스캔 중 · 신규 공고 1,284건"
+            "time": "01",
+            "tag": "읽기",
+            "msg": "이력서 · 결제 인프라 6년"
           },
           "l2": {
-            "time": "23:51",
-            "tag": "MATCH",
-            "msg": "조건에 맞는 공고 41건 · 이력서 기준 점수 산출"
+            "time": "02",
+            "tag": "읽기",
+            "msg": "공고 1,284건 읽음"
           },
           "l3": {
-            "time": "01:13",
-            "tag": "DRAFT",
-            "msg": "자기소개서 03/12 · 모든 문장에 이력서 근거 인용"
+            "time": "03",
+            "tag": "순위",
+            "msg": "41건이 경험과 맞음 · 그중 6건은 아주 잘 맞음"
           },
           "l4": {
-            "time": "02:47",
-            "tag": "DRAFT",
-            "msg": "자기소개서 09/12 · 지어낸 경력 0건"
+            "time": "04",
+            "tag": "부족",
+            "msg": "Kubernetes: 12건에 있고 이력서에는 없음"
           },
           "l5": {
-            "time": "04:19",
-            "tag": "QUEUE",
-            "msg": "12건 대기열 등록 · 스스로 전송되는 건 없음"
+            "time": "05",
+            "tag": "부족",
+            "msg": "9건이 팀을 이끈 경험을 요구, 이력서에는 '도왔다'"
           },
           "l6": {
-            "time": "07:00",
-            "tag": "HOLD",
-            "msg": "검토 시간 열림 · 무엇이든 거부 가능"
+            "time": "06",
+            "tag": "제외",
+            "msg": "6건은 없는 자격이 필요함 · 제외"
           },
           "l7": {
-            "time": "08:58",
-            "tag": "HOLD",
-            "msg": "2건 거부 · 10건 승인"
+            "time": "07",
+            "tag": "상위",
+            "msg": "가장 잘 맞는 공고 87 / 100 · 합격 확률이 아님"
           },
           "l8": {
-            "time": "09:00",
-            "tag": "SUBMIT",
-            "msg": "지원서 10건 발송 · 당신의 이름, 당신의 문장"
+            "time": "08",
+            "tag": "수정",
+            "msg": "숫자가 없는 성과 줄 3개 · 하나씩 짚음"
           },
           "l9": {
-            "time": "09:02",
-            "tag": "DIGEST",
-            "msg": "모닝 리포트 발송 · 이제 면접 연습하러 가요"
+            "time": "09",
+            "tag": "준비",
+            "msg": "이 면접에서 나올 가능성이 높은 질문 6개"
           }
         }
       },
-      "strip_summary": "23:00 → 09:00 · 초안 12 · 당신이 승인 10 · 동의 없이 발송 0",
-      "strip_scroll": "야간 근무 흐름 보기",
-      "sub_emphasis": "그리고 전부 승인 대기 줄에 올려 둘 뿐 — 당신의 확인 없이는 아무것도 전송되지 않아요."
+      "strip_summary": "공고 1,284건 읽음 · 41건이 맞음 · 6건은 아주 잘 맞음 · 빠진 건 모두 짚음",
+      "strip_scroll": "어떻게 되는지"
     },
     "problem": {
-      "eyebrow": "봇이 지는 이유",
-      "title": "물량전은 이미 기울어진 판이에요.",
-      "sub": "AI가 채용 시장을 지원서로 뒤덮었어요. Business Insider 테스트에서 대량 지원 봇의 응답률은 6%에 그쳤고 — 채용 담당자는 다 알아봐요 — 사람이 검토하고 승인한 지원서가 꾸준히 더 나은 결과를 냈어요. 답은 물량이 아니에요. 당신의 판단이 개입하는, 더 나은 에이전트예요.",
+      "eyebrow": "많이 지원하는 방법이 통하지 않게 된 이유",
+      "title": "더 많이 지원하는 건 답이 아니에요.",
+      "sub": "AI가 채용 시장을 뒤덮었고, 채용 담당자들도 알아채고 있어요. Business Insider의 실험에서 대량 지원 도구의 응답률은 6%였어요. 같은 이력서를 같은 벽에 더 많이 던져도 결과는 바뀌지 않아요. 바뀌는 건 각 공고가 무엇을 요구하는지, 그리고 내 이력서가 그걸 말하고 있는지 알 때예요.",
       "stats": {
         "s1": {
           "value": "242",
-          "label": "기업 공고 한 자리에 몰리는 평균 지원자 수"
+          "label": "공고 한 건에 지원하는 평균 인원"
         },
         "s2": {
           "value": "+400%",
-          "label": "AI 대량 지원이 퍼진 뒤 채용 담당자에게 쏟아지는 지원서 증가폭"
+          "label": "대량 지원 도구가 퍼진 뒤 채용 담당자에게 닿는 지원서 증가폭"
         },
         "s3": {
           "value": "41%",
-          "label": "자기 지원서 중 사람이 읽는 건 4분의 1도 안 된다고 믿는 구직자 비율"
+          "label": "자기 지원서 중 사람이 읽는 건 4분의 1도 안 된다고 보는 구직자 비율"
         }
       },
-      "source": "출처: The Interview Guys (242) · Fortune 보도, Greenhouse (+400%) · 구직자 설문, 2025–2026 (41%)"
+      "source": "출처: The Interview Guys(242) · Greenhouse, Fortune 인용(+400%) · 구직자 조사 2025~2026년(41%)"
     },
     "how": {
-      "eyebrow": "하룻밤 근무의 흐름",
-      "title": "하룻밤, 처음부터 끝까지.",
-      "sub": "조건은 한 번만 정해 두세요. 야근은 에이전트가 하고 — 정말 중요한 순간의 결정권은 전부 당신에게 돌려줘요.",
+      "eyebrow": "어떻게 되는지",
+      "title": "찾고. 이해하고. 고치고. 연습해요.",
+      "sub": "이력서는 한 번만 올리면 돼요. 그 뒤로는 질문 하나만 다뤄요. 이 공고가 원하는데 내가 말하지 않고 있는 건 무엇인가.",
       "steps": {
         "s1": {
-          "time": "23:04",
-          "tag": "SCOUT",
-          "title": "당신이 자는 동안 사냥해요",
-          "body": "에이전트가 실시간 채용 보드를 훑으며 직무, 연차, 기술 스택, 지역, 연봉까지 — 정해 둔 조건으로 엄격하게 걸러요. 안 맞는 공고는 당신 눈에 띄기도 전에 탈락이에요."
+          "time": "01",
+          "tag": "찾기",
+          "title": "시장을 읽어요",
+          "body": "지금 올라온 공고 수천 건을 읽고 이력서와 비교해요. 원하지 않은 조건의 공고는 목록에 오지 않아요."
         },
         "s2": {
-          "time": "01:30",
-          "tag": "DRAFT",
-          "title": "근거 없이는 한 줄도 안 써요",
-          "body": "매칭된 공고마다 맞춤 이력서와 진짜 자기소개서를 준비해요. 자소서의 모든 문장은 실제 경력의 한 줄을 인용해야 하고, 지어낸 경험은 통과하지 못해요 — 인용 검증이 코드로 강제되거든요."
+          "time": "02",
+          "tag": "이해",
+          "title": "빠진 것을 짚어요",
+          "body": "공고마다 가장 중요한 한 문장이 먼저 나와요. 공고는 Kubernetes를 두 번 요구하는데 이력서에는 한 번도 없다는 식이에요. 그 아래에 100점 만점의 적합 점수와, 그 숫자가 무엇이고 무엇이 아닌지 알려주는 문장이 붙어요."
         },
         "s3": {
-          "time": "07:00",
-          "tag": "HOLD",
-          "title": "거부권은 당신 손에",
-          "body": "모든 지원서가 검토 시간에 멈춰서 기다려요. 커피 한 잔 하면서 대기열을 훑고, 아무 초안이나 열어 보고, 조금이라도 이상하면 건너뛰세요. 당신의 OK 없이 당신 이름으로 나가는 건 없어요."
+          "time": "03",
+          "tag": "수정",
+          "title": "이력서를 고쳐요",
+          "body": "공고 하나에 맞춘 사본을 만들고, 바뀌는 부분을 나란히 놓고 봐요. 초안의 모든 숫자는 이력서의 어느 줄로 이어져야 하고, 그렇지 않으면 고칠 때까지 내려받을 수 없어요."
         },
         "s4": {
-          "time": "09:00",
-          "tag": "SUBMIT",
-          "title": "9:00 정각 발송 — 진짜 준비는 그다음부터",
-          "body": "승인된 지원서는 채용 담당자의 하루가 시작되는 시간에, 당신의 이름과 당신의 문장으로 나가요. 탭 한 번이면 되고, 오토파일럿 얼리 액세스가 열리면 그마저도 필요 없어요. 이어서 모닝 리포트가 메일함에 도착하고, 면접 스튜디오는 탭 한 번 거리에 있어요."
+          "time": "04",
+          "tag": "연습",
+          "title": "그다음 면접을 연습해요",
+          "body": "그 공고와 이력서를 파악한 음성 면접관이, 그 면접에서 나올 만한 것을 물어요. 리포트, 대화록, 녹화가 남아요."
         }
       }
     },
     "loop": {
-      "eyebrow": "전 과정, 하나의 루프",
-      "title": "에이전트 하나. 구직 전체.",
-      "sub": "‘일자리 구해야 하는데’부터 ‘최종 합격’까지 — 그 사이의 모든 일이 한곳에서 이뤄지고, 같은 에이전트가 당신의 맥락을 기억한 채 그 전부를 이어서 처리해요.",
+      "eyebrow": "전체 흐름",
+      "title": "이력서부터 합격까지, 한곳에서.",
+      "sub": "찾은 공고가 빠진 것을 알려주고, 그게 이력서 수정으로 이어지고, 그 수정이 연습 질문이 돼요. 각 단계가 다음 단계로 이어져요.",
       "cards": {
         "match": {
-          "tag": "MATCH",
-          "title": "이력서를 진짜로 읽는 매칭",
-          "body": "모든 공고에 이유가 적힌 AI 매칭 점수가 붙어요. 키워드 빙고가 아니라 실제 이력서를 기준으로 계산되고, 이력서가 바뀌면 점수도 새로 매겨져요."
+          "tag": "찾기",
+          "title": "얼마나 맞는지로 줄 세운 공고",
+          "body": "모든 공고를 실제 이력서와 대조해 읽고 네 단계 중 하나에 놓아요. 아주 잘 맞음, 잘 맞음, 가능성 있음, 맞기 어려움. 이유는 키워드 개수가 아니라 쉬운 말로 적어요."
         },
         "resume": {
-          "tag": "RESUME",
-          "title": "스스로 다시 쓰는 이력서",
-          "body": "LinkedIn이나 PDF에서 불러오고, 밋밋한 문장은 AI가 다시 쓰고, 어떤 공고에든 맞춤으로 다듬어요. 바뀐 부분은 비교 화면으로 확인하고 — 깔끔한 PDF나 DOCX로 내보내면 끝이에요."
+          "tag": "수정",
+          "title": "정말로 고칠 수 있는 이력서",
+          "body": "LinkedIn이나 PDF에서 가져오고, 약한 줄을 다시 쓰고, 공고 하나에 맞춘 사본을 바뀌는 부분과 함께 만들고, 읽기 프로그램이 읽을 수 있는 PDF로 내보내요."
         },
         "apply": {
-          "tag": "APPLY",
-          "chip": "오토파일럿 · 얼리 액세스",
-          "title": "동의 레이어가 내장된 지원",
-          "body": "근거 검증을 마친 자기소개서, 대기열, 거부할 수 있는 검토 홀드, 단단한 하루 상한까지. 완전 자동 오토파일럿은 얼리 액세스로 열리는 중이에요 — 동의 레이어부터 먼저 만든 건, 일부러예요."
+          "tag": "기록",
+          "title": "모든 지원과 그 결과",
+          "body": "지원은 회사 사이트에서 직접 해요. 공고는 알아서 '지원함'으로 옮겨가고, 1차 통화, 면접 중, 최종 면접, 합격, 불합격 중 어디서 멈췄는지 한눈에 보여요."
         },
         "studio": {
-          "tag": "STUDIO",
-          "title": "연습 상대가 되어 주는 면접관",
-          "body": "18개 분야 플레이북과 28가지 형식을 갖춘 라이브 음성 AI 면접관이에요. 전화 스크리닝부터 시스템 설계, 케이스 면접까지 — 실제 면접관이 보는 기준 그대로 채점해요."
+          "tag": "연습",
+          "title": "연습 상대가 되는 면접관",
+          "body": "18개 분야별 면접 지침과 28가지 형식(전화 면담, 시스템 설계, 케이스 면접 등)을 갖춘 음성 면접관이, 실제 면접과 같은 기준으로 채점해요."
         }
       }
     },
     "studio": {
-      "eyebrow": "후반전",
-      "title_machine": "서류 합격까지는 저희가",
-      "title_human": "면접 합격까지는 연습으로",
-      "sub": "구직자의 63%는 실제 채용에서 이미 AI 면접관을 만났어요(Greenhouse, 2026). 저희 면접관과 미리 붙어 보세요 — 실전이 익숙해질 때까지, 눈치 볼 것 없이 무제한으로요.",
+      "eyebrow": "나머지 절반",
+      "title_machine": "면접까지 가는 게 절반",
+      "title_human": "나머지 절반은 여기",
+      "sub": "구직자의 63%가 실제 채용에서 이미 AI 면접관을 만났어요(Greenhouse, 2026). 여기서는 아무도 보지 않는 곳에서 원하는 만큼 연습할 수 있어요.",
       "features": {
         "f1": {
-          "title": "사람처럼 말하고, 사람처럼 끼어들어요",
-          "body": "풀 듀플렉스 라이브 음성: 면접관이 실시간으로 파고들고, 반박하고, 꼬리 질문을 던져요. 원어민 억양의 목소리로 9개 언어를 지원해요."
+          "title": "사람처럼 말하고 끼어들어요",
+          "body": "음성으로 대화해요. 이어서 묻고, 반박하고, 말을 끊어요. 9개 언어를 각 언어의 자연스러운 목소리로."
         },
         "f2": {
-          "title": "암기 카드가 아니라, 18개 분야 플레이북",
-          "body": "법률, 금융, 헬스케어, 하드웨어, AI/ML까지 — 현직자가 실제로 묻는 질문을 던지고, 같은 눈높이로 채점해요."
+          "title": "18개 분야별 지침, 상식 문제집이 아니에요",
+          "body": "법률, 금융, 의료, 하드웨어, AI 등. 그 분야 사람들이 실제로 묻는 것을 묻고, 같은 기준으로 채점해요."
         },
         "f3": {
-          "title": "만나기 전에 숙제부터 해 와요",
-          "body": "면접관이 당신의 직무와 채용 공고에 맞는 최신 시장 요구사항을 조사하고, 이력서를 중심으로 맞춤 면접 플랜을 짜요."
+          "title": "만나기 전에 공고를 읽어요",
+          "body": "지금 올라온 같은 직무 공고와 붙여넣은 공고를 읽고, 이력서에 맞춰 질문을 짜요."
         },
         "f4": {
           "title": "다음 답변이 달라지는 리포트",
-          "body": "영역별 점수, 더 나은 답변 예시가 붙은 질문별 교정, 전체 스크립트, 다시 돌려 볼 수 있는 녹음까지 — 세션이 끝날 때마다 받아요."
+          "body": "쉬운 질문 다섯 개에 대한 답, 질문마다의 수정 지점과 더 나은 답변, 전체 대화록, 녹화가 남아요."
         },
         "f5": {
-          "title": "귓속 코치 — 원할 때만",
-          "body": "말이 길어지거나, 질문을 피하거나, 핵심을 뒤로 미루면 실시간으로 살짝 짚어 줘요. 카메라 켜기 모드로 실제 화상 면접의 압박감까지 더할 수 있어요."
+          "title": "원하면 답하는 동안 짚어줘요",
+          "body": "말이 길어지거나, 질문을 비켜가거나, 요점이 묻힐 때 짧게 짚어줘요. 카메라를 켜면 실제 화상 면접만큼의 긴장이 생겨요."
         }
       },
       "report": {
@@ -221,49 +2035,47 @@
         "overall": "82",
         "rows": {
           "r1": {
-            "k": "명확성",
+            "k": "이야기를 순서대로 전했다",
             "v": "86"
           },
           "r2": {
-            "k": "깊이",
+            "k": "실제 숫자를 말했다",
             "v": "78"
           },
           "r3": {
-            "k": "구조",
+            "k": "질문에 끝까지 답했다",
             "v": "84"
           }
         },
-        "quote": "“수치부터 말하세요 — 비용 40% 절감을 답변 맨 끝에 묻어 두셨어요.”",
-        "quote_label": "질문별 교정"
+        "quote": "\"숫자를 먼저 말하세요. 비용 40% 절감이 답변 맨 끝에 나왔어요.\"",
+        "quote_label": "질문 하나, 수정 하나"
       },
-      "cta": "무료 모의면접 시작하기"
+      "cta": "무료로 연습 면접 해보기"
     },
     "rules": {
-      "eyebrow": "작동 원칙",
-      "title": "약관 구석이 아니라, 코드에 박혀 있어요.",
-      "sub": "메뉴 깊숙이 숨겨 둔 설정이 아니에요. 에이전트가 애초에 이렇게 만들어졌어요 — 그래서 채용 담당자의 받은편지함에 도착한 글이 봇 스팸처럼 읽힐 일은 없어요.",
-      "file": "guarantees.conf — 읽기 전용",
-      "badge": "ENFORCED",
+      "eyebrow": "이 제품이 하지 않는 일",
+      "title": "하지 않는 일이 네 가지 있어요.",
+      "sub": "켜고 끌 수 있는 설정이 아니에요. 제품이 그렇게 만들어져 있어요.",
+      "file": "limits.txt — 읽기 전용",
+      "badge": "고정",
       "ok": "OK",
       "items": {
-        "r1_head": "진짜 자소서만",
-        "r1_body": "모든 자기소개서의 모든 문장은 실제 이력서를 인용해야 해요 — 지어낸 경력은 코드 차원에서 차단돼요.",
-        "r2_head": "검토 홀드",
-        "r2_body": "지원서 한 건 한 건, 거부할 수 있는 미리보기 창을 거치지 않으면 아무것도 제출되지 않아요.",
-        "r3_head": "조건 필터",
-        "r3_body": "연차, 기술 스택, 지역, 연봉 — 정해 둔 목표에서 벗어난 공고는 대기열에 아예 들어오지 못해요.",
-        "r4_head": "묻지마 지원 금지",
-        "r4_body": "하루 지원량에는 단단한 상한이 있어요. 한 건 한 건이 신중해야, 당신의 이름이 계속 신뢰를 얻어요.",
-        "r5_head": "떠날 땐 깔끔하게",
-        "r5_body": "클릭 한 번으로 에이전트를 멈출 수 있어요 — 계정 삭제도 흉내만 내는 소프트 삭제가 아니라 진짜 완전 삭제예요."
+        "r1_head": "대신 보내지 않아요",
+        "r1_body": "지원서도, 메시지도, 답장도 당신 이름으로 나가는 일은 없어요. 지원은 회사 사이트에서 직접 하고, 공고는 알아서 '지원함'으로 옮겨가요.",
+        "r2_head": "없는 경력을 만들지 않아요",
+        "r2_body": "맞춘 초안의 모든 숫자는 이력서의 어느 줄로 이어져야 해요. 이어지지 않는 숫자가 있으면, 고치거나 뺄 때까지 내려받을 수 없어요.",
+        "r3_head": "점수는 예측이 아니에요",
+        "r3_body": "적합 점수는 이력서와 공고가 얼마나 맞는지를 말해요. 합격 확률이 아니고, 점수를 보여줄 때마다 그렇게 적어요.",
+        "r4_head": "깔끔하게 떠날 수 있어요",
+        "r4_body": "계정을 지우면 정말로 지워져요. 이력서, 지원 내역, 대화록, 녹화까지 전부요."
       }
     },
     "pricing": {
       "eyebrow": "요금제",
-      "title": "무료로 시작하고, 효과가 보이면 올리세요.",
-      "sub": "모든 플랜에 에이전트 전체가 들어 있어요 — 이력서 AI, 공고 매칭, 지원 트래커, 동의 레이어까지. 유료 플랜은 면접 연습 횟수를 늘려 줘요.",
-      "unit": "면접 횟수 / 월",
-      "credit_note": "크레딧 1개 = 20분 모의면접 1회, 초 단위로 정산돼요. 크레딧은 매달 다시 채워지고, 결제는 카드로 — 중국에서는 Alipay도 돼요.",
+      "title": "무료로 시작하고, 효과가 보이면 결제하세요.",
+      "sub": "어떤 요금제에서도 제품 전체를 쓸 수 있어요. 공고 매칭, 부족한 점 리포트, 이력서 편집기, 지원 현황판까지. 유료 요금제로 늘어나는 건 연습 면접 횟수예요.",
+      "unit": "면접 / 월",
+      "credit_note": "크레딧 1개는 20분짜리 연습 면접 한 번이고 초 단위로 계산해요. 크레딧은 매달 다시 채워져요. 카드로, 중국에서는 Alipay로 결제해요.",
       "tiers": {
         "free": {
           "code": "TIER-0",
@@ -271,9 +2083,9 @@
           "rate": "1",
           "price": "$0",
           "per": "",
-          "note": "전체 도구는 기본으로, 채점 리포트가 나오는 모의면접이 매달 1회.",
-          "cta": "무료로 시작하기",
-          "unit": "면접 횟수 / 월"
+          "note": "제품 전체에 더해, 채점되는 연습 면접이 매달 한 번.",
+          "cta": "무료로 시작",
+          "unit": "면접 / 월"
         },
         "starter": {
           "code": "TIER-1",
@@ -281,10 +2093,10 @@
           "rate": "10",
           "price": "$15",
           "per": "/월",
-          "badge": "추천",
-          "note": "진지한 구직의 페이스 — 실전 면접 전마다 연습해요.",
+          "badge": "가장 많이 골라요",
+          "note": "실제 면접마다 한 번씩 연습할 수 있는 양이에요.",
           "cta": "스타터 시작하기",
-          "unit": "면접 횟수 / 월"
+          "unit": "면접 / 월"
         },
         "growth": {
           "code": "TIER-2",
@@ -292,284 +2104,259 @@
           "rate": "28",
           "price": "$29",
           "per": "/월",
-          "note": "올인 모드 — 최종 합격 사인까지 매일 반복 연습.",
+          "note": "결정될 때까지 매일 연습할 수 있어요.",
           "cta": "그로스 시작하기",
-          "unit": "면접 횟수 / 월"
+          "unit": "면접 / 월"
         }
       }
     },
     "faq": {
       "eyebrow": "자주 묻는 질문",
-      "title": "구직자들이 실제로 묻는 질문이에요.",
+      "title": "구직자들이 많이 묻는 것.",
       "items": {
         "q1": {
-          "q": "RoboApply가 뭔가요?",
-          "a": "RoboApply는 AI 취업 에이전트예요. 조건에 맞는 공고를 찾고, 실제 이력서와 대조해 점수를 매기고, 서류를 공고에 맞게 다듬고, 근거 검증을 거친 자기소개서 초안을 쓰고, 모든 지원서를 승인 대기 상태로 올려 둬요. 그리고 면접이 잡히면 — 라이브 AI 면접관과 함께 면접 연습까지 해요."
+          "q": "RoboApply는 무엇인가요?",
+          "a": "RoboApply는 이력서를 읽고, 지금 올라온 공고를 읽어서 공고마다 두 가지를 알려줘요. 내 이력서가 그 공고와 얼마나 맞는지, 그리고 공고가 요구하는데 이력서에는 없는 게 무엇인지예요. 그다음 이력서를 고치고, 말하는 AI 면접관과 면접을 연습할 수 있어요."
         },
         "q2": {
-          "q": "제 허락 없이 마음대로 지원하기도 하나요?",
-          "a": "아니요. 동의는 설정 항목이 아니라 구조 그 자체예요. 지원서는 명시적으로 승인한 뒤에만 나가고, 하루 지원량에는 단단한 상한이 있고, 완전 자동 오토파일럿은 직접 켜야 하는 얼리 액세스 기능이에요. 당신의 OK 없이 당신 이름으로 제출되는 건 없어요."
+          "q": "RoboApply가 대신 지원해 주나요?",
+          "a": "아니요. 당신 이름으로 회사에 보내는 건 하나도 없어요. 회사 사이트를 열어 직접 지원하면, 공고가 알아서 '지원함'으로 옮겨가고, 마음이 바뀌면 한 번 눌러서 되돌릴 수 있어요."
         },
         "q3": {
-          "q": "AI가 쓴 자기소개서, 채용 담당자가 알아채지 않나요?",
-          "a": "뻔한 AI 자소서는 티가 나요. RoboApply의 자소서는 만들어지는 방식부터 달라요. 모든 문장이 실제 이력서의 한 줄을 인용해야 하고, 이 인용 검증은 코드로 강제돼서 지어낸 경력은 애초에 나갈 수 없어요. 게다가 어디로든 발송되기 전에, 한 통 한 통 직접 검토하고 승인하게 돼 있어요."
+          "q": "100점 만점 점수는 무슨 뜻인가요?",
+          "a": "내 이력서가 그 공고와 얼마나 맞는지를 말해요. 직무와 직급, 요구하는 기술, 그 업계 경험, 근무지와 급여와 비자, 지금까지 경력이 움직인 방향을 봐요. 합격 확률이 아니고, 그런 척하지도 않아요."
         },
         "q4": {
-          "q": "AI랑 면접 연습이 정말 되나요?",
-          "a": "네 — 사람처럼 말하고, 파고들고, 끼어들기까지 하는 라이브 음성 면접관이에요. 28가지 형식과 18개 분야 플레이북(소프트웨어, 법률, 금융, 헬스케어 등) 중에서 고르고, 9개 언어 중 원하는 언어로 면접을 본 다음, 질문별 교정과 전체 스크립트, 녹음이 담긴 채점 리포트를 받아요."
+          "q": "AI와 정말로 면접 연습을 할 수 있나요?",
+          "a": "네. 사람처럼 말하고, 이어서 묻고, 끼어드는 음성 면접관과 해요. 28가지 형식과 18개 분야별 지침(소프트웨어, 법률, 금융, 의료 등) 중에서 고르고, 9개 언어로 면접하고, 질문마다의 수정 지점이 담긴 리포트와 대화록, 녹화를 받아요."
         },
         "q5": {
-          "q": "LazyApply 같은 자동 지원 봇과는 뭐가 다른가요?",
-          "a": "물량 봇은 판단 없이 대량으로 넣어요. Business Insider 테스트에서 대량 지원 봇의 응답률은 6%였고, 채용 담당자는 다 알아봐요. RoboApply는 검토 홀드, 근거 검증 자소서, 단단한 상한으로 당신의 판단을 과정 안에 남겨 두고 — 다른 누구도 안 하는 마무리까지 해요. 지원을 맡았던 바로 그 에이전트가 면접 준비까지 시켜 주거든요."
+          "q": "대신 대량으로 지원해 주는 도구와 뭐가 다른가요?",
+          "a": "그런 도구는 같은 이력서를 더 많이 보내요. Business Insider의 실험에서 대량 지원 도구의 응답률은 6%였어요. RoboApply는 반대로 해요. 공고 수를 줄이고, 한 건씩 제대로 읽고, 빠진 표현을 짚어서 지원하기 전에 고칠 수 있게 해요. 그리고 같은 제품이 면접 준비까지 이어서 해줘요."
         },
         "q6": {
-          "q": "가격은 어떻게 되나요?",
-          "a": "핵심 도구 전체와 월 1회 모의면접은 평생 무료예요. 스타터는 월 $15에 면접 연습 10회, 그로스는 월 $29에 28회예요. 크레딧 1개는 20분 세션이고, 초 단위로 정산되며 매달 다시 채워져요. 결제는 카드로, 중국에서는 Alipay로도 할 수 있어요."
+          "q": "요금은 얼마인가요?",
+          "a": "핵심 기능은 계속 무료이고 연습 면접이 매달 한 번 붙어요. 스타터는 월 $15에 연습 면접 10회, 그로스는 월 $29에 28회예요. 크레딧 1개는 20분짜리 세션이고 초 단위로 계산하며 매달 다시 채워져요. 카드로, 중국에서는 Alipay로 결제해요."
         },
         "q7": {
-          "q": "어떤 언어를 지원하나요?",
-          "a": "아홉 개 언어예요: 영어, 스페인어, 포르투갈어, 프랑스어, 독일어, 일본어, 한국어, 중국어 간체와 번체. 모의면접은 지금도 9개 언어 전부에서 돼요 — 면접관의 음성도, 채점 리포트도요. 인터페이스는 영어, 일본어, 중국어 간체·번체로 완전히 현지화됐고, 나머지 언어도 지금 순서대로 열리는 중이에요."
+          "q": "RoboApply는 어떤 언어를 지원하나요?",
+          "a": "9개 언어예요. 영어, 스페인어, 포르투갈어, 프랑스어, 독일어, 일본어, 한국어, 중국어 간체와 번체. 연습 면접은 리포트까지 포함해 9개 언어 모두에서 지금 쓸 수 있어요. 화면은 영어, 일본어, 중국어 간체와 번체로 모두 번역돼 있고 나머지도 곧 이어져요."
         },
         "q8": {
-          "q": "제 데이터는 안전한가요? 삭제하면 진짜 지워지나요?",
-          "a": "이력서, 스크립트, 녹음은 전부 당신 것이고, 어떤 것도 기업에 공유되지 않아요. 모든 AI 작업은 투명한 사용 내역 장부에 기록되고, 계정 삭제는 클릭 한 번으로 데이터를 실제로 지우는 완전 삭제예요 — 남겨 두고 감추는 소프트 삭제가 아니에요."
+          "q": "제 데이터는 안전한가요? 지울 수 있나요?",
+          "a": "이력서, 대화록, 녹화는 모두 당신 것이고 회사에 공유하지 않아요. 계정을 지우면 감추는 게 아니라 정말로 지워져요."
         }
       }
     },
     "final": {
       "chip": "얼리 액세스 · 무료로 시작",
-      "title_machine": "에이전트는 준비 완료",
-      "title_human": "당신만 오면 돼요",
-      "sub": "설정은 3분이면 끝나요. 이력서 올리고, 조건 정하고, 에이전트에게 브리핑하면 끝. 면접 스튜디오는 지금 바로 열려 있으니 — 첫 면접 연습은 무료로 해 보세요.",
-      "cta": "무료로 시작하기"
+      "title_machine": "무엇이 빠졌는지 확인하세요.",
+      "title_human": "필요한 건 한 번의 업로드",
+      "sub": "이력서를 올리고, 어떤 일을 찾는지 알려주면 첫 리포트를 볼 수 있어요. 연습 면접은 지금 바로 열려 있고 첫 세션은 무료예요.",
+      "cta": "무료로 시작"
     },
     "sticky": {
-      "cta": "무료로 시작하기",
-      "note": "카드 등록 불필요"
+      "cta": "무료로 시작",
+      "note": "카드 필요 없음"
     },
     "footer": {
-      "status": "시스템 정상 · 동의 레이어 상시 적용",
-      "note": "© RoboApply. 구직자가, 구직자를 위해 만들었어요.",
-      "tagline": "당신의 판단이 개입하는 AI 취업 에이전트.",
-      "lang_title": "당신의 언어로 만나는 RoboApply"
+      "status": "회사에 대신 보내는 일은 없어요",
+      "note": "© RoboApply. 구직자가 구직자를 위해 만들었어요.",
+      "tagline": "면접에 못 가는 이유를 확인하세요.",
+      "lang_title": "내 언어로 보는 RoboApply"
     }
-  },
-  "auth": {
-    "login": {
-      "title": "다시 만나서 반가워요",
-      "subtitle": "로그인하고 RoboApply 미션을 이어가세요.",
-      "email": "이메일",
-      "password": "비밀번호",
-      "submit": "로그인",
-      "submitting": "로그인 중…",
-      "no_account": "계정이 없으신가요?",
-      "signup_cta": "새로 만들기",
-      "error_generic": "로그인하지 못했어요. 이메일과 비밀번호를 확인하고 다시 시도해 주세요."
-    },
-    "signup": {
-      "title": "계정 만들기",
-      "subtitle": "60초면 끝 — 그다음 지원은 에이전트가 해요.",
-      "email": "이메일",
-      "password": "비밀번호",
-      "name": "이름",
-      "submit": "가입하기",
-      "submitting": "계정 만드는 중…",
-      "has_account": "이미 계정이 있으신가요?",
-      "login_cta": "로그인",
-      "error_generic": "계정을 만들지 못했어요. 다시 시도해 주세요."
-    },
-    "brand": {
-      "eyebrow": "AI 취업 코파일럿",
-      "headline": "<em>더 빨리</em> 합격하세요.",
-      "lead": "RoboApply가 이력서를 공고에 맞게 다듬고, 실전 같은 AI 모의면접을 진행하고, 모든 지원 내역을 한곳에 모아요 — 당신은 합격에만 집중하세요.",
-      "feature_resume": "공고 맞춤, ATS 최적화 이력서",
-      "feature_interview": "실전 같은 AI 모의면접",
-      "feature_track": "모든 지원 내역을 한곳에"
-    }
-  },
-  "onboarding": {
-    "brand_sub": "나만의 AI 잡 헌터",
-    "skip": "건너뛰기 →",
-    "upload": {
-      "title": "보여주세요, 당신의",
-      "title_accent": "이력서",
-      "lead": "시작하는 데 필요한 건 그게 전부예요. 한 번만 읽으면, 안 맞는 공고는 두 번 다시 안 보여 드릴게요.",
-      "drop_title": "이력서를 끌어다 놓거나, 클릭해서 선택하세요",
-      "drop_sub": "PDF, DOC/DOCX, TXT, MD — 최대 15 MB",
-      "ingest_title": "제가 읽어낸 것들",
-      "reading": "읽는 중…",
-      "error": "이력서를 읽지 못했어요. PDF나 DOCX로 해 보거나, 다른 파일을 골라 주세요.",
-      "received": "{size} · 업로드하고 읽는 중…"
-    },
-    "resumeSelect": {
-      "title": "어떤",
-      "title_accent": "이력서",
-      "title_after": "를 읽을까요?",
-      "lead": "가고 싶은 방향이 가장 잘 담긴 이력서를 골라 주세요 — 제가 읽고, 거기서부터 시작할게요.",
-      "upload_new": "새 이력서 업로드",
-      "paste_text": "이력서 텍스트 붙여넣기",
-      "primary_badge": "대표",
-      "last_edited": "마지막 수정 {date}",
-      "continue": "이 이력서로 계속하기",
-      "linkedin_import": "LinkedIn에서 가져오기",
-      "linkedin_placeholder": "https://www.linkedin.com/in/your-profile",
-      "paste_placeholder": "이력서 텍스트를 여기에 붙여넣으세요 — 일반 텍스트도, 마크다운도 좋아요.",
-      "paste_name": "붙여넣은 이력서",
-      "paste_submit": "이 텍스트 사용하기",
-      "back": "← 뒤로",
-      "retry": "다시 시도",
-      "pick_existing": "기존 이력서 선택",
-      "paste_instead": "텍스트로 붙여넣기",
-      "formats": "PDF · DOC/DOCX · TXT · MD",
-      "error_file_too_large": "파일이 너무 커요(최대 15 MB). 조금 더 작게 내보내서 올려 주세요.",
-      "error_unsupported_format": "그 형식은 읽을 수 없어요. PDF, DOC/DOCX, TXT, MD는 모두 돼요.",
-      "error_parse_failed": "이력서를 읽지 못했어요. 다른 파일로 해 보거나, 텍스트를 붙여넣어 주세요."
-    },
-    "chat": {
-      "title": "어떤 자리를 노릴지 정해 볼까요?",
-      "composer_placeholder": "무엇을 노리는지 알려 주세요 — 직무, 지역, 연봉, 절대 안 되는 조건까지…",
-      "send": "보내기",
-      "opening_prompt_hint": "이력서를 보고 첫 메시지를 미리 써 뒀어요 — 고쳐도 되고, 그대로 보내도 돼요.",
-      "skeleton_ingest": "이력서를 읽는 중…",
-      "status_searching_internal": "내부 공고 인덱스 검색 중…",
-      "status_searching_external": "외부 최신 공고 확인 중…",
-      "status_scoring": "이력서와 대조해 매칭 점수 계산 중…",
-      "tray_title": "지금까지 파악한 것",
-      "tray_edit_prefix": "그런데 {field} 얘긴데요…",
-      "tray_dismiss": "닫기",
-      "card_match": "{score}% 매칭",
-      "card_via": "{publisher} 제공",
-      "card_save": "저장",
-      "card_saved": "저장됨",
-      "card_pass": "넘기기",
-      "card_passed": "넘김",
-      "card_apply": "공고 보기",
-      "wrap_cta": "매칭 결과 보러 가기",
-      "restore_notice": "지난 대화에 이어서 계속해요.",
-      "superseded_notice": "이 대화는 다른 창에서 이어졌어요 — 새로고침하면 따라잡을 수 있어요.",
-      "error_turn_failed": "전송이 안 됐어요.",
-      "error_retry": "다시 시도",
-      "error_daily_limit": "오늘 온보딩을 여러 번 새로 시작하셨어요 — 내일 다시 오시거나, 지금 바로 앱으로 들어가셔도 돼요.",
-      "progress_resume": "이력서",
-      "progress_chat": "대화",
-      "progress_matches": "매칭",
-      "progress_done": "완료",
-      "fields": {
-        "targetRoles": "직무",
-        "seniority": "연차",
-        "workModes": "근무 형태",
-        "salary": "연봉",
-        "employmentTypes": "고용 형태",
-        "industriesTarget": "희망 업계",
-        "industriesAvoid": "피할 업계",
-        "companyStages": "회사 단계",
-        "companySizes": "회사 규모",
-        "locations": "지역",
-        "mustHaves": "필수 조건",
-        "dealbreakers": "절대 불가"
-      },
-      "values": {
-        "remote": "재택",
-        "hybrid": "하이브리드",
-        "onsite": "사무실 출근",
-        "full_time": "정규직",
-        "contract": "계약직",
-        "part_time": "파트타임",
-        "internship": "인턴"
-      }
-    }
-  },
-  "choosePlan": {
-    "title": "플랜을 선택하세요",
-    "subtitle": "시작할 플랜을 골라 주세요 — AI와 면접 연습을 시작할 수 있어요. 변경과 해지는 언제든 가능해요.",
-    "loading": "플랜 불러오는 중…",
-    "error": "플랜을 불러오지 못했어요.",
-    "retry": "다시 시도",
-    "continueFree": "지금은 건너뛰기 — 무료로 계속",
-    "selectFree": "무료로 시작하기",
-    "selectPaid": "{plan} 선택하기",
-    "blurb": {
-      "free": "가볍게 시험해 보는 월 1회 면접 연습.",
-      "starter": "월 10회 모의면접 — 매주 꾸준히 연습하는 페이스.",
-      "growth": "월 28회 모의면접 — 실전 전 매일 반복 연습."
-    },
-    "welcome": "가입 완료 — RoboApply에 오신 걸 환영해요",
-    "creditsHint": "크레딧 1개 = 20분 모의면접 1회.",
-    "checkoutFailed": "결제를 시작하지 못했어요. 다시 시도해 주세요."
   },
   "errors": {
-    "not_found_title": "404",
-    "not_found_body": "페이지를 찾을 수 없어요.",
-    "error_title": "문제가 생겼어요",
-    "error_body": "문제는 기록해 뒀어요. 다시 시도하거나 홈으로 돌아가세요.",
+    "not_found_title": "이 페이지는 없어요",
+    "not_found_body": "주소가 잘못됐거나 페이지가 옮겨졌을 수 있어요. 공고 목록에서 다시 시작해 주세요.",
+    "error_title": "이 페이지의 일부를 불러오지 못했어요",
+    "error_body": "저장한 내용은 잃어버리지 않았어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
     "try_again": "다시 시도",
-    "go_home": "홈으로"
+    "go_home": "채용공고로 가기"
   },
-  "ie": {
-    "report": {
-      "title": "면접 리포트",
-      "error": "리포트를 불러오지 못했어요.",
-      "loading": "리포트를 불러오는 중…",
-      "newInterview": "새 면접",
-      "processing": "면접을 마무리하고 있어요. 녹음과 점수가 곧 표시돼요.",
-      "refresh": "새로고침",
-      "refreshing": "새로고침 중…",
-      "overall": "종합 점수",
-      "noScore": "아직 점수가 없어요.",
-      "strengths": "강점",
-      "gaps": "개선할 점",
-      "recording": "녹음",
-      "transcript": "대화 기록",
-      "transcriptView": "대화 기록 보기",
-      "transcriptHide": "대화 기록 숨기기",
-      "transcriptCount": "{count}개 대화",
-      "download": "다운로드",
-      "analysisPending": "상세 분석을 생성하고 있어요. 최대 1분 정도 걸릴 수 있어요.",
-      "dim": {
-        "structure": "구성",
-        "specificity": "구체성",
-        "communication": "전달력",
-        "confidence": "자신감",
-        "roleFit": "직무 적합성"
+  "admin": {
+    "eyebrow": "운영 콘솔",
+    "title": "비용과",
+    "titleAccent": "매출",
+    "loading": "불러오는 중…",
+    "topCost": "최대 비용",
+    "estimated": "추정",
+    "estimatedNote": "음성 인식, 음성 합성, 전송량 비용은 실측이 아니라 추정값이에요.",
+    "export": {
+      "csv": "CSV 내보내기",
+      "refresh": "새로고침"
+    },
+    "range": {
+      "today": "오늘",
+      "7d": "7일",
+      "30d": "30일",
+      "custom": "직접 지정",
+      "customTitle": "기간 직접 지정",
+      "from": "시작",
+      "to": "종료",
+      "apply": "적용"
+    },
+    "pager": {
+      "prev": "이전",
+      "next": "다음"
+    },
+    "tabs": {
+      "overview": "개요",
+      "users": "사용자",
+      "sessions": "세션",
+      "rateCard": "단가표"
+    },
+    "kpi": {
+      "activeUsers": "활성 사용자",
+      "sessions": "세션",
+      "cost": "모델과 미디어 비용",
+      "revenue": "매출 · MRR",
+      "margin": "매출총이익률",
+      "costPerUser": "비용 / 활성 사용자",
+      "payingUsers": "유료 {n}명"
+    },
+    "chart": {
+      "costVsRevenue": "비용과 매출",
+      "costByFeature": "기능별 비용",
+      "costByModality": "유형별 비용",
+      "legend": {
+        "cost": "비용",
+        "revenue": "매출"
       },
-      "recommendations": {
-        "title": "실행 계획",
-        "sub": "개선을 위한 구체적인 단계",
-        "pending": "맞춤형 실행 계획을 생성하고 있어요…",
-        "unavailable": "이 세션에 대한 실행 계획이 없어요.",
-        "empty": "개선할 점이 없어요. 전반적으로 훌륭한 세션이었어요.",
-        "exampleLabel": "수정 예시",
-        "drill": "연습",
-        "priority": {
-          "high": "높은 우선순위",
-          "medium": "중간 우선순위",
-          "low": "낮은 우선순위"
-        }
+      "netMargin": "순이익 · {amount}({pct})"
+    },
+    "modality": {
+      "llm": "모델 토큰",
+      "stt": "음성 인식",
+      "tts": "음성 합성",
+      "image": "이미지 생성",
+      "egress": "녹화 전송량"
+    },
+    "users": {
+      "search": "이메일로 검색…",
+      "filter": {
+        "all": "전체",
+        "free": "무료",
+        "premium": "프리미엄",
+        "premiumPlus": "프리미엄+"
       },
-      "questionBreakdown": {
-        "title": "질문별 분석",
-        "count": "{count}개 질문",
-        "pending": "질문별 상세 분석을 생성하고 있어요…",
-        "unavailable": "이 세션에 대한 질문별 상세 분석이 없어요.",
-        "intentLabel": "이 질문의 의도",
-        "answerSummaryLabel": "내 답변",
-        "analysisLabel": "분석",
-        "correctionLabel": "고칠 점",
-        "suggestionLabel": "개선 방법",
-        "tipsLabel": "전문가 팁",
-        "modelAnswerLabel": "모범 답안",
-        "keyQuoteLabel": "내가 한 말",
-        "missed": "이 질문은 면접에서 다루지 않았어요.",
-        "offScript": "즉흥 질문",
-        "rating": {
-          "strong": "우수",
-          "adequate": "양호",
-          "weak": "개선 필요",
-          "missed": "다루지 않음"
-        }
+      "col": {
+        "user": "사용자",
+        "tier": "요금제",
+        "mrr": "MRR",
+        "cost": "기간 비용",
+        "margin": "이익",
+        "sessions": "세션",
+        "lastActive": "마지막 활동"
       },
-      "analysisStalled": "상세 분석이 예상보다 오래 걸리고 있어요.",
-      "refreshAnalysis": "분석 새로고침"
+      "empty": "{query}와 맞는 사용자가 없어요.",
+      "pagination": "{from}~{to} / {total}"
+    },
+    "detail": {
+      "eyebrow": "사용자 · {email}",
+      "titleAccent": "수지 현황",
+      "back": "사용자 전체",
+      "summary": "비용 {cost} · 결제 {revenue} → 이익 {margin}({pct})",
+      "lifetimeCost": "누적 비용",
+      "periodCost": "이 기간 비용",
+      "lifetimeRevenue": "누적 매출",
+      "dailyCost": "일별 비용 · 최근 30일",
+      "avgDaily": "평균 {amount}/일",
+      "costByFeature": "기능별 비용",
+      "interviewSessions": "면접 세션",
+      "setPlan": "요금제 설정",
+      "renews": "{date}에 갱신",
+      "col": {
+        "feature": "기능",
+        "calls": "호출",
+        "cost": "비용",
+        "pctSpend": "지출 비중",
+        "split": "음성 인식/음성 합성/모델"
+      }
+    },
+    "setPlan": {
+      "title": "요금제 설정",
+      "tier": "요금제",
+      "customPrice": "개별 가격(선택)",
+      "reason": "이유",
+      "reasonRequired": "이유를 반드시 적어야 해요.",
+      "cancel": "취소",
+      "confirm": "확인",
+      "success": "요금제를 바꿨어요."
+    },
+    "sessions": {
+      "empty": "이 기간에 세션이 없어요.",
+      "col": {
+        "date": "날짜",
+        "user": "사용자",
+        "role": "직무",
+        "duration": "시간",
+        "blueprint": "설계",
+        "liveLlm": "대화 모델",
+        "stt": "음성 인식",
+        "tts": "음성 합성",
+        "eval": "평가",
+        "coach": "짚어주기",
+        "total": "합계",
+        "status": "상태"
+      },
+      "status": {
+        "completed": "완료",
+        "inProgress": "진행 중",
+        "failed": "실패",
+        "billed": "청구됨"
+      }
+    },
+    "session": {
+      "eyebrow": "세션 비용",
+      "title": "세션 비용 내역",
+      "stage": {
+        "blueprint": "설계",
+        "liveLlm": "대화 모델",
+        "stt": "음성 인식",
+        "tts": "음성 합성",
+        "eval": "평가",
+        "coach": "짚어주기"
+      },
+      "col": {
+        "stage": "단계",
+        "model": "모델",
+        "usage": "사용량",
+        "unitRate": "단가",
+        "cost": "비용"
+      }
+    },
+    "rateCard": {
+      "title": "단가표",
+      "llm": "모델별 단가",
+      "speech": "음성 단가",
+      "media": "미디어 단가",
+      "note": "비용 추정에 쓰는 참조 단가 · admin-config에서 수정",
+      "editSoon": "단가 수정은 아직 할 수 없어요",
+      "col": {
+        "model": "모델",
+        "inputRate": "입력 $/100만",
+        "outputRate": "출력 $/100만",
+        "provider": "제공사",
+        "perMin": "분당",
+        "perGb": "GB당",
+        "perImage": "장당"
+      }
+    },
+    "empty": {
+      "title": "이 기간에는",
+      "titleAccent": "활동이 없어요",
+      "reset": "30일로 되돌리기"
+    },
+    "notAuthorized": {
+      "title": "권한이",
+      "titleAccent": "없어요",
+      "sub": "이 콘솔은 관리자만 쓸 수 있어요."
+    },
+    "error": {
+      "title": "이 화면을 불러오지 못했어요.",
+      "body": "다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
+      "retry": "다시 시도"
     }
   }
 }

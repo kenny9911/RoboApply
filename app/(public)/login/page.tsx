@@ -2,8 +2,8 @@
 
 // Login — the consumer-facing form card on the right of the auth split screen
 // (the brand hero is rendered by (public)/layout.tsx). Presentation only: the
-// auth data flow (login → refresh → next-param / jobApplyingEnabled / hasResume
-// routing) is unchanged from the placeholder.
+// auth data flow (login → refresh → `next` param → /jobs) is unchanged from the
+// placeholder apart from the destination, which no longer branches.
 
 import { FormEvent, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -46,22 +46,12 @@ export default function LoginPage() {
       // ?next= can't turn the post-login redirect into an open redirect.
       const rawNext = params?.get('next');
       const next = rawNext && /^\/(?![/\\])/.test(rawNext) ? rawNext : null;
-      const hasResume = !!me?.onboardingState?.completedSteps?.includes('resume');
-      // When job-applying is off, the auto-apply onboarding + Today home are
-      // gone: returning users land on Mock Interview, new users on the Resume
-      // Builder. (`next` from a deep-link still wins; the route gates redirect
-      // it if it points at a now-hidden surface.)
-      const jobApplyingEnabled = me?.jobApplyingEnabled !== false;
-      if (next) {
-        router.replace(next);
-      } else if (jobApplyingEnabled) {
-        // Skip onboarding for returning users who already uploaded a
-        // master resume — they should land on the home dashboard, not
-        // the upload-resume step.
-        router.replace(hasResume ? '/home' : '/onboarding');
-      } else {
-        router.replace(hasResume ? '/mock-interview' : '/resumes');
-      }
+      // One destination, no branch. /jobs IS the product (ruling R1), so the
+      // JOB_APPLYING_ENABLED fork is gone, and so is the has-a-resume fork:
+      // /onboarding no longer exists (setup is a panel in the /jobs filter bar,
+      // C21) and ResumeGate already shows the upload prompt to a user with no
+      // résumé, in place, on /jobs. A deep-link `next` still wins.
+      router.replace(next ?? '/jobs');
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : t('error_generic'));
     } finally {

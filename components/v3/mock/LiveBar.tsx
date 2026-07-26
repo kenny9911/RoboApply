@@ -33,7 +33,7 @@ export function LiveBar({
   total,
   onBack,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   return (
     <div className="iv-live-bar">
       <button type="button" className="btn ghost" onClick={onBack}>

@@ -44,7 +44,7 @@ interface Props {
 const PANEL_BG = 'var(--surface)';
 
 export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const tailorDiff = useResumeTailorDiff(resumeId);
   const applyMut = useResumeTailorApply(resumeId);
   const { data: searchData, isLoading: jobsLoading } = useJobSearch({
@@ -521,7 +521,7 @@ function TailorChangeRow({
   on: boolean;
   onToggle: () => void;
 }) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   return (
     <div className={`rb-change ${on ? 'on' : 'off'}`}>
       <button type="button" className="rb-change-toggle" onClick={onToggle}>

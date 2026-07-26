@@ -72,9 +72,10 @@ export default function RouteError({
   return (
     <main style={wrap}>
       <div style={cardStyle}>
-        <h1 style={titleStyle}>Something went wrong</h1>
+        <h1 style={titleStyle}>Something on this page failed to load</h1>
         <p style={subStyle}>
-          We&apos;ve logged the issue. You can try again or head back home.
+          Nothing you saved was lost. Try again, and if it keeps failing,
+          reload the page.
         </p>
         <div
           style={{
@@ -88,8 +89,8 @@ export default function RouteError({
           <button type="button" onClick={() => reset()} style={btnPrimary}>
             Try again
           </button>
-          <a href="/" style={btnGhost}>
-            Go home
+          <a href="/jobs" style={btnGhost}>
+            Go to Jobs
           </a>
         </div>
       </div>

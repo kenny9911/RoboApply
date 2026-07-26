@@ -16,7 +16,7 @@
 // than a toast — the app has no toast surface, and useWipeData already
 // invalidated the V2/V3 caches so the emptied pages repaint behind the modal.
 //
-// Copy lives under the `preferences.danger.delete_data_*` namespace (all four
+// Copy lives under the `settings.danger.delete_data_*` namespace (all four
 // locales), alongside the row it opens.
 
 import { useEffect, useState } from 'react';
@@ -40,7 +40,7 @@ export function WipeDataModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const t = useTranslations('preferences');
+  const t = useTranslations('settings');
   const wipe = useWipeData();
 
   const [confirm, setConfirm] = useState('');

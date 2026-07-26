@@ -34,7 +34,7 @@ const FORMATS: Array<{ id: Format; recommended?: boolean }> = [
 ];
 
 export function DownloadModal({ resumeId, resumeName, resumeMarkdown, onClose }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const [busy, setBusy] = useState<Format | null>(null);
   const [error, setError] = useState(false);
 

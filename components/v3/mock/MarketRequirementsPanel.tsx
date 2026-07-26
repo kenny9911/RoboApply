@@ -38,7 +38,7 @@ export function MarketRequirementsPanel({
   onPreview,
   onRetry,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
 
   return (
     <section className="iv-step">

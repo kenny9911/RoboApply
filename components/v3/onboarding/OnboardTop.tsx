@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function OnboardTop({ stage, onSkip, skipping = false }: Props) {
-  const t = useTranslations('onboarding');
+  const t = useTranslations('jobs.setup');
   const stageIndex = STAGES.indexOf(stage);
 
   return (
@@ -37,12 +37,12 @@ export function OnboardTop({ stage, onSkip, skipping = false }: Props) {
         </div>
         <div className="brand-name">
           RoboApply
-          <small>{t('brand_sub')}</small>
+          <small>{t('title')}</small>
         </div>
       </div>
 
       <div className="onboard-step">
-        {t(`chat.progress_${stage}`)}
+        {t(`progress_${stage}`)}
         <span className="pip-row">
           {STAGES.map((s, i) => (
             <span key={s} className={`pip ${i <= stageIndex ? 'on' : ''}`} />

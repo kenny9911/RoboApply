@@ -8,7 +8,7 @@
 // can open the identical flow instead of a stub. Owns the whole handshake:
 // type-your-email confirm + required reason → mutate → sign out → /login.
 //
-// Copy lives under the `account.danger.*` namespace in all four locales.
+// Copy lives under the `settings.danger.*` namespace in all four locales.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -30,7 +30,7 @@ export function DeleteAccountModal({
   /** The account's email — the user must retype it to confirm. */
   email: string;
 }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const router = useRouter();
   const auth = useAuth();
   const deleteAccount = useDeleteAccount();

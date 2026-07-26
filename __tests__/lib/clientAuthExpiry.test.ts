@@ -102,7 +102,7 @@ describe('stale-session recovery', () => {
   });
 
   it('on a protected route: rejects, clears credentials, calls the sessionless logout, navigates to /login', async () => {
-    setPath('/onboarding');
+    setPath('/jobs');
     const assignSpy = tryMockAssign();
     const { request } = await importFreshClient();
 
@@ -121,12 +121,12 @@ describe('stale-session recovery', () => {
     });
     expect(window.localStorage.getItem('auth_token')).toBeNull();
     if (assignSpy) {
-      expect(assignSpy).toHaveBeenCalledWith('/login?next=%2Fonboarding');
+      expect(assignSpy).toHaveBeenCalledWith('/login?next=%2Fjobs');
     }
   });
 
   it('fires only once for a burst of parallel 401s', async () => {
-    setPath('/onboarding');
+    setPath('/jobs');
     tryMockAssign();
     const { request } = await importFreshClient();
 

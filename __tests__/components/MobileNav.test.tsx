@@ -1,21 +1,23 @@
-// MobileNav — V3 mobile-only fixed bottom bar (replaces the V2 BottomNav).
-// 5 Workspace items: Today / Review queue / Resume builder / Mock interview /
-// Pipeline. Active item gets the accent color via aria-current="page".
+// MobileNav — the fixed bottom bar below 760px, where the 248px rail is
+// hidden.
+//
+// The bar IS the information architecture (ruling D3): the same four
+// destinations as the Sidebar, same labels, same order, unconditionally. The
+// tests below are mostly about what must NOT be possible — a fifth tab, a
+// flag-dependent tab count, a label the rail does not use, or a tap target
+// under 44px.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState, buildAuthValue } from '../utils/mockAuth';
-import { QUEUE_REVIEW_ENABLED } from '../../lib/jobApplying';
 
-// MobileNav now reads useAuth() (via useJobApplyingEnabled) to gate the
-// auto-apply tabs. Point it at the shared mock fixture (default: enabled).
 vi.mock('../../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: unknown }) => children,
   useAuth: () => mockAuthState.value,
 }));
 
-const pathnameRef = { current: '/home' };
+const pathnameRef = { current: '/jobs' };
 vi.mock('next/navigation', () => ({
   usePathname: () => pathnameRef.current,
   useRouter: () => ({
@@ -31,54 +33,96 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { MobileNav } from '../../components/v3/shell/MobileNav';
+import { DESTINATIONS } from '../../components/v3/shell/Sidebar';
 
-describe('MobileNav (V3)', () => {
+const IA: [string, string][] = [
+  ['/jobs', 'Jobs'],
+  ['/resume', 'Resume'],
+  ['/applications', 'Applications'],
+  ['/practice', 'Interview prep'],
+];
+
+describe('MobileNav', () => {
   beforeEach(() => {
-    pathnameRef.current = '/home';
+    pathnameRef.current = '/jobs';
     mockAuthState.value = buildAuthValue();
   });
 
-  it('renders the Workspace link items (Review queue hidden for launch)', () => {
+  it('renders exactly the four destinations, in the sidebar order', () => {
     renderWithProviders(<MobileNav />);
     const links = screen.getAllByRole('link');
-    expect(links.length).toBe(QUEUE_REVIEW_ENABLED ? 5 : 4);
-    if (!QUEUE_REVIEW_ENABLED) {
-      expect(
-        screen.queryByRole('link', { name: /Review queue/i }),
-      ).not.toBeInTheDocument();
+    expect(links.map((l) => l.getAttribute('href'))).toEqual(IA.map(([h]) => h));
+    for (const [href, label] of IA) {
+      const link = links.find((l) => l.getAttribute('href') === href)!;
+      expect(link).toHaveTextContent(label);
     }
   });
 
-  it('marks the active item with aria-current when on /home', () => {
-    pathnameRef.current = '/home';
+  it('renders the same array the Sidebar renders, not a copy of it', () => {
     renderWithProviders(<MobileNav />);
-    const today = screen.getByRole('link', { name: /Today/i });
-    expect(today).toHaveAttribute('aria-current', 'page');
-    const pipeline = screen.getByRole('link', { name: /Pipeline/i });
-    expect(pipeline).not.toHaveAttribute('aria-current');
+    expect(screen.getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual(
+      DESTINATIONS.map((d) => d.href),
+    );
   });
 
-  it('Mock interview lights up on a /mock-interview subroute', () => {
-    pathnameRef.current = '/mock-interview/cm_session_xyz';
+  it('does not lose or gain a tab for any auth state', () => {
+    const { unmount } = renderWithProviders(<MobileNav />);
+    expect(screen.getAllByRole('link')).toHaveLength(4);
+    unmount();
+
+    // There is no flag left that may hide a destination; a signed-in user with
+    // nothing set up sees the same four as everyone else.
+    mockAuthState.value = buildAuthValue({ onboardingState: null, profile: null });
     renderWithProviders(<MobileNav />);
-    const mock = screen.getByRole('link', { name: /Mock interview/i });
-    expect(mock).toHaveAttribute('aria-current', 'page');
+    expect(screen.getAllByRole('link')).toHaveLength(4);
   });
 
-  it('aria-label="Mobile" on the nav', () => {
+  it('carries none of the deleted tabs', () => {
     renderWithProviders(<MobileNav />);
-    expect(screen.getByLabelText(/Mobile/i)).toBeInTheDocument();
+    for (const gone of [/Today/, /Review queue/, /Pipeline/, /Mock interview/]) {
+      expect(screen.queryByRole('link', { name: gone })).not.toBeInTheDocument();
+    }
   });
 
-  it('hides the auto-apply tabs when job-applying is OFF (Resume + Mock remain)', () => {
-    mockAuthState.value = buildAuthValue({ jobApplyingEnabled: false });
+  it('labels are sentence case, not the old uppercase micro-label', () => {
     renderWithProviders(<MobileNav />);
-    const links = screen.getAllByRole('link');
-    expect(links.length).toBe(2); // Resume builder + Mock interview only
-    expect(screen.queryByRole('link', { name: /Today/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Review queue/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Pipeline/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Resume builder/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Mock interview/i })).toBeInTheDocument();
+    for (const [, label] of IA) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.queryByText(label.toUpperCase())).not.toBeInTheDocument();
+    }
+  });
+
+  it('every tab is at least 44×44', () => {
+    renderWithProviders(<MobileNav />);
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.style.minHeight).toBe('44px');
+      expect(link.style.minWidth).toBe('44px');
+    }
+  });
+
+  it('marks the active tab with aria-current, including sub-routes', () => {
+    pathnameRef.current = '/jobs';
+    const { unmount } = renderWithProviders(<MobileNav />);
+    expect(screen.getByRole('link', { name: /Jobs/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(
+      screen.getByRole('link', { name: /Applications/ }),
+    ).not.toHaveAttribute('aria-current');
+    unmount();
+
+    pathnameRef.current = '/practice/cm_session_xyz';
+    renderWithProviders(<MobileNav />);
+    expect(screen.getByRole('link', { name: /Interview prep/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('is a labelled navigation landmark', () => {
+    renderWithProviders(<MobileNav />);
+    const bar = screen.getByRole('navigation', { name: 'Main navigation' });
+    expect(within(bar).getAllByRole('link')).toHaveLength(4);
   });
 });

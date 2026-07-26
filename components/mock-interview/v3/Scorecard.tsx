@@ -51,7 +51,7 @@ export function Scorecard({ report, mockId, delta, axes, strengths, sharpen }: P
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <Link
-              href={`/mock-interview/${mockId}`}
+              href={`/practice/${mockId}`}
               className="inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-bold transition-transform hover:scale-[1.02]"
               style={{
                 background:
@@ -65,7 +65,7 @@ export function Scorecard({ report, mockId, delta, axes, strengths, sharpen }: P
               Run it again
             </Link>
             <Link
-              href="/mock-interview"
+              href="/practice"
               className="inline-flex h-11 items-center rounded-full border border-white/15 px-5 text-sm font-semibold transition-colors hover:bg-white/5"
               style={{ color: 'var(--dc-ink, #f5f5fa)' }}
             >

@@ -25,7 +25,7 @@ const PRIORITY_TONE: Record<IERecommendationPriority, PillTone> = {
 };
 
 export function RecommendationsCard({ recommendations, enrichmentPending }: Props) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   const showPlaceholder = recommendations === null;
 
   return (

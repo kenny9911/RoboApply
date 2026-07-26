@@ -21,7 +21,6 @@ export interface AuthContextValue {
   user: RoboUserSummary | null;
   profile: MeResponse['profile'] | null;
   onboardingState: MeResponse['onboardingState'] | null;
-  jobApplyingEnabled: boolean | null;
   refresh: () => Promise<MeResponse | null>;
   setSession: (data: MeResponse) => void;
   clear: () => void;
@@ -53,9 +52,6 @@ export function buildAuthValue(
     user: buildFakeUser(),
     profile: { id: 'profile-1', userId: 'seeker-1', locale: 'en' },
     onboardingState: { completed: true },
-    // Default to the job-applying surface being ON so existing tests see the
-    // full nav; flag-off tests override this to false.
-    jobApplyingEnabled: true,
     refresh: async () => null,
     setSession: () => {},
     clear: () => {},

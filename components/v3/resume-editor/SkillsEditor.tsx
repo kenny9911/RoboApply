@@ -24,7 +24,7 @@ export function SkillsEditor({
   suggestions,
   onClearSuggestions,
 }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 

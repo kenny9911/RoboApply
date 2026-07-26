@@ -36,8 +36,8 @@ describe('InterviewerPicker (archetype roster)', () => {
   it('renders localized persona role/blurb text (not raw i18n keys)', () => {
     const { container } = renderPicker();
     // en.json translations resolve to the English source text.
-    expect(screen.getByText('The Warm Recruiter')).toBeInTheDocument();
-    expect(screen.getByText('The Renaissance Architect')).toBeInTheDocument();
+    expect(screen.getByText('The warm recruiter')).toBeInTheDocument();
+    expect(screen.getByText('The broad architect')).toBeInTheDocument();
     // No raw key path leaked anywhere.
     expect(container.textContent).not.toMatch(/setup\.personas\./);
     expect(container.textContent).not.toMatch(/setup\.archetype\./);
@@ -45,10 +45,10 @@ describe('InterviewerPicker (archetype roster)', () => {
 
   it('shows an archetype chip on every card covering all 7 archetypes', () => {
     renderPicker();
-    // English chip labels from mock.setup.archetype.*
-    expect(screen.getAllByText('Deep-dive')).toHaveLength(3); // diaz, kai, voss
-    expect(screen.getAllByText('Breadth')).toHaveLength(3); // nova, atlas, amara
-    expect(screen.getAllByText('Behavioral')).toHaveLength(3); // priya, bishop, osei
+    // English chip labels from practice.setup.archetype.*
+    expect(screen.getAllByText('Depth')).toHaveLength(3); // diaz, kai, voss
+    expect(screen.getAllByText('Range')).toHaveLength(3); // nova, atlas, amara
+    expect(screen.getAllByText('Past situations')).toHaveLength(3); // priya, bishop, osei
     expect(screen.getAllByText('Problem-solving')).toHaveLength(3); // rex, okonkwo, devi
     expect(screen.getAllByText('Warm-up')).toHaveLength(2); // maya, june
     expect(screen.getAllByText('Communication')).toHaveLength(2); // lena, sterling

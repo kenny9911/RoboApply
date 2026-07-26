@@ -1,9 +1,9 @@
 'use client';
 
-// §01 Identity — profile, contact, links, default-resume picker.
+// Settings § Account — profile, contact, links.
 // name/email come from the auth profile (read-only display + editable name);
-// the rest live on the preferences blob. Default-resume picker reads the resume
-// library (useResumeList) and writes `defaultResumeId` to preferences.
+// the rest live on the preferences blob. The default-résumé picker that used to
+// close this section now has its own settings section (ResumeSection).
 
 import { useTranslations } from 'next-intl';
 import {
@@ -17,22 +17,19 @@ import {
 import { Btn } from '../../primitives';
 import { LanguageSwitcher } from '../../shell/LanguageSwitcher';
 import type { RAPreferences } from '../../../../lib/api/v2';
-import type { RAResumeVariantSummary } from '../../../../hooks/useResumes';
 
 export function IdentitySection({
   p,
   set,
   name,
   email,
-  resumes,
 }: {
   p: RAPreferences;
   set: <K extends keyof RAPreferences>(path: string, value: unknown) => void;
   name: string;
   email: string;
-  resumes: RAResumeVariantSummary[];
 }) {
-  const t = useTranslations('preferences');
+  const t = useTranslations('settings');
   const tc = useTranslations('common');
   const initials =
     name
@@ -146,42 +143,6 @@ export function IdentitySection({
         </PrefRow>
       </PrefGroup>
 
-      <PrefGroup label={t('identity.group_default_resume')}>
-        {resumes.length === 0 ? (
-          <div className="pref-row-sub">{t('identity.no_resumes')}</div>
-        ) : (
-          <div className="pref-resume-picker">
-            {resumes.map((r) => (
-              <label
-                key={r.id}
-                className={`pref-resume-card ${p.defaultResumeId === r.id ? 'on' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="defaultResume"
-                  checked={p.defaultResumeId === r.id}
-                  onChange={() => set('defaultResumeId', r.id)}
-                />
-                <div className="pref-resume-mini">
-                  <div className="rb-mini-name">{r.name}</div>
-                  <div className="rb-mini-line" style={{ width: '60%' }} />
-                  <div className="rb-mini-spacer" />
-                  <div className="rb-mini-section">EXP</div>
-                  <div className="rb-mini-line" style={{ width: '85%' }} />
-                  <div className="rb-mini-line" style={{ width: '70%' }} />
-                </div>
-                <div className="pref-resume-name">{r.name}</div>
-                <div className="pref-resume-meta">
-                  {r.targetJobCompany
-                    ? `→ ${r.targetJobCompany}`
-                    : t('identity.resume_base')}
-                  {r.matchScoreCached != null ? ` · ${r.matchScoreCached}/100` : ''}
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-      </PrefGroup>
     </>
   );
 }

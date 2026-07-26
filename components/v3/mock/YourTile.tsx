@@ -34,7 +34,7 @@ export function YourTile({
   camOn,
   onCamChange,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [permState, setPermState] = useState<PermState>('idle');

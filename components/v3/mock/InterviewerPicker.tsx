@@ -28,7 +28,7 @@ function PersonaCard({
   recommended?: boolean;
   onPick: () => void;
 }) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   // Localized persona field with the catalog English as a fallback.
   const tr = (field: 'role' | 'blurb' | 'style' | 'company'): string => {
     const key = `setup.personas.${persona.id}.${field}`;
@@ -104,7 +104,7 @@ interface Props {
 }
 
 export function InterviewerPicker({ interviewers, selectedId, onSelect, recommendedPersonaIds }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const [expanded, setExpanded] = useState(false);
   const recIds = recommendedPersonaIds ?? [];
   const recSet = useMemo(() => new Set(recIds), [recommendedPersonaIds]);

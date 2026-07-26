@@ -37,7 +37,7 @@ export function JobDetailModal({
   applying,
   onApply,
 }: Props) {
-  const t = useTranslations('today');
+  const t = useTranslations('jobs');
 
   const salary = job
     ? formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency)
@@ -109,7 +109,7 @@ export function JobDetailModal({
                 disabled={applying}
                 onClick={onApply}
               >
-                {applying ? t('actions.applying') : t('actions.applyNow')}
+                {applying ? t('actions.applying') : t('actions.applyOnSite')}
               </Btn>
             )}
           </>

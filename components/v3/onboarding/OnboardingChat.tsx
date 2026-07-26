@@ -20,7 +20,6 @@ import { raV2Api } from '../../../lib/api/v2';
 import type {
   IngestRow,
   OnboardingJobCard as OnboardingJobCardData,
-  RAAggressiveness,
   RAOnboardingQuickReply,
 } from '../../../lib/api/v2/types';
 import type { UseOnboardingChatReturn } from '../../../hooks/useOnboardingChat';
@@ -29,9 +28,16 @@ import { IngestRecap } from './IngestRecap';
 import { JobCardStack } from './JobCardStack';
 import { PreferenceTray } from './PreferenceTray';
 
-/** Quick-reply ids that short-circuit the wrap straight to /complete —
- *  the aggressiveness pills never round-trip through the chat (E10). */
-const AGGRESSIVENESS_IDS: ReadonlySet<string> = new Set([
+/** Quick-reply ids that short-circuit the wrap straight to /complete instead of
+ *  round-tripping through the chat (E10).
+ *
+ *  These three were the auto-apply aggressiveness pills. The SETTING is deleted
+ *  (rulings R1/R3 — there is no agent to tune and nothing to tune it about) but
+ *  the ids still arrive from the server's wrap turn, and picking any of them
+ *  still means "I'm done, finish setup". So the list stays as a short-circuit
+ *  and the chosen value is discarded. Delete this set once the server's wrap
+ *  turn stops offering the pills. */
+const WRAP_SHORTCUT_IDS: ReadonlySet<string> = new Set([
   'manual',
   'balanced',
   'aggressive',
@@ -47,7 +53,7 @@ interface Props {
   initialPassedJobIds?: string[];
   /** True when this chat was restored from a previous session. */
   restored?: boolean;
-  onComplete: (aggressiveness: RAAggressiveness) => void;
+  onComplete: () => void;
   completing: boolean;
 }
 
@@ -60,7 +66,7 @@ export function OnboardingChat({
   onComplete,
   completing,
 }: Props) {
-  const t = useTranslations('onboarding.chat');
+  const t = useTranslations('jobs.setup');
   const { state, sendMessage } = chat;
 
   const [composer, setComposer] = useState('');
@@ -103,9 +109,9 @@ export function OnboardingChat({
 
   function handleQuickReply(option: RAOnboardingQuickReply) {
     if (state.isStreaming || completing) return;
-    // Aggressiveness at wrap short-circuits straight to complete (E10).
-    if (state.state === 'wrap' && AGGRESSIVENESS_IDS.has(option.id)) {
-      onComplete(option.id as RAAggressiveness);
+    // A wrap shortcut goes straight to complete (E10).
+    if (state.state === 'wrap' && WRAP_SHORTCUT_IDS.has(option.id)) {
+      onComplete();
       return;
     }
     void sendMessage(option.label, option.id);
@@ -281,7 +287,7 @@ export function OnboardingChat({
           className="btn primary"
           disabled={completing}
           style={{ alignSelf: 'flex-start' }}
-          onClick={() => onComplete('balanced')}
+          onClick={() => onComplete()}
         >
           {t('wrap_cta')} <IconBolt size={14} />
         </button>

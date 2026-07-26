@@ -33,14 +33,14 @@ interface Props {
 }
 
 export function UploadStep({ file, extracted, totalRows, onPick, error }: Props) {
-  const t = useTranslations('onboarding.upload');
+  const t = useTranslations('jobs.setup');
 
   return (
     <>
       <h1>
-        {`${t('title')} ${t('title_accent')}.`}
+        {t('upload_title')}
       </h1>
-      <p className="lead">{t('lead')}</p>
+      <p className="lead">{t('upload_lead')}</p>
 
       <label className={`upload-zone ${file ? 'has-file' : ''}`}>
         <input
@@ -54,8 +54,8 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
             <div className="ic">
               <IconUpload size={22} strokeWidthValue={2.2} />
             </div>
-            <h3>{t('drop_title')}</h3>
-            <p>{t('drop_sub')}</p>
+            <h3>{t('upload_drop_title')}</h3>
+            <p>{t('upload_drop_sub')}</p>
             <div className="formats">
               <span>PDF</span> · <span>DOC/DOCX</span> · <span>TXT</span> ·{' '}
               <span>MD</span>
@@ -75,7 +75,7 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
                   marginTop: 4,
                 }}
               >
-                {t('received', { size: file.size })}
+                {t('upload_received', { size: file.size })}
               </div>
             </div>
           </div>
@@ -102,7 +102,7 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2 9 9l-7 3 7 3 3 7 3-7 7-3-7-3-3-7Z" />
             </svg>
-            {t('ingest_title')}
+            {t('upload_ingest_title')}
           </div>
           {extracted.map((row, i) => (
             <div key={i} className="ingest-row" style={{ animation: 'expand 0.25s ease' }}>
@@ -118,7 +118,7 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
               <div className="ic">
                 <div className="spinner" />
               </div>
-              <div>{t('reading')}</div>
+              <div>{t('upload_reading')}</div>
             </div>
           ) : null}
         </div>

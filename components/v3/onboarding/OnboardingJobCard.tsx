@@ -33,7 +33,7 @@ function formatSalary(job: OnboardingJobCardData): string | null {
 }
 
 export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props) {
-  const t = useTranslations('onboarding.chat');
+  const t = useTranslations('jobs.setup');
   const salary = formatSalary(job);
 
   return (
@@ -81,7 +81,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
             whiteSpace: 'nowrap',
           }}
         >
-          {t('card_match', { score: job.matchScore })}
+          {t('card_fit', { score: job.matchScore })}
         </span>
       </div>
 
@@ -118,7 +118,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
           disabled={saved || passed}
           onClick={() => onPass(job)}
         >
-          {passed ? t('card_passed') : t('card_pass')}
+          {passed ? t('card_removed') : t('card_not_interested')}
         </button>
         {job.isExternal && job.applyUrl ? (
           <a

@@ -21,7 +21,7 @@
 // claim the user can correct: the applied state carries an inline
 // "I didn't apply" that patches the tracker row back to `bookmarked`.
 //
-// Every user-facing string uses `t()` under the `today` namespace.
+// Every user-facing string uses `t()` under the `jobs` namespace.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -85,7 +85,7 @@ export function MatchCard({
   passed,
   appliedNow,
 }: Props) {
-  const t = useTranslations('today');
+  const t = useTranslations('jobs');
   const qc = useQueryClient();
 
   // Full-detail modal (the real posting: description / responsibilities /
@@ -164,17 +164,17 @@ export function MatchCard({
 
   const tags = deriveTags(job, liveScore, {
     tier: {
-      strong: t('tier.strong'),
-      good: t('tier.good'),
-      stretch: t('tier.stretch'),
-      longShot: t('tier.longShot'),
+      strong: t('fit.great'),
+      good: t('fit.good'),
+      stretch: t('fit.possible'),
+      longShot: t('fit.unlikely'),
     },
     workType: {
       remote: t('work.remote'),
       hybrid: t('work.hybrid'),
       onsite: t('work.onsite'),
     },
-    stretch: t('tag.stretch'),
+    stretch: t('tag.possible'),
   });
 
   const statusLabel =
@@ -182,7 +182,7 @@ export function MatchCard({
       ? t('status.applied')
       : status === 'passed'
         ? t('status.notInterested')
-        : t('status.queued');
+        : t('status.saved');
 
   return (
     <div className={`match ${expanded ? 'expanded' : ''}`}>
@@ -239,7 +239,7 @@ export function MatchCard({
         </div>
         <div className="match-right">
           {liveScore != null ? (
-            <ScoreDonut value={liveScore} label={t('match')} />
+            <ScoreDonut value={liveScore} label={t('score.label')} />
           ) : (
             <ScoreDonutSkeleton />
           )}
@@ -249,8 +249,9 @@ export function MatchCard({
 
       {expanded ? (
         <div className="match-expanded" onClick={(e) => e.stopPropagation()}>
-          <div className="ai-reasoning">
-            <div className="ai-avatar" aria-hidden="true" />
+          {/* No avatar slot: the reasoning has no speaker (D4/C9). It states
+            *  what the posting asks for and what the résumé shows. */}
+          <div className="why-fits">
             <div className="txt">
               <div className="lbl">{t('whyFits')}</div>
               {detail.isLoading && !matchView ? (

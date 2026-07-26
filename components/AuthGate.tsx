@@ -6,12 +6,11 @@
 // (roboapply/proxy.ts), which redirects unauthenticated requests to /login.
 // That single guard has two blind spots:
 //   1. Next.js middleware/proxy does NOT run on client-side soft navigations,
-//      so following an in-app <Link> (e.g. the sidebar logo → /home) never hits
+//      so following an in-app <Link> (e.g. the sidebar logo → /jobs) never hits
 //      it — a logged-out user lands on the protected route client-side.
 //   2. If the proxy is inactive for any reason, nothing redirects at all.
-// In either case an unauthenticated visitor reaches a protected route and the
-// downstream JobApplyingGate hangs on an infinite spinner (a blank page),
-// because the session never resolves to "authenticated".
+// In either case an unauthenticated visitor reaches a protected route whose
+// data all 401s, with nothing to redirect them anywhere.
 //
 // This gate closes that gap on the client: once auth resolves to
 // `unauthenticated`, it redirects to /login (preserving a ?next= return path

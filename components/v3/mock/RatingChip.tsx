@@ -22,7 +22,7 @@ const TONE: Record<IEQuestionRating, { color: string; bg: string; border: string
 };
 
 export function RatingChip({ rating, score, hideScore = false }: Props) {
-  const t = useTranslations('ie');
+  const t = useTranslations('practice');
   const s = TONE[rating] ?? TONE.adequate;
   const label = t(`report.questionBreakdown.rating.${rating}`);
   return (

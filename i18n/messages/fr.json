@@ -1,5 +1,6 @@
 {
   "common": {
+    "app_name": "RoboApply",
     "loading": "Chargement…",
     "sign_in": "Se connecter",
     "sign_out": "Se déconnecter",
@@ -11,565 +12,2351 @@
     "continue": "Continuer",
     "retry": "Réessayer",
     "saved": "Enregistré.",
-    "coming_soon": "Je finis de m'installer. Ça marchera dès que ton agent sera branché.",
-    "language": "Langue"
+    "language": "Langue",
+    "not_available": "Ce n'est pas encore disponible."
   },
   "nav": {
-    "mission": "Mission",
-    "apps": "Candidatures",
-    "settings": "Paramètres",
-    "home": "Accueil",
-    "resume_builder": "Créateur de CV",
-    "tracker": "Suivi",
-    "job_search": "Recherche d'emploi",
-    "mock_interview": "Entretien blanc",
-    "career_insights": "Analyses carrière",
-    "all_tools": "Tous les outils",
-    "all_tools_coming_soon": "D'autres outils et intégrations arrivent en V2.1.",
-    "referrals": "Parrainage",
-    "referrals_coming_soon": "Le parrainage arrive en V2.1.",
-    "support": "Support"
-  },
-  "landing": {
-    "meta": {
-      "title": "Agent IA recherche d'emploi & simulation d'entretien | RoboApply",
-      "description": "RoboApply : l'agent IA qui postule pour toi. Offres matchées à ton CV, lettres de motivation vérifiées et validées par toi, simulation d'entretien IA. Gratuit.",
-      "ogTitle": "RoboApply — On postule. Tu passes l'entretien.",
-      "ogDescription": "Ton agent IA matche les offres avec ton vrai CV, rédige des candidatures que tu valides avant tout envoi, et te prépare avec des entretiens blancs IA en direct, en 9 langues. Commence gratuitement.",
-      "keywords": "agent IA recherche d'emploi, IA qui postule pour toi, postuler automatiquement, simulation d'entretien IA, entretien blanc IA, lettre de motivation IA, CV IA, candidature automatique"
-    },
-    "header": {
-      "status_chip": "ACCÈS ANTICIPÉ",
-      "cta": "Commence gratuitement",
-      "theme_to_light": "Passer en mode matin",
-      "theme_to_dark": "Passer en mode nuit",
-      "lang_label": "Changer de langue"
-    },
-    "hero": {
-      "eyebrow": "Ton agent IA pour l'emploi · il travaille pendant que tu dors",
-      "headline_machine": "On postule",
-      "headline_human": "Tu passes l'entretien",
-      "subheadline": "RoboApply est un agent IA pour ta recherche d'emploi : il repère les offres qui te correspondent vraiment, les score sur ton vrai CV, et rédige des lettres de motivation qu'il peut sourcer ligne par ligne dans ta vraie expérience — puis met tout en attente de ta validation.",
-      "cta_primary": "Commence gratuitement",
-      "cta_secondary": "Regarde un service type",
-      "reassure": "Plan gratuit · Sans carte · Pilote automatique en accès anticipé",
-      "log": {
-        "aria": "Exemple de journal d'activité nocturne : l'agent scanne les job boards en direct à 23:04, matche les offres avec ton CV et ta cible, rédige des lettres de motivation sourcées pendant la nuit, met douze candidatures en file d'attente, ouvre ta fenêtre de contrôle à 7:00 où tu en recales deux et en valides dix, envoie les dix validées à 9:00, puis t'envoie un rapport du matin à 9:02 qui t'oriente vers l'entraînement à l'entretien.",
-        "title": "roboapply — overnight.log",
-        "live": "SERVICE TYPE",
-        "lines": {
-          "l1": {
-            "time": "23:04",
-            "tag": "SCOUT",
-            "msg": "scan des job boards en direct · 1 284 nouvelles offres"
-          },
-          "l2": {
-            "time": "23:51",
-            "tag": "MATCH",
-            "msg": "41 collent à ta cible · scorées sur ton vrai CV"
-          },
-          "l3": {
-            "time": "01:13",
-            "tag": "DRAFT",
-            "msg": "lettre de motivation 03/12 · chaque affirmation sourcée dans ton CV"
-          },
-          "l4": {
-            "time": "02:47",
-            "tag": "DRAFT",
-            "msg": "lettre de motivation 09/12 · zéro expérience inventée"
-          },
-          "l5": {
-            "time": "04:19",
-            "tag": "QUEUE",
-            "msg": "12 en file d'attente · rien ne part tout seul"
-          },
-          "l6": {
-            "time": "07:00",
-            "tag": "HOLD",
-            "msg": "fenêtre de contrôle ouverte · veto sur ce que tu veux"
-          },
-          "l7": {
-            "time": "08:58",
-            "tag": "HOLD",
-            "msg": "tu as recalé 2 · validé 10"
-          },
-          "l8": {
-            "time": "09:00",
-            "tag": "SUBMIT",
-            "msg": "10 candidatures parties · ton nom, tes mots"
-          },
-          "l9": {
-            "time": "09:02",
-            "tag": "DIGEST",
-            "msg": "rapport du matin envoyé · file t'entraîner à l'entretien"
-          }
-        }
-      },
-      "strip_summary": "23:00 → 09:00 · 12 brouillons · 10 approuvées par toi · 0 envoyée sans toi",
-      "strip_scroll": "comment se déroule un service",
-      "sub_emphasis": "Rien ne part sans toi."
-    },
-    "problem": {
-      "eyebrow": "POURQUOI LES BOTS PERDENT",
-      "title": "Le jeu du volume est truqué.",
-      "sub": "L'IA a inondé le recrutement. Dans un test de Business Insider, un bot qui postule en masse a obtenu 6% de réponses — et ça, les recruteurs le repèrent — alors que les candidatures relues et validées par un humain font systématiquement mieux. La solution, ce n'est pas plus de volume. C'est un meilleur agent, avec ton jugement dans la boucle.",
-      "stats": {
-        "s1": {
-          "value": "242",
-          "label": "candidats désormais en lice pour la même offre en entreprise"
-        },
-        "s2": {
-          "value": "+400%",
-          "label": "de candidatures en plus déversées sur les recruteurs depuis que l'IA postule en masse"
-        },
-        "s3": {
-          "value": "41%",
-          "label": "des candidats pensent que moins d'un quart de leurs candidatures sont vraiment lues par un humain"
-        }
-      },
-      "source": "Sources : The Interview Guys (242) · Greenhouse via Fortune (+400%) · enquêtes candidats, 2025–2026 (41%)"
-    },
-    "how": {
-      "eyebrow": "COMMENT TOURNE UN SERVICE",
-      "title": "Une nuit, du début à la fin.",
-      "sub": "Définis ta cible une fois. L'agent bosse aux heures où tu ne devrais pas — et te rend la main aux moments qui comptent.",
-      "steps": {
-        "s1": {
-          "time": "23:04",
-          "tag": "SCOUT",
-          "title": "Il chasse pendant que tu dors",
-          "body": "L'agent ratisse les job boards en direct et filtre sévèrement selon ta cible — poste, niveau, stack, lieu, salaire. Les offres à côté de la plaque sont recalées avant même que tu les voies."
-        },
-        "s2": {
-          "time": "01:30",
-          "tag": "DRAFT",
-          "title": "Il écrit, preuves à l'appui",
-          "body": "Un CV ajusté et une vraie lettre de motivation pour chaque match — et chaque affirmation de la lettre doit citer une ligne de ton vrai parcours. Impossible d'inventer une expérience : la vérification des sources est codée en dur."
-        },
-        "s3": {
-          "time": "07:00",
-          "tag": "HOLD",
-          "title": "Tu gardes le veto",
-          "body": "Tout attend dans une fenêtre de contrôle. Parcours la file avec ton café, ouvre n'importe quel brouillon, écarte ce qui te semble bancal. Rien ne part jamais en ton nom sans ton OK."
-        },
-        "s4": {
-          "time": "09:00",
-          "tag": "SUBMIT",
-          "title": "Tout part à 9:00 — et la vraie prépa commence",
-          "body": "Les candidatures validées partent au moment où les recruteurs commencent leur journée, en ton nom et avec tes mots — un clic de ta part, ou 100% mains libres à mesure que l'autopilote arrive en accès anticipé. Puis le récap tombe dans ta boîte mail, et le studio d'entretien est à un clic."
-        }
-      }
-    },
-    "loop": {
-      "eyebrow": "LA BOUCLE COMPLÈTE",
-      "title": "Un seul agent. Toute ta recherche.",
-      "sub": "Tout ce qui se passe entre « il me faut un job » et « j'ai signé » vit au même endroit — et le même agent garde ton contexte d'un bout à l'autre.",
-      "cards": {
-        "match": {
-          "tag": "MATCH",
-          "title": "Un matching qui lit ton CV",
-          "body": "Chaque offre reçoit un score de match IA avec les raisons rédigées, calculé sur ton vrai CV — pas du bingo de mots-clés. Les scores se rafraîchissent quand ton CV change."
-        },
-        "resume": {
-          "tag": "RESUME",
-          "title": "Un CV qui se réécrit tout seul",
-          "body": "Importe depuis LinkedIn ou un PDF, laisse l'IA muscler les points faibles, adapte-le à n'importe quelle offre avec un diff que tu relis — puis exporte un PDF ou un DOCX propre."
-        },
-        "apply": {
-          "tag": "APPLY",
-          "chip": "AUTOPILOTE · ACCÈS ANTICIPÉ",
-          "title": "Des candidatures avec consentement intégré",
-          "body": "Lettres de motivation sourcées, file d'attente avant envoi, fenêtre de contrôle avec droit de veto, plafonds quotidiens stricts. L'autopilote 100% mains libres arrive en accès anticipé — la couche de consentement est sortie en premier, et c'est voulu."
-        },
-        "studio": {
-          "tag": "STUDIO",
-          "title": "Ton sparring d'entretien",
-          "body": "Un intervieweur IA vocal, en direct, avec 18 playbooks métiers et 28 formats — du screening téléphonique au system design en passant par l'étude de cas — qui te note comme le vrai jury le fera."
-        }
-      }
-    },
-    "studio": {
-      "eyebrow": "LA SECONDE MI-TEMPS",
-      "title_machine": "On te décroche l'entretien",
-      "title_human": "puis on t'y prépare",
-      "sub": "63% des candidats ont déjà passé un entretien face à une IA dans un vrai recrutement (Greenhouse, 2026). Entraîne-toi face au nôtre — des répétitions illimitées, sans jugement, jusqu'à ce que le vrai te semble familier.",
-      "features": {
-        "f1": {
-          "title": "Il parle — et te coupe — comme une vraie personne",
-          "body": "Voix en direct full duplex : l'intervieweur creuse, te challenge et relance en temps réel, en 9 langues avec des voix à l'accent natif."
-        },
-        "f2": {
-          "title": "18 playbooks métiers, pas des questions bateau",
-          "body": "Droit, finance, santé, hardware, IA/ML et plus encore — il pose les questions que les gens du métier posent vraiment, et note avec la même grille."
-        },
-        "f3": {
-          "title": "Il potasse le dossier avant de te voir",
-          "body": "L'intervieweur se renseigne sur les exigences actuelles du marché pour ton poste et ton offre exacts, puis construit un plan d'entretien sur mesure autour de ton CV."
-        },
-        "f4": {
-          "title": "Un rapport qui change ta prochaine réponse",
-          "body": "Des scores par dimension, des corrections question par question avec des réponses plus solides à la clé, la transcription complète et un enregistrement à réécouter après chaque session."
-        },
-        "f5": {
-          "title": "Un coach dans l'oreillette — si tu veux",
-          "body": "Des coups de pouce en direct, optionnels, quand tu t'égares, esquives la question ou noies l'info clé. Le mode caméra ajoute la vraie pression d'un appel vidéo."
-        }
-      },
-      "report": {
-        "header": "session-042 — rapport",
-        "overall_label": "GLOBAL",
-        "overall": "82",
-        "rows": {
-          "r1": {
-            "k": "Clarté",
-            "v": "86"
-          },
-          "r2": {
-            "k": "Profondeur",
-            "v": "78"
-          },
-          "r3": {
-            "k": "Structure",
-            "v": "84"
-          }
-        },
-        "quote": "« Commence par le chiffre — tu as enterré tes 40% de réduction de coûts à la fin de ta réponse. »",
-        "quote_label": "correction question par question"
-      },
-      "cta": "Lance un entretien blanc gratuit"
-    },
-    "rules": {
-      "eyebrow": "RÈGLES DE FONCTIONNEMENT",
-      "title": "Codé en dur, pas en petits caractères.",
-      "sub": "Ce ne sont pas des réglages planqués dans un menu. C'est la façon dont l'agent est construit — pour que ce qui arrive dans la boîte mail d'un recruteur ne ressemble jamais à du spam de bot.",
-      "file": "guarantees.conf — lecture seule",
-      "badge": "ENFORCED",
-      "ok": "OK",
-      "items": {
-        "r1_head": "Que des vraies lettres",
-        "r1_body": "chaque affirmation de chaque lettre de motivation doit citer ton vrai CV — l'expérience inventée est bloquée dans le code.",
-        "r2_head": "La fenêtre de contrôle",
-        "r2_body": "rien ne part sans une fenêtre d'aperçu où tu peux mettre ton veto, candidature par candidature.",
-        "r3_head": "Filtre sur ta cible",
-        "r3_body": "les offres hors de tes critères — niveau, stack, lieu, salaire — n'atteignent jamais ta file.",
-        "r4_head": "Zéro envoi à l'aveugle",
-        "r4_body": "le volume quotidien est plafonné en dur ; chaque candidature est délibérée, pour que ton nom reste crédible.",
-        "r5_head": "Pars proprement",
-        "r5_body": "mets l'agent en pause en un clic — et la suppression du compte efface tout pour de vrai, pas une fausse suppression qui garde tes données."
-      }
-    },
-    "pricing": {
-      "eyebrow": "FORMULES",
-      "title": "Commence gratuitement. Monte en gamme quand ça marche.",
-      "sub": "Chaque formule inclut l'agent au complet — IA de CV, matching d'offres, suivi des candidatures et couche de consentement. Les formules payantes ajoutent de l'entraînement à l'entretien.",
-      "unit": "ENTRETIENS / MOIS",
-      "credit_note": "1 crédit = un entretien blanc de 20 minutes, facturé à la seconde. Les crédits se rechargent chaque mois. Paiement par carte bancaire — ou Alipay en Chine.",
-      "tiers": {
-        "free": {
-          "code": "TIER-0",
-          "name": "Gratuit",
-          "rate": "1",
-          "price": "$0",
-          "per": "",
-          "note": "Toute la boîte à outils, plus un entretien blanc noté chaque mois.",
-          "cta": "Commence gratuitement",
-          "unit": "ENTRETIEN / MOIS"
-        },
-        "starter": {
-          "code": "TIER-1",
-          "name": "Starter",
-          "rate": "10",
-          "price": "$15",
-          "per": "/mois",
-          "badge": "RECOMMANDÉE",
-          "note": "Le rythme d'une recherche sérieuse : un entraînement avant chaque vrai entretien.",
-          "cta": "Passe en Starter",
-          "unit": "ENTRETIENS / MOIS"
-        },
-        "growth": {
-          "code": "TIER-2",
-          "name": "Growth",
-          "rate": "28",
-          "price": "$29",
-          "per": "/mois",
-          "note": "À fond : des répétitions quotidiennes jusqu'à l'offre signée.",
-          "cta": "Passe en Growth",
-          "unit": "ENTRETIENS / MOIS"
-        }
-      }
-    },
-    "faq": {
-      "eyebrow": "TES QUESTIONS, NOS RÉPONSES",
-      "title": "Ce que les candidats nous demandent.",
-      "items": {
-        "q1": {
-          "q": "C'est quoi, RoboApply ?",
-          "a": "RoboApply est un agent IA de recherche d'emploi. Il déniche les offres qui collent à ta cible, les score sur ton vrai CV, adapte tes documents, rédige des lettres de motivation sourcées, et met chaque candidature en attente de ta validation — puis un intervieweur IA en direct t'entraîne pour les entretiens qui suivent."
-        },
-        "q2": {
-          "q": "Est-ce que RoboApply va postuler sans ma permission ?",
-          "a": "Non. Le consentement est dans l'architecture, pas dans un réglage : les candidatures ne partent qu'après ta validation explicite, le volume quotidien est plafonné en dur, et l'autopilote 100% mains libres est en accès anticipé, sur activation volontaire. Rien n'est envoyé en ton nom sans ton OK."
-        },
-        "q3": {
-          "q": "Les recruteurs repèrent-ils les lettres de motivation écrites par une IA ?",
-          "a": "Les lettres IA génériques, oui. Celles de RoboApply sont différentes par construction : chaque affirmation doit citer une ligne de ton vrai CV — la vérification des sources est codée en dur, donc aucune expérience inventée ne passe. Et tu relis et valides chaque lettre avant qu'elle parte où que ce soit."
-        },
-        "q4": {
-          "q": "Je peux vraiment m'entraîner à un entretien d'embauche avec une IA ?",
-          "a": "Oui — avec un intervieweur vocal en direct qui parle, creuse et te coupe comme une vraie personne. Choisis parmi 28 formats et 18 playbooks métiers (tech, droit, finance, santé et plus), passe l'entretien dans l'une des 9 langues, et reçois un rapport noté avec corrections question par question, transcription et enregistrement."
-        },
-        "q5": {
-          "q": "En quoi RoboApply est différent des bots de candidature automatique comme LazyApply ?",
-          "a": "Les bots de volume envoient en masse, sans jugement — dans un test de Business Insider, un bot de ce genre a obtenu 6% de réponses, et les recruteurs les repèrent. RoboApply garde ton jugement dans la boucle avec une fenêtre de contrôle, des lettres sourcées et des plafonds stricts, et il ferme la boucle que personne d'autre ne ferme : l'agent qui postule est aussi celui qui te prépare à l'entretien."
-        },
-        "q6": {
-          "q": "Combien coûte RoboApply ?",
-          "a": "Gratuit à vie pour la boîte à outils de base, plus un entretien blanc par mois. Starter : $15/mois avec 10 entretiens d'entraînement ; Growth : $29/mois avec 28. Un crédit = une session de 20 minutes facturée à la seconde, rechargée chaque mois. Paiement par carte bancaire, ou Alipay en Chine."
-        },
-        "q7": {
-          "q": "Quelles langues parle RoboApply ?",
-          "a": "Neuf : anglais, espagnol, portugais, français, allemand, japonais, coréen, chinois simplifié et traditionnel. Les entretiens blancs fonctionnent dès aujourd'hui dans les neuf langues — la voix de l'intervieweur et ton rapport noté. L'interface, elle, est entièrement traduite en anglais, en japonais et dans les deux variantes de chinois ; les autres langues sont en cours de déploiement."
-        },
-        "q8": {
-          "q": "Mes données sont-elles en sécurité — et je peux vraiment les supprimer ?",
-          "a": "Ton CV, tes transcriptions et tes enregistrements t'appartiennent ; rien n'est partagé avec les employeurs. Chaque action de l'IA est consignée dans un registre d'utilisation transparent, et la suppression du compte est un vrai effacement en un clic qui purge tes données — pas une fausse suppression qui les garde."
-        }
-      }
-    },
-    "final": {
-      "chip": "ACCÈS ANTICIPÉ · GRATUIT POUR COMMENCER",
-      "title_machine": "Ton agent est prêt",
-      "title_human": "quand tu l'es",
-      "sub": "Trois minutes de mise en route : CV importé, cible définie, agent briefé. Et le studio d'entretien est ouvert dès maintenant — lance ta première session d'entraînement gratuitement.",
-      "cta": "Commence gratuitement"
-    },
-    "sticky": {
-      "cta": "Commence gratuitement",
-      "note": "Sans carte bancaire"
-    },
-    "footer": {
-      "status": "SYSTÈME NOMINAL · COUCHE DE CONSENTEMENT ACTIVE",
-      "note": "© RoboApply. Conçu par des candidats, pour des candidats.",
-      "tagline": "L'agent IA de recherche d'emploi qui garde ton jugement dans la boucle.",
-      "lang_title": "RoboApply dans ta langue"
+    "aria_primary": "Navigation principale",
+    "brand_home": "RoboApply — aller aux offres",
+    "jobs": "Offres",
+    "resume": "CV",
+    "applications": "Candidatures",
+    "practice": "Entraînement",
+    "admin": "Admin",
+    "badge_no_reply": "{count} sans réponse depuis 10 jours",
+    "search_aria": "Rechercher des offres et des entreprises",
+    "search_placeholder": "Offres, entreprises…",
+    "account_menu": "Ton compte",
+    "settings": "Réglages",
+    "billing": "Facturation",
+    "sign_out": "Se déconnecter",
+    "theme_to_dark": "Passer en sombre",
+    "theme_to_light": "Passer en clair",
+    "palette": {
+      "aria": "Rechercher et aller à",
+      "placeholder": "Cherche une offre, une entreprise ou une page…",
+      "group_nav": "Aller à",
+      "group_jobs": "Offres",
+      "searching": "Recherche…",
+      "empty": "Rien trouvé. Essaie une entreprise ou un intitulé de poste."
     }
   },
-  "auth": {
-    "login": {
-      "title": "Ravi de te revoir",
-      "subtitle": "Connecte-toi à ta mission RoboApply.",
-      "email": "E-mail",
-      "password": "Mot de passe",
-      "submit": "Se connecter",
-      "submitting": "Connexion…",
-      "no_account": "Pas encore de compte ?",
-      "signup_cta": "Crée-en un",
-      "error_generic": "Impossible de te connecter. Vérifie ton e-mail et ton mot de passe, puis réessaie."
+  "jobs": {
+    "page_title": "Offres",
+    "headline": "{count, plural, =0 {Aucune offre ne te correspond pour l'instant.} one {1 offre te correspond.} other {# offres te correspondent.}}",
+    "headlineLoading": "Des offres qui te correspondent.",
+    "sub": "Mis à jour {time}.",
+    "read_count": "{scanned} nouvelles annonces lues depuis {since}. {worth} méritent ton temps.",
+    "matchesTitle": "Les offres qui te correspondent, les meilleures d'abord",
+    "fit": {
+      "great": "Très adapté",
+      "good": "Bien adapté",
+      "possible": "Possible",
+      "unlikely": "Peu probable"
     },
-    "signup": {
-      "title": "Crée ton compte",
-      "subtitle": "60 secondes pour une recherche d'emploi mains libres.",
-      "email": "E-mail",
-      "password": "Mot de passe",
-      "name": "Ton nom",
-      "submit": "S'inscrire",
-      "submitting": "Création du compte…",
-      "has_account": "Déjà un compte ?",
-      "login_cta": "Connecte-toi",
-      "error_generic": "Impossible de créer ton compte. Réessaie."
+    "tag": {
+      "possible": "Adéquation possible"
     },
-    "brand": {
-      "eyebrow": "COPILOTE IA DE RECHERCHE D'EMPLOI",
-      "headline": "Décroche un job <em>plus vite</em>.",
-      "lead": "RoboApply adapte ton CV, fait passer des entretiens blancs IA réalistes et garde chaque candidature au même endroit — pour que tu puisses te concentrer sur l'offre à décrocher.",
-      "feature_resume": "Des CV sur mesure, prêts pour les ATS",
-      "feature_interview": "Des entretiens blancs IA réalistes",
-      "feature_track": "Chaque candidature au même endroit"
-    }
-  },
-  "onboarding": {
-    "brand_sub": "TON CHASSEUR DE JOBS IA",
-    "skip": "Passer →",
-    "upload": {
-      "title": "Montre-moi ton",
-      "title_accent": "CV",
-      "lead": "C'est tout ce qu'il me faut pour démarrer. Une lecture, et je ne te montrerai plus jamais d'offres à côté de la plaque.",
-      "drop_title": "Dépose ton CV, ou clique pour parcourir",
-      "drop_sub": "PDF, DOC/DOCX, TXT ou MD — jusqu'à 15 Mo",
-      "ingest_title": "Ce que j'ai retenu",
-      "reading": "Lecture…",
-      "error": "Je n'ai pas réussi à lire ce CV. Essaie un PDF ou un DOCX, ou choisis un autre fichier.",
-      "received": "{size} · envoi et analyse…"
+    "score": {
+      "label": "Niveau d'adéquation",
+      "unit": "{score} / 100",
+      "explainer": "{score} / 100 — à quel point ton CV correspond à cette annonce",
+      "disclaimer": "Ce n'est pas ta probabilité d'être recruté.",
+      "empty": "Pas encore de note pour cette offre.",
+      "rubric_title": "Ce que la note compte",
+      "rubric": {
+        "title_level": "L'intitulé du poste et le niveau — 35",
+        "skills": "Les compétences demandées — 30",
+        "industry": "L'expérience dans ce secteur — 15",
+        "location_pay_visa": "Lieu, salaire et visa — 10",
+        "career_moves": "L'évolution de ton parcours jusqu'ici — 10"
+      }
     },
-    "resumeSelect": {
-      "title": "Quel CV veux-tu que je",
-      "title_accent": "lise",
-      "title_after": " ?",
-      "lead": "Choisis celui qui reflète le mieux où tu vas — je le lis et on part de là.",
-      "upload_new": "Charger un nouveau CV",
-      "paste_text": "Coller le texte du CV",
-      "primary_badge": "Principal",
-      "last_edited": "Modifié le {date}",
-      "continue": "Continuer avec ce CV",
-      "linkedin_import": "Importer depuis LinkedIn",
-      "linkedin_placeholder": "https://www.linkedin.com/in/ton-profil",
-      "paste_placeholder": "Colle le texte de ton CV ici — texte brut ou markdown, les deux marchent.",
-      "paste_name": "CV collé",
-      "paste_submit": "Utiliser ce texte",
-      "back": "← Retour",
-      "retry": "Réessayer",
-      "pick_existing": "Choisir un CV existant",
-      "paste_instead": "Coller du texte à la place",
-      "formats": "PDF · DOC/DOCX · TXT · MD",
-      "error_file_too_large": "Ce fichier est trop lourd (15 Mo max). Essaie un export plus léger.",
-      "error_unsupported_format": "Je ne peux pas lire ce format. PDF, DOC/DOCX, TXT ou MD fonctionnent tous.",
-      "error_parse_failed": "Je n'ai pas réussi à lire ce CV. Essaie un autre fichier, ou colle le texte à la place."
+    "gap": {
+      "missing_label": "C'est demandé et ton CV ne le mentionne pas :",
+      "overlap_label": "Ce qui correspond :",
+      "none_missing": "Rien de ce qui est demandé ne manque à ton CV.",
+      "fix_cta": "Corriger ça sur ton CV"
     },
-    "chat": {
-      "title": "On prépare ta chasse",
-      "composer_placeholder": "Dis-moi ce que tu chasses — postes, lieux, salaire, points rédhibitoires…",
+    "whyFits": "Pourquoi tu corresponds",
+    "thinking": "Lecture de l'annonce…",
+    "noReasoning": "Pas encore d'analyse détaillée pour cette offre.",
+    "evidence": "Annonce lue en entier. Comparée à ton CV.",
+    "trail": {
+      "label": "Ce que tu as fait sur cette offre",
+      "saved": "Gardée",
+      "tailored": "CV adapté",
+      "practiced": "Entraîné",
+      "applied": "Candidature envoyée"
+    },
+    "filter": {
+      "title": "Afficher",
+      "great_only": "Seulement ce qui est très adapté",
+      "good_and_better": "Ce qui est bien adapté et mieux",
+      "everything": "Tout",
+      "hidden_count": "{count} offres masquées parce qu'elles correspondent moins.",
+      "show_them": "Les afficher.",
+      "search_everywhere": "Chercher partout",
+      "search_everywhere_sub": "Lire aussi les sites d'emploi en dehors de RoboApply.",
+      "setup_cta": "Dis-nous ce que tu cherches"
+    },
+    "posted": {
+      "justNow": "à l'instant",
+      "hoursAgo": "il y a {count} h",
+      "daysAgo": "il y a {count} j"
+    },
+    "work": {
+      "remote": "À distance",
+      "hybrid": "Hybride",
+      "onsite": "Au bureau"
+    },
+    "status": {
+      "applied": "Candidature envoyée",
+      "notInterested": "Pas intéressé",
+      "saved": "Gardée pour plus tard"
+    },
+    "facet": {
+      "salaryFit": "Salaire",
+      "salaryWithinBand": "Dans la fourchette que tu as demandée",
+      "salaryBelowBand": "Sous la fourchette que tu as demandée",
+      "skillOverlap": "Compétences qui correspondent",
+      "skillValue": "{pct} % des compétences citées",
+      "riskFlag": "À vérifier",
+      "riskNone": "Rien à signaler"
+    },
+    "detail": {
+      "description": "L'annonce",
+      "responsibilities": "Ce que tu ferais",
+      "qualifications": "Ce qui est demandé",
+      "benefits": "Avantages",
+      "viewOriginal": "Lire l'annonce sur leur site"
+    },
+    "actions": {
+      "applyOnSite": "Postuler sur leur site",
+      "applying": "Ouverture de leur site…",
+      "saveForLater": "Garder pour plus tard",
+      "notInterested": "Pas intéressé",
+      "didntApply": "Je n'ai pas postulé",
+      "markApplied": "Marquer comme envoyée",
+      "undo": "Annuler",
+      "viewDetail": "Voir l'offre",
+      "refresh": "Chercher de nouvelles offres",
+      "filters": "Filtrer",
+      "practice": "S'entraîner pour cette offre",
+      "tailorResume": "Adapter ton CV à cette offre"
+    },
+    "appliedOnSiteBanner": "Déplacée dans Candidatures envoyées. Rien n'a été envoyé à ta place : tu postules sur le site de l'entreprise.",
+    "notInterestedBanner": "Retirée de ta liste.",
+    "empty": {
+      "title": "Aucune offre ne te correspond pour l'instant.",
+      "accent": "",
+      "sub": "Dis-nous ce que tu cherches, ou ajoute ton CV, et les offres qui correspondent apparaîtront ici."
+    },
+    "error": {
+      "title": "La liste des offres ne s'est pas chargée.",
+      "accent": "",
+      "sub": "Rien n'est perdu. Réessaie, et si ça continue, recharge la page.",
+      "retry": "Réessayer"
+    },
+    "setup": {
+      "title": "Dis-nous ce que tu cherches",
+      "sub": "Plus tu en dis, moins tu as d'offres à lire. Tu peux tout changer plus tard.",
+      "resume_title": "Choisis le CV à lire",
+      "resume_lead": "Prends celui qui colle le mieux au poste que tu veux ensuite.",
+      "resume_upload_new": "Envoyer un nouveau CV",
+      "resume_paste_text": "Coller le texte du CV",
+      "resume_primary_badge": "CV principal",
+      "resume_last_edited": "Modifié le {date}",
+      "resume_continue": "Utiliser ce CV",
+      "resume_pick_existing": "Choisir un CV que tu as déjà",
+      "resume_paste_instead": "Coller le texte à la place",
+      "resume_paste_placeholder": "Colle ici le texte de ton CV. Le texte brut suffit.",
+      "resume_paste_name": "CV collé",
+      "resume_paste_submit": "Utiliser ce texte",
+      "resume_back": "Retour",
+      "resume_retry": "Réessayer",
+      "resume_formats": "PDF, DOC, DOCX, TXT ou MD",
+      "resume_linkedin_import": "Importer depuis LinkedIn",
+      "resume_linkedin_placeholder": "https://www.linkedin.com/in/ton-profil",
+      "upload_title": "Ajoute ton CV",
+      "upload_lead": "Une seule lecture suffit pour ne plus voir des offres que tu n'accepterais jamais.",
+      "upload_drop_title": "Dépose ton CV ici, ou clique pour le choisir",
+      "upload_drop_sub": "PDF, DOC, DOCX, TXT ou MD — jusqu'à 15 Mo",
+      "upload_received": "{size} · envoi et lecture…",
+      "upload_ingest_title": "Ce que dit ton CV",
+      "upload_reading": "Lecture…",
+      "upload_error": "Ce CV n'a pas pu être lu. Essaie un PDF ou un DOCX, ou choisis un autre fichier.",
+      "reading_resume": "Lecture de ton CV…",
+      "status_searching_internal": "Recherche dans l'index des offres…",
+      "status_searching_external": "Vérification des nouvelles annonces ailleurs…",
+      "status_scoring": "Comparaison des offres avec ton CV…",
+      "composer_placeholder": "Postes, lieux, salaire, ce que tu n'accepteras pas…",
       "send": "Envoyer",
-      "opening_prompt_hint": "J'ai rédigé cette intro à partir de ton CV — modifie-la ou envoie-la telle quelle.",
-      "skeleton_ingest": "Lecture de ton CV…",
-      "status_searching_internal": "Recherche dans notre index d'offres…",
-      "status_searching_external": "Vérification des nouvelles offres externes…",
-      "status_scoring": "Calcul des scores face à ton CV…",
-      "tray_title": "Ce que j'ai pour l'instant",
-      "tray_edit_prefix": "En fait, pour {field}…",
-      "tray_dismiss": "Ignorer",
-      "card_match": "{score}% de match",
-      "card_via": "via {publisher}",
-      "card_save": "Garder",
-      "card_saved": "Gardée",
-      "card_pass": "Passer",
-      "card_passed": "Passée",
-      "card_apply": "Voir l'offre",
-      "wrap_cta": "Montre-moi mes matchs",
-      "restore_notice": "On reprend là où on s'était arrêtés.",
-      "superseded_notice": "Cette conversation a continué dans une autre fenêtre — actualise pour rattraper.",
-      "error_turn_failed": "Ça n'est pas passé.",
+      "opening_prompt_hint": "Ce message de départ vient de ton CV. Modifie-le ou envoie-le tel quel.",
+      "tray_title": "Ce que tu as dit jusqu'ici",
+      "tray_edit_prefix": "Changer {field}…",
+      "tray_dismiss": "Masquer",
+      "wrap_cta": "Montre-moi les offres",
+      "restore_notice": "On reprend où tu t'étais arrêté.",
+      "superseded_notice": "Cette configuration a continué dans une autre fenêtre. Recharge pour la voir.",
+      "error_turn_failed": "Ce message n'est pas passé. Envoie-le à nouveau.",
       "error_retry": "Réessayer",
-      "error_daily_limit": "Tu as relancé l'onboarding plusieurs fois aujourd'hui — reviens demain, ou file directement dans l'app.",
+      "error_daily_limit": "La configuration a été relancée plusieurs fois aujourd'hui. Reviens demain, ou va directement à tes offres.",
+      "error_parse_failed": "Ce CV n'a pas pu être lu. Essaie un autre fichier, ou colle le texte.",
+      "error_file_too_large": "Ce fichier dépasse 15 Mo. Essaie un export plus léger.",
+      "error_unsupported_format": "Ce format ne peut pas être lu. PDF, DOC, DOCX, TXT et MD fonctionnent.",
+      "card_fit": "{score} / 100",
+      "card_via": "via {publisher}",
+      "card_save": "Garder pour plus tard",
+      "card_saved": "Gardée",
+      "card_not_interested": "Pas intéressé",
+      "card_removed": "Retirée",
+      "card_apply": "Lire l'annonce",
       "progress_resume": "CV",
-      "progress_chat": "Chat",
-      "progress_matches": "Matchs",
+      "progress_chat": "Configuration",
+      "progress_matches": "Offres",
       "progress_done": "Terminé",
+      "skip": "Passer",
       "fields": {
-        "targetRoles": "Postes",
+        "targetRoles": "Intitulés de poste",
         "seniority": "Niveau",
-        "workModes": "Mode de travail",
+        "workModes": "À distance ou au bureau",
         "salary": "Salaire",
-        "employmentTypes": "Contrat",
-        "industriesTarget": "Secteurs",
-        "industriesAvoid": "À éviter",
-        "companyStages": "Stade de l'entreprise",
-        "companySizes": "Taille d'entreprise",
+        "employmentTypes": "Type de contrat",
+        "industriesTarget": "Secteurs qui t'intéressent",
+        "industriesAvoid": "Secteurs à écarter",
+        "companyStages": "Maturité de l'entreprise",
+        "companySizes": "Taille de l'entreprise",
         "locations": "Lieux",
-        "mustHaves": "Indispensables",
-        "dealbreakers": "Rédhibitoires"
+        "mustHaves": "Indispensable",
+        "dealbreakers": "Je n'accepterai pas"
       },
       "values": {
-        "remote": "Télétravail",
+        "remote": "À distance",
         "hybrid": "Hybride",
-        "onsite": "Sur site",
+        "onsite": "Au bureau",
         "full_time": "Temps plein",
-        "contract": "Contrat",
+        "contract": "Contrat court",
         "part_time": "Temps partiel",
         "internship": "Stage"
       }
     }
   },
-  "choosePlan": {
-    "title": "Choisis ta formule",
-    "subtitle": "Choisis une formule pour démarrer — entraîne-toi en entretien avec l'IA. Tu peux changer ou annuler à tout moment.",
-    "loading": "Chargement des formules…",
-    "error": "Impossible de charger les formules.",
-    "retry": "Réessayer",
-    "continueFree": "Passer pour l'instant — continuer en Gratuit",
-    "selectFree": "Commencer gratuitement",
-    "selectPaid": "Choisir {plan}",
-    "blurb": {
-      "free": "1 entretien d'entraînement par mois pour tester.",
-      "starter": "10 entretiens blancs par mois — un rythme hebdo régulier.",
-      "growth": "28 entretiens blancs par mois — des répétitions quotidiennes avant le vrai."
+  "resume": {
+    "eyebrow": "CV",
+    "title_lead": "Écris le CV ",
+    "title_accent": "que tu recruterais",
+    "title_after": ".",
+    "subtitle": "Pars d'une page blanche, envoie celui que tu as, ou importe-le depuis LinkedIn. Ensuite, adapte une copie pour chaque offre qui t'intéresse.",
+    "common": {
+      "cancel": "Annuler",
+      "close": "Fermer"
     },
-    "welcome": "Tu y es — bienvenue sur RoboApply",
-    "creditsHint": "1 crédit = un entretien blanc de 20 minutes.",
-    "checkoutFailed": "Impossible de lancer le paiement. Réessaie."
+    "gate": {
+      "title": "Ajoute ton CV pour commencer",
+      "subtitle": "Ton CV est ce que tout le reste lit. Ajoute-le, et les offres, les notes d'adéquation et la préparation aux entretiens se mettent en marche.",
+      "cta": "Envoyer un CV",
+      "uploading": "Lecture de ton CV…",
+      "formats": "PDF, DOCX ou TXT · jusqu'à 15 Mo",
+      "error": "Ce fichier n'a pas pu être lu. Réessaie, ou prends un autre fichier.",
+      "error_too_large": "Ce fichier dépasse 15 Mo. Essaie un fichier plus léger.",
+      "error_format": "Ce format ne peut pas être lu. Utilise un fichier PDF, DOCX ou TXT.",
+      "error_empty": "Aucun texte trouvé dans ce fichier. Utilise un PDF contenant du texte, pas un scan.",
+      "or_build": "Ou écris-en un depuis zéro"
+    },
+    "create": {
+      "scratch": {
+        "title": "Partir de zéro",
+        "desc": "Un modèle net, avec de l'aide sur chaque ligne. Idéal si tu débutes ta carrière.",
+        "meta": "Environ 10 minutes"
+      },
+      "file": {
+        "title": "Envoyer un CV",
+        "desc": "Dépose un PDF ou un DOCX. Il est lu, structuré, et les lignes faibles sont signalées.",
+        "meta": "PDF · DOCX · Apple Pages"
+      },
+      "linkedin": {
+        "title": "Importer depuis LinkedIn",
+        "desc": "Enregistre ton profil LinkedIn en PDF et dépose-le ici. Même lecture, mêmes signalements.",
+        "meta": "Enregistrer en PDF, puis envoyer"
+      },
+      "default_name": {
+        "scratch": "Brouillon sans titre",
+        "file": "CV envoyé",
+        "linkedin": "Import LinkedIn"
+      }
+    },
+    "library": {
+      "title": "Tes CV",
+      "count": "{count} versions"
+    },
+    "card": {
+      "base": "CV principal — non adapté à une offre",
+      "edited": "Modifié {when}",
+      "score_unit": "/100",
+      "delete": "Supprimer le CV",
+      "versions_used": "{used} versions sur {cap} utilisées"
+    },
+    "tip": {
+      "label": "Si tu débutes ta carrière",
+      "body": "Peu d'expérience professionnelle n'est pas un problème. Les projets de cours, les hackathons, les missions freelance et les projets personnels deviennent de vraies lignes. Utilise « Réécrire les études et les stages » sur chaque ligne."
+    },
+    "empty": {
+      "title_lead": "Pas encore de ",
+      "title_accent": "CV",
+      "sub": "Crée le premier — de zéro, par envoi de fichier, ou depuis LinkedIn — et chaque ligne sera vérifiée.",
+      "cta": "Partir de zéro"
+    },
+    "error": {
+      "title": "Tes CV ne se sont pas chargés.",
+      "sub": "Rien n'est perdu. Réessaie, et si ça continue, recharge la page.",
+      "retry": "Réessayer"
+    },
+    "ingest": {
+      "scratch": {
+        "template": "Modèle",
+        "template_v": "Une colonne, sobre, facile à lire pour les logiciels",
+        "sections": "Sections",
+        "sections_v": "Résumé · Expérience · Formation · Compétences · Projets",
+        "ai": "Aide activée",
+        "ai_v": "Chaque ligne : améliorer, raccourcir, développer, changer de ton",
+        "ready": "Prêt",
+        "ready_v": "Brouillon sans titre"
+      },
+      "import": {
+        "read": "Lu",
+        "identity": "Toi",
+        "identity_v": "Nom · e-mail · lieu",
+        "experience": "Expérience",
+        "experience_v": "Postes · intitulés · dates",
+        "education": "Formation",
+        "education_v": "Diplôme · école · années",
+        "skills": "Compétences",
+        "skills_v": "Compétences · outils · mots-clés",
+        "cleaned": "Nettoyé",
+        "cleaned_v": "Formulation et espacements"
+      }
+    },
+    "import": {
+      "title": {
+        "scratch": "Commencer un nouveau CV",
+        "file": "Envoyer un CV",
+        "linkedin": "Importer depuis LinkedIn"
+      },
+      "badge": {
+        "scratch": "Nouveau",
+        "file": "Envoi",
+        "linkedin": "Import"
+      },
+      "template": {
+        "classic": "Classique · une colonne",
+        "modern": "Moderne · deux colonnes",
+        "editorial": "Éditorial · serif"
+      },
+      "scratch_hint": "Choisis un modèle. Tu pourras en changer plus tard : ton contenu te suit.",
+      "drop": {
+        "title": "Dépose ton CV ici",
+        "sub": "PDF, DOCX ou Apple Pages",
+        "ready": "prêt à être lu"
+      },
+      "linkedin": {
+        "steps_title": "Enregistre ton profil LinkedIn en PDF",
+        "step1": "Ouvre ton profil sur LinkedIn",
+        "step2": "Clique sur « Plus », puis « Enregistrer au format PDF »",
+        "step3": "Envoie ce PDF ci-dessous",
+        "upload_title": "Dépose ici ton PDF LinkedIn",
+        "upload_sub": "Le PDF enregistré depuis ton profil",
+        "ready": "prêt à importer",
+        "or": "ou",
+        "url_label": "Profil public ? Colle plutôt son adresse",
+        "placeholder": "linkedin.com/in/ton-identifiant",
+        "hint": "Colle l'adresse publique de ton LinkedIn. Expérience, formation, compétences et liens sont importés."
+      },
+      "ingest_title": {
+        "scratch": "Préparation de ton brouillon",
+        "parse": "Lecture de ton CV"
+      },
+      "working": "En cours…",
+      "done": {
+        "title_scratch": "Brouillon prêt",
+        "title_import": "Importé",
+        "body_scratch": "Ouvre l'éditeur et remplis-le. L'aide ligne par ligne se trouve dans la marge de droite.",
+        "body_import": "Ton CV a été lu. Deux lignes faibles sont mises en avant dans l'éditeur."
+      },
+      "cancel": "Annuler",
+      "create_draft": "Créer le brouillon",
+      "parse_with_ai": "Lire ce fichier",
+      "open_editor": "Ouvrir l'éditeur",
+      "error": "Ce CV n'a pas pu être créé. Réessaie.",
+      "errors": {
+        "invalid_url": "Ce n'est pas une adresse de profil LinkedIn. Vérifie le lien et réessaie.",
+        "fetch_failed": "LinkedIn n'a pas pu être joint. Envoie plutôt ton PDF LinkedIn.",
+        "profile_empty": "Ce profil ne contenait pas assez d'éléments à importer. Envoie plutôt ton PDF LinkedIn.",
+        "url_import_not_configured": "L'import depuis une adresse LinkedIn n'est pas disponible ici. Envoie plutôt ton PDF LinkedIn.",
+        "parse_failed": "Ce fichier n'a pas pu être lu. Exporte-le à nouveau en PDF et retente.",
+        "unsupported_format": "Ce type de fichier ne peut pas être lu. Envoie un PDF ou un DOCX.",
+        "file_too_large": "Ce fichier est trop lourd. La limite est de 15 Mo.",
+        "file_required": "Choisis d'abord un fichier."
+      },
+      "demo_file_name": "cv-2024.pdf",
+      "demo_file_size": "184 Ko"
+    },
+    "toolbar": {
+      "back": "Tous les CV",
+      "rename": "Nom du CV",
+      "saved": "Toutes les modifications sont enregistrées",
+      "saving": "Enregistrement…",
+      "save_error": "Pas encore enregistré — nouvel essai",
+      "strength": "Solidité",
+      "coach": "Contrôle des lignes",
+      "hide_coach": "Masquer le contrôle des lignes",
+      "download": "Télécharger",
+      "tailor": "Adapter à une offre",
+      "delete": "Supprimer"
+    },
+    "section": {
+      "identity": "Toi",
+      "summary": "Résumé",
+      "experience": "Expérience",
+      "education": "Formation",
+      "skills": "Compétences",
+      "other": "Autres sections"
+    },
+    "field": {
+      "full_name": "Nom complet",
+      "title": "Intitulé",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "location": "Lieu",
+      "links": "Liens",
+      "ai": "Réécrire"
+    },
+    "summary": {
+      "placeholder": "Deux phrases. Commence par ce que tu as livré et par ce que ça a changé.",
+      "give_rewrites": "Voir 3 réécritures",
+      "rewriting": "Réécriture…",
+      "char_hint": "{count} caractères · vise 240–320",
+      "option": "Option {n}",
+      "use_this": "Prendre celle-ci",
+      "keep_current": "Garder ce que tu as"
+    },
+    "action": {
+      "improve": {
+        "label": "Améliorer la formulation",
+        "desc": "Des verbes plus forts, moins de mots"
+      },
+      "metrics": {
+        "label": "Ajouter des chiffres",
+        "desc": "Montre où un chiffre a sa place"
+      },
+      "shorten": {
+        "label": "Raccourcir",
+        "desc": "Coupe le remplissage, garde le résultat"
+      },
+      "expand": {
+        "label": "Ajouter du contexte",
+        "desc": "Dis comment tu l'as fait et pourquoi ça comptait"
+      },
+      "confident": {
+        "label": "Paraître plus sûr",
+        "desc": "« Dirigé » plutôt que « aidé à »"
+      },
+      "junior": {
+        "label": "Réécrire les études et les stages",
+        "desc": "Formulé comme le ferait un poste"
+      }
+    },
+    "bullet": {
+      "flag": "Cette ligne n'a aucun chiffre et un verbe vague. Essaie « Améliorer la formulation » ou « Ajouter des chiffres ».",
+      "placeholder": "Ce que tu as fait — commence par un verbe, termine par le résultat"
+    },
+    "rewrite": {
+      "rewriting": "Réécriture",
+      "suggested": "Réécriture proposée",
+      "accept": "Prendre celle-ci",
+      "regenerate": "En essayer une autre",
+      "discard": "Abandonner",
+      "error": "Cette réécriture n'est pas passée. Réessaie."
+    },
+    "experience": {
+      "hint": "Survole une ligne pour la réécrire",
+      "add_role": "Ajouter un poste",
+      "add_bullet": "Ajoute une ligne, ou colle la tienne",
+      "editing": "Modification",
+      "title_placeholder": "Intitulé du poste",
+      "company_placeholder": "Entreprise",
+      "location_placeholder": "Lieu",
+      "start_placeholder": "Début",
+      "end_placeholder": "Fin"
+    },
+    "education": {
+      "add": "Ajouter une formation",
+      "school_placeholder": "École ou université",
+      "degree_placeholder": "Diplôme",
+      "detail_placeholder": "Mentions, projets, résultats"
+    },
+    "skills": {
+      "suggest": "Proposer des compétences à partir de tes lignes",
+      "add": "Ajouter une compétence",
+      "placeholder": "Nom de la compétence",
+      "remove": "Retirer {skill}",
+      "suggested": "Trouvées dans tes lignes",
+      "dismiss_suggestions": "Masquer"
+    },
+    "young": {
+      "head": "Peu d'expérience professionnelle ? Ajoute une section qui met les études et les projets perso en langage de CV.",
+      "class_project": {
+        "label": "Projet de cours",
+        "desc": "Rédigé comme un travail livré"
+      },
+      "hackathon": {
+        "label": "Hackathon",
+        "desc": "48 heures · ce que tu as construit"
+      },
+      "side_project": {
+        "label": "Projet personnel",
+        "desc": "Open source ou perso"
+      },
+      "volunteer": {
+        "label": "Bénévolat",
+        "desc": "Ça compte"
+      },
+      "freelance": {
+        "label": "Mission freelance",
+        "desc": "Travail client rémunéré"
+      },
+      "leadership": {
+        "label": "Responsabilités étudiantes",
+        "desc": "Associations, conseils, groupes"
+      }
+    },
+    "preview": {
+      "label": "Aperçu en direct",
+      "page": "1 page"
+    },
+    "paper": {
+      "your_name": "Ton nom"
+    },
+    "coach": {
+      "label": "Contrôle des lignes",
+      "sub": "S'exécute pendant que tu écris",
+      "hide": "Masquer le contrôle des lignes",
+      "next": "Note suivante",
+      "tips": {
+        "metrics_good": "Tes lignes portent de vrais chiffres. Tiens ça sur tout le CV.",
+        "metrics_missing": "La plupart des lignes n'ont aucun chiffre. Ajoutes-en un à tes 3 principales.",
+        "summary_long": "Ton résumé est trop long. Ramène-le à deux phrases.",
+        "summary_tight": "Ton résumé est net. Commence par la phrase la plus proche du poste que tu veux.",
+        "summary_missing": "Il n'y a pas encore de résumé. Deux phrases en haut cadrent tout ce qui suit.",
+        "weak_verbs": "{count} lignes commencent par un verbe faible, comme « responsable de » ou « aidé à ». Réécris-les avec un verbe qui t'appartient.",
+        "strong_verbs": "Aucun début faible. Garde ça.",
+        "no_bullets": "Ce CV n'a pas encore de lignes à puces. Découpe chaque poste en lignes qui finissent par un résultat.",
+        "too_many_bullets": "Beaucoup de lignes ici. Garde les 3 à 5 plus fortes par poste.",
+        "good_density": "Bonne longueur. Réécris une ligne précise, ou adapte tout le CV à une offre."
+      }
+    },
+    "citation": {
+      "group_label": "Chaque chiffre ici vient de ton CV.",
+      "tap_hint": "Touche une ligne marquée pour voir d'où elle vient.",
+      "source": "De ton CV — {section}, ligne {line}",
+      "blocked_title": "Une ligne contient un chiffre introuvable dans ton CV. Corrige-le ou retire-le avant de télécharger.",
+      "edit_line": "Modifier la ligne",
+      "remove_line": "Retirer la ligne",
+      "warning": "Certains chiffres de ce brouillon ne figurent pas dans ton CV. Vérifie-les avant d'utiliser cette version."
+    },
+    "tailor": {
+      "eyebrow": "Adapter",
+      "title_pick": "Choisis l'offre pour laquelle adapter",
+      "title_analyzing_lead": "Lecture de l'annonce",
+      "title_analyzing_accent": "et",
+      "title_analyzing_after": "de ton CV…",
+      "title_review_lead": "Ce qui change pour",
+      "title_done": "Copie adaptée créée",
+      "source_label": "Choisis une de tes offres",
+      "loading_jobs": "Chargement de tes offres…",
+      "no_jobs": "Pas encore d'offres. Colle plutôt une annonce ci-dessous.",
+      "fit": "Adéquation",
+      "or": "ou",
+      "paste_toggle": "Coller une autre annonce",
+      "paste_placeholder": "Colle l'annonce ici — intitulé, entreprise, texte complet",
+      "analyze_paste": "Lire cette annonce",
+      "pasted_company": "Annonce collée",
+      "pasted_role": "Personnalisé",
+      "analyzing": {
+        "read_jd": "Lecture de l'annonce complète",
+        "cross_check": "Comparaison avec tes lignes",
+        "find_gaps": "Repérage des mots qu'ils utilisent et pas toi",
+        "draft": "Rédaction des changements",
+        "rescore": "Nouvelle note d'adéquation"
+      },
+      "before": "Avant",
+      "after": "Après",
+      "note": "{count} changements. Décoche ceux que tu ne veux pas : seuls les cochés sont appliqués.",
+      "kind": {
+        "rewrite": "Réécrire",
+        "add": "Ajouter",
+        "reorder": "Réordonner",
+        "trim": "Alléger"
+      },
+      "pick_hint": "Choisis une offre pour continuer",
+      "pick_different": "Choisir une autre offre",
+      "apply": "Appliquer {count} changements",
+      "back_to_editor": "Retour à l'éditeur",
+      "open_copy": "Ouvrir la copie adaptée",
+      "done_title": "Copie adaptée enregistrée",
+      "done_body": "Une nouvelle version, {name}, est dans ta bibliothèque. Ton CV principal n'a pas changé.",
+      "done_body_paste": "Ta version adaptée est prête. Ton CV principal n'a pas changé.",
+      "error": "Ce CV n'a pas pu être adapté. Réessaie.",
+      "manual_toggle": "Viser plutôt une entreprise et un intitulé",
+      "company_label": "Entreprise",
+      "company_placeholder": "Nom de l'entreprise",
+      "role_label": "Intitulé du poste",
+      "role_placeholder": "Intitulé du poste (facultatif)",
+      "analyze_manual": "Adapter à cette entreprise et à cet intitulé",
+      "manual_hint": "Sans annonce, l'adaptation se base uniquement sur l'entreprise, l'intitulé et ton CV.",
+      "version_name_label": "Enregistrer sous",
+      "estimated": "estimé",
+      "citation_warning": "Certains chiffres de ce brouillon ne figurent pas dans ton CV. Vérifie-les avant d'appliquer les changements."
+    },
+    "download": {
+      "eyebrow": "Téléchargement",
+      "title": "Télécharger en…",
+      "recommended": "Recommandé",
+      "error": "Ce téléchargement n'est pas passé. Réessaie.",
+      "pdf": {
+        "label": "PDF",
+        "desc": "PDF que les logiciels savent lire — le meilleur pour postuler"
+      },
+      "docx": {
+        "label": "DOCX",
+        "desc": "Fichier Word que tu peux encore modifier"
+      },
+      "txt": {
+        "label": "Texte brut",
+        "desc": "Pour coller dans les formulaires web"
+      },
+      "md": {
+        "label": "Markdown",
+        "desc": "Pour ton GitHub ou ton site perso"
+      },
+      "scanner_preview": "Ce que lit le logiciel de l'entreprise"
+    },
+    "state": {
+      "loading": "Chargement de ton CV…",
+      "error_title": "Ce CV ne s'est pas chargé.",
+      "error_body": "Il a peut-être été supprimé, ou le lien est peut-être faux.",
+      "back": "Retour à tous les CV"
+    },
+    "delete": {
+      "title": "Supprimer ce CV ?",
+      "body": "Cela retire définitivement le CV de ta bibliothèque. Pour confirmer, écris son nom ci-dessous.",
+      "input_label": "Écris le nom du CV pour confirmer",
+      "mismatch_hint": "Ça ne correspond pas au nom du CV.",
+      "cancel": "Annuler",
+      "confirm": "Supprimer le CV",
+      "confirming": "Suppression…",
+      "error": "Ce CV n'a pas pu être supprimé. Réessaie."
+    },
+    "extra": {
+      "hint": "Conservé de ton CV d'origine — modifiable en texte brut",
+      "heading_placeholder": "Titre de la section",
+      "body_placeholder": "Contenu de la section"
+    },
+    "entry": {
+      "move_up": "Monter",
+      "move_down": "Descendre",
+      "remove": "Retirer"
+    },
+    "analyzer": {
+      "title": "Vérification du CV",
+      "empty": "Rien à corriger. Ce CV se lit proprement.",
+      "severity": {
+        "critical": "À corriger",
+        "recommended": "Vaut la peine d'être corrigé",
+        "optional": "Facultatif"
+      }
+    }
   },
-  "errors": {
-    "not_found_title": "404",
-    "not_found_body": "On n'a pas trouvé cette page.",
-    "error_title": "Quelque chose a déraillé",
-    "error_body": "On a consigné le problème. Tu peux réessayer ou revenir à l'accueil.",
-    "try_again": "Réessayer",
-    "go_home": "Retour à l'accueil"
+  "applications": {
+    "page_title": "Candidatures",
+    "eyebrow": "{count} en cours",
+    "headline": "Où as-tu postulé, et qu'est-ce que ça a donné ?",
+    "sub": "Fais glisser une carte, ou utilise son menu d'étape, pour la déplacer entre les {columns} étapes. Les réponses et les invitations d'agenda la déplacent toutes seules.",
+    "loading": "Chargement de tes candidatures…",
+    "view": {
+      "by_stage": "Par étape",
+      "by_date": "Par date"
+    },
+    "columns": {
+      "saved": "Gardées",
+      "applied": "Envoyées",
+      "first_call": "Premier échange",
+      "interviewing": "Entretiens en cours",
+      "final_round": "Dernier tour",
+      "offer": "Proposition",
+      "rejected": "Refusées"
+    },
+    "column": {
+      "aria": "{name}, {count} offres"
+    },
+    "outcome": {
+      "label": "Comment ça s'est terminé",
+      "they_said_no": "Ils ont dit non",
+      "i_withdrew": "Je me suis retiré",
+      "job_pulled": "Le poste a été annulé"
+    },
+    "follow_up": {
+      "row": "{count, plural, one {1 entreprise n'a pas répondu depuis 10 jours.} other {# entreprises n'ont pas répondu depuis 10 jours.}}",
+      "write_cta": "Écrire une relance",
+      "grounding": "Écrit à partir de l'annonce et de ton CV.",
+      "open_mail": "Ouvrir dans ta messagerie"
+    },
+    "insight": {
+      "title": "Ta semaine",
+      "sub": "Ce qui s'est passé, et quoi faire ensuite.",
+      "empty": "Après une semaine de candidatures, il y aura quelque chose à dire ici.",
+      "refresh": "Mettre à jour",
+      "refreshing": "Mise à jour…",
+      "refresh_recent": "Ça vient d'être mis à jour. Réessaie plus tard.",
+      "metrics": {
+        "applications": "Candidatures",
+        "interviews": "Entretiens",
+        "offers": "Propositions",
+        "weeks_to_offer": "Semaines écoulées",
+        "unknown": "—",
+        "skills_observed": "Compétences les plus revenues"
+      }
+    },
+    "card": {
+      "drag_hint": "Fais glisser cette carte vers une autre étape, ou utilise son menu d'étape",
+      "move_label": "Déplacer {role} vers une autre étape",
+      "untitled_company": "Pas de nom d'entreprise",
+      "untitled_role": "Pas d'intitulé de poste"
+    },
+    "when": {
+      "follow_up": "Relancer le {date}",
+      "applied": "Envoyée {ago}",
+      "saved": "Gardée {ago}"
+    },
+    "ago": {
+      "now": "à l'instant",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} j",
+      "weeks": "{n} sem"
+    },
+    "empty": {
+      "saved": "Rien de gardé pour l'instant. Garde une offre et elle attend ici.",
+      "applied": "Pas encore de candidature.",
+      "first_call": "Pas encore de premier échange prévu.",
+      "interviewing": "Pas encore d'entretien prévu.",
+      "final_round": "Pas encore de dernier tour.",
+      "offer": "Pas encore de proposition.",
+      "rejected": "Aucun refus ici."
+    },
+    "empty_board": {
+      "title": "Il n'y a rien",
+      "accent": "encore",
+      "body": "Garde une offre ou postule, et elle apparaît ici, avec ce qui lui est arrivé."
+    },
+    "error": {
+      "title": "Tes candidatures ne se sont pas chargées.",
+      "body": "Rien n'est perdu. Réessaie, et si ça continue, recharge la page.",
+      "retry": "Réessayer"
+    },
+    "add": {
+      "cta": "Ajouter une offre",
+      "title": "Ajoute une offre trouvée ailleurs",
+      "field_url": "Lien vers l'annonce",
+      "field_url_placeholder": "https://exemple.com/offres/1234",
+      "field_title": "Intitulé du poste",
+      "field_title_placeholder": "Senior Product Manager",
+      "field_company": "Entreprise",
+      "field_company_placeholder": "Stripe",
+      "field_location": "Lieu",
+      "field_location_placeholder": "Paris · Hybride",
+      "field_status": "Étape",
+      "submit": "L'ajouter",
+      "submitting": "Ajout…",
+      "error_title_required": "Ajoute d'abord un intitulé de poste.",
+      "error_company_required": "Ajoute d'abord une entreprise.",
+      "error_generic": "Cette offre n'a pas pu être ajoutée. Réessaie."
+    },
+    "activity": {
+      "eyebrow": "7 derniers jours",
+      "title": "Tout ce ",
+      "titleAccent": "qui s'est passé",
+      "titleAfter": ".",
+      "sub": "Chaque candidature, chaque brouillon et chaque changement, avec sa date.",
+      "loading": "Chargement de ton historique…",
+      "stats": {
+        "appsSent": "Candidatures",
+        "replies": "Réponses",
+        "replyRate": "{percent} %",
+        "draftsWritten": "Brouillons écrits",
+        "thisWeek": "cette semaine"
+      },
+      "empty": {
+        "title": "Rien d'enregistré",
+        "titleAccent": "pour l'instant",
+        "sub": "Dès que tu gardes, adaptes et postules, chaque étape apparaît ici avec sa date."
+      },
+      "error": {
+        "title": "Ton historique ne s'est pas chargé.",
+        "body": "Rien n'est perdu. Réessaie, et si ça continue, recharge la page.",
+        "retry": "Réessayer"
+      }
+    }
   },
-  "ie": {
+  "practice": {
+    "setup": {
+      "eyebrow": "Entraînement · {count} postes",
+      "title": "Entraîne-toi jusqu'à ce que ",
+      "titleAccent": "ça devienne ordinaire",
+      "titleAfter": ".",
+      "sub": "Choisis un poste, choisis un interlocuteur, choisis un format. Il pose les questions ; des notes apparaissent à côté de toi pendant que tu réponds.",
+      "loading": "Chargement de l'entraînement…",
+      "startError": "Cet entretien n'a pas pu démarrer. Réessaie.",
+      "creditCost": "Coûte {n} crédits",
+      "creditsRemaining": "Il te reste {n} crédits",
+      "insufficientCredits": "Cet entretien demande {required} crédits et tu en as {balance}. Ajoute des crédits pour continuer.",
+      "getCredits": "Obtenir des crédits",
+      "brief_line": "Ton interlocuteur a été briefé sur {topic}.",
+      "first_free": "Ton premier entretien d'entraînement complet est gratuit.",
+      "recent": {
+        "label": "Reprends où tu t'étais arrêté",
+        "count": "{count} récents",
+        "with": "avec {name}",
+        "replay": "Rejouer cette session",
+        "showMore": "Voir {count} plus anciens",
+        "showLess": "Voir moins",
+        "deleteAria": "Supprimer l'enregistrement",
+        "deleteConfirm": "Supprimer cet enregistrement ?",
+        "delete": "Supprimer",
+        "cancel": "Annuler"
+      },
+      "role": {
+        "title": "Choisis un poste",
+        "sub": "Cherche ou parcours {count} postes",
+        "searchPlaceholder": "Senior PM, iOS, ML…",
+        "more": "{count} autres — affine ta recherche",
+        "tabBrowse": "Parcourir les postes",
+        "tabPaste": "Coller une annonce",
+        "jdPlaceholder": "Colle l'annonce complète — intitulé, ce que tu ferais, ce qui est demandé. Les questions en sont tirées.",
+        "jdHint": "Colle l'annonce complète. Les questions se construisent à partir de ce qu'elle demande.",
+        "jdCount": "{count} caractères",
+        "jdTooShort": "Ajoute-en un peu plus. Colle ce que tu ferais et ce qui est demandé, pour que les questions soient justes.",
+        "categories": {
+          "engineering-devops": "Ingénierie et DevOps",
+          "product-design": "Produit et Design",
+          "data-ai-analytics": "Données, IA et Analyse",
+          "marketing-content": "Marketing et Contenu",
+          "sales-customer-success": "Vente et Relation client",
+          "finance-accounting": "Finance et Comptabilité",
+          "healthcare-life-sciences": "Santé et Sciences du vivant",
+          "people-ops-trades": "RH, Opérations et Métiers techniques"
+        },
+        "roles": {
+          "frontend-engineer": "Développement front-end",
+          "backend-engineer": "Développement back-end",
+          "full-stack-engineer": "Développement full-stack",
+          "mobile-engineer-ios-android": "Développement mobile (iOS/Android)",
+          "devops-platform-engineer": "DevOps / Plateforme",
+          "site-reliability-engineer": "Fiabilité des systèmes (SRE)",
+          "security-engineer": "Sécurité informatique",
+          "engineering-manager": "Manager d'ingénierie",
+          "product-manager": "Product Manager",
+          "senior-product-manager": "Product Manager senior",
+          "technical-program-manager": "Program Manager technique",
+          "product-designer": "Design produit",
+          "ux-researcher": "Recherche UX",
+          "ux-ui-designer": "Design UX/UI",
+          "brand-visual-designer": "Design de marque / visuel",
+          "data-analyst": "Analyse de données",
+          "data-scientist": "Data science",
+          "data-engineer": "Ingénierie des données",
+          "machine-learning-engineer": "Ingénierie machine learning",
+          "analytics-engineer": "Ingénierie analytique",
+          "business-intelligence-analyst": "Analyse business intelligence",
+          "ai-research-scientist": "Recherche en IA",
+          "digital-marketing-manager": "Marketing digital",
+          "content-marketer-copywriter": "Contenu / rédaction publicitaire",
+          "seo-specialist": "Spécialiste SEO",
+          "social-media-manager": "Réseaux sociaux",
+          "growth-marketer": "Marketing de croissance",
+          "brand-manager": "Gestion de marque",
+          "public-relations-specialist": "Relations presse",
+          "account-executive": "Chargé de comptes",
+          "sales-development-rep-sdr": "Prospection commerciale (SDR)",
+          "solutions-sales-engineer": "Ingénierie solutions / avant-vente",
+          "customer-success-manager": "Customer Success Manager",
+          "account-manager": "Gestion de comptes",
+          "customer-support-specialist": "Support client",
+          "sales-manager": "Direction commerciale",
+          "financial-analyst": "Analyse financière",
+          "accountant": "Comptabilité",
+          "controller": "Contrôle de gestion",
+          "investment-equity-analyst": "Analyse investissement / actions",
+          "fp-a-manager": "Responsable planification financière (FP&A)",
+          "auditor": "Audit",
+          "tax-advisor": "Conseil fiscal",
+          "registered-nurse": "Soins infirmiers",
+          "medical-doctor-physician": "Médecine",
+          "pharmacist": "Pharmacie",
+          "clinical-research-associate": "Attaché de recherche clinique",
+          "healthcare-administrator": "Gestion hospitalière",
+          "medical-laboratory-scientist": "Biologie médicale",
+          "physical-therapist": "Kinésithérapie",
+          "hr-business-partner": "HR Business Partner",
+          "technical-recruiter": "Recrutement technique",
+          "project-manager": "Gestion de projet",
+          "operations-manager": "Direction des opérations",
+          "supply-chain-logistics-manager": "Supply chain / logistique",
+          "electrician": "Électricité",
+          "skilled-tradesperson-hvac-welding": "Métiers techniques (CVC/soudure)"
+        }
+      },
+      "interviewer": {
+        "title": "Choisis ton interlocuteur",
+        "sub": "Chacun interroge à sa façon. Prends celui contre qui tu veux t'entraîner."
+      },
+      "difficulty": {
+        "easy": "Facile",
+        "medium": "Moyen",
+        "hard": "Difficile"
+      },
+      "type": {
+        "title": "Choisis le format",
+        "sub": "Un seul, ou plusieurs à la suite",
+        "minutes": "{minutes} min",
+        "recommendedBadge": "Suggéré",
+        "recommendedFor": "Suggéré pour {role}",
+        "allFormats": "Tous les formats",
+        "forThisRole": "Pour ce poste"
+      },
+      "format": {
+        "title": "Comment tu apparais",
+        "sub": "La vidéo se rapproche du réel. La voix suffit pour s'échauffer.",
+        "video": {
+          "title": "Entretien vidéo",
+          "tag": "Suggéré",
+          "desc": "Caméra allumée, face à face. Le regard, la présence et la façon de gérer un silence sont notés.",
+          "b1": "Tu te vois dans le coin de l'écran",
+          "b2": "Regard et présence relevés",
+          "b3": "Enregistré pour que tu puisses le revoir"
+        },
+        "voice": {
+          "title": "Voix seulement",
+          "tag": "Moins de pression",
+          "desc": "Audio seul, comme au téléphone. Bien pour travailler la structure avant d'allumer la caméra.",
+          "b1": "Pas besoin de caméra",
+          "b2": "Concentration sur ce que tu dis",
+          "b3": "Transcription seulement"
+        }
+      },
+      "launch": {
+        "role": "Poste",
+        "interviewer": "Interlocuteur",
+        "format": "Format",
+        "mode": "Vidéo ou voix",
+        "pickRole": "Choisis un poste",
+        "pickInterviewer": "Choisis un interlocuteur",
+        "pickType": "Choisis un format",
+        "modeVideo": "Entretien vidéo",
+        "modeVoice": "Voix seulement",
+        "start": "Démarrer l'entretien",
+        "starting": "Démarrage…",
+        "language": "Langue",
+        "roleFromJd": "(d'après l'annonce que tu as collée)"
+      },
+      "modeShort": {
+        "voice": "Voix",
+        "video": "Vidéo"
+      },
+      "langDuration": {
+        "title": "Langue et durée",
+        "sub": "Choisis la langue de l'entretien et sa durée.",
+        "languageLabel": "Langue de l'entretien",
+        "durationLabel": "Durée"
+      },
+      "error": {
+        "title": "L'entraînement ne s'est pas chargé.",
+        "body": "Rien n'est perdu. Réessaie, et si ça continue, recharge la page.",
+        "retry": "Réessayer"
+      },
+      "preview": {
+        "title": "Ce qui est demandé pour ce poste",
+        "sub": "Ce que cet entretien va couvrir, tiré d'annonces réelles.",
+        "empty": "Choisis un poste ou colle une annonce, prends un interlocuteur et un format, puis vois ce que les questions vont couvrir.",
+        "loading": "Lecture des annonces en cours…",
+        "error": "Cet aperçu n'est pas disponible. Ton entretien reste construit pour ce poste.",
+        "retry": "Réessayer",
+        "previewBtn": "Montre-moi",
+        "summaryLabel": "Le poste, en bref",
+        "skillsLabel": "Compétences demandées",
+        "respLabel": "Ce que tu ferais",
+        "signalsLabel": "Ce qu'ils cherchent",
+        "questionsLabel": "Exemples de premières questions",
+        "sourcesLabel": "Tiré d'annonces réelles",
+        "sourcesGeneric": "D'après un profil général pour ce poste.",
+        "fromJd": "Tiré de l'annonce que tu as collée"
+      },
+      "personas": {
+        "maya": {
+          "role": "La recruteuse chaleureuse",
+          "blurb": "Conversation détendue et bienveillante. Fait sortir ton histoire avec des relances douces. Aucun piège.",
+          "style": "Rythme calme · questions ouvertes · écoute · encourage · jamais dans l'affrontement",
+          "company": "Chargée du recrutement dans une entreprise en forte croissance"
+        },
+        "june": {
+          "role": "La fondatrice",
+          "blurb": "La mission compte pour elle. Elle veut savoir pourquoi cette entreprise et pourquoi maintenant.",
+          "style": "Directe et rapide · commence par la motivation · teste la sincérité de la réponse",
+          "company": "Fondatrice et dirigeante d'une jeune entreprise"
+        },
+        "nova": {
+          "role": "Le tour d'horizon",
+          "blurb": "Curieuse et rapide. Parcourt tout le domaine et demande ce qui existe d'autre.",
+          "style": "Large · compare les alternatives · suit les tendances · va en largeur plutôt qu'en profondeur",
+          "company": "Principale dans un cabinet de conseil international"
+        },
+        "priya": {
+          "role": "Les situations vécues",
+          "blurb": "Interroge sur des situations réelles jusqu'à ce que ta réponse contienne une action claire et un résultat clair.",
+          "style": "Récits · situation, action, résultat · relances patientes · conflit et échec · sépare ce que tu as fait de ce que l'équipe a fait",
+          "company": "Responsable RH d'une grande marque grand public"
+        },
+        "rex": {
+          "role": "Le problème inattendu",
+          "blurb": "Te donne un problème que tu n'as jamais vu et regarde comment tu le découpes.",
+          "style": "Problèmes ouverts · estimations et hypothèses · raisonner à voix haute · change une contrainte en pleine réponse",
+          "company": "Cycles d'entretiens en grande tech et en conseil"
+        },
+        "diaz": {
+          "role": "Le manager de terrain",
+          "blurb": "Manager calme qui a fait le poste. Revient sans cesse sur ce que tu as fait, toi.",
+          "style": "Posé · la pratique avant la théorie · un exemple réel, étape par étape",
+          "company": "Responsable d'équipe qui met les mains dedans"
+        },
+        "atlas": {
+          "role": "L'architecte généraliste",
+          "blurb": "Profil senior et large. Cartographie ce que tu sais et interroge les parties que tu sautes.",
+          "style": "La largeur d'abord · plusieurs domaines · trouve les trous en passant au domaine suivant",
+          "company": "Ingénieur distingué dans une grande entreprise tech"
+        },
+        "bishop": {
+          "role": "Le niveau d'exigence",
+          "blurb": "Veut l'échec, le désaccord que tu as perdu, et la preuve que tu l'as assumé.",
+          "style": "Responsabilité · demande l'échec et le conflit · se méfie des réponses apprises · qu'as-tu fait",
+          "company": "Directeur du recrutement dans une entreprise en forte croissance"
+        },
+        "okonkwo": {
+          "role": "L'étude de cas",
+          "blurb": "Rigoureux, et change le problème en permanence. Ce qui compte, c'est ta façon de penser sous pression.",
+          "style": "Retour aux bases · découpage structuré · contraintes qui se resserrent · questionne tes hypothèses",
+          "company": "Associé dans un cabinet de stratégie de premier plan"
+        },
+        "kai": {
+          "role": "La profondeur technique",
+          "blurb": "Descend de trois niveaux. Veut la décision exacte et le cas où elle a cassé.",
+          "style": "Profondeur technique · silences · raconte-moi exactement ce qui s'est passé",
+          "company": "Ingénieur senior staff dans une grande équipe d'infrastructure"
+        },
+        "voss": {
+          "role": "La direction sceptique",
+          "blurb": "Conteste chaque affirmation. Veut le chiffre derrière l'histoire.",
+          "style": "Franche · sceptique · les chiffres d'abord · comment tu le sais",
+          "company": "Entretien au niveau direction générale"
+        },
+        "lena": {
+          "role": "Le test de clarté",
+          "blurb": "Regarde si ton message arrive clairement. Elle te demandera d'expliquer simplement ce qui est compliqué.",
+          "style": "Le public d'abord · explique-le à un débutant · récompense une phrase d'ouverture nette · repère les digressions",
+          "company": "Responsable communication qui a coaché des centaines de dirigeants"
+        },
+        "mirae": {
+          "role": "Le jury rapide",
+          "blurb": "Change de sujet toutes les deux minutes et laisse tourner le chrono.",
+          "style": "Changements de sujet rapides · réponses chronométrées · rythme élevé · récompense l'adaptation",
+          "company": "Préside le dernier tour dans une grande entreprise tech"
+        },
+        "osei": {
+          "role": "L'entretien sur la collaboration",
+          "blurb": "Regarde comment tu traites les gens quand c'est dur. Interroge sur le fait de faire passer l'équipe d'abord.",
+          "style": "Valeurs en actes · récits de collaboration · comment l'équipe l'a vécu · chaleureux mais insistant",
+          "company": "Directeur des ressources humaines dans une entreprise portée par ses valeurs"
+        },
+        "devi": {
+          "role": "La partenaire de réflexion",
+          "blurb": "Te donne un problème ouvert et le travaille avec toi. Ce qui compte, c'est ta façon de le cadrer.",
+          "style": "Réfléchir ensemble · bouscule ton cadrage · le raisonnement compte plus que la réponse",
+          "company": "Stratège produit qui raisonne à voix haute avec toi"
+        },
+        "amara": {
+          "role": "La cartographe des marchés",
+          "blurb": "Passe d'un marché et d'un secteur à l'autre, à la recherche d'étendue et de liens à tracer.",
+          "style": "Entre secteurs · cartographie le marché · qui d'autre le fait bien · relie les idées",
+          "company": "Conseillère croissance dans de nombreux secteurs"
+        },
+        "sterling": {
+          "role": "La tenue en réunion de direction",
+          "blurb": "Senior, exigeante, sans hâte. Veut la version courte d'abord, puis la preuve.",
+          "style": "Formelle · l'essentiel d'abord · concise sous les relances · teste la précision",
+          "company": "Dirigeante au niveau conseil d'administration d'un grand groupe"
+        },
+        "tariq": {
+          "role": "Le test de pression",
+          "blurb": "Appuie fort et vite, te coupe la parole, retourne ta réponse contre toi.",
+          "style": "Questions en rafale · interrompt et conteste · défend le camp adverse · teste le sang-froid",
+          "company": "Cycle d'entretiens d'une salle de marché sous pression"
+        }
+      },
+      "archetype": {
+        "warmup": "Échauffement",
+        "behavioral": "Situations vécues",
+        "breadth": "Étendue",
+        "potential": "Résolution de problèmes",
+        "depth": "Profondeur",
+        "communication": "Communication",
+        "pressure": "Pression"
+      },
+      "types": {
+        "screening": {
+          "label": "Entretien téléphonique",
+          "sub": "Parcours, motivation et les questions pratiques avant les vrais tours"
+        },
+        "behavioral": {
+          "label": "Situations vécues",
+          "sub": "Des histoires réelles : responsabilité, conflit, échec, influence, encadrement"
+        },
+        "technical": {
+          "label": "Code en direct",
+          "sub": "Résoudre un problème dans un éditeur partagé en expliquant à voix haute"
+        },
+        "system": {
+          "label": "Conception de système",
+          "sub": "Concevoir un grand système de bout en bout et défendre les arbitrages"
+        },
+        "case": {
+          "label": "Cas d'entreprise",
+          "sub": "Un problème d'entreprise ouvert : le structurer, utiliser les données, trancher"
+        },
+        "culture": {
+          "label": "Valeurs et façon de travailler",
+          "sub": "Ce à quoi tu tiens, comment tu travailles, comment tu agis quand c'est flou"
+        },
+        "panel": {
+          "label": "Jury",
+          "sub": "Mélange rapide de sujets, comme si plusieurs personnes interrogeaient en même temps"
+        },
+        "take_home": {
+          "label": "Défense d'un exercice",
+          "sub": "Défendre et prolonger un travail fait de ton côté"
+        },
+        "debugging": {
+          "label": "Débogage et revue de code",
+          "sub": "Trouver ce qui casse, ou relire le code de quelqu'un d'autre"
+        },
+        "incident_sre": {
+          "label": "Incident en direct",
+          "sub": "Gérer une panne en production : stabiliser, puis expliquer ce qui s'est passé"
+        },
+        "sql_analytics": {
+          "label": "SQL et analyse",
+          "sub": "Écrire des requêtes et raisonner sur des indicateurs à partir de vraies tables"
+        },
+        "product_sense": {
+          "label": "Sens produit",
+          "sub": "Concevoir un produit et choisir les chiffres qui disent si ça a marché"
+        },
+        "portfolio": {
+          "label": "Revue de travaux passés",
+          "sub": "Dérouler un travail réel : la démarche, les décisions, ta part, le résultat"
+        },
+        "design_critique": {
+          "label": "Critique de design",
+          "sub": "Critiquer un produit en direct, ou esquisser une réponse à un nouveau sujet"
+        },
+        "research_design": {
+          "label": "Conception d'une étude",
+          "sub": "Concevoir une étude sur le moment, ou trouver les failles d'une étude existante"
+        },
+        "sales_roleplay": {
+          "label": "Jeu de rôle commercial",
+          "sub": "Un appel en direct face à quelqu'un qui joue l'acheteur"
+        },
+        "pitch_demo": {
+          "label": "Pitch ou démo",
+          "sub": "Faire une démo ou un pitch devant un jury, puis répondre aux questions"
+        },
+        "account_strategy": {
+          "label": "Plan de compte",
+          "sub": "Analyser un compte client et bâtir un plan pour le garder et le développer"
+        },
+        "modeling_test": {
+          "label": "Modélisation financière",
+          "sub": "Construire ou tester un modèle et le défendre"
+        },
+        "finance_technical": {
+          "label": "Questions de finance",
+          "sub": "Comptabilité, valorisation, mécanique des opérations et vision d'investissement"
+        },
+        "clinical_scenario": {
+          "label": "Situation clinique",
+          "sub": "Dérouler une situation patient réaliste : évaluer, prioriser, alerter"
+        },
+        "situational_judgement": {
+          "label": "Jugement au travail",
+          "sub": "Des dilemmes professionnels qui testent l'éthique, le professionnalisme et le jugement"
+        },
+        "practical_skills": {
+          "label": "Test de savoir-faire",
+          "sub": "Dérouler une tâche concrète : technique, sécurité, normes, diagnostic"
+        },
+        "teaching_demo": {
+          "label": "Cours de démonstration",
+          "sub": "Donner une courte leçon, puis expliquer pourquoi tu l'as menée ainsi"
+        },
+        "ops_case": {
+          "label": "Cas d'opérations",
+          "sub": "Diagnostiquer un problème de processus ou d'approvisionnement et choisir quoi corriger d'abord"
+        },
+        "presentation": {
+          "label": "Présentation",
+          "sub": "Préparer et donner une présentation structurée, puis répondre aux questions"
+        },
+        "leadership_strategy": {
+          "label": "Encadrement et stratégie",
+          "sub": "Construire une équipe, donner une direction et les 90 premiers jours"
+        },
+        "reference_check": {
+          "label": "Références et diplômes",
+          "sub": "Questions de fin de processus sur le parcours, la fiabilité et les diplômes"
+        }
+      },
+      "showAll": "Afficher les {count}",
+      "showFewer": "Afficher moins"
+    },
+    "live": {
+      "loading": "Préparation de ta salle…",
+      "backToSetup": "Retour à la configuration",
+      "livePill": "En direct",
+      "live": "En direct",
+      "recording": "Enregistrement",
+      "modeVideo": "Vidéo",
+      "modeVoice": "Voix",
+      "progress": "Question {current} sur {total}",
+      "aiInterviewer": "Interlocuteur",
+      "interviewer": "Interlocuteur",
+      "state": {
+        "asking": "pose la question…",
+        "listening": "écoute",
+        "thinking": "réfléchit",
+        "speaking": "parle",
+        "connecting": "connexion…",
+        "waiting": "attend le départ…"
+      },
+      "questionNum": "Question {current} sur {total}",
+      "showHint": "Voir l'indice",
+      "hideHint": "Masquer l'indice",
+      "coachHint": "Indice",
+      "skip": "Passer",
+      "skipped": "(passée)",
+      "you": "Toi",
+      "youName": "Toi · {name}",
+      "youRole": "{role} · Toi",
+      "micOpen": "Micro ouvert — ta réponse est enregistrée",
+      "micOpenShort": "Micro ouvert",
+      "micReady": "Micro prêt",
+      "waitForQuestion": "Attends la fin de la question",
+      "composerPlaceholder": "Dis-le, écris-le, ou les deux. Commande et Entrée pour envoyer.",
+      "composerLabel": "Ta réponse",
+      "coachLive": "Notes pendant que tu réponds",
+      "dismiss": "Masquer",
+      "transcript": "Transcription en direct",
+      "transcriptEmpty": "La transcription apparaît ici pendant que vous parlez.",
+      "autoSaved": "Enregistré automatiquement",
+      "endEarly": "Terminer l'entretien plus tôt",
+      "ending": "Clôture…",
+      "cameraOff": "Caméra coupée",
+      "muteMic": "Couper le micro",
+      "unmuteMic": "Réactiver le micro",
+      "stopCam": "Couper la caméra",
+      "startCam": "Activer la caméra",
+      "endInterview": "Terminer l'entretien",
+      "agentJoining": "Mise en relation avec ton interlocuteur…",
+      "agentSlow": "Ton interlocuteur met du temps à arriver. Si rien ne se passe d'ici une minute, termine la session et lances-en une nouvelle.",
+      "agentQualityPoor": "La connexion de ton interlocuteur est mauvaise.",
+      "enableAudio": "Touche pour activer le son",
+      "reconnecting": "Reconnexion…",
+      "connectionLostTitle": "Connexion perdue",
+      "connectionLostBody": "Ton entretien est toujours ouvert. Rejoins-le pour reprendre où tu en étais, ou termine-le maintenant pour recevoir ton compte rendu.",
+      "autoRejoinTitle": "Connexion perdue — reconnexion",
+      "autoRejoinBody": "Tu es en train d'être ramené dans l'entretien. Si ça ne marche pas, tu peux le rejoindre à la main.",
+      "rejoin": "Rejoindre l'entretien",
+      "endAnyway": "Terminer l'entretien",
+      "poorConnection": "Mauvaise connexion",
+      "micDeniedTitle": "L'accès au micro est nécessaire",
+      "micDeniedBody": "Le micro n'a pas pu être utilisé, donc ton interlocuteur ne t'entend pas. Autorise le micro dans ton navigateur, puis réessaie.",
+      "micRetry": "Réessayer",
+      "deviceFailure": "Il y a un problème avec ton micro ou ta caméra. Vérifie les réglages de ton appareil — ton interlocuteur ne t'entend ou ne te voit peut-être pas.",
+      "interviewerUnavailableTitle": "Ton interlocuteur n'a pas pu rejoindre",
+      "interviewerUnavailableBody": "L'interlocuteur n'a pas pu être amené dans la salle. C'est en général temporaire. Réessaie dans un instant.",
+      "retry": "Réessayer",
+      "quality": {
+        "good": "Bonne connexion",
+        "fair": "Connexion correcte",
+        "poor": "Mauvaise connexion"
+      },
+      "controls": {
+        "camOn": "Caméra activée",
+        "camOff": "Caméra coupée",
+        "mic": "Micro",
+        "mute": "Couper",
+        "restart": "Recommencer",
+        "submitNext": "Envoyer et continuer",
+        "submitFinish": "Envoyer et terminer",
+        "submitting": "Envoi…"
+      },
+      "cam": {
+        "requesting": "Demande de la caméra…",
+        "requestingSub": "Réponds à la demande du navigateur",
+        "denied": "Caméra bloquée",
+        "deniedSub": "Autorise-la dans les réglages du navigateur, puis",
+        "tryAgain": "Réessayer",
+        "unavailable": "Aucune caméra trouvée",
+        "unavailableSub": "On continue en voix seulement",
+        "off": "Caméra coupée",
+        "turnOn": "Activer",
+        "allow": "Touche pour autoriser la caméra",
+        "enable": "Activer"
+      },
+      "expired": {
+        "title": "Cette session est terminée",
+        "body": "Cet entretien est fini, ou le lien est ancien. Lances-en un nouveau.",
+        "cta": "Démarrer un nouvel entretien"
+      },
+      "coach": {
+        "currentQuestion": "Question en cours",
+        "awaitingQuestion": "En attente de la prochaine question…",
+        "showHint": "Voir l'indice",
+        "hideHint": "Masquer l'indice",
+        "coachHint": "Indice",
+        "thinking": "Réflexion…",
+        "noHint": "Réponds avec tes propres mots.",
+        "coachLive": "Notes pendant que tu réponds",
+        "dismiss": "Masquer",
+        "listeningFor": "Ce qu'ils écoutent",
+        "answerTime": "Temps",
+        "pace": "Rythme",
+        "fillers": "Mots de remplissage",
+        "specifics": "Éléments concrets",
+        "coachMode": "Notes",
+        "on": "Activées",
+        "off": "Désactivées",
+        "coachModeHint": "De courtes notes pendant que tu réponds. Désactive-les pour un passage qui ressemble au réel."
+      }
+    },
     "report": {
-      "title": "Rapport d'entretien",
-      "error": "Impossible de charger le rapport.",
-      "loading": "Chargement de ton rapport…",
+      "title": "Compte rendu d'entretien",
+      "eyebrow": "Session terminée · {minutes} min",
+      "eyebrowScoring": "Évaluation de tes réponses",
+      "eyebrowFallback": "Entretien d'entraînement · compte rendu",
+      "sub": "Évalué comme le ferait un vrai jury.",
+      "loading": "Chargement de ton compte rendu…",
+      "loadingTitle": "Lecture de ",
+      "loadingTitleAccent": "tes réponses",
+      "loadingTitleAfter": "…",
+      "error": "Ce compte rendu ne s'est pas chargé. Réessaie, et si ça continue, recharge la page.",
       "newInterview": "Nouvel entretien",
-      "processing": "Finalisation de ton entretien — l'enregistrement et la note s'afficheront bientôt.",
+      "processing": "Finalisation. L'enregistrement et la note apparaissent ici sous peu.",
       "refresh": "Actualiser",
       "refreshing": "Actualisation…",
-      "overall": "Note globale",
+      "overall": "Global",
       "noScore": "Pas encore de note.",
-      "strengths": "Points forts",
-      "gaps": "À travailler",
+      "deltaUp": "+{delta} depuis ta dernière session",
+      "deltaDown": "−{delta} depuis ta dernière session",
+      "strengths": "Ce qui a marché",
+      "keepThese": "Garde ça",
+      "sharpen": "Ce qu'il faut corriger",
+      "topN": "Top {count}",
       "recording": "Enregistrement",
       "transcript": "Transcription",
-      "transcriptView": "Voir la transcription",
+      "transcriptView": "Afficher la transcription",
       "transcriptHide": "Masquer la transcription",
       "transcriptCount": "{count, plural, one {# échange} other {# échanges}}",
       "download": "Télécharger",
-      "analysisPending": "Ton analyse détaillée est en cours de génération — cela peut prendre jusqu'à une minute.",
+      "analysisPending": "L'analyse détaillée est en cours de rédaction. Ça peut prendre jusqu'à une minute.",
+      "analysisStalled": "L'analyse détaillée prend plus de temps que prévu.",
+      "refreshAnalysis": "Actualiser l'analyse",
       "dim": {
-        "structure": "Structure",
-        "specificity": "Précision",
-        "communication": "Communication",
-        "confidence": "Assurance",
-        "roleFit": "Adéquation au poste"
+        "structure": "As-tu raconté l'histoire dans l'ordre ?",
+        "specificity": "As-tu donné de vrais chiffres ?",
+        "communication": "Tes réponses avaient-elles la bonne longueur ?",
+        "confidence": "Avais-tu l'air sûr de toi ?",
+        "roleFit": "As-tu répondu à toute la question ?"
+      },
+      "actions": {
+        "runAgain": "Recommencer",
+        "pickSetup": "Choisir une autre configuration",
+        "download": "Télécharger la transcription",
+        "share": "Partager avec quelqu'un"
       },
       "recommendations": {
-        "title": "Plan d'action",
-        "sub": "Des étapes concrètes pour progresser",
-        "pending": "Ton plan d'action personnalisé est en cours de génération…",
-        "unavailable": "Aucun plan d'action disponible pour cette session.",
-        "empty": "Aucune recommandation — une session solide et complète.",
-        "exampleLabel": "Exemple de reformulation",
-        "drill": "S'entraîner",
+        "title": "Quoi faire ensuite",
+        "sub": "Des étapes concrètes, dans l'ordre",
+        "pending": "Tes prochaines étapes sont en cours de rédaction…",
+        "unavailable": "Aucune prochaine étape pour cette session.",
+        "empty": "Rien à changer. C'était une session solide.",
+        "exampleLabel": "Exemple de réécriture",
+        "drill": "S'entraîner là-dessus",
         "priority": {
-          "high": "Priorité haute",
-          "medium": "Priorité moyenne",
-          "low": "Priorité basse"
+          "high": "À faire en premier",
+          "medium": "À faire ensuite",
+          "low": "À faire plus tard"
         }
       },
       "questionBreakdown": {
-        "title": "Analyse question par question",
+        "title": "Question par question",
         "count": "{count, plural, one {# question} other {# questions}}",
-        "pending": "Ton analyse détaillée des questions est en cours de génération…",
-        "unavailable": "Analyse détaillée des questions non disponible pour cette session.",
-        "intentLabel": "Pourquoi cette question",
+        "pending": "L'analyse question par question est en cours de rédaction…",
+        "unavailable": "L'analyse question par question n'est pas disponible pour cette session.",
+        "intentLabel": "Pourquoi ils ont posé cette question",
         "answerSummaryLabel": "Ta réponse",
-        "analysisLabel": "Analyse",
-        "correctionLabel": "À corriger",
-        "suggestionLabel": "Comment progresser",
-        "tipsLabel": "Conseils de pro",
-        "modelAnswerLabel": "Réponse modèle",
+        "analysisLabel": "Ce qui s'est passé",
+        "correctionLabel": "Ce qu'il faut corriger",
+        "suggestionLabel": "Comment le corriger",
+        "tipsLabel": "Notes supplémentaires",
+        "modelAnswerLabel": "Une réponse plus solide",
         "keyQuoteLabel": "Ce que tu as dit",
-        "missed": "Cette question n'a pas été abordée pendant l'entretien.",
-        "offScript": "Question improvisée",
+        "missed": "Cette question n'a pas été abordée.",
+        "offScript": "Question imprévue",
         "rating": {
           "strong": "Solide",
           "adequate": "Correcte",
-          "weak": "À améliorer",
+          "weak": "À retravailler",
           "missed": "Non traitée"
         }
+      }
+    }
+  },
+  "settings": {
+    "title": "Réglages",
+    "loading": "Chargement de tes réglages…",
+    "nav": {
+      "search": "Ta recherche",
+      "resume": "CV",
+      "notif": "Notifications",
+      "appearance": "Apparence",
+      "billing": "Offre et facturation",
+      "account": "Compte",
+      "danger": "Zone sensible"
+    },
+    "savebar": {
+      "unsaved": "Tu as des modifications non enregistrées",
+      "discard": "Abandonner",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement…"
+    },
+    "error": {
+      "title": "Tes réglages ne se sont pas chargés.",
+      "body": "Rien n'est perdu. Réessaie, et si ça continue, recharge la page.",
+      "retry": "Réessayer"
+    },
+    "appearance": {
+      "title": "Apparence",
+      "sub": "L'allure de l'application. Ce choix n'est enregistré que sur cet appareil.",
+      "group": "Thème",
+      "theme_label": "Clair ou sombre",
+      "theme_sub": "Le sombre fatigue moins les yeux le soir. Rien d'autre ne change.",
+      "light": "Clair",
+      "dark": "Sombre"
+    },
+    "identity": {
+      "eyebrow": "Compte",
+      "title_before": "Qui",
+      "title_em": "tu es",
+      "title_after": ".",
+      "sub": "C'est à partir de ça que sont construits chaque candidature et chaque CV adapté.",
+      "group_profile": "Profil",
+      "upload_photo": "Envoyer une photo",
+      "photo_hint": "PNG ou JPG · le carré rend le mieux",
+      "full_name": "Nom complet",
+      "pronouns": "Pronoms",
+      "pronouns_sub": "Facultatif — sert à garder les lettres de motivation cohérentes",
+      "pronouns_other": "Autres",
+      "pronouns_none": "Je préfère ne pas le dire",
+      "years_exp": "Années d'expérience",
+      "new_grad": "Jeune diplômé",
+      "years_suffix": " ans",
+      "group_contact": "Contact",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "location": "Lieu",
+      "location_ph": "Ville, région",
+      "group_links": "Liens",
+      "linkedin": "LinkedIn",
+      "github": "GitHub",
+      "portfolio": "Portfolio ou site web",
+      "group_default_resume": "CV principal",
+      "resume_base": "Principal",
+      "no_resumes": "Pas encore de CV. Crées-en un dans la partie CV."
+    },
+    "hunt": {
+      "eyebrow": "Ta recherche",
+      "title_before": "Dis-nous ce que",
+      "title_em": "tu cherches",
+      "title_after": ".",
+      "sub": "Plus tu en dis, moins tu as d'offres à lire. Élargis quand tu veux en voir plus.",
+      "plain_label": "En clair",
+      "plain_l1": "Des postes de {roles} dans des entreprises {stages}",
+      "plain_l2": "{modes} à {cities}",
+      "plain_l3": "{min}k–{max}k $ de fixe · {count} secteurs",
+      "plain_l4": "Indispensable : {items}",
+      "plain_l5": "Je n'accepterai pas : {items}",
+      "any_stage": "de toute maturité",
+      "none": "aucun",
+      "mode_remote_word": "à distance",
+      "mode_hybrid_word": "hybride",
+      "mode_onsite_word": "au bureau",
+      "group_intent": "Avec tes mots",
+      "intent_label": "Ce que tu veux ensuite",
+      "intent_sub": "Texte libre — sert à départager quand deux offres se ressemblent",
+      "group_role": "Poste",
+      "titles_label": "Intitulés de poste qui t'intéressent",
+      "titles_sub": "Ajoute les variantes que tu accepterais",
+      "titles_ph": "Écris un intitulé, puis une virgule",
+      "seniority_label": "Niveau",
+      "seniority_sub": "Affiche {level} et au-dessus",
+      "group_location": "Lieu",
+      "work_mode_label": "À distance ou au bureau",
+      "mode_remote": "À distance",
+      "mode_remote_desc": "N'importe où, n'importe quel fuseau",
+      "mode_hybrid": "Hybride",
+      "mode_hybrid_desc": "2 à 3 jours au bureau",
+      "mode_onsite": "Au bureau",
+      "mode_onsite_desc": "5 jours au bureau",
+      "cities_label": "Villes ou régions",
+      "cities_sub": "Plus les endroits qui recrutent à distance",
+      "cities_ph": "Ajouter une ville",
+      "group_comp": "Salaire",
+      "salary_label": "Fourchette de salaire fixe",
+      "salary_sub": "{min}k–{max}k $ · tout ce qui est sous {min}k est masqué",
+      "salary_min": "Salaire fixe minimum",
+      "salary_max": "Salaire fixe maximum",
+      "salary_median": "Milieu du marché pour {level} : 215k $",
+      "group_company": "Entreprise",
+      "stage_label": "Maturité",
+      "stage_sub": "Le stade d'avancement de l'entreprise que tu veux rejoindre",
+      "headcount_label": "Taille de l'entreprise",
+      "group_industry": "Secteur",
+      "industries_target_label": "Secteurs qui t'intéressent",
+      "industries_target_sub": "Ceux-là passent en premier",
+      "industries_avoid_label": "Secteurs à écarter",
+      "industries_avoid_sub": "Jamais affichés",
+      "industries_avoid_ph": "Ajouter un secteur",
+      "group_hard_rules": "Règles fermes",
+      "musthaves_label": "Indispensable",
+      "musthaves_sub": "Les offres sans ça sont masquées",
+      "musthaves_ph": "Ajouter un indispensable",
+      "dealbreakers_label": "Je n'accepterai pas",
+      "dealbreakers_sub": "Si l'annonce le mentionne, elle est masquée",
+      "dealbreakers_ph": "Ajouter un élément",
+      "work_auth_label": "As-tu besoin qu'une entreprise te parraine pour un visa ?",
+      "auth_citizen": "Non — j'ai déjà le droit de travailler ici",
+      "auth_pr": "Non — je suis résident permanent",
+      "auth_h1b": "Oui — j'ai besoin d'un parrainage H-1B",
+      "auth_opt": "Oui — j'ai besoin d'une prolongation OPT",
+      "auth_eu": "Non — je suis citoyen de l'UE ou du Royaume-Uni",
+      "auth_other": "Autre chose"
+    },
+    "notif": {
+      "eyebrow": "Notifications",
+      "title_before": "Quand te",
+      "title_em": "contacter",
+      "title_after": ".",
+      "sub": "Tout est désactivé par défaut. Active ce que tu veux.",
+      "group_channels": "Où",
+      "channel_email": "E-mail",
+      "channel_email_sub": "Envoyé à l'adresse de ton compte",
+      "channel_push": "Notification",
+      "channel_push_sub": "Navigateur et application mobile",
+      "channel_sms": "SMS",
+      "group_matrix": "Quoi envoyer",
+      "col_email": "E-mail",
+      "col_push": "Notification",
+      "col_sms": "SMS",
+      "event_newMatch90_label": "Une offre très adaptée apparaît",
+      "event_newMatch90_sub": "Une nouvelle offre qui te correspond bien",
+      "event_appSent_label": "Tu marques une offre comme envoyée",
+      "event_appSent_sub": "Une courte confirmation",
+      "event_response_label": "Une entreprise répond",
+      "event_response_sub": "Quelqu'un du recrutement a écrit",
+      "event_interview_label": "Un entretien est fixé",
+      "event_interview_sub": "Un créneau a été retenu",
+      "group_digest": "Récapitulatif",
+      "digest_label": "À quelle fréquence",
+      "digest_sub": "Un seul récapitulatif au lieu de messages séparés",
+      "digest_off": "Désactivé",
+      "digest_daily": "Chaque jour à 7 h",
+      "digest_weekly": "Chaque lundi"
+    },
+    "privacy": {
+      "eyebrow": "Confidentialité",
+      "title_before": "Tes données et",
+      "title_em": "ta liste de blocage",
+      "title_after": ".",
+      "sub": "Les entreprises que tu bloques n'apparaissent jamais dans tes offres. Tes données t'appartiennent : tu peux les emporter ou les supprimer.",
+      "group_blocklist": "Entreprises dont tu ne veux pas voir les offres",
+      "blocked_label": "Bloquées",
+      "blocked_sub": "Les offres de ces entreprises n'apparaissent jamais",
+      "reason_employer": "Ton employeur actuel",
+      "reason_byyou": "Ajoutée par toi",
+      "remove": "Retirer",
+      "add_company": "Bloquer une entreprise",
+      "add_ph": "Nom de l'entreprise",
+      "add_confirm": "Ajouter",
+      "blocked_recruiters_label": "Recruteurs bloqués",
+      "blocked_recruiters_sub": "{count} recruteurs ne peuvent pas te contacter",
+      "manage_list": "Gérer la liste",
+      "group_data": "Tes données",
+      "export_label": "Tout télécharger",
+      "export_sub": "Candidatures, brouillons, transcriptions et CV",
+      "download_archive": "Télécharger",
+      "retention_label": "Durée de conservation",
+      "retention_sub": "Combien de temps les transcriptions d'entretien et les brouillons sont gardés",
+      "retention_30": "30 jours",
+      "retention_90": "90 jours",
+      "retention_365": "1 an",
+      "retention_forever": "Les garder"
+    },
+    "profile": {
+      "title": "Informations du compte",
+      "displayName": "Nom affiché",
+      "memberSince": "Inscrit le {date}",
+      "verified": "vérifié",
+      "edit": "Modifier",
+      "save": "Enregistrer",
+      "cancel": "Annuler"
+    },
+    "credits": {
+      "title": "Crédits d'entretiens d'entraînement",
+      "unit": "crédits",
+      "note": "1 crédit correspond à un entretien d'entraînement de 20 minutes. Les sessions plus courtes ou plus longues coûtent au prorata."
+    },
+    "region": {
+      "label": "Région",
+      "intl": "International (USD)",
+      "cn": "Chine (RMB)"
+    },
+    "billing": {
+      "title": "Offre et facturation",
+      "sub": "Ce que tu as aujourd'hui, ce vers quoi tu peux passer, et où sont tes reçus.",
+      "checkout_failed": "La page de paiement ne s'est pas ouverte. Réessaie, ou utilise une autre carte.",
+      "payments_unavailable": "Les paiements ne sont pas encore en place. Ton offre actuelle continue de fonctionner.",
+      "manage": "Gérer la facturation",
+      "invoices": "Voir les factures",
+      "cancel": "Résilier l'offre",
+      "viewHistory": "Voir l'historique de facturation",
+      "summaryNote": "Ton moyen de paiement, tes factures et tes reçus se trouvent dans l'espace sécurisé du prestataire de paiement.",
+      "current": {
+        "renews": "Renouvellement le {date} · facturé chaque mois",
+        "cancelsAt": "Se termine le {date}",
+        "expiresAt": "Terminé le {date} — renouvelle pour continuer",
+        "status": {
+          "active": "Actif",
+          "pastDue": "Paiement en retard",
+          "canceled": "Résilié"
+        }
       },
-      "analysisStalled": "L'analyse détaillée prend plus de temps que prévu.",
-      "refreshAnalysis": "Actualiser l'analyse"
+      "history": {
+        "heading": "Historique de facturation",
+        "subtitle": "Tes factures et tes reçus.",
+        "back": "Retour aux réglages",
+        "title": "Factures",
+        "empty": "Pas encore de facture.",
+        "loading": "Chargement…",
+        "error": "Ton historique de facturation ne s'est pas chargé. Réessaie.",
+        "download": "Télécharger",
+        "paid": "Payée",
+        "pending": "En attente",
+        "failed": "Échouée",
+        "card": "Carte"
+      },
+      "checkout": {
+        "success": "Ton offre est active.",
+        "cancel": "Le paiement a été annulé. Ton offre n'a pas changé.",
+        "dismiss": "Masquer"
+      }
+    },
+    "plan": {
+      "free": "Gratuit",
+      "premium": "Premium",
+      "premiumPlus": "Premium+",
+      "starter": "Starter",
+      "growth": "Growth",
+      "perMonth": "/mois",
+      "dailyCap": "{n} actions par jour",
+      "mostPopular": "Le plus choisi",
+      "current": "Ton offre",
+      "upgrade": "Passer au-dessus",
+      "downgrade": "Descendre d'une offre",
+      "comingSoon": "Pas encore disponible",
+      "freeForever": "Gratuit",
+      "freePrice": "Gratuit",
+      "subscribe": "S'abonner",
+      "subscribeAlipay": "Payer avec Alipay",
+      "creditsCap": "{n} crédits / mois",
+      "select_free": "Commencer gratuitement",
+      "select_paid": "Choisir {plan}",
+      "cta": {
+        "upgradeTo": "Passer à {plan}",
+        "switchTo": "Basculer sur {plan}",
+        "yourFreePlan": "Ton offre",
+        "alipaySwitchNote": "Pour changer d'offre, résilie puis réabonne-toi au moment du paiement."
+      },
+      "credits_explainer": "1 crédit correspond à un entretien d'entraînement de 20 minutes. Les sessions plus courtes ou plus longues coûtent au prorata, et tes crédits se rechargent au début de chaque mois de facturation.",
+      "feature": {
+        "mockInterviews": "Entretiens d'entraînement",
+        "resumeTailors": "Adaptation du CV",
+        "coverLetters": "Lettres de motivation",
+        "priorityMatching": "Notation des offres plus rapide",
+        "everythingFree": "Tout ce qu'il y a dans Gratuit",
+        "everythingPremium": "Tout ce qu'il y a dans Premium",
+        "prioritySupport": "Assistance plus rapide",
+        "creditsMonthly": "{n} crédits d'entretiens d'entraînement / mois",
+        "fullReports": "Comptes rendus d'entretien complets",
+        "allInterviewTypes": "Tous les formats et tous les interlocuteurs",
+        "everythingStarter": "Tout ce qu'il y a dans Starter",
+        "toneSteering": "Choisir le ton de l'interlocuteur"
+      }
+    },
+    "usage": {
+      "title": "Utilisation",
+      "byDate": "Ton activité · 30 derniers jours",
+      "byFeature": "Aujourd'hui, par fonction",
+      "actionCount": "{count} actions",
+      "meter": "{used} sur {cap}",
+      "tierCap": "{tier} · {cap}/jour",
+      "resetNote": "Remis à zéro chaque jour à minuit UTC · {tier} permet {cap}/jour",
+      "heatLess": "Moins",
+      "heatMore": "Plus",
+      "recent": "Activité récente",
+      "recentItem": "{count}× {feature}"
+    },
+    "security": {
+      "title": "Sécurité",
+      "changePassword": "Changer le mot de passe",
+      "changeSuccess": "Ton mot de passe a été changé.",
+      "currentPassword": "Mot de passe actuel",
+      "newPassword": "Nouveau mot de passe",
+      "confirmPassword": "Confirme le nouveau mot de passe",
+      "sessions": "Sessions",
+      "signOutEverywhere": "Se déconnecter partout",
+      "signOutNote": "Déconnecte tous les appareils et tous les navigateurs. Il faudra te reconnecter partout.",
+      "oauthNote": "Tu te connectes avec {provider}, il n'y a donc pas de mot de passe à changer.",
+      "strength": {
+        "weak": "Solidité · faible",
+        "fair": "Solidité · moyenne",
+        "good": "Solidité · bonne",
+        "strong": "Solidité · forte"
+      },
+      "error": {
+        "tooShort": "Ton mot de passe doit faire au moins 8 caractères.",
+        "mismatch": "Les deux mots de passe ne correspondent pas.",
+        "wrongPassword": "Ce n'est pas ton mot de passe actuel.",
+        "noPassword": "Ce compte n'a pas de mot de passe.",
+        "weakPassword": "Choisis un mot de passe plus solide.",
+        "rateLimited": "Trop de tentatives. Attends une minute et réessaie.",
+        "generic": "Ton mot de passe n'a pas été changé. Réessaie."
+      }
+    },
+    "danger": {
+      "eyebrow": "Zone sensible",
+      "title_before": "Les boutons",
+      "title_em": "sans retour",
+      "title_after": ".",
+      "sub": "Chacun te demande de confirmer. Ensuite, c'est irréversible.",
+      "reset_title": "Réinitialiser tes réglages",
+      "reset_desc": "Efface tout ce qui est sur cette page. Tes CV et tes candidatures restent.",
+      "reset_btn": "Réinitialiser les réglages",
+      "delete_data_title": "Supprimer tes données d'offres",
+      "delete_data_desc": "Efface ta liste d'offres et tes candidatures. Ton compte et tes CV restent.",
+      "delete_data_btn": "Supprimer les données d'offres",
+      "delete_data_confirm": "Cela efface ta liste d'offres, tes candidatures et ton historique. Ton compte et tes CV restent.",
+      "delete_data_confirm_label": "Confirmer",
+      "delete_data_confirm_hint": "Écris {keyword} pour confirmer.",
+      "delete_data_confirm_keyword": "SUPPRIMER",
+      "delete_data_confirm_cta": "Supprimer les données d'offres",
+      "delete_data_confirm_error": "Écris exactement {keyword} pour confirmer.",
+      "delete_data_cancel": "Annuler",
+      "delete_data_error": "Tes données n'ont pas été supprimées. Réessaie.",
+      "delete_data_success": "{count} enregistrements supprimés. Ton compte et tes CV sont intacts.",
+      "delete_data_done": "Terminé",
+      "delete_account_title": "Supprimer ton compte",
+      "delete_account_desc": "Supprime tout : CV, candidatures, transcriptions et enregistrements. C'est irréversible.",
+      "delete_account_btn": "Supprimer le compte",
+      "title": "Zone sensible",
+      "deleteAccount": "Supprimer le compte",
+      "deleteDescription": "Supprime ton compte, tes CV, tes enregistrements d'entretien et ton abonnement. C'est irréversible.",
+      "confirmEmailLabel": "Confirme ton e-mail",
+      "confirmEmailHint": "Écris {email} pour confirmer.",
+      "reasonLabel": "Raison",
+      "reasonPlaceholder": "Dis-nous pourquoi tu pars (obligatoire)",
+      "cancel": "Annuler",
+      "delete": "Supprimer mon compte",
+      "error": {
+        "mismatch": "Ce n'est pas l'e-mail de ce compte.",
+        "reasonRequired": "Dis-nous pourquoi tu pars.",
+        "generic": "Ton compte n'a pas été supprimé. Réessaie."
+      }
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Content de te revoir",
+      "subtitle": "Connecte-toi à RoboApply.",
+      "email": "E-mail",
+      "password": "Mot de passe",
+      "submit": "Se connecter",
+      "submitting": "Connexion…",
+      "no_account": "Pas encore de compte ?",
+      "signup_cta": "En créer un",
+      "error_generic": "Cet e-mail et ce mot de passe ne correspondent pas. Vérifie les deux et réessaie."
+    },
+    "signup": {
+      "title": "Crée ton compte",
+      "subtitle": "Ajoute ton CV et vois les offres que tu peux vraiment décrocher.",
+      "email": "E-mail",
+      "password": "Mot de passe",
+      "name": "Ton nom",
+      "submit": "S'inscrire",
+      "submitting": "Création de ton compte…",
+      "has_account": "Tu as déjà un compte ?",
+      "login_cta": "Se connecter",
+      "error_generic": "Ton compte n'a pas été créé. Réessaie, et si ça continue, utilise une autre adresse e-mail."
+    },
+    "brand": {
+      "tagline": "Découvre pourquoi tu n'obtiens pas d'entretiens",
+      "eyebrow": "Découvre pourquoi tu n'obtiens pas d'entretiens",
+      "headline": "Sois recruté <em>plus vite</em>.",
+      "lead": "RoboApply lit ton CV, te montre les offres que tu peux vraiment décrocher, nomme exactement ce qui manque et te prépare à l'entretien.",
+      "feature_resume": "Un CV que les logiciels savent lire",
+      "feature_interview": "Des entretiens d'entraînement qui te répondent",
+      "feature_track": "Toutes tes candidatures au même endroit"
+    }
+  },
+  "landing": {
+    "meta": {
+      "title": "Pourquoi tu n'obtiens pas d'entretiens | RoboApply",
+      "description": "RoboApply lit ton CV, lit plus de 1 000 offres ouvertes, te montre celles que tu peux vraiment décrocher et nomme exactement ce qui manque. Ensuite, une interlocutrice IA en direct te prépare. Gratuit pour commencer. 9 langues.",
+      "ogTitle": "RoboApply — découvre pourquoi tu n'obtiens pas d'entretiens",
+      "ogDescription": "Dépose ton CV. Vois quelles offres tu peux vraiment décrocher, ce que chacune demande et qui te manque, puis entraîne-toi à l'entretien avec une IA vocale. Commence gratuitement.",
+      "keywords": "pourquoi je n'obtiens pas d'entretiens, analyse des écarts du CV, vérifier son CV avec l'IA, offres qui correspondent à mon CV, entretien d'entraînement avec une IA, simulation d'entretien IA, mots-clés du CV, recherche d'emploi"
+    },
+    "header": {
+      "status_chip": "Accès anticipé",
+      "cta": "Commencer gratuitement",
+      "theme_to_light": "Passer en clair",
+      "theme_to_dark": "Passer en sombre",
+      "lang_label": "Changer de langue"
+    },
+    "hero": {
+      "eyebrow": "Lire ton CV · lire le marché · nommer l'écart",
+      "headline": "Découvre pourquoi tu n'obtiens pas d'entretiens.",
+      "subheadline": "Dépose ton CV. On lit plus de 1 000 offres ouvertes, on te montre celles que tu peux vraiment décrocher et on nomme exactement ce qui manque.",
+      "sub_emphasis": "C'est toi qui postules. On te dit d'abord ce que l'annonce demande.",
+      "cta_primary": "Commencer gratuitement",
+      "cta_secondary": "Vois comment une annonce est lue",
+      "reassure": "Offre gratuite · Sans carte · Rien n'est jamais envoyé à un employeur à ta place",
+      "log": {
+        "aria": "Un exemple de rapport d'écarts. Il lit un CV avec six ans d'expérience dans les paiements, lit 1 284 annonces ouvertes, en classe 41 comme correspondantes, puis nomme les écarts : Kubernetes apparaît dans douze de ces annonces et pas sur le CV ; neuf annonces demandent d'avoir encadré une équipe alors que le CV dit « participé à » ; six annonces exigent une habilitation de sécurité et sont donc retirées. Il montre la meilleure offre à 87 sur 100, signale trois lignes auxquelles il manque un chiffre, et liste les six questions que l'interlocuteur posera le plus probablement.",
+        "title": "roboapply — rapport d'écarts",
+        "live": "Exemple",
+        "lines": {
+          "l1": {
+            "time": "01",
+            "tag": "LIRE",
+            "msg": "ton CV · 6 ans, infrastructure de paiement"
+          },
+          "l2": {
+            "time": "02",
+            "tag": "LIRE",
+            "msg": "1 284 annonces ouvertes lues"
+          },
+          "l3": {
+            "time": "03",
+            "tag": "CLASSER",
+            "msg": "41 correspondent à ton expérience · 6 sont très adaptées"
+          },
+          "l4": {
+            "time": "04",
+            "tag": "MANQUE",
+            "msg": "Kubernetes : dans 12 d'entre elles, pas sur ton CV"
+          },
+          "l5": {
+            "time": "05",
+            "tag": "MANQUE",
+            "msg": "9 demandent d'avoir encadré une équipe ; ton CV dit « participé »"
+          },
+          "l6": {
+            "time": "06",
+            "tag": "RETIRÉ",
+            "msg": "6 exigent une habilitation que tu n'as pas · retirées"
+          },
+          "l7": {
+            "time": "07",
+            "tag": "TOP",
+            "msg": "meilleure adéquation 87 / 100 · pas ta probabilité d'être recruté"
+          },
+          "l8": {
+            "time": "08",
+            "tag": "CORRIGER",
+            "msg": "3 lignes sans aucun chiffre · chacune nommée"
+          },
+          "l9": {
+            "time": "09",
+            "tag": "PRÉPARER",
+            "msg": "6 questions que ce jury posera le plus probablement"
+          }
+        }
+      },
+      "strip_summary": "1 284 annonces lues · 41 correspondent · 6 très adaptées · chaque écart nommé",
+      "strip_scroll": "comment ça marche"
+    },
+    "problem": {
+      "eyebrow": "Pourquoi postuler plus ne marche plus",
+      "title": "Envoyer plus de candidatures n'est pas la réponse.",
+      "sub": "L'IA a inondé le recrutement, et les recruteurs le voient. Lors d'un test de Business Insider, un robot de candidature de masse a obtenu 6 % de réponses. Envoyer plus souvent le même CV contre le même mur ne change pas le résultat. Savoir ce que chaque annonce demande, et si ton CV le dit, oui.",
+      "stats": {
+        "s1": {
+          "value": "242",
+          "label": "personnes postulent aujourd'hui à une offre d'entreprise moyenne"
+        },
+        "s2": {
+          "value": "+400 %",
+          "label": "de candidatures en plus arrivent aux recruteurs depuis l'essor des outils de candidature de masse"
+        },
+        "s3": {
+          "value": "41 %",
+          "label": "des candidats pensent que moins d'un quart de leurs candidatures est un jour lu par une personne"
+        }
+      },
+      "source": "Sources : The Interview Guys (242) · Greenhouse via Fortune (+400 %) · enquêtes auprès de candidats, 2025–2026 (41 %)"
+    },
+    "how": {
+      "eyebrow": "Comment ça marche",
+      "title": "Trouver. Comprendre. Corriger. S'entraîner.",
+      "sub": "Ajoute ton CV une fois. Tout le reste tourne autour d'une question : qu'est-ce que cette annonce demande et que tu ne dis pas ?",
+      "steps": {
+        "s1": {
+          "time": "01",
+          "tag": "TROUVER",
+          "title": "Le marché est lu",
+          "body": "Des milliers d'annonces en ligne sont lues et comparées à ton CV. Les offres en dehors de ce que tu as demandé n'arrivent jamais dans ta liste."
+        },
+        "s2": {
+          "time": "02",
+          "tag": "COMPRENDRE",
+          "title": "L'écart est nommé",
+          "body": "Chaque offre commence par la phrase qui compte : ils demandent Kubernetes deux fois, et ton CV ne le mentionne jamais. En dessous se trouve la note sur 100, avec une ligne qui dit ce qu'est ce chiffre et ce qu'il n'est pas."
+        },
+        "s3": {
+          "time": "03",
+          "tag": "CORRIGER",
+          "title": "Tu corriges le CV",
+          "body": "Adapte une copie pour une offre, avec les changements côte à côte. Chaque chiffre du brouillon doit remonter à une ligne de ton CV, sinon le téléchargement est bloqué jusqu'à ce que tu le corriges."
+        },
+        "s4": {
+          "time": "04",
+          "tag": "S'ENTRAÎNER",
+          "title": "Puis tu t'entraînes à l'entretien",
+          "body": "Une interlocutrice vocale, briefée sur cette annonce et sur ton CV, pose ce que ce jury posera probablement. Tu reçois un compte rendu, une transcription et un enregistrement."
+        }
+      }
+    },
+    "loop": {
+      "eyebrow": "La boucle complète",
+      "title": "Un seul endroit, du CV à la proposition.",
+      "sub": "L'offre trouvée a révélé l'écart. L'écart a produit la correction du CV. La correction a produit la question d'entraînement. Chaque étape alimente la suivante.",
+      "cards": {
+        "match": {
+          "tag": "TROUVER",
+          "title": "Des offres classées selon ton adéquation",
+          "body": "Chaque offre est lue face à ton vrai CV et se place sur l'un des quatre échelons : très adapté, bien adapté, possible, peu probable. La raison est écrite en mots simples, pas en comptage de mots-clés."
+        },
+        "resume": {
+          "tag": "CORRIGER",
+          "title": "Un CV que tu peux vraiment corriger",
+          "body": "Importe depuis LinkedIn ou un PDF, réécris les lignes faibles, adapte une copie à une offre avec les changements côte à côte, et exporte un PDF que les logiciels savent lire."
+        },
+        "apply": {
+          "tag": "SUIVRE",
+          "title": "Chaque candidature, et ce qu'elle est devenue",
+          "body": "Tu postules sur le site de l'entreprise. L'offre passe toute seule en Envoyées, et le tableau montre exactement où chacune s'est arrêtée : premier échange, entretiens en cours, dernier tour, proposition ou refus."
+        },
+        "studio": {
+          "tag": "S'ENTRAÎNER",
+          "title": "Quelqu'un contre qui s'entraîner",
+          "body": "Une interlocutrice vocale avec 18 guides par métier et 28 formats — entretiens téléphoniques, conception de système, études de cas — qui te note comme le fera le vrai jury."
+        }
+      }
+    },
+    "studio": {
+      "eyebrow": "La seconde moitié",
+      "title_machine": "Décrocher l'entretien, c'est la moitié",
+      "title_human": "Voici l'autre moitié",
+      "sub": "63 % des candidats ont déjà eu affaire à une IA en entretien dans un vrai recrutement (Greenhouse, 2026). Entraîne-toi contre la nôtre autant de fois que tu veux, sans personne pour regarder.",
+      "features": {
+        "f1": {
+          "title": "Elle parle, et coupe la parole, comme une personne",
+          "body": "Voix en direct : elle relance, conteste et t'interrompt, en 9 langues avec des voix natives."
+        },
+        "f2": {
+          "title": "18 guides par métier, pas des listes de questions pièges",
+          "body": "Droit, finance, santé, matériel, IA et plus encore. Elle pose ce qu'on pose vraiment dans ce métier, et note avec le même regard."
+        },
+        "f3": {
+          "title": "Elle lit l'offre avant de te rencontrer",
+          "body": "Elle lit les annonces en cours pour ton poste exact, plus l'annonce que tu colles, puis construit les questions autour de ton CV."
+        },
+        "f4": {
+          "title": "Un compte rendu qui change ta prochaine réponse",
+          "body": "Cinq questions simples auxquelles on répond sur ta prestation, des corrections question par question avec une réponse plus solide, une transcription complète et un enregistrement."
+        },
+        "f5": {
+          "title": "Des notes pendant que tu réponds, si tu les veux",
+          "body": "De courtes notes quand tu t'égares, esquives la question ou noies ton propos. La caméra allumée ajoute la pression d'un vrai entretien vidéo."
+        }
+      },
+      "report": {
+        "header": "session-042 — compte rendu",
+        "overall_label": "Global",
+        "overall": "82",
+        "rows": {
+          "r1": {
+            "k": "A raconté l'histoire dans l'ordre",
+            "v": "86"
+          },
+          "r2": {
+            "k": "A donné de vrais chiffres",
+            "v": "78"
+          },
+          "r3": {
+            "k": "A répondu à toute la question",
+            "v": "84"
+          }
+        },
+        "quote": "« Commence par le chiffre. La baisse de coûts de 40 % est arrivée à la fin de ta réponse. »",
+        "quote_label": "une question, une correction"
+      },
+      "cta": "Faire un entretien d'entraînement gratuit"
+    },
+    "rules": {
+      "eyebrow": "Ce que ce produit ne fera pas",
+      "title": "Quatre choses que nous ne faisons pas.",
+      "sub": "Ce ne sont pas des réglages que tu peux activer. C'est la façon dont le produit est construit.",
+      "file": "limits.txt — lecture seule",
+      "badge": "Fixe",
+      "ok": "OK",
+      "items": {
+        "r1_head": "Rien n'est envoyé à ta place",
+        "r1_body": "aucune candidature, aucun message, aucune réponse ne part jamais en ton nom. Tu postules sur le site de l'entreprise ; l'offre passe toute seule en Envoyées.",
+        "r2_head": "Aucune expérience inventée",
+        "r2_body": "chaque chiffre d'un brouillon adapté doit remonter à une ligne de ton CV. Si ce n'est pas le cas, le téléchargement est bloqué jusqu'à ce que tu le corriges ou le retires.",
+        "r3_head": "La note n'est pas une prédiction",
+        "r3_body": "la note dit à quel point ton CV correspond à une annonce. Ce n'est pas ta probabilité d'être recruté, et le produit le dit sur chaque note.",
+        "r4_head": "Tu peux partir proprement",
+        "r4_body": "supprimer ton compte le supprime vraiment : CV, candidatures, transcriptions et enregistrements."
+      }
+    },
+    "pricing": {
+      "eyebrow": "Offres",
+      "title": "Commence gratuitement. Paie quand ça marche.",
+      "sub": "Chaque offre comprend tout le produit : les offres qui te correspondent, le rapport d'écarts, l'éditeur de CV et le tableau des candidatures. Les offres payantes achètent plus d'entretiens d'entraînement.",
+      "unit": "Entretiens / mois",
+      "credit_note": "1 crédit correspond à un entretien d'entraînement de 20 minutes, facturé à la seconde. Les crédits se rechargent chaque mois. Paiement par carte, ou par Alipay en Chine.",
+      "tiers": {
+        "free": {
+          "code": "TIER-0",
+          "name": "Gratuit",
+          "rate": "1",
+          "price": "0 $",
+          "per": "",
+          "note": "Tout le produit, plus un entretien d'entraînement noté par mois.",
+          "cta": "Commencer gratuitement",
+          "unit": "Entretien / mois"
+        },
+        "starter": {
+          "code": "TIER-1",
+          "name": "Starter",
+          "rate": "10",
+          "price": "15 $",
+          "per": "/mois",
+          "badge": "Le plus choisi",
+          "note": "De quoi s'entraîner avant chaque vrai entretien.",
+          "cta": "Commencer avec Starter",
+          "unit": "Entretiens / mois"
+        },
+        "growth": {
+          "code": "TIER-2",
+          "name": "Growth",
+          "rate": "28",
+          "price": "29 $",
+          "per": "/mois",
+          "note": "S'entraîner tous les jours jusqu'à signer.",
+          "cta": "Commencer avec Growth",
+          "unit": "Entretiens / mois"
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "Questions, réponses",
+      "title": "Ce que les candidats nous demandent.",
+      "items": {
+        "q1": {
+          "q": "Qu'est-ce que RoboApply ?",
+          "a": "RoboApply lit ton CV, lit des annonces en ligne et te dit deux choses sur chaque offre : à quel point ton CV lui correspond, et ce qu'elle demande exactement que ton CV ne dit pas. Ensuite, il t'aide à corriger le CV et à t'entraîner à l'entretien avec une IA vocale."
+        },
+        "q2": {
+          "q": "Est-ce que RoboApply postule aux offres à ma place ?",
+          "a": "Non. Rien n'est jamais envoyé à un employeur en ton nom. Tu ouvres le site de l'entreprise et tu postules là-bas ; l'offre passe toute seule en Envoyées sur ton tableau, et tu peux annuler ça d'un geste si tu changes d'avis."
+        },
+        "q3": {
+          "q": "Que veut dire la note sur 100 ?",
+          "a": "Elle dit à quel point ton CV correspond à cette annonce : l'intitulé et le niveau, les compétences demandées, l'expérience dans ce secteur, le lieu, le salaire et le visa, et l'évolution de ton parcours. Ce n'est pas ta probabilité d'être recruté, et elle ne prétend jamais l'être."
+        },
+        "q4": {
+          "q": "Puis-je vraiment m'entraîner à un entretien d'embauche avec une IA ?",
+          "a": "Oui, avec une interlocutrice vocale qui parle, relance et interrompt comme une personne. Choisis parmi 28 formats et 18 guides par métier (logiciel, droit, finance, santé et plus), passe l'entretien dans l'une des 9 langues, et reçois un compte rendu avec des corrections question par question, une transcription et un enregistrement."
+        },
+        "q5": {
+          "q": "En quoi est-ce différent des outils qui postulent en masse à ta place ?",
+          "a": "Ces outils envoient plus souvent le même CV. Lors d'un test de Business Insider, un robot de candidature de masse a obtenu 6 % de réponses. RoboApply fait l'inverse : moins d'offres, chacune lue correctement, avec les mots manquants nommés pour que tu les corriges avant de postuler. Et le même produit te prépare ensuite à l'entretien."
+        },
+        "q6": {
+          "q": "Combien ça coûte ?",
+          "a": "Le cœur du produit est gratuit pour toujours, plus un entretien d'entraînement par mois. Starter coûte 15 $ par mois avec 10 entretiens d'entraînement ; Growth coûte 29 $ par mois avec 28. Un crédit correspond à une session de 20 minutes facturée à la seconde et rechargée chaque mois. Paiement par carte, ou par Alipay en Chine."
+        },
+        "q7": {
+          "q": "Quelles langues RoboApply parle-t-il ?",
+          "a": "Neuf : anglais, espagnol, portugais, français, allemand, japonais, coréen, et chinois simplifié et traditionnel. Les entretiens d'entraînement fonctionnent aujourd'hui dans les neuf, compte rendu compris. L'interface est entièrement traduite en anglais, en japonais et dans les deux variantes du chinois, le reste arrive en ce moment."
+        },
+        "q8": {
+          "q": "Mes données sont-elles en sécurité, et puis-je les supprimer ?",
+          "a": "Ton CV, tes transcriptions et tes enregistrements t'appartiennent, et rien n'est partagé avec les employeurs. Supprimer ton compte le supprime vraiment, plutôt que de le masquer."
+        }
+      }
+    },
+    "final": {
+      "chip": "Accès anticipé · gratuit pour commencer",
+      "title_machine": "Découvre ce qui manque.",
+      "title_human": "Un seul envoi suffit",
+      "sub": "Ajoute ton CV, dis ce que tu cherches, et lis le premier rapport d'écarts. L'entraînement à l'entretien est ouvert dès maintenant, et ta première session est gratuite.",
+      "cta": "Commencer gratuitement"
+    },
+    "sticky": {
+      "cta": "Commencer gratuitement",
+      "note": "Sans carte"
+    },
+    "footer": {
+      "status": "Rien n'est envoyé à un employeur à ta place",
+      "note": "© RoboApply. Construit par des candidats, pour des candidats.",
+      "tagline": "Découvre pourquoi tu n'obtiens pas d'entretiens.",
+      "lang_title": "RoboApply dans ta langue"
+    }
+  },
+  "errors": {
+    "not_found_title": "Cette page n'existe pas",
+    "not_found_body": "L'adresse est peut-être fausse, ou la page a été déplacée. Va à tes offres et repars de là.",
+    "error_title": "Un élément de cette page n'a pas pu se charger",
+    "error_body": "Rien de ce que tu as enregistré n'est perdu. Réessaie, et si ça continue, recharge la page.",
+    "try_again": "Réessayer",
+    "go_home": "Aller aux offres"
+  },
+  "admin": {
+    "eyebrow": "Console d'exploitation",
+    "title": "Coûts et",
+    "titleAccent": "revenus",
+    "loading": "Chargement…",
+    "topCost": "coût principal",
+    "estimated": "estimé",
+    "estimatedNote": "Les coûts de reconnaissance vocale, de synthèse vocale et de sortie de données sont modélisés, pas mesurés.",
+    "export": {
+      "csv": "Exporter en CSV",
+      "refresh": "Actualiser"
+    },
+    "range": {
+      "today": "Aujourd'hui",
+      "7d": "7 j",
+      "30d": "30 j",
+      "custom": "Sur mesure",
+      "customTitle": "Période sur mesure",
+      "from": "Du",
+      "to": "Au",
+      "apply": "Appliquer"
+    },
+    "pager": {
+      "prev": "Précédent",
+      "next": "Suivant"
+    },
+    "tabs": {
+      "overview": "Vue d'ensemble",
+      "users": "Utilisateurs",
+      "sessions": "Sessions",
+      "rateCard": "Grille tarifaire"
+    },
+    "kpi": {
+      "activeUsers": "Utilisateurs actifs",
+      "sessions": "Sessions",
+      "cost": "Coût modèle et médias",
+      "revenue": "Revenus · MRR",
+      "margin": "Marge brute",
+      "costPerUser": "Coût / utilisateur actif",
+      "payingUsers": "{n} payants"
+    },
+    "chart": {
+      "costVsRevenue": "Coûts contre revenus",
+      "costByFeature": "Coût par fonction",
+      "costByModality": "Coût par type",
+      "legend": {
+        "cost": "Coût",
+        "revenue": "Revenus"
+      },
+      "netMargin": "Marge nette · {amount} ({pct})"
+    },
+    "modality": {
+      "llm": "Jetons du modèle",
+      "stt": "Voix vers texte",
+      "tts": "Texte vers voix",
+      "image": "Génération d'images",
+      "egress": "Sortie des enregistrements"
+    },
+    "users": {
+      "search": "Chercher par e-mail…",
+      "filter": {
+        "all": "Tous",
+        "free": "Gratuit",
+        "premium": "Premium",
+        "premiumPlus": "Premium+"
+      },
+      "col": {
+        "user": "Utilisateur",
+        "tier": "Palier",
+        "mrr": "MRR",
+        "cost": "Coût sur la période",
+        "margin": "Marge",
+        "sessions": "Sessions",
+        "lastActive": "Dernière activité"
+      },
+      "empty": "Aucun utilisateur ne correspond à {query}.",
+      "pagination": "{from}–{to} sur {total}"
+    },
+    "detail": {
+      "eyebrow": "Utilisateur · {email}",
+      "titleAccent": "situation",
+      "back": "Tous les utilisateurs",
+      "summary": "Coûte {cost} · Paie {revenue} → Marge {margin} ({pct})",
+      "lifetimeCost": "Coût depuis le début",
+      "periodCost": "Coût sur cette période",
+      "lifetimeRevenue": "Revenus depuis le début",
+      "dailyCost": "Coût journalier · 30 derniers j",
+      "avgDaily": "moy. {amount}/jour",
+      "costByFeature": "Coût par fonction",
+      "interviewSessions": "Sessions d'entretien",
+      "setPlan": "Définir l'offre",
+      "renews": "Renouvellement le {date}",
+      "col": {
+        "feature": "Fonction",
+        "calls": "Appels",
+        "cost": "Coût",
+        "pctSpend": "% des dépenses",
+        "split": "STT/TTS/modèle"
+      }
+    },
+    "setPlan": {
+      "title": "Définir l'offre",
+      "tier": "Palier",
+      "customPrice": "Prix sur mesure (facultatif)",
+      "reason": "Raison",
+      "reasonRequired": "Une raison est obligatoire.",
+      "cancel": "Annuler",
+      "confirm": "Confirmer",
+      "success": "Offre mise à jour."
+    },
+    "sessions": {
+      "empty": "Aucune session sur cette période.",
+      "col": {
+        "date": "Date",
+        "user": "Utilisateur",
+        "role": "Poste",
+        "duration": "Durée",
+        "blueprint": "Plan",
+        "liveLlm": "Modèle en direct",
+        "stt": "STT",
+        "tts": "TTS",
+        "eval": "Évaluation",
+        "coach": "Notes",
+        "total": "Total",
+        "status": "État"
+      },
+      "status": {
+        "completed": "Terminée",
+        "inProgress": "En cours",
+        "failed": "Échouée",
+        "billed": "Facturée"
+      }
+    },
+    "session": {
+      "eyebrow": "Coût de la session",
+      "title": "Détail du coût de la session",
+      "stage": {
+        "blueprint": "Plan",
+        "liveLlm": "Modèle en direct",
+        "stt": "STT",
+        "tts": "TTS",
+        "eval": "Évaluation",
+        "coach": "Notes"
+      },
+      "col": {
+        "stage": "Étape",
+        "model": "Modèle",
+        "usage": "Consommation",
+        "unitRate": "Tarif unitaire",
+        "cost": "Coût"
+      }
+    },
+    "rateCard": {
+      "title": "Grille tarifaire",
+      "llm": "Tarifs par modèle",
+      "speech": "Tarifs vocaux",
+      "media": "Tarifs médias",
+      "note": "Tarifs de référence utilisés pour modéliser le coût · à modifier dans admin-config",
+      "editSoon": "La modification des tarifs n'est pas encore disponible",
+      "col": {
+        "model": "Modèle",
+        "inputRate": "Entrée $/1 M",
+        "outputRate": "Sortie $/1 M",
+        "provider": "Fournisseur",
+        "perMin": "par min",
+        "perGb": "par Go",
+        "perImage": "par image"
+      }
+    },
+    "empty": {
+      "title": "Aucune activité sur cette",
+      "titleAccent": "période",
+      "reset": "Revenir à 30 j"
+    },
+    "notAuthorized": {
+      "title": "Accès",
+      "titleAccent": "refusé",
+      "sub": "Cette console est réservée aux administrateurs."
+    },
+    "error": {
+      "title": "Cette vue ne s'est pas chargée.",
+      "body": "Réessaie, et si ça continue, recharge la page.",
+      "retry": "Réessayer"
     }
   }
 }

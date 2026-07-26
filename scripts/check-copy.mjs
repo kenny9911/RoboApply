@@ -116,29 +116,24 @@ for (const [locale, bundle] of Object.entries(bundles)) {
 
 // ── 2. Locale parity ────────────────────────────────────────────────────────
 //
-// Two tiers, because that is the truth on the ground today: the app UI is
-// localized into four languages, while five more exist as landing pages only
-// (we market in Spanish and then hand the user an English app). Wave 5 of the
-// overhaul promotes them; until then the gate holds each tier to what it
-// actually claims, rather than reporting ~10,000 phantom failures nobody reads.
+// One tier. This used to be two: the app UI was localized into four languages
+// (en/ja/zh/zh-TW) while five more existed as landing pages only — we marketed
+// in Spanish and then handed the user an English app — and the gate held each
+// tier to what it actually claimed rather than reporting phantom failures.
+// Wave 5 was the promotion: all nine bundles now carry all eleven namespaces
+// at exact leaf parity, so a second tier would only describe a past state and
+// quietly stop guarding five locales' worth of app copy.
 //
-// To promote a locale: move it into FULL and run the i18n-locale-sync skill.
-
-const FULL = new Set(['en', 'ja', 'zh', 'zh-TW']);
-/** Namespaces a landing-only locale must nonetheless cover completely. */
-const LANDING_NS = ['landing', 'app'];
+// Every locale is now held to the full English key set. To add a tenth: run
+// the i18n-locale-sync skill, which produces a bundle this check accepts.
 
 for (const [locale, bundle] of Object.entries(bundles)) {
   if (locale === 'en') continue;
   const keys = leaves(bundle);
-  const required = FULL.has(locale)
-    ? [...enLeaves.keys()]
-    : [...enLeaves.keys()].filter((p) => LANDING_NS.some((ns) => p === ns || p.startsWith(`${ns}.`)));
 
-  for (const path of required) {
+  for (const path of enLeaves.keys()) {
     if (!keys.has(path)) {
-      fail(`${locale}.json`, path, FULL.has(locale) ? 'missing-key' : 'missing-landing-key',
-        'present in en.json, absent here');
+      fail(`${locale}.json`, path, 'missing-key', 'present in en.json, absent here');
     }
   }
   // An orphan is always a bug: it is a string nobody can ever reach, and it is

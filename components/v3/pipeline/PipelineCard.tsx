@@ -58,7 +58,7 @@ export function PipelineCard({
   onDragStart,
   onDragEnd,
 }: Props) {
-  const t = useTranslations('pipeline');
+  const t = useTranslations('applications');
   const { company, role, applyUrl } = resolveDisplay(entry);
   const when = useWhenLabel(entry);
 
@@ -143,7 +143,7 @@ export function PipelineCard({
 
 /** Human "when" sub-line: follow-up > applied > note snippet > saved. */
 function useWhenLabel(entry: RATrackerEntryView): string {
-  const t = useTranslations('pipeline');
+  const t = useTranslations('applications');
   if (entry.followUpAt) {
     return t('when.follow_up', { date: formatShort(entry.followUpAt) });
   }

@@ -28,7 +28,7 @@ interface Props {
 }
 
 export function SummaryEditor({ value, onChange, runRewrite }: Props) {
-  const t = useTranslations('resumeEditor');
+  const t = useTranslations('resume');
   const [busy, setBusy] = useState(false);
   const [options, setOptions] = useState<RewriteOption[] | null>(null);
   const [error, setError] = useState(false);

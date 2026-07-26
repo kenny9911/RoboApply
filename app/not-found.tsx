@@ -31,14 +31,15 @@ export default function NotFound() {
             margin: 0,
           }}
         >
-          404
+          That page does not exist
         </h1>
         <p style={{ marginTop: '12px', color: '#52525b' }}>
-          We couldn&apos;t find that page.
+          The address may be wrong, or the page may have moved. Go to your
+          jobs and start from there.
         </p>
         <div style={{ marginTop: '24px' }}>
           <Link
-            href="/"
+            href="/jobs"
             style={{
               display: 'inline-block',
               padding: '12px 24px',
@@ -50,7 +51,7 @@ export default function NotFound() {
                 '0 1px 2px rgba(29, 78, 216, 0.15), 0 4px 12px rgba(29, 78, 216, 0.18)',
             }}
           >
-            Go home
+            Go to Jobs
           </Link>
         </div>
       </div>

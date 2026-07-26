@@ -101,7 +101,7 @@ export function PreferenceTray({
   unconfirmed,
   onEditField,
 }: Props) {
-  const t = useTranslations('onboarding.chat');
+  const t = useTranslations('jobs.setup');
 
   // R7: only confirmed fields reach the tray.
   const visible = captured

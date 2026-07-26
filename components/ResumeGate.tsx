@@ -31,35 +31,35 @@ import { IconUpload, IconCheck } from './v3/primitives';
 // (DocumentParsingService) — RTF is NOT supported server-side.
 const ACCEPT_RESUME = '.pdf,.doc,.docx,.txt,.md,application/pdf';
 
-/** Map a backend upload error code → a resumeGate i18n key. Unknown/transient
+/** Map a backend upload error code → a resume.gate i18n key. Unknown/transient
  *  codes fall through to the generic message. The structured code lives on
  *  RoboApiError.payload.code (normalizeCode collapses unknown codes to
  *  'unknown', so we read the raw payload). */
 function errorKeyForCode(code: unknown): string {
   switch (code) {
     case 'file_too_large':
-      return 'error_too_large';
+      return 'gate.error_too_large';
     case 'unsupported_format':
-      return 'error_format';
+      return 'gate.error_format';
     case 'empty_text':
-      return 'error_empty';
+      return 'gate.error_empty';
     default:
-      return 'error';
+      return 'gate.error';
   }
 }
 
 /** Paths where the gate stands down so the user can reach an upload path. */
 function isExemptPath(pathname: string): boolean {
-  if (pathname === '/resumes' || pathname.startsWith('/resumes/')) return true;
-  // Account/billing + plans + admin console are reachable with zero resumes
-  // (admins may have none; a user must always be able to view/manage their
-  // plan and buy mock-interview credits before uploading anything).
-  if (pathname === '/account' || pathname.startsWith('/account/')) return true;
-  if (pathname === '/plans' || pathname.startsWith('/plans/')) return true;
+  if (pathname === '/resume' || pathname.startsWith('/resume/')) return true;
+  // Settings (which now holds billing and plan changes) and the admin console
+  // are reachable with zero résumés: admins may have none, and a user must
+  // always be able to see what they are paying for, and cancel it, before
+  // uploading anything.
+  if (pathname === '/settings' || pathname.startsWith('/settings/')) return true;
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return true;
-  // Fullscreen live mock-interview (mirrors the (auth) layout detection).
+  // Fullscreen live practice interview (mirrors the (auth) layout detection).
   if (
-    /^\/mock-interview\/[^/]+($|\/$)/.test(pathname) &&
+    /^\/practice\/[^/]+($|\/$)/.test(pathname) &&
     !pathname.endsWith('/report') &&
     !pathname.includes('/custom/')
   ) {
@@ -93,7 +93,7 @@ export function ResumeGate({ children }: { children: ReactNode }) {
 }
 
 function ResumeUploadPrompt() {
-  const t = useTranslations('resumeGate');
+  const t = useTranslations('resume');
   const uploadMut = useUploadResumeMutation();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [picked, setPicked] = useState<File | null>(null);
@@ -144,7 +144,7 @@ function ResumeUploadPrompt() {
         }}
         role="dialog"
         aria-modal="true"
-        aria-label={t('title')}
+        aria-label={t('gate.title')}
       >
         <div
           aria-hidden="true"
@@ -163,10 +163,10 @@ function ResumeUploadPrompt() {
         </div>
 
         <h1 style={{ fontSize: 22, fontWeight: 650, margin: '0 0 8px', letterSpacing: '-0.02em' }}>
-          {t('title')}
+          {t('gate.title')}
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 auto 22px', maxWidth: 360, lineHeight: 1.55 }}>
-          {busy ? t('uploading') : t('subtitle')}
+          {busy ? t('gate.uploading') : t('gate.subtitle')}
         </p>
 
         <input
@@ -185,10 +185,10 @@ function ResumeUploadPrompt() {
           style={{ width: '100%', justifyContent: 'center', opacity: busy ? 0.6 : 1 }}
         >
           {busy ? (
-            <>{t('uploading')}</>
+            <>{t('gate.uploading')}</>
           ) : (
             <>
-              <IconUpload size={15} strokeWidthValue={2.2} /> {t('cta')}
+              <IconUpload size={15} strokeWidthValue={2.2} /> {t('gate.cta')}
             </>
           )}
         </button>
@@ -216,11 +216,11 @@ function ResumeUploadPrompt() {
           </p>
         ) : null}
 
-        <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-2, #6b7280)' }}>{t('formats')}</div>
+        <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-2, #6b7280)' }}>{t('gate.formats')}</div>
 
         <div style={{ marginTop: 18, fontSize: 13 }}>
-          <a href="/resumes" style={{ color: 'var(--action)', textDecoration: 'none' }}>
-            {t('or_build')}
+          <a href="/resume" style={{ color: 'var(--action)', textDecoration: 'none' }}>
+            {t('gate.or_build')}
           </a>
         </div>
       </div>

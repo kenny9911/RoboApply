@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function LiveTranscript({ turns, interviewerName, typing }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to the latest turn.

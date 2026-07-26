@@ -38,7 +38,7 @@ export function LaunchBar({
   starting,
   onStart,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const { localizeRole } = useMockRoleLabels();
   const languageLabel =
     READY_LOCALES.find((l) => l.code === language)?.label ?? language;

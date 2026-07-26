@@ -55,7 +55,7 @@ export function RolePicker({
   jdText,
   onJdTextChange,
 }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   // Catalog category names + role titles stay English (the canonical id); only
   // the on-screen label is localized.
   const { localizeCategory, localizeRole } = useMockRoleLabels();

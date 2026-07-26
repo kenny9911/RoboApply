@@ -1,18 +1,20 @@
 'use client';
 
 // CommandPalette — the ⌘K overlay. A real palette (not the prototype's static
-// span): job/company search via raV2Api.search.run + quick-nav to the V3
-// routes. Opens on ⌘K / Ctrl-K from anywhere, or via the Topbar search button
-// (both go through CommandPaletteProvider's `open()`).
+// span): job/company search via raV2Api.search.run + quick-nav to the four
+// destinations. Opens on ⌘K / Ctrl-K from anywhere, or via either Topbar
+// search button (both go through CommandPaletteProvider's `open()`).
 //
 // Behaviour:
 //   • Type → debounced search.run({ q, sortBy:'match_desc' }); results show
 //     under a "Jobs" group. With an empty query we show quick-nav only.
 //   • ↑/↓ move the highlight across the flat result list; Enter selects;
-//     Esc closes. Selecting a job routes to /home (the Today match feed is the
-//     job surface in V3 — there's no standalone /jobs/[id] anymore); selecting
-//     a nav item routes to it.
-//   • Solid dark panel (literal #181923) per CLAUDE.md; dim backdrop.
+//     Esc closes. Selecting a nav item routes to it. Selecting a job routes to
+//     /jobs — the feed, not the posting: `app/(auth)/jobs/[id]` does not exist
+//     yet. Point this at `/jobs/${j.id}` in the same commit that adds it.
+//   • The panel is --surface with a --rule border, so it flips with the theme
+//     instead of being a dark island in a light app; the backdrop stays a
+//     near-black scrim in both themes, which is what a scrim is for.
 
 import {
   createContext,
@@ -30,11 +32,7 @@ import { useQuery } from '@tanstack/react-query';
 import { raV2Api } from '../../../lib/api/v2';
 import type { SearchRunResponse } from '../../../lib/api/v2';
 import { IconSearch, IconArrow } from '../primitives/Iconset';
-import {
-  isJobApplyRoute,
-  QUEUE_REVIEW_ENABLED,
-  useJobApplyingEnabled,
-} from '../../../lib/jobApplying';
+import { DESTINATIONS } from './Sidebar';
 
 // ── context ──────────────────────────────────────────────────────────
 interface PaletteCtx {
@@ -52,16 +50,13 @@ export function useCommandPalette(): PaletteCtx {
 
 const PANEL_BG = 'var(--surface)';
 
-// Quick-nav targets (mirrors the sidebar IA, including the launch-hidden /queue).
+// Quick-nav targets: the four destinations, read from the one array the
+// Sidebar and MobileNav also render, plus Settings — the palette is the only
+// keyboard route to a page that is otherwise two clicks into the avatar menu.
 const NAV_TARGETS: { href: string; labelKey: string }[] = [
-  { href: '/home', labelKey: 'today' },
-  { href: '/queue', labelKey: 'queue' },
-  { href: '/resumes', labelKey: 'resumes' },
-  { href: '/mock-interview', labelKey: 'interview' },
-  { href: '/tracker', labelKey: 'pipeline' },
-  { href: '/activity', labelKey: 'activity' },
-  { href: '/preferences', labelKey: 'preferences' },
-].filter((n) => QUEUE_REVIEW_ENABLED || n.href !== '/queue');
+  ...DESTINATIONS.map((d) => ({ href: d.href, labelKey: d.labelKey })),
+  { href: '/settings', labelKey: 'settings' },
+];
 
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -93,16 +88,12 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 // ── palette ──────────────────────────────────────────────────────────
 function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const router = useRouter();
-  const t = useTranslations('nav_v3');
-  const tp = useTranslations('palette');
+  const t = useTranslations('nav');
+  const tp = useTranslations('nav');
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // When job-applying is off, drop the auto-apply nav targets and the job
-  // search (job picks route to /home, which is hidden).
-  const showJobApply = useJobApplyingEnabled() === true;
 
   // Reset + focus when opened.
   useEffect(() => {
@@ -125,21 +116,17 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   const { data, isFetching } = useQuery<SearchRunResponse>({
     queryKey: ['v3', 'palette', 'search', debounced],
     queryFn: () => raV2Api.search.run({ q: debounced, limit: 6, sortBy: 'match_desc' }),
-    enabled: isOpen && debounced.length >= 2 && showJobApply,
+    enabled: isOpen && debounced.length >= 2,
     staleTime: 30_000,
   });
 
-  const jobs = debounced.length >= 2 && showJobApply ? data?.jobs ?? [] : [];
+  const jobs = debounced.length >= 2 ? data?.jobs ?? [] : [];
 
-  // Filter quick-nav by query (and drop the auto-apply targets when off).
+  // Filter quick-nav by query.
   const navMatches = useMemo(() => {
     const ql = debounced.toLowerCase();
-    return NAV_TARGETS.filter(
-      (n) =>
-        (showJobApply || !isJobApplyRoute(n.href)) &&
-        (!ql || t(n.labelKey).toLowerCase().includes(ql)),
-    );
-  }, [debounced, t, showJobApply]);
+    return NAV_TARGETS.filter((n) => !ql || t(n.labelKey).toLowerCase().includes(ql));
+  }, [debounced, t]);
 
   // Flat selectable list: nav items first, then jobs.
   const flat = useMemo(
@@ -147,7 +134,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       ...navMatches.map((n) => ({ type: 'nav' as const, href: n.href, label: t(n.labelKey) })),
       ...jobs.map((j) => ({
         type: 'job' as const,
-        href: '/home',
+        href: '/jobs',
         label: `${j.title} · ${j.companyName}`,
       })),
     ],
@@ -199,7 +186,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={tp('aria')}
+      aria-label={tp('palette.aria')}
       className="fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[12vh]"
       style={{ background: 'rgba(7, 8, 13, 0.62)', backdropFilter: 'blur(2px)' }}
       onClick={onClose}
@@ -219,7 +206,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={tp('placeholder')}
+            placeholder={tp('palette.placeholder')}
             className="flex-1 bg-transparent outline-none"
             style={{ color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 15 }}
           />
@@ -240,7 +227,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
         {/* Results */}
         <div className="max-h-[52vh] overflow-y-auto py-2">
           {navMatches.length > 0 ? (
-            <Group label={tp('group_nav')}>
+            <Group label={tp('palette.group_nav')}>
               {navMatches.map((n) => {
                 runningIndex += 1;
                 const i = runningIndex;
@@ -259,7 +246,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           ) : null}
 
           {jobs.length > 0 ? (
-            <Group label={tp('group_jobs')}>
+            <Group label={tp('palette.group_jobs')}>
               {jobs.map((j) => {
                 runningIndex += 1;
                 const i = runningIndex;
@@ -283,7 +270,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               className="px-4 py-8 text-center"
               style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}
             >
-              {isFetching ? tp('searching') : tp('empty')}
+              {isFetching ? tp('palette.searching') : tp('palette.empty')}
             </p>
           ) : null}
         </div>

@@ -45,8 +45,7 @@ function uploadErrorKey(err: unknown): string {
 }
 
 export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
-  const t = useTranslations('onboarding.resumeSelect');
-  const tChat = useTranslations('onboarding.chat');
+  const t = useTranslations('jobs.setup');
   const locale = useLocale();
 
   const resumeList = useResumeList();
@@ -106,7 +105,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
       const heading = text.match(/^#\s+(.+)$/m)?.[1]?.trim();
       const created = await createResume.mutateAsync({
         kind: 'base',
-        name: heading || t('paste_name'),
+        name: heading || t('resume_paste_name'),
         resumeMarkdown: text,
       });
       onReady(created.id);
@@ -141,7 +140,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
   const errorLine = localErrorKey
     ? t(localErrorKey)
     : errorCode === 'daily_limit'
-      ? tChat('error_daily_limit')
+      ? t('error_daily_limit')
       : errorCode
         ? t('error_parse_failed')
         : null;
@@ -149,10 +148,10 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
   return (
     <div style={{ width: '100%', maxWidth: 640, textAlign: 'left' }}>
       <h1 style={{ textAlign: 'center' }}>
-        {`${t('title')} ${t('title_accent')}${t('title_after')}`}
+        {t('resume_title')}
       </h1>
       <p className="lead" style={{ textAlign: 'center' }}>
-        {t('lead')}
+        {t('resume_lead')}
       </p>
 
       {errorLine ? (
@@ -164,7 +163,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
       {mode === 'list' ? (
         <>
           {/* ── Existing variants (newest first; primary preselected) ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} role="radiogroup" aria-label={t('title')}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} role="radiogroup" aria-label={t('resume_title')}>
             {variants.map((variant) => {
               const active = variant.id === selectedId;
               return (
@@ -210,12 +209,12 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                             color: 'var(--action)',
                           }}
                         >
-                          ★ {t('primary_badge')}
+                          ★ {t('resume_primary_badge')}
                         </span>
                       ) : null}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
-                      {t('last_edited', {
+                      {t('resume_last_edited', {
                         date: dateFormatter.format(new Date(variant.lastEditedAt)),
                       })}
                     </div>
@@ -234,7 +233,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
               onClick={() => setMode('upload')}
               disabled={pending}
             >
-              <IconUpload size={14} /> {t('upload_new')}
+              <IconUpload size={14} /> {t('resume_upload_new')}
             </button>
             <button
               type="button"
@@ -242,7 +241,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
               onClick={() => setMode('paste')}
               disabled={pending}
             >
-              {t('paste_text')}
+              {t('resume_paste_text')}
             </button>
           </div>
 
@@ -253,7 +252,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
               disabled={!selectedId || pending}
               onClick={() => selectedId && onReady(selectedId)}
             >
-              {t('continue')}
+              {t('resume_continue')}
             </button>
           </div>
         </>
@@ -275,8 +274,8 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                 type="url"
                 className="intent-input"
                 style={{ minHeight: 0, padding: '10px 12px', flex: 1 }}
-                placeholder={t('linkedin_placeholder')}
-                aria-label={t('linkedin_import')}
+                placeholder={t('resume_linkedin_placeholder')}
+                aria-label={t('resume_linkedin_import')}
                 value={linkedinUrl}
                 onChange={(e) => setLinkedinUrl(e.target.value)}
               />
@@ -286,22 +285,22 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                 disabled={!linkedinUrl.trim() || pending}
                 onClick={() => void handleLinkedInSubmit()}
               >
-                {t('linkedin_import')}
+                {t('resume_linkedin_import')}
               </button>
             </div>
           ) : null}
           {localErrorKey ? (
             <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
               <button type="button" className="btn ghost" onClick={() => setLocalErrorKey(null)}>
-                {t('retry')}
+                {t('resume_retry')}
               </button>
               {variants.length > 0 ? (
                 <button type="button" className="btn ghost" onClick={() => setMode('list')}>
-                  {t('pick_existing')}
+                  {t('resume_pick_existing')}
                 </button>
               ) : null}
               <button type="button" className="btn ghost" onClick={() => setMode('paste')}>
-                {t('paste_instead')}
+                {t('resume_paste_instead')}
               </button>
             </div>
           ) : null}
@@ -312,7 +311,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
               style={{ marginTop: 14 }}
               onClick={() => setMode('list')}
             >
-              {t('back')}
+              {t('resume_back')}
             </button>
           ) : null}
         </>
@@ -324,8 +323,8 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
             className="intent-input"
             style={{ minHeight: 220 }}
             value={pasteText}
-            placeholder={t('paste_placeholder')}
-            aria-label={t('paste_text')}
+            placeholder={t('resume_paste_placeholder')}
+            aria-label={t('resume_paste_text')}
             onChange={(e) => setPasteText(e.target.value)}
           />
           <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
@@ -335,10 +334,10 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
               disabled={!pasteText.trim() || pending}
               onClick={() => void handlePasteSubmit()}
             >
-              {t('paste_submit')}
+              {t('resume_paste_submit')}
             </button>
             <button type="button" className="btn ghost" onClick={() => setMode(variants.length > 0 ? 'list' : 'upload')}>
-              {t('back')}
+              {t('resume_back')}
             </button>
           </div>
         </>

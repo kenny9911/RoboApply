@@ -22,7 +22,7 @@ import { PipelineColumn } from './PipelineColumn';
 import { Btn } from '../primitives';
 
 export function PipelineBoard() {
-  const t = useTranslations('pipeline');
+  const t = useTranslations('applications');
   const { data, isLoading, isError, refetch, isFetching } = usePipelineBoard();
   const patchStatus = usePatchPipelineStatus();
   const [draggingId, setDraggingId] = useState<string | null>(null);

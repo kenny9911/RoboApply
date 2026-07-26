@@ -48,7 +48,7 @@ export function ActivityHeatmap({
   days: AccountUsageDay[];
   totalActions: number;
 }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const locale = useLocale();
   const max = days.reduce((m, d) => Math.max(m, d.count), 0);
   const dateFmt = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
@@ -139,7 +139,7 @@ function UsageMeterRow({
   feature: AccountUsageFeature;
   cap: number;
 }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const locale = useLocale();
   const numberFmt = new Intl.NumberFormat(locale);
   const safeCap = cap > 0 ? cap : Math.max(feature.count, 1);
@@ -202,7 +202,7 @@ export function UsageMeter({
   tier: AccountTier;
   tierLabelText: string;
 }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   const locale = useLocale();
   const numberFmt = new Intl.NumberFormat(locale);
 
@@ -259,7 +259,7 @@ export interface RecentActivityItem {
 }
 
 export function RecentActivityList({ items }: { items: RecentActivityItem[] }) {
-  const t = useTranslations('account');
+  const t = useTranslations('settings');
   return (
     <Panel style={{ marginTop: 16 }}>
       <div style={{ marginBottom: 12 }}>

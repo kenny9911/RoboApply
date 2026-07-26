@@ -39,10 +39,11 @@ export default function GlobalError({
               margin: 0,
             }}
           >
-            Something went wrong
+            Something on this page failed to load
           </h1>
           <p style={{ marginTop: '12px', color: '#52525b' }}>
-            We&apos;ve logged the issue. Please try again.
+            Nothing you saved was lost. Try again, and if it keeps failing,
+            reload the page.
           </p>
           <div style={{ marginTop: '24px' }}>
             <button

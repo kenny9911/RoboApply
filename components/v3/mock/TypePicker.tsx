@@ -27,7 +27,7 @@ interface Props {
 }
 
 export function TypePicker({ types, selectedId, onSelect, recommendedTypeIds, roleLabel }: Props) {
-  const t = useTranslations('mock');
+  const t = useTranslations('practice');
   const { localizeRole } = useMockRoleLabels();
   const [expanded, setExpanded] = useState(false);
   // Localized type label/sub with the catalog English as a safe fallback.
