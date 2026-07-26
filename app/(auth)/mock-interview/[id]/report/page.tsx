@@ -128,7 +128,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
       )}
 
       {s.status === 'completed' && enrichPending && (
-        <div style={{ border: '1px solid var(--accent-text)', background: 'var(--accent-soft)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ border: '1px solid var(--action)', background: 'var(--action-subtle)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span aria-busy="true">{t('report.analysisPending')}</span>
         </div>
       )}

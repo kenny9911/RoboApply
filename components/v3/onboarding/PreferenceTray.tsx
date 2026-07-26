@@ -120,11 +120,8 @@ export function PreferenceTray({
     <div style={{ textAlign: 'left' }}>
       <div
         style={{
-          fontFamily: 'var(--mono)',
-          fontSize: 10.5,
-          color: 'var(--muted)',
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           fontWeight: 600,
           marginBottom: 6,
         }}

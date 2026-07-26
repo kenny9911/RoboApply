@@ -117,7 +117,7 @@ export function JobDetailModal({
       }
     >
       {!job ? (
-        <div style={{ color: 'var(--muted)', padding: '24px 0' }}>
+        <div style={{ color: 'var(--text-muted)', padding: '24px 0' }}>
           {loading ? t('thinking') : t('noReasoning')}
         </div>
       ) : (
@@ -138,12 +138,10 @@ export function JobDetailModal({
             <section key={i}>
               <h3
                 style={{
-                  fontFamily: 'var(--sans)',
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  letterSpacing: '0.09em',
-                  textTransform: 'uppercase',
-                  color: 'var(--muted)',
+                  fontSize: 'var(--fs-label)',
+                  fontWeight: 500,
+                  letterSpacing: 'var(--ls-label)',
+                  color: 'var(--text-muted)',
                   margin: '0 0 8px',
                 }}
               >

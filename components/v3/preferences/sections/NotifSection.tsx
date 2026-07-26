@@ -36,12 +36,7 @@ export function NotifSection({
     <>
       <PrefHeader
         eyebrow={t('notif.eyebrow')}
-        title={
-          <>
-            {t('notif.title_before')} <em>{t('notif.title_em')}</em>
-            {t('notif.title_after')}
-          </>
-        }
+        title={`${t('notif.title_before')} ${t('notif.title_em')}${t('notif.title_after')}`}
         sub={t('notif.sub')}
       />
 

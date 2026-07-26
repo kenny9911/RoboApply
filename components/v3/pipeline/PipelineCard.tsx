@@ -67,7 +67,7 @@ export function PipelineCard({
       className="pipe-card"
       draggable
       aria-roledescription={t('card.drag_hint')}
-      style={dragging ? { opacity: 0.45, borderColor: 'var(--accent-text)' } : undefined}
+      style={dragging ? { opacity: 0.45, borderColor: 'var(--action)' } : undefined}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData(PIPELINE_DND_MIME, entry.id);
@@ -119,12 +119,9 @@ export function PipelineCard({
             onChange={(e) => onMove(entry.id, e.target.value as RATrackerStatus)}
             onPointerDown={(e) => e.stopPropagation()}
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '9.5px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              fontSize: 'var(--fs-label)',
               fontWeight: 600,
-              color: 'var(--muted)',
+              color: 'var(--text-muted)',
               background: 'var(--surface-2)',
               border: '1px solid var(--rule)',
               borderRadius: '6px',

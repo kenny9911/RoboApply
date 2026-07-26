@@ -6,12 +6,12 @@
 //   - TierBadge       free | premium | premium_plus pill
 //   - StatusBadge     completed | in_progress | failed | billed (Tag-tone pill)
 //   - EstimatedMarker the "~" + dotted-underline "modeled cost" affordance
-//   - MarginBadge     the profitability cell — sign-prefixed mono number +
+//   - MarginBadge     the profitability cell — sign-prefixed tabular number +
 //                     a thin vertical magnitude tick, green/red
 //   - MarginBar       the drill-down hero stacked revenue/cost/margin bar
 //
 // Margin uses a DEDICATED green/red pair (--ok / --danger) used nowhere else
-// in the app, so it reads instantly and never competes with the lime accent.
+// in the app, so it reads instantly and never competes with the action colour.
 // Color is never the ONLY signal — the +/− sign carries polarity too.
 
 import type { ReactNode } from 'react';
@@ -25,7 +25,7 @@ const TIER_STYLE: Record<
   { bg: string; color: string; border: string }
 > = {
   free: { bg: 'var(--surface-2)', color: 'var(--text-2)', border: 'var(--rule)' },
-  premium: { bg: 'var(--accent-soft)', color: 'var(--accent-text)', border: 'var(--accent-text)' },
+  premium: { bg: 'var(--action-subtle)', color: 'var(--action)', border: 'var(--action)' },
   premium_plus: { bg: 'var(--violet-soft)', color: 'var(--violet)', border: 'var(--violet)' },
 };
 
@@ -53,13 +53,10 @@ export function TierBadge({
   return (
     <span
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: size === 'sm' ? '9.5px' : '10px',
+        fontSize: 'var(--fs-label)',
         fontWeight: 600,
         padding: size === 'sm' ? '2px 8px' : '3px 9px',
         borderRadius: '99px',
-        letterSpacing: '0.02em',
-        textTransform: 'uppercase',
         background: s.bg,
         color: s.color,
         border: `1px solid ${s.border}`,
@@ -75,10 +72,10 @@ export function TierBadge({
 // ── StatusBadge ─────────────────────────────────────────────────────────
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
-  completed: { bg: 'var(--ok-soft)', color: 'var(--ok)' },
-  billed: { bg: 'var(--accent-soft)', color: 'var(--accent-text)' },
+  completed: { bg: 'var(--ok-subtle)', color: 'var(--ok)' },
+  billed: { bg: 'var(--action-subtle)', color: 'var(--action)' },
   in_progress: { bg: 'var(--violet-soft)', color: 'var(--violet)' },
-  failed: { bg: 'var(--danger-soft)', color: 'var(--danger)' },
+  failed: { bg: 'var(--danger-subtle)', color: 'var(--danger)' },
 };
 
 function statusI18nKey(status: string): string {
@@ -109,12 +106,10 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: '10px',
+        fontSize: 'var(--fs-label)',
         fontWeight: 600,
         padding: '3px 9px',
         borderRadius: '99px',
-        textTransform: 'uppercase',
         background: s.bg,
         color: s.color,
         whiteSpace: 'nowrap',
@@ -140,11 +135,10 @@ export function EstimatedMarker({
     <span
       title={note ?? t('estimatedNote')}
       style={{
-        color: 'var(--muted)',
-        borderBottom: '1px dotted var(--muted-2)',
+        color: 'var(--text-muted)',
+        borderBottom: '1px dotted var(--disabled)',
         cursor: 'help',
-        fontFamily: 'var(--mono)',
-        fontSize: '10px',
+        fontSize: 'var(--fs-label)',
       }}
     >
       {children ?? `~ ${t('estimated')}`}
@@ -174,7 +168,7 @@ export function MarginBadge({
 }) {
   if (profitable === null && amount === 0) {
     return (
-      <span style={{ fontFamily: 'var(--mono)', color: 'var(--muted)' }}>—</span>
+      <span style={{ color: 'var(--text-muted)' }}>—</span>
     );
   }
   const pos = amount >= 0;
@@ -183,7 +177,6 @@ export function MarginBadge({
   const base = revenue > 0 ? Math.abs(amount) / revenue : Math.min(1, Math.abs(amount) / 20);
   const tickH = Math.max(4, Math.min(22, Math.round(base * 22)));
   const color = pos ? 'var(--ok)' : 'var(--danger)';
-  const glow = pos ? 'var(--ok-soft)' : 'var(--danger-soft)';
   return (
     <span
       style={{
@@ -191,10 +184,9 @@ export function MarginBadge({
         alignItems: 'center',
         gap: 8,
         justifyContent: 'flex-end',
-        fontFamily: 'var(--mono)',
         fontVariantNumeric: 'tabular-nums',
         fontWeight: 600,
-        fontSize: 13,
+        fontSize: 'var(--fs-meta)',
         color,
       }}
     >
@@ -206,7 +198,6 @@ export function MarginBadge({
           borderRadius: 2,
           display: 'inline-block',
           background: color,
-          boxShadow: `0 0 6px ${glow}`,
         }}
       />
       {fmtSignedCurrency(amount, locale, currency)}
@@ -265,15 +256,15 @@ export function MarginBar({
         <span
           style={{
             width: `${costPct}%`,
-            background: 'var(--accent-soft)',
-            borderRight: '1px solid var(--accent)',
+            background: 'var(--action-subtle)',
+            borderRight: '1px solid var(--action)',
           }}
         />
         {marginPct > 0 ? (
           <span
             style={{
               width: `${marginPct}%`,
-              background: 'linear-gradient(90deg, var(--ok-soft), var(--ok))',
+              background: 'linear-gradient(90deg, var(--ok-subtle), var(--ok))',
             }}
           />
         ) : null}
@@ -291,13 +282,12 @@ export function MarginBar({
           display: 'flex',
           gap: 18,
           marginTop: 10,
-          fontFamily: 'var(--mono)',
-          fontSize: '10.5px',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           flexWrap: 'wrap',
         }}
       >
-        <LegendDot color="var(--accent-soft)" label={`${t('detail.periodCost')} ${fmtCurrency(cost, locale, currency)}`} />
+        <LegendDot color="var(--action-subtle)" label={`${t('detail.periodCost')} ${fmtCurrency(cost, locale, currency)}`} />
         <LegendDot
           color={underwater ? 'var(--danger)' : 'var(--ok)'}
           label={`${t('users.col.margin')} ${fmtSignedCurrency(margin, locale, currency)}`}

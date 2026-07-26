@@ -34,8 +34,8 @@ const STAGE_COLORS: Record<string, string> = {
   stt: 'var(--ok)',
   tts: 'var(--warn)',
   evaluation: 'var(--violet)',
-  coach: 'var(--accent-text)',
-  recording: 'var(--muted)',
+  coach: 'var(--action)',
+  recording: 'var(--text-muted)',
 };
 const STAGE_ESTIMATED = new Set(['stt', 'tts', 'recording']);
 const STAGE_ORDER = ['blueprint', 'liveLlm', 'stt', 'tts', 'evaluation', 'coach', 'recording'];
@@ -59,8 +59,7 @@ export default function AdminSessionDetailPage({
     return (
       <EmptyState
         icon={<span style={{ fontSize: 34 }}>🔒</span>}
-        title={t('notAuthorized.title')}
-        accentWord={t('notAuthorized.titleAccent')}
+        title={`${t('notAuthorized.title')} ${t('notAuthorized.titleAccent')}`}
         sub={t('notAuthorized.sub')}
       />
     );
@@ -85,9 +84,9 @@ export default function AdminSessionDetailPage({
         <div
           role="alert"
           className="flex flex-col items-center gap-4 text-center"
-          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-xl)', padding: '52px 32px' }}
+          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
         >
-          <p style={{ fontFamily: 'var(--sans)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('error.title')}</p>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('error.title')}</p>
           <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
           <Btn variant="primary" onClick={() => void q.refetch()}>
             {t('error.retry')}
@@ -117,7 +116,7 @@ export default function AdminSessionDetailPage({
     return {
       label: stageLabel(k, t),
       value: v,
-      color: STAGE_COLORS[k] ?? 'var(--accent-text)',
+      color: STAGE_COLORS[k] ?? 'var(--action)',
       estimated: STAGE_ESTIMATED.has(k),
       valueText: fmtCurrency(v, locale),
       pctText: fmtPercent(total > 0 ? (v / total) * 100 : 0, locale),
@@ -146,7 +145,7 @@ export default function AdminSessionDetailPage({
           <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.02em' }}>
             {s.role ?? '—'}
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 6 }}>
             {s.user.email ?? s.userId.slice(0, 8)} · {fmtLongDate(s.createdAt, locale)} · {durLabel(s.durationSec)}
           </div>
         </div>
@@ -157,7 +156,7 @@ export default function AdminSessionDetailPage({
         {stageItems.length > 0 ? (
           <CostBreakdownBar items={stageItems} variant="stacked" />
         ) : (
-          <p style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>—</p>
+          <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>—</p>
         )}
       </ChartCard>
 
@@ -179,16 +178,13 @@ export default function AdminSessionDetailPage({
                   key={h}
                   scope="col"
                   style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--muted)',
+                    fontSize: 'var(--fs-label)',
+                    color: 'var(--text-muted)',
                     fontWeight: 600,
                     textAlign: i === 0 ? 'left' : 'right',
                     padding: '13px 16px',
                     borderBottom: '1px solid var(--rule)',
-                    background: 'var(--bg-2)',
+                    background: 'var(--surface)',
                   }}
                 >
                   {h}
@@ -205,10 +201,10 @@ export default function AdminSessionDetailPage({
                     {it.label}
                   </span>
                 </td>
-                <td style={{ ...LEDGER_TD, textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--muted)' }}>
+                <td style={{ ...LEDGER_TD, textAlign: 'right', color: 'var(--text-muted)' }}>
                   {it.estimated ? `~ ${it.pctText}` : it.pctText}
                 </td>
-                <td style={{ ...LEDGER_TD, textAlign: 'right', fontFamily: 'var(--mono)', fontVariantNumeric: 'tabular-nums' }}>
+                <td style={{ ...LEDGER_TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   {it.valueText}
                 </td>
               </tr>
@@ -221,7 +217,6 @@ export default function AdminSessionDetailPage({
                   ...LEDGER_TD,
                   borderTop: '1px solid var(--rule)',
                   textAlign: 'right',
-                  fontFamily: 'var(--mono)',
                   fontVariantNumeric: 'tabular-nums',
                   fontWeight: 600,
                 }}
@@ -234,7 +229,7 @@ export default function AdminSessionDetailPage({
       </div>
 
       {s.totalTokens ? (
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', marginTop: 12 }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 12 }}>
           {fmtCompact(s.totalTokens, locale)} tok · {s.language ?? '—'} · {s.mode ?? '—'}
         </div>
       ) : null}
@@ -244,7 +239,7 @@ export default function AdminSessionDetailPage({
 
 const LEDGER_TD = {
   padding: '13px 16px',
-  borderBottom: '1px solid var(--rule-soft)',
+  borderBottom: '1px solid var(--rule)',
   fontSize: 13,
   color: 'var(--text)',
 } as const;

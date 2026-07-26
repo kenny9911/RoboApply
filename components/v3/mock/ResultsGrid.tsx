@@ -19,7 +19,7 @@ export function ResultsGrid({ strengths, gaps }: Props) {
       <div className="iv-results-card good">
         <div className="iv-results-card-head">
           <span className="iv-results-tag good">{t('report.strengths')}</span>
-          <span style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
             {t('report.keepThese')}
           </span>
         </div>
@@ -35,7 +35,7 @@ export function ResultsGrid({ strengths, gaps }: Props) {
       <div className="iv-results-card gap">
         <div className="iv-results-card-head">
           <span className="iv-results-tag warn">{t('report.sharpen')}</span>
-          <span style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}>
             {t('report.topN', { count: gaps.length })}
           </span>
         </div>

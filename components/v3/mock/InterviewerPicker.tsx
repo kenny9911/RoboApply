@@ -46,7 +46,6 @@ function PersonaCard({
         style={{
           background: `radial-gradient(circle at 30% 30%, ${persona.palette[0]}, transparent 60%),
                        radial-gradient(circle at 70% 70%, ${persona.palette[1]}, transparent 60%)`,
-          boxShadow: `0 0 20px ${persona.palette[0]}55`,
         }}
       />
       <div className="iv-persona-body">
@@ -82,9 +81,8 @@ function PersonaCard({
             <span
               style={{
                 marginLeft: 6,
-                fontFamily: 'var(--mono)',
-                fontSize: 10,
-                letterSpacing: '0.12em',
+                fontSize: 'var(--fs-label)',
+                letterSpacing: 'var(--ls-label)',
               }}
             >
               {t(`setup.difficulty.${DIFFICULTY_KEY[persona.difficulty] || 'medium'}`)}

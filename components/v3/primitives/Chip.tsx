@@ -25,9 +25,9 @@ export function Chip({ children, onClick, selected = false, className }: Props) 
       style={
         selected
           ? {
-              borderColor: 'var(--accent-text)',
-              color: 'var(--accent-text)',
-              background: 'var(--accent-soft)',
+              borderColor: 'var(--action)',
+              color: 'var(--action)',
+              background: 'var(--action-subtle)',
             }
           : undefined
       }

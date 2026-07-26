@@ -4,7 +4,7 @@
 //
 // Header / navigation controls for the admin console:
 //   - DateRangePicker  segmented Today / 7d / 30d / Custom (+ a custom Modal)
-//   - TabRail          horizontal segmented tab control (mono labels)
+//   - TabRail          horizontal segmented tab control
 //   - KpiStrip         the 6-up StatStrip extension for the overview KPI row
 //
 // The DateRangePicker resolves a preset to an explicit {from, to} ISO range so
@@ -91,17 +91,14 @@ export function DateRangePicker({
               onClick={() => pick(p.id)}
               aria-pressed={on}
               style={{
-                fontFamily: 'var(--mono)',
-                fontSize: '11.5px',
+                fontSize: 'var(--fs-label)',
                 fontWeight: 600,
-                letterSpacing: '0.02em',
-                textTransform: 'uppercase',
                 border: 0,
                 padding: '6px 12px',
                 borderRadius: 7,
                 cursor: 'pointer',
-                background: on ? 'var(--accent)' : 'transparent',
-                color: on ? 'var(--accent-ink)' : 'var(--muted)',
+                background: on ? 'var(--action)' : 'transparent',
+                color: on ? 'var(--action-ink)' : 'var(--text-muted)',
               }}
             >
               {p.label}
@@ -165,21 +162,18 @@ const FIELD_LABEL = {
   display: 'flex',
   flexDirection: 'column' as const,
   gap: 6,
-  fontFamily: 'var(--mono)',
-  fontSize: '11px',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.1em',
-  color: 'var(--muted)',
+  fontSize: 'var(--fs-label)' as const,
+  color: 'var(--text-muted)',
   fontWeight: 600,
 };
 
 const DATE_INPUT = {
-  background: 'var(--bg-2)',
+  background: 'var(--surface)',
   border: '1px solid var(--rule)',
   borderRadius: 9,
   padding: '9px 12px',
   color: 'var(--text)',
-  fontFamily: 'var(--sans)',
+  fontFamily: 'var(--font-ui)',
   fontSize: '14px',
   colorScheme: 'dark' as const,
 };
@@ -216,19 +210,16 @@ export function TabRail<T extends string>({
             aria-selected={on}
             onClick={() => onChange(tab.id)}
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '12px',
+              fontSize: 'var(--fs-label)',
               fontWeight: 600,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: on ? 'var(--text)' : 'var(--muted)',
+              color: on ? 'var(--text)' : 'var(--text-muted)',
               background: 'transparent',
               border: 0,
               padding: '12px 16px',
               cursor: 'pointer',
               position: 'relative',
               whiteSpace: 'nowrap',
-              boxShadow: on ? 'inset 0 -2px 0 var(--accent)' : 'none',
+              boxShadow: on ? 'inset 0 -2px 0 var(--action)' : 'none',
             }}
           >
             {tab.label}
@@ -241,7 +232,7 @@ export function TabRail<T extends string>({
 
 // ── KpiStrip ──────────────────────────────────────────────────────────────
 //
-// A 6-up grid extension of StatStrip. Each cell renders a mono caption, big
+// A 6-up grid extension of StatStrip. Each cell renders a caption, big
 // value, and an optional delta. `tone` colors the value + a top-rule (only
 // used for the Gross Margin cell, per the profitability rule).
 
@@ -278,8 +269,8 @@ export function KpiStrip({ kpis, loading }: { kpis: KpiCell[]; loading?: boolean
         const heroStyle = k.hero
           ? {
               background: 'var(--grad-brand)',
-              borderColor: 'var(--accent-text)',
-              boxShadow: '0 6px 26px -10px var(--accent-glow)',
+              borderColor: 'var(--action)',
+              boxShadow: 'var(--e2)',
             }
           : {};
         const topRule = toneColor ? { borderTop: `2px solid ${toneColor}` } : {};
@@ -287,11 +278,8 @@ export function KpiStrip({ kpis, loading }: { kpis: KpiCell[]; loading?: boolean
           <div key={k.label + i} style={{ ...STAT_BASE, ...heroStyle, ...topRule }}>
             <div
               style={{
-                fontFamily: 'var(--mono)',
-                fontSize: '9.5px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.12em',
-                color: k.hero ? 'var(--accent-ink)' : 'var(--muted)',
+                fontSize: 'var(--fs-label)',
+                color: k.hero ? 'var(--action-ink)' : 'var(--text-muted)',
                 marginBottom: 9,
                 fontWeight: 600,
               }}
@@ -305,7 +293,7 @@ export function KpiStrip({ kpis, loading }: { kpis: KpiCell[]; loading?: boolean
                 lineHeight: 1,
                 letterSpacing: '-0.03em',
                 fontWeight: 600,
-                color: k.hero ? 'var(--accent-ink)' : toneColor ?? 'var(--text)',
+                color: k.hero ? 'var(--action-ink)' : toneColor ?? 'var(--text)',
                 display: 'flex',
                 alignItems: 'baseline',
                 gap: 6,
@@ -316,14 +304,13 @@ export function KpiStrip({ kpis, loading }: { kpis: KpiCell[]; loading?: boolean
             {k.delta ? (
               <span
                 style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: '10.5px',
+                  fontSize: 'var(--fs-label)',
                   fontWeight: 500,
                   letterSpacing: 0,
                   marginTop: 8,
                   display: 'block',
                   color: k.hero
-                    ? 'var(--accent-ink)'
+                    ? 'var(--action-ink)'
                     : k.deltaDown
                       ? 'var(--danger)'
                       : 'var(--ok)',
@@ -358,5 +345,5 @@ const STAT_BASE = {
 
 /** A de-emphasized unit suffix span (the "$" / "%" one step down). */
 export function Unit({ children }: { children: ReactNode }) {
-  return <span style={{ fontSize: 15, color: 'var(--muted)', fontWeight: 500 }}>{children}</span>;
+  return <span style={{ fontSize: 15, color: 'var(--text-muted)', fontWeight: 500 }}>{children}</span>;
 }

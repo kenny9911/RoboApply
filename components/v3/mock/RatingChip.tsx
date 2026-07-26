@@ -15,9 +15,9 @@ interface Props {
 }
 
 const TONE: Record<IEQuestionRating, { color: string; bg: string; border: string }> = {
-  strong: { color: 'var(--ok)', bg: 'var(--ok-soft)', border: 'var(--ok)' },
-  adequate: { color: 'var(--accent-text)', bg: 'var(--accent-soft)', border: 'var(--accent-text)' },
-  weak: { color: 'var(--warn)', bg: 'var(--warn-soft)', border: 'var(--warn)' },
+  strong: { color: 'var(--ok)', bg: 'var(--ok-subtle)', border: 'var(--ok)' },
+  adequate: { color: 'var(--action)', bg: 'var(--action-subtle)', border: 'var(--action)' },
+  weak: { color: 'var(--warn)', bg: 'var(--warn-subtle)', border: 'var(--warn)' },
   missed: { color: 'var(--text-2)', bg: 'var(--surface-2)', border: 'var(--rule)' },
 };
 
@@ -31,8 +31,7 @@ export function RatingChip({ rating, score, hideScore = false }: Props) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
-        fontFamily: 'var(--mono)',
-        fontSize: 11,
+        fontSize: 'var(--fs-label)',
         fontWeight: 600,
         padding: '3px 9px',
         borderRadius: 12,

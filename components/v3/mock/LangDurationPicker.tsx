@@ -29,9 +29,9 @@ function pill(active: boolean): React.CSSProperties {
     fontSize: 13,
     fontWeight: 500,
     cursor: 'pointer',
-    border: `1px solid ${active ? 'var(--accent-text)' : 'var(--rule)'}`,
-    background: active ? 'var(--accent-soft)' : 'var(--surface)',
-    color: active ? 'var(--accent-text)' : 'var(--text)',
+    border: `1px solid ${active ? 'var(--action)' : 'var(--rule)'}`,
+    background: active ? 'var(--action-subtle)' : 'var(--surface)',
+    color: active ? 'var(--action)' : 'var(--text)',
     transition: 'border-color .12s, background .12s, color .12s',
   };
 }
@@ -62,7 +62,7 @@ export function LangDurationPicker({
       {/* Language */}
       <div style={{ marginBottom: 18 }}>
         <div
-          style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 8, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '.04em' }}
+          style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', marginBottom: 8, letterSpacing: 'var(--ls-label)' }}
         >
           {t('setup.langDuration.languageLabel')}
         </div>
@@ -88,7 +88,7 @@ export function LangDurationPicker({
       {/* Duration */}
       <div>
         <div
-          style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 8, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '.04em' }}
+          style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', marginBottom: 8, letterSpacing: 'var(--ls-label)' }}
         >
           {t('setup.langDuration.durationLabel')}
         </div>

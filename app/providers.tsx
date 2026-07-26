@@ -20,7 +20,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { useMemo, type ReactNode } from 'react';
 
 import { AuthProvider } from '../lib/auth/AuthProvider';
-import { DcThemeProvider } from '../lib/dcTheme';
+import { ThemeProvider } from '../lib/theme';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -65,7 +65,7 @@ export function Providers({ children, locale, messages }: ProvidersProps) {
         timeZone="UTC"
       >
         <AuthProvider>
-          <DcThemeProvider>{children}</DcThemeProvider>
+          <ThemeProvider>{children}</ThemeProvider>
         </AuthProvider>
       </NextIntlClientProvider>
     </QueryClientProvider>

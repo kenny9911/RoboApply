@@ -27,7 +27,7 @@ export function QuestionBreakdownSection({ items, enrichmentPending }: Props) {
           {t('report.questionBreakdown.title')}
         </h2>
         {!showPlaceholder ? (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-2)' }}>
+          <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
             {t('report.questionBreakdown.count', { count: items!.length })}
           </span>
         ) : null}

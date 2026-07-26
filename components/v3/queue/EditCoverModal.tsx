@@ -91,11 +91,8 @@ export function EditCoverModal({
       <label
         htmlFor="queue-edit-cover"
         style={{
-          fontFamily: 'var(--mono)',
-          fontSize: '10px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.14em',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           fontWeight: 600,
           display: 'block',
           marginBottom: 8,
@@ -117,7 +114,7 @@ export function EditCoverModal({
           border: `1px solid ${tooLong ? 'var(--warn)' : 'var(--rule)'}`,
           borderRadius: 'var(--r-sm)',
           color: 'var(--text)',
-          fontFamily: 'var(--sans)',
+          fontFamily: 'var(--font-ui)',
           fontSize: '14px',
           lineHeight: 1.65,
           padding: '14px 16px',
@@ -133,7 +130,7 @@ export function EditCoverModal({
           fontSize: '12px',
         }}
       >
-        <span style={{ color: error ? 'var(--warn)' : 'var(--muted)' }}>
+        <span style={{ color: error ? 'var(--warn)' : 'var(--text-muted)' }}>
           {error
             ? t('editCover.error')
             : tooLong
@@ -142,8 +139,7 @@ export function EditCoverModal({
         </span>
         <span
           style={{
-            fontFamily: 'var(--mono)',
-            color: tooLong ? 'var(--warn)' : 'var(--muted)',
+            color: tooLong ? 'var(--warn)' : 'var(--text-muted)',
           }}
         >
           {draft.length} / {MAX_LEN}

@@ -4,16 +4,26 @@
 // company · location · salary · posted line, derived tags, ScoreDonut + status.
 // Expanded (click the row): AI reasoning (rationale, rendered via the Markdown
 // primitive — sanitized), a 3-up facet strip, and the action row
-// (Apply now / Schedule auto-apply / Pass / View JD), or an applied/passed
-// banner.
+// (Apply on company site / Not interested / View detail), or an
+// applied / not-interested banner.
 //
 // Score: the collapsed donut shows the deterministic score from `useJobScore`
 // (lazily computed + cached). The expanded reasoning comes from
 // `useJobDetail(id,{resumeVariantId})` which resolves instantly once the score
 // is cached for that (job, variant) pair.
 //
+// THE APPLY FLOW (rulings R1 + C11). We do not submit anything to an employer
+// and never claim to. The primary action opens the employer's own posting in a
+// new tab and, in the same click, records the application locally — because
+// C11 says never instruct where you can act, and the alternative ("remember to
+// come back and mark this applied") is an instruction the user will not follow.
+// We cannot observe what happens on the employer's site, so the record is a
+// claim the user can correct: the applied state carries an inline
+// "I didn't apply" that patches the tracker row back to `bookmarked`.
+//
 // Every user-facing string uses `t()` under the `today` namespace.
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -22,13 +32,13 @@ import {
   Markdown,
   ScoreDonut,
   Tag,
-  IconBolt,
-  IconClock,
+  IconArrow,
   IconCheck,
   IconFile,
 } from '../primitives';
 import { useJobDetail } from '../../../hooks/useJobDetail';
 import { useJobScore } from '../../../hooks/useTodayMatches';
+import { raV2Api } from '../../../lib/api/v2';
 import type { RAJobListItem } from '../../../lib/api/v2';
 import { JobDetailModal } from './JobDetailModal';
 import {
@@ -49,14 +59,14 @@ interface Props {
   resumeVariantId: string | null;
   expanded: boolean;
   onToggle: () => void;
-  /** Local-dismiss "pass". */
+  /** Local-dismiss "not interested". */
   onPass: () => void;
-  /** Undo a local pass. */
+  /** Undo a local dismiss. */
   onUndoPass: () => void;
   /** Apply mutation state from the parent (one shared mutation). */
   applying: boolean;
   onApply: (jobId: string, resumeVariantId: string | null) => void;
-  /** Client-local "passed" flag (the feed owns dismissals). */
+  /** Client-local "not interested" flag (the feed owns dismissals). */
   passed: boolean;
   /** Set when this card's apply just succeeded (optimistic). */
   appliedNow: boolean;
@@ -76,10 +86,16 @@ export function MatchCard({
   appliedNow,
 }: Props) {
   const t = useTranslations('today');
+  const qc = useQueryClient();
 
   // Full-detail modal (the real posting: description / responsibilities /
   // qualifications / benefits + a link to the original listing).
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // Set once the user says "I didn't apply". The parent's `appliedNow` is a
+  // one-way optimistic flag it never clears, so this local flag is what lets
+  // the card fall back to its pre-apply state without a round trip.
+  const [unapplied, setUnapplied] = useState(false);
 
   // Deterministic score for the donut (lazy, cached).
   const scoreQuery = useJobScore(job.id, resumeVariantId);
@@ -93,13 +109,47 @@ export function MatchCard({
   );
   const matchView = detail.data?.matchScore ?? scoreQuery.data?.matchScore ?? null;
 
+  // The employer's own posting. Only the full job record carries it
+  // (`RAJobListItem` is a compact projection), so it lands with the expanded
+  // detail — which is also the only place the action row renders.
+  const applyUrl = detail.data?.job.applyUrl ?? null;
+  const trackerEntryId = detail.data?.trackerEntry?.id ?? null;
+
   // Status: applied (from tracker or optimistic) | passed (local) | queued.
   const trackerStatus = detail.data?.trackerEntry?.status ?? null;
-  const status: 'applied' | 'passed' | 'queued' = appliedNow
-    ? 'applied'
-    : passed
-      ? 'passed'
-      : cardStatusFromTracker(trackerStatus);
+  const status: 'applied' | 'passed' | 'queued' = unapplied
+    ? 'queued'
+    : appliedNow
+      ? 'applied'
+      : passed
+        ? 'passed'
+        : cardStatusFromTracker(trackerStatus);
+
+  // "I didn't apply" — walk the tracker row back to `bookmarked`. The job stays
+  // saved (the user did show intent by opening it); only the applied claim is
+  // withdrawn. Invalidations mirror `useApplyJob` so every surface reading this
+  // row agrees.
+  const undoApply = useMutation<void, Error, string>({
+    mutationFn: async (entryId) => {
+      await raV2Api.tracker.patch(entryId, { status: 'bookmarked' });
+    },
+    onSuccess: () => {
+      setUnapplied(true);
+      void qc.invalidateQueries({ queryKey: ['v2', 'tracker'] });
+      void qc.invalidateQueries({ queryKey: ['v2', 'search'] });
+      void qc.invalidateQueries({ queryKey: ['v2', 'job', job.id] });
+      void qc.invalidateQueries({ queryKey: ['v2', 'home', 'jobs'] });
+    },
+  });
+
+  /** Primary action. Open first — the popup blocker only trusts a window.open
+   *  that happens inside the click's own task — then record the application. */
+  const handleApplyOnSite = () => {
+    if (!applyUrl) return;
+    window.open(applyUrl, '_blank', 'noopener,noreferrer');
+    setUnapplied(false);
+    onApply(job.id, resumeVariantId);
+  };
 
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
   const age = postedAge(job.postedAt);
@@ -131,7 +181,7 @@ export function MatchCard({
     status === 'applied'
       ? t('status.applied')
       : status === 'passed'
-        ? t('status.passed')
+        ? t('status.notInterested')
         : t('status.queued');
 
   return (
@@ -204,11 +254,11 @@ export function MatchCard({
             <div className="txt">
               <div className="lbl">{t('whyFits')}</div>
               {detail.isLoading && !matchView ? (
-                <span style={{ color: 'var(--muted)' }}>{t('thinking')}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('thinking')}</span>
               ) : matchView ? (
                 <Markdown>{matchView.explanation.rationale}</Markdown>
               ) : (
-                <span style={{ color: 'var(--muted)' }}>{t('noReasoning')}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('noReasoning')}</span>
               )}
             </div>
           </div>
@@ -234,23 +284,37 @@ export function MatchCard({
 
           <div className="match-actions">
             {status === 'applied' ? (
-              <div className="applied-banner">
-                <span className="ic">
-                  <IconCheck size={12} strokeWidthValue={3} />
-                </span>
-                {t('appliedBanner')}
-              </div>
+              <>
+                {/* States only what happened: the posting opened and we wrote
+                 *  it down. No cover letter, no tailored resume and no
+                 *  screening answers were sent — nothing here submits. */}
+                <div className="applied-banner">
+                  <span className="ic">
+                    <IconCheck size={12} strokeWidthValue={3} />
+                  </span>
+                  {t('appliedOnSiteBanner')}
+                </div>
+                <Btn
+                  variant="ghost"
+                  disabled={!trackerEntryId || undoApply.isPending}
+                  onClick={() => {
+                    if (trackerEntryId) undoApply.mutate(trackerEntryId);
+                  }}
+                >
+                  {t('actions.didntApply')}
+                </Btn>
+              </>
             ) : status === 'passed' ? (
               <>
                 <div
                   className="applied-banner"
                   style={{
                     background: 'var(--surface-2)',
-                    color: 'var(--muted)',
+                    color: 'var(--text-muted)',
                     borderColor: 'var(--rule)',
                   }}
                 >
-                  {t('passedBanner')}
+                  {t('notInterestedBanner')}
                 </div>
                 <Btn variant="ghost" onClick={onUndoPass}>
                   {t('actions.undo')}
@@ -260,17 +324,14 @@ export function MatchCard({
               <>
                 <Btn
                   variant="primary"
-                  icon={<IconBolt size={14} />}
-                  disabled={applying}
-                  onClick={() => onApply(job.id, resumeVariantId)}
+                  icon={<IconArrow size={14} />}
+                  disabled={applying || !applyUrl}
+                  onClick={handleApplyOnSite}
                 >
-                  {applying ? t('actions.applying') : t('actions.applyNow')}
-                </Btn>
-                <Btn icon={<IconClock size={13} />}>
-                  {t('actions.schedule')}
+                  {t('actions.applyOnSite')}
                 </Btn>
                 <Btn variant="ghost" onClick={onPass}>
-                  {t('actions.pass')}
+                  {t('actions.notInterested')}
                 </Btn>
               </>
             )}

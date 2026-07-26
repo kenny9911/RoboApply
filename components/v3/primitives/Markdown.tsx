@@ -27,7 +27,7 @@ interface Props {
   className?: string;
 }
 
-const linkStyle = { color: 'var(--accent-text)', textDecoration: 'underline' } as const;
+const linkStyle = { color: 'var(--action)', textDecoration: 'underline' } as const;
 
 // Inline: the <p> renders as a fragment so no block-break is introduced.
 const INLINE_COMPONENTS: Components = {
@@ -64,11 +64,10 @@ const BLOCK_COMPONENTS: Components = {
   code: ({ children }: { children?: ReactNode }) => (
     <code
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: '0.9em',
+        fontSize: 'var(--fs-meta)',
         background: 'var(--bg)',
         border: '1px solid var(--rule)',
-        borderRadius: 4,
+        borderRadius: 'var(--r-sm)',
         padding: '1px 5px',
       }}
     >

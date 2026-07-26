@@ -73,12 +73,7 @@ export function PlanSection({
     <>
       <PrefHeader
         eyebrow={t('plan.eyebrow')}
-        title={
-          <>
-            {t('plan.title_before')} <em>{planLabel}</em>
-            {t('plan.title_after')}
-          </>
-        }
+        title={`${t('plan.title_before')} ${planLabel}${t('plan.title_after')}`}
         sub={t('plan.sub')}
       />
 

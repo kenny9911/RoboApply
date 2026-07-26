@@ -75,8 +75,7 @@ export default function AdminUserDetailPage({
     return (
       <EmptyState
         icon={<span style={{ fontSize: 34 }}>🔒</span>}
-        title={t('notAuthorized.title')}
-        accentWord={t('notAuthorized.titleAccent')}
+        title={`${t('notAuthorized.title')} ${t('notAuthorized.titleAccent')}`}
         sub={t('notAuthorized.sub')}
       />
     );
@@ -85,8 +84,7 @@ export default function AdminUserDetailPage({
   const header = (
     <PageHeader
       eyebrow={t('detail.eyebrow', { email: q.data?.user.email ?? '…' })}
-      title={t('title')}
-      accentWord={t('detail.titleAccent')}
+      title={`${t('title')} ${t('detail.titleAccent')}`}
       actions={backBtn}
     />
   );
@@ -98,9 +96,9 @@ export default function AdminUserDetailPage({
         <div
           role="alert"
           className="flex flex-col items-center gap-4 text-center"
-          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-xl)', padding: '52px 32px' }}
+          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
         >
-          <p style={{ fontFamily: 'var(--sans)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('error.title')}</p>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('error.title')}</p>
           <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
           <Btn variant="primary" onClick={() => void q.refetch()}>
             {t('error.retry')}
@@ -154,7 +152,7 @@ export default function AdminUserDetailPage({
 
   // Interview-sessions ledger.
   const sessionColumns: Column<AdminUserInterviewSession>[] = [
-    { key: 'date', header: t('sessions.col.date'), render: (s) => <span style={{ color: 'var(--text-2)', fontFamily: 'var(--mono)', fontSize: 12 }}>{fmtShortDate(s.createdAt, locale)}</span> },
+    { key: 'date', header: t('sessions.col.date'), render: (s) => <span style={{ color: 'var(--text-2)', fontSize: 'var(--fs-label)', fontVariantNumeric: 'tabular-nums' }}>{fmtShortDate(s.createdAt, locale)}</span> },
     { key: 'role', header: t('sessions.col.role'), render: (s) => s.role ?? '—' },
     { key: 'duration', header: t('sessions.col.duration'), align: 'right', render: (s) => durLabel(s.durationSec) },
     { key: 'cost', header: t('detail.col.cost'), align: 'right', render: (s) => fmtCurrency(s.costUsd, locale, currency) },
@@ -163,7 +161,7 @@ export default function AdminUserDetailPage({
       header: t('detail.col.split'),
       align: 'right',
       render: (s) => (
-        <span style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 11 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)', fontVariantNumeric: 'tabular-nums' }}>
           {splitText(s.cost.stt)}/{splitText(s.cost.tts)}/{splitText(s.cost.llm)}
         </span>
       ),
@@ -183,13 +181,12 @@ export default function AdminUserDetailPage({
             alignItems: 'center',
             gap: 8,
             border: '1px solid var(--ok)',
-            background: 'var(--ok-soft)',
+            background: 'var(--ok-subtle)',
             color: 'var(--ok)',
             borderRadius: 12,
             padding: '10px 14px',
             marginBottom: 16,
-            fontFamily: 'var(--mono)',
-            fontSize: 12.5,
+            fontSize: 'var(--fs-meta)',
           }}
         >
           <IconCheck size={14} strokeWidthValue={2.5} />
@@ -227,7 +224,7 @@ export default function AdminUserDetailPage({
           {sparkPoints.length > 0 ? (
             <Sparkline points={sparkPoints} />
           ) : (
-            <p style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>—</p>
+            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>—</p>
           )}
         </ChartCard>
       </div>
@@ -288,11 +285,8 @@ function SmallStat({ label, value }: { label: string; value: React.ReactNode }) 
     >
       <div
         style={{
-          fontFamily: 'var(--mono)',
-          fontSize: 9.5,
-          textTransform: 'uppercase',
-          letterSpacing: '0.12em',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           marginBottom: 9,
           fontWeight: 600,
         }}
@@ -310,11 +304,8 @@ function SubHeading({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: 11,
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-        color: 'var(--muted)',
+        fontSize: 'var(--fs-label)',
+        color: 'var(--text-muted)',
         fontWeight: 600,
         margin: '24px 0 12px',
       }}

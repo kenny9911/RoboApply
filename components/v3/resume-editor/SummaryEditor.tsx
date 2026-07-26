@@ -76,9 +76,8 @@ export function SummaryEditor({ value, onChange, runRewrite }: Props) {
         </button>
         <div
           style={{
-            fontSize: 11,
-            color: 'var(--muted)',
-            fontFamily: 'var(--mono)',
+            fontSize: 'var(--fs-label)',
+            color: 'var(--text-muted)',
           }}
         >
           {t('summary.char_hint', { count: charCount })}

@@ -43,9 +43,9 @@ function formatDate(locale: string, iso: string | null): string {
 
 const TIER_STYLE: Record<string, { bg: string; color: string; border: string }> = {
   free: { bg: 'var(--surface-2)', color: 'var(--text-2)', border: 'var(--rule)' },
-  starter: { bg: 'var(--accent-soft)', color: 'var(--accent-text)', border: 'var(--accent-text)' },
+  starter: { bg: 'var(--action-subtle)', color: 'var(--action)', border: 'var(--action)' },
   growth: { bg: 'var(--violet-soft)', color: 'var(--violet)', border: 'var(--violet)' },
-  premium: { bg: 'var(--accent-soft)', color: 'var(--accent-text)', border: 'var(--accent-text)' },
+  premium: { bg: 'var(--action-subtle)', color: 'var(--action)', border: 'var(--action)' },
   premium_plus: { bg: 'var(--violet-soft)', color: 'var(--violet)', border: 'var(--violet)' },
 };
 
@@ -54,9 +54,8 @@ export function TierBadge({ tier, children }: { tier: AccountTier; children: Rea
   return (
     <span
       style={{
-        fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600, padding: '3px 9px',
-        borderRadius: '99px', letterSpacing: '0.02em', textTransform: 'uppercase',
-        background: s.bg, color: s.color, border: `1px solid ${s.border}`, whiteSpace: 'nowrap',
+        fontSize: 'var(--fs-label)', fontWeight: 600, padding: '3px 9px',
+        borderRadius: '99px', background: s.bg, color: s.color, border: `1px solid ${s.border}`, whiteSpace: 'nowrap',
       }}
     >
       {children}
@@ -78,14 +77,14 @@ function StatusPill({ status, label }: { status: string; label: string }) {
   const s = status.toLowerCase();
   const tone =
     s === 'active' || s === 'trialing'
-      ? { bg: 'var(--ok-soft)', color: 'var(--ok)' }
+      ? { bg: 'var(--ok-subtle)', color: 'var(--ok)' }
       : s === 'past_due' || s === 'unpaid' || s === 'incomplete'
-        ? { bg: 'var(--warn-soft)', color: 'var(--warn)' }
+        ? { bg: 'var(--warn-subtle)', color: 'var(--warn)' }
         : { bg: 'var(--surface-2)', color: 'var(--text-2)' };
   return (
     <span style={{
-      fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 600, padding: '3px 9px',
-      borderRadius: '99px', textTransform: 'uppercase', background: tone.bg, color: tone.color,
+      fontSize: 'var(--fs-label)', fontWeight: 600, padding: '3px 9px',
+      borderRadius: '99px', background: tone.bg, color: tone.color,
       display: 'inline-flex', alignItems: 'center', gap: 5,
     }}>
       <span aria-hidden="true">●</span>{label}
@@ -110,10 +109,10 @@ export function CreditsCard({ credits }: { credits: BillingPlanResponse['credits
     <Panel style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ color: 'var(--accent-text)' }}><IconBolt size={18} /></span>
+          <span style={{ color: 'var(--action)' }}><IconBolt size={18} /></span>
           <span style={{ fontSize: 15, fontWeight: 600 }}>{t('credits.title')}</span>
         </div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-2)' }}>
+        <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
           <b style={{ color: 'var(--text)', fontSize: 26 }}>{fmtCredits(credits.balance)}</b>
           {allot > 0 ? <span> / {fmtCredits(allot)}</span> : null} {t('credits.unit')}
         </div>
@@ -123,7 +122,7 @@ export function CreditsCard({ credits }: { credits: BillingPlanResponse['credits
           <div style={{ width: `${pct}%`, height: '100%', background: 'var(--grad-brand)', borderRadius: 99 }} />
         </div>
       ) : null}
-      <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>{t('credits.note')}</div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>{t('credits.note')}</div>
     </Panel>
   );
 }
@@ -149,7 +148,7 @@ export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, can
   const isPaid = current.tier !== 'free';
 
   return (
-    <Panel style={{ position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-lift)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+    <Panel style={{ position: 'relative', overflow: 'hidden', boxShadow: 'var(--e2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
       <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'var(--grad-brand)' }} />
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -157,14 +156,14 @@ export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, can
           <StatusPill status={current.status} label={statusLabel(t, current.status)} />
         </div>
         {price ? (
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '15px', color: 'var(--text-2)' }}>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-2)' }}>
             <b style={{ color: 'var(--text)', fontSize: '22px' }}>{price}</b> {t('plan.perMonth')}
           </div>
         ) : (
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '15px', color: 'var(--muted)' }}>{t('plan.freeForever')}</div>
+          <div style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)' }}>{t('plan.freeForever')}</div>
         )}
         {renewDate ? (
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--muted)', marginTop: 10 }}>
+          <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', marginTop: 10 }}>
             {current.cancelAtPeriodEnd
               ? t('billing.current.cancelsAt', { date: renewDate })
               : current.manualRenewal
@@ -200,10 +199,10 @@ export function RegionToggle({ region, onChange }: { region: 'cn' | 'other'; onC
         onClick={() => onChange(val)}
         aria-pressed={active}
         style={{
-          fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 99,
-          border: `1px solid ${active ? 'var(--accent-text)' : 'var(--rule)'}`,
-          background: active ? 'var(--accent-soft)' : 'transparent',
-          color: active ? 'var(--accent-text)' : 'var(--text-2)', cursor: 'pointer',
+          fontSize: 'var(--fs-label)', fontWeight: 600, padding: '6px 14px', borderRadius: 99,
+          border: `1px solid ${active ? 'var(--action)' : 'var(--rule)'}`,
+          background: active ? 'var(--action-subtle)' : 'transparent',
+          color: active ? 'var(--action)' : 'var(--text-2)', cursor: 'pointer',
         }}
       >
         {label}
@@ -212,7 +211,7 @@ export function RegionToggle({ region, onChange }: { region: 'cn' | 'other'; onC
   };
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('region.label')}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('region.label')}</span>
       {opt('other', t('region.intl'))}
       {opt('cn', t('region.cn'))}
     </div>
@@ -226,7 +225,7 @@ export function BillingHistoryLink() {
   return (
     <Panel style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-2)', fontSize: '13px' }}>
-        <span style={{ color: 'var(--muted)' }}><IconFile size={16} /></span>
+        <span style={{ color: 'var(--text-muted)' }}><IconFile size={16} /></span>
         {t('billing.summaryNote')}
       </div>
       <Link href="/account/billing/history" style={{ textDecoration: 'none' }}>

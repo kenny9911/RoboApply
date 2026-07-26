@@ -91,16 +91,13 @@ export function SectionNav({ labels }: { labels: Record<AccountSectionId, string
             aria-current={on ? 'true' : undefined}
             onClick={() => onJump(id)}
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '11.5px',
+              fontSize: 'var(--fs-label)',
               fontWeight: 600,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: on ? 'var(--accent-ink)' : 'var(--muted)',
+              color: on ? 'var(--action-ink)' : 'var(--text-muted)',
               padding: '7px 13px',
               borderRadius: '99px',
-              border: `1px solid ${on ? 'var(--accent-text)' : 'var(--rule)'}`,
-              background: on ? 'var(--accent)' : 'var(--surface)',
+              border: `1px solid ${on ? 'var(--action)' : 'var(--rule)'}`,
+              background: on ? 'var(--action)' : 'var(--surface)',
               cursor: 'pointer',
             }}
           >
@@ -121,11 +118,8 @@ export function SecLabel({ id, children }: { id?: string; children: ReactNode })
     <div
       id={id}
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: '11px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
-        color: 'var(--muted)',
+        fontSize: 'var(--fs-label)',
+        color: 'var(--text-muted)',
         fontWeight: 600,
         margin: '36px 0 14px',
         scrollMarginTop: 80,
@@ -172,11 +166,8 @@ export function CapLabel({
   return (
     <span
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: '11px',
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-        color: 'var(--muted)',
+        fontSize: 'var(--fs-label)',
+        color: 'var(--text-muted)',
         fontWeight: 600,
         ...style,
       }}
@@ -227,8 +218,7 @@ function SignInMethodChip({ provider, label }: { provider: string; label: string
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
-        fontFamily: 'var(--mono)',
-        fontSize: '11px',
+        fontSize: 'var(--fs-label)',
         color: 'var(--text-2)',
         background: 'var(--surface-2)',
         border: '1px solid var(--rule)',
@@ -312,14 +302,13 @@ export function ProfileCard({
             height: 64,
             borderRadius: '50%',
             background: 'var(--grad-brand)',
-            color: 'var(--accent-ink)',
+            color: 'var(--action-ink)',
             fontWeight: 700,
-            fontSize: 24,
+            fontSize: 'var(--fs-title)',
             display: 'grid',
             placeItems: 'center',
-            fontFamily: 'var(--mono)',
             flexShrink: 0,
-            boxShadow: '0 0 0 1px var(--rule), 0 8px 24px -10px var(--accent-glow)',
+            boxShadow: 'var(--e2)',
           }}
         >
           {initialFrom(name, email)}
@@ -344,7 +333,7 @@ export function ProfileCard({
                   borderRadius: 9,
                   padding: '8px 12px',
                   color: 'var(--text)',
-                  fontFamily: 'var(--sans)',
+                  fontFamily: 'var(--font-ui)',
                   fontSize: '18px',
                   fontWeight: 600,
                   minWidth: 200,
@@ -383,15 +372,14 @@ export function ProfileCard({
               gap: 10,
               flexWrap: 'wrap',
               marginTop: 8,
-              fontFamily: 'var(--mono)',
-              fontSize: '12px',
+              fontSize: 'var(--fs-label)',
               color: 'var(--text-2)',
             }}
           >
             <span>{email}</span>
             {verified ? <Tag tone="strong">{t('profile.verified')}</Tag> : null}
             <SignInMethodChip provider={provider} label={providerLabel(provider)} />
-            <span style={{ color: 'var(--muted)' }}>· {memberSinceLabel}</span>
+            <span style={{ color: 'var(--text-muted)' }}>· {memberSinceLabel}</span>
           </div>
         </div>
       </div>

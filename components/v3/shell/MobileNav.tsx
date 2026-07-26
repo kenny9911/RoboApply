@@ -43,7 +43,7 @@ export function MobileNav() {
       aria-label="Mobile"
       className="v3-mobile-nav robo-bottom-nav fixed inset-x-0 bottom-0 z-30 items-stretch"
       style={{
-        background: 'var(--bg-2)',
+        background: 'var(--surface)',
         borderTop: '1px solid var(--rule)',
       }}
     >
@@ -55,15 +55,12 @@ export function MobileNav() {
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className="flex flex-1 flex-col items-center justify-center gap-1 py-2.5"
-            style={{ color: active ? 'var(--accent-text)' : 'var(--muted)' }}
+            style={{ color: active ? 'var(--action)' : 'var(--text-muted)' }}
           >
             {item.icon}
             <span
               style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 9,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
+                fontSize: 'var(--fs-label)',
                 fontWeight: 600,
               }}
             >

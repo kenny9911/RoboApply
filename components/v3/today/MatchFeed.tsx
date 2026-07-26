@@ -105,8 +105,7 @@ export function MatchFeed() {
         </div>
       ) : feed.isError ? (
         <EmptyState
-          title={t('error.title')}
-          accentWord={t('error.accent')}
+          title={`${t('error.title')} ${t('error.accent')}`}
           sub={t('error.sub')}
           action={
             <Btn variant="primary" onClick={() => void feed.refetch()}>
@@ -117,8 +116,7 @@ export function MatchFeed() {
       ) : visible.length === 0 ? (
         <EmptyState
           icon={<span style={{ fontSize: 36 }}>🎯</span>}
-          title={t('empty.title')}
-          accentWord={t('empty.accent')}
+          title={`${t('empty.title')} ${t('empty.accent')}`}
           sub={t('empty.sub')}
         />
       ) : (

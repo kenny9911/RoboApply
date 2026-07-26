@@ -61,7 +61,7 @@ export function PipelineColumn({
       onDrop={handleDrop}
       style={
         isOver
-          ? { borderColor: 'var(--accent-text)', boxShadow: 'var(--shadow-lift)' }
+          ? { borderColor: 'var(--action)', boxShadow: 'var(--e2)' }
           : undefined
       }
       aria-label={t('column.aria', {

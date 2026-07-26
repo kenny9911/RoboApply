@@ -1,211 +1,246 @@
 /* ═══════════════════════════════════════════════════════════════════
    PREFERENCES
+
+   Overhauled against docs/roboapply/OVERHAUL_RULINGS.md. Four things
+   happened here beyond the straight token sweep:
+
+   • The agent mood card (.pref-mood*, including the rotating orb) and the
+     aggressiveness picker (.pref-aggr*) are DELETED, not restyled. Auto-apply
+     is dead (ruling R1), so "how hard should the agent apply for me" is a
+     control for a capability the product no longer has, and D4 removes the
+     orb as a character cue.
+   • Every uppercase micro-label is sentence case, and the second font family
+     that always came with it is gone (rulings R4 / §2). Where the mono was
+     holding NUMBERS in a column, `font-variant-numeric: tabular-nums` does
+     that job in one family; where it was merely styling a label, it is just
+     deleted.
+   • Selection is drawn as a border plus a fill. Every 3px accent halo and
+     every `0 0 Npx` glow is gone; the only ring left in the file is
+     var(--focus-ring), and it only appears on real focus.
+   • Nothing loops forever. The two blinking dots ("hunt active", "unsaved
+     changes") described stored state, not work in flight (§5.4), so their
+     animations — and the reduced-motion block that existed to suppress them
+     — are gone.
+
+   Sizes: the 8-token scale, 12px floor. Text-entry controls (input, textarea,
+   select, chip field) sit at --fs-body rather than the --fs-meta their old
+   13.5px would map to: typed text is read text.
 ═══════════════════════════════════════════════════════════════════ */
 
 .pref {
   display: grid;
   grid-template-columns: 260px 1fr;
-  min-height: calc(100vh - 65px);
+  min-height: calc(100vh - 65px);   /* 65px = the app topbar */
   background: var(--bg);
 }
 
 /* ─── LEFT RAIL ─── */
 .pref-rail {
   border-right: 1px solid var(--rule);
-  background: var(--bg-2);
-  padding: 28px 16px 20px;
+  background: var(--surface);
+  padding: var(--sp-6) var(--sp-4) var(--sp-5);
   display: flex; flex-direction: column;
-  gap: 26px;
+  gap: var(--sp-5);
 }
-.pref-rail-head { padding: 0 10px; }
+.pref-rail-head { padding: 0 var(--sp-3); }
+/* Was a 10px uppercase mono eyebrow tracked out to 0.18em. */
 .pref-rail-eye {
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--muted);
-  font-weight: 700;
-  margin-bottom: 6px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-1);
 }
 .pref-rail-title {
-  font-family: var(--sans);
-  font-size: 22px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-title);
   font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1;
+  letter-spacing: var(--ls-title);
+  line-height: var(--lh-title);
 }
 
-.pref-nav { display: flex; flex-direction: column; gap: 2px; }
+.pref-nav { display: flex; flex-direction: column; gap: var(--sp-1); }
 .pref-nav-item {
   appearance: none;
   background: transparent;
   border: 0;
   color: var(--text-2);
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-meta);
   font-weight: 500;
-  letter-spacing: -0.005em;
-  padding: 9px 12px;
-  border-radius: 9px;
+  letter-spacing: var(--ls-meta);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
   cursor: pointer;
   text-align: left;
-  display: flex; align-items: center; gap: 12px;
-  transition: background .12s, color .12s;
+  display: flex; align-items: center; gap: var(--sp-3);
+  transition: background var(--dur-hover) var(--ease-out),
+              color var(--dur-hover) var(--ease-out);
 }
-.pref-nav-item:hover { background: var(--surface); color: var(--text); }
+/* The rail itself is --surface now, so hover has to step to --surface-2. */
+.pref-nav-item:hover { background: var(--surface-2); color: var(--text); }
 .pref-nav-item.active {
-  background: linear-gradient(90deg, var(--accent-soft) 0%, transparent 100%);
+  background: var(--action-subtle);
   color: var(--text);
-  box-shadow: inset 2px 0 0 var(--accent-text);
+  /* A flat inset marker bar, not elevation and not a glow: this is the
+   * "you are here" edge of the rail. */
+  box-shadow: inset 2px 0 0 var(--action);
 }
-.pref-nav-item.danger { color: var(--danger); margin-top: 8px; }
-.pref-nav-item.danger:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.pref-nav-item.danger { color: var(--danger); margin-top: var(--sp-2); }
+.pref-nav-item.danger:hover { background: var(--danger-subtle); }
 .pref-nav-ic {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--fs-meta);
+  font-weight: 500;
   width: 16px;
   text-align: center;
-  color: var(--muted);
+  color: var(--text-muted);
 }
-.pref-nav-item.active .pref-nav-ic { color: var(--accent-text); }
+.pref-nav-item.active .pref-nav-ic { color: var(--action); }
 .pref-nav-item.danger .pref-nav-ic { color: var(--danger); }
 
+/* Rail footer: the auto-apply engine's run state. Kept rendering (the markup
+ * in app/(auth)/preferences/page.tsx is gated on `showJobApply`), but stripped
+ * of its halo and its forever-blink — see the handoff note in the header. */
 .pref-rail-foot {
   margin-top: auto;
   border: 1px solid var(--rule);
-  border-radius: 12px;
-  background: var(--surface);
-  padding: 14px;
-  display: flex; flex-direction: column; gap: 12px;
+  border-radius: var(--r-md);
+  background: var(--bg);
+  padding: var(--sp-3);
+  display: flex; flex-direction: column; gap: var(--sp-3);
 }
-.pref-status { display: flex; gap: 11px; align-items: flex-start; }
+.pref-status { display: flex; gap: var(--sp-3); align-items: flex-start; }
 .pref-status-dot {
-  width: 9px; height: 9px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-top: 5px;
+  margin-top: 6px;   /* optical: centres the 8px dot on the first 13px line */
 }
-.pref-status-dot.on  { background: var(--ok);  box-shadow: 0 0 10px var(--ok); animation: blink 1.6s ease infinite; }
-.pref-status-dot.off { background: var(--muted-2); }
+/* "Hunt active" is a stored setting, not a request in flight, so the dot no
+ * longer blinks and no longer carries a coloured halo. */
+.pref-status-dot.on  { background: var(--ok); }
+.pref-status-dot.off { background: var(--disabled); }
 .pref-status strong {
   display: block;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  letter-spacing: var(--ls-meta);
 }
 .pref-status small {
   display: block;
-  font-size: 11.5px;
-  color: var(--muted);
-  margin-top: 2px;
-  line-height: 1.4;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+  line-height: var(--lh-meta);
 }
 .pref-pause-btn {
   appearance: none;
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--rule);
   color: var(--text);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   font-weight: 500;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
   cursor: pointer;
-  letter-spacing: -0.005em;
-  transition: border-color .12s, color .12s;
+  letter-spacing: var(--ls-meta);
+  transition: border-color var(--dur-hover) var(--ease-out),
+              color var(--dur-hover) var(--ease-out);
 }
-.pref-pause-btn:hover { border-color: var(--accent-text); color: var(--accent-text); }
+.pref-pause-btn:hover { border-color: var(--rule-strong); }
 
 /* ─── CONTENT ─── */
 .pref-body {
   overflow-y: auto;
-  padding: 36px 44px 100px;
+  /* Bottom padding clears the fixed save bar (16px inset + ~48px tall). */
+  padding: var(--sp-6) var(--sp-7) calc(var(--sp-8) + var(--sp-6));
   max-width: 980px;
 }
 
-.pref-head { margin-bottom: 36px; }
+.pref-head { margin-bottom: var(--sp-6); }
+/* Was a 10.5px uppercase mono pill at 0.16em, ringed in full-strength accent. */
 .pref-eyebrow {
   display: inline-flex;
   align-items: center;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--accent-text);
-  font-weight: 700;
-  padding: 4px 11px;
-  border-radius: 99px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-text);
-  margin-bottom: 14px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--action);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--action-subtle);
+  border: 1px solid var(--rule);
+  margin-bottom: var(--sp-3);
 }
+/* The page H1. Its 36px base sits in the 31–40 band, so it takes
+ * --fs-display, not --fs-hero — hero is the marketing headline, not the top
+ * of a settings screen. --font-display is legal here because it is applied
+ * to the whole headline (ruling R4). */
 .pref-title {
-  font-family: var(--sans);
+  font-family: var(--font-display);
   font-weight: 600;
-  font-size: clamp(36px, 4vw, 52px);
-  line-height: 0.96;
-  letter-spacing: -0.04em;
-  margin: 0 0 14px;
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+  margin: 0 0 var(--sp-3);
   max-width: 700px;
 }
+/* This used to be the italic-serif accent word set inside the headline —
+ * banned outright by R4. The rule survives only to undo the browser's
+ * default italic on <em>; emphasis in a headline is the headline. */
 .pref-title em {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 400;
-  color: var(--accent-text);
-  letter-spacing: -0.02em;
+  font-style: normal;
+  font-weight: inherit;
+  color: inherit;
 }
 .pref-sub {
-  font-size: 14.5px;
+  font-size: var(--fs-body);
   color: var(--text-2);
   max-width: 560px;
-  line-height: 1.55;
+  line-height: var(--lh-body);
   margin: 0;
 }
 
 /* ─── GROUP ─── */
 .pref-group {
   border-top: 1px solid var(--rule);
-  padding-top: 22px;
-  margin-top: 22px;
+  padding-top: var(--sp-5);
+  margin-top: var(--sp-5);
 }
 .pref-group:first-of-type { margin-top: 0; }
+/* Was 10.5px uppercase mono at 0.18em. */
 .pref-group-label {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--muted);
-  font-weight: 700;
-  margin-bottom: 14px;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-3);
 }
-.pref-group-body { display: flex; flex-direction: column; gap: 4px; }
+.pref-group-body { display: flex; flex-direction: column; gap: var(--sp-1); }
 
 /* ─── ROW ─── */
 .pref-row {
   display: grid;
   grid-template-columns: 280px 1fr;
-  gap: 24px;
-  padding: 14px 0;
-  border-bottom: 1px dashed transparent;
+  gap: var(--sp-5);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid transparent;
 }
-.pref-row:not(:last-child) { border-bottom-color: var(--rule-soft); }
-.pref-row-meta { padding-top: 2px; }
+.pref-row:not(:last-child) { border-bottom-color: var(--rule); }
+.pref-row-meta { padding-top: var(--sp-1); }
 .pref-row-label {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  letter-spacing: var(--ls-body);
   color: var(--text);
-  margin-bottom: 3px;
+  margin-bottom: var(--sp-1);
 }
 .pref-row-sub {
-  font-size: 12.5px;
-  color: var(--muted);
-  line-height: 1.45;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: var(--lh-meta);
   max-width: 260px;
 }
-.pref-row-sub strong { color: var(--text); font-weight: 600; }
+.pref-row-sub strong { color: var(--text); font-weight: 500; }
 .pref-row-control {
   display: flex; align-items: center;
   min-width: 0;
@@ -218,81 +253,93 @@
 /* Toggle (iOS-style) */
 .pref-toggle {
   appearance: none;
-  width: 40px; height: 22px;
+  width: 40px; height: 24px;
   background: var(--surface-3);
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   position: relative;
   padding: 0;
-  transition: background .15s, border-color .15s;
+  transition: background var(--dur-hover) var(--ease-out),
+              border-color var(--dur-hover) var(--ease-out);
   flex-shrink: 0;
 }
 .pref-toggle.on {
-  background: var(--accent);
-  border-color: var(--accent-text);   /* declutter: glow dropped — the fill flips */
+  background: var(--action);
+  border-color: var(--action);   /* declutter: glow dropped — the fill flips */
 }
+/* The thumb was literal white, which vanished against the light-blue dark
+ * theme --action. It now uses ink tokens, so it reads in both themes: a grey
+ * knob when off, the action's own ink when on. */
 .pref-toggle-thumb {
   position: absolute;
-  top: 1px; left: 1px;
+  top: 2px; left: 2px;
   width: 18px; height: 18px;
-  background: white;
+  background: var(--text-muted);
   border-radius: 50%;
-  transition: transform .18s cubic-bezier(.5, 1.5, .5, 1);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: transform var(--dur-enter) var(--ease-out),
+              background var(--dur-hover) var(--ease-out);
+  box-shadow: var(--e1);
 }
-.pref-toggle.on .pref-toggle-thumb { transform: translateX(18px); }
+.pref-toggle.on .pref-toggle-thumb {
+  background: var(--action-ink);
+  transform: translateX(16px);
+}
 
 /* Text input */
 .pref-input-wrap {
   display: flex; align-items: center;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
-  padding: 0 12px;
+  border-radius: var(--r-sm);
+  padding: 0 var(--sp-3);
   width: 100%;
   max-width: 420px;
-  transition: border-color .15s, box-shadow .15s;
+  min-height: var(--control-lg);
+  transition: border-color var(--dur-hover) var(--ease-out),
+              box-shadow var(--dur-hover) var(--ease-out);
 }
 .pref-input-wrap:focus-within {
-  border-color: var(--accent-text);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
 }
+/* The "$" / "@" prefix was mono. That was styling a label, not aligning a
+ * column of numbers, so the second family is simply gone. */
 .pref-input-prefix {
-  color: var(--muted);
-  font-family: var(--mono);
-  margin-right: 8px;
+  color: var(--text-muted);
+  margin-right: var(--sp-2);
 }
 .pref-input {
   flex: 1;
   background: transparent;
   border: 0;
   outline: 0;
-  font-family: var(--sans);
-  font-size: 13.5px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
   color: var(--text);
-  padding: 10px 0;
-  letter-spacing: -0.005em;
+  padding: var(--sp-2) 0;
+  letter-spacing: var(--ls-body);
 }
-.pref-input::placeholder { color: var(--muted-2); }
+.pref-input::placeholder { color: var(--disabled); }
 
 /* Textarea */
 .pref-textarea {
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
-  padding: 12px 14px;
-  font-family: var(--sans);
-  font-size: 13.5px;
-  line-height: 1.55;
+  border-radius: var(--r-sm);
+  padding: var(--sp-3);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
   color: var(--text);
   outline: 0;
   resize: vertical;
-  letter-spacing: -0.005em;
-  transition: border-color .15s, box-shadow .15s;
+  letter-spacing: var(--ls-body);
+  transition: border-color var(--dur-hover) var(--ease-out),
+              box-shadow var(--dur-hover) var(--ease-out);
 }
-.pref-textarea:focus { border-color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pref-textarea:focus { border-color: var(--action); box-shadow: var(--focus-ring); }
 
 /* Select */
 .pref-select-wrap {
@@ -304,24 +351,25 @@
   appearance: none;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
-  padding: 10px 36px 10px 14px;
-  font-family: var(--sans);
-  font-size: 13.5px;
+  border-radius: var(--r-sm);
+  padding: 0 var(--sp-6) 0 var(--sp-3);
+  height: var(--control-lg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
   font-weight: 500;
   color: var(--text);
   cursor: pointer;
   width: 100%;
-  letter-spacing: -0.005em;
+  letter-spacing: var(--ls-body);
 }
-.pref-select:focus { outline: 0; border-color: var(--accent-text); }
+.pref-select:focus { outline: none; box-shadow: var(--focus-ring); }
 .pref-select-caret {
   position: absolute;
-  right: 12px; top: 50%;
+  right: var(--sp-3); top: 50%;
   transform: translateY(-50%);
-  color: var(--muted);
+  color: var(--text-muted);
   pointer-events: none;
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 /* Segmented */
@@ -329,34 +377,36 @@
   display: inline-flex;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
-  padding: 3px;
-  gap: 2px;
+  border-radius: var(--r-sm);
+  padding: var(--sp-1);
+  gap: var(--sp-1);
 }
 .pref-seg-opt {
   appearance: none;
   background: transparent;
   border: 0;
-  padding: 7px 14px;
+  padding: var(--sp-2) var(--sp-3);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   font-weight: 500;
   color: var(--text-2);
   cursor: pointer;
-  border-radius: 6px;
-  letter-spacing: -0.005em;
-  transition: background .12s, color .12s;
+  border-radius: var(--r-sm);
+  letter-spacing: var(--ls-meta);
+  transition: background var(--dur-hover) var(--ease-out),
+              color var(--dur-hover) var(--ease-out);
 }
 .pref-seg-opt:hover { color: var(--text); }
+/* Selection is the fill, not a weight bump: 500 and 600 never sit side by
+ * side inside one component. */
 .pref-seg-opt.on {
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
+  background: var(--action);
+  color: var(--action-ink);
 }
 
 /* Slider */
 .pref-slider {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: var(--sp-3);
   width: 100%;
   max-width: 420px;
 }
@@ -365,33 +415,37 @@
   flex: 1;
   height: 6px;
   background: var(--surface-3);
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   outline: 0;
   cursor: pointer;
 }
+/* Thumbs were literal white ringed in a 2px accent border. One fill, one
+ * hairline — and no 2px borders anywhere (§geometry). */
 .pref-slider input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 18px; height: 18px;
   border-radius: 50%;
-  background: white;
-  border: 2px solid var(--accent-text);
+  background: var(--action);
+  border: 1px solid var(--action-hover);
   cursor: grab;
 }
 .pref-slider input[type="range"]::-moz-range-thumb {
   width: 18px; height: 18px;
   border-radius: 50%;
-  background: white;
-  border: 2px solid var(--accent-text);
+  background: var(--action);
+  border: 1px solid var(--action-hover);
   cursor: grab;
 }
+/* Was mono so the readout would not jitter as the value changed. Tabular
+ * figures do that in the same family, and the value is ink, not action. */
 .pref-slider-val {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent-text);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
   min-width: 70px;
   text-align: right;
-  letter-spacing: 0;
+  letter-spacing: var(--ls-meta);
 }
 
 /* Chip input */
@@ -400,34 +454,38 @@
   max-width: 540px;
 }
 .pref-chips {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 8px 10px;
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  padding: var(--sp-2);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
-  min-height: 42px;
-  transition: border-color .15s;
+  border-radius: var(--r-sm);
+  min-height: var(--control-lg);
+  transition: border-color var(--dur-hover) var(--ease-out),
+              box-shadow var(--dur-hover) var(--ease-out);
 }
-.pref-chip-input:focus-within .pref-chips { border-color: var(--accent-text); }
+.pref-chip-input:focus-within .pref-chips {
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
+}
 .pref-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 6px 4px 10px;
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
   background: var(--bg);
   border: 1px solid var(--rule);
-  border-radius: 99px;
-  font-size: 12.5px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-meta);
   font-weight: 500;
   color: var(--text);
-  letter-spacing: -0.005em;
+  letter-spacing: var(--ls-meta);
 }
 .pref-chip button {
   appearance: none;
   background: none;
   border: 0;
   padding: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1;
   width: 16px; height: 16px;
   border-radius: 50%;
@@ -438,122 +496,134 @@
   border: 0;
   outline: 0;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text);
-  padding: 5px 4px;
+  padding: var(--sp-1);
   min-width: 140px;
 }
-.pref-chips form input::placeholder { color: var(--muted-2); }
+.pref-chips form input::placeholder { color: var(--disabled); }
 
 /* Check grid */
 .pref-checkgrid {
   display: grid;
-  gap: 6px;
+  gap: var(--sp-2);
   width: 100%;
 }
 .pref-check {
-  display: flex; gap: 10px; align-items: flex-start;
-  padding: 10px 12px;
+  display: flex; gap: var(--sp-3); align-items: flex-start;
+  padding: var(--sp-3);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   cursor: pointer;
-  transition: border-color .12s, background .12s;
+  transition: border-color var(--dur-hover) var(--ease-out),
+              background var(--dur-hover) var(--ease-out);
 }
 .pref-check input { display: none; }
-.pref-check:hover { border-color: var(--text-2); }
-.pref-check.on { border-color: var(--accent-text); background: var(--accent-soft); }
+.pref-check:hover { border-color: var(--rule-strong); }
+.pref-check.on { border-color: var(--action); background: var(--action-subtle); }
 .pref-check-box {
   width: 16px; height: 16px;
-  border-radius: 4px;
-  border: 1.5px solid var(--rule);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--rule-strong);
   background: var(--bg);
   display: grid; place-items: center;
   flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--accent-ink);
-  transition: background .12s, border-color .12s;
+  margin-top: var(--sp-1);
+  color: var(--action-ink);
+  transition: background var(--dur-hover) var(--ease-out),
+              border-color var(--dur-hover) var(--ease-out);
 }
 .pref-check.on .pref-check-box {
-  background: var(--accent);
-  border-color: var(--accent-text);
+  background: var(--action);
+  border-color: var(--action);
 }
 .pref-check-body { min-width: 0; }
 .pref-check-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 500;
-  letter-spacing: -0.005em;
+  letter-spacing: var(--ls-body);
   color: var(--text);
 }
+/* Was a 10px uppercase mono sub-label — under the 12px floor, in a second
+ * family, and shouting. It is a description; it now reads like one. */
 .pref-check-sub {
   display: block;
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  margin-top: 2px;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+  line-height: var(--lh-meta);
 }
 
 /* ═════════════════════════════════════════════════════════════════
    IDENTITY
 ═════════════════════════════════════════════════════════════════ */
 .pref-avatar-row {
-  display: flex; gap: 18px; align-items: center;
-  margin-bottom: 8px;
+  display: flex; gap: var(--sp-4); align-items: center;
+  margin-bottom: var(--sp-2);
 }
+/* The avatar carries initials, i.e. text — so it can never be painted in
+ * --brand-mark (identity never carries a glyph: ruling R3). Flat action fill;
+ * the accent→violet gradient and its coloured drop-halo are both gone. */
 .pref-avatar {
   width: 72px; height: 72px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), var(--violet));
-  color: var(--accent-ink);
-  font-weight: 700;
-  font-size: 24px;
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: 600;
+  font-size: var(--fs-title);
   display: grid; place-items: center;
-  font-family: var(--mono);
-  box-shadow: 0 6px 18px -12px var(--accent-glow);   /* declutter: softened */
+  box-shadow: var(--e1);
 }
 
 .pref-resume-picker {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3);
 }
 .pref-resume-card {
   background: var(--surface);
-  border: 1.5px solid var(--rule);
-  border-radius: 11px;
-  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
   cursor: pointer;
   display: flex; flex-direction: column;
-  transition: border-color .15s;
+  transition: border-color var(--dur-hover) var(--ease-out),
+              background var(--dur-hover) var(--ease-out);
 }
 .pref-resume-card input { display: none; }
-.pref-resume-card:hover { border-color: var(--text-2); }
+.pref-resume-card:hover { border-color: var(--rule-strong); }
+/* Selected = border + fill. The 3px accent halo is deleted. */
 .pref-resume-card.on {
-  border-color: var(--accent-text);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--action);
+  background: var(--action-subtle);
 }
+/* Résumé DOCUMENT typography, not app chrome — exempt from the UI type rules
+ * (ruling C25), and this thumbnail is one of the places the literal-family
+ * bug lived: 'Times New Roman' was hard-coded here. It now resolves through
+ * --resume-serif, the same next/font face the rest of the résumé stack uses. */
 .pref-resume-mini {
   height: 110px;
   background: var(--paper-bg-2);
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 10px;
-  font-family: 'Times New Roman', serif;
+  border-radius: var(--r-sm);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  font-family: var(--resume-serif);
   color: var(--paper-ink);
   overflow: hidden;
 }
 .pref-resume-name {
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  margin-bottom: 2px;
+  letter-spacing: var(--ls-meta);
+  margin-bottom: var(--sp-1);
 }
+/* Was 10px mono. The dates/sizes still want to line up; tabular figures do
+ * that without a second family. */
 .pref-resume-meta {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--muted);
-  letter-spacing: 0;
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -562,38 +632,37 @@
 
 /* Intent translation panel */
 .pref-intent {
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--violet-soft) 100%);
-  border: 1px solid var(--accent-text);
-  border-radius: 14px;
-  padding: 18px 22px;
-  margin-bottom: 30px;
+  background: var(--action-subtle);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-6);
 }
+/* Was 10px uppercase mono at 0.18em. */
 .pref-intent-lbl {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--accent-text);
-  font-weight: 700;
-  margin-bottom: 12px;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-3);
 }
-.pref-intent-body { display: flex; flex-direction: column; gap: 6px; }
+.pref-intent-body { display: flex; flex-direction: column; gap: var(--sp-2); }
+/* Was italic serif. These are sentences the user reads to check we understood
+ * them — they are read text, and read text is Inter. */
 .pref-intent-line {
-  font-family: var(--serif);
-  font-size: 17px;
-  letter-spacing: -0.01em;
+  font-size: var(--fs-subtitle);
+  letter-spacing: var(--ls-subtitle);
+  line-height: var(--lh-subtitle);
   color: var(--text);
-  line-height: 1.4;
-  padding-left: 18px;
+  padding-left: var(--sp-5);
   position: relative;
 }
 .pref-intent-line::before {
   content: '→';
   position: absolute; left: 0;
-  color: var(--accent-text);
-  font-family: var(--mono);
-  font-weight: 700;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 .pref-intent-line.good::before { content: '+'; color: var(--ok); }
 .pref-intent-line.warn::before { content: '⊘'; color: var(--warn); }
@@ -605,9 +674,9 @@
   display: inline-flex;
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 4px;
-  gap: 2px;
+  border-radius: var(--r-sm);
+  padding: var(--sp-1);
+  gap: var(--sp-1);
   width: 100%;
   max-width: 540px;
 }
@@ -616,16 +685,17 @@
   appearance: none;
   background: transparent;
   border: 0;
-  padding: 8px 6px;
+  padding: var(--sp-2) var(--sp-1);
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   font-weight: 500;
   color: var(--text-2);
   cursor: pointer;
-  border-radius: 7px;
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  letter-spacing: -0.005em;
-  transition: color .12s, background .12s;
+  border-radius: var(--r-sm);
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-1);
+  letter-spacing: var(--ls-label);
+  transition: color var(--dur-hover) var(--ease-out),
+              background var(--dur-hover) var(--ease-out);
 }
 .pref-sen-pip {
   width: 6px; height: 6px;
@@ -634,64 +704,63 @@
 }
 .pref-sen:hover { color: var(--text); }
 .pref-sen.low { color: var(--text-2); }
-.pref-sen.low .pref-sen-pip { background: var(--accent); opacity: 0.4; }
+.pref-sen.low .pref-sen-pip { background: var(--action); opacity: 0.4; }
 .pref-sen.on {
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 700;
+  background: var(--action);
+  color: var(--action-ink);
 }
-.pref-sen.on .pref-sen-pip { background: var(--accent-ink); }
+.pref-sen.on .pref-sen-pip { background: var(--action-ink); }
 
 /* Mode (remote / hybrid / onsite) */
 .pref-mode-grid {
   display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: var(--sp-2);
   width: 100%;
   max-width: 540px;
 }
 .pref-mode {
   appearance: none;
   background: var(--surface);
-  border: 1.5px solid var(--rule);
+  border: 1px solid var(--rule);
   color: var(--text);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
   cursor: pointer;
   text-align: left;
   font-family: inherit;
   position: relative;
-  transition: border-color .15s;
+  transition: border-color var(--dur-hover) var(--ease-out),
+              background var(--dur-hover) var(--ease-out);
 }
-.pref-mode:hover { border-color: var(--text-2); }
+.pref-mode:hover { border-color: var(--rule-strong); }
 .pref-mode.on {
-  border-color: var(--accent-text);
-  background: var(--accent-soft);   /* declutter: halo dropped — border + fill select */
+  border-color: var(--action);
+  background: var(--action-subtle);   /* declutter: halo dropped — border + fill select */
 }
 .pref-mode-check {
-  position: absolute; top: 10px; right: 10px;
+  position: absolute; top: var(--sp-2); right: var(--sp-2);
   width: 18px; height: 18px;
   border-radius: 50%;
-  border: 1.5px solid var(--rule);
+  border: 1px solid var(--rule-strong);
   display: grid; place-items: center;
-  color: var(--accent-ink);
+  color: var(--action-ink);
   background: var(--bg);
 }
 .pref-mode.on .pref-mode-check {
-  background: var(--accent);
-  border-color: var(--accent-text);
+  background: var(--action);
+  border-color: var(--action);
 }
 .pref-mode-label {
-  font-size: 15px;
+  font-size: var(--fs-body);
   font-weight: 600;
-  letter-spacing: -0.02em;
-  margin-bottom: 4px;
+  letter-spacing: var(--ls-body);
+  margin-bottom: var(--sp-1);
 }
+/* Was a 10px uppercase mono caption. It is a one-line description. */
 .pref-mode-desc {
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: var(--lh-meta);
 }
 
 /* Salary range slider (double-headed) */
@@ -705,16 +774,16 @@
 }
 .pref-salary-track::before {
   content: ''; position: absolute;
-  top: 13px; left: 0; right: 0;
+  top: 13px; left: 0; right: 0;   /* (32 − 6) / 2 — centring, not rhythm */
   height: 6px;
   background: var(--surface-3);
-  border-radius: 99px;
+  border-radius: var(--r-pill);
 }
 .pref-salary-fill {
   position: absolute;
   top: 13px; height: 6px;
-  background: linear-gradient(90deg, var(--accent), var(--violet));
-  border-radius: 99px;
+  background: var(--action);
+  border-radius: var(--r-pill);
 }
 .pref-salary-track input[type="range"] {
   appearance: none;
@@ -728,162 +797,58 @@
   appearance: none;
   width: 20px; height: 20px;
   border-radius: 50%;
-  background: white;
-  border: 2px solid var(--accent-text);
+  background: var(--action);
+  border: 1px solid var(--action-hover);
   cursor: grab;
   pointer-events: auto;
 }
 .pref-salary-track input[type="range"]::-moz-range-thumb {
   width: 20px; height: 20px;
   border-radius: 50%;
-  background: white;
-  border: 2px solid var(--accent-text);
+  background: var(--action);
+  border: 1px solid var(--action-hover);
   cursor: grab;
   pointer-events: auto;
 }
+/* The two salary figures. They change under the thumb, so they are tabular;
+ * they are also numbers the user reads, so they are ink, not action. */
 .pref-salary-vals {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--sans);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--accent-text);
-  margin-top: 6px;
+  display: flex; align-items: center; gap: var(--sp-3);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: var(--ls-title);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  margin-top: var(--sp-2);
 }
+/* Was 10px mono. The italic on the middle band went with the serif tic. */
 .pref-salary-bands {
   display: flex; justify-content: space-between;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin-top: 6px;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  margin-top: var(--sp-2);
 }
 .pref-salary-bands span:nth-child(2) {
   color: var(--text-2);
-  font-style: italic;
 }
 
 /* ═════════════════════════════════════════════════════════════════
    AGENT
+
+   DELETED, not restyled:
+     .pref-mood / -orb / -lbl / -name / -desc / -stats / -stat / -statlbl
+     .pref-aggr-grid / .pref-aggr / -ic / -name / -desc
+
+   Auto-apply is dead (ruling R1), so the aggressiveness picker configures a
+   capability the product no longer has; and D4 removes the orb — a rotating
+   gradient disc that existed only to suggest a character was present.
+   Quiet-hours layout survives below: that is a notification preference, not
+   an auto-apply one.
 ═════════════════════════════════════════════════════════════════ */
 
-.pref-mood {
-  display: grid;
-  grid-template-columns: 110px 1fr auto;
-  gap: 24px;
-  align-items: center;
-  background: linear-gradient(135deg, var(--surface) 0%, var(--bg-2) 100%);
-  border: 1.5px solid var(--accent-text);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-  border-radius: 18px;
-  padding: 22px;
-  margin-bottom: 30px;
-  position: relative;
-  overflow: hidden;
-}
-.pref-mood-orb {
-  width: 100px; height: 100px;
-  border-radius: 50%;
-  position: relative;
-  animation: orb-rotate 6s linear infinite;
-  z-index: 1;
-}
-.pref-mood-orb::before {
-  content: ''; position: absolute; inset: 6px;
-  border-radius: 50%; background: var(--bg);
-}
-.pref-mood-orb::after {
-  content: ''; position: absolute; inset: 14px;
-  border-radius: 50%; background: inherit;
-  filter: blur(4px); opacity: 0.85;
-}
-.pref-mood-lbl {
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--accent-text);
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.pref-mood-name {
-  font-family: var(--sans);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-.pref-mood-desc {
-  font-size: 13.5px;
-  color: var(--text-2);
-  line-height: 1.4;
-  max-width: 460px;
-}
-.pref-mood-stats {
-  display: flex; gap: 18px;
-  border-left: 1px solid var(--rule);
-  padding-left: 24px;
-}
-.pref-mood-stat {
-  font-family: var(--sans);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1;
-}
-.pref-mood-statlbl {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  font-weight: 600;
-  margin-top: 6px;
-}
-
-.pref-aggr-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  width: 100%;
-  max-width: 700px;
-}
-.pref-aggr {
-  appearance: none;
-  background: var(--surface);
-  border: 1.5px solid var(--rule);
-  border-radius: 12px;
-  padding: 16px 18px;
-  text-align: left;
-  font-family: inherit;
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color .15s, transform .08s;
-}
-.pref-aggr:hover { border-color: var(--text-2); transform: translateY(-1px); }
-.pref-aggr.on {
-  border-color: var(--accent-text);
-  background: var(--accent-soft);   /* declutter: halo dropped — border + fill select */
-}
-.pref-aggr-ic {
-  display: inline-block;
-  font-size: 18px;
-  margin-bottom: 8px;
-  color: var(--accent-text);
-}
-.pref-aggr-name {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 4px;
-}
-.pref-aggr-desc {
-  font-size: 12px;
-  color: var(--text-2);
-  line-height: 1.45;
-}
-
-.pref-quiet { display: flex; align-items: center; gap: 10px; }
+.pref-quiet { display: flex; align-items: center; gap: var(--sp-3); }
 .pref-time { min-width: 110px; }
 .pref-time .pref-select-wrap { min-width: 110px; }
 
@@ -892,40 +857,41 @@
 ═════════════════════════════════════════════════════════════════ */
 .pref-notif-grid {
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   overflow: hidden;
   background: var(--surface);
 }
+/* Was 10px mono tracked to 0.16em. */
 .pref-notif-head {
   display: grid;
   grid-template-columns: 1fr 80px 80px 80px;
-  padding: 11px 16px;
-  background: var(--bg-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
   border-bottom: 1px solid var(--rule);
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  color: var(--muted);
-  font-weight: 700;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
 }
 .pref-notif-col { text-align: center; }
 .pref-notif-row {
   display: grid;
   grid-template-columns: 1fr 80px 80px 80px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--rule-soft);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--rule);
   align-items: center;
 }
 .pref-notif-row:last-child { border-bottom: 0; }
 .pref-notif-label {
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  letter-spacing: var(--ls-body);
 }
 .pref-notif-sub {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+  line-height: var(--lh-meta);
 }
 .pref-notif-cell { display: flex; justify-content: center; }
 
@@ -933,284 +899,283 @@
    INTEGRATIONS
 ═════════════════════════════════════════════════════════════════ */
 .pref-integ-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3);
 }
 .pref-integ {
-  display: flex; align-items: center; gap: 16px;
+  display: flex; align-items: center; gap: var(--sp-4);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 16px 18px;
-  transition: border-color .15s;
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  transition: border-color var(--dur-hover) var(--ease-out);
 }
-.pref-integ:hover { border-color: var(--text-2); }
+.pref-integ:hover { border-color: var(--rule-strong); }
 .pref-integ.on { border-color: var(--rule); }
+/* The monogram sits on a per-provider brand colour passed in as an inline
+ * style, so its ink stays a literal white rather than --action-ink, which
+ * flips with the theme while the provider's colour does not. Was serif with
+ * a drop shadow under the glyph; both are gone. */
 .pref-integ-ic {
   width: 40px; height: 40px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   display: grid; place-items: center;
   flex-shrink: 0;
-  font-family: var(--serif);
-  font-size: 19px;
+  font-size: var(--fs-subtitle);
   font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  color: #FFFFFF;
 }
 .pref-integ-body { flex: 1; min-width: 0; }
 .pref-integ-head {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 3px;
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin-bottom: var(--sp-1);
 }
 .pref-integ-name {
-  font-size: 14.5px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-}
-.pref-integ-status {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--ok);
-  letter-spacing: 0.12em;
+  font-size: var(--fs-body);
   font-weight: 600;
+  letter-spacing: var(--ls-body);
+}
+/* Was 10px mono at 0.12em. The colour is what says "connected". */
+.pref-integ-status {
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--ok);
 }
 .pref-integ-desc {
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   color: var(--text-2);
-  line-height: 1.4;
-  margin-bottom: 4px;
+  line-height: var(--lh-meta);
+  margin-bottom: var(--sp-1);
 }
+/* Was 10.5px mono — an account handle, not a number column. */
 .pref-integ-acct {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--muted);
-  letter-spacing: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  letter-spacing: var(--ls-meta);
 }
 
 /* ═════════════════════════════════════════════════════════════════
    PRIVACY
 ═════════════════════════════════════════════════════════════════ */
 .pref-blocked {
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
   width: 100%;
   max-width: 540px;
 }
 .pref-blocked-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 9px;
-  font-size: 13px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-meta);
 }
 .pref-blocked-name {
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-weight: 500;
+  letter-spacing: var(--ls-meta);
   flex: 1;
 }
+/* Was 9.5px mono at 0.16em — below the floor, in a second family, shouting. */
 .pref-blocked-reason {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
-  color: var(--muted);
-  font-weight: 700;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
 }
 .pref-blocked-add {
   appearance: none;
   background: transparent;
   border: 1px dashed var(--rule);
-  color: var(--muted);
-  padding: 9px 12px;
-  border-radius: 9px;
+  color: var(--text-muted);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
+  font-weight: 500;
   cursor: pointer;
   text-align: left;
-  letter-spacing: -0.005em;
-  transition: border-color .15s, color .15s;
+  letter-spacing: var(--ls-meta);
+  transition: border-color var(--dur-hover) var(--ease-out),
+              color var(--dur-hover) var(--ease-out);
 }
-.pref-blocked-add:hover { border-color: var(--accent-text); color: var(--accent-text); }
+.pref-blocked-add:hover { border-color: var(--rule-strong); color: var(--text); }
 
 /* ═════════════════════════════════════════════════════════════════
    PLAN
 ═════════════════════════════════════════════════════════════════ */
 .pref-usage {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
-  margin-bottom: 30px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
 }
 .pref-usage-stat {
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 16px 18px;
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
 }
 .pref-usage-num {
-  font-family: var(--sans);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-.pref-usage-lbl {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  color: var(--muted);
+  font-size: var(--fs-stat);
   font-weight: 600;
-  margin-bottom: 10px;
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  margin-bottom: var(--sp-1);
+}
+/* Was 9.5px mono at 0.14em. */
+.pref-usage-lbl {
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
 }
 .pref-usage-bar {
   height: 4px;
   background: var(--surface-3);
-  border-radius: 99px;
+  border-radius: var(--r-pill);
   overflow: hidden;
 }
 .pref-usage-bar .fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--violet));
+  background: var(--action);
 }
 
 .pref-plans {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3);
   width: 100%;
 }
 .pref-plan {
   background: var(--surface);
-  border: 1.5px solid var(--rule);
-  border-radius: 16px;
-  padding: 22px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
   display: flex; flex-direction: column;
   position: relative;
 }
+/* Current plan = border + fill. The 3px accent halo is deleted. */
 .pref-plan.on {
-  border-color: var(--accent-text);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--action);
+  background: var(--action-subtle);
 }
 .pref-plan-badge {
   position: absolute;
-  top: -10px; right: 16px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  padding: 4px 10px;
-  border-radius: 99px;
+  top: calc(var(--sp-3) * -1); right: var(--sp-4);
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
 }
 .pref-plan-name {
-  font-family: var(--sans);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 6px;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  letter-spacing: var(--ls-subtitle);
+  margin-bottom: var(--sp-2);
 }
 .pref-plan-price {
-  display: flex; align-items: baseline; gap: 4px;
-  margin-bottom: 18px;
+  display: flex; align-items: baseline; gap: var(--sp-1);
+  margin-bottom: var(--sp-4);
 }
 .pref-plan-price .num {
-  font-family: var(--sans);
-  font-size: 36px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
+  font-size: var(--fs-display);
+  font-weight: 600;
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-display);
+  font-variant-numeric: tabular-nums;
   color: var(--text);
-  line-height: 1;
 }
+/* Was 11px mono ("/mo"). A billing period is a label, not a column. */
 .pref-plan-price .bill {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
-  letter-spacing: 0;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
 }
 .pref-plan-bullets {
   list-style: none; padding: 0;
-  display: flex; flex-direction: column; gap: 8px;
-  margin: 0 0 18px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
   flex: 1;
 }
 .pref-plan-bullets li {
-  display: flex; gap: 9px; align-items: flex-start;
-  font-size: 12.5px;
-  line-height: 1.45;
+  display: flex; gap: var(--sp-2); align-items: flex-start;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
   color: var(--text-2);
-  letter-spacing: -0.005em;
+  letter-spacing: var(--ls-meta);
 }
 .pref-plan-bullets li .ic {
-  color: var(--accent-text);
-  font-weight: 700;
-  font-size: 13px;
+  color: var(--action);
+  font-size: var(--fs-meta);
   flex-shrink: 0;
 }
 
 /* ═════════════════════════════════════════════════════════════════
    DANGER ZONE
 ═════════════════════════════════════════════════════════════════ */
-.pref-danger-list { display: flex; flex-direction: column; gap: 10px; }
+.pref-danger-list { display: flex; flex-direction: column; gap: var(--sp-3); }
 .pref-danger {
   display: flex; justify-content: space-between; align-items: center;
-  gap: 20px;
+  gap: var(--sp-5);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 18px 22px;
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
 }
-.pref-danger.warn { border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
-.pref-danger.danger { border-color: color-mix(in srgb, var(--danger) 30%, transparent); background: color-mix(in srgb, var(--danger) 4%, transparent); }
+.pref-danger.warn { border-color: var(--warn); }
+.pref-danger.danger { border-color: var(--danger); background: var(--danger-subtle); }
 .pref-danger-title {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 4px;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  letter-spacing: var(--ls-body);
+  margin-bottom: var(--sp-1);
 }
 .pref-danger-desc {
-  font-size: 12.5px;
+  font-size: var(--fs-meta);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-meta);
   max-width: 540px;
 }
 .pref-btn-danger {
-  background: var(--danger-soft);
-  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  background: var(--danger-subtle);
+  border-color: var(--danger);
   color: var(--danger);
 }
 .pref-btn-danger:hover {
   background: color-mix(in srgb, var(--danger) 18%, transparent);
-  border-color: var(--danger);
-  color: var(--danger);
 }
 
 /* ═════════════════════════════════════════════════════════════════
    SAVE BAR
 ═════════════════════════════════════════════════════════════════ */
+/* A floating panel, so it is the one thing on this screen that earns --e3.
+ * It used to also carry a 3px accent ring and a coloured drop-glow. */
 .pref-savebar {
   position: fixed;
-  bottom: 16px;
+  bottom: var(--sp-4);
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);
-  border: 1px solid var(--accent-text);
-  border-radius: 14px;
-  padding: 12px 18px;
-  display: flex; align-items: center; gap: 24px;
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 12px 32px -20px var(--accent-glow);   /* declutter: softened */
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-lg);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex; align-items: center; gap: var(--sp-5);
+  box-shadow: var(--e3);
   z-index: 60;
-  animation: slide-up 0.25s ease;
+  animation: slide-up var(--dur-modal) var(--ease-out);
 }
 .pref-savebar-meta {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-meta);
+  font-weight: 500;
   color: var(--text);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--ls-meta);
 }
+/* "You have unsaved changes" is a state, not a request in flight, so the dot
+ * neither blinks nor glows. The bar's own arrival is the signal. */
 .pref-savebar-dot {
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
-  animation: blink 1.2s ease infinite;
+  background: var(--action);
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1218,31 +1183,23 @@
 ═════════════════════════════════════════════════════════════════ */
 @media (max-width: 1200px) {
   .pref { grid-template-columns: 220px 1fr; }
-  .pref-body { padding: 28px 28px 100px; }
-  .pref-row { grid-template-columns: 1fr; gap: 10px; padding: 14px 0; }
+  .pref-body { padding: var(--sp-6) var(--sp-6) calc(var(--sp-8) + var(--sp-6)); }
+  .pref-row { grid-template-columns: 1fr; gap: var(--sp-3); padding: var(--sp-3) 0; }
   .pref-row-meta { padding-top: 0; }
   .pref-row-sub { max-width: none; }
   .pref-checkgrid { grid-template-columns: repeat(2, 1fr) !important; }
-  .pref-aggr-grid { grid-template-columns: 1fr; }
   .pref-integ-grid { grid-template-columns: 1fr; }
   .pref-plans { grid-template-columns: 1fr; }
   .pref-usage { grid-template-columns: 1fr 1fr; }
   .pref-resume-picker { grid-template-columns: 1fr 1fr; }
   .pref-mode-grid { grid-template-columns: 1fr; }
-  .pref-mood { grid-template-columns: 1fr; gap: 18px; }
-  .pref-mood-stats { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 18px; }
   .pref-notif-head, .pref-notif-row {
     grid-template-columns: 1fr 60px 60px 60px;
   }
 }
 
-/* Reduced-motion: stop the remaining pref loops (status/save-bar blinks stay
- * semantic in the default experience but must respect the OS preference; the
- * mood orb is decorative). One-shot entrances (slide-up) are left alone. */
-@media (prefers-reduced-motion: reduce) {
-  .pref-status-dot.on,
-  .pref-mood-orb,
-  .pref-savebar-dot {
-    animation: none !important;
-  }
-}
+/* No prefers-reduced-motion block: the two infinite blinks it existed to
+ * suppress (.pref-status-dot.on, .pref-savebar-dot) no longer animate, and
+ * the mood orb they shared it with is deleted. The one remaining animation
+ * is the save bar's one-shot entrance, which app/globals.css already
+ * neutralises under the OS preference. */

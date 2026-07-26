@@ -75,7 +75,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
         <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{t('report.transcript')}</span>
         <a
           href={transcriptUrl}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--accent-text)' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--action)' }}
         >
           <ArrowDownTrayIcon style={{ width: 14, height: 14 }} />
           {t('report.download')}
@@ -108,14 +108,14 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
             style={{ width: 16, height: 16, color: 'var(--text-2)', transition: 'transform 0.18s ease', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}
           />
           {open ? t('report.transcriptHide') : t('report.transcriptView')}
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>
+          <span style={{ fontSize: 'var(--fs-label)', fontWeight: 500, color: 'var(--text-2)' }}>
             {t('report.transcriptCount', { count: exchanges.length })}
           </span>
         </button>
         {transcriptUrl ? (
           <a
             href={transcriptUrl}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--accent-text)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--action)' }}
           >
             <ArrowDownTrayIcon style={{ width: 14, height: 14 }} />
             {t('report.download')}
@@ -128,7 +128,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
           style={{
             marginTop: 12,
             border: '1px solid var(--rule)',
-            borderRadius: 'var(--r-xl, 16px)',
+            borderRadius: 'var(--r-lg)',
             background: 'var(--surface)',
             padding: 20,
             display: 'flex',
@@ -139,7 +139,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
           {exchanges.map((ex, i) => (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {i > 0 ? <div style={{ height: 1, background: 'var(--rule)', margin: '0 0 2px' }} /> : null}
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', fontWeight: 600 }}>
                 {String(i + 1).padStart(2, '0')}
               </span>
               {ex.interviewer.map((text, j) => (
@@ -154,11 +154,11 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
                 <div
                   key={`c-${j}`}
                   style={{
-                    borderLeft: '3px solid var(--accent-text)',
+                    borderLeft: '3px solid var(--action)',
                     paddingLeft: 12,
                   }}
                 >
-                  {turnLabel(t('live.you'), 'var(--accent-text)')}
+                  {turnLabel(t('live.you'), 'var(--action)')}
                   <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--text)', marginTop: 2 }}>
                     <Markdown block>{text}</Markdown>
                   </div>

@@ -23,48 +23,43 @@ import { Providers } from './providers';
 // never covered by these latin fonts (subsets:['latin']) — they fall back to
 // system fonts as before.
 
-// Cool Graphite design language uses Geist as the primary typeface.
-const geistSans = localFont({
-  src: './fonts/geist-100-900.woff2',
-  weight: '100 900',
-  display: 'swap',
-  variable: '--font-geist-sans',
-});
+// ── UI type (ruling R4) ───────────────────────────────────────────────────
+//
+// TWO families reach the interface, and no more. The previous system loaded
+// eleven and rendered three simultaneously — Space Grotesk for UI, Instrument
+// Serif italic for the accent word inside almost every headline, and JetBrains
+// Mono for every label, count and timestamp. That is what "the fonts are too
+// random" was describing, and it was measurable: 31 distinct sizes, 8 of them
+// half-pixel, 141 declarations below 12px.
+//
+// Inter carries 100% of read text. "Natural to users" has a precise
+// typographic meaning — high x-height, open apertures, unambiguous 1/l/I, and
+// a skeleton every reader has already absorbed from every operating system.
+// Instrument Sans appears only on the hero and page H1, applied to the whole
+// headline, never to a word inside one.
+//
+// Bound to --font-ui / --font-display in app/globals.css. Always reference the
+// generated CSS variable: next/font emits a hashed @font-face family, so a
+// literal 'Inter' in a stylesheet matches nothing and silently falls back.
 
-const geistMono = localFont({
-  src: './fonts/geist-mono-100-900.woff2',
-  weight: '100 900',
-  display: 'swap',
-  variable: '--font-geist-mono',
-});
-
-// Resume-builder fonts. Loaded once at the root so the Designer-tab font
-// picker can swap CSS vars on the preview without a network round-trip.
 const inter = localFont({
   src: './fonts/inter-100-900.woff2',
   weight: '100 900',
   display: 'swap',
   variable: '--font-inter',
 });
-const poppins = localFont({
-  src: [
-    { path: './fonts/poppins-400.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/poppins-500.woff2', weight: '500', style: 'normal' },
-    { path: './fonts/poppins-600.woff2', weight: '600', style: 'normal' },
-    { path: './fonts/poppins-700.woff2', weight: '700', style: 'normal' },
-  ],
+
+const instrumentSans = localFont({
+  src: './fonts/instrument-sans-400-700.woff2',
+  weight: '400 700',
   display: 'swap',
-  variable: '--font-poppins',
+  variable: '--font-instrument-sans',
 });
-const roboto = localFont({
-  src: [
-    { path: './fonts/roboto-400.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/roboto-500.woff2', weight: '500', style: 'normal' },
-    { path: './fonts/roboto-700.woff2', weight: '700', style: 'normal' },
-  ],
-  display: 'swap',
-  variable: '--font-roboto',
-});
+
+// ── Résumé document type ──────────────────────────────────────────────────
+// These are NOT UI fonts. They exist so the Designer tab can restyle the
+// résumé the user is about to send to an employer, where choosing your own
+// typography is legitimate. Four options (was eight); Inter is the default.
 const sourceSans = localFont({
   src: './fonts/source-sans-3-200-900.woff2',
   weight: '200 900',
@@ -86,44 +81,11 @@ const lora = localFont({
   variable: '--font-lora',
 });
 
-// The new 2026 RoboApply identity: Space Grotesk for chunky display + UI,
-// Instrument Serif (italic) for accent words and "feel-good" pull-quotes.
-const spaceGrotesk = localFont({
-  src: [
-    { path: './fonts/space-grotesk-400.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/space-grotesk-500.woff2', weight: '500', style: 'normal' },
-    { path: './fonts/space-grotesk-600.woff2', weight: '600', style: 'normal' },
-    { path: './fonts/space-grotesk-700.woff2', weight: '700', style: 'normal' },
-  ],
-  display: 'swap',
-  variable: '--font-space-grotesk',
-});
-const instrumentSerif = localFont({
-  src: [
-    { path: './fonts/instrument-serif-400.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/instrument-serif-400-italic.woff2', weight: '400', style: 'italic' },
-  ],
-  display: 'swap',
-  variable: '--font-instrument-serif',
-});
-
-// JetBrains Mono — the V3 mono slot: eyebrows, counts, timestamps, score
-// sub-labels, kbd, salary figures. Tabular feel. Bound to --mono in globals.css.
-const jetbrainsMono = localFont({
-  src: [
-    { path: './fonts/jetbrains-mono-400.woff2', weight: '400', style: 'normal' },
-    { path: './fonts/jetbrains-mono-500.woff2', weight: '500', style: 'normal' },
-    { path: './fonts/jetbrains-mono-600.woff2', weight: '600', style: 'normal' },
-  ],
-  display: 'swap',
-  variable: '--font-jetbrains-mono',
-});
-
 export const metadata = {
   metadataBase: new URL('https://www.roboapply.io'),
   title: 'RoboApply',
   description:
-    'We apply. You interview. Drop your resume, tell us what you want, and let our AI run the search overnight.',
+    "Find out why you're not getting interviews. Drop your resume — we read 1,000+ open roles, show you the ones you can actually get, and name exactly what's missing.",
   icons: {
     icon: '/roboapply-logo.png',
     shortcut: '/roboapply-logo.png',
@@ -144,24 +106,26 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      // SSR default is dark (the historical app theme). The inline script below
-      // flips data-theme to the persisted preference BEFORE first paint so there
-      // is no dark→light flash (FOUC). suppressHydrationWarning silences React's
+      // Light is the default theme (ruling R3). The inline script below flips
+      // data-theme to the persisted preference BEFORE first paint so there is
+      // no light→dark flash (FOUC). suppressHydrationWarning silences React's
       // warning about that pre-hydration mutation of the <html> attributes.
-      data-theme="dark"
+      data-theme="light"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} ${poppins.variable} ${roboto.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${spaceGrotesk.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${instrumentSans.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable}`}
     >
       <head>
         {/* No-flash theme bootstrap — must run render-blocking before paint.
-         * Reads the persisted dcTheme (lib/dcTheme.tsx, STORAGE_KEY
-         * 'roboapply:dc-theme:v3'), and sets data-theme + color-scheme on
-         * <html> so the correct palette is live on the very first frame.
-         * Keep the storage key + 'theme' field in sync with lib/dcTheme.tsx. */}
+         * Reads the persisted theme (lib/theme.tsx, STORAGE_KEY
+         * 'roboapply:theme:v4') and sets data-theme + color-scheme on <html>
+         * so the correct palette is live on the very first frame. Only 'light'
+         * and 'dark' are valid — the 'warm' scope was deleted, and the v4 key
+         * bump drops any persisted 'warm' so it snaps to the light default.
+         * Keep the storage key + 'theme' field in sync with lib/theme.tsx. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var s=localStorage.getItem('roboapply:dc-theme:v3');var t='dark';if(s){var p=JSON.parse(s);if(p&&(p.theme==='light'||p.theme==='dark'||p.theme==='warm'))t=p.theme;}var d=document.documentElement;d.setAttribute('data-theme',t);d.style.colorScheme=(t==='warm'?'light':t);}catch(e){}})();",
+              "(function(){try{var s=localStorage.getItem('roboapply:theme:v4');var t='light';if(s){var p=JSON.parse(s);if(p&&(p.theme==='light'||p.theme==='dark'))t=p.theme;}var d=document.documentElement;d.setAttribute('data-theme',t);d.style.colorScheme=t;}catch(e){}})();",
           }}
         />
       </head>

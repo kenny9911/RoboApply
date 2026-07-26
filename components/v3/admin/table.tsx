@@ -5,11 +5,12 @@
 // DataTable<Row> — the shared sortable / paginated dark table used by Users,
 // Sessions, and the drill-down ledgers. Real <table> semantics with
 // <th scope="col">, aria-sort on sortable headers (which are <button>s), and a
-// mono tabular body. Row click is an enhancement (the row is given a pointer +
-// onClick); a focusable cell remains the canonical path.
+// tabular-nums body (figures align on the digits; no monospace face). Row click
+// is an enhancement (the row is given a pointer + onClick); a focusable cell
+// remains the canonical path.
 //
 // States mirror activity/page.tsx: error → retry panel, loading → shimmer
-// rows, empty → inline mono message, else the rows.
+// rows, empty → inline message, else the rows.
 
 import type { ReactNode } from 'react';
 import { Btn } from '../primitives/Btn';
@@ -96,7 +97,7 @@ export function DataTable<Row, K extends string = string>({
           textAlign: 'center',
         }}
       >
-        <p style={{ fontFamily: 'var(--sans)', fontSize: 16, fontWeight: 600, color: 'var(--text)', margin: '0 0 8px' }}>
+        <p style={{ fontFamily: 'var(--font-ui)', fontSize: 16, fontWeight: 600, color: 'var(--text)', margin: '0 0 8px' }}>
           {errorTitle}
         </p>
         {errorBody ? (
@@ -158,16 +159,13 @@ export function DataTable<Row, K extends string = string>({
                   scope="col"
                   aria-sort={ariaSort}
                   style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: 10,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--muted)',
+                    fontSize: 'var(--fs-label)',
+                    color: 'var(--text-muted)',
                     fontWeight: 600,
                     textAlign: col.align === 'right' ? 'right' : 'left',
                     padding: '13px 16px',
                     borderBottom: '1px solid var(--rule)',
-                    background: 'var(--bg-2)',
+                    background: 'var(--surface)',
                     whiteSpace: 'nowrap',
                     width: col.width,
                   }}
@@ -193,7 +191,7 @@ export function DataTable<Row, K extends string = string>({
                     >
                       {col.header}
                       {isSorted ? (
-                        <span aria-hidden="true" style={{ color: 'var(--accent-text)' }}>
+                        <span aria-hidden="true" style={{ color: 'var(--action)' }}>
                           {sort!.dir === 'asc' ? '▲' : '▼'}
                         </span>
                       ) : null}
@@ -216,9 +214,8 @@ export function DataTable<Row, K extends string = string>({
                 style={{
                   padding: '40px 16px',
                   textAlign: 'center',
-                  fontFamily: 'var(--mono)',
-                  fontSize: 13,
-                  color: 'var(--muted)',
+                  fontSize: 'var(--fs-meta)',
+                  color: 'var(--text-muted)',
                 }}
               >
                 {emptyMessage}
@@ -251,11 +248,12 @@ export function DataTable<Row, K extends string = string>({
                       key={col.key}
                       style={{
                         padding: '13px 16px',
-                        borderBottom: '1px solid var(--rule-soft)',
-                        fontSize: 13,
+                        borderBottom: '1px solid var(--rule)',
+                        fontSize: 'var(--fs-meta)',
                         verticalAlign: 'middle',
                         textAlign: col.align === 'right' ? 'right' : 'left',
-                        fontFamily: col.align === 'right' ? 'var(--mono)' : undefined,
+                        /* Right-aligned cells are figures: they align on the
+                         * digits, which is tabular-nums' job, not a mono face. */
                         fontVariantNumeric: col.align === 'right' ? 'tabular-nums' : undefined,
                         color: 'var(--text)',
                       }}
@@ -277,9 +275,8 @@ export function DataTable<Row, K extends string = string>({
             alignItems: 'center',
             justifyContent: 'space-between',
             marginTop: 14,
-            fontFamily: 'var(--mono)',
-            fontSize: 11,
-            color: 'var(--muted)',
+            fontSize: 'var(--fs-label)',
+            color: 'var(--text-muted)',
           }}
         >
           <span>
@@ -305,7 +302,7 @@ function SkeletonRows({ colCount, label }: { colCount: number; label?: string })
       {Array.from({ length: 8 }).map((_, r) => (
         <tr key={r} className="animate-pulse" aria-busy="true" aria-label={r === 0 ? label : undefined}>
           {Array.from({ length: colCount }).map((__, c) => (
-            <td key={c} style={{ padding: '13px 16px', borderBottom: '1px solid var(--rule-soft)' }}>
+            <td key={c} style={{ padding: '13px 16px', borderBottom: '1px solid var(--rule)' }}>
               <div style={{ height: 12, borderRadius: 4, background: 'var(--surface-2)', width: c === 0 ? '70%' : '50%', marginLeft: c === 0 ? 0 : 'auto' }} />
             </td>
           ))}
@@ -339,19 +336,18 @@ export function UserCell({
           borderRadius: '50%',
           display: 'grid',
           placeItems: 'center',
-          fontFamily: 'var(--mono)',
-          fontSize: 11,
+          fontSize: 'var(--fs-label)',
           fontWeight: 700,
           flexShrink: 0,
           background: 'var(--grad-brand)',
-          color: 'var(--accent-ink)',
+          color: 'var(--action-ink)',
         }}
       >
         {initial}
       </div>
       <div>
         <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{email}</div>
-        {sub ? <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted)' }}>{sub}</div> : null}
+        {sub ? <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{sub}</div> : null}
       </div>
     </div>
   );

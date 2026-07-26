@@ -41,7 +41,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
     3: t('security.strength.good'),
     4: t('security.strength.strong'),
   };
-  const fillColor = score <= 1 ? 'var(--danger)' : score === 2 ? 'var(--warn)' : 'var(--accent-text)';
+  const fillColor = score <= 1 ? 'var(--danger)' : score === 2 ? 'var(--warn)' : 'var(--action)';
 
   return (
     <div>
@@ -61,8 +61,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
       {score > 0 ? (
         <div
           style={{
-            fontFamily: 'var(--mono)',
-            fontSize: '10.5px',
+            fontSize: 'var(--fs-label)',
             color: fillColor,
             marginTop: 5,
           }}
@@ -95,11 +94,8 @@ function PasswordField({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 16, maxWidth: 420 }}>
       <label
         style={{
-          fontFamily: 'var(--mono)',
-          fontSize: '11px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           fontWeight: 600,
         }}
       >
@@ -117,8 +113,7 @@ function PasswordField({
           borderRadius: 9,
           padding: '10px 12px',
           color: 'var(--text)',
-          fontFamily: 'var(--mono)',
-          fontSize: '13px',
+          fontSize: 'var(--fs-meta)',
         }}
       />
       {children}
@@ -273,7 +268,7 @@ export function DangerZone({ onRequestDelete }: { onRequestDelete: () => void })
     <div
       style={{
         border: '1px solid var(--danger)',
-        background: 'var(--danger-soft)',
+        background: 'var(--danger-subtle)',
         borderRadius: 'var(--r-lg)',
         padding: 20,
         display: 'flex',

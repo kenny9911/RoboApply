@@ -10,10 +10,11 @@
 //   The live mock-interview session is a focused fullscreen mode → no
 //   Sidebar/Topbar (the screen owns its own LiveBar + back link).
 //
-// Theme wiring: the dcTheme accent/density/aggressiveness/tone are written as
-// data-* on the wrapper so the CSS accent swap ([data-accent]) and density
-// multiplier resolve. `--density` is set imperatively from the density key
-// (0.7 / 1 / 1.2) — CSS can't map an enum to a number.
+// Theme wiring: none, here. Appearance is a single light/dark bit written to
+// <html data-theme> by lib/theme's provider, so the shell needs no data-* of
+// its own. The wrapper used to carry data-accent / data-density /
+// data-aggressiveness / data-tone plus an imperative `--density` multiplier;
+// all four knobs are deleted (OVERHAUL_RULINGS.md R3).
 //
 // `.dark-canvas` is kept on the wrapper so surviving V2 pages (not yet
 // replaced by a V3 screen lane) still pick up the legacy retint rules in
@@ -22,10 +23,8 @@
 // The edge proxy (roboapply/proxy.ts) gates these paths; we don't re-check.
 
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar, Topbar, MobileNav, CommandPaletteProvider } from '../../components/v3/shell';
-import { useDcTheme, densityMultiplier } from '../../lib/dcTheme';
 import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
 import { ResumeGate } from '../../components/ResumeGate';
@@ -33,7 +32,6 @@ import { JobApplyingGate } from '../../components/JobApplyingGate';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
-  const theme = useDcTheme();
 
   // Live mock-interview session = focused fullscreen (no shell). Setup +
   // report keep the shell so the user can navigate away mid-flow. Mirrors the
@@ -43,30 +41,14 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     !pathname.endsWith('/report') &&
     !pathname.includes('/custom/');
 
-  // Map the density enum → the --density multiplier on the wrapper.
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.documentElement.style.setProperty(
-      '--density',
-      String(densityMultiplier(theme.density)),
-    );
-  }, [theme.density]);
-
-  const wrapperProps = {
-    'data-accent': theme.accent,
-    'data-density': theme.density,
-    'data-aggressiveness': theme.aggressiveness,
-    'data-tone': theme.tone,
-  } as const;
-
   // Fullscreen live interview — no grid, no shell.
   const shell = isMockInterviewLive ? (
-    <div {...wrapperProps} className="dark-canvas v3-root min-h-screen">
+    <div className="dark-canvas v3-root min-h-screen">
       <main className="min-h-screen">{children}</main>
     </div>
   ) : (
     <CommandPaletteProvider>
-      <div {...wrapperProps} className="dark-canvas v3-root">
+      <div className="dark-canvas v3-root">
         <div className="app">
           {/* Sidebar — a direct grid child (248px). Hidden below 760px by
            *  v3.css (`.app > .side`), where MobileNav takes over. */}

@@ -165,19 +165,12 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
             </div>
             <h2 className="rb-modal-title">
               {step === 'pick' ? t('tailor.title_pick') : null}
-              {step === 'analyzing' ? (
-                <>
-                  {t('tailor.title_analyzing_lead')}{' '}
-                  <em>{t('tailor.title_analyzing_accent')}</em>{' '}
-                  {t('tailor.title_analyzing_after')}
-                </>
-              ) : null}
-              {step === 'review' ? (
-                <>
-                  {t('tailor.title_review_lead')}{' '}
-                  <em>{job?.company}</em>
-                </>
-              ) : null}
+              {step === 'analyzing'
+                ? `${t('tailor.title_analyzing_lead')} ${t('tailor.title_analyzing_accent')} ${t('tailor.title_analyzing_after')}`
+                : null}
+              {step === 'review'
+                ? `${t('tailor.title_review_lead')} ${job?.company ?? ''}`
+                : null}
               {step === 'done' ? t('tailor.title_done') : null}
             </h2>
           </div>
@@ -206,11 +199,11 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                 </div>
                 <div className="rb-tailor-jobs">
                   {jobsLoading ? (
-                    <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                       {t('tailor.loading_jobs')}
                     </p>
                   ) : jobs.length === 0 ? (
-                    <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                       {t('tailor.no_jobs')}
                     </p>
                   ) : (
@@ -432,7 +425,6 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                   display: 'grid',
                   placeItems: 'center',
                   margin: '0 auto 16px',
-                  boxShadow: '0 0 30px rgba(74, 222, 128, 0.4)',
                 }}
               >
                 <IconCheck size={28} />
@@ -473,7 +465,7 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
               <button type="button" className="btn ghost" onClick={onClose}>
                 {t('common.cancel')}
               </button>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {t('tailor.pick_hint')}
               </span>
             </>
@@ -564,9 +556,9 @@ function TailorChangeRow({
                 key={i}
                 className="rb-skill"
                 style={{
-                  background: 'var(--accent-soft)',
-                  color: 'var(--accent-text)',
-                  borderColor: 'var(--accent-text)',
+                  background: 'var(--action-subtle)',
+                  color: 'var(--action)',
+                  borderColor: 'var(--action)',
                 }}
               >
                 + {a}

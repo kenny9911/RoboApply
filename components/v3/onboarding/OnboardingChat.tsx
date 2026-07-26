@@ -170,9 +170,8 @@ export function OnboardingChat({
       {restored ? (
         <div
           style={{
-            fontSize: 12.5,
-            color: 'var(--muted)',
-            fontFamily: 'var(--mono)',
+            fontSize: 'var(--fs-meta)',
+            color: 'var(--text-muted)',
           }}
         >
           {t('restore_notice')}
@@ -234,9 +233,8 @@ export function OnboardingChat({
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              fontSize: 12.5,
-              color: 'var(--muted)',
-              fontFamily: 'var(--mono)',
+              fontSize: 'var(--fs-meta)',
+              color: 'var(--text-muted)',
             }}
           >
             <div className="spinner" style={{ width: 12, height: 12 }} />
@@ -318,7 +316,7 @@ export function OnboardingChat({
         </button>
       </div>
       {state.turnCount === 0 && openingPrompt ? (
-        <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
           {t('opening_prompt_hint')}
         </p>
       ) : null}

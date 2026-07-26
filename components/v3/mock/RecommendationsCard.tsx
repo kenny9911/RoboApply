@@ -34,7 +34,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
         <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
           {t('report.recommendations.title')}
         </h2>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
           {t('report.recommendations.sub')}
         </span>
       </div>
@@ -86,8 +86,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
                 {rec.linkedDimension ? (
                   <span
                     style={{
-                      fontFamily: 'var(--mono)',
-                      fontSize: 10.5,
+                      fontSize: 'var(--fs-label)',
                       color: 'var(--text-2)',
                       background: 'var(--surface-2)',
                       border: '1px solid var(--rule)',
@@ -123,8 +122,8 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
                 <div
                   style={{
                     marginTop: 10,
-                    background: 'var(--accent-soft)',
-                    border: '1px solid var(--accent-text)',
+                    background: 'var(--action-subtle)',
+                    border: '1px solid var(--action)',
                     borderRadius: 10,
                     padding: '12px 14px',
                   }}

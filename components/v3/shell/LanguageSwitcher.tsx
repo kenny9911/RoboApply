@@ -111,9 +111,9 @@ export function LanguageSwitcher({
                 fontSize: 13,
                 fontWeight: 500,
                 cursor: 'pointer',
-                border: `1px solid ${active ? 'var(--accent-text)' : 'var(--rule)'}`,
-                background: active ? 'var(--accent-soft)' : 'var(--surface)',
-                color: active ? 'var(--accent-text)' : 'var(--text)',
+                border: `1px solid ${active ? 'var(--action)' : 'var(--rule)'}`,
+                background: active ? 'var(--action-subtle)' : 'var(--surface)',
+                color: active ? 'var(--action)' : 'var(--text)',
               }}
             >
               {l.label}
@@ -153,7 +153,7 @@ export function LanguageSwitcher({
             borderRadius: 12,
             border: '1px solid var(--rule)',
             background: 'var(--surface)',
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.45)',
+            boxShadow: 'var(--e3)',
           }}
         >
           {READY_LOCALES.map((l) => {
@@ -177,8 +177,8 @@ export function LanguageSwitcher({
                   cursor: 'pointer',
                   fontSize: 13,
                   textAlign: 'left',
-                  background: active ? 'var(--accent-soft)' : 'transparent',
-                  color: active ? 'var(--accent-text)' : 'var(--text)',
+                  background: active ? 'var(--action-subtle)' : 'transparent',
+                  color: active ? 'var(--action)' : 'var(--text)',
                 }}
                 onMouseEnter={(e) => {
                   if (!active)

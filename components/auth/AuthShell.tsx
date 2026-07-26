@@ -23,7 +23,7 @@ function SparkMark() {
         height="20"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="var(--accent-text)"
+        stroke="var(--action)"
         strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -65,8 +65,11 @@ export function AuthBrandPanel() {
       <AuthBrandMark />
       <div className="auth-brand__inner">
         <p className="auth-eyebrow">{t('eyebrow')}</p>
+        {/* The headline is one continuous string in one family (ruling R4). The
+         * message still carries legacy <em> markup, so the tag handler stays —
+         * it now renders the chunks inline instead of an italic-serif accent. */}
         <p className="auth-headline">
-          {t.rich('headline', { em: (chunks) => <em>{chunks}</em> })}
+          {t.rich('headline', { em: (chunks) => <>{chunks}</> })}
         </p>
         <p className="auth-lead">{t('lead')}</p>
         <ul className="auth-features">

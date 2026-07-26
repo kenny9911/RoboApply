@@ -44,7 +44,7 @@ export interface ResumeTheme {
 export const DEFAULT_THEME: ResumeTheme = {
   templateKey: 'ats-clean',
   accent: '#0f766e',
-  font: 'geist',
+  font: 'inter',
   lineHeight: 120,
   listLineHeight: 120,
   dateFormat: 'MM/YYYY',
@@ -57,15 +57,25 @@ export const DEFAULT_THEME: ResumeTheme = {
   marginsTB: 0.6,
 };
 
+/** The résumé Designer picker. Four faces, was eight.
+ *
+ *  Geist, Poppins and Roboto are RETIRED: their woff2 no longer ships (see
+ *  app/layout.tsx). `FontKey` deliberately still accepts them so résumés with
+ *  one of those persisted keeps parsing — `fontFamilyFor` maps them onto
+ *  Inter. Do not narrow the union; the value lives in the database. */
 export const FONT_OPTIONS: { key: FontKey; label: string; cssVar: string }[] = [
-  { key: 'geist', label: 'Geist', cssVar: 'var(--font-geist-sans)' },
   { key: 'inter', label: 'Inter', cssVar: 'var(--font-inter)' },
-  { key: 'poppins', label: 'Poppins', cssVar: 'var(--font-poppins)' },
-  { key: 'roboto', label: 'Roboto', cssVar: 'var(--font-roboto)' },
   { key: 'source-sans', label: 'Source Sans 3', cssVar: 'var(--font-source-sans)' },
-  { key: 'merriweather', label: 'Merriweather', cssVar: 'var(--font-merriweather)' },
   { key: 'lora', label: 'Lora', cssVar: 'var(--font-lora)' },
+  { key: 'merriweather', label: 'Merriweather', cssVar: 'var(--font-merriweather)' },
 ];
+
+/** Retired keys → the face they now render in. */
+const RETIRED_FONTS: Record<string, string> = {
+  geist: 'var(--font-inter)',
+  poppins: 'var(--font-inter)',
+  roboto: 'var(--font-inter)',
+};
 
 /** Teal-style palette + the RoboApply accent at the front. */
 export const ACCENT_SWATCHES: { color: string; label: string }[] = [
@@ -82,7 +92,8 @@ export const ACCENT_SWATCHES: { color: string; label: string }[] = [
 
 export function fontFamilyFor(font: FontKey): string {
   const found = FONT_OPTIONS.find((f) => f.key === font);
-  return found ? `${found.cssVar}, system-ui, sans-serif` : 'system-ui, sans-serif';
+  const cssVar = found?.cssVar ?? RETIRED_FONTS[font] ?? 'var(--font-inter)';
+  return `${cssVar}, system-ui, sans-serif`;
 }
 
 const MONTHS_SHORT = [

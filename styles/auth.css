@@ -2,10 +2,14 @@
  * RoboApply — Auth (login / signup) surface
  *
  * A consumer-facing split screen: a brand/value-prop hero on the left
- * (desktop only) and a clean form card on the right. Built entirely on the V3
- * bare tokens (var(--bg) / var(--surface) / var(--accent) / var(--accent-text)
- * / --shadow-* …), so it inherits the dark-default + light-mode flip and the
- * data-accent swap automatically — no per-theme overrides needed here.
+ * (desktop only) and a clean form card on the right. Built entirely on the
+ * design-system role tokens (--bg / --surface-2 / --text / --action / --rule …),
+ * so the light default and the dark flip both fall out of the token layer —
+ * there is not, and must not be, a per-theme override in this file.
+ *
+ * The panel is a flat plane, not a lit one: the two radial accent washes and
+ * the blurred brand orb are gone (ruling §5.3, no glow). Separation between the
+ * two halves comes from one surface step plus a 1px rule.
  * ========================================================================== */
 
 .auth-split {
@@ -24,102 +28,92 @@
   position: relative;
   flex-direction: column;
   justify-content: space-between;
-  padding: 44px 48px;
+  padding: var(--sp-7);
   overflow: hidden;
-  border-right: 1px solid var(--rule-soft);
-  background:
-    radial-gradient(120% 120% at 6% 2%, var(--accent-soft) 0%, transparent 44%),
-    radial-gradient(130% 130% at 100% 100%, var(--violet-soft) 0%, transparent 50%),
-    linear-gradient(168deg, var(--surface) 0%, var(--bg-2) 58%, var(--bg) 100%);
+  border-right: 1px solid var(--rule);
+  background: var(--surface-2);
 }
 @media (min-width: 1024px) { .auth-brand { display: flex; } }
 
-/* a soft brand orb drifting behind the hero copy */
-.auth-brand__glow {
-  position: absolute;
-  inset: auto -140px -180px auto;
-  width: 480px;
-  height: 480px;
-  border-radius: 50%;
-  background: var(--grad-orb);
-  filter: blur(26px);
-  opacity: 0.45;
-  pointer-events: none;
-}
+/* The drifting brand orb is deleted. AuthShell still renders the (aria-hidden)
+ * element, so it is explicitly collapsed here rather than left to inherit a
+ * stray box. Remove both once components/auth/AuthShell.tsx drops the div. */
+.auth-brand__glow { display: none; }
 
 .auth-brand__inner {
   position: relative;
   z-index: 1;
   margin: auto 0;
-  max-width: 470px;
+  max-width: 480px;
 }
 
 .auth-eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0 0 18px;
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
+  margin: 0 0 var(--sp-4);
 }
 
+/* The one hero on this surface: display face, applied to the whole line. */
 .auth-headline {
-  font-family: var(--sans);
-  font-weight: 600;
-  font-size: clamp(40px, 4.4vw, 60px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-hero);
+  line-height: var(--lh-hero);
+  letter-spacing: var(--ls-hero);
   color: var(--text);
   margin: 0;
 }
+/* The copy still ships an <em> chunk (t.rich), which used to render as an
+ * italic serif accent word. Emphasis inside a headline is banned (ruling R4),
+ * so the tag is neutralised rather than styled — it must not reintroduce a
+ * second family, a second weight or a colour break mid-sentence. */
 .auth-headline em {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 400;
-  color: var(--accent-text);
+  font-style: normal;
+  font-weight: inherit;
+  color: inherit;
 }
 
 .auth-lead {
-  margin: 20px 0 0;
-  font-size: 16px;
-  line-height: 1.6;
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
   color: var(--text-2);
-  max-width: 448px;
 }
 
 .auth-features {
-  margin: 30px 0 0;
+  margin: var(--sp-6) 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: var(--sp-3);
 }
 .auth-feature {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 14.5px;
+  gap: var(--sp-3);
+  font-size: var(--fs-body);
   color: var(--text-2);
 }
 .auth-feature__dot {
   display: grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
   flex: none;
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  background: var(--action-subtle);
+  color: var(--action);
 }
 
 .auth-brand__foot {
   position: relative;
   z-index: 1;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--muted-2);
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -129,13 +123,13 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 40px 22px;
+  padding: var(--sp-6) var(--sp-5);
 }
 
 .auth-card {
   width: 100%;
-  max-width: 402px;
-  animation: authCardIn var(--dur-slow) var(--ease-standard) both;
+  max-width: 400px;
+  animation: authCardIn var(--dur-enter) var(--ease-out) both;
 }
 @keyframes authCardIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -143,53 +137,59 @@
 }
 
 /* compact brand mark — only shown on mobile, where the brand panel is hidden */
-.auth-card__brand { display: flex; margin-bottom: 30px; }
+.auth-card__brand { display: flex; margin-bottom: var(--sp-6); }
 @media (min-width: 1024px) { .auth-card__brand { display: none; } }
 
+/* .auth-title is an <h1>; family, weight and tracking come from the base h1
+ * rule in globals.css. Only the step on the scale is set here. */
 .auth-title {
-  font-family: var(--sans);
-  font-weight: 600;
-  font-size: 28px;
-  letter-spacing: -0.025em;
+  font-size: var(--fs-stat);
   color: var(--text);
   margin: 0;
 }
 .auth-subtitle {
-  margin: 8px 0 0;
-  font-size: 14.5px;
-  line-height: 1.5;
-  color: var(--muted);
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
 }
 
 .auth-form {
-  margin-top: 26px;
+  margin-top: var(--sp-5);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--sp-4);
 }
 
-.auth-field { display: flex; flex-direction: column; gap: 7px; }
-.auth-field__label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.auth-field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.auth-field__label {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--text-2);
+}
 .auth-field__input {
   width: 100%;
-  height: 46px;
-  padding: 0 14px;
-  font-family: var(--sans);
-  font-size: 15px;
+  height: var(--control-lg);
+  padding: 0 var(--sp-3);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   outline: none;
   transition:
-    border-color var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
+    border-color var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
 }
-.auth-field__input::placeholder { color: var(--muted-2); }
+.auth-field__input:hover { border-color: var(--rule-strong); }
+.auth-field__input::placeholder { color: var(--disabled); }
 .auth-field__input:focus {
-  border-color: var(--accent-text);
-  box-shadow: var(--shadow-focus);
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
 }
+/* Chrome repaints autofilled inputs with its own yellow; the absurd transition
+ * delay is the only reliable way to keep our surface colour. */
 .auth-field__input:-webkit-autofill {
   -webkit-text-fill-color: var(--text);
   transition: background-color 9999s ease-out;
@@ -198,25 +198,25 @@
 .auth-error {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 11px 13px;
-  border-radius: var(--r-md);
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.36);
-  color: var(--robo-danger);
-  font-size: 13px;
-  line-height: 1.45;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
 }
 .auth-error svg { flex: none; margin-top: 1px; }
 
-/* full-width, taller CTA built on the canonical .btn.primary */
+/* full-width, taller CTA built on the canonical .btn.primary — weight and fill
+ * stay inherited so this button never drifts from every other primary CTA. */
 .btn.auth-submit {
   width: 100%;
   justify-content: center;
-  height: 47px;
-  margin-top: 2px;
-  font-size: 14.5px;
-  border-radius: var(--r-md);
+  height: var(--control-lg);
+  font-size: var(--fs-body);
+  border-radius: var(--r-sm);
 }
 .btn.auth-submit:disabled {
   opacity: 0.55;
@@ -225,13 +225,13 @@
 }
 
 .auth-switch {
-  margin: 22px 0 0;
-  font-size: 14px;
-  color: var(--muted);
+  margin: var(--sp-5) 0 0;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
   text-align: center;
 }
 .auth-switch a {
-  color: var(--accent-text);
+  color: var(--action);
   font-weight: 500;
 }
 .auth-switch a:hover { text-decoration: underline; }

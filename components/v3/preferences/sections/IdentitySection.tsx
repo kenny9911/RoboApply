@@ -46,12 +46,7 @@ export function IdentitySection({
     <>
       <PrefHeader
         eyebrow={t('identity.eyebrow')}
-        title={
-          <>
-            {t('identity.title_before')} <em>{t('identity.title_em')}</em>
-            {t('identity.title_after')}
-          </>
-        }
+        title={`${t('identity.title_before')} ${t('identity.title_em')}${t('identity.title_after')}`}
         sub={t('identity.sub')}
       />
 

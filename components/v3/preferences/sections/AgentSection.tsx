@@ -70,12 +70,7 @@ export function AgentSection({
     <>
       <PrefHeader
         eyebrow={t('agent.eyebrow')}
-        title={
-          <>
-            {t('agent.title_before')} <em>{t('agent.title_em')}</em>{' '}
-            {t('agent.title_after')}
-          </>
-        }
+        title={`${t('agent.title_before')} ${t('agent.title_em')} ${t('agent.title_after')}`}
         sub={t('agent.sub')}
       />
 
@@ -86,7 +81,6 @@ export function AgentSection({
           style={{
             background: `radial-gradient(circle at 30% 30%, ${orb[0]}, transparent 60%),
                          radial-gradient(circle at 70% 70%, ${orb[1]}, transparent 60%)`,
-            boxShadow: `0 0 80px ${orb[0]}77`,
             animationDuration:
               p.aggressiveness === 'aggressive'
                 ? '3s'
@@ -179,7 +173,7 @@ export function AgentSection({
               />
             </div>
             <span
-              style={{ color: 'var(--muted)', fontFamily: 'var(--mono)', fontSize: 12 }}
+              style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-label)' }}
             >
               →
             </span>

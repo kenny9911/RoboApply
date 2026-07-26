@@ -205,7 +205,7 @@ export function LandingContent() {
                   style={{
                     inset: '-3rem',
                     background:
-                      'radial-gradient(closest-side, var(--accent-soft), transparent 70%)',
+                      'radial-gradient(closest-side, var(--action-subtle), transparent 70%)',
                     filter: 'blur(24px)',
                   }}
                 />
@@ -258,10 +258,7 @@ export function LandingContent() {
                       <span />
                       <span
                         className="caret inline-block h-[15px] w-[8px] translate-y-[2px]"
-                        style={{
-                          background: 'var(--accent)',
-                          boxShadow: '0 0 10px var(--accent-glow)',
-                        }}
+                        style={{ background: 'var(--brand-mark)' }}
                       />
                     </div>
                   </div>
@@ -287,7 +284,7 @@ export function LandingContent() {
         {/* ── 01 · Why bots are losing — the stats band ──────────── */}
         <section
           className="border-t border-ink-line-soft py-16 md:py-24"
-          style={{ background: 'var(--bg-2)' }}
+          style={{ background: 'var(--surface)' }}
         >
           <PageContainer maxWidth="content">
             <div className="scroll-rise">
@@ -371,10 +368,10 @@ export function LandingContent() {
                       <span
                         className={`relative z-10 mt-1 h-[11px] w-[11px] rounded-full border-2 ${
                           last
-                            ? 'border-[color:var(--accent)] bg-[color:var(--accent)]'
+                            ? 'border-[color:var(--action)] bg-[color:var(--action)]'
                             : 'border-[color:var(--rule)] bg-bg-page'
                         }`}
-                        style={last ? { boxShadow: 'var(--shadow-cta)' } : undefined}
+                        style={last ? { boxShadow: 'var(--e1)' } : undefined}
                       />
                     </div>
                     {/* content */}
@@ -405,7 +402,7 @@ export function LandingContent() {
         {/* ── 03 · The full loop — feature grid ──────────────────── */}
         <section
           className="border-y border-ink-line-soft py-16 md:py-24"
-          style={{ background: 'var(--bg-2)' }}
+          style={{ background: 'var(--surface)' }}
         >
           <PageContainer maxWidth="wide">
             <div className="scroll-rise text-center">
@@ -427,7 +424,7 @@ export function LandingContent() {
               {LOOP_CARDS.map(({ key, variant }) => (
                 <div
                   key={key}
-                  className="scroll-rise relative rounded-[var(--r-lg)] border border-ink-line bg-bg-card p-6 transition-all duration-200 ease-standard hover:-translate-y-[2px] hover:border-[color:var(--accent)] md:p-7"
+                  className="scroll-rise relative rounded-[var(--r-lg)] border border-ink-line bg-bg-card p-6 transition-all duration-200 ease-standard hover:-translate-y-[2px] hover:border-[color:var(--action)] md:p-7"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <Tag variant={variant} label={t(`loop.cards.${key}.tag`)} />
@@ -526,7 +523,6 @@ export function LandingContent() {
                       {t('studio.report.overall_label')}{' '}
                       <span
                         className="text-[20px] font-bold text-accent-text"
-                        style={{ textShadow: '0 0 16px var(--accent-glow)' }}
                       >
                         {t('studio.report.overall')}
                       </span>
@@ -549,7 +545,7 @@ export function LandingContent() {
                       </div>
                     ))}
                   </div>
-                  <blockquote className="serif-human mt-6 border-l-2 border-[color:var(--accent)] pl-4 text-[17px] leading-snug text-ink-900">
+                  <blockquote className="serif-human mt-6 border-l-2 border-[color:var(--action)] pl-4 text-[17px] leading-snug text-ink-900">
                     {t('studio.report.quote')}
                   </blockquote>
                   <p className="mt-2 pl-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
@@ -564,7 +560,7 @@ export function LandingContent() {
         {/* ── 05 · Operating rules — guarantees.conf ─────────────── */}
         <section
           className="border-y border-ink-line-soft py-16 md:py-24"
-          style={{ background: 'var(--bg-2)' }}
+          style={{ background: 'var(--surface)' }}
         >
           <PageContainer maxWidth="content">
             <div className="scroll-rise text-center">
@@ -589,7 +585,7 @@ export function LandingContent() {
                 </span>
                 <span
                   className="rounded-[4px] px-2 py-1 font-mono text-[10px] tracking-[0.14em]"
-                  style={{ background: 'var(--ok-soft)', color: 'var(--ok)' }}
+                  style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}
                 >
                   {t('rules.badge')}
                 </span>
@@ -603,7 +599,7 @@ export function LandingContent() {
                     <span
                       aria-hidden
                       className="mt-[3px] rounded-[4px] px-1.5 py-0.5 font-mono text-[11px]"
-                      style={{ background: 'var(--ok-soft)', color: 'var(--ok)' }}
+                      style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}
                     >
                       {t('rules.ok')}
                     </span>
@@ -642,15 +638,15 @@ export function LandingContent() {
               {TIERS.map(({ key, featured }) => (
                 <div
                   key={key}
-                  className={`scroll-rise relative flex flex-col rounded-[var(--r-lg)] border bg-bg-card p-6 transition-all duration-200 ease-standard hover:-translate-y-[2px] hover:border-[color:var(--accent)] hover:shadow-lift md:p-7 ${
-                    featured ? 'border-[color:var(--accent)]' : 'border-ink-line'
+                  className={`scroll-rise relative flex flex-col rounded-[var(--r-lg)] border bg-bg-card p-6 transition-all duration-200 ease-standard hover:-translate-y-[2px] hover:border-[color:var(--action)] hover:shadow-lift md:p-7 ${
+                    featured ? 'border-[color:var(--action)]' : 'border-ink-line'
                   }`}
-                  style={featured ? { boxShadow: 'var(--shadow-ring)' } : undefined}
+                  style={featured ? { boxShadow: 'var(--e2)' } : undefined}
                 >
                   {featured && (
                     <span
                       className="absolute -top-3 left-7 rounded-pill px-2.5 py-1 font-mono text-[10px] font-medium tracking-[0.12em]"
-                      style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+                      style={{ background: 'var(--action)', color: 'var(--action-ink)' }}
                     >
                       {t('pricing.tiers.starter.badge')}
                     </span>
@@ -666,11 +662,6 @@ export function LandingContent() {
                       className={`font-mono text-[52px] font-bold leading-none tabular-nums ${
                         featured ? 'text-accent-text' : 'text-ink-900'
                       }`}
-                      style={
-                        featured
-                          ? { textShadow: '0 0 24px var(--accent-glow)' }
-                          : undefined
-                      }
                     >
                       {t(`pricing.tiers.${key}.rate`)}
                     </span>
@@ -750,7 +741,7 @@ export function LandingContent() {
             className="pointer-events-none absolute inset-0"
             style={{
               backgroundImage:
-                'radial-gradient(ellipse 640px 360px at 50% 118%, var(--accent-soft), transparent 65%), radial-gradient(ellipse 520px 420px at 82% -12%, var(--violet-soft), transparent 60%)',
+                'radial-gradient(ellipse 640px 360px at 50% 118%, var(--action-subtle), transparent 65%), radial-gradient(ellipse 520px 420px at 82% -12%, var(--violet-soft), transparent 60%)',
             }}
           />
           <PageContainer

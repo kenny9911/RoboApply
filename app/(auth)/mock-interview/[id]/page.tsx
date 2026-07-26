@@ -801,7 +801,7 @@ function RoomStage({
         {/* RIGHT — candidate + controls + transcript */}
         <div className="iv-stage-right">
           {video ? (
-            <div style={{ position: 'relative', borderRadius: 'var(--r-xl, 16px)', overflow: 'hidden', border: '1px solid var(--rule)', background: '#000', aspectRatio: '16 / 9' }}>
+            <div style={{ position: 'relative', borderRadius: 'var(--r-lg)', overflow: 'hidden', border: '1px solid var(--rule)', background: '#000', aspectRatio: '16 / 9' }}>
               {localCamera ? (
                 <VideoTrack trackRef={localCamera} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
@@ -862,7 +862,7 @@ function RoomStage({
               position: 'absolute', inset: 0, zIndex: 30,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'rgba(8, 10, 18, 0.62)', backdropFilter: 'blur(3px)',
-              borderRadius: 'var(--r-xl, 16px)',
+              borderRadius: 'var(--r-lg)',
             }}
           >
             <span

@@ -3,7 +3,7 @@
 // /resumes — V3 Resume builder LIBRARY (Lane E). Replaces the V2 list body.
 //
 // Layout (source: RoboApply_V3/resume.jsx ResumeLibrary):
-//   PageHeader (eyebrow + serif-accent h1 + sub)
+//   PageHeader (eyebrow + h1 + sub)
 //   CreateCards   — Start from scratch / Upload a resume / Import from LinkedIn
 //   SectionHead   — "Your resumes · {n} versions" + sort
 //   ResumeList    — <ResumeCard> per variant (or loading / empty / error states)
@@ -272,9 +272,7 @@ export default function ResumesPage() {
       <PageHeader
         eyebrow={t('eyebrow')}
         eyebrowLive
-        title={t('title_lead')}
-        accentWord={t('title_accent')}
-        titleAfter={t('title_after')}
+        title={`${t('title_lead')} ${t('title_accent')}${t('title_after')}`}
         sub={t('subtitle')}
       />
 
@@ -310,7 +308,7 @@ export default function ResumesPage() {
       <div className="rb-section-head">
         <div className="iv-section-label" style={{ marginBottom: 0 }}>
           <span>{t('section.title')}</span>
-          <span style={{ color: 'var(--muted)' }}>
+          <span style={{ color: 'var(--text-muted)' }}>
             {t('section.count', { count: resumes.length })}
           </span>
         </div>
@@ -341,8 +339,7 @@ export default function ResumesPage() {
         />
       ) : sorted.length === 0 ? (
         <EmptyState
-          title={t('empty.title_lead')}
-          accentWord={t('empty.title_accent')}
+          title={`${t('empty.title_lead')} ${t('empty.title_accent')}`}
           sub={t('empty.sub')}
           action={
             <Btn variant="primary" onClick={() => handleSelect('scratch')}>
@@ -385,7 +382,7 @@ export default function ResumesPage() {
               flexWrap: 'wrap',
             }}
           >
-            <IconSparkle size={14} style={{ color: 'var(--accent-text)', flexShrink: 0, marginTop: 2 }} />
+            <IconSparkle size={14} style={{ color: 'var(--action)', flexShrink: 0, marginTop: 2 }} />
             <span>{t('tip.body')}</span>
           </div>
         </div>

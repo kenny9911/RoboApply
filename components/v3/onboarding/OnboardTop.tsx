@@ -31,7 +31,7 @@ export function OnboardTop({ stage, onSkip, skipping = false }: Props) {
         <div className="brand-mark">
           <IconSparkle
             size={20}
-            stroke="var(--accent-text)"
+            stroke="var(--action)"
             strokeWidthValue={2.2}
           />
         </div>

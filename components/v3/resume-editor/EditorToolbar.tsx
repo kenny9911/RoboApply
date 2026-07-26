@@ -79,7 +79,7 @@ export function EditorToolbar({
             outline: 'none',
             width: '100%',
             color: 'var(--text)',
-            fontFamily: 'var(--sans)',
+            fontFamily: 'var(--font-ui)',
           }}
         />
         <div className="rb-title-meta">

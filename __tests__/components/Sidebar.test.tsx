@@ -1,13 +1,13 @@
 // Sidebar — the V3 248px desktop nav rail (replaces the V2 LeftRail). Top→
-// bottom: BrandLogo, the primary nav (6 Workspace items + a Settings group
-// with Replay onboarding / Tweaks / Preferences), then the agent OrbCard.
+// bottom: BrandLogo, then the primary nav (6 Workspace items + a Settings
+// group: Preferences / Plans / Account, all links).
 // Active-state follows usePathname() with prefix-match for sub-routes.
 // Badges: /queue ← live useQueue().pendingCount, /home ← orbStats
 // matchedAboveThreshold (both hidden at 0), /mock-interview ← static
 // translated NEW pill. Tests hit the in-memory stub API (NODE_ENV=test).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState, buildAuthValue, buildFakeUser } from '../utils/mockAuth';
 import { raV2Api } from '../../lib/api/v2';
@@ -103,14 +103,6 @@ describe('Sidebar (V3)', () => {
     expect(screen.getByRole('link', { name: /Plans & credits/i })).toBeInTheDocument();
   });
 
-  it('renders Tweaks and Replay onboarding as buttons (not links)', () => {
-    renderWithProviders(<Sidebar />);
-    expect(screen.getByRole('button', { name: /Tweaks/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Replay onboarding/i }),
-    ).toBeInTheDocument();
-  });
-
   it('active item highlight follows usePathname() — /home', () => {
     pathnameRef.current = '/home';
     renderWithProviders(<Sidebar />);
@@ -128,11 +120,14 @@ describe('Sidebar (V3)', () => {
     expect(resumes).toHaveAttribute('aria-current', 'page');
   });
 
-  it('opens the Tweaks panel when the Tweaks button is clicked', () => {
+  it('carries no button-shaped nav actions — every entry is a link', () => {
     renderWithProviders(<Sidebar />);
-    fireEvent.click(screen.getByRole('button', { name: /Tweaks/i }));
-    // TweaksPanel renders its heading when open.
-    expect(screen.getByLabelText(/Primary/i)).toBeInTheDocument();
+    // Tweaks (the deleted accent/density/tone panel) and Replay onboarding were
+    // the only two <button> entries in the rail; both are gone.
+    expect(screen.queryByRole('button', { name: /Tweaks/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Replay onboarding/i }),
+    ).not.toBeInTheDocument();
   });
 
   it.runIf(QUEUE_REVIEW_ENABLED)('wires the /queue badge to the live pendingCount from useQueue()', async () => {

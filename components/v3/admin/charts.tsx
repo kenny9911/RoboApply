@@ -5,7 +5,7 @@
 // PURE CSS / SVG charts for the admin console — no recharts, no chart deps.
 // Each mirrors the "CSS-only fallback" column from ui-design.md §8:
 //
-//   - ChartCard          mono caption + legend + reserved-height body wrapper
+//   - ChartCard          caption + legend + reserved-height body wrapper
 //   - CostBreakdownBar   horizontal bar list ('rows') OR stacked single bar
 //   - CostRevenueArea    SVG area (cost) + line (revenue) over date buckets
 //   - ColumnChart        CSS column chart for a time series
@@ -65,11 +65,8 @@ export function ChartCard({
 }
 
 const CAP_STYLE: CSSProperties = {
-  fontFamily: 'var(--mono)',
-  fontSize: '11px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.1em',
-  color: 'var(--muted)',
+  fontSize: 'var(--fs-label)',
+  color: 'var(--text-muted)',
   fontWeight: 600,
 };
 
@@ -84,8 +81,7 @@ export function ChartLegend({
         display: 'inline-flex',
         gap: 14,
         alignItems: 'center',
-        fontFamily: 'var(--mono)',
-        fontSize: '10.5px',
+        fontSize: 'var(--fs-label)',
         color: 'var(--text-2)',
       }}
     >
@@ -154,7 +150,7 @@ export function CostBreakdownBar({
               <span
                 key={it.label + i}
                 title={`${it.label} · ${it.valueText}`}
-                style={{ width: `${pct}%`, background: it.color ?? 'var(--accent)' }}
+                style={{ width: `${pct}%`, background: it.color ?? 'var(--action)' }}
               />
             );
           })}
@@ -173,12 +169,12 @@ export function CostBreakdownBar({
               <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-2)' }}>
                 <span
                   aria-hidden="true"
-                  style={{ width: 9, height: 9, borderRadius: 3, background: it.color ?? 'var(--accent)' }}
+                  style={{ width: 9, height: 9, borderRadius: 3, background: it.color ?? 'var(--action)' }}
                 />
                 {it.label}
                 {it.estimated ? <EstimatedMarker>~est</EstimatedMarker> : null}
               </span>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '11.5px', color: 'var(--text-2)' }}>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
                 <b style={{ color: 'var(--text)' }}>{it.valueText}</b> · {it.pctText}
               </span>
             </div>
@@ -207,7 +203,7 @@ export function CostBreakdownBar({
               {it.estimated ? <EstimatedMarker>~est</EstimatedMarker> : null}
               {it.badge}
             </span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--text-2)' }}>
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
               <b style={{ color: 'var(--text)' }}>{it.valueText}</b> · {it.pctText}
             </span>
           </div>
@@ -223,8 +219,8 @@ export function CostBreakdownBar({
               style={{
                 height: '100%',
                 width: `${Math.max(2, (it.value / max) * 100)}%`,
-                background: it.color ?? 'var(--accent-soft)',
-                borderRight: `2px solid ${it.color ? it.color : 'var(--accent-text)'}`,
+                background: it.color ?? 'var(--action-subtle)',
+                borderRight: `2px solid ${it.color ? it.color : 'var(--action)'}`,
                 borderRadius: 99,
               }}
             />
@@ -288,8 +284,8 @@ export function CostRevenueArea({
       >
         <defs>
           <linearGradient id="ra-cost-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.32" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="var(--action)" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="var(--action)" stopOpacity="0.02" />
           </linearGradient>
         </defs>
         <g>
@@ -300,25 +296,25 @@ export function CostRevenueArea({
               y1={H * f}
               x2={W}
               y2={H * f}
-              stroke="var(--rule-soft)"
+              stroke="var(--rule)"
               strokeWidth="1"
             />
           ))}
         </g>
         <path d={costArea} fill="url(#ra-cost-grad)" />
-        <path d={costLine} fill="none" stroke="var(--accent-text)" strokeWidth="2" />
+        <path d={costLine} fill="none" stroke="var(--action)" strokeWidth="2" />
         <path d={revLine} fill="none" stroke="var(--violet)" strokeWidth="2.5" />
         <circle cx={x(lastIdx)} cy={y(points[lastIdx].revenueRunRateUsd)} r="4" fill="var(--violet)" />
-        <circle cx={x(lastIdx)} cy={y(points[lastIdx].costUsd)} r="4" fill="var(--accent)" />
+        <circle cx={x(lastIdx)} cy={y(points[lastIdx].costUsd)} r="4" fill="var(--action)" />
       </svg>
       <svg viewBox={`0 0 ${W} 16`} width="100%" height="16" style={{ display: 'block', marginTop: 4 }}>
-        <text x="0" y="12" fontFamily="var(--mono)" fontSize="10" fill="var(--muted)">
+        <text x="0" y="12" fontSize="12" fill="var(--text-muted)">
           {labelAt(0)}
         </text>
-        <text x={W / 2} y="12" textAnchor="middle" fontFamily="var(--mono)" fontSize="10" fill="var(--muted)">
+        <text x={W / 2} y="12" textAnchor="middle" fontSize="12" fill="var(--text-muted)">
           {labelAt(midIdx)}
         </text>
-        <text x={W} y="12" textAnchor="end" fontFamily="var(--mono)" fontSize="10" fill="var(--muted)">
+        <text x={W} y="12" textAnchor="end" fontSize="12" fill="var(--text-muted)">
           {labelAt(lastIdx)}
         </text>
       </svg>
@@ -340,7 +336,7 @@ function fmtAxisDate(day: string | undefined, locale: string): string {
 
 export function Sparkline({
   points,
-  color = 'var(--accent-text)',
+  color = 'var(--action)',
   height = 46,
 }: {
   points: number[];
@@ -359,7 +355,7 @@ export function Sparkline({
           key={i}
           style={{
             flex: 1,
-            background: 'var(--accent-soft)',
+            background: 'var(--action-subtle)',
             borderTop: `2px solid ${color}`,
             borderRadius: '2px 2px 0 0',
             minHeight: 3,
@@ -378,7 +374,7 @@ export function Sparkline({
 
 export function ColumnChart({
   data,
-  color = 'var(--accent-text)',
+  color = 'var(--action)',
   height = 140,
   valueFormatter,
 }: {
@@ -396,7 +392,7 @@ export function ColumnChart({
             title={`${d.label} · ${valueFormatter ? valueFormatter(d.value) : d.value}`}
             style={{
               height: `${Math.max(3, (d.value / max) * 100)}%`,
-              background: 'var(--accent-soft)',
+              background: 'var(--action-subtle)',
               borderTop: `2px solid ${color}`,
               borderRadius: '2px 2px 0 0',
               minHeight: 3,
@@ -457,10 +453,10 @@ export function ModalityDonut({
         </svg>
         <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
           <div>
-            <div className="robo-tnum" style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>
+            <div className="robo-tnum" style={{ fontSize: 'var(--fs-title)', fontWeight: 600, letterSpacing: 'var(--ls-title)' }}>
               {centerValue}
             </div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>
+            <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
               {centerLabel}
             </div>
           </div>
@@ -474,7 +470,7 @@ export function ModalityDonut({
               {seg.label}
               {seg.estimated ? <EstimatedMarker>~est</EstimatedMarker> : null}
             </span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '11.5px', color: 'var(--text-2)' }}>
+            <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
               <b style={{ color: 'var(--text)' }}>{seg.valueText}</b> · {seg.pctText}
             </span>
           </div>

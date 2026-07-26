@@ -50,17 +50,14 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
           listStyle: 'none',
         }}
       >
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>{num}</span>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{num}</span>
         <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>
           {item.question}
         </span>
         {item.blueprintIndex === null && !item.missed ? (
           <span
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              fontSize: 'var(--fs-label)',
               color: 'var(--text-2)',
               background: 'var(--surface-2)',
               border: '1px solid var(--rule)',
@@ -82,8 +79,8 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         {item.intent ? (
           <div
             style={{
-              background: 'var(--accent-soft)',
-              border: '1px solid var(--accent-text)',
+              background: 'var(--action-subtle)',
+              border: '1px solid var(--action)',
               borderRadius: 10,
               padding: '12px 14px',
             }}
@@ -140,7 +137,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         {item.correction ? (
           <div
             style={{
-              background: 'var(--warn-soft)',
+              background: 'var(--warn-subtle)',
               border: '1px solid var(--warn)',
               borderRadius: 10,
               padding: '12px 14px',
@@ -166,7 +163,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         {item.tips && item.tips.length ? (
           <div
             style={{
-              background: 'var(--ok-soft)',
+              background: 'var(--ok-subtle)',
               border: '1px solid var(--ok)',
               borderRadius: 10,
               padding: '12px 14px',
@@ -187,7 +184,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
           <div
             style={{
               background: 'var(--bg)',
-              border: '1px solid var(--accent-text)',
+              border: '1px solid var(--action)',
               borderRadius: 10,
               padding: '12px 14px',
             }}
@@ -205,8 +202,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
               <span
                 key={i}
                 style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: 10.5,
+                  fontSize: 'var(--fs-label)',
                   color: 'var(--text-2)',
                   background: 'var(--surface-2)',
                   border: '1px solid var(--rule)',

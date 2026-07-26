@@ -1,6 +1,6 @@
 'use client';
 
-// Pill — a small accent mono pill (the prototype's `.pill` inside queue heads:
+// Pill — a small accent pill (the prototype's `.pill` inside queue heads:
 // "92% fit"). Self-contained so screens can drop it anywhere, not just under a
 // `.queue-head .co`. Tones reuse the tag palette.
 
@@ -9,10 +9,10 @@ import type { ReactNode } from 'react';
 export type PillTone = 'accent' | 'violet' | 'warn' | 'ok' | 'muted';
 
 const TONE_STYLE: Record<PillTone, { bg: string; color: string; border: string }> = {
-  accent: { bg: 'var(--accent-soft)', color: 'var(--accent-text)', border: 'var(--accent-text)' },
+  accent: { bg: 'var(--action-subtle)', color: 'var(--action)', border: 'var(--action)' },
   violet: { bg: 'var(--violet-soft)', color: 'var(--violet)', border: 'var(--violet)' },
-  warn: { bg: 'var(--warn-soft)', color: 'var(--warn)', border: 'var(--warn)' },
-  ok: { bg: 'var(--ok-soft)', color: 'var(--ok)', border: 'var(--ok)' },
+  warn: { bg: 'var(--warn-subtle)', color: 'var(--warn)', border: 'var(--warn)' },
+  ok: { bg: 'var(--ok-subtle)', color: 'var(--ok)', border: 'var(--ok)' },
   muted: { bg: 'var(--surface-2)', color: 'var(--text-2)', border: 'var(--rule)' },
 };
 
@@ -28,8 +28,7 @@ export function Pill({ tone = 'accent', children, className }: Props) {
     <span
       className={className}
       style={{
-        fontFamily: 'var(--mono)',
-        fontSize: '10.5px',
+        fontSize: 'var(--fs-label)',
         fontWeight: 600,
         padding: '3px 8px',
         borderRadius: '99px',

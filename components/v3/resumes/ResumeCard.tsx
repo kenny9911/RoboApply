@@ -3,7 +3,7 @@
 // ResumeCard — one card in the library grid (.rb-card). Source:
 // RoboApply_V3/resume.jsx ResumeCard. Renders a faux "paper" preview, the
 // variant name + a derived version pill, a tailored-for line (or a "base"
-// muted line), and a mono meta row with the cached match score + last-edited.
+// muted line), and a meta row with the cached match score + last-edited.
 //
 // Data: a single `RAResumeVariantSummary` from `resumes.list()`. The prototype
 // carries `sections` + `version` which the summary shape does NOT have:
@@ -34,7 +34,7 @@ interface Props {
 
 function scoreColor(score: number): string {
   if (score >= 90) return 'var(--ok)';
-  if (score >= 80) return 'var(--accent-text)';
+  if (score >= 80) return 'var(--action)';
   return 'var(--warn)';
 }
 
@@ -81,7 +81,7 @@ export function ResumeCard({
           <div className="rb-card-tailored">
             <span className="rb-card-arrow">→</span>
             {resume.targetJobCompany ? `${resume.targetJobCompany} · ` : ''}
-            <em>{resume.targetJobTitle ?? ''}</em>
+            {resume.targetJobTitle ?? ''}
           </div>
         ) : (
           <div className="rb-card-tailored muted">{baseLabel}</div>
@@ -91,7 +91,7 @@ export function ResumeCard({
           {score !== null ? (
             <span className="rb-card-score" style={{ color: scoreColor(score) }}>
               {Math.round(score)}
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{scoreUnit}</span>
+              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{scoreUnit}</span>
             </span>
           ) : null}
           {score !== null ? <span className="rb-card-divider">·</span> : null}

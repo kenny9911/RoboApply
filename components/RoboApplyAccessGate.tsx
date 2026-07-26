@@ -29,7 +29,7 @@ export function RoboApplyAccessGate({ children }: { children: ReactNode }) {
   if (blocked) {
     return (
       <div
-        style={{ background: 'var(--bg)', color: 'var(--muted)' }}
+        style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}
         className="flex min-h-screen items-center justify-center px-6 text-center text-sm"
       >
         Redirecting you to RoboHire…

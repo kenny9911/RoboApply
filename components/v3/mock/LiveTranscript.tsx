@@ -31,7 +31,7 @@ export function LiveTranscript({ turns, interviewerName, typing }: Props) {
     <div className="iv-transcript">
       <div className="iv-transcript-head">
         <span>{t('live.transcript')}</span>
-        <span style={{ color: 'var(--muted)' }}>{t('live.autoSaved')}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{t('live.autoSaved')}</span>
       </div>
       <div className="iv-transcript-body" ref={bodyRef}>
         {turns.length === 0 ? (

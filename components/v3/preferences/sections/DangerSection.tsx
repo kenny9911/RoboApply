@@ -74,12 +74,7 @@ export function DangerSection({
     <>
       <PrefHeader
         eyebrow={t('danger.eyebrow')}
-        title={
-          <>
-            {t('danger.title_before')} <em>{t('danger.title_em')}</em>
-            {t('danger.title_after')}
-          </>
-        }
+        title={`${t('danger.title_before')} ${t('danger.title_em')}${t('danger.title_after')}`}
         sub={t('danger.sub')}
       />
 

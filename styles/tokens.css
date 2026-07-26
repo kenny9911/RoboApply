@@ -45,52 +45,49 @@
   --overlay-deep: rgba(10, 11, 16, 0.72);
   --overlay-dim:  rgba(10, 11, 16, 0.6);
 
-  /* Semantic danger for destructive actions. components/v3/admin/*,
-   * account/security.tsx and v3-account.css already referenced
-   * var(--danger)/var(--danger-soft) WITHOUT a definition (they silently
-   * degraded to currentColor); v3-preferences.css hardcoded #FF6B6B. One
-   * token now backs all of them. Theme overrides below. */
-  --danger:      #FF6B6B;
-  --danger-soft: rgba(255, 107, 107, 0.1);
+  /* --danger / --danger-soft are owned by app/globals.css (both themes,
+   * ratios computed). They used to be defined here AND theme-scoped here,
+   * which outranked :root and silently won. Do not redefine them. */
+  --danger-soft: var(--danger-subtle);
 
-  /* Resume "paper" palette — the ONE deliberately non-themed light surface
+  /* Résumé "paper" palette — the ONE deliberately non-themed light surface
    * (.rb-paper preview, .rb-mini / .rb-template-thumb / .pref-resume-mini
    * thumbnails). The paper stays warm-white in every theme BY DESIGN; do not
-   * add light/warm overrides for these. */
+   * add theme overrides for these. */
   --paper-bg:     #FAFAF6;   /* full paper sheet */
   --paper-bg-2:   #F2EFE4;   /* aged-paper thumbnails */
   --paper-ink:    #1B1815;   /* headings / primary ink */
   --paper-body:   #3C3631;   /* body copy */
-  --paper-muted:  #847C6E;   /* meta / contact lines */
-  --paper-faint:  #B7AE9D;   /* separators */
+  /* was #847C6E — 3.94:1 on #FAFAF6, a fail, and applied at 9.5px */
+  --paper-muted:  #6B6459;   /* meta / contact lines — 5.74:1 */
   --paper-rust:   #6B1C0E;   /* rust accent (titles) */
   --paper-accent: #D14328;   /* brighter rust (mini-preview name) */
-}
 
-/* Theme-scoped values for the supplemental tokens that DO flip (danger only —
- * live/overlay/paper are intentionally constant, see above). Mirrors the
- * html[data-theme] scoping app/globals.css uses; values match its
- * --robo-danger overrides (#DC2626 light / #C0392B warm, both WCAG-AA). */
-html[data-theme='light'] {
-  --danger:      #DC2626;
-  --danger-soft: rgba(220, 38, 38, 0.08);
-}
-html[data-theme='warm'] {
-  --danger:      #C0392B;
-  --danger-soft: rgba(192, 57, 43, 0.08);
+  /* Résumé DOCUMENT type. Separate from the UI scale on purpose: the résumé
+   * is the user's own artifact, so its conventions (11px date columns,
+   * uppercase EXPERIENCE headings, a serif option) are legitimate there and
+   * banned in the app chrome. Ruling C25.
+   *
+   * This also fixes a live bug: styles/v3-resume.css named 'Newsreader'
+   * (never loaded anywhere) and a literal 'JetBrains Mono' (which never
+   * matched next/font's hashed family), so every résumé preview and PDF
+   * export rendered in Times New Roman and Courier. */
+  --resume-sans:  var(--font-source-sans), var(--font-ui);
+  --resume-serif: var(--font-lora), Georgia, 'Times New Roman', serif;
+  --resume-mono:  ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
 }
 
 :root {
   /* === Fonts (re-pointed: JetBrains Mono is now the mono slot) === */
-  --robo-font-display: var(--sans);
-  --robo-font-body: var(--sans);
-  --robo-font-mono: var(--mono);
+  --robo-font-display: var(--font-display);
+  --robo-font-body: var(--font-ui);
+  --robo-font-mono: var(--font-ui);
 
   /* === Surfaces → V3 dark === */
   --robo-bg-page: var(--bg);
   --robo-bg-card: var(--surface);
   --robo-bg-muted: var(--surface-2);
-  --robo-bg-dim: rgba(7, 7, 13, 0.62);
+  --robo-bg-dim: var(--scrim);
 
   /* === Internal zinc stops → dark-canvas neutrals (kept; a few comps ref) === */
   --robo-zinc-50:  var(--surface-3);
@@ -117,8 +114,8 @@ html[data-theme='warm'] {
 
   /* === Brand gradient → V3 accent→violet === */
   --robo-grad-accent: var(--grad-brand);
-  --robo-grad-accent-soft: linear-gradient(135deg, var(--accent-soft) 0%, var(--violet-soft) 100%);
-  --robo-grad-accent-dim: linear-gradient(135deg, var(--accent-soft) 0%, var(--violet-soft) 100%);
+  --robo-grad-accent-soft: none;
+  --robo-grad-accent-dim: none;
 
   /* Cyan companion */
   --robo-cyan-500: var(--cyan);
@@ -145,17 +142,13 @@ html[data-theme='warm'] {
   /* === Semantic === */
   --robo-success: var(--ok);
   --robo-warn:    var(--warn);
-  --robo-danger:  #ef4444;
+  --robo-danger:  var(--danger);
 
   /* === Shadows → V3 dark glows === */
-  --robo-shadow-card:
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 6px 16px rgba(0, 0, 0, 0.28);
-  --robo-shadow-lift:
-    0 4px 16px rgba(0, 0, 0, 0.5),
-    0 24px 48px rgba(0, 0, 0, 0.42);
+  --robo-shadow-card: var(--e1);
+  --robo-shadow-lift: var(--e2);
   --robo-shadow-cta: var(--shadow-cta);
-  --robo-shadow-glow: var(--shadow-ring);
+  --robo-shadow-glow: var(--e2);
   --robo-shadow-focus: var(--shadow-focus);
 
   /* === Radii → V3 scale === */
@@ -170,7 +163,7 @@ html[data-theme='warm'] {
   --robo-duration-base: var(--dur-base);
   --robo-duration-slow: var(--dur-slow);
   --robo-ease-standard: var(--ease-standard);
-  --robo-ease-emphasized: cubic-bezier(0.32, 0.72, 0, 1);
+  --robo-ease-emphasized: var(--ease-out);
   --robo-ease-linear: linear;
 
   /* === Streaming cursor === */
@@ -190,7 +183,7 @@ html[data-theme='warm'] {
   --robo-gauge-fill-good:        var(--accent);
   --robo-gauge-fill-stretch:     var(--warn);
   --robo-gauge-fill-long-shot:   var(--muted-2);
-  --robo-premium-gate-bg:        rgba(7, 7, 13, 0.78);
+  --robo-premium-gate-bg:        var(--scrim);
   --robo-premium-gate-blur:      8px;
   --robo-today-pill-bg:          var(--accent);
   --robo-today-pill-ink:         var(--accent-ink);
@@ -216,25 +209,24 @@ html[data-theme='warm'] {
  * resolve from the V3 :root tokens.
  * ───────────────────────────────────────────────────────────────── */
 
-/* Eyebrow label */
+/* Eyebrow label. Was 11px uppercase mono at 0.12em tracking in a grey that
+ * computed to 4.37:1 — the single worst type recipe in the old system, and it
+ * was the house style for every section label. Now sentence case at the 12px
+ * floor, in the UI face. */
 .robo-eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
 }
 
 /* Table / tabular header caption */
 .robo-table-caption {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  line-height: 1.2;
+  letter-spacing: var(--ls-label);
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 /* Tabular numerics */

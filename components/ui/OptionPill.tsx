@@ -74,7 +74,7 @@ export function OptionPill({
             >
               <path
                 d="M1.5 5.2 3.7 7.5 8.5 2.5"
-                stroke="var(--accent-ink)"
+                stroke="var(--action-ink)"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"

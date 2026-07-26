@@ -1,17 +1,17 @@
 'use client';
 
-// Landing theme toggle — flips between the two landing appearances:
-// dark ("night shift", the electric V3 palette) and warm (the Anthropic
-// clay-on-cream scope, which the landing treats as its light mode; the
-// landing-scoped token overrides in styles/landing.css render the app's
-// 'light' theme with the same warm palette there).
+// Landing theme toggle — flips between the two appearances the product has:
+// light (the default) and dark. The third 'warm' scope is gone with the accent
+// picker (OVERHAUL_RULINGS.md R3); the landing-scoped token overrides in
+// styles/landing.css still render 'light' with the warm palette there, so the
+// landing keeps its own look without a theme of its own.
 //
-// Writes through useDcTheme() so the choice persists to localStorage and
-// follows the user into the app.
+// Writes through useTheme() so the choice persists to localStorage and follows
+// the user into the app.
 
 import { useTranslations } from 'next-intl';
 
-import { DEFAULT_THEME, useDcTheme } from '../../lib/dcTheme';
+import { DEFAULT_THEME, useTheme } from '../../lib/theme';
 
 function SunIcon() {
   return (
@@ -51,7 +51,7 @@ function MoonIcon() {
 
 export function ThemeToggle() {
   const t = useTranslations('landing.header');
-  const { theme, set, hydrated } = useDcTheme();
+  const { theme, toggle, hydrated } = useTheme();
   // Until mounted, use the server's DEFAULT theme so the icon/label match the
   // SSR'd HTML; the provider already holds the persisted theme while hydrating.
   const isDark = (hydrated ? theme : DEFAULT_THEME.theme) === 'dark';
@@ -59,11 +59,10 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      // Toggle relative to the REAL current theme, never the pre-mount placeholder.
-      onClick={() => set('theme', theme === 'dark' ? 'warm' : 'dark')}
+      onClick={toggle}
       aria-label={isDark ? t('theme_to_light') : t('theme_to_dark')}
       title={isDark ? t('theme_to_light') : t('theme_to_dark')}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-pill border border-ink-line text-ink-700 transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-accent-text"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--r-pill)] border border-[color:var(--rule)] text-[color:var(--text-2)] transition-colors duration-[var(--dur-hover)] hover:border-[color:var(--rule-strong)] hover:text-[color:var(--text)]"
     >
       {isDark ? <SunIcon /> : <MoonIcon />}
     </button>

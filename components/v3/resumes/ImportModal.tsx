@@ -334,7 +334,7 @@ export function ImportModal({
                 <div
                   style={{
                     fontSize: 12.5,
-                    color: 'var(--muted)',
+                    color: 'var(--text-muted)',
                     marginTop: 14,
                     textAlign: 'center',
                   }}
@@ -385,10 +385,9 @@ export function ImportModal({
                       <div className="file">{file.name}</div>
                       <div
                         style={{
-                          fontSize: 12.5,
+                          fontSize: 'var(--fs-meta)',
                           color: 'var(--text-2)',
                           marginTop: 4,
-                          fontFamily: 'var(--mono)',
                         }}
                       >
                         {file.size} · {labels.fileReady}
@@ -471,10 +470,9 @@ export function ImportModal({
                         <div className="file">{file.name}</div>
                         <div
                           style={{
-                            fontSize: 12.5,
+                            fontSize: 'var(--fs-meta)',
                             color: 'var(--text-2)',
                             marginTop: 4,
-                            fontFamily: 'var(--mono)',
                           }}
                         >
                           {file.size} · {labels.linkedinReady}
@@ -493,7 +491,7 @@ export function ImportModal({
                         alignItems: 'center',
                         gap: 10,
                         margin: '16px 0 12px',
-                        color: 'var(--muted)',
+                        color: 'var(--text-muted)',
                         fontSize: 12,
                       }}
                     >
@@ -502,7 +500,7 @@ export function ImportModal({
                       <span style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
                     </div>
                     <div
-                      style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}
+                      style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 8 }}
                     >
                       {labels.linkedinUrlLabel}
                     </div>
@@ -529,7 +527,7 @@ export function ImportModal({
                     <div
                       style={{
                         fontSize: 12.5,
-                        color: 'var(--muted)',
+                        color: 'var(--text-muted)',
                         marginTop: 10,
                         lineHeight: 1.5,
                       }}
@@ -587,7 +585,6 @@ export function ImportModal({
                 display: 'grid',
                 placeItems: 'center',
                 margin: '0 auto 16px',
-                boxShadow: '0 0 30px rgba(74, 222, 128, 0.4)',
               }}
             >
               <IconCheck size={28} strokeWidthValue={3} />

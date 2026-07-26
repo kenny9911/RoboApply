@@ -1,108 +1,73 @@
 'use client';
 
-// /home — V3 "Today" screen (IA Route 1).
+// /home — the Today screen (IA Route 1).
 //
-// The agent's overnight report + the match feed. Layout (the (auth) shell
-// already provides the .main-inner wrapper, so we render only the body):
+// Layout (the (auth) shell already provides the .main-inner wrapper, so we
+// render only the body):
 //
-//   PageHeader   eyebrow "Live · {time}" + tone-aware headline + sub
-//   TodayStatStrip   4-up hero (Auto-applied / Scanned / Matched ≥80 / In queue)
+//   PageHeader                  "{n} jobs that fit you." + "Updated {time}."
 //   MatchesHeader + MatchFeed   the scored match cards (expand → reasoning)
 //
 // Data:
-//   • useAgentStats()  → activity.orbStats — the hero strip numbers
-//   • useTodayMatches() (inside MatchFeed) → search.run + resolved resume
-//     variant; per-card jobs.score for the donut, jobs.get on expand.
+//   • useTodayMatches() → search.run + the resolved resume variant. MatchFeed
+//     calls the same hook with the same default limit, so this is one shared
+//     cache entry, not a second request. We read it here only for the headline
+//     count and the "updated at" stamp.
 //
-// Tone-aware copy: the dcTheme tone (formal | casual | witty) selects one of
-// three headline/sub variants per the prototype's TodayView. All copy is
-// `t()` under the `today` namespace.
+// TRUTH RULE (ruling D9 — the product never displays a number it did not
+// measure). This header states exactly two things and both are measured: how
+// many rows the feed actually returned, and when that response landed.
+// What used to be here, and why it is gone:
+//   • The tone-forked overnight headline (direct / playful / formal, selected
+//     from the dcTheme tone) — three ways to say the agent worked all night.
+//   • TodayStatStrip — a 4-up hero of `scannedOvernight` (the server hardcodes
+//     it to 0), `matchedAboveThreshold` (the pending count of a queue that is
+//     gated off for launch) and `autoAppliedToday`. A new account read
+//     "0 applications shipped overnight. 0 jobs scanned, 0 cleared your
+//     threshold." on its first visit.
+//
+// All copy is `t()` under the `today` namespace.
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { PageHeader } from '../../../components/v3/primitives';
-import { TodayStatStrip, MatchFeed } from '../../../components/v3/today';
-import { useAgentStats } from '../../../hooks/useActivity';
-import { useDcTheme, toneFor, type ToneKey } from '../../../lib/dcTheme';
-import { QUEUE_REVIEW_ENABLED } from '../../../lib/jobApplying';
-
-/** Map the dcTheme tone enum → the proto's copy register key. */
-function toneVariant(tone: ToneKey): 'direct' | 'playful' | 'formal' {
-  return toneFor(tone, {
-    formal: 'formal',
-    casual: 'direct',
-    witty: 'playful',
-  });
-}
+import { MatchFeed } from '../../../components/v3/today';
+import { useTodayMatches } from '../../../hooks/useTodayMatches';
 
 export default function HomePage() {
   const t = useTranslations('today');
-  const theme = useDcTheme();
-  const stats = useAgentStats();
+  const { feed } = useTodayMatches();
 
-  // Client-only clock for the "Live · {time}" eyebrow (avoids SSR hydration
-  // mismatch — render a stable placeholder first, then the real time).
-  const [now, setNow] = useState<string>('');
+  const count = feed.data?.jobs.length ?? 0;
+
+  // The stamp is the query's own `dataUpdatedAt` — the moment this response
+  // landed — not the wall clock, so "Updated 9:14 AM" is a fact about the list
+  // underneath it. Formatted client-side only: `toLocaleTimeString` resolves
+  // against the browser's locale + timezone, so rendering it on the server
+  // would hydrate a mismatch. Empty until the effect runs, and the sub is
+  // withheld rather than guessed.
+  const updatedAt = feed.dataUpdatedAt;
+  const [stamp, setStamp] = useState('');
   useEffect(() => {
-    const fmt = () =>
-      new Date().toLocaleTimeString(undefined, {
+    if (!updatedAt) {
+      setStamp('');
+      return;
+    }
+    setStamp(
+      new Date(updatedAt).toLocaleTimeString(undefined, {
         hour: 'numeric',
         minute: '2-digit',
-      });
-    setNow(fmt());
-    const id = window.setInterval(() => setNow(fmt()), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const variant = toneVariant(theme.tone);
-  const autoApplied = stats.data?.stats.autoAppliedToday ?? 0;
-  const scanned = stats.data?.stats.scannedOvernight ?? 0;
-  const matched = stats.data?.stats.matchedAboveThreshold ?? 0;
-  const queued = stats.data?.stats.inQueue ?? 0;
-
-  // Headline: the accent word sits mid-sentence, so we build the node with its
-  // own <em> and pass it as PageHeader's `title`.
-  const headline =
-    variant === 'playful' ? (
-      <>
-        {t('headline.playful.before')}{' '}
-        <em>{t('headline.playful.accent')}</em>{' '}
-        {t('headline.playful.after')}
-      </>
-    ) : variant === 'formal' ? (
-      <>
-        {t('headline.formal.before')}{' '}
-        <em>{t('headline.formal.accent')}</em>
-        {t('headline.formal.after')}
-      </>
-    ) : (
-      <>
-        {t('headline.direct.before', { count: autoApplied })}{' '}
-        <em>{t('headline.direct.accent')}</em>{' '}
-        {t('headline.direct.after')}
-      </>
+      }),
     );
-
-  // While /queue is hidden for launch the sub copy must not tease a review
-  // queue the user can't visit — the *_noqueue variants drop that clause.
-  const sub = t(QUEUE_REVIEW_ENABLED ? `sub.${variant}` : `sub_noqueue.${variant}`, {
-    scanned,
-    matched,
-    autoApplied,
-    queued,
-  });
+  }, [updatedAt]);
 
   return (
     <>
       <PageHeader
-        eyebrow={t('eyebrow', { time: now || '—' })}
-        eyebrowLive
-        title={headline}
-        sub={sub}
+        title={feed.isLoading ? t('headlineLoading') : t('headline', { count })}
+        sub={stamp ? t('sub', { time: stamp }) : undefined}
       />
-
-      <TodayStatStrip stats={stats.data?.stats} loading={stats.isLoading} />
 
       <MatchFeed />
     </>

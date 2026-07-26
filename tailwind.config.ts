@@ -1,13 +1,20 @@
 import type { Config } from 'tailwindcss';
 
-// RoboApply design tokens. Mirrors styles/tokens.css so utilities and CSS
-// custom properties stay in sync. CSS-var prefix is `--robo-*`. This is the
-// Cool Graphite palette (CEO ruling 2026-05-26) — cool zinc-on-white with one
-// electric blue accent. See docs/roboapply/04-modern-ui-redesign.md.
+// RoboApply design tokens for Tailwind.
 //
-// The `teal-*` key is preserved (now pointing at accent shades) for backward
-// compatibility with the 80+ existing class refs and the test suite. New code
-// should prefer `accent-*`.
+// Authority: docs/roboapply/OVERHAUL_RULINGS.md, then app/globals.css. Every
+// value below resolves to a CSS custom property so there is exactly one source
+// of truth and both themes flip for free.
+//
+// The `fontSize` scale is the important part: this config previously had NO
+// fontSize key at all, which is why 16 arbitrary `text-[Npx]` literals grew in
+// the components and why the stylesheets reached 31 distinct sizes. The eight
+// tokens below are the complete set — anything outside them fails
+// `npm run check:design`.
+//
+// Legacy keys (`teal-*`, `indigo-*`, `zinc-*`, and the V2 component tokens)
+// are kept pointing at the new tokens so ~80 existing class references keep
+// compiling. They are deleted as each screen is migrated.
 export default {
   content: [
     './app/**/*.{ts,tsx}',
@@ -18,7 +25,41 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Page + surfaces
+        // ── The system (ruling R3). Three colour roles, never confused. ──
+        // INK — must pass 4.5:1 on every surface it is permitted on.
+        text: {
+          DEFAULT: 'var(--text)',
+          2: 'var(--text-2)',
+          muted: 'var(--text-muted)',
+          disabled: 'var(--disabled)',
+        },
+        // SURFACE
+        surface: {
+          DEFAULT: 'var(--surface)',
+          2: 'var(--surface-2)',
+          3: 'var(--surface-3)',
+        },
+        rule: {
+          DEFAULT: 'var(--rule)',
+          strong: 'var(--rule-strong)',
+        },
+        // ACTION — buttons and links. Furniture; nobody notices it.
+        action: {
+          DEFAULT: 'var(--action)',
+          hover: 'var(--action-hover)',
+          ink: 'var(--action-ink)',
+          subtle: 'var(--action-subtle)',
+        },
+        // IDENTITY — never carries text. Only ever painted on `brand-plane`,
+        // which is why it is free to be electric lime and never needs a
+        // contrast check.
+        brand: {
+          mark: 'var(--brand-mark)',
+          plane: 'var(--brand-plane)',
+        },
+        ok: { DEFAULT: 'var(--ok)', subtle: 'var(--ok-subtle)' },
+
+        // Page + surfaces (legacy `bg-*` keys, repointed)
         bg: {
           page: 'var(--robo-bg-page)',
           card: 'var(--robo-bg-card)',
@@ -116,23 +157,54 @@ export default {
       backdropBlur: {
         'premium-gate': 'var(--robo-premium-gate-blur)',
       },
+      // Three elevation levels and one focus ring. No shadow may reference a
+      // hue — the previous system had 48 distinct shadows, 46 of them accent
+      // glows.
       boxShadow: {
-        card: 'var(--robo-shadow-card)',
-        lift: 'var(--robo-shadow-lift)',
-        cta: 'var(--robo-shadow-cta)',
-        focus: 'var(--robo-shadow-focus)',
+        e1: 'var(--e1)',
+        e2: 'var(--e2)',
+        e3: 'var(--e3)',
+        focus: 'var(--focus-ring)',
+        // legacy aliases
+        card: 'var(--e1)',
+        lift: 'var(--e2)',
+        cta: 'var(--e1)',
       },
       borderRadius: {
-        xs: 'var(--robo-radius-xs)',
-        sm: 'var(--robo-radius-sm)',
-        md: 'var(--robo-radius-md)',
-        lg: 'var(--robo-radius-lg)',
-        pill: 'var(--robo-radius-pill)',
+        sm: 'var(--r-sm)',
+        md: 'var(--r-md)',
+        lg: 'var(--r-lg)',
+        pill: 'var(--r-pill)',
+        // legacy alias — the six 1px-apart radii collapsed to four
+        xs: 'var(--r-sm)',
       },
       fontFamily: {
-        display: ['var(--robo-font-display)'],
-        body: ['var(--robo-font-body)'],
-        mono: ['var(--robo-font-mono)'],
+        // `display` = Instrument Sans, hero + page H1 only, whole headline.
+        // `body`/`sans` = Inter, everything else. `mono` deliberately resolves
+        // to the UI face: there is no downloaded monospace in the app.
+        display: ['var(--font-display)'],
+        sans: ['var(--font-ui)'],
+        body: ['var(--font-ui)'],
+        mono: ['var(--font-ui)'],
+      },
+      // The complete type scale. Eight sizes, 12px floor, no half-pixels.
+      fontSize: {
+        hero:     ['var(--fs-hero)',     { lineHeight: 'var(--lh-hero)',     letterSpacing: 'var(--ls-hero)',     fontWeight: '700' }],
+        display:  ['var(--fs-display)',  { lineHeight: 'var(--lh-display)',  letterSpacing: 'var(--ls-display)',  fontWeight: '600' }],
+        stat:     ['var(--fs-stat)',     { lineHeight: '1',                  letterSpacing: '-0.02em',            fontWeight: '600' }],
+        title:    ['var(--fs-title)',    { lineHeight: 'var(--lh-title)',    letterSpacing: 'var(--ls-title)',    fontWeight: '600' }],
+        subtitle: ['var(--fs-subtitle)', { lineHeight: 'var(--lh-subtitle)', letterSpacing: 'var(--ls-subtitle)', fontWeight: '500' }],
+        body:     ['var(--fs-body)',     { lineHeight: 'var(--lh-body)',     letterSpacing: 'var(--ls-body)' }],
+        meta:     ['var(--fs-meta)',     { lineHeight: 'var(--lh-meta)',     letterSpacing: 'var(--ls-meta)' }],
+        label:    ['var(--fs-label)',    { lineHeight: '1.35',               letterSpacing: 'var(--ls-label)',    fontWeight: '500' }],
+      },
+      spacing: {
+        1: 'var(--sp-1)', 2: 'var(--sp-2)', 3: 'var(--sp-3)', 4: 'var(--sp-4)',
+        5: 'var(--sp-5)', 6: 'var(--sp-6)', 7: 'var(--sp-7)', 8: 'var(--sp-8)',
+      },
+      maxWidth: {
+        page:  'var(--page-max)',
+        prose: 'var(--prose-max)',
       },
       transitionTimingFunction: {
         standard: 'var(--robo-ease-standard)',

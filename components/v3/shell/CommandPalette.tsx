@@ -214,19 +214,18 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           className="flex items-center gap-3 px-4 py-3.5"
           style={{ borderBottom: '1px solid var(--rule)' }}
         >
-          <IconSearch size={16} stroke="var(--muted)" />
+          <IconSearch size={16} stroke="var(--text-muted)" />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={tp('placeholder')}
             className="flex-1 bg-transparent outline-none"
-            style={{ color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 15 }}
+            style={{ color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 15 }}
           />
           <kbd
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10,
+              fontSize: 'var(--fs-label)',
               background: 'var(--bg)',
               padding: '2px 6px',
               borderRadius: 4,
@@ -251,7 +250,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                     active={i === active}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => select(i)}
-                    icon={<IconArrow size={14} stroke="var(--muted)" />}
+                    icon={<IconArrow size={14} stroke="var(--text-muted)" />}
                     label={t(n.labelKey)}
                   />
                 );
@@ -270,7 +269,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                     active={i === active}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => select(i)}
-                    icon={<IconSearch size={14} stroke="var(--accent-text)" />}
+                    icon={<IconSearch size={14} stroke="var(--action)" />}
                     label={j.title}
                     sub={j.companyName}
                   />
@@ -282,7 +281,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           {flat.length === 0 ? (
             <p
               className="px-4 py-8 text-center"
-              style={{ color: 'var(--muted)', fontSize: 13, fontStyle: 'italic' }}
+              style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}
             >
               {isFetching ? tp('searching') : tp('empty')}
             </p>
@@ -299,11 +298,8 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
       <div
         className="px-4 pb-1.5 pt-2"
         style={{
-          fontFamily: 'var(--mono)',
-          fontSize: 9.5,
-          textTransform: 'uppercase',
-          letterSpacing: '0.16em',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           fontWeight: 600,
         }}
       >
@@ -336,15 +332,15 @@ function Row({
       onMouseEnter={onMouseEnter}
       className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
       style={{
-        background: active ? 'var(--accent-soft)' : 'transparent',
-        boxShadow: active ? 'inset 2px 0 0 var(--accent-text)' : 'none',
+        background: active ? 'var(--action-subtle)' : 'transparent',
+        boxShadow: active ? 'inset 2px 0 0 var(--action)' : 'none',
       }}
     >
       <span aria-hidden="true">{icon}</span>
       <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text)', fontSize: 14 }}>
         {label}
         {sub ? (
-          <span style={{ color: 'var(--muted)', marginLeft: 8, fontSize: 12.5 }}>· {sub}</span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 12.5 }}>· {sub}</span>
         ) : null}
       </span>
     </button>

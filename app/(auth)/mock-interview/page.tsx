@@ -285,9 +285,7 @@ export default function MockSetupPage() {
     <PageHeader
       eyebrow={t('setup.eyebrow', { count: catalog?.totalRoles ?? 57 })}
       eyebrowLive
-      title={t('setup.title')}
-      accentWord={t('setup.titleAccent')}
-      titleAfter={t('setup.titleAfter')}
+      title={`${t('setup.title')} ${t('setup.titleAccent')}${t('setup.titleAfter')}`}
       sub={t('setup.sub')}
     />
   );
@@ -299,9 +297,9 @@ export default function MockSetupPage() {
         <div
           role="alert"
           className="flex flex-col items-center gap-4 text-center"
-          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-xl)', padding: '52px 32px' }}
+          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
         >
-          <p style={{ fontFamily: 'var(--sans)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
             {t('setup.error.title')}
           </p>
           <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('setup.error.body')}</p>
@@ -385,11 +383,11 @@ export default function MockSetupPage() {
 
       {/* Credit cost + balance hint for this interview. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
           {t('setup.creditCost', { n: creditCost })}
         </span>
         {creditsQ.data ? (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--muted)' }}>
+          <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)' }}>
             {t('setup.creditsRemaining', { n: creditsQ.data.balance })}
           </span>
         ) : null}
@@ -402,7 +400,7 @@ export default function MockSetupPage() {
       {insufficientCredits ? (
         <div
           role="alert"
-          style={{ border: '1px solid var(--warn)', background: 'var(--warn-soft)', borderRadius: 'var(--r-lg)', padding: '14px 16px', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
+          style={{ border: '1px solid var(--warn)', background: 'var(--warn-subtle)', borderRadius: 'var(--r-lg)', padding: '14px 16px', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
         >
           <span style={{ fontSize: 13.5, color: 'var(--text)' }}>
             {t('setup.insufficientCredits', { required: insufficientCredits.required, balance: insufficientCredits.balance })}

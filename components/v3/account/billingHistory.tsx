@@ -34,11 +34,11 @@ function fmtDate(locale: string, iso: string): string {
 
 function StatusChip({ status, label }: { status: string; label: string }) {
   const s = status.toLowerCase();
-  const tone = s === 'paid' ? { bg: 'var(--ok-soft)', color: 'var(--ok)' }
-    : s === 'open' || s === 'pending' ? { bg: 'var(--warn-soft)', color: 'var(--warn)' }
+  const tone = s === 'paid' ? { bg: 'var(--ok-subtle)', color: 'var(--ok)' }
+    : s === 'open' || s === 'pending' ? { bg: 'var(--warn-subtle)', color: 'var(--warn)' }
       : { bg: 'var(--surface-2)', color: 'var(--text-2)' };
   return (
-    <span style={{ fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 99, textTransform: 'uppercase', background: tone.bg, color: tone.color }}>
+    <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, padding: '3px 9px', borderRadius: 99, background: tone.bg, color: tone.color }}>
       {label}
     </span>
   );
@@ -57,12 +57,12 @@ function Row({ inv }: { inv: BillingInvoice }) {
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{inv.description}</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
           {fmtDate(locale, inv.date)} · {inv.kind === 'alipay' ? 'Alipay' : t('billing.history.card')}
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>
           {money(locale, inv.amountMinor, inv.currency)}
         </span>
         <StatusChip status={inv.status} label={statusLabel} />
@@ -81,14 +81,14 @@ export function BillingHistoryView() {
   const q = useBillingHistory();
 
   if (q.isLoading) {
-    return <Panel><div style={{ color: 'var(--muted)', fontSize: 14 }}>{t('billing.history.loading')}</div></Panel>;
+    return <Panel><div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('billing.history.loading')}</div></Panel>;
   }
   if (q.isError) {
     return <Panel><div style={{ color: 'var(--warn)', fontSize: 14 }}>{t('billing.history.error')}</div></Panel>;
   }
   const invoices = q.data?.invoices ?? [];
   if (invoices.length === 0) {
-    return <Panel><div style={{ color: 'var(--muted)', fontSize: 14 }}>{t('billing.history.empty')}</div></Panel>;
+    return <Panel><div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('billing.history.empty')}</div></Panel>;
   }
   return (
     <Panel style={{ padding: 0, overflow: 'hidden' }}>

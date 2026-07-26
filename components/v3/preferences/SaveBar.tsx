@@ -2,9 +2,9 @@
 
 // SaveBar — the sticky "Unsaved changes" bar that appears when the preferences
 // form is dirty and clears on save. Ported from the proto's `.pref-savebar`.
-// The panel uses the CSS gradient background (var(--surface) → var(--bg-2)),
-// which is fully opaque and resolves on :root in V3 — compliant with the
-// CLAUDE.md solid-panel rule (V3 defines --surface on :root, not a scoped token).
+// The panel background is a flat var(--surface) — fully opaque and resolved on
+// :root in V3, so it satisfies the CLAUDE.md solid-panel rule (V3 defines
+// --surface on :root, not as a scoped token).
 
 import { useTranslations } from 'next-intl';
 import { Btn, IconCheck } from '../primitives';

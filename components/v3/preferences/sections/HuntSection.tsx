@@ -100,12 +100,7 @@ export function HuntSection({
     <>
       <PrefHeader
         eyebrow={t('hunt.eyebrow')}
-        title={
-          <>
-            {t('hunt.title_before')} <em>{t('hunt.title_em')}</em>{' '}
-            {t('hunt.title_after')}
-          </>
-        }
+        title={`${t('hunt.title_before')} ${t('hunt.title_em')} ${t('hunt.title_after')}`}
         sub={t('hunt.sub')}
       />
 
@@ -243,7 +238,7 @@ export function HuntSection({
             </div>
             <div className="pref-salary-vals">
               <span>${p.salaryMinK}k</span>
-              <span style={{ color: 'var(--muted)' }}>—</span>
+              <span style={{ color: 'var(--text-muted)' }}>—</span>
               <span>${p.salaryMaxK}k</span>
             </div>
             <div className="pref-salary-bands">

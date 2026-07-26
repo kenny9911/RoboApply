@@ -80,7 +80,7 @@ export default function PlansPage() {
 
   // ── Header (always first; stable frame across all states) ──────────
   const header = (
-    <PageHeader eyebrow={t('eyebrow')} title={t('title')} accentWord={t('titleAccent')} sub={t('subtitle')} />
+    <PageHeader eyebrow={t('eyebrow')} title={`${t('title')} ${t('titleAccent')}`} sub={t('subtitle')} />
   );
 
   // ── Error ──────────────────────────────────────────────────────────
@@ -91,9 +91,9 @@ export default function PlansPage() {
         <div
           role="alert"
           className="flex flex-col items-center gap-4 text-center"
-          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-xl)', padding: '52px 32px' }}
+          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
         >
-          <p style={{ fontFamily: 'var(--sans)', fontSize: '18px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: '18px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
             {t('error.title')}
           </p>
           <p style={{ color: 'var(--text-2)', fontSize: '14px', maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
@@ -158,7 +158,7 @@ export default function PlansPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 20,
             padding: '12px 16px', borderRadius: 'var(--r-md)',
             border: `1px solid ${billingBanner === 'success' ? 'var(--ok)' : 'var(--rule)'}`,
-            background: billingBanner === 'success' ? 'var(--ok-soft)' : 'var(--surface)',
+            background: billingBanner === 'success' ? 'var(--ok-subtle)' : 'var(--surface)',
             color: billingBanner === 'success' ? 'var(--ok)' : 'var(--text-2)', fontSize: '13.5px',
           }}
         >
@@ -184,7 +184,7 @@ export default function PlansPage() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 20,
             padding: '12px 16px', borderRadius: 'var(--r-md)', border: '1px solid var(--warn)',
-            background: 'var(--warn-soft)', color: 'var(--warn)', fontSize: '13.5px',
+            background: 'var(--warn-subtle)', color: 'var(--warn)', fontSize: '13.5px',
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -222,7 +222,7 @@ export default function PlansPage() {
       {paymentsUnavailable ? (
         <p
           role="status"
-          style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}
+          style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}
         >
           {t('notice.paymentsUnavailable')}
         </p>
@@ -240,7 +240,7 @@ export default function PlansPage() {
 
       {/* How credits work (the rule, not the live balance). */}
       <Panel style={{ marginTop: 28, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <span style={{ color: 'var(--accent-text)', flexShrink: 0, marginTop: 2 }}><IconBolt size={18} /></span>
+        <span style={{ color: 'var(--action)', flexShrink: 0, marginTop: 2 }}><IconBolt size={18} /></span>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t('credits.title')}</div>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{t('credits.explainer')}</p>
@@ -261,7 +261,7 @@ export default function PlansPage() {
               }}
             >
               <span>{t(`faq.q${k}`)}</span>
-              <span aria-hidden="true" style={{ color: 'var(--muted)' }}>＋</span>
+              <span aria-hidden="true" style={{ color: 'var(--text-muted)' }}>＋</span>
             </summary>
             <p style={{ margin: 0, padding: '0 20px 16px', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.65 }}>
               {t(`faq.a${k}`)}

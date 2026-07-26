@@ -42,9 +42,7 @@ export default function QueuePage() {
     <PageHeader
       eyebrow={t('eyebrow', { count: pendingCount })}
       eyebrowLive
-      title={t('title')}
-      accentWord={t('titleAccent')}
-      titleAfter={t('titleAfter')}
+      title={`${t('title')} ${t('titleAccent')}${t('titleAfter')}`}
       sub={t('sub')}
     />
   );
@@ -60,13 +58,13 @@ export default function QueuePage() {
           style={{
             border: '1px solid var(--rule)',
             background: 'var(--surface)',
-            borderRadius: 'var(--r-xl)',
+            borderRadius: 'var(--r-lg)',
             padding: '52px 32px',
           }}
         >
           <p
             style={{
-              fontFamily: 'var(--sans)',
+              fontFamily: 'var(--font-ui)',
               fontSize: '18px',
               fontWeight: 600,
               color: 'var(--text)',
@@ -107,8 +105,7 @@ export default function QueuePage() {
         {header}
         <EmptyState
           icon={<span style={{ fontSize: 34 }}>🎉</span>}
-          title={t('empty.title')}
-          accentWord={t('empty.titleAccent')}
+          title={`${t('empty.title')} ${t('empty.titleAccent')}`}
           sub={t('empty.sub')}
         />
       </>

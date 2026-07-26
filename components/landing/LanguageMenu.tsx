@@ -70,7 +70,7 @@ export function LanguageMenu({ label }: { label: string }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={label}
-        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-pill border border-ink-line px-2 text-ink-700 transition-colors duration-150 hover:border-[color:var(--accent)] hover:text-accent-text sm:px-2.5"
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-pill border border-ink-line px-2 text-ink-700 transition-colors duration-150 hover:border-[color:var(--action)] hover:text-accent-text sm:px-2.5"
       >
         <GlobeIcon />
         {/* Current-language code — makes the 9-language story visible above

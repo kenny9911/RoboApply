@@ -6,7 +6,7 @@
 // tracker. Layout (the (auth) shell already provides the .main-inner wrapper,
 // so we render only the body):
 //
-//   PageHeader     eyebrow "{n} active conversations" + tone-aware headline + sub
+//   PageHeader     eyebrow "{n} active conversations" + headline + sub
 //   PipelineBoard  the kanban grid (columns: Saved / Applied / Interview / Offer)
 //
 // Status changes persist via `tracker.patch` — either by dragging a card to
@@ -25,20 +25,19 @@ import {
   columnIndexForStatus,
 } from '../../../components/v3/pipeline';
 import { usePipelineBoard } from '../../../hooks/usePipelineBoard';
-import { useDcTheme, toneFor, type ToneKey } from '../../../lib/dcTheme';
 
-/** Map the dcTheme tone enum → the proto's copy register key. */
-function toneVariant(tone: ToneKey): 'direct' | 'playful' | 'formal' {
-  return toneFor(tone, {
-    formal: 'formal',
-    casual: 'direct',
-    witty: 'playful',
-  });
-}
+/**
+ * The copy register. This used to fork three ways off the `tone` knob in
+ * lib/dcTheme (formal | casual | witty); the knob is deleted, so the page now
+ * always renders what the default (`casual` → `direct`) always rendered.
+ * Collapsing `pipeline.headline.*` / `pipeline.sub.*` down to a single string
+ * across all nine locales belongs to the i18n pass — see OVERHAUL_SPEC.md
+ * §"Delete within surviving namespaces".
+ */
+const COPY_VARIANT = 'direct';
 
 export default function PipelinePage() {
   const t = useTranslations('pipeline');
-  const theme = useDcTheme();
   const { data } = usePipelineBoard();
 
   // Active conversations = entries that land on a (non-terminal) column.
@@ -49,38 +48,13 @@ export default function PipelinePage() {
       )
     : 0;
 
-  const variant = toneVariant(theme.tone);
-
-  // Headline: the accent word sits mid-sentence, so build the node with its own
-  // <em> and pass it as PageHeader's `title` (matches the Home page pattern).
-  const headline =
-    variant === 'playful' ? (
-      <>
-        {t('headline.playful.before')}{' '}
-        <em>{t('headline.playful.accent')}</em>{' '}
-        {t('headline.playful.after')}
-      </>
-    ) : variant === 'formal' ? (
-      <>
-        {t('headline.formal.before')}{' '}
-        <em>{t('headline.formal.accent')}</em>
-        {t('headline.formal.after')}
-      </>
-    ) : (
-      <>
-        {t('headline.direct.before')}{' '}
-        <em>{t('headline.direct.accent')}</em>{' '}
-        {t('headline.direct.after')}
-      </>
-    );
-
   return (
     <>
       <PageHeader
         eyebrow={t('eyebrow', { count: activeCount })}
         eyebrowLive
-        title={headline}
-        sub={t(`sub.${variant}`, { columns: PIPELINE_COLUMNS.length })}
+        title={t(`headline.${COPY_VARIANT}`)}
+        sub={t(`sub.${COPY_VARIANT}`, { columns: PIPELINE_COLUMNS.length })}
       />
 
       <PipelineBoard />

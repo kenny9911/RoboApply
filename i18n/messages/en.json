@@ -2029,28 +2029,11 @@
     "matchesTitle": "Today's matches · sorted by fit",
     "appliedBanner": "Sent. Cover, tailored resume, and screening answers submitted.",
     "passedBanner": "Removed from your feed. I'll learn from this and skip similar roles.",
-    "headline": {
-      "direct": {
-        "before": "{count} applications",
-        "accent": "shipped",
-        "after": "overnight."
-      },
-      "playful": {
-        "before": "I worked the",
-        "accent": "night shift",
-        "after": "☕"
-      },
-      "formal": {
-        "before": "Overnight",
-        "accent": "summary",
-        "after": "."
-      }
-    },
-    "sub": {
-      "direct": "{scanned} jobs scanned, {matched} cleared your threshold, {autoApplied} auto-applied. The strongest are queued — your call.",
-      "playful": "Brewed coffee while you slept. {scanned} listings scanned, {matched} matched, {autoApplied} auto-applied. {queued} more are waiting for your green light.",
-      "formal": "{scanned} listings reviewed overnight. {matched} met the match threshold. {autoApplied} applications submitted; {queued} awaiting your approval."
-    },
+    "appliedOnSiteBanner": "Saved to your applications. Nothing was sent for you — you apply on the company's site.",
+    "notInterestedBanner": "Removed from your feed.",
+    "headline": "{count, plural, =0 {No jobs fit you yet.} one {1 job that fits you.} other {# jobs that fit you.}}",
+    "headlineLoading": "Jobs that fit you.",
+    "sub": "Updated {time}.",
     "sub_noqueue": {
       "direct": "{scanned} jobs scanned, {matched} cleared your threshold, {autoApplied} auto-applied.",
       "playful": "Brewed coffee while you slept. {scanned} listings scanned, {matched} matched, {autoApplied} auto-applied.",
@@ -2086,6 +2069,7 @@
     "status": {
       "applied": "✓ Applied",
       "passed": "✕ Passed",
+      "notInterested": "Not interested",
       "queued": "◆ In queue"
     },
     "facet": {
@@ -2106,9 +2090,12 @@
     },
     "actions": {
       "applyNow": "Apply now",
+      "applyOnSite": "Apply on company site",
       "applying": "Applying…",
       "schedule": "Schedule auto-apply",
       "pass": "Pass",
+      "notInterested": "Not interested",
+      "didntApply": "Mark as not applied",
       "undo": "Undo",
       "viewJd": "View JD ↗",
       "viewDetail": "View detail",
@@ -2157,21 +2144,9 @@
     "eyebrow": "{count} active conversations",
     "loading": "Loading your pipeline…",
     "headline": {
-      "direct": {
-        "before": "Where each",
-        "accent": "conversation",
-        "after": "stands."
-      },
-      "playful": {
-        "before": "Every",
-        "accent": "thread",
-        "after": "you've got going ✨"
-      },
-      "formal": {
-        "before": "Pipeline",
-        "accent": "overview",
-        "after": "."
-      }
+      "direct": "Where each conversation stands.",
+      "playful": "Every thread you've got going ✨",
+      "formal": "Pipeline overview."
     },
     "sub": {
       "direct": "Synced automatically from inbox replies and calendar invites. Drag a card — or use its status menu — to move it across the {columns} stages.",

@@ -28,11 +28,8 @@ import { useWipeData } from '../../../hooks/useAccount';
 import type { WipeDataResponse } from '../../../lib/api/account';
 
 const LABEL_STYLE: React.CSSProperties = {
-  fontFamily: 'var(--mono)',
-  fontSize: '11px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-  color: 'var(--muted)',
+  fontSize: 'var(--fs-label)',
+  color: 'var(--text-muted)',
   fontWeight: 600,
 };
 
@@ -134,8 +131,7 @@ export function WipeDataModal({
               borderRadius: 9,
               padding: '10px 12px',
               color: 'var(--text)',
-              fontFamily: 'var(--mono)',
-              fontSize: '13px',
+              fontSize: 'var(--fs-meta)',
             }}
           />
           {error ? (

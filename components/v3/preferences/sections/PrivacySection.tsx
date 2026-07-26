@@ -43,12 +43,7 @@ export function PrivacySection({
     <>
       <PrefHeader
         eyebrow={t('privacy.eyebrow')}
-        title={
-          <>
-            {t('privacy.title_before')} <em>{t('privacy.title_em')}</em>
-            {t('privacy.title_after')}
-          </>
-        }
+        title={`${t('privacy.title_before')} ${t('privacy.title_em')}${t('privacy.title_after')}`}
         sub={t('privacy.sub')}
       />
 

@@ -68,7 +68,7 @@ export function EditorSection({
           <button
             type="button"
             className="btn ghost"
-            style={{ padding: '5px 9px', fontSize: 11.5 }}
+            style={{ padding: '4px 8px', fontSize: 'var(--fs-label)' }}
             onClick={onAdd}
           >
             {addLabel}

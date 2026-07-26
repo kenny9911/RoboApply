@@ -30,12 +30,7 @@ export function IntegSection() {
     <>
       <PrefHeader
         eyebrow={t('integ.eyebrow')}
-        title={
-          <>
-            {t('integ.title_before')} <em>{t('integ.title_em')}</em>
-            {t('integ.title_after')}
-          </>
-        }
+        title={`${t('integ.title_before')} ${t('integ.title_em')}${t('integ.title_after')}`}
         sub={t('integ.sub')}
       />
 

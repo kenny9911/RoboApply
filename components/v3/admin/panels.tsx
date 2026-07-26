@@ -3,7 +3,7 @@
 // components/v3/admin/panels.tsx
 //
 // The larger composed admin surfaces:
-//   - ProfitabilitySummary  the drill-down hero (one mono sentence + MarginBar
+//   - ProfitabilitySummary  the drill-down hero (one plain sentence + MarginBar
 //                           + plan side with the admin "Set plan" button)
 //   - SetPlanModal          admin-action grammar: tier radio cards + optional
 //                           custom price + REQUIRED reason textarea
@@ -81,11 +81,10 @@ export function ProfitabilitySummary({
       <div style={{ minWidth: 280, flex: 1 }}>
         <div
           style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 20,
-            letterSpacing: '-0.01em',
+            fontSize: 'var(--fs-title)',
+            letterSpacing: 'var(--ls-title)',
             color: 'var(--text-2)',
-            lineHeight: 1.5,
+            lineHeight: 'var(--lh-title)',
           }}
         >
           {/* The summary sentence stays text-2; the MarginBar below carries
@@ -101,7 +100,7 @@ export function ProfitabilitySummary({
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <TierBadge tier={tier} />
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--muted)', margin: '10px 0 14px' }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: '10px 0 14px' }}>
           {renewsAt ? t('detail.renews', { date: fmtLongDate(renewsAt, locale) }) : '—'}
         </div>
         <Btn variant="violet" onClick={onSetPlan}>
@@ -205,7 +204,7 @@ export function SetPlanModal({
                   style={{
                     flex: '1 1 120px',
                     textAlign: 'left',
-                    background: on ? 'var(--violet-soft)' : 'var(--bg-2)',
+                    background: on ? 'var(--violet-soft)' : 'var(--surface)',
                     border: `1px solid ${on ? 'var(--violet)' : 'var(--rule)'}`,
                     borderRadius: 10,
                     padding: '12px 14px',
@@ -243,10 +242,10 @@ export function SetPlanModal({
             rows={3}
             required
             aria-required="true"
-            style={{ ...TEXT_INPUT, resize: 'vertical', fontFamily: 'var(--sans)' }}
+            style={{ ...TEXT_INPUT, resize: 'vertical', fontFamily: 'var(--font-ui)' }}
           />
           {touched && !reason.trim() ? (
-            <span style={{ color: 'var(--danger)', fontSize: 12, fontFamily: 'var(--mono)' }}>
+            <span style={{ color: 'var(--danger)', fontSize: 'var(--fs-label)' }}>
               {t('setPlan.reasonRequired')}
             </span>
           ) : null}
@@ -263,11 +262,8 @@ export function SetPlanModal({
 }
 
 const GROUP_LABEL = {
-  fontFamily: 'var(--mono)',
-  fontSize: '11px',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.1em',
-  color: 'var(--muted)',
+  fontSize: 'var(--fs-label)' as const,
+  color: 'var(--text-muted)',
   fontWeight: 600,
   padding: 0,
 };
@@ -280,13 +276,12 @@ const GROUP_LABEL_BLOCK = {
 };
 
 const TEXT_INPUT = {
-  background: 'var(--bg-2)',
+  background: 'var(--surface)',
   border: '1px solid var(--rule)',
   borderRadius: 9,
   padding: '10px 12px',
   color: 'var(--text)',
-  fontFamily: 'var(--mono)',
-  fontSize: '14px',
+  fontSize: 'var(--fs-body)',
   width: '100%',
   colorScheme: 'dark' as const,
 };
@@ -329,7 +324,7 @@ export function RateCardPanel({
           flexWrap: 'wrap',
         }}
       >
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
           {t('rateCard.note')} · {source.toUpperCase()}
         </span>
         <Btn variant="ghost" disabled>
@@ -382,11 +377,8 @@ function SubHeading({ children, aside }: { children: ReactNode; aside?: ReactNod
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        fontFamily: 'var(--mono)',
-        fontSize: 11,
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-        color: 'var(--muted)',
+        fontSize: 'var(--fs-label)',
+        color: 'var(--text-muted)',
         fontWeight: 600,
         margin: '24px 0 12px',
       }}
@@ -424,16 +416,13 @@ function RateTable({
               key={i}
               scope="col"
               style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--muted)',
+                fontSize: 'var(--fs-label)',
+                color: 'var(--text-muted)',
                 fontWeight: 600,
                 textAlign: aligns[i],
                 padding: '13px 16px',
                 borderBottom: '1px solid var(--rule)',
-                background: 'var(--bg-2)',
+                background: 'var(--surface)',
               }}
             >
               {h}
@@ -449,10 +438,11 @@ function RateTable({
                 key={ci}
                 style={{
                   padding: '13px 16px',
-                  borderBottom: ri === rows.length - 1 ? 0 : '1px solid var(--rule-soft)',
-                  fontSize: 13,
+                  borderBottom: ri === rows.length - 1 ? 0 : '1px solid var(--rule)',
+                  fontSize: 'var(--fs-meta)',
                   textAlign: aligns[ci],
-                  fontFamily: aligns[ci] === 'right' ? 'var(--mono)' : undefined,
+                  /* Right-aligned cells are figures: they align on the digits,
+                   * which is tabular-nums' job, not a mono face. */
                   fontVariantNumeric: aligns[ci] === 'right' ? 'tabular-nums' : undefined,
                   color: 'var(--text)',
                 }}

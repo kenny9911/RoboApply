@@ -14,7 +14,7 @@ export default function BillingHistoryPage() {
       <div style={{ marginBottom: 24 }}>
         <Link
           href="/account"
-          style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}
+          style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', textDecoration: 'none' }}
         >
           ← {t('billing.history.back')}
         </Link>

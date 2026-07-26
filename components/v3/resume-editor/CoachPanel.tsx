@@ -46,7 +46,7 @@ export function CoachPanel({ tips, onClose }: Props) {
         <div className="iv-coach-orb" />
         <div>
           <div className="iv-coach-lbl">{t('coach.label')}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {t('coach.sub')}
           </div>
         </div>
@@ -74,7 +74,7 @@ export function CoachPanel({ tips, onClose }: Props) {
         <button
           type="button"
           className="btn ghost"
-          style={{ padding: '4px 0', fontSize: 11.5 }}
+          style={{ padding: '4px 0', fontSize: 'var(--fs-label)' }}
           onClick={() => setIdx((i) => (i + 1) % tips.length)}
         >
           {t('coach.next')}

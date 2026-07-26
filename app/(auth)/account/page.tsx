@@ -111,8 +111,7 @@ export default function AccountPage() {
   const header = (
     <PageHeader
       eyebrow={t('eyebrow')}
-      title={t('title')}
-      accentWord={t('titleAccent')}
+      title={`${t('title')} ${t('titleAccent')}`}
     />
   );
 
@@ -128,7 +127,7 @@ export default function AccountPage() {
         padding: '12px 16px',
         borderRadius: 'var(--r-md)',
         border: `1px solid ${billingBanner === 'success' ? 'var(--ok)' : 'var(--rule)'}`,
-        background: billingBanner === 'success' ? 'var(--ok-soft)' : 'var(--surface)',
+        background: billingBanner === 'success' ? 'var(--ok-subtle)' : 'var(--surface)',
         color: billingBanner === 'success' ? 'var(--ok)' : 'var(--text-2)',
         fontSize: '13.5px',
       }}
@@ -160,11 +159,11 @@ export default function AccountPage() {
           style={{
             border: '1px solid var(--rule)',
             background: 'var(--surface)',
-            borderRadius: 'var(--r-xl)',
+            borderRadius: 'var(--r-lg)',
             padding: '52px 32px',
           }}
         >
-          <p style={{ fontFamily: 'var(--sans)', fontSize: '18px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: '18px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
             {t('error.title')}
           </p>
           <p style={{ color: 'var(--text-2)', fontSize: '14px', maxWidth: 420, margin: 0 }}>

@@ -38,7 +38,7 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
   return (
     <>
       <h1>
-        {t('title')} <em>{t('title_accent')}</em>.
+        {`${t('title')} ${t('title_accent')}.`}
       </h1>
       <p className="lead">{t('lead')}</p>
 
@@ -70,10 +70,9 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
               <div className="file">{file.name}</div>
               <div
                 style={{
-                  fontSize: 12.5,
+                  fontSize: 'var(--fs-meta)',
                   color: 'var(--text-2)',
                   marginTop: 4,
-                  fontFamily: 'var(--mono)',
                 }}
               >
                 {t('received', { size: file.size })}

@@ -60,7 +60,7 @@ export default function ChoosePlanPage() {
         {/* Header — welcome eyebrow + title + sub, region toggle right. */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
           <div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'var(--accent-text)', marginBottom: 8 }}>
+            <div style={{ fontSize: 'var(--fs-label)', fontWeight: 600, letterSpacing: 'var(--ls-label)', color: 'var(--action)', marginBottom: 8 }}>
               {t('welcome')}
             </div>
             <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.03em', margin: '0 0 6px' }}>{t('title')}</h1>
@@ -71,11 +71,11 @@ export default function ChoosePlanPage() {
 
         {/* States */}
         {planQ.isLoading ? (
-          <div aria-busy="true" aria-label={t('loading')} style={{ color: 'var(--muted)', fontSize: 14, padding: 40 }}>{t('loading')}</div>
+          <div aria-busy="true" aria-label={t('loading')} style={{ color: 'var(--text-muted)', fontSize: 14, padding: 40 }}>{t('loading')}</div>
         ) : planQ.isError || !plan ? (
           <div role="alert" style={{ color: 'var(--warn)', fontSize: 14, padding: 24 }}>
             {t('error')} ·{' '}
-            <button onClick={() => planQ.refetch()} style={{ color: 'var(--accent-text)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => planQ.refetch()} style={{ color: 'var(--action)', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
               {t('retry')}
             </button>
           </div>
@@ -96,13 +96,13 @@ export default function ChoosePlanPage() {
               </p>
             ) : null}
 
-            <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--muted)' }}>{t('creditsHint')}</p>
+            <p style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--text-muted)' }}>{t('creditsHint')}</p>
 
             <div style={{ textAlign: 'center', marginTop: 10 }}>
               <button
                 onClick={continueFree}
                 disabled={busy}
-                style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 13.5, cursor: busy ? 'not-allowed' : 'pointer', textDecoration: 'underline' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 13.5, cursor: busy ? 'not-allowed' : 'pointer', textDecoration: 'underline' }}
               >
                 {t('continueFree')}
               </button>

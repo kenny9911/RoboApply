@@ -138,7 +138,7 @@ function ResumeUploadPrompt() {
           maxWidth: 460,
           textAlign: 'center',
           background: 'var(--surface, #0f1117)',
-          border: '1px solid var(--border, rgba(255,255,255,0.08))',
+          border: '1px solid var(--rule)',
           borderRadius: 18,
           padding: '36px 28px',
         }}
@@ -155,8 +155,8 @@ function ResumeUploadPrompt() {
             margin: '0 auto 18px',
             display: 'grid',
             placeItems: 'center',
-            background: 'var(--accent-soft, rgba(124,92,255,0.15))',
-            color: 'var(--accent, #7c5cff)',
+            background: 'var(--action-subtle)',
+            color: 'var(--action)',
           }}
         >
           {busy ? <span className="spinner" /> : <IconUpload size={26} strokeWidthValue={2.2} />}
@@ -165,7 +165,7 @@ function ResumeUploadPrompt() {
         <h1 style={{ fontSize: 22, fontWeight: 650, margin: '0 0 8px', letterSpacing: '-0.02em' }}>
           {t('title')}
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--muted, #98a2b3)', margin: '0 auto 22px', maxWidth: 360, lineHeight: 1.55 }}>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 auto 22px', maxWidth: 360, lineHeight: 1.55 }}>
           {busy ? t('uploading') : t('subtitle')}
         </p>
 
@@ -198,7 +198,7 @@ function ResumeUploadPrompt() {
             style={{
               marginTop: 12,
               fontSize: 12.5,
-              color: 'var(--muted, #98a2b3)',
+              color: 'var(--text-muted)',
               display: 'flex',
               gap: 6,
               justifyContent: 'center',
@@ -206,7 +206,7 @@ function ResumeUploadPrompt() {
             }}
           >
             {!busy && <IconCheck size={13} strokeWidthValue={3} />}
-            <span style={{ fontFamily: 'var(--mono)' }}>{picked.name}</span>
+            <span>{picked.name}</span>
           </div>
         ) : null}
 
@@ -219,7 +219,7 @@ function ResumeUploadPrompt() {
         <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-2, #6b7280)' }}>{t('formats')}</div>
 
         <div style={{ marginTop: 18, fontSize: 13 }}>
-          <a href="/resumes" style={{ color: 'var(--accent, #7c5cff)', textDecoration: 'none' }}>
+          <a href="/resumes" style={{ color: 'var(--action)', textDecoration: 'none' }}>
             {t('or_build')}
           </a>
         </div>

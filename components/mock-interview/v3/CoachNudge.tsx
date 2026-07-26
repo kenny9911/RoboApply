@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { SparklesIcon } from '@heroicons/react/24/solid';
-import { AiOrb } from '../../../components/dc/AiOrb';
+import { IconSparkle } from '../../../components/v3/primitives/Iconset';
 import { cn } from '../../../lib/utils';
 
 interface Props {
@@ -75,32 +75,53 @@ export function CoachNudge({ question, draftWordCount, visible, className }: Pro
   return (
     <div
       className={cn(
-        'relative flex items-start gap-3 rounded-2xl border px-4 py-3',
-        'transition-all duration-300',
+        'relative flex items-start gap-3 border px-4 py-3',
+        'transition-all',
         mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
         className,
       )}
       role="status"
       aria-live="polite"
       style={{
-        background:
-          'linear-gradient(135deg, color-mix(in srgb, var(--dc-accent) 12%, transparent), color-mix(in srgb, var(--dc-secondary) 12%, transparent))',
-        borderColor: 'color-mix(in srgb, var(--dc-accent) 28%, transparent)',
-        boxShadow: '0 0 24px -8px color-mix(in srgb, var(--dc-accent) 50%, transparent)',
+        borderRadius: 'var(--r-lg)',
+        background: 'var(--surface-2)',
+        borderColor: 'var(--rule)',
+        boxShadow: 'var(--e1)',
+        transitionDuration: 'var(--dur-enter)',
+        transitionTimingFunction: 'var(--ease-out)',
       }}
     >
-      <span className="relative shrink-0">
-        <AiOrb size="sm" active />
-      </span>
+      {/* The nudge is picked locally from the question + draft length — there is
+       *  no LLM round-trip here, so the card deliberately does NOT carry the
+       *  `ra-working` indeterminate bar. That cue is reserved for a real
+       *  in-flight request; running it here would fake work the coach isn't
+       *  doing. */}
+      <IconSparkle
+        size={16}
+        className="mt-0.5 shrink-0"
+        style={{ color: 'var(--text-muted)' }}
+      />
       <div className="flex-1 pt-0.5">
         <p
-          className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.18em]"
-          style={{ color: 'var(--dc-accent, #c6ff3a)' }}
+          className="inline-flex items-center gap-1 font-medium"
+          style={{
+            fontSize: 'var(--fs-label)',
+            letterSpacing: 'var(--ls-label)',
+            color: 'var(--text-muted)',
+          }}
         >
           <SparklesIcon className="h-3 w-3" aria-hidden="true" />
-          Your Coach · silent
+          Your coach · silent
         </p>
-        <p className="dc-serif italic mt-0.5 text-[14px]" style={{ color: 'var(--dc-ink, #f5f5fa)' }}>
+        <p
+          className="mt-0.5"
+          style={{
+            fontFamily: 'var(--font-ui)',
+            fontSize: 'var(--fs-body)',
+            lineHeight: 'var(--lh-body)',
+            color: 'var(--text)',
+          }}
+        >
           {pool[idx]}
         </p>
       </div>

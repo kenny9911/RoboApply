@@ -93,7 +93,7 @@ export function PipelineBoard() {
         style={{
           border: '1px solid var(--rule)',
           background: 'var(--surface)',
-          borderRadius: 'var(--r-xl)',
+          borderRadius: 'var(--r-lg)',
           padding: '40px 32px',
           textAlign: 'center',
         }}
@@ -119,35 +119,31 @@ export function PipelineBoard() {
         style={{
           border: '1px solid var(--rule)',
           background: 'var(--surface)',
-          borderRadius: 'var(--r-xl)',
+          borderRadius: 'var(--r-lg)',
           padding: '52px 32px',
           textAlign: 'center',
         }}
       >
         <h3
           style={{
-            fontFamily: 'var(--sans)',
-            fontSize: 22,
+            fontSize: 'var(--fs-title)',
             fontWeight: 600,
-            letterSpacing: '-0.025em',
+            lineHeight: 'var(--lh-title)',
+            letterSpacing: 'var(--ls-title)',
             color: 'var(--text)',
             margin: 0,
           }}
         >
-          {t('empty_board.title')}
-          <em
-            style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontWeight: 400,
-              color: 'var(--accent-text)',
-              padding: '0 4px',
-            }}
-          >
-            {t('empty_board.accent')}
-          </em>
+          {`${t('empty_board.title')} ${t('empty_board.accent')}`}
         </h3>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '12px auto 0', maxWidth: 420 }}>
+        <p
+          style={{
+            color: 'var(--text-2)',
+            fontSize: 'var(--fs-body)',
+            margin: 'var(--sp-3) auto 0',
+            maxWidth: 420,
+          }}
+        >
           {t('empty_board.body')}
         </p>
       </div>

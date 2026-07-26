@@ -31,8 +31,11 @@ const NO_CONTENT_RESPONSE = {
   },
 };
 
+// `init` is unused by the mock body but must stay in the signature: vi.fn()
+// derives the recorded `mock.calls` tuple from it, and the logout assertions
+// below read calls[0][1] to prove the POST carried keepalive + credentials.
 function makeFetchMock() {
-  return vi.fn(async (url: string) =>
+  return vi.fn(async (url: string, init?: RequestInit) =>
     String(url).includes('/auth/logout')
       ? NO_CONTENT_RESPONSE
       : INVALID_TOKEN_RESPONSE,

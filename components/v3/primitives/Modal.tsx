@@ -130,7 +130,7 @@ export function Modal({
           {title ? (
             <h2
               style={{
-                fontFamily: 'var(--sans)',
+                fontFamily: 'var(--font-ui)',
                 fontSize: '20px',
                 fontWeight: 600,
                 letterSpacing: '-0.02em',

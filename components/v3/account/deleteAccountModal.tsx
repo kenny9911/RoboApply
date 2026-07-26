@@ -93,11 +93,8 @@ export function DeleteAccountModal({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <label
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '11px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--muted)',
+              fontSize: 'var(--fs-label)',
+              color: 'var(--text-muted)',
               fontWeight: 600,
             }}
           >
@@ -118,8 +115,7 @@ export function DeleteAccountModal({
               borderRadius: 9,
               padding: '10px 12px',
               color: 'var(--text)',
-              fontFamily: 'var(--mono)',
-              fontSize: '13px',
+              fontSize: 'var(--fs-meta)',
             }}
           />
         </div>
@@ -127,11 +123,8 @@ export function DeleteAccountModal({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <label
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: '11px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--muted)',
+              fontSize: 'var(--fs-label)',
+              color: 'var(--text-muted)',
               fontWeight: 600,
             }}
           >
@@ -149,7 +142,7 @@ export function DeleteAccountModal({
               borderRadius: 9,
               padding: '10px 12px',
               color: 'var(--text)',
-              fontFamily: 'var(--sans)',
+              fontFamily: 'var(--font-ui)',
               fontSize: '13px',
               resize: 'vertical',
             }}

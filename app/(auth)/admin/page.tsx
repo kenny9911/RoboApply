@@ -70,7 +70,7 @@ import {
 type TabId = 'overview' | 'users' | 'sessions' | 'rateCard';
 
 const MODALITY_COLORS: Record<string, string> = {
-  llm: 'var(--accent-text)',
+  llm: 'var(--action)',
   stt: 'var(--cyan)',
   tts: 'var(--violet)',
   image: 'var(--pink)',
@@ -94,8 +94,7 @@ export default function AdminPage() {
     <PageHeader
       eyebrow={t('eyebrow')}
       eyebrowLive
-      title={t('title')}
-      accentWord={t('titleAccent')}
+      title={`${t('title')} ${t('titleAccent')}`}
       actions={
         <>
           <DateRangePicker value={range} onChange={setRange} />
@@ -125,8 +124,7 @@ export default function AdminPage() {
         {header}
         <EmptyState
           icon={<span style={{ fontSize: 34 }}>🔒</span>}
-          title={t('notAuthorized.title')}
-          accentWord={t('notAuthorized.titleAccent')}
+          title={`${t('notAuthorized.title')} ${t('notAuthorized.titleAccent')}`}
           sub={t('notAuthorized.sub')}
         />
       </>
@@ -194,8 +192,7 @@ function OverviewTab({
     return (
       <EmptyState
         icon={<span style={{ fontSize: 34 }}>📉</span>}
-        title={t('empty.title')}
-        accentWord={t('empty.titleAccent')}
+        title={`${t('empty.title')} ${t('empty.titleAccent')}`}
         action={
           <Btn variant="primary" onClick={onResetRange}>
             {t('empty.reset')}
@@ -253,7 +250,7 @@ function OverviewTab({
   const modSegments = data.costByModality.map((m) => ({
     label: m.label,
     value: m.costUsd,
-    color: MODALITY_COLORS[m.modality] ?? 'var(--accent-text)',
+    color: MODALITY_COLORS[m.modality] ?? 'var(--action)',
     estimated: ESTIMATED_MODALITIES.has(m.modality),
     valueText: fmtCurrency(m.costUsd, locale),
     pctText: fmtPercent((m.costUsd / modTotal) * 100, locale),
@@ -270,7 +267,7 @@ function OverviewTab({
           legend={
             <ChartLegend
               items={[
-                { color: 'var(--accent-text)', label: t('chart.legend.cost') },
+                { color: 'var(--action)', label: t('chart.legend.cost') },
                 { color: 'var(--violet)', label: t('chart.legend.revenue') },
               ]}
             />
@@ -279,8 +276,7 @@ function OverviewTab({
           <CostRevenueArea points={data.costSeries} locale={locale} />
           <div
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
+              fontSize: 'var(--fs-label)',
               color: 'var(--text-2)',
               marginTop: 12,
               paddingTop: 12,
@@ -300,7 +296,7 @@ function OverviewTab({
           {featItems.length > 0 ? (
             <CostBreakdownBar items={featItems} variant="rows" />
           ) : (
-            <p style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>—</p>
+            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>—</p>
           )}
         </ChartCard>
         <ChartCard caption={t('chart.costByModality')}>
@@ -313,9 +309,8 @@ function OverviewTab({
               />
               <div
                 style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: '10.5px',
-                  color: 'var(--muted)',
+                  fontSize: 'var(--fs-label)',
+                  color: 'var(--text-muted)',
                   marginTop: 14,
                   display: 'flex',
                   gap: 6,
@@ -325,7 +320,7 @@ function OverviewTab({
               </div>
             </>
           ) : (
-            <p style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)' }}>—</p>
+            <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>—</p>
           )}
         </ChartCard>
       </div>
@@ -447,7 +442,7 @@ function UsersTab({
               border: 0,
               outline: 'none',
               color: 'var(--text)',
-              fontFamily: 'var(--sans)',
+              fontFamily: 'var(--font-ui)',
               fontSize: '12.5px',
               width: '100%',
             }}
@@ -542,7 +537,7 @@ function SessionsTab({
     {
       key: 'createdAt',
       header: t('sessions.col.date'),
-      render: (r) => <span style={{ color: 'var(--text-2)', fontFamily: 'var(--mono)', fontSize: 12 }}>{fmtSessionDate(r.createdAt, locale)}</span>,
+      render: (r) => <span style={{ color: 'var(--text-2)', fontSize: 'var(--fs-label)', fontVariantNumeric: 'tabular-nums' }}>{fmtSessionDate(r.createdAt, locale)}</span>,
     },
     { key: 'user', header: t('sessions.col.user'), render: (r) => r.email ?? r.userId.slice(0, 8) },
     { key: 'role', header: t('sessions.col.role'), render: (r) => r.role ?? '—' },
@@ -615,7 +610,7 @@ function SessionsTab({
         onRetry={() => void q.refetch()}
         loadingLabel={t('loading')}
       />
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--muted-2)', marginTop: 6 }}>
+      <div style={{ fontSize: 'var(--fs-label)', color: 'var(--disabled)', marginTop: 6 }}>
         ⌁ {t('estimatedNote')}
       </div>
     </div>
@@ -684,9 +679,9 @@ function RetryPanel({ onRetry }: { onRetry: () => void }) {
     <div
       role="alert"
       className="flex flex-col items-center gap-4 text-center"
-      style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-xl)', padding: '52px 32px' }}
+      style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
     >
-      <p style={{ fontFamily: 'var(--sans)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+      <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
         {t('error.title')}
       </p>
       <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('error.body')}</p>

@@ -78,7 +78,7 @@ export function QueueCard({ item, index }: Props) {
               <b>{item.companyName}</b>
               <span className="pill">{t('fitPill', { score: item.matchScore })}</span>
               {item.location ? (
-                <span style={{ color: 'var(--muted)' }}>· {item.location}</span>
+                <span style={{ color: 'var(--text-muted)' }}>· {item.location}</span>
               ) : null}
             </div>
           </div>

@@ -80,7 +80,7 @@ export function SkillsEditor({
             style={{
               width: 160,
               background: 'var(--surface)',
-              border: '1px solid var(--accent-text)',
+              border: '1px solid var(--action)',
               borderRadius: 99,
               padding: '6px 11px',
               fontSize: 12.5,
@@ -101,11 +101,8 @@ export function SkillsEditor({
         <div style={{ marginTop: 12 }}>
           <div
             style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 10.5,
-              textTransform: 'uppercase',
-              letterSpacing: '0.14em',
-              color: 'var(--accent-text)',
+              fontSize: 'var(--fs-label)',
+              color: 'var(--action)',
               fontWeight: 700,
               marginBottom: 8,
             }}
@@ -121,9 +118,9 @@ export function SkillsEditor({
                 onClick={() => add(s)}
                 style={{
                   cursor: 'pointer',
-                  background: 'var(--accent-soft)',
-                  color: 'var(--accent-text)',
-                  borderColor: 'var(--accent-text)',
+                  background: 'var(--action-subtle)',
+                  color: 'var(--action)',
+                  borderColor: 'var(--action)',
                 }}
               >
                 + {s}
@@ -132,7 +129,7 @@ export function SkillsEditor({
             <button
               type="button"
               className="btn ghost"
-              style={{ padding: '4px 8px', fontSize: 11 }}
+              style={{ padding: '4px 8px', fontSize: 'var(--fs-label)' }}
               onClick={onClearSuggestions}
             >
               {t('skills.dismiss_suggestions')}

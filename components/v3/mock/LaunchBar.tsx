@@ -55,7 +55,7 @@ export function LaunchBar({
           <span className="iv-launch-v">
             {interviewer ? (
               <>
-                {interviewer.name} · <em>{interviewer.role}</em>
+                {interviewer.name} · {interviewer.role}
               </>
             ) : (
               t('setup.launch.pickInterviewer')

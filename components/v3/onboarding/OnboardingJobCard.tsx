@@ -75,10 +75,9 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
         </div>
         <span
           style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 11.5,
+            fontSize: 'var(--fs-label)',
             fontWeight: 700,
-            color: 'var(--accent-text)',
+            color: 'var(--action)',
             whiteSpace: 'nowrap',
           }}
         >
@@ -87,7 +86,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
       </div>
 
       {salary ? (
-        <div style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text-2)' }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
           {salary}
         </div>
       ) : null}
@@ -97,7 +96,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
       </p>
 
       {job.isExternal && job.sourcePublisher ? (
-        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+        <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
           {t('card_via', { publisher: job.sourcePublisher })}
         </div>
       ) : null}
@@ -128,7 +127,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
             rel="noopener nofollow"
             style={{
               fontSize: 12,
-              color: 'var(--accent-text)',
+              color: 'var(--action)',
               textDecoration: 'underline',
               marginLeft: 'auto',
             }}

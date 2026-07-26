@@ -35,10 +35,10 @@ function intensityLevel(count: number, max: number): 0 | 1 | 2 | 3 | 4 {
 
 const HEAT_BG: Record<0 | 1 | 2 | 3 | 4, string> = {
   0: 'var(--surface-2)',
-  1: 'var(--accent-soft)',
+  1: 'var(--action-subtle)',
   2: 'rgba(201,255,59,.32)',
   3: 'rgba(201,255,59,.6)',
-  4: 'var(--accent-text)',
+  4: 'var(--action)',
 };
 
 export function ActivityHeatmap({
@@ -104,9 +104,8 @@ export function ActivityHeatmap({
           gap: 6,
           justifyContent: 'flex-end',
           marginTop: 14,
-          fontFamily: 'var(--mono)',
-          fontSize: '10px',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
         }}
       >
         {t('usage.heatLess')}
@@ -158,7 +157,7 @@ function UsageMeterRow({
         }}
       >
         <span style={{ fontSize: '13px', color: 'var(--text)' }}>{feature.label}</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
           {t('usage.meter', {
             used: numberFmt.format(feature.count),
             cap: numberFmt.format(safeCap),
@@ -183,7 +182,7 @@ function UsageMeterRow({
             display: 'block',
             height: '100%',
             width: `${pct}%`,
-            background: warn ? 'var(--warn)' : 'var(--accent)',
+            background: warn ? 'var(--warn)' : 'var(--action)',
             borderRadius: '99px',
           }}
         />
@@ -231,9 +230,8 @@ export function UsageMeter({
 
       <div
         style={{
-          fontFamily: 'var(--mono)',
-          fontSize: '11px',
-          color: 'var(--muted)',
+          fontSize: 'var(--fs-label)',
+          color: 'var(--text-muted)',
           marginTop: 16,
           paddingTop: 14,
           borderTop: '1px solid var(--rule)',

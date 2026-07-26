@@ -5,7 +5,6 @@
 export { Sidebar } from './Sidebar';
 export { Topbar } from './Topbar';
 export { BrandLogo } from './BrandLogo';
-export { OrbCard } from './OrbCard';
 export { MobileNav } from './MobileNav';
 export { LanguageSwitcher } from './LanguageSwitcher';
 export {

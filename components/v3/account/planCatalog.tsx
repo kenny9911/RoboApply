@@ -91,7 +91,7 @@ function PlanCard({
 
   const accent =
     item.key === 'starter'
-      ? { color: 'var(--accent-text)', bg: 'var(--accent-soft)', border: 'var(--accent-text)' }
+      ? { color: 'var(--action)', bg: 'var(--action-subtle)', border: 'var(--action)' }
       : item.key === 'growth'
         ? { color: 'var(--violet)', bg: 'var(--violet-soft)', border: 'var(--violet)' }
         : { color: 'var(--text-2)', bg: 'var(--surface-2)', border: 'var(--rule)' };
@@ -101,10 +101,10 @@ function PlanCard({
   return (
     <div
       style={{
-        border: `1px solid ${isCurrent ? 'var(--accent-text)' : recommended ? 'var(--violet)' : 'var(--rule)'}`,
+        border: `1px solid ${isCurrent ? 'var(--action)' : recommended ? 'var(--violet)' : 'var(--rule)'}`,
         background: 'var(--surface)', borderRadius: 16, padding: '24px 22px', display: 'flex',
         flexDirection: 'column', position: 'relative', minHeight: 360,
-        boxShadow: isCurrent ? 'var(--shadow-ring)' : undefined,
+        boxShadow: isCurrent ? 'var(--e2)' : undefined,
       }}
       aria-label={recommended ? `${tierLabel(t, item.key)} · ${t('plan.mostPopular')}` : undefined}
     >
@@ -112,22 +112,21 @@ function PlanCard({
         <span
           className="ra-plan-pop"
           style={{
-            position: 'absolute', top: -10, right: 18, fontFamily: 'var(--mono)', fontSize: '9.5px',
-            fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: '#fff', padding: '4px 10px', borderRadius: '99px', boxShadow: '0 4px 14px -4px var(--violet-glow)',
+            position: 'absolute', top: -10, right: 18, fontSize: 'var(--fs-label)',
+            fontWeight: 600, color: '#fff', padding: '4px 10px', borderRadius: '99px', boxShadow: 'var(--e1)',
           }}
         >{t('plan.mostPopular')}</span>
       ) : null}
 
       <div style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 14 }}>{tierLabel(t, item.key)}</div>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, fontFamily: 'var(--mono)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
         <span style={{ fontSize: '36px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text)' }}>{price}</span>
-        {!isFree ? <span style={{ fontSize: '13px', color: 'var(--muted)' }}>{t('plan.perMonth')}</span> : null}
+        {!isFree ? <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t('plan.perMonth')}</span> : null}
       </div>
 
       <div style={{
-        fontFamily: 'var(--mono)', fontSize: '12px', borderRadius: 9, padding: '8px 12px', margin: '18px 0',
+        fontSize: 'var(--fs-label)', borderRadius: 9, padding: '8px 12px', margin: '18px 0',
         textAlign: 'center', fontWeight: 600, ...accent, border: `1px solid ${accent.border}`,
       }}>
         {t('plan.creditsCap', { n: fmtCredits(item.credits) })}
@@ -136,7 +135,7 @@ function PlanCard({
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 11, marginBottom: 22, flex: 1, padding: 0 }}>
         {features.map((f, i) => (
           <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: '13px', color: 'var(--text-2)' }}>
-            <span style={{ flexShrink: 0, marginTop: 2, color: 'var(--accent-text)' }}><IconCheck size={15} /></span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: 'var(--action)' }}><IconCheck size={15} /></span>
             {f}
           </li>
         ))}

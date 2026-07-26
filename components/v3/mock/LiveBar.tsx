@@ -48,7 +48,7 @@ export function LiveBar({
         <span className="iv-live-sep">·</span>
         <span className="iv-live-meta">{typeLabel}</span>
         <span className="iv-live-sep">·</span>
-        <span className="iv-live-meta" style={{ color: 'var(--accent-text)' }}>
+        <span className="iv-live-meta" style={{ color: 'var(--action)' }}>
           {format === 'video' ? t('live.modeVideo') : t('live.modeVoice')}
         </span>
         <span className="iv-live-sep">·</span>

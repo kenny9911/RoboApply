@@ -149,8 +149,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
   return (
     <div style={{ width: '100%', maxWidth: 640, textAlign: 'left' }}>
       <h1 style={{ textAlign: 'center' }}>
-        {t('title')} <em>{t('title_accent')}</em>
-        {t('title_after')}
+        {`${t('title')} ${t('title_accent')}${t('title_after')}`}
       </h1>
       <p className="lead" style={{ textAlign: 'center' }}>
         {t('lead')}
@@ -182,7 +181,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                     padding: '14px 16px',
                     borderRadius: 12,
                     border: active
-                      ? '2px solid var(--accent)'
+                      ? '2px solid var(--action)'
                       : '1px solid var(--rule)',
                     background: 'var(--surface-2)',
                     cursor: 'pointer',
@@ -195,7 +194,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                       height: 18,
                       borderRadius: '50%',
                       border: active
-                        ? '5px solid var(--accent)'
+                        ? '5px solid var(--action)'
                         : '2px solid var(--rule)',
                       flexShrink: 0,
                     }}
@@ -207,11 +206,8 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                         <span
                           style={{
                             marginLeft: 8,
-                            fontSize: 10.5,
-                            fontFamily: 'var(--mono)',
-                            color: 'var(--accent-text)',
-                            letterSpacing: '0.08em',
-                            textTransform: 'uppercase',
+                            fontSize: 'var(--fs-label)',
+                            color: 'var(--action)',
                           }}
                         >
                           ★ {t('primary_badge')}

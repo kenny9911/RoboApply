@@ -38,7 +38,6 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
             className="iv-vt-orb"
             style={{
               background: orbBackground(interviewer),
-              boxShadow: `0 0 80px ${interviewer.palette[0]}88, 0 0 40px ${interviewer.palette[1]}66`,
             }}
           />
           <div className={`iv-vt-rings ${speaking ? 'on' : ''}`}>
@@ -94,7 +93,6 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
         className="iv-interviewer-orb"
         style={{
           background: orbBackground(interviewer),
-          boxShadow: `0 0 60px ${interviewer.palette[0]}66`,
         }}
       />
       <div className="iv-interviewer-rings">

@@ -218,7 +218,7 @@ export function Slider({
         aria-label={ariaLabel}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{
-          background: `linear-gradient(90deg, var(--accent) ${pct}%, var(--surface-3) ${pct}%)`,
+          background: `linear-gradient(90deg, var(--action) ${pct}%, var(--surface-3) ${pct}%)`,
         }}
       />
       <div className="pref-slider-val">

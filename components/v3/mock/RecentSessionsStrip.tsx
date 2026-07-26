@@ -79,7 +79,7 @@ export function RecentSessionsStrip({ sessions, onReplay, onDelete }: Props) {
     <div className="iv-recent">
       <div className="iv-section-label">
         <span>{t('setup.recent.label')}</span>
-        <span style={{ color: 'var(--muted)' }}>
+        <span style={{ color: 'var(--text-muted)' }}>
           {t('setup.recent.count', { count: sessions.length })}
         </span>
       </div>
@@ -112,7 +112,7 @@ export function RecentSessionsStrip({ sessions, onReplay, onDelete }: Props) {
               <button
                 type="button"
                 className="btn ghost"
-                style={{ padding: '5px 0', fontSize: 11.5 }}
+                style={{ padding: '5px 0', fontSize: 'var(--fs-label)' }}
                 onClick={() => onReplay(s)}
               >
                 {t('setup.recent.replay')}
