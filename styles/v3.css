@@ -445,12 +445,156 @@ html[lang='ja'] .page-h h1 {
 }
 .match.expanded { border-color: var(--action); box-shadow: var(--e2); }
 
+/* The fit meter — a 4px full-bleed strip along the top edge of every card.
+ * This is the feed's silhouette: it is the one element that makes a RoboApply
+ * job list recognisable at thumbnail size, and it costs the reader nothing to
+ * learn. `--score` is set inline (0–100).
+ *
+ * At Great fit the fill becomes --brand-mark on --brand-plane. That is the ONLY
+ * place identity appears in the feed, and it obeys the rule that --brand-mark
+ * never carries text: it is a bar, not a label. */
+.match-meter {
+  height: 4px;
+  width: 100%;
+  background: var(--surface-2);
+  position: relative;
+  overflow: hidden;
+}
+.match-meter::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: calc(var(--score, 0) * 1%);
+  background: var(--action);
+  transition: width var(--dur-enter) var(--ease-out);
+}
+/* Great fit is the one place identity appears in the feed. The dark plane
+ * behind the lime is a LIGHT-theme device — on a white card, lime alone has
+ * nothing to sit against. In dark the card already supplies that contrast, so
+ * the track stays the ordinary surface step; otherwise --brand-plane (#14161A)
+ * lands within two steps of --surface (#16181D), the unfilled remainder
+ * vanishes, and an 87 becomes indistinguishable from a 100. */
+.match-meter[data-tier='great'] { background: var(--brand-plane); }
+.match-meter[data-tier='great']::after { background: var(--brand-mark); }
+html[data-theme='dark'] .match-meter[data-tier='great'] { background: var(--surface-3); }
+
 .match-top {
   display: grid;
   grid-template-columns: 52px 1fr auto;
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-5);
+  align-items: start;
+}
+
+/* ── The gap leads (ruling R2) ──
+ * The gap is the one thing on this card an employer-funded competitor will
+ * never ship, so it is the first sentence the eye lands on, not a caveat on
+ * line three. The overlap follows it, quieter. */
+.match-read {
+  margin-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+/* `margin: 0` is load-bearing: the global reset only sets box-sizing, so a bare
+ * <p> keeps the UA's 1em block margins and collapses the 4px flex gap into
+ * ~24px, which visually detaches the overlap from the gap it qualifies. */
+.match-gap,
+.match-overlap {
+  margin: 0;
+}
+.match-gap {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  font-weight: 500;
+}
+.match-overlap {
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+/* ── Fit, stated in words first ──
+ * The tier word is the quality signal. The number sits under it, smaller and
+ * quieter, because a naked 0–100 beside a job reads as a percentage chance of
+ * getting it (ruling C5). */
+.match-fit { text-align: end; white-space: nowrap; }
+.match-fit .tier {
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  letter-spacing: var(--ls-subtitle);
+  color: var(--text);
+}
+.match-fit[data-tier='great'] .tier { color: var(--ok); }
+.match-fit[data-tier='unlikely'] .tier { color: var(--text-muted); }
+.match-fit .num {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  letter-spacing: var(--ls-label);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+/* ── The missing keywords, always labelled (ruling C17) ──
+ * A bare chip cluster reads as FEATURES — the exact inverse of what these are.
+ * The label is not optional. */
+.gap-block { margin-top: var(--sp-4); }
+.gap-block .lbl {
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  margin-bottom: var(--sp-2);
+}
+.gap-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.gap-chip {
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  font-weight: 500;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--warn-subtle);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
+/* ── The rubric, published (ruling C6) ──
+ * The weights are the most credible thing the scorer owns. They are stated in
+ * sentences a reader does not need a glossary for, and the disclaimer sits
+ * with them because this is where someone comes to ask what the number means. */
+.rubric { margin-top: var(--sp-4); }
+.rubric > summary {
+  cursor: pointer;
+  font-size: var(--fs-meta);
+  color: var(--action);
+  list-style: none;
+  display: inline-flex;
   align-items: center;
+  gap: var(--sp-1);
+}
+.rubric > summary::-webkit-details-marker { display: none; }
+.rubric > summary::after { content: '›'; transition: transform var(--dur-hover) var(--ease-out); }
+.rubric[open] > summary::after { transform: rotate(90deg); }
+.rubric ul {
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.rubric li {
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  line-height: var(--lh-meta);
+}
+.rubric .disclaimer {
+  margin: var(--sp-3) 0 0;   /* explicit: kills the UA's bottom margin too */
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--rule);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  font-weight: 500;
 }
 
 .logo {
@@ -465,16 +609,18 @@ html[lang='ja'] .page-h h1 {
   border: 1px solid var(--rule);
   position: relative;
 }
-/* Company-avatar tile gradients — INTENTIONALLY literal. These are fixed
- * per-company identity colours (data-color 0–4, like app-icon colours), not
- * theme colours: the same company must be the same swatch in light and dark
- * and next to every other company. They carry no text but their own initial,
- * always white, and never stand in for --brand-mark. */
-.logo[data-color="0"] { background: linear-gradient(135deg, #FF6B9D 0%, #FF4D7E 100%); color: white; }
-.logo[data-color="1"] { background: linear-gradient(135deg, #4ED8FF 0%, #2E9BFF 100%); color: white; }
-.logo[data-color="2"] { background: linear-gradient(135deg, #4ADE80 0%, #2BB870 100%); color: white; }
-.logo[data-color="3"] { background: linear-gradient(135deg, #FFB547 0%, #FF8A3D 100%); color: white; }
-.logo[data-color="4"] { background: linear-gradient(135deg, #8B5BFF 0%, #5B3BC4 100%); color: white; }
+/* Company-avatar tiles. Five variants so adjacent companies stay
+ * distinguishable when scanning a feed — that affordance is real and worth
+ * keeping. What is gone is the saturated five-gradient rainbow (hot pink,
+ * cyan, green, orange, violet) it used to be: twenty of those in one column
+ * was the loudest thing on the screen and it fought the one action colour for
+ * attention. These are neutral steps of the surface scale with the ink varying
+ * in weight, so they read as tiles rather than as status. */
+.logo[data-color="0"] { background: var(--surface-2); color: var(--text); }
+.logo[data-color="1"] { background: var(--surface-3); color: var(--text); }
+.logo[data-color="2"] { background: var(--surface-2); color: var(--text-2); }
+.logo[data-color="3"] { background: var(--surface-3); color: var(--text-2); }
+.logo[data-color="4"] { background: var(--surface-2); color: var(--text); border-color: var(--rule-strong); }
 
 .match-body { min-width: 0; }
 .match h3 {

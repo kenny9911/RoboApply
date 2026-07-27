@@ -398,16 +398,16 @@ function syntheticMatchExplanation(
       ],
       gaps: [
         score < 70
-          ? 'Limited evidence of the specific domain (e.g. fintech / health) the role calls out'
-          : 'Could highlight a project tightly matching the JD bullet points',
+          ? 'The resume shows no work in the industry this role calls out'
+          : 'No project on the resume matches what this job post asks for most',
         score < 60
-          ? 'Years of experience is just below the lower bound of the JD'
-          : 'Consider adding one quantified outcome per recent role',
+          ? 'They ask for more years than the resume shows'
+          : 'Recent roles have no numbers in them',
       ],
       rationale:
-        `This is a ${score >= 80 ? 'strong' : score >= 60 ? 'good' : score >= 40 ? 'stretch' : 'long shot'} ` +
-        `match. The resume covers the headline requirements and shows recent production experience at relevant scale. ` +
-        `The biggest opportunity is to tailor the top three bullets toward the specific product surface the JD names.`,
+        `This is a ${score >= 80 ? 'great fit' : score >= 60 ? 'good fit' : score >= 40 ? 'possible fit' : 'unlikely fit'}. ` +
+        `The resume covers the headline requirements and shows recent production experience at relevant scale. ` +
+        `The top three bullets do not mention the product area this job post names.`,
       signals: {
         skills: Math.max(0, Math.min(100, baseSkill)),
         experience: Math.max(0, Math.min(100, baseExp)),
@@ -434,7 +434,7 @@ function syntheticInsightForCurrentWeek(
     weekStartUtc: currentWeekStartUtc(),
     summaryMarkdown:
       `## Week summary\n\n` +
-      `You're moving steadily through the funnel. Top priority this week: keep momentum on your active ` +
+      `You're moving steadily through your applications. Top priority this week: keep momentum on your active ` +
       `interviews and follow up on applications past their 5-day window.`,
     citedTrackerIds: recent,
     metrics: {
@@ -1344,9 +1344,9 @@ export const stubApi: RaV2Api = {
           diff.roleTitle = job.title;
         }
       } else {
-        // Manual target / pasted JD — mirror the backend's naming.
+        // Manual target / pasted job post — mirror the backend's naming.
         diff.jobId = null;
-        diff.companyName = body.targetCompany?.trim() || 'Pasted JD';
+        diff.companyName = body.targetCompany?.trim() || 'Pasted job post';
         diff.roleTitle = body.targetTitle?.trim() || 'Target role';
       }
       return {

@@ -107,4 +107,76 @@ describe('/jobs', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Pass$/i })).toBeNull();
   });
+
+  it('leads with the gap and never lets the score stand alone', async () => {
+    const { container } = renderWithProviders(<JobsPage />);
+
+    // ── The gap leads (ruling R2) ──
+    // The scorer returns explanation.gaps as an array, so the first one is a
+    // sentence on the card face — not buried in the expanded rationale, and
+    // not a caveat under the score. This is the one thing on the card a
+    // competitor funded by employers will never ship, so its position is the
+    // product decision, and a regression here is silent otherwise.
+    await waitFor(
+      () => {
+        expect(container.querySelector('.match-gap')).not.toBeNull();
+      },
+      { timeout: 6000 },
+    );
+    // Anchor on the gap itself, not on "the first card": every card scores
+    // independently (useJobScore is lazy per row) and the stub deliberately
+    // makes jobs.score slow, so the first card in DOM order is not necessarily
+    // the first one to resolve.
+    const gap = container.querySelector('.match-gap')!;
+    const card = gap.closest('.match')!;
+    const overlap = card.querySelector('.match-overlap');
+    expect(gap.textContent?.trim()).toBeTruthy();
+
+    // Order matters, not just presence: gap above overlap. DOCUMENT_POSITION_
+    // FOLLOWING means `overlap` comes after `gap` in document order.
+    if (overlap) {
+      expect(
+        gap.compareDocumentPosition(overlap) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+
+    // ── The score is never the primary element (ruling C5) ──
+    // The tier word carries the quality signal; the number is secondary. The
+    // 56px donut that used to own this slot is gone.
+    expect(container.querySelector('.score-donut')).toBeNull();
+    const fit = card.querySelector('.match-fit');
+    expect(fit).not.toBeNull();
+    const tierWord = fit?.querySelector('.tier')?.textContent?.trim() ?? '';
+    expect(tierWord).toMatch(/^(Great fit|Good fit|Possible|Unlikely)$/);
+
+    // The number renders as "N / 100", never as a bare integer — a naked 0-100
+    // beside a job reads as a percentage chance of getting it.
+    const num = fit?.querySelector('.num')?.textContent?.trim() ?? '';
+    expect(num).toMatch(/^\d+ \/ 100$/);
+
+    // ── The disclaimer is required, not an FAQ entry (ruling C5) ──
+    expect(
+      screen.getByText('This is not your chance of getting hired.'),
+    ).toBeInTheDocument();
+
+    // ── The rubric is published in sentences, not analyst nouns (C6) ──
+    expect(screen.getByText(/The skills they ask for — 30/)).toBeInTheDocument();
+    expect(screen.queryByText(/trajectory|domain weight|logistics/i)).toBeNull();
+
+    // ── Missing keywords are always labelled (C17) ──
+    // A bare chip cluster reads as FEATURES, which is the exact inverse of
+    // what these are. If chips render, the label renders with them.
+    if (card.querySelector('.gap-chip')) {
+      expect(
+        screen.getByText(/They ask for these and your resume doesn't mention them:/),
+      ).toBeInTheDocument();
+    }
+
+    // The tier word appears once per card, not twice — it has its own slot, so
+    // deriveTags' tier tag is filtered out of the tag row.
+    const tierMentions = Array.from(card.querySelectorAll('.tag')).filter(
+      (el) => /^(Great fit|Good fit|Possible|Unlikely)$/.test(el.textContent?.trim() ?? ''),
+    );
+    expect(tierMentions).toHaveLength(0);
+  });
 });

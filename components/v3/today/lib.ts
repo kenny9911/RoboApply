@@ -165,6 +165,10 @@ export function deriveFacets(
 export interface DerivedTag {
   label: string;
   tone?: 'strong' | 'warn';
+  /** What produced this tag. The card drops `tier` from the tag row because
+   *  the tier word has its own slot on the right, and showing the same word
+   *  twice on one card is how a four-rung ladder stops being read. */
+  kind?: 'tier' | 'workType' | 'stretch';
 }
 
 /**
@@ -188,11 +192,12 @@ export function deriveTags(
     tags.push({
       label: labels.tier[tier],
       tone: tier === 'strong' || tier === 'good' ? 'strong' : undefined,
+      kind: 'tier',
     });
   }
-  tags.push({ label: labels.workType[job.workType] });
+  tags.push({ label: labels.workType[job.workType], kind: 'workType' });
   if (score != null && score < 60) {
-    tags.push({ label: labels.stretch, tone: 'warn' });
+    tags.push({ label: labels.stretch, tone: 'warn', kind: 'stretch' });
   }
   return tags;
 }

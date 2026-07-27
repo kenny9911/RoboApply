@@ -114,6 +114,42 @@ for (const [locale, bundle] of Object.entries(bundles)) {
   }
 }
 
+// ── 1b. Banned words in fixture data ────────────────────────────────────────
+//
+// lib/stub/raV2.stub.ts is not "just test data": with NEXT_PUBLIC_USE_STUB_API
+// it is what every screen renders in development, in the unit tests, and in any
+// demo. Its match explanations shipped "the JD bullet points" straight onto the
+// job card — banned vocabulary that this gate missed for exactly as long as it
+// only read i18n bundles. Fixture strings are product copy.
+
+const FIXTURES = ['lib/stub/raV2.stub.ts'];
+
+for (const rel of FIXTURES) {
+  let src;
+  try {
+    src = readFileSync(join(ROOT, rel), 'utf8');
+  } catch {
+    continue; // fixture removed — not this gate's business
+  }
+  src.split('\n').forEach((raw, i) => {
+    const line = raw.trim();
+    // Comments describe the code; they are not shown to anyone.
+    if (line.startsWith('//') || line.startsWith('*') || line.startsWith('/*')) return;
+    // Only STRING LITERALS can reach a user. Checking the whole line would flag
+    // `aggressiveness: body.aggressiveness` — an API field name, which is code,
+    // not copy — and the point of this gate is words a person reads.
+    const literals = raw.match(/'[^']*'|"[^"]*"|`[^`]*`/g) ?? [];
+    for (const lit of literals) {
+      const hay = ` ${lit.toLowerCase()} `;
+      for (const [term, why] of Object.entries(BANNED)) {
+        if (hay.includes(term)) {
+          fail(rel, `line ${i + 1}`, 'banned-word-fixture', `"${term}" — ${why}`);
+        }
+      }
+    }
+  });
+}
+
 // ── 2. Locale parity ────────────────────────────────────────────────────────
 //
 // One tier. This used to be two: the app UI was localized into four languages
