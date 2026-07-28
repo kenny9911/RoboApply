@@ -74,8 +74,13 @@ function flattenSkills(skills: unknown): string[] {
 
 /** Best-effort total-years estimate from experience duration strings:
  *  sums explicit "N years / N 年" tokens, else YYYY–YYYY/present ranges.
- *  Returns null when nothing parses (the row omits the years segment). */
-function estimateYears(experience: Array<Record<string, unknown>>): number | null {
+ *  Returns null when nothing parses (the row omits the years segment).
+ *
+ *  EXPORTED (not just used here) because the deterministic onboarding seed in
+ *  raResumeSeed.ts needs the same number for its evidence line — two copies of
+ *  a heuristic drift, and the recap and the confirm screen must never disagree
+ *  about how many years the resume shows. */
+export function estimateYears(experience: Array<Record<string, unknown>>): number | null {
   let total = 0;
   const nowYear = new Date().getFullYear();
   for (const entry of experience) {

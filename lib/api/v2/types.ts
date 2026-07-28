@@ -531,6 +531,10 @@ export interface RAPreferences {
   companySizes: string[];
   industriesTarget: string[];
   industriesAvoid: string[];
+  /** Companies the user WANTS to work for. Boosts the feed with an extra
+   *  company-scoped row; it is never a filter, and it is not the same thing
+   *  as `blockedCompanies` — do not render them next to each other unlabelled. */
+  targetCompanies: string[];
   mustHaves: string[];
   dealbreakers: string[];
   workAuth: string;
@@ -815,30 +819,23 @@ export interface ResumeTailorDiffBody {
 export type PreferencesUpdateBody = Partial<Omit<RAPreferences, 'updatedAt'>>;
 
 // ─────────────────────────────────────────────────────────────────────
-// Onboarding Chat v4 — /api/v1/roboapply/v2/onboarding/*
+// First-run setup — /api/v1/roboapply/v2/onboarding/*
 // ─────────────────────────────────────────────────────────────────────
 //
-// Byte-identical MIRROR of `backend/src/roboapply/v2/types/onboarding.ts`
-// (mirrored, not imported — workspace boundary). Drift between the two files
-// is the bug; the design spec (docs/design-spec-roboapply-onboarding-chat.md
-// §2/§3.2) is the arbiter. The NDJSON chat stream is consumed by
-// `hooks/useOnboardingChat.ts` via raw fetch — NOT through `RaV2Api`.
+// MIRROR of `server/src/roboapply/v2/types/onboarding.ts` (mirrored, not
+// imported — workspace boundary). Drift between the two files is the bug;
+// `docs/roboapply/ONBOARDING_SPEC.md` §6 is the arbiter.
+//
+// TWO steps: add a resume, then confirm what we read from it. One step when a
+// resume already exists. There is no chat, no elicitation, and no job cards
+// inside the flow — /jobs renders those one second later.
+//
+// The chat contract that used to live here (`RAOnboardingStreamEvent`,
+// quick replies, transcripts, `aggressiveness`, `/complete`, `/pass`) is
+// deleted, not deprecated. Nothing raw-fetches an NDJSON stream any more.
 
-/** Server-authoritative conversation state (S1–S4). */
-export type RAOnboardingState =
-  | 'greeting'
-  | 'elicitation'
-  | 'recommend'
-  | 'wrap';
-
-/** Status shimmer keys — machine keys, localized client-side via next-intl. */
-export type RAOnboardingStatusKey =
-  | 'searching_internal'
-  | 'searching_external'
-  | 'scoring';
-
-/** One "what I picked up" row, built deterministically server-side from the
- *  parsed resume variant. `label` arrives localized (server catalog);
+/** One "what your resume says" row, built deterministically server-side from
+ *  the parsed resume variant. `label` arrives localized (server catalog);
  *  `value` is real extracted content — there is no fake-data state. */
 export interface IngestRow {
   id: string;
@@ -854,25 +851,30 @@ export interface IngestRow {
   value: string;
 }
 
-/** Salary slice of the elicitation draft. */
+/** Salary slice of the draft. Never seeded, never inferred, never asked
+ *  during setup — it reaches this shape only from Settings → Hunt. */
 export interface OnboardingDraftSalary {
   min?: number;
   max?: number;
-  /** ISO 4217 — confirmed in conversation, never silently assumed. */
+  /** ISO 4217. */
   currency?: string;
   period?: RASalaryPeriod;
 }
 
-/** Locations slice of the elicitation draft. */
+/** Locations slice of the draft. */
 export interface OnboardingDraftLocations {
   countries?: string[];
   cities?: string[];
   remoteOk?: boolean;
 }
 
-/** The conversation's working preference draft. Field names double as the
- *  `captured` / `unconfirmed` identifiers on `prefs-update` events and as
- *  the preference-tray chip keys. */
+/**
+ * The preference draft. Arrives SEEDED from the parsed resume; the confirm
+ * submit sends back the COMPLETE post-edit state.
+ *
+ * `targetRoles` is the draft-side name for what the preferences blob calls
+ * `roleTitles` — the field `preferencesToFilters()` turns into the feed's `q`.
+ */
 export interface OnboardingDraftPreferences {
   targetRoles?: string[];
   seniority?: string;
@@ -884,138 +886,88 @@ export interface OnboardingDraftPreferences {
   companyStages?: string[];
   companySizes?: string[];
   locations?: OnboardingDraftLocations;
+  /** Companies the user would like to work for. Boosts; never filters. */
+  targetCompanies?: string[];
   mustHaves?: string[];
   dealbreakers?: string[];
 }
 
-/** A recommended job card surfaced inside the onboarding chat (≤5/round). */
-export interface OnboardingJobCard {
-  // RAJobListItem fields:
-  id: string;
-  title: string;
-  companyName: string;
-  companyLogoUrl: string | null;
-  location: string | null;
-  workType: RAWorkType;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  salaryCurrency: string | null;
-  postedAt: string | null;
-  isBookmarked: boolean;
-  matchScoreCached: number | null;
-  // onboarding additions:
-  /** 0–100, scorer output, floor 60. */
-  matchScore: number;
-  /** 1–2 sentences, in-locale, markdown-inline. Render sanitized. */
-  whyMatched: string;
-  /** 'jsearch'|'activejobs'|'linkedin' = external RapidAPI providers;
-   *  'robohire'|'gohire' cards come from the cross-bank search agent team. */
-  source: 'internal' | 'jsearch' | 'activejobs' | 'linkedin' | 'robohire' | 'gohire';
-  /** e.g. "LinkedIn", "104人力銀行", "RoboHire", "GoHire" → "via {publisher}". */
-  sourcePublisher?: string;
-  /** External only; open `_blank` with `rel="noopener nofollow"`. */
-  applyUrl?: string;
-  isExternal: boolean;
+/**
+ * Where a seeded value came from. RENDER THESE DIFFERENTLY: `resume` is "we
+ * read this", `inferred` is "we guessed this" and needs its uncertainty
+ * marker. An inferred value shown as a read value is exactly where "fast and
+ * respectful" flips to "presumptuous" — and in the case of the city it is also
+ * how a remote seeker ends up with an empty feed.
+ */
+export type OnboardingSeedSource = 'resume' | 'inferred';
+
+export interface OnboardingSeedFieldMeta {
+  source: OnboardingSeedSource;
+  /** 0–1. Confirm writes every submitted field at 1.0 regardless. */
+  confidence: number;
 }
 
-/** A quick-reply pill — `id` is the machine enum the server handles
- *  deterministically; `label` is the localized text shown (and echoed into
- *  the transcript as the user message). */
-export interface RAOnboardingQuickReply {
-  id: string;
-  label: string;
+/** Deterministic, token-free evidence for the lines beside the seeded chips
+ *  ("3 roles · about 8 years"). Never LLM-derived. */
+export interface OnboardingSeedEvidence {
+  roles?: string[];
+  years?: number;
+  city?: string;
+  employers?: string[];
 }
 
-/** The NDJSON stream union for `POST /onboarding/chat/stream` — one JSON
- *  object per line. */
-export type RAOnboardingStreamEvent =
-  | { type: 'session'; sessionId: string; state: RAOnboardingState }
-  | { type: 'text-delta'; delta: string }
-  | { type: 'status'; key: RAOnboardingStatusKey }
-  | {
-      type: 'prefs-update';
-      draft: OnboardingDraftPreferences;
-      /** Field names newly set this turn. */
-      captured: string[];
-      /** Fields below the confidence bar — the tray suppresses these until
-       *  the assistant confirms them (a later prefs-update drops them). */
-      unconfirmed: string[];
-      /** Optional per-field extractor confidence (0..1). */
-      fieldConfidence?: Record<string, number>;
-    }
-  | { type: 'chips'; chips: string[] }
-  | { type: 'quick-replies'; options: RAOnboardingQuickReply[] }
-  | { type: 'job-cards'; jobs: OnboardingJobCard[] }
-  | { type: 'state'; state: 'elicitation' | 'recommend' | 'wrap' }
-  | { type: 'done'; turnCount: number }
-  | { type: 'error'; code: string; message: string; data?: unknown };
+/** Which step the panel is showing, reported to `POST /onboarding/seen`. */
+export type OnboardingStep = 'resume' | 'confirm';
 
-// ── Onboarding request/response DTOs ─────────────────────────────────
+/** Everything step 2 renders. `POST /bootstrap` and `GET /session` both
+ *  return exactly this, so a mid-step reload has one code path. */
+export interface OnboardingSetupState {
+  sessionId: string;
+  /** The user has completed setup before (reopened from the filter bar). */
+  returning: boolean;
+  resumeVariant: { id: string; name: string };
+  ingestRows: IngestRow[];
+  draft: OnboardingDraftPreferences;
+  /** Per-field provenance, keyed by `OnboardingDraftPreferences` field name. */
+  fieldMeta: Record<string, OnboardingSeedFieldMeta>;
+  /** Seeded but NOT applied — render as an UNSELECTED suggestion chip.
+   *  `locations` lands here; roles never do. */
+  proposedFields: string[];
+  evidence: OnboardingSeedEvidence;
+  /** No roles could be derived — render the thin-resume variant. */
+  thin: boolean;
+  /** The parallel LLM seed had not landed yet. The screen is already correct;
+   *  re-fetch `GET /session` once only if `thin` is also true. */
+  enrichmentPending: boolean;
+}
 
 export interface OnboardingBootstrapBody {
   resumeVariantId: string;
 }
 
-export interface OnboardingBootstrapResponse {
+export type OnboardingBootstrapResponse = OnboardingSetupState;
+export type OnboardingSessionResponse = OnboardingSetupState;
+
+export interface OnboardingConfirmBody {
   sessionId: string;
-  state: RAOnboardingState;
-  returning: boolean;
-  resumeVariant: { id: string; name: string };
-  ingestRows: IngestRow[];
-  /** Localized assistant message #1 (references the resume headline). */
-  greeting: string;
-  /** LLM 1–2 sentence opener in the user's voice — pre-fills the composer,
-   *  fully editable. */
-  openingPrompt: string;
-  /** 3–4 resume-grounded suggestion chips, send-on-tap. */
-  chips: string[];
+  /** COMPLETE post-edit state. A present key REPLACES the seeded value —
+   *  including `[]`, which is how removing the last chip actually removes it.
+   *  An absent key is left untouched. */
+  draft: OnboardingDraftPreferences;
+  /** The one optional free-text line. Blank costs zero tokens. */
+  freeText?: string;
 }
 
-/** Body for the raw-fetch NDJSON stream (not part of `RaV2Api`). */
-export interface OnboardingChatStreamBody {
-  sessionId: string;
-  /** The transcript text (for quick-replies: the localized label). */
-  message: string;
-  /** Machine id when the turn came from a quick-reply pill — the server
-   *  handles it deterministically and skips the extractor. */
-  quickReplyId?: string;
-}
-
-export interface OnboardingTranscriptMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  at: string;
-}
-
-export interface OnboardingSessionResponse {
-  sessionId: string;
-  state: RAOnboardingState;
-  resumeVariantId: string | null;
-  transcript: OnboardingTranscriptMessage[];
-  draftPreferences: OnboardingDraftPreferences;
-  capturedFields: string[];
-  chips: string[];
-  /** Present only when turnCount === 0. */
-  openingPrompt?: string;
-  ingestRows: IngestRow[];
-  surfacedJobs: OnboardingJobCard[];
-  passedJobIds: string[];
-  turnCount: number;
-  recommendationRounds: number;
-}
-
-export interface OnboardingCompleteBody {
-  sessionId: string;
-  aggressiveness: RAAggressiveness;
-}
-
-export interface OnboardingCompleteResponse {
+export interface OnboardingConfirmResponse {
   goal: RACareerGoal;
   preferences: RAPreferences;
+  /** Draft field names the free-text line contributed, so the UI can echo
+   *  what it understood. Empty when `freeText` was blank or the call failed. */
+  capturedFromNotes: string[];
 }
 
 export interface OnboardingSkipBody {
-  /** Optional — skip from S0 has no session yet. */
+  /** Optional — a skip with no session yet still stamps `skippedAt`. */
   sessionId?: string;
 }
 
@@ -1023,13 +975,13 @@ export interface OnboardingSkipResponse {
   skipped: boolean;
 }
 
-export interface OnboardingPassBody {
-  sessionId: string;
-  jobId: string;
+export interface OnboardingSeenBody {
+  step: OnboardingStep;
 }
 
-export interface OnboardingPassResponse {
-  passed: boolean;
+export interface OnboardingSeenResponse {
+  /** The stored count AFTER this open. Stop auto-opening at 2. */
+  autoOpens: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1461,15 +1413,18 @@ export interface RaV2Api {
     update(body: PreferencesUpdateBody): Promise<PreferencesUpdateResponse>;
   };
 
-  /** Onboarding Chat v4 (S0 resume select → S1–S4 chat). The NDJSON chat
-   *  stream is NOT here — `hooks/useOnboardingChat.ts` raw-fetches it (the
-   *  same precedent as `_real.ts`'s multipart bypass). */
+  /** First-run setup: step 1 (add a resume) → step 2 (confirm what we read).
+   *  Every call is plain JSON — there is no stream to raw-fetch any more. */
   onboarding: {
+    /** Step 1 → step 2. Seeds the draft from the parsed resume variant. */
     bootstrap(body: OnboardingBootstrapBody): Promise<OnboardingBootstrapResponse>;
-    /** Restores the active session (≤7 days old). 404 → show S0. */
+    /** Restores an in-progress setup (≤7 days old). 404 → start at step 1. */
     getSession(): Promise<OnboardingSessionResponse>;
-    complete(body: OnboardingCompleteBody): Promise<OnboardingCompleteResponse>;
+    /** Step 2's submit. Persists preferences and ends setup. */
+    confirm(body: OnboardingConfirmBody): Promise<OnboardingConfirmResponse>;
+    /** Step 2 only. Stamps `skippedAt`; writes no preferences. */
     skip(body?: OnboardingSkipBody): Promise<OnboardingSkipResponse>;
-    pass(body: OnboardingPassBody): Promise<OnboardingPassResponse>;
+    /** The panel auto-opened. Increments the cap counter (stop at 2). */
+    seen(body: OnboardingSeenBody): Promise<OnboardingSeenResponse>;
   };
 }

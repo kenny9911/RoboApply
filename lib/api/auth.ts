@@ -30,10 +30,21 @@ export interface MeResponse {
   // callers also read `onboardingState`. Both are optional so either shape
   // round-trips without a type error.
   mission?: Record<string, unknown> | null;
+  // The signal the setup panel on /jobs runs off. All four fields matter:
+  //   completedSteps → WHICH step opens (no 'resume' → step 1; resume but no
+  //     'preferences' → step 2; both → closed);
+  //   skippedAt → suppress the auto-open for 7 days, EXCEPT in the no-resume
+  //     state, which always opens because the scorer has nothing to compare
+  //     without a parsed resume;
+  //   autoOpens → the hard cap. Two auto-opens ever; after that the panel is
+  //     reachable only by tap. Incremented by POST /v2/onboarding/seen.
   onboardingState?: {
     completed: boolean;
     step?: OnboardingStep;
     completedSteps?: OnboardingStep[];
+    /** ISO timestamp, or null when the user never skipped. */
+    skippedAt?: string | null;
+    autoOpens?: number;
   };
 }
 

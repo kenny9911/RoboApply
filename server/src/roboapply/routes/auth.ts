@@ -254,6 +254,16 @@ router.get(
       //                  every V3 user back to /onboarding on each login)
       //   - preferences: the chat-onboarding stamp preferencesBlob.onboarding
       //                  .completedAt, or the legacy intentText heuristic
+      //
+      // The setup panel on /jobs reads all four fields:
+      //   - completedSteps drives WHICH step opens (no 'resume' → step 1,
+      //     resume but no 'preferences' → step 2, both → closed);
+      //   - skippedAt suppresses the auto-open for 7 days, except for the
+      //     no-resume state, which always opens because the scorer has
+      //     nothing to compare without a parsed resume;
+      //   - autoOpens is the hard cap (2). It is incremented by
+      //     POST /v2/onboarding/seen, NOT by bootstrap — bootstrap needs a
+      //     resumeVariantId the no-resume user does not have.
       const ob = (goal?.preferencesBlob as any)?.onboarding ?? null;
       const hasResume = !!mission?.resumeId || variantCount > 0;
       const hasIntent =
@@ -264,6 +274,8 @@ router.get(
       const onboardingState = {
         completed: Boolean(ob?.completedAt) || (hasResume && hasIntent),
         completedSteps,
+        skippedAt: typeof ob?.skippedAt === 'string' ? ob.skippedAt : null,
+        autoOpens: typeof ob?.autoOpens === 'number' ? ob.autoOpens : 0,
       };
 
       return res.json({

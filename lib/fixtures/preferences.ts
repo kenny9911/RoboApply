@@ -55,6 +55,9 @@ export const FIXTURE_PREFERENCES: RAPreferences = {
   companySizes: ['11–50', '51–200', '201–1000'],
   industriesTarget: ['Healthtech', 'Climate', 'Developer tools', 'Education', 'Consumer'],
   industriesAvoid: ['Crypto', 'Defense', 'Gambling', 'Ad-tech'],
+  // Companies the user WANTS — boosts the feed, never filters it. Distinct
+  // from `blockedCompanies` further down, which is the opposite signal.
+  targetCompanies: ['Stripe', 'Linear', 'Watershed'],
   mustHaves: ['Remote-first', 'Mission-driven', 'Async-friendly'],
   dealbreakers: ['On-call PM rotation', 'In-office 5 days', 'Sub-180k base'],
   workAuth: 'US Citizen — no sponsorship needed',

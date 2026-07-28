@@ -47,11 +47,24 @@ export type RAAggressiveness = 'manual' | 'balanced' | 'aggressive';
 export interface RAPreferencesOnboarding {
   completedAt?: string;
   skippedAt?: string;
-  /** e.g. 'v4-chat'. */
+  /** e.g. 'v5-confirm'. */
   version?: string;
   completedSteps?: string[];
   /** The RAOnboardingSession that produced this stamp. */
   sessionId?: string;
+  /**
+   * How many times the setup panel has AUTO-opened. Hard cap 2, enforced
+   * client-side off `GET /auth/me`; `POST /onboarding/seen` increments it.
+   *
+   * It is stamped on PANEL OPEN and not on bootstrap, and the difference is
+   * the whole point: bootstrap needs a `resumeVariantId`, which is precisely
+   * what the no-resume user does not have — so a bootstrap-time counter would
+   * never fire for them and the panel would reopen forever for exactly the
+   * people the cap protects.
+   */
+  autoOpens?: number;
+  /** Which step the panel last auto-opened at ('resume' | 'confirm'). */
+  lastSeenStep?: string;
 }
 
 export interface RAPreferences {
@@ -82,6 +95,9 @@ export interface RAPreferences {
   companySizes: string[];
   industriesTarget: string[];
   industriesAvoid: string[];
+  /** Companies the user WANTS. Boosts the feed with an extra company-scoped
+   *  row; never a filter. Not to be confused with `blockedCompanies`. */
+  targetCompanies: string[];
   mustHaves: string[];
   dealbreakers: string[];
   workAuth: string;
@@ -205,6 +221,7 @@ function defaultPreferences(): RAPreferences {
     companySizes: [],
     industriesTarget: [],
     industriesAvoid: [],
+    targetCompanies: [],
     mustHaves: [],
     dealbreakers: [],
     workAuth: '',

@@ -433,6 +433,11 @@ export function normalizeDraftUpdates(raw: unknown): OnboardingDraftPreferences 
   const companySizes = normalizeStringList(u.companySizes, normalizeCompanySize, 6);
   if (companySizes !== undefined) out.companySizes = companySizes;
 
+  // Free text, never an enum: "Stripe", "小紅書", "any B-corp". It BOOSTS
+  // (an extra `search.run({ company })` row); it must never become a filter.
+  const targetCompanies = normalizeStringList(u.targetCompanies, cleanFreeText, MAX_LIST_ITEMS);
+  if (targetCompanies !== undefined) out.targetCompanies = targetCompanies;
+
   const mustHaves = normalizeStringList(u.mustHaves, cleanFreeText, MAX_LIST_ITEMS);
   if (mustHaves !== undefined) out.mustHaves = mustHaves;
   const dealbreakers = normalizeStringList(u.dealbreakers, cleanFreeText, MAX_LIST_ITEMS);
@@ -481,6 +486,33 @@ const FIELD_TOPIC: Partial<Record<keyof OnboardingDraftPreferences, OnboardingTo
   seniority: 'seniority',
 };
 
+/** Every list-valued draft field, with its cap. One table so `mergeDraft` and
+ *  `replaceDraft` can never disagree about which fields are lists. */
+export type DraftListField =
+  | 'targetRoles'
+  | 'workModes'
+  | 'employmentTypes'
+  | 'industriesTarget'
+  | 'industriesAvoid'
+  | 'companyStages'
+  | 'companySizes'
+  | 'targetCompanies'
+  | 'mustHaves'
+  | 'dealbreakers';
+
+const DRAFT_LIST_CAPS: Record<DraftListField, number> = {
+  targetRoles: MAX_TARGET_ROLES,
+  workModes: 3,
+  employmentTypes: 4,
+  industriesTarget: MAX_LIST_ITEMS,
+  industriesAvoid: MAX_LIST_ITEMS,
+  companyStages: 6,
+  companySizes: 6,
+  targetCompanies: MAX_LIST_ITEMS,
+  mustHaves: MAX_LIST_ITEMS,
+  dealbreakers: MAX_LIST_ITEMS,
+};
+
 function unionWithCap(current: string[] | undefined, incoming: string[], cap: number): string[] {
   const out = [...(current ?? [])];
   for (const v of incoming) {
@@ -522,8 +554,7 @@ export function mergeDraft(
   };
 
   const mergeList = (
-    field: 'targetRoles' | 'workModes' | 'employmentTypes' | 'industriesTarget'
-      | 'industriesAvoid' | 'companyStages' | 'companySizes' | 'mustHaves' | 'dealbreakers',
+    field: DraftListField,
     cap: number,
   ): void => {
     const incoming = clean[field] as string[] | undefined;
@@ -541,6 +572,7 @@ export function mergeDraft(
   mergeList('industriesAvoid', MAX_LIST_ITEMS);
   mergeList('companyStages', 6);
   mergeList('companySizes', 6);
+  mergeList('targetCompanies', MAX_LIST_ITEMS);
   mergeList('mustHaves', MAX_LIST_ITEMS);
   mergeList('dealbreakers', MAX_LIST_ITEMS);
 
@@ -566,6 +598,49 @@ export function mergeDraft(
       ...(inc.remoteOk !== undefined ? { remoteOk: inc.remoteOk } : {}),
     };
   }
+
+  return next;
+}
+
+/**
+ * REPLACE a draft with the user's complete post-edit state.
+ *
+ * This is the confirm path, and it exists because `mergeDraft` above unions
+ * array fields. Union is right for a conversation ("contract works too" ADDS
+ * to what is acceptable) and catastrophically wrong for a confirm screen: the
+ * core interaction of step 2 is REMOVING a seeded chip, and under a union that
+ * silently does nothing. The user taps × on "QA Lead", presses submit, and
+ * "QA Lead" is still in their preferences — with no error, no warning, and no
+ * way to tell.
+ *
+ * Semantics:
+ *   - a key PRESENT in `updates` replaces the current value wholesale,
+ *     including `[]` (the user removed everything — that is an answer);
+ *   - a key ABSENT from `updates` is left untouched, so a client that submits
+ *     only the controls it rendered cannot erase fields it never showed;
+ *   - `salary` / `locations` replace as whole objects, not sub-field merges —
+ *     a locations block that omits `cities` means the user cleared them;
+ *   - every value still runs through `normalizeDraftUpdates`, so the taxonomy
+ *     tables, caps and trims apply exactly as they do on the chat path.
+ *
+ * Never mutates its inputs; never throws.
+ */
+export function replaceDraft(
+  current: OnboardingDraftPreferences,
+  updates: OnboardingDraftPreferences,
+): OnboardingDraftPreferences {
+  const clean = normalizeDraftUpdates(updates);
+  const next: OnboardingDraftPreferences = { ...current };
+
+  for (const field of Object.keys(DRAFT_LIST_CAPS) as DraftListField[]) {
+    const incoming = clean[field] as string[] | undefined;
+    if (incoming === undefined) continue;
+    (next as Record<string, unknown>)[field] = incoming.slice(0, DRAFT_LIST_CAPS[field]);
+  }
+
+  if (clean.seniority !== undefined) next.seniority = clean.seniority;
+  if (clean.salary !== undefined) next.salary = { ...clean.salary };
+  if (clean.locations !== undefined) next.locations = { ...clean.locations };
 
   return next;
 }
@@ -692,10 +767,15 @@ export function draftToGoalInput(
  *     a closed choice over exactly three keys);
  *   - companyStages[] → partial true-only record (deep-merged in the service,
  *     so unstated stages keep their stored values);
- *   - targetRoles → the existing `roleTitles` key;
- *   - salary.min/max (absolute) → salaryMinK/MaxK (blob's K units).
- * Session-level keys (intentMarkdown, defaultResumeId, aggressiveness,
- * dailyCap, huntActive, onboarding) are the orchestrator's to add on top.
+ *   - targetRoles → the existing `roleTitles` key — the one
+ *     `preferencesToFilters()` turns into the feed's `q`, which is what makes
+ *     this whole mapper matter rather than being bookkeeping;
+ *   - salary.min/max (absolute) → salaryMinK/MaxK (blob's K units). Stored for
+ *     Settings only: it is deliberately never sent as a search filter, because
+ *     `salaryMax >= min` is a Prisma `gte` and `gte` does not match NULL, so a
+ *     floor deletes every posting without a published range.
+ * Session-level keys (intentMarkdown, defaultResumeId, dailyCap, huntActive,
+ * onboarding) are the orchestrator's to add on top.
  */
 export function draftToPreferencesPatch(
   draft: OnboardingDraftPreferences,
@@ -730,6 +810,7 @@ export function draftToPreferencesPatch(
   if (draft.salary?.max != null) patch.salaryMaxK = Math.round(draft.salary.max / 1000);
   if (draft.salary?.period != null) patch.salaryPeriod = draft.salary.period;
 
+  if (draft.targetCompanies !== undefined) patch.targetCompanies = draft.targetCompanies;
   if (draft.industriesTarget !== undefined) patch.industriesTarget = draft.industriesTarget;
   if (draft.industriesAvoid !== undefined) patch.industriesAvoid = draft.industriesAvoid;
   if (draft.companySizes !== undefined) patch.companySizes = draft.companySizes;

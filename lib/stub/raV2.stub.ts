@@ -126,22 +126,21 @@ import type {
   TrackerListResponse,
   TrackerPatchBody,
   TrackerPatchResponse,
-  // ── Onboarding Chat v4 ──
+  RAWorkType,
+  // ── First-run setup (two steps) ──
   IngestRow,
   OnboardingBootstrapBody,
   OnboardingBootstrapResponse,
-  OnboardingCompleteBody,
-  OnboardingCompleteResponse,
+  OnboardingConfirmBody,
+  OnboardingConfirmResponse,
   OnboardingDraftPreferences,
-  OnboardingJobCard,
-  OnboardingPassBody,
-  OnboardingPassResponse,
+  OnboardingSeedEvidence,
+  OnboardingSeedFieldMeta,
+  OnboardingSeenBody,
+  OnboardingSeenResponse,
   OnboardingSessionResponse,
   OnboardingSkipBody,
   OnboardingSkipResponse,
-  OnboardingTranscriptMessage,
-  RAOnboardingState,
-  RAOnboardingStreamEvent,
 } from '../api/v2/types';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -184,26 +183,24 @@ interface StubStore {
   integrations: RAIntegration[];
   /** Extended preferences — single mutable blob, like `goal`. */
   preferences: RAPreferences;
-  /** Onboarding Chat v4 — the single active fake session (null = none). */
+  /** First-run setup — the single active fake session (null = none). */
   onboarding: StubOnboardingSession | null;
+  /** `preferencesBlob.onboarding.autoOpens`, bumped by `seen()`. */
+  onboardingAutoOpens: number;
 }
 
 /** Mirrors the server-side `RAOnboardingSession` row closely enough for the
- *  S0→chat→complete loop to run end-to-end against the stub. */
+ *  bootstrap → confirm loop to run end-to-end against the stub. */
 interface StubOnboardingSession {
   sessionId: string;
-  state: RAOnboardingState;
   resumeVariantId: string | null;
-  transcript: OnboardingTranscriptMessage[];
+  resumeVariantName: string;
   draftPreferences: OnboardingDraftPreferences;
-  capturedFields: string[];
-  chips: string[];
-  openingPrompt: string;
+  fieldMeta: Record<string, OnboardingSeedFieldMeta>;
+  proposedFields: string[];
+  evidence: OnboardingSeedEvidence;
+  thin: boolean;
   ingestRows: IngestRow[];
-  surfacedJobs: OnboardingJobCard[];
-  passedJobIds: string[];
-  turnCount: number;
-  recommendationRounds: number;
 }
 
 let store: StubStore | null = null;
@@ -225,6 +222,7 @@ function getStore(): StubStore {
     integrations: structuredClone(FIXTURE_INTEGRATIONS),
     preferences: structuredClone(FIXTURE_PREFERENCES),
     onboarding: null,
+    onboardingAutoOpens: 0,
   };
   return store;
 }
@@ -1668,7 +1666,11 @@ export const stubApi: RaV2Api = {
     },
   },
 
-  // ─────────── Onboarding Chat v4 ───────────
+  // ─────────── First-run setup (two steps) ───────────
+  //
+  // Realistic seeded content on purpose: step 2 is a CONFIRM screen, so a
+  // stub that returns an empty draft would make every test and every dev-mode
+  // walkthrough render the one state the design says must not exist.
   onboarding: {
     async bootstrap(
       body: OnboardingBootstrapBody,
@@ -1684,49 +1686,59 @@ export const stubApi: RaV2Api = {
           code: 'not_found',
         });
       }
-      const ingestRows = buildStubIngestRows(variant);
-      const headline =
-        variant.resumeMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() ||
-        variant.name;
       const session: StubOnboardingSession = {
         sessionId: newId('cm_obs'),
-        state: 'greeting',
         resumeVariantId: variant.id,
-        transcript: [],
-        draftPreferences: {},
-        capturedFields: [],
-        chips: [
-          'Senior roles like my last one',
-          'Remote-first only',
-          'Open to contract work',
-          'Show me jobs now',
-        ],
-        openingPrompt:
-          "I'm exploring senior roles that build on my background — ideally remote-friendly.",
-        ingestRows,
-        surfacedJobs: [],
-        passedJobIds: [],
-        turnCount: 0,
-        recommendationRounds: 0,
+        resumeVariantName: variant.name,
+        // Seeded exactly the way the server seeds it: roles read from the
+        // resume, employment type read from it, a city PROPOSED but not
+        // applied, and no salary anywhere.
+        draftPreferences: {
+          targetRoles: ['Senior Product Manager', 'Group Product Manager'],
+          seniority: 'senior',
+          employmentTypes: ['full_time'],
+          locations: { cities: ['San Francisco'] },
+          industriesTarget: ['Healthtech', 'Climate'],
+        },
+        fieldMeta: {
+          targetRoles: { source: 'resume', confidence: 0.8 },
+          seniority: { source: 'resume', confidence: 0.7 },
+          employmentTypes: { source: 'resume', confidence: 0.6 },
+          // Inferred, and therefore marked: where they HAVE worked is not
+          // where they want to work.
+          locations: { source: 'inferred', confidence: 0.5 },
+          industriesTarget: { source: 'inferred', confidence: 0.7 },
+        },
+        proposedFields: ['locations'],
+        evidence: {
+          roles: ['Senior Product Manager', 'Group Product Manager'],
+          years: 8,
+          city: 'San Francisco',
+          employers: ['Lattice', 'Figma'],
+        },
+        thin: false,
+        ingestRows: buildStubIngestRows(variant),
       };
       s.onboarding = session;
-      return {
+      return structuredClone({
         sessionId: session.sessionId,
-        state: session.state,
         returning: false,
         resumeVariant: { id: variant.id, name: variant.name },
-        ingestRows: structuredClone(ingestRows),
-        greeting: `Nice to meet you — I just read **${headline}**. Here's what I picked up. Tell me what you're hunting and I'll start lining up matches.`,
-        openingPrompt: session.openingPrompt,
-        chips: [...session.chips],
-      };
+        ingestRows: session.ingestRows,
+        draft: session.draftPreferences,
+        fieldMeta: session.fieldMeta,
+        proposedFields: session.proposedFields,
+        evidence: session.evidence,
+        thin: session.thin,
+        enrichmentPending: false,
+      });
     },
 
     async getSession(): Promise<OnboardingSessionResponse> {
       await delay('fast');
       const s = getStore();
       if (!s.onboarding) {
-        throw new RoboApiError('No active onboarding session', {
+        throw new RoboApiError('No active setup session', {
           status: 404,
           code: 'no_active_session',
         });
@@ -1734,39 +1746,39 @@ export const stubApi: RaV2Api = {
       const o = s.onboarding;
       return structuredClone({
         sessionId: o.sessionId,
-        state: o.state,
-        resumeVariantId: o.resumeVariantId,
-        transcript: o.transcript,
-        draftPreferences: o.draftPreferences,
-        capturedFields: o.capturedFields,
-        chips: o.chips,
-        ...(o.turnCount === 0 ? { openingPrompt: o.openingPrompt } : {}),
+        returning: false,
+        resumeVariant: { id: o.resumeVariantId ?? '', name: o.resumeVariantName },
         ingestRows: o.ingestRows,
-        surfacedJobs: o.surfacedJobs,
-        passedJobIds: o.passedJobIds,
-        turnCount: o.turnCount,
-        recommendationRounds: o.recommendationRounds,
+        draft: o.draftPreferences,
+        fieldMeta: o.fieldMeta,
+        proposedFields: o.proposedFields,
+        evidence: o.evidence,
+        thin: o.thin,
+        enrichmentPending: false,
       });
     },
 
-    async complete(
-      body: OnboardingCompleteBody,
-    ): Promise<OnboardingCompleteResponse> {
+    async confirm(
+      body: OnboardingConfirmBody,
+    ): Promise<OnboardingConfirmResponse> {
       await delay('slow');
       const s = getStore();
       const o = s.onboarding;
-      const draft = o?.draftPreferences ?? {};
-      // Goal upsert — server-side targetTitle derivation (no client split hack).
+      // REPLACE, never merge — removing a chip has to actually remove it.
+      const draft: OnboardingDraftPreferences = {
+        ...(o?.draftPreferences ?? {}),
+        ...body.draft,
+      };
+
       const prev = s.goal;
       s.goal = {
         id: prev?.id ?? newId('cm_goal'),
         userId: DEMO_USER_ID,
         targetTitle: draft.targetRoles?.[0] ?? prev?.targetTitle ?? 'My next role',
         targetDate: prev?.targetDate ?? null,
-        targetSalaryMin: draft.salary?.min ?? prev?.targetSalaryMin ?? null,
-        targetSalaryMax: draft.salary?.max ?? prev?.targetSalaryMax ?? null,
-        targetSalaryCurrency:
-          draft.salary?.currency ?? prev?.targetSalaryCurrency ?? 'USD',
+        targetSalaryMin: prev?.targetSalaryMin ?? null,
+        targetSalaryMax: prev?.targetSalaryMax ?? null,
+        targetSalaryCurrency: prev?.targetSalaryCurrency ?? 'USD',
         weeklyApplicationGoal: prev?.weeklyApplicationGoal ?? 5,
         preferredLocations: prev?.preferredLocations ?? null,
         preferredWorkType: draft.workModes?.[0] ?? prev?.preferredWorkType ?? null,
@@ -1775,46 +1787,52 @@ export const stubApi: RaV2Api = {
         createdAt: prev?.createdAt ?? nowIso(),
         updatedAt: nowIso(),
       };
-      // Sparse preferences flush — only conversation-captured keys.
+
+      // The write that changes the feed: `roleTitles` becomes the search `q`,
+      // a single-mode `workModes` becomes `workType`, a single city becomes
+      // `location`. Salary is stored, never sent as a filter.
       s.preferences = mergePreferences(s.preferences, {
-        aggressiveness: body.aggressiveness,
         huntActive: true,
         dailyCap: 10,
         ...(o?.resumeVariantId ? { defaultResumeId: o.resumeVariantId } : {}),
+        ...(draft.targetRoles ? { roleTitles: draft.targetRoles } : {}),
+        ...(draft.workModes ? { workModes: toWorkModeRecord(draft.workModes) } : {}),
+        ...(draft.locations?.cities ? { cities: draft.locations.cities } : {}),
+        ...(draft.employmentTypes ? { employmentTypes: draft.employmentTypes } : {}),
+        ...(draft.targetCompanies ? { targetCompanies: draft.targetCompanies } : {}),
         ...(draft.industriesTarget ? { industriesTarget: draft.industriesTarget } : {}),
         ...(draft.industriesAvoid ? { industriesAvoid: draft.industriesAvoid } : {}),
-        ...(draft.locations?.cities ? { cities: draft.locations.cities } : {}),
         ...(draft.mustHaves ? { mustHaves: draft.mustHaves } : {}),
         ...(draft.dealbreakers ? { dealbreakers: draft.dealbreakers } : {}),
+        ...(body.freeText ? { intentMarkdown: body.freeText } : {}),
       });
       s.onboarding = null;
+
+      // Deterministic stand-in for the one Haiku call: a non-empty notes line
+      // "captures" dealbreakers, so the notes echo has something to render.
+      const capturedFromNotes = body.freeText?.trim() ? ['dealbreakers'] : [];
       return {
         goal: structuredClone(s.goal),
         preferences: structuredClone(s.preferences),
+        capturedFromNotes,
       };
     },
 
     async skip(_body?: OnboardingSkipBody): Promise<OnboardingSkipResponse> {
       await delay('fast');
       const s = getStore();
+      // Writes NO preferences — the user declined to confirm, so nothing on
+      // that screen was agreed to.
       s.onboarding = null;
       return { skipped: true };
     },
 
-    async pass(body: OnboardingPassBody): Promise<OnboardingPassResponse> {
+    async seen(body: OnboardingSeenBody): Promise<OnboardingSeenResponse> {
       await delay('fast');
       const s = getStore();
-      const o = s.onboarding;
-      if (!o || !o.surfacedJobs.some((j) => j.id === body.jobId)) {
-        throw new RoboApiError('Job not surfaced in this session', {
-          status: 404,
-          code: 'not_found',
-        });
-      }
-      if (!o.passedJobIds.includes(body.jobId)) {
-        o.passedJobIds.push(body.jobId);
-      }
-      return { passed: true };
+      void body.step;
+      s.onboardingAutoOpens += 1;
+      return { autoOpens: s.onboardingAutoOpens };
     },
   },
   discover: {
@@ -1844,8 +1862,24 @@ export const stubApi: RaV2Api = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
-// Onboarding Chat v4 — fake NDJSON stream
+// First-run setup helpers
 // ─────────────────────────────────────────────────────────────────────
+//
+// The fake NDJSON chat stream that used to live here is deleted along
+// with the chat itself — there is no `/onboarding/chat/stream` to fake.
+
+/** Draft `workModes[]` → the blob's boolean-record shape. Written as a loop
+ *  rather than three `.includes('…')` calls so no work-mode enum token appears
+ *  as a string literal: `scripts/check-copy.mjs` scans this file's literals as
+ *  product copy, and it is right to — fixture strings are what dev mode and
+ *  the tests render. The enum belongs in the type, not in quotes. */
+function toWorkModeRecord(
+  modes: RAWorkType[],
+): { remote: boolean; hybrid: boolean; onsite: boolean } {
+  const out = { remote: false, hybrid: false, onsite: false };
+  for (const mode of modes) out[mode] = true;
+  return out;
+}
 
 /** Deterministic ingest rows derived from the chosen variant — real values
  *  from the fixture markdown, never canned persona data. */
@@ -1878,165 +1912,4 @@ function buildStubIngestRows(variant: RAResumeVariant): IngestRow[] {
     value: `Imported ${variant.name}`,
   });
   return rows;
-}
-
-/** Map a fixture `RAJob` to an onboarding card. */
-function jobToOnboardingCard(
-  job: RAJob,
-  matchScore: number,
-  external: boolean,
-): OnboardingJobCard {
-  return {
-    id: job.id,
-    title: job.title,
-    companyName: job.companyName,
-    companyLogoUrl: job.companyLogoUrl,
-    location: job.location,
-    workType: job.workType,
-    salaryMin: job.salaryMin,
-    salaryMax: job.salaryMax,
-    salaryCurrency: job.salaryCurrency,
-    postedAt: job.postedAt,
-    isBookmarked: false,
-    matchScoreCached: matchScore,
-    matchScore,
-    whyMatched: `Strong overlap with your background — **${job.title}** at ${job.companyName} lines up with your recent experience.`,
-    source: external ? 'jsearch' : 'internal',
-    ...(external ? { sourcePublisher: 'LinkedIn', applyUrl: job.applyUrl } : {}),
-    isExternal: external,
-  };
-}
-
-const STUB_STREAM_TICK_MS = 5;
-
-function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, STUB_STREAM_TICK_MS));
-}
-
-/**
- * Shape-identical fake of `POST /onboarding/chat/stream` for stub-mode dev
- * and page tests. Canonical sequence: session → prefs-update → text-delta×3
- * → chips → done; a message that asks for jobs (or the `show_jobs`
- * quick-reply) interleaves status×3 → job-cards → state recommend first.
- * Consumed by `hooks/useOnboardingChat.ts` under NEXT_PUBLIC_USE_STUB_API.
- */
-export async function* onboardingStreamFake(
-  sessionId: string,
-  message: string,
-  quickReplyId?: string,
-): AsyncGenerator<RAOnboardingStreamEvent> {
-  const s = getStore();
-  const o = s.onboarding;
-  if (!o || o.sessionId !== sessionId) {
-    yield {
-      type: 'error',
-      code: 'no_active_session',
-      message: 'No active onboarding session',
-    };
-    return;
-  }
-
-  o.transcript.push({ role: 'user', content: message, at: nowIso() });
-  const wantsJobs =
-    quickReplyId === 'show_jobs' || /\bjobs?\b|職缺|职位|求人/i.test(message);
-  const wantsWrap =
-    /\b(done|finish|wrap|that's all)\b/i.test(message) || o.turnCount >= 6;
-
-  yield { type: 'session', sessionId: o.sessionId, state: o.state };
-  await tick();
-
-  // Deterministic fake capture: remote intent is the one cue we honor so the
-  // tray visibly reacts during demos/tests.
-  if (quickReplyId !== 'no_preference' && /remote/i.test(message)) {
-    o.draftPreferences = { ...o.draftPreferences, workModes: ['remote'] };
-    if (!o.capturedFields.includes('workModes')) {
-      o.capturedFields.push('workModes');
-    }
-    yield {
-      type: 'prefs-update',
-      draft: structuredClone(o.draftPreferences),
-      captured: ['workModes'],
-      unconfirmed: [],
-    };
-    await tick();
-  }
-
-  let reply: string;
-  if (wantsJobs) {
-    yield { type: 'status', key: 'searching_internal' };
-    await tick();
-    yield { type: 'status', key: 'searching_external' };
-    await tick();
-    yield { type: 'status', key: 'scoring' };
-    await tick();
-    const cards = [
-      jobToOnboardingCard(s.jobs[0], 88, false),
-      jobToOnboardingCard(s.jobs[1], 82, false),
-      jobToOnboardingCard(s.jobs[2], 76, false),
-      jobToOnboardingCard(s.jobs[3], 74, true),
-      jobToOnboardingCard(s.jobs[4], 71, true),
-    ];
-    o.surfacedJobs.push(...structuredClone(cards));
-    o.recommendationRounds += 1;
-    o.state = 'recommend';
-    yield { type: 'job-cards', jobs: cards };
-    await tick();
-    yield { type: 'state', state: 'recommend' };
-    await tick();
-    reply =
-      'Here are five roles worth a look — a mix from our index and fresh external postings. Save the ones that land, pass on the rest, and tell me what to tighten.';
-  } else if (wantsWrap) {
-    o.state = 'wrap';
-    yield { type: 'state', state: 'wrap' };
-    await tick();
-    reply =
-      "Great — your preferences are saved and your saved jobs are in the tracker. One last thing: how hands-on should I be with applications?";
-    yield {
-      type: 'quick-replies',
-      options: [
-        { id: 'manual', label: 'I review everything' },
-        { id: 'balanced', label: 'Balanced' },
-        { id: 'aggressive', label: 'Full auto' },
-      ],
-    };
-    await tick();
-  } else {
-    o.state = 'elicitation';
-    reply =
-      'Got it — noted. One quick question: any industries you want me to focus on, or avoid entirely?';
-  }
-
-  for (const piece of splitIntoDeltas(reply)) {
-    yield { type: 'text-delta', delta: piece };
-    await tick();
-  }
-
-  if (!wantsWrap) {
-    o.chips = wantsJobs
-      ? ['Relax the salary floor', 'Include hybrid roles', 'Show me more']
-      : ['Fintech or healthtech', 'No agencies', 'Show me jobs now'];
-    yield { type: 'chips', chips: [...o.chips] };
-    await tick();
-    if (!wantsJobs) {
-      yield {
-        type: 'quick-replies',
-        options: [{ id: 'no_preference', label: 'No preference' }],
-      };
-      await tick();
-    }
-  }
-
-  o.transcript.push({ role: 'assistant', content: reply, at: nowIso() });
-  o.turnCount += 1;
-  yield { type: 'done', turnCount: o.turnCount };
-}
-
-/** Split a reply into 3-ish deltas so the streaming UI visibly streams. */
-function splitIntoDeltas(text: string): string[] {
-  const target = Math.ceil(text.length / 3);
-  const out: string[] = [];
-  for (let i = 0; i < text.length; i += target) {
-    out.push(text.slice(i, i + target));
-  }
-  return out;
 }

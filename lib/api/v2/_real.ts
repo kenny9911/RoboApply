@@ -78,16 +78,16 @@ import type {
   PreferencesGetResponse,
   PreferencesUpdateBody,
   PreferencesUpdateResponse,
-  // ── Onboarding Chat v4 ──
+  // ── First-run setup ──
   OnboardingBootstrapBody,
   OnboardingBootstrapResponse,
   OnboardingSessionResponse,
-  OnboardingCompleteBody,
-  OnboardingCompleteResponse,
+  OnboardingConfirmBody,
+  OnboardingConfirmResponse,
   OnboardingSkipBody,
   OnboardingSkipResponse,
-  OnboardingPassBody,
-  OnboardingPassResponse,
+  OnboardingSeenBody,
+  OnboardingSeenResponse,
   DiscoverRunBody,
   CrossBankDiscoverResponse,
 } from './types';
@@ -334,10 +334,8 @@ export const realApi: RaV2Api = {
       roboApi.patch<PreferencesUpdateResponse>(`${BASE}/preferences`, body),
   },
 
-  // ── Onboarding Chat v4 — JSON endpoints only. The NDJSON chat stream
-  //    can't flow through this wrapper (it unwraps JSON bodies), so
-  //    `hooks/useOnboardingChat.ts` raw-fetches `/onboarding/chat/stream`
-  //    directly — the same bypass precedent as `resumes.upload` above. ──
+  // ── First-run setup — plain JSON, all of it. The NDJSON chat stream that
+  //    used to need a raw-fetch bypass here is deleted along with the chat. ──
   onboarding: {
     bootstrap: (body: OnboardingBootstrapBody) =>
       roboApi.post<OnboardingBootstrapResponse>(
@@ -346,18 +344,15 @@ export const realApi: RaV2Api = {
       ),
     getSession: () =>
       roboApi.get<OnboardingSessionResponse>(`${BASE}/onboarding/session`),
-    complete: (body: OnboardingCompleteBody) =>
-      roboApi.post<OnboardingCompleteResponse>(
-        `${BASE}/onboarding/complete`,
-        body,
-      ),
+    confirm: (body: OnboardingConfirmBody) =>
+      roboApi.post<OnboardingConfirmResponse>(`${BASE}/onboarding/confirm`, body),
     skip: (body?: OnboardingSkipBody) =>
       roboApi.post<OnboardingSkipResponse>(
         `${BASE}/onboarding/skip`,
         body ?? {},
       ),
-    pass: (body: OnboardingPassBody) =>
-      roboApi.post<OnboardingPassResponse>(`${BASE}/onboarding/pass`, body),
+    seen: (body: OnboardingSeenBody) =>
+      roboApi.post<OnboardingSeenResponse>(`${BASE}/onboarding/seen`, body),
   },
   discover: {
     run: (body?: DiscoverRunBody) =>
