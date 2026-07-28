@@ -115,7 +115,7 @@ export function MatchFeed() {
         />
       ) : visible.length === 0 ? (
         <EmptyState
-          icon={<span style={{ fontSize: 36 }}>🎯</span>}
+          icon={<span style={{ fontSize: 'var(--fs-display)' }}>🎯</span>}
           title={`${t('empty.title')} ${t('empty.accent')}`}
           sub={t('empty.sub')}
         />

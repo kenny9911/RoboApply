@@ -156,7 +156,7 @@ function UsageMeterRow({
           marginBottom: 7,
         }}
       >
-        <span style={{ fontSize: '13px', color: 'var(--text)' }}>{feature.label}</span>
+        <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)' }}>{feature.label}</span>
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
           {t('usage.meter', {
             used: numberFmt.format(feature.count),

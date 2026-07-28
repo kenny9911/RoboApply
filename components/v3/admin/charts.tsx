@@ -163,7 +163,7 @@ export function CostBreakdownBar({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                fontSize: '12.5px',
+                fontSize: 'var(--fs-meta)',
               }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-2)' }}>
@@ -192,7 +192,7 @@ export function CostBreakdownBar({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span
               style={{
-                fontSize: '13px',
+                fontSize: 'var(--fs-meta)',
                 color: 'var(--text)',
                 display: 'flex',
                 alignItems: 'center',
@@ -464,7 +464,7 @@ export function ModalityDonut({
       </div>
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 9 }}>
         {segments.map((seg, i) => (
-          <div key={seg.label + i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px' }}>
+          <div key={seg.label + i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 'var(--fs-meta)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-2)' }}>
               <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 3, background: seg.color }} />
               {seg.label}

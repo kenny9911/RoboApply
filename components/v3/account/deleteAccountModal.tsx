@@ -100,7 +100,7 @@ export function DeleteAccountModal({
           >
             {t('danger.confirmEmailLabel')}
           </label>
-          <p style={{ fontSize: '12.5px', color: 'var(--text-2)', margin: 0 }}>
+          <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', margin: 0 }}>
             {t('danger.confirmEmailHint', { email })}
           </p>
           <input
@@ -143,14 +143,14 @@ export function DeleteAccountModal({
               padding: '10px 12px',
               color: 'var(--text)',
               fontFamily: 'var(--font-ui)',
-              fontSize: '13px',
+              fontSize: 'var(--fs-meta)',
               resize: 'vertical',
             }}
           />
         </div>
 
         {error ? (
-          <p role="alert" style={{ color: 'var(--danger)', fontSize: '12.5px', margin: 0 }}>
+          <p role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)', margin: 0 }}>
             {error}
           </p>
         ) : null}

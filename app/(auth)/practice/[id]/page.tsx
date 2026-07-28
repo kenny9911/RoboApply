@@ -325,8 +325,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   if (phase === 'error' || !connection || !session) {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.expired.title')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 16px' }}>{t('live.expired.body')}</p>
+        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.expired.title')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px' }}>{t('live.expired.body')}</p>
         <Btn variant="primary" as="a" href="/practice">{t('live.expired.cta')}</Btn>
       </CenterMsg>
     );
@@ -334,8 +334,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   if (phase === 'micDenied') {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.micDeniedTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 16px', maxWidth: 440 }}>{t('live.micDeniedBody')}</p>
+        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.micDeniedTitle')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.micDeniedBody')}</p>
         <div style={{ display: 'flex', gap: 10 }}>
           <Btn variant="primary" onClick={() => void retryMic()} disabled={busy}>{t('live.micRetry')}</Btn>
           <Btn as="a" href="/practice">{t('live.expired.cta')}</Btn>
@@ -346,8 +346,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   if (phase === 'agentUnavailable') {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.interviewerUnavailableTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 16px', maxWidth: 440 }}>{t('live.interviewerUnavailableBody')}</p>
+        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.interviewerUnavailableTitle')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.interviewerUnavailableBody')}</p>
         <div style={{ display: 'flex', gap: 10 }}>
           <Btn variant="primary" onClick={() => void reacquire(false)} disabled={busy}>{t('live.retry')}</Btn>
           <Btn as="a" href="/practice">{t('live.expired.cta')}</Btn>
@@ -360,16 +360,16 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     // or falls through to the manual 'connectionLost' screen.
     return (
       <CenterMsg>
-        <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.autoRejoinTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 0', maxWidth: 440 }}>{t('live.autoRejoinBody')}</p>
+        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.autoRejoinTitle')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 0', maxWidth: 440 }}>{t('live.autoRejoinBody')}</p>
       </CenterMsg>
     );
   }
   if (phase === 'connectionLost') {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.connectionLostTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 16px', maxWidth: 440 }}>{t('live.connectionLostBody')}</p>
+        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.connectionLostTitle')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.connectionLostBody')}</p>
         <div style={{ display: 'flex', gap: 10 }}>
           <Btn variant="primary" onClick={() => void reacquire(true)} disabled={busy}>{t('live.rejoin')}</Btn>
           <Btn onClick={() => void finish(true)} disabled={busy}>{t('live.endAnyway')}</Btn>
@@ -425,7 +425,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
             position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)',
             zIndex: 60, padding: '8px 16px', borderRadius: 'var(--r-lg, 12px)',
             border: '1px solid rgba(245, 158, 11, 0.45)', background: 'var(--surface)',
-            color: 'var(--text)', fontSize: 13, cursor: 'pointer', maxWidth: 440,
+            color: 'var(--text)', fontSize: 'var(--fs-meta)', cursor: 'pointer', maxWidth: 440,
             textAlign: 'center',
           }}
         >
@@ -447,7 +447,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
 function CenterMsg({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-6"
-      style={{ flexDirection: 'column', textAlign: 'center', color: 'var(--text-2)', fontSize: 14 }}>
+      style={{ flexDirection: 'column', textAlign: 'center', color: 'var(--text-2)', fontSize: 'var(--fs-body)' }}>
       {children}
     </div>
   );
@@ -470,7 +470,7 @@ function QualityPill({ level, label }: { level: QualityLevel; label: string }) {
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+        padding: '3px 10px', borderRadius: 999, fontSize: 'var(--fs-label)', fontWeight: 600,
         border: `1px solid ${tone.border}`, background: tone.bg, color: tone.text,
       }}
     >
@@ -756,12 +756,12 @@ function RoomStage({
             background: 'rgba(0, 0, 0, 0.62)', backdropFilter: 'blur(4px)', cursor: 'pointer',
           }}
         >
-          <div aria-hidden style={{ fontSize: 44, lineHeight: 1 }}>🔊</div>
+          <div aria-hidden style={{ fontSize: 'var(--fs-hero)', lineHeight: 1 }}>🔊</div>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); unlockAudio(); }}
             style={{
-              padding: '14px 28px', borderRadius: 999, fontSize: 16, fontWeight: 700,
+              padding: '14px 28px', borderRadius: 999, fontSize: 'var(--fs-body)', fontWeight: 700,
               border: '1px solid rgba(239, 68, 68, 0.55)', background: 'rgba(239, 68, 68, 0.16)',
               color: '#fff', cursor: 'pointer',
             }}
@@ -781,7 +781,7 @@ function RoomStage({
               style={{
                 marginTop: 12, padding: '10px 14px', borderRadius: 'var(--r-lg, 12px)',
                 border: '1px solid var(--rule)', background: 'var(--surface)',
-                color: 'var(--text-2)', fontSize: 13, textAlign: 'center',
+                color: 'var(--text-2)', fontSize: 'var(--fs-meta)', textAlign: 'center',
               }}
             >
               {agentSlow ? t('live.agentSlow') : t('live.agentJoining')}
@@ -805,7 +805,7 @@ function RoomStage({
               {localCamera ? (
                 <VideoTrack trackRef={localCamera} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', fontSize: 13 }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', fontSize: 'var(--fs-meta)' }}>
                   {t('live.cameraOff')}
                 </div>
               )}
@@ -869,7 +869,7 @@ function RoomStage({
               style={{
                 padding: '12px 22px', borderRadius: 999,
                 border: '1px solid var(--rule)', background: 'var(--surface)',
-                color: 'var(--text)', fontSize: 15, fontWeight: 600,
+                color: 'var(--text)', fontSize: 'var(--fs-body)', fontWeight: 600,
               }}
             >
               {t('live.reconnecting')}

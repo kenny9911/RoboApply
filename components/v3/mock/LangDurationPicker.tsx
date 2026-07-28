@@ -26,7 +26,7 @@ function pill(active: boolean): React.CSSProperties {
   return {
     padding: '8px 16px',
     borderRadius: 999,
-    fontSize: 13,
+    fontSize: 'var(--fs-meta)',
     fontWeight: 500,
     cursor: 'pointer',
     border: `1px solid ${active ? 'var(--action)' : 'var(--rule)'}`,

@@ -59,7 +59,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
           <div
             style={{
               fontWeight: 600,
-              fontSize: 14.5,
+              fontSize: 'var(--fs-body)',
               color: 'var(--text)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -68,7 +68,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
           >
             {job.title}
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+          <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
             {job.companyName}
             {job.location ? ` · ${job.location}` : ''}
           </div>
@@ -91,7 +91,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
         </div>
       ) : null}
 
-      <p style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5, margin: 0 }}>
+      <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', lineHeight: 1.5, margin: 0 }}>
         <Markdown>{job.whyMatched}</Markdown>
       </p>
 
@@ -105,7 +105,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
         <button
           type="button"
           className="btn primary"
-          style={{ fontSize: 12.5, padding: '6px 12px' }}
+          style={{ fontSize: 'var(--fs-meta)', padding: '6px 12px' }}
           disabled={saved || passed}
           onClick={() => onSave(job)}
         >
@@ -114,7 +114,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
         <button
           type="button"
           className="btn ghost"
-          style={{ fontSize: 12.5, padding: '6px 12px' }}
+          style={{ fontSize: 'var(--fs-meta)', padding: '6px 12px' }}
           disabled={saved || passed}
           onClick={() => onPass(job)}
         >
@@ -126,7 +126,7 @@ export function OnboardingJobCard({ job, saved, passed, onSave, onPass }: Props)
             target="_blank"
             rel="noopener nofollow"
             style={{
-              fontSize: 12,
+              fontSize: 'var(--fs-label)',
               color: 'var(--action)',
               textDecoration: 'underline',
               marginLeft: 'auto',

@@ -21,10 +21,10 @@ export default function BillingHistoryPage() {
         >
           ← {t('billing.history.back')}
         </Link>
-        <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.03em', margin: '12px 0 4px' }}>
+        <h1 style={{ fontSize: 'var(--fs-stat)', fontWeight: 600, letterSpacing: '-0.03em', margin: '12px 0 4px' }}>
           {t('billing.history.heading')}
         </h1>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>{t('billing.history.subtitle')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: 0 }}>{t('billing.history.subtitle')}</p>
       </div>
       <BillingHistoryView />
     </div>

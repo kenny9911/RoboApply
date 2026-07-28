@@ -27,6 +27,15 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 /** Files exempt from the type/case/family rules entirely. */
 const EXEMPT_FILES = new Set(['styles/v3-resume.css']);
 
+/** Components that render the RÉSUMÉ DOCUMENT rather than app chrome. Same
+ *  exemption as styles/v3-resume.css and for the same reason (ruling C25): the
+ *  résumé is the user's own artifact, its sizes come from the Designer theme,
+ *  and forcing them onto the UI scale would reflow every template. */
+const EXEMPT_TSX = [
+  'components/v3/resume-editor/',
+  'components/v3/resumes/',
+];
+
 /** The complete type scale. Nothing else may set a font-size. */
 const FS_TOKENS = [
   '--fs-hero', '--fs-display', '--fs-stat', '--fs-title',
@@ -137,14 +146,29 @@ for (const rel of TSX_FILES) {
     const n = i + 1;
     if (raw.trimStart().startsWith('//') || raw.trimStart().startsWith('*')) return;
 
-    // Sub-floor inline sizes. 12px is the floor; the old worst case was 9.5px,
-    // uppercase, wide-tracked, in a grey that failed contrast, on a card.
-    // Only px-valued sizes are checked — React treats a bare number as px, but
-    // rem/em/% are relative and 2rem is not 2px.
-    const inline = raw.match(/fontSize:\s*(?:['"](\d+(?:\.\d+)?)px['"]|(\d+(?:\.\d+)?)\s*[,}])/);
-    const px = inline && Number(inline[1] ?? inline[2]);
-    if (px && px < 12) {
-      fail(rel, n, 'below-floor', `fontSize: ${px}px — floor is 12px (var(--fs-label))`);
+    // Inline sizes must come from the scale, exactly like CSS ones. Checking
+    // only for sub-12px left ~150 literals — including 12.5, 13.5 and 14.5 —
+    // sitting in style={{}} objects, which is the same "random fonts" problem
+    // relocated from the stylesheets into the components. rem/em/% are relative
+    // and legitimately outside the px scale, so they are not flagged.
+    if (!EXEMPT_TSX.some((e) => rel.includes(e))) {
+      const inline = raw.match(
+        /fontSize:\s*(?:['"](\d+(?:\.\d+)?)px['"]|(\d+(?:\.\d+)?)\s*[,}])/,
+      );
+      const px = inline && Number(inline[1] ?? inline[2]);
+      if (px) {
+        fail(
+          rel,
+          n,
+          px < 12 ? 'below-floor' : 'type-scale',
+          `fontSize: ${px}px — use a token (${FS_TOKENS.join(' ')})`,
+        );
+      }
+      // 400 body · 500 UI · 600 titles · 700 hero. 300 and 800 are deleted.
+      const wt = raw.match(/fontWeight:\s*['"]?(\d{3})['"]?/);
+      if (wt && !['400', '500', '600', '700'].includes(wt[1])) {
+        fail(rel, n, 'weight', `fontWeight: ${wt[1]} — only 400/500/600/700 ship`);
+      }
     }
     if (/textTransform:\s*['"]uppercase/.test(raw)) {
       fail(rel, n, 'uppercase', raw.trim());

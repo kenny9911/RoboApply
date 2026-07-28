@@ -299,10 +299,10 @@ export default function MockSetupPage() {
           className="flex flex-col items-center gap-4 text-center"
           style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
         >
-          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
             {t('setup.error.title')}
           </p>
-          <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('setup.error.body')}</p>
+          <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', maxWidth: 420, margin: 0 }}>{t('setup.error.body')}</p>
           <Btn variant="primary" onClick={() => void catalogQuery.refetch()}>{t('setup.error.retry')}</Btn>
         </div>
       </>
@@ -313,7 +313,7 @@ export default function MockSetupPage() {
     return (
       <>
         {header}
-        <div aria-busy="true" aria-label={t('setup.loading')} style={{ color: 'var(--text-2)', fontSize: 14, padding: '40px 0' }}>
+        <div aria-busy="true" aria-label={t('setup.loading')} style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', padding: '40px 0' }}>
           {t('setup.loading')}
         </div>
       </>
@@ -394,7 +394,7 @@ export default function MockSetupPage() {
       </div>
 
       {startError ? (
-        <p role="alert" style={{ color: 'var(--warn)', fontSize: 13, marginTop: 12 }}>{t('setup.startError')}</p>
+        <p role="alert" style={{ color: 'var(--warn)', fontSize: 'var(--fs-meta)', marginTop: 12 }}>{t('setup.startError')}</p>
       ) : null}
 
       {insufficientCredits ? (
@@ -402,7 +402,7 @@ export default function MockSetupPage() {
           role="alert"
           style={{ border: '1px solid var(--warn)', background: 'var(--warn-subtle)', borderRadius: 'var(--r-lg)', padding: '14px 16px', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
         >
-          <span style={{ fontSize: 13.5, color: 'var(--text)' }}>
+          <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)' }}>
             {t('setup.insufficientCredits', { required: insufficientCredits.required, balance: insufficientCredits.balance })}
           </span>
           <Link href="/account#billing" style={{ textDecoration: 'none' }}>

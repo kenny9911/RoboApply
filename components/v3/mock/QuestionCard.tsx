@@ -41,7 +41,7 @@ export function QuestionCard({
         <button
           type="button"
           className="btn ghost"
-          style={{ padding: '6px 10px', fontSize: 12 }}
+          style={{ padding: '6px 10px', fontSize: 'var(--fs-label)' }}
           onClick={onToggleHint}
         >
           <IconSparkle size={12} />
@@ -50,7 +50,7 @@ export function QuestionCard({
         <button
           type="button"
           className="btn ghost"
-          style={{ padding: '6px 10px', fontSize: 12 }}
+          style={{ padding: '6px 10px', fontSize: 'var(--fs-label)' }}
           onClick={onSkip}
         >
           {t('live.skip')}

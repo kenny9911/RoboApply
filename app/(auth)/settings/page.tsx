@@ -462,10 +462,10 @@ export default function SettingsPage() {
 
             {planQ.isError ? (
               <Panel>
-                <div role="alert" style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+                <div role="alert" style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
                   {t('error.title')}
                 </div>
-                <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-2)' }}>
+                <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
                   {t('error.body')}
                 </p>
                 <Btn variant="primary" onClick={() => void planQ.refetch()}>
@@ -501,7 +501,7 @@ export default function SettingsPage() {
                     role="status"
                     style={{
                       margin: '12px 0 0',
-                      fontSize: 13,
+                      fontSize: 'var(--fs-meta)',
                       color: 'var(--text-muted)',
                       textAlign: 'center',
                     }}

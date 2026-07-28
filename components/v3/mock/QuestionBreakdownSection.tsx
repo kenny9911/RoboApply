@@ -23,7 +23,7 @@ export function QuestionBreakdownSection({ items, enrichmentPending }: Props) {
   return (
     <section style={{ marginTop: 28 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+        <h2 style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
           {t('report.questionBreakdown.title')}
         </h2>
         {!showPlaceholder ? (
@@ -40,7 +40,7 @@ export function QuestionBreakdownSection({ items, enrichmentPending }: Props) {
             borderRadius: 12,
             padding: '18px 16px',
             color: 'var(--text-2)',
-            fontSize: 13.5,
+            fontSize: 'var(--fs-meta)',
           }}
         >
           {enrichmentPending

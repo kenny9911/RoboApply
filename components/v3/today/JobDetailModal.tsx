@@ -130,7 +130,7 @@ export function JobDetailModal({
             flexDirection: 'column',
             gap: 22,
             color: 'var(--text)',
-            fontSize: 14,
+            fontSize: 'var(--fs-body)',
             lineHeight: 1.6,
           }}
         >

@@ -74,7 +74,7 @@ export default function AdminUserDetailPage({
   if (!isAdmin) {
     return (
       <EmptyState
-        icon={<span style={{ fontSize: 34 }}>🔒</span>}
+        icon={<span style={{ fontSize: 'var(--fs-display)' }}>🔒</span>}
         title={`${t('notAuthorized.title')} ${t('notAuthorized.titleAccent')}`}
         sub={t('notAuthorized.sub')}
       />
@@ -98,8 +98,8 @@ export default function AdminUserDetailPage({
           className="flex flex-col items-center gap-4 text-center"
           style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
         >
-          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('error.title')}</p>
-          <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
+          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('error.title')}</p>
+          <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
           <Btn variant="primary" onClick={() => void q.refetch()}>
             {t('error.retry')}
           </Btn>
@@ -293,7 +293,7 @@ function SmallStat({ label, value }: { label: string; value: React.ReactNode }) 
       >
         {label}
       </div>
-      <div className="robo-tnum" style={{ fontSize: 27, lineHeight: 1, letterSpacing: '-0.03em', fontWeight: 600, color: 'var(--text)' }}>
+      <div className="robo-tnum" style={{ fontSize: 'var(--fs-stat)', lineHeight: 1, letterSpacing: '-0.03em', fontWeight: 600, color: 'var(--text)' }}>
         {value}
       </div>
     </div>

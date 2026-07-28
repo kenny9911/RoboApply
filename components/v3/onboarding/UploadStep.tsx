@@ -88,7 +88,7 @@ export function UploadStep({ file, extracted, totalRows, onPick, error }: Props)
           style={{
             marginTop: 14,
             color: 'var(--warn)',
-            fontSize: 13.5,
+            fontSize: 'var(--fs-meta)',
             textAlign: 'left',
           }}
         >

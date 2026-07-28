@@ -162,10 +162,10 @@ function ResumeUploadPrompt() {
           {busy ? <span className="spinner" /> : <IconUpload size={26} strokeWidthValue={2.2} />}
         </div>
 
-        <h1 style={{ fontSize: 22, fontWeight: 650, margin: '0 0 8px', letterSpacing: '-0.02em' }}>
+        <h1 style={{ fontSize: 'var(--fs-title)', fontWeight: 600, margin: '0 0 8px', letterSpacing: '-0.02em' }}>
           {t('gate.title')}
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 auto 22px', maxWidth: 360, lineHeight: 1.55 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', margin: '0 auto 22px', maxWidth: 360, lineHeight: 1.55 }}>
           {busy ? t('gate.uploading') : t('gate.subtitle')}
         </p>
 
@@ -197,7 +197,7 @@ function ResumeUploadPrompt() {
           <div
             style={{
               marginTop: 12,
-              fontSize: 12.5,
+              fontSize: 'var(--fs-meta)',
               color: 'var(--text-muted)',
               display: 'flex',
               gap: 6,
@@ -211,14 +211,14 @@ function ResumeUploadPrompt() {
         ) : null}
 
         {errorKey ? (
-          <p style={{ marginTop: 12, fontSize: 13, color: 'var(--warn, #f59e0b)' }} role="alert">
+          <p style={{ marginTop: 12, fontSize: 'var(--fs-meta)', color: 'var(--warn, #f59e0b)' }} role="alert">
             {t(errorKey)}
           </p>
         ) : null}
 
-        <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-2, #6b7280)' }}>{t('gate.formats')}</div>
+        <div style={{ marginTop: 16, fontSize: 'var(--fs-label)', color: 'var(--text-2, #6b7280)' }}>{t('gate.formats')}</div>
 
-        <div style={{ marginTop: 18, fontSize: 13 }}>
+        <div style={{ marginTop: 18, fontSize: 'var(--fs-meta)' }}>
           <a href="/resume" style={{ color: 'var(--action)', textDecoration: 'none' }}>
             {t('gate.or_build')}
           </a>

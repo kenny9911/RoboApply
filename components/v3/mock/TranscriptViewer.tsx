@@ -56,7 +56,7 @@ interface Props {
 }
 
 const turnLabel = (text: string, color: string) => (
-  <span style={{ fontSize: 12, fontWeight: 600, color }}>{text}</span>
+  <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color }}>{text}</span>
 );
 
 export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: Props) {
@@ -72,10 +72,10 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
     if (!transcriptUrl) return null;
     return (
       <section style={{ marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{t('report.transcript')}</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>{t('report.transcript')}</span>
         <a
           href={transcriptUrl}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--action)' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-meta)', color: 'var(--action)' }}
         >
           <ArrowDownTrayIcon style={{ width: 14, height: 14 }} />
           {t('report.download')}
@@ -100,7 +100,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
             padding: 0,
             cursor: 'pointer',
             color: 'var(--text)',
-            fontSize: 15,
+            fontSize: 'var(--fs-body)',
             fontWeight: 700,
           }}
         >
@@ -115,7 +115,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
         {transcriptUrl ? (
           <a
             href={transcriptUrl}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--action)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--fs-meta)', color: 'var(--action)' }}
           >
             <ArrowDownTrayIcon style={{ width: 14, height: 14 }} />
             {t('report.download')}
@@ -145,7 +145,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
               {ex.interviewer.map((text, j) => (
                 <div key={`i-${j}`}>
                   {turnLabel(t('live.interviewer'), 'var(--text-2)')}
-                  <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--text)', marginTop: 2 }}>
+                  <div style={{ fontSize: 'var(--fs-body)', lineHeight: 1.55, color: 'var(--text)', marginTop: 2 }}>
                     <Markdown block>{text}</Markdown>
                   </div>
                 </div>
@@ -159,7 +159,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
                   }}
                 >
                   {turnLabel(t('live.you'), 'var(--action)')}
-                  <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--text)', marginTop: 2 }}>
+                  <div style={{ fontSize: 'var(--fs-body)', lineHeight: 1.55, color: 'var(--text)', marginTop: 2 }}>
                     <Markdown block>{text}</Markdown>
                   </div>
                 </div>

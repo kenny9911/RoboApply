@@ -155,7 +155,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
       </p>
 
       {errorLine ? (
-        <p role="alert" style={{ color: 'var(--warn)', fontSize: 13.5, marginBottom: 12 }}>
+        <p role="alert" style={{ color: 'var(--warn)', fontSize: 'var(--fs-meta)', marginBottom: 12 }}>
           {errorLine}
         </p>
       ) : null}
@@ -199,7 +199,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                     }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--text)' }}>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--fs-body)', color: 'var(--text)' }}>
                       {variant.name}
                       {variant.isPrimary ? (
                         <span
@@ -213,7 +213,7 @@ export function ResumeSelectPanel({ onReady, busy, errorCode }: Props) {
                         </span>
                       ) : null}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
+                    <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', marginTop: 2 }}>
                       {t('resume_last_edited', {
                         date: dateFormatter.format(new Date(variant.lastEditedAt)),
                       })}

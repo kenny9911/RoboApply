@@ -101,7 +101,7 @@ export function PipelineBoard() {
         <p style={{ color: 'var(--text)', fontWeight: 600, margin: 0 }}>
           {t('error.title')}
         </p>
-        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '8px 0 18px' }}>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 18px' }}>
           {t('error.body')}
         </p>
         <Btn variant="default" onClick={() => refetch()} disabled={isFetching}>

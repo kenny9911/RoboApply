@@ -131,7 +131,7 @@ export function Modal({
             <h2
               style={{
                 fontFamily: 'var(--font-ui)',
-                fontSize: '20px',
+                fontSize: 'var(--fs-title)',
                 fontWeight: 600,
                 letterSpacing: '-0.02em',
                 color: 'var(--text)',
@@ -143,7 +143,7 @@ export function Modal({
             </h2>
           ) : null}
           {description ? (
-            <p style={{ marginTop: 8, fontSize: '13.5px', color: 'var(--text-2)' }}>
+            <p style={{ marginTop: 8, fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
               {description}
             </p>
           ) : null}

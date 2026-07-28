@@ -116,11 +116,11 @@ function PlanCard({
         >{t('plan.mostPopular')}</span>
       ) : null}
 
-      <div style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 14 }}>{tierLabel(t, item.key)}</div>
+      <div style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 14 }}>{tierLabel(t, item.key)}</div>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-        <span style={{ fontSize: '36px', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text)' }}>{price}</span>
-        {!isFree ? <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t('plan.perMonth')}</span> : null}
+        <span style={{ fontSize: 'var(--fs-display)', fontWeight: 600, letterSpacing: '-0.04em', color: 'var(--text)' }}>{price}</span>
+        {!isFree ? <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)' }}>{t('plan.perMonth')}</span> : null}
       </div>
 
       <div style={{
@@ -132,7 +132,7 @@ function PlanCard({
 
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 11, marginBottom: 22, flex: 1, padding: 0 }}>
         {features.map((f, i) => (
-          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: '13px', color: 'var(--text-2)' }}>
+          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
             <span style={{ flexShrink: 0, marginTop: 2, color: 'var(--action)' }}><IconCheck size={15} /></span>
             {f}
           </li>

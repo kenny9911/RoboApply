@@ -1009,11 +1009,11 @@ function EditorMessage({
       }}
     >
       <div>
-        <p style={{ fontSize: 15, color: 'var(--text)', fontWeight: 600 }}>
+        <p style={{ fontSize: 'var(--fs-body)', color: 'var(--text)', fontWeight: 600 }}>
           {title}
         </p>
         {body ? (
-          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', marginTop: 6 }}>
+          <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', marginTop: 6 }}>
             {body}
           </p>
         ) : null}

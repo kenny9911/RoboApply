@@ -108,7 +108,7 @@ export function LanguageSwitcher({
               style={{
                 padding: '7px 14px',
                 borderRadius: 999,
-                fontSize: 13,
+                fontSize: 'var(--fs-meta)',
                 fontWeight: 500,
                 cursor: 'pointer',
                 border: `1px solid ${active ? 'var(--action)' : 'var(--rule)'}`,
@@ -175,7 +175,7 @@ export function LanguageSwitcher({
                   borderRadius: 8,
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: 13,
+                  fontSize: 'var(--fs-meta)',
                   textAlign: 'left',
                   background: active ? 'var(--action-subtle)' : 'transparent',
                   color: active ? 'var(--action)' : 'var(--text)',

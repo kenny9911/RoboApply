@@ -97,11 +97,11 @@ export function DataTable<Row, K extends string = string>({
           textAlign: 'center',
         }}
       >
-        <p style={{ fontFamily: 'var(--font-ui)', fontSize: 16, fontWeight: 600, color: 'var(--text)', margin: '0 0 8px' }}>
+        <p style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', margin: '0 0 8px' }}>
           {errorTitle}
         </p>
         {errorBody ? (
-          <p style={{ color: 'var(--text-2)', fontSize: 14, margin: '0 auto 16px', maxWidth: 420 }}>{errorBody}</p>
+          <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '0 auto 16px', maxWidth: 420 }}>{errorBody}</p>
         ) : null}
         {onRetry ? (
           <Btn variant="primary" onClick={onRetry}>
@@ -346,7 +346,7 @@ export function UserCell({
         {initial}
       </div>
       <div>
-        <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{email}</div>
+        <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', fontWeight: 500 }}>{email}</div>
         {sub ? <div style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{sub}</div> : null}
       </div>
     </div>

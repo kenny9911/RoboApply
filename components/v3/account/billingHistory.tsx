@@ -56,7 +56,7 @@ function Row({ inv }: { inv: BillingInvoice }) {
       padding: '14px 16px', borderBottom: '1px solid var(--rule)', flexWrap: 'wrap',
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{inv.description}</span>
+        <span style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)' }}>{inv.description}</span>
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>
           {fmtDate(locale, inv.date)} · {inv.kind === 'alipay' ? 'Alipay' : t('billing.history.card')}
         </span>
@@ -81,18 +81,18 @@ export function BillingHistoryView() {
   const q = useBillingHistory();
 
   if (q.isLoading) {
-    return <Panel><div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('billing.history.loading')}</div></Panel>;
+    return <Panel><div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('billing.history.loading')}</div></Panel>;
   }
   if (q.isError) {
-    return <Panel><div style={{ color: 'var(--warn)', fontSize: 14 }}>{t('billing.history.error')}</div></Panel>;
+    return <Panel><div style={{ color: 'var(--warn)', fontSize: 'var(--fs-body)' }}>{t('billing.history.error')}</div></Panel>;
   }
   const invoices = q.data?.invoices ?? [];
   if (invoices.length === 0) {
-    return <Panel><div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('billing.history.empty')}</div></Panel>;
+    return <Panel><div style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-body)' }}>{t('billing.history.empty')}</div></Panel>;
   }
   return (
     <Panel style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--rule)', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--rule)', fontSize: 'var(--fs-meta)', fontWeight: 600, color: 'var(--text-2)' }}>
         {t('billing.history.title')}
       </div>
       {invoices.map((inv) => <Row key={`${inv.kind}:${inv.id}`} inv={inv} />)}

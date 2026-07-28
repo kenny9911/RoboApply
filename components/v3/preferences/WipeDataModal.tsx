@@ -109,13 +109,13 @@ export function WipeDataModal({
       }
     >
       {done ? (
-        <p role="status" style={{ fontSize: 13.5, color: 'var(--text-2)', margin: 0, lineHeight: 1.5 }}>
+        <p role="status" style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', margin: 0, lineHeight: 1.5 }}>
           {t('danger.delete_data_success', { count: totalCleared })}
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <label style={LABEL_STYLE}>{t('danger.delete_data_confirm_label')}</label>
-          <p style={{ fontSize: '12.5px', color: 'var(--text-2)', margin: 0 }}>
+          <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', margin: 0 }}>
             {t('danger.delete_data_confirm_hint', { keyword })}
           </p>
           <input
@@ -135,7 +135,7 @@ export function WipeDataModal({
             }}
           />
           {error ? (
-            <p role="alert" style={{ color: 'var(--danger)', fontSize: '12.5px', margin: 0 }}>
+            <p role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)', margin: 0 }}>
               {error}
             </p>
           ) : null}

@@ -174,7 +174,7 @@ const DATE_INPUT = {
   padding: '9px 12px',
   color: 'var(--text)',
   fontFamily: 'var(--font-ui)',
-  fontSize: '14px',
+  fontSize: 'var(--fs-body)',
   colorScheme: 'dark' as const,
 };
 
@@ -289,7 +289,7 @@ export function KpiStrip({ kpis, loading }: { kpis: KpiCell[]; loading?: boolean
             <div
               className="robo-tnum"
               style={{
-                fontSize: 27,
+                fontSize: 'var(--fs-stat)',
                 lineHeight: 1,
                 letterSpacing: '-0.03em',
                 fontWeight: 600,
@@ -345,5 +345,5 @@ const STAT_BASE = {
 
 /** A de-emphasized unit suffix span (the "$" / "%" one step down). */
 export function Unit({ children }: { children: ReactNode }) {
-  return <span style={{ fontSize: 15, color: 'var(--text-muted)', fontWeight: 500 }}>{children}</span>;
+  return <span style={{ fontSize: 'var(--fs-body)', color: 'var(--text-muted)', fontWeight: 500 }}>{children}</span>;
 }

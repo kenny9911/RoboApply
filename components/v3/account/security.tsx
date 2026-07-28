@@ -220,12 +220,12 @@ export function SecurityCard({
               />
 
               {(localError || passwordError) && (
-                <p role="alert" style={{ color: 'var(--danger)', fontSize: '12.5px', margin: '0 0 12px', maxWidth: 420 }}>
+                <p role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)', margin: '0 0 12px', maxWidth: 420 }}>
                   {localError ?? passwordError}
                 </p>
               )}
               {passwordSuccess && !localError && (
-                <p style={{ color: 'var(--ok)', fontSize: '12.5px', margin: '0 0 12px' }}>
+                <p style={{ color: 'var(--ok)', fontSize: 'var(--fs-meta)', margin: '0 0 12px' }}>
                   {t('security.changeSuccess')}
                 </p>
               )}
@@ -235,7 +235,7 @@ export function SecurityCard({
               </Btn>
             </form>
           ) : (
-            <p style={{ fontSize: '13px', color: 'var(--text-2)', maxWidth: 360 }}>
+            <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', maxWidth: 360 }}>
               {t('security.oauthNote', { provider: providerName })}
             </p>
           )}
@@ -246,7 +246,7 @@ export function SecurityCard({
           <CapLabel style={{ display: 'block', marginBottom: 16 }}>
             {t('security.sessions')}
           </CapLabel>
-          <p style={{ fontSize: '13px', color: 'var(--text-2)', maxWidth: 300, marginBottom: 14 }}>
+          <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', maxWidth: 300, marginBottom: 14 }}>
             {t('security.signOutNote')}
           </p>
           <Btn onClick={onSignOutEverywhere} disabled={signingOut}>
@@ -280,7 +280,7 @@ export function DangerZone({ onRequestDelete }: { onRequestDelete: () => void })
     >
       <div>
         <div style={{ fontWeight: 600, color: 'var(--text)' }}>{t('danger.deleteAccount')}</div>
-        <div style={{ fontSize: '12.5px', color: 'var(--text-2)', marginTop: 4, maxWidth: 480 }}>
+        <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', marginTop: 4, maxWidth: 480 }}>
           {t('danger.deleteDescription')}
         </div>
       </div>

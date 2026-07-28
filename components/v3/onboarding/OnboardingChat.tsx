@@ -249,13 +249,13 @@ export function OnboardingChat({
         ) : null}
 
         {errorNotice ? (
-          <p role="alert" style={{ color: 'var(--warn)', fontSize: 13, margin: 0 }}>
+          <p role="alert" style={{ color: 'var(--warn)', fontSize: 'var(--fs-meta)', margin: 0 }}>
             {errorNotice.text}
             {errorNotice.retry ? (
               <button
                 type="button"
                 className="btn ghost"
-                style={{ marginLeft: 10, fontSize: 12, padding: '4px 10px' }}
+                style={{ marginLeft: 10, fontSize: 'var(--fs-label)', padding: '4px 10px' }}
                 onClick={retryLastTurn}
               >
                 {t('error_retry')}
@@ -322,7 +322,7 @@ export function OnboardingChat({
         </button>
       </div>
       {state.turnCount === 0 && openingPrompt ? (
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+        <p style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)', margin: 0 }}>
           {t('opening_prompt_hint')}
         </p>
       ) : null}

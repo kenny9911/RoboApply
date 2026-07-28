@@ -334,7 +334,7 @@ export function ProfileCard({
                   padding: '8px 12px',
                   color: 'var(--text)',
                   fontFamily: 'var(--font-ui)',
-                  fontSize: '18px',
+                  fontSize: 'var(--fs-subtitle)',
                   fontWeight: 600,
                   minWidth: 200,
                 }}
@@ -349,7 +349,7 @@ export function ProfileCard({
           ) : (
             <div
               style={{
-                fontSize: '22px',
+                fontSize: 'var(--fs-title)',
                 fontWeight: 600,
                 letterSpacing: '-0.02em',
                 display: 'flex',

@@ -84,7 +84,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     return (
       <>
         <PageHeader title={t('report.title')} />
-        <p style={{ color: 'var(--text-2)', fontSize: 14 }}>{t('report.error')}</p>
+        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)' }}>{t('report.error')}</p>
         <Btn variant="primary" as="a" href="/practice">{t('report.newInterview')}</Btn>
       </>
     );
@@ -93,7 +93,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     return (
       <>
         <PageHeader eyebrowLive title={t('report.title')} />
-        <p aria-busy="true" style={{ color: 'var(--text-2)', fontSize: 14, padding: '40px 0' }}>{t('report.loading')}</p>
+        <p aria-busy="true" style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', padding: '40px 0' }}>{t('report.loading')}</p>
       </>
     );
   }
@@ -121,20 +121,20 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
       />
 
       {s.status !== 'completed' && (
-        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 'var(--fs-meta)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{t('report.processing')}</span>
           <Btn variant="default" onClick={() => void refresh()}>{refreshing ? t('report.refreshing') : t('report.refresh')}</Btn>
         </div>
       )}
 
       {s.status === 'completed' && enrichPending && (
-        <div style={{ border: '1px solid var(--action)', background: 'var(--action-subtle)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ border: '1px solid var(--action)', background: 'var(--action-subtle)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text)', fontSize: 'var(--fs-meta)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span aria-busy="true">{t('report.analysisPending')}</span>
         </div>
       )}
 
       {stalled && (
-        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 'var(--fs-meta)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <span>{t('report.analysisStalled')}</span>
           <Btn variant="default" onClick={() => void refresh()}>
             {refreshing ? t('report.refreshing') : t('report.refreshAnalysis')}
@@ -153,7 +153,7 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
       {/* Recording */}
       {report.recordingUrl && (
         <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>{t('report.recording')}</div>
+          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>{t('report.recording')}</div>
           {s.mode === 'video' ? (
             <video controls src={report.recordingUrl} style={{ width: '100%', maxWidth: 720, borderRadius: 'var(--r-lg, 12px)', background: '#000' }} />
           ) : (

@@ -213,7 +213,7 @@ export function SetPlanModal({
                   }}
                 >
                   <TierBadge tier={tr} size="sm" />
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500 }}>{tierLabel(tr)}</div>
+                  <div style={{ marginTop: 8, fontSize: 'var(--fs-meta)', fontWeight: 500 }}>{tierLabel(tr)}</div>
                 </button>
               );
             })}
@@ -252,7 +252,7 @@ export function SetPlanModal({
         </label>
 
         {errorMessage ? (
-          <p role="alert" style={{ color: 'var(--danger)', fontSize: 13, margin: 0 }}>
+          <p role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)', margin: 0 }}>
             {errorMessage}
           </p>
         ) : null}

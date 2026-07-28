@@ -372,7 +372,7 @@ export default function ResumesPage() {
           <div className="iv-coach-lbl">{t('tip.label')}</div>
           <div
             style={{
-              fontSize: 13,
+              fontSize: 'var(--fs-meta)',
               color: 'var(--text)',
               marginTop: 4,
               lineHeight: 1.5,

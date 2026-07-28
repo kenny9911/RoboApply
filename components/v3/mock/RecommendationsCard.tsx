@@ -31,7 +31,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
   return (
     <section style={{ marginTop: 28 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+        <h2 style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
           {t('report.recommendations.title')}
         </h2>
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)' }}>
@@ -46,7 +46,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
             borderRadius: 12,
             padding: '18px 16px',
             color: 'var(--text-2)',
-            fontSize: 13.5,
+            fontSize: 'var(--fs-meta)',
           }}
         >
           {enrichmentPending
@@ -60,7 +60,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
             borderRadius: 12,
             padding: '18px 16px',
             color: 'var(--text-2)',
-            fontSize: 13.5,
+            fontSize: 'var(--fs-meta)',
             background: 'var(--surface)',
           }}
         >
@@ -82,7 +82,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
                 <Pill tone={PRIORITY_TONE[rec.priority] ?? 'accent'}>
                   {t(`report.recommendations.priority.${rec.priority}`)}
                 </Pill>
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{rec.title}</span>
+                <span style={{ fontSize: 'var(--fs-body)', fontWeight: 700, color: 'var(--text)' }}>{rec.title}</span>
                 {rec.linkedDimension ? (
                   <span
                     style={{
@@ -99,7 +99,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
                 ) : null}
               </div>
 
-              <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
                 <Markdown block>{rec.detail}</Markdown>
               </div>
 
@@ -113,7 +113,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
                 }}
               >
                 <div className="qb-section-label">{t('report.recommendations.exampleLabel')}</div>
-                <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
                   <Markdown block>{rec.example}</Markdown>
                 </div>
               </div>
@@ -129,7 +129,7 @@ export function RecommendationsCard({ recommendations, enrichmentPending }: Prop
                   }}
                 >
                   <div className="qb-section-label">{t('report.recommendations.drill')}</div>
-                  <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
                     <Markdown block>{rec.drill}</Markdown>
                   </div>
                 </div>

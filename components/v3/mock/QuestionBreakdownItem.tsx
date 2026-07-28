@@ -51,7 +51,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         }}
       >
         <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-2)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{num}</span>
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>
+        <span style={{ flex: 1, fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>
           {item.question}
         </span>
         {item.blueprintIndex === null && !item.missed ? (
@@ -86,7 +86,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
             }}
           >
             {sectionLabel(t('report.questionBreakdown.intentLabel'))}
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.intent}</Markdown>
             </div>
           </div>
@@ -94,7 +94,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
 
         {/* Missed → single explanatory note; otherwise the candidate's words. */}
         {item.missed ? (
-          <div style={{ fontSize: 13, color: 'var(--text-2)', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', fontStyle: 'italic' }}>
             {t('report.questionBreakdown.missed')}
           </div>
         ) : item.keyQuote ? (
@@ -106,7 +106,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
                 padding: '8px 14px',
                 borderLeft: '3px solid var(--rule)',
                 color: 'var(--text-2)',
-                fontSize: 13.5,
+                fontSize: 'var(--fs-meta)',
                 lineHeight: 1.5,
                 fontStyle: 'italic',
               }}
@@ -119,7 +119,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         {!item.missed && item.answerSummary ? (
           <div>
             {sectionLabel(t('report.questionBreakdown.answerSummaryLabel'))}
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.answerSummary}</Markdown>
             </div>
           </div>
@@ -128,7 +128,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         {item.analysis ? (
           <div>
             {sectionLabel(t('report.questionBreakdown.analysisLabel'))}
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.analysis}</Markdown>
             </div>
           </div>
@@ -144,7 +144,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
             }}
           >
             {sectionLabel(t('report.questionBreakdown.correctionLabel'))}
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.correction}</Markdown>
             </div>
           </div>
@@ -153,7 +153,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
         {item.suggestion ? (
           <div>
             {sectionLabel(t('report.questionBreakdown.suggestionLabel'))}
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.suggestion}</Markdown>
             </div>
           </div>
@@ -172,7 +172,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
             {sectionLabel(t('report.questionBreakdown.tipsLabel'))}
             <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {item.tips.map((tip, i) => (
-                <li key={i} style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+                <li key={i} style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
                   <Markdown>{tip}</Markdown>
                 </li>
               ))}
@@ -190,7 +190,7 @@ export function QuestionBreakdownItem({ item, defaultOpen = false }: Props) {
             }}
           >
             {sectionLabel(t('report.questionBreakdown.modelAnswerLabel'))}
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)', lineHeight: 1.5 }}>
               <Markdown block>{item.modelAnswer}</Markdown>
             </div>
           </div>

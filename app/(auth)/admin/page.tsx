@@ -123,7 +123,7 @@ export default function AdminPage() {
       <>
         {header}
         <EmptyState
-          icon={<span style={{ fontSize: 34 }}>🔒</span>}
+          icon={<span style={{ fontSize: 'var(--fs-display)' }}>🔒</span>}
           title={`${t('notAuthorized.title')} ${t('notAuthorized.titleAccent')}`}
           sub={t('notAuthorized.sub')}
         />
@@ -191,7 +191,7 @@ function OverviewTab({
   if (!hasActivity) {
     return (
       <EmptyState
-        icon={<span style={{ fontSize: 34 }}>📉</span>}
+        icon={<span style={{ fontSize: 'var(--fs-display)' }}>📉</span>}
         title={`${t('empty.title')} ${t('empty.titleAccent')}`}
         action={
           <Btn variant="primary" onClick={onResetRange}>
@@ -443,7 +443,7 @@ function UsersTab({
               outline: 'none',
               color: 'var(--text)',
               fontFamily: 'var(--font-ui)',
-              fontSize: '12.5px',
+              fontSize: 'var(--fs-meta)',
               width: '100%',
             }}
           />
@@ -681,10 +681,10 @@ function RetryPanel({ onRetry }: { onRetry: () => void }) {
       className="flex flex-col items-center gap-4 text-center"
       style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
     >
-      <p style={{ fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+      <p style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
         {t('error.title')}
       </p>
-      <p style={{ color: 'var(--text-2)', fontSize: 14, maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
+      <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', maxWidth: 420, margin: 0 }}>{t('error.body')}</p>
       <Btn variant="primary" onClick={onRetry} icon={<IconClock size={14} />}>
         {t('error.retry')}
       </Btn>

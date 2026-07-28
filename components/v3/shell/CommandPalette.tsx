@@ -208,7 +208,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             onChange={(e) => setQ(e.target.value)}
             placeholder={tp('palette.placeholder')}
             className="flex-1 bg-transparent outline-none"
-            style={{ color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 15 }}
+            style={{ color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-body)' }}
           />
           <kbd
             style={{
@@ -268,7 +268,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           {flat.length === 0 ? (
             <p
               className="px-4 py-8 text-center"
-              style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}
+              style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-meta)', fontStyle: 'italic' }}
             >
               {isFetching ? tp('palette.searching') : tp('palette.empty')}
             </p>
@@ -324,10 +324,10 @@ function Row({
       }}
     >
       <span aria-hidden="true">{icon}</span>
-      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text)', fontSize: 14 }}>
+      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--text)', fontSize: 'var(--fs-body)' }}>
         {label}
         {sub ? (
-          <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 12.5 }}>· {sub}</span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 'var(--fs-meta)' }}>· {sub}</span>
         ) : null}
       </span>
     </button>

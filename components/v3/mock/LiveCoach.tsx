@@ -191,7 +191,7 @@ export function LiveQuestionCard({
         {question ? <Markdown>{question}</Markdown> : <span style={{ color: 'var(--text-2)' }}>{t('live.coach.awaitingQuestion')}</span>}
       </div>
       <div className="iv-question-actions">
-        <button type="button" className="btn ghost" style={{ padding: '6px 10px', fontSize: 12 }} onClick={onToggleHint}>
+        <button type="button" className="btn ghost" style={{ padding: '6px 10px', fontSize: 'var(--fs-label)' }} onClick={onToggleHint}>
           <IconSparkle size={12} />
           {hintOpen ? t('live.coach.hideHint') : t('live.coach.showHint')}
         </button>
