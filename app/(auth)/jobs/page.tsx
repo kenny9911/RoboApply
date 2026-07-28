@@ -66,10 +66,16 @@ export default function JobsPage() {
     );
   }, [updatedAt]);
 
+  // `isPending`, not `isLoading`. The feed query is held until stored
+  // preferences resolve (so it fires once, with filters, rather than firing
+  // unfiltered and then replacing the list), and a DISABLED TanStack query
+  // reports isLoading === false while it has no data — which rendered
+  // "No jobs fit you yet." at a user whose feed had not been requested yet.
+  // isPending covers both "waiting to start" and "in flight".
   return (
     <>
       <PageHeader
-        title={feed.isLoading ? t('headlineLoading') : t('headline', { count })}
+        title={feed.isPending ? t('headlineLoading') : t('headline', { count })}
         sub={stamp ? t('sub', { time: stamp }) : undefined}
       />
 
