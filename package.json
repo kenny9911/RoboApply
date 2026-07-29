@@ -20,7 +20,6 @@
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:plans-i18n": "node scripts/check-plans-i18n-parity.mjs",
     "check:design": "node scripts/check-design.mjs",
     "check:copy": "node scripts/check-copy.mjs",
     "check": "npm run check:design && npm run check:copy",
