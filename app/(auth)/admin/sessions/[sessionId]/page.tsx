@@ -5,7 +5,7 @@
 // duration · status), a stacked cost bar over the six stages, and a per-stage
 // ledger table. Modeled rows (STT/TTS/egress) carry the estimated marker.
 //
-// Renders inner content only; /admin/* is ResumeGate-exempt.
+// Renders inner content only; no first-run gate stands in front of /admin/*.
 
 import { use } from 'react';
 import { useRouter } from 'next/navigation';

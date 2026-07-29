@@ -48,9 +48,10 @@ export default function LoginPage() {
       const next = rawNext && /^\/(?![/\\])/.test(rawNext) ? rawNext : null;
       // One destination, no branch. /jobs IS the product (ruling R1), so the
       // JOB_APPLYING_ENABLED fork is gone, and so is the has-a-resume fork:
-      // /onboarding no longer exists (setup is a panel in the /jobs filter bar,
-      // C21) and ResumeGate already shows the upload prompt to a user with no
-      // résumé, in place, on /jobs. A deep-link `next` still wins.
+      // /onboarding no longer exists, and first-run setup is a panel that
+      // /jobs opens by itself when `onboardingState` says the user needs it
+      // (hooks/useSetupTrigger.ts). Nothing to decide out here. A deep-link
+      // `next` still wins.
       router.replace(next ?? '/jobs');
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : t('error_generic'));

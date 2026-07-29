@@ -27,7 +27,6 @@ import { usePathname } from 'next/navigation';
 import { Sidebar, Topbar, MobileNav, CommandPaletteProvider } from '../../components/v3/shell';
 import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
-import { ResumeGate } from '../../components/ResumeGate';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
@@ -67,25 +66,42 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     </CommandPaletteProvider>
   );
 
-  // Three gates wrap the shell, outermost first:
+  // TWO gates wrap the shell, outermost first:
   //   1. AuthGate — redirects UNauthenticated visitors to /login (?next=… round
   //      trip). The client-side backstop for soft navigations (e.g. the logo
   //      <Link>) and for any request the edge proxy doesn't gate.
   //   2. RoboApplyAccessGate — bounces confirmed RoboHire recruiters to the
   //      /job-seeker bridge (role check); everyone else falls through.
-  //   3. ResumeGate — for authenticated candidates with ZERO résumés, blocks
-  //      every authed page (except /resume + a live practice interview) with an
-  //      upload prompt, so the rest of the app always has a résumé to work on.
   //
-  // There used to be a fourth, JobApplyingGate, redirecting /home, /queue,
+  // ─── WHAT THE THIRD GATE WAS, AND WHY IT IS GONE ────────────────────────
+  //
+  // `ResumeGate` sat inside RoboApplyAccessGate and, for any authenticated
+  // candidate with ZERO résumés, REPLACED THIS ENTIRE SHELL with an upload
+  // prompt. Not the page slot — the shell. No Sidebar, no Topbar, no avatar
+  // menu, so no settings, no locale switch, no theme toggle and, decisively,
+  // NO SIGN-OUT. A user landing on it with a stale session had no way to
+  // recover except clearing cookies by hand: exactly the failure commit
+  // 212a2e6 exists to prevent, re-introduced one layer higher.
+  //
+  // It also captured nothing. A user could upload a résumé, satisfy the gate,
+  // and arrive at /jobs having told the product not one thing about what work
+  // they want — which is the whole reason first-run setup exists.
+  //
+  // Setup is now a PANEL inside app/(auth)/jobs/page.tsx (ONBOARDING_SPEC §2.1,
+  // "ResumeGate as a wall dies"). It gates /jobs only, because /jobs is the one
+  // screen that genuinely cannot do its job without a parsed résumé to compare
+  // against. /applications, /practice and /resume render normally with none:
+  // each already has an empty state that names the next action ("Save or apply
+  // to a job and it shows up here", "Start from scratch"), and /practice treats
+  // résumé text as optional context it simply omits.
+  //
+  // There used to be a fifth gate, JobApplyingGate, redirecting /home, /queue,
   // /tracker and /activity when JOB_APPLYING_ENABLED was off. All four routes
   // are gone and so is the flag (ruling C33) — /jobs IS the product, so there
   // is nothing left to gate.
   return (
     <AuthGate>
-      <RoboApplyAccessGate>
-        <ResumeGate>{shell}</ResumeGate>
-      </RoboApplyAccessGate>
+      <RoboApplyAccessGate>{shell}</RoboApplyAccessGate>
     </AuthGate>
   );
 }

@@ -6,7 +6,7 @@
 // Sessions · Rate card. A global DateRangePicker lives in the header actions
 // and is the spine of every read. Drill-downs (user / session) are separate
 // routes. Renders inner content only — the (auth) shell provides sidebar/
-// topbar; /admin is exempt from the ResumeGate.
+// topbar. No first-run gate stands in front of it: setup is a panel on /jobs.
 //
 // State order mirrors activity/page.tsx: header (+ controls) always first,
 // then per-tab error → loading skeleton → empty → success.

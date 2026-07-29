@@ -9,7 +9,7 @@
 // → useSetPlan mutation → success banner + refetch.
 //
 // Full route (linkable / shareable), own PageHeader, renders inner content
-// only (the (auth) shell provides the chrome; /admin/* is ResumeGate-exempt).
+// only (the (auth) shell provides the chrome; no first-run gate precedes /admin/*).
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
