@@ -164,7 +164,7 @@
       "skip": "Passer pour l’instant",
       "skip_note": "Si tu passes, tu verras toutes les offres ouvertes, les plus récentes en premier.",
       "skipped_banner": "Tu vois toutes les offres ouvertes, les plus récentes en premier.",
-      "restore_notice": "On reprend là où tu t’es arrêté.",
+      "restore_notice": "Tout reprend là où tu t’es arrêté.",
       "superseded_notice": "Cette configuration a continué dans une autre fenêtre. Recharge pour la voir.",
       "resume_title": "Ajoute ton CV",
       "resume_lead": "Une seule lecture suffit pour arrêter de te montrer des offres que tu n’accepterais jamais.",
@@ -215,7 +215,7 @@
       "notes_hint": "Une ligne suffit. Elle devient des filtres comme ceux du dessus.",
       "notes_added": "Repris de ce que tu as écrit : {fields}",
       "submit": "Montre-moi les offres",
-      "submitting": "Recherche des offres qui te correspondent…",
+      "submitting": "Recherche d’offres pour toi…",
       "fields": {
         "targetRoles": "Intitulés de poste que tu veux",
         "where": "Où et comment tu veux travailler",
@@ -244,7 +244,7 @@
         "hybrid": "Hybride",
         "onsite": "Au bureau",
         "full_time": "Temps plein",
-        "contract": "Contrat court",
+        "contract": "Freelance",
         "part_time": "Temps partiel",
         "internship": "Stage"
       }

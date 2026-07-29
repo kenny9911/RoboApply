@@ -166,7 +166,7 @@
       "skipped_banner": "열려 있는 채용 공고를 최신순으로 모두 보여주고 있어요.",
       "restore_notice": "멈춘 곳부터 이어서 진행해요.",
       "superseded_notice": "이 설정은 다른 창에서 계속됐어요. 새로고침하면 보여요.",
-      "resume_title": "이력서 올리기",
+      "resume_title": "이력서 추가하기",
       "resume_lead": "한 번만 읽어도 절대 지원하지 않을 공고를 더는 보여주지 않아요.",
       "resume_drop": "이력서를 여기에 놓거나 눌러서 고르세요",
       "resume_formats": "PDF, DOC, DOCX, TXT, MD — 최대 15MB",
@@ -213,8 +213,8 @@
       "notes_label": "그 밖에 중요한 것",
       "notes_placeholder": "비자 지원 필요, 에이전시 제외, 집에서 한 시간 이내, 컨설팅에서 벗어나고 싶어요…",
       "notes_hint": "한 줄이면 충분해요. 위와 같은 조건으로 바뀌어요.",
-      "notes_added": "적어 주신 내용에서 추가함: {fields}",
-      "submit": "채용 공고 보여주기",
+      "notes_added": "적어 주신 내용에서 추가했어요: {fields}",
+      "submit": "채용 공고 보기",
       "submitting": "맞는 공고를 찾고 있어요…",
       "fields": {
         "targetRoles": "원하는 직무명",
@@ -241,7 +241,7 @@
       },
       "values": {
         "remote": "재택",
-        "hybrid": "혼합",
+        "hybrid": "하이브리드",
         "onsite": "사무실 출근",
         "full_time": "정규직",
         "contract": "계약직",

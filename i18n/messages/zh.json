@@ -166,7 +166,7 @@
       "skipped_banner": "正在显示所有在招职位，最新的排在前面。",
       "restore_notice": "已经从你上次停下的地方继续。",
       "superseded_notice": "这次设置在另一个窗口继续了。刷新一下就能看到。",
-      "resume_title": "上传你的简历",
+      "resume_title": "添加你的简历",
       "resume_lead": "读一次就够了，之后不会再给你看你根本不会去的职位。",
       "resume_drop": "把简历拖到这里，或点击选择文件",
       "resume_formats": "PDF、DOC、DOCX、TXT 或 MD — 最大 15 MB",
@@ -214,7 +214,7 @@
       "notes_placeholder": "需要签证支持、不接受中介、离家一小时内、想离开咨询行业……",
       "notes_hint": "写一行就够。它会变成上面那样的条件。",
       "notes_added": "从你写的内容里加上了：{fields}",
-      "submit": "给我看职位",
+      "submit": "查看职位",
       "submitting": "正在找适合你的职位……",
       "fields": {
         "targetRoles": "你想要的职位名称",

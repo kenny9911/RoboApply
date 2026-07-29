@@ -166,7 +166,7 @@
       "skipped_banner": "正在顯示所有開放中的職缺，最新的排在前面。",
       "restore_notice": "已經從你上次停下的地方繼續。",
       "superseded_notice": "這次設定在另一個視窗繼續了。重新整理就能看到。",
-      "resume_title": "上傳你的履歷",
+      "resume_title": "新增你的履歷",
       "resume_lead": "讀一次就夠了，之後不會再給你看你根本不會去的職缺。",
       "resume_drop": "把履歷拖到這裡，或點一下選擇檔案",
       "resume_formats": "PDF、DOC、DOCX、TXT 或 MD — 最大 15 MB",
@@ -214,7 +214,7 @@
       "notes_placeholder": "需要簽證支援、不接受仲介、離家一小時內、想離開顧問業……",
       "notes_hint": "寫一行就夠。它會變成上面那樣的條件。",
       "notes_added": "從你寫的內容裡加上了：{fields}",
-      "submit": "給我看職缺",
+      "submit": "查看職缺",
       "submitting": "正在找適合你的職缺……",
       "fields": {
         "targetRoles": "你想要的職稱",
