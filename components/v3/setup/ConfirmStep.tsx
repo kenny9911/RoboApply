@@ -30,7 +30,7 @@
 //   • No job cards. /jobs renders those one second later; showing them here is
 //     the destination rendered twice.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { IngestRecap } from './IngestRecap';
@@ -43,6 +43,48 @@ import type {
   RAWorkType,
 } from '../../../lib/api/v2/types';
 import type { SetupDraftAction, SetupDraftState } from '../../../hooks/useSetup';
+
+/**
+ * Where the sticky action bar has to stop so it does not stick UNDERNEATH the
+ * fixed MobileNav — which would hide the only button on the screen, and is
+ * worse than not sticking at all.
+ *
+ * `components/v3/shell/MobileNav.tsx` is `fixed inset-x-0 bottom-0 z-30`, below
+ * 760px only, and its height is a 44px tab floor plus 8px of top padding, a 1px
+ * rule, and the iOS home indicator twice over (the tab pads for it and
+ * `.robo-bottom-nav` pads for it again). Hence `--control-lg + --sp-3 + 2×env`.
+ */
+const MOBILE_NAV_CLEARANCE =
+  'calc(var(--control-lg) + var(--sp-3) + 2 * env(safe-area-inset-bottom, 0px))';
+
+/** The breakpoint `styles/v3.css` shows the MobileNav at. */
+const MOBILE_NAV_QUERY = '(max-width: 760px)';
+
+/** 0 on desktop, the nav's height on a phone. A media query cannot be written
+ *  in an inline style and this bar is the only thing in the panel that needs
+ *  one, so it is read once here rather than added to a shared stylesheet.
+ *
+ *  KNOWN LIMIT, measured in a browser, not assumed: below 760px the bar does
+ *  not stick at all, and no value here changes that. `styles/v3.css` gives
+ *  `.main` `overflow-y: auto`, which makes it the sticky SCROLLPORT — and the
+ *  same file collapses `.app` to `height: auto` below 760px, so `.main` grows
+ *  with its content and never scrolls. A sticky box whose scrollport does not
+ *  scroll never leaves the flow. The fix is one line in the shell, not here:
+ *  `.main` needs a scrolling box (or the document needs to be the scrollport)
+ *  at that width. This offset is already correct for when that lands, and it
+ *  costs nothing until then. */
+function useStickyBottom(): string {
+  const [bottom, setBottom] = useState('0px');
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(MOBILE_NAV_QUERY);
+    const apply = () => setBottom(mq.matches ? MOBILE_NAV_CLEARANCE : '0px');
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+  return bottom;
+}
 
 const WORK_MODES: RAWorkType[] = ['remote', 'hybrid', 'onsite'];
 const EMPLOYMENT_TYPES: RAEmploymentType[] = [
@@ -96,6 +138,11 @@ interface Props {
   skipping: boolean;
   /** Draft field names the notes line contributed, echoed after submit. */
   notesEcho?: string | null;
+  /** A submit failure, as a `jobs.setup.*` key. Rendered INSIDE the action bar:
+   *  the bar is sticky, so a message placed after it would be pushed into the
+   *  panel's bottom padding — off screen, underneath the bar, at the exact
+   *  moment the user needs to read it. */
+  errorKey?: string | null;
 }
 
 export function ConfirmStep({
@@ -109,8 +156,10 @@ export function ConfirmStep({
   submitting,
   skipping,
   notesEcho,
+  errorKey,
 }: Props) {
   const t = useTranslations('jobs.setup');
+  const stickyBottom = useStickyBottom();
 
   const meta = session.fieldMeta ?? {};
   const sourceOf = (field: string): OnboardingSeedSource | null =>
@@ -166,8 +215,15 @@ export function ConfirmStep({
   return (
     <div>
       <header style={{ marginBottom: 'var(--sp-4)' }}>
+        {/* SetupPanel focuses this on the step change. The card swaps in place,
+         *  so without it the element that had focus (the drop zone, the file
+         *  the user just picked) is destroyed and focus falls to <body> — the
+         *  keyboard user arrives at step 2 with no idea it happened. */}
         <h2
+          data-setup-heading
+          tabIndex={-1}
           style={{
+            outline: 'none',
             fontSize: 'var(--fs-title)',
             fontWeight: 600,
             letterSpacing: 'var(--ls-title)',
@@ -356,22 +412,60 @@ export function ConfirmStep({
         </div>
       </div>
 
+      {/* STICKY.
+       *
+       *  Six control groups stacked in one column measure ~2,000px, so the only
+       *  button on the screen sits about three viewport-heights below the fold.
+       *  The whole promise of this step is "accept the prefill with one tap",
+       *  and a tap you have to scroll past six groups to find is not one tap.
+       *
+       *  Honest scope: this works wherever `.main` is the scrolling box, which
+       *  today means desktop only — see `useStickyBottom` for why the phone
+       *  case needs a one-line change in the shell that is not this file's to
+       *  make. Where it does not engage it degrades to exactly the in-flow
+       *  footer that shipped, so it is a win or a no-op and never a regression.
+       *
+       *  The negative inline margins pull the bar out to the panel's padding
+       *  box so content scrolls under it rather than beside it. */}
       <footer
         style={{
+          position: 'sticky',
+          bottom: stickyBottom,
+          zIndex: 1,
+          background: 'var(--surface)',
           display: 'flex',
           alignItems: 'center',
           gap: 'var(--sp-3)',
           flexWrap: 'wrap',
           borderTop: '1px solid var(--rule)',
-          paddingTop: 'var(--sp-4)',
           marginTop: 'var(--sp-2)',
+          marginInline: 'calc(-1 * var(--sp-5))',
+          paddingTop: 'var(--sp-4)',
+          paddingInline: 'var(--sp-5)',
+          paddingBottom: 'var(--sp-4)',
         }}
       >
+        {errorKey ? (
+          <p
+            role="alert"
+            style={{
+              flexBasis: '100%',
+              margin: 0,
+              color: 'var(--warn)',
+              fontSize: 'var(--fs-meta)',
+              lineHeight: 'var(--lh-meta)',
+            }}
+          >
+            {t(errorKey)}
+          </p>
+        ) : null}
+
         {/* Never disabled. Touching nothing and pressing this accepts the
          *  prefill, which is why there is no separate "accept" affordance. */}
         <button
           type="button"
           className="btn primary"
+          style={{ minHeight: 'var(--control-lg)' }}
           onClick={onSubmit}
           aria-busy={submitting}
         >
@@ -381,6 +475,7 @@ export function ConfirmStep({
           <button
             type="button"
             className="btn ghost"
+            style={{ minHeight: 'var(--control-lg)' }}
             onClick={onSkip}
             disabled={skipping}
           >

@@ -87,7 +87,13 @@ export function IngestRecap({ rows }: Props) {
 
       {rows === null ? (
         // Skeleton while the bootstrap is in flight.
-        <div aria-label={t('reading_title')}>
+        //
+        // `aria-label` on a plain <div> names nothing — a generic element with
+        // no role does not expose an accessible name, so the one state in the
+        // flow that lasts 8–15 seconds was silent. `role="status"` plus real
+        // text is what actually says "this is working" out loud.
+        <div role="status">
+          <span className="sr-only">{t('reading_title')}</span>
           {[0, 1, 2].map((i) => (
             <div key={i} className="ingest-row pending">
               <div className="ic">
@@ -105,7 +111,16 @@ export function IngestRecap({ rows }: Props) {
           ))}
         </div>
       ) : (
-        <>
+        // The rows arrive one at a time over ~2.5s. Read silently that is a
+        // block a screen-reader user reaches half-built and never hears
+        // finished, so additions are announced as they land and `aria-busy`
+        // says the block is not done yet. `additions` only: re-reading the
+        // whole recap on every row would be six announcements of six lines.
+        <div
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-busy={visibleCount < rows.length}
+        >
           {rows.slice(0, visibleCount).map((row) => (
             <div
               key={row.id}
@@ -127,7 +142,7 @@ export function IngestRecap({ rows }: Props) {
               <div>{t('reading_title')}</div>
             </div>
           ) : null}
-        </>
+        </div>
       )}
     </div>
   );

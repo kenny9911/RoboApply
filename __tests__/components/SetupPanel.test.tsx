@@ -12,6 +12,7 @@
 //   • opening straight at step 2 restores an interrupted session before it
 //     spends a new one.
 
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -194,5 +195,145 @@ describe('SetupPanel', () => {
     // The shell behind it — sign out, settings, every other destination — is
     // live. `aria-modal` here would be a lie to a screen reader.
     expect(panel).not.toHaveAttribute('aria-modal');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Keyboard and screen reader.
+//
+// The panel is a region layered over a LIVE shell, so it cannot trap focus —
+// which makes every one of these its own decision rather than something a
+// modal library would have handled.
+// ─────────────────────────────────────────────────────────────────────
+
+describe('SetupPanel — focus', () => {
+  it('puts focus on the step heading when it opens', async () => {
+    renderWithProviders(<SetupPanel initialStep="resume" onClose={() => {}} />);
+    const heading = await screen.findByRole('heading', { name: /add your resume/i });
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('follows the card when it swaps in place, instead of dropping to the body', async () => {
+    renderWithProviders(<SetupPanel initialStep="resume" onClose={() => {}} />);
+    const zone = await screen.findByRole('button', { name: /drop your resume here/i });
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' })] },
+    });
+
+    const heading = await screen.findByRole('heading', {
+      name: /here is what your resume says/i,
+    });
+    // Without this the drop zone is destroyed under the user's own focus and a
+    // keyboard user restarts from the top of the document with no announcement
+    // that the step changed at all.
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('gives focus back to whatever opened it', async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            open setup
+          </button>
+          {open ? (
+            <SetupPanel initialStep="resume" onClose={() => setOpen(false)} />
+          ) : null}
+        </>
+      );
+    }
+    renderWithProviders(<Harness />);
+    const opener = screen.getByRole('button', { name: /open setup/i });
+    opener.focus();
+    fireEvent.click(opener);
+
+    await screen.findByRole('heading', { name: /add your resume/i });
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+});
+
+describe('SetupPanel — escape', () => {
+  it('closes on escape from inside the panel', async () => {
+    const onClose = vi.fn();
+    renderWithProviders(<SetupPanel initialStep="resume" onClose={onClose} />);
+    const panel = await screen.findByRole('region', {
+      name: /tell us what you're looking for/i,
+    });
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('ignores an escape aimed at the live shell behind it', async () => {
+    const onClose = vi.fn();
+    renderWithProviders(
+      <>
+        <button type="button">sign out</button>
+        <SetupPanel initialStep="resume" onClose={onClose} />
+      </>,
+    );
+    await screen.findByRole('heading', { name: /add your resume/i });
+    // A window-level listener destroyed setup — and every edit in it — when the
+    // user pressed Escape to dismiss the avatar menu behind the panel.
+    fireEvent.keyDown(screen.getByRole('button', { name: /sign out/i }), {
+      key: 'Escape',
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when escape is cancelling an IME composition', async () => {
+    const onClose = vi.fn();
+    renderWithProviders(<SetupPanel initialStep="resume" onClose={onClose} />);
+    const panel = await screen.findByRole('region', {
+      name: /tell us what you're looking for/i,
+    });
+    fireEvent.keyDown(panel, { key: 'Escape', isComposing: true });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('SetupPanel — the reading screen', () => {
+  it('announces that it is reading, rather than showing a silent skeleton', async () => {
+    bootstrap.mockReturnValue(new Promise(() => {}));
+    renderWithProviders(
+      <SetupPanel initialStep="confirm" resumeVariantId="rv_1" onClose={() => {}} />,
+    );
+    // `aria-label` on a bare <div> named nothing, so the 8–15 second parse was
+    // completely silent.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /reading your resume/i,
+    );
+  });
+
+  it('keeps a failed submit next to the button that failed', async () => {
+    confirm.mockRejectedValueOnce(new Error('offline'));
+    renderWithProviders(
+      <SetupPanel initialStep="confirm" resumeVariantId="rv_1" onClose={() => {}} />,
+    );
+    await screen.findByText('Senior Product Manager');
+    const submit = screen.getByRole('button', { name: /show me the jobs/i });
+    fireEvent.click(submit);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/did not save/i);
+    // The action bar is sticky. Rendered as its SIBLING the message lands in
+    // the panel's bottom padding — below the fold, behind the bar.
+    expect(submit.closest('footer')).toContainElement(alert);
+  });
+
+  it('falls back to step 1 when the bootstrap fails, instead of a dead end', async () => {
+    bootstrap.mockRejectedValue(new Error('boom'));
+    renderWithProviders(
+      <SetupPanel initialStep="confirm" resumeVariantId="rv_1" onClose={() => {}} />,
+    );
+    // The reading screen has a skeleton, no close control and no retry, so
+    // "Setup could not load. Try again." was displayed with nothing to try.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/try again/i);
+    expect(
+      await screen.findByRole('button', { name: /drop your resume here/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^close$/i })).toBeInTheDocument();
   });
 });

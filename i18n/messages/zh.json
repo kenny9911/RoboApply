@@ -163,9 +163,7 @@
       "close": "关闭",
       "skip": "暂时跳过",
       "skip_note": "跳过之后，你会看到所有在招职位，最新的排在前面。",
-      "skipped_banner": "正在显示所有在招职位，最新的排在前面。",
       "restore_notice": "已经从你上次停下的地方继续。",
-      "superseded_notice": "这次设置在另一个窗口继续了。刷新一下就能看到。",
       "resume_title": "添加你的简历",
       "resume_lead": "读一次就够了，之后不会再给你看你根本不会去的职位。",
       "resume_drop": "把简历拖到这里，或点击选择文件",
@@ -259,18 +257,6 @@
     "common": {
       "cancel": "取消",
       "close": "关闭"
-    },
-    "gate": {
-      "title": "先上传你的简历",
-      "subtitle": "其他一切都从你的简历读起。上传一份，职位、合适度评分和面试准备就都能用了。",
-      "cta": "上传简历",
-      "uploading": "正在读你的简历…",
-      "formats": "PDF、DOCX 或 TXT · 最大 15 MB",
-      "error": "这个文件读不出来。请重试，或者换一个文件。",
-      "error_too_large": "这个文件超过 15 MB。换一个小一点的。",
-      "error_format": "这种格式读不出来。请用 PDF、DOCX 或 TXT 文件。",
-      "error_empty": "这个文件里没有找到文字。请用带文字的 PDF，不要用扫描件。",
-      "or_build": "或者从空白开始写一份"
     },
     "create": {
       "scratch": {

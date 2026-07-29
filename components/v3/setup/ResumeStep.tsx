@@ -58,6 +58,13 @@ export const MAX_RESUME_BYTES = 15 * 1024 * 1024;
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt', '.md'];
 
+/** `.btn` is 8px of vertical padding around 13px text — about 34px tall, under
+ *  the 44×44 tap-target floor. It is an inline-flex box with centred content
+ *  already, so a `minHeight` is the whole fix. Applied here rather than in
+ *  styles/v3.css because this panel is what the ruling is about; the shared
+ *  class is used by desktop-first surfaces too. */
+const BTN_TOUCH: React.CSSProperties = { minHeight: 'var(--control-lg)' };
+
 function humanSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -122,11 +129,18 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
   // The recovery is not "try again" — the same file fails the same way — it is
   // pasting, so the textarea opens underneath the message on its own.
   useEffect(() => {
-    if (localErrorKey === 'error_empty_text') {
-      setPasteOpen(true);
-      pasteRef.current?.focus();
-    }
+    if (localErrorKey === 'error_empty_text') setPasteOpen(true);
   }, [localErrorKey]);
+
+  // Focus lands in a SEPARATE effect, and that is the whole point: calling
+  // `pasteRef.current.focus()` in the same tick as `setPasteOpen(true)` focuses
+  // a textarea that React has not mounted yet, so it silently did nothing —
+  // both from the scanned-PDF path above and from the button below. Opening a
+  // field the user is then told to type in, without putting the caret in it,
+  // is a recovery that only works with a mouse.
+  useEffect(() => {
+    if (pasteOpen) pasteRef.current?.focus();
+  }, [pasteOpen]);
 
   async function acceptFile(file: File | null) {
     if (!file || pending) return;
@@ -224,8 +238,15 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
         }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
+          {/* `data-setup-heading` + tabIndex -1: SetupPanel moves focus here on
+           *  open and on every step change, which is what announces the step to
+           *  a screen reader and stops focus falling to <body> when the card
+           *  swaps in place. */}
           <h2
+            data-setup-heading
+            tabIndex={-1}
             style={{
+              outline: 'none',
               fontSize: 'var(--fs-title)',
               fontWeight: 600,
               letterSpacing: 'var(--ls-title)',
@@ -254,8 +275,10 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
           style={{
             display: 'grid',
             placeItems: 'center',
-            width: 'var(--control-sm)',
-            height: 'var(--control-sm)',
+            // 44, not 32: this is the exit on the first screen of the product,
+            // reached with a thumb (ruling: minimum 44×44 tap target).
+            width: 'var(--control-lg)',
+            height: 'var(--control-lg)',
             borderRadius: 'var(--r-sm)',
             border: '1px solid var(--rule)',
             background: 'var(--surface)',
@@ -293,11 +316,21 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
           background: dragging ? 'var(--action-subtle)' : undefined,
         }}
       >
+        {/* Visually hidden, but `.sr-only` is a clip — not `display:none` —
+         *  so it stays focusable AND stays in the tab order. A keyboard user
+         *  therefore hit an invisible second tab stop immediately after the
+         *  drop zone and could not see where focus had gone. The zone above is
+         *  the labelled activator; the input is plumbing.
+         *  `display:none` is NOT the fix: iOS Safari refuses to open the
+         *  picker for a display:none input, which would delete the browse door
+         *  on the platform this screen is designed for. */}
         <input
           ref={fileInputRef}
           type="file"
           accept={ACCEPT_RESUME}
           className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
           onChange={(e) => {
             void acceptFile(e.target.files?.[0] ?? null);
             // Reset so re-picking the SAME file after a parse failure still
@@ -338,6 +371,13 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
         )}
       </div>
 
+      {/* The accepted-file line lives INSIDE role="button", whose children are
+       *  presentational — so the one confirmation that anything happened was
+       *  never announced. Same string, said out loud, once. */}
+      <p role="status" className="sr-only">
+        {picked ? t('resume_received', { name: picked.name, size: picked.size }) : ''}
+      </p>
+
       {shownErrorKey ? (
         <div role="alert" style={{ marginTop: 'var(--sp-3)' }}>
           <p
@@ -362,10 +402,8 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
               <button
                 type="button"
                 className="btn ghost"
-                onClick={() => {
-                  setPasteOpen(true);
-                  pasteRef.current?.focus();
-                }}
+                style={BTN_TOUCH}
+                onClick={() => setPasteOpen(true)}
               >
                 {t('error_empty_action')}
               </button>
@@ -373,6 +411,7 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
               <button
                 type="button"
                 className="btn ghost"
+                style={BTN_TOUCH}
                 onClick={() => {
                   setLocalErrorKey(null);
                   fileInputRef.current?.click();
@@ -411,6 +450,7 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
         <button
           type="button"
           className="btn ghost"
+          style={BTN_TOUCH}
           aria-expanded={pasteOpen}
           onClick={() => setPasteOpen((v) => !v)}
           disabled={pending}
@@ -421,6 +461,7 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
           <button
             type="button"
             className="btn ghost"
+            style={BTN_TOUCH}
             aria-expanded={linkedinOpen}
             onClick={() => setLinkedinOpen((v) => !v)}
             disabled={pending}
@@ -444,7 +485,7 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
           <button
             type="button"
             className="btn primary"
-            style={{ marginTop: 'var(--sp-2)' }}
+            style={{ ...BTN_TOUCH, marginTop: 'var(--sp-2)' }}
             disabled={!pasteText.trim() || pending}
             onClick={() => void submitPaste()}
           >
@@ -472,12 +513,13 @@ export function ResumeStep({ onReady, busy = false, errorKey, onClose }: Props) 
               fontFamily: 'inherit',
               fontSize: 'var(--fs-meta)',
               fontWeight: 400,
-              minHeight: 'var(--control-md)',
+              minHeight: 'var(--control-lg)',
             }}
           />
           <button
             type="button"
             className="btn ghost"
+            style={BTN_TOUCH}
             disabled={!linkedinUrl.trim() || pending}
             onClick={() => void submitLinkedIn()}
           >

@@ -163,9 +163,7 @@
       "close": "Fechar",
       "skip": "Pular por enquanto",
       "skip_note": "Se pular, você vê todas as vagas abertas, as mais novas primeiro.",
-      "skipped_banner": "Você está vendo todas as vagas abertas, as mais novas primeiro.",
       "restore_notice": "Tudo continua de onde você parou.",
-      "superseded_notice": "Esta configuração continuou em outra janela. Recarregue para vê-la.",
       "resume_title": "Adicione seu currículo",
       "resume_lead": "Uma leitura já basta para parar de mostrar vagas que você nunca aceitaria.",
       "resume_drop": "Solte seu currículo aqui, ou clique para escolher",
@@ -259,18 +257,6 @@
     "common": {
       "cancel": "Cancelar",
       "close": "Fechar"
-    },
-    "gate": {
-      "title": "Envie seu currículo para começar",
-      "subtitle": "Seu currículo é a base de todo o resto. Coloque um e as vagas, o nível de encaixe e a preparação para entrevistas passam a funcionar.",
-      "cta": "Enviar currículo",
-      "uploading": "Lendo seu currículo…",
-      "formats": "PDF, DOCX ou TXT · até 15 MB",
-      "error": "Esse arquivo não pôde ser lido. Tente de novo ou use outro arquivo.",
-      "error_too_large": "Esse arquivo passa de 15 MB. Tente um menor.",
-      "error_format": "Esse formato não pode ser lido. Use um arquivo PDF, DOCX ou TXT.",
-      "error_empty": "Nenhum texto foi encontrado nesse arquivo. Use um PDF com texto, não um digitalizado.",
-      "or_build": "Ou escreva um do zero"
     },
     "create": {
       "scratch": {

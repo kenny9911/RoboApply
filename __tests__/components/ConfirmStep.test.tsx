@@ -11,7 +11,7 @@
 //   • there is no pay question, no level picker and no "Direction" control.
 
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, within } from '@testing-library/react';
 
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { ConfirmStep } from '../../components/v3/setup/ConfirmStep';
@@ -174,6 +174,78 @@ describe('ConfirmStep', () => {
     // Weak signal from the resume itself, offered as taps rather than as an
     // open text field the thinnest resume is least able to fill.
     expect(screen.getByRole('button', { name: 'Roadmapping' })).toBeInTheDocument();
+  });
+});
+
+// The chip groups carry the whole screen, so their keyboard and screen-reader
+// behaviour is the screen's keyboard and screen-reader behaviour.
+describe('ConfirmStep — chip group access', () => {
+  /** The <section> GroupShell wraps one control in. */
+  function groupOf(el: HTMLElement): HTMLElement {
+    const section = el.closest('section');
+    if (!section) throw new Error('chip is not inside a group');
+    return section as HTMLElement;
+  }
+
+  it('keeps focus in the group after a chip is removed', () => {
+    renderStep();
+    const remove = screen.getByRole('button', { name: /remove QA Lead/i });
+    const group = groupOf(remove);
+    fireEvent.click(remove);
+    // Removing is the core interaction of a confirm screen. Left alone the
+    // button that had focus is destroyed and focus falls to <body> — after
+    // every single removal.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(group).toContainElement(document.activeElement as HTMLElement);
+    expect((document.activeElement as HTMLElement).tagName).toBe('INPUT');
+  });
+
+  it('does not add a chip on the Enter that commits an IME candidate', () => {
+    const { dispatch } = renderStep();
+    const group = groupOf(screen.getByRole('button', { name: /remove QA Lead/i }));
+    const input = within(group).getByPlaceholderText(/type, then press enter/i);
+
+    fireEvent.change(input, { target: { value: 'データアナリスト' } });
+    // zh, zh-TW, ja and ko all type through an IME. Without the guard the first
+    // Enter of every entry adds a half-composed chip.
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(dispatch).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'add',
+      field: 'targetRoles',
+      value: 'データアナリスト',
+    });
+  });
+
+  it('names each control and the evidence that seeded it', () => {
+    renderStep();
+    const group = screen.getByRole('region', { name: 'Job titles you want' });
+    // A screen-reader user arriving by Tab never passes the heading, so the
+    // provenance marker and the why-line have to be the group's description
+    // rather than text that merely sits nearby.
+    expect(group).toHaveAccessibleDescription(/Your last jobs were/);
+    expect(group).toHaveAccessibleDescription(/From your resume/);
+  });
+
+  it('separates suggestions from applied values for a screen reader', () => {
+    renderStep();
+    // Otherwise "San Francisco, button" is indistinguishable from a chip that
+    // is already in the search.
+    const suggestions = screen.getAllByRole('group', { name: /or pick one/i });
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(
+      within(suggestions[0]).getAllByRole('button').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('exposes the applied chips as a countable set', () => {
+    renderStep();
+    const lists = screen.getAllByRole('list');
+    const titles = lists.find((l) => within(l).queryByText('QA Lead'));
+    expect(titles).toBeDefined();
+    expect(within(titles as HTMLElement).getAllByRole('listitem')).toHaveLength(2);
   });
 });
 

@@ -163,9 +163,7 @@
       "close": "Schließen",
       "skip": "Erst mal überspringen",
       "skip_note": "Ohne Angaben siehst du alle offenen Jobs, die neuesten zuerst.",
-      "skipped_banner": "Du siehst alle offenen Jobs, die neuesten zuerst.",
       "restore_notice": "Es geht da weiter, wo du aufgehört hast.",
-      "superseded_notice": "Diese Einrichtung lief in einem anderen Fenster weiter. Lade neu, um sie zu sehen.",
       "resume_title": "Lebenslauf hinzufügen",
       "resume_lead": "Einmal lesen reicht, damit du keine Jobs mehr siehst, die du nie nehmen würdest.",
       "resume_drop": "Zieh deinen Lebenslauf hierher oder klick zum Auswählen",
@@ -259,18 +257,6 @@
     "common": {
       "cancel": "Abbrechen",
       "close": "Schließen"
-    },
-    "gate": {
-      "title": "Füg deinen Lebenslauf hinzu, um loszulegen",
-      "subtitle": "Dein Lebenslauf ist die Grundlage für alles andere. Sobald einer da ist, funktionieren Jobs, Bewertungen und Gesprächsvorbereitung.",
-      "cta": "Lebenslauf hochladen",
-      "uploading": "Dein Lebenslauf wird gelesen…",
-      "formats": "PDF, DOCX oder TXT · bis 15 MB",
-      "error": "Diese Datei konnte nicht gelesen werden. Versuch es erneut oder nimm eine andere Datei.",
-      "error_too_large": "Diese Datei ist größer als 15 MB. Nimm eine kleinere.",
-      "error_format": "Dieses Format kann nicht gelesen werden. Nimm eine PDF-, DOCX- oder TXT-Datei.",
-      "error_empty": "In dieser Datei wurde kein Text gefunden. Nimm ein PDF mit echtem Text, keinen Scan.",
-      "or_build": "Oder schreib einen von Grund auf"
     },
     "create": {
       "scratch": {

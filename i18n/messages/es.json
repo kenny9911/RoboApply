@@ -163,9 +163,7 @@
       "close": "Cerrar",
       "skip": "Saltar por ahora",
       "skip_note": "Si lo saltas, verás todos los empleos abiertos, los más nuevos primero.",
-      "skipped_banner": "Estás viendo todos los empleos abiertos, los más nuevos primero.",
       "restore_notice": "Continúa donde lo dejaste.",
-      "superseded_notice": "Esta configuración siguió en otra ventana. Recarga para verla.",
       "resume_title": "Añade tu currículum",
       "resume_lead": "Con una lectura basta para dejar de mostrarte empleos que nunca aceptarías.",
       "resume_drop": "Suelta aquí tu currículum o haz clic para buscarlo",
@@ -259,18 +257,6 @@
     "common": {
       "cancel": "Cancelar",
       "close": "Cerrar"
-    },
-    "gate": {
-      "title": "Sube tu currículum para empezar",
-      "subtitle": "Tu currículum es lo que lee todo lo demás. Añade uno y ya funcionan los empleos, el nivel de encaje y la preparación de entrevistas.",
-      "cta": "Subir currículum",
-      "uploading": "Leyendo tu currículum…",
-      "formats": "PDF, DOCX o TXT · hasta 15 MB",
-      "error": "Ese archivo no se pudo leer. Inténtalo otra vez o prueba con otro archivo.",
-      "error_too_large": "Ese archivo pasa de 15 MB. Prueba con uno más pequeño.",
-      "error_format": "Ese formato no se puede leer. Usa un archivo PDF, DOCX o TXT.",
-      "error_empty": "No se encontró texto en ese archivo. Usa un PDF con texto, no un escaneo.",
-      "or_build": "O escribe uno desde cero"
     },
     "create": {
       "scratch": {

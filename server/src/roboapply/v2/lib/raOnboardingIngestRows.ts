@@ -104,8 +104,47 @@ export function estimateYears(experience: Array<Record<string, unknown>>): numbe
   return Math.min(Math.round(total), 50);
 }
 
+/**
+ * Strip INLINE markdown from a row value.
+ *
+ * These rows are read back to the user as "here is what your resume says", and
+ * that screen is the entire trust device for the prefilled setup step — it is
+ * what earns the right to propose values instead of asking for them. Markdown
+ * is the native shape of a résumé here (`resumeMarkdown` is a first-class
+ * column, and the paste door produces markdown), so a summary line arrives as
+ *
+ *     *AI Software Engineer · alex@example.com · github.com/alexchen*
+ *
+ * and rendered raw it shows the asterisks. A screen quoting someone's own
+ * résumé back at them with stray punctuation reads as broken parsing, which is
+ * the one impression it cannot afford.
+ *
+ * Block syntax is already handled by the callers (they match headings and strip
+ * the marker). This only unwraps inline emphasis, code and links.
+ */
+function stripInlineMarkdown(value: string): string {
+  return (
+    value
+      // [text](url) → text. Runs first so emphasis inside a label is caught.
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      // ***x*** / **x** / *x* and the _ forms. Non-greedy, and the delimiter
+      // must hug non-space so "5 * 3" and snake_case_names survive.
+      .replace(/(\*{1,3})(?=\S)([\s\S]*?\S)\1/g, '$2')
+      // Underscores need word boundaries on BOTH sides. CommonMark treats
+      // intraword `_` as literal precisely because identifiers use it, and
+      // without the boundary check `snake_case_configs` — which appears in real
+      // engineering résumés — collapses to `snakecaseconfigs`.
+      .replace(/(?<![A-Za-z0-9])(_{1,3})(?=\S)([\s\S]*?\S)\1(?![A-Za-z0-9])/g, '$2')
+      // `code`
+      .replace(/`([^`]+)`/g, '$1')
+      // Leading list bullets and blockquote markers on a quoted line.
+      .replace(/^\s*(?:[-*+]\s+|>\s*)/, '')
+      .trim()
+  );
+}
+
 function row(kind: IngestRowKind, label: string, value: string): IngestRow {
-  return { id: kind, kind, label, value: clipValue(value) };
+  return { id: kind, kind, label, value: clipValue(stripInlineMarkdown(value)) };
 }
 
 function rowsFromParsedData(

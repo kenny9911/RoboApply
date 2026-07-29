@@ -163,3 +163,50 @@ describe('ResumeStep', () => {
     expect(screen.getByText(/never shown to an employer/i)).toBeInTheDocument();
   });
 });
+
+describe('ResumeStep — keyboard and screen reader', () => {
+  it('keeps the hidden file input out of the tab order', () => {
+    renderStep();
+    const input = document.querySelector('input[type="file"]');
+    // `.sr-only` is a clip, not display:none — the input stayed focusable, so a
+    // keyboard user hit an invisible tab stop right after the drop zone and
+    // could not see where focus had gone. display:none is not the fix either:
+    // iOS Safari will not open the picker for one.
+    expect(input).toHaveAttribute('tabindex', '-1');
+    expect(input).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('puts the caret in the paste field it opens for a scanned PDF', async () => {
+    uploadMutate.mockRejectedValueOnce(
+      Object.assign(new Error('empty'), { payload: { code: 'empty_text' } }),
+    );
+    renderStep();
+    fireEvent.drop(screen.getByRole('button', { name: /drop your resume here/i }), {
+      dataTransfer: { files: [pdf('scan.pdf')] },
+    });
+
+    const textarea = await screen.findByLabelText(/paste the text instead/i);
+    // Focusing in the same tick as the state change focused a textarea React
+    // had not mounted yet, so the recovery only ever worked with a mouse.
+    await waitFor(() => expect(document.activeElement).toBe(textarea));
+  });
+
+  it('focuses the paste field when the door is opened by tap too', async () => {
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: /paste the text instead/i }));
+    const textarea = await screen.findByLabelText(/paste the text instead/i);
+    await waitFor(() => expect(document.activeElement).toBe(textarea));
+  });
+
+  it('announces that the file was accepted', async () => {
+    renderStep();
+    fireEvent.drop(screen.getByRole('button', { name: /drop your resume here/i }), {
+      dataTransfer: { files: [pdf('cv.pdf')] },
+    });
+    // The visible confirmation sits inside role="button", whose children are
+    // presentational — so nothing was announced at all.
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(/cv\.pdf/),
+    );
+  });
+});

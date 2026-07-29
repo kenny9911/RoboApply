@@ -3001,6 +3001,23 @@ details.qb-item[open] .qb-chevron { transform: rotate(180deg); }
    * hand-tuned overrides used to set. */
   .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
   .app > .side { display: none; }
+
+  /* Hand the scroll back to the document on phones.
+   *
+   * On desktop `.main` is the scrollport: `.app` is a 100vh grid and `.main`
+   * carries `overflow-y: auto`, so the rail stays put while the content
+   * scrolls. Here `.app` becomes `height: auto`, so `.main` is sized by its
+   * own content and NEVER scrolls — but `overflow-y: auto` still makes it a
+   * scroll CONTAINER, and that is the container `position: sticky` resolves
+   * against. The result is that anything sticky inside `.main` silently does
+   * nothing on exactly the viewport where sticky matters most: the setup
+   * panel's submit bar sat about three screen-heights below six chip groups,
+   * and the topbar did not follow either.
+   *
+   * `visible` removes the dead scrollport so both resolve against the
+   * viewport, which is what they were written for. */
+  .main { overflow-y: visible; }
+
   .main-inner, .topbar { padding-left: var(--sp-5); padding-right: var(--sp-5); }
   .match-top { grid-template-columns: 44px 1fr; }
   .match-right { grid-column: 2; flex-direction: row; align-items: center; }

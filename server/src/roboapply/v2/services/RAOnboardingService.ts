@@ -35,14 +35,18 @@
 //     thing being refused is the thing that makes the product work at all.
 //   - `aggressiveness` — dead since ruling R1 removed auto-apply.
 //
-// HANDOFF (deliberately NOT done here): `RAOnboardingRecommendService` no
-// longer has a caller in setup, but it still exports `evaluateCachedScore` and
-// `passesPrefilter` into `RACrossBankSearchService`, and it imports
-// `buildFallbackPlan` from `RAOnboardingSearchPlannerAgent`. Deleting it needs
-// that split (spec §6.5, `RAJobIngestService`) and is owned elsewhere. Its
-// `runRound` / `rehydrateCards` / `toCard` are now orphaned — say so out loud
-// rather than let them rot quietly, which is how nine orphaned components
-// happened last time.
+// HANDOFF (now done): the orphans this file flagged are gone.
+// `RAOnboardingRecommendService.runRound` / `rehydrateCards` / `toCard` /
+// `scoreRows` / `upsertExternalJob` / `composeWhyMatched` had no caller once
+// setup stopped running a recommendation round, and were deleted along with
+// `RAOnboardingSearchPlannerAgent` (its only importer). What is left under
+// that filename is the two pure functions other surfaces still import:
+// `evaluateCachedScore` (RACrossBankSearchService) and `passesPrefilter`.
+// Consequence to know about: the external job providers
+// (`lib/raJobProviders.ts` and the JSearch / Fantastic Jobs clients under it)
+// lost their last production caller with `runRound`. They are kept, with their
+// tests, as the seam a future `RAJobIngestService` (spec §6.5) plugs into —
+// but nothing in the running app reaches them today.
 
 import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';

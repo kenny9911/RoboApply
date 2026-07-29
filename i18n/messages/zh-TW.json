@@ -163,9 +163,7 @@
       "close": "關閉",
       "skip": "先略過",
       "skip_note": "略過之後，你會看到所有開放中的職缺，最新的排在前面。",
-      "skipped_banner": "正在顯示所有開放中的職缺，最新的排在前面。",
       "restore_notice": "已經從你上次停下的地方繼續。",
-      "superseded_notice": "這次設定在另一個視窗繼續了。重新整理就能看到。",
       "resume_title": "新增你的履歷",
       "resume_lead": "讀一次就夠了，之後不會再給你看你根本不會去的職缺。",
       "resume_drop": "把履歷拖到這裡，或點一下選擇檔案",
@@ -259,18 +257,6 @@
     "common": {
       "cancel": "取消",
       "close": "關閉"
-    },
-    "gate": {
-      "title": "先上傳你的履歷",
-      "subtitle": "其他一切都從你的履歷讀起。上傳一份，職缺、適合度分數和面試準備就都能用了。",
-      "cta": "上傳履歷",
-      "uploading": "正在讀你的履歷…",
-      "formats": "PDF、DOCX 或 TXT · 最大 15 MB",
-      "error": "這個檔案讀不出來。請重試，或者換一個檔案。",
-      "error_too_large": "這個檔案超過 15 MB。換一個小一點的。",
-      "error_format": "這種格式讀不出來。請用 PDF、DOCX 或 TXT 檔案。",
-      "error_empty": "這個檔案裡找不到文字。請用有文字的 PDF，不要用掃描檔。",
-      "or_build": "或者從空白開始寫一份"
     },
     "create": {
       "scratch": {

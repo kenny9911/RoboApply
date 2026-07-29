@@ -163,9 +163,7 @@
       "close": "Close",
       "skip": "Skip for now",
       "skip_note": "Skipping shows every open job, newest first.",
-      "skipped_banner": "Showing every open job, newest first.",
       "restore_notice": "Picked up where you left off.",
-      "superseded_notice": "This setup continued in another window. Reload to see it.",
       "resume_title": "Add your resume",
       "resume_lead": "One read is enough to stop showing you jobs you would never take.",
       "resume_drop": "Drop your resume here, or click to browse",
@@ -259,18 +257,6 @@
     "common": {
       "cancel": "Cancel",
       "close": "Close"
-    },
-    "gate": {
-      "title": "Add your resume to get started",
-      "subtitle": "Your resume is what everything else reads. Add one, and jobs, fit scores, and interview prep all start working.",
-      "cta": "Upload resume",
-      "uploading": "Reading your resume…",
-      "formats": "PDF, DOCX, or TXT · up to 15 MB",
-      "error": "That file could not be read. Try again, or try a different file.",
-      "error_too_large": "That file is over 15 MB. Try a smaller file.",
-      "error_format": "That format cannot be read. Use a PDF, DOCX, or TXT file.",
-      "error_empty": "No text was found in that file. Try a text-based PDF, not a scan.",
-      "or_build": "Or write one from scratch"
     },
     "create": {
       "scratch": {

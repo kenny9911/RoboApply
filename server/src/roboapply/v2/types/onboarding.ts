@@ -265,98 +265,10 @@ export interface OnboardingResumeSeedOutput {
   fieldConfidence: Record<string, number>;
 }
 
-// ─── Planner I/O (still used by RAOnboardingRecommendService) ──────────
-//
-// The recommendation round no longer runs during setup, but
-// RAOnboardingRecommendService still exports `evaluateCachedScore` /
-// `passesPrefilter` into RACrossBankSearchService, and it imports
-// `buildFallbackPlan` from RAOnboardingSearchPlannerAgent — so these three
-// types stay until that service is split (see the handoff note in
-// RAOnboardingService.ts).
-
-export interface OnboardingPlannerInput {
-  candidateHeadline: string;
-  draft: OnboardingDraftPreferences;
-  /** ISO-3166 alpha-2, lowercase (locale market default when unstated). */
-  marketCountry: string;
-}
-
-export interface OnboardingInternalSearchPlan {
-  q: string;
-  workType?: OnboardingWorkMode;
-  employmentType?: OnboardingEmploymentType;
-  location?: string;
-  /**
-   * Stated salary floor (absolute, draft currency). MUST NOT be passed into
-   * `RAJobIndexService.search()` — its `salaryMax >= salaryMin` filter is
-   * currency-blind and excludes null-salary rows. Salary is enforced only in
-   * the deterministic post-fetch prefilter.
-   */
-  salaryMin?: number;
-}
-
-export interface OnboardingExternalSearchPlan {
-  /** Free-text query, e.g. "senior backend engineer in taipei". */
-  query: string;
-  /** ISO-3166 alpha-2, lowercase — JSearch `country`. */
-  country: string;
-  /** JSearch `language`, e.g. 'zh-tw'. */
-  language?: string;
-  /** JSearch `work_from_home`. */
-  workFromHome?: boolean;
-  /** Comma-separated JSearch enums — `employment_types`. */
-  employmentTypes?: string;
-  /** JSearch `date_posted`. */
-  datePosted?: 'all' | 'today' | '3days' | 'week' | 'month';
-}
-
-export interface OnboardingSearchPlan {
-  internal: OnboardingInternalSearchPlan;
-  external: OnboardingExternalSearchPlan;
-}
-
-/**
- * A scored job card. Nothing in setup renders one any more (D10 — the flow
- * never shows what /jobs shows one second later); the type survives because
- * RAOnboardingRecommendService's card mappers are still compiled for the
- * cross-bank surface.
- */
-export interface OnboardingJobCard {
-  id: string;
-  title: string;
-  companyName: string;
-  companyLogoUrl: string | null;
-  location: string | null;
-  workType: OnboardingWorkMode;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  salaryCurrency: string | null;
-  postedAt: string | null;
-  isBookmarked: boolean;
-  matchScoreCached: number | null;
-  matchScore: number;
-  whyMatched: string;
-  source: 'internal' | 'jsearch' | 'activejobs' | 'linkedin' | 'robohire' | 'gohire';
-  sourcePublisher?: string;
-  applyUrl?: string;
-  isExternal: boolean;
-}
-
-/** Machine keys for the recommend-round status shimmer (cross-bank surface). */
-export type OnboardingStatusKey =
-  | 'searching_internal'
-  | 'searching_external'
-  | 'scoring';
-
-/**
- * Progress events a recommendation round can emit to its caller. This used to
- * be the full NDJSON union for `POST /onboarding/chat/stream`; that route and
- * its text/chips/quick-reply/transcript events are deleted. What remains is
- * the three shapes RAOnboardingRecommendService still writes, kept under the
- * historical name so that service compiles untouched while it waits to be
- * split into RAJobIngestService (see the handoff note in RAOnboardingService).
- */
-export type RAOnboardingStreamEvent =
-  | { type: 'status'; key: OnboardingStatusKey }
-  | { type: 'job-cards'; jobs: OnboardingJobCard[] }
-  | { type: 'error'; code: string; message: string; data?: unknown };
+// The search-planner I/O (`OnboardingPlannerInput`,
+// `OnboardingInternalSearchPlan`, `OnboardingExternalSearchPlan`,
+// `OnboardingSearchPlan`), the recommend-round card (`OnboardingJobCard`) and
+// its progress union (`OnboardingStatusKey`, `RAOnboardingStreamEvent`) are
+// deleted with their only referents — RAOnboardingSearchPlannerAgent and
+// RAOnboardingRecommendService.runRound. Setup never renders a job card (D10);
+// /jobs does, one second later, off its own DTOs in types/crossBank.ts.
