@@ -1,11 +1,25 @@
 'use client';
 
-// IngestRecap — the "what I picked up" panel at the top of the onboarding
-// chat. Renders the REAL ingest rows from the bootstrap response (built
-// server-side from the parsed resume) with a staggered reveal animation.
-// There is NO fake-data state in this component: while the bootstrap is in
-// flight (`rows === null`) it shows a skeleton, and once rows arrive they
-// reveal one at a time — instantly when the user prefers reduced motion.
+// IngestRecap — "What your resume says".
+//
+// Moved here from components/v3/onboarding/ with the panel rewrite. This is
+// NOT a spinner and it is not decoration: it is the evidence that earns the
+// prefill on step 2. A user who watched their own job titles, employers and
+// education appear one line at a time has already been told why the next
+// screen knows things about them, so the prefilled chips read as a reading
+// rather than a guess.
+//
+// The rows are built server-side from the parsed resume (`buildIngestRows`) —
+// there is no fake-data state. While the bootstrap is in flight (`rows ===
+// null`) it shows a skeleton; once rows arrive they reveal one at a time, and
+// instantly when the reader prefers reduced motion.
+//
+// COPY: the two status strings moved with the component. This block used to
+// call `reading_resume` and `upload_reading`; the rewritten `jobs.setup` block
+// does not carry either key, and next-intl renders the literal dotted path
+// rather than throwing, so leaving them would have shipped the string
+// "jobs.setup.upload_reading" to production in all nine locales. Both call
+// sites now read `reading_title`.
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -73,7 +87,7 @@ export function IngestRecap({ rows }: Props) {
 
       {rows === null ? (
         // Skeleton while the bootstrap is in flight.
-        <div aria-label={t('reading_resume')}>
+        <div aria-label={t('reading_title')}>
           {[0, 1, 2].map((i) => (
             <div key={i} className="ingest-row pending">
               <div className="ic">
@@ -83,7 +97,7 @@ export function IngestRecap({ rows }: Props) {
                 style={{
                   height: 10,
                   width: `${52 - i * 10}%`,
-                  borderRadius: 4,
+                  borderRadius: 'var(--r-sm)',
                   background: 'var(--surface-3)',
                 }}
               />
@@ -110,7 +124,7 @@ export function IngestRecap({ rows }: Props) {
               <div className="ic">
                 <div className="spinner" />
               </div>
-              <div>{t('upload_reading')}</div>
+              <div>{t('reading_title')}</div>
             </div>
           ) : null}
         </>
