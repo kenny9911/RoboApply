@@ -36,10 +36,27 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
   'claude-haiku-4-5': { input: 1.00, output: 5.00 },
 
   // ── OpenAI (OpenRouter + direct) ────────────────────────────────────
+  // The 5.6 line is the current default (LLM_MODEL=openrouter/openai/gpt-5.6-luna).
+  // Both slug forms are listed because the two routing paths hand us different
+  // ids: OpenRouter keeps `openai/…`, while the OpenAI-direct path strips the
+  // provider prefix in LLMService.normalizeModel() before the call is billed.
+  // luna / luna-pro share one price point, as do sol / sol-pro.
+  'openai/gpt-5.6-sol': { input: 5.00, output: 30.00 },
+  'openai/gpt-5.6-sol-pro': { input: 5.00, output: 30.00 },
+  'openai/gpt-5.6-terra': { input: 1.00, output: 6.00 },
+  'openai/gpt-5.6-terra-pro': { input: 2.50, output: 15.00 },
+  'openai/gpt-5.6-luna': { input: 0.20, output: 1.20 },
+  'openai/gpt-5.6-luna-pro': { input: 0.20, output: 1.20 },
   'openai/gpt-5.5': { input: 5.00, output: 30.00 },
   'openai/gpt-5.4': { input: 2.50, output: 15.00 },
   'openai/gpt-5.4-mini': { input: 0.75, output: 4.50 },
   'openai/gpt-oss-120b': { input: 0.039, output: 0.19 },
+  'gpt-5.6-sol': { input: 5.00, output: 30.00 },
+  'gpt-5.6-sol-pro': { input: 5.00, output: 30.00 },
+  'gpt-5.6-terra': { input: 1.00, output: 6.00 },
+  'gpt-5.6-terra-pro': { input: 2.50, output: 15.00 },
+  'gpt-5.6-luna': { input: 0.20, output: 1.20 },
+  'gpt-5.6-luna-pro': { input: 0.20, output: 1.20 },
   'gpt-5.5': { input: 5.00, output: 30.00 },
   'gpt-5.4': { input: 2.50, output: 15.00 },
   'gpt-5.4-mini': { input: 0.75, output: 4.50 },
