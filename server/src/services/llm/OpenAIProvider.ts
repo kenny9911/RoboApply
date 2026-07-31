@@ -2,6 +2,11 @@ import OpenAI from 'openai';
 import { Message, MessageContent, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '../../types/index.js';
 import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions } from './providerTuning.js';
 import { shouldUseJsonObject } from './jsonMode.js';
+import {
+  OPENAI_STYLE_EFFORTS,
+  modelSupportsReasoningEffort,
+  resolveReasoningEffort,
+} from './reasoningEffort.js';
 
 function sanitizeOpenAIText(value: string): string {
   let normalized = '';
@@ -102,6 +107,17 @@ export class OpenAIProvider implements LLMProvider {
       // `max_completion_tokens` is accepted by current OpenAI reasoning models and
       // also works with standard chat-completions usage.
       requestBody.max_completion_tokens = options.maxTokens;
+    }
+
+    // Reasoning-effort dial (admin tuning → LLM_REASONING_EFFORT). Gated on the
+    // model: only the GPT-5+ / o-series reasoning families accept the field,
+    // and OpenAI 400s when it is sent to anything else. See reasoningEffort.ts.
+    if (modelSupportsReasoningEffort(model)) {
+      const effort = resolveReasoningEffort({
+        tuned: this.extra?.reasoningEffort,
+        allow: OPENAI_STYLE_EFFORTS,
+      });
+      if (effort) requestBody.reasoning_effort = effort;
     }
 
     // API-level JSON mode. Guarded so we only send it when the prompt mentions

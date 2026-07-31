@@ -22,6 +22,7 @@ import { prisma } from '../prisma.js';
 import { encryptField, decryptField } from '../crypto.js';
 import { logger } from '../../services/LoggerService.js';
 import { isDbConfigDisabled } from './llmStackConfigSchema.js';
+import { parseReasoningEffort, type ReasoningEffort } from '../../services/llm/reasoningEffort.js';
 import {
   BYOK_PROVIDERS,
   baseUrlRequirement,
@@ -40,8 +41,9 @@ export interface ProviderTuning {
   timeoutMs?: number;
   /** DeepSeek thinking mode. */
   thinkingMode?: 'enabled' | 'disabled';
-  /** DeepSeek reasoning effort. */
-  reasoningEffort?: 'high' | 'max';
+  /** Reasoning effort for models that expose one; each provider filters it to
+   *  its own ladder (see services/llm/reasoningEffort.ts). */
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface ResolvedProviderCredential {
@@ -74,8 +76,12 @@ function parseEnvThinking(): 'enabled' | 'disabled' | undefined {
   return undefined;
 }
 
-function parseEnvEffort(): 'high' | 'max' | undefined {
-  const e = (process.env.DEEPSEEK_REASONING_EFFORT || '').trim().toLowerCase();
+// DeepSeek's own effort var. The global LLM_REASONING_EFFORT is NOT read here —
+// it applies to every provider, so DeepSeekProvider/OpenAI/OpenRouter resolve it
+// themselves as the last tier (see services/llm/reasoningEffort.ts). Keeping it
+// out of the credential keeps this resolver "what the DeepSeek key configures".
+function parseEnvEffort(): ReasoningEffort | undefined {
+  const e = parseReasoningEffort(process.env.DEEPSEEK_REASONING_EFFORT);
   return e === 'high' || e === 'max' ? e : undefined;
 }
 

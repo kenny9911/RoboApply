@@ -1,6 +1,11 @@
 // Semantic resume labels (re-exported from semanticLabels.ts)
 export * from './semanticLabels.js';
 
+// Type-only — services/llm/reasoningEffort.ts is a dependency-free leaf that
+// owns the effort ladder, so importing it here adds no runtime edge.
+import type { ReasoningEffort } from '../services/llm/reasoningEffort.js';
+export type { ReasoningEffort };
+
 // LLM Types
 export interface TextContentPart {
   type: 'text';
@@ -87,7 +92,12 @@ export interface ProviderExtra {
   proxyKey?: string;
   timeoutMs?: number;
   thinkingMode?: 'enabled' | 'disabled'; // deepseek
-  reasoningEffort?: 'high' | 'max'; // deepseek
+  // Reasoning-effort dial for the models that expose one (OpenAI/OpenRouter:
+  // minimal|low|medium|high; DeepSeek: high|max). Providers filter it to what
+  // their own API accepts and drop it otherwise — see
+  // services/llm/reasoningEffort.ts, which also owns the LLM_REASONING_EFFORT
+  // global fallback each provider applies when this is unset.
+  reasoningEffort?: ReasoningEffort;
 }
 
 // Resume Types - Expanded to preserve all content

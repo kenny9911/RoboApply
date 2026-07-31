@@ -14,7 +14,7 @@ import {
   type ByokProvider,
   type ResolvedByok,
 } from '../../lib/byokService.js';
-import { resolveProviderCredential } from '../../lib/llm/systemCredentials.js';
+import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/systemCredentials.js';
 import { getProviderSetting, getDefaultModel, getFallbackModelSetting } from '../../lib/llm/llmModels.js';
 import { isTransientLLMError } from './withRetry.js';
 import type { ProviderExtra } from '../../types/index.js';
@@ -195,7 +195,7 @@ export class LLMService {
   /** Build the per-construction ProviderExtra (base URL + proxy key + tuning)
    *  from a resolved credential, omitting undefined fields so providers fall
    *  back to their own env reads when nothing was configured. */
-  private buildExtra(tuning: { proxyKey?: string; timeoutMs?: number; thinkingMode?: 'enabled' | 'disabled'; reasoningEffort?: 'high' | 'max' }, baseUrl?: string): ProviderExtra {
+  private buildExtra(tuning: ProviderTuning, baseUrl?: string): ProviderExtra {
     return {
       ...(baseUrl ? { baseUrl } : {}),
       ...(tuning.proxyKey ? { proxyKey: tuning.proxyKey } : {}),

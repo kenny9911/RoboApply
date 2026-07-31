@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { Message, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '../../types/index.js';
 import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions } from './providerTuning.js';
 import { shouldUseJsonObject } from './jsonMode.js';
+import { DEEPSEEK_EFFORTS, resolveReasoningEffort, type ReasoningEffort } from './reasoningEffort.js';
 
 // DeepSeek's API is OpenAI-compatible. Two production model families as of 2026:
 //   deepseek-v4-pro    — reasoning-first, thinking mode always on
@@ -37,7 +38,7 @@ export class DeepSeekProvider implements LLMProvider {
   private defaultModel: string;
   // DB-resolved tuning (thinking mode / reasoning effort); each falls back to env.
   private readonly tunedThinkingMode?: 'enabled' | 'disabled';
-  private readonly tunedReasoningEffort?: 'high' | 'max';
+  private readonly tunedReasoningEffort?: ReasoningEffort;
   // Retained for the model-aware per-request timeout (see chat()).
   private readonly extra?: ProviderExtra;
 
@@ -101,8 +102,15 @@ export class DeepSeekProvider implements LLMProvider {
       // In thinking mode, DeepSeek silently ignores temperature/top_p/presence/frequency
       // penalties. Elide them to keep the request shape clean.
       params.thinking = { type: 'enabled' };
-      const effort = (this.tunedReasoningEffort || process.env.DEEPSEEK_REASONING_EFFORT || '').trim().toLowerCase();
-      if (effort === 'high' || effort === 'max') {
+      // DeepSeek's ladder is high|max only — a global LLM_REASONING_EFFORT of
+      // minimal/low/medium is therefore ignored here rather than sent and
+      // rejected. DEEPSEEK_REASONING_EFFORT still wins over the global dial.
+      const effort = resolveReasoningEffort({
+        tuned: this.tunedReasoningEffort,
+        envVars: ['DEEPSEEK_REASONING_EFFORT'],
+        allow: DEEPSEEK_EFFORTS,
+      });
+      if (effort) {
         params.reasoning_effort = effort;
       }
     } else {
