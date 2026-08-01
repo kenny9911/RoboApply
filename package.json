@@ -8,8 +8,9 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "concurrently --kill-others --kill-signal SIGINT \"npm run dev:server\" \"npm run dev:web\" \"./scripts/dev-interview-agent.sh\"",
+    "dev": "concurrently --kill-others --kill-signal SIGINT \"npm run dev:server\" \"npm run dev:web:after-api\" \"./scripts/dev-interview-agent.sh\"",
     "dev:web": "next dev -p 3611",
+    "dev:web:after-api": "tsx scripts/dev-web-after-api.ts",
     "dev:server": "tsx watch server/src/app.ts",
     "dev:interview-agent": "npm --prefix interview-agent run dev",
     "build": "prisma generate && npm run build:server && next build",
