@@ -1,6 +1,7 @@
 import pdf from 'pdf-parse';
 import { createRequire } from 'module';
 import { spawn } from 'child_process';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { llmService } from './llm/LLMService.js';
 import { GoogleProvider } from './llm/GoogleProvider.js';
 import { withLLMRetry } from './llm/withRetry.js';
@@ -11,6 +12,18 @@ import { resolveProviderCredential } from '../lib/llm/systemCredentials.js';
 import type { Message, MessageContent, ProviderExtra } from '../types/index.js';
 
 const PDF_LLM_MAX_TOKENS = 24000;
+
+/**
+ * Long edge, in pixels, of a PNG — read straight from the IHDR chunk so sizing
+ * a rasterized page costs no decode. Layout is fixed by the spec: 8-byte
+ * signature, 4-byte length, "IHDR", then width and height as big-endian uint32.
+ * Returns 0 for anything that is not a PNG.
+ */
+function pngLongEdge(png: Buffer): number {
+  if (png.length < 24 || png.readUInt32BE(0) !== 0x89504e47) return 0;
+  if (png.toString('latin1', 12, 16) !== 'IHDR') return 0;
+  return Math.max(png.readUInt32BE(16), png.readUInt32BE(20));
+}
 
 // Silence pdf.js CFF/Type2 font-hinting warnings ("Warning: Not enough
 // parameters for hstem; actual: 0, expected: 2") that flood the logs when a
@@ -43,8 +56,28 @@ export class PDFService {
    * string has been scattered across the text by pdftotext's layout engine.
    * When true, extractText() skips the early-return on quality-pass and forces
    * the LLM vision path, which handles watermarked PDFs much better.
+   *
+   * PER-REQUEST, deliberately. This used to be a plain instance field on a
+   * module singleton, reset at the top of every extractText() — so two uploads
+   * in flight at once (routine: one observed log had two ~50s ingests
+   * overlapping by 22s) raced on one boolean. Upload B could reset the flag
+   * while A's pdftotext was still running, or inherit A's watermark verdict and
+   * burn a needless vision call on a clean PDF. AsyncLocalStorage keeps the
+   * verdict inside the request that computed it, and it propagates through the
+   * child-process callbacks where the flag is actually set.
    */
-  private _watermarkScatterDetected = false;
+  private readonly scatterStore = new AsyncLocalStorage<{ detected: boolean }>();
+
+  /** Record a watermark-scatter verdict for the in-flight extraction. */
+  private markWatermarkScatter(): void {
+    const store = this.scatterStore.getStore();
+    if (store) store.detected = true;
+  }
+
+  /** Read the in-flight extraction's watermark-scatter verdict. */
+  private get watermarkScatterDetected(): boolean {
+    return this.scatterStore.getStore()?.detected ?? false;
+  }
 
   /** Safe multimodal model used when the resolved vision model is text-only. */
   private static readonly SAFE_VISION_FALLBACK = 'google/gemini-3-flash-preview';
@@ -549,7 +582,7 @@ export class PDFService {
             return t.length <= 3 && /^[A-Za-z0-9+/=_~-]+$/.test(t);
           }).length;
           if (nonEmptyLines.length > 20 && fragmentCount / nonEmptyLines.length > 0.25) {
-            this._watermarkScatterDetected = true;
+            this.markWatermarkScatter();
             logger.info('PDF_PDFTOTEXT', `Watermark scatter detected: ${fragmentCount}/${nonEmptyLines.length} fragment lines (${(fragmentCount / nonEmptyLines.length * 100).toFixed(0)}%)`, {}, requestId);
           }
           // Same signal for CJK watermarks: when 3+ lines contain trigger
@@ -562,7 +595,7 @@ export class PDFService {
             PDFService.CJK_WATERMARK_TRIGGERS.test(l)
           ).length;
           if (cjkWatermarkLineCount >= 3) {
-            this._watermarkScatterDetected = true;
+            this.markWatermarkScatter();
             logger.info('PDF_PDFTOTEXT', `CJK watermark scatter detected: ${cjkWatermarkLineCount} lines contain trigger phrases`, {}, requestId);
           }
         }
@@ -761,9 +794,27 @@ export class PDFService {
   /**
    * Detect if extracted text is garbled (poor extraction quality).
    */
-  isExtractionQualityGood(text: string, requestId?: string): boolean {
+  isExtractionQualityGood(text: string, requestId?: string, numPages = 1): boolean {
     if (!text || text.length < 20) {
       logger.info('PDF_QUALITY', `Quality check FAIL: text too short (${text?.length ?? 0} chars)`, {}, requestId);
+      return false;
+    }
+
+    // Density floor. This heuristic was written to catch GARBLED text (bad CJK
+    // encodings) and had no notion of ABSENT text, so an image-only scan whose
+    // only text layer was a 52-char ASCII watermark scored a clean PASS: the
+    // watermark is 96% Latin, which skips every CJK check below, and carries
+    // zero "garbled" chars. A résumé page has hundreds of characters — anything
+    // this thin is a failed extraction no matter how clean it looks.
+    const denseChars = text.replace(/\s/g, '').length;
+    const minChars = Math.max(1, Number(process.env.PDF_MIN_CHARS_PER_PAGE || 200)) * Math.max(1, numPages);
+    if (denseChars < minChars) {
+      logger.info(
+        'PDF_QUALITY',
+        `Quality check FAIL: too little content (${denseChars} non-whitespace chars across ${numPages} page(s), need ${minChars})`,
+        { denseChars, numPages, minChars },
+        requestId,
+      );
       return false;
     }
 
@@ -1056,12 +1107,36 @@ Do NOT translate, summarize, or omit any content. Output plain text only.`;
     try {
       const { pdf: pdfToImg } = await import('pdf-to-img');
       images = [];
-      const document = await pdfToImg(buffer, { scale: 2.0 });
-      for await (const image of document) {
+      // `scale` is a raw multiplier on the page's DECLARED box, not a DPI
+      // target, so a hardcoded 2.0 is unbounded. Scanners that write 300-DPI
+      // pixel counts into the MediaBox as points (Ghostscript does) declare a
+      // 2480x3508pt page — 2.0 renders that at 4960x7016 (34.8 MP, a 3.6MB PNG,
+      // 4.8MB once base64'd), a pure 2x UPSAMPLE of an already-full-resolution
+      // scan. Measured on one such file: 41,175 input tokens and 32.9s at 2.0
+      // versus 10,344 tokens and 22.9s at 1.0, with the 1.0 pass returning MORE
+      // text (3253 chars vs 2209). Upsampling costs 4x the tokens and buys
+      // nothing — cap the long edge instead of multiplying blind.
+      const maxEdge = Math.max(512, Number(process.env.PDF_VISION_MAX_EDGE_PX || 2400));
+      // Render 1:1 first (1pt = 1px at scale 1). That is the finished image for
+      // any page already at or above the OCR target — the overwhelmingly common
+      // case for scans — so only genuinely small pages pay a second render.
+      for await (const image of await pdfToImg(buffer, { scale: 1 })) {
         images.push(Buffer.from(image));
+      }
+      const nativeLongEdge = images.length ? pngLongEdge(images[0]) : 0;
+      const scale = nativeLongEdge > 0 ? Math.min(2, Math.max(1, maxEdge / nativeLongEdge)) : 1;
+      if (scale > 1) {
+        const upscaled: Buffer[] = [];
+        for await (const image of await pdfToImg(buffer, { scale })) {
+          upscaled.push(Buffer.from(image));
+        }
+        images = upscaled;
       }
       logger.info('PDF_VISION', `Converted ${images.length} pages to images`, {
         pages: images.length,
+        scale: Number(scale.toFixed(3)),
+        nativeLongEdge,
+        maxEdge,
       }, requestId);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -1197,8 +1272,13 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
    *   6. Last resort → return whatever we have
    */
   async extractText(buffer: Buffer, requestId?: string, signal?: AbortSignal): Promise<string> {
-    this._watermarkScatterDetected = false;
+    // Fresh watermark-scatter verdict, scoped to THIS extraction (see scatterStore).
+    return this.scatterStore.run({ detected: false }, () =>
+      this.extractTextInner(buffer, requestId, signal),
+    );
+  }
 
+  private async extractTextInner(buffer: Buffer, requestId?: string, signal?: AbortSignal): Promise<string> {
     logger.info('PDF_EXTRACT', `Starting PDF extraction (${Math.round(buffer.length / 1024)}KB)`, {
       bufferSizeKB: Math.round(buffer.length / 1024),
     }, requestId);
@@ -1266,12 +1346,12 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
     // Watermark scatter means the text passed quality checks (watermark chars are ASCII, not garbled CJK)
     // but the content is structurally damaged — words broken, fragments injected inline, sections disordered.
     // The LLM vision path handles these PDFs much better.
-    if (localText.length > 0 && this.isExtractionQualityGood(localText, requestId) && !this._watermarkScatterDetected) {
+    if (localText.length > 0 && this.isExtractionQualityGood(localText, requestId) && !this.watermarkScatterDetected) {
       logger.info('PDF_EXTRACT', `Using ${localSource} result (quality OK)`, { chars: localText.length }, requestId);
       return localText;
     }
 
-    if (this._watermarkScatterDetected) {
+    if (this.watermarkScatterDetected) {
       logger.info('PDF_EXTRACT', 'Watermark scatter detected — forcing LLM extraction despite quality check pass', {
         localChars: localText.length,
       }, requestId);
@@ -1324,7 +1404,7 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
     if (llmText && localText.length > 0) {
       // When watermark scatter was detected, prefer LLM — local text has inline
       // fragment damage that character counts can't detect.
-      if (this._watermarkScatterDetected) {
+      if (this.watermarkScatterDetected) {
         logger.info('PDF_EXTRACT', 'Using LLM result (watermark scatter in local text)', {
           localChars: localText.length, llmChars: llmText.length,
         }, requestId);
@@ -1360,6 +1440,17 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
    * Extract text and metadata from a PDF buffer
    */
   async extractWithMetadata(buffer: Buffer, requestId?: string): Promise<{
+    text: string;
+    numPages: number;
+    info: Record<string, unknown>;
+  }> {
+    // Fresh watermark-scatter verdict, scoped to THIS extraction (see scatterStore).
+    return this.scatterStore.run({ detected: false }, () =>
+      this.extractWithMetadataInner(buffer, requestId),
+    );
+  }
+
+  private async extractWithMetadataInner(buffer: Buffer, requestId?: string): Promise<{
     text: string;
     numPages: number;
     info: Record<string, unknown>;
@@ -1404,12 +1495,16 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
     }
 
     // Step 3: Quality check — if local extraction is good AND no watermark scatter, return immediately
-    if (localText.length > 0 && this.isExtractionQualityGood(localText, requestId) && !this._watermarkScatterDetected) {
+    if (
+      localText.length > 0 &&
+      this.isExtractionQualityGood(localText, requestId, data.numpages) &&
+      !this.watermarkScatterDetected
+    ) {
       return { text: localText, numPages: data.numpages, info: data.info || {} };
     }
 
     // Step 4: LLM extraction with local text as character-accuracy reference
-    if (this._watermarkScatterDetected) {
+    if (this.watermarkScatterDetected) {
       logger.info('PDF_EXTRACT', 'extractWithMetadata: watermark scatter detected — forcing LLM extraction', {}, requestId);
     } else if (localText.length > 0) {
       logger.info('PDF_EXTRACT', `extractWithMetadata: ${localSource} quality poor, trying LLM`, {}, requestId);
@@ -1441,7 +1536,7 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
     // Step 5: Pick the best result
     let finalText = localText;
     if (llmText && llmText.trim().length > 20 && localText.length > 0) {
-      if (this._watermarkScatterDetected) {
+      if (this.watermarkScatterDetected) {
         finalText = llmText;
       } else {
         const winner = this.compareExtractionQuality(localText, llmText, requestId);
