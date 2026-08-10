@@ -122,3 +122,19 @@ export const READY_LOCALES: { code: RoboLocale; label: string }[] = [
   { code: 'zh-TW', label: '繁體中文' },
   { code: 'ja', label: '日本語' },
 ];
+
+/**
+ * The languages a MOCK INTERVIEW can be conducted in. This is a different
+ * question from READY_LOCALES: the interview language picks the voice, the STT
+ * pinning and the interviewer's spoken language — it does not depend on the app
+ * chrome being translated. The voice engine supports all nine natively
+ * (`SupportedLocale` in server/src/interview-engine/voice/voiceCatalog.ts, plus
+ * LANGUAGE_NAMES in prompt/voiceSystemPrompt.ts), so this list MUST match that
+ * union.
+ *
+ * The practice launcher used to seed and render from READY_LOCALES, which
+ * silently downgraded a ko / es / fr / pt / de user to an English-speaking
+ * interviewer with no way to change it.
+ */
+export const INTERVIEW_LOCALES: { code: RoboLocale; label: string }[] =
+  LOCALES.map((code) => ({ code, label: LOCALE_LABELS[code] }));

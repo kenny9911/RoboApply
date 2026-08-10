@@ -102,11 +102,33 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
       ? (req.headers['accept-language'] as string)
       : null;
 
+    // Signup locale precedence — body → X-Robo-Locale header → robo_locale
+    // cookie → Accept-Language (resolved downstream by normalizeLocale).
+    //
+    // Accept-Language alone is WRONG here: it reports the browser's language,
+    // not the language the user chose on the marketing site. Someone who
+    // switched the site to Chinese and signed up on an English-locale browser
+    // used to get `locale: 'en'` persisted on SeekerProfile + RoboApplyMission,
+    // which is what every requestless background job reads — so every digest,
+    // insight and match rationale spoke English to them forever.
+    //
+    // This is the same chain as `getRequestLocale` in v2/lib/raLocale.ts,
+    // replicated (not imported) because that module is V2-scoped and this route
+    // is not; it is four lines, and raLocale.ts documents the same
+    // fork-the-tiny-helper rule for its own copy. Raw tags are passed through —
+    // seekerLocale.normalizeLocale owns normalization and the closed list.
+    const cookieLocale = (req as { cookies?: Record<string, string> }).cookies?.robo_locale;
+    const headerLocale = req.get('x-robo-locale');
+    const resolvedLocale =
+      (typeof locale === 'string' && locale.trim() ? locale : null) ??
+      (typeof headerLocale === 'string' && headerLocale.trim() ? headerLocale : null) ??
+      (typeof cookieLocale === 'string' && cookieLocale.trim() ? cookieLocale : null);
+
     const result = await seekerAuthService.signup({
       email,
       password,
       name: typeof name === 'string' ? name.trim() : undefined,
-      locale: typeof locale === 'string' ? locale : null,
+      locale: resolvedLocale,
       acceptLanguage,
       source: 'roboapply_signup',
     });

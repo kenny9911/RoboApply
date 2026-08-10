@@ -136,7 +136,14 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-  const resolvedLocale = normalizeLocale(locale ?? acceptLanguage);
+  // Fall THROUGH to Accept-Language when the explicit locale is unsupported.
+  // `normalizeLocale(locale ?? acceptLanguage)` only consulted the header when
+  // `locale` was absent: a caller passing an out-of-list tag ('zh-Hant-MO' is
+  // fine, but 'it' or a stale cookie value is not) got null persisted, which
+  // reads as English for every requestless background job. Callers now pass a
+  // header/cookie-derived locale (roboapply/routes/auth.ts), so an unrecognised
+  // value is a realistic input, not a programmer error.
+  const resolvedLocale = normalizeLocale(locale) ?? normalizeLocale(acceptLanguage);
   const market = marketFromAcceptLanguage(acceptLanguage ?? null);
   const source = input.source ?? 'organic';
 

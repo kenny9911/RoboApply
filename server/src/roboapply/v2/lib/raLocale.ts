@@ -23,12 +23,21 @@ import prisma from '../../../lib/prisma.js';
  * ja) — keeping the others lets a non-default `Accept-Language` still get a
  * native-language response, and matches the i18n surface in
  * `roboapply/lib/i18n.ts` + `frontend/src/i18n/locales/`.
+ *
+ * MUST stay a superset of `LOCALES` in roboapply/lib/localeConfig.ts. A locale
+ * the UI can render but this list omits is worse than an untranslated one: the
+ * user reads a fully translated UI, `normalizeRaLocale` returns null for their
+ * tag, `getRequestLocale` falls through to `'en'` — and because `'en'` is
+ * truthy, BaseAgent uses it as an EXPLICIT directive instead of auto-detecting
+ * the input's language, so every LLM answer is actively translated to English.
+ * That was the case for 'ko', whose 108 KB bundle ships complete.
  */
 export const RA_LOCALES = [
   'en',
   'zh',
   'zh-TW',
   'ja',
+  'ko',
   'es',
   'fr',
   'pt',
@@ -65,13 +74,12 @@ export function normalizeRaLocale(
   const exact = LOWER_TO_CANONICAL.get(lowered);
   if (exact) return exact;
 
-  // Traditional-Chinese variants all collapse to zh-TW.
-  if (
-    lowered === 'zh-tw' ||
-    lowered === 'zh-hant' ||
-    lowered === 'zh-hk' ||
-    lowered.startsWith('zh-hant')
-  ) {
+  // Traditional-Chinese variants all collapse to zh-TW. The test MUST match
+  // `matchLocale` in roboapply/lib/localeConfig.ts, which uses this same
+  // /hant|tw|hk|mo/ regex: when the two disagree the UI renders Traditional
+  // while the LLM is told to answer in Simplified. The earlier exact-equality
+  // list missed zh-MO and zh-yue-HK for exactly that reason.
+  if (lowered.startsWith('zh') && /hant|tw|hk|mo/.test(lowered)) {
     return 'zh-TW';
   }
 
