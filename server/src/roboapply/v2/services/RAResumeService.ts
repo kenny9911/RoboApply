@@ -520,6 +520,9 @@ export class RAResumeService {
   async uploadAndCreate(
     userId: string,
     params: { buffer: Buffer; fileName: string; mimeType: string; requestId?: string; name?: string },
+    // Optional trailing so non-route callers keep compiling; the ingest only
+    // uses it for the AI summary/highlight shown on the résumé card.
+    locale?: string,
   ): Promise<RAResumeVariantView> {
     const p = prisma as any;
 
@@ -531,6 +534,7 @@ export class RAResumeService {
         mimeType: params.mimeType,
         requestId: params.requestId,
         userId,
+        locale,
       });
     } catch (err) {
       if (err instanceof CandidateResumeIngestError) {
@@ -651,6 +655,9 @@ export class RAResumeService {
       name?: string;
       requestId?: string;
     },
+    // Optional trailing so non-route callers keep compiling; the ingest only
+    // uses it for the AI summary/highlight shown on the résumé card.
+    locale?: string,
   ): Promise<RAResumeVariantView> {
     if (params.mode === 'pdf') {
       if (!params.buffer || params.buffer.length === 0) {
@@ -665,6 +672,7 @@ export class RAResumeService {
           requestId: params.requestId,
           userId,
           textTransform: cleanLinkedInExportText,
+          locale,
         });
       } catch (err) {
         if (err instanceof CandidateResumeIngestError) {
@@ -716,6 +724,7 @@ export class RAResumeService {
         requestId: params.requestId,
         userId,
         storeOriginal: false, // synthetic text, not a real uploaded file
+        locale,
       });
     } catch (err) {
       if (err instanceof CandidateResumeIngestError) {

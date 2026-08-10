@@ -20,6 +20,7 @@ import path from 'node:path';
 import { pdfService } from '../services/PDFService.js';
 import { documentParsingService, DocumentParsingService } from '../services/DocumentParsingService.js';
 import { resumeParseAgent } from '../agents/ResumeParseAgent.js';
+import { goHireResumeParseService } from '../services/GoHireResumeParseService.js';
 import { generateResumeSummaryHighlight } from '../services/ResumeSummaryService.js';
 import { normalizeExtractedText } from '../services/ResumeParserService.js';
 import {
@@ -139,46 +140,77 @@ export async function ingestCandidateResume(params: {
    *  standard normalize + control-byte strip. Must be a pure, non-throwing
    *  string→string fn; a throw is swallowed and the untransformed text is used. */
   textTransform?: (raw: string) => string;
+  /** Caller's selected UI locale. Threaded ONLY into the summary/highlight LLM
+   *  call — extraction and parsing are language-agnostic, but the summary is
+   *  user-facing prose rendered on the résumé card, so it must come back in the
+   *  locale the user is reading the app in (not the résumé's own language). */
+  locale?: string | null;
 }): Promise<CandidateResumeIngestResult> {
   const { buffer, fileName, mimeType, userId, requestId, textTransform } = params;
   const storeOriginal = params.storeOriginal !== false;
 
-  // 1. Extract text (pure; no DB, no quota). cleanText strips DB-unsafe
-  // control bytes so the persisted rawText can never carry a NUL.
+  // 1+2. Extract text, then parse to structured JSON.
+  //
+  // PREFERRED PATH: GoHire's parse-resume endpoint does both in ONE call and is
+  // the primary route for plain PDF uploads. The local pipeline
+  // (pdftotext → rasterize → vision-LLM OCR → ResumeParseAgent) FABRICATES
+  // image-only scans: three passes over one scanned Chinese résumé produced
+  // three different candidates, phone numbers and universities, each persisted
+  // as parseStatus='parsed'. See GoHireResumeParseService for the evidence.
+  //
+  // The LinkedIn import path is deliberately excluded: it supplies a
+  // `textTransform` that strips "Save to PDF" footers from the extracted text
+  // BEFORE parsing, and a remote parse returns text and structure together with
+  // no seam to apply it. That path keeps the local pipeline unchanged.
   let rawText: string;
-  try {
-    rawText = cleanText(normalizeExtractedText(await extractText(buffer, mimeType, fileName, requestId)));
-    if (textTransform) {
-      try {
-        rawText = cleanText(textTransform(rawText));
-      } catch (transformErr) {
-        logger.warn(
-          'RA_RESUME_INGEST',
-          'textTransform failed; using untransformed text',
-          { userId, error: transformErr instanceof Error ? transformErr.message : String(transformErr) },
-          requestId,
-        );
+  let parsed: ParsedResume | undefined;
+
+  const remoteParse = textTransform
+    ? null
+    : await goHireResumeParseService.parseResumeFile({ buffer, fileName, mimeType, requestId });
+
+  if (remoteParse) {
+    rawText = cleanText(normalizeExtractedText(remoteParse.rawText));
+    parsed = remoteParse.parsed;
+  } else {
+    // FALLBACK: local extraction (pure; no DB, no quota). cleanText strips
+    // DB-unsafe control bytes so the persisted rawText can never carry a NUL.
+    try {
+      rawText = cleanText(normalizeExtractedText(await extractText(buffer, mimeType, fileName, requestId)));
+      if (textTransform) {
+        try {
+          rawText = cleanText(textTransform(rawText));
+        } catch (transformErr) {
+          logger.warn(
+            'RA_RESUME_INGEST',
+            'textTransform failed; using untransformed text',
+            { userId, error: transformErr instanceof Error ? transformErr.message : String(transformErr) },
+            requestId,
+          );
+        }
       }
+    } catch (err) {
+      throw new CandidateResumeIngestError(
+        'extract_failed',
+        err instanceof Error ? err.message : 'Could not read the file',
+      );
     }
-  } catch (err) {
-    throw new CandidateResumeIngestError(
-      'extract_failed',
-      err instanceof Error ? err.message : 'Could not read the file',
-    );
   }
+
   if (!rawText || rawText.trim().length < 20) {
     throw new CandidateResumeIngestError('empty_text', 'No readable text found in the file');
   }
 
-  // 2. Parse → structured JSON (pure; deterministic heuristic fallback inside).
-  let parsed: ParsedResume;
-  try {
-    parsed = await resumeParseAgent.parse(rawText, requestId);
-  } catch (err) {
-    throw new CandidateResumeIngestError(
-      'parse_failed',
-      err instanceof Error ? err.message : 'Could not parse the résumé',
-    );
+  if (!parsed) {
+    // Parse → structured JSON (pure; deterministic heuristic fallback inside).
+    try {
+      parsed = await resumeParseAgent.parse(rawText, requestId);
+    } catch (err) {
+      throw new CandidateResumeIngestError(
+        'parse_failed',
+        err instanceof Error ? err.message : 'Could not parse the résumé',
+      );
+    }
   }
   // Deep-clean every string in the parse so the jsonb `parsedData` column can
   // never receive a NUL byte (PostgreSQL rejects it → 500).
@@ -188,7 +220,7 @@ export async function ingestCandidateResume(params: {
   let summary = '';
   let highlight = '';
   try {
-    const s = await generateResumeSummaryHighlight(parsed, requestId);
+    const s = await generateResumeSummaryHighlight(parsed, requestId, params.locale);
     summary = cleanText(s.summary);
     highlight = cleanText(s.highlight);
   } catch (err) {

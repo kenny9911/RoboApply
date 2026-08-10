@@ -1,4 +1,5 @@
 import { logger } from './LoggerService.js';
+import { languageService } from './LanguageService.js';
 import { llmService } from './llm/LLMService.js';
 import { withLLMRetry } from './llm/withRetry.js';
 import type { ParsedResume } from '../types/index.js';
@@ -160,10 +161,24 @@ export function buildFallbackSummaryHighlight(parsed: ParsedResume): { summary: 
   return { summary, highlight };
 }
 
+/**
+ * Executive summary + one-line highlight for a parsed résumé.
+ *
+ * `locale` is the reader's selected UI language (optional + trailing so callers
+ * that have no request context still compile). When given, the summary is
+ * AUTHORED in that language: this prose is RoboApply's own copy on the résumé
+ * card, not a quotation from the document, so it follows the UI language rather
+ * than the résumé's. Without it, the only language rule in the prompt was
+ * "match the candidate's name and experience", so a zh-UI user with an English
+ * résumé always read an English card — and vice versa.
+ */
 export async function generateResumeSummaryHighlight(
   parsed: ParsedResume,
   requestId?: string,
+  locale?: string | null,
 ): Promise<{ summary: string; highlight: string }> {
+  // The résumé's OWN summary is returned verbatim on purpose — it is the
+  // candidate's writing, not ours, so `locale` does not apply to this branch.
   const existingSummary = parsed.summary?.trim();
   if (existingSummary && existingSummary.length > 30 && !isResumeSummaryLowSignal(existingSummary, parsed)) {
     const highlight = existingSummary.length <= 80
@@ -200,8 +215,22 @@ export async function generateResumeSummaryHighlight(
     parts.push(`Skills: ${skills.slice(0, 20).join(', ')}`);
   }
 
-  const prompt = `You are a senior recruiter writing an executive summary of a candidate for a client pitch. Based on this resume data, generate TWO things:
-1. An executive summary (3-4 sentences, ~80-120 words) that a recruiter can use to pitch this candidate to a hiring manager. Highlight: notable skills and technical depth, relevant experience and achievements, education (only if prestigious or highly relevant), and what makes this candidate stand out. Write in the SAME LANGUAGE as the candidate's name and experience (if Chinese name/companies, write in Chinese; if English, write in English). Focus on what's impressive and sellable — skip generic filler.
+  // Scope 'content', not 'analysis': this agent AUTHORS the artifact (the card
+  // copy) rather than commenting on the résumé, and the analysis-shaped clause
+  // is satisfiable while still writing the artifact in English.
+  const languageDirective = locale
+    ? languageService.getStrictOutputLanguageDirective(locale, 'content')
+    : null;
+  // The "same language as the candidate" rule is DROPPED whenever an explicit
+  // directive exists — leaving it in would be a second, contradicting language
+  // instruction sitting in the same message as the output, which is exactly how
+  // a cheap model ends up ignoring the directive.
+  const detectLanguageRule = languageDirective
+    ? ''
+    : " Write in the SAME LANGUAGE as the candidate's name and experience (if Chinese name/companies, write in Chinese; if English, write in English).";
+
+  const prompt = `${languageDirective ? `${languageDirective}\n\n` : ''}You are a senior recruiter writing an executive summary of a candidate for a client pitch. Based on this resume data, generate TWO things:
+1. An executive summary (3-4 sentences, ~80-120 words) that a recruiter can use to pitch this candidate to a hiring manager. Highlight: notable skills and technical depth, relevant experience and achievements, education (only if prestigious or highly relevant), and what makes this candidate stand out.${detectLanguageRule} Focus on what's impressive and sellable — skip generic filler.
 2. A one-line highlight (under 60 characters) — the single most compelling selling point of this candidate.
 
 Resume data:

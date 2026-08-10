@@ -173,7 +173,7 @@ router.post('/upload', requireAuth, handleResumeUpload, async (req: Request, res
       mimeType: file.mimetype || 'application/octet-stream',
       name: nameRaw || undefined,
       requestId: (req as any).requestId,
-    });
+    }, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
     if (err instanceof ResumeUploadError) {
@@ -217,7 +217,7 @@ router.post('/import-linkedin', requireAuth, handleResumeUpload, async (req: Req
       linkedinUrl: linkedinUrl || undefined,
       name: nameRaw || undefined,
       requestId: (req as any).requestId,
-    });
+    }, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
     if (err instanceof ResumeUploadError) {
