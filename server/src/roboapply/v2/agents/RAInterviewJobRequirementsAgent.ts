@@ -50,6 +50,27 @@ export class RAInterviewJobRequirementsAgent extends BaseAgent<
     return 1100;
   }
 
+  /**
+   * Honor the interview language over auto-detection. Without this override the
+   * only language backstop was `detectLanguage()` over `role + typeLabel` —
+   * and typeLabel comes from the English-only raMockCatalog constants, so a
+   * Chinese-language interview still detected as English and pinned step 1 to
+   * English. Every later step interpolates this output into its own prompt, so
+   * an English requirements profile drags the whole 5-step chain back to
+   * English even when those steps have their own directive.
+   *
+   * Scope is 'content': this agent SYNTHESIZES a requirements profile from web
+   * research and industry norms — it is authored prose (roleSummary,
+   * seniorityBar, domainContext) plus authored short phrases, not commentary
+   * about a user document, and it has no schema enums to protect.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are a senior technical recruiter and hiring-panel designer. Given a target ROLE, the interview TYPE, optional live web research, and the candidate's résumé context, produce a PRACTICAL, role-specific requirements profile that a real hiring team would use to structure an interview.
 
@@ -72,8 +93,12 @@ Return STRICT JSON only (no prose, no code fences):
 }`;
   }
 
-  protected formatInput(input: RAJobRequirementsInput): string {
+  protected formatInput(input: RAJobRequirementsInput, locale?: string): string {
     const parts: string[] = [];
+    // Restate the language in the user message too — the Tavily evidence block
+    // below is almost always English and out-bulks the system directive.
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     parts.push(`## Target role\n${clip(input.role, 160) || '(unspecified role)'}`);
     parts.push(`## Interview type\n${clip(input.typeLabel, 80)} — ${clip(input.typeSub, 200)}`);
     if (input.seniorityHint) parts.push(`## Seniority hint\n${clip(input.seniorityHint, 160)}`);

@@ -28,7 +28,7 @@ import {
 import { raInterviewJobRequirementsAgent } from '../agents/RAInterviewJobRequirementsAgent.js';
 import { raInterviewStrategyAgent } from '../agents/RAInterviewStrategyAgent.js';
 import { raInterviewTacticsAgent } from '../agents/RAInterviewTacticsAgent.js';
-import { raInterviewQuestionsAgent } from '../agents/RAInterviewQuestionsAgent.js';
+import { RAInterviewQuestionsAgent } from '../agents/RAInterviewQuestionsAgent.js';
 
 export interface RAInterviewPromptPersona {
   id: string;
@@ -293,7 +293,13 @@ export class RAInterviewPromptService {
     // ── Step 5: seed questions ──
     let questions: RASeedQuestion[] = [];
     try {
-      questions = await raInterviewQuestionsAgent.run(
+      // Per-REQUEST instance (like RAMockService does with
+      // RAMockInterviewerAgent): this agent stashes the call's locale on `this`
+      // so parseOutput knows whether an English default literal is safe. A
+      // shared instance would let a concurrent en interview overwrite a zh
+      // one's locale mid-flight.
+      const questionsAgent = new RAInterviewQuestionsAgent();
+      questions = await questionsAgent.run(
         {
           role,
           typeLabel: type.label,

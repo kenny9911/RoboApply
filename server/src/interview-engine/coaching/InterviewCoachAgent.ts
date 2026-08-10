@@ -53,11 +53,22 @@ export class InterviewCoachAgent extends BaseAgent<CoachAgentInput, CoachTip> {
     super('InterviewCoachAgent');
   }
 
-  // Strict output-language directive so coaching tips come back in the
-  // session language, not the prompt's English. Mirrors RAResumeRewriteAgent.
+  /**
+   * Strict output-language directive so coaching tips come back in the
+   * session language, not the prompt's English. Mirrors RAResumeRewriteAgent.
+   *
+   * Scope is 'content', NOT the default 'analysis': the tip IS the artifact the
+   * candidate reads, and the 'analysis' clause enumerates commentary fields
+   * ("summaries, top reasons, evidence sentences…") while framing the documents
+   * as inputs — a model can satisfy it and still whisper in English. The prompt
+   * also spells out English exemplar tips ("Lead with the result", "You're
+   * hedging — give one concrete moment"), which is the exact anchor that made
+   * RAResumeRewriteAgent answer a Chinese bullet in English; the 'content'
+   * directive explicitly tells the model those are illustrations of intent.
+   */
   protected getLocaleDirective(locale: string): string | null {
     return (
-      this.language.getStrictOutputLanguageDirective(locale) ??
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
       super.getLocaleDirective(locale)
     );
   }
@@ -81,21 +92,28 @@ Return STRICT JSON only (no prose, no code fences):
 Rules for "text":
 - ONE short, punchy sentence — at most ~18 words. No preamble, no "you should", no quotes around it.
 - Concrete and actionable. Name the specific move to make, not generic advice.
-- Write it in the interview LANGUAGE specified in the input (match it exactly — e.g. Chinese question → Chinese tip).
-- Speak TO the candidate ("Lead with the result", "Name the metric", "Pick one real moment").
+- Write it in the interview LANGUAGE specified in the input. That language governs even when this prompt, the coach focus, and the field context are written in English — every English example below shows the SHAPE of the tip, never the words to emit.
+- Speak TO the candidate — the register of "Lead with the result" / "Name the metric" / "Pick one real moment", phrased idiomatically in the interview language.
 
 MODE = hint: a pre-answer strategy whisper. Reveal what the interviewer is really probing and the single best move to make. Always set "kind": "good".
 
 MODE = nudge: react to the answer SO FAR.
-- If they're on track, set "kind": "good" and give the next gear ("Strong — now quantify the impact").
-- If they're hedging, vague, rambling, dodging, or staying abstract, set "kind": "careful" and give the precise fix ("You're hedging — give one concrete moment, not 'sometimes I…'").
+- If they're on track, set "kind": "good" and give the next gear (the "Strong — now quantify the impact" move).
+- If they're hedging, vague, rambling, dodging, or staying abstract, set "kind": "careful" and give the precise fix (the "You're hedging — give one concrete moment, not 'sometimes I…'" move).
 - Base it on what they ACTUALLY said; never invent details.
 
 Honor the COACH FOCUS — it tells you what this interviewer most rewards.`;
   }
 
-  protected formatInput(input: CoachAgentInput): string {
+  protected formatInput(input: CoachAgentInput, locale?: string): string {
+    // `locale` is `input.language` here — run() passes it into execute()'s locale
+    // slot. Restating it as the FIRST user-message line matters more for this
+    // agent than most: the COACH FOCUS / FIELD CONTEXT blocks below are English
+    // prose immediately adjacent to the one sentence we want written in the
+    // session language.
+    const languageLine = this.outputLanguageReminder(locale ?? input.language);
     const lines: string[] = [
+      ...(languageLine ? [languageLine] : []),
       `MODE: ${input.mode}`,
       `INTERVIEW LANGUAGE (write the tip in this language): ${input.language || 'en'}`,
       `ROLE: ${input.role || 'the role'}`,

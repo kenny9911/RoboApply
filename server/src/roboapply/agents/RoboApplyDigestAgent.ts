@@ -138,6 +138,23 @@ export class RoboApplyDigestAgent extends BaseAgent<
     return 3000;
   }
 
+  /**
+   * Strict output-language directive at 'content' scope — the subject line,
+   * email body and in-app narration ARE the artifact, not commentary about the
+   * user's documents, so the default 'analysis' clause (which enumerates
+   * commentary fields and calls the documents inputs) can be satisfied while
+   * the email still goes out in English. The prompt also hard-codes English
+   * sample copy ("RoboApply: N going out at 9am — skip with one tap", "Hope
+   * this finds you well"), which anchors the model to English unless the
+   * 'content' directive names those as illustrations of register.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are RoboApply's morning briefer. Each day you write a digest for ONE candidate. The voice is warm, opinionated, and matter-of-fact. The user is the passenger; you are the agent that did the work overnight.
 
@@ -170,11 +187,21 @@ export class RoboApplyDigestAgent extends BaseAgent<
 
 The \`emailSubject\` should be a short imperative phrase that names the queue size. Pattern: "RoboApply: N going out at 9am — skip with one tap". Quiet day: "RoboApply: quiet morning — nothing cleared your bar".
 
+Every English sample above (subject lines, body phrasings, the phrases banned as marketing voice) shows the SHAPE and register to hit, not the words to emit — reproduce the equivalent phrasing in the output language. Keep the product name "RoboApply" untranslated.
+
 You output ONLY the JSON object.`;
   }
 
-  protected formatInput(input: RoboApplyDigestInput): string {
+  protected formatInput(input: RoboApplyDigestInput, locale?: string): string {
     const blocks: string[] = [];
+    // Restate the output language as the FIRST user-message line. `Locale: xx`
+    // below reads as metadata, and everything after it (job titles, company
+    // names, English status strings) is English — on its own that beats a
+    // system-prompt-only directive. compose() passes '' as the language-source
+    // argument, so this reminder plus getLocaleDirective are the ONLY language
+    // signals this agent gets.
+    const languageLine = this.outputLanguageReminder(locale ?? input.locale);
+    if (languageLine) blocks.push(languageLine);
     blocks.push(`Locale: ${input.locale}`);
     blocks.push(`Tone: ${input.tone ?? 'warm_coach'}`);
     blocks.push(`First name: ${input.firstName || 'there'}`);

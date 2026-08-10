@@ -38,6 +38,15 @@ export class RAInterviewQuestionsAgent extends BaseAgent<
   RAInterviewQuestionsInput,
   RASeedQuestion[]
 > {
+  // The locale of the in-flight call, stashed in run() so parseOutput can tell
+  // whether an English literal is safe to emit. This is PER-REQUEST state on
+  // `this`, so the instance must NOT be shared: there is deliberately no
+  // module-level singleton below — callers construct one agent per call (see
+  // RAInterviewPromptService). Share one instance and two concurrent interviews
+  // (one en, one zh) overwrite each other's locale between run() and
+  // parseOutput, and the zh candidate gets the English literals.
+  private activeLocale?: string;
+
   constructor() {
     super('RAInterviewQuestionsAgent');
   }
@@ -48,6 +57,24 @@ export class RAInterviewQuestionsAgent extends BaseAgent<
 
   protected getMaxTokens(): number | undefined {
     return 1800;
+  }
+
+  /**
+   * Honor the interview language over auto-detection. The auto-detect source is
+   * `role + typeLabel + persona.style`, and the last two are English-only
+   * raMockCatalog constants — so a Chinese-language interview reliably detected
+   * as English and the candidate got English questions.
+   *
+   * Scope is 'content': every field here is user-facing authored text — the
+   * question the interviewer asks, the candidate's `hint`, and the `coachTip`
+   * shown live in the coach panel. "kind" is the one schema token and stays
+   * good|careful (the 'content' clause covers that).
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
   }
 
   protected getAgentPrompt(): string {
@@ -72,9 +99,13 @@ Return STRICT JSON only (no prose, no code fences):
 { "questions": [ { "phase": "...", "q": "...", "intent": "...", "idealSignal": "...", "probeIfWeak": "...", "hint": "...", "coachTip": { "kind": "good", "text": "..." } }, ... ] }`;
   }
 
-  protected formatInput(input: RAInterviewQuestionsInput): string {
+  protected formatInput(input: RAInterviewQuestionsInput, locale?: string): string {
     const r = input.requirements;
     const parts: string[] = [];
+    // Restate the language in the user message too — the persona/type blocks
+    // are English catalog constants and the résumé is often English.
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     parts.push(
       `## Persona\n${clip(input.persona.name, 80)} — ${clip(input.persona.role, 120)} (difficulty ${input.persona.difficulty}/3)\nStyle: ${clip(input.persona.style, 200)}`,
     );
@@ -96,6 +127,20 @@ Return STRICT JSON only (no prose, no code fences):
     return parts.join('\n\n');
   }
 
+  /**
+   * An English literal is only a sane default when the output language IS
+   * English. For a zh/ja/ko interview a hardcoded English hint is worse than no
+   * hint at all — the coach panel tolerates an empty string, the candidate does
+   * not tolerate a language switch mid-interview. Unknown/absent locale keeps
+   * the English literal, which is the pre-existing behaviour.
+   */
+  private localeSafeDefault(englishText: string): string {
+    const language = this.activeLocale
+      ? this.language.getLanguageFromLocale(this.activeLocale)
+      : null;
+    return language && language !== 'English' ? '' : englishText;
+  }
+
   protected parseOutput(response: string): RASeedQuestion[] {
     const p = parseJsonObject(response);
     const raw = Array.isArray(p.questions) ? p.questions : [];
@@ -112,10 +157,10 @@ Return STRICT JSON only (no prose, no code fences):
         intent: clip(r.intent, 300),
         idealSignal: clip(r.idealSignal, 300),
         probeIfWeak: clip(r.probeIfWeak, 400),
-        hint: clip(r.hint, 400) || 'Lead with a concrete example.',
+        hint: clip(r.hint, 400) || this.localeSafeDefault('Lead with a concrete example.'),
         coachTip: {
           kind: tip.kind === 'careful' ? 'careful' : 'good',
-          text: clip(tip.text, 300) || 'Be specific — concrete beats abstract.',
+          text: clip(tip.text, 300) || this.localeSafeDefault('Be specific — concrete beats abstract.'),
         },
       });
       if (out.length >= 10) break;
@@ -127,6 +172,7 @@ Return STRICT JSON only (no prose, no code fences):
     input: RAInterviewQuestionsInput,
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<RASeedQuestion[]> {
+    this.activeLocale = options.locale;
     return this.execute(
       input,
       `${input.role} ${input.typeLabel} ${input.persona.style}`,
@@ -138,5 +184,7 @@ Return STRICT JSON only (no prose, no code fences):
   }
 }
 
-export const raInterviewQuestionsAgent = new RAInterviewQuestionsAgent();
-export default raInterviewQuestionsAgent;
+// No module-level singleton on purpose — this agent carries per-request state
+// (`activeLocale`). Construct one per call, the way RAMockService constructs
+// RAMockInterviewerAgent.
+export default RAInterviewQuestionsAgent;

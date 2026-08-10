@@ -169,6 +169,23 @@ export class RoboApplyAuthorAgent extends BaseAgent<
     return 4000;
   }
 
+  /**
+   * Strict output-language directive at 'content' scope — this agent AUTHORS
+   * the cover letter and the custom application answers, i.e. the artifact
+   * itself. The default 'analysis' clause enumerates commentary fields and
+   * frames the documents as inputs, which a model can satisfy while still
+   * writing the letter in English. The prompt below is also full of English
+   * few-shot letters ("When you mentioned database performance…"), which read
+   * as a language signal unless the 'content' directive names them as
+   * illustrations. Falls back to the one-line hint for unknown locales.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are RoboApply's senior application writer. Your job is to author a focused, specific cover letter for ONE candidate applying to ONE job.
 
@@ -203,7 +220,9 @@ If the JD includes specific application questions (you can sometimes infer them 
 
 ## Locale
 
-Write the entire cover letter in the requested locale. Don't translate company/role names. Don't use locale-specific honorifics that the user didn't ask for.
+Write the entire cover letter AND every custom answer in the requested locale. The few-shot letters above are written in English to show the SHAPE of a good letter — they are not a signal about your output language. The resume and job description may also be in another language; you still write in the requested locale. Don't translate company/role names. Don't use locale-specific honorifics that the user didn't ask for.
+
+\`citationsToResume[].evidenceLine\` is the ONE exception: it is a verbatim quotation of a resume line, so reproduce it exactly as the resume writes it, in the resume's own language. \`claim\` follows the output locale.
 
 ## Output schema (strict JSON, no prose around it)
 
@@ -219,8 +238,15 @@ Write the entire cover letter in the requested locale. Don't translate company/r
 You output ONLY the JSON object. No preface, no fences, no trailing prose.`;
   }
 
-  protected formatInput(input: RoboApplyAuthorInput): string {
+  protected formatInput(input: RoboApplyAuthorInput, locale?: string): string {
     const blocks: string[] = [];
+    // Restate the output language as the FIRST user-message line. `Locale: xx`
+    // below is a bare tag a model can read as metadata; the JD, the parsed
+    // resume and the English few-shot letters that follow are all much louder
+    // language signals. Fall back to input.locale so the retry path in author()
+    // (which calls formatInput directly) keeps the reminder too.
+    const languageLine = this.outputLanguageReminder(locale ?? input.locale);
+    if (languageLine) blocks.push(languageLine);
     blocks.push(`Locale: ${input.locale}`);
     blocks.push(`Tier: ${input.tier}`);
     if (input.toneOverride && input.toneOverride.trim()) {
@@ -408,7 +434,7 @@ You output ONLY the JSON object. No preface, no fences, no trailing prose.`;
         ctx.requestId ?? undefined,
         input.locale,
       );
-      const userMessage = this.formatInput(input) + augmented;
+      const userMessage = this.formatInput(input, input.locale) + augmented;
       const responseText = await llmService.chat(
         [
           { role: 'system', content: systemPrompt },

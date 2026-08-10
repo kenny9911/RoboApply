@@ -225,7 +225,15 @@ Output ONLY the JSON object. No prose, no fences, no trailing newline noise.`;
 
   protected formatInput(input: RAJobMatchScorerInput): string {
     const parts: string[] = [];
-    parts.push(`## Job\nTitle: ${clipString(input.jobTitle, 500)}\n\nDescription:\n${clipString(input.jobDescription, 6_000)}`);
+    // OMIT the label when there is no title. The rescore-the-tailored-resume
+    // path (RAResumeAIService.tailorDiff) passes '' when the user tailored
+    // against a pasted JD without naming a target title; a dangling "Title:"
+    // reads as a blank field the model should fill and it scores against an
+    // invented role.
+    const title = clipString(input.jobTitle, 500);
+    parts.push(
+      `## Job\n${title ? `Title: ${title}\n\n` : ''}Description:\n${clipString(input.jobDescription, 6_000)}`,
+    );
     parts.push(`## Qualifications\n${clipString(input.jobQualifications, 3_000)}`);
     if (input.jobBenefits && input.jobBenefits.trim()) {
       parts.push(`## Benefits\n${clipString(input.jobBenefits, 1_500)}`);

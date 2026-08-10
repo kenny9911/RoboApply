@@ -197,6 +197,26 @@ export class RAResumeTailorAgent extends BaseAgent<
     return 2000;
   }
 
+  /**
+   * Honor the user's selected UI language. Scope is 'content', NOT the default
+   * 'analysis': `tailoredResumeMarkdown` IS the artifact — this agent authors
+   * the document rather than commenting on it. The 'analysis' clause enumerates
+   * commentary fields and calls the resume an *input*, so a model can satisfy it
+   * and still hand back an English resume (the production failure observed on
+   * RAResumeRewriteAgent, same shape).
+   *
+   * Before this override the agent had none, so a zh user tailoring an English
+   * base resume got BaseAgent's one-line hint against a fully English base
+   * resume + JD in the user message — auto-detection's language always won.
+   * Falls back to that hint for locales with no language mapping.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are RoboApply's senior resume tailor. Take a candidate's base resume and rewrite it to win the listed JD.
 
@@ -219,9 +239,9 @@ export class RAResumeTailorAgent extends BaseAgent<
    - Education / certifications
    - Adding skills the candidate doesn't have
 
-4. **Citation table.** For every line in the tailored resume that contains a NUMBER, emit one entry in \`citationsByLine\` mapping the tailored line's 0-based index → the base resume's source line index. Use \`sourceLineIndex: -1\` for purely structural lines (headings, blank, etc.) — but lines with digits MUST cite a real source line.
+4. **Citation table.** For every line in the tailored resume that contains a NUMBER, emit one entry in \`citationsByLine\` mapping the tailored line's 0-based index → the base resume's source line index. Use \`sourceLineIndex: -1\` for purely structural lines (headings, blank, etc.) — but lines with digits MUST cite a real source line. \`sourceText\` is the ONE field that is NOT written in the output language: it is a verbatim copy of the base-resume line, in whatever language that line is already in. Never translate, reword, or clean it up — it exists so a human can diff the claim against the source.
 
-5. **Change summary.** ≤ 200 words. Bullet list of what you changed and why. E.g. "Reordered Stripe bullets to lead with payments work (matches JD)". "Cut sentence about Jira admin work (not relevant)".
+5. **Change summary.** ≤ 200 words. Bullet list of what you changed and why. The samples that follow are English only because this prompt is; they illustrate the LEVEL OF DETAIL to give (which bullet, which employer, why), not the language to write in — write the summary itself in the output language. E.g. "Reordered Stripe bullets to lead with payments work (matches JD)". "Cut sentence about Jira admin work (not relevant)".
 
 ## Output schema (STRICT JSON, no prose around it, no code fences)
 
@@ -229,28 +249,41 @@ export class RAResumeTailorAgent extends BaseAgent<
   "tailoredResumeMarkdown": "string — the full tailored resume, markdown",
   "changeSummary": "string — bullet list, ≤200 words",
   "citationsByLine": {
-    "0": { "sourceLineIndex": 0, "sourceText": "verbatim base line" },
-    "5": { "sourceLineIndex": 12, "sourceText": "verbatim base line" }
+    "0": { "sourceLineIndex": 0, "sourceText": "verbatim base line, untranslated" },
+    "5": { "sourceLineIndex": 12, "sourceText": "verbatim base line, untranslated" }
   }
 }
 
 Output ONLY the JSON object.`;
   }
 
-  protected formatInput(input: RAResumeTailorInput): string {
+  protected formatInput(input: RAResumeTailorInput, locale?: string): string {
     const parts: string[] = [];
+    // Restate the output language HERE, not just in the system prompt: the
+    // whole user message below is the base resume + the JD, usually in English,
+    // and on a long English payload that bulk out-weighs a system directive.
+    // Remove this and a zh user's tailored resume comes back in English.
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     parts.push(`Complexity: ${input.complexity}`);
-    const targetLines = [`Title: ${clipString(input.jobTitle, 240)}`];
-    if (input.companyName) {
-      targetLines.push(`Company: ${clipString(input.companyName, 200)}`);
-    }
+    // OMIT the label when there is no title: the manual tailor lane sends ''
+    // when the user named no target title (RAResumeAIService deliberately sends
+    // nothing rather than a placeholder), and a dangling "Title:" reads to the
+    // model as a blank field to fill in — i.e. an invented target role.
+    const targetLines: string[] = [];
+    const title = clipString(input.jobTitle, 240);
+    if (title) targetLines.push(`Title: ${title}`);
+    const company = clipString(input.companyName, 200);
+    if (company) targetLines.push(`Company: ${company}`);
     const description = clipString(input.jobDescription, 6_000);
-    parts.push(
-      `## Target job\n${targetLines.join('\n')}\n\nDescription:\n${
-        description ||
-        '(No job description provided — tailor toward the company and title above using only what the base resume demonstrates.)'
-      }`,
-    );
+    const targetBlock = targetLines.length > 0 ? `${targetLines.join('\n')}\n\n` : '';
+    // The no-description note points at the title/company above, so it only
+    // makes sense when at least one of them survived the guard.
+    const noDescription =
+      targetLines.length > 0
+        ? '(No job description provided — tailor toward the company and title above using only what the base resume demonstrates.)'
+        : '(No target details provided — sharpen the base resume on its own terms; invent nothing.)';
+    parts.push(`## Target job\n${targetBlock}Description:\n${description || noDescription}`);
     if (input.parsedJD) {
       const pj = input.parsedJD;
       const blocks: string[] = [];

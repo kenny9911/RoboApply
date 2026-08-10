@@ -31,6 +31,7 @@
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { llmService } from '../../../services/llm/LLMService.js';
+import { languageService } from '../../../services/LanguageService.js';
 import { logger } from '../../../services/LoggerService.js';
 import type { ParsedResume } from '../../../types/index.js';
 
@@ -202,6 +203,26 @@ export class SeekerResumeTailorAgent extends BaseAgent<
     return 24000;
   }
 
+  /**
+   * Strict output-language directive at 'content' scope — the tailored summary
+   * and the rewritten bullets ARE the resume the seeker downloads, so this
+   * agent authors the artifact rather than commenting on it. The default
+   * 'analysis' clause enumerates commentary fields and frames the resume as an
+   * *input*, which a model can satisfy while still writing the tailored bullets
+   * in English (observed in production on RAResumeRewriteAgent).
+   *
+   * Note the verbatim-preservation rules below still hold and do NOT conflict:
+   * `originalBullets`, company / role / dateRange are COPIED from the source and
+   * must never be translated — only the text this agent newly writes (tailored
+   * summary + bullets, rationale, atsAlignmentNotes) follows the locale.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are a senior resume editor who tailors candidate resumes to specific job descriptions. Your only job is to REWORD, REORDER, EMPHASIZE, or DEMOTE existing content. You NEVER invent new skills, achievements, employers, dates, or metric numbers.
 
@@ -278,13 +299,20 @@ You output ONE strict JSON object, no prose around it:
 
 ## Locale
 
-Output text (summary, rationale, atsAlignmentNotes) in the seeker's locale. Do not translate the original resume content — preserve it verbatim. Only the new text (rationale, notes, the *tailored* summary if present) should be in locale.
+Write every field you AUTHOR in the seeker's output language: \`tailoredBullets\`, \`tailoredSections.summary.tailored\`, every \`rationale\`, \`atsAlignmentNotes\`, and the education \`section\` / \`rationale\` notes.
+
+COPIED fields are the exception and are NOT translated — they are verbatim quotations of the source document, and the downstream fact-checker matches them character-for-character against the original resume: \`originalBullets\`, \`tailoredSections.summary.original\`, and every \`company\` / \`role\` / \`dateRange\`. Reproduce those in the resume's own language exactly as given. \`injectedKeywords\` / \`removedKeywords\` / the skills arrays are ATS terms — keep them in the form the job description and resume use.
 
 You output ONLY the JSON.`;
   }
 
-  protected formatInput(input: SeekerResumeTailorInput): string {
-    const localeBlock = `Locale: ${input.locale || 'en'}`;
+  protected formatInput(input: SeekerResumeTailorInput, locale?: string): string {
+    // Restate the output language as the FIRST user-message line. `Locale: xx`
+    // alone reads as metadata, and everything after it — the parsed resume, the
+    // raw resume text, the whole JD — is bulk source text that drags the model
+    // toward mirroring the input's language instead of the seeker's.
+    const languageLine = this.outputLanguageReminder(locale ?? input.locale);
+    const localeBlock = `${languageLine ? `${languageLine}\n` : ''}Locale: ${input.locale || 'en'}`;
     const resumeBlock = input.originalParsedResume
       ? `## Parsed master resume (the source of truth — your output must reference only these facts)\n${JSON.stringify(input.originalParsedResume, null, 2)}`
       : '## Parsed master resume\n(not parsed — using raw text only)';
@@ -511,7 +539,7 @@ ${(input.job.niceToHave || '').slice(0, 2_000)}`;
       .join('\n')}\n\nTry again. NEVER invent facts. If a JD requirement is not supported by the original resume, OMIT it from the tailored output — do not fabricate.`;
 
     const systemPrompt = this.buildSystemPrompt(retryInput.job.description ?? retryInput.job.title, requestId, retryInput.locale);
-    const userMessage = this.formatInput(retryInput) + augmentedUserPart;
+    const userMessage = this.formatInput(retryInput, retryInput.locale) + augmentedUserPart;
     const retryResponseText = await llmService.chat(
       [
         { role: 'system', content: systemPrompt },
@@ -597,6 +625,13 @@ If any violation has severity 'hallucination', set passed=false. Same for 'misma
 
 You output ONLY the JSON.`;
 
+// The two quotation fields are the ONE exception to the language directive
+// appended below: they are copied out of the résumés so the retry pass (and a
+// human reading the log) can match them against the source. Translating them
+// makes the retry unable to locate the line it is supposed to fix.
+const CLAIM_CHECKER_VERBATIM_FIELDS_NOTE =
+  '`claim` and `originalSupport` are quotations: copy them VERBATIM out of the tailored / original resume, in whatever language those lines are already written in. Never translate or reword them. `location` is a JSON path and stays exactly as specified above.';
+
 async function runClaimChecker(args: {
   original: {
     parsedResume: ParsedResume | null;
@@ -650,11 +685,25 @@ async function runClaimChecker(args: {
   }\n\n## ORIGINAL raw text\n${(original.resumeText || '').slice(0, 14_000)}`;
   const tailoredBlock = `## TAILORED output\n${JSON.stringify(tailored, null, 2).slice(0, 14_000)}`;
 
+  // Apply the caller's locale (the argument used to be accepted and ignored).
+  // The checker's violation strings are spliced into the RETRY user message
+  // right beside the tailor agent's own "write in <language>" directive, so an
+  // unconditionally English block here competes with it at the exact moment
+  // the model is re-authoring the résumé. Scope is 'analysis': this pass
+  // COMMENTS on documents and emits a `severity` enum (enum preservation is in
+  // both scopes). Unknown locales return null → prompt unchanged.
+  const localeDirective = args.locale
+    ? languageService.getStrictOutputLanguageDirective(args.locale, 'analysis')
+    : null;
+  const systemPrompt = localeDirective
+    ? `${CLAIM_CHECKER_SYSTEM_PROMPT}\n\n${localeDirective}\n${CLAIM_CHECKER_VERBATIM_FIELDS_NOTE}`
+    : CLAIM_CHECKER_SYSTEM_PROMPT;
+
   let responseText: string;
   try {
     responseText = await llmService.chat(
       [
-        { role: 'system', content: CLAIM_CHECKER_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: `${originalBlock}\n\n${tailoredBlock}` },
       ],
       {

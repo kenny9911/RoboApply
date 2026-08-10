@@ -73,10 +73,17 @@ export class RAOnboardingResumeSeedAgent extends BaseAgent<
   }
 
   protected getLocaleDirective(locale: string): string | null {
-    // Enum tokens must stay English (they are matched against
-    // RA_PREFERENCE_OPTIONS); free text — role titles — follows the resume.
+    // Scope is 'content', not 'analysis': `targetRoles` is resume CONTENT this
+    // agent authors — job titles that land in the user's stored preferences and
+    // are rendered back to them. Under 'analysis' the model reads the resume as
+    // an *input* it is commenting on and mirrors the resume's language, so a zh
+    // user with an English CV got English target roles stored against a Chinese
+    // UI. The 'content' scope's schema clause still pins `industriesTarget` —
+    // those tokens are enumerated verbatim in the prompt and matched against
+    // RA_PREFERENCE_OPTIONS, so translating one silently drops the field in
+    // normalizeDraftUpdates.
     return (
-      this.language.getStrictOutputLanguageDirective(locale) ??
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
       super.getLocaleDirective(locale)
     );
   }
@@ -99,7 +106,9 @@ deterministically. You fill only the gaps it cannot:
 
 2. targetRoles — ONLY when DETERMINISTIC_ROLES is empty. Then read the prose
    for what this person actually does and emit 1-3 plain job titles as an
-   employer would post them ("Product Designer", not "Design Visionary"). If
+   employer in the output language would post them — the contrast between
+   "Product Designer" and "Design Visionary" shows the register to hit (a title
+   a job board would list, not a self-description), not the language to use. If
    DETERMINISTIC_ROLES is non-empty, omit targetRoles entirely; the structured
    parse already won and your version would only fight it.
 

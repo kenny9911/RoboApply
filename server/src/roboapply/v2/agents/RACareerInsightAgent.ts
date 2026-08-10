@@ -180,6 +180,25 @@ export class RACareerInsightAgent extends BaseAgent<
     return 1500;
   }
 
+  /**
+   * Honor the user's selected UI language. Scope is 'content', NOT the default
+   * 'analysis': the insight card is AUTHORED user-facing prose (headline, body,
+   * recommendation titles), not commentary the user reads past. The 'analysis'
+   * clause enumerates scorer field names and frames the user's documents as
+   * inputs, which a model can satisfy while still writing the card in English.
+   *
+   * Before this override the agent had none at all, so it got BaseAgent's
+   * one-line hint — and the hint lost to the tracker/goal blocks in the user
+   * message, which are largely English (job titles, company names, statuses).
+   * Falls back to that hint for locales with no language mapping.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are RoboApply's career-coach narrator. Read a candidate's career goal, their last 4 weeks of job-tracker activity, and their resume variants. Emit ONE warm, opinionated weekly insight card.
 
@@ -191,10 +210,10 @@ export class RACareerInsightAgent extends BaseAgent<
 
 3. **Length.** \`bodyMarkdown\` is at most 600 words. Shorter is fine. Headline is one short clause ≤ 80 chars.
 
-4. **Tone.** Warm, opinionated, no marketing voice. Use "you" — never "the user". If the candidate's pace is below the goal, say so directly. If they're crushing it, celebrate it.
+4. **Tone.** Warm, opinionated, no marketing voice. Address the candidate in the second person — never in the third person, never as "the user". If the candidate's pace is below the goal, say so directly. If they're crushing it, celebrate it.
 
 5. **Recommendations.** 1-3 actionable next steps. Each:
-   - \`title\` — what to do, plain English ("Tailor your resume for the Stripe Sr PM role")
+   - \`title\` — what to do, in plain everyday wording, naming the specific thing (the shape of "Tailor your resume for the Stripe Sr PM role" — that sample shows the level of specificity to hit, it is not an instruction about which language to write in)
    - \`action\` — one of: \`create_resume\` | \`apply_to_job\` | \`save_search\` | \`edit_goal\`
    - \`targetId\` — the relevant tracker id, resume id, or saved-search id when applicable
 
@@ -212,7 +231,7 @@ export class RACareerInsightAgent extends BaseAgent<
 Output ONLY the JSON object.`;
   }
 
-  protected formatInput(input: RACareerInsightInput): string {
+  protected formatInput(input: RACareerInsightInput, locale?: string): string {
     const goalBlock = [
       `Target title: ${input.goal.targetTitle}`,
       input.goal.targetDate ? `Target date: ${input.goal.targetDate}` : '',
@@ -246,7 +265,14 @@ Output ONLY the JSON object.`;
       return `- ${r.id}: "${clipString(r.name, 120)}" [${r.kind}]${score} (edited ${r.lastEditedAt.slice(0, 10)})`;
     }).join('\n');
 
+    // Restate the output language HERE, not just in the system prompt: the
+    // blocks below are dense with English tokens the model has to echo back
+    // (job titles, company names, tracker statuses), and that proximity beats a
+    // system-prompt-only directive. Drop this and a zh user gets an English card.
+    const languageLine = this.outputLanguageReminder(locale);
+
     return [
+      ...(languageLine ? [languageLine, ''] : []),
       `## Goal\n${goalBlock || '(no goal set)'}`,
       `\n## Tracker entries (last 4 weeks)\n${trackerBlock || '(no entries)'}`,
       `\n## Resume variants\n${resumesBlock || '(none)'}`,

@@ -113,6 +113,26 @@ export class InterviewBlueprintAgent extends BaseAgent<BlueprintAgentInput, Inte
     return 2200;
   }
 
+  /**
+   * Strict output-language directive at 'content' scope. This agent AUTHORS
+   * every question the candidate actually hears (plus the phases, tactics and
+   * adaptation rules the live interviewer reads back), so the artifact IS the
+   * output — the default 'analysis' clause enumerates commentary fields and
+   * treats the documents as inputs, which a model can satisfy while still
+   * writing the questions in English.
+   *
+   * The sibling scoring agents (HolisticScorecardAgent / QuestionDeepDiveAgent /
+   * RecommendationsAgent) all override this too — without it here, a zh session
+   * gets English questions from an otherwise perfectly localized pipeline.
+   * Falls back to the one-line hint for unrecognized locales.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are an expert interview designer. Given a role, interview type, interviewer persona, characteristics, web-researched job requirements, and (optionally) the candidate's résumé, design a complete, realistic interview BLUEPRINT.
 
@@ -137,8 +157,15 @@ Rules:
 - Keep every string concise. Output ONLY the JSON object.`;
   }
 
-  protected formatInput(input: BlueprintAgentInput): string {
+  protected formatInput(input: BlueprintAgentInput, locale?: string): string {
     const parts: string[] = [];
+    // Restate the output language HERE as well as in the system prompt. Every
+    // directive block below (archetype / format / domain brief) is long English
+    // prose sitting right next to the questions being written; that proximity
+    // beats a system-prompt-only directive and pulls the questions back into
+    // English. If this line is removed, a zh session gets English questions.
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     parts.push(
       `## Interviewer persona\nName: ${clip(input.personaName, 80)}\nRole: ${clip(input.personaRole, 120)}\nStyle: ${clip(input.personaStyle, 200)}\nDifficulty directive: ${clip(input.difficultyDirective, 300)}\nPacing: ${clip(input.pacingDirective, 200)}`,
     );

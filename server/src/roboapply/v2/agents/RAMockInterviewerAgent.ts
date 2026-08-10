@@ -163,6 +163,11 @@ export class RAMockInterviewerAgent extends BaseAgent<
   // instance processes one call at a time.
   private activeMode: RAMockAgentMode = 'plan';
 
+  // The locale of the in-flight call, stashed alongside activeMode (same
+  // single-call-per-instance reasoning) so parseOutput can tell whether an
+  // English literal default is safe to emit.
+  private activeLocale?: string;
+
   constructor() {
     super('RAMockInterviewerAgent');
   }
@@ -177,6 +182,25 @@ export class RAMockInterviewerAgent extends BaseAgent<
     // 'plan' returns ~5 questions with hints + tips; 'turn' is small. 900 is
     // generous for the plan path.
     return this.activeMode === 'plan' ? 900 : 400;
+  }
+
+  /**
+   * Honor the interview language over auto-detection. Scope is 'content': this
+   * agent AUTHORS the interviewer's spoken turns, the candidate's hints and the
+   * live coach nudges — it does not comment on a user document, so the
+   * 'analysis' clause (which enumerates scorer fields and frames the resume as
+   * an input) can be satisfied while still speaking English.
+   *
+   * It also had no override at all, so 'plan' fell back to auto-detecting over
+   * `role + type.label` — and type.label comes from the English-only
+   * raMockCatalog constants, which pinned a Chinese interview's questions to
+   * English. Falls back to the one-line hint for unmapped locales.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
   }
 
   protected getAgentPrompt(): string {
@@ -209,8 +233,14 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
 - Output ONLY the JSON object for the active mode.`;
   }
 
-  protected formatInput(input: RAMockAgentInput): string {
+  protected formatInput(input: RAMockAgentInput, locale?: string): string {
     const parts: string[] = [];
+    // Restate the output language HERE, not just in the system prompt: the
+    // persona/type blocks below are English catalog constants sitting right
+    // next to the turn being generated, and on this Haiku-tier call that
+    // proximity beats a system-only directive.
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     const p = input.persona;
     parts.push(
       `## Persona\nName: ${clipString(p.name, 80)}\nRole: ${clipString(p.role, 120)}\nStyle: ${clipString(p.style, 200)}\nBlurb: ${clipString(p.blurb, 300)}\nTone directive: ${difficultyGuidance(p.difficulty)}`,
@@ -250,6 +280,22 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
     }
 
     return parts.join('\n\n');
+  }
+
+  /**
+   * An English literal is only a sane default when the output language IS
+   * English. `RAMockQuestion.hint` / `coachTip.text` are non-optional strings
+   * (RAMockService's `asQuestions` already coerces a missing one to ''), so the
+   * honest degradation for a zh/ja/ko interview is an empty string — the coach
+   * panel simply renders nothing — rather than an English sentence dropped into
+   * a Chinese interview. Unknown/absent locale keeps the English literal, which
+   * is the pre-existing behaviour.
+   */
+  private localeSafeDefault(englishText: string): string {
+    const language = this.activeLocale
+      ? this.language.getLanguageFromLocale(this.activeLocale)
+      : null;
+    return language && language !== 'English' ? '' : englishText;
   }
 
   protected parseOutput(response: string): RAMockAgentOutput {
@@ -292,9 +338,15 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
             : {};
         const coachTip: RAMockCoachTip = {
           kind: coerceCoachKind(tipObj.kind),
-          text: clipString(tipObj.text, 400) || 'Be specific — concrete beats abstract.',
+          text:
+            clipString(tipObj.text, 400) ||
+            this.localeSafeDefault('Be specific — concrete beats abstract.'),
         };
-        questions.push({ q, hint: hint || 'Lead with a concrete example.', coachTip });
+        questions.push({
+          q,
+          hint: hint || this.localeSafeDefault('Lead with a concrete example.'),
+          coachTip,
+        });
         if (questions.length >= 8) break;
       }
       return questions.length > 0 ? { questions } : {};
@@ -334,6 +386,7 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<RAMockAgentOutput> {
     this.activeMode = input.mode;
+    this.activeLocale = options.locale;
     // Detect language from the candidate's answer (turn) or the role/type
     // (plan) so the interview comes back in the candidate's language.
     const langSource =
@@ -351,8 +404,13 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
   }
 }
 
-export const raMockInterviewerAgent = new RAMockInterviewerAgent();
-export default raMockInterviewerAgent;
+// NO module-level singleton on purpose. This agent keeps per-request state on
+// `this` (activeMode + activeLocale, both set in run() and read in
+// parseOutput), so a shared instance would let two concurrent interviews — one
+// en, one zh — overwrite each other's locale. RAMockService constructs a fresh
+// agent per request; exporting a singleton would make that discipline one
+// careless import away from being defeated.
+export default RAMockInterviewerAgent;
 
 export const __test = {
   pickMockInterviewerModel,

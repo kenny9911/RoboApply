@@ -42,6 +42,23 @@ export class RAInterviewTacticsAgent extends BaseAgent<
     return 1000;
   }
 
+  /**
+   * Honor the interview language over auto-detection — the auto-detect source
+   * is `persona.style + typeLabel`, both English-only catalog constants, so a
+   * Chinese-language interview always detected as English.
+   *
+   * Scope is 'content', and here it matters more than anywhere else in the
+   * chain: `probingTactics` are explicitly written to be "usable verbatim as
+   * follow-up moves", i.e. the interviewer SPEAKS them to the candidate. An
+   * English tactic list means English follow-ups mid-interview.
+   */
+  protected getLocaleDirective(locale: string): string | null {
+    return (
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
+      super.getLocaleDirective(locale)
+    );
+  }
+
   protected getAgentPrompt(): string {
     return `You are an interview-craft coach defining how a specific interviewer will actually CONDUCT an interview. Given the persona, the role requirements, and the strategy, produce three lists:
 
@@ -52,13 +69,19 @@ export class RAInterviewTacticsAgent extends BaseAgent<
 Rules:
 - Everything must sound like THIS persona at THIS difficulty.
 - Keep each item one actionable line.
+- The quoted sample phrasings above ("and then what?", "by how much?", …) name the MOVE, not the wording. Write each item — including the probing lines the interviewer will actually say — in the output language, using the phrasing a native speaker would use for that move.
 
 Return STRICT JSON only (no prose, no code fences):
 { "tactics": ["..."], "probingTactics": ["..."], "adaptationRules": ["IF ... THEN ..."] }`;
   }
 
-  protected formatInput(input: RAInterviewTacticsInput): string {
+  protected formatInput(input: RAInterviewTacticsInput, locale?: string): string {
     const parts: string[] = [];
+    // Restate the language next to the output: the probing tactics are quoted
+    // English sample phrasings in the system prompt, and that lexical guidance
+    // reads as "answer in English" on anything below Sonnet-tier.
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     parts.push(
       `## Persona\n${clip(input.persona.name, 80)} — ${clip(input.persona.role, 120)} (difficulty ${input.persona.difficulty}/3)\nStyle: ${clip(input.persona.style, 200)}`,
     );
