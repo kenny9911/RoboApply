@@ -22,6 +22,22 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.r2.cloudflarestorage.com', pathname: '/**' },
     ],
   },
+  experimental: {
+    // DEV ONLY, but load-bearing. `next dev` proxies every rewrites() entry
+    // through http-proxy with a HARD-CODED 30s cap when this is unset
+    // (next/dist/server/lib/router-utils/proxy-request.js: `proxyTimeout || 30_000`).
+    // Resume ingest of a scanned PDF runs 45-80s (GoHire parse-resume alone
+    // measured 45.4s), so the proxy destroyed the upload socket mid-flight and
+    // the browser got a plain-text 500 "Internal Server Error" while the API
+    // happily finished and committed the résumé — the user saw "could not be
+    // created, try again", retried, and minted duplicate rows.
+    //
+    // Do NOT "disable" this with 0: the schema accepts it, but `proxyTimeout || 30_000`
+    // treats 0 as falsy and silently restores the 30s cut. Use a large positive number.
+    // Production is unaffected — rewrites() returns [] outside development and
+    // Vercel routes /api/v1/* straight to the function (vercel.json maxDuration: 300).
+    proxyTimeout: 600_000,
+  },
   async redirects() {
     // No root redirect. The marketing page at `/` is ALWAYS served, session
     // or not — logged-in users can view the landing page (product decision
