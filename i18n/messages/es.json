@@ -81,6 +81,10 @@
     "whyFits": "Por qué encajas",
     "thinking": "Leyendo el anuncio…",
     "noReasoning": "Todavía no hay una lectura detallada de este empleo.",
+    "explanationLanguage": {
+      "regenerate": "Reescribir esto en español",
+      "regenerating": "Reescribiendo…"
+    },
     "evidence": "Se leyó el anuncio completo. Se comparó con tu currículum.",
     "trail": {
       "label": "Lo que has hecho con este empleo",

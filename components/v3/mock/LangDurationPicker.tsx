@@ -4,12 +4,15 @@
 // LANGUAGE (the LLM interviewer answers in this language) and the planned
 // DURATION in minutes (the generator time-boxes the interview plan to it).
 //
-// Language options come from READY_LOCALES (the same set the global switcher
-// offers); the default is the user's current UI locale. Duration offers a few
+// Language options come from INTERVIEW_LOCALES — every locale the voice engine
+// can actually conduct an interview in, NOT READY_LOCALES (which is only the
+// set whose app chrome is translated). Offering the READY subset here left a
+// ko / es / fr / pt / de candidate with no way to be interviewed in their own
+// language. The default is the user's current UI locale. Duration offers a few
 // presets plus the selected interview type's own estimate, defaulting to that.
 
 import { useTranslations } from 'next-intl';
-import { READY_LOCALES } from '../../../lib/localeConfig';
+import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 
 interface Props {
   language: string;
@@ -67,7 +70,7 @@ export function LangDurationPicker({
           {t('setup.langDuration.languageLabel')}
         </div>
         <div role="radiogroup" aria-label={t('setup.langDuration.languageLabel')} style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {READY_LOCALES.map((l) => {
+          {INTERVIEW_LOCALES.map((l) => {
             const active = l.code === language;
             return (
               <button

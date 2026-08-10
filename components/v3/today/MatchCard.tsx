@@ -53,7 +53,7 @@ import {
   IconFile,
 } from '../primitives';
 import { useJobDetail } from '../../../hooks/useJobDetail';
-import { useJobScore } from '../../../hooks/useTodayMatches';
+import { useJobScore, useRegenerateExplanation } from '../../../hooks/useTodayMatches';
 import { raV2Api } from '../../../lib/api/v2';
 import type { RAJobListItem } from '../../../lib/api/v2';
 import { JobDetailModal } from './JobDetailModal';
@@ -137,6 +137,10 @@ export function MatchCard({
     resumeVariantId ? { resumeVariantId } : undefined,
   );
   const matchView = detail.data?.matchScore ?? scoreQuery.data?.matchScore ?? null;
+
+  // Opt-in refresh for prose written in a language the user has since switched
+  // away from. Bound to the button in the expanded panel — one row, one gesture.
+  const regenerate = useRegenerateExplanation(job.id, resumeVariantId);
 
   // The employer's own posting. Only the full job record carries it
   // (`RAJobListItem` is a compact projection), so it lands with the expanded
@@ -345,7 +349,32 @@ export function MatchCard({
               {detail.isLoading && !matchView ? (
                 <span style={{ color: 'var(--text-muted)' }}>{t('thinking')}</span>
               ) : matchView ? (
-                <Markdown>{matchView.explanation.rationale}</Markdown>
+                <>
+                  <Markdown>{matchView.explanation.rationale}</Markdown>
+                  {/* The score is language-neutral and stays valid across a
+                    *  language switch — only these words are in the previous
+                    *  language. Re-generating costs a billed scorer call, so it
+                    *  is a user gesture on ONE expanded card, never something
+                    *  the feed fires for every row. See the cache gate in
+                    *  server/src/roboapply/v2/routes/jobs.ts. */}
+                  {matchView.explanationStale ? (
+                    <button
+                      type="button"
+                      className="link-btn"
+                      style={{
+                        marginTop: 8,
+                        fontSize: 'var(--fs-meta)',
+                        color: 'var(--action)',
+                      }}
+                      disabled={regenerate.isPending}
+                      onClick={() => regenerate.mutate()}
+                    >
+                      {regenerate.isPending
+                        ? t('explanationLanguage.regenerating')
+                        : t('explanationLanguage.regenerate')}
+                    </button>
+                  ) : null}
+                </>
               ) : (
                 <span style={{ color: 'var(--text-muted)' }}>{t('noReasoning')}</span>
               )}

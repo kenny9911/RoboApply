@@ -81,6 +81,10 @@
     "whyFits": "合っている理由",
     "thinking": "求人票を読んでいます…",
     "noReasoning": "この求人の詳しい読み取りはまだありません。",
+    "explanationLanguage": {
+      "regenerate": "日本語で書き直す",
+      "regenerating": "書き直しています…"
+    },
     "evidence": "求人票を最後まで読み、履歴書と照らし合わせました。",
     "trail": {
       "label": "この求人で行ったこと",

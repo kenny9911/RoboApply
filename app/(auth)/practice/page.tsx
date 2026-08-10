@@ -35,7 +35,7 @@ import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
 import { recommendationsForRole } from '../../../lib/interviewRecommendations';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { formatRelativeTime } from '../../../lib/relativeTime';
-import { READY_LOCALES } from '../../../lib/localeConfig';
+import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/types';
 import {
@@ -122,13 +122,17 @@ export default function MockSetupPage() {
   // Default the interview language to the language the user is using the app in
   // (their selected UI locale), tolerant of region variants: zh-CN → zh,
   // en-US → en, etc. Falls back to English only if nothing matches.
+  //
+  // Matched against INTERVIEW_LOCALES, not READY_LOCALES: the voice engine
+  // speaks all nine locales, and clamping to the translated-chrome subset
+  // silently seeded a ko / es / fr / pt / de user to an English interviewer.
   const uiLocale = useLocale();
   const [language, setLanguage] = useState<string>(() => {
     const base = uiLocale.split('-')[0];
     const match =
-      READY_LOCALES.find((l) => l.code === uiLocale) ??
-      READY_LOCALES.find((l) => l.code === base) ??
-      READY_LOCALES.find((l) => l.code.split('-')[0] === base);
+      INTERVIEW_LOCALES.find((l) => l.code === uiLocale) ??
+      INTERVIEW_LOCALES.find((l) => l.code === base) ??
+      INTERVIEW_LOCALES.find((l) => l.code.split('-')[0] === base);
     return match?.code ?? 'en';
   });
   const [durationOverride, setDurationOverride] = useState<number | null>(null);

@@ -81,6 +81,10 @@
     "whyFits": "Pourquoi tu corresponds",
     "thinking": "Lecture de l'annonce…",
     "noReasoning": "Pas encore d'analyse détaillée pour cette offre.",
+    "explanationLanguage": {
+      "regenerate": "Réécrire ceci en français",
+      "regenerating": "Réécriture en cours…"
+    },
     "evidence": "Annonce lue en entier. Comparée à ton CV.",
     "trail": {
       "label": "Ce que tu as fait sur cette offre",

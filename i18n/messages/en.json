@@ -81,6 +81,10 @@
     "whyFits": "Why you fit",
     "thinking": "Reading the posting…",
     "noReasoning": "No detailed read on this job yet.",
+    "explanationLanguage": {
+      "regenerate": "Rewrite this in English",
+      "regenerating": "Rewriting…"
+    },
     "evidence": "Read the full posting. Compared it against your resume.",
     "trail": {
       "label": "What you have done on this job",

@@ -81,6 +81,10 @@
     "whyFits": "Warum du passt",
     "thinking": "Anzeige wird gelesen…",
     "noReasoning": "Zu diesem Job gibt es noch keine ausführliche Einschätzung.",
+    "explanationLanguage": {
+      "regenerate": "Auf Deutsch neu schreiben",
+      "regenerating": "Wird neu geschrieben…"
+    },
     "evidence": "Die ganze Anzeige gelesen. Mit deinem Lebenslauf verglichen.",
     "trail": {
       "label": "Was du bei diesem Job schon gemacht hast",

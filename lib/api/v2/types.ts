@@ -242,7 +242,17 @@ export interface RAJobMatchScoreView {
   };
   generatedAt: string;
   resumeVariantId: string;
+  /** The résumé changed under this score — the NUMBER may be wrong. */
   stale: boolean;
+  /**
+   * The score stands, but `explanation` was written in a different UI language
+   * than the one this request is being read in (the user switched languages).
+   * The number is language-neutral, so the backend deliberately serves the
+   * cached row rather than paying for an LLM re-score on the bulk feed path —
+   * see the cache gate in server/src/roboapply/v2/routes/jobs.ts. Set
+   * `regenerateExplanation` on a single-row score call to refresh the prose.
+   */
+  explanationStale?: boolean;
 }
 
 export interface RAResumeVariant {
@@ -736,6 +746,14 @@ export interface JobApplyBody {
 export interface JobScoreBody {
   resumeVariantId: string;
   force?: boolean;
+  /**
+   * Opt in to re-generating the explanation prose when it was written in a
+   * different language than the caller is reading in. Costs one billed scorer
+   * call, so ONLY send it from a single-row, user-initiated gesture — never
+   * from the feed's bulk useQueries, which is what the server-side cache gate
+   * exists to protect.
+   */
+  regenerateExplanation?: boolean;
 }
 
 export type ResumeCreateBody =

@@ -81,6 +81,10 @@
     "whyFits": "Por que você combina",
     "thinking": "Lendo o anúncio…",
     "noReasoning": "Ainda não há uma leitura detalhada desta vaga.",
+    "explanationLanguage": {
+      "regenerate": "Reescrever isto em português",
+      "regenerating": "A reescrever…"
+    },
     "evidence": "O anúncio inteiro foi lido. Comparado com seu currículo.",
     "trail": {
       "label": "O que você já fez nesta vaga",

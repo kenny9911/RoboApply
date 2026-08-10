@@ -8,7 +8,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { signup } from '../../../lib/api/auth';
 import { useAuth } from '../../../lib/auth/AuthProvider';
@@ -17,6 +17,11 @@ import { AuthBrandMark, AuthField, AuthError } from '../../../components/auth/Au
 
 export default function SignupPage() {
   const t = useTranslations('auth.signup');
+  // The language the visitor actually read the site in. Sent with the signup so
+  // the backend seeds SeekerProfile.locale from an explicit choice instead of
+  // guessing from Accept-Language — without it, someone who browsed in Chinese
+  // but has an English-first browser gets English LLM output forever.
+  const locale = useLocale();
   const router = useRouter();
   const { refresh } = useAuth();
 
@@ -31,7 +36,7 @@ export default function SignupPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await signup({ email, password, name: name || undefined });
+      await signup({ email, password, name: name || undefined, locale });
       await refresh();
       // Straight into the product. The two interstitials that used to sit here
       // are deleted: /choose-plan asked for a payment decision before the user

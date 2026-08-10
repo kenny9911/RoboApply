@@ -212,6 +212,39 @@ export function useJobScore(
   });
 }
 
+/**
+ * Re-generate a single card's explanation prose in the CURRENT UI language.
+ *
+ * The score itself is language-neutral, so when the user switches languages the
+ * backend deliberately keeps serving the cached row (flagged
+ * `explanationStale`) rather than re-scoring — otherwise the feed's bulk
+ * `useQueries` would fire one billed scorer call per visible job on the first
+ * load after a switch. This is the opt-in that pays for exactly one row, and it
+ * MUST stay bound to a user gesture on a single expanded card. Never call it
+ * from the feed.
+ */
+export function useRegenerateExplanation(jobId: string, resumeVariantId: string | null) {
+  const qc = useQueryClient();
+  return useMutation<JobScoreResponse, Error, void>({
+    mutationFn: () => {
+      if (!resumeVariantId) throw new Error('Missing resume variant');
+      return raV2Api.jobs.score(jobId, {
+        resumeVariantId,
+        regenerateExplanation: true,
+      });
+    },
+    onSuccess: (data) => {
+      if (!resumeVariantId) return;
+      // Refresh both readers of this row: the lazy score query the collapsed
+      // card reads, and the job detail the expanded card prefers.
+      qc.setQueryData(todayKeys.score(jobId, resumeVariantId), data);
+      // useJobDetail keys as ['v2','job',id,params] (hooks/useJobDetail.ts) —
+      // prefix-match so every params variant for this job refetches.
+      void qc.invalidateQueries({ queryKey: ['v2', 'job', jobId] });
+    },
+  });
+}
+
 /** "Pass" a match — a local dismiss with no server write in the stub world.
  *  Exposed as a mutation-shaped helper so the card can show a transient state;
  *  the actual feed filtering is client-side (per the proto's `onPass`). */

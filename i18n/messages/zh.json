@@ -81,6 +81,10 @@
     "whyFits": "你为什么合适",
     "thinking": "正在读这份职位说明…",
     "noReasoning": "还没有对这份职位的详细分析。",
+    "explanationLanguage": {
+      "regenerate": "用简体中文重新生成",
+      "regenerating": "正在重新生成…"
+    },
     "evidence": "读完了整份职位说明，并和你的简历做了对比。",
     "trail": {
       "label": "你在这份职位上做过的事",

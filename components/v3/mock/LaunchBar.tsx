@@ -7,7 +7,7 @@
 
 import { useTranslations } from 'next-intl';
 import { IconBolt } from '../primitives/Iconset';
-import { READY_LOCALES } from '../../../lib/localeConfig';
+import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import type {
   RAMockFormat,
@@ -40,8 +40,10 @@ export function LaunchBar({
 }: Props) {
   const t = useTranslations('practice');
   const { localizeRole } = useMockRoleLabels();
+  // INTERVIEW_LOCALES, not READY_LOCALES — otherwise a ko / es / fr / pt / de
+  // pick falls through to the raw code ("ko") in the launch summary.
   const languageLabel =
-    READY_LOCALES.find((l) => l.code === language)?.label ?? language;
+    INTERVIEW_LOCALES.find((l) => l.code === language)?.label ?? language;
 
   return (
     <div className="iv-launch">

@@ -81,6 +81,10 @@
     "whyFits": "你為什麼適合",
     "thinking": "正在讀這則職缺說明…",
     "noReasoning": "還沒有這個職缺的詳細分析。",
+    "explanationLanguage": {
+      "regenerate": "以繁體中文重新產生",
+      "regenerating": "正在重新產生…"
+    },
     "evidence": "讀完了整則職缺說明，並和你的履歷做了比對。",
     "trail": {
       "label": "你在這個職缺上做過的事",

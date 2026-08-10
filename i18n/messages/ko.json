@@ -81,6 +81,10 @@
     "whyFits": "잘 맞는 이유",
     "thinking": "공고를 읽는 중…",
     "noReasoning": "이 공고를 자세히 읽은 결과는 아직 없어요.",
+    "explanationLanguage": {
+      "regenerate": "한국어로 다시 작성",
+      "regenerating": "다시 작성하는 중…"
+    },
     "evidence": "공고를 끝까지 읽고 이력서와 대조했어요.",
     "trail": {
       "label": "이 공고에서 한 일",
