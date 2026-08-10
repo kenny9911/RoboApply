@@ -79,8 +79,39 @@ export abstract class BaseAgent<TInput, TOutput> {
   /**
    * Format the input into a user message for the LLM
    * Override this in subclasses to customize input formatting
+   *
+   * `locale` is the same user-selected locale that produced the system-prompt
+   * language directive. It is passed here as well because a system-prompt
+   * directive alone loses on cheap/fast models when the USER message carries
+   * English lexical guidance ("Lead with ownership verbs (Led / Owned / Drove)")
+   * — that guidance sits closer to the output and reads as "answer in English".
+   * Content-authoring agents should prepend `outputLanguageReminder(locale)`.
+   * Subclasses that don't need it can keep the single-argument signature.
    */
-  protected abstract formatInput(input: TInput): string;
+  protected abstract formatInput(input: TInput, locale?: string): string;
+
+  /**
+   * A one-line output-language reminder for the USER message, restating the
+   * system prompt's directive where the model is most likely to honour it.
+   * Returns null when there is no locale or it maps to no known language.
+   *
+   * It deliberately still fires for `locale === 'en'`. The policy is
+   * SELECTED-LOCALE-ALWAYS-WINS: an English-UI user reading a Chinese resume
+   * gets English output, exactly as a Chinese-UI user reading an English resume
+   * gets Chinese. That symmetry is the whole point — an agent that mirrors the
+   * document's language instead is the bug this seam exists to close. Don't
+   * "optimize" the English case away without changing that policy on purpose.
+   */
+  protected outputLanguageReminder(locale?: string): string | null {
+    if (!locale) return null;
+    const language = this.language.getLanguageFromLocale(locale);
+    if (!language) return null;
+    const nativeHint = this.language.getLanguageInstructionForLanguage(language);
+    return (
+      `OUTPUT LANGUAGE: ${language}. ${nativeHint} ` +
+      `Write every human-readable value below in ${language}, whatever language the input is in.`
+    );
+  }
 
   /**
    * Parse the LLM response into the expected output format
@@ -219,7 +250,7 @@ export abstract class BaseAgent<TInput, TOutput> {
     logger.pushAgent(attributionRequestId, this.name);
 
     const systemPrompt = this.buildSystemPrompt(jdContent, requestId, locale);
-    const userMessage = this.formatInput(input);
+    const userMessage = this.formatInput(input, locale);
 
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
@@ -304,7 +335,7 @@ export abstract class BaseAgent<TInput, TOutput> {
     logger.pushAgent(attributionRequestId, this.name);
 
     const systemPrompt = this.buildSystemPrompt(jdContent, requestId, locale);
-    const userMessage = this.formatInput(input);
+    const userMessage = this.formatInput(input, locale);
 
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },

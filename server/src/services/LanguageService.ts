@@ -1,4 +1,18 @@
 /**
+ * What an agent's output IS, which decides how the strict output-language
+ * directive has to be phrased:
+ *
+ *   - 'analysis' — the agent writes ABOUT the user's documents (match scores,
+ *     insights, evaluations). The resume/JD are inputs; the output is commentary.
+ *   - 'content'  — the agent AUTHORS the artifact (resume bullets, summaries,
+ *     skills, cover letters, interview questions). The document text IS the
+ *     output, so the directive must say so explicitly.
+ *
+ * See `LanguageService.getStrictOutputLanguageDirective`.
+ */
+export type OutputLanguageScope = 'analysis' | 'content';
+
+/**
  * Language detection service that analyzes text to determine the primary language
  * Used to instruct LLMs to respond in the same language as the job description
  */
@@ -211,22 +225,75 @@ export class LanguageService {
    * verdicts, severities) that downstream code branches on, plus proper
    * nouns and technical terms.
    *
+   * `scope` picks which "what counts as output" clause is used:
+   *
+   *   - 'analysis' (default) — the agent WRITES ABOUT the user's documents
+   *     (match scoring, insights, evaluations). Its output is commentary, and
+   *     the resume/JD are inputs.
+   *
+   *   - 'content' — the agent AUTHORS the artifact itself (resume bullets and
+   *     summaries, skill phrases, cover letters, outreach copy, interview
+   *     questions). The 'analysis' clause silently fails here: it enumerates
+   *     commentary field names and calls the resume an *input*, so a model can
+   *     satisfy it while still writing the rewritten bullet in English. That is
+   *     the exact production failure this split fixes — a zh user's Chinese
+   *     bullet came back rewritten in English from RAResumeRewriteAgent with
+   *     the 'analysis' directive present and correct in the system prompt.
+   *
+   * Only the "what counts as output" clause differs. Enum preservation and the
+   * proper-noun rule apply to BOTH scopes — 'content' agents carry schema
+   * tokens too, and a translated one is silently dropped downstream.
+   *
+   * Both scopes carry the "English in this prompt is not a signal" clause:
+   * these prompts are authored in English and often name English words
+   * outright (`Lead with ownership verbs (Led / Owned / Drove)`, `No hedging
+   * ("helped", "assisted")`). Cheap/fast models read that lexical guidance —
+   * which sits in the user message, closer to the output than the system
+   * prompt — as "write English".
+   *
    * Returns null for unrecognized locales — callers should fall back to
    * `getLanguageInstructionFromLocale` / auto-detection.
    */
-  getStrictOutputLanguageDirective(locale: string): string | null {
+  getStrictOutputLanguageDirective(
+    locale: string,
+    scope: OutputLanguageScope = 'analysis',
+  ): string | null {
     const language = this.getLanguageFromLocale(locale);
     if (!language) {
       return null;
     }
     const nativeHint = this.getLanguageInstructionForLanguage(language);
+
+    const scopeClause =
+      scope === 'content'
+        ? [
+            `Write EVERY human-readable string in your output in ${language}. This INCLUDES THE DOCUMENT TEXT YOU PRODUCE, not just commentary about it: rewritten resume bullets, professional summaries, skill phrases, headlines, cover-letter and outreach copy, interview questions, and coaching tips.`,
+            `You are AUTHORING in ${language}. When the source bullet, resume, or job description is written in another language, you still write the result in ${language} — do NOT mirror the input's language, and do NOT translate into English.`,
+          ]
+        : [
+            `Write EVERY human-readable string in your output in ${language} — summaries, top reasons, evidence sentences, gap analyses, assessments, recommendations, counter-perspectives, and interview questions — even when the resume, job description, or other inputs are written in a different language.`,
+          ];
+
+    // Enum preservation is NOT scope-specific — it is orthogonal to whether the
+    // agent authors or comments. 'content' agents carry schema tokens too:
+    // RAOnboardingResumeSeedAgent emits `industriesTarget` from a closed list,
+    // RACareerInsightAgent emits `action`, and several emit a two-valued
+    // `coachTip.kind`. Downstream code drops values it cannot match, so a
+    // translated enum is SILENT DATA LOSS, not a cosmetic slip. Both scopes get
+    // this clause; only the wording of what "counts as output" differs above.
+    const schemaClause = [
+      'Schema-constrained enum values must stay EXACTLY as the output schema specifies — same words, same letter-casing, never translated. This includes (non-exhaustive): grades ("A+"), verdicts ("Strong Match"), recommendations ("Strongly Recommend"), severities ("Dealbreaker" and lowercase "dealbreaker"), confidence ("High" / "high"), proficiency ("Expert", "Advanced"), relevance and priority levels ("High|Medium|Low", "Critical|High|Medium|Low"), yes/no fields ("Yes", "No", "Partially"), and any value this prompt tells you to pick from a fixed list of options. Any value the schema writes as a pipe-separated choice is an enum. Only free-text narrative fields are translated.',
+      'JSON keys and any other schema-defined token stay EXACTLY as this prompt specifies — never translated.',
+    ];
+
     return [
       '# OUTPUT LANGUAGE (USER-SELECTED — HIGHEST PRIORITY)',
       `The user's selected interface language is ${language}. ${nativeHint}`,
-      `Write EVERY human-readable string in your output in ${language} — summaries, top reasons, evidence sentences, gap analyses, assessments, recommendations, counter-perspectives, and interview questions — even when the resume, job description, or other inputs are written in a different language.`,
+      ...scopeClause,
+      `This prompt and its examples are written in English for authoring convenience ONLY — that is NOT a signal about your output language. Any style rule that names specific English words (verbs to lead with, words to avoid, sample phrasings) is an ILLUSTRATION of the intent: apply the equivalent idiom in ${language}, never the English words themselves. This does NOT extend to values you are told to pick from a fixed list — see the schema rule below.`,
       'Keep proper nouns (people, companies, schools, products) and technical terms (e.g. Python, Kubernetes, RAG) in their original form.',
-      'Schema-constrained enum values must stay EXACTLY as the output schema specifies — same words, same letter-casing, never translated. This includes (non-exhaustive): grades ("A+"), verdicts ("Strong Match"), recommendations ("Strongly Recommend"), severities ("Dealbreaker" and lowercase "dealbreaker"), confidence ("High" / "high"), proficiency ("Expert", "Advanced"), relevance and priority levels ("High|Medium|Low", "Critical|High|Medium|Low"), and yes/no fields ("Yes", "No", "Partially"). Any value the schema writes as a pipe-separated choice is an enum. Only free-text narrative fields are translated.',
-      'This directive OVERRIDES any other language instruction elsewhere in this prompt.',
+      ...schemaClause,
+      'This directive OVERRIDES any other language instruction elsewhere in this prompt, EXCEPT the schema rule above — a fixed-list value is never translated, whatever else this prompt says.',
     ].join('\n');
   }
 }

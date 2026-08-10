@@ -88,9 +88,17 @@ function clipString(value: unknown, max: number): string {
   return value.trim().slice(0, max);
 }
 
+// Style guidance per action. These are written in English but describe INTENT,
+// not vocabulary: any English word named below is an illustration of the register
+// to hit, and the model is told (here and in the strict 'content' language
+// directive) to reach for the equivalent idiom in the OUTPUT language. The
+// earlier wording — bare `Lead with ownership verbs (Led / Owned / Drove)` and
+// `No hedging ("helped", "assisted", "involved in")` — read as a instruction to
+// emit those English words, and pulled Haiku into answering a Chinese bullet in
+// English even with the language directive present in the system prompt.
 const ACTION_GUIDANCE: Record<RAResumeRewriteAction, string> = {
   improve:
-    'Make the bullet sharper and more results-oriented. Lead with a strong verb, name the outcome, keep it to one line.',
+    'Make the bullet sharper and more results-oriented. Lead with a strong action verb in the output language, name the outcome, keep it to one line.',
   metrics:
     'Add quantification. ONLY keep numbers that already appear in the source bullet — if none exist, insert bracketed placeholders like [X], [n=__], [before → after] for the user to fill in. NEVER invent a concrete figure.',
   shorten:
@@ -98,7 +106,7 @@ const ACTION_GUIDANCE: Record<RAResumeRewriteAction, string> = {
   expand:
     'Add one layer of specificity (who you worked with, what stages, what the result was). 2–3 sentences max. Keep every number identical to the source.',
   confident:
-    'Rewrite in a confident first-person-implied voice. Lead with ownership verbs (Led / Owned / Drove). No hedging ("helped", "assisted", "involved in").',
+    'Rewrite in a confident first-person-implied voice. Lead with an ownership verb in the output language — the register of "Led" / "Owned" / "Drove", expressed idiomatically in that language. Drop hedging of the "helped" / "assisted" / "involved in" kind, again judged in the output language, not by those English words.',
   junior:
     'Reframe for an early-career / new-grad candidate: translate scope into concrete deliverables, lean on initiative and learning, avoid overclaiming seniority.',
 };
@@ -135,14 +143,20 @@ export class RAResumeRewriteAgent extends BaseAgent<
    * language. The base prompt is English-heavy (English mode descriptions +
    * English label words), and the editor often fires on an empty / English
    * summary, so the one-line LANGUAGE_INSTRUCTIONS hint loses often enough that
-   * a Chinese-UI user gets English rewrites. The strict directive states the
-   * user-selected language as the highest-priority rule (it keeps proper nouns
-   * + technical terms in their original form). Mirrors RAJobMatchScorerAgent.
+   * a Chinese-UI user gets English rewrites.
+   *
+   * Scope is 'content', NOT the default 'analysis'. This agent AUTHORS the
+   * resume text; it does not comment on it. The 'analysis' clause enumerates
+   * commentary fields ("summaries, top reasons, evidence sentences, gap
+   * analyses…") and calls the resume an *input*, which a model can satisfy
+   * while still writing the rewritten bullet in English — observed in
+   * production: locale resolved to zh, the directive was present and correct in
+   * the system prompt, and Haiku still translated a Chinese bullet into English.
    * Falls back to the default one-line hint for unrecognized locales.
    */
   protected getLocaleDirective(locale: string): string | null {
     return (
-      this.language.getStrictOutputLanguageDirective(locale) ??
+      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
       super.getLocaleDirective(locale)
     );
   }
@@ -167,8 +181,14 @@ export class RAResumeRewriteAgent extends BaseAgent<
 Return ONLY the JSON object for the active mode — no prose, no code fences.`;
   }
 
-  protected formatInput(input: RAResumeRewriteInput): string {
+  protected formatInput(input: RAResumeRewriteInput, locale?: string): string {
     const parts: string[] = [];
+    // Restate the output language HERE, not just in the system prompt: the
+    // per-action style guidance below is English prose sitting right next to the
+    // text being rewritten, and on a Haiku-tier model that proximity beat the
+    // system directive (see getLocaleDirective).
+    const languageLine = this.outputLanguageReminder(locale);
+    if (languageLine) parts.push(languageLine);
     parts.push(`MODE: ${input.mode}`);
 
     if (input.jobContext?.title || input.jobContext?.description) {
@@ -281,8 +301,12 @@ Return ONLY the JSON object for the active mode — no prose, no code fences.`;
   }
 }
 
-export const raResumeRewriteAgent = new RAResumeRewriteAgent();
-export default raResumeRewriteAgent;
+// NO module-level singleton on purpose. This agent keeps per-request state on
+// `this` (activeMode, and the locale that state is resolved against), so a
+// shared instance races between run() and parseOutput under concurrency.
+// RAResumeAIService constructs a fresh agent per request; exporting a singleton
+// would make it one careless import away from being wrong again.
+export default RAResumeRewriteAgent;
 
 export const __test = {
   pickResumeRewriteModel,
