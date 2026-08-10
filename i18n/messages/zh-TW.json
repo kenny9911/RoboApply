@@ -668,6 +668,28 @@
         "critical": "一定要改",
         "recommended": "建議改",
         "optional": "可改可不改"
+      },
+      "issue": {
+        "entry_fallback": "第 {index} 段經歷",
+        "contact_name": "填上你的全名，招募方才知道這份履歷是誰的。",
+        "contact_email": "填一個電子郵件地址 —— 招募方要有辦法聯絡到你。",
+        "contact_phone": "填一個電話號碼。層級高一點的職缺，通常先從一通電話開始。",
+        "contact_location": "填上你所在的城市 —— 很多公司會直接篩掉沒寫地點的履歷。",
+        "contact_links": "加一個 LinkedIn 或作品集連結，讓招募方有地方深入了解你。",
+        "title_missing": "寫上你想投的職稱，整份履歷才能講同一個故事。",
+        "summary_missing": "寫 2 到 3 句個人簡介。這是招募方最先讀到的內容。",
+        "summary_short": "你的個人簡介有 {words} 個詞。目標是 40 到 60 個 —— 夠說清你的賣點，又能一眼掃完。",
+        "summary_long": "你的個人簡介有 {words} 個詞。壓到 60 個以內 —— 履歷開頭幾秒鐘就被掃過去了。",
+        "experience_missing": "至少加一段工作經歷。這是履歷的主幹。",
+        "experience_head": "{where}：公司和職稱都要填。",
+        "experience_dates": "{where}：補上起訖時間 —— 沒有時間的空窗會讓人起疑。",
+        "experience_bullets_missing": "{where}：至少寫 2 到 3 條重點，說明你到底做了什麼。",
+        "experience_bullets_quantify": "{where}：你的重點裡一個數字都沒有。帶數字的成果 —— 快了 30%、每週 800 萬使用者 —— 更有份量。",
+        "experience_bullets_weak_start": "{where}：有 {count} 條重點以被動或無力的動詞開頭。試試「主導」「上線」「降低」。",
+        "experience_bullets_long": "{where}：有 {count} 條重點超過 32 個詞。每條控制在 1 到 2 行。",
+        "skills_few": "{count, plural, =0 {你還沒有列出技能} other {你只列了 # 項技能}}。大多數職缺會要求 8 到 15 項 —— 把目標職缺提到的補上。",
+        "skills_many": "{count} 項技能太多了 —— 招募方只會掃一眼。留下最貼合這個職缺的 12 到 15 項。",
+        "education_missing": "還沒有學歷。如果你畢業了就寫上 —— 不費什麼事，而且很多篩選會要求。"
       }
     }
   },

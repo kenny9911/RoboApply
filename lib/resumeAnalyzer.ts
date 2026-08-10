@@ -12,11 +12,61 @@ import type { StructuredResume } from './resumeStructure';
 
 export type AnalyzerSeverity = 'critical' | 'recommended' | 'optional';
 
+/**
+ * Every message this module can emit, as an i18n key under
+ * `resume.analyzer.issue` in i18n/messages/*.json. The analyzer never builds a
+ * user-facing sentence itself: it is imported by a client component that runs
+ * in nine locales, and a hardcoded English string here shipped English issue
+ * text into an otherwise fully translated editor. Rendering happens in
+ * components/v3/resume-editor/AnalyzerPanel.tsx.
+ *
+ * Keep this list in sync with the bundles — __tests__/utils/resumeAnalyzer.i18n.test.ts
+ * resolves every key here against all nine bundles, because next-intl renders a
+ * missing key as its own dotted path instead of throwing.
+ */
+export const ANALYZER_MESSAGE_KEYS = [
+  'contact_name',
+  'contact_email',
+  'contact_phone',
+  'contact_location',
+  'contact_links',
+  'title_missing',
+  'summary_missing',
+  'summary_short',
+  'summary_long',
+  'experience_missing',
+  'experience_head',
+  'experience_dates',
+  'experience_bullets_missing',
+  'experience_bullets_quantify',
+  'experience_bullets_weak_start',
+  'experience_bullets_long',
+  'skills_few',
+  'skills_many',
+  'education_missing',
+] as const;
+
+export type AnalyzerMessageKey = (typeof ANALYZER_MESSAGE_KEYS)[number];
+
+/** ICU values for an issue's message. */
+export interface AnalyzerMessageValues {
+  /** Company (or role title) of the entry an issue points at. Empty when the
+   *  entry has neither yet — the panel labels it by position instead. */
+  where?: string;
+  /** 1-based position of that entry, backing the `where` fallback label. */
+  entry?: number;
+  /** Plural-driving count: bullets, skills. */
+  count?: number;
+  /** Word count, for the summary-length rules. */
+  words?: number;
+}
+
 export interface AnalyzerIssue {
   id: string;
   severity: AnalyzerSeverity;
   category: 'contact' | 'summary' | 'experience' | 'skills' | 'formatting';
-  message: string;
+  messageKey: AnalyzerMessageKey;
+  messageValues?: AnalyzerMessageValues;
   /** Optional anchor for click-to-fix navigation in the editor. */
   anchor?: string;
 }
@@ -80,10 +130,11 @@ function makeIssue(
   id: string,
   severity: AnalyzerSeverity,
   category: AnalyzerIssue['category'],
-  message: string,
+  messageKey: AnalyzerMessageKey,
   anchor?: string,
+  messageValues?: AnalyzerMessageValues,
 ): AnalyzerIssue {
-  return { id, severity, category, message, anchor };
+  return { id, severity, category, messageKey, messageValues, anchor };
 }
 
 export function analyzeResume(resume: StructuredResume): AnalyzerReport {
@@ -92,35 +143,17 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
   // ── Contact ──────────────────────────────────────────────────────────
   if (!resume.contact.fullName.trim()) {
     issues.push(
-      makeIssue(
-        'contact.name',
-        'critical',
-        'contact',
-        'Add your full name so recruiters know who this resume belongs to.',
-        'section-contact',
-      ),
+      makeIssue('contact.name', 'critical', 'contact', 'contact_name', 'section-contact'),
     );
   }
   if (!resume.contact.email.trim()) {
     issues.push(
-      makeIssue(
-        'contact.email',
-        'critical',
-        'contact',
-        'Add an email address — recruiters need a way to reach you.',
-        'section-contact',
-      ),
+      makeIssue('contact.email', 'critical', 'contact', 'contact_email', 'section-contact'),
     );
   }
   if (!resume.contact.phone.trim()) {
     issues.push(
-      makeIssue(
-        'contact.phone',
-        'recommended',
-        'contact',
-        'Adding a phone number doubles your callback rate for senior roles.',
-        'section-contact',
-      ),
+      makeIssue('contact.phone', 'recommended', 'contact', 'contact_phone', 'section-contact'),
     );
   }
   if (!resume.contact.location.trim()) {
@@ -129,33 +162,21 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
         'contact.location',
         'recommended',
         'contact',
-        'Add your city — many ATS filters reject resumes without a location.',
+        'contact_location',
         'section-contact',
       ),
     );
   }
   if (resume.contact.links.length === 0) {
     issues.push(
-      makeIssue(
-        'contact.links',
-        'optional',
-        'contact',
-        'Add a LinkedIn URL or portfolio link to give recruiters somewhere to dig deeper.',
-        'section-contact',
-      ),
+      makeIssue('contact.links', 'optional', 'contact', 'contact_links', 'section-contact'),
     );
   }
 
   // ── Target title ─────────────────────────────────────────────────────
   if (!resume.targetTitle.trim()) {
     issues.push(
-      makeIssue(
-        'title.missing',
-        'recommended',
-        'contact',
-        'Add a target job title so the rest of your resume tells one consistent story.',
-        'section-target',
-      ),
+      makeIssue('title.missing', 'recommended', 'contact', 'title_missing', 'section-target'),
     );
   }
 
@@ -163,13 +184,7 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
   const summary = resume.summary.trim();
   if (!summary) {
     issues.push(
-      makeIssue(
-        'summary.missing',
-        'critical',
-        'summary',
-        'Write a 2-3 sentence summary. This is the first thing a recruiter reads.',
-        'section-summary',
-      ),
+      makeIssue('summary.missing', 'critical', 'summary', 'summary_missing', 'section-summary'),
     );
   } else {
     const words = summary.split(/\s+/).filter(Boolean).length;
@@ -179,19 +194,16 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
           'summary.short',
           'recommended',
           'summary',
-          `Your summary is ${words} words. Aim for 40-60 — long enough to land your pitch, short enough to skim.`,
+          'summary_short',
           'section-summary',
+          { words },
         ),
       );
     } else if (words > 90) {
       issues.push(
-        makeIssue(
-          'summary.long',
-          'optional',
-          'summary',
-          `Your summary is ${words} words. Tighten it to 60 or less — recruiters spend ~7 seconds on the top of a resume.`,
-          'section-summary',
-        ),
+        makeIssue('summary.long', 'optional', 'summary', 'summary_long', 'section-summary', {
+          words,
+        }),
       );
     }
   }
@@ -203,21 +215,25 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
         'exp.missing',
         'critical',
         'experience',
-        'Add at least one work experience entry. This is the spine of your resume.',
+        'experience_missing',
         'section-experience',
       ),
     );
   } else {
     resume.experiences.forEach((exp, idx) => {
-      const where = exp.company || exp.title || `Experience #${idx + 1}`;
+      // An entry with neither a company nor a title has no name to show yet;
+      // the panel falls back to labelling it by position, in the user's locale.
+      const where = exp.company || exp.title || '';
+      const entry = idx + 1;
       if (!exp.company.trim() || !exp.title.trim()) {
         issues.push(
           makeIssue(
             `exp.${exp.id}.head`,
             'critical',
             'experience',
-            `${where}: fill in both the company and the role title.`,
+            'experience_head',
             `exp-${exp.id}`,
+            { where, entry },
           ),
         );
       }
@@ -227,8 +243,9 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
             `exp.${exp.id}.dates`,
             'recommended',
             'experience',
-            `${where}: add start and end dates — gaps without dates raise flags.`,
+            'experience_dates',
             `exp-${exp.id}`,
+            { where, entry },
           ),
         );
       }
@@ -238,8 +255,9 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
             `exp.${exp.id}.bullets.missing`,
             'critical',
             'experience',
-            `${where}: add at least 2-3 bullet points showing what you actually did.`,
+            'experience_bullets_missing',
             `exp-${exp.id}`,
+            { where, entry },
           ),
         );
       } else {
@@ -261,8 +279,9 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
               `exp.${exp.id}.bullets.quantify`,
               'recommended',
               'experience',
-              `${where}: none of your bullets contain a number. Quantified outcomes (38% latency cut, 8M weekly users) hit harder.`,
+              'experience_bullets_quantify',
               `exp-${exp.id}`,
+              { where, entry },
             ),
           );
         }
@@ -272,8 +291,9 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
               `exp.${exp.id}.bullets.weak_start`,
               'recommended',
               'experience',
-              `${where}: ${weakStartCount} bullet${weakStartCount === 1 ? '' : 's'} start${weakStartCount === 1 ? 's' : ''} with a passive or weak verb. Try "Led", "Shipped", "Reduced".`,
+              'experience_bullets_weak_start',
               `exp-${exp.id}`,
+              { where, entry, count: weakStartCount },
             ),
           );
         }
@@ -283,8 +303,9 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
               `exp.${exp.id}.bullets.long`,
               'optional',
               'experience',
-              `${where}: ${overlongCount} bullet${overlongCount === 1 ? '' : 's'} run${overlongCount === 1 ? 's' : ''} past 32 words. Aim for 1-2 lines per bullet.`,
+              'experience_bullets_long',
               `exp-${exp.id}`,
+              { where, entry, count: overlongCount },
             ),
           );
         }
@@ -295,24 +316,16 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
   // ── Skills ───────────────────────────────────────────────────────────
   if (resume.skills.length < 5) {
     issues.push(
-      makeIssue(
-        'skills.few',
-        'recommended',
-        'skills',
-        `You list ${resume.skills.length} skill${resume.skills.length === 1 ? '' : 's'}. Most ATS systems weight 8-15 keywords — add more from the JD you're targeting.`,
-        'section-skills',
-      ),
+      makeIssue('skills.few', 'recommended', 'skills', 'skills_few', 'section-skills', {
+        count: resume.skills.length,
+      }),
     );
   }
   if (resume.skills.length > 25) {
     issues.push(
-      makeIssue(
-        'skills.many',
-        'optional',
-        'skills',
-        `${resume.skills.length} skills is a lot — recruiters skim. Trim to the 12-15 strongest for the role.`,
-        'section-skills',
-      ),
+      makeIssue('skills.many', 'optional', 'skills', 'skills_many', 'section-skills', {
+        count: resume.skills.length,
+      }),
     );
   }
 
@@ -323,7 +336,7 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
         'edu.missing',
         'optional',
         'formatting',
-        'No education entries. If you graduated, list it — it costs nothing and many filters require it.',
+        'education_missing',
         'section-education',
       ),
     );

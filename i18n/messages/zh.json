@@ -668,6 +668,28 @@
         "critical": "必须改",
         "recommended": "建议改",
         "optional": "可改可不改"
+      },
+      "issue": {
+        "entry_fallback": "第 {index} 段经历",
+        "contact_name": "填上你的全名，招聘方才知道这份简历是谁的。",
+        "contact_email": "填一个邮箱地址 —— 招聘方要有办法联系到你。",
+        "contact_phone": "填一个电话号码。级别高一些的职位，往往先从一通电话开始。",
+        "contact_location": "填上你所在的城市 —— 很多公司会直接筛掉没写地点的简历。",
+        "contact_links": "加一个领英或作品集链接，让招聘方有地方深入了解你。",
+        "title_missing": "写上你想投的职位名称，整份简历才能讲同一个故事。",
+        "summary_missing": "写 2 到 3 句个人简介。这是招聘方最先读到的内容。",
+        "summary_short": "你的个人简介有 {words} 个词。目标是 40 到 60 个 —— 够说清你的卖点，又能一眼扫完。",
+        "summary_long": "你的个人简介有 {words} 个词。压到 60 个以内 —— 简历开头几秒钟就被扫过去了。",
+        "experience_missing": "至少加一段工作经历。这是简历的主干。",
+        "experience_head": "{where}：公司和职位名称都要填。",
+        "experience_dates": "{where}：补上起止时间 —— 没有时间的空档会让人起疑。",
+        "experience_bullets_missing": "{where}：至少写 2 到 3 条要点，说明你到底做了什么。",
+        "experience_bullets_quantify": "{where}：你的要点里一个数字都没有。带数字的结果 —— 快了 30%、每周 800 万用户 —— 更有分量。",
+        "experience_bullets_weak_start": "{where}：有 {count} 条要点以被动或无力的动词开头。试试“主导”“上线”“降低”。",
+        "experience_bullets_long": "{where}：有 {count} 条要点超过 32 个词。每条控制在 1 到 2 行。",
+        "skills_few": "{count, plural, =0 {你还没有列出技能} other {你只列了 # 项技能}}。大多数职位描述会要求 8 到 15 项 —— 把目标职位提到的补上。",
+        "skills_many": "{count} 项技能太多了 —— 招聘方只会扫一眼。留下最贴合这个职位的 12 到 15 项。",
+        "education_missing": "还没有教育经历。如果你毕业了就写上 —— 不费什么事，而且很多筛选会要求。"
       }
     }
   },

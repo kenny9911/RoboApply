@@ -668,6 +668,28 @@
         "critical": "Fix this",
         "recommended": "Worth fixing",
         "optional": "Optional"
+      },
+      "issue": {
+        "entry_fallback": "Role {index}",
+        "contact_name": "Add your full name so recruiters know who this resume belongs to.",
+        "contact_email": "Add an email address — recruiters need a way to reach you.",
+        "contact_phone": "Add a phone number. Senior roles usually start with a call.",
+        "contact_location": "Add your city — many companies filter out resumes with no location.",
+        "contact_links": "Add a LinkedIn URL or portfolio link to give recruiters somewhere to dig deeper.",
+        "title_missing": "Add a target job title so the rest of your resume tells one consistent story.",
+        "summary_missing": "Write a 2-3 sentence summary. This is the first thing a recruiter reads.",
+        "summary_short": "Your summary is {words} words. Aim for 40-60 — long enough to land your pitch, short enough to skim.",
+        "summary_long": "Your summary is {words} words. Tighten it to 60 or less — the top of a resume gets skimmed in seconds.",
+        "experience_missing": "Add at least one work experience entry. This is the spine of your resume.",
+        "experience_head": "{where}: fill in both the company and the role title.",
+        "experience_dates": "{where}: add start and end dates — gaps without dates raise questions.",
+        "experience_bullets_missing": "{where}: add at least 2-3 bullet points showing what you actually did.",
+        "experience_bullets_quantify": "{where}: none of your bullets contain a number. Results with numbers — 30% faster, 8M weekly users — hit harder.",
+        "experience_bullets_weak_start": "{where}: {count, plural, one {# bullet starts} other {# bullets start}} with a passive or weak verb. Try “Led”, “Shipped”, “Reduced”.",
+        "experience_bullets_long": "{where}: {count, plural, one {# bullet runs} other {# bullets run}} past 32 words. Aim for 1-2 lines per bullet.",
+        "skills_few": "You list {count, plural, =0 {no skills yet} one {1 skill} other {# skills}}. Most job posts ask for 8-15 — add the ones the job you want names.",
+        "skills_many": "{count} skills is a lot — recruiters skim. Trim to the 12-15 strongest for the role.",
+        "education_missing": "No education entries. If you graduated, list it — it costs nothing and many filters require it."
       }
     }
   },

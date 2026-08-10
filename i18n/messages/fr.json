@@ -668,6 +668,28 @@
         "critical": "À corriger",
         "recommended": "Vaut la peine d'être corrigé",
         "optional": "Facultatif"
+      },
+      "issue": {
+        "entry_fallback": "Poste {index}",
+        "contact_name": "Ajoute ton nom complet pour que les recruteurs sachent à qui appartient ce CV.",
+        "contact_email": "Ajoute une adresse e-mail : les recruteurs ont besoin d'un moyen de te joindre.",
+        "contact_phone": "Ajoute un numéro de téléphone. Les postes seniors commencent souvent par un appel.",
+        "contact_location": "Ajoute ta ville : beaucoup d'entreprises écartent les CV sans lieu.",
+        "contact_links": "Ajoute ton LinkedIn ou un lien vers ton portfolio, pour que les recruteurs puissent creuser.",
+        "title_missing": "Ajoute le poste que tu vises, pour que tout le reste du CV raconte une seule histoire.",
+        "summary_missing": "Écris un résumé de 2 à 3 phrases. C'est la première chose qu'un recruteur lit.",
+        "summary_short": "Ton résumé fait {words} mots. Vise 40 à 60 : assez pour faire passer ton message, assez court pour être survolé.",
+        "summary_long": "Ton résumé fait {words} mots. Ramène-le à 60 au maximum : le haut d'un CV est survolé en quelques secondes.",
+        "experience_missing": "Ajoute au moins une expérience professionnelle. C'est la colonne vertébrale du CV.",
+        "experience_head": "{where} : renseigne l'entreprise et l'intitulé du poste.",
+        "experience_dates": "{where} : ajoute les dates de début et de fin ; un trou sans dates soulève des questions.",
+        "experience_bullets_missing": "{where} : ajoute au moins 2 à 3 lignes qui montrent ce que tu as fait.",
+        "experience_bullets_quantify": "{where} : aucune de tes lignes ne contient de chiffre. Les résultats chiffrés — 30 % plus rapide, 8 millions d'utilisateurs par semaine — frappent plus fort.",
+        "experience_bullets_weak_start": "{where} : {count, plural, one {# ligne commence} other {# lignes commencent}} par un verbe passif ou faible. Essaie « Piloté », « Lancé », « Réduit ».",
+        "experience_bullets_long": "{where} : {count, plural, one {# ligne dépasse} other {# lignes dépassent}} 32 mots. Vise 1 à 2 lignes par puce.",
+        "skills_few": "{count, plural, =0 {Tu n'as encore listé aucune compétence} one {Tu listes 1 compétence} other {Tu listes # compétences}}. La plupart des offres en demandent 8 à 15 : ajoute celles que cite le poste que tu veux.",
+        "skills_many": "{count} compétences, c'est beaucoup : les recruteurs survolent. Garde les 12 à 15 plus fortes pour ce poste.",
+        "education_missing": "Aucune formation renseignée. Si tu as un diplôme, mets-le : ça ne coûte rien et beaucoup de filtres l'exigent."
       }
     }
   },

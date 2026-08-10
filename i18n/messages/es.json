@@ -668,6 +668,28 @@
         "critical": "Corrige esto",
         "recommended": "Conviene corregirlo",
         "optional": "Opcional"
+      },
+      "issue": {
+        "entry_fallback": "Puesto {index}",
+        "contact_name": "Añade tu nombre completo para que los reclutadores sepan de quién es este currículum.",
+        "contact_email": "Añade un correo electrónico: los reclutadores necesitan una forma de contactarte.",
+        "contact_phone": "Añade un teléfono. Los puestos de mayor nivel suelen empezar con una llamada.",
+        "contact_location": "Añade tu ciudad: muchas empresas descartan los currículums sin ubicación.",
+        "contact_links": "Añade tu LinkedIn o un enlace a tu portafolio para que los reclutadores puedan profundizar.",
+        "title_missing": "Añade el puesto al que apuntas para que el resto del currículum cuente una sola historia.",
+        "summary_missing": "Escribe un resumen de 2 o 3 frases. Es lo primero que lee un reclutador.",
+        "summary_short": "Tu resumen tiene {words} palabras. Apunta a 40-60: suficiente para transmitir tu propuesta y corto para leerlo de un vistazo.",
+        "summary_long": "Tu resumen tiene {words} palabras. Déjalo en 60 o menos: la parte de arriba del currículum se lee en segundos.",
+        "experience_missing": "Añade al menos una experiencia laboral. Es la columna vertebral del currículum.",
+        "experience_head": "{where}: completa la empresa y el nombre del puesto.",
+        "experience_dates": "{where}: añade la fecha de inicio y la de fin; los huecos sin fechas generan dudas.",
+        "experience_bullets_missing": "{where}: añade al menos 2 o 3 líneas que muestren lo que hiciste.",
+        "experience_bullets_quantify": "{where}: ninguna de tus líneas tiene un número. Los resultados con cifras (30% más rápido, 8 millones de usuarios por semana) pegan más fuerte.",
+        "experience_bullets_weak_start": "{where}: {count, plural, one {# línea empieza} other {# líneas empiezan}} con un verbo pasivo o flojo. Prueba «Lideré», «Lancé», «Reduje».",
+        "experience_bullets_long": "{where}: {count, plural, one {# línea pasa} other {# líneas pasan}} de 32 palabras. Apunta a 1 o 2 renglones por línea.",
+        "skills_few": "{count, plural, =0 {Todavía no has puesto ninguna habilidad} one {Tienes 1 habilidad} other {Tienes # habilidades}}. La mayoría de las ofertas piden entre 8 y 15: añade las que menciona el empleo que quieres.",
+        "skills_many": "{count} habilidades son muchas: los reclutadores leen por encima. Deja las 12 a 15 más fuertes para el puesto.",
+        "education_missing": "No hay formación académica. Si te graduaste, ponlo: no cuesta nada y muchos filtros lo piden."
       }
     }
   },

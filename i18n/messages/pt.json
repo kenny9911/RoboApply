@@ -668,6 +668,28 @@
         "critical": "Corrija isto",
         "recommended": "Vale corrigir",
         "optional": "Opcional"
+      },
+      "issue": {
+        "entry_fallback": "Cargo {index}",
+        "contact_name": "Coloque seu nome completo para os recrutadores saberem de quem é este currículo.",
+        "contact_email": "Coloque um e-mail: os recrutadores precisam de um jeito de falar com você.",
+        "contact_phone": "Coloque um telefone. Cargos mais sêniores costumam começar por uma ligação.",
+        "contact_location": "Coloque sua cidade: muitas empresas descartam currículos sem localização.",
+        "contact_links": "Coloque seu LinkedIn ou um link de portfólio para os recrutadores irem mais fundo.",
+        "title_missing": "Coloque o cargo que você quer, assim o resto do currículo conta uma história só.",
+        "summary_missing": "Escreva um resumo de 2 a 3 frases. É a primeira coisa que um recrutador lê.",
+        "summary_short": "Seu resumo tem {words} palavras. Mire em 40-60: dá para passar seu recado e ainda ser lido rápido.",
+        "summary_long": "Seu resumo tem {words} palavras. Reduza para 60 ou menos: o topo do currículo é lido em segundos.",
+        "experience_missing": "Coloque pelo menos uma experiência de trabalho. É a espinha do currículo.",
+        "experience_head": "{where}: preencha a empresa e o nome do cargo.",
+        "experience_dates": "{where}: coloque as datas de início e de fim; períodos sem data levantam dúvidas.",
+        "experience_bullets_missing": "{where}: escreva pelo menos 2 a 3 linhas mostrando o que você fez de fato.",
+        "experience_bullets_quantify": "{where}: nenhuma das suas linhas tem número. Resultados com números — 30% mais rápido, 8 milhões de usuários por semana — pesam mais.",
+        "experience_bullets_weak_start": "{where}: {count, plural, one {# linha começa} other {# linhas começam}} com um verbo passivo ou fraco. Tente «Liderei», «Lancei», «Reduzi».",
+        "experience_bullets_long": "{where}: {count, plural, one {# linha passa} other {# linhas passam}} de 32 palavras. Deixe cada tópico com 1 ou 2 linhas.",
+        "skills_few": "{count, plural, =0 {Você ainda não listou nenhuma habilidade} one {Você listou 1 habilidade} other {Você listou # habilidades}}. A maioria das vagas pede de 8 a 15: acrescente as que a vaga que você quer cita.",
+        "skills_many": "{count} habilidades é muita coisa: recrutadores leem por cima. Fique com as 12 a 15 mais fortes para o cargo.",
+        "education_missing": "Não há formação acadêmica. Se você se formou, coloque: não custa nada e muitos filtros exigem."
       }
     }
   },

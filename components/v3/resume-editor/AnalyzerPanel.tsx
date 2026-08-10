@@ -6,9 +6,10 @@
 // shows WHY the score is what it is, with click-to-fix navigation via the
 // analyzer's per-issue anchors.
 //
-// Issue messages come from lib/resumeAnalyzer verbatim (they are generated
-// English strings, not i18n catalog entries — same as the score today). Panel
-// chrome is i18n'd like the rest of the editor.
+// lib/resumeAnalyzer emits an i18n key plus ICU values per issue, never a
+// sentence: the analyzer is pure/synchronous and locale-blind, and this panel
+// is the only place its issues are read. Everything here goes through the
+// catalog like the rest of the editor.
 
 import { useTranslations } from 'next-intl';
 
@@ -30,6 +31,19 @@ export function AnalyzerPanel({ report, onJump, onClose }: Props) {
   const sorted: AnalyzerIssue[] = SEVERITY_ORDER.flatMap((sev) =>
     report.issues.filter((i) => i.severity === sev),
   );
+
+  // An experience entry with neither a company nor a title has no name to put
+  // in front of the issue, so it is labelled by its position — translated,
+  // like everything else the user reads here.
+  const issueText = (issue: AnalyzerIssue) => {
+    const values = issue.messageValues ?? {};
+    const where =
+      values.where ||
+      (values.entry === undefined
+        ? ''
+        : t('analyzer.issue.entry_fallback', { index: values.entry }));
+    return t(`analyzer.issue.${issue.messageKey}`, { ...values, where });
+  };
 
   return (
     <div className="rb-analyzer-pop" role="dialog" aria-label={t('analyzer.title')}>
@@ -63,7 +77,7 @@ export function AnalyzerPanel({ report, onJump, onClose }: Props) {
                 <span className="rb-issue-sev">
                   {t(`analyzer.severity.${issue.severity}`)}
                 </span>
-                <span className="rb-issue-msg">{issue.message}</span>
+                <span className="rb-issue-msg">{issueText(issue)}</span>
               </span>
             </button>
           ))}

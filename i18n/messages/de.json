@@ -668,6 +668,28 @@
         "critical": "Unbedingt ändern",
         "recommended": "Lohnt sich zu ändern",
         "optional": "Optional"
+      },
+      "issue": {
+        "entry_fallback": "Station {index}",
+        "contact_name": "Trag deinen vollständigen Namen ein, damit Recruiter wissen, wessen Lebenslauf das ist.",
+        "contact_email": "Trag eine E-Mail-Adresse ein — Recruiter brauchen einen Weg, dich zu erreichen.",
+        "contact_phone": "Trag eine Telefonnummer ein. Bei erfahreneren Positionen fängt es meist mit einem Anruf an.",
+        "contact_location": "Trag deine Stadt ein — viele Unternehmen sortieren Lebensläufe ohne Ort aus.",
+        "contact_links": "Füg einen LinkedIn- oder Portfolio-Link hinzu, damit Recruiter tiefer einsteigen können.",
+        "title_missing": "Trag die Zielposition ein, damit der Rest des Lebenslaufs eine einzige Geschichte erzählt.",
+        "summary_missing": "Schreib ein Kurzprofil aus 2 bis 3 Sätzen. Das liest ein Recruiter zuerst.",
+        "summary_short": "Dein Kurzprofil hat {words} Wörter. Ziel sind 40 bis 60 — lang genug für deine Botschaft, kurz genug zum Überfliegen.",
+        "summary_long": "Dein Kurzprofil hat {words} Wörter. Kürz es auf höchstens 60 — der Anfang eines Lebenslaufs wird in Sekunden überflogen.",
+        "experience_missing": "Füg mindestens eine berufliche Station hinzu. Das ist das Rückgrat deines Lebenslaufs.",
+        "experience_head": "{where}: Trag Unternehmen und Positionsbezeichnung ein.",
+        "experience_dates": "{where}: Trag Anfangs- und Enddatum ein — Lücken ohne Datum werfen Fragen auf.",
+        "experience_bullets_missing": "{where}: Schreib mindestens 2 bis 3 Stichpunkte, die zeigen, was du tatsächlich gemacht hast.",
+        "experience_bullets_quantify": "{where}: In keinem deiner Stichpunkte steht eine Zahl. Ergebnisse mit Zahlen — 30 % schneller, 8 Mio. Nutzer pro Woche — wirken stärker.",
+        "experience_bullets_weak_start": "{where}: {count, plural, one {# Stichpunkt beginnt} other {# Stichpunkte beginnen}} mit einem passiven oder schwachen Verb. Probier „Geleitet“, „Eingeführt“, „Gesenkt“.",
+        "experience_bullets_long": "{where}: {count, plural, one {# Stichpunkt geht} other {# Stichpunkte gehen}} über 32 Wörter. Ziel sind 1 bis 2 Zeilen pro Stichpunkt.",
+        "skills_few": "{count, plural, =0 {Du hast noch keine Fähigkeiten eingetragen} one {Du hast 1 Fähigkeit eingetragen} other {Du hast # Fähigkeiten eingetragen}}. Die meisten Stellenanzeigen fragen 8 bis 15 ab — ergänz die, die in deiner Wunschstelle stehen.",
+        "skills_many": "{count} Fähigkeiten sind viel — Recruiter überfliegen. Behalt die 12 bis 15 stärksten für diese Stelle.",
+        "education_missing": "Keine Ausbildung eingetragen. Wenn du einen Abschluss hast, führ ihn auf — das kostet nichts, und viele Filter verlangen ihn."
       }
     }
   },
