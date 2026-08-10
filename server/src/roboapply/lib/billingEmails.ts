@@ -109,7 +109,7 @@ export function renderFridayNudgeEmail(input: {
   const { locale, name, credits, startUrl, accountUrl } = input;
   const greetName = name ? name.split(' ')[0] : '';
 
-  const T: Record<RoboEmailLocale, { subject: string; hi: string; body: string; creditsLine: string; cta: string; footer: string }> = {
+  const T: Record<RoboEmailLocale, { subject: string; hi: string; body: string; creditsLine: string; cta: string; footer: string; prefs: string }> = {
     en: {
       subject: 'Ready for next week? Practice an interview 🎯',
       hi: greetName ? `Hi ${greetName},` : 'Hi there,',
@@ -117,6 +117,7 @@ export function renderFridayNudgeEmail(input: {
       creditsLine: `You have <b>${credits}</b> mock-interview credit${credits === 1 ? '' : 's'} ready to use.`,
       cta: 'Start a mock interview',
       footer: 'You receive weekly prep nudges because you have RoboApply credits. Manage email preferences in your account.',
+      prefs: 'Preferences',
     },
     zh: {
       subject: '为下周做好准备了吗？练习一场面试 🎯',
@@ -125,6 +126,7 @@ export function renderFridayNudgeEmail(input: {
       creditsLine: `您还有 <b>${credits}</b> 个模拟面试额度可以使用。`,
       cta: '开始模拟面试',
       footer: '您拥有 RoboApply 额度，因此每周会收到练习提醒。可在账户中管理邮件偏好。',
+      prefs: '偏好设置',
     },
     'zh-TW': {
       subject: '為下週做好準備了嗎？練習一場面試 🎯',
@@ -133,6 +135,7 @@ export function renderFridayNudgeEmail(input: {
       creditsLine: `您還有 <b>${credits}</b> 個模擬面試點數可以使用。`,
       cta: '開始模擬面試',
       footer: '您擁有 RoboApply 點數，因此每週會收到練習提醒。可在帳戶中管理郵件偏好。',
+      prefs: '偏好設定',
     },
     ja: {
       subject: '来週の準備はできていますか？面接を練習しましょう 🎯',
@@ -141,6 +144,7 @@ export function renderFridayNudgeEmail(input: {
       creditsLine: `模擬面接クレジットが <b>${credits}</b> 件ご利用いただけます。`,
       cta: '模擬面接を始める',
       footer: 'RoboApply クレジットをお持ちのため、毎週の練習リマインダーをお送りしています。メール設定はアカウントで管理できます。',
+      prefs: '設定',
     },
   };
   const t = T[locale] ?? T.en;
@@ -149,8 +153,9 @@ export function renderFridayNudgeEmail(input: {
     <p style="font-size:15px;color:#444;line-height:1.6;margin:0 0 12px;">${t.body}</p>
     <p style="font-size:15px;color:#444;line-height:1.6;margin:0 0 24px;">${t.creditsLine}</p>
     <div style="margin:8px 0 4px;">${button(t.cta, startUrl)}</div>`;
-  const footer = `${t.footer} &middot; <a href="${accountUrl}" style="color:#9aa0aa;">${
-    locale === 'en' ? 'Preferences' : locale === 'ja' ? '設定' : '偏好設定'
-  }</a>`;
+  // Read the link label off `t` like every other string. The ternary this
+  // replaces fell through to Traditional Chinese for locale 'zh', mixing scripts
+  // in an otherwise fully Simplified email.
+  const footer = `${t.footer} &middot; <a href="${accountUrl}" style="color:#9aa0aa;">${t.prefs}</a>`;
   return { subject: t.subject, html: shell(body, footer) };
 }

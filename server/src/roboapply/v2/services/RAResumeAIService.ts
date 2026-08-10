@@ -167,9 +167,13 @@ function fallbackBulletRewrite(
   const stripTrailing = (s: string) => s.replace(/[.。．]$/, '');
   switch (action) {
     case 'shorten': {
-      // Keep the first sentence / clause.
+      // Keep the first sentence / clause. Re-terminate with the LOCALE's
+      // sentence mark — appending an ASCII '.' to a Chinese clause produced
+      // "…用户." in the editor.
       const firstClause = base.split(/[.;。；]/)[0]?.trim();
-      return firstClause ? `${firstClause}.` : base || m.bulletEmpty.shorten;
+      return firstClause
+        ? `${firstClause}${m.sentenceEnd}`
+        : base || m.bulletEmpty.shorten;
     }
     case 'metrics':
       return base
@@ -179,18 +183,36 @@ function fallbackBulletRewrite(
       return base
         ? `${stripTrailing(base)}${m.bulletExpandSuffix}`
         : m.bulletEmpty.expand;
-    case 'confident':
-      return base
-        ? base.replace(/\b(helped|assisted|involved in|worked on)\b/gi, 'led').replace(/^./, (c) => c.toUpperCase())
-        : m.bulletEmpty.confident;
+    case 'confident': {
+      if (!base) return m.bulletEmpty.confident;
+      // The hedge-verb DETECTOR is English-only — those words only occur in
+      // English prose — so the clause it fires on is ALWAYS English. Splicing
+      // the catalog's localized verb into it produces a mixed-language bullet
+      // ("geleitet build the pipeline", "主导 build the pipeline"), which is
+      // worse than leaving the line alone. So substitute only when the target
+      // language is English too; otherwise return the bullet untouched and let
+      // the LLM path own this action. Casing is a no-op on CJK either way.
+      // Identity compare: getResumeAIMessages returns the shared `en` object
+      // for 'en' AND for any unmapped locale, so this is exactly "the fallback
+      // text we are about to emit is English".
+      const isEnglishOutput = m === getResumeAIMessages('en');
+      const swapped = isEnglishOutput
+        ? base.replace(/\b(helped|assisted|involved in|worked on)\b/gi, m.bulletConfidentVerb)
+        : base;
+      return swapped.replace(/^./, (c) => c.toUpperCase());
+    }
     case 'junior':
       return base
         ? `${m.bulletJuniorPrefix}${base.charAt(0).toLowerCase()}${base.slice(1)}`
         : m.bulletEmpty.junior;
     case 'improve':
     default:
+      // The "already terminated?" class must include CJK marks, or a bullet
+      // ending in '。' gets an ASCII '.' bolted on.
       return base
-        ? base.replace(/^./, (c) => c.toUpperCase()).replace(/([^.!?])$/, '$1.')
+        ? base
+            .replace(/^./, (c) => c.toUpperCase())
+            .replace(/([^.!?。！？])$/, (_full, last: string) => `${last}${m.sentenceEnd}`)
         : m.bulletEmpty.improve;
   }
 }
@@ -249,22 +271,42 @@ function fallbackSkills(resumeMarkdown: string, locale?: string): string[] {
 
 // ─── Tailor-diff derivation (deterministic from base→tailored markdown) ────
 
+/** Identity of the synthetic pre-heading section. Deliberately NOT the
+ *  localized display name: `sectionHeaderName` is a string a real résumé
+ *  plausibly uses as an ACTUAL heading (ja '基本情報', zh '个人信息', zh-TW
+ *  '個人資料' are standard section titles), so keying off it made a user's own
+ *  section collide with ours in deriveChanges and made the "did we open a real
+ *  section?" sentinel below drop a genuine empty user section. */
+const HEADER_SECTION_ID = '__header__';
+
 interface MdSection {
+  /** Stable, non-localized identity — `HEADER_SECTION_ID` for the synthetic
+   *  pre-heading section, the raw heading text for every real one. Used for
+   *  base↔tailored pairing and the sentinel; never shipped to the client. */
+  id: string;
+  /** Display name — localized for the synthetic section. Ships to the client
+   *  as `RATailorChange.section`. */
   heading: string;
   lines: string[];
 }
 
 /** Split markdown into `## heading` sections. Lines before the first heading
- *  go into a synthetic "Header" section. */
-function splitSections(md: string): MdSection[] {
+ *  go into a synthetic header section whose NAME is localized: it is not a
+ *  heading the user wrote, it is ours, and it ships to the client verbatim as
+ *  `RATailorChange.section`. Only the DISPLAY is localized — the section's
+ *  identity (`id`) is locale-independent, so base + tailored pair up the same
+ *  way in every language. */
+function splitSections(md: string, locale?: string): MdSection[] {
+  const headerName = getResumeAIMessages(locale).sectionHeaderName;
   const lines = (md || '').split('\n');
   const sections: MdSection[] = [];
-  let current: MdSection = { heading: 'Header', lines: [] };
+  let current: MdSection = { id: HEADER_SECTION_ID, heading: headerName, lines: [] };
   for (const line of lines) {
     const h = line.match(/^#{1,3}\s+(.+?)\s*$/);
     if (h) {
-      if (current.lines.length > 0 || current.heading !== 'Header') sections.push(current);
-      current = { heading: h[1].trim(), lines: [] };
+      if (current.lines.length > 0 || current.id !== HEADER_SECTION_ID) sections.push(current);
+      const heading = h[1].trim();
+      current = { id: heading, heading, lines: [] };
     } else {
       current.lines.push(line);
     }
@@ -301,19 +343,22 @@ function deriveChanges(
   // Localized label/detail templates — these strings ship to the client
   // pre-rendered inside RATailorDiff.changes[], so the frontend bundles cannot
   // translate them; they must come back in the request locale. See
-  // raResumeAIMessages.ts (en fallback for es/fr/pt/de).
+  // raResumeAIMessages.ts (every RA_LOCALES entry has a block).
   const m = getResumeAIMessages(locale);
-  const baseSections = splitSections(baseMd);
-  const tailoredSections = splitSections(tailoredMd);
+  const baseSections = splitSections(baseMd, locale);
+  const tailoredSections = splitSections(tailoredMd, locale);
+  // Key on the locale-independent `id`, never the display heading — otherwise
+  // a user's own '基本情報' section and OUR synthetic header section share a key
+  // and one of them diffs against the wrong content.
   const baseByHeading = new Map<string, MdSection>();
-  for (const s of baseSections) baseByHeading.set(norm(s.heading), s);
+  for (const s of baseSections) baseByHeading.set(norm(s.id), s);
 
   const changes: RATailorChange[] = [];
   let counter = 0;
   const nextId = () => `c${++counter}`;
 
   for (const tSec of tailoredSections) {
-    const bSec = baseByHeading.get(norm(tSec.heading));
+    const bSec = baseByHeading.get(norm(tSec.id));
     const tBullets = bulletsOf(tSec);
     const bBullets = bSec ? bulletsOf(bSec) : [];
 
@@ -536,18 +581,32 @@ export async function resolveTailorScores(opts: {
   return { ...est, estimated: true };
 }
 
+/** Fold full-width digits (U+FF10–U+FF19) onto ASCII so the numeric comparison
+ *  below reads a CJK resume the same way it reads a Latin one. Without this a
+ *  Japanese bullet written "３０％ 改善" whose rewrite says "30% 改善" looks like
+ *  a fabricated number: the guard rejects a perfectly faithful rewrite and the
+ *  user silently gets the placeholder template instead. DIGITS ONLY — folding
+ *  full-width punctuation too would let "３０，効率２０" collapse into a bogus
+ *  single "30,20" run and reintroduce the false positive from the other side. */
+function foldFullWidthDigits(s: string): string {
+  return s.replace(/[０-９]/g, (d) =>
+    String.fromCharCode(d.charCodeAt(0) - 0xfee0),
+  );
+}
+
 /** Detect a fabricated concrete number: a digit-run in `out` (excluding
  *  bracketed placeholders + plausible years) that does NOT appear in `src`.
  *  Used to reject a hallucinated metric and fall back deterministically. */
 function hasFabricatedNumber(src: string, out: string): boolean {
+  const srcFolded = foldFullWidthDigits(src);
   // Strip bracketed placeholders like [X], [n=__], [before → after].
-  const stripped = out.replace(/\[[^\]]*\]/g, ' ');
+  const stripped = foldFullWidthDigits(out).replace(/\[[^\]]*\]/g, ' ');
   const runs = stripped.match(/\d+(?:[.,]\d+)?/g) ?? [];
   for (const run of runs) {
     const plain = run.replace(/[.,]/g, '');
     const asNum = Number(plain);
     if (Number.isFinite(asNum) && asNum >= 1990 && asNum <= 2099) continue; // year
-    if (!src.includes(run)) return true;
+    if (!srcFolded.includes(run)) return true;
   }
   return false;
 }
@@ -719,10 +778,22 @@ export class RAResumeAIService {
     // Resolve job context + cached base score. The manual lane (company +
     // optional title, JD optional) mirrors the jdText path — company/title
     // become the agent's target context and the diff's display names.
-    let companyName = manualCompany || 'Pasted JD';
-    let roleTitle = manualTitle || 'Target role';
+    //
+    // Two DIFFERENT fallbacks on purpose:
+    //  - companyName / roleTitle are DISPLAY strings rendered in the diff
+    //    header, so they come from the locale catalog (they used to be the
+    //    English literals 'Pasted JD' / 'Target role' — English text in a zh
+    //    user's panel).
+    //  - jobTitle is fed INTO the tailor prompt. When the user named no title
+    //    we send NOTHING rather than a placeholder: a placeholder is worse job
+    //    context than no context in any language, and an English seed string
+    //    sitting in the prompt beside the resume nudges the model into
+    //    answering in English (the exact failure mode this pass exists to fix).
+    const m = getResumeAIMessages(locale);
+    let companyName = manualCompany || m.tailorTargetPastedJD;
+    let roleTitle = manualTitle || m.tailorTargetRoleFallback;
     let jobId: string | null = null;
-    let jobTitle = manualTitle || 'Target role';
+    let jobTitle = manualTitle;
     let jobDescription = body.jdText ?? '';
     let targetCompanyName: string | undefined = manualCompany || undefined;
     let parsedJD: { qualifications?: string; responsibilities?: string; benefits?: string } | undefined;

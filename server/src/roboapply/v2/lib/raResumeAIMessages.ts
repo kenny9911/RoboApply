@@ -17,9 +17,12 @@
 // output is localized by threading `{ locale }` into the agent call (see
 // RAResumeRewriteAgent.getLocaleDirective).
 //
-// Locale coverage mirrors the frontend: en / zh / zh-TW / ja are fully
-// translated (READY_LOCALES in roboapply/lib/localeConfig.ts); es / fr / pt /
-// de fall back to English, matching the UI chrome for those locales. To add a
+// Locale coverage: ALL of RA_LOCALES (en / zh / zh-TW / ja / ko / es / fr / pt /
+// de) are fully translated here. The catalog used to stop after en/zh/zh-TW/ja
+// on the premise that the UI chrome was English for the rest — that premise is
+// dead (i18n/messages/ ships complete bundles for every locale, and RA_LOCALES
+// now carries 'ko'), and leaving a locale out means a user reading a fully
+// translated UI gets English resume text back from the degraded path. To add a
 // language: add a block here AND the frontend bundle — see
 // memory/project_roboapply_i18n.md.
 
@@ -52,12 +55,33 @@ export interface ResumeAIMessages {
   bulletExpandSuffix: string;
   /** Prefix prepended to the user's bullet for the 'junior' action. */
   bulletJuniorPrefix: string;
+  /** Sentence terminator for this locale ('.' for Latin scripts, '。' for
+   *  zh/ja). The deterministic bullet fallbacks re-terminate the user's own
+   *  text; appending an ASCII '.' to a Chinese bullet that already ends in
+   *  '。' produced "…。." in the editor. */
+  sentenceEnd: string;
+  /** Ownership verb the 'confident' fallback substitutes for English hedge
+   *  verbs ("helped" / "assisted" / …). The DETECTOR regex is English-only by
+   *  design (only English text contains those words), but the REPLACEMENT must
+   *  be in the user's language — a mixed-language bullet would otherwise get an
+   *  English "led" spliced into Chinese prose. */
+  bulletConfidentVerb: string;
   /** Generic skill phrases when none can be extracted from the resume. */
   skillsDefault: string[];
 
   // ── Tailor-diff change labels/details (deriveChanges in RAResumeAIService) ──
   // These back the "Tailor to a job" diff panel's per-change labels/details.
   // `{heading}` / `{n}` placeholders are substituted via format() below.
+  /** Name of the synthetic section holding the lines above the first markdown
+   *  heading (name / contact block). Ships to the client in
+   *  `RATailorChange.section` and is rendered verbatim by the diff panel. */
+  sectionHeaderName: string;
+  /** Diff-panel company name when the user tailored against a pasted JD with
+   *  no company of its own. */
+  tailorTargetPastedJD: string;
+  /** Diff-panel role title when the user named no target title. DISPLAY ONLY —
+   *  never feed this into the tailor prompt (see tailorDiff). */
+  tailorTargetRoleFallback: string;
   /** Label: a whole new section appeared in the tailored resume. {heading} */
   tailorChangeAddSection: string;
   /** Label: a bullet was reworded within a section. {heading} */
@@ -107,12 +131,17 @@ const en: ResumeAIMessages = {
   bulletExpandSuffix:
     '. Partnered with [stakeholders] across [duration] to deliver [outcome].',
   bulletJuniorPrefix: 'Translated this work into a concrete deliverable: ',
+  sentenceEnd: '.',
+  bulletConfidentVerb: 'led',
   skillsDefault: [
     'Cross-functional collaboration',
     'Project ownership',
     'Data-informed decision making',
     'Stakeholder communication',
   ],
+  sectionHeaderName: 'Header',
+  tailorTargetPastedJD: 'Pasted JD',
+  tailorTargetRoleFallback: 'Target role',
   tailorChangeAddSection: 'Add a tailored "{heading}" section',
   tailorChangeReword: 'Reword a bullet in {heading}',
   tailorChangeSurface: 'Surface {n} item(s) the JD asks for',
@@ -151,7 +180,12 @@ const zh: ResumeAIMessages = {
   bulletMetricsSuffix: ' —— 以 [指标，前 → 后] 衡量，n=[__]。',
   bulletExpandSuffix: '。与 [相关方] 在 [周期] 内协作，交付 [成果]。',
   bulletJuniorPrefix: '把这段经历转化为具体的可交付成果：',
+  sentenceEnd: '。',
+  bulletConfidentVerb: '主导',
   skillsDefault: ['跨职能协作', '项目主导', '数据驱动决策', '利益相关方沟通'],
+  sectionHeaderName: '个人信息',
+  tailorTargetPastedJD: '粘贴的职位描述',
+  tailorTargetRoleFallback: '目标职位',
   tailorChangeAddSection: '新增针对性的"{heading}"板块',
   tailorChangeReword: '改写 {heading} 中的一条要点',
   tailorChangeSurface: '突出 {n} 项 JD 要求的内容',
@@ -189,7 +223,12 @@ const zhTW: ResumeAIMessages = {
   bulletMetricsSuffix: ' —— 以 [指標，前 → 後] 衡量，n=[__]。',
   bulletExpandSuffix: '。與 [相關方] 在 [週期] 內協作，交付 [成果]。',
   bulletJuniorPrefix: '把這段經歷轉化為具體的可交付成果：',
+  sentenceEnd: '。',
+  bulletConfidentVerb: '主導',
   skillsDefault: ['跨職能協作', '專案主導', '數據驅動決策', '利害關係人溝通'],
+  sectionHeaderName: '個人資料',
+  tailorTargetPastedJD: '貼上的職缺描述',
+  tailorTargetRoleFallback: '目標職缺',
   tailorChangeAddSection: '新增針對性的「{heading}」區塊',
   tailorChangeReword: '改寫 {heading} 中的一條要點',
   tailorChangeSurface: '突顯 {n} 項 JD 要求的內容',
@@ -227,12 +266,17 @@ const ja: ResumeAIMessages = {
   bulletMetricsSuffix: ' —— [指標、前 → 後] で測定、n=[__]。',
   bulletExpandSuffix: '。[期間] にわたり [関係者] と連携し、[成果] を提供。',
   bulletJuniorPrefix: 'この経験を具体的な成果物に転換：',
+  sentenceEnd: '。',
+  bulletConfidentVerb: '主導',
   skillsDefault: [
     '部門横断のコラボレーション',
     'プロジェクトの主体的推進',
     'データに基づく意思決定',
     'ステークホルダーとのコミュニケーション',
   ],
+  sectionHeaderName: '基本情報',
+  tailorTargetPastedJD: '貼り付けた求人票',
+  tailorTargetRoleFallback: '希望職種',
   tailorChangeAddSection: '「{heading}」セクションを最適化して追加',
   tailorChangeReword: '{heading} の項目を書き直し',
   tailorChangeSurface: '求人票が求める項目を {n} 件追加',
@@ -246,13 +290,293 @@ const ja: ResumeAIMessages = {
     '最も強みのある経験を求人内容に合わせて再構成しました。',
 };
 
+const ko: ResumeAIMessages = {
+  summaryLabels: ['간결', '수치', '개성'],
+  summaryFallback: [
+    '높은 임팩트의 성과를 꾸준히 만들어온 시니어 전문가입니다. 미션 중심의 팀을 찾고 있습니다.',
+    '[분야]에서 측정 가능한 성과를 낸 실행형 인재입니다. [프로젝트]를 처음부터 끝까지 주도하며 [지표]를 X에서 Y로 개선했습니다.',
+    '모호한 과제를 실제로 출시되는 제품으로 바꾸는 실무형 실행가이며, 그 결과를 수치로 증명할 수 있습니다.',
+  ],
+  summaryAugment: [
+    '모든 성과는 구체적인 수치로 뒷받침됩니다.',
+    '다음에 무엇을 만들어야 할지에 대한 분명한 관점을 가지고 있습니다.',
+  ],
+  bulletEmpty: {
+    improve:
+      '[프로젝트]를 처음부터 끝까지 주도하고 [이해관계자]와 협업해 [성과]를 출시했습니다. [지표]를 X에서 Y로 개선했습니다.',
+    metrics:
+      '[행동] [프로젝트]로 [성과] 달성 — [지표, 이전 → 이후] 기준, [대상 범위, n=__] 대상.',
+    shorten: '[프로젝트] 출시 — [한 줄 핵심 성과].',
+    expand:
+      '[프로젝트]를 [출발점]에서 [단계]까지 추진했습니다. [기간] 동안 [이해관계자]와 협업했습니다. 결과: [지표를 포함한 성과].',
+    confident: '[프로젝트]를 주도하고 책임지며 끝까지 추진했습니다 — [지표를 포함한 성과].',
+    junior:
+      '[학업/인턴 경험]을 실무 성과물로 전환 — [범위, 규모, 결과].',
+  },
+  bulletMetricsSuffix: ' — [지표, 이전 → 이후] 기준으로 측정, n=[__].',
+  bulletExpandSuffix: '. [기간] 동안 [이해관계자]와 협업해 [성과]를 전달했습니다.',
+  bulletJuniorPrefix: '이 경험을 구체적인 성과물로 전환: ',
+  sentenceEnd: '.',
+  bulletConfidentVerb: '주도',
+  skillsDefault: [
+    '부서 간 협업',
+    '프로젝트 주도',
+    '데이터 기반 의사결정',
+    '이해관계자 커뮤니케이션',
+  ],
+  sectionHeaderName: '기본 정보',
+  tailorTargetPastedJD: '붙여넣은 채용 공고',
+  tailorTargetRoleFallback: '목표 직무',
+  tailorChangeAddSection: '맞춤형 "{heading}" 섹션 추가',
+  tailorChangeReword: '{heading}의 항목 하나를 재작성',
+  tailorChangeSurface: '채용 공고가 요구하는 항목 {n}개 부각',
+  tailorChangeTrim: '{heading}에서 관련성이 낮은 {n}줄 정리',
+  tailorChangeTrimDetail: '이번 지원에 도움이 되지 않는 내용을 삭제했습니다.',
+  // The 을/를 object particle agrees with the FINAL letter of the word it
+  // attaches to, and {heading} is an arbitrary section name (often a Latin
+  // word like 'Experience'). Interpolating before the particle is therefore
+  // never reliably correct — attach it to the fixed noun '섹션' instead.
+  tailorChangeReorder: '{heading} 섹션을 재정렬해 가장 적합한 내용을 앞에 배치',
+  tailorChangeReorderDetail: '채용 공고와 가장 관련 있는 항목을 맨 위로 옮겼습니다.',
+  tailorChangeFallbackSection: '요약',
+  tailorChangeFallback: '이 직무에 맞게 이력서를 다듬었습니다',
+  tailorChangeFallbackDetail:
+    '가장 강점이 되는 경력을 채용 공고에 맞게 재구성했습니다.',
+};
+
+const es: ResumeAIMessages = {
+  summaryLabels: ['Conciso', 'Numérico', 'Personalidad'],
+  summaryFallback: [
+    'Profesional sénior con un historial probado de entregar trabajo de alto impacto. En busca de un equipo con una misión clara.',
+    'Perfil ejecutor con logros medibles en [ámbito]. Responsable de [proyecto] de principio a fin, elevando [métrica] de X a Y.',
+    'Perfil práctico que convierte la ambigüedad en producto entregado, con resultados que lo demuestran.',
+  ],
+  summaryAugment: [
+    'Resultados respaldados por métricas concretas.',
+    'Con criterio propio y bien fundamentado sobre qué construir a continuación.',
+  ],
+  bulletEmpty: {
+    improve:
+      'Responsable de [proyecto] de principio a fin, en colaboración con [interlocutores] para entregar [resultado]. Elevé [métrica] de X a Y.',
+    metrics:
+      '[Acción] [proyecto] que logró [resultado] — medido por [métrica, antes → después], sobre [población, n=__].',
+    shorten: 'Entregué [proyecto] — [resultado clave en una línea].',
+    expand:
+      'Llevé [proyecto] desde [punto de partida] hasta [etapas]. Colaboré con [interlocutores] durante [periodo]. Resultado: [resultado con métrica].',
+    confident: 'Lideré, asumí e impulsé [proyecto] — [resultado con métrica].',
+    junior:
+      'Convertí [trabajo académico o de prácticas] en un entregable real — [alcance, escala, resultado].',
+  },
+  bulletMetricsSuffix: ' — medido por [métrica, antes → después], n=[__].',
+  bulletExpandSuffix:
+    '. Colaboré con [interlocutores] durante [periodo] para entregar [resultado].',
+  bulletJuniorPrefix: 'Convertí este trabajo en un entregable concreto: ',
+  sentenceEnd: '.',
+  bulletConfidentVerb: 'lideré',
+  skillsDefault: [
+    'Colaboración interfuncional',
+    'Responsabilidad integral de proyectos',
+    'Toma de decisiones basada en datos',
+    'Comunicación con stakeholders',
+  ],
+  sectionHeaderName: 'Encabezado',
+  tailorTargetPastedJD: 'Oferta pegada',
+  tailorTargetRoleFallback: 'Puesto objetivo',
+  tailorChangeAddSection: 'Añadir una sección "{heading}" adaptada',
+  tailorChangeReword: 'Reescribir un punto de {heading}',
+  tailorChangeSurface: 'Destacar {n} elemento(s) que pide la oferta',
+  tailorChangeTrim: 'Recortar {n} línea(s) menos relevante(s) de {heading}',
+  tailorChangeTrimDetail: 'Se eliminó contenido que no refuerza esta candidatura.',
+  tailorChangeReorder: 'Reordenar {heading} para empezar por lo más relevante',
+  tailorChangeReorderDetail: 'Se movió arriba el punto más relevante para la oferta.',
+  tailorChangeFallbackSection: 'Resumen',
+  tailorChangeFallback: 'Hemos adaptado tu CV a este puesto',
+  tailorChangeFallbackDetail:
+    'Se reformuló tu experiencia más sólida para ajustarla a la descripción del puesto.',
+};
+
+const fr: ResumeAIMessages = {
+  summaryLabels: ['Concis', 'Chiffré', 'Personnalité'],
+  summaryFallback: [
+    'Profil senior avec un historique de réalisations à fort impact. À la recherche d’une équipe portée par une mission.',
+    'Profil opérationnel aux résultats mesurables en [domaine]. Pilotage de [projet] de bout en bout, avec [indicateur] porté de X à Y.',
+    'Profil de terrain qui transforme l’incertitude en produit livré — avec les résultats pour le prouver.',
+  ],
+  summaryAugment: [
+    'Des résultats appuyés par des chiffres concrets.',
+    'Un point de vue affirmé sur ce qu’il faut construire ensuite.',
+  ],
+  bulletEmpty: {
+    improve:
+      'Piloté [projet] de bout en bout, en collaboration avec [parties prenantes] pour livrer [résultat]. [Indicateur] porté de X à Y.',
+    metrics:
+      '[Action] [projet] ayant permis [résultat] — mesuré par [indicateur, avant → après], sur [population, n=__].',
+    shorten: 'Livré [projet] — [résultat clé en une ligne].',
+    expand:
+      'Mené [projet] de [point de départ] jusqu’à [étapes]. Collaboré avec [parties prenantes] pendant [durée]. Résultat : [résultat chiffré].',
+    confident: 'Dirigé, porté et impulsé [projet] — [résultat chiffré].',
+    junior:
+      'Transformé [travaux académiques ou de stage] en livrable concret — [périmètre, échelle, résultat].',
+  },
+  bulletMetricsSuffix: ' — mesuré par [indicateur, avant → après], n=[__].',
+  bulletExpandSuffix:
+    '. Collaboré avec [parties prenantes] pendant [durée] pour livrer [résultat].',
+  bulletJuniorPrefix: 'Transformé ce travail en livrable concret : ',
+  sentenceEnd: '.',
+  bulletConfidentVerb: 'dirigé',
+  skillsDefault: [
+    'Collaboration transverse',
+    'Pilotage de projet de bout en bout',
+    'Décisions fondées sur les données',
+    'Communication avec les parties prenantes',
+  ],
+  sectionHeaderName: 'En-tête',
+  tailorTargetPastedJD: 'Offre collée',
+  tailorTargetRoleFallback: 'Poste visé',
+  tailorChangeAddSection: 'Ajouter une rubrique « {heading} » ciblée',
+  // "de {heading}" would need elision ("d’Expérience", "d’Éducation") whenever
+  // the section name is vowel-initial — which the common French résumé
+  // headings are. The interpolation cannot know, so the placeholder never sits
+  // directly after "de": the fixed noun "la rubrique" takes that slot and
+  // {heading} moves inside quotes, where it is grammatically inert.
+  tailorChangeReword: 'Reformuler un point de la rubrique « {heading} »',
+  tailorChangeSurface: 'Mettre en avant {n} élément(s) attendu(s) par l’offre',
+  tailorChangeTrim: 'Retirer {n} ligne(s) moins pertinente(s) de la rubrique « {heading} »',
+  tailorChangeTrimDetail:
+    'Contenu qui ne renforce pas cette candidature supprimé.',
+  tailorChangeReorder: 'Réordonner {heading} pour commencer par le plus pertinent',
+  tailorChangeReorderDetail:
+    'Le point le plus proche de l’offre a été remonté en tête.',
+  tailorChangeFallbackSection: 'Résumé',
+  tailorChangeFallback: 'Votre CV a été adapté à ce poste',
+  tailorChangeFallbackDetail:
+    'Vos expériences les plus fortes ont été reformulées pour correspondre à l’offre.',
+};
+
+const pt: ResumeAIMessages = {
+  summaryLabels: ['Conciso', 'Numérico', 'Personalidade'],
+  summaryFallback: [
+    'Profissional sênior com histórico consistente de entregas de alto impacto. Em busca de um time movido por propósito.',
+    'Perfil executor com resultados mensuráveis em [área]. Responsável por [projeto] de ponta a ponta, elevando [métrica] de X para Y.',
+    'Profissional mão na massa que transforma ambiguidade em produto entregue — com resultados para comprovar.',
+  ],
+  summaryAugment: [
+    'Resultados sustentados por métricas concretas.',
+    'Com uma opinião clara sobre o que construir a seguir.',
+  ],
+  bulletEmpty: {
+    improve:
+      'Responsável por [projeto] de ponta a ponta, em parceria com [stakeholders] para entregar [resultado]. Elevei [métrica] de X para Y.',
+    metrics:
+      '[Ação] [projeto] que gerou [resultado] — medido por [métrica, antes → depois], em [população, n=__].',
+    shorten: 'Entreguei [projeto] — [resultado principal em uma linha].',
+    expand:
+      'Conduzi [projeto] de [ponto de partida] até [etapas]. Atuei com [stakeholders] ao longo de [período]. Resultado: [resultado com métrica].',
+    confident: 'Liderei, assumi e impulsionei [projeto] — [resultado com métrica].',
+    junior:
+      'Converti [trabalho acadêmico ou de estágio] em uma entrega real — [escopo, escala, resultado].',
+  },
+  bulletMetricsSuffix: ' — medido por [métrica, antes → depois], n=[__].',
+  bulletExpandSuffix:
+    '. Atuei com [stakeholders] ao longo de [período] para entregar [resultado].',
+  bulletJuniorPrefix: 'Converti este trabalho em uma entrega concreta: ',
+  sentenceEnd: '.',
+  bulletConfidentVerb: 'liderei',
+  skillsDefault: [
+    'Colaboração multidisciplinar',
+    'Protagonismo em projetos de ponta a ponta',
+    'Decisões orientadas por dados',
+    'Comunicação com stakeholders',
+  ],
+  sectionHeaderName: 'Cabeçalho',
+  tailorTargetPastedJD: 'Vaga colada',
+  tailorTargetRoleFallback: 'Cargo-alvo',
+  tailorChangeAddSection: 'Adicionar uma seção "{heading}" direcionada',
+  tailorChangeReword: 'Reescrever um item de {heading}',
+  tailorChangeSurface: 'Destacar {n} item(ns) exigido(s) pela vaga',
+  tailorChangeTrim: 'Remover {n} linha(s) menos relevante(s) de {heading}',
+  tailorChangeTrimDetail: 'Removemos conteúdo que não fortalece esta candidatura.',
+  tailorChangeReorder: 'Reordenar {heading} para começar pelo mais aderente',
+  tailorChangeReorderDetail:
+    'O item mais relevante para a vaga foi movido para o topo.',
+  tailorChangeFallbackSection: 'Resumo',
+  tailorChangeFallback: 'Seu currículo foi adaptado para esta vaga',
+  tailorChangeFallbackDetail:
+    'Reorganizamos suas experiências mais fortes para combinar com a descrição da vaga.',
+};
+
+const de: ResumeAIMessages = {
+  summaryLabels: ['Prägnant', 'Zahlen', 'Persönlichkeit'],
+  summaryFallback: [
+    'Erfahrene Fachkraft mit nachweislicher Erfolgsbilanz bei wirkungsstarken Projekten. Auf der Suche nach einem Team mit klarer Mission.',
+    'Umsetzungsstarkes Profil mit messbaren Erfolgen in [Bereich]. [Projekt] end-to-end verantwortet und [Kennzahl] von X auf Y gesteigert.',
+    'Praxisorientiertes Profil, das aus unklaren Anforderungen fertige Produkte macht — mit belegbaren Ergebnissen.',
+  ],
+  summaryAugment: [
+    'Ergebnisse durch konkrete Kennzahlen belegt.',
+    'Mit einer klaren Haltung dazu, was als Nächstes gebaut werden sollte.',
+  ],
+  bulletEmpty: {
+    // "mit" governs the dative → dative plural "[Beteiligten]", here and in
+    // `expand` / `bulletExpandSuffix` below.
+    improve:
+      '[Projekt] end-to-end verantwortet und gemeinsam mit [Beteiligten] [Ergebnis] geliefert. [Kennzahl] von X auf Y gesteigert.',
+    metrics:
+      '[Aktion] [Projekt] mit [Ergebnis] — gemessen an [Kennzahl, vorher → nachher], bei [Grundgesamtheit, n=__].',
+    shorten: '[Projekt] geliefert — [ein prägnantes Ergebnis].',
+    expand:
+      '[Projekt] von [Ausgangspunkt] über [Phasen] vorangetrieben. Über [Zeitraum] mit [Beteiligten] zusammengearbeitet. Ergebnis: [Ergebnis mit Kennzahl].',
+    confident: '[Projekt] geleitet, verantwortet und vorangetrieben — [Ergebnis mit Kennzahl].',
+    junior:
+      '[Studien- oder Praktikumsarbeit] in ein praxistaugliches Ergebnis überführt — [Umfang, Größenordnung, Ergebnis].',
+  },
+  bulletMetricsSuffix: ' — gemessen an [Kennzahl, vorher → nachher], n=[__].',
+  bulletExpandSuffix:
+    '. Über [Zeitraum] mit [Beteiligten] zusammengearbeitet, um [Ergebnis] zu liefern.',
+  bulletJuniorPrefix: 'Diese Arbeit in ein konkretes Ergebnis überführt: ',
+  sentenceEnd: '.',
+  // Participle, not the finite past "leitete": every other German bullet in
+  // this block is participle register ("verantwortet", "geliefert",
+  // "vorangetrieben"), and fallbackBulletRewrite splices this token into the
+  // MIDDLE of the user's sentence (then upper-cases the sentence's first
+  // letter) — a finite verb there breaks the clause.
+  bulletConfidentVerb: 'geleitet',
+  skillsDefault: [
+    'Bereichsübergreifende Zusammenarbeit',
+    'Eigenverantwortliche Projektsteuerung',
+    'Datenbasierte Entscheidungen',
+    'Kommunikation mit Stakeholdern',
+  ],
+  sectionHeaderName: 'Kopfbereich',
+  tailorTargetPastedJD: 'Eingefügte Stellenanzeige',
+  tailorTargetRoleFallback: 'Zielposition',
+  tailorChangeAddSection: 'Passenden Abschnitt „{heading}“ ergänzen',
+  tailorChangeReword: 'Einen Punkt in {heading} umformulieren',
+  tailorChangeSurface: '{n} von der Stellenanzeige geforderte(n) Punkt(e) hervorheben',
+  tailorChangeTrim: '{n} weniger relevante Zeile(n) aus {heading} entfernen',
+  tailorChangeTrimDetail:
+    'Inhalte entfernt, die diese Bewerbung nicht stärken.',
+  tailorChangeReorder: '{heading} neu sortieren — Passendstes zuerst',
+  tailorChangeReorderDetail:
+    'Den für die Stelle relevantesten Punkt nach oben verschoben.',
+  tailorChangeFallbackSection: 'Kurzprofil',
+  tailorChangeFallback: 'Lebenslauf auf diese Stelle zugeschnitten',
+  tailorChangeFallbackDetail:
+    'Deine stärksten Erfahrungen wurden auf die Stellenbeschreibung hin neu formuliert.',
+};
+
+// Every locale in RA_LOCALES has a block — an omission here means a user with a
+// fully translated UI reads English resume text on the degraded path.
 const CATALOG: Partial<Record<string, ResumeAIMessages>> = {
   en,
   zh,
   'zh-TW': zhTW,
   ja,
-  // es / fr / pt / de intentionally absent → English fallback, consistent with
-  // the UI chrome for those locales.
+  ko,
+  es,
+  fr,
+  pt,
+  de,
 };
 
 /**
