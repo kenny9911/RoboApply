@@ -821,6 +821,7 @@
         "label": "멈춘 곳부터 이어서",
         "count": "최근 {count}건",
         "with": "{name}와 함께",
+        "unknownInterviewer": "인터뷰어",
         "replay": "이 기록 다시 재생",
         "showMore": "이전 {count}건 보기",
         "showLess": "간단히 보기",

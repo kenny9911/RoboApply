@@ -2,8 +2,8 @@
 
 // lib/mockRoleLabels.ts
 //
-// Display-label localization for the mock-interview catalog's job CATEGORIES and
-// ROLE titles. The catalog (lib/fixtures/mockCatalog.ts ↔ backend raMockCatalog)
+// Display-label localization for the mock-interview catalog's job CATEGORIES,
+// ROLE titles and interview TYPES. The catalog (lib/fixtures/mockCatalog.ts ↔ backend raMockCatalog)
 // keeps its English strings as the CANONICAL value — they are the id used for
 // the launch payload (`role`), recommendation matching (categoryForRole /
 // suitedRoleCategories), and category/role equality in the picker. We therefore
@@ -32,6 +32,10 @@ export interface MockRoleLabelHelpers {
   localizeCategory: (name: string) => string;
   /** Localized role title, English fallback (incl. free-text JD titles). */
   localizeRole: (role: string) => string;
+  /** Localized interview-type label/sub by catalog type id. `fallback` is the
+   *  catalog's English string; the raw id is the last resort (a session run on
+   *  a type the catalog no longer carries). */
+  localizeType: (id: string, field: 'label' | 'sub', fallback?: string) => string;
 }
 
 /** Hook returning localizers for catalog category names and role titles. */
@@ -45,5 +49,9 @@ export function useMockRoleLabels(): MockRoleLabelHelpers {
     const key = `setup.role.roles.${slugifyMockRole(role)}`;
     return t.has(key) ? t(key) : role;
   };
-  return { localizeCategory, localizeRole };
+  const localizeType = (id: string, field: 'label' | 'sub', fallback?: string): string => {
+    const key = `setup.types.${id}.${field}`;
+    return t.has(key) ? t(key) : fallback ?? id;
+  };
+  return { localizeCategory, localizeRole, localizeType };
 }

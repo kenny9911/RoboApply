@@ -821,6 +821,7 @@
         "label": "Continue de onde parou",
         "count": "{count} recentes",
         "with": "com {name}",
+        "unknownInterviewer": "seu entrevistador",
         "replay": "Reproduzir esta sessão de novo",
         "showMore": "Ver {count} anteriores",
         "showLess": "Ver menos",

@@ -34,6 +34,7 @@ import { JD_MIN_CHARS, type RoleSourceMode } from '../../../components/v3/mock/R
 import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
 import { recommendationsForRole } from '../../../lib/interviewRecommendations';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
+import { formatRelativeTime } from '../../../lib/relativeTime';
 import { READY_LOCALES } from '../../../lib/localeConfig';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/types';
@@ -49,18 +50,6 @@ const DEFAULT_DURATION_MINUTES = 30;
 // more just bloats the create body.
 const RESUME_CONTEXT_MAX_CHARS = 2000;
 
-function relativeWhen(iso: string | null): string {
-  if (!iso) return '';
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const d = Math.floor(hr / 24);
-  return `${d}d ago`;
-}
-
 /** Cheap client-side working title from a pasted JD — the first meaningful
  *  line, clipped. The backend blueprint agent infers the canonical title; this
  *  is only what we surface to the user before launch. */
@@ -75,7 +64,7 @@ function deriveRoleLabelFromJd(jd: string): string {
 
 export default function MockSetupPage() {
   const t = useTranslations('practice');
-  const { localizeRole } = useMockRoleLabels();
+  const { localizeRole, localizeType } = useMockRoleLabels();
   const router = useRouter();
   const { user } = useAuth();
 
@@ -205,14 +194,23 @@ export default function MockSetupPage() {
       .map((s) => ({
         id: s.id,
         role: localizeRole(s.role),
-        interviewerName: catalog.interviewers.find((i) => i.id === s.personaId)?.name ?? 'Interviewer',
-        typeLabel: catalog.types.find((tp) => tp.id === s.interviewType)?.label ?? s.interviewType,
+        // Persona names are proper nouns (Maya, Dr. Voss) — only the "no such
+        // persona" fallback needs translating. Type labels ride the same
+        // setup.types.<id> keys the TypePicker renders.
+        interviewerName:
+          catalog.interviewers.find((i) => i.id === s.personaId)?.name ??
+          t('setup.recent.unknownInterviewer'),
+        typeLabel: localizeType(
+          s.interviewType,
+          'label',
+          catalog.types.find((tp) => tp.id === s.interviewType)?.label ?? s.interviewType,
+        ),
         score: s.overall ?? 0,
-        when: relativeWhen(s.endedAt ?? s.createdAt),
+        when: formatRelativeTime(s.endedAt ?? s.createdAt, uiLocale),
         note: '',
       }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recent, catalog]);
+  }, [recent, catalog, uiLocale]);
 
   function replay(sessionId: string) {
     router.push(`/practice/${sessionId}/report`);

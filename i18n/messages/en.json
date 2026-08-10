@@ -821,6 +821,7 @@
         "label": "Pick up where you left off",
         "count": "{count} recent",
         "with": "with {name}",
+        "unknownInterviewer": "your interviewer",
         "replay": "Play this session again",
         "showMore": "Show {count} earlier",
         "showLess": "Show fewer",

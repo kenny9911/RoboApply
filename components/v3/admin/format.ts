@@ -5,6 +5,8 @@
 // `Intl.NumberFormat`. The cache keeps formatter construction cheap across the
 // many tabular cells.
 
+import { formatRelativeTime } from '../../../lib/relativeTime';
+
 const fmtCache = new Map<string, Intl.NumberFormat>();
 
 function getFormatter(key: string, factory: () => Intl.NumberFormat): Intl.NumberFormat {
@@ -101,29 +103,11 @@ export function fmtDuration(sec: number | null | undefined): string {
   return `${h}h ${m % 60}m`;
 }
 
-/** Relative "2h ago" / "just now". Locale-aware via Intl.RelativeTimeFormat. */
-const rtfCache = new Map<string, Intl.RelativeTimeFormat>();
+/** Relative "2 hr. ago" / "just now", with the admin tables' em-dash blank.
+ *  The locale-aware ladder itself lives in lib/relativeTime (shared with the
+ *  seeker-facing screens). */
 export function fmtRelative(iso: string | null | undefined, locale: string): string {
-  if (!iso) return '—';
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return '—';
-  const diffMs = Date.now() - then;
-  let fmt = rtfCache.get(locale);
-  if (!fmt) {
-    fmt = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
-    rtfCache.set(locale, fmt);
-  }
-  const sec = Math.round(diffMs / 1000);
-  if (Math.abs(sec) < 45) return fmt.format(0, 'second');
-  const min = Math.round(sec / 60);
-  if (Math.abs(min) < 60) return fmt.format(-min, 'minute');
-  const hr = Math.round(min / 60);
-  if (Math.abs(hr) < 24) return fmt.format(-hr, 'hour');
-  const day = Math.round(hr / 24);
-  if (Math.abs(day) < 30) return fmt.format(-day, 'day');
-  const mo = Math.round(day / 30);
-  if (Math.abs(mo) < 12) return fmt.format(-mo, 'month');
-  return fmt.format(-Math.round(mo / 12), 'year');
+  return formatRelativeTime(iso, locale) || '—';
 }
 
 /** Short calendar date "Jul 13" (locale-aware month). */

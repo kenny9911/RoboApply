@@ -821,6 +821,7 @@
         "label": "続きから始める",
         "count": "最近{count}件",
         "with": "{name}と",
+        "unknownInterviewer": "面接官",
         "replay": "この記録をもう一度再生する",
         "showMore": "過去の{count}件を表示",
         "showLess": "表示を減らす",

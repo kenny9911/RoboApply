@@ -28,13 +28,10 @@ interface Props {
 
 export function TypePicker({ types, selectedId, onSelect, recommendedTypeIds, roleLabel }: Props) {
   const t = useTranslations('practice');
-  const { localizeRole } = useMockRoleLabels();
+  const { localizeRole, localizeType } = useMockRoleLabels();
   const [expanded, setExpanded] = useState(false);
   // Localized type label/sub with the catalog English as a safe fallback.
-  const tr = (tp: RAMockType, field: 'label' | 'sub'): string => {
-    const key = `setup.types.${tp.id}.${field}`;
-    return t.has(key) ? t(key) : tp[field];
-  };
+  const tr = (tp: RAMockType, field: 'label' | 'sub'): string => localizeType(tp.id, field, tp[field]);
 
   const recIds = recommendedTypeIds ?? [];
   const recSet = useMemo(() => new Set(recIds), [recommendedTypeIds]);

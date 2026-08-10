@@ -821,6 +821,7 @@
         "label": "接著上次繼續",
         "count": "最近 {count} 場",
         "with": "面試官：{name}",
+        "unknownInterviewer": "未知",
         "replay": "再聽一次這場錄音",
         "showMore": "再顯示 {count} 場更早的",
         "showLess": "收合",

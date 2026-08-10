@@ -821,6 +821,7 @@
         "label": "Reprends où tu t'étais arrêté",
         "count": "{count} récents",
         "with": "avec {name}",
+        "unknownInterviewer": "ton intervieweur",
         "replay": "Rejouer cette session",
         "showMore": "Voir {count} plus anciens",
         "showLess": "Voir moins",
