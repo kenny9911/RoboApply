@@ -385,8 +385,10 @@
       "create_draft": "Crear borrador",
       "parse_with_ai": "Leer este archivo",
       "open_editor": "Abrir el editor",
+      "check_resumes": "Ver mis currículums",
       "error": "Ese currículum no se pudo crear. Inténtalo otra vez.",
       "errors": {
+        "lost_response": "Se perdió la conexión mientras se leía tu currículum. Puede que se haya guardado igual: revisa tu lista antes de volver a subirlo.",
         "invalid_url": "Esa no es una dirección de perfil de LinkedIn. Revisa el enlace e inténtalo otra vez.",
         "fetch_failed": "No se pudo acceder a LinkedIn. Sube tu PDF de LinkedIn en su lugar.",
         "profile_empty": "Ese perfil no tenía suficiente para importar. Sube tu PDF de LinkedIn en su lugar.",

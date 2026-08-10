@@ -112,6 +112,7 @@ interface Labels {
   createDraft: string;
   parseWithAi: string;
   openEditor: string;
+  checkResumes: string;
   error: string;
   // demo file (stub) — the prototype hardcodes a sample upload
   demoFileName: string;
@@ -128,6 +129,14 @@ interface Props {
    *  fetch_failed, parse_failed, …). Falls back to `labels.error` when a code
    *  is unmapped or absent. */
   errorMessages?: Record<string, string>;
+  /** Codes that mean the response was lost in transit rather than that the
+   *  create failed — the résumé may well have been saved. For these the modal
+   *  offers `onCheckList` instead of the start button, because pressing "read
+   *  this file" again is what mints the duplicate. */
+  lostResponseCodes?: readonly string[];
+  /** Recovery for a lost-response failure: refetch the library list so the user
+   *  can see whether the résumé actually landed. */
+  onCheckList?: () => void;
   /** Per-source ingest rows shown during the parsing animation. */
   ingestRows: (source: ImportSource, ctx: ImportCreateContext) => IngestItem[];
   /** Creates the variant for real; resolves with the new variant. */
@@ -150,6 +159,8 @@ export function ImportModal({
   labels,
   linkedinUrlEnabled = false,
   errorMessages,
+  lostResponseCodes,
+  onCheckList,
   ingestRows,
   onCreate,
   onClose,
@@ -277,6 +288,11 @@ export function ImportModal({
   // the generic label.
   const errorText =
     (errorCode && errorMessages?.[errorCode]) || labels.error;
+
+  // A lost response is not a failed create — we cannot tell from here whether
+  // the résumé saved, so the recovery is "go look", not "try again".
+  const lostResponse =
+    !!errorCode && !!onCheckList && !!lostResponseCodes?.includes(errorCode);
 
   return (
     <div className="rb-modal" onClick={onClose}>
@@ -616,7 +632,12 @@ export function ImportModal({
           <button type="button" className="btn ghost" onClick={onClose}>
             {labels.cancel}
           </button>
-          {stage === 'input' && (
+          {stage === 'input' && lostResponse && (
+            <button type="button" className="btn primary" onClick={onCheckList}>
+              {labels.checkResumes} <IconArrow size={14} />
+            </button>
+          )}
+          {stage === 'input' && !lostResponse && (
             <button
               type="button"
               className="btn primary"

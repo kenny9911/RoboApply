@@ -385,8 +385,10 @@
       "create_draft": "创建草稿",
       "parse_with_ai": "读取这个文件",
       "open_editor": "打开编辑器",
+      "check_resumes": "查看我的简历",
       "error": "这份简历没有创建成功。请重试。",
       "errors": {
+        "lost_response": "读取你的简历时连接中断了。它可能已经保存好了，再上传一次之前先看看你的列表。",
         "invalid_url": "这不是 LinkedIn 个人主页地址。检查链接后再试。",
         "fetch_failed": "连不上 LinkedIn。改为上传你的 LinkedIn PDF。",
         "profile_empty": "这个主页上的内容不够导入。改为上传你的 LinkedIn PDF。",

@@ -385,8 +385,10 @@
       "create_draft": "초안 만들기",
       "parse_with_ai": "이 파일 읽기",
       "open_editor": "편집기 열기",
+      "check_resumes": "내 이력서 확인하기",
       "error": "이력서를 만들지 못했어요. 다시 시도해 주세요.",
       "errors": {
+        "lost_response": "이력서를 읽는 중에 연결이 끊겼어요. 저장됐을 수도 있으니 다시 올리기 전에 목록을 확인해 주세요.",
         "invalid_url": "LinkedIn 프로필 주소가 아니에요. 링크를 확인하고 다시 시도해 주세요.",
         "fetch_failed": "LinkedIn에 연결하지 못했어요. 대신 LinkedIn PDF를 올려주세요.",
         "profile_empty": "이 프로필에는 가져올 내용이 부족했어요. 대신 LinkedIn PDF를 올려주세요.",

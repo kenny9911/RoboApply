@@ -385,8 +385,10 @@
       "create_draft": "Créer le brouillon",
       "parse_with_ai": "Lire ce fichier",
       "open_editor": "Ouvrir l'éditeur",
+      "check_resumes": "Voir mes CV",
       "error": "Ce CV n'a pas pu être créé. Réessaie.",
       "errors": {
+        "lost_response": "La connexion a été perdue pendant la lecture de ton CV. Il a peut-être quand même été enregistré : regarde ta liste avant de le renvoyer.",
         "invalid_url": "Ce n'est pas une adresse de profil LinkedIn. Vérifie le lien et réessaie.",
         "fetch_failed": "LinkedIn n'a pas pu être joint. Envoie plutôt ton PDF LinkedIn.",
         "profile_empty": "Ce profil ne contenait pas assez d'éléments à importer. Envoie plutôt ton PDF LinkedIn.",

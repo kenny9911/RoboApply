@@ -385,8 +385,10 @@
       "create_draft": "Create draft",
       "parse_with_ai": "Read this file",
       "open_editor": "Open editor",
+      "check_resumes": "Check my resumes",
       "error": "That resume could not be created. Try again.",
       "errors": {
+        "lost_response": "We lost the connection while your resume was being read. It may have saved — check your list before uploading again.",
         "invalid_url": "That is not a LinkedIn profile address. Check the link and try again.",
         "fetch_failed": "LinkedIn could not be reached. Upload your LinkedIn PDF instead.",
         "profile_empty": "That profile did not have enough to import. Upload your LinkedIn PDF instead.",

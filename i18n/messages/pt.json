@@ -385,8 +385,10 @@
       "create_draft": "Criar rascunho",
       "parse_with_ai": "Ler este arquivo",
       "open_editor": "Abrir o editor",
+      "check_resumes": "Ver meus currículos",
       "error": "Esse currículo não pôde ser criado. Tente de novo.",
       "errors": {
+        "lost_response": "A conexão caiu enquanto seu currículo estava sendo lido. Pode ser que ele tenha sido salvo mesmo assim — veja sua lista antes de enviar de novo.",
         "invalid_url": "Esse não é um endereço de perfil do LinkedIn. Confira o link e tente de novo.",
         "fetch_failed": "Não foi possível acessar o LinkedIn. Envie seu PDF do LinkedIn no lugar.",
         "profile_empty": "Esse perfil não tinha conteúdo suficiente para importar. Envie seu PDF do LinkedIn no lugar.",

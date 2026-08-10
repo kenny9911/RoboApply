@@ -236,16 +236,25 @@ export default function ResumesPage() {
     createDraft: t('import.create_draft'),
     parseWithAi: t('import.parse_with_ai'),
     openEditor: t('import.open_editor'),
+    checkResumes: t('import.check_resumes'),
     error: t('import.error'),
     demoFileName: t('import.demo_file_name'),
     demoFileSize: t('import.demo_file_size'),
   };
+
+  // Failures where the request died in transit rather than being refused. A
+  // scanned PDF parses for 45-80s, and the résumé is usually committed before
+  // the response goes missing — so "try again" is the one instruction we must
+  // NOT give. See LOST_RESPONSE_CODES' copy and the "check my resumes" action.
+  const LOST_RESPONSE_CODES = ['network_error', 'server_error'] as const;
 
   // Per-code failure copy keyed by the backend error code. Covers both the
   // LinkedIn-import codes (invalid_url / fetch_failed / profile_empty /
   // url_import_not_configured) and the shared upload-parse codes; the modal
   // falls back to importLabels.error for anything unmapped.
   const importErrorMessages: Record<string, string> = {
+    network_error: t('import.errors.lost_response'),
+    server_error: t('import.errors.lost_response'),
     invalid_url: t('import.errors.invalid_url'),
     fetch_failed: t('import.errors.fetch_failed'),
     profile_empty: t('import.errors.profile_empty'),
@@ -265,6 +274,13 @@ export default function ResumesPage() {
   function handleDone(variant: RAResumeVariant) {
     setImporting(null);
     router.push(`/resume/${variant.id}`);
+  }
+
+  // Recovery after a lost response: close the modal and refetch the library, so
+  // the user lands on the list that answers "did it save?" for itself.
+  function handleCheckList() {
+    setImporting(null);
+    void refetch();
   }
 
   return (
@@ -394,6 +410,8 @@ export default function ResumesPage() {
           labels={importLabels}
           linkedinUrlEnabled={linkedinConfig.data?.urlImportEnabled ?? false}
           errorMessages={importErrorMessages}
+          lostResponseCodes={LOST_RESPONSE_CODES}
+          onCheckList={handleCheckList}
           ingestRows={ingestRows}
           onCreate={handleCreate}
           onClose={() => setImporting(null)}

@@ -92,6 +92,14 @@ function normalizeCode(
       return 'not_a_seeker_account';
     case 'account_deleted':
       return 'account_deleted';
+    // Transport codes this module sets on itself (a fetch that threw, a 5xx).
+    // Without these they fall through to 'unknown' and a caller cannot tell a
+    // connection that died mid-flight — where the request may well have been
+    // processed — from a request the server actively refused.
+    case 'network_error':
+      return 'network_error';
+    case 'server_error':
+      return 'server_error';
     default:
       if (status === 404) return 'not_found';
       if (status === 429) return 'rate_limited';

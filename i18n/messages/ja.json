@@ -385,8 +385,10 @@
       "create_draft": "下書きを作る",
       "parse_with_ai": "このファイルを読む",
       "open_editor": "エディタを開く",
+      "check_resumes": "履歴書一覧を確認する",
       "error": "履歴書を作成できませんでした。もう一度試してください。",
       "errors": {
+        "lost_response": "履歴書の読み取り中に接続が切れました。保存されている場合があります。もう一度アップロードする前に一覧を確認してください。",
         "invalid_url": "LinkedInのプロフィールURLではありません。リンクを確認してもう一度試してください。",
         "fetch_failed": "LinkedInに接続できませんでした。代わりにLinkedInのPDFをアップロードしてください。",
         "profile_empty": "このプロフィールには取り込める情報が足りませんでした。代わりにLinkedInのPDFをアップロードしてください。",

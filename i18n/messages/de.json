@@ -385,8 +385,10 @@
       "create_draft": "Entwurf anlegen",
       "parse_with_ai": "Diese Datei lesen",
       "open_editor": "Editor öffnen",
+      "check_resumes": "Meine Lebensläufe ansehen",
       "error": "Dieser Lebenslauf konnte nicht angelegt werden. Versuch es erneut.",
       "errors": {
+        "lost_response": "Die Verbindung ist abgebrochen, während dein Lebenslauf gelesen wurde. Er wurde vielleicht trotzdem gespeichert – sieh in deiner Liste nach, bevor du ihn noch einmal hochlädst.",
         "invalid_url": "Das ist keine LinkedIn-Profiladresse. Prüf den Link und versuch es erneut.",
         "fetch_failed": "LinkedIn war nicht erreichbar. Lade stattdessen dein LinkedIn-PDF hoch.",
         "profile_empty": "Dieses Profil hatte zu wenig Inhalt zum Importieren. Lade stattdessen dein LinkedIn-PDF hoch.",

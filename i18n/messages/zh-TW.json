@@ -385,8 +385,10 @@
       "create_draft": "建立草稿",
       "parse_with_ai": "讀取這個檔案",
       "open_editor": "開啟編輯器",
+      "check_resumes": "查看我的履歷",
       "error": "這份履歷沒有建立成功。請重試。",
       "errors": {
+        "lost_response": "讀取你的履歷時連線中斷了。它可能已經存好了，再上傳一次之前先看看你的清單。",
         "invalid_url": "這不是 LinkedIn 個人檔案網址。檢查連結後再試。",
         "fetch_failed": "連不上 LinkedIn。改成上傳你的 LinkedIn PDF。",
         "profile_empty": "這個個人檔案上的內容不夠匯入。改成上傳你的 LinkedIn PDF。",
