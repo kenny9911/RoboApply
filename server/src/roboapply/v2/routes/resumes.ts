@@ -167,11 +167,17 @@ router.post('/upload', requireAuth, handleResumeUpload, async (req: Request, res
       return res.status(422).json({ error: 'file_required', code: 'file_required' });
     }
     const nameRaw = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    // Opaque per-file token (see RAResumeVariant.uploadIdempotencyKey). Bounded
+    // and optional: an absent or oversized key just means no replay protection,
+    // never a rejected upload.
+    const keyRaw =
+      typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
     const resume = await raResumeService.uploadAndCreate(userId, {
       buffer: file.buffer,
       fileName: file.originalname || 'resume',
       mimeType: file.mimetype || 'application/octet-stream',
       name: nameRaw || undefined,
+      idempotencyKey: keyRaw && keyRaw.length <= 200 ? keyRaw : undefined,
       requestId: (req as any).requestId,
     }, getRequestLocale(req));
     return res.status(201).json({ resume });

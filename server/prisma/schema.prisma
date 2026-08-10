@@ -5269,6 +5269,17 @@ model RAResumeVariant {
   /// 'failed'. NULL for variants that never went through the parse pipeline.
   parseStatus         String?
 
+  /// Idempotency key for upload-parse: an opaque per-file token the client
+  /// sends with POST /resumes/upload (today, sha256 of the file bytes, so it
+  /// is stable across retries and across modal sessions). A repeat upload
+  /// returns the row the first attempt created instead of minting a duplicate
+  /// — the failure mode when a 45-80s parse commits server-side but the
+  /// response is lost in transit. NULL for every non-upload variant; Postgres
+  /// treats NULLs as distinct, so those never collide on the index below.
+  /// Released on soft delete (see RAResumeService.delete) so re-uploading the
+  /// same file after deleting it creates a fresh row.
+  uploadIdempotencyKey String?
+
   /// Raw extracted text from the uploaded file (pre-parse). Candidate-owned —
   /// never written to the recruiter `Resume` table.
   rawText             String?   @db.Text
@@ -5303,6 +5314,7 @@ model RAResumeVariant {
   @@index([userId, isPrimary])
   @@index([targetJobId])
   @@index([resumeContentHash])
+  @@unique([userId, uploadIdempotencyKey])
 }
 
 /// User's saved search queries.

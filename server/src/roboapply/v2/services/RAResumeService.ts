@@ -519,12 +519,39 @@ export class RAResumeService {
    */
   async uploadAndCreate(
     userId: string,
-    params: { buffer: Buffer; fileName: string; mimeType: string; requestId?: string; name?: string },
+    params: {
+      buffer: Buffer;
+      fileName: string;
+      mimeType: string;
+      requestId?: string;
+      name?: string;
+      /** Opaque per-file token from the client (see schema). */
+      idempotencyKey?: string;
+    },
     // Optional trailing so non-route callers keep compiling; the ingest only
     // uses it for the AI summary/highlight shown on the résumé card.
     locale?: string,
   ): Promise<RAResumeVariantView> {
     const p = prisma as any;
+
+    // Retry of an upload that already landed → hand back the existing row
+    // BEFORE re-running the 45-80s parse. This is the dedupe that actually
+    // fires for uploads: the resumeContentHash check below it hashes
+    // LLM-produced markdown, which is not reproducible across two parses of
+    // the same bytes.
+    if (params.idempotencyKey) {
+      const prior = await p.rAResumeVariant.findFirst({
+        where: { userId, uploadIdempotencyKey: params.idempotencyKey, deletedAt: null },
+        select: { id: true },
+      });
+      if (prior) {
+        logger.info('RA_V2_RESUME', 'upload replayed (idempotency key hit)', {
+          userId,
+          resumeId: prior.id,
+        });
+        return this.reloadView(prior.id);
+      }
+    }
 
     let ingest: CandidateResumeIngestResult;
     try {
@@ -549,6 +576,7 @@ export class RAResumeService {
       fallbackFileName: params.fileName,
       fallbackMimeType: params.mimeType,
       fallbackSize: params.buffer.byteLength,
+      idempotencyKey: params.idempotencyKey,
     });
   }
 
@@ -569,6 +597,8 @@ export class RAResumeService {
       fallbackFileName?: string;
       fallbackMimeType?: string;
       fallbackSize?: number;
+      /** Opaque per-file upload token; see the schema field of the same name. */
+      idempotencyKey?: string;
     },
   ): Promise<RAResumeVariantView> {
     const p = prisma as any;
@@ -593,7 +623,7 @@ export class RAResumeService {
       return this.reloadView(dupId);
     }
 
-    const created = await p.rAResumeVariant.create({
+    const createData = {
       data: {
         userId,
         name: opts.name?.trim() || ingest.displayName,
@@ -615,9 +645,29 @@ export class RAResumeService {
         originalFileName: ingest.original?.fileName ?? opts.fallbackFileName ?? null,
         originalFileMimeType: ingest.original?.mimeType ?? opts.fallbackMimeType ?? null,
         originalFileSize: ingest.original?.size ?? opts.fallbackSize ?? null,
+        uploadIdempotencyKey: opts.idempotencyKey ?? null,
         lastEditedAt: new Date(),
       },
-    });
+    };
+
+    let created: { id: string };
+    try {
+      created = await p.rAResumeVariant.create(createData);
+    } catch (err) {
+      // Two uploads of the same file raced (the user retried while the first
+      // parse was still running) and the other one won @@unique([userId,
+      // uploadIdempotencyKey]). Both parses burned, but only one row exists —
+      // hand back the winner instead of surfacing a 500.
+      const winnerId = opts.idempotencyKey
+        ? await this.findByIdempotencyKey(userId, opts.idempotencyKey, err)
+        : null;
+      if (!winnerId) throw err;
+      logger.info('RA_V2_RESUME', 'upload lost the idempotency race', {
+        userId,
+        resumeId: winnerId,
+      });
+      return this.reloadView(winnerId);
+    }
     logger.info('RA_V2_RESUME', `resume created (${opts.sourceKind})`, {
       userId,
       resumeId: created.id,
@@ -625,6 +675,26 @@ export class RAResumeService {
     });
     await this.normalizePrimary(userId);
     return this.reloadView(created.id);
+  }
+
+  /**
+   * Resolve the row that already holds `key` — but only when `err` is the
+   * unique-constraint violation on @@unique([userId, uploadIdempotencyKey]).
+   * Any other failure (a dropped connection, a bad column) must keep bubbling,
+   * or a genuinely broken create would masquerade as a successful replay.
+   */
+  private async findByIdempotencyKey(
+    userId: string,
+    key: string,
+    err: unknown,
+  ): Promise<string | null> {
+    const code = (err as { code?: unknown } | null)?.code;
+    if (code !== 'P2002') return null;
+    const row = await (prisma as any).rAResumeVariant.findFirst({
+      where: { userId, uploadIdempotencyKey: key, deletedAt: null },
+      select: { id: true },
+    });
+    return row?.id ?? null;
   }
 
   /**
@@ -821,7 +891,10 @@ export class RAResumeService {
     }
     await p.rAResumeVariant.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      // Release the upload key with the row: the unique index spans soft-deleted
+      // rows too, so keeping it would make re-uploading the same file after a
+      // delete either collide or replay the deleted résumé back at the user.
+      data: { deletedAt: new Date(), uploadIdempotencyKey: null },
     });
     // Reconcile primaries: if we removed the primary, this promotes the next
     // most-recently-edited active résumé (and self-heals any drift) so the user
