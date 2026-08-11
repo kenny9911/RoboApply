@@ -81,6 +81,28 @@ const lora = localFont({
   variable: '--font-lora',
 });
 
+// ── CJK — Source Han Sans (思源黑體) ──────────────────────────────────────
+// Self-hosted from adobe-fonts/source-han-sans (release branch, variable
+// WOFF2 region subsets; SIL OFL 1.1 — ./fonts/LICENSE-SourceHanSans.txt).
+// CN carries simplified (zh); TW carries traditional with Taiwan MOE glyph
+// standards (zh-TW). NOT preloaded: these are multi-MB faces that only
+// zh/zh-TW pages reference — globals.css slots them into --font-ui via
+// <html lang>, so other locales never download them.
+const sourceHanSC = localFont({
+  src: './fonts/source-han-sans-cn-vf.woff2',
+  weight: '250 900',
+  display: 'swap',
+  preload: false,
+  variable: '--font-source-han-sc',
+});
+const sourceHanTW = localFont({
+  src: './fonts/source-han-sans-tw-vf.woff2',
+  weight: '250 900',
+  display: 'swap',
+  preload: false,
+  variable: '--font-source-han-tw',
+});
+
 export const metadata = {
   metadataBase: new URL('https://www.roboapply.io'),
   title: 'RoboApply',
@@ -112,7 +134,7 @@ export default async function RootLayout({
       // warning about that pre-hydration mutation of the <html> attributes.
       data-theme="light"
       suppressHydrationWarning
-      className={`${inter.variable} ${instrumentSans.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable}`}
+      className={`${inter.variable} ${instrumentSans.variable} ${sourceSans.variable} ${merriweather.variable} ${lora.variable} ${sourceHanSC.variable} ${sourceHanTW.variable}`}
     >
       <head>
         {/* No-flash theme bootstrap — must run render-blocking before paint.

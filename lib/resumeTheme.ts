@@ -93,7 +93,10 @@ export const ACCENT_SWATCHES: { color: string; label: string }[] = [
 export function fontFamilyFor(font: FontKey): string {
   const found = FONT_OPTIONS.find((f) => f.key === font);
   const cssVar = found?.cssVar ?? RETIRED_FONTS[font] ?? 'var(--font-inter)';
-  return `${cssVar}, system-ui, sans-serif`;
+  // --font-han: Source Han Sans, defined only under html[lang='zh'/'zh-TW']
+  // (globals.css) — CJK résumé text renders 思源黑體 there; everywhere else
+  // the var() fallback collapses to system-ui and nothing extra downloads.
+  return `${cssVar}, var(--font-han, system-ui), system-ui, sans-serif`;
 }
 
 const MONTHS_SHORT = [
