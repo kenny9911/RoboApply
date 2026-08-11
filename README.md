@@ -14,7 +14,7 @@ See [`docs/ENGINEERING_PLAN.md`](docs/ENGINEERING_PLAN.md) for architecture & ra
 ```bash
 cp .env.example .env          # fill in DATABASE_URL, JWT_SECRET, LLM keys, …
 npm install                   # installs deps + runs `prisma generate`
-npm run dev                   # Express API :4607  +  Next.js :3611 (concurrently)
+npm run dev                   # Express API (.env PORT, default :4607)  +  Next.js :3611 (concurrently)
 ```
 
 Open http://localhost:3611. The Next dev server proxies `/api/*` → the local Express API (`NEXT_PUBLIC_API_URL`).
