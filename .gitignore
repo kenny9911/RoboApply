@@ -24,3 +24,4 @@ logs/
 *.tsbuildinfo
 .vercel
 .env*
+.gstack/
