@@ -154,6 +154,9 @@ export interface CreditsResponse {
   periodAllotment: number | null;
   tier: string;
   currentPeriodEnd: string | null;
+  /** Minutes covered by one mock-interview credit. Optional for compatibility
+   *  with an older backend during a rolling deployment. */
+  creditMinutes?: number;
 }
 
 export interface BillingInvoice {

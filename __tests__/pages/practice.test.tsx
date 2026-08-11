@@ -9,8 +9,8 @@
 // renders the page in zh and pins all three to their localized output.
 
 import type { ReactNode } from 'react';
-import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AbstractIntlMessages } from 'next-intl';
 
 import PracticePage from '../../app/(auth)/practice/page';
@@ -25,6 +25,14 @@ beforeAll(() => {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY_MS).toISOString();
+const creditState = vi.hoisted(() => ({
+  data: {
+    balance: 1,
+    periodAllotment: 1,
+    tier: 'free',
+    creditMinutes: 20,
+  },
+}));
 
 // Two completed sessions: one on a persona the catalog knows (maya), one on a
 // persona id it doesn't (the fallback path).
@@ -57,6 +65,10 @@ vi.mock('../../lib/auth/AuthProvider', () => ({
   useAuth: () => mockAuthState.value,
 }));
 
+vi.mock('../../hooks/useAccount', () => ({
+  useCredits: () => ({ data: creditState.data }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(), replace: vi.fn(), refresh: vi.fn(),
@@ -74,6 +86,16 @@ const zh = {
 } as AbstractIntlMessages;
 
 describe('/practice recent sessions', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/practice');
+    creditState.data = {
+      balance: 1,
+      periodAllotment: 1,
+      tier: 'free',
+      creditMinutes: 20,
+    };
+  });
+
   it('localizes the type label, the missing-persona fallback and the timestamp', async () => {
     const { container } = renderWithProviders(<PracticePage />, {
       intlLocale: 'zh',
@@ -101,5 +123,91 @@ describe('/practice recent sessions', () => {
     expect(screen.getByText('前天')).toBeTruthy();
     expect(screen.getByText('3天前')).toBeTruthy();
     expect(screen.queryByText(/\d+[dhm] ago/)).toBeNull();
+  });
+
+  it('shows one setup decision at a time and preselects the recommended plan', async () => {
+    renderWithProviders(<PracticePage />, {
+      intlLocale: 'en',
+      intlMessages: enMessages as AbstractIntlMessages,
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Which role are you practicing for?' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Your recommended practice plan' })).toBeNull();
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'Frontend Engineer' }));
+    const continueButton = screen.getByRole('button', { name: 'Continue' });
+    await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(continueButton);
+
+    expect(await screen.findByRole('heading', { name: 'Your recommended practice plan' })).toBeTruthy();
+    expect(screen.getAllByText('Kai').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Live coding').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('heading', { name: 'How should this practice feel?' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('heading', { name: 'How should this practice feel?' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Product and Design7' }));
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: 'Product Manager' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Okonkwo/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Product sense').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('uses the server-authored minutes-per-credit rate for preflight and the affordable duration', async () => {
+    creditState.data = {
+      balance: 1.5,
+      periodAllotment: 1.5,
+      tier: 'free',
+      creditMinutes: 10,
+    };
+
+    renderWithProviders(<PracticePage />, {
+      intlLocale: 'en',
+      intlMessages: enMessages as AbstractIntlMessages,
+    });
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'Frontend Engineer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This interview needs 5 credits and you have 1.5.');
+    const startButton = screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Length: 15 min' }));
+    await waitFor(() => expect(startButton.disabled).toBe(false));
+  });
+
+  it('prefills the previous plan when a report asks to run it again', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/practice?role=Frontend+Engineer&interviewer=kai&type=technical&mode=voice&language=fr&duration=15',
+    );
+
+    renderWithProviders(<PracticePage />, {
+      intlLocale: 'en',
+      intlMessages: enMessages as AbstractIntlMessages,
+    });
+
+    const roleChoice = await screen.findByRole('radio', { name: 'Frontend Engineer' });
+    await waitFor(() => expect(roleChoice).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect((await screen.findAllByText('Kai')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Live coding').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByRole('radio', { name: /Voice only/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('combobox')).toHaveValue('fr');
+    expect(screen.getByRole('radio', { name: '15 min' })).toHaveAttribute('aria-checked', 'true');
   });
 });

@@ -39,7 +39,9 @@ import '@livekit/components-styles';
 
 import { useMockCatalog } from '../../../../hooks/useMockV3';
 import { useAuth } from '../../../../lib/auth/AuthProvider';
+import { useMockRoleLabels } from '../../../../lib/mockRoleLabels';
 import { Btn } from '../../../../components/v3/primitives/Btn';
+import { IconPlay, IconX } from '../../../../components/v3/primitives/Iconset';
 import {
   LiveBar, InterviewerTile, YourTile, LiveTranscript, type AiState,
   useLiveCoach, LiveQuestionCard, LiveCoachNudge, CoachMeters, CoachToggle,
@@ -59,10 +61,13 @@ import {
   type IESessionDetail,
 } from '../../../../lib/api/interviewEngine';
 import type { RAMockInterviewer, RAMockTurn } from '../../../../lib/api/v2/types';
+import styles from './live.module.css';
 
 type Phase =
   | 'loading' | 'ready' | 'micDenied' | 'agentUnavailable' | 'reconnecting'
   | 'connectionLost' | 'error' | 'ended';
+
+type ExitIntent = 'report' | 'setup';
 
 // One automatic rejoin per disconnect episode: the short delay lets a flapping
 // network settle before re-minting a token, and the single-attempt cap means a
@@ -115,6 +120,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   const [roomKey, setRoomKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [deviceFailure, setDeviceFailure] = useState(false);
+  const [exitIntent, setExitIntent] = useState<ExitIntent | null>(null);
   const endingRef = useRef(false);
   const connectRef = useRef(false);
   // Set by the End/Back paths BEFORE the room disconnects, so the disconnect
@@ -205,6 +211,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     if (endingRef.current) return;
     endingRef.current = true;
     intentionalEndRef.current = true;
+    setExitIntent(null);
     setPhase('ended');
     const startedAt = sessionRef.current?.startedAt;
     const startedMs = startedAt ? Date.parse(startedAt) : NaN;
@@ -216,6 +223,18 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     try { await interviewEngineApi.end(id); } catch { /* finalize is idempotent server-side */ }
     router.push(toReport ? `/practice/${id}/report` : '/practice');
   }, [id, router, trackEvent, flushEvents]);
+
+  const requestExit = useCallback((intent: ExitIntent) => {
+    if (endingRef.current) return;
+    setExitIntent(intent);
+  }, []);
+
+  const cancelExit = useCallback(() => setExitIntent(null), []);
+
+  const confirmExit = useCallback(() => {
+    if (!exitIntent) return;
+    void finish(exitIntent === 'report');
+  }, [exitIntent, finish]);
 
   // One automatic reacquire per disconnect episode (reset on successful
   // rejoin). The timer is cleared on unmount so a navigation away doesn't
@@ -367,14 +386,23 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   }
   if (phase === 'connectionLost') {
     return (
-      <CenterMsg>
-        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.connectionLostTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.connectionLostBody')}</p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Btn variant="primary" onClick={() => void reacquire(true)} disabled={busy}>{t('live.rejoin')}</Btn>
-          <Btn onClick={() => void finish(true)} disabled={busy}>{t('live.endAnyway')}</Btn>
-        </div>
-      </CenterMsg>
+      <>
+        <CenterMsg>
+          <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.connectionLostTitle')}</p>
+          <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.connectionLostBody')}</p>
+          <div className={styles.centerActions}>
+            <Btn variant="primary" onClick={() => void reacquire(true)} disabled={busy}>{t('live.rejoin')}</Btn>
+            <Btn onClick={() => requestExit('report')} disabled={busy}>{t('live.endAnyway')}</Btn>
+          </div>
+        </CenterMsg>
+        {exitIntent && (
+          <ExitConfirmDialog
+            intent={exitIntent}
+            onCancel={cancelExit}
+            onConfirm={confirmExit}
+          />
+        )}
+      </>
     );
   }
 
@@ -414,41 +442,179 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
         }
         setDeviceFailure(true);
       }}
-      className="iv-live"
+      className={`iv-live ${styles.room}`}
     >
       <RoomAudioRenderer />
       {deviceFailure && (
-        <div
-          role="alert"
-          onClick={() => setDeviceFailure(false)}
-          style={{
-            position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 60, padding: '8px 16px', borderRadius: 'var(--r-lg, 12px)',
-            border: '1px solid rgba(245, 158, 11, 0.45)', background: 'var(--surface)',
-            color: 'var(--text)', fontSize: 'var(--fs-meta)', cursor: 'pointer', maxWidth: 440,
-            textAlign: 'center',
-          }}
-        >
-          {t('live.deviceFailure')}
+        <div role="alert" className={styles.deviceAlert}>
+          <span>{t('live.deviceFailure')}</span>
+          <button
+            type="button"
+            onClick={() => setDeviceFailure(false)}
+            aria-label={t('live.dismiss')}
+          >
+            <IconX size={16} />
+          </button>
         </div>
       )}
       <RoomStage
         session={session}
         connection={connection}
         interviewer={interviewer}
-        onEnd={() => void finish(true)}
-        onBack={() => void finish(false)}
+        onEnd={() => requestExit('report')}
+        onBack={() => requestExit('setup')}
         onEvent={trackEvent}
       />
+      {exitIntent && (
+        <ExitConfirmDialog
+          intent={exitIntent}
+          onCancel={cancelExit}
+          onConfirm={confirmExit}
+        />
+      )}
     </LiveKitRoom>
   );
 }
 
 function CenterMsg({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-6"
-      style={{ flexDirection: 'column', textAlign: 'center', color: 'var(--text-2)', fontSize: 'var(--fs-body)' }}>
+    <div className={styles.centerMsg}>
       {children}
+    </div>
+  );
+}
+
+function ExitConfirmDialog({
+  intent,
+  onCancel,
+  onConfirm,
+}: {
+  intent: ExitIntent;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations('practice');
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    cancelRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [onCancel]);
+
+  const bodyKey = intent === 'report' ? 'live.exitDialog.reportBody' : 'live.exitDialog.setupBody';
+  const confirmKey = intent === 'report' ? 'live.exitDialog.reportConfirm' : 'live.exitDialog.setupConfirm';
+
+  return (
+    <div
+      className={styles.dialogBackdrop}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className={styles.dialog}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="practice-exit-title"
+        aria-describedby="practice-exit-description"
+      >
+        <div className={styles.dialogMark} aria-hidden>!</div>
+        <div>
+          <h2 id="practice-exit-title">{t('live.exitDialog.title')}</h2>
+          <p id="practice-exit-description">{t(bodyKey)}</p>
+        </div>
+        <div className={styles.dialogActions}>
+          <button ref={cancelRef} type="button" className="btn" onClick={onCancel}>
+            {t('live.exitDialog.cancel')}
+          </button>
+          <button type="button" className={`btn ${styles.dialogConfirm}`} onClick={onConfirm}>
+            {t(confirmKey)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AudioUnlockDialog({ onUnlock }: { onUnlock: () => void }) {
+  const t = useTranslations('practice');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => actionRef.current?.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      // This gate cannot be dismissed: the worker deliberately waits for the
+      // client_ready handshake so the opening question is never spoken into a
+      // muted browser. Escape therefore keeps the dialog open and returns
+      // focus to its one safe action.
+      if (event.key === 'Escape' || event.key === 'Tab') {
+        event.preventDefault();
+        actionRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus();
+    };
+  }, []);
+
+  return (
+    <div className={styles.audioOverlay}>
+      <div
+        ref={dialogRef}
+        className={styles.audioDialog}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="practice-audio-title"
+        aria-describedby="practice-audio-description"
+      >
+        <div className={styles.audioIcon} aria-hidden>
+          <IconPlay size={24} />
+        </div>
+        <h2 id="practice-audio-title">{t('live.audioUnlockTitle')}</h2>
+        <p id="practice-audio-description">{t('live.audioUnlockBody')}</p>
+        <button
+          ref={actionRef}
+          type="button"
+          onClick={onUnlock}
+          className={`btn primary ${styles.audioButton}`}
+        >
+          <IconPlay size={16} />
+          {t('live.enableAudio')}
+        </button>
+      </div>
     </div>
   );
 }
@@ -507,6 +673,7 @@ function RoomStage({
   onEvent: (type: string, data?: Record<string, unknown>) => void;
 }) {
   const t = useTranslations('practice');
+  const { localizeRole, localizeType } = useMockRoleLabels();
   const { user } = useAuth();
   const room = useRoomContext();
   const { state } = useVoiceAssistant();
@@ -523,11 +690,24 @@ function RoomStage({
   const [localQuality, setLocalQuality] = useState<QualityLevel | null>(null);
   const [agentDegraded, setAgentDegraded] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [openPanel, setOpenPanel] = useState<'self' | 'coach' | 'transcript' | null>(null);
   const segMapRef = useRef<Map<string, RAMockTurn>>(new Map());
+
+  const togglePanel = useCallback((panel: 'self' | 'coach' | 'transcript', open: boolean) => {
+    setOpenPanel((current) => (open ? panel : current === panel ? null : current));
+  }, []);
+  useEffect(() => {
+    if (!openPanel) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenPanel(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [openPanel]);
 
   // Coach Mode — on by default (this is a practice tool), persisted per browser.
   const [coachOn, setCoachOn] = useState(true);
-  const [hintOpen, setHintOpen] = useState(true);
+  const [hintOpen, setHintOpen] = useState(false);
   useEffect(() => {
     try {
       const v = window.localStorage.getItem('ie_coach_mode');
@@ -714,22 +894,27 @@ function RoomStage({
     state === 'speaking' ? 'asking' : state === 'listening' ? 'listening' : 'thinking';
 
   const candidateName = user?.name?.trim() || user?.email?.split('@')[0] || t('live.you');
-  const typeLabel = session.interviewType;
+  const roleLabel = localizeRole(session.role);
+  const typeLabel = localizeType(session.interviewType, 'label');
 
   return (
     <>
       <LiveBar
-        role={session.role}
+        role={roleLabel}
         typeLabel={typeLabel}
         format={connection.mode}
         elapsedSec={elapsed}
         currentIndex={0}
+        // The real-time engine is conversational rather than a fixed N-question
+        // sequence. Zero intentionally hides progress instead of showing the
+        // misleading "Question 1 of 0" label.
         total={0}
         onBack={onBack}
+        className={styles.header}
       />
 
       {(localQuality !== null || agentDegraded) && (
-        <div role="status" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+        <div role="status" className={styles.qualityRow}>
           {localQuality !== null && (
             <QualityPill level={localQuality} label={t(`live.quality.${localQuality}`)} />
           )}
@@ -745,45 +930,15 @@ function RoomStage({
         // animate to "speaking" and hear nothing (the avatar state tracks the
         // agent, not local playback), masking the failure. Covering the stage
         // forces the one tap that unlocks audio AND signals the worker to greet.
-        <div
-          role="alertdialog"
-          aria-modal="true"
-          onClick={unlockAudio}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 80,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 16, padding: 24, textAlign: 'center',
-            background: 'rgba(0, 0, 0, 0.62)', backdropFilter: 'blur(4px)', cursor: 'pointer',
-          }}
-        >
-          <div aria-hidden style={{ fontSize: 'var(--fs-hero)', lineHeight: 1 }}>🔊</div>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); unlockAudio(); }}
-            style={{
-              padding: '14px 28px', borderRadius: 999, fontSize: 'var(--fs-body)', fontWeight: 700,
-              border: '1px solid rgba(239, 68, 68, 0.55)', background: 'rgba(239, 68, 68, 0.16)',
-              color: '#fff', cursor: 'pointer',
-            }}
-          >
-            {t('live.enableAudio')}
-          </button>
-        </div>
+        <AudioUnlockDialog onUnlock={unlockAudio} />
       )}
 
-      <div className="iv-live-stage" style={{ position: 'relative' }}>
+      <div className={`iv-live-stage ${styles.stage}`}>
         {/* LEFT — interviewer */}
-        <div className="iv-stage-left">
+        <section className={`iv-stage-left ${styles.interviewerColumn}`} aria-label={t('live.interviewer')}>
           <InterviewerTile interviewer={interviewer} aiState={aiState} video={video} />
           {!agentJoined && (
-            <div
-              role="status"
-              style={{
-                marginTop: 12, padding: '10px 14px', borderRadius: 'var(--r-lg, 12px)',
-                border: '1px solid var(--rule)', background: 'var(--surface)',
-                color: 'var(--text-2)', fontSize: 'var(--fs-meta)', textAlign: 'center',
-              }}
-            >
+            <div role="status" className={styles.agentStatus}>
               {agentSlow ? t('live.agentSlow') : t('live.agentJoining')}
             </div>
           )}
@@ -796,34 +951,48 @@ function RoomStage({
               onToggleHint={() => setHintOpen((o) => !o)}
             />
           )}
-        </div>
+        </section>
 
         {/* RIGHT — candidate + controls + transcript */}
-        <div className="iv-stage-right">
-          {video ? (
-            <div style={{ position: 'relative', borderRadius: 'var(--r-lg)', overflow: 'hidden', border: '1px solid var(--rule)', background: '#000', aspectRatio: '16 / 9' }}>
-              {localCamera ? (
-                <VideoTrack trackRef={localCamera} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', fontSize: 'var(--fs-meta)' }}>
-                  {t('live.cameraOff')}
+        <section className={`iv-stage-right ${styles.candidateColumn}`} aria-label={t('live.you')}>
+          <details
+            className={`${styles.auxDisclosure} ${styles.selfViewDisclosure}`}
+            open={openPanel === 'self'}
+            onToggle={(event) => togglePanel('self', event.currentTarget.open)}
+          >
+            <summary>
+              <span>{t('live.you')}</span>
+              <span className={styles.auxStatus}>
+                {isMicrophoneEnabled ? t('live.micReady') : t('live.unmuteMic')}
+              </span>
+            </summary>
+            <div className={styles.selfViewBody}>
+              {video ? (
+                <div className={styles.videoFrame}>
+                  {localCamera ? (
+                    <VideoTrack trackRef={localCamera} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div className={styles.cameraOff}>
+                      {t('live.cameraOff')}
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <YourTile
+                  name={candidateName}
+                  role={roleLabel}
+                  initials={initialsOf(candidateName)}
+                  active={state === 'listening'}
+                  video={false}
+                  camOn={false}
+                  onCamChange={() => undefined}
+                />
               )}
             </div>
-          ) : (
-            <YourTile
-              name={candidateName}
-              role={session.role}
-              initials={initialsOf(candidateName)}
-              active={state === 'listening'}
-              video={false}
-              camOn={false}
-              onCamChange={() => undefined}
-            />
-          )}
+          </details>
 
           {/* Controls (iv-* design) */}
-          <div className="iv-controls">
+          <div className={`iv-controls ${styles.controls}`}>
             <button type="button" className="btn" onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}>
               {isMicrophoneEnabled ? t('live.muteMic') : t('live.unmuteMic')}
             </button>
@@ -833,7 +1002,7 @@ function RoomStage({
               </button>
             )}
             <CoachToggle on={coachOn} onToggle={toggleCoach} />
-            <button type="button" className="btn primary" onClick={onEnd}>
+            <button type="button" className={`btn ${styles.endButton}`} onClick={onEnd}>
               {t('live.endInterview')}
             </button>
           </div>
@@ -843,35 +1012,40 @@ function RoomStage({
           )}
 
           {coachOn && agentJoined && (
-            <CoachMeters metrics={coach.metrics} listeningFor={coach.listeningFor} />
+            <details
+              className={`${styles.auxDisclosure} ${styles.coachDisclosure}`}
+              open={openPanel === 'coach'}
+              onToggle={(event) => togglePanel('coach', event.currentTarget.open)}
+            >
+              <summary>{t('live.coach.coachMode')}</summary>
+              <div className={styles.coachPanel}>
+                <CoachMeters metrics={coach.metrics} listeningFor={coach.listeningFor} />
+              </div>
+            </details>
           )}
 
-          <LiveTranscript
-            turns={transcript}
-            interviewerName={interviewer.name}
-            typing={state === 'thinking'}
-          />
-        </div>
+          <details
+            className={`${styles.auxDisclosure} ${styles.transcriptDisclosure}`}
+            open={openPanel === 'transcript'}
+            onToggle={(event) => togglePanel('transcript', event.currentTarget.open)}
+          >
+            <summary>{t('live.transcript')}</summary>
+            <LiveTranscript
+              turns={transcript}
+              interviewerName={interviewer.name}
+              typing={state === 'thinking'}
+            />
+          </details>
+        </section>
 
         {/* Reconnecting overlay — covers the stage so the AI tile can't sit on
             a misleading 'Thinking…' while the connection is down. */}
         {reconnecting && (
           <div
             role="status"
-            style={{
-              position: 'absolute', inset: 0, zIndex: 30,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(8, 10, 18, 0.62)', backdropFilter: 'blur(3px)',
-              borderRadius: 'var(--r-lg)',
-            }}
+            className={styles.reconnectOverlay}
           >
-            <span
-              style={{
-                padding: '12px 22px', borderRadius: 999,
-                border: '1px solid var(--rule)', background: 'var(--surface)',
-                color: 'var(--text)', fontSize: 'var(--fs-body)', fontWeight: 600,
-              }}
-            >
+            <span>
               {t('live.reconnecting')}
             </span>
           </div>

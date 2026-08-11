@@ -9,9 +9,8 @@
 // routes to the live room. The engine's persona ids are aligned to this
 // catalog's interviewer ids, so the selection maps 1:1.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { RoboApiError } from '../../../lib/api/client';
 import { raV2Api } from '../../../lib/api/v2';
@@ -20,22 +19,17 @@ import { useCredits } from '../../../hooks/useAccount';
 import { useMockCatalog } from '../../../hooks/useMockV3';
 import { PageHeader } from '../../../components/v3/primitives/PageHeader';
 import { Btn } from '../../../components/v3/primitives/Btn';
-import {
-  RecentSessionsStrip,
-  RolePicker,
-  MarketRequirementsPanel,
-  InterviewerPicker,
-  TypePicker,
-  FormatPicker,
-  LangDurationPicker,
-  LaunchBar,
-} from '../../../components/v3/mock';
+import { PracticeSetupFlow } from '../../../components/v3/mock';
 import { JD_MIN_CHARS, type RoleSourceMode } from '../../../components/v3/mock/RolePicker';
 import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
 import { recommendationsForRole } from '../../../lib/interviewRecommendations';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { formatRelativeTime } from '../../../lib/relativeTime';
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
+import {
+  mockCreditsForMinutes,
+  normalizeMockCreditMinutes,
+} from '../../../lib/mockInterviewCredits';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/types';
 import {
@@ -70,6 +64,9 @@ export default function MockSetupPage() {
 
   const catalogQuery = useMockCatalog();
   const catalog = catalogQuery.data?.catalog;
+  const defaultedTargetRef = useRef<string | null>(null);
+  const replayHydratedRef = useRef(false);
+  const replayTargetRef = useRef<string | null>(null);
 
   // Résumé context for the blueprint prompt (the interviewer tailors question
   // targeting to it). Fetched in the background at page load — never inside
@@ -142,7 +139,85 @@ export default function MockSetupPage() {
   const [insufficientCredits, setInsufficientCredits] = useState<{ balance: number; required: number } | null>(null);
   const creditsQ = useCredits();
 
+  // A report's "Run it again" action carries the last interview plan in the
+  // URL. Hydrate it after the catalog is ready so every id is validated against
+  // the current choices, while keeping the server-rendered first frame stable.
+  useEffect(() => {
+    if (!catalog || replayHydratedRef.current || typeof window === 'undefined') return;
+    replayHydratedRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const replayRole = params.get('role')?.trim() ?? '';
+    const replayCategory = catalog.roleCategories.find((item) => item.roles.includes(replayRole));
+    if (!replayRole || !replayCategory) return;
+
+    const replayInterviewer = catalog.interviewers.find(
+      (item) => item.id === params.get('interviewer'),
+    )?.id ?? null;
+    const replayType = catalog.types.find((item) => item.id === params.get('type'))?.id ?? null;
+    const replayMode = params.get('mode');
+    const replayLanguage = params.get('language');
+    const parsedDuration = Number(params.get('duration'));
+    const replayDuration =
+      Number.isInteger(parsedDuration) && parsedDuration >= 5 && parsedDuration <= 120
+        ? parsedDuration
+        : null;
+
+    setSourceMode('role');
+    setQuery('');
+    setActiveCategory(replayCategory.name);
+    setRole(replayRole);
+    setInterviewerId(replayInterviewer);
+    setTypeId(replayType);
+    if (replayMode === 'video' || replayMode === 'voice') setFormat(replayMode);
+    if (INTERVIEW_LOCALES.some((locale) => locale.code === replayLanguage)) {
+      setLanguage(replayLanguage as string);
+    }
+    setDurationOverride(replayDuration);
+
+    // A complete saved plan should survive the role-aware defaulting effect.
+    // Partial or stale links intentionally fall back to current recommendations.
+    const replayTarget = replayInterviewer && replayType ? `role:${replayRole}` : null;
+    replayTargetRef.current = replayTarget;
+    defaultedTargetRef.current = replayTarget;
+  }, [catalog]);
+
   const effectiveCategory = activeCategory || catalog?.roleCategories[0]?.name || '';
+
+  function changeCategory(nextCategory: string) {
+    setActiveCategory(nextCategory);
+    setQuery('');
+
+    const category = catalog?.roleCategories.find((item) => item.name === nextCategory);
+    if (role && category && !category.roles.includes(role)) {
+      setRole(null);
+      defaultedTargetRef.current = null;
+    }
+  }
+
+  function selectRole(nextRole: string) {
+    setRole(nextRole);
+    const category = catalog?.roleCategories.find((item) => item.roles.includes(nextRole));
+    if (category) setActiveCategory(category.name);
+
+    if (catalog) {
+      const nextRecommendations = recommendationsForRole(nextRole, catalog.roleCategories);
+      setInterviewerId(
+        nextRecommendations?.personaIds[0] ??
+        catalog.interviewers.find((item) => item.id === 'maya')?.id ??
+        catalog.interviewers[0]?.id ??
+        null,
+      );
+      setTypeId(
+        nextRecommendations?.typeIds[0] ??
+        catalog.types.find((item) => item.id === 'behavioral')?.id ??
+        catalog.types[0]?.id ??
+        null,
+      );
+      setDurationOverride(null);
+      defaultedTargetRef.current = `role:${nextRole}`;
+    }
+  }
 
   const interviewer = useMemo(
     () => catalog?.interviewers.find((i) => i.id === interviewerId) ?? null,
@@ -160,16 +235,6 @@ export default function MockSetupPage() {
     [role, sourceMode, catalog],
   );
 
-  // When a role is picked and no format is chosen yet, default to the top
-  // recommended format for that role. The user can still pick any other (and
-  // once they've chosen, changing role never overrides their pick).
-  useEffect(() => {
-    if (sourceMode === 'role' && recs && !typeId) {
-      setTypeId(recs.typeIds[0] ?? null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recs, sourceMode]);
-
   const durationMinutes = durationOverride ?? type?.minutes ?? DEFAULT_DURATION_MINUTES;
 
   // The effective role comes from EITHER the picked chip (browse) or the pasted
@@ -181,6 +246,48 @@ export default function MockSetupPage() {
   const canLaunch = !!(interviewer && type && hasRoleSource);
   // Preview just needs a target + persona + type; it never gates launch.
   const canPreview = !!(interviewer && type && hasRoleSource);
+  const targetKey = hasRoleSource
+    ? sourceMode === 'role'
+      ? `role:${role}`
+      : `jd:${deriveRoleLabelFromJd(jdTrimmed)}`
+    : null;
+
+  // Once the target is known, build a sensible plan immediately. Role-aware
+  // recommendations win; pasted descriptions use the catalog's familiar Maya
+  // + behavioral defaults. A new target gets a newly matched plan exactly once,
+  // while manual changes remain untouched for as long as that target stays put.
+  useEffect(() => {
+    if (!catalog || !targetKey) {
+      // The URL prefill effect runs earlier in this same commit, before the
+      // selected role has rendered. Preserve its complete plan for that one
+      // transition instead of immediately clearing it as a missing target.
+      if (replayTargetRef.current) return;
+      defaultedTargetRef.current = null;
+      return;
+    }
+    if (replayTargetRef.current === targetKey) {
+      replayTargetRef.current = null;
+      defaultedTargetRef.current = targetKey;
+      return;
+    }
+    if (defaultedTargetRef.current === targetKey) return;
+    defaultedTargetRef.current = targetKey;
+
+    const nextPersonaId =
+      recs?.personaIds[0] ??
+      catalog.interviewers.find((item) => item.id === 'maya')?.id ??
+      catalog.interviewers[0]?.id ??
+      null;
+    const nextTypeId =
+      recs?.typeIds[0] ??
+      catalog.types.find((item) => item.id === 'behavioral')?.id ??
+      catalog.types[0]?.id ??
+      null;
+
+    setInterviewerId(nextPersonaId);
+    setTypeId(nextTypeId);
+    setDurationOverride(null);
+  }, [catalog, recs, targetKey]);
 
   // A preview is only valid for the exact inputs it was generated from. If any
   // of them changes, drop the stale result so the panel can't misrepresent what
@@ -235,7 +342,7 @@ export default function MockSetupPage() {
   }
 
   async function launch() {
-    if (!canLaunch || !interviewer || !type) return;
+    if (!canLaunch || !canAfford || !interviewer || !type) return;
     setStarting(true);
     setStartError(false);
     setInsufficientCredits(null);
@@ -267,8 +374,11 @@ export default function MockSetupPage() {
     }
   }
 
-  // Credit cost of the currently-selected duration (1 credit = 20 min).
-  const creditCost = Math.ceil((durationMinutes / 20) * 100) / 100;
+  // Mirror the server's runtime credit policy. The optional-field fallback is
+  // only for a rolling deployment where the frontend reaches an older API.
+  const creditMinutes = normalizeMockCreditMinutes(creditsQ.data?.creditMinutes);
+  const creditCost = mockCreditsForMinutes(durationMinutes, creditMinutes);
+  const canAfford = creditsQ.data === undefined || creditsQ.data.balance + 1e-9 >= creditCost;
 
   // Fetch the market-grounded requirements preview for the current selection.
   // User-triggered (the panel's Preview button); never auto-fires.
@@ -323,107 +433,61 @@ export default function MockSetupPage() {
   }
 
   return (
-    <>
-      {header}
-
-      <RecentSessionsStrip
-        sessions={recentSummaries}
-        onReplay={(s) => replay(s.id)}
-        onDelete={(s) => void removeSession(s.id)}
-      />
-
-      <RolePicker
-        categories={catalog.roleCategories}
-        totalRoles={catalog.totalRoles}
-        query={query}
-        onQueryChange={setQuery}
-        activeCategory={effectiveCategory}
-        onCategoryChange={setActiveCategory}
-        selectedRole={role}
-        onSelectRole={setRole}
-        sourceMode={sourceMode}
-        onSourceModeChange={setSourceMode}
-        jdText={jdText}
-        onJdTextChange={setJdText}
-      />
-
-      <MarketRequirementsPanel
-        state={previewMut.isPending ? 'loading' : previewMut.isError ? 'error' : previewMut.data ? 'ready' : 'idle'}
-        requirements={previewMut.data?.requirements ?? null}
-        webSources={previewMut.data?.webSources ?? []}
-        sampleQuestions={previewMut.data?.sampleQuestions ?? []}
-        groundedOn={previewMut.data?.groundedOn}
-        canPreview={canPreview}
-        onPreview={() => runPreview()}
-        onRetry={() => runPreview()}
-      />
-
-      <InterviewerPicker
-        interviewers={catalog.interviewers}
-        selectedId={interviewerId}
-        onSelect={setInterviewerId}
-        recommendedPersonaIds={recs?.personaIds}
-      />
-
-      <TypePicker
-        types={catalog.types}
-        selectedId={typeId}
-        onSelect={setTypeId}
-        recommendedTypeIds={recs?.typeIds}
-        roleLabel={role}
-      />
-
-      <FormatPicker value={format} onChange={setFormat} />
-
-      <LangDurationPicker
-        language={language}
-        onLanguageChange={setLanguage}
-        durationMinutes={durationMinutes}
-        onDurationChange={setDurationOverride}
-        typeMinutes={type?.minutes ?? null}
-      />
-
-      {/* Credit cost + balance hint for this interview. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
-          {t('setup.creditCost', { n: creditCost })}
-        </span>
-        {creditsQ.data ? (
-          <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-muted)' }}>
-            {t('setup.creditsRemaining', { n: creditsQ.data.balance })}
-          </span>
-        ) : null}
-      </div>
-
-      {startError ? (
-        <p role="alert" style={{ color: 'var(--warn)', fontSize: 'var(--fs-meta)', marginTop: 12 }}>{t('setup.startError')}</p>
-      ) : null}
-
-      {insufficientCredits ? (
-        <div
-          role="alert"
-          style={{ border: '1px solid var(--warn)', background: 'var(--warn-subtle)', borderRadius: 'var(--r-lg)', padding: '14px 16px', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
-        >
-          <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text)' }}>
-            {t('setup.insufficientCredits', { required: insufficientCredits.required, balance: insufficientCredits.balance })}
-          </span>
-          <Link href="/account#billing" style={{ textDecoration: 'none' }}>
-            <Btn variant="primary">{t('setup.getCredits')}</Btn>
-          </Link>
-        </div>
-      ) : null}
-
-      <LaunchBar
-        role={effectiveRole}
-        interviewer={interviewer}
-        type={type}
-        format={format}
-        language={language}
-        durationMinutes={durationMinutes}
-        canLaunch={canLaunch}
-        starting={starting}
-        onStart={() => void launch()}
-      />
-    </>
+    <PracticeSetupFlow
+      categories={catalog.roleCategories}
+      totalRoles={catalog.totalRoles}
+      query={query}
+      onQueryChange={setQuery}
+      activeCategory={effectiveCategory}
+      onCategoryChange={changeCategory}
+      selectedRole={role}
+      effectiveRole={effectiveRole}
+      onSelectRole={selectRole}
+      sourceMode={sourceMode}
+      onSourceModeChange={setSourceMode}
+      jdText={jdText}
+      onJdTextChange={setJdText}
+      hasRoleSource={hasRoleSource}
+      interviewers={catalog.interviewers}
+      selectedInterviewerId={interviewerId}
+      onSelectInterviewer={setInterviewerId}
+      recommendedPersonaIds={recs?.personaIds}
+      types={catalog.types}
+      selectedTypeId={typeId}
+      onSelectType={(value) => {
+        setTypeId(value);
+        setInsufficientCredits(null);
+      }}
+      recommendedTypeIds={recs?.typeIds}
+      format={format}
+      onFormatChange={setFormat}
+      language={language}
+      onLanguageChange={setLanguage}
+      durationMinutes={durationMinutes}
+      onDurationChange={(value) => {
+        setDurationOverride(value);
+        setInsufficientCredits(null);
+      }}
+      recentSessions={recentSummaries}
+      onReplay={(session) => replay(session.id)}
+      onDelete={(session) => void removeSession(session.id)}
+      previewState={previewMut.isPending ? 'loading' : previewMut.isError ? 'error' : previewMut.data ? 'ready' : 'idle'}
+      requirements={previewMut.data?.requirements ?? null}
+      webSources={previewMut.data?.webSources ?? []}
+      sampleQuestions={previewMut.data?.sampleQuestions ?? []}
+      groundedOn={previewMut.data?.groundedOn}
+      canPreview={canPreview}
+      onPreview={runPreview}
+      onRetryPreview={runPreview}
+      creditCost={creditCost}
+      creditMinutes={creditMinutes}
+      creditsRemaining={creditsQ.data?.balance}
+      canAfford={canAfford}
+      startError={startError}
+      insufficientCredits={insufficientCredits}
+      canLaunch={canLaunch}
+      starting={starting}
+      onStart={() => void launch()}
+    />
   );
 }

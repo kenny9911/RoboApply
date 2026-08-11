@@ -1,36 +1,52 @@
 'use client';
 
-// /mock-interview/[id]/report — RESULTS (V3 design) from the Interview Engine.
+// /practice/[id]/report — a guided debrief from the Interview Engine.
 //
-// Re-skins onto the V3 ResultsTop (overall + breakdown) + ResultsGrid
-// (strengths / sharpen) components, then adds the engine extras: the localized
-// LLM enrichment (concrete recommendations + a per-question deep dive with
-// analysis / correction / suggestion), the recording playback (audio for voice
-// mode, video for video mode), and the transcript.
-//
-// Two-phase report: finalize() persists a deterministic score instantly, then a
-// background LLM pass enriches it (localized prose, recommendations, per-question
-// analysis). We poll until `reportPending` clears (or give up after a cap so a
-// legacy session doesn't poll forever). Once polling gives up, a persistent
-// "refresh analysis" affordance stays: re-fetching the report also triggers the
-// server's lazy re-enrichment, so a stuck report can self-heal on demand.
+// The report is deliberately ordered like a coach's handoff: one concrete
+// homework assignment first, the clearest keep/change signals second, compact
+// scores third, and the supporting evidence behind optional disclosures. The
+// data lifecycle is unchanged: deterministic scores arrive immediately while
+// the richer LLM review and recording continue to poll in the background.
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRightIcon } from '@heroicons/react/24/outline';
 import { useTranslations } from 'next-intl';
 
-import { PageHeader } from '../../../../../components/v3/primitives/PageHeader';
 import { Btn } from '../../../../../components/v3/primitives/Btn';
+import { Markdown } from '../../../../../components/v3/primitives/Markdown';
+import { PageHeader } from '../../../../../components/v3/primitives/PageHeader';
 import {
-  ResultsTop,
-  ResultsGrid,
-  RecommendationsCard,
   QuestionBreakdownSection,
   TranscriptViewer,
 } from '../../../../../components/v3/mock';
+import {
+  interviewEngineApi,
+  type IEDimensionKey,
+  type IERecommendation,
+  type IERecommendationPriority,
+  type IEReport,
+} from '../../../../../lib/api/interviewEngine';
 import { canonicalDimKey } from '../../../../../lib/mock/dimensionLabels';
-import { interviewEngineApi, type IEReport } from '../../../../../lib/api/interviewEngine';
+import styles from './report.module.css';
 
 const MAX_POLLS = 15;
+const PRIORITY_ORDER: Record<IERecommendationPriority, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+function orderedRecommendations(recommendations: IERecommendation[] | null) {
+  if (recommendations === null) return null;
+  return recommendations
+    .map((recommendation, index) => ({ recommendation, index }))
+    .sort((a, b) => {
+      const priorityDelta =
+        PRIORITY_ORDER[a.recommendation.priority] - PRIORITY_ORDER[b.recommendation.priority];
+      return priorityDelta || a.index - b.index;
+    })
+    .map(({ recommendation }) => recommendation);
+}
 
 export default function MockReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -44,32 +60,41 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
 
   const load = useCallback(async () => {
     try {
-      const r = await interviewEngineApi.report(id);
-      setReport(r);
-      return r;
+      const nextReport = await interviewEngineApi.report(id);
+      setReport(nextReport);
+      setError(false);
+      return nextReport;
     } catch {
       setError(true);
       return null;
     }
   }, [id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  // The recording (egress webhook) and the LLM enrichment both land a few
-  // seconds after the interview ends — auto-retry until both are ready, capped
-  // so a legacy / failed-enrichment session settles instead of polling forever.
+  // The recording (egress webhook) and LLM enrichment both arrive shortly
+  // after the interview. Retry while either is pending, but cap the polling so
+  // legacy or failed sessions settle into a recoverable manual-refresh state.
   useEffect(() => {
     if (!report || gaveUp) return;
-    const s = report.session;
+    const session = report.session;
     const needMore =
-      s.status !== 'completed' ||
-      !!s.reportPending ||
-      (!report.recordingUrl && s.recordingAvailable);
+      session.status !== 'completed' ||
+      !!session.reportPending ||
+      (!report.recordingUrl && session.recordingAvailable);
     if (!needMore) return;
-    if (pollsRef.current >= MAX_POLLS) { setGaveUp(true); return; }
-    const delay = s.status !== 'completed' ? 3000 : 4000;
-    const h = window.setTimeout(() => { pollsRef.current += 1; void load(); }, delay);
-    return () => window.clearTimeout(h);
+    if (pollsRef.current >= MAX_POLLS) {
+      setGaveUp(true);
+      return;
+    }
+    const delay = session.status !== 'completed' ? 3000 : 4000;
+    const timer = window.setTimeout(() => {
+      pollsRef.current += 1;
+      void load();
+    }, delay);
+    return () => window.clearTimeout(timer);
   }, [report, load, gaveUp]);
 
   const refresh = async () => {
@@ -82,92 +107,424 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
 
   if (error) {
     return (
-      <>
+      <div className={styles.report}>
         <PageHeader title={t('report.title')} />
-        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)' }}>{t('report.error')}</p>
-        <Btn variant="primary" as="a" href="/practice">{t('report.newInterview')}</Btn>
-      </>
+        <section className={styles.messageCard} role="alert">
+          <p>{t('report.error')}</p>
+          <Btn variant="primary" as="a" href="/practice">
+            {t('report.newInterview')}
+          </Btn>
+        </section>
+      </div>
     );
   }
+
   if (!report) {
     return (
-      <>
+      <div className={styles.report} aria-busy="true" aria-live="polite">
         <PageHeader eyebrowLive title={t('report.title')} />
-        <p aria-busy="true" style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', padding: '40px 0' }}>{t('report.loading')}</p>
-      </>
+        <section className={styles.loadingCard}>
+          <span className={styles.loadingMark} aria-hidden="true" />
+          <p>{t('report.loading')}</p>
+        </section>
+      </div>
     );
   }
 
-  const s = report.session;
-  const enrichPending = !!s.reportPending && !gaveUp;
-  // Polling gave up with the analysis (or an advertised recording) still
-  // missing — offer a manual retry instead of a dead end. The refetch also
-  // fires the backend's lazy re-enrichment.
+  const session = report.session;
+  const enrichPending = !!session.reportPending && !gaveUp;
   const stalled =
     gaveUp &&
-    s.status === 'completed' &&
-    (!!s.reportPending || (s.recordingAvailable && !report.recordingUrl));
-  const breakdown = (s.breakdown ?? []).map((b) => {
-    const ck = canonicalDimKey(b.key);
-    return { key: ck ? t(`report.dim.${ck}`) : b.key, value: b.value, note: b.note };
+    session.status === 'completed' &&
+    (!!session.reportPending ||
+      (session.recordingAvailable && !report.recordingUrl));
+  const recommendations = orderedRecommendations(session.recommendations);
+  const homework = recommendations?.[0] ?? null;
+  const reviewPending = session.status !== 'completed' || enrichPending;
+  const hasCandidateAnswer = report.transcript.some(
+    (turn) =>
+      turn.role === 'candidate' &&
+      !turn.interim &&
+      turn.text.trim().length > 0,
+  );
+  const reportTooShort =
+    'reportTooShort' in session && Boolean(session.reportTooShort);
+  // New reports carry the server's substantive-answer guard. The transcript
+  // fallback keeps abandoned legacy sessions honest without briefly showing an
+  // empty state while a current report is still being finalized.
+  const isNoAnswerReport =
+    reportTooShort ||
+    (session.status === 'completed' && !reviewPending && !hasCandidateAnswer);
+  const overall = Math.max(0, Math.min(100, session.overall ?? 0));
+  const breakdown = (session.breakdown ?? []).map((item) => {
+    const canonicalKey = canonicalDimKey(item.key);
+    return {
+      key: canonicalKey ? t(`report.dim.${canonicalKey}`) : item.key,
+      value: Math.max(0, Math.min(100, item.value)),
+      note: item.note,
+    };
   });
+  const coachingMoment = [...(session.questionAnalysis ?? [])]
+    .filter((item) => !item.missed && (item.keyQuote || item.answerSummary))
+    .sort((a, b) => a.score - b.score)[0] ?? null;
+  const coachingQuote = coachingMoment?.keyQuote || coachingMoment?.answerSummary || '';
+  const managerTakeaway = coachingMoment?.correction || coachingMoment?.analysis || '';
+  const strongerRewrite = coachingMoment?.modelAnswer || coachingMoment?.suggestion || '';
+  const showCoachingPath = Boolean(coachingQuote && managerTakeaway && strongerRewrite);
+  const hasQuestionAnalysis = Boolean(session.questionAnalysis?.length);
+  const hasRecommendations = Boolean(recommendations?.length);
+  const hasTranscript = Boolean(
+    report.transcriptUrl ||
+    report.transcript.some(
+      (turn) =>
+        !turn.interim &&
+        turn.role !== 'system' &&
+        turn.text.trim().length > 0,
+    ),
+  );
+  const hasDeepDive =
+    hasRecommendations ||
+    hasQuestionAnalysis ||
+    Boolean(report.recordingUrl) ||
+    hasTranscript;
+  const outcomeDiagnosis =
+    session.gaps[0] ||
+    breakdown[0]?.note ||
+    session.summary ||
+    t('report.sub');
+  const practiceAgainParams = new URLSearchParams({
+    role: session.role,
+    type: session.interviewType,
+    mode: session.mode,
+    language: session.language,
+    duration: String(session.durationMinutes),
+  });
+  if (session.personaId) {
+    practiceAgainParams.set('interviewer', session.personaId);
+  }
+  const practiceAgainHref = `/practice?${practiceAgainParams.toString()}`;
+
+  if (isNoAnswerReport) {
+    return (
+      <div className={styles.report}>
+        <PageHeader
+          eyebrow={`${session.role} · ${t(`setup.modeShort.${session.mode}`)}`}
+          title={t('report.title')}
+        />
+        <section className={styles.noAnswerState} aria-labelledby="report-no-answer-title">
+          <span className={styles.noAnswerMark} aria-hidden="true">—</span>
+          <div className={styles.noAnswerCopy}>
+            <h2 id="report-no-answer-title">{t('report.noScore')}</h2>
+            <div>
+              {session.summary ? (
+                <Markdown block>{session.summary}</Markdown>
+              ) : (
+                t('report.recommendations.unavailable')
+              )}
+            </div>
+          </div>
+          <Btn variant="primary" as="a" href="/practice">
+            {t('report.actions.pickSetup')}
+          </Btn>
+        </section>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className={styles.report}>
       <PageHeader
-        eyebrow={`${s.role} · ${t(`setup.modeShort.${s.mode}`)}`}
+        eyebrow={`${session.role} · ${t(`setup.modeShort.${session.mode}`)}`}
         title={t('report.title')}
-        sub={s.summary ?? undefined}
       />
 
-      {s.status !== 'completed' && (
-        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 'var(--fs-meta)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {session.status !== 'completed' ? (
+        <div className={styles.statusBanner} role="status">
           <span>{t('report.processing')}</span>
-          <Btn variant="default" onClick={() => void refresh()}>{refreshing ? t('report.refreshing') : t('report.refresh')}</Btn>
+          <Btn variant="default" onClick={() => void refresh()} disabled={refreshing}>
+            {refreshing ? t('report.refreshing') : t('report.refresh')}
+          </Btn>
         </div>
-      )}
+      ) : null}
 
-      {s.status === 'completed' && enrichPending && (
-        <div style={{ border: '1px solid var(--action)', background: 'var(--action-subtle)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text)', fontSize: 'var(--fs-meta)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      {session.status === 'completed' && enrichPending ? (
+        <div className={styles.pendingBanner} role="status" aria-live="polite">
+          <span className={styles.statusDot} aria-hidden="true" />
           <span aria-busy="true">{t('report.analysisPending')}</span>
         </div>
-      )}
+      ) : null}
 
-      {stalled && (
-        <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-lg, 12px)', padding: '12px 16px', marginBottom: 16, color: 'var(--text-2)', fontSize: 'var(--fs-meta)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      {stalled ? (
+        <div className={styles.statusBanner} role="status">
           <span>{t('report.analysisStalled')}</span>
-          <Btn variant="default" onClick={() => void refresh()}>
+          <Btn variant="default" onClick={() => void refresh()} disabled={refreshing}>
             {refreshing ? t('report.refreshing') : t('report.refreshAnalysis')}
           </Btn>
         </div>
-      )}
+      ) : null}
 
-      <ResultsTop overall={s.overall ?? 0} delta={null} breakdown={breakdown} />
-
-      <ResultsGrid strengths={s.strengths ?? []} gaps={s.gaps ?? []} />
-
-      <RecommendationsCard recommendations={s.recommendations} enrichmentPending={enrichPending} />
-
-      <QuestionBreakdownSection items={s.questionAnalysis} enrichmentPending={enrichPending} />
-
-      {/* Recording */}
-      {report.recordingUrl && (
-        <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 'var(--fs-body)', fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>{t('report.recording')}</div>
-          {s.mode === 'video' ? (
-            <video controls src={report.recordingUrl} style={{ width: '100%', maxWidth: 720, borderRadius: 'var(--r-lg, 12px)', background: '#000' }} />
-          ) : (
-            <audio controls src={report.recordingUrl} style={{ width: '100%', maxWidth: 520 }} />
-          )}
+      <section
+        className={styles.outcomeLine}
+        aria-label={`${t('report.overall')}: ${overall}/100`}
+      >
+        <span>{overall}<small>/100</small></span>
+        <div>
+          <Markdown>{outcomeDiagnosis}</Markdown>
         </div>
-      )}
+      </section>
 
-      {/* Transcript — grouped into Q&A exchanges, collapsed behind a toggle. */}
-      <TranscriptViewer turns={report.transcript} transcriptUrl={report.transcriptUrl} />
+      <section className={styles.homework} aria-labelledby="report-homework-title">
+        <div className={styles.homeworkCopy}>
+          <div className={styles.homeworkKicker}>
+            <span aria-hidden="true">01</span>
+            {homework
+              ? t(`report.recommendations.priority.${homework.priority}`)
+              : t('report.recommendations.title')}
+          </div>
+          <h2 id="report-homework-title" className={styles.homeworkTitle}>
+            {homework ? (
+              <Markdown>{homework.title}</Markdown>
+            ) : recommendations?.length === 0 ? (
+              t('report.recommendations.empty')
+            ) : reviewPending ? (
+              t('report.recommendations.pending')
+            ) : (
+              t('report.recommendations.unavailable')
+            )}
+          </h2>
+          {homework ? (
+            <div className={styles.homeworkDetail}>
+              <Markdown block>{homework.detail}</Markdown>
+            </div>
+          ) : null}
+          {homework?.drill ? (
+            <div className={styles.drill}>
+              <span>{t('report.recommendations.drill')}</span>
+              <Markdown block>{homework.drill}</Markdown>
+            </div>
+          ) : null}
+        </div>
+        <div className={styles.homeworkAction}>
+          <Btn
+            variant="primary"
+            as="a"
+            href={practiceAgainHref}
+            icon={<ArrowRightIcon aria-hidden="true" />}
+          >
+            {t('report.actions.runAgain')}
+          </Btn>
+        </div>
+      </section>
 
-      <div style={{ display: 'flex', gap: 12, marginTop: 28, paddingBottom: 40 }}>
-        <Btn variant="primary" as="a" href="/practice">{t('report.newInterview')}</Btn>
-      </div>
-    </>
+      {(session.strengths.length > 0 || session.gaps.length > 0 || showCoachingPath) ? (
+        <section className={styles.signalGrid} aria-label={t('report.title')}>
+          {session.strengths.length > 0 ? (
+            <article className={`${styles.signalCard} ${styles.signalGood}`}>
+              <header>
+                <span className={styles.signalIndex} aria-hidden="true">02</span>
+                <div>
+                  <h2>{t('report.strengths')}</h2>
+                  <p>{t('report.keepThese')}</p>
+                </div>
+              </header>
+              <div className={styles.signalLead}>
+                <Markdown block>{session.strengths[0]}</Markdown>
+              </div>
+              {session.strengths.length > 1 ? (
+                <details className={styles.signalMore}>
+                  <summary>{t('report.topN', { count: session.strengths.length })}</summary>
+                  <ul>
+                    {session.strengths.slice(1).map((strength, index) => (
+                      <li key={index}><Markdown>{strength}</Markdown></li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </article>
+          ) : null}
+
+          {(session.gaps.length > 0 || showCoachingPath) ? (
+            <article className={`${styles.signalCard} ${styles.signalImprove}`}>
+              <header>
+                <span className={styles.signalIndex} aria-hidden="true">03</span>
+                <div>
+                  <h2>{t('report.sharpen')}</h2>
+                  {session.gaps.length > 0 ? (
+                    <p>{t('report.topN', { count: session.gaps.length })}</p>
+                  ) : null}
+                </div>
+              </header>
+              {session.gaps[0] ? (
+                <div className={styles.signalLead}>
+                  <Markdown block>{session.gaps[0]}</Markdown>
+                </div>
+              ) : null}
+              {showCoachingPath ? (
+                <div className={styles.coachingPath}>
+                  <div className={styles.coachingStep}>
+                    <span>{t('report.questionBreakdown.keyQuoteLabel')}</span>
+                    <blockquote><Markdown block>{coachingQuote}</Markdown></blockquote>
+                  </div>
+                  <ArrowRightIcon className={styles.coachingArrow} aria-hidden="true" />
+                  <div className={styles.coachingStep}>
+                    <span>{t('report.questionBreakdown.analysisLabel')}</span>
+                    <div><Markdown block>{managerTakeaway}</Markdown></div>
+                  </div>
+                  <ArrowRightIcon className={styles.coachingArrow} aria-hidden="true" />
+                  <div className={styles.coachingStep}>
+                    <span>{t('report.questionBreakdown.modelAnswerLabel')}</span>
+                    <div><Markdown block>{strongerRewrite}</Markdown></div>
+                  </div>
+                </div>
+              ) : null}
+              {session.gaps.length > 1 ? (
+                <details className={styles.signalMore}>
+                  <summary>{t('report.topN', { count: session.gaps.length })}</summary>
+                  <ul>
+                    {session.gaps.slice(1).map((gap, index) => (
+                      <li key={index}><Markdown>{gap}</Markdown></li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </article>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className={styles.scoreSection} aria-labelledby="report-score-title">
+        <div className={styles.scoreIntro}>
+          <span
+            className={styles.scoreNumber}
+            role="progressbar"
+            aria-label={t('report.overall')}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={overall}
+          >
+            {overall}
+          </span>
+          <div>
+            <h2 id="report-score-title">{t('report.overall')}</h2>
+            <p>{t('report.sub')}</p>
+          </div>
+        </div>
+        {breakdown.length > 0 ? (
+          <div className={styles.scoreRows}>
+            {breakdown.map((item) => (
+              <div className={styles.scoreRow} key={item.key}>
+                <div className={styles.scoreQuestion}>
+                  <span>{item.key}</span>
+                  {item.note ? <Markdown>{item.note}</Markdown> : null}
+                </div>
+                <span
+                  className={styles.scoreValue}
+                  role="progressbar"
+                  aria-label={item.key}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={item.value}
+                >
+                  {item.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      {hasDeepDive ? (
+        <section className={styles.deepDive} aria-label={t('report.recommendations.title')}>
+        {hasRecommendations ? <details className={styles.disclosure}>
+          <summary>
+            <span className={styles.disclosureTitle}>
+              <span>{t('report.recommendations.title')}</span>
+              <small>{t('report.recommendations.sub')}</small>
+            </span>
+          </summary>
+          <div className={styles.disclosureBody}>
+            <ol className={styles.recommendationList}>
+                {recommendations!.map((recommendation, index) => (
+                  <li key={`${recommendation.priority}-${index}`}>
+                    <div className={styles.recommendationHead}>
+                      <span className={`${styles.priority} ${styles[recommendation.priority]}`}>
+                        {t(`report.recommendations.priority.${recommendation.priority}`)}
+                      </span>
+                      {recommendation.linkedDimension ? (
+                        <span className={styles.dimensionTag}>
+                          {t(`report.dim.${recommendation.linkedDimension as IEDimensionKey}`)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <h3><Markdown>{recommendation.title}</Markdown></h3>
+                    <div className={styles.recommendationDetail}>
+                      <Markdown block>{recommendation.detail}</Markdown>
+                    </div>
+                    <div className={styles.example}>
+                      <span>{t('report.recommendations.exampleLabel')}</span>
+                      <Markdown block>{recommendation.example}</Markdown>
+                    </div>
+                    {recommendation.drill ? (
+                      <div className={styles.recommendationDrill}>
+                        <span>{t('report.recommendations.drill')}</span>
+                        <Markdown block>{recommendation.drill}</Markdown>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+            </ol>
+          </div>
+        </details> : null}
+
+        {hasQuestionAnalysis ? (
+          <details className={styles.disclosure}>
+            <summary>
+              <span className={styles.disclosureTitle}>
+                <span>{t('report.questionBreakdown.title')}</span>
+                <small>
+                  {t('report.questionBreakdown.count', {
+                    count: session.questionAnalysis!.length,
+                  })}
+                </small>
+              </span>
+            </summary>
+            <div className={styles.disclosureBody}>
+              <QuestionBreakdownSection
+                items={session.questionAnalysis}
+                enrichmentPending={reviewPending}
+                showHeading={false}
+                defaultOpenFirst={false}
+              />
+            </div>
+          </details>
+        ) : null}
+
+        {report.recordingUrl ? (
+          <details className={styles.disclosure}>
+            <summary>
+              <span className={styles.disclosureTitle}>
+                <span>{t('report.recording')}</span>
+                <small>{t(`setup.modeShort.${session.mode}`)}</small>
+              </span>
+            </summary>
+            <div className={styles.mediaBody}>
+              {session.mode === 'video' ? (
+                <video controls preload="metadata" src={report.recordingUrl} />
+              ) : (
+                <audio controls preload="metadata" src={report.recordingUrl} />
+              )}
+            </div>
+          </details>
+        ) : null}
+
+        {hasTranscript ? <div className={styles.transcriptShell}>
+          <TranscriptViewer
+            turns={report.transcript}
+            transcriptUrl={report.transcriptUrl}
+          />
+        </div> : null}
+      </section>
+      ) : null}
+    </div>
   );
 }

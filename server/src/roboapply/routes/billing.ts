@@ -33,6 +33,7 @@ import {
   RoboApplyBillingError,
 } from '../services/RoboApplyBillingService.js';
 import { getBalance } from '../../lib/mockCreditService.js';
+import { getMockPlanCatalog } from '../../lib/mockInterviewPlans.js';
 import { countryHeaderFromRequest } from '../../lib/billingRegion.js';
 import { getRequestLocale } from '../v2/lib/raLocale.js';
 import { renderAlipayReceiptPdf } from '../lib/invoiceReceipt.js';
@@ -68,6 +69,10 @@ router.get('/plan', requireAuth, async (req: Request, res: Response) => {
 router.get('/credits', requireAuth, async (req: Request, res: Response) => {
   try {
     const bal = await getBalance(req.user!.id);
+    // getBalance resolves this same cached catalogue first, so this read is
+    // effectively free and keeps the response aligned with the gate/debit
+    // policy even when finance changes the runtime AppConfig override.
+    const catalog = await getMockPlanCatalog();
     return res.json({
       success: true,
       data: {
@@ -75,6 +80,7 @@ router.get('/credits', requireAuth, async (req: Request, res: Response) => {
         periodAllotment: bal.periodAllotment,
         tier: bal.tier,
         currentPeriodEnd: bal.currentPeriodEnd?.toISOString() ?? null,
+        creditMinutes: catalog.creditMinutes,
       },
     });
   } catch (err) {

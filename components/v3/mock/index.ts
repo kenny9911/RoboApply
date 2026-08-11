@@ -6,6 +6,7 @@
 
 // Setup (Route 5)
 export { RecentSessionsStrip } from './RecentSessionsStrip';
+export { PracticeSetupFlow } from './PracticeSetupFlow';
 export { RolePicker } from './RolePicker';
 export { MarketRequirementsPanel } from './MarketRequirementsPanel';
 export { InterviewerPicker } from './InterviewerPicker';

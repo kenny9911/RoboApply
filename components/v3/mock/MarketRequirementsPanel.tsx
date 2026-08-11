@@ -17,6 +17,8 @@ import type { IERequirements } from '../../../lib/api/interviewEngine';
 export type PreviewState = 'idle' | 'loading' | 'ready' | 'error';
 
 interface Props {
+  /** Uses a concise heading when embedded inside the guided review disclosure. */
+  compact?: boolean;
   state: PreviewState;
   requirements: IERequirements | null;
   webSources: Array<{ title: string; url: string }>;
@@ -29,6 +31,7 @@ interface Props {
 }
 
 export function MarketRequirementsPanel({
+  compact = false,
   state,
   requirements,
   webSources,
@@ -41,12 +44,12 @@ export function MarketRequirementsPanel({
   const t = useTranslations('practice');
 
   return (
-    <section className="iv-step">
+    <section className={`iv-step ${compact ? 'iv-preview-compact' : ''}`}>
       <div className="iv-step-head">
-        <span className="iv-step-num" aria-hidden>✦</span>
+        {!compact ? <span className="iv-step-num" aria-hidden>✦</span> : null}
         <div>
           <div className="iv-step-title">{t('setup.preview.title')}</div>
-          <div className="iv-step-sub">{t('setup.preview.sub')}</div>
+          {!compact ? <div className="iv-step-sub">{t('setup.preview.sub')}</div> : null}
         </div>
         <Btn
           variant="ghost"

@@ -16,6 +16,7 @@ interface Props {
   currentIndex: number;
   total: number;
   onBack: () => void;
+  className?: string;
 }
 
 function fmtTime(s: number): string {
@@ -32,36 +33,57 @@ export function LiveBar({
   currentIndex,
   total,
   onBack,
+  className,
 }: Props) {
   const t = useTranslations('practice');
+  const safeTotal = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
+  const safeCurrent = safeTotal > 0
+    ? Math.min(
+      Number.isFinite(currentIndex) ? Math.max(0, Math.floor(currentIndex)) : 0,
+      safeTotal - 1,
+    )
+    : 0;
+  const safeElapsed = Number.isFinite(elapsedSec) ? Math.max(0, Math.floor(elapsedSec)) : 0;
+  const showProgress = safeTotal > 0;
+
   return (
-    <div className="iv-live-bar">
-      <button type="button" className="btn ghost" onClick={onBack}>
-        {t('live.backToSetup')}
+    <header className={`iv-live-bar${className ? ` ${className}` : ''}`}>
+      <button type="button" className="btn ghost" onClick={onBack} aria-label={t('live.backToSetup')}>
+        <span className="iv-live-back-label">{t('live.backToSetup')}</span>
       </button>
-      <div className="iv-live-bar-center">
-        <span className="iv-live-pill">
-          <span className="rec" />
-          {t('live.livePill')}
-        </span>
-        <span className="iv-live-meta">{role}</span>
-        <span className="iv-live-sep">·</span>
-        <span className="iv-live-meta">{typeLabel}</span>
-        <span className="iv-live-sep">·</span>
-        <span className="iv-live-meta" style={{ color: 'var(--action)' }}>
-          {format === 'video' ? t('live.modeVideo') : t('live.modeVoice')}
-        </span>
-        <span className="iv-live-sep">·</span>
-        <span className="iv-live-time">{fmtTime(elapsedSec)}</span>
+      <div className="iv-live-bar-center iv-live-context">
+        <div className="iv-live-primary">
+          <span className="iv-live-pill">
+            <span className="rec" aria-hidden />
+            {t('live.livePill')}
+          </span>
+          <span className="iv-live-meta">{role}</span>
+        </div>
+        <div className="iv-live-secondary">
+          <span>{typeLabel}</span>
+          <span className="iv-live-sep" aria-hidden>·</span>
+          <span>{format === 'video' ? t('live.modeVideo') : t('live.modeVoice')}</span>
+        </div>
       </div>
-      <div className="iv-live-progress" aria-label={t('live.progress', { current: currentIndex + 1, total })}>
-        {Array.from({ length: total }).map((_, i) => (
-          <span
-            key={i}
-            className={`iv-pip ${i < currentIndex ? 'done' : i === currentIndex ? 'active' : ''}`}
-          />
-        ))}
+      <div className="iv-live-session">
+        <time className="iv-live-time" dateTime={`PT${safeElapsed}S`}>
+          {fmtTime(safeElapsed)}
+        </time>
+        {showProgress && (
+          <div
+            className="iv-live-progress"
+            aria-label={t('live.progress', { current: safeCurrent + 1, total: safeTotal })}
+          >
+            {Array.from({ length: safeTotal }).map((_, i) => (
+              <span
+                key={i}
+                aria-hidden
+                className={`iv-pip ${i < safeCurrent ? 'done' : i === safeCurrent ? 'active' : ''}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </header>
   );
 }
