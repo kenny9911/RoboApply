@@ -5217,6 +5217,12 @@ model RATrackerEntry {
   /// Read-only link — no FK constraint to avoid cross-namespace coupling.
   linkedRunId        String?
 
+  /// Soft-delete tombstone. When set, the row is hidden from every read path
+  /// (list/board, counts, getById, patch, bulk, and the (userId, jobId)
+  /// duplicate check) — the user can re-save the same job afterward. Mirrors
+  /// the `RAResumeVariant.deletedAt` precedent; no hard delete anymore.
+  deletedAt          DateTime?
+
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -5228,6 +5234,7 @@ model RATrackerEntry {
   @@index([userId, dateApplied(sort: Desc)])
   @@index([userId, followUpAt])
   @@index([userId, jobId])
+  @@index([userId, deletedAt])
   @@index([linkedRunId])
 }
 

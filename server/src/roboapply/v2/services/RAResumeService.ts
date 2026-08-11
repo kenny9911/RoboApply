@@ -882,7 +882,7 @@ export class RAResumeService {
       });
       if (otherBase === 0) {
         const dependents = await p.rATrackerEntry.count({
-          where: { userId, jobId: { not: null } },
+          where: { userId, jobId: { not: null }, deletedAt: null },
         });
         if (dependents > 0) {
           throw new ResumeInUseError(dependents);

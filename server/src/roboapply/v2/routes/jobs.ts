@@ -125,7 +125,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     }
 
     const [trackerRow, scoreRow, keywordsRow] = await Promise.all([
-      p.rATrackerEntry.findFirst({ where: { userId, jobId } }),
+      p.rATrackerEntry.findFirst({ where: { userId, jobId, deletedAt: null } }),
       // If a variant is requested, prefer that specific cached score;
       // otherwise surface the highest-score row for the (user, job).
       req.query.resumeVariantId

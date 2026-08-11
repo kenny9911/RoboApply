@@ -602,7 +602,7 @@ export class RACrossBankSearchService {
   private async loadBookmarks(p: any, userId: string, raJobIds: string[]): Promise<Set<string>> {
     if (raJobIds.length === 0) return new Set();
     const rows = await p.rATrackerEntry.findMany({
-      where: { userId, jobId: { in: raJobIds } },
+      where: { userId, jobId: { in: raJobIds }, deletedAt: null },
       select: { jobId: true },
     });
     return new Set(rows.map((r: { jobId: string | null }) => r.jobId).filter(Boolean) as string[]);

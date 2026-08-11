@@ -208,7 +208,7 @@ export class RAJobIndexService {
     const rowsAll = await p.rAJob.findMany({ where, orderBy });
 
     const bookmarks = await p.rATrackerEntry.findMany({
-      where: { userId, jobId: { in: rowsAll.map((r: any) => r.id) } },
+      where: { userId, jobId: { in: rowsAll.map((r: any) => r.id) }, deletedAt: null },
       select: { jobId: true },
     });
     const bookmarkedIds = new Set<string>(

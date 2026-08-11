@@ -136,6 +136,7 @@ export class RAInsightService {
       p.rATrackerEntry.findMany({
         where: {
           userId,
+          deletedAt: null,
           updatedAt: { gte: new Date(Date.now() - 28 * 86_400_000) },
         },
         orderBy: { updatedAt: 'desc' },
