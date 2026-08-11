@@ -13,14 +13,14 @@
     "verify:voices": "node verify-voices.mjs"
   },
   "dependencies": {
-    "@livekit/agents": "1.5.1",
-    "@livekit/agents-plugin-openai": "1.5.1",
-    "@livekit/agents-plugin-silero": "1.5.1",
-    "dotenv": "^16.4.5"
+    "@livekit/agents": "1.6.2",
+    "@livekit/agents-plugin-openai": "1.6.2",
+    "@livekit/agents-plugin-silero": "1.6.2",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.6.0"
   },
   "optionalDependencies": {
