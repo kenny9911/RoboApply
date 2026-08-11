@@ -104,5 +104,17 @@
     "prisma": "7.9.1",
     "tsx": "^4.23.12",
     "vitest": "^2.1.9"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "esbuild@0.21.5": true,
+    "free-email-domains@1.9.93": true,
+    "prisma@7.9.1": true,
+    "protobufjs@7.6.4": true,
+    "@google/genai@2.16.0": true,
+    "@parcel/watcher@2.5.6": true,
+    "@prisma/engines@7.9.1": true,
+    "@swc/core@1.15.43": true,
+    "fsevents@2.3.3": true
   }
 }
