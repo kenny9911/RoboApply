@@ -31,6 +31,33 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   });
 }
 
+// Node 26 exposes experimental Web Storage globals that are UNDEFINED unless
+// `--localstorage-file` is passed — and their mere presence on the Node global
+// stops vitest's jsdom environment from installing jsdom's real implementation
+// (it won't shadow existing Node globals). Shim a Map-backed Storage so
+// anything touching localStorage/sessionStorage keeps working under Node 26+.
+function createMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    key: (i: number) => Array.from(store.keys())[i] ?? null,
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+  } as Storage;
+}
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  if (typeof window !== 'undefined' && !window[name]) {
+    Object.defineProperty(window, name, {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  }
+}
+
 // JSDOM lacks ResizeObserver. Several heroicons/animation libraries called
 // at render time use it.
 if (typeof globalThis.ResizeObserver === 'undefined') {
