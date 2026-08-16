@@ -11,7 +11,7 @@
 // All visuals live in styles/auth.css (.auth-*), so dark/light + data-accent
 // flips come for free.
 
-import { useId, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { cn } from '../../lib/utils';
 
@@ -95,15 +95,61 @@ export function AuthError({ message }: { message: string }) {
   );
 }
 
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+      {off ? <path d="M4 20 20 4" /> : null}
+    </svg>
+  );
+}
+
 type AuthFieldProps = InputHTMLAttributes<HTMLInputElement> & { label: ReactNode };
 
-export function AuthField({ label, id, ...rest }: AuthFieldProps) {
+export function AuthField({ label, id, type, ...rest }: AuthFieldProps) {
+  const t = useTranslations('auth.field');
   const autoId = useId();
   const fieldId = id ?? autoId;
+  // Password fields get a reveal toggle. `type` then follows the toggle, so the
+  // browser still sees a real password input while masked (autofill + managers
+  // keep working) and a plain text one while revealed.
+  const isPassword = type === 'password';
+  const [revealed, setRevealed] = useState(false);
   return (
     <div className="auth-field">
       <label htmlFor={fieldId} className="auth-field__label">{label}</label>
-      <input id={fieldId} className="auth-field__input" {...rest} />
+      <div className="auth-field__control">
+        <input
+          id={fieldId}
+          className={cn('auth-field__input', isPassword && 'auth-field__input--reveal')}
+          type={isPassword && revealed ? 'text' : type}
+          {...rest}
+        />
+        {isPassword ? (
+          <button
+            type="button"
+            className="auth-field__reveal"
+            onClick={() => setRevealed((v) => !v)}
+            aria-label={revealed ? t('hide_password') : t('show_password')}
+            aria-pressed={revealed}
+            aria-controls={fieldId}
+            tabIndex={-1}
+          >
+            <EyeIcon off={revealed} />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -1900,6 +1900,10 @@
       "login_cta": "Se connecter",
       "error_generic": "Ton compte n'a pas été créé. Réessaie, et si ça continue, utilise une autre adresse e-mail."
     },
+    "field": {
+      "show_password": "Afficher le mot de passe",
+      "hide_password": "Masquer le mot de passe"
+    },
     "brand": {
       "tagline": "Découvre pourquoi tu n'obtiens pas d'entretiens",
       "eyebrow": "Découvre pourquoi tu n'obtiens pas d'entretiens",

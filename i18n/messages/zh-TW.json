@@ -1900,6 +1900,10 @@
       "login_cta": "登入",
       "error_generic": "帳戶沒有建立成功。請重試；如果一直失敗，換一個電子郵件。"
     },
+    "field": {
+      "show_password": "顯示密碼",
+      "hide_password": "隱藏密碼"
+    },
     "brand": {
       "tagline": "弄清楚你為什麼拿不到面試",
       "eyebrow": "弄清楚你為什麼拿不到面試",

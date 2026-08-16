@@ -195,6 +195,37 @@
   transition: background-color 9999s ease-out;
 }
 
+.auth-field__control { position: relative; display: block; }
+/* Room for the reveal button, and no duplicate eye from the browser's own
+ * password UI (Edge/IE reveal, Safari strong-password/caps-lock glyphs). */
+.auth-field__input--reveal { padding-inline-end: calc(var(--control-lg) - var(--sp-1)); }
+.auth-field__input--reveal::-ms-reveal,
+.auth-field__input--reveal::-ms-clear { display: none; }
+.auth-field__reveal {
+  position: absolute;
+  inset-inline-end: var(--sp-1);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  padding: 0;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease-out);
+}
+.auth-field__reveal:hover { color: var(--text); }
+.auth-field__reveal:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: var(--focus-ring);
+}
+
 .auth-error {
   display: flex;
   align-items: flex-start;

@@ -1900,6 +1900,10 @@
       "login_cta": "로그인",
       "error_generic": "계정을 만들지 못했어요. 다시 시도해 보고, 계속 안 되면 다른 이메일을 써주세요."
     },
+    "field": {
+      "show_password": "비밀번호 표시",
+      "hide_password": "비밀번호 숨기기"
+    },
     "brand": {
       "tagline": "면접에 못 가는 이유를 확인하세요",
       "eyebrow": "면접에 못 가는 이유를 확인하세요",

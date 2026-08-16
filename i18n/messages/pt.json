@@ -1900,6 +1900,10 @@
       "login_cta": "Entrar",
       "error_generic": "Sua conta não foi criada. Tente de novo e, se continuar falhando, use outro e-mail."
     },
+    "field": {
+      "show_password": "Mostrar palavra-passe",
+      "hide_password": "Ocultar palavra-passe"
+    },
     "brand": {
       "tagline": "Descubra por que você não está sendo chamado para entrevistas",
       "eyebrow": "Descubra por que você não está sendo chamado para entrevistas",
