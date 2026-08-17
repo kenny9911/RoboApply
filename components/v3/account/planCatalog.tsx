@@ -111,7 +111,7 @@ function PlanCard({
           className="ra-plan-pop"
           style={{
             position: 'absolute', top: -10, right: 18, fontSize: 'var(--fs-label)',
-            fontWeight: 600, color: '#fff', padding: '4px 10px', borderRadius: '99px', boxShadow: 'var(--e1)',
+            fontWeight: 600, padding: '4px 10px', borderRadius: '99px', boxShadow: 'var(--e1)',
           }}
         >{t('plan.mostPopular')}</span>
       ) : null}

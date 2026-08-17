@@ -37,37 +37,53 @@
  * ═══════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Surfaces (light) ── */
-  --bg:          #FBFBFC;
+  /* ── Surfaces (light) — Arkira neutral ramp (worker.arkira.ai) ──
+   * Arkira builds on stock Tailwind grays: gray-100 #F3F4F6, gray-200 #E5E7EB
+   * (its confirmed border colour), gray-300 #D1D5DB. --bg carries the faint
+   * lavender cast its pages sit on; cards stay pure white so they lift off it. */
+  --bg:          #F8F8FC;
   --surface:     #FFFFFF;
-  --surface-2:   #F1F2F4;
-  --surface-3:   #E8EAEE;
-  --rule:        #E4E6EA;
-  --rule-strong: #D3D6DC;
+  --surface-2:   #F4F5F7;
+  --surface-3:   #E9EBEF;
+  --rule:        #E5E7EB;
+  --rule-strong: #D1D5DB;
 
   /* ── Ink (light) — ratios vs surface · bg · surface-2 · surface-3 ── */
-  --text:        #14161A;  /* 18.11 · 17.51 · 16.17 · 15.04 */
-  --text-2:      #4A4F58;  /*  8.23 ·  7.96 ·  7.35 ·  6.84 */
-  --text-muted:  #676D78;  /*  5.20 ·  5.03 ·  4.65 ·  4.32 — AA on all four */
-  --disabled:    #949AA5;  /*  2.83 — placeholders + disabled ONLY, never live text */
+  --text:        #111827;  /* 17.74 · 16.75 · 16.26 · 14.86 */
+  --text-2:      #4B5563;  /*  7.56 ·  7.13 ·  6.93 ·  6.33 */
+  --text-muted:  #636A78;  /*  5.44 ·  5.13 ·  4.98 ·  4.55 — AA on all four.
+                            * Arkira's own gray-500 #6B7280 measures 4.05 on
+                            * --surface-3 and would fail; this is that hue held
+                            * to the 4.5 floor rather than the swatch. */
+  --disabled:    #9CA3AF;  /*  2.54 — placeholders + disabled ONLY, never live text */
 
-  /* ── Action (light) — furniture. 5.80 both as ink on white and as a fill under white ── */
-  --action:        #0B6E8C;
-  --action-hover:  #095A73;
+  /* ── Action (light) — Arkira indigo-600. 5.46 both as ink on white and as a
+   * fill under white; 4.57 at worst, on --surface-3. Arkira's headline primary
+   * is the lighter #6C5FFD, but that measures 4.47 on white and fails ruling R3
+   * in both directions, so the action slot takes the indigo it uses for links
+   * and #6C5FFD survives only as the tint/gradient hue below. ── */
+  --action:        #5A4CFA;
+  --action-hover:  #4A3BE3;  /* 6.94 — darker on hover, per the existing
+                              * convention. Arkira hovers *lighter*, to #6C5FFD,
+                              * which would drop white-on-fill to 4.47. */
   --action-ink:    #FFFFFF;
-  --action-subtle: rgba(11, 110, 140, 0.08);
+  --action-subtle: rgba(90, 76, 250, 0.08);  /* resolves to #F2F1FF on white —
+                                              * Arkira's primary-50 is #F4F3FF */
 
   /* ── Identity — the same in BOTH themes, because it only ever sits on --brand-plane ── */
   --brand-mark:  #C9FF3B;  /* 15.6:1 on --brand-plane */
   --brand-plane: #14161A;
 
-  /* ── Status (light) ── */
-  --ok:            #0F7A3D;  /* 5.42 */
-  --ok-subtle:     rgba(15, 122, 61, 0.10);
-  --warn:          #9A5B00;  /* 5.43 */
-  --warn-subtle:   rgba(154, 91, 0, 0.10);
-  --danger:        #B3261E;  /* 6.54 both directions */
-  --danger-subtle: rgba(179, 38, 30, 0.10);
+  /* ── Status (light) — Arkira ships the stock HeroUI ramps, whose -500 stops
+   * (#17C964 / #F5A524 / #F31260) all fail as ink. These are the same three
+   * hues taken to the darkest step that clears 4.5 on every surface. ── */
+  --ok:            #0E793C;  /* HeroUI success-700 — 5.50 · 4.61 at worst */
+  --ok-subtle:     rgba(14, 121, 60, 0.10);
+  --warn:          #8A5C13;  /* HeroUI warning-700 #936316 measures 4.36 on
+                              * --surface-3; this is it darkened — 5.80 · 4.86 */
+  --warn-subtle:   rgba(138, 92, 19, 0.10);
+  --danger:        #C20E4D;  /* HeroUI danger-600 — 6.06 · 5.08 at worst */
+  --danger-subtle: rgba(194, 14, 77, 0.10);
 
   /* ── Type families ──
    * MUST resolve through next/font's generated CSS variables. A literal
@@ -125,15 +141,15 @@
   --prose-max:  68ch;
 
   /* ── Elevation — three levels, no hue. Glow is banned (ruling §5.3). ── */
-  --e1: 0 1px 2px rgba(16, 20, 28, 0.06), 0 1px 1px rgba(16, 20, 28, 0.04);
-  --e2: 0 4px 12px -2px rgba(16, 20, 28, 0.08), 0 2px 4px -2px rgba(16, 20, 28, 0.06);
-  --e3: 0 16px 40px -12px rgba(16, 20, 28, 0.18);
+  --e1: 0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 1px rgba(17, 24, 39, 0.04);
+  --e2: 0 4px 12px -2px rgba(17, 24, 39, 0.08), 0 2px 4px -2px rgba(17, 24, 39, 0.06);
+  --e3: 0 16px 40px -12px rgba(17, 24, 39, 0.18);
 
   /* The ONLY focus ring in the system. */
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--action);
 
   /* Modal / sheet / gate backdrop. */
-  --scrim: rgba(16, 20, 28, 0.44);
+  --scrim: rgba(17, 24, 39, 0.44);
 
   /* ── Motion ── */
   --dur-hover: 120ms;
@@ -143,8 +159,17 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in:  cubic-bezier(0.4, 0, 1, 1);
 
-  /* ── The one surviving gradient. Marketing hero panel only. ── */
-  --grad-brand: linear-gradient(135deg, #0B6E8C 0%, #1E9BBF 100%);
+  /* ── The one surviving gradient. Marketing hero panel only. ──
+   * Arkira's CTA stops exactly (it runs them at 90deg; the 135deg here is the
+   * existing geometry). Neither stop clears 4.5 against white (#635FFF is 4.55
+   * but #BB61F4 is only 3.43), so this is a panel/mark fill, not an ink plane.
+   * Three surfaces already break that — the admin KPI tile
+   * (components/v3/admin/controls.tsx:271) and the account + admin avatars
+   * (account/sections.tsx:304, admin/table.tsx:342) set --action-ink on it. It
+   * is a PRE-EXISTING failure, not one this palette introduced: the outgoing
+   * teal ramp ended at #1E9BBF, which was 3.23. Fix by giving those three a
+   * flat --action fill; do not add a fourth. */
+  --grad-brand: linear-gradient(135deg, #635FFF 0%, #BB61F4 100%);
 
   color-scheme: light;
 }
@@ -168,24 +193,30 @@ html[data-theme='dark'] {
   --text-muted: #949AA5;  /*  6.68 ·  6.28 ·  5.70 ·  5.09 — replaces #7C7E91, which FAILED at 3.99 */
   --disabled:   #6A707B;
 
-  --action:        #4FC3E8;  /* 9.27 · 8.71 · 7.91 · 7.07 */
-  --action-hover:  #6ED0EF;
-  --action-ink:    #08131A;  /* 9.21 on the action fill */
-  --action-subtle: rgba(79, 195, 232, 0.10);
+  /* Arkira's indigo-400 — the step its own ramp uses on dark ground. Hover
+   * goes lighter here, which is the dark convention and the direction Arkira
+   * hovers in; only the light theme has to invert it to protect white-on-fill. */
+  --action:        #9B8AFF;  /* 6.72 · 6.32 · 5.74 · 5.13 */
+  --action-hover:  #B4A6FF;  /* 8.85 · 8.32 · 7.56 · 6.75 */
+  --action-ink:    #12102B;  /* 6.59 on the action fill */
+  --action-subtle: rgba(155, 138, 255, 0.14);
 
   --ok:            #46C97D;  /* 8.92 */
   --ok-subtle:     rgba(70, 201, 125, 0.14);
   --warn:          #E0A83C;  /* 8.85 */
   --warn-subtle:   rgba(224, 168, 60, 0.14);
-  --danger:        #F2695E;  /* 6.26 */
-  --danger-subtle: rgba(242, 105, 94, 0.14);
+  /* Rose, so dark stays a sibling of the light theme's HeroUI crimson #C20E4D
+   * rather than keeping the old red-orange. HeroUI's own danger-400 #F54180
+   * measures 4.08 on --surface-3 and fails; this is one step lighter. */
+  --danger:        #F76192;  /* 6.37 · 5.99 · 5.44 · 4.86 */
+  --danger-subtle: rgba(247, 97, 146, 0.14);
 
   /* Dark elevation is a surface step + a 1px rule. Only the top level keeps a shadow. */
   --e1: none;
   --e2: none;
   --e3: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
 
-  --grad-brand: linear-gradient(135deg, #4FC3E8 0%, #7FD8F0 100%);
+  --grad-brand: linear-gradient(135deg, #8B87FF 0%, #CB8CF7 100%);
   --scrim: rgba(0, 0, 0, 0.62);
 
   color-scheme: dark;

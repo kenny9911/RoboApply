@@ -42,12 +42,14 @@
  * Was a hand-picked #6d28d9 with a per-theme override, because the old
  * four-accent --violet could not clear WCAG-AA against the hardcoded white
  * label. There is one action colour now, so the badge is just the action fill
- * with its own ink and the contrast is settled by the token pair (5.80 in
- * light, 9.21 in dark) instead of by a literal.
+ * with its own ink and the contrast is settled by the token pair (5.46 in
+ * light, 6.59 in dark) instead of by a literal.
  *
- * NOTE: planCatalog.tsx still sets `color: '#fff'` inline, which outranks the
- * declaration below — white on the dark-theme --action fails AA. The colour
- * here is correct the moment that inline value is dropped; see the handoff. */
+ * The `color: '#fff'` that planCatalog.tsx used to set inline is GONE. It had
+ * to go with the Arkira palette: dark --action moved from teal #4FC3E8 to
+ * indigo #9B8AFF, and white on that is 2.81 — the inline outranked the
+ * declaration below, so the badge would have shipped failing. Do not put it
+ * back; --action-ink is the only ink this fill takes. */
 .ra-plan-pop {
   background: var(--action);
   color: var(--action-ink);
