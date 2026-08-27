@@ -23,8 +23,9 @@
 //   • ANY OTHER URL → a custom proxy. Auth = `x-api-key` plus the shared
 //     `X-Proxy-Key: <LLM_PROXY_KEY>` header (symmetry with the Gemini proxy).
 //
-// modelPricing.ts already normalises the prefixed/dotted OpenRouter slugs back
-// to their dashed lookup keys, so cost tracking works on either path.
+// The cost table (modelCostTable.ts) lists each Claude model once and answers
+// to the prefixed/dotted OpenRouter slug AND the dashed direct-API id alike, so
+// cost tracking works on either path.
 
 import Anthropic from '@anthropic-ai/sdk';
 

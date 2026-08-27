@@ -1,157 +1,102 @@
-// Per-model pricing in USD per 1M tokens. Source of truth: comments in repo
-// root .env. When you bump prices, update both places.
+// Per-model pricing math. The RATES themselves live in one place —
+// `modelCostTable.ts` — and this module derives the lookup map and the costing
+// functions from it. To bump a price or add a model, edit the cost table; you
+// should not need to touch this file.
 //
-// Exported so the unified rate-card resolver (lib/rateCard.ts) can use this as
-// its hardcoded DEFAULT tier — keeping the project invariant that an empty
-// rate-card DB resolves byte-for-byte to these constants.
-export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  // ── Google Gemini (OpenRouter + direct) ─────────────────────────────
-  'google/gemini-pro-latest': { input: 2.00, output: 12.00 },
-  'google/gemini-flash-latest': { input: 1.50, output: 9.00 },
-  'google/gemini-3.1-pro-preview': { input: 2.00, output: 12.00 },
-  'google/gemini-3-flash-preview': { input: 0.50, output: 3.00 },
-  'google/gemini-3.5-flash': { input: 1.50, output: 9.00 },
-  'google/gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
-  'google/gemini-3.1-flash-image-preview': { input: 0.25, output: 1.50 },
-  'gemini-pro-latest': { input: 2.00, output: 12.00 },
-  'gemini-flash-latest': { input: 1.50, output: 9.00 },
-  'gemini-3.1-pro-preview': { input: 2.00, output: 12.00 },
-  'gemini-3-flash-preview': { input: 0.50, output: 3.00 },
-  'gemini-3.5-flash': { input: 1.50, output: 9.00 },
-  'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
-  'gemini-3.1-flash-image-preview': { input: 0.25, output: 1.50 },
+// Exported so the unified rate-card resolver (lib/rateCard.ts) can use
+// MODEL_PRICING as its hardcoded DEFAULT tier — keeping the project invariant
+// that an empty rate-card DB resolves to the cost table's constants.
 
-  // ── Anthropic Claude (OpenRouter + direct) ──────────────────────────
-  'anthropic/claude-opus-4.8': { input: 5.00, output: 25.00 },
-  'anthropic/claude-opus-4.7': { input: 5.00, output: 25.00 },
-  'anthropic/claude-opus-4.6': { input: 5.00, output: 25.00 },
-  'anthropic/claude-sonnet-4.6': { input: 3.00, output: 15.00 },
-  'anthropic/claude-haiku-4.5': { input: 1.00, output: 5.00 },
-  'claude-opus-4-8': { input: 5.00, output: 25.00 },
-  'claude-opus-4-7': { input: 5.00, output: 25.00 },
-  'claude-opus-4-6': { input: 5.00, output: 25.00 },
-  'claude-opus-4-6-20250408': { input: 5.00, output: 25.00 },
-  'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
-  'claude-sonnet-4-6-20250408': { input: 3.00, output: 15.00 },
-  'claude-haiku-4-5': { input: 1.00, output: 5.00 },
+import {
+  AUDIO_MODEL_COST_TABLE,
+  DEFAULT_MODEL_COST,
+  FREE_VARIANT_COST,
+  MODEL_COST_TABLE,
+  buildCostLookup,
+} from './modelCostTable.js';
 
-  // ── OpenAI (OpenRouter + direct) ────────────────────────────────────
-  // The 5.6 line is the current default (LLM_MODEL=openrouter/openai/gpt-5.6-luna).
-  // Both slug forms are listed because the two routing paths hand us different
-  // ids: OpenRouter keeps `openai/…`, while the OpenAI-direct path strips the
-  // provider prefix in LLMService.normalizeModel() before the call is billed.
-  // luna / luna-pro share one price point, as do sol / sol-pro.
-  'openai/gpt-5.6-sol': { input: 5.00, output: 30.00 },
-  'openai/gpt-5.6-sol-pro': { input: 5.00, output: 30.00 },
-  'openai/gpt-5.6-terra': { input: 1.00, output: 6.00 },
-  'openai/gpt-5.6-terra-pro': { input: 2.50, output: 15.00 },
-  'openai/gpt-5.6-luna': { input: 0.20, output: 1.20 },
-  'openai/gpt-5.6-luna-pro': { input: 0.20, output: 1.20 },
-  'openai/gpt-5.5': { input: 5.00, output: 30.00 },
-  'openai/gpt-5.4': { input: 2.50, output: 15.00 },
-  'openai/gpt-5.4-mini': { input: 0.75, output: 4.50 },
-  'openai/gpt-oss-120b': { input: 0.039, output: 0.19 },
-  'gpt-5.6-sol': { input: 5.00, output: 30.00 },
-  'gpt-5.6-sol-pro': { input: 5.00, output: 30.00 },
-  'gpt-5.6-terra': { input: 1.00, output: 6.00 },
-  'gpt-5.6-terra-pro': { input: 2.50, output: 15.00 },
-  'gpt-5.6-luna': { input: 0.20, output: 1.20 },
-  'gpt-5.6-luna-pro': { input: 0.20, output: 1.20 },
-  'gpt-5.5': { input: 5.00, output: 30.00 },
-  'gpt-5.4': { input: 2.50, output: 15.00 },
-  'gpt-5.4-mini': { input: 0.75, output: 4.50 },
+const lookup = buildCostLookup(MODEL_COST_TABLE);
 
-  // ── DeepSeek ────────────────────────────────────────────────────────
-  'deepseek/deepseek-v4-pro': { input: 0.435, output: 0.87 },
-  'deepseek/deepseek-v4-flash': { input: 0.10, output: 0.20 },
-  'deepseek-v4-pro': { input: 0.435, output: 0.87 },
-  'deepseek-v4-flash': { input: 0.10, output: 0.20 },
-
-  // ── Moonshot Kimi ───────────────────────────────────────────────────
-  // Default Kimi pricing — non-thinking ($0.7448 in / $4.655 out per 1M).
-  // Thinking-mode (256K context) at the provider is $0.60 in / $3.00 out
-  // per 1M, but it shares the same model id, so we keep one entry. If a
-  // call site needs thinking-mode billing accuracy, calculate manually.
-  'moonshotai/kimi-k2.6': { input: 0.7448, output: 4.655 },
-  'moonshotai/kimi-k2.5': { input: 0.60, output: 3.00 },
-  'kimi-k2.6': { input: 0.7448, output: 4.655 },
-  'kimi-k2.5': { input: 0.60, output: 3.00 },
-
-  // ── Other OpenRouter models ─────────────────────────────────────────
-  'xiaomi/mimo-v2.5-pro': { input: 1.00, output: 3.00 },
-  'xiaomi/mimo-v2.5-flash': { input: 0.09, output: 0.29 },
-  'z-ai/glm-5': { input: 0.95, output: 2.55 },
-  'z-ai/glm-4.7': { input: 0.40, output: 1.50 },
-  'minimax/minimax-m2.7': { input: 0.30, output: 1.20 },
-  'x-ai/grok-4.1-fast': { input: 0.20, output: 0.50 },
-  'x-ai/grok-code-fast-1': { input: 0.20, output: 1.50 },
-
-  // ── MiniMax (direct OpenAICompatibleProvider, bare model ids) ────────
-  // Direct api.minimax.chat serves bare ids (no `minimax/` slug). Same list
-  // pricing as the OpenRouter route above. m3: $0.30/M in, $1.20/M out.
-  'minimax-m2.7': { input: 0.30, output: 1.20 },
-  'minimax-m3': { input: 0.30, output: 1.20 },
-  'minimax/minimax-m3': { input: 0.30, output: 1.20 },
-
-  // ── Ollama (self-hosted, no per-token API cost) ─────────────────────
-  // Local inference has no marginal token cost, so bill at $0 rather than the
-  // $1/$3 default (which would over-report platform spend). Add the specific
-  // model ids you actually run — the calculateModelCost warning below names any
-  // id still hitting the default so the gap is easy to spot.
-  'qwen3': { input: 0, output: 0 },
-  'qwen2.5': { input: 0, output: 0 },
-  'llama3.3': { input: 0, output: 0 },
-  'llama3.1': { input: 0, output: 0 },
-  'mistral': { input: 0, output: 0 },
-
-  // ── Default fallback ────────────────────────────────────────────────
-  'default': { input: 1.00, output: 3.00 },
-};
-
-// Audio models billed per minute of audio (not per token). Used by ASR and
-// TTS surfaces (e.g. the GoHire `/transcribe` endpoint that uses
-// `gpt-4o-transcribe` via OpenAI's audio API).
-export const AUDIO_MODEL_PRICING_PER_MINUTE: Record<string, number> = {
-  'gpt-4o-transcribe': 0.006,
-  'gpt-4o-mini-transcribe': 0.012,
-  'gpt-4o-mini-tts': 0.012,
-  'whisper-1': 0.006,
-  'whisper': 0.006,
-};
-
-export function normalizeModelForPricing(model: string): string {
-  const normalized = model.trim().replace(/^models\//i, '');
-
-  switch (normalized) {
-    case 'anthropic/claude-opus-4.8':
-    case 'claude-opus-4.8':
-      return 'claude-opus-4-8';
-    case 'anthropic/claude-opus-4.7':
-    case 'claude-opus-4.7':
-      return 'claude-opus-4-7';
-    case 'anthropic/claude-opus-4.6':
-    case 'claude-opus-4.6':
-    case 'claude-opus-4-6-20250408':
-      return 'claude-opus-4-6';
-    case 'anthropic/claude-sonnet-4.7':
-    case 'claude-sonnet-4.7':
-      return 'claude-sonnet-4-7';
-    case 'anthropic/claude-sonnet-4.6':
-    case 'claude-sonnet-4.6':
-    case 'claude-sonnet-4-6-20250408':
-      return 'claude-sonnet-4-6';
-    case 'anthropic/claude-haiku-4.5':
-    case 'claude-haiku-4.5':
-      return 'claude-haiku-4-5';
-    default:
-      return normalized;
+// A table bug (two rows fighting over one id at different rates) would silently
+// mis-bill, so shout about it at import time. modelCostTable.test.ts asserts
+// this list is empty, which is where it should actually get caught. NB: we use
+// console.* here, not LoggerService, because LoggerService imports this module —
+// importing it back would be a require cycle.
+if (lookup.conflicts.length > 0) {
+  for (const c of lookup.conflicts) {
+    console.error(
+      `[modelPricing] Cost-table conflict on id "${c.id}": kept the rate from ` +
+        `"${c.keptRow}", ignored "${c.ignoredRow}". Fix MODEL_COST_TABLE in ` +
+        'server/src/lib/modelCostTable.ts.',
+    );
   }
+}
+
+/** Flat id → USD-per-1M-token lookup, derived from MODEL_COST_TABLE. Includes
+ *  every canonical id, its bare (prefix-stripped) form, and every alias, plus
+ *  the `default` fallback tier. Read-only: reprice in the cost table. */
+export const MODEL_PRICING: Record<string, { input: number; output: number }> = Object.freeze({
+  ...lookup.pricing,
+  default: { ...DEFAULT_MODEL_COST },
+});
+
+/** Audio models billed per minute of audio (not per token). Used by ASR and
+ *  TTS surfaces (e.g. the GoHire `/transcribe` endpoint that uses
+ *  `gpt-4o-transcribe` via OpenAI's audio API). */
+export const AUDIO_MODEL_PRICING_PER_MINUTE: Record<string, number> = AUDIO_MODEL_COST_TABLE;
+
+/** Strip the decoration providers add around a model id: surrounding
+ *  whitespace and Google's `models/` prefix. */
+function cleanModelId(model: string): string {
+  return (model ?? '').trim().replace(/^models\//i, '');
+}
+
+/** Resolve a model id to its cost-table row, following the same ladder as
+ *  `calculateModelCost`: exact id → OpenRouter `:variant` handling → miss. */
+function resolveRate(
+  model: string,
+): { rate: { input: number; output: number }; canonical: string } | null {
+  const cleaned = cleanModelId(model);
+  const exact = lookup.pricing[cleaned];
+  if (exact) return { rate: exact, canonical: lookup.canonicalId[cleaned] };
+
+  // OpenRouter appends a `:variant` suffix to some ids. `:free` costs nothing
+  // whatever the base model charges; every other variant (`:nitro`, `:floor`,
+  // …) is a routing preference billed at the base model's rate. Ollama's
+  // `name:tag` ids fall out of the same rule.
+  const colon = cleaned.lastIndexOf(':');
+  if (colon > 0) {
+    const base = cleaned.slice(0, colon);
+    if (cleaned.slice(colon + 1).toLowerCase() === 'free') {
+      return { rate: { ...FREE_VARIANT_COST }, canonical: lookup.canonicalId[base] ?? cleaned };
+    }
+    const baseRate = lookup.pricing[base];
+    if (baseRate) return { rate: baseRate, canonical: lookup.canonicalId[base] };
+  }
+
+  // Anthropic-direct replies carry the RESOLVED, date-stamped id
+  // (`claude-opus-5-20260101`) rather than the alias that was requested, and
+  // AnthropicProvider bills `response.model`. A dated snapshot is the same
+  // model at the same rate, so drop the stamp and price the family.
+  const dated = /^(.*)-\d{8}$/.exec(cleaned);
+  if (dated) {
+    const base = dated[1];
+    const baseRate = lookup.pricing[base];
+    if (baseRate) return { rate: baseRate, canonical: lookup.canonicalId[base] };
+  }
+
+  return null;
+}
+
+/** Canonical cost-table id for a model, or the cleaned id when it isn't priced.
+ *  Used for log/warning attribution — billing goes through `calculateModelCost`. */
+export function normalizeModelForPricing(model: string): string {
+  return resolveRate(model)?.canonical ?? cleanModelId(model);
 }
 
 // Models we've already warned about hitting the default tier — one warning per
 // unique id per process keeps the signal visible without flooding the logs (this
-// runs on every LLM call). NB: we use console.* here, not LoggerService, because
-// LoggerService imports this module — importing it back would be a require cycle.
+// runs on every LLM call).
 const warnedUnpricedModels = new Set<string>();
 
 export function calculateModelCost(
@@ -159,21 +104,21 @@ export function calculateModelCost(
   promptTokens: number,
   completionTokens: number,
 ): number {
-  const normalizedModel = normalizeModelForPricing(model);
-  const explicit = MODEL_PRICING[normalizedModel] || MODEL_PRICING[model];
-  const pricing = explicit || MODEL_PRICING.default;
+  const resolved = resolveRate(model);
+  const pricing = resolved?.rate ?? MODEL_PRICING.default;
 
-  if (!explicit && model !== 'default') {
-    // No pricing row — this model is being billed at the $1/$3 default, which
+  if (!resolved && cleanModelId(model) !== 'default') {
+    // No cost-table row — this model is being billed at the $1/$3 default, which
     // silently mis-costs any newly added model. Surface it once so a row can be
-    // added to MODEL_PRICING above.
-    if (!warnedUnpricedModels.has(normalizedModel)) {
-      warnedUnpricedModels.add(normalizedModel);
+    // added to MODEL_COST_TABLE.
+    const cleaned = cleanModelId(model);
+    if (!warnedUnpricedModels.has(cleaned)) {
+      warnedUnpricedModels.add(cleaned);
       console.warn(
-        `[modelPricing] No pricing row for model "${model}"` +
-          (normalizedModel !== model ? ` (normalized "${normalizedModel}")` : '') +
+        `[modelPricing] No cost-table row for model "${model}"` +
+          (cleaned !== model ? ` (normalized "${cleaned}")` : '') +
           ` — billing at default $${MODEL_PRICING.default.input}/$${MODEL_PRICING.default.output} per 1M. ` +
-          'Add a row to MODEL_PRICING in backend/src/lib/modelPricing.ts.',
+          'Add a row to MODEL_COST_TABLE in server/src/lib/modelCostTable.ts.',
       );
     }
   }
@@ -184,7 +129,7 @@ export function calculateModelCost(
 }
 
 export function calculateAudioModelCost(model: string, minutes: number): number {
-  const normalized = model.trim().replace(/^models\//i, '').toLowerCase();
+  const normalized = cleanModelId(model).toLowerCase();
   const rate = AUDIO_MODEL_PRICING_PER_MINUTE[normalized] ?? 0;
   return rate * Math.max(0, minutes);
 }
@@ -212,14 +157,8 @@ export function calculateFireCrawlCost(pages: number): number {
   return pages * perPage;
 }
 
+/** True when the model prices off an explicit Anthropic row in the cost table
+ *  (i.e. we know its real rate rather than falling back to the default tier). */
 export function isClaudeModelWithFixedPricing(model: string): boolean {
-  const normalized = normalizeModelForPricing(model);
-  return (
-    normalized === 'claude-opus-4-8' ||
-    normalized === 'claude-opus-4-7' ||
-    normalized === 'claude-opus-4-6' ||
-    normalized === 'claude-sonnet-4-7' ||
-    normalized === 'claude-sonnet-4-6' ||
-    normalized === 'claude-haiku-4-5'
-  );
+  return resolveRate(model)?.canonical.startsWith('anthropic/') ?? false;
 }
