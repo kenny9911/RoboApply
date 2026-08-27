@@ -53,7 +53,13 @@ Every per-token rate the platform bills with, in USD per 1,000,000 tokens. The r
 | `llama3.1` | $0 | $0 | — | Self-hosted via Ollama. |
 | `mistral` | $0 | $0 | — | Self-hosted via Ollama. |
 
-**Unpriced models** fall back to $1 in / $3 out per 1M, and `calculateModelCost` warns once per unknown id. **OpenRouter `:free` variants** bill at $0 by rule, whether or not they have a row.
+Three rules resolve ids that have no row of their own:
+
+- **`…:free`** bills at $0, whether or not it is listed — an OpenRouter free variant must never fall through to the default tier.
+- **`…:variant`** (`:nitro`, `:floor`, and Ollama `name:tag` ids) bills at the base model rate.
+- **`…-YYYYMMDD`** bills as its family, so an Anthropic dated snapshot needs no row of its own — the direct API answers with the resolved dated id.
+
+Anything still unmatched falls back to $1 in / $3 out per 1M, and `calculateModelCost` warns once per unknown id.
 
 ## Audio models (per minute)
 

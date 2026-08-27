@@ -18,13 +18,18 @@ import { fileURLToPath } from 'node:url';
 
 import dotenv from 'dotenv';
 
+import { MODEL_ENV } from '../server/src/lib/llm/llmStackConfigSchema.js';
 import {
   AUDIO_MODEL_COST_TABLE,
   DEFAULT_MODEL_COST,
   MODEL_COST_TABLE,
-  buildCostLookup,
   idsForRow,
 } from '../server/src/lib/modelCostTable.js';
+import { lookupModelRate } from '../server/src/lib/modelPricing.js';
+import {
+  DIRECT_PROVIDER_PREFIXES,
+  PROVIDER_PREFIX_ALIASES,
+} from '../server/src/services/llm/providerPrefixes.js';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 
@@ -33,41 +38,46 @@ const REPO_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 dotenv.config({ path: resolve(REPO_ROOT, '.env'), override: false, quiet: true });
 dotenv.config({ path: resolve(REPO_ROOT, '.env.local'), override: false, quiet: true });
 
-/** Model-selector env vars, in the order the config docs list them. */
-const MODEL_ENV_VARS = [
-  'LLM_MODEL',
-  'LLM_FALLBACK_MODEL',
-  'LLM_MATCHING_MODEL',
-  'LLM_EXTRACT_MODEL',
-  'LLM_VISION_MODEL',
-  'LLM_ONBOARDING_MODEL',
-  'LLM_REWRITE_MODEL',
-  'LLM_INTERVIEW_MODEL',
-];
-
-const { pricing } = buildCostLookup(MODEL_COST_TABLE);
+/** Every model-selector env var, straight from the config registry — a
+ *  hand-copied subset would report "all ok" while a purpose we forgot to list
+ *  quietly bills at the default tier. */
+const MODEL_ENV_VARS = Object.values(MODEL_ENV);
 
 /** `$0.375` — trims the trailing zeros a fixed precision would add. */
 const usd = (n: number): string => `$${Number(n.toFixed(6))}`;
 
 /**
- * A configured selector carries a leading routing hint the pricing path never
- * sees (`openrouter/openai/gpt-5.6-luna` is billed as `openai/gpt-5.6-luna`
- * once LLMService has resolved the provider). Strip it the same way, so this
- * check reflects what will actually be billed.
+ * Which id a configured selector will actually be BILLED under, and its rate.
+ *
+ * A selector carries a leading `<provider>/` routing hint that LLMService
+ * strips before the call is costed, so `openrouter/openai/gpt-5.6-luna` is
+ * billed as `openai/gpt-5.6-luna`. Peel hints off one segment at a time — but
+ * only segments that are real provider prefixes, or this would happily strip
+ * the vendor namespace off `z-ai/glm-5.3-flash` and report a false match.
+ * Rates come from lookupModelRate, the biller's own resolver, so the `:free`,
+ * `:variant` and dated-snapshot rules are all reflected here.
  */
-function billingIdFor(selector: string): string {
-  const id = selector.trim().replace(/^models\//i, '');
-  if (pricing[id]) return id;
-  const cut = id.indexOf('/');
-  if (cut > 0) {
-    const rest = id.slice(cut + 1);
-    if (rest.includes('/') && pricing[rest]) return rest;
-    // `gemini/…` is an accepted direct-provider alias for `google/…`.
-    if (id.startsWith('gemini/') && pricing[`google/${rest}`]) return `google/${rest}`;
-    if (rest.includes('/')) return rest;
+function billingFor(selector: string): { id: string; rate: { input: number; output: number } | null } {
+  const candidates: string[] = [];
+  let id = selector.trim().replace(/^models\//i, '');
+  candidates.push(id);
+
+  while (id.includes('/')) {
+    const head = id.slice(0, id.indexOf('/')).toLowerCase();
+    const tail = id.slice(id.indexOf('/') + 1);
+    const providerType = PROVIDER_PREFIX_ALIASES[head] ?? head;
+    if (!DIRECT_PROVIDER_PREFIXES.has(providerType)) break;
+    // `gemini/x` routes to Google, which bills the `google/x` slug.
+    if (providerType !== head && !tail.includes('/')) candidates.push(`${providerType}/${tail}`);
+    candidates.push(tail);
+    id = tail;
   }
-  return id;
+
+  for (const candidate of candidates) {
+    const rate = lookupModelRate(candidate);
+    if (rate) return { id: candidate, rate };
+  }
+  return { id: candidates[candidates.length - 1], rate: null };
 }
 
 function render(): string {
@@ -101,11 +111,25 @@ function render(): string {
     );
   }
   out.push('');
+  out.push('Three rules resolve ids that have no row of their own:');
+  out.push('');
   out.push(
-    `**Unpriced models** fall back to ${usd(DEFAULT_MODEL_COST.input)} in / ` +
+    '- **`…:free`** bills at $0, whether or not it is listed — an OpenRouter free ' +
+      'variant must never fall through to the default tier.',
+  );
+  out.push(
+    '- **`…:variant`** (`:nitro`, `:floor`, and Ollama `name:tag` ids) bills at the ' +
+      'base model rate.',
+  );
+  out.push(
+    '- **`…-YYYYMMDD`** bills as its family, so an Anthropic dated snapshot needs no ' +
+      'row of its own — the direct API answers with the resolved dated id.',
+  );
+  out.push('');
+  out.push(
+    `Anything still unmatched falls back to ${usd(DEFAULT_MODEL_COST.input)} in / ` +
       `${usd(DEFAULT_MODEL_COST.output)} out per 1M, and \`calculateModelCost\` warns ` +
-      'once per unknown id. **OpenRouter `:free` variants** bill at $0 by rule, ' +
-      'whether or not they have a row.',
+      'once per unknown id.',
   );
   out.push('');
   out.push('## Audio models (per minute)');
@@ -151,8 +175,7 @@ function reportConfiguredCoverage(): void {
   console.error('\nConfigured models in this environment:');
   let gaps = 0;
   for (const [name, selector] of configured) {
-    const id = billingIdFor(selector);
-    const rate = pricing[id];
+    const { id, rate } = billingFor(selector);
     if (rate) {
       console.error(`  ok   ${name}=${selector}  →  ${usd(rate.input)}/${usd(rate.output)} per 1M`);
     } else {

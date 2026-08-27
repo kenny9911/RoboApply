@@ -94,6 +94,13 @@ export function normalizeModelForPricing(model: string): string {
   return resolveRate(model)?.canonical ?? cleanModelId(model);
 }
 
+/** The rate `calculateModelCost` would bill this model at, or null when it has
+ *  no row and would fall through to the default tier. Same resolution ladder,
+ *  so tooling can ask "is this model priced?" without re-deriving the answer. */
+export function lookupModelRate(model: string): { input: number; output: number } | null {
+  return resolveRate(model)?.rate ?? null;
+}
+
 // Models we've already warned about hitting the default tier — one warning per
 // unique id per process keeps the signal visible without flooding the logs (this
 // runs on every LLM call).

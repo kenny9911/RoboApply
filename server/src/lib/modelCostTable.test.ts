@@ -10,6 +10,7 @@ import {
   MODEL_PRICING,
   calculateModelCost,
   isClaudeModelWithFixedPricing,
+  lookupModelRate,
   normalizeModelForPricing,
 } from './modelPricing.js';
 
@@ -184,6 +185,16 @@ describe('id resolution', () => {
     expect(normalizeModelForPricing('models/gemini-3.7-flash')).toBe('google/gemini-3.7-flash');
     // Unknown ids come back cleaned but otherwise untouched.
     expect(normalizeModelForPricing('  unknown/model  ')).toBe('unknown/model');
+  });
+
+  it('reports through lookupModelRate exactly what it bills', () => {
+    // Tooling asks lookupModelRate "is this priced?"; a divergence from the
+    // biller's own ladder would make the coverage check lie.
+    expect(lookupModelRate('openrouter/openai/gpt-5.6-luna')).toBeNull();
+    expect(lookupModelRate('openai/gpt-5.6-luna')).toEqual({ input: 0.2, output: 1.2 });
+    expect(lookupModelRate('z-ai/glm-4.7:free')).toEqual({ input: 0, output: 0 });
+    expect(lookupModelRate('claude-opus-5-20260101')).toEqual({ input: 5, output: 25 });
+    expect(lookupModelRate('openai/gpt-5.4-nano')).toBeNull();
   });
 
   it('recognises Anthropic models as explicitly priced', () => {

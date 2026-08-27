@@ -17,6 +17,7 @@ import {
 import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/systemCredentials.js';
 import { getProviderSetting, getDefaultModel, getFallbackModelSetting } from '../../lib/llm/llmModels.js';
 import { isTransientLLMError } from './withRetry.js';
+import { DIRECT_PROVIDER_PREFIXES, PROVIDER_PREFIX_ALIASES } from './providerPrefixes.js';
 import type { ProviderExtra } from '../../types/index.js';
 
 /** chatWithUsage() result — content plus the billed token usage + resolved model. */
@@ -26,26 +27,6 @@ export interface LLMChatResult {
   model: string;
 }
 
-const DIRECT_PROVIDER_PREFIXES = new Set([
-  'openai',
-  'google',
-  'kimi',
-  'moonshot',
-  'deepseek',
-  'openrouter',
-  'anthropic',
-  'minimax',
-  'ollama',
-  'newapi',
-]);
-
-// Provider-prefix aliases: the model-id prefix a caller may use differs from the
-// internal provider key. Google's native SDK is Gemini-branded, so `gemini/…` is
-// accepted as a synonym for the `google` provider (e.g. `gemini/gemini-3-flash-preview`
-// → Google direct). Normalized in resolveDirectModel before the prefix is matched.
-const PROVIDER_PREFIX_ALIASES: Record<string, string> = {
-  gemini: 'google',
-};
 
 // Dedupe the "stripped redundant routing prefix" log. `normalizeModel` runs on
 // EVERY chat() call (config is resolved fresh per call for hot-reload), so a
@@ -80,46 +61,27 @@ function llmProviderToByokProvider(providerType: string): ByokProvider | null {
 }
 
 export class LLMService {
-  // Hardcoded last-resort defaults (matching the historical env defaults). The
-  // default provider + model are resolved FRESH on every chat() call via
+  // The default provider + model are resolved FRESH on every chat() call via
   // resolveDefaults() — NOT cached on the instance — so an admin changing the
   // DB-backed default takes effect within ~1s without a redeploy. See
   // docs/llm-settings-db/.
   private static readonly DEFAULT_PROVIDER = 'openrouter';
-  // Last-resort default model when EVERY config layer (DB defaultModel + env
-  // LLM_MODEL) is empty. MUST be `openrouter/`-prefixed (not bare `google/…`):
-  // a `google/` prefix is a recognized DIRECT-provider prefix that pins the call
-  // to Google's NATIVE API regardless of providerMode (see resolveDirectModel /
-  // chatWithUsage). With a `google/` default, a fully-cleared config silently
-  // re-pinned the parse path to Google-direct — unreachable from the China
-  // deploy and a contributor to the 2026-06-24 parse-resume outage. The
-  // `openrouter/` prefix routes the same Gemini model THROUGH OpenRouter, which
-  // is reachable and honors LLM_PROVIDER. The prefix is stripped to
-  // `google/gemini-3-flash-preview` (OpenRouter's real model id) before dispatch.
-  private static readonly DEFAULT_MODEL = 'openrouter/google/gemini-3-flash-preview';
 
-  /** Resolve the default provider mode + model: DB override ?? env ?? hardcoded. */
-  private resolveDefaults(): { providerMode: string; model: string } {
+  /** Resolve default routing: DB override ?? env. Model selection never lives in code. */
+  private resolveDefaults(): { providerMode: string; model?: string } {
     return {
       providerMode: (getProviderSetting() || LLMService.DEFAULT_PROVIDER).toLowerCase(),
-      model: getDefaultModel() || LLMService.DEFAULT_MODEL,
+      model: getDefaultModel(),
     };
   }
 
   private getConfiguredFallbackModel(primaryModel: string): string | null {
-    // DB override (admin) wins, then env LLM_FALLBACK_MODEL, then the heuristic.
+    // DB override (admin) wins, then env LLM_FALLBACK_MODEL. There is no
+    // source-level model substitution: operators own both model choices.
     const configured = (getFallbackModelSetting() || '').trim();
     if (configured && configured !== primaryModel) {
       return configured;
     }
-
-    const normalized = primaryModel.toLowerCase();
-    const providerPrefix = primaryModel.includes('/') ? `${primaryModel.split('/')[0]}/` : '';
-
-    if (normalized.includes('gemini-3.1-pro-preview')) {
-      return `${providerPrefix}gemini-3-flash-preview`;
-    }
-
     return null;
   }
 
@@ -192,6 +154,44 @@ export class LLMService {
     return { providerType, model: rawModel.substring(slashIdx + 1) };
   }
 
+  /** Resolve a configured selector with the same rules for primary and fallback
+   * calls. Recognized provider prefixes always pin the native provider; an
+   * explicit openrouter/ prefix keeps the vendor slug behind OpenRouter. */
+  private resolvePlatformRoute(
+    rawModel: string,
+    providerMode: string,
+    defaultModel?: string,
+    explicitProvider?: string,
+  ): { providerType: string; model: string } {
+    if (explicitProvider) {
+      return {
+        providerType: explicitProvider,
+        model: this.normalizeModel(rawModel, explicitProvider),
+      };
+    }
+
+    const direct = this.resolveDirectModel(rawModel);
+    // Every recognized outer prefix is an explicit route, including
+    // openrouter/...; it must win even when legacy LLM_PROVIDER names a
+    // different single provider.
+    if (direct) return direct;
+
+    if (providerMode === 'direct') {
+      if (rawModel.includes('/')) {
+        return { providerType: 'openrouter', model: rawModel };
+      }
+      return {
+        providerType: this.resolveDirectModel(defaultModel || '')?.providerType ?? 'openrouter',
+        model: rawModel,
+      };
+    }
+
+    return {
+      providerType: providerMode,
+      model: this.normalizeModel(rawModel, providerMode),
+    };
+  }
+
   /** Build the per-construction ProviderExtra (base URL + proxy key + tuning)
    *  from a resolved credential, omitting undefined fields so providers fall
    *  back to their own env reads when nothing was configured. */
@@ -211,9 +211,15 @@ export class LLMService {
    * tier sits ABOVE this in chat(). A fresh instance is built per call (cheap SDK
    * client) so admin key/model changes apply without restart — never cached.
    */
-  private createProvider(providerType: string): LLMProvider {
+  private createProvider(providerType: string, selectedModel?: string): LLMProvider {
     const cred = resolveProviderCredential(providerType);
-    const model = this.resolveDefaults().model;
+    const model = selectedModel || this.resolveDefaults().model;
+    if (!model) {
+      throw new Error(
+        'No LLM model is configured. Set the task-specific LLM_*_MODEL variable ' +
+          'or configure LLM_MODEL in the LLM stack.',
+      );
+    }
     const extra = this.buildExtra(cred.tuning, cred.baseUrl);
     // Fail loudly on a missing credential. Every provider below except ollama
     // requires a key; without this guard an empty string flows into the SDK
@@ -390,7 +396,7 @@ export class LLMService {
     const requestId = options?.requestId || getCurrentRequestId() || generateRequestId();
 
     // Resolve provider + model depending on mode. Both the provider mode and the
-    // default model are resolved FRESH here (DB override ?? env ?? hardcoded) so
+    // default model are resolved FRESH here (DB override ?? env) so
     // admin changes apply within ~1s with no redeploy.
     const defaults = this.resolveDefaults();
     const providerMode = defaults.providerMode;
@@ -400,50 +406,22 @@ export class LLMService {
     // would be shipped to the provider as a model id.
     const explicitModel = options?.visionModel || options?.model;
     const rawModel = (explicitModel && explicitModel !== 'default' ? explicitModel : undefined) || defaults.model;
-    let activeProvider: LLMProvider;
-    let model: string;
-
-    if (options?.provider) {
-      // Explicit per-call provider override — highest precedence.
-      activeProvider = this.createProvider(options.provider);
-      model = this.normalizeModel(rawModel, options.provider);
-    } else {
-      // A recognized DIRECT-provider prefix on the model id pins the call to that
-      // provider's NATIVE API, bypassing OpenRouter — REGARDLESS of providerMode
-      // (LLM_PROVIDER). Examples:
-      //   gemini/gemini-3-flash-preview  → Google direct   (gemini = google alias)
-      //   openai/gpt-5.4-mini            → OpenAI direct
-      //   deepseek/deepseek-v4-pro       → DeepSeek direct
-      // To route a vendor model THROUGH OpenRouter, use the `openrouter/…` prefix
-      // (or a bare model id while in openrouter mode). The `openrouter/` prefix is
-      // intentionally excluded here so it falls through to the OpenRouter path.
-      const direct = this.resolveDirectModel(rawModel);
-      if (direct && direct.providerType !== 'openrouter') {
-        activeProvider = this.createProvider(direct.providerType);
-        model = direct.model;
-      } else if (providerMode === 'direct') {
-        if (direct) {
-          // `openrouter/…` prefix → OpenRouter with the routing hint stripped.
-          activeProvider = this.createProvider('openrouter');
-          model = direct.model;
-        } else if (rawModel.includes('/')) {
-          // Has a prefix but not a recognized provider — pass through OpenRouter unchanged.
-          activeProvider = this.createProvider('openrouter');
-          model = rawModel;
-        } else {
-          // No prefix at all — use the DEFAULT model's provider (the historical
-          // `defaultProviderType`), derived from the resolved default model prefix.
-          const defType = this.resolveDirectModel(defaults.model)?.providerType ?? 'openrouter';
-          activeProvider = this.createProvider(defType);
-          model = rawModel;
-        }
-      } else {
-        // Legacy single-provider mode (openrouter, google, openai, kimi) — applies
-        // to bare / openrouter-prefixed / unrecognized-prefix ids only.
-        activeProvider = this.createProvider(providerMode);
-        model = this.normalizeModel(rawModel, providerMode);
-      }
+    if (!rawModel) {
+      throw new Error(
+        'No LLM model is configured for this call. Set its task-specific ' +
+          'LLM_*_MODEL variable or configure LLM_MODEL in the LLM stack.',
+      );
     }
+    // A recognized provider prefix pins the call natively regardless of
+    // LLM_PROVIDER. The explicit per-call provider remains highest precedence.
+    const primaryRoute = this.resolvePlatformRoute(
+      rawModel,
+      providerMode,
+      defaults.model,
+      options?.provider,
+    );
+    let activeProvider = this.createProvider(primaryRoute.providerType, primaryRoute.model);
+    const model = primaryRoute.model;
 
     // ── BYOK resolution ──────────────────────────────────────────────────
     // If the current request's user has an active BYOK key for the
@@ -559,18 +537,19 @@ export class LLMService {
 
       const rawFallbackModel = this.getConfiguredFallbackModel(model);
       if (rawFallbackModel && rawFallbackModel !== model && this.shouldTryFallback(error)) {
-        // In direct mode, the fallback model may have a provider prefix that needs resolving
-        let fallbackProvider = activeProvider;
-        let fallbackModel = rawFallbackModel;
-        if (providerMode === 'direct') {
-          const resolved = this.resolveDirectModel(rawFallbackModel);
-          if (resolved) {
-            fallbackModel = resolved.model;
-            if (resolved.providerType !== activeProvider.getProviderName().toLowerCase()) {
-              fallbackProvider = this.createProvider(resolved.providerType);
-            }
-          }
-        }
+        // Resolve the fallback as its own selector. This must not depend on the
+        // global provider mode: a native task selector may fall back through an
+        // explicit openrouter/... selector (or vice versa).
+        const fallbackRoute = this.resolvePlatformRoute(
+          rawFallbackModel,
+          providerMode,
+          defaults.model,
+        );
+        const fallbackModel = fallbackRoute.model;
+        const fallbackProvider =
+          fallbackRoute.providerType === activeProvider.getProviderName().toLowerCase()
+            ? activeProvider
+            : this.createProvider(fallbackRoute.providerType, fallbackModel);
 
         const fallbackStart = Date.now();
         logger.warn('LLM', 'Retrying with fallback model', {
@@ -686,11 +665,11 @@ export class LLMService {
         model = modelId;
       } else {
         const defaults = this.resolveDefaults();
-        providerType = this.resolveDirectModel(defaults.model)?.providerType
+        providerType = this.resolveDirectModel(defaults.model || '')?.providerType
           ?? (defaults.providerMode === 'direct' ? 'openrouter' : defaults.providerMode);
         model = modelId;
       }
-      const provider = this.createProvider(providerType); // system → env, NO byok
+      const provider = this.createProvider(providerType, model); // system → env, NO byok
       const resp = await provider.chat(
         [{ role: 'user', content: 'Reply with exactly: ok' }],
         { model, maxTokens: 16, temperature: 0 },
@@ -706,10 +685,11 @@ export class LLMService {
     }
   }
 
-  /** The resolved default model (DB override ?? env ?? hardcoded). Used for
-   *  telemetry labels and as the fallback model for callers that omit one. */
+  /** The resolved default model (DB override ?? env). */
   getModel(): string {
-    return this.resolveDefaults().model;
+    const model = this.resolveDefaults().model;
+    if (!model) throw new Error('No default LLM model is configured. Set LLM_MODEL.');
+    return model;
   }
 
   /** The resolved provider mode ('direct' | 'openrouter' | ...). */
