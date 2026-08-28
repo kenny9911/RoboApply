@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { Message, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '../../types/index.js';
 import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions } from './providerTuning.js';
 import { openAIJsonResponseFormat } from './jsonMode.js';
-import { OPENAI_STYLE_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
+import { OPENROUTER_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
 
 export class OpenRouterProvider implements LLMProvider {
   private client: OpenAI;
@@ -40,13 +40,18 @@ export class OpenRouterProvider implements LLMProvider {
   async chat(messages: Message[], options?: LLMOptions): Promise<LLMResponse> {
     const model = options?.model || this.defaultModel;
 
-    // Global/admin reasoning-effort dial (see reasoningEffort.ts). OpenRouter's
-    // unified `reasoning` object takes EITHER an effort OR a max_tokens budget,
-    // not both — so a call that set its own reasoningMaxTokens keeps that
-    // explicit cap and the dial stands down for that call.
-    const effort = options?.reasoningMaxTokens
+    // OpenRouter's unified `reasoning` object takes EITHER an effort OR a
+    // max_tokens budget. An explicit task effort wins; otherwise an agent's
+    // reasoningMaxTokens cap wins over shared admin/global effort tuning.
+    const explicitEffort = options?.reasoningEffort && OPENROUTER_EFFORTS.includes(options.reasoningEffort)
+      ? options.reasoningEffort
+      : undefined;
+    const effort = explicitEffort ?? (options?.reasoningMaxTokens
       ? undefined
-      : resolveReasoningEffort({ tuned: this.extra?.reasoningEffort, allow: OPENAI_STYLE_EFFORTS });
+      : resolveReasoningEffort({
+          tuned: this.extra?.reasoningEffort,
+          allow: OPENROUTER_EFFORTS,
+        }));
 
     const response = await this.client.chat.completions.create(
       {
@@ -64,7 +69,7 @@ export class OpenRouterProvider implements LLMProvider {
         // gpt-5.6 default — that expose one. OpenRouter drops the param for
         // models without reasoning support. (Not in the OpenAI SDK types; the
         // SDK passes unknown body fields through.)
-        ...(options?.reasoningMaxTokens
+        ...(options?.reasoningMaxTokens && !effort
           ? { reasoning: { max_tokens: options.reasoningMaxTokens } }
           : effort
             ? { reasoning: { effort } }

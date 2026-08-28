@@ -599,7 +599,7 @@ export class RAOnboardingService {
     const seeded = (session.draftPreferences ?? {}) as OnboardingDraftPreferences;
     let draft = replaceDraft(seeded, submitted);
 
-    // ── The one free-text line. One Haiku call, or none at all. ──
+    // ── The one free-text line. One configured onboarding call, or none. ──
     const notes = typeof freeText === 'string' ? freeText.trim().slice(0, MAX_FREE_TEXT_LEN) : '';
     let capturedFromNotes: string[] = [];
     let extractorRan = false;

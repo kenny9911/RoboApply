@@ -83,7 +83,7 @@ export const setupKeys = {
 /**
  * How long to wait before the single enrichment re-fetch.
  *
- * The deterministic seed renders step 2 immediately; one Haiku call runs in
+ * The deterministic seed renders step 2 immediately; one configured onboarding LLM call runs in
  * parallel and can land later. We re-read the session EXACTLY ONCE, and only
  * when `enrichmentPending && thin` — that is the single case where the late
  * seed changes what the screen renders (a thin resume has no roles at all

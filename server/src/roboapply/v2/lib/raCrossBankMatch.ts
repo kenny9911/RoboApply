@@ -575,7 +575,7 @@ export function inviteBand(llmScore: number, inviteBar: number, barIsDefault: bo
 export function computeRaiseOddsLevers(c: PreMatchedCandidate, scorerGaps: string[]): string[] {
   const levers = dedupeStrings([...c.missingRequiredTags, ...c.missingRequiredKeywords]);
   // When the recruiter predicates are empty (common — producers absent), fall
-  // back to the Sonnet scorer's observed gaps for this job.
+  // back to the configured scorer's observed gaps for this job.
   if (levers.length === 0) return dedupeStrings(scorerGaps).slice(0, 4);
   return levers.slice(0, 4);
 }
@@ -619,7 +619,7 @@ export function bankDisplayName(bank: BankId): string {
 }
 
 /**
- * Hash of the exact job fields the Sonnet scorer consumes. Cross-bank RAJob
+ * Hash of the exact job fields the configured scorer consumes. Cross-bank RAJob
  * mirrors are RE-materialized every run from a live recruiter DB whose JD can
  * change in place (same Job.id → same RAJob.id), so the match-score cache must
  * invalidate when the JD content changes — resumeContentHash alone can't see a

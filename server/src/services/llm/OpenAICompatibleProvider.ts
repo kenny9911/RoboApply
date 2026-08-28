@@ -80,6 +80,14 @@ export class OpenAICompatibleProvider implements LLMProvider {
       params.max_tokens = options.maxTokens;
     }
 
+    // Custom OpenAI-compatible gateways may expose the standard qualitative
+    // reasoning control. Only send it when the caller explicitly selected one;
+    // shared provider/global tuning is intentionally handled by dedicated
+    // providers that can validate their own model families.
+    if (options?.reasoningEffort) {
+      params.reasoning_effort = options.reasoningEffort;
+    }
+
     // API-level JSON mode (minimax / new-api / Ollama all speak OpenAI's
     // response_format). Guarded on the "prompt mentions json" precondition.
     if (shouldUseJsonObject(options, messages)) {

@@ -152,12 +152,13 @@ export class RAInsightService {
     let summary = '';
     let citedTrackerIds: string[] = [];
     let metrics: RACareerInsightView['metrics'] = null;
-    const modelUsed = pickCareerInsightModel();
+    let modelUsed = 'deterministic';
     let citationGuardPassed = true;
     let agentSucceeded = false;
 
     if (goal) {
       try {
+        const selectedModel = pickCareerInsightModel();
         const { RACareerInsightAgent } = await import(
           '../agents/RACareerInsightAgent.js'
         );
@@ -209,6 +210,7 @@ export class RAInsightService {
         citedTrackerIds = Array.isArray(out?.citedTrackerIds) ? out.citedTrackerIds : [];
         metrics = computeMetrics(tracker as any[]);
         citationGuardPassed = true;
+        modelUsed = selectedModel;
         agentSucceeded = true;
       } catch (err) {
         logger.warn('RA_V2_INSIGHT', 'insight agent failed; using deterministic fallback', {

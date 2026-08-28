@@ -9,7 +9,7 @@
 //
 // Pipeline (smoothest full-duplex): Silero VAD-based turn detection +
 // preemptive generation + tuned endpointing/interruption thresholds.
-// STT (Deepgram Nova-3) → LLM (per metadata; control-plane default) → TTS via
+// STT (Deepgram Nova-3) → LLM (required per metadata) → TTS via
 // the LiveKit Inference gateway (OpenAI tts-1 as the local floor).
 //
 // This file ONLY defines the agent (default export). The worker is launched
@@ -103,7 +103,10 @@ interface RoomMeta {
   durationMinutes?: number;
   voice?: { provider?: string; model?: string; voiceId?: string; languageCode?: string };
   stt?: { provider?: string; model?: string; language?: string; fallbackModels?: string[] };
-  llm?: { model?: string };
+  llm?: {
+    model?: string;
+    reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  };
 }
 
 /** Map an interview locale to a valid inference STT language code. The
@@ -159,7 +162,19 @@ function buildStt(stt: RoomMeta['stt'], language: string) {
 }
 
 function buildLlm(llm: RoomMeta['llm']) {
-  return new inference.LLM({ model: llm?.model ?? 'openai/gpt-4o' });
+  const model = llm?.model?.trim();
+  if (!model) {
+    throw new Error(
+      'interview room metadata is missing llm.model; configure LLM_INTERVIEW_MODEL on the control plane',
+    );
+  }
+  const reasoningEffort = llm?.reasoningEffort;
+  return new inference.LLM({
+    model,
+    ...(reasoningEffort
+      ? { modelOptions: { reasoning_effort: reasoningEffort } }
+      : {}),
+  });
 }
 
 function buildTts(voiceMeta: RoomMeta['voice'], sessionId?: string) {
@@ -801,7 +816,9 @@ export default defineAgent({
     slog(
       `session started: language=${meta.language ?? 'en'} durationMinutes=${durationMinutes} ` +
       `greeting=${openingLine ? 'deterministic' : 'llm'} ` +
-      `models={llm:${meta.llm?.model ?? 'openai/gpt-4o'}, stt:${meta.stt?.model ?? 'deepgram/nova-3'}` +
+      `models={llm:${meta.llm?.model ?? '(missing)'}` +
+      `${meta.llm?.reasoningEffort ? ` (reasoning=${meta.llm.reasoningEffort})` : ''}, ` +
+      `stt:${meta.stt?.model ?? 'deepgram/nova-3'}` +
       `${meta.stt?.fallbackModels?.length ? `(+fallback ${meta.stt.fallbackModels.join(',')})` : ''}, ` +
       `tts:${meta.voice?.model ?? 'tts-1 (local floor)'}, voiceId:${meta.voice?.voiceId ?? '-'}, ` +
       `voiceProvider:${meta.voice?.provider ?? 'openai'}}`,

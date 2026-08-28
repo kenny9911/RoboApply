@@ -9,7 +9,7 @@
 // a fixed script. Also emits the candidate-facing `hint` + `coachTip` so the
 // existing mock UI keeps working unchanged.
 //
-// Sonnet-tier. Runs ONCE at start; may throw (orchestrator has a fallback).
+// Uses the configured interview model once at start; may throw (orchestrator has a fallback).
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import {
@@ -19,6 +19,7 @@ import {
   type RAJobRequirements,
   clip,
   interviewGenModel,
+  interviewGenReasoningEffort,
   parseJsonObject,
 } from '../lib/interviewGenShared.js';
 
@@ -57,6 +58,10 @@ export class RAInterviewQuestionsAgent extends BaseAgent<
 
   protected getMaxTokens(): number | undefined {
     return 1800;
+  }
+
+  protected getReasoningEffort() {
+    return interviewGenReasoningEffort();
   }
 
   /**

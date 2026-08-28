@@ -91,7 +91,7 @@ export async function composeAndSendDigestForMission(
   const input = await buildDigestInput(mission);
   const firstName = (mission.user?.name ?? '').split(/\s+/)[0] || '';
 
-  // ── Compose via the Sonnet agent. Failure returns a deterministic
+  // ── Compose via the configured agent. Failure returns a deterministic
   // fallback (no audit row).
   const output = await roboApplyDigestAgent.compose(
     { ...input, firstName },

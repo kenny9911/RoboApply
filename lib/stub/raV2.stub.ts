@@ -445,7 +445,7 @@ function syntheticInsightForCurrentWeek(
       recruiterViewsCount: 10,
       topSkillsObserved: ['LLM evaluation', 'TypeScript', 'Python'],
     },
-    modelUsed: 'anthropic/claude-sonnet-4.6',
+    modelUsed: 'stub',
     citationGuardPassed: true,
     generatedAt: nowIso(),
     createdAt: nowIso(),

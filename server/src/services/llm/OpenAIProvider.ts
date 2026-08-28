@@ -114,6 +114,7 @@ export class OpenAIProvider implements LLMProvider {
     // and OpenAI 400s when it is sent to anything else. See reasoningEffort.ts.
     if (modelSupportsReasoningEffort(model)) {
       const effort = resolveReasoningEffort({
+        explicit: options?.reasoningEffort,
         tuned: this.extra?.reasoningEffort,
         allow: OPENAI_STYLE_EFFORTS,
       });

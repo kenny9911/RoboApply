@@ -7,7 +7,8 @@ import { GoogleProvider } from './llm/GoogleProvider.js';
 import { withLLMRetry } from './llm/withRetry.js';
 import { generateRequestId, logger } from './LoggerService.js';
 import { runConcurrent } from '../utils/concurrency.js';
-import { getModelSetting, getProviderSetting } from '../lib/llm/llmModels.js';
+import { getProviderSetting } from '../lib/llm/llmModels.js';
+import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
 import { resolveProviderCredential } from '../lib/llm/systemCredentials.js';
 import type { Message, MessageContent, ProviderExtra } from '../types/index.js';
 
@@ -79,17 +80,12 @@ export class PDFService {
     return this.scatterStore.getStore()?.detected ?? false;
   }
 
-  /** Safe multimodal model used when the resolved vision model is text-only. */
-  private static readonly SAFE_VISION_FALLBACK = 'google/gemini-3-flash-preview';
-
   /**
    * Known TEXT-ONLY model families. Vision/OCR extraction sends image parts to
    * the model, so routing one of these here produces an API error or empty/
-   * garbage content. The classic trap: the default model (LLM_MODEL) is set to a
-   * text-only reasoning model like `deepseek-v4-pro`, the `vision` purpose is
-   * left unset, and `getPreferredVisionModel` falls through to that default.
-   * Conservative denylist — we only OVERRIDE when we're confident the model
-   * can't see, so an unrecognised (possibly multimodal) model is left untouched.
+   * garbage content. Conservative denylist: reject only families we know cannot
+   * see, while allowing an unrecognised (possibly multimodal) configured model
+   * through to its provider.
    */
   private isKnownTextOnlyModel(model: string): boolean {
     const m = model.toLowerCase();
@@ -102,53 +98,26 @@ export class PDFService {
     );
   }
 
-  private getPreferredVisionModel(): string | undefined {
-    // DB-first resolution (mirrors the rest of the LLM-settings-DB stack):
-    //   DB 'vision' purpose (admin LLM settings) ?? env LLM_VISION_MODEL   ← getModelSetting('vision')
-    //   then PDF-specific env PDF_VISION_MODEL
-    //   then the default model (DB defaultModel ?? env LLM_MODEL)
-    // Read per-call so an admin's DB change applies without a restart. DB now
-    // wins over PDF_VISION_MODEL: that env var previously overrode the DB and
-    // pinned OCR to Google-direct, which a DB reroute could not fix (the
-    // 2026-06-24 parse-resume outage — China deploy could not reach Google).
-    // DB 'vision' purpose (admin LLM settings) ?? env LLM_VISION_MODEL. This is
-    // the authoritative admin-controllable value and MUST win over the legacy
-    // PDF_VISION_MODEL env var.
-    const dbOrEnvVision = getModelSetting('vision');
-    const pdfEnvVision = process.env.PDF_VISION_MODEL?.trim();
-    // Surface the footgun: a stale PDF_VISION_MODEL on a box where an admin set
-    // the vision model via DB/LLM settings is silently ignored (correct), but
-    // operators must know — pinning OCR to the wrong vendor via this env was a
-    // contributor to the 2026-06-24 parse-resume outage.
-    if (pdfEnvVision && dbOrEnvVision && pdfEnvVision !== dbOrEnvVision) {
-      logger.warn(
-        'PDF_SERVICE',
-        `PDF_VISION_MODEL="${pdfEnvVision}" is ignored — the admin 'vision' LLM setting "${dbOrEnvVision}" ` +
-          'takes precedence. Remove PDF_VISION_MODEL or set the vision model via admin LLM settings.',
+  private getExtractionMultimodalModel(): string {
+    // One task setting owns BOTH textual resume parsing and file OCR. Read it on
+    // every call so an admin override/env reload applies without a restart.
+    const model = getTaskModel('extract')?.trim();
+    if (!model) {
+      throw new Error(
+        'File extraction requires LLM_EXTRACT_MODEL (or the extract task admin override) to be configured.',
       );
     }
-    const resolved = (
-      dbOrEnvVision ||
-      pdfEnvVision ||
-      getModelSetting('defaultModel') ||
-      ''
-    ).trim();
 
-    if (!resolved) return undefined;
-
-    // Guard: never send images to a text-only model (e.g. a deepseek-v4-pro
-    // default). Fall back to a multimodal model so OCR keeps working regardless
-    // of what the global default / admin config points at.
-    if (this.isKnownTextOnlyModel(resolved)) {
-      logger.warn(
-        'PDF_SERVICE',
-        `Configured vision model "${resolved}" is text-only; using ${PDFService.SAFE_VISION_FALLBACK} for OCR. ` +
-          'Pin a multimodal model via LLM_VISION_MODEL / the "vision" purpose in admin LLM settings.',
+    // Do not silently swap vendors/models. A configured text-only model is an
+    // operator error for a multimodal call and must be visible as such.
+    if (this.isKnownTextOnlyModel(model)) {
+      throw new Error(
+        `Configured extraction model "${model}" cannot process PDF/image input. ` +
+          'Set LLM_EXTRACT_MODEL to a multimodal model.',
       );
-      return PDFService.SAFE_VISION_FALLBACK;
     }
 
-    return resolved;
+    return model;
   }
 
   /**
@@ -166,7 +135,7 @@ export class PDFService {
   }
 
   private getDirectGoogleVisionProvider(model?: string): GoogleProvider | null {
-    const resolvedModel = (model || this.getPreferredVisionModel() || '').trim();
+    const resolvedModel = (model || this.getExtractionMultimodalModel()).trim();
     if (!resolvedModel) {
       return null;
     }
@@ -206,14 +175,15 @@ export class PDFService {
   }
 
   private async runMultimodalExtraction(messages: Message[], requestId: string | undefined, category: string, signal?: AbortSignal): Promise<string> {
-    const model = this.getPreferredVisionModel();
+    const model = this.getExtractionMultimodalModel();
+    const reasoningEffort = getTaskReasoningEffort('extract');
     const googleProvider = this.getDirectGoogleVisionProvider(model);
     const effectiveRequestId = requestId || generateRequestId();
     const startTime = Date.now();
 
     if (googleProvider) {
       logger.info(category, 'Using direct Google multimodal extraction', {
-        model: model || '(default)',
+        model,
       }, effectiveRequestId);
 
       try {
@@ -221,13 +191,14 @@ export class PDFService {
           temperature: 0.1,
           maxTokens: PDF_LLM_MAX_TOKENS,
           requestId: effectiveRequestId,
-          ...(model ? { model } : {}),
+          model,
+          reasoningEffort,
           ...(signal ? { signal } : {}),
         });
 
         logger.logLLMCall({
           requestId: effectiveRequestId,
-          model: response.model || model || 'gemini',
+          model: response.model || model,
           provider: googleProvider.getProviderName(),
           promptTokens: response.usage.promptTokens,
           completionTokens: response.usage.completionTokens,
@@ -237,7 +208,8 @@ export class PDFService {
           options: {
             temperature: 0.1,
             maxTokens: PDF_LLM_MAX_TOKENS,
-            ...(model ? { model } : {}),
+            model,
+            reasoningEffort,
           },
           responseText: response.content,
         });
@@ -246,7 +218,7 @@ export class PDFService {
       } catch (error) {
         logger.logLLMCall({
           requestId: effectiveRequestId,
-          model: model || 'gemini',
+          model,
           provider: googleProvider.getProviderName(),
           promptTokens: 0,
           completionTokens: 0,
@@ -256,7 +228,8 @@ export class PDFService {
           options: {
             temperature: 0.1,
             maxTokens: PDF_LLM_MAX_TOKENS,
-            ...(model ? { model } : {}),
+            model,
+            reasoningEffort,
           },
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -266,14 +239,15 @@ export class PDFService {
 
     logger.info(category, 'Using configured generic multimodal provider', {
       provider: llmService.getProvider(),
-      model: model || '(default)',
+      model,
     }, effectiveRequestId);
 
     return llmService.chat(messages, {
       temperature: 0.1,
       maxTokens: PDF_LLM_MAX_TOKENS,
       requestId: effectiveRequestId,
-      ...(model ? { visionModel: model } : {}),
+      model,
+      reasoningEffort,
       ...(signal ? { signal } : {}),
     });
   }
@@ -916,7 +890,8 @@ export class PDFService {
    * support PDF data URIs, so this path is provider-aware by design.
    */
   async extractTextWithDirectLLM(buffer: Buffer, requestId?: string, pdfParseText?: string, signal?: AbortSignal): Promise<string> {
-    if (!this.getDirectGoogleVisionProvider()) {
+    const extractionModel = this.getExtractionMultimodalModel();
+    if (!this.getDirectGoogleVisionProvider(extractionModel)) {
       throw new Error('Direct PDF extraction requires direct Google Gemini access');
     }
 
@@ -925,7 +900,7 @@ export class PDFService {
 
     logger.info('PDF_LLM', `Sending raw PDF directly to LLM (${sizeKB}KB)`, {
       sizeKB,
-      visionModel: this.getPreferredVisionModel() || '(default)',
+      extractionModel,
       hasPdfParseRef: !!pdfParseText,
     }, requestId);
 

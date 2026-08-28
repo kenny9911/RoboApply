@@ -4959,10 +4959,10 @@ model RoboApplyRun {
   resumeId           String
   tailoredResumeText String  @db.Text
 
-  // Cover letter — produced by RoboApplyAuthorAgent (Opus 4.7) and verified by
+  // Cover letter — produced by RoboApplyAuthorAgent and verified by
   // RoboApplyCitationGuardAgent (via SeekerResumeTailorAgent's claim-guard).
   coverLetter       String   @db.Text
-  coverLetterModel  String  // 'anthropic/claude-opus-4-7' or sonnet fallback
+  coverLetterModel  String  // configured provider/model identifier
   coverLetterCost   Decimal? @db.Decimal(10, 6) // forensic — UsageDeductionLog is canonical
   // The literal system+user prompt blob that produced the cover letter.
   // Surfaced by `POST /runs/:id/show-prompt` for the transparency screen.
@@ -5041,8 +5041,8 @@ model RoboApplyDigest {
 }
 
 /// Cover-letter cache. Keyed by sha256(resumeId + jobId + intentVersion +
-/// toneOverrideHash). The Opus 4.7 cost model REQUIRES this cache to keep
-/// Premium+ inside its $10/MAU/mo ceiling — see arch §8. expiresAt drives a
+/// toneOverrideHash). Reuse keeps paid-tier authoring latency and cost bounded;
+/// see arch §8. expiresAt drives a
 /// weekly cleanup cron; entries past expiresAt are pruned in a single
 /// `deleteMany` sweep.
 model RoboApplyCoverLetterCache {
@@ -5360,7 +5360,7 @@ model RACareerInsight {
   /// `{ applicationsCount, interviewsCount, offerCount, weeksToOfferEstimate?, … }`
   metrics              Json?
 
-  /// e.g. 'anthropic/claude-sonnet-4.6'
+  /// Configured provider/model identifier used for this generation.
   modelUsed            String
   /// Forensic; canonical billing record is UsageDeductionLog.
   tokenCost            Decimal?  @db.Decimal(10, 6)
@@ -5381,7 +5381,7 @@ model RAKeywordExtraction {
 
   /// Top 30: `Array<{ keyword: string, importance: 'high'|'medium'|'low', frequency: number }>`
   keywords     Json
-  /// e.g. 'anthropic/claude-haiku-4-5'
+  /// Configured provider/model identifier used for this extraction.
   modelUsed    String
   tokenCost    Decimal? @db.Decimal(10, 6)
   generatedAt  DateTime @default(now())
@@ -5408,7 +5408,7 @@ model RAJobMatchScore {
   /// edits, the cache is stale.
   resumeContentHashAtScore    String
 
-  /// e.g. 'anthropic/claude-sonnet-4.6'
+  /// Configured provider/model identifier used for this score.
   modelUsed                   String
   tokenCost                   Decimal? @db.Decimal(10, 6)
   generatedAt                 DateTime @default(now())

@@ -11,11 +11,10 @@
 //   - mode='skills'  → up to ~8 skill phrases inferred from the resume.
 //                      Returns string[].
 //
-// This is a cheap Haiku-tier call (mirrors RAKeywordExtractorAgent) — the
-// editor fires it on every button press, so latency + cost matter more than
-// voice. The shape returned to the route layer is mode-agnostic
-// (`RAResumeRewriteAgentOutput`); RAResumeAIService maps it to the wire
-// `ResumeRewriteResponse`.
+// The editor fires this configured rewrite-model call on every button press,
+// so latency + cost matter more than voice. The shape returned to the route
+// layer is mode-agnostic (`RAResumeRewriteAgentOutput`); RAResumeAIService maps
+// it to the wire `ResumeRewriteResponse`.
 //
 // CitationGuard discipline (per RAResumeTailorAgent): the model is told never
 // to invent numbers. The 'metrics' action is the one that wants quantified
@@ -29,7 +28,10 @@
 // is an inline tailor op). Failures pay zero.
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_HAIKU } from './raModels.js';
+import {
+  getTaskModel,
+  getTaskReasoningEffort,
+} from '../../../lib/llm/llmTaskSettings.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -64,21 +66,17 @@ export interface RAResumeRewriteAgentOutput {
   skills?: string[];
 }
 
-// Haiku-tier default — cheap + fast, matches RAKeywordExtractorAgent. Used
-// when the env override below is unset. Exported for callers / tests.
-export const RA_RESUME_REWRITE_MODEL = RA_MODEL_HAIKU;
-
-// Env var that overrides the model at runtime.
-const ENV_MODEL = 'RA_V2_RESUME_REWRITE_MODEL';
-
 /**
- * Resolve the resume-rewrite model. Reads `process.env` at CALL TIME (not
- * module-load) so it picks up dotenv values regardless of ESM import order —
- * the backend's `dotenv.config()` runs after this module is hoisted, so a
- * module-level read would miss the override. Falls back to the default above.
+ * Resolve the resume-rewrite model through the shared task setting. The helper
+ * reads configuration at call time, after local dotenv loading, and returns
+ * undefined when unset so LLMService uses the central stack default.
  */
-export function pickResumeRewriteModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_RESUME_REWRITE_MODEL;
+export function pickResumeRewriteModel(): string | undefined {
+  return getTaskModel('rewrite');
+}
+
+export function pickResumeRewriteReasoningEffort() {
+  return getTaskReasoningEffort('rewrite');
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -93,9 +91,9 @@ function clipString(value: unknown, max: number): string {
 // to hit, and the model is told (here and in the strict 'content' language
 // directive) to reach for the equivalent idiom in the OUTPUT language. The
 // earlier wording — bare `Lead with ownership verbs (Led / Owned / Drove)` and
-// `No hedging ("helped", "assisted", "involved in")` — read as a instruction to
-// emit those English words, and pulled Haiku into answering a Chinese bullet in
-// English even with the language directive present in the system prompt.
+// `No hedging ("helped", "assisted", "involved in")` — read as an instruction to
+// emit those English words, and pulled the model into answering a Chinese bullet
+// in English even with the language directive present in the system prompt.
 const ACTION_GUIDANCE: Record<RAResumeRewriteAction, string> = {
   improve:
     'Make the bullet sharper and more results-oriented. Lead with a strong action verb in the output language, name the outcome, keep it to one line.',
@@ -138,6 +136,10 @@ export class RAResumeRewriteAgent extends BaseAgent<
     return 700;
   }
 
+  protected getReasoningEffort() {
+    return pickResumeRewriteReasoningEffort();
+  }
+
   /**
    * Honor the user's selected UI language over the auto-detected source
    * language. The base prompt is English-heavy (English mode descriptions +
@@ -151,8 +153,8 @@ export class RAResumeRewriteAgent extends BaseAgent<
    * analyses…") and calls the resume an *input*, which a model can satisfy
    * while still writing the rewritten bullet in English — observed in
    * production: locale resolved to zh, the directive was present and correct in
-   * the system prompt, and Haiku still translated a Chinese bullet into English.
-   * Falls back to the default one-line hint for unrecognized locales.
+   * the system prompt, and the model still translated a Chinese bullet into
+   * English. Falls back to the default one-line hint for unrecognized locales.
    */
   protected getLocaleDirective(locale: string): string | null {
     return (
@@ -185,7 +187,7 @@ Return ONLY the JSON object for the active mode — no prose, no code fences.`;
     const parts: string[] = [];
     // Restate the output language HERE, not just in the system prompt: the
     // per-action style guidance below is English prose sitting right next to the
-    // text being rewritten, and on a Haiku-tier model that proximity beat the
+    // text being rewritten, and on a smaller model that proximity beat the
     // system directive (see getLocaleDirective).
     const languageLine = this.outputLanguageReminder(locale);
     if (languageLine) parts.push(languageLine);
@@ -310,5 +312,6 @@ export default RAResumeRewriteAgent;
 
 export const __test = {
   pickResumeRewriteModel,
+  pickResumeRewriteReasoningEffort,
   ACTION_GUIDANCE,
 };

@@ -18,7 +18,8 @@
 //     S3_ACCESS_KEY_ID|AWS_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY|AWS_SECRET_ACCESS_KEY,
 //     S3_FORCE_PATH_STYLE
 //   Worker model selection (passed to the worker via room metadata; overridable):
-//     INTERVIEW_ENGINE_LLM_MODEL, INTERVIEW_ENGINE_STT_MODEL
+//     LLM_INTERVIEW_MODEL, LLM_INTERVIEW_REASONING_EFFORT,
+//     INTERVIEW_ENGINE_STT_MODEL
 //   Callback wiring:
 //     INTERVIEW_ENGINE_CALLBACK_BASE_URL — base URL the worker uses to reach this
 //        backend (e.g. https://api.robohire.io). Falls back to BACKEND_PUBLIC_URL /
@@ -27,6 +28,9 @@
 //     INTERVIEW_ENGINE_JOIN_TOKEN_TTL_SEC (default 3600)
 //     INTERVIEW_ENGINE_SESSION_EXPIRY_MIN (default 120)
 //     INTERVIEW_ENGINE_RECORDING_ENABLED  (default true)
+
+import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
+import type { InterviewReasoningEffort } from './types.js';
 
 export class InterviewEngineConfigError extends Error {
   readonly code = 'interview_engine_not_configured';
@@ -124,14 +128,138 @@ export function isR2Configured(): boolean {
 /** All interview artifacts live under this R2 prefix. */
 export const INTERVIEW_R2_PREFIX = 'interviews';
 
-// ─── Worker model defaults (passed via room metadata) ─────────────────────
+// ─── Worker models (passed via room metadata) ──────────────────────────────
 //
-// These are LiveKit Inference model identifiers consumed by the Python worker.
-// Keep them overridable; the per-locale STT/voice can still be refined by the
-// voice catalog. Defaults are conservative, broadly-multilingual choices.
+// These are LiveKit Inference model identifiers consumed by the Node worker.
+// The per-locale STT/voice can still be refined by the voice catalog.
+
+/**
+ * Model IDs that have the same namespace in our backend selector and LiveKit
+ * Inference. This is a compatibility catalog, never a fallback: the selected
+ * entry still comes exclusively from LLM_INTERVIEW_MODEL. Keep it aligned with
+ * https://docs.livekit.io/agents/models/inference/ and the worker dependency.
+ */
+const ALIGNED_INTERVIEW_MODELS = [
+  'openai/gpt-5.5',
+  'openai/gpt-5.6-luna',
+  'openai/gpt-5.6-sol',
+  'openai/gpt-5.6-terra',
+  'openai/gpt-5.4',
+  'openai/gpt-5.4-mini',
+  'openai/gpt-5.4-nano',
+  'openai/gpt-5.3-chat-latest',
+  'openai/gpt-5.2',
+  'openai/gpt-5.2-chat-latest',
+  'openai/gpt-5.1',
+  'openai/gpt-5.1-chat-latest',
+  'openai/gpt-5',
+  'openai/gpt-5-mini',
+  'openai/gpt-5-nano',
+  'openai/gpt-4.1',
+  'openai/gpt-4.1-mini',
+  'openai/gpt-4.1-nano',
+  'openai/gpt-4o',
+  'openai/gpt-4o-mini',
+  'openai/chat-latest',
+  'openai/gpt-oss-120b',
+  'google/gemini-3.1-pro-preview',
+  'google/gemini-3-flash-preview',
+  'google/gemini-3.1-flash-lite',
+  'google/gemini-3.5-flash',
+  'google/gemini-3.5-flash-lite',
+  'google/gemini-3.6-flash',
+  'google/gemini-2.5-pro',
+  'google/gemini-2.5-flash',
+  'google/gemini-2.5-flash-lite',
+] as const;
+
+/** Backend selector → semantically equivalent LiveKit Inference model ID. */
+const LIVEKIT_MODEL_BY_BACKEND_SELECTOR = new Map<string, string>();
+
+for (const model of ALIGNED_INTERVIEW_MODELS) {
+  // Native backend routing and explicit OpenRouter routing both resolve to the
+  // same model family in LiveKit's own namespace.
+  LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(model, model);
+  LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(`openrouter/${model}`, model);
+
+  // LLMService accepts gemini/... as a direct-provider alias for google/....
+  // LiveKit uses only the google namespace, so normalize that alias here too.
+  if (model.startsWith('google/')) {
+    LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(`gemini/${model.slice('google/'.length)}`, model);
+  }
+}
+
+for (const version of ['kimi-k2.5', 'kimi-k2.6']) {
+  const workerModel = `moonshotai/${version}`;
+  LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(`kimi/${version}`, workerModel);
+  LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(`moonshot/${version}`, workerModel);
+  LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(`openrouter/${workerModel}`, workerModel);
+}
+
+// The backend's direct DeepSeek namespace and LiveKit's hosted namespace are
+// intentionally different. V4 Flash has no LiveKit Inference equivalent, so
+// it is not silently substituted with V4 Pro.
+LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(
+  'deepseek/deepseek-v4-pro',
+  'deepseek-ai/deepseek-v4-pro',
+);
+LIVEKIT_MODEL_BY_BACKEND_SELECTOR.set(
+  'openrouter/deepseek/deepseek-v4-pro',
+  'deepseek-ai/deepseek-v4-pro',
+);
+
+export interface InterviewLlmRouting {
+  /** Exact task selector consumed by backend interview agents. */
+  backendModel: string;
+  /** Equivalent model ID consumed by LiveKit Inference. */
+  workerModel: string;
+  reasoningEffort?: InterviewReasoningEffort;
+}
+
+function requireInterviewBackendModel(): string {
+  const model = getTaskModel('interview');
+  if (!model) {
+    throw new InterviewEngineConfigError(
+      'Interview LLM is not configured. Set LLM_INTERVIEW_MODEL.',
+    );
+  }
+  return model;
+}
+
+function mapInterviewModelToWorker(backendModel: string): string {
+  const workerModel = LIVEKIT_MODEL_BY_BACKEND_SELECTOR.get(backendModel);
+  if (!workerModel) {
+    throw new InterviewEngineConfigError(
+      `LLM_INTERVIEW_MODEL="${backendModel}" has no supported equivalent in LiveKit Inference. ` +
+      'Configure one model selector supported by both the backend LLM stack and LiveKit Inference.',
+    );
+  }
+  return workerModel;
+}
 
 export function getWorkerLlmModel(): string {
-  return process.env.INTERVIEW_ENGINE_LLM_MODEL?.trim() || 'openai/gpt-5.4';
+  return mapInterviewModelToWorker(requireInterviewBackendModel());
+}
+
+export function getWorkerLlmReasoningEffort(): InterviewReasoningEffort | undefined {
+  const effort = getTaskReasoningEffort('interview');
+  if (effort === 'max') {
+    throw new InterviewEngineConfigError(
+      'LLM_INTERVIEW_REASONING_EFFORT=max is not supported by LiveKit Inference; use minimal, low, medium, or high.',
+    );
+  }
+  return effort;
+}
+
+/** Resolve the backend + worker pair once so a live-session claim is atomic
+ *  with respect to hot configuration changes. */
+export function getInterviewLlmRouting(): InterviewLlmRouting {
+  const backendModel = requireInterviewBackendModel();
+  return {
+    backendModel,
+    workerModel: mapInterviewModelToWorker(backendModel),
+    reasoningEffort: getWorkerLlmReasoningEffort(),
+  };
 }
 
 export function getWorkerSttModel(): string {

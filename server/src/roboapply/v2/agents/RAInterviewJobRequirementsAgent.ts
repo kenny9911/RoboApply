@@ -7,7 +7,7 @@
 // candidate's résumé. Output is the foundation the strategy / tactics /
 // questions agents build on.
 //
-// Sonnet-tier (env RA_V2_INTERVIEW_GEN_MODEL). Runs ONCE at "Start interview".
+// Uses the configured interview model. Runs ONCE at "Start interview".
 // On any failure the orchestrator substitutes a heuristic fallback, so this
 // agent may throw freely.
 
@@ -17,6 +17,7 @@ import {
   asStringArray,
   clip,
   interviewGenModel,
+  interviewGenReasoningEffort,
   parseJsonObject,
 } from '../lib/interviewGenShared.js';
 
@@ -48,6 +49,10 @@ export class RAInterviewJobRequirementsAgent extends BaseAgent<
 
   protected getMaxTokens(): number | undefined {
     return 1100;
+  }
+
+  protected getReasoningEffort() {
+    return interviewGenReasoningEffort();
   }
 
   /**

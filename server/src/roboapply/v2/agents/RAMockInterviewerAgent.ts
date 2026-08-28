@@ -17,10 +17,9 @@
 // (behavioral / technical / system / case / culture / panel) steers the
 // question domain.
 //
-// Cost/latency: this is a Haiku-tier call (mirrors RAResumeRewriteAgent /
-// RAKeywordExtractorAgent) — `nextTurn` fires on every answer, so latency
-// matters more than depth. Returns STRICT JSON; RAMockService maps it to the
-// wire shapes.
+// `nextTurn` fires on every answer, so latency matters. Model and reasoning
+// effort come from the shared interview task settings. Returns STRICT JSON;
+// RAMockService maps it to the wire shapes.
 //
 // Graceful degradation: failures THROW. RAMockService catches and falls back
 // to a deterministic question bank / canned interviewer turn so every endpoint
@@ -28,7 +27,7 @@
 // (mock isn't a billed SKU yet).
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_HAIKU } from './raModels.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../../lib/llm/llmTaskSettings.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -113,21 +112,9 @@ export interface RAMockAgentOutput {
   coachTip?: RAMockCoachTip | null;
 }
 
-// Haiku-tier default — cheap + fast, fires on every answer. Used when the env
-// override below is unset. Exported so callers / tests can reference it.
-export const RA_MOCK_INTERVIEWER_MODEL = RA_MODEL_HAIKU;
-
-// Env var that overrides the model at runtime.
-const ENV_MODEL = 'RA_V2_MOCK_INTERVIEWER_MODEL';
-
-/**
- * Resolve the mock-interviewer model. Reads `process.env` at CALL TIME (not
- * module-load) so it picks up dotenv values regardless of ESM import order —
- * the backend's `dotenv.config()` runs after this module is hoisted, so a
- * module-level read would miss the override. Falls back to the default above.
- */
-export function pickMockInterviewerModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_MOCK_INTERVIEWER_MODEL;
+/** Resolve at call time so env reloads and DB overrides take effect. */
+export function pickMockInterviewerModel(): string | undefined {
+  return getTaskModel('interview');
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -184,6 +171,10 @@ export class RAMockInterviewerAgent extends BaseAgent<
     return this.activeMode === 'plan' ? 900 : 400;
   }
 
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('interview');
+  }
+
   /**
    * Honor the interview language over auto-detection. Scope is 'content': this
    * agent AUTHORS the interviewer's spoken turns, the candidate's hints and the
@@ -237,7 +228,7 @@ Output: { "turns": [ { "who": "them", "text": "..." } ], "coachTip": { "kind": "
     const parts: string[] = [];
     // Restate the output language HERE, not just in the system prompt: the
     // persona/type blocks below are English catalog constants sitting right
-    // next to the turn being generated, and on this Haiku-tier call that
+    // next to the turn being generated, and on a smaller configured model that
     // proximity beats a system-only directive.
     const languageLine = this.outputLanguageReminder(locale);
     if (languageLine) parts.push(languageLine);

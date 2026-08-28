@@ -6,7 +6,7 @@
 // AND PROBING TACTICS (step 4), plus ADAPTATION RULES that make the live
 // interview adaptive (escalate / de-escalate / pivot based on answer quality).
 //
-// Sonnet-tier. Runs ONCE at start; may throw (orchestrator has a fallback).
+// Runs once on the configured interview model; may throw (the orchestrator has a fallback).
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import {
@@ -16,6 +16,7 @@ import {
   asStringArray,
   clip,
   interviewGenModel,
+  interviewGenReasoningEffort,
   parseJsonObject,
 } from '../lib/interviewGenShared.js';
 
@@ -40,6 +41,10 @@ export class RAInterviewTacticsAgent extends BaseAgent<
 
   protected getMaxTokens(): number | undefined {
     return 1000;
+  }
+
+  protected getReasoningEffort() {
+    return interviewGenReasoningEffort();
   }
 
   /**
@@ -79,7 +84,7 @@ Return STRICT JSON only (no prose, no code fences):
     const parts: string[] = [];
     // Restate the language next to the output: the probing tactics are quoted
     // English sample phrasings in the system prompt, and that lexical guidance
-    // reads as "answer in English" on anything below Sonnet-tier.
+    // reads as "answer in English" on smaller models.
     const languageLine = this.outputLanguageReminder(locale);
     if (languageLine) parts.push(languageLine);
     parts.push(

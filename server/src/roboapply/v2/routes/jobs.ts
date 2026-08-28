@@ -21,7 +21,7 @@ import { costPatchFromTally } from '../../../lib/deductionCost.js';
 import { getCurrentRequestId } from '../../../lib/requestContext.js';
 import { logger } from '../../../services/LoggerService.js';
 import { raJobIndexService, toJobView } from '../services/RAJobIndexService.js';
-import { pickJobMatchScorerModel } from '../agents/RAJobMatchScorerAgent.js';
+import { resolvedJobMatchScorerModel } from '../agents/RAJobMatchScorerAgent.js';
 import {
   raTrackerService,
   TrackerNotFoundError,
@@ -275,6 +275,11 @@ router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
     if (!job) return res.status(404).json({ error: 'not_found' });
     if (!variant) return res.status(404).json({ error: 'variant_not_found' });
 
+    // Resolve once and use the same selector for cache validation, execution,
+    // and persistence. A hot config change must never label one model's output
+    // as another model or keep serving scores generated before the change.
+    const modelUsed = resolvedJobMatchScorerModel();
+
     const existing = await p.rAJobMatchScore.findUnique({
       where: {
         userId_jobId_resumeVariantId: {
@@ -286,6 +291,7 @@ router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
     });
     const hashMatches =
       !!existing && existing.resumeContentHashAtScore === variant.resumeContentHash;
+    const modelMatches = !!existing && existing.modelUsed === modelUsed;
     // The cache is keyed on (user, job, variant) + résumé content hash, but the
     // explanation is PROSE — a row generated for another UI language still has
     // the right NUMBER and the wrong WORDS.
@@ -306,7 +312,13 @@ router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
     // language). The bulk path sends neither; the expanded card — one row, one
     // user gesture — is what is meant to send it.
     const proseRegenRequested = force || body.regenerateExplanation === true;
-    if (existing && hashMatches && !force && (localeMatches || !proseRegenRequested)) {
+    if (
+      existing &&
+      hashMatches &&
+      modelMatches &&
+      !force &&
+      (localeMatches || !proseRegenRequested)
+    ) {
       return res.json({
         matchScore: {
           score: existing.score,
@@ -325,7 +337,6 @@ router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
     // the frontend `RAJobMatchScoreView` contract.
     let score = 0;
     let explanation: any = null;
-    const modelUsed = pickJobMatchScorerModel();
     let agentSucceeded = false;
     try {
       const { RAJobMatchScorerAgent } = await import(
@@ -338,7 +349,7 @@ router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
         jobDescription: job.description ?? '',
         jobQualifications: job.qualifications ?? '',
         jobBenefits: job.benefits ?? undefined,
-      }, { locale });
+      }, { locale, model: modelUsed });
       score = typeof out?.score === 'number' ? out.score : 0;
       // Reshape BE3 output to frontend `explanation` JSON: strengths/gaps
       // map 1:1; rationale comes from `summary`; signals decompose the
@@ -436,9 +447,11 @@ router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
             ? 'first_score'
             : !hashMatches
               ? 'resume_changed'
-              : force
-                ? 'forced'
-                : 'locale_regen',
+              : !modelMatches
+                ? 'model_changed'
+                : force
+                  ? 'forced'
+                  : 'locale_regen',
         },
       });
     }

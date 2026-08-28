@@ -2,7 +2,7 @@
 //
 // Orchestrator for the cross-bank job-search agent team. Owns ONE never-throwing
 // discovery round: sequence the team, enforce budgets/concurrency, dedup across
-// banks, materialize matched recruiter jobs into RAJob, cache-first Sonnet
+// banks, materialize matched recruiter jobs into RAJob, cache-first configured
 // scoring, acceptance-odds, insight, rank/bucket, persist, return the DTO.
 //
 // Reads candidate context + writes ALL rows via the active-brand `prisma`
@@ -13,7 +13,7 @@ import { prisma } from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../../lib/deductionCost.js';
-import { raJobMatchScorerAgent, pickJobMatchScorerModel } from '../agents/RAJobMatchScorerAgent.js';
+import { raJobMatchScorerAgent, resolvedJobMatchScorerModel } from '../agents/RAJobMatchScorerAgent.js';
 import { raCrossBankExplorerAgent } from '../agents/RACrossBankExplorerAgent.js';
 import { raCrossBankInsightAgent } from '../agents/RACrossBankInsightAgent.js';
 import { evaluateCachedScore } from './RAOnboardingRecommendService.js';
@@ -130,7 +130,7 @@ export class RACrossBankSearchService {
       const resumeTokens = new Set(normalizeTokens(variant.resumeMarkdown));
       const candidateHeadline = variant.summary?.slice(0, 400) || signals.currentTitles[0] || 'job seeker';
 
-      // STEP 3 — explorer (Haiku). Draft prefs are best-effort (empty is fine).
+      // STEP 3 — configured explorer. Draft prefs are best-effort (empty is fine).
       const draft = await this.loadDraft(p, input.userId);
       const marketCountry = (draft.locations?.countries?.[0] ?? localeCountry(locale)).toLowerCase();
       const plan = await raCrossBankExplorerAgent.run(
@@ -205,13 +205,22 @@ export class RACrossBankSearchService {
       });
 
       // STEP 7 — scoring (cache-first, waves ≤8, budget-bounded).
+      // Snapshot the effective task model once for cache validation, calls, and
+      // persistence. Rows from an older configured model are full cache misses.
+      const scorerModel = resolvedJobMatchScorerModel();
       const toScore = preMatch.toScore.filter((c) => raJobIdByKey.has(`${c.bank}:${c.job.id}`));
       const cacheRows: Record<string, { score: number; explanation: unknown } | null> = {};
       const raJobIds = toScore.map((c) => raJobIdByKey.get(`${c.bank}:${c.job.id}`)!);
       if (raJobIds.length > 0) {
         const cached = await p.rAJobMatchScore.findMany({
           where: { userId: input.userId, resumeVariantId: variant.id, jobId: { in: raJobIds } },
-          select: { jobId: true, score: true, explanation: true, resumeContentHashAtScore: true },
+          select: {
+            jobId: true,
+            score: true,
+            explanation: true,
+            resumeContentHashAtScore: true,
+            modelUsed: true,
+          },
         });
         // Current job-content hash per materialized RAJob id, so an in-place JD
         // edit (same Job.id) invalidates a stale score. [review FIX-0]
@@ -220,7 +229,12 @@ export class RACrossBankSearchService {
           jobHashById.set(raJobIdByKey.get(`${c.bank}:${c.job.id}`)!, jobScoringContentHash(c.job));
         }
         for (const row of cached) {
-          const decision = evaluateCachedScore(row, variant.resumeContentHash, locale);
+          const decision = evaluateCachedScore(
+            row,
+            variant.resumeContentHash,
+            locale,
+            scorerModel,
+          );
           const exp = (row.explanation ?? {}) as Record<string, unknown>;
           const cachedJobHash = (exp.crossBank as Record<string, unknown> | undefined)?.jobContentHash;
           const jobUnchanged =
@@ -254,10 +268,10 @@ export class RACrossBankSearchService {
               jobQualifications: [cand.job.qualifications, cand.job.hardRequirements].filter(Boolean).join('\n\n'),
               jobBenefits: cand.job.benefits ?? undefined,
             },
-            { requestId: input.requestId, locale, signal: input.signal },
+            { requestId: input.requestId, locale, signal: input.signal, model: scorerModel },
           );
           scorerCallsUsed++;
-          await this.persistScore(p, input, variant, raJobId, cand, res, locale);
+          await this.persistScore(p, input, variant, raJobId, cand, res, locale, scorerModel);
           await this.bill('ra_crossbank_score', input, raJobId, cand.bank);
           scoredMap.set(raJobId, this.buildScoredRow(cand, raJobId, res.score, res));
         } catch (err) {
@@ -297,7 +311,7 @@ export class RACrossBankSearchService {
       ];
       const bookmarked = await this.loadBookmarks(p, input.userId, allRaJobIds);
 
-      // STEP 9 — insight (Sonnet, 1 call over the recommended shortlist).
+      // STEP 9 — configured insight model, 1 call over the recommended shortlist.
       const coverageStatsPre = {
         banksSwept,
         recommendedCount: recommendedRows.length,
@@ -498,6 +512,7 @@ export class RACrossBankSearchService {
     cand: PreMatchedCandidate,
     res: { score: number; summary: string; strengths: string[]; gaps: string[]; keywordsMatched: string[]; keywordsMissing: string[] },
     locale: string,
+    scorerModel: string,
   ): Promise<void> {
     // Same inviteScaleOffset as buildScoredRow so the stored odds match the
     // card's odds exactly. [review FIX-3]
@@ -534,7 +549,7 @@ export class RACrossBankSearchService {
       score: res.score,
       explanation,
       resumeContentHashAtScore: variant.resumeContentHash,
-      modelUsed: pickJobMatchScorerModel(),
+      modelUsed: scorerModel,
     };
     await p.rAJobMatchScore.upsert({
       where: {

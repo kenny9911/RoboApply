@@ -22,7 +22,7 @@
 //                the user's previous completed session.
 //
 // LLM: the question plan + per-turn follow-ups come from
-// `RAMockInterviewerAgent` (Haiku-tier, persona-aware). The SCORE is a
+// `RAMockInterviewerAgent` (configured interview model, persona-aware). The SCORE is a
 // deterministic transcript heuristic — robust, free, and never 500s. Mock is
 // NOT a billed SKU yet (no quota gating / no UsageDeductionLog row); if it
 // becomes one, gate `start`/`nextTurn` through `lib/matchBilling`-style

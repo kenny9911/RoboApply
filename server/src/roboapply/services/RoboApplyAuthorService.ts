@@ -8,8 +8,8 @@
 //      with the cached output WITHOUT touching the LLM or writing any
 //      `roboapply_cover_letter` audit row (caller already paid for the
 //      original generation).
-//   4. On MISS: invoke RoboApplyAuthorAgent (Opus for Premium/Premium+,
-//      Sonnet for Free). Agent runs CitationGuard internally; on success it
+//   4. On MISS: invoke RoboApplyAuthorAgent with the configured tier model.
+//      Agent runs CitationGuard internally; on success it
 //      writes the `roboapply_cover_letter` audit row. On final rejection
 //      (CG failed twice OR LLM unavailable), the run is marked failed with
 //      `failureReason='cover_letter_unavailable'` and ZERO deduction is
@@ -114,7 +114,7 @@ export async function authorQueuedRunsForMission(
 /**
  * Author the cover letter for ONE run. Idempotent — if the run is already
  * `previewing` (cover letter already authored), returns 'skipped' without
- * doing work. Cache-first; on MISS invokes the Opus author agent.
+ * doing work. Cache-first; on MISS invokes the configured author agent.
  *
  * Quota: cache HITs cost zero; LLM successes commit one
  * `roboapply_cover_letter` audit row via the agent. LLM failures cost zero.
@@ -332,7 +332,7 @@ export async function authorOneRun(
 /**
  * Run the author pass for ALL enabled missions with queued runs. Called by
  * the cron immediately after the matcher. Concurrency-capped across
- * missions so we don't blow the Opus bill in one go.
+ * missions so we keep provider spend and rate pressure bounded.
  */
 export async function authorAllQueuedRuns(
   ctx: { requestId?: string | null } = {},

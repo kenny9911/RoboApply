@@ -33,8 +33,7 @@ export function isDbConfigDisabled(): boolean {
 
 /* ── Per-purpose model keys ───────────────────────────────────────────────
  * Each maps 1:1 to a real, verified-live env var + call site. See
- * docs/llm-settings-db/03-build-plan.md §A. interviewPrompt / livekit are
- * intentionally absent (not read by the backend). */
+ * docs/llm-settings-db/03-build-plan.md §A. */
 export const PURPOSE_KEYS = [
   'fast',
   'pro',
@@ -45,10 +44,14 @@ export const PURPOSE_KEYS = [
   'evaluation',
   'matchResume',
   'matchScreen',
+  'matching',
   'prematchFilter',
   'jobTag',
   'resumeTag',
   'extract',
+  'onboarding',
+  'rewrite',
+  'interview',
   'vision',
   'intentParser',
   // SCRM / CS Copilot (the /crm-ai workspace). crmHealth runs the merged
@@ -63,8 +66,7 @@ export const PURPOSE_KEYS = [
   'crmEmail',
   'crmDigest',
   'crmCoaching',
-  // Agent Alex text-chat model (prefixed id, e.g. 'anthropic/claude-opus-4-8'
-  // or 'google/gemini-3.1-pro-preview'). When set, it overrides the legacy
+  // Agent Alex text-chat model (prefixed provider/model id). When set, it overrides the legacy
   // agent_alex.{env} blob's provider/model choice — see
   // services/agentAlex/config.ts resolveAgentAlexChatOverride().
   'agentAlex',
@@ -85,10 +87,14 @@ export const MODEL_ENV: Record<ModelKey, string> = {
   evaluation: 'LLM_EVALUATION',
   matchResume: 'LLM_MATCH_RESUME',
   matchScreen: 'LLM_MATCH_SCREEN',
+  matching: 'LLM_MATCHING_MODEL',
   prematchFilter: 'LLM_PREMATCH_FILTER',
   jobTag: 'LLM_JOB_TAG',
   resumeTag: 'LLM_RESUME_TAG',
-  extract: 'LLM_EXTRACT',
+  extract: 'LLM_EXTRACT_MODEL',
+  onboarding: 'LLM_ONBOARDING_MODEL',
+  rewrite: 'LLM_REWRITE_MODEL',
+  interview: 'LLM_INTERVIEW_MODEL',
   vision: 'LLM_VISION_MODEL',
   intentParser: 'LLM_INTENT_PARSER',
   crmHealth: 'LLM_CRM_HEALTH',

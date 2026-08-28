@@ -32,9 +32,10 @@
 //         Work mode is hard-filtered only when the stated set is exactly
 //         ['remote'], and an external row's 'onsite' is treated as unknown
 //         (only is_remote=true is trustworthy).
-//   E8/R5/R11 — RAJobMatchScore cache acceptance requires
-//         explanation.responseLanguage === locale AND explanation.promptVersion
-//         present. Mismatch = score still ranks, prose is stale.
+//   E8/R5/R11 — RAJobMatchScore cache acceptance requires the current scorer
+//         model plus explanation.responseLanguage === locale and a present
+//         explanation.promptVersion. A model mismatch invalidates the score;
+//         a locale/version mismatch keeps only the numeric score reusable.
 
 import type { RaLocale } from '../lib/raLocale.js';
 import type { OnboardingDraftPreferences } from '../types/onboarding.js';
@@ -50,11 +51,21 @@ export interface CacheDecision {
 }
 
 export function evaluateCachedScore(
-  row: { resumeContentHashAtScore?: string | null; explanation?: unknown } | null | undefined,
+  row: {
+    resumeContentHashAtScore?: string | null;
+    modelUsed?: string | null;
+    explanation?: unknown;
+  } | null | undefined,
   variantHash: string | null | undefined,
   locale: RaLocale,
+  currentModel: string,
 ): CacheDecision {
-  if (!row || !variantHash || row.resumeContentHashAtScore !== variantHash) {
+  if (
+    !row ||
+    !variantHash ||
+    row.resumeContentHashAtScore !== variantHash ||
+    row.modelUsed !== currentModel
+  ) {
     return { fresh: false, scoreOnly: false };
   }
   const exp =

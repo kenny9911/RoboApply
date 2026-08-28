@@ -33,6 +33,9 @@ export interface LLMOptions {
   // well below maxTokens so the answer always has headroom. Ignored by
   // providers/models without reasoning support.
   reasoningMaxTokens?: number;
+  // Per-call qualitative reasoning effort. Task-specific callers use this to
+  // override provider/admin/global tuning without mutating shared state.
+  reasoningEffort?: ReasoningEffort;
   // Force the provider to emit a single JSON object (the API-level "JSON mode" /
   // structured-output flag). Translated per provider:
   //   OpenAI / OpenRouter / Kimi / DeepSeek / OpenAI-compatible →
@@ -92,8 +95,9 @@ export interface ProviderExtra {
   proxyKey?: string;
   timeoutMs?: number;
   thinkingMode?: 'enabled' | 'disabled'; // deepseek
-  // Reasoning-effort dial for the models that expose one (OpenAI/OpenRouter:
-  // minimal|low|medium|high; DeepSeek: high|max). Providers filter it to what
+  // Reasoning-effort dial for models that expose one (OpenAI/OpenRouter:
+  // minimal|low|medium|high; DeepSeek: high|max; Anthropic: low through max).
+  // Providers filter it to what
   // their own API accepts and drop it otherwise — see
   // services/llm/reasoningEffort.ts, which also owns the LLM_REASONING_EFFORT
   // global fallback each provider applies when this is unset.

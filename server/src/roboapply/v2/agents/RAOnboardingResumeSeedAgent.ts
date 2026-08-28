@@ -28,7 +28,10 @@
 // of it at once.
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_HAIKU } from './raModels.js';
+import {
+  getTaskModel,
+  getTaskReasoningEffort,
+} from '../../../lib/llm/llmTaskSettings.js';
 import { clip, parseJsonObject } from '../lib/interviewGenShared.js';
 import { normalizeDraftUpdates } from '../lib/raOnboardingDraft.js';
 import { RA_PREFERENCE_OPTIONS } from '../services/RAPreferencesService.js';
@@ -38,11 +41,12 @@ import type {
   OnboardingResumeSeedOutput,
 } from '../types/onboarding.js';
 
-export const RA_ONBOARDING_SEED_MODEL = RA_MODEL_HAIKU;
-const ENV_MODEL = 'RA_V2_ONBOARDING_SEED_MODEL';
+export function pickOnboardingSeedModel(): string | undefined {
+  return getTaskModel('onboarding');
+}
 
-export function pickOnboardingSeedModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_ONBOARDING_SEED_MODEL;
+export function pickOnboardingSeedReasoningEffort() {
+  return getTaskReasoningEffort('onboarding');
 }
 
 /** The only fields this agent is permitted to contribute. Anything else the
@@ -70,6 +74,10 @@ export class RAOnboardingResumeSeedAgent extends BaseAgent<
   protected getMaxTokens(): number | undefined {
     // Two short arrays and a confidence map.
     return 700;
+  }
+
+  protected getReasoningEffort() {
+    return pickOnboardingSeedReasoningEffort();
   }
 
   protected getLocaleDirective(locale: string): string | null {
@@ -219,6 +227,7 @@ export default raOnboardingResumeSeedAgent;
 
 export const __test = {
   pickOnboardingSeedModel,
+  pickOnboardingSeedReasoningEffort,
   emptySeedOutput,
   ALLOWED_FIELDS,
 };

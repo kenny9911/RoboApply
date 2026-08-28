@@ -18,6 +18,9 @@ export type InterviewStatus =
 
 export type InterviewSource = 'roboapply' | 'recruiter' | 'external';
 
+/** Reasoning levels accepted by LiveKit Inference's chat-completion contract. */
+export type InterviewReasoningEffort = 'minimal' | 'low' | 'medium' | 'high';
+
 export type TranscriptRole = 'interviewer' | 'candidate' | 'system';
 
 export interface TranscriptTurn {
@@ -72,7 +75,7 @@ export interface InterviewRoomMetadata {
   openingLine: string;
   voice: ResolvedVoice;
   stt: ResolvedStt;
-  llm: { model: string };
+  llm: { model: string; reasoningEffort?: InterviewReasoningEffort };
   /** Base URL the worker POSTs transcript + lifecycle callbacks to. */
   callbackBaseUrl: string;
 }

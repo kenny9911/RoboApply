@@ -7,7 +7,7 @@
 // fitted to the selected duration. The phases' minutes should sum to ~the
 // requested duration.
 //
-// Sonnet-tier. Runs ONCE at start; may throw (orchestrator has a fallback).
+// Runs once on the configured interview model; may throw (the orchestrator has a fallback).
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import {
@@ -17,6 +17,7 @@ import {
   asStringArray,
   clip,
   interviewGenModel,
+  interviewGenReasoningEffort,
   parseJsonObject,
 } from '../lib/interviewGenShared.js';
 
@@ -50,6 +51,10 @@ export class RAInterviewStrategyAgent extends BaseAgent<
 
   protected getMaxTokens(): number | undefined {
     return 1100;
+  }
+
+  protected getReasoningEffort() {
+    return interviewGenReasoningEffort();
   }
 
   /**

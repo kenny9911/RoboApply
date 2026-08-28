@@ -226,7 +226,7 @@ export interface OnboardingSeenResponse {
 
 // ─── Agent I/O schemas (backend-internal) ──────────────────────────────
 
-/** PrefExtract (Haiku) — the free-text line on step 2, and nothing else. */
+/** PrefExtract — one configured onboarding call for the step-2 free-text line. */
 export interface OnboardingExtractorInput {
   /** Clipped 2000 chars. */
   userMessage: string;
@@ -249,7 +249,7 @@ export interface OnboardingExtractorOutput {
   pastedResumeDetected: boolean;
 }
 
-/** ResumeSeed (Haiku, once at bootstrap, fire-and-forget). */
+/** ResumeSeed (configured onboarding model, once at bootstrap, fire-and-forget). */
 export interface OnboardingResumeSeedInput {
   /** `RAResumeVariant.parsedData`, JSON-stringified and clipped to 6000. */
   parsedJson: string;

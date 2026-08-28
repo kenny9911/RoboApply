@@ -39,7 +39,7 @@ export const FIXTURE_INSIGHT: RACareerInsight = {
       'developer experience',
     ],
   },
-  modelUsed: 'anthropic/claude-sonnet-4.6',
+  modelUsed: 'fixture',
   citationGuardPassed: true,
   generatedAt: '2026-05-26T18:30:00.000Z',
   createdAt: '2026-05-26T18:30:00.000Z',

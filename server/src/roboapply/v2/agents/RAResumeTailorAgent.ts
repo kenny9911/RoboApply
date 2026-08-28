@@ -1,8 +1,8 @@
 // backend/src/roboapply/v2/agents/RAResumeTailorAgent.ts
 //
 // RoboApply V2 Agent #3 — Tailor a base resume to a specific JD. Per
-// docs/roboapply/v2/04-backend-spec.md §6 — Sonnet-tier for `standard`
-// complexity, Opus-tier for `deep_rewrite` (Premium+ only).
+// docs/roboapply/v2/04-backend-spec.md §6 — supports `standard` and
+// `deep_rewrite` (Premium+ only) complexity tiers.
 //
 // Contract (BE3 Wave 4):
 //   Input  : { baseResumeMarkdown, jobTitle, jobDescription, parsedJD?,
@@ -12,9 +12,9 @@
 //
 // Notes:
 //   - Temperature 0.3 (low-creative — accuracy beats voice for resumes)
-//   - Model: tiered, env-configurable. `standard` → Sonnet 4.6 default,
-//     `deep_rewrite` → Opus 4.8 default (see raModels.ts). Override per tier
-//     with RA_V2_RESUME_TAILOR_MODEL_STANDARD / RA_V2_RESUME_TAILOR_MODEL_DEEP.
+//   - Model: env-configurable per tier via
+//     RA_V2_RESUME_TAILOR_MODEL_STANDARD / RA_V2_RESUME_TAILOR_MODEL_DEEP;
+//     otherwise inherits the configured LLM stack.
 //   - Max output 2000 tokens (full resume can be long)
 //   - CitationGuard pattern from assessmentPipeline/CitationGuardAgent —
 //     every quantitative claim in the tailored output must map back to
@@ -25,7 +25,7 @@
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
-import { RA_MODEL_OPUS, RA_MODEL_SONNET } from './raModels.js';
+import { llmService } from '../../../services/llm/LLMService.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -76,12 +76,6 @@ export interface RAResumeTailorOutput {
   citationGuardViolations: number[];
 }
 
-// Default model IDs per tier. Used when the corresponding env var is unset.
-// Exported so BE2's service / tests can reference the defaults without
-// reaching into the agent's internals.
-export const RA_RESUME_TAILOR_MODEL_STANDARD = RA_MODEL_SONNET;
-export const RA_RESUME_TAILOR_MODEL_DEEP = RA_MODEL_OPUS;
-
 // Env var names that override the per-tier model at runtime.
 const ENV_MODEL_STANDARD = 'RA_V2_RESUME_TAILOR_MODEL_STANDARD';
 const ENV_MODEL_DEEP = 'RA_V2_RESUME_TAILOR_MODEL_DEEP';
@@ -108,14 +102,13 @@ function lineHasQuantitativeClaim(line: string): boolean {
  * CALL TIME (not module-load) so it picks up dotenv values regardless of ESM
  * import order — the backend's `dotenv.config()` runs after the agent module
  * is hoisted/evaluated, so a module-level `process.env` read would miss it.
- *   - `standard`     → RA_V2_RESUME_TAILOR_MODEL_STANDARD (default Sonnet 4.6)
- *   - `deep_rewrite` → RA_V2_RESUME_TAILOR_MODEL_DEEP      (default Opus 4.8)
+ * Both tiers inherit the configured LLM stack when their override is unset.
  */
 export function pickTailorModel(complexity: RAResumeTailorComplexity): string {
   if (complexity === 'deep_rewrite') {
-    return process.env[ENV_MODEL_DEEP]?.trim() || RA_RESUME_TAILOR_MODEL_DEEP;
+    return process.env[ENV_MODEL_DEEP]?.trim() || llmService.getModel();
   }
-  return process.env[ENV_MODEL_STANDARD]?.trim() || RA_RESUME_TAILOR_MODEL_STANDARD;
+  return process.env[ENV_MODEL_STANDARD]?.trim() || llmService.getModel();
 }
 
 /**

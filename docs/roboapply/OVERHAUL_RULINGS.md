@@ -237,7 +237,7 @@ These override the spec. Each was raised as fatal or serious and is accepted as 
   anonymous identity. Needs an `RAPreviewSession` model and an `owner` discriminator — its own wave.
   Also: the API is a single Vercel function, so a token+poll shape never completes (the instance
   freezes after the response) and the in-memory rate limiter is per-instance by its own admission —
-  i.e. an unauthenticated endpoint spending Anthropic + RapidAPI budget in a loop. Run the work
+  i.e. an unauthenticated endpoint spending LLM + RapidAPI budget in a loop. Run the work
   inside the POST; persist the limit.
 - **C37 — `RAJobListItem` drops `salaryPeriod` and `employmentType`** in the list projection, so the
   card cannot render `/month` vs `/year`. Add to the projection, `lib/api/v2/types.ts`, and

@@ -15,6 +15,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Message, MessageContent, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '../../types/index.js';
 import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions } from './providerTuning.js';
+import { ANTHROPIC_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
@@ -44,6 +45,11 @@ export class AnthropicProvider implements LLMProvider {
 
   async chat(messages: Message[], options?: LLMOptions): Promise<LLMResponse> {
     const model = options?.model || this.defaultModel;
+    const effort = resolveReasoningEffort({
+      explicit: options?.reasoningEffort,
+      tuned: this.extra?.reasoningEffort,
+      allow: ANTHROPIC_EFFORTS,
+    }) as 'low' | 'medium' | 'high' | 'max' | undefined;
 
     // Anthropic separates `system` from `messages`. Concatenate any
     // system messages we receive (BaseAgent only emits one, but be safe).
@@ -68,6 +74,7 @@ export class AnthropicProvider implements LLMProvider {
       {
         model,
         max_tokens: options?.maxTokens ?? 24000,
+        ...(effort ? { output_config: { effort } } : {}),
         ...(systemParts.length ? { system: systemParts.join('\n\n') } : {}),
         ...(typeof options?.temperature === 'number' ? { temperature: options.temperature } : {}),
         messages: userMessages as Anthropic.MessageParam[],

@@ -3,7 +3,7 @@
 // Opportunity Explorer — the coverage agent. Turns the candidate's headline +
 // resume-derived titles/skills + draft prefs into an expansion plan of
 // primary + adjacent + transferable-skill-stretch titles plus a normalized
-// tag/keyword vocabulary used as both banks' OR-union net. Haiku, cheap, wide.
+// tag/keyword vocabulary used as both banks' OR-union net.
 //
 // Contract (spec §3.2): the ONLY component allowed to broaden beyond the stated
 // target. Internal tokens ALWAYS English/ASCII (CJK matches nothing in the
@@ -12,7 +12,7 @@
 // deterministic fallback.
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_HAIKU } from './raModels.js';
+import { llmService } from '../../../services/llm/LLMService.js';
 import { dedupeStrings } from '../lib/raCrossBankMatch.js';
 import type {
   CrossBankExplorerInput,
@@ -22,7 +22,7 @@ import type {
 const ENV_MODEL = 'RA_V2_CROSSBANK_EXPLORER_MODEL';
 
 export function pickCrossBankExplorerModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_MODEL_HAIKU;
+  return process.env[ENV_MODEL]?.trim() || llmService.getModel();
 }
 
 function strArr(v: unknown, maxLen: number, maxItems: number): string[] {

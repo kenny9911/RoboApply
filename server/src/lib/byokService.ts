@@ -422,24 +422,45 @@ async function probeAnthropic(
   baseUrl: string,
   signal: AbortSignal,
 ): Promise<{ ok: boolean; error?: string }> {
-  // 1-token completion. Cheaper than /v1/models which requires the SDK.
-  const url = `${baseUrl.replace(/\/+$/, '')}/v1/messages`;
-  const res = await fetch(url, {
-    method: 'POST',
+  // Credential-only probe: listing models avoids pinning a product model or
+  // spending inference tokens merely to validate a key.
+  const root = baseUrl.replace(/\/+$/, '');
+  const res = await fetch(`${root}/v1/models?limit=1`, {
+    method: 'GET',
     headers: {
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
     },
     redirect: 'manual',
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 24000,
-      messages: [{ role: 'user', content: 'hi' }],
-    }),
     signal,
   });
   if (res.ok) return { ok: true };
+  if ([404, 405, 501].includes(res.status)) {
+    // Some Anthropic Messages-compatible proxies do not implement /v1/models.
+    // Send a deliberately incomplete, non-billable Messages request instead:
+    // authenticated endpoints return a validation error, while bad keys still
+    // return 401/403. This keeps custom base URLs compatible without selecting
+    // (or paying for) any source-pinned model.
+    const messagesRes = await fetch(`${root}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      redirect: 'manual',
+      body: JSON.stringify({ max_tokens: 1, messages: [] }),
+      signal,
+    });
+    if (messagesRes.ok || messagesRes.status === 400 || messagesRes.status === 422) {
+      return { ok: true };
+    }
+    const messagesBody = await safeReadBody(messagesRes);
+    return {
+      ok: false,
+      error: `${messagesRes.status} ${messagesRes.statusText}${messagesBody ? ` — ${messagesBody}` : ''}`,
+    };
+  }
   const body = await safeReadBody(res);
   return { ok: false, error: `${res.status} ${res.statusText}${body ? ` — ${body}` : ''}` };
 }

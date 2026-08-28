@@ -10,6 +10,7 @@
 // blueprint so a session can ALWAYS start.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 
 export interface BlueprintRequirements {
   roleSummary: string;
@@ -111,6 +112,10 @@ export class InterviewBlueprintAgent extends BaseAgent<BlueprintAgentInput, Inte
 
   protected getMaxTokens(): number | undefined {
     return 2200;
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('interview');
   }
 
   /**
@@ -276,7 +281,14 @@ Rules:
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<InterviewBlueprint> {
     const langSource = `${input.role} ${input.typeLabel} ${input.jdText ?? ''} ${input.webEvidence ?? ''}`.slice(0, 400);
-    return this.execute(input, langSource, options.requestId, options.locale, undefined, options.signal);
+    return this.execute(
+      input,
+      langSource,
+      options.requestId,
+      options.locale,
+      getTaskModel('interview'),
+      options.signal,
+    );
   }
 }
 

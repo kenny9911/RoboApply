@@ -2,7 +2,7 @@
 //
 // RoboApply V2 Agent #1 — Score a (resume, job) pair for the Job Detail
 // match-score card. Per docs/roboapply/v2/04-backend-spec.md §6, this is
-// the Sonnet-tier scoring agent that backs the `RAJobMatchScore` cache.
+// the configured scoring agent that backs the `RAJobMatchScore` cache.
 //
 // Contract (BE3 Wave 4):
 //   Input  : { resumeMarkdown, jobTitle, jobDescription, jobQualifications, jobBenefits? }
@@ -10,9 +10,9 @@
 //
 // Notes:
 //   - Temperature 0.1 (scoring → determinism, per project convention)
-//   - Model: Sonnet 4.6 (via LLMService model override; provider routing
-//     is the LLMService's job — we just emit the model name)
-//   - Max output ~600 tokens (cap kept small; structured output is short)
+//   - Model: LLM_MATCHING_MODEL when configured, otherwise the LLM stack default
+//     (via LLMService model override; provider routing is the LLMService's job)
+//   - Max output 1500 tokens (CJK-safe structured-output headroom)
 //   - No CitationGuard: pure scoring; no fabricated narrative to verify
 //   - Quota: BE2's service writes the `ra_job_match_score` SKU after
 //     this agent's `.run()` returns successfully (failure costs zero)
@@ -28,7 +28,11 @@
 //     whenever a locale is threaded into run()
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_SONNET } from './raModels.js';
+import {
+  getTaskModel,
+  getTaskReasoningEffort,
+} from '../../../lib/llm/llmTaskSettings.js';
+import { getDefaultModel } from '../../../lib/llm/llmModels.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -56,22 +60,26 @@ export interface RAJobMatchScorerOutput {
   keywordsMissing: string[];
 }
 
-// Default model. Used when the env override below is unset. Exported so
-// BE2's scheduler / on-demand route / tests can reference the default
-// without reaching into the agent's internals.
-export const RA_JOB_MATCH_SCORER_MODEL = RA_MODEL_SONNET;
-
-// Env var that overrides the model at runtime.
-const ENV_MODEL = 'RA_V2_JOB_MATCH_SCORER_MODEL';
-
 /**
- * Resolve the job-match-scorer model. Reads `process.env` at CALL TIME (not
- * module-load) so it picks up dotenv values regardless of ESM import order —
- * the backend's `dotenv.config()` runs after this module is hoisted, so a
- * module-level read would miss the override. Falls back to the default above.
+ * Resolve the job-match-scorer model at call time through the shared LLM stack:
+ * the admin `matching` override wins, then `LLM_MATCHING_MODEL`. When neither
+ * is configured, LLMService uses the configured stack default.
  */
-export function pickJobMatchScorerModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_JOB_MATCH_SCORER_MODEL;
+export function pickJobMatchScorerModel(): string | undefined {
+  return getTaskModel('matching');
+}
+
+/** Effective model label used when persisting a successful score. Mirrors the
+ * exact task → stack-default chain that LLMService applies to the call. */
+export function resolvedJobMatchScorerModel(): string {
+  const taskModel = pickJobMatchScorerModel();
+  const model = taskModel && taskModel !== 'default' ? taskModel : getDefaultModel();
+  if (!model) {
+    throw new Error(
+      'Job-match scorer model is not configured. Set LLM_MATCHING_MODEL or LLM_MODEL.',
+    );
+  }
+  return model;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -124,6 +132,10 @@ export class RAJobMatchScorerAgent extends BaseAgent<
     // gives comfortable headroom for the full structured output in any
     // supported locale. Keep ≥ 1200 (guarded by a unit test).
     return 1500;
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('matching');
   }
 
   /**
@@ -288,19 +300,19 @@ Output ONLY the JSON object. No prose, no fences, no trailing newline noise.`;
 
   /**
    * Public convenience wrapper. BE2's service will call `.run()` (with
-   * the model pinned to Sonnet) and apply quota / cache write semantics
+   * the configured matching model) and apply quota / cache write semantics
    * around it. Failures throw — caller does NOT debit on throw.
    */
   async run(
     input: RAJobMatchScorerInput,
-    options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
+    options: { requestId?: string; locale?: string; signal?: AbortSignal; model?: string } = {},
   ): Promise<RAJobMatchScorerOutput> {
     return this.execute(
       input,
       input.jobDescription,
       options.requestId,
       options.locale,
-      pickJobMatchScorerModel(),
+      options.model ?? pickJobMatchScorerModel(),
       options.signal,
     );
   }
@@ -312,6 +324,7 @@ export default raJobMatchScorerAgent;
 // Test surface — keep tight.
 export const __test = {
   pickJobMatchScorerModel,
+  resolvedJobMatchScorerModel,
   clampScore,
   sanitizeStringArray,
   clipString,

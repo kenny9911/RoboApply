@@ -1,13 +1,11 @@
 // backend/src/roboapply/agents/RoboApplyAuthorAgent.ts
 //
-// Agent #3 in docs/roboapply/02-architecture.md §2 — the Opus 4.7 cover
-// letter author. The ONLY Opus call in the RoboApply stack. Per-call cost
-// is ~$0.13; the 30d cache in RoboApplyCoverLetterCache is what keeps the
-// Premium+ tier inside its $10/MAU/mo ceiling. See arch §8.
+// Agent #3 in docs/roboapply/02-architecture.md §2 — cover-letter author.
+// The 30d cache in RoboApplyCoverLetterCache controls repeated generation.
 //
 // Chain (per arch §3.2):
-//   1. Opus call → { coverLetter, customAnswers, citationsToResume }
-//   2. CitationGuard (Haiku-4.5) pass via SeekerResumeTailorAgent's
+//   1. Configured model call → { coverLetter, customAnswers, citationsToResume }
+//   2. CitationGuard pass via SeekerResumeTailorAgent's
 //      `__test.runClaimChecker` — verifies every claim in the cover letter
 //      is supported by the parsed resume. ALL skill / metric / role
 //      claims must be defensible.
@@ -18,13 +16,11 @@
 //
 // Quota: writes one `roboapply_cover_letter` audit row on success
 // (CitationGuard pass). Failures (LLM error, parse error, CG rejection
-// after retry, Opus quota'd) cost zero — failure is free per the project
+// after retry, model unavailable) cost zero — failure is free per the project
 // Resume Match Quota Rule.
 //
-// Tier policy:
-//   - Free      → Sonnet 4.6 model + 'Sent via RoboApply' watermark
-//   - Premium   → Opus 4.7, no watermark
-//   - Premium+  → Opus 4.7 + custom toneOverride prepended to prompt
+// Tier policy: free adds a watermark; paid tiers may use a separately configured
+// model and Premium+ may prepend a custom tone override.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
 import { llmService } from '../../services/llm/LLMService.js';
@@ -85,6 +81,8 @@ export interface RoboApplyAuthorOutput {
 
 export type RoboApplyAuthorRejectionCode =
   | 'citation_guard_failed_after_retry'
+  // Retained as a stable persisted/API code even though the author model is
+  // now provider-configured rather than pinned to one model family.
   | 'opus_unavailable'
   | 'parse_failed_after_retry'
   | 'invalid_input';
@@ -105,11 +103,8 @@ export class RoboApplyAuthorRejectedError extends Error {
 
 const FREE_TIER_WATERMARK = '\n\n— Sent via RoboApply (free tier)';
 
-// Per arch §2: Opus for Premium/Premium+, Sonnet for Free. Both are
-// env-overridable defaults — see pickModelForTier(). Resolved at CALL TIME
-// (not module-load) so dotenv values apply regardless of ESM import order.
-const MODEL_PAID_DEFAULT = 'anthropic/claude-opus-4.7';
-const MODEL_FREE_DEFAULT = 'openrouter/anthropic/claude-sonnet-4.6';
+// Tier-specific overrides remain supported, but model choice never falls back
+// to a vendor literal in source. Unset tiers inherit the configured LLM stack.
 
 // Cover letter target length window.
 const MIN_COVER_LETTER_WORDS = 200;
@@ -137,9 +132,9 @@ function sanitizeStringArray(value: unknown, maxLen: number, maxItems: number): 
 
 function pickModelForTier(tier: 'free' | 'premium' | 'premium_plus'): string {
   if (tier === 'free') {
-    return process.env.RA_AUTHOR_MODEL_FREE?.trim() || MODEL_FREE_DEFAULT;
+    return process.env.RA_AUTHOR_MODEL_FREE?.trim() || llmService.getModel();
   }
-  return process.env.RA_AUTHOR_MODEL_PAID?.trim() || MODEL_PAID_DEFAULT;
+  return process.env.RA_AUTHOR_MODEL_PAID?.trim() || llmService.getModel();
 }
 
 function applyWatermarkIfFree(text: string, tier: string): string {
@@ -335,8 +330,8 @@ You output ONLY the JSON object. No preface, no fences, no trailing prose.`;
 
   /**
    * Author one cover letter for one (resume, job) pair. Runs the full chain:
-   *   1. Opus (or Sonnet for Free)
-   *   2. CitationGuard (Haiku) — reuses SeekerResumeTailorAgent's claim checker
+   *   1. Configured tier model
+   *   2. CitationGuard — reuses SeekerResumeTailorAgent's claim checker
    *   3. Retry ONCE on CG failure with violations called out
    *   4. On success → write `roboapply_cover_letter` audit row
    *   5. On final failure → throw; caller does NOT bill
@@ -357,11 +352,11 @@ You output ONLY the JSON object. No preface, no fences, no trailing prose.`;
       );
     }
 
-    const model = pickModelForTier(input.tier);
-
     // ─ Pass 1 ────────────────────────────────────────────────────────────
     let firstOutput: RoboApplyAuthorOutput;
+    let model: string;
     try {
+      model = pickModelForTier(input.tier);
       firstOutput = await this.execute(
         input,
         input.job.description ?? input.job.title,
@@ -370,7 +365,7 @@ You output ONLY the JSON object. No preface, no fences, no trailing prose.`;
         model,
       );
     } catch (err) {
-      // Opus / Sonnet provider failure — surface a typed error so the caller
+      // Provider failure — surface a typed error so the caller
       // marks the run as failed with reason='cover_letter_unavailable' and
       // does NOT debit roboapply_cover_letter.
       throw new RoboApplyAuthorRejectedError(
@@ -533,7 +528,7 @@ You output ONLY the JSON object. No preface, no fences, no trailing prose.`;
 
 export const roboApplyAuthorAgent = new RoboApplyAuthorAgent();
 
-// ─── CitationGuard pass (Haiku 4.5 via SeekerResumeTailorAgent) ────────
+// ─── CitationGuard pass via SeekerResumeTailorAgent ────────────────────
 //
 // We reuse the seeker's claim checker by wrapping its public test export.
 // The seeker checker is parameterized on `original` + `tailored` (a

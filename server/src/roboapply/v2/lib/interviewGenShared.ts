@@ -2,22 +2,20 @@
 //
 // Shared types + tiny parse helpers for the Interview Prompt Generator
 // pipeline (RAInterviewJobRequirements/Strategy/Tactics/Questions agents and
-// the RAInterviewPromptService orchestrator). Pure, no LLM; imports only the
-// shared RA model constant + types — safe under the V2 boundary.
+// the RAInterviewPromptService orchestrator).
 
-import { RA_MODEL_SONNET } from '../agents/raModels.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../../lib/llm/llmTaskSettings.js';
 
 // ─── Model selection ──────────────────────────────────────────────────────
 //
-// One env-overridable model for the whole one-time generation pipeline. These
-// are quality-sensitive, run once at "Start interview", so they default to the
-// Sonnet tier rather than the cheap Haiku the live turn-agent uses. The id
-// itself lives in raModels.ts (single source of truth).
+// Both settings resolve at call time so env reloads and DB overrides take
+// effect uniformly across the legacy and Interview Engine interview stacks.
+export function interviewGenModel(): string | undefined {
+  return getTaskModel('interview');
+}
 
-export const RA_INTERVIEW_GEN_MODEL_DEFAULT = RA_MODEL_SONNET;
-
-export function interviewGenModel(): string {
-  return process.env.RA_V2_INTERVIEW_GEN_MODEL?.trim() || RA_INTERVIEW_GEN_MODEL_DEFAULT;
+export function interviewGenReasoningEffort() {
+  return getTaskReasoningEffort('interview');
 }
 
 // ─── Generation artifact types (the "blueprint") ──────────────────────────

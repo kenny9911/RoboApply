@@ -4,7 +4,7 @@
 // (the textarea in /onboarding step 2) into the structured
 // `RoboApplyParsedIntent` shape consumed by the daily matcher + digest.
 //
-// Single LLM call, Sonnet 4.6, temperature 0.1. Cached by sha256(intentText
+// Single configured LLM call, temperature 0.1. Cached by sha256(intentText
 // + locale) — see backend/src/roboapply/lib/cacheKey.ts. Mission-edit bumps
 // `intentVersion` which invalidates downstream cover-letter cache, but does
 // NOT invalidate this row because the intentText + locale pair is the only
@@ -23,6 +23,19 @@ import { BaseAgent } from '../../agents/BaseAgent.js';
 import type { DeductionSku, DeductionSource } from '../../lib/matchBilling.js';
 import { writeDeductionLog } from '../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../lib/deductionCost.js';
+import {
+  getTaskModel,
+  getTaskReasoningEffort,
+} from '../../lib/llm/llmTaskSettings.js';
+
+/** Resolve at call time so admin/env onboarding changes apply without restart. */
+export function pickIntentParserModel(): string | undefined {
+  return getTaskModel('onboarding');
+}
+
+export function pickIntentParserReasoningEffort() {
+  return getTaskReasoningEffort('onboarding');
+}
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -188,6 +201,10 @@ export class RoboApplyIntentParserAgent extends BaseAgent<
     return 2000;
   }
 
+  protected getReasoningEffort() {
+    return pickIntentParserReasoningEffort();
+  }
+
   protected getAgentPrompt(): string {
     return `You are RoboApply's intent parser. The user has just told you, in their own words, what kind of job they want. Your job is to turn that prose into ONE strict JSON object matching the RoboApplyParsedIntent schema below — no prose, no markdown, no commentary, no leading apology.
 
@@ -330,7 +347,13 @@ You output ONLY the JSON object.`;
 
     let output: RoboApplyParsedIntent;
     try {
-      output = await this.execute(input, input.intentText, ctx.requestId ?? undefined, input.locale);
+      output = await this.execute(
+        input,
+        input.intentText,
+        ctx.requestId ?? undefined,
+        input.locale,
+        pickIntentParserModel(),
+      );
     } catch (err) {
       throw new RoboApplyIntentParseError(
         'llm_error',

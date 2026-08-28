@@ -3,6 +3,7 @@ import { languageService } from './LanguageService.js';
 import { llmService } from './llm/LLMService.js';
 import { withLLMRetry } from './llm/withRetry.js';
 import type { ParsedResume } from '../types/index.js';
+import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
 
 const LOW_SIGNAL_SUMMARY_PATTERNS = [
   /给我一个支点/i,
@@ -241,7 +242,11 @@ Respond ONLY with JSON (no markdown):
 
   try {
     const response = await withLLMRetry(
-      () => llmService.chat([{ role: 'user', content: prompt }], { requestId }),
+      () => llmService.chat([{ role: 'user', content: prompt }], {
+        requestId,
+        model: getTaskModel('extract'),
+        reasoningEffort: getTaskReasoningEffort('extract'),
+      }),
       { label: 'resumeSummary', requestId },
     );
 

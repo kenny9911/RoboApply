@@ -18,6 +18,7 @@
 // returns null so the live room simply shows nothing.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 
 export type CoachMode = 'hint' | 'nudge';
 export type CoachTipKind = 'good' | 'careful';
@@ -79,6 +80,10 @@ export class InterviewCoachAgent extends BaseAgent<CoachAgentInput, CoachTip> {
 
   protected getMaxTokens(): number | undefined {
     return 150; // tiny — one sentence
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('interview');
   }
 
   protected getAgentPrompt(): string {
@@ -156,7 +161,14 @@ Honor the COACH FOCUS — it tells you what this interviewer most rewards.`;
     // Pin the reply language to the interview language (locale arg), and feed the
     // question/answer as the language source as a backstop.
     const langSource = `${input.question} ${input.answerSoFar ?? ''}`.slice(0, 400);
-    return this.execute(input, langSource, options.requestId, input.language, undefined, options.signal);
+    return this.execute(
+      input,
+      langSource,
+      options.requestId,
+      input.language,
+      getTaskModel('interview'),
+      options.signal,
+    );
   }
 }
 

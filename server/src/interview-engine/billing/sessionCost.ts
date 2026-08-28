@@ -39,13 +39,12 @@ import { calculateModelCost } from '../../lib/modelPricing.js';
 import { getRateCard } from '../../lib/rateCard.js';
 import { writeDeductionLog } from '../../lib/matchBilling.js';
 import { debitForFinishedSession } from '../../lib/mockCreditService.js';
-import { getDefaultModel } from '../../lib/llm/llmModels.js';
+import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
 import {
-  getWorkerLlmModel,
   getWorkerSttModel,
   getWorkerSttFallbackModels,
 } from '../config.js';
-import type { ResolvedVoice } from '../types.js';
+import type { InterviewRoomMetadata, ResolvedVoice } from '../types.js';
 
 // ─── Cost shapes (stored in InterviewSession.costBreakdown) ───────────────────
 
@@ -181,7 +180,10 @@ export function tokenCostFromSnapshot(
  *  over to a fallback (STT nova-3 → nova-2, TTS gateway → ElevenLabs). LiveKit
  *  reports one item per provider/model, so we ACCUMULATE per type — overwriting
  *  would silently drop every model but the last (under-counting cost on failover). */
-export function priceLiveUsage(items: LiveModelUsageItem[]): LiveCost {
+export function priceLiveUsage(
+  items: LiveModelUsageItem[],
+  fallbackWorkerModel?: string,
+): LiveCost {
   let llm: TokenStageCost | undefined;
   let stt: LiveCost['stt'];
   let tts: LiveCost['tts'];
@@ -203,9 +205,10 @@ export function priceLiveUsage(items: LiveModelUsageItem[]): LiveCost {
     if (it.type === 'llm_usage') {
       const promptTokens = num(it.inputTokens);
       const completionTokens = num(it.outputTokens);
-      const usd = calculateModelCost(id || getWorkerLlmModel(), promptTokens, completionTokens);
-      llm = llm ?? { model: id || getWorkerLlmModel(), promptTokens: 0, completionTokens: 0, totalTokens: 0, usd: 0 };
-      llm.model = mergeModel(llm.model, id || getWorkerLlmModel());
+      const resolvedModel = id || fallbackWorkerModel || 'unreported';
+      const usd = calculateModelCost(resolvedModel, promptTokens, completionTokens);
+      llm = llm ?? { model: resolvedModel, promptTokens: 0, completionTokens: 0, totalTokens: 0, usd: 0 };
+      llm.model = mergeModel(llm.model, resolvedModel);
       llm.promptTokens += promptTokens;
       llm.completionTokens += completionTokens;
       llm.totalTokens = llm.promptTokens + llm.completionTokens;
@@ -325,8 +328,12 @@ export function recordEvaluationCost(sessionId: string, cost: TokenStageCost | n
   return applyCost(sessionId, { evaluation: cost });
 }
 
-export function recordLiveUsage(sessionId: string, items: LiveModelUsageItem[]): Promise<void> {
-  return applyCost(sessionId, { live: priceLiveUsage(items) });
+export function recordLiveUsage(
+  sessionId: string,
+  items: LiveModelUsageItem[],
+  fallbackWorkerModel?: string,
+): Promise<void> {
+  return applyCost(sessionId, { live: priceLiveUsage(items, fallbackWorkerModel) });
 }
 
 /** Sum a coach call's delta into the stored stage (latest model id wins). */
@@ -349,7 +356,7 @@ function accumulateCoachStage(prev: CoachStageCost | undefined, delta: CoachStag
 export async function recordCoachCost(sessionId: string, requestId: string): Promise<void> {
   try {
     const snap = logger.getRequestSnapshot(requestId);
-    const cost = tokenCostFromSnapshot(snap, getDefaultModel());
+    const cost = tokenCostFromSnapshot(snap, getTaskModel('interview'));
     if (!cost) return;
     await applyCost(sessionId, {
       coach: {
@@ -549,10 +556,15 @@ export async function writeMockInterviewLedger(sessionId: string): Promise<void>
 // ─── Model summary (the "all models used" INFO log at session start) ──────────
 
 /** Every model a mock-interview session touches, for the start-of-interview log. */
-export function describeSessionModels(voice: ResolvedVoice): Record<string, unknown> {
+export function describeSessionModels(
+  voice: ResolvedVoice,
+  llm: InterviewRoomMetadata['llm'],
+  backendModel: string,
+): Record<string, unknown> {
   return {
     // Real-time worker pipeline (LiveKit) — drives the live conversation.
-    liveLlm: getWorkerLlmModel(),
+    liveLlm: llm.model,
+    liveLlmReasoningEffort: llm.reasoningEffort,
     stt: getWorkerSttModel(),
     sttFallbacks: getWorkerSttFallbackModels(),
     tts: {
@@ -562,9 +574,10 @@ export function describeSessionModels(voice: ResolvedVoice): Record<string, unkn
       languageCode: voice.languageCode,
       label: voice.label,
     },
-    // Backend agents — share the default model (DB override ?? env LLM_MODEL).
+    // Backend agents — share the interview task settings.
     backendAgents: {
-      model: getDefaultModel() ?? '(env LLM_MODEL default)',
+      model: backendModel,
+      reasoningEffort: llm.reasoningEffort,
       uses: ['blueprint', 'holisticScorecard', 'questionDeepDive', 'recommendations', 'coach'],
     },
   };

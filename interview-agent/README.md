@@ -27,8 +27,8 @@ real-time conversation.
 - Speaks in the candidate's language. STT/LLM/TTS all run through **LiveKit
   Inference** (no extra provider keys): STT `deepgram/nova-3` (idle-tolerant;
   the control plane also sends a server-side `deepgram/nova-2` fallback), LLM
-  per metadata (control-plane default `openai/gpt-5.4`; the worker's own
-  metadata-less fallback is `openai/gpt-4o`), TTS the control-plane-resolved
+  per metadata (from the control plane's required `LLM_INTERVIEW_MODEL`, with
+  optional `LLM_INTERVIEW_REASONING_EFFORT`), TTS the control-plane-resolved
   native voice (e.g. `cartesia/sonic-3` or ElevenLabs per locale) with a gateway
   ElevenLabs fallback. **OpenAI `tts-1`** is only the local last-resort floor
   (needs `OPENAI_API_KEY`) so a session is never mute.
@@ -86,6 +86,10 @@ still required.
 | `INTERVIEW_ENGINE_AGENT_NAME` | the control plane's `INTERVIEW_ENGINE_AGENT_NAME` (default `RoboApply-Interview`) |
 | `LIVEKIT_AGENT_CALLBACK_SECRET` | the control plane's `LIVEKIT_AGENT_CALLBACK_SECRET` |
 | `OPENAI_API_KEY` | for the OpenAI `tts-1` last-resort TTS floor |
+
+The control plane must set `LLM_INTERVIEW_MODEL`; it also forwards the optional
+`LLM_INTERVIEW_REASONING_EFFORT` on each room. The worker intentionally has no
+hard-coded LLM fallback: missing model metadata fails the job with a clear error.
 
 STT/LLM/TTS run through LiveKit Inference (only `LIVEKIT_*` needed); model ids
 arrive per-interview via room metadata, so there is nothing model-related to

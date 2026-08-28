@@ -7,8 +7,8 @@
 // schema, two physical DBs), materializes matched recruiter `Job` rows into the
 // candidate-side `RAJob` index, LLM-scores them, and returns a coverage/accuracy
 // ranked result. These types are the seams between the five components:
-// Explorer (Haiku) → Bank retrieval → Pre-Matcher (pure) → Precise Matcher
-// (Sonnet, reused RAJobMatchScorerAgent) → Insight (Sonnet) → Orchestrator.
+// Explorer (configured) → Bank retrieval → Pre-Matcher (pure) → Precise Matcher
+// (matching task model) → Insight (configured) → Orchestrator.
 
 import type { OnboardingDraftPreferences } from './onboarding.js';
 import type { RaLocale } from '../lib/raLocale.js';
@@ -33,7 +33,7 @@ export interface CandidateSignals {
   years: number | null;
 }
 
-// ─── Opportunity Explorer (Haiku) ────────────────────────────────────────
+// ─── Opportunity Explorer ────────────────────────────────────────────────
 
 export interface CrossBankExplorerInput {
   candidateHeadline: string;
@@ -129,7 +129,7 @@ export interface PreMatchedCandidate {
   requiredCoverage: number;
   keywordCoverage: number;
   preferredOverlap: number;
-  /** LLM-free projected 0-100 stand-in used before Sonnet scores. */
+  /** LLM-free projected 0-100 stand-in used before full LLM scores. */
   projectedScore: number;
   inviteBar: number;
   barIsDefault: boolean;
@@ -145,12 +145,12 @@ export interface PreMatchedCandidate {
 export interface PreMatchResult {
   /** Everything above PRE_FLOOR — all materialized into RAJob. */
   coverageSet: PreMatchedCandidate[];
-  /** The budget-limited subset that gets a Sonnet score. */
+  /** The budget-limited subset that gets a matching-model score. */
   toScore: PreMatchedCandidate[];
   droppedTwins: number;
 }
 
-// ─── Insight Analyst (Sonnet) ────────────────────────────────────────────
+// ─── Insight Analyst ─────────────────────────────────────────────────────
 
 export interface CrossBankInsightShortlistItem {
   jobId: string;

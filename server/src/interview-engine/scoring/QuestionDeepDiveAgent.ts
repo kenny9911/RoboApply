@@ -17,6 +17,7 @@
 // indistinguishable from "no questions to flag", and the UI rendered praise.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 import type { TranscriptTurn } from '../types.js';
 import type { BlueprintQuestion } from '../prompt/InterviewBlueprintAgent.js';
 import type { QuestionAnalysisItem, QuestionRating } from './reportTypes.js';
@@ -84,12 +85,16 @@ export class QuestionDeepDiveAgent extends BaseAgent<DeepDiveInput, DeepDiveOutp
   }
 
   protected getReasoningMaxTokens(): number | undefined {
-    // The default model is always-thinking (over OpenRouter, reasoning tokens
+    // An always-thinking interview model (over OpenRouter, reasoning tokens
     // count toward getMaxTokens). Without a cap, reasoning can consume the whole
     // budget and the JSON array truncates → parseOutput throws → the section
     // degrades to "unavailable". Cap reasoning so the enlarged intent+tips array
     // keeps ≥12k tokens of guaranteed answer headroom. Mirrors HolisticScorecardAgent.
     return 6000;
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('interview');
   }
 
   protected getAgentPrompt(): string {
@@ -221,7 +226,14 @@ Write all human-facing text in the interview language as instructed at the very 
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<DeepDiveOutput> {
     const langSource = `${input.role} ${input.interviewType}`.slice(0, 200);
-    return this.execute(input, langSource, options.requestId, options.locale, undefined, options.signal);
+    return this.execute(
+      input,
+      langSource,
+      options.requestId,
+      options.locale,
+      getTaskModel('interview'),
+      options.signal,
+    );
   }
 }
 

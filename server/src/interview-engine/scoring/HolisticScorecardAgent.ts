@@ -10,6 +10,7 @@
 // score, so a usable report is always produced.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 import type { TranscriptTurn } from '../types.js';
 import type { InterviewScore } from './interviewScorer.js';
 import {
@@ -85,6 +86,10 @@ export class HolisticScorecardAgent extends BaseAgent<HolisticInput, HolisticOut
     // flat cap entirely on reasoning and return empty content — keep the JSON
     // answer ≥4k tokens of headroom.
     return 12000;
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('interview');
   }
 
   protected getReasoningMaxTokens(): number | undefined {
@@ -189,7 +194,14 @@ Rules:
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<HolisticOutput> {
     const langSource = `${input.role} ${input.interviewType}`.slice(0, 200);
-    return this.execute(input, langSource, options.requestId, options.locale, undefined, options.signal);
+    return this.execute(
+      input,
+      langSource,
+      options.requestId,
+      options.locale,
+      getTaskModel('interview'),
+      options.signal,
+    );
   }
 }
 

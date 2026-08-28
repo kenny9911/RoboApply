@@ -27,8 +27,11 @@ import {
   getAgentCallbackSecret,
   getCallbackBaseUrl,
   getSessionExpiryMinutes,
+  getInterviewLlmRouting,
+  getWorkerLlmModel,
   isRecordingEnabled,
   InterviewEngineConfigError,
+  type InterviewLlmRouting,
 } from '../config.js';
 import {
   createInterviewRoom,
@@ -46,7 +49,6 @@ import { inferRoleFromJd } from '../prompt/InterviewBlueprintAgent.js';
 import { scoreTranscript } from '../scoring/interviewScorer.js';
 import type { InterviewScore } from '../scoring/interviewScorer.js';
 import { runInterviewEvaluation } from '../scoring/interviewEvaluationService.js';
-import { getWorkerLlmModel } from '../config.js';
 import {
   describeSessionModels,
   tokenCostFromSnapshot,
@@ -57,7 +59,7 @@ import {
   writeMockInterviewLedger,
   type LiveModelUsageItem,
 } from '../billing/sessionCost.js';
-import { getDefaultModel } from '../../lib/llm/llmModels.js';
+import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
 import { gateMockInterview } from '../../lib/mockCreditService.js';
 import type {
   InterviewMode,
@@ -167,6 +169,32 @@ export interface ConnectionDetails {
   recording: boolean;
 }
 
+function liveLlmSnapshot(routing: InterviewLlmRouting): Record<string, unknown> {
+  return {
+    model: routing.workerModel,
+    backendModel: routing.backendModel,
+    ...(routing.reasoningEffort ? { reasoningEffort: routing.reasoningEffort } : {}),
+  };
+}
+
+function withLiveLlmSnapshot(
+  blueprint: unknown,
+  routing: InterviewLlmRouting,
+): Record<string, unknown> {
+  const base = blueprint && typeof blueprint === 'object' && !Array.isArray(blueprint)
+    ? blueprint as Record<string, unknown>
+    : {};
+  return { ...base, liveLlm: liveLlmSnapshot(routing) };
+}
+
+function storedWorkerModel(blueprint: unknown): string | undefined {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return undefined;
+  const liveLlm = (blueprint as Record<string, unknown>).liveLlm;
+  if (!liveLlm || typeof liveLlm !== 'object' || Array.isArray(liveLlm)) return undefined;
+  const model = (liveLlm as Record<string, unknown>).model;
+  return typeof model === 'string' && model.trim() ? model.trim() : undefined;
+}
+
 export class InterviewSessionService {
   // ─── Create ─────────────────────────────────────────────────────────────
 
@@ -199,6 +227,11 @@ export class InterviewSessionService {
         throw new InterviewInsufficientCreditsError(afford);
       }
     }
+
+    // A session created here is destined for the LiveKit worker. Validate the
+    // single interview selector before spending on blueprint generation or
+    // persisting a session that can never connect.
+    const initialLlmRouting = getInterviewLlmRouting();
 
     const characteristics = normalizeCharacteristics(input.characteristics, persona.difficulty);
     const candidateName = (input.candidateName ?? '').trim() || undefined;
@@ -246,7 +279,15 @@ export class InterviewSessionService {
         resumeContext: resumeContext ?? null,
         jdText: jdText ?? null,
         interviewPrompt: gen.systemPrompt,
-        blueprint: { ...gen.blueprint, interviewerBrief: gen.masterBrief, openingInstruction: gen.openingInstruction, openingLine: gen.openingLine } as unknown as object,
+        blueprint: withLiveLlmSnapshot(
+          {
+            ...gen.blueprint,
+            interviewerBrief: gen.masterBrief,
+            openingInstruction: gen.openingInstruction,
+            openingLine: gen.openingLine,
+          },
+          initialLlmRouting,
+        ) as unknown as object,
         questions: gen.seedQuestions as unknown as object,
         webSources: gen.webSources as unknown as object,
         roomName,
@@ -273,7 +314,7 @@ export class InterviewSessionService {
     // snapshot's tokens/cost are exactly the blueprint stage. Best-effort.
     if (input.requestId) {
       const snap = logger.getRequestSnapshot(input.requestId);
-      void recordBlueprintCost(created.id, tokenCostFromSnapshot(snap, getDefaultModel()));
+      void recordBlueprintCost(created.id, tokenCostFromSnapshot(snap, getTaskModel('interview')));
     }
     return created;
   }
@@ -300,6 +341,26 @@ export class InterviewSessionService {
     const identity = `candidate-${session.id}`;
     const ttlSeconds = Math.max(900, session.plannedDurationMinutes * 60 + 600); // duration + 10 min slack
 
+    let resolvedRouting: InterviewLlmRouting | undefined;
+    let resolvedMetadata: InterviewRoomMetadata | undefined;
+    let resolvedMetadataStr: string | undefined;
+    const resolveRoomConfig = () => {
+      const routing = resolvedRouting ?? getInterviewLlmRouting();
+      const metadata = resolvedMetadata ?? this.buildRoomMetadata(session, voice, routing);
+      const metadataStr = resolvedMetadataStr ?? JSON.stringify(metadata);
+      resolvedRouting = routing;
+      resolvedMetadata = metadata;
+      resolvedMetadataStr = metadataStr;
+      return { routing, metadata, metadataStr };
+    };
+
+    // Resolve and validate every worker setting before claiming created→live.
+    // A bad model/effort must leave the session retryable instead of producing
+    // a live database row with no worker dispatched into its room. Healthy live
+    // reconnects do not need new worker metadata and remain usable if an admin
+    // is in the middle of changing model configuration.
+    const preparedRoom = session.status === 'created' ? resolveRoomConfig() : undefined;
+
     let agentDispatched = !!session.agentDispatchId;
     let recording = !!session.egressId || !!session.recordingKey;
 
@@ -311,25 +372,38 @@ export class InterviewSessionService {
     // transcript). updateMany is atomic: only the winner gets count===1.
     const claim = await prisma.interviewSession.updateMany({
       where: { id: session.id, status: 'created' },
-      data: { status: 'live', startedAt: session.startedAt ?? new Date(), participantIdentity: identity },
+      data: {
+        status: 'live',
+        startedAt: session.startedAt ?? new Date(),
+        participantIdentity: identity,
+        ...(preparedRoom
+          ? {
+              // Persist the exact worker namespace dispatched for this session.
+              // Usage callbacks can then price missing model metadata correctly
+              // even if an admin hot-changes LLM_INTERVIEW_MODEL mid-interview.
+              blueprint: withLiveLlmSnapshot(
+                session.blueprint,
+                preparedRoom.routing,
+              ) as unknown as object,
+            }
+          : {}),
+      },
     });
 
     if (claim.count === 1) {
       // We are the SOLE dispatcher for this session.
-      const metadata = this.buildRoomMetadata(session, voice);
-      const metadataStr = JSON.stringify(metadata);
-
+      const { routing, metadata, metadataStr } = resolveRoomConfig();
       // Surface EVERY model this mock interview will use, in the INFO log /
       // terminal console, at the moment the interview starts. Covers the live
       // worker pipeline (LLM · STT + fallbacks · TTS voice) and the backend
-      // agents (blueprint · evaluation · coach, all on the default model).
+      // agents (blueprint · evaluation · coach, all on the interview model).
       logger.info('INTERVIEW_ENGINE_MODELS', `mock interview models · session ${session.id}`, {
         sessionId: session.id,
         role: session.role,
         interviewType: session.interviewType,
         mode,
         language: session.language,
-        ...describeSessionModels(voice),
+        ...describeSessionModels(voice, metadata.llm, routing.backendModel),
         requestId: params.requestId,
       });
 
@@ -402,7 +476,7 @@ export class InterviewSessionService {
       // persistDispatchIdIfUnset is only-if-unset, so concurrent retries that
       // both dispatch converge on one recorded id.
       if (fresh && fresh.status === 'live' && !fresh.agentDispatchId) {
-        const metadataStr = JSON.stringify(this.buildRoomMetadata(session, voice));
+        const { metadataStr } = resolveRoomConfig();
         const redispatchPromise = dispatchAgent({
           roomName: session.roomName,
           agentName: getInterviewAgentName(),
@@ -498,7 +572,11 @@ export class InterviewSessionService {
     }
   }
 
-  private buildRoomMetadata(session: InterviewSession, voice: ResolvedVoice): InterviewRoomMetadata {
+  private buildRoomMetadata(
+    session: InterviewSession,
+    voice: ResolvedVoice,
+    llmRouting: InterviewLlmRouting,
+  ): InterviewRoomMetadata {
     const stt = resolveStt(session.language);
     const blueprint = (session.blueprint ?? {}) as Record<string, unknown>;
     const openingInstruction = typeof blueprint.openingInstruction === 'string' ? blueprint.openingInstruction : `Greet the candidate and begin the ${session.interviewType} interview.`;
@@ -526,7 +604,12 @@ export class InterviewSessionService {
       openingLine,
       voice,
       stt,
-      llm: { model: getWorkerLlmModel() },
+      llm: {
+        model: llmRouting.workerModel,
+        ...(llmRouting.reasoningEffort
+          ? { reasoningEffort: llmRouting.reasoningEffort }
+          : {}),
+      },
       callbackBaseUrl: getCallbackBaseUrl(),
     };
   }
@@ -928,7 +1011,10 @@ export class InterviewSessionService {
 
       // Meter the report-evaluation LLM cost (holistic + deep-dive +
       // recommendations all run under reqId). Best-effort.
-      await recordEvaluationCost(sessionId, tokenCostFromSnapshot(logger.getRequestSnapshot(reqId), getDefaultModel()));
+      await recordEvaluationCost(
+        sessionId,
+        tokenCostFromSnapshot(logger.getRequestSnapshot(reqId), getTaskModel('interview')),
+      );
 
       // Refresh the R2 report sidecar with the rich version (best-effort).
       if (interviewR2Storage.isConfigured()) {
@@ -1118,7 +1204,20 @@ export class InterviewSessionService {
   }): Promise<{ ok: true }> {
     this.assertCallbackSecret(params.secret);
     const items = Array.isArray(params.modelUsage) ? params.modelUsage : [];
-    await recordLiveUsage(params.sessionId, items);
+    const stored = await prisma.interviewSession.findUnique({
+      where: { id: params.sessionId },
+      select: { blueprint: true },
+    }).catch(() => null);
+    let fallbackWorkerModel = storedWorkerModel(stored?.blueprint);
+    if (!fallbackWorkerModel) {
+      try {
+        // Legacy session rows predate the persisted liveLlm snapshot.
+        fallbackWorkerModel = getWorkerLlmModel();
+      } catch {
+        // Usage is still recorded as `unreported`; metering must remain best-effort.
+      }
+    }
+    await recordLiveUsage(params.sessionId, items, fallbackWorkerModel);
     logger.info('INTERVIEW_ENGINE_SESSION', 'live usage ingested', {
       sessionId: params.sessionId,
       items: items.length,

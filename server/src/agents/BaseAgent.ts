@@ -4,6 +4,7 @@ import { LanguageService, languageService } from '../services/LanguageService.js
 import { logger } from '../services/LoggerService.js';
 import { getCurrentRequestId } from '../lib/requestContext.js';
 import { withLLMRetry } from '../services/llm/withRetry.js';
+import type { ReasoningEffort } from '../services/llm/reasoningEffort.js';
 
 /**
  * Abstract base class for all agents
@@ -47,6 +48,11 @@ export abstract class BaseAgent<TInput, TOutput> {
    * the option, so `undefined` (the default) changes nothing anywhere.
    */
   protected getReasoningMaxTokens(): number | undefined {
+    return undefined;
+  }
+
+  /** Per-call reasoning effort for this agent's task category. */
+  protected getReasoningEffort(): ReasoningEffort | undefined {
     return undefined;
   }
 
@@ -266,6 +272,7 @@ export abstract class BaseAgent<TInput, TOutput> {
     try {
       const maxTokens = this.getMaxTokens();
       const reasoningMaxTokens = this.getReasoningMaxTokens();
+      const reasoningEffort = this.getReasoningEffort();
       const responseFormat = this.getResponseFormat();
       const response = await withLLMRetry(
         () => this.chatLogged(messages, {
@@ -273,6 +280,7 @@ export abstract class BaseAgent<TInput, TOutput> {
           requestId,
           ...(maxTokens !== undefined ? { maxTokens } : {}),
           ...(reasoningMaxTokens !== undefined ? { reasoningMaxTokens } : {}),
+          ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(responseFormat ? { responseFormat } : {}),
           ...(model ? { model } : {}),
           ...(signal ? { signal } : {}),
@@ -354,6 +362,7 @@ export abstract class BaseAgent<TInput, TOutput> {
       // whereas each agent's parseOutput() provides a safe default.
       const maxTokens = this.getMaxTokens();
       const reasoningMaxTokens = this.getReasoningMaxTokens();
+      const reasoningEffort = this.getReasoningEffort();
       const responseFormat = this.getResponseFormat();
       const response = await withLLMRetry(
         () => this.chatLogged(messages, {
@@ -361,6 +370,7 @@ export abstract class BaseAgent<TInput, TOutput> {
           requestId,
           ...(maxTokens !== undefined ? { maxTokens } : {}),
           ...(reasoningMaxTokens !== undefined ? { reasoningMaxTokens } : {}),
+          ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(responseFormat ? { responseFormat } : {}),
           ...(model ? { model } : {}),
           ...(provider ? { provider } : {}),

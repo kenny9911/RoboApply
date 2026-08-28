@@ -1,7 +1,7 @@
 // backend/src/roboapply/v2/agents/RACareerInsightAgent.ts
 //
 // RoboApply V2 Agent #5 — Weekly insight card for the /insights page. Per
-// docs/roboapply/v2/04-backend-spec.md §6 — Sonnet-tier narrative with
+// docs/roboapply/v2/04-backend-spec.md §6 — narrative generation with
 // a CitationGuard pass over the cited tracker IDs.
 //
 // Contract (BE3 Wave 4):
@@ -16,7 +16,7 @@
 //
 // Notes:
 //   - Temperature 0.4 (warm narrative; not deterministic but not freewheeling)
-//   - Model: Sonnet 4.6
+//   - Model: configured LLM stack (or RA_V2_CAREER_INSIGHT_MODEL override)
 //   - Max output 1500 tokens
 //   - Quota: BE2's scheduler writes `ra_career_insight` SKU on success.
 //   - Length cap ≤ 600 words (per spec §2.6 RACareerInsight definition);
@@ -24,7 +24,7 @@
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
-import { RA_MODEL_SONNET } from './raModels.js';
+import { llmService } from '../../../services/llm/LLMService.js';
 
 // ─── Public types (mirror BE1's RA models — shapes only, no Prisma import)
 
@@ -90,11 +90,6 @@ export interface RACareerInsightOutput {
   recommendations: RARecommendation[];
 }
 
-// Default model. Used when the env override below is unset. Exported so
-// BE2's scheduler / on-demand service / tests can reference the default
-// without reaching into the agent's internals.
-export const RA_CAREER_INSIGHT_MODEL = RA_MODEL_SONNET;
-
 // Env var that overrides the model at runtime.
 const ENV_MODEL = 'RA_V2_CAREER_INSIGHT_MODEL';
 
@@ -102,10 +97,11 @@ const ENV_MODEL = 'RA_V2_CAREER_INSIGHT_MODEL';
  * Resolve the career-insight model. Reads `process.env` at CALL TIME (not
  * module-load) so it picks up dotenv values regardless of ESM import order —
  * the backend's `dotenv.config()` runs after this module is hoisted, so a
- * module-level read would miss the override. Falls back to the default above.
+ * module-level read would miss the override. Falls back to the configured LLM
+ * stack rather than a vendor literal.
  */
 export function pickCareerInsightModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_CAREER_INSIGHT_MODEL;
+  return process.env[ENV_MODEL]?.trim() || llmService.getModel();
 }
 
 const VALID_ACTIONS = new Set<RARecommendationAction>([

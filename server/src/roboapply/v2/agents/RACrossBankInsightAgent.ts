@@ -2,7 +2,7 @@
 //
 // Insight Analyst — explains the shortlist honestly. A portfolio-level
 // coverage-vs-accuracy narrative + per-job "why matched" + the ONE lever that
-// would raise the candidate's odds. Sonnet.
+// would raise the candidate's odds.
 //
 // CitationGuard (spec §3.6): every perJob.jobId MUST be in the input shortlist
 // or it is stripped (no fabricated jobs); every raiseOddsNote may cite ONLY a
@@ -10,7 +10,7 @@
 // the input context is available. parseOutput NEVER throws.
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_SONNET } from './raModels.js';
+import { llmService } from '../../../services/llm/LLMService.js';
 import type { CrossBankInsightInput, CrossBankInsight } from '../types/crossBank.js';
 
 const ENV_MODEL = 'RA_V2_CROSSBANK_INSIGHT_MODEL';
@@ -19,7 +19,7 @@ const ENV_MODEL = 'RA_V2_CROSSBANK_INSIGHT_MODEL';
 const SCORE_PATTERN = /\b\d{1,3}\s*(?:\/\s*100\b|%|\spoints?\b|\spts?\b)/gi;
 
 export function pickCrossBankInsightModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_MODEL_SONNET;
+  return process.env[ENV_MODEL]?.trim() || llmService.getModel();
 }
 
 function scrubProse(s: string): string {

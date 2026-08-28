@@ -1,10 +1,11 @@
 import { llmService } from './llm/LLMService.js';
 import { logger } from './LoggerService.js';
-import { getModelSetting } from '../lib/llm/llmModels.js';
+import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
 
 // Read per-call (not a module const) so an admin's DB override applies without a
-// restart. DB override ?? env LLM_EXTRACT ?? undefined (→ llmService default).
-const extractModel = (): string | undefined => getModelSetting('extract');
+// restart. DB override ?? env LLM_EXTRACT_MODEL ?? undefined.
+const extractModel = (): string | undefined => getTaskModel('extract');
+const extractReasoningEffort = () => getTaskReasoningEffort('extract');
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -451,7 +452,12 @@ Parse this resume and return ONLY valid JSON (no markdown, no explanation):`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text },
       ],
-      { temperature: 0.0, requestId, model: extractModel() }
+      {
+        temperature: 0.0,
+        requestId,
+        model: extractModel(),
+        reasoningEffort: extractReasoningEffort(),
+      },
     );
 
     const duration = Date.now() - startTime;
@@ -507,7 +513,12 @@ Output beautifully formatted Markdown:`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: 'Format this resume into professional Markdown.' },
         ],
-        { temperature: 0.1, requestId, model: extractModel() }
+        {
+          temperature: 0.1,
+          requestId,
+          model: extractModel(),
+          reasoningEffort: extractReasoningEffort(),
+        },
       );
 
       const formatted = response.trim();
@@ -554,7 +565,12 @@ RESUME TEXT:`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: rawText },
         ],
-        { temperature: 0.1, requestId, model: extractModel() }
+        {
+          temperature: 0.1,
+          requestId,
+          model: extractModel(),
+          reasoningEffort: extractReasoningEffort(),
+        },
       );
 
       const formatted = response.trim();

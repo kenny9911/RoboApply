@@ -16,6 +16,7 @@
 // indistinguishable from "nothing to recommend", and the UI rendered praise.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
 import {
   toCanonicalDimKey,
   type Recommendation,
@@ -68,6 +69,10 @@ export class RecommendationsAgent extends BaseAgent<RecommendationsInput, Recomm
     // Personalized multi-section action plan. 2200 was tight; give reasoning
     // headroom so the JSON isn't truncated. Billed on actual usage.
     return 6000;
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('interview');
   }
 
   protected getAgentPrompt(): string {
@@ -178,7 +183,14 @@ Write all prose in the interview language as instructed at the very top of this 
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<RecommendationsOutput> {
     const langSource = `${input.role} ${input.interviewType}`.slice(0, 200);
-    return this.execute(input, langSource, options.requestId, options.locale, undefined, options.signal);
+    return this.execute(
+      input,
+      langSource,
+      options.requestId,
+      options.locale,
+      getTaskModel('interview'),
+      options.signal,
+    );
   }
 }
 

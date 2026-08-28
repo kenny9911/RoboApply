@@ -20,8 +20,9 @@
 //     code-level backstop either way.
 //
 // Notes:
-//   - Haiku tier, temperature 0.1, maxTokens 500; fallback is a no-op turn
-//     (`{updates:{}, …}`) — the conversation proceeds without the capture
+//   - configured onboarding model, temperature 0.1, maxTokens 500; fallback is
+//     a no-op turn (`{updates:{}, …}`) — the conversation proceeds without the
+//     capture
 //   - parseOutput re-normalizes every enum through the raOnboardingDraft.ts
 //     taxonomy tables (closed list in prompt + parser normalization = two
 //     enforcement lines; unknown values DROP) and never throws
@@ -30,7 +31,10 @@
 //     mustHaves) stay in the user's language
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
-import { RA_MODEL_HAIKU } from './raModels.js';
+import {
+  getTaskModel,
+  getTaskReasoningEffort,
+} from '../../../lib/llm/llmTaskSettings.js';
 import { asStringArray, clip, parseJsonObject } from '../lib/interviewGenShared.js';
 import {
   marketDefaultsForLocale,
@@ -60,13 +64,12 @@ export interface RAOnboardingPrefExtractOutput extends OnboardingExtractorOutput
   wantsToFinish: boolean;
 }
 
-// Default model + env override (read at call time — see pickJDParseModel for
-// the dotenv/ESM ordering rationale).
-export const RA_ONBOARDING_EXTRACT_MODEL = RA_MODEL_HAIKU;
-const ENV_MODEL = 'RA_V2_ONBOARDING_EXTRACT_MODEL';
+export function pickOnboardingExtractModel(): string | undefined {
+  return getTaskModel('onboarding');
+}
 
-export function pickOnboardingExtractModel(): string {
-  return process.env[ENV_MODEL]?.trim() || RA_ONBOARDING_EXTRACT_MODEL;
+export function pickOnboardingExtractReasoningEffort() {
+  return getTaskReasoningEffort('onboarding');
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -211,6 +214,10 @@ export class RAOnboardingPrefExtractAgent extends BaseAgent<
   protected getMaxTokens(): number | undefined {
     // A sparse-delta JSON object; 500 is generous.
     return 500;
+  }
+
+  protected getReasoningEffort() {
+    return pickOnboardingExtractReasoningEffort();
   }
 
   /**
@@ -460,6 +467,7 @@ export default raOnboardingPrefExtractAgent;
 // Test surface — keep tight.
 export const __test = {
   pickOnboardingExtractModel,
+  pickOnboardingExtractReasoningEffort,
   buildLocaleMarketHint,
   normalizeDeclinedTopics,
   normalizeFieldConfidence,

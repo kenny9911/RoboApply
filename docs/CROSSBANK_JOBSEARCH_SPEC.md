@@ -18,8 +18,8 @@ RoboHire and GoHire are the **same product white-labelled onto two physically se
 
 1. **Retrieval is high-recall and non-starving.** The only hard `WHERE` cuts are true dealbreakers: `status='open'`, `publishedAt` present and fresh (≤45d). Salary / level / work-mode are *soft weights*, never SQL cuts — this is the documented starvation trap from the onboarding pipeline. Tag/keyword overlap is *one OR-signal* in retrieval and *one term* in a deterministic pre-score, **never a hard drop**.
 2. **We never gamble the funnel on the recruiter tag grammar.** The producers of `requiredTagSet`/`matchInviteScore` (`JobSemanticTagAgent`, `JobKeywordService`, `JobBankMatchService`) **do not exist in this repo**, so those arrays may be empty `[]` and the bar may be the untuned `@default(60)`. Accuracy-first's design staked its whole funnel on a hard `requiredTagCoverage≥0.70` gate against a grammar this repo cannot confirm — a mass false-negative hazard that reintroduces the exact empty-inventory bug **[FIX-5]**. We keep tags soft; a grammar miss degrades *ranking*, never *recall*.
-3. **Accuracy arrives in two layers over the wide pool:** (a) the reused `RAJobMatchScorerAgent` (calibrated 0-100 Sonnet), and (b) the recruiter's own `matchInviteScore` turned into an honest **acceptance-odds** band. Both are directional "odds / above-the-bar" signals, explicitly *not* an invite guarantee (the two rubrics are only heuristically comparable) **[FIX cross-scale]**.
-4. **Everything above a low `PRE_FLOOR` is materialized** into `RAJob` so it is visible in `/search` even if the Sonnet budget never reaches it. Two output buckets: **Recommended** (scored, good odds, "apply now") and **Explore** (adjacent/stretch, honestly labeled "worth a look / would need X"). Coverage guaranteed; accuracy surfaced; nothing silently dropped.
+3. **Accuracy arrives in two layers over the wide pool:** (a) the reused `RAJobMatchScorerAgent` (calibrated 0-100 matching task model), and (b) the recruiter's own `matchInviteScore` turned into an honest **acceptance-odds** band. Both are directional "odds / above-the-bar" signals, explicitly *not* an invite guarantee (the two rubrics are only heuristically comparable) **[FIX cross-scale]**.
+4. **Everything above a low `PRE_FLOOR` is materialized** into `RAJob` so it is visible in `/search` even if the scoring budget never reaches it. Two output buckets: **Recommended** (scored, good odds, "apply now") and **Explore** (adjacent/stretch, honestly labeled "worth a look / would need X"). Coverage guaranteed; accuracy surfaced; nothing silently dropped.
 
 The grafted upgrade: **within the Recommended bucket, jobs are ordered by accuracy-first's acceptance-odds composite** (invite-margin sigmoid dominant, anchored by a *scale-free* required-coverage term), not by a flat `0.6·llm + 0.4·odds` blend — so "a job far above ITS recruiter's own bar outranks a higher-raw-score job below its bar," the mandated behavior.
 
@@ -139,14 +139,14 @@ Five components. Deterministic ones use `model: none`. LLM agents extend `BaseAg
 - **Rules:**
   - Every stage `try/caught`; one bank down → other-bank-only; both disabled/down/empty → `{ zeroResults:true }`. `RA_CROSSBANK_DISABLED` short-circuits to zeroResults.
   - Bank clients are strictly read-only (`findMany` on `Job`/`Company`). RAJob upsert, RAJobMatchScore upsert, deduction logs → default `prisma` only.
-  - **[FIX-4] Do NOT reuse `scoreRows` verbatim** — it does `Promise.all(rows.map(...))` over the *whole* array (RAOnboardingRecommendService.ts:829), so a budget of 16 would fire 16 concurrent Sonnet calls. The orchestrator owns its own `scoreWave` using `mapWithConcurrency(rows, SCORER_CONCURRENCY=8, fn)` so in-flight ≤ 8 regardless of budget.
+  - **[FIX-4] Do NOT reuse `scoreRows` verbatim** — it does `Promise.all(rows.map(...))` over the *whole* array (RAOnboardingRecommendService.ts:829), so a budget of 16 would fire 16 concurrent scorer calls. The orchestrator owns its own `scoreWave` using `mapWithConcurrency(rows, SCORER_CONCURRENCY=8, fn)` so in-flight ≤ 8 regardless of budget.
   - Respect `SCORER_BUDGET` (default 16, env `RA_CROSSBANK_SCORER_BUDGET`), `PER_BANK_QUERY_TAKE 60`, `PER_BANK_CANDIDATE_CAP 120`, `MATERIALIZE_CAP 120` (total, top-preScore).
   - Cache-first scoring via `evaluateCachedScore` (reused, RAOnboardingRecommendService.ts:183); failed scorer pairs skipped, debit zero.
   - Per fresh score: `writeDeductionLog({sku:'ra_crossbank_score', source:'free_tier', …costPatchFromTally(requestId)})`. Per insight call: `{sku:'ra_crossbank_insight'}`.
 - **Input:** `CrossBankDiscoverInput` (§3.7). **Output:** `CrossBankDiscoverResult` (§3.7).
 - **Receives from:** `routes/discover.ts`. **Sends to:** `routes/discover.ts` → `res.json`; side-effect RAJob + RAJobMatchScore rows into `/home`, `/search`, `/tracker`.
 
-### 3.2 `RACrossBankExplorerAgent` — Opportunity Explorer · model: HAIKU
+### 3.2 `RACrossBankExplorerAgent` — Opportunity Explorer · configured LLM stack
 
 - **Goal:** widen recall. Turn `candidateHeadline` + resume-derived titles/skills + draft prefs into an expansion plan of **primary + adjacent + transferable-skill-stretch** titles plus a normalized tag/keyword vocabulary used as both banks' OR-union + set-overlap net.
 - **Role:** `BaseAgent<CrossBankExplorerInput, CrossBankExplorerPlan>`. The only component allowed to broaden beyond the stated target. `getTemperature()` 0.3, `getMaxTokens()` 700 (CJK headroom for the tag/keyword arrays), `getResponseFormat()` `'json_object'`, `getLocaleDirective()` → `null`.
@@ -157,7 +157,7 @@ Five components. Deterministic ones use `model: none`. LLM agents extend `BaseAg
   - Emit `transferableSkillTags` in **both** grammars we might meet — bare canonical (`python`, `kubernetes`) AND, where natural, namespaced (`lang:python`) — because the recruiter grammar is unverifiable; `canonicalizeTag()` (§5.1) reconciles both sides downstream. Under-claiming is safer than over-claiming since these feed soft overlap only.
   - Caps: `primaryTitles ≤4`, `adjacentTitles ≤6`, `stretchTitles ≤4`, `transferableSkillTags ≤20`, `mustKeywords ≤15`, `niceKeywords ≤15`.
   - `parseOutput` NEVER throws — `run()` back-fills every empty slot from `buildExplorerFallback(signals, draft)` (deterministic).
-  - `pickCrossBankExplorerModel()` reads `RA_V2_CROSSBANK_EXPLORER_MODEL || RA_MODEL_HAIKU` at call time.
+  - `pickCrossBankExplorerModel()` reads the optional `RA_V2_CROSSBANK_EXPLORER_MODEL` override, then the configured LLM stack model, at call time.
 
 ```ts
 interface CrossBankExplorerInput {
@@ -220,10 +220,10 @@ interface BankJobProvider {
 - **Output** `BankJobRow` selects the full recruiter signal set: `id, title, description, qualifications, hardRequirements, niceToHave, benefits, location, locationCity, locationCountry, workType, employmentType, experienceLevel, salaryMin/Max/Currency/Period, requiredTagSet, preferredTagSet, requiredKeywordSet, preferredKeywordSet, matchInviteScore, matchWeights, publishedAt` + `{ companyName, companyLogoUrl }` + `bank` + `retrievedVia:'title'|'keyword'|'tag'`.
 - **Receives from:** Orchestrator (client via `getBankClient(bank)` + `BankSearchIntent`). **Sends to:** Pre-Matcher.
 
-### 3.5 `RAJobMatchScorerAgent` — Precise Matcher · model: SONNET · **REUSED VERBATIM**
+### 3.5 `RAJobMatchScorerAgent` — Precise Matcher · matching task model
 
 - **Goal:** produce the calibrated 0-100 accuracy score + `summary/strengths/gaps/keywordsMatched/keywordsMissing` for each `(resume, materialized job)` pair in the budgeted subset.
-- **Role:** existing `BaseAgent`, **no new scorer, no modification**. Temp 0.1; **its own `getMaxTokens()` (~600 output cap — do NOT re-describe as 1500; the agent comment at line 15 caps output ~600)**; throws on malformed output so a bad pair is never cached or billed. Model via `pickJobMatchScorerModel()` (`RA_V2_JOB_MATCH_SCORER_MODEL || RA_MODEL_SONNET`).
+- **Role:** existing `BaseAgent`. Temp 0.1; **its own `getMaxTokens()` (1500 output cap for CJK-safe structured-output headroom)**; throws on malformed output so a bad pair is never cached or billed. Model and reasoning effort come from `LLM_MATCHING_MODEL` and `LLM_MATCHING_REASONING_EFFORT`.
 - **Rules:** called only from the orchestrator's `scoreWave` (`mapWithConcurrency ≤8`); each success upserts `RAJobMatchScore` + writes `ra_crossbank_score`; each throw caught → pair skipped, debit zero. Fed the candidate's primary `RAResumeVariant.resumeMarkdown` + the **materialized RAJob's** title/description/qualifications/benefits. Cache accepted only when `evaluateCachedScore → fresh`.
 
 ```ts
@@ -232,16 +232,16 @@ interface RAJobMatchScorerOutput { score: number; summary: string; strengths: st
 ```
 - **Receives from:** Orchestrator (`toScore` cache-miss pairs). **Sends to:** Orchestrator (score+prose → RAJobMatchScore + acceptance-odds compute) and the Insight Analyst (strengths/gaps).
 
-### 3.6 `RACrossBankInsightAgent` — Insight Analyst · model: SONNET
+### 3.6 `RACrossBankInsightAgent` — Insight Analyst · configured LLM stack
 
 - **Goal:** explain the shortlist honestly — a portfolio-level coverage-vs-accuracy narrative, and per-job "why matched" + **"the ONE thing that would raise your odds."**
-- **Role:** `BaseAgent<CrossBankInsightInput, CrossBankInsight>`. Sonnet temp 0.4, `getMaxTokens()` 1400 (CJK), `getResponseFormat()` `'json_object'`. Reuses the `RACareerInsightAgent` CitationGuard discipline.
+- **Role:** `BaseAgent<CrossBankInsightInput, CrossBankInsight>`. Temperature 0.4, `getMaxTokens()` 1400 (CJK), `getResponseFormat()` `'json_object'`. Reuses the `RACareerInsightAgent` CitationGuard discipline.
 - **Rules (grafted CitationGuard):**
   - `perJob[].jobId` MUST be in `input.shortlist` or it is stripped (no fabricated jobs).
-  - `raiseOddsNote` must name only a lever in that job's `raiseOddsLevers` set (the deterministic `missingRequiredTags ∪ missingRequiredKeywords`); any hint naming an out-of-set lever is stripped. When `requiredTagSet`/`requiredKeywordSet` are empty for a job, fall back to the Sonnet scorer's `gaps[]` for that job's note.
+  - `raiseOddsNote` must name only a lever in that job's `raiseOddsLevers` set (the deterministic `missingRequiredTags ∪ missingRequiredKeywords`); any hint naming an out-of-set lever is stripped. When `requiredTagSet`/`requiredKeywordSet` are empty for a job, fall back to the configured scorer's `gaps[]` for that job's note.
   - Second person, in-locale (`getStrictOutputLanguageDirective`); prose scrubbed of numeric scores (`SCORE_PATTERN`) and third-person address — the card carries the number.
   - `parseOutput` never throws → `{ portfolioSummary: deterministic fallback, perJob: [] }`; the orchestrator fills missing notes with deterministic `composeWhyMatched` + a gap/invite-gap line.
-  - `pickCrossBankInsightModel()` reads `RA_V2_CROSSBANK_INSIGHT_MODEL || RA_MODEL_SONNET` at call time.
+  - `pickCrossBankInsightModel()` reads the optional `RA_V2_CROSSBANK_INSIGHT_MODEL` override, then the configured LLM stack model, at call time.
 
 ```ts
 interface CrossBankInsightInput { candidateHeadline: string; locale: RaLocale; coverage: CrossBankCoverageStats;
@@ -279,7 +279,7 @@ interface CrossBankDiscoverResult {
 - **STEP 0 — GATE + SWEEP.** If `RA_CROSSBANK_DISABLED==='true'` → zeroResults. `const p = prisma`. **Lazy archival sweep [FIX-8 bloat/staleness]:** best-effort bounded `p.rAJob.updateMany({ where:{ sourceBoard:{ in:['robohire','gohire'] }, archivedAt:null, postedAt:{ lt: now − FRESHNESS_DAYS } }, data:{ archivedAt: now } })` so expired mirrors drop out of `/search`.
 - **STEP 1 — CONTEXT.** Load resume variant (`resumeVariantId ?? primary`, `userId`, `deletedAt:null`; select `id, resumeMarkdown, resumeContentHash, parsedData, summary`). No `resumeMarkdown` → zeroResults. `signals = deriveCandidateSignals(variant)` (pure) → `{ currentTitles, topSkills, candidateTagSet, candidateKeywords, seniority, years }`. Precompute `resumeTokens = new Set(normalizeTokens(resumeMarkdown))` once (belt-and-suspenders keyword coverage).
 - **STEP 2 — BANKS.** `banks = listEnabledBanks()`. Empty → zeroResults. `emit({type:'status',key:'searching_internal'})`.
-- **STEP 3 — EXPLORER (Haiku, 1 call).** `marketCountry = draft.locations.countries[0] ?? locale default`. `plan = await explorer.run({candidateHeadline, ...signals, draft, marketCountry, banks}, {requestId, signal})`; throw → `buildExplorerFallback(signals, draft)`.
+- **STEP 3 — EXPLORER (configured model, 1 call).** `marketCountry = draft.locations.countries[0] ?? locale default`. `plan = await explorer.run({candidateHeadline, ...signals, draft, marketCountry, banks}, {requestId, signal})`; throw → `buildExplorerFallback(signals, draft)`.
 - **STEP 4 — RETRIEVAL SWEEP (both banks in parallel, each try/caught).**
   ```ts
   const pools = await Promise.allSettled(banks.map(b =>
@@ -289,13 +289,13 @@ interface CrossBankDiscoverResult {
   A rejected/`null` pool → that bank degraded (record in `banksDegraded`), its rows `[]`. All banks empty/null → zeroResults.
 - **STEP 5 — PRE-MATCH (deterministic).** `preMatch = preMatchCandidates({ rows: pools.flat(), plan, signals, draft, resumeTokens, scorerBudget: SCORER_BUDGET, aggressiveness })` → preScore + tier + projectedScore + `{inviteBar, barIsDefault}` per row; cross-bank fingerprint dedup; filter `preScore ≥ PRE_FLOOR` → `coverageSet`; tier-reserved budget split → `toScore`. `coverageSet` capped to `MATERIALIZE_CAP` top-preScore.
 - **STEP 6 — MATERIALIZE (default prisma).** For each `coverageSet` row: `p.rAJob.upsert({ where:{ externalId_sourceBoard:{ externalId: job.id, sourceBoard: bank } }, create/update: mapRecruiterJobToRAJobUpsert(job, company, bank, verdict) })`. Collect `rAJobId` keyed by `(bank, job.id)`. **This is the P0 inventory fix** — `coverageSet` is visible in `/search` even when unscored.
-- **STEP 7 — SCORING (Sonnet, cache-first, waves ≤8).** `emit({type:'status',key:'scoring'})`. Batch-load `RAJobMatchScore` cache for the `toScore` RAJob ids (`userId, resumeVariantId`). `evaluateCachedScore → fresh` → reuse score+prose (count `cacheHits`). Misses (bounded by remaining budget) → **`scoreWave(rows) = mapWithConcurrency(rows, SCORER_CONCURRENCY=8, scorePair)`** **[FIX-4]**. Each success upserts `RAJobMatchScore` (explanation stamped, §6) + `writeDeductionLog('ra_crossbank_score')`; each throw → skip, debit zero. Budget-exhausted `toScore` rows keep `preScore` as a proxy and are flagged `scored:false` (they land in Explore).
+- **STEP 7 — SCORING (matching task model, cache-first, waves ≤8).** `emit({type:'status',key:'scoring'})`. Batch-load `RAJobMatchScore` cache for the `toScore` RAJob ids (`userId, resumeVariantId`). `evaluateCachedScore → fresh` → reuse score+prose (count `cacheHits`). Misses (bounded by remaining budget) → **`scoreWave(rows) = mapWithConcurrency(rows, SCORER_CONCURRENCY=8, scorePair)`** **[FIX-4]**. Each success upserts `RAJobMatchScore` (explanation stamped, §6) + `writeDeductionLog('ra_crossbank_score')`; each throw → skip, debit zero. Budget-exhausted `toScore` rows keep `preScore` as a proxy and are flagged `scored:false` (they land in Explore).
 - **STEP 8 — ACCEPTANCE-ODDS (deterministic).** For every scored job compute `computeAcceptanceOdds(llmScore, verdict)` + `inviteBand()` (§5.3).
-- **STEP 9 — INSIGHT (Sonnet, 1 call).** `shortlist = ` top ~12 scored by acceptance-odds. `insight = await insightAgent.run({...}, {requestId, locale, signal}).catch(() => null)`; CitationGuard to shortlist jobIds + raiseOddsLevers; missing notes → deterministic fallback. `writeDeductionLog('ra_crossbank_insight')`.
+- **STEP 9 — INSIGHT (configured model, 1 call).** `shortlist = ` top ~12 scored by acceptance-odds. `insight = await insightAgent.run({...}, {requestId, locale, signal}).catch(() => null)`; CitationGuard to shortlist jobIds + raiseOddsLevers; missing notes → deterministic fallback. `writeDeductionLog('ra_crossbank_insight')`.
 - **STEP 10 — RANK + BUCKET (deterministic, §5.4).** Recommended = scored & `llmScore ≥ SCORE_FLOOR`, ordered by **acceptanceOdds desc**, sliced to `limit`. Explore = `coverageSet` minus Recommended, ordered by `preScore desc`, sliced to 24, tier-labeled. Batch-load `RATrackerEntry` bookmark state. Build `DiscoverJobCard[]` per bucket.
 - **STEP 11 — RETURN** `{ recommended, explore, coverage, insight, banksSwept, banksDegraded, scorerCallsUsed, scorerCacheHits, zeroResults: recommended.length + explore.length === 0 }`.
 
-**Concurrency/budget ceiling:** ≤2 bank sweeps ∥ · 1 Haiku · ≤16 Sonnet scores in `≤8`-wide waves (hard-capped by `mapWithConcurrency`) · 1 Sonnet insight. Per-run ≈ **$0.30–0.35** (see §8). Route enforces a per-user daily cap + rate limit.
+**Concurrency/budget ceiling:** ≤2 bank sweeps ∥ · 1 explorer call · ≤16 matching-model scores in `≤8`-wide waves (hard-capped by `mapWithConcurrency`) · 1 insight call. Cost depends on configured models (see §8). Route enforces a per-user daily cap + rate limit.
 
 **`mapWithConcurrency` (new util, `raCrossBankMatch.ts`):**
 ```ts
@@ -348,9 +348,9 @@ preScore = 100·(0.34·requiredCoverage + 0.16·keywordCoverage + 0.14·preferre
 
 **COVERAGE GUARANTEE:** keep all `preScore ≥ PRE_FLOOR(25)` → `coverageSet`; all materialized (up to `MATERIALIZE_CAP`), visible in `/search` regardless of LLM scoring.
 
-**BUDGET RESERVATION:** `SCORER_BUDGET` split by tier per `aggressiveness`; within each tier take top-preScore; under-filled tier spills to the next; enforce `MIN_STRETCH_SCORED=3` so adjacent/stretch always get Sonnet attention — the knob that stops accuracy from silently deleting recall.
+**BUDGET RESERVATION:** `SCORER_BUDGET` split by tier per `aggressiveness`; within each tier take top-preScore; under-filled tier spills to the next; enforce `MIN_STRETCH_SCORED=3` so adjacent/stretch always get scorer attention — the knob that stops accuracy from silently deleting recall.
 
-### 5.3 Acceptance-odds (accuracy-first composite, grafted) — computed after Sonnet scoring
+### 5.3 Acceptance-odds (accuracy-first composite, grafted) — computed after matching-model scoring
 
 ```
 margin           = (llmScore − INVITE_SCALE_OFFSET) − inviteBar
@@ -442,8 +442,8 @@ interface CrossBankDiscoverResponse { recommended: DiscoverJobCard[]; explore: D
 | File | Responsibility |
 |---|---|
 | `server/src/roboapply/v2/services/RACrossBankSearchService.ts` | Orchestrator `run()`: never-throw, bank sweep ∥, pre-match, materialize, cache-first `scoreWave` (own `mapWithConcurrency ≤8`), acceptance-odds, insight, rank/bucket, persist, DTO. Exports `raCrossBankSearchService` singleton + `__test` seams. |
-| `server/src/roboapply/v2/agents/RACrossBankExplorerAgent.ts` | Haiku `BaseAgent<CrossBankExplorerInput,CrossBankExplorerPlan>`; temp 0.3, maxTokens 700, `json_object`, locale→null; `buildExplorerFallback`; `pickCrossBankExplorerModel`; `__test`. |
-| `server/src/roboapply/v2/agents/RACrossBankInsightAgent.ts` | Sonnet `BaseAgent`; temp 0.4, maxTokens 1400; CitationGuard (jobId + raiseOddsLevers), score/third-person scrub, parse-lenient; `pickCrossBankInsightModel`; `__test`. |
+| `server/src/roboapply/v2/agents/RACrossBankExplorerAgent.ts` | Configured `BaseAgent<CrossBankExplorerInput,CrossBankExplorerPlan>`; temp 0.3, maxTokens 700, `json_object`, locale→null; `buildExplorerFallback`; `pickCrossBankExplorerModel`; `__test`. |
+| `server/src/roboapply/v2/agents/RACrossBankInsightAgent.ts` | Configured `BaseAgent`; temp 0.4, maxTokens 1400; CitationGuard (jobId + raiseOddsLevers), score/third-person scrub, parse-lenient; `pickCrossBankInsightModel`; `__test`. |
 | `server/src/roboapply/v2/lib/raBankClients.ts` | `BankId`, `getBankClient` (singleton-reuse + per-URL cache), `isBankEnabled` (+ tenancy gate), `listEnabledBanks`. |
 | `server/src/roboapply/v2/lib/raBankProviders.ts` | `BankJobProvider` seam + `robohireBankProvider`/`gohireBankProvider`; `search(client, intent, ctx)` (injected client) with `buildBankJobWhere` + `normalizeBankJobRow`; returns `null`, never throws. |
 | `server/src/roboapply/v2/lib/raCrossBankMatch.ts` | Pure heart: `canonicalizeTag`, `parseSeniorityBand`(executive→exec), `deriveCandidateSignals`, `computePreScore`, `assignTier`, `resolveMatchInviteScore` (clamp 55–80 + `barIsDefault`), `crossBankDedup`(jobFingerprint + alsoOnBank), `reserveScorerBudgetByTier`(MIN_STRETCH_SCORED), `computeAcceptanceOdds`(default-bar reweight + INVITE_SCALE_OFFSET), `inviteBand`, `computeRaiseOddsLevers`, `mapRecruiterJobToRAJobUpsert`, `synthesizeApplyUrl`, `normalizeWorkMode`, `normalizeEmploymentType`, `normalizeSalaryPeriod`, `bankDisplayName`, `mapWithConcurrency`, `buildCoverageStats`. Wide `__test` export. |
@@ -467,15 +467,15 @@ interface CrossBankDiscoverResponse { recommended: DiscoverJobCard[]; explore: D
 | `lib/api/v2/types.ts` | Add `DiscoverJobCard` + `CrossBankDiscoverResponse`; widen `RAJobListItem`/`OnboardingJobCard` source handling. |
 | `lib/api/v2/_real.ts` | `discover.run = roboApi.post(\`${BASE}/discover/run\`, body)`. |
 | `lib/stub/raV2.stub.ts` | `discover.run` stub returning the identical `CrossBankDiscoverResponse` shape (keeps `NODE_ENV=test` component tests green). |
-| `.env.example` | `DATABASE_URL_ROBOHIRE`, `DATABASE_URL_GOHIRE` (+ `DIRECT_*`), `ROBOHIRE_PUBLIC_JOB_BASE_URL`, `GOHIRE_PUBLIC_JOB_BASE_URL`, `RA_CROSSBANK_DISABLED`, `RA_CROSSBANK_ROBOHIRE_DISABLED`, `RA_CROSSBANK_GOHIRE_DISABLED`, `RA_CROSSBANK_CROSS_TENANT_CONFIRMED`, `RA_CROSSBANK_SCORER_BUDGET`, `RA_CROSSBANK_INVITE_OFFSET`, `RA_V2_CROSSBANK_EXPLORER_MODEL`, `RA_V2_CROSSBANK_INSIGHT_MODEL`. |
+| `.env.example` | `DATABASE_URL_ROBOHIRE`, `DATABASE_URL_GOHIRE` (+ `DIRECT_*`), `ROBOHIRE_PUBLIC_JOB_BASE_URL`, `GOHIRE_PUBLIC_JOB_BASE_URL`, `RA_CROSSBANK_DISABLED`, `RA_CROSSBANK_ROBOHIRE_DISABLED`, `RA_CROSSBANK_GOHIRE_DISABLED`, `RA_CROSSBANK_CROSS_TENANT_CONFIRMED`, `RA_CROSSBANK_SCORER_BUDGET`, `RA_CROSSBANK_INVITE_OFFSET`, `LLM_MATCHING_MODEL`, `LLM_MATCHING_REASONING_EFFORT`, `RA_V2_CROSSBANK_EXPLORER_MODEL`, `RA_V2_CROSSBANK_INSIGHT_MODEL`. |
 
 ---
 
 ## 8. Cost / billing + observability
 
-- **Per-run cost:** 1 Haiku explorer (~$0.002) + ≤16 Sonnet scores (~$0.018 each ⇒ ≤$0.29, minus cache hits) + 1 Sonnet insight (~$0.01) ≈ **$0.30 typical, ~$0.35 ceiling**. Cache-first scoring makes repeat runs near-free. Compromise budget 16 (between accuracy-first's 12 and coverage-first's 24) preserves tier reservation while roughly halving coverage-first's cost/bloat.
+- **Per-run cost:** depends on the configured explorer, matching, and insight models. Cache-first scoring keeps repeat runs near-free; the scorer budget remains capped at 16 calls per run.
 - **Billing rows:** `ra_crossbank_score` per fresh score, `ra_crossbank_insight` per insight call — both audit-only `source:'free_tier'` (deliberately NOT the gated V1 `resume_match`; if this later bills real credit it must route through `runMatchWithQuota`'s gate→commit-on-success, not this audit SKU). Cost via `costPatchFromTally(requestId)`; failed calls debit zero.
-- **Route guard:** `POST /discover/run` enforces a **per-user daily cap + rate limit** (mirror the mission daily-cap pattern) so the ≤$0.35/run path is not abusable.
+- **Route guard:** `POST /discover/run` enforces a **per-user daily cap + rate limit** (mirror the mission daily-cap pattern) so the model-backed path is not abusable.
 - **Structured log (one line per run):** `logger.info('RA_V2_CROSSBANK', { userId, banksSwept, banksDegraded, retrieved, materialized, droppedTwins, scorerCalls, cacheHits, recommended, explore, gateDroppedByPreFloor, defaultBarShare, durationMs, platformCostUsd })`. `AGENT_LLM` per-agent cost lines are automatic via `chatLogged`.
 - **Monitor before GA (the calibration debts):** `defaultBarShare` (how many banks ship the untuned 60 bar — drives which odds weights dominate), acceptance-odds vs **real invite outcomes** (to set `INVITE_SCALE_OFFSET`), adjacent/stretch surfaced ratio (Explorer over-broadening), and materialized-row growth (bloat/archival).
 
@@ -485,7 +485,7 @@ interface CrossBankDiscoverResponse { recommended: DiscoverJobCard[]; explore: D
 
 1. **Recruiter matching-signal producers are absent from this repo** (`JobSemanticTagAgent`/`JobKeywordService`/`JobBankMatchService`), so `requiredTagSet`/`requiredKeywordSet` may be `[]` and `matchInviteScore` the untuned `@default(60)`. **Mitigation [FIX-5]:** tags/keywords are *soft* — one OR-clause in retrieval, one term in a 6-term preScore, never a hard drop; keyword coverage falls back to raw resume tokens; `barIsDefault` reweights odds to lean on the scale-free required-coverage anchor. A signal-empty bank degrades ranking, never recall.
 2. **Tag grammar is unverifiable** (schema `lang:python` vs `semanticLabels.ts` title-case `Python`). **Mitigation:** `canonicalizeTag()` accepts both namespaced and bare forms + a synonym map, applied to both sides; because tags are soft, a residual mismatch only softens a bonus term.
-3. **Cross-scorer scale mismatch:** our Sonnet 0-100 rubric (35/30/15/10/10) vs the recruiter's `matchInviteScore` are only heuristically comparable. **Mitigation:** label everything "odds / above the bar", never "you will be invited"; `INVITE_SCALE_OFFSET` (env) corrects systematic drift once validated against real invite outcomes; the 0.30–0.55 required-coverage anchor keeps ranking honest if the LLM-vs-bar comparison is noisy.
+3. **Cross-scorer scale mismatch:** our LLM 0-100 rubric (35/30/15/10/10) vs the recruiter's `matchInviteScore` are only heuristically comparable. **Mitigation:** label everything "odds / above the bar", never "you will be invited"; `INVITE_SCALE_OFFSET` (env) corrects systematic drift once validated against real invite outcomes; the 0.30–0.55 required-coverage anchor keeps ranking honest if the LLM-vs-bar comparison is noisy.
 4. **Concurrency [FIX-4]:** `scoreRows` is NOT chunked (`Promise.all` over the whole array). The orchestrator owns `mapWithConcurrency(rows, 8, fn)` so in-flight ≤ 8 regardless of the 16-budget — no rate-limit breach.
 5. **Materialization bloat + dead postings [FIX-8]:** up to ~120 rows/run into the shared candidate index, no live status mirror. **Mitigation:** shipped `archivedAt` sweep at STEP 0 (postedAt < now−45d); `MATERIALIZE_CAP=120`; `reconcileCrossBankJobStatus` on apply-click/detail-open archives closed jobs and blocks dead applies. Add a periodic hard-purge of unreferenced crossbank RAJob rows as a V2.5 follow-up.
 6. **Connection budget [FIX-6]:** `getBankClient` returns the singleton when a bank URL equals the active DB (no 2nd pool); a genuinely-foreign bank opens one extra `max:1` pool. Worst cold-start = 2 pools (3 only if both bank URLs differ from `DATABASE_URL`), all read-only. Watch Neon/LightArk pooler limits under `/discover` burst; the route rate-limit bounds it.

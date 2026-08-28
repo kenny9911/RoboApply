@@ -8,9 +8,9 @@
 // audio track and measures the received PCM to prove the greeting is actually
 // spoken — not just "session started" in a log.
 //
-// Run: node verify-greeting.mjs [language]
-//   node verify-greeting.mjs en
-//   node verify-greeting.mjs zh
+// Run: node verify-greeting.mjs [language] [LiveKit worker model]
+//   node verify-greeting.mjs en livekit-provider/model-id
+//   node verify-greeting.mjs zh provider/model-id
 //
 // Exit 0 = greeting audio detected (PASS). Exit 1 = no greeting (FAIL).
 
@@ -29,6 +29,7 @@ import {
 } from '@livekit/rtc-node';
 
 loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
 
 const LANG = (process.argv[2] || 'en').trim();
 const URL = process.env.LIVEKIT_URL?.trim();
@@ -36,8 +37,24 @@ const KEY = process.env.LIVEKIT_API_KEY?.trim();
 const SECRET = process.env.LIVEKIT_API_SECRET?.trim();
 const AGENT_NAME = process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboApply-Interview';
 const CALLBACK_BASE = process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() || 'http://localhost:4607';
+// This harness talks directly to the worker, so it needs the LiveKit Inference
+// ID that production writes to room metadata—not the backend selector stored in
+// LLM_INTERVIEW_MODEL (the control plane may translate provider namespaces).
+const LLM_MODEL = (process.argv[3] || process.env.VERIFY_LIVEKIT_LLM_MODEL || '').trim();
+const LLM_REASONING_EFFORT = (process.env.LLM_INTERVIEW_REASONING_EFFORT || '').trim().toLowerCase();
 if (!URL || !KEY || !SECRET) {
-  console.error('Missing LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env.local');
+  console.error('Missing LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET in .env.local or .env');
+  process.exit(2);
+}
+if (!LLM_MODEL) {
+  console.error('Missing LiveKit worker model (pass it after the language or set VERIFY_LIVEKIT_LLM_MODEL)');
+  process.exit(2);
+}
+if (
+  LLM_REASONING_EFFORT &&
+  !['minimal', 'low', 'medium', 'high'].includes(LLM_REASONING_EFFORT)
+) {
+  console.error('LLM_INTERVIEW_REASONING_EFFORT must be minimal, low, medium, or high for LiveKit Inference');
   process.exit(2);
 }
 const HTTP_URL = URL.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
@@ -64,7 +81,10 @@ const metadata = JSON.stringify({
   openingInstruction: opening,
   voice: { provider: 'openai', model: 'tts-1', voiceId: 'nova', languageCode: LANG },
   stt: { provider: 'deepgram', model: 'deepgram/nova-3', language: LANG, fallbackModels: ['deepgram/nova-2'] },
-  llm: { model: 'openai/gpt-4o' },
+  llm: {
+    model: LLM_MODEL,
+    ...(LLM_REASONING_EFFORT ? { reasoningEffort: LLM_REASONING_EFFORT } : {}),
+  },
   callbackBaseUrl: CALLBACK_BASE,
 });
 

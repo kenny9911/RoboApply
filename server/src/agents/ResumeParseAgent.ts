@@ -3,6 +3,7 @@ import { withLLMRetry } from '../services/llm/withRetry.js';
 import type { Message, ParsedResume, WorkExperience } from '../types/index.js';
 import { logger } from '../services/LoggerService.js';
 import { isParsedResumeLikelyIncomplete } from '../services/ResumeParseValidation.js';
+import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
 
 interface ResumeParseInput {
   resumeText: string;
@@ -749,6 +750,8 @@ Please parse this resume and extract structured information.`;
         temperature: retry ? 0 : 0.1,
         maxTokens: 24000,
         requestId,
+        model: getTaskModel('extract'),
+        reasoningEffort: getTaskReasoningEffort('extract'),
         ...(signal ? { signal } : {}),
       }),
       { label: `${this.name}.parseOnce`, requestId, signal },

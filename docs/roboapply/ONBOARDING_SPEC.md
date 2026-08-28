@@ -77,7 +77,7 @@ sentence is satisfied literally, and the CEO's request is satisfied completely.
 **WHY.** `RAOnboardingService.pickNextTopic` walks seven topics one LLM round-trip at a time
 (`targetRoles → workMode → salary → industry → employmentType → location → seniority`). A chat turn
 costs a read, a decision, typing and a round trip — 12 to 16 seconds each when nothing goes wrong.
-Seven of them is 90–180 s of user time, 8+ blocking round trips, ~10 Haiku + up to 25 Sonnet calls.
+Seven of them is 90–180 s of user time, 8+ blocking round trips, ~10 onboarding-model + up to 25 matching-model calls.
 Meanwhile `bootstrap()` already reads `parsedData`, `summary` and `resumeMarkdown` and uses them for
 two cosmetic things — display rows and a prose headline — then writes `draftPreferences: {}`.
 `RAOnboardingKickoffAgent`'s own prompt instructs the model to determine role, trajectory, tenure
@@ -99,8 +99,8 @@ advance of its consumer we got `components/v3/onboarding/*`: nine components, 45
 five test files, 60 translated strings, imported by nothing. Ship the surface with its consumer or
 do not ship it.
 
-Deleting the chat also deletes the flow's entire LLM wall-clock: bootstrap becomes **1 Haiku**
-(often 0 — see D5), confirm becomes **0 or 1 Haiku**.
+Deleting the chat also deletes the flow's entire LLM wall-clock: bootstrap becomes **1 onboarding-model call**
+(often 0 — see D5), confirm becomes **0 or 1 onboarding-model call**.
 
 **WHAT DIES.** `POST /onboarding/chat/stream`, `RAOnboardingChatAgent`,
 `RAOnboardingSearchPlannerAgent`, `RAOnboardingKickoffAgent`, `RAOnboardingService.runTurn` and its
@@ -118,7 +118,7 @@ a display string. `EMPLOYMENT_TYPE_TABLE` in `raOnboardingDraft.ts` already maps
 `'freelance'`. Zero new normalization is required for four of the five seeded fields.
 
 So the deterministic seed runs in-process, in single-digit milliseconds, and the confirm screen
-renders off it. One Haiku agent (`RAOnboardingResumeSeedAgent`) runs in parallel and contributes
+renders off it. One onboarding-model agent (`RAOnboardingResumeSeedAgent`) runs in parallel and contributes
 only `industriesTarget`, plus a role list when the deterministic path found none (thin resume). If
 it fails or is slow, the screen is already correct.
 
@@ -211,7 +211,7 @@ commit `1f4fb83` deliberately deleted.
 
 Consequence: **the recommend round does not run inside onboarding.** Confirm persists and closes;
 `/jobs` runs its normal preference-driven search and lazily scores each visible card with the
-`useJobScore` path that already ships. This removes 1 Haiku planner + up to 8 Sonnet scorers and
+`useJobScore` path that already ships. This removes 1 onboarding-model planner + up to 8 matching-model scorers and
 12–25 s of blocking wall-clock from the first-run path.
 
 To keep the corpus from being thin for a brand-new query, `POST /onboarding/confirm` fires **one
@@ -259,7 +259,7 @@ cannot currently keep it.
 
 **WHY.** `SESSIONS_PER_DAY = 3`, counted from UTC midnight. Three resume re-picks with a turn each
 and a four-minute-old account is 429'd out of setup for the rest of the day, with copy that says
-"Come back tomorrow." With the chat gone, a session costs at most 2 Haiku calls.
+"Come back tomorrow." With the chat gone, a session costs at most 2 onboarding-model calls.
 
 **WHAT DIES.** `SESSIONS_PER_DAY = 3` → `20`. `jobs.setup.error_daily_limit` is rewritten to name a
 recovery instead of a date.
@@ -436,7 +436,7 @@ attached to individual empty rows — an unfilled row just shows its `empty.*` p
 question is the most expensive thing in the UI and the user with the thinnest resume is the least
 able to answer it.
 
-**Server on submit.** `POST /v2/onboarding/confirm` — deterministic merge, one optional Haiku for
+**Server on submit.** `POST /v2/onboarding/confirm` — deterministic merge, one optional onboarding-model call for
 the free-text line, persist to `RACareerGoal` + `preferencesBlob`, set the variant primary,
 fire-and-forget the external provider warm. No scorers, no planner.
 
@@ -677,7 +677,8 @@ server re-applies it on confirm so the two can never drift.
 
 ### 6.2 New — `RAOnboardingResumeSeedAgent`
 
-`server/src/roboapply/v2/agents/RAOnboardingResumeSeedAgent.ts`. Haiku, temp 0.1, max 700 tokens.
+`server/src/roboapply/v2/agents/RAOnboardingResumeSeedAgent.ts`. Uses `LLM_ONBOARDING_MODEL` and
+`LLM_ONBOARDING_REASONING_EFFORT`; temp 0.1, max 700 tokens.
 Input: `parsedData` JSON clipped to 6000 chars + `resumeMarkdown` clipped to 1200.
 Output: `{ updates: OnboardingDraftPreferences, fieldConfidence }` — reuses `parseOutput`,
 `normalizeDraftUpdates`, `dropFalseClears`, `normalizeFieldConfidence` from
@@ -939,12 +940,12 @@ cut at the score floor).
    `employmentTypes` contains both, `locations.cities` present with `fieldConfidence.locations
    === 0.5` and `'locations'` in `proposedFields`, `seniority` non-null. An empty resume →
    `thin === true`.
-3. `POST /bootstrap` against a real variant returns `draft` non-empty and costs **≤ 1** Anthropic
+3. `POST /bootstrap` against a real variant returns `draft` non-empty and costs **≤ 1** onboarding-model
    call (assert on `writeDeductionLog` rows).
-4. `POST /confirm` with `freeText: ''` costs **0** Anthropic calls and writes `roleTitles`,
+4. `POST /confirm` with `freeText: ''` costs **0** onboarding-model calls and writes `roleTitles`,
    `workModes`, `cities`, `targetCompanies`, `onboarding.completedAt` into `preferencesBlob`.
 5. `POST /confirm` with `freeText: 'no agencies, not defense'` → `dealbreakers` populated,
-   `capturedFromNotes` non-empty, exactly 1 Haiku call.
+   `capturedFromNotes` non-empty, exactly 1 onboarding-model call.
 6. `grep -rn "pickNextTopic\|runTurn\|chat/stream" server/src` returns nothing.
 
 ---

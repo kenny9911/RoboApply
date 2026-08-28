@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BankJobRow } from '../types/crossBank.js';
+import { jobScoringContentHash } from '../lib/raCrossBankMatch.js';
 
 // ─── Mock every I/O seam BEFORE importing the service ──────────────────────
 const upsertRAJob = vi.fn(async (args: any) => ({ id: `raj_${args.where.externalId_sourceBoard.externalId}` }));
@@ -82,12 +83,9 @@ const scorerRun = vi.fn(async (input: any) => {
 });
 vi.mock('../agents/RAJobMatchScorerAgent.js', () => ({
   raJobMatchScorerAgent: { run: (...a: any[]) => scorerRun(...a) },
-  pickJobMatchScorerModel: () => 'openrouter/anthropic/claude-sonnet-4.6',
+  resolvedJobMatchScorerModel: () => 'provider/test-matching-model',
 }));
 
-vi.mock('./RAOnboardingRecommendService.js', () => ({
-  evaluateCachedScore: () => ({ fresh: false, scoreOnly: false }),
-}));
 const writeDeductionLog = vi.fn(async () => undefined);
 vi.mock('../../../lib/matchBilling.js', () => ({ writeDeductionLog: (...a: any[]) => writeDeductionLog(...a) }));
 vi.mock('../../../lib/deductionCost.js', () => ({ costPatchFromTally: () => ({ platformCostUsd: 0.3, metadata: {} }) }));
@@ -122,6 +120,13 @@ describe('RACrossBankSearchService.run (integration)', () => {
     expect(upsertRAJob).toHaveBeenCalled();
     // Scores were persisted for scored pairs.
     expect(upsertScore).toHaveBeenCalled();
+    expect(scorerRun.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+      model: 'provider/test-matching-model',
+    }));
+    expect(upsertScore.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      create: expect.objectContaining({ modelUsed: 'provider/test-matching-model' }),
+      update: expect.objectContaining({ modelUsed: 'provider/test-matching-model' }),
+    }));
     // Insight portfolio summary surfaced.
     expect(res.insight?.portfolioSummary).toContain('backend');
     // Cards carry acceptance-odds + honest bands.
@@ -129,6 +134,58 @@ describe('RACrossBankSearchService.run (integration)', () => {
     expect(top.acceptanceOdds).toBeGreaterThan(0);
     expect(['strong', 'on_the_bar', 'reach', 'bar_unset']).toContain(top.acceptanceBand);
     expect(top.applyUrl).toMatch(/\/jobs\//);
+  });
+
+  it('recomputes a hash-current cache row produced by an old scorer model', async () => {
+    const job = mkJob('rh1', 'Senior Backend Engineer', 'robohire', 70).job;
+    findManyScore.mockResolvedValueOnce([
+      {
+        jobId: 'raj_rh1',
+        score: 91,
+        explanation: {
+          responseLanguage: 'en',
+          promptVersion: 'crossbank_v1',
+          crossBank: { jobContentHash: jobScoringContentHash(job) },
+        },
+        resumeContentHashAtScore: 'h1',
+        modelUsed: 'anthropic/claude-sonnet-4.6',
+      },
+    ]);
+
+    const svc = new RACrossBankSearchService();
+    const res = await svc.run({ userId: 'u1', resumeVariantId: null, locale: 'en' });
+
+    expect(findManyScore.mock.calls[0]?.[0].select).toEqual(expect.objectContaining({
+      modelUsed: true,
+    }));
+    expect(res.scorerCacheHits).toBe(0);
+    expect(scorerRun).toHaveBeenCalledTimes(3);
+  });
+
+  it('reuses a cache row only when its scorer model is still current', async () => {
+    const job = mkJob('rh1', 'Senior Backend Engineer', 'robohire', 70).job;
+    findManyScore.mockResolvedValueOnce([
+      {
+        jobId: 'raj_rh1',
+        score: 91,
+        explanation: {
+          rationale: 'Cached current-model score.',
+          strengths: ['Go depth'],
+          gaps: [],
+          responseLanguage: 'en',
+          promptVersion: 'crossbank_v1',
+          crossBank: { jobContentHash: jobScoringContentHash(job) },
+        },
+        resumeContentHashAtScore: 'h1',
+        modelUsed: 'provider/test-matching-model',
+      },
+    ]);
+
+    const svc = new RACrossBankSearchService();
+    const res = await svc.run({ userId: 'u1', resumeVariantId: null, locale: 'en' });
+
+    expect(res.scorerCacheHits).toBe(1);
+    expect(scorerRun).toHaveBeenCalledTimes(2);
   });
 
   it('degrades to one bank when the other returns null, never throws', async () => {

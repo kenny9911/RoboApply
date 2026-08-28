@@ -22,8 +22,7 @@
 // seeker zero credits. See docs/job-seeker-ai-architecture.md §4.2 +
 // docs/prd-job-seeker-app.md §F (Pricing & Tiers).
 //
-// Cost: Sonnet (rewrite) ≈ $0.06–$0.10; Gemini Flash (claim-checker) ≈
-// $0.003. Total ≈ $0.07/call.
+// Model and reasoning effort: shared rewrite task settings for both passes.
 //
 // Boundary: extends BaseAgent (explicitly allow-listed for seeker code).
 // References ResumeMatchAgent only as a public re-scoring utility — the
@@ -34,6 +33,10 @@ import { llmService } from '../../../services/llm/LLMService.js';
 import { languageService } from '../../../services/LanguageService.js';
 import { logger } from '../../../services/LoggerService.js';
 import type { ParsedResume } from '../../../types/index.js';
+import {
+  getTaskModel,
+  getTaskReasoningEffort,
+} from '../../../lib/llm/llmTaskSettings.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -190,6 +193,10 @@ export class SeekerResumeTailorAgent extends BaseAgent<
 > {
   constructor() {
     super('SeekerResumeTailorAgent');
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('rewrite');
   }
 
   protected getTemperature(): number {
@@ -497,6 +504,7 @@ ${(input.job.niceToHave || '').slice(0, 2_000)}`;
       input.job.description ?? input.job.title,
       requestId,
       input.locale,
+      getTaskModel('rewrite'),
     );
 
     const firstCheck = await runClaimChecker({
@@ -548,6 +556,8 @@ ${(input.job.niceToHave || '').slice(0, 2_000)}`;
       {
         temperature: this.getTemperature(),
         maxTokens: this.getMaxTokens(),
+        model: getTaskModel('rewrite'),
+        reasoningEffort: getTaskReasoningEffort('rewrite'),
         requestId,
       },
     );
@@ -597,7 +607,7 @@ export const seekerResumeTailorAgent = new SeekerResumeTailorAgent();
 // We then translate that into a verdict the tailor agent uses to decide
 // whether to retry or accept.
 
-const CLAIM_CHECKER_MODEL = 'google/gemini-3.0-flash';
+const claimCheckerModel = (): string | undefined => getTaskModel('rewrite');
 
 const CLAIM_CHECKER_SYSTEM_PROMPT = `You are an adversarial fact-checker. You are given an ORIGINAL parsed resume + raw text (the ground truth) and a TAILORED resume (a recent edit). Your only job is to find ANY claim in the tailored resume that is not directly supported by the original.
 
@@ -700,6 +710,15 @@ async function runClaimChecker(args: {
     : CLAIM_CHECKER_SYSTEM_PROMPT;
 
   let responseText: string;
+  const model = claimCheckerModel();
+  let modelUsed = model ?? 'unconfigured';
+  if (!model) {
+    try {
+      modelUsed = llmService.getModel();
+    } catch {
+      // Preserve the fail-closed verdict below when no model is configured.
+    }
+  }
   try {
     responseText = await llmService.chat(
       [
@@ -709,7 +728,8 @@ async function runClaimChecker(args: {
       {
         temperature: 0.0,
         maxTokens: 24000,
-        model: CLAIM_CHECKER_MODEL,
+        model,
+        reasoningEffort: getTaskReasoningEffort('rewrite'),
         requestId,
       },
     );
@@ -734,7 +754,7 @@ async function runClaimChecker(args: {
           originalSupport: 'NONE',
         },
       ],
-      modelUsed: CLAIM_CHECKER_MODEL,
+      modelUsed,
     };
   }
 
@@ -765,7 +785,7 @@ async function runClaimChecker(args: {
           originalSupport: 'NONE',
         },
       ],
-      modelUsed: CLAIM_CHECKER_MODEL,
+      modelUsed,
     };
   }
 
@@ -789,13 +809,13 @@ async function runClaimChecker(args: {
   }
 
   const passed = parsed.passed === true && violations.length === 0;
-  return { passed, violations, modelUsed: CLAIM_CHECKER_MODEL };
+  return { passed, violations, modelUsed };
 }
 
 // Exported for testing — lets the test inject violations or stub LLM.
 export const __test = {
   runClaimChecker,
-  CLAIM_CHECKER_MODEL,
+  claimCheckerModel,
 };
 
 export default seekerResumeTailorAgent;

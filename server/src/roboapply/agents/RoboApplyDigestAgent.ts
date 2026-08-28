@@ -23,6 +23,7 @@ import { BaseAgent } from '../../agents/BaseAgent.js';
 import { writeDeductionLog } from '../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../lib/deductionCost.js';
 import { logger } from '../../services/LoggerService.js';
+import { llmService } from '../../services/llm/LLMService.js';
 import type { RoboApplyLocale } from './RoboApplyIntentParserAgent.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
@@ -93,13 +94,8 @@ export interface RoboApplyDigestOutput {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-// Default model. Used when the env override is unset. Resolved at CALL TIME
-// (not module-load) so it picks up dotenv values regardless of ESM import
-// order — the backend's `dotenv.config()` runs after this module is hoisted.
-const MODEL_DIGEST_DEFAULT = 'openrouter/anthropic/claude-sonnet-4.6';
-
 function digestModel(): string {
-  return process.env.RA_DIGEST_MODEL?.trim() || MODEL_DIGEST_DEFAULT;
+  return process.env.RA_DIGEST_MODEL?.trim() || llmService.getModel();
 }
 
 function clipString(s: unknown, max: number): string {
@@ -263,7 +259,7 @@ You output ONLY the JSON object.`;
   }
 
   /**
-   * Compose the daily digest. Runs the Sonnet pass, applies CitationGuard
+   * Compose the daily digest. Runs the configured LLM pass, applies CitationGuard
    * to verify every cited run id is real, sanitizes (drops sentences with
    * unknown ids), and writes the `roboapply_digest` audit row on success.
    *
@@ -283,8 +279,9 @@ You output ONLY the JSON object.`;
     },
   ): Promise<RoboApplyDigestOutput> {
     let output: RoboApplyDigestOutput;
-    const model = digestModel();
+    let model: string;
     try {
+      model = digestModel();
       output = await this.execute(
         input,
         '',

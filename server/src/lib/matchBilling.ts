@@ -657,22 +657,22 @@ export type DeductionSku =
   // (no quota gate at this SKU level — the underlying `resume_match` and
   // `seeker_apply` SKUs gate, and RoboApply itself caps by tier-daily-cap on
   // the mission row). docs/roboapply/02-architecture.md §9.
-  | 'roboapply_intent'         // Sonnet intent parse (~$0.005/call)
-  | 'roboapply_cover_letter'   // Opus 4.7 cover letter author (Sonnet for Free tier)
-  | 'roboapply_digest'         // Sonnet morning-digest narrator
+  | 'roboapply_intent'         // Configured intent-parser call
+  | 'roboapply_cover_letter'   // Configured cover-letter author call
+  | 'roboapply_digest'         // Configured morning-digest narrator
   // RoboApply V2 SKUs — candidate-facing companion product. All are
   // audit-only debits (V2 agents call `writeDeductionLog` directly; the
   // route layer enforces tier caps + rate limits where applicable).
   // See docs/roboapply/v2/04-backend-spec.md §7.
-  | 'ra_match_score'           // RAJobMatchScorerAgent — Sonnet, ~$0.02/call
-  | 'ra_keyword_extract'       // RAKeywordExtractorAgent — Haiku, ~$0.001/call
-  | 'ra_resume_tailor'         // RAResumeTailorAgent — Sonnet/Opus, $0.03/$0.18
-  | 'ra_cover_letter'          // RACoverLetterAgent — Opus/Sonnet, $0.15/$0.03
-  | 'ra_insight'               // RACareerInsightAgent — Sonnet, ~$0.015/call
-  | 'ra_jd_parse'              // RAJDParseAgent — Sonnet, ~$0.01/call (V2.1)
-  | 'ra_onboarding_turn'       // Onboarding-chat turn (Haiku extract + Sonnet stream) — success-only, ~$0.015/turn
-  | 'ra_crossbank_score'       // Cross-bank search — RAJobMatchScorerAgent per (resume,bank-job) pair — Sonnet, ~$0.018/call (audit-only, free_tier)
-  | 'ra_crossbank_insight';    // Cross-bank search — RACrossBankInsightAgent portfolio narrative — Sonnet, ~$0.01/call (audit-only, free_tier)
+  | 'ra_match_score'           // Configured RAJobMatchScorerAgent call
+  | 'ra_keyword_extract'       // Configured keyword-extractor call
+  | 'ra_resume_tailor'         // Configured resume-tailor call
+  | 'ra_cover_letter'          // Configured cover-letter call
+  | 'ra_insight'               // Configured career-insight call
+  | 'ra_jd_parse'              // Configured job-description parser call (V2.1)
+  | 'ra_onboarding_turn'       // Configured onboarding turn; success-only
+  | 'ra_crossbank_score'       // Configured scorer per (resume, bank-job) pair (audit-only, free_tier)
+  | 'ra_crossbank_insight';    // Configured cross-bank portfolio narrative (audit-only, free_tier)
 
 export type DeductionSource = 'plan' | 'overage' | 'free_tier' | 'byok';
 

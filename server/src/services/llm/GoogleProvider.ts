@@ -1,6 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Message, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '../../types/index.js';
 import { resolveLlmRequestTimeoutMs } from './providerTuning.js';
+import {
+  googleThinkingConfigFor,
+  OPENAI_STYLE_EFFORTS,
+  resolveReasoningEffort,
+} from './reasoningEffort.js';
 
 export class GoogleProvider implements LLMProvider {
   private genAI: GoogleGenerativeAI;
@@ -54,19 +59,32 @@ export class GoogleProvider implements LLMProvider {
       modelName = modelName.split('/')[1];
     }
 
+    const effort = resolveReasoningEffort({
+      explicit: options?.reasoningEffort,
+      tuned: this.extra?.reasoningEffort,
+      allow: OPENAI_STYLE_EFFORTS,
+    });
+    const thinkingConfig = googleThinkingConfigFor(modelName, effort);
+    // This repository still uses the legacy @google/generative-ai SDK, whose
+    // TypeScript shape predates thinkingConfig. It forwards generationConfig
+    // keys unchanged, so keep the current client while sending the documented
+    // GenerateContent REST field.
+    const generationConfig = {
+      temperature: options?.temperature ?? 0.7,
+      maxOutputTokens: options?.maxTokens,
+      ...(thinkingConfig ? { thinkingConfig } : {}),
+      // API-level JSON mode. Gemini's native structured-output knob — forces
+      // a single application/json response (compatible with thinking models).
+      // No "prompt must mention json" precondition (that's OpenAI-only), so we
+      // gate purely on the caller's responseFormat flag.
+      ...(options?.responseFormat === 'json_object'
+        ? { responseMimeType: 'application/json' }
+        : {}),
+    };
+
     const model = this.genAI.getGenerativeModel({
       model: modelName,
-      generationConfig: {
-        temperature: options?.temperature ?? 0.7,
-        maxOutputTokens: options?.maxTokens,
-        // API-level JSON mode. Gemini's native structured-output knob — forces
-        // a single application/json response (compatible with thinking models).
-        // No "prompt must mention json" precondition (that's OpenAI-only), so we
-        // gate purely on the caller's responseFormat flag.
-        ...(options?.responseFormat === 'json_object'
-          ? { responseMimeType: 'application/json' }
-          : {}),
-      },
+      generationConfig,
     }, this.requestOptions);
 
     // Convert messages to Gemini format

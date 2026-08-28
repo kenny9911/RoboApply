@@ -299,7 +299,7 @@ claim ends a candidacy. This is AI capability made legible — the opposite of t
 
 ### D14 — The interview grade must be produced by a model that read the transcript.
 
-**DECISION.** Build `RAInterviewEvalAgent` (Sonnet, temp 0.1). Input: the transcript **and** the
+**DECISION.** Build `RAInterviewEvalAgent` (configured interview task model, temp 0.1). Input: the transcript **and** the
 `RAInterviewBlueprint` that generated the questions. Output contract: every dimension score must cite
 a **verbatim quote** from the candidate's own turn; no quote, no claim. `heuristicScore()` is retained
 only as the never-throws fallback and, when it fires, the UI labels it
@@ -1253,7 +1253,7 @@ warning.
 
 **Goal.** The grade is produced by a model that read the transcript.
 
-**Files.** `server/src/roboapply/v2/agents/RAInterviewEvalAgent.ts` (new; Sonnet, temp 0.1,
+**Files.** `server/src/roboapply/v2/agents/RAInterviewEvalAgent.ts` (new; configured interview task model, temp 0.1,
 quote-citation output contract, `parseOutput` throws) · `RAMockService.ts` (`score()` calls the agent;
 `heuristicScore` becomes the labelled fallback) · `app/(auth)/practice/[id]/report/page.tsx` +
 `components/mock-interview/v3/Scorecard.tsx` (homework layout per §6.7).

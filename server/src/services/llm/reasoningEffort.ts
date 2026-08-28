@@ -1,13 +1,14 @@
 /**
  * Shared reasoning-effort resolution for the LLM providers.
  *
- * `LLM_REASONING_EFFORT` is a GLOBAL dial: set it once (repo-root .env) and
- * every model that exposes a reasoning-effort knob runs at that setting. Models
- * WITHOUT one ignore it — the value is dropped here, before the request body is
- * built, so a non-reasoning model is never sent a field it would 400 on.
+ * `LLM_REASONING_EFFORT` is the shared fallback dial for providers that opt in.
+ * Task-specific calls can supply a higher-precedence explicit value. Providers
+ * filter both forms against the ladder their API accepts so unsupported values
+ * are omitted rather than causing an upstream 400.
  *
  * Precedence, per provider:
- *   DB system-key tuning (`ProviderExtra.reasoningEffort`, admin LLM settings)
+ *   per-call task override (`LLM_*_REASONING_EFFORT`)
+ *   → DB system-key tuning (`ProviderExtra.reasoningEffort`, admin LLM settings)
  *   → the provider's own env var (e.g. `DEEPSEEK_REASONING_EFFORT`)
  *   → the global `LLM_REASONING_EFFORT`.
  * Unset everywhere ⇒ `undefined` ⇒ the field is omitted entirely and the
@@ -15,9 +16,10 @@
  *
  * Each provider declares what its API actually ACCEPTS via `allow`, and a value
  * outside that set falls through to the next tier instead of being sent:
- *   • OpenAI chat-completions `reasoning_effort` and OpenRouter's unified
- *     `reasoning.effort` share the minimal|low|medium|high ladder.
+ *   • OpenAI chat-completions uses minimal|low|medium|high.
+ *   • OpenRouter's unified `reasoning.effort` also accepts max.
  *   • DeepSeek takes high|max only, so a global `medium` is ignored there.
+ *   • Anthropic Messages uses `output_config.effort` with low through max.
  *
  * Deliberately dependency-free (like providerTuning.ts's model predicates) so
  * it can be unit-tested without the server's nodenext `.js`-specifier world.
@@ -31,8 +33,47 @@ const ALL_EFFORTS: readonly string[] = ['minimal', 'low', 'medium', 'high', 'max
 /** OpenAI's ladder — also what OpenRouter's unified `reasoning.effort` takes. */
 export const OPENAI_STYLE_EFFORTS: readonly ReasoningEffort[] = ['minimal', 'low', 'medium', 'high'];
 
-/** DeepSeek's ladder (no low/medium; `max` is DeepSeek-only). */
+/** OpenRouter's unified ladder. Its router maps `max` to the upstream model's
+ * strongest supported effort, while OpenAI-direct does not accept that value. */
+export const OPENROUTER_EFFORTS: readonly ReasoningEffort[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'max',
+];
+
+/** DeepSeek's ladder (no minimal/low/medium). */
 export const DEEPSEEK_EFFORTS: readonly ReasoningEffort[] = ['high', 'max'];
+
+/** Anthropic Messages `output_config.effort` ladder. */
+export const ANTHROPIC_EFFORTS: readonly ReasoningEffort[] = ['low', 'medium', 'high', 'max'];
+
+export type GoogleThinkingLevel = Exclude<ReasoningEffort, 'max'>;
+export type GoogleThinkingConfig =
+  | { thinkingLevel: GoogleThinkingLevel }
+  | { thinkingBudget: number };
+
+/** Convert the shared effort ladder to the model-specific Gemini
+ * GenerateContent contract: Gemini 3+ takes thinkingLevel, while 2.5 takes a
+ * numeric thinkingBudget. `minimal` on Gemini 3 Pro maps to its closest
+ * supported level (`low`). */
+export function googleThinkingConfigFor(
+  model: string | undefined,
+  effort: ReasoningEffort | undefined,
+): GoogleThinkingConfig | undefined {
+  if (!model || !effort || effort === 'max') return undefined;
+  const id = model.toLowerCase().split('/').pop() ?? '';
+  if (/^gemini-2\.5(?:[.-]|$)/.test(id)) {
+    const thinkingBudget =
+      effort === 'high' ? 24_576 : effort === 'medium' ? 8_192 : 1_024;
+    return { thinkingBudget };
+  }
+  if (!/^gemini-3(?:[.-]|$)/.test(id)) return undefined;
+  const thinkingLevel =
+    effort === 'minimal' && /(?:^|-)pro(?:-|$)/.test(id) ? 'low' : effort;
+  return { thinkingLevel };
+}
 
 /** The global env dial. Provider-specific vars are passed per call site. */
 export const GLOBAL_REASONING_EFFORT_ENV = 'LLM_REASONING_EFFORT';
@@ -50,6 +91,8 @@ export function parseReasoningEffort(raw: unknown): ReasoningEffort | undefined 
  * (checked in order); the global dial is always the last tier.
  */
 export function resolveReasoningEffort(args: {
+  /** Per-call task override — wins over shared provider tuning. */
+  explicit?: string;
   /** DB system-key tuning — wins over env. */
   tuned?: string;
   /** Provider-specific env var names, highest precedence first. */
@@ -58,6 +101,7 @@ export function resolveReasoningEffort(args: {
   allow: readonly ReasoningEffort[];
 }): ReasoningEffort | undefined {
   const tiers: unknown[] = [
+    args.explicit,
     args.tuned,
     ...(args.envVars ?? []).map((name) => process.env[name]),
     process.env[GLOBAL_REASONING_EFFORT_ENV],

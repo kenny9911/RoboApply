@@ -16,6 +16,7 @@
 // pipeline is fire-and-forget cost-wise (mock is not a billed SKU).
 
 import { logger } from '../../../services/LoggerService.js';
+import { llmService } from '../../../services/llm/LLMService.js';
 import { raSearchWeb, formatWebEvidence } from '../lib/raWebSearch.js';
 import {
   type RAInterviewBlueprint,
@@ -29,6 +30,16 @@ import { raInterviewJobRequirementsAgent } from '../agents/RAInterviewJobRequire
 import { raInterviewStrategyAgent } from '../agents/RAInterviewStrategyAgent.js';
 import { raInterviewTacticsAgent } from '../agents/RAInterviewTacticsAgent.js';
 import { RAInterviewQuestionsAgent } from '../agents/RAInterviewQuestionsAgent.js';
+
+function resolvedInterviewModelLabel(): string {
+  const taskModel = interviewGenModel();
+  if (taskModel) return taskModel;
+  try {
+    return llmService.getModel();
+  } catch {
+    return 'deterministic';
+  }
+}
 
 export interface RAInterviewPromptPersona {
   id: string;
@@ -326,7 +337,10 @@ export class RAInterviewPromptService {
       tactics,
       questions,
       webSources,
-      model: interviewGenModel(),
+      // The task selector wins. If every agent degraded because no model was
+      // configured, preserve this service's never-throws contract and label
+      // the heuristic artifact accurately.
+      model: resolvedInterviewModelLabel(),
       generatedAt: new Date().toISOString(),
     };
 
