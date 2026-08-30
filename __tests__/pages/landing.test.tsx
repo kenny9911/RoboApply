@@ -42,11 +42,11 @@ describe('Landing page', () => {
     // h1 carried the retired "We apply. You interview." tagline.
     expect(
       screen.getByRole('heading', {
-        name: /Find out why you're not getting interviews\./i,
+        name: /Automate Job Applications\. Find out why you're not getting interviews\./i,
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/We read 1,000\+ open roles/i),
+      screen.getByText(/Tired of wasting your time applying to jobs\? .*We read 1,000\+ open roles/i),
     ).toBeInTheDocument();
   });
 
