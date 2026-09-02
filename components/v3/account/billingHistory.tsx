@@ -14,14 +14,9 @@ import { Panel } from './sections';
 import { useBillingHistory } from '../../../hooks/useAccount';
 import { accountApi, type BillingInvoice } from '../../../lib/api/account';
 
-function money(locale: string, amountMinor: number, currency: string): string {
-  const amount = amountMinor / 100;
-  try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: (currency || 'USD').toUpperCase(), maximumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency === 'CNY' ? '¥' : '$'}${amount.toFixed(2)}`;
-  }
-}
+// Each row is formatted in ITS OWN currency — a USD invoice stays "$15" and an
+// Alipay receipt stays "¥19" whatever market the user is in today.
+import { money } from './format';
 function fmtDate(locale: string, iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);

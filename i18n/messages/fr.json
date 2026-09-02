@@ -1708,16 +1708,17 @@
       "unit": "crédits",
       "note": "1 crédit correspond à un entretien d'entraînement de 20 minutes. Les sessions plus courtes ou plus longues coûtent au prorata."
     },
-    "region": {
-      "label": "Région",
-      "intl": "International (USD)",
-      "cn": "Chine (RMB)"
-    },
     "billing": {
       "title": "Offre et facturation",
       "sub": "Ce que tu as aujourd'hui, ce vers quoi tu peux passer, et où sont tes reçus.",
       "checkout_failed": "La page de paiement ne s'est pas ouverte. Réessaie, ou utilise une autre carte.",
       "payments_unavailable": "Les paiements ne sont pas encore en place. Ton offre actuelle continue de fonctionner.",
+      "currency": {
+        "usd": "Les prix sont en dollars américains, réglés par carte.",
+        "cny": "Les prix sont en RMB, réglés via Alipay.",
+        "switchToCny": "Tu es en Chine continentale ? Passe en RMB et Alipay.",
+        "switchToUsd": "Tu es hors de Chine continentale ? Passe en dollars et carte."
+      },
       "manage": "Gérer la facturation",
       "invoices": "Voir les factures",
       "cancel": "Résilier l'offre",
@@ -2149,7 +2150,6 @@
           "code": "TIER-0",
           "name": "Gratuit",
           "rate": "1",
-          "price": "0 $",
           "per": "",
           "note": "Tout le produit, plus un entretien d'entraînement noté par mois.",
           "cta": "Commencer gratuitement",
@@ -2159,7 +2159,6 @@
           "code": "TIER-1",
           "name": "Starter",
           "rate": "10",
-          "price": "15 $",
           "per": "/mois",
           "badge": "Le plus choisi",
           "note": "De quoi s'entraîner avant chaque vrai entretien.",
@@ -2170,7 +2169,6 @@
           "code": "TIER-2",
           "name": "Growth",
           "rate": "28",
-          "price": "29 $",
           "per": "/mois",
           "note": "S'entraîner tous les jours jusqu'à signer.",
           "cta": "Commencer avec Growth",

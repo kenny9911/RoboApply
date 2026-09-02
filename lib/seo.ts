@@ -18,6 +18,7 @@ import {
   localePath,
   type RoboLocale,
 } from './localeConfig';
+import { MARKET_CURRENCY, PLAN_PRICES_MINOR, type BillingMarket } from './pricing';
 
 export { localePath };
 
@@ -139,13 +140,18 @@ export function landingMetadata(locale: RoboLocale): Metadata {
  * aggregateRating/review (we have no collected ratings; faking them is a
  * manual-action trigger) and no FAQPage (Google removed FAQ rich results
  * May 2026; the visible FAQ text is what AI engines actually extract).
- * Prices must stay in sync with the visible pricing section
- * (server/src/lib/mockInterviewPlans.ts: Free $0 / Starter $15 / Growth $29).
+ * Prices come from lib/pricing.ts — the table the visible pricing section
+ * renders from — in the currency this visitor's market pays in, so the
+ * structured data never disagrees with the page beside it.
  */
-export function landingJsonLd(locale: RoboLocale): string {
+export function landingJsonLd(locale: RoboLocale, market: BillingMarket = 'other'): string {
   const { title, description } = landingMetaStrings(locale);
   const url = `${SITE_URL}${localePath(locale)}`;
   const lang = HREFLANG[locale];
+  const currency = MARKET_CURRENCY[market];
+  // schema.org wants a decimal string in major units.
+  const price = (plan: keyof typeof PLAN_PRICES_MINOR) =>
+    String(PLAN_PRICES_MINOR[plan][currency] / 100);
   const graph = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -187,14 +193,14 @@ export function landingJsonLd(locale: RoboLocale): string {
         description,
         offers: {
           '@type': 'AggregateOffer',
-          priceCurrency: 'USD',
-          lowPrice: '0',
-          highPrice: '29',
+          priceCurrency: currency,
+          lowPrice: price('free'),
+          highPrice: price('growth'),
           offerCount: 3,
           offers: [
-            { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD' },
-            { '@type': 'Offer', name: 'Starter', price: '15', priceCurrency: 'USD' },
-            { '@type': 'Offer', name: 'Growth', price: '29', priceCurrency: 'USD' },
+            { '@type': 'Offer', name: 'Free', price: price('free'), priceCurrency: currency },
+            { '@type': 'Offer', name: 'Starter', price: price('starter'), priceCurrency: currency },
+            { '@type': 'Offer', name: 'Growth', price: price('growth'), priceCurrency: currency },
           ],
         },
       },

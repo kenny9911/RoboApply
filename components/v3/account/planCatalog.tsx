@@ -17,7 +17,7 @@
 //
 // PRESENTATIONAL + interaction-wiring only: it owns NO data query, NO region
 // state, NO router. The host page fetches the plan (useBillingPlan), renders the
-// RegionToggle, and decides Stripe-vs-Alipay + the post-checkout `next` target,
+// CurrencyNote, and decides Stripe-vs-Alipay + the post-checkout `next` target,
 // passing handlers in. That lets the same component serve a chromeless top-level
 // page and an in-shell page with zero shell logic leaking.
 //

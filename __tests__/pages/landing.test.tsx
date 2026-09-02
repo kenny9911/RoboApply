@@ -50,6 +50,22 @@ describe('Landing page', () => {
     ).toBeInTheDocument();
   });
 
+  it('quotes the plans in US dollars by default and in RMB for mainland China', () => {
+    // A location rule, not a language one: the market comes from the request's
+    // country header (lib/serverMarket.ts) and is handed in as a prop.
+    const { unmount } = renderWithProviders(<LandingContent />);
+    expect(screen.getByText('$15')).toBeInTheDocument();
+    expect(screen.getByText('$29')).toBeInTheDocument();
+    expect(screen.queryByText('¥19')).toBeNull();
+    unmount();
+
+    renderWithProviders(<LandingContent market="cn" />);
+    expect(screen.getByText('¥19')).toBeInTheDocument();
+    expect(screen.getByText('¥45')).toBeInTheDocument();
+    expect(screen.queryByText('$15')).toBeNull();
+    expect(screen.queryByText('$29')).toBeNull();
+  });
+
   it('primary CTAs link to /signup (header, hero, studio, pricing, final, sticky)', () => {
     renderWithProviders(<LandingContent />);
     const ctas = screen

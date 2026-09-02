@@ -6,7 +6,8 @@
 //   - TierBadge          free | starter | growth (+ legacy premium*) mono pill
 //   - CreditsCard        mock-interview credit balance + monthly allotment
 //   - CurrentPlanCard    tier · price (region currency) · status · renewal/expiry
-//   - RegionToggle       USD ⇄ RMB (detection can be wrong; user can switch)
+//   - CurrencyNote       which currency the grid is in and how it is paid,
+//                        plus the way out if the country guess is wrong
 //   - BillingHistoryLink small link to the invoice history page
 //
 // The Free/Starter/Growth plan grid moved to ./planCatalog.tsx (<PlanCatalog>),
@@ -23,6 +24,7 @@ import { money, fmtCredits } from './format';
 import type {
   AccountTier,
   BillingPlanResponse,
+  BillingRegion,
 } from '../../../lib/api/account';
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
@@ -187,34 +189,36 @@ export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, can
   );
 }
 
-// ─── RegionToggle ─────────────────────────────────────────────────────────────
+// ─── CurrencyNote ─────────────────────────────────────────────────────────────
+//
+// Mainland China pays RMB through Alipay; everyone else — Taiwan and Hong Kong
+// included — pays US dollars by card (server/src/lib/billingRegion.ts). The
+// API decided which from the visitor's country, so this is a sentence rather
+// than a toggle: it names the currency the grid below is quoted in and how it
+// is paid. The one link is the way out when the country guess is wrong — a
+// relay or a VPN puts a Shanghai user in Singapore — and it flips the whole
+// grid, prices and payment rail together, through the host's region override.
 
-export function RegionToggle({ region, onChange }: { region: 'cn' | 'other'; onChange: (r: 'cn' | 'other') => void }) {
+export function CurrencyNote({
+  region,
+  onSwitch,
+}: {
+  region: BillingRegion;
+  onSwitch: (market: BillingRegion['market']) => void;
+}) {
   const t = useTranslations('settings');
-  const opt = (val: 'cn' | 'other', label: string) => {
-    const active = region === val;
-    return (
+  const cn = region.market === 'cn';
+  return (
+    <p className="ra-billing-currency" role="status">
+      {cn ? t('billing.currency.cny') : t('billing.currency.usd')}{' '}
       <button
         type="button"
-        onClick={() => onChange(val)}
-        aria-pressed={active}
-        style={{
-          fontSize: 'var(--fs-label)', fontWeight: 600, padding: '6px 14px', borderRadius: 99,
-          border: `1px solid ${active ? 'var(--action)' : 'var(--rule)'}`,
-          background: active ? 'var(--action-subtle)' : 'transparent',
-          color: active ? 'var(--action)' : 'var(--text-2)', cursor: 'pointer',
-        }}
+        className="ra-billing-currency-switch"
+        onClick={() => onSwitch(cn ? 'other' : 'cn')}
       >
-        {label}
+        {cn ? t('billing.currency.switchToUsd') : t('billing.currency.switchToCny')}
       </button>
-    );
-  };
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{t('region.label')}</span>
-      {opt('other', t('region.intl'))}
-      {opt('cn', t('region.cn'))}
-    </div>
+    </p>
   );
 }
 

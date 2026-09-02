@@ -60,7 +60,7 @@ import {
 import {
   Panel,
   PlanCatalog,
-  RegionToggle,
+  CurrencyNote,
   CurrentPlanCard,
   CreditsCard,
   BillingHistoryLink,
@@ -487,14 +487,12 @@ export default function SettingsPage() {
                   <CreditsCard credits={planQ.data.credits} />
                 </div>
 
-                {/* Region toggle sits right above the grid whose prices it
-                 *  controls. */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 22 }}>
-                  <RegionToggle
-                    region={planQ.data.region.market}
-                    onChange={setRegionOverride}
-                  />
-                </div>
+                {/* Which currency is a location rule — mainland China pays
+                 *  RMB by Alipay, everyone else US dollars by card — and the
+                 *  API has already applied it. This names it above the grid
+                 *  whose prices it explains, and offers the other market for
+                 *  when the location guess is wrong. */}
+                <CurrencyNote region={planQ.data.region} onSwitch={setRegionOverride} />
 
                 {!planQ.data.stripeConfigured && !planQ.data.alipayConfigured ? (
                   <p

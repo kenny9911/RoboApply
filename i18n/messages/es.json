@@ -1708,16 +1708,17 @@
       "unit": "créditos",
       "note": "1 crédito es una entrevista de práctica de 20 minutos. Las sesiones más cortas o más largas cuestan en proporción."
     },
-    "region": {
-      "label": "Región",
-      "intl": "Internacional (USD)",
-      "cn": "China (RMB)"
-    },
     "billing": {
       "title": "Plan y facturación",
       "sub": "Qué tienes ahora, a qué más puedes pasarte y dónde están tus recibos.",
       "checkout_failed": "La página de pago no se abrió. Inténtalo otra vez o usa otra tarjeta.",
       "payments_unavailable": "Los pagos todavía no están configurados. Tu plan actual sigue funcionando.",
+      "currency": {
+        "usd": "Los precios están en dólares estadounidenses y se cobran con tarjeta.",
+        "cny": "Los precios están en RMB y se pagan con Alipay.",
+        "switchToCny": "¿Estás en China continental? Cambia a RMB y Alipay.",
+        "switchToUsd": "¿Estás fuera de China continental? Cambia a dólares y tarjeta."
+      },
       "manage": "Gestionar la facturación",
       "invoices": "Ver facturas",
       "cancel": "Cancelar el plan",
@@ -2149,7 +2150,6 @@
           "code": "TIER-0",
           "name": "Gratis",
           "rate": "1",
-          "price": "0 $",
           "per": "",
           "note": "El producto entero, más una entrevista de práctica puntuada al mes.",
           "cta": "Empezar gratis",
@@ -2159,7 +2159,6 @@
           "code": "TIER-1",
           "name": "Starter",
           "rate": "10",
-          "price": "15 $",
           "per": "/mes",
           "badge": "El más elegido",
           "note": "Suficiente para practicar antes de cada entrevista real.",
@@ -2170,7 +2169,6 @@
           "code": "TIER-2",
           "name": "Growth",
           "rate": "28",
-          "price": "29 $",
           "per": "/mes",
           "note": "Practica cada día hasta que firmes algo.",
           "cta": "Empezar con Growth",

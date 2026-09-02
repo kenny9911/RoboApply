@@ -14,7 +14,7 @@ export {
   TierBadge,
   CreditsCard,
   CurrentPlanCard,
-  RegionToggle,
+  CurrencyNote,
   BillingHistoryLink,
   tierLabel,
 } from './billing';

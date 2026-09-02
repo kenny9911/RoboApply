@@ -1708,16 +1708,17 @@
       "unit": "Credits",
       "note": "1 Credit ist ein Übungsgespräch von 20 Minuten. Kürzere und längere Sitzungen kosten anteilig."
     },
-    "region": {
-      "label": "Region",
-      "intl": "International (USD)",
-      "cn": "China (RMB)"
-    },
     "billing": {
       "title": "Tarif und Abrechnung",
       "sub": "Was du gerade hast, wohin du wechseln kannst und wo deine Belege liegen.",
       "checkout_failed": "Die Zahlungsseite ging nicht auf. Versuch es erneut oder nimm eine andere Karte.",
       "payments_unavailable": "Zahlungen sind noch nicht eingerichtet. Dein aktueller Tarif läuft weiter.",
+      "currency": {
+        "usd": "Die Preise sind in US-Dollar und werden per Karte abgebucht.",
+        "cny": "Die Preise sind in RMB und werden über Alipay bezahlt.",
+        "switchToCny": "Du bist in Festlandchina? Wechsle zu RMB und Alipay.",
+        "switchToUsd": "Du bist außerhalb Festlandchinas? Wechsle zu US-Dollar und Karte."
+      },
       "manage": "Abrechnung verwalten",
       "invoices": "Rechnungen ansehen",
       "cancel": "Tarif kündigen",
@@ -2149,7 +2150,6 @@
           "code": "TIER-0",
           "name": "Kostenlos",
           "rate": "1",
-          "price": "0 $",
           "per": "",
           "note": "Das ganze Produkt, dazu ein bewertetes Übungsgespräch pro Monat.",
           "cta": "Kostenlos starten",
@@ -2159,7 +2159,6 @@
           "code": "TIER-1",
           "name": "Starter",
           "rate": "10",
-          "price": "15 $",
           "per": "/Mon.",
           "badge": "Am häufigsten gewählt",
           "note": "Genug, um vor jedem echten Gespräch zu üben.",
@@ -2170,7 +2169,6 @@
           "code": "TIER-2",
           "name": "Growth",
           "rate": "28",
-          "price": "29 $",
           "per": "/Mon.",
           "note": "Jeden Tag üben, bis du unterschreibst.",
           "cta": "Mit Growth beginnen",

@@ -12,6 +12,7 @@ import { LandingContent } from '../../components/landing/LandingContent';
 import { LandingJsonLd } from '../../components/landing/LandingJsonLd';
 import { DEFAULT_LOCALE, isLocale } from '../../lib/localeConfig';
 import { landingMetadata } from '../../lib/seo';
+import { resolveVisitorMarket } from '../../lib/serverMarket';
 
 interface LocaleParams {
   params: Promise<{ locale: string }>;
@@ -29,10 +30,13 @@ export default async function LocalizedLandingPage({ params }: LocaleParams) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   if (locale === DEFAULT_LOCALE) permanentRedirect('/');
+  // Currency follows the visitor's country, not the page's language: /zh read
+  // from Taipei quotes US dollars, /en read from Shanghai quotes RMB.
+  const market = await resolveVisitorMarket(locale);
   return (
     <>
-      <LandingJsonLd locale={locale} />
-      <LandingContent />
+      <LandingJsonLd locale={locale} market={market} />
+      <LandingContent market={market} />
     </>
   );
 }

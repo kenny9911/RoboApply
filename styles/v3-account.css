@@ -93,3 +93,27 @@
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* Currency note above the plan grid (/settings → Plan and billing). Which
+ * currency is a location rule — mainland China pays RMB by Alipay, everyone
+ * else US dollars by card — and the API has already applied it, so this is a
+ * sentence, not a toggle. The trailing link is the way out when the location
+ * guess is wrong (a relay, a VPN). */
+.ra-billing-currency {
+  margin: var(--sp-5) 0 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+.ra-billing-currency-switch {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--action);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ra-billing-currency-switch:hover { color: var(--text); }

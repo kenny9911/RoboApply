@@ -27,7 +27,7 @@
 // (`landing` + `common`). Motion is CSS-only with a reduced-motion fallback.
 
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Logo } from '../chrome/Logo';
 import { PageContainer } from '../ui/PageContainer';
@@ -38,6 +38,12 @@ import {
 } from '../../lib/localeConfig';
 import { LanguageMenu } from './LanguageMenu';
 import { ThemeToggle } from './ThemeToggle';
+import {
+  MARKET_CURRENCY,
+  formatMoney,
+  planPriceMinor,
+  type BillingMarket,
+} from '../../lib/pricing';
 
 type TagVariant =
   | 'scout'
@@ -97,7 +103,15 @@ const TIERS = [
 
 const FAQ_ITEMS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'] as const;
 
-export function LandingContent() {
+export interface LandingContentProps {
+  /** Which currency the pricing section quotes. Decided per request from the
+   *  visitor's country (lib/serverMarket.ts): mainland China sees RMB,
+   *  everyone else US dollars — a location rule, not a language one. */
+  market?: BillingMarket;
+}
+
+export function LandingContent({ market = 'other' }: LandingContentProps) {
+  const locale = useLocale();
   const t = useTranslations('landing');
   const tCommon = useTranslations('common');
 
@@ -671,7 +685,7 @@ export function LandingContent() {
                   </div>
                   <div className="mt-5 flex items-baseline gap-1">
                     <span className="text-xl font-semibold text-ink-900">
-                      {t(`pricing.tiers.${key}.price`)}
+                      {formatMoney(locale, planPriceMinor(key, market), MARKET_CURRENCY[market])}
                     </span>
                     {t(`pricing.tiers.${key}.per`) !== '' && (
                       <span className="text-sm text-ink-500">

@@ -1708,16 +1708,17 @@
       "unit": "credits",
       "note": "1 credit is a 20-minute practice interview. Shorter and longer sessions cost proportionally."
     },
-    "region": {
-      "label": "Region",
-      "intl": "International (USD)",
-      "cn": "China (RMB)"
-    },
     "billing": {
       "title": "Plan and billing",
       "sub": "What you are on now, what else you can move to, and where your receipts are.",
       "checkout_failed": "The payment page did not open. Try again, or use a different card.",
       "payments_unavailable": "Payments are not set up yet. Your current plan keeps working.",
+      "currency": {
+        "usd": "Prices are in US dollars, billed by card.",
+        "cny": "Prices are in RMB, paid with Alipay.",
+        "switchToCny": "In mainland China? Switch to RMB and Alipay.",
+        "switchToUsd": "Outside mainland China? Switch to US dollars and card."
+      },
       "manage": "Manage billing",
       "invoices": "See invoices",
       "cancel": "Cancel plan",
@@ -2149,7 +2150,6 @@
           "code": "TIER-0",
           "name": "Free",
           "rate": "1",
-          "price": "$0",
           "per": "",
           "note": "The whole product, plus one scored practice interview a month.",
           "cta": "Start free",
@@ -2159,7 +2159,6 @@
           "code": "TIER-1",
           "name": "Starter",
           "rate": "10",
-          "price": "$15",
           "per": "/mo",
           "badge": "Most picked",
           "note": "Enough to practice before every real interview.",
@@ -2170,7 +2169,6 @@
           "code": "TIER-2",
           "name": "Growth",
           "rate": "28",
-          "price": "$29",
           "per": "/mo",
           "note": "Practice every day until you sign something.",
           "cta": "Start Growth",

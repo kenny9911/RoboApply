@@ -1708,16 +1708,17 @@
       "unit": "créditos",
       "note": "1 crédito é uma entrevista de treino de 20 minutos. Sessões mais curtas ou mais longas custam proporcionalmente."
     },
-    "region": {
-      "label": "Região",
-      "intl": "Internacional (USD)",
-      "cn": "China (RMB)"
-    },
     "billing": {
       "title": "Plano e cobrança",
       "sub": "O que você tem agora, para onde dá para mudar e onde ficam seus recibos.",
       "checkout_failed": "A página de pagamento não abriu. Tente de novo ou use outro cartão.",
       "payments_unavailable": "Os pagamentos ainda não estão configurados. Seu plano atual continua funcionando.",
+      "currency": {
+        "usd": "Os preços estão em dólares americanos, cobrados no cartão.",
+        "cny": "Os preços estão em RMB, pagos com Alipay.",
+        "switchToCny": "Você está na China continental? Mude para RMB e Alipay.",
+        "switchToUsd": "Você está fora da China continental? Mude para dólares e cartão."
+      },
       "manage": "Gerenciar a cobrança",
       "invoices": "Ver faturas",
       "cancel": "Cancelar o plano",
@@ -2149,7 +2150,6 @@
           "code": "TIER-0",
           "name": "Grátis",
           "rate": "1",
-          "price": "US$ 0",
           "per": "",
           "note": "O produto inteiro, mais uma entrevista de treino avaliada por mês.",
           "cta": "Começar grátis",
@@ -2159,7 +2159,6 @@
           "code": "TIER-1",
           "name": "Starter",
           "rate": "10",
-          "price": "US$ 15",
           "per": "/mês",
           "badge": "O mais escolhido",
           "note": "O bastante para treinar antes de cada entrevista de verdade.",
@@ -2170,7 +2169,6 @@
           "code": "TIER-2",
           "name": "Growth",
           "rate": "28",
-          "price": "US$ 29",
           "per": "/mês",
           "note": "Treinar todo dia até você assinar algo.",
           "cta": "Começar no Growth",

@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import { LandingContent } from '../components/landing/LandingContent';
 import { LandingJsonLd } from '../components/landing/LandingJsonLd';
 import { resolveLocale } from '../lib/serverLocale';
+import { resolveVisitorMarket } from '../lib/serverMarket';
 import { landingMetadata } from '../lib/seo';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -27,10 +28,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function LandingPage() {
   const locale = await resolveLocale();
+  // Mainland China sees RMB, everyone else US dollars — decided per request
+  // from the visitor's country, not from the language they read in.
+  const market = await resolveVisitorMarket(locale);
   return (
     <>
-      <LandingJsonLd locale={locale} />
-      <LandingContent />
+      <LandingJsonLd locale={locale} market={market} />
+      <LandingContent market={market} />
     </>
   );
 }
