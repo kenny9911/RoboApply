@@ -6,13 +6,16 @@
 //   • Admin is an admin-only trailing entry, not a fifth destination,
 //   • the only badge is the count of applications with no reply in 10+ days,
 //     hidden at zero,
-//   • active state follows usePathname(), including sub-routes.
+//   • active state follows usePathname(), including sub-routes,
+//   • inside /settings — and only there — a Settings group opens beneath the
+//     four, listing that page's seven sections as links, so the screen has ONE
+//     rail rather than a second one of its own; the open section is the hash.
 //
 // Tests hit the in-memory stub API (NODE_ENV=test), whose tracker fixture has
 // two rows in `applied` with 2026-05 apply dates.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState, buildAuthValue, buildFakeUser } from '../utils/mockAuth';
 import { raV2Api } from '../../lib/api/v2';
@@ -167,6 +170,100 @@ describe('Sidebar', () => {
     renderWithProviders(<Sidebar />);
     await screen.findByRole('link', { name: 'Interview prep' });
     expect(within(screen.getByRole('navigation')).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  describe('inside /settings — the one rail', () => {
+    const SECTIONS: [string, string][] = [
+      ['search', 'Your search'],
+      ['resume', 'Resume'],
+      ['notif', 'Notifications'],
+      ['appearance', 'Appearance'],
+      ['billing', 'Plan and billing'],
+      ['account', 'Account'],
+      ['danger', 'Danger zone'],
+    ];
+
+    afterEach(() => {
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('opens a Settings group beneath the four destinations, listing the seven sections in order', async () => {
+      pathnameRef.current = '/settings';
+      window.history.replaceState(null, '', '/settings');
+      renderWithProviders(<Sidebar />);
+      await screen.findByRole('link', { name: 'Interview prep' });
+
+      const rail = screen.getByRole('navigation');
+      const links = within(rail).getAllByRole('link');
+      // The destinations first, unchanged — then the group.
+      expect(links.slice(0, 4).map((l) => l.getAttribute('href'))).toEqual(IA.map(([h]) => h));
+      expect(within(rail).getByText('Settings')).toHaveClass('nav-section');
+
+      const group = within(rail).getByRole('group', { name: 'Settings' });
+      const sectionLinks = within(group).getAllByRole('link');
+      expect(sectionLinks.map((l) => l.textContent)).toEqual(SECTIONS.map(([, label]) => label));
+      // On /settings itself the sections are fragment anchors — same document,
+      // no navigation, and the browser fires hashchange.
+      expect(sectionLinks.map((l) => l.getAttribute('href'))).toEqual(SECTIONS.map(([id]) => `#${id}`));
+      expect(within(group).getByRole('link', { name: 'Danger zone' })).toHaveClass('danger');
+    });
+
+    it('lights the section the hash names, and no destination', async () => {
+      pathnameRef.current = '/settings';
+      window.history.replaceState(null, '', '/settings#billing');
+      renderWithProviders(<Sidebar />);
+      const billing = await screen.findByRole('link', { name: 'Plan and billing' });
+      expect(billing).toHaveAttribute('aria-current', 'page');
+
+      const links = within(screen.getByRole('navigation')).getAllByRole('link');
+      for (const link of links) {
+        if (link !== billing) expect(link).not.toHaveAttribute('aria-current');
+      }
+    });
+
+    it('follows the hash as it changes', async () => {
+      pathnameRef.current = '/settings';
+      window.history.replaceState(null, '', '/settings#account');
+      renderWithProviders(<Sidebar />);
+      expect(await screen.findByRole('link', { name: 'Account' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+
+      act(() => {
+        window.location.hash = '#danger';
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'Danger zone' })).toHaveAttribute(
+          'aria-current',
+          'page',
+        ),
+      );
+      expect(screen.getByRole('link', { name: 'Account' })).not.toHaveAttribute('aria-current');
+    });
+
+    it('keeps Plan and billing lit on the invoice page, with links back to the page', async () => {
+      pathnameRef.current = '/settings/billing/history';
+      window.history.replaceState(null, '', '/settings/billing/history');
+      renderWithProviders(<Sidebar />);
+      const billing = await screen.findByRole('link', { name: 'Plan and billing' });
+      expect(billing).toHaveAttribute('aria-current', 'page');
+      // A sub-route is another document: real links to /settings#id.
+      expect(billing).toHaveAttribute('href', '/settings#billing');
+      expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute(
+        'href',
+        '/settings#account',
+      );
+    });
+
+    it('is absent everywhere else — Settings is still not a destination', async () => {
+      pathnameRef.current = '/jobs';
+      renderWithProviders(<Sidebar />);
+      await screen.findByRole('link', { name: 'Interview prep' });
+      expect(screen.queryByRole('group', { name: 'Settings' })).not.toBeInTheDocument();
+      expect(document.querySelectorAll('.nav-section')).toHaveLength(0);
+      expect(within(screen.getByRole('navigation')).getAllByRole('link')).toHaveLength(4);
+    });
   });
 
   describe('the no-reply badge (ruling C11)', () => {

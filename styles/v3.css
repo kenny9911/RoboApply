@@ -141,6 +141,29 @@
   font-weight: 500;
 }
 
+/* ─── SETTINGS GROUP ───
+ * Opens beneath the destinations while the user is inside /settings
+ * (components/v3/shell/SettingsRailGroup.tsx) — the one rail that screen has.
+ * A hairline and a sentence-case label set it apart; the entries indent to the
+ * destinations' text column (15px icon + 11px gap) so they read as children
+ * of the rail, and the aria-current rule above marks the open section. The
+ * danger entry keeps its own tint when open: being in the danger zone should
+ * look like it. */
+.nav-group {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--rule);
+}
+.nav-item.nav-sub { padding-left: calc(var(--sp-3) + 26px); }
+.nav-item.danger { color: var(--danger); }
+.nav-item.danger:hover { background: var(--danger-subtle); color: var(--danger); }
+.nav-item.danger[aria-current="page"] {
+  background: var(--danger-subtle);
+  color: var(--danger);
+  box-shadow: inset 2px 0 0 var(--danger);
+}
+
 /* ─── MAIN ─── */
 .main {
   overflow-y: auto;

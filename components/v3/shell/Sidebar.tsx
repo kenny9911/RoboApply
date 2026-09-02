@@ -16,6 +16,11 @@
 // Settings, Billing and Sign out moved to the AvatarMenu in the Topbar, which
 // is the only place they were ever reachable on a phone.
 //
+// While the user is inside /settings, a Settings group opens beneath the
+// destinations listing that page's seven sections (SettingsRailGroup) — so the
+// screen has one rail, not a second one of its own. It is contextual, not a
+// fifth destination: absent everywhere else, and never on the mobile bar.
+//
 // DESTINATIONS is exported and consumed by MobileNav, because the mobile bar
 // IS the IA (D3): same four, same labels, same order, by construction rather
 // than by two lists agreeing today and drifting next month.
@@ -34,6 +39,7 @@ import { usePipelineBoard } from '../../../hooks/usePipelineBoard';
 import type { RATrackerEntryView } from '../../../lib/api/v2';
 import { cn } from '../../../lib/utils';
 import { BrandLogo } from './BrandLogo';
+import { SettingsRailGroup } from './SettingsRailGroup';
 import {
   IconSearch,
   IconFile,
@@ -121,6 +127,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
   const t = useTranslations('nav');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const inSettings = pathname === '/settings' || pathname.startsWith('/settings/');
 
   // Shares the TanStack cache entry with /applications and PipelineBoard, so
   // on the Applications screen the badge costs nothing and everywhere else it
@@ -170,6 +177,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
       <nav className="nav">
         {DESTINATIONS.map(renderLink)}
         {isAdmin ? renderLink(ADMIN) : null}
+        {inSettings ? <SettingsRailGroup /> : null}
       </nav>
     </aside>
   );

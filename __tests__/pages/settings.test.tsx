@@ -23,7 +23,7 @@
 // leads nowhere.
 
 import type { ReactNode } from 'react';
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 
 import SettingsPage from '../../app/(auth)/settings/page';
@@ -55,6 +55,10 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('/settings', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/settings');
+  });
+
   it('renders the seven sections and lands on Your search', async () => {
     renderWithProviders(<SettingsPage />);
 
@@ -62,14 +66,16 @@ describe('/settings', () => {
     await waitFor(
       () => {
         expect(
-          screen.getByRole('button', { name: 'Your search' }),
+          screen.getByRole('link', { name: 'Your search' }),
         ).toBeInTheDocument();
       },
       { timeout: 4000 },
     );
 
-    // All seven, in order. Each is a section on this page, not a route.
-    for (const name of [
+    // All seven, in order. Each is a section on this page, not a route — a
+    // fragment anchor, because the open section is the URL hash.
+    const ids = ['search', 'resume', 'notif', 'appearance', 'billing', 'account', 'danger'];
+    const names = [
       'Your search',
       'Resume',
       'Notifications',
@@ -77,9 +83,14 @@ describe('/settings', () => {
       'Plan and billing',
       'Account',
       'Danger zone',
-    ]) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument();
-    }
+    ];
+    names.forEach((name, i) => {
+      expect(screen.getByRole('link', { name })).toHaveAttribute('href', `#${ids[i]}`);
+    });
+    expect(screen.getByRole('link', { name: 'Your search' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
 
     // Default section is Your search → its H1 is the one setup sentence
     // (C21). The heading is assembled from three keys, so match on the
@@ -99,18 +110,20 @@ describe('/settings', () => {
     await waitFor(
       () => {
         expect(
-          screen.getByRole('button', { name: 'Plan and billing' }),
+          screen.getByRole('link', { name: 'Plan and billing' }),
         ).toBeInTheDocument();
       },
       { timeout: 4000 },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Plan and billing' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Plan and billing' }));
+    // A fragment anchor: the browser moves the URL, then fires hashchange.
+    await waitFor(() => expect(window.location.hash).toBe('#billing'));
 
-    // The section header renders immediately. Its sub is unique to the body —
-    // the title itself collides with the rail button.
+    // The section swaps once the browser fires hashchange (a task later). Its
+    // sub is unique to the body — the title itself collides with the rail link.
     expect(
-      screen.getByText(
+      await screen.findByText(
         /What you are on now, what else you can move to, and where your receipts are\./i,
       ),
     ).toBeInTheDocument();
@@ -135,13 +148,39 @@ describe('/settings', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens the section the URL hash names — the deep link every "Billing" entry points at', async () => {
+    // The avatar menu, the practice launcher's "Get credits" and the invoice
+    // page's back link all point at /settings#billing. Before the hash drove
+    // the section, every one of them landed on "Your search".
+    window.history.replaceState(null, '', '/settings#billing');
+    renderWithProviders(<SettingsPage />);
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText(
+            /What you are on now, what else you can move to, and where your receipts are\./i,
+          ),
+        ).toBeInTheDocument();
+      },
+      { timeout: 4000 },
+    );
+    expect(screen.getByRole('link', { name: 'Plan and billing' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('link', { name: 'Your search' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
   it('shows the save bar on edit and clears it after saving', async () => {
     renderWithProviders(<SettingsPage />);
 
     await waitFor(
       () => {
         expect(
-          screen.getByRole('button', { name: 'Your search' }),
+          screen.getByRole('link', { name: 'Your search' }),
         ).toBeInTheDocument();
       },
       { timeout: 4000 },
@@ -182,18 +221,18 @@ describe('/settings', () => {
     await waitFor(
       () => {
         expect(
-          screen.getByRole('button', { name: 'Danger zone' }),
+          screen.getByRole('link', { name: 'Danger zone' }),
         ).toBeInTheDocument();
       },
       { timeout: 4000 },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Danger zone' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Danger zone' }));
 
     // Before the modal opens, the row title is the only match. The copy names
     // what is destroyed and what survives, in the user's nouns — "job data",
     // not "application records" (C4: the product nouns are job, application,
     // resume, practice interview).
-    expect(screen.getByText('Delete your job data')).toBeInTheDocument();
+    expect(await screen.findByText('Delete your job data')).toBeInTheDocument();
     expect(
       screen.getByText(/Your account and resumes stay\./i),
     ).toBeInTheDocument();

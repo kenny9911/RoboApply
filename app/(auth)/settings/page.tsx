@@ -7,8 +7,11 @@
 // destinations (/jobs, /resume, /applications, /practice) and everything a user
 // only visits when something is wrong lives behind the avatar menu, here.
 //
-// Sections, in order — the left rail and the mobile section list read from the
-// same SECTIONS array, so the two can never drift:
+// Sections, in order. The open section is the URL hash (/settings#billing),
+// read through hooks/useSettingsSection — the same hook the app Sidebar's
+// Settings group renders from, so the rail, the phone section row and every
+// deep link in the product agree on which section is open. The list itself is
+// SETTINGS_SECTIONS in that hook:
 //
 //   Your search      HuntSection + BlocklistSection      preferences + goal
 //   Resume           ResumeSection                       preferences
@@ -34,12 +37,18 @@
 //
 // Post-checkout return: paid CTAs pass { next:'/settings', cancelNext:'/settings' }
 // so Stripe/Alipay return here; the backend appends ?billing=success|cancel,
-// which we surface as a banner, refetch on, and strip.
+// which we surface as a banner, refetch on, and strip (to /settings#billing,
+// so the section the user paid from stays open).
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import {
+  SETTINGS_SECTIONS,
+  settingsSectionHref,
+  useSettingsSection,
+} from '../../../hooks/useSettingsSection';
 import { usePreferences, useUpdatePreferences } from '../../../hooks/usePreferences';
 import { useGoal, useGoalMutation } from '../../../hooks/useGoal';
 import { useResumeList } from '../../../hooks/useResumes';
@@ -85,25 +94,6 @@ import type {
   PreferencesUpdateBody,
 } from '../../../lib/api/v2';
 
-type SectionId =
-  | 'search'
-  | 'resume'
-  | 'notif'
-  | 'appearance'
-  | 'billing'
-  | 'account'
-  | 'danger';
-
-const SECTIONS: { id: SectionId; danger?: boolean }[] = [
-  { id: 'search' },
-  { id: 'resume' },
-  { id: 'notif' },
-  { id: 'appearance' },
-  { id: 'billing' },
-  { id: 'account' },
-  { id: 'danger', danger: true },
-];
-
 // Map a numeric seniority index (Intern..Principal, 0..5) ↔ the RASeniority
 // enum used by `goal`. The two vocabularies don't line up 1:1 (RASeniority has
 // no "intern/junior/mid" and adds manager/director/vp/cxo) — this is a
@@ -141,7 +131,16 @@ export default function SettingsPage() {
   const updatePrefs = useUpdatePreferences();
   const upsertGoal = useGoalMutation();
 
-  const [section, setSection] = useState<SectionId>('search');
+  const section = useSettingsSection();
+
+  // A section switch is a new screen: start it at the top rather than wherever
+  // the previous section's scroll left off. Plain scrollTop writes, because
+  // .main is the scrollport on desktop and the document is on phones.
+  useEffect(() => {
+    const main = document.querySelector<HTMLElement>('.main');
+    if (main) main.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+  }, [section]);
 
   // ── Preference draft + its server baseline (dirty compare + discard) ──
   const [draft, setDraft] = useState<RAPreferences | null>(null);
@@ -239,12 +238,12 @@ export default function SettingsPage() {
     const flag = searchParams?.get('billing');
     if (flag === 'success' || flag === 'cancel') {
       setBillingBanner(flag);
-      setSection('billing');
       // On a successful return the subscription likely changed — refetch so the
       // now-current tier flips to a disabled "Current plan".
       if (flag === 'success') void planQ.refetch();
-      // Strip the param so a refresh doesn't re-show the banner.
-      router.replace('/settings');
+      // Strip the param so a refresh doesn't re-show the banner; the hash
+      // keeps the billing section open.
+      router.replace(settingsSectionHref('billing'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -336,27 +335,29 @@ export default function SettingsPage() {
 
   return (
     <div className="pref">
-      {/* Left rail — the section list. Below 760px (the breakpoint where the
-       *  app sidebar gives way to MobileNav) v3-preferences.css turns it into a
-       *  sticky horizontal scroller above the body, so every section — plan
-       *  changes, cancellation, account deletion — stays reachable on a phone.
-       *  Before this page existed a phone user could reach none of them. */}
+      {/* Section row — phones only. On ≥760px the app Sidebar carries this
+       *  same list as a Settings group (one rail, not two); below that width
+       *  the Sidebar is hidden, and v3-preferences.css renders this as a sticky
+       *  horizontal scroller above the body, so every section — plan changes,
+       *  cancellation, account deletion — stays reachable on a phone. Before
+       *  this page existed a phone user could reach none of them.
+       *  Fragment anchors rather than buttons: the section IS the hash. */}
       <aside className="pref-rail">
         <div className="pref-rail-head">
           <div className="pref-rail-title">{t('title')}</div>
         </div>
-        <nav className="pref-nav">
-          {SECTIONS.map((s) => (
-            <button
+        <nav className="pref-nav" aria-label={t('title')}>
+          {SETTINGS_SECTIONS.map((s) => (
+            <a
               key={s.id}
-              type="button"
+              href={`#${s.id}`}
               className={`pref-nav-item ${section === s.id ? 'active' : ''} ${
                 s.danger ? 'danger' : ''
               }`}
-              onClick={() => setSection(s.id)}
+              aria-current={section === s.id ? 'page' : undefined}
             >
               {t(`nav.${s.id}`)}
-            </button>
+            </a>
           ))}
         </nav>
       </aside>

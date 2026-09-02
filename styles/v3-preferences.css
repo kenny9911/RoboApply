@@ -27,21 +27,14 @@
    13.5px would map to: typed text is read text.
 ═══════════════════════════════════════════════════════════════════ */
 
-.pref {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  min-height: calc(100vh - 65px);   /* 65px = the app topbar */
-  background: var(--bg);
-}
+/* One rail. On ≥760px the section list lives in the app Sidebar as a
+ * Settings group (components/v3/shell/SettingsRailGroup.tsx), so this wrapper
+ * is a plain column and .pref-rail does not render. The rail styled below is
+ * for phones — see the 760px block — where the Sidebar is hidden. */
+.pref { background: var(--bg); }
 
-/* ─── LEFT RAIL ─── */
-.pref-rail {
-  border-right: 1px solid var(--rule);
-  background: var(--surface);
-  padding: var(--sp-6) var(--sp-4) var(--sp-5);
-  display: flex; flex-direction: column;
-  gap: var(--sp-5);
-}
+/* ─── SECTION RAIL (phones only) ─── */
+.pref-rail { display: none; }
 .pref-rail-head { padding: 0 var(--sp-3); }
 /* Was a 10px uppercase mono eyebrow tracked out to 0.18em. */
 .pref-rail-eye {
@@ -72,6 +65,7 @@
   border-radius: var(--r-sm);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;   /* it is a fragment anchor (#billing), not a button */
   display: flex; align-items: center; gap: var(--sp-3);
   transition: background var(--dur-hover) var(--ease-out),
               color var(--dur-hover) var(--ease-out);
@@ -151,9 +145,9 @@
 
 /* ─── CONTENT ─── */
 .pref-body {
-  overflow-y: auto;
-  /* Bottom padding clears the fixed save bar (16px inset + ~48px tall). */
-  padding: var(--sp-6) var(--sp-7) calc(var(--sp-8) + var(--sp-6));
+  /* No inset of its own — .main-inner already pads the page like every other
+   * screen. Bottom padding clears the fixed save bar (16px inset + ~48px). */
+  padding: 0 0 calc(var(--sp-8) + var(--sp-6));
   max-width: 980px;
 }
 
@@ -1198,22 +1192,19 @@
   }
 }
 
-/* 760px is the breakpoint where v3.css drops the 248px app sidebar and the
- * MobileNav bottom bar takes over. Below it, a 220px section rail beside the
- * body leaves ~150px of usable width on a 375px phone, so the rail stops being
- * a column and becomes a horizontal scroller above the content.
+/* 760px is the breakpoint where v3.css drops the 248px app sidebar — and with
+ * it the Settings group that lists these sections on desktop — and the
+ * MobileNav bottom bar takes over. So below it the page carries its own
+ * section rail: a sticky horizontal scroller above the content.
  *
  * This is load-bearing, not polish: /settings is the ONLY route holding plan
  * changes, cancellation and account deletion (rulings D2), and until this file
  * had a rule here a phone user could not reach any of them. Cancelling a
  * subscription must work on the device the subscription was bought on. */
 @media (max-width: 760px) {
-  .pref {
-    grid-template-columns: 1fr;
-    min-height: 0;
-  }
   .pref-rail {
-    border-right: none;
+    display: flex; flex-direction: column;
+    background: var(--surface);
     border-bottom: 1px solid var(--rule);
     padding: var(--sp-4) 0 0;
     gap: var(--sp-3);
@@ -1221,12 +1212,12 @@
     top: 0;
     z-index: 2;
   }
-  .pref-rail-head { padding: 0 var(--sp-4); }
+  .pref-rail-head { padding: 0; }
   .pref-nav {
     flex-direction: row;
     gap: var(--sp-1);
     overflow-x: auto;
-    padding: 0 var(--sp-4) var(--sp-3);
+    padding: 0 0 var(--sp-3);
     /* Momentum scrolling without a visible scrollbar eating a row of pixels. */
     scrollbar-width: none;
   }
@@ -1240,7 +1231,7 @@
    * row it would push the item out of line instead. */
   .pref-nav-item.danger { margin-top: 0; }
   .pref-body {
-    padding: var(--sp-5) var(--sp-4) calc(var(--sp-8) + var(--sp-8));
+    padding: var(--sp-5) 0 calc(var(--sp-8) + var(--sp-8));
   }
   .pref-checkgrid { grid-template-columns: 1fr !important; }
   .pref-usage { grid-template-columns: 1fr; }
