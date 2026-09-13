@@ -36,7 +36,7 @@ const CRUMB_MAP: { test: (p: string) => boolean; page: string }[] = [
   // must be tested before the plain /settings prefix.
   { test: (p) => p.startsWith('/settings/billing'), page: 'billing' },
   { test: (p) => p === '/settings' || p.startsWith('/settings/'), page: 'settings' },
-  { test: (p) => p === '/jobs' || p.startsWith('/jobs/'), page: 'jobs' },
+  { test: (p) => p === '/jobs' || p.startsWith('/jobs/') || p === '/job-search' || p.startsWith('/job-search/'), page: 'jobs' },
   { test: (p) => p === '/resume' || p.startsWith('/resume/'), page: 'resume' },
   { test: (p) => p === '/applications' || p.startsWith('/applications/'), page: 'applications' },
   { test: (p) => p === '/practice' || p.startsWith('/practice/'), page: 'practice' },

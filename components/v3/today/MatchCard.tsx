@@ -1,44 +1,9 @@
 'use client';
 
-// MatchCard — one row in the /jobs feed.
-//
-// THE GAP LEADS (ruling R2). Collapsed, the card reads:
-//
-//   ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  4px fit meter, full bleed — the feed's silhouette (C41)
-//   [ST]  Senior Payments Engineer                        Great fit
-//         Stripe · Remote · $180k–$220k · 2d ago            87 / 100
-//         They ask for Kubernetes and your resume …       ← the gap, first
-//         Your payments background lines up …             ← the overlap, quieter
-//
-// The gap is first because it is the one thing on this card a competitor
-// funded by employers will never ship. It used to be line three, inside a
-// collapsed section, behind a donut.
-//
-// THE SCORE IS NEVER THE PRIMARY ELEMENT (ruling C5). A naked 0–100 next to a
-// job has exactly one folk meaning — a percentage chance of getting it — and a
-// candidate who reads "87" and relaxes has made the most expensive error in a
-// job search. So the tier word leads in plain language (Great fit / Good fit /
-// Possible / Unlikely, the single ladder used everywhere), the number sits
-// under it small and quiet, and the rubric expander carries the required
-// disclaimer. The 56px ScoreDonut this replaced put the number at
-// --fs-subtitle as the heaviest thing in the row.
-//
-// Data: `useJobScore` (lazy, cached) gives the collapsed card its score AND its
-// explanation.strengths / explanation.gaps — the scorer already returns both as
-// arrays, so the gap line costs no extra request. The expanded rationale comes
-// from `useJobDetail(id,{resumeVariantId})`, which resolves instantly once the
-// score is cached for that (job, variant) pair.
-//
-// THE APPLY FLOW (rulings R1 + C11). We do not submit anything to an employer
-// and never claim to. The primary action opens the employer's own posting in a
-// new tab and, in the same click, records the application locally — because
-// C11 says never instruct where you can act, and the alternative ("remember to
-// come back and mark this applied") is an instruction the user will not follow.
-// We cannot observe what happens on the employer's site, so the record is a
-// claim the user can correct: the applied state carries an inline
-// "I didn't apply" that patches the tracker row back to `bookmarked`.
-//
-// Every user-facing string uses `t()` under the `jobs` namespace.
+// A job opportunity with disclosed facts, a secondary fit score, and the
+// resume evidence beside its rationale. The score describes a comparison, not
+// a hiring probability. The expanded actions open the employer posting and
+// record the user's application locally; Undo corrects that local record.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -55,19 +20,17 @@ import {
 import { useJobDetail } from '../../../hooks/useJobDetail';
 import { useJobScore, useRegenerateExplanation } from '../../../hooks/useTodayMatches';
 import { raV2Api } from '../../../lib/api/v2';
-import type { RAJobListItem } from '../../../lib/api/v2';
+import type { JobGetResponse, RAJobListItem } from '../../../lib/api/v2';
 import { JobDetailModal } from './JobDetailModal';
 import {
   cardStatusFromTracker,
   deriveFacets,
   deriveTags,
-  formatSalary,
-  logoColor,
-  logoLetter,
   postedAge,
   scoreTier,
   type MatchTier,
 } from './lib';
+import { CompanyIdentity, JobFacts } from './JobFacts';
 
 /** The scorer's internal tiering → the one user-facing ladder (ruling C2).
  *  `strong/stretch/longShot` are our vocabulary; Great fit / Good fit /
@@ -99,6 +62,8 @@ interface Props {
   passed: boolean;
   /** Set when this card's apply just succeeded (optimistic). */
   appliedNow: boolean;
+  /** Clear the feed's optimistic application after the server acknowledges a correction. */
+  onApplicationUndone: (jobId: string) => void;
 }
 
 export function MatchCard({
@@ -113,6 +78,7 @@ export function MatchCard({
   onApply,
   passed,
   appliedNow,
+  onApplicationUndone,
 }: Props) {
   const t = useTranslations('jobs');
   const qc = useQueryClient();
@@ -121,15 +87,12 @@ export function MatchCard({
   // qualifications / benefits + a link to the original listing).
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // Set once the user says "I didn't apply". The parent's `appliedNow` is a
-  // one-way optimistic flag it never clears, so this local flag is what lets
-  // the card fall back to its pre-apply state without a round trip.
-  const [unapplied, setUnapplied] = useState(false);
-
-  // Deterministic score for the donut (lazy, cached).
+  // Deterministic comparison score (lazy, cached). Sentinel values are unknown.
   const scoreQuery = useJobScore(job.id, resumeVariantId);
-  const liveScore =
-    job.matchScoreCached ?? scoreQuery.data?.matchScore.score ?? null;
+  const scoreCandidate = job.matchScoreCached != null && job.matchScoreCached >= 0
+    ? job.matchScoreCached
+    : scoreQuery.data?.matchScore.score;
+  const liveScore = scoreCandidate != null && scoreCandidate >= 0 && scoreCandidate <= 100 ? scoreCandidate : null;
 
   // Expanded reasoning — only fetched once the row opens.
   const detail = useJobDetail(
@@ -150,9 +113,7 @@ export function MatchCard({
 
   // Status: applied (from tracker or optimistic) | passed (local) | queued.
   const trackerStatus = detail.data?.trackerEntry?.status ?? null;
-  const status: 'applied' | 'passed' | 'queued' = unapplied
-    ? 'queued'
-    : appliedNow
+  const status: 'applied' | 'passed' | 'queued' = appliedNow
       ? 'applied'
       : passed
         ? 'passed'
@@ -167,7 +128,13 @@ export function MatchCard({
       await raV2Api.tracker.patch(entryId, { status: 'bookmarked' });
     },
     onSuccess: () => {
-      setUnapplied(true);
+      // Filtering unmounts cards. Both the optimistic feed acknowledgement and
+      // the shared cached record must reflect this confirmed correction before
+      // a card can mount again; component-local state cannot preserve it.
+      onApplicationUndone(job.id);
+      qc.setQueriesData<JobGetResponse>({ queryKey: ['v2', 'job', job.id] }, (current) => current?.trackerEntry
+        ? { ...current, trackerEntry: { ...current.trackerEntry, status: 'bookmarked' } }
+        : current);
       void qc.invalidateQueries({ queryKey: ['v2', 'tracker'] });
       void qc.invalidateQueries({ queryKey: ['v2', 'search'] });
       void qc.invalidateQueries({ queryKey: ['v2', 'job', job.id] });
@@ -180,11 +147,9 @@ export function MatchCard({
   const handleApplyOnSite = () => {
     if (!applyUrl) return;
     window.open(applyUrl, '_blank', 'noopener,noreferrer');
-    setUnapplied(false);
     onApply(job.id, resumeVariantId);
   };
 
-  const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
   const age = postedAge(job.postedAt);
   const postedLabel =
     age.key === 'unknown'
@@ -211,7 +176,7 @@ export function MatchCard({
       onsite: t('work.onsite'),
     },
     stretch: t('tag.possible'),
-  }).filter((tg) => tg.kind !== 'tier');
+  }).filter((tg) => tg.kind !== 'tier' && tg.kind !== 'workType');
 
   // ── Fit, in words ──
   // One ladder, four rungs, used on the card, in the filter and in the empty
@@ -243,17 +208,7 @@ export function MatchCard({
         : t('status.saved');
 
   return (
-    <div className={`match ${expanded ? 'expanded' : ''}`}>
-      {/* The fit meter. Decorative — the same value is stated in words and
-       *  digits immediately below, so it carries no information of its own and
-       *  is hidden from assistive tech rather than announced twice. */}
-      <div
-        className="match-meter"
-        data-tier={tier ?? undefined}
-        style={{ ['--score' as string]: liveScore ?? 0 }}
-        aria-hidden="true"
-      />
-
+    <article className={`match discovery-match ${expanded ? 'expanded' : ''}`}>
       {/* The collapsed header is the toggle. It lives in its own focusable
        *  region (NOT a wrapping role=button over the whole card) so the
        *  expanded action buttons aren't nested inside a button — invalid ARIA
@@ -263,6 +218,7 @@ export function MatchCard({
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
+        aria-controls={`match-evidence-${job.id}`}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -271,25 +227,10 @@ export function MatchCard({
           }
         }}
       >
-        <div className="logo" data-color={logoColor(index)}>
-          {logoLetter(job.companyName)}
-        </div>
+        <CompanyIdentity name={job.companyName} logoUrl={job.companyLogoUrl} index={index} />
         <div className="match-body">
-          <h3>{job.title}</h3>
           <div className="co">
             <b>{job.companyName}</b>
-            {job.location ? (
-              <>
-                <span className="dot" />
-                <span>{job.location}</span>
-              </>
-            ) : null}
-            {salary ? (
-              <>
-                <span className="dot" />
-                <span>{salary}</span>
-              </>
-            ) : null}
             {postedLabel ? (
               <>
                 <span className="dot" />
@@ -297,6 +238,8 @@ export function MatchCard({
               </>
             ) : null}
           </div>
+          <h3>{job.title}</h3>
+          <JobFacts job={job} />
           {tags.length ? (
             <div className="match-tags">
               {tags.map((tg, i) => (
@@ -314,11 +257,11 @@ export function MatchCard({
           {leadGap || leadStrength ? (
             <div className="match-read">
               {leadGap ? (
-                <p className="match-gap">{leadGap}</p>
+                <p className="match-gap"><span className="discovery-evidence-label">{t('discovery.gaps')}</span>{leadGap}</p>
               ) : (
                 <p className="match-gap">{t('gap.none_missing')}</p>
               )}
-              {leadStrength ? <p className="match-overlap">{leadStrength}</p> : null}
+              {leadStrength ? <p className="match-overlap"><span className="discovery-evidence-label">{t('discovery.strengths')}</span>{leadStrength}</p> : null}
             </div>
           ) : null}
         </div>
@@ -326,6 +269,7 @@ export function MatchCard({
         <div className="match-right">
           {tierLabel && liveScore != null ? (
             <div className="match-fit" data-tier={tier ?? undefined}>
+              <span className="discovery-fit-label">{t('discovery.match')}</span>
               <div className="tier">{tierLabel}</div>
               {/* The number, second and quiet. The full explainer ("87 / 100 —
                 *  how well your resume lines up with this job post") is the
@@ -335,12 +279,14 @@ export function MatchCard({
               </div>
             </div>
           ) : null}
-          <div className={`match-status ${status}`}>{statusLabel}</div>
+          {status !== 'queued' || job.isBookmarked ? <div className={`match-status ${status}`}>{statusLabel}</div> : null}
+          <span className="discovery-review"><span>{t('discovery.review')}</span><IconArrow size={15} /></span>
         </div>
       </div>
 
       {expanded ? (
-        <div className="match-expanded" onClick={(e) => e.stopPropagation()}>
+        <div id={`match-evidence-${job.id}`} className="match-expanded" onClick={(e) => e.stopPropagation()}>
+          <div className="discovery-evaluation">
           {/* No avatar slot: the reasoning has no speaker (D4/C9). It states
             *  what the posting asks for and what the résumé shows. */}
           <div className="why-fits">
@@ -376,10 +322,18 @@ export function MatchCard({
                   ) : null}
                 </>
               ) : (
-                <span style={{ color: 'var(--text-muted)' }}>{t('noReasoning')}</span>
+                <span style={{ color: 'var(--text-muted)' }}>{resumeVariantId ? t('noReasoning') : t('discovery.noResume')}</span>
               )}
             </div>
           </div>
+
+          <aside className="discovery-evidence-panel">
+            {strengths.length ? (
+              <section className="discovery-strengths">
+                <h4>{t('discovery.strengths')}</h4>
+                <ul>{strengths.slice(0, 4).map((strength, i) => <li key={i}><IconCheck size={14} /><span>{strength}</span></li>)}</ul>
+              </section>
+            ) : null}
 
           {/* Everything they ask for that the résumé does not mention. The
             *  label is mandatory (ruling C17): three bare words in pill shapes
@@ -397,6 +351,9 @@ export function MatchCard({
               </div>
             </div>
           ) : null}
+
+          </aside>
+          </div>
 
           {/* The rubric, published. The scorer's weights are the most credible
             *  artifact the product owns — bidirectional seniority penalties,
@@ -429,9 +386,9 @@ export function MatchCard({
                 riskFlag: t('facet.riskFlag'),
                 riskNone: t('facet.riskNone'),
               }).map((f, i) => (
-                <div key={i} className={`facet ${f.tone ?? ''}`}>
+                <div key={i} className={`facet ${i === 0 && job.salaryMin == null && job.salaryMax == null ? '' : f.tone ?? ''}`}>
                   <div className="lbl">{f.label}</div>
-                  <div className="val">{f.value}</div>
+                  <div className="val">{i === 0 && job.salaryMin == null && job.salaryMax == null ? t('discovery.salaryUnknown') : f.value}</div>
                 </div>
               ))}
             </div>
@@ -511,9 +468,8 @@ export function MatchCard({
         loading={detail.isLoading}
         applied={status === 'applied'}
         applying={applying}
-        onApply={() => onApply(job.id, resumeVariantId)}
+        onApply={handleApplyOnSite}
       />
-    </div>
+    </article>
   );
 }
-

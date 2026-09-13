@@ -2,7 +2,7 @@ import type { Config } from 'tailwindcss';
 
 // RoboApply design tokens for Tailwind.
 //
-// Authority: docs/roboapply/OVERHAUL_RULINGS.md, then app/globals.css. Every
+// Authority: docs/design-system.md and app/globals.css. Every
 // value below resolves to a CSS custom property so there is exactly one source
 // of truth and both themes flip for free.
 //
@@ -43,16 +43,14 @@ export default {
           DEFAULT: 'var(--rule)',
           strong: 'var(--rule-strong)',
         },
-        // ACTION — buttons and links. Furniture; nobody notices it.
+        // ACTION — buttons, links, and interactive emphasis.
         action: {
           DEFAULT: 'var(--action)',
           hover: 'var(--action-hover)',
           ink: 'var(--action-ink)',
           subtle: 'var(--action-subtle)',
         },
-        // IDENTITY — never carries text. Only ever painted on `brand-plane`,
-        // which is why it is free to be electric lime and never needs a
-        // contrast check.
+        // IDENTITY — the shared mark and its paired brand background.
         brand: {
           mark: 'var(--brand-mark)',
           plane: 'var(--brand-plane)',
@@ -74,7 +72,7 @@ export default {
           line: 'var(--robo-line)',
           'line-soft': 'var(--robo-line-soft)',
         },
-        // Accent — electric blue, the canonical brand color
+        // Accent — legacy aliases for the shared purple action palette
         accent: {
           50:  'var(--robo-accent-50)',
           100: 'var(--robo-accent-100)',
@@ -179,9 +177,8 @@ export default {
         xs: 'var(--r-sm)',
       },
       fontFamily: {
-        // `display` = Instrument Sans, hero + page H1 only, whole headline.
-        // `body`/`sans` = Inter, everything else. `mono` deliberately resolves
-        // to the UI face: there is no downloaded monospace in the app.
+        // Instrument Sans carries the full interface. `mono` deliberately
+        // resolves to the UI face; resume document typography is separate.
         display: ['var(--font-display)'],
         sans: ['var(--font-ui)'],
         body: ['var(--font-ui)'],

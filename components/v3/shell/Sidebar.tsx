@@ -63,7 +63,7 @@ export const DESTINATIONS: Destination[] = [
     href: '/jobs',
     labelKey: 'jobs',
     Icon: IconSearch,
-    match: (p) => p === '/jobs' || p.startsWith('/jobs/'),
+    match: (p) => p === '/jobs' || p.startsWith('/jobs/') || p === '/job-search' || p.startsWith('/job-search/'),
   },
   {
     href: '/resume',
@@ -174,11 +174,29 @@ export function Sidebar({ className }: { className?: string } = {}) {
     <aside className={cn('side', className)} aria-label={t('aria_primary')}>
       <BrandLogo />
 
+      <div className="workspace-identity">
+        <span className="workspace-avatar" aria-hidden="true">
+          {user?.name?.trim().slice(0, 1).toUpperCase() || 'R'}
+        </span>
+        <div>
+          <strong>{t('workspace')}</strong>
+          <span>{t('workspace_note')}</span>
+        </div>
+      </div>
+
       <nav className="nav">
         {DESTINATIONS.map(renderLink)}
         {isAdmin ? renderLink(ADMIN) : null}
         {inSettings ? <SettingsRailGroup /> : null}
       </nav>
+
+      <div className="workspace-guide">
+        <div className="workspace-guide-path" aria-hidden="true">
+          <IconSearch size={18} /><i /><IconFile size={18} /><i /><IconSparkle size={18} />
+        </div>
+        <strong>{t('guide')}</strong>
+        <p>{t('guide_note')}</p>
+      </div>
     </aside>
   );
 }

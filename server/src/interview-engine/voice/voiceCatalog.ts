@@ -1,38 +1,13 @@
 // backend/src/interview-engine/voice/voiceCatalog.ts
 //
-// Requirement #5: pick the best NATIVE-TONE voice for the interview locale.
-// Never let an English-accented voice speak another language.
-//
-// Strategy: emit NATIVE per-locale voices reachable through the LiveKit
-// Inference gateway — the SAME gateway the worker already uses for STT/LLM, so
-// no provider plugin and no provider API key are needed (LiveKit bills + rate-
-// limits it). `model` is a gateway 'provider/model' id and `voiceId` is that
-// provider's voice id; the worker passes both straight into `inference.TTS`.
-//   • Default: Cartesia `sonic-3` — genuinely native en/zh(Mandarin)/ja/ko and
-//     the lowest latency on the gateway (~90ms TTFB).
-//   • Exception zh-TW: Cartesia has only ONE Mainland Mandarin, which sounds
-//     Mainland to a Taiwanese listener — so Traditional/Taiwan uses ElevenLabs
-//     'Yu' (fQj4gJSexpu8RDE2Ii5m), a native youthful Taiwan-accent FEMALE voice
-//     (also gateway-billed, no key). CAUTION: the gateway serves only ElevenLabs
-//     DEFAULT/curated voices — of the ~20 ElevenLabs "Taiwan Mandarin" library
-//     voices, ONLY 'Yu' is gateway-accepted; every other (incl. the former
-//     'Anna Su' r6qgCCGI7RWKXCagm158) is REJECTED mid-turn → silent OpenAI-floor
-//     fallback speaking generic Mandarin. Never swap in another Taiwan library id
-//     without first probing it (interview-agent/verify-voices.mjs zh-TW). The
-//     Taiwan accent comes from the VOICE + the Traditional-character prompt text;
-//     languageCode is the single gateway Mandarin code 'zh'.
-//   • es/fr/pt/de FEMALE currently ride the multilingual English Cartesia voice
-//     with the locale's language code (no verified native per-locale Cartesia id
-//     yet). Labels say so honestly; drop in a native id via the per-locale env
-//     overrides below when one is sourced — no redeploy needed.
-//   • MALE voices: each persona carries a voiceGender hint (interviewCatalog.ts)
-//     so a male persona never introduces himself in a female voice. All male
-//     defaults use the verified ElevenLabs PREMADE 'George' (warm, professional)
-//     on the multilingual `eleven_turbo_v2_5` — the same trusted gateway combo
-//     as zh-TW — with the per-locale language code. Premade ids only: a
-//     fabricated/wrong id silently degrades to the English fallback voice.
-//   • The worker keeps OpenAI tts-1 ('nova') as a LOCAL last-resort floor so a
-//     session is never mute.
+// Voices use LiveKit Inference, with per-locale language codes and persona
+// gender. ElevenLabs was retired from the gateway on August 31, 2026:
+// https://docs.livekit.io/agents/models/tts/elevenlabs/
+// Cartesia sonic-3 remains supported. The Chinese, Japanese and Korean female
+// voices retain their locale defaults; other locales and the male Blake voice
+// use multilingual voices. Taiwan currently uses the Mandarin female voice;
+// its label does not promise a Taiwan accent. Native alternatives can be set
+// through the overrides below after verify-voices.mjs confirms gateway access.
 // `languageCode` is now a SHORT gateway code ('en'|'zh'|'ja'|'ko'|...), NOT a
 // Google/BCP-47 regional code. Everything is overridable via env (no redeploy):
 //
@@ -72,30 +47,31 @@ export function isSupportedLocale(input?: string | null): boolean {
 
 export type VoiceGender = 'female' | 'male' | 'neutral';
 
-/** The verified ElevenLabs PREMADE 'George' — warm, professional male,
- *  multilingual on eleven_turbo_v2_5. One id serves every locale (the locale's
- *  languageCode carries the language); per-locale _MALE env overrides swap in
- *  a native male id without a redeploy. */
-const MALE_PREMADE_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb';
-const MALE_PREMADE_MODEL = 'elevenlabs/eleven_turbo_v2_5';
+/** Cartesia Blake, a male voice listed by LiveKit and probed through the gateway.
+ * https://docs.livekit.io/agents/models/tts/cartesia/#voices
+ * Language is pinned separately; non-English labels describe it as multilingual. */
+const MALE_PREMADE_VOICE_ID = 'a167e0f3-df7e-4d52-a9c3-f949145efdab';
+const MALE_PREMADE_MODEL = 'cartesia/sonic-3';
+const RETIRED_MALE_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb';
+const RETIRED_TAIWAN_VOICE_ID = 'fQj4gJSexpu8RDE2Ii5m';
+const warnedRetiredOverrides = new Set<string>();
 
 function maleDefault(languageCode: string, label: string): ResolvedVoice {
-  return { provider: 'elevenlabs', model: MALE_PREMADE_MODEL, voiceId: MALE_PREMADE_VOICE_ID, languageCode, label };
+  return { provider: 'cartesia', model: MALE_PREMADE_MODEL, voiceId: MALE_PREMADE_VOICE_ID, languageCode, label };
 }
 
 /**
- * Native-tone voice defaults per locale × gender, reached via the LiveKit
+ * Voice defaults per locale × gender, reached via the LiveKit
  * Inference gateway. `model` = 'provider/model', `voiceId` = that provider's
  * voice id, `languageCode` = short gateway language code. The worker passes all
  * three to `inference.TTS({ model, voice, language })`.
- *   • female (the default): en/zh/ja/ko on native Cartesia sonic-3; zh-TW on an
- *     ElevenLabs Taiwan voice; es/fr/pt/de ride the multilingual English
+ *   • female (the default): en/zh/ja/ko on Cartesia sonic-3; zh-TW on the same
+ *     Mandarin voice as zh; es/fr/pt/de ride the multilingual English
  *     Cartesia voice with a swapped language code (labels say so) pending
  *     native per-locale ids — override via INTERVIEW_ENGINE_VOICE_<LOCALE>.
- *   • male: the ElevenLabs premade 'George' (multilingual) everywhere —
+ *   • male: Cartesia Blake (multilingual) everywhere —
  *     override via INTERVIEW_ENGINE_VOICE_<LOCALE>_MALE.
- * All gateway-billed — no provider API key. The worker has an OpenAI tts-1
- * local floor, so an unresolved id degrades gracefully.
+ * All gateway-billed — no provider API key.
  */
 const VOICE_DEFAULTS: Record<SupportedLocale, { female: ResolvedVoice; male: ResolvedVoice }> = {
   en: {
@@ -107,7 +83,7 @@ const VOICE_DEFAULTS: Record<SupportedLocale, { female: ResolvedVoice; male: Res
     male:   maleDefault('zh', '普通话 · 男声 · 多语音色'),
   },
   'zh-TW': {
-    female: { provider: 'elevenlabs', model: 'elevenlabs/eleven_turbo_v2_5', voiceId: 'fQj4gJSexpu8RDE2Ii5m',                 languageCode: 'zh', label: '國語 · 台灣 · 女聲' },
+    female: { provider: 'cartesia',   model: 'cartesia/sonic-3',             voiceId: 'e90c6678-f0d3-4767-9883-5d0ecf5894a8', languageCode: 'zh', label: '國語 · 通用華語 · 女聲' },
     male:   maleDefault('zh', '國語 · 男聲 · 多語音色'),
   },
   ja: {
@@ -172,13 +148,42 @@ export function resolveVoice(locale?: string | null, voiceGender?: VoiceGender):
   const modelOverride = process.env.INTERVIEW_ENGINE_TTS_MODEL?.trim();           // global, all locales
   const localeModelOverride = process.env[localeModelEnvKey(norm, gender)]?.trim(); // per-locale (+ _MALE), e.g. KO / ZH_TW
   const voiceOverride = process.env[localeEnvKey(norm, gender)]?.trim();            // per-locale (+ _MALE) voiceId
+  // Older setup instructions pinned these defaults as voice-only overrides.
+  // Their ElevenLabs ids cannot be paired with the new Cartesia model. Preserve
+  // custom overrides and explicit model/provider choices; migrate only the
+  // former default for this locale/gender when no model/provider is specified.
+  const retiredDefaultOverride = !localeModelOverride && !modelOverride && !providerOverride && (
+    (gender === 'male' && voiceOverride === RETIRED_MALE_VOICE_ID)
+    || (norm === 'zh-TW' && gender === 'female' && voiceOverride === RETIRED_TAIWAN_VOICE_ID)
+  );
+  if (retiredDefaultOverride) {
+    const key = localeEnvKey(norm, gender);
+    if (!warnedRetiredOverrides.has(key)) {
+      warnedRetiredOverrides.add(key);
+      console.warn(`[interview-engine] ${key} uses a retired ElevenLabs default; using the current ${base.model} default.`);
+    }
+  }
   return {
     provider: providerOverride || base.provider,
     model: localeModelOverride || modelOverride || base.model,
-    voiceId: voiceOverride || base.voiceId,
+    voiceId: (!retiredDefaultOverride && voiceOverride) || base.voiceId,
     languageCode: base.languageCode,
     label: base.label,
   };
+}
+
+/** Prepared sessions persist their voice before connecting. Refresh retired
+ * gateway voices at dispatch time so those sessions benefit from new defaults.
+ * Supported stored voices remain stable; current explicit env overrides still
+ * take precedence when resolving a replacement. */
+export function resolveSessionVoice(
+  storedVoice: ResolvedVoice | null | undefined,
+  locale?: string | null,
+  voiceGender?: VoiceGender,
+): ResolvedVoice {
+  if (storedVoice && !storedVoice.model?.trim().startsWith('elevenlabs/')) return storedVoice;
+  const gender = voiceGender ?? (storedVoice?.voiceId === RETIRED_MALE_VOICE_ID ? 'male' : undefined);
+  return resolveVoice(locale, gender);
 }
 
 /** Resolve the STT config for an interview locale. */

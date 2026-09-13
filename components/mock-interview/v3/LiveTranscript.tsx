@@ -9,7 +9,7 @@
 //
 //   YOU       At Mavn we shipped a clinician inbox redesign…
 //
-// Speaker labels are mono uppercase, lime-tinted for the interviewer,
+// Speaker labels are mono uppercase, action-tinted for the interviewer,
 // violet-tinted for the candidate. A trailing "…" three-dot indicator
 // signals that the AI is currently speaking / processing.
 
@@ -63,8 +63,8 @@ export function LiveTranscript({
             aria-hidden="true"
             className="inline-block h-1.5 w-1.5 rounded-full"
             style={{
-              background: 'var(--dc-accent, #c6ff3a)',
-              boxShadow: '0 0 6px var(--dc-accent, #c6ff3a)',
+              background: 'var(--action)',
+              boxShadow: '0 0 6px var(--action)',
             }}
           />
           Auto-saved
@@ -99,7 +99,7 @@ export function LiveTranscript({
 function Line({ turn, interviewerSlug }: { turn: MockTurn; interviewerSlug: string }) {
   const isInterviewer = turn.role === 'interviewer';
   const label = isInterviewer ? interviewerSlug : 'You';
-  const labelColor = isInterviewer ? 'var(--dc-accent, #c6ff3a)' : 'var(--dc-secondary, #b691ff)';
+  const labelColor = isInterviewer ? 'var(--action)' : 'var(--dc-secondary, #b691ff)';
 
   // The label sits in its own narrow column (~72px). Multi-word labels
   // (e.g. "DR. VOSS") wrap onto two lines like in the screenshot.

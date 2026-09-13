@@ -73,6 +73,13 @@ export interface ExternalJobNormalized {
   salaryPeriod: string | null;
   /** ISO datetime. Every client's fallback chain ends at fetch time, so never null. */
   postedAt: string;
+  /** Distinguishes legacy fetch-time fallbacks from actual source publication dates. */
+  postedAtEstimated?: boolean;
+  /** Original fetch time, retained when a provider response is served from cache. */
+  fetchedAt?: string;
+  /** Existing onboarding inference is not exposed as source evidence by the public API. */
+  salaryCurrencyInferred?: boolean;
+  locationCountryEstimated?: boolean;
   applyUrl: string | null;
   /** True when applying goes straight to the employer/ATS (not an aggregator). */
   applyIsDirect: boolean;

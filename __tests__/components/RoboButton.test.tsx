@@ -1,9 +1,7 @@
 // RoboButton — variants, disabled state, click handler.
 //
-// Per Teal-UI §8 (post electric-on-paper redesign, commit 81387e82): primary
-// is the accent fill with on-accent ink (`text-accent-ink`), outline is white
-// bg with an accent-text border (`border-accent-text`) — both theme-aware
-// tokens, not literal colors. Plus ghost, danger. Disabled state must visually
+// Primary and outline variants use the shared action/surface tokens in both
+// themes. Plus ghost, danger. Disabled state must visually
 // disable AND drop button.disabled = true.
 
 import { describe, it, expect, vi } from 'vitest';
@@ -11,19 +9,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { RoboButton } from '../../components/ui/RoboButton';
 
 describe('RoboButton', () => {
-  it('renders primary variant by default with solid teal background', () => {
+  it('renders primary variant by default with theme-aware action colors', () => {
     render(<RoboButton>Submit</RoboButton>);
     const btn = screen.getByRole('button', { name: /Submit/i });
     expect(btn).toBeInTheDocument();
-    expect(btn.className).toMatch(/bg-teal-900/);
-    expect(btn.className).toMatch(/text-accent-ink/);
+    expect(btn).toHaveClass('bg-action', 'text-action-ink');
   });
 
-  it('renders outline variant with white bg + accent-text border', () => {
+  it('renders outline variant with theme-aware surface and action border', () => {
     render(<RoboButton variant="outline">Next</RoboButton>);
     const btn = screen.getByRole('button', { name: /Next/i });
-    expect(btn.className).toMatch(/bg-white/);
-    expect(btn.className).toMatch(/border-accent-text/);
+    expect(btn).toHaveClass('bg-surface', 'border-action', 'text-action');
   });
 
   it('renders ghost variant', () => {

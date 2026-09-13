@@ -167,13 +167,13 @@ export function VideoPanel({ name, role, micOpen, cameraOn }: Props) {
         className="dc-mono absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur"
         style={{
           background: 'rgba(0,0,0,0.55)',
-          color: 'var(--dc-accent, #c6ff3a)',
+          color: 'var(--action)',
         }}
       >
         <span
           aria-hidden="true"
           className="inline-flex h-1.5 w-1.5 rounded-full"
-          style={{ background: 'var(--dc-accent, #c6ff3a)', boxShadow: '0 0 6px var(--dc-accent, #c6ff3a)' }}
+          style={{ background: 'var(--action)', boxShadow: '0 0 6px var(--action)' }}
         />
         You
       </span>

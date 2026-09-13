@@ -1,14 +1,7 @@
 'use client';
 
-// RoboButton — the canonical CTA. Single brand color (teal-900). NO amber.
-// Two real variants per the Teal-UI spec (03-teal-ui-reference.md §8):
-//   - primary (solid teal-900, white text)        — commit-level actions
-//   - outline (white bg, teal-900 border + ink)    — "next" / progress-forward
-//
-// Plus a quiet `ghost` for in-context affordances (back links, dismiss).
-//
-// 14–16px text, weight 600, padding 14×28, radius from --robo-radius-sm.
-// Per CLAUDE.md i18n rule — children must be translated strings.
+// RoboButton — legacy native control using the shared action and surface
+// palette. Children must be translated strings.
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/utils';
@@ -41,17 +34,17 @@ export function RoboButton({
   ...rest
 }: Props) {
   const base =
-    'inline-flex select-none items-center justify-center gap-2 rounded-sm font-semibold transition-colors duration-fast ease-standard disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700';
+    'inline-flex select-none items-center justify-center gap-2 rounded-sm font-semibold transition-colors duration-fast ease-standard disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action';
 
   const variants: Record<NonNullable<Props['variant']>, string> = {
     primary:
-      'bg-teal-900 text-accent-ink shadow-cta hover:bg-teal-700 disabled:bg-ink-line disabled:text-ink-300 disabled:shadow-none',
+      'bg-action text-action-ink shadow-cta hover:bg-action-hover disabled:bg-ink-line disabled:text-ink-300 disabled:shadow-none',
     outline:
-      'border-2 border-accent-text bg-white text-accent-text hover:bg-teal-50 disabled:border-ink-line disabled:text-ink-300 disabled:bg-white',
+      'border-2 border-action bg-surface text-action hover:bg-action-subtle disabled:border-ink-line disabled:text-ink-300 disabled:bg-surface',
     ghost:
-      'bg-transparent text-accent-text hover:bg-teal-50 disabled:text-ink-300',
+      'bg-transparent text-action hover:bg-action-subtle disabled:text-ink-300',
     danger:
-      'border border-danger bg-white text-danger hover:bg-danger/5 disabled:border-ink-line disabled:text-ink-300',
+      'border border-danger bg-surface text-danger hover:bg-danger/5 disabled:border-ink-line disabled:text-ink-300',
   };
 
   return (

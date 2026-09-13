@@ -62,12 +62,10 @@ describe('/applications', () => {
       }),
     ).toBeInTheDocument();
 
-    // The stage columns render under the C1 ladder (label text is unique per
-    // column).
-    expect(screen.getByText('Saved')).toBeInTheDocument();
-    expect(screen.getByText('Applied')).toBeInTheDocument();
-    expect(screen.getByText('Interviewing')).toBeInTheDocument();
-    expect(screen.getByText('Offer')).toBeInTheDocument();
+    // Stage headings remain navigable independently of the summary metrics.
+    for (const name of ['Saved', 'Applied', 'Interviewing', 'Offer']) {
+      expect(await screen.findByRole('heading', { name, level: 2 })).toBeInTheDocument();
+    }
     // The pre-ruling label is gone, not merely unused: "Interview" as a stage
     // name reads as an event, and C1 wants the state.
     expect(screen.queryByText(/^Interview$/)).toBeNull();

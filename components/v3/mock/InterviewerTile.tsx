@@ -20,11 +20,6 @@ interface Props {
   video: boolean;
 }
 
-function orbBackground(p: RAMockInterviewer): string {
-  return `radial-gradient(circle at 30% 30%, ${p.palette[0]}, transparent 60%),
-          radial-gradient(circle at 70% 70%, ${p.palette[1]}, transparent 60%)`;
-}
-
 export function InterviewerTile({ interviewer, aiState, video }: Props) {
   const t = useTranslations('practice');
   const speaking = aiState === 'asking';
@@ -37,7 +32,7 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
           <div
             className="iv-vt-orb"
             style={{
-              background: orbBackground(interviewer),
+              background: 'var(--grad-brand)',
             }}
           />
           <div className={`iv-vt-rings ${speaking ? 'on' : ''}`}>
@@ -92,7 +87,7 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
       <div
         className="iv-interviewer-orb"
         style={{
-          background: orbBackground(interviewer),
+          background: 'var(--grad-brand)',
         }}
       />
       <div className="iv-interviewer-rings">

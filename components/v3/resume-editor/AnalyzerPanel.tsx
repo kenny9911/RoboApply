@@ -12,8 +12,9 @@
 // catalog like the rest of the editor.
 
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 
-import { IconX } from '../primitives';
+import { IconArrow, IconCheck, IconX } from '../primitives';
 import type { AnalyzerIssue, AnalyzerReport, AnalyzerSeverity } from '../../../lib/resumeAnalyzer';
 
 interface Props {
@@ -27,10 +28,13 @@ const SEVERITY_ORDER: AnalyzerSeverity[] = ['critical', 'recommended', 'optional
 
 export function AnalyzerPanel({ report, onJump, onClose }: Props) {
   const t = useTranslations('resume');
+  const [severity, setSeverity] = useState<AnalyzerSeverity | null>(null);
 
   const sorted: AnalyzerIssue[] = SEVERITY_ORDER.flatMap((sev) =>
     report.issues.filter((i) => i.severity === sev),
   );
+  const activeSeverity = severity && report.counts[severity] > 0 ? severity : null;
+  const visible = activeSeverity ? sorted.filter((issue) => issue.severity === activeSeverity) : sorted;
 
   // An experience entry with neither a company nor a title has no name to put
   // in front of the issue, so it is labelled by its position — translated,
@@ -46,10 +50,9 @@ export function AnalyzerPanel({ report, onJump, onClose }: Props) {
   };
 
   return (
-    <div className="rb-analyzer-pop" role="dialog" aria-label={t('analyzer.title')}>
+    <div className="rb-analyzer-pop discovery-analyzer" role="dialog" aria-label={t('analyzer.title')} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
       <div className="rb-analyzer-head">
-        <span className="rb-analyzer-title">{t('analyzer.title')}</span>
-        <span className="rb-analyzer-score">{report.score}</span>
+        <div><span className="rb-analyzer-title">{t('analyzer.title')}</span><p>{t('analyzer.method')}</p></div>
         <button
           type="button"
           className="iv-coach-close"
@@ -61,11 +64,25 @@ export function AnalyzerPanel({ report, onJump, onClose }: Props) {
         </button>
       </div>
 
+      <div className="discovery-analyzer-overview">
+        <span className="rb-analyzer-score">{t('analyzer.scoreUnit', { score: report.score })}</span>
+        <div className="discovery-analyzer-meter" aria-hidden="true"><span style={{ width: `${report.score}%` }} /></div>
+      </div>
+
+      <div className="discovery-analyzer-filters" aria-label={t('analyzer.title')}>
+        {SEVERITY_ORDER.map((value) => (
+          <button key={value} type="button" aria-pressed={activeSeverity === value} disabled={report.counts[value] === 0} className={value} onClick={() => setSeverity(severity === value ? null : value)}>
+            <strong>{report.counts[value]}</strong><span>{t(`analyzer.severity.${value}`)}</span>
+          </button>
+        ))}
+      </div>
+      <p className="discovery-analyzer-guidance">{t('analyzer.guidance')}</p>
+
       {sorted.length === 0 ? (
-        <p className="rb-analyzer-empty">{t('analyzer.empty')}</p>
+        <p className="rb-analyzer-empty"><IconCheck size={18} />{t('analyzer.empty')}</p>
       ) : (
         <div className="rb-analyzer-list">
-          {sorted.map((issue) => (
+          {visible.map((issue) => (
             <button
               key={issue.id}
               type="button"
@@ -79,6 +96,7 @@ export function AnalyzerPanel({ report, onJump, onClose }: Props) {
                 </span>
                 <span className="rb-issue-msg">{issueText(issue)}</span>
               </span>
+              <IconArrow className="discovery-issue-arrow" size={15} />
             </button>
           ))}
         </div>

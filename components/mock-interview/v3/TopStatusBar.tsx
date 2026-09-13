@@ -5,7 +5,7 @@
 //   ←  Back to setup        ● LIVE  Senior PM · Behavioral · 📹 Video · 00:16        ─ ─ ─ ─ ─
 //
 // Left: back link. Center: live status group (red LIVE pill + meta crumbs +
-// blinking timer). Right: per-question progress pips (lime when reached).
+// blinking timer). Right: per-question progress pips (accented when reached).
 
 import Link from 'next/link';
 import { ArrowLeftIcon, VideoCameraIcon } from '@heroicons/react/24/outline';
@@ -91,7 +91,7 @@ export function TopStatusBar({
         {/* Mode w/ icon */}
         <span
           className="inline-flex items-center gap-1.5 text-[13.5px] whitespace-nowrap"
-          style={{ color: 'var(--dc-accent, #c6ff3a)' }}
+          style={{ color: 'var(--action)' }}
         >
           <VideoCameraIcon className="h-4 w-4" aria-hidden="true" />
           {modeLabel}
@@ -100,7 +100,7 @@ export function TopStatusBar({
         {/* Clock */}
         <span
           className="dc-mono text-[14px] font-bold whitespace-nowrap"
-          style={{ color: 'var(--dc-accent, #c6ff3a)' }}
+          style={{ color: 'var(--action)' }}
         >
           {formatClock(elapsedSec)}
         </span>
@@ -117,11 +117,11 @@ export function TopStatusBar({
               style={{
                 width: i === currentIndex ? 36 : 28,
                 background: reached
-                  ? 'var(--dc-accent, #c6ff3a)'
+                  ? 'var(--action)'
                   : 'rgba(255,255,255,0.12)',
                 boxShadow:
                   i === currentIndex
-                    ? '0 0 8px var(--dc-accent, #c6ff3a)'
+                    ? '0 0 8px var(--action)'
                     : undefined,
               }}
             />

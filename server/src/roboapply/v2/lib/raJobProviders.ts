@@ -1,7 +1,7 @@
 // backend/src/roboapply/v2/lib/raJobProviders.ts
 //
 // Provider seam + fan-out aggregator for the external RapidAPI job-search APIs
-// consumed by the onboarding recommendation round (RAOnboardingRecommendService).
+// retained from onboarding and reused by the HTTP-independent job-search service.
 //
 // Three implementations behind ONE RAPID_API_KEY (each separately subscribed on
 // the RapidAPI app):

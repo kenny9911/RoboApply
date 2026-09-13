@@ -1,6 +1,6 @@
 'use client';
 
-// Card — bg-white panel with --robo-line-soft border and --robo-shadow-card
+// Card — themed surface with --robo-line-soft border and --robo-shadow-card
 // shadow. Two padding presets: compact (20×24) and hero (32px).
 
 import type { HTMLAttributes, ReactNode } from 'react';
@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils';
 interface Props extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   padding?: 'compact' | 'hero' | 'none';
-  /** Render a subtle highlight tint (teal-50 bg). */
+  /** Render a subtle action tint. */
   tinted?: boolean;
 }
 
@@ -30,7 +30,7 @@ export function Card({
     <div
       className={cn(
         'rounded-md border border-ink-line-soft shadow-card',
-        tinted ? 'bg-teal-50' : 'bg-white',
+        tinted ? 'bg-action-subtle' : 'bg-surface',
         PADDING[padding],
         className,
       )}

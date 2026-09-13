@@ -3,9 +3,9 @@
 // Logo — the RoboApply wordmark. PNG mark + wordmark.
 // Used in left rail (top), public header, onboarding header.
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '../../lib/utils';
+import { BrandSymbol } from './BrandSymbol';
 
 interface Props {
   size?: 'sm' | 'md';
@@ -22,14 +22,7 @@ export function Logo({ size = 'md', href = '/', className }: Props) {
   const sz = SIZES[size];
   const inner = (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
-      <Image
-        src="/roboapply-logo.png"
-        alt="RoboApply"
-        width={sz.px}
-        height={sz.px}
-        priority
-        className={cn('object-contain', sz.mark)}
-      />
+      <span className={cn('brand-mark', sz.mark)} aria-hidden="true"><BrandSymbol size={sz.px - 8} /></span>
       <span
         className={cn('font-bold tracking-tight text-ink-900', sz.text)}
         style={{ letterSpacing: '-0.02em' }}

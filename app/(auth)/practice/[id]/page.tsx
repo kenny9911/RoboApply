@@ -624,9 +624,9 @@ function AudioUnlockDialog({ onUnlock }: { onUnlock: () => void }) {
 // good stays visually quiet (no alarm during a healthy interview); fair warns,
 // poor alarms.
 const QUALITY_TONE: Record<QualityLevel, { bar: string; text: string; border: string; bg: string }> = {
-  good: { bar: '#34d399', text: 'var(--text-2)', border: 'var(--rule)', bg: 'var(--surface)' },
-  fair: { bar: '#f59e0b', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.45)', bg: 'rgba(245, 158, 11, 0.12)' },
-  poor: { bar: '#ef4444', text: '#ef4444', border: 'rgba(239, 68, 68, 0.45)', bg: 'rgba(239, 68, 68, 0.12)' },
+  good: { bar: 'var(--ok)', text: 'var(--text-2)', border: 'var(--rule)', bg: 'var(--surface)' },
+  fair: { bar: 'var(--warn)', text: 'var(--warn)', border: 'var(--warn)', bg: 'var(--warn-subtle)' },
+  poor: { bar: 'var(--danger)', text: 'var(--danger)', border: 'var(--danger)', bg: 'var(--danger-subtle)' },
 };
 
 function QualityPill({ level, label }: { level: QualityLevel; label: string }) {

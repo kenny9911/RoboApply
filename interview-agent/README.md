@@ -29,9 +29,11 @@ real-time conversation.
   the control plane also sends a server-side `deepgram/nova-2` fallback), LLM
   per metadata (from the control plane's required `LLM_INTERVIEW_MODEL`, with
   optional `LLM_INTERVIEW_REASONING_EFFORT`), TTS the control-plane-resolved
-  native voice (e.g. `cartesia/sonic-3` or ElevenLabs per locale) with a gateway
-  ElevenLabs fallback. **OpenAI `tts-1`** is only the local last-resort floor
-  (needs `OPENAI_API_KEY`) so a session is never mute.
+  voice (`cartesia/sonic-3` by default). ElevenLabs was
+  [retired from LiveKit Inference on August 31, 2026](https://docs.livekit.io/agents/models/tts/elevenlabs/).
+  **OpenAI `tts-1`** is an optional direct-provider fallback (needs a funded
+  `OPENAI_API_KEY`). Failed providers are not polled in the background; if no
+  provider produces greeting audio, startup ends and releases the worker job.
 - Forwards every finalized turn to the control plane
   (`POST /api/v1/interview-engine/callbacks/sessions/:id/transcript`,
   secret-gated), posts `lifecycle:started`/`lifecycle:ended` (plus

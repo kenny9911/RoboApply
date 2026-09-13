@@ -23,30 +23,14 @@ import { Providers } from './providers';
 // never covered by these latin fonts (subsets:['latin']) — they fall back to
 // system fonts as before.
 
-// ── UI type (ruling R4) ───────────────────────────────────────────────────
-//
-// TWO families reach the interface, and no more. The previous system loaded
-// eleven and rendered three simultaneously — Space Grotesk for UI, Instrument
-// Serif italic for the accent word inside almost every headline, and JetBrains
-// Mono for every label, count and timestamp. That is what "the fonts are too
-// random" was describing, and it was measurable: 31 distinct sizes, 8 of them
-// half-pixel, 141 declarations below 12px.
-//
-// Inter carries 100% of read text. "Natural to users" has a precise
-// typographic meaning — high x-height, open apertures, unambiguous 1/l/I, and
-// a skeleton every reader has already absorbed from every operating system.
-// Instrument Sans appears only on the hero and page H1, applied to the whole
-// headline, never to a word inside one.
-//
-// Bound to --font-ui / --font-display in app/globals.css. Always reference the
-// generated CSS variable: next/font emits a hashed @font-face family, so a
-// literal 'Inter' in a stylesheet matches nothing and silently falls back.
-
+// The interface uses the self-hosted Instrument Sans variable font throughout.
+// Inter remains available only for the user's resume document templates.
 const inter = localFont({
   src: './fonts/inter-100-900.woff2',
   weight: '100 900',
   display: 'swap',
   variable: '--font-inter',
+  preload: false,
 });
 
 const instrumentSans = localFont({
@@ -109,8 +93,8 @@ export const metadata = {
   description:
     "Find out why you're not getting interviews. Drop your resume — we read 1,000+ open roles, show you the ones you can actually get, and name exactly what's missing.",
   icons: {
-    icon: '/roboapply-logo.png',
-    shortcut: '/roboapply-logo.png',
+    icon: '/roboapply-mark.svg',
+    shortcut: '/roboapply-mark.svg',
     apple: '/roboapply-logo.png',
   },
 };

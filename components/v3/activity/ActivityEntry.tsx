@@ -7,7 +7,7 @@
 //            Markdown primitive (NEVER raw — bodies carry **bold** company
 //            names + reasoning clauses from the LLM)
 //   [meta]   right-aligned mono note; when it contains "saved" it renders as
-//            the green pill (proto behaviour)
+//            the positive-status pill (proto behaviour)
 //
 // The entry's `kind` (success | action | note | violet) drives the timeline
 // dot colour via the `.log-entry.<kind>` CSS in styles/v3.css.

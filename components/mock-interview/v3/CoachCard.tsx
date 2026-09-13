@@ -2,7 +2,7 @@
 
 // CoachCard — the silent feedback the user's AI coach drops in mid-answer.
 // Visual rebuild of CoachNudge for the new live page:
-//   • Lime gradient border + outer glow
+//   • Accent gradient border + outer glow
 //   • Tiny orb on the left, "YOUR COACH · LIVE" eyebrow, italic message
 //   • Dismiss X at the top-right
 //
@@ -82,13 +82,13 @@ export function CoachCard({
         className,
       )}
       style={{
-        borderColor: 'var(--dc-accent, #c6ff3a)',
+        borderColor: 'var(--action)',
         background: 'rgba(11, 11, 18, 0.85)',
         boxShadow:
           '0 0 0 4px color-mix(in srgb, var(--dc-accent) 12%, transparent), 0 14px 36px -8px color-mix(in srgb, var(--dc-accent) 35%, transparent)',
       }}
     >
-      {/* Mini orb — matches the persona-orb language but lime-only */}
+      {/* Mini orb — matches the persona-orb language in the action color */}
       <span
         aria-hidden="true"
         className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
@@ -119,7 +119,7 @@ export function CoachCard({
       <div className="flex-1 pt-0.5">
         <p
           className="dc-mono text-[10px] font-semibold uppercase tracking-[0.18em]"
-          style={{ color: 'var(--dc-accent, #c6ff3a)' }}
+          style={{ color: 'var(--action)' }}
         >
           Your Coach · Live
         </p>

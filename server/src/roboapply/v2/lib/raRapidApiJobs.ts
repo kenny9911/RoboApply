@@ -27,7 +27,7 @@ export type { ExternalJobNormalized } from './raExternalJobTypes.js';
 
 const BASE_URL = 'https://jsearch.p.rapidapi.com';
 const RAPIDAPI_HOST = 'jsearch.p.rapidapi.com';
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 25_000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
 const BREAKER_COOLDOWN_MS = 60 * 60 * 1000;
@@ -184,6 +184,12 @@ export function normalizeJSearchJob(
 
   const hasSalary = j.job_min_salary != null || j.job_max_salary != null;
   const apply = pickApplyUrl(j);
+  const absoluteDate = typeof j.job_posted_at_datetime_utc === 'string'
+    ? Date.parse(j.job_posted_at_datetime_utc)
+    : typeof j.job_posted_at_timestamp === 'number' ? j.job_posted_at_timestamp * 1000 : NaN;
+  const sourcePostedAt = Number.isFinite(absoluteDate) && Math.abs(absoluteDate) <= 8.64e15
+    ? new Date(absoluteDate).toISOString()
+    : parseRelativePostedAt(j.job_posted_at, req.fetchedAt);
 
   return deepClean({
     externalId: `jsearch:${j.job_id}`,
@@ -198,6 +204,7 @@ export function normalizeJSearchJob(
     locationCountry: typeof j.job_country === 'string'
       ? j.job_country
       : (req.country ? req.country.toUpperCase() : null),
+    locationCountryEstimated: typeof j.job_country !== 'string' || !j.job_country.trim(),
     workType: j.job_is_remote === true ? 'remote' : 'unknown', // only true is trusted; never 'onsite'
     employmentType: mapEmployment(
       (Array.isArray(j.job_employment_types) ? j.job_employment_types[0] : undefined)
@@ -205,14 +212,12 @@ export function normalizeJSearchJob(
     ),
     salaryMin: j.job_min_salary != null ? Math.round(Number(j.job_min_salary)) : null,
     salaryMax: j.job_max_salary != null ? Math.round(Number(j.job_max_salary)) : null,
-    salaryCurrency: hasSalary ? currencyForCountry(req.country) : null,
+    salaryCurrency: hasSalary ? (typeof j.job_salary_currency === 'string' ? j.job_salary_currency : currencyForCountry(req.country)) : null,
+    salaryCurrencyInferred: hasSalary && typeof j.job_salary_currency !== 'string',
     salaryPeriod: typeof j.job_salary_period === 'string' ? j.job_salary_period.toLowerCase() : null,
-    postedAt: (typeof j.job_posted_at_datetime_utc === 'string' ? j.job_posted_at_datetime_utc : null)
-      ?? (typeof j.job_posted_at_timestamp === 'number'
-        ? new Date(j.job_posted_at_timestamp * 1000).toISOString()
-        : null)
-      ?? parseRelativePostedAt(j.job_posted_at, req.fetchedAt)
-      ?? req.fetchedAt.toISOString(),
+    postedAt: sourcePostedAt ?? req.fetchedAt.toISOString(),
+    postedAtEstimated: sourcePostedAt === null,
+    fetchedAt: req.fetchedAt.toISOString(),
     applyUrl: apply.url,
     applyIsDirect: apply.isDirect,
     description: typeof j.job_description === 'string' ? j.job_description : '',
@@ -240,6 +245,8 @@ function buildCacheKey(p: JSearchSearchParams): string {
     p.workFromHome === true ? 'wfh' : 'any',
     p.employmentTypes ?? '',
     p.page ?? 1,
+    p.numPages ?? 2,
+    p.language ?? '',
   ].join('|');
 }
 
@@ -295,8 +302,9 @@ function utcDay(now: number): string {
 }
 
 function dailyBudget(): number {
-  const raw = Number(process.env.RA_ONBOARDING_JSEARCH_DAILY_BUDGET ?? '');
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_DAILY_BUDGET;
+  const configured = process.env.RA_ONBOARDING_JSEARCH_DAILY_BUDGET;
+  const raw = configured?.trim() ? Number(configured) : DEFAULT_DAILY_BUDGET;
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : DEFAULT_DAILY_BUDGET;
 }
 
 function rollDailyWindow(now: number): void {
@@ -393,7 +401,7 @@ export async function searchJSearchJobs(
     }
     return null;
   }
-  dailyState.used += 1; // count the billed attempt up front — a burst retry rides the same ticket
+  dailyState.used += 1; // Count every upstream attempt, including a retry below.
 
   const numPages = params.numPages ?? 2;
   const search = new URLSearchParams();
@@ -436,6 +444,9 @@ export async function searchJSearchJobs(
       }
       // Per-second burst — exactly one jittered retry.
       await jitteredDelay(300 + Math.random() * 500, controller.signal);
+      rollDailyWindow(Date.now());
+      if (dailyState.used >= dailyBudget()) return null;
+      dailyState.used += 1;
       response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
       if (response.status === 429) {
         const retryText = await response.text().catch(() => '');
@@ -461,12 +472,10 @@ export async function searchJSearchJobs(
     const rlResetSec = headerNum(response, 'x-ratelimit-requests-reset');
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
       logger.warn('RA_V2_JSEARCH_HTTP_ERROR', `JSearch HTTP ${response.status}`, {
         requestId: opts?.requestId,
         httpStatus: response.status,
         query: params.query.slice(0, 120),
-        error: errText.slice(0, 200),
       });
       return null;
     }
@@ -507,12 +516,14 @@ export async function searchJSearchJobs(
             ? Object.keys(body.data as Record<string, unknown>).slice(0, 12)
             : typeof body.data,
       });
+      return null;
     }
 
     const fetchedAt = new Date();
     const jobs = rawJobs
       .map((j) => normalizeJSearchJob(j, { country: params.country, fetchedAt }))
       .filter((j): j is ExternalJobNormalized => j !== null);
+    if (rawJobs.length > 0 && jobs.length === 0) return null;
 
     logger.info('RA_V2_JSEARCH_CALL', 'JSearch search completed', {
       requestId: opts?.requestId,
@@ -544,7 +555,7 @@ export async function searchJSearchJobs(
     logger.warn('RA_V2_JSEARCH_FAILED', 'JSearch search failed; continuing without external jobs', {
       requestId: opts?.requestId,
       query: params.query.slice(0, 120),
-      error: err instanceof Error ? err.message : String(err),
+      errorType: err instanceof Error ? err.name : 'UnknownError',
     });
     return null;
   } finally {

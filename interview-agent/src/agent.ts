@@ -17,9 +17,12 @@
 // so job subprocesses import the default export.
 
 import { config as loadEnv } from 'dotenv';
-import { inference, tts, voice, defineAgent, type JobContext, type JobProcess } from '@livekit/agents';
+import { inference, voice, defineAgent, type JobContext, type JobProcess } from '@livekit/agents';
 import * as silero from '@livekit/agents-plugin-silero';
 import * as openai from '@livekit/agents-plugin-openai';
+import { errorMessage, SessionLifecycle } from './session-lifecycle.js';
+import { InterviewTtsFallback } from './tts-fallback.js';
+import { SafeOpenAiTts } from './safe-openai-tts.js';
 
 // Job subprocesses import this file; ensure they have the env too (inherited
 // from the parent in most cases, but load defensively).
@@ -178,85 +181,43 @@ function buildLlm(llm: RoomMeta['llm']) {
 }
 
 function buildTts(voiceMeta: RoomMeta['voice'], sessionId?: string) {
-  // Honor the control-plane-resolved NATIVE voice by routing it through the
-  // LiveKit Inference gateway — the SAME gateway used for STT/LLM, so it needs
-  // only LIVEKIT_* creds (no provider API key, no extra plugin). The catalog
-  // sends a 'provider/model' id (e.g. 'cartesia/sonic-3'), a provider voice id,
-  // and a short language code.
   const model = voiceMeta?.model?.trim();
   const voiceId = voiceMeta?.voiceId?.trim();
   const language = voiceMeta?.languageCode?.trim() || undefined;
 
-  // LOCAL last-resort floor: OpenAI tts-1 (multilingual). It backs the gateway
-  // primary via the FallbackAdapter below and shares NO failure mode with the
-  // LiveKit Inference gateway, so it stays up when the gateway (or a specific
-  // provider voice) is down. Built DEFENSIVELY, and with the key read from the
-  // LIVE env at call time: the plugin otherwise captures process.env.OPENAI_API_KEY
-  // at IMPORT time (before this module's loadEnv in dev), and an unset key throws
-  // at construction — passing it explicitly reads what loadEnv has since
-  // populated. A genuinely-absent key yields NO floor (gateway alone) rather than
-  // crashing every session (main.ts warns about this at boot).
-  const openaiKey = process.env.OPENAI_API_KEY?.trim() || undefined;
+  // Read the optional direct-provider key after dotenv has loaded. A configured
+  // key can still be out of quota; the fallback handles that as a provider
+  // failure, never as a guarantee that speech is available.
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
   const floorVoice = voiceId && OPENAI_VOICES.has(voiceId) ? voiceId : 'nova';
-  let floor: openai.TTS | null = null;
-  try {
-    floor = new openai.TTS({
-      model: 'tts-1',
-      voice: floorVoice as openai.TTSVoices,
-      ...(openaiKey ? { apiKey: openaiKey } : {}),
-    });
-  } catch (err) {
-    console.warn(`[interview-agent] session_id=${sessionId ?? 'unknown'} OpenAI TTS floor unavailable (OPENAI_API_KEY?):`, err instanceof Error ? err.message : err);
-  }
+  const floor = openaiKey ? new SafeOpenAiTts({
+    model: 'tts-1',
+    voice: floorVoice as openai.TTSVoices,
+    apiKey: openaiKey,
+  }) : null;
 
-  // Any 'provider/model' id → gateway TTS as the PRIMARY. (Legacy bare ids
-  // without a slash — e.g. the old 'tts' — use the floor alone.)
   if (model && model.includes('/')) {
     try {
       const primary = new inference.TTS({
         model,
         ...(voiceId ? { voice: voiceId } : {}),
         ...(language ? { language } : {}),
-        // SERVER-SIDE gateway failover (gateway-valid providers only — OpenAI is
-        // NOT an Inference TTS provider, it's the LOCAL floor above). ElevenLabs
-        // 'Rachel' is a guaranteed premade multilingual voice. The fallback entry
-        // has no top-level `language` field, but `extraKwargs` is forwarded to
-        // the provider verbatim (gateway `extra` payload) and ElevenLabs honors
-        // `language_code` (ISO 639-1) on eleven_turbo_v2_5 — without it a
-        // mid-interview failover would flip the voice back to English.
-        fallback: [{
-          model: 'elevenlabs/eleven_turbo_v2_5',
-          voice: '21m00Tcm4TlvDq8ikWAM',
-          ...(language ? { extraKwargs: { language_code: language } } : {}),
-        }],
       });
-      // CLIENT-SIDE failover via the SDK's FallbackAdapter. `inference.TTS`
-      // opens the gateway WS LAZILY at stream() time, so a rejected model /
-      // unknown voiceId / provider error throws MID-TURN — never at construction
-      // — so the try/catch here can't catch it and (pre-fix) the base stream
-      // silently closed with ZERO frames: the interviewer's text committed to the
-      // transcript but the turn was MUTE, and after a few such turns the SDK's
-      // unrecoverable-TTS-error counter hard-closed the whole session. The
-      // FallbackAdapter watches for that zero-frame/error completion (which the
-      // server-side `fallback` above does NOT cover — that only handles a
-      // provider error the gateway itself sees) and fails over to the local
-      // OpenAI floor, so a turn is never mute. maxRetryPerTTS:0 → fail over on
-      // the FIRST gateway error (no multi-second retry dead-air before the
-      // greeting). Because audio then always plays, the session's TTS error
-      // counter resets each turn and never trips the session-close path.
-      // If the floor couldn't be built (no OPENAI_API_KEY), use the gateway
-      // alone — same reach as before this hardening, minus the never-mute
-      // guarantee (already surfaced by the warn above + the boot check).
-      return floor ? new tts.FallbackAdapter({ ttsInstances: [primary, floor], maxRetryPerTTS: 0 }) : primary;
+      // The catalog selects supported gateway voices. ElevenLabs was retired
+      // from LiveKit Inference on 2026-08-31, so it cannot be a gateway fallback.
+      // Handle mid-stream/zero-frame failures locally without the SDK 1.6.2
+      // recovery loop, which calls unsupported inference.TTS.synthesize().
+      return new InterviewTtsFallback(floor ? [primary, floor] : [primary]);
     } catch (err) {
-      console.warn(`[interview-agent] session_id=${sessionId ?? 'unknown'} inference.TTS init failed; using OpenAI floor:`, err);
+      console.warn(
+        `[interview-agent] session_id=${sessionId ?? 'unknown'} inference.TTS init failed; using OpenAI floor:`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 
-  // Legacy/bare id, or gateway construction failed → the floor if we have one.
-  if (floor) return floor;
-  // No usable gateway path AND no floor: a session with no TTS is unavoidable —
-  // surface WHY loudly instead of returning a broken pipeline.
+  // Legacy bare model ids use the direct-provider path.
+  if (floor) return new InterviewTtsFallback([floor]);
   throw new Error('no TTS available: gateway voice unusable and OPENAI_API_KEY unset');
 }
 
@@ -310,11 +271,13 @@ export default defineAgent({
     //    so a stray "mhm"/cough/echo doesn't stop the interviewer.
     //  - endpointing min/maxDelay: snappy but patient end-of-turn detection,
     //    widened for CJK (see endpointingFor).
+    const sessionTts = buildTts(meta.voice, sessionId);
+    const lifecycle = new SessionLifecycle(() => sessionTts.close(), swarn);
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,
       stt: buildStt(meta.stt, meta.language ?? 'en'),
       llm: buildLlm(meta.llm),
-      tts: buildTts(meta.voice, sessionId),
+      tts: sessionTts,
       turnHandling: {
         // VAD-based end-of-turn. The multilingual semantic model's inference is
         // unreliable in this Node build (lk_end_of_utterance_multilingual fails
@@ -342,14 +305,16 @@ export default defineAgent({
         preemptiveGeneration: { enabled: true, preemptiveTts: false },
       },
     });
+    let sessionStarted = false;
+    let resolveSessionClosed!: () => void;
+    const sessionClosed = new Promise<void>((resolve) => { resolveSessionClosed = resolve; });
 
     // Did the interviewer's audio actually START playing? `await session.say()`
     // resolves even when TTS produced ZERO frames (the SpeechHandle settles on
     // both success and error), so this is the only reliable signal that the
     // greeting/turn was truly audible — it drives the greeting watchdog below.
-    let heardAgentAudio = false;
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
-      if (ev.newState === 'speaking') heardAgentAudio = true;
+      if (ev.newState === 'speaking') lifecycle.recordAudio();
     });
 
     // 3) Transcript + lifecycle forwarding to the control plane (secret-gated).
@@ -390,11 +355,37 @@ export default defineAgent({
             await sleep(CALLBACK_RETRY_BASE_MS * attempt);
             continue;
           }
-          swarn(`control-plane POST ${path} failed after ${attempts} attempt(s):`, err);
+          swarn(`control-plane POST ${path} failed after ${attempts} attempt(s): ${errorMessage(err)}`);
           return 'lost';
         }
       }
       return 'lost';
+    };
+
+    let failurePromise: Promise<void> | undefined;
+    const failSession = (reason: string, error?: unknown): Promise<void> => {
+      if (failurePromise) return failurePromise;
+      const modelClosed = lifecycle.close();
+      const message = error === undefined ? undefined : errorMessage(error);
+      serror(`session failed: reason=${reason}${message ? ` error=${message}` : ''}`);
+      failurePromise = (async () => {
+        // Preserve the diagnosis before the shutdown callback posts 'ended'.
+        const reported = post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/lifecycle`, {
+          event: 'error', reason, ...(message ? { message } : {}),
+        });
+        await modelClosed;
+        try {
+          // shutdown() reuses the SDK's pending error-close task; close() can
+          // start a second teardown while STT/LLM is already closing it.
+          session.shutdown({ drain: false });
+          if (sessionStarted) await sessionClosed;
+        } catch (closeError) {
+          swarn(`failed-session close failed: ${errorMessage(closeError)}`);
+        }
+        await reported;
+        ctx.shutdown(reason);
+      })();
+      return failurePromise;
     };
 
     // 3a) Per-turn latency metrics. Buffered + batch-POSTed so "why was session
@@ -499,6 +490,7 @@ export default defineAgent({
     let nudgeCount = 0;
     let lastNudgeAt = 0;
     session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+      if (!lifecycle.active) return;
       if (ev.newState !== 'away') return;
       if (nudgeCount >= NUDGE_MAX_PER_SESSION) return;
       if (Date.now() - lastNudgeAt < NUDGE_MIN_GAP_MS) return;
@@ -516,21 +508,20 @@ export default defineAgent({
             'Gently check in — reassure them they can take their time, and offer to rephrase the question.',
         });
       } catch (err) {
-        swarn('re-engagement nudge failed:', err);
+        swarn(`re-engagement nudge failed: ${errorMessage(err)}`);
       }
     });
 
     // 3c) Session close/error visibility. The SDK closes the WHOLE AgentSession
     //     on a single unrecoverable pipeline error (see buildStt), and a closed
     //     session otherwise looks like an interviewer who just went mute: the
-    //     'ended' lifecycle only fires when the JOB shuts down, so nothing
-    //     reaches the control plane until room timeouts. Log every pipeline
-    //     error, and on an unexpected close POST an 'error' lifecycle event —
-    //     the backend's lifecycle handler ignores unknown events gracefully
-    //     (never 500s), so this is pure telemetry, never load-bearing.
+    //     'ended' lifecycle only fires when the JOB shuts down. Close the TTS
+    //     model too (the SDK leaves its recovery tasks alive), report the error,
+    //     then release the job through the normal transcript/usage drain.
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const err = ev.error as { message?: string; recoverable?: boolean } | undefined;
-      serror(`pipeline error (recoverable=${err?.recoverable ?? 'unknown'}):`, ev.error);
+      serror(`pipeline error (recoverable=${err?.recoverable ?? 'unknown'}): ${errorMessage(ev.error)}`);
+      if (err?.recoverable === false) void failSession('pipeline_error', ev.error);
     });
     const EXPECTED_CLOSE_REASONS = new Set<string>([
       voice.CloseReason.USER_INITIATED, // our own session.close() paths (overtime, abandonment)
@@ -538,18 +529,15 @@ export default defineAgent({
       voice.CloseReason.PARTICIPANT_DISCONNECTED, // candidate left — the abandon timer owns teardown
     ]);
     session.on(voice.AgentSessionEventTypes.Close, (ev) => {
+      sessionStarted = false;
+      resolveSessionClosed();
+      void lifecycle.close();
       const reason = String(ev.reason ?? 'unknown');
       if (EXPECTED_CLOSE_REASONS.has(reason)) {
         slog(`session closed (${reason})`);
         return;
       }
-      const message = ev.error instanceof Error ? ev.error.message : ev.error ? String(ev.error) : undefined;
-      serror(`session closed UNEXPECTEDLY: reason=${reason}${message ? ` error=${message}` : ''}`);
-      void post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/lifecycle`, {
-        event: 'error',
-        reason,
-        ...(message ? { message } : {}),
-      });
+      void failSession(reason, ev.error);
     });
 
     // 3d) Abandoned-room teardown. closeOnDisconnect is disabled at start() so
@@ -564,7 +552,7 @@ export default defineAgent({
     // control plane; anything else (hidden egress, ops) never arms the timer.
     const isCandidate = (identity: string): boolean => identity.startsWith('candidate-');
     ctx.room.on('participantDisconnected', (p) => {
-      if (!isCandidate(p.identity)) return;
+      if (!lifecycle.active || !isCandidate(p.identity)) return;
       slog(`candidate disconnected — closing in ${ABANDON_GRACE_MS / 1000}s unless they rejoin`);
       if (abandonTimer) clearTimeout(abandonTimer);
       abandonTimer = setTimeout(() => {
@@ -574,7 +562,7 @@ export default defineAgent({
           try {
             await session.close();
           } catch (err) {
-            swarn('abandoned-session close failed:', err);
+            swarn(`abandoned-session close failed: ${errorMessage(err)}`);
           }
           ctx.shutdown('candidate_abandoned');
         })();
@@ -595,6 +583,7 @@ export default defineAgent({
     const timeManagementTimers: NodeJS.Timeout[] = [];
 
     ctx.addShutdownCallback(async () => {
+      await lifecycle.close();
       for (const t of timeManagementTimers) clearTimeout(t);
       timeManagementTimers.length = 0;
       if (abandonTimer) {
@@ -637,13 +626,19 @@ export default defineAgent({
           modelUsage: usage?.modelUsage ?? [],
         });
       } catch (err) {
-        swarn('usage report failed:', err);
+        swarn(`usage report failed: ${errorMessage(err)}`);
       }
       await post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/lifecycle`, { event: 'ended' });
     });
 
     // 4) Connect, start, and greet.
-    await ctx.connect();
+    try {
+      await ctx.connect();
+    } catch (error) {
+      await failSession('connection_failed', error);
+      return;
+    }
+    if (!lifecycle.active) return;
 
     // Audio-ready handshake (see CLIENT_READY_TIMEOUT_MS). Attach the listener
     // BEFORE session.start()/greet so a `client_ready` published during the
@@ -668,17 +663,34 @@ export default defineAgent({
     // candidate disconnects with CLIENT_INITIATED — which a mid-interview page
     // refresh sends — leaving a rejoining candidate with a mute agent. Disabled:
     // the abandonment grace timer (3d) owns candidate-gone teardown instead.
-    await session.start({ agent, room: ctx.room, inputOptions: { closeOnDisconnect: false } });
+    try {
+      await session.start({ agent, room: ctx.room, inputOptions: { closeOnDisconnect: false } });
+      sessionStarted = lifecycle.active;
+    } catch (error) {
+      ctx.room.off('dataReceived', onClientData);
+      await failSession('session_start_failed', error);
+      return;
+    }
 
     // Hold the greeting until the candidate's browser confirms audio playback is
     // unlocked — otherwise the opening streams into a muted <audio> element and
     // is lost (see CLIENT_DATA_TOPIC). Bounded + fail-open: an old client that
     // never signals still gets greeted after the timeout rather than dead air.
-    const readyState = await Promise.race([
-      clientReadyPromise,
-      sleep(CLIENT_READY_TIMEOUT_MS).then(() => 'timeout' as const),
-    ]);
-    ctx.room.off('dataReceived', onClientData);
+    let readyTimer: NodeJS.Timeout | undefined;
+    let readyState: 'ready' | 'timeout' | 'closed';
+    try {
+      readyState = await Promise.race([
+        clientReadyPromise,
+        lifecycle.whenClosed,
+        new Promise<'timeout'>((resolve) => {
+          readyTimer = setTimeout(() => resolve('timeout'), CLIENT_READY_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      clearTimeout(readyTimer);
+      ctx.room.off('dataReceived', onClientData);
+    }
+    if (!lifecycle.active) return;
     slog(`client audio-ready: ${readyState}`);
 
     // The greeting must NOT be interruptible — otherwise the candidate's mic
@@ -689,41 +701,23 @@ export default defineAgent({
     // hears an opening. addToChatCtx records it as the interviewer's turn so the
     // model continues the conversation naturally instead of greeting again.
     const greetingStartAt = Date.now();
-    try {
-      if (openingLine) {
-        await session.say(openingLine, { allowInterruptions: false, addToChatCtx: true });
-      } else {
-        await session.generateReply({ instructions: opening, allowInterruptions: false });
-      }
-    } catch (err) {
-      swarn('primary greeting failed; falling back to LLM greeting:', err);
-      // Last-ditch: if a deterministic say() somehow failed, try the LLM path so
-      // the interview still opens rather than sitting in silence.
-      if (openingLine) {
-        try {
-          await session.generateReply({ instructions: opening, allowInterruptions: false });
-        } catch (err2) {
-          serror('greeting fully failed:', err2);
-        }
-      }
-    }
-
-    // Greeting watchdog. say() resolving is NOT proof of audio (it settles even
-    // on a zero-frame TTS miss), so if the agent never reached the 'speaking'
-    // state the opening was silent — re-issue it ONCE. The client-side
-    // FallbackAdapter should make this rare; addToChatCtx:false so a re-issue
-    // after a missed state signal never double-records the greeting turn.
-    if (!heardAgentAudio) {
-      swarn('greeting produced no audible frames (never reached speaking) — re-issuing once');
-      try {
+    const greeted = await lifecycle.greet(
+      async (repeat) => {
         if (openingLine) {
-          await session.say(openingLine, { allowInterruptions: false, addToChatCtx: false });
+          await session.say(openingLine, { allowInterruptions: false, addToChatCtx: !repeat });
         } else {
           await session.generateReply({ instructions: opening, allowInterruptions: false });
         }
-      } catch (err) {
-        serror('greeting re-issue failed:', err);
+      },
+      openingLine ? async () => {
+        await session.generateReply({ instructions: opening, allowInterruptions: false });
+      } : undefined,
+    );
+    if (!greeted) {
+      if (lifecycle.active) {
+        await failSession('greeting_no_audio', new Error('opening greeting produced no audio'));
       }
+      return;
     }
 
     // 'started' lifecycle: the agent's join time is otherwise unknowable
@@ -743,13 +737,14 @@ export default defineAgent({
     // (readonly) live context, append, and apply via the SDK's supported
     // updateChatCtx. The model sees it on its next turn — nothing is spoken.
     const injectSystemNote = async (note: string): Promise<void> => {
+      if (!lifecycle.active) return;
       try {
         const updated = agent.chatCtx.copy();
         updated.addMessage({ role: 'system', content: note });
         await agent.updateChatCtx(updated);
         slog(`time note injected: ${note.slice(0, 80)}`);
       } catch (err) {
-        swarn('system-note injection failed:', err);
+        swarn(`system-note injection failed: ${errorMessage(err)}`);
       }
     };
     // Timers are anchored to entryAt (not "now") so the planned duration counts
@@ -791,6 +786,7 @@ export default defineAgent({
     // localized goodbye, then close the session gracefully. If anything fails,
     // the existing room timeouts still tear the session down.
     scheduleAtElapsed(durationMs + 240_000, () => {
+      if (!lifecycle.active) return;
       void (async () => {
         try {
           const handle = session.generateReply({
@@ -801,7 +797,7 @@ export default defineAgent({
           await session.close();
           slog('overtime hard-stop: closing spoken, session closed');
         } catch (err) {
-          swarn('overtime wrap-up failed; leaving teardown to room timeouts:', err);
+          swarn(`overtime wrap-up failed; leaving teardown to room timeouts: ${errorMessage(err)}`);
           return;
         }
         // Release the job too: shutdown drains transcripts and fires 'ended',

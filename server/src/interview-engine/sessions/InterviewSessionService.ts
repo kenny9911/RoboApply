@@ -41,7 +41,7 @@ import {
 } from '../livekit/liveKitClient.js';
 import { startRoomRecording, stopRecording } from '../livekit/egress.js';
 import { interviewR2Storage } from '../storage/r2Storage.js';
-import { resolveVoice, resolveStt, normalizeLocale } from '../voice/voiceCatalog.js';
+import { resolveVoice, resolveSessionVoice, resolveStt, normalizeLocale } from '../voice/voiceCatalog.js';
 import { findPersona, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
 import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
@@ -337,7 +337,11 @@ export class InterviewSessionService {
     }
 
     const mode = session.mode as InterviewMode;
-    const voice = (session.voice as unknown as ResolvedVoice) ?? resolveVoice(session.language);
+    const voice = resolveSessionVoice(
+      session.voice as unknown as ResolvedVoice | null,
+      session.language,
+      session.personaId ? findPersona(session.personaId)?.voiceGender : undefined,
+    );
     const identity = `candidate-${session.id}`;
     const ttlSeconds = Math.max(900, session.plannedDurationMinutes * 60 + 600); // duration + 10 min slack
 
@@ -376,6 +380,7 @@ export class InterviewSessionService {
         status: 'live',
         startedAt: session.startedAt ?? new Date(),
         participantIdentity: identity,
+        voice: voice as unknown as object,
         ...(preparedRoom
           ? {
               // Persist the exact worker namespace dispatched for this session.

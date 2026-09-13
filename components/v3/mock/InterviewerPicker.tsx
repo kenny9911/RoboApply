@@ -43,10 +43,7 @@ function PersonaCard({
     >
       <div
         className="iv-persona-orb"
-        style={{
-          background: `radial-gradient(circle at 30% 30%, ${persona.palette[0]}, transparent 60%),
-                       radial-gradient(circle at 70% 70%, ${persona.palette[1]}, transparent 60%)`,
-        }}
+        style={{ background: 'var(--grad-brand)' }}
       />
       <div className="iv-persona-body">
         <div className="iv-persona-name">
@@ -60,9 +57,9 @@ function PersonaCard({
             <span
               className="iv-persona-archetype"
               style={{
-                background: `${persona.palette[1]}22`,
-                color: persona.palette[1],
-                borderColor: `${persona.palette[1]}55`,
+                background: 'var(--action-subtle)',
+                color: 'var(--action)',
+                borderColor: 'var(--rule)',
               }}
             >
               {t(archetypeKey)}

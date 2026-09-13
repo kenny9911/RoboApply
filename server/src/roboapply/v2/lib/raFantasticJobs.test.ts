@@ -50,6 +50,19 @@ function atsRow(overrides: Record<string, unknown> = {}): any {
 }
 
 describe('normalizeFantasticJob — identity + prefix', () => {
+  it('normalizes the current September marketplace salary/location field names', () => {
+    const job = normalizeFantasticJob(atsRow({
+      locations_raw: undefined, locations: [{ address: { addressCountry: 'DE' } }],
+      salary_raw: undefined, salary: { currency: 'EUR', value: { minValue: 5000, maxValue: 7000, unitText: 'MONTH' } },
+    }), 'activejobs', FETCH_AT)!;
+    expect(job.locationCountry).toBe('DE');
+    expect(job.salaryMin).toBe(5000);
+    expect(job.salaryCurrency).toBe('EUR');
+    expect(job.salaryPeriod).toBe('month');
+    const enriched = normalizeFantasticJob(atsRow({ salary_raw: undefined, ai_salary_min_value: 100, ai_salary_max_value: 150, ai_salary_currency: 'USD', ai_salary_unit_text: 'HOUR' }), 'activejobs', FETCH_AT)!;
+    expect(enriched.salaryMin).toBe(100);
+    expect(enriched.salaryPeriod).toBe('hour');
+  });
   it('stamps externalId with the board prefix and sourceBoard', () => {
     const n = normalizeFantasticJob(atsRow(), 'activejobs', FETCH_AT)!;
     expect(n.externalId).toBe('activejobs:1737000000-0d4f2c9e5b7a41e8b0c2f3a1');
@@ -206,13 +219,13 @@ describe('normalizeFantasticJob — salary (irregular JSON-LD)', () => {
     expect(n.salaryCurrency).toBeNull();
     expect(n.salaryPeriod).toBeNull();
   });
-  it('WEEK/DAY period → null (no target slot)', () => {
+  it('preserves weekly salary periods for the search API', () => {
     const n = normalizeFantasticJob(
       atsRow({ salary_raw: { currency: 'USD', value: { minValue: 2000, maxValue: 3000, unitText: 'WEEK' } } }),
       'activejobs',
       FETCH_AT,
     )!;
-    expect(n.salaryPeriod).toBeNull();
+    expect(n.salaryPeriod).toBe('week');
   });
 });
 
@@ -265,23 +278,23 @@ describe('normalizeFantasticJob — apply + publisher + description', () => {
 });
 
 describe('buildQuery', () => {
-  it('title_filter from titleQuery, else query', () => {
-    expect(__test.buildQuery({ query: 'q', country: 'us', titleQuery: 'backend engineer' } as any).get('title_filter')).toBe(
+  it('title from titleQuery, else query', () => {
+    expect(__test.buildQuery({ query: 'q', country: 'us', titleQuery: 'backend engineer' } as any).get('title')).toBe(
       'backend engineer',
     );
-    expect(__test.buildQuery({ query: 'nurse', country: 'us' } as any).get('title_filter')).toBe('nurse');
+    expect(__test.buildQuery({ query: 'nurse', country: 'us' } as any).get('title')).toBe('nurse');
   });
-  it('location_filter from locationText, else country name; ISO omitted when unmapped', () => {
-    expect(__test.buildQuery({ query: 'q', country: 'us', locationText: 'Taipei' } as any).get('location_filter')).toBe('Taipei');
-    expect(__test.buildQuery({ query: 'q', country: 'us' } as any).get('location_filter')).toBe('United States');
-    expect(__test.buildQuery({ query: 'q', country: 'zz' } as any).get('location_filter')).toBeNull();
+  it('location from locationText, else country name; ISO omitted when unmapped', () => {
+    expect(__test.buildQuery({ query: 'q', country: 'us', locationText: 'Taipei' } as any).get('location')).toBe('Taipei');
+    expect(__test.buildQuery({ query: 'q', country: 'us' } as any).get('location')).toBe('United States');
+    expect(__test.buildQuery({ query: 'q', country: 'zz' } as any).get('location')).toBeNull();
   });
-  it('always requests description_type=text and a limit; remote only when workFromHome', () => {
+  it('always requests description_format=text and a limit; remote only when workFromHome', () => {
     const q = __test.buildQuery({ query: 'q', country: 'us', workFromHome: true } as any);
-    expect(q.get('description_type')).toBe('text');
+    expect(q.get('description_format')).toBe('text');
     expect(q.get('limit')).toBeTruthy();
-    expect(q.get('remote')).toBe('true');
-    expect(__test.buildQuery({ query: 'q', country: 'us' } as any).get('remote')).toBeNull();
+    expect(q.get('ai_work_arrangement')).toBe('Remote Solely,Remote OK');
+    expect(__test.buildQuery({ query: 'q', country: 'us' } as any).get('ai_work_arrangement')).toBeNull();
   });
 });
 
@@ -301,9 +314,9 @@ describe('titleFilterFrom — reduce OR-tokens to an AND-able role noun (review 
     expect(__test.titleFilterFrom('senior lead')).toBe('senior lead');
   });
 
-  it('buildQuery sends the reduced title_filter', () => {
+  it('buildQuery sends the reduced title', () => {
     expect(
-      __test.buildQuery({ query: 'q', country: 'us', titleQuery: 'senior backend engineer' } as any).get('title_filter'),
+      __test.buildQuery({ query: 'q', country: 'us', titleQuery: 'senior backend engineer' } as any).get('title'),
     ).toBe('backend engineer');
   });
 });
@@ -386,20 +399,30 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
     expect(await searchFantasticJobs('activejobs', { query: 'dev', country: 'us' })).toBeNull();
   });
 
-  it('parses a bare array and normalizes; hits the 7d ATS endpoint', async () => {
+  it('parses a bare array and uses the current ATS route with time_frame', async () => {
     const fn = mockFetch(200, [atsRow()]);
     const jobs = await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' });
     expect(jobs).toHaveLength(1);
     expect(jobs![0].sourceBoard).toBe('activejobs');
     const calledUrl = fn.mock.calls[0][0] as string;
-    expect(calledUrl).toContain('active-jobs-db.p.rapidapi.com/active-ats-7d');
-    expect(calledUrl).toContain('title_filter=engineer');
-    expect(calledUrl).toContain('description_type=text');
+    expect(calledUrl).toContain('active-jobs-db.p.rapidapi.com/active-ats?');
+    expect(calledUrl).toContain('title=engineer');
+    expect(calledUrl).toContain('time_frame=7d');
+    expect(calledUrl).not.toContain('/active-ats-7d');
+    expect(calledUrl).toContain('description_format=text');
   });
 
   it('non-array body (error object) → null', async () => {
     mockFetch(200, { message: 'oops' });
     expect(await searchFantasticJobs('activejobs', { query: 'dev', country: 'us' })).toBeNull();
+  });
+  it('uses current job-board route and restricts optional LinkedIn source', async () => {
+    const fn = mockFetch(200, [atsRow()]);
+    await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us' });
+    const url = new URL(fn.mock.calls[0][0] as string);
+    expect(url.pathname).toBe('/active-jb');
+    expect(url.searchParams.get('source')).toBe('linkedin');
+    expect(url.searchParams.get('exclude_recruiter_fields')).toBe('true');
   });
 
   it('403 opens the breaker so the next call short-circuits (no 2nd fetch)', async () => {
@@ -420,6 +443,19 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
   it('refuses an empty title (too-broad/costly) without billing', async () => {
     const fn = mockFetch(200, [atsRow()]);
     expect(await searchFantasticJobs('activejobs', { query: '', country: 'us' })).toBeNull();
+    expect(fn).not.toHaveBeenCalled();
+  });
+  it('retains CJK role filters and rejects punctuation-only paid scans', async () => {
+    const fn = mockFetch(200, [atsRow()]);
+    await searchFantasticJobs('activejobs', { query: '軟體工程師', country: 'tw' });
+    expect(new URL(fn.mock.calls[0][0] as string).searchParams.get('title')).toBe('軟體工程師');
+    expect(await searchFantasticJobs('activejobs', { query: '---', country: 'tw' })).toBeNull();
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+  it('zero daily budget refuses upstream calls', async () => {
+    process.env.RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET = '0';
+    const fn = mockFetch(200, [atsRow()]);
+    expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toBeNull();
     expect(fn).not.toHaveBeenCalled();
   });
 });

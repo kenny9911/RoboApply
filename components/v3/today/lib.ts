@@ -12,6 +12,19 @@ import type {
   RATrackerStatus,
   RAWorkType,
 } from '../../../lib/api/v2';
+import type { DiscoveryFilters } from './DiscoveryControls';
+
+/** Client filters only narrow the already loaded collection. They do not
+ * request another search or discard a job because its score is pending. */
+export function filterDiscoveryJobs(jobs: RAJobListItem[], filters: DiscoveryFilters): RAJobListItem[] {
+  const terms = filters.query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return jobs.filter((job) => {
+    if (filters.workType !== 'all' && job.workType !== filters.workType) return false;
+    if (filters.salaryOnly && job.salaryMin == null && job.salaryMax == null) return false;
+    const searchable = `${job.title} ${job.companyName} ${job.location ?? ''}`.toLocaleLowerCase();
+    return terms.every((term) => searchable.includes(term));
+  });
+}
 
 /** A logo bubble color index 0..4 (matches `.logo[data-color]` in v3.css). */
 export function logoColor(index: number): number {
@@ -24,7 +37,8 @@ export function logoLetter(companyName: string): string {
   return c ? c[0]!.toUpperCase() : '?';
 }
 
-/** Compact salary band, e.g. "$185–215k". Returns null when unknown. */
+/** A disclosed band with explicit currency and one-sided bounds. No salary
+ * period is inferred because the compact search result does not contain it. */
 export function formatSalary(
   min: number | null,
   max: number | null,
@@ -35,7 +49,7 @@ export function formatSalary(
   const k = (n: number) => {
     if (n >= 1000) {
       const v = n / 1000;
-      return Number.isInteger(v) ? `${v}k` : `${v.toFixed(0)}k`;
+      return `${v}k`;
     }
     return String(n);
   };
@@ -43,24 +57,27 @@ export function formatSalary(
     return min === max ? `${sym}${k(min)}` : `${sym}${k(min)}–${k(max)}`;
   }
   const only = (min ?? max)!;
-  return `${sym}${k(only)}`;
+  return `${min != null ? '≥' : '≤'} ${sym}${k(only)}`;
 }
 
 function currencySymbol(currency: string | null): string {
-  switch ((currency ?? 'USD').toUpperCase()) {
+  switch ((currency ?? '').toUpperCase()) {
     case 'USD':
+      return 'US$';
     case 'AUD':
+      return 'A$';
     case 'CAD':
-      return '$';
+      return 'CA$';
     case 'EUR':
       return '€';
     case 'GBP':
       return '£';
     case 'JPY':
+      return 'JP¥';
     case 'CNY':
-      return '¥';
+      return 'CN¥';
     default:
-      return '';
+      return currency ? `${currency.toUpperCase()} ` : '';
   }
 }
 

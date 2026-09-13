@@ -38,10 +38,10 @@
 // ever having been empty.
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
-import { Btn, EmptyState, IconRefresh } from '../primitives';
+import { Btn, EmptyState, IconRefresh, IconSearch } from '../primitives';
 import { raV2Api } from '../../../lib/api/v2';
 import type { JobScoreResponse, RAJobListItem } from '../../../lib/api/v2';
 import { useApplyJob } from '../../../hooks/useJobDetail';
@@ -51,15 +51,18 @@ import {
   usePassMatch,
 } from '../../../hooks/useTodayMatches';
 import { MatchCard } from './MatchCard';
+import { DiscoveryControls, DEFAULT_DISCOVERY_FILTERS } from './DiscoveryControls';
+import { filterDiscoveryJobs } from './lib';
 
 interface Props {
   /** Open the first-run setup panel. Wired by /jobs; the feed header is the
    *  one place in the product that offers it by tap (ruling C21 — one name,
    *  one place). Optional so the feed still renders standalone. */
   onOpenSetup?: () => void;
+  updatedLabel?: string;
 }
 
-export function MatchFeed({ onOpenSetup }: Props = {}) {
+export function MatchFeed({ onOpenSetup, updatedLabel }: Props = {}) {
   const t = useTranslations('jobs');
   const { feed, resumeVariantId } = useTodayMatches();
   const applyMutation = useApplyJob();
@@ -80,6 +83,8 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
   // Track which job id is currently being applied to (the shared mutation only
   // exposes one isPending; we pin it to the right card).
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [filters, setFilters] = useState(DEFAULT_DISCOVERY_FILTERS);
+  const [lastPassedId, setLastPassedId] = useState<string | null>(null);
 
   const allJobs = useMemo<RAJobListItem[]>(
     () => feed.data?.jobs ?? [],
@@ -118,8 +123,10 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
    *  even before this row's own query resolves. */
   const scoreById = new Map<string, number>();
   allJobs.forEach((job, i) => {
-    const live = job.matchScoreCached ?? scoreQueries[i]?.data?.matchScore.score;
-    if (typeof live === 'number') scoreById.set(job.id, live);
+    const live = job.matchScoreCached != null && job.matchScoreCached >= 0
+      ? job.matchScoreCached
+      : scoreQueries[i]?.data?.matchScore.score;
+    if (typeof live === 'number' && live >= 0 && live <= 100) scoreById.set(job.id, live);
   });
 
   // `useQueries` hands back a fresh array on every render, so the map above
@@ -130,7 +137,7 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
     .map((job) => `${job.id}:${scoreById.get(job.id) ?? ''}`)
     .join('|');
 
-  const visible = useMemo(() => {
+  const available = useMemo(() => {
     const rows = allJobs.filter((j) => !passedIds.has(j.id));
     // Decorate–sort–undecorate with the retrieval index as the tiebreak, so the
     // sort is stable in every engine and unscored rows hold their server order
@@ -150,6 +157,10 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- scoreSignature IS
     // the stable projection of scoreById; see the note above it.
   }, [allJobs, passedIds, scoreSignature]);
+
+  const visible = useMemo(() => filterDiscoveryJobs(available, filters), [available, filters]);
+  const companyCount = new Set(available.map((job) => job.companyName.trim().toLowerCase())).size;
+  const salaryCount = available.filter((job) => job.salaryMin != null || job.salaryMax != null).length;
 
   // Pin the default-open row ONCE, and re-pick only if it leaves the list
   // (passed). Without the pin, every re-sort would drag the open card out from
@@ -181,11 +192,21 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
   };
 
   const handlePass = (jobId: string) => {
+    setLastPassedId(jobId);
     setPassedIds((prev) => new Set(prev).add(jobId));
     passMutation.mutate(jobId);
   };
 
+  const handleApplicationUndone = (jobId: string) => {
+    setAppliedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(jobId);
+      return next;
+    });
+  };
+
   const handleUndoPass = (jobId: string) => {
+    setLastPassedId(null);
     setPassedIds((prev) => {
       const next = new Set(prev);
       next.delete(jobId);
@@ -194,10 +215,13 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
   };
 
   return (
-    <>
+    <section className="discovery-feed" aria-label={t('discovery.listTitle')}>
       <div className="matches-head">
-        <div className="ttl">{t('matchesTitle')}</div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div>
+          <div className="discovery-list-heading"><h2>{t('discovery.listTitle')}</h2>{updatedLabel ? <span className="discovery-updated">{updatedLabel}</span> : null}</div>
+          <div className="ttl">{t('matchesTitle')}</div>
+        </div>
+        <div className="discovery-feed-actions">
           <Btn
             variant="ghost"
             icon={<IconRefresh size={13} />}
@@ -224,6 +248,24 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
         </div>
       </div>
 
+      {!feed.isPending && !feed.isError && available.length > 0 ? (
+        <>
+          <div className="discovery-summary" aria-label={t('discovery.essentials')}>
+            <div><strong>{available.length}</strong><span>{t('discovery.loaded')}</span></div>
+            <div><strong>{companyCount}</strong><span>{t('discovery.companies')}</span></div>
+            <div><strong>{salaryCount}</strong><span>{t('discovery.disclosed')}</span></div>
+          </div>
+          <DiscoveryControls value={filters} onChange={setFilters} visibleCount={visible.length} totalCount={available.length} />
+        </>
+      ) : null}
+
+      {lastPassedId ? (
+        <div className="discovery-undo" role="status">
+          <span>{t('notInterestedBanner')}</span>
+          <Btn variant="ghost" onClick={() => handleUndoPass(lastPassedId)}>{t('actions.undo')}</Btn>
+        </div>
+      ) : null}
+
       {/* `isPending`, not `isLoading` — the same trap the page header already
        *  documents. The feed query is HELD until stored preferences resolve, and
        *  a disabled TanStack query reports isLoading === false while it has no
@@ -246,13 +288,19 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
             </Btn>
           }
         />
+      ) : available.length > 0 && visible.length === 0 ? (
+        <EmptyState
+          title={t('discovery.emptyTitle')}
+          sub={t('discovery.emptyBody')}
+          action={<Btn variant="primary" onClick={() => setFilters(DEFAULT_DISCOVERY_FILTERS)}>{t('discovery.clear')}</Btn>}
+        />
       ) : visible.length === 0 ? (
         // Reachable only when the SERVER returned nothing (or the user passed
         // on everything) — never because a score has not arrived yet.
         <EmptyState
-          icon={<span style={{ fontSize: 'var(--fs-display)' }}>🎯</span>}
-          title={`${t('empty.title')} ${t('empty.accent')}`}
-          sub={t('empty.sub')}
+          icon={<IconSearch size={28} />}
+          title={allJobs.length > 0 ? t('discovery.allReviewed') : `${t('empty.title')} ${t('empty.accent')}`}
+          sub={allJobs.length > 0 ? t('notInterestedBanner') : t('empty.sub')}
           action={
             onOpenSetup ? (
               <Btn variant="primary" onClick={onOpenSetup}>
@@ -279,11 +327,12 @@ export function MatchFeed({ onOpenSetup }: Props = {}) {
               onUndoPass={() => handleUndoPass(job.id)}
               passed={passedIds.has(job.id)}
               appliedNow={appliedIds.has(job.id)}
+              onApplicationUndone={handleApplicationUndone}
             />
           ))}
         </div>
       )}
-    </>
+    </section>
   );
 }
 

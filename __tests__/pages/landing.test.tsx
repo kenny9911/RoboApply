@@ -12,7 +12,7 @@
 // whole overhaul exists to remove.
 
 import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { renderWithProviders } from '../utils/renderWithProviders';
 
 vi.mock('next/navigation', () => ({
@@ -30,23 +30,21 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { LandingContent } from '../../components/landing/LandingContent';
-import {
-  SEO_READY_LOCALES,
-  localePath,
-} from '../../lib/localeConfig';
+import { SEO_READY_LOCALES, localePath } from '../../lib/localeConfig';
 
 describe('Landing page', () => {
-  it('renders the R2 hero headline + subheadline (translated)', () => {
+  it('renders the career-discovery hero headline and subheadline (translated)', () => {
     renderWithProviders(<LandingContent />);
-    // Ruling R2: ONE sentence, one i18n key. The old two-span machine/human
-    // h1 carried the retired "We apply. You interview." tagline.
+    // The complete headline stays in one translated key.
     expect(
       screen.getByRole('heading', {
-        name: /Automate Job Applications\. Find out why you're not getting interviews\./i,
+        name: /Find work that fits\. Know where you stand\./i,
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Tired of wasting your time applying to jobs\? .*We read 1,000\+ open roles/i),
+      screen.getByText(
+        /Explore roles that match your experience, understand what.s missing/i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -82,15 +80,44 @@ describe('Landing page', () => {
 
   it('renders the gap-report panel (sr summary + sample label)', () => {
     renderWithProviders(<LandingContent />);
-    // The animated body is aria-hidden; the sr-only summary carries it.
+    // The interactive sample also has a complete summary for assistive tech.
     expect(screen.getByText(/A sample gap report/i)).toBeInTheDocument();
     expect(screen.getByText(/roboapply — gap report/i)).toBeInTheDocument();
+  });
+
+  it('lets visitors inspect every stage of the sample without leaving the page', () => {
+    renderWithProviders(<LandingContent />);
+    const understand = screen.getByRole('button', { name: /UNDERSTAND/i });
+    expect(understand).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByText('Kubernetes: in 12 of them, not on your resume'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /FIND/i }));
+    expect(understand).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('1,284 open postings read')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /FIX/i }));
+    expect(
+      screen.getByText('3 bullets have no number · each one named'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /PRACTICE/i }));
+    expect(
+      screen.getByText('6 questions this panel is most likely to ask'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /PRACTICE/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('renders the why-bots-lose stats band with citable numbers', () => {
     renderWithProviders(<LandingContent />);
     expect(
-      screen.getByRole('heading', { name: /More applications is not the answer\./i }),
+      screen.getByRole('heading', {
+        name: /More applications is not the answer\./i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText('242')).toBeInTheDocument();
     expect(screen.getByText('+400%')).toBeInTheDocument();
@@ -157,7 +184,9 @@ describe('Landing page', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/limits\.txt/i)).toBeInTheDocument();
     expect(screen.getByText(/Nothing is sent for you/i)).toBeInTheDocument();
-    expect(screen.getByText(/The score is not a prediction/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /The score is not a prediction/i }),
+    ).toBeInTheDocument();
   });
 
   it('renders the REAL pricing plans (mock-interview credits)', () => {
@@ -166,9 +195,7 @@ describe('Landing page', () => {
     expect(
       screen.getByRole('heading', { name: 'Starter' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Growth' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Growth' })).toBeInTheDocument();
     // Credits + prices — must match the billing catalog
     // (mockInterviewPlans.ts), NOT the retired $19/$49 apps-per-day tiers.
     expect(screen.getByText('10')).toBeInTheDocument();

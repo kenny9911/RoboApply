@@ -70,7 +70,7 @@ export function PipelineColumn({
       })}
     >
       <div className={cn('pipe-head', column.tone || undefined)}>
-        <div className="name">{t(`columns.${column.labelKey}`)}</div>
+        <h2 className="name">{t(`columns.${column.labelKey}`)}</h2>
         <div className="count">{count}</div>
       </div>
 

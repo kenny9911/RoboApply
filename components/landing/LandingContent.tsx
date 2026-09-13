@@ -1,39 +1,14 @@
 'use client';
 
-// Landing — public marketing. "THE GAP REPORT", v3.
-//
-// Positioned on the gap, not on fit (ruling R2): the H1 asks the question the
-// visitor already says out loud — "why am I not getting interviews?" — and the
-// page answers it by showing the work. The hero panel is a nine-line gap
-// report (resume read → postings read → ranked → the words that are missing →
-// the fit score with its disclaimer → the bullets with no number → the
-// questions the panel will ask). It is a SAMPLE, labelled as one.
-//
-// What this page must never do (ruling R1): claim the product submits
-// anything to an employer. The overnight activity log, the review-hold
-// language, the autopilot chips, the "We apply. You interview." tagline and
-// the guarantees list were all removed in wave 5 — the product opens the
-// employer's own posting and the user applies there.
-//
-// Sections: 01 why applying more stopped working (stats band) · 02 how it
-// works (find → understand → fix → practice) · 03 the whole loop · 04 the
-// interview prep spotlight (report receipt) · 05 the four things we do not do
-// · 06 pricing (practice-interview credits) · 07 an always-visible FAQ
-// written for AI-engine extraction · a final band.
-//
-// THEMES — two appearances only, light and dark (ruling R3 deleted `warm` and
-// the accent picker). styles/landing.css re-points the base tokens on
-// .landing-root to the warm clay-on-cream palette in light. Copy is 100% i18n
-// (`landing` + `common`). Motion is CSS-only with a reduced-motion fallback.
-
 import Link from 'next/link';
+import { useId, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-
-import { Logo } from '../chrome/Logo';
 import { PageContainer } from '../ui/PageContainer';
+import { BrandSymbol } from '../chrome/BrandSymbol';
 import {
   LOCALE_LABELS,
   SEO_READY_LOCALES,
+  isLocale,
   localePath,
 } from '../../lib/localeConfig';
 import { LanguageMenu } from './LanguageMenu';
@@ -45,68 +20,300 @@ import {
   type BillingMarket,
 } from '../../lib/pricing';
 
-type TagVariant =
-  | 'scout'
-  | 'match'
-  | 'draft'
-  | 'queue'
-  | 'hold'
-  | 'submit'
-  | 'digest';
-
-// Hero gap-report rows: i18n key ↔ chip variant. The step numbers and tags
-// live in i18n but stay ASCII in every locale (machine voice). The `variant`
-// names are legacy chip colours, not claims — l8's `submit` variant only means
-// "the flashing row", and nothing on this page submits anything.
-const LOG_LINES: ReadonlyArray<{ key: string; variant: TagVariant }> = [
-  { key: 'l1', variant: 'scout' },
-  { key: 'l2', variant: 'match' },
-  { key: 'l3', variant: 'draft' },
-  { key: 'l4', variant: 'draft' },
-  { key: 'l5', variant: 'queue' },
-  { key: 'l6', variant: 'hold' },
-  { key: 'l7', variant: 'hold' },
-  { key: 'l8', variant: 'submit' },
-  { key: 'l9', variant: 'digest' },
-];
-
-const STEPS: ReadonlyArray<{ key: string; variant: TagVariant }> = [
-  { key: 's1', variant: 'scout' },
-  { key: 's2', variant: 'draft' },
-  { key: 's3', variant: 'hold' },
-  { key: 's4', variant: 'submit' },
-];
-
-const STATS = ['s1', 's2', 's3'] as const;
-
-const LOOP_CARDS: ReadonlyArray<{ key: string; variant: TagVariant }> = [
-  { key: 'match', variant: 'match' },
-  { key: 'resume', variant: 'draft' },
-  { key: 'apply', variant: 'hold' },
-  { key: 'studio', variant: 'digest' },
-];
-
+const STEPS = ['s1', 's2', 's3', 's4'] as const;
+const LOOP_CARDS = ['match', 'resume', 'apply', 'studio'] as const;
 const STUDIO_FEATURES = ['f1', 'f2', 'f3', 'f4', 'f5'] as const;
 const REPORT_ROWS = [
   { key: 'r1', width: '86%' },
   { key: 'r2', width: '78%' },
   { key: 'r3', width: '84%' },
 ] as const;
-
-const RULES = ['r1', 'r2', 'r3', 'r4'] as const;
-
-const TIERS = [
-  { key: 'free', featured: false },
-  { key: 'starter', featured: true },
-  { key: 'growth', featured: false },
-] as const;
-
+const TIERS = ['free', 'starter', 'growth'] as const;
 const FAQ_ITEMS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'] as const;
+type PreviewStep = (typeof STEPS)[number];
+
+function Arrow({ down = false }: { down?: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={down ? { transform: 'rotate(90deg)' } : undefined}
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function BrandWordmark() {
+  return (
+    <span className="landing-wordmark">
+      <span className="landing-brand-symbol" aria-hidden="true">
+        <BrandSymbol size={23} />
+      </span>
+      RoboApply
+      <span className="landing-wordmark-period" aria-hidden="true">
+        .
+      </span>
+    </span>
+  );
+}
+
+function SectionHeading({
+  section,
+  number,
+}: {
+  section: 'problem' | 'how' | 'loop' | 'rules' | 'pricing' | 'faq';
+  number: string;
+}) {
+  const t = useTranslations('landing');
+  return (
+    <div className="landing-section-heading">
+      <p className="landing-eyebrow">
+        <span>{number}</span>
+        {t(`${section}.eyebrow`)}
+      </p>
+      <h2>{t(`${section}.title`)}</h2>
+      {section !== 'faq' && (
+        <p className="landing-section-description">{t(`${section}.sub`)}</p>
+      )}
+    </div>
+  );
+}
+
+function FeatureIcon({ index }: { index: number }) {
+  const paths = [
+    <g key="find">
+      <circle cx="10.5" cy="10.5" r="5.5" />
+      <path d="m15 15 5 5M8 10.5h5M10.5 8v5" />
+    </g>,
+    <g key="resume">
+      <path d="M14 3H5v18h14V8l-5-5Z M14 3v5h5M8 12h8M8 16h5" />
+    </g>,
+    <g key="track">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16M15 4v16M5.5 8h1M11.5 11h1M17.5 8h1" />
+    </g>,
+    <g key="practice">
+      <rect x="9" y="3" width="6" height="12" rx="3" />
+      <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+    </g>,
+  ];
+  return (
+    <svg
+      width="26"
+      height="26"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[index]}
+    </svg>
+  );
+}
+
+/** The preview uses the same evidence hierarchy as the product. All figures
+ * are explicitly sample data, and the explanation travels with the score. */
+function ProductPreview() {
+  const t = useTranslations('landing');
+  const [step, setStep] = useState<PreviewStep>('s2');
+  const panelId = useId();
+  return (
+    <div
+      className="landing-preview-stage anim-rise"
+      style={{ animationDelay: '.18s' }}
+    >
+      <div className="landing-preview-orbit" aria-hidden="true">
+        <svg viewBox="0 0 500 500" fill="none">
+          <path
+            d="M-20 330C85 105 440 24 478 184c40 169-311 331-389 183C10 218 258 40 410 91"
+            stroke="currentColor"
+            strokeWidth="1.2"
+          />
+          <path d="m405 79 8 14-16 5" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      </div>
+      <div className="landing-preview">
+        <div className="landing-preview-toolbar">
+          <span className="landing-preview-title">{t('hero.log.title')}</span>
+          <span className="sample-chip">
+            <span aria-hidden="true" />
+            {t('hero.log.live')}
+          </span>
+        </div>
+        <div className="landing-preview-nav" aria-label={t('how.title')}>
+          {STEPS.map((key, i) => (
+            <button
+              type="button"
+              key={key}
+              aria-pressed={step === key}
+              aria-controls={panelId}
+              onClick={() => setStep(key)}
+            >
+              <span className="landing-preview-step" aria-hidden="true">
+                0{i + 1}
+              </span>
+              {t(`how.steps.${key}.tag`)}
+            </button>
+          ))}
+        </div>
+        <div className="landing-preview-content" id={panelId}>
+          <div className="landing-preview-context">
+            <span className="landing-preview-avatar" aria-hidden="true">
+              <FeatureIcon index={step === 's4' ? 3 : 1} />
+            </span>
+            <p>{t('hero.log.lines.l1.msg')}</p>
+          </div>
+          {step === 's1' ? (
+            <div className="landing-preview-view">
+              <div className="landing-preview-market">
+                <span>1,284</span>
+                <p>{t('hero.log.lines.l2.msg')}</p>
+              </div>
+              <div className="landing-preview-insight">
+                <span className="landing-insight-mark" aria-hidden="true">
+                  ↗
+                </span>
+                <p>{t('hero.log.lines.l3.msg')}</p>
+              </div>
+              <p className="landing-preview-note">
+                {t('hero.log.lines.l6.msg')}
+              </p>
+            </div>
+          ) : null}
+          {step === 's2' ? (
+            <div className="landing-preview-view">
+              <div className="landing-match-summary">
+                <div className="landing-match-score">
+                  <span>87</span>
+                  <small>/ 100</small>
+                </div>
+                <p>{t('hero.log.lines.l7.msg')}</p>
+              </div>
+              <div className="landing-evidence">
+                <span className="landing-evidence-tag">
+                  {t('hero.log.lines.l4.tag')}
+                </span>
+                <p>{t('hero.log.lines.l4.msg')}</p>
+              </div>
+              <div className="landing-evidence">
+                <span className="landing-evidence-tag">
+                  {t('hero.log.lines.l5.tag')}
+                </span>
+                <p>{t('hero.log.lines.l5.msg')}</p>
+              </div>
+            </div>
+          ) : null}
+          {step === 's3' ? (
+            <div className="landing-preview-view">
+              <div className="landing-preview-insight">
+                <span className="landing-insight-mark" aria-hidden="true">
+                  <FeatureIcon index={1} />
+                </span>
+                <p>{t('hero.log.lines.l8.msg')}</p>
+              </div>
+              <div className="landing-preview-document" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <p className="landing-preview-note">{t('how.steps.s3.body')}</p>
+            </div>
+          ) : null}
+          {step === 's4' ? (
+            <div className="landing-preview-view">
+              <div className="landing-preview-wave" aria-hidden="true">
+                {[
+                  18, 30, 45, 25, 56, 36, 68, 48, 25, 45, 64, 38, 22, 46, 30,
+                  17,
+                ].map((height, i) => (
+                  <span key={i} style={{ height }} />
+                ))}
+              </div>
+              <div className="landing-preview-insight">
+                <span className="landing-insight-mark" aria-hidden="true">
+                  <FeatureIcon index={3} />
+                </span>
+                <p>{t('hero.log.lines.l9.msg')}</p>
+              </div>
+              <p className="landing-preview-note">
+                {t('studio.features.f3.body')}
+              </p>
+            </div>
+          ) : null}
+        </div>
+        <div className="landing-preview-footer">
+          <span className="landing-preview-check" aria-hidden="true">
+            ✓
+          </span>
+          {t('rules.items.r3_head')}
+        </div>
+      </div>
+      <div className="landing-preview-caption">
+        <span aria-hidden="true">↳</span>
+        {t('hero.strip_summary')}
+      </div>
+      <p className="sr-only">{t('hero.log.aria')}</p>
+    </div>
+  );
+}
+
+function InterviewReport() {
+  const t = useTranslations('landing');
+  return (
+    <div className="landing-report-stage">
+      <div className="landing-report-wave" aria-hidden="true">
+        {[
+          20, 38, 26, 54, 78, 44, 94, 60, 40, 72, 96, 50, 30, 68, 48, 80, 32,
+          54, 28, 18,
+        ].map((height, i) => (
+          <span key={i} style={{ height }} />
+        ))}
+      </div>
+      <div className="landing-report">
+        <div className="landing-report-header">
+          <span>{t('studio.report.header')}</span>
+          <span className="sample-chip">{t('hero.log.live')}</span>
+        </div>
+        <div className="landing-report-overall">
+          <span>{t('studio.report.overall')}</span>
+          <p>{t('studio.report.overall_label')}</p>
+        </div>
+        <div className="landing-report-rows">
+          {REPORT_ROWS.map(({ key, width }) => (
+            <div key={key}>
+              <div className="landing-report-row-label">
+                <span>{t(`studio.report.rows.${key}.k`)}</span>
+                <strong>{t(`studio.report.rows.${key}.v`)}</strong>
+              </div>
+              <div className="report-bar">
+                <span className="report-bar-fill" style={{ width }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <blockquote>{t('studio.report.quote')}</blockquote>
+        <p className="landing-report-attribution">
+          {t('studio.report.quote_label')}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export interface LandingContentProps {
-  /** Which currency the pricing section quotes. Decided per request from the
-   *  visitor's country (lib/serverMarket.ts): mainland China sees RMB,
-   *  everyone else US dollars — a location rule, not a language one. */
   market?: BillingMarket;
 }
 
@@ -114,736 +321,324 @@ export function LandingContent({ market = 'other' }: LandingContentProps) {
   const locale = useLocale();
   const t = useTranslations('landing');
   const tCommon = useTranslations('common');
-
   return (
-    <div className="landing-root min-h-screen bg-bg-page">
-      {/* Film grain over the whole page */}
-      <div aria-hidden className="landing-grain" />
-
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="landing-header sticky top-0 z-40 border-b border-ink-line-soft">
-        <PageContainer
-          maxWidth="wide"
-          className="flex h-16 items-center justify-between gap-3 !py-0"
-        >
-          {/* Wordmark, not the white-boxed bitmap — the accent square echoes
-              the caret motif. */}
-          <span className="landing-wordmark">
-            <span aria-hidden className="wordmark-square" />
-            RoboApply
-          </span>
-          <div className="flex items-center gap-2.5 sm:gap-4">
+    <div className="landing-root">
+      <header className="landing-header">
+        <PageContainer maxWidth="wide" className="landing-header-inner">
+          <a
+            href={localePath(isLocale(locale) ? locale : 'en')}
+            aria-label="RoboApply"
+          >
+            <BrandWordmark />
+          </a>
+          <nav className="landing-main-nav" aria-label={t('how.eyebrow')}>
+            <a href="#how">{t('how.eyebrow')}</a>
+            <a href="#studio">{t('loop.cards.studio.tag')}</a>
+            <a href="#pricing">{t('pricing.eyebrow')}</a>
+          </nav>
+          <div className="landing-header-actions">
             <LanguageMenu label={t('header.lang_label')} />
             <ThemeToggle />
-            <Link
-              href="/login"
-              className="text-sm font-semibold text-accent-text hover:underline"
-            >
+            <Link href="/login" className="landing-sign-in">
               {tCommon('sign_in')}
             </Link>
-            <Link
-              href="/signup"
-              className="cta-primary hidden !h-10 !rounded-[10px] !px-4 !text-[13px] md:inline-flex"
-            >
+            <Link href="/signup" className="cta-primary landing-header-cta">
               {t('header.cta')}
+              <Arrow />
             </Link>
           </div>
         </PageContainer>
       </header>
-
       <main>
-        {/* ── Hero — the gap report ────────────────────────────── */}
-        <section className="hero-fold hero-base relative overflow-hidden">
-          <div aria-hidden className="hero-grid pointer-events-none absolute inset-0 z-0" />
-          <div aria-hidden className="hero-wash pointer-events-none absolute inset-0 z-0" />
-          <div className="hero-fold-body relative z-10 w-full">
-          <PageContainer
-            maxWidth="wide"
-            className="w-full !pt-12 !pb-16 md:!pt-16 md:!pb-20"
-          >
-            <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-              {/* Left — pitch */}
-              <div>
-                <p
-                  className="anim-rise hero-eyebrow"
-                  style={{ animationDelay: '.05s' }}
-                >
-                  {t('hero.eyebrow')}
-                </p>
-                {/* Ruling R2: ONE sentence, one string. The old two-span
-                    machine/human split ("We apply." / "You interview.") was
-                    the retired auto-apply tagline — and a headline split
-                    across two keys cannot be translated as one sentence. */}
-                <h1
-                  className="anim-rise hero-h1 mt-5 font-bold text-ink-900"
-                  style={{ animationDelay: '.15s' }}
-                >
-                  {t('hero.headline')}
-                </h1>
-                <p
-                  className="anim-rise mt-6 max-w-[52ch] text-base leading-relaxed text-ink-700 md:text-lg"
-                  style={{ animationDelay: '.28s' }}
-                >
-                  {t('hero.subheadline')}
-                </p>
-                <p className="anim-rise sub-emph" style={{ animationDelay: '.34s' }}>
-                  {t('hero.sub_emphasis')}
-                </p>
-                <div
-                  className="anim-rise mt-8 flex flex-wrap items-center gap-x-6 gap-y-4 md:mt-9"
-                  style={{ animationDelay: '.4s' }}
-                >
-                  <Link
-                    href="/signup"
-                    className="cta-primary w-full sm:w-auto"
-                  >
-                    {t('hero.cta_primary')}
-                    <span aria-hidden className="font-mono text-[15px] opacity-70">
-                      ↵
-                    </span>
-                  </Link>
-                  <a href="#how" className="cta-quiet">
-                    {t('hero.cta_secondary')} <span aria-hidden>↓</span>
-                  </a>
-                </div>
-                <p
-                  className="anim-rise mt-5 text-[13px] text-ink-500"
-                  style={{ animationDelay: '.48s' }}
-                >
-                  {t('hero.reassure')}
-                </p>
-              </div>
-
-              {/* Right — the signature log panel */}
-              <div className="relative w-full max-w-[560px] lg:mx-0 lg:justify-self-end">
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute"
-                  style={{
-                    inset: '-3rem',
-                    background:
-                      'radial-gradient(closest-side, var(--action-subtle), transparent 70%)',
-                    filter: 'blur(24px)',
-                  }}
-                />
-                <div
-                  className="anim-rise log-panel relative overflow-hidden rounded-[var(--r-lg)] border border-ink-line p-4 min-[421px]:p-5 md:p-6"
-                  style={{ animationDelay: '.55s' }}
-                >
-                  <div className="mb-4 flex items-center justify-between border-b border-ink-line-soft pb-3">
-                    <span className="flex items-center">
-                      <span aria-hidden className="log-dots">
-                        <span />
-                        <span />
-                        <span />
-                      </span>
-                      <span className="font-mono text-xs text-ink-500">
-                        {t('hero.log.title')}
-                      </span>
-                    </span>
-                    <span className="sample-chip">
-                      <span aria-hidden className="live-dot" />
-                      {t('hero.log.live')}
-                    </span>
-                  </div>
-                  <div aria-hidden="true">
-                    {LOG_LINES.map(({ key, variant }, i) => {
-                      const delay = `${(0.9 + i * 0.22).toFixed(2)}s`;
-                      return (
-                        <div
-                          key={key}
-                          className={`${
-                            variant === 'submit' ? 'log-flash' : 'log-line'
-                          } grid grid-cols-[2.9rem_auto_1fr] items-baseline gap-x-3 py-[5px] font-mono text-[12px] leading-relaxed min-[421px]:grid-cols-[3.2rem_auto_1fr] min-[421px]:text-[13px]`}
-                          style={{ animationDelay: delay }}
-                        >
-                          <span className="text-ink-500">
-                            {t(`hero.log.lines.${key}.time`)}
-                          </span>
-                          <Tag variant={variant} label={t(`hero.log.lines.${key}.tag`)} />
-                          <span className="min-w-0 text-ink-700">
-                            {t(`hero.log.lines.${key}.msg`)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {/* Caret row */}
-                    <div
-                      className="log-line grid grid-cols-[2.9rem_auto_1fr] items-baseline gap-x-3 py-[5px] min-[421px]:grid-cols-[3.2rem_auto_1fr]"
-                      style={{ animationDelay: '3.1s' }}
-                    >
-                      <span />
-                      <span
-                        className="caret inline-block h-[15px] w-[8px] translate-y-[2px]"
-                        style={{ background: 'var(--brand-mark)' }}
-                      />
-                    </div>
-                  </div>
-                  <p className="sr-only">{t('hero.log.aria')}</p>
-                </div>
-              </div>
-            </div>
-          </PageContainer>
-          </div>
-          {/* Dawn line — closes the fold with the consent receipt + scroll cue */}
-          <div className="hero-strip">
-            <PageContainer maxWidth="wide" className="!py-0">
-              <div className="hero-strip-row">
-                <span className="truncate">{t('hero.strip_summary')}</span>
-                <a href="#how">
-                  {t('hero.strip_scroll')} <span aria-hidden>↓</span>
+        <section className="hero-fold">
+          <PageContainer maxWidth="wide" className="landing-hero-container">
+            <div className="landing-hero-copy">
+              <p className="hero-eyebrow anim-rise">
+                <span aria-hidden="true" />
+                {t('hero.eyebrow')}
+              </p>
+              <h1
+                className="hero-h1 anim-rise"
+                style={{ animationDelay: '.06s' }}
+              >
+                {t('hero.headline')}
+              </h1>
+              <p
+                className="landing-hero-description anim-rise"
+                style={{ animationDelay: '.1s' }}
+              >
+                {t('hero.subheadline')}
+              </p>
+              <p
+                className="sub-emph anim-rise"
+                style={{ animationDelay: '.13s' }}
+              >
+                {t('hero.sub_emphasis')}
+              </p>
+              <div
+                className="landing-hero-actions anim-rise"
+                style={{ animationDelay: '.16s' }}
+              >
+                <Link href="/signup" className="cta-primary">
+                  {t('hero.cta_primary')}
+                  <Arrow />
+                </Link>
+                <a href="#how" className="cta-quiet">
+                  {t('hero.cta_secondary')}
+                  <Arrow down />
                 </a>
               </div>
+              <p className="landing-hero-reassure">{t('hero.reassure')}</p>
+            </div>
+            <ProductPreview />
+          </PageContainer>
+          <div className="hero-strip">
+            <PageContainer maxWidth="wide" className="hero-strip-row">
+              <span>{t('footer.note')}</span>
+              <a href="#how">
+                {t('hero.strip_scroll')}
+                <Arrow down />
+              </a>
             </PageContainer>
           </div>
         </section>
 
-        {/* ── 01 · Why bots are losing — the stats band ──────────── */}
-        <section
-          className="border-t border-ink-line-soft py-16 md:py-24"
-          style={{ background: 'var(--surface)' }}
-        >
-          <PageContainer maxWidth="content">
-            <div className="scroll-rise">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                <span className="text-accent-text">01</span> · {t('problem.eyebrow')}
-              </p>
-              <h2
-                className="mt-3 text-3xl font-bold text-ink-900 md:text-4xl"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {t('problem.title')}
-              </h2>
-              <p className="mt-3 max-w-[58ch] text-base text-ink-700 md:text-lg">
-                {t('problem.sub')}
-              </p>
+        <section id="how" className="landing-section landing-how">
+          <PageContainer maxWidth="wide">
+            <div className="landing-how-intro">
+              <SectionHeading section="how" number="01" />
+              <p className="landing-section-aside">{t('loop.sub')}</p>
             </div>
-
-            <div className="mt-10 grid gap-4 sm:grid-cols-3 md:mt-12 md:gap-5">
-              {STATS.map((key) => (
-                <div
-                  key={key}
-                  className="scroll-rise rounded-[var(--r-lg)] border border-ink-line bg-bg-card p-6"
-                >
-                  <p className="stat-number font-mono text-[44px] font-bold leading-none tabular-nums text-accent-text md:text-[52px]">
-                    {t(`problem.stats.${key}.value`)}
-                  </p>
-                  <p className="mt-3 text-sm leading-relaxed text-ink-700">
-                    {t(`problem.stats.${key}.label`)}
-                  </p>
-                </div>
+            <div className="landing-steps">
+              {STEPS.map((key, i) => (
+                <article key={key} className="landing-step">
+                  <div className="landing-step-top">
+                    <span className="landing-step-number">0{i + 1}</span>
+                    <span className="landing-step-label">
+                      {t(`how.steps.${key}.tag`)}
+                    </span>
+                    <Arrow />
+                  </div>
+                  <h3>{t(`how.steps.${key}.title`)}</h3>
+                  <p>{t(`how.steps.${key}.body`)}</p>
+                </article>
               ))}
             </div>
-            <p className="scroll-rise mt-5 font-mono text-[11px] uppercase tracking-[0.1em] text-ink-500">
-              {t('problem.source')}
-            </p>
           </PageContainer>
         </section>
 
-        {/* ── 02 · How a shift runs ──────────────────────────────── */}
-        <section id="how" className="py-16 md:py-28">
-          <PageContainer maxWidth="content">
-            <div className="scroll-rise">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                <span className="text-accent-text">02</span> · {t('how.eyebrow')}
-              </p>
-              <h2
-                className="mt-3 text-3xl font-bold text-ink-900 md:text-4xl"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {t('how.title')}
-              </h2>
-              <p className="mt-3 max-w-[52ch] text-base text-ink-700 md:text-lg">
-                {t('how.sub')}
-              </p>
-            </div>
-
-            <div className="mt-12 md:mt-16">
-              {STEPS.map(({ key, variant }, i) => {
-                const last = i === STEPS.length - 1;
-                return (
-                  <div
-                    key={key}
-                    className={`scroll-rise group relative grid grid-cols-[24px_1fr] gap-x-4 md:grid-cols-[96px_28px_1fr] md:gap-x-5 ${
-                      last ? '' : 'pb-12'
-                    }`}
-                  >
-                    {/* time + tag (md+) */}
-                    <div className="hidden md:flex md:flex-col md:items-end">
-                      <span className="font-mono text-lg font-semibold tabular-nums text-ink-900 transition-colors duration-150 group-hover:text-accent-text">
-                        {t(`how.steps.${key}.time`)}
-                      </span>
-                      <span className="mt-1.5">
-                        <Tag variant={variant} label={t(`how.steps.${key}.tag`)} />
-                      </span>
-                    </div>
-                    {/* rail */}
-                    <div aria-hidden className="relative flex justify-center">
-                      {!last && (
-                        <span className="absolute top-1 bottom-[-4px] w-px bg-[color:var(--rule)]" />
-                      )}
-                      <span
-                        className={`relative z-10 mt-1 h-[11px] w-[11px] rounded-full border-2 ${
-                          last
-                            ? 'border-[color:var(--action)] bg-[color:var(--action)]'
-                            : 'border-[color:var(--rule)] bg-bg-page'
-                        }`}
-                        style={last ? { boxShadow: 'var(--e1)' } : undefined}
-                      />
-                    </div>
-                    {/* content */}
+        <section className="landing-section landing-loop">
+          <PageContainer maxWidth="wide">
+            <div className="landing-loop-layout">
+              <SectionHeading section="loop" number="02" />
+              <div className="landing-capabilities">
+                {LOOP_CARDS.map((key, i) => (
+                  <article key={key} className="landing-capability">
+                    <span className="landing-capability-icon">
+                      <FeatureIcon index={i} />
+                    </span>
                     <div>
-                      <div className="flex items-center gap-2 md:hidden">
-                        <span className="font-mono text-sm font-semibold tabular-nums text-ink-900">
-                          {t(`how.steps.${key}.time`)}
-                        </span>
-                        <Tag variant={variant} label={t(`how.steps.${key}.tag`)} />
-                      </div>
-                      <h3
-                        className="mt-1 text-lg font-semibold text-ink-900 md:mt-0 md:text-xl lg:text-2xl"
-                        style={{ letterSpacing: '-0.015em' }}
-                      >
-                        {t(`how.steps.${key}.title`)}
-                      </h3>
-                      <p className="mt-2 max-w-[58ch] text-[15px] leading-relaxed text-ink-700 md:text-base">
-                        {t(`how.steps.${key}.body`)}
+                      <p className="landing-capability-tag">
+                        {t(`loop.cards.${key}.tag`)}
                       </p>
+                      <h3>{t(`loop.cards.${key}.title`)}</h3>
+                      <p>{t(`loop.cards.${key}.body`)}</p>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </PageContainer>
-        </section>
-
-        {/* ── 03 · The full loop — feature grid ──────────────────── */}
-        <section
-          className="border-y border-ink-line-soft py-16 md:py-24"
-          style={{ background: 'var(--surface)' }}
-        >
-          <PageContainer maxWidth="wide">
-            <div className="scroll-rise text-center">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                <span className="text-accent-text">03</span> · {t('loop.eyebrow')}
-              </p>
-              <h2
-                className="mt-3 text-3xl font-bold text-ink-900 md:text-4xl"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {t('loop.title')}
-              </h2>
-              <p className="mx-auto mt-3 max-w-[52ch] text-base text-ink-700 md:text-lg">
-                {t('loop.sub')}
-              </p>
-            </div>
-
-            <div className="mx-auto mt-10 grid max-w-[1040px] gap-4 sm:grid-cols-2 md:mt-14 md:gap-5">
-              {LOOP_CARDS.map(({ key, variant }) => (
-                <div
-                  key={key}
-                  className="scroll-rise relative rounded-[var(--r-lg)] border border-ink-line bg-bg-card p-6 transition-all duration-200 ease-standard hover:-translate-y-[2px] hover:border-[color:var(--action)] md:p-7"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <Tag variant={variant} label={t(`loop.cards.${key}.tag`)} />
-                  </div>
-                  <h3
-                    className="mt-4 text-lg font-semibold text-ink-900 md:text-xl"
-                    style={{ letterSpacing: '-0.015em' }}
-                  >
-                    {t(`loop.cards.${key}.title`)}
-                  </h3>
-                  <p className="mt-2 text-[15px] leading-relaxed text-ink-700">
-                    {t(`loop.cards.${key}.body`)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </PageContainer>
-        </section>
-
-        {/* ── 04 · Interview studio spotlight ────────────────────── */}
-        <section id="studio" className="py-16 md:py-28">
-          <PageContainer maxWidth="wide">
-            <div className="grid items-center gap-10 lg:grid-cols-[1fr_0.9fr] lg:gap-16">
-              {/* Left — pitch + features */}
-              <div>
-                <p className="scroll-rise font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                  <span className="text-accent-text">04</span> · {t('studio.eyebrow')}
-                </p>
-                <h2
-                  className="scroll-rise mt-3 font-bold text-ink-900"
-                  style={{
-                    fontSize: 'clamp(1.9rem, 4.2vw, 2.9rem)',
-                    lineHeight: 1.1,
-                    letterSpacing: '-0.02em',
-                  }}
-                >
-                  {t('studio.title_machine')}
-                  <span className="text-accent-text">.</span>{' '}
-                  <span className="serif-human">{t('studio.title_human')}</span>
-                  <span className="text-accent-text">.</span>
-                </h2>
-                <p className="scroll-rise mt-4 max-w-[56ch] text-base text-ink-700 md:text-lg">
-                  {t('studio.sub')}
-                </p>
-
-                <div className="mt-8">
-                  {STUDIO_FEATURES.map((key, i) => (
-                    <div
-                      key={key}
-                      className="scroll-rise grid grid-cols-[2rem_1fr] gap-x-3 border-t border-ink-line-soft py-4 last:border-b md:py-5"
-                    >
-                      <span className="font-mono text-xs font-semibold tabular-nums text-accent-text">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      <div>
-                        <h3 className="text-[15px] font-semibold text-ink-900 md:text-base">
-                          {t(`studio.features.${key}.title`)}
-                        </h3>
-                        <p className="mt-1 text-sm leading-relaxed text-ink-700">
-                          {t(`studio.features.${key}.body`)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Link
-                  href="/signup"
-                  className="cta-outline scroll-rise mt-8 !w-auto px-6"
-                >
-                  {t('studio.cta')}
-                </Link>
-              </div>
-
-              {/* Right — the report-card receipt */}
-              <div className="relative w-full max-w-[480px] lg:justify-self-end">
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute"
-                  style={{
-                    inset: '-3rem',
-                    background:
-                      'radial-gradient(closest-side, var(--violet-soft), transparent 70%)',
-                    filter: 'blur(24px)',
-                  }}
-                />
-                <div className="scroll-rise log-panel relative overflow-hidden rounded-[var(--r-lg)] border border-ink-line p-5 md:p-6">
-                  <div className="mb-5 flex items-center justify-between border-b border-ink-line-soft pb-3">
-                    <span className="font-mono text-xs text-ink-500">
-                      {t('studio.report.header')}
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
-                      {t('studio.report.overall_label')}{' '}
-                      <span
-                        className="text-[20px] font-bold text-accent-text"
-                      >
-                        {t('studio.report.overall')}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="space-y-4">
-                    {REPORT_ROWS.map(({ key, width }) => (
-                      <div key={key}>
-                        <div className="flex items-baseline justify-between font-mono text-[12px]">
-                          <span className="text-ink-700">
-                            {t(`studio.report.rows.${key}.k`)}
-                          </span>
-                          <span className="tabular-nums text-ink-900">
-                            {t(`studio.report.rows.${key}.v`)}
-                          </span>
-                        </div>
-                        <div className="report-bar mt-1.5">
-                          <span className="report-bar-fill" style={{ width }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <blockquote className="serif-human mt-6 border-l-2 border-[color:var(--action)] pl-4 text-[17px] leading-snug text-ink-900">
-                    {t('studio.report.quote')}
-                  </blockquote>
-                  <p className="mt-2 pl-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-500">
-                    {t('studio.report.quote_label')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </PageContainer>
-        </section>
-
-        {/* ── 05 · Operating rules — guarantees.conf ─────────────── */}
-        <section
-          className="border-y border-ink-line-soft py-16 md:py-24"
-          style={{ background: 'var(--surface)' }}
-        >
-          <PageContainer maxWidth="content">
-            <div className="scroll-rise text-center">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                <span className="text-accent-text">05</span> · {t('rules.eyebrow')}
-              </p>
-              <h2
-                className="mt-3 text-3xl font-bold text-ink-900 md:text-4xl"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {t('rules.title')}
-              </h2>
-              <p className="mx-auto mt-3 max-w-[52ch] text-base text-ink-700 md:text-lg">
-                {t('rules.sub')}
-              </p>
-            </div>
-
-            <div className="scroll-rise mx-auto mt-10 max-w-[720px] overflow-hidden rounded-[var(--r-lg)] border border-ink-line bg-bg-card md:mt-12">
-              <div className="flex items-center justify-between border-b border-ink-line-soft px-5 py-3 md:px-6">
-                <span className="font-mono text-xs text-ink-500">
-                  {t('rules.file')}
-                </span>
-                <span
-                  className="rounded-[4px] px-2 py-1 font-mono text-[10px] tracking-[0.14em]"
-                  style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}
-                >
-                  {t('rules.badge')}
-                </span>
-              </div>
-              <div className="px-5 py-2 md:px-6">
-                {RULES.map((rule) => (
-                  <div
-                    key={rule}
-                    className="flex items-start gap-3.5 border-b border-ink-line-soft py-4 last:border-0"
-                  >
-                    <span
-                      aria-hidden
-                      className="mt-[3px] rounded-[4px] px-1.5 py-0.5 font-mono text-[11px]"
-                      style={{ background: 'var(--ok-subtle)', color: 'var(--ok)' }}
-                    >
-                      {t('rules.ok')}
-                    </span>
-                    <p className="text-[15px] leading-relaxed text-ink-700">
-                      <strong className="font-semibold text-ink-900">
-                        {t(`rules.items.${rule}_head`)}
-                      </strong>{' '}
-                      — {t(`rules.items.${rule}_body`)}
-                    </p>
-                  </div>
+                  </article>
                 ))}
               </div>
             </div>
           </PageContainer>
         </section>
 
-        {/* ── 06 · Pricing — the real plans ──────────────────────── */}
-        <section id="pricing" className="py-16 md:py-28">
+        <section id="studio" className="landing-section landing-studio">
           <PageContainer maxWidth="wide">
-            <div className="scroll-rise text-center">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                <span className="text-accent-text">06</span> · {t('pricing.eyebrow')}
-              </p>
-              <h2
-                className="mt-3 text-3xl font-bold text-ink-900 md:text-4xl"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {t('pricing.title')}
-              </h2>
-              <p className="mx-auto mt-3 max-w-[52ch] text-base text-ink-700 md:text-lg">
-                {t('pricing.sub')}
-              </p>
+            <div className="landing-studio-layout">
+              <div>
+                <p className="landing-eyebrow">
+                  <span>03</span>
+                  {t('studio.eyebrow')}
+                </p>
+                <h2>
+                  {t('studio.title_machine')}. {t('studio.title_human')}.
+                </h2>
+                <p className="landing-section-description">{t('studio.sub')}</p>
+                <Link href="/signup" className="cta-primary landing-studio-cta">
+                  {t('studio.cta')}
+                  <Arrow />
+                </Link>
+              </div>
+              <InterviewReport />
             </div>
+            <div className="landing-studio-features">
+              {STUDIO_FEATURES.map((key, i) => (
+                <article key={key}>
+                  <span>0{i + 1}</span>
+                  <h3>{t(`studio.features.${key}.title`)}</h3>
+                  <p>{t(`studio.features.${key}.body`)}</p>
+                </article>
+              ))}
+            </div>
+          </PageContainer>
+        </section>
 
-            <div className="mx-auto mt-10 grid max-w-[1040px] items-stretch gap-5 md:mt-12 lg:grid-cols-3">
-              {TIERS.map(({ key, featured }) => (
-                <div
-                  key={key}
-                  className={`scroll-rise relative flex flex-col rounded-[var(--r-lg)] border bg-bg-card p-6 transition-all duration-200 ease-standard hover:-translate-y-[2px] hover:border-[color:var(--action)] hover:shadow-lift md:p-7 ${
-                    featured ? 'border-[color:var(--action)]' : 'border-ink-line'
-                  }`}
-                  style={featured ? { boxShadow: 'var(--e2)' } : undefined}
-                >
-                  {featured && (
-                    <span
-                      className="absolute -top-3 left-7 rounded-pill px-2.5 py-1 font-mono text-[10px] font-medium tracking-[0.12em]"
-                      style={{ background: 'var(--action)', color: 'var(--action-ink)' }}
-                    >
-                      {t('pricing.tiers.starter.badge')}
-                    </span>
-                  )}
-                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-500">
-                    {t(`pricing.tiers.${key}.code`)}
-                  </p>
-                  <h3 className="mt-2 text-[22px] font-semibold text-ink-900">
-                    {t(`pricing.tiers.${key}.name`)}
-                  </h3>
-                  <div className="mt-6 flex items-baseline gap-2.5">
-                    <span
-                      className={`font-mono text-[52px] font-bold leading-none tabular-nums ${
-                        featured ? 'text-accent-text' : 'text-ink-900'
-                      }`}
-                    >
-                      {t(`pricing.tiers.${key}.rate`)}
-                    </span>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-500">
-                      {t(`pricing.tiers.${key}.unit`)}
-                    </span>
+        <section className="landing-section landing-problem">
+          <PageContainer maxWidth="wide">
+            <div className="landing-problem-layout">
+              <SectionHeading section="problem" number="04" />
+              <div className="landing-stats">
+                {(['s1', 's2', 's3'] as const).map((key) => (
+                  <div key={key}>
+                    <p className="stat-number">
+                      {t(`problem.stats.${key}.value`)}
+                    </p>
+                    <p>{t(`problem.stats.${key}.label`)}</p>
                   </div>
-                  <div className="mt-5 flex items-baseline gap-1">
-                    <span className="text-xl font-semibold text-ink-900">
-                      {formatMoney(locale, planPriceMinor(key, market), MARKET_CURRENCY[market])}
-                    </span>
-                    {t(`pricing.tiers.${key}.per`) !== '' && (
-                      <span className="text-sm text-ink-500">
-                        {t(`pricing.tiers.${key}.per`)}
-                      </span>
+                ))}
+              </div>
+            </div>
+            <p className="landing-sources">{t('problem.source')}</p>
+          </PageContainer>
+        </section>
+
+        <section className="landing-section landing-rules">
+          <PageContainer maxWidth="wide">
+            <div className="landing-rules-layout">
+              <SectionHeading section="rules" number="05" />
+              <div>
+                <div className="landing-rules-label">
+                  <span>{t('rules.file')}</span>
+                  <span>{t('rules.badge')}</span>
+                </div>
+                {(['r1', 'r2', 'r3', 'r4'] as const).map((key, i) => (
+                  <article key={key} className="landing-rule">
+                    <span aria-hidden="true">0{i + 1}</span>
+                    <div>
+                      <h3>{t(`rules.items.${key}_head`)}</h3>
+                      <p>{t(`rules.items.${key}_body`)}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </PageContainer>
+        </section>
+
+        <section id="pricing" className="landing-section landing-pricing">
+          <PageContainer maxWidth="wide">
+            <SectionHeading section="pricing" number="06" />
+            <div className="landing-price-grid">
+              {TIERS.map((key) => (
+                <article
+                  key={key}
+                  className={`landing-price-card${key === 'starter' ? ' is-featured' : ''}`}
+                >
+                  <div className="landing-price-heading">
+                    <h3>{t(`pricing.tiers.${key}.name`)}</h3>
+                    {key === 'starter' && (
+                      <span>{t('pricing.tiers.starter.badge')}</span>
                     )}
                   </div>
-                  <p className="mt-3 text-sm leading-relaxed text-ink-700">
+                  <div className="landing-price">
+                    <strong>
+                      {formatMoney(
+                        locale,
+                        planPriceMinor(key, market),
+                        MARKET_CURRENCY[market],
+                      )}
+                    </strong>
+                    <span>{t(`pricing.tiers.${key}.per`)}</span>
+                  </div>
+                  <p className="landing-price-note">
                     {t(`pricing.tiers.${key}.note`)}
                   </p>
-                  <div className="flex-1" />
-                  {featured ? (
-                    <Link
-                      href="/signup"
-                      className="cta-primary mt-8 w-full !h-12 !text-sm"
-                    >
-                      {t(`pricing.tiers.${key}.cta`)}
-                    </Link>
-                  ) : (
-                    <Link href="/signup" className="cta-outline mt-8">
-                      {t(`pricing.tiers.${key}.cta`)}
-                    </Link>
-                  )}
-                </div>
+                  <div className="landing-price-credits">
+                    <span>{t(`pricing.tiers.${key}.rate`)}</span>
+                    <p>{t(`pricing.tiers.${key}.unit`)}</p>
+                  </div>
+                  <Link
+                    href="/signup"
+                    className={
+                      key === 'starter' ? 'cta-primary' : 'cta-outline'
+                    }
+                  >
+                    {t(`pricing.tiers.${key}.cta`)}
+                    <Arrow />
+                  </Link>
+                </article>
               ))}
             </div>
-            <p className="scroll-rise mx-auto mt-6 max-w-[64ch] text-center font-mono text-[11px] uppercase tracking-[0.1em] leading-relaxed text-ink-500">
-              {t('pricing.credit_note')}
-            </p>
+            <p className="landing-credit-note">{t('pricing.credit_note')}</p>
           </PageContainer>
         </section>
 
-        {/* ── 07 · FAQ — visible, extraction-friendly ────────────── */}
-        <section id="faq" className="border-t border-ink-line-soft py-16 md:py-24">
+        <section id="faq" className="landing-section landing-faq">
           <PageContainer maxWidth="wide">
-            <div className="scroll-rise">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-ink-500">
-                <span className="text-accent-text">07</span> · {t('faq.eyebrow')}
-              </p>
-              <h2
-                className="mt-3 text-3xl font-bold text-ink-900 md:text-4xl"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {t('faq.title')}
-              </h2>
-            </div>
-
-            <div className="mt-10 grid gap-x-12 gap-y-8 md:mt-12 md:grid-cols-2">
-              {FAQ_ITEMS.map((key) => (
-                <div key={key} className="scroll-rise">
-                  <h3 className="text-base font-semibold text-ink-900 md:text-lg">
-                    {t(`faq.items.${key}.q`)}
-                  </h3>
-                  <p className="mt-2 text-[15px] leading-relaxed text-ink-700">
-                    {t(`faq.items.${key}.a`)}
-                  </p>
-                </div>
-              ))}
+            <div className="landing-faq-layout">
+              <SectionHeading section="faq" number="07" />
+              <div className="landing-faq-answers">
+                {FAQ_ITEMS.map((key) => (
+                  <article key={key}>
+                    <h3>{t(`faq.items.${key}.q`)}</h3>
+                    <p>{t(`faq.items.${key}.a`)}</p>
+                  </article>
+                ))}
+              </div>
             </div>
           </PageContainer>
         </section>
 
-        {/* ── 08 · Clock in — final CTA ──────────────────────────── */}
-        <section className="relative overflow-hidden border-t border-ink-line-soft py-20 text-center md:py-32">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              backgroundImage:
-                'radial-gradient(ellipse 640px 360px at 50% 118%, var(--action-subtle), transparent 65%), radial-gradient(ellipse 520px 420px at 82% -12%, var(--violet-soft), transparent 60%)',
-            }}
-          />
-          <PageContainer
-            maxWidth="content"
-            className="relative z-10 flex flex-col items-center"
-          >
-            <span className="scroll-rise inline-flex h-8 items-center gap-2 rounded-pill border border-ink-line bg-bg-card px-3.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-700">
-              <span aria-hidden className="live-dot" />
-              {t('final.chip')}
-            </span>
-            <h2
-              className="scroll-rise mt-7 font-bold text-ink-900"
-              style={{
-                fontSize: 'clamp(2.2rem, 5vw, 3.6rem)',
-                lineHeight: 1.06,
-                letterSpacing: '-0.025em',
-              }}
-            >
-              {t('final.title_machine')}{' '}
-              <span className="serif-human">{t('final.title_human')}</span>
-              <span className="text-accent-text">.</span>
-            </h2>
-            <p className="scroll-rise mt-5 max-w-[46ch] text-base text-ink-700 md:text-lg">
-              {t('final.sub')}
-            </p>
-            <Link
-              href="/signup"
-              className="cta-primary scroll-rise mt-9 w-full sm:w-auto"
-            >
+        <section className="landing-final">
+          <PageContainer maxWidth="wide">
+            <div className="landing-final-copy">
+              <p className="landing-eyebrow">
+                <span aria-hidden="true">↗</span>
+                {t('final.chip')}
+              </p>
+              <h2>
+                {t('final.title_machine')} {t('final.title_human')}.
+              </h2>
+              <p>{t('final.sub')}</p>
+            </div>
+            <Link href="/signup" className="cta-primary">
               {t('final.cta')}
-              <span aria-hidden className="font-mono text-[15px] opacity-70">
-                ↵
-              </span>
+              <Arrow />
             </Link>
           </PageContainer>
         </section>
       </main>
-
-      {/* ── Footer ─────────────────────────────────────────────── */}
-      <footer className="border-t border-ink-line pb-24 md:pb-0">
-        <PageContainer maxWidth="wide" className="!py-8">
-          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-            <Logo size="sm" />
-            <p className="text-sm text-ink-700">{t('footer.tagline')}</p>
-            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-500">
-              {t('footer.status')}
-            </p>
+      <footer className="landing-footer">
+        <PageContainer maxWidth="wide">
+          <div className="landing-footer-top">
+            <BrandWordmark />
+            <p>{t('footer.tagline')}</p>
+            <span>{t('footer.status')}</span>
           </div>
-          {/* Locale links — crawlable entry points to the hreflang cluster */}
           <nav
             aria-label={t('footer.lang_title')}
-            className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-ink-line-soft pt-5"
+            className="landing-locale-links"
           >
-            {SEO_READY_LOCALES.map((locale) => (
+            {SEO_READY_LOCALES.map((language) => (
               <a
-                key={locale}
-                href={localePath(locale)}
-                hrefLang={locale}
-                lang={locale}
-                className="text-xs text-ink-500 transition-colors duration-100 hover:text-accent-text"
+                key={language}
+                href={localePath(language)}
+                hrefLang={language}
+                lang={language}
               >
-                {LOCALE_LABELS[locale]}
+                {LOCALE_LABELS[language]}
               </a>
             ))}
           </nav>
-          <p className="mt-5 text-center text-xs text-ink-500">
-            {t('footer.note')}
-          </p>
+          <p className="landing-footer-note">{t('footer.note')}</p>
         </PageContainer>
       </footer>
-
-      {/* ── Sticky mobile CTA — thumb zone ─────────────────────── */}
-      <div className="landing-sticky-cta md:hidden">
-        <div className="flex items-center gap-3">
-          <Link href="/signup" className="cta-primary !h-12 flex-1 !text-[15px]">
-            {t('sticky.cta')}
-          </Link>
-          <span className="font-mono text-[10px] uppercase leading-tight tracking-[0.08em] text-ink-500">
-            {t('sticky.note')}
-          </span>
-        </div>
+      <div className="landing-sticky-cta">
+        <Link href="/signup" className="cta-primary">
+          {t('sticky.cta')}
+          <Arrow />
+        </Link>
+        <span>{t('sticky.note')}</span>
       </div>
     </div>
   );
-}
-
-// Color-coded mono tag chip — SCOUT / MATCH / DRAFT / QUEUE / HOLD /
-// SUBMIT / DIGEST. Variants live in styles/landing.css.
-function Tag({ variant, label }: { variant: TagVariant; label: string }) {
-  return <span className={`log-tag log-tag--${variant}`}>{label}</span>;
 }

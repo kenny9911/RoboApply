@@ -41,6 +41,13 @@ describe('normalizeJSearchJob', () => {
     expect(n.sourceBoard).toBe('jsearch');
     expect(n.externalId).toBe('jsearch:BHjSRfumTmut48avAAAAAA==');
   });
+  it('retains original fetch time and marks a missing publication date as estimated', () => {
+    const fetchedAt = new Date('2026-09-12T12:00:00Z');
+    const n = normalizeJSearchJob(rawJob({ job_posted_at_datetime_utc: null }), { country: 'us', fetchedAt })!;
+    expect(n.postedAtEstimated).toBe(true);
+    expect(n.fetchedAt).toBe(fetchedAt.toISOString());
+    expect(n.salaryCurrencyInferred).toBe(true);
+  });
 });
 
 describe('searchJSearchJobs — /search-v2 (fetch mocked)', () => {
@@ -93,6 +100,23 @@ describe('searchJSearchJobs — /search-v2 (fetch mocked)', () => {
   it('non-OK envelope → null (never throws)', async () => {
     mockFetch(200, { status: 'ERROR', data: { jobs: [] } });
     expect(await searchJSearchJobs({ query: 'developer', country: 'us' })).toBeNull();
+  });
+  it('unknown success shape and wholly invalid rows are errors, not empty markets', async () => {
+    mockFetch(200, { status: 'OK', data: { unexpected: [] } });
+    expect(await searchJSearchJobs({ query: 'engineer', country: 'us' })).toBeNull();
+    mockFetch(200, { status: 'OK', data: { jobs: [{ unexpected: 'row' }] } });
+    expect(await searchJSearchJobs({ query: 'engineer', country: 'us' })).toBeNull();
+  });
+  it('zero daily budget refuses upstream calls', async () => {
+    process.env.RA_ONBOARDING_JSEARCH_DAILY_BUDGET = '0';
+    const fn = mockFetch(200, { status: 'OK', data: { jobs: [] } });
+    expect(await searchJSearchJobs({ query: 'engineer', country: 'us' })).toBeNull();
+    expect(fn).not.toHaveBeenCalled();
+  });
+  it('separates provider cache by language and page count', () => {
+    const params = { query: 'engineer', country: 'us' };
+    expect(__test.buildCacheKey({ ...params, language: 'en' })).not.toBe(__test.buildCacheKey({ ...params, language: 'fr' }));
+    expect(__test.buildCacheKey({ ...params, numPages: 1 })).not.toBe(__test.buildCacheKey({ ...params, numPages: 2 }));
   });
 
   it('403 → null and opens the breaker', async () => {

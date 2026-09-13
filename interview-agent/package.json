@@ -6,6 +6,7 @@
   "description": "RoboApply Interview Engine — LiveKit voice worker (Node/TS). The metadata-driven AI interviewer.",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test test/*.test.mjs",
     "dev": "npm run build && node dist/main.js dev",
     "start": "node dist/main.js start",
     "console": "npm run build && node dist/main.js console",
@@ -16,7 +17,8 @@
     "@livekit/agents": "1.6.2",
     "@livekit/agents-plugin-openai": "1.6.2",
     "@livekit/agents-plugin-silero": "1.6.2",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "openai": "6.49.0"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

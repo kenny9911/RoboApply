@@ -188,7 +188,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       aria-modal="true"
       aria-label={tp('palette.aria')}
       className="fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[12vh]"
-      style={{ background: 'rgba(7, 8, 13, 0.62)', backdropFilter: 'blur(2px)' }}
+      style={{ background: 'var(--scrim)', backdropFilter: 'blur(2px)' }}
       onClick={onClose}
     >
       <div

@@ -101,7 +101,7 @@ export function Modal({
       aria-modal="true"
       aria-label={ariaLabel ?? (typeof title === 'string' ? title : undefined)}
       className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
-      style={{ background: 'rgba(7, 8, 13, 0.62)', backdropFilter: 'blur(2px)' }}
+      style={{ background: 'var(--scrim)', backdropFilter: 'blur(2px)' }}
       onClick={onClose}
     >
       <div

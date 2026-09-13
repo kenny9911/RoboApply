@@ -36,7 +36,7 @@ export function PageHeader({
 }: Props) {
   return (
     <header className={cn('page-h', className)}>
-      <div>
+      <div className="page-h-copy">
         {eyebrow ? (
           <span className="eyebrow">
             {eyebrowLive ? <span className="dot" aria-hidden="true" /> : null}
@@ -44,11 +44,10 @@ export function PageHeader({
           </span>
         ) : null}
         <h1>{title}</h1>
+        {sub ? <p className="sub">{sub}</p> : null}
       </div>
       {actions ? (
         <div className="top-actions">{actions}</div>
-      ) : sub ? (
-        <p className="sub">{sub}</p>
       ) : null}
     </header>
   );

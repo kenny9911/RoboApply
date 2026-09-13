@@ -22,7 +22,7 @@ interface Props {
 export function EmptyState({ icon, title, sub, action, className }: Props) {
   return (
     <div
-      className={cn('flex flex-col items-center justify-center text-center', className)}
+      className={cn('workspace-empty flex flex-col items-center justify-center text-center', className)}
       style={{
         border: '1px solid var(--rule)',
         background: 'var(--surface)',
@@ -31,7 +31,9 @@ export function EmptyState({ icon, title, sub, action, className }: Props) {
         gap: 'var(--sp-3)',
       }}
     >
-      {icon ? <div aria-hidden="true">{icon}</div> : null}
+      <div className="workspace-empty-icon" aria-hidden="true">
+        {icon ?? <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 25V11a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v14M5 25h22M12 13h8M12 17h5M12 21h8" /><path d="M12 8V5h8v3" /></svg>}
+      </div>
       <h3
         style={{
           fontSize: 'var(--fs-title)',

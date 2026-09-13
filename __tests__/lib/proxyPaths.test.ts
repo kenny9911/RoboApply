@@ -25,9 +25,17 @@ describe('proxyPaths.isProtectedPath', () => {
     expect(isProtectedPath('/admin/users/cm_u1')).toBe(true);
   });
 
-  it('lists exactly the six protected prefixes', () => {
+  it('protects external search and key management', () => {
+    expect(isProtectedPath('/job-search')).toBe(true);
+    expect(isProtectedPath('/job-search/developers')).toBe(true);
+    expect(isProtectedPath('/developers/job-search')).toBe(false);
+    expect(isProtectedPath('/job-searching')).toBe(false);
+  });
+
+  it('lists exactly the seven protected prefixes', () => {
     expect([...PROTECTED_PREFIXES]).toEqual([
       '/jobs',
+      '/job-search',
       '/resume',
       '/applications',
       '/practice',

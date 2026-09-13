@@ -5,220 +5,130 @@
 @import '../styles/v3-account.css';
 @import '../styles/auth.css';
 @import '../styles/landing.css';
+@import '../styles/workspace.css';
+@import '../styles/discovery.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ═══════════════════════════════════════════════════════════════════
- * RoboApply design system
- *
- * Authority: docs/roboapply/OVERHAUL_RULINGS.md (binding), then
- * docs/roboapply/OVERHAUL_SPEC.md. Do not add a token here without a
- * ruling — the previous system reached 31 font sizes, 4 user-swappable
- * accents, 3 themes and 46 glow shadows by accretion.
- *
- * THREE COLOUR ROLES, NEVER CONFUSED (ruling R3):
- *
- *   INK       --text / --text-2 / --text-muted      must pass 4.5:1 everywhere
- *   ACTION    --action / --action-hover / -ink      buttons + links; furniture
- *   IDENTITY  --brand-mark on --brand-plane         never carries text, ever
- *
- * Because --brand-mark is never ink, contrast does not constrain it — which
- * is what lets electric lime survive as the brand signature. It is only ever
- * painted on --brand-plane (near-black, both themes), so it always reads at
- * ~15:1 and never has to be checked again.
- *
- * TYPE (ruling R4): Inter for 100% of read text; Instrument Sans for the
- * hero and page H1 only, applied to the whole headline. No mono. No serif.
- * Eight sizes. 12px floor. No uppercase micro-labels.
- *
- * Light is the default theme. Dark is first-class.
- * ═══════════════════════════════════════════════════════════════════ */
-
+/* RoboApply — Clarity design system.
+ * The September 2026 redesign is defined in docs/design-system.md.
+ * Ashby-inspired violet gradients, neutral surfaces, evidence before scores.
+ * All legacy aliases below resolve to this source of truth.
+ */
 :root {
-  /* ── Surfaces (light) — Arkira neutral ramp (worker.arkira.ai) ──
-   * Arkira builds on stock Tailwind grays: gray-100 #F3F4F6, gray-200 #E5E7EB
-   * (its confirmed border colour), gray-300 #D1D5DB. --bg carries the faint
-   * lavender cast its pages sit on; cards stay pure white so they lift off it. */
-  --bg:          #F8F8FC;
-  --surface:     #FFFFFF;
-  --surface-2:   #F4F5F7;
-  --surface-3:   #E9EBEF;
-  --rule:        #E5E7EB;
-  --rule-strong: #D1D5DB;
-
-  /* ── Ink (light) — ratios vs surface · bg · surface-2 · surface-3 ── */
-  --text:        #111827;  /* 17.74 · 16.75 · 16.26 · 14.86 */
-  --text-2:      #4B5563;  /*  7.56 ·  7.13 ·  6.93 ·  6.33 */
-  --text-muted:  #636A78;  /*  5.44 ·  5.13 ·  4.98 ·  4.55 — AA on all four.
-                            * Arkira's own gray-500 #6B7280 measures 4.05 on
-                            * --surface-3 and would fail; this is that hue held
-                            * to the 4.5 floor rather than the swatch. */
-  --disabled:    #9CA3AF;  /*  2.54 — placeholders + disabled ONLY, never live text */
-
-  /* ── Action (light) — Arkira indigo-600. 5.46 both as ink on white and as a
-   * fill under white; 4.57 at worst, on --surface-3. Arkira's headline primary
-   * is the lighter #6C5FFD, but that measures 4.47 on white and fails ruling R3
-   * in both directions, so the action slot takes the indigo it uses for links
-   * and #6C5FFD survives only as the tint/gradient hue below. ── */
-  --action:        #5A4CFA;
-  --action-hover:  #4A3BE3;  /* 6.94 — darker on hover, per the existing
-                              * convention. Arkira hovers *lighter*, to #6C5FFD,
-                              * which would drop white-on-fill to 4.47. */
-  --action-ink:    #FFFFFF;
-  --action-subtle: rgba(90, 76, 250, 0.08);  /* resolves to #F2F1FF on white —
-                                              * Arkira's primary-50 is #F4F3FF */
-
-  /* ── Identity — the same in BOTH themes, because it only ever sits on --brand-plane ── */
-  --brand-mark:  #C9FF3B;  /* 15.6:1 on --brand-plane */
-  --brand-plane: #14161A;
-
-  /* ── Status (light) — Arkira ships the stock HeroUI ramps, whose -500 stops
-   * (#17C964 / #F5A524 / #F31260) all fail as ink. These are the same three
-   * hues taken to the darkest step that clears 4.5 on every surface. ── */
-  --ok:            #0E793C;  /* HeroUI success-700 — 5.50 · 4.61 at worst */
-  --ok-subtle:     rgba(14, 121, 60, 0.10);
-  --warn:          #8A5C13;  /* HeroUI warning-700 #936316 measures 4.36 on
-                              * --surface-3; this is it darkened — 5.80 · 4.86 */
-  --warn-subtle:   rgba(138, 92, 19, 0.10);
-  --danger:        #C20E4D;  /* HeroUI danger-600 — 6.06 · 5.08 at worst */
-  --danger-subtle: rgba(194, 14, 77, 0.10);
-
-  /* ── Type families ──
-   * MUST resolve through next/font's generated CSS variables. A literal
-   * family name ('Inter', 'InterVariable') matches NOTHING — next/font emits a
-   * hashed @font-face family — and the page silently falls back to system
-   * fonts while still downloading the woff2. See ruling C23; this is the same
-   * bug that left every résumé export set in Times New Roman. */
-  --font-ui:
-    var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
-    'Hiragino Sans', 'Yu Gothic', 'PingFang SC', 'PingFang TC', 'Microsoft YaHei',
-    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --bg: #FCFCFE;
+  --surface: #FFFFFF;
+  --surface-2: #F5F4FA;
+  --surface-3: #ECEAF4;
+  --rule: #E2DFED;
+  --rule-strong: #C3BDD7;
+  --text: #20202B;
+  --text-2: #525162;
+  --text-muted: #656274;
+  --disabled: #918B9F;
+  --action: #4F3DCA;
+  --action-hover: #4031AF;
+  --action-ink: #FFFFFF;
+  --action-subtle: #EFEDFC;
+  --brand-mark: #F0ECFF;
+  --brand-plane: #30266B;
+  --ok: #315CB3;
+  --ok-subtle: #EAF0FC;
+  --warn: #85551C;
+  --warn-subtle: #FAEFDC;
+  --danger: #AF3547;
+  --danger-subtle: #FBECEF;
+  --font-ui: var(--font-instrument-sans), -apple-system, BlinkMacSystemFont,
+    'Segoe UI', system-ui, 'Hiragino Sans', 'Yu Gothic', 'PingFang SC',
+    'PingFang TC', 'Microsoft YaHei', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   --font-display: var(--font-instrument-sans), var(--font-ui);
-  /* Zero-byte system stack. Permitted for the ⌘K <kbd> glyph and nothing else. */
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
-
-  /* ── Type scale — the complete set. Nothing outside this table may ship. ── */
-  --fs-hero:     clamp(40px, 5.5vw, 64px);
-  --fs-display:  clamp(28px, 3vw, 36px);
-  --fs-stat:     28px;
-  --fs-title:    20px;
+  --fs-hero: clamp(40px, 5.5vw, 72px);
+  --fs-display: clamp(28px, 3vw, 40px);
+  --fs-stat: 28px;
+  --fs-title: 20px;
   --fs-subtitle: 17px;
-  --fs-body:     15px;
-  --fs-meta:     13px;
-  --fs-label:    12px;   /* HARD FLOOR */
-
-  --lh-hero:     1.04;
-  --lh-display:  1.12;
-  --lh-title:    1.25;
-  --lh-subtitle: 1.35;
-  --lh-body:     1.55;
-  --lh-meta:     1.5;
-
-  --ls-hero:     -0.03em;
-  --ls-display:  -0.022em;
-  --ls-title:    -0.014em;
-  --ls-subtitle: -0.01em;
-  --ls-body:     -0.006em;
-  --ls-meta:     0;
-  --ls-label:    0.01em;
-
-  /* ── Geometry ── */
-  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --fs-body: 15px;
+  --fs-meta: 13px;
+  --fs-label: 12px;
+  --lh-hero: 1.04;
+  --lh-display: 1.12;
+  --lh-title: 1.25;
+  --lh-subtitle: 1.4;
+  --lh-body: 1.6;
+  --lh-meta: 1.5;
+  --ls-hero: -0.045em;
+  --ls-display: -0.035em;
+  --ls-title: -0.02em;
+  --ls-subtitle: -0.012em;
+  --ls-body: -0.006em;
+  --ls-meta: 0;
+  --ls-label: 0.01em;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
-
-  --r-sm:   8px;    /* inputs, buttons, chips */
-  --r-md:   12px;   /* cards */
-  --r-lg:   16px;   /* modals, sheets */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 20px;
   --r-pill: 999px;
-
-  --control-sm: 32px;
-  --control-md: 36px;
-  --control-lg: 44px;   /* touch + primary CTA; minimum tap target */
-
-  --page-max:   1120px;
-  --prose-max:  68ch;
-
-  /* ── Elevation — three levels, no hue. Glow is banned (ruling §5.3). ── */
-  --e1: 0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 1px rgba(17, 24, 39, 0.04);
-  --e2: 0 4px 12px -2px rgba(17, 24, 39, 0.08), 0 2px 4px -2px rgba(17, 24, 39, 0.06);
-  --e3: 0 16px 40px -12px rgba(17, 24, 39, 0.18);
-
-  /* The ONLY focus ring in the system. */
+  --control-sm: 36px;
+  --control-md: 40px;
+  --control-lg: 44px;
+  --page-max: 1280px;
+  --prose-max: 68ch;
+  --e1: 0 2px 3px rgba(27, 22, 49, 0.055);
+  --e2: 0 8px 24px -12px rgba(27, 22, 49, 0.16);
+  --e3: 0 28px 80px -24px rgba(27, 22, 49, 0.24);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--action);
-
-  /* Modal / sheet / gate backdrop. */
-  --scrim: rgba(17, 24, 39, 0.44);
-
-  /* ── Motion ── */
+  --scrim: rgba(24, 21, 40, 0.44);
   --dur-hover: 120ms;
   --dur-enter: 180ms;
-  --dur-exit:  140ms;
+  --dur-exit: 140ms;
   --dur-modal: 240ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
-  --ease-in:  cubic-bezier(0.4, 0, 1, 1);
-
-  /* ── The one surviving gradient. Marketing hero panel only. ──
-   * Arkira's CTA stops exactly (it runs them at 90deg; the 135deg here is the
-   * existing geometry). Neither stop clears 4.5 against white (#635FFF is 4.55
-   * but #BB61F4 is only 3.43), so this is a panel/mark fill, not an ink plane.
-   * Three surfaces already break that — the admin KPI tile
-   * (components/v3/admin/controls.tsx:271) and the account + admin avatars
-   * (account/sections.tsx:304, admin/table.tsx:342) set --action-ink on it. It
-   * is a PRE-EXISTING failure, not one this palette introduced: the outgoing
-   * teal ramp ended at #1E9BBF, which was 3.23. Fix by giving those three a
-   * flat --action fill; do not add a fourth. */
-  --grad-brand: linear-gradient(135deg, #635FFF 0%, #BB61F4 100%);
-
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --grad-brand: linear-gradient(180deg, #6857DB, #473BCE);
+  --grad-brand-hover: linear-gradient(180deg, #5B48CB, #3E30B6);
+  --grad-soft: linear-gradient(135deg, #F6F5FF, #ECEAFF 58%, #F1F5FF);
+  --grad-panel: linear-gradient(140deg, #EFECFF, #E4DFFF 48%, #E9F0FF);
   color-scheme: light;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
  * DARK — first-class, not an afterthought. Ink and surfaces flip;
- * identity does not (lime still sits on --brand-plane).
+ * identity stays violet with lavender highlights and neutral ink.
  * Every ratio below is computed sRGB-linearised, not eyeballed.
  * ═══════════════════════════════════════════════════════════════════ */
 html[data-theme='dark'] {
-  --bg:          #0F1115;
-  --surface:     #16181D;
-  --surface-2:   #1E2127;
-  --surface-3:   #262A31;
-  --rule:        #2A2E35;
-  --rule-strong: #363B44;
-
-  /* ratios vs bg · surface · surface-2 · surface-3 */
-  --text:       #F2F3F5;  /* 17.02 · 15.99 · 14.53 · 12.97 */
-  --text-2:     #ADB3BD;  /*  8.96 ·  8.42 ·  7.65 ·  6.83 */
-  --text-muted: #949AA5;  /*  6.68 ·  6.28 ·  5.70 ·  5.09 — replaces #7C7E91, which FAILED at 3.99 */
-  --disabled:   #6A707B;
-
-  /* Arkira's indigo-400 — the step its own ramp uses on dark ground. Hover
-   * goes lighter here, which is the dark convention and the direction Arkira
-   * hovers in; only the light theme has to invert it to protect white-on-fill. */
-  --action:        #9B8AFF;  /* 6.72 · 6.32 · 5.74 · 5.13 */
-  --action-hover:  #B4A6FF;  /* 8.85 · 8.32 · 7.56 · 6.75 */
-  --action-ink:    #12102B;  /* 6.59 on the action fill */
-  --action-subtle: rgba(155, 138, 255, 0.14);
-
-  --ok:            #46C97D;  /* 8.92 */
-  --ok-subtle:     rgba(70, 201, 125, 0.14);
-  --warn:          #E0A83C;  /* 8.85 */
-  --warn-subtle:   rgba(224, 168, 60, 0.14);
-  /* Rose, so dark stays a sibling of the light theme's HeroUI crimson #C20E4D
-   * rather than keeping the old red-orange. HeroUI's own danger-400 #F54180
-   * measures 4.08 on --surface-3 and fails; this is one step lighter. */
-  --danger:        #F76192;  /* 6.37 · 5.99 · 5.44 · 4.86 */
-  --danger-subtle: rgba(247, 97, 146, 0.14);
-
-  /* Dark elevation is a surface step + a 1px rule. Only the top level keeps a shadow. */
+  --bg: #171622;
+  --surface: #201E2D;
+  --surface-2: #292638;
+  --surface-3: #343046;
+  --rule: #403A55;
+  --rule-strong: #756B91;
+  --text: #F5F3FC;
+  --text-2: #CFCADC;
+  --text-muted: #B8B1C8;
+  --disabled: #857C97;
+  --action: #B9ADFF;
+  --action-hover: #D0C7FF;
+  --action-ink: #211A49;
+  --action-subtle: #332C50;
+  --ok: #A8C4FF;
+  --ok-subtle: #26344E;
+  --warn: #EAC18A;
+  --warn-subtle: #423629;
+  --danger: #FFA2AD;
+  --danger-subtle: #482D33;
   --e1: none;
   --e2: none;
   --e3: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
-
-  --grad-brand: linear-gradient(135deg, #8B87FF 0%, #CB8CF7 100%);
+  --grad-brand: linear-gradient(180deg, #C7BCFF, #A99BFF);
+  --grad-brand-hover: linear-gradient(180deg, #DDD5FF, #C0B4FF);
+  --grad-soft: linear-gradient(135deg, #262239, #302949 58%, #252E47);
+  --grad-panel: linear-gradient(140deg, #31264F, #3C3060 48%, #273856);
   --scrim: rgba(0, 0, 0, 0.62);
-
   color-scheme: dark;
 }
 
@@ -310,7 +220,7 @@ body {
 
 body {
   min-height: 100vh;
-  /* A page background is a colour. The two ellipse washes are deleted. */
+  /* Gradient accents belong to deliberate panels and controls. */
 }
 
 button {
@@ -389,7 +299,7 @@ html[lang='zh'],
 html[lang='zh-TW'] {
   /* --font-display needs no override: it ends in var(--font-ui). */
   --font-ui:
-    var(--font-inter), var(--font-han), -apple-system, BlinkMacSystemFont,
+    var(--font-instrument-sans), var(--font-han), -apple-system, BlinkMacSystemFont,
     'Segoe UI', system-ui, 'PingFang SC', 'PingFang TC', 'Microsoft YaHei',
     sans-serif;
 }

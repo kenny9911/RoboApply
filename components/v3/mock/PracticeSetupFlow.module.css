@@ -19,7 +19,7 @@
   margin: var(--sp-1) 0 0;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: clamp(30px, 5vw, 42px);
+  font-size: var(--fs-display);
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: -0.035em;
@@ -30,7 +30,7 @@
   margin: 0;
   color: var(--action);
   font-size: var(--fs-label);
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: var(--ls-label);
 }
 
@@ -55,7 +55,7 @@
   justify-content: center;
   gap: var(--sp-2);
   border: 1px solid var(--rule);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--text-2);
   padding: 0 var(--sp-4);
@@ -117,9 +117,9 @@
 .panel {
   overflow: clip;
   border: 1px solid var(--rule);
-  border-radius: calc(var(--r-lg) + 4px);
+  border-radius: var(--r-lg);
   background: var(--surface);
-  box-shadow: var(--e2);
+  box-shadow: var(--e1);
 }
 
 .stepper {
@@ -213,7 +213,7 @@
   margin: 0;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: clamp(24px, 4vw, 31px);
+  font-size: var(--fs-title);
   font-weight: 600;
   line-height: 1.12;
   letter-spacing: -0.025em;
@@ -371,7 +371,7 @@
   margin-top: var(--sp-2);
   color: var(--text);
   font-size: var(--fs-title);
-  font-weight: 650;
+  font-weight: 600;
   line-height: var(--lh-title);
 }
 
@@ -384,7 +384,7 @@
 .planLabel {
   color: var(--action);
   font-size: var(--fs-label);
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: var(--ls-label);
 }
 
@@ -398,7 +398,7 @@
   color: var(--action);
   padding: 3px var(--sp-2);
   font-size: var(--fs-label);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .customize,
@@ -436,7 +436,7 @@
   margin-bottom: var(--sp-3);
   color: var(--text);
   font-size: var(--fs-meta);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .choiceGrid {
@@ -472,7 +472,7 @@
 .compactChoice strong,
 .formatChoice strong {
   font-size: var(--fs-meta);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .compactChoice small,
@@ -490,7 +490,7 @@
   color: var(--action);
   font-size: var(--fs-label);
   font-style: normal;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .choiceMark {
@@ -557,7 +557,7 @@
   border-radius: var(--r-sm);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: 18px;
+  font-size: var(--fs-subtitle);
 }
 
 .selectedChoice .formatIcon {
@@ -648,7 +648,7 @@
   margin: var(--sp-1) 0 0;
   color: var(--text);
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -761,7 +761,7 @@
   }
 
   .intro h1 {
-    font-size: 32px;
+    font-size: var(--fs-display);
   }
 
   .recentDisclosure,

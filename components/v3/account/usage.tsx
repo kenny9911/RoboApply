@@ -36,8 +36,8 @@ function intensityLevel(count: number, max: number): 0 | 1 | 2 | 3 | 4 {
 const HEAT_BG: Record<0 | 1 | 2 | 3 | 4, string> = {
   0: 'var(--surface-2)',
   1: 'var(--action-subtle)',
-  2: 'rgba(201,255,59,.32)',
-  3: 'rgba(201,255,59,.6)',
+  2: 'color-mix(in srgb, var(--action) 32%, var(--surface))',
+  3: 'color-mix(in srgb, var(--action) 60%, var(--surface))',
   4: 'var(--action)',
 };
 

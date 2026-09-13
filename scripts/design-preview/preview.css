@@ -1,0 +1,14 @@
+@font-face { font-family: 'Preview Instrument Sans'; src: url('/fonts/instrument-sans-400-700.woff2') format('woff2'); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: 'Preview Inter'; src: url('/fonts/inter-100-900.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Preview Source Sans'; src: url('/fonts/source-sans-3-200-900.woff2') format('woff2'); font-weight: 200 900; font-display: swap; }
+@font-face { font-family: 'Preview Merriweather'; src: url('/fonts/merriweather-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Preview Lora'; src: url('/fonts/lora-400-700.woff2') format('woff2'); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: 'Preview Source Han SC'; src: url('/fonts/source-han-sans-cn-vf.woff2') format('woff2'); font-weight: 250 900; font-display: swap; }
+@font-face { font-family: 'Preview Source Han TW'; src: url('/fonts/source-han-sans-tw-vf.woff2') format('woff2'); font-weight: 250 900; font-display: swap; }
+:root { --font-instrument-sans: 'Preview Instrument Sans'; --font-inter: 'Preview Inter'; --font-source-sans: 'Preview Source Sans'; --font-merriweather: 'Preview Merriweather'; --font-lora: 'Preview Lora'; --font-source-han-sc: 'Preview Source Han SC'; --font-source-han-tw: 'Preview Source Han TW'; }
+body { padding-top: 32px; }
+#design-preview-banner { position: fixed; inset: 0 0 auto; height: 32px; z-index: 10000; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: #30266b; color: #f0ecff; font: 600 12px/1.2 'Preview Instrument Sans', sans-serif; }
+#design-preview-banner span { color: #fff; font-weight: 400; }
+.app > .side { top: 32px; height: calc(100dvh - 32px); }
+.preview-error { margin: 32px; padding: 24px; white-space: pre-wrap; background: var(--surface); border: 1px solid var(--rule); color: var(--text); }
+@media (max-width: 600px) { #design-preview-banner span { display: none; } }

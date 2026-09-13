@@ -12,6 +12,8 @@ next-env.d.ts
 .tsbuildinfo
 .turbo/
 coverage/
+.playwright-cli/
+output/playwright/
 
 # Backend server build output + generated Prisma client (regenerated on install)
 server/dist/

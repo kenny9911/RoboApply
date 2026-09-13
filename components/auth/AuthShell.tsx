@@ -1,56 +1,94 @@
 'use client';
 
-// Auth chrome for the login / signup split-screen surface.
-//
-//  • AuthBrandPanel — the desktop-only left hero (brand mark + value props).
-//  • AuthBrandMark  — the wordmark, reused compactly on mobile where the panel
-//                     is hidden. Intentionally NOT a <Link> (an unauthenticated
-//                     click on /home would just bounce back through the gate).
-//  • AuthField      — a labelled input styled on the V3 bare tokens.
-//
-// All visuals live in styles/auth.css (.auth-*), so dark/light + data-accent
-// flips come for free.
+// Shared authentication chrome: a calm entry point, clear benefits, and
+// accessible form controls. Account actions remain in the route components.
 
-import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import {
+  useId,
+  useState,
+  useTransition,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ThemeToggle } from '../landing/ThemeToggle';
+import { BrandSymbol } from '../chrome/BrandSymbol';
+import { setLocaleCookie } from '../../lib/locale';
+import { useLocale, useTranslations } from 'next-intl';
+import { isLocale, localePath, READY_LOCALES } from '../../lib/localeConfig';
 import { cn } from '../../lib/utils';
 
-function SparkMark() {
+function AuthLogoSymbol() {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="var(--action)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-      </svg>
+    <span className="auth-brand-mark" aria-hidden="true">
+      <BrandSymbol size={24} />
     </span>
   );
 }
 
 export function AuthBrandMark({ className }: { className?: string }) {
-  const t = useTranslations('auth.brand');
+  const locale = useLocale();
   return (
-    <span className={cn('brand', className)} aria-label="RoboApply">
-      <SparkMark />
-      <span className="brand-name">
+    <Link
+      href={localePath(isLocale(locale) ? locale : 'en')}
+      className={cn('auth-wordmark', className)}
+      aria-label="RoboApply"
+    >
+      <AuthLogoSymbol />
+      <span>
         RoboApply
-        <small>{t('tagline')}</small>
+        <span className="auth-wordmark-period" aria-hidden="true">
+          .
+        </span>
       </span>
-    </span>
+    </Link>
+  );
+}
+
+/** Locale changes keep the visitor and their entered form on the auth page. */
+export function AuthUtilities() {
+  const t = useTranslations('common');
+  const locale = useLocale();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="auth-utilities">
+      <select
+        aria-label={t('language')}
+        value={locale}
+        disabled={pending}
+        onChange={(event) => {
+          const language = event.target.value;
+          if (!isLocale(language)) return;
+          setLocaleCookie(language);
+          startTransition(() => router.refresh());
+        }}
+      >
+        {READY_LOCALES.map((language) => (
+          <option key={language.code} value={language.code}>
+            {language.label}
+          </option>
+        ))}
+      </select>
+      <ThemeToggle />
+    </div>
   );
 }
 
 function FeatureCheck() {
   return (
     <span className="auth-feature__dot" aria-hidden="true">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M20 6L9 17l-5-5" />
       </svg>
     </span>
@@ -61,21 +99,41 @@ export function AuthBrandPanel() {
   const t = useTranslations('auth.brand');
   return (
     <aside className="auth-brand">
-      <div className="auth-brand__glow" aria-hidden="true" />
+      <div className="auth-brand__path" aria-hidden="true">
+        <svg
+          viewBox="0 0 600 800"
+          fill="none"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <path
+            d="M-180 650C20 170 715 306 496 710S50 745 236 470c137-201 357-64 344 69"
+            stroke="currentColor"
+            strokeWidth="1"
+          />
+          <path d="M572 524l8 17 13-11" stroke="currentColor" strokeWidth="1" />
+          <circle cx="238" cy="469" r="7" fill="currentColor" />
+        </svg>
+      </div>
       <AuthBrandMark />
       <div className="auth-brand__inner">
         <p className="auth-eyebrow">{t('eyebrow')}</p>
-        {/* The headline is one continuous string in one family (ruling R4). The
-         * message still carries legacy <em> markup, so the tag handler stays —
-         * it now renders the chunks inline instead of an italic-serif accent. */}
         <p className="auth-headline">
-          {t.rich('headline', { em: (chunks) => <>{chunks}</> })}
+          {t.rich('headline', { em: (chunks) => <em>{chunks}</em> })}
         </p>
         <p className="auth-lead">{t('lead')}</p>
         <ul className="auth-features">
-          <li className="auth-feature"><FeatureCheck />{t('feature_resume')}</li>
-          <li className="auth-feature"><FeatureCheck />{t('feature_interview')}</li>
-          <li className="auth-feature"><FeatureCheck />{t('feature_track')}</li>
+          <li className="auth-feature">
+            <FeatureCheck />
+            {t('feature_resume')}
+          </li>
+          <li className="auth-feature">
+            <FeatureCheck />
+            {t('feature_interview')}
+          </li>
+          <li className="auth-feature">
+            <FeatureCheck />
+            {t('feature_track')}
+          </li>
         </ul>
       </div>
       <p className="auth-brand__foot">© RoboApply</p>
@@ -86,7 +144,16 @@ export function AuthBrandPanel() {
 export function AuthError({ message }: { message: string }) {
   return (
     <div className="auth-error" role="alert">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <circle cx="12" cy="12" r="9" />
         <path d="M12 8v5M12 16.5h.01" />
       </svg>
@@ -115,7 +182,9 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-type AuthFieldProps = InputHTMLAttributes<HTMLInputElement> & { label: ReactNode };
+type AuthFieldProps = InputHTMLAttributes<HTMLInputElement> & {
+  label: ReactNode;
+};
 
 export function AuthField({ label, id, type, ...rest }: AuthFieldProps) {
   const t = useTranslations('auth.field');
@@ -128,11 +197,16 @@ export function AuthField({ label, id, type, ...rest }: AuthFieldProps) {
   const [revealed, setRevealed] = useState(false);
   return (
     <div className="auth-field">
-      <label htmlFor={fieldId} className="auth-field__label">{label}</label>
+      <label htmlFor={fieldId} className="auth-field__label">
+        {label}
+      </label>
       <div className="auth-field__control">
         <input
           id={fieldId}
-          className={cn('auth-field__input', isPassword && 'auth-field__input--reveal')}
+          className={cn(
+            'auth-field__input',
+            isPassword && 'auth-field__input--reveal',
+          )}
           type={isPassword && revealed ? 'text' : type}
           {...rest}
         />
@@ -144,7 +218,6 @@ export function AuthField({ label, id, type, ...rest }: AuthFieldProps) {
             aria-label={revealed ? t('hide_password') : t('show_password')}
             aria-pressed={revealed}
             aria-controls={fieldId}
-            tabIndex={-1}
           >
             <EyeIcon off={revealed} />
           </button>

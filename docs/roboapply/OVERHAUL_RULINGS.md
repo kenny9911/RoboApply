@@ -1,5 +1,7 @@
 # Overhaul Rulings — CEO decisions + critic corrections
 
+> September 2026: the user requested a full redesign, then explicitly replaced the green palette with the purple and gradient direction of Ashby’s growth page. The current visual authority is [Clarity](../design-system.md), which supersedes the earlier Fieldwork palette and the aesthetic choices below. Existing functional, localization, accessibility, and truthful-content requirements continue to apply.
+
 > Status: **BINDING, and supersedes `OVERHAUL_SPEC.md` wherever they disagree.**
 > Date: 2026-07-26. Read this file first, then the spec.
 >

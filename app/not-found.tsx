@@ -1,5 +1,4 @@
-// 404 fallback. Minimal Cool Graphite styling so the page doesn't look like
-// a stock Next.js error screen.
+// 404 fallback using the shared theme and self-contained color fallbacks.
 //
 // IMPORTANT: this file is rendered at build time as a STATIC page. It
 // cannot use cookies(), headers(), next-intl client provider, or anything
@@ -16,10 +15,10 @@ export default function NotFound() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '24px',
-        background: '#fafafa',
-        color: '#09090b',
+        background: 'var(--bg, #FCFCFE)',
+        color: 'var(--text, #20202B)',
         fontFamily:
-          "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+          "var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif)",
       }}
     >
       <div style={{ textAlign: 'center', maxWidth: '480px' }}>
@@ -33,7 +32,7 @@ export default function NotFound() {
         >
           That page does not exist
         </h1>
-        <p style={{ marginTop: '12px', color: '#52525b' }}>
+        <p style={{ marginTop: '12px', color: 'var(--text-2, #525162)' }}>
           The address may be wrong, or the page may have moved. Go to your
           jobs and start from there.
         </p>
@@ -44,11 +43,11 @@ export default function NotFound() {
               display: 'inline-block',
               padding: '12px 24px',
               borderRadius: '8px',
-              color: '#ffffff',
+              color: 'var(--action-ink, #FFFFFF)',
               fontWeight: 600,
-              background: '#1d4ed8',
+              background: 'var(--action, #4F3DCA)',
               boxShadow:
-                '0 1px 2px rgba(29, 78, 216, 0.15), 0 4px 12px rgba(29, 78, 216, 0.18)',
+                'var(--e1, 0 2px 6px rgba(32, 32, 43, 0.08))',
             }}
           >
             Go to Jobs

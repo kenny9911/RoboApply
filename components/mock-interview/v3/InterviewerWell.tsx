@@ -20,7 +20,7 @@ interface Props {
   eyebrow?: string;
   /** Status badge at the top-right ("LISTENING" / "SPEAKING"). */
   statusLabel: string;
-  /** Drives the listening dot color (red while you speak, lime while AI speaks). */
+  /** Drives the listening dot color (recording red while you speak, action color while AI speaks). */
   statusTint: 'red' | 'lime';
   /** Whether the AI is actively speaking — drives the orb glow pulse. */
   speaking?: boolean;
@@ -35,9 +35,9 @@ export function InterviewerWell({
   speaking = false,
   className,
 }: Props) {
-  const tintColor = statusTint === 'red' ? '#ef4444' : '#c6ff3a';
-  const orbGradient = `radial-gradient(circle at 32% 28%, ${persona.gradient.from}, ${persona.gradient.to} 55%, color-mix(in srgb, ${persona.gradient.to} 60%, #000) 100%)`;
-  const orbGlowColor = persona.gradient.from;
+  const tintColor = statusTint === 'red' ? 'var(--live)' : 'var(--action)';
+  const orbGradient = 'var(--grad-brand)';
+  const orbGlowColor = 'var(--action)';
 
   return (
     <section

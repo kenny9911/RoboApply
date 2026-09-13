@@ -28,6 +28,7 @@
 import { useTranslations } from 'next-intl';
 
 import { PageHeader } from '../../../components/v3/primitives';
+import { MetricGrid } from '../../../components/v3/primitives/MetricGrid';
 import { PipelineBoard } from '../../../components/v3/pipeline';
 import {
   PIPELINE_COLUMNS,
@@ -50,10 +51,20 @@ export default function ApplicationsPage() {
   return (
     <>
       <PageHeader
-        eyebrow={t('eyebrow', { count: activeCount })}
-        eyebrowLive
+        eyebrow={data ? t('eyebrow', { count: activeCount }) : t('loading')}
+        eyebrowLive={Boolean(data)}
         title={t('headline')}
         sub={t('sub', { columns: PIPELINE_COLUMNS.length })}
+      />
+
+      <MetricGrid
+        label={t('page_title')}
+        items={PIPELINE_COLUMNS.map((column, index) => ({
+          label: t(`columns.${column.labelKey}`),
+          value: data
+            ? data.entries.filter((entry) => columnIndexForStatus(entry.status) === index).length
+            : '—',
+        }))}
       />
 
       <PipelineBoard />

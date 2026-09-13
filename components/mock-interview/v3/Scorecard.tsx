@@ -36,7 +36,7 @@ export function Scorecard({ report, mockId, delta, axes, strengths, sharpen }: P
       >
         <ScoreDonut score={report.score} delta={delta} />
         <div className="flex flex-col justify-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--dc-accent, #c6ff3a)' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--action)' }}>
             That run · scorecard
           </p>
           <h1 className="dc-display dc-display-lg mt-2" style={{ color: 'var(--dc-ink, #f5f5fa)' }}>
@@ -80,7 +80,7 @@ export function Scorecard({ report, mockId, delta, axes, strengths, sharpen }: P
         className="rounded-3xl border p-6"
         style={{ borderColor: 'var(--dc-edge)', background: 'var(--dc-surface, #11111c)' }}
       >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--dc-accent, #c6ff3a)' }}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--action)' }}>
           Breakdown
         </p>
         <h2 className="dc-display text-2xl" style={{ color: 'var(--dc-ink, #f5f5fa)' }}>
@@ -131,7 +131,7 @@ function ScoreDonut({ score, delta }: { score: number; delta: number | null }) {
       <svg className="h-44 w-44 -rotate-90" viewBox="0 0 160 160" aria-hidden="true">
         <defs>
           <linearGradient id="donut-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="var(--dc-accent, #c6ff3a)" />
+            <stop offset="0%" stopColor="var(--action)" />
             <stop offset="100%" stopColor="var(--dc-secondary, #b691ff)" />
           </linearGradient>
         </defs>
@@ -226,7 +226,7 @@ function SplitCard({
   items: string[];
 }) {
   const Icon = kind === 'strengths' ? CheckIcon : ExclamationTriangleIcon;
-  const tint = kind === 'strengths' ? 'var(--dc-accent, #c6ff3a)' : '#ff9d4d';
+  const tint = kind === 'strengths' ? 'var(--action)' : '#ff9d4d';
   return (
     <div
       className="rounded-3xl border p-5"

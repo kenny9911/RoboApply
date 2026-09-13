@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>RoboApply · Responsive design preview</title>
+  <style>
+    @font-face { font-family: Preview; src: url('/fonts/instrument-sans-400-700.woff2') format('woff2'); font-weight: 400 700; font-display: swap; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f4fa; color: #20202b; font: 15px/1.5 Preview, system-ui, sans-serif; }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
+    header p { margin: 4px 0 0; color: #525162; }
+    a { color: #4f3dca; text-underline-offset: 3px; }
+    .controls { display: flex; gap: 16px; flex-wrap: wrap; padding: 16px; margin-bottom: 16px; background: #fff; border: 1px solid #e2dfed; border-radius: 12px; }
+    label { display: grid; gap: 5px; flex: 1 1 180px; font-size: 13px; font-weight: 600; }
+    select { width: 100%; min-height: 42px; padding: 8px 12px; border: 1px solid #c3bdd7; border-radius: 7px; background: #fff; color: inherit; font: inherit; font-size: 15px; }
+    select:focus-visible { outline: 3px solid #4f3dca; outline-offset: 3px; }
+    .caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; font-size: 13px; color: #525162; }
+    .viewport-scroll { width: 100%; overflow-x: auto; padding: 0 0 16px; }
+    .device { width: max-content; margin: 0 auto; border: 1px solid #c3bdd7; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 8px 28px #20202b14; }
+    iframe { display: block; border: 0; background: #fcfcfe; }
+    @media (max-width: 560px) { main { padding: 16px 12px; } h1 { font-size: 21px; } .controls { gap: 12px; } label { flex-basis: 140px; } .device { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><h1>Responsive design preview</h1><p>Actual application components · Example data · Live requests blocked</p></div>
+      <a href="/jobs">Open full workspace</a>
+    </header>
+    <div class="controls">
+      <label for="page">Page
+        <select id="page">
+          <option value="/jobs">Jobs</option>
+          <option value="/resume">Resume</option>
+          <option value="/applications">Applications</option>
+          <option value="/practice">Interview prep</option>
+          <option value="/settings">Settings</option>
+        </select>
+      </label>
+      <label for="locale">Language
+        <select id="locale">
+          <option value="en">English</option>
+          <option value="zh-TW" selected>繁體中文</option>
+        </select>
+      </label>
+      <label for="device">Device viewport
+        <select id="device">
+          <option value="390x667">Phone · 390 × 667</option>
+          <option value="390x844">Tall phone · 390 × 844</option>
+          <option value="768x1024">Tablet · 768 × 1024</option>
+        </select>
+      </label>
+    </div>
+    <div class="caption"><output id="viewport-label">390 × 667 CSS pixels</output><span>Scroll and navigate inside the preview. Use its theme control to inspect dark mode.</span></div>
+    <div class="viewport-scroll">
+      <div class="device"><iframe id="mobile-preview" title="RoboApply mobile workspace with example data" src="/jobs?locale=zh-TW" width="390" height="667"></iframe></div>
+    </div>
+  </main>
+  <script>
+    const page = document.getElementById('page');
+    const locale = document.getElementById('locale');
+    const device = document.getElementById('device');
+    const frame = document.getElementById('mobile-preview');
+    const caption = document.getElementById('viewport-label');
+    function updatePage() { frame.src = page.value + '?locale=' + encodeURIComponent(locale.value); }
+    page.addEventListener('change', updatePage);
+    locale.addEventListener('change', updatePage);
+    device.addEventListener('change', () => {
+      const [width, height] = device.value.split('x').map(Number);
+      frame.width = String(width);
+      frame.height = String(height);
+      caption.textContent = width + ' × ' + height + ' CSS pixels';
+    });
+  </script>
+</body>
+</html>

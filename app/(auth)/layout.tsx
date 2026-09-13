@@ -22,14 +22,23 @@
 //
 // The edge proxy (roboapply/proxy.ts) gates these paths; we don't re-check.
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Sidebar, Topbar, MobileNav, CommandPaletteProvider } from '../../components/v3/shell';
 import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
+  const t = useTranslations('nav');
+  const mainRef = useRef<HTMLElement>(null);
+
+  // The workspace scrolls inside main on desktop. Reset that region when the
+  // destination changes; same-page setting anchors keep their own position.
+  useEffect(() => {
+    if (!window.location.hash) mainRef.current?.scrollTo?.(0, 0);
+  }, [pathname]);
 
   // A live practice interview = focused fullscreen (no shell). Setup + report
   // keep the shell so the user can navigate away mid-flow: /practice/[id] but
@@ -42,18 +51,19 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   // Fullscreen live interview — no grid, no shell.
   const shell = isPracticeLive ? (
     <div className="dark-canvas v3-root min-h-screen">
-      <main className="min-h-screen">{children}</main>
+      <main id="main-content" tabIndex={-1} className="min-h-screen">{children}</main>
     </div>
   ) : (
     <CommandPaletteProvider>
       <div className="dark-canvas v3-root">
+        <a className="workspace-skip" href="#main-content">{t('skip_content')}</a>
         <div className="app">
           {/* Sidebar — a direct grid child (248px). Hidden below 760px by
            *  v3.css (`.app > .side`), where MobileNav takes over. */}
           <Sidebar />
 
           {/* Main column: sticky Topbar + scrollable content. */}
-          <main className="main">
+          <main className="main" id="main-content" tabIndex={-1} ref={mainRef}>
             <Topbar />
             <div className="main-inner">{children}</div>
           </main>

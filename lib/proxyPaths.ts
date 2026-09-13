@@ -30,6 +30,7 @@
 export const PROTECTED_PREFIXES = [
   // The four destinations.
   '/jobs',
+  '/job-search',
   '/resume',
   '/applications',
   '/practice',

@@ -1,47 +1,19 @@
-/* ===================================================================== */
-/* RoboApply — legacy token compatibility shim (V3, 2026-05-28)           */
-/* ===================================================================== */
-/*                                                                        */
-/*  V3 is DARK-ONLY. The canonical token set (--bg / --surface / --accent */
-/*  / --mono / …) lives on `:root` in app/globals.css, transcribed from   */
-/*  the prototype (RoboApply_V3/RoboApply.html). This file no longer       */
-/*  defines the old light "Cool Graphite" --robo-* palette — that layer is */
-/*  DELETED per docs/roboapply/v3/00-design-system.md §5.                  */
-/*                                                                        */
-/*  What remains here is a thin COMPATIBILITY SHIM: the `--robo-*` names   */
-/*  that tailwind.config.ts still references (bg-page, ink-900, accent-700,*/
-/*  teal-*, shadow-cta, rounded-pill, font-*, …) are re-pointed at the V3  */
-/*  dark tokens so legacy V2 markup keeps compiling AND flips to the V3    */
-/*  dark palette automatically — exactly what the old `.dark-canvas main`  */
-/*  retint block did, but now from :root so the whole app is dark and the  */
-/*  wrapper class can go away. Screen lanes delete the V2 markup that uses  */
-/*  these in Wave 1–3; until then, nothing breaks.                         */
-/*                                                                        */
-/*  New V3 code should use the bare token names (--bg, --accent, …) and    */
-/*  the .v3-* / prototype component classes, NOT these --robo-* aliases.   */
-/* ===================================================================== */
+/* RoboApply — compatibility aliases for the shared design system.
+ * Canonical light/dark colors and gradients live in app/globals.css.
+ * Legacy --robo-* names resolve to those semantic tokens so older controls
+ * inherit the current palette. New app chrome should use bare token names.
+ * Resume document colors below deliberately remain independent of the UI.
+ */
 
-/* ─────────────────────────────────────────────────────────────────
- * V3 SUPPLEMENTAL TOKENS (2026-07-10, theme-declutter pass)
- *
- * These would ideally live with the canonical tokens on :root in
- * app/globals.css; they are defined here because globals.css is owned by a
- * concurrent session. tokens.css is @imported first from globals.css, so
- * these resolve globally exactly like the canonical set.
- * ───────────────────────────────────────────────────────────────── */
+/* Supplemental recording, overlay, and resume-document tokens. */
 :root {
-  /* Recording / live-mic red — REC pill, hot-mic dot, "you speaking" tile
-   * ring. Used ONLY inside the always-dark .iv-live cockpit + video tiles
-   * (globals.css re-pins that stage dark in every theme), so these carry NO
-   * light/warm overrides on purpose. */
+  /* Recording and microphone state retain their explicit red signal. */
   --live:      #FF5050;
   --live-soft: rgba(255, 80, 80, 0.14);
   --live-ring: rgba(255, 80, 80, 0.3);
   --live-glow: rgba(255, 80, 80, 0.4);
 
-  /* Scrim overlays painted over video-tile content (badges / name plates /
-   * compact mic) — keyed to the dark --bg #0A0B10. Cockpit-only; constant
-   * across themes for the same reason as --live. */
+  /* Video badges and name plates use a stable neutral scrim over footage. */
   --overlay-deep: rgba(10, 11, 16, 0.72);
   --overlay-dim:  rgba(10, 11, 16, 0.6);
 
@@ -78,18 +50,18 @@
 }
 
 :root {
-  /* === Fonts (re-pointed: JetBrains Mono is now the mono slot) === */
+  /* === Fonts: one shared UI face === */
   --robo-font-display: var(--font-display);
   --robo-font-body: var(--font-ui);
   --robo-font-mono: var(--font-ui);
 
-  /* === Surfaces → V3 dark === */
+  /* === Theme-aware surfaces === */
   --robo-bg-page: var(--bg);
   --robo-bg-card: var(--surface);
   --robo-bg-muted: var(--surface-2);
   --robo-bg-dim: var(--scrim);
 
-  /* === Internal zinc stops → dark-canvas neutrals (kept; a few comps ref) === */
+  /* === Legacy zinc stops → semantic neutrals === */
   --robo-zinc-50:  var(--surface-3);
   --robo-zinc-100: var(--surface-2);
   --robo-zinc-150: var(--surface-2);
@@ -103,7 +75,7 @@
   --robo-zinc-900: var(--text);
   --robo-zinc-950: var(--text);
 
-  /* === Accent → V3 accent (swaps with [data-accent]) === */
+  /* === Accent → shared action palette === */
   --robo-accent-900: var(--accent);
   --robo-accent-700: var(--accent);
   --robo-accent-600: var(--accent);
@@ -112,10 +84,10 @@
   --robo-accent-100: var(--accent-soft);
   --robo-accent-50:  var(--accent-soft);
 
-  /* === Brand gradient → V3 accent→violet === */
+  /* === Shared brand and supporting gradients === */
   --robo-grad-accent: var(--grad-brand);
-  --robo-grad-accent-soft: none;
-  --robo-grad-accent-dim: none;
+  --robo-grad-accent-soft: var(--grad-soft);
+  --robo-grad-accent-dim: var(--grad-soft);
 
   /* Cyan companion */
   --robo-cyan-500: var(--cyan);
@@ -144,7 +116,7 @@
   --robo-warn:    var(--warn);
   --robo-danger:  var(--danger);
 
-  /* === Shadows → V3 dark glows === */
+  /* === Shared elevation === */
   --robo-shadow-card: var(--e1);
   --robo-shadow-lift: var(--e2);
   --robo-shadow-cta: var(--shadow-cta);

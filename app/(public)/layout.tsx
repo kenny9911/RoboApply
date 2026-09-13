@@ -4,13 +4,16 @@
 // on the V3 bare tokens so dark/light tracks automatically.
 
 import type { ReactNode } from 'react';
-import { AuthBrandPanel } from '../../components/auth/AuthShell';
+import { AuthBrandPanel, AuthUtilities } from '../../components/auth/AuthShell';
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <div className="auth-split">
       <AuthBrandPanel />
-      <div className="auth-pane">{children}</div>
+      <div className="auth-pane">
+        <AuthUtilities />
+        {children}
+      </div>
     </div>
   );
 }

@@ -88,7 +88,7 @@ export function ProfitabilitySummary({
           }}
         >
           {/* The summary sentence stays text-2; the MarginBar below carries
-              the green/red profitability signal. */}
+              the positive/negative profitability signal. */}
           {t('detail.summary', {
             cost: fmtCurrency(cost, locale, currency),
             revenue: fmtCurrency(revenue, locale, currency),

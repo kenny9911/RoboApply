@@ -21,12 +21,10 @@
 // back as `{message:"..."}` with a non-200 status, so we type-guard for an
 // array before mapping.
 //
-// Field-spelling caveat: the raw RapidAPI field names differ from the Apify /
-// Context7 mirror (e.g. `directapply`/`description_text`/`ai_salary_minvalue`,
-// NOT `direct_apply`/`job_description`/`ai_salary_min_value`). The CORE fields
-// mapped below are stable across sources; the `ai_*` fallbacks are secondary
-// (a wrong spelling there just yields null, never a crash). Smoke-test one live
-// call per host after subscribing to lock the `ai_*` spellings.
+// Current marketplace contract verified 2026-09-12: GET /active-ats and
+// /active-jb, with time_frame/title/location/description_format. Raw response
+// fields now use salary, locations, and ai_salary_min_value/unit_text.
+// Legacy field aliases remain supported for cached and older records.
 
 import { logger } from '../../../services/LoggerService.js';
 import type {
@@ -36,7 +34,7 @@ import type {
   JobSearchProvider,
 } from './raExternalJobTypes.js';
 
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 25_000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
 const BREAKER_COOLDOWN_MS = 60 * 60 * 1000;
@@ -49,7 +47,7 @@ interface FantasticConfig {
   /** sourceBoard + externalId prefix. */
   readonly board: Extract<ExternalSourceBoard, 'activejobs' | 'linkedin'>;
   readonly host: string;
-  /** Path prefix; the freshness window (`24h`/`7d`) is appended per env. */
+  /** Current marketplace route; freshness is sent as time_frame. */
   readonly pathPrefix: string;
   /** Per-provider kill-switch + daily-budget env var names. */
   readonly disableEnv: string;
@@ -59,7 +57,7 @@ interface FantasticConfig {
 const ACTIVE_JOBS_CONFIG: FantasticConfig = {
   board: 'activejobs',
   host: 'active-jobs-db.p.rapidapi.com',
-  pathPrefix: '/active-ats-',
+  pathPrefix: '/active-ats',
   disableEnv: 'RA_ONBOARDING_ACTIVEJOBS_DISABLED',
   budgetEnv: 'RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET',
 };
@@ -67,7 +65,7 @@ const ACTIVE_JOBS_CONFIG: FantasticConfig = {
 const LINKEDIN_CONFIG: FantasticConfig = {
   board: 'linkedin',
   host: 'linkedin-job-search-api.p.rapidapi.com',
-  pathPrefix: '/active-jb-',
+  pathPrefix: '/active-jb',
   disableEnv: 'RA_ONBOARDING_LINKEDIN_JOBS_DISABLED',
   budgetEnv: 'RA_ONBOARDING_LINKEDIN_JOBS_DAILY_BUDGET',
 };
@@ -128,8 +126,10 @@ const PERIOD_MAP: Record<string, string | null> = {
   MONTHLY: 'month',
   HOUR: 'hour',
   HOURLY: 'hour',
-  WEEK: null,
-  DAY: null,
+  WEEK: 'week',
+  WEEKLY: 'week',
+  DAY: 'day',
+  DAILY: 'day',
 };
 
 /** ISO-3166 alpha-2 → full country name for Fantastic Jobs `location_filter`
@@ -203,9 +203,9 @@ export function normalizeFantasticJob(
   if (typeof j.title !== 'string' || !j.title.trim()) return null;
   if (typeof j.organization !== 'string' || !j.organization.trim()) return null;
 
-  const sr = j.salary_raw ?? {};
+  const sr = j.salary ?? j.salary_raw ?? {};
   const bareVal = typeof sr.value === 'number' ? sr.value : undefined;
-  const unit = String(sr?.value?.unitText ?? sr?.unitText ?? j.ai_salary_unittext ?? '').toUpperCase();
+  const unit = String(sr?.value?.unitText ?? sr?.unitText ?? j.ai_salary_unit_text ?? j.ai_salary_unittext ?? '').toUpperCase();
   const empRaw = String(
     firstString(j.employment_type) ?? firstString(j.ai_employment_type) ?? '',
   )
@@ -220,15 +220,15 @@ export function normalizeFantasticJob(
     j.location_type === 'TELECOMMUTE' ||
     workArrangement.startsWith('Remote');
 
-  const salaryMin = toFiniteNumber(sr?.value?.minValue ?? sr?.minValue ?? bareVal ?? j.ai_salary_minvalue);
-  const salaryMax = toFiniteNumber(sr?.value?.maxValue ?? sr?.maxValue ?? bareVal ?? j.ai_salary_maxvalue);
+  const salaryMin = toFiniteNumber(sr?.value?.minValue ?? sr?.minValue ?? bareVal ?? j.ai_salary_min_value ?? j.ai_salary_minvalue ?? j.ai_salary_value);
+  const salaryMax = toFiniteNumber(sr?.value?.maxValue ?? sr?.maxValue ?? bareVal ?? j.ai_salary_max_value ?? j.ai_salary_maxvalue ?? j.ai_salary_value);
   const hasSalary = salaryMin != null || salaryMax != null;
 
   // addressCountry is usually an ISO alpha-2 string ("US") but schema.org also
   // allows a Country object ({ "@type":"Country", name:"United States" }). A raw
   // truthy object would short-circuit the ?? chain and then fail the string
   // guard below → null, discarding the countries_derived fallback. Narrow first.
-  const rawCountry = j.locations_raw?.[0]?.address?.addressCountry;
+  const rawCountry = (j.locations ?? j.locations_raw)?.[0]?.address?.addressCountry;
   const country =
     (typeof rawCountry === 'string' && rawCountry.trim() ? rawCountry : null) ??
     (rawCountry && typeof rawCountry === 'object' && typeof rawCountry.name === 'string'
@@ -262,6 +262,8 @@ export function normalizeFantasticJob(
       : null,
     salaryPeriod: hasSalary && unit ? (PERIOD_MAP[unit] ?? null) : null,
     postedAt: toIsoUtc(j.date_posted ?? j.date_created, fetchedAt),
+    postedAtEstimated: typeof j.date_posted !== 'string' || !Number.isFinite(Date.parse(j.date_posted)),
+    fetchedAt: fetchedAt.toISOString(),
     applyUrl,
     // Active Jobs DB `url` is the employer/ATS posting (source_type 'ats') → direct.
     // LinkedIn `url` is a linkedin.com/jobs/view page (source_type 'jobboard') → not direct.
@@ -283,8 +285,9 @@ class ProviderState {
   constructor(private readonly cfg: FantasticConfig) {}
 
   private budget(): number {
-    const raw = Number(process.env[this.cfg.budgetEnv] ?? '');
-    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_DAILY_BUDGET;
+    const configured = process.env[this.cfg.budgetEnv];
+    const raw = configured?.trim() ? Number(configured) : DEFAULT_DAILY_BUDGET;
+    return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : DEFAULT_DAILY_BUDGET;
   }
 
   private rollDay(now: number): void {
@@ -439,7 +442,7 @@ function titleFilterFrom(raw: string): string {
   const tokens = raw
     .toLowerCase()
     .split(/\s+/)
-    .map((t) => t.replace(/[^a-z0-9+#.]/g, ''))
+    .map((t) => t.replace(/[^\p{L}\p{N}+#.]/gu, ''))
     .filter(Boolean);
   if (tokens.length === 0) return '';
   const meaningful = tokens.filter((t) => !TITLE_STOPWORDS.has(t));
@@ -450,17 +453,18 @@ function titleFilterFrom(raw: string): string {
 function buildQuery(params: ExternalSearchParams): URLSearchParams {
   const q = new URLSearchParams();
   const title = titleFilterFrom((params.titleQuery ?? params.query ?? '').trim());
-  if (title) q.set('title_filter', title);
+  if (title) q.set('title', title);
   const location = (params.locationText ?? '').trim() || countryName(params.country) || '';
-  if (location) q.set('location_filter', location);
-  q.set('description_type', 'text'); // required or no description field is returned
+  if (location) q.set('location', location);
+  q.set('time_frame', windowSuffix());
+  q.set('description_format', 'text'); // required or no description field is returned
   q.set('limit', String(RESULT_LIMIT));
-  if (params.workFromHome === true) q.set('remote', 'true');
+  if (params.workFromHome === true) q.set('ai_work_arrangement', 'Remote Solely,Remote OK');
   return q;
 }
 
 function cacheKeyFor(board: FantasticConfig['board'], q: URLSearchParams): string {
-  return [board, windowSuffix(), q.get('title_filter') ?? '', q.get('location_filter') ?? '', q.get('remote') ?? '']
+  return [board, windowSuffix(), q.get('title') ?? '', q.get('location') ?? '', q.get('ai_work_arrangement') ?? '']
     .join('|')
     .toLowerCase();
 }
@@ -490,6 +494,12 @@ export async function searchFantasticJobs(
   if (state.breakerIsOpen(now)) return null;
 
   const q = buildQuery(params);
+  // A nonempty punctuation-only query must never become a paid full-window scan.
+  if (!q.get('title')) return null;
+  if (board === 'linkedin') {
+    q.set('source', 'linkedin');
+    q.set('exclude_recruiter_fields', 'true');
+  }
   const cacheKey = cacheKeyFor(board, q);
   const cached = state.cacheGet(cacheKey, now);
   if (cached) {
@@ -505,7 +515,10 @@ export async function searchFantasticJobs(
 
   if (!state.claimDailyTicket(now)) return null;
 
-  const url = `https://${cfg.host}${cfg.pathPrefix}${windowSuffix()}?${q.toString()}`;
+  // Sept 2026 marketplace migration: old /active-ats-7d /active-jb-7d
+  // routes now 404. Current contracts use /active-ats or /active-jb with
+  // time_frame/title/location/description_format. Verified live 2026-09-12.
+  const url = `https://${cfg.host}${cfg.pathPrefix}?${q.toString()}`;
   const headers = { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': cfg.host };
 
   const controller = new AbortController();
@@ -524,6 +537,7 @@ export async function searchFantasticJobs(
         return null;
       }
       await jitteredDelay(300 + Math.random() * 500, controller.signal);
+      if (!state.claimDailyTicket(Date.now())) return null;
       response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
       if (response.status === 429) {
         const retryText = await response.text().catch(() => '');
@@ -549,13 +563,11 @@ export async function searchFantasticJobs(
     const rlRemaining = headerNum(response, 'x-ratelimit-requests-remaining');
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
       logger.warn('RA_V2_FANTASTIC_HTTP_ERROR', `Fantastic Jobs HTTP ${response.status}`, {
         requestId: opts?.requestId,
         board,
         httpStatus: response.status,
         title: title.slice(0, 120),
-        error: errText.slice(0, 200),
       });
       return null;
     }
@@ -575,13 +587,14 @@ export async function searchFantasticJobs(
     const jobs = body
       .map((j) => normalizeFantasticJob(j, board, fetchedAt))
       .filter((j): j is ExternalJobNormalized => j !== null);
+    if (body.length > 0 && jobs.length === 0) return null;
 
     logger.info('RA_V2_FANTASTIC_CALL', 'Fantastic Jobs search completed', {
       requestId: opts?.requestId,
       board,
       window: windowSuffix(),
       title: title.slice(0, 120),
-      location: q.get('location_filter') ?? '',
+      location: q.get('location') ?? '',
       httpStatus: response.status,
       rawRows: body.length,
       jobs: jobs.length,
@@ -597,7 +610,7 @@ export async function searchFantasticJobs(
     logger.warn('RA_V2_FANTASTIC_FAILED', 'Fantastic Jobs search failed; continuing without it', {
       requestId: opts?.requestId,
       board,
-      error: err instanceof Error ? err.message : String(err),
+      errorType: err instanceof Error ? err.name : 'UnknownError',
     });
     return null;
   } finally {

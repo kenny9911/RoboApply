@@ -26,7 +26,7 @@
 // what these cases prove is that the page WIRES it.
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { screen, waitFor, act, within } from '@testing-library/react';
+import { screen, waitFor, act, within, fireEvent } from '@testing-library/react';
 
 import JobsPage from '../../app/(auth)/jobs/page';
 import { renderWithProviders } from '../utils/renderWithProviders';
@@ -100,24 +100,19 @@ beforeEach(() => {
 });
 
 describe('/jobs', () => {
-  it('renders the measured header, updated stamp, and job feed against the stub API', async () => {
+  it('renders the discovery title, measured collection, updated stamp, and job feed', async () => {
     renderWithProviders(<JobsPage />);
 
-    // The h1 + feed header render immediately. While the feed is in flight the
-    // headline is uncounted ("Jobs that fit you.") — it never guesses a number
-    // it has not measured (rule D9).
-    const h1 = screen.getByRole('heading', { level: 1, name: /jobs that fit/i });
+    // The title is stable during retrieval. The collection summary appears
+    // only after the API responds; pending scores do not imply a fit claim.
+    const h1 = screen.getByRole('heading', { level: 1, name: /Find a role you can see yourself in/i });
     expect(h1).toBeInTheDocument();
     expect(screen.getByText(/Jobs that fit you, best fit first/i)).toBeInTheDocument();
 
-    // Once search.run lands, the headline states the count the feed actually
-    // returned. Asserting the shape (not a hardcoded fixture length) still
-    // proves the ICU interpolation ran: a missing key would leave the literal
-    // "jobs.headline" — next-intl renders the dotted path rather than throwing
-    // (C30) — and a broken one would leave a raw "{count}".
+    // The count comes from loaded records, never a fixture-specific number.
     await waitFor(
       () => {
-        expect(h1.textContent).toMatch(/^\d+ jobs? that fits? you\.$/);
+        expect(Number(screen.getByText('Jobs to explore').parentElement?.querySelector('strong')?.textContent)).toBeGreaterThan(0);
       },
       { timeout: 4000 },
     );
@@ -260,8 +255,10 @@ describe('/jobs — unscored rows', () => {
     // "never resolves". Nothing here can be rescued by a fast stub or by scores
     // an earlier test in this file warmed into the shared stub store.
     const realRun = raV2Api.search.run.bind(raV2Api.search);
+    let servedCount = 0;
     vi.spyOn(raV2Api.search, 'run').mockImplementation(async (params) => {
       const res = await realRun(params);
+      servedCount = res.jobs.length;
       return { ...res, jobs: res.jobs.map((j) => ({ ...j, matchScoreCached: null })) };
     });
     vi.spyOn(raV2Api.jobs, 'score').mockImplementation(
@@ -270,13 +267,13 @@ describe('/jobs — unscored rows', () => {
 
     const { container } = renderWithProviders(<JobsPage />);
 
-    // The measured headline is the count the SERVER returned...
-    const h1 = screen.getByRole('heading', { level: 1, name: /jobs that fit/i });
+    // The collection summary reports the count the SERVER returned...
+    expect(screen.getByRole('heading', { level: 1, name: /Find a role you can see yourself in/i })).toBeInTheDocument();
     await waitFor(
-      () => expect(h1.textContent).toMatch(/^\d+ jobs? that fits? you\.$/),
+      () => expect(Number(screen.getByText('Jobs to explore').parentElement?.querySelector('strong')?.textContent)).toBe(servedCount),
       { timeout: 4000 },
     );
-    const claimed = Number(h1.textContent!.match(/^(\d+)/)![1]);
+    const claimed = servedCount;
     expect(claimed).toBeGreaterThan(0);
 
     // ...and the feed renders exactly that many cards, with not one score
@@ -360,6 +357,72 @@ describe('/jobs — unscored rows', () => {
 // The first-run trigger
 // ─────────────────────────────────────────────────────────────────────────
 
+describe('/jobs — discovery controls', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('filters the loaded jobs, explains an empty result, and restores the collection', async () => {
+    const { container } = renderWithProviders(<JobsPage />);
+    const cards = () => container.querySelectorAll('.matches .discovery-match');
+    await waitFor(() => expect(cards().length).toBeGreaterThan(0), { timeout: 4000 });
+    const count = cards().length;
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search these jobs' }), { target: { value: 'no-such-role-314159' } });
+    expect(cards()).toHaveLength(0);
+    expect(screen.getByText('No jobs match these filters.')).toBeInTheDocument();
+    expect(screen.getByText(`Showing 0 of ${count} loaded jobs`)).toBeInTheDocument();
+
+    const clearActions = screen.getAllByRole('button', { name: 'Clear filters' });
+    fireEvent.click(clearActions[clearActions.length - 1]!);
+    expect(cards()).toHaveLength(count);
+    expect(screen.getByRole('searchbox', { name: 'Search these jobs' })).toHaveValue('');
+  });
+
+  it('offers an accessible Undo after dismissing a job from the collection', async () => {
+    const { container } = renderWithProviders(<JobsPage />);
+    const cards = () => container.querySelectorAll('.matches .discovery-match');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Not interested' })).toBeInTheDocument(), { timeout: 4000 });
+    const count = cards().length;
+    fireEvent.click(screen.getByRole('button', { name: 'Not interested' }));
+    expect(cards()).toHaveLength(count - 1);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(cards()).toHaveLength(count);
+  });
+
+  it('preserves an application correction when filtering unmounts and remounts the card', async () => {
+    vi.spyOn(window, 'open').mockImplementation(() => null);
+    const { container } = renderWithProviders(<JobsPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply on company site' })).toBeEnabled(), { timeout: 6000 });
+    const card = container.querySelector('.discovery-match.expanded') as HTMLElement;
+    const title = within(card).getByRole('heading', { level: 3 }).textContent!;
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Apply on company site' }));
+    await waitFor(() => expect(within(card).getByRole('button', { name: "I didn't apply" })).toBeEnabled(), { timeout: 6000 });
+    fireEvent.click(within(card).getByRole('button', { name: "I didn't apply" }));
+    await waitFor(() => expect(within(card).getByRole('button', { name: 'Apply on company site' })).toBeEnabled());
+
+    const search = screen.getByRole('searchbox', { name: 'Search these jobs' });
+    fireEvent.change(search, { target: { value: 'no-such-role-314159' } });
+    expect(screen.queryByRole('heading', { name: title, level: 3 })).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: '' } });
+    const restored = screen.getByRole('heading', { name: title, level: 3 }).closest('.discovery-match') as HTMLElement;
+    expect(restored).not.toBe(card);
+    await waitFor(() => expect(within(restored).getByRole('button', { name: 'Apply on company site' })).toBeEnabled());
+    expect(within(restored).queryByRole('button', { name: "I didn't apply" })).not.toBeInTheDocument();
+    expect(restored.querySelector('.match-status.applied')).toBeNull();
+  });
+
+  it('opens the employer site when applying from the full job posting', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderWithProviders(<JobsPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply on company site' })).toBeEnabled(), { timeout: 6000 });
+    fireEvent.click(screen.getByRole('button', { name: 'See the job' }));
+    const dialog = screen.getByRole('dialog');
+    const original = within(dialog).getByRole('link', { name: 'Read the posting on their site' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply on company site' }));
+    expect(open).toHaveBeenCalledWith(original.getAttribute('href'), '_blank', 'noopener,noreferrer');
+  });
+});
+
 describe('/jobs — first-run setup trigger', () => {
   const withState = (o: Record<string, unknown>) => {
     mockAuthState.value = buildAuthValue({ onboardingState: o as never });
@@ -428,7 +491,7 @@ describe('/jobs — first-run setup trigger', () => {
       expect(screen.getByTestId('setup-panel')).toBeInTheDocument(),
     );
     expect(
-      screen.getByRole('heading', { level: 1, name: /jobs that fit/i }),
+      screen.getByRole('heading', { level: 1, name: /Find a role you can see yourself in/i }),
     ).toBeInTheDocument();
     await waitFor(
       () =>

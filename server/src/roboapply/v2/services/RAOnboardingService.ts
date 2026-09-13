@@ -46,7 +46,8 @@
 // (`lib/raJobProviders.ts` and the JSearch / Fantastic Jobs clients under it)
 // lost their last production caller with `runRound`. They are kept, with their
 // tests, as the seam a future `RAJobIngestService` (spec §6.5) plugs into —
-// but nothing in the running app reaches them today.
+// They are now reused by `server/src/job-search/service.ts`, reached through
+// the standalone search workspace and the versioned integration API.
 
 import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';

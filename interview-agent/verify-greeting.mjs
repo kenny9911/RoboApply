@@ -36,7 +36,8 @@ const URL = process.env.LIVEKIT_URL?.trim();
 const KEY = process.env.LIVEKIT_API_KEY?.trim();
 const SECRET = process.env.LIVEKIT_API_SECRET?.trim();
 const AGENT_NAME = process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboApply-Interview';
-const CALLBACK_BASE = process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() || 'http://localhost:4607';
+// Synthetic sessions have no database row, so do not send callbacks by default.
+const CALLBACK_BASE = process.env.VERIFY_CALLBACK_BASE_URL?.trim() || '';
 // This harness talks directly to the worker, so it needs the LiveKit Inference
 // ID that production writes to room metadata—not the backend selector stored in
 // LLM_INTERVIEW_MODEL (the control plane may translate provider namespaces).
@@ -65,6 +66,13 @@ const OPENINGS = {
   zh: '用中文热情地问候候选人，说"你好，我是今天的面试官 Maya。"然后请他们简单地做个自我介绍。',
 };
 const opening = OPENINGS[LANG] || OPENINGS.en;
+const openingLine = LANG.startsWith('zh')
+  ? '你好，我是今天的面试官。请简单介绍一下你自己。'
+  : 'Hello, I am your interviewer today. Please briefly introduce yourself.';
+const voiceModel = process.env.VERIFY_TTS_MODEL?.trim() || 'cartesia/sonic-3';
+const voiceId = process.env.VERIFY_TTS_VOICE?.trim() || (LANG.startsWith('zh')
+  ? 'e90c6678-f0d3-4767-9883-5d0ecf5894a8'
+  : '694f9389-aac1-45b6-b726-9d9369183238');
 
 const roomName = `verify-greeting-${LANG}-${Date.now()}`;
 const sessionId = `verify_${Date.now()}`;
@@ -79,7 +87,8 @@ const metadata = JSON.stringify({
   systemPrompt:
     'You are Maya, a warm, professional interviewer. Conduct a thoughtful, adaptive interview. Keep questions concise and conversational.',
   openingInstruction: opening,
-  voice: { provider: 'openai', model: 'tts-1', voiceId: 'nova', languageCode: LANG },
+  openingLine,
+  voice: { provider: voiceModel.split('/')[0], model: voiceModel, voiceId, languageCode: LANG.startsWith('zh') ? 'zh' : LANG },
   stt: { provider: 'deepgram', model: 'deepgram/nova-3', language: LANG, fallbackModels: ['deepgram/nova-2'] },
   llm: {
     model: LLM_MODEL,

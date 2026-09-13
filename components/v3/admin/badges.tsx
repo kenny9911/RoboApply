@@ -7,10 +7,10 @@
 //   - StatusBadge     completed | in_progress | failed | billed (Tag-tone pill)
 //   - EstimatedMarker the "~" + dotted-underline "modeled cost" affordance
 //   - MarginBadge     the profitability cell — sign-prefixed tabular number +
-//                     a thin vertical magnitude tick, green/red
+//                     a thin vertical magnitude tick, positive/negative
 //   - MarginBar       the drill-down hero stacked revenue/cost/margin bar
 //
-// Margin uses a DEDICATED green/red pair (--ok / --danger) used nowhere else
+// Margin uses a DEDICATED positive/negative pair (--ok / --danger) used nowhere else
 // in the app, so it reads instantly and never competes with the action colour.
 // Color is never the ONLY signal — the +/− sign carries polarity too.
 
@@ -208,7 +208,7 @@ export function MarginBadge({
 // ── MarginBar ─────────────────────────────────────────────────────────────
 //
 // Full-width stacked bar for the drill-down hero. Revenue is the track; cost is
-// overlaid in accent-soft and the margin remainder in green. When the user is
+// overlaid in accent-soft and the margin remainder in the positive color. When the user is
 // underwater (cost > revenue) the cost segment fills the whole bar and a red
 // "underwater" overflow segment is appended past the revenue line.
 

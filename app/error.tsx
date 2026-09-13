@@ -6,7 +6,7 @@
 // Kept minimal (no nested `<Link>` wrapping a `<RoboButton>` etc.) because
 // the prerender path can't serialize complex children reliably.
 //
-// Cool Graphite palette — slate-tinted, monochrome with accent CTA.
+// Shared theme with self-contained fallbacks when the root stylesheet fails.
 
 import { useEffect } from 'react';
 
@@ -16,10 +16,10 @@ const wrap: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   padding: '24px',
-  background: '#fafafa',
-  color: '#09090b',
+  background: 'var(--bg, #FCFCFE)',
+  color: 'var(--text, #20202B)',
   fontFamily:
-    "'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+    "var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif)",
 };
 
 const cardStyle: React.CSSProperties = { textAlign: 'center', maxWidth: '480px' };
@@ -31,17 +31,17 @@ const titleStyle: React.CSSProperties = {
   margin: 0,
 };
 
-const subStyle: React.CSSProperties = { marginTop: '12px', color: '#52525b' };
+const subStyle: React.CSSProperties = { marginTop: '12px', color: 'var(--text-2, #525162)' };
 
 const btnPrimary: React.CSSProperties = {
   display: 'inline-block',
   padding: '12px 24px',
   borderRadius: '8px',
-  color: '#ffffff',
+  color: 'var(--action-ink, #FFFFFF)',
   fontWeight: 600,
-  background: '#1d4ed8',
+  background: 'var(--action, #4F3DCA)',
   boxShadow:
-    '0 1px 2px rgba(29, 78, 216, 0.15), 0 4px 12px rgba(29, 78, 216, 0.18)',
+    'var(--e1, 0 2px 6px rgba(32, 32, 43, 0.08))',
   border: 'none',
   cursor: 'pointer',
 };
@@ -50,10 +50,10 @@ const btnGhost: React.CSSProperties = {
   display: 'inline-block',
   padding: '12px 24px',
   borderRadius: '8px',
-  color: '#27272a',
+  color: 'var(--text-2, #525162)',
   fontWeight: 500,
   background: 'transparent',
-  border: '1px solid #e4e4e7',
+  border: '1px solid var(--rule, #E3E0EE)',
   textDecoration: 'none',
 };
 

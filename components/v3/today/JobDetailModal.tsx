@@ -14,7 +14,8 @@ import { useTranslations } from 'next-intl';
 
 import { Btn, Markdown, Modal, IconBolt, IconCheck } from '../primitives';
 import type { RAJob } from '../../../lib/api/v2';
-import { formatSalary, postedAge } from './lib';
+import { postedAge } from './lib';
+import { CompanyIdentity, JobFacts } from './JobFacts';
 
 interface Props {
   open: boolean;
@@ -39,18 +40,6 @@ export function JobDetailModal({
 }: Props) {
   const t = useTranslations('jobs');
 
-  const salary = job
-    ? formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency)
-    : null;
-
-  const workLabel = job
-    ? job.workType === 'remote'
-      ? t('work.remote')
-      : job.workType === 'hybrid'
-        ? t('work.hybrid')
-        : t('work.onsite')
-    : null;
-
   let postedLabel: string | null = null;
   if (job) {
     const age = postedAge(job.postedAt);
@@ -63,12 +52,6 @@ export function JobDetailModal({
             ? t('posted.hoursAgo', { count: age.count })
             : t('posted.daysAgo', { count: age.count });
   }
-
-  const meta = job
-    ? [job.companyName, job.location, salary, workLabel, postedLabel]
-        .filter(Boolean)
-        .join('  ·  ')
-    : '';
 
   const sections = job
     ? [
@@ -84,8 +67,9 @@ export function JobDetailModal({
       open={open}
       onClose={onClose}
       maxWidth="xl"
+      className="discovery-posting-modal"
       title={job?.title ?? t('thinking')}
-      description={meta || undefined}
+      description={postedLabel || undefined}
       footer={
         job ? (
           <>
@@ -121,35 +105,25 @@ export function JobDetailModal({
           {loading ? t('thinking') : t('noReasoning')}
         </div>
       ) : (
-        <div
-          style={{
-            maxHeight: 'min(56vh, 540px)',
-            overflowY: 'auto',
-            paddingRight: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 22,
-            color: 'var(--text)',
-            fontSize: 'var(--fs-body)',
-            lineHeight: 1.6,
-          }}
-        >
-          {sections.map((s, i) => (
-            <section key={i}>
-              <h3
-                style={{
-                  fontSize: 'var(--fs-label)',
-                  fontWeight: 500,
-                  letterSpacing: 'var(--ls-label)',
-                  color: 'var(--text-muted)',
-                  margin: '0 0 8px',
-                }}
-              >
-                {s.label}
-              </h3>
-              <Markdown block>{s.body as string}</Markdown>
-            </section>
-          ))}
+        <div className="discovery-posting">
+          <div className="discovery-employer">
+            <CompanyIdentity name={job.companyName} logoUrl={job.companyLogoUrl} />
+            <div><span>{t('discovery.company')}</span><strong>{job.companyName}</strong></div>
+          </div>
+          <JobFacts job={job} />
+          <div className="discovery-posting-layout">
+            <nav className="discovery-posting-nav" aria-label={t('discovery.essentials')}>
+              {sections.map((section, i) => <a key={section.label} href={`#posting-${job.id}-${i}`}>{section.label}</a>)}
+            </nav>
+            <div className="discovery-posting-content">
+              {sections.map((s, i) => (
+                <section key={s.label} id={`posting-${job.id}-${i}`}>
+                  <h3>{s.label}</h3>
+                  <Markdown block>{s.body as string}</Markdown>
+                </section>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </Modal>

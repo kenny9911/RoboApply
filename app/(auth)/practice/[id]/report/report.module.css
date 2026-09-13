@@ -102,7 +102,7 @@
   background: var(--surface-2);
   color: var(--text-muted);
   font-size: var(--fs-stat);
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -114,7 +114,7 @@
   margin: 0;
   color: var(--text);
   font-size: var(--fs-title);
-  font-weight: 650;
+  font-weight: 600;
   line-height: var(--lh-title);
 }
 
@@ -156,13 +156,13 @@
   background: var(--action);
   color: var(--action-ink);
   font-size: var(--fs-title);
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .outcomeLine > span small {
   font-size: var(--fs-label);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .outcomeLine > div {
@@ -216,8 +216,8 @@
   max-width: 22ch;
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: clamp(var(--fs-title), 3vw, var(--fs-stat));
-  font-weight: 650;
+  font-size: var(--fs-title);
+  font-weight: 600;
   line-height: var(--lh-title);
   letter-spacing: var(--ls-title);
   text-wrap: balance;
@@ -326,7 +326,7 @@
   margin: 0;
   color: var(--text);
   font-size: var(--fs-subtitle);
-  font-weight: 650;
+  font-weight: 600;
   line-height: var(--lh-subtitle);
   letter-spacing: var(--ls-subtitle);
 }
@@ -448,7 +448,7 @@
   place-items: center;
   color: var(--text);
   font-size: var(--fs-stat);
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -456,7 +456,7 @@
   margin: 0;
   color: var(--text);
   font-size: var(--fs-subtitle);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .scoreIntro p {
@@ -514,7 +514,7 @@
   background: var(--surface-2);
   color: var(--text);
   font-size: var(--fs-meta);
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -565,7 +565,7 @@
   gap: var(--sp-3);
   color: var(--text);
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .disclosureTitle small {
@@ -612,7 +612,7 @@
   left: 0;
   color: var(--text-muted);
   font-size: var(--fs-label);
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -672,7 +672,7 @@
   margin: 0;
   color: var(--text);
   font-size: var(--fs-subtitle);
-  font-weight: 650;
+  font-weight: 600;
   line-height: var(--lh-subtitle);
 }
 

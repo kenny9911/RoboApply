@@ -1,7 +1,7 @@
 'use client';
 
 // CoachNudge — the live coach tip surfaced mid-answer (proto `.iv-coach`). Two
-// tones: 'good' (lime) and 'careful' (amber). The tip text is LLM/stub-authored
+// tones: 'good' (positive) and 'careful' (amber). The tip text is LLM/stub-authored
 // → rendered through the sanitized Markdown primitive. Dismissible.
 
 import { useTranslations } from 'next-intl';

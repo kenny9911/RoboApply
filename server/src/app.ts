@@ -55,6 +55,8 @@ import stripeWebhookRouter from './roboapply/routes/stripeWebhook.js';
 import cronRouter from './cron/handlers.js';
 import { startRoboApplyCron } from './roboapply/schedulers/RoboApplyCronService.js';
 import { logger } from './services/LoggerService.js';
+import { createJobSearchRouters } from './job-search/routes.js';
+import { handleJobSearchBodyError } from './job-search/request-errors.js';
 
 const app = express();
 
@@ -128,6 +130,10 @@ app.use('/api/v1/roboapply/billing', roboapplyBillingRouter);
 app.use('/api/v1/roboapply/account', roboapplyAccountRouter);
 app.use('/api/v1/roboapply/v2', roboapplyV2Router);
 
+const jobSearchRouters = createJobSearchRouters();
+app.use('/api/v1/job-search', jobSearchRouters.api);
+app.use('/api/v1/roboapply/v2/job-search', jobSearchRouters.website);
+
 app.use('/api/v1/interview-engine', interviewEngineRouter);
 
 // Vercel Cron HTTP endpoints (CRON_SECRET-gated). See cron/handlers.ts.
@@ -140,6 +146,7 @@ app.get('/', (_req, res) => {
 // ─── Error handler ──────────────────────────────────────────────────────
 app.use(
   (err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (handleJobSearchBodyError(err, req, res)) return;
     const requestId = (req as express.Request & { requestId?: string }).requestId;
     logger.error(
       'SERVER',

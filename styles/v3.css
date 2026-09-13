@@ -64,11 +64,8 @@
   display: flex; align-items: center; gap: var(--sp-3);
   padding: var(--sp-1) var(--sp-2) 0;
 }
-/* The ONE place identity colour is allowed to appear as a mark: --brand-mark
- * painted on --brand-plane (ruling R3). Both are theme-invariant, so the
- * lime reads at ~15:1 in light and dark without ever being asked to be ink.
- * The stroke below overrides BrandLogo.tsx's inline `stroke` presentation
- * attribute (CSS always wins over presentation attributes). */
+/* Shared identity mark. The glyph and plane remain paired in both themes;
+ * the shell adds the current brand gradient to this background. */
 .brand-mark {
   width: 36px; height: 36px;
   border-radius: var(--r-sm);
@@ -492,12 +489,7 @@ html[lang='ja'] .page-h h1 {
   background: var(--action);
   transition: width var(--dur-enter) var(--ease-out);
 }
-/* Great fit is the one place identity appears in the feed. The dark plane
- * behind the lime is a LIGHT-theme device — on a white card, lime alone has
- * nothing to sit against. In dark the card already supplies that contrast, so
- * the track stays the ordinary surface step; otherwise --brand-plane (#14161A)
- * lands within two steps of --surface (#16181D), the unfilled remainder
- * vanishes, and an 87 becomes indistinguishable from a 100. */
+/* Keep filled and unfilled score segments distinct in each theme. */
 .match-meter[data-tier='great'] { background: var(--brand-plane); }
 .match-meter[data-tier='great']::after { background: var(--brand-mark); }
 html[data-theme='dark'] .match-meter[data-tier='great'] { background: var(--surface-3); }
@@ -1919,10 +1911,7 @@ html[data-theme='dark'] .match-meter[data-tier='great'] { background: var(--surf
   height: 3px;
   background: var(--action);
 }
-/* Interviewer identity disc. The per-persona colour still arrives as an
- * inline background from the component; what is gone is the perpetual
- * rotation and the blurred inner orb — a face for a character that D4 says
- * does not exist. */
+/* Interviewer identity disc uses the shared gradient supplied by the UI. */
 .iv-persona-orb {
   width: 52px; height: 52px;
   border-radius: 50%;
