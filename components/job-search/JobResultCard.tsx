@@ -18,6 +18,7 @@ export function JobResultCard({ job, providers }: { job: SearchJob; providers: P
   const applyUrl = safeJobUrl(job.applyUrl);
   const sourceUrl = safeJobUrl(job.sourceUrl);
   const providerName = (id: string) => providers.find((provider) => provider.id === id)?.name ?? id;
+  const publishers = [...new Set(job.sources.map((source) => source.publisher).filter((publisher): publisher is string => !!publisher && publisher !== providerName(job.provider)))];
 
   return (
     <article className="job-search-card">
@@ -27,7 +28,7 @@ export function JobResultCard({ job, providers }: { job: SearchJob; providers: P
           <p className="job-search-company">{job.company || t('company_unknown')}</p>
           <h3>{job.title}</h3>
         </div>
-        <span className="job-search-source-tag">{providerName(job.provider)}</span>
+        <span className="job-search-source-tag">{[providerName(job.provider), ...publishers].join(' · ')}</span>
       </div>
       <ul className="job-search-facts">
         <li>{job.location || t('location_unknown')}</li>
@@ -44,8 +45,8 @@ export function JobResultCard({ job, providers }: { job: SearchJob; providers: P
         <div className="job-search-details-body">
           <h4>{t('description')}</h4>
           <p className="job-search-description">{job.description || t('description_missing')}</p>
-          {job.sources.length > 1 ? <div><h4>{t('provenance')}</h4><ul className="job-search-provenance">{job.sources.map((source, index) => {
-            const url = safeJobUrl(source.applyUrl);
+          {job.sources.length > 1 || job.sources.some((source) => source.publisher) ? <div><h4>{t('provenance')}</h4><ul className="job-search-provenance">{job.sources.map((source, index) => {
+            const url = safeJobUrl(source.sourceUrl) ?? safeJobUrl(source.applyUrl);
             const label = [providerName(source.provider), source.publisher].filter(Boolean).join(' · ');
             return <li key={`${source.provider}-${source.id}-${index}`}>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{label} ↗</a> : label}</li>;
           })}</ul></div> : null}

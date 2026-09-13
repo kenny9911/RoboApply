@@ -48,6 +48,33 @@ describe('normalizeJSearchJob', () => {
     expect(n.fetchedAt).toBe(fetchedAt.toISOString());
     expect(n.salaryCurrencyInferred).toBe(true);
   });
+  it('retains LinkedIn provenance while preferring the direct employer application', () => {
+    const link = 'https://www.linkedin.com/jobs/view/1234567890';
+    const n = normalizeJSearchJob(rawJob({ job_apply_link: link, job_publisher: 'LinkedIn' }), { country: 'us', fetchedAt: new Date() })!;
+    expect(n.applyIsDirect).toBe(true);
+    expect(n.applyUrl).toContain('careers.caterpillar.com');
+    expect(n.sourceUrl).toBe(link);
+  });
+  it('retains a LinkedIn posting found only in alternative apply options', () => {
+    const link = 'https://tw.linkedin.com/jobs/view/software-engineer-1234567890?trackingId=example';
+    const raw = rawJob();
+    raw.apply_options.push({ apply_link: link, is_direct: false, publisher: 'LinkedIn' });
+    const n = normalizeJSearchJob(raw, { country: 'us', fetchedAt: new Date() })!;
+    expect(n.sourceUrl).toBe(link);
+    expect(n.applyUrl).toBe(raw.job_apply_link);
+  });
+  it.each([
+    'https://linkedin.com.example.org/jobs/view/123',
+    'https://notlinkedin.com/jobs/view/123',
+    'https://linkedin.com@evil.example/jobs/view/123',
+    'https://linkedin.com/company/example',
+    'javascript:linkedin.com/jobs/view/123',
+  ])('does not prefer a lookalike or non-posting source URL: %s', (link) => {
+    const raw = rawJob();
+    raw.apply_options.push({ apply_link: link, is_direct: false, publisher: 'LinkedIn' });
+    const n = normalizeJSearchJob(raw, { country: 'us', fetchedAt: new Date() })!;
+    expect(n.sourceUrl).toBe(raw.job_apply_link);
+  });
 });
 
 describe('searchJSearchJobs — /search-v2 (fetch mocked)', () => {

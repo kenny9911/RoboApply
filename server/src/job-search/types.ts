@@ -19,6 +19,8 @@ export interface SearchSource {
   id: string;
   applyUrl: string;
   publisher: string | null;
+  /** Original source posting retained when direct-apply URLs replace it. */
+  sourceUrl?: string | null;
 }
 
 export interface SearchJob {
@@ -79,4 +81,33 @@ export interface SearchResult {
     searchedAt: string;
     cache: 'hit' | 'miss' | 'coalesced';
   };
+}
+
+/** Natural-language intent plus only explicitly supplied filter overrides. */
+export interface AgentSearchInput {
+  request: string;
+  country?: string;
+  location?: string;
+  remote?: boolean;
+  datePosted?: DatePosted;
+  employmentTypes?: EmploymentType[];
+  providers?: ProviderId[];
+  limit?: number;
+  locale?: string;
+  linkedinOnly?: boolean;
+}
+
+export interface AgentSearchResult extends SearchResult {
+  agent: {
+    queries: string[];
+    mode: 'planned';
+    criteria: { country: string; location?: string; remote?: boolean; datePosted?: DatePosted; employmentTypes?: EmploymentType[] };
+    unverifiedPreferences: string[];
+    linkedinOnly: boolean;
+  };
+  searches: Array<{
+    query: string;
+    providers: ProviderStatus[];
+    error?: { code: string; message: string };
+  }>;
 }

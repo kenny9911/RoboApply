@@ -8,6 +8,7 @@ vi.mock('../services/LoggerService.js', () => ({ logger: { error: vi.fn(), warn:
 import { createJobSearchRouters } from './routes.js';
 import { JobSearchAccessError } from './keys.js';
 import { SearchQuotaError } from './quota.js';
+import { JobSearchValidationError } from './validation.js';
 
 const emptyResult = {
   jobs: [], meta: { totalReturned: 0, deduplicated: 0, partial: false, searchedAt: '2026-09-12T00:00:00Z', cache: 'miss', providers: [{ id: 'jsearch', name: 'JSearch', status: 'empty', resultCount: 0 }] },
@@ -15,12 +16,13 @@ const emptyResult = {
 const service = { providers: vi.fn(), search: vi.fn() };
 const keys = { authenticate: vi.fn(), list: vi.fn(), create: vi.fn(), revoke: vi.fn() };
 const quota = { reserve: vi.fn(), finish: vi.fn() };
+const agent = { search: vi.fn() };
 let server: Server;
 let base: string;
 
 beforeAll(async () => {
   const app = express(); app.use(express.json());
-  const routers = createJobSearchRouters({ service: service as never, keys: keys as never, quota: quota as never, sessionAuth: (req, res, next) => {
+  const routers = createJobSearchRouters({ service: service as never, keys: keys as never, quota: quota as never, agent, sessionAuth: (req, res, next) => {
     if (req.get('x-test-session') !== 'owner') return res.status(401).json({ code: 'AUTH_REQUIRED' });
     req.user = { id: 'owner' } as any;
     if (req.get('x-test-legacy')) req.apiKeyId = 'legacy';
@@ -40,6 +42,77 @@ beforeEach(() => {
     return { userId: 'owner', apiKeyId: 'key' };
   });
   quota.reserve.mockResolvedValue('reservation'); quota.finish.mockResolvedValue(undefined);
+  agent.search.mockResolvedValue({ ...structuredClone(emptyResult), agent: { queries: ['engineer'], mode: 'planned', criteria: { country: 'tw' }, unverifiedPreferences: ['Visa sponsorship'], linkedinOnly: false }, searches: [{ query: 'engineer', providers: emptyResult.meta.providers }] });
+});
+
+describe('job-search agent HTTP API', () => {
+  const body = { request: 'Find engineering jobs in Taiwan with visa sponsorship.', locale: 'en' };
+  const auth = { Authorization: 'Bearer fixture-key' };
+  it('publishes the natural-language contract with the existing scoped-key authentication', async () => {
+    const doc = await (await fetch(`${base}/api/openapi.json`)).json();
+    expect(doc.paths['/agent/search'].post.operationId).toBe('agentSearchJobs');
+    expect(doc.components.schemas.AgentSearchInput.required).toEqual(['request']);
+    expect(doc.components.schemas.AgentSearchInput.properties.request.maxLength).toBe(2000);
+    expect(doc.components.schemas.Source.properties.sourceUrl).toBeDefined();
+    expect(doc.security).toEqual([{ JobSearchKey: [] }]);
+  });
+  it('rejects missing integration authentication before planning', async () => {
+    expect((await post('/api/agent/search', body)).status).toBe(401);
+    expect(agent.search).not.toHaveBeenCalled();
+  });
+  it('passes authenticated identity and API audience without double-reserving usage', async () => {
+    const res = await post('/api/agent/search', body, auth);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(agent.search).toHaveBeenCalledWith(body, expect.objectContaining({
+      userId: 'owner', apiKeyId: 'key', audience: 'api', requestId: res.headers.get('x-request-id'), signal: expect.any(AbortSignal),
+    }));
+    expect((await res.json()).agent.unverifiedPreferences).toEqual(['Visa sponsorship']);
+    expect(quota.reserve).not.toHaveBeenCalled();
+  });
+  it('only allows sessions onto the website agent and passes website rights', async () => {
+    expect((await post('/website/agent/search', body, auth)).status).toBe(401);
+    expect((await post('/website/agent/search', body, { 'x-test-session': 'owner', 'x-test-legacy': 'yes' })).status).toBe(403);
+    expect(agent.search).not.toHaveBeenCalled();
+    expect((await post('/website/agent/search', body, { 'x-test-session': 'owner' })).status).toBe(200);
+    expect(agent.search).toHaveBeenCalledWith(body, expect.objectContaining({ userId: 'owner', audience: 'website' }));
+  });
+  it.each([
+    [new JobSearchValidationError('request', 'Describe your search.'), 400, 'invalid_request'],
+    [new JobSearchAccessError('agent_unavailable', 503, 'Planning unavailable.'), 503, 'agent_unavailable'],
+    [new SearchQuotaError(60), 429, 'rate_limited'],
+  ])('returns typed failures and request identifiers: %s', async (error, status, code) => {
+    agent.search.mockRejectedValue(error);
+    const res = await post('/api/agent/search', body, auth);
+    expect(res.status).toBe(status);
+    if (status === 429) expect(res.headers.get('retry-after')).toBe('60');
+    expect(await res.json()).toMatchObject({ code, requestId: res.headers.get('x-request-id') });
+  });
+  it('retains partial successes and query diagnostics when the second query reaches quota', async () => {
+    const partial = await agent.search();
+    partial.meta.partial = true;
+    partial.searches.push({ query: 'software engineer', providers: [], error: { code: 'rate_limited', message: 'Limit reached.' } });
+    agent.search.mockResolvedValue(partial);
+    const res = await post('/api/agent/search', body, auth);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.meta.partial).toBe(true);
+    expect(data.searches[1].error.code).toBe('rate_limited');
+  });
+  it('returns the plan and diagnostics as a 503 when no source responded', async () => {
+    const failed = await agent.search();
+    failed.meta.providers[0].status = 'timeout'; failed.meta.partial = true;
+    agent.search.mockResolvedValue(failed);
+    const res = await post('/api/agent/search', body, auth);
+    expect(res.status).toBe(503);
+    expect((await res.json()).data.agent.queries).toEqual(['engineer']);
+  });
+  it('sanitizes unexpected dependency failures', async () => {
+    agent.search.mockRejectedValue(new Error('postgres://private-credential'));
+    const res = await post('/api/agent/search', body, auth);
+    expect(res.status).toBe(503);
+    expect(await res.text()).not.toContain('private-credential');
+  });
 });
 const post = (path: string, body: unknown, headers: Record<string, string> = {}) => fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
 

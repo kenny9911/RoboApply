@@ -6,12 +6,14 @@ import { jobSearchService, parseSearchInput, JobSearchValidationError } from './
 import { JobSearchAccessError, jobSearchKeys } from './keys.js';
 import { SearchQuotaError, jobSearchQuota } from './quota.js';
 import { jobSearchOpenApi } from './openapi.js';
+import { createJobSearchAgent, type jobSearchAgent } from './agent.js';
 
 type Dependencies = {
   service: typeof jobSearchService;
   keys: typeof jobSearchKeys;
   quota: typeof jobSearchQuota;
   sessionAuth: RequestHandler;
+  agent: typeof jobSearchAgent;
 };
 
 function requestId(req: Request, res: Response, next: NextFunction) {
@@ -37,6 +39,7 @@ function fail(err: unknown, req: Request, res: Response) {
 
 export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
   const d = { service: jobSearchService, keys: jobSearchKeys, quota: jobSearchQuota, sessionAuth: requireAuth, ...overrides };
+  const agent = overrides.agent ?? createJobSearchAgent({ service: d.service, quota: d.quota });
   const api = Router();
   const website = Router();
   api.use(requestId);
@@ -63,6 +66,27 @@ export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
 
   for (const [router, audience] of [[api, 'api'], [website, 'website']] as const) {
     router.get('/providers', (_req, res) => res.json({ providers: d.service.providers(audience) }));
+    router.post('/agent/search', async (req, res) => {
+      const controller = new AbortController();
+      const close = () => { if (!res.writableEnded) controller.abort(); };
+      res.on('close', close);
+      try {
+        const identity = res.locals.searchIdentity as { userId: string; apiKeyId?: string };
+        // The agent reserves each query, including planning before query one.
+        const result = await agent.search(req.body, {
+          ...identity, audience, requestId: req.requestId, signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        const succeeded = result.meta.providers.some(p => p.status === 'ok' || p.status === 'empty');
+        if (!succeeded) return res.status(503).json({
+          error: 'No selected job source is currently available.', code: 'providers_unavailable',
+          requestId: req.requestId, data: result,
+        });
+        return res.json(result);
+      } catch (err) {
+        if (!controller.signal.aborted) return fail(err, req, res);
+      } finally { res.off('close', close); }
+    });
     router.post('/search', async (req, res) => {
       let reservation: string | undefined;
       let apiKeyId: string | undefined;

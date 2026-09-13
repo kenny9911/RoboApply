@@ -1,12 +1,13 @@
 // Deliberately fictional fixtures. This module is only aliased by the loopback preview.
-import type { JobSearchKey, ProviderInfo, SearchInput, SearchJob, SearchResult } from '../../lib/api/job-search-types';
+import type { AgentSearchInput, AgentSearchResult, JobSearchKey, ProviderInfo, SearchInput, SearchJob, SearchResult } from '../../lib/api/job-search-types';
 import { RoboApiError } from '../../lib/api/client';
-export { failedSearchResult, JOB_SEARCH_CURL_EXAMPLE, JOB_SEARCH_OPENAPI_URL } from '../../lib/api/job-search';
+export { failedSearchResult, JOB_SEARCH_AGENT_CURL_EXAMPLE, JOB_SEARCH_CURL_EXAMPLE, JOB_SEARCH_OPENAPI_URL } from '../../lib/api/job-search';
 
 const scenario = () => new URLSearchParams(window.location.search).get('scenario');
 const sources: ProviderInfo[] = [
   { id: 'jsearch', name: 'JSearch', enabled: true, sourceType: 'aggregator', homepage: 'https://example.invalid/jsearch' },
   { id: 'activejobs', name: 'Active Jobs DB', enabled: true, sourceType: 'aggregator', homepage: 'https://example.invalid/active' },
+  { id: 'linkedin', name: 'LinkedIn via Fantastic.jobs', enabled: false, reason: 'disabled', sourceType: 'board', homepage: 'https://example.invalid/linkedin' },
   { id: 'hiringindex', name: 'HiringIndex', enabled: false, sourceType: 'aggregator', homepage: 'https://example.invalid/hiring' },
 ];
 const fixtureJob: SearchJob = {
@@ -19,6 +20,26 @@ let keys: JobSearchKey[] = [];
 const pause = () => new Promise<void>((resolve) => setTimeout(resolve, 450));
 export const jobSearchApi = {
   async providers() { return { providers: sources.map((source) => ({ ...source, enabled: scenario() === 'unconfigured' ? false : source.enabled })) }; },
+  async agentSearch(input: AgentSearchInput): Promise<AgentSearchResult> {
+    if (scenario() === 'agent_unavailable') {
+      await pause();
+      throw new RoboApiError('Preview planning failure', { status: 503, payload: { code: 'agent_unavailable' } });
+    }
+    const result = await jobSearchApi.search({ query: 'product engineer', country: input.country || 'TW', providers: input.providers });
+    const queries = ['product engineer', 'software engineer'];
+    const jobs = input.linkedinOnly ? result.jobs.slice(0, 1).map(job => ({
+      ...job, sources: [{ ...job.sources[0], publisher: 'LinkedIn' }],
+    })) : result.jobs;
+    return {
+      ...result, jobs, meta: { ...result.meta, totalReturned: jobs.length },
+      agent: {
+        mode: 'planned', queries, linkedinOnly: input.linkedinOnly ?? false,
+        criteria: { country: input.country || 'TW', location: input.location || 'Taipei', remote: true, datePosted: 'week', employmentTypes: ['full_time'] },
+        unverifiedPreferences: ['Visa sponsorship — fictional example; confirm in the original posting.'],
+      },
+      searches: queries.map(query => ({ query, providers: result.meta.providers })),
+    };
+  },
   async search(input: SearchInput): Promise<SearchResult> {
     await pause();
     if (scenario() === 'error') throw new RoboApiError('Preview failure', { status: 503 });

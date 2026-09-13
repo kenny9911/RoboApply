@@ -81,6 +81,8 @@ export interface ExternalJobNormalized {
   salaryCurrencyInferred?: boolean;
   locationCountryEstimated?: boolean;
   applyUrl: string | null;
+  /** Original publisher posting, retained when application prefers an employer link. */
+  sourceUrl?: string | null;
   /** True when applying goes straight to the employer/ATS (not an aggregator). */
   applyIsDirect: boolean;
   description: string;

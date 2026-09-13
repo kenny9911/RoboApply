@@ -98,8 +98,8 @@ export default function JobsPage() {
         <PageHeader
           title={t('discovery.title')}
           sub={t('discovery.intro')}
+          actions={<Link className="btn primary" href="/job-search" title={searchT('entry_hint')}>{searchT('search')}<span aria-hidden="true">→</span></Link>}
         />
-        <Link className="v3-btn v3-btn-secondary" href="/job-search">{searchT('title')}</Link>
       </div>
 
       {/* The one place the panel can be summoned by tap (ruling C21 — one

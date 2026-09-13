@@ -169,6 +169,24 @@ function pickApplyUrl(j: any): { url: string | null; isDirect: boolean } {
   return { url: fallback, isDirect: j?.job_apply_is_direct === true };
 }
 
+/** Retain board provenance separately from the best application destination. */
+function pickSourceUrl(j: any): string | null {
+  const original = typeof j?.job_apply_link === 'string' ? j.job_apply_link : null;
+  const options = Array.isArray(j?.apply_options) ? j.apply_options : [];
+  const links: unknown[] = [original, ...options.map((option: any) => option?.apply_link)];
+  const linkedin = links.find((link): link is string => {
+    if (typeof link !== 'string') return false;
+    try {
+      const url = new URL(link);
+      const host = url.hostname.toLowerCase();
+      return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password &&
+        (host === 'linkedin.com' || host.endsWith('.linkedin.com')) &&
+        /^\/jobs\/view\/[^/]+\/?$/.test(url.pathname);
+    } catch { return false; }
+  });
+  return linkedin ?? original;
+}
+
 /**
  * Normalize one raw /search job. Returns null for rows missing the identity
  * fields (id / title / employer) — normalize-and-drop, CustomHttpDriver style.
@@ -219,6 +237,7 @@ export function normalizeJSearchJob(
     postedAtEstimated: sourcePostedAt === null,
     fetchedAt: req.fetchedAt.toISOString(),
     applyUrl: apply.url,
+    sourceUrl: pickSourceUrl(j),
     applyIsDirect: apply.isDirect,
     description: typeof j.job_description === 'string' ? j.job_description : '',
     sourcePublisher: typeof j.job_publisher === 'string' ? j.job_publisher : null,

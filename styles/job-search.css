@@ -11,10 +11,42 @@
 .job-search-primary-fields { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: var(--sp-4); align-items: end; }
 .job-search-primary-fields > .btn { min-height: var(--control-lg); padding-inline: var(--sp-5); }
 .job-search-field { display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-meta); font-weight: 600; min-width: 0; }
-.job-search-field input, .job-search-field select { width: 100%; min-width: 0; height: var(--control-lg); border: 1px solid var(--rule-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); padding: 0 var(--sp-3); font-family: var(--font-ui); font-size: var(--fs-body); font-weight: 400; }
-.job-search-field input::placeholder { color: var(--text-muted); }
-.job-search-field input:focus-visible, .job-search-field select:focus-visible, .job-search-workspace summary:focus-visible, .job-search-workspace a:focus-visible, .job-search-developer-guide a:focus-visible, .job-search-code pre:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
+.job-search-field input, .job-search-field select, .job-search-field textarea { width: 100%; min-width: 0; height: var(--control-lg); border: 1px solid var(--rule-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); padding: 0 var(--sp-3); font-family: var(--font-ui); font-size: var(--fs-body); font-weight: 400; }
+.job-search-field input::placeholder, .job-search-field textarea::placeholder { color: var(--text-muted); }
+.job-search-field input:focus-visible, .job-search-field select:focus-visible, .job-search-field textarea:focus-visible, .job-search-workspace summary:focus-visible, .job-search-workspace a:focus-visible, .job-search-developer-guide a:focus-visible, .job-search-code pre:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
 .job-search-field-hint { color: var(--text-muted); font-size: var(--fs-label); font-weight: 400; line-height: var(--lh-meta); }
+.job-search-agent-input > .job-search-field > label { font-size: var(--fs-subtitle); }
+.job-search-field textarea { height: auto; min-height: calc(var(--control-lg) * 3); padding: var(--sp-4); line-height: var(--lh-body); resize: vertical; }
+.job-search-agent-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-5); margin-top: var(--sp-5); }
+.job-search-linkedin-option { max-width: 60ch; }
+.job-search-linkedin-option p, .job-search-override-hint, .job-search-source-loading { font-size: var(--fs-meta); color: var(--text-muted); line-height: var(--lh-meta); }
+.job-search-linkedin-option p { margin-top: var(--sp-1); }
+.job-search-agent-submit { flex-shrink: 0; justify-content: center; min-height: calc(var(--control-lg) + var(--sp-2)); min-width: 176px; padding-inline: var(--sp-5); font-size: var(--fs-subtitle); }
+.job-search-pending-actions { display: flex; justify-content: flex-end; margin-top: var(--sp-3); }
+.job-search-override-hint { margin-bottom: var(--sp-4); }
+.job-search-source-loading { margin-top: var(--sp-4); }
+.job-search-plan { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-md); padding: var(--sp-5); margin-bottom: var(--sp-6); }
+.job-search-plan header { border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-4); }
+.job-search-plan h2 { font-size: var(--fs-title); font-weight: 600; letter-spacing: var(--ls-title); margin: 0; }
+.job-search-plan h3 { font-size: var(--fs-meta); font-weight: 600; margin: 0 0 var(--sp-3); }
+.job-search-plan header p { font-size: var(--fs-meta); color: var(--text-muted); margin-top: var(--sp-2); }
+.job-search-plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-5); padding-top: var(--sp-5); }
+.job-search-query-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); list-style: none; padding: 0; }
+.job-search-query-chips li { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--rule); border-radius: var(--r-sm); color: var(--action); background: var(--action-subtle); font-size: var(--fs-meta); overflow-wrap: anywhere; }
+.job-search-criteria { display: grid; gap: var(--sp-2); margin: 0; }
+.job-search-criteria > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--sp-3); font-size: var(--fs-meta); }
+.job-search-criteria dt { color: var(--text-muted); }
+.job-search-criteria dd { margin: 0; overflow-wrap: anywhere; }
+.job-search-unverified { margin-top: var(--sp-5); padding: var(--sp-4); border-radius: var(--r-sm); background: var(--warn-subtle); color: var(--warn); }
+.job-search-unverified h3 { margin-bottom: var(--sp-2); }
+.job-search-unverified p, .job-search-unverified li { font-size: var(--fs-meta); line-height: var(--lh-meta); }
+.job-search-unverified ul { margin-top: var(--sp-3); padding-inline-start: var(--sp-5); }
+.job-search-request-review { font-size: var(--fs-meta); color: var(--text-muted); margin-top: var(--sp-3); }
+.job-search-request-review summary { cursor: pointer; }
+.job-search-request-review p { margin-top: var(--sp-2); white-space: pre-wrap; overflow-wrap: anywhere; line-height: var(--lh-body); }
+.job-search-query-outcome { margin-bottom: var(--sp-4); }
+.job-search-query-outcome h3 { font-size: var(--fs-meta); font-weight: 600; overflow-wrap: anywhere; margin-bottom: var(--sp-2); }
+.job-search-coverage .job-search-query-error { font-size: var(--fs-meta); color: var(--warn); background: var(--warn-subtle); padding: var(--sp-3); border-radius: var(--r-sm); }
 .job-search-filter-panel { margin-top: var(--sp-5); border-top: 1px solid var(--rule); }
 .job-search-filter-panel > summary, .job-search-details > summary, .job-search-coverage > summary { cursor: pointer; font-size: var(--fs-meta); font-weight: 600; padding-block: var(--sp-4); color: var(--text-2); }
 .job-search-filter-panel > summary::marker, .job-search-details > summary::marker, .job-search-coverage > summary::marker { color: var(--action); }
@@ -129,6 +161,9 @@
   .job-search-quickstart { grid-template-columns: 1fr; gap: var(--sp-5); }
 }
 @media (max-width: 760px) {
+  .job-search-agent-actions { flex-direction: column; align-items: stretch; gap: var(--sp-4); }
+  .job-search-agent-submit { width: 100%; }
+  .job-search-plan-grid { grid-template-columns: 1fr; }
   .job-search-hero, .job-search-form { padding: var(--sp-5); }
   .job-search-card { padding: var(--sp-4); }
   .job-search-card-top { flex-wrap: wrap; gap: var(--sp-3); }

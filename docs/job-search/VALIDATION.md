@@ -1,5 +1,19 @@
 # Job search release verification
 
+## Job Search Agent update — 2026-09-14
+
+Implemented the explicit Search Job action, natural-language planning, a maximum of two bounded source searches, LinkedIn provenance filtering, per-query diagnostics, explicit filter overrides, cancellation, and the corresponding website/API endpoint. Public API documentation includes the agent request example. The shared integration skill now records agent quota and provenance invariants.
+
+- **Full acceptance harness passed** under Node 24.21.0: **862 tests in 89 files**, including **245 focused tests in 14 files**. Server typecheck, design/copy/LLM-cost checks, and exact locale/ICU parity passed (1,458 messages across nine namespaces).
+- **Production build passed**: Prisma client generation, Express compilation, and Next.js 16.3 webpack build in `/tmp/roboapply-agent-build.64ylhY`. No environment files were copied, no schema was pushed, and the active development `.next` directory was preserved.
+- **Runtime contract smoke passed** against the running local Express application: OpenAPI returned 200 and exposed `agentSearchJobs`; an unauthenticated agent request returned 401 before planning.
+- **Browser QA passed** using the actual components in the isolated fixture preview: desktop English/light and mobile Traditional Chinese/dark, explicit submit, resulting plan/criteria, LinkedIn-only, partial coverage, and visible publisher attribution. Screenshots are under `output/playwright/job-agent-*.png`. Fixtures clearly label fictional jobs and block live requests.
+- **Independent review** found and resolved lowercase country display, role-less intent reported as a transient outage, and inability to override inferred LinkedIn-only intent. Adapter regressions now preserve LinkedIn URLs when employer application links are preferred and reject misleading hostname alternatives. The backend agent and primary agent cross-reviewed quota, cancellation, source rights, and HTTP behavior.
+
+No paid model or provider evaluation was performed in this update. Natural-language planning has synthetic contract/behavior coverage; real-model interpretation quality remains unmeasured. Dedicated LinkedIn entitlement, live yield/latency, and additional standalone redistribution rights remain activation work, as documented in [LINKEDIN_STRATEGY.md](LINKEDIN_STRATEGY.md). These checks establish local implementation/build acceptance, not production deployment or complete LinkedIn inventory.
+
+## Original service release — 2026-09-12
+
 Verified locally on 2026-09-12 using **Node 24.21.0**. This records implemented and tested behavior, not a production deployment or commercial data license.
 
 ## Agent harness

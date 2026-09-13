@@ -71,7 +71,7 @@ export function normalizeJob(raw: ProviderJob, fetchedAt: string): SearchJob | n
     sourceUrl: safeJobUrl(raw.sourceUrl) ?? applyUrl,
     applyIsDirect: raw.applyIsDirect === true,
     provider: raw.sourceBoard,
-    sources: [{ provider: raw.sourceBoard, id: clean(raw.externalId, 300), applyUrl, publisher: clean(raw.sourcePublisher) || null }],
+    sources: [{ provider: raw.sourceBoard, id: clean(raw.externalId, 300), applyUrl, publisher: clean(raw.sourcePublisher) || null, sourceUrl: safeJobUrl(raw.sourceUrl) ?? applyUrl }],
     postedAt: raw.postedAtEstimated ? null : iso(raw.postedAt),
     fetchedAt: iso(raw.fetchedAt) ?? fetchedAt,
     remote: raw.workType === 'remote' ? true : null,
