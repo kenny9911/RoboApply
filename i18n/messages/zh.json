@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "面试准备 · {count} 个职位",
-      "title": "反复练习，直到",
-      "titleAccent": "不再紧张",
-      "titleAfter": "。",
-      "sub": "选职位、选面试官、选形式。面试官提问，你回答时旁边会同步出现提示。",
-      "guide": {
-        "eyebrow": "面试练习",
-        "title": "设置一场模拟面试",
-        "sub": "四个简单步骤，大约两分钟。",
-        "recent": "最近练习（{count}）",
-        "progressLabel": "面试设置进度",
-        "steps": {
-          "job": "职位",
-          "style": "面试风格",
-          "preferences": "偏好",
-          "review": "确认"
+      "flow": {
+        "title": "练到习以为常。",
+        "sub": "选好你要面试的职位，其余的已经按它配好了——开始之前都可以改。",
+        "recentTitle": "接着上次继续",
+        "again": "再练一次这场",
+        "viewReport": "查看报告",
+        "roleLegend": "你要面试哪个职位？",
+        "categories": "职位类别",
+        "noMatch": "没有职位匹配“{query}”。换个更短的词，或者直接粘贴职位说明。",
+        "planLegend": "你的这场面试",
+        "planHint": "已按职位配好，哪项都能改。",
+        "pickRoleFirst": "先在上面选一个职位。",
+        "chip": {
+          "focus": "重点",
+          "mode": "形式",
+          "language": "语言"
         },
-        "jobTitle": "你想练习哪个职位的面试？",
-        "jobSub": "搜索职位、按类别浏览，或粘贴职位描述。",
-        "styleTitle": "为你推荐的练习方案",
-        "styleSub": "我们已根据这个职位匹配面试官和提问方式。如有需要，你可以调整。",
-        "focusLabel": "面试重点",
-        "planPending": "请先选择职位",
-        "changeSetup": "更改面试风格",
-        "preferencesTitle": "你希望这次练习是什么感觉？",
-        "preferencesSub": "默认设置已准备好，你可以按需调整。",
-        "videoHint": "最接近真实面试",
-        "voiceHint": "压力更小，适合热身",
-        "reviewTitle": "准备好就开始",
-        "reviewSub": "面试官加入前，再确认一次。",
-        "previewSummary": "预览可能会问的问题",
-        "back": "返回",
-        "continue": "继续",
-        "stepCount": "第 {current} 步，共 {total} 步",
-        "reassurance": "返回修改不会丢失已选内容。"
+        "tray": {
+          "focus": "这场面试考什么？",
+          "length": "要面多久？"
+        },
+        "done": "完成",
+        "costShort": "需要 {n} 个额度——超出你的余额",
+        "useShorter": "改成 {minutes} 分钟",
+        "previewToggle": "预览可能会问的问题"
       },
       "loading": "正在加载面试准备…",
       "startError": "这场面试没有开始成功。请重试。",
@@ -1463,18 +1453,17 @@
         "on": "开",
         "off": "关",
         "coachModeHint": "回答时给出简短提示。想更接近真实面试就关掉它。"
+      },
+      "rail": {
+        "title": "提示与文字记录",
+        "close": "关闭面板"
       }
     },
     "report": {
       "title": "面试报告",
-      "eyebrow": "已完成 · {minutes} 分钟",
-      "eyebrowScoring": "正在给你的回答评分",
-      "eyebrowFallback": "练习面试 · 报告",
       "sub": "按真实面试小组的标准来评。",
+      "evidence": "这份报告背后的依据",
       "loading": "正在加载你的报告…",
-      "loadingTitle": "正在读",
-      "loadingTitleAccent": "你的回答",
-      "loadingTitleAfter": "…",
       "error": "这份报告没有加载出来。请重试；如果一直失败，请刷新页面。",
       "newInterview": "新的面试",
       "processing": "正在收尾。录音和评分马上会出现在这里。",

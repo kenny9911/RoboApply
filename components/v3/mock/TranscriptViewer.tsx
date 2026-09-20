@@ -53,15 +53,19 @@ interface Props {
   transcriptUrl?: string | null;
   /** Start expanded. Default false — the toggle is the "View transcript" CTA. */
   defaultOpen?: boolean;
+  /** Drop the built-in show/hide control. Set when something outside already
+   *  names and reveals this panel (the report's evidence tabs), so the reader
+   *  isn't handed a second collapse inside the one they just opened. */
+  embedded?: boolean;
 }
 
 const turnLabel = (text: string, color: string) => (
   <span style={{ fontSize: 'var(--fs-label)', fontWeight: 600, color }}>{text}</span>
 );
 
-export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: Props) {
+export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false, embedded = false }: Props) {
   const t = useTranslations('practice');
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || embedded);
 
   const exchanges = groupTranscript(turns);
   // No groupable Q&A (e.g. a degenerate/aborted session whose only turns are
@@ -85,9 +89,9 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
   }
 
   return (
-    <section style={{ marginTop: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <button
+    <section style={{ marginTop: embedded ? 0 : 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: embedded ? 'flex-end' : 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        {embedded ? null : <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
@@ -111,7 +115,7 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
           <span style={{ fontSize: 'var(--fs-label)', fontWeight: 500, color: 'var(--text-2)' }}>
             {t('report.transcriptCount', { count: exchanges.length })}
           </span>
-        </button>
+        </button>}
         {transcriptUrl ? (
           <a
             href={transcriptUrl}
@@ -127,10 +131,10 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
         <div
           style={{
             marginTop: 12,
-            border: '1px solid var(--rule)',
+            border: embedded ? 0 : '1px solid var(--rule)',
             borderRadius: 'var(--r-lg)',
-            background: 'var(--surface)',
-            padding: 20,
+            background: embedded ? 'transparent' : 'var(--surface)',
+            padding: embedded ? 0 : 20,
             display: 'flex',
             flexDirection: 'column',
             gap: 18,
@@ -154,8 +158,10 @@ export function TranscriptViewer({ turns, transcriptUrl, defaultOpen = false }: 
                 <div
                   key={`c-${j}`}
                   style={{
-                    borderLeft: '3px solid var(--action)',
-                    paddingLeft: 12,
+                    borderLeft: '1px solid var(--action)',
+                    borderRadius: '0 var(--r-sm) var(--r-sm) 0',
+                    background: 'var(--action-subtle)',
+                    padding: '8px 12px',
                   }}
                 >
                   {turnLabel(t('live.you'), 'var(--action)')}

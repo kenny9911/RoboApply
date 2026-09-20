@@ -1,11 +1,16 @@
 'use client';
 
-// /mock-interview/[id] — LIVE real-time AI voice/video interview.
+// /practice/[id] — LIVE real-time AI voice/video interview.
 //
 // Real LiveKit room (full-duplex voice with the dispatched Python interviewer
-// worker), re-skinned onto the V3 .iv-* design system + components (LiveBar,
-// InterviewerTile, YourTile, LiveTranscript). The (auth) layout renders this
-// route full-focus (no sidebar).
+// worker). The (auth) layout renders this route full-focus (no sidebar), so
+// the screen owns all of its own chrome.
+//
+// Shaped like a call, because that is what it is: the interviewer holds the
+// stage, the candidate's own tile is pinned into the corner of it, the coach
+// and transcript live in a rail that opens on demand, and the mic / camera /
+// end controls sit in a bar at the bottom where a candidate's hand already
+// expects them.
 //
 // Disconnect ≠ end: the backend keeps 'live' sessions rejoinable (re-mints a
 // token, re-dispatches a missing agent), so only a deliberate End/Back or a
@@ -13,7 +18,7 @@
 // and bill a half-run interview. An unexpected drop first gets ONE automatic
 // rejoin attempt; only if that fails does the manual Rejoin screen appear.
 
-import { use, useCallback, useEffect, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -41,10 +46,20 @@ import { useMockCatalog } from '../../../../hooks/useMockV3';
 import { useAuth } from '../../../../lib/auth/AuthProvider';
 import { useMockRoleLabels } from '../../../../lib/mockRoleLabels';
 import { Btn } from '../../../../components/v3/primitives/Btn';
-import { IconPlay, IconX } from '../../../../components/v3/primitives/Iconset';
+import {
+  IconCamera,
+  IconCameraOff,
+  IconEndCall,
+  IconMic,
+  IconMicOff,
+  IconPlay,
+  IconSparkle,
+  IconTranscript,
+  IconX,
+} from '../../../../components/v3/primitives/Iconset';
 import {
   LiveBar, InterviewerTile, YourTile, LiveTranscript, type AiState,
-  useLiveCoach, LiveQuestionCard, LiveCoachNudge, CoachMeters, CoachToggle,
+  useLiveCoach, LiveQuestionCard, LiveCoachNudge, CoachMeters,
 } from '../../../../components/v3/mock';
 // Imported directly (not via the ./mock barrel) so non-live pages don't pull
 // livekit-client into their bundles.
@@ -690,20 +705,25 @@ function RoomStage({
   const [localQuality, setLocalQuality] = useState<QualityLevel | null>(null);
   const [agentDegraded, setAgentDegraded] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
-  const [openPanel, setOpenPanel] = useState<'self' | 'coach' | 'transcript' | null>(null);
+  // The side rail holds the coach meters and the running transcript. It is
+  // CLOSED by default: this is eye-contact practice, and a candidate reading
+  // their own transcript is not practising the thing they came to practise.
+  // The candidate's own tile is NOT in here — it is pinned to the stage, the
+  // way it is in every real call.
+  const [railTab, setRailTab] = useState<'coach' | 'transcript' | null>(null);
   const segMapRef = useRef<Map<string, RAMockTurn>>(new Map());
 
-  const togglePanel = useCallback((panel: 'self' | 'coach' | 'transcript', open: boolean) => {
-    setOpenPanel((current) => (open ? panel : current === panel ? null : current));
+  const toggleRail = useCallback((tab: 'coach' | 'transcript') => {
+    setRailTab((current) => (current === tab ? null : tab));
   }, []);
   useEffect(() => {
-    if (!openPanel) return;
+    if (!railTab) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenPanel(null);
+      if (event.key === 'Escape') setRailTab(null);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [openPanel]);
+  }, [railTab]);
 
   // Coach Mode — on by default (this is a practice tool), persisted per browser.
   const [coachOn, setCoachOn] = useState(true);
@@ -722,6 +742,9 @@ function RoomStage({
     });
   }, []);
   const coach = useLiveCoach({ sessionId: session.id, transcript, session, enabled: coachOn });
+  useEffect(() => {
+    if (!coachOn) setRailTab((current) => (current === 'coach' ? null : current));
+  }, [coachOn]);
 
   // Timer — derived from the server's startedAt (not a local 0-based counter)
   // so a refresh or rejoin shows TRUE elapsed time. Display freezes while
@@ -933,15 +956,60 @@ function RoomStage({
         <AudioUnlockDialog onUnlock={unlockAudio} />
       )}
 
-      <div className={`iv-live-stage ${styles.stage}`}>
-        {/* LEFT — interviewer */}
-        <section className={`iv-stage-left ${styles.interviewerColumn}`} aria-label={t('live.interviewer')}>
-          <InterviewerTile interviewer={interviewer} aiState={aiState} video={video} />
-          {!agentJoined && (
-            <div role="status" className={styles.agentStatus}>
-              {agentSlow ? t('live.agentSlow') : t('live.agentJoining')}
+      <div className={styles.stage} data-rail={railTab ? 'open' : 'closed'}>
+        <div className={styles.stageMain}>
+          <div className={styles.frame} data-mode={video ? 'video' : 'voice'}>
+            <InterviewerTile interviewer={interviewer} aiState={aiState} video={video} />
+
+            {/* The candidate's own tile is PINNED, not tucked behind a
+                disclosure: seeing yourself is half of what video practice is
+                for. It only OVERLAYS in video mode — there is nothing to
+                overlay in voice, where it would just cover the interviewer's
+                name, so it sits below the stage as its own row. */}
+            {video ? (
+              <div className={`${styles.selfTile} ${styles.selfTileVideo}`}>
+                {localCamera ? (
+                  <VideoTrack trackRef={localCamera} className={styles.selfFeed} />
+                ) : (
+                  <p className={styles.selfOff}>{t('live.cameraOff')}</p>
+                )}
+                <span className={styles.selfName}>
+                  {isMicrophoneEnabled ? <IconMic size={12} /> : <IconMicOff size={12} />}
+                  {t('live.you')}
+                </span>
+              </div>
+            ) : null}
+
+            {/* Reconnecting cover — the interviewer tile tracks the AGENT, so
+                without this it would sit on a confident "Thinking…" while the
+                connection is actually down. */}
+            {reconnecting && (
+              <div role="status" className={styles.reconnectOverlay}>
+                <span>{t('live.reconnecting')}</span>
+              </div>
+            )}
+          </div>
+
+          {!video && (
+            <div className={styles.selfRow}>
+              <YourTile
+                name={candidateName}
+                role={roleLabel}
+                initials={initialsOf(candidateName)}
+                active={state === 'listening'}
+                video={false}
+                camOn={false}
+                onCamChange={() => undefined}
+              />
             </div>
           )}
+
+          {!agentJoined && (
+            <p role="status" className={styles.agentStatus}>
+              {agentSlow ? t('live.agentSlow') : t('live.agentJoining')}
+            </p>
+          )}
+
           {coachOn && agentJoined && (
             <LiveQuestionCard
               question={coach.question}
@@ -951,106 +1019,135 @@ function RoomStage({
               onToggleHint={() => setHintOpen((o) => !o)}
             />
           )}
-        </section>
-
-        {/* RIGHT — candidate + controls + transcript */}
-        <section className={`iv-stage-right ${styles.candidateColumn}`} aria-label={t('live.you')}>
-          <details
-            className={`${styles.auxDisclosure} ${styles.selfViewDisclosure}`}
-            open={openPanel === 'self'}
-            onToggle={(event) => togglePanel('self', event.currentTarget.open)}
-          >
-            <summary>
-              <span>{t('live.you')}</span>
-              <span className={styles.auxStatus}>
-                {isMicrophoneEnabled ? t('live.micReady') : t('live.unmuteMic')}
-              </span>
-            </summary>
-            <div className={styles.selfViewBody}>
-              {video ? (
-                <div className={styles.videoFrame}>
-                  {localCamera ? (
-                    <VideoTrack trackRef={localCamera} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div className={styles.cameraOff}>
-                      {t('live.cameraOff')}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <YourTile
-                  name={candidateName}
-                  role={roleLabel}
-                  initials={initialsOf(candidateName)}
-                  active={state === 'listening'}
-                  video={false}
-                  camOn={false}
-                  onCamChange={() => undefined}
-                />
-              )}
-            </div>
-          </details>
-
-          {/* Controls (iv-* design) */}
-          <div className={`iv-controls ${styles.controls}`}>
-            <button type="button" className="btn" onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}>
-              {isMicrophoneEnabled ? t('live.muteMic') : t('live.unmuteMic')}
-            </button>
-            {video && (
-              <button type="button" className="btn" onClick={() => void localParticipant.setCameraEnabled(!isCameraEnabled)}>
-                {isCameraEnabled ? t('live.stopCam') : t('live.startCam')}
-              </button>
-            )}
-            <CoachToggle on={coachOn} onToggle={toggleCoach} />
-            <button type="button" className={`btn ${styles.endButton}`} onClick={onEnd}>
-              {t('live.endInterview')}
-            </button>
-          </div>
 
           {coachOn && coach.nudge && (
             <LiveCoachNudge tip={coach.nudge} onDismiss={coach.dismissNudge} />
           )}
+        </div>
 
-          {coachOn && agentJoined && (
-            <details
-              className={`${styles.auxDisclosure} ${styles.coachDisclosure}`}
-              open={openPanel === 'coach'}
-              onToggle={(event) => togglePanel('coach', event.currentTarget.open)}
+        {railTab ? (
+          <aside className={styles.rail} aria-label={t('live.rail.title')}>
+            <div className={styles.railTabs} role="tablist" aria-label={t('live.rail.title')}>
+              {(coachOn ? (['coach', 'transcript'] as const) : (['transcript'] as const)).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  id={`practice-rail-tab-${tab}`}
+                  aria-selected={railTab === tab}
+                  aria-controls="practice-rail-panel"
+                  className={railTab === tab ? styles.railTabOn : undefined}
+                  onClick={() => setRailTab(tab)}
+                >
+                  {tab === 'coach' ? t('live.coach.coachMode') : t('live.transcript')}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={styles.railClose}
+                aria-label={t('live.rail.close')}
+                onClick={() => setRailTab(null)}
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div
+              className={styles.railBody}
+              id="practice-rail-panel"
+              role="tabpanel"
+              aria-labelledby={`practice-rail-tab-${railTab}`}
+              tabIndex={0}
             >
-              <summary>{t('live.coach.coachMode')}</summary>
-              <div className={styles.coachPanel}>
-                <CoachMeters metrics={coach.metrics} listeningFor={coach.listeningFor} />
-              </div>
-            </details>
-          )}
+              {railTab === 'coach'
+                ? <CoachMeters metrics={coach.metrics} listeningFor={coach.listeningFor} />
+                : <LiveTranscript turns={transcript} interviewerName={interviewer.name} typing={state === 'thinking'} />}
+            </div>
+          </aside>
+        ) : null}
+      </div>
 
-          <details
-            className={`${styles.auxDisclosure} ${styles.transcriptDisclosure}`}
-            open={openPanel === 'transcript'}
-            onToggle={(event) => togglePanel('transcript', event.currentTarget.open)}
-          >
-            <summary>{t('live.transcript')}</summary>
-            <LiveTranscript
-              turns={transcript}
-              interviewerName={interviewer.name}
-              typing={state === 'thinking'}
+      {/* Call controls — the vocabulary of every video call the candidate has
+          ever been in, because this is the moment to be invisible. */}
+      <div className={styles.controlBar}>
+        <div className={styles.controlGroup}>
+          <ControlButton
+            tone="device"
+            on={isMicrophoneEnabled}
+            label={isMicrophoneEnabled ? t('live.muteMic') : t('live.unmuteMic')}
+            icon={isMicrophoneEnabled ? <IconMic size={19} /> : <IconMicOff size={19} />}
+            onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
+          />
+          {video && (
+            <ControlButton
+              tone="device"
+              on={isCameraEnabled}
+              label={isCameraEnabled ? t('live.stopCam') : t('live.startCam')}
+              icon={isCameraEnabled ? <IconCamera size={19} /> : <IconCameraOff size={19} />}
+              onClick={() => void localParticipant.setCameraEnabled(!isCameraEnabled)}
             />
-          </details>
-        </section>
+          )}
+          <ControlButton
+            tone="panel"
+            on={coachOn}
+            label={t('live.coach.coachMode')}
+            icon={<IconSparkle size={19} />}
+            onClick={toggleCoach}
+          />
+          <ControlButton
+            tone="panel"
+            on={railTab === 'transcript'}
+            label={t('live.transcript')}
+            icon={<IconTranscript size={19} />}
+            onClick={() => toggleRail('transcript')}
+          />
+        </div>
 
-        {/* Reconnecting overlay — covers the stage so the AI tile can't sit on
-            a misleading 'Thinking…' while the connection is down. */}
-        {reconnecting && (
-          <div
-            role="status"
-            className={styles.reconnectOverlay}
-          >
-            <span>
-              {t('live.reconnecting')}
-            </span>
-          </div>
-        )}
+        <button
+          type="button"
+          className={styles.endButton}
+          aria-label={t('live.endInterview')}
+          onClick={onEnd}
+        >
+          <IconEndCall size={18} aria-hidden />
+          {/* The label collapses on a phone, where the red handset is the
+              universally read affordance and the bar has no room to spare. */}
+          <span className={styles.endLabel}>{t('live.endInterview')}</span>
+        </button>
       </div>
     </>
+  );
+}
+
+/** One round call-control button: icon, an always-visible label, and a real
+ *  pressed state.
+ *
+ *  Two tones, because "on" means opposite things here. A live mic and a running
+ *  camera are the NORMAL state of an interview, so they stay quiet and turn red
+ *  only when switched off — the one state a candidate must never misread. The
+ *  coach and the transcript are optional panels, so they carry the accent while
+ *  they are open. */
+function ControlButton({
+  tone, on, label, icon, onClick,
+}: {
+  tone: 'device' | 'panel';
+  on: boolean;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
+  const state = tone === 'device'
+    ? (on ? '' : styles.controlDanger)
+    : (on ? styles.controlOn : '');
+  return (
+    <button
+      type="button"
+      className={`${styles.control} ${state}`}
+      aria-pressed={on}
+      onClick={onClick}
+    >
+      <span className={styles.controlIcon} aria-hidden>{icon}</span>
+      <span className={styles.controlLabel}>{label}</span>
+    </button>
   );
 }

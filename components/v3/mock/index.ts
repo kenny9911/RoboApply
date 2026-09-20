@@ -4,16 +4,18 @@
 // the .iv-* class family in styles/v3.css, wired to the mock.* API envelope
 // (useMockV3 hooks → raV2Api.mock.* → stub today). Setup → live → report.
 
-// Setup (Route 5)
-export { RecentSessionsStrip } from './RecentSessionsStrip';
-export { PracticeSetupFlow } from './PracticeSetupFlow';
-export { RolePicker } from './RolePicker';
+// Setup (Route 5) — one screen: the role picker, the plan chips and the launch
+// dock all live in PracticeSetupFlow. The per-step pickers the old four-step
+// wizard composed (RolePicker, InterviewerPicker, TypePicker, FormatPicker,
+// LangDurationPicker, LaunchBar) went with it.
+export {
+  PracticeSetupFlow,
+  PracticeSetupSkeleton,
+  PracticeSetupError,
+  JD_MIN_CHARS,
+  type RoleSourceMode,
+} from './PracticeSetupFlow';
 export { MarketRequirementsPanel } from './MarketRequirementsPanel';
-export { InterviewerPicker } from './InterviewerPicker';
-export { TypePicker } from './TypePicker';
-export { FormatPicker } from './FormatPicker';
-export { LangDurationPicker } from './LangDurationPicker';
-export { LaunchBar } from './LaunchBar';
 
 // Live (Route 6)
 export { LiveBar } from './LiveBar';
@@ -38,7 +40,6 @@ export {
 // Report (Route 7)
 export { ResultsTop } from './ResultsTop';
 export { ResultsGrid } from './ResultsGrid';
-export { RecommendationsCard } from './RecommendationsCard';
 export { QuestionBreakdownSection } from './QuestionBreakdownSection';
 export { QuestionBreakdownItem } from './QuestionBreakdownItem';
 export { RatingChip } from './RatingChip';

@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "Entraînement · {count} postes",
-      "title": "Entraîne-toi jusqu'à ce que ",
-      "titleAccent": "ça devienne ordinaire",
-      "titleAfter": ".",
-      "sub": "Choisis un poste, choisis un interlocuteur, choisis un format. Il pose les questions ; des notes apparaissent à côté de toi pendant que tu réponds.",
-      "guide": {
-        "eyebrow": "Entraînement à l’entretien",
-        "title": "Configure ton entretien d’entraînement",
-        "sub": "Quatre étapes rapides. Environ deux minutes.",
-        "recent": "Entraînements récents ({count})",
-        "progressLabel": "Progression de la configuration de l’entretien",
-        "steps": {
-          "job": "Poste",
-          "style": "Style d’entretien",
-          "preferences": "Préférences",
-          "review": "Vérification"
+      "flow": {
+        "title": "Entraîne-toi jusqu’à ce que ça devienne banal.",
+        "sub": "Choisis le poste pour lequel tu passes l’entretien. Le reste est déjà adapté : tu peux tout changer avant de commencer.",
+        "recentTitle": "Reprends où tu t’étais arrêté",
+        "again": "Refaire cet entretien",
+        "viewReport": "Voir le compte rendu",
+        "roleLegend": "Pour quel poste passes-tu l’entretien ?",
+        "categories": "Catégories de postes",
+        "noMatch": "Aucun poste ne correspond à « {query} ». Essaie un mot plus court ou colle l’annonce.",
+        "planLegend": "Ton entretien",
+        "planHint": "Adapté au poste. Change ce que tu veux.",
+        "pickRoleFirst": "Choisis un poste ci-dessus pour commencer.",
+        "chip": {
+          "focus": "Thèmes",
+          "mode": "Format",
+          "language": "Langue"
         },
-        "jobTitle": "Pour quel poste veux-tu t’entraîner ?",
-        "jobSub": "Recherche un poste, parcours une catégorie ou colle une annonce.",
-        "styleTitle": "Ton programme d’entraînement recommandé",
-        "styleSub": "Nous avons adapté l’interlocuteur et le style des questions à ce poste. Modifie-les seulement si tu le souhaites.",
-        "focusLabel": "Thèmes de l’entretien",
-        "planPending": "Choisis d’abord un poste",
-        "changeSetup": "Changer le style d’entretien",
-        "preferencesTitle": "Comment veux-tu t’entraîner ?",
-        "preferencesSub": "Les réglages par défaut sont prêts. Modifie ce que tu veux.",
-        "videoHint": "Au plus près d’un vrai entretien",
-        "voiceHint": "Un échauffement sans pression",
-        "reviewTitle": "Commence quand tu veux",
-        "reviewSub": "Une dernière vérification avant que ton interlocuteur arrive.",
-        "previewSummary": "Voir les questions possibles",
-        "back": "Retour",
-        "continue": "Continuer",
-        "stepCount": "Étape {current} sur {total}",
-        "reassurance": "Tu peux revenir en arrière sans perdre tes choix."
+        "tray": {
+          "focus": "Sur quoi doit porter cet entretien ?",
+          "length": "Combien de temps doit-il durer ?"
+        },
+        "done": "Terminé",
+        "costShort": "{n} crédits — plus que ton solde",
+        "useShorter": "Passer à {minutes} min",
+        "previewToggle": "Voir les questions possibles"
       },
       "loading": "Chargement de l'entraînement…",
       "startError": "Cet entretien n'a pas pu démarrer. Réessaie.",
@@ -1463,18 +1453,17 @@
         "on": "Activées",
         "off": "Désactivées",
         "coachModeHint": "De courtes notes pendant que tu réponds. Désactive-les pour un passage qui ressemble au réel."
+      },
+      "rail": {
+        "title": "Notes et transcription",
+        "close": "Fermer le panneau"
       }
     },
     "report": {
       "title": "Compte rendu d'entretien",
-      "eyebrow": "Session terminée · {minutes} min",
-      "eyebrowScoring": "Évaluation de tes réponses",
-      "eyebrowFallback": "Entretien d'entraînement · compte rendu",
       "sub": "Évalué comme le ferait un vrai jury.",
+      "evidence": "Les éléments sur lesquels repose ce compte rendu",
       "loading": "Chargement de ton compte rendu…",
-      "loadingTitle": "Lecture de ",
-      "loadingTitleAccent": "tes réponses",
-      "loadingTitleAfter": "…",
       "error": "Ce compte rendu ne s'est pas chargé. Réessaie, et si ça continue, recharge la page.",
       "newInterview": "Nouvel entretien",
       "processing": "Finalisation. L'enregistrement et la note apparaissent ici sous peu.",

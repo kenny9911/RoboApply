@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "Práctica · {count} puestos",
-      "title": "Practica hasta que ",
-      "titleAccent": "te parezca normal",
-      "titleAfter": ".",
-      "sub": "Elige un puesto, elige a quien te entreviste, elige un formato. Esa persona pregunta; las notas aparecen a tu lado mientras respondes.",
-      "guide": {
-        "eyebrow": "Práctica de entrevistas",
-        "title": "Configura una entrevista de práctica",
-        "sub": "Cuatro pasos breves. Te tomará unos dos minutos.",
-        "recent": "Prácticas recientes ({count})",
-        "progressLabel": "Progreso de la configuración",
-        "steps": {
-          "job": "Puesto",
-          "style": "Estilo de entrevista",
-          "preferences": "Preferencias",
-          "review": "Revisión"
+      "flow": {
+        "title": "Practica hasta que te parezca normal.",
+        "sub": "Elige el puesto para el que te entrevistas. El resto ya está ajustado a él y puedes cambiar lo que quieras antes de empezar.",
+        "recentTitle": "Sigue donde lo dejaste",
+        "again": "Practicar esto otra vez",
+        "viewReport": "Ver el informe",
+        "roleLegend": "¿Para qué puesto te entrevistas?",
+        "categories": "Categorías de puestos",
+        "noMatch": "Ningún puesto coincide con «{query}». Prueba con una palabra más corta o pega el anuncio.",
+        "planLegend": "Tu entrevista",
+        "planHint": "Ajustada al puesto. Cambia lo que quieras.",
+        "pickRoleFirst": "Elige arriba un puesto para empezar.",
+        "chip": {
+          "focus": "Enfoque",
+          "mode": "Formato",
+          "language": "Idioma"
         },
-        "jobTitle": "¿Para qué puesto quieres practicar?",
-        "jobSub": "Busca un puesto, explora una categoría o pega una descripción del puesto.",
-        "styleTitle": "Tu plan de práctica recomendado",
-        "styleSub": "Adaptamos a quien te entrevista y el estilo de las preguntas a este puesto. Cámbialos solo si quieres.",
-        "focusLabel": "Enfoque de la entrevista",
-        "planPending": "Primero elige un puesto",
-        "changeSetup": "Cambiar el estilo de la entrevista",
-        "preferencesTitle": "¿Cómo quieres que sea esta práctica?",
-        "preferencesSub": "Los valores predeterminados ya están listos. Ajusta lo que quieras.",
-        "videoHint": "Lo más parecido a la entrevista real",
-        "voiceHint": "Calentamiento con menos presión",
-        "reviewTitle": "Todo listo cuando tú quieras",
-        "reviewSub": "Haz una última revisión antes de que entre quien te entrevista.",
-        "previewSummary": "Ver qué podrían preguntarte",
-        "back": "Atrás",
-        "continue": "Continuar",
-        "stepCount": "Paso {current} de {total}",
-        "reassurance": "Puedes volver atrás sin perder estas opciones."
+        "tray": {
+          "focus": "¿Qué debe cubrir esta entrevista?",
+          "length": "¿Cuánto debe durar?"
+        },
+        "done": "Listo",
+        "costShort": "{n} créditos: más de los que tienes",
+        "useShorter": "Usar {minutes} min",
+        "previewToggle": "Ver qué podrían preguntarte"
       },
       "loading": "Cargando la práctica…",
       "startError": "Esa entrevista no se pudo empezar. Inténtalo otra vez.",
@@ -1463,18 +1453,17 @@
         "on": "Activadas",
         "off": "Desactivadas",
         "coachModeHint": "Notas cortas mientras respondes. Desactívalas para que se parezca más a lo real."
+      },
+      "rail": {
+        "title": "Notas y transcripción",
+        "close": "Cerrar el panel"
       }
     },
     "report": {
       "title": "Informe de la entrevista",
-      "eyebrow": "Sesión terminada · {minutes} min",
-      "eyebrowScoring": "Puntuando tus respuestas",
-      "eyebrowFallback": "Entrevista de práctica · informe",
       "sub": "Puntuado como lo puntuaría el panel real.",
+      "evidence": "Las pruebas detrás de este informe",
       "loading": "Cargando tu informe…",
-      "loadingTitle": "Leyendo ",
-      "loadingTitleAccent": "tus respuestas",
-      "loadingTitleAfter": "…",
       "error": "Ese informe no se cargó. Inténtalo otra vez y, si sigue fallando, recarga la página.",
       "newInterview": "Nueva entrevista",
       "processing": "Terminando. La grabación y la puntuación aparecen aquí enseguida.",

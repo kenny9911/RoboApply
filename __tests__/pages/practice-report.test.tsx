@@ -123,9 +123,10 @@ describe('/practice/[id]/report', () => {
     expect(
       (await screen.findAllByText('Add the deciding metric')).length,
     ).toBeGreaterThan(0);
-    expect(
-      screen.getByLabelText('Overall: 76/100'),
-    ).toBeInTheDocument();
+    // The overall score is stated ONCE, as the verdict meter.
+    const overall = screen.getByRole('progressbar', { name: 'Overall' });
+    expect(overall).toHaveAttribute('aria-valuenow', '76');
+    expect(screen.getAllByText('76')).toHaveLength(1);
     expect(
       screen.getAllByText('Make the decision criteria and outcome concrete.').length,
     ).toBeGreaterThan(0);

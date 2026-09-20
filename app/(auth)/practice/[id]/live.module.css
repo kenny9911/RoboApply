@@ -1,15 +1,17 @@
 .room {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  overflow-x: hidden;
 }
 
 .header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 40;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr) minmax(120px, 1fr);
   min-height: 72px;
@@ -65,175 +67,458 @@
   gap: var(--sp-3);
 }
 
+/* ─── Stage ─────────────────────────────────────────────────────────────── */
+
 .stage {
-  position: relative;
-  width: min(100%, 1180px);
+  width: 100%;
+  max-width: 1240px;
   min-height: 0;
-  margin: 0 auto;
-  padding: var(--sp-5);
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  /* Centred while it fits, pinned to the top the moment it doesn't, so a short
+   * stage isn't stranded against the header and a tall one never clips. */
+  align-content: safe center;
   gap: var(--sp-4);
-  align-items: start;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
 }
 
-.interviewerColumn,
-.candidateColumn {
+@media (min-width: 1080px) {
+  .stage[data-rail='open'] {
+    grid-template-columns: minmax(0, 1fr) 352px;
+  }
+}
+
+.stageMain {
   min-width: 0;
-  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* The interviewer owns the frame; the candidate's tile and every status cover
+ * are positioned against it. */
+.frame {
+  position: relative;
+  min-width: 0;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+/* Bounded three ways: never wider than the column, never so wide the avatar
+ * becomes a wall, never so tall the question underneath leaves the screen. */
+.frame[data-mode='video'] {
+  width: min(100%, 780px, calc((100dvh - 360px) * 16 / 9));
+}
+
+.frame[data-mode='video'] > :global(.iv-video-tile) {
+  width: 100%;
+}
+
+/* The name overlay is a video-call name plate, not a bio: it is capped so it
+ * cannot run under the candidate's own tile in the opposite corner. */
+.frame :global(.iv-vt-name-overlay) {
+  max-width: min(50%, 300px);
+}
+
+.frame :global(.iv-vt-role) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frame[data-mode='voice'] {
+  width: min(100%, 720px);
+}
+
+.frame :global(.iv-interviewer) {
+  min-height: min(46dvh, 380px);
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-6) var(--sp-5);
+}
+
+/* ─── Candidate tile ────────────────────────────────────────────────────── */
+
+.selfTile {
+  position: absolute;
+  right: var(--sp-4);
+  bottom: var(--sp-4);
+  z-index: 10;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--e2);
+}
+
+.selfTileVideo {
+  width: clamp(148px, 21%, 224px);
+  aspect-ratio: 16 / 9;
+  background: var(--brand-plane);
+}
+
+.selfFeed {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  /* A self-view that is not mirrored reads as someone else's camera. */
+  transform: scaleX(-1);
+}
+
+.selfOff {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--brand-mark);
+  font-size: var(--fs-label);
+  text-align: center;
+}
+
+.selfName {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, #000 55%, transparent);
+  color: #fff;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Voice mode: a row under the stage, not an overlay. */
+.selfRow {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.selfRow :global(.iv-you) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: var(--sp-2);
+}
+
+.selfRow :global(.iv-avatar-sm) {
+  flex: 0 0 auto;
+}
+
+/* ─── Status covers ─────────────────────────────────────────────────────── */
+
+.agentStatus {
+  margin: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-2);
+  padding: var(--sp-3);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.reconnectOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-lg);
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+}
+
+.reconnectOverlay > span {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--sp-3) var(--sp-5);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: var(--e2);
+}
+
+.qualityRow {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-3) var(--sp-4) 0;
+}
+
+/* ─── Rail ──────────────────────────────────────────────────────────────── */
+
+.rail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--e1);
 }
 
-.interviewerColumn {
-  gap: var(--sp-4);
-  border-right: 1px solid var(--rule);
-  overflow: visible;
-}
-
-.interviewerColumn :global(.iv-interviewer) {
-  padding: var(--sp-4) 0 var(--sp-2);
-}
-
-.interviewerColumn :global(.iv-question) {
-  margin-top: 0 !important;
-  background: var(--surface-2);
-}
-
-.agentStatus {
-  margin-top: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--text-2);
-  font-size: var(--fs-meta);
-  text-align: center;
-}
-
-.candidateColumn {
-  gap: var(--sp-3);
-}
-
-.videoFrame {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 16 / 9;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--brand-plane);
-}
-
-.cameraOff {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: #f2f3f5;
-  font-size: var(--fs-meta);
-}
-
-.controls {
-  justify-content: center;
-  padding: var(--sp-2);
-  border-radius: var(--r-md);
-  box-shadow: none;
-}
-
-.controls > :global(.btn) {
-  min-height: var(--control-lg);
-  flex: 1 1 auto;
-}
-
-.endButton {
-  border-color: var(--danger) !important;
-  background: var(--danger-subtle) !important;
-  color: var(--danger) !important;
-}
-
-.endButton:hover {
-  background: var(--danger) !important;
-  color: var(--bg) !important;
-}
-
-.qualityRow {
-  display: flex;
-  justify-content: center;
-  gap: var(--sp-2);
-  margin: var(--sp-3) var(--sp-4) 0;
-  flex-wrap: wrap;
-}
-
-.auxDisclosure {
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-
-.selfViewDisclosure,
-.coachDisclosure,
-.transcriptDisclosure {
-  min-width: 0;
-}
-
-.auxDisclosure > summary {
-  min-height: var(--control-lg);
-  padding: var(--sp-2) var(--sp-4);
+.railTabs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-2);
+  padding: var(--sp-2);
+}
+
+.railTabs button {
+  min-height: var(--control-sm);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
   color: var(--text-2);
+  padding: 0 var(--sp-3);
+  font: inherit;
   font-size: var(--fs-meta);
   font-weight: 600;
   cursor: pointer;
-  list-style: none;
+  transition: background var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out);
 }
 
-.auxDisclosure > summary::-webkit-details-marker {
-  display: none;
+.railTabs button:hover {
+  color: var(--text);
 }
 
-.auxDisclosure > summary::after {
-  content: '+';
-  color: var(--text-muted);
-  font-size: var(--fs-title);
-  font-weight: 400;
+.railTabOn,
+.railTabs .railTabOn:hover {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--e1);
 }
 
-.auxDisclosure[open] > summary {
-  border-bottom: 1px solid var(--rule);
-}
-
-.auxDisclosure[open] > summary::after {
-  content: '−';
-}
-
-.auxStatus {
+.railClose {
+  display: grid;
+  place-items: center;
+  width: var(--control-sm);
+  min-width: var(--control-sm);
   margin-left: auto;
-  margin-right: var(--sp-3);
   color: var(--text-muted);
-  font-size: var(--fs-label);
-  font-weight: 500;
 }
 
-.selfViewBody,
-.coachPanel {
-  padding: var(--sp-3);
+.railClose:hover {
+  background: var(--surface-3);
 }
 
-.coachPanel :global(.iv-cmeters) {
+.railBody {
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+  padding: var(--sp-4);
+}
+
+.railBody:focus-visible {
+  outline: 0;
+  box-shadow: inset var(--focus-ring);
+}
+
+.railBody :global(.iv-cmeters) {
   margin-top: 0;
 }
 
-.transcriptDisclosure :global(.iv-transcript) {
+.railBody :global(.iv-transcript) {
   border: 0;
   border-radius: 0;
 }
 
-.transcriptDisclosure :global(.iv-transcript-head) {
+.railBody :global(.iv-transcript-head) {
   display: none;
+}
+
+/* ─── Call controls ─────────────────────────────────────────────────────── */
+
+.controlBar {
+  position: relative;
+  z-index: 50;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  padding: var(--sp-3) var(--sp-5) calc(var(--sp-3) + env(safe-area-inset-bottom));
+  backdrop-filter: blur(14px);
+}
+
+.controlGroup {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.control {
+  min-width: 68px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 3px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-2);
+  padding: var(--sp-1) var(--sp-2) 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.controlIcon {
+  width: var(--control-lg);
+  height: var(--control-lg);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  transition:
+    border-color var(--dur-hover) var(--ease-out),
+    background var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out);
+}
+
+.control:hover .controlIcon {
+  border-color: var(--rule-strong);
+  background: var(--surface-2);
+}
+
+.controlLabel {
+  max-width: 88px;
+  overflow: hidden;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controlOn {
+  color: var(--action);
+}
+
+.controlOn .controlIcon,
+.control.controlOn:hover .controlIcon {
+  border-color: var(--action);
+  background: var(--action);
+  color: var(--action-ink);
+}
+
+/* A muted mic is the one state a candidate must never misread. */
+.controlDanger {
+  color: var(--danger);
+}
+
+.controlDanger .controlIcon,
+.control.controlDanger:hover .controlIcon {
+  border-color: var(--danger);
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.endButton {
+  min-height: var(--control-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-pill);
+  background: var(--danger-subtle);
+  color: var(--danger);
+  padding: 0 var(--sp-5);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out);
+}
+
+.endButton:hover {
+  background: var(--danger);
+  color: var(--bg);
+}
+
+@media (max-width: 760px) {
+  .stage {
+    padding: var(--sp-3) var(--sp-3) 0;
+  }
+
+  .frame :global(.iv-interviewer) {
+    min-height: 280px;
+    padding: var(--sp-5) var(--sp-4);
+  }
+
+  .selfTile {
+    right: var(--sp-2);
+    bottom: var(--sp-2);
+  }
+
+  .selfTileVideo {
+    width: 116px;
+  }
+
+
+  .controlBar {
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom));
+  }
+
+  .frame :global(.iv-vt-name-overlay) {
+    max-width: 44%;
+  }
+
+  /* At this width the header already names the role. */
+  .frame :global(.iv-vt-role) {
+    display: none;
+  }
+
+  .control {
+    min-width: 48px;
+    padding: var(--sp-1) 4px 6px;
+  }
+
+  .controlLabel {
+    max-width: 54px;
+    font-size: 11px;
+  }
+
+  .endButton {
+    width: var(--control-lg);
+    justify-content: center;
+    padding: 0;
+  }
+
+  .endLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .railBody {
+    max-height: 44vh;
+  }
 }
 
 .deviceAlert {
@@ -439,42 +724,18 @@
   color: var(--bg) !important;
 }
 
-@media (max-width: 980px) {
-  .stage {
-    grid-template-columns: 1fr;
-    max-width: 760px;
-  }
-
-  .interviewerColumn {
-    border-bottom: 1px solid var(--rule);
-  }
-}
+/* ─── Phone and short-landscape ─────────────────────────────────────────── */
 
 @media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
-  .room {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    width: 100%;
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-
   .header {
-    position: relative;
-    flex: 0 0 52px;
+    position: sticky;
     grid-template-columns: 44px minmax(0, 1fr) auto;
-    width: 100%;
-    height: 52px;
     min-height: 52px;
+    gap: var(--sp-2);
+    background: var(--surface);
     padding: var(--sp-1) var(--sp-2);
     padding-right: max(var(--sp-2), env(safe-area-inset-right));
     padding-left: max(var(--sp-2), env(safe-area-inset-left));
-    gap: var(--sp-2);
-    background: var(--surface);
     backdrop-filter: none;
   }
 
@@ -482,8 +743,8 @@
     grid-column: 1;
     width: var(--control-lg);
     min-width: var(--control-lg);
-    padding: 0;
     justify-content: center;
+    padding: 0;
   }
 
   .header > :global(.btn)::before {
@@ -494,358 +755,16 @@
 
   .header :global(.iv-live-back-label),
   .header :global(.iv-live-secondary) {
-    display: none;
-  }
-
-  .header :global(.iv-live-context) {
-    grid-column: 2;
-    grid-row: 1;
-    align-items: flex-start;
-    text-align: left;
-  }
-
-  .header :global(.iv-live-primary) {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .header :global(.iv-live-primary .iv-live-meta) {
-    max-width: 100%;
-    font-size: var(--fs-label);
-  }
-
-  .header :global(.iv-live-pill) {
-    padding: 2px var(--sp-2);
-  }
-
-  .header :global(.iv-live-session) {
-    grid-column: 3;
-    grid-row: 1;
-    gap: var(--sp-2);
-  }
-
-  .header :global(.iv-live-time) {
-    font-size: var(--fs-meta);
-  }
-
-  .stage {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    width: 100%;
-    max-width: none;
-    height: auto;
-    min-height: 0;
-    padding: var(--sp-2) var(--sp-2) calc(68px + env(safe-area-inset-bottom));
-    padding-right: max(var(--sp-2), env(safe-area-inset-right));
-    padding-left: max(var(--sp-2), env(safe-area-inset-left));
-    gap: var(--sp-2);
+    position: absolute;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
-  }
-
-  .interviewerColumn {
-    display: flex;
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: var(--sp-2);
-    gap: var(--sp-2);
-    overflow: hidden;
-    border-radius: var(--r-md);
-  }
-
-  .candidateColumn {
-    display: grid;
-    flex: 0 0 var(--control-lg);
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    min-height: var(--control-lg);
-    padding: 0;
-    gap: var(--sp-1);
-    overflow: visible;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .interviewerColumn :global(.iv-interviewer) {
-    display: grid;
-    flex: 0 0 72px;
-    grid-template-columns: 72px minmax(0, 1fr);
-    grid-template-rows: 1fr 1fr;
-    width: 100%;
-    height: 72px;
-    padding: var(--sp-1) 0;
-    align-items: center;
-  }
-
-  .interviewerColumn :global(.iv-interviewer-orb) {
-    grid-column: 1;
-    grid-row: 1 / -1;
-    width: 64px;
-    height: 64px;
-  }
-
-  .interviewerColumn :global(.iv-interviewer-rings) {
-    top: var(--sp-1);
-    left: 0;
-    width: 64px;
-    height: 64px;
-    transform: none;
-  }
-
-  .interviewerColumn :global(.iv-interviewer-name) {
-    grid-column: 2;
-    grid-row: 1;
-    align-self: end;
-    margin: 0;
-    overflow: hidden;
-    font-size: var(--fs-body);
-    text-overflow: ellipsis;
+    clip-path: inset(50%);
     white-space: nowrap;
-  }
-
-  .interviewerColumn :global(.iv-interviewer-role) {
-    display: none;
-  }
-
-  .interviewerColumn :global(.iv-interviewer-state) {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: start;
-    justify-self: start;
-    max-width: 100%;
-    overflow: hidden;
-    padding: 2px var(--sp-2);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer) {
-    flex: 0 0 72px;
-    width: 100%;
-    height: 72px;
-    overflow: visible;
-    aspect-ratio: auto;
-    border: 0;
-    background: transparent;
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-canvas) {
-    right: auto;
-    width: 72px;
-    border: 1px solid var(--rule);
-    border-radius: var(--r-md);
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-orb),
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-rings span) {
-    width: 48px;
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-badge),
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-bars) {
-    display: none;
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-name-overlay) {
-    top: var(--sp-2);
-    bottom: auto;
-    left: 80px;
-    max-width: calc(100% - 88px);
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-role) {
-    display: none;
-  }
-
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-state-pill) {
-    top: auto;
-    right: auto;
-    bottom: var(--sp-2);
-    left: 80px;
-    padding: 2px var(--sp-2);
-  }
-
-  .agentStatus {
-    flex: 1 1 auto;
-    min-height: 0;
-    margin: 0;
-    overflow: auto;
-  }
-
-  .interviewerColumn :global(.iv-question) {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: var(--sp-3);
-    overflow: auto;
-    border-radius: var(--r-md);
-  }
-
-  .interviewerColumn :global(.iv-question-num) {
-    margin-bottom: var(--sp-2);
-  }
-
-  .interviewerColumn :global(.iv-question-text) {
-    margin-bottom: var(--sp-2);
-    font-size: var(--fs-body);
-    line-height: var(--lh-body);
-  }
-
-  .interviewerColumn :global(.iv-question-actions) {
-    padding-top: var(--sp-2);
-  }
-
-  .interviewerColumn :global(.iv-question-actions .btn) {
-    min-height: var(--control-lg);
-  }
-
-  .interviewerColumn :global(.iv-hint) {
-    max-height: 104px;
-    overflow: auto;
-  }
-
-  .auxDisclosure {
-    min-width: 0;
-    height: var(--control-lg);
-    overflow: visible;
-  }
-
-  .auxDisclosure > summary {
-    min-width: 0;
-    height: var(--control-lg);
-    min-height: var(--control-lg);
-    padding: var(--sp-1) var(--sp-2);
-    justify-content: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .auxDisclosure > summary::after,
-  .auxStatus {
-    display: none;
-  }
-
-  .auxDisclosure[open] > summary {
-    border-bottom: 0;
-    border-color: var(--action);
-    background: var(--action-subtle);
-    color: var(--action);
-  }
-
-  .selfViewBody,
-  .coachPanel,
-  .transcriptDisclosure[open] :global(.iv-transcript) {
-    position: fixed;
-    z-index: 48;
-    border: 1px solid var(--rule-strong);
-    border-radius: var(--r-md);
-    background: var(--surface);
-    box-shadow: var(--e3);
-  }
-
-  .selfViewBody {
-    right: var(--sp-2);
-    bottom: calc(116px + env(safe-area-inset-bottom));
-    width: min(228px, 62vw);
-    padding: var(--sp-1);
-  }
-
-  .selfViewBody .videoFrame {
-    border-radius: var(--r-sm);
-  }
-
-  .selfViewBody :global(.iv-you) {
-    padding: var(--sp-3);
-  }
-
-  .selfViewBody :global(.iv-mic) {
-    height: 44px;
-    margin-bottom: 0;
-  }
-
-  .coachPanel {
-    right: var(--sp-2);
-    bottom: calc(116px + env(safe-area-inset-bottom));
-    left: var(--sp-2);
-    max-height: min(46vh, 320px);
-    overflow: auto;
-  }
-
-  .transcriptDisclosure[open] :global(.iv-transcript) {
-    right: var(--sp-2);
-    bottom: calc(116px + env(safe-area-inset-bottom));
-    left: var(--sp-2);
-    max-height: min(46vh, 320px);
-  }
-
-  .transcriptDisclosure :global(.iv-transcript-body) {
-    max-height: min(40vh, 270px);
-  }
-
-  .controls {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 50;
-    display: flex;
-    min-height: calc(60px + env(safe-area-inset-bottom));
-    padding: var(--sp-2) var(--sp-2) calc(var(--sp-2) + env(safe-area-inset-bottom));
-    padding-right: max(var(--sp-2), env(safe-area-inset-right));
-    padding-left: max(var(--sp-2), env(safe-area-inset-left));
-    gap: var(--sp-1);
-    flex-wrap: nowrap;
-    border-width: 1px 0 0;
-    border-radius: 0;
-    background: var(--surface);
-    box-shadow: var(--e2);
-  }
-
-  .controls > :global(.btn) {
-    min-width: 0;
-    min-height: var(--control-lg);
-    padding: var(--sp-1) var(--sp-2);
-    justify-content: center;
-    overflow: hidden;
-    font-size: var(--fs-label);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .controls > .endButton {
-    flex-grow: 1.25;
-  }
-
-  .candidateColumn > :global(.iv-coach) {
-    position: fixed;
-    right: var(--sp-2);
-    bottom: calc(116px + env(safe-area-inset-bottom));
-    left: var(--sp-2);
-    z-index: 49;
-    margin: 0 !important;
-    box-shadow: var(--e2);
-  }
-
-  .qualityRow {
-    position: fixed;
-    top: 56px;
-    right: var(--sp-2);
-    left: var(--sp-2);
-    z-index: 45;
-    margin: 0;
-    pointer-events: none;
   }
 
   .deviceAlert {
     top: 60px;
-  }
-
-  .reconnectOverlay {
-    inset: var(--sp-2) var(--sp-2) calc(68px + env(safe-area-inset-bottom));
   }
 
   .audioOverlay,
@@ -869,83 +788,21 @@
   }
 }
 
-@media (max-height: 500px) and (orientation: landscape) {
-  .header {
-    flex-basis: 48px;
-    height: 48px;
-    min-height: 48px;
-  }
-
-  .stage {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 148px;
-    grid-template-rows: minmax(0, 1fr);
-    padding: 6px 6px calc(62px + env(safe-area-inset-bottom));
-    padding-right: max(6px, env(safe-area-inset-right));
-    padding-left: max(6px, env(safe-area-inset-left));
-    gap: 6px;
-  }
-
-  .interviewerColumn {
-    display: grid;
-    grid-template-columns: 72px minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    gap: var(--sp-2);
-  }
-
-  .interviewerColumn > :global(.iv-interviewer),
-  .interviewerColumn > :global(.iv-video-tile.interviewer) {
-    grid-column: 1;
-    grid-row: 1;
-    align-self: start;
-  }
-
-  .interviewerColumn > :global(.iv-question),
-  .interviewerColumn > .agentStatus {
-    grid-column: 2;
-    grid-row: 1;
-    height: 100%;
-  }
-
-  .interviewerColumn :global(.iv-interviewer-name),
-  .interviewerColumn :global(.iv-interviewer-state),
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-name-overlay),
-  .interviewerColumn :global(.iv-video-tile.interviewer .iv-vt-state-pill) {
-    display: none;
-  }
-
-  .candidateColumn {
-    display: flex;
-    height: 100%;
+/* A phone held sideways has no vertical room to spare: the rail becomes a
+ * sheet over the stage rather than a column beside it. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .frame :global(.iv-interviewer) {
     min-height: 0;
-    flex-direction: column;
+    padding: var(--sp-3);
   }
 
-  .candidateColumn .auxDisclosure {
-    width: 100%;
-    flex: 0 0 var(--control-lg);
+  .frame :global(.iv-interviewer-orb),
+  .frame :global(.iv-interviewer-rings) {
+    width: 84px;
+    height: 84px;
   }
 
-  .selfViewBody,
-  .coachPanel,
-  .transcriptDisclosure[open] :global(.iv-transcript) {
-    bottom: calc(68px + env(safe-area-inset-bottom));
-  }
-
-  .candidateColumn > :global(.iv-coach) {
-    bottom: calc(64px + env(safe-area-inset-bottom));
-  }
-
-  .qualityRow {
-    top: 50px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .header,
-  .audioOverlay,
-  .dialogBackdrop,
-  .reconnectOverlay {
-    backdrop-filter: none;
+  .railBody {
+    max-height: 38vh;
   }
 }

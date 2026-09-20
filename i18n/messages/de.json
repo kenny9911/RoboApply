@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "Vorbereitung · {count} Jobs",
-      "title": "Üben, bis ",
-      "titleAccent": "es sich normal anfühlt",
-      "titleAfter": ".",
-      "sub": "Wähl einen Job, wähl eine Gesprächsperson, wähl ein Format. Sie fragt; Hinweise erscheinen neben dir, während du antwortest.",
-      "guide": {
-        "eyebrow": "Interviewtraining",
-        "title": "Übungsgespräch einrichten",
-        "sub": "Vier kurze Schritte. Dauert etwa zwei Minuten.",
-        "recent": "Letzte Übungsgespräche ({count})",
-        "progressLabel": "Fortschritt bei der Einrichtung",
-        "steps": {
-          "job": "Job",
-          "style": "Gesprächsstil",
-          "preferences": "Einstellungen",
-          "review": "Prüfen"
+      "flow": {
+        "title": "Üb so lange, bis es sich normal anfühlt.",
+        "sub": "Wähl den Job, für den du dich bewirbst. Der Rest ist schon darauf abgestimmt — vor dem Start kannst du alles ändern.",
+        "recentTitle": "Mach da weiter, wo du aufgehört hast",
+        "again": "Das nochmal üben",
+        "viewReport": "Bericht ansehen",
+        "roleLegend": "Für welchen Job ist das Gespräch?",
+        "categories": "Job-Kategorien",
+        "noMatch": "Kein Job passt zu „{query}“. Probier ein kürzeres Wort oder füg die Stellenanzeige ein.",
+        "planLegend": "Dein Gespräch",
+        "planHint": "Auf den Job abgestimmt. Änder, was du willst.",
+        "pickRoleFirst": "Wähl oben einen Job, dann geht’s los.",
+        "chip": {
+          "focus": "Schwerpunkt",
+          "mode": "Format",
+          "language": "Sprache"
         },
-        "jobTitle": "Für welchen Job möchtest du üben?",
-        "jobSub": "Such einen Job, stöber durch die Kategorien oder füg eine Stellenanzeige ein.",
-        "styleTitle": "Dein empfohlener Übungsplan",
-        "styleSub": "Wir haben Gesprächsperson und Fragestil auf diesen Job abgestimmt. Ändere sie nur, wenn du möchtest.",
-        "focusLabel": "Schwerpunkt",
-        "planPending": "Wähl zuerst einen Job",
-        "changeSetup": "Gesprächsstil ändern",
-        "preferencesTitle": "Wie soll sich die Übung anfühlen?",
-        "preferencesSub": "Die Voreinstellungen sind startklar. Pass an, was du möchtest.",
-        "videoHint": "Am nächsten am echten Gespräch",
-        "voiceHint": "Aufwärmen mit weniger Druck",
-        "reviewTitle": "Du kannst loslegen",
-        "reviewSub": "Prüf alles noch einmal, bevor deine Gesprächsperson beitritt.",
-        "previewSummary": "Vorschau auf mögliche Fragen",
-        "back": "Zurück",
-        "continue": "Weiter",
-        "stepCount": "Schritt {current} von {total}",
-        "reassurance": "Du kannst zurückgehen, ohne diese Auswahl zu verlieren."
+        "tray": {
+          "focus": "Worum soll es in dem Gespräch gehen?",
+          "length": "Wie lange soll es dauern?"
+        },
+        "done": "Fertig",
+        "costShort": "{n} Credits — mehr als du hast",
+        "useShorter": "Lieber {minutes} Min.",
+        "previewToggle": "Vorschau auf mögliche Fragen"
       },
       "loading": "Vorbereitung wird geladen…",
       "startError": "Dieses Gespräch konnte nicht gestartet werden. Versuch es erneut.",
@@ -1463,18 +1453,17 @@
         "on": "An",
         "off": "Aus",
         "coachModeHint": "Kurze Hinweise, während du antwortest. Schalt sie aus, wenn es sich echt anfühlen soll."
+      },
+      "rail": {
+        "title": "Hinweise und Mitschrift",
+        "close": "Panel schließen"
       }
     },
     "report": {
       "title": "Gesprächsbericht",
-      "eyebrow": "Sitzung beendet · {minutes} Min.",
-      "eyebrowScoring": "Deine Antworten werden bewertet",
-      "eyebrowFallback": "Übungsgespräch · Bericht",
       "sub": "Bewertet so, wie eine echte Runde bewerten würde.",
+      "evidence": "Die Belege hinter diesem Bericht",
       "loading": "Dein Bericht wird geladen…",
-      "loadingTitle": "Deine Antworten ",
-      "loadingTitleAccent": "werden gelesen",
-      "loadingTitleAfter": "…",
       "error": "Der Bericht wurde nicht geladen. Versuch es erneut, und wenn es weiter scheitert, lade die Seite neu.",
       "newInterview": "Neues Gespräch",
       "processing": "Wird abgeschlossen. Aufzeichnung und Bewertung erscheinen gleich hier.",

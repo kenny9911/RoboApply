@@ -1,318 +1,451 @@
+/* /practice setup — one screen.
+ *
+ * Three bands, in the order a candidate uses them: what you did last time,
+ * the one decision you actually have to make, and a dock that holds the plan
+ * plus Start against the bottom of the viewport so the action is never more
+ * than a click away no matter where the role list is scrolled. */
+
 .page {
-  width: min(100%, 860px);
+  width: min(100%, 920px);
   margin: 0 auto;
-  padding-bottom: calc(var(--sp-8) + var(--control-lg));
+  padding-bottom: var(--sp-6);
 }
 
+/* ─── Intro ─────────────────────────────────────────────────────────────── */
+
 .intro {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--sp-5);
   margin-bottom: var(--sp-5);
 }
 
 .intro h1 {
   max-width: 18ch;
-  margin: var(--sp-1) 0 0;
+  margin: 0;
   color: var(--text);
   font-family: var(--font-display);
   font-size: var(--fs-display);
   font-weight: 600;
-  line-height: 1.02;
-  letter-spacing: -0.035em;
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
   text-wrap: balance;
 }
 
-.eyebrow {
-  margin: 0;
-  color: var(--action);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  letter-spacing: var(--ls-label);
-}
-
-.lead {
+.intro p {
+  max-width: 56ch;
   margin: var(--sp-2) 0 0;
   color: var(--text-2);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
+  text-wrap: pretty;
 }
 
-.recentDisclosure {
-  position: relative;
-  flex: 0 0 auto;
+/* ─── Recent lane ───────────────────────────────────────────────────────── */
+
+.lane {
+  margin-bottom: var(--sp-5);
 }
 
-.recentDisclosure > summary,
-.customize > summary,
-.previewDisclosure > summary {
-  min-height: var(--control-lg);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text-2);
-  padding: 0 var(--sp-4);
-  font-size: var(--fs-meta);
-  font-weight: 600;
-  cursor: pointer;
-  list-style: none;
-  transition:
-    color var(--dur-hover) var(--ease-out),
-    border-color var(--dur-hover) var(--ease-out),
-    background var(--dur-hover) var(--ease-out);
+.laneHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 
-.recentDisclosure > summary::-webkit-details-marker,
-.customize > summary::-webkit-details-marker,
-.previewDisclosure > summary::-webkit-details-marker {
-  display: none;
-}
-
-.recentDisclosure > summary:hover,
-.customize > summary:hover,
-.previewDisclosure > summary:hover {
-  border-color: var(--rule-strong);
-  color: var(--text);
-}
-
-.recentDisclosure[open] > summary {
-  border-color: var(--action);
-  color: var(--action);
-}
-
-.recentBody {
-  position: absolute;
-  top: calc(100% + var(--sp-2));
-  right: 0;
-  width: min(760px, calc(100vw - 48px));
-  max-height: min(560px, calc(100vh - 180px));
-  overflow: auto;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  padding: var(--sp-5);
-  box-shadow: var(--e3);
-}
-
-.recentBody :global(.iv-recent) {
-  margin: 0;
-}
-
-.recentBody :global(.iv-recent-del),
-.recentBody :global(.iv-recent-del--inline),
-.recentBody :global(.iv-recent-row-replay),
-.recentBody :global(.iv-recent-confirm-yes),
-.recentBody :global(.iv-recent-confirm-no) {
-  min-width: var(--control-lg);
-  min-height: var(--control-lg);
-}
-
-.panel {
-  overflow: clip;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: var(--e1);
-}
-
-.stepper {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0;
-  padding: var(--sp-3) var(--sp-5);
-  border-bottom: 1px solid var(--rule);
-  background: var(--surface-2);
-  list-style: none;
-}
-
-.stepper li {
-  position: relative;
-  min-width: 0;
-}
-
-.stepper li:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: 0;
-  width: 1px;
-  height: 20px;
-  background: var(--rule);
-  transform: translateY(-50%);
-}
-
-.stepButton {
-  width: 100%;
-  min-height: var(--control-lg);
+.laneHead h2 {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--sp-2);
-  border: 0;
-  background: transparent;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+}
+
+.laneHead h2 svg {
   color: var(--text-muted);
-  padding: 0 var(--sp-3);
+}
+
+.laneToggle,
+.laneGhost,
+.lanePrimary,
+.laneDanger {
+  min-height: var(--control-sm);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--action);
+  padding: 0 var(--sp-2);
   font: inherit;
   font-size: var(--fs-label);
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out);
 }
 
-.stepButton:disabled {
-  cursor: default;
-  opacity: 0.62;
+.laneToggle {
+  font-size: var(--fs-meta);
 }
 
-.stepMark {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+.laneToggle:hover,
+.laneGhost:hover {
+  background: var(--action-subtle);
+}
+
+.laneGhost {
+  color: var(--text-2);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.laneGhost:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.laneDanger {
+  color: var(--danger);
+}
+
+.laneDanger:hover {
+  background: var(--danger-subtle);
+}
+
+.laneGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.laneCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+  transition: border-color var(--dur-hover) var(--ease-out);
+}
+
+.laneCard:hover {
+  border-color: var(--rule-strong);
+}
+
+.laneTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.laneScore {
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-subtitle);
+}
+
+.laneWhen {
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+
+.laneTitle {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laneSub {
+  overflow: hidden;
+  margin: 0 0 var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laneActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-top: auto;
+  padding-top: var(--sp-1);
+  border-top: 1px solid var(--rule);
+}
+
+.lanePrimary {
+  margin-left: calc(var(--sp-2) * -1);
+}
+
+.lanePrimary:hover {
+  background: var(--action-subtle);
+}
+
+.laneDelete {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  margin-right: calc(var(--sp-2) * -1);
   display: grid;
   place-items: center;
-  border: 1px solid var(--rule-strong);
-  border-radius: 50%;
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease-out), background var(--dur-hover) var(--ease-out);
+}
+
+.laneDelete:hover {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.laneConfirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-top: auto;
+  padding-top: var(--sp-1);
+  border-top: 1px solid var(--rule);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+}
+
+.laneConfirm > div {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+/* ─── The brief ─────────────────────────────────────────────────────────── */
+
+.brief {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
   background: var(--surface);
+  padding: clamp(20px, 3.4vw, 32px);
+  box-shadow: var(--e1);
+}
+
+.roleHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.roleHead h2 {
+  max-width: 26ch;
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: var(--lh-title);
+  letter-spacing: var(--ls-title);
+  text-wrap: balance;
+}
+
+.sourceToggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  padding: 3px;
+}
+
+.sourceToggle button {
+  min-height: var(--control-sm);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-2);
+  padding: 0 var(--sp-4);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out);
+}
+
+.sourceToggle button:hover {
+  color: var(--text);
+}
+
+.sourceOn,
+.sourceToggle .sourceOn:hover {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--e1);
+}
+
+/* Search */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: 0 var(--sp-4);
+  transition: border-color var(--dur-hover) var(--ease-out), background var(--dur-hover) var(--ease-out);
+}
+
+.search:focus-within {
+  border-color: var(--action);
+  background: var(--surface);
+}
+
+.search svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-lg);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+
+.search input::placeholder {
+  color: var(--text-muted);
+}
+
+.search input:focus {
+  outline: 0;
+}
+
+.search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+/* Category tabs */
+
+.categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.categories button {
+  min-height: var(--control-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  padding: 0 var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out),
+    background var(--dur-hover) var(--ease-out);
+}
+
+.categories button span {
   color: var(--text-muted);
   font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
 }
 
-.mobileStepText {
-  display: none;
-}
-
-.currentStep {
+.categories button:hover {
+  border-color: var(--rule-strong);
   color: var(--text);
 }
 
-.currentStep .stepMark,
-.completeStep .stepMark {
+.categoryOn,
+.categories .categoryOn:hover {
   border-color: var(--action);
-  background: var(--action);
-  color: var(--action-ink);
+  background: var(--action-subtle);
+  color: var(--action);
 }
 
-.content {
-  min-height: 0;
-  padding: clamp(24px, 5vw, 42px);
+.categoryOn span {
+  color: var(--action);
 }
 
-.stepHeading {
-  margin-bottom: var(--sp-5);
+/* Role grid — a whole category at a time, so it never needs its own scrollbar. */
+
+.roleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
 }
 
-.stepHeading h2 {
-  max-width: 24ch;
-  margin: 0;
+.roleChip {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
   color: var(--text);
-  font-family: var(--font-display);
-  font-size: var(--fs-title);
-  font-weight: 600;
-  line-height: 1.12;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-  scroll-margin-top: calc(var(--control-lg) + var(--sp-5));
-}
-
-.stepHeading h2:focus {
-  outline: 0;
-  box-shadow: none;
-}
-
-.stepHeading p {
-  max-width: 62ch;
-  margin: var(--sp-2) 0 0;
-  color: var(--text-2);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
-}
-
-.roleStep :global(.iv-step) {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.roleStep :global(.iv-step-head) {
-  flex-wrap: wrap;
-  margin-bottom: var(--sp-4);
-}
-
-.roleStep :global(.iv-step-head--compact .iv-source-toggle) {
-  margin-left: 0;
-}
-
-.roleStep :global(.iv-step-head--compact .iv-search) {
-  width: min(100%, 320px);
-  height: var(--control-lg);
-}
-
-.roleStep :global(.iv-step-head--compact .iv-search input) {
-  align-self: stretch;
-  min-width: 0;
-  min-height: var(--control-lg);
-}
-
-.roleStep :global(.iv-source-tab),
-.roleStep :global(.iv-cat-tab),
-.roleStep :global(.iv-role-chip) {
-  min-height: var(--control-lg);
-}
-
-.roleStep :global(.iv-cat-tabs) {
-  flex-wrap: wrap;
-  overflow: visible;
-  padding: 0 var(--sp-1) var(--sp-1);
-}
-
-.roleStep :global(.iv-cat-tab) {
-  flex: 0 0 auto;
-}
-
-.roleStep :global(.iv-role-grid) {
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 1px;
-}
-
-.roleStep :global(.iv-role-grid--guided) {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: 300px;
-}
-
-.roleStep :global(.iv-role-chip--guided) {
-  min-height: 64px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  align-content: center;
-  gap: 2px var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out),
+    background var(--dur-hover) var(--ease-out);
 }
 
-.roleStep :global(.iv-role-name) {
+.roleChip:hover {
+  border-color: var(--rule-strong);
+  background: var(--surface-2);
+}
+
+.roleChipBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.roleChipBody strong {
   overflow: hidden;
-  color: var(--text);
-  font-size: var(--fs-body);
+  font-size: var(--fs-meta);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.roleStep :global(.iv-role-chip--guided:not(.iv-role-chip--has-meta) .iv-role-name) {
-  grid-row: 1 / -1;
-  align-self: center;
-}
-
-.roleStep :global(.iv-role-meta) {
+.roleChipBody small {
   overflow: hidden;
   color: var(--text-muted);
   font-size: var(--fs-label);
@@ -320,592 +453,739 @@
   white-space: nowrap;
 }
 
-.roleStep :global(.iv-role-indicator) {
-  grid-column: 2;
-  grid-row: 1 / -1;
-  align-self: center;
-  width: 18px;
-  height: 18px;
-  border: 1.5px solid var(--rule-strong);
-  border-radius: 50%;
-  position: relative;
-}
-
-.roleStep :global(.iv-role-chip--guided.active .iv-role-name),
-.roleStep :global(.iv-role-chip--guided.active .iv-role-meta) {
-  color: var(--action-ink);
-}
-
-.roleStep :global(.iv-role-chip--guided.active .iv-role-indicator) {
-  border-color: var(--action-ink);
-}
-
-.roleStep :global(.iv-role-chip--guided.active .iv-role-indicator::after) {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: var(--action-ink);
-}
-
-.planSummary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-3);
-}
-
-.planCard {
-  position: relative;
-  min-height: 144px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-1);
-  border: 1px solid var(--action);
-  border-radius: var(--r-lg);
+.roleChipOn,
+.roleChip.roleChipOn:hover {
+  border-color: var(--action);
   background: var(--action-subtle);
-  padding: var(--sp-5);
 }
 
-.planCard strong {
-  margin-top: var(--sp-2);
-  color: var(--text);
-  font-size: var(--fs-title);
-  font-weight: 600;
-  line-height: var(--lh-title);
+.roleChipOn .roleChipBody small {
+  color: var(--action);
 }
 
-.planCard > span:not(.planLabel, .recommended) {
-  color: var(--text-2);
+.noMatch,
+.overflowHint {
+  margin: var(--sp-4) 0 0;
+  color: var(--text-muted);
   font-size: var(--fs-meta);
+}
+
+.noMatch {
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-md);
+  padding: var(--sp-5);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Paste-a-job-post */
+
+.jd textarea {
+  width: 100%;
+  min-height: 200px;
+  display: block;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: var(--sp-4);
+  font: inherit;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  resize: vertical;
+  transition: border-color var(--dur-hover) var(--ease-out), background var(--dur-hover) var(--ease-out);
+}
+
+.jd textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.jd textarea:focus {
+  border-color: var(--action);
+  background: var(--surface);
+}
+
+.jdMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin: var(--sp-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
   line-height: var(--lh-meta);
 }
 
-.planLabel {
-  color: var(--action);
-  font-size: var(--fs-label);
+.jdMeta > span:last-child {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.jdCountOk {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* ─── The dock ──────────────────────────────────────────────────────────── */
+
+.dock {
+  z-index: 4;
+  margin-top: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--grad-soft);
+  padding: var(--sp-4) clamp(16px, 3vw, 24px);
+  box-shadow: var(--e2);
+}
+
+/* Once a job is chosen the dock pins to the bottom of the scrollport so Start
+ * stays reachable from anywhere in the role list. `.pageLive` adds the matching
+ * run-off space, so the last row of roles can always be scrolled clear of it. */
+.dockLive {
+  position: sticky;
+  bottom: var(--sp-4);
+}
+
+.pageLive {
+  padding-bottom: 168px;
+}
+
+.planHead {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.planHead h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-meta);
   font-weight: 600;
   letter-spacing: var(--ls-label);
 }
 
-.recommended {
-  position: absolute;
-  top: var(--sp-3);
-  right: var(--sp-3);
-  border: 1px solid var(--action);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  color: var(--action);
-  padding: 3px var(--sp-2);
-  font-size: var(--fs-label);
-  font-weight: 600;
-}
-
-.customize,
-.previewDisclosure {
-  margin-top: var(--sp-4);
-}
-
-.customize > summary,
-.previewDisclosure > summary {
-  border-radius: var(--r-sm);
-  background: transparent;
-}
-
-.customizeBody {
-  display: grid;
-  gap: var(--sp-5);
-  margin-top: var(--sp-4);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--rule);
-}
-
-.customizeBody fieldset,
-.preferenceGroup,
-.preferenceGrid fieldset {
-  min-width: 0;
+.planHead p {
   margin: 0;
-  padding: 0;
-  border: 0;
+  color: var(--text-2);
+  font-size: var(--fs-label);
 }
 
-.customizeBody legend,
-.preferenceGroup legend,
-.preferenceGrid legend,
-.preferenceGrid label > span {
+
+/* Plan chips */
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.chip {
+  position: relative;
+  min-height: var(--control-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--sp-1) var(--sp-3);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.chip:hover {
+  border-color: var(--rule-strong);
+}
+
+.chipIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.chipText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chipText small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.chipText strong {
+  overflow: hidden;
+  max-width: 22ch;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--action);
+}
+
+.chipChevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  transition: transform var(--dur-enter) var(--ease-out);
+}
+
+.chipOpen {
+  border-color: var(--action);
+  box-shadow: inset 0 0 0 1px var(--action);
+}
+
+.chipOpen .chipIcon,
+.chipOpen .chipChevron {
+  color: var(--action);
+}
+
+.chipOpen .chipChevron {
+  transform: rotate(180deg);
+}
+
+/* Option tray — inline, never an overlay: nothing here needs to interrupt, and
+ * a tray that pushes the dock open stays legible at any viewport width. */
+
+.tray {
+  max-height: min(42vh, 330px);
+  overflow-y: auto;
+  margin-top: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-3);
+  animation: trayIn var(--dur-enter) var(--ease-out);
+}
+
+@keyframes trayIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.trayHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
   margin-bottom: var(--sp-3);
+}
+
+.trayHead h3 {
+  margin: 0;
   color: var(--text);
   font-size: var(--fs-meta);
   font-weight: 600;
 }
 
-.choiceGrid {
+.trayDone {
+  min-height: var(--control-sm);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--action);
+  padding: 0 var(--sp-2);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trayDone:hover {
+  background: var(--action-subtle);
+}
+
+.optionGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sp-2);
 }
 
-.compactChoice {
-  position: relative;
-  min-height: 64px;
+.optionGrid[data-columns='1'] { grid-template-columns: minmax(0, 1fr); }
+.optionGrid[data-columns='2'] { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.optionGrid[data-columns='3'] { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+.option {
+  min-height: 56px;
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-3);
   border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--text);
-  padding: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color var(--dur-hover) var(--ease-out),
+    background var(--dur-hover) var(--ease-out);
 }
 
-.compactChoice > span:nth-child(2),
-.formatChoice > span:last-child {
+.option:hover {
+  border-color: var(--rule-strong);
+  background: var(--surface-2);
+}
+
+.optionBody {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
-.compactChoice strong,
-.formatChoice strong {
+.optionBody strong {
+  overflow: hidden;
   font-size: var(--fs-meta);
   font-weight: 600;
-}
-
-.compactChoice small,
-.formatChoice small {
-  overflow: hidden;
-  color: var(--text-2);
-  font-size: var(--fs-label);
-  font-weight: 400;
-  line-height: var(--lh-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.compactChoice em {
+.optionBody small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.optionMark {
+  width: 18px;
+  height: 18px;
+  position: relative;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 50%;
+  transition: border-color var(--dur-hover) var(--ease-out);
+}
+
+.optionBadge {
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: var(--action-subtle);
   color: var(--action);
+  padding: 2px var(--sp-2);
   font-size: var(--fs-label);
   font-style: normal;
   font-weight: 600;
 }
 
-.choiceMark {
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid var(--rule-strong);
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 3px var(--surface);
-}
-
-.selectedChoice {
+.optionOn,
+.option.optionOn:hover {
   border-color: var(--action);
   background: var(--action-subtle);
 }
 
-.selectedChoice .choiceMark {
+.optionOn .optionMark,
+.roleChipOn .optionMark {
   border-color: var(--action);
+}
+
+.optionOn .optionMark::after,
+.roleChipOn .optionMark::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
   background: var(--action);
 }
 
-.showMore {
-  min-height: var(--control-lg);
-  margin-top: var(--sp-2);
-  border: 0;
-  background: transparent;
+.optionOn .optionBody small {
   color: var(--action);
-  padding: 0;
-  font: inherit;
-  font-size: var(--fs-meta);
-  font-weight: 600;
-  cursor: pointer;
 }
 
-.preferenceGroup {
-  margin-bottom: var(--sp-5);
-}
-
-.formatGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-3);
-}
-
-.formatChoice {
-  min-height: 88px;
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--sp-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  color: var(--text);
-  padding: var(--sp-4);
-  text-align: left;
-  cursor: pointer;
-}
-
-.formatIcon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
+.optionMuted .optionBody strong {
   color: var(--text-2);
-  font-size: var(--fs-subtitle);
 }
 
-.selectedChoice .formatIcon {
-  background: var(--action);
-  color: var(--action-ink);
+.optionMuted .optionBody small {
+  color: var(--warn);
 }
 
-.preferenceGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
-  gap: var(--sp-5);
-  align-items: start;
+/* Launch row */
+
+.launch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
 }
 
-.preferenceGrid label {
+.launchMeta {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-.preferenceGrid select {
-  width: 100%;
-  min-height: var(--control-lg);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 var(--sp-3);
-  font: inherit;
-  font-size: var(--fs-meta);
-}
-
-.durationGroup {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--sp-2);
-}
-
-.durationGroup button {
-  min-height: var(--control-lg);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text-2);
-  padding: 0 var(--sp-2);
-  font: inherit;
-  font-size: var(--fs-label);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.durationGroup .selectedDuration {
-  border-color: var(--action);
-  background: var(--action);
-  color: var(--action-ink);
-}
-
-.reviewList {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
   margin: 0;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-lg);
+}
+
+.launchMeta strong {
   overflow: hidden;
-}
-
-.reviewList > div {
-  min-width: 0;
-  padding: var(--sp-4);
-  border-bottom: 1px solid var(--rule);
-}
-
-.reviewList > div:nth-child(odd) {
-  border-right: 1px solid var(--rule);
-}
-
-.reviewList > div:nth-last-child(-n + 2) {
-  border-bottom: 0;
-}
-
-.reviewList dt {
-  color: var(--text-muted);
-  font-size: var(--fs-label);
-  font-weight: 600;
-}
-
-.reviewList dd {
-  overflow: hidden;
-  margin: var(--sp-1) 0 0;
   color: var(--text);
   font-size: var(--fs-body);
   font-weight: 600;
+  letter-spacing: var(--ls-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.previewDisclosure > :global(.iv-step) {
-  margin: var(--sp-4) 0 0;
-  padding: 0;
-  border: 0;
-}
-
-.previewDisclosure :global(.iv-step-head) {
-  margin-bottom: var(--sp-3);
-}
-
-.creditRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  margin-top: var(--sp-4);
+.launchMeta span {
   color: var(--text-2);
-  font-size: var(--fs-meta);
-}
-
-.error,
-.creditAlert {
-  margin: var(--sp-3) 0 0;
-  border: 1px solid var(--warn);
-  border-radius: var(--r-md);
-  background: var(--warn-subtle);
-  color: var(--text);
-  padding: var(--sp-3) var(--sp-4);
-  font-size: var(--fs-meta);
-}
-
-.creditActions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-}
-
-.creditAlert {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-}
-
-.creditAlert :global(.btn) {
-  min-height: var(--control-lg);
-  flex: 0 0 auto;
-  text-decoration: none;
-}
-
-.actions {
-  min-height: 76px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: var(--sp-3);
-  border-top: 1px solid var(--rule);
-  background: var(--surface);
-  padding: var(--sp-3) clamp(20px, 5vw, 42px);
-}
-
-.actions > :global(.btn) {
-  min-height: var(--control-lg);
-}
-
-.actions > :global(.btn:first-child) {
-  justify-self: start;
-}
-
-.actions > :global(.btn:last-child) {
-  min-width: 132px;
-  justify-self: end;
-  justify-content: center;
-}
-
-.actions > :global(.btn.primary:disabled) {
-  border-color: var(--rule);
-  background: var(--surface-3);
-  color: var(--text-muted);
-  opacity: 1;
-}
-
-.actions > span {
-  color: var(--text-muted);
   font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
 }
 
-.reassurance {
-  margin: var(--sp-3) 0 0;
-  color: var(--text-muted);
-  font-size: var(--fs-label);
-  text-align: center;
+.launchMeta .launchPending {
+  font-size: var(--fs-meta);
 }
 
+.start {
+  min-height: var(--control-lg);
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--grad-brand);
+  color: var(--action-ink);
+  padding: 0 var(--sp-6);
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  letter-spacing: var(--ls-body);
+  cursor: pointer;
+  transition: background var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.start:hover:not(:disabled) {
+  background: var(--grad-brand-hover);
+  box-shadow: var(--e2);
+}
+
+.start:disabled {
+  background: var(--surface-3);
+  color: var(--disabled);
+  cursor: not-allowed;
+}
+
+/* Alerts */
+
+.alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin: var(--sp-3) 0 0;
+  border: 1px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: var(--warn-subtle);
+  color: var(--text);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.alertActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.alert .laneGhost {
+  border-color: var(--rule-strong);
+  background: var(--surface);
+}
+
+/* ─── Preview ───────────────────────────────────────────────────────────── */
+
+.previewShell {
+  margin-top: var(--sp-4);
+}
+
+.previewToggle {
+  min-height: var(--control-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  padding: 0 var(--sp-3) 0 var(--sp-2);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-hover) var(--ease-out), background var(--dur-hover) var(--ease-out);
+}
+
+.previewToggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.previewToggle svg {
+  transition: transform var(--dur-enter) var(--ease-out);
+}
+
+.chevronUp {
+  transform: rotate(180deg);
+}
+
+.previewBody {
+  margin-top: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-5);
+}
+
+.previewBody > :global(.iv-step) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.previewBody :global(.iv-step-head) {
+  margin-bottom: var(--sp-3);
+}
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+
 @media (max-width: 760px) {
-  .page {
-    padding-bottom: calc(var(--control-lg) + var(--sp-8) + env(safe-area-inset-bottom));
+  .page,
+  .pageLive {
+    /* Run-off past the shared bottom nav, so the dock can always be scrolled
+     * clear of whatever it is currently floating over. */
+    padding-bottom: calc(var(--control-lg) + var(--sp-7) + env(safe-area-inset-bottom));
   }
 
-  .intro {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--sp-3);
-  }
-
-  .intro h1 {
-    font-size: var(--fs-display);
-  }
-
-  .recentDisclosure,
-  .recentDisclosure > summary {
-    width: 100%;
-  }
-
-  .recentBody {
-    position: static;
-    width: 100%;
-    max-height: none;
-    margin-top: var(--sp-2);
-    padding: var(--sp-3);
-    box-shadow: var(--e1);
-  }
-
-  .recentBody :global(.iv-recent-grid) {
-    grid-template-columns: 1fr;
-  }
-
-  .panel {
-    border-radius: var(--r-lg);
-  }
-
-  .stepper {
-    display: block;
-    padding: var(--sp-2);
-  }
-
-  .stepper li {
-    display: none;
-  }
-
-  .stepper li:has(.currentStep) {
-    display: block;
-  }
-
-  .stepper li:not(:last-child)::after {
-    display: none;
-  }
-
-  .stepButton {
-    justify-content: flex-start;
-    padding: 0 var(--sp-1);
-  }
-
-  .stepMark,
-  .stepText {
-    display: none;
-  }
-
-  .mobileStepText {
-    display: inline;
-    color: var(--text);
-    font-size: var(--fs-meta);
-  }
-
-  .content {
-    min-height: 0;
-    padding: var(--sp-5) var(--sp-4);
-  }
-
-  .roleStep :global(.iv-step-head--compact) {
+  .roleHead {
     align-items: stretch;
     flex-direction: column;
     gap: var(--sp-3);
   }
 
-  .roleStep :global(.iv-step-head--compact .iv-search) {
-    width: 100%;
-    margin-left: 0;
+  .sourceToggle {
+    align-self: stretch;
   }
 
-  .roleStep :global(.iv-role-grid) {
-    max-height: none;
-    overflow: visible;
+  .sourceToggle button {
+    flex: 1;
+    padding: 0 var(--sp-2);
   }
 
-  .roleStep :global(.iv-role-grid--guided) {
-    grid-template-columns: 1fr;
+  .brief {
+    padding: var(--sp-4);
   }
 
-  .planSummary,
-  .formatGrid,
-  .preferenceGrid,
-  .reviewList {
-    grid-template-columns: 1fr;
+  .categories {
+    /* Eight long category names stack to eight rows on a phone. One scrolling
+     * row of filter chips is the familiar shape and costs 48px, not 400px. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: var(--sp-4) calc(var(--sp-4) * -1) 0;
+    padding: 2px var(--sp-4);
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
   }
 
-  .planCard {
-    min-height: 126px;
+  .categories::-webkit-scrollbar {
+    display: none;
   }
 
-  .choiceGrid {
-    grid-template-columns: 1fr;
+  .categories button {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
   }
 
-  .compactChoice small {
-    white-space: normal;
+  .roleGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .durationGroup {
+  .laneGrid {
+    display: flex;
+    overflow-x: auto;
+    /* Bleeds to the shell's own gutter (.main-inner padding at this width). */
+    margin: 0 calc(var(--sp-5) * -1);
+    padding: 2px var(--sp-5);
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+  }
+
+  .laneGrid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .laneCard {
+    /* The next card peeks, so the row reads as scrollable without a scrollbar. */
+    width: 78vw;
+    max-width: 300px;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .dock {
+    bottom: calc(var(--control-lg) + var(--sp-3) + env(safe-area-inset-bottom));
+    padding: var(--sp-3);
+  }
+
+  .chipRow {
+    /* One tap-sized row that scrolls sideways beats five stacked full-width
+     * buttons pushing Start off the screen. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 calc(var(--sp-3) * -1);
+    padding: 2px var(--sp-3);
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .chipRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .tray {
+    max-height: min(50vh, 300px);
+  }
+
+  .optionGrid[data-columns='2'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .optionGrid[data-columns='3'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .reviewList > div,
-  .reviewList > div:nth-child(odd),
-  .reviewList > div:nth-last-child(-n + 2) {
-    border-right: 0;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .reviewList > div:last-child {
-    border-bottom: 0;
-  }
-
-  .creditAlert {
+  .launch {
     align-items: stretch;
     flex-direction: column;
+    gap: var(--sp-2);
   }
 
-  .actions {
-    position: sticky;
-    z-index: 2;
-    bottom: calc(var(--control-lg) + var(--sp-3) + env(safe-area-inset-bottom));
-    min-height: 68px;
-    grid-template-columns: 1fr auto 1fr;
-    padding: var(--sp-2) var(--sp-3);
-    box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 6%, transparent);
+  .start {
+    width: 100%;
   }
 
-  .actions > :global(.btn:last-child) {
-    min-width: 112px;
-  }
-
-  .reassurance {
-    padding: 0 var(--sp-4);
+  .alert {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .recentDisclosure > summary,
-  .customize > summary,
-  .previewDisclosure > summary {
+  .tray {
+    animation: none;
+  }
+
+  .chipChevron,
+  .previewToggle svg {
     transition: none;
+  }
+}
+
+/* ─── Loading and failure ───────────────────────────────────────────────── */
+
+.skeletonHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.skeletonChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.shimmer {
+  display: block;
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(
+      90deg,
+      var(--surface-2) 0%,
+      var(--surface-3) 38%,
+      var(--surface-2) 72%
+    ) 0 0 / 280% 100%;
+  animation: shimmer 1.4s var(--ease-out) infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+
+.errorState {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-5) 0;
+}
+
+.errorState h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: var(--ls-title);
+}
+
+.errorState p {
+  max-width: 52ch;
+  margin: 0 0 var(--sp-3);
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background: var(--surface-2);
   }
 }

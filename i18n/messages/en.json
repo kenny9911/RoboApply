@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "Interview prep · {count} roles",
-      "title": "Practice until ",
-      "titleAccent": "it feels ordinary",
-      "titleAfter": ".",
-      "sub": "Pick a role, pick an interviewer, pick a format. The interviewer asks; notes appear beside you as you answer.",
-      "guide": {
-        "eyebrow": "Interview practice",
-        "title": "Set up a practice interview",
-        "sub": "Four short steps. About two minutes.",
-        "recent": "Recent practice ({count})",
-        "progressLabel": "Interview setup progress",
-        "steps": {
-          "job": "Job",
-          "style": "Interview style",
-          "preferences": "Preferences",
-          "review": "Review"
+      "flow": {
+        "title": "Practice until it feels ordinary.",
+        "sub": "Pick the job you're interviewing for. The rest is already matched to it — change anything before you start.",
+        "recentTitle": "Pick up where you left off",
+        "again": "Practice this again",
+        "viewReport": "See the report",
+        "roleLegend": "Which job are you interviewing for?",
+        "categories": "Role categories",
+        "noMatch": "No role matches “{query}”. Try a shorter word, or paste the job post instead.",
+        "planLegend": "Your interview",
+        "planHint": "Matched to the role. Change anything.",
+        "pickRoleFirst": "Pick a job above to begin.",
+        "chip": {
+          "focus": "Focus",
+          "mode": "Format",
+          "language": "Language"
         },
-        "jobTitle": "Which role are you practicing for?",
-        "jobSub": "Search a role, browse a category, or paste a job description.",
-        "styleTitle": "Your recommended practice plan",
-        "styleSub": "We matched the interviewer and question style to this role. Change either only if you want to.",
-        "focusLabel": "Interview focus",
-        "planPending": "Choose a role first",
-        "changeSetup": "Change interview style",
-        "preferencesTitle": "How should this practice feel?",
-        "preferencesSub": "The defaults are ready. Adjust anything you want.",
-        "videoHint": "Most like the real interview",
-        "voiceHint": "Lower-pressure warm-up",
-        "reviewTitle": "Ready when you are",
-        "reviewSub": "One last check before your interviewer joins.",
-        "previewSummary": "Preview what you may be asked",
-        "back": "Back",
-        "continue": "Continue",
-        "stepCount": "Step {current} of {total}",
-        "reassurance": "You can go back without losing these choices."
+        "tray": {
+          "focus": "What should this interview cover?",
+          "length": "How long should it run?"
+        },
+        "done": "Done",
+        "costShort": "{n} credits — more than you have",
+        "useShorter": "Use {minutes} min instead",
+        "previewToggle": "Preview what you may be asked"
       },
       "loading": "Loading interview prep…",
       "startError": "That interview could not be started. Try again.",
@@ -1463,18 +1453,17 @@
         "on": "On",
         "off": "Off",
         "coachModeHint": "Short notes while you answer. Turn them off for a run that feels real."
+      },
+      "rail": {
+        "title": "Coach and transcript",
+        "close": "Close the panel"
       }
     },
     "report": {
       "title": "Interview report",
-      "eyebrow": "Session complete · {minutes} min",
-      "eyebrowScoring": "Scoring your answers",
-      "eyebrowFallback": "Practice interview · report",
       "sub": "Scored the way the real panel would score it.",
+      "evidence": "The evidence behind this report",
       "loading": "Loading your report…",
-      "loadingTitle": "Reading ",
-      "loadingTitleAccent": "your answers",
-      "loadingTitleAfter": "…",
       "error": "That report did not load. Try again, and if it keeps failing, reload the page.",
       "newInterview": "New interview",
       "processing": "Finishing up. The recording and the score appear here shortly.",

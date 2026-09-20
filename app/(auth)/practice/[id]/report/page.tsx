@@ -14,7 +14,7 @@ import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../../../../components/v3/primitives/Btn';
 import { Markdown } from '../../../../../components/v3/primitives/Markdown';
-import { PageHeader } from '../../../../../components/v3/primitives/PageHeader';
+import { useMockRoleLabels } from '../../../../../lib/mockRoleLabels';
 import {
   QuestionBreakdownSection,
   TranscriptViewer,
@@ -51,11 +51,15 @@ function orderedRecommendations(recommendations: IERecommendation[] | null) {
 export default function MockReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const t = useTranslations('practice');
+  const { localizeRole } = useMockRoleLabels();
 
   const [report, setReport] = useState<IEReport | null>(null);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [gaveUp, setGaveUp] = useState(false);
+  // Named rather than indexed: which sections exist depends on what the
+  // enrichment produced, and it can grow while the page is open.
+  const [tab, setTab] = useState<string | null>(null);
   const pollsRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -108,7 +112,9 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
   if (error) {
     return (
       <div className={styles.report}>
-        <PageHeader title={t('report.title')} />
+        <header className={styles.head}>
+          <h1>{t('report.title')}</h1>
+        </header>
         <section className={styles.messageCard} role="alert">
           <p>{t('report.error')}</p>
           <Btn variant="primary" as="a" href="/practice">
@@ -122,7 +128,9 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
   if (!report) {
     return (
       <div className={styles.report} aria-busy="true" aria-live="polite">
-        <PageHeader eyebrowLive title={t('report.title')} />
+        <header className={styles.head}>
+          <h1>{t('report.title')}</h1>
+        </header>
         <section className={styles.loadingCard}>
           <span className={styles.loadingMark} aria-hidden="true" />
           <p>{t('report.loading')}</p>
@@ -182,11 +190,6 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
         turn.text.trim().length > 0,
     ),
   );
-  const hasDeepDive =
-    hasRecommendations ||
-    hasQuestionAnalysis ||
-    Boolean(report.recordingUrl) ||
-    hasTranscript;
   const outcomeDiagnosis =
     session.gaps[0] ||
     breakdown[0]?.note ||
@@ -207,10 +210,14 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
   if (isNoAnswerReport) {
     return (
       <div className={styles.report}>
-        <PageHeader
-          eyebrow={`${session.role} · ${t(`setup.modeShort.${session.mode}`)}`}
-          title={t('report.title')}
-        />
+        <header className={styles.head}>
+          <h1>{t('report.title')}</h1>
+          <p>
+            {localizeRole(session.role)}
+            <span aria-hidden> · </span>
+            {t(`setup.modeShort.${session.mode}`)}
+          </p>
+        </header>
         <section className={styles.noAnswerState} aria-labelledby="report-no-answer-title">
           <span className={styles.noAnswerMark} aria-hidden="true">—</span>
           <div className={styles.noAnswerCopy}>
@@ -231,13 +238,37 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     );
   }
 
+  const evidenceTabs: Array<{ id: string; label: string; count?: string }> = [
+    hasRecommendations
+      ? { id: 'steps', label: t('report.recommendations.title'), count: String(recommendations!.length) }
+      : null,
+    hasQuestionAnalysis
+      ? {
+        id: 'questions',
+        label: t('report.questionBreakdown.title'),
+        count: String(session.questionAnalysis!.length),
+      }
+      : null,
+    report.recordingUrl ? { id: 'recording', label: t('report.recording') } : null,
+    hasTranscript ? { id: 'transcript', label: t('report.transcript') } : null,
+  ].filter(Boolean) as Array<{ id: string; label: string; count?: string }>;
+
+  const activeTab = tab && evidenceTabs.some((item) => item.id === tab)
+    ? tab
+    : evidenceTabs[0]?.id ?? '';
+
   return (
     <div className={styles.report}>
-      <PageHeader
-        eyebrow={`${session.role} · ${t(`setup.modeShort.${session.mode}`)}`}
-        title={t('report.title')}
-      />
-
+      <header className={styles.head}>
+        <h1>{t('report.title')}</h1>
+        <p>
+          {localizeRole(session.role)}
+          <span aria-hidden> · </span>
+          {t(`setup.modeShort.${session.mode}`)}
+          <span aria-hidden> · </span>
+          {t('setup.type.minutes', { minutes: session.durationMinutes })}
+        </p>
+      </header>
       {session.status !== 'completed' ? (
         <div className={styles.statusBanner} role="status">
           <span>{t('report.processing')}</span>
@@ -263,24 +294,31 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      <section
-        className={styles.outcomeLine}
-        aria-label={`${t('report.overall')}: ${overall}/100`}
-      >
-        <span>{overall}<small>/100</small></span>
-        <div>
-          <Markdown>{outcomeDiagnosis}</Markdown>
+      <section className={styles.verdict} aria-labelledby="report-verdict-title">
+        <p
+          className={styles.verdictScore}
+          role="progressbar"
+          aria-labelledby="report-verdict-title"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={overall}
+        >
+          <strong>{overall}</strong>
+          <span>/100</span>
+        </p>
+        <div className={styles.verdictCopy}>
+          <h2 id="report-verdict-title">{t('report.overall')}</h2>
+          <Markdown block>{outcomeDiagnosis}</Markdown>
         </div>
       </section>
 
       <section className={styles.homework} aria-labelledby="report-homework-title">
         <div className={styles.homeworkCopy}>
-          <div className={styles.homeworkKicker}>
-            <span aria-hidden="true">01</span>
-            {homework
-              ? t(`report.recommendations.priority.${homework.priority}`)
-              : t('report.recommendations.title')}
-          </div>
+          {homework ? (
+            <span className={`${styles.priority} ${styles[homework.priority]}`}>
+              {t(`report.recommendations.priority.${homework.priority}`)}
+            </span>
+          ) : null}
           <h2 id="report-homework-title" className={styles.homeworkTitle}>
             {homework ? (
               <Markdown>{homework.title}</Markdown>
@@ -321,11 +359,8 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
           {session.strengths.length > 0 ? (
             <article className={`${styles.signalCard} ${styles.signalGood}`}>
               <header>
-                <span className={styles.signalIndex} aria-hidden="true">02</span>
-                <div>
-                  <h2>{t('report.strengths')}</h2>
-                  <p>{t('report.keepThese')}</p>
-                </div>
+                <h2>{t('report.strengths')}</h2>
+                <p>{t('report.keepThese')}</p>
               </header>
               <div className={styles.signalLead}>
                 <Markdown block>{session.strengths[0]}</Markdown>
@@ -346,13 +381,10 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
           {(session.gaps.length > 0 || showCoachingPath) ? (
             <article className={`${styles.signalCard} ${styles.signalImprove}`}>
               <header>
-                <span className={styles.signalIndex} aria-hidden="true">03</span>
-                <div>
-                  <h2>{t('report.sharpen')}</h2>
-                  {session.gaps.length > 0 ? (
-                    <p>{t('report.topN', { count: session.gaps.length })}</p>
-                  ) : null}
-                </div>
+                <h2>{t('report.sharpen')}</h2>
+                {session.gaps.length > 0 ? (
+                  <p>{t('report.topN', { count: session.gaps.length })}</p>
+                ) : null}
               </header>
               {session.gaps[0] ? (
                 <div className={styles.signalLead}>
@@ -392,24 +424,9 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
         </section>
       ) : null}
 
-      <section className={styles.scoreSection} aria-labelledby="report-score-title">
-        <div className={styles.scoreIntro}>
-          <span
-            className={styles.scoreNumber}
-            role="progressbar"
-            aria-label={t('report.overall')}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={overall}
-          >
-            {overall}
-          </span>
-          <div>
-            <h2 id="report-score-title">{t('report.overall')}</h2>
-            <p>{t('report.sub')}</p>
-          </div>
-        </div>
-        {breakdown.length > 0 ? (
+      {breakdown.length > 0 ? (
+        <section className={styles.scoreSection} aria-labelledby="report-score-title">
+          <h2 id="report-score-title">{t('report.sub')}</h2>
           <div className={styles.scoreRows}>
             {breakdown.map((item) => (
               <div className={styles.scoreRow} key={item.key}>
@@ -417,33 +434,75 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
                   <span>{item.key}</span>
                   {item.note ? <Markdown>{item.note}</Markdown> : null}
                 </div>
-                <span
-                  className={styles.scoreValue}
+                <div
+                  className={styles.scoreMeter}
                   role="progressbar"
                   aria-label={item.key}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={item.value}
                 >
-                  {item.value}
-                </span>
+                  <span className={styles.scoreTrack} aria-hidden>
+                    <span className={styles.scoreFill} style={{ width: `${item.value}%` }} />
+                  </span>
+                  <span className={styles.scoreValue}>{item.value}</span>
+                </div>
               </div>
             ))}
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
-      {hasDeepDive ? (
-        <section className={styles.deepDive} aria-label={t('report.recommendations.title')}>
-        {hasRecommendations ? <details className={styles.disclosure}>
-          <summary>
-            <span className={styles.disclosureTitle}>
-              <span>{t('report.recommendations.title')}</span>
-              <small>{t('report.recommendations.sub')}</small>
-            </span>
-          </summary>
-          <div className={styles.disclosureBody}>
-            <ol className={styles.recommendationList}>
+      {evidenceTabs.length > 0 ? (
+        <section className={styles.evidence} aria-labelledby="report-evidence-title">
+          <h2 id="report-evidence-title" className="sr-only">{t('report.evidence')}</h2>
+
+          {/* One tab strip instead of four stacked disclosures: the reader can
+              see every piece of evidence that exists before choosing one. */}
+          <div className={styles.tabs} role="tablist" aria-labelledby="report-evidence-title">
+            {evidenceTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`report-tab-${tab.id}`}
+                aria-selected={activeTab === tab.id}
+                aria-controls="report-tabpanel"
+                tabIndex={activeTab === tab.id ? 0 : -1}
+                className={activeTab === tab.id ? styles.tabOn : undefined}
+                onClick={() => setTab(tab.id)}
+                onKeyDown={(event) => {
+                  const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                  if (!keys.includes(event.key)) return;
+                  event.preventDefault();
+                  const ids = evidenceTabs.map((item) => item.id);
+                  const at = ids.indexOf(activeTab);
+                  const next = event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? ids.length - 1
+                      : event.key === 'ArrowLeft'
+                        ? (at - 1 + ids.length) % ids.length
+                        : (at + 1) % ids.length;
+                  setTab(ids[next]);
+                  requestAnimationFrame(() => document.getElementById(`report-tab-${ids[next]}`)?.focus());
+                }}
+              >
+                {tab.label}
+                {tab.count ? <span aria-hidden>{tab.count}</span> : null}
+              </button>
+            ))}
+          </div>
+
+          <div
+            className={styles.tabPanel}
+            id="report-tabpanel"
+            role="tabpanel"
+            aria-labelledby={`report-tab-${activeTab}`}
+            tabIndex={0}
+          >
+            {activeTab === 'steps' && hasRecommendations ? (
+              <ol className={styles.recommendationList}>
                 {recommendations!.map((recommendation, index) => (
                   <li key={`${recommendation.priority}-${index}`}>
                     <div className={styles.recommendationHead}>
@@ -472,58 +531,37 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
                     ) : null}
                   </li>
                 ))}
-            </ol>
-          </div>
-        </details> : null}
+              </ol>
+            ) : null}
 
-        {hasQuestionAnalysis ? (
-          <details className={styles.disclosure}>
-            <summary>
-              <span className={styles.disclosureTitle}>
-                <span>{t('report.questionBreakdown.title')}</span>
-                <small>
-                  {t('report.questionBreakdown.count', {
-                    count: session.questionAnalysis!.length,
-                  })}
-                </small>
-              </span>
-            </summary>
-            <div className={styles.disclosureBody}>
+            {activeTab === 'questions' && hasQuestionAnalysis ? (
               <QuestionBreakdownSection
                 items={session.questionAnalysis}
                 enrichmentPending={reviewPending}
                 showHeading={false}
-                defaultOpenFirst={false}
+                defaultOpenFirst
               />
-            </div>
-          </details>
-        ) : null}
+            ) : null}
 
-        {report.recordingUrl ? (
-          <details className={styles.disclosure}>
-            <summary>
-              <span className={styles.disclosureTitle}>
-                <span>{t('report.recording')}</span>
-                <small>{t(`setup.modeShort.${session.mode}`)}</small>
-              </span>
-            </summary>
-            <div className={styles.mediaBody}>
-              {session.mode === 'video' ? (
-                <video controls preload="metadata" src={report.recordingUrl} />
-              ) : (
-                <audio controls preload="metadata" src={report.recordingUrl} />
-              )}
-            </div>
-          </details>
-        ) : null}
+            {activeTab === 'recording' && report.recordingUrl ? (
+              <div className={styles.mediaBody}>
+                {session.mode === 'video' ? (
+                  <video controls preload="metadata" src={report.recordingUrl} />
+                ) : (
+                  <audio controls preload="metadata" src={report.recordingUrl} />
+                )}
+              </div>
+            ) : null}
 
-        {hasTranscript ? <div className={styles.transcriptShell}>
-          <TranscriptViewer
-            turns={report.transcript}
-            transcriptUrl={report.transcriptUrl}
-          />
-        </div> : null}
-      </section>
+            {activeTab === 'transcript' && hasTranscript ? (
+              <TranscriptViewer
+                embedded
+                turns={report.transcript}
+                transcriptUrl={report.transcriptUrl}
+              />
+            ) : null}
+          </div>
+        </section>
       ) : null}
     </div>
   );

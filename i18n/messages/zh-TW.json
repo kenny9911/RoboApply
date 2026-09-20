@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "面試準備 · {count} 個職缺",
-      "title": "反覆練習，直到",
-      "titleAccent": "不再緊張",
-      "titleAfter": "。",
-      "sub": "選職缺、選面試官、選形式。面試官提問，你回答時旁邊會同步出現提示。",
-      "guide": {
-        "eyebrow": "面試練習",
-        "title": "設定一場模擬面試",
-        "sub": "四個簡短步驟，大約兩分鐘即可完成。",
-        "recent": "最近的面試練習（{count}）",
-        "progressLabel": "面試設定進度",
-        "steps": {
-          "job": "職缺",
-          "style": "面試風格",
-          "preferences": "偏好設定",
-          "review": "確認"
+      "flow": {
+        "title": "練到習以為常。",
+        "sub": "選好你要面試的職缺，其餘的已經照它配好了——開始之前都能改。",
+        "recentTitle": "接著上次繼續",
+        "again": "再練一次這場",
+        "viewReport": "查看報告",
+        "roleLegend": "你要面試哪個職缺？",
+        "categories": "職務類別",
+        "noMatch": "沒有職務符合「{query}」。換個短一點的詞，或直接貼上職缺說明。",
+        "planLegend": "你的這場面試",
+        "planHint": "已照職缺配好，哪一項都能改。",
+        "pickRoleFirst": "先在上面選一個職缺。",
+        "chip": {
+          "focus": "重點",
+          "mode": "形式",
+          "language": "語言"
         },
-        "jobTitle": "你想針對哪個職缺練習面試？",
-        "jobSub": "搜尋職位、瀏覽類別，或貼上職缺說明。",
-        "styleTitle": "為你推薦的練習方案",
-        "styleSub": "我們已依照這個職缺搭配面試官與提問風格。除非你想調整，否則不必變更。",
-        "focusLabel": "面試重點",
-        "planPending": "請先選擇職缺",
-        "changeSetup": "變更面試風格",
-        "preferencesTitle": "你希望這次練習如何進行？",
-        "preferencesSub": "預設值已經設定好了，你可以視需要調整。",
-        "videoHint": "最接近正式面試",
-        "voiceHint": "低壓暖身練習",
-        "reviewTitle": "準備好就開始",
-        "reviewSub": "面試官加入前，最後確認一次。",
-        "previewSummary": "預覽面試可能會問的問題",
-        "back": "上一步",
-        "continue": "繼續",
-        "stepCount": "第 {current} 步，共 {total} 步",
-        "reassurance": "回到上一步也不會失去這些設定。"
+        "tray": {
+          "focus": "這場面試要考什麼？",
+          "length": "要面多久？"
+        },
+        "done": "完成",
+        "costShort": "需要 {n} 點——超過你的餘額",
+        "useShorter": "改成 {minutes} 分鐘",
+        "previewToggle": "預覽面試可能會問的問題"
       },
       "loading": "正在載入面試準備…",
       "startError": "這場面試沒有開始成功。請重試。",
@@ -1463,18 +1453,17 @@
         "on": "開",
         "off": "關",
         "coachModeHint": "回答時給出簡短提示。想更接近真實面試就把它關掉。"
+      },
+      "rail": {
+        "title": "提示與逐字稿",
+        "close": "關閉面板"
       }
     },
     "report": {
       "title": "面試報告",
-      "eyebrow": "已完成 · {minutes} 分鐘",
-      "eyebrowScoring": "正在為你的回答評分",
-      "eyebrowFallback": "練習面試 · 報告",
       "sub": "照真實面試小組的標準來評。",
+      "evidence": "這份報告背後的依據",
       "loading": "正在載入你的報告…",
-      "loadingTitle": "正在讀",
-      "loadingTitleAccent": "你的回答",
-      "loadingTitleAfter": "…",
       "error": "這份報告沒有載入出來。請重試；如果一直失敗，請重新整理頁面。",
       "newInterview": "新的面試",
       "processing": "正在收尾。錄音和分數馬上會出現在這裡。",

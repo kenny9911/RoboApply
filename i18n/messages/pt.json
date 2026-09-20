@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "Preparação · {count} cargos",
-      "title": "Treine até ",
-      "titleAccent": "virar rotina",
-      "titleAfter": ".",
-      "sub": "Escolha um cargo, escolha quem entrevista, escolha um formato. Ele pergunta; as observações aparecem ao seu lado enquanto você responde.",
-      "guide": {
-        "eyebrow": "Treino de entrevista",
-        "title": "Prepare uma entrevista de treino",
-        "sub": "Quatro passos rápidos. Leva cerca de dois minutos.",
-        "recent": "Treinos recentes ({count})",
-        "progressLabel": "Progresso da preparação da entrevista",
-        "steps": {
-          "job": "Cargo",
-          "style": "Estilo da entrevista",
-          "preferences": "Preferências",
-          "review": "Revisão"
+      "flow": {
+        "title": "Treine até virar rotina.",
+        "sub": "Escolha a vaga para a qual você vai ser entrevistado. O resto já está ajustado a ela e dá para mudar tudo antes de começar.",
+        "recentTitle": "Continue de onde parou",
+        "again": "Treinar esta de novo",
+        "viewReport": "Ver o relatório",
+        "roleLegend": "Para qual vaga é a entrevista?",
+        "categories": "Categorias de cargos",
+        "noMatch": "Nenhum cargo corresponde a “{query}”. Tente uma palavra mais curta ou cole o anúncio da vaga.",
+        "planLegend": "Sua entrevista",
+        "planHint": "Ajustada à vaga. Mude o que quiser.",
+        "pickRoleFirst": "Escolha uma vaga acima para começar.",
+        "chip": {
+          "focus": "Foco",
+          "mode": "Formato",
+          "language": "Idioma"
         },
-        "jobTitle": "Para qual cargo você quer treinar?",
-        "jobSub": "Busque um cargo, navegue por uma categoria ou cole uma descrição da vaga.",
-        "styleTitle": "Seu plano de treino recomendado",
-        "styleSub": "Combinamos quem vai entrevistar e o estilo das perguntas com este cargo. Mude qualquer um deles só se quiser.",
-        "focusLabel": "Foco da entrevista",
-        "planPending": "Escolha um cargo primeiro",
-        "changeSetup": "Mudar o estilo da entrevista",
-        "preferencesTitle": "Como você quer que este treino seja?",
-        "preferencesSub": "As opções padrão já estão prontas. Ajuste o que quiser.",
-        "videoHint": "Mais parecido com a entrevista real",
-        "voiceHint": "Aquecimento com menos pressão",
-        "reviewTitle": "Tudo pronto quando você estiver",
-        "reviewSub": "Confira tudo uma última vez antes de quem vai entrevistar entrar.",
-        "previewSummary": "Ver o que podem perguntar",
-        "back": "Voltar",
-        "continue": "Continuar",
-        "stepCount": "Passo {current} de {total}",
-        "reassurance": "Você pode voltar sem perder estas escolhas."
+        "tray": {
+          "focus": "O que esta entrevista deve cobrir?",
+          "length": "Quanto tempo ela deve durar?"
+        },
+        "done": "Pronto",
+        "costShort": "{n} créditos — mais do que você tem",
+        "useShorter": "Usar {minutes} min",
+        "previewToggle": "Ver o que podem perguntar"
       },
       "loading": "Carregando a preparação…",
       "startError": "Essa entrevista não pôde começar. Tente de novo.",
@@ -1463,18 +1453,17 @@
         "on": "Ligadas",
         "off": "Desligadas",
         "coachModeHint": "Observações curtas enquanto você responde. Desligue para uma rodada que pareça real."
+      },
+      "rail": {
+        "title": "Observações e transcrição",
+        "close": "Fechar o painel"
       }
     },
     "report": {
       "title": "Relatório da entrevista",
-      "eyebrow": "Sessão concluída · {minutes} min",
-      "eyebrowScoring": "Avaliando suas respostas",
-      "eyebrowFallback": "Entrevista de treino · relatório",
       "sub": "Avaliado do jeito que a banca real avaliaria.",
+      "evidence": "As evidências por trás deste relatório",
       "loading": "Carregando seu relatório…",
-      "loadingTitle": "Lendo ",
-      "loadingTitleAccent": "suas respostas",
-      "loadingTitleAfter": "…",
       "error": "Esse relatório não carregou. Tente de novo e, se continuar falhando, recarregue a página.",
       "newInterview": "Nova entrevista",
       "processing": "Finalizando. A gravação e a nota aparecem aqui em instantes.",

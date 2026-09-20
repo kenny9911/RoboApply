@@ -1,15 +1,13 @@
 'use client';
 
-// /mock-interview — SETUP (V3 design) wired to the real-time Interview Engine.
+// /practice — SETUP, wired to the real-time Interview Engine.
 //
-// Keeps the polished V3 setup UI (RolePicker · InterviewerPicker · TypePicker ·
-// FormatPicker · LangDurationPicker · LaunchBar + RecentSessionsStrip, all on the
-// .iv-* class family) and the RA mock catalog for the pickers. On launch it
-// creates a real InterviewSession via the Interview Engine (LiveKit voice) and
-// routes to the live room. The engine's persona ids are aligned to this
-// catalog's interviewer ids, so the selection maps 1:1.
+// This file owns the state and the engine calls; PracticeSetupFlow owns the
+// screen. On launch it creates a real InterviewSession via the Interview
+// Engine (LiveKit voice) and routes to the live room. The engine's persona ids
+// are aligned to this catalog's interviewer ids, so the selection maps 1:1.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { RoboApiError } from '../../../lib/api/client';
@@ -17,10 +15,13 @@ import { raV2Api } from '../../../lib/api/v2';
 import { useCredits } from '../../../hooks/useAccount';
 
 import { useMockCatalog } from '../../../hooks/useMockV3';
-import { PageHeader } from '../../../components/v3/primitives/PageHeader';
-import { Btn } from '../../../components/v3/primitives/Btn';
-import { PracticeSetupFlow } from '../../../components/v3/mock';
-import { JD_MIN_CHARS, type RoleSourceMode } from '../../../components/v3/mock/RolePicker';
+import {
+  PracticeSetupFlow,
+  PracticeSetupError,
+  PracticeSetupSkeleton,
+  JD_MIN_CHARS,
+  type RoleSourceMode,
+} from '../../../components/v3/mock';
 import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
 import { recommendationsForRole } from '../../../lib/interviewRecommendations';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
@@ -139,48 +140,73 @@ export default function MockSetupPage() {
   const [insufficientCredits, setInsufficientCredits] = useState<{ balance: number; required: number } | null>(null);
   const creditsQ = useCredits();
 
+  // Restore a whole saved plan (a past session, or a report's "Run it again"
+  // link) onto the brief. Every id is validated against the CURRENT catalog, so
+  // a retired persona or type simply falls back to today's recommendation
+  // instead of launching an interview the engine can't build.
+  //
+  // Shared by the ?role=… URL hydration below and the recent-practice lane, so
+  // both paths restore exactly the same fields.
+  const applyPlan = useCallback((plan: {
+    role: string;
+    interviewer?: string | null;
+    type?: string | null;
+    mode?: string | null;
+    language?: string | null;
+    duration?: number | null;
+  }): boolean => {
+    if (!catalog) return false;
+    const planRole = plan.role.trim();
+    const category = catalog.roleCategories.find((item) => item.roles.includes(planRole));
+    if (!planRole || !category) return false;
+
+    const planInterviewer = catalog.interviewers.find((item) => item.id === plan.interviewer)?.id ?? null;
+    const planType = catalog.types.find((item) => item.id === plan.type)?.id ?? null;
+    const planDuration =
+      typeof plan.duration === 'number' && Number.isInteger(plan.duration) && plan.duration >= 5 && plan.duration <= 120
+        ? plan.duration
+        : null;
+
+    setSourceMode('role');
+    setQuery('');
+    setActiveCategory(category.name);
+    setRole(planRole);
+    setInterviewerId(planInterviewer);
+    setTypeId(planType);
+    if (plan.mode === 'video' || plan.mode === 'voice') setFormat(plan.mode);
+    if (INTERVIEW_LOCALES.some((locale) => locale.code === plan.language)) {
+      setLanguage(plan.language as string);
+    }
+    setDurationOverride(planDuration);
+    setInsufficientCredits(null);
+    setStartError(false);
+
+    // A complete saved plan should survive the role-aware defaulting effect.
+    // Partial or stale plans intentionally fall back to current recommendations.
+    const target = planInterviewer && planType ? `role:${planRole}` : null;
+    replayTargetRef.current = target;
+    defaultedTargetRef.current = target;
+    return true;
+  }, [catalog]);
+
   // A report's "Run it again" action carries the last interview plan in the
-  // URL. Hydrate it after the catalog is ready so every id is validated against
-  // the current choices, while keeping the server-rendered first frame stable.
+  // URL. Hydrate it after the catalog is ready, while keeping the
+  // server-rendered first frame stable.
   useEffect(() => {
     if (!catalog || replayHydratedRef.current || typeof window === 'undefined') return;
     replayHydratedRef.current = true;
 
     const params = new URLSearchParams(window.location.search);
-    const replayRole = params.get('role')?.trim() ?? '';
-    const replayCategory = catalog.roleCategories.find((item) => item.roles.includes(replayRole));
-    if (!replayRole || !replayCategory) return;
-
-    const replayInterviewer = catalog.interviewers.find(
-      (item) => item.id === params.get('interviewer'),
-    )?.id ?? null;
-    const replayType = catalog.types.find((item) => item.id === params.get('type'))?.id ?? null;
-    const replayMode = params.get('mode');
-    const replayLanguage = params.get('language');
     const parsedDuration = Number(params.get('duration'));
-    const replayDuration =
-      Number.isInteger(parsedDuration) && parsedDuration >= 5 && parsedDuration <= 120
-        ? parsedDuration
-        : null;
-
-    setSourceMode('role');
-    setQuery('');
-    setActiveCategory(replayCategory.name);
-    setRole(replayRole);
-    setInterviewerId(replayInterviewer);
-    setTypeId(replayType);
-    if (replayMode === 'video' || replayMode === 'voice') setFormat(replayMode);
-    if (INTERVIEW_LOCALES.some((locale) => locale.code === replayLanguage)) {
-      setLanguage(replayLanguage as string);
-    }
-    setDurationOverride(replayDuration);
-
-    // A complete saved plan should survive the role-aware defaulting effect.
-    // Partial or stale links intentionally fall back to current recommendations.
-    const replayTarget = replayInterviewer && replayType ? `role:${replayRole}` : null;
-    replayTargetRef.current = replayTarget;
-    defaultedTargetRef.current = replayTarget;
-  }, [catalog]);
+    applyPlan({
+      role: params.get('role')?.trim() ?? '',
+      interviewer: params.get('interviewer'),
+      type: params.get('type'),
+      mode: params.get('mode'),
+      language: params.get('language'),
+      duration: Number.isFinite(parsedDuration) ? parsedDuration : null,
+    });
+  }, [catalog, applyPlan]);
 
   const effectiveCategory = activeCategory || catalog?.roleCategories[0]?.name || '';
 
@@ -327,6 +353,22 @@ export default function MockSetupPage() {
     router.push(`/practice/${sessionId}/report`);
   }
 
+  // "Practice this again" — restore that session's whole plan onto the brief.
+  // It stops short of launching: a new interview spends credits, so the
+  // candidate still presses Start.
+  function repeat(sessionId: string) {
+    const past = recent.find((item) => item.id === sessionId);
+    if (!past) return;
+    applyPlan({
+      role: past.role,
+      interviewer: past.personaId,
+      type: past.interviewType,
+      mode: past.mode,
+      language: past.language,
+      duration: past.durationMinutes,
+    });
+  }
+
   // Delete a past session + its recording. Optimistic: drop it from the list
   // right away; if the server delete fails, re-sync from the server's truth.
   async function removeSession(sessionId: string) {
@@ -393,43 +435,12 @@ export default function MockSetupPage() {
     });
   }
 
-  const header = (
-    <PageHeader
-      eyebrow={t('setup.eyebrow', { count: catalog?.totalRoles ?? 57 })}
-      eyebrowLive
-      title={`${t('setup.title')} ${t('setup.titleAccent')}${t('setup.titleAfter')}`}
-      sub={t('setup.sub')}
-    />
-  );
-
   if (catalogQuery.isError) {
-    return (
-      <>
-        {header}
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-4 text-center"
-          style={{ border: '1px solid var(--rule)', background: 'var(--surface)', borderRadius: 'var(--r-lg)', padding: '52px 32px' }}
-        >
-          <p style={{ fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
-            {t('setup.error.title')}
-          </p>
-          <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', maxWidth: 420, margin: 0 }}>{t('setup.error.body')}</p>
-          <Btn variant="primary" onClick={() => void catalogQuery.refetch()}>{t('setup.error.retry')}</Btn>
-        </div>
-      </>
-    );
+    return <PracticeSetupError onRetry={() => void catalogQuery.refetch()} />;
   }
 
   if (catalogQuery.isLoading || !catalog) {
-    return (
-      <>
-        {header}
-        <div aria-busy="true" aria-label={t('setup.loading')} style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', padding: '40px 0' }}>
-          {t('setup.loading')}
-        </div>
-      </>
-    );
+    return <PracticeSetupSkeleton />;
   }
 
   return (
@@ -470,6 +481,7 @@ export default function MockSetupPage() {
       }}
       recentSessions={recentSummaries}
       onReplay={(session) => replay(session.id)}
+      onRepeat={(session) => repeat(session.id)}
       onDelete={(session) => void removeSession(session.id)}
       previewState={previewMut.isPending ? 'loading' : previewMut.isError ? 'error' : previewMut.data ? 'ready' : 'idle'}
       requirements={previewMut.data?.requirements ?? null}

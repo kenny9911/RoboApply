@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "面接対策 · {count}職種",
-      "title": "練習を重ねて",
-      "titleAccent": "当たり前にする",
-      "titleAfter": "。",
-      "sub": "職種、面接官、形式を選んでください。面接官が質問し、答えている間に横に指摘が出ます。",
-      "guide": {
-        "eyebrow": "面接練習",
-        "title": "練習面接を準備します",
-        "sub": "4つの短いステップです。所要時間は約2分です。",
-        "recent": "最近の練習（{count}件）",
-        "progressLabel": "面接設定の進捗",
-        "steps": {
-          "job": "職種",
-          "style": "面接スタイル",
-          "preferences": "希望設定",
-          "review": "確認"
+      "flow": {
+        "title": "面接が当たり前になるまで練習を。",
+        "sub": "受ける職種を選んでください。あとはそれに合わせて設定済みです。始める前ならどれでも変えられます。",
+        "recentTitle": "続きから始める",
+        "again": "もう一度練習する",
+        "viewReport": "レポートを見る",
+        "roleLegend": "どの職種の面接を受けますか？",
+        "categories": "職種カテゴリー",
+        "noMatch": "「{query}」に一致する職種はありません。短い言葉で試すか、求人票を貼り付けてください。",
+        "planLegend": "今回の面接",
+        "planHint": "職種に合わせて設定済みです。どれでも変えられます。",
+        "pickRoleFirst": "まず上で職種を選んでください。",
+        "chip": {
+          "focus": "重点",
+          "mode": "形式",
+          "language": "言語"
         },
-        "jobTitle": "どの職種の面接を練習しますか？",
-        "jobSub": "職種を検索するか、カテゴリーから選ぶか、求人票を貼り付けてください。",
-        "styleTitle": "おすすめの練習プラン",
-        "styleSub": "この職種に合わせて、面接官と質問形式を選びました。変更したい場合のみ調整してください。",
-        "focusLabel": "面接の重点",
-        "planPending": "まず職種を選んでください",
-        "changeSetup": "面接スタイルを変更",
-        "preferencesTitle": "どのような形で練習しますか？",
-        "preferencesSub": "標準設定のまま始められます。必要に応じて調整してください。",
-        "videoHint": "本番の面接に最も近い形式です",
-        "voiceHint": "負担を抑えたウォームアップです",
-        "reviewTitle": "いつでも始められます",
-        "reviewSub": "面接官が参加する前に、最後に内容を確認してください。",
-        "previewSummary": "聞かれる可能性のある質問を確認",
-        "back": "戻る",
-        "continue": "続ける",
-        "stepCount": "ステップ {current} / {total}",
-        "reassurance": "前の画面に戻っても、選択内容は保持されます。"
+        "tray": {
+          "focus": "この面接で何を扱いますか？",
+          "length": "何分で行いますか？"
+        },
+        "done": "完了",
+        "costShort": "{n}クレジット必要（残高が足りません）",
+        "useShorter": "{minutes}分にする",
+        "previewToggle": "聞かれる可能性のある質問を確認"
       },
       "loading": "面接対策を読み込んでいます…",
       "startError": "この面接を開始できませんでした。もう一度試してください。",
@@ -1463,18 +1453,17 @@
         "on": "オン",
         "off": "オフ",
         "coachModeHint": "回答中に短い指摘が出ます。本番に近づけたいときはオフにしてください。"
+      },
+      "rail": {
+        "title": "指摘と文字起こし",
+        "close": "パネルを閉じる"
       }
     },
     "report": {
       "title": "面接レポート",
-      "eyebrow": "セッション終了 · {minutes}分",
-      "eyebrowScoring": "回答を採点しています",
-      "eyebrowFallback": "練習面接 · レポート",
       "sub": "実際の面接官と同じ観点で採点しました。",
+      "evidence": "この評価の根拠",
       "loading": "レポートを読み込んでいます…",
-      "loadingTitle": "あなたの",
-      "loadingTitleAccent": "回答を読んでいます",
-      "loadingTitleAfter": "…",
       "error": "このレポートを読み込めませんでした。もう一度試して、それでも失敗する場合はページを再読み込みしてください。",
       "newInterview": "新しい面接",
       "processing": "仕上げています。録画と採点はまもなくここに表示されます。",

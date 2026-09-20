@@ -876,41 +876,31 @@
   },
   "practice": {
     "setup": {
-      "eyebrow": "면접 준비 · 직무 {count}개",
-      "title": "연습해서",
-      "titleAccent": "당연한 일로 만들어요",
-      "titleAfter": ".",
-      "sub": "직무, 면접관, 형식을 골라주세요. 면접관이 묻고, 답하는 동안 옆에 짚어주는 말이 나와요.",
-      "guide": {
-        "eyebrow": "면접 연습",
-        "title": "연습 면접을 준비해요",
-        "sub": "간단한 4단계로, 약 2분이면 돼요.",
-        "recent": "최근 연습 ({count})",
-        "progressLabel": "면접 설정 진행률",
-        "steps": {
-          "job": "직무",
-          "style": "면접 방식",
-          "preferences": "설정",
-          "review": "확인"
+      "flow": {
+        "title": "면접이 익숙해질 때까지 연습해요.",
+        "sub": "면접 볼 직무만 고르세요. 나머지는 거기에 맞춰 이미 준비돼 있고, 시작 전에 뭐든 바꿀 수 있어요.",
+        "recentTitle": "멈춘 곳부터 이어서",
+        "again": "이 면접 다시 연습하기",
+        "viewReport": "리포트 보기",
+        "roleLegend": "어떤 직무로 면접을 보나요?",
+        "categories": "직무 카테고리",
+        "noMatch": "‘{query}’와 맞는 직무가 없어요. 더 짧은 단어로 찾거나 채용 공고를 붙여 넣어 보세요.",
+        "planLegend": "이번 면접",
+        "planHint": "직무에 맞춰 골라뒀어요. 뭐든 바꿀 수 있어요.",
+        "pickRoleFirst": "위에서 직무를 먼저 골라주세요.",
+        "chip": {
+          "focus": "다룰 내용",
+          "mode": "형식",
+          "language": "언어"
         },
-        "jobTitle": "어떤 직무의 면접을 연습할까요?",
-        "jobSub": "직무를 검색하거나 카테고리에서 찾거나, 채용 공고를 붙여 넣으세요.",
-        "styleTitle": "추천 연습 플랜",
-        "styleSub": "이 직무에 맞춰 면접관과 질문 방식을 골랐어요. 원할 때만 바꿔도 돼요.",
-        "focusLabel": "면접에서 다룰 내용",
-        "planPending": "먼저 직무를 선택해 주세요",
-        "changeSetup": "면접 방식 바꾸기",
-        "preferencesTitle": "어떤 방식으로 연습할까요?",
-        "preferencesSub": "기본값은 이미 준비됐어요. 원하는 것만 조정해 주세요.",
-        "videoHint": "실제 면접과 가장 비슷해요",
-        "voiceHint": "부담 없이 워밍업해요",
-        "reviewTitle": "준비되면 시작해요",
-        "reviewSub": "면접관이 들어오기 전에 마지막으로 확인해 주세요.",
-        "previewSummary": "예상 질문 미리 보기",
-        "back": "뒤로",
-        "continue": "계속",
-        "stepCount": "{total}단계 중 {current}단계",
-        "reassurance": "뒤로 돌아가도 선택한 내용은 사라지지 않아요."
+        "tray": {
+          "focus": "이 면접에서 무엇을 다룰까요?",
+          "length": "얼마나 길게 볼까요?"
+        },
+        "done": "완료",
+        "costShort": "크레딧 {n}개 필요 — 잔액보다 많아요",
+        "useShorter": "{minutes}분으로 하기",
+        "previewToggle": "예상 질문 미리 보기"
       },
       "loading": "면접 준비를 불러오는 중…",
       "startError": "이 면접을 시작하지 못했어요. 다시 시도해 주세요.",
@@ -1463,18 +1453,17 @@
         "on": "켬",
         "off": "끔",
         "coachModeHint": "답하는 동안 짧게 짚어줘요. 실제처럼 해보고 싶으면 꺼두세요."
+      },
+      "rail": {
+        "title": "짚어주기와 대화록",
+        "close": "패널 닫기"
       }
     },
     "report": {
       "title": "면접 리포트",
-      "eyebrow": "세션 완료 · {minutes}분",
-      "eyebrowScoring": "답변을 채점하는 중",
-      "eyebrowFallback": "연습 면접 · 리포트",
       "sub": "실제 면접관이 보는 기준으로 채점했어요.",
+      "evidence": "이 리포트의 근거",
       "loading": "리포트를 불러오는 중…",
-      "loadingTitle": "답변을",
-      "loadingTitleAccent": "읽는 중",
-      "loadingTitleAfter": "…",
       "error": "이 리포트를 불러오지 못했어요. 다시 시도해 보고, 계속 안 되면 페이지를 새로고침해 주세요.",
       "newInterview": "새 면접",
       "processing": "마무리하는 중이에요. 녹화와 점수가 곧 여기에 나와요.",

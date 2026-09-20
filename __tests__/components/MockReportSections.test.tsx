@@ -1,5 +1,5 @@
-// Mock-interview REPORT sections (v3) — RecommendationsCard +
-// QuestionBreakdownSection. Verifies the new localized report sections render
+// Mock-interview REPORT sections (v3) — QuestionBreakdownSection +
+// TranscriptViewer. Verifies the new localized report sections render
 // their LLM content (via the sanitized Markdown primitive), resolve their
 // ie.report.* i18n keys against the real en bundle, and handle the
 // pending/unavailable states.
@@ -8,23 +8,12 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 import { IntlWrapper } from '../utils/mockTranslations';
-import { RecommendationsCard } from '../../components/v3/mock/RecommendationsCard';
 import { QuestionBreakdownSection } from '../../components/v3/mock/QuestionBreakdownSection';
 import { TranscriptViewer, groupTranscript } from '../../components/v3/mock/TranscriptViewer';
 import type {
-  IERecommendation,
   IEQuestionAnalysisItem,
   IETranscriptTurn,
 } from '../../lib/api/interviewEngine';
-
-const REC: IERecommendation = {
-  title: 'Quantify your impact',
-  priority: 'high',
-  detail: 'You described the migration without a single metric.',
-  example: 'Before: "we improved performance." After: "cut p95 latency 40% (820ms → 490ms)."',
-  drill: 'Re-answer 3 stories in 90s each, one number per story.',
-  linkedDimension: 'roleFit',
-};
 
 const QUESTION: IEQuestionAnalysisItem = {
   questionIndex: 0,
@@ -43,44 +32,6 @@ const QUESTION: IEQuestionAnalysisItem = {
   score: 42,
   tags: ['no tradeoffs'],
 };
-
-describe('RecommendationsCard', () => {
-  it('renders a recommendation with priority, example, drill, and dimension', () => {
-    render(
-      <IntlWrapper>
-        <RecommendationsCard recommendations={[REC]} />
-      </IntlWrapper>,
-    );
-    expect(screen.getByText('What to do next')).toBeInTheDocument();
-    expect(screen.getByText('Quantify your impact')).toBeInTheDocument();
-    expect(screen.getByText('Do this first')).toBeInTheDocument();
-    expect(screen.getByText(/single metric/i)).toBeInTheDocument();
-    expect(screen.getByText('Example rewrite')).toBeInTheDocument();
-    expect(screen.getByText('Practice this')).toBeInTheDocument();
-    // The report's five scores are now questions, not analyst nouns (C16).
-    expect(
-      screen.getByText('Did you answer the whole question?'),
-    ).toBeInTheDocument(); // linkedDimension label
-  });
-
-  it('shows the pending note when enrichment has not landed', () => {
-    render(
-      <IntlWrapper>
-        <RecommendationsCard recommendations={null} enrichmentPending />
-      </IntlWrapper>,
-    );
-    expect(screen.getByText(/next steps are being written/i)).toBeInTheDocument();
-  });
-
-  it('shows the empty note for a flawless session', () => {
-    render(
-      <IntlWrapper>
-        <RecommendationsCard recommendations={[]} />
-      </IntlWrapper>,
-    );
-    expect(screen.getByText(/Nothing to change/i)).toBeInTheDocument();
-  });
-});
 
 describe('QuestionBreakdownSection', () => {
   it('renders a question with analysis / correction / suggestion / model answer', () => {
