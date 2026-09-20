@@ -290,20 +290,3 @@ export function CoachMeters({ metrics, listeningFor }: { metrics: CoachMetrics; 
     </div>
   );
 }
-
-// ── Coach Mode toggle (controls row) ──────────────────────────────────────────
-export function CoachToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
-  const t = useTranslations('practice');
-  return (
-    <button
-      type="button"
-      className={`btn ${on ? 'coach-on' : 'ghost'}`}
-      onClick={onToggle}
-      aria-pressed={on}
-      title={t('live.coach.coachModeHint')}
-    >
-      <IconSparkle size={12} />
-      {t('live.coach.coachMode')} · {on ? t('live.coach.on') : t('live.coach.off')}
-    </button>
-  );
-}
