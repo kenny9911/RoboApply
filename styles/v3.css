@@ -37,6 +37,21 @@
 .v3-root ::-webkit-scrollbar-track { background: transparent; }
 .v3-root ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: var(--r-pill); }
 .v3-root ::-webkit-scrollbar-thumb:hover { background: var(--rule-strong); }
+.v3-root { scrollbar-color: var(--surface-3) transparent; }
+
+/* ─── BROWSER SURFACES ───
+   Selection and the text caret ship with a browser default that belongs to no
+   design system. Both are drawn from the palette so a dragged selection or a
+   blinking cursor reads as part of the product rather than as the OS. */
+.v3-root ::selection {
+  background: var(--action-subtle);
+  color: var(--text);
+}
+.v3-root input,
+.v3-root textarea,
+.v3-root [contenteditable] {
+  caret-color: var(--action);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    APP SHELL
@@ -2322,6 +2337,9 @@ html[data-theme='dark'] .match-meter[data-tier='great'] { background: var(--surf
   margin-bottom: var(--sp-3);
 }
 .iv-interviewer-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
   font-size: var(--fs-label);
   letter-spacing: var(--ls-label);
   font-weight: 500;
@@ -2641,17 +2659,21 @@ html[data-theme='dark'] .match-meter[data-tier='great'] { background: var(--surf
   font-weight: 500;
   z-index: 4;
 }
-.iv-vt-state-pill .dot {
+.iv-vt-state-pill .dot,
+.iv-interviewer-state .dot {
   width: 6px; height: 6px; border-radius: 50%;
+  flex: 0 0 auto;
   background: var(--text-muted);
 }
 /* Both dots track a genuinely live audio state, so the blink stays; the halo
  * under each one does not. */
-.iv-vt-state-pill .dot.speaking {
+.iv-vt-state-pill .dot.speaking,
+.iv-interviewer-state .dot.speaking {
   background: var(--action);
   animation: blink 1.2s ease infinite;
 }
-.iv-vt-state-pill .dot.listening {
+.iv-vt-state-pill .dot.listening,
+.iv-interviewer-state .dot.listening {
   background: var(--live);
   animation: blink 1s ease infinite;
 }

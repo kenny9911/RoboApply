@@ -58,17 +58,12 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
         </div>
 
         <div className="iv-vt-state-pill">
-          {aiState === 'asking' ? (
-            <>
-              <span className="dot speaking" /> {t('live.state.speaking')}
-            </>
-          ) : aiState === 'listening' ? (
-            <>
-              <span className="dot listening" /> {t('live.state.listening')}
-            </>
-          ) : (
-            <>⋯ {t('live.state.thinking')}</>
-          )}
+          <span className={`dot ${aiState === 'asking' ? 'speaking' : aiState}`} />
+          {aiState === 'asking'
+            ? t('live.state.speaking')
+            : aiState === 'listening'
+              ? t('live.state.listening')
+              : t('live.state.thinking')}
         </div>
 
         <div className="iv-vt-name-overlay">
@@ -98,11 +93,12 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
       <div className="iv-interviewer-name">{interviewer.name}</div>
       <div className="iv-interviewer-role">{interviewer.role}</div>
       <div className="iv-interviewer-state">
+        <span className={`dot ${aiState === 'asking' ? 'speaking' : aiState}`} />
         {aiState === 'asking'
-          ? `◉  ${t('live.state.asking')}`
+          ? t('live.state.asking')
           : aiState === 'listening'
-            ? `◌  ${t('live.state.listening')}`
-            : `⋯  ${t('live.state.thinking')}`}
+            ? t('live.state.listening')
+            : t('live.state.thinking')}
       </div>
     </div>
   );

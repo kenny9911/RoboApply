@@ -144,4 +144,98 @@ export const IconSettings = (p: IconProps) => (
   </Icon>
 );
 
+// ── Practice / interview set ───────────────────────────────────────────────
+// Drawn on the same 24 grid at 1.5px so they sit beside the originals without
+// a visible weight break.
+
+export const IconMic = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+    <path d="M5 11a7 7 0 0 0 14 0" />
+    <path d="M12 18v3" />
+  </Icon>
+);
+export const IconMicOff = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 9V6a3 3 0 0 1 5.9-.7" />
+    <path d="M15 11.5V12a3 3 0 0 1-4.6 2.5" />
+    <path d="M5 11a7 7 0 0 0 10.6 6" />
+    <path d="M19 11v1" />
+    <path d="M12 18v3" />
+    <path d="m4 4 16 16" />
+  </Icon>
+);
+export const IconCamera = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 7.5h10a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 2 15V9a1.5 1.5 0 0 1 1.5-1.5Z" />
+    <path d="m15 11 5.2-2.9a.6.6 0 0 1 .8.5v6.8a.6.6 0 0 1-.8.5L15 13Z" />
+  </Icon>
+);
+export const IconCameraOff = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8.5 7.5h5a1.5 1.5 0 0 1 1.5 1.5v3" />
+    <path d="M15 13v2a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 2 15V9a1.5 1.5 0 0 1 1.5-1.5h.6" />
+    <path d="m15 11 5.2-2.9a.6.6 0 0 1 .8.5v6.8a.6.6 0 0 1-.8.5l-2-1.1" />
+    <path d="m4 4 16 16" />
+  </Icon>
+);
+export const IconWaveform = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 10.5v3M8 7v10M12 4.5v15M16 8v8M20 10.5v3" />
+  </Icon>
+);
+export const IconChevron = (p: IconProps) => <Icon d="m6 9 6 6 6-6" {...p} />;
+export const IconPerson = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M5 20a7 7 0 0 1 14 0" />
+  </Icon>
+);
+export const IconTarget = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none" />
+  </Icon>
+);
+export const IconGlobe = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18" />
+    <path d="M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" />
+  </Icon>
+);
+export const IconTranscript = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 5.5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H8.5L4.5 20v-3H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z" />
+    <path d="M7 10h7M7 13h5" />
+  </Icon>
+);
+export const IconEndCall = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.6 14.2a1.4 1.4 0 0 1-.4-1.4C4 9.6 7.6 7.5 12 7.5s8 2.1 8.8 5.3a1.4 1.4 0 0 1-.4 1.4l-1.6 1.4a1.4 1.4 0 0 1-1.8 0l-1.5-1.2a1.4 1.4 0 0 1-.5-1.3l.2-1.2a10 10 0 0 0-6.4 0l.2 1.2a1.4 1.4 0 0 1-.5 1.3L7 16.6a1.4 1.4 0 0 1-1.8 0Z" />
+  </Icon>
+);
+export const IconPanel = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="4.5" width="18" height="15" rx="2" />
+    <path d="M14.5 4.5v15" />
+  </Icon>
+);
+export const IconSliders = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+    <circle cx="16" cy="7" r="2" />
+    <circle cx="8" cy="17" r="2" />
+  </Icon>
+);
+export const IconHistory = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+    <path d="M3 4v4.5h4.5" />
+    <path d="M12 7.5V12l3 1.8" />
+  </Icon>
+);
+
+
 export { Icon };
