@@ -2,7 +2,12 @@ import OpenAI from 'openai';
 import { Message, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '../../types/index.js';
 import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions } from './providerTuning.js';
 import { openAIJsonResponseFormat } from './jsonMode.js';
-import { OPENROUTER_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
+import { modelSupportsReasoningEffort, OPENROUTER_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
+
+// Match the existing DeepSeek reserve for small structured-output calls.
+// OpenAI reasoning models share their completion limit with the final answer;
+// the scorer's 1,500-token answer allowance alone was all spent on reasoning.
+const DEFAULT_OPENAI_REASONING_HEADROOM_TOKENS = 8_000;
 
 export class OpenRouterProvider implements LLMProvider {
   private client: OpenAI;
@@ -53,6 +58,20 @@ export class OpenRouterProvider implements LLMProvider {
           allow: OPENROUTER_EFFORTS,
         }));
 
+    // OpenRouter maps reasoning.max_tokens to an effort for OpenAI models,
+    // not a hard reasoning cap. Give these models an additional allowance in
+    // the combined completion limit, including when their default effort is
+    // used. An explicit effort supersedes the numeric budget above, so it also
+    // uses the default reserve here. Other vendors retain their budget semantics.
+    let maxTokens = options?.maxTokens;
+    if (maxTokens !== undefined && Number.isFinite(maxTokens) && maxTokens > 0
+      && modelSupportsReasoningEffort(model)) {
+      const budget = !effort ? options?.reasoningMaxTokens : undefined;
+      maxTokens += budget !== undefined && Number.isFinite(budget) && budget > 0
+        ? budget
+        : DEFAULT_OPENAI_REASONING_HEADROOM_TOKENS;
+    }
+
     const response = await this.client.chat.completions.create(
       {
         model,
@@ -61,14 +80,11 @@ export class OpenRouterProvider implements LLMProvider {
           content: m.content as any,
         })),
         temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxTokens,
-        // OpenRouter's unified reasoning control. `max_tokens` bounds a
-        // thinking model's reasoning budget so it cannot consume the whole
-        // max_tokens and return empty content; `effort` is the qualitative
-        // dial (LLM_REASONING_EFFORT / admin tuning) for models — like the
-        // gpt-5.6 default — that expose one. OpenRouter drops the param for
-        // models without reasoning support. (Not in the OpenAI SDK types; the
-        // SDK passes unknown body fields through.)
+        max_tokens: maxTokens,
+        // Numeric reasoning caps apply only on supporting models; OpenAI uses
+        // effort, with completion headroom handled above. OpenRouter drops the
+        // control for models without reasoning support. The SDK passes this
+        // extension through despite it not being in its request types.
         ...(options?.reasoningMaxTokens && !effort
           ? { reasoning: { max_tokens: options.reasoningMaxTokens } }
           : effort
@@ -133,7 +149,8 @@ export class OpenRouterProvider implements LLMProvider {
       // withLLMRetry to fail fast. Upstream provider errors and content
       // filters stay retryable.
       const nativeFinish = (choice?.native_finish_reason || '').toLowerCase();
-      if (choice?.finish_reason === 'length' || nativeFinish === 'length' || nativeFinish === 'max_tokens') {
+      if (choice?.finish_reason === 'length'
+        || ['length', 'max_tokens', 'max_output_tokens'].includes(nativeFinish)) {
         err.nonRetryable = true;
         err.finishReason = choice?.finish_reason || choice?.native_finish_reason;
       }

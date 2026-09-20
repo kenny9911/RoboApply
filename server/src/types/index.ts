@@ -26,12 +26,13 @@ export interface Message {
 
 export interface LLMOptions {
   temperature?: number;
+  // Completion budget. Thinking-enabled DeepSeek and OpenAI reasoning models
+  // via OpenRouter add reasoning headroom to this answer allowance.
   maxTokens?: number;
-  // Cap on REASONING tokens for thinking models (OpenRouter unified
-  // `reasoning.max_tokens`). Without it, dynamic thinking can burn the whole
-  // maxTokens budget and return empty content (finish_reason=length). Set it
-  // well below maxTokens so the answer always has headroom. Ignored by
-  // providers/models without reasoning support.
+  // Reasoning budget. OpenRouter sends reasoning.max_tokens: models with hard
+  // caps count it within maxTokens; OpenAI models map it to effort and also add
+  // it as completion headroom. DeepSeek adds it as headroom when thinking is on.
+  // On OpenRouter an explicit reasoningEffort supersedes this numeric budget.
   reasoningMaxTokens?: number;
   // Per-call qualitative reasoning effort. Task-specific callers use this to
   // override provider/admin/global tuning without mutating shared state.
