@@ -50,6 +50,15 @@ const build = await context({
       builder.onResolve({ filter: /^next\/(navigation|link)$/ }, ({ path }) => ({
         path: resolve(preview, path.endsWith('/link') ? 'link.tsx' : 'navigation.ts'),
       }));
+      // The live interview room is unreviewable without a WebRTC room, a voice
+      // worker and spent credits, so the preview renders it against a scripted
+      // stand-in. Layout and states only — never connection behaviour.
+      builder.onResolve({ filter: /^livekit-client$|^@livekit\/components-react$/ }, () => ({
+        path: resolve(preview, 'livekit.tsx'),
+      }));
+      builder.onResolve({ filter: /^@livekit\/components-styles$/ }, () => ({
+        path: resolve(preview, 'empty.css'),
+      }));
       builder.onResolve({ filter: /(?:^|\/)AuthProvider(?:\.tsx)?$/ }, () => ({
         path: resolve(preview, 'auth.tsx'),
       }));
