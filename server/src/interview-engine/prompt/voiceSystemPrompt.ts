@@ -13,6 +13,7 @@
 import type { InterviewBlueprint } from './InterviewBlueprintAgent.js';
 import type { InterviewCharacteristics } from '../types.js';
 import { describeDifficulty, describePacing } from './characteristics.js';
+import { toSpokenText } from './spokenText.js';
 import { normalizeLocale, type SupportedLocale } from '../voice/voiceCatalog.js';
 
 /** English + native language names for the "speak in X" instruction. */
@@ -83,7 +84,13 @@ export function composeVoiceSystemPrompt(p: ComposeParams): string {
   const candidate = sanitizeInline(p.candidateName) || 'the candidate';
   const role = sanitizeInline(p.role);
 
-  const seedQs = bp.questions.slice(0, 8).map((q, i) => `${i + 1}. ${q.q}`).join('\n');
+  // Speakable form: the voice output rules below ban markdown/code/symbols, and
+  // these seed questions are the model's nearest examples of what to ask. A
+  // blueprint that wrote a type literal in backticks teaches it the opposite.
+  const seedQs = bp.questions
+    .slice(0, 8)
+    .map((q, i) => `${i + 1}. ${toSpokenText(q.q)}`)
+    .join('\n');
   const focus = joinList([...c.focusAreas, ...bp.strategy.focusAreas]);
   const mustCover = joinList(c.mustCoverTopics);
   const probes = joinList(bp.tactics.probingTactics, 5);
@@ -206,13 +213,20 @@ const SELF_INTRO_PROMPT: Record<SupportedLocale, string> = {
  * line, so we substitute the localized self-intro prompt instead. The system
  * prompt may keep the English seed questions — the language instruction covers
  * live adaptation; only this verbatim-spoken line must stay single-language.
+ *
+ * The question is also the one piece of LLM-authored text on this line, so it
+ * goes through toSpokenText() — a technical blueprint writes type literals in
+ * backticks, and this line is synthesized as-is.
  */
 export function composeOpeningLine(p: ComposeParams): string {
   const norm = normalizeLocale(p.language);
   const role = sanitizeInline(p.role) || null;
+  // toSpokenText, not trim(): this question is handed to session.say() and
+  // synthesized VERBATIM, so any markdown the blueprint wrote around it is
+  // spoken and is echoed into the live transcript the question card renders.
   const firstQ = p.blueprintIsFallback && norm !== 'en'
     ? SELF_INTRO_PROMPT[norm]
-    : p.blueprint.questions?.[0]?.q?.trim() || SELF_INTRO_PROMPT[norm];
+    : toSpokenText(p.blueprint.questions?.[0]?.q) || SELF_INTRO_PROMPT[norm];
   const args: OpeningLineArgs = {
     name: sanitizeInline(p.candidateName) || undefined,
     persona: sanitizeInline(p.personaName),
