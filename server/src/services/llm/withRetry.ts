@@ -79,7 +79,9 @@ export function isTransientLLMError(error: unknown): boolean {
   // Deterministic truncation that lost its structured `nonRetryable` field
   // (e.g. the error was re-wrapped or crossed a serialization boundary).
   // Keeps the 'no content in' match below from retrying a max_tokens burn.
-  if (message.includes('finish_reason=length') || message.includes('native_finish_reason=max_tokens')) {
+  if (message.includes('finish_reason=length')
+    || message.includes('native_finish_reason=max_tokens')
+    || message.includes('native_finish_reason=max_output_tokens')) {
     return false;
   }
 

@@ -43,9 +43,10 @@ export abstract class BaseAgent<TInput, TOutput> {
    * Via OpenRouter, reasoning tokens count toward max_tokens — an always-on
    * reasoning model (deepseek-v4-pro, gemini dynamic thinking) can burn the
    * whole budget thinking and return empty content (finish_reason=length).
-   * Agents that override getMaxTokens() with a small cap should set this to
-   * leave the answer ≥4k tokens of headroom. Non-OpenRouter providers ignore
-   * the option, so `undefined` (the default) changes nothing anywhere.
+   * For models with hard reasoning caps, keep this below getMaxTokens() to
+   * leave room for the answer. OpenAI models via OpenRouter map it to effort
+   * and add completion headroom; thinking-enabled DeepSeek also adds headroom.
+   * Those paths supply a default reserve when this is undefined.
    */
   protected getReasoningMaxTokens(): number | undefined {
     return undefined;
