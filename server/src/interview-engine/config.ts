@@ -137,9 +137,15 @@ export const INTERVIEW_R2_PREFIX = 'interviews';
  * Model IDs that have the same namespace in our backend selector and LiveKit
  * Inference. This is a compatibility catalog, never a fallback: the selected
  * entry still comes exclusively from LLM_INTERVIEW_MODEL. Keep it aligned with
- * https://docs.livekit.io/agents/models/inference/ and the worker dependency.
+ * what the LiveKit Inference gateway actually serves: its docs
+ * (https://docs.livekit.io/agents/models/inference/) and the worker SDK's
+ * model union both lag the gateway, so probe a new ID before adding it.
  */
 const ALIGNED_INTERVIEW_MODELS = [
+  // Gateway-verified 2026-09-28, before docs.livekit.io listed any GPT-6 model.
+  // gpt-6-terra, gpt-6-astra and the -pro variants 404 there, so they stay out.
+  'openai/gpt-6-luna',
+  'openai/gpt-6-sol',
   'openai/gpt-5.5',
   'openai/gpt-5.6-luna',
   'openai/gpt-5.6-sol',

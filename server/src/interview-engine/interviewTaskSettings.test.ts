@@ -81,10 +81,23 @@ describe('interview task settings', () => {
     expect(getWorkerLlmModel()).toBe('google/gemini-3-flash-preview');
   });
 
+  it('routes the GPT-6 models LiveKit Inference serves to the worker', () => {
+    process.env.LLM_INTERVIEW_MODEL = 'openrouter/openai/gpt-6-luna';
+    expect(interviewGenModel()).toBe('openrouter/openai/gpt-6-luna');
+    expect(getWorkerLlmModel()).toBe('openai/gpt-6-luna');
+
+    process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-6-sol';
+    expect(getWorkerLlmModel()).toBe('openai/gpt-6-sol');
+  });
+
   it('rejects backend models that have no equivalent in LiveKit Inference', () => {
     process.env.LLM_INTERVIEW_MODEL = 'deepseek/deepseek-v4-flash';
 
     expect(interviewGenModel()).toBe('deepseek/deepseek-v4-flash');
+    expect(() => getWorkerLlmModel()).toThrow('no supported equivalent in LiveKit');
+
+    // OpenRouter serves it; the LiveKit gateway 404s it.
+    process.env.LLM_INTERVIEW_MODEL = 'openrouter/openai/gpt-6-astra';
     expect(() => getWorkerLlmModel()).toThrow('no supported equivalent in LiveKit');
   });
 
