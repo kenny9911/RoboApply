@@ -104,6 +104,9 @@ describe('MODEL_COST_TABLE integrity', () => {
 describe('published rates', () => {
   it.each([
     ['google/gemini-3.7-flash', 0.375, 1.875],
+    ['openai/gpt-6-luna', 0.1, 0.5],
+    ['openai/gpt-6-sol', 2, 10],
+    ['openai/gpt-6-astra', 10, 50],
     ['openai/gpt-5.6-sol', 2, 10],
     ['openai/gpt-5.6-terra', 2, 12],
     ['openai/gpt-5.6-luna', 0.2, 1.2],
@@ -118,6 +121,9 @@ describe('published rates', () => {
   });
 
   it('keeps the -pro twins that share a price point aligned with their base', () => {
+    expect(per1M('openai/gpt-6-luna-pro')).toBe(per1M('openai/gpt-6-luna'));
+    expect(per1M('openai/gpt-6-sol-pro')).toBe(per1M('openai/gpt-6-sol'));
+    expect(per1M('openai/gpt-6-astra-pro')).toBe(per1M('openai/gpt-6-astra'));
     expect(per1M('openai/gpt-5.6-luna-pro')).toBe(per1M('openai/gpt-5.6-luna'));
     expect(per1M('openai/gpt-5.6-sol-pro')).toBe(per1M('openai/gpt-5.6-sol'));
     // terra-pro is priced independently, so it must NOT track terra.
@@ -129,6 +135,7 @@ describe('id resolution', () => {
   it('prices the bare id a direct-provider route bills under', () => {
     // LLMService.normalizeModel strips the routing prefix before the call is
     // costed, so both shapes have to land on the same rate.
+    expect(per1M('gpt-6-luna')).toBe(per1M('openai/gpt-6-luna'));
     expect(per1M('gpt-5.6-luna')).toBe(per1M('openai/gpt-5.6-luna'));
     expect(per1M('gemini-3.7-flash')).toBe(per1M('google/gemini-3.7-flash'));
     expect(per1M('claude-opus-5')).toBe(per1M('anthropic/claude-opus-5'));
@@ -192,6 +199,7 @@ describe('id resolution', () => {
     // biller's own ladder would make the coverage check lie.
     expect(lookupModelRate('openrouter/openai/gpt-5.6-luna')).toBeNull();
     expect(lookupModelRate('openai/gpt-5.6-luna')).toEqual({ input: 0.2, output: 1.2 });
+    expect(lookupModelRate('openai/gpt-6-luna')).toEqual({ input: 0.1, output: 0.5 });
     expect(lookupModelRate('z-ai/glm-4.7:free')).toEqual({ input: 0, output: 0 });
     expect(lookupModelRate('claude-opus-5-20260101')).toEqual({ input: 5, output: 25 });
     expect(lookupModelRate('openai/gpt-5.4-nano')).toBeNull();

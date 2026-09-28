@@ -81,9 +81,14 @@ export const MODEL_COST_TABLE: readonly ModelCostRow[] = [
   { id: 'anthropic/claude-haiku-4.5', input: 1.0, output: 5.0, aliases: ['claude-haiku-4-5'] },
 
   // ── OpenAI ──────────────────────────────────────────────────────────────
-  // The 5.6 line is the current default (LLM_MODEL=openrouter/openai/gpt-5.6-luna).
+  // The GPT-6 line is the current default (LLM_MODEL=openrouter/openai/gpt-6-luna).
   // `-pro` twins that share a price point ride along as aliases; terra-pro is
-  // priced independently, so it keeps its own row.
+  // priced independently, so it keeps its own row. GPT-6 and 5.6 both bill
+  // prompts of 272K+ tokens at 2× input / 1.5× output; the rows carry the base
+  // rate, so a call that long is under-costed.
+  { id: 'openai/gpt-6-luna', input: 0.1, output: 0.5, aliases: ['openai/gpt-6-luna-pro'] },
+  { id: 'openai/gpt-6-sol', input: 2.0, output: 10.0, aliases: ['openai/gpt-6-sol-pro'] },
+  { id: 'openai/gpt-6-astra', input: 10.0, output: 50.0, aliases: ['openai/gpt-6-astra-pro'] },
   { id: 'openai/gpt-5.6-luna', input: 0.2, output: 1.2, aliases: ['openai/gpt-5.6-luna-pro'] },
   { id: 'openai/gpt-5.6-sol', input: 2.0, output: 10.0, aliases: ['openai/gpt-5.6-sol-pro'] },
   { id: 'openai/gpt-5.6-terra', input: 2.0, output: 12.0 },

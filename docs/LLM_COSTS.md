@@ -24,6 +24,9 @@ Every per-token rate the platform bills with, in USD per 1,000,000 tokens. The r
 | `anthropic/claude-opus-4.6` | $5 | $25 | `claude-opus-4.6`, `claude-opus-4-6` |  |
 | `anthropic/claude-sonnet-4.6` | $3 | $15 | `claude-sonnet-4.6`, `claude-sonnet-4-6` |  |
 | `anthropic/claude-haiku-4.5` | $1 | $5 | `claude-haiku-4.5`, `claude-haiku-4-5` |  |
+| `openai/gpt-6-luna` | $0.1 | $0.5 | `gpt-6-luna`, `openai/gpt-6-luna-pro`, `gpt-6-luna-pro` |  |
+| `openai/gpt-6-sol` | $2 | $10 | `gpt-6-sol`, `openai/gpt-6-sol-pro`, `gpt-6-sol-pro` |  |
+| `openai/gpt-6-astra` | $10 | $50 | `gpt-6-astra`, `openai/gpt-6-astra-pro`, `gpt-6-astra-pro` |  |
 | `openai/gpt-5.6-luna` | $0.2 | $1.2 | `gpt-5.6-luna`, `openai/gpt-5.6-luna-pro`, `gpt-5.6-luna-pro` |  |
 | `openai/gpt-5.6-sol` | $2 | $10 | `gpt-5.6-sol`, `openai/gpt-5.6-sol-pro`, `gpt-5.6-sol-pro` |  |
 | `openai/gpt-5.6-terra` | $2 | $12 | `gpt-5.6-terra` |  |
