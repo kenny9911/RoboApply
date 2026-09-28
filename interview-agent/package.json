@@ -11,6 +11,7 @@
     "start": "node dist/main.js start",
     "console": "npm run build && node dist/main.js console",
     "verify:greeting": "node verify-greeting.mjs",
+    "verify:llm": "node verify-llm.mjs",
     "verify:voices": "node verify-voices.mjs"
   },
   "dependencies": {

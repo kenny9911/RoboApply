@@ -139,7 +139,13 @@ export const INTERVIEW_R2_PREFIX = 'interviews';
  * entry still comes exclusively from LLM_INTERVIEW_MODEL. Keep it aligned with
  * what the LiveKit Inference gateway actually serves: its docs
  * (https://docs.livekit.io/agents/models/inference/) and the worker SDK's
- * model union both lag the gateway, so probe a new ID before adding it.
+ * model union both lag the gateway, so probe a new ID before adding it:
+ *
+ *   cd interview-agent && npm run verify:llm -- [model ...] [--effort high]
+ *
+ * It streams a reply through the worker's own LLM construction using only the
+ * LIVEKIT_* creds in interview-agent/.env.local; with no model it probes every
+ * ID below. interview-agent/verify-llm.mjs mirrors this list — update both.
  */
 const ALIGNED_INTERVIEW_MODELS = [
   // Gateway-verified 2026-09-28, before docs.livekit.io listed any GPT-6 model.
