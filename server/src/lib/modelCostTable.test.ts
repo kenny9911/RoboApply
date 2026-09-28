@@ -103,6 +103,8 @@ describe('MODEL_COST_TABLE integrity', () => {
 
 describe('published rates', () => {
   it.each([
+    ['google/gemini-3.8-flash', 0.75, 3.75],
+    ['google/gemini-3.8-flash-tts', 0.5, 9],
     ['google/gemini-3.7-flash', 0.375, 1.875],
     ['openai/gpt-6-luna', 0.1, 0.5],
     ['openai/gpt-6-sol', 2, 10],
@@ -138,6 +140,9 @@ describe('id resolution', () => {
     expect(per1M('gpt-6-luna')).toBe(per1M('openai/gpt-6-luna'));
     expect(per1M('gpt-5.6-luna')).toBe(per1M('openai/gpt-5.6-luna'));
     expect(per1M('gemini-3.7-flash')).toBe(per1M('google/gemini-3.7-flash'));
+    expect(per1M('gemini-3.8-flash-tts')).toBe(per1M('google/gemini-3.8-flash-tts'));
+    // Resolution is exact, so the TTS model never inherits the text model's rate.
+    expect(per1M('gemini-3.8-flash-tts')).not.toBe(per1M('gemini-3.8-flash'));
     expect(per1M('claude-opus-5')).toBe(per1M('anthropic/claude-opus-5'));
     expect(per1M('glm-5.3-flash')).toBe(per1M('z-ai/glm-5.3-flash'));
   });

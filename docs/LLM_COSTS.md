@@ -9,6 +9,8 @@ Every per-token rate the platform bills with, in USD per 1,000,000 tokens. The r
 
 | Model | Input $/1M | Output $/1M | Also billed as | Notes |
 | --- | ---: | ---: | --- | --- |
+| `google/gemini-3.8-flash` | $0.75 | $3.75 | `gemini-3.8-flash` |  |
+| `google/gemini-3.8-flash-tts` | $0.5 | $9 | `gemini-3.8-flash-tts` | Google-direct rate (not on OpenRouter). Text in, audio tokens out. |
 | `google/gemini-3.7-flash` | $0.375 | $1.875 | `gemini-3.7-flash` |  |
 | `google/gemini-3.5-flash` | $1.5 | $9 | `gemini-3.5-flash` |  |
 | `google/gemini-3-flash-preview` | $0.5 | $3 | `gemini-3-flash-preview` |  |

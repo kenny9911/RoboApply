@@ -58,6 +58,13 @@ export const FREE_VARIANT_COST = { input: 0, output: 0 } as const;
 
 export const MODEL_COST_TABLE: readonly ModelCostRow[] = [
   // ── Google Gemini ───────────────────────────────────────────────────────
+  { id: 'google/gemini-3.8-flash', input: 0.75, output: 3.75 },
+  {
+    id: 'google/gemini-3.8-flash-tts',
+    input: 0.5,
+    output: 9.0,
+    note: 'Google-direct rate (not on OpenRouter). Text in, audio tokens out.',
+  },
   { id: 'google/gemini-3.7-flash', input: 0.375, output: 1.875 },
   { id: 'google/gemini-3.5-flash', input: 1.5, output: 9.0 },
   { id: 'google/gemini-3-flash-preview', input: 0.5, output: 3.0 },
