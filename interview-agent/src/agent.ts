@@ -23,6 +23,11 @@ import * as openai from '@livekit/agents-plugin-openai';
 import { errorMessage, SessionLifecycle } from './session-lifecycle.js';
 import { InterviewTtsFallback } from './tts-fallback.js';
 import { SafeOpenAiTts } from './safe-openai-tts.js';
+import { ClientReadyGate, parseClientMessage, resolveClientReadyTimeoutMs } from './client-signals.js';
+import { createClientEndHandler } from './client-end.js';
+import { createPoster, EagerTurnDeduper, TranscriptSender, type TranscriptRole } from './callbacks.js';
+import { charLength, planOpening } from './opening.js';
+import { resolveLiveLlm, type LlmMetaBlock } from './live-model.js';
 
 // Job subprocesses import this file; ensure they have the env too (inherited
 // from the parent in most cases, but load defensively).
@@ -47,13 +52,11 @@ const METRICS_BUFFER_CAP = 1000;
 // Control-plane callback resilience. The transcript callbacks are the ONLY path
 // the recorded interview reaches the backend, so a momentary backend blip during
 // a live interview must not silently drop turns — that yields an empty, all-zero
-// report (the backend finalizes the session via the browser/LiveKit-webhook path
-// with whatever transcript it has, which is nothing). Callbacks retry transient
-// NETWORK failures (ECONNREFUSED / timeout / DNS) with backoff; transcript turns
-// are buffered and re-sent until delivered, with a longer drain at session end
-// (the last chance before the job subprocess exits).
-const CALLBACK_MAX_ATTEMPTS = 4; // 1 try + 3 retries per POST
-const CALLBACK_RETRY_BASE_MS = 600; // backoff: 600 / 1200 / 1800 ms
+// report. Callbacks retry network errors, 5xx, 408/409/429 with backoff (see
+// callbacks.ts; other 4xx are final). Transcript turns carry a (role, ts) key
+// the control plane dedupes on, are batched <= 100 per POST, and are re-sent
+// until delivered, with a longer drain at session end (the last chance before
+// the job subprocess exits).
 const TRANSCRIPT_FLUSH_INTERVAL_MS = 4_000;
 const TRANSCRIPT_BUFFER_CAP = 2_000; // bound memory if the backend stays unreachable
 const SHUTDOWN_DRAIN_ATTEMPTS = 8; // ~12s extra drain window at session end
@@ -80,15 +83,26 @@ const ABANDON_GRACE_MS = 90_000;
 // the browser autoplay policy blocks remote audio until the user interacts —
 // and WebRTC audio is real-time, not buffered, so a greeting spoken into that
 // blocked window is LOST while every later turn is fine (the classic "no voice
-// when the interview started"). The client publishes a one-shot `client_ready`
-// data message on this topic once playback is CONFIRMED unlocked (see the
-// mock-interview page); the worker holds the greeting until it arrives. Fail
-// OPEN after the timeout so an old/instrumented client (or a blocked data
-// channel) still gets greeted rather than sitting in silence. Tunable for ops
-// (and for local `console` runs, which have no browser client).
-const CLIENT_DATA_TOPIC = 'ie';
-const CLIENT_READY_TIMEOUT_MS =
-  Number.parseInt(process.env.WORKER_CLIENT_READY_TIMEOUT_MS ?? '', 10) || 12_000;
+// when the interview started"). The browser signals playback-unlocked on two
+// channels (client-signals.ts): the durable participant attribute
+// `ie.client_ready = '1'` (visible to a worker that joins late — the old
+// one-shot data packet was lost whenever the browser connected first), and the
+// legacy `client_ready` data message on topic `ie` (re-sent by new browsers
+// whenever an agent joins). Either opens the gate. Fail OPEN after the timeout
+// so an old client (or a blocked data channel) still gets greeted rather than
+// sitting in silence. Tunable for ops (and for local `console` runs, which have
+// no browser client).
+const CLIENT_READY_TIMEOUT_MS = resolveClientReadyTimeoutMs(process.env.WORKER_CLIENT_READY_TIMEOUT_MS);
+
+// Candidate-initiated end ({type:'end'} on topic `ie`, relayed by the control
+// plane). Bound the graceful session close so a wedged pipeline can never hold
+// the shutdown drain (transcript → metrics → usage → 'ended') hostage.
+const CLIENT_END_CLOSE_TIMEOUT_MS = 4_000;
+
+// Soft cap on the spoken first question. Long scenario text belongs on the
+// on-screen question card; the control plane is expected to send a short
+// spoken openingQuestion. Over this we still speak it (interruptible) but warn.
+const SPOKEN_QUESTION_WARN_CHARS = 320;
 
 /** Subset of InterviewRoomMetadata the worker reads (kept in sync with
  *  backend/src/interview-engine/types.ts). */
@@ -97,19 +111,23 @@ interface RoomMeta {
   language?: string;
   systemPrompt?: string;
   openingInstruction?: string;
-  /** Deterministic localized greeting spoken verbatim (preferred over the LLM
-   *  greeting — guarantees the candidate always hears an opening). */
+  /** LEGACY deterministic opening (greeting + intro + first question in one
+   *  line). Split worker-side into a short greeting + interruptible question
+   *  when the split fields below are absent (see opening.ts). */
   openingLine?: string;
+  /** Short greeting, spoken verbatim and NOT interruptible (<= ~150 chars). */
+  openingGreeting?: string;
+  /** First question, spoken verbatim right after the greeting, INTERRUPTIBLE. */
+  openingQuestion?: string;
   callbackBaseUrl?: string;
   /** Planned interview length — drives the elapsed-time system notes so the
    *  model has an actual clock to "manage its time" against. */
   durationMinutes?: number;
   voice?: { provider?: string; model?: string; voiceId?: string; languageCode?: string };
   stt?: { provider?: string; model?: string; language?: string; fallbackModels?: string[] };
-  llm?: {
-    model?: string;
-    reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
-  };
+  llm?: LlmMetaBlock;
+  /** Optional explicit live-turn model (C12); overrides `llm` when present. */
+  liveLlm?: LlmMetaBlock;
 }
 
 /** Map an interview locale to a valid inference STT language code. The
@@ -164,14 +182,14 @@ function buildStt(stt: RoomMeta['stt'], language: string) {
   });
 }
 
-function buildLlm(llm: RoomMeta['llm']) {
-  const model = llm?.model?.trim();
-  if (!model) {
+function buildLlm(meta: RoomMeta) {
+  const live = resolveLiveLlm(meta);
+  if (!live) {
     throw new Error(
-      'interview room metadata is missing llm.model; configure LLM_INTERVIEW_MODEL on the control plane',
+      'interview room metadata is missing llm.model; configure LLM_INTERVIEW_LIVE_MODEL or LLM_INTERVIEW_MODEL on the control plane',
     );
   }
-  const reasoningEffort = llm?.reasoningEffort;
+  const { model, reasoningEffort } = live;
   return new inference.LLM({
     model,
     ...(reasoningEffort
@@ -245,7 +263,7 @@ export default defineAgent({
     const callbackBase = (meta.callbackBaseUrl ?? '').replace(/\/+$/, '');
     const systemPrompt = meta.systemPrompt || 'You are a professional interviewer. Conduct a thoughtful, adaptive interview.';
     const opening = meta.openingInstruction || 'Greet the candidate warmly and ask your first question.';
-    const openingLine = (meta.openingLine ?? '').trim();
+    const liveLlm = resolveLiveLlm(meta);
     // 30min default matches the control plane's session default — a missing or
     // garbage value must never schedule a wrap-up at t=0.
     const durationMinutes =
@@ -276,7 +294,7 @@ export default defineAgent({
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,
       stt: buildStt(meta.stt, meta.language ?? 'en'),
-      llm: buildLlm(meta.llm),
+      llm: buildLlm(meta),
       tts: sessionTts,
       turnHandling: {
         // VAD-based end-of-turn. The multilingual semantic model's inference is
@@ -321,46 +339,22 @@ export default defineAgent({
     //    Node has global fetch + AbortSignal.timeout.
     const sleep = (ms: number): Promise<void> => new Promise((r) => { setTimeout(r, ms); });
 
-    // Returns 'delivered' once the backend RECEIVES the request — even on a
-    // non-2xx status, because a resend would double-append the transcript (the
-    // ingest is an unconditional jsonb append). Returns 'lost' only if EVERY
-    // attempt failed at the network layer (ECONNREFUSED / timeout / DNS), where
-    // the request never reached the backend so a resend is safe. Buffered
-    // callers (transcript, metrics) re-queue on 'lost' and retry later;
-    // 'delivered' is terminal.
-    type PostResult = 'delivered' | 'lost' | 'skipped';
-    const post = async (
-      path: string,
-      body: unknown,
-      attempts: number = CALLBACK_MAX_ATTEMPTS,
-    ): Promise<PostResult> => {
-      if (!callbackBase) return 'skipped';
-      const payload = JSON.stringify(body);
-      for (let attempt = 1; attempt <= attempts; attempt += 1) {
-        try {
-          const res = await fetch(`${callbackBase}${path}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'x-interview-callback-secret': CALLBACK_SECRET },
-            body: payload,
-            signal: AbortSignal.timeout(8000),
-          });
-          // Received by the backend. A non-2xx is a server-side concern, not a
-          // delivery failure; retrying would duplicate appended turns.
-          if (!res.ok) swarn(`control-plane POST ${path} -> HTTP ${res.status}`);
-          return 'delivered';
-        } catch (err) {
-          // Network-layer failure: the request never reached the backend, so a
-          // retry is safe (no double-append risk).
-          if (attempt < attempts) {
-            await sleep(CALLBACK_RETRY_BASE_MS * attempt);
-            continue;
-          }
-          swarn(`control-plane POST ${path} failed after ${attempts} attempt(s): ${errorMessage(err)}`);
-          return 'lost';
-        }
-      }
-      return 'lost';
-    };
+    // Secret-gated control-plane POST with the C11 retry policy (callbacks.ts):
+    // network errors / 5xx / 408 / 409 / 429 retry with backoff, any other 4xx
+    // is final. Buffered callers (transcript, metrics) re-queue on 'lost'.
+    const post = createPoster({
+      baseUrl: callbackBase,
+      secret: CALLBACK_SECRET,
+      sleep,
+      warn: (m) => swarn(m),
+    });
+
+    // Set once the candidate's End arrives. The end path interrupts in-flight
+    // speech and latches the TTS model closed, so the FallbackAdapter reports
+    // "all TTS instances failed" as an unrecoverable error — a teardown
+    // artifact, not a pipeline fault. Reporting it would overwrite the
+    // control plane's no_answer/completed outcome with 'pipeline_error'.
+    let clientEndRequested = false;
 
     let failurePromise: Promise<void> | undefined;
     const failSession = (reason: string, error?: unknown): Promise<void> => {
@@ -412,29 +406,39 @@ export default defineAgent({
 
     // 3a′) Transcript turns are buffered and flushed on an interval; a delivery
     //      failure keeps them buffered for the next flush (and the shutdown
-    //      drain). Pre-resilience this was a per-turn fire-and-forget POST, so a
-    //      momentary backend outage during the interview permanently lost the
-    //      turn → an empty, all-zero report.
-    const transcriptBuffer: Array<{ role: string; text: string; ts: number }> = [];
-    let transcriptFlushing = false;
+    //      drain). Each turn carries key = role:ts (the control plane dedupes
+    //      on it, so a retried batch never double-appends) and batches are
+    //      capped at 100 turns per POST.
+    const transcript = new TranscriptSender(
+      post,
+      `/api/v1/interview-engine/callbacks/sessions/${sessionId}/transcript`,
+      { bufferCap: TRANSCRIPT_BUFFER_CAP, warn: (m) => swarn(m) },
+    );
     const flushTranscript = async (): Promise<void> => {
-      if (!callbackBase) { transcriptBuffer.length = 0; return; }
-      if (transcriptFlushing || transcriptBuffer.length === 0) return;
-      transcriptFlushing = true;
-      try {
-        // Snapshot the buffered turns, then send. On 'lost' (network) put them
-        // back at the FRONT so chronological order holds and they retry next
-        // flush (turns that arrived during the await stay behind them).
-        const turns = transcriptBuffer.splice(0, transcriptBuffer.length);
-        const result = await post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/transcript`, { turns });
-        if (result === 'lost') transcriptBuffer.unshift(...turns);
-      } finally {
-        transcriptFlushing = false;
-      }
+      if (!callbackBase) { transcript.clear(); return; }
+      await transcript.flush();
     };
     let transcriptFlushTimer: NodeJS.Timeout | null = setInterval(() => {
       void flushTranscript();
     }, TRANSCRIPT_FLUSH_INTERVAL_MS);
+
+    // Interviewer turns spoken from known text (greeting / first question) are
+    // recorded when the speech is CREATED — a session finalized mid-greeting
+    // still has the interviewer turn. The SDK's playout-end echo of the same
+    // text is swallowed once by the deduper.
+    const eagerTurns = new EagerTurnDeduper();
+    const recordTurn = (role: TranscriptRole, text: string): void => {
+      if (!callbackBase) return;
+      if (!transcript.add(role, text)) return;
+      // Nudge a near-real-time flush (keeps the live screen / server current);
+      // the interval + shutdown drain are the durability guarantee.
+      void flushTranscript();
+    };
+    const recordSpokenInterviewerTurn = (text: string): void => {
+      if (!text.trim()) return;
+      eagerTurns.remember(text);
+      recordTurn('interviewer', text);
+    };
 
     session.on(voice.AgentSessionEventTypes.MetricsCollected, (ev) => {
       const m = ev.metrics;
@@ -472,15 +476,9 @@ export default defineAgent({
       const text = item?.textContent?.trim();
       if (!text) return;
       if (!callbackBase) return;
-      const role = item?.role === 'user' ? 'candidate' : item?.role === 'assistant' ? 'interviewer' : 'system';
-      // Bound memory if the backend is unreachable for a long stretch (drop the
-      // oldest — but the cap is generous enough that a normal interview never
-      // hits it).
-      if (transcriptBuffer.length >= TRANSCRIPT_BUFFER_CAP) transcriptBuffer.shift();
-      transcriptBuffer.push({ role, text, ts: Date.now() });
-      // Nudge a near-real-time flush (keeps the live screen / server current);
-      // the interval + shutdown drain are the durability guarantee.
-      void flushTranscript();
+      const role: TranscriptRole = item?.role === 'user' ? 'candidate' : item?.role === 'assistant' ? 'interviewer' : 'system';
+      if (role === 'interviewer' && eagerTurns.consume(text)) return; // already recorded at speech creation
+      recordTurn(role, text);
     });
 
     // 3b) Silent-candidate re-engagement. The SDK flips user state to 'away'
@@ -520,6 +518,10 @@ export default defineAgent({
     //     then release the job through the normal transcript/usage drain.
     session.on(voice.AgentSessionEventTypes.Error, (ev) => {
       const err = ev.error as { message?: string; recoverable?: boolean } | undefined;
+      if (clientEndRequested) {
+        slog(`pipeline error during client end ignored: ${errorMessage(ev.error)}`);
+        return;
+      }
       serror(`pipeline error (recoverable=${err?.recoverable ?? 'unknown'}): ${errorMessage(ev.error)}`);
       if (err?.recoverable === false) void failSession('pipeline_error', ev.error);
     });
@@ -603,13 +605,13 @@ export default defineAgent({
       // status-guarded (turns arriving after finalize are dropped). This is the
       // last chance to deliver buffered turns before the job exits, so retry
       // over a longer window than the live flush.
-      for (let i = 0; i < SHUTDOWN_DRAIN_ATTEMPTS && transcriptBuffer.length > 0; i += 1) {
+      for (let i = 0; i < SHUTDOWN_DRAIN_ATTEMPTS && transcript.pending > 0; i += 1) {
         await flushTranscript();
-        if (transcriptBuffer.length > 0) await sleep(SHUTDOWN_DRAIN_GAP_MS);
+        if (transcript.pending > 0) await sleep(SHUTDOWN_DRAIN_GAP_MS);
       }
-      if (transcriptBuffer.length > 0) {
+      if (transcript.pending > 0) {
         serror(
-          `shutdown: ${transcriptBuffer.length} transcript turn(s) UNDELIVERED — control plane ` +
+          `shutdown: ${transcript.pending} transcript turn(s) UNDELIVERED — control plane ` +
           `unreachable for the entire drain window; this session's report will be empty`,
         );
       }
@@ -631,7 +633,63 @@ export default defineAgent({
       await post(`/api/v1/interview-engine/callbacks/sessions/${sessionId}/lifecycle`, { event: 'ended' });
     });
 
-    // 4) Connect, start, and greet.
+    // 4) Browser signals (C7 ready / C8 end). The listeners are attached BEFORE
+    //    ctx.connect() — the Room object exists pre-connect — so a packet or an
+    //    attribute published while the worker is still joining is never missed,
+    //    and they stay attached for the whole job ('end' can arrive any time).
+    const readyGate = new ClientReadyGate();
+    let resolveEndRequested!: (v: 'ended') => void;
+    const whenEndRequested = new Promise<'ended'>((resolve) => { resolveEndRequested = resolve; });
+    const runClientEnd = createClientEndHandler({
+      stopInput: () => session.input.setAudioEnabled(false),
+      interrupt: () => { void session.interrupt({ force: true }).await.catch(() => {}); },
+      closeLifecycle: () => lifecycle.close(),
+      closeSession: () => session.close(),
+      shutdown: (reason) => ctx.shutdown(reason),
+      sleep,
+      sessionStarted: () => sessionStarted,
+      warn: (m) => swarn(m),
+      closeTimeoutMs: CLIENT_END_CLOSE_TIMEOUT_MS,
+    });
+    let endLogged = false;
+    const handleClientEnd = (): Promise<void> => {
+      clientEndRequested = true;
+      if (!endLogged) {
+        endLogged = true;
+        resolveEndRequested('ended');
+        slog('client requested end — stopping turns and draining the transcript');
+      }
+      return runClientEnd();
+    };
+
+    const onClientData = (payload: Uint8Array, _p?: unknown, _k?: unknown, topic?: string): void => {
+      const msg = parseClientMessage(payload, topic);
+      if (!msg) return;
+      if (msg.type === 'client_ready') {
+        if (readyGate.markReady('data')) slog('client audio-ready via data message');
+      } else if (msg.type === 'end') {
+        void handleClientEnd();
+      }
+    };
+    const checkParticipantReady = (attributes: Record<string, string> | undefined): void => {
+      if (readyGate.observeAttributes(attributes)) slog('client audio-ready via participant attribute');
+    };
+    const onAttributesChanged = (_changed: Record<string, string>, participant: { attributes?: Record<string, string> }): void => {
+      checkParticipantReady(participant?.attributes);
+    };
+    const onParticipantJoined = (participant: { attributes?: Record<string, string> }): void => {
+      checkParticipantReady(participant?.attributes);
+    };
+    ctx.room.on('dataReceived', onClientData);
+    ctx.room.on('participantAttributesChanged', onAttributesChanged);
+    ctx.room.on('participantConnected', onParticipantJoined);
+    ctx.addShutdownCallback(async () => {
+      ctx.room.off('dataReceived', onClientData);
+      ctx.room.off('participantAttributesChanged', onAttributesChanged);
+      ctx.room.off('participantConnected', onParticipantJoined);
+    });
+
+    // 5) Connect, start, and greet.
     try {
       await ctx.connect();
     } catch (error) {
@@ -639,24 +697,11 @@ export default defineAgent({
       return;
     }
     if (!lifecycle.active) return;
-
-    // Audio-ready handshake (see CLIENT_READY_TIMEOUT_MS). Attach the listener
-    // BEFORE session.start()/greet so a `client_ready` published during the
-    // candidate's join is never missed. The promise resolves once — a
-    // `client_ready` message on our topic flips it; the greeting races it
-    // against a fail-open timeout below.
-    let clientReadyResolve: (v: 'ready') => void = () => {};
-    const clientReadyPromise = new Promise<'ready'>((res) => { clientReadyResolve = res; });
-    const onClientData = (payload: Uint8Array, _p?: unknown, _k?: unknown, topic?: string): void => {
-      if (topic && topic !== CLIENT_DATA_TOPIC) return;
-      try {
-        const msg = JSON.parse(new TextDecoder().decode(payload)) as { type?: string };
-        if (msg?.type === 'client_ready') clientReadyResolve('ready');
-      } catch {
-        // Non-JSON / unrelated app data — ignore.
-      }
-    };
-    ctx.room.on('dataReceived', onClientData);
+    // Attributes are room state: a browser that set ie.client_ready before we
+    // joined is visible right now.
+    for (const participant of ctx.room.remoteParticipants.values()) {
+      checkParticipantReady(participant.attributes);
+    }
 
     const agent = new voice.Agent({ instructions: systemPrompt });
     // closeOnDisconnect defaults to TRUE and closes the session the instant the
@@ -667,49 +712,65 @@ export default defineAgent({
       await session.start({ agent, room: ctx.room, inputOptions: { closeOnDisconnect: false } });
       sessionStarted = lifecycle.active;
     } catch (error) {
-      ctx.room.off('dataReceived', onClientData);
       await failSession('session_start_failed', error);
       return;
     }
 
     // Hold the greeting until the candidate's browser confirms audio playback is
     // unlocked — otherwise the opening streams into a muted <audio> element and
-    // is lost (see CLIENT_DATA_TOPIC). Bounded + fail-open: an old client that
-    // never signals still gets greeted after the timeout rather than dead air.
+    // is lost (see CLIENT_READY_TIMEOUT_MS). Bounded + fail-open: an old client
+    // that never signals still gets greeted after the timeout.
     let readyTimer: NodeJS.Timeout | undefined;
-    let readyState: 'ready' | 'timeout' | 'closed';
+    let readyState: 'ready' | 'timeout' | 'closed' | 'ended';
     try {
       readyState = await Promise.race([
-        clientReadyPromise,
+        readyGate.whenReady.then(() => 'ready' as const),
         lifecycle.whenClosed,
+        whenEndRequested,
         new Promise<'timeout'>((resolve) => {
           readyTimer = setTimeout(() => resolve('timeout'), CLIENT_READY_TIMEOUT_MS);
         }),
       ]);
     } finally {
       clearTimeout(readyTimer);
-      ctx.room.off('dataReceived', onClientData);
     }
-    if (!lifecycle.active) return;
-    slog(`client audio-ready: ${readyState}`);
+    if (!lifecycle.active || readyState === 'ended') return;
+    slog(`client audio-ready: ${readyState}${readyGate.source ? ` (${readyGate.source})` : ''}`);
 
-    // The greeting must NOT be interruptible — otherwise the candidate's mic
-    // picking up the agent's own voice (or any noise) cuts it off immediately.
-    // Prefer a DETERMINISTIC spoken greeting (`say`) over an LLM-generated one
-    // (`generateReply`): say() synthesizes a known, fully-localized line and
+    // Opening (opening.ts): a SHORT greeting that is NOT interruptible —
+    // otherwise the candidate's mic picking up the agent's own voice (or any
+    // noise) cuts it off immediately — then the first question as a normal
+    // INTERRUPTIBLE turn so a candidate can barge in instead of sitting through
+    // a monologue. Deterministic say() is preferred over an LLM greeting: it
     // never depends on the LLM producing a first turn, so the candidate ALWAYS
-    // hears an opening. addToChatCtx records it as the interviewer's turn so the
-    // model continues the conversation naturally instead of greeting again.
+    // hears an opening. Both are recorded as interviewer turns when the speech
+    // is created (recordSpokenInterviewerTurn), not only after playout.
+    const plan = planOpening(meta);
+    if (plan.source.startsWith('legacy')) {
+      slog(
+        `opening split from legacy openingLine (${plan.source}): greeting=${charLength(plan.greeting)} chars, ` +
+        `question=${plan.question ? charLength(plan.question) : 0} chars`,
+      );
+    }
+    // With no greeting but a question (an unsplittable legacy line), the
+    // question itself is the opening — spoken interruptibly.
+    const openingText = plan.greeting || plan.question || '';
+    const openingInterruptible = !plan.greeting;
+    const followUpQuestion = plan.greeting ? plan.question : null;
+    let greetingMode: 'deterministic' | 'llm' = openingText ? 'deterministic' : 'llm';
+
     const greetingStartAt = Date.now();
     const greeted = await lifecycle.greet(
       async (repeat) => {
-        if (openingLine) {
-          await session.say(openingLine, { allowInterruptions: false, addToChatCtx: !repeat });
+        if (openingText) {
+          if (!repeat) recordSpokenInterviewerTurn(openingText);
+          await session.say(openingText, { allowInterruptions: openingInterruptible, addToChatCtx: !repeat });
         } else {
           await session.generateReply({ instructions: opening, allowInterruptions: false });
         }
       },
-      openingLine ? async () => {
+      openingText ? async () => {
+        greetingMode = 'llm';
         await session.generateReply({ instructions: opening, allowInterruptions: false });
       } : undefined,
     );
@@ -730,8 +791,29 @@ export default defineAgent({
       joinMs: greetingStartAt - entryAt,
       greetingMs: Date.now() - greetingStartAt,
       clientReady: readyState,
-      greeting: openingLine ? 'deterministic' : 'llm',
+      greeting: greetingMode,
     });
+
+    // First question, interruptible. Skipped when the LLM fallback greeted
+    // (its opening instruction already asks the first question).
+    if (followUpQuestion && greetingMode === 'deterministic' && lifecycle.active) {
+      if (charLength(followUpQuestion) > SPOKEN_QUESTION_WARN_CHARS) {
+        swarn(
+          `spoken first question is ${charLength(followUpQuestion)} chars — long scenario text should ` +
+          'stay on the on-screen question card (control plane openingQuestion)',
+        );
+      }
+      try {
+        recordSpokenInterviewerTurn(followUpQuestion);
+        const handle = session.say(followUpQuestion, { allowInterruptions: true, addToChatCtx: true });
+        handle.addDoneCallback((h) => {
+          const err = h.exception();
+          if (err) swarn(`first question playout failed: ${errorMessage(err)}`);
+        });
+      } catch (err) {
+        swarn(`first question failed: ${errorMessage(err)}`);
+      }
+    }
 
     // Inject a non-spoken system note into the agent's chat context: copy the
     // (readonly) live context, append, and apply via the SDK's supported
@@ -811,9 +893,9 @@ export default defineAgent({
     // Log every live model this session uses to the worker console.
     slog(
       `session started: language=${meta.language ?? 'en'} durationMinutes=${durationMinutes} ` +
-      `greeting=${openingLine ? 'deterministic' : 'llm'} ` +
-      `models={llm:${meta.llm?.model ?? '(missing)'}` +
-      `${meta.llm?.reasoningEffort ? ` (reasoning=${meta.llm.reasoningEffort})` : ''}, ` +
+      `greeting=${greetingMode} opening=${plan.source} ` +
+      `models={llm:${liveLlm?.model ?? '(missing)'}` +
+      `${liveLlm?.reasoningEffort ? ` (reasoning=${liveLlm.reasoningEffort})` : ''}${liveLlm ? ` [${liveLlm.source}]` : ''}, ` +
       `stt:${meta.stt?.model ?? 'deepgram/nova-3'}` +
       `${meta.stt?.fallbackModels?.length ? `(+fallback ${meta.stt.fallbackModels.join(',')})` : ''}, ` +
       `tts:${meta.voice?.model ?? 'tts-1 (local floor)'}, voiceId:${meta.voice?.voiceId ?? '-'}, ` +

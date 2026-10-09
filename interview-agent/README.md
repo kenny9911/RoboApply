@@ -16,8 +16,8 @@ real-time conversation.
   `LIVEKIT_AGENT_NAME`, which is "Agent Alex"; never auto-joins).
 - Reads **everything per-interview from room/job metadata** (the
   `InterviewRoomMetadata` contract in
-  `backend/src/interview-engine/types.ts`): system prompt, opening line,
-  language, voice, STT/LLM/TTS models.
+  `server/src/interview-engine/types.ts`): system prompt, opening, language,
+  voice, STT/LLM/TTS models.
 - Smoothest full-duplex: **Silero VAD end-of-turn detection
   (`turnDetection: 'vad'`) + preemptive generation (+ preemptive TTS)**, with
   per-language endpointing (wider for zh/ja/ko); barge-in interrupts the
@@ -27,16 +27,32 @@ real-time conversation.
 - Speaks in the candidate's language. STT/LLM/TTS all run through **LiveKit
   Inference** (no extra provider keys): STT `deepgram/nova-3` (idle-tolerant;
   the control plane also sends a server-side `deepgram/nova-2` fallback), LLM
-  per metadata (from the control plane's required `LLM_INTERVIEW_MODEL`, with
-  optional `LLM_INTERVIEW_REASONING_EFFORT`), TTS the control-plane-resolved
+  per metadata (`liveLlm` when present, else `llm` — the control plane fills it
+  from `LLM_INTERVIEW_LIVE_MODEL` / `LLM_INTERVIEW_LIVE_REASONING_EFFORT`,
+  falling back to `LLM_INTERVIEW_MODEL`), TTS the control-plane-resolved
   voice (`cartesia/sonic-3` by default). ElevenLabs was
   [retired from LiveKit Inference on August 31, 2026](https://docs.livekit.io/agents/models/tts/elevenlabs/).
   **OpenAI `tts-1`** is an optional direct-provider fallback (needs a funded
   `OPENAI_API_KEY`). Failed providers are not polled in the background; if no
   provider produces greeting audio, startup ends and releases the worker job.
+- Opens with a **short, non-interruptible greeting** followed by the first
+  question as a normal **interruptible** turn. New metadata sends
+  `openingGreeting` + `openingQuestion`; a legacy combined `openingLine` is
+  split worker-side (`src/opening.ts`) at the template's "let's begin" marker.
+  Spoken-from-text interviewer turns are recorded when the speech is created,
+  so a session ended mid-greeting still has the interviewer turn.
+- Holds the greeting until the browser confirms audio playback is unlocked:
+  participant attribute `ie.client_ready = '1'` (durable, seen even when the
+  browser joined first) **or** the `{type:'client_ready'}` data message on topic
+  `ie`; fail-open after `WORKER_CLIENT_READY_TIMEOUT_MS` (default 5000).
+- On `{type:'end'}` (topic `ie`, relayed by the control plane when the
+  candidate ends): stops taking turns, closes the session, drains the
+  transcript, posts `lifecycle:ended`, and shuts the job down.
 - Forwards every finalized turn to the control plane
   (`POST /api/v1/interview-engine/callbacks/sessions/:id/transcript`,
-  secret-gated), posts `lifecycle:started`/`lifecycle:ended` (plus
+  secret-gated; batches of <= 100 turns, each with `key = role:ts` for
+  server-side dedupe; network/5xx/408/409/429 retried up to 3 times, other 4xx
+  final), posts `lifecycle:started`/`lifecycle:ended` (plus
   `lifecycle:error` on an unexpected AgentSession close), and shuts itself down
   ~90 s after the candidate disconnects without returning, so an abandoned room
   never holds a worker slot until the overtime hard-stop.
@@ -50,6 +66,11 @@ RoomComposite → Cloudflare R2.
   import this.
 - `src/main.ts` — the launcher (`cli.runApp` + `ServerOptions`). Points
   `agent` at the built `dist/agent.js`.
+- Pure, unit-tested helpers (`test/*.test.mjs` run against `dist/`):
+  `client-signals.ts` (ready/end handshake), `client-end.ts` (end sequence),
+  `callbacks.ts` (retry policy, transcript batching/keys, eager-turn dedupe),
+  `opening.ts` (greeting/question split), `live-model.ts` (live LLM selection),
+  `session-lifecycle.ts`, `tts-fallback.ts`, `safe-openai-tts.ts`.
 
 The build-then-run split (run `node dist/main.js`, not `tsx`) is deliberate:
 job subprocesses run plain `node` on the built JS, avoiding loader issues.
