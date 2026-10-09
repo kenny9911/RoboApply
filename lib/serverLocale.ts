@@ -8,7 +8,8 @@
 //      landing routes render with the matching <html lang> + message bundle
 //      regardless of the visitor's cookie. This is what makes /{locale}
 //      pages stable, indexable documents for hreflang.
-//   2. `robo_locale` cookie — the user's explicit choice.
+//   2. `robo_locale` cookie — the user's explicit choice: set by the language
+//      switchers, and by opening a localized landing URL (RememberLocale).
 //   3. Accept-Language — first supported tag wins (script-aware zh mapping).
 //   4. DEFAULT_LOCALE (`en`).
 
