@@ -12,7 +12,7 @@
 
 import { createHash } from 'node:crypto';
 import { jobFingerprint } from './raOnboardingDraft.js';
-import { normalizeForSearch } from './raJobSearch.js';
+import { normalizeCompanyName, normalizeJobTitle } from '../../../features/jobs/normalize/index.js';
 import type {
   BankId,
   BankJobRow,
@@ -679,9 +679,7 @@ export function mapRecruiterJobToRAJobUpsert(c: PreMatchedCandidate): {
   const data: Record<string, unknown> = {
     applyUrl: synthesizeApplyUrl(c.bank, job.id),
     title: job.title,
-    titleNormalized: normalizeForSearch(job.title),
     companyName: c.company.companyName,
-    companyNameNormalized: normalizeForSearch(c.company.companyName),
     companyLogoUrl: c.company.companyLogoUrl,
     location: job.location,
     locationCity: job.locationCity,
@@ -690,7 +688,8 @@ export function mapRecruiterJobToRAJobUpsert(c: PreMatchedCandidate): {
     employmentType: normalizeEmploymentType(job.employmentType),
     salaryMin: job.salaryMin,
     salaryMax: job.salaryMax,
-    salaryCurrency: job.salaryCurrency ?? 'USD',
+    // D3: no currency is invented when the bank row states none.
+    salaryCurrency: job.salaryCurrency ?? null,
     salaryPeriod: normalizeSalaryPeriod(job.salaryPeriod),
     description,
     descriptionPlain: stripControl(stripHtml(description)),
@@ -713,11 +712,34 @@ export function mapRecruiterJobToRAJobUpsert(c: PreMatchedCandidate): {
       missingRequiredTags: c.missingRequiredTags,
       missingRequiredKeywords: c.missingRequiredKeywords,
     },
-    archivedAt: null,
+    // Inventory honesty fields (WP-16b, ARCH §2.4): which market's feed the job
+    // belongs to and that it came from our recruiter bank. fromRecruiterBank is
+    // NOT a claim the job is absent elsewhere and gives no ranking boost.
+    // employerVerified / publicDisplay are left to the bank sync, which reads
+    // the bank's own verified-employer and syndication-consent records.
+    market: c.bank === 'gohire' ? 'cn' : 'intl',
+    fromRecruiterBank: true,
+    sourceName: bankDisplayName(c.bank),
+    sourcePriority: 15,
   };
+  // The bank sync (features/jobs/ingest, WP-16b) owns this (externalId,
+  // sourceBoard) row once it exists. The update therefore never:
+  //   - clears archivedAt — a row closed as 'reported' or 'duplicate' must stay
+  //     closed; the sync revives only 'source_removed' / 'bank_closed' rows when
+  //     the bank lists the job again;
+  //   - rewrites titleNormalized / companyNameNormalized — they must keep
+  //     agreeing with the row's dedupeKey and companyId (WP-16a normalizers).
+  // A new row is created with the WP-16a normalizers for the same reason.
   return {
     where: { externalId_sourceBoard: { externalId: job.id, sourceBoard: c.bank } },
-    create: { externalId: job.id, sourceBoard: c.bank, ...data },
+    create: {
+      externalId: job.id,
+      sourceBoard: c.bank,
+      ...data,
+      titleNormalized: normalizeJobTitle(job.title),
+      companyNameNormalized: normalizeCompanyName(c.company.companyName) || c.company.companyName.toLowerCase(),
+      archivedAt: null,
+    },
     update: data,
   };
 }

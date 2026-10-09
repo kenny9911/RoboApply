@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`leases and budgets > leases with FOR UPDATE SKIP LOCKED, by priority, for enabled providers of the market 1`] = `"UPDATE "RAIngestQuery" SET "nextRunAt" = now() + interval '15 minutes' WHERE "id" IN ( SELECT "id" FROM "RAIngestQuery" WHERE "enabled" = true AND "market" = $1 AND "provider" = ANY($2::text[]) AND "nextRunAt" <= now() ORDER BY "priority" ASC, "nextRunAt" ASC LIMIT $3 FOR UPDATE SKIP LOCKED ) RETURNING "id", "market", "provider", "params", "origin", "demandScore", "priority", "consecutiveEmpty""`;

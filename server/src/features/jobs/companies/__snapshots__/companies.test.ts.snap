@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`read service SQL > typeahead is market-scoped, prefix-first then trigram similarity, with escaped LIKE input 1`] = `"SELECT c."id", c."displayName" AS "name", c."slug", c."logoUrl", c."domain" FROM "RACompany" c WHERE c."market" = $1 AND (c."nameNormalized" LIKE $2 ESCAPE '\\' OR c."nameNormalized" % $3) ORDER BY (c."nameNormalized" LIKE $4 ESCAPE '\\') DESC, similarity(c."nameNormalized", $5) DESC, c."displayName" ASC LIMIT $6"`;

@@ -1,4 +1,5 @@
 import type { SearchInput, DatePosted, EmploymentType } from './types.js';
+import { getCurrentBrandOrDefault } from '../platform/brand/index.js';
 
 export const KNOWN_PROVIDER_IDS = ['activejobs', 'hiringindex', 'linkedin', 'jsearch'] as const;
 export const EMPLOYMENT_TYPES: readonly EmploymentType[] = ['full_time', 'part_time', 'contract', 'internship'];
@@ -29,6 +30,15 @@ function list(value: unknown, field: string, allowed: readonly string[]): string
   return [...new Set(values.map((v) => (v as string).trim()))].sort();
 }
 
+/**
+ * The country a search runs in when the request names none: the serving
+ * brand's default market country (RoboApply → 'us', GoApply → 'cn'), lower
+ * case. Outside a request (scripts, tests) the default brand applies.
+ */
+export function defaultSearchCountry(): string {
+  return getCurrentBrandOrDefault().defaultCountry.toLowerCase();
+}
+
 /** Accepts HTTP query values or JSON, rejects unsupported filters before any paid call. */
 export function parseSearchInput(value: unknown): SearchInput {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('input', 'Search input must be an object.');
@@ -37,7 +47,7 @@ export function parseSearchInput(value: unknown): SearchInput {
   for (const key of Object.keys(raw)) if (!allowed.includes(key)) fail(key, `Unsupported search field: ${key}.`);
   const query = textField(raw.query, 'query', 160);
   if (query.length < 2 || !/[\p{L}\p{N}]/u.test(query)) fail('query', 'query must contain at least two characters and a letter or number.');
-  const country = raw.country === undefined ? 'us' : textField(raw.country, 'country', 2).toLowerCase();
+  const country = raw.country === undefined ? defaultSearchCountry() : textField(raw.country, 'country', 2).toLowerCase();
   if (!COUNTRIES.has(country.toUpperCase())) fail('country', 'country must be an ISO 3166-1 alpha-2 code.');
   const input: SearchInput = { query, country, datePosted: 'all', limit: 20 };
   if (raw.location !== undefined) {
