@@ -1,0 +1,76 @@
+// ra-mock.prisma: Wave 0 / CLEAN area models (ARCHITECTURE.md §2.1).
+// Moved verbatim from the former single-file schema.prisma; no DDL change.
+// The original RoboApply V2 section note lives at the top of ra-jobs.prisma.
+
+// ── V3 Tier-2 ─────────────────────────────────────────────────────────────
+
+/// One row per (user, provider) integration connection state. Static metadata
+/// (display name / description / brand colour) lives in code; this table holds
+/// only the connection state + OAuth tokens. See roboapply/v2 integrations.
+model RAIntegration {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String // linkedin | gmail | gcal | slack | notion | github
+  connected    Boolean   @default(false)
+  account      String? // connected account label, e.g. "maya@chen.io"
+  accessToken  String?   @db.Text
+  refreshToken String?   @db.Text
+  expiresAt    DateTime?
+  connectedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+/// A mock-interview session. Questions + transcript + the final score live as
+/// JSON on the row (no separate turn table — a session's transcript is read/
+/// written whole). status: in_progress | complete.
+model RAMockSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role          String
+  interviewerId String
+  typeId        String
+  format        String // video | voice
+
+  /// BCP-47 interview language (en | zh | zh-TW | ja | …). Null = legacy/en.
+  language               String?
+  /// Planned interview length in minutes (from setup). Distinct from
+  /// `durationMinutes` below, which is the ACTUAL elapsed time set at score.
+  plannedDurationMinutes Int?
+
+  /// The composed master interviewer brief (markdown) produced by the
+  /// Interview Prompt Generator pipeline and handed to the live interviewer.
+  interviewPrompt String? @db.Text
+  /// Structured generation artifacts: { requirements, strategy, tactics,
+  /// questions, interviewerBrief, webSources, model, generatedAt }.
+  blueprint       Json?
+
+  /// ordered [{ q, hint, coachTip }] generated at start
+  questions  Json
+  /// accumulated RAMockTurn[] (them/you), grows per nextTurn
+  transcript Json   @default("[]")
+  status     String @default("in_progress")
+
+  // ── Score (null until the session is scored) ──
+  overall         Int?
+  delta           Int?
+  breakdown       Json? // [{ key, value, note }]
+  strengths       String[] @default([])
+  gaps            String[] @default([])
+  note            String?
+  durationMinutes Int?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, status])
+}

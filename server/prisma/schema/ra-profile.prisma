@@ -1,0 +1,98 @@
+// ra-profile.prisma: PROF area models (ARCHITECTURE.md §2.7).
+// Added by FND-1b (Jobright clone). AI prompts never receive photo, 籍贯,
+// 政治面貌, gender, birth date, family members or EEO answers
+// (profileSnapshotForLlm() in WP-19 is the only context builder).
+
+/// The structured candidate profile (one per user).
+model RAProfile {
+  userId              String   @id
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName           String?
+  middleName          String?
+  lastName            String?
+  headline            String?
+  contactEmail        String?
+  phoneE164           String?
+  /// 'mobile' | 'home' | 'work' | 'other'
+  phoneType           String?
+  addressLine1        String?
+  city                String?
+  region              String?
+  postalCode          String?
+  country             String?
+  /// `{ linkedin, github, portfolio, website, x }`
+  links               Json     @default("{}")
+  summary             String?  @db.Text
+  /// `[{ name, group?, level?, confirmed: boolean }]`
+  skills              Json     @default("[]")
+  /// `[{ language, level }]`
+  languages           Json     @default("[]")
+  /// `[{ country: 'US', authorized: boolean|null, sponsorship: 'now'|'later'|'no'|null }]`
+  /// Ruling C18: a question the user answers, not a label we infer.
+  workAuth            Json     @default("[]")
+  /// Onboarding situation answer (PRODUCT §4.2).
+  seekerType          String?
+  /// Career goal key (PRODUCT §4.3).
+  careerGoal          String?
+  /// GoApply fields: `{ identity: 'yingjie'|'zaixiao'|'shezhao', graduationClass, degree,
+  ///   isFullTimeProgram, schoolName, schoolTags (display/user-filter only, never a
+  ///   ranking input), major, jobSearchStatus, internshipDaysPerWeek, internshipMonths,
+  ///   availableFrom, acceptReassignment }`
+  cnFields            Json?
+  completeness        Int      @default(0)
+  syncedFromVariantId String?
+  updatedAt           DateTime @updatedAt
+  createdAt           DateTime @default(now())
+}
+
+model RAProfileEducation {
+  id           String  @id @default(cuid())
+  userId       String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school       String
+  degree       String?
+  major        String?
+  gpa          String?
+  /// 'YYYY-MM'
+  startYm      String?
+  endYm        String?
+  current      Boolean @default(false)
+  location     String?
+  coursework   String?
+  achievements String?
+  sortOrder    Int     @default(0)
+
+  @@index([userId, sortOrder])
+}
+
+model RAProfileExperience {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  company        String
+  employmentType String?
+  location       String?
+  startYm        String?
+  endYm          String?
+  current        Boolean  @default(false)
+  summary        String?  @db.Text
+  bullets        String[] @default([])
+  /// 'work' | 'internship' (CN separates 实习)
+  kind           String   @default("work")
+  sortOrder      Int      @default(0)
+
+  @@index([userId, sortOrder])
+}
+
+/// EEO answers (RoboApply) and CN sensitive fields (政治面貌, 籍贯, 家庭成员).
+/// AES-GCM via server/src/lib/crypto.ts. Never sent to an LLM, never used in
+/// matching, decrypted only for the extension autofill payload with consent
+/// 'autofill_sensitive'.
+model RASensitiveAnswers {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ciphertext String   @db.Text
+  keyVersion Int
+  updatedAt  DateTime @updatedAt
+}

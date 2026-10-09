@@ -1,0 +1,70 @@
+// ra-compliance.prisma: compliance logs and personal-information requests
+// (TASK_PLAN.md R-17, CN_TW_LAUNCH_PLAN.md §4.1(4)). Added by FND-1b (Jobright clone).
+//
+// These rows are records the operator must be able to produce, so they are not
+// deleted with the account by cascade:
+// - RAAiContentLabelLog and RAContentSafetyEvent keep `userId` as a plain
+//   string (no FK) and are purged on schedule by compliance-daily (6 months).
+// - RAPersonalInfoRequest keeps the request after the account is gone (proof
+//   that an access/delete request was handled); its user link is SET NULL.
+
+/// One row per AI-generated artifact shown to a GoApply user (AI content
+/// labelling rules): which label was applied. Purged after 6 months.
+model RAAiContentLabelLog {
+  id           String   @id @default(cuid())
+  brand        String
+  userId       String?
+  /// 'resume' | 'cover_letter' | 'assistant_message' | 'practice_report' | …
+  artifactType String
+  artifactId   String?
+  /// 'explicit' | 'implicit_only'
+  labelMode    String
+  /// Implicit-label content id embedded in the artifact metadata.
+  contentId    String
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+/// GoApply content-safety verdicts on LLM input and output (WP-24).
+model RAContentSafetyEvent {
+  id        String   @id @default(cuid())
+  brand     String
+  userId    String?
+  /// Feature surface, e.g. 'copilot' | 'tailor' | 'cover_letter' | 'practice'.
+  surface   String
+  /// 'input' | 'output'
+  direction String
+  /// 'pass' | 'review' | 'block'
+  verdict   String
+  /// Provider labels / matched rule ids; no raw user text.
+  matched   Json?
+  provider  String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([brand, verdict, createdAt])
+}
+
+/// A personal-information request (PIPL / GDPR / TW PDPA): access, export,
+/// correct, delete, withdraw consent.
+model RAPersonalInfoRequest {
+  id        String    @id @default(cuid())
+  brand     String
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// 'access' | 'export' | 'correct' | 'delete' | 'withdraw'
+  kind      String
+  /// 'open' | 'in_progress' | 'done' | 'rejected'
+  status    String    @default("open")
+  /// Statutory due date.
+  dueAt     DateTime
+  /// Request detail and handling notes (no copies of the exported data).
+  detail    Json?
+  createdAt DateTime  @default(now())
+  closedAt  DateTime?
+
+  @@index([status, dueAt])
+  @@index([userId])
+}

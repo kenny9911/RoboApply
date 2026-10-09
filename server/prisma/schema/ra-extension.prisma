@@ -1,0 +1,64 @@
+// ra-extension.prisma: EXT area models (ARCHITECTURE.md §2.10, §6).
+// Added by FND-1b (Jobright clone). D1: the extension fills forms; the user
+// clicks Submit. It never watches or detects submits.
+
+/// A paired browser extension install. The device token is stored hashed.
+model RAExtensionDevice {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand        String
+  /// sha256 of 'rax_<32B base64url>'
+  tokenHash    String          @unique
+  /// First 8 chars, for the devices list.
+  tokenPrefix  String
+  name         String
+  browser      String?
+  extVersion   String?
+  lastSeenAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime        @default(now())
+  autofillRuns RAAutofillRun[]
+
+  @@index([userId, revokedAt])
+}
+
+/// One "Fill this form" run on an employer page.
+model RAAutofillRun {
+  id                  String            @id @default(cuid())
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId            String
+  device              RAExtensionDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  jobId               String?
+  trackerEntryId      String?
+  host                String
+  atsType             String
+  fieldsTotal         Int               @default(0)
+  fieldsFilled        Int               @default(0)
+  aiAnswers           Int               @default(0)
+  /// 'started' | 'filled' | 'partial' | 'failed'
+  outcome             String            @default("started")
+  /// The USER says they submitted (D1); never detected.
+  userMarkedSubmitted Boolean           @default(false)
+  creditLedgerId      String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([deviceId])
+}
+
+/// "Support this site" requests from the extension.
+model RASiteRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  host      String
+  url       String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([host])
+  @@index([userId])
+}

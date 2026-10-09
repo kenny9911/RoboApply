@@ -1,8 +1,10 @@
 // prisma.config.ts (repo root)
 //
 // RoboApply shares the RoboHire Prisma schema (same Neon database for now).
-// The schema lives under server/prisma/schema.prisma; its generator emits the
-// client to server/src/generated/prisma. `prisma generate` (build/postinstall)
+// The schema is a multi-file folder, server/prisma/schema/ (every *.prisma
+// file in it is loaded; see docs/jobright-clone/ARCHITECTURE.md §2.1). The
+// generator block in schema/_datasource.prisma emits the client to
+// server/src/generated/prisma. `prisma generate` (build/postinstall)
 // only reads the schema and never connects, so a placeholder migration URL is
 // fine when DIRECT_DATABASE_URL / DATABASE_URL aren't set in the build env.
 //
@@ -20,7 +22,7 @@ const migrationUrl =
   'postgresql://noop:noop@127.0.0.1:5432/noop';
 
 export default defineConfig({
-  schema: path.join('server', 'prisma', 'schema.prisma'),
+  schema: path.join('server', 'prisma', 'schema'),
   datasource: {
     url: migrationUrl,
   },

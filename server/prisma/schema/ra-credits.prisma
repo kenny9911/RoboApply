@@ -1,0 +1,81 @@
+// ra-credits.prisma: CRED area models (ARCHITECTURE.md §2.11, §7; TASK_PLAN.md R-07).
+// Added by FND-1b (Jobright clone). Practice minutes stay in
+// SeekerSubscription.mockCredits + MockInterviewCreditLedger (mockCreditService).
+
+/// Usage counter per bucket and window. An atomic conditional UPDATE enforces the cap (ARCH §7.3).
+model RACreditWindow {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Bucket key (TASK_PLAN.md §4.1.f), e.g. 'tailor' | 'cover_letter' | 'ready_kits'.
+  bucket    String
+  /// 'd:2026-10-09' | 'w:2026-W41' | 'm:2026-10', in the user's time zone.
+  windowKey String
+  used      Int      @default(0)
+  reserved  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, bucket, windowKey])
+}
+
+/// Reserve → commit/release ledger, one row per metered action.
+model RACreditLedger {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bucket         String
+  /// Units (positive = consumption).
+  amount         Int
+  /// 'reserved' | 'committed' | 'released'
+  status         String
+  /// 'window' | 'grant:<grantId>' (every plan has a cap, Pro included: fair-use caps, R-07)
+  fromSource     String
+  windowKey      String?
+  /// '<userId>:<bucket>:<client Idempotency-Key or server ref>'
+  idempotencyKey String    @unique
+  /// 'tailor_session' | 'cover_letter' | 'autofill_run' | …
+  refType        String?
+  refId          String?
+  /// UsageDeductionLog sku for the cost join.
+  sku            String?
+  createdAt      DateTime  @default(now())
+  settledAt      DateTime?
+
+  @@index([userId, bucket, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+}
+
+/// Bonus credits (referral rewards, admin grants, purchased packs) consumed after the window allowance.
+model RACreditGrant {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// A bucket, or '*' for any AI bucket.
+  bucket    String
+  amount    Int
+  remaining Int
+  /// 'referral' | 'admin' | 'pack' | 'compensation'
+  reason    String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, bucket, expiresAt])
+}
+
+/// Per-user overrides (beta flags, admin cap changes). Resolution order:
+/// catalog → plan → override.
+model RAEntitlementOverride {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 'bucket:tailor' | 'entitlement:saved_searches' | 'flag:coaching'
+  key       String
+  /// number | boolean
+  value     Json
+  reason    String
+  /// Admin user id (no FK; audit only).
+  adminId   String?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, key])
+}

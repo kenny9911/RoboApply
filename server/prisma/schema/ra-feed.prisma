@@ -1,0 +1,92 @@
+// ra-feed.prisma: FEED area models (ARCHITECTURE.md §2.6).
+// Added by FND-1b (Jobright clone). "Liked" = saved for later = an
+// RATrackerEntry with status 'bookmarked' and source 'feed'; there is no like table.
+
+/// One row per (user, job) with the user's current state. Used for NOT EXISTS /
+/// joins in the feed query.
+model RAJobUserState {
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId            String
+  job              RAJob     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  hiddenAt         DateTime?
+  /// Reason code (ARCH §4.9).
+  hiddenReason     String?
+  viewedAt         DateTime?
+  applyClickedAt   DateTime?
+  impressions      Int       @default(0)
+  lastImpressionAt DateTime?
+
+  @@id([userId, jobId])
+  @@index([userId, hiddenAt])
+  @@index([jobId])
+}
+
+/// Append-only interaction log (feedback loop + analytics).
+model RAJobInteraction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId         String
+  /// 'view' | 'save' | 'unsave' | 'hide' | 'unhide' | 'report' | 'apply_click' |
+  /// 'applied' | 'unapplied' | 'share' | 'copilot_open'
+  kind          String
+  reasonCode    String?
+  detail        Json?
+  feedSessionId String?
+  position      Int?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([jobId, kind])
+}
+
+/// A ranked, paginated snapshot of the feed (ARCH §4.8).
+model RAFeedSession {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchProfileId String?
+  profileVersion  Int?
+  /// 'recommended' | 'newest' | 'best_fit' | 'highest_pay' | 'deadline' (GoApply)
+  sort            String
+  queryHash       String
+  jobIds          String[]
+  /// `[{ jobId, fit, kind: 'pre'|'ai', rank }]`
+  ranks           Json
+  totalEstimate   Int
+  /// Older boundary of the retrieval window (for the next refill).
+  windowEndsAt    DateTime
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([expiresAt])
+}
+
+/// Daily feed rating (0–10) with reasons (calibration).
+model RAFeedRating {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayKey        String
+  /// 0–10
+  score         Int
+  reasons       String[] @default([])
+  note          String?
+  feedSessionId String?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, dayKey])
+}
+
+/// Learned per-user affinities from interactions (ranking factor; listed on /help/ranking).
+model RAUserAffinity {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// `{ taxonomyId: -1..1 }`
+  taxonomyWeights Json     @default("{}")
+  companyWeights  Json     @default("{}")
+  skillWeights    Json     @default("{}")
+  updatedAt       DateTime @updatedAt
+}

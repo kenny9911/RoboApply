@@ -1,0 +1,157 @@
+// ra-prep.prisma: PREP area models — question bank and coaching
+// (ARCHITECTURE.md §2.12, TASK_PLAN.md R-18). Added by FND-1b (Jobright clone).
+
+model RAInterviewQuestion {
+  id                    String             @id @default(cuid())
+  market                String
+  companyId             String?
+  companyNameNormalized String?
+  taxonomyId            String?
+  /// 'coding' | 'system_design' | 'domain_design' | 'behavioral'
+  category              String
+  /// 'easy' | 'medium' | 'hard'
+  difficulty            String?
+  seniority             String?
+  title                 String
+  body                  String             @db.Text
+  locale                String
+  /// D3: 'user_report' (a candidate contributed it, moderated) | 'ai_practice'
+  /// (generated; ALWAYS labelled, never attributed to a company) | 'curated'
+  /// (staff-written, generic, labelled "Written by %BRAND% staff — not reported
+  /// by candidates"). Service check: ONLY sourceKind='user_report' may carry
+  /// companyId / companyNameNormalized. Moderation rejects verbatim
+  /// assessment/test content under NDA or copyright.
+  sourceKind            String
+  /// 'YYYY-MM' for user reports.
+  reportedPeriod        String?
+  contributionId        String?
+  /// `{ approach, whatTheyTest, commonMistakes, rubric, followUps }` — AI-generated, labelled.
+  guide                 Json?
+  guideModel            String?
+  /// 'published' | 'hidden'
+  status                String             @default("published")
+  reportsCount          Int                @default(0)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  reports               RAQuestionReport[]
+
+  @@index([market, companyNameNormalized, category, status])
+  @@index([market, taxonomyId, category])
+}
+
+model RAQuestionContribution {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market      String
+  companyName String
+  role        String
+  /// 'YYYY-MM'
+  interviewYm String
+  body        String    @db.Text
+  /// 'pending' | 'approved' | 'rejected'
+  status      String    @default("pending")
+  moderatorId String?
+  moderatedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+model RAQuestionReport {
+  id         String              @id @default(cuid())
+  questionId String
+  question   RAInterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason     String
+  note       String?
+  createdAt  DateTime            @default(now())
+
+  @@index([questionId])
+  @@index([userId])
+}
+
+/// Coach roster (V2: admin-managed roster + the coach's own booking link or a
+/// request email; paid booking is Later). Coaches are real people who agreed to
+/// be listed; the nav entry stays hidden while no coach is active (D3).
+model RACoach {
+  id             String           @id @default(cuid())
+  /// Optional (R-18): a roster coach need not have an account.
+  userId         String?          @unique
+  user           User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand          String
+  displayName    String
+  headline       String
+  bio            String           @db.Text
+  photoUrl       String?
+  languages      String[]         @default([])
+  specialties    String[]         @default([])
+  /// Session lengths offered, in minutes, e.g. [30, 60].
+  sessionLengths Int[]            @default([])
+  /// `{ '30': amountMinor, '60': amountMinor, currency }` as set by the coach; empty when not listed.
+  rates          Json             @default("{}")
+  /// The coach's own booking page (e.g. Cal.com).
+  bookingUrl     String?
+  /// Booking requests are emailed here (and to admin) when there is no booking link.
+  requestEmail   String?
+  introVideoUrl  String?
+  /// Shown on /coaching only when true.
+  active         Boolean          @default(false)
+  /// 'applied' | 'approved' | 'paused' | 'rejected' (Later marketplace)
+  status         String           @default("applied")
+  approvedAt     DateTime?
+  approvedBy     String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  slots          RACoachSlot[]
+  bookings       RACoachBooking[]
+
+  @@index([brand, active])
+}
+
+/// Later (paid booking): bookable slots. No UI in V2.
+model RACoachSlot {
+  id          String          @id @default(cuid())
+  coachId     String
+  coach       RACoach         @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  durationMin Int
+  /// 'open' | 'held' | 'booked' | 'cancelled'
+  status      String          @default("open")
+  heldUntil   DateTime?
+  booking     RACoachBooking?
+
+  @@index([coachId, startsAt])
+}
+
+/// Later (paid booking): a booked session. No UI in V2. CN rails never carry
+/// coaching payments (no 二清).
+model RACoachBooking {
+  id              String      @id @default(cuid())
+  coachId         String
+  coach           RACoach     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotId          String      @unique
+  slot            RACoachSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  durationMin     Int
+  topic           String
+  resumeVariantId String?
+  contact         Json
+  priceMinor      Int
+  currency        String
+  /// Stripe session id.
+  paymentRef      String?
+  /// 'pending_payment' | 'pending_coach' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+  status          String      @default("pending_payment")
+  meetingUrl      String?
+  cancelledBy     String?
+  refundPct       Int?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([coachId])
+}

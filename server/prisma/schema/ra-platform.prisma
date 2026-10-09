@@ -1,0 +1,149 @@
+// ra-platform.prisma: platform models (ARCHITECTURE.md §2.3; FND/AUTH/GROW).
+// Added by FND-1b (Jobright clone). Feature WPs never edit .prisma files;
+// they list "Schema requests" in their handoff (TASK_PLAN.md §2.1 rule 6).
+
+/// Durable work queue drained by cron ticks and waitUntil (ARCH §4.6). One row
+/// per unit of work. Transient: no FK to User (the account wipe deletes rows by
+/// userId; jobs-maintain prunes finished rows).
+model RAWorkItem {
+  id          String    @id @default(cuid())
+  /// 'job.enrich' | 'job.score' | 'alert.send' | 'email.send' | 'seo.rebuild' |
+  /// 'ingest.query' | 'resume.grade' | 'onboarding.match' | …
+  kind        String
+  /// e.g. 'job.enrich:<jobId>:v3'
+  dedupeKey   String?   @unique
+  brand       String?
+  userId      String?
+  payload     Json
+  /// Lower runs first.
+  priority    Int       @default(100)
+  runAfter    DateTime  @default(now())
+  /// 'queued' | 'leased' | 'done' | 'failed' | 'dead'
+  status      String    @default("queued")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  leasedUntil DateTime?
+  leaseOwner  String?
+  lastError   String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([kind, status, runAfter, priority])
+  @@index([status, leasedUntil])
+  @@index([userId])
+}
+
+/// Fixed-window counters for rate limits and budgets (replaces the in-memory limiter).
+model RARateCounter {
+  /// 'rl:signup:ip:<hash>' | 'budget:llm:enrich:roboapply' | 'rl:copilot:user:<id>'
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+  expiresAt   DateTime
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+}
+
+/// Single-use tokens: password reset, email verification, magic links, OAuth
+/// state, extension hand-off, unsubscribe, logged-out alert confirmation.
+model RAAuthToken {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand      String
+  /// 'password_reset' | 'email_verify' | 'magic_prefs' | 'oauth_state' | 'ext_pair' |
+  /// 'email_unsub' | 'anon_alert_confirm'
+  kind       String
+  /// sha256 of the raw token; the raw token is never stored.
+  tokenHash  String    @unique
+  payload    Json?
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, kind])
+  @@index([expiresAt])
+}
+
+/// External identities linked to a user (Google, WeChat, LINE). No OAuth tokens stored.
+model RAAuthIdentity {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand      String
+  /// 'google' | 'wechat' | 'line'
+  provider   String
+  /// WeChat appid (open platform web vs 公众号 vs mini program differ); "" otherwise.
+  appId      String    @default("")
+  /// Google sub | WeChat openid | LINE userId
+  subject    String
+  /// WeChat unionid
+  unionId    String?
+  email      String?
+  /// Name/avatar as returned by the provider.
+  profile    Json?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([brand, provider, appId, subject])
+  @@index([unionId])
+  @@index([userId])
+}
+
+/// First-party product analytics (no third-party pixels; CN-E-02). Deleted with
+/// the account (cascade); rows for linked anonIds are deleted by the wipe; kept
+/// ≤13 months.
+model RAProductEvent {
+  id        String   @id @default(cuid())
+  brand     String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Set only after analytics consent for EEA/UK/CH visitors (no anonymous id before consent).
+  anonId    String?
+  /// 'onboarding_step_completed' | 'feed_card_impression' | … (registry:
+  /// server/src/features/growth/events.ts)
+  name      String
+  props     Json?
+  path      String?
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+  @@index([brand, createdAt])
+  @@index([anonId])
+}
+
+/// Generic survey answers: extension uninstall, alert unsubscribe, NPS.
+model RASurveyResponse {
+  id        String   @id @default(cuid())
+  brand     String
+  /// 'ext_uninstall' | 'alert_unsubscribe' | 'nps'
+  kind      String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonId    String?
+  /// `{ reasons: string[], note?: string }`
+  answers   Json
+  createdAt DateTime @default(now())
+
+  @@index([kind, createdAt])
+  @@index([userId])
+}
+
+/// Invite codes that gate signup on a brand during a closed stage (GoApply CN-0).
+model RABrandInvite {
+  id        String    @id @default(cuid())
+  brand     String
+  /// sha256 of the code; the raw code is shown once to the admin who creates it.
+  codeHash  String    @unique
+  maxUses   Int       @default(1)
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  note      String?
+  /// Admin user id (no FK; admin accounts outlive codes).
+  createdBy String?
+  createdAt DateTime  @default(now())
+
+  @@index([brand, createdAt])
+}

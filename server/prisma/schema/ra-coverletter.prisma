@@ -1,0 +1,34 @@
+// ra-coverletter.prisma: CL area models (ARCHITECTURE.md §2.9).
+// Added by FND-1b (Jobright clone).
+
+/// A cover letter written from the user's resume and a posting. AI output;
+/// every sentence cites its source in `citations`.
+model RACoverLetter {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId           String?
+  trackerEntryId  String?
+  resumeVariantId String
+  resumeVariant   RAResumeVariant @relation(fields: [resumeVariantId], references: [id], onDelete: Cascade)
+  title           String
+  /// 'professional' | 'warm' | 'direct' | 'enthusiastic'
+  tone            String          @default("professional")
+  /// 'short' | 'medium' | 'long'
+  length          String          @default("medium")
+  locale          String
+  bodyMarkdown    String          @db.Text
+  /// `[{ body, reason, createdAt }]`, max 20.
+  versions        Json            @default("[]")
+  /// `[{ sentenceIdx, source: 'resume'|'posting', ref }]`
+  citations       Json            @default("[]")
+  model           String?
+  creditLedgerId  String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, jobId])
+  @@index([resumeVariantId])
+}

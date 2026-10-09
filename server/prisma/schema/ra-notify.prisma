@@ -1,0 +1,116 @@
+// ra-notify.prisma: NOTIF area models (ARCHITECTURE.md §2.12, §8).
+// Added by FND-1b (Jobright clone). The in-app message center reuses
+// SeekerNotification (legacy.prisma).
+
+/// One job-alert send for a saved search (instant or digest).
+model RAAlertDelivery {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchProfileId String
+  searchProfile   RASearchProfile @relation(fields: [searchProfileId], references: [id], onDelete: Cascade)
+  /// 'instant' | 'digest_daily' | 'digest_weekly'
+  kind            String
+  jobIds          String[]
+  emailLogId      String?
+  sentAt          DateTime        @default(now())
+
+  @@index([userId, sentAt(sort: Desc)])
+  @@index([searchProfileId, sentAt(sort: Desc)])
+}
+
+/// Web push subscription (RoboApply PWA).
+model RAPushSubscription {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand       String
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  failedCount Int       @default(0)
+  lastOkAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Admin-authored in-app announcements (translated before publish).
+model RAAnnouncement {
+  id        String   @id @default(cuid())
+  brand     String
+  /// e.g. '2026-11-copilot-launch'
+  key       String   @unique
+  locales   String[]
+  /// `{ [locale]: { title, body, ctaLabel?, ctaHref? } }`
+  content   Json
+  /// `{ plans?: string[], signedUpBefore?, flags?: string[] }`
+  cohort    Json     @default("{}")
+  priority  Int      @default(100)
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+
+  @@index([brand, startsAt, endsAt])
+}
+
+/// Server-side UI state that follows the user across devices.
+model RAUserUiState {
+  userId          String    @id
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// `{ tours: { key: seenAt }, dismissals: { key: { count, at } }, popupLastShownAt,
+  ///    announcementsSeen: string[] }`
+  state           Json      @default("{}")
+  /// Stamped by GET /feed/new-count; the Jobs nav badge counts ≥ Good fit jobs since then.
+  lastFeedVisitAt DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+/// One row per email send attempt. The raw address is never stored.
+model RAEmailLog {
+  id         String   @id @default(cuid())
+  brand      String
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template   String
+  /// sha256(lowercase email)
+  toHash     String
+  /// 'resend' | 'aliyun_dm'
+  provider   String
+  providerId String?
+  /// 'sent' | 'failed' | 'suppressed'
+  status     String
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([template, createdAt])
+  @@index([userId, createdAt])
+  @@index([toHash])
+}
+
+/// Logged-out job alerts (V2, WP-78): double opt-in (confirm token in
+/// RAAuthToken kind 'anon_alert_confirm'), one-click unsubscribe. No account.
+model RAAnonAlertSubscription {
+  id             String    @id @default(cuid())
+  brand          String
+  /// Needed to send the alert; deleted on unsubscribe purge.
+  email          String
+  /// sha256(lowercase email), for lookups and suppression.
+  emailHash      String
+  locale         String
+  /// FilterSet v1 subset: `{ q?, taxonomyIds?, country?, locations?, workModels? }`
+  filters        Json
+  /// 'daily' | 'weekly'
+  cadence        String    @default("daily")
+  /// 'pending' | 'confirmed' | 'unsubscribed'
+  status         String    @default("pending")
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  lastSentAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([brand, status, lastSentAt])
+  @@index([emailHash])
+}

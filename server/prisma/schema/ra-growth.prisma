@@ -1,0 +1,40 @@
+// ra-growth.prisma: GROW area models (ARCHITECTURE.md §2.12).
+// Added by FND-1b (Jobright clone).
+
+model RAReferralCode {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand     String
+  /// 8 chars, Crockford base32.
+  code      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model RAReferral {
+  id            String    @id @default(cuid())
+  brand         String
+  inviterUserId String
+  inviter       User      @relation("RAReferralInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  inviteeUserId String    @unique
+  invitee       User      @relation("RAReferralInvitee", fields: [inviteeUserId], references: [id], onDelete: Cascade)
+  /// 'pending' | 'qualified' | 'rewarded' | 'rejected'
+  status        String    @default("pending")
+  riskScore     Int       @default(0)
+  riskReasons   String[]  @default([])
+  qualifiedAt   DateTime?
+  rewardedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([inviterUserId, status])
+}
+
+/// First/last touch attribution captured at signup (F-ONB-02).
+model RAAttribution {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonId     String?
+  /// `{ from, utmSource, utmMedium, utmCampaign, ref, inviteCode, landingPath, jobId, at }`
+  firstTouch Json
+  lastTouch  Json?
+  createdAt  DateTime @default(now())
+}

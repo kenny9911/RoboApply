@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// Runtime traffic uses the Neon pooler (pgbouncer transaction mode)
+// configured in src/lib/prisma.ts. Migrations / `prisma db push` must
+// bypass the pooler — DDL over transaction-mode pgbouncer silently
+// no-ops multi-statement changes — so prisma.config.ts points db push
+// at the direct (non-pooler) Neon endpoint via DIRECT_DATABASE_URL.
+//
+// Multi-file schema (ARCHITECTURE.md §2.1). prisma.config.ts points Prisma at
+// this folder; every *.prisma file here is loaded. This file holds only the
+// generator and datasource. The generator emits the client to
+// server/src/generated/prisma (one directory deeper than the old single file,
+// hence ../../). Models live in legacy.prisma and the ra-*.prisma area files.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../../src/generated/prisma"
+  // Force ESM .js import extensions in the generated client. The default
+  // is "inferred from environment", which produces .ts extensions in some
+  // build contexts (notably Render's Linux Docker build) and breaks at
+  // runtime with `Cannot find module .../class.ts`. Pinning to "js" makes
+  // the generated TypeScript emit cleanly to .js after tsc compiles to dist/.
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

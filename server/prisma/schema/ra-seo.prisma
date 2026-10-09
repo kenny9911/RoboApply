@@ -1,0 +1,27 @@
+// ra-seo.prisma: SEO area models (ARCHITECTURE.md §2.12, §9).
+// Added by FND-1b (Jobright clone).
+
+/// A programmatic browse page. Intro text is built from real stats plus
+/// template text, never invented facts (D3).
+model RASeoPage {
+  id          String   @id @default(cuid())
+  brand       String
+  locale      String
+  /// 'role' | 'role_city' | 'remote_role' | 'company' | 'segment' | 'sponsorship_role' | 'compare' | 'campus'
+  type        String
+  slug        String
+  /// `{ taxonomyId?, city?, country?, companyId?, segment? }`
+  params      Json
+  title       String
+  h1          String
+  intro       String   @db.Text
+  /// `{ jobCount, newLast7d, medianSalary?: { value, currency, period, sampleSize },
+  ///    topCompanies: […], asOf }` — medians only when sampleSize ≥ MIN_SAMPLE (20).
+  stats       Json
+  jobCount    Int
+  indexable   Boolean  @default(false)
+  lastBuiltAt DateTime @default(now())
+
+  @@unique([brand, locale, type, slug])
+  @@index([brand, indexable, type])
+}

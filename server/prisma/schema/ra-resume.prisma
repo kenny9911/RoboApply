@@ -1,0 +1,170 @@
+// ra-resume.prisma: RES area models (ARCHITECTURE.md §2.1).
+// Moved verbatim from the former single-file schema.prisma; no DDL change.
+// The original RoboApply V2 section note lives at the top of ra-jobs.prisma.
+
+/// V2 candidate-owned resumes. Decoupled from the recruiter `Resume` model —
+/// V2 stores its own variants and never reads `Resume` directly.
+/// Spec: 04-backend-spec.md §2.4.
+model RAResumeVariant {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String
+  /// 'base' | 'tailored_for_jd' | 'from_template'
+  kind String @default("base")
+
+  /// Required when kind='tailored_for_jd' (validated in application code).
+  targetJobId String?
+  targetJob   RAJob?  @relation("RAResumeVariantTargetJob", fields: [targetJobId], references: [id], onDelete: SetNull)
+
+  basedOnVariantId String?
+  basedOnVariant   RAResumeVariant?  @relation("RAResumeVariantBasedOn", fields: [basedOnVariantId], references: [id], onDelete: SetNull)
+  derivedVariants  RAResumeVariant[] @relation("RAResumeVariantBasedOn")
+
+  /// For kind='from_template' — e.g. 'fresh_grad_engineering'.
+  templateKey String?
+
+  resumeMarkdown    String @db.Text
+  /// sha256(resumeMarkdown), used as the cache key for RAJobMatchScore.
+  resumeContentHash String
+
+  /// Exactly one variant per user is the "primary" résumé (enforced in app
+  /// code via a transaction, not a DB partial-unique index). The first résumé
+  /// a user creates/uploads is auto-promoted to primary.
+  isPrimary   Boolean @default(false)
+  /// How this variant entered the system: 'upload' | 'scratch' | 'template' |
+  /// 'linkedin' | 'tailored'. Drives the resume-card source chip.
+  sourceKind  String?
+  /// Upload-parse lifecycle for kind='base' uploads: 'parsed' | 'parsing' |
+  /// 'failed'. NULL for variants that never went through the parse pipeline.
+  parseStatus String?
+
+  /// Idempotency key for upload-parse: an opaque per-file token the client
+  /// sends with POST /resumes/upload (today, sha256 of the file bytes, so it
+  /// is stable across retries and across modal sessions). A repeat upload
+  /// returns the row the first attempt created instead of minting a duplicate
+  /// — the failure mode when a 45-80s parse commits server-side but the
+  /// response is lost in transit. NULL for every non-upload variant; Postgres
+  /// treats NULLs as distinct, so those never collide on the index below.
+  /// Released on soft delete (see RAResumeService.delete) so re-uploading the
+  /// same file after deleting it creates a fresh row.
+  uploadIdempotencyKey String?
+
+  /// Raw extracted text from the uploaded file (pre-parse). Candidate-owned —
+  /// never written to the recruiter `Resume` table.
+  rawText    String? @db.Text
+  /// Structured parse (ParsedResume JSON) produced by ResumeParseAgent.
+  parsedData Json?
+  /// AI-generated recruiter-style pitch summary + one-line highlight.
+  summary    String? @db.Text
+  highlight  String?
+
+  /// Reference to the original uploaded file in candidate-scoped object
+  /// storage (distinct keyspace from recruiter resume originals). NULL when no
+  /// original was retained (scratch / template variants).
+  originalFileProvider String?
+  originalFileKey      String?
+  originalFileName     String?
+  originalFileMimeType String?
+  originalFileSize     Int?
+
+  /// Most recent match score against targetJobId, denormalised for resume-list
+  /// rendering. NULL when no score has been computed.
+  matchScoreCached Int?
+
+  lastEditedAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  /// Soft delete (UI hides; admin can recover).
+  deletedAt    DateTime?
+
+  matchScores RAJobMatchScore[]
+
+  // ── Jobright clone (FND-1b; ARCH §2.9) ──
+  /// `{ template: 'standard'|'compact'|'centered'|'structured'|'split', font,
+  ///    sizes{name,section,sub,body}, page: 'letter'|'a4',
+  ///    spacing{section,entry,line,marginY,marginX}, justify, headerAlign, accent,
+  ///    bullet, skillsLayout, eduOrder, dateFormat, hideDivider }`
+  layout               Json?
+  targetTitle          String?
+  /// Inserted claims the user has not verified yet. >0 blocks export (ruling C12).
+  unverifiedClaims     Int               @default(0)
+  /// 'none' | 'running' | 'done' | 'failed'
+  analysisStatus       String?
+  grades               RAResumeGrade[]
+  tailorSessionsBase   RATailorSession[] @relation("TailorBase")
+  tailorSessionsResult RATailorSession[] @relation("TailorResult")
+  coverLetters         RACoverLetter[]
+
+  @@unique([userId, uploadIdempotencyKey])
+  @@index([userId, lastEditedAt(sort: Desc)])
+  @@index([userId, kind, lastEditedAt(sort: Desc)])
+  @@index([userId, isPrimary])
+  @@index([targetJobId])
+  @@index([resumeContentHash])
+}
+
+// ── Jobright clone: resume check and tailoring (FND-1b; ARCH §2.9) ─────────
+
+/// One resume check run (F-RES-03). AI output; labelled as AI in the UI.
+model RAResumeGrade {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variantId      String
+  variant        RAResumeVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  contentHash    String
+  targetTitle    String?
+  /// 'running' | 'done' | 'failed' | 'cancelled'
+  status         String          @default("running")
+  /// 'A' | 'B' | 'C' | 'D'
+  grade          String?
+  /// 0–100
+  score          Int?
+  /// `{ urgent, critical, optional }`
+  counts         Json?
+  /// `[{ id, type, severity, section, anchor, why, how, suggestion? }]`
+  issues         Json?
+  model          String?
+  creditLedgerId String?
+  createdAt      DateTime        @default(now())
+  completedAt    DateTime?
+
+  @@index([variantId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// A tailoring session: base resume + job → reviewed tailored variant.
+model RATailorSession {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseVariantId    String
+  baseVariant      RAResumeVariant  @relation("TailorBase", fields: [baseVariantId], references: [id], onDelete: Cascade)
+  resultVariantId  String?
+  resultVariant    RAResumeVariant? @relation("TailorResult", fields: [resultVariantId], references: [id], onDelete: SetNull)
+  jobId            String?
+  /// Pasted posting: `{ title, company, text }`
+  jdSnapshot       Json?
+  /// 'guided' | 'fast'
+  mode             String           @default("guided")
+  /// 'summary' | 'skills' | 'work_quick' | 'work_full' | 'projects'
+  sections         String[]         @default([])
+  customPrompt     String?
+  /// Only keywords the user confirmed they actually have.
+  keywordsSelected String[]         @default([])
+  scoreBefore      Int?
+  scoreAfter       Int?
+  /// `[{ id, text, kind: 'keyword'|'number'|'claim',
+  ///    status: 'pending'|'kept'|'removed'|'edited', evidence?: { source: 'resume', ref } }]`
+  claims           Json             @default("[]")
+  /// 'draft' | 'generating' | 'review' | 'finalized' | 'failed'
+  status           String           @default("draft")
+  creditLedgerId   String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId, jobId])
+  @@index([baseVariantId])
+  @@index([resultVariantId])
+}

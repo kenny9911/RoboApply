@@ -1,0 +1,88 @@
+// ra-cn.prisma: GoApply / mainland models (ARCHITECTURE.md §2.12,
+// TASK_PLAN.md R-17, CN_TW_LAUNCH_PLAN.md §4.1(4)). Added by FND-1b (Jobright clone).
+
+/// Phone one-time codes (AUTH writes). The code is stored hashed.
+model RAPhoneOtp {
+  id         String    @id @default(cuid())
+  brand      String
+  phoneE164  String
+  codeHash   String
+  /// 'login' | 'bind'
+  purpose    String
+  attempts   Int       @default(0)
+  ipHash     String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phoneE164, createdAt(sort: Desc)])
+  @@index([expiresAt])
+}
+
+/// GoApply campus recruiting calendar (校招日历). Staff-curated from an official
+/// page: paste the official URL → extractor proposes fields → a person verifies →
+/// publish.
+model RACampusEvent {
+  id               String                 @id @default(cuid())
+  market           String                 @default("cn")
+  companyName      String
+  companyId        String?
+  /// Programme title, e.g. "2027届校园招聘".
+  title            String
+  /// e.g. '2027届'
+  graduationClass  String
+  /// 'application' | 'test' | 'interview' | 'info_session'
+  kind             String                 @default("application")
+  /// 网申 window.
+  applyOpensAt     DateTime?
+  applyClosesAt    DateTime?
+  /// `[{ kind: 'wangshen'|'ceping'|'bishi'|'mianshi'|'offer'|'info_session', startsAt?, endsAt?, note? }]`
+  stages           Json                   @default("[]")
+  cities           String[]               @default([])
+  roles            String[]               @default([])
+  /// D3: every row MUST carry the employer's official URL; nothing is published
+  /// without it, and the UI always links to it.
+  officialUrl      String
+  /// Where the details were read from, when it is not the official page.
+  sourceUrl        String?
+  sourceName       String?
+  sourceNote       String?
+  /// 'draft' | 'published' | 'archived'
+  status           String                 @default("draft")
+  /// Required to publish (app-enforced). Rows older than 14 days without
+  /// re-verification show "待核实".
+  verifiedAt       DateTime?
+  verifiedByUserId String?
+  /// Staff user id (no FK).
+  createdBy        String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  subscriptions    RACampusSubscription[]
+
+  @@index([market, status, graduationClass, applyClosesAt])
+  @@index([companyName])
+}
+
+/// Deadline reminders for a campus event, or "follow a company" (kind 'company').
+model RACampusSubscription {
+  id                    String         @id @default(cuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 'event' | 'company'
+  kind                  String         @default("event")
+  eventId               String?
+  event                 RACampusEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// kind 'company': the followed company and 届别.
+  companyNameNormalized String?
+  graduationClass       String?
+  /// 'email' | 'wechat' | 'in_app'
+  channel               String         @default("in_app")
+  remindAt              DateTime?
+  lastNotifiedAt        DateTime?
+  createdAt             DateTime       @default(now())
+
+  @@unique([userId, eventId])
+  @@unique([userId, kind, companyNameNormalized])
+  @@index([eventId])
+  @@index([companyNameNormalized, graduationClass])
+}

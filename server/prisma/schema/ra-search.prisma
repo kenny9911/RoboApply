@@ -1,0 +1,86 @@
+// ra-search.prisma: PREF area models (ARCHITECTURE.md §2.1).
+// Moved verbatim from the former single-file schema.prisma; no DDL change.
+// The original RoboApply V2 section note lives at the top of ra-jobs.prisma.
+
+/// One row per user. The "Career Goal" card on /home.
+model RACareerGoal {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  targetTitle           String
+  targetDate            DateTime? // date-only semantics; ISO YYYY-MM-DD on the wire
+  targetSalaryMin       Int?
+  targetSalaryMax       Int?
+  targetSalaryCurrency  String?   @default("USD")
+  weeklyApplicationGoal Int       @default(5)
+
+  /// { countries: string[], cities: string[], remoteOk: boolean, hybridOk: boolean }
+  preferredLocations Json?
+  /// 'remote' | 'hybrid' | 'onsite' | null
+  preferredWorkType  String?
+  /// 'ic' | 'senior' | 'staff' | 'principal' | 'manager' | 'director' | 'vp' | 'cxo' | null
+  seniority          String?
+  notesMarkdown      String? @db.Text
+
+  /// RoboApply V3 extended-preferences blob (RAPreferences minus the fields
+  /// goal/auth-profile own). Deep-merged on PATCH. Null until first save —
+  /// the RAPreferencesService defaults it for first-time users.
+  preferencesBlob Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// User's saved search queries.
+/// Spec: 04-backend-spec.md §2.5.
+model RASavedSearch {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name  String
+  /// SearchQuery shape — see spec §5.7 for the keys (title, location, workType, …).
+  query Json
+
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ── Jobright clone: the one preference store (FND-1b; ARCH §2.8) ───────────
+
+/// Saved searches = search profiles. `filters` holds FilterSet v1 (zod schema in
+/// server/src/features/search/contract.ts). RACareerGoal.preferencesBlob and
+/// RASavedSearch rows are migrated in on first read (FND-4 legacyMigration).
+model RASearchProfile {
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  /// Exactly one per user (app-enforced in a transaction).
+  isDefault          Boolean           @default(false)
+  /// The profile the feed uses now.
+  isActive           Boolean           @default(false)
+  /// Optimistic concurrency for drawer / assistant / onboarding writes.
+  version            Int               @default(1)
+  schemaVersion      Int               @default(1)
+  /// FilterSet v1.
+  filters            Json
+  /// Instant alerts per day: 0 | 1 | 2 | 5 | 100 (Pro "as they arrive"; never
+  /// called "unlimited" in copy).
+  alertInstantMax    Int               @default(0)
+  /// 'daily' | 'weekly' | null
+  alertDigest        String?
+  alertLastInstantAt DateTime?
+  alertLastDigestAt  DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  alertDeliveries    RAAlertDelivery[]
+
+  @@index([userId, isDefault])
+  @@index([alertInstantMax, alertLastInstantAt])
+  @@index([alertDigest, alertLastDigestAt])
+}

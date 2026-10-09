@@ -1,27 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-//
-// Runtime traffic uses the Neon pooler (pgbouncer transaction mode)
-// configured in src/lib/prisma.ts. Migrations / `prisma db push` must
-// bypass the pooler — DDL over transaction-mode pgbouncer silently
-// no-ops multi-statement changes — so prisma.config.ts points db push
-// at the direct (non-pooler) Neon endpoint via DIRECT_DATABASE_URL.
-
-generator client {
-  provider            = "prisma-client"
-  output              = "../src/generated/prisma"
-  // Force ESM .js import extensions in the generated client. The default
-  // is "inferred from environment", which produces .ts extensions in some
-  // build contexts (notably Render's Linux Docker build) and breaks at
-  // runtime with `Cannot find module .../class.ts`. Pinning to "js" makes
-  // the generated TypeScript emit cleanly to .js after tsc compiles to dist/.
-  moduleFormat        = "esm"
-  importFileExtension = "js"
-}
-
-datasource db {
-  provider = "postgresql"
-}
+// Legacy shared models (ARCHITECTURE.md §2.1): the former single-file
+// schema.prisma minus the generator/datasource (_datasource.prisma) and the
+// RA* models (ra-*.prisma). Models were moved, not edited.
 
 model Team {
   id          String   @id @default(cuid())
@@ -69,25 +48,25 @@ model TeamInvitation {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String?
-  name         String?
-  phone        String?
-  jobTitle     String?
-  company      String?
-  avatar       String?
-  role         String   @default("user") // 'user', 'internal', 'agency', 'admin', 'candidate', 'sales', or 'customer_success' — PRIMARY role; gates permissions. Invariant: roles[0] === role.
-  roles        String[] @default(["user"]) // Full role list; superset of [role]. See docs/prd-user-multi-role-candidate.md.
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String?
+  name            String?
+  phone           String?
+  jobTitle        String?
+  company         String?
+  avatar          String?
+  role            String   @default("user") // 'user', 'internal', 'agency', 'admin', 'candidate', 'sales', or 'customer_success' — PRIMARY role; gates permissions. Invariant: roles[0] === role.
+  roles           String[] @default(["user"]) // Full role list; superset of [role]. See docs/prd-user-multi-role-candidate.md.
   // Hard admin-disable flag. False = cannot log in at all. Distinct from
   // subscription expiration (which is computed from subscriptionStatus +
   // currentPeriodEnd and only restricts LLM features, not login). Flipped by
   // the admin /users/:id/disable + /enable endpoints. See
   // docs/prd-resume-match-quota-rule.md and the subscriptionGate helper.
-  isActive     Boolean  @default(true)
-  provider     String? // 'email', 'google', 'github', 'linkedin'
-  providerId   String?
-  teamId       String?
+  isActive        Boolean  @default(true)
+  provider        String? // 'email', 'google', 'github', 'linkedin'
+  providerId      String?
+  teamId          String?
   // SCRM owner assignment — each customer (a recruiter User) gets a CS owner and
   // a sales owner, both pointing at internal staff Users (role customer_success /
   // sales). SetNull so reassigning or deleting a staff member never deletes the
@@ -95,8 +74,8 @@ model User {
   // "SCRM / CS Copilot" models near the end of this file.
   assignedSalesId String?
   assignedCsId    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Subscription / Stripe
   stripeCustomerId               String?   @unique
@@ -288,45 +267,45 @@ model User {
   // SCRM / CS Copilot. Self-relations: this customer's assigned sales/CS owner,
   // and (inverse) the customers a staff user owns. Plus the customer's CS data.
   // See the "SCRM / CS Copilot" model block near the end of this file.
-  assignedSales          User?                 @relation("UserAssignedSales", fields: [assignedSalesId], references: [id], onDelete: SetNull)
-  assignedCs             User?                 @relation("UserAssignedCs", fields: [assignedCsId], references: [id], onDelete: SetNull)
-  salesAssignedCustomers User[]                @relation("UserAssignedSales")
-  csAssignedCustomers    User[]                @relation("UserAssignedCs")
-  customerProfile        CustomerProfile?      @relation("CustomerProfileUser")
-  healthSnapshots        HealthScoreSnapshot[] @relation("HealthScoreSnapshotUser")
-  customerInteractions   CustomerInteraction[] @relation("CustomerInteractionCustomer")
-  crmAlertsAsCustomer    CrmAlert[]            @relation("CrmAlertCustomer")
-  crmAlertsAssigned      CrmAlert[]            @relation("CrmAlertAssignee")
-  crmEmailDraftsReceived CrmEmailDraft[]       @relation("CrmEmailDraftRecipient")
-  crmEmailDraftsApproved CrmEmailDraft[]       @relation("CrmEmailDraftApprover")
-  crmEmailDraftsRejected CrmEmailDraft[]       @relation("CrmEmailDraftRejecter")
-  supportTicketsAsCustomer SupportTicket[]     @relation("SupportTicketCustomer")
-  supportTicketsAssigned   SupportTicket[]     @relation("SupportTicketAssignee")
-  playbookRuns           PlaybookRun[]         @relation("PlaybookRunCustomer")
+  assignedSales            User?                 @relation("UserAssignedSales", fields: [assignedSalesId], references: [id], onDelete: SetNull)
+  assignedCs               User?                 @relation("UserAssignedCs", fields: [assignedCsId], references: [id], onDelete: SetNull)
+  salesAssignedCustomers   User[]                @relation("UserAssignedSales")
+  csAssignedCustomers      User[]                @relation("UserAssignedCs")
+  customerProfile          CustomerProfile?      @relation("CustomerProfileUser")
+  healthSnapshots          HealthScoreSnapshot[] @relation("HealthScoreSnapshotUser")
+  customerInteractions     CustomerInteraction[] @relation("CustomerInteractionCustomer")
+  crmAlertsAsCustomer      CrmAlert[]            @relation("CrmAlertCustomer")
+  crmAlertsAssigned        CrmAlert[]            @relation("CrmAlertAssignee")
+  crmEmailDraftsReceived   CrmEmailDraft[]       @relation("CrmEmailDraftRecipient")
+  crmEmailDraftsApproved   CrmEmailDraft[]       @relation("CrmEmailDraftApprover")
+  crmEmailDraftsRejected   CrmEmailDraft[]       @relation("CrmEmailDraftRejecter")
+  supportTicketsAsCustomer SupportTicket[]       @relation("SupportTicketCustomer")
+  supportTicketsAssigned   SupportTicket[]       @relation("SupportTicketAssignee")
+  playbookRuns             PlaybookRun[]         @relation("PlaybookRunCustomer")
 
   // Seeker app — /job-seeker candidate-facing product. 1:1 SeekerProfile is
   // created lazily on first /job-seeker visit. Cascade hard-delete happens
   // via SeekerDeletionService after the 7d soft-delete grace period.
   // See docs/prd-job-seeker-app.md + docs/job-seeker-engineering-spec.md.
-  seekerProfile               SeekerProfile?              @relation("SeekerProfileUser")
-  seekerOnboardingInterviews  SeekerOnboardingInterview[] @relation("SeekerOnboardingInterviewUser")
+  seekerProfile              SeekerProfile?              @relation("SeekerProfileUser")
+  seekerOnboardingInterviews SeekerOnboardingInterview[] @relation("SeekerOnboardingInterviewUser")
 
   // RoboApply — V1 fully-automatic-default candidate product. One mission per
   // user, lifetime. Lives behind the seeker-style boundary in
   // backend/src/roboapply/*. See docs/roboapply/02-architecture.md §6.
-  roboApplyMission            RoboApplyMission?
+  roboApplyMission RoboApplyMission?
 
   // RoboApply V2 — candidate-facing companion to RoboHire. Lives behind a
   // separate decoupled boundary in backend/src/roboapply/v2/*. See
   // docs/roboapply/v2/04-backend-spec.md §2.
-  raCareerGoal      RACareerGoal?
-  raTrackerEntries  RATrackerEntry[]
-  raResumeVariants  RAResumeVariant[]
-  raSavedSearches   RASavedSearch[]
-  raCareerInsights  RACareerInsight[]
-  raJobMatchScores  RAJobMatchScore[]
-  raIntegrations    RAIntegration[]
-  raMockSessions    RAMockSession[]
+  raCareerGoal     RACareerGoal?
+  raTrackerEntries RATrackerEntry[]
+  raResumeVariants RAResumeVariant[]
+  raSavedSearches  RASavedSearch[]
+  raCareerInsights RACareerInsight[]
+  raJobMatchScores RAJobMatchScore[]
+  raIntegrations   RAIntegration[]
+  raMockSessions   RAMockSession[]
 
   // Interview Engine — standalone real-time AI voice-interview service
   // (backend/src/interview-engine/*). Powers /mock-interview and the external
@@ -345,10 +324,10 @@ model User {
   // column add grandfathers all current rows as verified, and ONLY
   // AuthService.signup() (email/password) explicitly writes `false`. OAuth user
   // creation explicitly writes `true`. See docs/design-spec-signup-email-verification.md.
-  emailVerified            Boolean   @default(true)
-  emailVerifiedAt          DateTime?
-  emailVerificationToken   String?   @unique // sha256 of the raw token emailed to the user
-  emailVerificationExpiry  DateTime?
+  emailVerified             Boolean   @default(true)
+  emailVerifiedAt           DateTime?
+  emailVerificationToken    String?   @unique // sha256 of the raw token emailed to the user
+  emailVerificationExpiry   DateTime?
   // Explicit issue time of the live token. Used for the per-recipient resend
   // cooldown so it is independent of EMAIL_VERIFICATION_TTL_HOURS (which can be
   // changed by an admin and would otherwise corrupt a back-computed issue time).
@@ -359,12 +338,86 @@ model User {
   // applied server-side in GET so the frontend can treat as always-present.
   matchingPreferences Json?
 
+  // ── Jobright clone (FND-1b; docs/jobright-clone/ARCHITECTURE.md §2.2, TASK_PLAN.md R-01/R-17) ──
+  // The product brand this account belongs to: 'roboapply' | 'goapply'. Set at
+  // signup from the request host and never changed (identity partition, ARCH
+  // §1.10). Not to be confused with `market` above (recruiter overage billing).
+  brand              String    @default("roboapply")
+  // E.164 phone, normalized via libphonenumber-js. GoApply real-name identity
+  // (CN L-8) requires a verified number. Unique per brand (index below); the
+  // legacy free-text `phone` column is left untouched.
+  phoneE164          String?
+  phoneVerifiedAt    DateTime?
+  // Touched at most hourly by requireAuth; drives score precompute and alerts.
+  lastActiveAt       DateTime?
+  // True for GoApply phone/WeChat accounts that have no real email: `email`
+  // then holds a reserved `…@users.goapply.invalid` placeholder and the email
+  // layer refuses to send to `.invalid` (CN L-8).
+  emailIsPlaceholder Boolean   @default(false)
+
+  // Jobright clone back-relations (one per RA* model that points at User).
+  raProfile              RAProfile?
+  raSensitive            RASensitiveAnswers?
+  raEducation            RAProfileEducation[]
+  raExperience           RAProfileExperience[]
+  raSearchProfiles       RASearchProfile[]
+  raJobStates            RAJobUserState[]
+  raInteractions         RAJobInteraction[]
+  raFeedSessions         RAFeedSession[]
+  raFeedRatings          RAFeedRating[]
+  raAffinity             RAUserAffinity?
+  raFitReports           RAFitReport[]
+  raResumeGrades         RAResumeGrade[]
+  raTailorSessions       RATailorSession[]
+  raCoverLetters         RACoverLetter[]
+  raTrackerEvents        RATrackerEvent[]
+  raArtifacts            RAApplicationArtifact[]
+  raContactsOwned        RAContact[]
+  raContactImports       RAContactImport[]
+  raOutreachDrafts       RAOutreachDraft[]
+  raCopilotThreads       RACopilotThread[]
+  raCopilotProposals     RACopilotProposal[]
+  raCopilotMemory        RACopilotMemory[]
+  raAgentSettings        RAAgentSettings?
+  raAgentQueue           RAAgentQueueItem[]
+  raAgentKitEvents       RAAgentKitEvent[]
+  raAnswerBank           RAAnswerBankItem[]
+  raExtDevices           RAExtensionDevice[]
+  raAutofillRuns         RAAutofillRun[]
+  raSiteRequests         RASiteRequest[]
+  raCreditWindows        RACreditWindow[]
+  raCreditLedger         RACreditLedger[]
+  raCreditGrants         RACreditGrant[]
+  raEntitlementOverrides RAEntitlementOverride[]
+  raAlertDeliveries      RAAlertDelivery[]
+  raPushSubs             RAPushSubscription[]
+  raUiState              RAUserUiState?
+  raEmailLogs            RAEmailLog[]
+  raReferralCode         RAReferralCode?
+  raReferralsSent        RAReferral[]             @relation("RAReferralInviter")
+  raReferralReceived     RAReferral?              @relation("RAReferralInvitee")
+  raAttribution          RAAttribution?
+  raAuthIdentities       RAAuthIdentity[]
+  raAuthTokens           RAAuthToken[]
+  raProductEvents        RAProductEvent[]
+  raSurveyResponses      RASurveyResponse[]
+  raQuestionContribs     RAQuestionContribution[]
+  raQuestionReports      RAQuestionReport[]
+  raCoach                RACoach?
+  raCoachBookings        RACoachBooking[]
+  raCampusSubscriptions  RACampusSubscription[]
+  raPersonalInfoRequests RAPersonalInfoRequest[]
+  raJobsOwned            RAJob[]                  @relation("RAJobOwner")
+
+  @@unique([brand, phoneE164])
   @@index([email])
   @@index([provider, providerId])
   @@index([teamId])
   @@index([createdAt])
   @@index([assignedSalesId])
   @@index([assignedCsId])
+  @@index([brand, createdAt])
+  @@index([lastActiveAt])
 }
 
 // Per-user LLM API keys ("Bring Your Own Key").
@@ -715,11 +768,28 @@ model AlipayOrder {
   completedAt DateTime?
   createdAt   DateTime  @default(now())
 
+  // ── Jobright clone (FND-1b; ARCH §2.2, CN plan §4.1(4), TASK_PLAN.md R-15/R-17) ──
+  // The model name is kept for callback compatibility; it now records any
+  // CN-rail order (Alipay or WeChat Pay). Existing rows read as Alipay.
+  channel         String  @default("alipay") // 'alipay' | 'wechatpay'
+  brand           String? // 'roboapply' | 'goapply'; set on every write from now on
+  planKey         String? // R-08 plan key, e.g. 'pro_monthly' | 'pro_week_pass'
+  // 'subscription' | 'interview_pack' only. Never 'coaching' on the CN rails:
+  // the platform must not collect money on a coach's behalf (no 二清).
+  purpose         String  @default("subscription")
+  amountMinor     Int? // fen; `amount` (Float yuan) stays for legacy readers
+  relatedId       String? // reserved
+  wxPrepayId      String? // WeChat Pay v3 prepay_id
+  wxCodeUrl       String? // WeChat Pay NATIVE code_url (QR)
+  wxTransactionId String? // WeChat Pay transaction_id from the notify
+  tradeType       String? // WeChat Pay: 'NATIVE' | 'H5' | 'JSAPI'
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([outTradeNo])
   @@index([status])
+  @@index([channel, status])
 }
 
 // Self-service subscription RENEWAL — a one-time payment that extends the
@@ -774,7 +844,7 @@ model AdminAdjustment {
 // wire, check, cash, etc.). One row per inbound payment. Spec:
 // docs/prd-admin-external-payment.md.
 model ExternalPayment {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   userId          String
   recordedById    String
   paymentMethod   String // 'bank_transfer' | 'wire' | 'check' | 'cash' | 'other'
@@ -881,24 +951,24 @@ model OverageCharge {
 //
 // See docs/prd-resume-match-quota-rule.md.
 model UsageDeductionLog {
-  id     String @id @default(cuid())
-  userId String
+  id       String  @id @default(cuid())
+  userId   String
   // Set when the billed operation was driven by an API-key request (rh_...).
   // Null for cookie/JWT (UI) requests and non-HTTP contexts (cron/worker/seeker).
   // Enables per-API-key billing reconciliation alongside per-user.
   apiKeyId String?
   // 'resume_match' | 'interview' | 'agent_alex_text' | 'agent_alex_voice'.
   // Free-form so new SKUs can be added without a migration.
-  sku    String
+  sku      String
   // Almost always 1; reserved for future batch ops that must commit
   // multiple units atomically. The batch-interview path today writes one
   // row per resume even though the counter is updated atomically — keeps
   // per-unit forensic detail.
-  units  Int    @default(1)
+  units    Int     @default(1)
   // 'plan' | 'overage' | 'free_tier'. Tells finance whether the unit
   // came from the user's plan quota, their wallet (overage), or a
   // free-tier user under their lifetime cap.
-  source String
+  source   String
 
   // Snapshot of effective tier + counter state AT TIME OF DEBIT, so a
   // future plan change or counter reset doesn't make this row hard to
@@ -1035,20 +1105,20 @@ model InterviewRoomConfigVersion {
 }
 
 model Resume {
-  id                    String    @id @default(cuid())
-  userId                String
-  recruiterUserId       String?
-  name                  String
-  email                 String?
-  phone                 String?
-  currentRole           String?
-  experienceYears       String?
-  summary               String?   @db.Text // AI-generated professional summary
-  highlight             String? // One-line highlight for card display
-  resumeText            String    @db.Text
-  parsedData            Json?
-  insightData           Json?
-  jobFitData            Json?
+  id                          String    @id @default(cuid())
+  userId                      String
+  recruiterUserId             String?
+  name                        String
+  email                       String?
+  phone                       String?
+  currentRole                 String?
+  experienceYears             String?
+  summary                     String?   @db.Text // AI-generated professional summary
+  highlight                   String? // One-line highlight for card display
+  resumeText                  String    @db.Text
+  parsedData                  Json?
+  insightData                 Json?
+  jobFitData                  Json?
   // ── Talent Hub AI-First intelligence (additive, nullable) ────────────────
   // See docs/talent-ai-first/. Written ONLY by TalentIntelligenceService.
   // talentIntelligence holds the unified TalentIntelligence JSON object
@@ -1066,45 +1136,45 @@ model Resume {
   talentStageUpdatedAt        DateTime?
   talentJobSetHash            String?
   lastOutreachDrafts          Json?
-  fileName              String?
-  fileSize              Int?
-  fileType              String?
-  originalFileProvider  String?
-  originalFileKey       String?
-  originalFileName      String?
-  originalFileMimeType  String?
-  originalFileSize      Int?
-  originalFileChecksum  String?
-  originalFileStoredAt  DateTime?
-  contentHash           String?
+  fileName                    String?
+  fileSize                    Int?
+  fileType                    String?
+  originalFileProvider        String?
+  originalFileKey             String?
+  originalFileName            String?
+  originalFileMimeType        String?
+  originalFileSize            Int?
+  originalFileChecksum        String?
+  originalFileStoredAt        DateTime?
+  contentHash                 String?
   // External-system identifier for idempotent upsert via the partner-facing
   // POST /api/v1/external/resumes/import endpoint (e.g. GoHire's resume id).
   // Scoped by (userId, source, externalId) so the same external id under
   // different external systems doesn't collide. Null for resumes uploaded
   // via the in-product UI / Talent Hub / Auto-Loader.
-  externalId            String?
-  status                String    @default("active")
-  source                String    @default("upload")
-  tags                  String[]  @default([])
-  notes                 String?   @db.Text
-  preferences           Json?
+  externalId                  String?
+  status                      String    @default("active")
+  source                      String    @default("upload")
+  tags                        String[]  @default([])
+  notes                       String?   @db.Text
+  preferences                 Json?
   // ResumeSemanticTagAgent output — see backend/src/types/semanticLabels.ts.
   // tagSet is the denormalized flat array used for index-backed queries
   // (GIN index applied via apply-indexes.ts). Always rebuilt from
   // semanticLabels via buildTagSet() — never written by hand.
-  semanticLabels        Json?
-  semanticLabelsVersion String?
-  tagSet                String[]  @default([])
+  semanticLabels              Json?
+  semanticLabelsVersion       String?
+  tagSet                      String[]  @default([])
   // Match v2 — raw normalized keyword pool for lexical overlap against JDs.
   // Distinct from tagSet (which holds namespaced semantic enums); keywordSet
   // is the unprefixed, alias-normalized vocabulary of skills/tools/tech the
   // candidate demonstrates. Built deterministically at upload time from
   // parsedData + semanticLabels via ResumeKeywordService.buildResumeKeywordSet().
   // GIN-indexed for future tag-search use. See docs/prd-match-v2.md.
-  keywordSet            String[]  @default([])
-  keywordSetVersion     String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  keywordSet                  String[]  @default([])
+  keywordSetVersion           String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
   user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   recruiterUser          User?                 @relation("ResumeRecruiter", fields: [recruiterUserId], references: [id], onDelete: SetNull)
@@ -1580,37 +1650,37 @@ model JobResumeMatch {
 }
 
 model Interview {
-  id              String    @id @default(cuid())
-  userId          String
-  jobId           String?
-  resumeId        String?
-  hiringRequestId String?
-  candidateId     String?
-  candidateName   String
-  candidateEmail  String?
-  jobTitle        String?
-  jobDescription  String?   @db.Text
-  resumeText      String?   @db.Text
-  status          String    @default("scheduled") // queued, sending, scheduled, in_progress, completed, cancelled, expired, failed
-  type            String    @default("ai_video") // ai_video, ai_audio, ai_text
-  scheduledAt     DateTime?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  duration        Int? // seconds
-  accessToken     String?   @unique // unique token for candidate to join
-  roomId          String? // LiveKit room ID
-  transcript      Json? // Array of { role, content, timestamp }
-  recordingUrl    String?
-  gohireUserId    String? // GoHire user_id returned from invitation API
-  metadata        Json?
+  id                 String    @id @default(cuid())
+  userId             String
+  jobId              String?
+  resumeId           String?
+  hiringRequestId    String?
+  candidateId        String?
+  candidateName      String
+  candidateEmail     String?
+  jobTitle           String?
+  jobDescription     String?   @db.Text
+  resumeText         String?   @db.Text
+  status             String    @default("scheduled") // queued, sending, scheduled, in_progress, completed, cancelled, expired, failed
+  type               String    @default("ai_video") // ai_video, ai_audio, ai_text
+  scheduledAt        DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  duration           Int? // seconds
+  accessToken        String?   @unique // unique token for candidate to join
+  roomId             String? // LiveKit room ID
+  transcript         Json? // Array of { role, content, timestamp }
+  recordingUrl       String?
+  gohireUserId       String? // GoHire user_id returned from invitation API
+  metadata           Json?
   // Set when ensureEvaluationForInterview() or another auto-eval path decided
   // NOT to run the evaluation. Currently the only value is
   // 'duration_too_short' (interview ran for < 30% of Job.interviewDuration).
   // Surfaces in the interview-hub list as a badge so recruiters know why no
   // evaluation was generated.
   autoEvalSkipReason String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   hiringRequest HiringRequest?        @relation(fields: [hiringRequestId], references: [id], onDelete: SetNull)
@@ -1667,14 +1737,14 @@ model InterviewDialogTurn {
 // Source links: exactly one of (interviewId | goHireInterviewId) is set, or
 // neither (stateless external-API caller that opted into persist).
 model InterviewEvaluation {
-  id                   String    @id @default(cuid())
+  id String @id @default(cuid())
 
   // Source links — exactly one of (interviewId | goHireInterviewId) is set
-  interviewId          String?
-  goHireInterviewId    String?
-  userId               String // recruiter who owns this row
-  jobId                String?
-  resumeId             String?
+  interviewId       String?
+  goHireInterviewId String?
+  userId            String // recruiter who owns this row
+  jobId             String?
+  resumeId          String?
 
   // Scoring
   overallScore         Int?
@@ -1686,55 +1756,47 @@ model InterviewEvaluation {
   // Payloads
   evaluationData       Json? // UnifiedEvaluation — full canonical shape. M2 `decisionReason` (≤140 chars) lives at evaluationData.decisionReason.
   passes               Json? // { eval, reflect, refine, totalLatencyMs, models } — intermediate pass artifacts for audit/debug
-  summary              String?   @db.Text // internal-facing 1-paragraph
-  clientSummary        String?   @db.Text // client share-page paragraph
+  summary              String? @db.Text // internal-facing 1-paragraph
+  clientSummary        String? @db.Text // client share-page paragraph
   hiringManagerSummary Json? // { headline: string, bullets: string[] } — for email
   strengths            Json? // Array<{ statement, evidence }>
   weaknesses           Json? // Array<{ statement, evidence }>
 
   // Versioning
-  schemaVersion        String    @default("v2.0")
-  promptVersion        String    @default("v2.0")
-  revision             Int       @default(1)
+  schemaVersion        String  @default("v2.0")
+  promptVersion        String  @default("v2.0")
+  revision             Int     @default(1)
   previousEvaluationId String?
-  revisionNotes        String?   @db.Text
+  revisionNotes        String? @db.Text
 
   // Disqualification gating — when any Critical must-have FAILs, this is true
   // and share-link mint refuses unless the recruiter explicitly overrides.
-  disqualified         Boolean   @default(false)
+  disqualified Boolean @default(false)
 
   // Share state
-  shareToken           String?   @unique
-  shareExpiresAt       DateTime?
-  shareViewCount       Int       @default(0)
-  lastSharedAt         DateTime?
-  shareAudience        String? // 'client' | 'manager' | null
+  shareToken     String?   @unique
+  shareExpiresAt DateTime?
+  shareViewCount Int       @default(0)
+  lastSharedAt   DateTime?
+  shareAudience  String? // 'client' | 'manager' | null
 
   // Cache
-  cachedHtmlReport     String?   @db.Text
-  cachedHtmlReportAt   DateTime?
+  cachedHtmlReport   String?   @db.Text
+  cachedHtmlReportAt DateTime?
 
   // Audit
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  interview          Interview?            @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  goHireInterview    GoHireInterview?      @relation(fields: [goHireInterviewId], references: [id], onDelete: Cascade)
-  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  previousEvaluation InterviewEvaluation?  @relation("EvaluationRevision", fields: [previousEvaluationId], references: [id])
-  revisions          InterviewEvaluation[] @relation("EvaluationRevision")
+  interview          Interview?             @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  goHireInterview    GoHireInterview?       @relation(fields: [goHireInterviewId], references: [id], onDelete: Cascade)
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  previousEvaluation InterviewEvaluation?   @relation("EvaluationRevision", fields: [previousEvaluationId], references: [id])
+  revisions          InterviewEvaluation[]  @relation("EvaluationRevision")
   accessLogs         EvaluationAccessLog[]
   shareEvents        EvaluationShareEvent[]
 
-  @@index([interviewId])
-  @@index([goHireInterviewId])
-  @@index([userId])
-  @@index([jobId])
-  @@index([resumeId])
-  @@index([overallScore])
-  @@index([verdict])
-  @@index([revision])
   // DB-level at-most-once enforcement (AR-EVAL-IDEMPOTENCY). Two processes (the API
   // /transcript handler and the agent-runtime eval-sweeper) can both pass the
   // check-then-act `evaluations.length === 0` guard and both try to write the first
@@ -1745,6 +1807,14 @@ model InterviewEvaluation {
   // and goHireInterviewId-bound rows never collide cross-source.
   @@unique([interviewId, revision])
   @@unique([goHireInterviewId, revision])
+  @@index([interviewId])
+  @@index([goHireInterviewId])
+  @@index([userId])
+  @@index([jobId])
+  @@index([resumeId])
+  @@index([overallScore])
+  @@index([verdict])
+  @@index([revision])
 }
 
 // 2026-06 Question Grader — persistent, cross-candidate cache of the
@@ -1777,7 +1847,7 @@ model InterviewTranscriptSegment {
   id        String   @id @default(cuid())
   hashKey   String   @unique
   version   String
-  payload   Json     // QuestionUnit[] : [{ qid, questionText, candidateAnswerText, category, timestampSeconds }]
+  payload   Json // QuestionUnit[] : [{ qid, questionText, candidateAnswerText, category, timestampSeconds }]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1793,7 +1863,7 @@ model InterviewGraderResult {
   id        String   @id @default(cuid())
   hashKey   String   @unique
   version   String
-  payload   Json     // { items: QaAssessmentItem[], capability?: CapabilitySynthesisResult }
+  payload   Json // { items: QaAssessmentItem[], capability?: CapabilitySynthesisResult }
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2649,13 +2719,13 @@ model AgentAlexSession {
 // No User relation on purpose — keeps the model self-contained and lets
 // anonymous rows exist without a back-relation edit on the big User model.
 model AlanSession {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String?
-  title        String   @default("批量招聘需求")
-  status       String   @default("active") // active | submitted | updated (edited after a submit)
-  campaign     Json     @default("{}") // BulkHiringCampaign
-  messages     Json     @default("[]") // ChatMessage[] — full transcript, persisted so the client can reopen a session and continue
-  turnCount    Int      @default(0)
+  title        String    @default("批量招聘需求")
+  status       String    @default("active") // active | submitted | updated (edited after a submit)
+  campaign     Json      @default("{}") // BulkHiringCampaign
+  messages     Json      @default("[]") // ChatMessage[] — full transcript, persisted so the client can reopen a session and continue
+  turnCount    Int       @default(0)
   contactName  String?
   contactEmail String?
   // Stable timestamp of the FIRST submit (set once when status → submitted;
@@ -2673,8 +2743,8 @@ model AlanSession {
   creditsCharged    Float   @default(0)
   lastModel         String?
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId, updatedAt])
   @@index([status, updatedAt])
@@ -2938,32 +3008,32 @@ model Company {
   // Most rich fields are JSON columns because their shape is still evolving
   // and we never query by sub-field. TypeScript interfaces live in
   // backend/src/types/companyProfile.ts.
-  legalName               String?
-  logoUrl                 String?
-  founded                 Int?
-  companyType             String? // "public" | "private" | "startup" | "nonprofit" | "government" | "subsidiary"
-  ticker                  String?
-  headcount               Int?
-  subIndustry             String?
-  description             String?   @db.Text
-  about                   String?   @db.Text
-  mission                 String?   @db.Text
-  vision                  String?   @db.Text
-  values                  Json?     // string[]
-  culture                 Json?     // CompanyCulture
-  personnelPolicy         Json?     // CompanyPersonnelPolicy
-  hiringPreferences       Json?     // CompanyHiringPreferences
-  compensationPhilosophy  Json?     // CompanyCompensationPhilosophy
-  techStack               Json?     // string[]
-  recentNews              Json?     // CompanyNewsItem[]
-  fundingInfo             Json?     // CompanyFundingInfo
-  leadership              Json?     // CompanyLeader[]
-  competitors             Json?     // string[]
-  growthSignals           Json?     // CompanyGrowthSignals
-  awards                  Json?     // CompanyAward[]
-  socials                 Json?     // CompanySocials
-  glassdoorRating         Float?
-  internalNotes           String?   @db.Text // recruiter-private; NEVER sent to AI
+  legalName              String?
+  logoUrl                String?
+  founded                Int?
+  companyType            String? // "public" | "private" | "startup" | "nonprofit" | "government" | "subsidiary"
+  ticker                 String?
+  headcount              Int?
+  subIndustry            String?
+  description            String?   @db.Text
+  about                  String?   @db.Text
+  mission                String?   @db.Text
+  vision                 String?   @db.Text
+  values                 Json? // string[]
+  culture                Json? // CompanyCulture
+  personnelPolicy        Json? // CompanyPersonnelPolicy
+  hiringPreferences      Json? // CompanyHiringPreferences
+  compensationPhilosophy Json? // CompanyCompensationPhilosophy
+  techStack              Json? // string[]
+  recentNews             Json? // CompanyNewsItem[]
+  fundingInfo            Json? // CompanyFundingInfo
+  leadership             Json? // CompanyLeader[]
+  competitors            Json? // string[]
+  growthSignals          Json? // CompanyGrowthSignals
+  awards                 Json? // CompanyAward[]
+  socials                Json? // CompanySocials
+  glassdoorRating        Float?
+  internalNotes          String?   @db.Text // recruiter-private; NEVER sent to AI
   // 招聘与用人规则 — recruiter/client-authored candidate-selection rules. Free-text,
   // one rule per entry. Shape: CompanyHiringRule[] = { id, text, enabled,
   // createdAt, updatedAt } (see backend/src/types/companyProfile.ts). Enabled
@@ -2971,14 +3041,14 @@ model Company {
   // injected as a "Candidate Selection Rules" prompt block into BOTH resume
   // matching (ResumeMatchAgent / MatchAgent) and interview evaluation
   // (UnifiedEvaluationAgent). Resolver: backend/src/lib/clientSelectionRules.ts.
-  hiringRules             Json?     // CompanyHiringRule[]
-  lastResearchedAt        DateTime?
-  researchSources         Json?     // CompanyResearchSource[]
-  researchVersion         Int       @default(0)
+  hiringRules            Json? // CompanyHiringRule[]
+  lastResearchedAt       DateTime?
+  researchSources        Json? // CompanyResearchSource[]
+  researchVersion        Int       @default(0)
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   contacts Contact[]
-  jobs     Job[]     // Jobs linked to this client via Job.companyId (SetNull on delete)
+  jobs     Job[] // Jobs linked to this client via Job.companyId (SetNull on delete)
 
   @@index([userId])
   @@index([name])
@@ -3442,8 +3512,8 @@ model SupportTicket {
 
   messages SupportTicketMessage[]
   // Phase 6 (CS Copilot inbox) — relations to the customer + assigned CS rep.
-  customer User  @relation("SupportTicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  assignee User? @relation("SupportTicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  customer User                   @relation("SupportTicketCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  assignee User?                  @relation("SupportTicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([customerId, status])
   @@index([assigneeId, status])
@@ -3997,6 +4067,9 @@ enum SeekerSubscriptionTier {
   premium_plus
   starter
   growth
+  /// Jobright clone (FND-1b; PRODUCT_PLAN.md §6.3): the one paid tier. The
+  /// period (week / month / quarter / pass) lives in SeekerSubscription.interval.
+  pro
 }
 
 /// Per-user seeker profile. 1:1 with User. Created lazily on first /job-seeker
@@ -4068,28 +4141,56 @@ model SeekerProfile {
   deletionConfirmationId String?   @unique
   deletionEmailSentAt    DateTime?
 
+  // ── Jobright clone onboarding (FND-1b; TASK_PLAN.md R-06, PRODUCT_PLAN.md §4) ──
+  /// Server-side onboarding stage (string codes; route map in
+  /// server/src/features/onboarding/contract.ts `ONBOARDING_STAGE_ROUTES`).
+  /// RoboApply: account → situation → basics → goal → preferences → resume →
+  /// matching → confirm → tour → done (goal/preferences only on branch 'explore').
+  /// GoApply: account → consent → identity → education → intent → tags → resume →
+  /// matching → confirm → tour → done.
+  /// Defaults to 'done' so the additive push never sends existing users back
+  /// through onboarding; signup writes 'account' explicitly (WP-10).
+  onboardingStep        String    @default("done")
+  /// Per-step answers, keyed by stage code (PRODUCT §4.1). Shape documented in
+  /// the onboarding contract; e.g. `answers.goal` drives the feed goal adjustment.
+  onboardingAnswers     Json?
+  /// Branch: 'urgent' (timing "As soon as possible") | 'explore' (PRODUCT §4.2).
+  onboardingPath        String?
+  /// Flow version, e.g. 'v6-jobright'.
+  onboardingVersion     String?
+  onboardingStartedAt   DateTime?
+  onboardingCompletedAt DateTime?
+  /// Entry attribution carried through every step (F-ONB-02):
+  /// `{ from, jobId?, action?, ref?, inviteCode?, utmSource?, utmMedium?, utmCampaign?, alert? }`.
+  onboardingEntry       Json?
+  /// IANA time zone captured at signup; credit windows and Monday lists use it.
+  timezone              String?
+  /// Acquisition survey answer key and optional free text.
+  acquisitionSource     String?
+  acquisitionNote       String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation("SeekerProfileUser", fields: [userId], references: [id], onDelete: Cascade)
 
   // Backrefs
-  preferences         SeekerJobPreferences?
-  jobMatches          SeekerJobMatch[]
-  applications        SeekerApplication[]
-  resumeVersions      SeekerResumeVersion[]
-  mockInterviews      SeekerMockInterview[]
+  preferences          SeekerJobPreferences?
+  jobMatches           SeekerJobMatch[]
+  applications         SeekerApplication[]
+  resumeVersions       SeekerResumeVersion[]
+  mockInterviews       SeekerMockInterview[]
   onboardingInterviews SeekerOnboardingInterview[]
-  profileVideos       SeekerProfileVideo[]
-  trainingProgress    SeekerTrainingProgress[]
-  subscription        SeekerSubscription?
-  autoApplySettings   SeekerAutoApplySettings?
-  boardConnections    SeekerBoardConnection[]
-  skillGaps           SeekerSkillGap[]
-  consentRecords      SeekerConsentRecord[]
-  activityLogs        SeekerActivityLog[]
-  notifications       SeekerNotification[]
-  mockCreditLedger    MockInterviewCreditLedger[]
+  profileVideos        SeekerProfileVideo[]
+  trainingProgress     SeekerTrainingProgress[]
+  subscription         SeekerSubscription?
+  autoApplySettings    SeekerAutoApplySettings?
+  boardConnections     SeekerBoardConnection[]
+  skillGaps            SeekerSkillGap[]
+  consentRecords       SeekerConsentRecord[]
+  activityLogs         SeekerActivityLog[]
+  notifications        SeekerNotification[]
+  mockCreditLedger     MockInterviewCreditLedger[]
 
   @@index([userId])
   @@index([source])
@@ -4159,7 +4260,7 @@ model SeekerJobMatch {
   /// Cache key is implicit on (matchVersion, jobUpdatedAt): we invalidate
   /// by setting this to null when the match row is upserted with a new
   /// score. Reads on `/matches/:matchId/why` short-circuit when present.
-  explainerCache Json?
+  explainerCache    Json?
   /// When the explainerCache was produced. Used to age out stale entries
   /// (e.g. if the seeker re-runs onboarding and the fused profile shifts).
   explainerCachedAt DateTime?
@@ -4283,13 +4384,13 @@ model SeekerApplication {
   /// matches SeekerApplicationCoachOutput in 03-architecture.md §2.1.
   /// Stored once per stage transition; re-coaching invokes the agent
   /// again and overwrites the row. V1: no streaming, one-shot.
-  coachOutput Json?
+  coachOutput         Json?
   /// Stage the coach output was produced for. When the application
   /// status changes, the cached coach output is invalidated by setting
   /// this to null so the next /coach call regenerates.
   coachOutputForStage String?
   /// When the coachOutput was produced.
-  coachOutputAt DateTime?
+  coachOutputAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4641,6 +4742,21 @@ model SeekerSubscription {
   /// The allotment granted for the current period (for "X of N credits" display).
   mockCreditsPeriodAllotment Float?
 
+  // ── Jobright clone (FND-1b; ARCH §2.2, TASK_PLAN.md R-08, CN plan §4.1(4)) ──
+  /// 'roboapply' | 'goapply'; set on every write from now on.
+  brand          String?
+  /// R-08 plan key: 'free' | 'pro_weekly' | 'pro_monthly' | 'pro_quarterly' |
+  /// 'pro_week_pass' | 'practice_pack_5' | 'practice_pack_15' (+ 'student_*' V2);
+  /// legacy 'starter' | 'growth' grandfathered.
+  planKey        String?
+  /// 'week' | 'month' | 'quarter' | 'pass'
+  interval       String?
+  /// 'stripe' | 'alipay' | 'wechatpay'
+  rail           String?
+  /// ISO country of the paying card (Stripe), for the TW revenue monitor and
+  /// EU/UK/TW checkout acknowledgements.
+  billingCountry String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4840,11 +4956,25 @@ model SeekerNotification {
 
   createdAt DateTime @default(now())
 
+  // ── Jobright clone: reused as the in-app message center (FND-1b; ARCH §2.2, §8.3) ──
+  /// Denormalized owner for the per-user unread query (no FK; the row is
+  /// already deleted with the account through seekerProfile).
+  userId      String?
+  brand       String?
+  /// 'job_alert' | 'application' | 'billing' | 'system' | 'invitation' | 'announcement' | 'referral'
+  category    String?
+  /// i18n key under `messages.templates.*`; title/body above are fallbacks.
+  templateKey String?
+  /// ICU params for templateKey.
+  params      Json?
+  pushSentAt  DateTime?
+
   seekerProfile SeekerProfile @relation(fields: [seekerProfileId], references: [id], onDelete: Cascade)
 
   @@index([seekerProfileId, readAt])
   @@index([seekerProfileId, createdAt])
   @@index([type])
+  @@index([userId, readAt, createdAt])
 }
 
 // ============================================================================
@@ -4892,10 +5022,10 @@ model RoboApplyMission {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Intent — prose + parsed structured form
-  intentText      String   @db.Text
-  parsedIntent    Json?
-  intentVersion   Int      @default(1) // bumps on each save; cache-key salt
-  intentParsedAt  DateTime?
+  intentText     String    @db.Text
+  parsedIntent   Json?
+  intentVersion  Int       @default(1) // bumps on each save; cache-key salt
+  intentParsedAt DateTime?
 
   // Tier + behaviour
   tier                    SeekerSubscriptionTier @default(free) // free | premium | premium_plus
@@ -4904,11 +5034,11 @@ model RoboApplyMission {
   coverLetterToneOverride String?                @db.Text // Premium+ only
 
   // State machine
-  enabled       Boolean   @default(true)
-  pausedUntil   DateTime? // null = not paused; future date = paused-until; far-future = indefinite
-  pausedReason  String?
-  timezone      String    @default("UTC") // IANA TZ string captured at onboarding
-  locale        String    @default("en")
+  enabled      Boolean   @default(true)
+  pausedUntil  DateTime? // null = not paused; future date = paused-until; far-future = indefinite
+  pausedReason String?
+  timezone     String    @default("UTC") // IANA TZ string captured at onboarding
+  locale       String    @default("en")
 
   // Resume snapshot — which resume the mission is using. SetNull if the
   // recruiter-side Resume row is hard-deleted; the mission keeps its history.
@@ -4916,9 +5046,9 @@ model RoboApplyMission {
   resume   Resume? @relation("RoboApplyMissionResume", fields: [resumeId], references: [id], onDelete: SetNull)
 
   // Scheduler bookkeeping — used by the catchup sweep + missed-window detect.
-  nextSweepAt        DateTime?
-  lastDigestSentAt   DateTime?
-  lastSubmissionAt   DateTime?
+  nextSweepAt      DateTime?
+  lastDigestSentAt DateTime?
+  lastSubmissionAt DateTime?
 
   // Telemetry
   totalSubmitted Int @default(0)
@@ -4950,9 +5080,9 @@ model RoboApplyRun {
   mission   RoboApplyMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
 
   // What we're submitting
-  jobId          String? // FK to Job — nullable to allow `manual_link` runs that don't have a Job row
-  job            Job?    @relation("RoboApplyRunJob", fields: [jobId], references: [id], onDelete: SetNull)
-  jobContentHash String  // for dedup; matches Job.contentHash when jobId is set
+  jobId              String? // FK to Job — nullable to allow `manual_link` runs that don't have a Job row
+  job                Job?    @relation("RoboApplyRunJob", fields: [jobId], references: [id], onDelete: SetNull)
+  jobContentHash     String // for dedup; matches Job.contentHash when jobId is set
   // Snapshot of the resume text submitted (post-tailoring). Stored verbatim
   // for the transparency screen so we don't drift if the source resume
   // changes later.
@@ -4962,7 +5092,7 @@ model RoboApplyRun {
   // Cover letter — produced by RoboApplyAuthorAgent and verified by
   // RoboApplyCitationGuardAgent (via SeekerResumeTailorAgent's claim-guard).
   coverLetter       String   @db.Text
-  coverLetterModel  String  // configured provider/model identifier
+  coverLetterModel  String // configured provider/model identifier
   coverLetterCost   Decimal? @db.Decimal(10, 6) // forensic — UsageDeductionLog is canonical
   // The literal system+user prompt blob that produced the cover letter.
   // Surfaced by `POST /runs/:id/show-prompt` for the transparency screen.
@@ -4989,7 +5119,7 @@ model RoboApplyRun {
   // True iff this run was submitted by SeekerAutoApplyService in simulation
   // mode (no env keys set). Surface to the user as "Will go live once we
   // connect to {Board}".
-  simulated         Boolean @default(false)
+  simulated         Boolean               @default(false)
 
   status RoboApplyRunStatus @default(queued)
 
@@ -5059,466 +5189,16 @@ model RoboApplyCoverLetterCache {
 
   /// Output: the full RoboApplyAuthorOutput shape from
   /// backend/src/roboapply/agents/RoboApplyAuthorAgent.ts.
-  output           Json
-  modelUsed        String
-  tokenCost        Decimal? @db.Decimal(10, 6)
-  citationGuardPassed Boolean @default(true) // false rows are cached as fallback letters
+  output              Json
+  modelUsed           String
+  tokenCost           Decimal? @db.Decimal(10, 6)
+  citationGuardPassed Boolean  @default(true) // false rows are cached as fallback letters
 
   createdAt DateTime @default(now())
   expiresAt DateTime
 
   @@index([expiresAt])
   @@index([resumeId, jobId])
-}
-
-//
-// ─────────────────────────────────────────────────────────────────────────────
-//  RoboApply V2 (candidate-facing companion product)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// All tables prefixed `RA` to distinguish from V1's `RoboApply*`. The slice
-// is strictly additive — no FK changes to any existing table. Lives behind
-// the decoupled boundary in backend/src/roboapply/v2/* enforced by
-// scripts/check-roboapply-v2-boundary.mjs.
-//
-// Spec: docs/roboapply/v2/04-backend-spec.md §2 (every column / index here
-// must match the spec exactly).
-//
-// Note on indexes: the spec calls for a `pg_trgm` GIN index on
-// `RAJob.titleNormalized` + `RAJob.companyNameNormalized` for fast
-// substring search. Prisma 7 does not natively manage GIN-trgm indexes
-// via `@@index`, and the seed-data scale (~200 rows) makes a sequential
-// scan acceptable for launch. The btree indexes below cover the rest of
-// the spec's index requirements. When V2.5 lands live-ingest at 10k+
-// rows, add `previewFeatures = ["postgresqlExtensions"]` + an
-// `extensions = [pg_trgm]` block to the datasource and a manual
-// `CREATE INDEX ... USING gin (...) gin_trgm_ops` migration.
-//
-
-/// One row per user. The "Career Goal" card on /home.
-model RACareerGoal {
-  id                     String    @id @default(cuid())
-  userId                 String    @unique
-  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  targetTitle            String
-  targetDate             DateTime? // date-only semantics; ISO YYYY-MM-DD on the wire
-  targetSalaryMin        Int?
-  targetSalaryMax        Int?
-  targetSalaryCurrency   String?   @default("USD")
-  weeklyApplicationGoal  Int       @default(5)
-
-  /// { countries: string[], cities: string[], remoteOk: boolean, hybridOk: boolean }
-  preferredLocations     Json?
-  /// 'remote' | 'hybrid' | 'onsite' | null
-  preferredWorkType      String?
-  /// 'ic' | 'senior' | 'staff' | 'principal' | 'manager' | 'director' | 'vp' | 'cxo' | null
-  seniority              String?
-  notesMarkdown          String?   @db.Text
-
-  /// RoboApply V3 extended-preferences blob (RAPreferences minus the fields
-  /// goal/auth-profile own). Deep-merged on PATCH. Null until first save —
-  /// the RAPreferencesService defaults it for first-time users.
-  preferencesBlob        Json?
-
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-}
-
-/// The seeded V2 job index. One row per (sourceBoard, externalId).
-/// Spec: 04-backend-spec.md §2.2.
-model RAJob {
-  id                     String    @id @default(cuid())
-  externalId             String
-  /// 'greenhouse' | 'lever' | 'seed' | 'manual' | 'jsearch' | 'robohire' | 'gohire'
-  /// robohire/gohire rows are materialized by the cross-bank search agent team
-  /// (RACrossBankSearchService) from the recruiter Job banks. externalId = the
-  /// recruiter Job.id; @@unique([externalId, sourceBoard]) keeps the two banks'
-  /// Job.id spaces collision-free. No DDL — sourceBoard is a plain String.
-  sourceBoard            String
-  applyUrl               String
-
-  title                  String
-  /// lowercased, trimmed — forward-compatible with pg_trgm GIN index (V2.5)
-  titleNormalized        String
-  companyName            String
-  companyNameNormalized  String
-  companyLogoUrl         String?
-
-  location               String?
-  locationCity           String?
-  locationCountry        String?
-  /// 'remote' | 'hybrid' | 'onsite'
-  workType               String    @default("onsite")
-  /// 'full_time' | 'contract' | 'part_time' | 'internship' | null
-  employmentType         String?
-
-  salaryMin              Int?
-  salaryMax              Int?
-  salaryCurrency         String?   @default("USD")
-  /// 'year' | 'hour' | 'month'
-  salaryPeriod           String?   @default("year")
-
-  description            String    @db.Text
-  descriptionPlain       String    @db.Text
-  qualifications         String?   @db.Text
-  responsibilities       String?   @db.Text
-  benefits               String?   @db.Text
-
-  postedAt               DateTime?
-  /// Seed-only metadata: `{ companyTier: 'faang' | 'series_b' | …, role: 'pm' | 'swe' | … }`
-  seedTags               Json?
-  archivedAt             DateTime?
-
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-
-  trackerEntries         RATrackerEntry[]
-  resumeVariants         RAResumeVariant[] @relation("RAResumeVariantTargetJob")
-  keywordExtraction      RAKeywordExtraction?
-  matchScores            RAJobMatchScore[]
-
-  @@unique([externalId, sourceBoard])
-  @@index([workType, archivedAt])
-  @@index([locationCity, archivedAt])
-  @@index([postedAt(sort: Desc), archivedAt])
-  @@index([salaryMin(sort: Desc), archivedAt])
-  @@index([archivedAt])
-}
-
-/// User's Job Tracker rows.
-/// Spec: 04-backend-spec.md §2.3.
-model RATrackerEntry {
-  id                 String    @id @default(cuid())
-  userId             String
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  jobId              String?
-  job                RAJob?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
-
-  /// `{ title, companyName, location?, applyUrl }` captured at add-time so the
-  /// row keeps rendering when jobId is null OR the linked RAJob was removed.
-  externalSnapshot   Json?
-
-  /// `bookmarked | applying | applied | interviewing | negotiating | accepted | rejected | withdrawn`
-  status             String    @default("bookmarked")
-  excitementStars    Int       @default(0)
-  maxSalary          Int?
-  maxSalaryCurrency  String?   @default("USD")
-  notesMarkdown      String?   @db.Text
-  dateSaved          DateTime  @default(now())
-  dateApplied        DateTime?
-  deadline           DateTime? // date-only semantics
-  followUpAt         DateTime?
-  /// 'ra_autoapply' | 'manual' | 'extension' | null
-  appliedVia         String?
-
-  /// Optional V1 `RoboApplyRun.id` if created by the V1 auto-apply flow.
-  /// Read-only link — no FK constraint to avoid cross-namespace coupling.
-  linkedRunId        String?
-
-  /// Soft-delete tombstone. When set, the row is hidden from every read path
-  /// (list/board, counts, getById, patch, bulk, and the (userId, jobId)
-  /// duplicate check) — the user can re-save the same job afterward. Mirrors
-  /// the `RAResumeVariant.deletedAt` precedent; no hard delete anymore.
-  deletedAt          DateTime?
-
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  /// Partial-unique semantics ("UNIQUE(userId, jobId) WHERE jobId IS NOT NULL")
-  /// are enforced in application code in V2 — Prisma cannot express
-  /// partial-unique. Application path: routes/tracker.ts POST checks for
-  /// existing (userId, jobId) before insert and returns 409 'duplicate_tracker_entry'.
-  @@index([userId, status, updatedAt(sort: Desc)])
-  @@index([userId, dateApplied(sort: Desc)])
-  @@index([userId, followUpAt])
-  @@index([userId, jobId])
-  @@index([userId, deletedAt])
-  @@index([linkedRunId])
-}
-
-/// V2 candidate-owned resumes. Decoupled from the recruiter `Resume` model —
-/// V2 stores its own variants and never reads `Resume` directly.
-/// Spec: 04-backend-spec.md §2.4.
-model RAResumeVariant {
-  id                  String    @id @default(cuid())
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  name                String
-  /// 'base' | 'tailored_for_jd' | 'from_template'
-  kind                String    @default("base")
-
-  /// Required when kind='tailored_for_jd' (validated in application code).
-  targetJobId         String?
-  targetJob           RAJob?    @relation("RAResumeVariantTargetJob", fields: [targetJobId], references: [id], onDelete: SetNull)
-
-  basedOnVariantId    String?
-  basedOnVariant      RAResumeVariant?  @relation("RAResumeVariantBasedOn", fields: [basedOnVariantId], references: [id], onDelete: SetNull)
-  derivedVariants     RAResumeVariant[] @relation("RAResumeVariantBasedOn")
-
-  /// For kind='from_template' — e.g. 'fresh_grad_engineering'.
-  templateKey         String?
-
-  resumeMarkdown      String    @db.Text
-  /// sha256(resumeMarkdown), used as the cache key for RAJobMatchScore.
-  resumeContentHash   String
-
-  /// Exactly one variant per user is the "primary" résumé (enforced in app
-  /// code via a transaction, not a DB partial-unique index). The first résumé
-  /// a user creates/uploads is auto-promoted to primary.
-  isPrimary           Boolean   @default(false)
-  /// How this variant entered the system: 'upload' | 'scratch' | 'template' |
-  /// 'linkedin' | 'tailored'. Drives the resume-card source chip.
-  sourceKind          String?
-  /// Upload-parse lifecycle for kind='base' uploads: 'parsed' | 'parsing' |
-  /// 'failed'. NULL for variants that never went through the parse pipeline.
-  parseStatus         String?
-
-  /// Idempotency key for upload-parse: an opaque per-file token the client
-  /// sends with POST /resumes/upload (today, sha256 of the file bytes, so it
-  /// is stable across retries and across modal sessions). A repeat upload
-  /// returns the row the first attempt created instead of minting a duplicate
-  /// — the failure mode when a 45-80s parse commits server-side but the
-  /// response is lost in transit. NULL for every non-upload variant; Postgres
-  /// treats NULLs as distinct, so those never collide on the index below.
-  /// Released on soft delete (see RAResumeService.delete) so re-uploading the
-  /// same file after deleting it creates a fresh row.
-  uploadIdempotencyKey String?
-
-  /// Raw extracted text from the uploaded file (pre-parse). Candidate-owned —
-  /// never written to the recruiter `Resume` table.
-  rawText             String?   @db.Text
-  /// Structured parse (ParsedResume JSON) produced by ResumeParseAgent.
-  parsedData          Json?
-  /// AI-generated recruiter-style pitch summary + one-line highlight.
-  summary             String?   @db.Text
-  highlight           String?
-
-  /// Reference to the original uploaded file in candidate-scoped object
-  /// storage (distinct keyspace from recruiter resume originals). NULL when no
-  /// original was retained (scratch / template variants).
-  originalFileProvider String?
-  originalFileKey      String?
-  originalFileName     String?
-  originalFileMimeType String?
-  originalFileSize     Int?
-
-  /// Most recent match score against targetJobId, denormalised for resume-list
-  /// rendering. NULL when no score has been computed.
-  matchScoreCached    Int?
-
-  lastEditedAt        DateTime  @default(now())
-  createdAt           DateTime  @default(now())
-  /// Soft delete (UI hides; admin can recover).
-  deletedAt           DateTime?
-
-  matchScores         RAJobMatchScore[]
-
-  @@index([userId, lastEditedAt(sort: Desc)])
-  @@index([userId, kind, lastEditedAt(sort: Desc)])
-  @@index([userId, isPrimary])
-  @@index([targetJobId])
-  @@index([resumeContentHash])
-  @@unique([userId, uploadIdempotencyKey])
-}
-
-/// User's saved search queries.
-/// Spec: 04-backend-spec.md §2.5.
-model RASavedSearch {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  name       String
-  /// SearchQuery shape — see spec §5.7 for the keys (title, location, workType, …).
-  query      Json
-
-  lastRunAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  @@index([userId, createdAt(sort: Desc)])
-}
-
-/// Weekly career-insight summary. One row per (userId, weekStartUtc).
-/// Spec: 04-backend-spec.md §2.6.
-model RACareerInsight {
-  id                   String    @id @default(cuid())
-  userId               String
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// Sunday-anchored UTC date. Date-only semantics on the wire.
-  weekStartUtc         DateTime
-
-  /// ≤ 600 words, sanitised markdown.
-  summaryMarkdown      String    @db.Text
-  /// Every `RATrackerEntry.id` referenced in the narration; CitationGuard
-  /// verifies these against the user's tracker rows.
-  citedTrackerIds      String[]  @default([])
-  /// `{ applicationsCount, interviewsCount, offerCount, weeksToOfferEstimate?, … }`
-  metrics              Json?
-
-  /// Configured provider/model identifier used for this generation.
-  modelUsed            String
-  /// Forensic; canonical billing record is UsageDeductionLog.
-  tokenCost            Decimal?  @db.Decimal(10, 6)
-  citationGuardPassed  Boolean   @default(false)
-  generatedAt          DateTime  @default(now())
-  createdAt            DateTime  @default(now())
-
-  @@unique([userId, weekStartUtc])
-  @@index([weekStartUtc])
-}
-
-/// LLM keyword extraction for an RAJob. Refreshed weekly by `ra.keywordRefresh`.
-/// Spec: 04-backend-spec.md §2.7.
-model RAKeywordExtraction {
-  id           String   @id @default(cuid())
-  jobId        String   @unique
-  job          RAJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  /// Top 30: `Array<{ keyword: string, importance: 'high'|'medium'|'low', frequency: number }>`
-  keywords     Json
-  /// Configured provider/model identifier used for this extraction.
-  modelUsed    String
-  tokenCost    Decimal? @db.Decimal(10, 6)
-  generatedAt  DateTime @default(now())
-
-  @@index([generatedAt])
-}
-
-/// Cached resume × job match score. Spec: 04-backend-spec.md §2.8.
-model RAJobMatchScore {
-  id                          String   @id @default(cuid())
-  userId                      String
-  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId                       String
-  job                         RAJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  resumeVariantId             String
-  resumeVariant               RAResumeVariant @relation(fields: [resumeVariantId], references: [id], onDelete: Cascade)
-
-  /// 0–100
-  score                       Int
-  /// `{ strengths: string[], gaps: string[], rationale: string, signals: { skills, experience, location, salary } }`
-  explanation                 Json
-
-  /// Snapshot of the variant's hash at score time; if the variant later
-  /// edits, the cache is stale.
-  resumeContentHashAtScore    String
-
-  /// Configured provider/model identifier used for this score.
-  modelUsed                   String
-  tokenCost                   Decimal? @db.Decimal(10, 6)
-  generatedAt                 DateTime @default(now())
-
-  @@unique([userId, jobId, resumeVariantId])
-  @@index([userId, score(sort: Desc)])
-  @@index([jobId, score(sort: Desc)])
-  @@index([generatedAt])
-}
-
-// ── V3 Tier-2 ─────────────────────────────────────────────────────────────
-
-/// One row per (user, provider) integration connection state. Static metadata
-/// (display name / description / brand colour) lives in code; this table holds
-/// only the connection state + OAuth tokens. See roboapply/v2 integrations.
-model RAIntegration {
-  id           String    @id @default(cuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider     String    // linkedin | gmail | gcal | slack | notion | github
-  connected    Boolean   @default(false)
-  account      String?   // connected account label, e.g. "maya@chen.io"
-  accessToken  String?   @db.Text
-  refreshToken String?   @db.Text
-  expiresAt    DateTime?
-  connectedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  @@unique([userId, provider])
-  @@index([userId])
-}
-
-/// A mock-interview session. Questions + transcript + the final score live as
-/// JSON on the row (no separate turn table — a session's transcript is read/
-/// written whole). status: in_progress | complete.
-model RAMockSession {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  role            String
-  interviewerId   String
-  typeId          String
-  format          String    // video | voice
-
-  /// BCP-47 interview language (en | zh | zh-TW | ja | …). Null = legacy/en.
-  language        String?
-  /// Planned interview length in minutes (from setup). Distinct from
-  /// `durationMinutes` below, which is the ACTUAL elapsed time set at score.
-  plannedDurationMinutes Int?
-
-  /// The composed master interviewer brief (markdown) produced by the
-  /// Interview Prompt Generator pipeline and handed to the live interviewer.
-  interviewPrompt String?   @db.Text
-  /// Structured generation artifacts: { requirements, strategy, tactics,
-  /// questions, interviewerBrief, webSources, model, generatedAt }.
-  blueprint       Json?
-
-  /// ordered [{ q, hint, coachTip }] generated at start
-  questions       Json
-  /// accumulated RAMockTurn[] (them/you), grows per nextTurn
-  transcript      Json      @default("[]")
-  status          String    @default("in_progress")
-
-  // ── Score (null until the session is scored) ──
-  overall         Int?
-  delta           Int?
-  breakdown       Json?     // [{ key, value, note }]
-  strengths       String[]  @default([])
-  gaps            String[]  @default([])
-  note            String?
-  durationMinutes Int?
-
-  startedAt       DateTime  @default(now())
-  completedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([userId, createdAt(sort: Desc)])
-  @@index([userId, status])
-}
-
-/// Conversational onboarding chat session (RoboApply "Onboarding Chat v4").
-/// One active session per user (app-enforced — bootstrap abandons the prior
-/// active row). Persisted so the 7-day restore window, server-enforced caps
-/// (turns / rounds / JSearch calls / sessions-per-day), and the funnel
-/// metrics survive restarts and multi-instance deploys.
-/// Spec: docs/design-spec-roboapply-onboarding-chat.md §5.
-model RAOnboardingSession {
-  id                   String    @id @default(cuid())
-  userId               String
-  status               String    @default("active")   // active | completed | skipped | abandoned
-  resumeVariantId      String?
-  locale               String    @default("en")
-  transcript           Json      @default("[]")        // [{role:'user'|'assistant', content, at}]
-  draftPreferences     Json      @default("{}")        // OnboardingDraftPreferences
-  askedTopics          Json      @default("[]")        // topic enums asked or declined
-  openingPrompt        String?   @db.Text
-  chips                Json      @default("[]")
-  surfacedJobIds       Json      @default("[]")        // RAJob ids, all rounds
-  passedJobIds         Json      @default("[]")
-  turnCount            Int       @default(0)
-  recommendationRounds Int       @default(0)
-  jsearchCallCount     Int       @default(0)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  completedAt          DateTime?
-
-  @@index([userId, status])
 }
 
 /// Interview Engine session — one real-time AI voice/video mock interview.
@@ -5533,16 +5213,16 @@ model RAOnboardingSession {
 ///                                       \-> failed / expired
 /// See backend/src/interview-engine/ and docs/interview-engine/DESIGN.md.
 model InterviewSession {
-  id        String @id @default(cuid())
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   /// How the session was created: 'roboapply' (candidate UI), 'recruiter'
   /// (RoboHire SPA), or 'external' (third-party via X-API-Key).
-  source    String  @default("roboapply")
+  source      String  @default("roboapply")
   /// Set when created through the external API. Plain scalar (no relation) so
   /// the ApiKey model stays untouched; forensic join is by id.
-  apiKeyId  String?
+  apiKeyId    String?
   /// Caller-supplied opaque reference (external API) for their own bookkeeping.
   externalRef String?
 
@@ -5550,7 +5230,7 @@ model InterviewSession {
   role                   String
   interviewType          String  @default("behavioral") // behavioral|technical|system|case|culture|panel|screening|custom
   personaId              String? // interviewer persona id (from the catalog) or null for custom
-  mode                   String  @default("voice")       // voice | video
+  mode                   String  @default("voice") // voice | video
   /// BCP-47 interview language (en|zh|zh-TW|ja|es|fr|pt|de).
   language               String  @default("en")
   plannedDurationMinutes Int     @default(30)
@@ -5582,7 +5262,7 @@ model InterviewSession {
   agentDispatchId     String?
   participantIdentity String?
 
-  status String @default("created") // created|live|finalizing|completed|failed|expired
+  status String  @default("created") // created|live|finalizing|completed|failed|expired
   error  String?
 
   // ── Recording (Egress -> R2) ──
@@ -5635,7 +5315,7 @@ model InterviewSession {
   ///   { worker: { startedAt, joinMs, greeting },
   ///     events:       [...worker per-turn latency events], tail-capped ≤2000,
   ///     clientEvents: [...browser telemetry events],       tail-capped ≤500 }
-  liveMetrics      Json?
+  liveMetrics Json?
 
   // ── Lifecycle timestamps ──
   startedAt DateTime?
@@ -5784,12 +5464,12 @@ model CrmEmailDraft {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  recipient  User              @relation("CrmEmailDraftRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
-  approvedBy User?             @relation("CrmEmailDraftApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  rejectedBy User?             @relation("CrmEmailDraftRejecter", fields: [rejectedById], references: [id], onDelete: SetNull)
-  alert      CrmAlert?         @relation("CrmEmailDraftAlert", fields: [alertId], references: [id], onDelete: SetNull)
-  campaign   OutboundCampaign? @relation("OutboundCampaignDraft", fields: [campaignId], references: [id], onDelete: SetNull)
-  playbookRun PlaybookRun?     @relation("PlaybookRunDraft", fields: [playbookRunId], references: [id], onDelete: SetNull)
+  recipient   User              @relation("CrmEmailDraftRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  approvedBy  User?             @relation("CrmEmailDraftApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectedBy  User?             @relation("CrmEmailDraftRejecter", fields: [rejectedById], references: [id], onDelete: SetNull)
+  alert       CrmAlert?         @relation("CrmEmailDraftAlert", fields: [alertId], references: [id], onDelete: SetNull)
+  campaign    OutboundCampaign? @relation("OutboundCampaignDraft", fields: [campaignId], references: [id], onDelete: SetNull)
+  playbookRun PlaybookRun?      @relation("PlaybookRunDraft", fields: [playbookRunId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([recipientUserId, createdAt])
@@ -5923,25 +5603,25 @@ model OutboundCampaign {
 /// Source of truth for retry counting (attempt) and recency dedup (R2 / FR-11).
 model RuntimeRun {
   id           String    @id @default(cuid())
-  kind         String    // RunKind: 'evaluate_interview' | 'match' | 'reminder' | 'execute_task' | <scaffolded>
-  trigger      String    // RunTrigger: 'poll' | 'manual' | 'boot' | 'event'
+  kind         String // RunKind: 'evaluate_interview' | 'match' | 'reminder' | 'execute_task' | <scaffolded>
+  trigger      String // RunTrigger: 'poll' | 'manual' | 'boot' | 'event'
   status       String    @default("running") // RunStatus: running | completed | skipped | failed | blocked_quota
-  targetType   String?   // TargetType: 'interview' | 'job' | 'resume' | 'task' | 'reminder' | null(cycle summary)
-  targetId     String?   // null on the cycle-summary row
-  dedupKey     String?   // discriminator folded into recency dedup (e.g. reminder window '24h' | 'follow_up')
-  userId       String?   // owner of the target, for scoping / billing correlation
+  targetType   String? // TargetType: 'interview' | 'job' | 'resume' | 'task' | 'reminder' | null(cycle summary)
+  targetId     String? // null on the cycle-summary row
+  dedupKey     String? // discriminator folded into recency dedup (e.g. reminder window '24h' | 'follow_up')
+  userId       String? // owner of the target, for scoping / billing correlation
   startedAt    DateTime  @default(now())
   finishedAt   DateTime?
   durationMs   Int?
-  resultJson   Json?     // produced ids / counters / skip reason
-  errorMessage String?   // message-only (NFR-5) — never a stack, never secrets
+  resultJson   Json? // produced ids / counters / skip reason
+  errorMessage String? // message-only (NFR-5) — never a stack, never secrets
   attempt      Int       @default(1) // retry counter for this (kind, targetId); FR-12 cap source
-  requestId    String?   // correlates to ApiRequestLog / LLMCallLog / UsageDeductionLog
-  instanceId   String?   // which runtime replica produced this row (forensics)
-  lockKey      String?   // CP-1: exact buildLockKey(...) value acquired for this unit (written at runner.ts:340).
-                         // abort_run frees the lease by the STORED key (never reconstructed from run.kind, since
-                         // buildLockKey's 1st arg is lockKind≠kind and the match-sweeper's composite/match_job
-                         // keys never match a reconstruction). null on cycle-summary rows / non-locked units.
+  requestId    String? // correlates to ApiRequestLog / LLMCallLog / UsageDeductionLog
+  instanceId   String? // which runtime replica produced this row (forensics)
+  lockKey      String? // CP-1: exact buildLockKey(...) value acquired for this unit (written at runner.ts:340).
+  // abort_run frees the lease by the STORED key (never reconstructed from run.kind, since
+  // buildLockKey's 1st arg is lockKind≠kind and the match-sweeper's composite/match_job
+  // keys never match a reconstruction). null on cycle-summary rows / non-locked units.
   createdAt    DateTime  @default(now())
 
   // Recency dedup hot path: "is there a completed run for (kind,targetId[,dedupKey]) since T?"
@@ -5957,30 +5637,31 @@ model RuntimeRun {
 /// acquire = conditional upsert with expiry; renew = heartbeat extend; release = delete;
 /// reapExpired = deleteMany(expiresAt < now). Connection-agnostic — correct under Neon/PgBouncer.
 model RuntimeLock {
-  key         String   @id              // e.g. 'evaluate_interview:<interviewId>', 'match:<jobId>:<resumeId>'
-  holder      String                    // `${hostname}:${pid}:${uuid}` — the acquiring instance
-  acquiredAt  DateTime @default(now())
-  expiresAt   DateTime                  // lease TTL; reaper deletes rows past this
-  meta        Json?                     // optional: { kind, targetId, attempt } for debugging
-  @@index([expiresAt])                  // reaper sweep
-  @@index([holder])                     // releaseAllHeld(holder) on shutdown (FR-16)
+  key        String   @id // e.g. 'evaluate_interview:<interviewId>', 'match:<jobId>:<resumeId>'
+  holder     String // `${hostname}:${pid}:${uuid}` — the acquiring instance
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime // lease TTL; reaper deletes rows past this
+  meta       Json? // optional: { kind, targetId, attempt } for debugging
+
+  @@index([expiresAt]) // reaper sweep
+  @@index([holder]) // releaseAllHeld(holder) on shutdown (FR-16)
 }
 
 /// Registry + admin-editable config. One row per agent key. Read by AgentConfigResolver
 /// (RuntimeAgent.config (DB) ?? env ?? code default). Writes are admin/seed only.
 model RuntimeAgent {
-  id          String   @id @default(cuid())
-  key         String   @unique          // 'eval-sweeper' | 'match-sweeper' | 'reminder-sweeper' | 'task-drainer'
+  id          String    @id @default(cuid())
+  key         String    @unique // 'eval-sweeper' | 'match-sweeper' | 'reminder-sweeper' | 'task-drainer'
   name        String
   description String?
-  enabled     Boolean  @default(true)    // master on/off (AgentConfig.enabled)
-  schedule    String?                    // cron expr; null = continuous interval poll
-  config      Json?                      // per-agent knobs: { batchSize, concurrency, maxAttempts, lockTtlMs,
-                                         //                    recencyWindowMs, pollIntervalMs, lookbackHours }
-  lastRunAt   DateTime?                  // updated by the scheduler at cycle start (best-effort)
+  enabled     Boolean   @default(true) // master on/off (AgentConfig.enabled)
+  schedule    String? // cron expr; null = continuous interval poll
+  config      Json? // per-agent knobs: { batchSize, concurrency, maxAttempts, lockTtlMs,
+  //                    recencyWindowMs, pollIntervalMs, lookbackHours }
+  lastRunAt   DateTime? // updated by the scheduler at cycle start (best-effort)
   nextRunAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 /// Cross-process imperative command queue. The API (Agent Manager UI) enqueues a verb;
@@ -5990,21 +5671,21 @@ model RuntimeAgent {
 /// double-execution backstop (a double run_now still cannot double-process a unit).
 model RuntimeCommand {
   id          String    @id @default(cuid())
-  agentKey    String?   // target RuntimeAgent.key; null = operator-wide (restart/stop/reload_config-all)
-  command     String    // 'run_now'|'pause'|'resume'|'stop'|'restart'|'abort_run'|'reload_config'
-  argsJson    Json?     // { runId } for abort_run; { reason } for audit; { ...patch } context
+  agentKey    String? // target RuntimeAgent.key; null = operator-wide (restart/stop/reload_config-all)
+  command     String // 'run_now'|'pause'|'resume'|'stop'|'restart'|'abort_run'|'reload_config'
+  argsJson    Json? // { runId } for abort_run; { reason } for audit; { ...patch } context
   status      String    @default("pending") // pending | claimed | done | failed | expired
-  requestedBy String?   // User.id of the issuing admin (RBAC / audit correlation)
-  claimedBy   String?   // Operator instanceId (host:pid:uuid) that claimed it
+  requestedBy String? // User.id of the issuing admin (RBAC / audit correlation)
+  claimedBy   String? // Operator instanceId (host:pid:uuid) that claimed it
   claimedAt   DateTime?
   finishedAt  DateTime?
-  resultJson  Json?     // ack payload / message-only error
-  expiresAt   DateTime  // Operator skips + marks 'expired' once now() > expiresAt
+  resultJson  Json? // ack payload / message-only error
+  expiresAt   DateTime // Operator skips + marks 'expired' once now() > expiresAt
   createdAt   DateTime  @default(now())
 
   @@index([status, agentKey, createdAt]) // poller hot path: pending for (key|null) oldest-first
-  @@index([agentKey, createdAt])         // per-agent command history (detail page)
-  @@index([createdAt])                   // global recent-commands feed
+  @@index([agentKey, createdAt]) // per-agent command history (detail page)
+  @@index([createdAt]) // global recent-commands feed
 }
 
 /// Operator liveness + live scheduler snapshot. One row per running instance, upserted on
@@ -6012,13 +5693,13 @@ model RuntimeCommand {
 /// ACTUAL armed agents (not just the saved RuntimeAgent row), version, and the kill-switch
 /// state — the closest thing to a health check for a worker with no HTTP port.
 model RuntimeHeartbeat {
-  instanceId  String   @id          // host:pid:uuid (matches RuntimeRun.instanceId / RuntimeLock.holder prefix)
-  beatAt      DateTime              // bumped each tick; offline := now() - beatAt > staleThresholdMs
-  startedAt   DateTime              // when this instance booted
-  version     String?               // git sha / build id, for deploy verification
-  armedAgents Json?                 // [{ key, isRunning, schedule, nextRunAt }] live snapshot
+  instanceId  String   @id // host:pid:uuid (matches RuntimeRun.instanceId / RuntimeLock.holder prefix)
+  beatAt      DateTime // bumped each tick; offline := now() - beatAt > staleThresholdMs
+  startedAt   DateTime // when this instance booted
+  version     String? // git sha / build id, for deploy verification
+  armedAgents Json? // [{ key, isRunning, schedule, nextRunAt }] live snapshot
   disabled    Boolean  @default(false) // AGENT_RUNTIME_DISABLED reflected for the UI
   createdAt   DateTime @default(now())
 
-  @@index([beatAt])                 // "latest live instance" / staleness sweep
+  @@index([beatAt]) // "latest live instance" / staleness sweep
 }

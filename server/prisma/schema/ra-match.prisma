@@ -1,0 +1,83 @@
+// ra-match.prisma: MATCH area models (ARCHITECTURE.md §2.1).
+// Moved verbatim from the former single-file schema.prisma; no DDL change.
+// The original RoboApply V2 section note lives at the top of ra-jobs.prisma.
+
+/// LLM keyword extraction for an RAJob. Refreshed weekly by `ra.keywordRefresh`.
+/// Spec: 04-backend-spec.md §2.7.
+model RAKeywordExtraction {
+  id    String @id @default(cuid())
+  jobId String @unique
+  job   RAJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /// Top 30: `Array<{ keyword: string, importance: 'high'|'medium'|'low', frequency: number }>`
+  keywords    Json
+  /// Configured provider/model identifier used for this extraction.
+  modelUsed   String
+  tokenCost   Decimal? @db.Decimal(10, 6)
+  generatedAt DateTime @default(now())
+
+  @@index([generatedAt])
+}
+
+/// Cached resume × job match score. Spec: 04-backend-spec.md §2.8.
+model RAJobMatchScore {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId           String
+  job             RAJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resumeVariantId String
+  resumeVariant   RAResumeVariant @relation(fields: [resumeVariantId], references: [id], onDelete: Cascade)
+
+  /// 0–100
+  score       Int
+  /// `{ strengths: string[], gaps: string[], rationale: string, signals: { skills, experience, location, salary } }`
+  explanation Json
+
+  /// Snapshot of the variant's hash at score time; if the variant later
+  /// edits, the cache is stale.
+  resumeContentHashAtScore String
+
+  /// Configured provider/model identifier used for this score.
+  modelUsed   String
+  tokenCost   Decimal? @db.Decimal(10, 6)
+  generatedAt DateTime @default(now())
+
+  // ── Jobright clone (FND-1b; ARCH §2.5, TASK_PLAN.md R-09) ──
+  /// Only 'ai' scores are persisted; 'pre' (deterministic) scores are computed per request.
+  scoreKind            String  @default("ai")
+  /// 'great' (≥80) | 'good' (65–79) | 'possible' (45–64) | 'unlikely' (<45); config MATCH_TIERS.
+  tier                 String?
+  /// `[{ key: 'title_level'|'skills'|'industry'|'logistics'|'career_path', weight,
+  ///    score: number|null, status: 'scored'|'not_stated',
+  ///    evidence: [{ text, source: 'resume'|'posting', ref? }] }]`
+  dimensions           Json?
+  /// e.g. 'scorer_v3'
+  promptVersion        String?
+  locale               String?
+  /// Logistics depend on the user's pay/location preferences at score time.
+  searchProfileVersion Int?
+
+  @@unique([userId, jobId, resumeVariantId])
+  @@index([userId, score(sort: Desc)])
+  @@index([jobId, score(sort: Desc)])
+  @@index([generatedAt])
+  @@index([userId, tier, generatedAt(sort: Desc)])
+}
+
+/// Competitiveness and other long reports (F-MATCH-04).
+model RAFitReport {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 'competitiveness' | 'linkedin_profile' (gated)
+  kind           String
+  inputHash      String
+  /// See the match contract; D3: every comparative number carries `{ value, source, sampleSize }`.
+  report         Json
+  model          String?
+  creditLedgerId String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, kind, createdAt(sort: Desc)])
+}

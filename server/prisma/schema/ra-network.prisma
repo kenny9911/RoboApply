@@ -1,0 +1,74 @@
+// ra-network.prisma: NET area models (ARCHITECTURE.md §2.10).
+// Added by FND-1b (Jobright clone). People shown are real records from a named
+// source (D3). A connections import keeps name, company, position and
+// connected-on only: no email is stored (honesty review H16).
+
+/// People at companies, from honest sources only.
+model RAContact {
+  id                      String            @id @default(cuid())
+  market                  String
+  /// Set for user-imported / user-added contacts: private to the owner.
+  ownerUserId             String?
+  owner                   User?             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  /// 'user_connections_import' | 'user_added' | 'bank_recruiter'
+  source                  String
+  /// Import id | recruiter-bank user id (+ opt-in record id and timestamp for bank_recruiter).
+  sourceRef               String?
+  /// bank_recruiter only. D3: set ONLY by the contacts-sync from an opt-in record
+  /// read through a RoboHire/GoHire API (record id + timestamp in sourceRef);
+  /// never backfilled, never assumed.
+  consentBasis            String?
+  companyNameNormalized   String
+  companyId               String?
+  fullName                String
+  firstName               String?
+  title                   String?
+  linkedinUrl             String?
+  /// LinkedIn export "Connected On" date, when the row came from that export.
+  connectedOn             DateTime?
+  pastCompaniesNormalized String[]          @default([])
+  schoolsNormalized       String[]          @default([])
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  outreachDrafts          RAOutreachDraft[]
+
+  @@index([ownerUserId, companyNameNormalized])
+  @@index([market, companyNameNormalized, source])
+}
+
+model RAContactImport {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 'linkedin_connections_csv'
+  kind          String
+  fileName      String
+  rowCount      Int
+  importedCount Int
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// A message draft the user copies and sends themselves (we never send it).
+model RAOutreachDraft {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactId      String?
+  contact        RAContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  jobId          String?
+  trackerEntryId String?
+  /// 'linkedin_note' | 'email' | 'referral_ask' | 'follow_up' | 'wechat'
+  channel        String
+  subject        String?
+  body           String     @db.Text
+  model          String?
+  copiedAt       DateTime?
+  /// The user says they sent it.
+  markedSentAt   DateTime?
+  createdAt      DateTime   @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([contactId])
+}

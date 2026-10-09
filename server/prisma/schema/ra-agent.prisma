@@ -1,0 +1,103 @@
+// ra-agent.prisma: AGENT area models — "Ready to apply" (ARCHITECTURE.md §2.10,
+// TASK_PLAN.md R-19, PRODUCT_PLAN.md §5.8). Added by FND-1b (Jobright clone).
+// D1: the product never submits an application. We prepare, the user submits.
+// No state here is ever 'submitted'.
+
+/// Ready-to-apply settings and setup progress (one per user).
+model RAAgentSettings {
+  userId           String    @id
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Jobs per week: 5 | 10 | 20 | 30. A target, never a cap.
+  weeklyTarget     Int       @default(10)
+  /// Minimum fit tier picked for the weekly list: 'great' | 'good' | 'possible'.
+  minTier          String    @default("good")
+  /// Tailor the resume for each job (default on).
+  tailorEach       Boolean   @default(true)
+  /// 'when_required' (only when the post asks for one) | 'always' | 'never'
+  coverLetterMode  String    @default("when_required")
+  /// Base resume to tailor from; null = the primary resume.
+  baseVariantId    String?
+  /// File naming style for prepared files, e.g. 'name_company_role' (contract enum).
+  fileNameStyle    String    @default("name_company_role")
+  /// 'profile' | 'calibrate' | 'answers' | 'weekly' | 'extension' | 'done'
+  /// ('extension' = "Get the extension", skippable; ruling C13).
+  setupStep        String    @default("profile")
+  /// `[{ jobId, verdict: 'up'|'down', reason?, note? }]`
+  calibration      Json      @default("[]")
+  setupCompletedAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+/// One job in the user's ready-to-apply list and its kit.
+model RAAgentQueueItem {
+  id                  String            @id @default(cuid())
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId               String
+  trackerEntryId      String?
+  /// picked → preparing → ready_for_review → approved → opened → applied
+  /// (+ skipped | expired | failed). Never 'submitted' (D1). `opened` behaves like
+  /// "Apply on company site": the tracker entry moves to applied at once, with Undo.
+  state               String            @default("picked")
+  /// ISO week of the list this item belongs to, in the user's time zone, e.g. '2026-W41'.
+  weekKey             String
+  resumeVariantId     String?
+  coverLetterId       String?
+  tailorSessionId     String?
+  /// Required autofill fields still missing: `[{ key, label }]`
+  missingFields       Json?
+  /// 'weekly' | 'suggestions' | 'feed' | 'copilot' | 'search' | 'manual'
+  addedVia            String
+  lastError           String?
+  openedAt            DateTime?
+  completedAt         DateTime?
+  /// Set ONLY when the user tells the extension they submitted (D1). Nothing
+  /// watches or detects submits on employer pages.
+  userMarkedSubmitted Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  kitEvents           RAAgentKitEvent[]
+
+  @@unique([userId, jobId])
+  @@index([userId, state, updatedAt(sort: Desc)])
+  @@index([userId, weekKey])
+}
+
+/// Audit row per kit state transition (F-AGENT-11): what was generated, what
+/// the user approved, which file was opened.
+model RAAgentKitEvent {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  queueItemId String
+  queueItem   RAAgentQueueItem @relation(fields: [queueItemId], references: [id], onDelete: Cascade)
+  fromState   String?
+  toState     String
+  /// 'user' | 'system' | 'extension'
+  actor       String
+  /// e.g. `{ tailorSessionId?, coverLetterId?, artifactId?, fileName?, creditLedgerId? }`
+  detail      Json?
+  createdAt   DateTime         @default(now())
+
+  @@index([queueItemId, createdAt])
+  @@index([userId, createdAt])
+}
+
+/// The user's saved answers to common application questions.
+model RAAnswerBankItem {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Canonical key from server/src/features/agent/questionKeys.ts, or 'custom:<hash>'.
+  questionKey  String
+  questionText String
+  answer       String    @db.Text
+  /// 'user' | 'ai_confirmed'
+  source       String
+  locale       String
+  lastUsedAt   DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, questionKey])
+}
