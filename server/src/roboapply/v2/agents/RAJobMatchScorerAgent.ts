@@ -1,7 +1,13 @@
 // backend/src/roboapply/v2/agents/RAJobMatchScorerAgent.ts
 //
 // RoboApply V2 Agent #1 — Score a (resume, job) pair for the Job Detail
-// match-score card. Per docs/roboapply/v2/04-backend-spec.md §6, this is
+// match-score card.
+//
+// WP-18: the fit score now runs on scorer v3 (`RAJobMatchScorerV3Agent`,
+// below; four judged components + quoted evidence, the server sums the
+// total) through server/src/features/match. This v2 class is kept only for
+// its existing callers (RACrossBankSearchService, RAResumeAIService.tailorDiff);
+// new code must not call it. Per docs/roboapply/v2/04-backend-spec.md §6, this is
 // the configured scoring agent that backs the `RAJobMatchScore` cache.
 //
 // Contract (BE3 Wave 4):
@@ -319,11 +325,266 @@ Output ONLY the JSON object. No prose, no fences, no trailing newline noise.`;
   }
 }
 
+// ═══ Scorer v3 (WP-18; ARCHITECTURE.md §4.7) ════════════════════════════
+//
+// The v3 contract replaces the opaque single number with four judged
+// components plus quoted evidence. The model NEVER emits a total: the server
+// (server/src/features/match/MatchService.ts) sums the components with the
+// published weights (MATCH_WEIGHTS) together with the deterministic
+// "location, pay and visa" component it computed itself. Evidence must be a
+// verbatim quote from the resume or the posting; the server drops anything
+// else (CitationGuard). The resume arrives PII-stripped.
+//
+// `RAJobMatchScorerAgent` (v2, above) stays for its existing callers
+// (RACrossBankSearchService, RAResumeAIService.tailorDiff); new code scores
+// through the MATCH area, which uses this class.
+
+export const SCORER_V3_PROMPT_VERSION = 'scorer_v3';
+
+export type ScorerV3DimensionKey = 'title_level' | 'skills' | 'industry' | 'career_path';
+export const SCORER_V3_DIMENSIONS: readonly ScorerV3DimensionKey[] = ['title_level', 'skills', 'industry', 'career_path'];
+
+export interface RAJobMatchScorerV3Input {
+  /** PII-stripped resume markdown. */
+  resumeMarkdown: string;
+  /** `profileSnapshotForLlm()` text when available (never sensitive fields). */
+  profileContext?: string | null;
+  job: {
+    title: string;
+    companyName: string;
+    seniority?: string | null;
+    educationLevel?: string | null;
+    minYears?: number | null;
+    skills?: string[];
+    description: string;
+    qualifications?: string | null;
+    responsibilities?: string | null;
+  };
+  /** The deterministic location/pay/visa result, given to the model as fact. */
+  logistics: { score: number | null; lines: string[] };
+  targets: { titles: string[]; seniority: string[] };
+}
+
+export interface ScorerV3RawEvidence {
+  text: string;
+  source: 'resume' | 'posting';
+}
+
+export interface RAJobMatchScorerV3Output {
+  dimensions: Record<ScorerV3DimensionKey, { score: number | null; evidence: ScorerV3RawEvidence[] }>;
+  strengths: string[];
+  gaps: string[];
+  keywordsMatched: string[];
+  keywordsMissing: string[];
+  /** Second person, no number; null when the model's summary stated a score. */
+  summary: string | null;
+}
+
+/** A summary that states a number-as-score is dropped (the card shows the number once). */
+const SUMMARY_NUMBER = /\d+\s*(?:\/\s*100|%|分|points?\b|out of)/iu;
+
+/**
+ * Evidence kept per component at parse time. Deliberately above the 3 the
+ * card shows: the CitationGuard (features/match/evidence.ts) drops invented
+ * quotes first and then keeps the first 3 verbatim ones, so a valid 4th quote
+ * still counts when an earlier one was made up.
+ */
+export const SCORER_V3_PARSE_EVIDENCE_CAP = 6;
+
+function parseEvidence(value: unknown): ScorerV3RawEvidence[] {
+  if (!Array.isArray(value)) return [];
+  const out: ScorerV3RawEvidence[] = [];
+  for (const e of value) {
+    if (!e || typeof e !== 'object') continue;
+    const { text, source } = e as { text?: unknown; source?: unknown };
+    if (typeof text !== 'string' || !text.trim()) continue;
+    if (source !== 'resume' && source !== 'posting') continue;
+    out.push({ text: text.trim().slice(0, 240), source });
+    if (out.length >= SCORER_V3_PARSE_EVIDENCE_CAP) break;
+  }
+  return out;
+}
+
+function parseNullableScore(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return clampScore(value);
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return clampScore(Number(value));
+  return undefined;
+}
+
+export class RAJobMatchScorerV3Agent extends BaseAgent<RAJobMatchScorerV3Input, RAJobMatchScorerV3Output> {
+  constructor() {
+    super('RAJobMatchScorerV3Agent');
+  }
+
+  protected getTemperature(): number {
+    return 0.1;
+  }
+
+  protected getMaxTokens(): number | undefined {
+    // Four components × ≤3 quotes + lists + summary; CJK-safe headroom (see v2 note).
+    return 2000;
+  }
+
+  protected getReasoningEffort() {
+    return getTaskReasoningEffort('matching');
+  }
+
+  protected getLocaleDirective(locale: string): string | null {
+    return this.language.getStrictOutputLanguageDirective(locale) ?? super.getLocaleDirective(locale);
+  }
+
+  protected getAgentPrompt(): string {
+    return `${currentBrandPersona('fit scorer')} — you compare ONE candidate's resume with ONE job post and
+judge four components separately. The candidate reads your words next to the job, so every
+claim must be defensible from the two texts. Write strengths, gaps and summary in SECOND
+PERSON ("your payments experience"), never "the candidate".
+
+## Components (score each 0-100, or null when the texts give nothing to judge)
+
+- title_level: does the role's title, scope and level fit the level and discipline the
+  resume shows? Penalize both directions (too junior and too senior). When the post states
+  a degree, years of experience or a graduation class (届别), judge eligibility here.
+- skills: the post's REQUIRED skills that the resume evidences, weighted to recent work.
+  Nice-to-have skills count half. Absence of evidence is a gap, not a guess.
+- industry: direct industry experience beats adjacent; adjacent beats unrelated. Null when
+  the post does not make the industry clear.
+- career_path: does the career so far lead toward this role, and is the scope of past work
+  proportional to this role? Null for a resume with no work history.
+
+Location, pay and visa are NOT yours to judge: they were computed from the user's stated
+preferences and are given below as facts. Do not repeat them as strengths or gaps.
+
+## Hard rules
+
+1. Never output a total or overall score. Only the four component scores.
+2. Evidence: up to 3 per component, each an EXACT quote (copy the characters) from the
+   resume ("source":"resume") or the job post ("source":"posting"), at most 200 characters.
+   Never paraphrase inside evidence. Quotes that are not verbatim are discarded.
+3. Never invent skills or experience. A skill the resume does not mention is a gap.
+4. Never judge school name, school reputation or school tier (985/211/双一流, "top" or
+   "elite" schools), nor age, gender, nationality, ethnicity, family, photo, birthplace
+   (籍贯) or political status (政治面貌). They are not inputs, even if present.
+5. Strengths and gaps: at most 5 each, specific (name the skill or experience). Gaps are
+   observations about the resume ("no Kubernetes work shown"), never verdicts on the person.
+6. Keywords: concrete terms from the post (skills, tools, certifications), verbatim in the
+   post's language. keywordsMatched = in the resume; keywordsMissing = not in it. Max 10 each.
+7. Summary: 1-2 sentences, at most 45 words, second person. Lead with the strongest concrete
+   overlap, then the most material gap. Never state a number, percentage or score.
+
+## Output (STRICT JSON only, no prose, no code fences)
+
+{
+  "dimensions": {
+    "title_level": { "score": 0, "evidence": [{ "text": "...", "source": "posting" }] },
+    "skills": { "score": 0, "evidence": [] },
+    "industry": { "score": null, "evidence": [] },
+    "career_path": { "score": 0, "evidence": [] }
+  },
+  "strengths": ["..."],
+  "gaps": ["..."],
+  "keywordsMatched": ["..."],
+  "keywordsMissing": ["..."],
+  "summary": "..."
+}`;
+  }
+
+  protected formatInput(input: RAJobMatchScorerV3Input): string {
+    const j = input.job;
+    const facts = [
+      `Title: ${clipString(j.title, 300)}`,
+      `Company: ${clipString(j.companyName, 200)}`,
+      j.seniority ? `Level stated or inferred from the post: ${j.seniority}` : '',
+      j.educationLevel && j.educationLevel !== 'none' ? `Degree the post asks for: ${j.educationLevel}` : '',
+      typeof j.minYears === 'number' ? `Years of experience the post asks for: ${j.minYears}+` : '',
+      j.skills?.length ? `Skills extracted from the post: ${j.skills.slice(0, 30).join(', ')}` : '',
+    ].filter(Boolean);
+    const parts = [
+      `## Job post\n${facts.join('\n')}\n\nDescription:\n${clipString(j.description, 6_000)}`,
+      j.qualifications ? `## Qualifications\n${clipString(j.qualifications, 3_000)}` : '',
+      j.responsibilities ? `## Responsibilities\n${clipString(j.responsibilities, 2_000)}` : '',
+      `## Location, pay and visa (computed; given as fact)\n${
+        input.logistics.lines.length ? input.logistics.lines.join('\n') : 'Nothing stated to compare.'
+      }`,
+      input.targets.titles.length || input.targets.seniority.length
+        ? `## What the candidate is looking for\n${[
+            input.targets.titles.length ? `Titles: ${input.targets.titles.slice(0, 10).join(', ')}` : '',
+            input.targets.seniority.length ? `Levels: ${input.targets.seniority.join(', ')}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n')}`
+        : '',
+      input.profileContext ? `## Candidate profile\n${clipString(input.profileContext, 3_000)}` : '',
+      `## Candidate resume\n${clipString(input.resumeMarkdown, 8_000)}`,
+      'Judge the four components. Output ONLY the JSON object.',
+    ];
+    return parts.filter(Boolean).join('\n\n');
+  }
+
+  protected parseOutput(response: string): RAJobMatchScorerV3Output {
+    // Malformed output THROWS (never a fallback score): the caller falls back
+    // to the deterministic "Quick estimate" and persists nothing.
+    if (!response || typeof response !== 'string') throw new Error('RAJobMatchScorerV3Agent: unparseable scorer response');
+    const cleaned = response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    let parsed: Record<string, unknown> | null = null;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const m = cleaned.match(/\{[\s\S]*\}/);
+      if (m) {
+        try {
+          parsed = JSON.parse(m[0]);
+        } catch {
+          parsed = null;
+        }
+      }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('RAJobMatchScorerV3Agent: unparseable scorer response');
+    const dims = parsed.dimensions as Record<string, unknown> | undefined;
+    if (!dims || typeof dims !== 'object') throw new Error('RAJobMatchScorerV3Agent: missing dimensions');
+    const out = {} as RAJobMatchScorerV3Output['dimensions'];
+    for (const key of SCORER_V3_DIMENSIONS) {
+      const d = (dims[key] ?? null) as { score?: unknown; evidence?: unknown } | null;
+      const score = d && typeof d === 'object' ? parseNullableScore(d.score) : undefined;
+      // title_level and skills must be judged; industry and career_path may be null.
+      if (score === undefined || (score === null && (key === 'title_level' || key === 'skills'))) {
+        throw new Error(`RAJobMatchScorerV3Agent: missing ${key} score`);
+      }
+      out[key] = { score, evidence: parseEvidence(d?.evidence) };
+    }
+    const summary = clipString(parsed.summary, 400);
+    return {
+      dimensions: out,
+      strengths: sanitizeStringArray(parsed.strengths, 240, 5),
+      gaps: sanitizeStringArray(parsed.gaps, 240, 5),
+      keywordsMatched: sanitizeStringArray(parsed.keywordsMatched, 80, 10),
+      keywordsMissing: sanitizeStringArray(parsed.keywordsMissing, 80, 10),
+      summary: summary && !SUMMARY_NUMBER.test(summary) ? summary : null,
+    };
+  }
+
+  async run(
+    input: RAJobMatchScorerV3Input,
+    options: { requestId?: string; locale?: string; signal?: AbortSignal; model?: string } = {},
+  ): Promise<RAJobMatchScorerV3Output> {
+    return this.execute(
+      input,
+      input.job.description,
+      options.requestId,
+      options.locale,
+      options.model ?? pickJobMatchScorerModel(),
+      options.signal,
+    );
+  }
+}
+
 export const raJobMatchScorerAgent = new RAJobMatchScorerAgent();
 export default raJobMatchScorerAgent;
 
 // Test surface — keep tight.
 export const __test = {
+  parseNullableScore,
+  parseEvidence,
   pickJobMatchScorerModel,
   resolvedJobMatchScorerModel,
   clampScore,
