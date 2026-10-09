@@ -1,6 +1,7 @@
 // lib/api/profile.ts — Profile: basics, education, experience, skills, sensitive answers, resume sync.
 //
-// Thin typed wrappers over the area contract (FND-7). Owner: WP-19.
+// Thin typed wrappers over the area contract (FND-7; filled by WP-19).
+// `putSensitiveAnswers({})` deletes the stored answers.
 // Request types are the contract's zod input types; response types are the
 // contract's views. Change a signature here only together with its contract.
 //
@@ -68,13 +69,13 @@ export function putSkills(body: In<typeof P.PutSkillsBodySchema>, opts?: CallOpt
 }
 
 /** `profile.getSensitive` — GET /api/v1/roboapply/profile/sensitive */
-export function getSensitiveAnswers(opts?: CallOptions): Promise<P.SensitiveAnswers> {
-  return call<P.SensitiveAnswers>('GET', `/api/v1/roboapply/profile/sensitive`, opts);
+export function getSensitiveAnswers(opts?: CallOptions): Promise<P.SensitiveAnswersView> {
+  return call<P.SensitiveAnswersView>('GET', `/api/v1/roboapply/profile/sensitive`, opts);
 }
 
 /** `profile.putSensitive` — PUT /api/v1/roboapply/profile/sensitive */
-export function putSensitiveAnswers(body: In<typeof P.SensitiveAnswersSchema> = {}, opts?: CallOptions): Promise<P.SensitiveAnswers> {
-  return call<P.SensitiveAnswers>('PUT', `/api/v1/roboapply/profile/sensitive`, { ...opts, body });
+export function putSensitiveAnswers(body: In<typeof P.SensitiveAnswersSchema> = {}, opts?: CallOptions): Promise<P.SensitiveAnswersView> {
+  return call<P.SensitiveAnswersView>('PUT', `/api/v1/roboapply/profile/sensitive`, { ...opts, body });
 }
 
 /** `profile.syncPreview` — POST /api/v1/roboapply/profile/sync-from-resume */
