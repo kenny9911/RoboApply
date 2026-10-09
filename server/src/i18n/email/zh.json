@@ -1,0 +1,26 @@
+{
+  "billing": {
+    "renewal": {
+      "subjectAuto": "您的 %BRAND% {plan} 套餐将在 5 天后续订",
+      "subjectManual": "您的 %BRAND% {plan} 套餐将在 5 天后到期",
+      "headingAuto": "您的套餐即将续订",
+      "headingManual": "您的套餐即将到期",
+      "bodyAuto": "您的 {plan} 套餐将于 {date} 自动续订，无需操作，模拟面试额度将自动刷新。",
+      "bodyManual": "您的 {plan} 月度套餐将于 {date} 到期。立即续订以继续使用模拟面试额度。",
+      "credits": "您当前还剩 {credits} 个模拟面试额度。",
+      "ctaAuto": "管理订阅",
+      "ctaManual": "立即续订",
+      "footer": "您收到此账单提醒，是因为您拥有有效的 %BRAND% 套餐。"
+    },
+    "fridayNudge": {
+      "subject": "为下周做好准备了吗？练习一场面试",
+      "greetingNamed": "{name}，您好：",
+      "greeting": "您好：",
+      "body": "周末是提升自己的好时机。来一场快速模拟面试，让您在下周自信出击、脱颖而出。",
+      "credits": "您还有 {credits} 个模拟面试额度可以使用。",
+      "cta": "开始模拟面试",
+      "footer": "您拥有 %BRAND% 额度，因此每周会收到练习提醒。可在账户中管理邮件偏好。",
+      "preferences": "偏好设置"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "shell": {
+    "reasonTransactional": "You received this email because it is about your %BRAND% account.",
+    "reasonAlert": "You received this email because you turned on job alerts in %BRAND%.",
+    "reasonTips": "You received this email because \"Tips and reminders\" is on in your %BRAND% settings.",
+    "reasonMarketing": "You received this email because you agreed to product news from %BRAND%.",
+    "unsubscribe": "Unsubscribe",
+    "preferences": "Email settings",
+    "sentBy": "Sent by {entity}"
+  },
+  "billing": {
+    "renewal": {
+      "subjectAuto": "Your %BRAND% {plan} plan renews in 5 days",
+      "subjectManual": "Your %BRAND% {plan} plan expires in 5 days",
+      "headingAuto": "Your plan renews soon",
+      "headingManual": "Your plan expires soon",
+      "bodyAuto": "Your {plan} plan renews automatically on {date}. No action needed — your mock-interview credits will refresh.",
+      "bodyManual": "Your {plan} monthly pass expires on {date}. Renew now to keep your mock-interview credits without interruption.",
+      "credits": "You currently have {credits, plural, one {# mock-interview credit} other {# mock-interview credits}} remaining.",
+      "ctaAuto": "Manage subscription",
+      "ctaManual": "Renew now",
+      "footer": "You receive billing reminders because you have an active %BRAND% plan."
+    },
+    "fridayNudge": {
+      "subject": "Ready for next week? Practice an interview",
+      "greetingNamed": "Hi {name},",
+      "greeting": "Hi there,",
+      "body": "The weekend is a great time to sharpen up. Run a quick mock interview and walk into next week ready to impress.",
+      "credits": "You have {credits, plural, one {# mock-interview credit} other {# mock-interview credits}} ready to use.",
+      "cta": "Start a mock interview",
+      "footer": "You receive weekly prep nudges because you have %BRAND% credits. Manage email preferences in your account.",
+      "preferences": "Preferences"
+    }
+  }
+}

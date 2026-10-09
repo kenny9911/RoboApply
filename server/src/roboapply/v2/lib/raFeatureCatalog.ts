@@ -45,7 +45,51 @@ export const FEATURE_BY_SKU: Record<string, FeatureDef> = {
   seeker_negotiation: { key: 'negotiation', label: 'Offer Negotiation', modality: 'llm' },
   seeker_interview_planner: { key: 'interview_planner', label: 'Interview Planner', modality: 'llm' },
   seeker_match: { key: 'match_score', label: 'Job-Match Scoring', modality: 'llm' },
+  // Cross-bank search (existing SKUs that had no mapping and fell into "Other").
+  ra_crossbank_score: { key: 'crossbank', label: 'Cross-bank Search', modality: 'llm' },
+  ra_crossbank_insight: { key: 'crossbank', label: 'Cross-bank Search', modality: 'llm' },
+  // Jobright-clone SKUs, pre-registered by FND-3 (ARCHITECTURE.md §7.5). Writers
+  // add each one to the DeductionSku union in lib/matchBilling.ts when they
+  // first log it. `PLATFORM_SKUS` below marks the shared (non-user) costs.
+  ra_job_enrich: { key: 'job_enrich', label: 'Job Enrichment', modality: 'llm' },
+  ra_match_score_v3: { key: 'match_score', label: 'Job-Match Scoring', modality: 'llm' },
+  ra_fit_analysis: { key: 'fit_analysis', label: 'Fit Analysis', modality: 'llm' },
+  ra_competitiveness: { key: 'competitiveness', label: 'Competitiveness Report', modality: 'llm' },
+  ra_copilot_turn: { key: 'assistant', label: 'Assistant', modality: 'llm' },
+  ra_copilot_summary: { key: 'assistant', label: 'Assistant', modality: 'llm' },
+  ra_resume_grade: { key: 'resume_check', label: 'Resume Check', modality: 'llm' },
+  ra_resume_fix: { key: 'resume_rewrite', label: 'Resume Rewrite', modality: 'llm' },
+  ra_tailor_v2: { key: 'resume_tailor', label: 'Resume Tailor', modality: 'llm' },
+  ra_outreach_draft: { key: 'outreach', label: 'Outreach Draft', modality: 'llm' },
+  ra_ext_answer: { key: 'ai_answer', label: 'Application Answers', modality: 'llm' },
+  ra_job_import: { key: 'job_import', label: 'Job Import', modality: 'llm' },
+  ra_interview_guide: { key: 'interview_guide', label: 'Interview Question Guide', modality: 'llm' },
+  ra_seo_intro: { key: 'seo_intro', label: 'Public Page Intro', modality: 'llm' },
 };
+
+/** The SKUs ARCHITECTURE.md §7.5 adds for the jobright clone (all mapped above). */
+export const CLONE_SKUS = [
+  'ra_job_enrich',
+  'ra_match_score_v3',
+  'ra_fit_analysis',
+  'ra_competitiveness',
+  'ra_copilot_turn',
+  'ra_copilot_summary',
+  'ra_resume_grade',
+  'ra_resume_fix',
+  'ra_tailor_v2',
+  'ra_cover_letter',
+  'ra_outreach_draft',
+  'ra_ext_answer',
+  'ra_job_import',
+  'ra_interview_guide',
+  'ra_seo_intro',
+  'ra_crossbank_score',
+  'ra_crossbank_insight',
+] as const;
+
+/** SKUs whose cost belongs to the platform, not to one user (logged under SHARED_COST_USER_ID). */
+export const PLATFORM_SKUS: ReadonlySet<string> = new Set(['ra_job_enrich', 'ra_seo_intro']);
 
 export const FEATURE_OTHER: FeatureDef = { key: 'other', label: 'Other', modality: 'llm' };
 

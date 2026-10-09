@@ -1,0 +1,26 @@
+{
+  "billing": {
+    "renewal": {
+      "subjectAuto": "您的 %BRAND% {plan} 方案將在 5 天後續訂",
+      "subjectManual": "您的 %BRAND% {plan} 方案將在 5 天後到期",
+      "headingAuto": "您的方案即將續訂",
+      "headingManual": "您的方案即將到期",
+      "bodyAuto": "您的 {plan} 方案將於 {date} 自動續訂，無需操作，模擬面試點數將自動刷新。",
+      "bodyManual": "您的 {plan} 月度方案將於 {date} 到期。立即續訂以繼續使用模擬面試點數。",
+      "credits": "您目前還剩 {credits} 個模擬面試點數。",
+      "ctaAuto": "管理訂閱",
+      "ctaManual": "立即續訂",
+      "footer": "您收到此帳單提醒，是因為您擁有有效的 %BRAND% 方案。"
+    },
+    "fridayNudge": {
+      "subject": "為下週做好準備了嗎？練習一場面試",
+      "greetingNamed": "{name}，您好：",
+      "greeting": "您好：",
+      "body": "週末是提升自己的好時機。來一場快速模擬面試，讓您在下週自信出擊、脫穎而出。",
+      "credits": "您還有 {credits} 個模擬面試點數可以使用。",
+      "cta": "開始模擬面試",
+      "footer": "您擁有 %BRAND% 點數，因此每週會收到練習提醒。可在帳戶中管理郵件偏好。",
+      "preferences": "偏好設定"
+    }
+  }
+}

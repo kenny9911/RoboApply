@@ -21,6 +21,13 @@
 //   9. */15 * * * * UTC                → interview-session cleanup (finalize or
 //                                       expire stranded sessions; expire stale
 //                                       'preparing' rows).
+//  10+. Platform crons (FND-3)         → every entry of PLATFORM_CRON_JOBS in
+//                                       server/src/cron/handlers.ts (queue-drain,
+//                                       jobs-ingest, reminders, …), the same
+//                                       tasks Vercel Cron calls. Override one
+//                                       schedule with ROBOAPPLY_<NAME>_CRON (e.g.
+//                                       ROBOAPPLY_QUEUE_DRAIN_CRON); turn them all
+//                                       off with ROBOAPPLY_PLATFORM_CRON_DISABLED=true.
 //
 // All cron expressions overridable via env (see DEFAULT_* constants below).
 // Kill switch: ROBOAPPLY_CRON_DISABLED=true → no tasks register at all.
@@ -39,6 +46,7 @@ import { composeAndSendDigestsForLocalHour } from '../services/RoboApplyDigestSe
 import { runRenewalReminderSweep, runFridayNudgeSweep } from '../services/RoboApplyBillingReminderService.js';
 import { runAccountPurgeSweep } from '../services/SeekerAccountPurgeService.js';
 import { interviewSessionService } from '../../interview-engine/sessions/InterviewSessionService.js';
+import { PLATFORM_CRON_JOBS, runPlatformCron } from '../../cron/handlers.js';
 
 // ─── Defaults ───────────────────────────────────────────────────────────
 
@@ -61,6 +69,12 @@ const firedThisHour = new Set<string>();
 let dedupCleanupInterval: NodeJS.Timeout | null = null;
 
 const tasks: ScheduledTask[] = [];
+const platformRunning = new Set<string>();
+
+/** `queue-drain` → `ROBOAPPLY_QUEUE_DRAIN_CRON`. */
+export function platformCronEnvName(name: string): string {
+  return `ROBOAPPLY_${name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_CRON`;
+}
 
 // ─── Public API ─────────────────────────────────────────────────────────
 
@@ -285,6 +299,32 @@ export function startRoboApplyCron(): void {
     },
   );
 
+  // ── 10+. Platform crons (FND-3) — mirrors of the Vercel Cron entries ──
+  if ((process.env.ROBOAPPLY_PLATFORM_CRON_DISABLED ?? '').toLowerCase() === 'true') {
+    logger.info('ROBOAPPLY_CRON', 'platform crons disabled via ROBOAPPLY_PLATFORM_CRON_DISABLED');
+  } else {
+    for (const job of PLATFORM_CRON_JOBS) {
+      registerCron(
+        `platform_${job.name}`,
+        process.env[platformCronEnvName(job.name)] || job.schedule,
+        tz,
+        async () => {
+          // A run that outlives its interval is not started twice in one process.
+          if (platformRunning.has(job.name)) {
+            logger.info('ROBOAPPLY_CRON', `${job.name} still running; skipping this tick`);
+            return;
+          }
+          platformRunning.add(job.name);
+          try {
+            await runPlatformCron(job);
+          } finally {
+            platformRunning.delete(job.name);
+          }
+        },
+      );
+    }
+  }
+
   // Rotate the per-hour dedup set every hour so it doesn't grow unbounded.
   dedupCleanupInterval = setInterval(() => {
     const currentHour = new Date().toISOString().slice(0, 13);
@@ -315,6 +355,7 @@ export function stopRoboApplyCron(): void {
     dedupCleanupInterval = null;
   }
   firedThisHour.clear();
+  platformRunning.clear();
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────

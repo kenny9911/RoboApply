@@ -1,4 +1,20 @@
+// server/src/services/EmailService.ts — LEGACY SHIM.
+//
+// @deprecated for new code: use `sendEmail` from `server/src/platform/email`
+// (brand-aware transport, templates in 9 locales, RAEmailLog, unsubscribe
+// headers). This class keeps its old surface for the existing callers
+// (AuthService, RoboApplyDigestService, RoboApplyBillingReminderService) and
+// now delegates the HTTP call to the platform's Resend transport. WP-21a /
+// WP-39a move those callers; WP-75 deletes this file once nothing imports it.
+//
+// Behaviour kept: `send()` returns a boolean and never throws; `isConfigured`
+// and `defaultFrom` as before. Changed: addresses on the reserved `.invalid`
+// TLD (GoApply placeholder emails) are never sent to, and the built-in From
+// fallback is the RoboApply sender instead of the old RoboHire one.
+
 import prisma from '../lib/prisma.js';
+import { BRANDS } from '../platform/brand/registry.js';
+import { resendTransport } from '../platform/email/transports/resend.js';
 
 interface SendEmailOptions {
   to: string | string[];
@@ -13,53 +29,40 @@ interface SendEmailOptions {
   text?: string;
 }
 
+const DEFAULT_FROM = `${BRANDS.roboapply.email.fromName} <${BRANDS.roboapply.email.fromAddress}>`;
+
+function isDeliverable(address: string): boolean {
+  return !address.trim().toLowerCase().endsWith('.invalid');
+}
+
 class EmailService {
-  private apiKey: string | undefined;
-  private from: string;
-
-  constructor() {
-    this.apiKey = process.env.RESEND_API_KEY;
-    this.from = process.env.EMAIL_FROM || 'RoboHire <noreply@updates.robohire.io>';
-  }
-
   get isConfigured(): boolean {
-    return !!this.apiKey;
+    return resendTransport.isConfigured();
   }
 
-  /** The configured default From header (EMAIL_FROM or the built-in fallback).
+  /** The configured default From header (EMAIL_FROM or the RoboApply sender).
    *  Exposed so brand-aware senders can swap the display name while keeping
    *  the Resend-verified address. */
   get defaultFrom(): string {
-    return this.from;
+    return process.env.EMAIL_FROM || DEFAULT_FROM;
   }
 
   async send(options: SendEmailOptions): Promise<boolean> {
-    if (!this.apiKey) return false;
+    if (!this.isConfigured) return false;
+    const to = (Array.isArray(options.to) ? options.to : [options.to]).filter(isDeliverable);
+    if (to.length === 0) return false;
 
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          from: options.from || this.from,
-          to: Array.isArray(options.to) ? options.to : [options.to],
-          subject: options.subject,
-          html: options.html,
-          ...(options.text ? { text: options.text } : {}),
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        console.error('EmailService send failed:', res.status, body);
-      }
-      return res.ok;
-    } catch (err) {
-      console.error('EmailService send error:', err);
-      return false;
+    const result = await resendTransport.send({
+      from: options.from || this.defaultFrom,
+      to,
+      subject: options.subject,
+      html: options.html,
+      ...(options.text ? { text: options.text } : {}),
+    });
+    if (!result.ok) {
+      console.error('EmailService send failed:', result.error);
     }
+    return result.ok;
   }
 
   /**
