@@ -1,23 +1,51 @@
-/* styles/brands/goapply.css — GoApply's identity and action tokens.
+/* styles/brands/goapply.css — GoApply's identity and action tokens (WP-12).
  *
- * EMPTY PLACEHOLDER (FND-6a). Owner: WP-12, which fills it.
- *
- * Loaded once by app/globals.css. It may only redefine the brand tokens
+ * Loaded once by app/globals.css. RoboApply has no file: its tokens are the
+ * defaults in app/globals.css. This sheet may ONLY redefine the brand tokens
  * (scripts/check-design.mjs BRAND_TOKENS): --action, --action-hover,
  * --action-ink, --action-subtle, --brand-mark, --brand-plane, --grad-brand,
- * --grad-brand-hover, --grad-soft, --grad-panel — light and dark, scoped to
- * the attribute app/layout.tsx sets on <html>:
+ * --grad-brand-hover, --grad-soft, --grad-panel. Surfaces, ink, status
+ * colours, type and spacing stay shared, so every screen keeps its layout and
+ * contrast budget on both brands.
  *
- *   html[data-brand='goapply'] { … }                       light
- *   html[data-brand='goapply'][data-theme='dark'] { … }    dark
+ * Direction (ARCHITECTURE.md §1.6): a deep blue action with a jade identity
+ * plane. Identity (--brand-plane / --brand-mark) appears only where ruling R3
+ * allows it (the brand mark, Great fit); the glyph is the mark, never text.
  *
- * Every pair must keep the 4.5:1 rules in docs/design-system.md (WP-12 adds
- * the contrast test over both brands × both themes). RoboApply has no file:
- * its tokens are the defaults in app/globals.css.
+ * Contrast (docs/design-system.md; __tests__/brand/contrast.test.ts computes
+ * every pair below for both brands × both themes):
+ *   light  --action-ink on --action 6.45 · --action on --bg 6.30, on
+ *          --surface-2 5.90, on --action-subtle 5.59 · --action-ink on every
+ *          --grad-brand / --grad-brand-hover stop ≥ 5.03 · --brand-mark on
+ *          --brand-plane 7.11 · --text on every --grad-soft / --grad-panel
+ *          stop ≥ 12.9
+ *   dark   --action-ink on --action 8.68 · --action on --bg 10.17, on
+ *          --action-subtle 7.44 · --action-ink on gradient stops ≥ 7.34 ·
+ *          --brand-mark on --brand-plane 6.49 · --text on panel stops ≥ 10.1
  */
 
 html[data-brand='goapply'] {
+  --action: #1F57C8;
+  --action-hover: #1A47A6;
+  --action-ink: #FFFFFF;
+  --action-subtle: #E8EFFC;
+  --brand-mark: #DDF5EC;
+  --brand-plane: #0F5A4A;
+  --grad-brand: linear-gradient(180deg, #2F6AD8, #1A4FB8);
+  --grad-brand-hover: linear-gradient(180deg, #275DC4, #16449F);
+  --grad-soft: linear-gradient(135deg, #F3F7FF, #E6EEFF 58%, #EAF7F2);
+  --grad-panel: linear-gradient(140deg, #E9F0FF, #DCE7FF 48%, #E0F3EC);
 }
 
 html[data-brand='goapply'][data-theme='dark'] {
+  --action: #A9C3FF;
+  --action-hover: #C6D7FF;
+  --action-ink: #0E2350;
+  --action-subtle: #24304D;
+  --brand-mark: #C9F2E3;
+  --brand-plane: #155C4B;
+  --grad-brand: linear-gradient(180deg, #B7CCFF, #95B2FF);
+  --grad-brand-hover: linear-gradient(180deg, #CFDDFF, #ADC4FF);
+  --grad-soft: linear-gradient(135deg, #1F2537, #232E4A 58%, #1F3433);
+  --grad-panel: linear-gradient(140deg, #233052, #2A3A63 48%, #1F3D3A);
 }
