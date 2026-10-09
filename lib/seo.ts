@@ -6,7 +6,8 @@
 // URL scheme: `/` is English AND the x-default (content-negotiated for
 // first-time visitors via Accept-Language); every other locale lives at
 // `/{locale}` so crawlers get stable, indexable localized documents with a
-// full hreflang cluster. `/en` permanently redirects to `/`.
+// full hreflang cluster. `/en` also renders English (so a link can force it)
+// but canonicalizes to `/` and is not part of the cluster.
 
 import type { Metadata } from 'next';
 
