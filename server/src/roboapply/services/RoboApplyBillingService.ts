@@ -56,7 +56,10 @@ function roboApplyBaseUrl(): string {
 }
 
 function backendUrl(): string {
-  return process.env.BACKEND_URL || 'https://api.robohire.io';
+  // Billing now runs in RoboApply's same-origin API. The former RoboHire
+  // backend has no callback route and returns 404 for paid orders. Use the
+  // canonical www host directly so the payment worker needs no redirect.
+  return (process.env.BACKEND_URL || 'https://www.roboapply.io').replace(/\/+$/, '');
 }
 
 /**
