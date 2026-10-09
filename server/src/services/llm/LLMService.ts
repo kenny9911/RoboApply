@@ -18,6 +18,22 @@ import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/sy
 import { getProviderSetting, getDefaultModel, getFallbackModelSetting } from '../../lib/llm/llmModels.js';
 import { isTransientLLMError } from './withRetry.js';
 import { DIRECT_PROVIDER_PREFIXES, PROVIDER_PREFIX_ALIASES } from './providerPrefixes.js';
+import {
+  AUTO_FALLBACK_PREFERENCE,
+  CIRCUIT_OPEN_MS,
+  LLMUnavailableError,
+  MISSING_CREDENTIAL_FLAG,
+  classifyCredentialFailure,
+  credentialFingerprint,
+  errorHttpStatus,
+  fallbackMaxTokens,
+  getOpenCircuit,
+  isAutoFallbackEnabled,
+  markCircuitBypassLogged,
+  noteAutoFallbackChoice,
+  openCircuit,
+  type CredentialFailureKind,
+} from './fallbackRouting.js';
 import type { ProviderExtra } from '../../types/index.js';
 
 /** chatWithUsage() result — content plus the billed token usage + resolved model. */
@@ -35,6 +51,18 @@ export interface LLMChatResult {
 // AND every retry — noise that reads like the router fumbling/​retrying when it
 // is just quietly normalizing. Log each unique (model → provider) once.
 const loggedPrefixStrips = new Set<string>();
+
+/** One resolved fallback hop. */
+interface FallbackCandidate {
+  providerType: string;
+  model: string;
+  /** The selector as configured, for logs. */
+  selector: string;
+  source: 'configured' | 'auto';
+}
+
+/** Why the call is being rerouted. */
+type FallbackReason = CredentialFailureKind | 'circuit_open' | 'transient';
 
 /**
  * Map an LLMService provider type ('kimi', 'openai', etc.) to the BYOK
@@ -86,6 +114,12 @@ export class LLMService {
   }
 
   private shouldTryFallback(error: unknown): boolean {
+    // Auth/billing failures (401/402/403, "User not found.", "invalid api key",
+    // "insufficient credits", an empty Anthropic balance reported as 400...)
+    // can never succeed on a retry of the same key, so they always reroute.
+    // Matched on the provider's status where it exposes one, not only on text.
+    if (classifyCredentialFailure(error)) return true;
+
     const message = String(
       (error && typeof error === 'object' && 'message' in error)
         ? (error as { message?: string }).message
@@ -192,6 +226,273 @@ export class LLMService {
     };
   }
 
+  /** Platform (system DB → env) credential presence + fingerprint for one provider type. */
+  private platformCredential(providerType: string): { hasKey: boolean; fingerprint: string } {
+    const lower = providerType.toLowerCase();
+    let apiKey = '';
+    try {
+      apiKey = resolveProviderCredential(lower).apiKey || '';
+    } catch {
+      apiKey = '';
+    }
+    return {
+      hasKey: lower === 'ollama' || !!apiKey.trim(),
+      fingerprint: credentialFingerprint(apiKey),
+    };
+  }
+
+  /**
+   * The ordered fallback hops for one failed (or circuit-open) primary call.
+   *
+   * 1. The configured fallback (admin DB override ?? LLM_FALLBACK_MODEL), for
+   *    every fallback-worthy failure, exactly as before.
+   * 2. On a CREDENTIAL failure only (auth, billing, missing key, open
+   *    circuit), the auto-selected direct routes from AUTO_FALLBACK_PREFERENCE.
+   *    A transient blip (429/5xx/timeout) without a configured fallback still
+   *    goes back to withLLMRetry on the primary, so a rate-limit hiccup never
+   *    silently switches model.
+   *
+   * Hops are skipped when their provider has no key, has an open circuit, or
+   * is the provider whose credentials just failed.
+   */
+  private buildFallbackCandidates(input: {
+    primaryModel: string;
+    primaryProviderType: string;
+    providerMode: string;
+    defaultModel?: string;
+    credentialFailure: boolean;
+  }): FallbackCandidate[] {
+    const primaryType = input.primaryProviderType.toLowerCase();
+    const out: FallbackCandidate[] = [];
+    const seen = new Set<string>([`${primaryType}::${input.primaryModel}`]);
+    const usable = (providerType: string): boolean => {
+      const lower = providerType.toLowerCase();
+      if (input.credentialFailure && lower === primaryType) return false;
+      const cred = this.platformCredential(lower);
+      if (!cred.hasKey) return false;
+      return !getOpenCircuit(lower, cred.fingerprint);
+    };
+
+    const configured = this.getConfiguredFallbackModel(input.primaryModel);
+    if (configured) {
+      const route = this.resolvePlatformRoute(configured, input.providerMode, input.defaultModel);
+      const key = `${route.providerType.toLowerCase()}::${route.model}`;
+      if (!seen.has(key) && usable(route.providerType)) {
+        seen.add(key);
+        out.push({ ...route, selector: configured, source: 'configured' });
+      }
+    }
+
+    if (input.credentialFailure && isAutoFallbackEnabled()) {
+      const auto: FallbackCandidate[] = [];
+      for (const selector of AUTO_FALLBACK_PREFERENCE) {
+        const route = this.resolveDirectModel(selector);
+        // Auto-selection is direct-provider only: never openrouter.
+        if (!route || route.providerType === 'openrouter') continue;
+        const key = `${route.providerType}::${route.model}`;
+        if (seen.has(key) || !usable(route.providerType)) continue;
+        seen.add(key);
+        auto.push({ ...route, selector, source: 'auto' });
+      }
+      const summary = auto.map((c) => c.selector).join(' → ') || '(none)';
+      if (noteAutoFallbackChoice(summary)) {
+        logger.warn('LLM_SERVICE', `Auto-selected LLM fallback route: ${summary}`, {
+          primaryProvider: primaryType,
+          configuredFallback: configured ?? null,
+          candidates: auto.map((c) => `${c.providerType}/${c.model}`),
+        });
+      }
+      out.push(...auto);
+    }
+    return out;
+  }
+
+  /**
+   * Run the fallback hops in order. A hop that fails on its own credentials
+   * opens that provider's circuit and moves to the next hop; any other failure
+   * ends the chain (it is not a "dead key" problem, and timing out on several
+   * providers in a row would multiply latency).
+   */
+  private async runFallbackChain(input: {
+    candidates: FallbackCandidate[];
+    messages: Message[];
+    options: LLMOptions | undefined;
+    requestOptions: Record<string, unknown>;
+    requestId: string;
+    primaryModel: string;
+    primaryProviderType: string;
+    reason: FallbackReason;
+    primaryError: unknown;
+  }): Promise<LLMChatResult> {
+    const attempted: string[] = [];
+    let lastError: unknown = input.primaryError;
+
+    for (const candidate of input.candidates) {
+      const label = `${candidate.providerType}/${candidate.model}`;
+      attempted.push(label);
+      let fallbackProvider: LLMProvider;
+      try {
+        fallbackProvider = this.createProvider(candidate.providerType, candidate.model);
+      } catch (createErr) {
+        lastError = createErr;
+        continue;
+      }
+
+      const fallbackOptions: LLMOptions = {
+        ...input.options,
+        model: candidate.model,
+        // The explicit per-call provider / vision override named the PRIMARY
+        // route; the hop carries its own.
+        provider: undefined,
+        visionModel: undefined,
+        maxTokens: fallbackMaxTokens(
+          candidate.providerType,
+          input.options?.maxTokens,
+          input.options?.reasoningMaxTokens,
+        ),
+      };
+      const logOptions = {
+        ...input.requestOptions,
+        model: candidate.model,
+        maxTokens: fallbackOptions.maxTokens,
+        fallbackFrom: input.primaryModel,
+        fallbackFromProvider: input.primaryProviderType,
+        fallbackReason: input.reason,
+        fallbackSource: candidate.source,
+      };
+
+      const fallbackStart = Date.now();
+      logger.warn('LLM', 'Retrying with fallback model', {
+        model: input.primaryModel,
+        provider: input.primaryProviderType,
+        fallbackModel: candidate.model,
+        fallbackProvider: fallbackProvider.getProviderName(),
+        fallbackSource: candidate.source,
+        reason: input.reason,
+      }, input.requestId);
+
+      try {
+        const fallbackResponse = await fallbackProvider.chat(input.messages, fallbackOptions);
+        logger.logLLMCall({
+          requestId: input.requestId,
+          model: fallbackResponse.model || candidate.model,
+          provider: fallbackProvider.getProviderName(),
+          promptTokens: fallbackResponse.usage.promptTokens,
+          completionTokens: fallbackResponse.usage.completionTokens,
+          duration: Date.now() - fallbackStart,
+          status: 'success',
+          messages: input.messages,
+          options: logOptions,
+          responseText: fallbackResponse.content,
+        });
+        return {
+          content: fallbackResponse.content,
+          usage: fallbackResponse.usage,
+          model: fallbackResponse.model || candidate.model,
+        };
+      } catch (fallbackError) {
+        const fallbackDuration = Date.now() - fallbackStart;
+        const fallbackErrorUsage = (fallbackError as { usage?: { promptTokens?: number; completionTokens?: number } })?.usage;
+        logger.logLLMCall({
+          requestId: input.requestId,
+          model: candidate.model,
+          provider: fallbackProvider.getProviderName(),
+          promptTokens: fallbackErrorUsage?.promptTokens ?? 0,
+          completionTokens: fallbackErrorUsage?.completionTokens ?? 0,
+          duration: fallbackDuration,
+          status: 'error',
+          messages: input.messages,
+          options: logOptions,
+          errorMessage: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
+          transient: isTransientLLMError(fallbackError),
+        });
+        logger.error('LLM', `Fallback LLM call failed`, {
+          model: candidate.model,
+          provider: fallbackProvider.getProviderName(),
+          error: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
+          duration: `${fallbackDuration}ms`,
+        }, input.requestId);
+
+        lastError = fallbackError;
+        const kind = classifyCredentialFailure(fallbackError);
+        if (kind === 'auth' || kind === 'billing') {
+          this.tripCircuit(candidate.providerType, kind, fallbackError, input.requestId);
+          continue;
+        }
+        throw fallbackError;
+      }
+    }
+
+    // Every hop was a dead key (or none could be built). For a transient
+    // primary failure, hand back the last error so withLLMRetry keeps its
+    // semantics; for a credential failure, say clearly that nothing is left.
+    if (input.reason === 'transient') throw lastError;
+    throw this.unavailableError({
+      reason: input.reason,
+      providerType: input.primaryProviderType,
+      model: input.primaryModel,
+      primaryError: input.primaryError,
+      attempted,
+      lastError,
+    });
+  }
+
+  /** Open (or extend) the circuit for a provider whose platform key failed. */
+  private tripCircuit(providerType: string, kind: 'auth' | 'billing', error: unknown, requestId?: string): void {
+    const message = error instanceof Error ? error.message : String(error);
+    const { opened, until } = openCircuit(
+      providerType,
+      this.platformCredential(providerType).fingerprint,
+      kind,
+      message,
+    );
+    if (opened) {
+      logger.error('LLM_SERVICE', `LLM provider "${providerType}" rejected its platform credentials (${kind}); routing around it for ${Math.round(CIRCUIT_OPEN_MS / 60000)} min`, {
+        provider: providerType,
+        kind,
+        status: errorHttpStatus(error) ?? null,
+        error: message.slice(0, 300),
+        until: new Date(until).toISOString(),
+      }, requestId);
+    }
+  }
+
+  private unavailableError(input: {
+    reason: FallbackReason;
+    providerType: string;
+    model: string;
+    primaryError: unknown;
+    attempted: string[];
+    lastError?: unknown;
+  }): LLMUnavailableError {
+    const primaryKind: CredentialFailureKind =
+      classifyCredentialFailure(input.primaryError) ??
+      (input.reason === 'billing' || input.reason === 'missing_key' ? input.reason : 'auth');
+    const primaryMsg = input.primaryError instanceof Error
+      ? input.primaryError.message
+      : String(input.primaryError ?? 'circuit open');
+    const what =
+      primaryKind === 'missing_key'
+        ? `has no API key configured (${primaryMsg.slice(0, 240)})`
+        : primaryKind === 'billing'
+          ? `rejected the request for billing/credit reasons (${primaryMsg.slice(0, 200)})`
+          : `rejected its API key (${primaryMsg.slice(0, 200)})`;
+    const tail = input.attempted.length
+      ? ` Fallback routes also failed: ${input.attempted.join(', ')}` +
+        (input.lastError instanceof Error ? ` (last error: ${input.lastError.message.slice(0, 200)}).` : '.')
+      : ' No fallback route is available: set LLM_FALLBACK_MODEL (or the admin fallback model) ' +
+        `or configure an API key for one of: ${AUTO_FALLBACK_PREFERENCE.map((s) => s.split('/')[0]).join(', ')}.`;
+    return new LLMUnavailableError({
+      message: `LLM provider "${input.providerType}" ${what} for model "${input.model}".${tail}`,
+      reason: primaryKind,
+      provider: input.providerType,
+      model: input.model,
+      upstreamStatus: errorHttpStatus(input.primaryError),
+      attemptedFallbacks: input.attempted,
+      cause: input.lastError ?? input.primaryError,
+    });
+  }
+
   /** Build the per-construction ProviderExtra (base URL + proxy key + tuning)
    *  from a resolved credential, omitting undefined fields so providers fall
    *  back to their own env reads when nothing was configured. */
@@ -229,11 +530,15 @@ export class LLMService {
     // decrypted (FIELD_ENCRYPTION_KEY mismatch after a DB migration) AND the
     // provider's env fallback var is unset.
     if (!cred.apiKey?.trim() && providerType.toLowerCase() !== 'ollama') {
-      throw new Error(
-        `No API key resolved for LLM provider "${providerType}" ` +
-          `(system DB key absent or undecryptable — check FIELD_ENCRYPTION_KEY — ` +
-          `and the provider's env fallback key is unset). ` +
-          `Re-save the key in admin LLM settings or set the env var.`,
+      // Flagged so chat() can treat it as a credential failure and reroute.
+      throw Object.assign(
+        new Error(
+          `No API key resolved for LLM provider "${providerType}" ` +
+            `(system DB key absent or undecryptable — check FIELD_ENCRYPTION_KEY — ` +
+            `and the provider's env fallback key is unset). ` +
+            `Re-save the key in admin LLM settings or set the env var.`,
+        ),
+        { [MISSING_CREDENTIAL_FLAG]: true, nonRetryable: true },
       );
     }
     switch (providerType.toLowerCase()) {
@@ -420,8 +725,17 @@ export class LLMService {
       defaults.model,
       options?.provider,
     );
-    let activeProvider = this.createProvider(primaryRoute.providerType, primaryRoute.model);
     const model = primaryRoute.model;
+    // A missing platform key is a credential failure like any other: keep it
+    // so BYOK can still serve the call, else reroute to a fallback below.
+    let activeProvider: LLMProvider | null = null;
+    let primaryCreateError: unknown = null;
+    try {
+      activeProvider = this.createProvider(primaryRoute.providerType, primaryRoute.model);
+    } catch (createErr) {
+      if (classifyCredentialFailure(createErr) !== 'missing_key') throw createErr;
+      primaryCreateError = createErr;
+    }
 
     // ── BYOK resolution ──────────────────────────────────────────────────
     // If the current request's user has an active BYOK key for the
@@ -431,7 +745,7 @@ export class LLMService {
     // the platform key would re-introduce the billing surprise we set
     // out to eliminate. See docs/prd-byok.md.
     const userId = getCurrentUserId();
-    const providerNamePreByok = activeProvider.getProviderName();
+    const providerNamePreByok = activeProvider?.getProviderName() ?? primaryRoute.providerType.toLowerCase();
     const byokProviderKey = llmProviderToByokProvider(providerNamePreByok);
     let byokRow: ResolvedByok | null = null;
     let byokActive = false;
@@ -446,14 +760,81 @@ export class LLMService {
       if (byokRow) {
         activeProvider = this.createProviderWithByok(providerNamePreByok, byokRow, model);
         byokActive = true;
+        primaryCreateError = null;
       }
     }
 
-    const providerName = activeProvider.getProviderName();
     const requestOptions = {
       ...options,
       model,
     };
+    const fallbackContext = {
+      messages,
+      options,
+      requestOptions,
+      requestId,
+      primaryModel: model,
+      primaryProviderType: providerNamePreByok,
+    };
+    const candidatesFor = (credentialFailure: boolean): FallbackCandidate[] =>
+      this.buildFallbackCandidates({
+        primaryModel: model,
+        primaryProviderType: providerNamePreByok,
+        providerMode,
+        defaultModel: defaults.model,
+        credentialFailure,
+      });
+
+    // No platform key and no BYOK: go straight to a fallback, or fail clearly.
+    if (!activeProvider) {
+      const candidates = candidatesFor(true);
+      if (candidates.length === 0) {
+        throw this.unavailableError({
+          reason: 'missing_key',
+          providerType: providerNamePreByok,
+          model,
+          primaryError: primaryCreateError,
+          attempted: [],
+        });
+      }
+      return this.runFallbackChain({
+        ...fallbackContext,
+        candidates,
+        reason: 'missing_key',
+        primaryError: primaryCreateError,
+      });
+    }
+
+    // Circuit breaker: the platform key for this provider failed auth/billing
+    // in the last 10 minutes, so skip the doomed round-trip. BYOK calls use the
+    // user's own key and are never short-circuited. With no fallback left, the
+    // primary is tried anyway (the key may have been fixed upstream).
+    if (!byokActive) {
+      const circuit = getOpenCircuit(
+        providerNamePreByok,
+        this.platformCredential(providerNamePreByok).fingerprint,
+      );
+      if (circuit) {
+        const candidates = candidatesFor(true);
+        if (candidates.length > 0) {
+          if (markCircuitBypassLogged(providerNamePreByok)) {
+            logger.warn('LLM_SERVICE', `Circuit open for "${providerNamePreByok}"; routing calls to ${candidates[0].providerType}/${candidates[0].model} until ${new Date(circuit.until).toISOString()}`, {
+              provider: providerNamePreByok,
+              kind: circuit.kind,
+              reason: circuit.reason,
+            }, requestId);
+          }
+          return this.runFallbackChain({
+            ...fallbackContext,
+            candidates,
+            reason: 'circuit_open',
+            primaryError: new Error(circuit.reason),
+          });
+        }
+      }
+    }
+
+    const providerName = activeProvider.getProviderName();
     logger.info('LLM', `→ ${providerName}/${model}${byokActive ? ' [byok]' : ''}`, {
       provider: providerName,
       model,
@@ -535,83 +916,45 @@ export class LLMService {
         throw error;
       }
 
-      const rawFallbackModel = this.getConfiguredFallbackModel(model);
-      if (rawFallbackModel && rawFallbackModel !== model && this.shouldTryFallback(error)) {
-        // Resolve the fallback as its own selector. This must not depend on the
-        // global provider mode: a native task selector may fall back through an
-        // explicit openrouter/... selector (or vice versa).
-        const fallbackRoute = this.resolvePlatformRoute(
-          rawFallbackModel,
-          providerMode,
-          defaults.model,
-        );
-        const fallbackModel = fallbackRoute.model;
-        const fallbackProvider =
-          fallbackRoute.providerType === activeProvider.getProviderName().toLowerCase()
-            ? activeProvider
-            : this.createProvider(fallbackRoute.providerType, fallbackModel);
-
-        const fallbackStart = Date.now();
-        logger.warn('LLM', 'Retrying with fallback model', {
-          model,
-          fallbackModel,
-          fallbackProvider: fallbackProvider.getProviderName(),
-        }, requestId);
-
-        try {
-          const fallbackResponse = await fallbackProvider.chat(messages, {
-            ...options,
-            model: fallbackModel,
+      // A credential failure (401/402/403, dead or out-of-credit key) opens
+      // this provider's circuit and reroutes through the configured fallback,
+      // then the auto-selected direct routes. Anything else keeps the
+      // historical rule: configured fallback only, on fallback-worthy errors.
+      const credentialKind = classifyCredentialFailure(error);
+      if (credentialKind === 'auth' || credentialKind === 'billing') {
+        this.tripCircuit(providerName, credentialKind, error, requestId);
+      }
+      if (credentialKind) {
+        const candidates = candidatesFor(true);
+        if (candidates.length === 0) {
+          throw this.unavailableError({
+            reason: credentialKind,
+            providerType: providerName,
+            model,
+            primaryError: error,
+            attempted: [],
           });
+        }
+        return this.runFallbackChain({
+          ...fallbackContext,
+          candidates,
+          reason: credentialKind,
+          primaryError: error,
+        });
+      }
 
-          const fallbackDuration = Date.now() - fallbackStart;
-          logger.logLLMCall({
-            requestId,
-            model: fallbackResponse.model || fallbackModel,
-            provider: fallbackProvider.getProviderName(),
-            promptTokens: fallbackResponse.usage.promptTokens,
-            completionTokens: fallbackResponse.usage.completionTokens,
-            duration: fallbackDuration,
-            status: 'success',
-            messages,
-            options: {
-              ...requestOptions,
-              model: fallbackModel,
-              fallbackFrom: model,
-            },
-            responseText: fallbackResponse.content,
+      if (this.shouldTryFallback(error)) {
+        // Resolved as its own selector, independent of the global provider
+        // mode: a native task selector may fall back through an explicit
+        // openrouter/... selector (or vice versa).
+        const candidates = candidatesFor(false);
+        if (candidates.length > 0) {
+          return this.runFallbackChain({
+            ...fallbackContext,
+            candidates,
+            reason: 'transient',
+            primaryError: error,
           });
-
-          return {
-            content: fallbackResponse.content,
-            usage: fallbackResponse.usage,
-            model: fallbackResponse.model || fallbackModel,
-          };
-        } catch (fallbackError) {
-          const fallbackDuration = Date.now() - fallbackStart;
-          const fallbackErrorUsage = (fallbackError as { usage?: { promptTokens?: number; completionTokens?: number } })?.usage;
-          logger.logLLMCall({
-            requestId,
-            model: fallbackModel,
-            provider: fallbackProvider.getProviderName(),
-            promptTokens: fallbackErrorUsage?.promptTokens ?? 0,
-            completionTokens: fallbackErrorUsage?.completionTokens ?? 0,
-            duration: fallbackDuration,
-            status: 'error',
-            messages,
-            options: {
-              ...requestOptions,
-              model: fallbackModel,
-              fallbackFrom: model,
-            },
-            errorMessage: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
-          });
-          logger.error('LLM', `Fallback LLM call failed`, {
-            model: fallbackModel,
-            error: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
-            duration: `${fallbackDuration}ms`,
-          }, requestId);
-          throw fallbackError;
         }
       }
 
