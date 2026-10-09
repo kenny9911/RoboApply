@@ -6,7 +6,7 @@
 //   1. Writes the `robo_locale` cookie (so the server layout re-reads it and
 //      hands NextIntlClientProvider the matching message bundle).
 //   2. Best-effort persists the choice to the user's profile via
-//      `PUT /preferences/locale` so requestless background jobs (weekly
+//      `setLocalePreference()` (lib/api/brand.ts) so requestless background jobs (weekly
 //      insights, score refresh, digest emails) generate content in the same
 //      language. The UI never blocks on this.
 //   3. `router.refresh()` so the server tree re-renders with the new bundle
@@ -14,17 +14,23 @@
 //      (set from the cookie in lib/api/client.ts) — so LLM responses come
 //      back in the chosen language too.
 //
+// The list is the request brand's locales (TASK_PLAN.md WP-12, ARCHITECTURE.md
+// §1.6): nine on RoboApply, 简体中文 + English on GoApply. One list feeds every
+// switcher (components/features/brand/locales.ts), in the brand's order.
+//
 // Two variants:
 //   - 'icon' (default) — compact globe button for the Topbar.
 //   - 'full'           — a labelled row of pills for the Preferences page.
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { READY_LOCALES, type RoboLocale } from '../../../lib/localeConfig';
+import type { RoboLocale } from '../../../lib/localeConfig';
+import { brandSwitcherLocales } from '../../features/brand/locales';
 import { setLocaleCookie } from '../../../lib/locale';
-import { roboApi } from '../../../lib/api/client';
+import { setLocalePreference } from '../../../lib/api/brand';
+import { useBrand } from '../../../lib/brand';
 
 function GlobeIcon({ size = 15 }: { size?: number }) {
   return (
@@ -57,9 +63,10 @@ export function LanguageSwitcher({
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
+  const brand = useBrand();
+  const locales = useMemo(() => brandSwitcherLocales(brand.locales), [brand.locales]);
 
-  const current =
-    READY_LOCALES.find((l) => l.code === locale) ?? READY_LOCALES[0];
+  const current = locales.find((l) => l.code === locale) ?? locales[0];
 
   useEffect(() => {
     if (!open) return;
@@ -82,9 +89,7 @@ export function LanguageSwitcher({
     if (code === locale) return;
     setLocaleCookie(code);
     // Best-effort persist for requestless jobs — never block the UI on it.
-    roboApi
-      .put('/api/v1/roboapply/v2/preferences/locale', { locale: code })
-      .catch(() => {});
+    setLocalePreference(code).catch(() => {});
     startTransition(() => router.refresh());
   }
 
@@ -96,7 +101,7 @@ export function LanguageSwitcher({
         role="radiogroup"
         aria-label={t('language')}
       >
-        {READY_LOCALES.map((l) => {
+        {locales.map((l) => {
           const active = l.code === locale;
           return (
             <button
@@ -106,6 +111,7 @@ export function LanguageSwitcher({
               aria-checked={active}
               onClick={() => choose(l.code)}
               style={{
+                minHeight: 'var(--control-lg)',
                 padding: '7px 14px',
                 borderRadius: 999,
                 fontSize: 'var(--fs-meta)',
@@ -133,7 +139,7 @@ export function LanguageSwitcher({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('language')}
-        title={`${t('language')} · ${current.label}`}
+        title={current ? `${t('language')} · ${current.label}` : t('language')}
         onClick={() => setOpen((v) => !v)}
       >
         <GlobeIcon size={15} />
@@ -156,7 +162,7 @@ export function LanguageSwitcher({
             boxShadow: 'var(--e3)',
           }}
         >
-          {READY_LOCALES.map((l) => {
+          {locales.map((l) => {
             const active = l.code === locale;
             return (
               <button
@@ -171,6 +177,7 @@ export function LanguageSwitcher({
                   justifyContent: 'space-between',
                   gap: 12,
                   width: '100%',
+                  minHeight: 'var(--control-lg)',
                   padding: '9px 12px',
                   borderRadius: 8,
                   border: 'none',

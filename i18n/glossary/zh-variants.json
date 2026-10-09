@@ -1,0 +1,66 @@
+{
+  "//": "zh (GoApply, Simplified, mainland) vs zh-TW (RoboApply, Traditional, Taiwan). Source: docs/jobright-clone/CN_TW_LAUNCH_PLAN.md §4.2 WP-TW-LOCALE (banned lists) and §9 (glossary). scripts/check-zh-variants.mjs enforces `banned`; `glossary` is the reference table for INT translators (WP-92-zh / WP-92-zh-TW). Add an `allow` row only with a reason: it exempts one key path (exact, or a prefix ending in '.') from one term.",
+  "banned": {
+    "zh-TW": {
+      "reason": "Mainland vocabulary in Taiwan copy. Use the zh-TW column of the glossary (履歷, 職缺, 線上應徵, 校園徵才, 影片, 軟體, 資訊, 預設, 使用者, 登入, 品質, 網路, 帳號, 資料).",
+      "terms": [
+        "简历", "簡歷",
+        "岗位", "崗位",
+        "网申", "網申",
+        "校招",
+        "视频", "視頻",
+        "软件", "軟件",
+        "信息",
+        "默认", "默認",
+        "用户", "用戶",
+        "登录", "登錄",
+        "质量", "質量",
+        "网络", "網絡",
+        "账号", "賬號",
+        "数据", "數據"
+      ]
+    },
+    "zh": {
+      "reason": "Taiwan vocabulary in mainland copy. Use the zh column of the glossary (简历, 岗位 / 职位, 面议).",
+      "terms": ["履歷", "職缺", "面議"]
+    }
+  },
+  "allow": [],
+  "glossary": [
+    { "en": "resume", "zh": "简历", "zh-TW": "履歷" },
+    { "en": "job / opening", "zh": "岗位 / 职位", "zh-TW": "職缺" },
+    { "en": "salary", "zh": "薪资", "zh-TW": "薪資" },
+    { "en": "compensation (on a posting)", "zh": "薪资待遇", "zh-TW": "待遇" },
+    { "en": "negotiable", "zh": "面议", "zh-TW": "面議" },
+    { "en": "year-end bonus", "zh": "年终奖", "zh-TW": "年終" },
+    { "en": "13-month pay", "zh": "13薪", "zh-TW": "年終另計 / 13個月" },
+    { "en": "apply", "zh": "投递 / 申请", "zh-TW": "應徵" },
+    { "en": "online application form", "zh": "网申", "zh-TW": "線上應徵" },
+    { "en": "campus recruiting", "zh": "校招", "zh-TW": "校園徵才" },
+    { "en": "internship", "zh": "实习", "zh-TW": "實習" },
+    { "en": "cover letter", "zh": "求职信", "zh-TW": "求職信" },
+    { "en": "autobiography section", "zh": null, "zh-TW": "自傳" },
+    { "en": "interview practice", "zh": "AI 模拟面试", "zh-TW": "AI 模擬面試" },
+    { "en": "written test", "zh": "笔试", "zh-TW": "筆試" },
+    { "en": "assessment", "zh": "测评", "zh-TW": "測驗" },
+    { "en": "referral", "zh": "内推", "zh-TW": "內部推薦" },
+    { "en": "offer", "zh": "Offer / 录用通知", "zh-TW": "錄取通知" },
+    { "en": "tripartite agreement", "zh": "三方协议", "zh-TW": null },
+    { "en": "application tracker", "zh": "求职进度", "zh-TW": "應徵進度" },
+    { "en": "match", "zh": "匹配度", "zh-TW": "符合度" },
+    { "en": "autofill (extension)", "zh": "一键填表", "zh-TW": "一鍵填表" },
+    { "en": "profile", "zh": "个人资料", "zh-TW": "個人檔案" },
+    { "en": "account", "zh": "账号", "zh-TW": "帳號" },
+    { "en": "log in", "zh": "登录", "zh-TW": "登入" },
+    { "en": "settings", "zh": "设置", "zh-TW": "設定" },
+    { "en": "upload / file", "zh": "上传 / 文件", "zh-TW": "上傳 / 檔案" },
+    { "en": "default", "zh": "默认", "zh-TW": "預設" },
+    { "en": "user", "zh": "用户", "zh-TW": "使用者" },
+    { "en": "data / information", "zh": "数据 / 信息", "zh-TW": "資料 / 資訊" },
+    { "en": "video", "zh": "视频", "zh-TW": "影片" },
+    { "en": "software", "zh": "软件", "zh-TW": "軟體" },
+    { "en": "project", "zh": "项目", "zh-TW": "專案" },
+    { "en": "remote / hybrid", "zh": "远程 / 混合办公", "zh-TW": "遠端 / 混合辦公" },
+    { "en": "currency", "zh": "元 / ¥", "zh-TW": "新台幣 / NT$" }
+  ]
+}
