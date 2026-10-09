@@ -1,8 +1,9 @@
-// /admin/invites — route shell (FND-6b). Admin: GoApply invite codes.
-//
-// STUB. Owner: WP-11, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/invites — GoApply invite codes for the invite-only beta (TASK_PLAN.md
+// WP-11). Renders inside the (auth) app shell; the API is admin-only and the
+// page shows a not-authorized state to everyone else.
+
+import { AdminInvites } from '../../../../components/features/auth-cn';
 
 export default function AdminInvitesPage() {
-  return <div hidden data-route-stub="/admin/invites" data-owner="WP-11" />;
+  return <AdminInvites />;
 }
