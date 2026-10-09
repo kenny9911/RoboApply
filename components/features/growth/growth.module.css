@@ -1,0 +1,185 @@
+/* components/features/growth/growth.module.css — the analytics consent
+ * banner and the getting-started checklist (WP-23). Clarity tokens only;
+ * light and dark come from the tokens themselves; both brands share it
+ * (brand stylesheets only retint the action tokens). */
+
+/* ── Analytics consent banner ─────────────────────────────────────────── */
+.consent {
+  position: fixed;
+  z-index: 60;
+  left: var(--sp-4);
+  right: var(--sp-4);
+  bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  margin: 0 auto;
+  max-width: 720px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: var(--e3);
+}
+.consentText {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.consentTitle {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.consentBody {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.consentLink {
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.consentActions {
+  display: flex;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+/* Allow and Don't allow carry identical weight (Reject as prominent as Accept). */
+.choice {
+  min-height: 44px;
+  min-width: 112px;
+  justify-content: center;
+}
+@media (max-width: 760px) {
+  .consent {
+    left: var(--sp-4);
+    right: var(--sp-4);
+    padding: var(--sp-4);
+    /* Clear the shared bottom navigation. */
+    bottom: calc(64px + var(--sp-3) + env(safe-area-inset-bottom));
+  }
+  .consentActions {
+    width: 100%;
+  }
+  .choice {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* ── Getting-started checklist ────────────────────────────────────────── */
+.checklist {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  padding: var(--sp-4) var(--sp-5);
+}
+.compact {
+  padding: var(--sp-3) var(--sp-4);
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.title {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+.intro {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.progress {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+.close {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.steps {
+  list-style: none;
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-1) 0;
+  border-top: 1px solid var(--rule);
+}
+.step:first-child {
+  border-top: 0;
+}
+.mark {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule-strong);
+  color: var(--text-muted);
+}
+.markDone {
+  background: var(--action-subtle);
+  border-color: var(--action);
+  color: var(--action);
+}
+.stepLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-body);
+}
+.stepLabelDone {
+  color: var(--text-2);
+}
+.stepAction {
+  flex: 0 0 auto;
+  min-height: 44px;
+  justify-content: center;
+}
+.outcome {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 760px) {
+  .checklist {
+    padding: var(--sp-4);
+  }
+  .step {
+    flex-wrap: wrap;
+  }
+  .stepAction {
+    margin-left: calc(24px + var(--sp-3));
+  }
+}
