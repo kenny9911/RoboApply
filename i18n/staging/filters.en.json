@@ -1,3 +1,300 @@
 {
-  "filters": {}
+  "filters": {
+    "drawer": {
+      "title": "Filters",
+      "description": "Changes apply to {name}.",
+      "clear": "Clear all",
+      "show": "Show jobs",
+      "showCount": "Show {count, plural, one {# job} other {# jobs}}",
+      "showCapped": "Show {count}+ jobs",
+      "saving": "Saving…",
+      "conflict": "This search was changed somewhere else, so the latest version is loaded. Check it and save again.",
+      "saveFailed": "Your filters were not saved. Try again.",
+      "invalid": "Some filters are not valid. Check the highlighted fields.",
+      "sponsorshipNotSynced": "Filters saved. Your profile's work-authorization answer was not updated; you can change it on your profile.",
+      "openButton": "All filters",
+      "openButtonCount": "All filters ({count})"
+    },
+    "unnamed": "Your main search",
+    "unnamedNumbered": "Saved search {n}",
+    "unnamedOther": "Unnamed saved search",
+    "sections": {
+      "basic": "Basic",
+      "pay": "Pay and sponsorship",
+      "interests": "Interests",
+      "companies": "Companies",
+      "cn": "Campus and internships"
+    },
+    "fields": {
+      "taxonomyIds": "Job function",
+      "titles": "Job titles",
+      "excludedTitles": "Titles to leave out",
+      "jobTypes": "Job type",
+      "workModels": "Work model",
+      "country": "Country",
+      "locations": "Locations",
+      "seniority": "Level",
+      "yearsRange": "Years of experience asked for",
+      "postedWithinDays": "Date posted",
+      "salaryMin": "Minimum pay",
+      "includeUndisclosedPay": "Only jobs that list pay",
+      "needsSponsorship": "Visa sponsorship",
+      "excludeRequirements": "Leave out jobs that require",
+      "industries": "Industries",
+      "excludedIndustries": "Industries to leave out",
+      "skills": "Skills",
+      "excludedSkills": "Skills to leave out",
+      "roleType": "Role type",
+      "companies": "Only these companies",
+      "preferredCompanies": "Companies you like",
+      "excludedCompanies": "Companies to leave out",
+      "companySizes": "Company size",
+      "excludeAgencies": "Staffing agencies",
+      "recruiterJobsOnly": "Recruiter-posted jobs",
+      "fitTier": "Fit",
+      "q": "Keywords",
+      "employerTags": "Employer type",
+      "classYear": "Graduation class",
+      "degree": "Degree the post asks for",
+      "employmentType": "Hiring track",
+      "internDays": "Internship days a week",
+      "dailyPay": "Internship pay a day",
+      "salaryMonthsMin": "Months of pay a year",
+      "hukouTag": "Hukou",
+      "schoolTiers": "Your school"
+    },
+    "help": {
+      "taxonomyIds": "Pick a function or a specific role. Type at least 2 letters.",
+      "titles": "Jobs whose title matches any of these.",
+      "locations": "Remote jobs stay in your list.",
+      "yearsRange": "Jobs that don't say how many years they want stay in your list.",
+      "includeUndisclosedPay": "Off: jobs that don't list pay stay in your list.",
+      "needsSponsorship": "Shows jobs that mention sponsorship first and hides jobs whose post says they don't sponsor. This answer is also saved on your profile.",
+      "companySizes": "Many posts don't say company size. Jobs without a size stay in your list.",
+      "recruiterJobsOnly": "Only jobs recruiters posted on {sourceName}.",
+      "excludeAgencies": "Hide posts from staffing agencies.",
+      "skills": "Jobs that ask for any of these skills.",
+      "employerTags": "A tag shows only when the official post says so.",
+      "schoolTiers": "Hides posts that require a school tier you don't have. Never used to rank jobs.",
+      "hukouTag": "Only posts whose official text says hukou is offered.",
+      "salaryMonthsMin": "Jobs that don't say how many months they pay stay in your list.",
+      "preferredCompanies": "Jobs at these companies rank higher. Other jobs still show.",
+      "companies": "When you add companies here, only their jobs show."
+    },
+    "options": {
+      "any": "Any",
+      "jobTypes": {
+        "full_time": "Full-time",
+        "part_time": "Part-time",
+        "contract": "Contract",
+        "internship": "Internship"
+      },
+      "workModels": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "On-site"
+      },
+      "seniority": {
+        "intern_newgrad": "Intern or new grad",
+        "entry": "Entry level",
+        "mid": "Mid level",
+        "senior": "Senior",
+        "lead_staff": "Lead or staff",
+        "director_exec": "Director or executive"
+      },
+      "postedWithinDays": {
+        "any": "Any time",
+        "1": "Past 24 hours",
+        "3": "Past 3 days",
+        "7": "Past week",
+        "30": "Past month"
+      },
+      "payPeriod": {
+        "year": "a year",
+        "month": "a month",
+        "hour": "an hour"
+      },
+      "excludeRequirements": {
+        "citizenship": "Citizens only",
+        "clearance": "Security clearance"
+      },
+      "roleType": {
+        "any": "Either",
+        "ic": "Individual contributor",
+        "manager": "People manager"
+      },
+      "companySizes": {
+        "1-10": "1–10 people",
+        "11-50": "11–50 people",
+        "51-200": "51–200 people",
+        "201-1000": "201–1,000 people",
+        "1001-5000": "1,001–5,000 people",
+        "5000+": "5,000+ people"
+      },
+      "employerTags": {
+        "soe": "State-owned enterprise",
+        "bianzhi": "Public institution (bianzhi)",
+        "hukou": "Hukou offered",
+        "foreign": "Foreign company"
+      },
+      "degree": {
+        "dazhuan": "Associate degree (dazhuan)",
+        "bachelor": "Bachelor's",
+        "master": "Master's",
+        "phd": "PhD"
+      },
+      "employmentType": {
+        "campus": "Campus hiring",
+        "social": "Experienced hiring",
+        "internship": "Internship"
+      },
+      "schoolTiers": {
+        "985": "985",
+        "211": "211",
+        "double_first_class": "Double First-Class"
+      },
+      "fitTier": {
+        "great": "Great fits only",
+        "good": "Good fits and better",
+        "all": "Everything"
+      },
+      "radiusSameCity": "Same city",
+      "radiusKm": "Within {distance} km",
+      "radiusMi": "Within {distance} mi",
+      "classYear": "Class of {year}",
+      "salaryMonths": "{months} months or more"
+    },
+    "controls": {
+      "add": "Add",
+      "remove": "Remove {label}",
+      "addCustom": "Add “{text}”",
+      "noSuggestions": "No suggestions. Press Enter to add what you typed.",
+      "suggestionsLabel": "Suggestions",
+      "locationPlaceholder": "City or region",
+      "radius": "Distance",
+      "amount": "Amount",
+      "period": "Per",
+      "min": "From",
+      "max": "To",
+      "yearsUnit": "years",
+      "daysUnit": "days",
+      "kMonth": "Minimum monthly pay (K)",
+      "dailyPayAmount": "Minimum CNY a day",
+      "sponsorshipToggle": "I need visa sponsorship in {country}",
+      "recruiterToggle": "Recruiter-posted jobs only",
+      "agencyToggle": "Hide staffing-agency posts",
+      "hukouToggle": "Only posts that offer hukou",
+      "listedPayToggle": "Only jobs that list pay",
+      "anyCountry": "Any country",
+      "titlePlaceholder": "Add a job title",
+      "functionPlaceholder": "Search functions and roles",
+      "skillPlaceholder": "Add a skill",
+      "companyPlaceholder": "Add a company",
+      "industryPlaceholder": "Add an industry"
+    },
+    "quick": {
+      "label": "Quick filters",
+      "location": "Location",
+      "level": "Level",
+      "jobType": "Job type",
+      "workModel": "Work model",
+      "posted": "Date posted",
+      "pay": "Pay",
+      "apply": "Apply",
+      "cancel": "Cancel"
+    },
+    "chips": {
+      "label": "Active filters",
+      "remove": "Remove filter: {label}",
+      "clearAll": "Clear all",
+      "payValue": "{amount} {period} or more",
+      "yearsValue": "{min}–{max} years",
+      "yearsMin": "{min}+ years",
+      "yearsMax": "Up to {max} years",
+      "internDaysValue": "{min}–{max} days a week",
+      "dailyPayValue": "{amount} a day or more",
+      "recruiterOnly": "Recruiter-posted only",
+      "noAgencies": "No staffing agencies",
+      "listedPayOnly": "Lists pay",
+      "sponsorshipNeeded": "Needs sponsorship",
+      "hukouOnly": "Hukou offered",
+      "excluded": "Not {value}",
+      "only": "Only {value}"
+    },
+    "fit": {
+      "label": "Show",
+      "hiding": "Hiding {count, plural, one {# weaker fit} other {# weaker fits}}.",
+      "showThem": "Show them."
+    },
+    "search": {
+      "label": "Search job titles or companies",
+      "placeholder": "Search job titles or companies",
+      "titles": "Job titles",
+      "companies": "Companies",
+      "keyword": "Search for “{q}”"
+    },
+    "saved": {
+      "label": "Saved search",
+      "main": "Main",
+      "inUse": "In use",
+      "saveAs": "Save as a new search",
+      "namePlaceholder": "Name this search",
+      "save": "Save",
+      "cancel": "Cancel",
+      "rename": "Rename",
+      "delete": "Delete",
+      "makeMain": "Make this your main search",
+      "use": "Use this search",
+      "capNote": "Your plan keeps up to {max, plural, one {# saved search} other {# saved searches}}.",
+      "proNote": "Pro keeps up to {proMax}.",
+      "seePro": "See Pro",
+      "limitReached": "You have reached your plan's limit for saved searches.",
+      "cannotDeleteMain": "Make another search your main one before you delete this one.",
+      "cannotDeleteLast": "You need at least one saved search.",
+      "deleteFailed": "This search was not deleted. Try again.",
+      "createFailed": "This search was not saved. Try again.",
+      "confirmDelete": "Delete “{name}”? Its alerts stop too.",
+      "confirmDeleteAction": "Delete search"
+    },
+    "diff": {
+      "title": "What will change",
+      "none": "Nothing changes.",
+      "added": "Add",
+      "removed": "Remove",
+      "changed": "Change",
+      "setTo": "{field}: {value}",
+      "fromTo": "{field}: {from} → {to}",
+      "cleared": "{field}: any"
+    },
+    "settings": {
+      "eyebrow": "Your search",
+      "title": "Saved searches",
+      "sub": "Your main search decides which jobs you see first. Alerts use your saved searches too.",
+      "filtersSummary": "{count, plural, =0 {No filters: all jobs} one {# filter} other {# filters}}",
+      "editFilters": "Edit filters",
+      "alerts": "New-job alerts",
+      "instant": "Instant alerts",
+      "digest": "Email summary",
+      "instantOptions": {
+        "0": "Off",
+        "1": "Up to 1 a day",
+        "2": "Up to 2 a day",
+        "5": "Up to 5 a day",
+        "100": "As they arrive"
+      },
+      "digestOptions": {
+        "none": "Off",
+        "daily": "Daily",
+        "weekly": "Weekly"
+      },
+      "alertsProNote": "Pro can get alerts as they arrive.",
+      "alertsSaveFailed": "Your alert setting was not saved. Try again.",
+      "loadFailed": "Your saved searches did not load.",
+      "retry": "Try again",
+      "loading": "Loading your saved searches…"
+    },
+    "hunt": {
+      "moved": "Job titles, places, pay, company and industry filters now live in your saved searches below, so the job list and alerts use the same filters."
+    }
+  }
 }

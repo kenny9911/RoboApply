@@ -3,6 +3,14 @@
 // Career Goal CRUD. One row per user (UNIQUE userId). Used by the Home page
 // "Career Goal" card and the goal-edit drawer. PUT /goal upserts.
 //
+// WP-20 (ARCHITECTURE.md §2.8): job targeting lives in RASearchProfile, the
+// one preference store. The goal row's targeting columns (targetTitle,
+// salary, preferredLocations, preferredWorkType, seniority) seed the default
+// search profile ONCE (features/search/legacyMigration.ts) and are otherwise
+// the goal card's own display values: changing them here does not change the
+// feed. Filters change through /search-profiles (or the legacy
+// /v2/preferences bridge).
+//
 // The shape returned matches `RACareerGoal` from
 // `roboapply/lib/api/v2/types.ts` — every field stringified to ISO where the
 // type expects ISO. Date columns (targetDate) round-trip as YYYY-MM-DD.

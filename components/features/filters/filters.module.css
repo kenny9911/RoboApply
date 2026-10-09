@@ -1,0 +1,571 @@
+/* components/features/filters/filters.module.css — the filters drawer, quick
+ * bar, chips, fit-tier view, typeahead, saved-search switcher and FilterDiff
+ * (WP-20). Clarity tokens only; light and dark come from the tokens. Touch
+ * targets are 44px on phones; controls are 40px on wide screens. */
+
+/* ── Drawer body ───────────────────────────────────────────────────────── */
+.drawerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--rule);
+  min-width: 0;
+}
+.section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.sectionTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.fieldLabel {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+  padding: 0;
+}
+.help {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: var(--lh-meta);
+}
+.error {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--danger);
+}
+.status {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+
+/* ── Toggle buttons (multi-select) and segmented radios ───────────────── */
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.toggle {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.toggle:hover {
+  border-color: var(--action);
+}
+.toggle:focus-visible,
+.input:focus-visible,
+.select:focus-visible,
+.chipRemove:focus-visible,
+.quickBtn:focus-visible,
+.option:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.toggleOn {
+  border-color: var(--action);
+  background: var(--action-subtle);
+  color: var(--action);
+  font-weight: 600;
+}
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.segment {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.segment input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.segment:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+.segmentOn {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--e1);
+}
+
+/* ── Checkbox rows ────────────────────────────────────────────────────── */
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.checkRow input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--action);
+}
+.checkText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────── */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.input,
+.select {
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-body);
+}
+.input {
+  flex: 1 1 160px;
+}
+.numberInput {
+  width: 96px;
+  flex: 0 0 auto;
+}
+.unit {
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Tag field (chips + combobox) ─────────────────────────────────────── */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-size: var(--fs-meta);
+  color: var(--text);
+}
+.tagText {
+  overflow-wrap: anywhere;
+}
+.chipRemove {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.chipRemove:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.combo {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.listbox {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e2);
+}
+.groupLabel {
+  padding: 8px 12px 4px;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  min-height: 40px;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-body);
+  color: var(--text);
+  cursor: pointer;
+}
+.optionActive {
+  background: var(--action-subtle);
+}
+.optionContext {
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+/* ── Drawer footer ────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.footerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* ── Quick bar ────────────────────────────────────────────────────────── */
+.quickBar {
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 2px;
+  margin: 0;
+  list-style: none;
+  scrollbar-width: thin;
+}
+.quickBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.quickBtn:hover {
+  border-color: var(--action);
+}
+.quickBtnActive {
+  border-color: var(--action);
+  background: var(--action-subtle);
+  color: var(--action);
+  font-weight: 600;
+}
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+/* ── Active chips ─────────────────────────────────────────────────────── */
+.chipsBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.clearAll {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--action);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+.clearAll:hover {
+  text-decoration: underline;
+}
+
+/* ── Fit tier ─────────────────────────────────────────────────────────── */
+.fitBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.fitLabel {
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.hiding {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.linkBtn {
+  padding: 0;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--action);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+.linkBtn:hover {
+  text-decoration: underline;
+}
+
+/* ── Saved-search switcher ────────────────────────────────────────────── */
+.switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.switcherSelect {
+  max-width: 100%;
+  flex: 1 1 200px;
+}
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+.noteLink {
+  color: var(--action);
+  font-weight: 600;
+}
+
+/* ── FilterDiff ───────────────────────────────────────────────────────── */
+.diff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+.diffTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.diffList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.diffRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--fs-meta);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.diffKind {
+  flex: none;
+  min-width: 64px;
+  font-weight: 600;
+}
+.diffAdd {
+  color: var(--ok);
+}
+.diffRemove {
+  color: var(--danger);
+}
+.diffChange {
+  color: var(--action);
+}
+
+/* ── Settings section ─────────────────────────────────────────────────── */
+.profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.profileCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  min-width: 0;
+}
+.profileHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.profileName {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--action-subtle);
+  color: var(--action);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.alertsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.alertsRow label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 180px;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+
+@media (max-width: 760px) {
+  .toggle,
+  .input,
+  .select,
+  .quickBtn,
+  .option,
+  .checkRow {
+    min-height: 44px;
+  }
+  .chipRemove {
+    width: 44px;
+    height: 44px;
+  }
+  .segment {
+    min-height: 44px;
+  }
+  .clearAll,
+  .linkBtn {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle {
+    transition: none;
+  }
+}

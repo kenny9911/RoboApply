@@ -56,6 +56,7 @@ const CN: FilterSet = {
   employmentType: ['campus', 'internship'],
   internDays: { min: 3, max: 5 },
   dailyPay: { min: 200 },
+  salaryMonthsMin: 13,
   hukouTag: true,
   schoolTiers: ['985', '211'],
   fitTier: 'all',

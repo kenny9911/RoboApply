@@ -12,7 +12,7 @@
 // `workAuth`, `mustHaves` and `dealbreakers` stay in the blob as they are.
 // Pure functions; SearchProfileService does the I/O.
 
-import type { RAPreferences } from '../../roboapply/v2/services/RAPreferencesService.js';
+import type { DEAD_AGENT_KNOBS, RAPreferences } from '../../roboapply/v2/services/RAPreferencesService.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { COMPANY_SIZES, JOB_TYPES, PAY_PERIODS, WORK_MODELS, type FilterField, type FilterSet } from './contract.js';
 import { coerceFilterSet } from './filterSet.js';
@@ -26,7 +26,10 @@ const kept = (note: string): LegacyDisposition => ({ action: 'kept', note });
 const dropped = (note: string): LegacyDisposition => ({ action: 'dropped', note });
 const mapped = (to: FilterField, note?: string): LegacyDisposition => ({ action: 'mapped', to, ...(note ? { note } : {}) });
 
-/** Every RAPreferences key. 'kept' = stays in preferencesBlob (not a search filter). */
+/** Keys older blobs still carry: the dead agent knobs (no longer on the RAPreferences type). */
+type DeadAgentKnob = (typeof DEAD_AGENT_KNOBS)[number];
+
+/** Every RAPreferences key (and every dead knob older blobs carry). 'kept' = stays in preferencesBlob (not a search filter). */
 export const LEGACY_PREFERENCE_KEYS = {
   phone: kept('identity'),
   location: kept('identity (free text; not a search location)'),
@@ -71,7 +74,7 @@ export const LEGACY_PREFERENCE_KEYS = {
   plan: kept('read-only mirror of billing'),
   onboarding: kept('onboarding provenance'),
   updatedAt: kept('timestamp'),
-} as const satisfies Record<keyof RAPreferences, LegacyDisposition>;
+} as const satisfies Record<keyof RAPreferences | DeadAgentKnob, LegacyDisposition>;
 
 /** RACareerGoal columns that carry job targeting. */
 export const LEGACY_GOAL_KEYS = {

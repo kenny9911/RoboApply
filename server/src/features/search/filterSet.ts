@@ -272,6 +272,7 @@ export const FILTER_FIELD_SPECS: Readonly<Record<FilterField, FilterFieldSpec>> 
   employmentType: { field: 'employmentType', section: 'cn', markets: ['cn'], predicate: '校招 / 社招 / 实习 is one of these' },
   internDays: { field: 'internDays', section: 'cn', markets: ['cn'], predicate: 'required days a week within the range; unstated passes' },
   dailyPay: { field: 'dailyPay', section: 'cn', markets: ['cn'], predicate: 'internship 元/天 ≥ min; undisclosed per includeUndisclosedPay' },
+  salaryMonthsMin: { field: 'salaryMonthsMin', section: 'cn', markets: ['cn'], predicate: 'stated months of pay a year (N薪) ≥ N; unstated passes' },
   hukouTag: { field: 'hukouTag', section: 'cn', markets: ['cn'], predicate: 'official text says 可落户 (evidence quote required)' },
   schoolTiers: { field: 'schoolTiers', section: 'cn', markets: ['cn'], predicate: 'hide postings that state a school-tier requirement the user lacks; never a ranking input' },
 };
