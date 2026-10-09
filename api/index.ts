@@ -16,9 +16,11 @@
 //    /var/task/api/index.js (which keeps this ESM `import`) is classified as
 //    ESM by Node. (An `.mts` entry is NOT an alternative — vercel.json's
 //    `functions` pattern doesn't match .mts in the api/ directory.)
-//  - vercel.json includeFiles must be "server/**" (not just server/dist/**)
+//  - vercel.json includeFiles must contain "server/**" (not just server/dist/**)
 //    so server/package.json — whose only job is marking server/dist/**.js as
 //    ESM — actually ships inside the function bundle.
+//  - PDF.js loads native canvas and its worker/font assets dynamically. The
+//    explicit includeFiles entries keep those assets in the function bundle.
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — resolved at build time from the compiled server output.
