@@ -96,6 +96,10 @@ import {
   qualityLevel,
   type QualityLevel,
 } from '../../../../components/v3/mock/liveConnection';
+// Parley pilot transport (see ParleyStage at the bottom of this file).
+import { useParleyCall } from '../../../../components/v3/mock/parley/useParleyCall';
+import { LocalVideo } from '../../../../components/v3/mock/parley/LocalVideo';
+import type { CaptionSegment } from '../../../../components/v3/mock/parley/parleyCaptions';
 import {
   ieErrorInfo,
   interviewEngineApi,
@@ -103,6 +107,7 @@ import {
   RETRYABLE_PREPARE_ERRORS,
   type IEClientEvent,
   type IEConnection,
+  type IEParleyJoin,
   type IESessionDetail,
 } from '../../../../lib/api/interviewEngine';
 import type { RAMockInterviewer, RAMockTurn } from '../../../../lib/api/v2/types';
@@ -222,11 +227,18 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   // interviewer-joined state instead of wiping them mid-interview.
   const [transcript, setTranscript] = useState<LiveTurn[]>([]);
   const segMapRef = useRef<Map<string, LiveTurn>>(new Map());
-  const addSegments = useCallback((segments: TranscriptionSegment[], who: RAMockTurn['who']) => {
+  const addSegments = useCallback((
+    segments: Array<Pick<TranscriptionSegment, 'id' | 'text' | 'final'>>,
+    who: RAMockTurn['who'],
+  ) => {
     const map = segMapRef.current;
     for (const seg of segments) map.set(seg.id, { who, text: seg.text, final: seg.final });
     setTranscript(Array.from(map.values()));
   }, []);
+  // Parley captions carry their own speaker.
+  const addCaptionSegments = useCallback((segments: CaptionSegment[]) => {
+    for (const seg of segments) addSegments([seg], seg.who);
+  }, [addSegments]);
   const [agentJoined, setAgentJoined] = useState(false);
   const markAgentJoined = useCallback(() => setAgentJoined(true), []);
 
@@ -736,6 +748,41 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
       : devicePlan && isDeviceFailure(devicePlan.camera)
         ? devicePlan.camera
         : 'off';
+
+  if (connection.transport === 'parley' && connection.parley) {
+    // Parley pilot: the browser talks to Parley directly — no LiveKit room.
+    // The rejoin flow (roomKey bump) remounts the stage onto the same Parley
+    // session; a server-side end routes to the report like ROOM_DELETED does.
+    return (
+      <div className={`iv-live ${styles.room}`}>
+        <ParleyStage
+          key={roomKey}
+          join={connection.parley}
+          session={session}
+          connection={connection}
+          interviewer={interviewer}
+          wantCamera={wantCamera}
+          initialCamera={initialCamera}
+          transcript={transcript}
+          onSegments={addCaptionSegments}
+          agentJoined={agentJoined}
+          onAgentJoined={markAgentJoined}
+          onEnd={() => requestExit('report')}
+          onBack={() => requestExit('setup')}
+          onEnded={() => finish(true, false)}
+          onLost={() => handleDisconnected(undefined)}
+          onEvent={trackEvent}
+        />
+        {exitIntent && (
+          <ExitConfirmDialog
+            intent={exitIntent}
+            onCancel={cancelExit}
+            onConfirm={confirmExit}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <LiveKitRoom
@@ -1611,6 +1658,340 @@ function RoomStage({
           <IconEndCall size={18} aria-hidden />
           {/* The label collapses on a phone, where the red handset is the
               universally read affordance and the bar has no room to spare. */}
+          <span className={styles.endLabel}>{t('live.endInterview')}</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The live stage on the Parley pilot transport (INTERVIEW_ENGINE_PARLEY_PILOT).
+ * Same screen as RoomStage — a deliberate copy of its layout so the LiveKit
+ * path stays untouched while the pilot runs — driven by useParleyCall instead
+ * of LiveKit hooks. Differences: Parley reports no connection quality (no
+ * pills), the interviewer has no video, and the camera is a local self-view
+ * that is never sent anywhere.
+ */
+function ParleyStage({
+  join, session, connection, interviewer, wantCamera, initialCamera,
+  transcript, onSegments, agentJoined, onAgentJoined, onEnd, onBack, onEnded, onLost, onEvent,
+}: {
+  join: IEParleyJoin;
+  session: IESessionDetail;
+  connection: IEConnection;
+  interviewer: RAMockInterviewer;
+  wantCamera: boolean;
+  initialCamera: DeviceState;
+  transcript: LiveTurn[];
+  onSegments: (segments: CaptionSegment[]) => void;
+  agentJoined: boolean;
+  onAgentJoined: () => void;
+  onEnd: () => void;
+  onBack: () => void;
+  /** Parley ended the interview (time up): go to the report. */
+  onEnded: () => void;
+  /** Parley gave up reconnecting: the page's rejoin flow takes over. */
+  onLost: () => void;
+  onEvent: (type: string, data?: Record<string, unknown>) => void;
+}) {
+  const t = useTranslations('practice');
+  const { localizeRole, localizeType } = useMockRoleLabels();
+  const { user } = useAuth();
+  const video = connection.mode === 'video';
+
+  // agent_join_ms once per interview, not per remount.
+  const joinedRef = useRef(agentJoined);
+  const joinStartRef = useRef(Date.now());
+  const handleAgentJoined = useCallback(() => {
+    if (!joinedRef.current) {
+      joinedRef.current = true;
+      onEvent('agent_join_ms', { ms: Date.now() - joinStartRef.current });
+    }
+    onAgentJoined();
+  }, [onAgentJoined, onEvent]);
+
+  const call = useParleyCall({
+    join,
+    wantCamera: video && wantCamera,
+    onSegments,
+    onAgentJoined: handleAgentJoined,
+    onEnded,
+    onLost,
+    onEvent,
+  });
+  const reconnecting = call.status === 'reconnecting';
+
+  const [agentSlow, setAgentSlow] = useState(false);
+  useEffect(() => {
+    if (agentJoined) { setAgentSlow(false); return; }
+    const h = window.setTimeout(() => {
+      setAgentSlow(true);
+      onEvent('agent_slow_15s');
+    }, 15000);
+    return () => window.clearTimeout(h);
+  }, [agentJoined, onEvent]);
+
+  // Camera: the device-check verdict until the call opens it, then live state.
+  const camState: DeviceState = video && wantCamera ? call.camState : initialCamera;
+  const [camNoticeOpen, setCamNoticeOpen] = useState(video && isDeviceFailure(initialCamera));
+  useEffect(() => {
+    if (video && isDeviceFailure(call.camState)) setCamNoticeOpen(true);
+    if (call.camState === 'ok') setCamNoticeOpen(false);
+  }, [video, call.camState]);
+
+  const [railTab, setRailTab] = useState<'coach' | 'transcript' | null>(null);
+  const toggleRail = useCallback((tab: 'coach' | 'transcript') => {
+    setRailTab((current) => (current === tab ? null : tab));
+  }, []);
+  useEffect(() => {
+    if (!railTab) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRailTab(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [railTab]);
+
+  const [coachOn, setCoachOn] = useState(true);
+  const [hintOpen, setHintOpen] = useState(false);
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem('ie_coach_mode');
+      if (v === '0') setCoachOn(false);
+    } catch { /* ignore */ }
+  }, []);
+  const toggleCoach = useCallback(() => {
+    setCoachOn((on) => {
+      const next = !on;
+      try { window.localStorage.setItem('ie_coach_mode', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  const coach = useLiveCoach({
+    sessionId: session.id,
+    transcript,
+    session,
+    enabled: coachOn,
+    agentSpeaking: call.agentState === 'speaking',
+  });
+  useEffect(() => {
+    if (!coachOn) setRailTab((current) => (current === 'coach' ? null : current));
+  }, [coachOn]);
+
+  // Timer from the server's startedAt; frozen while reconnecting (see RoomStage).
+  const startedMs = session.startedAt ? Date.parse(session.startedAt) : NaN;
+  const baseMsRef = useRef(Number.isFinite(startedMs) ? startedMs : Date.now());
+  useEffect(() => {
+    if (Number.isFinite(startedMs)) baseMsRef.current = startedMs;
+  }, [startedMs]);
+  const [elapsed, setElapsed] = useState(() => Math.max(0, Math.floor((Date.now() - baseMsRef.current) / 1000)));
+  useEffect(() => {
+    if (reconnecting) return;
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - baseMsRef.current) / 1000)));
+    tick();
+    const h = window.setInterval(tick, 1000);
+    return () => window.clearInterval(h);
+  }, [reconnecting, startedMs]);
+
+  const aiState: AiState =
+    call.agentState === 'speaking' ? 'asking' : call.agentState === 'listening' ? 'listening' : 'thinking';
+  const cameraReason = isDeviceFailure(camState) ? deviceStateLabel(t, camState) : null;
+  const candidateName = user?.name?.trim() || user?.email?.split('@')[0] || t('live.you');
+  const roleLabel = localizeRole(session.role);
+  const typeLabel = localizeType(session.interviewType, 'label');
+  const micFix = deviceFix(t, 'mic', call.micState);
+  const camFix = video ? deviceFix(t, 'camera', camState) : null;
+
+  return (
+    <>
+      <LiveBar
+        role={roleLabel}
+        typeLabel={typeLabel}
+        format={connection.mode}
+        elapsedSec={elapsed}
+        currentIndex={0}
+        total={0}
+        onBack={onBack}
+        className={styles.header}
+      />
+
+      {camNoticeOpen && camFix && (
+        <div role="alert" className={styles.deviceAlert}>
+          <span>
+            <strong>{t('live.cameraUnavailable')}</strong>
+            {' '}
+            {camFix}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCamNoticeOpen(false)}
+            aria-label={t('live.dismiss')}
+          >
+            <IconX size={16} />
+          </button>
+        </div>
+      )}
+
+      {micFix ? (
+        <MicBlockedDialog
+          fix={micFix}
+          busy={call.micState === 'checking'}
+          onRetry={call.retryMic}
+          onEnd={onEnd}
+        />
+      ) : call.audioBlocked ? (
+        <AudioUnlockDialog onUnlock={call.unlockAudio} />
+      ) : null}
+
+      <div className={styles.stage} data-rail={railTab ? 'open' : 'closed'}>
+        <div className={styles.stageMain}>
+          <div className={styles.frame} data-mode={video ? 'video' : 'voice'}>
+            <InterviewerTile interviewer={interviewer} aiState={aiState} video={video} />
+
+            {video ? (
+              <div className={`${styles.selfTile} ${styles.selfTileVideo}`}>
+                {call.cameraStream ? (
+                  <LocalVideo stream={call.cameraStream} className={styles.selfFeed} />
+                ) : (
+                  <div className={styles.selfOff}>
+                    <IconCameraOff size={18} aria-hidden />
+                    <span>{t('live.cameraOff')}</span>
+                    {cameraReason ? <span className={styles.selfOffReason}>{cameraReason}</span> : null}
+                  </div>
+                )}
+                <span className={styles.selfName}>
+                  {call.micOn ? <IconMic size={12} /> : <IconMicOff size={12} />}
+                  {t('live.you')}
+                </span>
+              </div>
+            ) : null}
+
+            {reconnecting && (
+              <div role="status" className={styles.reconnectOverlay}>
+                <span>{t('live.reconnecting')}</span>
+              </div>
+            )}
+          </div>
+
+          {!video && (
+            <div className={styles.selfRow}>
+              <YourTile
+                name={candidateName}
+                role={roleLabel}
+                initials={initialsOf(candidateName)}
+                active={call.agentState === 'listening'}
+                video={false}
+                camOn={false}
+                onCamChange={() => undefined}
+              />
+            </div>
+          )}
+
+          {!agentJoined && (
+            <p role="status" className={styles.agentStatus}>
+              {agentSlow ? t('live.agentSlow') : t('live.agentJoining')}
+            </p>
+          )}
+
+          {coachOn && agentJoined && (
+            <LiveQuestionCard
+              question={coach.question}
+              hint={coach.hint}
+              hintLoading={coach.hintLoading}
+              hintOpen={hintOpen}
+              onToggleHint={() => setHintOpen((o) => !o)}
+            />
+          )}
+
+          {coachOn && coach.nudge && (
+            <LiveCoachNudge tip={coach.nudge} onDismiss={coach.dismissNudge} />
+          )}
+        </div>
+
+        {railTab ? (
+          <aside className={styles.rail} aria-label={t('live.rail.title')}>
+            <div className={styles.railTabs} role="tablist" aria-label={t('live.rail.title')}>
+              {(coachOn ? (['coach', 'transcript'] as const) : (['transcript'] as const)).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  id={`practice-rail-tab-${tab}`}
+                  aria-selected={railTab === tab}
+                  aria-controls="practice-rail-panel"
+                  className={railTab === tab ? styles.railTabOn : undefined}
+                  onClick={() => setRailTab(tab)}
+                >
+                  {tab === 'coach' ? t('live.coach.coachMode') : t('live.transcript')}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={styles.railClose}
+                aria-label={t('live.rail.close')}
+                onClick={() => setRailTab(null)}
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div
+              className={styles.railBody}
+              id="practice-rail-panel"
+              role="tabpanel"
+              aria-labelledby={`practice-rail-tab-${railTab}`}
+              tabIndex={0}
+            >
+              {railTab === 'coach'
+                ? <CoachMeters metrics={coach.metrics} listeningFor={coach.listeningFor} />
+                : <LiveTranscript turns={transcript} interviewerName={interviewer.name} typing={call.agentState === 'thinking'} />}
+            </div>
+          </aside>
+        ) : null}
+      </div>
+
+      <div className={styles.controlBar}>
+        <div className={styles.controlGroup}>
+          <ControlButton
+            tone="device"
+            on={call.micOn}
+            label={call.micOn ? t('live.muteMic') : t('live.unmuteMic')}
+            icon={call.micOn ? <IconMic size={19} /> : <IconMicOff size={19} />}
+            onClick={call.toggleMic}
+          />
+          {video && (
+            <ControlButton
+              tone="device"
+              on={call.camOn}
+              label={call.camOn ? t('live.stopCam') : t('live.startCam')}
+              icon={call.camOn ? <IconCamera size={19} /> : <IconCameraOff size={19} />}
+              onClick={call.toggleCamera}
+            />
+          )}
+          <ControlButton
+            tone="panel"
+            on={coachOn}
+            label={t('live.coach.coachMode')}
+            icon={<IconSparkle size={19} />}
+            onClick={toggleCoach}
+          />
+          <ControlButton
+            tone="panel"
+            on={railTab === 'transcript'}
+            label={t('live.transcript')}
+            icon={<IconTranscript size={19} />}
+            onClick={() => toggleRail('transcript')}
+          />
+        </div>
+
+        <button
+          type="button"
+          className={styles.endButton}
+          aria-label={t('live.endInterview')}
+          onClick={onEnd}
+        >
+          <IconEndCall size={18} aria-hidden />
           <span className={styles.endLabel}>{t('live.endInterview')}</span>
         </button>
       </div>
