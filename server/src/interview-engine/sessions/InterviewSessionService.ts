@@ -97,6 +97,14 @@ import {
   PREPARE_FAILURE_CODES,
   type SessionControl,
 } from './lifecycleHelpers.js';
+import {
+  drainParleySession,
+  getParleyConnection,
+  isParleySession,
+  pullParleyTranscript,
+  stopParleySession,
+  type ParleyJoin,
+} from '../parley/parleySessions.js';
 
 export class InterviewValidationError extends Error {
   constructor(msg: string) { super(msg); this.name = 'InterviewValidationError'; }
@@ -222,6 +230,9 @@ export interface CreateSessionInput {
   creditExempt?: boolean;
   /** Per-session worker callback origin (C13); null/undefined = call-time default. */
   callbackBaseUrl?: string | null;
+  /** 'parley' runs this session on the Parley pilot transport (see
+   *  parley/parleyConfig.ts); omitted = LiveKit. Fixed for the session's life. */
+  transport?: 'parley';
 }
 
 export interface PrepareSessionParams {
@@ -247,6 +258,10 @@ export interface ConnectionDetails {
   expiresAt: string;
   agentDispatched: boolean;
   recording: boolean;
+  /** Present only for Parley sessions: url/token are then empty and the
+   *  browser joins Parley with `parley` instead of a LiveKit room. */
+  transport?: 'parley';
+  parley?: ParleyJoin;
 }
 
 function liveLlmSnapshot(routing: InterviewLlmRouting): Record<string, unknown> {
@@ -324,6 +339,7 @@ export class InterviewSessionService {
     const control: SessionControl = {
       ...(input.callbackBaseUrl ? { callbackBaseUrl: input.callbackBaseUrl } : {}),
       ...(input.creditExempt ? { creditExempt: true } : {}),
+      ...(input.transport === 'parley' ? { transport: 'parley' as const } : {}),
     };
 
     // C1: persist immediately as 'preparing'. Blueprint + prompt generation
@@ -366,6 +382,7 @@ export class InterviewSessionService {
       creditExempt: input.creditExempt === true ? true : undefined,
       callbackOrigin: input.callbackBaseUrl ?? undefined,
       apiKeyId: input.apiKeyId ?? undefined,
+      transport: input.transport,
       requestId: input.requestId,
     });
     return created;
@@ -538,9 +555,6 @@ export class InterviewSessionService {
     apiKeyId?: string | null;
     requestId?: string;
   }): Promise<ConnectionDetails> {
-    if (!isLiveKitConfigured()) {
-      throw new InterviewEngineConfigError('LiveKit is not configured; cannot start a live interview.');
-    }
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
 
     // C4: a session that is still preparing, failed or already over can never
@@ -557,6 +571,11 @@ export class InterviewSessionService {
       session.language,
       session.personaId ? findPersona(session.personaId)?.voiceGender : undefined,
     );
+    // Parley pilot: no room, dispatch or worker — the browser joins Parley.
+    if (isParleySession(session)) return getParleyConnection(session, voice);
+    if (!isLiveKitConfigured()) {
+      throw new InterviewEngineConfigError('LiveKit is not configured; cannot start a live interview.');
+    }
     const identity = `candidate-${session.id}`;
     const ttlSeconds = Math.max(900, session.plannedDurationMinutes * 60 + 600); // duration + 10 min slack
 
@@ -1195,12 +1214,19 @@ export class InterviewSessionService {
     const sessionId = session.id;
     // A session that never went live has no room, egress or worker to drain.
     const wentLive = !!(session.startedAt || session.livekitRoomSid || session.agentDispatchId);
+    const parley = isParleySession(session);
 
-    if (wentLive) {
+    if (wentLive && !parley) {
       // Stop recording if still active (best-effort).
       if (session.egressId) await stopRecording(session.egressId);
       // Tear down the room (best-effort; releases the worker).
       await deleteInterviewRoom(session.roomName);
+    }
+    if (wentLive && parley && !opts.workerDrained) {
+      // Parley finalizing without a drain (lost webhook, expiry sweep): pull
+      // the transcript from Parley; there is no worker flush to wait for.
+      await pullParleyTranscript(this, session);
+      opts = { ...opts, workerDrained: true };
     }
 
     const readTurns = async (): Promise<TranscriptTurn[] | null> => {
@@ -1535,7 +1561,7 @@ export class InterviewSessionService {
         expiresAt: { lt: now },
         updatedAt: { lt: quietBefore },
       },
-      select: { id: true, status: true, transcript: true, endedAt: true },
+      select: { id: true, status: true, transcript: true, endedAt: true, liveMetrics: true },
       orderBy: { expiresAt: 'asc' },
       take: RECONCILE_BATCH_SIZE,
     });
@@ -1544,7 +1570,12 @@ export class InterviewSessionService {
     let expired = staleExpired;
     for (const row of rows) {
       const turnCount = Array.isArray(row.transcript) ? row.transcript.length : 0;
-      const action = decideReconcileAction(row.status, turnCount);
+      // A Parley session's transcript stays on Parley until the interview
+      // ends, so zero turns here proves nothing: finalize (which pulls it)
+      // instead of expiring a conversation that may have happened.
+      const action = row.status !== 'created' && isParleySession(row)
+        ? 'finalize'
+        : decideReconcileAction(row.status, turnCount);
       try {
         if (action === 'finalize') {
           // finalize() refuses to claim 'finalizing' rows (its idempotency
@@ -1642,10 +1673,14 @@ export class InterviewSessionService {
     });
     if (claim.count !== 1) return this.finalize(session.id);
 
-    const signalled = await withTimeout(sendInterviewEndSignal(session.roomName), 3000, false);
-    const drained = signalled ? await this.waitForWorkerEnded(session.id, endedAt.getTime()) : false;
+    // Parley: stop the conversation and pull its final transcript directly.
+    const parley = isParleySession(session);
+    const signalled = parley ? false : await withTimeout(sendInterviewEndSignal(session.roomName), 3000, false);
+    const drained = parley
+      ? await drainParleySession(this, session)
+      : signalled ? await this.waitForWorkerEnded(session.id, endedAt.getTime()) : false;
     logger.info('INTERVIEW_ENGINE_SESSION', 'candidate ended interview', {
-      sessionId: session.id, endSignalSent: signalled, workerDrained: drained,
+      sessionId: session.id, endSignalSent: signalled, workerDrained: drained, ...(parley ? { transport: 'parley' } : {}),
     });
 
     const fresh = await prisma.interviewSession.findUnique({ where: { id: session.id } });
@@ -1686,10 +1721,14 @@ export class InterviewSessionService {
 
     // Tear down any live LiveKit resources before dropping the row.
     if (session.status === 'created' || session.status === 'live' || session.status === 'finalizing') {
-      if (session.egressId) {
-        await stopRecording(session.egressId).catch(() => { /* best-effort */ });
+      if (isParleySession(session)) {
+        await stopParleySession(session);
+      } else {
+        if (session.egressId) {
+          await stopRecording(session.egressId).catch(() => { /* best-effort */ });
+        }
+        await deleteInterviewRoom(session.roomName).catch(() => { /* best-effort */ });
       }
-      await deleteInterviewRoom(session.roomName).catch(() => { /* best-effort */ });
     }
 
     // Remove R2 media/transcript/report (best-effort, never throws).
