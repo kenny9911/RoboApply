@@ -179,7 +179,7 @@ router.get('/history', requireAuth, async (req: Request, res: Response) => {
 
 // Direct-open endpoint: the frontend just opens this URL in a new tab. Stripe →
 // 302 to the hosted PDF; Alipay → stream the generated receipt PDF inline.
-router.get('/invoices/:id/download', requireAuth, async (req: Request, res: Response) => {
+router.get('/invoices/:id/download', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const resolved = await resolveInvoiceDownload(req.user!.id, req.params.id);
     if (resolved.kind === 'stripe') {

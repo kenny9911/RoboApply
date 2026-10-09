@@ -47,7 +47,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/send', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/send', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const result = await raQueueService.send(
@@ -69,7 +69,7 @@ router.post('/:id/send', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/skip', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/skip', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const result = await raQueueService.skip(
@@ -91,7 +91,7 @@ router.post('/:id/skip', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/cover', requireAuth, async (req: Request, res: Response) => {
+router.patch('/:id/cover', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const { coverLetterMarkdown } = req.body ?? {};

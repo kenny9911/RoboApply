@@ -66,7 +66,7 @@ router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/sessions/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/sessions/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const session = await interviewSessionService.getOwned(req.user!.id, req.params.id);
     return res.json({ session: toSessionDetail(session) });
@@ -75,7 +75,7 @@ router.get('/sessions/:id', requireAuth, async (req: Request, res: Response) => 
   }
 });
 
-router.post('/sessions/:id/connection', requireAuth, async (req: Request, res: Response) => {
+router.post('/sessions/:id/connection', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const connection = await interviewSessionService.getConnection({
       sessionId: req.params.id,
@@ -91,7 +91,7 @@ router.post('/sessions/:id/connection', requireAuth, async (req: Request, res: R
 // Live COACH whisper — a one-line hint (pre-answer strategy) or nudge (live
 // correction). Best-effort + never-throws: returns { coach: null } on any
 // failure so the live room degrades silently. The coach is an aid, not a gate.
-router.post('/sessions/:id/coach', requireAuth, async (req: Request, res: Response) => {
+router.post('/sessions/:id/coach', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const b = req.body ?? {};
     const mode: CoachMode = b.mode === 'nudge' ? 'nudge' : 'hint';
@@ -120,7 +120,7 @@ router.post('/sessions/:id/coach', requireAuth, async (req: Request, res: Respon
 // coach: telemetry must never surface an error into a running interview, so
 // any failure — malformed body, unowned session, DB hiccup — answers ok with
 // nothing stored.
-router.post('/sessions/:id/client-events', requireAuth, async (req: Request, res: Response) => {
+router.post('/sessions/:id/client-events', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const result = await interviewSessionService.ingestClientEvents({
       sessionId: req.params.id,
@@ -133,7 +133,7 @@ router.post('/sessions/:id/client-events', requireAuth, async (req: Request, res
   }
 });
 
-router.post('/sessions/:id/end', requireAuth, async (req: Request, res: Response) => {
+router.post('/sessions/:id/end', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const session = await interviewSessionService.endByOwner({ sessionId: req.params.id, userId: req.user!.id });
     return res.json({ session: toSessionDetail(session) });
@@ -142,7 +142,7 @@ router.post('/sessions/:id/end', requireAuth, async (req: Request, res: Response
   }
 });
 
-router.get('/sessions/:id/report', requireAuth, async (req: Request, res: Response) => {
+router.get('/sessions/:id/report', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { session, recordingUrl, transcriptUrl } = await interviewSessionService.getReport({
       sessionId: req.params.id,
@@ -159,7 +159,7 @@ router.get('/sessions/:id/report', requireAuth, async (req: Request, res: Respon
   }
 });
 
-router.delete('/sessions/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/sessions/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     await interviewSessionService.deleteByOwner({ sessionId: req.params.id, userId: req.user!.id });
     return res.json({ ok: true });

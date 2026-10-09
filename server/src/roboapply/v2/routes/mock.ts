@@ -108,7 +108,7 @@ router.post('/next-turn', requireAuth, async (req: Request, res: Response) => {
 });
 
 // POST /:sessionId/score — mark complete + return the scored report.
-router.post('/:sessionId/score', requireAuth, async (req: Request, res: Response) => {
+router.post('/:sessionId/score', requireAuth, async (req: Request<{ sessionId: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const result = await raMockService.score(userId, req.params.sessionId);

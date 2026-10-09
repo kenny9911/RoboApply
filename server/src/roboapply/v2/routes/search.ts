@@ -115,7 +115,7 @@ router.get('/saved', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/saved/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/saved/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const p = prisma as any;

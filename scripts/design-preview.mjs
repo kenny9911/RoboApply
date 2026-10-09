@@ -8,8 +8,7 @@ import { dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { context } from 'esbuild';
 import postcss from 'postcss';
-import tailwindcss from 'tailwindcss';
-import autoprefixer from 'autoprefixer';
+import tailwindcss from '@tailwindcss/postcss';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const preview = resolve(repo, 'scripts/design-preview');
@@ -64,8 +63,7 @@ const build = await context({
       }));
       builder.onLoad({ filter: /app\/globals\.css$/ }, async ({ path }) => ({
         contents: (await postcss([
-          tailwindcss({ config: resolve(repo, 'tailwind.config.ts') }),
-          autoprefixer(),
+          tailwindcss({ base: repo }),
         ]).process(await readFile(path, 'utf8'), { from: path })).css,
         loader: 'css',
         resolveDir: dirname(path),

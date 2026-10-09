@@ -237,7 +237,7 @@ router.post('/import-linkedin', requireAuth, handleResumeUpload, async (req: Req
   }
 });
 
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const resume = await raResumeService.getById(userId, req.params.id);
@@ -255,7 +255,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+router.patch('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const resume = await raResumeService.patch(userId, req.params.id, req.body ?? {});
@@ -273,7 +273,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     await raResumeService.delete(userId, req.params.id);
@@ -299,7 +299,7 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
 });
 
 // POST /:id/primary — mark this variant as the user's primary résumé.
-router.post('/:id/primary', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/primary', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const resume = await raResumeService.setPrimary(userId, req.params.id);
@@ -318,7 +318,7 @@ router.post('/:id/primary', requireAuth, async (req: Request, res: Response) => 
 });
 
 // GET /:id/original-file — stream the stored original upload (owner-only).
-router.get('/:id/original-file', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/original-file', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const ref = await raResumeService.getOriginalFileRef(userId, req.params.id);
@@ -349,7 +349,7 @@ router.get('/:id/original-file', requireAuth, async (req: Request, res: Response
 // real downloadable file (owner-only). Unlike /original-file (which echoes the
 // uploaded bytes), this exports the BUILT/TAILORED resume itself. PDF today;
 // docx is added alongside renderResumeDocx.
-router.get('/:id/export', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/export', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const format = String(req.query.format ?? 'pdf').toLowerCase();
@@ -393,7 +393,7 @@ router.get('/:id/export', requireAuth, async (req: Request, res: Response) => {
 // ── V3 inline AI ──────────────────────────────────────────────────────────
 
 // POST /:id/rewrite — bullet | summary | skills inline rewrite.
-router.post('/:id/rewrite', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as RewriteInput;
@@ -416,7 +416,7 @@ router.post('/:id/rewrite', requireAuth, async (req: Request, res: Response) => 
 });
 
 // POST /:id/tailor-diff — propose a tailor diff for a (resume, job) pair.
-router.post('/:id/tailor-diff', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/tailor-diff', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as TailorDiffInput;
@@ -445,7 +445,7 @@ router.post('/:id/tailor-diff', requireAuth, async (req: Request, res: Response)
 // (omitted = accept all) reverts the deselected reversible changes in the
 // tailored markdown before persisting. targetCompany/targetTitle carry the
 // manual-target lineage when there is no saved job.
-router.post('/:id/tailor-apply', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/tailor-apply', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as {
@@ -486,7 +486,7 @@ router.post('/:id/tailor-apply', requireAuth, async (req: Request, res: Response
 });
 
 // GET /:id/coach-tips — editor coach tips (free, deterministic).
-router.get('/:id/coach-tips', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/coach-tips', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const result = await raResumeAIService.coachTips(userId, req.params.id);

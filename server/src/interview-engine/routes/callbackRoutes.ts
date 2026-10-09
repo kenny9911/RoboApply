@@ -19,7 +19,7 @@ const router = Router();
 
 const SECRET_HEADER = 'x-interview-callback-secret';
 
-router.post('/sessions/:id/transcript', async (req: Request, res: Response) => {
+router.post('/sessions/:id/transcript', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const secret = (req.headers[SECRET_HEADER] as string | undefined) ?? undefined;
     const turns = Array.isArray(req.body?.turns) ? req.body.turns : [];
@@ -30,7 +30,7 @@ router.post('/sessions/:id/transcript', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/sessions/:id/usage', async (req: Request, res: Response) => {
+router.post('/sessions/:id/usage', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const secret = (req.headers[SECRET_HEADER] as string | undefined) ?? undefined;
     const modelUsage = Array.isArray(req.body?.modelUsage) ? req.body.modelUsage : [];
@@ -41,7 +41,7 @@ router.post('/sessions/:id/usage', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/sessions/:sessionId/metrics', async (req: Request, res: Response) => {
+router.post('/sessions/:sessionId/metrics', async (req: Request<{ sessionId: string }>, res: Response) => {
   try {
     const secret = (req.headers[SECRET_HEADER] as string | undefined) ?? undefined;
     const result = await interviewSessionService.ingestMetrics({
@@ -55,7 +55,7 @@ router.post('/sessions/:sessionId/metrics', async (req: Request, res: Response) 
   }
 });
 
-router.post('/sessions/:id/lifecycle', async (req: Request, res: Response) => {
+router.post('/sessions/:id/lifecycle', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const secret = (req.headers[SECRET_HEADER] as string | undefined) ?? undefined;
     const event = typeof req.body?.event === 'string' ? req.body.event : '';

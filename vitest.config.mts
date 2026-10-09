@@ -8,9 +8,8 @@ import { resolve } from 'node:path';
 const root = fileURLToPath(new URL('./', import.meta.url));
 
 export default defineConfig({
-  esbuild: {
-    jsx: 'automatic',
-    jsxImportSource: 'react',
+  oxc: {
+    jsx: { runtime: 'automatic', importSource: 'react' },
   },
   resolve: {
     alias: {
@@ -35,6 +34,8 @@ export default defineConfig({
     // the bare pattern doesn't exclude — the sweep then fails on third-party
     // snapshots. interview-agent's own sources are excluded too: they target
     // the worker's nodenext/ESM world, not this jsdom config.
-    exclude: ['**/node_modules/**', '.next/**', 'dist/**', 'interview-agent/**'],
+    // Vitest 5 also discovers hidden directories. Nested agent worktrees are
+    // separate checkouts whose tests must use their own source and config.
+    exclude: ['**/node_modules/**', '**/.claude/**', '**/.codex/**', '.next/**', 'dist/**', 'interview-agent/**'],
   },
 });

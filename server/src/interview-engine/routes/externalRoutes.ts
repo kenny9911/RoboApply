@@ -67,7 +67,7 @@ router.post('/sessions', requireAuth, requireApiKey, async (req: Request, res: R
   }
 });
 
-router.get('/sessions/:id', requireAuth, requireApiKey, async (req: Request, res: Response) => {
+router.get('/sessions/:id', requireAuth, requireApiKey, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const session = await interviewSessionService.getOwned(req.user!.id, req.params.id, req.apiKeyId);
     return res.json({ session: toSessionDetail(session) });
@@ -76,7 +76,7 @@ router.get('/sessions/:id', requireAuth, requireApiKey, async (req: Request, res
   }
 });
 
-router.post('/sessions/:id/connection', requireAuth, requireApiKey, async (req: Request, res: Response) => {
+router.post('/sessions/:id/connection', requireAuth, requireApiKey, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const connection = await interviewSessionService.getConnection({
       sessionId: req.params.id,
@@ -90,7 +90,7 @@ router.post('/sessions/:id/connection', requireAuth, requireApiKey, async (req: 
   }
 });
 
-router.post('/sessions/:id/end', requireAuth, requireApiKey, async (req: Request, res: Response) => {
+router.post('/sessions/:id/end', requireAuth, requireApiKey, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const session = await interviewSessionService.endByOwner({ sessionId: req.params.id, userId: req.user!.id, apiKeyId: req.apiKeyId });
     return res.json({ session: toSessionSummary(session) });
@@ -99,7 +99,7 @@ router.post('/sessions/:id/end', requireAuth, requireApiKey, async (req: Request
   }
 });
 
-router.get('/sessions/:id/report', requireAuth, requireApiKey, async (req: Request, res: Response) => {
+router.get('/sessions/:id/report', requireAuth, requireApiKey, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { session, recordingUrl, transcriptUrl } = await interviewSessionService.getReport({ sessionId: req.params.id, userId: req.user!.id, apiKeyId: req.apiKeyId });
     return res.json({

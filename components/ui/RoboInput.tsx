@@ -49,7 +49,7 @@ export const RoboInput = forwardRef<HTMLInputElement, Props>(
             id={inputId}
             ref={ref}
             className={cn(
-              'h-full flex-1 bg-transparent text-[18px] font-semibold text-ink-900 placeholder:font-normal placeholder:text-ink-300 focus:outline-none',
+              'h-full flex-1 bg-transparent text-[18px] font-semibold text-ink-900 placeholder:font-normal placeholder:text-ink-300 focus:outline-hidden',
               className,
             )}
             {...rest}

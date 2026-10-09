@@ -1,3 +1,4 @@
+@import 'tailwindcss' source(none);
 @import '../styles/tokens.css';
 @import '../styles/v3.css';
 @import '../styles/v3-resume.css';
@@ -8,9 +9,24 @@
 @import '../styles/workspace.css';
 @import '../styles/discovery.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config '../tailwind.config.ts';
+@source './';
+@source '../components';
+@source '../lib';
+
+/* Preserve the v3 preflight defaults used by the existing components. */
+@layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+  button, [role='button'] {
+    cursor: pointer;
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--color-gray-400);
+    opacity: 1;
+  }
+}
 
 /* RoboApply — Clarity design system.
  * The September 2026 redesign is defined in docs/design-system.md.

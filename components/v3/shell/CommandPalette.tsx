@@ -207,7 +207,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={tp('palette.placeholder')}
-            className="flex-1 bg-transparent outline-none"
+            className="flex-1 bg-transparent outline-hidden"
             style={{ color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-body)' }}
           />
           <kbd

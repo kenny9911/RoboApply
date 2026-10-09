@@ -90,7 +90,7 @@ router.post('/bulk', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const entry = await raTrackerService.getById(userId, req.params.id);
@@ -131,7 +131,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+router.patch('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const entry = await raTrackerService.patch(userId, req.params.id, req.body ?? {});
@@ -149,7 +149,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     await raTrackerService.delete(userId, req.params.id);

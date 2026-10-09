@@ -85,7 +85,7 @@ class UnavailableStream extends tts.SynthesizeStream {
 }
 
 /**
- * Session-scoped failover for LiveKit Agents 1.6.2.
+ * Session-scoped failover for LiveKit Agents.
  *
  * Its stock adapter health-checks every failed provider with synthesize(), which
  * inference.TTS does not implement, and creates unowned StreamAdapters. Keep one

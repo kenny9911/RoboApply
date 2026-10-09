@@ -2,9 +2,9 @@ import { type APIConnectOptions } from '@livekit/agents';
 import * as openai from '@livekit/agents-plugin-openai';
 import { OpenAI } from 'openai';
 
-/** OpenAI floor with handled failures for the SDK 1.6.2 ChunkedStream task. */
+/** OpenAI floor with handled failures for the LiveKit ChunkedStream task. */
 export class SafeOpenAiTts extends openai.TTS {
-  private readonly speechClient: OpenAI;
+  private readonly speechClient: OpenAI | NonNullable<openai.TTSOptions['client']>;
   private readonly speechAbort = new AbortController();
   private speechOptions: openai.TTSOptions;
 
@@ -17,7 +17,10 @@ export class SafeOpenAiTts extends openai.TTS {
       baseURL: options.baseURL,
       maxRetries: 0,
     });
-    super({ ...speechOptions, client });
+    // LiveKit owns an OpenAI 6 client; our synthesis path uses OpenAI 7.
+    // Keep the SDK instances separate (including their private class state),
+    // while still honoring a caller-provided LiveKit client in both paths.
+    super(speechOptions);
     this.speechClient = client;
     this.speechOptions = speechOptions;
   }

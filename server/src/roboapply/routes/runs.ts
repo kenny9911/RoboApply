@@ -139,7 +139,7 @@ router.get('/', requireAuth, requireSeekerProfile, async (req: Request, res: Res
 
 // ─── GET /:id ───────────────────────────────────────────────────────────
 
-router.get('/:id', requireAuth, requireSeekerProfile, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, requireSeekerProfile, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const missionId = await getMissionIdForUser(req.user!.id);
     if (!missionId) {
@@ -203,7 +203,7 @@ router.get('/:id', requireAuth, requireSeekerProfile, async (req: Request, res: 
 // for the match credit; the author already paid for the cover letter
 // credit. Skipping just stops the submitter from firing.
 
-router.post('/:id/skip', requireAuth, requireSeekerProfile, async (req: Request, res: Response) => {
+router.post('/:id/skip', requireAuth, requireSeekerProfile, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const missionId = await getMissionIdForUser(req.user!.id);
     if (!missionId) {
@@ -247,7 +247,7 @@ router.post('/:id/skip', requireAuth, requireSeekerProfile, async (req: Request,
 // whether the board withdraw call succeeds (we treat the user's intent as
 // authoritative; the board side is best-effort). Increments totalUndone.
 
-router.post('/:id/undo', requireAuth, requireSeekerProfile, async (req: Request, res: Response) => {
+router.post('/:id/undo', requireAuth, requireSeekerProfile, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const missionId = await getMissionIdForUser(req.user!.id);
     if (!missionId) {
@@ -304,7 +304,7 @@ router.post('/:id/undo', requireAuth, requireSeekerProfile, async (req: Request,
 
 // ─── POST /:id/manual-link-opened ───────────────────────────────────────
 
-router.post('/:id/manual-link-opened', requireAuth, requireSeekerProfile, async (req: Request, res: Response) => {
+router.post('/:id/manual-link-opened', requireAuth, requireSeekerProfile, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const missionId = await getMissionIdForUser(req.user!.id);
     if (!missionId) {
@@ -357,7 +357,7 @@ router.post('/:id/manual-link-opened', requireAuth, requireSeekerProfile, async 
 // next sweep picks it up. Frontend already shows a "sending now" optimistic
 // toast.
 
-router.post('/:id/apply-early', requireAuth, requireSeekerProfile, async (req: Request, res: Response) => {
+router.post('/:id/apply-early', requireAuth, requireSeekerProfile, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const id = req.params.id;
@@ -399,7 +399,7 @@ router.post('/:id/apply-early', requireAuth, requireSeekerProfile, async (req: R
 // at author time. Used by the Application Detail "show me the prompt"
 // affordance for transparency.
 
-router.get('/:id/prompt', requireAuth, requireSeekerProfile, async (req: Request, res: Response) => {
+router.get('/:id/prompt', requireAuth, requireSeekerProfile, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const id = req.params.id;

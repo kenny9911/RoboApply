@@ -1,5 +1,4 @@
-import pdf from 'pdf-parse';
-import { createRequire } from 'module';
+import { parsePdf, renderPdfPages } from '../lib/parsePdf.js';
 import { spawn } from 'child_process';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { llmService } from './llm/LLMService.js';
@@ -24,30 +23,6 @@ function pngLongEdge(png: Buffer): number {
   if (png.length < 24 || png.readUInt32BE(0) !== 0x89504e47) return 0;
   if (png.toString('latin1', 12, 16) !== 'IHDR') return 0;
   return Math.max(png.readUInt32BE(16), png.readUInt32BE(20));
-}
-
-// Silence pdf.js CFF/Type2 font-hinting warnings ("Warning: Not enough
-// parameters for hstem; actual: 0, expected: 2") that flood the logs when a
-// resume embeds a malformed/subsetted font — pdf-parse bundles pdf.js v1.10.100,
-// whose charstring parser emits one console.log warning per broken glyph (a
-// single bad upload can produce hundreds). They are benign: pdf.js recovers and
-// text extraction is unaffected. Drop the warnings tier to errors-only.
-//
-// Node caches the build module by path, so this is the SAME singleton pdf-parse
-// lazily requires on first pdf() call; the verbosity is forwarded to pdf.js's
-// in-process fake worker via the 'configure' message, which is where the font
-// warnings originate. Real pdf.js errors still surface (errors tier kept).
-//
-// NB: the UMD build's top-level export is a wrapper; the verbosity controls
-// (VERBOSITY_LEVELS + the verbosity get/set) live on the nested `.PDFJS`
-// namespace, which shares the one bundle-global verbosity that warn() reads.
-try {
-  const pdfjsBuild = createRequire(import.meta.url)('pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js');
-  const ns = pdfjsBuild?.PDFJS;
-  if (ns?.VERBOSITY_LEVELS) ns.verbosity = ns.VERBOSITY_LEVELS.errors;
-} catch {
-  // Non-fatal: if pdf-parse bundles a different pdf.js build, logs stay noisy
-  // but parsing is unaffected.
 }
 
 export class PDFService {
@@ -118,20 +93,6 @@ export class PDFService {
     }
 
     return model;
-  }
-
-  /**
-   * Race a promise against a timeout. Used to bound pdf-parse and other
-   * library calls that have no built-in timeout and can stall on corrupt
-   * PDFs, blocking the batch worker until the frontend gives up.
-   */
-  private withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-    return Promise.race([
-      p,
-      new Promise<T>((_resolve, reject) => {
-        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-      }),
-    ]);
   }
 
   private getDirectGoogleVisionProvider(model?: string): GoogleProvider | null {
@@ -1003,7 +964,7 @@ Do NOT translate, summarize, or omit any content. Output plain text only.`;
    * Used when a user uploads a resume as a photo or scan rather than a
    * PDF/Word document. Mirrors the per-page prompt of `extractTextWithVision`
    * but skips the "page N of M" wording (it's always one image) and skips
-   * pdf-to-img rasterization (we already have an image buffer).
+   * PDF rasterization (we already have an image buffer).
    *
    * `mimeType` is preserved into the data-URI so the vision provider sees
    * the format correctly — Gemini / GPT-4o / Claude all dispatch on it.
@@ -1080,8 +1041,6 @@ Do NOT translate, summarize, or omit any content. Output plain text only.`;
 
     let images: Buffer[];
     try {
-      const { pdf: pdfToImg } = await import('pdf-to-img');
-      images = [];
       // `scale` is a raw multiplier on the page's DECLARED box, not a DPI
       // target, so a hardcoded 2.0 is unbounded. Scanners that write 300-DPI
       // pixel counts into the MediaBox as points (Ghostscript does) declare a
@@ -1095,17 +1054,11 @@ Do NOT translate, summarize, or omit any content. Output plain text only.`;
       // Render 1:1 first (1pt = 1px at scale 1). That is the finished image for
       // any page already at or above the OCR target — the overwhelmingly common
       // case for scans — so only genuinely small pages pay a second render.
-      for await (const image of await pdfToImg(buffer, { scale: 1 })) {
-        images.push(Buffer.from(image));
-      }
+      images = await renderPdfPages(buffer, 1);
       const nativeLongEdge = images.length ? pngLongEdge(images[0]) : 0;
       const scale = nativeLongEdge > 0 ? Math.min(2, Math.max(1, maxEdge / nativeLongEdge)) : 1;
       if (scale > 1) {
-        const upscaled: Buffer[] = [];
-        for await (const image of await pdfToImg(buffer, { scale })) {
-          upscaled.push(Buffer.from(image));
-        }
-        images = upscaled;
+        images = await renderPdfPages(buffer, scale);
       }
       logger.info('PDF_VISION', `Converted ${images.length} pages to images`, {
         pages: images.length,
@@ -1115,7 +1068,7 @@ Do NOT translate, summarize, or omit any content. Output plain text only.`;
       }, requestId);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('PDF_VISION', `pdf-to-img conversion failed: ${errMsg}`, {
+      logger.error('PDF_VISION', `PDF rendering failed: ${errMsg}`, {
         stack: error instanceof Error ? error.stack : undefined,
       }, requestId);
       throw new Error(`PDF to image conversion failed: ${errMsg}`);
@@ -1288,29 +1241,17 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
     // Step 2: Fallback to pdf-parse if pdftotext didn't work
     if (!localText) {
       try {
-        const originalWarn = console.warn;
-        console.warn = (...args: unknown[]) => {
-          if (typeof args[0] === 'string' && args[0].includes('private use area')) return;
-          originalWarn.apply(console, args);
-        };
-        try {
-          const startTime = Date.now();
-          // pdf-parse has no built-in timeout; wrap in Promise.race so a
-          // corrupt PDF can't stall the event loop / batch worker forever.
-          const pdfParseTimeoutMs = Number(process.env.PDF_PARSE_TIMEOUT_MS || 60_000);
-          const data = await this.withTimeout(pdf(buffer), pdfParseTimeoutMs, 'pdf-parse');
-          logger.info('PDF_EXTRACT', `pdf-parse raw output: ${data.text.length} chars`, {
-            preview: data.text.substring(0, 300).replace(/\n/g, '\\n'),
-          }, requestId);
-          localText = this.cleanText(data.text, requestId);
-          localSource = 'pdf-parse';
-          logger.info('PDF_EXTRACT', `pdf-parse completed in ${Date.now() - startTime}ms`, {
-            rawChars: data.text.length, cleanedChars: localText.length,
-            preview: localText.substring(0, 150),
-          }, requestId);
-        } finally {
-          console.warn = originalWarn;
-        }
+        const startTime = Date.now();
+        const data = await parsePdf(buffer);
+        logger.info('PDF_EXTRACT', `pdf-parse raw output: ${data.text.length} chars`, {
+          preview: data.text.substring(0, 300).replace(/\n/g, '\\n'),
+        }, requestId);
+        localText = this.cleanText(data.text, requestId);
+        localSource = 'pdf-parse';
+        logger.info('PDF_EXTRACT', `pdf-parse completed in ${Date.now() - startTime}ms`, {
+          rawChars: data.text.length, cleanedChars: localText.length,
+          preview: localText.substring(0, 150),
+        }, requestId);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
         logger.warn('PDF_EXTRACT', `pdf-parse failed: ${errMsg}`, {}, requestId);
@@ -1430,22 +1371,13 @@ Include ALL details from this page only. Do NOT translate, summarize, or omit an
     numPages: number;
     info: Record<string, unknown>;
   }> {
-    // We always need pdf-parse for metadata (numPages, info)
-    const originalWarn = console.warn;
-    console.warn = (...args: unknown[]) => {
-      if (typeof args[0] === 'string' && args[0].includes('private use area')) return;
-      originalWarn.apply(console, args);
-    };
-
-    let data: { text: string; numpages: number; info: Record<string, unknown> };
+    // Parse text and metadata with one document, releasing its resources afterward.
+    let data: Awaited<ReturnType<typeof parsePdf>>;
     try {
-      const pdfParseTimeoutMs = Number(process.env.PDF_PARSE_TIMEOUT_MS || 60_000);
-      data = await this.withTimeout(pdf(buffer), pdfParseTimeoutMs, 'pdf-parse');
+      data = await parsePdf(buffer);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to parse PDF: ${message}`);
-    } finally {
-      console.warn = originalWarn;
     }
 
     // Step 1: Try pdftotext first for text extraction

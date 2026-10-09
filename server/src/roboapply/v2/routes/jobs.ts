@@ -110,7 +110,7 @@ function isExplanationLocaleUsable(explanation: any, locale: RaLocale): boolean 
   return locale === RA_DEFAULT_LOCALE;
 }
 
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;
@@ -205,7 +205,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/apply', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/apply', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;
@@ -230,7 +230,7 @@ router.post('/:id/apply', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/save', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/save', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;
@@ -254,7 +254,7 @@ router.post('/:id/save', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/score', requireAuth, async (req: Request, res: Response) => {
+router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;

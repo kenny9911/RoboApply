@@ -15,19 +15,19 @@
     "verify:voices": "node verify-voices.mjs"
   },
   "dependencies": {
-    "@livekit/agents": "1.6.2",
-    "@livekit/agents-plugin-openai": "1.6.2",
-    "@livekit/agents-plugin-silero": "1.6.2",
-    "dotenv": "^17.4.2",
-    "openai": "6.49.0"
+    "@livekit/agents": "1.9.1",
+    "@livekit/agents-plugin-openai": "1.9.1",
+    "@livekit/agents-plugin-silero": "1.9.1",
+    "dotenv": "^18.0.6",
+    "openai": "7.31.0"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
-    "tsx": "^4.23.12",
-    "typescript": "^5.6.0"
+    "@types/node": "^24.19.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   },
   "optionalDependencies": {
-    "@livekit/rtc-ffi-bindings-darwin-arm64": "^0.12.60"
+    "@livekit/rtc-ffi-bindings-darwin-arm64": "^0.12.82"
   },
   "engines": {
     "node": ">=22"
@@ -35,6 +35,6 @@
   "allowScripts": {
     "esbuild@0.28.2": true,
     "onnxruntime-node@1.24.3": true,
-    "@livekit/local-inference@0.2.6": true
+    "@livekit/local-inference@0.2.7": true
   }
 }

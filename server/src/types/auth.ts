@@ -92,6 +92,7 @@ declare global {
       subscriptionGate?: SubscriptionGateResult;
     }
     interface Request {
+      user?: User;
       requestId?: string;
       sessionToken?: string;
       apiKeyId?: string;

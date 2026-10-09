@@ -106,7 +106,7 @@ router.get('/users.csv', async (req: Request, res: Response) => {
 });
 
 // ─── GET /users/:userId ───────────────────────────────────────────────────────
-router.get('/users/:userId', async (req: Request, res: Response) => {
+router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Response) => {
   try {
     const range = resolveRange(str(req.query.from), str(req.query.to), str(req.query.tz));
     const data = await getUserDetail(req.params.userId, range);
@@ -119,7 +119,7 @@ router.get('/users/:userId', async (req: Request, res: Response) => {
 });
 
 // ─── POST /users/:userId/plan ───────────────────────────────────────────────
-router.post('/users/:userId/plan', async (req: Request, res: Response) => {
+router.post('/users/:userId/plan', async (req: Request<{ userId: string }>, res: Response) => {
   try {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const tier = body.tier;
@@ -189,7 +189,7 @@ router.get('/sessions.csv', async (req: Request, res: Response) => {
 });
 
 // ─── GET /sessions/:id ────────────────────────────────────────────────────────
-router.get('/sessions/:id', async (req: Request, res: Response) => {
+router.get('/sessions/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const data = await getSessionDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, code: 'session_not_found', error: 'Session not found' });

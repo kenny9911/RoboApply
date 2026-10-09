@@ -113,8 +113,9 @@ test('failed inference streams use the chunked backup without health probes or f
     assert.equal(primary.streamCalls, 1);
     assert.equal(primary.synthesizeCalls, 0, 'inference synthesize() must never be used for recovery');
     assert.equal(backup.synthesizeCalls, 3);
-    assert.ok(errors.length > 0);
-    assert.ok(errors.every((error) => error.recoverable));
+    // LiveKit 1.9 absorbs child errors when another provider completes the turn.
+    assert.equal(errors.length, 0, 'successful failover must not signal a session error');
+    assert.equal(adapter.status[0].available, false);
     assert.ok(adapter.status.every((status) => status.recoveringTask === null));
   } finally {
     await adapter.close();

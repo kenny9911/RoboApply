@@ -58,7 +58,7 @@ export function OptionPill({
       {radio ? (
         <span
           className={cn(
-            'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2',
+            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
             selected
               ? 'border-accent-text bg-accent-500'
               : 'border-ink-300 bg-bg-card',
