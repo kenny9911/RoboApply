@@ -9,6 +9,8 @@
 //   DELETE /:id             — soft delete (409 if only base + tracker dependents)
 //   POST   /:id/rewrite     — V3 inline AI rewrite (bullet | summary | skills)
 //   POST   /:id/tailor-diff — V3 propose a tailor diff for a job (does NOT create a variant)
+//   (rewrite + tailor-diff answer 503 ai_unavailable when the user's AI consent
+//   is off or the brand has no text model; WP-22, TASK_PLAN.md §2.2)
 //   GET    /:id/coach-tips  — V3 editor coach tips (free, deterministic)
 //
 // Quota note: `tailored_for_jd` create + `/rewrite` + `/tailor-diff` are
@@ -36,6 +38,7 @@ import {
   type ResumeCreateInput,
 } from '../services/RAResumeService.js';
 import {
+  AiUnavailableError,
   raResumeAIService,
   ResumeNotFoundError as ResumeAINotFoundError,
   RewriteValidationError,
@@ -403,6 +406,9 @@ router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, re
     if (err instanceof ResumeAINotFoundError) {
       return res.status(404).json({ error: 'not_found' });
     }
+    if (err instanceof AiUnavailableError) {
+      return res.status(503).json({ error: 'ai_unavailable', code: 'ai_unavailable' });
+    }
     if (err instanceof RewriteValidationError) {
       return res.status(422).json({ error: err.message });
     }
@@ -425,6 +431,9 @@ router.post('/:id/tailor-diff', requireAuth, async (req: Request<{ id: string }>
   } catch (err) {
     if (err instanceof ResumeAINotFoundError) {
       return res.status(404).json({ error: 'not_found' });
+    }
+    if (err instanceof AiUnavailableError) {
+      return res.status(503).json({ error: 'ai_unavailable', code: 'ai_unavailable' });
     }
     if (err instanceof RewriteValidationError) {
       return res.status(422).json({ error: err.message });

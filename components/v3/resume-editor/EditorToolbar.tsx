@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 
 import { Btn, IconSparkle, IconArrow, IconBolt, IconUpload, IconTrash } from '../primitives';
 import { AnalyzerPanel } from './AnalyzerPanel';
+import { ResumeCheckEntry } from '../../features/resume';
 import type { AnalyzerReport } from '../../../lib/resumeAnalyzer';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -35,6 +36,10 @@ interface Props {
   onTailor: () => void;
   onDelete: () => void;
   onBack: () => void;
+  /** Resume id: adds the Resume check entry and the server check in the analyzer popover (WP-22). */
+  resumeId?: string;
+  /** False hides AI-only actions (Tailor) when the user's AI is off. Default true. */
+  aiEnabled?: boolean;
 }
 
 export function EditorToolbar({
@@ -50,6 +55,8 @@ export function EditorToolbar({
   onTailor,
   onDelete,
   onBack,
+  resumeId,
+  aiEnabled = true,
 }: Props) {
   const t = useTranslations('resume');
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -110,6 +117,7 @@ export function EditorToolbar({
             {issuesOpen && report ? (
               <AnalyzerPanel
                 report={report}
+                resumeId={resumeId}
                 onJump={(anchor) => {
                   onJumpToIssue?.(anchor);
                   setIssuesOpen(false);
@@ -122,6 +130,7 @@ export function EditorToolbar({
       </div>
 
       <div className="rb-toolbar-actions">
+        {resumeId ? <ResumeCheckEntry resumeId={resumeId} name={name} /> : null}
         <Btn variant="ghost" onClick={onToggleCoach} icon={<IconSparkle size={13} />}>
           {coachOpen ? t('toolbar.hide_coach') : t('toolbar.coach')}
         </Btn>
@@ -131,9 +140,11 @@ export function EditorToolbar({
         <Btn onClick={onDownload} icon={<IconUpload size={13} style={{ transform: 'rotate(180deg)' }} />}>
           {t('toolbar.download')}
         </Btn>
-        <Btn variant="primary" onClick={onTailor} icon={<IconBolt size={13} />}>
-          {t('toolbar.tailor')}
-        </Btn>
+        {aiEnabled ? (
+          <Btn variant="primary" onClick={onTailor} icon={<IconBolt size={13} />}>
+            {t('toolbar.tailor')}
+          </Btn>
+        ) : null}
       </div>
     </div>
   );

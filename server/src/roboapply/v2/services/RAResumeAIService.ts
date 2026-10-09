@@ -39,6 +39,7 @@ import {
 import { RAResumeTailorAgent } from '../agents/RAResumeTailorAgent.js';
 import { RAJobMatchScorerAgent } from '../agents/RAJobMatchScorerAgent.js';
 import { getResumeAIMessages, format } from '../lib/raResumeAIMessages.js';
+import { resumeAiAvailable, resumeForLlm } from '../../../features/resume/index.js';
 
 // ─── Public wire types (mirror lib/api/v2/types.ts) ───────────────────────
 
@@ -122,6 +123,19 @@ export class ResumeNotFoundError extends Error {
   constructor() {
     super('Resume not found');
     this.name = 'ResumeNotFoundError';
+  }
+}
+
+/**
+ * The user may not have AI run on their data (GoApply without the
+ * `ai_resume_parsing` consent, or no domestic model configured). Thrown before
+ * any LLM call; the route answers 503 `ai_unavailable` (TASK_PLAN.md §2.2).
+ */
+export class AiUnavailableError extends Error {
+  readonly code = 'ai_unavailable' as const;
+  constructor() {
+    super('AI is not available for this account');
+    this.name = 'AiUnavailableError';
   }
 }
 
@@ -642,6 +656,7 @@ export class RAResumeAIService {
     }
 
     const variant = await this.loadOwnedVariant(userId, id);
+    if (!(await resumeAiAvailable(userId))) throw new AiUnavailableError();
 
     // Optional job context to bias the rewrite.
     let jobContext: { title?: string; description?: string } | undefined;
@@ -662,7 +677,8 @@ export class RAResumeAIService {
           mode: body.mode,
           text: body.text,
           action,
-          resumeMarkdown: variant.resumeMarkdown ?? '',
+          // Prompt hygiene: no contact block, photo, 籍贯, birth date or family lines.
+          resumeMarkdown: resumeForLlm(variant.resumeMarkdown ?? ''),
           jobContext,
         },
         { requestId, locale },
@@ -773,6 +789,7 @@ export class RAResumeAIService {
     }
 
     const variant = await this.loadOwnedVariant(userId, id);
+    if (!(await resumeAiAvailable(userId))) throw new AiUnavailableError();
     const baseMd = variant.resumeMarkdown ?? '';
 
     // Resolve job context + cached base score. The manual lane (company +

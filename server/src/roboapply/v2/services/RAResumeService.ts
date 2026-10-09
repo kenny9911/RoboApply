@@ -337,7 +337,12 @@ export class RAResumeService {
 
     let tailoredMarkdown: string = base.resumeMarkdown;
     let agentSucceeded = false;
+    // AI consent (TASK_PLAN.md §2.2): without it the copy stays the base
+    // resume and no LLM is called.
+    const { resumeAiAvailable } = await import('../../../features/resume/index.js');
+    const aiOk = await resumeAiAvailable(userId);
     try {
+      if (!aiOk) throw new Error('ai_unavailable');
       // BE3 owns this module. The interface is a single `.run(input)` method
       // per spec §5. Failure costs zero (no writeDeductionLog).
       const { RAResumeTailorAgent } = await import('../agents/RAResumeTailorAgent.js');

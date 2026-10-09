@@ -5,8 +5,10 @@
 // rule-level detail. Pure / synchronous so we can re-score on every keystroke
 // without a network round-trip.
 //
-// When the real backend lands, swap this for an LLM-backed scorer — the
-// `AnalyzerReport` shape stays the same so the panel doesn't change.
+// The full Resume check is server-side now (WP-22: POST /v2/resumes/:id/grade,
+// report at /resume/[id]/check). This heuristic stays as the quick, offline
+// view the editor recomputes on every keystroke; the analyzer popover leads
+// with the latest server check (components/features/resume EditorCheckSummary).
 
 import type { StructuredResume } from './resumeStructure';
 

@@ -50,12 +50,20 @@ export interface RAResumeRewriteInput {
   mode: RAResumeRewriteMode;
   /** The bullet text or current summary. Omitted/empty for 'skills'. */
   text?: string;
-  /** Required when mode === 'bullet'. */
+  /**
+   * Required when mode === 'bullet'. In 'summary' mode any action other than
+   * 'improve' steers all three options (shorter / longer / stronger).
+   */
   action?: RAResumeRewriteAction;
   /** The full resume markdown — context for 'skills' + 'summary' modes. */
   resumeMarkdown: string;
   /** Optional target-job context to bias the rewrite. */
   jobContext?: { title?: string; description?: string };
+  /**
+   * Optional free-text instruction from the user (resume-check fix panel,
+   * WP-22). Style guidance only: it can never add facts or numbers.
+   */
+  instruction?: string;
 }
 
 export interface RAResumeRewriteAgentOutput {
@@ -108,6 +116,17 @@ const ACTION_GUIDANCE: Record<RAResumeRewriteAction, string> = {
     'Rewrite in a confident first-person-implied voice. Lead with an ownership verb in the output language — the register of "Led" / "Owned" / "Drove", expressed idiomatically in that language. Drop hedging of the "helped" / "assisted" / "involved in" kind, again judged in the output language, not by those English words.',
   junior:
     'Reframe for an early-career / new-grad candidate: translate scope into concrete deliverables, lean on initiative and learning, avoid overclaiming seniority.',
+};
+
+// Summary-mode guidance per action (WP-22 fix panel: Shorter / Longer /
+// Stronger on a summary issue). 'improve' keeps the default three options, so
+// the editor's summary rewrite (which always sends 'improve') is unchanged.
+const SUMMARY_ACTION_GUIDANCE: Partial<Record<RAResumeRewriteAction, string>> = {
+  shorten: 'Every option must be clearly shorter than the current summary: one or two short sentences, no filler. Keep only facts already in it.',
+  expand: 'Every option may be a little longer than the current summary: add one layer of specificity taken only from the resume below. Keep every number identical to the source.',
+  confident: 'Every option uses a confident, ownership voice in the output language. Drop hedging, judged in the output language. Do not add facts.',
+  metrics: 'Lead with results. ONLY keep numbers that already appear in the resume below; where a figure is missing, use a bracketed placeholder like [X]. NEVER invent a concrete figure.',
+  junior: 'Frame for an early-career candidate: concrete deliverables, initiative and learning, no overclaimed seniority.',
 };
 
 // ─── Agent ──────────────────────────────────────────────────────────────
@@ -203,6 +222,12 @@ Return ONLY the JSON object for the active mode — no prose, no code fences.`;
       parts.push(`## Job context\n${ctx.join('\n')}`);
     }
 
+    if (input.instruction) {
+      parts.push(
+        `## User instruction (style only — it never adds facts, employers, dates or numbers)\n${clipString(input.instruction, 1_000)}`,
+      );
+    }
+
     if (input.mode === 'bullet') {
       const action = input.action ?? 'improve';
       parts.push(`ACTION: ${action}`);
@@ -215,6 +240,11 @@ Return ONLY the JSON object for the active mode — no prose, no code fences.`;
         parts.push(`## Current summary\n${clipString(input.text, 1_500)}`);
       }
       parts.push(`## Full resume (for grounding — use only facts present here)\n${clipString(input.resumeMarkdown, 8_000)}`);
+      const summaryGuidance = input.action ? SUMMARY_ACTION_GUIDANCE[input.action] : undefined;
+      if (input.action && summaryGuidance) {
+        parts.push(`ACTION: ${input.action}`);
+        parts.push(`Guidance (applies to all 3 options): ${summaryGuidance}`);
+      }
       parts.push('Produce 3 summary options (Tight / Numeric / Personality). Output ONLY {"options": ["...","...","..."]}.');
     } else {
       // skills
