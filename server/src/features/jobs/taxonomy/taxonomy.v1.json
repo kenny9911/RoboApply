@@ -1,0 +1,6311 @@
+{
+  "version": 1,
+  "asOf": "2026-10-10",
+  "sources": [
+    {
+      "id": "onet_soc_2019",
+      "name": "O*NET-SOC 2019 occupation codes and titles",
+      "publisher": "U.S. Department of Labor, Employment and Training Administration",
+      "url": "https://www.onetcenter.org/taxonomy.html",
+      "license": "O*NET content: CC BY 4.0 (attribution: USDOL/ETA). The SOC structure itself is a U.S. federal public-domain standard.",
+      "usedFor": "The `soc` codes on role nodes; some English role titles."
+    },
+    {
+      "id": "common_titles",
+      "name": "Common job-posting titles, compiled by the RoboApply team",
+      "publisher": "RoboApply",
+      "url": null,
+      "license": "Original work.",
+      "usedFor": "Role groups, technology titles not covered by SOC, synonyms and Chinese labels."
+    }
+  ],
+  "nodes": [
+    {
+      "id": "software_engineering",
+      "level": 1,
+      "parent": null,
+      "en": "Software engineering",
+      "zh": "软件开发",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "swe_backend",
+      "level": 2,
+      "parent": "software_engineering",
+      "en": "Backend and platform",
+      "zh": "后端与平台",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "software_engineer",
+      "level": 3,
+      "parent": "swe_backend",
+      "en": "Software engineer",
+      "zh": "软件工程师",
+      "synonyms": {
+        "en": [
+          "software developer",
+          "swe",
+          "sde",
+          "software development engineer",
+          "programmer",
+          "application developer",
+          "developer",
+          "software engineering intern",
+          "software engineering internship"
+        ],
+        "zh": [
+          "软件开发工程师",
+          "程序员",
+          "开发工程师",
+          "研发工程师"
+        ]
+      },
+      "soc": [
+        "15-1252.00"
+      ],
+      "generic": true
+    },
+    {
+      "id": "backend_engineer",
+      "level": 3,
+      "parent": "swe_backend",
+      "en": "Backend engineer",
+      "zh": "后端开发工程师",
+      "synonyms": {
+        "en": [
+          "backend developer",
+          "back end engineer",
+          "back end developer",
+          "backend software engineer",
+          "server engineer",
+          "api engineer",
+          "java developer",
+          "java engineer",
+          "python developer",
+          "golang developer",
+          "go engineer",
+          "nodejs developer",
+          "php developer",
+          "ruby on rails developer",
+          "dotnet developer",
+          "cpp developer"
+        ],
+        "zh": [
+          "后端工程师",
+          "后端开发",
+          "后端",
+          "java开发",
+          "服务端开发工程师",
+          "服务端开发",
+          "java开发工程师",
+          "java工程师",
+          "go开发工程师",
+          "golang开发工程师",
+          "python开发工程师",
+          "php开发工程师",
+          "cpp开发工程师"
+        ]
+      },
+      "soc": [
+        "15-1252.00"
+      ]
+    },
+    {
+      "id": "fullstack_engineer",
+      "level": 3,
+      "parent": "swe_backend",
+      "en": "Full-stack engineer",
+      "zh": "全栈工程师",
+      "synonyms": {
+        "en": [
+          "full stack engineer",
+          "full stack developer",
+          "fullstack developer",
+          "fullstack engineer"
+        ],
+        "zh": [
+          "全栈开发工程师",
+          "全栈开发"
+        ]
+      },
+      "soc": [
+        "15-1252.00"
+      ]
+    },
+    {
+      "id": "platform_engineer",
+      "level": 3,
+      "parent": "swe_backend",
+      "en": "Platform engineer",
+      "zh": "平台开发工程师",
+      "synonyms": {
+        "en": [
+          "developer platform engineer",
+          "internal tools engineer",
+          "developer productivity engineer"
+        ],
+        "zh": [
+          "中台开发工程师",
+          "基础平台开发工程师",
+          "工具链开发工程师"
+        ]
+      }
+    },
+    {
+      "id": "blockchain_engineer",
+      "level": 3,
+      "parent": "swe_backend",
+      "en": "Blockchain engineer",
+      "zh": "区块链工程师",
+      "synonyms": {
+        "en": [
+          "blockchain developer",
+          "smart contract engineer",
+          "smart contract developer",
+          "solidity developer",
+          "web3 engineer",
+          "web3 developer"
+        ],
+        "zh": [
+          "区块链开发工程师",
+          "智能合约工程师",
+          "智能合约开发"
+        ]
+      }
+    },
+    {
+      "id": "swe_frontend",
+      "level": 2,
+      "parent": "software_engineering",
+      "en": "Frontend and mobile",
+      "zh": "前端与移动端",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "frontend_engineer",
+      "level": 3,
+      "parent": "swe_frontend",
+      "en": "Frontend engineer",
+      "zh": "前端开发工程师",
+      "synonyms": {
+        "en": [
+          "frontend developer",
+          "front end engineer",
+          "front end developer",
+          "ui engineer",
+          "javascript developer",
+          "javascript engineer",
+          "react developer",
+          "react engineer",
+          "vue developer",
+          "angular developer",
+          "typescript developer"
+        ],
+        "zh": [
+          "前端工程师",
+          "前端开发",
+          "前端",
+          "web前端开发工程师",
+          "web前端",
+          "h5开发工程师"
+        ]
+      },
+      "soc": [
+        "15-1254.00"
+      ]
+    },
+    {
+      "id": "web_developer",
+      "level": 3,
+      "parent": "swe_frontend",
+      "en": "Web developer",
+      "zh": "网站开发工程师",
+      "synonyms": {
+        "en": [
+          "website developer",
+          "wordpress developer",
+          "shopify developer",
+          "webmaster"
+        ],
+        "zh": [
+          "网站开发",
+          "网页开发工程师",
+          "建站工程师"
+        ]
+      },
+      "soc": [
+        "15-1254.00"
+      ]
+    },
+    {
+      "id": "ios_engineer",
+      "level": 3,
+      "parent": "swe_frontend",
+      "en": "iOS engineer",
+      "zh": "iOS开发工程师",
+      "synonyms": {
+        "en": [
+          "ios developer",
+          "swift developer",
+          "iphone developer",
+          "ios software engineer"
+        ],
+        "zh": [
+          "ios工程师",
+          "ios开发",
+          "苹果开发工程师"
+        ]
+      }
+    },
+    {
+      "id": "android_engineer",
+      "level": 3,
+      "parent": "swe_frontend",
+      "en": "Android engineer",
+      "zh": "Android开发工程师",
+      "synonyms": {
+        "en": [
+          "android developer",
+          "kotlin developer",
+          "android software engineer"
+        ],
+        "zh": [
+          "安卓开发工程师",
+          "android工程师",
+          "安卓开发",
+          "android开发"
+        ]
+      }
+    },
+    {
+      "id": "mobile_engineer",
+      "level": 3,
+      "parent": "swe_frontend",
+      "en": "Mobile engineer",
+      "zh": "移动端开发工程师",
+      "synonyms": {
+        "en": [
+          "mobile developer",
+          "mobile app developer",
+          "mobile software engineer",
+          "react native developer",
+          "flutter developer",
+          "app developer"
+        ],
+        "zh": [
+          "移动开发工程师",
+          "app开发工程师",
+          "客户端开发工程师",
+          "小程序开发工程师",
+          "鸿蒙开发工程师"
+        ]
+      }
+    },
+    {
+      "id": "game_developer",
+      "level": 3,
+      "parent": "swe_frontend",
+      "en": "Game developer",
+      "zh": "游戏开发工程师",
+      "synonyms": {
+        "en": [
+          "game programmer",
+          "game engineer",
+          "unity developer",
+          "unreal developer",
+          "unreal engine developer",
+          "gameplay engineer",
+          "gameplay programmer"
+        ],
+        "zh": [
+          "游戏开发",
+          "游戏客户端开发",
+          "unity开发工程师",
+          "u3d开发工程师",
+          "ue4开发工程师",
+          "游戏服务端开发"
+        ]
+      }
+    },
+    {
+      "id": "swe_quality",
+      "level": 2,
+      "parent": "software_engineering",
+      "en": "Quality and testing",
+      "zh": "测试与质量",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "qa_engineer",
+      "level": 3,
+      "parent": "swe_quality",
+      "en": "QA engineer",
+      "zh": "软件测试工程师",
+      "synonyms": {
+        "en": [
+          "quality assurance engineer",
+          "software tester",
+          "software test engineer",
+          "qa analyst",
+          "qa tester",
+          "manual tester",
+          "quality assurance analyst",
+          "game tester"
+        ],
+        "zh": [
+          "测试工程师",
+          "qa工程师",
+          "功能测试工程师",
+          "软件测试",
+          "游戏测试"
+        ]
+      },
+      "soc": [
+        "15-1253.00"
+      ]
+    },
+    {
+      "id": "sdet",
+      "level": 3,
+      "parent": "swe_quality",
+      "en": "Test automation engineer",
+      "zh": "测试开发工程师",
+      "synonyms": {
+        "en": [
+          "sdet",
+          "software development engineer in test",
+          "software engineer in test",
+          "test automation engineer",
+          "qa automation engineer",
+          "automation test engineer"
+        ],
+        "zh": [
+          "自动化测试工程师",
+          "测试开发",
+          "性能测试工程师"
+        ]
+      },
+      "soc": [
+        "15-1253.00"
+      ]
+    },
+    {
+      "id": "swe_systems",
+      "level": 2,
+      "parent": "software_engineering",
+      "en": "Embedded and systems software",
+      "zh": "嵌入式与系统软件",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "embedded_software_engineer",
+      "level": 3,
+      "parent": "swe_systems",
+      "en": "Embedded software engineer",
+      "zh": "嵌入式软件工程师",
+      "synonyms": {
+        "en": [
+          "embedded engineer",
+          "embedded developer",
+          "embedded systems engineer",
+          "firmware engineer",
+          "firmware developer",
+          "embedded software developer"
+        ],
+        "zh": [
+          "嵌入式开发工程师",
+          "嵌入式工程师",
+          "固件工程师",
+          "固件开发工程师",
+          "单片机开发工程师",
+          "bsp工程师"
+        ]
+      }
+    },
+    {
+      "id": "systems_software_engineer",
+      "level": 3,
+      "parent": "swe_systems",
+      "en": "Systems software engineer",
+      "zh": "系统软件工程师",
+      "synonyms": {
+        "en": [
+          "kernel engineer",
+          "linux kernel developer",
+          "operating systems engineer",
+          "compiler engineer",
+          "database kernel engineer",
+          "gpu software engineer",
+          "cuda engineer",
+          "high performance computing engineer",
+          "hpc engineer"
+        ],
+        "zh": [
+          "内核开发工程师",
+          "操作系统开发工程师",
+          "编译器工程师",
+          "数据库内核开发",
+          "gpu软件工程师",
+          "高性能计算工程师"
+        ]
+      }
+    },
+    {
+      "id": "swe_leadership",
+      "level": 2,
+      "parent": "software_engineering",
+      "en": "Engineering leadership and architecture",
+      "zh": "技术管理与架构",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "tech_lead",
+      "level": 3,
+      "parent": "swe_leadership",
+      "en": "Tech lead",
+      "zh": "技术负责人",
+      "synonyms": {
+        "en": [
+          "technical lead",
+          "lead engineer",
+          "lead developer",
+          "lead software engineer"
+        ],
+        "zh": [
+          "技术组长",
+          "开发组长",
+          "技术主管"
+        ]
+      }
+    },
+    {
+      "id": "engineering_manager",
+      "level": 3,
+      "parent": "swe_leadership",
+      "en": "Engineering manager",
+      "zh": "研发经理",
+      "synonyms": {
+        "en": [
+          "software engineering manager",
+          "software development manager",
+          "development manager",
+          "engineering team manager"
+        ],
+        "zh": [
+          "技术经理",
+          "研发主管",
+          "开发经理"
+        ]
+      },
+      "soc": [
+        "11-3021.00"
+      ]
+    },
+    {
+      "id": "engineering_director",
+      "level": 3,
+      "parent": "swe_leadership",
+      "en": "Director of engineering / CTO",
+      "zh": "技术总监",
+      "synonyms": {
+        "en": [
+          "vp of engineering",
+          "vp engineering",
+          "vice president of engineering",
+          "head of engineering",
+          "director of engineering",
+          "engineering director",
+          "chief technology officer",
+          "cto"
+        ],
+        "zh": [
+          "首席技术官",
+          "研发总监",
+          "技术vp",
+          "技术副总裁"
+        ]
+      },
+      "soc": [
+        "11-3021.00"
+      ]
+    },
+    {
+      "id": "software_architect",
+      "level": 3,
+      "parent": "swe_leadership",
+      "en": "Software architect",
+      "zh": "软件架构师",
+      "synonyms": {
+        "en": [
+          "system architect",
+          "technical architect",
+          "application architect",
+          "enterprise architect"
+        ],
+        "zh": [
+          "架构师",
+          "系统架构师",
+          "技术架构师",
+          "应用架构师"
+        ]
+      },
+      "soc": [
+        "15-1299.08"
+      ]
+    },
+    {
+      "id": "data_ai",
+      "level": 1,
+      "parent": null,
+      "en": "Data and AI",
+      "zh": "数据与人工智能",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "data_analytics",
+      "level": 2,
+      "parent": "data_ai",
+      "en": "Data science and analytics",
+      "zh": "数据科学与分析",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "data_scientist",
+      "level": 3,
+      "parent": "data_analytics",
+      "en": "Data scientist",
+      "zh": "数据科学家",
+      "synonyms": {
+        "en": [
+          "data science",
+          "decision scientist",
+          "applied data scientist"
+        ],
+        "zh": [
+          "数据科学工程师",
+          "数据挖掘工程师",
+          "数据挖掘"
+        ]
+      },
+      "soc": [
+        "15-2051.00"
+      ]
+    },
+    {
+      "id": "data_analyst",
+      "level": 3,
+      "parent": "data_analytics",
+      "en": "Data analyst",
+      "zh": "数据分析师",
+      "synonyms": {
+        "en": [
+          "data analytics analyst",
+          "analytics analyst",
+          "sql analyst",
+          "business data analyst",
+          "marketing analyst",
+          "growth analyst"
+        ],
+        "zh": [
+          "数据分析",
+          "数据分析专员",
+          "商业数据分析师",
+          "数据运营"
+        ]
+      }
+    },
+    {
+      "id": "product_analyst",
+      "level": 3,
+      "parent": "data_analytics",
+      "en": "Product analyst",
+      "zh": "产品数据分析师",
+      "synonyms": {
+        "en": [
+          "product data analyst",
+          "product analytics",
+          "product insights analyst"
+        ],
+        "zh": [
+          "产品分析师",
+          "用户行为分析师"
+        ]
+      }
+    },
+    {
+      "id": "bi_analyst",
+      "level": 3,
+      "parent": "data_analytics",
+      "en": "Business intelligence analyst",
+      "zh": "商业智能分析师",
+      "synonyms": {
+        "en": [
+          "bi analyst",
+          "bi developer",
+          "bi engineer",
+          "business intelligence developer",
+          "business intelligence engineer",
+          "tableau developer",
+          "power bi developer",
+          "reporting analyst"
+        ],
+        "zh": [
+          "bi分析师",
+          "bi工程师",
+          "bi开发工程师",
+          "报表开发工程师"
+        ]
+      },
+      "soc": [
+        "15-2051.01"
+      ]
+    },
+    {
+      "id": "statistician",
+      "level": 3,
+      "parent": "data_analytics",
+      "en": "Statistician",
+      "zh": "统计分析师",
+      "synonyms": {
+        "en": [
+          "biostatistician",
+          "statistical analyst",
+          "statistical programmer",
+          "sas programmer"
+        ],
+        "zh": [
+          "统计师",
+          "生物统计师",
+          "统计编程师"
+        ]
+      },
+      "soc": [
+        "15-2041.00"
+      ]
+    },
+    {
+      "id": "data_engineering",
+      "level": 2,
+      "parent": "data_ai",
+      "en": "Data engineering",
+      "zh": "数据工程",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "data_engineer",
+      "level": 3,
+      "parent": "data_engineering",
+      "en": "Data engineer",
+      "zh": "数据开发工程师",
+      "synonyms": {
+        "en": [
+          "big data engineer",
+          "etl developer",
+          "etl engineer",
+          "data pipeline engineer",
+          "data platform engineer",
+          "spark engineer",
+          "hadoop developer"
+        ],
+        "zh": [
+          "数据工程师",
+          "大数据开发工程师",
+          "大数据工程师",
+          "etl工程师",
+          "数仓开发工程师",
+          "数据仓库工程师",
+          "数仓工程师"
+        ]
+      }
+    },
+    {
+      "id": "analytics_engineer",
+      "level": 3,
+      "parent": "data_engineering",
+      "en": "Analytics engineer",
+      "zh": "分析工程师",
+      "synonyms": {
+        "en": [
+          "dbt developer",
+          "analytics data engineer"
+        ],
+        "zh": [
+          "数据建模工程师"
+        ]
+      }
+    },
+    {
+      "id": "database_administrator",
+      "level": 3,
+      "parent": "data_engineering",
+      "en": "Database administrator",
+      "zh": "数据库管理员",
+      "synonyms": {
+        "en": [
+          "dba",
+          "database engineer",
+          "sql dba",
+          "oracle dba",
+          "mysql dba"
+        ],
+        "zh": [
+          "dba工程师",
+          "数据库工程师",
+          "数据库运维工程师"
+        ]
+      },
+      "soc": [
+        "15-1242.00"
+      ]
+    },
+    {
+      "id": "data_architect",
+      "level": 3,
+      "parent": "data_engineering",
+      "en": "Data architect",
+      "zh": "数据架构师",
+      "synonyms": {
+        "en": [
+          "database architect",
+          "data modeler",
+          "data modeling engineer",
+          "data warehouse architect"
+        ],
+        "zh": [
+          "数据库架构师",
+          "数仓架构师"
+        ]
+      },
+      "soc": [
+        "15-1243.00"
+      ]
+    },
+    {
+      "id": "ml_ai",
+      "level": 2,
+      "parent": "data_ai",
+      "en": "Machine learning and AI",
+      "zh": "机器学习与人工智能",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "ml_engineer",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "Machine learning engineer",
+      "zh": "机器学习工程师",
+      "synonyms": {
+        "en": [
+          "ml engineer",
+          "mle",
+          "machine learning software engineer",
+          "deep learning engineer",
+          "ai engineer",
+          "artificial intelligence engineer",
+          "applied ml engineer",
+          "ai developer"
+        ],
+        "zh": [
+          "算法工程师",
+          "机器学习算法工程师",
+          "深度学习工程师",
+          "ai工程师",
+          "人工智能工程师",
+          "ai算法工程师",
+          "深度学习算法工程师"
+        ]
+      }
+    },
+    {
+      "id": "ai_research_scientist",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "AI research scientist",
+      "zh": "AI研究科学家",
+      "synonyms": {
+        "en": [
+          "research scientist machine learning",
+          "machine learning researcher",
+          "machine learning scientist",
+          "ai researcher",
+          "applied scientist",
+          "research scientist ai",
+          "ai scientist",
+          "research engineer machine learning"
+        ],
+        "zh": [
+          "算法研究员",
+          "ai研究员",
+          "人工智能研究员",
+          "机器学习研究员"
+        ]
+      },
+      "soc": [
+        "15-1221.00"
+      ]
+    },
+    {
+      "id": "nlp_engineer",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "NLP and LLM engineer",
+      "zh": "大模型算法工程师",
+      "synonyms": {
+        "en": [
+          "nlp engineer",
+          "natural language processing engineer",
+          "llm engineer",
+          "large language model engineer",
+          "prompt engineer",
+          "generative ai engineer",
+          "genai engineer",
+          "nlp scientist"
+        ],
+        "zh": [
+          "nlp算法工程师",
+          "nlp工程师",
+          "大模型工程师",
+          "自然语言处理工程师",
+          "大模型应用开发工程师",
+          "提示词工程师"
+        ]
+      }
+    },
+    {
+      "id": "cv_engineer",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "Computer vision engineer",
+      "zh": "计算机视觉工程师",
+      "synonyms": {
+        "en": [
+          "cv engineer",
+          "computer vision scientist",
+          "image processing engineer",
+          "vision engineer"
+        ],
+        "zh": [
+          "cv算法工程师",
+          "视觉算法工程师",
+          "图像算法工程师",
+          "图像处理工程师"
+        ]
+      }
+    },
+    {
+      "id": "recsys_engineer",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "Search and recommendation engineer",
+      "zh": "搜索推荐算法工程师",
+      "synonyms": {
+        "en": [
+          "recommendation engineer",
+          "recommender systems engineer",
+          "recommendation systems engineer",
+          "search relevance engineer",
+          "ranking engineer",
+          "ads ranking engineer"
+        ],
+        "zh": [
+          "推荐算法工程师",
+          "搜索算法工程师",
+          "广告算法工程师",
+          "推荐系统工程师"
+        ]
+      }
+    },
+    {
+      "id": "mlops_engineer",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "MLOps engineer",
+      "zh": "MLOps工程师",
+      "synonyms": {
+        "en": [
+          "machine learning operations engineer",
+          "ml platform engineer",
+          "ml infrastructure engineer",
+          "ai infrastructure engineer",
+          "ai platform engineer"
+        ],
+        "zh": [
+          "机器学习平台工程师",
+          "ai平台工程师",
+          "ai基础设施工程师",
+          "大模型训练平台工程师"
+        ]
+      }
+    },
+    {
+      "id": "data_annotator",
+      "level": 3,
+      "parent": "ml_ai",
+      "en": "Data annotation specialist",
+      "zh": "数据标注员",
+      "synonyms": {
+        "en": [
+          "data labeler",
+          "data annotator",
+          "annotation specialist",
+          "ai trainer",
+          "ai data trainer",
+          "rater",
+          "search quality rater"
+        ],
+        "zh": [
+          "数据标注",
+          "标注员",
+          "ai训练师",
+          "数据标注专员"
+        ]
+      }
+    },
+    {
+      "id": "it_infrastructure",
+      "level": 1,
+      "parent": null,
+      "en": "IT and infrastructure",
+      "zh": "IT与基础架构",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "devops_cloud",
+      "level": 2,
+      "parent": "it_infrastructure",
+      "en": "DevOps and cloud",
+      "zh": "运维开发与云计算",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "devops_engineer",
+      "level": 3,
+      "parent": "devops_cloud",
+      "en": "DevOps engineer",
+      "zh": "DevOps工程师",
+      "synonyms": {
+        "en": [
+          "devops",
+          "build and release engineer",
+          "release engineer",
+          "ci cd engineer",
+          "build engineer",
+          "devops specialist"
+        ],
+        "zh": [
+          "运维开发工程师",
+          "devops开发工程师",
+          "持续集成工程师"
+        ]
+      }
+    },
+    {
+      "id": "sre",
+      "level": 3,
+      "parent": "devops_cloud",
+      "en": "Site reliability engineer",
+      "zh": "SRE工程师",
+      "synonyms": {
+        "en": [
+          "sre",
+          "site reliability",
+          "reliability engineer",
+          "site reliability engineering"
+        ],
+        "zh": [
+          "网站可靠性工程师",
+          "稳定性工程师",
+          "可靠性运维工程师"
+        ]
+      }
+    },
+    {
+      "id": "cloud_engineer",
+      "level": 3,
+      "parent": "devops_cloud",
+      "en": "Cloud engineer",
+      "zh": "云计算工程师",
+      "synonyms": {
+        "en": [
+          "cloud architect",
+          "aws engineer",
+          "azure engineer",
+          "gcp engineer",
+          "cloud infrastructure engineer",
+          "cloud solutions architect",
+          "cloud developer",
+          "cloud operations engineer",
+          "solutions architect",
+          "solution architect"
+        ],
+        "zh": [
+          "云架构师",
+          "云平台工程师",
+          "云运维工程师",
+          "云原生工程师"
+        ]
+      }
+    },
+    {
+      "id": "infrastructure_engineer",
+      "level": 3,
+      "parent": "devops_cloud",
+      "en": "Infrastructure engineer",
+      "zh": "基础架构工程师",
+      "synonyms": {
+        "en": [
+          "infrastructure software engineer",
+          "kubernetes engineer",
+          "infrastructure developer",
+          "storage engineer",
+          "distributed systems engineer"
+        ],
+        "zh": [
+          "基础设施工程师",
+          "分布式存储工程师",
+          "分布式系统工程师"
+        ]
+      }
+    },
+    {
+      "id": "it_ops",
+      "level": 2,
+      "parent": "it_infrastructure",
+      "en": "IT operations and support",
+      "zh": "IT运维与支持",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "sysadmin",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "Systems administrator",
+      "zh": "系统管理员",
+      "synonyms": {
+        "en": [
+          "system administrator",
+          "sysadmin",
+          "linux administrator",
+          "windows administrator",
+          "linux system administrator",
+          "server administrator"
+        ],
+        "zh": [
+          "系统运维工程师",
+          "运维工程师",
+          "linux运维工程师",
+          "系统运维"
+        ]
+      },
+      "soc": [
+        "15-1244.00"
+      ]
+    },
+    {
+      "id": "network_engineer",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "Network engineer",
+      "zh": "网络工程师",
+      "synonyms": {
+        "en": [
+          "network administrator",
+          "network architect",
+          "network operations engineer",
+          "ccna engineer",
+          "network specialist"
+        ],
+        "zh": [
+          "网络运维工程师",
+          "网络管理员",
+          "网络架构师"
+        ]
+      },
+      "soc": [
+        "15-1241.00"
+      ]
+    },
+    {
+      "id": "it_support",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "IT support specialist",
+      "zh": "IT支持工程师",
+      "synonyms": {
+        "en": [
+          "help desk technician",
+          "helpdesk analyst",
+          "help desk analyst",
+          "desktop support",
+          "desktop support technician",
+          "it technician",
+          "service desk analyst",
+          "it support",
+          "computer support specialist"
+        ],
+        "zh": [
+          "桌面运维",
+          "it运维支持",
+          "网管",
+          "it专员",
+          "桌面支持工程师"
+        ]
+      },
+      "soc": [
+        "15-1232.00"
+      ]
+    },
+    {
+      "id": "it_manager",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "IT manager",
+      "zh": "IT经理",
+      "synonyms": {
+        "en": [
+          "information technology manager",
+          "it director",
+          "head of it",
+          "it operations manager",
+          "chief information officer",
+          "cio"
+        ],
+        "zh": [
+          "信息技术经理",
+          "it主管",
+          "信息化经理",
+          "信息中心主任",
+          "it总监"
+        ]
+      },
+      "soc": [
+        "11-3021.00"
+      ]
+    },
+    {
+      "id": "it_project_manager",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "IT project manager",
+      "zh": "IT项目经理",
+      "synonyms": {
+        "en": [
+          "technical project manager",
+          "software project manager",
+          "it project lead"
+        ],
+        "zh": [
+          "软件项目经理",
+          "技术项目经理",
+          "信息化项目经理"
+        ]
+      },
+      "soc": [
+        "15-1299.09"
+      ]
+    },
+    {
+      "id": "systems_analyst",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "Systems analyst",
+      "zh": "系统分析师",
+      "synonyms": {
+        "en": [
+          "computer systems analyst",
+          "it business analyst",
+          "business systems analyst",
+          "it analyst"
+        ],
+        "zh": [
+          "系统分析员",
+          "it业务分析师"
+        ]
+      },
+      "soc": [
+        "15-1211.00"
+      ]
+    },
+    {
+      "id": "erp_consultant",
+      "level": 3,
+      "parent": "it_ops",
+      "en": "ERP consultant",
+      "zh": "ERP实施顾问",
+      "synonyms": {
+        "en": [
+          "sap consultant",
+          "oracle consultant",
+          "erp analyst",
+          "salesforce consultant",
+          "salesforce administrator",
+          "crm consultant",
+          "implementation consultant",
+          "netsuite consultant"
+        ],
+        "zh": [
+          "sap顾问",
+          "erp顾问",
+          "实施工程师",
+          "实施顾问",
+          "erp实施工程师"
+        ]
+      }
+    },
+    {
+      "id": "security",
+      "level": 1,
+      "parent": null,
+      "en": "Security",
+      "zh": "网络安全",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "security_engineering",
+      "level": 2,
+      "parent": "security",
+      "en": "Security engineering",
+      "zh": "安全工程",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "security_engineer",
+      "level": 3,
+      "parent": "security_engineering",
+      "en": "Security engineer",
+      "zh": "安全工程师",
+      "synonyms": {
+        "en": [
+          "cybersecurity engineer",
+          "cyber security engineer",
+          "application security engineer",
+          "appsec engineer",
+          "cloud security engineer",
+          "information security engineer",
+          "product security engineer",
+          "security software engineer"
+        ],
+        "zh": [
+          "网络安全工程师",
+          "信息安全工程师",
+          "应用安全工程师",
+          "安全开发工程师"
+        ]
+      }
+    },
+    {
+      "id": "penetration_tester",
+      "level": 3,
+      "parent": "security_engineering",
+      "en": "Penetration tester",
+      "zh": "渗透测试工程师",
+      "synonyms": {
+        "en": [
+          "pentester",
+          "pen tester",
+          "ethical hacker",
+          "red team engineer",
+          "offensive security engineer",
+          "security researcher",
+          "vulnerability researcher"
+        ],
+        "zh": [
+          "渗透测试",
+          "白帽子",
+          "红队工程师",
+          "安全研究员",
+          "漏洞挖掘工程师"
+        ]
+      }
+    },
+    {
+      "id": "security_analyst",
+      "level": 3,
+      "parent": "security_engineering",
+      "en": "Security analyst",
+      "zh": "安全分析师",
+      "synonyms": {
+        "en": [
+          "information security analyst",
+          "soc analyst",
+          "cyber security analyst",
+          "cybersecurity analyst",
+          "threat analyst",
+          "incident responder",
+          "threat intelligence analyst",
+          "security operations analyst"
+        ],
+        "zh": [
+          "信息安全分析师",
+          "安全运营工程师",
+          "安全运维工程师",
+          "应急响应工程师"
+        ]
+      },
+      "soc": [
+        "15-1212.00"
+      ]
+    },
+    {
+      "id": "security_governance",
+      "level": 2,
+      "parent": "security",
+      "en": "Security governance and leadership",
+      "zh": "安全治理与管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "security_architect",
+      "level": 3,
+      "parent": "security_governance",
+      "en": "Security architect",
+      "zh": "安全架构师",
+      "synonyms": {
+        "en": [
+          "cybersecurity architect",
+          "information security architect",
+          "cloud security architect"
+        ],
+        "zh": [
+          "网络安全架构师",
+          "信息安全架构师"
+        ]
+      }
+    },
+    {
+      "id": "security_compliance",
+      "level": 3,
+      "parent": "security_governance",
+      "en": "Security compliance analyst",
+      "zh": "安全合规专员",
+      "synonyms": {
+        "en": [
+          "grc analyst",
+          "it auditor",
+          "governance risk and compliance analyst",
+          "information security compliance analyst",
+          "security compliance manager"
+        ],
+        "zh": [
+          "信息安全合规专员",
+          "等保测评工程师",
+          "it审计",
+          "安全合规工程师"
+        ]
+      }
+    },
+    {
+      "id": "security_leader",
+      "level": 3,
+      "parent": "security_governance",
+      "en": "Head of security / CISO",
+      "zh": "安全总监",
+      "synonyms": {
+        "en": [
+          "ciso",
+          "chief information security officer",
+          "head of security",
+          "director of security",
+          "security director",
+          "information security manager"
+        ],
+        "zh": [
+          "首席信息安全官",
+          "信息安全总监",
+          "安全经理",
+          "信息安全经理"
+        ]
+      }
+    },
+    {
+      "id": "product",
+      "level": 1,
+      "parent": null,
+      "en": "Product and program management",
+      "zh": "产品与项目管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "product_management",
+      "level": 2,
+      "parent": "product",
+      "en": "Product management",
+      "zh": "产品管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "product_manager",
+      "level": 3,
+      "parent": "product_management",
+      "en": "Product manager",
+      "zh": "产品经理",
+      "synonyms": {
+        "en": [
+          "pm",
+          "product owner",
+          "associate product manager",
+          "apm",
+          "group product manager",
+          "product lead",
+          "digital product manager"
+        ],
+        "zh": [
+          "产品专员",
+          "产品助理",
+          "产品负责人",
+          "产品主管",
+          "b端产品经理",
+          "c端产品经理"
+        ]
+      }
+    },
+    {
+      "id": "technical_product_manager",
+      "level": 3,
+      "parent": "product_management",
+      "en": "Technical product manager",
+      "zh": "技术产品经理",
+      "synonyms": {
+        "en": [
+          "platform product manager",
+          "api product manager",
+          "technical product owner",
+          "infrastructure product manager"
+        ],
+        "zh": [
+          "平台产品经理",
+          "后台产品经理",
+          "技术型产品经理",
+          "数据产品经理"
+        ]
+      }
+    },
+    {
+      "id": "ai_product_manager",
+      "level": 3,
+      "parent": "product_management",
+      "en": "AI product manager",
+      "zh": "AI产品经理",
+      "synonyms": {
+        "en": [
+          "ml product manager",
+          "machine learning product manager",
+          "generative ai product manager",
+          "ai pm"
+        ],
+        "zh": [
+          "人工智能产品经理",
+          "大模型产品经理",
+          "算法产品经理"
+        ]
+      }
+    },
+    {
+      "id": "product_director",
+      "level": 3,
+      "parent": "product_management",
+      "en": "Head of product",
+      "zh": "产品总监",
+      "synonyms": {
+        "en": [
+          "vp of product",
+          "vp product",
+          "director of product",
+          "director of product management",
+          "chief product officer",
+          "cpo"
+        ],
+        "zh": [
+          "首席产品官",
+          "产品副总裁",
+          "产品vp"
+        ]
+      }
+    },
+    {
+      "id": "program_management",
+      "level": 2,
+      "parent": "product",
+      "en": "Program and project management",
+      "zh": "项目管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "program_manager",
+      "level": 3,
+      "parent": "program_management",
+      "en": "Program manager",
+      "zh": "项目群经理",
+      "synonyms": {
+        "en": [
+          "technical program manager",
+          "tpm",
+          "program lead",
+          "senior program manager"
+        ],
+        "zh": [
+          "项目集经理",
+          "技术项目群经理"
+        ]
+      }
+    },
+    {
+      "id": "project_manager",
+      "level": 3,
+      "parent": "program_management",
+      "en": "Project manager",
+      "zh": "项目经理",
+      "synonyms": {
+        "en": [
+          "project coordinator",
+          "project lead",
+          "pmp",
+          "project management specialist",
+          "project officer"
+        ],
+        "zh": [
+          "项目专员",
+          "项目助理",
+          "项目主管",
+          "pmo"
+        ]
+      },
+      "soc": [
+        "13-1082.00"
+      ]
+    },
+    {
+      "id": "scrum_master",
+      "level": 3,
+      "parent": "program_management",
+      "en": "Scrum master",
+      "zh": "敏捷教练",
+      "synonyms": {
+        "en": [
+          "agile coach",
+          "agile project manager",
+          "agile delivery lead",
+          "scrum master agile"
+        ],
+        "zh": [
+          "scrum master",
+          "敏捷项目经理"
+        ]
+      }
+    },
+    {
+      "id": "design",
+      "level": 1,
+      "parent": null,
+      "en": "Design",
+      "zh": "设计",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "product_design",
+      "level": 2,
+      "parent": "design",
+      "en": "Product and UX design",
+      "zh": "产品与体验设计",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "product_designer",
+      "level": 3,
+      "parent": "product_design",
+      "en": "Product designer",
+      "zh": "产品设计师",
+      "synonyms": {
+        "en": [
+          "digital product designer",
+          "ux ui designer",
+          "ui ux designer",
+          "product design lead"
+        ],
+        "zh": [
+          "ui ux设计师",
+          "ux ui设计师",
+          "数字产品设计师"
+        ]
+      }
+    },
+    {
+      "id": "ux_designer",
+      "level": 3,
+      "parent": "product_design",
+      "en": "UX designer",
+      "zh": "交互设计师",
+      "synonyms": {
+        "en": [
+          "user experience designer",
+          "interaction designer",
+          "ux architect",
+          "ux writer",
+          "content designer",
+          "service designer"
+        ],
+        "zh": [
+          "用户体验设计师",
+          "ux设计师",
+          "交互设计",
+          "体验设计师"
+        ]
+      }
+    },
+    {
+      "id": "ui_designer",
+      "level": 3,
+      "parent": "product_design",
+      "en": "UI designer",
+      "zh": "UI设计师",
+      "synonyms": {
+        "en": [
+          "user interface designer",
+          "web designer",
+          "interface designer",
+          "app designer"
+        ],
+        "zh": [
+          "界面设计师",
+          "网页设计师",
+          "ui设计"
+        ]
+      },
+      "soc": [
+        "15-1255.00"
+      ]
+    },
+    {
+      "id": "ux_researcher",
+      "level": 3,
+      "parent": "product_design",
+      "en": "UX researcher",
+      "zh": "用户研究员",
+      "synonyms": {
+        "en": [
+          "user researcher",
+          "design researcher",
+          "usability researcher",
+          "user experience researcher"
+        ],
+        "zh": [
+          "用户研究",
+          "用研",
+          "用户体验研究员",
+          "用户研究专员"
+        ]
+      }
+    },
+    {
+      "id": "design_manager",
+      "level": 3,
+      "parent": "product_design",
+      "en": "Design manager",
+      "zh": "设计经理",
+      "synonyms": {
+        "en": [
+          "head of design",
+          "design director",
+          "design lead",
+          "creative director",
+          "vp of design"
+        ],
+        "zh": [
+          "设计总监",
+          "设计主管",
+          "创意总监"
+        ]
+      }
+    },
+    {
+      "id": "visual_design",
+      "level": 2,
+      "parent": "design",
+      "en": "Visual, brand and game art",
+      "zh": "视觉、品牌与游戏美术",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "graphic_designer",
+      "level": 3,
+      "parent": "visual_design",
+      "en": "Graphic designer",
+      "zh": "平面设计师",
+      "synonyms": {
+        "en": [
+          "visual designer",
+          "brand designer",
+          "communication designer",
+          "marketing designer",
+          "packaging designer",
+          "print designer"
+        ],
+        "zh": [
+          "视觉设计师",
+          "品牌设计师",
+          "美工",
+          "电商美工",
+          "包装设计师"
+        ]
+      },
+      "soc": [
+        "27-1024.00"
+      ]
+    },
+    {
+      "id": "motion_designer",
+      "level": 3,
+      "parent": "visual_design",
+      "en": "Motion designer and animator",
+      "zh": "动效设计师",
+      "synonyms": {
+        "en": [
+          "motion graphics designer",
+          "animator",
+          "2d animator",
+          "3d animator",
+          "motion graphics artist",
+          "vfx artist"
+        ],
+        "zh": [
+          "动画设计师",
+          "动画师",
+          "mg动画设计师",
+          "特效师",
+          "影视特效师"
+        ]
+      },
+      "soc": [
+        "27-1014.00"
+      ]
+    },
+    {
+      "id": "illustrator",
+      "level": 3,
+      "parent": "visual_design",
+      "en": "Illustrator",
+      "zh": "插画师",
+      "synonyms": {
+        "en": [
+          "illustration artist",
+          "digital illustrator",
+          "storyboard artist"
+        ],
+        "zh": [
+          "插画设计师",
+          "分镜师"
+        ]
+      }
+    },
+    {
+      "id": "game_artist",
+      "level": 3,
+      "parent": "visual_design",
+      "en": "Game artist",
+      "zh": "游戏美术",
+      "synonyms": {
+        "en": [
+          "3d artist",
+          "2d artist",
+          "technical artist",
+          "character artist",
+          "environment artist",
+          "3d modeler",
+          "concept artist"
+        ],
+        "zh": [
+          "游戏原画",
+          "原画师",
+          "3d美术",
+          "游戏建模师",
+          "角色原画",
+          "场景原画",
+          "技术美术"
+        ]
+      }
+    },
+    {
+      "id": "game_designer",
+      "level": 3,
+      "parent": "visual_design",
+      "en": "Game designer",
+      "zh": "游戏策划",
+      "synonyms": {
+        "en": [
+          "level designer",
+          "systems designer",
+          "narrative designer",
+          "game design",
+          "combat designer"
+        ],
+        "zh": [
+          "游戏策划师",
+          "关卡策划",
+          "数值策划",
+          "系统策划",
+          "剧情策划"
+        ]
+      }
+    },
+    {
+      "id": "spatial_design",
+      "level": 2,
+      "parent": "design",
+      "en": "Industrial, interior and architecture",
+      "zh": "工业、室内与建筑设计",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "industrial_designer",
+      "level": 3,
+      "parent": "spatial_design",
+      "en": "Industrial designer",
+      "zh": "工业设计师",
+      "synonyms": {
+        "en": [
+          "product industrial designer",
+          "cmf designer",
+          "industrial design engineer"
+        ],
+        "zh": [
+          "产品外观设计师",
+          "id设计师",
+          "工业设计"
+        ]
+      },
+      "soc": [
+        "27-1021.00"
+      ]
+    },
+    {
+      "id": "interior_designer",
+      "level": 3,
+      "parent": "spatial_design",
+      "en": "Interior designer",
+      "zh": "室内设计师",
+      "synonyms": {
+        "en": [
+          "space designer",
+          "interior architect",
+          "interior design consultant"
+        ],
+        "zh": [
+          "空间设计师",
+          "软装设计师",
+          "家装设计师"
+        ]
+      },
+      "soc": [
+        "27-1025.00"
+      ]
+    },
+    {
+      "id": "architect",
+      "level": 3,
+      "parent": "spatial_design",
+      "en": "Architect",
+      "zh": "建筑师",
+      "synonyms": {
+        "en": [
+          "building architect",
+          "architectural designer",
+          "project architect",
+          "licensed architect",
+          "landscape architect"
+        ],
+        "zh": [
+          "建筑设计师",
+          "注册建筑师",
+          "景观设计师",
+          "规划设计师"
+        ]
+      },
+      "soc": [
+        "17-1011.00"
+      ]
+    },
+    {
+      "id": "hardware",
+      "level": 1,
+      "parent": null,
+      "en": "Hardware and electronics",
+      "zh": "硬件与电子",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "hardware_design",
+      "level": 2,
+      "parent": "hardware",
+      "en": "Hardware design",
+      "zh": "硬件设计",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "hardware_engineer",
+      "level": 3,
+      "parent": "hardware_design",
+      "en": "Hardware engineer",
+      "zh": "硬件工程师",
+      "synonyms": {
+        "en": [
+          "computer hardware engineer",
+          "hardware design engineer",
+          "pcb design engineer",
+          "pcb engineer",
+          "board design engineer",
+          "hardware development engineer"
+        ],
+        "zh": [
+          "硬件开发工程师",
+          "pcb设计工程师",
+          "电路设计工程师",
+          "pcb工程师",
+          "layout工程师"
+        ]
+      },
+      "soc": [
+        "17-2061.00"
+      ]
+    },
+    {
+      "id": "electrical_engineer",
+      "level": 3,
+      "parent": "hardware_design",
+      "en": "Electrical engineer",
+      "zh": "电气工程师",
+      "synonyms": {
+        "en": [
+          "electrical design engineer",
+          "power systems engineer",
+          "power engineer",
+          "electrical project engineer"
+        ],
+        "zh": [
+          "电气设计工程师",
+          "电力工程师",
+          "强电工程师",
+          "电力系统工程师"
+        ]
+      },
+      "soc": [
+        "17-2071.00"
+      ]
+    },
+    {
+      "id": "electronics_engineer",
+      "level": 3,
+      "parent": "hardware_design",
+      "en": "Electronics engineer",
+      "zh": "电子工程师",
+      "synonyms": {
+        "en": [
+          "rf engineer",
+          "analog engineer",
+          "power electronics engineer",
+          "electronic design engineer",
+          "antenna engineer",
+          "signal integrity engineer"
+        ],
+        "zh": [
+          "射频工程师",
+          "模拟电路工程师",
+          "电子电路工程师",
+          "电源工程师",
+          "天线工程师"
+        ]
+      },
+      "soc": [
+        "17-2072.00"
+      ]
+    },
+    {
+      "id": "semiconductors",
+      "level": 2,
+      "parent": "hardware",
+      "en": "Semiconductors",
+      "zh": "半导体与芯片",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "chip_design_engineer",
+      "level": 3,
+      "parent": "semiconductors",
+      "en": "Chip design engineer",
+      "zh": "芯片设计工程师",
+      "synonyms": {
+        "en": [
+          "asic design engineer",
+          "asic engineer",
+          "rtl design engineer",
+          "digital design engineer",
+          "analog ic design engineer",
+          "fpga engineer",
+          "fpga developer",
+          "physical design engineer",
+          "silicon engineer"
+        ],
+        "zh": [
+          "ic设计工程师",
+          "数字ic设计工程师",
+          "模拟ic设计工程师",
+          "fpga工程师",
+          "芯片工程师",
+          "数字前端设计工程师",
+          "数字后端工程师",
+          "版图工程师"
+        ]
+      }
+    },
+    {
+      "id": "chip_verification_engineer",
+      "level": 3,
+      "parent": "semiconductors",
+      "en": "Chip verification engineer",
+      "zh": "芯片验证工程师",
+      "synonyms": {
+        "en": [
+          "design verification engineer",
+          "dv engineer",
+          "asic verification engineer",
+          "verification engineer"
+        ],
+        "zh": [
+          "ic验证工程师",
+          "数字验证工程师",
+          "验证工程师"
+        ]
+      }
+    },
+    {
+      "id": "semiconductor_process_engineer",
+      "level": 3,
+      "parent": "semiconductors",
+      "en": "Semiconductor process engineer",
+      "zh": "半导体工艺工程师",
+      "synonyms": {
+        "en": [
+          "process integration engineer",
+          "fab process engineer",
+          "etch engineer",
+          "lithography engineer",
+          "thin film engineer",
+          "yield engineer",
+          "semiconductor packaging engineer"
+        ],
+        "zh": [
+          "工艺整合工程师",
+          "制程工程师",
+          "光刻工程师",
+          "良率工程师",
+          "封装工程师",
+          "刻蚀工程师"
+        ]
+      }
+    },
+    {
+      "id": "robotics",
+      "level": 2,
+      "parent": "hardware",
+      "en": "Robotics and autonomy",
+      "zh": "机器人与自动驾驶",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "robotics_engineer",
+      "level": 3,
+      "parent": "robotics",
+      "en": "Robotics engineer",
+      "zh": "机器人工程师",
+      "synonyms": {
+        "en": [
+          "robotics software engineer",
+          "robotics developer",
+          "motion planning engineer",
+          "autonomy engineer",
+          "ros developer"
+        ],
+        "zh": [
+          "机器人算法工程师",
+          "机器人开发工程师",
+          "机器人软件工程师",
+          "运动控制工程师"
+        ]
+      }
+    },
+    {
+      "id": "controls_engineer",
+      "level": 3,
+      "parent": "robotics",
+      "en": "Controls and automation engineer",
+      "zh": "自动化工程师",
+      "synonyms": {
+        "en": [
+          "controls engineer",
+          "plc engineer",
+          "plc programmer",
+          "automation controls engineer",
+          "instrumentation engineer",
+          "scada engineer"
+        ],
+        "zh": [
+          "电气自动化工程师",
+          "plc工程师",
+          "自控工程师",
+          "仪表工程师"
+        ]
+      }
+    },
+    {
+      "id": "autonomous_driving_engineer",
+      "level": 3,
+      "parent": "robotics",
+      "en": "Autonomous driving engineer",
+      "zh": "自动驾驶工程师",
+      "synonyms": {
+        "en": [
+          "self driving engineer",
+          "adas engineer",
+          "perception engineer",
+          "autonomous vehicle engineer",
+          "planning and control engineer",
+          "slam engineer"
+        ],
+        "zh": [
+          "自动驾驶算法工程师",
+          "感知算法工程师",
+          "规划控制算法工程师",
+          "slam算法工程师",
+          "智能驾驶工程师"
+        ]
+      }
+    },
+    {
+      "id": "engineering",
+      "level": 1,
+      "parent": null,
+      "en": "Engineering",
+      "zh": "工程技术",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "mechanical_manufacturing",
+      "level": 2,
+      "parent": "engineering",
+      "en": "Mechanical and manufacturing",
+      "zh": "机械与制造工程",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "mechanical_engineer",
+      "level": 3,
+      "parent": "mechanical_manufacturing",
+      "en": "Mechanical engineer",
+      "zh": "机械工程师",
+      "synonyms": {
+        "en": [
+          "mechanical design engineer",
+          "cad engineer",
+          "mechanical product engineer",
+          "thermal engineer"
+        ],
+        "zh": [
+          "机械设计工程师",
+          "结构设计工程师",
+          "热设计工程师"
+        ]
+      },
+      "soc": [
+        "17-2141.00"
+      ]
+    },
+    {
+      "id": "manufacturing_engineer",
+      "level": 3,
+      "parent": "mechanical_manufacturing",
+      "en": "Manufacturing engineer",
+      "zh": "制造工程师",
+      "synonyms": {
+        "en": [
+          "production engineer",
+          "process engineer",
+          "manufacturing process engineer",
+          "npi engineer",
+          "new product introduction engineer"
+        ],
+        "zh": [
+          "生产工程师",
+          "工艺工程师",
+          "npi工程师",
+          "制造工艺工程师"
+        ]
+      }
+    },
+    {
+      "id": "industrial_engineer",
+      "level": 3,
+      "parent": "mechanical_manufacturing",
+      "en": "Industrial engineer",
+      "zh": "工业工程师",
+      "synonyms": {
+        "en": [
+          "ie engineer",
+          "lean engineer",
+          "continuous improvement engineer"
+        ],
+        "zh": [
+          "ie工程师",
+          "精益工程师",
+          "精益生产工程师"
+        ]
+      },
+      "soc": [
+        "17-2112.00"
+      ]
+    },
+    {
+      "id": "quality_engineer",
+      "level": 3,
+      "parent": "mechanical_manufacturing",
+      "en": "Quality engineer",
+      "zh": "质量工程师",
+      "synonyms": {
+        "en": [
+          "supplier quality engineer",
+          "sqe",
+          "manufacturing quality engineer",
+          "quality control engineer"
+        ],
+        "zh": [
+          "品质工程师",
+          "质量管理工程师",
+          "供应商质量工程师",
+          "sqe工程师",
+          "可靠性工程师"
+        ]
+      }
+    },
+    {
+      "id": "civil_construction",
+      "level": 2,
+      "parent": "engineering",
+      "en": "Civil and construction",
+      "zh": "土木与建筑工程",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "civil_engineer",
+      "level": 3,
+      "parent": "civil_construction",
+      "en": "Civil engineer",
+      "zh": "土木工程师",
+      "synonyms": {
+        "en": [
+          "structural engineer",
+          "site engineer",
+          "geotechnical engineer",
+          "transportation engineer",
+          "bridge engineer"
+        ],
+        "zh": [
+          "土木结构工程师",
+          "岩土工程师",
+          "道路桥梁工程师",
+          "施工员",
+          "现场工程师"
+        ]
+      },
+      "soc": [
+        "17-2051.00"
+      ]
+    },
+    {
+      "id": "construction_manager",
+      "level": 3,
+      "parent": "civil_construction",
+      "en": "Construction manager",
+      "zh": "施工经理",
+      "synonyms": {
+        "en": [
+          "site manager",
+          "construction project manager",
+          "construction superintendent",
+          "general contractor manager"
+        ],
+        "zh": [
+          "施工项目经理",
+          "工程经理",
+          "项目工程经理"
+        ]
+      },
+      "soc": [
+        "11-9021.00"
+      ]
+    },
+    {
+      "id": "mep_engineer",
+      "level": 3,
+      "parent": "civil_construction",
+      "en": "MEP engineer",
+      "zh": "机电工程师",
+      "synonyms": {
+        "en": [
+          "building services engineer",
+          "hvac engineer",
+          "plumbing engineer",
+          "mechanical electrical plumbing engineer"
+        ],
+        "zh": [
+          "暖通工程师",
+          "给排水工程师",
+          "建筑机电工程师"
+        ]
+      }
+    },
+    {
+      "id": "cost_estimator",
+      "level": 3,
+      "parent": "civil_construction",
+      "en": "Cost estimator / quantity surveyor",
+      "zh": "造价工程师",
+      "synonyms": {
+        "en": [
+          "quantity surveyor",
+          "cost estimator",
+          "cost engineer",
+          "estimator",
+          "construction estimator"
+        ],
+        "zh": [
+          "预算员",
+          "造价员",
+          "工程造价"
+        ]
+      },
+      "soc": [
+        "13-1051.00"
+      ]
+    },
+    {
+      "id": "process_energy",
+      "level": 2,
+      "parent": "engineering",
+      "en": "Chemical, energy and environment",
+      "zh": "化工、能源与环境",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "chemical_engineer",
+      "level": 3,
+      "parent": "process_energy",
+      "en": "Chemical engineer",
+      "zh": "化工工程师",
+      "synonyms": {
+        "en": [
+          "process chemical engineer",
+          "chemical process engineer"
+        ],
+        "zh": [
+          "化学工程师",
+          "化工工艺工程师"
+        ]
+      },
+      "soc": [
+        "17-2041.00"
+      ]
+    },
+    {
+      "id": "energy_engineer",
+      "level": 3,
+      "parent": "process_energy",
+      "en": "Energy engineer",
+      "zh": "新能源工程师",
+      "synonyms": {
+        "en": [
+          "renewable energy engineer",
+          "solar engineer",
+          "battery engineer",
+          "energy storage engineer",
+          "wind energy engineer",
+          "photovoltaic engineer"
+        ],
+        "zh": [
+          "能源工程师",
+          "光伏工程师",
+          "电池工程师",
+          "储能工程师",
+          "风电工程师",
+          "电池研发工程师"
+        ]
+      }
+    },
+    {
+      "id": "environmental_engineer",
+      "level": 3,
+      "parent": "process_energy",
+      "en": "Environmental and EHS engineer",
+      "zh": "环境工程师",
+      "synonyms": {
+        "en": [
+          "ehs engineer",
+          "environmental health and safety engineer",
+          "ehs specialist",
+          "sustainability engineer",
+          "safety engineer"
+        ],
+        "zh": [
+          "环保工程师",
+          "ehs工程师",
+          "安全环保工程师"
+        ]
+      },
+      "soc": [
+        "17-2081.00"
+      ]
+    },
+    {
+      "id": "materials_engineer",
+      "level": 3,
+      "parent": "process_energy",
+      "en": "Materials engineer",
+      "zh": "材料工程师",
+      "synonyms": {
+        "en": [
+          "materials scientist",
+          "metallurgical engineer",
+          "polymer engineer"
+        ],
+        "zh": [
+          "材料研发工程师",
+          "冶金工程师",
+          "高分子材料工程师"
+        ]
+      },
+      "soc": [
+        "17-2131.00"
+      ]
+    },
+    {
+      "id": "aero_auto",
+      "level": 2,
+      "parent": "engineering",
+      "en": "Aerospace and automotive",
+      "zh": "航空航天与汽车",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "aerospace_engineer",
+      "level": 3,
+      "parent": "aero_auto",
+      "en": "Aerospace engineer",
+      "zh": "航空航天工程师",
+      "synonyms": {
+        "en": [
+          "aeronautical engineer",
+          "avionics engineer",
+          "propulsion engineer",
+          "flight test engineer",
+          "spacecraft engineer"
+        ],
+        "zh": [
+          "飞行器设计工程师",
+          "航电工程师",
+          "航空工程师",
+          "航天工程师"
+        ]
+      },
+      "soc": [
+        "17-2011.00"
+      ]
+    },
+    {
+      "id": "automotive_engineer",
+      "level": 3,
+      "parent": "aero_auto",
+      "en": "Automotive engineer",
+      "zh": "汽车工程师",
+      "synonyms": {
+        "en": [
+          "vehicle engineer",
+          "powertrain engineer",
+          "chassis engineer",
+          "ev engineer",
+          "electric vehicle engineer",
+          "vehicle integration engineer"
+        ],
+        "zh": [
+          "整车工程师",
+          "动力总成工程师",
+          "底盘工程师",
+          "新能源汽车工程师",
+          "三电工程师"
+        ]
+      }
+    },
+    {
+      "id": "marketing",
+      "level": 1,
+      "parent": null,
+      "en": "Marketing and growth",
+      "zh": "市场营销与运营",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "marketing_brand",
+      "level": 2,
+      "parent": "marketing",
+      "en": "Marketing and brand",
+      "zh": "市场与品牌",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "marketing_manager",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Marketing manager",
+      "zh": "市场经理",
+      "synonyms": {
+        "en": [
+          "marketing lead",
+          "head of marketing",
+          "marketing director",
+          "cmo",
+          "chief marketing officer",
+          "vp marketing"
+        ],
+        "zh": [
+          "市场总监",
+          "营销经理",
+          "市场主管",
+          "营销总监",
+          "首席营销官"
+        ]
+      },
+      "soc": [
+        "11-2021.00"
+      ]
+    },
+    {
+      "id": "marketing_specialist",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Marketing specialist",
+      "zh": "市场专员",
+      "synonyms": {
+        "en": [
+          "marketing coordinator",
+          "marketing associate",
+          "marketing executive",
+          "marketing assistant",
+          "marketing generalist"
+        ],
+        "zh": [
+          "营销专员",
+          "市场营销",
+          "市场助理",
+          "市场推广专员",
+          "市场营销专员"
+        ]
+      },
+      "soc": [
+        "13-1161.00"
+      ]
+    },
+    {
+      "id": "brand_manager",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Brand manager",
+      "zh": "品牌经理",
+      "synonyms": {
+        "en": [
+          "brand marketing manager",
+          "brand strategist",
+          "brand specialist"
+        ],
+        "zh": [
+          "品牌专员",
+          "品牌策划",
+          "品牌营销经理"
+        ]
+      }
+    },
+    {
+      "id": "product_marketing_manager",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Product marketing manager",
+      "zh": "产品市场经理",
+      "synonyms": {
+        "en": [
+          "pmm",
+          "product marketer",
+          "product marketing lead"
+        ],
+        "zh": [
+          "产品营销经理",
+          "产品市场专员"
+        ]
+      }
+    },
+    {
+      "id": "market_research_analyst",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Market research analyst",
+      "zh": "市场研究分析师",
+      "synonyms": {
+        "en": [
+          "market researcher",
+          "consumer insights analyst",
+          "insights manager",
+          "market intelligence analyst"
+        ],
+        "zh": [
+          "市场调研专员",
+          "消费者洞察",
+          "市场研究员",
+          "用户洞察分析师"
+        ]
+      },
+      "soc": [
+        "13-1161.00"
+      ]
+    },
+    {
+      "id": "pr_specialist",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Communications and PR specialist",
+      "zh": "公关专员",
+      "synonyms": {
+        "en": [
+          "public relations specialist",
+          "pr manager",
+          "communications manager",
+          "corporate communications",
+          "media relations",
+          "communications specialist"
+        ],
+        "zh": [
+          "公关经理",
+          "品牌公关",
+          "媒介经理",
+          "媒介专员"
+        ]
+      },
+      "soc": [
+        "27-3031.00"
+      ]
+    },
+    {
+      "id": "event_planner",
+      "level": 3,
+      "parent": "marketing_brand",
+      "en": "Event planner",
+      "zh": "活动策划",
+      "synonyms": {
+        "en": [
+          "event coordinator",
+          "event manager",
+          "event marketing manager",
+          "conference planner"
+        ],
+        "zh": [
+          "活动策划经理",
+          "会展策划",
+          "活动执行"
+        ]
+      },
+      "soc": [
+        "13-1121.00"
+      ]
+    },
+    {
+      "id": "digital_marketing",
+      "level": 2,
+      "parent": "marketing",
+      "en": "Digital and growth marketing",
+      "zh": "数字营销与增长",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "digital_marketing_manager",
+      "level": 3,
+      "parent": "digital_marketing",
+      "en": "Digital marketing manager",
+      "zh": "数字营销经理",
+      "synonyms": {
+        "en": [
+          "online marketing manager",
+          "digital marketing specialist",
+          "performance marketing manager",
+          "paid media manager",
+          "ppc specialist",
+          "paid social manager",
+          "media buyer"
+        ],
+        "zh": [
+          "网络营销",
+          "效果广告投放",
+          "信息流广告优化师",
+          "投放专员",
+          "广告优化师",
+          "投放优化师"
+        ]
+      }
+    },
+    {
+      "id": "seo_specialist",
+      "level": 3,
+      "parent": "digital_marketing",
+      "en": "SEO specialist",
+      "zh": "SEO专员",
+      "synonyms": {
+        "en": [
+          "search engine optimization specialist",
+          "seo manager",
+          "sem specialist",
+          "seo analyst"
+        ],
+        "zh": [
+          "seo优化",
+          "搜索引擎优化专员",
+          "sem专员",
+          "seo优化师"
+        ]
+      }
+    },
+    {
+      "id": "growth_marketer",
+      "level": 3,
+      "parent": "digital_marketing",
+      "en": "Growth marketer",
+      "zh": "增长经理",
+      "synonyms": {
+        "en": [
+          "growth manager",
+          "growth hacker",
+          "user acquisition manager",
+          "lifecycle marketing manager",
+          "crm marketing manager",
+          "retention marketing manager"
+        ],
+        "zh": [
+          "用户增长",
+          "增长运营",
+          "拉新专员",
+          "用户增长经理"
+        ]
+      }
+    },
+    {
+      "id": "content_marketer",
+      "level": 3,
+      "parent": "digital_marketing",
+      "en": "Content marketing manager",
+      "zh": "内容营销经理",
+      "synonyms": {
+        "en": [
+          "content marketer",
+          "content strategist",
+          "content marketing specialist"
+        ],
+        "zh": [
+          "内容营销",
+          "内容策划",
+          "内容营销专员"
+        ]
+      }
+    },
+    {
+      "id": "social_media_manager",
+      "level": 3,
+      "parent": "digital_marketing",
+      "en": "Social media manager",
+      "zh": "新媒体运营",
+      "synonyms": {
+        "en": [
+          "social media specialist",
+          "community manager",
+          "social media coordinator",
+          "social media marketing manager"
+        ],
+        "zh": [
+          "社交媒体运营",
+          "社群运营",
+          "社区运营",
+          "小红书运营",
+          "抖音运营",
+          "公众号运营"
+        ]
+      }
+    },
+    {
+      "id": "ecommerce_manager",
+      "level": 3,
+      "parent": "digital_marketing",
+      "en": "E-commerce manager",
+      "zh": "电商运营",
+      "synonyms": {
+        "en": [
+          "ecommerce manager",
+          "e commerce specialist",
+          "online store manager",
+          "amazon account manager",
+          "marketplace manager",
+          "ecommerce specialist"
+        ],
+        "zh": [
+          "电商运营专员",
+          "天猫运营",
+          "淘宝运营",
+          "跨境电商运营",
+          "亚马逊运营",
+          "京东运营"
+        ]
+      }
+    },
+    {
+      "id": "online_operations",
+      "level": 2,
+      "parent": "marketing",
+      "en": "Online operations",
+      "zh": "互联网运营",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "user_operations",
+      "level": 3,
+      "parent": "online_operations",
+      "en": "User operations specialist",
+      "zh": "用户运营",
+      "synonyms": {
+        "en": [
+          "user operations",
+          "member operations specialist",
+          "user engagement specialist"
+        ],
+        "zh": [
+          "用户运营专员",
+          "会员运营"
+        ]
+      }
+    },
+    {
+      "id": "content_operations",
+      "level": 3,
+      "parent": "online_operations",
+      "en": "Content operations specialist",
+      "zh": "内容运营",
+      "synonyms": {
+        "en": [
+          "content operations",
+          "content operations manager"
+        ],
+        "zh": [
+          "内容运营专员",
+          "编辑运营"
+        ]
+      }
+    },
+    {
+      "id": "product_operations",
+      "level": 3,
+      "parent": "online_operations",
+      "en": "Product operations specialist",
+      "zh": "产品运营",
+      "synonyms": {
+        "en": [
+          "product operations manager",
+          "product ops",
+          "product operations"
+        ],
+        "zh": [
+          "产品运营专员",
+          "活动运营"
+        ]
+      }
+    },
+    {
+      "id": "live_commerce_operations",
+      "level": 3,
+      "parent": "online_operations",
+      "en": "Live commerce operations specialist",
+      "zh": "直播运营",
+      "synonyms": {
+        "en": [
+          "livestream operations",
+          "live commerce manager",
+          "live streaming operations"
+        ],
+        "zh": [
+          "直播运营专员",
+          "主播运营",
+          "直播电商运营"
+        ]
+      }
+    },
+    {
+      "id": "content_moderator",
+      "level": 3,
+      "parent": "online_operations",
+      "en": "Content moderator",
+      "zh": "内容审核",
+      "synonyms": {
+        "en": [
+          "trust and safety analyst",
+          "content reviewer",
+          "trust and safety specialist"
+        ],
+        "zh": [
+          "内容审核员",
+          "审核专员",
+          "内容安全审核"
+        ]
+      }
+    },
+    {
+      "id": "sales",
+      "level": 1,
+      "parent": null,
+      "en": "Sales and business development",
+      "zh": "销售与商务拓展",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "sales_roles",
+      "level": 2,
+      "parent": "sales",
+      "en": "Sales",
+      "zh": "销售业务",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "account_executive",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Account executive",
+      "zh": "销售代表",
+      "synonyms": {
+        "en": [
+          "ae",
+          "sales executive",
+          "enterprise account executive",
+          "sales representative",
+          "sales rep",
+          "outside sales representative",
+          "sales consultant"
+        ],
+        "zh": [
+          "销售",
+          "大客户销售",
+          "销售专员",
+          "销售顾问"
+        ]
+      },
+      "soc": [
+        "41-3091.00"
+      ]
+    },
+    {
+      "id": "sdr",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Sales development representative",
+      "zh": "销售开发代表",
+      "synonyms": {
+        "en": [
+          "sdr",
+          "bdr",
+          "business development representative",
+          "inside sales representative",
+          "lead generation specialist"
+        ],
+        "zh": [
+          "电话销售",
+          "电销",
+          "销售线索专员",
+          "网络销售"
+        ]
+      }
+    },
+    {
+      "id": "account_manager",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Account manager",
+      "zh": "客户经理",
+      "synonyms": {
+        "en": [
+          "key account manager",
+          "kam",
+          "client manager",
+          "client account manager"
+        ],
+        "zh": [
+          "大客户经理",
+          "ka经理",
+          "渠道客户经理"
+        ]
+      }
+    },
+    {
+      "id": "sales_manager",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Sales manager",
+      "zh": "销售经理",
+      "synonyms": {
+        "en": [
+          "head of sales",
+          "sales director",
+          "vp sales",
+          "vp of sales",
+          "regional sales manager",
+          "sales lead",
+          "area sales manager"
+        ],
+        "zh": [
+          "销售总监",
+          "区域销售经理",
+          "销售主管",
+          "大区经理"
+        ]
+      },
+      "soc": [
+        "11-2022.00"
+      ]
+    },
+    {
+      "id": "sales_engineer",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Sales engineer",
+      "zh": "售前工程师",
+      "synonyms": {
+        "en": [
+          "solutions engineer",
+          "presales engineer",
+          "pre sales consultant",
+          "presales consultant",
+          "solutions consultant",
+          "technical sales engineer"
+        ],
+        "zh": [
+          "售前顾问",
+          "解决方案工程师",
+          "技术销售",
+          "解决方案架构师"
+        ]
+      },
+      "soc": [
+        "41-9031.00"
+      ]
+    },
+    {
+      "id": "retail_sales",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Retail sales associate",
+      "zh": "门店销售",
+      "synonyms": {
+        "en": [
+          "retail associate",
+          "store associate",
+          "sales associate",
+          "retail sales representative",
+          "cashier"
+        ],
+        "zh": [
+          "导购",
+          "店员",
+          "收银员",
+          "门店导购"
+        ]
+      },
+      "soc": [
+        "41-2031.00"
+      ]
+    },
+    {
+      "id": "store_manager",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Store manager",
+      "zh": "店长",
+      "synonyms": {
+        "en": [
+          "retail store manager",
+          "shop manager",
+          "assistant store manager",
+          "retail manager"
+        ],
+        "zh": [
+          "门店经理",
+          "店铺经理",
+          "门店店长"
+        ]
+      }
+    },
+    {
+      "id": "real_estate_agent",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Real estate agent",
+      "zh": "房产经纪人",
+      "synonyms": {
+        "en": [
+          "realtor",
+          "property agent",
+          "leasing consultant",
+          "real estate broker",
+          "leasing agent"
+        ],
+        "zh": [
+          "房产销售",
+          "置业顾问",
+          "房地产经纪人",
+          "租赁顾问"
+        ]
+      },
+      "soc": [
+        "41-9022.00"
+      ]
+    },
+    {
+      "id": "insurance_agent",
+      "level": 3,
+      "parent": "sales_roles",
+      "en": "Insurance agent",
+      "zh": "保险代理人",
+      "synonyms": {
+        "en": [
+          "insurance broker",
+          "insurance advisor",
+          "insurance sales agent"
+        ],
+        "zh": [
+          "保险顾问",
+          "保险经纪人",
+          "保险销售"
+        ]
+      },
+      "soc": [
+        "41-3021.00"
+      ]
+    },
+    {
+      "id": "business_development",
+      "level": 2,
+      "parent": "sales",
+      "en": "Business development and partnerships",
+      "zh": "商务拓展与合作",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "bd_manager",
+      "level": 3,
+      "parent": "business_development",
+      "en": "Business development manager",
+      "zh": "商务拓展经理",
+      "synonyms": {
+        "en": [
+          "bd manager",
+          "business developer",
+          "bdm",
+          "biz dev manager",
+          "business development specialist"
+        ],
+        "zh": [
+          "bd经理",
+          "商务经理",
+          "商务拓展",
+          "bd专员",
+          "商务专员"
+        ]
+      }
+    },
+    {
+      "id": "partnerships_manager",
+      "level": 3,
+      "parent": "business_development",
+      "en": "Partnerships and channel manager",
+      "zh": "渠道经理",
+      "synonyms": {
+        "en": [
+          "partnerships manager",
+          "alliance manager",
+          "channel manager",
+          "channel sales manager",
+          "partner manager"
+        ],
+        "zh": [
+          "渠道销售",
+          "合作伙伴经理",
+          "渠道专员",
+          "生态合作经理"
+        ]
+      }
+    },
+    {
+      "id": "customer",
+      "level": 1,
+      "parent": null,
+      "en": "Customer support and success",
+      "zh": "客户服务与成功",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "customer_service",
+      "level": 2,
+      "parent": "customer",
+      "en": "Customer service and support",
+      "zh": "客户服务与技术支持",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "customer_service_rep",
+      "level": 3,
+      "parent": "customer_service",
+      "en": "Customer service representative",
+      "zh": "客服专员",
+      "synonyms": {
+        "en": [
+          "customer service agent",
+          "customer support representative",
+          "call center agent",
+          "customer care representative",
+          "customer service associate",
+          "customer support specialist",
+          "call center representative"
+        ],
+        "zh": [
+          "客服",
+          "在线客服",
+          "电话客服",
+          "客户服务专员",
+          "售后客服"
+        ]
+      },
+      "soc": [
+        "43-4051.00"
+      ]
+    },
+    {
+      "id": "technical_support_engineer",
+      "level": 3,
+      "parent": "customer_service",
+      "en": "Technical support engineer",
+      "zh": "技术支持工程师",
+      "synonyms": {
+        "en": [
+          "support engineer",
+          "application support engineer",
+          "product support specialist",
+          "customer support engineer",
+          "technical support specialist",
+          "field application engineer"
+        ],
+        "zh": [
+          "技术支持",
+          "售后技术支持",
+          "售后工程师",
+          "现场应用工程师",
+          "fae"
+        ]
+      }
+    },
+    {
+      "id": "customer_service_manager",
+      "level": 3,
+      "parent": "customer_service",
+      "en": "Customer service manager",
+      "zh": "客服经理",
+      "synonyms": {
+        "en": [
+          "support manager",
+          "head of support",
+          "customer support lead",
+          "call center manager",
+          "customer support manager"
+        ],
+        "zh": [
+          "客服主管",
+          "客服组长"
+        ]
+      }
+    },
+    {
+      "id": "customer_success",
+      "level": 2,
+      "parent": "customer",
+      "en": "Customer success",
+      "zh": "客户成功",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "customer_success_manager",
+      "level": 3,
+      "parent": "customer_success",
+      "en": "Customer success manager",
+      "zh": "客户成功经理",
+      "synonyms": {
+        "en": [
+          "csm",
+          "client success manager",
+          "customer success specialist",
+          "customer success lead",
+          "client services manager"
+        ],
+        "zh": [
+          "客户成功专员"
+        ]
+      }
+    },
+    {
+      "id": "onboarding_specialist",
+      "level": 3,
+      "parent": "customer_success",
+      "en": "Customer onboarding specialist",
+      "zh": "客户上线专员",
+      "synonyms": {
+        "en": [
+          "onboarding specialist",
+          "customer onboarding manager",
+          "client onboarding specialist"
+        ],
+        "zh": [
+          "客户培训专员",
+          "客户上线经理"
+        ]
+      }
+    },
+    {
+      "id": "finance",
+      "level": 1,
+      "parent": null,
+      "en": "Finance and accounting",
+      "zh": "财务与金融",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "accounting",
+      "level": 2,
+      "parent": "finance",
+      "en": "Accounting and audit",
+      "zh": "会计与审计",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "accountant",
+      "level": 3,
+      "parent": "accounting",
+      "en": "Accountant",
+      "zh": "会计",
+      "synonyms": {
+        "en": [
+          "staff accountant",
+          "general ledger accountant",
+          "cost accountant",
+          "cpa",
+          "chartered accountant",
+          "senior accountant",
+          "accounting specialist"
+        ],
+        "zh": [
+          "会计师",
+          "总账会计",
+          "成本会计",
+          "注册会计师",
+          "主办会计"
+        ]
+      },
+      "soc": [
+        "13-2011.00"
+      ]
+    },
+    {
+      "id": "auditor",
+      "level": 3,
+      "parent": "accounting",
+      "en": "Auditor",
+      "zh": "审计师",
+      "synonyms": {
+        "en": [
+          "internal auditor",
+          "external auditor",
+          "audit associate",
+          "audit senior",
+          "audit manager",
+          "financial auditor"
+        ],
+        "zh": [
+          "审计",
+          "内审",
+          "审计专员",
+          "内部审计"
+        ]
+      },
+      "soc": [
+        "13-2011.00"
+      ]
+    },
+    {
+      "id": "bookkeeper",
+      "level": 3,
+      "parent": "accounting",
+      "en": "Bookkeeper and AP/AR specialist",
+      "zh": "出纳",
+      "synonyms": {
+        "en": [
+          "bookkeeper",
+          "bookkeeping clerk",
+          "accounts payable specialist",
+          "accounts receivable specialist",
+          "ap clerk",
+          "ar clerk",
+          "billing specialist",
+          "accounting clerk"
+        ],
+        "zh": [
+          "出纳员",
+          "应付会计",
+          "应收会计",
+          "财务助理",
+          "财务专员"
+        ]
+      },
+      "soc": [
+        "43-3031.00"
+      ]
+    },
+    {
+      "id": "tax_specialist",
+      "level": 3,
+      "parent": "accounting",
+      "en": "Tax specialist",
+      "zh": "税务专员",
+      "synonyms": {
+        "en": [
+          "tax accountant",
+          "tax manager",
+          "tax consultant",
+          "tax advisor",
+          "tax analyst"
+        ],
+        "zh": [
+          "税务经理",
+          "税务会计",
+          "税务顾问"
+        ]
+      }
+    },
+    {
+      "id": "finance_leader",
+      "level": 3,
+      "parent": "accounting",
+      "en": "Finance manager / controller",
+      "zh": "财务经理",
+      "synonyms": {
+        "en": [
+          "financial controller",
+          "controller",
+          "finance manager",
+          "head of finance",
+          "cfo",
+          "chief financial officer",
+          "finance director",
+          "treasurer"
+        ],
+        "zh": [
+          "财务总监",
+          "首席财务官",
+          "财务主管"
+        ]
+      },
+      "soc": [
+        "11-3031.01"
+      ]
+    },
+    {
+      "id": "financial_analysis",
+      "level": 2,
+      "parent": "finance",
+      "en": "Financial analysis and investment",
+      "zh": "财务分析与投资",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "financial_analyst",
+      "level": 3,
+      "parent": "financial_analysis",
+      "en": "Financial analyst",
+      "zh": "财务分析师",
+      "synonyms": {
+        "en": [
+          "fpa analyst",
+          "finance analyst",
+          "corporate finance analyst",
+          "budget analyst",
+          "financial planning analyst"
+        ],
+        "zh": [
+          "财务分析",
+          "fpa",
+          "经营分析师",
+          "预算分析师"
+        ]
+      },
+      "soc": [
+        "13-2051.00"
+      ]
+    },
+    {
+      "id": "investment_analyst",
+      "level": 3,
+      "parent": "financial_analysis",
+      "en": "Investment analyst",
+      "zh": "投资分析师",
+      "synonyms": {
+        "en": [
+          "equity research analyst",
+          "investment associate",
+          "private equity associate",
+          "venture capital analyst",
+          "buy side analyst",
+          "portfolio analyst"
+        ],
+        "zh": [
+          "行业研究员",
+          "投资经理",
+          "投研",
+          "股票研究员",
+          "投资助理",
+          "基金研究员"
+        ]
+      },
+      "soc": [
+        "13-2051.00"
+      ]
+    },
+    {
+      "id": "investment_banker",
+      "level": 3,
+      "parent": "financial_analysis",
+      "en": "Investment banking analyst",
+      "zh": "投行分析师",
+      "synonyms": {
+        "en": [
+          "investment banker",
+          "ib analyst",
+          "m and a analyst",
+          "investment banking associate"
+        ],
+        "zh": [
+          "投资银行分析师",
+          "并购分析师",
+          "投行",
+          "投行经理"
+        ]
+      }
+    },
+    {
+      "id": "quant_analyst",
+      "level": 3,
+      "parent": "financial_analysis",
+      "en": "Quantitative analyst",
+      "zh": "量化研究员",
+      "synonyms": {
+        "en": [
+          "quant",
+          "quantitative researcher",
+          "quant developer",
+          "quantitative trader",
+          "quantitative strategist",
+          "quant researcher"
+        ],
+        "zh": [
+          "量化分析师",
+          "量化开发工程师",
+          "量化交易员",
+          "量化策略研究员"
+        ]
+      },
+      "soc": [
+        "13-2099.01"
+      ]
+    },
+    {
+      "id": "risk_analyst",
+      "level": 3,
+      "parent": "financial_analysis",
+      "en": "Risk and credit analyst",
+      "zh": "风控分析师",
+      "synonyms": {
+        "en": [
+          "risk analyst",
+          "credit risk analyst",
+          "risk manager",
+          "market risk analyst",
+          "credit analyst",
+          "fraud analyst",
+          "underwriter"
+        ],
+        "zh": [
+          "风险管理",
+          "风控专员",
+          "信贷审批",
+          "信用分析师",
+          "反欺诈分析师",
+          "风控策略分析师"
+        ]
+      },
+      "soc": [
+        "13-2054.00"
+      ]
+    },
+    {
+      "id": "actuary",
+      "level": 3,
+      "parent": "financial_analysis",
+      "en": "Actuary",
+      "zh": "精算师",
+      "synonyms": {
+        "en": [
+          "actuarial analyst",
+          "actuarial associate"
+        ],
+        "zh": [
+          "精算分析师",
+          "精算专员"
+        ]
+      },
+      "soc": [
+        "15-2011.00"
+      ]
+    },
+    {
+      "id": "banking",
+      "level": 2,
+      "parent": "finance",
+      "en": "Banking and wealth",
+      "zh": "银行与财富管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "financial_advisor",
+      "level": 3,
+      "parent": "banking",
+      "en": "Financial advisor",
+      "zh": "理财顾问",
+      "synonyms": {
+        "en": [
+          "wealth manager",
+          "financial planner",
+          "private banker",
+          "relationship manager",
+          "wealth advisor"
+        ],
+        "zh": [
+          "理财经理",
+          "财富顾问",
+          "私人银行家",
+          "客户关系经理"
+        ]
+      },
+      "soc": [
+        "13-2052.00"
+      ]
+    },
+    {
+      "id": "loan_officer",
+      "level": 3,
+      "parent": "banking",
+      "en": "Loan officer",
+      "zh": "信贷员",
+      "synonyms": {
+        "en": [
+          "mortgage loan officer",
+          "credit officer",
+          "loan processor",
+          "mortgage advisor"
+        ],
+        "zh": [
+          "信贷经理",
+          "贷款专员",
+          "按揭专员"
+        ]
+      },
+      "soc": [
+        "13-2072.00"
+      ]
+    },
+    {
+      "id": "bank_teller",
+      "level": 3,
+      "parent": "banking",
+      "en": "Bank teller",
+      "zh": "银行柜员",
+      "synonyms": {
+        "en": [
+          "teller",
+          "personal banker",
+          "bank associate"
+        ],
+        "zh": [
+          "柜员",
+          "银行大堂经理",
+          "综合柜员"
+        ]
+      },
+      "soc": [
+        "43-3071.00"
+      ]
+    },
+    {
+      "id": "trader",
+      "level": 3,
+      "parent": "banking",
+      "en": "Trader",
+      "zh": "交易员",
+      "synonyms": {
+        "en": [
+          "securities trader",
+          "equity trader",
+          "sales and trading analyst",
+          "fx trader",
+          "commodities trader"
+        ],
+        "zh": [
+          "证券交易员",
+          "期货交易员",
+          "外汇交易员"
+        ]
+      },
+      "soc": [
+        "41-3031.00"
+      ]
+    },
+    {
+      "id": "operations",
+      "level": 1,
+      "parent": null,
+      "en": "Operations and supply chain",
+      "zh": "运营管理与供应链",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "business_operations",
+      "level": 2,
+      "parent": "operations",
+      "en": "Business operations",
+      "zh": "业务运营与管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "operations_manager",
+      "level": 3,
+      "parent": "business_operations",
+      "en": "Operations manager",
+      "zh": "运营管理经理",
+      "synonyms": {
+        "en": [
+          "general manager",
+          "business operations manager",
+          "head of operations",
+          "coo",
+          "chief operating officer",
+          "director of operations",
+          "operations director"
+        ],
+        "zh": [
+          "总经理",
+          "首席运营官",
+          "运营总监",
+          "营运经理"
+        ]
+      },
+      "soc": [
+        "11-1021.00"
+      ]
+    },
+    {
+      "id": "operations_analyst",
+      "level": 3,
+      "parent": "business_operations",
+      "en": "Operations analyst",
+      "zh": "运营分析专员",
+      "synonyms": {
+        "en": [
+          "business operations analyst",
+          "strategy and operations analyst",
+          "bizops analyst",
+          "operations specialist"
+        ],
+        "zh": [
+          "运营分析师",
+          "经营分析专员"
+        ]
+      }
+    },
+    {
+      "id": "facilities_manager",
+      "level": 3,
+      "parent": "business_operations",
+      "en": "Facilities manager",
+      "zh": "设施经理",
+      "synonyms": {
+        "en": [
+          "facility manager",
+          "building manager",
+          "property manager"
+        ],
+        "zh": [
+          "物业经理",
+          "厂务经理",
+          "设施管理"
+        ]
+      },
+      "soc": [
+        "11-3013.00"
+      ]
+    },
+    {
+      "id": "supply_chain",
+      "level": 2,
+      "parent": "operations",
+      "en": "Supply chain and logistics",
+      "zh": "供应链与物流",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "supply_chain_manager",
+      "level": 3,
+      "parent": "supply_chain",
+      "en": "Supply chain manager",
+      "zh": "供应链经理",
+      "synonyms": {
+        "en": [
+          "supply chain planner",
+          "demand planner",
+          "supply planner",
+          "sop manager",
+          "planning manager",
+          "supply chain analyst"
+        ],
+        "zh": [
+          "供应链专员",
+          "计划经理",
+          "需求计划",
+          "生产计划",
+          "pmc",
+          "物料计划"
+        ]
+      },
+      "soc": [
+        "11-3071.04"
+      ]
+    },
+    {
+      "id": "logistics_coordinator",
+      "level": 3,
+      "parent": "supply_chain",
+      "en": "Logistics coordinator",
+      "zh": "物流专员",
+      "synonyms": {
+        "en": [
+          "logistician",
+          "logistics manager",
+          "transportation coordinator",
+          "freight forwarder",
+          "shipping coordinator",
+          "logistics specialist"
+        ],
+        "zh": [
+          "物流经理",
+          "货运代理",
+          "国际物流",
+          "跨境物流",
+          "物流调度"
+        ]
+      },
+      "soc": [
+        "13-1081.00"
+      ]
+    },
+    {
+      "id": "buyer",
+      "level": 3,
+      "parent": "supply_chain",
+      "en": "Buyer and procurement specialist",
+      "zh": "采购专员",
+      "synonyms": {
+        "en": [
+          "buyer",
+          "purchasing agent",
+          "procurement specialist",
+          "purchasing manager",
+          "sourcing manager",
+          "procurement manager",
+          "category manager"
+        ],
+        "zh": [
+          "采购",
+          "采购经理",
+          "寻源经理",
+          "采购工程师",
+          "品类经理"
+        ]
+      },
+      "soc": [
+        "13-1023.00"
+      ]
+    },
+    {
+      "id": "warehouse_manager",
+      "level": 3,
+      "parent": "supply_chain",
+      "en": "Warehouse manager",
+      "zh": "仓储经理",
+      "synonyms": {
+        "en": [
+          "warehouse supervisor",
+          "inventory manager",
+          "distribution center manager",
+          "inventory control specialist",
+          "warehouse associate"
+        ],
+        "zh": [
+          "仓库主管",
+          "仓管员",
+          "库管",
+          "仓库管理员"
+        ]
+      }
+    },
+    {
+      "id": "import_export",
+      "level": 3,
+      "parent": "supply_chain",
+      "en": "Import and export specialist",
+      "zh": "外贸专员",
+      "synonyms": {
+        "en": [
+          "trade compliance specialist",
+          "customs specialist",
+          "export coordinator",
+          "foreign trade specialist",
+          "import coordinator",
+          "customs broker"
+        ],
+        "zh": [
+          "外贸业务员",
+          "报关员",
+          "关务专员",
+          "外贸跟单",
+          "单证员"
+        ]
+      }
+    },
+    {
+      "id": "people",
+      "level": 1,
+      "parent": null,
+      "en": "People and HR",
+      "zh": "人力资源",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "human_resources",
+      "level": 2,
+      "parent": "people",
+      "en": "Human resources",
+      "zh": "人力资源管理",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "hr_generalist",
+      "level": 3,
+      "parent": "human_resources",
+      "en": "HR generalist",
+      "zh": "人事专员",
+      "synonyms": {
+        "en": [
+          "hr specialist",
+          "human resources specialist",
+          "hr coordinator",
+          "hr associate",
+          "hr assistant",
+          "human resources generalist",
+          "people operations specialist"
+        ],
+        "zh": [
+          "人力资源专员",
+          "人事助理",
+          "hr专员",
+          "人事行政专员"
+        ]
+      },
+      "soc": [
+        "13-1071.00"
+      ]
+    },
+    {
+      "id": "hrbp",
+      "level": 3,
+      "parent": "human_resources",
+      "en": "HR business partner",
+      "zh": "HRBP",
+      "synonyms": {
+        "en": [
+          "hrbp",
+          "people partner",
+          "human resources business partner"
+        ],
+        "zh": [
+          "人力资源业务伙伴",
+          "hr业务伙伴"
+        ]
+      }
+    },
+    {
+      "id": "hr_manager",
+      "level": 3,
+      "parent": "human_resources",
+      "en": "HR manager",
+      "zh": "人力资源经理",
+      "synonyms": {
+        "en": [
+          "hr director",
+          "chief people officer",
+          "vp people",
+          "head of hr",
+          "head of people",
+          "human resources manager",
+          "people operations manager"
+        ],
+        "zh": [
+          "人事经理",
+          "人力资源总监",
+          "hr经理",
+          "hrd",
+          "人事总监"
+        ]
+      },
+      "soc": [
+        "11-3121.00"
+      ]
+    },
+    {
+      "id": "compensation_benefits",
+      "level": 3,
+      "parent": "human_resources",
+      "en": "Compensation and benefits specialist",
+      "zh": "薪酬福利专员",
+      "synonyms": {
+        "en": [
+          "compensation analyst",
+          "payroll specialist",
+          "benefits administrator",
+          "total rewards manager",
+          "payroll administrator",
+          "compensation manager"
+        ],
+        "zh": [
+          "薪酬专员",
+          "薪资专员",
+          "薪酬福利经理",
+          "绩效专员"
+        ]
+      },
+      "soc": [
+        "13-1141.00"
+      ]
+    },
+    {
+      "id": "learning_development",
+      "level": 3,
+      "parent": "human_resources",
+      "en": "Learning and development specialist",
+      "zh": "培训专员",
+      "synonyms": {
+        "en": [
+          "training specialist",
+          "l and d manager",
+          "learning and development manager",
+          "trainer",
+          "corporate trainer",
+          "training manager"
+        ],
+        "zh": [
+          "培训经理",
+          "培训师",
+          "企业讲师",
+          "内训师"
+        ]
+      },
+      "soc": [
+        "13-1151.00"
+      ]
+    },
+    {
+      "id": "employee_relations",
+      "level": 3,
+      "parent": "human_resources",
+      "en": "Employee relations specialist",
+      "zh": "员工关系专员",
+      "synonyms": {
+        "en": [
+          "employee relations manager",
+          "labor relations specialist"
+        ],
+        "zh": [
+          "员工关系",
+          "劳动关系专员"
+        ]
+      }
+    },
+    {
+      "id": "recruiting",
+      "level": 2,
+      "parent": "people",
+      "en": "Recruiting",
+      "zh": "招聘",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "recruiter",
+      "level": 3,
+      "parent": "recruiting",
+      "en": "Recruiter",
+      "zh": "招聘专员",
+      "synonyms": {
+        "en": [
+          "technical recruiter",
+          "talent acquisition specialist",
+          "talent acquisition partner",
+          "sourcer",
+          "recruiting coordinator",
+          "recruitment consultant",
+          "headhunter",
+          "talent partner"
+        ],
+        "zh": [
+          "猎头",
+          "猎头顾问",
+          "hr招聘",
+          "招聘助理",
+          "招聘顾问"
+        ]
+      }
+    },
+    {
+      "id": "talent_acquisition_manager",
+      "level": 3,
+      "parent": "recruiting",
+      "en": "Talent acquisition manager",
+      "zh": "招聘经理",
+      "synonyms": {
+        "en": [
+          "head of talent acquisition",
+          "recruiting manager",
+          "recruitment manager",
+          "ta lead",
+          "head of recruiting"
+        ],
+        "zh": [
+          "招聘主管",
+          "招聘总监"
+        ]
+      }
+    },
+    {
+      "id": "legal",
+      "level": 1,
+      "parent": null,
+      "en": "Legal and compliance",
+      "zh": "法务与合规",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "legal_roles",
+      "level": 2,
+      "parent": "legal",
+      "en": "Legal",
+      "zh": "法律",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "lawyer",
+      "level": 3,
+      "parent": "legal_roles",
+      "en": "Lawyer",
+      "zh": "律师",
+      "synonyms": {
+        "en": [
+          "attorney",
+          "associate attorney",
+          "solicitor",
+          "barrister",
+          "litigator",
+          "trial lawyer"
+        ],
+        "zh": [
+          "执业律师",
+          "诉讼律师",
+          "非诉律师"
+        ]
+      },
+      "soc": [
+        "23-1011.00"
+      ]
+    },
+    {
+      "id": "in_house_counsel",
+      "level": 3,
+      "parent": "legal_roles",
+      "en": "In-house counsel",
+      "zh": "法务专员",
+      "synonyms": {
+        "en": [
+          "legal counsel",
+          "corporate counsel",
+          "general counsel",
+          "legal manager",
+          "head of legal",
+          "in house lawyer"
+        ],
+        "zh": [
+          "法务",
+          "法务经理",
+          "企业法务",
+          "法务总监"
+        ]
+      }
+    },
+    {
+      "id": "paralegal",
+      "level": 3,
+      "parent": "legal_roles",
+      "en": "Paralegal",
+      "zh": "律师助理",
+      "synonyms": {
+        "en": [
+          "legal assistant",
+          "legal secretary",
+          "legal clerk",
+          "litigation paralegal"
+        ],
+        "zh": [
+          "法务助理",
+          "律所助理"
+        ]
+      },
+      "soc": [
+        "23-2011.00"
+      ]
+    },
+    {
+      "id": "ip_specialist",
+      "level": 3,
+      "parent": "legal_roles",
+      "en": "Intellectual property specialist",
+      "zh": "知识产权专员",
+      "synonyms": {
+        "en": [
+          "patent agent",
+          "patent attorney",
+          "trademark specialist",
+          "ip counsel",
+          "patent engineer"
+        ],
+        "zh": [
+          "专利代理师",
+          "专利工程师",
+          "商标代理人",
+          "知识产权顾问"
+        ]
+      }
+    },
+    {
+      "id": "compliance",
+      "level": 2,
+      "parent": "legal",
+      "en": "Compliance and regulatory",
+      "zh": "合规与法规事务",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "compliance_officer",
+      "level": 3,
+      "parent": "compliance",
+      "en": "Compliance officer",
+      "zh": "合规专员",
+      "synonyms": {
+        "en": [
+          "compliance analyst",
+          "compliance manager",
+          "aml analyst",
+          "kyc analyst",
+          "regulatory compliance specialist",
+          "anti money laundering analyst"
+        ],
+        "zh": [
+          "合规经理",
+          "反洗钱专员",
+          "合规官"
+        ]
+      },
+      "soc": [
+        "13-1041.00"
+      ]
+    },
+    {
+      "id": "regulatory_affairs",
+      "level": 3,
+      "parent": "compliance",
+      "en": "Regulatory affairs specialist",
+      "zh": "注册专员",
+      "synonyms": {
+        "en": [
+          "regulatory affairs manager",
+          "regulatory specialist",
+          "ra specialist",
+          "regulatory affairs associate"
+        ],
+        "zh": [
+          "法规事务专员",
+          "药品注册专员",
+          "医疗器械注册专员"
+        ]
+      }
+    },
+    {
+      "id": "privacy_specialist",
+      "level": 3,
+      "parent": "compliance",
+      "en": "Privacy specialist",
+      "zh": "数据合规专员",
+      "synonyms": {
+        "en": [
+          "data protection officer",
+          "dpo",
+          "privacy counsel",
+          "privacy analyst",
+          "privacy manager"
+        ],
+        "zh": [
+          "数据保护官",
+          "隐私合规专员",
+          "个人信息保护专员"
+        ]
+      }
+    },
+    {
+      "id": "healthcare",
+      "level": 1,
+      "parent": null,
+      "en": "Healthcare and life sciences",
+      "zh": "医疗健康与生命科学",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "clinical",
+      "level": 2,
+      "parent": "healthcare",
+      "en": "Clinical care",
+      "zh": "临床医疗",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "physician",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Physician",
+      "zh": "医生",
+      "synonyms": {
+        "en": [
+          "doctor",
+          "medical doctor",
+          "general practitioner",
+          "gp",
+          "hospitalist",
+          "attending physician",
+          "resident physician",
+          "surgeon"
+        ],
+        "zh": [
+          "医师",
+          "临床医生",
+          "全科医生",
+          "主治医师",
+          "住院医师",
+          "外科医生"
+        ]
+      }
+    },
+    {
+      "id": "registered_nurse",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Registered nurse",
+      "zh": "护士",
+      "synonyms": {
+        "en": [
+          "rn",
+          "staff nurse",
+          "nurse",
+          "icu nurse",
+          "er nurse",
+          "charge nurse",
+          "clinical nurse"
+        ],
+        "zh": [
+          "注册护士",
+          "护师",
+          "临床护士",
+          "护理"
+        ]
+      },
+      "soc": [
+        "29-1141.00"
+      ]
+    },
+    {
+      "id": "nurse_practitioner",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Nurse practitioner",
+      "zh": "执业护师",
+      "synonyms": {
+        "en": [
+          "np",
+          "advanced practice nurse",
+          "aprn",
+          "family nurse practitioner"
+        ],
+        "zh": [
+          "高级执业护士"
+        ]
+      },
+      "soc": [
+        "29-1171.00"
+      ]
+    },
+    {
+      "id": "pharmacist",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Pharmacist",
+      "zh": "药剂师",
+      "synonyms": {
+        "en": [
+          "clinical pharmacist",
+          "retail pharmacist",
+          "pharmd",
+          "staff pharmacist"
+        ],
+        "zh": [
+          "药师",
+          "执业药师",
+          "临床药师"
+        ]
+      },
+      "soc": [
+        "29-1051.00"
+      ]
+    },
+    {
+      "id": "physical_therapist",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Physical or occupational therapist",
+      "zh": "康复治疗师",
+      "synonyms": {
+        "en": [
+          "physical therapist",
+          "physiotherapist",
+          "pt",
+          "rehabilitation therapist",
+          "occupational therapist",
+          "speech therapist"
+        ],
+        "zh": [
+          "物理治疗师",
+          "康复师",
+          "作业治疗师",
+          "言语治疗师"
+        ]
+      },
+      "soc": [
+        "29-1123.00"
+      ]
+    },
+    {
+      "id": "dentist",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Dentist",
+      "zh": "牙医",
+      "synonyms": {
+        "en": [
+          "dental surgeon",
+          "general dentist",
+          "orthodontist"
+        ],
+        "zh": [
+          "口腔医生",
+          "牙科医生",
+          "口腔医师"
+        ]
+      },
+      "soc": [
+        "29-1021.00"
+      ]
+    },
+    {
+      "id": "medical_technologist",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Medical lab and imaging technologist",
+      "zh": "医学检验技师",
+      "synonyms": {
+        "en": [
+          "medical laboratory technologist",
+          "clinical laboratory scientist",
+          "medical lab scientist",
+          "radiologic technologist",
+          "sonographer",
+          "radiographer"
+        ],
+        "zh": [
+          "检验技师",
+          "影像技师",
+          "检验科技师",
+          "放射技师"
+        ]
+      },
+      "soc": [
+        "29-2011.00"
+      ]
+    },
+    {
+      "id": "psychologist",
+      "level": 3,
+      "parent": "clinical",
+      "en": "Psychologist or therapist",
+      "zh": "心理咨询师",
+      "synonyms": {
+        "en": [
+          "psychologist",
+          "therapist",
+          "mental health counselor",
+          "clinical psychologist",
+          "licensed therapist",
+          "counseling psychologist"
+        ],
+        "zh": [
+          "心理治疗师",
+          "心理医生",
+          "心理咨询"
+        ]
+      },
+      "soc": [
+        "19-3033.00"
+      ]
+    },
+    {
+      "id": "health_admin",
+      "level": 2,
+      "parent": "healthcare",
+      "en": "Healthcare administration and clinical research",
+      "zh": "医疗管理与临床研究",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "healthcare_administrator",
+      "level": 3,
+      "parent": "health_admin",
+      "en": "Healthcare administrator",
+      "zh": "医疗管理",
+      "synonyms": {
+        "en": [
+          "hospital administrator",
+          "practice manager",
+          "clinic manager",
+          "medical and health services manager",
+          "healthcare manager"
+        ],
+        "zh": [
+          "医院管理人员",
+          "诊所经理",
+          "医务管理"
+        ]
+      },
+      "soc": [
+        "11-9111.00"
+      ]
+    },
+    {
+      "id": "medical_coder",
+      "level": 3,
+      "parent": "health_admin",
+      "en": "Medical coder and biller",
+      "zh": "病案编码员",
+      "synonyms": {
+        "en": [
+          "medical coder",
+          "medical billing specialist",
+          "medical biller",
+          "coding specialist",
+          "health information technician"
+        ],
+        "zh": [
+          "病案管理员",
+          "病案编码"
+        ]
+      }
+    },
+    {
+      "id": "medical_sales_rep",
+      "level": 3,
+      "parent": "health_admin",
+      "en": "Medical sales representative",
+      "zh": "医药代表",
+      "synonyms": {
+        "en": [
+          "pharmaceutical sales representative",
+          "medical device sales representative",
+          "pharma rep",
+          "medical sales rep"
+        ],
+        "zh": [
+          "医药销售",
+          "医疗器械销售",
+          "医药代表专员"
+        ]
+      }
+    },
+    {
+      "id": "clinical_research_associate",
+      "level": 3,
+      "parent": "health_admin",
+      "en": "Clinical research associate",
+      "zh": "临床监查员",
+      "synonyms": {
+        "en": [
+          "cra",
+          "clinical research coordinator",
+          "crc",
+          "clinical trial manager",
+          "clinical project manager"
+        ],
+        "zh": [
+          "临床研究协调员",
+          "临床项目经理",
+          "临床协调员",
+          "临床监查"
+        ]
+      }
+    },
+    {
+      "id": "life_sciences",
+      "level": 2,
+      "parent": "healthcare",
+      "en": "Life sciences research",
+      "zh": "生命科学研发",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "biomedical_scientist",
+      "level": 3,
+      "parent": "life_sciences",
+      "en": "Biomedical research scientist",
+      "zh": "生物医药研究员",
+      "synonyms": {
+        "en": [
+          "medical scientist",
+          "biologist",
+          "molecular biologist",
+          "immunologist",
+          "cell biologist",
+          "drug discovery scientist"
+        ],
+        "zh": [
+          "生物研究员",
+          "药物研发",
+          "药物研发工程师",
+          "分子生物学研究员",
+          "生物医药研发"
+        ]
+      },
+      "soc": [
+        "19-1042.00"
+      ]
+    },
+    {
+      "id": "chemist",
+      "level": 3,
+      "parent": "life_sciences",
+      "en": "Chemist",
+      "zh": "化学研究员",
+      "synonyms": {
+        "en": [
+          "analytical chemist",
+          "medicinal chemist",
+          "formulation scientist",
+          "organic chemist"
+        ],
+        "zh": [
+          "化学分析员",
+          "药物化学研究员",
+          "分析化学工程师",
+          "制剂研究员"
+        ]
+      },
+      "soc": [
+        "19-2031.00"
+      ]
+    },
+    {
+      "id": "biomedical_engineer",
+      "level": 3,
+      "parent": "life_sciences",
+      "en": "Biomedical engineer",
+      "zh": "生物医学工程师",
+      "synonyms": {
+        "en": [
+          "medical device engineer",
+          "bioengineer",
+          "biomedical engineering"
+        ],
+        "zh": [
+          "医疗器械研发工程师",
+          "医疗器械工程师"
+        ]
+      },
+      "soc": [
+        "17-2031.00"
+      ]
+    },
+    {
+      "id": "bioinformatics_scientist",
+      "level": 3,
+      "parent": "life_sciences",
+      "en": "Bioinformatics scientist",
+      "zh": "生物信息分析师",
+      "synonyms": {
+        "en": [
+          "bioinformatician",
+          "computational biologist",
+          "bioinformatics engineer",
+          "bioinformatics analyst"
+        ],
+        "zh": [
+          "生物信息工程师",
+          "生信分析",
+          "生信工程师"
+        ]
+      }
+    },
+    {
+      "id": "education",
+      "level": 1,
+      "parent": null,
+      "en": "Education and research",
+      "zh": "教育与科研",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "teaching",
+      "level": 2,
+      "parent": "education",
+      "en": "Teaching",
+      "zh": "教学",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "school_teacher",
+      "level": 3,
+      "parent": "teaching",
+      "en": "School teacher",
+      "zh": "中小学教师",
+      "synonyms": {
+        "en": [
+          "teacher",
+          "high school teacher",
+          "middle school teacher",
+          "elementary school teacher",
+          "primary school teacher",
+          "secondary school teacher",
+          "homeroom teacher",
+          "math teacher",
+          "science teacher"
+        ],
+        "zh": [
+          "教师",
+          "老师",
+          "高中老师",
+          "初中老师",
+          "小学老师",
+          "班主任",
+          "数学老师"
+        ]
+      },
+      "soc": [
+        "25-2031.00"
+      ]
+    },
+    {
+      "id": "tutor",
+      "level": 3,
+      "parent": "teaching",
+      "en": "Tutor",
+      "zh": "辅导老师",
+      "synonyms": {
+        "en": [
+          "private tutor",
+          "online tutor",
+          "test prep instructor",
+          "academic tutor"
+        ],
+        "zh": [
+          "家教",
+          "课外辅导老师",
+          "学科辅导老师"
+        ]
+      }
+    },
+    {
+      "id": "language_teacher",
+      "level": 3,
+      "parent": "teaching",
+      "en": "Language teacher",
+      "zh": "语言教师",
+      "synonyms": {
+        "en": [
+          "esl teacher",
+          "english teacher",
+          "english as a second language teacher",
+          "chinese teacher",
+          "mandarin teacher",
+          "tefl teacher",
+          "language instructor"
+        ],
+        "zh": [
+          "英语老师",
+          "外语教师",
+          "对外汉语教师",
+          "雅思老师",
+          "中文老师"
+        ]
+      }
+    },
+    {
+      "id": "early_childhood_teacher",
+      "level": 3,
+      "parent": "teaching",
+      "en": "Early childhood teacher",
+      "zh": "幼儿教师",
+      "synonyms": {
+        "en": [
+          "preschool teacher",
+          "kindergarten teacher",
+          "early childhood educator",
+          "childcare teacher"
+        ],
+        "zh": [
+          "幼师",
+          "幼儿园老师",
+          "早教老师"
+        ]
+      },
+      "soc": [
+        "25-2011.00"
+      ]
+    },
+    {
+      "id": "professor",
+      "level": 3,
+      "parent": "teaching",
+      "en": "Professor or lecturer",
+      "zh": "高校教师",
+      "synonyms": {
+        "en": [
+          "professor",
+          "assistant professor",
+          "associate professor",
+          "lecturer",
+          "faculty member",
+          "adjunct professor",
+          "university lecturer"
+        ],
+        "zh": [
+          "讲师",
+          "教授",
+          "副教授",
+          "大学老师",
+          "大学教师"
+        ]
+      }
+    },
+    {
+      "id": "special_education_teacher",
+      "level": 3,
+      "parent": "teaching",
+      "en": "Special education teacher",
+      "zh": "特殊教育教师",
+      "synonyms": {
+        "en": [
+          "special needs teacher",
+          "sen teacher",
+          "special education aide"
+        ],
+        "zh": [
+          "特教老师",
+          "特殊教育老师"
+        ]
+      }
+    },
+    {
+      "id": "education_support",
+      "level": 2,
+      "parent": "education",
+      "en": "Curriculum, advising and administration",
+      "zh": "教研、升学与教务",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "instructional_designer",
+      "level": 3,
+      "parent": "education_support",
+      "en": "Instructional designer",
+      "zh": "课程设计师",
+      "synonyms": {
+        "en": [
+          "curriculum developer",
+          "curriculum designer",
+          "learning designer",
+          "e learning developer",
+          "learning experience designer"
+        ],
+        "zh": [
+          "课程研发",
+          "教研员",
+          "教学设计师",
+          "课程研发专员"
+        ]
+      },
+      "soc": [
+        "25-9031.00"
+      ]
+    },
+    {
+      "id": "academic_advisor",
+      "level": 3,
+      "parent": "education_support",
+      "en": "Academic or career advisor",
+      "zh": "升学与职业顾问",
+      "synonyms": {
+        "en": [
+          "academic advisor",
+          "career counselor",
+          "career advisor",
+          "school counselor",
+          "admissions counselor",
+          "study abroad consultant",
+          "admissions officer"
+        ],
+        "zh": [
+          "留学顾问",
+          "升学顾问",
+          "职业规划师",
+          "招生顾问",
+          "课程顾问"
+        ]
+      },
+      "soc": [
+        "21-1012.00"
+      ]
+    },
+    {
+      "id": "education_administrator",
+      "level": 3,
+      "parent": "education_support",
+      "en": "Education administrator",
+      "zh": "教务管理",
+      "synonyms": {
+        "en": [
+          "principal",
+          "school administrator",
+          "dean",
+          "academic affairs coordinator",
+          "school director",
+          "registrar"
+        ],
+        "zh": [
+          "校长",
+          "教务",
+          "教务主任",
+          "教务专员",
+          "学术主管"
+        ]
+      }
+    },
+    {
+      "id": "research",
+      "level": 2,
+      "parent": "education",
+      "en": "Research",
+      "zh": "科研",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "postdoc",
+      "level": 3,
+      "parent": "research",
+      "en": "Postdoctoral researcher",
+      "zh": "博士后",
+      "synonyms": {
+        "en": [
+          "postdoctoral fellow",
+          "postdoc",
+          "research fellow",
+          "postdoctoral researcher"
+        ],
+        "zh": [
+          "博士后研究员"
+        ]
+      }
+    },
+    {
+      "id": "research_assistant",
+      "level": 3,
+      "parent": "research",
+      "en": "Research assistant",
+      "zh": "科研助理",
+      "synonyms": {
+        "en": [
+          "research technician",
+          "lab assistant",
+          "graduate research assistant",
+          "laboratory technician",
+          "research coordinator"
+        ],
+        "zh": [
+          "研究助理",
+          "实验室助理",
+          "实验员"
+        ]
+      }
+    },
+    {
+      "id": "economist",
+      "level": 3,
+      "parent": "research",
+      "en": "Economist or policy researcher",
+      "zh": "经济研究员",
+      "synonyms": {
+        "en": [
+          "economist",
+          "economic analyst",
+          "research economist",
+          "econometrician"
+        ],
+        "zh": [
+          "经济分析师",
+          "宏观研究员",
+          "经济学研究员"
+        ]
+      },
+      "soc": [
+        "19-3011.00"
+      ]
+    },
+    {
+      "id": "consulting",
+      "level": 1,
+      "parent": null,
+      "en": "Consulting, strategy and public sector",
+      "zh": "咨询、战略与公共部门",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "consulting_roles",
+      "level": 2,
+      "parent": "consulting",
+      "en": "Consulting and strategy",
+      "zh": "咨询与战略",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "management_consultant",
+      "level": 3,
+      "parent": "consulting_roles",
+      "en": "Management consultant",
+      "zh": "管理咨询顾问",
+      "synonyms": {
+        "en": [
+          "consultant",
+          "strategy consultant",
+          "business consultant",
+          "associate consultant",
+          "engagement manager",
+          "management consulting"
+        ],
+        "zh": [
+          "咨询顾问",
+          "战略咨询顾问",
+          "咨询师",
+          "管理咨询"
+        ]
+      },
+      "soc": [
+        "13-1111.00"
+      ],
+      "generic": true
+    },
+    {
+      "id": "business_analyst",
+      "level": 3,
+      "parent": "consulting_roles",
+      "en": "Business analyst",
+      "zh": "业务分析师",
+      "synonyms": {
+        "en": [
+          "ba",
+          "process analyst",
+          "requirements analyst",
+          "business process analyst"
+        ],
+        "zh": [
+          "需求分析师",
+          "商业分析师",
+          "业务分析"
+        ]
+      },
+      "soc": [
+        "13-1111.00"
+      ]
+    },
+    {
+      "id": "strategy_manager",
+      "level": 3,
+      "parent": "consulting_roles",
+      "en": "Strategy manager",
+      "zh": "战略经理",
+      "synonyms": {
+        "en": [
+          "corporate strategy manager",
+          "strategy analyst",
+          "corporate development manager",
+          "chief of staff",
+          "strategic planning manager"
+        ],
+        "zh": [
+          "战略分析师",
+          "战略投资经理",
+          "幕僚长",
+          "战略规划经理"
+        ]
+      }
+    },
+    {
+      "id": "public_sector",
+      "level": 2,
+      "parent": "consulting",
+      "en": "Government and nonprofit",
+      "zh": "政府与非营利",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "policy_analyst",
+      "level": 3,
+      "parent": "public_sector",
+      "en": "Policy and public affairs",
+      "zh": "政策分析师",
+      "synonyms": {
+        "en": [
+          "policy analyst",
+          "public policy analyst",
+          "government affairs manager",
+          "public affairs specialist",
+          "legislative analyst"
+        ],
+        "zh": [
+          "政府事务经理",
+          "政府关系",
+          "政策研究员",
+          "公共事务经理"
+        ]
+      }
+    },
+    {
+      "id": "civil_servant",
+      "level": 3,
+      "parent": "public_sector",
+      "en": "Civil servant",
+      "zh": "公务员",
+      "synonyms": {
+        "en": [
+          "government officer",
+          "public servant",
+          "government employee"
+        ],
+        "zh": [
+          "事业单位工作人员",
+          "选调生",
+          "机关工作人员"
+        ]
+      }
+    },
+    {
+      "id": "nonprofit_program_manager",
+      "level": 3,
+      "parent": "public_sector",
+      "en": "Nonprofit program manager",
+      "zh": "公益项目经理",
+      "synonyms": {
+        "en": [
+          "program officer",
+          "grant manager",
+          "fundraiser",
+          "fundraising manager",
+          "development officer",
+          "community organizer"
+        ],
+        "zh": [
+          "公益项目官员",
+          "筹款经理",
+          "ngo项目官员",
+          "基金会项目官员"
+        ]
+      }
+    },
+    {
+      "id": "social_worker",
+      "level": 3,
+      "parent": "public_sector",
+      "en": "Social worker",
+      "zh": "社会工作者",
+      "synonyms": {
+        "en": [
+          "case manager",
+          "caseworker",
+          "licensed social worker",
+          "clinical social worker"
+        ],
+        "zh": [
+          "社工",
+          "个案管理员",
+          "社会工作师"
+        ]
+      },
+      "soc": [
+        "21-1021.00"
+      ]
+    },
+    {
+      "id": "administration",
+      "level": 1,
+      "parent": null,
+      "en": "Administration",
+      "zh": "行政与文职",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "admin_roles",
+      "level": 2,
+      "parent": "administration",
+      "en": "Administrative and office",
+      "zh": "行政与办公室",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "administrative_assistant",
+      "level": 3,
+      "parent": "admin_roles",
+      "en": "Administrative assistant",
+      "zh": "行政助理",
+      "synonyms": {
+        "en": [
+          "admin assistant",
+          "administrative coordinator",
+          "office assistant",
+          "office administrator",
+          "secretary",
+          "administrative specialist"
+        ],
+        "zh": [
+          "行政专员",
+          "文员",
+          "秘书",
+          "行政文员"
+        ]
+      },
+      "soc": [
+        "43-6014.00"
+      ]
+    },
+    {
+      "id": "executive_assistant",
+      "level": 3,
+      "parent": "admin_roles",
+      "en": "Executive assistant",
+      "zh": "总裁助理",
+      "synonyms": {
+        "en": [
+          "ea",
+          "executive secretary",
+          "personal assistant",
+          "executive administrative assistant"
+        ],
+        "zh": [
+          "总经理助理",
+          "董事长秘书",
+          "高管助理",
+          "董事长助理"
+        ]
+      },
+      "soc": [
+        "43-6011.00"
+      ]
+    },
+    {
+      "id": "office_manager",
+      "level": 3,
+      "parent": "admin_roles",
+      "en": "Office manager",
+      "zh": "行政经理",
+      "synonyms": {
+        "en": [
+          "administrative manager",
+          "office coordinator",
+          "workplace manager",
+          "workplace experience manager"
+        ],
+        "zh": [
+          "行政主管",
+          "办公室主任",
+          "行政总监"
+        ]
+      }
+    },
+    {
+      "id": "receptionist",
+      "level": 3,
+      "parent": "admin_roles",
+      "en": "Receptionist",
+      "zh": "前台",
+      "synonyms": {
+        "en": [
+          "front desk receptionist",
+          "front desk coordinator",
+          "front office assistant",
+          "front desk agent"
+        ],
+        "zh": [
+          "前台接待",
+          "前台文员",
+          "前台行政"
+        ]
+      },
+      "soc": [
+        "43-4171.00"
+      ]
+    },
+    {
+      "id": "data_entry_clerk",
+      "level": 3,
+      "parent": "admin_roles",
+      "en": "Data entry and office clerk",
+      "zh": "数据录入员",
+      "synonyms": {
+        "en": [
+          "data entry clerk",
+          "data entry operator",
+          "data entry specialist",
+          "office clerk",
+          "clerk",
+          "records clerk"
+        ],
+        "zh": [
+          "录入员",
+          "资料员",
+          "档案管理员"
+        ]
+      },
+      "soc": [
+        "43-9021.00"
+      ]
+    },
+    {
+      "id": "media",
+      "level": 1,
+      "parent": null,
+      "en": "Media and content",
+      "zh": "媒体与内容",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "writing_editorial",
+      "level": 2,
+      "parent": "media",
+      "en": "Writing, editorial and translation",
+      "zh": "写作、编辑与翻译",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "copywriter",
+      "level": 3,
+      "parent": "writing_editorial",
+      "en": "Copywriter",
+      "zh": "文案",
+      "synonyms": {
+        "en": [
+          "creative copywriter",
+          "advertising copywriter",
+          "content writer",
+          "brand copywriter",
+          "writer"
+        ],
+        "zh": [
+          "文案策划",
+          "广告文案",
+          "文案编辑",
+          "撰稿人"
+        ]
+      },
+      "soc": [
+        "27-3043.00"
+      ]
+    },
+    {
+      "id": "technical_writer",
+      "level": 3,
+      "parent": "writing_editorial",
+      "en": "Technical writer",
+      "zh": "技术文档工程师",
+      "synonyms": {
+        "en": [
+          "documentation specialist",
+          "api documentation writer",
+          "technical author",
+          "documentation engineer"
+        ],
+        "zh": [
+          "技术写作",
+          "文档工程师",
+          "技术文档"
+        ]
+      },
+      "soc": [
+        "27-3042.00"
+      ]
+    },
+    {
+      "id": "editor",
+      "level": 3,
+      "parent": "writing_editorial",
+      "en": "Editor",
+      "zh": "编辑",
+      "synonyms": {
+        "en": [
+          "content editor",
+          "copy editor",
+          "managing editor",
+          "editor in chief",
+          "proofreader",
+          "news editor"
+        ],
+        "zh": [
+          "内容编辑",
+          "新媒体编辑",
+          "文字编辑",
+          "主编",
+          "校对"
+        ]
+      },
+      "soc": [
+        "27-3041.00"
+      ]
+    },
+    {
+      "id": "journalist",
+      "level": 3,
+      "parent": "writing_editorial",
+      "en": "Journalist",
+      "zh": "记者",
+      "synonyms": {
+        "en": [
+          "reporter",
+          "correspondent",
+          "news writer",
+          "news reporter"
+        ],
+        "zh": [
+          "新闻记者",
+          "采编",
+          "记者编辑"
+        ]
+      },
+      "soc": [
+        "27-3023.00"
+      ]
+    },
+    {
+      "id": "translator",
+      "level": 3,
+      "parent": "writing_editorial",
+      "en": "Translator or interpreter",
+      "zh": "翻译",
+      "synonyms": {
+        "en": [
+          "translator",
+          "interpreter",
+          "localization specialist",
+          "localization manager",
+          "conference interpreter"
+        ],
+        "zh": [
+          "笔译",
+          "口译",
+          "翻译员",
+          "本地化专员",
+          "同声传译"
+        ]
+      },
+      "soc": [
+        "27-3091.00"
+      ]
+    },
+    {
+      "id": "video_production",
+      "level": 2,
+      "parent": "media",
+      "en": "Video, photo and creators",
+      "zh": "视频、摄影与创作者",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "video_editor",
+      "level": 3,
+      "parent": "video_production",
+      "en": "Video editor",
+      "zh": "视频剪辑师",
+      "synonyms": {
+        "en": [
+          "film editor",
+          "post production editor",
+          "youtube editor"
+        ],
+        "zh": [
+          "剪辑师",
+          "后期剪辑",
+          "视频后期",
+          "短视频剪辑"
+        ]
+      },
+      "soc": [
+        "27-4032.00"
+      ]
+    },
+    {
+      "id": "photographer",
+      "level": 3,
+      "parent": "video_production",
+      "en": "Photographer or videographer",
+      "zh": "摄影师",
+      "synonyms": {
+        "en": [
+          "photographer",
+          "videographer",
+          "camera operator",
+          "cinematographer",
+          "photo editor"
+        ],
+        "zh": [
+          "摄像师",
+          "摄影摄像",
+          "修图师"
+        ]
+      },
+      "soc": [
+        "27-4021.00"
+      ]
+    },
+    {
+      "id": "content_creator",
+      "level": 3,
+      "parent": "video_production",
+      "en": "Content creator",
+      "zh": "内容创作者",
+      "synonyms": {
+        "en": [
+          "youtuber",
+          "video creator",
+          "streamer",
+          "livestream host",
+          "influencer",
+          "podcaster"
+        ],
+        "zh": [
+          "主播",
+          "带货主播",
+          "短视频编导",
+          "达人",
+          "博主",
+          "短视频运营"
+        ]
+      }
+    },
+    {
+      "id": "producer",
+      "level": 3,
+      "parent": "video_production",
+      "en": "Producer",
+      "zh": "制片人",
+      "synonyms": {
+        "en": [
+          "tv producer",
+          "film producer",
+          "podcast producer",
+          "executive producer",
+          "video producer",
+          "production coordinator"
+        ],
+        "zh": [
+          "制片",
+          "编导",
+          "导演",
+          "视频编导"
+        ]
+      }
+    },
+    {
+      "id": "manufacturing",
+      "level": 1,
+      "parent": null,
+      "en": "Manufacturing and skilled trades",
+      "zh": "生产制造与技工",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "production",
+      "level": 2,
+      "parent": "manufacturing",
+      "en": "Production",
+      "zh": "生产",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "production_supervisor",
+      "level": 3,
+      "parent": "production",
+      "en": "Production supervisor",
+      "zh": "生产主管",
+      "synonyms": {
+        "en": [
+          "production manager",
+          "plant manager",
+          "manufacturing supervisor",
+          "shift supervisor",
+          "factory manager",
+          "manufacturing manager"
+        ],
+        "zh": [
+          "生产经理",
+          "车间主任",
+          "厂长",
+          "班组长",
+          "生产厂长"
+        ]
+      },
+      "soc": [
+        "51-1011.00"
+      ]
+    },
+    {
+      "id": "machine_operator",
+      "level": 3,
+      "parent": "production",
+      "en": "Machine operator",
+      "zh": "操作工",
+      "synonyms": {
+        "en": [
+          "production operator",
+          "assembly operator",
+          "production worker",
+          "assembler",
+          "line worker",
+          "packer",
+          "production associate"
+        ],
+        "zh": [
+          "普工",
+          "生产操作员",
+          "装配工",
+          "包装工",
+          "流水线工人"
+        ]
+      }
+    },
+    {
+      "id": "quality_inspector",
+      "level": 3,
+      "parent": "production",
+      "en": "Quality inspector",
+      "zh": "质检员",
+      "synonyms": {
+        "en": [
+          "qc inspector",
+          "quality control inspector",
+          "quality technician",
+          "qc technician",
+          "quality control technician"
+        ],
+        "zh": [
+          "品检员",
+          "qc",
+          "品质检验员",
+          "检验员"
+        ]
+      },
+      "soc": [
+        "51-9061.00"
+      ]
+    },
+    {
+      "id": "cnc_machinist",
+      "level": 3,
+      "parent": "production",
+      "en": "CNC machinist",
+      "zh": "数控机床操作员",
+      "synonyms": {
+        "en": [
+          "machinist",
+          "cnc programmer",
+          "cnc operator",
+          "tool and die maker"
+        ],
+        "zh": [
+          "数控编程",
+          "cnc技术员",
+          "车工",
+          "铣工",
+          "模具工"
+        ]
+      },
+      "soc": [
+        "51-4041.00"
+      ]
+    },
+    {
+      "id": "trades",
+      "level": 2,
+      "parent": "manufacturing",
+      "en": "Skilled trades and transport",
+      "zh": "技工、维修与运输",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "electrician",
+      "level": 3,
+      "parent": "trades",
+      "en": "Electrician",
+      "zh": "电工",
+      "synonyms": {
+        "en": [
+          "journeyman electrician",
+          "industrial electrician",
+          "maintenance electrician",
+          "electrical technician"
+        ],
+        "zh": [
+          "维修电工",
+          "电工技师",
+          "高压电工"
+        ]
+      },
+      "soc": [
+        "47-2111.00"
+      ]
+    },
+    {
+      "id": "maintenance_technician",
+      "level": 3,
+      "parent": "trades",
+      "en": "Maintenance technician",
+      "zh": "设备维修技术员",
+      "synonyms": {
+        "en": [
+          "maintenance mechanic",
+          "facilities technician",
+          "field service technician",
+          "equipment technician",
+          "hvac technician",
+          "service technician"
+        ],
+        "zh": [
+          "设备维修工",
+          "机修工",
+          "维修技工",
+          "设备技术员",
+          "暖通技工"
+        ]
+      },
+      "soc": [
+        "49-9071.00"
+      ]
+    },
+    {
+      "id": "welder",
+      "level": 3,
+      "parent": "trades",
+      "en": "Welder",
+      "zh": "焊工",
+      "synonyms": {
+        "en": [
+          "welding technician",
+          "fabricator",
+          "pipe welder",
+          "welder fabricator"
+        ],
+        "zh": [
+          "电焊工",
+          "焊接技术员",
+          "氩弧焊工"
+        ]
+      },
+      "soc": [
+        "51-4121.00"
+      ]
+    },
+    {
+      "id": "driver",
+      "level": 3,
+      "parent": "trades",
+      "en": "Driver and courier",
+      "zh": "司机",
+      "synonyms": {
+        "en": [
+          "truck driver",
+          "delivery driver",
+          "cdl driver",
+          "courier",
+          "chauffeur",
+          "van driver"
+        ],
+        "zh": [
+          "货车司机",
+          "快递员",
+          "配送员",
+          "驾驶员"
+        ]
+      },
+      "soc": [
+        "53-3032.00"
+      ]
+    },
+    {
+      "id": "hospitality",
+      "level": 1,
+      "parent": null,
+      "en": "Hospitality and travel",
+      "zh": "酒店、餐饮与旅游",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "food_service",
+      "level": 2,
+      "parent": "hospitality",
+      "en": "Food service",
+      "zh": "餐饮",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "chef",
+      "level": 3,
+      "parent": "food_service",
+      "en": "Chef or cook",
+      "zh": "厨师",
+      "synonyms": {
+        "en": [
+          "chef",
+          "cook",
+          "line cook",
+          "sous chef",
+          "head chef",
+          "pastry chef",
+          "kitchen staff"
+        ],
+        "zh": [
+          "厨师长",
+          "面点师",
+          "烘焙师",
+          "西点师"
+        ]
+      },
+      "soc": [
+        "35-1011.00"
+      ]
+    },
+    {
+      "id": "restaurant_manager",
+      "level": 3,
+      "parent": "food_service",
+      "en": "Restaurant manager",
+      "zh": "餐厅经理",
+      "synonyms": {
+        "en": [
+          "food service manager",
+          "cafe manager",
+          "kitchen manager",
+          "restaurant general manager"
+        ],
+        "zh": [
+          "餐饮经理",
+          "餐厅店长",
+          "餐饮店长"
+        ]
+      },
+      "soc": [
+        "11-9051.00"
+      ]
+    },
+    {
+      "id": "server",
+      "level": 3,
+      "parent": "food_service",
+      "en": "Server, barista or bartender",
+      "zh": "餐厅服务员",
+      "synonyms": {
+        "en": [
+          "waiter",
+          "waitress",
+          "server",
+          "barista",
+          "bartender",
+          "restaurant host"
+        ],
+        "zh": [
+          "服务员",
+          "咖啡师",
+          "调酒师"
+        ]
+      },
+      "soc": [
+        "35-3031.00"
+      ]
+    },
+    {
+      "id": "hotel_travel",
+      "level": 2,
+      "parent": "hospitality",
+      "en": "Hotels and travel",
+      "zh": "酒店与旅游",
+      "synonyms": {
+        "en": [],
+        "zh": []
+      }
+    },
+    {
+      "id": "hotel_manager",
+      "level": 3,
+      "parent": "hotel_travel",
+      "en": "Hotel manager",
+      "zh": "酒店经理",
+      "synonyms": {
+        "en": [
+          "front office manager",
+          "hotel general manager",
+          "guest services manager"
+        ],
+        "zh": [
+          "酒店前厅经理",
+          "酒店总经理",
+          "前厅经理"
+        ]
+      },
+      "soc": [
+        "11-9081.00"
+      ]
+    },
+    {
+      "id": "travel_consultant",
+      "level": 3,
+      "parent": "hotel_travel",
+      "en": "Travel consultant",
+      "zh": "旅游顾问",
+      "synonyms": {
+        "en": [
+          "travel agent",
+          "tour guide",
+          "travel planner",
+          "travel advisor"
+        ],
+        "zh": [
+          "旅游销售",
+          "导游",
+          "旅行定制师",
+          "旅行顾问"
+        ]
+      },
+      "soc": [
+        "41-3041.00"
+      ]
+    },
+    {
+      "id": "flight_attendant",
+      "level": 3,
+      "parent": "hotel_travel",
+      "en": "Flight attendant",
+      "zh": "空乘",
+      "synonyms": {
+        "en": [
+          "cabin crew",
+          "steward",
+          "stewardess",
+          "cabin attendant"
+        ],
+        "zh": [
+          "空中乘务员",
+          "乘务员",
+          "空姐"
+        ]
+      },
+      "soc": [
+        "53-2031.00"
+      ]
+    }
+  ]
+}

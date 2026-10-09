@@ -1,0 +1,412 @@
+// server/src/features/search/SearchProfileService.ts
+//
+// CRUD over RASearchProfile, the one preference store (ARCHITECTURE.md §2.8,
+// §3.3). No routes here: WP-20 mounts `/search-profiles` on this service.
+//
+// Invariants:
+//   - every user who has read their profiles has exactly one default profile
+//     and exactly one active profile (both enforced in transactions; the first
+//     read migrates the legacy preferences under a per-user advisory lock);
+//   - writes carry the version the client read; a mismatch raises
+//     VersionConflictError (409) instead of overwriting a newer edit from the
+//     drawer, the Assistant or onboarding;
+//   - the number of profiles is capped by the `saved_searches` entitlement
+//     (Free 1, Pro 10); profiles imported from legacy saved searches are kept
+//     even above the cap;
+//   - `alertInstantMax` may not exceed the `instant_alerts` entitlement.
+
+import type { ExtendedPrismaClient, ExtendedTransactionClient } from '../../lib/prisma.js';
+import { BRANDS, type Market } from '../../platform/brand/registry.js';
+import { entitlementService as defaultEntitlements, type EntitlementService } from '../../platform/credits/index.js';
+import { logger } from '../../services/LoggerService.js';
+import {
+  ALERT_INSTANT_OPTIONS,
+  FILTER_SET_SCHEMA_VERSION,
+  type FilterSet,
+  type FilterSetPatch,
+  type SearchProfileListWire,
+  type SearchProfileWire,
+} from './contract.js';
+import { coerceFilterSet, mergeFilterSet, parseFilterSet, parseFilterSetPatch, type FilterIssue } from './filterSet.js';
+import { buildLegacyProfiles } from './legacyMigration.js';
+
+// ── Errors ─────────────────────────────────────────────────────────────────
+
+export class SearchProfileNotFoundError extends Error {
+  readonly code = 'search_profile_not_found' as const;
+  readonly status = 404;
+  constructor(readonly profileId: string) {
+    super(`Search profile ${profileId} not found`);
+    this.name = 'SearchProfileNotFoundError';
+  }
+}
+
+export class VersionConflictError extends Error {
+  readonly code = 'version_conflict' as const;
+  readonly status = 409;
+  constructor(
+    readonly profileId: string,
+    readonly expectedVersion: number,
+    readonly currentVersion: number,
+    readonly current: SearchProfileWire,
+  ) {
+    super(`Search profile ${profileId} is at version ${currentVersion}, not ${expectedVersion}`);
+    this.name = 'VersionConflictError';
+  }
+}
+
+export class SavedSearchLimitError extends Error {
+  readonly code = 'saved_search_limit' as const;
+  readonly status = 403;
+  constructor(
+    readonly max: number,
+    readonly upgradable: boolean,
+  ) {
+    super(`Up to ${max} saved searches on this plan`);
+    this.name = 'SavedSearchLimitError';
+  }
+}
+
+export class AlertFrequencyNotAllowedError extends Error {
+  readonly code = 'alert_frequency_not_allowed' as const;
+  readonly status = 403;
+  constructor(readonly max: number) {
+    super(`Instant alerts are limited to ${max} a day on this plan`);
+    this.name = 'AlertFrequencyNotAllowedError';
+  }
+}
+
+export class InvalidFiltersError extends Error {
+  readonly code = 'invalid_filters' as const;
+  readonly status = 422;
+  constructor(readonly issues: FilterIssue[]) {
+    super('Invalid filters');
+    this.name = 'InvalidFiltersError';
+  }
+}
+
+export class LastProfileError extends Error {
+  readonly code = 'cannot_delete_last_profile' as const;
+  readonly status = 409;
+  constructor() {
+    super('The last search profile cannot be deleted');
+    this.name = 'LastProfileError';
+  }
+}
+
+export type SearchProfileError =
+  | SearchProfileNotFoundError
+  | VersionConflictError
+  | SavedSearchLimitError
+  | AlertFrequencyNotAllowedError
+  | InvalidFiltersError
+  | LastProfileError;
+
+/** `{ status, body }` for a search-profile error, or null. */
+export function searchErrorToHttp(err: unknown): { status: number; body: Record<string, unknown> } | null {
+  if (err instanceof VersionConflictError) return { status: 409, body: { error: err.code, currentVersion: err.currentVersion, profile: err.current } };
+  if (err instanceof SavedSearchLimitError) return { status: 403, body: { error: err.code, max: err.max, upgradable: err.upgradable } };
+  if (err instanceof AlertFrequencyNotAllowedError) return { status: 403, body: { error: err.code, max: err.max } };
+  if (err instanceof InvalidFiltersError) return { status: 422, body: { error: err.code, issues: err.issues } };
+  if (err instanceof SearchProfileNotFoundError || err instanceof LastProfileError) return { status: err.status, body: { error: err.code } };
+  return null;
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type Db = Pick<ExtendedPrismaClient, '$transaction' | 'rASearchProfile' | 'rACareerGoal' | 'rASavedSearch'>;
+type Tx = Pick<ExtendedTransactionClient, '$executeRaw' | 'rASearchProfile' | 'rACareerGoal' | 'rASavedSearch'>;
+
+interface ProfileRow {
+  id: string;
+  userId: string;
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
+  version: number;
+  schemaVersion: number;
+  filters: unknown;
+  alertInstantMax: number;
+  alertDigest: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const PROFILE_SELECT = {
+  id: true,
+  userId: true,
+  name: true,
+  isDefault: true,
+  isActive: true,
+  version: true,
+  schemaVersion: true,
+  filters: true,
+  alertInstantMax: true,
+  alertDigest: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export interface CreateProfileInput {
+  name: string;
+  filters: unknown;
+  isDefault?: boolean;
+  activate?: boolean;
+  alertInstantMax?: number;
+  alertDigest?: 'daily' | 'weekly' | null;
+}
+
+export interface UpdateProfileInput {
+  version: number;
+  name?: string;
+  filters?: unknown;
+  alertInstantMax?: number;
+  alertDigest?: 'daily' | 'weekly' | null;
+}
+
+export interface SearchProfileServiceDeps {
+  getDb?: () => Promise<Db>;
+  entitlements?: EntitlementService;
+}
+
+function toWire(row: ProfileRow, market: Market): SearchProfileWire {
+  return {
+    id: row.id,
+    name: row.name,
+    isDefault: row.isDefault,
+    isActive: row.isActive,
+    version: row.version,
+    schemaVersion: row.schemaVersion,
+    filters: coerceFilterSet(row.filters, { market }).value,
+    alertInstantMax: row.alertInstantMax,
+    alertDigest: row.alertDigest === 'daily' || row.alertDigest === 'weekly' ? row.alertDigest : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function sortProfiles(rows: ProfileRow[]): ProfileRow[] {
+  return [...rows].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+const defaultGetDb = async (): Promise<Db> => (await import('../../lib/prisma.js')).default;
+
+export function createSearchProfileService(deps: SearchProfileServiceDeps = {}) {
+  const getDb = deps.getDb ?? defaultGetDb;
+  const entitlements = deps.entitlements ?? defaultEntitlements;
+
+  async function context(userId: string) {
+    const ent = await entitlements.resolve(userId);
+    return { ent, market: ent.market, currency: BRANDS[ent.brand].currency };
+  }
+
+  function validateFilters(raw: unknown, market: Market): FilterSet {
+    const parsed = parseFilterSet(raw, { market });
+    if (!parsed.ok) throw new InvalidFiltersError(parsed.issues);
+    return parsed.value;
+  }
+
+  function checkAlertFrequency(value: number | undefined, max: number): void {
+    if (value === undefined) return;
+    if (!(ALERT_INSTANT_OPTIONS as readonly number[]).includes(value)) throw new InvalidFiltersError([{ path: 'alertInstantMax', message: 'not an allowed option' }]);
+    if (value > max) throw new AlertFrequencyNotAllowedError(max);
+  }
+
+  async function rowsFor(db: Db | Tx, userId: string): Promise<ProfileRow[]> {
+    return (await db.rASearchProfile.findMany({ where: { userId }, select: PROFILE_SELECT })) as ProfileRow[];
+  }
+
+  /** First read: migrate legacy preferences once (advisory lock per user). Returns the rows. */
+  async function ensureProfiles(userId: string, market: Market, currency: string): Promise<ProfileRow[]> {
+    const db = await getDb();
+    const existing = await rowsFor(db, userId);
+    if (existing.length) return existing;
+    return db.$transaction(async (txRaw) => {
+      const tx = txRaw as unknown as Tx;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ra_search_profile:${userId}`}))`;
+      const again = await rowsFor(tx, userId);
+      if (again.length) return again;
+      const [goal, saved] = await Promise.all([
+        tx.rACareerGoal.findUnique({
+          where: { userId },
+          select: {
+            targetTitle: true,
+            targetSalaryMin: true,
+            targetSalaryCurrency: true,
+            preferredLocations: true,
+            preferredWorkType: true,
+            seniority: true,
+            preferencesBlob: true,
+          },
+        }),
+        tx.rASavedSearch.findMany({ where: { userId }, select: { id: true, name: true, query: true, createdAt: true } }),
+      ]);
+      const profiles = buildLegacyProfiles({ goal, savedSearches: saved, market, currency });
+      for (const p of profiles) {
+        await tx.rASearchProfile.create({
+          data: {
+            userId,
+            name: p.name,
+            isDefault: p.isDefault,
+            isActive: p.isActive,
+            version: 1,
+            schemaVersion: FILTER_SET_SCHEMA_VERSION,
+            filters: p.filters as object,
+            alertInstantMax: 0,
+            alertDigest: null,
+          },
+        });
+      }
+      logger.info('SEARCH_PROFILES', 'legacy preferences migrated', { userId, profiles: profiles.map((p) => p.source) });
+      return rowsFor(tx, userId);
+    });
+  }
+
+  async function getRow(userId: string, id: string, db?: Db | Tx): Promise<ProfileRow> {
+    const row = (await (db ?? (await getDb())).rASearchProfile.findFirst({ where: { id, userId }, select: PROFILE_SELECT })) as ProfileRow | null;
+    if (!row) throw new SearchProfileNotFoundError(id);
+    return row;
+  }
+
+  async function list(userId: string): Promise<SearchProfileListWire> {
+    const { ent, market, currency } = await context(userId);
+    const rows = sortProfiles(await ensureProfiles(userId, market, currency));
+    return {
+      profiles: rows.map((r) => toWire(r, market)),
+      maxProfiles: ent.entitlements.saved_searches,
+      maxInstantAlerts: ent.entitlements.instant_alerts,
+    };
+  }
+
+  async function get(userId: string, id: string): Promise<SearchProfileWire> {
+    const { market } = await context(userId);
+    return toWire(await getRow(userId, id), market);
+  }
+
+  /** The profile the feed uses now (active, else default). Migrates on first use. */
+  async function getActive(userId: string): Promise<SearchProfileWire> {
+    const { market, currency } = await context(userId);
+    const rows = await ensureProfiles(userId, market, currency);
+    const row = rows.find((r) => r.isActive) ?? rows.find((r) => r.isDefault) ?? sortProfiles(rows)[0];
+    return toWire(row, market);
+  }
+
+  async function create(userId: string, input: CreateProfileInput): Promise<SearchProfileWire> {
+    const { ent, market, currency } = await context(userId);
+    const filters = validateFilters(input.filters, market);
+    checkAlertFrequency(input.alertInstantMax, ent.entitlements.instant_alerts);
+    const existing = await ensureProfiles(userId, market, currency);
+    if (existing.length >= ent.entitlements.saved_searches) {
+      throw new SavedSearchLimitError(ent.entitlements.saved_searches, ent.planProfile === 'free' && ent.proSellable);
+    }
+    const db = await getDb();
+    const row = await db.$transaction(async (txRaw) => {
+      const tx = txRaw as unknown as Tx;
+      if (input.isDefault) await tx.rASearchProfile.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
+      if (input.activate) await tx.rASearchProfile.updateMany({ where: { userId, isActive: true }, data: { isActive: false } });
+      return tx.rASearchProfile.create({
+        data: {
+          userId,
+          name: input.name.trim().slice(0, 60),
+          isDefault: !!input.isDefault,
+          isActive: !!input.activate,
+          version: 1,
+          schemaVersion: FILTER_SET_SCHEMA_VERSION,
+          filters: filters as object,
+          alertInstantMax: input.alertInstantMax ?? 0,
+          alertDigest: input.alertDigest ?? null,
+        },
+        select: PROFILE_SELECT,
+      });
+    });
+    return toWire(row as ProfileRow, market);
+  }
+
+  async function update(userId: string, id: string, input: UpdateProfileInput): Promise<SearchProfileWire> {
+    const { ent, market } = await context(userId);
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) data.name = input.name.trim().slice(0, 60);
+    if (input.filters !== undefined) data.filters = validateFilters(input.filters, market) as object;
+    if (input.alertInstantMax !== undefined) {
+      checkAlertFrequency(input.alertInstantMax, ent.entitlements.instant_alerts);
+      data.alertInstantMax = input.alertInstantMax;
+    }
+    if (input.alertDigest !== undefined) data.alertDigest = input.alertDigest;
+    const db = await getDb();
+    const res = await db.rASearchProfile.updateMany({
+      where: { id, userId, version: input.version },
+      data: { ...data, version: { increment: 1 } },
+    });
+    if (res.count !== 1) {
+      const current = await getRow(userId, id, db);
+      throw new VersionConflictError(id, input.version, current.version, toWire(current, market));
+    }
+    return toWire(await getRow(userId, id, db), market);
+  }
+
+  /** Apply a FilterSetPatch (value replaces, null clears) at an expected version. */
+  async function patchFilters(userId: string, id: string, version: number, patch: unknown): Promise<SearchProfileWire> {
+    const parsed = parseFilterSetPatch(patch);
+    if (!parsed.ok) throw new InvalidFiltersError(parsed.issues);
+    const { market } = await context(userId);
+    const row = await getRow(userId, id);
+    if (row.version !== version) throw new VersionConflictError(id, version, row.version, toWire(row, market));
+    const merged = mergeFilterSet(coerceFilterSet(row.filters, { market }).value, parsed.value as FilterSetPatch);
+    return update(userId, id, { version, filters: merged });
+  }
+
+  async function setDefault(userId: string, id: string): Promise<SearchProfileWire> {
+    const { market } = await context(userId);
+    const db = await getDb();
+    const row = await db.$transaction(async (txRaw) => {
+      const tx = txRaw as unknown as Tx;
+      await getRow(userId, id, tx);
+      await tx.rASearchProfile.updateMany({ where: { userId, isDefault: true, NOT: { id } }, data: { isDefault: false } });
+      await tx.rASearchProfile.updateMany({ where: { id, userId }, data: { isDefault: true } });
+      return getRow(userId, id, tx);
+    });
+    return toWire(row, market);
+  }
+
+  /** Make a profile the one the feed uses. */
+  async function activate(userId: string, id: string): Promise<SearchProfileWire> {
+    const { market } = await context(userId);
+    const db = await getDb();
+    const row = await db.$transaction(async (txRaw) => {
+      const tx = txRaw as unknown as Tx;
+      await getRow(userId, id, tx);
+      await tx.rASearchProfile.updateMany({ where: { userId, isActive: true, NOT: { id } }, data: { isActive: false } });
+      await tx.rASearchProfile.updateMany({ where: { id, userId }, data: { isActive: true } });
+      return getRow(userId, id, tx);
+    });
+    return toWire(row, market);
+  }
+
+  /** Delete a profile; the oldest remaining becomes default / the default becomes active when needed. */
+  async function remove(userId: string, id: string): Promise<void> {
+    const db = await getDb();
+    await db.$transaction(async (txRaw) => {
+      const tx = txRaw as unknown as Tx;
+      const row = await getRow(userId, id, tx);
+      const rows = await rowsFor(tx, userId);
+      if (rows.length <= 1) throw new LastProfileError();
+      await tx.rASearchProfile.deleteMany({ where: { id, userId } });
+      const rest = sortProfiles(rows.filter((r) => r.id !== id));
+      let defaultId = rest.find((r) => r.isDefault)?.id;
+      if (row.isDefault || !defaultId) {
+        defaultId = [...rest].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0].id;
+        await tx.rASearchProfile.updateMany({ where: { id: defaultId, userId }, data: { isDefault: true } });
+      }
+      if (row.isActive || !rest.some((r) => r.isActive)) {
+        await tx.rASearchProfile.updateMany({ where: { id: defaultId, userId }, data: { isActive: true } });
+      }
+    });
+  }
+
+  return { list, get, getActive, create, update, patchFilters, setDefault, activate, remove };
+}
+
+export type SearchProfileService = ReturnType<typeof createSearchProfileService>;
+
+/** The process-wide service. */
+export const searchProfileService: SearchProfileService = createSearchProfileService();
