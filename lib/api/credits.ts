@@ -8,6 +8,7 @@
 //   GET    /api/v1/roboapply/credits
 //   GET    /api/v1/roboapply/credits/history
 //   POST   /api/v1/roboapply/credits/cancel
+//   POST   /api/v1/roboapply/credits/cancel/survey   (requested from WP-21a)
 //   GET    /api/v1/roboapply/billing/plans
 //   POST   /api/v1/public/cancel
 //   POST   /api/v1/public/cancel/confirm
@@ -22,9 +23,38 @@
 
 import { call, type CallOptions, type In, type Items, type Out, seg, withQuery } from './contracts/wire';
 import type * as C from './contracts/credits';
+import type { FxReference } from '../pricing';
 
 /** An entitlement override row (admin). The contract names no view type yet (WP-21a). */
 export type CreditOverrideView = Out<typeof C.CreateOverrideBodySchema> & { id: string; createdAt: string };
+
+/**
+ * Fields WP-21b requested on `GET /billing/plans` (handoff → WP-21a). They are
+ * optional until the server sends them; every reader goes through
+ * `plansExtras()` so the adapter stays in one place.
+ *   - `fxReference`: the admin TWD reference rate (source + as-of), only while fresh.
+ *   - `visitor.country`: the buyer's country (edge header / billing country),
+ *     which decides the EU/UK/TW withdrawal acknowledgement.
+ */
+export interface PlansExtras {
+  fxReference?: FxReference | null;
+  visitor?: { country: string | null } | null;
+}
+
+export type PlansView = C.PlansResponse & PlansExtras;
+
+/** One plan of the brand catalog (server `CatalogPlan`). */
+export type CatalogPlan = C.PlansResponse['plans'][number];
+
+/** The requested extras, normalised (null when absent). */
+export function plansExtras(view: PlansView | null | undefined): { fxReference: FxReference | null; visitorCountry: string | null } {
+  const fx = view?.fxReference ?? null;
+  const country = view?.visitor?.country ?? null;
+  return {
+    fxReference: fx && typeof fx === 'object' ? fx : null,
+    visitorCountry: typeof country === 'string' && /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : null,
+  };
+}
 
 /** `credits.get` — GET /api/v1/roboapply/credits */
 export function getCredits(opts?: CallOptions): Promise<C.CreditsResponse> {
@@ -41,9 +71,19 @@ export function cancelSubscription(body: In<typeof C.CancelSubscriptionBodySchem
   return call<C.CancelResponse>('POST', `/api/v1/roboapply/credits/cancel`, { ...opts, body });
 }
 
+/**
+ * `credits.cancelSurvey` — POST /api/v1/roboapply/credits/cancel/survey
+ * (requested from WP-21a). The optional "why did you cancel?" answer, sent
+ * AFTER a cancel. Its own endpoint so it can never re-run the cancel's side
+ * effects (a second confirmation email or cancel event). Records only.
+ */
+export function sendCancelSurvey(body: In<typeof C.CancelSubscriptionBodySchema>, opts?: CallOptions): Promise<void> {
+  return call<void>('POST', `/api/v1/roboapply/credits/cancel/survey`, { ...opts, body });
+}
+
 /** `billing.plans` — GET /api/v1/roboapply/billing/plans */
-export function getPlans(opts?: CallOptions): Promise<C.PlansResponse> {
-  return call<C.PlansResponse>('GET', `/api/v1/roboapply/billing/plans`, opts);
+export function getPlans(opts?: CallOptions): Promise<PlansView> {
+  return call<PlansView>('GET', `/api/v1/roboapply/billing/plans`, opts);
 }
 
 /** `cancel.request` — POST /api/v1/public/cancel */
@@ -101,6 +141,7 @@ export const creditsApi = {
   getCredits,
   getCreditHistory,
   cancelSubscription,
+  sendCancelSurvey,
   getPlans,
   requestPublicCancel,
   confirmPublicCancel,

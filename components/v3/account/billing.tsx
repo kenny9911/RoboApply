@@ -103,6 +103,7 @@ function statusLabel(t: (k: string) => string, status: string): string {
 
 // ─── CreditsCard ──────────────────────────────────────────────────────────────
 
+/** @deprecated Legacy /settings billing renderer piece; replaced by components/features/credits (WP-21b: CreditsUsage). WP-75 deletes it once unused. */
 export function CreditsCard({ credits }: { credits: BillingPlanResponse['credits'] }) {
   const t = useTranslations('settings');
   const allot = credits.periodAllotment ?? 0;
@@ -139,6 +140,7 @@ interface CurrentPlanCardProps {
   canceling: boolean;
 }
 
+/** @deprecated Legacy /settings billing renderer piece; replaced by components/features/credits (WP-21b: BillingView). WP-75 deletes it once unused. */
 export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, canceling }: CurrentPlanCardProps) {
   const t = useTranslations('settings');
   const locale = useLocale();
@@ -199,6 +201,11 @@ export function CurrentPlanCard({ plan, onManageBilling, onCancel, managing, can
 // relay or a VPN puts a Shanghai user in Singapore — and it flips the whole
 // grid, prices and payment rail together, through the host's region override.
 
+/**
+ * @deprecated The brand now locks currency and rail (TASK_PLAN.md WP-21a:
+ * `?region=` removed), so there is nothing to switch. Replaced by
+ * components/features/credits (WP-21b); WP-75 deletes it once unused.
+ */
 export function CurrencyNote({
   region,
   onSwitch,

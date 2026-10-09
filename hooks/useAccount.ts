@@ -59,10 +59,14 @@ export function useAccountProfile(): UseQueryResult<AccountProfile, Error> {
   });
 }
 
-export function useBillingPlan(region?: 'cn' | 'other' | null): UseQueryResult<BillingPlanResponse, Error> {
+export function useBillingPlan(
+  region?: 'cn' | 'other' | null,
+  options: { enabled?: boolean } = {},
+): UseQueryResult<BillingPlanResponse, Error> {
   return useQuery({
     queryKey: accountKeys.plan(region),
     queryFn: () => accountApi.plan(region ?? undefined),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -160,12 +164,14 @@ export interface CheckoutVars {
   cancelNext?: string;
 }
 
+/** @deprecated Legacy tier checkout (`starter` / `growth`). Use `usePlanCheckout` from hooks/credits (WP-21b). */
 export function useCheckout(): UseMutationResult<StripeRedirect, Error, CheckoutVars> {
   return useMutation({
     mutationFn: (v: CheckoutVars) => accountApi.checkout(v.tier, v.next, v.cancelNext),
   });
 }
 
+/** @deprecated Legacy tier checkout. Use `usePlanCheckout` from hooks/credits (WP-21b). */
 export function useAlipayCheckout(): UseMutationResult<StripeRedirect, Error, CheckoutVars> {
   return useMutation({
     mutationFn: (v: CheckoutVars) => accountApi.alipayCheckout(v.tier, v.next),
@@ -178,6 +184,7 @@ export function usePortal(): UseMutationResult<StripeRedirect, Error, void> {
   });
 }
 
+/** @deprecated Legacy cancel. Use `useCancelSubscription` from hooks/credits (one click, cancel-time alternative; WP-21b). */
 export function useCancelPlan(): UseMutationResult<CancelPlanResponse, Error, void> {
   const qc = useQueryClient();
   return useMutation({

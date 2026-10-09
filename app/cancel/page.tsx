@@ -1,20 +1,30 @@
-// /cancel — route shell (FND-6b). Cancel a subscription without signing in.
+// /cancel — cancel a subscription without signing in (PRODUCT_PLAN.md §3.4,
+// F-BILL-03; §312k BGB). Public page in HybridShell (R-23): the app shell with
+// a session, marketing chrome and the legal footer without one. Every footer
+// links here (`CancelFooterLink`; German label "Verträge hier kündigen").
 //
-// STUB. Owner: WP-21b, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// Flow: email → one-time link (30 min, single use) → `/cancel?token=…` →
+// "Cancel now". The token is passed to the client once and stripped from the
+// address bar there. Token pages are never indexed.
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../components/v3/shell/HybridShell';
 import { LegalFooter } from '../../components/features/market';
+import { PublicCancelFlow } from '../../components/features/credits';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export const metadata: Metadata = { robots: { index: false, follow: true } };
 
-export default function CancelPage() {
+export default async function CancelPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const token = typeof params.token === 'string' && params.token.length <= 512 ? params.token : null;
   return (
     <HybridShell from="cancel" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/cancel" data-owner="WP-21b" />
+      <PublicCancelFlow token={token} />
     </HybridShell>
   );
 }

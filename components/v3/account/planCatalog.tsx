@@ -207,6 +207,13 @@ function PlanCard({
   }
 }
 
+/**
+ * @deprecated Sells the legacy `starter` / `growth` practice plans, which stop
+ * being sold at launch (PRODUCT_PLAN.md §6.3). Use `PlanPicker` /
+ * `CreditsSettingsSection` from components/features/credits (WP-21b). Still
+ * rendered by the legacy /settings billing renderer until INT wires the
+ * credits section; WP-75 deletes it after a zero-importer grep.
+ */
 export function PlanCatalog({ plan, busy, mode, onSelectPaid, onSelectFree, onCancel }: PlanCatalogProps) {
   const ordered = [...plan.plans].sort((a, b) => PLAN_ORDER.indexOf(a.key) - PLAN_ORDER.indexOf(b.key));
   return (
