@@ -19,17 +19,30 @@
 // Contract: debit + grant are best-effort and MUST NOT throw into the interview
 // lifecycle (mirrors sessionCost.ts). The gate (checkAffordable) is allowed to
 // surface an error to the route so the user gets a clean 402.
+//
+// Jobright clone (TASK_PLAN.md WP-21a; PRODUCT_PLAN.md §6.3):
+//   • tier 'pro' is paid: its credits come from the plan (`grantForPlan` with
+//     the plan catalog's practice allowance), never from the free monthly
+//     grant. Quarterly plans ("3 per month, granted monthly") re-grant lazily
+//     here on a new UTC month while the plan is live.
+//   • A paid tier whose period has ended (an expired pass) is treated as free.
+//   • Practice packs ADD credits that stay valid 12 months. Each pack is an
+//     RACreditGrant row (bucket 'practice', reason 'pack'); plan credits are
+//     spent before pack credits, so a plan grant (which SETS the balance, no
+//     rollover) keeps the unspent pack credits on top, and an expired pack
+//     removes only what is left of it.
 
 import prisma from './prisma.js';
 import { logger } from '../services/LoggerService.js';
 import {
   getMockPlanCatalog,
-  isPaidMockPlan,
   roundCreditsUp,
   creditsForMinutes,
   creditsForSeconds,
   type MockPlanKey,
 } from './mockInterviewPlans.js';
+import { PLAN_DEFINITIONS, isPlanKey, type PracticeAllowance } from '../platform/billing/planCatalog.js';
+import { parseBrandId } from '../platform/brand/registry.js';
 
 export type CreditLedgerReason =
   | 'grant_purchase'
@@ -59,7 +72,121 @@ interface ResolvedSeeker {
   mockCreditsRenewedAt: Date | null;
   mockCreditsPeriodAllotment: number | null;
   currentPeriodEnd: Date | null;
+  planKey: string | null;
+  status: string | null;
+  brand: string | null;
+  autoRenewing: boolean;
 }
+
+/** Paid practice tiers (legacy starter/growth and the clone's single paid tier). */
+export function isPaidTier(tier: string | null | undefined): boolean {
+  return tier === 'starter' || tier === 'growth' || tier === 'pro';
+}
+
+/** Statuses during which a paid plan still counts (past_due = Stripe is retrying). */
+const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due']);
+/** An auto-renewing Stripe plan keeps counting this long past its period end while the renewal webhook lands. */
+const RENEWAL_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Is the seeker's paid plan live at `now`? Legacy rows without a period end stay paid (old behaviour). */
+export function paidPlanLive(
+  sub: { tier: string; status: string | null; currentPeriodEnd: Date | null; autoRenewing: boolean },
+  now: Date,
+): boolean {
+  if (!isPaidTier(sub.tier)) return false;
+  if (sub.status && !LIVE_STATUSES.has(sub.status)) return false;
+  if (!sub.currentPeriodEnd) return true;
+  const grace = sub.autoRenewing ? RENEWAL_GRACE_MS : 0;
+  return sub.currentPeriodEnd.getTime() + grace > now.getTime();
+}
+
+/** The practice allowance of an R-08 plan key (null for legacy keys and free). */
+export function planPracticeAllowance(planKey: string | null | undefined, brand?: string | null): PracticeAllowance | null {
+  if (!isPlanKey(planKey)) return null;
+  const b = parseBrandId(brand) ?? 'roboapply';
+  const def = PLAN_DEFINITIONS[b].find((d) => d.key === planKey) ?? PLAN_DEFINITIONS.roboapply.find((d) => d.key === planKey);
+  return def?.practice ?? null;
+}
+
+// ─── Practice packs (RACreditGrant rows, bucket 'practice') ───────────────────
+
+export const PRACTICE_PACK_BUCKET = 'practice';
+
+export interface PackRow {
+  id: string;
+  remaining: number;
+  expiresAt: Date | null;
+}
+
+/**
+ * How much of each pack is still unspent, given the balance. Plan credits are
+ * spent first and, among packs, the soonest-expiring first; so the unspent
+ * pack total is min(sum of packs, balance), allocated to the latest-expiring
+ * packs first.
+ */
+export function allocatePackRemaining(packs: readonly PackRow[], balance: number): Map<string, number> {
+  const total = packs.reduce((n, p) => n + Math.max(0, p.remaining), 0);
+  let left = Math.max(0, Math.min(total, balance));
+  const order = [...packs].sort((a, b) => (b.expiresAt?.getTime() ?? Infinity) - (a.expiresAt?.getTime() ?? Infinity));
+  const out = new Map<string, number>();
+  for (const p of order) {
+    const take = Math.min(Math.max(0, p.remaining), left);
+    out.set(p.id, take);
+    left -= take;
+  }
+  return out;
+}
+
+async function loadPacks(userId: string): Promise<PackRow[]> {
+  try {
+    return await prisma.rACreditGrant.findMany({
+      where: { userId, bucket: PRACTICE_PACK_BUCKET, remaining: { gt: 0 } },
+      select: { id: true, remaining: true, expiresAt: true },
+    });
+  } catch (err) {
+    logger.warn('MOCK_CREDIT', 'pack lookup failed', { userId, error: err instanceof Error ? err.message : String(err) });
+    return [];
+  }
+}
+
+/**
+ * Before a plan grant SETS the balance: the unspent credits of live packs,
+ * which are carried on top. Rows are trimmed to what is really left.
+ */
+async function packCarryForGrant(userId: string, previousBalance: number, now: Date): Promise<number> {
+  const packs = (await loadPacks(userId)).filter((p) => !p.expiresAt || p.expiresAt.getTime() > now.getTime());
+  if (!packs.length) return 0;
+  const alloc = allocatePackRemaining(packs, previousBalance);
+  let carry = 0;
+  for (const p of packs) {
+    const eff = alloc.get(p.id) ?? 0;
+    carry += eff;
+    if (eff < p.remaining) {
+      await prisma.rACreditGrant.updateMany({ where: { id: p.id, remaining: p.remaining }, data: { remaining: eff } }).catch(() => {});
+    }
+  }
+  return carry;
+}
+
+/** Lazily remove what is left of expired packs from the balance. */
+async function expirePacks(seeker: ResolvedSeeker, userId: string, now: Date): Promise<number> {
+  const packs = await loadPacks(userId);
+  const expired = packs.filter((p) => p.expiresAt && p.expiresAt.getTime() <= now.getTime());
+  if (!expired.length) return seeker.mockCredits;
+  const alloc = allocatePackRemaining(packs, seeker.mockCredits);
+  let balance = seeker.mockCredits;
+  for (const p of expired) {
+    const claim = await prisma.rACreditGrant.updateMany({ where: { id: p.id, remaining: p.remaining }, data: { remaining: 0 } });
+    if (claim.count !== 1) continue;
+    const eff = alloc.get(p.id) ?? 0;
+    if (eff > 0) {
+      const res = await adjustCredits({ userId, delta: -eff, reason: 'expire', source: 'system', metadata: { packGrantId: p.id } });
+      if (res) balance = res.balanceAfter;
+    }
+  }
+  return balance;
+}
+
 
 function num(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);
@@ -103,6 +230,11 @@ async function resolveSeeker(userId: string): Promise<ResolvedSeeker | null> {
       mockCreditsRenewedAt: true,
       mockCreditsPeriodAllotment: true,
       currentPeriodEnd: true,
+      planKey: true,
+      status: true,
+      brand: true,
+      stripeSubscriptionId: true,
+      cancelAtPeriodEnd: true,
     },
   });
   if (!sub) return null;
@@ -114,6 +246,10 @@ async function resolveSeeker(userId: string): Promise<ResolvedSeeker | null> {
     mockCreditsRenewedAt: sub.mockCreditsRenewedAt ?? null,
     mockCreditsPeriodAllotment: sub.mockCreditsPeriodAllotment ?? null,
     currentPeriodEnd: sub.currentPeriodEnd ?? null,
+    planKey: sub.planKey ?? null,
+    status: sub.status ?? null,
+    brand: sub.brand ?? null,
+    autoRenewing: Boolean(sub.stripeSubscriptionId) && !sub.cancelAtPeriodEnd,
   };
 }
 
@@ -170,35 +306,43 @@ export async function getBalance(userId: string): Promise<CreditBalance> {
     };
   }
 
-  // Lazy free-tier monthly re-grant: only for the free tier, only when the last
-  // grant was in a previous UTC month (or never). Paid tiers are granted by the
-  // payment/renewal path, never here.
-  if (!isPaidMockPlan(seeker.tier)) {
-    const now = new Date();
+  const now = new Date();
+  // Expired practice packs leave the balance first (what is left of them).
+  const balanceNow = await expirePacks(seeker, userId, now);
+  if (balanceNow !== seeker.mockCredits) seeker.mockCredits = balanceNow;
+  const live = paidPlanLive(seeker, now);
+
+  // Lazy free-tier monthly re-grant: only when there is no live paid plan,
+  // and only when the last grant was in a previous UTC month (or never). Paid
+  // plans are granted by the payment/renewal path (and the quarterly monthly
+  // re-grant below), never here.
+  if (!live) {
     if (!sameUtcMonth(seeker.mockCreditsRenewedAt, now)) {
+      const carry = await packCarryForGrant(userId, seeker.mockCredits, now);
+      const target = freeCredits + carry;
       // CONDITIONAL claim: only the writer whose read still matches the stored
       // renewedAt wins (guards against two concurrent getBalance() calls both
       // granting + writing duplicate ledger rows at a month boundary). The
       // loser sees count===0 and falls through to read the granted balance.
       const claim = await prisma.seekerSubscription.updateMany({
         where: { id: seeker.subscriptionId, mockCreditsRenewedAt: seeker.mockCreditsRenewedAt },
-        data: { mockCredits: freeCredits, mockCreditsRenewedAt: now, mockCreditsPeriodAllotment: freeCredits },
+        data: { mockCredits: target, mockCreditsRenewedAt: now, mockCreditsPeriodAllotment: freeCredits },
       });
       if (claim.count === 1) {
         await appendLedger({
           seekerProfileId: seeker.seekerProfileId,
           userId,
-          delta: roundCreditsUp(freeCredits - seeker.mockCredits) || freeCredits - seeker.mockCredits,
-          balanceAfter: freeCredits,
+          delta: roundCreditsUp(target - seeker.mockCredits) || target - seeker.mockCredits,
+          balanceAfter: target,
           reason: seeker.mockCreditsRenewedAt ? 'grant_free_monthly' : 'signup_bonus',
           tier: 'free',
           source: 'system',
-          metadata: { previousBalance: seeker.mockCredits },
+          metadata: { previousBalance: seeker.mockCredits, packCarry: carry },
         });
       }
       // Whether we won or lost the race, the balance is now the free allotment.
       return {
-        credits: freeCredits,
+        credits: target,
         tier: 'free',
         periodAllotment: freeCredits,
         renewedAt: now,
@@ -206,6 +350,45 @@ export async function getBalance(userId: string): Promise<CreditBalance> {
         ephemeral: false,
       };
     }
+    return {
+      credits: seeker.mockCredits,
+      tier: 'free',
+      periodAllotment: seeker.mockCreditsPeriodAllotment,
+      renewedAt: seeker.mockCreditsRenewedAt,
+      currentPeriodEnd: seeker.currentPeriodEnd,
+      ephemeral: false,
+    };
+  }
+
+  // Quarterly Pro ("3 per month, granted monthly"): re-grant on a new UTC month.
+  const allowance = seeker.tier === 'pro' ? planPracticeAllowance(seeker.planKey, seeker.brand) : null;
+  if (allowance?.per === 'month' && seeker.mockCreditsRenewedAt && !sameUtcMonth(seeker.mockCreditsRenewedAt, now)) {
+    const carry = await packCarryForGrant(userId, seeker.mockCredits, now);
+    const target = allowance.credits + carry;
+    const claim = await prisma.seekerSubscription.updateMany({
+      where: { id: seeker.subscriptionId, mockCreditsRenewedAt: seeker.mockCreditsRenewedAt },
+      data: { mockCredits: target, mockCreditsRenewedAt: now, mockCreditsPeriodAllotment: allowance.credits },
+    });
+    if (claim.count === 1) {
+      await appendLedger({
+        seekerProfileId: seeker.seekerProfileId,
+        userId,
+        delta: target - seeker.mockCredits,
+        balanceAfter: target,
+        reason: 'grant_renewal',
+        tier: seeker.tier,
+        source: 'system',
+        metadata: { previousBalance: seeker.mockCredits, planKey: seeker.planKey, monthly: true, packCarry: carry },
+      });
+    }
+    return {
+      credits: target,
+      tier: seeker.tier,
+      periodAllotment: allowance.credits,
+      renewedAt: now,
+      currentPeriodEnd: seeker.currentPeriodEnd,
+      ephemeral: false,
+    };
   }
 
   return {
@@ -282,27 +465,40 @@ export async function debitForFinishedSession(params: {
 
 // ─── Grant (purchase / renewal) — SET to plan allotment, no rollover ──────────
 
+/** Paid tiers grantForPlan accepts: legacy practice plans and the clone's Pro tier. */
+export type GrantTier = MockPlanKey | 'pro';
+
 export async function grantForPlan(params: {
   userId: string;
-  tier: MockPlanKey;
+  tier: GrantTier;
+  /** Allotment override (Pro plans: the plan catalog's practice allowance). Legacy tiers read the mock-plan catalog. */
+  credits?: number;
   reason: Extract<CreditLedgerReason, 'grant_purchase' | 'grant_renewal'>;
-  source: string; // 'stripe' | 'alipay'
+  source: string; // 'stripe' | 'alipay' | 'wechatpay'
   currentPeriodEnd?: Date | null;
   metadata?: Record<string, unknown> | null;
 }): Promise<void> {
   try {
     const catalog = await getMockPlanCatalog();
-    const allotment = catalog.plans[params.tier]?.credits ?? 0;
+    const allotment =
+      typeof params.credits === 'number' && params.credits >= 0
+        ? params.credits
+        : params.tier === 'pro'
+          ? 0
+          : (catalog.plans[params.tier]?.credits ?? 0);
     const seeker = await resolveSeeker(params.userId);
     if (!seeker) {
       logger.warn('MOCK_CREDIT', 'grantForPlan skipped — no seeker profile', { userId: params.userId, tier: params.tier });
       return;
     }
     const now = new Date();
+    // Unspent practice-pack credits ride on top of the plan allotment.
+    const carry = await packCarryForGrant(params.userId, seeker.mockCredits, now);
+    const balanceAfter = allotment + carry;
     await prisma.seekerSubscription.update({
       where: { id: seeker.subscriptionId },
       data: {
-        mockCredits: allotment,
+        mockCredits: balanceAfter,
         mockCreditsRenewedAt: now,
         mockCreditsPeriodAllotment: allotment,
         ...(params.currentPeriodEnd !== undefined ? { currentPeriodEnd: params.currentPeriodEnd } : {}),
@@ -311,18 +507,19 @@ export async function grantForPlan(params: {
     await appendLedger({
       seekerProfileId: seeker.seekerProfileId,
       userId: params.userId,
-      delta: allotment - seeker.mockCredits,
-      balanceAfter: allotment,
+      delta: balanceAfter - seeker.mockCredits,
+      balanceAfter,
       reason: params.reason,
       tier: params.tier,
       source: params.source,
-      metadata: { previousBalance: seeker.mockCredits, allotment, ...(params.metadata ?? {}) },
+      metadata: { previousBalance: seeker.mockCredits, allotment, packCarry: carry, ...(params.metadata ?? {}) },
     });
     logger.info('MOCK_CREDIT', 'credits granted', {
       userId: params.userId,
       tier: params.tier,
       reason: params.reason,
       allotment,
+      packCarry: carry,
       previousBalance: seeker.mockCredits,
     });
   } catch (err) {
@@ -343,7 +540,9 @@ export async function grantForPlan(params: {
  */
 export async function grantForPlanIfNewPeriod(params: {
   userId: string;
-  tier: MockPlanKey;
+  tier: GrantTier;
+  /** Allotment override (Pro plans). */
+  credits?: number;
   periodStart: Date | null;
   currentPeriodEnd?: Date | null;
   source: string;
@@ -372,6 +571,7 @@ export async function grantForPlanIfNewPeriod(params: {
   await grantForPlan({
     userId: params.userId,
     tier: params.tier,
+    credits: params.credits,
     reason,
     source: params.source,
     currentPeriodEnd: params.currentPeriodEnd ?? null,

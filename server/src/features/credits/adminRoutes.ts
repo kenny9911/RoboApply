@@ -1,39 +1,65 @@
-// server/src/features/credits/adminRoutes.ts — STUB (FND-5). Owner: WP-21a.
+// server/src/features/credits/adminRoutes.ts — admin credits routes (WP-21a).
 // Mounted by features/index.ts at /api/v1/roboapply/admin/credits (admin only):
-// caps editor (AppConfig credits.catalog.v1), entitlement overrides, FX
-// reference (TWD line), TW revenue monitor.
+//   GET/PUT /catalog            caps editor (AppConfig credits.catalog.v1; validated, 30 s cache dropped on save)
+//   GET/POST /overrides         entitlement overrides (bucket:<b> | entitlement:<k> | flag:<key>)
+//   DELETE /overrides/:id
+//   GET/PUT /fx-reference       TWD reference rate with source and as-of (hidden from users after 45 days)
+//   GET /tw-revenue             Stripe TW-card revenue YTD vs NT$600k (70 % warning)
+//   GET /refund-quote?userId    F-BILL-08 decision for the user's latest charge (quote only; refunds are issued in Stripe)
 
-import { Router, type RequestHandler } from 'express';
-import type { ZodType } from 'zod';
+import { Router, type Request } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireAdmin } from '../../middleware/admin.js';
-import { markStub, NotImplementedError, parseBody, parseParams, parseQuery, route } from '../../platform/http.js';
+import { parseBody, parseParams, parseQuery, requireUserId } from '../../platform/http.js';
 import type { FeatureRouterDeps } from '../index.js';
-import { CreateOverrideBodySchema, ListOverridesQuerySchema, OverrideParamsSchema, PutCatalogBodySchema, PutFxReferenceBodySchema } from './contract.js';
+import {
+  CreateOverrideBodySchema,
+  ListOverridesQuerySchema,
+  OverrideParamsSchema,
+  PutCatalogBodySchema,
+  PutFxReferenceBodySchema,
+  RefundQuoteQuerySchema,
+} from './contract.js';
+import { billingRoute, serviceFor } from './routes.js';
+import type { CreditsAreaService } from './service.js';
 
-function stub(what: string, s: { params?: ZodType; query?: ZodType; body?: ZodType } = {}): RequestHandler {
-  return markStub(
-    route(async (req) => {
-      if (s.params) parseParams(req, s.params);
-      if (s.query) parseQuery(req, s.query);
-      if (s.body) parseBody(req, s.body);
-      throw new NotImplementedError(what);
-    }),
-  );
+function adminIdOf(req: Request): string | null {
+  try {
+    return requireUserId(req);
+  } catch {
+    return null;
+  }
 }
 
-export function createCreditsAdminRouter(deps: FeatureRouterDeps = {}): Router {
+export function createCreditsAdminRouter(deps: FeatureRouterDeps & { service?: CreditsAreaService } = {}): Router {
   const router = Router();
   const admin = [...(deps.adminAuth ?? [requireAuth, requireAdmin])];
+  const service = serviceFor(deps);
 
-  router.get('/catalog', ...admin, stub('credits.admin.getCatalog'));
-  router.put('/catalog', ...admin, stub('credits.admin.putCatalog', { body: PutCatalogBodySchema }));
-  router.get('/overrides', ...admin, stub('credits.admin.listOverrides', { query: ListOverridesQuerySchema }));
-  router.post('/overrides', ...admin, stub('credits.admin.createOverride', { body: CreateOverrideBodySchema }));
-  router.delete('/overrides/:id', ...admin, stub('credits.admin.deleteOverride', { params: OverrideParamsSchema }));
-  router.get('/fx-reference', ...admin, stub('credits.admin.getFx'));
-  router.put('/fx-reference', ...admin, stub('credits.admin.putFx', { body: PutFxReferenceBodySchema }));
-  router.get('/tw-revenue', ...admin, stub('credits.admin.twRevenue'));
+  router.get('/catalog', ...admin, billingRoute(async () => service.getCatalog()));
+  router.put(
+    '/catalog',
+    ...admin,
+    billingRoute(async (req) => service.putCatalog(parseBody(req, PutCatalogBodySchema).override, adminIdOf(req))),
+  );
+  router.get('/overrides', ...admin, billingRoute(async (req) => service.listOverrides(parseQuery(req, ListOverridesQuerySchema))));
+  router.post(
+    '/overrides',
+    ...admin,
+    billingRoute(async (req) => service.createOverride(parseBody(req, CreateOverrideBodySchema), adminIdOf(req)), { status: 201 }),
+  );
+  router.delete(
+    '/overrides/:id',
+    ...admin,
+    billingRoute(async (req, res) => {
+      await service.deleteOverride(parseParams(req, OverrideParamsSchema).id, adminIdOf(req));
+      res.status(204).end();
+    }),
+  );
+  router.get('/fx-reference', ...admin, billingRoute(async () => service.getFx()));
+  router.put('/fx-reference', ...admin, billingRoute(async (req) => service.putFx(parseBody(req, PutFxReferenceBodySchema), adminIdOf(req))));
+  router.get('/tw-revenue', ...admin, billingRoute(async () => service.twRevenue()));
+  router.get('/refund-quote', ...admin, billingRoute(async (req) => service.refundQuote(parseQuery(req, RefundQuoteQuerySchema).userId)));
 
   return router;
 }

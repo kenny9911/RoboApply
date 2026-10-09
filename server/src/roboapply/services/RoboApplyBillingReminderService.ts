@@ -1,83 +1,42 @@
-// backend/src/roboapply/services/RoboApplyBillingReminderService.ts
+// server/src/roboapply/services/RoboApplyBillingReminderService.ts
 //
-// Two lifecycle email sweeps for RoboApply billing:
-//   1. runRenewalReminderSweep — T-5d before a paid plan's monthly period ends.
-//      Stripe subs say "renews automatically"; CN/Alipay passes say "expires —
-//      renew now". Always sent (transactional), deduped per (sub, periodEnd).
-//   2. runFridayNudgeSweep — weekly "prep for next week's interviews" engagement
-//      nudge to users with credits / an active plan. Honors weeklyNudgeOptOut,
-//      deduped per (user, ISO week).
+// Billing reminder sweeps (PRODUCT_PLAN.md §6.3, §6.5; ARCHITECTURE.md §7.4;
+// TASK_PLAN.md WP-21a). Brand-aware, sent through the platform email service
+// (template `billing.renewal_reminder` / `billing.annual_reminder`), so every
+// send is logged in RAEmailLog (X-31: reminders are sent AND logged).
 //
-// Both are best-effort and idempotent via Notification.dedupKey (a unique
-// constraint → P2002 on a repeat = already sent). Driven by RoboApplyCronService.
+//   runRenewalReminderSweep (daily cron `billing-renewal-reminder`):
+//     - auto-renewing plans: 5 days before a monthly/quarterly renewal,
+//       2 days before a weekly one (cancelled plans get nothing — they won't
+//       renew);
+//     - passes that end without renewing: GoApply 30/90-day passes 3 days
+//       before they end ("续费" reminder), the old RoboApply Alipay monthly
+//       passes 5 days before; 7-day passes get none (nothing renews and a
+//       reminder would only be a sales nudge);
+//     - an annual reminder for subscriptions that have run over 12 months,
+//       once per year of the subscription.
+//   Each send is claimed once through Notification.dedupKey (unique); a send
+//   that fails releases its claim so the next daily run retries while the
+//   plan is still inside its reminder window.
+//
+//   runFridayNudgeSweep: RETIRED. The weekly practice nudge is promotional;
+//   WP-39a sends its successor under "Tips and reminders" (default off for
+//   EEA/UK/CH/CA visitors and GoApply). Kept as a no-op only because the cron
+//   handler still imports it; WP-75 deletes the cron entry and this export.
 
-import prisma from '../../lib/prisma.js';
+import prisma, { type ExtendedPrismaClient } from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
-import { emailService } from '../../services/EmailService.js';
-import { getBalance } from '../../lib/mockCreditService.js';
-import { isPaidMockPlan } from '../../lib/mockInterviewPlans.js';
-import { renderRenewalEmail, renderFridayNudgeEmail, type RoboEmailLocale } from '../lib/billingEmails.js';
+import { sendEmail as platformSendEmail } from '../../platform/email/index.js';
+import '../../platform/email/templates/billing/index.js';
+import { parseBrandId, type BrandId } from '../../platform/brand/registry.js';
+import { planDefinitionFor } from '../../platform/billing/index.js';
 
-// RoboApply mock-interview paid plans ONLY. Deliberately excludes the legacy
-// premium / premium_plus seeker tiers — those are deprecated for the mock
-// product and must not receive Starter/Growth billing emails.
-const RA_PAID_TIERS = ['starter', 'growth'];
+export type ReminderDb = Pick<ExtendedPrismaClient, 'seekerSubscription' | 'seekerProfile' | 'user' | 'notification'>;
 
-function roboApplyBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_ROBOAPPLY_URL || process.env.ROBOAPPLY_URL || 'https://roboapply.robohire.io';
-}
-function fromHeader(): string {
-  return process.env.ROBOAPPLY_EMAIL_FROM || 'RoboApply <noreply@updates.robohire.io>';
-}
-
-function resolveEmailLocale(locale: string | null | undefined, market: string | null | undefined): RoboEmailLocale {
-  const l = (locale ?? '').trim();
-  if (l === 'en' || l === 'zh' || l === 'zh-TW' || l === 'ja') return l;
-  const m = (market ?? '').trim().toLowerCase();
-  if (m === 'cn') return 'zh';
-  if (m === 'tw') return 'zh-TW';
-  if (m === 'jp') return 'ja';
-  return 'en';
-}
-
-function isoWeek(d: Date): string {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const week =
-    1 +
-    Math.round(((date.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
-  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
-
-/** Claim a dedupKey by inserting a Notification row. Returns the row id when
- *  newly claimed, or null when a row already exists (P2002). */
-async function claimDedup(input: {
-  dedupKey: string;
-  userId: string;
-  type: string;
-  title: string;
-}): Promise<string | null> {
-  try {
-    const row = await prisma.notification.create({
-      data: {
-        userId: input.userId,
-        type: input.type,
-        title: input.title,
-        dedupKey: input.dedupKey,
-      },
-      select: { id: true },
-    });
-    return row.id;
-  } catch (err: any) {
-    if (err?.code === 'P2002') return null; // already sent
-    throw err;
-  }
-}
-
-async function markEmailSent(notificationId: string): Promise<void> {
-  await prisma.notification.update({ where: { id: notificationId }, data: { emailSent: true } }).catch(() => {});
+export interface ReminderDeps {
+  db?: ReminderDb;
+  sendEmail?: typeof platformSendEmail;
+  now?: Date;
 }
 
 export interface SweepResult {
@@ -87,161 +46,286 @@ export interface SweepResult {
   failed: number;
 }
 
-// ─── 1. Renewal reminder (T-5d) ───────────────────────────────────────────────
+const DAY_MS = 86_400_000;
+const YEAR_MS = 365 * DAY_MS;
+/** Auto-renewing plans: days before renewal (PRODUCT §6.5). */
+export const RENEWAL_LEAD_DAYS = { week: 2, month: 5, quarter: 5 } as const;
+/** GoApply passes (PRODUCT §6.3: 3 days before expiry) and old RoboApply Alipay passes (5, unchanged). */
+export const PASS_LEAD_DAYS = { goapply: 3, legacy: 5 } as const;
+const PAID_TIERS = ['pro', 'starter', 'growth'];
+const SCAN_LIMIT = 5000;
 
-export async function runRenewalReminderSweep(opts: { now?: Date } = {}): Promise<SweepResult> {
-  const result: SweepResult = { scanned: 0, sent: 0, skipped: 0, failed: 0 };
-  if (!emailService.isConfigured) {
-    logger.info('RA_BILLING_REMINDER', 'renewal sweep skipped — email not configured');
-    return result;
+interface Candidate {
+  id: string;
+  seekerProfileId: string;
+  tier: string;
+  planKey: string | null;
+  interval: string | null;
+  brand: string | null;
+  currency: string | null;
+  amountMinor: number | null;
+  stripeSubscriptionId: string | null;
+  currentPeriodEnd: Date | null;
+  startedAt: Date | null;
+}
+
+interface Recipient {
+  userId: string;
+  email: string;
+  locale: string | null;
+  brand: BrandId;
+}
+
+export type ReminderKind = { kind: 'auto'; leadDays: number } | { kind: 'pass'; leadDays: number } | null;
+
+/** Which reminder (if any) a live paid row gets, and how many days ahead. */
+export function reminderFor(sub: Pick<Candidate, 'tier' | 'planKey' | 'interval' | 'brand' | 'currency' | 'stripeSubscriptionId'>): ReminderKind {
+  if (sub.stripeSubscriptionId) {
+    const interval = sub.interval === 'week' || sub.interval === 'quarter' ? sub.interval : 'month';
+    return { kind: 'auto', leadDays: RENEWAL_LEAD_DAYS[interval] };
   }
-  const now = opts.now ?? new Date();
-  const windowStart = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000);
-  const windowEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+  if (sub.tier === 'starter' || sub.tier === 'growth') {
+    // Old RoboApply Alipay monthly passes, honoured until they expire.
+    return sub.currency === 'CNY' ? { kind: 'pass', leadDays: PASS_LEAD_DAYS.legacy } : null;
+  }
+  const brand = parseBrandId(sub.brand) ?? 'roboapply';
+  const def = planDefinitionFor(brand, sub.planKey);
+  if (brand === 'goapply' && def?.kind === 'pass' && (def.passDays ?? 0) >= 30) return { kind: 'pass', leadDays: PASS_LEAD_DAYS.goapply };
+  return null;
+}
 
-  const subs = await prisma.seekerSubscription.findMany({
+async function loadRecipients(db: ReminderDb, subs: Candidate[]): Promise<Map<string, Recipient>> {
+  const profileIds = [...new Set(subs.map((s) => s.seekerProfileId))];
+  const out = new Map<string, Recipient>();
+  if (!profileIds.length) return out;
+  const profiles = await db.seekerProfile.findMany({
+    where: { id: { in: profileIds }, deletedAt: null },
+    select: { id: true, userId: true, locale: true },
+  });
+  const users = await db.user.findMany({
+    where: { id: { in: [...new Set(profiles.map((p) => p.userId))] } },
+    select: { id: true, email: true, brand: true },
+  });
+  const byUser = new Map(users.map((u) => [u.id, u]));
+  for (const p of profiles) {
+    const u = byUser.get(p.userId);
+    if (!u?.email) continue;
+    out.set(p.id, { userId: u.id, email: u.email, locale: p.locale ?? null, brand: parseBrandId(u.brand) ?? 'roboapply' });
+  }
+  return out;
+}
+
+async function claim(db: ReminderDb, dedupKey: string, userId: string, type: string, title: string): Promise<string | null> {
+  try {
+    const row = await db.notification.create({ data: { userId, type, title, dedupKey }, select: { id: true } });
+    return row.id;
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'P2002') return null;
+    throw err;
+  }
+}
+
+async function release(db: ReminderDb, id: string): Promise<void> {
+  await db.notification.delete({ where: { id } }).catch(() => {});
+}
+
+async function markSent(db: ReminderDb, id: string): Promise<void> {
+  await db.notification.update({ where: { id }, data: { emailSent: true } }).catch(() => {});
+}
+
+async function deliver(
+  db: ReminderDb,
+  send: typeof platformSendEmail,
+  claimInput: { dedupKey: string; type: string; title: string },
+  recipient: Recipient,
+  email: { template: string; brand: BrandId; params: Record<string, unknown> },
+  result: SweepResult,
+): Promise<void> {
+  let claimId: string | null;
+  try {
+    claimId = await claim(db, claimInput.dedupKey, recipient.userId, claimInput.type, claimInput.title);
+  } catch (err) {
+    logger.warn('RA_BILLING_REMINDER', 'dedup claim failed', { key: claimInput.dedupKey, error: err instanceof Error ? err.message : String(err) });
+    result.failed++;
+    return;
+  }
+  if (!claimId) {
+    result.skipped++;
+    return;
+  }
+  try {
+    const res = await send({ template: email.template, to: recipient.email, userId: recipient.userId, locale: recipient.locale, brand: email.brand, params: email.params });
+    if (res.status === 'sent') {
+      await markSent(db, claimId);
+      result.sent++;
+    } else if (res.status === 'suppressed') {
+      // Placeholder address, no transport on this brand: nothing to retry.
+      result.skipped++;
+    } else {
+      await release(db, claimId);
+      result.failed++;
+    }
+  } catch (err) {
+    await release(db, claimId);
+    logger.warn('RA_BILLING_REMINDER', 'send failed', { key: claimInput.dedupKey, error: err instanceof Error ? err.message : String(err) });
+    result.failed++;
+  }
+}
+
+const CANDIDATE_SELECT = {
+  id: true,
+  seekerProfileId: true,
+  tier: true,
+  planKey: true,
+  interval: true,
+  brand: true,
+  currency: true,
+  amountMinor: true,
+  stripeSubscriptionId: true,
+  currentPeriodEnd: true,
+  startedAt: true,
+} as const;
+
+function toCandidate(r: Record<string, unknown>): Candidate {
+  return {
+    id: String(r.id),
+    seekerProfileId: String(r.seekerProfileId),
+    tier: String(r.tier),
+    planKey: (r.planKey as string | null) ?? null,
+    interval: (r.interval as string | null) ?? null,
+    brand: (r.brand as string | null) ?? null,
+    currency: (r.currency as string | null) ?? null,
+    amountMinor: (r.amountMinor as number | null) ?? null,
+    stripeSubscriptionId: (r.stripeSubscriptionId as string | null) ?? null,
+    currentPeriodEnd: (r.currentPeriodEnd as Date | null) ?? null,
+    startedAt: (r.startedAt as Date | null) ?? null,
+  };
+}
+
+// ─── Renewal + pass-expiry reminders, and the annual reminder ────────────────
+
+export async function runRenewalReminderSweep(opts: ReminderDeps = {}): Promise<SweepResult & { annual: SweepResult }> {
+  const db = opts.db ?? prisma;
+  const send = opts.sendEmail ?? platformSendEmail;
+  const now = opts.now ?? new Date();
+  const result: SweepResult = { scanned: 0, sent: 0, skipped: 0, failed: 0 };
+
+  const maxLead = Math.max(...Object.values(RENEWAL_LEAD_DAYS), ...Object.values(PASS_LEAD_DAYS));
+  const rows = await db.seekerSubscription.findMany({
     where: {
       status: { in: ['active', 'trialing'] },
-      tier: { in: RA_PAID_TIERS as never },
-      currentPeriodEnd: { gte: windowStart, lt: windowEnd },
+      tier: { in: PAID_TIERS as never },
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: { gt: now, lte: new Date(now.getTime() + maxLead * DAY_MS) },
     },
-    select: {
-      id: true,
-      tier: true,
-      currency: true,
-      stripeSubscriptionId: true,
-      currentPeriodEnd: true,
-      seekerProfile: {
-        select: { locale: true, market: true, user: { select: { id: true, email: true, name: true } } },
-      },
-    },
-    take: 5000,
+    select: CANDIDATE_SELECT,
+    take: SCAN_LIMIT,
   });
+  const subs = rows.map((r) => toCandidate(r as unknown as Record<string, unknown>));
+  const recipients = await loadRecipients(db, subs);
 
   for (const sub of subs) {
     result.scanned++;
-    const user = sub.seekerProfile?.user;
-    if (!user?.email || !sub.currentPeriodEnd) {
+    const kind = reminderFor(sub);
+    const recipient = recipients.get(sub.seekerProfileId);
+    if (!kind || !recipient || !sub.currentPeriodEnd) {
+      result.skipped++;
+      continue;
+    }
+    if (sub.currentPeriodEnd.getTime() - now.getTime() > kind.leadDays * DAY_MS) {
       result.skipped++;
       continue;
     }
     const periodEndIso = sub.currentPeriodEnd.toISOString();
-    const dedupKey = `ra_renewal_reminder:${sub.id}:${periodEndIso.slice(0, 10)}`;
-    let notifId: string | null;
-    try {
-      notifId = await claimDedup({ dedupKey, userId: user.id, type: 'ra_renewal_reminder', title: 'RoboApply renewal reminder' });
-    } catch (err) {
-      logger.warn('RA_BILLING_REMINDER', 'renewal dedup claim failed', { subId: sub.id, error: err instanceof Error ? err.message : String(err) });
-      result.failed++;
-      continue;
-    }
-    if (!notifId) {
+    await deliver(
+      db,
+      send,
+      { dedupKey: `ra_renewal_reminder:${sub.id}:${periodEndIso.slice(0, 10)}`, type: 'ra_renewal_reminder', title: 'Renewal reminder' },
+      recipient,
+      {
+        template: 'billing.renewal_reminder',
+        brand: parseBrandId(sub.brand) ?? recipient.brand,
+        params: {
+          planKey: sub.planKey && sub.tier === 'pro' ? sub.planKey : sub.tier,
+          date: periodEndIso,
+          amountMinor: sub.amountMinor,
+          currency: sub.currency,
+          interval: sub.interval,
+          manual: kind.kind === 'pass',
+        },
+      },
+      result,
+    );
+  }
+
+  const annual = await runAnnualReminderSweep({ db, sendEmail: send, now });
+  logger.info('RA_BILLING_REMINDER', 'renewal sweep complete', { ...result, annual });
+  return { ...result, annual };
+}
+
+/** Subscriptions running for over 12 months: one reminder per year of the subscription. */
+export async function runAnnualReminderSweep(opts: ReminderDeps = {}): Promise<SweepResult> {
+  const db = opts.db ?? prisma;
+  const send = opts.sendEmail ?? platformSendEmail;
+  const now = opts.now ?? new Date();
+  const result: SweepResult = { scanned: 0, sent: 0, skipped: 0, failed: 0 };
+  const rows = await db.seekerSubscription.findMany({
+    where: {
+      status: { in: ['active', 'trialing'] },
+      tier: { in: PAID_TIERS as never },
+      cancelAtPeriodEnd: false,
+      stripeSubscriptionId: { not: null },
+      startedAt: { lte: new Date(now.getTime() - YEAR_MS) },
+    },
+    select: CANDIDATE_SELECT,
+    take: SCAN_LIMIT,
+  });
+  const subs = rows.map((r) => toCandidate(r as unknown as Record<string, unknown>));
+  const recipients = await loadRecipients(db, subs);
+  for (const sub of subs) {
+    result.scanned++;
+    const recipient = recipients.get(sub.seekerProfileId);
+    if (!recipient || !sub.startedAt) {
       result.skipped++;
       continue;
     }
-
-    try {
-      const tier = String(sub.tier);
-      const planLabel = tier === 'growth' || tier === 'premium_plus' ? 'Growth' : 'Starter';
-      const manualRenewal = isPaidMockPlan(tier) && !sub.stripeSubscriptionId && sub.currency === 'CNY';
-      const locale = resolveEmailLocale(sub.seekerProfile?.locale, sub.seekerProfile?.market);
-      const balance = await getBalance(user.id);
-      const ctaUrl = `${roboApplyBaseUrl()}/account?billing=${manualRenewal ? 'renew' : 'manage'}`;
-      const { subject, html } = renderRenewalEmail({
-        locale,
-        planLabel,
-        periodEndIso,
-        manualRenewal,
-        credits: balance.credits,
-        ctaUrl,
-      });
-      const ok = await emailService.send({ to: user.email, subject, html, from: fromHeader() });
-      if (ok) {
-        await markEmailSent(notifId);
-        result.sent++;
-      } else {
-        result.failed++;
-      }
-    } catch (err) {
-      logger.warn('RA_BILLING_REMINDER', 'renewal send failed', { subId: sub.id, error: err instanceof Error ? err.message : String(err) });
-      result.failed++;
+    const years = Math.floor((now.getTime() - sub.startedAt.getTime()) / YEAR_MS);
+    if (years < 1) {
+      result.skipped++;
+      continue;
     }
+    await deliver(
+      db,
+      send,
+      { dedupKey: `ra_annual_reminder:${sub.id}:${years}`, type: 'ra_annual_reminder', title: 'Annual subscription reminder' },
+      recipient,
+      {
+        template: 'billing.annual_reminder',
+        brand: parseBrandId(sub.brand) ?? recipient.brand,
+        params: {
+          planKey: sub.planKey && sub.tier === 'pro' ? sub.planKey : sub.tier,
+          startedAt: sub.startedAt.toISOString(),
+          nextRenewal: sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
+          amountMinor: sub.amountMinor,
+          currency: sub.currency,
+          interval: sub.interval,
+        },
+      },
+      result,
+    );
   }
-
-  logger.info('RA_BILLING_REMINDER', 'renewal sweep complete', { ...result });
   return result;
 }
 
-// ─── 2. Friday "prep for next week" nudge ─────────────────────────────────────
+// ─── Retired: Friday "prep for next week" nudge ───────────────────────────────
 
-export async function runFridayNudgeSweep(opts: { now?: Date } = {}): Promise<SweepResult> {
-  const result: SweepResult = { scanned: 0, sent: 0, skipped: 0, failed: 0 };
-  if (!emailService.isConfigured) {
-    logger.info('RA_BILLING_REMINDER', 'friday nudge sweep skipped — email not configured');
-    return result;
-  }
-  const now = opts.now ?? new Date();
-  const week = isoWeek(now);
-
-  // Engaged users: an active paid plan OR a positive credit balance. Opt-outs and
-  // soft-deleted profiles are excluded.
-  const subs = await prisma.seekerSubscription.findMany({
-    where: {
-      OR: [{ tier: { in: RA_PAID_TIERS as never }, status: 'active' }, { mockCredits: { gt: 0 } }],
-      seekerProfile: { weeklyNudgeOptOut: false, deletedAt: null },
-    },
-    select: {
-      mockCredits: true,
-      seekerProfile: {
-        select: { locale: true, market: true, user: { select: { id: true, email: true, name: true } } },
-      },
-    },
-    take: 5000,
-  });
-
-  for (const sub of subs) {
-    result.scanned++;
-    const user = sub.seekerProfile?.user;
-    if (!user?.email) {
-      result.skipped++;
-      continue;
-    }
-    const dedupKey = `ra_friday_nudge:${user.id}:${week}`;
-    let notifId: string | null;
-    try {
-      notifId = await claimDedup({ dedupKey, userId: user.id, type: 'ra_friday_nudge', title: 'RoboApply weekly prep' });
-    } catch (err) {
-      logger.warn('RA_BILLING_REMINDER', 'nudge dedup claim failed', { userId: user.id, error: err instanceof Error ? err.message : String(err) });
-      result.failed++;
-      continue;
-    }
-    if (!notifId) {
-      result.skipped++;
-      continue;
-    }
-
-    try {
-      const locale = resolveEmailLocale(sub.seekerProfile?.locale, sub.seekerProfile?.market);
-      const { subject, html } = renderFridayNudgeEmail({
-        locale,
-        name: user.name,
-        credits: sub.mockCredits ?? 0,
-        startUrl: `${roboApplyBaseUrl()}/mock-interview`,
-        accountUrl: `${roboApplyBaseUrl()}/account`,
-      });
-      const ok = await emailService.send({ to: user.email, subject, html, from: fromHeader() });
-      if (ok) {
-        await markEmailSent(notifId);
-        result.sent++;
-      } else {
-        result.failed++;
-      }
-    } catch (err) {
-      logger.warn('RA_BILLING_REMINDER', 'nudge send failed', { userId: user.id, error: err instanceof Error ? err.message : String(err) });
-      result.failed++;
-    }
-  }
-
-  logger.info('RA_BILLING_REMINDER', 'friday nudge sweep complete', { week, ...result });
-  return result;
+/**
+ * @deprecated Retired by WP-21a. The weekly practice nudge is promotional and
+ * moves to WP-39a's lifecycle sequence under "Tips and reminders". This no-op
+ * stays only while `server/src/cron/handlers.ts` and RoboApplyCronService
+ * import it; WP-75 deletes the `billing-friday-nudge` cron and this export.
+ */
+export async function runFridayNudgeSweep(_opts: { now?: Date } = {}): Promise<SweepResult & { retired: true }> {
+  logger.info('RA_BILLING_REMINDER', 'friday nudge retired (WP-21a); nothing sent');
+  return { scanned: 0, sent: 0, skipped: 0, failed: 0, retired: true };
 }
