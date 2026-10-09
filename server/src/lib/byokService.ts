@@ -34,6 +34,24 @@ export const BYOK_PROVIDERS = [
 
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
 
+/**
+ * Whether personal API keys are used on a brand. GoApply: never (TASK_PLAN
+ * R-13 — its AI stays on the domestic model and a user key could point
+ * anywhere). RoboApply: yes.
+ */
+export function isByokAllowedForBrand(brandId: string | undefined | null): boolean {
+  return brandId !== 'goapply';
+}
+
+/** Thrown when a GoApply unit of work tries to store a personal key. */
+export class ByokNotAllowedError extends Error {
+  readonly code = 'feature_disabled' as const;
+  constructor() {
+    super('Personal API keys are not available on this site.');
+    this.name = 'ByokNotAllowedError';
+  }
+}
+
 export function isByokProvider(value: unknown): value is ByokProvider {
   return typeof value === 'string' && (BYOK_PROVIDERS as readonly string[]).includes(value);
 }
@@ -203,7 +221,7 @@ export async function resolveByok(
   provider: ByokProvider,
 ): Promise<ResolvedByok | null> {
   if (!userId) return null;
-  if (getCurrentBrandId() === 'goapply') return null;
+  if (!isByokAllowedForBrand(getCurrentBrandId())) return null;
   let row: { id: string; encryptedKey: string; baseUrl: string | null; isActive: boolean } | null;
   try {
     row = await prisma.userLLMKey.findUnique({
@@ -311,6 +329,7 @@ export interface UpsertByokInput {
 }
 
 export async function upsertByok(input: UpsertByokInput): Promise<void> {
+  if (!isByokAllowedForBrand(getCurrentBrandId())) throw new ByokNotAllowedError();
   const baseValidation = validateBaseUrl(input.provider, input.baseUrl);
   if (!baseValidation.ok) {
     throw new Error(baseValidation.error);

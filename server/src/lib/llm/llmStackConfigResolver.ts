@@ -22,6 +22,7 @@ import {
   PURPOSE_KEYS,
   parseLlmStackBlob,
   type ConfigEnvironment,
+  type LlmStackBrand,
   type LlmStackConfigBlob,
 } from './llmStackConfigSchema.js';
 
@@ -35,53 +36,60 @@ interface CachedSnapshot {
   source: 'db' | 'empty';
 }
 
-let activeCache: CachedSnapshot | null = null;
+// One snapshot per brand (WP-14): GoApply's overrides live under their own
+// AppConfig key and are never read for RoboApply, nor the other way round.
+const activeCaches = new Map<LlmStackBrand, CachedSnapshot>();
 
 /* ── Read API ─────────────────────────────────────────────────────────────── */
 
-export async function getLlmStack(): Promise<LlmStackConfigBlob> {
+export async function getLlmStack(brandId: LlmStackBrand = 'roboapply'): Promise<LlmStackConfigBlob> {
   if (isDbConfigDisabled()) return emptyLlmStackBlob();
   const now = Date.now();
-  if (activeCache && activeCache.expiresAt > now) return activeCache.blob;
+  const cached = activeCaches.get(brandId);
+  if (cached && cached.expiresAt > now) return cached.blob;
 
   const env = getActiveEnvironment();
   try {
-    const row = await prisma.appConfig.findUnique({ where: { key: appConfigKeyFor(env) } });
+    const row = await prisma.appConfig.findUnique({ where: { key: appConfigKeyFor(env, brandId) } });
     const parsed = parseLlmStackBlob(row?.value);
     const blob = parsed || emptyLlmStackBlob();
-    activeCache = { blob, fetchedAt: now, expiresAt: now + CACHE_TTL_MS, source: parsed ? 'db' : 'empty' };
+    activeCaches.set(brandId, { blob, fetchedAt: now, expiresAt: now + CACHE_TTL_MS, source: parsed ? 'db' : 'empty' });
     return blob;
   } catch {
-    const blob = activeCache?.blob || emptyLlmStackBlob();
-    activeCache = { blob, fetchedAt: now, expiresAt: now + STALE_TTL_MS, source: 'empty' };
+    const blob = cached?.blob || emptyLlmStackBlob();
+    activeCaches.set(brandId, { blob, fetchedAt: now, expiresAt: now + STALE_TTL_MS, source: 'empty' });
     return blob;
   }
 }
 
 /**
  * Synchronous accessor for the hot path (provider/model resolution). Returns
- * the cached overrides blob; on cold cache returns an all-null blob (⇒ env
- * fallback in the accessor) and warms in the background.
+ * the cached overrides blob of one brand; on cold cache returns an all-null
+ * blob (⇒ env fallback in the accessor) and warms in the background.
  */
-export function getLlmStackSync(): LlmStackConfigBlob {
+export function getLlmStackSync(brandId: LlmStackBrand = 'roboapply'): LlmStackConfigBlob {
   if (isDbConfigDisabled()) return emptyLlmStackBlob();
-  if (activeCache) {
-    if (activeCache.expiresAt <= Date.now()) void getLlmStack().catch(() => {});
-    return activeCache.blob;
+  const cached = activeCaches.get(brandId);
+  if (cached) {
+    if (cached.expiresAt <= Date.now()) void getLlmStack(brandId).catch(() => {});
+    return cached.blob;
   }
-  void getLlmStack().catch(() => {});
+  void getLlmStack(brandId).catch(() => {});
   return emptyLlmStackBlob();
 }
 
 /** Read a specific environment's stored blob (admin UI). No caching. */
-export async function getLlmStackForEnvironment(env: ConfigEnvironment): Promise<{
+export async function getLlmStackForEnvironment(
+  env: ConfigEnvironment,
+  brandId: LlmStackBrand = 'roboapply',
+): Promise<{
   blob: LlmStackConfigBlob;
   source: 'db' | 'empty';
   updatedAt: Date | null;
   updatedBy: string | null;
 }> {
   try {
-    const row = await prisma.appConfig.findUnique({ where: { key: appConfigKeyFor(env) } });
+    const row = await prisma.appConfig.findUnique({ where: { key: appConfigKeyFor(env, brandId) } });
     const parsed = parseLlmStackBlob(row?.value);
     if (parsed) {
       return { blob: parsed, source: 'db', updatedAt: row?.updatedAt ?? null, updatedBy: row?.updatedBy ?? null };
@@ -117,15 +125,17 @@ export async function saveLlmStack(
   blob: LlmStackConfigBlob,
   adminId: string,
   reason: string,
+  brandId: LlmStackBrand = 'roboapply',
 ): Promise<{ previous: LlmStackConfigBlob | null; diffs: string[] }> {
-  const before = await prisma.appConfig.findUnique({ where: { key: appConfigKeyFor(env) } });
+  const key = appConfigKeyFor(env, brandId);
+  const before = await prisma.appConfig.findUnique({ where: { key } });
   const previous = parseLlmStackBlob(before?.value);
   const diffs = diffLlmStack(previous, blob);
 
   await prisma.appConfig.upsert({
-    where: { key: appConfigKeyFor(env) },
+    where: { key },
     update: { value: JSON.stringify(blob), updatedBy: adminId },
-    create: { key: appConfigKeyFor(env), value: JSON.stringify(blob), updatedBy: adminId },
+    create: { key, value: JSON.stringify(blob), updatedBy: adminId },
   });
 
   // Audit — the blob is NON-SECRET (no API keys live here; those are in
@@ -136,7 +146,7 @@ export async function saveLlmStack(
       data: {
         userId: adminId, // self-action — config change, no per-user target
         adminId,
-        type: `llm_stack_config:${env}`,
+        type: brandId === 'roboapply' ? `llm_stack_config:${env}` : `llm_stack_config:${brandId}:${env}`,
         oldValue: previous ? JSON.stringify(previous) : null,
         newValue: JSON.stringify(blob),
         reason: `${reason}${diffs.length ? ` — ${diffs.join('; ')}` : ''}`,
@@ -145,6 +155,7 @@ export async function saveLlmStack(
     .catch((err) => {
       logger.error('ADMIN', 'AdminAdjustment write failed for llm_stack config save', {
         env,
+        brandId,
         adminId,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -157,29 +168,30 @@ export async function saveLlmStack(
 /* ── Cache controls / boot ────────────────────────────────────────────────── */
 
 export function invalidateLlmStack(): void {
-  activeCache = null;
+  activeCaches.clear();
 }
 
 export async function warmupLlmStack(): Promise<void> {
   try {
-    await getLlmStack();
+    await Promise.all([getLlmStack('roboapply'), getLlmStack('goapply')]);
   } catch {
     /* sync readers degrade to env */
   }
 }
 
-export function getLlmStackCacheState(): {
+export function getLlmStackCacheState(brandId: LlmStackBrand = 'roboapply'): {
   activeEnvironment: ConfigEnvironment;
   hasCache: boolean;
   cacheAgeMs: number | null;
   source: 'db' | 'empty' | null;
   dbDisabled: boolean;
 } {
+  const cached = activeCaches.get(brandId);
   return {
     activeEnvironment: getActiveEnvironment(),
-    hasCache: !!activeCache,
-    cacheAgeMs: activeCache ? Date.now() - activeCache.fetchedAt : null,
-    source: activeCache?.source ?? null,
+    hasCache: !!cached,
+    cacheAgeMs: cached ? Date.now() - cached.fetchedAt : null,
+    source: cached?.source ?? null,
     dbDisabled: isDbConfigDisabled(),
   };
 }

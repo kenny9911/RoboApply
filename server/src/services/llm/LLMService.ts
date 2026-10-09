@@ -15,9 +15,47 @@ import {
   type ResolvedByok,
 } from '../../lib/byokService.js';
 import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/systemCredentials.js';
-import { getProviderSetting, getDefaultModel, getFallbackModelSetting } from '../../lib/llm/llmModels.js';
+import {
+  getProviderSetting,
+  getDefaultModel,
+  getFallbackModelSetting,
+  getRetryAttempts,
+  getRetryBaseMs,
+  getRetryMaxMs,
+} from '../../lib/llm/llmModels.js';
+import { contextlessLlmBrand, requireLlmCallBrand } from '../../lib/llm/llmBrand.js';
+import { getTaskModel, getTaskModelOrDefault, type LlmTask } from '../../lib/llm/llmTaskSettings.js';
 import { isTransientLLMError } from './withRetry.js';
-import { DIRECT_PROVIDER_PREFIXES, PROVIDER_PREFIX_ALIASES } from './providerPrefixes.js';
+import { normalizeProviderType, resolveProviderPrefix } from './providerPrefixes.js';
+import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
+import { allowedBrands } from '../../platform/brand/runtime.js';
+import { LlmBrandPolicyError } from '../../platform/llm/brandPolicy.js';
+import { checkLlmEgress, type LlmEgressDecision } from '../../platform/llm/egressPolicy.js';
+import {
+  ContentBlockedError,
+  checkInput as contentSafetyCheckInput,
+  checkOutput as contentSafetyCheckOutput,
+  contentSafetyApplies,
+} from '../../platform/llm/contentSafety/index.js';
+import { AiUnavailableError, LlmStreamInterruptedError, ToolsUnsupportedError } from './errors.js';
+import { DOMESTIC_VENDORS, isDomesticVendor } from './domesticVendors.js';
+import { estimatePromptTokens, estimateTokensFromText } from './tokenEstimate.js';
+import {
+  StreamOutputGate,
+  buildStreamParams,
+  createStreamingClient,
+  runStreamRound,
+  supportsToolStreaming,
+  toLoggableMessages,
+  toolMessageText,
+  type ChatCompletionsClient,
+  type LlmToolCall,
+  type LlmToolDefinition,
+  type StreamFinishReason,
+  type StreamRoundResult,
+  type ToolChatMessage,
+  type ToolChoice,
+} from './toolStreaming.js';
 import {
   AUTO_FALLBACK_PREFERENCE,
   CIRCUIT_OPEN_MS,
@@ -34,7 +72,88 @@ import {
   openCircuit,
   type CredentialFailureKind,
 } from './fallbackRouting.js';
-import type { ProviderExtra } from '../../types/index.js';
+import type { LLMUsageInfo, ProviderExtra, ReasoningEffort } from '../../types/index.js';
+
+/**
+ * Options for one LLMService call: the provider-level LLMOptions plus the
+ * per-brand routing inputs (WP-14).
+ */
+export interface LLMServiceOptions extends LLMOptions {
+  /**
+   * Pin the brand of this call. Default: the brand of the current unit of
+   * work (request / runWithBrand). Crons and workers that process users of
+   * both brands must pass it (or wrap the work in runWithBrand).
+   */
+  brand?: BrandId;
+  /** LLM task, for content-safety events and logs ('copilot', 'tailor', …). */
+  task?: LlmTask | string;
+  /**
+   * Whether the prompt carries user data (default true). Only a RoboApply
+   * prompt with NO user data may reach a mainland-China endpoint; GoApply's
+   * domestic-only rule applies regardless.
+   */
+  carriesUserData?: boolean;
+}
+
+/** Options for streamChatWithTools (ARCHITECTURE.md §5.1). */
+export interface StreamChatWithToolsOptions {
+  tools: readonly LlmToolDefinition[];
+  /** The task whose model to use (`copilot` for the Assistant). */
+  task: LlmTask;
+  signal?: AbortSignal;
+  /** Answer budget per round (reasoning headroom is added for thinking modes). */
+  maxTokens?: number;
+  reasoningMaxTokens?: number;
+  temperature?: number;
+  reasoningEffort?: ReasoningEffort;
+  thinkingMode?: 'enabled' | 'disabled';
+  toolChoice?: ToolChoice;
+  /** Explicit model selector (overrides the task model). */
+  model?: string;
+  brand?: BrandId;
+  carriesUserData?: boolean;
+  requestId?: string;
+  /** Text as it streams (on GoApply only after the content-safety check passed it). */
+  onDelta?: (text: string) => void;
+  /** Each completed tool call, in order, when the round ends. */
+  onToolCall?: (call: LlmToolCall) => void;
+  /** Test seam: build the SDK client (default: the OpenAI SDK). */
+  clientFactory?: (providerType: string, cred: { apiKey: string; baseUrl?: string | null; proxyKey?: string; timeoutMs?: number }) => ChatCompletionsClient;
+}
+
+export interface StreamChatWithToolsResult {
+  content: string;
+  toolCalls: LlmToolCall[];
+  finishReason: StreamFinishReason;
+  usage: LLMUsageInfo;
+  model: string;
+  provider: string;
+  /**
+   * The round's thinking text, when the provider streamed one. Never shown to
+   * the user. When the round asked for tools, copy it onto the next
+   * AssistantToolCallMessage (`reasoningContent`): DeepSeek and Kimi thinking
+   * modes reject the following round without it.
+   */
+  reasoningContent?: string;
+}
+
+/** What a task resolves to for a brand, without calling anything (verify script, startup check). */
+export interface LlmRouteExplanation {
+  brand: BrandId;
+  task: LlmTask | 'default' | 'fallback';
+  selector: string | null;
+  /** True when the task has no model of its own and uses the brand default. */
+  inheritsDefault: boolean;
+  providerType: string | null;
+  model: string | null;
+  baseUrl: string | null;
+  host: string | null;
+  hasKey: boolean;
+  allowed: boolean;
+  policyCode?: string;
+  reason?: string;
+  toolsSupported: boolean;
+}
 
 /** chatWithUsage() result — content plus the billed token usage + resolved model. */
 export interface LLMChatResult {
@@ -51,6 +170,8 @@ export interface LLMChatResult {
 // AND every retry — noise that reads like the router fumbling/​retrying when it
 // is just quietly normalizing. Log each unique (model → provider) once.
 const loggedPrefixStrips = new Set<string>();
+
+let warnedMissingBrand = false;
 
 /** One resolved fallback hop. */
 interface FallbackCandidate {
@@ -95,18 +216,42 @@ export class LLMService {
   // docs/llm-settings-db/.
   private static readonly DEFAULT_PROVIDER = 'openrouter';
 
-  /** Resolve default routing: DB override ?? env. Model selection never lives in code. */
-  private resolveDefaults(): { providerMode: string; model?: string } {
-    return {
-      providerMode: (getProviderSetting() || LLMService.DEFAULT_PROVIDER).toLowerCase(),
-      model: getDefaultModel(),
-    };
+  /**
+   * Resolve default routing for a brand: DB override ?? env. Model selection
+   * never lives in code. RoboApply falls back to the historical OpenRouter
+   * mode; GoApply has NO default provider (R-13): with CN_LLM_PROVIDER unset,
+   * a bare model id cannot be routed and the call answers ai_unavailable.
+   */
+  private resolveDefaults(brand: ProductBrand = this.callBrand()): { providerMode: string; model?: string } {
+    const configured = normalizeProviderType(getProviderSetting(brand.id) || '');
+    const providerMode = configured || (brand.llmProfile === 'domestic_cn' ? '' : LLMService.DEFAULT_PROVIDER);
+    return { providerMode, model: getDefaultModel(brand.id) };
   }
 
-  private getConfiguredFallbackModel(primaryModel: string): string | null {
-    // DB override (admin) wins, then env LLM_FALLBACK_MODEL. There is no
-    // source-level model substitution: operators own both model choices.
-    const configured = (getFallbackModelSetting() || '').trim();
+  /**
+   * The brand of a call: the explicit option, else the current unit of work,
+   * else this deployment's single brand (BRAND_LOCK / ALLOWED_BRANDS), else
+   * the default (RoboApply; legacy crons and scripts). The default is logged
+   * once, because a GoApply user's prompt must never take that path — such
+   * callers pass `brand` or use runWithBrand. With `sending` (a prompt is
+   * about to leave), a production deployment that also serves GoApply refuses
+   * the default outright (BrandContextMissingError).
+   */
+  private callBrand(explicit?: BrandId, sending = false): ProductBrand {
+    if (explicit) return getBrand(explicit);
+    const resolved = sending ? requireLlmCallBrand() : contextlessLlmBrand();
+    if (resolved.source === 'default' && !warnedMissingBrand) {
+      warnedMissingBrand = true;
+      logger.warn('LLM_POLICY', 'LLM call without a brand context; routing as the default brand. Pass `brand` or wrap the work in runWithBrand().');
+    }
+    return getBrand(resolved.brandId);
+  }
+
+  private getConfiguredFallbackModel(primaryModel: string, brand: ProductBrand): string | null {
+    // DB override (admin) wins, then env LLM_FALLBACK_MODEL (CN_LLM_FALLBACK_MODEL
+    // on GoApply). There is no source-level model substitution: operators own
+    // both model choices.
+    const configured = (getFallbackModelSetting(brand.id) || '').trim();
     if (configured && configured !== primaryModel) {
       return configured;
     }
@@ -179,12 +324,14 @@ export class LLMService {
    * In 'direct' mode, parse "provider/model" to resolve which provider to use.
    * Returns null if the prefix is not a known direct provider.
    */
-  private resolveDirectModel(rawModel: string): { providerType: string; model: string } | null {
+  private resolveDirectModel(
+    rawModel: string,
+    brand: ProductBrand = this.callBrand(),
+  ): { providerType: string; model: string } | null {
     if (!rawModel.includes('/')) return null;
     const slashIdx = rawModel.indexOf('/');
-    const prefix = rawModel.substring(0, slashIdx).toLowerCase();
-    const providerType = PROVIDER_PREFIX_ALIASES[prefix] ?? prefix;
-    if (!DIRECT_PROVIDER_PREFIXES.has(providerType)) return null;
+    const providerType = resolveProviderPrefix(rawModel.substring(0, slashIdx), brand.llmProfile);
+    if (!providerType) return null;
     return { providerType, model: rawModel.substring(slashIdx + 1) };
   }
 
@@ -196,15 +343,17 @@ export class LLMService {
     providerMode: string,
     defaultModel?: string,
     explicitProvider?: string,
+    brand: ProductBrand = this.callBrand(),
   ): { providerType: string; model: string } {
     if (explicitProvider) {
+      const providerType = normalizeProviderType(explicitProvider);
       return {
-        providerType: explicitProvider,
-        model: this.normalizeModel(rawModel, explicitProvider),
+        providerType,
+        model: this.normalizeModel(this.normalizeModel(rawModel, explicitProvider), providerType),
       };
     }
 
-    const direct = this.resolveDirectModel(rawModel);
+    const direct = this.resolveDirectModel(rawModel, brand);
     // Every recognized outer prefix is an explicit route, including
     // openrouter/...; it must win even when legacy LLM_PROVIDER names a
     // different single provider.
@@ -215,15 +364,118 @@ export class LLMService {
         return { providerType: 'openrouter', model: rawModel };
       }
       return {
-        providerType: this.resolveDirectModel(defaultModel || '')?.providerType ?? 'openrouter',
+        providerType: this.resolveDirectModel(defaultModel || '', brand)?.providerType ?? 'openrouter',
         model: rawModel,
       };
     }
+
+    // GoApply with no CN_LLM_PROVIDER: a bare model id has no route. The
+    // empty provider type is refused by the brand policy as missing_route.
+    if (!providerMode) return { providerType: '', model: rawModel };
 
     return {
       providerType: providerMode,
       model: this.normalizeModel(rawModel, providerMode),
     };
+  }
+
+  /* ── Per-brand policy (WP-14, TASK_PLAN R-13) ──────────────────────────── */
+
+  /** Credential base URL of a provider (system DB / env), without throwing. */
+  private credentialBaseUrl(providerType: string): string | null {
+    if (!providerType) return null;
+    try {
+      return resolveProviderCredential(providerType).baseUrl ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Decide one route (primary or fallback) on its real endpoint host. */
+  private routeDecision(
+    brand: ProductBrand,
+    providerType: string,
+    opts: { carriesUserData?: boolean; byok?: boolean; baseUrl?: string | null; model?: string } = {},
+  ): LlmEgressDecision {
+    return checkLlmEgress({
+      brand,
+      provider: providerType,
+      credentialBaseUrl: opts.baseUrl !== undefined ? opts.baseUrl : this.credentialBaseUrl(providerType),
+      model: opts.model ?? null,
+      byok: opts.byok,
+      carriesUserData: opts.carriesUserData,
+    });
+  }
+
+  /**
+   * Refuse the primary route when the brand may not use it. A GoApply call
+   * with no route at all is "AI unavailable" (503: the feature is hidden
+   * until a domestic model is configured); any other refusal is a
+   * configuration error (LlmBrandPolicyError, 500) that is logged and NEVER
+   * re-routed to another provider.
+   */
+  private assertPrimaryRoute(
+    brand: ProductBrand,
+    route: { providerType: string; model: string },
+    carriesUserData: boolean | undefined,
+    requestId: string,
+  ): void {
+    if (!route.providerType && brand.llmProfile === 'domestic_cn') {
+      throw new AiUnavailableError('no_model', `${brand.name}: CN_LLM_PROVIDER is not set and "${route.model}" has no provider prefix.`);
+    }
+    const decision = this.routeDecision(brand, route.providerType, { carriesUserData, model: route.model });
+    if (decision.allowed) return;
+    const error = new LlmBrandPolicyError(decision.code ?? 'missing_route', decision.reason ?? 'Route refused.', decision.host);
+    logger.error('LLM_POLICY', `Refused LLM route for ${brand.id}: ${route.providerType || '(none)'}/${route.model}`, {
+      brand: brand.id,
+      provider: route.providerType || null,
+      model: route.model,
+      host: decision.host,
+      policyCode: error.policyCode,
+      reason: error.reason,
+    }, requestId);
+    throw error;
+  }
+
+  /** Text a content-safety input check covers: user turns first, then the rest. */
+  private safetyInputText(messages: ReadonlyArray<Message | ToolChatMessage>): string {
+    const parts = (role: string) =>
+      messages.filter((m) => (role === 'user' ? m.role === 'user' : m.role !== 'user')).map((m) => toolMessageText(m as ToolChatMessage));
+    return [...parts('user'), ...parts('other')].filter(Boolean).join('\n');
+  }
+
+  /**
+   * Run one content-safety check (GoApply only; RoboApply is never checked).
+   * A block propagates as ContentBlockedError (422). Any other failure of the
+   * checker fails CLOSED as ai_unavailable (503): GoApply never returns
+   * unchecked output.
+   */
+  private async contentSafety(
+    stage: 'input' | 'output',
+    text: string,
+    ctx: { brand: ProductBrand; task?: string; requestId: string; callId: string },
+  ): Promise<void> {
+    if (!contentSafetyApplies(ctx.brand.id)) return;
+    const safetyCtx = { brand: ctx.brand.id, task: ctx.task || 'unspecified', userId: getCurrentUserId() ?? null, callId: ctx.callId };
+    try {
+      await (stage === 'input' ? contentSafetyCheckInput(text, safetyCtx) : contentSafetyCheckOutput(text, safetyCtx));
+    } catch (err) {
+      if (err instanceof ContentBlockedError) {
+        logger.warn('LLM_SAFETY', `Content safety blocked the ${stage} of a ${ctx.brand.id} ${safetyCtx.task} call`, {
+          brand: ctx.brand.id,
+          task: safetyCtx.task,
+          stage,
+          labels: err.details.labels,
+        }, ctx.requestId);
+        throw err;
+      }
+      logger.error('LLM_SAFETY', `Content-safety check failed (${stage}); failing closed`, {
+        brand: ctx.brand.id,
+        task: safetyCtx.task,
+        error: err instanceof Error ? err.message : String(err),
+      }, ctx.requestId);
+      throw new AiUnavailableError('content_safety_unavailable', undefined, { cause: err });
+    }
   }
 
   /** Platform (system DB → env) credential presence + fingerprint for one provider type. */
@@ -261,6 +513,10 @@ export class LLMService {
     providerMode: string;
     defaultModel?: string;
     credentialFailure: boolean;
+    brand: ProductBrand;
+    carriesUserData?: boolean;
+    /** Keep only hops whose provider can stream tool calls. */
+    requireTools?: boolean;
   }): FallbackCandidate[] {
     const primaryType = input.primaryProviderType.toLowerCase();
     const out: FallbackCandidate[] = [];
@@ -268,16 +524,21 @@ export class LLMService {
     const usable = (providerType: string): boolean => {
       const lower = providerType.toLowerCase();
       if (input.credentialFailure && lower === primaryType) return false;
+      if (input.requireTools && !supportsToolStreaming(lower)) return false;
+      // The brand policy filters the chain (R-13): GoApply keeps only domestic
+      // routes; a RoboApply prompt with user data drops mainland endpoints
+      // (Wave 0's auto list includes deepseek-v4-flash).
+      if (!this.routeDecision(input.brand, lower, { carriesUserData: input.carriesUserData }).allowed) return false;
       const cred = this.platformCredential(lower);
       if (!cred.hasKey) return false;
       return !getOpenCircuit(lower, cred.fingerprint);
     };
 
-    const configured = this.getConfiguredFallbackModel(input.primaryModel);
+    const configured = this.getConfiguredFallbackModel(input.primaryModel, input.brand);
     if (configured) {
-      const route = this.resolvePlatformRoute(configured, input.providerMode, input.defaultModel);
+      const route = this.resolvePlatformRoute(configured, input.providerMode, input.defaultModel, undefined, input.brand);
       const key = `${route.providerType.toLowerCase()}::${route.model}`;
-      if (!seen.has(key) && usable(route.providerType)) {
+      if (route.providerType && !seen.has(key) && usable(route.providerType)) {
         seen.add(key);
         out.push({ ...route, selector: configured, source: 'configured' });
       }
@@ -286,7 +547,7 @@ export class LLMService {
     if (input.credentialFailure && isAutoFallbackEnabled()) {
       const auto: FallbackCandidate[] = [];
       for (const selector of AUTO_FALLBACK_PREFERENCE) {
-        const route = this.resolveDirectModel(selector);
+        const route = this.resolveDirectModel(selector, input.brand);
         // Auto-selection is direct-provider only: never openrouter.
         if (!route || route.providerType === 'openrouter') continue;
         const key = `${route.providerType}::${route.model}`;
@@ -295,8 +556,9 @@ export class LLMService {
         auto.push({ ...route, selector, source: 'auto' });
       }
       const summary = auto.map((c) => c.selector).join(' → ') || '(none)';
-      if (noteAutoFallbackChoice(summary)) {
+      if (noteAutoFallbackChoice(`${input.brand.id}:${summary}`)) {
         logger.warn('LLM_SERVICE', `Auto-selected LLM fallback route: ${summary}`, {
+          brand: input.brand.id,
           primaryProvider: primaryType,
           configuredFallback: configured ?? null,
           candidates: auto.map((c) => `${c.providerType}/${c.model}`),
@@ -305,6 +567,13 @@ export class LLMService {
       out.push(...auto);
     }
     return out;
+  }
+
+  /** The auto-fallback providers this brand may use (for error messages). */
+  private autoFallbackProvidersFor(brand: ProductBrand): string[] {
+    return AUTO_FALLBACK_PREFERENCE
+      .map((selector) => this.resolveDirectModel(selector, brand)?.providerType ?? selector.split('/')[0])
+      .filter((provider) => this.routeDecision(brand, provider).allowed);
   }
 
   /**
@@ -323,6 +592,7 @@ export class LLMService {
     primaryProviderType: string;
     reason: FallbackReason;
     primaryError: unknown;
+    brand: ProductBrand;
   }): Promise<LLMChatResult> {
     const attempted: string[] = [];
     let lastError: unknown = input.primaryError;
@@ -434,6 +704,7 @@ export class LLMService {
       primaryError: input.primaryError,
       attempted,
       lastError,
+      brand: input.brand,
     });
   }
 
@@ -464,7 +735,11 @@ export class LLMService {
     primaryError: unknown;
     attempted: string[];
     lastError?: unknown;
+    brand?: ProductBrand;
   }): LLMUnavailableError {
+    const brand = input.brand ?? this.callBrand();
+    const fallbackEnv = `${brand.llmEnvPrefix}LLM_FALLBACK_MODEL`;
+    const autoProviders = this.autoFallbackProvidersFor(brand);
     const primaryKind: CredentialFailureKind =
       classifyCredentialFailure(input.primaryError) ??
       (input.reason === 'billing' || input.reason === 'missing_key' ? input.reason : 'auth');
@@ -480,8 +755,8 @@ export class LLMService {
     const tail = input.attempted.length
       ? ` Fallback routes also failed: ${input.attempted.join(', ')}` +
         (input.lastError instanceof Error ? ` (last error: ${input.lastError.message.slice(0, 200)}).` : '.')
-      : ' No fallback route is available: set LLM_FALLBACK_MODEL (or the admin fallback model) ' +
-        `or configure an API key for one of: ${AUTO_FALLBACK_PREFERENCE.map((s) => s.split('/')[0]).join(', ')}.`;
+      : ` No fallback route is available: set ${fallbackEnv} (or the admin fallback model)` +
+        (autoProviders.length ? ` or configure an API key for one of: ${autoProviders.join(', ')}.` : '.');
     return new LLMUnavailableError({
       message: `LLM provider "${input.providerType}" ${what} for model "${input.model}".${tail}`,
       reason: primaryKind,
@@ -582,12 +857,39 @@ export class LLMService {
           proxyKey: extra.proxyKey,
           timeoutMs: extra.timeoutMs,
         });
+      case 'qwen':
+      case 'dashscope':
+      case 'glm':
+      case 'zhipu':
+      case 'doubao':
+      case 'ark':
+        return this.createDomesticProvider(normalizeProviderType(providerType), cred.apiKey, cred.baseUrl, model, extra);
       default: {
         logger.warn('LLM_SERVICE', `Unknown provider "${providerType}", falling back to OpenRouter`);
         const orCred = resolveProviderCredential('openrouter');
         return new OpenRouterProvider(orCred.apiKey, model, this.buildExtra(orCred.tuning, orCred.baseUrl));
       }
     }
+  }
+
+  /** Qwen / GLM / Doubao on the OpenAI-compatible path with their thinking switch. */
+  private createDomesticProvider(
+    providerType: string,
+    apiKey: string,
+    baseUrl: string | undefined | null,
+    model: string,
+    extra: ProviderExtra,
+  ): LLMProvider {
+    if (!isDomesticVendor(providerType)) throw new Error(`Not a domestic vendor: ${providerType}`);
+    return new OpenAICompatibleProvider({
+      apiKey,
+      baseURL: baseUrl || DOMESTIC_VENDORS[providerType].baseURL,
+      defaultModel: model,
+      providerName: providerType,
+      timeoutMs: extra.timeoutMs,
+      thinkingVendor: providerType,
+      noProxyKey: true,
+    });
   }
 
   /**
@@ -655,7 +957,7 @@ export class LLMService {
     }
   }
 
-  async chat(messages: Message[], options?: LLMOptions): Promise<string> {
+  async chat(messages: Message[], options?: LLMServiceOptions): Promise<string> {
     return (await this.chatWithUsage(messages, options)).content;
   }
 
@@ -665,7 +967,7 @@ export class LLMService {
    * (e.g. the candidate-chat NDJSON `done` event). Logging/cost tracking is
    * identical to chat() (handled internally via logger.logLLMCall).
    */
-  async chatWithUsage(messages: Message[], options?: LLMOptions): Promise<LLMChatResult> {
+  async chatWithUsage(messages: Message[], options?: LLMServiceOptions): Promise<LLMChatResult> {
     // ── MOCK_LLM short-circuit (test plan R-09) ───────────────────────────
     // When `MOCK_LLM=true` is set in the environment, every LLM call returns
     // a deterministic canned response without touching any provider. This is
@@ -700,10 +1002,37 @@ export class LLMService {
     // is the last-resort fallback for genuinely context-less callers.
     const requestId = options?.requestId || getCurrentRequestId() || generateRequestId();
 
+    // Per-brand routing (WP-14). GoApply calls pass the content-safety check
+    // on the way in and on the way out (WP-24 provider; fail closed).
+    const brand = this.callBrand(options?.brand, true);
+    const callId = `${requestId}:${Math.random().toString(36).slice(2, 10)}`;
+    const safetyCtx = { brand, task: options?.task, requestId, callId };
+    // The input check runs once the route is known to be allowed (so a
+    // GoApply deployment without a model never pays for a check).
+    const result = await this.routeAndCall(messages, options, brand, requestId, startTime, () =>
+      this.contentSafety('input', this.safetyInputText(messages), safetyCtx),
+    );
+    await this.contentSafety('output', result.content, safetyCtx);
+    return result;
+  }
+
+  /** Resolve the brand's route (policy-checked), call it, reroute on failure. */
+  private async routeAndCall(
+    messages: Message[],
+    callOptions: LLMServiceOptions | undefined,
+    brand: ProductBrand,
+    requestId: string,
+    startTime: number,
+    beforeProviderCall: () => Promise<void>,
+  ): Promise<LLMChatResult> {
+    // The routing inputs stay out of what providers receive.
+    const { brand: _brand, task: _task, carriesUserData, ...options } = callOptions ?? {};
+    void _brand;
+    void _task;
     // Resolve provider + model depending on mode. Both the provider mode and the
     // default model are resolved FRESH here (DB override ?? env) so
     // admin changes apply within ~1s with no redeploy.
-    const defaults = this.resolveDefaults();
+    const defaults = this.resolveDefaults(brand);
     const providerMode = defaults.providerMode;
     // 'default' is the sentinel some resolvers (e.g. resolveEvaluationModel)
     // emit when neither a DB override nor an env var configures a model. It
@@ -711,6 +1040,10 @@ export class LLMService {
     // would be shipped to the provider as a model id.
     const explicitModel = options?.visionModel || options?.model;
     const rawModel = (explicitModel && explicitModel !== 'default' ? explicitModel : undefined) || defaults.model;
+    if (!rawModel && brand.llmProfile === 'domestic_cn') {
+      // GoApply never borrows RoboApply's model (R-13): no CN model, no AI.
+      throw new AiUnavailableError('no_model', `${brand.name}: no CN_LLM_MODEL (or task model) is configured.`);
+    }
     if (!rawModel) {
       throw new Error(
         'No LLM model is configured for this call. Set its task-specific ' +
@@ -724,7 +1057,11 @@ export class LLMService {
       providerMode,
       defaults.model,
       options?.provider,
+      brand,
     );
+    // Brand policy on the endpoint host (R-13): refused → logged, thrown, never re-routed.
+    this.assertPrimaryRoute(brand, primaryRoute, carriesUserData, requestId);
+    await beforeProviderCall();
     const model = primaryRoute.model;
     // A missing platform key is a credential failure like any other: keep it
     // so BYOK can still serve the call, else reroute to a fallback below.
@@ -746,7 +1083,8 @@ export class LLMService {
     // out to eliminate. See docs/prd-byok.md.
     const userId = getCurrentUserId();
     const providerNamePreByok = activeProvider?.getProviderName() ?? primaryRoute.providerType.toLowerCase();
-    const byokProviderKey = llmProviderToByokProvider(providerNamePreByok);
+    // BYOK is off for GoApply (R-13: a user key could point anywhere).
+    const byokProviderKey = brand.llmProfile === 'domestic_cn' ? null : llmProviderToByokProvider(providerNamePreByok);
     let byokRow: ResolvedByok | null = null;
     let byokActive = false;
     if (userId && byokProviderKey) {
@@ -756,6 +1094,16 @@ export class LLMService {
         // Decryption failure surfaces here. Don't fall back — let it
         // bubble. User sees the error and can clear/replace the key.
         throw resolveErr;
+      }
+      // A user key whose own base URL is a refused endpoint (e.g. a RoboApply
+      // user's gateway on a mainland host) is not used; the already-checked
+      // platform route serves the call instead.
+      if (byokRow && !this.routeDecision(brand, providerNamePreByok, { carriesUserData, byok: true, baseUrl: byokRow.baseUrl }).allowed) {
+        logger.warn('LLM_POLICY', `Skipping a personal ${providerNamePreByok} key: its endpoint is not allowed for ${brand.id}`, {
+          brand: brand.id,
+          provider: providerNamePreByok,
+        }, requestId);
+        byokRow = null;
       }
       if (byokRow) {
         activeProvider = this.createProviderWithByok(providerNamePreByok, byokRow, model);
@@ -775,6 +1123,7 @@ export class LLMService {
       requestId,
       primaryModel: model,
       primaryProviderType: providerNamePreByok,
+      brand,
     };
     const candidatesFor = (credentialFailure: boolean): FallbackCandidate[] =>
       this.buildFallbackCandidates({
@@ -783,6 +1132,8 @@ export class LLMService {
         providerMode,
         defaultModel: defaults.model,
         credentialFailure,
+        brand,
+        carriesUserData,
       });
 
     // No platform key and no BYOK: go straight to a fallback, or fail clearly.
@@ -795,6 +1146,7 @@ export class LLMService {
           model,
           primaryError: primaryCreateError,
           attempted: [],
+          brand,
         });
       }
       return this.runFallbackChain({
@@ -933,6 +1285,7 @@ export class LLMService {
             model,
             primaryError: error,
             attempted: [],
+            brand,
           });
         }
         return this.runFallbackChain({
@@ -962,7 +1315,7 @@ export class LLMService {
     }
   }
 
-  async chatWithJsonResponse<T>(messages: Message[], options?: LLMOptions): Promise<T> {
+  async chatWithJsonResponse<T>(messages: Message[], options?: LLMServiceOptions): Promise<T> {
     const response = await this.chat(messages, options);
     
     // Try to extract JSON from the response
@@ -992,30 +1345,34 @@ export class LLMService {
    * Admin diagnostic: run a 1-token chat against `modelId` using the resolved
    * SYSTEM/env credentials (the platform path). Deliberately bypasses the user
    * BYOK swap in chat() — the admin is testing the system config, not their own
-   * key. Never throws; returns a structured result for the UI.
+   * key. Never throws; returns a structured result for the UI. The probe
+   * carries no user data, but the brand policy still applies (GoApply only
+   * ever reaches domestic endpoints).
    */
-  async probeModel(modelId: string): Promise<{ ok: boolean; latencyMs: number; provider: string; sample?: string; error?: string }> {
+  async probeModel(
+    modelId: string,
+    brandId?: BrandId,
+  ): Promise<{ ok: boolean; latencyMs: number; provider: string; sample?: string; error?: string }> {
     const start = Date.now();
-    let providerType = 'openrouter';
+    const brand = this.callBrand(brandId);
+    let providerType = brand.llmProfile === 'domestic_cn' ? '' : 'openrouter';
     try {
-      let model = modelId;
-      const resolved = this.resolveDirectModel(modelId);
-      if (resolved) {
-        providerType = resolved.providerType;
-        model = resolved.model;
-      } else if (modelId.includes('/')) {
-        providerType = 'openrouter';
-        model = modelId;
-      } else {
-        const defaults = this.resolveDefaults();
-        providerType = this.resolveDirectModel(defaults.model || '')?.providerType
-          ?? (defaults.providerMode === 'direct' ? 'openrouter' : defaults.providerMode);
-        model = modelId;
+      const defaults = this.resolveDefaults(brand);
+      const route = this.resolvePlatformRoute(modelId, defaults.providerMode, defaults.model, undefined, brand);
+      providerType = route.providerType;
+      const decision = this.routeDecision(brand, route.providerType, { carriesUserData: false, model: route.model });
+      if (!route.providerType || !decision.allowed) {
+        return {
+          ok: false,
+          latencyMs: Date.now() - start,
+          provider: providerType,
+          error: decision.reason ?? `No provider for "${modelId}" on ${brand.id}.`,
+        };
       }
-      const provider = this.createProvider(providerType, model); // system → env, NO byok
+      const provider = this.createProvider(route.providerType, route.model); // system → env, NO byok
       const resp = await provider.chat(
         [{ role: 'user', content: 'Reply with exactly: ok' }],
-        { model, maxTokens: 16, temperature: 0 },
+        { model: route.model, maxTokens: 16, temperature: 0 },
       );
       return { ok: true, latencyMs: Date.now() - start, provider: providerType, sample: (resp.content || '').slice(0, 120) };
     } catch (err) {
@@ -1028,17 +1385,419 @@ export class LLMService {
     }
   }
 
-  /** The resolved default model (DB override ?? env). */
+  /** The resolved default model (DB override ?? env) of the current brand. */
   getModel(): string {
-    const model = this.resolveDefaults().model;
-    if (!model) throw new Error('No default LLM model is configured. Set LLM_MODEL.');
+    const brand = this.callBrand();
+    const model = this.resolveDefaults(brand).model;
+    if (!model) throw new Error(`No default LLM model is configured. Set ${brand.llmEnvPrefix}LLM_MODEL.`);
     return model;
   }
 
-  /** The resolved provider mode ('direct' | 'openrouter' | ...). */
+  /** The resolved provider mode ('direct' | 'openrouter' | ...) of the current brand. */
   getProvider(): string {
-    return this.resolveDefaults().providerMode;
+    return this.resolveDefaults(this.callBrand()).providerMode;
+  }
+
+  /* ── Route explanation (verify script, startup checks) ─────────────────── */
+
+  /**
+   * What a task (or the default / fallback model) resolves to for a brand,
+   * WITHOUT calling anything: selector, provider, endpoint host, whether a key
+   * exists, whether the brand policy allows it, and whether it can stream tool
+   * calls.
+   */
+  explainRoute(task: LlmTask | 'default' | 'fallback', brandId?: BrandId): LlmRouteExplanation {
+    const brand = this.callBrand(brandId);
+    const defaults = this.resolveDefaults(brand);
+    const own =
+      task === 'default'
+        ? defaults.model
+        : task === 'fallback'
+          ? getFallbackModelSetting(brand.id)
+          : getTaskModel(task, brand.id);
+    const inheritsDefault = !own && task !== 'default' && task !== 'fallback' && !!defaults.model;
+    const selector = own ?? (inheritsDefault ? defaults.model ?? null : null);
+    const base: LlmRouteExplanation = {
+      brand: brand.id,
+      task,
+      selector,
+      inheritsDefault,
+      providerType: null,
+      model: null,
+      baseUrl: null,
+      host: null,
+      hasKey: false,
+      allowed: false,
+      toolsSupported: false,
+    };
+    if (!selector) {
+      return { ...base, policyCode: 'missing_route', reason: `No model configured (${brand.llmEnvPrefix}LLM_MODEL).` };
+    }
+    const route = this.resolvePlatformRoute(selector, defaults.providerMode, defaults.model, undefined, brand);
+    const decision = this.routeDecision(brand, route.providerType, { model: route.model });
+    return {
+      ...base,
+      providerType: route.providerType || null,
+      model: route.model,
+      baseUrl: decision.baseUrl,
+      host: decision.host,
+      hasKey: route.providerType ? this.platformCredential(route.providerType).hasKey : false,
+      allowed: !!route.providerType && decision.allowed,
+      ...(decision.allowed && route.providerType
+        ? {}
+        : { policyCode: decision.code ?? 'missing_route', reason: decision.reason ?? `No provider for "${selector}".` }),
+      toolsSupported: !!route.providerType && supportsToolStreaming(route.providerType),
+    };
+  }
+
+  /* ── Streaming with tools (ARCHITECTURE.md §5.1; F-ORION-01/04) ────────── */
+
+  /**
+   * Stream one model round with tool definitions. Text deltas go to
+   * `onDelta` as they arrive; completed tool calls go to `onToolCall` (and
+   * the result) when the round ends. The caller runs the tools and calls
+   * again with the assistant tool-call message and the tool results.
+   *
+   * - Only OpenAI-compatible providers stream tools; Google and Anthropic
+   *   throw ToolsUnsupportedError.
+   * - Brand policy as in chat(): GoApply domestic only (no BYOK), RoboApply
+   *   never reaches a mainland endpoint with user data.
+   * - Retries (transient errors) and credential fallbacks happen ONLY before
+   *   the first delta or tool call is emitted; afterwards a failure throws
+   *   LlmStreamInterruptedError so the caller ends the turn with an error
+   *   event and a retry button.
+   * - An aborted `signal` stops the stream and throws an AbortError.
+   * - GoApply: the input passes content safety first, and streamed text is
+   *   released in checked chunks (StreamOutputGate), so nothing unchecked
+   *   reaches the user.
+   */
+  async streamChatWithTools(
+    messages: readonly ToolChatMessage[],
+    opts: StreamChatWithToolsOptions,
+  ): Promise<StreamChatWithToolsResult> {
+    const startTime = Date.now();
+    const requestId = opts.requestId || getCurrentRequestId() || generateRequestId();
+    const brand = this.callBrand(opts.brand, true);
+
+    if (process.env.MOCK_LLM === 'true') {
+      const content = 'Mock reply.';
+      opts.onDelta?.(content);
+      return {
+        content,
+        toolCalls: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'mock',
+        provider: 'mock',
+      };
+    }
+
+    const defaults = this.resolveDefaults(brand);
+    const rawModel = (opts.model && opts.model !== 'default' ? opts.model : undefined) ?? getTaskModelOrDefault(opts.task, brand.id);
+    if (!rawModel) {
+      if (brand.llmProfile === 'domestic_cn') {
+        throw new AiUnavailableError('no_model', `${brand.name}: no CN_LLM_${opts.task.toUpperCase()}_MODEL or CN_LLM_MODEL is configured.`);
+      }
+      throw new Error(`No LLM model is configured for task "${opts.task}". Set LLM_${opts.task.toUpperCase()}_MODEL or LLM_MODEL.`);
+    }
+    const primary = this.resolvePlatformRoute(rawModel, defaults.providerMode, defaults.model, undefined, brand);
+    this.assertPrimaryRoute(brand, primary, opts.carriesUserData, requestId);
+    if (!supportsToolStreaming(primary.providerType)) {
+      throw new ToolsUnsupportedError(primary.providerType, primary.model);
+    }
+
+    const callId = `${requestId}:${Math.random().toString(36).slice(2, 10)}`;
+    const safetyCtx = { brand, task: opts.task, requestId, callId };
+    await this.contentSafety('input', this.safetyInputText(messages), safetyCtx);
+
+    // Credentials: BYOK (RoboApply only, endpoint re-checked) → system/env.
+    type Hop = { providerType: string; model: string; apiKey: string; baseUrl: string | null; byok: boolean; rowId?: string; source: 'primary' | 'configured' | 'auto' };
+    const hops: Hop[] = [];
+    const platformHop = (providerType: string, model: string, source: Hop['source']): Hop | null => {
+      try {
+        const cred = resolveProviderCredential(providerType);
+        if (!cred.apiKey?.trim() && providerType !== 'ollama') return null;
+        return { providerType, model, apiKey: cred.apiKey, baseUrl: cred.baseUrl ?? null, byok: false, source };
+      } catch {
+        return null;
+      }
+    };
+    const userId = getCurrentUserId();
+    const byokKey = brand.llmProfile === 'domestic_cn' ? null : llmProviderToByokProvider(primary.providerType);
+    if (userId && byokKey) {
+      const row = await resolveByok(userId, byokKey);
+      if (row && this.routeDecision(brand, primary.providerType, { carriesUserData: opts.carriesUserData, byok: true, baseUrl: row.baseUrl }).allowed) {
+        hops.push({ providerType: primary.providerType, model: primary.model, apiKey: row.apiKey, baseUrl: row.baseUrl, byok: true, rowId: row.rowId, source: 'primary' });
+      }
+    }
+    const primaryCircuit = getOpenCircuit(primary.providerType, this.platformCredential(primary.providerType).fingerprint);
+    if (hops.length === 0) {
+      const hop = platformHop(primary.providerType, primary.model, 'primary');
+      if (hop && !primaryCircuit) hops.push(hop);
+    }
+    const fallbacksFor = (credentialFailure: boolean): Hop[] =>
+      this.buildFallbackCandidates({
+        primaryModel: primary.model,
+        primaryProviderType: primary.providerType,
+        providerMode: defaults.providerMode,
+        defaultModel: defaults.model,
+        credentialFailure,
+        brand,
+        carriesUserData: opts.carriesUserData,
+        requireTools: true,
+      })
+        .map((c) => platformHop(c.providerType, c.model, c.source))
+        .filter((h): h is Hop => h !== null);
+    // A user key never falls back to the platform (no surprise billing).
+    if (hops.length === 0) hops.push(...fallbacksFor(true));
+    // Circuit open and nothing else left: try the primary anyway (the key may
+    // have been fixed upstream), as chat() does.
+    if (hops.length === 0 && primaryCircuit) {
+      const hop = platformHop(primary.providerType, primary.model, 'primary');
+      if (hop) hops.push(hop);
+    }
+    if (hops.length === 0) {
+      throw this.unavailableError({
+        reason: primaryCircuit ? 'circuit_open' : 'missing_key',
+        providerType: primary.providerType,
+        model: primary.model,
+        primaryError: primaryCircuit ? new Error(primaryCircuit.reason) : new Error(`No API key resolved for LLM provider "${primary.providerType}"`),
+        attempted: [],
+        brand,
+      });
+    }
+
+    // Emission bookkeeping: once anything reached the caller, no retry.
+    let emitted = false;
+    let emittedText = '';
+    const emit = (text: string) => {
+      emitted = true;
+      emittedText += text;
+      opts.onDelta?.(text);
+    };
+    const gate = contentSafetyApplies(brand.id)
+      ? new StreamOutputGate((text) => this.contentSafety('output', text, safetyCtx), emit)
+      : null;
+    const onText = async (delta: string) => {
+      if (gate) await gate.push(delta);
+      else emit(delta);
+    };
+
+    const attempts = Math.max(1, getRetryAttempts() ?? 3);
+    const baseMs = getRetryBaseMs() ?? 800;
+    const maxMs = getRetryMaxMs() ?? 6_000;
+    const loggable = toLoggableMessages(messages);
+    let lastError: unknown = null;
+    const tried = new Set<string>();
+
+    for (let hopIndex = 0; hopIndex < hops.length; hopIndex += 1) {
+      const hop = hops[hopIndex];
+      tried.add(`${hop.providerType}::${hop.model}`);
+      const tuning = hop.byok ? undefined : resolveProviderCredential(hop.providerType).tuning;
+      const client = (opts.clientFactory ?? createStreamingClient)(hop.providerType, {
+        apiKey: hop.apiKey,
+        baseUrl: hop.baseUrl,
+        ...(tuning ? { proxyKey: tuning.proxyKey } : {}),
+        ...(tuning?.timeoutMs !== undefined ? { timeoutMs: tuning.timeoutMs } : {}),
+      });
+      const params = buildStreamParams({
+        providerType: hop.providerType,
+        model: hop.model,
+        messages,
+        tools: opts.tools,
+        toolChoice: opts.toolChoice,
+        maxTokens: opts.maxTokens,
+        reasoningMaxTokens: opts.reasoningMaxTokens,
+        temperature: opts.temperature,
+        reasoningEffort: opts.reasoningEffort,
+        thinkingMode: opts.thinkingMode,
+        tunedThinkingMode: tuning?.thinkingMode,
+      });
+
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        if (opts.signal?.aborted) throw abortError();
+        // Text the gate held back from a failed attempt (or hop) was never
+        // shown; drop it so the next attempt's text is emitted exactly once.
+        gate?.reset();
+        const hopStart = Date.now();
+        try {
+          const round: StreamRoundResult = await runStreamRound({ client, params, signal: opts.signal, onText });
+          // The SDK may end the iterator quietly on abort: a cut-short round is
+          // never reported as a finished one.
+          if (opts.signal?.aborted) throw abortError();
+          if (gate) {
+            await gate.flush();
+            // Tool arguments carry model-written text the user can see
+            // (drafts, proposals, echoed queries): check them before any
+            // reaches the caller.
+            if (round.toolCalls.length > 0) {
+              await this.contentSafety(
+                'output',
+                round.toolCalls.map((c) => `${c.name} ${c.arguments}`).join('\n'),
+                safetyCtx,
+              );
+            }
+          }
+          for (const call of round.toolCalls) {
+            emitted = true;
+            opts.onToolCall?.(call);
+          }
+          const usage: LLMUsageInfo = round.usage ?? {
+            promptTokens: estimatePromptTokens(loggable),
+            completionTokens: estimateTokensFromText(round.content),
+            totalTokens: 0,
+            estimated: true,
+          };
+          if (usage.estimated) usage.totalTokens = usage.promptTokens + usage.completionTokens;
+          if (hop.byok) {
+            setByokInRequest();
+            if (hop.rowId) void touchByok(hop.rowId);
+          }
+          logger.logLLMCall({
+            requestId,
+            model: round.model || hop.model,
+            provider: hop.providerType,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            duration: Date.now() - startTime,
+            status: 'success',
+            messages: loggable,
+            options: {
+              model: hop.model,
+              task: opts.task,
+              stream: true,
+              tools: opts.tools.map((t) => t.name),
+              ...(hop.source !== 'primary' ? { fallbackFrom: primary.model, fallbackSource: hop.source } : {}),
+            },
+            responseText: round.content + round.toolCalls.map((c) => `\n[tool_call ${c.name}] ${c.arguments}`).join(''),
+            byok: hop.byok,
+          });
+          return {
+            content: round.content,
+            toolCalls: round.toolCalls,
+            finishReason: round.finishReason,
+            usage,
+            model: round.model || hop.model,
+            provider: hop.providerType,
+            ...(round.reasoningContent ? { reasoningContent: round.reasoningContent } : {}),
+          };
+        } catch (error) {
+          lastError = error;
+          if (opts.signal?.aborted) throw abortError();
+          // A content-safety verdict is never retried or rerouted.
+          if (error instanceof ContentBlockedError || error instanceof AiUnavailableError) throw error;
+          const transient = isTransientLLMError(error);
+          logger.logLLMCall({
+            requestId,
+            model: hop.model,
+            provider: hop.providerType,
+            promptTokens: 0,
+            completionTokens: 0,
+            duration: Date.now() - hopStart,
+            status: 'error',
+            messages: loggable,
+            options: { model: hop.model, task: opts.task, stream: true },
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            byok: hop.byok,
+            transient,
+          });
+          if (emitted) throw new LlmStreamInterruptedError(error, emittedText);
+          const credentialKind = classifyCredentialFailure(error);
+          if (credentialKind) {
+            if (!hop.byok && (credentialKind === 'auth' || credentialKind === 'billing')) {
+              this.tripCircuit(hop.providerType, credentialKind, error, requestId);
+            }
+            if (hop.byok) throw error;
+            // Next hop: add the brand-filtered, tool-capable fallbacks once.
+            if (hopIndex === hops.length - 1) {
+              for (const next of fallbacksFor(true)) {
+                if (!tried.has(`${next.providerType}::${next.model}`)) hops.push(next);
+              }
+            }
+            break;
+          }
+          if (transient && attempt < attempts) {
+            const expDelay = Math.min(maxMs, baseMs * 2 ** (attempt - 1));
+            await sleep(Math.round(expDelay / 2 + Math.random() * expDelay * 0.5), opts.signal);
+            continue;
+          }
+          throw error;
+        }
+      }
+    }
+    throw this.unavailableError({
+      reason: classifyCredentialFailure(lastError) ?? 'auth',
+      providerType: primary.providerType,
+      model: primary.model,
+      primaryError: lastError,
+      attempted: [...tried].map((k) => k.replace('::', '/')),
+      lastError,
+      brand,
+    });
   }
 }
 
+function abortError(): Error {
+  return new DOMException('The operation was aborted', 'AbortError');
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+}
+
 export const llmService = new LLMService();
+
+/* ── Startup check (ARCHITECTURE.md §5.1) ─────────────────────────────────── */
+
+export interface CopilotToolsCheck {
+  brand: BrandId;
+  ok: boolean;
+  /** Why the brand is skipped (GoApply with no domestic model: its AI is hidden). */
+  skipped?: string;
+  route: LlmRouteExplanation;
+  problem?: string;
+}
+
+/**
+ * Fail loudly when the copilot task resolves to a model that cannot stream
+ * tool calls (Google, Anthropic) or that the brand policy refuses, for every
+ * brand this deployment serves. GoApply without a configured domestic model
+ * is skipped (its AI is hidden, `ai.text=false`). Call at boot; pass
+ * `{ throwOnError: false }` to get the report only.
+ */
+export function assertCopilotModelSupportsTools(
+  options: { brands?: BrandId[]; throwOnError?: boolean; service?: LLMService } = {},
+): CopilotToolsCheck[] {
+  const service = options.service ?? llmService;
+  const brands = options.brands ?? allowedBrands();
+  const results: CopilotToolsCheck[] = brands.map((brandId) => {
+    const route = service.explainRoute('copilot', brandId);
+    const brand = getBrand(brandId);
+    if (!route.selector && brand.llmProfile === 'domestic_cn') {
+      return { brand: brandId, ok: true, skipped: 'no domestic model configured (AI hidden)', route };
+    }
+    if (!route.selector) return { brand: brandId, ok: false, route, problem: 'no copilot or default model configured' };
+    if (!route.allowed) return { brand: brandId, ok: false, route, problem: route.reason ?? 'route refused by the brand policy' };
+    if (!route.toolsSupported) {
+      return { brand: brandId, ok: false, route, problem: `provider "${route.providerType}" cannot stream tool calls` };
+    }
+    return { brand: brandId, ok: true, route };
+  });
+  const failures = results.filter((r) => !r.ok);
+  if (failures.length > 0 && options.throwOnError !== false) {
+    const lines = failures.map((f) => `${f.brand}: ${f.problem} (selector ${f.route.selector ?? '(none)'})`);
+    throw new ToolsUnsupportedError(
+      failures[0].route.providerType ?? '(none)',
+      failures[0].route.model ?? '(none)',
+      `The Assistant (copilot) model cannot be used: ${lines.join('; ')}. ` +
+        'Set LLM_COPILOT_MODEL / CN_LLM_COPILOT_MODEL to a tool-capable, allowed model.',
+    );
+  }
+  return results;
+}

@@ -1,7 +1,8 @@
 // server/src/platform/llm/brandPolicy.ts
 //
 // Pure LLM routing policy per brand (TASK_PLAN.md R-13, CN_TW_LAUNCH_PLAN.md
-// L-3). No I/O; WP-14 wires it into LLMService (primary and every fallback).
+// L-3). No I/O. WP-14 wires it into LLMService (primary and every fallback)
+// through egressPolicy.ts, which supplies the endpoint the client really calls.
 //
 // GoApply (`llmProfile: 'domestic_cn'`):
 //   - may call only the domestic vendors deepseek, qwen/DashScope, kimi
@@ -109,15 +110,23 @@ export interface LlmPolicyInput extends LlmRoute {
   env?: EnvLike;
 }
 
+/**
+ * A refused route (500 `brand_policy` through platform/http mapError). The
+ * client sees only the generic message; `reason` (with the host) is for logs.
+ * Non-retryable: the configuration will refuse the next attempt too.
+ */
 export class LlmBrandPolicyError extends Error {
   readonly code = 'brand_policy' as const;
   readonly policyCode: LlmPolicyCode;
   readonly host: string | null;
+  readonly reason: string;
+  readonly nonRetryable = true;
   constructor(policyCode: LlmPolicyCode, reason: string, host: string | null) {
-    super(reason);
+    super('This request cannot be routed for this site.');
     this.name = 'LlmBrandPolicyError';
     this.policyCode = policyCode;
     this.host = host;
+    this.reason = reason;
   }
 }
 

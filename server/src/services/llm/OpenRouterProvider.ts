@@ -4,6 +4,7 @@ import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions
 import { openAIJsonResponseFormat } from './jsonMode.js';
 import { modelSupportsReasoningEffort, OPENROUTER_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
+import { openRouterProviderPreferences } from '../../platform/llm/egressPolicy.js';
 
 /**
  * OpenRouter app-attribution headers for the brand of the current unit of
@@ -105,6 +106,10 @@ export class OpenRouterProvider implements LLMProvider {
         // Constrains the model to a single JSON object, killing the prose-
         // wrapped / preamble parse_failed seen in MATCHING_ORCHESTRATOR.
         ...openAIJsonResponseFormat(options, messages),
+        // Never let OpenRouter forward the prompt to a mainland-China upstream
+        // (R-13 egress policy; the host check only sees openrouter.ai). An
+        // OpenRouter extension the SDK passes through untyped.
+        ...({ provider: openRouterProviderPreferences() } as Record<string, unknown>),
       } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       // Per-request AbortSignal + model-aware timeout (overrides the client
       // default). Reasoning models (e.g. deepseek-v4-pro routed via OpenRouter)

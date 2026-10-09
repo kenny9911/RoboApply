@@ -132,6 +132,19 @@ function envCredential(providerType: string): ResolvedProviderCredential {
       return base(process.env.OLLAMA_API_KEY || 'ollama', trimmed('OLLAMA_BASE_URL'));
     case 'newapi':
       return base(process.env.NEWAPI_API_KEY || '', trimmed('NEWAPI_BASE_URL'));
+    // Domestic OpenAI-compatible vendors (WP-14). Vendor-only keys stay
+    // unprefixed (TASK_PLAN R-03). They have no SystemLLMKey/BYOK row, so the
+    // env is their only credential tier. The proxy key is NOT attached: these
+    // endpoints are the vendors' own hosts.
+    case 'qwen':
+    case 'dashscope':
+      return { apiKey: process.env.DASHSCOPE_API_KEY || '', baseUrl: trimmed('DASHSCOPE_BASE_URL'), tuning: {}, source: 'env' };
+    case 'glm':
+    case 'zhipu':
+      return { apiKey: process.env.GLM_API_KEY || '', baseUrl: trimmed('GLM_API_BASE_URL'), tuning: {}, source: 'env' };
+    case 'doubao':
+    case 'ark':
+      return { apiKey: process.env.ARK_API_KEY || '', baseUrl: trimmed('ARK_BASE_URL'), tuning: {}, source: 'env' };
     default:
       return base('', undefined);
   }
