@@ -15,7 +15,21 @@
 //     companyStages / workModes); arrays + scalars replace; bumps updatedAt.
 //   - first-time users get the defaults below (no row / null blob).
 //
-// The prefs-vs-goal split (per the fixture header + 02-stub-contract.md §5):
+// WP-20 (ARCHITECTURE.md §2.8): the job-targeting keys (`roleTitles`,
+// `workModes`, `cities`, `salaryMinK`, `salaryPeriod`, `employmentTypes`,
+// `companyStages`, `companySizes`, `industriesTarget/Avoid`,
+// `targetCompanies`) are no longer written to the blob. GET projects them
+// from the user's ACTIVE search profile (RASearchProfile.filters, the one
+// preference store) and PATCH turns a change to them into a FilterSetPatch on
+// that profile (features/search/legacyBridge.ts). The wire shape is unchanged,
+// so the legacy V2 client, onboarding confirm and Settings keep working.
+// `blockedCompanies` stays here (privacy) and is mirrored into
+// `excludedCompanies`. The dead agent knobs (`aggressiveness`,
+// `matchThreshold`, `dailyCap`, `quietStart/End`, `autoDecline`,
+// `autoSchedule`) are dropped from the type, stripped on write and ignored on
+// read.
+//
+// The older prefs-vs-goal split (per the fixture header + 02-stub-contract.md §5):
 //   - goal owns: targetTitle, salary band, work type, seniority, preferred
 //     locations. The frontend already mirrors those to `goal.upsert`.
 //   - this blob owns: everything else in RAPreferences (identity extras, hunt
@@ -27,15 +41,29 @@
 // targetSalaryMin/Max + preferredWorkType + preferredLocations); the stub keeps
 // them here too, so we preserve that to keep the wire shape identical.
 
-import prisma from '../../../lib/prisma.js';
+import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
+import { BRANDS } from '../../../platform/brand/registry.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/index.js';
+import {
+  SEARCH_BACKED_PREFERENCE_KEYS,
+  VersionConflictError,
+  preferencePatchToFilterPatch,
+  projectFiltersToPreferences,
+  searchProfileService as defaultSearchProfiles,
+  type SearchProfileService,
+} from '../../../features/search/index.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Wire types — kept structurally identical to roboapply/lib/api/v2/types.ts.
 // (V2 backend cannot import the frontend types module; we mirror it here.)
 // ─────────────────────────────────────────────────────────────────────
 
+/** @deprecated Dead agent knob (ARCH §2.8): no longer stored or returned. */
 export type RAAggressiveness = 'manual' | 'balanced' | 'aggressive';
+
+/** Dead agent knobs: stripped on write, ignored on read (ARCH §2.8). */
+export const DEAD_AGENT_KNOBS = ['aggressiveness', 'matchThreshold', 'dailyCap', 'quietStart', 'quietEnd', 'autoDecline', 'autoSchedule'] as const;
 
 /**
  * Onboarding-chat provenance stamp. Written WHOLESALE (the key is not in
@@ -102,14 +130,7 @@ export interface RAPreferences {
   dealbreakers: string[];
   workAuth: string;
 
-  // Agent behavior
-  aggressiveness: RAAggressiveness;
-  matchThreshold: number;
-  dailyCap: number;
-  quietStart: number;
-  quietEnd: number;
-  autoDecline: boolean;
-  autoSchedule: boolean;
+  // Agent behavior (the dead knobs are gone: DEAD_AGENT_KNOBS)
   pauseDuringInterviews: boolean;
   reScoreWeekly: boolean;
   coachLoudness: string;
@@ -227,13 +248,6 @@ function defaultPreferences(): RAPreferences {
     workAuth: '',
 
     // Agent behavior
-    aggressiveness: 'balanced',
-    matchThreshold: 80,
-    dailyCap: 10,
-    quietStart: 22,
-    quietEnd: 8,
-    autoDecline: false,
-    autoSchedule: false,
     pauseDuringInterviews: true,
     reScoreWeekly: true,
     coachLoudness: 'nudges',
@@ -316,7 +330,7 @@ function mergePreferences(
 function hydrateBlob(raw: unknown): RAPreferences {
   const base = defaultPreferences();
   if (!isPlainObject(raw)) return base;
-  const merged = mergePreferences(base, raw as RAPreferencesUpdateInput);
+  const merged = mergePreferences(base, stripDeadKnobs(raw) as RAPreferencesUpdateInput);
   // Preserve the stored updatedAt if present (mergePreferences stamps a new
   // one); a GET should not look like a fresh write.
   if (typeof (raw as Record<string, unknown>).updatedAt === 'string') {
@@ -325,69 +339,169 @@ function hydrateBlob(raw: unknown): RAPreferences {
   return merged;
 }
 
+function stripDeadKnobs(raw: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...raw };
+  for (const k of DEAD_AGENT_KNOBS) delete out[k];
+  return out;
+}
+
+/** The blob as stored: everything except the search-backed keys. */
+function storableBlob(prefs: RAPreferences): Record<string, unknown> {
+  const out = stripDeadKnobs({ ...(prefs as unknown as Record<string, unknown>) });
+  for (const k of SEARCH_BACKED_PREFERENCE_KEYS) delete out[k];
+  return out;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Service
 // ─────────────────────────────────────────────────────────────────────
 
+type GoalDb = Pick<ExtendedPrismaClient, 'rACareerGoal'>;
+
+export interface RAPreferencesServiceDeps {
+  getDb?: () => Promise<GoalDb>;
+  searchProfiles?: Pick<SearchProfileService, 'getActive' | 'update'>;
+  /** Currency for a new pay floor (default: the request brand's). */
+  currency?: () => string;
+}
+
+const defaultGetDb = async (): Promise<GoalDb> => (await import('../../../lib/prisma.js')).default;
+
 export class RAPreferencesService {
+  private readonly getDb: () => Promise<GoalDb>;
+  private readonly searchProfiles: Pick<SearchProfileService, 'getActive' | 'update'>;
+  private readonly currency: () => string;
+
+  constructor(deps: RAPreferencesServiceDeps = {}) {
+    this.getDb = deps.getDb ?? defaultGetDb;
+    this.searchProfiles = deps.searchProfiles ?? defaultSearchProfiles;
+    this.currency = deps.currency ?? (() => BRANDS[getCurrentBrandOrDefault().id].currency);
+  }
+
+  private async readBlob(userId: string): Promise<unknown> {
+    const db = await this.getDb();
+    const row = await db.rACareerGoal.findUnique({ where: { userId }, select: { preferencesBlob: true } });
+    return row?.preferencesBlob ?? null;
+  }
+
   /**
-   * GET /preferences — returns the user's blob (defaulted for first-timers)
-   * plus the static option lists. Never returns null; a user with no row gets
-   * the defaults.
+   * Overlay the active search profile's projection. When the store cannot be
+   * read (logged), the blob's own legacy values are returned unchanged:
+   * stale but real, never invented.
+   */
+  private async withProjection(userId: string, prefs: RAPreferences): Promise<RAPreferences> {
+    try {
+      const active = await this.searchProfiles.getActive(userId);
+      return { ...prefs, ...projectFiltersToPreferences(active.filters) };
+    } catch (err) {
+      logger.warn('RA_V2_PREFERENCES', 'search profile projection failed; returning stored values', {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return prefs;
+    }
+  }
+
+  /**
+   * GET /preferences — the user's blob (defaulted for first-timers) with the
+   * job-targeting keys projected from the active search profile, plus the
+   * static option lists. Never returns null.
    */
   async get(userId: string): Promise<{
     preferences: RAPreferences;
     options: RAPreferenceOptions;
   }> {
-    const p = prisma as any;
-    const row = await p.rACareerGoal.findUnique({
-      where: { userId },
-      select: { preferencesBlob: true },
-    });
-    const preferences = hydrateBlob(row?.preferencesBlob ?? null);
+    const preferences = await this.withProjection(userId, hydrateBlob(await this.readBlob(userId)));
     return { preferences, options: RA_PREFERENCE_OPTIONS };
   }
 
   /**
-   * PATCH /preferences — deep-merge the patch into the stored blob and persist.
-   * Returns the merged result (PreferencesUpdateResponse shape: { preferences }).
+   * PATCH /preferences — deep-merge the non-search keys into the stored blob,
+   * then apply any change to a job-targeting key to the active search profile
+   * (one FilterSetPatch, retried once on a version conflict). Returns the
+   * merged result with the fresh projection (PreferencesUpdateResponse shape).
    *
    * The blob lives on RACareerGoal. If the user has no goal row yet we must
    * create one — but `targetTitle` is a required column. We seed it with an
    * empty string placeholder so the prefs surface works before a goal is set;
    * the goal route's own validation (non-empty targetTitle) still gates the
    * real goal save, and goal.get tolerates the placeholder.
+   *
+   * Order matters for users who predate search profiles. Their job-targeting
+   * keys still sit in the blob, and the one-time legacy migration (run by
+   * `searchProfiles.getActive`) reads them from there. So the migration is
+   * forced BEFORE the blob is rewritten; only once it has succeeded may the
+   * targeting keys be stripped. If it fails, the blob is written with those
+   * keys kept (dead knobs still dropped), so a later migration still finds
+   * them.
+   *
+   * The blob is written before the search-profile write, so a failed
+   * search-profile write never loses the onboarding stamp or a notification
+   * setting; that failure is then thrown (the route answers 500 and the
+   * client keeps its draft).
    */
   async update(
     userId: string,
-    patch: RAPreferencesUpdateInput,
+    patchIn: RAPreferencesUpdateInput,
   ): Promise<{ preferences: RAPreferences }> {
-    const p = prisma as any;
-    const existing = await p.rACareerGoal.findUnique({
-      where: { userId },
-      select: { preferencesBlob: true },
-    });
+    const patch = stripDeadKnobs({ ...(patchIn as Record<string, unknown>) }) as RAPreferencesUpdateInput;
+    const db = await this.getDb();
 
-    const current = hydrateBlob(existing?.preferencesBlob ?? null);
-    const merged = mergePreferences(current, patch);
-
-    await p.rACareerGoal.upsert({
-      where: { userId },
-      create: {
+    // Migrate (or confirm) the search profiles while the blob is untouched.
+    let migrationError: unknown = null;
+    try {
+      await this.searchProfiles.getActive(userId);
+    } catch (err) {
+      migrationError = err;
+      logger.warn('RA_V2_PREFERENCES', 'search profile store unavailable; keeping job-targeting keys in the blob', {
         userId,
-        targetTitle: '',
-        preferencesBlob: merged as unknown as object,
-      },
-      update: {
-        preferencesBlob: merged as unknown as object,
-      },
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    const rawBefore = await this.readBlob(userId);
+    const current = hydrateBlob(rawBefore);
+    const blockedBefore = current.blockedCompanies;
+    const merged = mergePreferences(current, patch);
+    const stored = (migrationError ? stripDeadKnobs({ ...(merged as unknown as Record<string, unknown>) }) : storableBlob(merged)) as object;
+
+    await db.rACareerGoal.upsert({
+      where: { userId },
+      create: { userId, targetTitle: '', preferencesBlob: stored },
+      update: { preferencesBlob: stored },
     });
+
+    const searchKeys = Object.keys(patch).filter(
+      (k) => (SEARCH_BACKED_PREFERENCE_KEYS as readonly string[]).includes(k) || k === 'blockedCompanies',
+    );
+    if (searchKeys.length) {
+      // The change is in the blob (kept unstripped), but it did not reach the
+      // search profile: report the failure rather than pretend it saved.
+      if (migrationError) throw migrationError;
+      await this.writeThrough(userId, patch as Record<string, unknown>, blockedBefore);
+    }
 
     logger.info('RA_V2_PREFERENCES', 'preferences updated', {
       userId,
       keys: Object.keys(patch),
+      searchKeys,
     });
-    return { preferences: merged };
+    return { preferences: await this.withProjection(userId, merged) };
+  }
+
+  private async writeThrough(userId: string, patch: Record<string, unknown>, blockedBefore: string[]): Promise<void> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const active = await this.searchProfiles.getActive(userId);
+      const filtersPatch = preferencePatchToFilterPatch(patch, { current: active.filters, currency: this.currency(), blockedBefore });
+      if (!filtersPatch) return;
+      try {
+        await this.searchProfiles.update(userId, active.id, { version: active.version, filtersPatch });
+        return;
+      } catch (err) {
+        if (err instanceof VersionConflictError && attempt === 0) continue;
+        throw err;
+      }
+    }
   }
 }
 

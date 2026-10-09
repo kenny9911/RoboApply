@@ -18,8 +18,8 @@
 //     `targetCompanies`, which boosted the feed; turning it into the
 //     include-only `companies` filter would silently narrow the feed.
 //   - GoApply fields (CN plan; PRODUCT F-FILT-01/02 cn column): `classYear`,
-//     `degree`, `employmentType`, `internDays`, `dailyPay`, `hukouTag`,
-//     `schoolTiers`. School tier is a user-side filter on postings that state
+//     `degree`, `employmentType`, `internDays`, `dailyPay`, `salaryMonthsMin`
+//     (K·N薪, added by WP-20), `hukouTag`, `schoolTiers`. School tier is a user-side filter on postings that state
 //     a requirement and never a ranking input (ruling C15).
 
 import { z } from 'zod';
@@ -138,6 +138,8 @@ export const FilterSetV1Schema = z
     internDays: RangeSchema(1, 7).optional(),
     /** 元/天 floor for internships. */
     dailyPay: z.object({ min: z.number().int().positive().max(100_000) }).strict().optional(),
+    /** K·N薪: at least N months of pay a year, when the posting states it (12–24). WP-20 addition. */
+    salaryMonthsMin: z.number().int().min(12).max(24).optional(),
     /** Only postings whose official text says 可落户. */
     hukouTag: z.boolean().optional(),
     /** The user's own school tiers: hides postings that require a tier the user lacks. */
@@ -153,7 +155,17 @@ export type SalaryMin = z.infer<typeof SalaryMinSchema>;
 export const FILTER_FIELDS = Object.keys(FilterSetV1Schema.shape) as FilterField[];
 
 /** Fields that exist only on GoApply (market `cn`). */
-export const CN_ONLY_FIELDS: readonly FilterField[] = ['employerTags', 'classYear', 'degree', 'employmentType', 'internDays', 'dailyPay', 'hukouTag', 'schoolTiers'];
+export const CN_ONLY_FIELDS: readonly FilterField[] = [
+  'employerTags',
+  'classYear',
+  'degree',
+  'employmentType',
+  'internDays',
+  'dailyPay',
+  'salaryMonthsMin',
+  'hukouTag',
+  'schoolTiers',
+];
 /** Fields that exist only on RoboApply (market `intl`); GoApply replaces sponsorship with 户口/届别. */
 export const INTL_ONLY_FIELDS: readonly FilterField[] = ['needsSponsorship', 'excludeRequirements'];
 
@@ -179,6 +191,7 @@ export const FilterSetPatchSchema = z
 // ── Search profiles (RASearchProfile) ─────────────────────────────────────
 
 const ProfileName = z.string().trim().max(60);
+const Version = z.number().int().min(1);
 
 export const AlertInstantSchema = literalUnion(ALERT_INSTANT_OPTIONS);
 
@@ -194,26 +207,45 @@ export const CreateSearchProfileBodySchema = z
   })
   .strict();
 
+/**
+ * PATCH /search-profiles/:id (ARCH §3.3). `baseVersion` is the version the
+ * client read; a mismatch answers 409 version_conflict with the current
+ * profile. `version` is accepted as an alias (FND-4's original name).
+ * `filters` replaces the whole set; `filtersPatch` (FilterSetPatch: a value
+ * replaces a field, `null` clears it) is what the Assistant, "Not interested"
+ * and the chips send. They are mutually exclusive. `makeDefault: true` makes
+ * this the default profile (there is no way to un-default: pick another).
+ */
 export const UpdateSearchProfileBodySchema = z
   .object({
-    /** The version the client read; a mismatch answers 409 version_conflict. */
-    version: z.number().int().min(1),
+    baseVersion: Version.optional(),
+    version: Version.optional(),
     name: ProfileName.optional(),
     filters: z.unknown().optional(),
+    filtersPatch: z.unknown().optional(),
     alertInstantMax: AlertInstantSchema.optional(),
     alertDigest: z.enum(ALERT_DIGESTS).nullable().optional(),
+    makeDefault: z.literal(true).optional(),
   })
-  .strict();
+  .strict()
+  .refine((b) => b.baseVersion !== undefined || b.version !== undefined, { message: 'baseVersion is required', path: ['baseVersion'] })
+  .refine((b) => b.filters === undefined || b.filtersPatch === undefined, { message: 'send filters or filtersPatch, not both', path: ['filtersPatch'] });
 
+/** @deprecated Use `UpdateSearchProfileBodySchema` with `filtersPatch` (one PATCH). */
 export const PatchSearchProfileFiltersBodySchema = z
   .object({
-    version: z.number().int().min(1),
+    version: Version,
     patch: z.unknown(),
   })
   .strict();
 
 export type CreateSearchProfileBody = z.infer<typeof CreateSearchProfileBodySchema>;
 export type UpdateSearchProfileBody = z.infer<typeof UpdateSearchProfileBodySchema>;
+
+/** The version a PATCH body carries (`baseVersion`, else the `version` alias). */
+export function baseVersionOf(body: { baseVersion?: number; version?: number }): number {
+  return (body.baseVersion ?? body.version) as number;
+}
 
 /** Response shape for one profile. */
 export interface SearchProfileWire {
@@ -236,9 +268,90 @@ export interface SearchProfileListWire {
   maxProfiles: number;
   /** Highest instant-alert option the plan allows. */
   maxInstantAlerts: number;
+  /** The Pro column's saved-search cap, for the inline Pro note; null when no Pro plan is sellable or the user is Pro. */
+  proMaxProfiles: number | null;
+  /** A sellable Pro plan exists and the user is not on it. */
+  upgradable: boolean;
 }
 
-/** Error codes the search routes answer with (WP-20). */
+// ── Route params, queries and responses (WP-20) ─────────────────────────
+
+export const SearchProfileParamsSchema = z.object({ id: z.string().min(1).max(64) });
+
+/** POST /search-profiles/count → `FeedCountResult` (count capped at 5,000; `{count:null}` until the feed counts). */
+export const CountFiltersBodySchema = z.object({ filters: z.unknown() }).strict();
+
+/** GET /taxonomy?locale&q */
+export const TaxonomyQuerySchema = z.object({ locale: z.string().max(8).optional(), q: z.string().trim().max(80).optional() });
+
+/** GET /taxonomy/skills?q= (≥2 characters, 1 for Chinese; market-scoped; the client offers the typed text as a custom entry). */
+export const SkillsQuerySchema = z.object({ q: z.string().trim().min(1).max(60), locale: z.string().max(8).optional() });
+
+/** One taxonomy node with its label in the requested locale. */
+export interface TaxonomyNodeWire {
+  id: string;
+  level: 1 | 2 | 3;
+  parent: string | null;
+  label: string;
+}
+
+/** A role suggestion for the title typeahead. */
+export interface TaxonomySuggestionWire {
+  id: string;
+  level: 1 | 2 | 3;
+  label: string;
+  /** "Role group · Category" for roles, the category for groups, null for categories. */
+  context: string | null;
+}
+
+/** GET /taxonomy: the tree (no `q`), or ranked suggestions (with `q`). */
+export interface TaxonomyResponse {
+  version: number;
+  asOf: string;
+  locale: string;
+  /** Every node (no `q`); empty when `q` is sent. */
+  nodes: TaxonomyNodeWire[];
+  /** Ranked suggestions (with `q`); empty without. */
+  suggestions: TaxonomySuggestionWire[];
+  /** Public sources the taxonomy is built from (D3). */
+  sources: Array<{ name: string; url: string | null; license: string }>;
+}
+
+/** One skill suggestion. `postings` = seen in job posts of this market; `common_name` = a well-known alias was expanded. */
+export interface SkillSuggestionWire {
+  value: string;
+  label: string;
+  source: 'postings' | 'common_name';
+}
+
+export interface SkillSuggestionsResponse {
+  items: SkillSuggestionWire[];
+}
+
+/** One zero-results relaxation (mirrors feed's LimitingFilter). */
+export interface LimitingFilterWire {
+  field: string;
+  value: unknown;
+  /** Jobs the feed would show without this filter. */
+  removalGain: number;
+}
+
+/** GET /search-profiles/:id/limiting. `available: false` until the feed can measure (WP-32). */
+export interface LimitingFiltersResponse {
+  items: LimitingFilterWire[];
+  available: boolean;
+}
+
+/**
+ * Error answers of the search routes (WP-20). Each uses a platform code
+ * (`platform/http.ts`) with `details.reason` naming the search case:
+ *   404 not_found          { reason: 'search_profile_not_found' }
+ *   409 version_conflict   { currentVersion, profile }
+ *   403 forbidden          { reason: 'saved_search_limit', max, upgradable }
+ *   403 forbidden          { reason: 'alert_frequency_not_allowed', max }
+ *   422 invalid_request    { reason: 'invalid_filters', issues }
+ *   409 conflict           { reason: 'cannot_delete_last_profile' | 'cannot_delete_default_profile' }
+ */
 export const SEARCH_ERROR_CODES = {
   notFound: 'search_profile_not_found', // 404
   versionConflict: 'version_conflict', // 409 { currentVersion, profile }
@@ -246,4 +359,5 @@ export const SEARCH_ERROR_CODES = {
   alertFrequency: 'alert_frequency_not_allowed', // 403 { max }
   invalidFilters: 'invalid_filters', // 422 { issues }
   lastProfile: 'cannot_delete_last_profile', // 409
+  defaultProfile: 'cannot_delete_default_profile', // 409
 } as const;
