@@ -1,3 +1,213 @@
 {
-  "legal": {}
+  "legal": {
+    "aiBadge": {
+      "text": "AI-generated",
+      "document": "AI-assisted document",
+      "audio": "AI voice",
+      "title": "Written with AI. Check it before you use it."
+    },
+    "docs": {
+      "terms": "Terms of service",
+      "privacy": "Privacy notice",
+      "cookies": "Cookies",
+      "refunds": "Refunds",
+      "subscription-terms": "Subscription terms",
+      "ai-disclosure": "How we use AI",
+      "tw-pdpa-notice": "Taiwan data notice",
+      "pi-collection-list": "Personal information we collect",
+      "third-party-sharing": "Who we share data with",
+      "ai-content-labels": "AI content labels",
+      "complaints": "Complaints",
+      "referral-terms": "Referral terms",
+      "coaching": "Coaching terms"
+    },
+    "footer": {
+      "aria": "Legal",
+      "copyright": "© {year} {entity}",
+      "icp": "ICP filing {number}",
+      "psb": "Public security filing {number}",
+      "edi": "Value-added telecom licence {number}",
+      "hrLicence": "HR service licence {number} ({holder})",
+      "aiModels": "AI models: {models}",
+      "modelWithFiling": "{model} (filing {filingNo})",
+      "genaiRegistration": "Generative AI service registration {number}",
+      "algorithmFiling": "Algorithm filing {number}",
+      "complaintsEmail": "Complaints: {email}",
+      "complaintsPhone": "Complaints phone: {phone}"
+    },
+    "page": {
+      "eyebrow": "Legal",
+      "draftTitle": "Draft",
+      "draftBody": "This document is still being reviewed and is not final. Sections in brackets are not written yet.",
+      "updated": "Last updated {date}",
+      "version": "Version {version}",
+      "otherDocs": "Other documents",
+      "englishOnly": "This document is available in English only for now."
+    },
+    "disclosures": {
+      "modelsTitle": "AI models we use",
+      "processorsTitle": "Who processes your data",
+      "colModel": "Model",
+      "colVendor": "Vendor",
+      "colCountry": "Country",
+      "colFiling": "Filing number",
+      "colProcessor": "Processor",
+      "colPurpose": "What for",
+      "noModels": "No AI model is set up, so AI features are off.",
+      "noProcessors": "Not listed",
+      "notListed": "Not listed",
+      "loading": "Loading…",
+      "error": "This list did not load. Reload the page to try again.",
+      "statusNote": "Filing status: {note}"
+    },
+    "processors": {
+      "database": "Database",
+      "hosting": "Website hosting",
+      "email": "Email delivery",
+      "voice": "Voice practice",
+      "speech": "Speech recognition and voice",
+      "payments": "Payments",
+      "ai_models": "AI models",
+      "storage": "File storage"
+    },
+    "retention": {
+      "title": "How long we keep data",
+      "colData": "Data",
+      "colKept": "Kept for",
+      "colHow": "How it is deleted",
+      "keep": "{unit, select, hours {{amount, plural, one {# hour} other {# hours}}} days {{amount, plural, one {# day} other {# days}}} other {{amount, plural, one {# month} other {# months}}}}",
+      "enforced": {
+        "auto": "Deleted automatically",
+        "provider": "Set by our database provider",
+        "manual": "Not automated yet"
+      },
+      "rows": {
+        "assistant_messages": "Assistant conversations",
+        "job_interactions": "Job views, saves and other actions",
+        "feed_impressions": "Job lists shown to you",
+        "product_events": "Product usage events",
+        "closed_accounts": "Account data after you delete your account",
+        "soft_deleted_rows": "Resumes, cover letters, tracked jobs and Assistant memories you delete",
+        "application_artifacts": "Copies of files used for applications",
+        "inactive_accounts": "Accounts with no sign-in (after a 30-day notice email)",
+        "auth_tokens": "Sign-in codes and links, after they expire",
+        "ai_label_logs": "AI content label records",
+        "content_safety_events": "Content safety check records",
+        "interview_recordings": "Practice interview recordings and transcripts",
+        "data_exports": "Your data export files",
+        "backups": "Database backups"
+      }
+    },
+    "privacy": {
+      "title": "Privacy and your data",
+      "intro": "Get a copy of your data, ask us to correct or delete it, and see how long we keep it.",
+      "exportTitle": "Download your data",
+      "exportBody": "We put everything in your account into one file. It appears here when it is ready, and we email you.",
+      "exportCta": "Prepare my data",
+      "exportStarting": "Starting…",
+      "exportQueued": "We are preparing your file. This page updates when it is ready.",
+      "exportReady": "Ready to download until {date}.",
+      "download": "Download file",
+      "requestsTitle": "Your requests",
+      "requestsIntro": "Ask to see, correct or delete your data, or for an explanation of how we use it. We answer by the date shown.",
+      "requestsEmpty": "You have not made any requests.",
+      "newRequest": "New request",
+      "kindLabel": "What do you want to do?",
+      "detailLabel": "Details (optional)",
+      "detailHint": "Tell us which data, if it helps.",
+      "submit": "Send request",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "conflict": "You already have an open request of this kind.",
+      "error": "Something went wrong. Try again.",
+      "loadError": "Your requests did not load.",
+      "retry": "Try again",
+      "due": "Answer due by {date}",
+      "resolved": "Closed {date}",
+      "filed": "Sent {date}",
+      "kinds": {
+        "access": "See what data you hold about me",
+        "copy": "Get a copy of my data",
+        "correction": "Correct my data",
+        "deletion": "Delete some of my data",
+        "portability": "Get my data to move it elsewhere",
+        "withdraw_consent": "Withdraw a consent",
+        "explanation": "Explain how my data is used"
+      },
+      "statuses": {
+        "open": "Received",
+        "in_progress": "In progress",
+        "done": "Done",
+        "rejected": "Declined"
+      },
+      "deleteTitle": "Delete your account",
+      "deleteBody": "To delete your whole account and everything in it, use Delete account in the Danger zone.",
+      "deleteLink": "Go to Danger zone"
+    },
+    "consents": {
+      "title": "Consents",
+      "intro": "Each consent is separate. Turn any optional one on or off here; the change applies at once.",
+      "required": "Required",
+      "optional": "Optional",
+      "on": "On",
+      "off": "Off",
+      "notChosen": "Not chosen",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "changed": "Changed {date}",
+      "notWithdrawable": "This ends only when you delete your account.",
+      "englishOnly": "Shown in English: no approved translation of this text yet.",
+      "loadError": "Your consents did not load.",
+      "retry": "Try again",
+      "error": "That change did not save. Try again.",
+      "outdated": "This text was updated. Reload to read the current version.",
+      "reload": "Reload",
+      "closeTitle": "Withdraw and delete your account?",
+      "closeBody": "This service runs outside mainland China during the beta, so it cannot run without this consent. Withdrawing it closes your account now and deletes your data. This cannot be undone.",
+      "closeConfirm": "Withdraw and delete my account",
+      "closeKeep": "Keep my account",
+      "closing": "Your account is closed and your data is being deleted. You will be signed out."
+    },
+    "explain": {
+      "title": "Why this job",
+      "fromResume": "From your resume",
+      "fromPosting": "From the posting",
+      "headline": {
+        "personalized": "Why this job: {tier, select, great {Great fit} good {Good fit} possible {Possible} other {Unlikely}}",
+        "personalizedNoScore": "Why this job",
+        "nonPersonalized": "Sorted by date posted and your filters"
+      },
+      "reason": {
+        "title_level": "Your title and level line up with this role.",
+        "skills": "Your skills cover what this role asks for.",
+        "industry": "You have worked in this industry.",
+        "logistics": "The location and work setup suit what you asked for.",
+        "career_path": "This role is a natural next step from your experience.",
+        "skillsAligned": "Skills you have that this role asks for: {skills}"
+      },
+      "gap": {
+        "title_level": "The level may differ from yours.",
+        "skills": "Some skills this role asks for are not on your resume.",
+        "industry": "You have less experience in this industry.",
+        "logistics": "The location or work setup may not suit what you asked for.",
+        "career_path": "This role is a bigger change from your experience.",
+        "skillsMissing": "Asked for, not on your resume: {skills}"
+      },
+      "notStated": {
+        "title_level": "The posting does not say the level.",
+        "skills": "The posting does not list skills.",
+        "industry": "The posting does not say the industry.",
+        "logistics": "The posting does not say the location or work setup.",
+        "career_path": "Not enough detail to compare career steps."
+      },
+      "notice": {
+        "notHiringChance": "This is not your chance of getting hired.",
+        "quickEstimate": "Quick estimate, made without AI.",
+        "factors": "Based on your title and level, skills, industry, location wishes and career path. Never on age, gender, birthplace, photo or family.",
+        "factorsNone": "Your profile is not used to sort these jobs.",
+        "turnOff": "To sort jobs without your profile, turn off “Rank jobs using my profile” in Settings.",
+        "turnOn": "To sort jobs by fit, turn on “Rank jobs using my profile” in Settings."
+      }
+    }
+  }
 }

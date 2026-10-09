@@ -1,14 +1,27 @@
-// server/src/features/compliance/workers.ts — STUB (FND-3). Owner: WP-13.
+// server/src/features/compliance/workers.ts — queue workers of the compliance area (WP-13).
 //
-// Queue workers for this area. server/src/platform/queue/registry.ts (FND-5) imports
-// `workers` from every area and registers them. The list is empty until the owner
-// adds handlers, so items of these kinds stay `queued` (never leased) until then.
-// Kinds this area will handle:
-//   - 'compliance.export': build a personal-data export.
-//   - 'compliance.purge': one retention purge batch (e.g. after a withdrawn cross-border consent).
+// server/src/platform/queue/registry.ts imports `workers` from every area and
+// registers them.
+//   - 'compliance.export': build a personal-data export (dataExport.ts).
+//   - 'compliance.purge':  close and delete an account after a withdrawn
+//                          cross-border consent (purge.ts).
+// Importing this module also registers the area's email templates.
 
 import type { WorkerDefinition } from '../../platform/queue/index.js';
+import { handleDataExport } from './dataExport.js';
+import { handleAccountPurge } from './purge.js';
+import { COMPLIANCE_WORK_KINDS } from './kinds.js';
+import './emails.js';
 
-export const COMPLIANCE_WORK_KINDS = { dataExport: 'compliance.export', retentionPurge: 'compliance.purge' } as const;
+export { COMPLIANCE_WORK_KINDS } from './kinds.js';
 
-export const workers: WorkerDefinition[] = [];
+export const workers: WorkerDefinition[] = [
+  { kind: COMPLIANCE_WORK_KINDS.dataExport, handler: async (item) => handleDataExport(item), concurrency: 2 },
+  {
+    kind: COMPLIANCE_WORK_KINDS.retentionPurge,
+    handler: async (item) => {
+      await handleAccountPurge(item);
+    },
+    concurrency: 1,
+  },
+];

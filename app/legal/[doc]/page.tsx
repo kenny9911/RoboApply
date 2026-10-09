@@ -1,21 +1,64 @@
-// /legal/[doc] — route shell (FND-6b). Legal documents per brand.
+// /legal/[doc] — legal documents per brand (WP-13; PRODUCT_PLAN.md F-MKT-04).
 //
-// STUB. Owner: WP-13, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// RoboApply: terms, privacy, cookies, refunds, subscription-terms,
+// ai-disclosure, tw-pdpa-notice. GoApply: terms (用户协议), privacy (隐私政策),
+// pi-collection-list (个人信息收集清单), third-party-sharing (第三方共享清单),
+// ai-content-labels (AI 生成内容标识说明), complaints (投诉举报). Aliases
+// (`/legal/agreement`, `/legal/personal-info-list`, GoApply `/legal/ai-disclosure`)
+// redirect to the canonical slug.
+//
+// Public page in HybridShell (R-23). Documents are DRAFT until counsel approves
+// them and ops sets the docs version; drafts are never indexed, and production
+// GoApply serves nothing until CN_LEGAL_DOCS_VERSION is set (404).
 
 import type { Metadata } from 'next';
+import { notFound, permanentRedirect } from 'next/navigation';
 
-import { HybridShell } from '../../../components/v3/shell/HybridShell';
+import { LegalDocument, legalDocsFor } from '../../../components/features/compliance';
 import { LegalFooter } from '../../../components/features/market';
+import { HybridShell } from '../../../components/v3/shell/HybridShell';
+import { getServerBrand } from '../../../lib/server/brand';
+import { resolveLocale } from '../../../lib/serverLocale';
+import { loadLegalDocForPage, type LegalBrandInfo } from '../legalSource';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+type Params = { params: Promise<{ doc: string }> };
 
-export default async function LegalDocPage({ params }: { params: Promise<{ doc: string }> }) {
+async function load(doc: string) {
+  const brand = await getServerBrand();
+  const info: LegalBrandInfo = { id: brand.id, market: brand.market, name: brand.name, replyTo: brand.email.replyTo };
+  return { brand, info, result: loadLegalDocForPage(info, doc) };
+}
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { doc } = await params;
+  const { brand, result } = await load(doc);
+  if (result.kind !== 'doc') return { robots: { index: false, follow: false } };
+  return {
+    title: `${result.doc.title} · ${brand.seo.titleSuffix}`,
+    robots: result.doc.draft ? { index: false, follow: false } : { index: true, follow: true },
+  };
+}
+
+export default async function LegalDocPage({ params }: Params) {
+  const { doc } = await params;
+  const { brand, result } = await load(doc);
+  if (result.kind === 'redirect') permanentRedirect(`/legal/${result.to}`);
+  if (result.kind !== 'doc') notFound();
+  const locale = await resolveLocale(brand);
   return (
     <HybridShell from="legal" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/legal/[doc]" data-owner="WP-13" data-param={doc} />
+      <LegalDocument
+        doc={result.doc.doc}
+        title={result.doc.title}
+        body={result.doc.body}
+        draft={result.doc.draft}
+        version={result.doc.version}
+        updated={result.doc.updated}
+        market={brand.market}
+        lang={result.doc.lang}
+        uiLocale={locale}
+        otherDocs={legalDocsFor(brand.market, locale)}
+      />
     </HybridShell>
   );
 }

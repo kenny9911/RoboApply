@@ -6,7 +6,8 @@
 // different questions and belong under different headings:
 //   • BlocklistSection → "Your search"  — companies you don't want to see jobs
 //     from (the first entry is the auto-blocked current employer).
-//   • DataSection      → "Account"      — download your data, retention window.
+//   • DataSection      → "Account"      — WP-13: data export, personal-information
+//                                          requests, the retention schedule.
 //
 // The profile-visibility control ("Hidden from recruiters") that used to open
 // this file is DELETED per OVERHAUL_RULINGS C19: no recruiter-visible profile
@@ -16,9 +17,10 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { PrefGroup, PrefRow, Select } from '../controls';
+import { PrefGroup, PrefRow } from '../controls';
 import { Btn, IconX } from '../../primitives';
 import type { RAPreferences } from '../../../../lib/api/v2';
+import { PrivacyPanel } from '../../../features/compliance';
 
 export function BlocklistSection({
   p,
@@ -103,33 +105,17 @@ export function BlocklistSection({
   );
 }
 
-export function DataSection({
-  p,
-  set,
-}: {
+/**
+ * Settings → Privacy and data (WP-13). The props are kept for the settings
+ * page's existing renderer; the section no longer reads the preferences blob:
+ * the old "download archive" button did nothing and the per-user retention
+ * select was never enforced, so both are replaced by the real export,
+ * personal-information requests and the published retention schedule
+ * (components/features/compliance/PrivacyPanel.tsx).
+ */
+export function DataSection(_props: {
   p: RAPreferences;
   set: (path: string, value: unknown) => void;
 }) {
-  const t = useTranslations('settings');
-
-  return (
-    <PrefGroup label={t('privacy.group_data')}>
-      <PrefRow label={t('privacy.export_label')} sub={t('privacy.export_sub')}>
-        <Btn>{t('privacy.download_archive')}</Btn>
-      </PrefRow>
-      <PrefRow label={t('privacy.retention_label')} sub={t('privacy.retention_sub')}>
-        <Select
-          value={p.dataRetention}
-          onChange={(v) => set('dataRetention', v)}
-          ariaLabel={t('privacy.retention_label')}
-          options={[
-            { value: '30', label: t('privacy.retention_30') },
-            { value: '90', label: t('privacy.retention_90') },
-            { value: '365', label: t('privacy.retention_365') },
-            { value: 'forever', label: t('privacy.retention_forever') },
-          ]}
-        />
-      </PrefRow>
-    </PrefGroup>
-  );
+  return <PrivacyPanel />;
 }
