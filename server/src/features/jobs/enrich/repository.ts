@@ -1,0 +1,164 @@
+// server/src/features/jobs/enrich/repository.ts
+//
+// The database side of enrichment, behind a narrow interface so the service
+// is tested without a database. Typed Prisma only (TASK_PLAN.md §2.1 rule 5).
+//   loadJob      — the RAJob columns enrichment reads;
+//   saveJob      — one RAJob update with the reconciled columns;
+//   saveKeywords — upsert the job's RAKeywordExtraction row (top 30);
+//   logCost      — one UsageDeductionLog row, SKU `ra_job_enrich`, under the
+//                  brand's system user (ARCH §4.5 step 4). Failures are logged,
+//                  never thrown: a lost audit row must not fail the job.
+
+import prisma from '../../../lib/prisma.js';
+import { Prisma } from '../../../generated/prisma/client.js';
+import { logger } from '../../../services/LoggerService.js';
+import type { EnrichJobRecord, EnrichUpdate } from './reconcile.js';
+import type { JobKeyword } from './keywords.js';
+
+export const ENRICH_COST_SKU = 'ra_job_enrich';
+
+export interface KeywordRow {
+  keywords: JobKeyword[];
+  modelUsed: string;
+  /** USD; null when no model ran. */
+  tokenCost: number | null;
+  generatedAt: Date;
+}
+
+export interface EnrichCostEntry {
+  userId: string;
+  jobId: string;
+  brand: string;
+  market: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+  requestId: string | null;
+}
+
+export interface EnrichRepository {
+  loadJob(jobId: string): Promise<EnrichJobRecord | null>;
+  saveJob(jobId: string, update: EnrichUpdate): Promise<void>;
+  saveKeywords(jobId: string, row: KeywordRow): Promise<void>;
+  logCost(entry: EnrichCostEntry): Promise<void>;
+}
+
+export type EnrichDb = Pick<typeof prisma, 'rAJob' | 'rAKeywordExtraction' | 'usageDeductionLog'>;
+
+const JOB_SELECT = {
+  id: true,
+  market: true,
+  visibility: true,
+  ownerUserId: true,
+  sourceBoard: true,
+  title: true,
+  titleNormalized: true,
+  companyName: true,
+  companyNameNormalized: true,
+  description: true,
+  descriptionPlain: true,
+  qualifications: true,
+  responsibilities: true,
+  benefits: true,
+  taxonomyIds: true,
+  primaryTaxonomyId: true,
+  seniority: true,
+  educationLevel: true,
+  skills: true,
+  skillsDetail: true,
+  sponsorship: true,
+  sponsorshipEvidence: true,
+  citizenshipRequired: true,
+  clearanceRequired: true,
+  employerTags: true,
+  fraudFlags: true,
+  marketTags: true,
+  summary: true,
+  enrichedAt: true,
+  enrichVersion: true,
+  enrichModel: true,
+  archivedAt: true,
+} as const satisfies Prisma.RAJobSelect;
+
+function json(value: unknown[] | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.DbNull;
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+/** The Prisma `data` for an EnrichUpdate (absent keys stay unchanged). */
+export function toJobUpdateData(update: EnrichUpdate): Prisma.RAJobUpdateInput {
+  const data: Prisma.RAJobUpdateInput = {};
+  if (update.taxonomyIds !== undefined) data.taxonomyIds = { set: update.taxonomyIds };
+  if (update.primaryTaxonomyId !== undefined) data.primaryTaxonomyId = update.primaryTaxonomyId;
+  if (update.seniority !== undefined) data.seniority = update.seniority;
+  if (update.educationLevel !== undefined) data.educationLevel = update.educationLevel;
+  if (update.skills !== undefined) data.skills = { set: update.skills };
+  if (update.skillsDetail !== undefined) data.skillsDetail = json(update.skillsDetail);
+  if (update.sponsorship !== undefined) data.sponsorship = update.sponsorship;
+  if (update.sponsorshipEvidence !== undefined) data.sponsorshipEvidence = update.sponsorshipEvidence;
+  if (update.citizenshipRequired !== undefined) data.citizenshipRequired = update.citizenshipRequired;
+  if (update.clearanceRequired !== undefined) data.clearanceRequired = update.clearanceRequired;
+  if (update.employerTags !== undefined) data.employerTags = { set: update.employerTags };
+  if (update.marketTags !== undefined) data.marketTags = json(update.marketTags);
+  if (update.fraudFlags !== undefined) data.fraudFlags = json(update.fraudFlags);
+  if (update.summary !== undefined) data.summary = update.summary;
+  if (update.searchText !== undefined) data.searchText = update.searchText;
+  if (update.enrichedAt !== undefined) data.enrichedAt = update.enrichedAt;
+  if (update.enrichVersion !== undefined) data.enrichVersion = update.enrichVersion;
+  if (update.enrichModel !== undefined) data.enrichModel = update.enrichModel;
+  return data;
+}
+
+export function createPrismaEnrichRepository(db: EnrichDb = prisma): EnrichRepository {
+  return {
+    async loadJob(jobId) {
+      return db.rAJob.findUnique({ where: { id: jobId }, select: JOB_SELECT });
+    },
+    async saveJob(jobId, update) {
+      const data = toJobUpdateData(update);
+      if (Object.keys(data).length === 0) return;
+      await db.rAJob.update({ where: { id: jobId }, data, select: { id: true } });
+    },
+    async saveKeywords(jobId, row) {
+      const keywords = JSON.parse(JSON.stringify(row.keywords)) as Prisma.InputJsonValue;
+      await db.rAKeywordExtraction.upsert({
+        where: { jobId },
+        create: { jobId, keywords, modelUsed: row.modelUsed, tokenCost: row.tokenCost, generatedAt: row.generatedAt },
+        update: { keywords, modelUsed: row.modelUsed, tokenCost: row.tokenCost, generatedAt: row.generatedAt },
+        select: { id: true },
+      });
+    },
+    async logCost(entry) {
+      try {
+        await db.usageDeductionLog.create({
+          data: {
+            userId: entry.userId,
+            sku: ENRICH_COST_SKU,
+            source: 'free_tier',
+            units: 1,
+            platformCostUsd: entry.costUsd,
+            requestId: entry.requestId,
+            relatedEntityType: 'job',
+            relatedEntityId: entry.jobId,
+            metadata: {
+              brand: entry.brand,
+              market: entry.market,
+              model: entry.model,
+              promptTokens: entry.promptTokens,
+              completionTokens: entry.completionTokens,
+            },
+          },
+          select: { id: true },
+        });
+      } catch (err) {
+        logger.error('JOB_ENRICH', 'failed to write the enrichment cost row', {
+          jobId: entry.jobId,
+          userId: entry.userId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  };
+}
