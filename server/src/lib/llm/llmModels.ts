@@ -9,8 +9,18 @@
  * matchScreen) by composing these leaf reads. This keeps the migration faithful:
  * with an empty DB, `getModelSetting(k)` returns exactly the legacy env value, so
  * every call site behaves byte-for-byte like today (the §2 invariant).
+ *
+ * Per brand (WP-14, TASK_PLAN R-03/R-13): every read is made for the brand of
+ * the current unit of work (or the `brand` argument). RoboApply reads the
+ * unprefixed env and the `llm_stack.{env}` override; GoApply reads `CN_<NAME>`
+ * and `llm_stack.goapply.{env}` with NO fallback to RoboApply's values, so a
+ * missing CN_LLM_MODEL can never send a mainland user's prompt to the
+ * international stack.
  */
 
+import { brandEnv } from '../../platform/brand/brandEnv.js';
+import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
+import { contextlessLlmBrand } from './llmBrand.js';
 import { getLlmStackSync } from './llmStackConfigResolver.js';
 import {
   MODEL_ENV,
@@ -20,46 +30,62 @@ import {
   type PurposeKey,
 } from './llmStackConfigSchema.js';
 
+/** A brand id or registry entry; omitted → the brand of the current unit of work. */
+export type LlmBrandArg = BrandId | ProductBrand | undefined;
+
 function clean(v: string | null | undefined): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
-function overrideFor(key: ModelKey): string | undefined {
+export { contextlessLlmBrand, requireLlmCallBrand, type ContextlessLlmBrand } from './llmBrand.js';
+
+/** The brand an LLM setting is read for. */
+export function llmBrand(brand?: LlmBrandArg): ProductBrand {
+  if (!brand) return getBrand(contextlessLlmBrand().brandId);
+  return typeof brand === 'string' ? getBrand(brand) : brand;
+}
+
+function overrideFor(key: ModelKey, brand: ProductBrand): string | undefined {
   if (isDbConfigDisabled()) return undefined;
-  const blob = getLlmStackSync();
+  const blob = getLlmStackSync(brand.id);
   if (key === 'defaultModel') return clean(blob.defaultModel);
   if (key === 'fallbackModel') return clean(blob.fallbackModel);
   return clean(blob.purposes[key as PurposeKey]);
 }
 
-function envFor(key: ModelKey): string | undefined {
-  return clean(process.env[MODEL_ENV[key]]);
+function envFor(key: ModelKey, brand: ProductBrand): string | undefined {
+  return brandEnv(brand, MODEL_ENV[key]);
 }
 
-/** Leaf resolution for one model setting: DB override ?? env ?? undefined. */
-export function getModelSetting(key: ModelKey): string | undefined {
-  return overrideFor(key) ?? envFor(key);
+/** Leaf resolution for one model setting: DB override ?? env ?? undefined (per brand). */
+export function getModelSetting(key: ModelKey, brand?: LlmBrandArg): string | undefined {
+  const b = llmBrand(brand);
+  return overrideFor(key, b) ?? envFor(key, b);
 }
 
 /* ── Core (non-purpose) convenience getters ─────────────────────────────────── */
 
-/** LLM_PROVIDER override ?? env ?? undefined. */
-export function getProviderSetting(): string | undefined {
+/** LLM_PROVIDER (CN_LLM_PROVIDER on GoApply): override ?? env ?? undefined. */
+export function getProviderSetting(brand?: LlmBrandArg): string | undefined {
+  const b = llmBrand(brand);
   if (!isDbConfigDisabled()) {
-    const p = clean(getLlmStackSync().provider);
+    const p = clean(getLlmStackSync(b.id).provider);
     if (p) return p;
   }
-  return clean(process.env.LLM_PROVIDER);
+  return brandEnv(b, 'LLM_PROVIDER');
 }
 
-export const getDefaultModel = (): string | undefined => getModelSetting('defaultModel');
-export const getFallbackModelSetting = (): string | undefined => getModelSetting('fallbackModel');
+export const getDefaultModel = (brand?: LlmBrandArg): string | undefined => getModelSetting('defaultModel', brand);
+export const getFallbackModelSetting = (brand?: LlmBrandArg): string | undefined =>
+  getModelSetting('fallbackModel', brand);
 
 /* ── Tuning getters (DB override ?? env ?? code default at call site) ────────── */
+// Retry and timeout tuning carries no routing decision, so both brands share
+// RoboApply's blob and the unprefixed env.
 
 function tuningNum(field: 'retryAttempts' | 'retryBaseMs' | 'retryMaxMs' | 'timeoutMs', envName: string): number | undefined {
   if (!isDbConfigDisabled()) {
-    const v = getLlmStackSync().tuning[field];
+    const v = getLlmStackSync('roboapply').tuning[field];
     if (typeof v === 'number' && Number.isFinite(v)) return v;
   }
   const e = parseInt((process.env[envName] ?? '').trim(), 10);
@@ -75,21 +101,31 @@ export const getTimeoutMs = (): number | undefined => tuningNum('timeoutMs', 'LL
 
 export interface ModelKeyResolution {
   key: ModelKey;
+  /** The env variable this brand reads for the key (`CN_…` on GoApply). */
+  envName: string;
   override: string | null; // admin-set DB value (null = inherit)
   env: string | null; // what env provides for this key
   effective: string | null; // override ?? env (the leaf that runs)
   source: 'override' | 'env' | 'none';
 }
 
-export function resolveModelKey(key: ModelKey): ModelKeyResolution {
-  const override = overrideFor(key) ?? null;
-  const env = envFor(key) ?? null;
+export function resolveModelKey(key: ModelKey, brand?: LlmBrandArg): ModelKeyResolution {
+  const b = llmBrand(brand);
+  const override = overrideFor(key, b) ?? null;
+  const env = envFor(key, b) ?? null;
   const effective = override ?? env;
-  return { key, override, env, effective, source: override ? 'override' : env ? 'env' : 'none' };
+  return {
+    key,
+    envName: b.llmEnvPrefix + MODEL_ENV[key],
+    override,
+    env,
+    effective,
+    source: override ? 'override' : env ? 'env' : 'none',
+  };
 }
 
 /** Every model key resolved — for the admin page's effective-value display. */
-export function getAllModelResolutions(): ModelKeyResolution[] {
+export function getAllModelResolutions(brand?: LlmBrandArg): ModelKeyResolution[] {
   const keys: ModelKey[] = ['defaultModel', 'fallbackModel', ...PURPOSE_KEYS];
-  return keys.map(resolveModelKey);
+  return keys.map((k) => resolveModelKey(k, brand));
 }

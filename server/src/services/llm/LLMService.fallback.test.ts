@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// These tests run without a brand context, i.e. as RoboApply. Since WP-14 the
+// RoboApply egress rule applies: a prompt with user data never reaches a
+// mainland-China endpoint, so direct DeepSeek is no longer a RoboApply
+// fallback (see the "egress" cases below and LLMService.brand.test.ts).
+
 const state = vi.hoisted(() => ({
   calls: [] as Array<{ provider: string; model: string | undefined; maxTokens?: number; responseFormat?: string; temperature?: number }>,
   providerMode: 'openrouter',
@@ -104,10 +109,12 @@ describe('LLMService fallback routing', () => {
   });
 
   it('routes an explicit OpenRouter fallback away from a native task provider', async () => {
-    const result = await new LLMService().chatWithUsage(msgs, { model: 'deepseek/native-primary' });
+    state.keys = { ...ALL_KEYS, openai: 'o-key' };
+    state.behavior = { openai: err('503 Service unavailable', { status: 503 }) };
+    const result = await new LLMService().chatWithUsage(msgs, { model: 'openai/native-primary' });
 
     expect(state.calls).toEqual([
-      { provider: 'deepseek', model: 'native-primary' },
+      { provider: 'openai', model: 'native-primary' },
       { provider: 'openrouter', model: 'google/fallback-model' },
     ]);
     expect(result.model).toBe('google/fallback-model');
@@ -141,16 +148,16 @@ describe('LLMService fallback routing', () => {
     ['403 Forbidden', 403, 'auth'],
   ] as const)('credential failure %s', (message, status, kind) => {
     it('falls back to the configured model on another provider', async () => {
-      state.fallbackModel = 'deepseek/deepseek-v4-flash';
+      state.fallbackModel = 'anthropic/claude-sonnet-4-6';
       state.behavior = { openrouter: err(message, { status }) };
 
       const result = await new LLMService().chatWithUsage(msgs, { model: 'openrouter/openai/gpt-6-luna' });
 
       expect(state.calls.map((c) => `${c.provider}/${c.model}`)).toEqual([
         'openrouter/openai/gpt-6-luna',
-        'deepseek/deepseek-v4-flash',
+        'anthropic/claude-sonnet-4-6',
       ]);
-      expect(result.content).toBe('deepseek response');
+      expect(result.content).toBe('anthropic response');
       expect(routing.listOpenCircuits()).toMatchObject([{ provider: 'openrouter', kind }]);
     });
   });
@@ -196,13 +203,56 @@ describe('LLMService fallback routing', () => {
 
   it('skips auto candidates without a key and never auto-selects openrouter', async () => {
     state.fallbackModel = '';
-    state.keys = { openrouter: 'or-key', deepseek: 'd-key' };
+    state.keys = { openrouter: 'or-key', openai: 'o-key' };
     state.behavior = { openrouter: err('401 User not found.', { status: 401 }) };
 
     const result = await new LLMService().chatWithUsage(msgs, { model: 'openrouter/openai/gpt-6-luna' });
 
-    expect(state.calls.map((c) => c.provider)).toEqual(['openrouter', 'deepseek']);
-    expect(result.model).toBe('deepseek-v4-flash');
+    expect(state.calls.map((c) => c.provider)).toEqual(['openrouter', 'openai']);
+    expect(result.model).toBe('gpt-6-luna');
+  });
+
+  describe('egress (RoboApply, WP-14)', () => {
+    it('never auto-selects direct DeepSeek (a mainland endpoint) for a prompt with user data', async () => {
+      state.fallbackModel = '';
+      state.keys = { openrouter: 'or-key', deepseek: 'd-key' };
+      state.behavior = { openrouter: err('401 User not found.', { status: 401 }) };
+
+      const caught = await new LLMService().chat(msgs, { model: 'openrouter/openai/gpt-6-luna' }).catch((e: unknown) => e);
+
+      expect(routing.isLLMUnavailableError(caught)).toBe(true);
+      expect(state.calls.map((c) => c.provider)).toEqual(['openrouter']);
+    });
+
+    it('drops a configured DeepSeek fallback and continues to the allowed auto routes', async () => {
+      state.fallbackModel = 'deepseek/deepseek-v4-flash';
+      state.behavior = { openrouter: err('401 User not found.', { status: 401 }) };
+
+      await new LLMService().chat(msgs, { model: 'openrouter/openai/gpt-6-luna' });
+
+      expect(state.calls.map((c) => `${c.provider}/${c.model}`)).toEqual([
+        'openrouter/openai/gpt-6-luna',
+        'google/gemini-3.8-flash',
+      ]);
+    });
+
+    it('still allows DeepSeek when the caller declares the prompt carries no user data', async () => {
+      state.fallbackModel = 'deepseek/deepseek-v4-flash';
+      state.behavior = { openrouter: err('503 Service unavailable', { status: 503 }) };
+
+      const result = await new LLMService().chatWithUsage(msgs, { model: 'openrouter/openai/gpt-6-luna', carriesUserData: false });
+
+      expect(state.calls.map((c) => c.provider)).toEqual(['openrouter', 'deepseek']);
+      expect(result.content).toBe('deepseek response');
+    });
+
+    it('refuses a direct DeepSeek primary with brand_policy and never re-routes it', async () => {
+      const caught = await new LLMService().chat(msgs, { model: 'deepseek/deepseek-v4-flash' }).catch((e: unknown) => e);
+
+      expect(caught).toMatchObject({ code: 'brand_policy', policyCode: 'mainland_endpoint_for_intl', host: 'api.deepseek.com' });
+      expect(state.calls).toEqual([]);
+      expect(loggerMock.error).toHaveBeenCalledWith('LLM_POLICY', expect.stringContaining('Refused LLM route'), expect.anything(), expect.anything());
+    });
   });
 
   it('skips a configured fallback on the same dead provider and continues to the auto routes', async () => {
@@ -219,7 +269,7 @@ describe('LLMService fallback routing', () => {
 
   it('walks past a fallback that is itself out of credit (Anthropic reports it as 400)', async () => {
     state.fallbackModel = '';
-    state.keys = { openrouter: 'or-key', anthropic: 'a-key', deepseek: 'd-key' };
+    state.keys = { openrouter: 'or-key', anthropic: 'a-key', openai: 'o-key' };
     state.behavior = {
       openrouter: err('401 User not found.', { status: 401 }),
       anthropic: err('400 Your credit balance is too low to access the Anthropic API.', { status: 400 }),
@@ -227,8 +277,8 @@ describe('LLMService fallback routing', () => {
 
     const result = await new LLMService().chatWithUsage(msgs, { model: 'openrouter/openai/gpt-6-luna' });
 
-    expect(state.calls.map((c) => c.provider)).toEqual(['openrouter', 'anthropic', 'deepseek']);
-    expect(result.content).toBe('deepseek response');
+    expect(state.calls.map((c) => c.provider)).toEqual(['openrouter', 'anthropic', 'openai']);
+    expect(result.content).toBe('openai response');
     expect(routing.listOpenCircuits().map((c) => c.provider).sort()).toEqual(['anthropic', 'openrouter']);
   });
 
@@ -284,7 +334,7 @@ describe('LLMService fallback routing', () => {
     });
 
     it('does not open on network or 5xx errors', async () => {
-      state.fallbackModel = 'deepseek/deepseek-v4-flash';
+      state.fallbackModel = 'anthropic/claude-sonnet-4-6';
       state.behavior = { openrouter: err('503 Service unavailable', { status: 503 }) };
       await new LLMService().chat(msgs, { model: 'openrouter/openai/gpt-6-luna' });
       expect(routing.listOpenCircuits()).toEqual([]);
@@ -318,7 +368,8 @@ describe('LLMService fallback routing', () => {
       expect((e as unknown as { status?: number }).status).toBeUndefined();
       expect(e.message).toContain('"openrouter" rejected its API key (401 User not found.)');
       expect(e.message).toContain('set LLM_FALLBACK_MODEL');
-      expect(e.message).toContain('google, anthropic, deepseek, openai');
+      // Only the auto routes this brand may use are suggested (no DeepSeek for RoboApply).
+      expect(e.message).toContain('google, anthropic, openai');
     });
 
     it('respects LLM_FALLBACK_AUTO=false', async () => {

@@ -27,24 +27,12 @@
  * (kept in lock-step — if you add a provider there, add it here).
  */
 
-const DIRECT_PROVIDER_PREFIXES = new Set([
-  'openai',
-  'google',
-  'kimi',
-  'moonshot',
-  'deepseek',
-  'openrouter',
-  'anthropic',
-  'minimax',
-  'ollama',
-  'newapi',
-]);
-
-// `gemini/…` is accepted as a synonym for the `google` provider (Google's native
-// SDK is Gemini-branded) — same alias LLMService applies in resolveDirectModel.
-const PROVIDER_PREFIX_ALIASES: Record<string, string> = {
-  gemini: 'google',
-};
+// The prefix table lives in services/llm/providerPrefixes.ts (one copy, so a
+// provider added there is understood here too). `qwen/` pins DashScope only on
+// the domestic profile (GoApply); on RoboApply it stays an OpenRouter slug.
+import { getBrand } from '../../platform/brand/registry.js';
+import { contextlessLlmBrand } from './llmBrand.js';
+import { resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
 
 export interface LlmSelector {
   /** The model id the upstream provider expects (routing prefix stripped). */
@@ -80,8 +68,8 @@ export function parseLlmSelector(llm?: string | null): LlmSelector | null {
   const rest = raw.substring(slashIdx + 1);
   if (rest.length === 0) return { model: raw };
 
-  const provider = PROVIDER_PREFIX_ALIASES[head] ?? head;
-  if (!DIRECT_PROVIDER_PREFIXES.has(provider)) {
+  const provider = resolveProviderPrefix(head, getBrand(contextlessLlmBrand().brandId).llmProfile);
+  if (!provider) {
     // Unrecognized prefix (e.g. a bare "vendor/model" OpenRouter slug) — keep
     // the whole string as the model and let default routing handle it.
     return { model: raw };

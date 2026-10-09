@@ -34,4 +34,12 @@ describe('OpenRouter attribution headers follow the brand', () => {
       timeout: expect.any(Number),
     });
   });
+
+  it('asks OpenRouter never to forward the prompt to a mainland-China upstream', async () => {
+    const provider = new OpenRouterProvider('k', 'deepseek/deepseek-v4-flash');
+    await runWithBrand('roboapply', () => provider.chat([{ role: 'user', content: 'hi' }]));
+    expect(state.create.mock.calls[0]![0]).toMatchObject({
+      provider: { ignore: expect.arrayContaining(['deepseek', 'alibaba', 'baidu', 'streamlake']) },
+    });
+  });
 });
