@@ -128,7 +128,9 @@ interface Props {
   creditMinutes: number;
   creditsRemaining?: number;
   canAfford: boolean;
-  startError: boolean;
+  /** Why the last Start failed, if it did: a plain network problem, a busy
+   *  interview service, or anything else. */
+  startError: 'network' | 'busy' | 'generic' | null;
   insufficientCredits: { balance: number; required: number } | null;
   canLaunch: boolean;
   starting: boolean;
@@ -452,7 +454,8 @@ export function PracticeSetupFlow({
     // The brief is now filled in below; put the candidate where the decision
     // they still have to make lives.
     requestAnimationFrame(() => {
-      dockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Optional call: jsdom (and some embedded webviews) lack scrollIntoView.
+      dockRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
     });
   }
 
@@ -783,7 +786,15 @@ export function PracticeSetupFlow({
           </>
         ) : null}
 
-        {startError ? <p role="alert" className={styles.alert}>{t('setup.startError')}</p> : null}
+        {startError ? (
+          <p role="alert" className={styles.alert}>
+            {startError === 'network'
+              ? t('setup.startErrorNetwork')
+              : startError === 'busy'
+                ? t('setup.startErrorBusy')
+                : t('setup.startError')}
+          </p>
+        ) : null}
 
         {creditShortage ? (
           <div role="alert" className={styles.alert}>

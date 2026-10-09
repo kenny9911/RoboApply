@@ -1,0 +1,205 @@
+.wrap {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  display: flex;
+  width: min(560px, 100%);
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-6);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--e1);
+}
+
+.head h1 {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.head p {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--brand-plane);
+}
+
+.previewVideo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  /* A self-view that is not mirrored reads as someone else's camera. */
+  transform: scaleX(-1);
+}
+
+.previewOff {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--brand-mark);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.devices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.device {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.device[data-state='denied'],
+.device[data-state='notFound'],
+.device[data-state='inUse'],
+.device[data-state='insecure'],
+.device[data-state='error'] {
+  border-color: var(--warn);
+}
+
+.deviceIcon {
+  display: grid;
+  width: var(--control-md);
+  height: var(--control-md);
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+}
+
+.deviceBody {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.deviceName {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.deviceState {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+.deviceState[data-state='ok'] {
+  color: var(--ok);
+}
+
+.deviceState[data-state='denied'],
+.deviceState[data-state='notFound'],
+.deviceState[data-state='inUse'],
+.deviceState[data-state='insecure'],
+.deviceState[data-state='error'] {
+  color: var(--warn);
+}
+
+.meter {
+  position: relative;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--rule);
+}
+
+.meterFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: var(--r-pill);
+  background: var(--ok);
+  transition: width 80ms linear;
+}
+
+.fix {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-body);
+}
+
+.required {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--fs-meta);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.actions :global(.btn) {
+  min-height: var(--control-lg);
+}
+
+@media (max-width: 760px) {
+  .card {
+    padding: var(--sp-4);
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .actions :global(.btn) {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meterFill {
+    transition: none;
+  }
+}

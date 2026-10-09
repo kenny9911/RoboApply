@@ -2,21 +2,36 @@
 
 // /practice/[id] — LIVE real-time AI voice/video interview.
 //
-// Real LiveKit room (full-duplex voice with the dispatched Python interviewer
+// Real LiveKit room (full-duplex voice with the dispatched interviewer
 // worker). The (auth) layout renders this route full-focus (no sidebar), so
 // the screen owns all of its own chrome.
 //
-// Shaped like a call, because that is what it is: the interviewer holds the
-// stage, the candidate's own tile is pinned into the corner of it, the coach
-// and transcript live in a rail that opens on demand, and the mic / camera /
-// end controls sit in a bar at the bottom where a candidate's hand already
-// expects them.
+// The page walks one session through four steps:
+//
+//   1. PREPARING — the setup screen navigates here the moment the session row
+//      exists. While the server writes the interview plan (POST /prepare, an
+//      LLM call that can take a while) the candidate sees calm progress copy,
+//      not a spinner on the setup button. A GET poll backs the long request
+//      up. A failed plan shows what went wrong and a Retry; it is never
+//      charged.
+//   2. DEVICE CHECK — mic (always) and camera (video mode) are opened and
+//      shown BEFORE the room token is minted, because minting it dispatches
+//      the interviewer and starts the clock. The Join tap is also the user
+//      gesture that lets the browser play the interviewer's voice.
+//   3. ROOM — mic and camera are published explicitly after Connected, each
+//      with its own error handling. A camera that fails keeps the interview
+//      going voice-only; a mic that fails blocks with a how-to-fix. Only a
+//      real connection error is fatal.
+//   4. END — the end request is fired with keepalive and the page goes
+//      straight to the report, which polls while the server finalizes.
 //
 // Disconnect ≠ end: the backend keeps 'live' sessions rejoinable (re-mints a
 // token, re-dispatches a missing agent), so only a deliberate End/Back or a
 // server-side termination finalizes — finalizing on a WiFi blip would score
 // and bill a half-run interview. An unexpected drop first gets ONE automatic
-// rejoin attempt; only if that fails does the manual Rejoin screen appear.
+// rejoin attempt; only if that fails does the manual Rejoin screen appear. A
+// second tab taking the seat (duplicate identity) stops and asks instead of
+// rejoining, so two tabs never evict each other in a loop.
 
 import { use, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -36,9 +51,11 @@ import {
   ConnectionState,
   ConnectionQuality,
   DisconnectReason,
-  MediaDeviceFailure,
+  ParticipantKind,
+  type RoomOptions,
   type TranscriptionSegment,
   type Participant,
+  type RemoteParticipant,
 } from 'livekit-client';
 import '@livekit/components-styles';
 
@@ -59,8 +76,19 @@ import {
 } from '../../../../components/v3/primitives/Iconset';
 import {
   LiveBar, InterviewerTile, YourTile, LiveTranscript, type AiState,
-  useLiveCoach, LiveQuestionCard, LiveCoachNudge, CoachMeters,
+  useLiveCoach, LiveQuestionCard, LiveCoachNudge, CoachMeters, type LiveTurn,
 } from '../../../../components/v3/mock';
+import {
+  DeviceCheck,
+  deviceFix,
+  deviceStateLabel,
+  type DeviceCheckResult,
+} from '../../../../components/v3/mock/DeviceCheck';
+import {
+  classifyMediaError,
+  isDeviceFailure,
+  type DeviceState,
+} from '../../../../components/v3/mock/deviceState';
 // Imported directly (not via the ./mock barrel) so non-live pages don't pull
 // livekit-client into their bundles.
 import {
@@ -69,8 +97,10 @@ import {
   type QualityLevel,
 } from '../../../../components/v3/mock/liveConnection';
 import {
+  ieErrorInfo,
   interviewEngineApi,
   postClientEvents,
+  RETRYABLE_PREPARE_ERRORS,
   type IEClientEvent,
   type IEConnection,
   type IESessionDetail,
@@ -79,8 +109,11 @@ import type { RAMockInterviewer, RAMockTurn } from '../../../../lib/api/v2/types
 import styles from './live.module.css';
 
 type Phase =
-  | 'loading' | 'ready' | 'micDenied' | 'agentUnavailable' | 'reconnecting'
-  | 'connectionLost' | 'error' | 'ended';
+  | 'loading' | 'preparing' | 'prepareFailed' | 'deviceCheck' | 'ready'
+  | 'agentUnavailable' | 'reconnecting' | 'connectionLost' | 'superseded'
+  | 'connectError' | 'expired' | 'ended';
+
+type PrepareErrorCode = 'llm_unavailable' | 'prepare_failed';
 
 type ExitIntent = 'report' | 'setup';
 
@@ -92,6 +125,38 @@ const AUTO_REJOIN_DELAY_MS = 1_500;
 // the dispatch usually still lands moments later (the backend persists the
 // late dispatch id). Re-check once before declaring the interviewer gone.
 const AGENT_DISPATCH_RETRY_DELAY_MS = 3_000;
+// Backup poll while POST /prepare is in flight (a proxy can drop a long
+// request even though the server finishes the plan).
+const PREPARE_POLL_MS = 3_000;
+// After this long the preparing screen adds a "still working" line.
+const PREPARE_SLOW_MS = 45_000;
+// When the /prepare request itself dies without a contract code (proxy reset,
+// 504, the serving instance recycled mid-run), nothing server-side moves the
+// row out of 'preparing' — the run died with the request. If the poll still
+// sees 'preparing' this long after the failure, /prepare is issued again (the
+// server dedupes in-process and writes only WHERE status='preparing'), at
+// most PREPARE_MAX_REISSUES times per attempt.
+const PREPARE_REISSUE_AFTER_MS = 15_000;
+const PREPARE_MAX_REISSUES = 3;
+
+// Full-duplex audio tuning. echoCancellation is CRITICAL: it runs in the
+// candidate's browser (the only place with the speaker reference signal) so the
+// agent's own voice played through the candidate's speakers is not picked up
+// by the mic and re-transcribed — without it, full duplex breaks into a
+// feedback loop. DTX skips sending silence (lower latency/bandwidth) and RED
+// adds redundant audio packets so brief packet loss doesn't glitch the
+// conversation. Module-level so its identity never changes: LiveKitRoom
+// rebuilds the Room when this object's serialization changes.
+const ROOM_OPTIONS: RoomOptions = {
+  adaptiveStream: true,
+  dynacast: true,
+  audioCaptureDefaults: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  },
+  publishDefaults: { dtx: true, red: true },
+};
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -105,21 +170,23 @@ const FALLBACK_INTERVIEWER: RAMockInterviewer = {
   palette: ['#4ED8FF', '#8B5BFF'], company: '', style: '', archetype: 'behavioral',
 };
 
-// Probe the mic BEFORE mounting the room: the session auto-connects with
-// audio, so a denied/absent mic would otherwise yield a silent one-way
-// interview that still bills. Only hard permission/absence failures block
-// entry — transient errors (device busy etc.) fall through to the in-room
-// onMediaDeviceFailure banner.
-async function probeMicrophone(): Promise<'ok' | 'denied'> {
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return 'ok';
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    for (const track of stream.getTracks()) track.stop();
-    return 'ok';
-  } catch (err) {
-    const name = err instanceof Error ? err.name : '';
-    return name === 'NotAllowedError' || name === 'NotFoundError' ? 'denied' : 'ok';
-  }
+/** A callback whose identity never changes but always runs the latest closure.
+ *  LiveKitRoom lists onError / onDisconnected / onMediaDeviceFailure as effect
+ *  dependencies; a new identity on every parent render re-ran its connect
+ *  effect, and mid-reconnect that started a second full connect. */
+function useStableCallback<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const ref = useRef(fn);
+  useEffect(() => { ref.current = fn; });
+  return useCallback((...args: A) => ref.current(...args), []);
+}
+
+/** A LiveKit error that means the room connection itself failed (as opposed
+ *  to a device or publish error, which must never end the interview). */
+function isConnectionError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const name = (err as { name?: unknown }).name;
+  const message = String((err as { message?: unknown }).message ?? '');
+  return name === 'ConnectionError' || /no livekit url/i.test(message);
 }
 
 export default function MockLivePage({ params }: { params: Promise<{ id: string }> }) {
@@ -130,20 +197,38 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   const [phase, setPhase] = useState<Phase>('loading');
   const [session, setSession] = useState<IESessionDetail | null>(null);
   const [connection, setConnection] = useState<IEConnection | null>(null);
+  const [prepareError, setPrepareError] = useState<PrepareErrorCode>('prepare_failed');
+  // Bumped on every re-run of /prepare (the Retry button) so the preparing
+  // effect starts over.
+  const [prepareAttempt, setPrepareAttempt] = useState(0);
+  // What the device check found — the room publishes the camera only when
+  // the candidate's camera actually worked there.
+  const [devicePlan, setDevicePlan] = useState<DeviceCheckResult | null>(null);
   // Bumped on every re-minted token so LiveKitRoom remounts with the fresh
   // credentials (its `token` prop is only read at mount time).
   const [roomKey, setRoomKey] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [deviceFailure, setDeviceFailure] = useState(false);
   const [exitIntent, setExitIntent] = useState<ExitIntent | null>(null);
   const endingRef = useRef(false);
-  const connectRef = useRef(false);
   // Set by the End/Back paths BEFORE the room disconnects, so the disconnect
   // handler can tell a deliberate end from a dropped connection.
   const intentionalEndRef = useRef(false);
   const busyRef = useRef(false);
   const sessionRef = useRef<IESessionDetail | null>(null);
   useEffect(() => { sessionRef.current = session; }, [session]);
+
+  // ── Session-scoped live state. Lives HERE, above the keyed room subtree, so
+  // a rejoin (which remounts the room) keeps the transcript and the
+  // interviewer-joined state instead of wiping them mid-interview.
+  const [transcript, setTranscript] = useState<LiveTurn[]>([]);
+  const segMapRef = useRef<Map<string, LiveTurn>>(new Map());
+  const addSegments = useCallback((segments: TranscriptionSegment[], who: RAMockTurn['who']) => {
+    const map = segMapRef.current;
+    for (const seg of segments) map.set(seg.id, { who, text: seg.text, final: seg.final });
+    setTranscript(Array.from(map.values()));
+  }, []);
+  const [agentJoined, setAgentJoined] = useState(false);
+  const markAgentJoined = useCallback(() => setAgentJoined(true), []);
 
   // ── Client telemetry — buffered, flushed every 10s + on unmount/end.
   // Losing a batch is fine; blocking the interview on telemetry is not.
@@ -166,9 +251,141 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     return () => { window.clearInterval(h); flushEvents(true); };
   }, [flushEvents]);
 
-  const catalogQuery = useMockCatalog();
+  // The catalog only names the interviewer. A focus refetch would re-render
+  // the page that hosts the room for nothing, so it is off here.
+  const catalogQuery = useMockCatalog({ refetchOnWindowFocus: false });
   const interviewer: RAMockInterviewer =
     catalogQuery.data?.catalog.interviewers.find((i) => i.id === session?.personaId) ?? FALLBACK_INTERVIEWER;
+
+  const reportHref = `/practice/${id}/report`;
+
+  /** Route the page by the server's view of the session. */
+  const routeBySession = useCallback((s: IESessionDetail) => {
+    setSession(s);
+    switch (s.status) {
+      case 'preparing':
+        setPhase('preparing');
+        return;
+      case 'created':
+      case 'live':
+        setPhase('deviceCheck');
+        return;
+      case 'failed':
+        if (s.error && RETRYABLE_PREPARE_ERRORS.has(s.error)) {
+          setPrepareError(s.error as PrepareErrorCode);
+          setPhase('prepareFailed');
+          return;
+        }
+        // no_answer and worker failures have their own report states.
+        router.replace(reportHref);
+        return;
+      case 'finalizing':
+      case 'completed':
+        router.replace(reportHref);
+        return;
+      default:
+        setPhase('expired');
+    }
+  }, [router, reportHref]);
+
+  // ── 0. Load the session once.
+  const loadedRef = useRef(false);
+  const loadSession = useCallback(async () => {
+    try {
+      const { session: s } = await interviewEngineApi.get(id);
+      routeBySession(s);
+    } catch (err) {
+      const info = ieErrorInfo(err);
+      trackEvent('load_failed', { status: info.status, network: info.network });
+      setPhase(info.status === 404 ? 'expired' : 'connectError');
+    }
+  }, [id, routeBySession, trackEvent]);
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    void loadSession();
+  }, [loadSession]);
+
+  // ── 1. Preparing: run /prepare (long) with a GET poll as backup.
+  const [prepareSlow, setPrepareSlow] = useState(false);
+  useEffect(() => {
+    if (phase !== 'preparing') return;
+    let cancelled = false;
+    const ctrl = new AbortController();
+    setPrepareSlow(false);
+    const slowTimer = window.setTimeout(() => { if (!cancelled) setPrepareSlow(true); }, PREPARE_SLOW_MS);
+    const startedAt = Date.now();
+    trackEvent('prepare_start', { attempt: prepareAttempt });
+    let inFlight = false;
+    let deadSince: number | null = null;
+    let reissues = 0;
+    const runPrepare = () => {
+      inFlight = true;
+      deadSince = null;
+      interviewEngineApi
+        // retry:true on every attempt after the first. It only matters to a
+        // 'failed' session; a 'preparing' one just runs (deduped server-side).
+        .prepare(id, { retry: prepareAttempt > 0, signal: ctrl.signal })
+        .then(({ session: s }) => {
+          inFlight = false;
+          if (cancelled) return;
+          trackEvent('prepare_done', { ms: Date.now() - startedAt, status: s.status });
+          if (s.status !== 'preparing') routeBySession(s);
+          else deadSince = Date.now(); // answered but still preparing: let the poll re-issue
+        })
+        .catch((err) => {
+          inFlight = false;
+          if (cancelled) return;
+          const info = ieErrorInfo(err);
+          if (info.code === 'llm_unavailable' || info.code === 'prepare_failed') {
+            trackEvent('prepare_failed', { code: info.code });
+            if (info.session) setSession(info.session);
+            setPrepareError(info.code);
+            setPhase('prepareFailed');
+            return;
+          }
+          // A proxy timeout, a dropped connection or an older API without
+          // /prepare: the poll below settles it, re-issuing /prepare if the
+          // session is still 'preparing' a while later.
+          deadSince = Date.now();
+          trackEvent('prepare_request_failed', { status: info.status, network: info.network });
+        });
+    };
+    runPrepare();
+    const poll = window.setInterval(() => {
+      interviewEngineApi
+        .get(id)
+        .then(({ session: s }) => {
+          if (cancelled) return;
+          if (s.status !== 'preparing') {
+            routeBySession(s);
+            return;
+          }
+          if (
+            !inFlight
+            && deadSince !== null
+            && Date.now() - deadSince >= PREPARE_REISSUE_AFTER_MS
+            && reissues < PREPARE_MAX_REISSUES
+          ) {
+            reissues += 1;
+            trackEvent('prepare_reissue', { reissue: reissues });
+            runPrepare();
+          }
+        })
+        .catch(() => undefined);
+    }, PREPARE_POLL_MS);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      window.clearInterval(poll);
+      window.clearTimeout(slowTimer);
+    };
+  }, [phase, prepareAttempt, id, routeBySession, trackEvent]);
+
+  const retryPrepare = useCallback(() => {
+    setPrepareAttempt((n) => n + 1);
+    setPhase('preparing');
+  }, []);
 
   // agentDispatched=false is often a false negative (8s server-side dispatch
   // timeout, not a failed dispatch), so re-fetch once before treating it as
@@ -182,47 +399,92 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     return retried;
   }, [id, trackEvent]);
 
-  useEffect(() => {
-    // Run EXACTLY once. connection() dispatches the AI interviewer into the
-    // room, so a double-invocation (React StrictMode runs effects twice in dev,
-    // re-renders, etc.) would put two interviewers in the room — overlapping
-    // voices + doubled transcript. The ref guard survives StrictMode's
-    // double-invoke; the backend also claims the dispatch atomically.
-    // (Rejoin after a drop deliberately bypasses this effect — it only
-    // re-calls connection(), which is safe for 'live' sessions.)
-    if (connectRef.current) return;
-    connectRef.current = true;
-    (async () => {
-      try {
-        const [{ session: s }, c] = await Promise.all([
-          interviewEngineApi.get(id),
-          fetchConnection(),
-        ]);
-        // connection() stamps startedAt server-side, but this session snapshot
-        // raced it — approximate with "now" so the timer starts at zero; a
-        // rejoin re-fetch replaces it with the true server value.
-        setSession(s.startedAt ? s : { ...s, startedAt: new Date().toISOString() });
-        setConnection(c);
-        if (c.agentDispatched === false) {
-          // The backend already knows the interviewer dispatch failed —
-          // entering the room would just burn the 15s wait into silence.
-          setPhase('agentUnavailable');
-          return;
+  /** connection() refused or failed: decide where that leaves the candidate. */
+  const handleConnectionFailure = useCallback(async (err: unknown, fallback: Phase) => {
+    const info = ieErrorInfo(err);
+    trackEvent('connect_failed', { code: info.code, status: info.status, network: info.network });
+    switch (info.code) {
+      case 'not_ready':
+        setPhase('preparing');
+        return;
+      case 'session_failed':
+        if (info.reason && RETRYABLE_PREPARE_ERRORS.has(info.reason)) {
+          setPrepareError(info.reason as PrepareErrorCode);
+          setPhase('prepareFailed');
+        } else {
+          router.replace(reportHref);
         }
-        if ((await probeMicrophone()) === 'denied') {
-          trackEvent('mic_denied');
-          setPhase('micDenied');
-          return;
-        }
-        setPhase('ready');
-      } catch (err) {
-        trackEvent('connect_failed', { message: err instanceof Error ? err.message : String(err) });
-        setPhase('error');
+        return;
+      case 'session_ended':
+        router.replace(reportHref);
+        return;
+      case 'worker_unavailable':
+        setPhase('agentUnavailable');
+        return;
+      default:
+        break;
+    }
+    // An older API rejects connection() without a code once the session has
+    // left 'live' — ask for its status before showing a generic error.
+    try {
+      const { session: s } = await interviewEngineApi.get(id);
+      if (s.status !== 'created' && s.status !== 'live') {
+        routeBySession(s);
+        return;
       }
-    })();
-  }, [id, trackEvent, fetchConnection]);
+    } catch { /* offline — fall through */ }
+    setPhase(fallback);
+  }, [id, router, reportHref, routeBySession, trackEvent]);
 
-  const finish = useCallback(async (toReport: boolean, intentional = true) => {
+  // ── 2 → 3. Join (from the device check) and every rejoin.
+  //
+  // Re-mints a token (the backend re-dispatches a missing agent for 'live'
+  // sessions) and re-enters via a key bump. Rejoins skip the device check:
+  // in-room device failures are handled in the room.
+  const enterRoom = useCallback(async (opts: { isRejoin: boolean; auto?: boolean }) => {
+    if (busyRef.current || endingRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    const { isRejoin, auto = false } = opts;
+    if (isRejoin) trackEvent('rejoin_attempt', { auto });
+    try {
+      const c = await fetchConnection();
+      setConnection(c);
+      if (c.agentDispatched === false) { setPhase('agentUnavailable'); return; }
+      // True elapsed across refresh/rejoin comes from the server's startedAt,
+      // which connection() just stamped.
+      try {
+        const { session: s } = await interviewEngineApi.get(id);
+        setSession(s.startedAt ? s : { ...s, startedAt: new Date().toISOString() });
+      } catch {
+        setSession((prev) => (prev && !prev.startedAt ? { ...prev, startedAt: new Date().toISOString() } : prev));
+      }
+      if (isRejoin) trackEvent('rejoin_success', { auto });
+      // Recovery closes the disconnect episode — the next drop gets its own
+      // automatic attempt.
+      autoRejoinUsedRef.current = false;
+      setRoomKey((k) => k + 1);
+      setPhase('ready');
+    } catch (err) {
+      // The automatic attempt must never strand the user on the transient
+      // 'reconnecting' screen — hand over to the manual Rejoin screen.
+      await handleConnectionFailure(err, isRejoin ? 'connectionLost' : 'connectError');
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [id, fetchConnection, handleConnectionFailure, trackEvent]);
+
+  const joinFromDeviceCheck = useCallback((result: DeviceCheckResult) => {
+    trackEvent('device_check', { mic: result.mic, camera: result.camera });
+    setDevicePlan(result);
+    void enterRoom({ isRejoin: false });
+  }, [enterRoom, trackEvent]);
+
+  // ── 4. End: fire the end request (keepalive) and go to the report now.
+  // The server tells the interviewer to stop, waits for the final transcript
+  // and scores in the background; the report page polls for it.
+  const finish = useCallback((toReport: boolean, intentional = true) => {
     if (endingRef.current) return;
     endingRef.current = true;
     intentionalEndRef.current = true;
@@ -235,9 +497,9 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
       intentional,
     });
     flushEvents(true);
-    try { await interviewEngineApi.end(id); } catch { /* finalize is idempotent server-side */ }
-    router.push(toReport ? `/practice/${id}/report` : '/practice');
-  }, [id, router, trackEvent, flushEvents]);
+    interviewEngineApi.endKeepalive(id);
+    router.push(toReport ? reportHref : '/practice');
+  }, [id, router, reportHref, trackEvent, flushEvents]);
 
   const requestExit = useCallback((intent: ExitIntent) => {
     if (endingRef.current) return;
@@ -248,7 +510,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
 
   const confirmExit = useCallback(() => {
     if (!exitIntent) return;
-    void finish(exitIntent === 'report');
+    finish(exitIntent === 'report');
   }, [exitIntent, finish]);
 
   // One automatic reacquire per disconnect episode (reset on successful
@@ -260,69 +522,26 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     if (autoRejoinTimerRef.current !== null) window.clearTimeout(autoRejoinTimerRef.current);
   }, []);
 
-  // Re-mint a token (the backend re-dispatches a missing agent for 'live'
-  // sessions) and re-enter via a key bump — never through the initial effect,
-  // whose connectRef one-shot guard exists to prevent double agent dispatch.
-  const reacquire = useCallback(async (isRejoin: boolean, auto = false) => {
-    if (busyRef.current || endingRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    if (isRejoin) trackEvent('rejoin_attempt', { auto });
-    try {
-      const c = await fetchConnection();
-      setConnection(c);
-      if (c.agentDispatched === false) { setPhase('agentUnavailable'); return; }
-      // True elapsed across refresh/rejoin comes from the server's startedAt.
-      try {
-        const { session: s } = await interviewEngineApi.get(id);
-        if (s.startedAt) setSession(s);
-      } catch { /* keep the local snapshot */ }
-      if ((await probeMicrophone()) === 'denied') {
-        trackEvent('mic_denied');
-        setPhase('micDenied');
-        return;
-      }
-      if (isRejoin) trackEvent('rejoin_success', { auto });
-      // Recovery closes the disconnect episode — the next drop gets its own
-      // automatic attempt.
-      autoRejoinUsedRef.current = false;
-      setRoomKey((k) => k + 1);
-      setPhase('ready');
-    } catch {
-      // connection() rejects once the session has left 'live' — a completed
-      // session goes to its report, a dead one to the expired screen; a plain
-      // network failure stays put so the user can retry.
-      try {
-        const { session: s } = await interviewEngineApi.get(id);
-        if (s.status === 'completed' || s.status === 'finalizing') {
-          router.push(`/practice/${id}/report`);
-          return;
-        }
-        if (s.status === 'failed' || s.status === 'expired') {
-          setPhase('error');
-          return;
-        }
-      } catch { /* offline */ }
-      // The automatic attempt must never strand the user on the transient
-      // 'reconnecting' screen — hand over to the manual Rejoin screen.
-      if (auto) setPhase('connectionLost');
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
-  }, [id, router, trackEvent, fetchConnection]);
-
-  // Reason-aware disconnect: deliberate end or server termination → finalize
-  // as before; anything else (network loss, signal closed, unknown) → try ONE
-  // automatic rejoin, then offer the manual screen — never end + bill the
-  // session on a drop.
-  const handleDisconnected = useCallback((reason?: DisconnectReason) => {
+  // Reason-aware disconnect: deliberate end or server termination → finalize;
+  // another tab took the seat → stop and ask; anything else (network loss,
+  // signal closed, unknown) → ONE automatic rejoin, then the manual screen —
+  // never end + bill the session on a drop.
+  const handleDisconnected = useStableCallback((reason?: DisconnectReason) => {
     if (endingRef.current) return;
     trackEvent('disconnected', {
       reason: reason !== undefined ? DisconnectReason[reason] ?? String(reason) : 'unknown',
     });
-    if (classifyDisconnect(reason, intentionalEndRef.current) === 'finalize') {
-      void finish(true, intentionalEndRef.current);
+    const action = classifyDisconnect(reason, intentionalEndRef.current);
+    if (action === 'finalize') {
+      finish(true, intentionalEndRef.current);
+      return;
+    }
+    if (action === 'superseded') {
+      if (autoRejoinTimerRef.current !== null) {
+        window.clearTimeout(autoRejoinTimerRef.current);
+        autoRejoinTimerRef.current = null;
+      }
+      setPhase('superseded');
       return;
     }
     if (!autoRejoinUsedRef.current) {
@@ -330,7 +549,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
       setPhase('reconnecting');
       autoRejoinTimerRef.current = window.setTimeout(() => {
         autoRejoinTimerRef.current = null;
-        void reacquire(true, true);
+        void enterRoom({ isRejoin: true, auto: true });
       }, AUTO_REJOIN_DELAY_MS);
       return;
     }
@@ -339,74 +558,163 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     // routes to 'ready' or 'connectionLost' when it resolves.
     if (autoRejoinTimerRef.current !== null || busyRef.current) return;
     setPhase('connectionLost');
-  }, [finish, trackEvent, reacquire]);
+  });
 
-  const retryMic = useCallback(async () => {
-    if (busyRef.current || endingRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    try {
-      if ((await probeMicrophone()) === 'denied') { trackEvent('mic_denied'); return; }
-      setPhase('ready');
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
+  // Only a failed CONNECTION is fatal. LiveKitRoom also reports publish
+  // failures here; tracks are published by RoomStage with their own handling,
+  // so anything else is logged and the interview carries on.
+  const handleRoomError = useStableCallback((err: Error) => {
+    if (endingRef.current) return;
+    if (isConnectionError(err)) {
+      trackEvent('room_connect_failed', { message: err?.message });
+      setPhase('connectError');
+      return;
     }
-  }, [trackEvent]);
+    trackEvent('room_error', { name: err?.name, message: err?.message });
+  });
+
+  const handleDeviceFailure = useStableCallback((failure?: unknown, kind?: MediaDeviceKind) => {
+    trackEvent('device_failure', { failure: failure === undefined ? null : String(failure), kind: kind ?? null });
+  });
+
+  // ── Render ─────────────────────────────────────────────────────────────
 
   if (phase === 'loading') return <CenterMsg>{t('live.loading')}</CenterMsg>;
   if (phase === 'ended') return <CenterMsg>{t('live.ending')}</CenterMsg>;
-  if (phase === 'error' || !connection || !session) {
+
+  if (phase === 'preparing') {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.expired.title')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px' }}>{t('live.expired.body')}</p>
+        <div className={styles.preparing} role="status" aria-live="polite" aria-busy="true">
+          <span className={styles.preparingBar} aria-hidden />
+          <p className={styles.centerTitle}>{t('live.preparing.title')}</p>
+          <p className={styles.centerBody}>{t('live.preparing.body')}</p>
+          <p className={styles.centerNote}>
+            {prepareSlow ? t('live.preparing.slow') : t('live.preparing.note')}
+          </p>
+        </div>
+        <div className={styles.centerActions}>
+          <Btn as="a" href="/practice">{t('live.backToSetup')}</Btn>
+        </div>
+      </CenterMsg>
+    );
+  }
+
+  if (phase === 'prepareFailed') {
+    const llm = prepareError === 'llm_unavailable';
+    return (
+      <CenterMsg>
+        <div role="alert">
+          <p className={styles.centerTitle}>
+            {llm ? t('live.prepareFailed.llmTitle') : t('live.prepareFailed.title')}
+          </p>
+          <p className={styles.centerBody}>
+            {llm ? t('live.prepareFailed.llmBody') : t('live.prepareFailed.body')}
+          </p>
+        </div>
+        <div className={styles.centerActions}>
+          <Btn variant="primary" onClick={retryPrepare}>{t('live.retry')}</Btn>
+          <Btn as="a" href="/practice">{t('live.backToSetup')}</Btn>
+        </div>
+      </CenterMsg>
+    );
+  }
+
+  if (phase === 'expired' || !session) {
+    return (
+      <CenterMsg>
+        <p className={styles.centerTitle}>{t('live.expired.title')}</p>
+        <p className={styles.centerBody}>{t('live.expired.body')}</p>
         <Btn variant="primary" as="a" href="/practice">{t('live.expired.cta')}</Btn>
       </CenterMsg>
     );
   }
-  if (phase === 'micDenied') {
+
+  if (phase === 'deviceCheck') {
+    return (
+      <DeviceCheck
+        mode={session.mode}
+        rejoin={session.status === 'live'}
+        busy={busy}
+        onJoin={joinFromDeviceCheck}
+        onBack={() => router.push('/practice')}
+      />
+    );
+  }
+
+  if (phase === 'connectError') {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.micDeniedTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.micDeniedBody')}</p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Btn variant="primary" onClick={() => void retryMic()} disabled={busy}>{t('live.micRetry')}</Btn>
-          <Btn as="a" href="/practice">{t('live.expired.cta')}</Btn>
+        <div role="alert">
+          <p className={styles.centerTitle}>{t('live.connectError.title')}</p>
+          <p className={styles.centerBody}>{t('live.connectError.body')}</p>
+        </div>
+        <div className={styles.centerActions}>
+          <Btn
+            variant="primary"
+            disabled={busy}
+            onClick={() => {
+              if (connection) void enterRoom({ isRejoin: true });
+              else { setPhase('loading'); void loadSession(); }
+            }}
+          >
+            {t('live.retry')}
+          </Btn>
+          <Btn as="a" href="/practice">{t('live.backToSetup')}</Btn>
         </div>
       </CenterMsg>
     );
   }
+
   if (phase === 'agentUnavailable') {
     return (
       <CenterMsg>
-        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.interviewerUnavailableTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.interviewerUnavailableBody')}</p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Btn variant="primary" onClick={() => void reacquire(false)} disabled={busy}>{t('live.retry')}</Btn>
+        <p className={styles.centerTitle}>{t('live.interviewerUnavailableTitle')}</p>
+        <p className={styles.centerBody}>{t('live.interviewerUnavailableBody')}</p>
+        <div className={styles.centerActions}>
+          <Btn variant="primary" onClick={() => void enterRoom({ isRejoin: false })} disabled={busy}>{t('live.retry')}</Btn>
           <Btn as="a" href="/practice">{t('live.expired.cta')}</Btn>
         </div>
       </CenterMsg>
     );
   }
+
   if (phase === 'reconnecting') {
-    // Transient — the automatic reacquire either remounts the room ('ready')
+    // Transient — the automatic attempt either remounts the room ('ready')
     // or falls through to the manual 'connectionLost' screen.
     return (
       <CenterMsg>
-        <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.autoRejoinTitle')}</p>
-        <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 0', maxWidth: 440 }}>{t('live.autoRejoinBody')}</p>
+        <p className={styles.centerTitle}>{t('live.autoRejoinTitle')}</p>
+        <p className={styles.centerBody}>{t('live.autoRejoinBody')}</p>
       </CenterMsg>
     );
   }
-  if (phase === 'connectionLost') {
+
+  if (phase === 'superseded') {
+    return (
+      <CenterMsg>
+        <div role="alert">
+          <p className={styles.centerTitle}>{t('live.superseded.title')}</p>
+          <p className={styles.centerBody}>{t('live.superseded.body')}</p>
+        </div>
+        <div className={styles.centerActions}>
+          <Btn variant="primary" onClick={() => void enterRoom({ isRejoin: true })} disabled={busy}>
+            {t('live.superseded.useHere')}
+          </Btn>
+          <Btn as="a" href="/practice">{t('live.backToSetup')}</Btn>
+        </div>
+      </CenterMsg>
+    );
+  }
+
+  if (phase === 'connectionLost' || !connection) {
     return (
       <>
         <CenterMsg>
-          <p style={{ fontSize: 'var(--fs-subtitle)', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{t('live.connectionLostTitle')}</p>
-          <p style={{ color: 'var(--text-2)', fontSize: 'var(--fs-body)', margin: '8px 0 16px', maxWidth: 440 }}>{t('live.connectionLostBody')}</p>
+          <p className={styles.centerTitle}>{t('live.connectionLostTitle')}</p>
+          <p className={styles.centerBody}>{t('live.connectionLostBody')}</p>
           <div className={styles.centerActions}>
-            <Btn variant="primary" onClick={() => void reacquire(true)} disabled={busy}>{t('live.rejoin')}</Btn>
+            <Btn variant="primary" onClick={() => void enterRoom({ isRejoin: true })} disabled={busy}>{t('live.rejoin')}</Btn>
             <Btn onClick={() => requestExit('report')} disabled={busy}>{t('live.endAnyway')}</Btn>
           </div>
         </CenterMsg>
@@ -421,61 +729,42 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     );
   }
 
+  const wantCamera = connection.mode === 'video' && (devicePlan === null || devicePlan.camera === 'ok');
+  const initialCamera: DeviceState =
+    connection.mode !== 'video'
+      ? 'off'
+      : devicePlan && isDeviceFailure(devicePlan.camera)
+        ? devicePlan.camera
+        : 'off';
+
   return (
     <LiveKitRoom
       key={roomKey}
       serverUrl={connection.url}
       token={connection.token}
       connect
-      audio
-      video={connection.mode === 'video'}
-      // Full-duplex audio tuning. echoCancellation is CRITICAL: it runs in the
-      // candidate's browser (the only place with the speaker reference signal)
-      // so the agent's own voice played through the candidate's speakers is not
-      // picked up by the mic and re-transcribed — without it, full duplex breaks
-      // into a feedback loop. DTX skips sending silence (lower latency/bandwidth)
-      // and RED adds redundant audio packets so brief packet loss doesn't glitch
-      // the conversation.
-      options={{
-        adaptiveStream: true,
-        dynacast: true,
-        audioCaptureDefaults: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        publishDefaults: { dtx: true, red: true },
-      }}
+      // Devices are NOT handed to LiveKitRoom: its publish step reports a
+      // denied or busy camera through onError, which used to end the whole
+      // interview. RoomStage enables each device itself after Connected.
+      audio={false}
+      video={false}
+      options={ROOM_OPTIONS}
       onDisconnected={handleDisconnected}
-      onError={(err) => {
-        trackEvent('connect_failed', { message: err?.message });
-        setPhase('error');
-      }}
-      onMediaDeviceFailure={(failure) => {
-        if (failure === MediaDeviceFailure.PermissionDenied || failure === MediaDeviceFailure.NotFound) {
-          trackEvent('mic_denied');
-        }
-        setDeviceFailure(true);
-      }}
+      onError={handleRoomError}
+      onMediaDeviceFailure={handleDeviceFailure}
       className={`iv-live ${styles.room}`}
     >
       <RoomAudioRenderer />
-      {deviceFailure && (
-        <div role="alert" className={styles.deviceAlert}>
-          <span>{t('live.deviceFailure')}</span>
-          <button
-            type="button"
-            onClick={() => setDeviceFailure(false)}
-            aria-label={t('live.dismiss')}
-          >
-            <IconX size={16} />
-          </button>
-        </div>
-      )}
       <RoomStage
         session={session}
         connection={connection}
         interviewer={interviewer}
+        wantCamera={wantCamera}
+        initialCamera={initialCamera}
+        transcript={transcript}
+        onSegments={addSegments}
+        agentJoined={agentJoined}
+        onAgentJoined={markAgentJoined}
         onEnd={() => requestExit('report')}
         onBack={() => requestExit('setup')}
         onEvent={trackEvent}
@@ -634,6 +923,61 @@ function AudioUnlockDialog({ onUnlock }: { onUnlock: () => void }) {
   );
 }
 
+/** The microphone failed inside the room. Blocking, with the plain fix, a
+ *  Retry that re-opens the mic in place (no rejoin), and a way out. */
+function MicBlockedDialog({
+  fix, busy, onRetry, onEnd,
+}: {
+  fix: string;
+  busy: boolean;
+  onRetry: () => void;
+  onEnd: () => void;
+}) {
+  const t = useTranslations('practice');
+  const actionRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => actionRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      previousFocus?.focus();
+    };
+  }, []);
+
+  return (
+    <div className={styles.audioOverlay}>
+      <div
+        className={styles.audioDialog}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="practice-mic-title"
+        aria-describedby="practice-mic-description"
+      >
+        <div className={styles.audioIcon} aria-hidden>
+          <IconMicOff size={24} />
+        </div>
+        <h2 id="practice-mic-title">{t('live.micBlocked.title')}</h2>
+        <p id="practice-mic-description">{fix}</p>
+        <div className={styles.micActions}>
+          <button
+            ref={actionRef}
+            type="button"
+            onClick={onRetry}
+            disabled={busy}
+            className={`btn primary ${styles.audioButton}`}
+          >
+            {t('live.micRetry')}
+          </button>
+          <button type="button" onClick={onEnd} className={`btn ${styles.audioButton}`}>
+            {t('live.endInterview')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Connection quality indicator ──────────────────────────────────────────
 
 // good stays visually quiet (no alarm during a healthy interview); fair warns,
@@ -670,19 +1014,36 @@ function QualityPill({ level, label }: { level: QualityLevel; label: string }) {
 
 // ─── In-room stage (LiveKit room context) ─────────────────────────────────
 
-// Audio-ready handshake with the interview worker. The worker holds its opening
-// greeting until it receives this one-shot signal on this topic, so the greeting
-// is never spoken into a browser output the autoplay policy has muted. Reliable
-// delivery (not lossy) — the worker only greets once.
+// Audio-ready handshake with the interview worker (contract C7). The worker
+// holds its opening greeting until it sees the candidate is ready, so the
+// greeting is never spoken into a browser output the autoplay policy has
+// muted. Readiness is sent two ways, and the worker accepts either:
+//   - the participant attribute `ie.client_ready = '1'` — STATE, so a worker
+//     that joins later reads it on join;
+//   - the reliable data message {type:'client_ready'} on topic 'ie' — sent
+//     once after connect and AGAIN whenever an agent participant connects,
+//     because a data packet only reaches participants present at send time
+//     and the candidate usually joins before the interviewer does.
+// Both only fire once the browser can actually play audio.
 const IE_DATA_TOPIC = 'ie';
+const READY_ATTRIBUTE = 'ie.client_ready';
 const READY_PACKET = new TextEncoder().encode(JSON.stringify({ type: 'client_ready' }));
 
 function RoomStage({
-  session, connection, interviewer, onEnd, onBack, onEvent,
+  session, connection, interviewer, wantCamera, initialCamera,
+  transcript, onSegments, agentJoined, onAgentJoined, onEnd, onBack, onEvent,
 }: {
   session: IESessionDetail;
   connection: IEConnection;
   interviewer: RAMockInterviewer;
+  /** Publish the camera once connected (video mode, and it worked in the check). */
+  wantCamera: boolean;
+  /** Why the camera is off when it is not wanted (the device-check result). */
+  initialCamera: DeviceState;
+  transcript: LiveTurn[];
+  onSegments: (segments: TranscriptionSegment[], who: RAMockTurn['who']) => void;
+  agentJoined: boolean;
+  onAgentJoined: () => void;
   onEnd: () => void;
   onBack: () => void;
   onEvent: (type: string, data?: Record<string, unknown>) => void;
@@ -691,12 +1052,10 @@ function RoomStage({
   const { localizeRole, localizeType } = useMockRoleLabels();
   const { user } = useAuth();
   const room = useRoomContext();
-  const { state } = useVoiceAssistant();
+  const { state, agent, videoTrack: agentVideo } = useVoiceAssistant();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
 
   const video = connection.mode === 'video';
-  const [transcript, setTranscript] = useState<RAMockTurn[]>([]);
-  const [agentJoined, setAgentJoined] = useState(false);
   const [agentSlow, setAgentSlow] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   // Persistent 3-level indicator for the LOCAL uplink, plus a separate flag for
@@ -711,7 +1070,71 @@ function RoomStage({
   // The candidate's own tile is NOT in here — it is pinned to the stage, the
   // way it is in every real call.
   const [railTab, setRailTab] = useState<'coach' | 'transcript' | null>(null);
-  const segMapRef = useRef<Map<string, RAMockTurn>>(new Map());
+
+  // ── Devices. Published here, after Connected, one at a time and each with
+  // its own error handling — a camera failure must never take the mic (or
+  // the interview) down with it.
+  const [micState, setMicState] = useState<DeviceState>('checking');
+  const [camState, setCamState] = useState<DeviceState>(video && wantCamera ? 'checking' : initialCamera);
+  const [camNoticeOpen, setCamNoticeOpen] = useState(video && isDeviceFailure(initialCamera));
+
+  const enableMic = useCallback(async () => {
+    setMicState('checking');
+    try {
+      await localParticipant.setMicrophoneEnabled(true);
+      setMicState('ok');
+    } catch (err) {
+      const s = classifyMediaError(err);
+      setMicState(isDeviceFailure(s) ? s : 'error');
+      onEvent('mic_failed', { state: s });
+    }
+  }, [localParticipant, onEvent]);
+
+  const enableCamera = useCallback(async () => {
+    setCamState('checking');
+    try {
+      await localParticipant.setCameraEnabled(true);
+      setCamState('ok');
+      setCamNoticeOpen(false);
+    } catch (err) {
+      const s = classifyMediaError(err);
+      setCamState(isDeviceFailure(s) ? s : 'error');
+      setCamNoticeOpen(true);
+      onEvent('camera_failed', { state: s });
+    }
+  }, [localParticipant, onEvent]);
+
+  const publishedRef = useRef(false);
+  useEffect(() => {
+    const start = () => {
+      if (publishedRef.current || room.state !== ConnectionState.Connected) return;
+      publishedRef.current = true;
+      void enableMic();
+      if (video && wantCamera) void enableCamera();
+    };
+    start();
+    room.on(RoomEvent.Connected, start);
+    return () => { room.off(RoomEvent.Connected, start); };
+  }, [room, video, wantCamera, enableMic, enableCamera]);
+
+  const toggleMic = useCallback(async () => {
+    if (isMicrophoneEnabled) {
+      try { await localParticipant.setMicrophoneEnabled(false); } catch { /* stays on */ }
+      return;
+    }
+    await enableMic();
+  }, [isMicrophoneEnabled, localParticipant, enableMic]);
+
+  const toggleCamera = useCallback(async () => {
+    if (isCameraEnabled) {
+      try {
+        await localParticipant.setCameraEnabled(false);
+        setCamState('off');
+      } catch { /* stays on */ }
+      return;
+    }
+    await enableCamera();
+  }, [isCameraEnabled, localParticipant, enableCamera]);
 
   const toggleRail = useCallback((tab: 'coach' | 'transcript') => {
     setRailTab((current) => (current === tab ? null : tab));
@@ -741,7 +1164,13 @@ function RoomStage({
       return next;
     });
   }, []);
-  const coach = useLiveCoach({ sessionId: session.id, transcript, session, enabled: coachOn });
+  const coach = useLiveCoach({
+    sessionId: session.id,
+    transcript,
+    session,
+    enabled: coachOn,
+    agentSpeaking: state === 'speaking',
+  });
   useEffect(() => {
     if (!coachOn) setRailTab((current) => (current === 'coach' ? null : current));
   }, [coachOn]);
@@ -829,33 +1258,43 @@ function RoomStage({
     return () => { room.off(RoomEvent.ConnectionQualityChanged, onQuality); };
   }, [room, onEvent]);
 
-  // Audio autoplay unlock + worker greeting handshake. This page auto-connects
-  // with NO user gesture, so on a fresh document load (refresh / deep-link / new
-  // tab / Safari) the browser autoplay policy blocks remote audio — the agent
-  // would speak into a muted output and the candidate would hear nothing, with
-  // nothing looking wrong. Two parts:
-  //   (1) proactively call room.startAudio() — a no-op grant where the browser
-  //       already allows playback, so the common case unlocks with zero delay;
-  //   (2) once playback is CONFIRMED unlocked, publish a one-shot `client_ready`
-  //       message. The worker holds its greeting until it arrives, so the
-  //       opening is never lost to a muted output. A blocked browser shows the
-  //       enable-audio overlay, whose tap both unlocks AND fires the signal.
+  // ── Audio unlock + client_ready handshake (see the note at the top).
+  // (1) proactively call room.startAudio() — a no-op grant where the browser
+  //     already allows playback, so the common case unlocks with zero delay;
+  // (2) once playback is CONFIRMED unlocked, set the ready attribute and
+  //     publish the ready message. A blocked browser shows the enable-audio
+  //     overlay, whose tap both unlocks AND signals.
   const readySentRef = useRef(false);
-  const signalReady = useCallback(() => {
-    if (readySentRef.current) return;
+  const readyAttrRef = useRef(false);
+  const signalReady = useCallback((why: string, force = false) => {
     if (room.state !== ConnectionState.Connected || !room.canPlaybackAudio) return;
+    if (!readyAttrRef.current) {
+      readyAttrRef.current = true;
+      // An older API mints tokens without canUpdateOwnMetadata, so this can be
+      // refused — the data message below still carries readiness.
+      Promise.resolve()
+        .then(() => room.localParticipant.setAttributes({ [READY_ATTRIBUTE]: '1' }))
+        .then(() => onEvent('client_ready_attr'))
+        .catch(() => { readyAttrRef.current = false; onEvent('client_ready_attr_failed'); });
+    }
+    if (readySentRef.current && !force) return;
     readySentRef.current = true;
     room.localParticipant
       .publishData(READY_PACKET, { reliable: true, topic: IE_DATA_TOPIC })
-      .then(() => onEvent('client_ready'))
+      .then(() => onEvent('client_ready', { why }))
       .catch(() => { readySentRef.current = false; /* not ready yet — a later event retries */ });
   }, [room, onEvent]);
   useEffect(() => {
+    let wasBlocked: boolean | null = null;
     const sync = () => {
       const blocked = !room.canPlaybackAudio;
       setAudioBlocked(blocked);
-      if (blocked) onEvent('audio_blocked');
-      else signalReady();
+      if (blocked) {
+        if (wasBlocked !== true) onEvent('audio_blocked');
+      } else {
+        signalReady('connected');
+      }
+      wasBlocked = blocked;
     };
     // Proactively unlock where the browser permits it; on a blocked browser this
     // rejects and the enable-audio overlay drives the unlock via unlockAudio.
@@ -869,22 +1308,38 @@ function RoomStage({
   }, [room, onEvent, signalReady]);
   const unlockAudio = useCallback(() => {
     room.startAudio()
-      .then(() => { setAudioBlocked(false); onEvent('audio_unlocked'); signalReady(); })
+      .then(() => { setAudioBlocked(false); onEvent('audio_unlocked'); signalReady('audio_unlocked', true); })
       .catch(() => { /* keep the overlay — the next tap retries */ });
   }, [room, onEvent, signalReady]);
 
-  // Agent-joined detection: voice-assistant state leaves connecting/disconnected
-  // once the worker is in the room and talking/listening.
-  const joinStartRef = useRef(Date.now());
-  const agentJoinedRef = useRef(false);
+  // An interviewer that joins AFTER the candidate missed the first message:
+  // send it again the moment an agent participant connects.
   useEffect(() => {
-    if (agentJoinedRef.current) return;
+    const onJoin = (participant: RemoteParticipant) => {
+      if (participant.kind !== ParticipantKind.AGENT) return;
+      onEvent('agent_connected', { identity: participant.identity });
+      signalReady('agent_joined', true);
+    };
+    room.on(RoomEvent.ParticipantConnected, onJoin);
+    return () => { room.off(RoomEvent.ParticipantConnected, onJoin); };
+  }, [room, onEvent, signalReady]);
+  // Belt and braces: the first time the voice-assistant hook sees the agent.
+  const agentIdentity = agent?.identity;
+  useEffect(() => {
+    if (agentIdentity) signalReady('agent_seen', true);
+  }, [agentIdentity, signalReady]);
+
+  // Agent-joined detection: voice-assistant state leaves connecting/disconnected
+  // once the worker is in the room and talking/listening. Kept above this
+  // subtree (onAgentJoined) so a rejoin does not bring the banner back.
+  const joinStartRef = useRef(Date.now());
+  useEffect(() => {
+    if (agentJoined) return;
     if (state === 'listening' || state === 'speaking' || state === 'thinking') {
-      agentJoinedRef.current = true;
       onEvent('agent_join_ms', { ms: Date.now() - joinStartRef.current });
-      setAgentJoined(true);
+      onAgentJoined();
     }
-  }, [state, onEvent]);
+  }, [state, agentJoined, onAgentJoined, onEvent]);
 
   // If the interviewer hasn't joined within 15s, surface a hint (usually means
   // the agent worker isn't deployed/registered).
@@ -897,21 +1352,26 @@ function RoomStage({
     return () => window.clearTimeout(h);
   }, [agentJoined, onEvent]);
 
-  // Live transcript from LiveKit's transcription stream.
+  // Live transcript from LiveKit's transcription stream, stored above this
+  // subtree so it survives a rejoin.
   useEffect(() => {
     const onTr = (segments: TranscriptionSegment[], participant?: Participant) => {
       const isCandidate = participant ? participant.identity === connection.identity || participant.isLocal : false;
-      const who: RAMockTurn['who'] = isCandidate ? 'you' : 'them';
-      const map = segMapRef.current;
-      for (const seg of segments) map.set(seg.id, { who, text: seg.text });
-      setTranscript(Array.from(map.values()));
+      onSegments(segments, isCandidate ? 'you' : 'them');
     };
     room.on(RoomEvent.TranscriptionReceived, onTr);
     return () => { room.off(RoomEvent.TranscriptionReceived, onTr); };
-  }, [room, connection.identity]);
+  }, [room, connection.identity, onSegments]);
 
   const cameraTracks = useTracks([Track.Source.Camera], { onlySubscribed: false });
   const localCamera = cameraTracks.find((tr) => tr.participant.isLocal);
+  // Turning the camera off MUTES the publication rather than removing it, so
+  // "a publication exists" is not "the camera is on" — that rendered a black
+  // tile. Show the feed only for a live, unmuted track.
+  const cameraLive = Boolean(
+    isCameraEnabled && localCamera?.publication?.track && !localCamera.publication.isMuted,
+  );
+  const cameraReason = isDeviceFailure(camState) ? deviceStateLabel(t, camState) : null;
 
   const aiState: AiState =
     state === 'speaking' ? 'asking' : state === 'listening' ? 'listening' : 'thinking';
@@ -919,6 +1379,8 @@ function RoomStage({
   const candidateName = user?.name?.trim() || user?.email?.split('@')[0] || t('live.you');
   const roleLabel = localizeRole(session.role);
   const typeLabel = localizeType(session.interviewType, 'label');
+  const micFix = deviceFix(t, 'mic', micState);
+  const camFix = video ? deviceFix(t, 'camera', camState) : null;
 
   return (
     <>
@@ -947,19 +1409,52 @@ function RoomStage({
         </div>
       )}
 
-      {audioBlocked && (
+      {camNoticeOpen && camFix && (
+        <div role="alert" className={styles.deviceAlert}>
+          <span>
+            <strong>{t('live.cameraUnavailable')}</strong>
+            {' '}
+            {camFix}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCamNoticeOpen(false)}
+            aria-label={t('live.dismiss')}
+          >
+            <IconX size={16} />
+          </button>
+        </div>
+      )}
+
+      {micFix ? (
+        // BLOCKING: the interviewer cannot hear a candidate without a mic, so
+        // carrying on would be a one-way interview that still bills.
+        <MicBlockedDialog
+          fix={micFix}
+          busy={micState === 'checking'}
+          onRetry={() => void enableMic()}
+          onEnd={onEnd}
+        />
+      ) : audioBlocked ? (
         // BLOCKING overlay, not a small pill: while the browser autoplay policy
         // has audio muted the candidate would otherwise see the interviewer
         // animate to "speaking" and hear nothing (the avatar state tracks the
         // agent, not local playback), masking the failure. Covering the stage
         // forces the one tap that unlocks audio AND signals the worker to greet.
         <AudioUnlockDialog onUnlock={unlockAudio} />
-      )}
+      ) : null}
 
       <div className={styles.stage} data-rail={railTab ? 'open' : 'closed'}>
         <div className={styles.stageMain}>
           <div className={styles.frame} data-mode={video ? 'video' : 'voice'}>
-            <InterviewerTile interviewer={interviewer} aiState={aiState} video={video} />
+            <InterviewerTile
+              interviewer={interviewer}
+              aiState={aiState}
+              video={video}
+              media={video && agentVideo ? (
+                <VideoTrack trackRef={agentVideo} className={styles.agentFeed} />
+              ) : undefined}
+            />
 
             {/* The candidate's own tile is PINNED, not tucked behind a
                 disclosure: seeing yourself is half of what video practice is
@@ -968,10 +1463,14 @@ function RoomStage({
                 name, so it sits below the stage as its own row. */}
             {video ? (
               <div className={`${styles.selfTile} ${styles.selfTileVideo}`}>
-                {localCamera ? (
+                {cameraLive && localCamera ? (
                   <VideoTrack trackRef={localCamera} className={styles.selfFeed} />
                 ) : (
-                  <p className={styles.selfOff}>{t('live.cameraOff')}</p>
+                  <div className={styles.selfOff}>
+                    <IconCameraOff size={18} aria-hidden />
+                    <span>{t('live.cameraOff')}</span>
+                    {cameraReason ? <span className={styles.selfOffReason}>{cameraReason}</span> : null}
+                  </div>
                 )}
                 <span className={styles.selfName}>
                   {isMicrophoneEnabled ? <IconMic size={12} /> : <IconMicOff size={12} />}
@@ -1076,7 +1575,7 @@ function RoomStage({
             on={isMicrophoneEnabled}
             label={isMicrophoneEnabled ? t('live.muteMic') : t('live.unmuteMic')}
             icon={isMicrophoneEnabled ? <IconMic size={19} /> : <IconMicOff size={19} />}
-            onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
+            onClick={() => void toggleMic()}
           />
           {video && (
             <ControlButton
@@ -1084,7 +1583,7 @@ function RoomStage({
               on={isCameraEnabled}
               label={isCameraEnabled ? t('live.stopCam') : t('live.startCam')}
               icon={isCameraEnabled ? <IconCamera size={19} /> : <IconCameraOff size={19} />}
-              onClick={() => void localParticipant.setCameraEnabled(!isCameraEnabled)}
+              onClick={() => void toggleCamera()}
             />
           )}
           <ControlButton

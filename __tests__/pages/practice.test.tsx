@@ -57,7 +57,8 @@ const RECENT = [
   },
 ];
 
-vi.mock('../../lib/api/interviewEngine', () => ({
+vi.mock('../../lib/api/interviewEngine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/api/interviewEngine')>()),
   interviewEngineApi: {
     recent: vi.fn(async () => ({ sessions: RECENT })),
     remove: vi.fn(async () => ({ ok: true })),

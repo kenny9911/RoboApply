@@ -34,8 +34,11 @@ export {
   CoachMeters,
   CoachToggle,
   type CoachMetrics,
+  type LiveTurn,
   type UseLiveCoachResult,
 } from './LiveCoach';
+// Pre-join device check (mic level, mirrored camera preview, per-device fix).
+export { DeviceCheck, deviceFix, deviceStateLabel, type DeviceCheckResult } from './DeviceCheck';
 
 // Report (Route 7)
 export { ResultsTop } from './ResultsTop';

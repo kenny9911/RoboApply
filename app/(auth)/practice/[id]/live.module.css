@@ -173,13 +173,30 @@
 }
 
 .selfOff {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 2px;
   height: 100%;
   margin: 0;
+  padding: var(--sp-2);
   color: var(--brand-mark);
   font-size: var(--fs-label);
   text-align: center;
+}
+
+.selfOffReason {
+  color: var(--text-2);
+  font-size: var(--fs-label);
+}
+
+/* The interviewer's own video (an avatar worker's camera), when published. */
+.agentFeed {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .selfName {
@@ -193,7 +210,7 @@
   background: color-mix(in srgb, #000 55%, transparent);
   color: #fff;
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 
@@ -498,7 +515,6 @@
 
   .controlLabel {
     max-width: 54px;
-    font-size: 11px;
   }
 
   .endButton {
@@ -651,6 +667,82 @@
   text-align: center;
   color: var(--text-2);
   font-size: var(--fs-body);
+}
+
+.centerTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+
+.centerBody {
+  max-width: 440px;
+  margin: var(--sp-2) auto var(--sp-4);
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.centerNote {
+  max-width: 440px;
+  margin: 0 auto var(--sp-4);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+/* Preparing: an indeterminate bar, never a percentage — nobody knows how
+ * long the plan will take, and a fake number that stalls at 90% is worse
+ * than honest motion. */
+.preparing {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+.preparingBar {
+  position: relative;
+  display: block;
+  width: min(240px, 60vw);
+  height: 4px;
+  margin-bottom: var(--sp-5);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--rule);
+}
+
+.preparingBar::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: var(--r-pill);
+  background: var(--action);
+  animation: preparingSlide 1.6s var(--ease-standard) infinite;
+}
+
+@keyframes preparingSlide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preparingBar::after {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+.micActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+}
+
+.micActions .audioButton {
+  margin-top: var(--sp-4);
 }
 
 .centerActions {

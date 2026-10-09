@@ -1323,7 +1323,9 @@
         }
       },
       "showAll": "Show all {count}",
-      "showFewer": "Show fewer"
+      "showFewer": "Show fewer",
+      "startErrorNetwork": "We couldn't reach the server. Check your internet connection and try again.",
+      "startErrorBusy": "The interview service is busy right now. Wait a minute, then try again."
     },
     "live": {
       "loading": "Setting up your room…",
@@ -1457,6 +1459,73 @@
       "rail": {
         "title": "Coach and transcript",
         "close": "Close the panel"
+      },
+      "preparing": {
+        "title": "Getting your interview ready",
+        "body": "Your interviewer is reading the role and planning the questions. This usually takes less than a minute.",
+        "note": "If this step fails, you won't be charged.",
+        "slow": "This is taking longer than usual. Keep this page open and it will continue on its own."
+      },
+      "prepareFailed": {
+        "title": "This interview couldn't be planned",
+        "body": "Something went wrong while planning your questions. You haven't been charged. Try again, or go back and change the setup.",
+        "llmTitle": "The interview service isn't responding",
+        "llmBody": "The service that writes your questions didn't answer, so this interview couldn't be planned. You haven't been charged. Try again in a minute."
+      },
+      "connectError": {
+        "title": "We couldn't connect you",
+        "body": "The connection to the interview room failed. Check your internet connection, then try again."
+      },
+      "superseded": {
+        "title": "This interview is open in another tab",
+        "body": "An interview can only be open in one tab or window at a time. Close the other one, or continue here.",
+        "useHere": "Use this tab"
+      },
+      "micBlocked": {
+        "title": "Your microphone isn't working"
+      },
+      "cameraUnavailable": "Continuing with voice only.",
+      "device": {
+        "title": "Check your microphone and camera",
+        "titleVoice": "Check your microphone",
+        "body": "Say a few words. The bar under Microphone should move when you speak.",
+        "mic": "Microphone",
+        "camera": "Camera",
+        "level": "Microphone level",
+        "preview": "Your camera preview",
+        "retry": "Try again",
+        "join": "Join the interview",
+        "rejoin": "Rejoin the interview",
+        "joinVoiceOnly": "Join with voice only",
+        "joining": "Joining…",
+        "micRequired": "Your interviewer needs to hear you. Fix the microphone to continue.",
+        "voiceOnlyNote": "You can still do this interview with voice only.",
+        "state": {
+          "checking": "Checking…",
+          "ok": "Working",
+          "denied": "Blocked",
+          "notFound": "Not found",
+          "inUse": "In use by another app",
+          "insecure": "Not allowed on this page",
+          "off": "Off",
+          "error": "Not working"
+        },
+        "fix": {
+          "mic": {
+            "denied": "Your browser is blocking the microphone. Select the icon at the left of the address bar, allow the microphone, then try again.",
+            "notFound": "No microphone was found. Connect one or turn on your headset, then try again.",
+            "inUse": "Another app is using your microphone. Close any other calls or recording apps, then try again.",
+            "insecure": "Your browser only allows the microphone on a secure page. Open this page with https, then try again.",
+            "error": "The microphone didn't start. Check your sound settings, then try again."
+          },
+          "camera": {
+            "denied": "Your browser is blocking the camera. Select the icon at the left of the address bar, allow the camera, then try again.",
+            "notFound": "No camera was found. Connect one, then try again.",
+            "inUse": "Another app is using your camera. Close any other calls or video apps, then try again.",
+            "insecure": "Your browser only allows the camera on a secure page. Open this page with https, then try again.",
+            "error": "The camera didn't start. Check your camera settings, then try again."
+          }
+        }
       }
     },
     "report": {
@@ -1534,6 +1603,17 @@
           "weak": "Needs work",
           "missed": "Not covered"
         }
+      },
+      "retry": "Try again",
+      "scorePending": "Your score is being worked out. This page updates by itself.",
+      "noAnswer": {
+        "title": "No answers were recorded",
+        "body": "The interview ended before any of your answers were recorded, so there is nothing to score. You were not charged for this session.",
+        "cta": "Start again"
+      },
+      "failed": {
+        "title": "This interview couldn't be scored",
+        "body": "The interview stopped before it could finish, so there is no report for it."
       }
     }
   },

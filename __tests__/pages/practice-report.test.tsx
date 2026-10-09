@@ -189,4 +189,59 @@ describe('/practice/[id]/report', () => {
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
     expect(screen.queryByText('Show the transcript')).not.toBeInTheDocument();
   });
+
+  it('shows a pending verdict, not 0/100, while the session is still finalizing', async () => {
+    const base = makeReport();
+    await renderReport({
+      ...base,
+      session: { ...base.session, status: 'finalizing', overall: null, recommendations: null },
+    });
+    expect(await screen.findByText(/Your score is being worked out/)).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { name: 'Overall' })).toBeNull();
+    expect(screen.queryByText('/100')).toBeNull();
+  });
+
+  it('shows the no-answer state (not charged) for a failed no_answer session', async () => {
+    const base = makeReport();
+    await renderReport({
+      ...base,
+      session: { ...base.session, status: 'failed', error: 'no_answer', overall: null },
+      transcript: [],
+    });
+    expect(await screen.findByRole('heading', { name: 'No answers were recorded' })).toBeInTheDocument();
+    expect(screen.getByText(/You were not charged/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Start again' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/practice?role=Backend+Engineer'),
+    );
+    // A settled failed session does not keep polling.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a plain failed state for any other failed session', async () => {
+    const base = makeReport();
+    await renderReport({
+      ...base,
+      session: { ...base.session, status: 'failed', error: 'worker_error', overall: null },
+    });
+    expect(await screen.findByRole('heading', { name: "This interview couldn't be scored" })).toBeInTheDocument();
+  });
+
+  it('offers Retry when the report fails to load', async () => {
+    reportMock.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => {
+      render(
+        <IntlWrapper>
+          <Suspense fallback={<p>Loading test report</p>}>
+            <MockReportPage params={Promise.resolve({ id: 'practice-report-1' })} />
+          </Suspense>
+        </IntlWrapper>,
+      );
+    });
+    const retry = await screen.findByRole('button', { name: 'Try again' });
+    reportMock.mockResolvedValueOnce(makeReport());
+    await act(async () => { retry.click(); });
+    expect(await screen.findByRole('progressbar', { name: 'Overall' })).toHaveAttribute('aria-valuenow', '76');
+  });
 });

@@ -145,6 +145,56 @@
   line-height: var(--lh-body);
 }
 
+.noAnswerCopy > p {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.messageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.messageActions :global(.btn) {
+  min-height: var(--control-lg);
+}
+
+/* Score not ready: a quiet placeholder where the number will go. */
+.verdictPending {
+  background: var(--surface);
+}
+
+.verdictSkeleton {
+  width: 132px;
+  height: 56px;
+  display: block;
+  border-radius: var(--r-md);
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: verdictShimmer 1.6s var(--ease-standard) infinite;
+}
+
+.verdictPending p {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+@keyframes verdictShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdictSkeleton {
+    animation: none;
+  }
+}
+
 .noAnswerCopy :global(.v3-md-block) > :last-child {
   margin-bottom: 0 !important;
 }

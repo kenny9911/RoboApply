@@ -43,12 +43,18 @@ export const mockV3Keys = {
   score: (sessionId: string) => ['v3', 'mock', 'score', sessionId] as const,
 };
 
-export function useMockCatalog(): UseQueryResult<MockCatalogResponse, Error> {
+export function useMockCatalog(
+  opts: { refetchOnWindowFocus?: boolean } = {},
+): UseQueryResult<MockCatalogResponse, Error> {
   return useQuery({
     queryKey: mockV3Keys.catalog(),
     queryFn: () => raV2Api.mock.catalog(),
     // Catalog is effectively static for a session.
     staleTime: 5 * 60 * 1000,
+    // The live interview room passes false: a focus refetch re-renders the
+    // page that hosts the LiveKit room, and nothing in the catalog can change
+    // mid-interview.
+    ...(opts.refetchOnWindowFocus === false ? { refetchOnWindowFocus: false } : {}),
   });
 }
 

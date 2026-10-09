@@ -34,6 +34,7 @@ import {
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import type { RAMockFormat, RAMockSessionSummary } from '../../../lib/api/v2/types';
 import {
+  ieErrorInfo,
   interviewEngineApi,
   type IECreateBody,
   type IESessionSummary,
@@ -136,7 +137,7 @@ export default function MockSetupPage() {
   const [durationOverride, setDurationOverride] = useState<number | null>(null);
 
   const [starting, setStarting] = useState(false);
-  const [startError, setStartError] = useState(false);
+  const [startError, setStartError] = useState<'network' | 'busy' | 'generic' | null>(null);
   const [insufficientCredits, setInsufficientCredits] = useState<{ balance: number; required: number } | null>(null);
   const creditsQ = useCredits();
 
@@ -179,7 +180,7 @@ export default function MockSetupPage() {
     }
     setDurationOverride(planDuration);
     setInsufficientCredits(null);
-    setStartError(false);
+    setStartError(null);
 
     // A complete saved plan should survive the role-aware defaulting effect.
     // Partial or stale plans intentionally fall back to current recommendations.
@@ -386,7 +387,7 @@ export default function MockSetupPage() {
   async function launch() {
     if (!canLaunch || !canAfford || !interviewer || !type) return;
     setStarting(true);
-    setStartError(false);
+    setStartError(null);
     setInsufficientCredits(null);
     try {
       const body: IECreateBody = {
@@ -402,15 +403,25 @@ export default function MockSetupPage() {
         // simply omitted rather than delaying the launch.
         resumeContext: resumeContext ?? undefined,
       };
+      // The server answers as soon as the session row exists (status
+      // 'preparing'); the interview plan is written while the live page shows
+      // its own progress, so navigate straight away.
       const { session } = await interviewEngineApi.create(body);
       router.push(`/practice/${session.id}`);
     } catch (err) {
+      const info = ieErrorInfo(err);
       // 402 → out of mock-interview credits. Show an upsell, not a generic error.
-      if (err instanceof RoboApiError && err.status === 402 && (err.payload as any)?.error === 'insufficient_credits') {
-        const p = err.payload as { balance?: number; required?: number };
+      if (info.code === 'insufficient_credits') {
+        const p = (err instanceof RoboApiError ? err.payload : {}) as { balance?: number; required?: number };
         setInsufficientCredits({ balance: p.balance ?? 0, required: p.required ?? 0 });
+      } else if (info.network) {
+        setStartError('network');
+      } else if (info.code === 'llm_unavailable' || info.code === 'worker_unavailable' || info.status === 503) {
+        // An older API still writes the plan inside create and answers 503
+        // when the language service is down.
+        setStartError('busy');
       } else {
-        setStartError(true);
+        setStartError('generic');
       }
       setStarting(false);
     }

@@ -1323,7 +1323,9 @@
         }
       },
       "showAll": "Afficher les {count}",
-      "showFewer": "Afficher moins"
+      "showFewer": "Afficher moins",
+      "startErrorNetwork": "Impossible de joindre le serveur. Vérifie ta connexion internet, puis réessaie.",
+      "startErrorBusy": "Le service d'entretien est très sollicité en ce moment. Attends une minute, puis réessaie."
     },
     "live": {
       "loading": "Préparation de ta salle…",
@@ -1457,6 +1459,73 @@
       "rail": {
         "title": "Notes et transcription",
         "close": "Fermer le panneau"
+      },
+      "preparing": {
+        "title": "Préparation de ton entretien",
+        "body": "Ton interlocuteur étudie le poste et prépare les questions. Cela prend en général moins d'une minute.",
+        "note": "Si cette étape échoue, rien ne te sera facturé.",
+        "slow": "Cela prend plus de temps que d'habitude. Garde cette page ouverte, la suite se lancera toute seule."
+      },
+      "prepareFailed": {
+        "title": "Cet entretien n'a pas pu être préparé",
+        "body": "Un problème est survenu pendant la préparation des questions. Rien ne t'a été facturé. Réessaie, ou reviens en arrière pour changer la configuration.",
+        "llmTitle": "Le service d'entretien ne répond pas",
+        "llmBody": "Le service qui rédige tes questions n'a pas répondu, donc cet entretien n'a pas pu être préparé. Rien ne t'a été facturé. Réessaie dans une minute."
+      },
+      "connectError": {
+        "title": "Connexion impossible",
+        "body": "La connexion à la salle d'entretien a échoué. Vérifie ta connexion internet, puis réessaie."
+      },
+      "superseded": {
+        "title": "Cet entretien est ouvert dans un autre onglet",
+        "body": "Un entretien ne peut être ouvert que dans un seul onglet ou une seule fenêtre à la fois. Ferme l'autre, ou continue ici.",
+        "useHere": "Utiliser cet onglet"
+      },
+      "micBlocked": {
+        "title": "Ton micro ne fonctionne pas"
+      },
+      "cameraUnavailable": "On continue en audio seulement.",
+      "device": {
+        "title": "Vérifie ton micro et ta caméra",
+        "titleVoice": "Vérifie ton micro",
+        "body": "Dis quelques mots. La barre sous Micro doit bouger quand tu parles.",
+        "mic": "Micro",
+        "camera": "Caméra",
+        "level": "Niveau du micro",
+        "preview": "Aperçu de ta caméra",
+        "retry": "Réessayer",
+        "join": "Rejoindre l'entretien",
+        "rejoin": "Revenir dans l'entretien",
+        "joinVoiceOnly": "Rejoindre en audio seulement",
+        "joining": "Connexion…",
+        "micRequired": "Ton interlocuteur doit pouvoir t'entendre. Règle le micro pour continuer.",
+        "voiceOnlyNote": "Tu peux faire cet entretien en audio seulement.",
+        "state": {
+          "checking": "Vérification…",
+          "ok": "Fonctionne",
+          "denied": "Bloqué",
+          "notFound": "Introuvable",
+          "inUse": "Utilisé par une autre appli",
+          "insecure": "Non autorisé sur cette page",
+          "off": "Désactivée",
+          "error": "Ne fonctionne pas"
+        },
+        "fix": {
+          "mic": {
+            "denied": "Ton navigateur bloque le micro. Sélectionne l'icône à gauche de la barre d'adresse, autorise le micro, puis réessaie.",
+            "notFound": "Aucun micro trouvé. Branches-en un ou allume ton casque, puis réessaie.",
+            "inUse": "Une autre appli utilise ton micro. Ferme les autres appels ou applis d'enregistrement, puis réessaie.",
+            "insecure": "Ton navigateur n'autorise le micro que sur une page sécurisée. Ouvre cette page en https, puis réessaie.",
+            "error": "Le micro n'a pas démarré. Vérifie tes réglages audio, puis réessaie."
+          },
+          "camera": {
+            "denied": "Ton navigateur bloque la caméra. Sélectionne l'icône à gauche de la barre d'adresse, autorise la caméra, puis réessaie.",
+            "notFound": "Aucune caméra trouvée. Branches-en une, puis réessaie.",
+            "inUse": "Une autre appli utilise ta caméra. Ferme les autres appels ou applis vidéo, puis réessaie.",
+            "insecure": "Ton navigateur n'autorise la caméra que sur une page sécurisée. Ouvre cette page en https, puis réessaie.",
+            "error": "La caméra n'a pas démarré. Vérifie les réglages de ta caméra, puis réessaie."
+          }
+        }
       }
     },
     "report": {
@@ -1534,6 +1603,17 @@
           "weak": "À retravailler",
           "missed": "Non traitée"
         }
+      },
+      "retry": "Réessayer",
+      "scorePending": "Ton score est en cours de calcul. Cette page se met à jour toute seule.",
+      "noAnswer": {
+        "title": "Aucune réponse enregistrée",
+        "body": "L'entretien s'est terminé avant qu'une de tes réponses soit enregistrée, il n'y a donc rien à noter. Cette séance ne t'a pas été facturée.",
+        "cta": "Recommencer"
+      },
+      "failed": {
+        "title": "Cet entretien n'a pas pu être noté",
+        "body": "L'entretien s'est arrêté avant la fin, il n'y a donc pas de compte rendu."
       }
     }
   },

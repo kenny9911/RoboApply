@@ -20,17 +20,23 @@ import { interviewEngineApi, type IECoachTip, type IESessionDetail } from '../..
 import type { RAMockTurn } from '../../../lib/api/v2/types';
 
 // ── Derive (current question, answer-so-far) from the live transcript ──────────
-function deriveQA(turns: RAMockTurn[]): { question: string; answer: string } {
+/** A live transcript turn. `final` is false while the speech-to-text segment
+ *  is still interim (it can still change); absent means "treat as final". */
+export type LiveTurn = RAMockTurn & { final?: boolean };
+
+function deriveQA(turns: LiveTurn[]): { question: string; answer: string; questionFinal: boolean } {
   let lastThem = -1;
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turns[i].who === 'them') { lastThem = i; break; }
   }
-  if (lastThem < 0) return { question: '', answer: '' };
+  if (lastThem < 0) return { question: '', answer: '', questionFinal: false };
   let start = lastThem;
   while (start - 1 >= 0 && turns[start - 1].who === 'them') start--;
-  const question = turns.slice(start, lastThem + 1).map((t) => t.text).join(' ').trim();
+  const qTurns = turns.slice(start, lastThem + 1);
+  const question = qTurns.map((t) => t.text).join(' ').trim();
+  const questionFinal = qTurns.every((t) => t.final !== false);
   const answer = turns.slice(lastThem + 1).filter((t) => t.who === 'you').map((t) => t.text).join(' ').trim();
-  return { question, answer };
+  return { question, answer, questionFinal };
 }
 
 // Hedging / filler words across the live interview languages (en/zh/ja).
@@ -67,15 +73,23 @@ export interface UseLiveCoachResult {
 }
 
 /** Drives the live coach: question/answer derivation, debounced LLM hint+nudge
- *  fetches, and zero-latency client metrics. Inert when `enabled` is false. */
+ *  fetches, and zero-latency client metrics. Inert when `enabled` is false.
+ *
+ *  The hint is only requested for a FINISHED question: every interviewer
+ *  segment final, and the interviewer no longer speaking. Asking on interim
+ *  text fired one paid /coach call per sentence pause and made the hint
+ *  flicker. In-flight requests are aborted on unmount and when the question
+ *  changes, so a late answer never lands on the wrong question. */
 export function useLiveCoach(args: {
   sessionId: string;
-  transcript: RAMockTurn[];
+  transcript: LiveTurn[];
   session: IESessionDetail;
   enabled: boolean;
+  /** True while the interviewer is speaking — the question is not done yet. */
+  agentSpeaking?: boolean;
 }): UseLiveCoachResult {
-  const { sessionId, transcript, session, enabled } = args;
-  const { question, answer } = useMemo(() => deriveQA(transcript), [transcript]);
+  const { sessionId, transcript, session, enabled, agentSpeaking = false } = args;
+  const { question, answer, questionFinal } = useMemo(() => deriveQA(transcript), [transcript]);
 
   const [hint, setHint] = useState<IECoachTip | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -87,9 +101,19 @@ export function useLiveCoach(args: {
   const answerStartRef = useRef<number | null>(null);
   const lastNudgeAtRef = useRef(0);
   const lastNudgeLenRef = useRef(0);
+  const hintAbortRef = useRef<AbortController | null>(null);
+  const nudgeAbortRef = useRef<AbortController | null>(null);
+
+  // Abort anything in flight when the room goes away.
+  useEffect(() => () => {
+    hintAbortRef.current?.abort();
+    nudgeAbortRef.current?.abort();
+  }, []);
 
   // New question → reset the per-answer coach state.
   useEffect(() => {
+    nudgeAbortRef.current?.abort();
+    nudgeAbortRef.current = null;
     setNudge(null);
     setNudgeDismissed(false);
     answerStartRef.current = null;
@@ -108,24 +132,27 @@ export function useLiveCoach(args: {
     return () => window.clearInterval(h);
   }, [enabled]);
 
-  // HINT: fetch once per distinct, settled question.
+  // HINT: fetch once per distinct, FINISHED question.
   useEffect(() => {
     if (!enabled) { setHint(null); return; }
     const q = question.trim();
     if (!q || q === lastHintQRef.current) return;
+    if (!questionFinal || agentSpeaking) return; // still being asked
     const handle = window.setTimeout(() => {
-      if (question.trim() !== q) return; // still streaming → wait for next settle
       lastHintQRef.current = q;
+      hintAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      hintAbortRef.current = ctrl;
       setHint(null);
       setHintLoading(true);
       interviewEngineApi
-        .coach(sessionId, { mode: 'hint', question: q })
-        .then((r) => setHint(r.coach))
+        .coach(sessionId, { mode: 'hint', question: q }, { signal: ctrl.signal })
+        .then((r) => { if (!ctrl.signal.aborted) setHint(r.coach); })
         .catch(() => undefined)
-        .finally(() => setHintLoading(false));
-    }, 1300);
+        .finally(() => { if (!ctrl.signal.aborted) setHintLoading(false); });
+    }, 600);
     return () => window.clearTimeout(handle);
-  }, [question, enabled, sessionId]);
+  }, [question, questionFinal, agentSpeaking, enabled, sessionId]);
 
   // NUDGE: react to the answer-so-far, debounced + throttled, only on real growth.
   useEffect(() => {
@@ -138,9 +165,15 @@ export function useLiveCoach(args: {
       if (a.length - lastNudgeLenRef.current < 40) return; // need meaningful growth
       lastNudgeAtRef.current = now;
       lastNudgeLenRef.current = a.length;
+      nudgeAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      nudgeAbortRef.current = ctrl;
       interviewEngineApi
-        .coach(sessionId, { mode: 'nudge', question: question.trim(), answer: a })
-        .then((r) => { if (r.coach) { setNudge(r.coach); setNudgeDismissed(false); } })
+        .coach(sessionId, { mode: 'nudge', question: question.trim(), answer: a }, { signal: ctrl.signal })
+        .then((r) => {
+          if (ctrl.signal.aborted) return;
+          if (r.coach) { setNudge(r.coach); setNudgeDismissed(false); }
+        })
         .catch(() => undefined);
     }, 2500);
     return () => window.clearTimeout(handle);

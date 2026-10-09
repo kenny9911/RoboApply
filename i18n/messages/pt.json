@@ -1323,7 +1323,9 @@
         }
       },
       "showAll": "Ver todos os {count}",
-      "showFewer": "Ver menos"
+      "showFewer": "Ver menos",
+      "startErrorNetwork": "Não conseguimos falar com o servidor. Verifique sua conexão com a internet e tente de novo.",
+      "startErrorBusy": "O serviço de entrevistas está ocupado agora. Espere um minuto e tente de novo."
     },
     "live": {
       "loading": "Preparando sua sala…",
@@ -1457,6 +1459,73 @@
       "rail": {
         "title": "Observações e transcrição",
         "close": "Fechar o painel"
+      },
+      "preparing": {
+        "title": "Preparando sua entrevista",
+        "body": "Quem vai entrevistar você está lendo a vaga e preparando as perguntas. Isso costuma levar menos de um minuto.",
+        "note": "Se esta etapa falhar, você não será cobrado.",
+        "slow": "Está demorando mais que o normal. Deixe esta página aberta e ela vai continuar sozinha."
+      },
+      "prepareFailed": {
+        "title": "Não foi possível preparar esta entrevista",
+        "body": "Algo deu errado ao preparar suas perguntas. Você não foi cobrado. Tente de novo ou volte e mude a configuração.",
+        "llmTitle": "O serviço de entrevistas não está respondendo",
+        "llmBody": "O serviço que escreve suas perguntas não respondeu, então não foi possível preparar esta entrevista. Você não foi cobrado. Tente de novo em um minuto."
+      },
+      "connectError": {
+        "title": "Não conseguimos conectar você",
+        "body": "A conexão com a sala da entrevista falhou. Verifique sua conexão com a internet e tente de novo."
+      },
+      "superseded": {
+        "title": "Esta entrevista está aberta em outra aba",
+        "body": "Uma entrevista só pode ficar aberta em uma aba ou janela por vez. Feche a outra ou continue aqui.",
+        "useHere": "Usar esta aba"
+      },
+      "micBlocked": {
+        "title": "Seu microfone não está funcionando"
+      },
+      "cameraUnavailable": "Seguindo só com voz.",
+      "device": {
+        "title": "Verifique seu microfone e sua câmera",
+        "titleVoice": "Verifique seu microfone",
+        "body": "Fale algumas palavras. A barra abaixo de Microfone deve se mexer quando você fala.",
+        "mic": "Microfone",
+        "camera": "Câmera",
+        "level": "Nível do microfone",
+        "preview": "Prévia da sua câmera",
+        "retry": "Tentar de novo",
+        "join": "Entrar na entrevista",
+        "rejoin": "Voltar para a entrevista",
+        "joinVoiceOnly": "Entrar só com voz",
+        "joining": "Entrando…",
+        "micRequired": "Quem entrevista precisa ouvir você. Resolva o microfone para continuar.",
+        "voiceOnlyNote": "Você ainda pode fazer esta entrevista só com voz.",
+        "state": {
+          "checking": "Verificando…",
+          "ok": "Funcionando",
+          "denied": "Bloqueado",
+          "notFound": "Não encontrado",
+          "inUse": "Em uso por outro app",
+          "insecure": "Não permitido nesta página",
+          "off": "Desligada",
+          "error": "Não está funcionando"
+        },
+        "fix": {
+          "mic": {
+            "denied": "Seu navegador está bloqueando o microfone. Selecione o ícone à esquerda da barra de endereço, libere o microfone e tente de novo.",
+            "notFound": "Nenhum microfone foi encontrado. Conecte um ou ligue seu fone de ouvido e tente de novo.",
+            "inUse": "Outro app está usando seu microfone. Feche outras chamadas ou apps de gravação e tente de novo.",
+            "insecure": "Seu navegador só libera o microfone em páginas seguras. Abra esta página com https e tente de novo.",
+            "error": "O microfone não ligou. Verifique as configurações de som e tente de novo."
+          },
+          "camera": {
+            "denied": "Seu navegador está bloqueando a câmera. Selecione o ícone à esquerda da barra de endereço, libere a câmera e tente de novo.",
+            "notFound": "Nenhuma câmera foi encontrada. Conecte uma e tente de novo.",
+            "inUse": "Outro app está usando sua câmera. Feche outras chamadas ou apps de vídeo e tente de novo.",
+            "insecure": "Seu navegador só libera a câmera em páginas seguras. Abra esta página com https e tente de novo.",
+            "error": "A câmera não ligou. Verifique as configurações da câmera e tente de novo."
+          }
+        }
       }
     },
     "report": {
@@ -1534,6 +1603,17 @@
           "weak": "Precisa melhorar",
           "missed": "Não abordada"
         }
+      },
+      "retry": "Tentar de novo",
+      "scorePending": "Sua nota está sendo calculada. Esta página se atualiza sozinha.",
+      "noAnswer": {
+        "title": "Nenhuma resposta foi gravada",
+        "body": "A entrevista terminou antes de qualquer resposta sua ser gravada, então não há nada para avaliar. Você não foi cobrado por esta sessão.",
+        "cta": "Começar de novo"
+      },
+      "failed": {
+        "title": "Não foi possível avaliar esta entrevista",
+        "body": "A entrevista parou antes de terminar, então não há relatório para ela."
       }
     }
   },

@@ -29,7 +29,18 @@ import {
 import { canonicalDimKey } from '../../../../../lib/mock/dimensionLabels';
 import styles from './report.module.css';
 
-const MAX_POLLS = 15;
+// Poll with exponential backoff while the server finalizes and the review is
+// written: quick at first (the score usually lands within seconds of End),
+// then slower, for about three minutes in total. After that the page settles
+// into a manual Refresh.
+const POLL_FIRST_MS = 2_000;
+const POLL_MAX_MS = 20_000;
+const POLL_BUDGET_MS = 3 * 60_000;
+
+function nextPollDelay(attempt: number): number {
+  return Math.min(POLL_MAX_MS, Math.round(POLL_FIRST_MS * 1.5 ** attempt));
+}
+
 const PRIORITY_ORDER: Record<IERecommendationPriority, number> = {
   high: 0,
   medium: 1,
@@ -61,16 +72,26 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
   // enrichment produced, and it can grow while the page is open.
   const [tab, setTab] = useState<string | null>(null);
   const pollsRef = useRef(0);
+  const pollStartRef = useRef(Date.now());
+  // Bumped after every load (success or failure) so the poll effect re-arms
+  // even when the payload did not change.
+  const [loadTick, setLoadTick] = useState(0);
+  const reportRef = useRef<IEReport | null>(null);
 
   const load = useCallback(async () => {
     try {
       const nextReport = await interviewEngineApi.report(id);
+      reportRef.current = nextReport;
       setReport(nextReport);
       setError(false);
       return nextReport;
     } catch {
-      setError(true);
+      // A failed poll keeps what is already on screen; only a page with
+      // nothing to show turns into the error state.
+      if (!reportRef.current) setError(true);
       return null;
+    } finally {
+      setLoadTick((n) => n + 1);
     }
   }, [id]);
 
@@ -78,38 +99,41 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     void load();
   }, [load]);
 
-  // The recording (egress webhook) and LLM enrichment both arrive shortly
-  // after the interview. Retry while either is pending, but cap the polling so
-  // legacy or failed sessions settle into a recoverable manual-refresh state.
+  // Right after End the session is still finalizing; the recording (egress
+  // webhook) and the written review arrive later still. Keep polling while
+  // any of them is pending, backing off, then settle into manual Refresh.
   useEffect(() => {
-    if (!report || gaveUp) return;
-    const session = report.session;
-    const needMore =
-      session.status !== 'completed' ||
-      !!session.reportPending ||
-      (!report.recordingUrl && session.recordingAvailable);
+    if (gaveUp) return;
+    if (!report && !error) return; // the first load is still in flight
+    const session = report?.session;
+    const needMore = !session
+      ? true
+      : (session.status !== 'completed' && session.status !== 'failed' && session.status !== 'expired') ||
+        (session.status === 'completed' && session.overall == null && !('reportTooShort' in session && session.reportTooShort)) ||
+        !!session.reportPending ||
+        (!report!.recordingUrl && session.recordingAvailable);
     if (!needMore) return;
-    if (pollsRef.current >= MAX_POLLS) {
+    if (Date.now() - pollStartRef.current >= POLL_BUDGET_MS) {
       setGaveUp(true);
       return;
     }
-    const delay = session.status !== 'completed' ? 3000 : 4000;
     const timer = window.setTimeout(() => {
       pollsRef.current += 1;
       void load();
-    }, delay);
+    }, nextPollDelay(pollsRef.current));
     return () => window.clearTimeout(timer);
-  }, [report, load, gaveUp]);
+  }, [report, error, load, gaveUp, loadTick]);
 
   const refresh = async () => {
     setGaveUp(false);
     pollsRef.current = 0;
+    pollStartRef.current = Date.now();
     setRefreshing(true);
     await load();
     setRefreshing(false);
   };
 
-  if (error) {
+  if (error && !report) {
     return (
       <div className={styles.report}>
         <header className={styles.head}>
@@ -117,9 +141,14 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
         </header>
         <section className={styles.messageCard} role="alert">
           <p>{t('report.error')}</p>
-          <Btn variant="primary" as="a" href="/practice">
-            {t('report.newInterview')}
-          </Btn>
+          <div className={styles.messageActions}>
+            <Btn variant="primary" onClick={() => void refresh()} disabled={refreshing}>
+              {refreshing ? t('report.refreshing') : t('report.retry')}
+            </Btn>
+            <Btn as="a" href="/practice">
+              {t('report.newInterview')}
+            </Btn>
+          </div>
         </section>
       </div>
     );
@@ -164,6 +193,9 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     reportTooShort ||
     (session.status === 'completed' && !reviewPending && !hasCandidateAnswer);
   const overall = Math.max(0, Math.min(100, session.overall ?? 0));
+  // No verdict until the session is completed AND scored: a "0/100" while
+  // the server is still finalizing reads as a real (terrible) score.
+  const scorePending = session.status !== 'completed' || session.overall == null;
   const breakdown = (session.breakdown ?? []).map((item) => {
     const canonicalKey = canonicalDimKey(item.key);
     return {
@@ -206,6 +238,58 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
     practiceAgainParams.set('interviewer', session.personaId);
   }
   const practiceAgainHref = `/practice?${practiceAgainParams.toString()}`;
+
+  // Contract C10: a session that ended with no recorded answer is 'failed'
+  // with error 'no_answer' — never evaluated, never charged.
+  if (session.status === 'failed' && session.error === 'no_answer') {
+    return (
+      <div className={styles.report}>
+        <header className={styles.head}>
+          <h1>{t('report.title')}</h1>
+          <p>
+            {localizeRole(session.role)}
+            <span aria-hidden> · </span>
+            {t(`setup.modeShort.${session.mode}`)}
+          </p>
+        </header>
+        <section className={styles.noAnswerState} aria-labelledby="report-no-answer-title">
+          <span className={styles.noAnswerMark} aria-hidden="true">—</span>
+          <div className={styles.noAnswerCopy}>
+            <h2 id="report-no-answer-title">{t('report.noAnswer.title')}</h2>
+            <p>{t('report.noAnswer.body')}</p>
+          </div>
+          <Btn variant="primary" as="a" href={practiceAgainHref}>
+            {t('report.noAnswer.cta')}
+          </Btn>
+        </section>
+      </div>
+    );
+  }
+
+  if (session.status === 'failed' || session.status === 'expired') {
+    return (
+      <div className={styles.report}>
+        <header className={styles.head}>
+          <h1>{t('report.title')}</h1>
+          <p>
+            {localizeRole(session.role)}
+            <span aria-hidden> · </span>
+            {t(`setup.modeShort.${session.mode}`)}
+          </p>
+        </header>
+        <section className={styles.noAnswerState} aria-labelledby="report-failed-title">
+          <span className={styles.noAnswerMark} aria-hidden="true">—</span>
+          <div className={styles.noAnswerCopy}>
+            <h2 id="report-failed-title">{t('report.failed.title')}</h2>
+            <p>{t('report.failed.body')}</p>
+          </div>
+          <Btn variant="primary" as="a" href={practiceAgainHref}>
+            {t('report.noAnswer.cta')}
+          </Btn>
+        </section>
+      </div>
+    );
+  }
 
   if (isNoAnswerReport) {
     return (
@@ -294,23 +378,37 @@ export default function MockReportPage({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      <section className={styles.verdict} aria-labelledby="report-verdict-title">
-        <p
-          className={styles.verdictScore}
-          role="progressbar"
+      {scorePending ? (
+        <section
+          className={`${styles.verdict} ${styles.verdictPending}`}
           aria-labelledby="report-verdict-title"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={overall}
+          aria-busy={!gaveUp}
         >
-          <strong>{overall}</strong>
-          <span>/100</span>
-        </p>
-        <div className={styles.verdictCopy}>
-          <h2 id="report-verdict-title">{t('report.overall')}</h2>
-          <Markdown block>{outcomeDiagnosis}</Markdown>
-        </div>
-      </section>
+          <span className={styles.verdictSkeleton} aria-hidden="true" />
+          <div className={styles.verdictCopy}>
+            <h2 id="report-verdict-title">{t('report.overall')}</h2>
+            <p>{gaveUp ? t('report.analysisStalled') : t('report.scorePending')}</p>
+          </div>
+        </section>
+      ) : (
+        <section className={styles.verdict} aria-labelledby="report-verdict-title">
+          <p
+            className={styles.verdictScore}
+            role="progressbar"
+            aria-labelledby="report-verdict-title"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={overall}
+          >
+            <strong>{overall}</strong>
+            <span>/100</span>
+          </p>
+          <div className={styles.verdictCopy}>
+            <h2 id="report-verdict-title">{t('report.overall')}</h2>
+            <Markdown block>{outcomeDiagnosis}</Markdown>
+          </div>
+        </section>
+      )}
 
       <section className={styles.homework} aria-labelledby="report-homework-title">
         <div className={styles.homeworkCopy}>

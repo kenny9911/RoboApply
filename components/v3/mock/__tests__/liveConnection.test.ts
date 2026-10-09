@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { ConnectionQuality, DisconnectReason } from 'livekit-client';
 import {
   SERVER_ENDED_REASONS,
+  SUPERSEDED_REASONS,
   classifyDisconnect,
   qualityLevel,
 } from '../liveConnection';
@@ -36,6 +37,20 @@ describe('classifyDisconnect', () => {
 
   it('SERVER_ENDED_REASONS is exactly the three server-termination reasons', () => {
     expect(SERVER_ENDED_REASONS.size).toBe(3);
+  });
+
+  it('another tab taking the seat is superseded — never an automatic rejoin', () => {
+    expect(classifyDisconnect(DisconnectReason.DUPLICATE_IDENTITY, false)).toBe('superseded');
+    expect(SUPERSEDED_REASONS.size).toBe(1);
+  });
+
+  it('join failures and rejected resumes are network blips — recover, not superseded', () => {
+    expect(classifyDisconnect(DisconnectReason.JOIN_FAILURE, false)).toBe('recover');
+    expect(classifyDisconnect(DisconnectReason.STATE_MISMATCH, false)).toBe('recover');
+  });
+
+  it('a deliberate end still finalizes even if the reason looks superseded', () => {
+    expect(classifyDisconnect(DisconnectReason.DUPLICATE_IDENTITY, true)).toBe('finalize');
   });
 });
 

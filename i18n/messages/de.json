@@ -1323,7 +1323,9 @@
         }
       },
       "showAll": "Alle {count} zeigen",
-      "showFewer": "Weniger zeigen"
+      "showFewer": "Weniger zeigen",
+      "startErrorNetwork": "Der Server war nicht erreichbar. Prüf deine Internetverbindung und versuch es erneut.",
+      "startErrorBusy": "Der Gesprächsdienst ist gerade ausgelastet. Warte eine Minute und versuch es dann erneut."
     },
     "live": {
       "loading": "Dein Raum wird eingerichtet…",
@@ -1457,6 +1459,73 @@
       "rail": {
         "title": "Hinweise und Mitschrift",
         "close": "Panel schließen"
+      },
+      "preparing": {
+        "title": "Dein Gespräch wird vorbereitet",
+        "body": "Deine Gesprächsperson liest sich in die Stelle ein und plant die Fragen. Das dauert meist weniger als eine Minute.",
+        "note": "Wenn dieser Schritt fehlschlägt, wird nichts berechnet.",
+        "slow": "Das dauert länger als sonst. Lass diese Seite offen, es geht dann von selbst weiter."
+      },
+      "prepareFailed": {
+        "title": "Dieses Gespräch konnte nicht vorbereitet werden",
+        "body": "Beim Planen deiner Fragen ist etwas schiefgelaufen. Dir wurde nichts berechnet. Versuch es erneut oder geh zurück und ändere die Auswahl.",
+        "llmTitle": "Der Gesprächsdienst antwortet nicht",
+        "llmBody": "Der Dienst, der deine Fragen schreibt, hat nicht geantwortet, deshalb konnte dieses Gespräch nicht vorbereitet werden. Dir wurde nichts berechnet. Versuch es in einer Minute erneut."
+      },
+      "connectError": {
+        "title": "Verbindung fehlgeschlagen",
+        "body": "Die Verbindung zum Gesprächsraum ist fehlgeschlagen. Prüf deine Internetverbindung und versuch es erneut."
+      },
+      "superseded": {
+        "title": "Dieses Gespräch ist in einem anderen Tab geöffnet",
+        "body": "Ein Gespräch kann immer nur in einem Tab oder Fenster offen sein. Schließ das andere oder mach hier weiter.",
+        "useHere": "Diesen Tab verwenden"
+      },
+      "micBlocked": {
+        "title": "Dein Mikrofon funktioniert nicht"
+      },
+      "cameraUnavailable": "Es geht nur mit Ton weiter.",
+      "device": {
+        "title": "Mikrofon und Kamera prüfen",
+        "titleVoice": "Mikrofon prüfen",
+        "body": "Sag ein paar Worte. Der Balken unter Mikrofon sollte sich bewegen, wenn du sprichst.",
+        "mic": "Mikrofon",
+        "camera": "Kamera",
+        "level": "Mikrofonpegel",
+        "preview": "Deine Kameravorschau",
+        "retry": "Erneut versuchen",
+        "join": "Gespräch beitreten",
+        "rejoin": "Erneut beitreten",
+        "joinVoiceOnly": "Nur mit Ton beitreten",
+        "joining": "Wird verbunden…",
+        "micRequired": "Deine Gesprächsperson muss dich hören können. Bring das Mikrofon zum Laufen, um weiterzumachen.",
+        "voiceOnlyNote": "Du kannst dieses Gespräch auch nur mit Ton führen.",
+        "state": {
+          "checking": "Wird geprüft…",
+          "ok": "Funktioniert",
+          "denied": "Blockiert",
+          "notFound": "Nicht gefunden",
+          "inUse": "Von einer anderen App belegt",
+          "insecure": "Auf dieser Seite nicht erlaubt",
+          "off": "Aus",
+          "error": "Funktioniert nicht"
+        },
+        "fix": {
+          "mic": {
+            "denied": "Dein Browser blockiert das Mikrofon. Wähl das Symbol links in der Adressleiste, erlaub das Mikrofon und versuch es erneut.",
+            "notFound": "Es wurde kein Mikrofon gefunden. Schließ eins an oder schalte dein Headset ein und versuch es erneut.",
+            "inUse": "Eine andere App nutzt dein Mikrofon. Schließ andere Anrufe oder Aufnahme-Apps und versuch es erneut.",
+            "insecure": "Dein Browser erlaubt das Mikrofon nur auf sicheren Seiten. Öffne diese Seite mit https und versuch es erneut.",
+            "error": "Das Mikrofon ist nicht gestartet. Prüf deine Toneinstellungen und versuch es erneut."
+          },
+          "camera": {
+            "denied": "Dein Browser blockiert die Kamera. Wähl das Symbol links in der Adressleiste, erlaub die Kamera und versuch es erneut.",
+            "notFound": "Es wurde keine Kamera gefunden. Schließ eine an und versuch es erneut.",
+            "inUse": "Eine andere App nutzt deine Kamera. Schließ andere Anrufe oder Video-Apps und versuch es erneut.",
+            "insecure": "Dein Browser erlaubt die Kamera nur auf sicheren Seiten. Öffne diese Seite mit https und versuch es erneut.",
+            "error": "Die Kamera ist nicht gestartet. Prüf deine Kameraeinstellungen und versuch es erneut."
+          }
+        }
       }
     },
     "report": {
@@ -1534,6 +1603,17 @@
           "weak": "Braucht Arbeit",
           "missed": "Nicht behandelt"
         }
+      },
+      "retry": "Erneut versuchen",
+      "scorePending": "Deine Punktzahl wird gerade berechnet. Diese Seite aktualisiert sich von selbst.",
+      "noAnswer": {
+        "title": "Keine Antworten aufgenommen",
+        "body": "Das Gespräch endete, bevor eine deiner Antworten aufgenommen wurde, deshalb gibt es nichts zu bewerten. Diese Sitzung wurde dir nicht berechnet.",
+        "cta": "Neu starten"
+      },
+      "failed": {
+        "title": "Dieses Gespräch konnte nicht bewertet werden",
+        "body": "Das Gespräch wurde vor dem Ende unterbrochen, deshalb gibt es keinen Bericht dazu."
       }
     }
   },

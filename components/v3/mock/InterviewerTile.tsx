@@ -9,6 +9,7 @@
 //   'listening' → listening
 //   'thinking'  → thinking
 
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { RAMockInterviewer } from '../../../lib/api/v2/types';
 
@@ -18,15 +19,22 @@ interface Props {
   interviewer: RAMockInterviewer;
   aiState: AiState;
   video: boolean;
+  /** The interviewer's own video (an avatar worker's camera track), rendered
+   *  by the caller so this tile stays free of LiveKit imports. When absent the
+   *  orb stands in. */
+  media?: ReactNode;
 }
 
-export function InterviewerTile({ interviewer, aiState, video }: Props) {
+export function InterviewerTile({ interviewer, aiState, video, media }: Props) {
   const t = useTranslations('practice');
   const speaking = aiState === 'asking';
 
   if (video) {
     return (
       <div className={`iv-video-tile interviewer ${speaking ? 'speaking' : ''}`}>
+        {media ? (
+          <div className="iv-vt-canvas" data-media="video">{media}</div>
+        ) : (
         <div className="iv-vt-canvas">
           <div className="iv-vt-grid" />
           <div
@@ -49,6 +57,7 @@ export function InterviewerTile({ interviewer, aiState, video }: Props) {
             </div>
           ) : null}
         </div>
+        )}
 
         <div className="iv-vt-badge">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
