@@ -34,7 +34,7 @@
 //   Tuning:
 //     INTERVIEW_ENGINE_JOIN_TOKEN_TTL_SEC (default 3600)
 //     INTERVIEW_ENGINE_SESSION_EXPIRY_MIN (default 120)
-//     INTERVIEW_ENGINE_RECORDING_ENABLED  (default true)
+//     INTERVIEW_ENGINE_RECORDING_ENABLED  (default false — opt-in)
 
 import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../services/llm/reasoningEffort.js';
@@ -492,7 +492,10 @@ export function getSessionExpiryMinutes(): number {
   return Number.isFinite(raw) && raw >= 5 ? Math.floor(raw) : 120;
 }
 
+/** Opt-in: recording practice audio/video to R2 needs an explicit true. A
+ *  default-on recorder would store every practice session with no consent
+ *  the moment storage credentials work. Per-session consent comes later. */
 export function isRecordingEnabled(): boolean {
-  const raw = (process.env.INTERVIEW_ENGINE_RECORDING_ENABLED || 'true').trim().toLowerCase();
-  return !['false', '0', 'no', 'off'].includes(raw);
+  const raw = (process.env.INTERVIEW_ENGINE_RECORDING_ENABLED || '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'on'].includes(raw);
 }
