@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Markdown } from '../primitives';
+import { AiGeneratedBadge } from '../../features/market';
 import type {
   ResumeRewriteBody,
   ResumeRewriteResponse,
@@ -25,9 +26,11 @@ interface Props {
   onChange: (next: string) => void;
   /** The page's `useResumeRewrite(id).mutateAsync`. */
   runRewrite: (body: ResumeRewriteBody) => Promise<ResumeRewriteResponse>;
+  /** False hides the AI rewrite chip (no AI consent / no model). Default true. */
+  aiEnabled?: boolean;
 }
 
-export function SummaryEditor({ value, onChange, runRewrite }: Props) {
+export function SummaryEditor({ value, onChange, runRewrite, aiEnabled = true }: Props) {
   const t = useTranslations('resume');
   const [busy, setBusy] = useState(false);
   const [options, setOptions] = useState<RewriteOption[] | null>(null);
@@ -58,6 +61,7 @@ export function SummaryEditor({ value, onChange, runRewrite }: Props) {
         placeholder={t('summary.placeholder')}
       />
       <div className="rb-summary-bar">
+        {aiEnabled ? (
         <button
           type="button"
           className="rb-ai-chip"
@@ -74,6 +78,9 @@ export function SummaryEditor({ value, onChange, runRewrite }: Props) {
             </>
           )}
         </button>
+        ) : (
+          <span />
+        )}
         <div
           style={{
             fontSize: 'var(--fs-label)',
@@ -90,6 +97,7 @@ export function SummaryEditor({ value, onChange, runRewrite }: Props) {
 
       {options ? (
         <div className="rb-options">
+          <AiGeneratedBadge kind="text" />
           {options.map((opt, i) => (
             <div key={i} className="rb-option">
               <div className="rb-option-lbl">

@@ -47,6 +47,8 @@ import {
   useDeleteResumeMutation,
 } from '../../../hooks/useResumes';
 import { DeleteResumeConfirm } from '../../../components/resumes/DeleteResumeConfirm';
+import { ResumeCheckEntry } from '../../../components/features/resume';
+import checkStyles from '../../../components/features/resume/ResumeCheck.module.css';
 import type {
   RAResumeVariant,
   RAResumeVariantSummary,
@@ -366,17 +368,20 @@ export default function ResumesPage() {
       ) : (
         <div className="rb-list">
           {sorted.map((r) => (
-            <ResumeCard
-              key={r.id}
-              resume={r}
-              version={versionById.get(r.id) ?? 'v1'}
-              editedLabel={editedLabel(r)}
-              baseLabel={t('card.base')}
-              scoreUnit={t('card.score_unit')}
-              onOpen={() => router.push(`/resume/${r.id}`)}
-              onDelete={() => setDeleteTarget(r)}
-              deleteLabel={t('card.delete')}
-            />
+            // Each card carries a Resume check entry (WP-22; F-RES-02).
+            <div key={r.id} className={checkStyles.entryWrap}>
+              <ResumeCard
+                resume={r}
+                version={versionById.get(r.id) ?? 'v1'}
+                editedLabel={editedLabel(r)}
+                baseLabel={t('card.base')}
+                scoreUnit={t('card.score_unit')}
+                onOpen={() => router.push(`/resume/${r.id}`)}
+                onDelete={() => setDeleteTarget(r)}
+                deleteLabel={t('card.delete')}
+              />
+              <ResumeCheckEntry resumeId={r.id} name={r.name} />
+            </div>
           ))}
         </div>
       )}

@@ -68,6 +68,7 @@ import {
   type StructuredEducation,
 } from '../../../../lib/resumeStructure';
 import { analyzeResume } from '../../../../lib/resumeAnalyzer';
+import { useLatestResumeCheck } from '../../../../hooks/resume/useResumeCheck';
 import {
   EditorToolbar,
   EditorSection,
@@ -96,6 +97,10 @@ export default function ResumeEditorPage({
   const { data: resume, isLoading, isError } = useResume(id);
   const patch = usePatchResumeMutation(id);
   const rewrite = useResumeRewrite(id);
+  // AI consent (TASK_PLAN.md §2.2): the server reports whether AI may run for
+  // this user; AI actions hide only once it says no (it refuses them anyway).
+  const resumeCheck = useLatestResumeCheck(id);
+  const aiEnabled = resumeCheck.data?.aiAvailable !== false;
   const del = useDeleteResumeMutation();
   const { data: coachData } = useResumeCoachTips(id);
 
@@ -207,6 +212,7 @@ export default function ResumeEditorPage({
       'section-experience': 'experience',
       'section-education': 'education',
       'section-skills': 'skills',
+      'section-projects': 'extra-sections',
     };
     const domId = anchor.startsWith('exp-') ? anchor : sectionMap[anchor];
     if (!domId) return;
@@ -214,6 +220,16 @@ export default function ResumeEditorPage({
       .getElementById(domId)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
+
+  // /resume/[id]?focus=section-… (links from the resume check report): jump
+  // once the structured editor has rendered.
+  const focusHandledRef = useRef(false);
+  useEffect(() => {
+    if (focusHandledRef.current || !structured) return;
+    focusHandledRef.current = true;
+    const focus = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('focus');
+    if (focus) window.setTimeout(() => jumpToIssue(focus), 0);
+  }, [structured, jumpToIssue]);
 
   // ── structured mutators ──
   const updateStructured = useCallback(
@@ -472,6 +488,8 @@ export default function ResumeEditorPage({
           onTailor={() => setTailorOpen(true)}
           onDelete={() => setDeleteOpen(true)}
           onBack={() => router.push('/resume')}
+          resumeId={id}
+          aiEnabled={aiEnabled}
         />
 
         <div className="rb-split">
@@ -554,6 +572,7 @@ export default function ResumeEditorPage({
                 value={structured.summary}
                 onChange={(v) => updateStructured({ ...structured, summary: v })}
                 runRewrite={(body) => rewrite.mutateAsync(body)}
+                aiEnabled={aiEnabled}
               />
             </EditorSection>
 
@@ -673,6 +692,7 @@ export default function ResumeEditorPage({
                           pendingBulletFocusRef.current = null;
                         }}
                         runRewrite={(body) => rewrite.mutateAsync(body)}
+                        aiEnabled={aiEnabled}
                         targetJobId={resume.targetJobId}
                       />
                     ))}
@@ -794,9 +814,9 @@ export default function ResumeEditorPage({
             <EditorSection
               eyebrow="05"
               title={t('section.skills')}
-              aiLabel={t('skills.suggest')}
+              aiLabel={aiEnabled ? t('skills.suggest') : undefined}
               aiBusy={skillsBusy}
-              onAi={suggestSkills}
+              onAi={aiEnabled ? suggestSkills : undefined}
               anchorId="skills"
             >
               <SkillsEditor

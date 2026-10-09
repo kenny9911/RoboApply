@@ -25,6 +25,7 @@ import { useTranslations } from 'next-intl';
 
 import { Markdown, IconX, IconCheck, IconRefresh } from '../primitives';
 import { AI_ACTIONS } from './constants';
+import { AiGeneratedBadge } from '../../features/market';
 import type {
   RAResumeRewriteAction,
   ResumeRewriteBody,
@@ -50,6 +51,11 @@ interface Props {
   /** Ack for requestFocus so the page clears its pending-focus token. */
   onFocusHandled?: () => void;
   runRewrite: (body: ResumeRewriteBody) => Promise<ResumeRewriteResponse>;
+  /**
+   * False hides every AI action (GoApply without the AI consent, or no model
+   * for the brand; TASK_PLAN.md §2.2). Default true.
+   */
+  aiEnabled?: boolean;
   /** Optional job context to bias the rewrite. */
   targetJobId?: string | null;
 }
@@ -83,6 +89,7 @@ export function BulletRow({
   requestFocus = false,
   onFocusHandled,
   runRewrite,
+  aiEnabled = true,
   targetJobId,
 }: Props) {
   const t = useTranslations('resume');
@@ -213,7 +220,7 @@ export function BulletRow({
           </span>
         )}
         <div className="rb-bullet-actions">
-          {AI_ACTIONS.map((a) => (
+          {(aiEnabled ? AI_ACTIONS : []).map((a) => (
             <button
               key={a.id}
               type="button"
@@ -225,7 +232,7 @@ export function BulletRow({
               <span className="rb-bact-lbl">{t(`action.${a.id}.label`)}</span>
             </button>
           ))}
-          <span className="rb-bact-sep" aria-hidden="true" />
+          {aiEnabled ? <span className="rb-bact-sep" aria-hidden="true" /> : null}
           <button
             type="button"
             className="rb-bact"
@@ -323,6 +330,7 @@ export function BulletRow({
               <div className="rb-rewrite-text">
                 <Markdown>{draft ?? ''}</Markdown>
               </div>
+              <AiGeneratedBadge kind="text" />
               <div className="rb-rewrite-foot">
                 <button
                   type="button"

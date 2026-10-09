@@ -16,6 +16,7 @@
 //   POST   /api/v1/roboapply/v2/resumes/:id/grade
 //   GET    /api/v1/roboapply/v2/resumes/:id/grade/latest
 //   POST   /api/v1/roboapply/v2/resumes/:id/issues/:issueId/fix
+//   POST   /api/v1/roboapply/v2/resumes/:id/issues/:issueId/apply
 //   POST   /api/v1/roboapply/v2/resumes/:id/keyword-report
 //   PATCH  /api/v1/roboapply/v2/resumes/:id/layout
 
@@ -43,23 +44,32 @@ export function finalizeTailorSession(id: string, opts?: CallOptions): Promise<R
 }
 
 /** `resume.cancelGrade` — POST /api/v1/roboapply/v2/resumes/grades/:gradeId/cancel */
-export function cancelGrade(gradeId: string, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/v2/resumes/grades/${seg(gradeId)}/cancel`, opts);
+export function cancelGrade(gradeId: string, opts?: CallOptions): Promise<R.CancelGradeResponse> {
+  return call<R.CancelGradeResponse>('POST', `/api/v1/roboapply/v2/resumes/grades/${seg(gradeId)}/cancel`, opts);
 }
 
-/** `resume.grade` — POST /api/v1/roboapply/v2/resumes/:id/grade */
+/**
+ * `resume.grade` — POST /api/v1/roboapply/v2/resumes/:id/grade. Runs in the
+ * request (≤45 s) and returns the finished check. Pass `idempotencyKey`: the
+ * AI pass spends a `resume_check` credit.
+ */
 export function startGrade(id: string, body: In<typeof R.GradeBodySchema> = {}, opts?: CallOptions): Promise<R.GradeStartResponse> {
   return call<R.GradeStartResponse>('POST', `/api/v1/roboapply/v2/resumes/${seg(id)}/grade`, { ...opts, body });
 }
 
 /** `resume.latestGrade` — GET /api/v1/roboapply/v2/resumes/:id/grade/latest */
-export function getLatestGrade(id: string, opts?: CallOptions): Promise<R.GradeView | null> {
-  return call<R.GradeView | null>('GET', `/api/v1/roboapply/v2/resumes/${seg(id)}/grade/latest`, opts);
+export function getLatestGrade(id: string, opts?: CallOptions): Promise<R.LatestGradeResponse> {
+  return call<R.LatestGradeResponse>('GET', `/api/v1/roboapply/v2/resumes/${seg(id)}/grade/latest`, opts);
 }
 
 /** `resume.fixIssue` — POST /api/v1/roboapply/v2/resumes/:id/issues/:issueId/fix */
 export function fixIssue(id: string, issueId: string, body: In<typeof R.FixIssueBodySchema>, opts?: CallOptions): Promise<R.FixIssueResponse> {
   return call<R.FixIssueResponse>('POST', `/api/v1/roboapply/v2/resumes/${seg(id)}/issues/${seg(issueId)}/fix`, { ...opts, body });
+}
+
+/** `resume.applyFix` — POST /api/v1/roboapply/v2/resumes/:id/issues/:issueId/apply (replaces the issue's text in the resume) */
+export function applyIssueFix(id: string, issueId: string, body: In<typeof R.ApplyFixBodySchema>, opts?: CallOptions): Promise<R.ApplyFixResponse> {
+  return call<R.ApplyFixResponse>('POST', `/api/v1/roboapply/v2/resumes/${seg(id)}/issues/${seg(issueId)}/apply`, { ...opts, body });
 }
 
 /** `resume.keywordReport` — POST /api/v1/roboapply/v2/resumes/:id/keyword-report */
@@ -82,6 +92,7 @@ export const resumesApi = {
   startGrade,
   getLatestGrade,
   fixIssue,
+  applyIssueFix,
   getKeywordReport,
   patchResumeLayout,
 };
