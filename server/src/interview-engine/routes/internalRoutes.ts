@@ -5,7 +5,8 @@
 //
 //   GET  /catalog                      — personas + interview types
 //   GET  /sessions/recent              — the user's recent sessions
-//   POST /sessions                     — create a session (generates prompt)
+//   POST /sessions                     — create a session (status 'preparing'; fast)
+//   POST /sessions/:id/prepare         — generate blueprint + prompt (long; {retry:true} re-runs a failure)
 //   GET  /sessions/:id                 — session detail
 //   POST /sessions/:id/connection      — go live → LiveKit url + token + room
 //   POST /sessions/:id/coach           — live whisper hint/nudge (never 500s)
@@ -24,7 +25,15 @@ import { interviewCoachService } from '../coaching/interviewCoachService.js';
 import type { CoachMode } from '../coaching/InterviewCoachAgent.js';
 import { toSessionSummary, toSessionDetail } from './serialize.js';
 import { handleEngineError } from './errors.js';
+import { resolveSessionCallbackBaseUrl } from '../config.js';
 import type { InterviewSource } from '../types.js';
+
+/** Admins are exempt from mock-interview credits — explicitly, on the
+ *  'roboapply' source (never via the recruiter source path). */
+function isAdmin(user: { role?: string | null; roles?: string[] | null } | undefined): boolean {
+  if (!user) return false;
+  return user.role === 'admin' || (Array.isArray(user.roles) && user.roles.includes('admin'));
+}
 
 const router = Router();
 
@@ -44,10 +53,16 @@ router.get('/sessions/recent', requireAuth, async (req: Request, res: Response) 
 router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
   try {
     const b = req.body ?? {};
-    const source: InterviewSource = req.user!.role === 'admin' || req.user!.role === 'user' ? 'recruiter' : 'roboapply';
+    const admin = isAdmin(req.user as { role?: string; roles?: string[] });
+    // Legacy role-'user' (RoboHire-style) accounts stay on the 'recruiter'
+    // source, which was never credit-gated or debited. Moving them onto the
+    // seeker credit gate is a billing change that needs product sign-off.
+    const source: InterviewSource = !admin && req.user!.role === 'user' ? 'recruiter' : 'roboapply';
     const session = await interviewSessionService.createSession({
       userId: req.user!.id,
       source,
+      creditExempt: admin,
+      callbackBaseUrl: resolveSessionCallbackBaseUrl(req.headers),
       role: typeof b.role === 'string' ? b.role : '',
       interviewType: typeof b.interviewType === 'string' ? b.interviewType : undefined,
       personaId: typeof b.personaId === 'string' ? b.personaId : undefined,
@@ -63,6 +78,22 @@ router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
     return res.json({ session: toSessionDetail(session) });
   } catch (err) {
     return handleEngineError(res, 'create', err, { userId: req.user?.id });
+  }
+});
+
+// C2: run (or re-run with {retry:true}) blueprint + prompt generation. A long
+// request — the client also polls GET /sessions/:id as a backup.
+router.post('/sessions/:id/prepare', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+  try {
+    const session = await interviewSessionService.prepareSession({
+      sessionId: req.params.id,
+      userId: req.user!.id,
+      retry: req.body?.retry === true,
+      requestId: getCurrentRequestId() ?? undefined,
+    });
+    return res.json({ session: toSessionDetail(session) });
+  } catch (err) {
+    return handleEngineError(res, 'prepare', err, { userId: req.user?.id, sessionId: req.params.id });
   }
 });
 

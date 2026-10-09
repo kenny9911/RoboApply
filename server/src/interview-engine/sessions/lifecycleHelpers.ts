@@ -208,3 +208,68 @@ function p50(vals: number[]): number {
   const sorted = [...vals].sort((a, b) => a - b);
   return sorted[Math.floor((sorted.length - 1) / 2)];
 }
+
+// ─── Preparation / failure codes ───────────────────────────────────────────
+
+/** session.error codes a POST /prepare {retry:true} may re-run (C2). */
+export const PREPARE_FAILURE_CODES = ['llm_unavailable', 'prepare_failed'] as const;
+
+export function isRetryablePrepareFailure(code: string | null | undefined): boolean {
+  return !!code && (PREPARE_FAILURE_CODES as readonly string[]).includes(code);
+}
+
+/** Worker-supplied failure reason → a short, log/UI-safe code. */
+export function sanitizeWorkerReason(reason: unknown): string {
+  if (typeof reason !== 'string') return '';
+  return reason.trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+}
+
+// ─── Per-session control data (inside liveMetrics.control) ─────────────────
+
+/** Control-plane facts captured at create time and kept with the session,
+ *  inside the existing liveMetrics JSON column (no schema change). */
+export interface SessionControl {
+  /** Worker callback origin derived from the create request (C13). */
+  callbackBaseUrl?: string;
+  /** Admin session: no credit gate, no debit. */
+  creditExempt?: boolean;
+}
+
+export function readSessionControl(liveMetrics: unknown): SessionControl {
+  const control = asLiveMetrics(liveMetrics).control;
+  if (!control || typeof control !== 'object' || Array.isArray(control)) return {};
+  const c = control as Record<string, unknown>;
+  return {
+    ...(typeof c.callbackBaseUrl === 'string' && c.callbackBaseUrl ? { callbackBaseUrl: c.callbackBaseUrl } : {}),
+    ...(c.creditExempt === true ? { creditExempt: true } : {}),
+  };
+}
+
+// ─── Transcript helpers ────────────────────────────────────────────────────
+
+/** Candidate turns with real text — the "did an interview happen" signal for
+ *  the no-answer (C10) and worker-error (C9) paths. Tolerates raw JSON. */
+export function countCandidateTurns(transcript: unknown): number {
+  if (!Array.isArray(transcript)) return 0;
+  let n = 0;
+  for (const t of transcript) {
+    if (!t || typeof t !== 'object') continue;
+    const r = t as Record<string, unknown>;
+    if (r.role === 'candidate' && typeof r.text === 'string' && r.text.trim()) n += 1;
+  }
+  return n;
+}
+
+/** Drop repeats of the same (role, ts) inside one incoming batch (C11), keeping
+ *  the first occurrence and the batch order. */
+export function dedupeTurnsByKey<T extends { role: string; ts: number }>(turns: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const t of turns) {
+    const key = `${t.role}:${t.ts}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}

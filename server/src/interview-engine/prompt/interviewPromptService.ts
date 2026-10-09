@@ -6,8 +6,9 @@
 //   3. Deterministic compose → voice system prompt + opening + master brief +
 //      seed questions (UI shape) + web sources.
 //
-// NEVER throws: any failed stage degrades to a heuristic so a session can
-// always start.
+// NEVER throws by default: any failed stage degrades to a heuristic so a
+// session can always start. With `strictLlm` (session preparation) an
+// unusable model stack throws InterviewLlmUnavailableError instead.
 
 import { logger } from '../../services/LoggerService.js';
 import { searchJobRequirements, formatWebEvidence } from '../webSearch.js';
@@ -23,6 +24,8 @@ import {
   type ComposeParams,
 } from './voiceSystemPrompt.js';
 import type { InterviewCharacteristics } from '../types.js';
+import { getWebEvidenceTimeoutMs } from '../config.js';
+import { InterviewLlmUnavailableError, isLlmUnavailableError } from './llmFailure.js';
 
 export interface SeedQuestion {
   q: string;
@@ -60,6 +63,15 @@ export interface PromptGenerationInput {
   questionCount?: number;
   requestId?: string;
   signal?: AbortSignal;
+  /**
+   * Session preparation sets this: a blueprint failure caused by the model
+   * stack (dead key, quota, outage, timeout, empty output) THROWS
+   * InterviewLlmUnavailableError instead of silently degrading to the
+   * heuristic English blueprint, so the session fails honestly with
+   * 'llm_unavailable' (and is never charged). Other blueprint errors still
+   * fall back. Unset (preview, external API) keeps the never-throws posture.
+   */
+  strictLlm?: boolean;
 }
 
 /** Real job boards we prefer to ground requirements on (the "competitive market
@@ -258,15 +270,31 @@ export class InterviewPromptService {
     const jd = (input.jdText ?? '').trim();
     // A substantial JD is authoritative — don't spend a search on it.
     if (jd.length > 600) return { webEvidence: '', webSources: [] };
+    // Cap the whole stage (incl. the open-web retry): a slow search must never
+    // stall preparation. The abort cancels the in-flight fetch; the race is the
+    // belt-and-suspenders for a fetch that ignores the signal.
+    const budgetMs = getWebEvidenceTimeoutMs();
+    const budget = AbortSignal.timeout(budgetMs);
+    const signal = input.signal ? AbortSignal.any([input.signal, budget]) : budget;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const roleForQuery = input.role || input.typeLabel;
       const query = `${roleForQuery} job description requirements responsibilities qualifications`;
-      const resp = await searchJobRequirements(query, {
+      const search = searchJobRequirements(query, {
         maxResults: 5,
         includeDomains: JOB_BOARD_DOMAINS,
         requestId: input.requestId,
-        signal: input.signal,
+        signal,
       });
+      const timedOut = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), budgetMs + 250);
+      });
+      const resp = await Promise.race([search, timedOut]);
+      if (resp === null && signal.aborted) {
+        logger.warn('INTERVIEW_ENGINE_PROMPT', 'web evidence search exceeded its budget; continuing without it', {
+          requestId: input.requestId, budgetMs,
+        });
+      }
       return {
         webEvidence: formatWebEvidence(resp),
         webSources: (resp?.results ?? []).slice(0, 5).map((r) => ({ title: r.title, url: r.url })),
@@ -274,6 +302,8 @@ export class InterviewPromptService {
     } catch {
       // searchJobRequirements already swallows; belt-and-suspenders.
       return { webEvidence: '', webSources: [] };
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
@@ -316,6 +346,14 @@ export class InterviewPromptService {
         { requestId: input.requestId, locale: input.language, signal: input.signal },
       );
     } catch (err) {
+      if (input.strictLlm && isLlmUnavailableError(err)) {
+        logger.error('INTERVIEW_ENGINE_PROMPT', 'blueprint agent failed: LLM unavailable', {
+          requestId: input.requestId, role: input.role, error: err instanceof Error ? err.message : String(err),
+        });
+        throw err instanceof InterviewLlmUnavailableError
+          ? err
+          : new InterviewLlmUnavailableError('Interview blueprint LLM is unavailable', { cause: err });
+      }
       logger.warn('INTERVIEW_ENGINE_PROMPT', 'blueprint agent failed; using heuristic', {
         requestId: input.requestId, role: input.role, error: err instanceof Error ? err.message : String(err),
       });

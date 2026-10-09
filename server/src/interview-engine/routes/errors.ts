@@ -10,7 +10,12 @@ import {
   InterviewNotFoundError,
   InterviewAuthError,
   InterviewInsufficientCreditsError,
+  InterviewNotReadyError,
+  InterviewSessionFailedError,
+  InterviewSessionEndedError,
+  InterviewPrepareFailedError,
 } from '../sessions/InterviewSessionService.js';
+import { toSessionDetail } from './serialize.js';
 
 export function handleEngineError(res: Response, op: string, err: unknown, extra?: Record<string, unknown>): Response {
   if (err instanceof InterviewValidationError) {
@@ -25,6 +30,23 @@ export function handleEngineError(res: Response, op: string, err: unknown, extra
       required: err.required,
       tier: err.tier,
     });
+  }
+  // C5 envelope: { error: <code>, message? } (+ session where the client needs it).
+  if (err instanceof InterviewPrepareFailedError) {
+    return res.status(err.code === 'llm_unavailable' ? 503 : 500).json({
+      error: err.code,
+      message: err.message,
+      session: toSessionDetail(err.session),
+    });
+  }
+  if (err instanceof InterviewNotReadyError) {
+    return res.status(409).json({ error: 'not_ready', message: err.message });
+  }
+  if (err instanceof InterviewSessionFailedError) {
+    return res.status(409).json({ error: 'session_failed', reason: err.reason, message: err.message });
+  }
+  if (err instanceof InterviewSessionEndedError) {
+    return res.status(409).json({ error: 'session_ended', status: err.status, message: err.message });
   }
   if (err instanceof InterviewNotFoundError) {
     return res.status(404).json({ error: 'not_found' });

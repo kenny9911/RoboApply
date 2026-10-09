@@ -29,15 +29,14 @@ import { runAccountPurgeSweep } from '../roboapply/services/SeekerAccountPurgeSe
 const router = Router();
 
 /**
- * Interview-engine expiry reconciliation, piggybacked on the existing frequent
- * jobs (no dedicated vercel.json cron entry): finalize-or-expire sessions
- * stranded past expiresAt so their ingested transcripts still become reports.
- * Rides BOTH the catchup sweep (every 15 min, but only 9-15 UTC) and the
- * hourly digest job, which covers the hours catchup doesn't run. Idempotent,
- * cheap when nothing is stranded (one indexed query), and best-effort — it
- * never fails the host job.
+ * Interview-engine expiry reconciliation: finalize-or-expire sessions stranded
+ * past expiresAt so their ingested transcripts still become reports, and
+ * expire 'preparing' rows whose prepare request was lost (> 30 min). Has its
+ * own cron route (/interview-cleanup, every 15 min in vercel.json and in the
+ * local node-cron service). Idempotent, cheap when nothing is stranded, and
+ * best-effort — it never throws.
  */
-async function reconcileInterviewSessions() {
+export async function reconcileInterviewSessions() {
   try {
     return await interviewSessionService.reconcileExpiredSessions();
   } catch (err) {
@@ -90,30 +89,19 @@ router.get(
   }),
 );
 
-// 2. Digest fanout (service filters by user-local 07:00). Also hosts the
-//    interview-session reconciler for the hours the catchup sweep doesn't run.
-router.get(
-  '/digest',
-  job('digest', async () => {
-    const digests = await composeAndSendDigestsForLocalHour({});
-    const interviewReconcile = await reconcileInterviewSessions();
-    return { digests, interviewReconcile };
-  }),
-);
+// 2. Digest fanout (service filters by user-local 07:00).
+router.get('/digest', job('digest', () => composeAndSendDigestsForLocalHour({})));
 
 // 3. Submitter (service filters by user-local 09:00).
 router.get('/submitter', job('submitter', () => submitDueRunsAll({})));
 
-// 4. Catchup sweep — submit due + hard-fail stale previewing runs. The most
-//    frequent cron (every 15 min in its window), so the interview-session
-//    reconciler rides here too.
+// 4. Catchup sweep — submit due + hard-fail stale previewing runs.
 router.get(
   '/catchup',
   job('catchup', async () => {
     const submit = await submitDueRunsAll({});
     const hardFail = await catchupHardFailStaleRuns({});
-    const interviewReconcile = await reconcileInterviewSessions();
-    return { submit, hardFail, interviewReconcile };
+    return { submit, hardFail };
   }),
 );
 
@@ -138,5 +126,9 @@ router.get('/billing-friday-nudge', job('billing-friday-nudge', () => runFridayN
 //    first, then the User row (cascades), for accounts soft-deleted past the
 //    retention window. See SeekerAccountPurgeService.
 router.get('/account-purge', job('account-purge', () => runAccountPurgeSweep({})));
+
+// 9. Interview-session cleanup (every 15 min): finalize/expire stranded
+//    sessions past expiresAt + expire stale 'preparing' rows.
+router.get('/interview-cleanup', job('interview-cleanup', () => reconcileInterviewSessions()));
 
 export default router;

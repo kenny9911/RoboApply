@@ -39,10 +39,13 @@ import { calculateModelCost } from '../../lib/modelPricing.js';
 import { getRateCard } from '../../lib/rateCard.js';
 import { writeDeductionLog } from '../../lib/matchBilling.js';
 import { debitForFinishedSession } from '../../lib/mockCreditService.js';
-import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
+import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
+import { readSessionControl } from '../sessions/lifecycleHelpers.js';
 import {
   getWorkerSttModel,
   getWorkerSttFallbackModels,
+  getBlueprintModel,
+  getBlueprintReasoningEffort,
 } from '../config.js';
 import type { InterviewRoomMetadata, ResolvedVoice } from '../types.js';
 
@@ -437,6 +440,8 @@ export async function writeMockInterviewLedger(sessionId: string): Promise<void>
       plannedDurationMinutes: true,
       endedAt: true,
       costBreakdown: true,
+      // liveMetrics.control.creditExempt marks admin sessions (no debit).
+      liveMetrics: true,
       user: { select: { subscriptionTier: true } },
     } as const;
 
@@ -487,7 +492,8 @@ export async function writeMockInterviewLedger(sessionId: string): Promise<void>
     // failure here never blocks the cost ledger or the interview. Runs after the
     // idempotency guard above, so it fires exactly once per session.
     let creditDebit: { debited: number; balanceAfter: number } | null = null;
-    if (row.source === 'roboapply') {
+    const creditExempt = readSessionControl(row.liveMetrics).creditExempt === true;
+    if (row.source === 'roboapply' && !creditExempt) {
       creditDebit = await debitForFinishedSession({
         userId: row.userId,
         sessionId,
@@ -495,7 +501,7 @@ export async function writeMockInterviewLedger(sessionId: string): Promise<void>
         plannedDurationMinutes: row.plannedDurationMinutes,
       });
     }
-    const enforced = row.source === 'roboapply';
+    const enforced = row.source === 'roboapply' && !creditExempt;
 
     await writeDeductionLog({
       userId: row.userId,
@@ -515,6 +521,7 @@ export async function writeMockInterviewLedger(sessionId: string): Promise<void>
       relatedEntityId: sessionId,
       metadata: {
         sessionSource: row.source,
+        ...(creditExempt ? { creditExempt: true } : {}),
         costUsd: round6(costUsd),
         durationSec,
         minutes: round4(durationSec / 60),
@@ -574,11 +581,15 @@ export function describeSessionModels(
       languageCode: voice.languageCode,
       label: voice.label,
     },
-    // Backend agents — share the interview task settings.
+    // Backend agents — the interview task settings (blueprint may override).
     backendAgents: {
       model: backendModel,
-      reasoningEffort: llm.reasoningEffort,
-      uses: ['blueprint', 'holisticScorecard', 'questionDeepDive', 'recommendations', 'coach'],
+      reasoningEffort: getTaskReasoningEffort('interview'),
+      uses: ['holisticScorecard', 'questionDeepDive', 'recommendations', 'coach'],
+    },
+    blueprint: {
+      model: getBlueprintModel(),
+      reasoningEffort: getBlueprintReasoningEffort(),
     },
   };
 }

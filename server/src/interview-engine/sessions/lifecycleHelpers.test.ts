@@ -47,3 +47,50 @@ describe('recordingMimeForMode', () => {
     expect(recordingMimeForMode('')).toBe('video/mp4');
   });
 });
+
+import {
+  countCandidateTurns,
+  dedupeTurnsByKey,
+  isRetryablePrepareFailure,
+  readSessionControl,
+  sanitizeWorkerReason,
+} from './lifecycleHelpers.js';
+
+describe('preparation + worker failure helpers', () => {
+  it('only llm_unavailable / prepare_failed are retryable', () => {
+    expect(isRetryablePrepareFailure('llm_unavailable')).toBe(true);
+    expect(isRetryablePrepareFailure('prepare_failed')).toBe(true);
+    expect(isRetryablePrepareFailure('no_answer')).toBe(false);
+    expect(isRetryablePrepareFailure(null)).toBe(false);
+  });
+
+  it('sanitizes worker reasons into short codes', () => {
+    expect(sanitizeWorkerReason(' Greeting No Audio! ')).toBe('greeting_no_audio');
+    expect(sanitizeWorkerReason(42)).toBe('');
+    expect(sanitizeWorkerReason('x'.repeat(200))).toHaveLength(64);
+  });
+});
+
+describe('session control + transcript helpers', () => {
+  it('reads control data defensively', () => {
+    expect(readSessionControl(null)).toEqual({});
+    expect(readSessionControl({ control: 'bad' })).toEqual({});
+    expect(readSessionControl({ control: { callbackBaseUrl: 'https://a.roboapply.io', creditExempt: true, other: 1 } }))
+      .toEqual({ callbackBaseUrl: 'https://a.roboapply.io', creditExempt: true });
+  });
+
+  it('counts only non-empty candidate turns', () => {
+    expect(countCandidateTurns(null)).toBe(0);
+    expect(countCandidateTurns([
+      { role: 'interviewer', text: 'Q', ts: 1 },
+      { role: 'candidate', text: '  ', ts: 2 },
+      { role: 'candidate', text: 'A', ts: 3 },
+    ])).toBe(1);
+  });
+
+  it('dedupes a batch on role + ts, keeping order', () => {
+    const a = { role: 'candidate', text: 'A', ts: 1 };
+    const b = { role: 'interviewer', text: 'Q', ts: 1 };
+    expect(dedupeTurnsByKey([a, b, { ...a, text: 'retry' }])).toEqual([a, b]);
+  });
+});

@@ -12,7 +12,11 @@ function sectionFailed(report: Record<string, unknown>, section: string): boolea
 export function toSessionSummary(s: InterviewSession) {
   return {
     id: s.id,
+    // 'preparing' | 'created' | 'live' | 'finalizing' | 'completed' | 'failed' | 'expired'
     status: s.status,
+    // Failure code when status is 'failed' (llm_unavailable | prepare_failed |
+    // no_answer | a worker reason); null otherwise.
+    error: s.error ?? null,
     source: s.source,
     role: s.role,
     interviewType: s.interviewType,

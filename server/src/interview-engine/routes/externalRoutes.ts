@@ -21,6 +21,7 @@ import { getCurrentRequestId } from '../../lib/requestContext.js';
 import { interviewSessionService } from '../sessions/InterviewSessionService.js';
 import { toSessionSummary, toSessionDetail } from './serialize.js';
 import { handleEngineError } from './errors.js';
+import { resolveSessionCallbackBaseUrl } from '../config.js';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ function requireApiKey(req: Request, res: Response, next: NextFunction) {
 router.post('/sessions', requireAuth, requireApiKey, async (req: Request, res: Response) => {
   try {
     const b = req.body ?? {};
-    const session = await interviewSessionService.createSession({
+    const created = await interviewSessionService.createSession({
       userId: req.user!.id,
       source: 'external',
       apiKeyId: req.apiKeyId,
@@ -49,7 +50,18 @@ router.post('/sessions', requireAuth, requireApiKey, async (req: Request, res: R
       characteristics: b.characteristics,
       candidateName: typeof b.candidateName === 'string' ? b.candidateName : undefined,
       resumeContext: typeof b.resumeContext === 'string' ? b.resumeContext : undefined,
+      callbackBaseUrl: resolveSessionCallbackBaseUrl(req.headers),
       requestId: getCurrentRequestId() ?? undefined,
+    });
+    // External callers keep their synchronous contract: the session comes back
+    // ready ('created'). strictLlm:false keeps the never-fail heuristic
+    // blueprint fallback this API always had.
+    const session = await interviewSessionService.prepareSession({
+      sessionId: created.id,
+      userId: req.user!.id,
+      apiKeyId: req.apiKeyId,
+      requestId: getCurrentRequestId() ?? undefined,
+      strictLlm: false,
     });
 
     if (req.query.connect === '1' || req.query.connect === 'true') {

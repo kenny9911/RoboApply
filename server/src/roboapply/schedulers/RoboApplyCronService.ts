@@ -18,6 +18,9 @@
 //   8. 0 4 * * *  UTC                  → GDPR account purge (hard-delete
 //                                       accounts soft-deleted past retention:
 //                                       R2 artifacts first, then User rows).
+//   9. */15 * * * * UTC                → interview-session cleanup (finalize or
+//                                       expire stranded sessions; expire stale
+//                                       'preparing' rows).
 //
 // All cron expressions overridable via env (see DEFAULT_* constants below).
 // Kill switch: ROBOAPPLY_CRON_DISABLED=true → no tasks register at all.
@@ -35,6 +38,7 @@ import { submitDueRunsAll, catchupHardFailStaleRuns } from '../services/RoboAppl
 import { composeAndSendDigestsForLocalHour } from '../services/RoboApplyDigestService.js';
 import { runRenewalReminderSweep, runFridayNudgeSweep } from '../services/RoboApplyBillingReminderService.js';
 import { runAccountPurgeSweep } from '../services/SeekerAccountPurgeService.js';
+import { interviewSessionService } from '../../interview-engine/sessions/InterviewSessionService.js';
 
 // ─── Defaults ───────────────────────────────────────────────────────────
 
@@ -46,6 +50,7 @@ const DEFAULT_CACHE_CLEANUP_CRON = '0 3 * * 0'; // Sunday 03:00 UTC
 const DEFAULT_RENEWAL_REMINDER_CRON = '0 6 * * *'; // 06:00 UTC daily — T-5d renewal reminders
 const DEFAULT_FRIDAY_NUDGE_CRON = '0 16 * * 5'; // Fri 16:00 UTC — weekly prep nudge
 const DEFAULT_ACCOUNT_PURGE_CRON = '0 4 * * *'; // 04:00 UTC daily — GDPR hard-purge sweep
+const DEFAULT_INTERVIEW_CLEANUP_CRON = '*/15 * * * *'; // every 15 min — interview session cleanup
 
 // In-memory dedup so a per-mission submitter doesn't race the catchup sweep
 // already fired this hour. The submitter/digest services have their own
@@ -264,6 +269,22 @@ export function startRoboApplyCron(): void {
     },
   );
 
+  // ── 9. Interview-session cleanup — every 15 min ───────────────────────
+  registerCron(
+    'interview_cleanup',
+    process.env.ROBOAPPLY_INTERVIEW_CLEANUP_CRON || DEFAULT_INTERVIEW_CLEANUP_CRON,
+    tz,
+    async () => {
+      const r = await interviewSessionService.reconcileExpiredSessions().catch((err) => {
+        logger.error('ROBOAPPLY_CRON', 'interview cleanup threw', { error: err instanceof Error ? err.message : String(err) });
+        return null;
+      });
+      if (r && (r.finalized > 0 || r.expired > 0)) {
+        logger.info('ROBOAPPLY_CRON', 'interview cleanup cycle complete', r);
+      }
+    },
+  );
+
   // Rotate the per-hour dedup set every hour so it doesn't grow unbounded.
   dedupCleanupInterval = setInterval(() => {
     const currentHour = new Date().toISOString().slice(0, 13);
@@ -329,6 +350,7 @@ export const __test = {
   DEFAULT_SUBMITTER_CRON,
   DEFAULT_CATCHUP_CRON,
   DEFAULT_CACHE_CLEANUP_CRON,
+  DEFAULT_INTERVIEW_CLEANUP_CRON,
 };
 
 export default roboApplyCronService;

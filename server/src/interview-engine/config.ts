@@ -18,18 +18,26 @@
 //     S3_ACCESS_KEY_ID|AWS_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY|AWS_SECRET_ACCESS_KEY,
 //     S3_FORCE_PATH_STYLE
 //   Worker model selection (passed to the worker via room metadata; overridable):
-//     LLM_INTERVIEW_MODEL, LLM_INTERVIEW_REASONING_EFFORT,
+//     LLM_INTERVIEW_LIVE_MODEL, LLM_INTERVIEW_LIVE_REASONING_EFFORT — the live
+//        turn model (falls back to LLM_INTERVIEW_MODEL; effort defaults 'low' for
+//        reasoning models (gpt-5/6, o-series, gpt-oss), none otherwise),
+//     LLM_INTERVIEW_MODEL, LLM_INTERVIEW_REASONING_EFFORT (blueprint + evaluation),
+//     LLM_INTERVIEW_BLUEPRINT_MODEL, LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT
+//        (optional faster model for session preparation),
 //     INTERVIEW_ENGINE_STT_MODEL
 //   Callback wiring:
 //     INTERVIEW_ENGINE_CALLBACK_BASE_URL — base URL the worker uses to reach this
 //        backend (e.g. https://api.robohire.io). Falls back to BACKEND_PUBLIC_URL /
-//        PUBLIC_BACKEND_URL, else http://localhost:<PORT>.
+//        PUBLIC_BACKEND_URL; in production (VERCEL=1 / NODE_ENV=production) to the
+//        public origin of the create request (allowlisted hosts only, see
+//        INTERVIEW_ENGINE_CALLBACK_ALLOWED_HOSTS), else http://localhost:<PORT>.
 //   Tuning:
 //     INTERVIEW_ENGINE_JOIN_TOKEN_TTL_SEC (default 3600)
 //     INTERVIEW_ENGINE_SESSION_EXPIRY_MIN (default 120)
 //     INTERVIEW_ENGINE_RECORDING_ENABLED  (default true)
 
 import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
+import { parseReasoningEffort, type ReasoningEffort } from '../services/llm/reasoningEffort.js';
 import type { InterviewReasoningEffort } from './types.js';
 
 export class InterviewEngineConfigError extends Error {
@@ -238,40 +246,117 @@ function requireInterviewBackendModel(): string {
   return model;
 }
 
-function mapInterviewModelToWorker(backendModel: string): string {
+function mapInterviewModelToWorker(backendModel: string, envName = 'LLM_INTERVIEW_MODEL'): string {
   const workerModel = LIVEKIT_MODEL_BY_BACKEND_SELECTOR.get(backendModel);
   if (!workerModel) {
     throw new InterviewEngineConfigError(
-      `LLM_INTERVIEW_MODEL="${backendModel}" has no supported equivalent in LiveKit Inference. ` +
+      `${envName}="${backendModel}" has no supported equivalent in LiveKit Inference. ` +
       'Configure one model selector supported by both the backend LLM stack and LiveKit Inference.',
     );
   }
   return workerModel;
 }
 
-export function getWorkerLlmModel(): string {
-  return mapInterviewModelToWorker(requireInterviewBackendModel());
-}
-
-export function getWorkerLlmReasoningEffort(): InterviewReasoningEffort | undefined {
-  const effort = getTaskReasoningEffort('interview');
-  if (effort === 'max') {
+/** The selector the LIVE worker turns run on, before LiveKit mapping:
+ *  LLM_INTERVIEW_LIVE_MODEL when set, else the interview task model (backward
+ *  compatible). The ALIGNED_INTERVIEW_MODELS allowlist applies to THIS value. */
+function liveModelSelector(): { selector: string; envName: string } {
+  const live = process.env.LLM_INTERVIEW_LIVE_MODEL?.trim();
+  if (live) return { selector: live, envName: 'LLM_INTERVIEW_LIVE_MODEL' };
+  const model = getTaskModel('interview');
+  if (!model) {
     throw new InterviewEngineConfigError(
-      'LLM_INTERVIEW_REASONING_EFFORT=max is not supported by LiveKit Inference; use minimal, low, medium, or high.',
+      'Interview LLM is not configured. Set LLM_INTERVIEW_MODEL (or LLM_INTERVIEW_LIVE_MODEL for the live worker).',
     );
   }
-  return effort;
+  return { selector: model, envName: 'LLM_INTERVIEW_MODEL' };
+}
+
+/** LiveKit Inference model id for live interview turns. */
+export function getWorkerLlmModel(): string {
+  const { selector, envName } = liveModelSelector();
+  return mapInterviewModelToWorker(selector, envName);
+}
+
+/** True for LiveKit worker model ids that accept OpenAI's `reasoning_effort`
+ *  (gpt-5*, gpt-6*, o-series, gpt-oss) — excluding the non-reasoning
+ *  `chat-latest` aliases. gpt-4.1*, gpt-4o*, Gemini, Kimi and DeepSeek keep the
+ *  pre-split behaviour (no effort unless explicitly configured), because
+ *  OpenAI rejects `reasoning_effort` on non-reasoning models with a 400 and
+ *  every live turn would then fail. */
+export function liveModelAcceptsReasoningEffort(workerModel: string | undefined): boolean {
+  if (!workerModel) return false;
+  const id = workerModel.trim().toLowerCase();
+  if (!id.startsWith('openai/')) return false;
+  const name = id.slice('openai/'.length);
+  if (name === 'chat-latest' || name.endsWith('-chat-latest')) return false;
+  return /^(gpt-5|gpt-6|gpt-oss|o\d)/.test(name);
+}
+
+/** Reasoning effort for live turns: LLM_INTERVIEW_LIVE_REASONING_EFFORT when
+ *  set; otherwise 'low' for reasoning-capable live models and undefined (no
+ *  effort sent) for everything else. Voice turns are latency-bound (a 'high'
+ *  effort costs ~5 s of dead air per turn), so the live worker never inherits
+ *  the blueprint/evaluation dial. `workerModel` defaults to the resolved live
+ *  model; an unresolvable model yields no default effort. */
+export function getWorkerLlmReasoningEffort(workerModel?: string): InterviewReasoningEffort | undefined {
+  const effort = parseReasoningEffort(process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT);
+  if (effort === 'max') {
+    throw new InterviewEngineConfigError(
+      'LLM_INTERVIEW_LIVE_REASONING_EFFORT=max is not supported by LiveKit Inference; use minimal, low, medium, or high.',
+    );
+  }
+  if (effort) return effort;
+  let model = workerModel;
+  if (model === undefined) {
+    try {
+      model = getWorkerLlmModel();
+    } catch {
+      model = undefined;
+    }
+  }
+  return liveModelAcceptsReasoningEffort(model) ? 'low' : undefined;
 }
 
 /** Resolve the backend + worker pair once so a live-session claim is atomic
- *  with respect to hot configuration changes. */
+ *  with respect to hot configuration changes. The backend model (blueprint +
+ *  evaluation) stays required: a session without it can never be prepared. */
 export function getInterviewLlmRouting(): InterviewLlmRouting {
   const backendModel = requireInterviewBackendModel();
+  const workerModel = getWorkerLlmModel();
   return {
     backendModel,
-    workerModel: mapInterviewModelToWorker(backendModel),
-    reasoningEffort: getWorkerLlmReasoningEffort(),
+    workerModel,
+    reasoningEffort: getWorkerLlmReasoningEffort(workerModel),
   };
+}
+
+// ─── Session-preparation (blueprint) model ─────────────────────────────────
+
+/** Model for the blueprint/prompt pipeline: LLM_INTERVIEW_BLUEPRINT_MODEL when
+ *  set (e.g. a faster direct-provider model), else the interview task model. */
+export function getBlueprintModel(): string | undefined {
+  return process.env.LLM_INTERVIEW_BLUEPRINT_MODEL?.trim() || getTaskModel('interview');
+}
+
+/** Effort for the blueprint call: LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT when
+ *  valid, else the interview task effort. */
+export function getBlueprintReasoningEffort(): ReasoningEffort | undefined {
+  return parseReasoningEffort(process.env.LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT)
+    ?? getTaskReasoningEffort('interview');
+}
+
+/** Upper bound on the market-research (Tavily) stage of preparation. */
+export function getWebEvidenceTimeoutMs(): number {
+  const raw = Number(process.env.INTERVIEW_ENGINE_WEB_EVIDENCE_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 1000 ? Math.floor(raw) : 15_000;
+}
+
+/** Upper bound on one whole preparation run (web evidence + blueprint LLM).
+ *  Kept under the Vercel function maxDuration (300 s). */
+export function getPrepareTimeoutMs(): number {
+  const raw = Number(process.env.INTERVIEW_ENGINE_PREPARE_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 10_000 ? Math.floor(raw) : 240_000;
 }
 
 export function getWorkerSttModel(): string {
@@ -303,15 +388,96 @@ export function getWorkerSttFallbackModels(): string[] {
 
 // ─── Callback wiring ──────────────────────────────────────────────────────
 
-/** Base URL the agent worker uses to POST transcript / lifecycle callbacks. */
-export function getCallbackBaseUrl(): string {
+function explicitCallbackBaseUrl(): string | null {
   const explicit =
     process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() ||
     process.env.BACKEND_PUBLIC_URL?.trim() ||
     process.env.PUBLIC_BACKEND_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
+  return explicit ? explicit.replace(/\/+$/, '') : null;
+}
+
+function localCallbackBaseUrl(): string {
   const port = process.env.PORT?.trim() || '4607';
   return `http://localhost:${port}`;
+}
+
+export function isProductionRuntime(): boolean {
+  return process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+}
+
+/** Brand apex domains whose hosts (and subdomains) may receive worker
+ *  callbacks when the origin is derived from a request. The callback carries
+ *  the shared worker secret, so a client-supplied Host must never be trusted
+ *  blindly. Extend with INTERVIEW_ENGINE_CALLBACK_ALLOWED_HOSTS (comma list). */
+const DEFAULT_CALLBACK_HOSTS = ['roboapply.io', 'robohire.io', 'goapply.top'];
+
+function callbackHostAllowlist(): string[] {
+  const extra = (process.env.INTERVIEW_ENGINE_CALLBACK_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  const vercel = [
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_BRANCH_URL,
+    process.env.VERCEL_URL,
+  ]
+    .map((h) => (h || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+    .filter(Boolean);
+  return [...DEFAULT_CALLBACK_HOSTS, ...extra, ...vercel];
+}
+
+function isAllowedCallbackHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return callbackHostAllowlist().some((allowed) => h === allowed || h.endsWith(`.${allowed}`));
+}
+
+function firstHeader(value: string | string[] | undefined): string {
+  const v = Array.isArray(value) ? value[0] : value;
+  return (v ?? '').split(',')[0]!.trim();
+}
+
+/**
+ * Public origin of an incoming request (x-forwarded-proto + x-forwarded-host,
+ * else host). Returns null when the host is missing, malformed or not on the
+ * callback allowlist. Production callbacks always use https.
+ */
+export function deriveRequestOrigin(
+  headers: Record<string, string | string[] | undefined>,
+): string | null {
+  const host = (firstHeader(headers['x-forwarded-host']) || firstHeader(headers.host)).toLowerCase();
+  if (!host || !/^[a-z0-9.-]+(:\d{1,5})?$/.test(host)) return null;
+  const hostname = host.replace(/:\d+$/, '');
+  if (!isAllowedCallbackHost(hostname)) return null;
+  const proto = firstHeader(headers['x-forwarded-proto']).toLowerCase();
+  const scheme = proto === 'http' && !isProductionRuntime() ? 'http' : 'https';
+  return `${scheme}://${host}`;
+}
+
+/**
+ * Base URL to persist on a NEW session for worker callbacks. Explicit env
+ * wins; in production an allowlisted request origin is used (so a missing
+ * INTERVIEW_ENGINE_CALLBACK_BASE_URL no longer sends the worker to its own
+ * localhost), then the Vercel production domain; dev keeps the localhost
+ * default. Returns null when nothing better than the call-time default exists.
+ */
+export function resolveSessionCallbackBaseUrl(
+  headers?: Record<string, string | string[] | undefined>,
+): string | null {
+  if (explicitCallbackBaseUrl()) return null; // call-time env read stays authoritative
+  if (!isProductionRuntime()) return null;
+  const fromRequest = headers ? deriveRequestOrigin(headers) : null;
+  if (fromRequest) return fromRequest;
+  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return prod ? `https://${prod}` : null;
+}
+
+/** Base URL the agent worker uses to POST transcript / lifecycle callbacks.
+ *  `persisted` is the per-session origin captured at create time (C13). */
+export function getCallbackBaseUrl(persisted?: string | null): string {
+  const explicit = explicitCallbackBaseUrl();
+  if (explicit) return explicit;
+  if (persisted && /^https?:\/\//.test(persisted)) return persisted.replace(/\/+$/, '');
+  return localCallbackBaseUrl();
 }
 
 // ─── Tuning ────────────────────────────────────────────────────────────────

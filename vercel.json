@@ -20,6 +20,7 @@
     { "path": "/api/v1/cron/cache-cleanup", "schedule": "0 3 * * 0" },
     { "path": "/api/v1/cron/billing-renewal-reminder", "schedule": "0 6 * * *" },
     { "path": "/api/v1/cron/billing-friday-nudge", "schedule": "0 16 * * 5" },
-    { "path": "/api/v1/cron/account-purge", "schedule": "0 4 * * *" }
+    { "path": "/api/v1/cron/account-purge", "schedule": "0 4 * * *" },
+    { "path": "/api/v1/cron/interview-cleanup", "schedule": "*/15 * * * *" }
   ]
 }

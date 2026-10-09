@@ -1,6 +1,6 @@
 // backend/src/interview-engine/routes/callbackRoutes.ts
 //
-// Worker → control-plane callbacks. The Python LiveKit agent posts the running
+// Worker → control-plane callbacks. The LiveKit worker posts the running
 // transcript and lifecycle events here. NOT behind user auth — gated by the
 // shared secret (LIVEKIT_AGENT_CALLBACK_SECRET) which the worker sends in the
 // `x-interview-callback-secret` header. Mounted at
@@ -9,7 +9,8 @@
 //   POST /sessions/:id/transcript   body { turns: [{ role, text, ts }] }
 //   POST /sessions/:id/usage        body { modelUsage: [{ type, provider, model, ... }] }
 //   POST /sessions/:id/metrics      body { events: [{ type, ts, ...latency fields }] }
-//   POST /sessions/:id/lifecycle    body { event: 'started' | 'ended', joinMs?, greeting? }
+//   POST /sessions/:id/lifecycle    body { event: 'started' | 'ended' | 'error', joinMs?, greeting?,
+//                                          greetingMs?, clientReady?, reason?, message? }
 
 import { Router, type Request, type Response } from 'express';
 import { interviewSessionService } from '../sessions/InterviewSessionService.js';
@@ -65,6 +66,10 @@ router.post('/sessions/:id/lifecycle', async (req: Request<{ id: string }>, res:
       event,
       joinMs: typeof req.body?.joinMs === 'number' ? req.body.joinMs : undefined,
       greeting: typeof req.body?.greeting === 'string' ? req.body.greeting : undefined,
+      greetingMs: typeof req.body?.greetingMs === 'number' ? req.body.greetingMs : undefined,
+      clientReady: req.body?.clientReady,
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+      message: typeof req.body?.message === 'string' ? req.body.message : undefined,
     });
     return res.json({ ok: true });
   } catch (err) {

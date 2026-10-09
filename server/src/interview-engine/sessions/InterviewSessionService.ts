@@ -5,14 +5,19 @@
 // persistence, and scoring around the InterviewSession DB row.
 //
 // Lifecycle:
-//   createSession()  → row (status 'created') with generated prompt/voice/qs
+//   createSession()  → row (status 'preparing'), credits gated; returns fast
+//   prepareSession() → blueprint + prompt + voice (status → 'created', or
+//                      'failed' with error llm_unavailable | prepare_failed)
 //   getConnection()  → create room + dispatch agent + start egress + mint token
 //                      (status → 'live')
 //   ingestTranscript() (worker callback, secret-gated) → append turns
 //   handleEgressEnded() / handleRoomFinished() (LiveKit webhook) → record file +
 //                      finalize
+//   endByOwner()     → 'finalizing' + {type:'end'} to the worker, wait for its
+//                      drain, then finalize()
 //   finalize()       → upload transcript to R2 + score → report (status
-//                      → 'completed')
+//                      → 'completed'; zero candidate turns → 'failed'/no_answer,
+//                      never charged)
 //
 // Ownership: every read/mutation is scoped to the owning user (the human user
 // OR the API-key owner for external sessions); cross-tenant access 404s.
@@ -29,6 +34,8 @@ import {
   getSessionExpiryMinutes,
   getInterviewLlmRouting,
   getWorkerLlmModel,
+  getBlueprintModel,
+  getPrepareTimeoutMs,
   isRecordingEnabled,
   InterviewEngineConfigError,
   type InterviewLlmRouting,
@@ -38,6 +45,7 @@ import {
   dispatchAgent,
   mintJoinToken,
   deleteInterviewRoom,
+  sendInterviewEndSignal,
 } from '../livekit/liveKitClient.js';
 import { startRoomRecording, stopRecording } from '../livekit/egress.js';
 import { interviewR2Storage } from '../storage/r2Storage.js';
@@ -45,6 +53,7 @@ import { resolveVoice, resolveSessionVoice, resolveStt, normalizeLocale } from '
 import { findPersona, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
 import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
+import { classifyPrepareError, describePrepareError, type PrepareFailureCode } from '../prompt/llmFailure.js';
 import { inferRoleFromJd } from '../prompt/InterviewBlueprintAgent.js';
 import { scoreTranscript } from '../scoring/interviewScorer.js';
 import type { InterviewScore } from '../scoring/interviewScorer.js';
@@ -80,6 +89,13 @@ import {
   summarizeMetricEvents,
   MAX_STORED_CLIENT_EVENTS,
   MAX_STORED_WORKER_METRIC_EVENTS,
+  countCandidateTurns,
+  dedupeTurnsByKey,
+  isRetryablePrepareFailure,
+  readSessionControl,
+  sanitizeWorkerReason,
+  PREPARE_FAILURE_CODES,
+  type SessionControl,
 } from './lifecycleHelpers.js';
 
 export class InterviewValidationError extends Error {
@@ -103,6 +119,46 @@ export class InterviewInsufficientCreditsError extends Error {
     this.balance = info.balance;
     this.required = info.required;
     this.tier = info.tier;
+  }
+}
+
+/** POST /prepare called before the session is ready to go live (409 not_ready). */
+export class InterviewNotReadyError extends Error {
+  readonly code = 'not_ready' as const;
+  constructor() { super('Interview session is still being prepared'); this.name = 'InterviewNotReadyError'; }
+}
+/** The session failed (preparation or the live worker); `reason` is session.error. */
+export class InterviewSessionFailedError extends Error {
+  readonly code = 'session_failed' as const;
+  reason: string;
+  constructor(reason: string) {
+    super('Interview session failed');
+    this.name = 'InterviewSessionFailedError';
+    this.reason = reason;
+  }
+}
+/** The session already ended (finalizing / completed / expired). */
+export class InterviewSessionEndedError extends Error {
+  readonly code = 'session_ended' as const;
+  status: string;
+  constructor(status: string) {
+    super(`Interview session is ${status}; start a new session.`);
+    this.name = 'InterviewSessionEndedError';
+    this.status = status;
+  }
+}
+/** Preparation failed: 'llm_unavailable' → 503, 'prepare_failed' → 500. The
+ *  failed session rides along so the client can render it without a re-read. */
+export class InterviewPrepareFailedError extends Error {
+  readonly code: PrepareFailureCode;
+  session: InterviewSession;
+  constructor(code: PrepareFailureCode, session: InterviewSession) {
+    super(code === 'llm_unavailable'
+      ? 'The interview AI is temporarily unavailable.'
+      : 'The interview could not be prepared.');
+    this.name = 'InterviewPrepareFailedError';
+    this.code = code;
+    this.session = session;
   }
 }
 
@@ -135,6 +191,15 @@ const RECONCILE_QUIET_MS = 10 * 60_000;
 // Bound each reconcile sweep; finalize's flush grace makes each finalization
 // cost seconds, and the cron re-runs soon anyway.
 const RECONCILE_BATCH_SIZE = 25;
+// A 'preparing' row untouched this long lost its prepare request (tab closed,
+// function killed) — the cleanup sweep expires it (C3).
+const STALE_PREPARING_MS = 30 * 60_000;
+// C8: after the {type:'end'} data message, how long endByOwner waits for the
+// worker's 'ended' lifecycle (its transcript drain) before tearing down.
+const END_SIGNAL_WAIT_MS = 8000;
+const END_SIGNAL_POLL_MS = 400;
+// Statuses finalize() never claims: already terminal or mid-finalize.
+const NON_FINALIZABLE = ['completed', 'finalizing', 'failed', 'expired'];
 
 export interface CreateSessionInput {
   userId: string;
@@ -153,6 +218,21 @@ export interface CreateSessionInput {
   /** Optional pasted job description — AUTHORITATIVE for requirements. */
   jdText?: string;
   requestId?: string;
+  /** Skip the mock-interview credit gate + debit (admins). Recorded on the row. */
+  creditExempt?: boolean;
+  /** Per-session worker callback origin (C13); null/undefined = call-time default. */
+  callbackBaseUrl?: string | null;
+}
+
+export interface PrepareSessionParams {
+  sessionId: string;
+  userId: string;
+  apiKeyId?: string | null;
+  /** Re-run a session that failed with llm_unavailable / prepare_failed. */
+  retry?: boolean;
+  requestId?: string;
+  /** false = never fail on the LLM (heuristic blueprint fallback). Default true. */
+  strictLlm?: boolean;
 }
 
 export interface ConnectionDetails {
@@ -210,11 +290,12 @@ export class InterviewSessionService {
     const durationMinutes = clampDuration(input.durationMinutes) ?? type.minutes;
 
     // CREDIT GATE (RoboApply candidate flow only). Recruiter + external-API
-    // sources bill separately and are exempt. Runs BEFORE the expensive blueprint
-    // LLM call so a credit-less user never burns generation cost. Throws
-    // InterviewInsufficientCreditsError → 402 with an upsell payload.
+    // sources bill separately and are exempt; admins are exempt explicitly.
+    // Runs BEFORE anything is persisted so a credit-less user never gets a
+    // session (or blueprint spend). Throws InterviewInsufficientCreditsError →
+    // 402 with an upsell payload.
     const source: InterviewSource = input.source ?? 'roboapply';
-    if (source === 'roboapply') {
+    if (source === 'roboapply' && !input.creditExempt) {
       const afford = await gateMockInterview(input.userId, durationMinutes);
       if (!afford.ok) {
         logger.info('INTERVIEW_ENGINE_SESSION', 'mock interview blocked — insufficient credits', {
@@ -229,42 +310,28 @@ export class InterviewSessionService {
     }
 
     // A session created here is destined for the LiveKit worker. Validate the
-    // single interview selector before spending on blueprint generation or
-    // persisting a session that can never connect.
-    const initialLlmRouting = getInterviewLlmRouting();
+    // interview model selectors before persisting a session that can never
+    // connect (InterviewEngineConfigError → 503).
+    getInterviewLlmRouting();
 
     const characteristics = normalizeCharacteristics(input.characteristics, persona.difficulty);
     const candidateName = (input.candidateName ?? '').trim() || undefined;
     const resumeContext = (input.resumeContext ?? '').trim() || undefined;
 
-    // Generate the prompt artifacts (Tavily → blueprint → compose). Never throws.
-    const gen = await interviewPromptService.generate({
-      role,
-      personaName: persona.name,
-      personaRole: persona.role,
-      personaStyle: persona.style,
-      personaDifficulty: persona.difficulty,
-      archetype: persona.archetype,
-      typeLabel: type.label,
-      typeSub: type.sub,
-      typeId: type.id,
-      language,
-      durationMinutes,
-      characteristics,
-      candidateName,
-      resumeContext,
-      jdText,
-      requestId: input.requestId,
-    });
-
     const voice = resolveVoice(language, persona.voiceGender);
     const roomName = `ie-${randomUUID()}`;
     const expiresAt = new Date(Date.now() + getSessionExpiryMinutes() * 60_000);
+    const control: SessionControl = {
+      ...(input.callbackBaseUrl ? { callbackBaseUrl: input.callbackBaseUrl } : {}),
+      ...(input.creditExempt ? { creditExempt: true } : {}),
+    };
 
+    // C1: persist immediately as 'preparing'. Blueprint + prompt generation
+    // (Tavily + one LLM call, often a minute or more) runs in prepareSession().
     const created = await prisma.interviewSession.create({
       data: {
         userId: input.userId,
-        source: input.source ?? 'roboapply',
+        source,
         apiKeyId: input.apiKeyId ?? null,
         externalRef: input.externalRef ?? null,
         role,
@@ -278,25 +345,16 @@ export class InterviewSessionService {
         candidateName: candidateName ?? null,
         resumeContext: resumeContext ?? null,
         jdText: jdText ?? null,
-        interviewPrompt: gen.systemPrompt,
-        blueprint: withLiveLlmSnapshot(
-          {
-            ...gen.blueprint,
-            interviewerBrief: gen.masterBrief,
-            openingInstruction: gen.openingInstruction,
-            openingLine: gen.openingLine,
-          },
-          initialLlmRouting,
-        ) as unknown as object,
-        questions: gen.seedQuestions as unknown as object,
-        webSources: gen.webSources as unknown as object,
         roomName,
-        status: 'created',
+        status: 'preparing',
         expiresAt,
+        ...(Object.keys(control).length > 0
+          ? { liveMetrics: { control } as unknown as object }
+          : {}),
       },
     });
 
-    logger.info('INTERVIEW_ENGINE_SESSION', 'session created', {
+    logger.info('INTERVIEW_ENGINE_SESSION', 'session created (preparing)', {
       sessionId: created.id,
       userId: input.userId,
       source: created.source,
@@ -305,18 +363,171 @@ export class InterviewSessionService {
       mode,
       language,
       durationMinutes,
+      creditExempt: input.creditExempt === true ? true : undefined,
+      callbackOrigin: input.callbackBaseUrl ?? undefined,
       apiKeyId: input.apiKeyId ?? undefined,
       requestId: input.requestId,
     });
-
-    // Meter the prompt-generation (blueprint) LLM cost. At create time the
-    // blueprint agent is the only LLM call on this request, so the request
-    // snapshot's tokens/cost are exactly the blueprint stage. Best-effort.
-    if (input.requestId) {
-      const snap = logger.getRequestSnapshot(input.requestId);
-      void recordBlueprintCost(created.id, tokenCostFromSnapshot(snap, getTaskModel('interview')));
-    }
     return created;
+  }
+
+  // ─── Prepare (blueprint + prompt) ─────────────────────────────────────────
+
+  /** In-process dedupe of concurrent prepare calls for one session (C2). A
+   *  duplicate run on another instance is harmless: every write is
+   *  conditional on status='preparing'. */
+  private readonly inflightPrepares = new Map<string, Promise<InterviewSession>>();
+
+  /**
+   * C2: generate the blueprint, interviewer prompt and voice for a 'preparing'
+   * session, synchronously. Any other status returns the row unchanged; a
+   * 'failed' session (llm_unavailable / prepare_failed) re-runs only with
+   * `retry`. Failures persist status 'failed' + error code and throw
+   * InterviewPrepareFailedError. Nothing here charges credits.
+   */
+  async prepareSession(params: PrepareSessionParams): Promise<InterviewSession> {
+    let session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+
+    if (session.status === 'failed') {
+      const code = session.error ?? '';
+      if (!isRetryablePrepareFailure(code)) throw new InterviewSessionFailedError(code || 'failed');
+      if (!params.retry) throw new InterviewPrepareFailedError(code as PrepareFailureCode, session);
+      await prisma.interviewSession.updateMany({
+        where: { id: session.id, status: 'failed', error: { in: [...PREPARE_FAILURE_CODES] } },
+        data: { status: 'preparing', error: null, endedAt: null },
+      });
+      const fresh = await prisma.interviewSession.findUnique({ where: { id: session.id } });
+      if (!fresh) throw new InterviewNotFoundError();
+      session = fresh;
+      logger.info('INTERVIEW_ENGINE_SESSION', 'prepare retry requested', {
+        sessionId: session.id, previousError: code, status: session.status, requestId: params.requestId,
+      });
+      if (session.status === 'failed') {
+        const again = session.error ?? '';
+        if (isRetryablePrepareFailure(again)) throw new InterviewPrepareFailedError(again as PrepareFailureCode, session);
+        throw new InterviewSessionFailedError(again || 'failed');
+      }
+    }
+
+    if (session.status !== 'preparing') return session;
+
+    const inflight = this.inflightPrepares.get(session.id);
+    if (inflight) return inflight;
+    const run = this.runPrepare(session, params).finally(() => {
+      this.inflightPrepares.delete(session.id);
+    });
+    this.inflightPrepares.set(session.id, run);
+    return run;
+  }
+
+  private async runPrepare(session: InterviewSession, params: PrepareSessionParams): Promise<InterviewSession> {
+    const startedAt = Date.now();
+    try {
+      const persona = (session.personaId && findPersona(session.personaId)) || DEFAULT_PERSONA;
+      const type = findType(session.interviewType) || DEFAULT_TYPE;
+      const characteristics = normalizeCharacteristics(session.characteristics, persona.difficulty);
+      const routing = getInterviewLlmRouting();
+
+      const gen = await interviewPromptService.generate({
+        role: session.role,
+        personaName: persona.name,
+        personaRole: persona.role,
+        personaStyle: persona.style,
+        personaDifficulty: persona.difficulty,
+        archetype: persona.archetype,
+        typeLabel: type.label,
+        typeSub: type.sub,
+        typeId: type.id,
+        language: session.language,
+        durationMinutes: session.plannedDurationMinutes,
+        characteristics,
+        candidateName: session.candidateName ?? undefined,
+        resumeContext: session.resumeContext ?? undefined,
+        jdText: session.jdText ?? undefined,
+        requestId: params.requestId,
+        signal: AbortSignal.timeout(getPrepareTimeoutMs()),
+        strictLlm: params.strictLlm !== false,
+      });
+
+      const voice = resolveVoice(session.language, persona.voiceGender);
+      // Conditional on 'preparing': a concurrent run elsewhere, a delete or an
+      // end-by-owner must win over this (late) result.
+      const persisted = await prisma.interviewSession.updateMany({
+        where: { id: session.id, status: 'preparing' },
+        data: {
+          status: 'created',
+          error: null,
+          interviewPrompt: gen.systemPrompt,
+          blueprint: withLiveLlmSnapshot(
+            {
+              ...gen.blueprint,
+              interviewerBrief: gen.masterBrief,
+              openingInstruction: gen.openingInstruction,
+              openingLine: gen.openingLine,
+            },
+            routing,
+          ) as unknown as object,
+          questions: gen.seedQuestions as unknown as object,
+          webSources: gen.webSources as unknown as object,
+          voice: voice as unknown as object,
+          // The connect window starts when the session is actually ready.
+          expiresAt: new Date(Date.now() + getSessionExpiryMinutes() * 60_000),
+        },
+      });
+
+      const current = await prisma.interviewSession.findUnique({ where: { id: session.id } });
+      if (!current) throw new InterviewNotFoundError();
+      if (persisted.count !== 1) {
+        logger.info('INTERVIEW_ENGINE_SESSION', 'prepare result discarded (session moved on)', {
+          sessionId: session.id, status: current.status, requestId: params.requestId,
+        });
+        if (current.status === 'failed' && isRetryablePrepareFailure(current.error ?? '')) {
+          throw new InterviewPrepareFailedError(current.error as PrepareFailureCode, current);
+        }
+        return current;
+      }
+
+      logger.info('INTERVIEW_ENGINE_SESSION', 'session prepared', {
+        sessionId: session.id,
+        durationMs: Date.now() - startedAt,
+        questionCount: Array.isArray(gen.seedQuestions) ? gen.seedQuestions.length : 0,
+        blueprintFallback: gen.blueprint.isFallback === true ? true : undefined,
+        requestId: params.requestId,
+      });
+
+      // Meter the prompt-generation (blueprint) LLM cost: the blueprint agent
+      // is the only LLM call on the prepare request. Best-effort.
+      if (params.requestId) {
+        const snap = logger.getRequestSnapshot(params.requestId);
+        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel()));
+      }
+      return current;
+    } catch (err) {
+      if (err instanceof InterviewPrepareFailedError || err instanceof InterviewNotFoundError) throw err;
+      const code = classifyPrepareError(err);
+      logger.error('INTERVIEW_ENGINE_SESSION', 'session prepare failed', {
+        sessionId: session.id,
+        code,
+        error: describePrepareError(err),
+        durationMs: Date.now() - startedAt,
+        requestId: params.requestId,
+      });
+      await prisma.interviewSession.updateMany({
+        where: { id: session.id, status: 'preparing' },
+        data: { status: 'failed', error: code },
+      }).catch((persistErr) => {
+        logger.error('INTERVIEW_ENGINE_SESSION', 'prepare failure could not be persisted', {
+          sessionId: session.id, error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+        });
+      });
+      const current = await prisma.interviewSession.findUnique({ where: { id: session.id } }).catch(() => null);
+      if (!current) throw new InterviewNotFoundError();
+      if (current.status !== 'failed') {
+        // Another run already succeeded (or the session moved on) — not a failure.
+        if (current.status !== 'preparing') return current;
+      }
+      throw new InterviewPrepareFailedError(code, { ...current, status: 'failed', error: current.error ?? code });
+    }
   }
 
   // ─── Connect (go live) ────────────────────────────────────────────────────
@@ -332,8 +543,12 @@ export class InterviewSessionService {
     }
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
 
-    if (session.status === 'completed' || session.status === 'failed' || session.status === 'expired') {
-      throw new InterviewValidationError(`Session is ${session.status}; create a new session.`);
+    // C4: a session that is still preparing, failed or already over can never
+    // go (back) live — answer with a typed 409 the client can act on.
+    if (session.status === 'preparing') throw new InterviewNotReadyError();
+    if (session.status === 'failed') throw new InterviewSessionFailedError(session.error ?? 'failed');
+    if (session.status === 'completed' || session.status === 'expired' || session.status === 'finalizing') {
+      throw new InterviewSessionEndedError(session.status);
     }
 
     const mode = session.mode as InterviewMode;
@@ -615,7 +830,9 @@ export class InterviewSessionService {
           ? { reasoningEffort: llmRouting.reasoningEffort }
           : {}),
       },
-      callbackBaseUrl: getCallbackBaseUrl(),
+      // C13: the origin captured from the create request (production, when
+      // INTERVIEW_ENGINE_CALLBACK_BASE_URL is unset); env still wins.
+      callbackBaseUrl: getCallbackBaseUrl(readSessionControl(session.liveMetrics).callbackBaseUrl),
     };
   }
 
@@ -627,19 +844,33 @@ export class InterviewSessionService {
     turns: TranscriptTurn[];
   }): Promise<{ ok: true; total: number }> {
     this.assertCallbackSecret(params.secret);
-    const incoming = sanitizeTurns(params.turns);
+    // C11: the worker retries failed batches, so a turn can arrive twice —
+    // dedupe on (role, ts) within the batch here and against the stored
+    // transcript in the statement below.
+    const incoming = dedupeTurnsByKey(sanitizeTurns(params.turns));
 
     // Single-statement jsonb append: atomic under concurrent worker flushes
     // (a read-modify-write here loses interleaved batches) AND status-guarded
     // in the same statement (turns arriving after 'completed' are dropped, not
-    // resurrected onto an already-scored session). RETURNING gives the
-    // post-append length without a second round-trip.
+    // resurrected onto an already-scored session). The NOT EXISTS filter drops
+    // turns already stored with the same (role, ts); under concurrent updates
+    // Postgres re-evaluates it against the row version it finally locks.
+    // RETURNING gives the post-append length without a second round-trip.
     const rows = await prisma.$queryRawUnsafe<Array<{ total: number }>>(
-      `UPDATE "InterviewSession"
-          SET transcript = COALESCE(transcript, '[]'::jsonb) || $1::jsonb,
+      `UPDATE "InterviewSession" AS s
+          SET transcript = COALESCE(s.transcript, '[]'::jsonb) || COALESCE((
+                SELECT jsonb_agg(n.elem ORDER BY n.idx)
+                  FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY AS n(elem, idx)
+                 WHERE NOT EXISTS (
+                   SELECT 1
+                     FROM jsonb_array_elements(COALESCE(s.transcript, '[]'::jsonb)) AS o(elem)
+                    WHERE o.elem->>'role' = n.elem->>'role'
+                      AND o.elem->'ts' = n.elem->'ts'
+                 )
+              ), '[]'::jsonb),
               "updatedAt" = now()
-        WHERE id = $2 AND status IN ('created', 'live', 'finalizing')
-        RETURNING jsonb_array_length(transcript) AS total`,
+        WHERE s.id = $2 AND s.status IN ('created', 'live', 'finalizing')
+        RETURNING jsonb_array_length(s.transcript) AS total`,
       JSON.stringify(incoming),
       params.sessionId,
     );
@@ -676,19 +907,25 @@ export class InterviewSessionService {
     return { ok: true, total };
   }
 
-  /** Worker lifecycle callback: 'started' | 'ended'. 'started' records join
-   *  telemetry into liveMetrics.worker; 'ended' triggers finalize. */
+  /** Worker lifecycle callback: 'started' | 'ended' | 'error'. 'started'
+   *  records join telemetry into liveMetrics.worker; 'error' records the
+   *  failure (C9); 'ended' marks the worker drained and triggers finalize. */
   async workerLifecycle(params: {
     sessionId: string;
     secret: string | undefined;
     event: string;
     joinMs?: number;
     greeting?: string;
+    greetingMs?: number;
+    clientReady?: unknown;
+    reason?: string;
+    message?: string;
   }): Promise<void> {
     this.assertCallbackSecret(params.secret);
     if (params.event === 'started') {
       logger.info('INTERVIEW_ENGINE_SESSION', 'worker started', {
         sessionId: params.sessionId, joinMs: params.joinMs, greeting: params.greeting,
+        greetingMs: params.greetingMs, clientReady: params.clientReady,
       });
       // Telemetry merge is best-effort — a metrics write must never fail the
       // worker's lifecycle ping (the worker treats a non-2xx as a real error).
@@ -700,9 +937,12 @@ export class InterviewSessionService {
         if (row) {
           const metrics = asLiveMetrics(row.liveMetrics);
           metrics.worker = {
+            ...(metrics.worker ?? {}),
             startedAt: new Date().toISOString(),
             ...(typeof params.joinMs === 'number' && Number.isFinite(params.joinMs) ? { joinMs: params.joinMs } : {}),
             ...(typeof params.greeting === 'string' && params.greeting ? { greeting: params.greeting.slice(0, 500) } : {}),
+            ...(typeof params.greetingMs === 'number' && Number.isFinite(params.greetingMs) ? { greetingMs: params.greetingMs } : {}),
+            ...(params.clientReady !== undefined ? { clientReady: compactTelemetryValue(params.clientReady) } : {}),
           };
           await prisma.interviewSession.update({
             where: { id: params.sessionId },
@@ -716,13 +956,98 @@ export class InterviewSessionService {
       }
       return;
     }
+    if (params.event === 'error') {
+      await this.handleWorkerError(params.sessionId, params.reason, params.message);
+      return;
+    }
     if (params.event === 'ended') {
-      await this.finalize(params.sessionId).catch((err) => {
+      await this.markWorkerEnded(params.sessionId);
+      // The worker posts 'ended' after its own transcript/metrics/usage drain,
+      // so finalize can skip the flush grace (the late-turn recheck remains).
+      await this.finalize(params.sessionId, { workerDrained: true }).catch((err) => {
         logger.error('INTERVIEW_ENGINE_SESSION', 'finalize from worker lifecycle failed', {
           sessionId: params.sessionId, error: err instanceof Error ? err.message : String(err),
         });
       });
     }
+  }
+
+  /** Atomically stamp liveMetrics.workerEndedAt (epoch ms). endByOwner polls
+   *  it to know the worker's drain finished. Best-effort. */
+  private async markWorkerEnded(sessionId: string): Promise<void> {
+    try {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "InterviewSession"
+            SET "liveMetrics" = COALESCE("liveMetrics", '{}'::jsonb) || jsonb_build_object('workerEndedAt', $2::bigint)
+          WHERE id = $1`,
+        sessionId,
+        Date.now(),
+      );
+    } catch (err) {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'worker ended stamp failed', {
+        sessionId, error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * C9: the worker reports a pipeline failure ({event:'error', reason,
+   * message}). Recorded in session.error + liveMetrics.worker.errors and
+   * logged at error level. With zero candidate turns the interview never
+   * happened: the session is marked 'failed' (never charged) and its room is
+   * torn down; otherwise it is recorded and the interview finalizes normally.
+   */
+  private async handleWorkerError(sessionId: string, reason?: string, message?: string): Promise<void> {
+    const code = sanitizeWorkerReason(reason) || 'worker_error';
+    const detail = typeof message === 'string' ? message.slice(0, 500) : undefined;
+    logger.error('INTERVIEW_ENGINE_SESSION', 'worker reported an error', { sessionId, reason: code, message: detail });
+
+    const row = await prisma.interviewSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        status: true, error: true, transcript: true, liveMetrics: true, roomName: true, egressId: true, endedAt: true,
+      },
+    });
+    if (!row) return;
+
+    const metrics = asLiveMetrics(row.liveMetrics);
+    const worker = { ...(metrics.worker ?? {}) } as Record<string, unknown>;
+    worker.errors = capTail(worker.errors, [{ reason: code, ...(detail ? { message: detail } : {}), ts: Date.now() }], 20);
+    metrics.worker = worker;
+
+    const active = row.status === 'created' || row.status === 'live' || row.status === 'finalizing';
+    if (active && countCandidateTurns(row.transcript) === 0) {
+      const res = await prisma.interviewSession.updateMany({
+        where: { id: sessionId, status: row.status },
+        data: {
+          status: 'failed',
+          error: code,
+          endedAt: row.endedAt ?? new Date(),
+          durationSec: 0,
+          liveMetrics: metrics as unknown as object,
+        },
+      });
+      if (res.count === 1) {
+        logger.error('INTERVIEW_ENGINE_SESSION', 'session failed by worker error before any answer (not charged)', {
+          sessionId, reason: code, fromStatus: row.status,
+        });
+        if (row.egressId) void stopRecording(row.egressId).catch(() => { /* best-effort */ });
+        void deleteInterviewRoom(row.roomName).catch(() => { /* best-effort */ });
+        return;
+      }
+    }
+    await prisma.interviewSession.update({
+      where: { id: sessionId },
+      data: {
+        // Keep a terminal row's existing code (e.g. no_answer) — the UI keys on it.
+        ...(row.error ? {} : { error: code }),
+        liveMetrics: metrics as unknown as object,
+      },
+    }).catch((err) => {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'worker error record failed', {
+        sessionId, error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   /** Worker callback: per-turn latency metrics + worker telemetry, batched.
@@ -819,7 +1144,7 @@ export class InterviewSessionService {
   async handleRoomFinished(roomName: string): Promise<void> {
     const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true } });
     if (!session) return;
-    if (session.status === 'completed') return;
+    if (NON_FINALIZABLE.includes(session.status)) return;
     await this.finalize(session.id).catch((err) => {
       logger.error('INTERVIEW_ENGINE_SESSION', 'finalize from room_finished failed', {
         sessionId: session.id, error: err instanceof Error ? err.message : String(err),
@@ -832,10 +1157,13 @@ export class InterviewSessionService {
   /** End the session: stop egress, persist transcript to R2, score → report.
    *  Idempotent — reachable from 3 paths (candidate end, room_finished webhook,
    *  worker 'ended' lifecycle), so a no-op once we're already finalizing. */
-  async finalize(sessionId: string): Promise<InterviewSession> {
+  async finalize(sessionId: string, opts: { workerDrained?: boolean } = {}): Promise<InterviewSession> {
     const session = await prisma.interviewSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new InterviewNotFoundError();
-    if (session.status === 'completed' || session.status === 'finalizing') return session;
+    // Terminal rows (completed / failed / expired) and an in-flight finalize
+    // are never re-claimed: a late room_finished webhook or worker 'ended'
+    // must not turn a failed (uncharged) session into a completed one.
+    if (NON_FINALIZABLE.includes(session.status)) return session;
 
     // Atomically CLAIM the terminal transition so EXACTLY ONE of the converging
     // finalize triggers proceeds. finalize() is reachable concurrently from the
@@ -846,7 +1174,7 @@ export class InterviewSessionService {
     // spend AND a duplicate mock_interview cost ledger row. updateMany is atomic;
     // only the winner gets count===1 (mirrors the created→live claim above).
     const claim = await prisma.interviewSession.updateMany({
-      where: { id: sessionId, status: { notIn: ['completed', 'finalizing'] } },
+      where: { id: sessionId, status: { notIn: NON_FINALIZABLE } },
       data: { status: 'finalizing', endedAt: session.endedAt ?? new Date() },
     });
     if (claim.count !== 1) {
@@ -855,11 +1183,25 @@ export class InterviewSessionService {
       const current = await prisma.interviewSession.findUnique({ where: { id: sessionId } });
       return current ?? session;
     }
+    return this.finalizeClaimed(session, opts);
+  }
 
-    // Stop recording if still active (best-effort).
-    if (session.egressId) await stopRecording(session.egressId);
-    // Tear down the room (best-effort; releases the worker).
-    await deleteInterviewRoom(session.roomName);
+  /** The body of finalize() for a row this caller already moved to
+   *  'finalizing' (finalize's own claim, or endByOwner's). */
+  private async finalizeClaimed(
+    session: InterviewSession,
+    opts: { workerDrained?: boolean } = {},
+  ): Promise<InterviewSession> {
+    const sessionId = session.id;
+    // A session that never went live has no room, egress or worker to drain.
+    const wentLive = !!(session.startedAt || session.livekitRoomSid || session.agentDispatchId);
+
+    if (wentLive) {
+      // Stop recording if still active (best-effort).
+      if (session.egressId) await stopRecording(session.egressId);
+      // Tear down the room (best-effort; releases the worker).
+      await deleteInterviewRoom(session.roomName);
+    }
 
     const readTurns = async (): Promise<TranscriptTurn[] | null> => {
       try {
@@ -899,10 +1241,24 @@ export class InterviewSessionService {
     // read — scoring that snapshot would silently drop the last answer(s).
     // Give the flush a short grace window, then re-read. Stable ts-sort:
     // batches from different flushes can arrive interleaved out of order.
-    await sleep(TRANSCRIPT_FLUSH_GRACE_MS);
+    if (wentLive && !opts.workerDrained) await sleep(TRANSCRIPT_FLUSH_GRACE_MS);
     let turns = sortTurnsByTs(asTranscript(session.transcript));
     const reread = await readTurns();
     if (reread) turns = reread;
+
+    // C10: no candidate answer was ever recorded — there is nothing to score.
+    // No LLM evaluation, no cost ledger, no credit debit; the report page shows
+    // a plain "no answers were recorded, you were not charged" state.
+    if (countCandidateTurns(turns) === 0 && wentLive && !opts.workerDrained) {
+      // An older worker's shutdown drain can outlast the grace; one more look
+      // before declaring that nothing was said.
+      await sleep(TRANSCRIPT_FLUSH_GRACE_MS);
+      const late = await readTurns();
+      if (late) turns = late;
+    }
+    if (countCandidateTurns(turns) === 0) {
+      return this.finalizeNoAnswer(session, turns);
+    }
 
     // Score.
     const persona = session.personaId ? findPersona(session.personaId) : undefined;
@@ -990,6 +1346,25 @@ export class InterviewSessionService {
     });
 
     return updated;
+  }
+
+  /** Terminal state for a finalize with zero candidate turns (C10). */
+  private async finalizeNoAnswer(session: InterviewSession, turns: TranscriptTurn[]): Promise<InterviewSession> {
+    const res = await prisma.interviewSession.updateMany({
+      where: { id: session.id, status: 'finalizing' },
+      data: {
+        status: 'failed',
+        error: 'no_answer',
+        endedAt: session.endedAt ?? new Date(),
+        durationSec: 0,
+      },
+    });
+    const current = await prisma.interviewSession.findUnique({ where: { id: session.id } });
+    logger.info('INTERVIEW_ENGINE_SESSION', 'session ended with no candidate answer (not charged)', {
+      sessionId: session.id, turns: turns.length, applied: res.count === 1,
+    });
+    if (!current) throw new InterviewNotFoundError();
+    return current;
   }
 
   /**
@@ -1135,6 +1510,24 @@ export class InterviewSessionService {
    * cron surface (server/src/cron/handlers.ts).
    */
   async reconcileExpiredSessions(now = new Date()): Promise<{ scanned: number; finalized: number; expired: number }> {
+    // C3: a 'preparing' row nobody touched for 30 min lost its prepare request
+    // (tab closed, function killed). Expire it; it was never charged.
+    let staleExpired = 0;
+    try {
+      const stale = await prisma.interviewSession.updateMany({
+        where: { status: 'preparing', updatedAt: { lt: new Date(now.getTime() - STALE_PREPARING_MS) } },
+        data: { status: 'expired', endedAt: now },
+      });
+      staleExpired = stale.count;
+      if (staleExpired > 0) {
+        logger.info('INTERVIEW_ENGINE_SESSION', 'reconciler expired stale preparing sessions', { count: staleExpired });
+      }
+    } catch (err) {
+      logger.error('INTERVIEW_ENGINE_SESSION', 'stale preparing sweep failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     const quietBefore = new Date(now.getTime() - RECONCILE_QUIET_MS);
     const rows = await prisma.interviewSession.findMany({
       where: {
@@ -1148,7 +1541,7 @@ export class InterviewSessionService {
     });
 
     let finalized = 0;
-    let expired = 0;
+    let expired = staleExpired;
     for (const row of rows) {
       const turnCount = Array.isArray(row.transcript) ? row.transcript.length : 0;
       const action = decideReconcileAction(row.status, turnCount);
@@ -1189,12 +1582,12 @@ export class InterviewSessionService {
         });
       }
     }
-    if (rows.length > 0) {
+    if (rows.length > 0 || staleExpired > 0) {
       logger.info('INTERVIEW_ENGINE_SESSION', 'reconcile sweep complete', {
-        scanned: rows.length, finalized, expired,
+        scanned: rows.length + staleExpired, finalized, expired,
       });
     }
-    return { scanned: rows.length, finalized, expired };
+    return { scanned: rows.length + staleExpired, finalized, expired };
   }
 
   // ─── Live usage ingest (worker callback) ──────────────────────────────────
@@ -1230,10 +1623,54 @@ export class InterviewSessionService {
     return { ok: true };
   }
 
-  /** Candidate explicitly ends the interview from the UI. */
+  /**
+   * Candidate explicitly ends the interview from the UI (C8). A live session
+   * is claimed 'finalizing' first (so the report page sees it end at once),
+   * the worker is told to wrap up with {type:'end'} on topic 'ie', and we wait
+   * up to ~8 s for its 'ended' callback — i.e. its final transcript flush —
+   * before deleting the room and scoring. Older workers ignore the message;
+   * room deletion plus the flush grace remains their fallback.
+   */
   async endByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<InterviewSession> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    return this.finalize(session.id);
+    if (session.status !== 'live') return this.finalize(session.id);
+
+    const endedAt = session.endedAt ?? new Date();
+    const claim = await prisma.interviewSession.updateMany({
+      where: { id: session.id, status: 'live' },
+      data: { status: 'finalizing', endedAt },
+    });
+    if (claim.count !== 1) return this.finalize(session.id);
+
+    const signalled = await withTimeout(sendInterviewEndSignal(session.roomName), 3000, false);
+    const drained = signalled ? await this.waitForWorkerEnded(session.id, endedAt.getTime()) : false;
+    logger.info('INTERVIEW_ENGINE_SESSION', 'candidate ended interview', {
+      sessionId: session.id, endSignalSent: signalled, workerDrained: drained,
+    });
+
+    const fresh = await prisma.interviewSession.findUnique({ where: { id: session.id } });
+    if (!fresh) throw new InterviewNotFoundError();
+    // A worker error during the wait may already have failed the session.
+    if (fresh.status !== 'finalizing') return fresh;
+    return this.finalizeClaimed(fresh, { workerDrained: drained });
+  }
+
+  /** Poll liveMetrics.workerEndedAt until the worker's 'ended' callback lands
+   *  (stamped at or after `sinceMs`), up to END_SIGNAL_WAIT_MS. */
+  private async waitForWorkerEnded(sessionId: string, sinceMs: number): Promise<boolean> {
+    const deadline = Date.now() + END_SIGNAL_WAIT_MS;
+    while (Date.now() < deadline) {
+      const row = await prisma.interviewSession.findUnique({
+        where: { id: sessionId },
+        select: { status: true, liveMetrics: true },
+      }).catch(() => null);
+      if (!row) return false;
+      if (row.status !== 'finalizing') return true;
+      const endedAt = asLiveMetrics(row.liveMetrics).workerEndedAt;
+      if (typeof endedAt === 'number' && endedAt >= sinceMs - 5_000) return true;
+      await sleep(END_SIGNAL_POLL_MS);
+    }
+    return false;
   }
 
   /**
@@ -1368,6 +1805,18 @@ export class InterviewSessionService {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Bound a worker-supplied telemetry value before storing it. */
+function compactTelemetryValue(value: unknown): unknown {
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') return value.slice(0, 200);
+  try {
+    const json = JSON.stringify(value);
+    return json && json.length <= 1000 ? JSON.parse(json) : String(json).slice(0, 1000);
+  } catch {
+    return null;
+  }
 }
 
 /** Race a promise against a timeout; resolve to `fallback` if it's too slow. */

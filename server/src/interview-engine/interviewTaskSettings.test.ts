@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  getBlueprintModel,
+  getInterviewLlmRouting,
   getWorkerLlmModel,
   getWorkerLlmReasoningEffort,
   InterviewEngineConfigError,
@@ -18,6 +20,10 @@ const ENV_KEYS = [
   'LLM_INTERVIEW_MODEL',
   'LLM_INTERVIEW_REASONING_EFFORT',
   'INTERVIEW_ENGINE_LLM_MODEL',
+  'LLM_INTERVIEW_LIVE_MODEL',
+  'LLM_INTERVIEW_LIVE_REASONING_EFFORT',
+  'LLM_INTERVIEW_BLUEPRINT_MODEL',
+  'LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT',
   'RA_V2_INTERVIEW_GEN_MODEL',
   'RA_V2_MOCK_INTERVIEWER_MODEL',
 ] as const;
@@ -123,11 +129,83 @@ describe('interview task settings', () => {
     expect(new LegacyProbe().readReasoningEffort()).toBe('high');
   });
 
-  it('forwards LiveKit-supported effort and rejects max for the worker', () => {
-    process.env.LLM_INTERVIEW_REASONING_EFFORT = 'medium';
+  it('defaults the live effort to low, independent of the blueprint/evaluation effort', () => {
+    process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-5.4';
+    process.env.LLM_INTERVIEW_REASONING_EFFORT = 'high';
+    expect(getWorkerLlmReasoningEffort()).toBe('low');
+    expect(getInterviewLlmRouting()).toEqual({
+      backendModel: 'openai/gpt-5.4',
+      workerModel: 'openai/gpt-5.4',
+      reasoningEffort: 'low',
+    });
+  });
+
+  it('forwards LiveKit-supported live effort and rejects max for the worker', () => {
+    process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-6-luna';
+    process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT = 'medium';
     expect(getWorkerLlmReasoningEffort()).toBe('medium');
 
-    process.env.LLM_INTERVIEW_REASONING_EFFORT = 'max';
+    process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT = 'max';
     expect(() => getWorkerLlmReasoningEffort()).toThrow(InterviewEngineConfigError);
+
+    process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT = 'bogus';
+    expect(getWorkerLlmReasoningEffort()).toBe('low');
+  });
+
+  it('sends no default live effort to non-reasoning live models', () => {
+    process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-6-luna';
+    for (const live of [
+      'openai/gpt-4.1-mini',
+      'openai/gpt-4o',
+      'openai/chat-latest',
+      'openai/gpt-5.2-chat-latest',
+      'google/gemini-3-flash-preview',
+      'kimi/kimi-k2.6',
+    ]) {
+      process.env.LLM_INTERVIEW_LIVE_MODEL = live;
+      expect(getWorkerLlmReasoningEffort()).toBeUndefined();
+      expect(getInterviewLlmRouting().reasoningEffort).toBeUndefined();
+    }
+
+    // An explicit live effort is still honoured (operator's choice).
+    process.env.LLM_INTERVIEW_LIVE_MODEL = 'openai/gpt-4.1-mini';
+    process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT = 'minimal';
+    expect(getInterviewLlmRouting().reasoningEffort).toBe('minimal');
+
+    // Reasoning families keep the 'low' default.
+    delete process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT;
+    for (const live of ['openai/gpt-5.4-mini', 'openrouter/openai/gpt-6-sol', 'openai/gpt-oss-120b']) {
+      process.env.LLM_INTERVIEW_LIVE_MODEL = live;
+      expect(getInterviewLlmRouting().reasoningEffort).toBe('low');
+    }
+  });
+
+  it('gives no default live effort when no live model resolves', () => {
+    expect(getWorkerLlmReasoningEffort()).toBeUndefined();
+  });
+
+  it('routes live turns to LLM_INTERVIEW_LIVE_MODEL and applies the allowlist to it', () => {
+    process.env.LLM_INTERVIEW_MODEL = 'deepseek/deepseek-v4-flash'; // backend-only model
+    process.env.LLM_INTERVIEW_LIVE_MODEL = 'openai/gpt-4.1-mini';
+    expect(getWorkerLlmModel()).toBe('openai/gpt-4.1-mini');
+    expect(getInterviewLlmRouting()).toMatchObject({
+      backendModel: 'deepseek/deepseek-v4-flash',
+      workerModel: 'openai/gpt-4.1-mini',
+    });
+
+    process.env.LLM_INTERVIEW_LIVE_MODEL = 'openrouter/openai/gpt-6-astra';
+    expect(() => getWorkerLlmModel()).toThrow('LLM_INTERVIEW_LIVE_MODEL');
+  });
+
+  it('lets the blueprint use its own model and effort, else the interview ones', () => {
+    process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-6-luna';
+    process.env.LLM_INTERVIEW_REASONING_EFFORT = 'high';
+    expect(getBlueprintModel()).toBe('openai/gpt-6-luna');
+    expect(new BlueprintProbe().readReasoningEffort()).toBe('high');
+
+    process.env.LLM_INTERVIEW_BLUEPRINT_MODEL = 'google/gemini-3-flash-preview';
+    process.env.LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT = 'low';
+    expect(getBlueprintModel()).toBe('google/gemini-3-flash-preview');
+    expect(new BlueprintProbe().readReasoningEffort()).toBe('low');
   });
 });

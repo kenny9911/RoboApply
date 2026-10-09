@@ -10,7 +10,7 @@
 // blueprint so a session can ALWAYS start.
 
 import { BaseAgent } from '../../agents/BaseAgent.js';
-import { getTaskModel, getTaskReasoningEffort } from '../../lib/llm/llmTaskSettings.js';
+import { getBlueprintModel, getBlueprintReasoningEffort } from '../config.js';
 
 export interface BlueprintRequirements {
   roleSummary: string;
@@ -115,7 +115,8 @@ export class InterviewBlueprintAgent extends BaseAgent<BlueprintAgentInput, Inte
   }
 
   protected getReasoningEffort() {
-    return getTaskReasoningEffort('interview');
+    // LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT, else the interview task effort.
+    return getBlueprintReasoningEffort();
   }
 
   /**
@@ -287,7 +288,8 @@ Rules:
       langSource,
       options.requestId,
       options.locale,
-      getTaskModel('interview'),
+      // LLM_INTERVIEW_BLUEPRINT_MODEL (faster prep model), else the interview model.
+      getBlueprintModel(),
       options.signal,
     );
   }

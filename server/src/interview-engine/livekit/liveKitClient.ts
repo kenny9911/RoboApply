@@ -21,7 +21,7 @@ import {
   RoomServiceClient,
   type CreateOptions,
 } from 'livekit-server-sdk';
-import { TrackSource } from '@livekit/protocol';
+import { DataPacket_Kind, TrackSource } from '@livekit/protocol';
 import { getLiveKitCreds, getLiveKitHttpUrl, getJoinTokenTtlSeconds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
@@ -153,6 +153,10 @@ export async function mintJoinToken(params: {
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
+    // C7: the browser sets the participant attribute 'ie.client_ready' = '1'
+    // once audio playback is unlocked; attributes are state, so a worker that
+    // joins later still sees it (a one-shot data packet can be missed).
+    canUpdateOwnMetadata: true,
     canPublishSources: params.allowVideo
       ? [TrackSource.MICROPHONE, TrackSource.CAMERA, TrackSource.SCREEN_SHARE]
       : [TrackSource.MICROPHONE],
@@ -166,6 +170,31 @@ export async function mintJoinToken(params: {
     identity: params.identity,
     expiresAt: new Date(Date.now() + ttl * 1000),
   };
+}
+
+/** Data topic shared by the browser, the worker and the control plane. */
+export const INTERVIEW_DATA_TOPIC = 'ie';
+
+/**
+ * Ask the worker to wrap up (C8): a reliable {type:'end'} data message on
+ * topic 'ie'. Newer workers stop taking turns, flush the transcript and post
+ * the 'ended' lifecycle; older workers ignore it (room deletion remains the
+ * fallback). Best-effort; returns whether the message was accepted.
+ */
+export async function sendInterviewEndSignal(roomName: string): Promise<boolean> {
+  try {
+    const payload = new TextEncoder().encode(JSON.stringify({ type: 'end' }));
+    await getRoomClient().sendData(roomName, payload, DataPacket_Kind.RELIABLE, {
+      topic: INTERVIEW_DATA_TOPIC,
+    });
+    return true;
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_LK', 'sendData end signal failed (best-effort)', {
+      roomName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
 }
 
 /** Tear down a room early (candidate ended / cleanup). Best-effort. */
