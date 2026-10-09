@@ -1,8 +1,8 @@
-// /profile — route shell (FND-6b). Profile: education, experience, skills, work authorization.
-//
-// STUB. Owner: WP-19, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /profile — the candidate profile (WP-19; PRODUCT_PLAN.md F-ACCT-03, O9).
+// Renders inside the (auth) app shell, which already wraps `.main-inner`.
 
-export default function ProfilePage() {
-  return <div hidden data-route-stub="/profile" data-owner="WP-19" />;
+import { ProfilePage } from '../../../components/features/profile';
+
+export default function Page() {
+  return <ProfilePage />;
 }
