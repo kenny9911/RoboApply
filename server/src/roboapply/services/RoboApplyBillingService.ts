@@ -1,122 +1,159 @@
-// backend/src/roboapply/services/RoboApplyBillingService.ts
+// server/src/roboapply/services/RoboApplyBillingService.ts
 //
-// RoboApply self-serve subscriptions for the mock-interview product:
-//   • Free / Starter / Growth plans, each granting monthly mock-interview credits.
-//   • Non-China (incl. Taiwan) → USD via Stripe recurring subscription.
-//   • Mainland China → RMB via Alipay (GoHire worker, one-time monthly pass).
+// Seeker billing behind the legacy `/api/v1/roboapply/billing/*` routes and
+// the Stripe webhook (TASK_PLAN.md WP-21a; PRODUCT_PLAN.md §6; ARCHITECTURE.md
+// §7.4). Brand-aware since the Jobright clone:
 //
-// Revenue lives on SeekerSubscription (keyed by seekerProfileId); credit balance
-// + ledger live there too (see lib/mockCreditService.ts). Plan catalogue +
-// region routing come from lib/mockInterviewPlans.ts + lib/billingRegion.ts.
+//   • the brand picks the rail (`resolveRail`): RoboApply → Stripe (USD),
+//     GoApply → Alipay (CNY passes; WeChat Pay via WP-62). No `?region=`.
+//   • plans are the R-08 catalog (`platform/billing/planCatalog.ts`): Pro
+//     weekly/monthly/quarterly subscriptions, the 7-day pass and practice
+//     packs as one-time payments. Legacy `starter`/`growth` are no longer
+//     sold; existing subscribers keep them ("Practice plan (legacy)") and can
+//     switch with a quote first (`quoteSwitch` → `confirmSwitch`).
+//   • checkout refuses an auto-renewing plan without the unticked
+//     acknowledgement and records it (`auto_renew_ack`, plus
+//     `withdrawal_waiver` when ticked) before the payment page opens.
+//   • Stripe objects carry `brand` + `planKey` metadata; the webhook is
+//     replay-safe (one claim per checkout session / failed invoice / paid
+//     switch invoice, period guards on credit grants). Renewal credits are
+//     granted only from `invoice.paid`, never from `subscription.updated`
+//     (Stripe advances the period before it collects) and never while past_due.
+//   • a plan switch needs the auto-renewal acknowledgement for the new terms,
+//     recorded before Stripe charges.
+//   • CN orders are fulfilled through `fulfilPass()`.
 //
-// Stripe webhooks share the one /api/v1/webhooks/stripe endpoint: routes/
-// checkout.ts calls handleRoboApplyStripeEvent() FIRST and only falls through to
-// recruiter logic when this returns { handled: false }. RoboApply events are
-// identified by metadata.product === 'roboapply' (checkout) or a
-// stripeSubscriptionId matching a SeekerSubscription row (subscription/invoice.*).
-//
-// Alipay uses its OWN notify_url (/api/v1/roboapply/billing/alipay/callback) and
-// 'ra_'-prefixed AlipayOrder.tier so recruiter flows never touch RA orders.
-//
-// Spec: docs/roboapply-billing-credits/spec.md.
+// Revenue state lives on SeekerSubscription (keyed by seekerProfileId);
+// practice credits stay in lib/mockCreditService.ts.
 
-import Stripe from 'stripe';
-import { timingSafeEqual } from 'node:crypto';
-import prisma from '../../lib/prisma.js';
+import type Stripe from 'stripe';
+import prisma, { type ExtendedPrismaClient } from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
-import {
-  getMockPlanCatalog,
-  priceIdToMockPlanKey,
-  isPaidMockPlan,
-  type MockPlanKey,
-} from '../../lib/mockInterviewPlans.js';
-import {
-  getBalance,
-  grantForPlan,
-  grantForPlanIfNewPeriod,
-} from '../../lib/mockCreditService.js';
-import {
-  resolveBillingRegion,
-  type RegionSignals,
-  type BillingRegion,
-} from '../../lib/billingRegion.js';
+import { getMockPlanCatalog, priceIdToMockPlanKey, isPaidMockPlan, type MockPlanKey } from '../../lib/mockInterviewPlans.js';
+import { getBalance as defaultGetBalance, grantForPlanIfNewPeriod as defaultGrantIfNewPeriod, type GrantTier } from '../../lib/mockCreditService.js';
+import { billingRegionForBrand, type BillingRegion } from '../../lib/billingRegion.js';
 import { tierDailyCap, getRateCard } from '../../lib/rateCard.js';
+import { getBrand, parseBrandId, type BrandId, type PaymentRail, type ProductBrand } from '../../platform/brand/registry.js';
+import {
+  BillingError,
+  availableRails,
+  buildPlanViews,
+  cancelSubscription,
+  closePendingOrder,
+  confirmSwitch,
+  describePlan,
+  fulfilPass,
+  getPlan as getCatalogPlan,
+  getRegisteredRail,
+  getStripe as platformGetStripe,
+  grantPracticePack,
+  isPlanKey,
+  loadBillingAccount,
+  planDefinitionFor,
+  planKeyForStripePrice,
+  quoteSwitch,
+  railAvailable,
+  recordCheckoutAcknowledgements,
+  resolveRail,
+  safeReturnPath,
+  stripePeriod,
+  CallbackRejectedError,
+  alipayCallbackSecretOk as platformAlipaySecretOk,
+  appOrigin,
+  type BillingAccount,
+  type CallbackInput,
+  type CancelOutcome,
+  type CheckoutResult,
+  type PlanStatus,
+  type PlanView,
+  type SwitchQuote,
+} from '../../platform/billing/index.js';
+import { sendEmail as platformSendEmail } from '../../platform/email/index.js';
+import '../../platform/email/templates/billing/index.js';
+import { entitlementService } from '../../platform/credits/index.js';
+
+// ── Dependencies (tests replace them) ─────────────────────────────────────
+
+export type BillingServiceDb = Pick<
+  ExtendedPrismaClient,
+  '$transaction' | 'user' | 'seekerProfile' | 'seekerSubscription' | 'alipayOrder' | 'rACreditLedger' | 'seekerConsentRecord' | 'roboApplyMission'
+>;
+
+export interface BillingServiceDeps {
+  db: BillingServiceDb;
+  getStripe: () => Stripe | null;
+  now: () => Date;
+  grantIfNewPeriod: typeof defaultGrantIfNewPeriod;
+  grantPack: (input: { userId: string; credits: number; idempotencyKey: string; purchasedAt: Date }) => Promise<unknown>;
+  getBalance: typeof defaultGetBalance;
+  sendEmail: typeof platformSendEmail;
+  invalidate: (userId: string) => void;
+}
+
+function defaultDeps(): BillingServiceDeps {
+  return {
+    db: prisma,
+    getStripe: () => platformGetStripe(),
+    now: () => new Date(),
+    grantIfNewPeriod: defaultGrantIfNewPeriod,
+    grantPack: (input) => grantPracticePack(input),
+    getBalance: defaultGetBalance,
+    sendEmail: platformSendEmail,
+    invalidate: (userId) => entitlementService.invalidate(userId),
+  };
+}
+
+let deps: BillingServiceDeps = defaultDeps();
+
+/** Tests only: override some dependencies (call with no argument to restore). */
+export function setBillingServiceDepsForTests(partial?: Partial<BillingServiceDeps>): void {
+  deps = partial ? { ...defaultDeps(), ...partial } : defaultDeps();
+}
+
+// ── Compatibility exports (routes/stripeWebhook.ts, routes/billing.ts) ───
 
 export function getStripe(): Stripe | null {
-  const key = process.env.STRIPE_SECRET_KEY;
-  return key ? new Stripe(key) : null;
+  return deps.getStripe();
 }
 
-function roboApplyBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_ROBOAPPLY_URL ||
-    process.env.ROBOAPPLY_URL ||
-    'http://localhost:3611'
-  );
-}
-
-function backendUrl(): string {
-  // Billing now runs in RoboApply's same-origin API. The former RoboHire
-  // backend has no callback route and returns 404 for paid orders. Use the
-  // canonical www host directly so the payment worker needs no redirect.
-  return (process.env.BACKEND_URL || 'https://www.roboapply.io').replace(/\/+$/, '');
-}
-
-/**
- * Sanitise a caller-supplied post-payment redirect path. Only a same-origin
- * RELATIVE path is allowed (must start with a single '/', never '//' or a
- * scheme) so the checkout success/return URL can't be turned into an open
- * redirect. Returns undefined for anything unsafe → caller falls back to its
- * default.
- */
+/** Same-origin relative return path, or undefined. */
 export function safeNextPath(raw: unknown): string | undefined {
-  if (typeof raw !== 'string') return undefined;
-  const p = raw.trim();
-  if (!p.startsWith('/') || p.startsWith('//') || p.includes('://') || p.includes('\\')) return undefined;
-  return p.slice(0, 200);
+  return safeReturnPath(raw);
 }
 
-/**
- * Optional shared secret for the Alipay callback. When `ALIPAY_CALLBACK_SECRET`
- * is set we embed it in the worker's notify_url and require the worker to echo
- * it back on the callback — so a user who knows their own out_trade_no still
- * can't forge a TRADE_SUCCESS to self-grant a plan. When unset, behaviour is
- * unchanged (matches the recruiter Alipay flow). Constant-time compare.
- */
+/** Constant-time check of the Alipay worker's echoed callback secret (false when ALIPAY_CALLBACK_SECRET is unset). */
 export function alipayCallbackSecretOk(token: string | undefined): boolean {
-  const secret = process.env.ALIPAY_CALLBACK_SECRET;
-  if (!secret) return true; // not configured → no check (backward-compatible)
-  const a = Buffer.from(String(token ?? ''));
-  const b = Buffer.from(secret);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-async function loadSubscriptionForUser(userId: string) {
-  const profile = await prisma.seekerProfile.findUnique({
-    where: { userId },
-    select: { id: true, market: true, locale: true, subscription: true },
-  });
-  return {
-    profileId: profile?.id ?? null,
-    market: profile?.market ?? null,
-    locale: profile?.locale ?? null,
-    subscription: profile?.subscription ?? null,
-  };
+  return platformAlipaySecretOk(token);
 }
 
 export class RoboApplyBillingError extends Error {
   code: string;
   status: number;
-  constructor(code: string, message: string, status = 400) {
+  details?: Record<string, unknown>;
+  constructor(code: string, message: string, status = 400, details?: Record<string, unknown>) {
     super(message);
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
-// ─── Read: current plan + credits + region + tier catalogue ───────────────────
+function fromBillingError(err: unknown): never {
+  if (err instanceof BillingError) throw new RoboApplyBillingError(err.code, err.message, err.status, err.details);
+  throw err;
+}
+
+async function requireAccount(userId: string): Promise<BillingAccount> {
+  const account = await loadBillingAccount(deps.db, userId);
+  if (!account) throw new RoboApplyBillingError('no_profile', 'No account', 404);
+  return account;
+}
+
+// ── Read: current plan + credits + catalog ───────────────────────────────
 
 export interface RoboApplyPlanView {
+  brand: BrandId;
+  /** The brand's currency and primary rail (no longer chosen by region signals). */
   region: BillingRegion;
   current: {
     tier: string;
@@ -126,367 +163,321 @@ export interface RoboApplyPlanView {
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
     hasStripeCustomer: boolean;
-    /** True for the CN/Alipay one-time monthly pass (manual renewal). */
+    /** A pass that ends unless bought again (CN passes, old intl Alipay passes). */
     manualRenewal: boolean;
+    planKey: string;
+    state: PlanStatus['state'];
+    /** Grandfathered starter/growth ("Practice plan (legacy)"). */
+    legacyPlan: boolean;
+    autoRenews: boolean;
+    /** Stripe is retrying a failed charge (show the payment-failed banner). */
+    paymentFailed: boolean;
+    rail: string | null;
   };
-  credits: {
-    balance: number;
-    periodAllotment: number | null;
-    tier: string;
-  };
-  plans: Array<{
-    key: MockPlanKey;
-    credits: number;
-    usdMinor: number;
-    cnyMinor: number;
-    current: boolean;
-    purchasable: boolean;
-  }>;
+  credits: { balance: number; periodAllotment: number | null; tier: string };
+  /** Legacy practice-plan rows (shape kept for old clients). Never purchasable now. */
+  plans: Array<{ key: MockPlanKey; credits: number; usdMinor: number; cnyMinor: number; current: boolean; purchasable: false }>;
+  /** The R-08 catalog for this brand. */
+  catalog: PlanView[];
+  defaultSelection: string | null;
+  rails: PaymentRail[];
   stripeConfigured: boolean;
   alipayConfigured: boolean;
 }
 
-export async function getPlan(userId: string, regionSignals: RegionSignals = {}): Promise<RoboApplyPlanView> {
-  const catalog = await getMockPlanCatalog();
-  const { market, locale, subscription } = await loadSubscriptionForUser(userId);
-  const region = resolveBillingRegion({
-    ...regionSignals,
-    profileMarket: regionSignals.profileMarket ?? market,
-    locale: regionSignals.locale ?? locale,
-  });
-  const tier = (subscription?.tier as string) ?? 'free';
-  const balance = await getBalance(userId);
-
-  const plans = (['free', 'starter', 'growth'] as MockPlanKey[]).map((k) => {
-    const p = catalog.plans[k];
-    return {
-      key: k,
-      credits: p.credits,
-      usdMinor: p.usdMinor,
-      cnyMinor: p.cnyMinor,
-      current: tier === k,
-      // Stripe path needs a price id; Alipay path needs a configured CNY price.
-      purchasable:
-        k !== 'free' &&
-        (region.method === 'stripe' ? !!p.stripePriceId : p.cnyMinor > 0),
-    };
-  });
-
+export async function getPlan(userId: string, opts: { brand: ProductBrand }): Promise<RoboApplyPlanView> {
+  const account = await requireAccount(userId);
+  const now = deps.now();
+  const status = describePlan(account, now);
+  const sub = account.subscription;
+  const mock = await getMockPlanCatalog();
+  const balance = await deps.getBalance(userId);
+  const tier = sub?.tier ?? 'free';
+  const legacyPlans = (['free', 'starter', 'growth'] as MockPlanKey[]).map((k) => ({
+    key: k,
+    credits: mock.plans[k].credits,
+    usdMinor: mock.plans[k].usdMinor,
+    cnyMinor: mock.plans[k].cnyMinor,
+    current: tier === k,
+    purchasable: false as const,
+  }));
+  const views = buildPlanViews(opts.brand.id, { currentPlanKey: status.live ? status.planKey : 'free' });
   return {
-    region,
+    brand: opts.brand.id,
+    region: billingRegionForBrand(opts.brand),
     current: {
       tier,
-      status: subscription?.status ?? 'active',
-      amountMinor: subscription?.amountMinor ?? null,
-      currency: subscription?.currency ?? null,
-      currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
-      cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
-      hasStripeCustomer: !!subscription?.stripeCustomerId,
-      // CN/Alipay subs have no Stripe subscription id and are billed in CNY →
-      // manual monthly renewal. Derived from the SUBSCRIPTION's own state (set
-      // at activation), never the current request's region — a CN subscriber
-      // travelling abroad must still see the Alipay "renew" path.
-      manualRenewal:
-        isPaidMockPlan(tier) && !subscription?.stripeSubscriptionId && subscription?.currency === 'CNY',
+      status: sub?.status ?? 'active',
+      amountMinor: sub?.amountMinor ?? null,
+      currency: sub?.currency ?? null,
+      currentPeriodEnd: sub?.currentPeriodEnd?.toISOString() ?? null,
+      cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
+      hasStripeCustomer: Boolean(sub?.stripeCustomerId),
+      manualRenewal: status.live && (status.state === 'pass' || status.state === 'legacy_pass'),
+      planKey: status.planKey,
+      state: status.state,
+      legacyPlan: status.state === 'legacy_subscription' || status.state === 'legacy_pass',
+      autoRenews: status.autoRenews,
+      paymentFailed: status.paymentFailed,
+      rail: sub?.rail ?? (sub?.stripeSubscriptionId ? 'stripe' : null),
     },
     credits: { balance: balance.credits, periodAllotment: balance.periodAllotment, tier: balance.tier },
-    plans,
-    stripeConfigured: !!process.env.STRIPE_SECRET_KEY,
-    alipayConfigured: !!(process.env.ALIPAY_API_URL || true), // worker has a default URL
+    plans: legacyPlans,
+    catalog: views.plans,
+    defaultSelection: views.defaultSelection,
+    rails: availableRails(opts.brand),
+    stripeConfigured: railAvailable(opts.brand, 'stripe'),
+    alipayConfigured: railAvailable(opts.brand, 'alipay'),
   };
 }
 
-// ─── Stripe Checkout (USD recurring) ──────────────────────────────────────────
+// ── Checkout (any rail) ──────────────────────────────────────────────────
 
-export async function createCheckoutSession(params: {
+export interface CheckoutInput {
   userId: string;
-  email: string;
-  tier: 'starter' | 'growth';
-  /** Same-origin relative path to return to after success/cancel (signup flow). */
+  brand: ProductBrand;
+  planKey: string;
+  autoRenewAck?: boolean;
+  withdrawalWaiver?: boolean;
+  rail?: PaymentRail | null;
   successPath?: string;
   cancelPath?: string;
-}): Promise<{ url: string }> {
-  const stripe = getStripe();
-  if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
-
-  const catalog = await getMockPlanCatalog();
-  const priceId = catalog.plans[params.tier].stripePriceId;
-  if (!priceId) throw new RoboApplyBillingError('no_price', `No Stripe price configured for ${params.tier}`, 503);
-
-  const { profileId, subscription } = await loadSubscriptionForUser(params.userId);
-  if (!profileId) throw new RoboApplyBillingError('no_profile', 'No RoboApply profile', 409);
-
-  let customerId = subscription?.stripeCustomerId ?? null;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: params.email,
-      metadata: { userId: params.userId, seekerProfileId: profileId, product: 'roboapply' },
-    });
-    customerId = customer.id;
-    await prisma.seekerSubscription.upsert({
-      where: { seekerProfileId: profileId },
-      update: { stripeCustomerId: customerId },
-      create: { seekerProfileId: profileId, tier: 'free', status: 'active', stripeCustomerId: customerId },
-    });
-  }
-
-  const base = roboApplyBaseUrl();
-  const successUrl = params.successPath
-    ? `${base}${params.successPath}${params.successPath.includes('?') ? '&' : '?'}billing=success`
-    : `${base}/account?billing=success`;
-  const cancelUrl = `${base}${params.cancelPath ?? '/account'}${(params.cancelPath ?? '/account').includes('?') ? '&' : '?'}billing=cancel`;
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
-    client_reference_id: params.userId,
-    metadata: { userId: params.userId, seekerProfileId: profileId, tier: params.tier, product: 'roboapply' },
-    subscription_data: {
-      metadata: { userId: params.userId, seekerProfileId: profileId, tier: params.tier, product: 'roboapply' },
-    },
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    allow_promotion_codes: true,
-  });
-
-  if (!session.url) throw new RoboApplyBillingError('checkout_failed', 'Stripe did not return a checkout URL', 502);
-  logger.info('RA_BILLING', 'stripe checkout session created', { userId: params.userId, tier: params.tier, sessionId: session.id });
-  return { url: session.url };
+  ip?: string | null;
+  userAgent?: string | null;
+  context?: { tradeType?: 'native' | 'h5' | 'jsapi'; openId?: string };
 }
 
-export async function createPortalSession(userId: string): Promise<{ url: string }> {
-  const stripe = getStripe();
-  if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
-  const { subscription } = await loadSubscriptionForUser(userId);
-  if (!subscription?.stripeCustomerId) {
-    throw new RoboApplyBillingError('no_customer', 'No billing account yet — subscribe first', 409);
+export type CheckoutView = CheckoutResult & { url?: string; rail: PaymentRail };
+
+export async function createCheckout(input: CheckoutInput): Promise<CheckoutView> {
+  try {
+    if (!isPlanKey(input.planKey)) {
+      throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey });
+    }
+    const plan = getCatalogPlan(input.brand.id, input.planKey);
+    if (!plan || !plan.sellable || plan.kind === 'free' || plan.phase !== 'mvp') {
+      throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey, reason: plan?.unsellableReason ?? 'unknown' });
+    }
+    if (plan.requiresAutoRenewAck && input.autoRenewAck !== true) {
+      throw new BillingError('auto_renew_ack_required', 'Tick the box to agree that this plan renews automatically');
+    }
+    const rail = resolveRail(input.brand, input.rail ?? null);
+    const account = await requireAccount(input.userId);
+    if (!account.seekerProfileId) throw new BillingError('no_profile', 'No seeker profile');
+
+    const status = describePlan(account, deps.now());
+    if (plan.kind === 'pass' && status.live && status.autoRenews) {
+      // Cancel first; the pass then starts when the paid period ends.
+      throw new BillingError('already_subscribed', 'You already have a plan that renews. Cancel it first, then buy the pass.', {
+        planKey: status.planKey,
+      });
+    }
+    if (plan.kind === 'subscription' && status.live) {
+      // Two live plans would double-charge the overlap.
+      if (status.state === 'pass' || status.state === 'legacy_pass') {
+        // A pass has no subscription to switch; it simply ends. Say when.
+        const until = status.accessUntil?.toISOString() ?? null;
+        throw new BillingError('pass_active', until ? `Your pass runs until ${until.slice(0, 10)}. You can subscribe once it ends.` : 'Your pass is still running. You can subscribe once it ends.', {
+          planKey: status.planKey,
+          availableFrom: until,
+        });
+      }
+      throw new BillingError('already_subscribed', 'You already have a plan. Switch plans, or subscribe when it ends.', {
+        planKey: status.planKey,
+        accessUntil: status.accessUntil?.toISOString() ?? null,
+      });
+    }
+
+    await recordCheckoutAcknowledgements(deps.db, {
+      seekerProfileId: account.seekerProfileId,
+      plan,
+      autoRenewAck: input.autoRenewAck === true,
+      withdrawalWaiver: input.withdrawalWaiver === true,
+      ip: input.ip,
+      userAgent: input.userAgent,
+    });
+
+    const result = await rail.createCheckout({
+      brand: input.brand,
+      plan,
+      user: { id: account.userId, email: account.email, name: account.name },
+      seekerProfileId: account.seekerProfileId,
+      stripeCustomerId: account.subscription?.stripeCustomerId ?? null,
+      acknowledgements: { autoRenewAck: input.autoRenewAck === true, withdrawalWaiver: input.withdrawalWaiver === true },
+      successPath: input.successPath,
+      cancelPath: input.cancelPath,
+      context: input.context,
+    });
+    logger.info('RA_BILLING', 'checkout created', { userId: input.userId, planKey: plan.key, rail: rail.id, brand: input.brand.id });
+    return { ...result, rail: rail.id, ...(result.kind === 'redirect' ? { url: result.url } : {}) };
+  } catch (err) {
+    return fromBillingError(err);
   }
-  const portal = await stripe.billingPortal.sessions.create({
-    customer: subscription.stripeCustomerId,
-    return_url: `${roboApplyBaseUrl()}/account`,
-  });
+}
+
+// ── Portal, cancel, switch ───────────────────────────────────────────────
+
+export async function createPortalSession(userId: string, brand: ProductBrand): Promise<{ url: string }> {
+  const stripe = deps.getStripe();
+  if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
+  const account = await requireAccount(userId);
+  const customer = account.subscription?.stripeCustomerId;
+  if (!customer) throw new RoboApplyBillingError('no_customer', 'No billing account yet — subscribe first', 409);
+  const portal = await stripe.billingPortal.sessions.create({ customer, return_url: `${appOrigin(brand)}/settings/billing` });
   return { url: portal.url };
 }
 
-export async function cancelAtPeriodEnd(userId: string): Promise<{ ok: true }> {
-  const stripe = getStripe();
-  if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
-  const { subscription } = await loadSubscriptionForUser(userId);
-  if (!subscription?.stripeSubscriptionId) {
-    throw new RoboApplyBillingError('no_subscription', 'No active auto-renewing subscription to cancel', 409);
-  }
-  await stripe.subscriptions.update(subscription.stripeSubscriptionId, { cancel_at_period_end: true });
-  await prisma.seekerSubscription.update({ where: { id: subscription.id }, data: { cancelAtPeriodEnd: true } });
-  logger.info('RA_BILLING', 'cancel-at-period-end requested', { userId });
-  return { ok: true };
-}
-
-// ─── Alipay (RMB one-time monthly pass) ───────────────────────────────────────
-
-export async function createAlipayOrder(params: {
-  userId: string;
-  name: string | null;
-  email: string;
-  tier: 'starter' | 'growth';
-  /** Same-origin relative path to return to after payment (signup flow). */
-  returnPath?: string;
-}): Promise<{ url: string }> {
-  const { profileId } = await loadSubscriptionForUser(params.userId);
-  if (!profileId) throw new RoboApplyBillingError('no_profile', 'No RoboApply profile', 409);
-
-  const catalog = await getMockPlanCatalog();
-  const cnyMinor = catalog.plans[params.tier].cnyMinor;
-  if (cnyMinor <= 0) throw new RoboApplyBillingError('no_price', `No CNY price configured for ${params.tier}`, 503);
-  // The GoHire Alipay worker bills in WHOLE YUAN (matches the recruiter flow).
-  const amount = Math.round(cnyMinor / 100);
-
-  const now = new Date();
-  const ts = now.toISOString().replace(/[-T:.Z]/g, '').slice(0, 14);
-  const uid = Math.random().toString(36).slice(2, 10);
-  const outTradeNo = `RAORDER_${ts}_${params.userId.slice(0, 8)}_${uid}`;
-
-  const subject = `RoboApply ${params.tier === 'growth' ? 'Growth' : 'Starter'} 月度订阅`;
-  const alipayPayload = {
-    out_trade_no: outTradeNo,
-    total_amount: amount,
-    subject,
-    pay_channel: 'alipay',
-    user_name: params.name || params.email,
-    user_email: params.email,
-    user_id: params.userId,
-    // The GoHire payment worker only has the 'gohire' platform (Alipay merchant)
-    // registered; an unknown platform like 'roboapply' makes it 500. RoboApply
-    // orders stay distinguishable downstream by the RAORDER_ out_trade_no prefix
-    // and the ra_* tier on AlipayOrder, and the callback routes by our own
-    // notify_url (below) — not by platform. Set ROBOAPPLY_ALIPAY_PLATFORM once a
-    // dedicated RoboApply merchant/platform is registered on the worker.
-    platform: process.env.ROBOAPPLY_ALIPAY_PLATFORM || 'gohire',
-    package_data: {
-      package_id: params.tier,
-      package_name: params.tier,
-      package_type: '1',
-      package_price: String(amount),
-    },
-    notify_url: `${backendUrl()}/api/v1/roboapply/billing/alipay/callback${
-      process.env.ALIPAY_CALLBACK_SECRET ? `?cb=${encodeURIComponent(process.env.ALIPAY_CALLBACK_SECRET)}` : ''
-    }`,
-    return_url: `${roboApplyBaseUrl()}${params.returnPath ?? '/account'}${
-      (params.returnPath ?? '/account').includes('?') ? '&' : '?'
-    }billing=success`,
-  };
-
-  const alipayApiUrl = process.env.ALIPAY_API_URL || 'https://worker.gohire.top/payment/payment/create';
-  let alipayData: { code: number; data?: { pay_url: string }; message?: string };
+/** One-click cancel (sends the confirmation email when auto-renewal was turned off). */
+export async function cancelPlan(
+  userId: string,
+  input: { reason?: string; note?: string; source: 'in_app' | 'public_link' | 'legacy_route' },
+): Promise<CancelOutcome & { account: BillingAccount }> {
+  const account = await requireAccount(userId);
+  let outcome: CancelOutcome;
   try {
-    const alipayRes = await fetch(alipayApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(alipayPayload),
-    });
-    // Read as text first: an unknown platform / worker fault returns a non-JSON
-    // body (e.g. plain "Internal Server Error"), which .json() would throw on —
-    // masking the real cause. Capture + log the status and body instead.
-    const rawBody = await alipayRes.text();
-    try {
-      alipayData = JSON.parse(rawBody) as typeof alipayData;
-    } catch {
-      logger.error('RA_BILLING', 'alipay worker non-JSON response', {
-        status: alipayRes.status,
-        body: rawBody.slice(0, 300),
-        platform: alipayPayload.platform,
-      });
-      throw new RoboApplyBillingError('alipay_failed', 'Payment provider returned an unexpected response', 502);
-    }
+    outcome = await cancelSubscription(account, input, { getStripe: deps.getStripe, db: deps.db, now: deps.now });
   } catch (err) {
-    if (err instanceof RoboApplyBillingError) throw err;
-    logger.error('RA_BILLING', 'alipay worker request failed', { error: err instanceof Error ? err.message : String(err) });
-    throw new RoboApplyBillingError('alipay_unreachable', 'Could not reach the payment provider', 502);
+    return fromBillingError(err);
   }
-
-  if (alipayData.code !== 0 || !alipayData.data?.pay_url) {
-    logger.error('RA_BILLING', 'alipay worker error', { code: alipayData.code, message: alipayData.message });
-    throw new RoboApplyBillingError('alipay_failed', alipayData.message || 'Failed to create Alipay order', 502);
-  }
-
-  await prisma.alipayOrder.create({
-    data: {
-      userId: params.userId,
-      outTradeNo,
-      tier: `ra_${params.tier}`, // distinct from recruiter starter/growth/business
-      amount,
-      status: 'pending',
-    },
-  });
-
-  logger.info('RA_BILLING', 'alipay order created', { userId: params.userId, tier: params.tier, outTradeNo, amount });
-  return { url: alipayData.data.pay_url };
+  deps.invalidate(userId);
+  if (outcome.changed) await sendCancelConfirmation(account, outcome);
+  return { ...outcome, account };
 }
 
-/** Alipay payment callback for RoboApply orders (own notify_url). Idempotent. */
-export async function handleRoboApplyAlipayCallback(params: {
-  pay_status: string | undefined;
-  out_trade_no: string | undefined;
-}): Promise<{ ok: boolean; code: number; message: string }> {
-  const { pay_status, out_trade_no } = params;
-  if (!pay_status || !out_trade_no) {
-    return { ok: false, code: 40001, message: 'invalid callback params' };
-  }
-  const order = await prisma.alipayOrder.findUnique({ where: { outTradeNo: out_trade_no } });
-  if (!order || !order.tier.startsWith('ra_')) {
-    return { ok: false, code: 40002, message: 'order not found' };
-  }
-  const planKey = order.tier.replace(/^ra_/, '') as MockPlanKey;
-
-  if (pay_status === 'TRADE_SUCCESS' && order.status !== 'completed') {
-    const catalog = await getMockPlanCatalog();
-    const cnyMinor = catalog.plans[planKey]?.cnyMinor ?? Math.round(order.amount * 100);
-    const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    // Claim the order → activate the subscription. The order.status guard makes
-    // this idempotent: a duplicate callback finds it already completed and skips.
-    let activated = false;
-    await prisma.$transaction(async (tx) => {
-      const current = await tx.alipayOrder.findUnique({ where: { outTradeNo: out_trade_no }, select: { status: true } });
-      if (current?.status === 'completed') return;
-      await tx.alipayOrder.update({ where: { outTradeNo: out_trade_no }, data: { status: 'completed', completedAt: new Date() } });
-
-      const profile = await tx.seekerProfile.findUnique({ where: { userId: order.userId }, select: { id: true } });
-      if (!profile) {
-        logger.warn('RA_BILLING', 'alipay callback: no seeker profile', { userId: order.userId, outTradeNo: out_trade_no });
-        return;
-      }
-      await tx.seekerSubscription.upsert({
-        where: { seekerProfileId: profile.id },
-        update: {
-          tier: planKey as never,
-          status: 'active',
-          market: 'cn',
-          currency: 'CNY',
-          amountMinor: cnyMinor,
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: false,
-          canceledAt: null,
-          startedAt: new Date(),
-        },
-        create: {
-          seekerProfileId: profile.id,
-          tier: planKey as never,
-          status: 'active',
-          market: 'cn',
-          currency: 'CNY',
-          amountMinor: cnyMinor,
-          currentPeriodEnd: periodEnd,
-          startedAt: new Date(),
-        },
-      });
-      activated = true;
+export async function sendCancelConfirmation(account: BillingAccount, outcome: CancelOutcome): Promise<void> {
+  try {
+    await deps.sendEmail({
+      template: 'billing.cancel_confirmed',
+      to: account.email,
+      userId: account.userId,
+      locale: account.locale,
+      brand: account.brand,
+      params: {
+        planKey: outcome.planKey,
+        cancelledAt: deps.now().toISOString(),
+        accessUntil: outcome.accessUntil ? outcome.accessUntil.toISOString() : null,
+      },
     });
-
-    if (activated) {
-      // Each Alipay payment is a fresh monthly pass → grant (reset to allotment).
-      await grantForPlan({
-        userId: order.userId,
-        tier: planKey,
-        reason: 'grant_purchase',
-        source: 'alipay',
-        currentPeriodEnd: periodEnd,
-        metadata: { outTradeNo: out_trade_no, amountCny: order.amount },
-      });
-      await syncMissionTier(order.userId, planKey).catch(() => {});
-      logger.info('RA_BILLING', 'alipay subscription activated', { userId: order.userId, tier: planKey, outTradeNo: out_trade_no });
-    }
-    return { ok: true, code: 0, message: 'success' };
+  } catch (err) {
+    logger.warn('RA_BILLING', 'cancel confirmation email failed', { userId: account.userId, error: err instanceof Error ? err.message : String(err) });
   }
-
-  if (pay_status === 'TRADE_CLOSED' && order.status === 'pending') {
-    await prisma.alipayOrder.update({ where: { outTradeNo: out_trade_no }, data: { status: 'closed' } });
-    return { ok: true, code: 0, message: 'closed' };
-  }
-  return { ok: true, code: 0, message: 'no action' };
 }
 
-// ─── Billing history + invoice download ───────────────────────────────────────
+/** Legacy route: `{ ok: true }` after turning auto-renewal off. */
+export async function cancelAtPeriodEnd(userId: string): Promise<{ ok: true; status: CancelOutcome['status']; accessUntil: string | null }> {
+  const res = await cancelPlan(userId, { source: 'legacy_route' });
+  return { ok: true, status: res.status, accessUntil: res.accessUntil?.toISOString() ?? null };
+}
+
+export interface SwitchInput {
+  planKey: string;
+  confirm?: boolean;
+  prorationDate?: number;
+  /** Required on confirm for an auto-renewing target (the unticked box on the quote sheet). */
+  autoRenewAck?: boolean;
+  withdrawalWaiver?: boolean;
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+export async function switchPlan(
+  userId: string,
+  brand: ProductBrand,
+  input: SwitchInput,
+): Promise<{ quote: SwitchQuote } | { switched: true; planKey: string }> {
+  const account = await requireAccount(userId);
+  try {
+    if (!isPlanKey(input.planKey)) throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey });
+    if (account.brand !== brand.id) throw new BillingError('switch_not_available', 'Switch plans on the site you signed up on');
+    const target = getCatalogPlan(brand.id, input.planKey);
+    if (!target) throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey });
+    const stripeDeps = { getStripe: deps.getStripe, db: deps.db, now: deps.now };
+    if (!input.confirm) return { quote: await quoteSwitch(account, target, stripeDeps) };
+    if (input.prorationDate === undefined) throw new BillingError('quote_expired', 'Review the quote first');
+    const seekerProfileId = account.seekerProfileId;
+    if (!seekerProfileId) throw new BillingError('no_profile', 'No seeker profile');
+    const res = await confirmSwitch(account, target, input.prorationDate, stripeDeps, {
+      autoRenewAck: input.autoRenewAck === true,
+      record: () =>
+        recordCheckoutAcknowledgements(deps.db, {
+          seekerProfileId,
+          plan: target,
+          autoRenewAck: input.autoRenewAck === true,
+          withdrawalWaiver: input.withdrawalWaiver === true,
+          ip: input.ip,
+          userAgent: input.userAgent,
+        }),
+    });
+    deps.invalidate(userId);
+    return { switched: true, planKey: res.planKey };
+  } catch (err) {
+    return fromBillingError(err);
+  }
+}
+
+// ── CN rails: callback → fulfilPass ──────────────────────────────────────
+
+/** Alipay worker notify (own notify_url). Idempotent. */
+export async function handleAlipayCallback(input: CallbackInput): Promise<{ ok: boolean; httpStatus: number; code: number; message: string }> {
+  const rail = getRegisteredRail('alipay');
+  if (!rail?.verifyCallback) return { ok: false, httpStatus: 503, code: 50003, message: 'alipay rail unavailable' };
+  let verified;
+  try {
+    verified = await rail.verifyCallback(input);
+  } catch (err) {
+    if (err instanceof CallbackRejectedError) {
+      if (err.reason === 'not_configured') return { ok: false, httpStatus: 503, code: 50003, message: 'callback verification unavailable' };
+      if (err.reason === 'bad_secret') return { ok: false, httpStatus: 403, code: 40003, message: 'forbidden' };
+      return { ok: false, httpStatus: 400, code: 40001, message: 'invalid callback params' };
+    }
+    throw err;
+  }
+  if (verified.status === 'paid') {
+    const res = await fulfilPass({ outTradeNo: verified.outTradeNo, channel: 'alipay', paidAmountMinor: verified.paidAmountMinor, transactionId: verified.transactionId });
+    if (res.status === 'not_found') return { ok: false, httpStatus: 400, code: 40002, message: 'order not found' };
+    if (res.status === 'amount_mismatch') return { ok: false, httpStatus: 400, code: 40004, message: 'amount mismatch' };
+    if (res.status === 'unknown_plan') return { ok: false, httpStatus: 400, code: 40005, message: 'unknown plan' };
+    if (res.status === 'fulfilled' && res.userId && res.planKey && isPaidMockPlan(res.planKey)) {
+      await syncMissionTier(res.userId, res.planKey).catch(() => {});
+    }
+    return { ok: true, httpStatus: 200, code: 0, message: 'success' };
+  }
+  if (verified.status === 'closed') {
+    await closePendingOrder(verified.outTradeNo);
+    return { ok: true, httpStatus: 200, code: 0, message: 'closed' };
+  }
+  return { ok: true, httpStatus: 200, code: 0, message: 'no action' };
+}
+
+// ── Billing history + invoice download ───────────────────────────────────
 
 export interface BillingInvoice {
   id: string;
   kind: 'stripe' | 'alipay';
-  date: string; // ISO
+  date: string;
   amountMinor: number;
   currency: string;
-  status: string; // paid | open | uncollectible | void | pending | failed
+  status: string;
   description: string;
   downloadable: boolean;
 }
 
-export async function getBillingHistory(userId: string): Promise<{ invoices: BillingInvoice[] }> {
-  const { subscription } = await loadSubscriptionForUser(userId);
-  const out: BillingInvoice[] = [];
+function orderPlanLabel(order: { planKey: string | null; tier: string; brand: string | null }): string {
+  const key = order.planKey ?? order.tier.replace(/^ra_/, '');
+  if (key === 'starter' || key === 'growth') return 'Practice plan (legacy)';
+  const brand = parseBrandId(order.brand) ?? 'roboapply';
+  return planDefinitionFor(brand, key)?.defaultLabel ?? key;
+}
 
-  // Stripe invoices (USD).
-  const stripe = getStripe();
-  if (stripe && subscription?.stripeCustomerId) {
+export async function getBillingHistory(userId: string): Promise<{ invoices: BillingInvoice[] }> {
+  const account = await requireAccount(userId);
+  const out: BillingInvoice[] = [];
+  const brandName = getBrand(account.brand).name;
+  const stripe = deps.getStripe();
+  const customer = account.subscription?.stripeCustomerId;
+  if (stripe && customer) {
     try {
-      const list = await stripe.invoices.list({ customer: subscription.stripeCustomerId, limit: 50 });
+      const list = await stripe.invoices.list({ customer, limit: 50 });
       for (const inv of list.data) {
         out.push({
           id: inv.id as string,
@@ -495,266 +486,447 @@ export async function getBillingHistory(userId: string): Promise<{ invoices: Bil
           amountMinor: inv.amount_paid ?? inv.amount_due ?? 0,
           currency: (inv.currency ?? 'usd').toUpperCase(),
           status: inv.status ?? 'open',
-          description: inv.lines?.data?.[0]?.description ?? 'RoboApply subscription',
-          downloadable: !!(inv.invoice_pdf || inv.hosted_invoice_url),
+          description: inv.lines?.data?.[0]?.description ?? `${brandName} subscription`,
+          downloadable: Boolean(inv.invoice_pdf || inv.hosted_invoice_url),
         });
       }
     } catch (err) {
       logger.warn('RA_BILLING', 'stripe invoice list failed', { error: err instanceof Error ? err.message : String(err) });
     }
   }
-
-  // Alipay orders (CNY).
-  const orders = await prisma.alipayOrder.findMany({
+  const orders = await deps.db.alipayOrder.findMany({
     where: { userId, tier: { startsWith: 'ra_' }, status: 'completed' },
     orderBy: { completedAt: 'desc' },
     take: 50,
   });
   for (const o of orders) {
+    const orderBrand = getBrand(parseBrandId(o.brand) ?? 'roboapply').name;
     out.push({
       id: o.id,
       kind: 'alipay',
       date: (o.completedAt ?? o.createdAt).toISOString(),
-      amountMinor: Math.round(o.amount * 100),
+      amountMinor: o.amountMinor ?? Math.round(o.amount * 100),
       currency: 'CNY',
       status: 'paid',
-      description: `RoboApply ${o.tier.replace(/^ra_/, '')} (Alipay)`,
+      description: `${orderBrand} ${orderPlanLabel(o)} (${o.channel === 'wechatpay' ? 'WeChat Pay' : 'Alipay'})`,
       downloadable: true,
     });
   }
-
   out.sort((a, b) => (a.date < b.date ? 1 : -1));
   return { invoices: out };
 }
 
-/**
- * Resolve an invoice download. Stripe → a redirect URL to the hosted PDF.
- * Alipay → signals the route to stream a generated PDF receipt. Ownership is
- * verified here so a guessed id can't leak another user's invoice.
- */
 export async function resolveInvoiceDownload(
   userId: string,
   invoiceId: string,
 ): Promise<{ kind: 'stripe'; url: string } | { kind: 'alipay'; orderId: string }> {
-  const { subscription } = await loadSubscriptionForUser(userId);
-
-  // Stripe invoice ids start with 'in_'.
+  const account = await requireAccount(userId);
   if (invoiceId.startsWith('in_')) {
-    const stripe = getStripe();
+    const stripe = deps.getStripe();
     if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
     const inv = await stripe.invoices.retrieve(invoiceId);
     const customerId = typeof inv.customer === 'string' ? inv.customer : inv.customer?.id;
-    if (!subscription?.stripeCustomerId || customerId !== subscription.stripeCustomerId) {
+    if (!account.subscription?.stripeCustomerId || customerId !== account.subscription.stripeCustomerId) {
       throw new RoboApplyBillingError('forbidden', 'Invoice does not belong to you', 403);
     }
     const url = inv.invoice_pdf || inv.hosted_invoice_url;
     if (!url) throw new RoboApplyBillingError('no_pdf', 'No downloadable invoice available', 404);
     return { kind: 'stripe', url };
   }
-
-  // Otherwise an AlipayOrder id.
-  const order = await prisma.alipayOrder.findUnique({ where: { id: invoiceId } });
+  const order = await deps.db.alipayOrder.findUnique({ where: { id: invoiceId } });
   if (!order || order.userId !== userId || !order.tier.startsWith('ra_')) {
     throw new RoboApplyBillingError('not_found', 'Invoice not found', 404);
   }
   return { kind: 'alipay', orderId: order.id };
 }
 
-export async function getAlipayOrderForReceipt(userId: string, orderId: string) {
-  const order = await prisma.alipayOrder.findUnique({ where: { id: orderId } });
+export interface ReceiptOrder {
+  id: string;
+  outTradeNo: string;
+  brand: BrandId;
+  planLabel: string;
+  amountMinor: number;
+  channel: string;
+  paidAt: Date;
+}
+
+export async function getAlipayOrderForReceipt(userId: string, orderId: string): Promise<ReceiptOrder> {
+  const order = await deps.db.alipayOrder.findUnique({ where: { id: orderId } });
   if (!order || order.userId !== userId || !order.tier.startsWith('ra_')) {
     throw new RoboApplyBillingError('not_found', 'Invoice not found', 404);
   }
-  return order;
+  return {
+    id: order.id,
+    outTradeNo: order.outTradeNo,
+    brand: parseBrandId(order.brand) ?? 'roboapply',
+    planLabel: orderPlanLabel(order),
+    amountMinor: order.amountMinor ?? Math.round(order.amount * 100),
+    channel: order.channel ?? 'alipay',
+    paidAt: order.completedAt ?? order.createdAt,
+  };
 }
 
-// ─── Webhook reconciliation (Stripe, shared endpoint) ─────────────────────────
+// ── Stripe webhook ───────────────────────────────────────────────────────
 
 async function syncMissionTier(userId: string, tier: string): Promise<void> {
   const card = await getRateCard();
-  await prisma.roboApplyMission
+  await deps.db.roboApplyMission
     .update({ where: { userId }, data: { tier: tier as never, dailyCap: tierDailyCap(card, tier) } })
     .catch(() => {
       /* mission may not exist — non-fatal */
     });
 }
 
-const STRIPE_STATUS_MAP: Record<string, string> = {
+/** Stripe status → SeekerSubscription.status. past_due keeps Pro while Stripe retries; unpaid/incomplete do not. */
+export const STRIPE_STATUS_MAP: Record<string, string> = {
   active: 'active',
   trialing: 'trialing',
   past_due: 'past_due',
   canceled: 'canceled',
-  unpaid: 'past_due',
-  incomplete: 'past_due',
+  unpaid: 'unpaid',
+  incomplete: 'incomplete',
   incomplete_expired: 'canceled',
+  paused: 'paused',
 };
+
+/**
+ * One-time claim for a webhook side effect (a checkout session, a failed
+ * invoice). Rows live in the credit ledger under bucket 'billing_event'
+ * (status committed, amount 0) — the unique idempotency key does the work.
+ */
+async function claimOnce(db: Pick<ExtendedPrismaClient, 'rACreditLedger'>, userId: string, key: string, refType: string): Promise<boolean> {
+  const res = await db.rACreditLedger.createMany({
+    data: [
+      {
+        userId,
+        bucket: 'billing_event',
+        amount: 0,
+        status: 'committed',
+        fromSource: 'stripe',
+        idempotencyKey: `billing:${key}`,
+        refType,
+        refId: key,
+        settledAt: deps.now(),
+      },
+    ],
+    skipDuplicates: true,
+  });
+  return res.count === 1;
+}
+
+interface SubHints {
+  seekerProfileId?: string;
+  planKey?: string;
+  fromCheckout?: boolean;
+  billingCountry?: string | null;
+}
 
 interface UpsertResult {
   handled: boolean;
   userId?: string;
-  oldTier?: string;
-  newTier?: MockPlanKey | 'free';
-  periodStart?: Date | null;
-  periodEnd?: Date | null;
+  planKey?: string;
+  tier?: string;
 }
 
-/** Sync a Stripe subscription onto the SeekerSubscription row. `creditGrant`
- *  controls credit granting: 'always' (deliberate purchase), 'period'
- *  (renewal/update — only when the period rolled or tier changed), 'none'. */
-async function upsertFromSubscription(
-  sub: Stripe.Subscription,
-  hints: { userId?: string; seekerProfileId?: string; tier?: MockPlanKey },
-  creditGrant: 'always' | 'period' | 'none',
-): Promise<UpsertResult> {
-  const catalog = await getMockPlanCatalog();
-  const item = sub.items?.data?.[0];
-  const priceId = item?.price?.id ?? null;
-  const tier = hints.tier ?? priceIdToMockPlanKey(catalog, priceId) ?? null;
+function resolvePlanFromStripe(sub: Stripe.Subscription, hints: SubHints, legacyCatalog: Awaited<ReturnType<typeof getMockPlanCatalog>>) {
+  const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+  const metaKey = (sub.metadata?.planKey as string | undefined) ?? hints.planKey;
+  const planKey = (isPlanKey(metaKey) ? metaKey : null) ?? planKeyForStripePrice(priceId);
+  if (planKey) return { planKey, tier: 'pro' as GrantTier, legacy: false, priceId };
+  const legacy: MockPlanKey = priceIdToMockPlanKey(legacyCatalog, priceId) ?? (sub.metadata?.tier === 'growth' ? 'growth' : 'starter');
+  return { planKey: legacy as string, tier: legacy as GrantTier, legacy: true, priceId };
+}
 
-  let row = await prisma.seekerSubscription.findFirst({
-    where: { stripeSubscriptionId: sub.id },
-    select: { id: true, seekerProfileId: true, tier: true },
-  });
-  if (!row && hints.seekerProfileId) {
-    row = await prisma.seekerSubscription.findUnique({
-      where: { seekerProfileId: hints.seekerProfileId },
-      select: { id: true, seekerProfileId: true, tier: true },
-    });
-  }
-  if (!row && typeof sub.customer === 'string') {
-    row = await prisma.seekerSubscription.findFirst({
-      where: { stripeCustomerId: sub.customer },
-      select: { id: true, seekerProfileId: true, tier: true },
-    });
+async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints, creditGrant: 'always' | 'period' | 'none'): Promise<UpsertResult> {
+  const db = deps.db;
+  const select = { id: true, seekerProfileId: true, tier: true, stripeSubscriptionId: true } as const;
+  let row = await db.seekerSubscription.findFirst({ where: { stripeSubscriptionId: sub.id }, select });
+  if (!row && hints.fromCheckout) {
+    if (hints.seekerProfileId) row = await db.seekerSubscription.findUnique({ where: { seekerProfileId: hints.seekerProfileId }, select });
+    if (!row && typeof sub.customer === 'string') row = await db.seekerSubscription.findFirst({ where: { stripeCustomerId: sub.customer }, select });
   }
   if (!row) return { handled: false };
 
+  const legacyCatalog = await getMockPlanCatalog();
+  const plan = resolvePlanFromStripe(sub, hints, legacyCatalog);
   const status = STRIPE_STATUS_MAP[sub.status] ?? 'active';
-  const periodEnd = (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null;
-  const periodStart = (sub as any).current_period_start ? new Date((sub as any).current_period_start * 1000) : null;
-  const amountMinor = typeof item?.price?.unit_amount === 'number' ? item.price.unit_amount : undefined;
-  const resolvedTier: MockPlanKey | 'free' = status === 'canceled' ? 'free' : (tier ?? 'starter');
-  const oldTier = String(row.tier);
+  const ended = status === 'canceled';
+  const { start, end } = stripePeriod(sub);
+  const item = sub.items?.data?.[0];
+  const def = plan.legacy ? null : planDefinitionFor('roboapply', plan.planKey);
+  const tier = ended ? 'free' : plan.tier;
 
-  await prisma.seekerSubscription.update({
+  await db.seekerSubscription.update({
     where: { id: row.id },
     data: {
-      tier: resolvedTier as never,
+      tier: tier as never,
       status,
+      brand: 'roboapply',
+      rail: 'stripe',
+      planKey: ended ? 'free' : plan.planKey,
+      interval: ended ? null : (def?.interval ?? 'month'),
       market: 'other',
       currency: item?.price?.currency?.toUpperCase() ?? undefined,
       stripeSubscriptionId: sub.id,
       stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : undefined,
-      stripePriceId: priceId ?? undefined,
-      amountMinor,
-      currentPeriodEnd: periodEnd,
+      stripePriceId: plan.priceId ?? undefined,
+      amountMinor: typeof item?.price?.unit_amount === 'number' ? item.price.unit_amount : undefined,
+      currentPeriodEnd: end,
       cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-      canceledAt: status === 'canceled' ? new Date() : null,
-      startedAt: (sub as any).start_date ? new Date((sub as any).start_date * 1000) : undefined,
+      canceledAt: ended ? deps.now() : null,
+      ...(sub.start_date ? { startedAt: new Date(sub.start_date * 1000) } : {}),
+      ...(hints.billingCountry ? { billingCountry: hints.billingCountry.toUpperCase() } : {}),
     },
   });
 
-  const profile = await prisma.seekerProfile.findUnique({ where: { id: row.seekerProfileId }, select: { userId: true } });
+  const profile = await db.seekerProfile.findUnique({ where: { id: row.seekerProfileId }, select: { userId: true } });
   const userId = profile?.userId;
   if (userId) {
-    await syncMissionTier(userId, resolvedTier);
-    // Credit grants for active paid subscriptions.
-    if (creditGrant !== 'none' && status !== 'canceled' && isPaidMockPlan(resolvedTier)) {
-      await grantForPlanIfNewPeriod({
+    if (plan.legacy || ended) await syncMissionTier(userId, tier).catch(() => {});
+    // Credits only for a paid-up period. past_due keeps Pro features on while
+    // Stripe retries, but the new period's practice minutes wait for payment.
+    const paidUp = status === 'active' || status === 'trialing';
+    if (creditGrant !== 'none' && paidUp && !ended) {
+      await deps.grantIfNewPeriod({
         userId,
-        tier: resolvedTier,
-        periodStart,
-        currentPeriodEnd: periodEnd,
+        tier: plan.tier,
+        credits: plan.legacy ? undefined : (def?.practice?.credits ?? 0),
+        periodStart: start,
+        currentPeriodEnd: end,
         source: 'stripe',
-        force: creditGrant === 'always' || oldTier !== resolvedTier,
+        force: creditGrant === 'always' || String(row.tier) !== String(plan.tier),
+        metadata: { planKey: plan.planKey, stripeSubscriptionId: sub.id },
       });
     }
+    deps.invalidate(userId);
   }
-
-  logger.info('RA_BILLING', 'stripe subscription synced', { subId: sub.id, status, tier: resolvedTier, creditGrant });
-  return { handled: true, userId, oldTier, newTier: resolvedTier, periodStart, periodEnd };
+  logger.info('RA_BILLING', 'stripe subscription synced', { subId: sub.id, status, planKey: plan.planKey, creditGrant });
+  return { handled: true, userId, planKey: plan.planKey, tier };
 }
 
-export async function handleRoboApplyStripeEvent(
-  event: Stripe.Event,
-  stripe: Stripe,
-): Promise<{ handled: boolean }> {
+/** A one-time payment (7-day pass or practice pack) from Stripe Checkout. */
+async function fulfilStripePayment(session: Stripe.Checkout.Session): Promise<{ handled: boolean; duplicate?: boolean }> {
+  const meta = session.metadata ?? {};
+  const planKey = meta.planKey;
+  const userId = meta.userId ?? session.client_reference_id ?? undefined;
+  const seekerProfileId = meta.seekerProfileId;
+  if (!userId || !seekerProfileId || !isPlanKey(planKey)) return { handled: false };
+  const def = planDefinitionFor('roboapply', planKey);
+  if (!def || (def.kind !== 'pass' && def.kind !== 'pack')) return { handled: false };
+  if (session.payment_status && session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required') {
+    return { handled: true }; // async payment methods: wait for checkout.session.async_payment_succeeded
+  }
+  const now = deps.now();
+  const billingCountry = session.customer_details?.address?.country?.toUpperCase() ?? null;
+
+  if (def.kind === 'pack') {
+    const fresh = await claimOnce(deps.db, userId, `checkout:${session.id}`, 'stripe_checkout');
+    await deps.grantPack({ userId, credits: def.practice?.credits ?? 0, idempotencyKey: `stripe:${session.id}`, purchasedAt: now });
+    return { handled: true, duplicate: !fresh };
+  }
+
+  // The 7-day pass: claim + activate in one transaction.
+  const periodEnd = await deps.db.$transaction(async (tx) => {
+    const fresh = await claimOnce(tx, userId, `checkout:${session.id}`, 'stripe_checkout');
+    if (!fresh) return null;
+    const cur = await tx.seekerSubscription.findUnique({
+      where: { seekerProfileId },
+      select: { tier: true, status: true, currentPeriodEnd: true, startedAt: true, stripeSubscriptionId: true },
+    });
+    const curLive =
+      cur && String(cur.tier) !== 'free' && ['active', 'trialing', 'past_due'].includes(cur.status) && cur.currentPeriodEnd && cur.currentPeriodEnd > now
+        ? cur.currentPeriodEnd
+        : null;
+    const base = curLive ?? now;
+    const end = new Date(base.getTime() + (def.passDays ?? 7) * 86_400_000);
+    const data = {
+      tier: 'pro' as const,
+      status: 'active',
+      brand: 'roboapply',
+      rail: 'stripe',
+      planKey,
+      interval: 'pass',
+      market: 'other',
+      currency: (session.currency ?? 'usd').toUpperCase(),
+      amountMinor: session.amount_total ?? null,
+      currentPeriodEnd: end,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      // A cancelled subscription still running hands over to the pass at its end;
+      // its later events no longer match this row (stripeSubscriptionId cleared).
+      stripeSubscriptionId: null,
+      startedAt: curLive ? (cur?.startedAt ?? now) : now,
+      ...(typeof session.customer === 'string' ? { stripeCustomerId: session.customer } : {}),
+      ...(billingCountry ? { billingCountry } : {}),
+    };
+    await tx.seekerSubscription.upsert({ where: { seekerProfileId }, update: data, create: { seekerProfileId, ...data } });
+    return end;
+  });
+  if (!periodEnd) {
+    // Replay: the activation committed earlier. Re-run the period-guarded grant
+    // (periodStart = when the claim committed) so a crash between the commit
+    // and the grant heals, while a completed grant (renewedAt ≥ claim) skips.
+    const claim = await deps.db.rACreditLedger.findUnique({
+      where: { idempotencyKey: `billing:checkout:${session.id}` },
+      select: { createdAt: true, settledAt: true },
+    });
+    const row = await deps.db.seekerSubscription.findUnique({ where: { seekerProfileId }, select: { planKey: true, currentPeriodEnd: true } });
+    const claimedAt = claim?.settledAt ?? claim?.createdAt ?? null;
+    if (claimedAt && row?.planKey === planKey && row.currentPeriodEnd && row.currentPeriodEnd > now) {
+      await deps.grantIfNewPeriod({
+        userId,
+        tier: 'pro',
+        credits: def.practice?.credits ?? 0,
+        periodStart: claimedAt,
+        currentPeriodEnd: row.currentPeriodEnd,
+        source: 'stripe',
+        force: false,
+        metadata: { planKey, checkoutSessionId: session.id, replay: true },
+      });
+    }
+    return { handled: true, duplicate: true };
+  }
+  await deps.grantIfNewPeriod({
+    userId,
+    tier: 'pro',
+    credits: def.practice?.credits ?? 0,
+    periodStart: now,
+    currentPeriodEnd: periodEnd,
+    source: 'stripe',
+    force: true,
+    metadata: { planKey, checkoutSessionId: session.id },
+  });
+  deps.invalidate(userId);
+  logger.info('RA_BILLING', 'stripe pass activated', { userId, planKey, periodEnd: periodEnd.toISOString() });
+  return { handled: true };
+}
+
+/** Subscription id of an invoice (top-level on old API versions, under `parent` on current ones). */
+export function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const legacy = (invoice as unknown as { subscription?: string | { id: string } | null }).subscription;
+  if (typeof legacy === 'string') return legacy;
+  if (legacy && typeof legacy === 'object') return legacy.id;
+  const parent = (invoice as unknown as { parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null }).parent;
+  const s = parent?.subscription_details?.subscription;
+  if (typeof s === 'string') return s;
+  return s && typeof s === 'object' ? s.id : null;
+}
+
+async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<{ handled: boolean; duplicate?: boolean }> {
+  const subId = invoiceSubscriptionId(invoice);
+  if (!subId) return { handled: false };
+  const row = await deps.db.seekerSubscription.findFirst({
+    where: { stripeSubscriptionId: subId },
+    select: { id: true, seekerProfileId: true, planKey: true, tier: true, amountMinor: true, currency: true },
+  });
+  if (!row) return { handled: false };
+  await deps.db.seekerSubscription.update({ where: { id: row.id }, data: { status: 'past_due' } });
+  const profile = await deps.db.seekerProfile.findUnique({ where: { id: row.seekerProfileId }, select: { userId: true, locale: true } });
+  if (!profile) return { handled: true };
+  deps.invalidate(profile.userId);
+  const fresh = invoice.id ? await claimOnce(deps.db, profile.userId, `payfail:${invoice.id}`, 'stripe_invoice') : false;
+  if (!fresh) return { handled: true, duplicate: true };
+  const user = await deps.db.user.findUnique({ where: { id: profile.userId }, select: { email: true } });
+  if (user?.email) {
+    await deps.sendEmail({
+      template: 'billing.payment_failed',
+      to: user.email,
+      userId: profile.userId,
+      locale: profile.locale,
+      brand: 'roboapply',
+      params: {
+        planKey: row.planKey ?? String(row.tier),
+        amountMinor: invoice.amount_due ?? row.amountMinor ?? null,
+        currency: (invoice.currency ?? row.currency ?? 'usd').toUpperCase(),
+      },
+    });
+  }
+  logger.info('RA_BILLING', 'subscription marked past_due', { subId });
+  return { handled: true };
+}
+
+export interface StripeEventResult {
+  handled: boolean;
+  /** The event repeated work already done (replayed delivery); nothing changed twice. */
+  duplicate?: boolean;
+  /** Processing failed; answer 500 so Stripe retries (every step is replay-safe). */
+  failed?: boolean;
+}
+
+export async function handleRoboApplyStripeEvent(event: Stripe.Event, stripe: Stripe): Promise<StripeEventResult> {
   try {
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.metadata?.product !== 'roboapply') return { handled: false };
-        const subscriptionId = session.subscription as string | null;
+        if (session.metadata?.brand && session.metadata.brand !== 'roboapply') {
+          // GoApply never charges through Stripe; never activate anything for it here.
+          logger.error('RA_BILLING', 'stripe checkout for a non-Stripe brand ignored', { sessionId: session.id, brand: session.metadata.brand });
+          return { handled: true };
+        }
+        if (session.mode === 'payment') return await fulfilStripePayment(session);
+        const subscriptionId = typeof session.subscription === 'string' ? session.subscription : (session.subscription?.id ?? null);
         if (!subscriptionId) return { handled: true };
+        const userId = session.metadata?.userId ?? session.client_reference_id ?? null;
+        const fresh = userId ? await claimOnce(deps.db, userId, `checkout:${session.id}`, 'stripe_checkout') : true;
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
-        await upsertFromSubscription(
+        const r = await upsertFromSubscription(
           sub,
           {
-            userId: session.metadata?.userId,
             seekerProfileId: session.metadata?.seekerProfileId,
-            tier: session.metadata?.tier as MockPlanKey | undefined,
+            planKey: session.metadata?.planKey ?? session.metadata?.tier,
+            fromCheckout: true,
+            billingCountry: session.customer_details?.address?.country ?? null,
           },
-          'always', // deliberate purchase → grant credits now
+          fresh ? 'always' : 'period',
         );
-        return { handled: true };
+        return { handled: r.handled, ...(fresh ? {} : { duplicate: true }) };
       }
-      case 'customer.subscription.updated': {
-        const sub = event.data.object as Stripe.Subscription;
-        const r = await upsertFromSubscription(
-          sub,
-          {
-            seekerProfileId: (sub.metadata?.seekerProfileId as string) || undefined,
-            tier: (sub.metadata?.tier as MockPlanKey) || undefined,
-          },
-          'period', // only grant on a true tier change / new period
-        );
-        return { handled: r.handled };
-      }
+      case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
+        // State only. Stripe advances the period when it drafts the renewal
+        // invoice, before it collects, so credits wait for invoice.paid.
         const sub = event.data.object as Stripe.Subscription;
         const r = await upsertFromSubscription(
           sub,
-          {
-            seekerProfileId: (sub.metadata?.seekerProfileId as string) || undefined,
-            tier: (sub.metadata?.tier as MockPlanKey) || undefined,
-          },
+          { planKey: (sub.metadata?.planKey as string) || (sub.metadata?.tier as string) || undefined },
           'none',
         );
         return { handled: r.handled };
       }
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice;
-        const subId = (invoice as any).subscription as string | null;
+        const subId = invoiceSubscriptionId(invoice);
         if (!subId) return { handled: false };
-        const owned = await prisma.seekerSubscription.findFirst({ where: { stripeSubscriptionId: subId }, select: { id: true } });
+        const owned = await deps.db.seekerSubscription.findFirst({ where: { stripeSubscriptionId: subId }, select: { id: true, seekerProfileId: true } });
         if (!owned) return { handled: false };
-        // Renewal cycle → grant the new period's credits. The first invoice
-        // (billing_reason 'subscription_create') is already covered by
-        // checkout.session.completed, so we only act on the recurring cycle.
-        if ((invoice as any).billing_reason === 'subscription_cycle') {
-          const sub = await stripe.subscriptions.retrieve(subId);
-          await upsertFromSubscription(sub, {}, 'period');
+        const reason = invoice.billing_reason;
+        if (reason !== 'subscription_cycle' && reason !== 'subscription_update' && reason !== 'subscription_create') return { handled: true };
+        // A paid renewal (or the first invoice, as a safety net behind checkout)
+        // grants the period's credits once, guarded by the period start. A paid
+        // plan switch grants the new plan's credits once per invoice.
+        let mode: 'always' | 'period' = 'period';
+        let duplicate = false;
+        if (reason === 'subscription_update' && invoice.id) {
+          const profile = await deps.db.seekerProfile.findUnique({ where: { id: owned.seekerProfileId }, select: { userId: true } });
+          if (profile) {
+            const fresh = await claimOnce(deps.db, profile.userId, `invoice:${invoice.id}`, 'stripe_invoice');
+            mode = fresh ? 'always' : 'period';
+            duplicate = !fresh;
+          }
         }
-        return { handled: true };
+        const sub = await stripe.subscriptions.retrieve(subId);
+        await upsertFromSubscription(sub, {}, mode);
+        return { handled: true, ...(duplicate ? { duplicate: true } : {}) };
       }
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice;
-        const subId = (invoice as any).subscription as string | null;
-        if (!subId) return { handled: false };
-        const row = await prisma.seekerSubscription.findFirst({ where: { stripeSubscriptionId: subId }, select: { id: true } });
-        if (!row) return { handled: false };
-        await prisma.seekerSubscription.update({ where: { id: row.id }, data: { status: 'past_due' } });
-        logger.info('RA_BILLING', 'subscription marked past_due', { subId });
-        return { handled: true };
-      }
+      case 'invoice.payment_failed':
+        return await handlePaymentFailed(event.data.object as Stripe.Invoice);
       default:
         return { handled: false };
     }
   } catch (err) {
-    logger.error('RA_BILLING', 'webhook handling failed', {
-      type: event.type,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return { handled: false };
+    logger.error('RA_BILLING', 'webhook handling failed', { type: event.type, id: event.id, error: err instanceof Error ? err.message : String(err) });
+    return { handled: false, failed: true };
   }
 }

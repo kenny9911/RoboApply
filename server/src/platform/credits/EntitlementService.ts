@@ -3,7 +3,8 @@
 // EntitlementService.resolve(userId) (ARCHITECTURE.md §7.2). Resolution order:
 //   1. the brand's credit catalog (defaults + AppConfig `credits.catalog.v1`);
 //   2. the plan: the active SeekerSubscription picks the `free` or `pro`
-//      column (status active|trialing and currentPeriodEnd in the future);
+//      column (status active|trialing|past_due and currentPeriodEnd in the
+//      future; past_due keeps Pro while Stripe retries, PRODUCT §6.5);
 //   3. live RAEntitlementOverride rows (`bucket:<bucket>` → cap,
 //      `entitlement:<key>` → number|boolean), newest wins, expired ignored.
 //
@@ -29,7 +30,13 @@ import {
 } from './catalog.js';
 import { CREDIT_WINDOWS, safeTimeZone, type CreditWindow } from './windows.js';
 
-export const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'] as const;
+/**
+ * Statuses that keep the paid plan. `past_due` = Stripe is retrying a failed
+ * renewal (3 tries over about 7 days): features stay on until the last retry
+ * fails and Stripe marks the subscription unpaid/canceled (PRODUCT_PLAN.md
+ * §6.5; WP-21a).
+ */
+export const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'] as const;
 
 export interface AccountSnapshot {
   brand: string | null;

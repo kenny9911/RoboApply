@@ -25,7 +25,9 @@ export type PracticeGrantReason =
   | 'checklist_complete'
   | 'referral'
   | 'compensation'
-  | 'admin';
+  | 'admin'
+  /** A purchased practice pack (platform/billing/packs.ts; key = the order / checkout session). */
+  | 'pack_purchase';
 
 export type PracticeGrantStatus = 'granted' | 'already_granted' | 'in_progress' | 'no_profile' | 'failed';
 

@@ -1,31 +1,34 @@
-// backend/src/roboapply/routes/billing.ts
+// server/src/roboapply/routes/billing.ts
 //
-// RoboApply self-serve billing for the mock-interview product. Mounted at
-// /api/v1/roboapply/billing/* in backend/src/index.ts.
+// Seeker billing. Mounted at /api/v1/roboapply/billing/* (app.ts). Brand-aware
+// since the Jobright clone (TASK_PLAN.md WP-21a): the request's brand picks
+// the currency and rail; `?region=` is gone.
 //
-//   GET  /plan                      — region + both prices + credits + plan catalogue
-//   GET  /credits                   — current credit balance (+ allotment)
-//   POST /checkout                  — { tier } → Stripe Checkout url (USD recurring)
-//   POST /alipay                    — { tier } → Alipay pay url (RMB monthly pass)
-//   GET/POST /alipay/callback       — GoHire Alipay worker notify_url
-//   POST /portal                    — Stripe Billing Portal url
-//   POST /cancel                    — cancel Stripe sub at period end
-//   GET  /history                   — unified invoice list (Stripe + Alipay)
-//   GET  /invoices/:id/download     — redirect to Stripe PDF / stream Alipay receipt
+//   GET  /plan                      current plan, practice credits, the brand's catalog
+//   GET  /credits                   practice credit balance (+ allotment)
+//   POST /checkout                  { planKey, autoRenewAck?, withdrawalWaiver?, rail? } → { url } (Stripe/Alipay) | QR | JSAPI
+//   POST /alipay                    { planKey } → { url } (GoApply passes; same as checkout with rail 'alipay')
+//   GET/POST /alipay/callback       GoHire Alipay worker notify_url → fulfilPass
+//   POST /portal                    Stripe Billing Portal url
+//   POST /cancel                    turn auto-renewal off (one click; confirmation email)
+//   POST /switch                    { planKey } → quote; { planKey, confirm: true, prorationDate, autoRenewAck } → switched
+//   GET  /history                   unified invoice list (Stripe + CN orders)
+//   GET  /invoices/:id/download     Stripe PDF redirect / brand-aware CN receipt
 //
-// V1 namespace (imports the shared engine + Stripe billing service freely).
+// The new seeker endpoints (/credits area, /billing/plans, public /cancel)
+// live in server/src/features/credits.
 
 import { Router, type Request, type Response } from 'express';
+import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth.js';
 import { logger } from '../../services/LoggerService.js';
 import {
   getPlan,
-  createCheckoutSession,
-  createAlipayOrder,
-  handleRoboApplyAlipayCallback,
-  alipayCallbackSecretOk,
+  createCheckout,
+  handleAlipayCallback,
   createPortalSession,
   cancelAtPeriodEnd,
+  switchPlan,
   getBillingHistory,
   resolveInvoiceDownload,
   getAlipayOrderForReceipt,
@@ -34,32 +37,73 @@ import {
 } from '../services/RoboApplyBillingService.js';
 import { getBalance } from '../../lib/mockCreditService.js';
 import { getMockPlanCatalog } from '../../lib/mockInterviewPlans.js';
-import { countryHeaderFromRequest } from '../../lib/billingRegion.js';
-import { getRequestLocale } from '../v2/lib/raLocale.js';
 import { renderAlipayReceiptPdf } from '../lib/invoiceReceipt.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
+import { getBrand, type ProductBrand } from '../../platform/brand/registry.js';
+import { collectingEntity, isPaymentRail } from '../../platform/billing/index.js';
 
 const router = Router();
 
+function brandOf(req: Request): ProductBrand {
+  return (req as Request & { brand?: ProductBrand }).brand ?? getCurrentBrandOrDefault();
+}
+
 function handleErr(err: unknown, req: Request, res: Response, code: string) {
   if (err instanceof RoboApplyBillingError) {
-    return res.status(err.status).json({ success: false, code: err.code, error: err.message });
+    const body: Record<string, unknown> = { success: false, code: err.code, error: err.message };
+    if (err.details) body.details = err.details;
+    return res.status(err.status).json(body);
   }
   logger.error('RA_BILLING', `${code} failed`, { error: err instanceof Error ? err.message : String(err) }, req.requestId);
   return res.status(500).json({ success: false, code, error: 'Billing request failed' });
 }
 
-function validatePaidTier(raw: unknown): 'starter' | 'growth' {
-  if (raw === 'starter' || raw === 'growth') return raw;
-  throw new RoboApplyBillingError('invalid_tier', 'tier must be starter | growth');
+function invalid(res: Response, issues: z.ZodError) {
+  return res.status(422).json({
+    success: false,
+    code: 'invalid_request',
+    error: 'Invalid request',
+    details: issues.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+  });
+}
+
+export const CheckoutBodySchema = z
+  .object({
+    planKey: z.string().min(1).max(40).optional(),
+    /** Retired: starter/growth are no longer sold. */
+    tier: z.string().max(40).optional(),
+    autoRenewAck: z.boolean().optional(),
+    withdrawalWaiver: z.boolean().optional(),
+    rail: z.enum(['stripe', 'alipay', 'wechatpay']).optional(),
+    next: z.string().max(400).optional(),
+    cancelNext: z.string().max(400).optional(),
+    tradeType: z.enum(['native', 'h5', 'jsapi']).optional(),
+    openId: z.string().max(128).optional(),
+  })
+  .passthrough();
+
+export const SwitchBodySchema = z
+  .object({
+    planKey: z.string().min(1).max(40),
+    confirm: z.boolean().optional(),
+    prorationDate: z.number().int().positive().optional(),
+    /** Required with `confirm` when the new plan renews automatically. */
+    autoRenewAck: z.boolean().optional(),
+    withdrawalWaiver: z.boolean().optional(),
+  })
+  .strict();
+
+function legacyTierRefusal(res: Response) {
+  return res.status(409).json({
+    success: false,
+    code: 'plan_not_sellable',
+    error: 'Practice plans are no longer sold. Choose a Pro plan or a practice pack.',
+  });
 }
 
 router.get('/plan', requireAuth, async (req: Request, res: Response) => {
   try {
-    const data = await getPlan(req.user!.id, {
-      explicit: typeof req.query.region === 'string' ? req.query.region : null,
-      countryHeader: countryHeaderFromRequest(req),
-      locale: getRequestLocale(req),
-    });
+    const data = await getPlan(req.user!.id, { brand: brandOf(req) });
     return res.json({ success: true, data });
   } catch (err) {
     return handleErr(err, req, res, 'plan_failed');
@@ -69,9 +113,6 @@ router.get('/plan', requireAuth, async (req: Request, res: Response) => {
 router.get('/credits', requireAuth, async (req: Request, res: Response) => {
   try {
     const bal = await getBalance(req.user!.id);
-    // getBalance resolves this same cached catalogue first, so this read is
-    // effectively free and keeps the response aligned with the gate/debit
-    // policy even when finance changes the runtime AppConfig override.
     const catalog = await getMockPlanCatalog();
     return res.json({
       success: true,
@@ -88,62 +129,48 @@ router.get('/credits', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
+async function checkout(req: Request, res: Response, forcedRail?: 'alipay') {
+  const parsed = CheckoutBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
+  const body = parsed.data;
+  if (!body.planKey) {
+    if (body.tier) return legacyTierRefusal(res);
+    return res.status(422).json({ success: false, code: 'invalid_request', error: 'Invalid request', details: [{ path: 'planKey', message: 'Required' }] });
+  }
+  const next = safeNextPath(body.next);
+  const cancelNext = safeNextPath(body.cancelNext);
   try {
-    const tier = validatePaidTier((req.body ?? {}).tier);
-    const next = safeNextPath((req.body ?? {}).next);
-    // Optional explicit cancel return (in-app /plans upgrades return to /plans).
-    // Back-compat: when absent, keep the signup default (/choose-plan when a
-    // success `next` was given, else the service default of /account).
-    const cancelNext = safeNextPath((req.body ?? {}).cancelNext);
-    const data = await createCheckoutSession({
+    const data = await createCheckout({
       userId: req.user!.id,
-      email: req.user!.email,
-      tier,
+      brand: brandOf(req),
+      planKey: body.planKey,
+      autoRenewAck: body.autoRenewAck,
+      withdrawalWaiver: body.withdrawalWaiver,
+      rail: forcedRail ?? (isPaymentRail(body.rail) ? body.rail : null),
       successPath: next,
-      cancelPath: cancelNext ?? (next ? '/choose-plan' : undefined),
+      cancelPath: cancelNext ?? (next ? '/settings/billing' : undefined),
+      ip: req.ip ?? null,
+      userAgent: req.get('user-agent') ?? null,
+      context: body.tradeType ? { tradeType: body.tradeType, openId: body.openId } : undefined,
     });
     return res.json({ success: true, data });
   } catch (err) {
     return handleErr(err, req, res, 'checkout_failed');
   }
-});
+}
 
-router.post('/alipay', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tier = validatePaidTier((req.body ?? {}).tier);
-    const next = safeNextPath((req.body ?? {}).next);
-    const data = await createAlipayOrder({
-      userId: req.user!.id,
-      name: req.user!.name ?? null,
-      email: req.user!.email,
-      tier,
-      returnPath: next,
-    });
-    return res.json({ success: true, data });
-  } catch (err) {
-    return handleErr(err, req, res, 'alipay_failed');
-  }
-});
+router.post('/checkout', requireAuth, (req, res) => checkout(req, res));
+router.post('/alipay', requireAuth, (req, res) => checkout(req, res, 'alipay'));
 
-// GoHire Alipay worker notify_url. Public (no auth) — identified by out_trade_no.
+// GoHire Alipay worker notify_url. Public (no auth); proves itself with the
+// echoed ALIPAY_CALLBACK_SECRET and is identified by out_trade_no.
 async function alipayCallback(req: Request, res: Response) {
-  // Optional shared-secret check (see ALIPAY_CALLBACK_SECRET). When configured,
-  // a callback missing the worker-echoed secret is rejected before any DB write
-  // — closing the forge/brute-force vector on this public endpoint.
-  const cbToken = (req.query.cb || (req.body as any)?.cb || req.headers['x-alipay-callback-secret']) as string | undefined;
-  if (!alipayCallbackSecretOk(cbToken)) {
-    logger.warn('RA_BILLING', 'alipay callback rejected — bad/missing secret', { out_trade_no: req.query.out_trade_no });
-    return res.status(403).json({ code: 40003, message: 'forbidden' });
-  }
-  const pay_status = (req.query.pay_status || (req.body as any)?.pay_status) as string | undefined;
-  const out_trade_no = (req.query.out_trade_no || (req.body as any)?.out_trade_no) as string | undefined;
-  logger.info('RA_BILLING', 'alipay callback', { pay_status, out_trade_no });
   try {
-    const result = await handleRoboApplyAlipayCallback({ pay_status, out_trade_no });
-    return res.status(result.ok ? 200 : 400).json({ code: result.code, message: result.message });
+    const result = await handleAlipayCallback({ query: req.query as Record<string, unknown>, body: req.body, headers: req.headers });
+    if (!result.ok) logger.warn('RA_BILLING', 'alipay callback refused', { code: result.code, out_trade_no: req.query.out_trade_no });
+    return res.status(result.httpStatus).json({ code: result.code, message: result.message });
   } catch (err) {
-    logger.error('RA_BILLING', 'alipay callback error', { out_trade_no, error: err instanceof Error ? err.message : String(err) });
+    logger.error('RA_BILLING', 'alipay callback error', { out_trade_no: req.query.out_trade_no, error: err instanceof Error ? err.message : String(err) });
     return res.status(500).json({ code: 50001, message: 'internal error' });
   }
 }
@@ -152,7 +179,7 @@ router.post('/alipay/callback', alipayCallback);
 
 router.post('/portal', requireAuth, async (req: Request, res: Response) => {
   try {
-    const data = await createPortalSession(req.user!.id);
+    const data = await createPortalSession(req.user!.id, brandOf(req));
     return res.json({ success: true, data });
   } catch (err) {
     return handleErr(err, req, res, 'portal_failed');
@@ -168,6 +195,23 @@ router.post('/cancel', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// Legacy → Pro (or between Pro intervals). Without `confirm` it only quotes;
+// nothing is charged until `{ confirm: true, prorationDate }` comes back.
+router.post('/switch', requireAuth, async (req: Request, res: Response) => {
+  const parsed = SwitchBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
+  try {
+    const data = await switchPlan(req.user!.id, brandOf(req), {
+      ...parsed.data,
+      ip: req.ip ?? null,
+      userAgent: req.get('user-agent') ?? null,
+    });
+    return res.json({ success: true, data });
+  } catch (err) {
+    return handleErr(err, req, res, 'switch_failed');
+  }
+});
+
 router.get('/history', requireAuth, async (req: Request, res: Response) => {
   try {
     const data = await getBillingHistory(req.user!.id);
@@ -177,32 +221,32 @@ router.get('/history', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// Direct-open endpoint: the frontend just opens this URL in a new tab. Stripe →
-// 302 to the hosted PDF; Alipay → stream the generated receipt PDF inline.
+// Direct-open endpoint: Stripe → 302 to the hosted PDF; CN orders → our receipt PDF.
 router.get('/invoices/:id/download', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const resolved = await resolveInvoiceDownload(req.user!.id, req.params.id);
-    if (resolved.kind === 'stripe') {
-      return res.redirect(302, resolved.url);
-    }
+    if (resolved.kind === 'stripe') return res.redirect(302, resolved.url);
     const order = await getAlipayOrderForReceipt(req.user!.id, resolved.orderId);
-    const planLabel = order.tier.replace(/^ra_/, '') === 'growth' ? 'Growth' : 'Starter';
+    const brand = getBrand(order.brand);
     const pdf = await renderAlipayReceiptPdf({
       orderId: order.id,
       outTradeNo: order.outTradeNo,
-      planLabel,
-      subject: `RoboApply ${planLabel} 月度订阅`,
-      amountMinor: Math.round(order.amount * 100),
+      brandName: brand.name,
+      planLabel: order.planLabel,
+      subject: `${brand.name} ${order.planLabel}`,
+      amountMinor: order.amountMinor,
       currency: 'CNY',
-      paidAt: order.completedAt ?? order.createdAt,
+      paidAt: order.paidAt,
       customerName: req.user!.name ?? '',
       customerEmail: req.user!.email,
+      paymentMethod: order.channel === 'wechatpay' ? 'WeChat Pay (微信支付)' : 'Alipay (支付宝)',
+      collectedBy: collectingEntity(brand),
     });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="roboapply-receipt-${order.outTradeNo}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="${brand.id}-receipt-${order.outTradeNo}.pdf"`);
     return res.send(pdf);
   } catch (err) {
-    return handleErr(err, req, res, 'invoice_download_failed');
+    return handleErr(err, req as unknown as Request, res, 'invoice_download_failed');
   }
 });
 

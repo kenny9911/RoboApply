@@ -63,11 +63,16 @@ describe('resolution order: catalog → plan → override', () => {
     expect(r.timezone).toBe('UTC'); // brand default
   });
 
-  it('drops to Free when the period ended or the status is not active', () => {
+  it('drops to Free when the period ended or the status is not active (past_due keeps Pro while Stripe retries)', () => {
     expect(resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: sub({ planKey: 'pro_monthly', currentPeriodEnd: PAST }) })).planProfile).toBe('free');
     expect(
       resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: sub({ planKey: 'pro_monthly', status: 'past_due', currentPeriodEnd: FUTURE }) })).planProfile,
-    ).toBe('free');
+    ).toBe('pro');
+    for (const status of ['unpaid', 'canceled', 'incomplete']) {
+      expect(
+        resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: sub({ planKey: 'pro_monthly', status, currentPeriodEnd: FUTURE }) })).planProfile,
+      ).toBe('free');
+    }
     expect(resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: sub({ planKey: 'pro_monthly', currentPeriodEnd: null }) })).planProfile).toBe('free');
     expect(liveSubscription(sub({ status: 'trialing', currentPeriodEnd: FUTURE }), NOW)).toBe(true);
   });

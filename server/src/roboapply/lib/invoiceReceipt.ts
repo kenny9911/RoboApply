@@ -1,9 +1,14 @@
 // backend/src/roboapply/lib/invoiceReceipt.ts
 //
-// Generates a branded PDF receipt for a RoboApply Alipay order. Stripe provides
-// its own hosted invoice PDF; Alipay (the GoHire worker) does not, so we render
-// our own. CJK-safe via the bundled Noto Sans SC faces (Chinese subjects render
-// real glyphs, not tofu boxes).
+// Generates a brand-aware PDF receipt for a CN-rail order (Alipay today, WeChat
+// Pay from WP-62). Stripe provides its own hosted invoice PDF; the GoHire
+// payment worker does not, so we render our own. CJK-safe via the bundled
+// Noto Sans SC faces (Chinese subjects render real glyphs, not tofu boxes).
+//
+// TASK_PLAN.md WP-21a: the receipt carries the brand that sold the plan and
+// names the entity that actually collected the money
+// (`CN_PAYMENT_COLLECTING_ENTITY`, ARCHITECTURE.md §7.4) when configured —
+// never an invented one.
 
 import PDFDocument from 'pdfkit';
 import fs from 'node:fs';
@@ -20,13 +25,21 @@ const HAS_FONTS = fs.existsSync(FONT_REGULAR) && fs.existsSync(FONT_BOLD);
 export interface ReceiptInput {
   orderId: string;
   outTradeNo: string;
-  planLabel: string; // 'Starter' | 'Growth'
-  subject: string; // e.g. 'RoboApply Growth 月度订阅'
+  /** The brand that sold the plan ('RoboApply' | 'GoApply'). */
+  brandName: string;
+  planLabel: string;
+  subject: string; // e.g. 'GoApply 会员月卡'
   amountMinor: number; // fen
   currency: string; // 'CNY'
   paidAt: Date;
   customerName: string;
   customerEmail: string;
+  /** 'Alipay (支付宝)' | 'WeChat Pay (微信支付)'. */
+  paymentMethod?: string;
+  /** The entity that collected the payment, from config; omitted when unset. */
+  collectedBy?: string | null;
+  /** Pass/pack wording for the footer. */
+  footerNote?: string;
 }
 
 function money(amountMinor: number, currency: string): string {
@@ -57,7 +70,7 @@ export async function renderAlipayReceiptPdf(input: ReceiptInput): Promise<Buffe
   const accent = '#5b5bd6';
 
   // Header
-  doc.font(bold).fontSize(22).fillColor(accent).text('RoboApply', left, 56);
+  doc.font(bold).fontSize(22).fillColor(accent).text(input.brandName, left, 56);
   doc.font(reg).fontSize(11).fillColor('#555').text('Payment Receipt', left, 84);
   doc.moveTo(left, 110).lineTo(539, 110).strokeColor('#e5e7eb').stroke();
 
@@ -72,7 +85,8 @@ export async function renderAlipayReceiptPdf(input: ReceiptInput): Promise<Buffe
   row('Date', input.paidAt.toISOString().slice(0, 10));
   row('Billed to', `${input.customerName || input.customerEmail}`);
   row('Email', input.customerEmail);
-  row('Payment method', 'Alipay (支付宝)');
+  row('Payment method', input.paymentMethod ?? 'Alipay (支付宝)');
+  if (input.collectedBy) row('Collected by', input.collectedBy);
   row('Status', 'Paid');
 
   // Line item
@@ -92,7 +106,7 @@ export async function renderAlipayReceiptPdf(input: ReceiptInput): Promise<Buffe
 
   // Footer
   doc.font(reg).fontSize(9).fillColor('#999').text(
-    'Thank you for using RoboApply. This receipt confirms a one-month subscription pass. Mock-interview credits are granted on payment. For questions, contact support.',
+    input.footerNote ?? `Thank you for using ${input.brandName}. This receipt confirms a one-time payment; it does not renew. Practice credits are granted on payment. For questions, contact support.`,
     left,
     760,
     { width: 483 },

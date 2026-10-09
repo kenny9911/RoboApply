@@ -1,17 +1,28 @@
-// server/src/features/credits/routes.ts — STUB (FND-5). Owner: WP-21a.
+// server/src/features/credits/routes.ts — seeker + public credits routes (WP-21a).
 //
 // Mounted by features/index.ts:
 //   createCreditsRouter()      at /api/v1/roboapply/credits
+//     GET  /            → CreditsResponse (caps, usage, reset times, plan; practice balance)
+//     GET  /history     → { items: CreditLedgerView[], cursor }   committed ledger rows
+//     POST /cancel      → CancelResponse   one click; survey optional; confirmation email
 //   createBillingPlansRouter() at /api/v1/roboapply/billing/plans (after the legacy
 //                              /billing router, which has no /plans path)
-//   createPublicCancelRouter() at /api/v1/public/cancel
-// The admin router lives in adminRoutes.ts.
+//     GET  /            → PlansResponse    public; signed-in users also get `current`
+//   createPublicCancelRouter() at /api/v1/public/cancel (no sign-in; §312k BGB)
+//     POST /            {email} → 204 always; emails a single-use 30-minute link
+//     POST /confirm     {token} → CancelResponse
+// The admin router lives in adminRoutes.ts. Checkout stays on the legacy
+// /billing/checkout route (roboapply/routes/billing.ts).
 
-import { Router, type RequestHandler } from 'express';
-import type { ZodType } from 'zod';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
 import { optionalAuth } from '../../middleware/auth.js';
-import { markStub, NotImplementedError, parseBody, parseParams, parseQuery, route } from '../../platform/http.js';
+import { parseBody, parseQuery, requireUserId, route } from '../../platform/http.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
+import type { ProductBrand } from '../../platform/brand/registry.js';
+import { BillingError, billingErrorBody } from '../../platform/billing/errors.js';
+import { clientIp } from '../../platform/ratelimit/index.js';
+import { countryHeaderFromRequest } from '../../lib/billingRegion.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
   CancelSubscriptionBodySchema,
@@ -19,39 +30,87 @@ import {
   PublicCancelConfirmBodySchema,
   PublicCancelRequestBodySchema,
 } from './contract.js';
+import { CreditsAreaService, creditsAreaService } from './service.js';
 
-function stub(what: string, s: { params?: ZodType; query?: ZodType; body?: ZodType } = {}): RequestHandler {
-  return markStub(
-    route(async (req) => {
-      if (s.params) parseParams(req, s.params);
-      if (s.query) parseQuery(req, s.query);
-      if (s.body) parseBody(req, s.body);
-      throw new NotImplementedError(what);
-    }),
-  );
+export function brandOf(req: Request): ProductBrand {
+  return (req as Request & { brand?: ProductBrand }).brand ?? getCurrentBrandOrDefault();
 }
 
-export function createCreditsRouter(deps: FeatureRouterDeps = {}): Router {
+/** `route()` plus the billing error envelope (codes like `no_subscription`, `cancel_token_invalid`). */
+export function billingRoute<T>(fn: (req: Request, res: Response) => Promise<T>, options: { status?: number } = {}): RequestHandler {
+  return route(async (req, res) => {
+    try {
+      return await fn(req, res);
+    } catch (err) {
+      if (err instanceof BillingError) {
+        res.status(err.status).json(billingErrorBody(err));
+        return undefined as T;
+      }
+      throw err;
+    }
+  }, options);
+}
+
+export function serviceFor(deps: FeatureRouterDeps & { service?: CreditsAreaService }): CreditsAreaService {
+  if (deps.service) return deps.service;
+  if (deps.env) {
+    const env = deps.env;
+    return new CreditsAreaService({ env: () => env });
+  }
+  return creditsAreaService;
+}
+
+export function createCreditsRouter(deps: FeatureRouterDeps & { service?: CreditsAreaService } = {}): Router {
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
+  const service = serviceFor(deps);
 
-  router.get('/', ...auth, stub('credits.get'));
-  router.get('/history', ...auth, stub('credits.history', { query: CreditHistoryQuerySchema }));
-  router.post('/cancel', ...auth, stub('credits.cancel', { body: CancelSubscriptionBodySchema }));
-
+  router.get('/', ...auth, billingRoute(async (req) => service.getCredits(requireUserId(req), brandOf(req))));
+  router.get(
+    '/history',
+    ...auth,
+    billingRoute(async (req) => service.history(requireUserId(req), parseQuery(req, CreditHistoryQuerySchema))),
+  );
+  router.post(
+    '/cancel',
+    ...auth,
+    billingRoute(async (req) => service.cancel(requireUserId(req), brandOf(req), parseBody(req, CancelSubscriptionBodySchema))),
+  );
   return router;
 }
 
-export function createBillingPlansRouter(deps: FeatureRouterDeps = {}): Router {
+export function createBillingPlansRouter(deps: FeatureRouterDeps & { service?: CreditsAreaService } = {}): Router {
   const router = Router();
   const maybeAuth = [...(deps.optionalAuth ?? [optionalAuth])];
-  router.get('/', ...maybeAuth, stub('billing.plans'));
+  const service = serviceFor(deps);
+  router.get(
+    '/',
+    ...maybeAuth,
+    billingRoute(async (req) => {
+      const userId = (req as Request & { user?: { id?: string } }).user?.id ?? null;
+      return service.plans(brandOf(req), { userId, country: countryHeaderFromRequest(req) });
+    }),
+  );
   return router;
 }
 
-export function createPublicCancelRouter(_deps: FeatureRouterDeps = {}): Router {
+export function createPublicCancelRouter(deps: FeatureRouterDeps & { service?: CreditsAreaService } = {}): Router {
   const router = Router();
-  router.post('/', stub('cancel.request', { body: PublicCancelRequestBodySchema }));
-  router.post('/confirm', stub('cancel.confirm', { body: PublicCancelConfirmBodySchema }));
+  const service = serviceFor(deps);
+  router.post(
+    '/',
+    billingRoute(async (req, res) => {
+      const { email } = parseBody(req, PublicCancelRequestBodySchema);
+      await service.requestPublicCancel(brandOf(req), email, clientIp(req));
+      res.status(204).end();
+    }),
+  );
+  router.post(
+    '/confirm',
+    billingRoute(async (req) => {
+      const { token } = parseBody(req, PublicCancelConfirmBodySchema);
+      return service.confirmPublicCancel(brandOf(req), token);
+    }),
+  );
   return router;
 }
