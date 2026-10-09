@@ -23,6 +23,7 @@ import { HttpError } from '../../platform/http.js';
 import { brandOfUser, getBrand, getCurrentBrandOrDefault, type ProductBrand } from '../../platform/brand/index.js';
 import { hasLiveConsent } from '../../platform/consent/index.js';
 import { isEnabled } from '../../platform/flags.js';
+import { isCnMainland } from '../../platform/residency/index.js';
 import { CnProfileFieldsSchema } from '../onboarding-cn/index.js';
 import { hasTwAnswers } from '../tw/index.js';
 import {
@@ -83,7 +84,8 @@ const blankToNull = (v: string | undefined): string | null | undefined => (v ===
 const ym = (v: string | undefined | null): string | null | undefined => (v === undefined ? undefined : v === null || v === '' ? null : v.slice(0, 7));
 
 export function isCnMainlandDeployment(env: CryptoEnv): boolean {
-  return env.DEPLOY_REGION === 'cn-mainland';
+  // One definition of the mainland stack (WP-15 platform/residency; trims and lowercases).
+  return isCnMainland(env);
 }
 
 /**

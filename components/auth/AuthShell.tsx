@@ -20,7 +20,8 @@ import { ThemeToggle } from '../landing/ThemeToggle';
 import { BrandSymbol } from '../chrome/BrandSymbol';
 import { setLocaleCookie } from '../../lib/locale';
 import { useLocale, useTranslations } from 'next-intl';
-import { isLocale, localePath, READY_LOCALES } from '../../lib/localeConfig';
+import { isLocale, localePath } from '../../lib/localeConfig';
+import { brandSwitcherLocales } from '../features/brand';
 import { cn } from '../../lib/utils';
 import { useBrand } from '../../lib/brand/BrandProvider';
 import { entryContext } from '../../lib/auth/entry';
@@ -59,7 +60,10 @@ export function AuthUtilities() {
   const t = useTranslations('common');
   const locale = useLocale();
   const router = useRouter();
+  const brand = useBrand();
   const [pending, startTransition] = useTransition();
+  // Only the brand's own locales (nine on RoboApply, zh/en on GoApply; WP-12).
+  const languages = brandSwitcherLocales(brand.locales);
   return (
     <div className="auth-utilities">
       <select
@@ -73,7 +77,7 @@ export function AuthUtilities() {
           startTransition(() => router.refresh());
         }}
       >
-        {READY_LOCALES.map((language) => (
+        {languages.map((language) => (
           <option key={language.code} value={language.code}>
             {language.label}
           </option>

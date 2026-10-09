@@ -11,7 +11,7 @@ import { createFakePrisma } from '../../test/fakePrisma.js';
 import { fakeAuth, startRouteHarness, type HarnessResponse, type RouteHarness } from '../../test/routeHarness.js';
 import { createProfileRouter, createProfileService, type ProfileView, type SensitiveAnswersView, type SyncFromResumeResponse } from './index.js';
 import type { ProfileDb, ProfileServiceDeps } from './service.js';
-import { createTwFieldsStore } from './twFieldsStore.js';
+import { createTwFieldsStore, twFieldsColumnPresent } from './twFieldsStore.js';
 
 const RA = 'localhost:3621';
 const GO = 'goapply.localhost:3621';
@@ -172,7 +172,10 @@ describe('GET / PATCH /profile', () => {
     expect(res.body.details).toEqual({ schemaRequest: 'SR-WP19-1' });
   });
 
-  it.todo('SR-WP19-1: Taiwan fields persist and read back once RAProfile.twFields exists (createTwFieldsStore(true) against the migrated client)');
+  it('SR-WP19-1 landed (SCHEMA-2): the default store finds RAProfile.twFields in the generated client', () => {
+    expect(twFieldsColumnPresent()).toBe(true);
+    expect(createTwFieldsStore().available).toBe(true);
+  });
 });
 
 describe('Taiwan fields with the column present (adapter path)', () => {

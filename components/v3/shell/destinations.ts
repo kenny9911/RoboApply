@@ -97,7 +97,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'applications', href: '/applications', labelKey: 'applications', icon: IconStack, group: 'top', brands: RA, flag: null, badge: 'applications', mobile: 2, ready: true, match: under('/applications') },
   { id: 'resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: RA, flag: null, badge: null, mobile: 3, ready: true, match: under('/resume') },
   { id: 'practice', href: '/practice', labelKey: 'practice', icon: IconSparkle, group: 'top', brands: RA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
-  { id: 'profile', href: '/profile', labelKey: 'profile', icon: IconPerson, group: 'top', brands: RA, flag: null, badge: 'profile', mobile: 'more', ready: false, match: under('/profile') },
+  { id: 'profile', href: '/profile', labelKey: 'profile', icon: IconPerson, group: 'top', brands: RA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
   // ── RoboApply · lower ─────────────────────────────────────────────────
   { id: 'coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: RA, flag: 'coaching', badge: null, mobile: 'more', ready: false, gate: 'coachRoster', match: under('/coaching') },
   { id: 'invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: RA, flag: 'invites', badge: null, mobile: 'more', ready: false, match: under('/invite') },
@@ -112,7 +112,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 3, ready: true, match: under('/applications') },
   { id: 'cn.resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/resume') },
   { id: 'cn.practice', href: '/practice', labelKey: 'cn_practice', mobileLabelKey: 'cn_practice_short', icon: IconSparkle, group: 'top', brands: GA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
-  { id: 'cn.profile', href: '/profile', labelKey: 'cn_profile', icon: IconPerson, group: 'top', brands: GA, flag: null, badge: 'profile', mobile: 'more', ready: false, match: under('/profile') },
+  { id: 'cn.profile', href: '/profile', labelKey: 'cn_profile', icon: IconPerson, group: 'top', brands: GA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
   // ── GoApply · lower (内推 · 邀请好友 · 设置 · 会员 badge) ─────────────────
   { id: 'cn.referrals', href: '/referrals', labelKey: 'cn_referrals', icon: IconUsers, group: 'lower', brands: GA, flag: 'cn.referralCodes', badge: null, mobile: 'more', ready: false, match: under('/referrals') },
   { id: 'cn.invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: GA, flag: 'invites', badge: null, mobile: 'more', ready: false, match: under('/invite') },

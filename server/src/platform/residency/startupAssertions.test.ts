@@ -92,7 +92,9 @@ describe('DEPLOY_REGION=cn-mainland', () => {
     // Every unpinned selector follows the provider: each one is reported.
     expect(
       checkResidency({ ...GOOD, CN_LLM_PROVIDER: 'openrouter' }).failures.map((f) => f.message.split(' ')[0]),
-    ).toEqual(['CN_LLM_PROVIDER', 'CN_LLM_FALLBACK_MODEL', 'CN_LLM_MODEL']);
+      // CN_LLM_FALLBACK_MODEL ('qwen/qwen-plus') carries its own prefix, which
+      // WP-14 maps to DashScope (domestic), so it no longer follows CN_LLM_PROVIDER.
+    ).toEqual(['CN_LLM_PROVIDER', 'CN_LLM_MODEL']);
     expect(codes({ ...GOOD, CN_LLM_COPILOT_MODEL: 'anthropic/claude-x' })).toEqual(['cn_llm_off_allowlist']);
     expect(codes({ ...GOOD, CN_RA_MODEL_TAILOR: 'openai/gpt-x' })).toEqual(['cn_llm_off_allowlist']);
     // A domestic provider pointed at an offshore base URL is refused too.

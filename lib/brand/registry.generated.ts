@@ -234,11 +234,11 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
     },
     // Planned asset paths; the brand presentation WP (WP-12) adds the files.
     assets: {
-      mark: '/goapply-mark.svg',
-      logo: '/goapply-logo.png',
-      og: '/og-goapply.png',
-      favicon: '/goapply-mark.svg',
-      appleTouch: '/goapply-logo.png',
+      mark: '/brands/goapply/mark.svg',
+      logo: '/brands/goapply/logo.png',
+      og: '/brands/goapply/og.png',
+      favicon: '/brands/goapply/favicon.svg',
+      appleTouch: '/brands/goapply/apple-touch.png',
     },
     theme: { themeColorLight: '#FCFCFE', themeColorDark: '#171622' },
     seo: { titleSuffix: 'GoApply', sameAs: [], searchEngines: ['baidu', 'bing'] },

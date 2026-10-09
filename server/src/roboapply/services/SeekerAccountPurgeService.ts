@@ -49,6 +49,7 @@ import { parseBrandId } from '../../platform/brand/registry.js';
 import { growthService } from '../../features/growth/index.js';
 import { purgeAuthTokens } from '../../features/auth/tokens.js';
 import {
+  isPurgeSafeRoleSet,
   partitionPurgeCandidates,
   purgeCutoff,
   resolveRetentionDays,
@@ -217,6 +218,51 @@ export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboard
     });
   }
   return { onboardingSessions: onboardingSessions.count, workItems: workItems.count, anonEvents };
+}
+
+/**
+ * Hard-delete ONE already-closed account now: stored files first, then the
+ * User row and its cascades — the same steps as the sweep, without waiting
+ * for the retention window. For statutory deadlines shorter than that window
+ * (WP-13: withdrawing GoApply's CN-0 cross-border consent must purge within
+ * the PIPL 15-working-day due date). Refuses, and changes nothing, when the
+ * account is not closed (`SeekerProfile.deletedAt` unset) or holds a
+ * non-seeker role. An account that no longer exists counts as purged.
+ */
+export async function purgeAccountNow(userId: string): Promise<{ blocked: boolean; reason?: string }> {
+  const profile = await prisma.seekerProfile.findFirst({
+    where: { userId },
+    select: { userId: true, deletedAt: true, user: { select: { role: true, roles: true, brand: true } } },
+  });
+  if (!profile) {
+    const user = await prisma.user.findFirst({ where: { id: userId }, select: { id: true } });
+    return user ? { blocked: true, reason: 'not_a_seeker_account' } : { blocked: false };
+  }
+  if (!profile.deletedAt) return { blocked: true, reason: 'account_not_closed' };
+  const candidate: PurgeCandidate = {
+    userId: profile.userId,
+    deletedAt: profile.deletedAt,
+    role: profile.user.role,
+    roles: profile.user.roles,
+    brand: profile.user.brand,
+  };
+  // No retention window here (the caller's deadline is shorter); the role guard still applies.
+  if (!isPurgeSafeRoleSet(candidate.role, candidate.roles)) {
+    logger.warn('RA_ACCOUNT_PURGE', 'immediate purge refused: non-seeker roles need manual review', { userId, role: candidate.role, roles: candidate.roles });
+    return { blocked: true, reason: 'unsafe_role' };
+  }
+  const outcome = await runWithBrand(parseBrandId(candidate.brand) ?? 'roboapply', () => purgeUser(userId));
+  if (outcome.blocked) {
+    logger.warn('RA_ACCOUNT_PURGE', 'immediate purge blocked — user kept for retry', { userId, reason: outcome.reason });
+    return { blocked: true, reason: outcome.reason };
+  }
+  logger.warn('RA_ACCOUNT_PURGE', 'account hard-purged now (statutory request)', {
+    userId,
+    softDeletedAt: candidate.deletedAt?.toISOString(),
+    interviewSessionsCleaned: outcome.interviewSessionsCleaned,
+    resumeOriginalsDeleted: outcome.resumeOriginalsDeleted,
+  });
+  return { blocked: false };
 }
 
 /** Run one purge sweep. `now` / `retentionDays` / `limit` are test seams. */

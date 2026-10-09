@@ -4,7 +4,7 @@
 
 import type { ReactElement } from 'react';
 
-import { getPlanCatalog, defaultSelection } from '../../../../server/src/platform/billing/planCatalog';
+import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
 import type { CreditsResponse } from '../../../../lib/api/contracts/credits';
 import type { PlansView } from '../../../../lib/api/credits';
 import type { BrandId } from '../../../../lib/brand/registry.generated';
@@ -37,7 +37,18 @@ export const GA_ENV = {
 };
 
 export function plansView(brand: BrandId = 'roboapply', env: Record<string, string> = brand === 'goapply' ? GA_ENV : RA_ENV, extras: Partial<PlansView> = {}): PlansView {
-  return { plans: getPlanCatalog(brand, env), defaultSelection: defaultSelection(brand, env), ...extras };
+  // The full WP-21a `PlansResponse` (planViews.ts builds the plans the server sends).
+  const { plans, defaultSelection } = buildPlanViews(brand, { env });
+  return {
+    plans,
+    defaultSelection,
+    currency: brand === 'goapply' ? 'CNY' : 'USD',
+    paymentsOpen: brand !== 'goapply',
+    checkout: { rails: brand === 'goapply' ? [] : ['stripe'], showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test' },
+    fxReference: null,
+    offers: [],
+    ...extras,
+  };
 }
 
 const bucket = (cap: number, used = 0, window: 'day' | 'week' = 'day') => ({

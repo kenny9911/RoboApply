@@ -672,7 +672,9 @@ export type DeductionSku =
   | 'ra_jd_parse'              // Configured job-description parser call (V2.1)
   | 'ra_onboarding_turn'       // Configured onboarding turn; success-only
   | 'ra_crossbank_score'       // Configured scorer per (resume, bank-job) pair (audit-only, free_tier)
-  | 'ra_crossbank_insight';    // Configured cross-bank portfolio narrative (audit-only, free_tier)
+  | 'ra_crossbank_insight'     // Configured cross-bank portfolio narrative (audit-only, free_tier)
+  // Jobright clone — platform-paid batch work, logged under the brand system user.
+  | 'ra_job_enrich';           // One structured enrichment call per job (WP-17; audit-only)
 
 export type DeductionSource = 'plan' | 'overage' | 'free_tier' | 'byok';
 

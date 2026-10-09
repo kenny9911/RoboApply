@@ -128,9 +128,9 @@ export function chainProviders(providers: ContentSafetyProvider[]): ContentSafet
       if (!merged) {
         merged = { ...r };
       } else {
-        const worse = worstVerdict(merged.verdict, r.verdict) !== merged.verdict;
+        const worse: boolean = worstVerdict(merged.verdict, r.verdict) !== merged.verdict;
         // The hit location travels as a pair (offset + slice) from one provider.
-        const hitFromR = worse || merged.hitOffset === undefined;
+        const hitFromR: boolean = worse || merged.hitOffset === undefined;
         merged = {
           verdict: worstVerdict(merged.verdict, r.verdict),
           labels: [...new Set([...merged.labels, ...r.labels])],

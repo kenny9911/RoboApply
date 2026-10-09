@@ -86,13 +86,13 @@ export const SETTINGS_REGISTRY: readonly SettingsSectionEntry[] = [
   { id: 'credits', labelKey: 'nav.settingsSections.credits', brands: BOTH, ready: true, owner: 'credits', wp: 'WP-21b' },
   { id: 'privacy', labelKey: 'nav.settingsSections.privacy', brands: BOTH, ready: true, owner: 'compliance', wp: 'WP-13' },
   { id: 'appearance', labelKey: 'settings.nav.appearance', brands: BOTH, ready: true, owner: 'brand', wp: 'WP-12' },
-  { id: 'consents', labelKey: 'nav.settingsSections.consents', brands: ['goapply'], ready: false, owner: 'compliance', wp: 'WP-13' },
+  { id: 'consents', labelKey: 'nav.settingsSections.consents', brands: ['goapply'], ready: true, owner: 'compliance', wp: 'WP-13' },
   { id: 'search', labelKey: 'settings.nav.search', brands: BOTH, ready: true, owner: 'search', wp: 'WP-20', aliases: ['resume'] },
   { id: 'assistant', labelKey: 'nav.settingsSections.assistant', brands: BOTH, ready: false, owner: 'copilot', wp: 'WP-51', requires: (f) => f.copilot === true },
   { id: 'devices', labelKey: 'nav.settingsSections.devices', brands: BOTH, ready: false, owner: 'extension', wp: 'WP-55a', requires: (f) => f.extension === true },
   { id: 'connections', labelKey: 'nav.settingsSections.connections', brands: BOTH, ready: false, owner: 'network', wp: 'WP-54', requires: (f) => f.hiringContacts === 'on' },
   { id: 'referrals', labelKey: 'nav.settingsSections.referrals', brands: BOTH, ready: false, owner: 'growth', wp: 'WP-60', requires: (f) => f.invites === true },
-  { id: 'sensitive', labelKey: 'nav.settingsSections.sensitive', brands: BOTH, ready: false, owner: 'profile', wp: 'WP-19' },
+  { id: 'sensitive', labelKey: 'nav.settingsSections.sensitive', brands: BOTH, ready: true, owner: 'profile', wp: 'WP-19' },
   { id: 'danger', labelKey: 'settings.nav.danger', brands: BOTH, ready: true, owner: 'auth', wp: 'WP-10', danger: true },
 ];
 

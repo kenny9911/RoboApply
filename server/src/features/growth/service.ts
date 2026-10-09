@@ -37,7 +37,6 @@ import {
   ANON_ID_RE,
   EVENT_RETENTION_DAYS,
   EVENTS_PER_IP_KEY,
-  EVENTS_PER_IP_WINDOWS,
   analyticsLinkAllowed,
   eventTime,
   isProductEventName,
@@ -193,7 +192,7 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
       const cost = body.events.length;
       if (anonId) {
         await enforce(rateLimitKey('eventsPerAnon', 'id', anonId, ctx.brand), rateLimitWindows('eventsPerAnon'), cost);
-        await enforce(rateLimitKey(EVENTS_PER_IP_KEY, 'ip', ctx.ip, ctx.brand), EVENTS_PER_IP_WINDOWS, cost);
+        await enforce(rateLimitKey(EVENTS_PER_IP_KEY, 'ip', ctx.ip, ctx.brand), rateLimitWindows(EVENTS_PER_IP_KEY), cost);
       } else {
         await enforce(rateLimitKey('eventsPerAnon', 'ip', ctx.ip, ctx.brand), rateLimitWindows('eventsPerAnon'), cost);
       }

@@ -36,7 +36,18 @@ describe('error codes', () => {
       content_blocked: 422,
       brand_policy: 500,
       brand_unavailable: 404,
+      storage_unavailable: 503,
+      brand_context_missing: 500,
     });
+  });
+
+  it('maps the WP-15 residency errors (storage_unavailable → 503, brand_context_missing → 500)', async () => {
+    const { StorageUnavailableError } = await import('./residency/uploadPolicy.js');
+    const { WriteBrandUnknownError } = await import('./residency/writeBrand.js');
+    expect(mapError(new StorageUnavailableError('goapply')).status).toBe(503);
+    expect(mapError(new StorageUnavailableError('goapply')).body.code).toBe('storage_unavailable');
+    const missing = mapError(new WriteBrandUnknownError('saveFile'));
+    expect([missing.status, missing.body.code]).toEqual([500, 'brand_context_missing']);
   });
 
   it('maps duck-typed domain errors by code and lifts their details', () => {

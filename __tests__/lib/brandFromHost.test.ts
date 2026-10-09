@@ -22,6 +22,8 @@ import { brandIdFromRequestParts } from '../../lib/server/brand';
 import { devBrandHeader } from '../../lib/api/client';
 import { resolveBrandFromRequest } from '../../server/src/platform/brand/runtime';
 import { proxy } from '../../proxy';
+import { CLAMPED_FROM_COOKIE } from '../../lib/proxyPaths';
+import { CLAMPED_FROM_COOKIE as NUDGE_CLAMPED_FROM_COOKIE } from '../../components/features/brand/nudge';
 
 const DEV: EnvSource = { NODE_ENV: 'development' };
 const PROD: EnvSource = { NODE_ENV: 'production' };
@@ -223,6 +225,16 @@ describe('proxy', () => {
     const loc = new URL(res.headers.get('location')!);
     expect(loc.pathname).toBe('/zh/x');
     expect(loc.search).toBe('?y=1');
+  });
+
+  it('the clamp remembers the dropped locale in a short-lived, client-readable cookie for the wrong-brand nudge', () => {
+    const res = proxy(request('http://goapply.localhost:3621/zh-TW/x', { headers: { host: 'goapply.localhost:3621' } }));
+    const setCookie = res.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`${NUDGE_CLAMPED_FROM_COOKIE}=zh-TW`);
+    expect(setCookie).toMatch(/Max-Age=600/i);
+    expect(setCookie).toMatch(/Path=\//i);
+    expect(setCookie).not.toMatch(/HttpOnly/i);
+    expect(CLAMPED_FROM_COOKIE).toBe(NUDGE_CLAMPED_FROM_COOKIE);
   });
 
   it('does not clamp /zh-TW on roboapply', () => {

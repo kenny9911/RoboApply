@@ -39,6 +39,12 @@ model RAProfile {
   ///   ranking input), major, jobSearchStatus, internshipDaysPerWeek, internshipMonths,
   ///   availableFrom, acceptReassignment }`
   cnFields            Json?
+  /// RoboApply-Taiwan (TW-04) answers (SCHEMA-2, SR-WP19-1), validated by
+  /// TwProfileFieldsSchema (server/src/features/tw/profileFields.ts):
+  /// `{ desiredTitles?, desiredCategoryIds?, desiredLocations? (county/city codes | 'ANY'),
+  ///   desiredPay?: { kind: 'monthly'|'annual', range: { min, max } } | { kind: 'negotiable'|'company_policy' } | null }`.
+  /// Form answers (希望職稱/地點/待遇), not search filters.
+  twFields            Json?
   completeness        Int      @default(0)
   syncedFromVariantId String?
   updatedAt           DateTime @updatedAt

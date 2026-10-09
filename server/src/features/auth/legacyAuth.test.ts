@@ -135,13 +135,14 @@ describe('POST /auth/signup (WP-10)', () => {
         consents: AGE,
         attribution: { from: 'job', jobId: 'cm1', action: 'apply', utmSource: 'newsletter' },
       },
-      GO,
+      ROBO,
     );
     expect(res.status).toBe(201);
-    expect(res.body.data).toMatchObject({ next: '/onboarding/consent', user: { email: 'new@example.test', market: 'cn' } });
+    expect(res.body.data).toMatchObject({ user: { email: 'new@example.test' } });
     expect(res.headers.get('set-cookie')).toContain(`${SESSION_COOKIE_NAME}=`);
     const user = db().$rows('user')[0]!;
-    expect(user).toMatchObject({ brand: 'goapply', role: 'seeker', roles: ['seeker'], emailVerified: false, market: 'cn' });
+    expect(user).toMatchObject({ brand: 'roboapply', role: 'seeker', roles: ['seeker'], emailVerified: false });
+    expect(user.market).not.toBe('cn');
     expect(db().$rows('seekerProfile')[0]).toMatchObject({
       onboardingStep: 'account',
       onboardingVersion: 'v6-jobright',
@@ -162,9 +163,27 @@ describe('POST /auth/signup (WP-10)', () => {
   // needs verify-before-create email signup. The acceptance criterion
   // "normal response" is therefore NOT met yet; this test pins today's
   // behaviour (no 409, no session, a notice to the inbox).
+  it('GoApply email signup is closed until WP-93: 403 signup_closed, nothing written, no email', async () => {
+    // Interim gate (Wave 2 integration): no invite redemption and no CN-0
+    // pipl_cross_border consent on this path yet. Same answer whether or not
+    // the email exists on either brand.
+    for (const seeded of [false, true]) {
+      if (seeded) await seedAccount('roboapply');
+      const res = await signup(
+        { email: seeded ? 'ana@example.test' : 'new@example.test', password: 'abcdefg1', consents: AGE },
+        GO,
+      );
+      expect([res.status, res.body.code]).toEqual([403, 'signup_closed']);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    }
+    expect(db().$rows('user')).toHaveLength(1);
+    expect(db().$rows('seekerConsentRecord')).toEqual([]);
+    expect(h.emails).toEqual([]);
+  });
+
   it('an email held by the other brand: 200 check_email, no session, a notice to that inbox (no 409)', async () => {
-    await seedAccount('roboapply');
-    const res = await signup({ email: 'ana@example.test', password: 'abcdefg1', consents: AGE }, GO);
+    await seedAccount('goapply');
+    const res = await signup({ email: 'ana@example.test', password: 'abcdefg1', consents: AGE }, ROBO);
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({ status: 'check_email' });
     expect(res.headers.get('set-cookie')).toBeNull();

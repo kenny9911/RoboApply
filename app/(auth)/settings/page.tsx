@@ -9,10 +9,10 @@
 //   Account        IdentitySection                       preferences (draft)
 //   Sign-in and security  SecurityCard                   account API
 //   Notifications  NotifSection                          preferences (draft)
-//   Plan and billing  the billing stack                  billing API
-//   Credits        CreditsCard                           billing API
-//   Privacy and data  DataSection                        preferences (draft)
-//   Appearance     AppearanceSection                     localStorage (theme)
+//   Plan and billing  credits SettingsSection (WP-21b)   sectionComponents.ts
+//   Credits        credits SettingsSection (WP-21b)      sectionComponents.ts
+//   Privacy and data  compliance PrivacyPanel (WP-13)    sectionComponents.ts
+//   Appearance     brand SettingsSection (WP-12)         sectionComponents.ts
 //   Your search    HuntSection + ResumeSection + BlocklistSection
 //   Danger zone    DangerSection                         destructive modals
 //   (+ consents, assistant, devices, connections, referrals, sensitive:
@@ -33,19 +33,18 @@
 //     `goal`. The band (salaryMinK/MaxK) is ALSO kept on the prefs draft for
 //     the UI and mirrored to goal on save (goal stores absolute dollars; prefs
 //     stores k).
-//   • Appearance, billing and security write immediately — a theme, a Stripe
-//     redirect and a password change have nothing to Discard.
+//   • Security writes immediately — a password change has nothing to Discard.
 //
-// Post-checkout return: paid CTAs pass { next:'/settings', cancelNext:'/settings' }
-// so Stripe/Alipay return here; the backend appends ?billing=success|cancel,
-// which we surface as a banner, refetch on, and strip (to /settings#billing,
-// so the section the user paid from stays open).
+// Plan and billing / Credits (Wave 2 gate): rendered by WP-21b's credits
+// SettingsSection. Checkout there sends `planKey` (the legacy `{ tier }`
+// checkout this page used is refused by WP-21a with 409 plan_not_sellable)
+// and returns through /settings/billing/return (CheckoutReturn).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { SettingsPage, settingsHref, type SettingsRenderers } from '../../../components/features/settings';
+import { SettingsPage, type SettingsRenderers } from '../../../components/features/settings';
 import { usePreferences, useUpdatePreferences } from '../../../hooks/usePreferences';
 import { useGoal, useGoalMutation } from '../../../hooks/useGoal';
 import { useResumeList } from '../../../hooks/useResumes';
@@ -57,33 +56,13 @@ import {
   IdentitySection,
   HuntSection,
   ResumeSection,
-  AppearanceSection,
   NotifSection,
   BlocklistSection,
-  DataSection,
   DangerSection,
 } from '../../../components/v3/preferences';
-import {
-  Panel,
-  PlanCatalog,
-  CurrencyNote,
-  CurrentPlanCard,
-  CreditsCard,
-  BillingHistoryLink,
-  SecurityCard,
-} from '../../../components/v3/account';
+import { Panel, SecurityCard } from '../../../components/v3/account';
 import { Btn } from '../../../components/v3/primitives/Btn';
-import { IconCheck, IconX } from '../../../components/v3/primitives/Iconset';
-import {
-  useAccountProfile,
-  useBillingPlan,
-  useCancelPlan,
-  useChangePassword,
-  useCheckout,
-  useAlipayCheckout,
-  usePortal,
-  useSignOutAll,
-} from '../../../hooks/useAccount';
+import { useAccountProfile, useChangePassword, useSignOutAll } from '../../../hooks/useAccount';
 import type {
   RAPreferences,
   RAPreferenceOptions,
@@ -117,7 +96,6 @@ export default function SettingsRoute() {
   // aliases were three names for the same function.
   const t = useTranslations('settings');
   const router = useRouter();
-  const searchParams = useSearchParams();
   const auth = useAuth();
 
   const prefsQuery = usePreferences();
@@ -219,58 +197,6 @@ export default function SettingsRoute() {
     setBaselineSeniority(seniorityIndex);
   };
 
-  // ── Billing (loaded lazily — only the billing section reads it) ───────
-  const [regionOverride, setRegionOverride] = useState<'cn' | 'other' | null>(null);
-  const planQ = useBillingPlan(regionOverride);
-  const checkout = useCheckout();
-  const alipay = useAlipayCheckout();
-  const portal = usePortal();
-  const cancelPlan = useCancelPlan();
-  const [checkoutError, setCheckoutError] = useState(false);
-
-  const [billingBanner, setBillingBanner] = useState<'success' | 'cancel' | null>(null);
-  useEffect(() => {
-    const flag = searchParams?.get('billing');
-    if (flag === 'success' || flag === 'cancel') {
-      setBillingBanner(flag);
-      // On a successful return the subscription likely changed — refetch so the
-      // now-current tier flips to a disabled "Current plan".
-      if (flag === 'success') void planQ.refetch();
-      // Strip the param so a refresh doesn't re-show the banner; the hash
-      // keeps the billing section open.
-      router.replace(settingsHref('billing'));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const onSelectPaid = (tier: 'starter' | 'growth') => {
-    setCheckoutError(false);
-    const mutation = planQ.data?.region.method === 'alipay' ? alipay : checkout;
-    mutation.mutate(
-      { tier, next: '/settings', cancelNext: '/settings' },
-      {
-        onSuccess: (res) => {
-          window.location.href = res.url;
-        },
-        // The provider was unreachable or rejected the order. Surface it
-        // instead of failing silently.
-        onError: () => setCheckoutError(true),
-      },
-    );
-  };
-
-  const onManageBilling = () => {
-    portal.mutate(undefined, {
-      onSuccess: (res) => {
-        window.location.href = res.url;
-      },
-      onError: (err) => {
-        // 409 no_customer — gracefully do nothing visible beyond logging.
-        if (err instanceof RoboApiError && err.code === 'not_found') return;
-      },
-    });
-  };
-
   // ── Account security ─────────────────────────────────────────────────
   const profileQ = useAccountProfile();
   const changePassword = useChangePassword();
@@ -344,111 +270,6 @@ export default function SettingsRoute() {
               <p className="pref-sub">{t('loading')}</p>
             ),
           notifications: () => <NotifSection p={draft} set={set} />,
-          billing: () => (
-            <>
-              <PrefHeader eyebrow={t('nav.billing')} title={t('billing.title')} sub={t('billing.sub')} />
-              {billingBanner ? (
-                <div
-                  role="status"
-                  className="ra-settings-banner"
-                  style={{
-                    border: `1px solid ${billingBanner === 'success' ? 'var(--ok)' : 'var(--rule)'}`,
-                    background: billingBanner === 'success' ? 'var(--ok-subtle)' : 'var(--surface)',
-                    color: billingBanner === 'success' ? 'var(--ok)' : 'var(--text-2)',
-                  }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    {billingBanner === 'success' ? <IconCheck size={16} /> : <IconX size={16} />}
-                    {billingBanner === 'success' ? t('billing.checkout.success') : t('billing.checkout.cancel')}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t('billing.checkout.dismiss')}
-                    onClick={() => setBillingBanner(null)}
-                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'grid' }}
-                  >
-                    <IconX size={15} />
-                  </button>
-                </div>
-              ) : null}
-
-              {checkoutError ? (
-                <div
-                  role="alert"
-                  className="ra-settings-banner"
-                  style={{ border: '1px solid var(--warn)', background: 'var(--warn-subtle)', color: 'var(--warn)' }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <IconX size={16} />
-                    {t('billing.checkout_failed')}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t('billing.checkout.dismiss')}
-                    onClick={() => setCheckoutError(false)}
-                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'grid' }}
-                  >
-                    <IconX size={15} />
-                  </button>
-                </div>
-              ) : null}
-
-              {planQ.isError ? (
-                <BillingError onRetry={() => void planQ.refetch()} />
-              ) : planQ.isLoading || !planQ.data ? (
-                <p className="pref-sub">{t('loading')}</p>
-              ) : (
-                <>
-                  <CurrentPlanCard
-                    plan={planQ.data}
-                    onManageBilling={onManageBilling}
-                    onCancel={() => cancelPlan.mutate()}
-                    managing={portal.isPending}
-                    canceling={cancelPlan.isPending}
-                  />
-
-                  {/* Which currency is a location rule — mainland China pays
-                   *  RMB by Alipay, everyone else US dollars by card — and the
-                   *  API has already applied it. This names it above the grid
-                   *  whose prices it explains, and offers the other market for
-                   *  when the location guess is wrong. */}
-                  <CurrencyNote region={planQ.data.region} onSwitch={setRegionOverride} />
-
-                  {!planQ.data.stripeConfigured && !planQ.data.alipayConfigured ? (
-                    <p
-                      role="status"
-                      style={{ margin: '12px 0 0', fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', textAlign: 'center' }}
-                    >
-                      {t('billing.payments_unavailable')}
-                    </p>
-                  ) : null}
-
-                  <PlanCatalog
-                    plan={planQ.data}
-                    busy={checkout.isPending || alipay.isPending || cancelPlan.isPending}
-                    mode="in-app"
-                    onSelectPaid={onSelectPaid}
-                    onSelectFree={() => {
-                      /* no-op in-app; downgrade is per-card via onCancel */
-                    }}
-                    onCancel={() => cancelPlan.mutate()}
-                  />
-
-                  <BillingHistoryLink />
-                </>
-              )}
-            </>
-          ),
-          credits: () =>
-            planQ.isError ? (
-              <BillingError onRetry={() => void planQ.refetch()} />
-            ) : planQ.isLoading || !planQ.data ? (
-              <p className="pref-sub">{t('loading')}</p>
-            ) : (
-              <CreditsCard credits={planQ.data.credits} />
-            ),
-          privacy: () => <DataSection p={draft} set={set} />,
-          appearance: () => <AppearanceSection />,
           search: () => (
             <>
               <HuntSection
@@ -477,7 +298,7 @@ export default function SettingsRoute() {
   );
 }
 
-/** The billing/account load failure: say what happened and what to do next. */
+/** The account load failure: say what happened and what to do next. */
 function BillingError({ onRetry }: { onRetry: () => void }) {
   const t = useTranslations('settings');
   return (

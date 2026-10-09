@@ -49,7 +49,8 @@ export type CatalogPlan = C.PlansResponse['plans'][number];
 /** The requested extras, normalised (null when absent). */
 export function plansExtras(view: PlansView | null | undefined): { fxReference: FxReference | null; visitorCountry: string | null } {
   const fx = view?.fxReference ?? null;
-  const country = view?.visitor?.country ?? null;
+  // WP-21a sends the buyer's edge country as `checkout.country`.
+  const country = view?.visitor?.country ?? view?.checkout?.country ?? null;
   return {
     fxReference: fx && typeof fx === 'object' ? fx : null,
     visitorCountry: typeof country === 'string' && /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : null,

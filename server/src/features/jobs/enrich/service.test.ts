@@ -14,7 +14,7 @@ import type { EnrichLlmOptions } from './agent.js';
 import type { EnrichJobRecord, EnrichUpdate } from './reconcile.js';
 import type { EnrichCostEntry, KeywordRow } from './repository.js';
 import { ENRICH_VERSION, RULES_ONLY_MODEL } from './schema.js';
-import { CN_POSTING, intlModelReply, makeJob } from './__tests__/fixtures.js';
+import { CN_POSTING, INTL_POSTING, intlModelReply, makeJob } from './__tests__/fixtures.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const FIRST = { attempt: 1, maxAttempts: 5 };
@@ -242,6 +242,27 @@ describe('enrichJob', () => {
     await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
     await enrichJob({ jobId: 'job_1', force: true }, FIRST, h.deps);
     expect(h.calls).toHaveLength(2);
+  });
+
+  it('a forced re-enrichment of an edited posting drops sponsorship and citizenship quotes the posting no longer contains', async () => {
+    // Ingest (WP-16b pipeline) enqueues `{ jobId, force: true }` when a row's
+    // title/description hash changed. The model may still repeat the old
+    // quotes; reconcile must not keep evidence the text no longer has (D3).
+    const h = harness(makeJob());
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    expect(h.job).toMatchObject({ sponsorshipEvidence: 'We are unable to sponsor work visas for this role.', citizenshipRequired: true });
+
+    const edited = INTL_POSTING.split('\n')
+      .filter((line) => !/sponsor|citizens/i.test(line))
+      .join('\n');
+    Object.assign(h.job, { description: edited, descriptionPlain: edited });
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).toMatchObject({ status: 'already_enriched' });
+
+    await enrichJob({ jobId: 'job_1', force: true }, FIRST, h.deps);
+    expect(h.calls).toHaveLength(2);
+    expect(h.job.sponsorshipEvidence).toBeNull();
+    expect(h.job.sponsorship).not.toBe('not_offered');
+    expect(h.job.citizenshipRequired).not.toBe(true);
   });
 
   it('re-enriches a row stamped with an older version', async () => {

@@ -10,13 +10,16 @@
 // inside LLMService stays the authoritative check; this one keeps MATCH from
 // sending a GoApply resume abroad even before that lands.
 //
-// Pure: the provider is read from the model id's routing prefix, else the
-// configured default provider; the endpoint is the provider's env base URL,
-// else its default host.
+// Pure: the provider is read from the model id's routing prefix — resolved
+// for the brand's LLM profile exactly as LLMService resolves it
+// (`resolveProviderPrefix`: on RoboApply `qwen/…` is an OpenRouter vendor
+// slug, on GoApply the native DashScope provider) — else the configured
+// default provider; the endpoint is the provider's env base URL (the same
+// variables lib/llm/systemCredentials.ts reads), else its default host.
 
 import { checkLlmRoute, type EnvLike, type LlmRoute } from '../../platform/llm/brandPolicy.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
-import { DIRECT_PROVIDER_PREFIXES, PROVIDER_PREFIX_ALIASES } from '../../services/llm/providerPrefixes.js';
+import { resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
 
 /** Env var holding each provider's base URL override (mirrors lib/llm/systemCredentials.ts). */
 const BASE_URL_ENV: Record<string, string> = {
@@ -30,18 +33,36 @@ const BASE_URL_ENV: Record<string, string> = {
   minimax: 'MINIMAX_BASE_URL',
   ollama: 'OLLAMA_BASE_URL',
   newapi: 'NEWAPI_BASE_URL',
+  // Domestic vendors (WP-14); aliases resolve to these keys first.
+  qwen: 'DASHSCOPE_BASE_URL',
+  dashscope: 'DASHSCOPE_BASE_URL',
+  glm: 'GLM_API_BASE_URL',
+  zhipu: 'GLM_API_BASE_URL',
+  doubao: 'ARK_BASE_URL',
+  ark: 'ARK_BASE_URL',
 };
 
-/** The provider named by the model id's routing prefix (`openrouter/…`, `deepseek/…`), or null. */
-export function prefixedProvider(model: string): string | null {
+type LlmProfile = Pick<ProductBrand, 'llmProfile'>['llmProfile'];
+
+/**
+ * The provider named by the model id's routing prefix (`openrouter/…`,
+ * `deepseek/…`) for this LLM profile, or null. A prefix that is only an
+ * OpenRouter vendor namespace on the global profile (`qwen/…`) names no
+ * provider there, as in LLMService.
+ */
+export function prefixedProvider(model: string, profile: LlmProfile = 'global'): string | null {
   const head = model.includes('/') ? model.slice(0, model.indexOf('/')).trim().toLowerCase() : '';
-  const p = PROVIDER_PREFIX_ALIASES[head] ?? head;
-  return p && DIRECT_PROVIDER_PREFIXES.has(p) ? p : null;
+  return head ? resolveProviderPrefix(head, profile) : null;
 }
 
 /** The provider and endpoint a scorer model id resolves to. */
-export function scorerRoute(model: string, defaultProvider: string | null | undefined, env: EnvLike = process.env): LlmRoute {
-  let provider = prefixedProvider(model) ?? (defaultProvider || 'openrouter').trim().toLowerCase();
+export function scorerRoute(
+  model: string,
+  defaultProvider: string | null | undefined,
+  env: EnvLike = process.env,
+  profile: LlmProfile = 'global',
+): LlmRoute {
+  let provider = prefixedProvider(model, profile) ?? (defaultProvider || 'openrouter').trim().toLowerCase();
   // LLMService's 'direct' mode sends an unprefixed vendor/model id to OpenRouter.
   if (provider === 'direct') provider = 'openrouter';
   const envKey = BASE_URL_ENV[provider];
@@ -56,7 +77,7 @@ export function scorerRouteAllowed(
   defaultProvider: string | null | undefined,
   env: EnvLike = process.env,
 ): boolean {
-  return checkLlmRoute({ ...scorerRoute(model, defaultProvider, env), brand, carriesUserData: true, env }).allowed;
+  return checkLlmRoute({ ...scorerRoute(model, defaultProvider, env, brand.llmProfile), brand, carriesUserData: true, env }).allowed;
 }
 
 /** The configured default provider (LLM_PROVIDER, DB override first); null when unreadable. */
@@ -72,7 +93,7 @@ export async function configuredDefaultProvider(): Promise<string | null> {
 /** The production check: reads the default provider only when the model id names none. Fails closed. */
 export async function defaultScorerRouteAllowed(brand: Pick<ProductBrand, 'id' | 'llmProfile'>, model: string): Promise<boolean> {
   try {
-    const fallback = prefixedProvider(model) ? null : await configuredDefaultProvider();
+    const fallback = prefixedProvider(model, brand.llmProfile) ? null : await configuredDefaultProvider();
     return scorerRouteAllowed(brand, model, fallback);
   } catch {
     return false;

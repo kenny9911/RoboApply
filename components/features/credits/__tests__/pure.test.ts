@@ -63,6 +63,9 @@ describe('pricing math (derived from server prices only)', () => {
     expect(plansExtras(plansView())).toEqual({ fxReference: null, visitorCountry: null });
     expect(plansExtras(plansView('roboapply', RA_ENV, { visitor: { country: 'de' } })).visitorCountry).toBe('DE');
     expect(plansExtras(undefined)).toEqual({ fxReference: null, visitorCountry: null });
+    // WP-21a sends the edge country as checkout.country (Wave 2 gate seam fix).
+    const base = plansView();
+    expect(plansExtras({ ...base, checkout: { ...base.checkout, country: 'fr' } }).visitorCountry).toBe('FR');
   });
 });
 

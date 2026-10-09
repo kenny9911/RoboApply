@@ -96,7 +96,8 @@ describe('registry (pure)', () => {
 
   it('sections whose owner has not shipped stay hidden without the dev override', () => {
     const ids = visibleSettingsSections({ brandId: 'goapply', flags: flagsWith({ copilot: true }), showAll: false }).map((s) => s.id);
-    expect(ids).toEqual(['account', 'security', 'notifications', 'billing', 'credits', 'privacy', 'appearance', 'search', 'danger']);
+    // consents (WP-13, GoApply only) and sensitive (WP-19) shipped in Wave 2.
+    expect(ids).toEqual(['account', 'security', 'notifications', 'billing', 'credits', 'privacy', 'appearance', 'consents', 'search', 'sensitive', 'danger']);
   });
 
   it('old hashes still open their section; unknown or hidden ones fall back to the first', () => {

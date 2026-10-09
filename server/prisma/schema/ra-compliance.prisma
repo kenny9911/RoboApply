@@ -36,9 +36,13 @@ model RAContentSafetyEvent {
   surface   String
   /// 'input' | 'output'
   direction String
-  /// 'pass' | 'review' | 'block'
+  /// 'pass' | 'review' | 'block' | 'error' ('error' = the check itself failed and
+  /// the call failed closed with 503 ai_unavailable; WP-24)
   verdict   String
-  /// Provider labels / matched rule ids; no raw user text.
+  /// `{ reason, labels, ruleIds, listVersion, callId, textSha256, textLength,
+  ///   excerpt?, excerptAnchor?: 'hit'|'slice_start'|'text_start', slice?: { index, length },
+  ///   finalScan?, segments? }`. Never the full user text: only a SHA-256 hash and length, plus,
+  /// for 'block' and 'review' verdicts only, an excerpt of at most 200 characters (WP-24).
   matched   Json?
   provider  String?
   createdAt DateTime @default(now())
@@ -54,7 +58,8 @@ model RAPersonalInfoRequest {
   brand     String
   userId    String?
   user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  /// 'access' | 'export' | 'correct' | 'delete' | 'withdraw'
+  /// 'access' | 'copy' | 'correction' | 'deletion' | 'portability' |
+  /// 'withdraw_consent' | 'explanation' (WP-13 contract)
   kind      String
   /// 'open' | 'in_progress' | 'done' | 'rejected'
   status    String    @default("open")

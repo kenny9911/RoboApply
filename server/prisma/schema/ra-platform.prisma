@@ -53,7 +53,10 @@ model RAAuthToken {
   user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   brand      String
   /// 'password_reset' | 'email_verify' | 'magic_prefs' | 'oauth_state' | 'ext_pair' |
-  /// 'email_unsub' | 'anon_alert_confirm'
+  /// 'email_unsub' | 'anon_alert_confirm' | 'oauth_pending' | 'known_device' (WP-10) |
+  /// 'wechat_reverify' (WP-11) | 'billing_cancel' (WP-21a, public /cancel link).
+  /// 'oauth_state' payload (WP-10/11) holds `nonceHash` (sha256 of the browser-bound
+  /// nonce cookie) and, for WeChat sign-up, the server-versioned `consents`.
   kind       String
   /// sha256 of the raw token; the raw token is never stored.
   tokenHash  String    @unique

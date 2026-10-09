@@ -32,7 +32,7 @@ vi.mock('../../services/ResumeOriginalFileStorageService.js', () => ({
 }));
 
 import type { createFakePrisma } from '../../test/fakePrisma.js';
-import { runAccountPurgeSweep, setArtifactStorageDeleter } from '../../roboapply/services/SeekerAccountPurgeService.js';
+import { purgeAccountNow, runAccountPurgeSweep, setArtifactStorageDeleter } from '../../roboapply/services/SeekerAccountPurgeService.js';
 import { WIPED_CLONE_TABLES, wipeSeekerApplicationData } from '../../roboapply/services/SeekerAccountDataWipeService.js';
 import { growthService } from '../growth/index.js';
 
@@ -181,6 +181,46 @@ describe('account purge removes every RA* row of the user', () => {
     const summary = await runAccountPurgeSweep({ now: NOW });
     expect(summary.purged).toBe(1);
     expect(db().$rows('user').map((u) => u.id)).toEqual(['intl']);
+    setArtifactStorageDeleter(null);
+  });
+});
+
+describe('purgeAccountNow (WP-13 statutory purge seam)', () => {
+  it('hard-deletes one closed account at once, files first; the other user keeps theirs', async () => {
+    seedUser('cn', 'goapply', 0);
+    seedUser('kept', 'goapply', null);
+    const deleted: string[] = [];
+    setArtifactStorageDeleter(async (key) => {
+      deleted.push(key);
+      return true;
+    });
+    const events = vi.spyOn(growthService, 'deleteEventsForUser').mockResolvedValue({ deleted: 0 });
+    expect(await purgeAccountNow('cn')).toEqual({ blocked: false });
+    expect(deleted).toEqual(['artifacts/cn.pdf']);
+    expect(db().$rows('user').map((u) => u.id)).toEqual(['kept']);
+    // Already gone → idempotent success.
+    expect(await purgeAccountNow('cn')).toEqual({ blocked: false });
+    events.mockRestore();
+    setArtifactStorageDeleter(null);
+  });
+
+  it('refuses an account that is not closed, and keeps it when a file cannot be deleted', async () => {
+    seedUser('open', 'goapply', null);
+    expect(await purgeAccountNow('open')).toEqual({ blocked: true, reason: 'account_not_closed' });
+    seedUser('stuck', 'goapply', 0);
+    setArtifactStorageDeleter(async () => false);
+    expect((await purgeAccountNow('stuck')).blocked).toBe(true);
+    expect(db().$rows('user').map((u) => u.id).sort()).toEqual(['open', 'stuck']);
+    setArtifactStorageDeleter(null);
+  });
+
+  it('never hard-deletes a closed account that also holds a non-seeker role', async () => {
+    seedUser('mixed', 'goapply', 0);
+    const profile = db().$rows('seekerProfile').find((r) => r.userId === 'mixed')!;
+    profile.user = { role: 'admin', roles: ['seeker', 'admin'], brand: 'goapply' };
+    setArtifactStorageDeleter(async () => true);
+    expect(await purgeAccountNow('mixed')).toEqual({ blocked: true, reason: 'unsafe_role' });
+    expect(db().$rows('user').map((u) => u.id)).toEqual(['mixed']);
     setArtifactStorageDeleter(null);
   });
 });

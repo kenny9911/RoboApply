@@ -56,6 +56,10 @@ export const ERROR_STATUS = {
   brand_policy: 500,
   /** The deployment does not serve this brand (FND-2a brand middleware). */
   brand_unavailable: 404,
+  /** The brand's file storage is not available on this deployment (WP-15 residency; never falls back to another bucket). */
+  storage_unavailable: 503,
+  /** A residency-critical write ran with no brand context (WP-15 writeBrand; a server bug, logged). */
+  brand_context_missing: 500,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_STATUS;
@@ -84,6 +88,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   content_blocked: 'This content cannot be processed.',
   brand_policy: 'This request cannot be routed for this site.',
   brand_unavailable: 'This site is not served by this deployment.',
+  storage_unavailable: 'File storage is not available right now.',
+  brand_context_missing: 'Something went wrong.',
 };
 
 export class HttpError extends Error {

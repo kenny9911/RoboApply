@@ -205,9 +205,14 @@ describe('provider ingest', () => {
       job({ externalId: 'jsearch:5', applyUrl: null, sourceUrl: null }),
     ]);
     expect(result).toMatchObject({ received: 5, written: 3, inserted: 1, updated: 2, skipped: 2 });
-    const items = enqueueMany.mock.calls[0]![0] as Array<{ kind: string; payload: { jobId: string }; options: { dedupeKey: string } }>;
+    const items = enqueueMany.mock.calls[0]![0] as Array<{ kind: string; payload: { jobId: string; force?: boolean }; options: { dedupeKey: string } }>;
     expect(items.map((i) => i.payload.jobId).sort()).toEqual(['old2', expect.stringMatching(/^c/)].sort());
     expect(items.every((i) => i.kind === 'job.enrich' && /^job\.enrich:[^:]+:v[0-9a-f]{12}$/.test(i.options.dedupeKey))).toBe(true);
+    // A changed row must be re-enriched even though it already carries
+    // ENRICH_VERSION (WP-17's enrichJob skips it without `force`); a new row
+    // is a plain first enrichment.
+    expect(items.find((i) => i.payload.jobId === 'old2')!.payload).toEqual({ jobId: 'old2', force: true });
+    expect(items.find((i) => i.payload.jobId !== 'old2')!.payload).not.toHaveProperty('force');
   });
 });
 

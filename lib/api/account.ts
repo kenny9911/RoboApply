@@ -70,6 +70,10 @@ export interface WipeDataResponse {
   matchScores: number;
   runs: number;
   digests: number;
+  /** Jobright-clone application-data rows removed, per table (WP-10). */
+  clone: Record<string, number>;
+  /** Stored application files that could not be confirmed deleted (rows kept; retried later). */
+  applicationFilesKept: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -185,10 +189,11 @@ export interface CancelPlanResponse {
 // ─────────────────────────────────────────────────────────────────────
 // Clone plans (WP-21b UI over WP-21a's server; PRODUCT_PLAN.md §6.3)
 //
-// The legacy `/billing` endpoints gain a `planKey` body (additive: `tier`
-// keeps working for the legacy /settings renderer). Requested from WP-21a in
-// the WP-21b handoff; until the server ships them the calls fail with the
-// server's error and the UI says so (no client fallback, nothing charged).
+// The `/billing` checkout endpoints take a `planKey` body (WP-21a; the old
+// `{ tier }` body now answers 409). Switching is one server endpoint, adapted
+// below. Fields the WP-21b handoff still requests from the server (cancel
+// survey, `cancelAtPeriodEnd` on the summary) fail with the server's error and
+// the UI says so (no client fallback, nothing charged).
 // ─────────────────────────────────────────────────────────────────────
 
 /** POST /billing/checkout (RoboApply, Stripe) and /billing/alipay (GoApply) with a clone plan key. */
@@ -244,6 +249,38 @@ export interface SwitchConfirmResponse {
 // Endpoints
 // ─────────────────────────────────────────────────────────────────────
 
+// WP-21a serves one endpoint for both steps, `POST /billing/switch`: without
+// `confirm` it answers `{ quote }`; with `{ confirm: true, prorationDate }` it
+// charges. The UI's opaque `quoteId` carries the plan key and the proration
+// timestamp the server needs back (Wave 2 gate seam fix).
+interface ServerSwitchQuote {
+  planKey: string;
+  currency: string;
+  amountDueTodayMinor: number;
+  newRenewalPriceMinor: number;
+  nextRenewalDate: string;
+  prorationDate: number;
+}
+
+export function fromServerQuote(q: ServerSwitchQuote): SwitchQuote {
+  return {
+    quoteId: `${q.planKey}:${q.prorationDate}`,
+    planKey: q.planKey,
+    currency: q.currency,
+    amountDueTodayMinor: q.amountDueTodayMinor,
+    renewalAmountMinor: q.newRenewalPriceMinor,
+    nextRenewalAt: q.nextRenewalDate,
+  };
+}
+
+export function parseQuoteId(quoteId: string): { planKey: string; prorationDate: number } {
+  const at = quoteId.lastIndexOf(':');
+  const planKey = at > 0 ? quoteId.slice(0, at) : '';
+  const prorationDate = Number(at > 0 ? quoteId.slice(at + 1) : NaN);
+  if (!planKey || !Number.isInteger(prorationDate) || prorationDate <= 0) throw new Error('Invalid switch quote id');
+  return { planKey, prorationDate };
+}
+
 const ACCOUNT_BASE = '/api/v1/roboapply/account';
 const BILLING_BASE = '/api/v1/roboapply/billing';
 
@@ -292,12 +329,23 @@ export const accountApi = {
   /** Clone plan checkout on a CN rail (GoApply; off until CN_PAYMENTS_ENABLED). */
   alipayCheckoutPlan: (body: PlanCheckoutBody) =>
     roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/alipay`, body),
-  /** Legacy practice plan → Pro: a quote first; nothing is charged. */
-  switchQuote: (body: SwitchQuoteBody) =>
-    roboApi.post<SwitchQuote>(`${BILLING_BASE}/switch/quote`, body),
-  /** Legacy practice plan → Pro: charges the quoted amount. */
-  switchConfirm: (body: SwitchConfirmBody) =>
-    roboApi.post<SwitchConfirmResponse>(`${BILLING_BASE}/switch/confirm`, body),
+  /** Legacy practice plan → Pro: a quote first; nothing is charged (POST /billing/switch without `confirm`). */
+  switchQuote: async (body: SwitchQuoteBody): Promise<SwitchQuote> => {
+    const { quote } = await roboApi.post<{ quote: ServerSwitchQuote }>(`${BILLING_BASE}/switch`, { planKey: body.planKey });
+    return fromServerQuote(quote);
+  },
+  /** Legacy practice plan → Pro: charges the quoted amount (POST /billing/switch with `confirm`). */
+  switchConfirm: async (body: SwitchConfirmBody): Promise<SwitchConfirmResponse> => {
+    const { planKey, prorationDate } = parseQuoteId(body.quoteId);
+    const res = await roboApi.post<{ switched: true; planKey: string }>(`${BILLING_BASE}/switch`, {
+      planKey,
+      confirm: true,
+      prorationDate,
+      autoRenewAck: body.autoRenewAck,
+      ...(body.withdrawalWaiver !== undefined ? { withdrawalWaiver: body.withdrawalWaiver } : {}),
+    });
+    return { status: 'switched', planKey: res.planKey, nextRenewalAt: null };
+  },
   /** Absolute URL the browser opens directly — Stripe 302s to its hosted PDF,
    *  Alipay streams a generated receipt. Carries the session cookie. */
   invoiceDownloadUrl: (id: string) =>

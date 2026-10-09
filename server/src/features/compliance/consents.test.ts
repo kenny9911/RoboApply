@@ -140,6 +140,23 @@ describe('recordConsent', () => {
     expect(out.accountClosing).toBe(false);
   });
 
+  it('records and withdraws autofill_sensitive on both brands (the gate WP-19 sensitiveForAutofill reads)', async () => {
+    for (const brand of [roboapply, goapply]) {
+      const def = findConsentDefinition(brand.id, 'autofill_sensitive')!;
+      expect(def).toMatchObject({ requiredWhen: 'never', stage: 'in_context', withdrawable: true, defaultGranted: false });
+      expect(def.prose.en).toMatch(/forms I open myself/);
+      const fake = db();
+      const deps = { db: fake as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn() };
+      await recordConsent({ userId: 'u1', brand, type: 'autofill_sensitive', granted: true, proseVersion: CONSENT_PROSE_VERSION }, deps);
+      const out = await recordConsent({ userId: 'u1', brand, type: 'autofill_sensitive', granted: false, proseVersion: CONSENT_PROSE_VERSION }, deps);
+      expect(out.accountClosing).toBe(false);
+      expect(fake.$rows('seekerConsentRecord').map((r) => [r.consentType, r.granted])).toEqual([
+        ['autofill_sensitive', true],
+        ['autofill_sensitive', false],
+      ]);
+    }
+  });
+
   it('409 on outdated prose, 422 on unknown or non-withdrawable', async () => {
     const deps = { db: db() as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn() };
     await expect(recordConsent({ userId: 'u1', brand: goapply, type: 'ai_resume_parsing', granted: true, proseVersion: 'v0' }, deps)).rejects.toMatchObject({ code: 'version_conflict' });

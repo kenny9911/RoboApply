@@ -43,7 +43,8 @@
       "submit": "Create account",
       "submitting": "Creating your account…",
       "checkEmailTitle": "Check your email",
-      "checkEmailBody": "We sent a message to {email}. Open it to continue."
+      "checkEmailBody": "We sent a message to {email}. Open it to continue.",
+      "closed": "Sign-up with email is not open yet. Existing accounts can still sign in."
     },
     "loginForm": {
       "forgot": "Forgot password?",

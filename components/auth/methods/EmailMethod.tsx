@@ -179,6 +179,8 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
       else if (code === 'weak_password' || code === 'invalid_password') setError({ key: 'signupForm.weakPassword' });
       else if (code === 'invalid_email') setError({ key: 'signupForm.emailInvalid' });
       else if (code === 'rate_limited') setError({ key: 'errors.rateLimited' });
+      // GoApply email signup is closed server-side until WP-93 (invite + CN-0 consents).
+      else if (code === 'signup_closed') setError({ key: 'signupForm.closed' });
       else setError({ key: 'signup.error_generic' });
     } finally {
       setSubmitting(false);

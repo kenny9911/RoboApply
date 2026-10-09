@@ -120,8 +120,8 @@ describe('registry (pure)', () => {
   it('the nav differs per brand', () => {
     const ra = buildNav(ctx({ flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
     const ga = buildNav(ctx({ brandId: 'goapply', flags: flagsWith({ 'jobs.feed': true }) })).all.map((e) => e.id);
-    expect(ra).toEqual(['jobs', 'applications', 'resume', 'practice', 'settings']);
-    expect(ga).toEqual(['cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.settings']);
+    expect(ra).toEqual(['jobs', 'applications', 'resume', 'practice', 'profile', 'settings']);
+    expect(ga).toEqual(['cn.jobs', 'cn.applications', 'cn.resume', 'cn.practice', 'cn.profile', 'cn.settings']);
     expect(ga.some((id) => ra.includes(id))).toBe(false);
   });
 
@@ -182,12 +182,12 @@ describe('registry (pure)', () => {
 describe('Sidebar per brand', () => {
   it('RoboApply and GoApply render different rails', () => {
     const { unmount } = renderWithBrand(<Sidebar />, { brand: 'roboapply', flags: { 'jobs.feed': true } });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/settings']);
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
     expect(screen.getByRole('link', { name: 'Interview prep' })).toBeInTheDocument();
     unmount();
 
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.feed': true } });
-    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/settings']);
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
     // GoApply's own label (面试练习 in zh; English until INT translates).
     expect(screen.getByRole('link', { name: 'Interview practice' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Interview prep' })).not.toBeInTheDocument();
@@ -195,7 +195,7 @@ describe('Sidebar per brand', () => {
 
   it('GoApply hides 职位 when the job feed is off', () => {
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: {} });
-    expect(railHrefs()).toEqual(['/applications', '/resume', '/practice', '/settings']);
+    expect(railHrefs()).toEqual(['/applications', '/resume', '/practice', '/profile', '/settings']);
   });
 
   it('shows not-ready entries only with NEXT_PUBLIC_SHOW_ALL_NAV, and still only when flagged on', () => {

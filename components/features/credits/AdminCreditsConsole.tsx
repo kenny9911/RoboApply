@@ -380,7 +380,7 @@ function TwRevenuePanel() {
         <ul className={styles.list}>
           <li className={styles.row}>
             <span className={styles.rowLabel}>{t('revenue')}</span>
-            <span className={styles.rowValue}>{twd(d.revenueTwd)}</span>
+            <span className={styles.rowValue}>{d.revenueTwd === null ? '—' : twd(d.revenueTwd)}</span>
           </li>
           <li className={styles.row}>
             <span className={styles.rowLabel}>{t('level')}</span>

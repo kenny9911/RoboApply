@@ -62,6 +62,7 @@ const IA: [string, string][] = [
   ['/applications', 'Applications'],
   ['/resume', 'Resume'],
   ['/practice', 'Interview prep'],
+  ['/profile', 'Profile'], // WP-19 shipped in Wave 2
 ];
 const LOWER: [string, string][] = [['/settings', 'Settings']];
 const ALL = [...IA, ...LOWER];
@@ -77,7 +78,7 @@ describe('Sidebar', () => {
     vi.useRealTimers();
   });
 
-  it('renders the four destinations then Settings, in order, and nothing else', async () => {
+  it('renders the destinations then Settings, in order, and nothing else', async () => {
     renderWithProviders(<Sidebar />);
     // Let the badge query settle so a late render can't add a link.
     await screen.findByRole('link', { name: 'Interview prep' });
@@ -92,7 +93,8 @@ describe('Sidebar', () => {
   });
 
   it('exports the four destinations MobileNav renders (legacy DESTINATIONS)', () => {
-    expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.map(([h]) => h));
+    // Profile sits in the More sheet on phones (mobile: 'more'), not the tab bar.
+    expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.filter(([h]) => h !== '/profile').map(([h]) => h));
     expect(DESTINATIONS.map((d) => d.labelKey)).toEqual([
       'jobs',
       'applications',
@@ -189,6 +191,7 @@ describe('Sidebar', () => {
       ['privacy', 'Privacy and data'],
       ['appearance', 'Appearance'],
       ['search', 'Your search'],
+      ['sensitive', 'Sensitive answers'], // WP-19 shipped in Wave 2
       ['danger', 'Danger zone'],
     ];
 

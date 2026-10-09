@@ -135,6 +135,11 @@ describe('requirements (credentials, env, legal mode) cannot be overridden', () 
     expect(isEnabledForBrand('ai.text', go, EMPTY)).toBe(false);
     expect(isEnabledForBrand('ai.text', go, { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k' })).toBe(false); // no model
     expect(isEnabledForBrand('ai.text', go, { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' })).toBe(true);
+    // WP-24: a misconfigured content-safety filter hides GoApply AI (never RoboApply's).
+    const cnModel = { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' };
+    expect(isEnabledForBrand('ai.text', go, { ...cnModel, CN_CONTENT_SAFETY_PROVIDER: 'nonsense' })).toBe(false);
+    expect(isEnabledForBrand('ai.text', go, { ...cnModel, CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' })).toBe(false); // no keys
+    expect(isEnabledForBrand('ai.text', robo, { CN_CONTENT_SAFETY_PROVIDER: 'nonsense' })).toBe(true);
     expect(isEnabledForBrand('ai.text', go, { CN_LLM_PROVIDER: 'openrouter', OPENROUTER_API_KEY: 'k', CN_LLM_MODEL: 'x' })).toBe(false);
     expect(isEnabledForBrand('ai.text', go, { LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', LLM_MODEL: 'x' })).toBe(false);
     expect(isEnabledForBrand('ai.vision', go, { CN_LLM_PROVIDER: 'qwen', DASHSCOPE_API_KEY: 'k', CN_LLM_MODEL: 'qwen-max' })).toBe(false);

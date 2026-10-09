@@ -20,6 +20,12 @@ vi.mock('next/headers', () => ({
     get: (name: string) => (request.cookies[name] ? { name, value: request.cookies[name] } : undefined),
   }),
 }));
+const uiStateMock = vi.hoisted(() => ({
+  // Never resolves: the wrong-brand nudge stays hidden until the dismissal state is known.
+  getUiState: vi.fn(() => new Promise<never>(() => {})),
+  dismiss: vi.fn(async () => ({})),
+}));
+vi.mock('../../lib/api/uiState', () => uiStateMock);
 vi.mock('next/font/local', () => ({
   default: () => ({ variable: 'font-var', className: 'font-class', style: {} }),
 }));
@@ -81,7 +87,7 @@ describe('generateMetadata / generateViewport per brand', () => {
     expect(String(meta.metadataBase)).toBe('https://www.goapply.top/');
     expect(meta.title).toBe('GoApply');
     expect(meta.applicationName).toBe('GoApply');
-    expect(meta.icons).toMatchObject({ icon: '/goapply-mark.svg' });
+    expect(meta.icons).toEqual({ icon: '/brands/goapply/favicon.svg', shortcut: '/brands/goapply/favicon.svg', apple: '/brands/goapply/apple-touch.png' });
     const viewport = await generateViewport();
     expect(viewport.themeColor).toEqual([
       { media: '(prefers-color-scheme: light)', color: getBrand('goapply').theme.themeColorLight },
@@ -185,15 +191,24 @@ describe('RootLayout', () => {
   });
 });
 
-describe('root slot stubs', () => {
-  it('render nothing until WP-12 / WP-23 fill them', () => {
-    const { container } = render(
-      <>
-        <WrongBrandNudge country="CN" locale="zh" />
-        <AnalyticsConsent country="DE" />
-      </>,
-    );
-    expect(container).toBeEmptyDOMElement();
+describe('root slots (filled by WP-12 / WP-23)', () => {
+  // The real behaviour is tested in __tests__/brand (WP-12) and
+  // components/features/growth (WP-23). Here: both slots mount at the root
+  // without throwing, and neither renders anything before its own async check
+  // resolves (the nudge waits for the dismissal state, which this mock never
+  // answers; the consent banner waits for the page to be idle).
+  it('mount without throwing and render nothing before their checks resolve', () => {
+    let result: ReturnType<typeof render> | undefined;
+    expect(() => {
+      result = render(
+        <>
+          <WrongBrandNudge country="CN" locale="zh" />
+          <AnalyticsConsent country="DE" />
+        </>,
+      );
+    }).not.toThrow();
+    expect(result!.container).toBeEmptyDOMElement();
+    expect(uiStateMock.getUiState).toHaveBeenCalled();
   });
 });
 

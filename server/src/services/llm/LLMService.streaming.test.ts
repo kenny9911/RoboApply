@@ -29,7 +29,7 @@ vi.mock('../../lib/llm/systemCredentials.js', () => ({
 
 const { LLMService, assertCopilotModelSupportsTools } = await import('./LLMService.js');
 const { LlmStreamInterruptedError, ToolsUnsupportedError } = await import('./errors.js');
-const { StreamOutputGate, buildStreamParams, createStreamingClient, toOpenAIMessages } = await import('./toolStreaming.js');
+const { buildStreamParams, createStreamingClient, toOpenAIMessages } = await import('./toolStreaming.js');
 const { runWithBrand } = await import('../../lib/requestContext.js');
 const safety = await import('../../platform/llm/contentSafety/index.js');
 const routing = await import('./fallbackRouting.js');
@@ -124,6 +124,7 @@ afterEach(() => {
     else process.env[n] = savedEnv[n];
   }
   safety.setContentSafetyProvider(null);
+  safety.setContentSafetyEventWriter(null);
 });
 
 const tools = [
@@ -499,26 +500,103 @@ describe('streamChatWithTools on GoApply', () => {
   });
 });
 
-describe('StreamOutputGate', () => {
-  it('checks the pending chunk with the released tail before emitting it', async () => {
-    const checked: string[] = [];
-    const emitted: string[] = [];
-    const gate = new StreamOutputGate(async (t) => void checked.push(t), (t) => emitted.push(t), 10, 4);
-    await gate.push('abcdefghij'); // reaches 10 → released
-    await gate.push('klm');
-    await gate.flush();
-    expect(emitted).toEqual(['abcdefghij', 'klm']);
-    expect(checked).toEqual(['abcdefghij', 'ghijklm']);
+describe('streamChatWithTools on GoApply uses the WP-24 stream guard', () => {
+  beforeEach(() => {
+    process.env.CN_LLM_DOMESTIC_HOSTS = '127.0.0.1';
+    process.env.CN_LLM_PROVIDER = 'newapi';
+    process.env.CN_LLM_MODEL = 'fake-model';
   });
 
-  it('reset() drops held-back text so it is never emitted', async () => {
-    const emitted: string[] = [];
-    const gate = new StreamOutputGate(async () => undefined, (t) => emitted.push(t), 10, 4);
-    await gate.push('abc');
-    gate.reset();
-    await gate.push('xyz');
-    await gate.flush();
-    expect(emitted).toEqual(['xyz']);
+  const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+
+  it('writes ONE output event row per stream (not one per segment), hashing the whole reply', async () => {
+    const rows: Array<{ direction: string; verdict: string; matched: { textLength: number; segments?: number } }> = [];
+    safety.setContentSafetyEventWriter(async (row) => void rows.push(row as never));
+    safety.setContentSafetyProvider({
+      id: 'spy',
+      checkInput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' }),
+      checkOutput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' }),
+    });
+    const reply = words(200); // well over two 300-character segments
+    const deltas = reply.match(/.{1,37}/gs) ?? [];
+    handlers.push((_req, res) => sse(res, [...deltas.map(textChunk), finishChunk('stop')]));
+    const out: string[] = [];
+
+    const result = await go(() =>
+      new LLMService().streamChatWithTools([{ role: 'user', content: 'x' }], { task: 'copilot', tools, onDelta: (d) => out.push(d) }),
+    );
+
+    expect(result.content).toBe(reply);
+    expect(out.join('')).toBe(reply);
+    const outputRows = rows.filter((r) => r.direction === 'output');
+    expect(outputRows).toHaveLength(1);
+    expect(outputRows[0]).toMatchObject({ verdict: 'pass', matched: { textLength: reply.length } });
+    expect(outputRows[0].matched.segments).toBeGreaterThan(1);
+  });
+
+  it('never checks a segment that ends inside a Latin word (no "ass" from "assignment")', async () => {
+    const checked: string[] = [];
+    safety.setContentSafetyProvider({
+      id: 'spy',
+      checkInput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' }),
+      checkOutput: async (text: string) => {
+        checked.push(text);
+        return { verdict: /\bass\b/.test(text) ? ('block' as const) : ('pass' as const), labels: [], provider: 'spy' };
+      },
+    });
+    // The 300-character release point falls inside "assignment".
+    const head = 'x'.repeat(297) + ' ';
+    const reply = `${head}assignment done.`;
+    handlers.push((_req, res) => sse(res, [textChunk(`${head}ass`), textChunk('ignment done.'), finishChunk('stop')]));
+    const out: string[] = [];
+
+    const result = await go(() =>
+      new LLMService().streamChatWithTools([{ role: 'user', content: 'x' }], { task: 'copilot', tools, onDelta: (d) => out.push(d) }),
+    );
+
+    expect(result.content).toBe(reply);
+    expect(out.join('')).toBe(reply);
+    expect(checked.length).toBeGreaterThan(1);
+  });
+
+  it('runs the final whole-reply keyword scan: a block in finish() stops the stream', async () => {
+    safety.setContentSafetyProvider({
+      id: 'spy',
+      checkInput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' }),
+      checkOutput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' }),
+      keywordProvider: {
+        id: 'kw',
+        checkInput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'kw' }),
+        checkOutput: async (text: string) => ({
+          verdict: text.includes('违禁') ? ('block' as const) : ('pass' as const),
+          labels: ['kw'],
+          provider: 'kw',
+        }),
+      },
+    } as never);
+    handlers.push((_req, res) => sse(res, [textChunk('违禁'), finishChunk('stop')]));
+    const out: string[] = [];
+
+    await expect(
+      go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'x' }], { task: 'copilot', tools, onDelta: (d) => out.push(d) })),
+    ).rejects.toMatchObject({ code: 'content_blocked' });
+  });
+
+  it('maps a checker failure inside the guard to ai_unavailable (content_safety_unavailable)', async () => {
+    safety.setContentSafetyProvider({
+      id: 'spy',
+      checkInput: async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' }),
+      checkOutput: async () => {
+        throw new Error('checker down');
+      },
+    });
+    handlers.push((_req, res) => sse(res, [textChunk('hello'), finishChunk('stop')]));
+    const out: string[] = [];
+
+    await expect(
+      go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'x' }], { task: 'copilot', tools, onDelta: (d) => out.push(d) })),
+    ).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(out).toEqual([]);
   });
 });
 

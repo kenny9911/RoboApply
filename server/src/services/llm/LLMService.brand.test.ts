@@ -378,7 +378,12 @@ describe('content safety (WP-24 seam, wired here)', () => {
     const [inputText, ctx] = provider.checkInput.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(inputText.startsWith('Rewrite my summary.')).toBe(true);
     expect(ctx).toMatchObject({ brand: 'goapply', task: 'rewrite' });
-    expect(provider.checkOutput).toHaveBeenCalledWith('deepseek says hello', expect.objectContaining({ brand: 'goapply', callId: ctx.callId }));
+    // WP-24's engine also passes a third `{ signal }` options argument, so
+    // assert on the first two arguments only.
+    expect(provider.checkOutput).toHaveBeenCalledTimes(1);
+    const [outputText, outCtx] = provider.checkOutput.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(outputText).toBe('deepseek says hello');
+    expect(outCtx).toMatchObject({ brand: 'goapply', callId: ctx.callId });
   });
 
   it('never checks RoboApply calls', async () => {

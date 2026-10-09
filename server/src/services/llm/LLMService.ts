@@ -36,12 +36,14 @@ import {
   checkInput as contentSafetyCheckInput,
   checkOutput as contentSafetyCheckOutput,
   contentSafetyApplies,
+  createOutputStreamGuard,
+  type ContentSafetyContext,
+  type OutputStreamGuard,
 } from '../../platform/llm/contentSafety/index.js';
 import { AiUnavailableError, LlmStreamInterruptedError, ToolsUnsupportedError } from './errors.js';
 import { DOMESTIC_VENDORS, isDomesticVendor } from './domesticVendors.js';
 import { estimatePromptTokens, estimateTokensFromText } from './tokenEstimate.js';
 import {
-  StreamOutputGate,
   buildStreamParams,
   createStreamingClient,
   runStreamRound,
@@ -456,14 +458,34 @@ export class LLMService {
     ctx: { brand: ProductBrand; task?: string; requestId: string; callId: string },
   ): Promise<void> {
     if (!contentSafetyApplies(ctx.brand.id)) return;
-    const safetyCtx = { brand: ctx.brand.id, task: ctx.task || 'unspecified', userId: getCurrentUserId() ?? null, callId: ctx.callId };
+    const safetyCtx = this.safetyContext(ctx);
+    await this.safetyVerdict(stage, ctx, () =>
+      stage === 'input' ? contentSafetyCheckInput(text, safetyCtx) : contentSafetyCheckOutput(text, safetyCtx),
+    );
+  }
+
+  private safetyContext(ctx: { brand: ProductBrand; task?: string; callId: string }): ContentSafetyContext {
+    return { brand: ctx.brand.id, task: ctx.task || 'unspecified', userId: getCurrentUserId() ?? null, callId: ctx.callId };
+  }
+
+  /**
+   * Run a content-safety step and map its failures: a block propagates as
+   * ContentBlockedError (422); anything else fails CLOSED as ai_unavailable
+   * (503 `content_safety_unavailable`).
+   */
+  private async safetyVerdict<T>(
+    stage: 'input' | 'output',
+    ctx: { brand: ProductBrand; task?: string; requestId: string },
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const task = ctx.task || 'unspecified';
     try {
-      await (stage === 'input' ? contentSafetyCheckInput(text, safetyCtx) : contentSafetyCheckOutput(text, safetyCtx));
+      return await run();
     } catch (err) {
       if (err instanceof ContentBlockedError) {
-        logger.warn('LLM_SAFETY', `Content safety blocked the ${stage} of a ${ctx.brand.id} ${safetyCtx.task} call`, {
+        logger.warn('LLM_SAFETY', `Content safety blocked the ${stage} of a ${ctx.brand.id} ${task} call`, {
           brand: ctx.brand.id,
-          task: safetyCtx.task,
+          task,
           stage,
           labels: err.details.labels,
         }, ctx.requestId);
@@ -471,7 +493,7 @@ export class LLMService {
       }
       logger.error('LLM_SAFETY', `Content-safety check failed (${stage}); failing closed`, {
         brand: ctx.brand.id,
-        task: safetyCtx.task,
+        task,
         error: err instanceof Error ? err.message : String(err),
       }, ctx.requestId);
       throw new AiUnavailableError('content_safety_unavailable', undefined, { cause: err });
@@ -1468,8 +1490,10 @@ export class LLMService {
    *   event and a retry button.
    * - An aborted `signal` stops the stream and throws an AbortError.
    * - GoApply: the input passes content safety first, and streamed text is
-   *   released in checked chunks (StreamOutputGate), so nothing unchecked
-   *   reaches the user.
+   *   released in checked segments by WP-24's createOutputStreamGuard (one
+   *   guard per attempt: keyword-length overlap, partial-word holdback, a
+   *   final whole-reply keyword scan and one event row per stream), so
+   *   nothing unchecked reaches the user.
    */
   async streamChatWithTools(
     messages: readonly ToolChatMessage[],
@@ -1575,12 +1599,20 @@ export class LLMService {
       emittedText += text;
       opts.onDelta?.(text);
     };
-    const gate = contentSafetyApplies(brand.id)
-      ? new StreamOutputGate((text) => this.contentSafety('output', text, safetyCtx), emit)
-      : null;
+    // GoApply: a fresh WP-24 stream guard per attempt (text a failed attempt
+    // held back was never shown, so it is simply dropped with its guard).
+    const guarded = contentSafetyApplies(brand.id);
+    let guard: OutputStreamGuard | null = null;
+    let guardSawText = false;
     const onText = async (delta: string) => {
-      if (gate) await gate.push(delta);
-      else emit(delta);
+      if (!guard) {
+        emit(delta);
+        return;
+      }
+      const active = guard;
+      guardSawText = true;
+      const cleared = await this.safetyVerdict('output', safetyCtx, () => active.push(delta));
+      if (cleared) emit(cleared);
     };
 
     const attempts = Math.max(1, getRetryAttempts() ?? 3);
@@ -1616,17 +1648,26 @@ export class LLMService {
 
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         if (opts.signal?.aborted) throw abortError();
-        // Text the gate held back from a failed attempt (or hop) was never
-        // shown; drop it so the next attempt's text is emitted exactly once.
-        gate?.reset();
+        // Text the guard held back from a failed attempt (or hop) was never
+        // shown; a new guard drops it so the next attempt's text is emitted
+        // exactly once.
+        guard = guarded ? createOutputStreamGuard(this.safetyContext(safetyCtx)) : null;
+        guardSawText = false;
         const hopStart = Date.now();
         try {
           const round: StreamRoundResult = await runStreamRound({ client, params, signal: opts.signal, onText });
           // The SDK may end the iterator quietly on abort: a cut-short round is
           // never reported as a finished one.
           if (opts.signal?.aborted) throw abortError();
-          if (gate) {
-            await gate.flush();
+          if (guard) {
+            // Release what is still held back after the last check and the
+            // whole-reply keyword scan; this can still block (treated like a
+            // mid-stream block). It records the stream's one event row.
+            const active = guard;
+            if (guardSawText) {
+              const rest = await this.safetyVerdict('output', safetyCtx, () => active.finish());
+              if (rest) emit(rest);
+            }
             // Tool arguments carry model-written text the user can see
             // (drafts, proposals, echoed queries): check them before any
             // reaches the caller.

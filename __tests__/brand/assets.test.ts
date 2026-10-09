@@ -6,12 +6,9 @@
 // under public/ ("assets selected from brand.assets").
 //
 // WP-12 ships the GoApply files under public/brands/goapply/. The brand
-// registry (server/src/platform/brand/registry.ts, a hot file owned by FND /
-// INT, mirrored in lib/brand/registry.generated.ts) still names the planned
-// /goapply-*.svg|png paths, which do not exist. Until INT repoints it to
-// GOAPPLY_ASSETS below (WP-12 handoff request R1, blocking for the GoApply
-// release), the GoApply registry check is an `it.fails`: it turns red the
-// moment the registry is fixed, and INT then changes it to `it`.
+// registry (server/src/platform/brand/registry.ts, mirrored in
+// lib/brand/registry.generated.ts) points at them since the Wave 2 gate
+// (WP-12 handoff request R1), so both brands' checks are plain `it`.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,7 +50,7 @@ describe('brand.assets point at files under public/', () => {
     expect(missingAssets('roboapply')).toEqual([]);
   });
 
-  it.fails('goapply: every brand.assets path exists (blocked on request R1: INT repoints the registry to /brands/goapply/*)', () => {
+  it('goapply: every brand.assets path exists', () => {
     expect(missingAssets('goapply')).toEqual([]);
   });
 });

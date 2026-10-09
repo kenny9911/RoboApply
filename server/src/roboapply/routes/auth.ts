@@ -2,7 +2,9 @@
 //
 // Mounted at /api/v1/roboapply/auth/* in backend/src/index.ts.
 //
-//   POST /signup    — seeker signup (WP-10): agreements (`age_16_plus`
+//   POST /signup    — seeker signup (WP-10; GoApply hosts answer 403
+//                     `signup_closed` until WP-93 adds invite + CN-0
+//                     consents): agreements (`age_16_plus`
 //                     required; PDPA notice for zh-TW/TW), unchecked
 //                     marketing opt-in, entry attribution, brand + market
 //                     stamping, onboardingStep 'account', verification email.
@@ -154,6 +156,22 @@ function isPlausibleEmail(email: unknown): email is string {
  * onboarding flow at /onboarding to flesh it out with intent + resume.
  */
 router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
+  // Interim GoApply gate (Wave 2 integration; WP-93 replaces it). Email
+  // signup on GoApply does not yet redeem an invite inside the
+  // account-creation transaction (CN_SIGNUP_MODE=invite is the default),
+  // check `goapplySignupOpen(env)`, or record the CN-0 `pipl_cross_border`
+  // and `pipl_basic_processing` consents that WP-13's withdrawal/purge flow
+  // assumes every GoApply account gave. Until it does, a GoApply host cannot
+  // create an account here: 403 `signup_closed`, the code WP-11's phone and
+  // WeChat flows use. Checked before anything else so the answer does not
+  // depend on whether the email exists on either brand.
+  if (requestBrandId(req) === 'goapply') {
+    return res.status(403).json({
+      success: false,
+      code: 'signup_closed',
+      error: 'Sign-up is not open yet.',
+    });
+  }
   try {
     const { email, password, name, locale } = req.body ?? {};
     if (!isPlausibleEmail(email)) {

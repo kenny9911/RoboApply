@@ -342,18 +342,22 @@ model User {
   // The product brand this account belongs to: 'roboapply' | 'goapply'. Set at
   // signup from the request host and never changed (identity partition, ARCH
   // §1.10). Not to be confused with `market` above (recruiter overage billing).
-  brand              String    @default("roboapply")
+  brand                  String    @default("roboapply")
   // E.164 phone, normalized via libphonenumber-js. GoApply real-name identity
   // (CN L-8) requires a verified number. Unique per brand (index below); the
   // legacy free-text `phone` column is left untouched.
-  phoneE164          String?
-  phoneVerifiedAt    DateTime?
+  phoneE164              String?
+  phoneVerifiedAt        DateTime?
   // Touched at most hourly by requireAuth; drives score precompute and alerts.
-  lastActiveAt       DateTime?
+  lastActiveAt           DateTime?
   // True for GoApply phone/WeChat accounts that have no real email: `email`
   // then holds a reserved `…@users.goapply.invalid` placeholder and the email
   // layer refuses to send to `.invalid` (CN L-8).
-  emailIsPlaceholder Boolean   @default(false)
+  emailIsPlaceholder     Boolean   @default(false)
+  // When the 30-day inactive-account notice was emailed (SCHEMA-2, SR-13-1).
+  // The retention job deletes an account 24 months after its last sign-in
+  // only once this notice was sent at least 30 days earlier (WP-13 retention).
+  inactivityNoticeSentAt DateTime?
 
   // Jobright clone back-relations (one per RA* model that points at User).
   raProfile              RAProfile?
@@ -397,6 +401,7 @@ model User {
   raReferralsSent        RAReferral[]             @relation("RAReferralInviter")
   raReferralReceived     RAReferral?              @relation("RAReferralInvitee")
   raAttribution          RAAttribution?
+  raGrowthChecklist      RAGrowthChecklist?
   raAuthIdentities       RAAuthIdentity[]
   raAuthTokens           RAAuthToken[]
   raProductEvents        RAProductEvent[]

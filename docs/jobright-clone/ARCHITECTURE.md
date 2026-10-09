@@ -1704,8 +1704,10 @@ Legend: **Auth** S = seeker session, P = public, X = extension device token, A =
 | GET `/auth/oauth/line/start`, `/callback` | P | same pattern (LINE Login v2.1) | RoboApply, `authMethods` includes `line` |
 | POST `/auth/phone/send-code` | P | `{ phone, purpose }` → `{ resendInSec }`; SMS through `server/src/platform/sms/` (Aliyun or Tencent; OTP text only, no links, CN-L-07) | 1/60 s/phone, 10/day/phone, 30/day/IP |
 | POST `/auth/phone/verify` | P | `{ phone, code }` → session (creates the user on first login; consents required in the body for new users) | 5 wrong codes per OTP |
-| GET `/auth/wechat/qr?next=` | P | → 302 `open.weixin.qq.com/connect/qrconnect` (snsapi_login) | GoApply |
-| GET `/auth/wechat/callback` | P | code → access token → openid/unionid → user + `RAAuthIdentity` → cookie → 302 | — |
+| POST `/auth/wechat/start` | P | `{ flow, next?, consents?, inviteCode? }` → `{ url }`; checks the signup consents (422 when incomplete) and stores them with a browser-bound nonce (`ra_wx_oauth_nonce` cookie) in the state. The only way to **create** an account through WeChat (WP-11). Relies on production CORS refusing credentialed cross-origin POSTs | GoApply |
+| GET `/auth/wechat/qr?next=` | P | → 302 `open.weixin.qq.com/connect/qrconnect` (snsapi_login). Carries **no consents** (an `agree` query is refused): returning users and `purpose=reverify` only; a new WeChat user started here ends with `consent_required` | GoApply |
+| GET `/auth/wechat/mp/start` | P | inside `MicroMessenger` (公众号 OAuth); same rule: no consents, returning users only | GoApply |
+| GET `/auth/wechat/callback` | P | code → access token → openid/unionid → user + `RAAuthIdentity` → cookie → 302; requires and clears the nonce cookie (`oauth_state_invalid` otherwise) | — |
 | GET `/auth/me` (existing) | S | + `{ brand, onboarding:{step,path,completed}, entitlements: EntitlementSummary, flags, unreadCount }`; **drops** `mission` (V1) | — |
 | POST `/auth/logout` (existing) | P | unchanged | — |
 | GET `/account/identities` | S | → linked Google/WeChat/LINE/phone | — |
@@ -1998,7 +2000,7 @@ Drained as `job.enrich` work items by `queue-drain` (every 5 minutes), plus `wai
 | `/api/v1/cron/jobs-plan` | `0 2 * * *` | INGEST | planner |
 | `/api/v1/cron/jobs-ingest` | `*/10 * * * *` | INGEST | fetch/normalize/upsert |
 | `/api/v1/cron/queue-drain` | `*/5 * * * *` | FND (platform) | drains `job.enrich`, `job.score`, `resume.grade`, `email.send`, `seo.rebuild` |
-| `/api/v1/cron/jobs-maintain` | `30 3 * * *` | INGEST | expire/archive, dedupe repair, release stale credit reservations, prune `RAFeedSession`/`RARateCounter`/`RAProductEvent` (>180 d) |
+| `/api/v1/cron/jobs-maintain` | `30 3 * * *` | INGEST | expire/archive, dedupe repair, release stale credit reservations, prune `RAFeedSession`/`RARateCounter` (>180 d). `RAProductEvent` is pruned at 13 months by `compliance-daily` (WP-13 retention row `product_events`; TASK_PLAN.md WP-13 and the consent banner say 13 months; Wave 2 gate ruling) |
 | `/api/v1/cron/score-precompute` | `*/15 * * * *` | MATCH | §4.7 |
 | `/api/v1/cron/job-alerts` | `*/15 * * * *` | NOTIF | §8.2 |
 | `/api/v1/cron/reminders` | `0 * * * *` | TRK/NOTIF | follow-up and interview reminders |

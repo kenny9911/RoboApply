@@ -62,7 +62,7 @@ import {
 } from './lib/brand/runtime';
 // PROTECTED_PREFIXES + isProtectedPath live in a next/server-free module so
 // they're unit-testable without the Edge runtime (lib/proxyPaths.ts).
-import { isProtectedPath } from './lib/proxyPaths';
+import { CLAMPED_FROM_COOKIE, isProtectedPath } from './lib/proxyPaths';
 
 export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
@@ -86,7 +86,12 @@ export function proxy(req: NextRequest) {
   if (clamped) {
     const url = req.nextUrl.clone();
     url.pathname = clamped;
-    return withOverrideCookie(NextResponse.redirect(url), resolution);
+    const res = NextResponse.redirect(url);
+    // Remember the dropped locale for ~10 min so the wrong-brand nudge can
+    // offer the other brand (e.g. /zh-TW on GoApply → RoboApply in Traditional
+    // Chinese). Readable by the client; never used for routing.
+    res.cookies.set(CLAMPED_FROM_COOKIE, pathname.split('/')[1]!, { path: '/', sameSite: 'lax', maxAge: 600 });
+    return withOverrideCookie(res, resolution);
   }
 
   // 2. Auth gate for protected paths.

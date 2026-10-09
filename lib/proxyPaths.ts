@@ -62,3 +62,11 @@ export const PROTECTED_PREFIXES = [
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
+
+/**
+ * Cookie the proxy sets when it clamps a locale the brand does not serve
+ * (e.g. /zh-TW on GoApply → /zh), holding the dropped locale for ~10 minutes.
+ * Must equal CLAMPED_FROM_COOKIE in components/features/brand/nudge.ts, which
+ * the wrong-brand nudge reads (pinned by __tests__/lib/brandFromHost.test.ts).
+ */
+export const CLAMPED_FROM_COOKIE = 'ra_clamped_from';

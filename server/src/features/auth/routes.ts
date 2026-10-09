@@ -32,7 +32,7 @@ import { getCurrentBrand } from '../../platform/brand/brandContext.js';
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { parseBody, parseParams, parseQuery, requireUserId } from '../../platform/http.js';
-import { assertRateLimit, clientIp, HOUR, rateLimit } from '../../platform/ratelimit/index.js';
+import { assertRateLimit, clientIp, rateLimit } from '../../platform/ratelimit/index.js';
 import { buildCookieOptions, SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
@@ -68,7 +68,6 @@ const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 export const OAUTH_BINDER_COOKIE = 'ra_oauth_state';
 const OAUTH_BINDER_MAX_AGE_MS = 15 * 60 * 1000;
 /** /oauth/{provider}/start per IP (each start stores a state row). */
-const OAUTH_START_WINDOWS = [{ limit: 30, windowSec: HOUR }];
 
 function setBinder(req: Request, res: Response, binder: string): void {
   res.cookie(OAUTH_BINDER_COOKIE, binder, buildCookieOptions(req, { maxAge: OAUTH_BINDER_MAX_AGE_MS, sameSite: 'lax' }));
@@ -183,7 +182,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
   router.post(
     '/password/forgot',
     flag('auth.passwordReset'),
-    ...limit({ name: 'passwordResetPerIp', windows: [{ limit: 20, windowSec: HOUR }] }),
+    ...limit({ name: 'passwordResetPerIp' }),
     authRoute(async (req, res) => {
       const { email } = parseBody(req, ForgotPasswordBodySchema);
       if (deps.rateLimits !== false) await perEmailLimit(email);
@@ -195,7 +194,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
   router.post(
     '/password/reset',
     flag('auth.passwordReset'),
-    ...limit({ name: 'passwordResetSubmitPerIp', windows: [{ limit: 10, windowSec: HOUR }] }),
+    ...limit({ name: 'passwordResetSubmitPerIp' }),
     authRoute(async (req, res) => {
       const { token, password } = parseBody(req, ResetPasswordBodySchema);
       const brand = brandOf(req);
@@ -214,7 +213,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
   router.post(
     '/email/verify/send',
     ...auth,
-    ...limit({ name: 'emailVerifySendPerUser', by: 'user', windows: [{ limit: 3, windowSec: HOUR }] }),
+    ...limit({ name: 'emailVerifySendPerUser', by: 'user' }),
     authRoute(async (req, res) => {
       await svc().sendVerificationEmail({ userId: requireUserId(req), brand: brandOf(req) });
       res.status(204).end();
@@ -250,7 +249,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
     router.get(
       `/oauth/${provider}/start`,
       flag(capability),
-      ...limit({ name: 'oauthStartPerIp', windows: OAUTH_START_WINDOWS }),
+      ...limit({ name: 'oauthStartPerIp' }),
       authRoute(async (req, res) => {
         const q = parseQuery(req, OAuthStartQuerySchema);
         const brand = brandOf(req);

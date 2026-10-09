@@ -25,6 +25,7 @@
     "check:design": "node scripts/check-design.mjs",
     "check:copy": "node scripts/check-copy.mjs",
     "check:llm-costs": "tsx scripts/print-llm-costs.ts --check",
+    "verify:llm": "tsx scripts/verify-llm-brand.ts",
     "check:api-boundary": "node scripts/check-api-boundary.mjs",
     "check:extension": "node scripts/check-extension-no-submit.mjs",
     "check:zh-variants": "node scripts/check-zh-variants.mjs",

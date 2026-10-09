@@ -7,7 +7,7 @@ model RAPhoneOtp {
   brand      String
   phoneE164  String
   codeHash   String
-  /// 'login' | 'bind'
+  /// 'login' | 'bind' | 'change_old' | 'change_new' (WP-11)
   purpose    String
   attempts   Int       @default(0)
   ipHash     String

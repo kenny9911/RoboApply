@@ -38,3 +38,20 @@ model RAAttribution {
   lastTouch  Json?
   createdAt  DateTime @default(now())
 }
+
+/// Getting-started checklist progress (F-GROW-05; SCHEMA-2, SR-23-1). Functional
+/// account state, not analytics: it outlives the event prune, does not depend
+/// on analytics consent and is written only by the server through
+/// growth.markChecklistStep() (never by the client). The first stamp wins.
+model RAGrowthChecklist {
+  userId      String    @id
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tailorAt    DateTime?
+  practiceAt  DateTime?
+  saveJobAt   DateTime?
+  /// The one-time practice-credit reward was granted (ledger key checklist_complete).
+  rewardedAt  DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

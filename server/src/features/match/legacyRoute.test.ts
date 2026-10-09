@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { getBrand, type ProductBrand } from '../../platform/brand/registry.js';
 import { SCORER_PROMPT_VERSION, type MatchDimension } from './contract.js';
 import { legacyAiGate, legacyExplanation, legacyExtras, legacySignals, v2Signals, v3Dimensions } from './legacyView.js';
+import { prefixedProvider, scorerRoute } from './scorerRoute.js';
 
 const INTL_MODEL = 'openrouter/openai/gpt-5.6-luna';
 
@@ -271,9 +272,25 @@ describe('legacyView helpers', () => {
     expect(await legacyAiGate({ userId: 'u', brand: goapply, model: INTL_MODEL }, { aiAllowed: async () => false })).toBe('ai_off');
     expect(await legacyAiGate({ userId: 'u', brand: goapply, model: INTL_MODEL }, { aiAllowed: yes })).toBe('ai_unavailable');
     expect(await legacyAiGate({ userId: 'u', brand: goapply, model: 'deepseek/deepseek-chat' }, { aiAllowed: yes })).toBeNull();
-    // 'qwen/…' is not a routing prefix LLMService knows: it goes to the default provider (OpenRouter), so it is refused.
-    expect(await legacyAiGate({ userId: 'u', brand: goapply, model: 'qwen/qwen-max' }, { aiAllowed: yes })).toBe('ai_unavailable');
+    // Since WP-14, 'qwen/…' routes to DashScope (mainland) on GoApply, so it is allowed there.
+    expect(await legacyAiGate({ userId: 'u', brand: goapply, model: 'qwen/qwen-max' }, { aiAllowed: yes })).toBeNull();
     expect(await legacyAiGate({ userId: 'u', brand: getBrand('roboapply'), model: INTL_MODEL }, { aiAllowed: yes })).toBeNull();
     expect(await legacyAiGate({ userId: 'u', brand: getBrand('roboapply'), model: 'deepseek/deepseek-chat' }, { aiAllowed: yes })).toBe('ai_unavailable');
+    // On RoboApply 'qwen/…' is the OpenRouter vendor slug (providerPrefixes
+    // DOMESTIC_ONLY_PREFIXES), as LLMService resolves it — not DashScope.
+    expect(await legacyAiGate({ userId: 'u', brand: getBrand('roboapply'), model: 'qwen/qwen3.8-flash' }, { aiAllowed: yes })).toBeNull();
+    // The unambiguous native spelling is still mainland on RoboApply.
+    expect(await legacyAiGate({ userId: 'u', brand: getBrand('roboapply'), model: 'dashscope/qwen-max' }, { aiAllowed: yes })).toBe('ai_unavailable');
+  });
+
+  it('scorerRoute resolves the prefix per brand profile and reads the domestic base-URL variables', () => {
+    expect(prefixedProvider('qwen/qwen3.8-flash')).toBeNull();
+    expect(prefixedProvider('qwen/qwen3.8-flash', 'domestic_cn')).toBe('qwen');
+    expect(prefixedProvider('dashscope/qwen-max')).toBe('qwen');
+    expect(scorerRoute('qwen/qwen3.8-flash', 'openrouter', {}, 'global')).toMatchObject({ provider: 'openrouter' });
+    const env = { DASHSCOPE_BASE_URL: 'https://gw.example.cn/v1', GLM_API_BASE_URL: 'https://glm.example.cn/v1', ARK_BASE_URL: 'https://ark.example.cn/v1' };
+    expect(scorerRoute('qwen/qwen-max', null, env, 'domestic_cn')).toMatchObject({ provider: 'qwen', baseUrl: 'https://gw.example.cn/v1' });
+    expect(scorerRoute('zhipu/glm-5', null, env, 'domestic_cn')).toMatchObject({ provider: 'glm', baseUrl: 'https://glm.example.cn/v1' });
+    expect(scorerRoute('ark/doubao-pro', null, env, 'domestic_cn')).toMatchObject({ provider: 'doubao', baseUrl: 'https://ark.example.cn/v1' });
   });
 });

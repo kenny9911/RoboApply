@@ -2,8 +2,8 @@
 // area's settings component (FND-6a seam).
 //
 // A section whose content predates the clone (account, security,
-// notifications, billing, credits, privacy, appearance, search, danger) is
-// rendered by app/(auth)/settings/page.tsx from the existing
+// notifications, search, danger) is still rendered by
+// app/(auth)/settings/page.tsx from the existing
 // components/v3/{preferences,account} pieces. Every other section renders the
 // component registered here, from `components/features/<area>/SettingsSection.tsx`
 // (TASK_PLAN.md §4.1.e). FND-6b creates those stubs and the six new sections
@@ -19,8 +19,10 @@
 
 import type { ComponentType } from 'react';
 
+import { BrandSettingsSection } from '../brand';
 import { ComplianceSettingsSection } from '../compliance';
 import { CopilotSettingsSection } from '../copilot';
+import { CreditsSettingsSection } from '../credits';
 import { ExtensionSettingsSection } from '../extension';
 import { GrowthSettingsSection } from '../growth';
 import { NetworkSettingsSection } from '../network';
@@ -33,6 +35,10 @@ export interface SettingsSectionProps {
 
 export const SECTION_COMPONENTS: Partial<Record<SettingsSectionId, ComponentType<SettingsSectionProps>>> = {
   consents: ComplianceSettingsSection, // components/features/compliance/SettingsSection.tsx, WP-13
+  privacy: ComplianceSettingsSection, // WP-13 (Wave 2 gate: replaces the page's DataSection wrapper)
+  billing: CreditsSettingsSection, // components/features/credits/SettingsSection.tsx, WP-21b (Wave 2 gate: the page's legacy {tier} checkout got 409)
+  credits: CreditsSettingsSection, // WP-21b (Wave 2 gate)
+  appearance: BrandSettingsSection, // components/features/brand/SettingsSection.tsx, WP-12 (Wave 2 gate)
   assistant: CopilotSettingsSection, // components/features/copilot/SettingsSection.tsx, WP-51
   devices: ExtensionSettingsSection, // components/features/extension/SettingsSection.tsx, WP-55a
   connections: NetworkSettingsSection, // components/features/network/SettingsSection.tsx, WP-54

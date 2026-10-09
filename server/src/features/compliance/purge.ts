@@ -7,9 +7,10 @@
 //      revoked (the same soft delete as /account/delete, WP-10);
 //   2. hard-delete it — stored files first, then the User row with its
 //      cascades — through the account-purge seam `purgeAccountNow(userId)`
-//      exported by SeekerAccountPurgeService (requested from WP-10; a launch
-//      blocker for GoApply CN-0). Until that export exists the closed account
-//      is hard-deleted by the nightly account-purge sweep
+//      exported by SeekerAccountPurgeService (added at the Wave 2 gate). When
+//      it refuses (non-seeker role) or is blocked (a stored file could not be
+//      deleted), or if the export were missing, the closed account is
+//      hard-deleted by the nightly account-purge sweep
 //      (ACCOUNT_PURGE_RETENTION_DAYS after closing, default 30 calendar days),
 //      which is later than the 15-working-day due date. The request then stays
 //      `in_progress` with a handling note giving the expected sweep date and,

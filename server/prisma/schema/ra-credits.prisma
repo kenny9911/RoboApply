@@ -22,6 +22,8 @@ model RACreditLedger {
   id             String    @id @default(cuid())
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// A credit bucket, or 'billing_event' for webhook replay claims (WP-21a; keyed
+  /// 'billing:checkout:*' | 'billing:payfail:*' | 'billing:invoice:*', amount 0).
   bucket         String
   /// Units (positive = consumption).
   amount         Int

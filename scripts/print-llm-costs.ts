@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 import dotenv from 'dotenv';
 
-import { MODEL_ENV } from '../server/src/lib/llm/llmStackConfigSchema.js';
+import { ALL_BRAND_MODEL_ENV_VARS } from '../server/src/lib/llm/llmStackConfigSchema.js';
 import {
   AUDIO_MODEL_COST_TABLE,
   DEFAULT_MODEL_COST,
@@ -41,7 +41,8 @@ dotenv.config({ path: resolve(REPO_ROOT, '.env.local'), override: false, quiet: 
 /** Every model-selector env var, straight from the config registry — a
  *  hand-copied subset would report "all ok" while a purpose we forgot to list
  *  quietly bills at the default tier. */
-const MODEL_ENV_VARS = Object.values(MODEL_ENV);
+// Both brands: the unprefixed RoboApply names and their CN_ GoApply twins (WP-14).
+const MODEL_ENV_VARS = ALL_BRAND_MODEL_ENV_VARS;
 
 /** `$0.375` — trims the trailing zeros a fixed precision would add. */
 const usd = (n: number): string => `$${Number(n.toFixed(6))}`;

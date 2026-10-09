@@ -174,6 +174,23 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     },
   },
   {
+    // The extension (WP-55a) fills stored sensitive answers only with this
+    // live grant (profile service `sensitiveForAutofill`, WP-19). Wave 2 gate.
+    type: 'autofill_sensitive',
+    brand: 'goapply',
+    requiredWhen: 'never',
+    appliesWhen: 'always',
+    stage: 'in_context',
+    control: 'toggle',
+    withdrawable: true,
+    onWithdraw: 'none',
+    defaultGranted: false,
+    prose: {
+      zh: '允许 %BRAND% 浏览器插件把我填写的敏感信息（例如籍贯、政治面貌、家庭成员）填入我自己打开的申请表，由我检查后自行提交。这些信息不用于匹配或 AI 处理。关闭后插件不再填写这些信息。',
+      en: 'Let the %BRAND% browser extension fill sensitive answers I entered (for example native place, political status or family members) into application forms I open myself, for me to check and submit. They are never used for matching or AI processing. Turning this off stops the extension from filling them.',
+    },
+  },
+  {
     type: 'share_with_gohire',
     brand: 'goapply',
     requiredWhen: 'never',
@@ -294,6 +311,21 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     onWithdraw: 'none',
     defaultGranted: false,
     prose: { en: 'Let the Assistant remember preferences I tell it, for later conversations. You can review and delete them anytime.' },
+  },
+  {
+    // See the GoApply entry: gates `sensitiveForAutofill` (WP-19 → WP-55a). Wave 2 gate.
+    type: 'autofill_sensitive',
+    brand: 'roboapply',
+    requiredWhen: 'never',
+    appliesWhen: 'always',
+    stage: 'in_context',
+    control: 'toggle',
+    withdrawable: true,
+    onWithdraw: 'none',
+    defaultGranted: false,
+    prose: {
+      en: 'Let the %BRAND% browser extension fill my sensitive answers (voluntary self-identification such as gender, race or ethnicity, veteran and disability status) into application forms I open myself, for me to check and submit. They are never used for matching or AI processing. Turning this off stops the extension from filling them.',
+    },
   },
   {
     type: 'tips_reminders',

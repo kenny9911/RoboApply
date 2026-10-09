@@ -83,10 +83,10 @@ describe('check-api-boundary', () => {
     expect(v[0]).toContain('server/src/features/feed/service.ts:1');
   });
 
-  it('this checkout passes (only the two baselined offenders exist)', () => {
+  it('this checkout passes (only the one baselined offender exists)', () => {
     expect(boundary.evaluate(process.cwd()).violations).toEqual([]);
     const offenders = [...boundary.findOffenders(process.cwd()).apiLiterals.keys()].sort();
-    expect(offenders).toEqual(['components/v3/shell/LanguageSwitcher.tsx', 'lib/resumeDownload.ts']);
+    expect(offenders).toEqual(['lib/resumeDownload.ts']);
   });
 });
 
@@ -138,8 +138,8 @@ export function chooseOption(el) { assertNotSubmitLike(el); el.click(); }
   });
 });
 
-describe('check-zh-variants (stub until WP-12)', () => {
-  it('exits 0', () => {
+describe('check-zh-variants (real check since WP-12)', () => {
+  it('exits 0 on this checkout', () => {
     const r = spawnSync(process.execPath, ['scripts/check-zh-variants.mjs'], { encoding: 'utf8' });
     expect(r.status).toBe(0);
   });

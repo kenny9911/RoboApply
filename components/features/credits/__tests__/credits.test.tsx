@@ -234,7 +234,7 @@ describe('CreditsUsage', () => {
 });
 
 describe('PriceReference (Taiwan, CN L-7)', () => {
-  const fresh = () => ({ currency: 'TWD' as const, ratePerUsd: 32, source: 'Bank of Taiwan', asOf: new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10) });
+  const fresh = () => ({ currency: 'TWD' as const, ratePerUsd: 32, source: 'Bank of Taiwan', asOf: new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10), amounts: {} });
 
   it('renders for zh-TW with a fresh rate', async () => {
     api.getPlans.mockResolvedValue(plansView('roboapply', undefined, { fxReference: fresh() }));

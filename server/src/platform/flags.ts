@@ -34,6 +34,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { getCurrentBrandOrDefault } from './brand/brandContext.js';
 import { envSet, parseBoolEnv, brandEnv, type EnvSource } from './brand/brandEnv.js';
 import type { BrandFlags, BrandId, HiringContactsMode, ProductBrand } from './brand/registry.js';
+import { contentSafetyReadiness } from './llm/contentSafety/config.js';
 
 /** Product flags held in the registry (booleans only; hiringContacts is a mode). */
 export type ProductFlagKey = Exclude<keyof BrandFlags, 'hiringContacts'>;
@@ -175,8 +176,10 @@ function cnPaymentsEnabled(env: EnvSource): boolean {
 function aiTextConfigured(brand: ProductBrand, env: EnvSource): boolean {
   // RoboApply keeps today's stack (unprefixed env + DB override, resolved by
   // LLMService); its AI is always on. GoApply needs its own domestic model,
-  // with no fallback to the international stack (R-13).
-  return brand.llmProfile === 'domestic_cn' ? cnLlmConfigured(env) : true;
+  // with no fallback to the international stack (R-13), and a usable
+  // content-safety filter (WP-24): a misconfigured filter hides the AI
+  // features instead of letting every call fail closed with 503.
+  return brand.llmProfile === 'domestic_cn' ? cnLlmConfigured(env) && contentSafetyReadiness(env).usable : true;
 }
 
 /**

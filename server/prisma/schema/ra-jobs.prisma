@@ -62,7 +62,7 @@ model RAJob {
   salaryMin      Int?
   salaryMax      Int?
   salaryCurrency String? @default("USD")
-  /// 'year' | 'hour' | 'month'
+  /// 'year' | 'month' | 'week' | 'day' | 'hour'
   salaryPeriod   String? @default("year")
 
   description      String  @db.Text
@@ -100,7 +100,8 @@ model RAJob {
   company     RACompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   // taxonomy and level
-  /// L1/L2/L3 ids from taxonomy.v1.json, e.g. ['01','01-08','01-08-01'].
+  /// Taxonomy ids from taxonomy.v1.json, snake_case, ordered [L1, L2, L3]
+  /// (WP-16a; e.g. ['software_engineering', 'swe_backend', 'backend_engineer']).
   taxonomyIds       String[] @default([])
   primaryTaxonomyId String?
   /// 'intern_newgrad' | 'entry' | 'mid' | 'senior' | 'lead_staff' | 'director_exec'
@@ -158,6 +159,9 @@ model RAJob {
   sourceName           String?
   /// For reposted jobs: the original publisher (reposted-source duty, CN plan §4.1).
   originalSourceName   String?
+  /// Host of the original publisher's page (from sourceUrl, then applyUrl),
+  /// skipping job-board hosts; never a LinkedIn host (SCHEMA-2, WP-16a).
+  originalHost         String?
   /// 'greenhouse' | 'lever' | 'workday' | 'ashby' | 'smartrecruiters' | 'icims' |
   /// 'workable' | 'taleo' | 'successfactors' | 'moka' | 'beisen' | 'feishu' | 'dayee' | 'other'
   atsType              String?
@@ -182,6 +186,11 @@ model RAJob {
   closedAt             DateTime?
   /// 'expired' | 'source_removed' | 'bank_closed' | 'reported' | 'duplicate'
   closeReason          String?
+  /// Missed-refresh tracking (SCHEMA-2, SR-16b-1): the RAIngestQuery that last
+  /// returned this job and that query's runCount at the time. Archived as
+  /// 'source_removed' once the query has run twice more without it.
+  lastSeenQueryId      String?
+  lastSeenRun          Int?
   /// GoApply anti-fraud evidence: `[{ rule, evidence, at }]`; flagged jobs are
   /// excluded from ranking until reviewed (WP-41).
   fraudFlags           Json?
@@ -228,6 +237,7 @@ model RAJob {
   @@index([enrichedAt])
   @@index([ownerUserId])
   @@index([salaryCurrency, salaryAnnualMax])
+  @@index([lastSeenQueryId])
 }
 
 // ── Jobright clone: INGEST models (FND-1b; ARCH §2.4) ──────────────────────
@@ -265,6 +275,8 @@ model RACompany {
   @@unique([market, nameNormalized])
   @@unique([market, slug])
   @@index([domain])
+  /// Company typeahead (SCHEMA-2, SR-16b-2); needs pg_trgm (server/prisma/sql/000_extensions.sql).
+  @@index([nameNormalized(ops: raw("gin_trgm_ops"))], type: Gin)
 }
 
 /// Demand-driven ingestion plan (ARCH §4.3). One row per provider × normalized query.
@@ -287,6 +299,9 @@ model RAIngestQuery {
   lastNewCount     Int?
   lastSeenCount    Int?
   consecutiveEmpty Int       @default(0)
+  /// Counted runs (succeeded with ≥1 posting) for the missed-refresh rule
+  /// (SCHEMA-2, SR-16b-1; see RAJob.lastSeenRun).
+  runCount         Int       @default(0)
   lastError        String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

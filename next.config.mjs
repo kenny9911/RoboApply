@@ -15,6 +15,13 @@ const nextConfig = {
       process.env.NEXT_PUBLIC_API_URL ??
       (process.env.NODE_ENV === 'development' ? 'http://localhost:4607' : ''),
   },
+  // The legal pages read content/legal/<market>/*.md at request time
+  // (app/legal/legalSource.ts, WP-13); file tracing cannot see those reads,
+  // so ship the folder with the /legal/[doc] route. The API function gets the
+  // same folder through vercel.json includeFiles.
+  outputFileTracingIncludes: {
+    '/legal/*': ['./content/legal/**/*'],
+  },
   images: {
     remotePatterns: [
       // R2 public bucket. Adjust when production host is finalized.

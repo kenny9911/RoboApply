@@ -64,6 +64,12 @@ import brandPublicRouter from './features/brand/routes.js';
 import { mountFeatures } from './features/index.js';
 // Side effect: registers every area's queue workers (queue-drain cron + kickDrain).
 import './platform/queue/registry.js';
+import { runStartupAssertions } from './platform/startup.js';
+
+// ─── Startup assertions ─────────────────────────────────────────────────
+// Residency (WP-15): a misconfigured mainland deployment refuses to boot.
+// Assistant tool support (WP-14): report-only until WP-50 ships.
+runStartupAssertions({ log: logger });
 
 const app = express();
 

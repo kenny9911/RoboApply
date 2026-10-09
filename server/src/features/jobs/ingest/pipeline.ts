@@ -151,7 +151,16 @@ export async function processJobs(
     if (u.inserted) result.inserted += 1;
     else result.updated += 1;
     if (u.inserted || !prior || prior.contentHash !== hash) {
-      enrich.push({ kind: ENRICH_KIND, payload: { jobId: u.id }, options: { dedupeKey: `${ENRICH_KIND}:${u.id}:v${hash.slice(0, 12)}`, brand: ctx.brand } });
+      // A materially changed posting (an existing row whose title/description
+      // hash moved) is re-enriched with `force`: WP-17's enrichJob otherwise
+      // answers `already_enriched` for a row at ENRICH_VERSION and would keep
+      // quotes, tags and the summary from text the posting no longer has (D3).
+      const changed = !u.inserted && !!prior;
+      enrich.push({
+        kind: ENRICH_KIND,
+        payload: changed ? { jobId: u.id, force: true } : { jobId: u.id },
+        options: { dedupeKey: `${ENRICH_KIND}:${u.id}:v${hash.slice(0, 12)}`, brand: ctx.brand },
+      });
     }
   }
   await applyDedupe(ctx.db, ctx.market, jobs.map((j) => j.dedupeKey));

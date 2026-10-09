@@ -6,7 +6,7 @@
     "api/index.ts": {
       "maxDuration": 300,
       "memory": 2048,
-      "includeFiles": "{server/**,node_modules/@napi-rs/canvas*/**,node_modules/pdfjs-dist/{package.json,legacy/build/**,standard_fonts/**,cmaps/**,wasm/**}}"
+      "includeFiles": "{server/**,content/legal/**,node_modules/@napi-rs/canvas*/**,node_modules/pdfjs-dist/{package.json,legacy/build/**,standard_fonts/**,cmaps/**,wasm/**}}"
     }
   },
   "rewrites": [

@@ -77,7 +77,7 @@ describe('/settings', () => {
 
     // All of them, in order. Each is a section on this page, not a route — a
     // fragment anchor, because the open section is the URL hash.
-    const ids = ['account', 'security', 'notifications', 'billing', 'credits', 'privacy', 'appearance', 'search', 'danger'];
+    const ids = ['account', 'security', 'notifications', 'billing', 'credits', 'privacy', 'appearance', 'search', 'sensitive', 'danger'];
     const names = [
       'Account',
       'Sign-in and security',
@@ -87,6 +87,7 @@ describe('/settings', () => {
       'Privacy and data',
       'Appearance',
       'Your search',
+      'Sensitive answers',
       'Danger zone',
     ];
     const row = screen.getByRole('navigation', { name: 'Settings' });
@@ -138,32 +139,27 @@ describe('/settings', () => {
     // A fragment anchor: the browser moves the URL, then fires hashchange.
     await waitFor(() => expect(window.location.hash).toBe('#billing'));
 
-    // The section swaps once the browser fires hashchange (a task later). Its
-    // sub is unique to the body — the title itself collides with the rail link.
+    // The section swaps once the browser fires hashchange (a task later). Since
+    // the Wave 2 gate the body is WP-21b's billing view (registered in
+    // sectionComponents.ts), not the page's legacy renderer: that one checked
+    // out with `{ tier }`, which WP-21a refuses with 409 plan_not_sellable.
+    expect(await screen.findByTestId('billing-view')).toBeInTheDocument();
     expect(
-      await screen.findByText(
-        /What you are on now, what else you can move to, and where your receipts are\./i,
-      ),
-    ).toBeInTheDocument();
+      screen.queryByText(/What you are on now, what else you can move to, and where your receipts are\./i),
+    ).toBeNull();
 
-    // The plan body itself is served by accountApi, which has no stub and no
+    // The plan sheet is served by the billing API, which has no stub and no
     // network in JSDOM — so this test asserts the branch that a phone user on
-    // a bad connection actually hits. It must say what happened and what to do
-    // next, never a blank panel and never "something went wrong on my end"
-    // (voice rule: errors are factual, and there is no speaker to have an
-    // "end"). The populated catalog is covered by PlanCatalog.test.tsx.
+    // a bad connection actually hits. It must say what happened and offer a
+    // retry, never a blank panel (voice rule: errors are factual). The
+    // populated sheet is covered by components/features/credits/__tests__.
     await waitFor(
       () => {
-        expect(screen.getByRole('alert')).toHaveTextContent(
-          'Your settings did not load.',
-        );
+        expect(screen.getByText("We couldn't load the plans.")).toBeInTheDocument();
       },
       { timeout: 4000 },
     );
-    expect(screen.getByText(/Nothing was lost\./i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Try again' }),
-    ).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Try again' }).length).toBeGreaterThan(0);
   });
 
   it('opens the section the URL hash names — the deep link every "Billing" entry points at', async () => {
@@ -175,11 +171,7 @@ describe('/settings', () => {
 
     await waitFor(
       () => {
-        expect(
-          screen.getByText(
-            /What you are on now, what else you can move to, and where your receipts are\./i,
-          ),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId('billing-view')).toBeInTheDocument();
       },
       { timeout: 4000 },
     );

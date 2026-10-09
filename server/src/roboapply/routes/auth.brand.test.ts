@@ -26,7 +26,11 @@ vi.mock('../../lib/prisma.js', () => {
     seekerProfile: { upsert: vi.fn() },
     userActivity: { create: m.activity },
     roboApplyMission: { create: vi.fn(async () => ({})) },
-    $transaction: async (fn: (tx: unknown) => unknown) => fn({ user: { create: m.userCreate }, seekerProfile: { create: m.profileCreate } }),
+    $transaction: async (fn: (tx: unknown) => unknown) => fn({
+        user: { create: m.userCreate },
+        seekerProfile: { create: m.profileCreate },
+        seekerConsentRecord: { createMany: vi.fn(async () => ({ count: 2 })) },
+      }),
   };
   return { default: client, prisma: client };
 });
@@ -84,12 +88,15 @@ beforeEach(() => {
   m.profileCreate.mockResolvedValue({ id: 'p1', source: 'organic', readinessScore: 0, locale: 'en' });
 });
 
+// WP-10 signup rules: the age agreement is required and the password needs a digit.
+const AGE = [{ type: 'age_16_plus', granted: true, proseVersion: 'v1' }];
+
 describe('SeekerAuthService brand stamping and gate', () => {
   it('signup writes User.brand from the request brand; no brand → column default', async () => {
     m.findUnique.mockResolvedValue(null);
-    await seekerAuthService.signup({ email: 'new@example.test', password: 'long-password', brand: 'goapply' });
+    await seekerAuthService.signup({ email: 'new@example.test', password: 'long-password1', brand: 'goapply', consents: AGE });
     expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'goapply' });
-    await seekerAuthService.signup({ email: 'new2@example.test', password: 'long-password' });
+    await seekerAuthService.signup({ email: 'new2@example.test', password: 'long-password1', consents: AGE });
     expect(m.userCreate.mock.calls[1]![0].data).not.toHaveProperty('brand');
   });
 
@@ -126,11 +133,25 @@ describe('legacy /auth routes pass the host brand', () => {
 
   const body = { email: 'u@example.test', password: 'right-password' };
 
-  it('signup on the GoApply host creates a GoApply account', async () => {
+  it('email signup on the GoApply host is closed until WP-93 (403 signup_closed, nothing created)', async () => {
+    // Interim gate: no invite redemption and no CN-0 pipl_cross_border consent
+    // on this path yet. Brand stamping itself is covered at the service level
+    // above (seekerAuthService.signup with brand 'goapply').
     m.findUnique.mockResolvedValue(null);
-    const res = await h.request('POST', '/api/v1/roboapply/auth/signup', { host: GOAPPLY, body: { ...body, password: 'long-password' } });
+    const res = await h.request<{ code: string }>('POST', '/api/v1/roboapply/auth/signup', {
+      host: GOAPPLY,
+      body: { ...body, password: 'long-password1', consents: AGE },
+    });
+    expect([res.status, res.body.code]).toEqual([403, 'signup_closed']);
+    expect(m.userCreate).not.toHaveBeenCalled();
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('email signup on the RoboApply host still creates a RoboApply account', async () => {
+    m.findUnique.mockResolvedValue(null);
+    const res = await h.request('POST', '/api/v1/roboapply/auth/signup', { host: ROBOAPPLY, body: { ...body, password: 'long-password1', consents: AGE } });
     expect(res.status).toBe(201);
-    expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'goapply' });
+    expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'roboapply' });
   });
 
   it('login with a RoboApply account on the GoApply host → 409 account_other_brand, no cookie', async () => {

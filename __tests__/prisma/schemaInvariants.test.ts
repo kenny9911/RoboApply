@@ -116,6 +116,7 @@ const PLACEMENT: Record<string, string> = {
   RAReferralCode: 'ra-growth.prisma',
   RAReferral: 'ra-growth.prisma',
   RAAttribution: 'ra-growth.prisma',
+  RAGrowthChecklist: 'ra-growth.prisma', // SCHEMA-2 (SR-23-1)
   // ra-prep
   RAInterviewQuestion: 'ra-prep.prisma',
   RAQuestionContribution: 'ra-prep.prisma',
@@ -237,6 +238,7 @@ const SCOPE: Record<string, Scope> = {
   RAReferralCode: 'brand',
   RAReferral: 'brand',
   RAAttribution: 'user',
+  RAGrowthChecklist: 'user', // SCHEMA-2 (SR-23-1)
   RAInterviewQuestion: 'brand',
   RAQuestionContribution: 'brand',
   RAQuestionReport: 'user',

@@ -53,6 +53,16 @@ export const RATE_LIMITS = {
   extensionDevice: [{ limit: 600, windowSec: HOUR }],
   /** First-party events per anonId: 120/min. */
   eventsPerAnon: [{ limit: 120, windowSec: MINUTE }],
+  /** First-party events per IP for batches that carry an anonId (rotating anonIds cannot lift it): 600/min (WP-23). */
+  eventsPerIp: [{ limit: 600, windowSec: MINUTE }],
+  /** Password-reset requests per IP: 20/h (WP-10; the per-email cap is passwordResetPerEmail). */
+  passwordResetPerIp: [{ limit: 20, windowSec: HOUR }],
+  /** Password-reset submissions (new password) per IP: 10/h (WP-10). */
+  passwordResetSubmitPerIp: [{ limit: 10, windowSec: HOUR }],
+  /** Verification-email sends per user: 3/h (WP-10). */
+  emailVerifySendPerUser: [{ limit: 3, windowSec: HOUR }],
+  /** OAuth (Google/LINE) starts per IP: 30/h (WP-10). */
+  oauthStartPerIp: [{ limit: 30, windowSec: HOUR }],
   /** Global guard for any authenticated route: 600/min per user. */
   authenticatedPerUser: [{ limit: 600, windowSec: MINUTE }],
 } as const satisfies Record<string, readonly RateWindow[]>;

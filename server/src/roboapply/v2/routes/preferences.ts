@@ -24,6 +24,7 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../lib/raAuth.js';
 import { normalizeRaLocale } from '../lib/raLocale.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import { logger } from '../../../services/LoggerService.js';
 import prisma from '../../../lib/prisma.js';
 import { raPreferencesService } from '../services/RAPreferencesService.js';
@@ -88,7 +89,9 @@ router.put('/locale', requireAuth, async (req: Request, res: Response) => {
     const locale = normalizeRaLocale(
       typeof raw.locale === 'string' ? raw.locale : undefined,
     );
-    if (!locale) {
+    // Only a locale the request's brand serves (nine on RoboApply, zh/en on
+    // GoApply; WP-12 R7) — the switchers never offer another one.
+    if (!locale || !(getCurrentBrandOrDefault().locales as readonly string[]).includes(locale)) {
       return res.status(422).json({ error: 'invalid_locale' });
     }
     await prisma.seekerProfile.updateMany({

@@ -67,12 +67,12 @@ export function sendEventsBeacon(body: In<typeof G.EventsBatchBodySchema>): bool
   }
 }
 
-/** growth.checklist: GET /api/v1/roboapply/growth/checklist (mount pending, WP-23 request to INT) */
+/** `growth.checklist` — GET /api/v1/roboapply/growth/checklist */
 export function getChecklist(opts?: CallOptions): Promise<G.ChecklistView> {
   return call<G.ChecklistView>('GET', `/api/v1/roboapply/growth/checklist`, opts);
 }
 
-/** growth.checklist.dismiss: POST /api/v1/roboapply/growth/checklist/dismiss (mount pending, WP-23 request to INT) */
+/** `growth.checklist.dismiss` — POST /api/v1/roboapply/growth/checklist/dismiss */
 export function dismissChecklist(opts?: CallOptions): Promise<G.ChecklistView> {
   return call<G.ChecklistView>('POST', `/api/v1/roboapply/growth/checklist/dismiss`, opts);
 }

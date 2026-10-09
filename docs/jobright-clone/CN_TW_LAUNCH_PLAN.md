@@ -108,6 +108,7 @@
 A startup assertion (WP-RESIDENCY) refuses to boot when `DEPLOY_REGION=cn-mainland` and any of the following holds:
 - `CN_ICP_NUMBER` is unset;
 - the `DATABASE_URL` host is not on the CN allowlist (default suffixes are maintained in code; override with `CN_ALLOWED_DB_HOST_SUFFIXES`; private RFC1918 IPs are allowed);
+  a match on a **default** Aliyun RDS suffix does not prove the region (the same suffix serves offshore regions), so the check only warns there; ops confirm the RDS RegionId or use the VPC private address (WP-15);
 - `ALLOWED_BRANDS` contains `intl`;
 - any CN LLM provider resolves outside the allowlist.
 
