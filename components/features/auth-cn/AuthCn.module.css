@@ -1,0 +1,433 @@
+/* GoApply sign-in methods, bind/change phone, WeChat notices and the admin
+   invite console (WP-11). Clarity tokens only; light + dark come from the
+   token values; touch targets are at least 44px. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta, 1.5);
+}
+
+.control {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--control-lg);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  transition: border-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+}
+
+.inputWrap:focus-within {
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
+}
+
+.inputWrap[data-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.prefix {
+  padding-inline: var(--sp-3) var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  border-inline-end: 1px solid var(--rule);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  min-height: calc(var(--control-lg) - 2px);
+  padding: 0 var(--sp-3);
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  letter-spacing: 0.01em;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.sendBtn {
+  flex: 0 0 auto;
+  min-height: var(--control-lg);
+  min-width: 112px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--action);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sendBtn:hover:not(:disabled) {
+  border-color: var(--action);
+}
+
+.sendBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.sendBtn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.check {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: var(--sp-2);
+  align-items: start;
+  min-height: var(--control-lg);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--action);
+  cursor: pointer;
+}
+
+.check a {
+  color: var(--action);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.submit {
+  width: 100%;
+  min-height: var(--control-lg);
+  justify-content: center;
+}
+
+.error {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--danger-subtle);
+  color: var(--danger);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+.notice {
+  margin: 0;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--ok-subtle);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+.linkBtn {
+  align-self: flex-start;
+  min-height: var(--control-lg);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.linkBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-sm);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+.wechatBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.wechatBtn:hover {
+  border-color: var(--action);
+}
+
+.wechatBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.wechatBtn[aria-disabled='true'] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Banners ─────────────────────────────────────────────────────────── */
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--warn-subtle);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+}
+
+.bannerText {
+  flex: 1 1 220px;
+  margin: 0;
+}
+
+.bannerTitle {
+  display: block;
+  font-weight: 600;
+}
+
+.bannerAction {
+  min-height: var(--control-lg);
+}
+
+/* ── Settings section ────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.step {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+/* ── Admin console ───────────────────────────────────────────────────── */
+
+.admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  max-width: var(--page-max, 1120px);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-4);
+}
+
+.codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.code {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-meta);
+}
+
+.table th,
+.table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--rule);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  background: var(--surface-2);
+}
+
+.table td {
+  color: var(--text);
+}
+
+.select {
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+}
+
+.select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+}
+
+@media (max-width: 760px) {
+  .section,
+  .panel {
+    padding: var(--sp-4);
+  }
+
+  .sendBtn {
+    min-width: 104px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inputWrap {
+    transition: none;
+  }
+}
