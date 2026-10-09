@@ -1,8 +1,11 @@
 // __tests__/pages/settings.test.tsx
 //
-// Smoke test for /settings — ONE page with seven sections, reached from the
-// avatar menu. Not a destination (ruling D2: there are exactly four, and
-// settings is not one of them).
+// Smoke test for /settings — ONE page; its sections, their order and the
+// brand rules come from components/features/settings/registry.ts (FND-6a,
+// PRODUCT_PLAN.md §3.4): Account · Sign-in and security · Notifications ·
+// Plan and billing · Credits · Privacy and data · Appearance · Your search ·
+// Danger zone on RoboApply today. The registry itself (per brand, flags,
+// readiness) is covered in __tests__/shell/settings.test.tsx.
 //
 // This replaces __tests__/pages/preferences.test.tsx. What changed and why:
 //   • Route: /preferences → /settings, and it absorbed /plans, /account and
@@ -59,7 +62,7 @@ describe('/settings', () => {
     window.history.replaceState(null, '', '/settings');
   });
 
-  it('renders the seven sections and lands on Your search', async () => {
+  it('renders the sections in registry order and lands on Account', async () => {
     renderWithProviders(<SettingsPage />);
 
     // The section list lands once the preferences query resolves.
@@ -72,27 +75,42 @@ describe('/settings', () => {
       { timeout: 4000 },
     );
 
-    // All seven, in order. Each is a section on this page, not a route — a
+    // All of them, in order. Each is a section on this page, not a route — a
     // fragment anchor, because the open section is the URL hash.
-    const ids = ['search', 'resume', 'notif', 'appearance', 'billing', 'account', 'danger'];
+    const ids = ['account', 'security', 'notifications', 'billing', 'credits', 'privacy', 'appearance', 'search', 'danger'];
     const names = [
-      'Your search',
-      'Resume',
-      'Notifications',
-      'Appearance',
-      'Plan and billing',
       'Account',
+      'Sign-in and security',
+      'Notifications',
+      'Plan and billing',
+      'Credits',
+      'Privacy and data',
+      'Appearance',
+      'Your search',
       'Danger zone',
     ];
+    const row = screen.getByRole('navigation', { name: 'Settings' });
+    expect(within(row).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual(ids.map((id) => `#${id}`));
     names.forEach((name, i) => {
       expect(screen.getByRole('link', { name })).toHaveAttribute('href', `#${ids[i]}`);
     });
-    expect(screen.getByRole('link', { name: 'Your search' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute(
       'aria-current',
       'page',
     );
+  });
 
-    // Default section is Your search → its H1 is the one setup sentence
+  it('opens Your search from its hash, with the one setup sentence as its H1', async () => {
+    window.history.replaceState(null, '', '/settings#search');
+    renderWithProviders(<SettingsPage />);
+    await waitFor(
+      () => {
+        expect(screen.getByRole('link', { name: 'Your search' })).toHaveAttribute('aria-current', 'page');
+      },
+      { timeout: 4000 },
+    );
+
+    // Your search's H1 is the one setup sentence
     // (C21). The heading is assembled from three keys, so match on the
     // distinctive middle rather than the whole string.
     expect(
@@ -175,6 +193,7 @@ describe('/settings', () => {
   });
 
   it('shows the save bar on edit and clears it after saving', async () => {
+    window.history.replaceState(null, '', '/settings#search');
     renderWithProviders(<SettingsPage />);
 
     await waitFor(

@@ -1261,7 +1261,7 @@ Additional rules for the orchestrator parsing this block:
    "dependsOn": ["WP-91"], "namespace": null,
    "catalogIds": []},
   {"id": "WP-93", "wave": 6, "title": "INT: final wiring (nav ready flags, prefixes, mounts, crons, registries, env)",
-   "owns": ["components/v3/shell/destinations.ts","lib/proxyPaths.ts","app/robots.ts","next.config.mjs","server/src/features/index.ts","server/src/app.ts","vercel.json","server/src/cron/handlers.ts","components/features/settings/registry.ts","components/auth/methods/registry.ts","package.json",".env.example","docs/jobright-clone/TASK_PLAN.md"],
+   "owns": ["components/v3/shell/destinations.ts","lib/proxyPaths.ts","app/robots.ts","next.config.mjs","server/src/features/index.ts","server/src/app.ts","vercel.json","server/src/cron/handlers.ts","components/features/settings/registry.ts","components/features/settings/sectionComponents.ts","components/auth/methods/registry.ts","package.json",".env.example","docs/jobright-clone/TASK_PLAN.md"],
    "dependsOn": ["WP-91"], "namespace": null,
    "catalogIds": []},
   {"id": "WP-94", "wave": 6, "title": "INT: gates + production build (fixes dispatched as fix WPs)",

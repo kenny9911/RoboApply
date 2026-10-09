@@ -72,3 +72,12 @@ Most of these have a safe default, so the code does not wait on them.
     - campus calendar in `off` mode, plus curation staff (OPS-B4/B6);
     - the Chinese brand name (OPS-B3);
     - the mainland filing sequence C-1…C-17.
+
+## Owner decisions — 2026-10-10 (binding; answers to the plan's open items)
+
+| Item | Decision |
+|---|---|
+| OPS-A1 clone database | **Neon branch** of the RoboApply project. The owner creates it and puts `DATABASE_URL` / `DIRECT_DATABASE_URL` in the clone worktree's `.env`; every additive push goes to the branch first, each diff shown to the owner. The main DB is pushed only at release. |
+| Track A recording default | **Off.** Shipped on `main` in `8278e5f` (`INTERVIEW_ENGINE_RECORDING_ENABLED` is opt-in). WP-43 adds per-session consent, WP-63a the 90-day purge. |
+| OPS-B1 prices | **Use the PRODUCT_PLAN §6.3 proposals in test mode:** RoboApply Pro $9.99/week, $24.99/month, $59.99/quarter; 7-day pass $6.99; practice packs 5 for $9.99, 15 for $24.99. GoApply non-renewing passes ¥12 week / ¥39 month / ¥99 quarter; practice packs ¥29 / ¥79 (GoApply charging stays off until `CN_PAYMENTS_ENABLED`). No launch offer. Amounts live in the plan catalog config; Stripe test price IDs attach via `STRIPE_PRICE_<PLANKEY>` once a `sk_test_` key is in the clone `.env` (empty today — OPS-A9). |
+| OPS-A8 copy-gate additions | **Approved as listed in TASK_PLAN R-12** (incl. `unlimited`, `guarantee` affirmative, standalone ATS/JD, per-locale auto-apply bans, zh 北森/牛客). |

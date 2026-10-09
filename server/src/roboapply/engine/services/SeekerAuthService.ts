@@ -25,6 +25,7 @@ import {
   type SeekerMarket,
 } from '../lib/seekerLocale.js';
 import { SEEKER_CONSENT_PROSE_VERSION } from '../lib/seekerConsentTypes.js';
+import { parseBrandId, type BrandId } from '../../../platform/brand/registry.js';
 
 const SALT_ROUNDS = 12;
 
@@ -37,11 +38,20 @@ export interface SeekerSignupInput {
   acceptLanguage?: string | null;
   /** 'organic' (default) | 'invited' | 'imported'. */
   source?: string;
+  /**
+   * Product brand of the request (`req.brand.id`). Stamped on `User.brand`
+   * (immutable afterwards); omitted → the column default ('roboapply').
+   * requireAuth rejects a session whose user.brand differs from the host's
+   * brand, so an unstamped GoApply signup would be unusable.
+   */
+  brand?: BrandId;
 }
 
 export interface SeekerLoginInput {
   email: string;
   password: string;
+  /** Product brand of the request; a non-admin account of the other brand gets SeekerAccountOtherBrandError. */
+  brand?: BrandId;
 }
 
 export interface SeekerAuthResult {
@@ -92,6 +102,18 @@ export class SeekerAccountDisabledError extends Error {
   constructor() {
     super('This account has been suspended. Contact support if you believe this is an error.');
     this.name = 'SeekerAccountDisabledError';
+  }
+}
+
+/**
+ * The password matched, but the account belongs to the other product brand
+ * (ARCH §1 rule 5 / §3.2: `409 account_other_brand`, only after the password
+ * checks out, so account existence never leaks to a wrong guess).
+ */
+export class SeekerAccountOtherBrandError extends Error {
+  constructor(readonly accountBrand: BrandId) {
+    super('This account belongs to another site.');
+    this.name = 'SeekerAccountOtherBrandError';
   }
 }
 
@@ -160,6 +182,7 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
         role: 'seeker',
         roles: ['seeker'],
         market,
+        ...(input.brand ? { brand: input.brand } : {}),
       },
       select: {
         id: true,
@@ -227,6 +250,7 @@ async function login(input: SeekerLoginInput): Promise<SeekerAuthResult> {
       passwordHash: true,
       subscriptionTier: true,
       market: true,
+      brand: true,
       seekerProfile: {
         select: {
           id: true,
@@ -247,6 +271,14 @@ async function login(input: SeekerLoginInput): Promise<SeekerAuthResult> {
   // a clear message, instead of getting a session cookie and then being
   // silently bounced by /me's 401 (which the client swallows).
   if (user.isActive === false) throw new SeekerAccountDisabledError();
+
+  // Brand gate (mirrors requireAuth's `auth_other_brand`): never mint a
+  // session that the next authenticated call would reject. Admins are exempt,
+  // as they are in requireAuth.
+  const accountBrand = parseBrandId(user.brand);
+  if (input.brand && accountBrand && accountBrand !== input.brand && user.role !== 'admin') {
+    throw new SeekerAccountOtherBrandError(accountBrand);
+  }
 
   // Admins use the RoboApply candidate product but never went through the
   // seeker signup funnel, so they have no SeekerProfile. requireSeekerProfile

@@ -32,7 +32,22 @@ describe('proxyPaths.isProtectedPath', () => {
     expect(isProtectedPath('/job-searching')).toBe(false);
   });
 
-  it('lists exactly the seven protected prefixes', () => {
+  it('protects the clone\'s authenticated routes (FND-6a; PRODUCT_PLAN.md §3.4)', () => {
+    for (const p of ['/onboarding', '/profile', '/assistant', '/ready', '/inbox', '/invite', '/coaching', '/referrals']) {
+      expect(isProtectedPath(p), p).toBe(true);
+      expect(isProtectedPath(`${p}/x`), `${p}/x`).toBe(true);
+    }
+    expect(isProtectedPath('/onboarding/situation')).toBe(true);
+    expect(isProtectedPath('/ready/setup')).toBe(true);
+  });
+
+  it('leaves the public pages signed-in users also use (HybridShell) open', () => {
+    for (const p of ['/campus', '/job/cm1-staff-engineer', '/browse/engineering', '/extension', '/pricing', '/tools/resume-check', '/r/ABC123', '/unsubscribe/t0k']) {
+      expect(isProtectedPath(p), p).toBe(false);
+    }
+  });
+
+  it('lists exactly the fifteen protected prefixes', () => {
     expect([...PROTECTED_PREFIXES]).toEqual([
       '/jobs',
       '/job-search',
@@ -41,6 +56,14 @@ describe('proxyPaths.isProtectedPath', () => {
       '/practice',
       '/settings',
       '/admin',
+      '/onboarding',
+      '/profile',
+      '/assistant',
+      '/ready',
+      '/inbox',
+      '/invite',
+      '/coaching',
+      '/referrals',
     ]);
   });
 
@@ -51,7 +74,7 @@ describe('proxyPaths.isProtectedPath', () => {
   });
 
   it('no longer protects the routes this wave deleted — next.config redirects() forwards them', () => {
-    for (const p of ['/home', '/tracker', '/resumes', '/mock-interview', '/queue', '/preferences', '/plans', '/account', '/onboarding', '/choose-plan', '/activity', '/mission', '/apps', '/search', '/insights']) {
+    for (const p of ['/home', '/tracker', '/resumes', '/mock-interview', '/queue', '/preferences', '/plans', '/account', '/choose-plan', '/activity', '/mission', '/apps', '/search', '/insights']) {
       expect(isProtectedPath(p), p).toBe(false);
     }
   });

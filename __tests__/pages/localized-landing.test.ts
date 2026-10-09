@@ -6,18 +6,24 @@
 import type React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
-const { notFound } = vi.hoisted(() => ({
+const { notFound, redirect, brand } = vi.hoisted(() => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
   }),
+  redirect: vi.fn((to: string) => {
+    throw new Error(`NEXT_REDIRECT ${to}`);
+  }),
+  brand: { id: 'roboapply' as 'roboapply' | 'goapply' },
 }));
 
-vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('next/navigation', () => ({ notFound, redirect }));
+vi.mock('../../lib/server/brand', () => ({ getServerBrandId: async () => brand.id }));
 vi.mock('../../lib/serverMarket', () => ({
   resolveVisitorMarket: vi.fn(async () => 'other'),
 }));
 
 import LocalizedLandingPage, { generateMetadata } from '../../app/[locale]/page';
+import RootLandingPage, { generateMetadata as rootMetadata } from '../../app/page';
 import { RememberLocale } from '../../components/landing/RememberLocale';
 
 const params = (locale: string) => ({ params: Promise.resolve({ locale }) });
@@ -46,5 +52,19 @@ describe('localized landing route', () => {
   it('404s an unknown locale segment', async () => {
     await expect(LocalizedLandingPage(params('xx'))).rejects.toThrow('NEXT_NOT_FOUND');
     expect(await generateMetadata(params('xx'))).toEqual({});
+  });
+
+  // D3: the RoboApply landing claims a job feed, a live AI interviewer and 9
+  // languages — none true for GoApply — so a GoApply host never renders it.
+  it('never serves the RoboApply landing on the GoApply brand', async () => {
+    brand.id = 'goapply';
+    try {
+      await expect(LocalizedLandingPage(params('zh'))).rejects.toThrow('NEXT_REDIRECT /login');
+      await expect(RootLandingPage()).rejects.toThrow('NEXT_REDIRECT /login');
+      expect(await generateMetadata(params('zh'))).toEqual({ robots: { index: false, follow: false } });
+      expect(await rootMetadata()).toEqual({ robots: { index: false, follow: false } });
+    } finally {
+      brand.id = 'roboapply';
+    }
   });
 });

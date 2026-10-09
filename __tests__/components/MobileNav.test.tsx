@@ -1,11 +1,13 @@
 // MobileNav — the fixed bottom bar below 760px, where the 248px rail is
 // hidden.
 //
-// The bar IS the information architecture (ruling D3): the same four
-// destinations as the Sidebar, same labels, same order, unconditionally. The
-// tests below are mostly about what must NOT be possible — a fifth tab, a
-// flag-dependent tab count, a label the rail does not use, or a tap target
-// under 44px.
+// The bar is the registry's mobile slots (components/v3/shell/destinations.ts,
+// PRODUCT_PLAN.md §3.3): RoboApply `Jobs · Applications · Resume · Interview
+// prep · More`. The four destination tabs are links; the fifth opens the More
+// sheet. The tests below are mostly about what must NOT be possible — a fifth
+// destination link, a label the rail does not use, or a tap target under
+// 44px. Per-brand slots and the More sheet are covered in
+// __tests__/shell/nav.test.tsx.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
@@ -37,8 +39,8 @@ import { DESTINATIONS } from '../../components/v3/shell/Sidebar';
 
 const IA: [string, string][] = [
   ['/jobs', 'Jobs'],
-  ['/resume', 'Resume'],
   ['/applications', 'Applications'],
+  ['/resume', 'Resume'],
   ['/practice', 'Interview prep'],
 ];
 
@@ -48,7 +50,7 @@ describe('MobileNav', () => {
     mockAuthState.value = buildAuthValue();
   });
 
-  it('renders exactly the four destinations, in the sidebar order', () => {
+  it('renders exactly the four destination links, in the PRODUCT §3.3 order', () => {
     renderWithProviders(<MobileNav />);
     const links = screen.getAllByRole('link');
     expect(links.map((l) => l.getAttribute('href'))).toEqual(IA.map(([h]) => h));
@@ -94,7 +96,7 @@ describe('MobileNav', () => {
 
   it('every tab is at least 44×44', () => {
     renderWithProviders(<MobileNav />);
-    for (const link of screen.getAllByRole('link')) {
+    for (const link of [...screen.getAllByRole('link'), screen.getByRole('button', { name: 'More' })]) {
       expect(link.style.minHeight).toBe('44px');
       expect(link.style.minWidth).toBe('44px');
     }
@@ -124,5 +126,7 @@ describe('MobileNav', () => {
     renderWithProviders(<MobileNav />);
     const bar = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(within(bar).getAllByRole('link')).toHaveLength(4);
+    // The fifth slot opens the More sheet (Settings lives there today).
+    expect(within(bar).getByRole('button', { name: 'More' })).toHaveAttribute('aria-haspopup', 'dialog');
   });
 });

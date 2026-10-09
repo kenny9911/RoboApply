@@ -30,6 +30,7 @@ import { costPatchFromTally } from '../../lib/deductionCost.js';
 import type { ParsedResume, MatchResult } from '../../types/index.js';
 import { __test as seekerTailorTest } from '../engine/agents/SeekerResumeTailorAgent.js';
 import type { RoboApplyParsedIntent, RoboApplyLocale } from './RoboApplyIntentParserAgent.js';
+import { currentBrandPersona } from '../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -182,7 +183,7 @@ export class RoboApplyAuthorAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's senior application writer. Your job is to author a focused, specific cover letter for ONE candidate applying to ONE job.
+    return `${currentBrandPersona('senior application writer')}. Your job is to author a focused, specific cover letter for ONE candidate applying to ONE job.
 
 ## Hard rules — these are absolute
 

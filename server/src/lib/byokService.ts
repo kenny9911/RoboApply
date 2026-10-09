@@ -14,6 +14,7 @@
 import { prisma } from './prisma.js';
 import { encryptField, decryptField } from './crypto.js';
 import { logger } from '../services/LoggerService.js';
+import { getCurrentBrandId } from './requestContext.js';
 
 // ---------------------------------------------------------------------------
 // Provider catalog
@@ -186,6 +187,14 @@ export interface ResolvedByok {
  * active, with the API key decrypted in-memory. Returns null when no
  * row matches — callers should fall back to platform credentials.
  *
+ * - GoApply never uses BYOK (R-13: its AI stays on the domestic model; a
+ *   user key would route a GoApply user's data to an offshore provider), so
+ *   a GoApply unit of work always gets null.
+ * - A failed LOOKUP (DB error, pool timeout) is logged and returns null: the
+ *   platform route serves the call, as it did before every request carried a
+ *   user context. Only a row that exists but cannot be DECRYPTED throws —
+ *   silently using the platform key then would hide a broken user key.
+ *
  * Caller is responsible for making the LLM call with the returned key
  * and stamping `byok=true` on the resulting log row.
  */
@@ -194,12 +203,23 @@ export async function resolveByok(
   provider: ByokProvider,
 ): Promise<ResolvedByok | null> {
   if (!userId) return null;
+  if (getCurrentBrandId() === 'goapply') return null;
+  let row: { id: string; encryptedKey: string; baseUrl: string | null; isActive: boolean } | null;
   try {
-    const row = await prisma.userLLMKey.findUnique({
+    row = await prisma.userLLMKey.findUnique({
       where: { userId_provider: { userId, provider } },
       select: { id: true, encryptedKey: true, baseUrl: true, isActive: true },
     });
-    if (!row || !row.isActive) return null;
+  } catch (err) {
+    logger.warn('BYOK', 'lookup failed; serving the call on the platform route', {
+      userId,
+      provider,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+  if (!row || !row.isActive) return null;
+  try {
     const apiKey = decryptField(row.encryptedKey);
     return { rowId: row.id, apiKey, baseUrl: row.baseUrl };
   } catch (err) {

@@ -83,6 +83,12 @@ describe('RoboApiError code normalisation', () => {
       new RoboApiError('x', { code: 'ACCOUNT_DISABLED', status: 401 }).code,
     ).toBe('account_disabled');
   });
+
+  it('keeps the brand codes (session from / account of the other brand)', async () => {
+    const { RoboApiError } = await importFreshClient();
+    expect(new RoboApiError('x', { code: 'auth_other_brand', status: 401 }).code).toBe('auth_other_brand');
+    expect(new RoboApiError('x', { code: 'account_other_brand', status: 409 }).code).toBe('account_other_brand');
+  });
 });
 
 describe('stale-session recovery', () => {
@@ -123,6 +129,26 @@ describe('stale-session recovery', () => {
     if (assignSpy) {
       expect(assignSpy).toHaveBeenCalledWith('/login?next=%2Fjobs');
     }
+  });
+
+  it('an other-brand session (401 auth_other_brand) gets the same recovery', async () => {
+    setPath('/jobs');
+    const assignSpy = tryMockAssign();
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes('/auth/logout')
+        ? NO_CONTENT_RESPONSE
+        : {
+            ok: false,
+            status: 401,
+            json: async () => ({ success: false, error: 'This session belongs to another site.', code: 'auth_other_brand' }),
+          },
+    );
+    const { request } = await importFreshClient();
+
+    await expect(request('GET', '/api/v1/roboapply/auth/me')).rejects.toMatchObject({ code: 'auth_other_brand', status: 401 });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/auth/logout'))).toHaveLength(1);
+    expect(window.localStorage.getItem('auth_token')).toBeNull();
+    if (assignSpy) expect(assignSpy).toHaveBeenCalledWith('/login?next=%2Fjobs');
   });
 
   it('fires only once for a burst of parallel 401s', async () => {

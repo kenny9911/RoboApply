@@ -26,6 +26,7 @@ import { logger } from '../../services/LoggerService.js';
 import seekerAuthService, {
   SeekerAccountDeletedError,
   SeekerAccountDisabledError,
+  SeekerAccountOtherBrandError,
   SeekerEmailTakenError,
   SeekerInvalidCredentialsError,
   SeekerNotSeekerAccountError,
@@ -36,8 +37,15 @@ import { requireSeekerProfile } from '../engine/middleware/seekerAuth.js';
 import { getMissionForUser } from '../services/RoboApplyMissionService.js';
 import prisma from '../../lib/prisma.js';
 import { recordUserActivity } from '../../lib/userActivity.js';
+import { getCurrentBrandId } from '../../lib/requestContext.js';
+import { getBrand, type BrandId } from '../../platform/brand/registry.js';
 
 const router = Router();
+
+/** The request's product brand (brand middleware), stamped on signup and checked on login. */
+function requestBrandId(req: Request): BrandId | undefined {
+  return (req as Request & { brand?: { id: BrandId } }).brand?.id ?? getCurrentBrandId();
+}
 
 const SESSION_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -132,6 +140,7 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
       locale: resolvedLocale,
       acceptLanguage,
       source: 'roboapply_signup',
+      brand: requestBrandId(req),
     });
 
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
@@ -208,7 +217,7 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
       });
     }
 
-    const result = await seekerAuthService.login({ email, password });
+    const result = await seekerAuthService.login({ email, password, brand: requestBrandId(req) });
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
 
     await recordUserActivity(req, {
@@ -229,6 +238,14 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
+    if (err instanceof SeekerAccountOtherBrandError) {
+      return res.status(409).json({
+        success: false,
+        code: 'account_other_brand',
+        error: 'This account belongs to another site. Sign in there instead.',
+        details: { otherBrandUrl: `${getBrand(err.accountBrand).canonicalOrigin}/login` },
+      });
+    }
     if (err instanceof SeekerNotSeekerAccountError) {
       return res.status(403).json({
         success: false,

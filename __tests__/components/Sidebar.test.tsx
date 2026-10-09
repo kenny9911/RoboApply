@@ -1,15 +1,19 @@
 // Sidebar — the 248px desktop nav rail.
 //
-// What this file is defending (OVERHAUL_RULINGS.md R1/D2/D3, C11, C14):
-//   • exactly four destinations, in order, with the target labels — no
-//     Workspace/Settings section headers, no /queue, no "NEW" pill,
-//   • Admin is an admin-only trailing entry, not a fifth destination,
-//   • the only badge is the count of applications with no reply in 10+ days,
-//     hidden at zero,
+// What this file is defending (PRODUCT_PLAN.md §3.3 via the registry in
+// components/v3/shell/destinations.ts; OVERHAUL_RULINGS C11, C14):
+//   • RoboApply today: Jobs · Applications · Resume · Interview prep, then a
+//     lower group with Settings (the clone's new entries stay hidden until
+//     INT flips `ready`) — no /queue, no "NEW" pill, no section headers
+//     outside /settings,
+//   • Admin is an admin-only trailing entry in the lower group,
+//   • the only live badge is the count of applications with no reply in 10+
+//     days, hidden at zero,
 //   • active state follows usePathname(), including sub-routes,
 //   • inside /settings — and only there — a Settings group opens beneath the
-//     four, listing that page's seven sections as links, so the screen has ONE
+//     entries, listing that page's sections as links, so the screen has ONE
 //     rail rather than a second one of its own; the open section is the hash.
+// Per-brand nav, flags and badges are covered in __tests__/shell/nav.test.tsx.
 //
 // Tests hit the in-memory stub API (NODE_ENV=test), whose tracker fixture has
 // two rows in `applied` with 2026-05 apply dates.
@@ -52,13 +56,15 @@ import {
 } from '../../components/v3/shell/Sidebar';
 
 /** The IA, spelled out here so a change to the nav has to be a change to this
- *  list too. Route = nav label. */
+ *  list too. Route = nav label. Top group, then the lower group. */
 const IA: [string, string][] = [
   ['/jobs', 'Jobs'],
-  ['/resume', 'Resume'],
   ['/applications', 'Applications'],
+  ['/resume', 'Resume'],
   ['/practice', 'Interview prep'],
 ];
+const LOWER: [string, string][] = [['/settings', 'Settings']];
+const ALL = [...IA, ...LOWER];
 
 describe('Sidebar', () => {
   beforeEach(() => {
@@ -71,35 +77,35 @@ describe('Sidebar', () => {
     vi.useRealTimers();
   });
 
-  it('renders exactly the four destinations, in order, and nothing else', async () => {
+  it('renders the four destinations then Settings, in order, and nothing else', async () => {
     renderWithProviders(<Sidebar />);
-    // Let the badge query settle so a late render can't add a fifth link.
+    // Let the badge query settle so a late render can't add a link.
     await screen.findByRole('link', { name: 'Interview prep' });
 
     const rail = screen.getByRole('navigation');
     const links = within(rail).getAllByRole('link');
-    expect(links.map((l) => l.getAttribute('href'))).toEqual(IA.map(([h]) => h));
-    for (const [href, label] of IA) {
+    expect(links.map((l) => l.getAttribute('href'))).toEqual(ALL.map(([h]) => h));
+    for (const [href, label] of ALL) {
       const link = links.find((l) => l.getAttribute('href') === href)!;
       expect(link).toHaveTextContent(label);
     }
   });
 
-  it('exports the same four destinations MobileNav renders', () => {
+  it('exports the four destinations MobileNav renders (legacy DESTINATIONS)', () => {
     expect(DESTINATIONS.map((d) => d.href)).toEqual(IA.map(([h]) => h));
     expect(DESTINATIONS.map((d) => d.labelKey)).toEqual([
       'jobs',
-      'resume',
       'applications',
+      'resume',
       'practice',
     ]);
   });
 
-  it('carries no section headers — one nav group, no Workspace/Settings', () => {
+  it('carries no section headers outside /settings; Settings sits in the lower group', () => {
     renderWithProviders(<Sidebar />);
     expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
-    // "Settings" moved to the avatar menu; it is not a rail entry.
-    expect(screen.queryByRole('link', { name: /^Settings$/ })).not.toBeInTheDocument();
+    const lower = screen.getByRole('group', { name: 'Account and more' });
+    expect(within(lower).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
     expect(document.querySelectorAll('.nav-section')).toHaveLength(0);
   });
 
@@ -123,7 +129,7 @@ describe('Sidebar', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('hides Admin from a seeker and shows it to an admin, after the four', () => {
+  it('hides Admin from a seeker and shows it to an admin, last', () => {
     const { unmount } = renderWithProviders(<Sidebar />);
     expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
     unmount();
@@ -132,7 +138,7 @@ describe('Sidebar', () => {
     renderWithProviders(<Sidebar />);
     const links = within(screen.getByRole('navigation')).getAllByRole('link');
     expect(links.map((l) => l.getAttribute('href'))).toEqual([
-      ...IA.map(([h]) => h),
+      ...ALL.map(([h]) => h),
       '/admin',
     ]);
   });
@@ -173,13 +179,16 @@ describe('Sidebar', () => {
   });
 
   describe('inside /settings — the one rail', () => {
+    // The registry's ready sections for RoboApply (components/features/settings/registry.ts).
     const SECTIONS: [string, string][] = [
-      ['search', 'Your search'],
-      ['resume', 'Resume'],
-      ['notif', 'Notifications'],
-      ['appearance', 'Appearance'],
-      ['billing', 'Plan and billing'],
       ['account', 'Account'],
+      ['security', 'Sign-in and security'],
+      ['notifications', 'Notifications'],
+      ['billing', 'Plan and billing'],
+      ['credits', 'Credits'],
+      ['privacy', 'Privacy and data'],
+      ['appearance', 'Appearance'],
+      ['search', 'Your search'],
       ['danger', 'Danger zone'],
     ];
 
@@ -187,7 +196,7 @@ describe('Sidebar', () => {
       window.history.replaceState(null, '', '/');
     });
 
-    it('opens a Settings group beneath the four destinations, listing the seven sections in order', async () => {
+    it('opens a Settings group beneath the entries, listing the sections in order', async () => {
       pathnameRef.current = '/settings';
       window.history.replaceState(null, '', '/settings');
       renderWithProviders(<Sidebar />);
@@ -195,9 +204,9 @@ describe('Sidebar', () => {
 
       const rail = screen.getByRole('navigation');
       const links = within(rail).getAllByRole('link');
-      // The destinations first, unchanged — then the group.
-      expect(links.slice(0, 4).map((l) => l.getAttribute('href'))).toEqual(IA.map(([h]) => h));
-      expect(within(rail).getByText('Settings')).toHaveClass('nav-section');
+      // The entries first, unchanged — then the group.
+      expect(links.slice(0, ALL.length).map((l) => l.getAttribute('href'))).toEqual(ALL.map(([h]) => h));
+      expect(rail.querySelector('.nav-section')).toHaveTextContent('Settings');
 
       const group = within(rail).getByRole('group', { name: 'Settings' });
       const sectionLinks = within(group).getAllByRole('link');
@@ -256,13 +265,20 @@ describe('Sidebar', () => {
       );
     });
 
-    it('is absent everywhere else — Settings is still not a destination', async () => {
+    it('keeps old deep links working: #notif opens Notifications', async () => {
+      pathnameRef.current = '/settings';
+      window.history.replaceState(null, '', '/settings#notif');
+      renderWithProviders(<Sidebar />);
+      expect(await screen.findByRole('link', { name: 'Notifications' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('is absent everywhere else', async () => {
       pathnameRef.current = '/jobs';
       renderWithProviders(<Sidebar />);
       await screen.findByRole('link', { name: 'Interview prep' });
       expect(screen.queryByRole('group', { name: 'Settings' })).not.toBeInTheDocument();
       expect(document.querySelectorAll('.nav-section')).toHaveLength(0);
-      expect(within(screen.getByRole('navigation')).getAllByRole('link')).toHaveLength(4);
+      expect(within(screen.getByRole('navigation')).getAllByRole('link')).toHaveLength(ALL.length);
     });
   });
 

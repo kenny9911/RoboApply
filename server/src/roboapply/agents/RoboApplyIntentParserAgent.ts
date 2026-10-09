@@ -27,6 +27,7 @@ import {
   getTaskModel,
   getTaskReasoningEffort,
 } from '../../lib/llm/llmTaskSettings.js';
+import { currentBrandPersona } from '../../platform/brand/persona.js';
 
 /** Resolve at call time so admin/env onboarding changes apply without restart. */
 export function pickIntentParserModel(): string | undefined {
@@ -206,7 +207,7 @@ export class RoboApplyIntentParserAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's intent parser. The user has just told you, in their own words, what kind of job they want. Your job is to turn that prose into ONE strict JSON object matching the RoboApplyParsedIntent schema below — no prose, no markdown, no commentary, no leading apology.
+    return `${currentBrandPersona('intent parser')}. The user has just told you, in their own words, what kind of job they want. Your job is to turn that prose into ONE strict JSON object matching the RoboApplyParsedIntent schema below — no prose, no markdown, no commentary, no leading apology.
 
 ## Hard rules — these are absolute
 

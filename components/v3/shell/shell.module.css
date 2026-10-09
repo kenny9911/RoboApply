@@ -1,0 +1,230 @@
+/* components/v3/shell/shell.module.css — shell pieces added by FND-6a
+ * (lower nav group, badge dot, Ask button, marketing chrome, More sheet).
+ * Tokens only (ARCHITECTURE.md §10.2). The base rail/topbar classes stay in
+ * styles/v3.css and styles/workspace.css. */
+
+/* The lower group sits under the destinations; .nav-group draws the rule. */
+.lower {
+  gap: 2px;
+}
+
+/* "Incomplete" dot on a nav entry (Profile). Decorative; the sentence is in
+ * an sr-only span beside it. */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--action);
+  flex-shrink: 0;
+}
+
+/* Topbar "Ask" (opens the Assistant rail). */
+.ask {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  cursor: pointer;
+}
+.ask:hover {
+  background: var(--surface-2);
+}
+.ask:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .askLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .ask {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* Bottom bar: every slot is at least 44 × 44. */
+.tab {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-1) max(var(--sp-2), env(safe-area-inset-bottom));
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+}
+.tab[aria-current='page'],
+.tab[data-active='true'],
+.tab[aria-expanded='true'] {
+  color: var(--action);
+}
+.tabLabel {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+.tabBadge {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 6px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+.tabDot {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 8px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--action);
+}
+
+/* More sheet rows. */
+.moreList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 48px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  text-decoration: none;
+}
+.moreItem:hover,
+.moreItem[aria-current='page'] {
+  background: var(--surface-2);
+}
+.moreItemLabel {
+  flex: 1 1 auto;
+}
+.moreCount {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--action-subtle);
+  color: var(--action);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-align: center;
+}
+.morePlan {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--rule);
+}
+.morePlan:empty {
+  display: none;
+}
+
+/* Marketing chrome (HybridShell, signed out). */
+.mkt {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+.mktHeader {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-6);
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+}
+.mktBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  text-decoration: none;
+}
+.mktActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.mktLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  text-decoration: none;
+}
+.mktCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-decoration: none;
+}
+.mktCta:hover {
+  background: var(--action-hover);
+}
+.mktMain {
+  flex: 1 1 auto;
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .mktHeader {
+    padding: var(--sp-2) var(--sp-4);
+  }
+}

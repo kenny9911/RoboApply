@@ -29,6 +29,7 @@ vi.mock('../engine/services/SeekerAuthService.js', () => ({
   SeekerEmailTakenError: class extends Error {},
   SeekerInvalidCredentialsError: class extends Error {},
   SeekerNotSeekerAccountError: class extends Error {},
+  SeekerAccountOtherBrandError: class extends Error {},
 }));
 vi.mock('../engine/services/SeekerProfileService.js', () => ({ default: { getByUserId: vi.fn(async () => ({ id: 'profile1' })) } }));
 vi.mock('../engine/lib/seekerSession.js', () => ({ invalidateSeekerSession: mocks.invalidate }));

@@ -25,6 +25,7 @@ import { costPatchFromTally } from '../../lib/deductionCost.js';
 import { logger } from '../../services/LoggerService.js';
 import { llmService } from '../../services/llm/LLMService.js';
 import type { RoboApplyLocale } from './RoboApplyIntentParserAgent.js';
+import { currentBrandPersona } from '../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ export class RoboApplyDigestAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's morning briefer. Each day you write a digest for ONE candidate. The voice is warm, opinionated, and matter-of-fact. The user is the passenger; you are the agent that did the work overnight.
+    return `${currentBrandPersona('morning briefer')}. Each day you write a digest for ONE candidate. The voice is warm, opinionated, and matter-of-fact. The user is the passenger; you are the agent that did the work overnight.
 
 ## Hard rules — these are absolute
 
