@@ -1,4 +1,8 @@
 import { logger } from './LoggerService.js';
+import type { BrandId } from '../platform/brand/registry.js';
+import { DEFAULT_GOHIRE_API_BASE, goHireParseActive } from '../platform/residency/egressPolicy.js';
+import { applyResumeUploadPolicy } from '../platform/residency/uploadPolicy.js';
+import { resolveWriteBrand } from '../platform/residency/writeBrand.js';
 import type {
   ParsedResume,
   WorkExperience,
@@ -16,13 +20,12 @@ import type {
  *
  * WHY THIS EXISTS. Local extraction ran pdftotext → (on failure) rasterize →
  * vision-LLM OCR → ResumeParseAgent. For image-only scans that path FABRICATES
- * the document: three passes over one 2.8MB scanned Chinese résumé produced
- * three different candidates (陈丽萍 / 庄丽萍 / 邱丽萍 — the real name is 占丽萍),
- * three different phone numbers and three different universities, every one of
- * them persisted with parseStatus='parsed'. A wrong phone number on a
- * job-seeker's résumé is worse than a visible failure. GoHire's endpoint is
+ * the document: repeated passes over one scanned Chinese resume produced a
+ * different candidate name, phone number and university each time, every one
+ * of them persisted with parseStatus='parsed'. A wrong phone number on a
+ * job-seeker's resume is worse than a visible failure. GoHire's endpoint is
  * purpose-built for this (its docs state text, scanned and image-only PDFs are
- * all supported) and returns the correct 占丽萍 / 15907036381 / 九江学院.
+ * all supported) and returned the correct fields for the same scan.
  *
  * It replaces BOTH pipeline steps at once: the response carries `rawText` (the
  * full transcription) AND the structured fields, so a hit skips local
@@ -31,9 +34,19 @@ import type {
  * NOT a hard dependency. Every failure path returns null and the caller falls
  * back to the local pipeline — an unconfigured key, a non-PDF, an oversized
  * file, a timeout, a non-200, or a response too thin to be a real parse.
+ *
+ * DATA RESIDENCY (TASK_PLAN.md R-16, CN_TW_LAUNCH_PLAN.md L-10, WP-15). The
+ * API host resolves to a mainland-China server. It is used only for the brands
+ * in `GOHIRE_PARSE_BRANDS` (default `goapply`); RoboApply uploads never reach
+ * it unless the owner adds `roboapply` there after the privacy notice
+ * discloses the transfer. Every call also passes the brand's egress policy
+ * (`platform/residency/egressPolicy.ts`). For GoApply running offshore (CN-0)
+ * the result is redacted before it is returned for storage — government ID
+ * numbers and health details removed, photo fields dropped
+ * (`platform/residency/uploadPolicy.ts`).
  */
 
-const DEFAULT_API_BASE = 'https://api.gohire.top';
+const DEFAULT_API_BASE = DEFAULT_GOHIRE_API_BASE;
 /** Documented ceiling for the endpoint. Larger files skip straight to local. */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 /**
@@ -307,10 +320,16 @@ export class GoHireResumeParseService {
     return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
   }
 
-  isConfigured(): boolean {
-    // Opt-out so a bad upstream can be switched off without a redeploy.
-    if ((process.env.GOHIRE_PARSE_ENABLED || '').trim().toLowerCase() === 'false') return false;
-    return Boolean(this.resolveApiKey());
+  /**
+   * Whether uploads for the brand (default: the current brand) may go to the
+   * GoHire parse API: enabled (`GOHIRE_PARSE_ENABLED=false` is the opt-out
+   * switch), keyed, the brand is in `GOHIRE_PARSE_BRANDS` and the API host
+   * passes the brand's egress policy (`goHireParseActive`). False when the
+   * brand cannot be known — no guessing RoboApply for a mainland transfer.
+   */
+  isConfigured(brand?: BrandId): boolean {
+    const brandId = resolveWriteBrand(brand);
+    return brandId ? goHireParseActive(brandId) : false;
   }
 
   /**
@@ -323,10 +342,13 @@ export class GoHireResumeParseService {
     mimeType: string;
     requestId?: string;
     signal?: AbortSignal;
+    /** Brand that owns the upload (default: the current unit of work's brand). */
+    brand?: BrandId;
   }): Promise<GoHireParseResult | null> {
     const { buffer, fileName, mimeType, requestId, signal } = params;
+    const brandId = resolveWriteBrand(params.brand);
 
-    if (!this.isConfigured()) return null;
+    if (!brandId || !this.isConfigured(brandId)) return null;
 
     // The endpoint takes PDFs only. Everything else (docx, images, txt) stays
     // on the local pipeline, which already handles those formats natively.
@@ -409,16 +431,21 @@ export class GoHireResumeParseService {
         return null;
       }
 
+      // Brand storage rule (CN-0 GoApply: redact IDs and health details, drop photos).
+      const applied = applyResumeUploadPolicy(brandId, { rawText, parsed });
+      const result: GoHireParseResult = { rawText: applied.rawText, parsed: applied.parsed ?? parsed };
+
       logger.info('GOHIRE_PARSE', 'GoHire parse succeeded', {
         rawChars: rawText.length,
         hasName: Boolean(parsed.name),
         hasPhone: Boolean(parsed.phone),
         experienceCount: parsed.experience.length,
         educationCount: parsed.education.length,
+        redacted: applied.redactions ? Object.values(applied.redactions).reduce((a, b) => a + b, 0) : 0,
         elapsedMs: Date.now() - startedAt,
       }, requestId);
 
-      return { rawText, parsed };
+      return result;
     } catch (err) {
       // Includes upstream timeout AND caller abort. Both degrade to local.
       logger.warn(
