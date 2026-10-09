@@ -1,0 +1,339 @@
+/* components/features/match — fit score, "What we compared", fit analysis,
+   keyword check (WP-18). Clarity tokens only; both themes and both brands
+   come from the token layer. Dense evidence sits on solid surfaces. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.subheading {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.intro {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  line-height: 1.5;
+  max-width: 68ch;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* ── Score ──────────────────────────────────────────────────────────────── */
+.score {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.estimate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+.estimateTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.summaryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.summaryText {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+/* ── What we compared ───────────────────────────────────────────────────── */
+.parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.part:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.partHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.partLabel {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.partMeta {
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--r-pill);
+  background: var(--action);
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidenceItem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.source {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Why you fit / What you're missing ──────────────────────────────────── */
+.twoUp {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+@media (max-width: 760px) {
+  .twoUp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-left: var(--sp-4);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 28px;
+  padding: 2px var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-size: var(--fs-meta);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.chipHave {
+  border-color: var(--ok);
+  background: var(--ok-subtle);
+}
+
+.chipMissing {
+  border-style: dashed;
+}
+
+.chipMark {
+  font-weight: 700;
+}
+
+/* ── Keyword check ──────────────────────────────────────────────────────── */
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rowLabel {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.rowDetail {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+
+.status {
+  justify-self: end;
+  align-self: start;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.statusMet {
+  background: var(--ok-subtle);
+  color: var(--ok);
+}
+
+.statusPartly {
+  background: var(--action-subtle);
+  color: var(--text);
+}
+
+.statusNotMet {
+  background: var(--warn-subtle);
+  color: var(--warn);
+}
+
+/* ── Education and actions ──────────────────────────────────────────────── */
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.action {
+  min-height: 44px;
+}
+
+.alert {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--warn);
+  line-height: 1.45;
+}
+
+.skeleton {
+  height: 72px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fill {
+    transition: width 200ms ease-out;
+  }
+}

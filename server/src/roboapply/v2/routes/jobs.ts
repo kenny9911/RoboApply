@@ -11,6 +11,19 @@
 // failures pay zero per the Resume Match Quota Rule precedent, and a UI
 // language switch pays zero too: the score survives it, only the prose is in
 // the old language (see the cache gate in POST /:id/score).
+//
+// WP-18 (fit scoring) changed only the score parts, additively (TASK_PLAN
+// §2.1 rule 9; the V2 client is frozen). WP-34's job-detail route replaces
+// this one with scorer v3 (`features/match` `createScoreJobHandler()`); until
+// then:
+//   - `explanation.signals` is no longer synthesized: values come from real
+//     data or are null (features/match/legacyView.ts);
+//   - both routes add `tier`, `kind` ('ai'), `dimensions` (the stored scorer
+//     v3 breakdown, null on a v2 row) and `estimateReason` (null);
+//   - POST /:id/score keeps the v2 scorer and its cache (it never answers a
+//     deterministic estimate, so a V2 card never shows an unlabelled one), and
+//     before a model call checks the GoApply AI consent and the brand LLM
+//     policy (503 `ai_off` / `ai_unavailable`, zero model calls).
 
 import { Router, type Request, type Response } from 'express';
 import prisma from '../../../lib/prisma.js';
@@ -22,6 +35,8 @@ import { getCurrentRequestId } from '../../../lib/requestContext.js';
 import { logger } from '../../../services/LoggerService.js';
 import { raJobIndexService, toJobView } from '../services/RAJobIndexService.js';
 import { resolvedJobMatchScorerModel } from '../agents/RAJobMatchScorerAgent.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
+import { legacyAiGate, legacyExplanation, legacyExtras, v2Signals } from '../../../features/match/legacyView.js';
 import {
   raTrackerService,
   TrackerNotFoundError,
@@ -171,7 +186,8 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
       });
       matchScore = {
         score: (scoreRow as any).score,
-        explanation: (scoreRow as any).explanation,
+        explanation: legacyExplanation(scoreRow),
+        ...legacyExtras(scoreRow),
         generatedAt: isoDate((scoreRow as any).generatedAt),
         resumeVariantId: (scoreRow as any).resumeVariantId,
         stale: variant
@@ -322,7 +338,8 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
       return res.json({
         matchScore: {
           score: existing.score,
-          explanation: existing.explanation,
+          explanation: legacyExplanation(existing),
+          ...legacyExtras(existing),
           generatedAt: isoDate(existing.generatedAt),
           resumeVariantId: existing.resumeVariantId,
           stale: false,
@@ -331,6 +348,11 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
         cached: true,
       });
     }
+
+    // No model call without the GoApply "Use AI" consent, or to a model the
+    // brand's LLM policy refuses (R-13: a GoApply resume never goes abroad).
+    const gate = await legacyAiGate({ userId, brand: getCurrentBrandOrDefault(), model: modelUsed });
+    if (gate) return res.status(503).json({ error: gate });
 
     // Live recompute via BE3's RAJobMatchScorerAgent. Agent output shape
     // (score / summary / strengths / gaps / keywords) is reshaped to match
@@ -352,23 +374,15 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
       }, { locale, model: modelUsed });
       score = typeof out?.score === 'number' ? out.score : 0;
       // Reshape BE3 output to frontend `explanation` JSON: strengths/gaps
-      // map 1:1; rationale comes from `summary`; signals decompose the
-      // keyword-match ratio into the four-axis breakdown the FE expects.
-      const matched = Array.isArray(out?.keywordsMatched) ? out.keywordsMatched.length : 0;
-      const missing = Array.isArray(out?.keywordsMissing) ? out.keywordsMissing.length : 0;
-      const total = matched + missing || 1;
-      const skillsPct = Math.round((matched / total) * 100);
+      // map 1:1; rationale comes from `summary`; `signals` carries only what
+      // is known — the share of the model's matched keywords — and null for
+      // experience, location and salary (no longer synthesized; WP-18).
       explanation = stampExplanationLocale(
         {
           strengths: Array.isArray(out?.strengths) ? out.strengths : [],
           gaps: Array.isArray(out?.gaps) ? out.gaps : [],
           rationale: typeof out?.summary === 'string' ? out.summary : '',
-          signals: {
-            skills: skillsPct,
-            experience: score,
-            location: job.workType === 'remote' ? 95 : 80,
-            salary: 85,
-          },
+          signals: v2Signals(out ?? {}),
         },
         locale,
       );
@@ -387,6 +401,14 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
       });
     }
 
+    // The prompt version marks this as a v2 row: scorer v3 re-scores it and
+    // never reads a breakdown left over from an earlier v3 score.
+    const v2RowColumns = {
+      scoreKind: 'ai',
+      tier: legacyExtras({ score }).tier,
+      promptVersion: SCORER_PROMPT_VERSION,
+      locale,
+    };
     const row = await p.rAJobMatchScore.upsert({
       where: {
         userId_jobId_resumeVariantId: {
@@ -404,6 +426,7 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
         resumeContentHashAtScore: variant.resumeContentHash,
         modelUsed,
         generatedAt: new Date(),
+        ...v2RowColumns,
       },
       update: {
         score,
@@ -411,6 +434,8 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
         resumeContentHashAtScore: variant.resumeContentHash,
         modelUsed,
         generatedAt: new Date(),
+        // A v2 score over a scorer v3 row: the v3 columns no longer describe it.
+        ...v2RowColumns,
       },
     });
 
@@ -459,7 +484,8 @@ router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res:
     return res.json({
       matchScore: {
         score: row.score,
-        explanation: row.explanation,
+        explanation: legacyExplanation(row),
+        ...legacyExtras(row),
         generatedAt: isoDate(row.generatedAt),
         resumeVariantId: row.resumeVariantId,
         stale: false,
