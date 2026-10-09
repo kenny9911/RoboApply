@@ -5,6 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './LoggerService.js';
+import { brandEnv, type EnvSource } from '../platform/brand/brandEnv.js';
+import type { BrandId } from '../platform/brand/registry.js';
+import { isMainlandStorageHost } from '../platform/residency/egressPolicy.js';
+import { StorageUnavailableError, mayStoreOriginal, resumeUploadPolicy } from '../platform/residency/uploadPolicy.js';
+import { WriteBrandUnknownError, resolveWriteBrand } from '../platform/residency/writeBrand.js';
+
+export { StorageUnavailableError, WriteBrandUnknownError };
 
 export type ResumeOriginalFileProvider = 'local' | 's3';
 type ResumeOriginalFileProviderMode = ResumeOriginalFileProvider | 'none';
@@ -26,27 +33,89 @@ export interface ResumeOriginalFileRef {
   mimeType?: string | null;
 }
 
-class ResumeOriginalFileStorageService {
-  private readonly providerMode: ResumeOriginalFileProviderMode;
+/**
+ * Per-brand storage target (TASK_PLAN.md WP-15, CN_TW_LAUNCH_PLAN.md §2.2):
+ *   - RoboApply: `S3_*` (or AWS_* credentials), `RESUME_FILE_STORAGE_PROVIDER`
+ *     override, local disk outside production — today's behaviour.
+ *   - GoApply offshore (CN-0): `discard` — no original file is ever written
+ *     (ruling H6); the upload is parsed in memory only.
+ *   - GoApply on the mainland stack: `CN_S3_*` only, with no fallback to
+ *     `S3_*`/`AWS_*` and no local disk. Missing → `unavailable`: writes throw
+ *     `StorageUnavailableError` (503 storage_unavailable) and nothing goes to
+ *     the international bucket.
+ */
+type BrandStorageMode = ResumeOriginalFileProviderMode | 'discard' | 'unavailable';
+
+interface BrandStorageConfig {
+  brandId: BrandId;
+  mode: BrandStorageMode;
+  bucket: string | null;
+  endpoint: string | null;
+  region: string;
+  forcePathStyle: boolean;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+/** Keys of GoApply objects start with this segment, so reads/deletes route to the CN bucket without a brand context. */
+const CN_KEY_PREFIX = 'cn/';
+
+export type S3ClientLike = Pick<S3Client, 'send'>;
+
+export interface ResumeOriginalFileStorageOptions {
+  env?: EnvSource;
+  /** Tests inject a fake client; production builds a real S3Client per brand. */
+  createS3Client?: (config: { region: string; endpoint?: string; forcePathStyle: boolean; credentials: { accessKeyId: string; secretAccessKey: string } }) => S3ClientLike;
+}
+
+export class ResumeOriginalFileStorageService {
+  private readonly env: EnvSource;
   private readonly prefix: string;
   private readonly localDir: string;
-  private readonly s3Bucket: string | null;
-  private readonly s3Client: S3Client | null;
+  private readonly clientFactory: NonNullable<ResumeOriginalFileStorageOptions['createS3Client']>;
+  private readonly configs = new Map<BrandId, BrandStorageConfig>();
+  private readonly clients = new Map<BrandId, S3ClientLike>();
 
-  constructor() {
-    this.providerMode = this.resolveProviderMode();
+  constructor(options: ResumeOriginalFileStorageOptions = {}) {
+    this.env = options.env ?? process.env;
     this.prefix = this.resolvePrefix();
     this.localDir = this.resolveLocalDir();
-    this.s3Bucket = this.resolveS3Bucket();
-    this.s3Client = this.providerMode === 's3' ? this.createS3Client() : null;
+    this.clientFactory = options.createS3Client ?? ((config) => new S3Client(config));
+    // Resolve RoboApply eagerly, as before, so a misconfigured intl bucket shows at boot.
+    const intl = this.configFor('roboapply');
+    if (intl.mode === 's3') this.clientFor('roboapply');
   }
 
-  getProviderMode(): ResumeOriginalFileProviderMode {
-    return this.providerMode;
+  /**
+   * The brand's mode (default: the brand of the current unit of work).
+   * `none` when the brand cannot be known (see `resolveWriteBrand`).
+   */
+  getProviderMode(brand?: BrandId): BrandStorageMode {
+    const id = this.writeBrand(brand);
+    return id ? this.configFor(id).mode : 'none';
   }
 
-  isConfigured(): boolean {
-    return this.providerMode !== 'none';
+  /**
+   * Whether an original file can be stored for the brand (default: the
+   * current brand). False when the brand cannot be known: a residency-critical
+   * write never guesses RoboApply.
+   */
+  isConfigured(brand?: BrandId): boolean {
+    const id = this.writeBrand(brand);
+    if (!id) return false;
+    const mode = this.configFor(id).mode;
+    return mode === 'local' || mode === 's3';
+  }
+
+  /**
+   * Throws `StorageUnavailableError` (503) when the brand's storage is required
+   * but missing (GoApply on the mainland stack without `CN_S3_*`). Upload
+   * routes call it before accepting a file.
+   */
+  assertAvailable(brand?: BrandId): void {
+    const id = this.writeBrand(brand);
+    if (!id) throw new WriteBrandUnknownError('Resume upload');
+    if (this.configFor(id).mode === 'unavailable') throw new StorageUnavailableError(id);
   }
 
   async saveFile(params: {
@@ -61,24 +130,42 @@ class ResumeOriginalFileStorageService {
      *  never co-mingle with recruiter resume originals. Defaults to the
      *  instance prefix (`resume-originals`). */
     keyspace?: string;
+    /** Brand that owns the file (default: the current unit of work's brand). */
+    brand?: BrandId;
   }): Promise<StoredResumeOriginalFile | null> {
-    if (this.providerMode === 'none') {
+    // Fail closed without a brand: never fall back to RoboApply's bucket.
+    const brandId = this.writeBrand(params.brand);
+    if (!brandId) {
+      logger.error('RESUME_STORAGE', 'Refusing to store an original: no brand for this write', { size: params.size }, params.requestId);
+      throw new WriteBrandUnknownError('Original resume file');
+    }
+    const config = this.configFor(brandId);
+
+    if (config.mode === 'unavailable') {
+      logger.warn('RESUME_STORAGE', 'Refusing to store an original: the brand bucket is not configured', { brand: brandId }, params.requestId);
+      throw new StorageUnavailableError(brandId);
+    }
+    if (config.mode === 'discard') {
+      logger.info('RESUME_STORAGE', 'Original file not kept (brand storage rule)', { brand: brandId, size: params.size }, params.requestId);
+      return null;
+    }
+    if (config.mode === 'none') {
       return null;
     }
 
     const fileName = sanitizeStorageFilename(params.fileName);
-    const key = this.buildKey(params.userId, fileName, params.keyspace);
+    const key = this.buildKey(params.userId, fileName, params.keyspace, brandId);
     const mimeType = params.mimeType || 'application/octet-stream';
     const storedAt = new Date();
     const checksum = crypto.createHash('sha256').update(params.buffer).digest('hex');
 
-    if (this.providerMode === 'local') {
+    if (config.mode === 'local') {
       const absolutePath = path.join(this.localDir, key);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
       await fs.writeFile(absolutePath, params.buffer);
     } else {
-      await this.getS3Client().send(new PutObjectCommand({
-        Bucket: this.getS3Bucket(),
+      await this.clientFor(brandId).send(new PutObjectCommand({
+        Bucket: this.bucketFor(brandId),
         Key: key,
         Body: params.buffer,
         ContentType: mimeType,
@@ -86,7 +173,8 @@ class ResumeOriginalFileStorageService {
     }
 
     logger.info('RESUME_STORAGE', 'Stored original resume file', {
-      provider: this.providerMode,
+      provider: config.mode,
+      brand: brandId,
       key,
       fileName,
       size: params.size,
@@ -94,7 +182,7 @@ class ResumeOriginalFileStorageService {
     }, params.requestId);
 
     return {
-      provider: this.providerMode,
+      provider: config.mode,
       key,
       fileName: params.fileName,
       mimeType,
@@ -119,8 +207,9 @@ class ResumeOriginalFileStorageService {
       return { buffer, fileName, mimeType };
     }
 
-    const response = await this.getS3Client().send(new GetObjectCommand({
-      Bucket: this.getS3Bucket(),
+    const brandId = brandOfKey(key);
+    const response = await this.clientFor(brandId).send(new GetObjectCommand({
+      Bucket: this.bucketFor(brandId),
       Key: key,
     }));
 
@@ -168,9 +257,10 @@ class ResumeOriginalFileStorageService {
       }
     }
 
+    const brandId = brandOfKey(key);
     try {
-      const r = await this.getS3Client().send(new HeadObjectCommand({
-        Bucket: this.getS3Bucket(),
+      const r = await this.clientFor(brandId).send(new HeadObjectCommand({
+        Bucket: this.bucketFor(brandId),
         Key: key,
       }));
       return {
@@ -208,8 +298,9 @@ class ResumeOriginalFileStorageService {
     if (!provider || !key) return null;
     if (provider !== 's3') return null;
 
+    const brandId = brandOfKey(key);
     const cmd = new GetObjectCommand({
-      Bucket: this.getS3Bucket(),
+      Bucket: this.bucketFor(brandId),
       Key: key,
       // Force inline rendering when the stored MIME is sensible — keeps the
       // admin's browser preview behavior identical to the existing
@@ -219,20 +310,21 @@ class ResumeOriginalFileStorageService {
         ? `inline; filename="${ref.fileName.replace(/"/g, '')}"`
         : undefined,
     });
-    return getSignedUrl(this.getS3Client(), cmd, { expiresIn: Math.max(60, Math.min(3600, expiresInSeconds)) });
+    return getSignedUrl(this.clientFor(brandId) as S3Client, cmd, { expiresIn: Math.max(60, Math.min(3600, expiresInSeconds)) });
   }
 
   /**
-   * Stream every object in the configured bucket. Yields pages so callers
-   * (the admin inventory CSV export) can compose row-by-row without buffering
-   * the whole listing into memory. Only supports the `s3` provider.
+   * Stream every object in the brand's bucket (default RoboApply). Yields
+   * pages so callers (the admin inventory CSV export) can compose row-by-row
+   * without buffering the whole listing into memory. Only supports the `s3`
+   * provider.
    *
    * Each yielded object has key, size (bytes), lastModified.
    */
-  async *listAllObjects(): AsyncGenerator<{ key: string; size: number; lastModified: Date | null }> {
-    if (this.providerMode !== 's3') return;
-    const client = this.getS3Client();
-    const Bucket = this.getS3Bucket();
+  async *listAllObjects(brand: BrandId = 'roboapply'): AsyncGenerator<{ key: string; size: number; lastModified: Date | null }> {
+    if (this.configFor(brand).mode !== 's3') return;
+    const client = this.clientFor(brand);
+    const Bucket = this.bucketFor(brand);
     let token: string | undefined;
     do {
       const r = await client.send(new ListObjectsV2Command({
@@ -253,15 +345,16 @@ class ResumeOriginalFileStorageService {
   }
 
   /**
-   * Inspect the configured bucket without exposing the keys. Used by the
-   * admin endpoint to surface what's reachable: bucket name, endpoint,
-   * provider mode. Never returns credentials.
+   * Inspect the brand's bucket (default RoboApply) without exposing the keys.
+   * Used by the admin endpoint to surface what's reachable: bucket name,
+   * endpoint, provider mode. Never returns credentials.
    */
-  describeStorageProvider(): { mode: ResumeOriginalFileProviderMode; bucket: string | null; endpoint: string | null; prefix: string } {
+  describeStorageProvider(brand: BrandId = 'roboapply'): { mode: BrandStorageMode; bucket: string | null; endpoint: string | null; prefix: string } {
+    const config = this.configFor(brand);
     return {
-      mode: this.providerMode,
-      bucket: this.s3Bucket,
-      endpoint: (process.env.S3_ENDPOINT || '').trim() || null,
+      mode: config.mode,
+      bucket: config.bucket,
+      endpoint: config.endpoint,
       prefix: this.prefix,
     };
   }
@@ -301,8 +394,9 @@ class ResumeOriginalFileStorageService {
     }
 
     try {
-      await this.getS3Client().send(new DeleteObjectCommand({
-        Bucket: this.getS3Bucket(),
+      const brandId = brandOfKey(key);
+      await this.clientFor(brandId).send(new DeleteObjectCommand({
+        Bucket: this.bucketFor(brandId),
         Key: key,
       }));
       return true;
@@ -315,31 +409,78 @@ class ResumeOriginalFileStorageService {
     }
   }
 
-  private resolveProviderMode(): ResumeOriginalFileProviderMode {
-    const explicit = (process.env.RESUME_FILE_STORAGE_PROVIDER || '').trim().toLowerCase();
+  private writeBrand(explicit?: BrandId): BrandId | null {
+    return resolveWriteBrand(explicit, this.env);
+  }
+
+  private configFor(brandId: BrandId): BrandStorageConfig {
+    const cached = this.configs.get(brandId);
+    if (cached) return cached;
+    const config = brandId === 'goapply' ? this.resolveCnConfig() : this.resolveIntlConfig();
+    this.configs.set(brandId, config);
+    return config;
+  }
+
+  /** RoboApply: unchanged from before the brand split. */
+  private resolveIntlConfig(): BrandStorageConfig {
+    const env = this.env;
+    const bucket = (env.S3_BUCKET || '').trim() || null;
+    const accessKeyId = (env.S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID || '').trim();
+    const secretAccessKey = (env.S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY || '').trim();
+    const base = {
+      brandId: 'roboapply' as BrandId,
+      bucket,
+      endpoint: (env.S3_ENDPOINT || '').trim() || null,
+      region: (env.S3_REGION || env.AWS_REGION || 'auto').trim(),
+      forcePathStyle: ['true', '1', 'yes'].includes((env.S3_FORCE_PATH_STYLE || '').trim().toLowerCase()),
+      accessKeyId,
+      secretAccessKey,
+    };
+    const explicit = (env.RESUME_FILE_STORAGE_PROVIDER || '').trim().toLowerCase();
     if (explicit === 's3' || explicit === 'local' || explicit === 'none') {
-      return explicit;
+      return { ...base, mode: explicit };
     }
+    if (bucket && accessKeyId && secretAccessKey) return { ...base, mode: 's3' };
+    return { ...base, mode: env.NODE_ENV === 'production' ? 'none' : 'local' };
+  }
 
-    const hasS3Credentials = Boolean(this.resolveS3Bucket())
-      && Boolean(process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID)
-      && Boolean(process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
-    if (hasS3Credentials) {
-      return 's3';
+  /** GoApply: CN-0 keeps nothing; on the mainland only `CN_S3_*`, never a fallback. */
+  private resolveCnConfig(): BrandStorageConfig {
+    const env = this.env;
+    const cn = (name: string) => brandEnv('goapply', name, env) ?? '';
+    const base = {
+      brandId: 'goapply' as BrandId,
+      bucket: cn('S3_BUCKET') || null,
+      endpoint: cn('S3_ENDPOINT') || null,
+      region: cn('S3_REGION') || 'auto',
+      forcePathStyle: ['true', '1', 'yes'].includes(cn('S3_FORCE_PATH_STYLE').toLowerCase()),
+      accessKeyId: cn('S3_ACCESS_KEY_ID'),
+      secretAccessKey: cn('S3_SECRET_ACCESS_KEY'),
+    };
+    if (!mayStoreOriginal('goapply', env)) {
+      const policy = resumeUploadPolicy('goapply', env);
+      return { ...base, mode: policy.originals === 'discard' ? 'discard' : 'unavailable' };
     }
-
-    return process.env.NODE_ENV === 'production' ? 'none' : 'local';
+    // The endpoint must be mainland object storage (an `oss-cn-*` / COS
+    // mainland / OBS `cn-*` region, a private host, or
+    // CN_ALLOWED_STORAGE_HOST_SUFFIXES) and never the intl bucket. Being set
+    // in CN_S3_ENDPOINT is not enough: an AWS us-east-1 endpoint is refused.
+    if (!isMainlandStorageHost(base.endpoint, env)) {
+      logger.error('RESUME_STORAGE', 'CN_S3_ENDPOINT is not a mainland storage host; refusing to store GoApply files there', { endpoint: base.endpoint });
+      return { ...base, mode: 'unavailable' };
+    }
+    return { ...base, mode: 's3' };
   }
 
   private resolvePrefix(): string {
-    const raw = (process.env.RESUME_FILE_STORAGE_PREFIX || 'resume-originals')
+    const raw = (this.env.RESUME_FILE_STORAGE_PREFIX || 'resume-originals')
       .trim()
       .replace(/^\/+|\/+$/g, '');
     return raw || 'resume-originals';
   }
 
   private resolveLocalDir(): string {
-    const configured = (process.env.RESUME_FILE_STORAGE_LOCAL_DIR || '').trim();
+    const configured = (this.env.RESUME_FILE_STORAGE_LOCAL_DIR || '').trim();
     if (configured) {
       return path.resolve(configured);
     }
@@ -348,49 +489,50 @@ class ResumeOriginalFileStorageService {
     return path.resolve(__dirname, '..', '..', 'storage');
   }
 
-  private resolveS3Bucket(): string | null {
-    return (process.env.S3_BUCKET || '').trim() || null;
-  }
-
-  private createS3Client(): S3Client {
-    const accessKeyId = (process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '').trim();
-    const secretAccessKey = (process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '').trim();
-    const region = (process.env.S3_REGION || process.env.AWS_REGION || 'auto').trim();
-    const endpoint = (process.env.S3_ENDPOINT || '').trim() || undefined;
-    const forcePathStyle = ['true', '1', 'yes'].includes((process.env.S3_FORCE_PATH_STYLE || '').trim().toLowerCase());
-
-    if (!this.s3Bucket || !accessKeyId || !secretAccessKey) {
-      throw new Error('S3 original-file storage is selected but bucket/credentials are missing');
+  private clientFor(brandId: BrandId): S3ClientLike {
+    const existing = this.clients.get(brandId);
+    if (existing) return existing;
+    const config = this.configFor(brandId);
+    if (config.mode === 'unavailable' || config.mode === 'discard') {
+      throw new StorageUnavailableError(brandId);
     }
-
-    return new S3Client({
-      region,
-      endpoint,
-      forcePathStyle,
-      credentials: { accessKeyId, secretAccessKey },
-    });
-  }
-
-  private getS3Client(): S3Client {
-    if (!this.s3Client) {
+    if (config.mode !== 's3') {
       throw new Error('S3 original-file storage is not configured');
     }
-    return this.s3Client;
+    if (!config.bucket || !config.accessKeyId || !config.secretAccessKey) {
+      throw new Error('S3 original-file storage is selected but bucket/credentials are missing');
+    }
+    const client = this.clientFactory({
+      region: config.region,
+      endpoint: config.endpoint ?? undefined,
+      forcePathStyle: config.forcePathStyle,
+      credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+    });
+    this.clients.set(brandId, client);
+    return client;
   }
 
-  private getS3Bucket(): string {
-    if (!this.s3Bucket) {
+  private bucketFor(brandId: BrandId): string {
+    const bucket = this.configFor(brandId).bucket;
+    if (!bucket) {
+      if (brandId === 'goapply') throw new StorageUnavailableError(brandId);
       throw new Error('S3 bucket is not configured');
     }
-    return this.s3Bucket;
+    return bucket;
   }
 
-  private buildKey(userId: string, fileName: string, keyspace?: string): string {
+  private buildKey(userId: string, fileName: string, keyspace: string | undefined, brandId: BrandId): string {
     const prefix = (keyspace || this.prefix).replace(/^\/+|\/+$/g, '') || this.prefix;
     const ownerSegment = userId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'user';
     const dateSegment = new Date().toISOString().slice(0, 10);
-    return `${prefix}/${ownerSegment}/${dateSegment}/${crypto.randomUUID()}-${fileName}`;
+    const brandSegment = brandId === 'goapply' ? CN_KEY_PREFIX : '';
+    return `${brandSegment}${prefix}/${ownerSegment}/${dateSegment}/${crypto.randomUUID()}-${fileName}`;
   }
+}
+
+/** The brand an object key belongs to (GoApply keys carry the `cn/` segment). */
+export function brandOfKey(key: string): BrandId {
+  return key.startsWith(CN_KEY_PREFIX) ? 'goapply' : 'roboapply';
 }
 
 function sanitizeStorageFilename(fileName: string): string {
