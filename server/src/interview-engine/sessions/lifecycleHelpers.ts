@@ -233,6 +233,8 @@ export interface SessionControl {
   callbackBaseUrl?: string;
   /** Admin session: no credit gate, no debit. */
   creditExempt?: boolean;
+  /** Runs on the Parley pilot transport instead of LiveKit (parley/). */
+  transport?: 'parley';
 }
 
 export function readSessionControl(liveMetrics: unknown): SessionControl {
@@ -242,6 +244,7 @@ export function readSessionControl(liveMetrics: unknown): SessionControl {
   return {
     ...(typeof c.callbackBaseUrl === 'string' && c.callbackBaseUrl ? { callbackBaseUrl: c.callbackBaseUrl } : {}),
     ...(c.creditExempt === true ? { creditExempt: true } : {}),
+    ...(c.transport === 'parley' ? { transport: 'parley' as const } : {}),
   };
 }
 

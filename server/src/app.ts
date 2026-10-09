@@ -89,10 +89,11 @@ app.use(
 );
 
 // ─── Raw-body webhooks (MUST precede express.json) ──────────────────────
-// Stripe + LiveKit need the untouched request Buffer for signature
+// Stripe + LiveKit + Parley need the untouched request Buffer for signature
 // verification. Do not reorder these below express.json().
 app.use('/api/v1/roboapply/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/v1/interview-engine/webhooks/livekit', express.raw({ type: '*/*' }));
+app.use('/api/v1/interview-engine/webhooks/parley', express.raw({ type: '*/*', limit: '10mb' }));
 // Feature webhooks (WeChat Pay v3 notify signs the raw bytes; the WeChat MP
 // server endpoint sends XML). Every /api/v1/webhooks/* handler receives the
 // untouched Buffer (features/index.ts mounts them).

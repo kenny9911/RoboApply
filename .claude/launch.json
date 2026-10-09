@@ -17,6 +17,24 @@
         "scripts/design-preview.mjs"
       ],
       "port": 3612
+    },
+    {
+      "name": "parley",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd ../parley && deploy/local.sh && exec deploy/local.sh logs"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "parley-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd ../parley && PORT=8080 PUBLIC_URL=http://localhost:8080 PARLEY_DATA_DIR=./data/roboapply-pilot PARLEY_ADMIN_PASSWORD=${PARLEY_ADMIN_PASSWORD:-dev} npm run dev"
+      ],
+      "port": 8080
     }
   ]
 }

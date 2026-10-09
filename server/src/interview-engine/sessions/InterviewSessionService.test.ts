@@ -529,3 +529,29 @@ describe('cleanup sweep (C3)', () => {
     expect(h.rows.get(fresh.id)!.status).toBe('preparing');
   });
 });
+
+describe('Parley pilot transport', () => {
+  it('records the transport at create time and the sweep finalizes (never blindly expires) a live Parley session', async () => {
+    const parley = await svc.createSession({ userId: 'u1', role: 'x', transport: 'parley' });
+    const livekit = await svc.createSession({ userId: 'u1', role: 'y' });
+    expect(h.rows.get(parley.id)!.liveMetrics).toMatchObject({ control: { transport: 'parley' } });
+    expect(h.rows.get(livekit.id)!.liveMetrics ?? {}).not.toHaveProperty('control.transport');
+
+    const longAgo = new Date(Date.now() - 60 * 60_000);
+    for (const id of [parley.id, livekit.id]) {
+      Object.assign(h.rows.get(id)!, { status: 'live', startedAt: longAgo, expiresAt: longAgo, updatedAt: longAgo, transcript: [] });
+    }
+    h.deleteRoom.mockClear();
+    const r = await svc.reconcileExpiredSessions();
+
+    // Zero turns proves nothing for Parley (the transcript lives there until
+    // the end): it is finalized — here to no_answer, Parley being unconfigured
+    // — while the LiveKit one with zero turns is expired as before.
+    expect(r.finalized).toBe(1);
+    expect(h.rows.get(parley.id)!.status).toBe('failed');
+    expect(h.rows.get(parley.id)!.error).toBe('no_answer');
+    expect(h.rows.get(livekit.id)!.status).toBe('expired');
+    // No LiveKit room teardown for the Parley session.
+    expect(h.deleteRoom).not.toHaveBeenCalledWith(h.rows.get(parley.id)!.roomName);
+  });
+});

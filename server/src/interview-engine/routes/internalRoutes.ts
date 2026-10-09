@@ -26,6 +26,7 @@ import type { CoachMode } from '../coaching/InterviewCoachAgent.js';
 import { toSessionSummary, toSessionDetail } from './serialize.js';
 import { handleEngineError } from './errors.js';
 import { resolveSessionCallbackBaseUrl } from '../config.js';
+import { shouldUseParley } from '../parley/parleyConfig.js';
 import type { InterviewSource } from '../types.js';
 
 /** Admins are exempt from mock-interview credits — explicitly, on the
@@ -63,6 +64,8 @@ router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
       source,
       creditExempt: admin,
       callbackBaseUrl: resolveSessionCallbackBaseUrl(req.headers),
+      // Parley pilot (INTERVIEW_ENGINE_PARLEY_PILOT): candidate practice only.
+      transport: source === 'roboapply' && shouldUseParley(req.user!) ? 'parley' : undefined,
       role: typeof b.role === 'string' ? b.role : '',
       interviewType: typeof b.interviewType === 'string' ? b.interviewType : undefined,
       personaId: typeof b.personaId === 'string' ? b.personaId : undefined,

@@ -8,6 +8,7 @@
 //   /v1/sessions/*                 — external (X-API-Key) developer surface
 //   /callbacks/sessions/*          — worker callbacks (shared-secret gated)
 //   /webhooks/livekit              — LiveKit Cloud webhook (raw body, signed)
+//   /webhooks/parley               — Parley pilot webhook (raw body, signed)
 
 import { Router } from 'express';
 import internalRoutes from './internalRoutes.js';
@@ -15,10 +16,12 @@ import previewRoutes from './previewRoutes.js';
 import externalRoutes from './externalRoutes.js';
 import callbackRoutes from './callbackRoutes.js';
 import webhookRoutes from './webhookRoutes.js';
+import parleyWebhookRoutes from './parleyWebhookRoutes.js';
 
 const router = Router();
 
 router.use('/webhooks', webhookRoutes);
+router.use('/webhooks', parleyWebhookRoutes);
 router.use('/callbacks', callbackRoutes);
 router.use('/v1', externalRoutes);
 router.use('/', previewRoutes);

@@ -15,6 +15,7 @@ import {
   InterviewSessionEndedError,
   InterviewPrepareFailedError,
 } from '../sessions/InterviewSessionService.js';
+import { ParleyUnavailableError } from '../parley/parleySessions.js';
 import { toSessionDetail } from './serialize.js';
 
 export function handleEngineError(res: Response, op: string, err: unknown, extra?: Record<string, unknown>): Response {
@@ -55,6 +56,10 @@ export function handleEngineError(res: Response, op: string, err: unknown, extra
     return res.status(403).json({ error: 'forbidden', message: err.message });
   }
   if (err instanceof InterviewEngineConfigError) {
+    return res.status(503).json({ error: err.code, message: err.message });
+  }
+  if (err instanceof ParleyUnavailableError) {
+    logger.warn('INTERVIEW_ENGINE_ROUTE', `${op}: parley unavailable`, { ...extra, error: err.message });
     return res.status(503).json({ error: err.code, message: err.message });
   }
   logger.error('INTERVIEW_ENGINE_ROUTE', `${op} failed`, {

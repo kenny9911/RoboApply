@@ -221,6 +221,19 @@ export interface IEConnection {
   expiresAt: string;
   agentDispatched: boolean;
   recording: boolean;
+  /** 'parley' = the Parley pilot transport: `url`/`token` are empty and the
+   *  page joins Parley with `parley` instead of a LiveKit room. */
+  transport?: 'parley';
+  parley?: IEParleyJoin;
+}
+
+/** What the browser needs to join a Parley session (WebRTC straight to the node). */
+export interface IEParleyJoin {
+  baseUrl: string;
+  sessionId: string;
+  clientToken: string;
+  expiresAt: string;
+  iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }>;
 }
 
 export interface IETranscriptTurn {
