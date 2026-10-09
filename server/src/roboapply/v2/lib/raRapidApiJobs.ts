@@ -241,7 +241,28 @@ export function normalizeJSearchJob(
     applyIsDirect: apply.isDirect,
     description: typeof j.job_description === 'string' ? j.job_description : '',
     sourcePublisher: typeof j.job_publisher === 'string' ? j.job_publisher : null,
+    // Provider-stated extras for the WP-16b ingest normalizer (absent = not stated).
+    ...jsearchExtras(j),
   });
+}
+
+/** JSearch fields the provider states that the onboarding consumer never read. */
+function jsearchExtras(j: any): Partial<ExternalJobNormalized> {
+  const out: Partial<ExternalJobNormalized> = {};
+  const exp = j.job_required_experience && typeof j.job_required_experience === 'object' ? j.job_required_experience : null;
+  if (exp?.no_experience_required === true) out.experienceMonths = 0;
+  else if (typeof exp?.required_experience_in_months === 'number' && Number.isFinite(exp.required_experience_in_months)) {
+    out.experienceMonths = exp.required_experience_in_months;
+  }
+  const skills = Array.isArray(j.job_required_skills)
+    ? j.job_required_skills.filter((s: unknown): s is string => typeof s === 'string' && s.trim() !== '')
+    : [];
+  if (skills.length) out.skills = skills;
+  if (typeof j.job_offer_expiration_datetime_utc === 'string' && Number.isFinite(Date.parse(j.job_offer_expiration_datetime_utc))) {
+    out.expiresAt = j.job_offer_expiration_datetime_utc;
+  }
+  if (typeof j.employer_website === 'string' && /^https?:\/\//i.test(j.employer_website)) out.companyWebsite = j.employer_website;
+  return out;
 }
 
 // ---------------------------------------------------------------------------

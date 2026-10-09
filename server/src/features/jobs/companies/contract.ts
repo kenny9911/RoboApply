@@ -11,6 +11,8 @@
 // a company of the other market answers 404.
 
 import { z } from 'zod';
+import type { Sourced } from '../../../platform/http.js';
+import type { FeedItem } from '../../feed/contract.js';
 
 /** GET /companies?q= — trigram typeahead on the normalized name (≥2 chars), market-scoped, with logo. */
 export const CompanyTypeaheadQuerySchema = z.object({ q: z.string().trim().min(2).max(80), limit: z.coerce.number().int().min(1).max(20).optional() });
@@ -51,8 +53,12 @@ export interface CompanyProfile {
     description: SourcedFact<string>;
     website: SourcedFact<string>;
   }>;
-  /** Live canonical public jobs at this company in the brand's market. */
-  openJobs: number;
+  /**
+   * Live canonical public jobs at this company in the brand's market — our
+   * own count (source 'index', method 'computed'), rendered "{n} open jobs at
+   * {company} in %BRAND%" through SourceNote (D3).
+   */
+  openJobs: Sourced<number>;
 }
 
 /** GET /companies/:id/h1b (RoboApply, flag `h1bHistory`; US DOL LCA). */
@@ -67,6 +73,14 @@ export interface H1bHistoryResponse {
 
 /** GET /companies/:id/jobs */
 export const CompanyJobsQuerySchema = z.object({ cursor: z.string().max(512).optional() });
+/**
+ * Live canonical public jobs at the company (newest first, 20 a page), as
+ * feed cards without fit or derived badges. `cursor` is opaque; null = last page.
+ */
+export interface CompanyJobsResponse {
+  items: FeedItem[];
+  cursor: string | null;
+}
 
 // ── Documented JSON columns (ra-jobs.prisma) ─────────────────────────────
 

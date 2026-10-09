@@ -149,6 +149,16 @@ function countryName(code: string | null | undefined): string | null {
   return COUNTRY_NAME[code.trim().toLowerCase()] ?? null;
 }
 
+/**
+ * The `location_filter` country name Fantastic Jobs matches for an ISO code,
+ * or null when the client cannot scope a search to that country (the API
+ * would then search everywhere). WP-16b's planner only plans Fantastic Jobs
+ * queries for countries this returns a name for.
+ */
+export function fantasticCountryName(code: string | null | undefined): string | null {
+  return countryName(code);
+}
+
 function firstString(arr: unknown): string | null {
   if (!Array.isArray(arr) || arr.length === 0) return null;
   const v = arr[0];
@@ -270,7 +280,31 @@ export function normalizeFantasticJob(
     applyIsDirect: j.source_type === 'ats',
     description: descriptionRaw,
     sourcePublisher: prettifySource(j.source) ?? hostOf(j.source_domain),
+    // Provider-stated extras for the WP-16b ingest normalizer (absent = not stated).
+    ...fantasticExtras(j, workArrangement),
   });
+}
+
+/** Active Jobs DB / LinkedIn AI-enrichment fields the provider states (ARCH §4.2: map them first). */
+function fantasticExtras(j: any, workArrangement: string): Partial<ExternalJobNormalized> {
+  const out: Partial<ExternalJobNormalized> = {};
+  if (workArrangement.trim()) out.workModel = workArrangement.trim();
+  const level = typeof j.ai_experience_level === 'string' && j.ai_experience_level.trim() ? j.ai_experience_level.trim() : firstString(j.ai_experience_level);
+  if (level) out.experienceLevel = level;
+  const skills = Array.isArray(j.ai_key_skills)
+    ? j.ai_key_skills.filter((s: unknown): s is string => typeof s === 'string' && s.trim() !== '')
+    : [];
+  if (skills.length) out.skills = skills;
+  const validThrough = typeof j.date_validthrough === 'string' ? j.date_validthrough : typeof j.valid_through === 'string' ? j.valid_through : null;
+  if (validThrough && Number.isFinite(Date.parse(validThrough))) out.expiresAt = validThrough;
+  const website =
+    typeof j.organization_url === 'string' && /^https?:\/\//i.test(j.organization_url)
+      ? j.organization_url
+      : typeof j.domain_derived === 'string' && j.domain_derived.trim()
+        ? `https://${j.domain_derived.trim()}`
+        : null;
+  if (website) out.companyWebsite = website;
+  return out;
 }
 
 // ─── Per-provider guard: LRU cache, circuit breaker, daily budget ──────────

@@ -88,6 +88,24 @@ export interface ExternalJobNormalized {
   description: string;
   /** "LinkedIn", "Greenhouse", "104人力銀行", … — rendered as "via X" attribution. */
   sourcePublisher: string | null;
+
+  // ── Provider-stated extras (WP-16b ingest; optional, additive) ──────────
+  // Consumers that predate the inventory pipeline ignore them. Each is copied
+  // only when the provider states it; nothing is inferred here (D3). The
+  // ingest normalizer (features/jobs/normalize) maps them first so the
+  // enrichment LLM can be skipped for fields the provider already covers.
+  /** The provider's own work-arrangement label ('Hybrid', 'On-site', 'Remote OK'). Never guessed. */
+  workModel?: string | null;
+  /** Provider experience band ('0-2', '2-5', '5-10', '10+'). */
+  experienceLevel?: string | null;
+  /** Required experience in months (JSearch). */
+  experienceMonths?: number | null;
+  /** Provider-extracted skills, as given. */
+  skills?: string[] | null;
+  /** Provider expiry (schema.org validThrough / JSearch offer expiration), ISO. */
+  expiresAt?: string | null;
+  /** The employer's website as the provider states it. */
+  companyWebsite?: string | null;
 }
 
 /**
