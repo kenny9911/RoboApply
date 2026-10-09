@@ -1,8 +1,10 @@
-// /admin/credits — route shell (FND-6b). Admin: per-brand, per-plan credit caps.
-//
-// STUB. Owner: WP-21b, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/credits — credit limits per brand and plan, per-user overrides, the
+// Taiwan reference rate and the Taiwan revenue monitor (WP-21b UI over
+// WP-21a's admin API). Admin only; the console checks the role and the API
+// enforces it.
+
+import { AdminCreditsConsole } from '../../../../components/features/credits';
 
 export default function AdminCreditsPage() {
-  return <div hidden data-route-stub="/admin/credits" data-owner="WP-21b" />;
+  return <AdminCreditsConsole />;
 }

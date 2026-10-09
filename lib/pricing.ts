@@ -87,3 +87,82 @@ export function formatMoney(locale: string, amountMinor: number, currency: strin
     return `${code === 'CNY' ? '¥' : '$'}${amount}`;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Clone plan catalog helpers (WP-21b; PRODUCT_PLAN.md §6.1–§6.4, TASK_PLAN.md
+// R-08, R-25). The plan sheet, /settings#billing and PriceReference read the
+// server catalog (`GET /billing/plans`); these helpers only DERIVE display
+// numbers from those server prices — no amount is hard-coded here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Countries where the consumer has a 14-day right of withdrawal at checkout,
+ * so the plan sheet adds the optional withdrawal-waiver acknowledgement
+ * (PRODUCT F-BILL-08): the EU 27, the UK, and Taiwan (digital-services
+ * exemption only with prior agreement). Unknown country → no box, so the
+ * buyer keeps the full 14-day refund (the safe default for the consumer).
+ */
+export const WITHDRAWAL_WAIVER_COUNTRIES: ReadonlySet<string> = new Set([
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
+  'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
+  'GB', 'TW',
+]);
+
+export function requiresWithdrawalWaiver(country: string | null | undefined): boolean {
+  const c = (country ?? '').trim().toUpperCase();
+  return c.length === 2 && WITHDRAWAL_WAIVER_COUNTRIES.has(c);
+}
+
+/**
+ * Weekly price → the monthly equivalent ("about $43 a month"): 52 weeks / 12,
+ * rounded to a whole currency unit because the line says "about". Minor units.
+ */
+export function monthlyEquivalentMinor(amountMinor: number | null | undefined): number | null {
+  if (amountMinor === null || amountMinor === undefined || !Number.isFinite(amountMinor) || amountMinor <= 0) return null;
+  return Math.round((amountMinor * 52) / 12 / 100) * 100;
+}
+
+/**
+ * "Save N%" against our own monthly price × months, rounded DOWN so the claim
+ * is never larger than the real saving (PRODUCT §6.1 rule 2). Null when a
+ * price is unknown or there is no saving.
+ */
+export function savingsPercent(
+  amountMinor: number | null | undefined,
+  monthlyMinor: number | null | undefined,
+  months: number,
+): number | null {
+  if (!amountMinor || !monthlyMinor || months < 2) return null;
+  const reference = monthlyMinor * months;
+  if (reference <= 0 || amountMinor >= reference) return null;
+  const pct = Math.floor(((reference - amountMinor) / reference) * 100);
+  return pct > 0 ? pct : null;
+}
+
+/** The TWD reference line hides itself when the admin rate is older than this (CN L-7). */
+export const FX_REFERENCE_MAX_AGE_DAYS = 45;
+
+/** The admin-entered reference rate (`fx.reference` AppConfig) as the web receives it. */
+export interface FxReference {
+  currency: 'TWD';
+  ratePerUsd: number;
+  source: string;
+  /** YYYY-MM-DD. */
+  asOf: string;
+}
+
+/** True when the rate has a source and is at most 45 days old. Never guesses. */
+export function isFxReferenceFresh(ref: FxReference | null | undefined, now: Date = new Date()): ref is FxReference {
+  if (!ref || ref.currency !== 'TWD' || !(ref.ratePerUsd > 0) || !ref.source?.trim()) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ref.asOf)) return false;
+  const asOf = Date.parse(`${ref.asOf}T00:00:00Z`);
+  if (Number.isNaN(asOf)) return false;
+  const ageDays = (now.getTime() - asOf) / 86_400_000;
+  return ageDays >= -1 && ageDays <= FX_REFERENCE_MAX_AGE_DAYS;
+}
+
+/** USD cents → whole New Taiwan dollars at the reference rate (rounded to the nearest dollar). */
+export function twdReferenceAmount(usdMinor: number, ratePerUsd: number): number | null {
+  if (!Number.isFinite(usdMinor) || usdMinor <= 0 || !(ratePerUsd > 0)) return null;
+  return Math.round((usdMinor / 100) * ratePerUsd);
+}

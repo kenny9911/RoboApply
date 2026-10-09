@@ -1,0 +1,526 @@
+/* components/features/credits — billing and credits UI (WP-21b).
+   Clarity tokens only; light/dark come from the token block in app/globals.css,
+   brand identity from styles/brands/<brand>.css. Every control is ≥44 px tall
+   on touch screens. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.card {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.h2 {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.h3 {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.body {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.planName {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.actions :global(.btn),
+.touch {
+  min-height: 44px;
+}
+
+.link {
+  background: none;
+  border: 0;
+  padding: var(--sp-2) 0;
+  min-height: 44px;
+  color: var(--action);
+  font: inherit;
+  font-size: var(--fs-meta);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.link:hover {
+  color: var(--action-hover);
+}
+
+.link:focus-visible,
+.option:focus-within,
+.choice:focus-visible,
+.check input:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* ── Banners ─────────────────────────────────────────────────────────── */
+
+.banner {
+  border: 1px solid var(--warn);
+  background: var(--warn-subtle);
+  color: var(--text);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.bannerText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.notice {
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ok {
+  border-color: var(--ok);
+  background: var(--ok-subtle);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-meta);
+}
+
+/* ── Plan sheet ──────────────────────────────────────────────────────── */
+
+.fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: var(--sp-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-3);
+}
+
+.option {
+  position: relative;
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-4);
+  min-height: 44px;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-standard), background 160ms var(--ease-standard);
+}
+
+.option:hover {
+  border-color: var(--rule-strong);
+}
+
+.optionSelected {
+  border-color: var(--action);
+  background: var(--action-subtle);
+}
+
+.optionDisabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.option input[type='radio'] {
+  margin: 3px 0 0;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--action);
+}
+
+.optionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.price {
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tag {
+  align-self: flex-start;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--action);
+  background: var(--action-subtle);
+  border-radius: var(--r-pill);
+  padding: 2px var(--sp-2);
+}
+
+.check {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  font-size: var(--fs-meta);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.check input {
+  margin: 2px 0 0;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--action);
+}
+
+/* ── Out-of-credits sheet: three equal options ───────────────────────── */
+
+.choices {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+}
+
+@media (min-width: 760px) {
+  .choices {
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  }
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  text-align: left;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--sp-4);
+  min-height: 44px;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.choice:hover {
+  border-color: var(--action);
+}
+
+.choiceTitle {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Credits list ────────────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.rowLabel {
+  font-size: var(--fs-body);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.rowValue {
+  font-size: var(--fs-body);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rowMeta {
+  grid-column: 1 / -1;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+
+.meter {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  background: var(--action);
+  border-radius: var(--r-pill);
+}
+
+/* ── Plan badge (sidebar rail / More sheet) ──────────────────────────── */
+
+.badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: var(--sp-2) var(--sp-3);
+  min-height: 44px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--fs-meta);
+}
+
+.badge:hover {
+  border-color: var(--rule-strong);
+}
+
+.badge:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.badgePlan {
+  font-weight: 600;
+}
+
+.badgeMeta {
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+
+.badgeCta {
+  color: var(--action);
+  font-weight: 600;
+  font-size: var(--fs-label);
+}
+
+/* ── Pages ───────────────────────────────────────────────────────────── */
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--sp-2) 0 var(--sp-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.publicPage {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--sp-7) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-stat);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.label {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.input {
+  min-height: 44px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-body);
+  width: 100%;
+  min-width: 0;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 1px;
+}
+
+.select {
+  composes: input;
+}
+
+/* ── Admin ───────────────────────────────────────────────────────────── */
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-meta);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--rule-soft);
+  vertical-align: middle;
+}
+
+.table thead th {
+  border-top: 0;
+  color: var(--text-muted);
+  font-weight: 600;
+  background: var(--surface-2);
+}
+
+.capInput {
+  composes: input;
+  width: 96px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-3);
+}
+
+@media (max-width: 759px) {
+  .card {
+    padding: var(--sp-4);
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions :global(.btn) {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option {
+    transition: none;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

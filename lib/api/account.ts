@@ -183,6 +183,64 @@ export interface CancelPlanResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Clone plans (WP-21b UI over WP-21a's server; PRODUCT_PLAN.md §6.3)
+//
+// The legacy `/billing` endpoints gain a `planKey` body (additive: `tier`
+// keeps working for the legacy /settings renderer). Requested from WP-21a in
+// the WP-21b handoff; until the server ships them the calls fail with the
+// server's error and the UI says so (no client fallback, nothing charged).
+// ─────────────────────────────────────────────────────────────────────
+
+/** POST /billing/checkout (RoboApply, Stripe) and /billing/alipay (GoApply) with a clone plan key. */
+export interface PlanCheckoutBody {
+  /** A `PLAN_KEYS` value from GET /billing/plans. */
+  planKey: string;
+  /** The unticked-by-default "renews automatically" box (consent `auto_renew_ack`); required for auto-renewing plans. */
+  autoRenewAck?: boolean;
+  /** EU/UK/TW "Start now" withdrawal waiver (consent `withdrawal_waiver`); optional. */
+  withdrawalWaiver?: boolean;
+  /** Same-origin path after a successful payment. */
+  next?: string;
+  /** Same-origin path when the buyer leaves the payment page. */
+  cancelNext?: string;
+}
+
+/** Stripe answers `{ url }`; a CN rail answers an order with a pay URL or QR code. */
+export type PlanCheckoutResponse =
+  | { url: string }
+  | { orderId: string; payUrl?: string | null; qrCodeUrl?: string | null };
+
+/** POST /billing/switch/quote — what a legacy practice-plan subscriber pays to switch to Pro. Nothing is charged. */
+export interface SwitchQuote {
+  quoteId: string;
+  planKey: string;
+  currency: string;
+  /** Prorated amount charged today if the user confirms. */
+  amountDueTodayMinor: number;
+  /** The new plan's renewal price. */
+  renewalAmountMinor: number;
+  /** ISO date of the next renewal at the new price. */
+  nextRenewalAt: string;
+}
+
+export interface SwitchQuoteBody {
+  planKey: string;
+}
+
+/** POST /billing/switch/confirm — charges only now. */
+export interface SwitchConfirmBody {
+  quoteId: string;
+  autoRenewAck: boolean;
+  withdrawalWaiver?: boolean;
+}
+
+export interface SwitchConfirmResponse {
+  status: 'switched';
+  planKey: string;
+  nextRenewalAt: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Endpoints
 // ─────────────────────────────────────────────────────────────────────
 
@@ -228,6 +286,18 @@ export const accountApi = {
   portal: () => roboApi.post<StripeRedirect>(`${BILLING_BASE}/portal`),
   cancel: () => roboApi.post<CancelPlanResponse>(`${BILLING_BASE}/cancel`),
   history: () => roboApi.get<BillingHistoryResponse>(`${BILLING_BASE}/history`),
+  /** Clone plan checkout (Stripe, RoboApply). */
+  checkoutPlan: (body: PlanCheckoutBody) =>
+    roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/checkout`, body),
+  /** Clone plan checkout on a CN rail (GoApply; off until CN_PAYMENTS_ENABLED). */
+  alipayCheckoutPlan: (body: PlanCheckoutBody) =>
+    roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/alipay`, body),
+  /** Legacy practice plan → Pro: a quote first; nothing is charged. */
+  switchQuote: (body: SwitchQuoteBody) =>
+    roboApi.post<SwitchQuote>(`${BILLING_BASE}/switch/quote`, body),
+  /** Legacy practice plan → Pro: charges the quoted amount. */
+  switchConfirm: (body: SwitchConfirmBody) =>
+    roboApi.post<SwitchConfirmResponse>(`${BILLING_BASE}/switch/confirm`, body),
   /** Absolute URL the browser opens directly — Stripe 302s to its hosted PDF,
    *  Alipay streams a generated receipt. Carries the session cookie. */
   invoiceDownloadUrl: (id: string) =>
