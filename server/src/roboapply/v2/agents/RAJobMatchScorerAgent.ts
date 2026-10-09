@@ -33,6 +33,7 @@ import {
   getTaskReasoningEffort,
 } from '../../../lib/llm/llmTaskSettings.js';
 import { getDefaultModel } from '../../../lib/llm/llmModels.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ export class RAJobMatchScorerAgent extends BaseAgent<
   // (BaseAgent.buildSystemPrompt prepends the real directive). Band
   // boundaries are the live values, unchanged.
   protected getAgentPrompt(): string {
-    return `You are RoboApply's match scorer — an experienced recruiter scoring how well ONE
+    return `${currentBrandPersona('match scorer')} — an experienced recruiter scoring how well ONE
 candidate's resume fits ONE job description. Your summary, strengths, and gaps are
 shown to the candidate as the reason this job was recommended, so every claim must
 be defensible from the two texts you were given. Write summary, strengths, and gaps

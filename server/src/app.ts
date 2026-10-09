@@ -58,6 +58,12 @@ import { logger } from './services/LoggerService.js';
 import { createJobSearchRouters } from './job-search/routes.js';
 import { handleJobSearchBodyError } from './job-search/request-errors.js';
 import { trackFeatureActivity } from './middleware/userActivity.js';
+import { brandContext } from './platform/brand/brandContext.js';
+import { corsOrigins } from './platform/brand/runtime.js';
+import brandPublicRouter from './features/brand/routes.js';
+import { mountFeatures } from './features/index.js';
+// Side effect: registers every area's queue workers (queue-drain cron + kickDrain).
+import './platform/queue/registry.js';
 
 const app = express();
 
@@ -70,29 +76,14 @@ const app = express();
 app.set('trust proxy', true);
 
 // ─── CORS ───────────────────────────────────────────────────────────────
-// Same-origin in production (the Next.js app and this API share roboapply.io
-// via a Vercel rewrite), but we still allowlist the apex + api subdomain and
-// local dev origins for direct/cross-origin calls.
-const frontendUrlsFromEnv = (process.env.FRONTEND_URLS || '')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
-
-const productionOrigins: (string | RegExp)[] = [
-  process.env.NEXT_PUBLIC_ROBOAPPLY_URL || 'https://roboapply.io',
-  'https://roboapply.io',
-  'https://www.roboapply.io',
-  'https://api.roboapply.io',
-  ...frontendUrlsFromEnv,
-  /^https:\/\/[a-z0-9-]+\.vercel\.app$/i,
-];
-
+// Same-origin in production (the Next.js app and this API share each brand's
+// host via a Vercel rewrite), but we still allowlist every registry host of
+// the brands this deployment serves, NEXT_PUBLIC_ROBOAPPLY_URL, FRONTEND_URLS
+// and *.vercel.app previews. Dev allows localhost / goapply.localhost on the
+// dev ports. Built from the brand registry (platform/brand/runtime.ts).
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === 'production'
-        ? productionOrigins
-        : ['http://localhost:3611', 'http://localhost:3000'],
+    origin: corsOrigins(),
     credentials: true,
   }),
 );
@@ -102,6 +93,10 @@ app.use(
 // verification. Do not reorder these below express.json().
 app.use('/api/v1/roboapply/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/v1/interview-engine/webhooks/livekit', express.raw({ type: '*/*' }));
+// Feature webhooks (WeChat Pay v3 notify signs the raw bytes; the WeChat MP
+// server endpoint sends XML). Every /api/v1/webhooks/* handler receives the
+// untouched Buffer (features/index.ts mounts them).
+app.use('/api/v1/webhooks', express.raw({ type: '*/*', limit: '1mb' }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -114,6 +109,14 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ─── Brand + request context ────────────────────────────────────────────
+// Resolves the product brand from the Host (platform/brand/runtime.ts),
+// refuses brands this deployment does not serve, stamps `X-RA-Brand`, and
+// enters the AsyncLocalStorage request context (which is what makes
+// setCurrentUserId / BYOK / per-user log lines work). Must stay after
+// cookieParser (dev override cookie) and the request id, before every router.
+app.use(brandContext);
+
 // ─── Health ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'roboapply-api' }));
 app.get('/api/v1/health', (_req, res) => res.json({ ok: true, service: 'roboapply-api' }));
@@ -122,6 +125,9 @@ app.get('/api/v1/health', (_req, res) => res.json({ ok: true, service: 'roboappl
 app.use(trackFeatureActivity);
 // Stripe webhook first so its sub-path isn't shadowed by the billing router.
 app.use('/api/v1/roboapply/stripe/webhook', stripeWebhookRouter);
+
+// Public brand + capabilities for the requesting host (no auth).
+app.use('/api/v1/public/brand', brandPublicRouter);
 
 app.use('/api/v1/roboapply/auth', roboapplyAuthRouter);
 app.use('/api/v1/roboapply/missions', roboapplyMissionsRouter);
@@ -140,6 +146,12 @@ app.use('/api/v1/interview-engine', interviewEngineRouter);
 
 // Vercel Cron HTTP endpoints (CRON_SECRET-gated). See cron/handlers.ts.
 app.use('/api/v1/cron', cronRouter);
+
+// ─── Feature areas (Jobright clone) ─────────────────────────────────────
+// Mounted ONCE and AFTER every legacy router above, so live legacy paths
+// keep precedence; feature routers declare only new paths and check their
+// capability per route. See features/index.ts (FEATURE_MOUNTS).
+mountFeatures(app);
 
 app.get('/', (_req, res) => {
   res.json({ name: 'RoboApply API', version: '1.0.0' });

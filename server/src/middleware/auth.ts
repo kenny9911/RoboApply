@@ -3,7 +3,7 @@ import authService from '../services/AuthService.js';
 import prisma from '../lib/prisma.js';
 import type { AuthUser, ApiKeyScope } from '../types/auth.js';
 import { withUserUsageLimits } from './usageMeter.js';
-import { setCurrentUserId, setCurrentUserName } from '../lib/requestContext.js';
+import { getCurrentBrandId, setCurrentUserId, setCurrentUserName } from '../lib/requestContext.js';
 import { logger } from '../services/LoggerService.js';
 import { evaluateSubscriptionGate } from '../lib/subscriptionGate.js';
 import { resolveGraceDaysForUser } from '../lib/subscriptionGraceConfig.js';
@@ -73,6 +73,79 @@ function resolveLogDisplayName(user: { name?: string | null; email?: string | nu
   if (!email) return undefined;
   const local = email.split('@')[0];
   return local || email;
+}
+
+// ─── Brand gate + activity stamp (TASK_PLAN.md FND-2a, ARCH §1.4) ────────
+
+/** Brand of the request, or undefined outside the brand middleware (tests, WS upgrade). */
+function currentRequestBrandId(): string | undefined {
+  try {
+    return getCurrentBrandId();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A session belongs to the brand its user signed up on (`User.brand`,
+ * immutable). A GoApply cookie copied to a RoboApply host (or the reverse)
+ * must not work there. Admins and seeds (`role === 'admin'`) are exempt.
+ * Returns true when the request must be rejected. Users without a stored
+ * brand (rows read before db push #1, API-key users) are not gated.
+ */
+export function isOtherBrandSession(user: { brand?: unknown; role?: unknown }, requestBrandId: string | undefined): boolean {
+  if (!requestBrandId) return false;
+  if (user.role === 'admin') return false;
+  return typeof user.brand === 'string' && user.brand.length > 0 && user.brand !== requestBrandId;
+}
+
+function rejectOtherBrand(res: Response): void {
+  res.status(401).json({
+    success: false,
+    error: 'This session belongs to another site. Sign in here to continue.',
+    code: 'auth_other_brand',
+  });
+}
+
+/** `User.lastActiveAt` is written at most once an hour per user. */
+export const LAST_ACTIVE_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
+const lastActiveTouchedAt = new Map<string, number>();
+
+/** Pure: should this request stamp lastActiveAt? */
+export function shouldTouchLastActive(
+  lastActiveAt: Date | string | null | undefined,
+  lastTouchedInProcessMs: number | undefined,
+  nowMs: number,
+): boolean {
+  if (lastTouchedInProcessMs !== undefined && nowMs - lastTouchedInProcessMs < LAST_ACTIVE_TOUCH_INTERVAL_MS) return false;
+  if (!lastActiveAt) return true;
+  const t = new Date(lastActiveAt).getTime();
+  return !Number.isFinite(t) || nowMs - t >= LAST_ACTIVE_TOUCH_INTERVAL_MS;
+}
+
+/** Fire-and-forget; never blocks or fails the request. */
+function touchLastActive(user: { id: string; lastActiveAt?: Date | string | null }): void {
+  try {
+    const now = Date.now();
+    if (!shouldTouchLastActive(user.lastActiveAt, lastActiveTouchedAt.get(user.id), now)) return;
+    lastActiveTouchedAt.set(user.id, now);
+    if (lastActiveTouchedAt.size > 50_000) lastActiveTouchedAt.clear();
+    void Promise.resolve()
+      .then(() => prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date(now) }, select: { id: true } }))
+      .catch((err: unknown) => {
+        logger.debug?.('AUTH', 'lastActiveAt touch failed', {
+          userId: user.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  } catch {
+    // Never let the activity stamp affect authentication.
+  }
+}
+
+/** Test seam: forget the in-process touch throttle. */
+export function resetLastActiveTouchesForTests(): void {
+  lastActiveTouchedAt.clear();
 }
 
 /**
@@ -412,7 +485,19 @@ export async function requireAuth(
       return;
     }
 
+    // Brand gate: a session from the other product brand is not valid here.
+    if (isOtherBrandSession(user as { brand?: unknown; role?: unknown }, currentRequestBrandId())) {
+      logger.info('AUTH', 'Rejected other-brand session', {
+        userId: user.id,
+        userBrand: (user as { brand?: unknown }).brand,
+        requestBrand: currentRequestBrandId(),
+      });
+      rejectOtherBrand(res);
+      return;
+    }
+
     req.user = await toAuthenticatedUser(user as LimitAwareAuthUser);
+    touchLastActive(user as { id: string; lastActiveAt?: Date | string | null });
     // Thread the authenticated userId + display name through the async
     // context + logger so every subsequent log line within this request
     // carries them — lets ops scan server logs by name without joining
@@ -523,8 +608,10 @@ export async function optionalAuth(
         }
       }
 
-      if (user) {
+      // An other-brand session is treated as anonymous on optional routes.
+      if (user && !isOtherBrandSession(user as { brand?: unknown; role?: unknown }, currentRequestBrandId())) {
         req.user = await toAuthenticatedUser(user as LimitAwareAuthUser);
+        touchLastActive(user as { id: string; lastActiveAt?: Date | string | null });
         const displayName = resolveLogDisplayName(req.user);
         setCurrentUserId(req.user.id);
         setCurrentUserName(displayName);

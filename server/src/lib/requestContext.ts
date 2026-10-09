@@ -1,7 +1,16 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { randomUUID } from 'node:crypto';
+import type { BrandId } from '../platform/brand/registry.js';
 
-interface RequestStore {
+export interface RequestStore {
   requestId: string;
+  // Product brand of this unit of work (TASK_PLAN.md R-01). Set by the brand
+  // middleware (platform/brand/brandContext.ts) for HTTP requests, and by
+  // `runWithBrand` for crons, queue workers and webhooks.
+  brandId?: BrandId;
+  // Normalized request host (no port). Lets helpers that have no `req`
+  // (e.g. buildCookieOptions) decide per host.
+  host?: string;
   // Attached by the auth middleware once req.user is resolved. Every log
   // line emitted inside the same async context will auto-include this so
   // admins can filter server logs by user. Mutable because the request
@@ -22,8 +31,45 @@ interface RequestStore {
 
 const requestContext = new AsyncLocalStorage<RequestStore>();
 
-export function withRequestContext<T>(requestId: string, fn: () => T): T {
-  return requestContext.run({ requestId }, fn);
+/**
+ * Run `fn` inside a fresh request context. The string form (a bare request
+ * id) is kept for existing callers (job-search/agent.ts); it keeps the
+ * enclosing brand and host so a nested context never loses its brand. The
+ * store form is what the brand middleware uses.
+ */
+export function withRequestContext<T>(requestIdOrStore: string | RequestStore, fn: () => T): T {
+  let store: RequestStore;
+  if (typeof requestIdOrStore === 'string') {
+    const parent = requestContext.getStore();
+    store = { requestId: requestIdOrStore };
+    if (parent?.brandId) store.brandId = parent.brandId;
+    if (parent?.host) store.host = parent.host;
+  } else {
+    store = { ...requestIdOrStore };
+  }
+  return requestContext.run(store, fn);
+}
+
+/**
+ * Run `fn` as a unit of work for one brand: crons, queue workers, webhooks and
+ * anything else that has no HTTP request. Starts a fresh store (the request id
+ * is inherited when there is one; the user is NOT inherited, so a per-user
+ * unit sets its own via setCurrentUserId).
+ */
+export function runWithBrand<T>(brandId: BrandId, fn: () => T): T {
+  const parent = requestContext.getStore();
+  return requestContext.run(
+    { requestId: parent?.requestId ?? `brand-${randomUUID()}`, brandId },
+    fn,
+  );
+}
+
+export function getCurrentBrandId(): BrandId | undefined {
+  return requestContext.getStore()?.brandId;
+}
+
+export function getCurrentRequestHost(): string | undefined {
+  return requestContext.getStore()?.host;
 }
 
 export function getCurrentRequestId(): string | undefined {

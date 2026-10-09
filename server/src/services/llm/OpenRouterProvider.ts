@@ -3,6 +3,16 @@ import { Message, LLMOptions, LLMProvider, LLMResponse, ProviderExtra } from '..
 import { resolveLlmRequestTimeoutMs, LLM_SDK_MAX_RETRIES, buildSdkRequestOptions } from './providerTuning.js';
 import { openAIJsonResponseFormat } from './jsonMode.js';
 import { modelSupportsReasoningEffort, OPENROUTER_EFFORTS, resolveReasoningEffort } from './reasoningEffort.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
+
+/**
+ * OpenRouter app-attribution headers for the brand of the current unit of
+ * work (ARCHITECTURE.md §1.7). Previously hard-coded to the recruiter product.
+ */
+export function openRouterBrandHeaders(): Record<string, string> {
+  const brand = getCurrentBrandOrDefault();
+  return { 'HTTP-Referer': brand.canonicalOrigin, 'X-Title': brand.name };
+}
 
 // Match the existing DeepSeek reserve for small structured-output calls.
 // OpenAI reasoning models share their completion limit with the final answer;
@@ -25,10 +35,9 @@ export class OpenRouterProvider implements LLMProvider {
     this.client = new OpenAI({
       apiKey,
       baseURL,
-      defaultHeaders: {
-        'HTTP-Referer': 'https://robohire.io',
-        'X-Title': 'RoboHire API',
-      },
+      // Brand at construction time; chat() re-sends the current brand's
+      // headers per request because providers are cached across requests.
+      defaultHeaders: openRouterBrandHeaders(),
       // OpenRouter can route to reasoning models (incl. deepseek-v4-pro).
       // Reasoning-friendly timeout + SDK retries off (withLLMRetry is the
       // single retry layer). See providerTuning.ts.
@@ -100,7 +109,10 @@ export class OpenRouterProvider implements LLMProvider {
       // Per-request AbortSignal + model-aware timeout (overrides the client
       // default). Reasoning models (e.g. deepseek-v4-pro routed via OpenRouter)
       // keep the long ceiling; fast models fail fast at 90s. See providerTuning.ts.
-      buildSdkRequestOptions(options, this.extra, 'OPENROUTER_LLM_TIMEOUT_MS'),
+      {
+        ...buildSdkRequestOptions(options, this.extra, 'OPENROUTER_LLM_TIMEOUT_MS'),
+        headers: openRouterBrandHeaders(),
+      },
     );
 
     const choice = response?.choices?.[0] as

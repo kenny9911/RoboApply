@@ -12,6 +12,7 @@
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { llmService } from '../../../services/llm/LLMService.js';
 import type { CrossBankInsightInput, CrossBankInsight } from '../types/crossBank.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 const ENV_MODEL = 'RA_V2_CROSSBANK_INSIGHT_MODEL';
 // No trailing \b: `%` is a non-word char, so a boundary after it never
@@ -54,7 +55,7 @@ export class RACrossBankInsightAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's job-match analyst. You explain a candidate's cross-bank job
+    return `${currentBrandPersona('job-match analyst')}. You explain a candidate's cross-bank job
 shortlist to THEM, in second person, honestly.
 
 ## Hard rules

@@ -26,6 +26,7 @@
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
 import { llmService } from '../../../services/llm/LLMService.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -211,7 +212,7 @@ export class RAResumeTailorAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's senior resume tailor. Take a candidate's base resume and rewrite it to win the listed JD.
+    return `${currentBrandPersona('senior resume tailor')}. Take a candidate's base resume and rewrite it to win the listed JD.
 
 ## Hard rules — these are absolute
 

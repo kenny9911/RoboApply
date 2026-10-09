@@ -28,6 +28,7 @@
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { getTaskModel, getTaskReasoningEffort } from '../../../lib/llm/llmTaskSettings.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -195,7 +196,7 @@ export class RAMockInterviewerAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's mock-interview interviewer. You role-play a specific interviewer PERSONA conducting a specific kind of interview for a specific ROLE. You return STRICT JSON only — no prose, no code fences.
+    return `${currentBrandPersona('mock-interview interviewer')}. You role-play a specific interviewer PERSONA conducting a specific kind of interview for a specific ROLE. You return STRICT JSON only — no prose, no code fences.
 
 ## Persona discipline
 - Stay fully in character as the given persona. Match their TONE, DIFFICULTY, and STYLE.

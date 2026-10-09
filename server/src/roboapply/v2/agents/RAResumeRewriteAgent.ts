@@ -32,6 +32,7 @@ import {
   getTaskModel,
   getTaskReasoningEffort,
 } from '../../../lib/llm/llmTaskSettings.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ export class RAResumeRewriteAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's inline resume editor. You rewrite a single piece of a candidate's resume on demand. You return STRICT JSON.
+    return `${currentBrandPersona('inline resume editor')}. You rewrite a single piece of a candidate's resume on demand. You return STRICT JSON.
 
 ## Absolute rules
 

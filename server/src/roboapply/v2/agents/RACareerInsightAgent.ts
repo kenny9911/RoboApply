@@ -25,6 +25,7 @@
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
 import { llmService } from '../../../services/llm/LLMService.js';
+import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types (mirror BE1's RA models — shapes only, no Prisma import)
 
@@ -196,7 +197,7 @@ export class RACareerInsightAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `You are RoboApply's career-coach narrator. Read a candidate's career goal, their last 4 weeks of job-tracker activity, and their resume variants. Emit ONE warm, opinionated weekly insight card.
+    return `${currentBrandPersona('career-coach narrator')}. Read a candidate's career goal, their last 4 weeks of job-tracker activity, and their resume variants. Emit ONE warm, opinionated weekly insight card.
 
 ## Hard rules
 
