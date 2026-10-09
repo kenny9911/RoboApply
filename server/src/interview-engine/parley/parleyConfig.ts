@@ -22,6 +22,9 @@
 //   PARLEY_TTS_PROFILES    optional "zh:tts_…,en:tts_…" — voice per interview
 //                          language (exact locale, then its primary subtag);
 //                          other languages use the agent's own voice
+//   PARLEY_WEBHOOK_BASE_URL optional origin Parley calls our webhook at, when
+//                          it can't use the normal callback origin (Parley in
+//                          Docker on a laptop: http://host.docker.internal:4611)
 // scripts/parley-provision.ts creates all of these on a Parley node.
 
 import { getAgentCallbackSecret } from '../config.js';
@@ -41,6 +44,11 @@ export function getParleyConfig(): ParleyConfig | null {
   const agentId = process.env.PARLEY_AGENT_ID?.trim();
   if (!baseUrl || !apiKey || !webhookSecret || !agentId) return null;
   return { baseUrl, apiKey, webhookSecret, agentId };
+}
+
+/** PARLEY_WEBHOOK_BASE_URL (no trailing slash), or null to use the session's callback origin. */
+export function getParleyWebhookBaseOverride(): string | null {
+  return process.env.PARLEY_WEBHOOK_BASE_URL?.trim().replace(/\/+$/, '') || null;
 }
 
 /** The Parley TTS profile for an interview language, if PARLEY_TTS_PROFILES maps one. */

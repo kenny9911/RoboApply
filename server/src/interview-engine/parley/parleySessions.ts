@@ -32,7 +32,7 @@ import { getAgentCallbackSecret, getCallbackBaseUrl } from '../config.js';
 import { asLiveMetrics, readSessionControl } from '../sessions/lifecycleHelpers.js';
 import type { LiveModelUsageItem } from '../billing/sessionCost.js';
 import type { InterviewMode, ResolvedVoice, TranscriptTurn } from '../types.js';
-import { getParleyConfig, resolveParleyTtsProfile, type ParleyConfig } from './parleyConfig.js';
+import { getParleyConfig, getParleyWebhookBaseOverride, resolveParleyTtsProfile, type ParleyConfig } from './parleyConfig.js';
 import {
   createParleySession,
   endParleySession,
@@ -221,7 +221,7 @@ async function createHandle(cfg: ParleyConfig, session: InterviewSession, starte
   const control = readSessionControl(session.liveMetrics);
   const input: ParleyCreateSessionInput = {
     ...buildParleySessionInput(session),
-    webhookUrl: `${getCallbackBaseUrl(control.callbackBaseUrl)}${PARLEY_WEBHOOK_PATH}`,
+    webhookUrl: `${getParleyWebhookBaseOverride() ?? getCallbackBaseUrl(control.callbackBaseUrl)}${PARLEY_WEBHOOK_PATH}`,
   };
   const t0 = Date.now();
   try {

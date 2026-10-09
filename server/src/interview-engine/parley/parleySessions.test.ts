@@ -158,6 +158,19 @@ describe('parley sessions', () => {
       expect(conn).toMatchObject({ transport: 'parley', agentDispatched: true, recording: false, parley: { ...HANDLE, baseUrl: 'http://parley.test' } });
     });
 
+    it('PARLEY_WEBHOOK_BASE_URL overrides the webhook origin (Parley in Docker on a laptop)', async () => {
+      process.env.PARLEY_WEBHOOK_BASE_URL = 'http://host.docker.internal:4611/';
+      try {
+        m.updateMany.mockResolvedValueOnce({ count: 1 });
+        m.create.mockResolvedValueOnce({ id: 'ses_1', clientToken: 'ct_1', expiresAt: HANDLE.expiresAt, rtc: { offerUrl: 'u', iceServers: [] } });
+        m.executeRaw.mockResolvedValueOnce(1);
+        await getParleyConnection(session(), VOICE);
+        expect(m.create.mock.calls[0][1].webhookUrl).toBe('http://host.docker.internal:4611/api/v1/interview-engine/webhooks/parley');
+      } finally {
+        delete process.env.PARLEY_WEBHOOK_BASE_URL;
+      }
+    });
+
     it('a reconnect reuses the stored handle without creating anything', async () => {
       const conn = await getParleyConnection(session({ status: 'live', liveMetrics: { control: { transport: 'parley' }, parley: HANDLE } }), VOICE);
       expect(m.updateMany).not.toHaveBeenCalled();
