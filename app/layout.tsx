@@ -1,15 +1,29 @@
-// Root layout. Picks the locale + loads messages on the server, then hands
-// them to the client `<Providers>` so next-intl works in both RSC and CSR.
+// Root layout. Resolves the request's product brand (lib/server/brand.ts,
+// from the proxy's x-ra-brand), picks the locale (clamped to the brand's
+// locales) + loads the brand's messages on the server, then hands them to the
+// client `<Providers>` so next-intl works in both RSC and CSR.
+//
+// Per brand (ARCHITECTURE.md §1.5): `<html data-brand>`, generateMetadata()
+// (metadataBase, title, icons, Baidu verification), generateViewport()
+// (theme colors), the `%BRAND%` substitution in loadMessages, and two root
+// slots — the wrong-market nudge (WP-12) and the analytics consent banner
+// (WP-23) — mounted once here.
 //
 // The Pages Router /404 and /500 fallback pages live at pages/404.tsx and
 // pages/500.tsx so they bypass this layout entirely. The `dynamic =
 // 'force-dynamic'` directive below applies to all App Router pages.
 
+import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 import './globals.css';
 
+import { WrongBrandNudge } from '../components/features/brand/WrongBrandNudge';
+import { AnalyticsConsent } from '../components/features/growth/AnalyticsConsent';
+import { publicBrand } from '../lib/brand/client';
+import { buildRootMetadata, buildRootViewport } from '../lib/brand/metadata';
 import { loadMessages } from '../lib/i18n';
+import { getRequestCountry, getServerBrand } from '../lib/server/brand';
 import { resolveLocale } from '../lib/serverLocale';
 import { Providers } from './providers';
 
@@ -87,17 +101,15 @@ const sourceHanTW = localFont({
   variable: '--font-source-han-tw',
 });
 
-export const metadata = {
-  metadataBase: new URL('https://www.roboapply.io'),
-  title: 'RoboApply',
-  description:
-    "Find out why you're not getting interviews. Drop your resume — we read 1,000+ open roles, show you the ones you can actually get, and name exactly what's missing.",
-  icons: {
-    icon: '/roboapply-mark.svg',
-    shortcut: '/roboapply-mark.svg',
-    apple: '/roboapply-logo.png',
-  },
-};
+// Per-brand head metadata (lib/brand/metadata.ts). RoboApply's output is the
+// same as the former static export (plus applicationName and theme colors).
+export async function generateMetadata(): Promise<Metadata> {
+  return buildRootMetadata(await getServerBrand());
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  return buildRootViewport(await getServerBrand());
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -106,12 +118,17 @@ export default async function RootLayout({
 }: {
   children: ReactNode;
 }) {
-  const locale = await resolveLocale();
-  const messages = loadMessages(locale as any);
+  const brand = await getServerBrand();
+  const locale = await resolveLocale(brand);
+  const messages = loadMessages(locale, brand.id);
+  const country = await getRequestCountry();
 
   return (
     <html
       lang={locale}
+      // Brand scope for CSS (styles/brands/<brand>.css overrides identity and
+      // action tokens under html[data-brand='goapply']) and for tests.
+      data-brand={brand.id}
       // Light is the default theme (ruling R3). The inline script below flips
       // data-theme to the persisted preference BEFORE first paint so there is
       // no light→dark flash (FOUC). suppressHydrationWarning silences React's
@@ -136,8 +153,10 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-bg-page text-ink-900">
-        <Providers locale={locale} messages={messages}>
+        <Providers locale={locale} messages={messages} brand={publicBrand(brand)}>
+          <WrongBrandNudge country={country} locale={locale} />
           {children}
+          <AnalyticsConsent country={country} />
         </Providers>
       </body>
     </html>

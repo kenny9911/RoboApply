@@ -1,6 +1,6 @@
 {
   "common": {
-    "app_name": "RoboApply",
+    "app_name": "%BRAND%",
     "loading": "Loading…",
     "sign_in": "Sign in",
     "sign_out": "Sign out",
@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Main navigation",
-    "brand_home": "RoboApply — go to Jobs",
+    "brand_home": "%BRAND% — go to Jobs",
     "jobs": "Jobs",
     "resume": "Resume",
     "applications": "Applications",
@@ -106,7 +106,7 @@
       "hidden_count": "Hiding {count} jobs that are a weaker fit.",
       "show_them": "Show them.",
       "search_everywhere": "Search everywhere",
-      "search_everywhere_sub": "Also read job banks outside RoboApply.",
+      "search_everywhere_sub": "Also read job banks outside %BRAND%.",
       "setup_cta": "Tell us what you're looking for"
     },
     "posted": {
@@ -1993,7 +1993,7 @@
   "auth": {
     "login": {
       "title": "Welcome back",
-      "subtitle": "Sign in to RoboApply.",
+      "subtitle": "Sign in to %BRAND%.",
       "email": "Email",
       "password": "Password",
       "submit": "Sign in",
@@ -2022,7 +2022,7 @@
       "tagline": "Find out why you're not getting interviews",
       "eyebrow": "Find out why you're not getting interviews",
       "headline": "Get hired <em>faster</em>.",
-      "lead": "RoboApply reads your resume, shows you the jobs you can actually get, names exactly what is missing, and gets you ready for the interview.",
+      "lead": "%BRAND% reads your resume, shows you the jobs you can actually get, names exactly what is missing, and gets you ready for the interview.",
       "feature_resume": "A resume that scanners can read",
       "feature_interview": "Practice interviews that talk back",
       "feature_track": "Every application in one place"
@@ -2030,9 +2030,9 @@
   },
   "landing": {
     "meta": {
-      "title": "Why you're not getting interviews | RoboApply",
-      "description": "RoboApply reads your resume, reads 1,000+ open roles, shows you the ones you can actually get, and names exactly what is missing. Then a live AI interviewer gets you ready. Free to start. 9 languages.",
-      "ogTitle": "RoboApply — find out why you're not getting interviews",
+      "title": "Why you're not getting interviews | %BRAND%",
+      "description": "%BRAND% reads your resume, reads 1,000+ open roles, shows you the ones you can actually get, and names exactly what is missing. Then a live AI interviewer gets you ready. Free to start. 9 languages.",
+      "ogTitle": "%BRAND% — find out why you're not getting interviews",
       "ogDescription": "Drop your resume. See which open roles you can actually get, what each one asks for that you're missing, and practice the interview with a live AI interviewer. Start free.",
       "keywords": "why am I not getting interviews, resume gap analysis, AI resume check, jobs that fit my resume, AI mock interview practice, AI interview practice, resume keyword check, job search"
     },
@@ -2053,7 +2053,7 @@
       "reassure": "Free plan · No card required · Nothing is ever sent to an employer for you",
       "log": {
         "aria": "A sample gap report. It reads a resume with six years of payments work, reads 1,284 open postings, ranks 41 as a fit, and then names the gaps: Kubernetes appears in twelve of those postings and not on the resume; nine postings ask for team leadership while the resume says helped with; six postings ask for a security clearance, so they are removed. It shows the top job at 87 out of 100, notes three bullets that need a number, and lists the six questions the interviewer is most likely to ask.",
-        "title": "roboapply — gap report",
+        "title": "%BRAND% — gap report",
         "live": "Sample",
         "lines": {
           "l1": {
@@ -2294,11 +2294,11 @@
       "title": "What job seekers ask us.",
       "items": {
         "q1": {
-          "q": "What is RoboApply?",
-          "a": "RoboApply reads your resume, reads live job postings, and tells you two things about each job: how well your resume lines up with it, and exactly what it asks for that your resume does not say. Then it helps you fix the resume and practice the interview with a live AI interviewer."
+          "q": "What is %BRAND%?",
+          "a": "%BRAND% reads your resume, reads live job postings, and tells you two things about each job: how well your resume lines up with it, and exactly what it asks for that your resume does not say. Then it helps you fix the resume and practice the interview with a live AI interviewer."
         },
         "q2": {
-          "q": "Does RoboApply apply to jobs for me?",
+          "q": "Does %BRAND% apply to jobs for me?",
           "a": "No. Nothing is ever sent to an employer under your name. You open the company's site and apply there; the job moves to Applied on your board by itself, and you can undo that in one tap if you changed your mind."
         },
         "q3": {
@@ -2311,14 +2311,14 @@
         },
         "q5": {
           "q": "How is this different from tools that mass-apply for you?",
-          "a": "Those tools send more of the same resume. In one Business Insider test, a mass-apply bot got a 6% response rate. RoboApply does the opposite: fewer jobs, each one read properly, with the missing words named so you can fix them before you apply. And the same product then prepares you for the interview."
+          "a": "Those tools send more of the same resume. In one Business Insider test, a mass-apply bot got a 6% response rate. %BRAND% does the opposite: fewer jobs, each one read properly, with the missing words named so you can fix them before you apply. And the same product then prepares you for the interview."
         },
         "q6": {
           "q": "How much does it cost?",
           "a": "The core product is free forever, plus one practice interview a month. Starter is $15/month with 10 practice interviews; Growth is $29/month with 28. A credit is a 20-minute session charged by the second and refilled monthly. Pay by card, or Alipay in China."
         },
         "q7": {
-          "q": "What languages does RoboApply speak?",
+          "q": "What languages does %BRAND% speak?",
           "a": "Nine: English, Spanish, Portuguese, French, German, Japanese, Korean, and Simplified and Traditional Chinese. Practice interviews work in all nine today, including the report. The interface is fully translated into English, Japanese, and both Chinese variants, with the rest arriving now."
         },
         "q8": {
@@ -2340,9 +2340,9 @@
     },
     "footer": {
       "status": "Nothing is sent to an employer for you",
-      "note": "© RoboApply. Built by candidates, for candidates.",
+      "note": "© %BRAND%. Built by candidates, for candidates.",
       "tagline": "Find out why you're not getting interviews.",
-      "lang_title": "RoboApply in your language"
+      "lang_title": "%BRAND% in your language"
     }
   },
   "errors": {
@@ -2652,7 +2652,7 @@
     "entry_hint": "Describe your next role and search connected job sources."
   },
   "jobSearchApi": {
-    "eyebrow": "RoboApply for developers",
+    "eyebrow": "%BRAND% for developers",
     "title": "Job search, ready to connect.",
     "intro": "Bring structured job search into your product through one API, with source attribution and provider status in every response.",
     "search": "Explore job search",
@@ -2666,7 +2666,7 @@
     "access_title": "Keep access in your control.",
     "access_body": "Create a named key for your server and revoke it from your account. Keep keys on your backend, outside browser code.",
     "quickstart": "Make your first search",
-    "quickstart_body": "Create a key, store it as an environment variable on your server, and send this request to your RoboApply origin.",
+    "quickstart_body": "Create a key, store it as an environment variable on your server, and send this request to your %BRAND% origin.",
     "example": "Example request",
     "example_note": "Replace ROBOAPPLY_ORIGIN with your deployment URL and ROBOAPPLY_JOB_SEARCH_KEY with your API key.",
     "response_title": "Handle the response",
@@ -2674,7 +2674,7 @@
     "terms_title": "Source availability and usage",
     "terms_body": "Available sources depend on server configuration and provider entitlements. Provider usage terms still apply to job data, including storage and redistribution. This endpoint does not submit applications.",
     "keys_title": "API keys",
-    "keys_intro": "Connect your server to RoboApply job search. Each key belongs to your account and can be revoked independently.",
+    "keys_intro": "Connect your server to %BRAND% job search. Each key belongs to your account and can be revoked independently.",
     "key_name": "Key name",
     "key_placeholder": "For example, careers portal",
     "create": "Create API key",

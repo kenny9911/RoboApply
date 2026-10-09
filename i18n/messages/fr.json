@@ -1,6 +1,6 @@
 {
   "common": {
-    "app_name": "RoboApply",
+    "app_name": "%BRAND%",
     "loading": "Chargement…",
     "sign_in": "Se connecter",
     "sign_out": "Se déconnecter",
@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Navigation principale",
-    "brand_home": "RoboApply — aller aux offres",
+    "brand_home": "%BRAND% — aller aux offres",
     "jobs": "Offres",
     "resume": "CV",
     "applications": "Candidatures",
@@ -106,7 +106,7 @@
       "hidden_count": "{count} offres masquées parce qu'elles correspondent moins.",
       "show_them": "Les afficher.",
       "search_everywhere": "Chercher partout",
-      "search_everywhere_sub": "Lire aussi les sites d'emploi en dehors de RoboApply.",
+      "search_everywhere_sub": "Lire aussi les sites d'emploi en dehors de %BRAND%.",
       "setup_cta": "Dis-nous ce que tu cherches"
     },
     "posted": {
@@ -1993,7 +1993,7 @@
   "auth": {
     "login": {
       "title": "Content de te revoir",
-      "subtitle": "Connecte-toi à RoboApply.",
+      "subtitle": "Connecte-toi à %BRAND%.",
       "email": "E-mail",
       "password": "Mot de passe",
       "submit": "Se connecter",
@@ -2022,7 +2022,7 @@
       "tagline": "Découvre pourquoi tu n'obtiens pas d'entretiens",
       "eyebrow": "Découvre pourquoi tu n'obtiens pas d'entretiens",
       "headline": "Sois recruté <em>plus vite</em>.",
-      "lead": "RoboApply lit ton CV, te montre les offres que tu peux vraiment décrocher, nomme exactement ce qui manque et te prépare à l'entretien.",
+      "lead": "%BRAND% lit ton CV, te montre les offres que tu peux vraiment décrocher, nomme exactement ce qui manque et te prépare à l'entretien.",
       "feature_resume": "Un CV que les logiciels savent lire",
       "feature_interview": "Des entretiens d'entraînement qui te répondent",
       "feature_track": "Toutes tes candidatures au même endroit"
@@ -2030,9 +2030,9 @@
   },
   "landing": {
     "meta": {
-      "title": "Pourquoi tu n'obtiens pas d'entretiens | RoboApply",
-      "description": "RoboApply lit ton CV, lit plus de 1 000 offres ouvertes, te montre celles que tu peux vraiment décrocher et nomme exactement ce qui manque. Ensuite, une interlocutrice IA en direct te prépare. Gratuit pour commencer. 9 langues.",
-      "ogTitle": "RoboApply — découvre pourquoi tu n'obtiens pas d'entretiens",
+      "title": "Pourquoi tu n'obtiens pas d'entretiens | %BRAND%",
+      "description": "%BRAND% lit ton CV, lit plus de 1 000 offres ouvertes, te montre celles que tu peux vraiment décrocher et nomme exactement ce qui manque. Ensuite, une interlocutrice IA en direct te prépare. Gratuit pour commencer. 9 langues.",
+      "ogTitle": "%BRAND% — découvre pourquoi tu n'obtiens pas d'entretiens",
       "ogDescription": "Dépose ton CV. Vois quelles offres tu peux vraiment décrocher, ce que chacune demande et qui te manque, puis entraîne-toi à l'entretien avec une IA vocale. Commence gratuitement.",
       "keywords": "pourquoi je n'obtiens pas d'entretiens, analyse des écarts du CV, vérifier son CV avec l'IA, offres qui correspondent à mon CV, entretien d'entraînement avec une IA, simulation d'entretien IA, mots-clés du CV, recherche d'emploi"
     },
@@ -2053,7 +2053,7 @@
       "reassure": "Offre gratuite · Sans carte · Rien n'est jamais envoyé à un employeur à ta place",
       "log": {
         "aria": "Un exemple de rapport d'écarts. Il lit un CV avec six ans d'expérience dans les paiements, lit 1 284 annonces ouvertes, en classe 41 comme correspondantes, puis nomme les écarts : Kubernetes apparaît dans douze de ces annonces et pas sur le CV ; neuf annonces demandent d'avoir encadré une équipe alors que le CV dit « participé à » ; six annonces exigent une habilitation de sécurité et sont donc retirées. Il montre la meilleure offre à 87 sur 100, signale trois lignes auxquelles il manque un chiffre, et liste les six questions que l'interlocuteur posera le plus probablement.",
-        "title": "roboapply — rapport d'écarts",
+        "title": "%BRAND% — rapport d'écarts",
         "live": "Exemple",
         "lines": {
           "l1": {
@@ -2294,11 +2294,11 @@
       "title": "Ce que les candidats nous demandent.",
       "items": {
         "q1": {
-          "q": "Qu'est-ce que RoboApply ?",
-          "a": "RoboApply lit ton CV, lit des annonces en ligne et te dit deux choses sur chaque offre : à quel point ton CV lui correspond, et ce qu'elle demande exactement que ton CV ne dit pas. Ensuite, il t'aide à corriger le CV et à t'entraîner à l'entretien avec une IA vocale."
+          "q": "Qu'est-ce que %BRAND% ?",
+          "a": "%BRAND% lit ton CV, lit des annonces en ligne et te dit deux choses sur chaque offre : à quel point ton CV lui correspond, et ce qu'elle demande exactement que ton CV ne dit pas. Ensuite, il t'aide à corriger le CV et à t'entraîner à l'entretien avec une IA vocale."
         },
         "q2": {
-          "q": "Est-ce que RoboApply postule aux offres à ma place ?",
+          "q": "Est-ce que %BRAND% postule aux offres à ma place ?",
           "a": "Non. Rien n'est jamais envoyé à un employeur en ton nom. Tu ouvres le site de l'entreprise et tu postules là-bas ; l'offre passe toute seule en Envoyées sur ton tableau, et tu peux annuler ça d'un geste si tu changes d'avis."
         },
         "q3": {
@@ -2311,14 +2311,14 @@
         },
         "q5": {
           "q": "En quoi est-ce différent des outils qui postulent en masse à ta place ?",
-          "a": "Ces outils envoient plus souvent le même CV. Lors d'un test de Business Insider, un robot de candidature de masse a obtenu 6 % de réponses. RoboApply fait l'inverse : moins d'offres, chacune lue correctement, avec les mots manquants nommés pour que tu les corriges avant de postuler. Et le même produit te prépare ensuite à l'entretien."
+          "a": "Ces outils envoient plus souvent le même CV. Lors d'un test de Business Insider, un robot de candidature de masse a obtenu 6 % de réponses. %BRAND% fait l'inverse : moins d'offres, chacune lue correctement, avec les mots manquants nommés pour que tu les corriges avant de postuler. Et le même produit te prépare ensuite à l'entretien."
         },
         "q6": {
           "q": "Combien ça coûte ?",
           "a": "Le cœur du produit est gratuit pour toujours, plus un entretien d'entraînement par mois. Starter coûte 15 $ par mois avec 10 entretiens d'entraînement ; Growth coûte 29 $ par mois avec 28. Un crédit correspond à une session de 20 minutes facturée à la seconde et rechargée chaque mois. Paiement par carte, ou par Alipay en Chine."
         },
         "q7": {
-          "q": "Quelles langues RoboApply parle-t-il ?",
+          "q": "Quelles langues %BRAND% parle-t-il ?",
           "a": "Neuf : anglais, espagnol, portugais, français, allemand, japonais, coréen, et chinois simplifié et traditionnel. Les entretiens d'entraînement fonctionnent aujourd'hui dans les neuf, compte rendu compris. L'interface est entièrement traduite en anglais, en japonais et dans les deux variantes du chinois, le reste arrive en ce moment."
         },
         "q8": {
@@ -2340,9 +2340,9 @@
     },
     "footer": {
       "status": "Rien n'est envoyé à un employeur à ta place",
-      "note": "© RoboApply. Construit par des candidats, pour des candidats.",
+      "note": "© %BRAND%. Construit par des candidats, pour des candidats.",
       "tagline": "Découvre pourquoi tu n'obtiens pas d'entretiens.",
-      "lang_title": "RoboApply dans ta langue"
+      "lang_title": "%BRAND% dans ta langue"
     }
   },
   "errors": {
@@ -2652,7 +2652,7 @@
     "entry_hint": "Décris ton prochain poste et lance une recherche dans les sources d’emploi connectées."
   },
   "jobSearchApi": {
-    "eyebrow": "RoboApply pour les développeurs",
+    "eyebrow": "%BRAND% pour les développeurs",
     "title": "La recherche d’emploi, prête à intégrer.",
     "intro": "Intègre une recherche d’emploi structurée à ton produit avec une seule API. Chaque réponse indique les sources des données et l’état des fournisseurs.",
     "search": "Explorer la recherche d’emploi",
@@ -2666,7 +2666,7 @@
     "access_title": "Garde le contrôle des accès.",
     "access_body": "Crée une clé nommée pour ton serveur et révoque-la depuis ton compte. Conserve les clés sur ton backend, hors du code du navigateur.",
     "quickstart": "Lance ta première recherche",
-    "quickstart_body": "Crée une clé, enregistre-la dans une variable d’environnement sur ton serveur, puis envoie cette requête à l’adresse de ton déploiement RoboApply.",
+    "quickstart_body": "Crée une clé, enregistre-la dans une variable d’environnement sur ton serveur, puis envoie cette requête à l’adresse de ton déploiement %BRAND%.",
     "example": "Exemple de requête",
     "example_note": "Remplace ROBOAPPLY_ORIGIN par l’URL de ton déploiement et ROBOAPPLY_JOB_SEARCH_KEY par ta clé API.",
     "response_title": "Traite la réponse",
@@ -2674,7 +2674,7 @@
     "terms_title": "Disponibilité et utilisation des sources",
     "terms_body": "Les sources disponibles dépendent de la configuration du serveur et des droits accordés par les fournisseurs. Les données d’emploi restent soumises aux conditions des fournisseurs, y compris pour le stockage et la redistribution. Cet endpoint n’envoie aucune candidature.",
     "keys_title": "Clés API",
-    "keys_intro": "Connecte ton serveur à la recherche d’emploi RoboApply. Chaque clé appartient à ton compte et peut être révoquée séparément.",
+    "keys_intro": "Connecte ton serveur à la recherche d’emploi %BRAND%. Chaque clé appartient à ton compte et peut être révoquée séparément.",
     "key_name": "Nom de la clé",
     "key_placeholder": "Par exemple, portail emploi",
     "create": "Créer une clé API",

@@ -113,7 +113,7 @@
     "entry_hint": "Describe your next role and search connected job sources."
   },
   "jobSearchApi": {
-    "eyebrow": "RoboApply for developers",
+    "eyebrow": "%BRAND% for developers",
     "title": "Job search, ready to connect.",
     "intro": "Bring structured job search into your product through one API, with source attribution and provider status in every response.",
     "search": "Explore job search",
@@ -127,7 +127,7 @@
     "access_title": "Keep access in your control.",
     "access_body": "Create a named key for your server and revoke it from your account. Keep keys on your backend, outside browser code.",
     "quickstart": "Make your first search",
-    "quickstart_body": "Create a key, store it as an environment variable on your server, and send this request to your RoboApply origin.",
+    "quickstart_body": "Create a key, store it as an environment variable on your server, and send this request to your %BRAND% origin.",
     "example": "Example request",
     "example_note": "Replace ROBOAPPLY_ORIGIN with your deployment URL and ROBOAPPLY_JOB_SEARCH_KEY with your API key.",
     "response_title": "Handle the response",
@@ -135,7 +135,7 @@
     "terms_title": "Source availability and usage",
     "terms_body": "Available sources depend on server configuration and provider entitlements. Provider usage terms still apply to job data, including storage and redistribution. This endpoint does not submit applications.",
     "keys_title": "API keys",
-    "keys_intro": "Connect your server to RoboApply job search. Each key belongs to your account and can be revoked independently.",
+    "keys_intro": "Connect your server to %BRAND% job search. Each key belongs to your account and can be revoked independently.",
     "key_name": "Key name",
     "key_placeholder": "For example, careers portal",
     "create": "Create API key",

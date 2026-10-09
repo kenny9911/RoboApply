@@ -12,8 +12,24 @@ import { API_BASE } from '../config';
 import { LOCALE_COOKIE } from '../localeConfig';
 import { isProtectedPath } from '../proxyPaths';
 
+/**
+ * `GET /api/v1/public/brand` — the requesting host's brand and its resolved
+ * capabilities (R-04, R-24). Read by lib/flags.ts `useCapabilities()`.
+ * FND-7's area wrapper `lib/api/brand.ts` may wrap it; keep the path here.
+ */
+export const PUBLIC_BRAND_PATH = '/api/v1/public/brand';
+
+/** Dev/preview brand override cookie, set by proxy.ts from `?__brand=` (lib/brand/runtime.ts). */
+const BRAND_OVERRIDE_COOKIE = 'ra_brand_override';
+
 export type RoboErrorCode =
   | 'auth_expired'
+  // The session belongs to the other product brand (requireAuth 401). Same
+  // recovery as a dead session: drop the cookie, sign in on this site.
+  | 'auth_other_brand'
+  // Login: the password matched an account of the other brand (409, with
+  // `payload.details.otherBrandUrl`).
+  | 'account_other_brand'
   | 'account_disabled'
   | 'subscription_locked'
   | 'quota_exceeded'
@@ -69,6 +85,10 @@ function normalizeCode(
     case 'AUTH_REQUIRED':
     case 'auth_expired':
       return 'auth_expired';
+    case 'auth_other_brand':
+      return 'auth_other_brand';
+    case 'account_other_brand':
+      return 'account_other_brand';
     case 'ACCOUNT_DISABLED':
     case 'account_disabled':
       return 'account_disabled';
@@ -183,15 +203,36 @@ function getBearerToken(): string | null {
  * forwarded `opts.cookie` string in a server (RSC) context.
  */
 function getLocaleFromCookie(cookieStr?: string): string | null {
+  return readCookie(LOCALE_COOKIE, cookieStr);
+}
+
+/** Read one cookie from the forwarded string (RSC) or `document.cookie` (browser). */
+function readCookie(name: string, cookieStr?: string): string | null {
   const source =
     cookieStr ?? (typeof document !== 'undefined' ? document.cookie : '');
   if (!source) return null;
   const match = source
-    .split('; ')
-    .find((row) => row.startsWith(`${LOCALE_COOKIE}=`));
+    .split(/;\s*/)
+    .find((row) => row.startsWith(`${name}=`));
   if (!match) return null;
-  const value = decodeURIComponent(match.slice(LOCALE_COOKIE.length + 1));
-  return value || null;
+  try {
+    const value = decodeURIComponent(match.slice(name.length + 1));
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Development only: echo the `ra_brand_override` cookie as `X-RA-Brand` so
+ * the API serves the brand the page is showing (ARCHITECTURE.md §1.5).
+ * Express accepts the header on dev/preview hosts only, and production
+ * bundles never send it (same-origin requests carry the real Host).
+ */
+export function devBrandHeader(cookieStr?: string): string | null {
+  if (process.env.NODE_ENV === 'production') return null;
+  const value = readCookie(BRAND_OVERRIDE_COOKIE, cookieStr);
+  return value === 'roboapply' || value === 'goapply' ? value : null;
 }
 
 export async function request<T>(
@@ -211,6 +252,12 @@ export async function request<T>(
   if (!headers['X-Robo-Locale']) {
     const locale = getLocaleFromCookie(opts.cookie);
     if (locale) headers['X-Robo-Locale'] = locale;
+  }
+
+  // Dev-only brand override echo (never in production builds).
+  if (!headers['X-RA-Brand']) {
+    const devBrand = devBrandHeader(opts.cookie);
+    if (devBrand) headers['X-RA-Brand'] = devBrand;
   }
 
   // Browser path: forward localStorage bearer as a fallback in case the
@@ -260,8 +307,10 @@ export async function request<T>(
     // Dead/absent session on a page that requires one → force re-login.
     // Public pages (landing, /login itself) just see the rejection: their
     // logged-out rendering is the correct outcome there.
+    // A session from the other brand is just as unusable here: the server
+    // rejects it on every call while the proxy still sees a cookie.
     if (
-      error.code === 'auth_expired' &&
+      (error.code === 'auth_expired' || error.code === 'auth_other_brand') &&
       typeof window !== 'undefined' &&
       isProtectedPath(window.location.pathname)
     ) {

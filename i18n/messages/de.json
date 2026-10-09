@@ -1,6 +1,6 @@
 {
   "common": {
-    "app_name": "RoboApply",
+    "app_name": "%BRAND%",
     "loading": "Wird geladen…",
     "sign_in": "Anmelden",
     "sign_out": "Abmelden",
@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Hauptnavigation",
-    "brand_home": "RoboApply — zu den Jobs",
+    "brand_home": "%BRAND% — zu den Jobs",
     "jobs": "Jobs",
     "resume": "Lebenslauf",
     "applications": "Bewerbungen",
@@ -106,7 +106,7 @@
       "hidden_count": "{count} Jobs ausgeblendet, die schlechter passen.",
       "show_them": "Trotzdem zeigen.",
       "search_everywhere": "Überall suchen",
-      "search_everywhere_sub": "Auch Jobbörsen außerhalb von RoboApply lesen.",
+      "search_everywhere_sub": "Auch Jobbörsen außerhalb von %BRAND% lesen.",
       "setup_cta": "Sag uns, was du suchst"
     },
     "posted": {
@@ -1993,7 +1993,7 @@
   "auth": {
     "login": {
       "title": "Willkommen zurück",
-      "subtitle": "Melde dich bei RoboApply an.",
+      "subtitle": "Melde dich bei %BRAND% an.",
       "email": "E-Mail",
       "password": "Passwort",
       "submit": "Anmelden",
@@ -2022,7 +2022,7 @@
       "tagline": "Finde heraus, warum du keine Einladungen bekommst",
       "eyebrow": "Finde heraus, warum du keine Einladungen bekommst",
       "headline": "<em>Schneller</em> eingestellt werden.",
-      "lead": "RoboApply liest deinen Lebenslauf, zeigt dir die Jobs, die du wirklich bekommen kannst, benennt genau, was fehlt, und bereitet dich auf das Gespräch vor.",
+      "lead": "%BRAND% liest deinen Lebenslauf, zeigt dir die Jobs, die du wirklich bekommen kannst, benennt genau, was fehlt, und bereitet dich auf das Gespräch vor.",
       "feature_resume": "Ein Lebenslauf, den Scanner lesen können",
       "feature_interview": "Übungsgespräche, die zurückreden",
       "feature_track": "Alle Bewerbungen an einem Ort"
@@ -2030,9 +2030,9 @@
   },
   "landing": {
     "meta": {
-      "title": "Warum du keine Einladungen bekommst | RoboApply",
-      "description": "RoboApply liest deinen Lebenslauf, liest über 1.000 offene Stellen, zeigt dir die, die du wirklich bekommen kannst, und benennt genau, was fehlt. Danach macht dich eine sprechende KI-Gesprächspartnerin bereit. Kostenlos starten. 9 Sprachen.",
-      "ogTitle": "RoboApply — finde heraus, warum du keine Einladungen bekommst",
+      "title": "Warum du keine Einladungen bekommst | %BRAND%",
+      "description": "%BRAND% liest deinen Lebenslauf, liest über 1.000 offene Stellen, zeigt dir die, die du wirklich bekommen kannst, und benennt genau, was fehlt. Danach macht dich eine sprechende KI-Gesprächspartnerin bereit. Kostenlos starten. 9 Sprachen.",
+      "ogTitle": "%BRAND% — finde heraus, warum du keine Einladungen bekommst",
       "ogDescription": "Lade deinen Lebenslauf hoch. Sieh, welche offenen Stellen du wirklich bekommen kannst, was jede davon verlangt und dir fehlt, und üb das Gespräch mit einer sprechenden KI. Kostenlos starten.",
       "keywords": "warum bekomme ich keine Einladungen, Lücken im Lebenslauf, Lebenslauf mit KI prüfen, Jobs die zu meinem Lebenslauf passen, Übungsgespräch mit KI, Vorstellungsgespräch üben, Schlagwörter im Lebenslauf, Jobsuche"
     },
@@ -2053,7 +2053,7 @@
       "reassure": "Kostenloser Tarif · Keine Karte nötig · Für dich wird nie etwas an ein Unternehmen geschickt",
       "log": {
         "aria": "Ein Beispielbericht über Lücken. Er liest einen Lebenslauf mit sechs Jahren Erfahrung im Zahlungsverkehr, liest 1.284 offene Anzeigen, stuft 41 als passend ein und benennt dann die Lücken: Kubernetes steht in zwölf dieser Anzeigen und nicht im Lebenslauf; neun Anzeigen verlangen Teamführung, während der Lebenslauf „mitgeholfen“ sagt; sechs Anzeigen verlangen eine Sicherheitsfreigabe und fallen deshalb weg. Er zeigt den besten Job mit 87 von 100, nennt drei Stichpunkte, denen eine Zahl fehlt, und listet die sechs Fragen auf, die im Gespräch am wahrscheinlichsten kommen.",
-        "title": "roboapply — Lückenbericht",
+        "title": "%BRAND% — Lückenbericht",
         "live": "Beispiel",
         "lines": {
           "l1": {
@@ -2294,11 +2294,11 @@
       "title": "Was Jobsuchende uns fragen.",
       "items": {
         "q1": {
-          "q": "Was ist RoboApply?",
-          "a": "RoboApply liest deinen Lebenslauf, liest aktuelle Stellenanzeigen und sagt dir zu jedem Job zwei Dinge: wie gut dein Lebenslauf dazu passt und was genau verlangt wird, das dein Lebenslauf nicht sagt. Danach hilft es dir, den Lebenslauf zu ändern und das Gespräch mit einer sprechenden KI zu üben."
+          "q": "Was ist %BRAND%?",
+          "a": "%BRAND% liest deinen Lebenslauf, liest aktuelle Stellenanzeigen und sagt dir zu jedem Job zwei Dinge: wie gut dein Lebenslauf dazu passt und was genau verlangt wird, das dein Lebenslauf nicht sagt. Danach hilft es dir, den Lebenslauf zu ändern und das Gespräch mit einer sprechenden KI zu üben."
         },
         "q2": {
-          "q": "Bewirbt sich RoboApply für mich?",
+          "q": "Bewirbt sich %BRAND% für mich?",
           "a": "Nein. Unter deinem Namen wird nie etwas an ein Unternehmen geschickt. Du öffnest die Seite des Unternehmens und bewirbst dich dort; der Job rückt in deiner Übersicht von selbst auf „Beworben“, und das kannst du mit einem Tipp rückgängig machen, wenn du es dir anders überlegst."
         },
         "q3": {
@@ -2311,14 +2311,14 @@
         },
         "q5": {
           "q": "Wie unterscheidet sich das von Tools, die massenhaft für dich bewerben?",
-          "a": "Solche Tools verschicken denselben Lebenslauf noch öfter. In einem Test von Business Insider erreichte ein Massenbewerbungs-Bot eine Rücklaufquote von 6 %. RoboApply macht das Gegenteil: weniger Jobs, jeder davon richtig gelesen, mit den fehlenden Wörtern beim Namen genannt, damit du sie vor der Bewerbung ergänzen kannst. Und dasselbe Produkt bereitet dich danach auf das Gespräch vor."
+          "a": "Solche Tools verschicken denselben Lebenslauf noch öfter. In einem Test von Business Insider erreichte ein Massenbewerbungs-Bot eine Rücklaufquote von 6 %. %BRAND% macht das Gegenteil: weniger Jobs, jeder davon richtig gelesen, mit den fehlenden Wörtern beim Namen genannt, damit du sie vor der Bewerbung ergänzen kannst. Und dasselbe Produkt bereitet dich danach auf das Gespräch vor."
         },
         "q6": {
           "q": "Was kostet das?",
           "a": "Der Kern des Produkts ist dauerhaft kostenlos, dazu ein Übungsgespräch pro Monat. Starter kostet 15 $ im Monat mit 10 Übungsgesprächen, Growth 29 $ im Monat mit 28. Ein Credit ist eine Sitzung von 20 Minuten, sekundengenau abgerechnet und monatlich aufgefüllt. Zahlung per Karte, in China per Alipay."
         },
         "q7": {
-          "q": "Welche Sprachen spricht RoboApply?",
+          "q": "Welche Sprachen spricht %BRAND%?",
           "a": "Neun: Englisch, Spanisch, Portugiesisch, Französisch, Deutsch, Japanisch, Koreanisch sowie Chinesisch in Kurz- und Langzeichen. Übungsgespräche funktionieren heute in allen neun, samt Bericht. Die Oberfläche ist vollständig auf Englisch, Japanisch und in beiden chinesischen Varianten übersetzt, der Rest kommt gerade dazu."
         },
         "q8": {
@@ -2340,9 +2340,9 @@
     },
     "footer": {
       "status": "Für dich wird nichts an ein Unternehmen geschickt",
-      "note": "© RoboApply. Von Bewerbenden für Bewerbende gebaut.",
+      "note": "© %BRAND%. Von Bewerbenden für Bewerbende gebaut.",
       "tagline": "Finde heraus, warum du keine Einladungen bekommst.",
-      "lang_title": "RoboApply in deiner Sprache"
+      "lang_title": "%BRAND% in deiner Sprache"
     }
   },
   "errors": {
@@ -2652,7 +2652,7 @@
     "entry_hint": "Beschreibe deinen nächsten Job und durchsuche die verbundenen Jobquellen."
   },
   "jobSearchApi": {
-    "eyebrow": "RoboApply für Entwickler",
+    "eyebrow": "%BRAND% für Entwickler",
     "title": "Jobsuche, bereit zur Integration.",
     "intro": "Integriere strukturierte Jobsuche über eine einzige API in dein Produkt. Jede Antwort enthält die Datenquellen und den Status der Anbieter.",
     "search": "Jobsuche entdecken",
@@ -2666,7 +2666,7 @@
     "access_title": "Behalte die Kontrolle über den Zugriff.",
     "access_body": "Erstelle einen benannten Schlüssel für deinen Server und widerrufe ihn über dein Konto. Speichere Schlüssel im Backend, außerhalb des Browsercodes.",
     "quickstart": "Starte deine erste Suche",
-    "quickstart_body": "Erstelle einen Schlüssel, speichere ihn als Umgebungsvariable auf deinem Server und sende diese Anfrage an die Adresse deiner RoboApply-Installation.",
+    "quickstart_body": "Erstelle einen Schlüssel, speichere ihn als Umgebungsvariable auf deinem Server und sende diese Anfrage an die Adresse deiner %BRAND%-Installation.",
     "example": "Beispielanfrage",
     "example_note": "Ersetze ROBOAPPLY_ORIGIN durch die URL deiner Installation und ROBOAPPLY_JOB_SEARCH_KEY durch deinen API-Schlüssel.",
     "response_title": "Verarbeite die Antwort",
@@ -2674,7 +2674,7 @@
     "terms_title": "Verfügbarkeit und Nutzung der Quellen",
     "terms_body": "Verfügbare Quellen hängen von der Serverkonfiguration und den vereinbarten Zugriffsrechten der Anbieter ab. Für Jobdaten gelten weiterhin die Nutzungsbedingungen der Anbieter, auch für Speicherung und Weiterverbreitung. Dieser Endpunkt versendet keine Bewerbungen.",
     "keys_title": "API-Schlüssel",
-    "keys_intro": "Verbinde deinen Server mit der Jobsuche von RoboApply. Jeder Schlüssel gehört zu deinem Konto und kann einzeln widerrufen werden.",
+    "keys_intro": "Verbinde deinen Server mit der Jobsuche von %BRAND%. Jeder Schlüssel gehört zu deinem Konto und kann einzeln widerrufen werden.",
     "key_name": "Schlüsselname",
     "key_placeholder": "Zum Beispiel Karriereportal",
     "create": "API-Schlüssel erstellen",

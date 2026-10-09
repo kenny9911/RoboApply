@@ -1,6 +1,6 @@
 {
   "common": {
-    "app_name": "RoboApply",
+    "app_name": "%BRAND%",
     "loading": "Cargando…",
     "sign_in": "Iniciar sesión",
     "sign_out": "Cerrar sesión",
@@ -17,7 +17,7 @@
   },
   "nav": {
     "aria_primary": "Navegación principal",
-    "brand_home": "RoboApply — ir a Empleos",
+    "brand_home": "%BRAND% — ir a Empleos",
     "jobs": "Empleos",
     "resume": "Currículum",
     "applications": "Candidaturas",
@@ -106,7 +106,7 @@
       "hidden_count": "Se ocultan {count} empleos que encajan peor.",
       "show_them": "Mostrarlos.",
       "search_everywhere": "Buscar en todas partes",
-      "search_everywhere_sub": "Leer también portales de empleo fuera de RoboApply.",
+      "search_everywhere_sub": "Leer también portales de empleo fuera de %BRAND%.",
       "setup_cta": "Cuéntanos qué buscas"
     },
     "posted": {
@@ -1993,7 +1993,7 @@
   "auth": {
     "login": {
       "title": "Hola de nuevo",
-      "subtitle": "Inicia sesión en RoboApply.",
+      "subtitle": "Inicia sesión en %BRAND%.",
       "email": "Correo electrónico",
       "password": "Contraseña",
       "submit": "Iniciar sesión",
@@ -2022,7 +2022,7 @@
       "tagline": "Descubre por qué no te llaman a entrevistas",
       "eyebrow": "Descubre por qué no te llaman a entrevistas",
       "headline": "Consigue trabajo <em>antes</em>.",
-      "lead": "RoboApply lee tu currículum, te muestra los empleos que puedes conseguir de verdad, nombra exactamente lo que falta y te prepara para la entrevista.",
+      "lead": "%BRAND% lee tu currículum, te muestra los empleos que puedes conseguir de verdad, nombra exactamente lo que falta y te prepara para la entrevista.",
       "feature_resume": "Un currículum que los escáneres pueden leer",
       "feature_interview": "Entrevistas de práctica que te responden",
       "feature_track": "Todas tus candidaturas en un solo sitio"
@@ -2030,9 +2030,9 @@
   },
   "landing": {
     "meta": {
-      "title": "Por qué no te llaman a entrevistas | RoboApply",
-      "description": "RoboApply lee tu currículum, lee más de 1.000 vacantes abiertas, te muestra las que puedes conseguir de verdad y nombra exactamente lo que falta. Después, una entrevistadora de IA por voz te prepara. Empieza gratis. 9 idiomas.",
-      "ogTitle": "RoboApply — descubre por qué no te llaman a entrevistas",
+      "title": "Por qué no te llaman a entrevistas | %BRAND%",
+      "description": "%BRAND% lee tu currículum, lee más de 1.000 vacantes abiertas, te muestra las que puedes conseguir de verdad y nombra exactamente lo que falta. Después, una entrevistadora de IA por voz te prepara. Empieza gratis. 9 idiomas.",
+      "ogTitle": "%BRAND% — descubre por qué no te llaman a entrevistas",
       "ogDescription": "Sube tu currículum. Mira qué vacantes puedes conseguir de verdad, qué pide cada una que a ti te falta, y practica la entrevista con una IA por voz. Empieza gratis.",
       "keywords": "por qué no me llaman a entrevistas, análisis de carencias del currículum, revisar currículum con IA, empleos que encajan con mi currículum, práctica de entrevistas con IA, entrevista simulada con IA, palabras clave del currículum, búsqueda de empleo"
     },
@@ -2053,7 +2053,7 @@
       "reassure": "Plan gratis · Sin tarjeta · Nunca se envía nada a una empresa por ti",
       "log": {
         "aria": "Un informe de carencias de ejemplo. Lee un currículum con seis años de experiencia en pagos, lee 1.284 anuncios abiertos, clasifica 41 como encaje y luego nombra las carencias: Kubernetes aparece en doce de esos anuncios y no en el currículum; nueve anuncios piden haber dirigido un equipo mientras el currículum dice «ayudé con»; seis anuncios piden una habilitación de seguridad, así que se descartan. Muestra el mejor empleo con 87 sobre 100, señala tres líneas que necesitan un número y enumera las seis preguntas que es más probable que haga quien entreviste.",
-        "title": "roboapply — informe de carencias",
+        "title": "%BRAND% — informe de carencias",
         "live": "Ejemplo",
         "lines": {
           "l1": {
@@ -2294,11 +2294,11 @@
       "title": "Lo que nos pregunta quien busca empleo.",
       "items": {
         "q1": {
-          "q": "¿Qué es RoboApply?",
-          "a": "RoboApply lee tu currículum, lee anuncios de empleo reales y te dice dos cosas de cada empleo: qué tan bien encaja tu currículum con él y qué pide exactamente que tu currículum no dice. Después te ayuda a arreglar el currículum y a practicar la entrevista con una IA por voz."
+          "q": "¿Qué es %BRAND%?",
+          "a": "%BRAND% lee tu currículum, lee anuncios de empleo reales y te dice dos cosas de cada empleo: qué tan bien encaja tu currículum con él y qué pide exactamente que tu currículum no dice. Después te ayuda a arreglar el currículum y a practicar la entrevista con una IA por voz."
         },
         "q2": {
-          "q": "¿RoboApply se postula a los empleos por mí?",
+          "q": "¿%BRAND% se postula a los empleos por mí?",
           "a": "No. Nunca se envía nada a una empresa a tu nombre. Tú abres la web de la empresa y te postulas allí; el empleo pasa solo a Enviadas en tu tablero, y puedes deshacerlo con un toque si cambias de idea."
         },
         "q3": {
@@ -2311,14 +2311,14 @@
         },
         "q5": {
           "q": "¿En qué se diferencia de las herramientas que se postulan en masa por ti?",
-          "a": "Esas herramientas mandan más veces el mismo currículum. En una prueba de Business Insider, un bot de postulación masiva obtuvo un 6 % de respuesta. RoboApply hace lo contrario: menos empleos, cada uno leído en serio, con las palabras que faltan nombradas para que las arregles antes de postularte. Y el mismo producto te prepara después para la entrevista."
+          "a": "Esas herramientas mandan más veces el mismo currículum. En una prueba de Business Insider, un bot de postulación masiva obtuvo un 6 % de respuesta. %BRAND% hace lo contrario: menos empleos, cada uno leído en serio, con las palabras que faltan nombradas para que las arregles antes de postularte. Y el mismo producto te prepara después para la entrevista."
         },
         "q6": {
           "q": "¿Cuánto cuesta?",
           "a": "El producto básico es gratis para siempre, más una entrevista de práctica al mes. Starter cuesta 15 $ al mes con 10 entrevistas de práctica; Growth cuesta 29 $ al mes con 28. Un crédito es una sesión de 20 minutos cobrada por segundos y repuesta cada mes. Paga con tarjeta, o con Alipay en China."
         },
         "q7": {
-          "q": "¿Qué idiomas habla RoboApply?",
+          "q": "¿Qué idiomas habla %BRAND%?",
           "a": "Nueve: inglés, español, portugués, francés, alemán, japonés, coreano y chino simplificado y tradicional. Las entrevistas de práctica ya funcionan en los nueve, informe incluido. La interfaz está traducida por completo al inglés, al japonés y a las dos variantes del chino, y el resto está llegando ahora."
         },
         "q8": {
@@ -2340,9 +2340,9 @@
     },
     "footer": {
       "status": "No se envía nada a una empresa por ti",
-      "note": "© RoboApply. Hecho por candidatos, para candidatos.",
+      "note": "© %BRAND%. Hecho por candidatos, para candidatos.",
       "tagline": "Descubre por qué no te llaman a entrevistas.",
-      "lang_title": "RoboApply en tu idioma"
+      "lang_title": "%BRAND% en tu idioma"
     }
   },
   "errors": {
@@ -2652,7 +2652,7 @@
     "entry_hint": "Describe tu próximo trabajo y busca en las fuentes de empleo conectadas."
   },
   "jobSearchApi": {
-    "eyebrow": "RoboApply para desarrolladores",
+    "eyebrow": "%BRAND% para desarrolladores",
     "title": "La búsqueda de empleo, lista para integrar.",
     "intro": "Incorpora búsquedas de empleo con datos estructurados en tu producto mediante una sola API, con atribución de fuentes y estado de los proveedores en cada respuesta.",
     "search": "Explorar la búsqueda de empleo",
@@ -2666,7 +2666,7 @@
     "access_title": "Mantén el control del acceso.",
     "access_body": "Crea una clave con nombre para tu servidor y revócala desde tu cuenta. Guarda las claves en tu backend, fuera del código del navegador.",
     "quickstart": "Haz tu primera búsqueda",
-    "quickstart_body": "Crea una clave, guárdala como variable de entorno en tu servidor y envía esta solicitud a la dirección de tu despliegue de RoboApply.",
+    "quickstart_body": "Crea una clave, guárdala como variable de entorno en tu servidor y envía esta solicitud a la dirección de tu despliegue de %BRAND%.",
     "example": "Ejemplo de solicitud",
     "example_note": "Reemplaza ROBOAPPLY_ORIGIN por la URL de tu despliegue y ROBOAPPLY_JOB_SEARCH_KEY por tu clave de API.",
     "response_title": "Procesa la respuesta",
@@ -2674,7 +2674,7 @@
     "terms_title": "Disponibilidad y uso de las fuentes",
     "terms_body": "Las fuentes disponibles dependen de la configuración del servidor y de los permisos contratados con los proveedores. Los datos de empleo siguen sujetos a los términos de cada proveedor, incluidos el almacenamiento y la redistribución. Este endpoint no envía postulaciones.",
     "keys_title": "Claves de API",
-    "keys_intro": "Conecta tu servidor a la búsqueda de empleo de RoboApply. Cada clave pertenece a tu cuenta y se puede revocar de forma independiente.",
+    "keys_intro": "Conecta tu servidor a la búsqueda de empleo de %BRAND%. Cada clave pertenece a tu cuenta y se puede revocar de forma independiente.",
     "key_name": "Nombre de la clave",
     "key_placeholder": "Por ejemplo, portal de empleos",
     "create": "Crear clave de API",

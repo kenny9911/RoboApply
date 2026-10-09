@@ -35,8 +35,35 @@ export function isLocale(value: string | undefined): value is RoboLocale {
  * components can build crawlable language links without importing the
  * message bundles.
  */
-export function localePath(locale: RoboLocale): string {
-  return locale === DEFAULT_LOCALE ? '/' : `/${locale}`;
+export function localePath(
+  locale: RoboLocale,
+  defaultLocale: RoboLocale = DEFAULT_LOCALE,
+): string {
+  return locale === defaultLocale ? '/' : `/${locale}`;
+}
+
+// ── Brand clamp helpers ─────────────────────────────────────────────────────
+//
+// Each product brand serves a subset of LOCALES (lib/brand: RoboApply all 9,
+// default `en`; GoApply `zh` + `en`, default `zh`). These helpers take the
+// brand's list explicitly (`brand.locales`, `brand.defaultLocale`) so this
+// module stays free of brand and bundle imports and remains client-safe.
+
+/** True when `value` is one of `allowed`. */
+export function isLocaleIn(
+  value: string | null | undefined,
+  allowed: readonly RoboLocale[],
+): value is RoboLocale {
+  return !!value && (allowed as readonly string[]).includes(value);
+}
+
+/** Narrow `value` to `allowed`, else `fallback` (the brand's default locale). */
+export function clampLocale(
+  value: string | null | undefined,
+  allowed: readonly RoboLocale[],
+  fallback: RoboLocale,
+): RoboLocale {
+  return isLocaleIn(value, allowed) ? value : fallback;
 }
 
 /** Native display label for every locale (landing language menu + SEO). */
@@ -93,35 +120,55 @@ export const HREFLANG: Record<RoboLocale, string> = {
  * anything zh-* else → zh; pt-BR/pt-PT → pt; en-GB → en; …).
  * Tags are assumed to be in preference order (q-values pre-sorted or ignored).
  */
-export function matchLocale(tags: readonly string[]): RoboLocale | null {
+export function matchLocale(
+  tags: readonly string[],
+  allowed: readonly RoboLocale[] = LOCALES,
+): RoboLocale | null {
   for (const raw of tags) {
-    const tag = raw.trim();
-    if (!tag) continue;
-    if (isLocale(tag)) return tag;
-    const lower = tag.toLowerCase();
-    if (lower.startsWith('zh')) {
-      // Traditional-script regions and explicit Hant → zh-TW; rest → zh.
-      if (/hant|tw|hk|mo/.test(lower)) return 'zh-TW';
-      return 'zh';
-    }
-    const base = lower.split('-')[0];
-    if (isLocale(base)) return base;
+    const candidate = matchOneTag(raw);
+    // A brand that does not serve the matched locale skips to the next tag.
+    if (candidate && isLocaleIn(candidate, allowed)) return candidate;
   }
   return null;
 }
 
+function matchOneTag(raw: string): RoboLocale | null {
+  const tag = raw.trim();
+  if (!tag) return null;
+  if (isLocale(tag)) return tag;
+  const lower = tag.toLowerCase();
+  if (lower.startsWith('zh')) {
+    // Traditional-script regions and explicit Hant → zh-TW; rest → zh.
+    if (/hant|tw|hk|mo/.test(lower)) return 'zh-TW';
+    return 'zh';
+  }
+  const base = lower.split('-')[0];
+  return isLocale(base) ? base : null;
+}
+
 /**
- * The locales the in-app language switcher offers, with native display
- * labels. This is the user-facing subset of LOCALES — extend it as each
- * additional bundle is completed. (es / fr / pt / de are declared in LOCALES
- * for forward-compat but fall back to `en` and are intentionally hidden here.)
+ * THE language-switcher list — one list for every switcher (the in-app
+ * LanguageSwitcher, AuthShell and the landing LanguageMenu; ARCHITECTURE.md
+ * §1.6). Pass the brand's locales (`useBrand().locales`) so GoApply offers
+ * only 简体中文 + English; with no argument it is every locale (RoboApply).
+ * Order follows LOCALES; labels are native names.
  */
-export const READY_LOCALES: { code: RoboLocale; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'zh', label: '简体中文' },
-  { code: 'zh-TW', label: '繁體中文' },
-  { code: 'ja', label: '日本語' },
-];
+export function switcherLocales(
+  allowed: readonly RoboLocale[] = LOCALES,
+): { code: RoboLocale; label: string }[] {
+  return LOCALES.filter((code) => isLocaleIn(code, allowed)).map((code) => ({
+    code,
+    label: LOCALE_LABELS[code],
+  }));
+}
+
+/**
+ * RoboApply's switcher list (all nine bundles are complete). Kept as a
+ * constant for existing importers; new code calls
+ * `switcherLocales(brand.locales)` so the list follows the brand.
+ */
+export const READY_LOCALES: { code: RoboLocale; label: string }[] =
+  switcherLocales(LOCALES);
 
 /**
  * The languages a MOCK INTERVIEW can be conducted in. This is a different
