@@ -17,7 +17,7 @@
 import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
 import { resolveTimeZone, sqlLocalTime } from '../../../lib/timeBuckets.js';
-import { getRateCard, tierPriceUsd, tierDailyCap, type RateCard } from '../../../lib/rateCard.js';
+import { getRateCard, tierPriceUsd, tierDailyCap } from '../../../lib/rateCard.js';
 import { featureForSku, SHARED_COST_USER_ID } from '../lib/raFeatureCatalog.js';
 
 const MAX_USERS = 5000; // admin table hard cap; logged when exceeded
@@ -30,9 +30,42 @@ export interface Range {
 
 export function resolveRange(fromRaw?: string, toRaw?: string, tzRaw?: string): Range {
   const tz = resolveTimeZone(tzRaw);
-  const to = toRaw ? new Date(toRaw) : new Date();
-  const from = fromRaw ? new Date(fromRaw) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const to = toRaw ? parseRangeBound(toRaw, tz, true) : new Date();
+  const from = fromRaw ? parseRangeBound(fromRaw, tz, false) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to) {
+    throw new RangeError('from and to must be valid dates with from before to');
+  }
+  if (to.getTime() - from.getTime() > 366 * 86_400_000) throw new RangeError('Select a reporting range of at most 366 days');
   return { from, to, tz };
+}
+
+/** Date-only UI ranges include the entire selected end day in the viewer's zone.
+ * ISO instants retain their documented half-open [from,to) meaning. */
+function parseRangeBound(raw: string, tz: string, end: boolean): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date(raw);
+  const calendar = new Date(`${raw}T00:00:00.000Z`);
+  if (!Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== raw) return new Date(NaN);
+  if (end) calendar.setUTCDate(calendar.getUTCDate() + 1);
+  const target = calendar.getTime();
+  let guess = target;
+  const format = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  for (let i = 0; i < 4; i++) {
+    const parts = format.formatToParts(new Date(guess));
+    const value = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+    const local = Date.UTC(value('year'), value('month') - 1, value('day'), value('hour'), value('minute'), value('second'));
+    const delta = target - local;
+    guess += delta;
+    if (delta === 0) break;
+  }
+  return new Date(guess);
+}
+
+/** Plan catalog prices are quotations, not receipts. Unknown/non-USD amounts
+ * cannot be used for USD profitability without an explicit FX ledger. */
+export function actualMrrUsd(row: { amountMinor: number | null; currency: string | null; status?: string | null; tier?: string | null }): number | null {
+  if (row.status !== 'active' || row.tier === 'free') return 0;
+  if (row.amountMinor == null || row.currency?.toUpperCase() !== 'USD') return null;
+  return round2(row.amountMinor / 100);
 }
 
 function n(v: unknown): number {
@@ -72,37 +105,38 @@ function stagesFromBreakdown(breakdown: unknown): InterviewBreakdownStages {
 // ─── Revenue (MRR) ─────────────────────────────────────────────────────────────
 
 interface MrrResult {
-  mrrUsd: number;
-  byTier: Record<string, { count: number; mrrUsd: number }>;
+  mrrUsd: number | null;
+  byTier: Record<string, { count: number; mrrUsd: number | null }>;
   payingUsers: number;
 }
 
-async function getActiveMrr(card: RateCard): Promise<MrrResult> {
+async function getActiveMrr(): Promise<MrrResult> {
   const rows = await prisma.$queryRawUnsafe<{ tier: string; amountMinor: number | null; currency: string | null }[]>(
     `SELECT ss."tier"::text AS tier, ss."amountMinor" AS "amountMinor", ss."currency" AS currency
        FROM "SeekerSubscription" ss
       WHERE ss."status" = 'active'`,
   );
-  const byTier: Record<string, { count: number; mrrUsd: number }> = {};
+  const byTier: Record<string, { count: number; mrrUsd: number | null }> = {};
   let mrrUsd = 0;
+  let hasUnconvertedRevenue = false;
   let payingUsers = 0;
   for (const r of rows) {
-    const price = r.amountMinor != null ? n(r.amountMinor) / 100 : tierPriceUsd(card, r.tier);
-    // Non-USD amounts are recorded as-is; treated as USD for the headline (the
-    // detail view shows the original currency). Most RoboApply subs are USD.
+    const price = actualMrrUsd({ ...r, status: 'active' });
     if (!byTier[r.tier]) byTier[r.tier] = { count: 0, mrrUsd: 0 };
     byTier[r.tier].count += 1;
-    byTier[r.tier].mrrUsd += price;
-    mrrUsd += price;
-    if (price > 0) payingUsers += 1;
+    if (price == null) { hasUnconvertedRevenue = true; byTier[r.tier].mrrUsd = null; }
+    else {
+      if (byTier[r.tier].mrrUsd != null) byTier[r.tier].mrrUsd! += price;
+      mrrUsd += price;
+    }
+    if (r.amountMinor != null && r.amountMinor > 0) payingUsers += 1;
   }
-  return { mrrUsd: round2(mrrUsd), byTier, payingUsers };
+  return { mrrUsd: hasUnconvertedRevenue ? null : round2(mrrUsd), byTier, payingUsers };
 }
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
 export async function getOverview(range: Range) {
-  const card = await getRateCard();
   const params = [range.from, range.to];
 
   // Totals + active users (exclude the shared/cron sentinel from active-user count).
@@ -186,7 +220,7 @@ export async function getOverview(range: Range) {
     range.tz,
   );
 
-  const mrr = await getActiveMrr(card);
+  const mrr = await getActiveMrr();
   const totalCost = round4(n(totals.total_cost));
   const activeUsers = n(totals.active_users);
 
@@ -194,8 +228,8 @@ export async function getOverview(range: Range) {
   // 30-day run-rate so the % is apples-to-apples regardless of window length.
   const windowDays = Math.max(1, (range.to.getTime() - range.from.getTime()) / 86_400_000);
   const monthlyCostRunRate = round2((totalCost / windowDays) * 30);
-  const grossMarginUsd = round2(mrr.mrrUsd - monthlyCostRunRate);
-  const grossMarginPct = mrr.mrrUsd > 0 ? round2((grossMarginUsd / mrr.mrrUsd) * 100) : null;
+  const grossMarginUsd = mrr.mrrUsd == null ? null : round2(mrr.mrrUsd - monthlyCostRunRate);
+  const grossMarginPct = mrr.mrrUsd != null && mrr.mrrUsd > 0 && grossMarginUsd != null ? round2((grossMarginUsd / mrr.mrrUsd) * 100) : null;
 
   return {
     range: { from: range.from.toISOString(), to: range.to.toISOString(), tz: range.tz },
@@ -217,7 +251,7 @@ export async function getOverview(range: Range) {
     costSeries: seriesRows.map((r) => ({
       day: r.day,
       costUsd: round4(n(r.cost)),
-      revenueRunRateUsd: round2(mrr.mrrUsd / 30),
+      revenueRunRateUsd: mrr.mrrUsd == null ? null : round2(mrr.mrrUsd / 30),
     })),
   };
 }
@@ -234,7 +268,6 @@ export interface UsersQuery {
 }
 
 export async function getUsers(opts: UsersQuery) {
-  const card = await getRateCard();
   const { from, to } = opts.range;
 
   // Per-user cost + sessions + last active in window (exclude shared sentinel).
@@ -303,9 +336,10 @@ export async function getUsers(opts: UsersQuery) {
   let rows = infoRows.map((u) => {
     const cost = n(costByUser.get(u.id)?.cost);
     const tier = u.tier ?? 'free';
-    const mrr = u.amountMinor != null ? n(u.amountMinor) / 100 : tierPriceUsd(card, tier);
+    const mrr = actualMrrUsd({ ...u, tier });
     const periodCost = round4(cost);
-    const marginUsd = round2(mrr - periodCost);
+    const monthlyCostRunRateUsd = periodCost / Math.max(1, (to.getTime() - from.getTime()) / 86_400_000) * 30;
+    const marginUsd = mrr == null ? null : round2(mrr - monthlyCostRunRateUsd);
     return {
       userId: u.id,
       email: u.email,
@@ -313,11 +347,13 @@ export async function getUsers(opts: UsersQuery) {
       role: u.role,
       tier,
       status: u.status ?? 'active',
-      mrrUsd: round2(mrr),
+      mrrUsd: mrr,
+      amountMinor: u.amountMinor,
+      currency: u.currency?.toUpperCase() ?? null,
       periodCostUsd: periodCost,
       marginUsd,
-      marginPct: mrr > 0 ? round2((marginUsd / mrr) * 100) : null,
-      profitable: mrr > 0 ? marginUsd >= 0 : null,
+      marginPct: mrr != null && mrr > 0 && marginUsd != null ? round2((marginUsd / mrr) * 100) : null,
+      profitable: mrr != null && mrr > 0 && marginUsd != null ? marginUsd >= 0 : null,
       sessions: sessionsByUser.get(u.id) ?? 0,
       interviewDebits: n(costByUser.get(u.id)?.ic),
       lastActiveAt: costByUser.get(u.id)?.last?.toISOString() ?? null,
@@ -381,7 +417,7 @@ export async function getUserDetail(userId: string, range: Range) {
   const u = userRows[0];
   if (!u) return null;
   const tier = u.tier ?? 'free';
-  const mrrUsd = u.amountMinor != null ? n(u.amountMinor) / 100 : tierPriceUsd(card, tier);
+  const mrrUsd = actualMrrUsd({ ...u, tier });
 
   const [lifetimeRow, periodSkuRows, dailyRows, sessions] = await Promise.all([
     prisma.$queryRawUnsafe<{ cost: number }[]>(
@@ -425,7 +461,8 @@ export async function getUserDetail(userId: string, range: Range) {
     featureMap.set(f.key, cur);
   }
   const periodCostUsd = round4(periodSkuRows.reduce((s, r) => s + n(r.cost), 0));
-  const marginUsd = round2(mrrUsd - periodCostUsd);
+  const monthlyCostRunRateUsd = periodCostUsd / Math.max(1, (range.to.getTime() - range.from.getTime()) / 86_400_000) * 30;
+  const marginUsd = mrrUsd == null ? null : round2(mrrUsd - monthlyCostRunRateUsd);
 
   return {
     user: {
@@ -439,9 +476,9 @@ export async function getUserDetail(userId: string, range: Range) {
     subscription: {
       tier,
       status: u.status ?? 'active',
-      mrrUsd: round2(mrrUsd),
+      mrrUsd,
       amountMinor: u.amountMinor,
-      currency: u.currency ?? 'usd',
+      currency: u.currency?.toUpperCase() ?? null,
       dailyCap: tierDailyCap(card, tier),
       stripeCustomerId: u.stripeCustomerId,
       currentPeriodEnd: u.currentPeriodEnd?.toISOString() ?? null,
@@ -450,10 +487,10 @@ export async function getUserDetail(userId: string, range: Range) {
     profitability: {
       lifetimeCostUsd: round4(n(lifetimeRow[0]?.cost)),
       periodCostUsd,
-      mrrUsd: round2(mrrUsd),
+      mrrUsd,
       marginUsd,
-      marginPct: mrrUsd > 0 ? round2((marginUsd / mrrUsd) * 100) : null,
-      profitable: mrrUsd > 0 ? marginUsd >= 0 : null,
+      marginPct: mrrUsd != null && mrrUsd > 0 && marginUsd != null ? round2((marginUsd / mrrUsd) * 100) : null,
+      profitable: mrrUsd != null && mrrUsd > 0 && marginUsd != null ? marginUsd >= 0 : null,
     },
     costByFeature: Array.from(featureMap.values())
       .map((f) => ({ ...f, costUsd: round4(f.costUsd) }))
@@ -590,11 +627,16 @@ export async function setUserPlan(input: SetPlanInput) {
   }
   const card = await getRateCard();
   const existing = await prisma.seekerSubscription.findUnique({ where: { seekerProfileId: profile.id } });
-  const amountMinor =
-    input.amountMinor != null ? input.amountMinor : Math.round(tierPriceUsd(card, input.tier) * 100);
+  const currency = (input.currency ?? existing?.currency ?? 'USD').toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw Object.assign(new Error('A valid currency code is required'), { code: 'invalid_currency' });
+  const sameExistingPrice = existing?.tier === input.tier && existing?.currency?.toUpperCase() === currency;
+  const amountMinor = input.amountMinor ?? (input.tier === 'free' ? 0
+    : sameExistingPrice && existing?.amountMinor != null ? existing.amountMinor
+      : currency === 'USD' ? Math.round(tierPriceUsd(card, input.tier) * 100) : null);
+  if (amountMinor == null) throw Object.assign(new Error('An explicit amount is required for this currency'), { code: 'amount_required' });
 
   const before = existing
-    ? { tier: existing.tier, status: existing.status, amountMinor: existing.amountMinor }
+    ? { tier: existing.tier, status: existing.status, amountMinor: existing.amountMinor, currency: existing.currency }
     : null;
 
   await prisma.seekerSubscription.upsert({
@@ -602,14 +644,14 @@ export async function setUserPlan(input: SetPlanInput) {
     update: {
       tier: input.tier as any,
       amountMinor,
-      currency: input.currency ?? existing?.currency ?? 'usd',
+      currency,
       status: 'active',
     },
     create: {
       seekerProfileId: profile.id,
       tier: input.tier as any,
       amountMinor,
-      currency: input.currency ?? 'usd',
+      currency,
       status: 'active',
     },
   });
@@ -630,7 +672,7 @@ export async function setUserPlan(input: SetPlanInput) {
       adminId: input.adminId,
       type: 'subscription',
       oldValue: before ? JSON.stringify(before) : null,
-      newValue: JSON.stringify({ tier: input.tier, amountMinor, source: 'roboapply_admin' }),
+      newValue: JSON.stringify({ tier: input.tier, amountMinor, currency, source: 'roboapply_admin' }),
       reason: input.reason,
     },
   });
@@ -642,5 +684,5 @@ export async function setUserPlan(input: SetPlanInput) {
     amountMinor,
   });
 
-  return { ok: true, tier: input.tier, amountMinor };
+  return { ok: true, tier: input.tier, amountMinor, currency };
 }

@@ -166,7 +166,8 @@ export function SetPlanModal({
     const body: AdminSetPlanBody = { tier, reason: reason.trim() };
     const priceNum = Number(customPrice);
     if (customPrice && Number.isFinite(priceNum) && priceNum >= 0) {
-      body.amountMinor = Math.round(priceNum * 100);
+      const digits = new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+      body.amountMinor = Math.round(priceNum * 10 ** digits);
       body.currency = currency;
     }
     onConfirm(body);

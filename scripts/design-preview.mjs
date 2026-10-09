@@ -13,14 +13,15 @@ import tailwindcss from '@tailwindcss/postcss';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const preview = resolve(repo, 'scripts/design-preview');
 const jobSearchPreview = process.env.ROBOAPPLY_PREVIEW === 'job-search';
+const adminPreview = process.env.ROBOAPPLY_PREVIEW === 'admin';
 const output = resolve(preview, '.memory');
 const assets = new Map();
-const port = jobSearchPreview ? 3613 : 3612;
+const port = adminPreview ? 3614 : jobSearchPreview ? 3613 : 3612;
 let buildError = '';
 
 const build = await context({
   absWorkingDir: repo,
-  entryPoints: [resolve(repo, jobSearchPreview ? 'scripts/job-search-preview/entry.tsx' : 'scripts/design-preview/entry.tsx')],
+  entryPoints: [resolve(repo, adminPreview ? 'scripts/admin-preview/entry.tsx' : jobSearchPreview ? 'scripts/job-search-preview/entry.tsx' : 'scripts/design-preview/entry.tsx')],
   bundle: true,
   platform: 'browser',
   format: 'esm',
@@ -42,6 +43,16 @@ const build = await context({
   plugins: [{
     name: 'isolated-design-preview',
     setup(builder) {
+      if (adminPreview) {
+        builder.onResolve({ filter: /\/api\/adminOperations$/ }, ({ importer }) => {
+          const fixture = resolve(repo, 'scripts/admin-preview/operations.ts');
+          return importer === fixture ? undefined : { path: fixture };
+        });
+        builder.onResolve({ filter: /\/api\/admin$/ }, ({ importer }) => {
+          const fixture = resolve(repo, 'scripts/admin-preview/legacy.ts');
+          return importer === fixture ? undefined : { path: fixture };
+        });
+      }
       if (jobSearchPreview) builder.onResolve({ filter: /\/api\/job-search$/ }, ({ importer }) => {
         const fixture = resolve(repo, 'scripts/job-search-preview/api.ts');
         return importer === fixture ? undefined : { path: fixture };
@@ -59,7 +70,7 @@ const build = await context({
         path: resolve(preview, 'empty.css'),
       }));
       builder.onResolve({ filter: /(?:^|\/)AuthProvider(?:\.tsx)?$/ }, () => ({
-        path: resolve(preview, 'auth.tsx'),
+        path: adminPreview ? resolve(repo, 'scripts/admin-preview/auth.tsx') : resolve(preview, 'auth.tsx'),
       }));
       builder.onLoad({ filter: /app\/globals\.css$/ }, async ({ path }) => ({
         contents: (await postcss([
@@ -138,7 +149,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`Design preview · Example data: http://localhost:${port}/${jobSearchPreview ? 'job-search' : 'jobs'}`);
+  console.log(`Design preview · Example data: http://localhost:${port}/${adminPreview ? 'admin' : jobSearchPreview ? 'job-search' : 'jobs'}`);
   console.log('Actual app components, fixture API, loopback only. Source edits rebuild; reload the browser.');
 });
 server.on('error', async (error) => { console.error(error.message); await build.dispose(); process.exitCode = 1; });

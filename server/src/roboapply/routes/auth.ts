@@ -35,6 +35,7 @@ import { invalidateSeekerSession } from '../engine/lib/seekerSession.js';
 import { requireSeekerProfile } from '../engine/middleware/seekerAuth.js';
 import { getMissionForUser } from '../services/RoboApplyMissionService.js';
 import prisma from '../../lib/prisma.js';
+import { recordUserActivity } from '../../lib/userActivity.js';
 
 const router = Router();
 
@@ -160,6 +161,15 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
       );
     }
 
+    await recordUserActivity(req, {
+      userId: result.user.id,
+      eventType: 'signup',
+      path: '/api/v1/roboapply/auth/signup',
+      sessionToken: result.sessionToken,
+      market: result.user.market,
+      statusCode: 201,
+    });
+
     return res.status(201).json({
       success: true,
       data: {
@@ -200,6 +210,15 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
 
     const result = await seekerAuthService.login({ email, password });
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
+
+    await recordUserActivity(req, {
+      userId: result.user.id,
+      eventType: 'login',
+      path: '/api/v1/roboapply/auth/login',
+      sessionToken: result.sessionToken,
+      market: result.user.market,
+      statusCode: 200,
+    });
 
     return res.json({
       success: true,

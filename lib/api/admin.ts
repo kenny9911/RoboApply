@@ -34,9 +34,9 @@ export interface AdminOverviewKpis {
   sessions: number;
   totalCostUsd: number;
   sharedCostUsd: number;
-  mrrUsd: number;
+  mrrUsd: number | null;
   monthlyCostRunRateUsd: number;
-  grossMarginUsd: number;
+  grossMarginUsd: number | null;
   grossMarginPct: number | null;
   costPerActiveUserUsd: number;
   payingUsers: number;
@@ -58,12 +58,12 @@ export interface AdminCostByModality {
 export interface AdminCostSeriesPoint {
   day: string;
   costUsd: number;
-  revenueRunRateUsd: number;
+  revenueRunRateUsd: number | null;
 }
 
 export interface AdminMrrByTierEntry {
   count: number;
-  mrrUsd: number;
+  mrrUsd: number | null;
 }
 
 export interface AdminOverviewResponse {
@@ -102,9 +102,9 @@ export interface AdminUserRow {
   role: string;
   tier: string;
   status: string;
-  mrrUsd: number;
+  mrrUsd: number | null;
   periodCostUsd: number;
-  marginUsd: number;
+  marginUsd: number | null;
   marginPct: number | null;
   profitable: boolean | null;
   sessions: number;
@@ -136,9 +136,9 @@ export interface AdminUserDetailUser {
 export interface AdminUserDetailSubscription {
   tier: string;
   status: string;
-  mrrUsd: number;
+  mrrUsd: number | null;
   amountMinor: number | null;
-  currency: string;
+  currency: string | null;
   dailyCap: number | null;
   stripeCustomerId: string | null;
   currentPeriodEnd: string | null;
@@ -148,8 +148,8 @@ export interface AdminUserDetailSubscription {
 export interface AdminUserDetailProfitability {
   lifetimeCostUsd: number;
   periodCostUsd: number;
-  mrrUsd: number;
-  marginUsd: number;
+  mrrUsd: number | null;
+  marginUsd: number | null;
   marginPct: number | null;
   profitable: boolean | null;
 }

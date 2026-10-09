@@ -30,15 +30,17 @@ export function resolveRange(value: RangeValue): { from: string; to: string; tz:
       ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       : 'UTC';
   const now = new Date();
-  const toISODate = (d: Date) => d.toISOString().slice(0, 10);
-  const to = toISODate(now);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (value.preset === 'custom' && value.from && value.to) {
-    return { from: value.from, to: value.to, tz };
+    const from = new Date(`${value.from}T00:00:00`);
+    const to = new Date(`${value.to}T00:00:00`);
+    to.setDate(to.getDate() + 1);
+    return { from: from.toISOString(), to: to.toISOString(), tz };
   }
   const days = value.preset === 'today' ? 0 : value.preset === '7d' ? 6 : 29;
-  const fromDate = new Date(now);
-  fromDate.setDate(fromDate.getDate() - days);
-  return { from: toISODate(fromDate), to, tz };
+  start.setDate(start.getDate() - days);
+  return { from: start.toISOString(), to: end.toISOString(), tz };
 }
 
 export function DateRangePicker({
@@ -119,8 +121,9 @@ export function DateRangePicker({
             </Btn>
             <Btn
               variant="primary"
+              disabled={!draftFrom || !draftTo || draftFrom > draftTo}
               onClick={() => {
-                if (draftFrom && draftTo) {
+                if (draftFrom && draftTo && draftFrom <= draftTo) {
                   onChange({ preset: 'custom', from: draftFrom, to: draftTo });
                   setCustomOpen(false);
                 }
@@ -175,7 +178,6 @@ const DATE_INPUT = {
   color: 'var(--text)',
   fontFamily: 'var(--font-ui)',
   fontSize: 'var(--fs-body)',
-  colorScheme: 'dark' as const,
 };
 
 // ── TabRail ─────────────────────────────────────────────────────────────────

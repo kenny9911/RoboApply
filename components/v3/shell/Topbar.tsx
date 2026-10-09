@@ -63,6 +63,7 @@ export function Topbar() {
       </div>
 
       <div className="top-actions">
+        {crumb?.page !== 'admin' ? <>
         <button
           type="button"
           className="search max-[760px]:hidden"
@@ -85,6 +86,8 @@ export function Topbar() {
         >
           <IconSearch size={15} />
         </button>
+
+        </> : null}
 
         <ThemeToggle />
 

@@ -129,3 +129,17 @@ export function fmtLongDate(iso: string | null | undefined, locale: string): str
     year: 'numeric',
   }).format(d);
 }
+
+/** Format provider minor units in their original ISO currency (JPY has no cents). */
+export function fmtNativeAmount(amountMinor: number | null | undefined, currency: string | null | undefined, locale: string): string {
+  if (amountMinor == null || !Number.isFinite(amountMinor) || !currency) return '—';
+  try {
+    const formatter = getFormatter(`native:${locale}:${currency}`, () => new Intl.NumberFormat(locale, {
+      style: 'currency', currency: currency.toUpperCase(), currencyDisplay: 'code',
+    }));
+    const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+    return formatter.format(amountMinor / 10 ** digits);
+  } catch {
+    return '—';
+  }
+}

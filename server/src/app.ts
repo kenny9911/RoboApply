@@ -57,6 +57,7 @@ import { startRoboApplyCron } from './roboapply/schedulers/RoboApplyCronService.
 import { logger } from './services/LoggerService.js';
 import { createJobSearchRouters } from './job-search/routes.js';
 import { handleJobSearchBodyError } from './job-search/request-errors.js';
+import { trackFeatureActivity } from './middleware/userActivity.js';
 
 const app = express();
 
@@ -118,6 +119,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'roboapply-a
 app.get('/api/v1/health', (_req, res) => res.json({ ok: true, service: 'roboapply-api' }));
 
 // ─── Routes ─────────────────────────────────────────────────────────────
+app.use(trackFeatureActivity);
 // Stripe webhook first so its sub-path isn't shadowed by the billing router.
 app.use('/api/v1/roboapply/stripe/webhook', stripeWebhookRouter);
 

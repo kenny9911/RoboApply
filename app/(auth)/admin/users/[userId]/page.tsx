@@ -18,6 +18,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useAuth } from '../../../../../lib/auth/useAuth';
 import { useAdminUser, useSetPlan } from '../../../../../hooks/useAdmin';
 import { RoboApiError } from '../../../../../lib/api/client';
+import { MetricGrid } from '../../../../../components/v3/primitives/MetricGrid';
+import { fmtNativeAmount } from '../../../../../components/v3/admin/format';
+import styles from '../../admin.module.css';
 import { PageHeader } from '../../../../../components/v3/primitives/PageHeader';
 import { EmptyState } from '../../../../../components/v3/primitives/EmptyState';
 import { Btn } from '../../../../../components/v3/primitives/Btn';
@@ -27,7 +30,7 @@ import {
   Sparkline,
   DataTable,
   StatusBadge,
-  ProfitabilitySummary,
+  TierBadge,
   SetPlanModal,
   type Column,
   fmtCurrency,
@@ -47,6 +50,7 @@ export default function AdminUserDetailPage({
   params: Promise<{ userId: string }>;
 }) {
   const t = useTranslations('admin');
+  const ops = useTranslations('adminOps');
   const locale = useLocale();
   const router = useRouter();
   const { userId } = use(params);
@@ -84,7 +88,7 @@ export default function AdminUserDetailPage({
   const header = (
     <PageHeader
       eyebrow={t('detail.eyebrow', { email: q.data?.user.email ?? '…' })}
-      title={`${t('title')} ${t('detail.titleAccent')}`}
+      title={q.data?.user.name || q.data?.user.email || ops('user')}
       actions={backBtn}
     />
   );
@@ -126,7 +130,7 @@ export default function AdminUserDetailPage({
   }
 
   const data = q.data;
-  const currency = data.subscription.currency || 'USD';
+  const currency = data.subscription.currency;
   const { profitability: p } = data;
 
   // Daily-cost sparkline points.
@@ -141,7 +145,7 @@ export default function AdminUserDetailPage({
   const featColumns: Column<AdminCostByFeature>[] = [
     { key: 'feature', header: t('detail.col.feature'), render: (f) => f.label },
     { key: 'calls', header: t('detail.col.calls'), align: 'right', render: (f) => fmtCount(f.units, locale) },
-    { key: 'cost', header: t('detail.col.cost'), align: 'right', render: (f) => fmtCurrency(f.costUsd, locale, currency) },
+    { key: 'cost', header: t('detail.col.cost'), align: 'right', render: (f) => fmtCurrency(f.costUsd, locale, 'USD') },
     {
       key: 'pct',
       header: t('detail.col.pctSpend'),
@@ -155,7 +159,7 @@ export default function AdminUserDetailPage({
     { key: 'date', header: t('sessions.col.date'), render: (s) => <span style={{ color: 'var(--text-2)', fontSize: 'var(--fs-label)', fontVariantNumeric: 'tabular-nums' }}>{fmtShortDate(s.createdAt, locale)}</span> },
     { key: 'role', header: t('sessions.col.role'), render: (s) => s.role ?? '—' },
     { key: 'duration', header: t('sessions.col.duration'), align: 'right', render: (s) => durLabel(s.durationSec) },
-    { key: 'cost', header: t('detail.col.cost'), align: 'right', render: (s) => fmtCurrency(s.costUsd, locale, currency) },
+    { key: 'cost', header: t('detail.col.cost'), align: 'right', render: (s) => fmtCurrency(s.costUsd, locale, 'USD') },
     {
       key: 'split',
       header: t('detail.col.split'),
@@ -194,31 +198,27 @@ export default function AdminUserDetailPage({
         </div>
       ) : null}
 
-      <ProfitabilitySummary
-        cost={p.periodCostUsd}
-        revenue={p.mrrUsd}
-        marginPct={p.marginPct}
-        profitable={p.profitable}
-        tier={data.subscription.tier}
-        renewsAt={data.subscription.currentPeriodEnd}
-        currency={currency}
-        locale={locale}
-        onSetPlan={() => {
-          setPlanError(null);
-          setPlanOpen(true);
-        }}
-      />
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 18 }}>
-        <SmallStat label={t('detail.lifetimeCost')} value={fmtCurrency(p.lifetimeCostUsd, locale, currency)} />
-        <SmallStat label={t('detail.periodCost')} value={fmtCurrency(p.periodCostUsd, locale, currency)} />
-        <SmallStat label={t('detail.lifetimeRevenue')} value={fmtCurrency(p.mrrUsd, locale, currency)} />
-      </div>
+      <section className={styles.panel} style={{ marginBottom: 24 }}>
+        <div className={styles.panelHeader}>
+          <div><TierBadge tier={data.subscription.tier} /><p style={{ marginTop: 8 }}>{data.user.email}</p></div>
+          <Btn variant="violet" onClick={() => { setPlanError(null); setPlanOpen(true); }}>{t('detail.setPlan')}</Btn>
+        </div>
+        <MetricGrid label={ops('overview')} items={[
+          { label: ops('subscriptionPrice'), value: fmtNativeAmount(data.subscription.amountMinor, currency, locale), detail: currency || ops('priceUnknown') },
+          { label: t('detail.periodCost'), value: fmtCurrency(p.periodCostUsd, locale, 'USD'), detail: ops('costCurrency') },
+          { label: t('detail.lifetimeCost'), value: fmtCurrency(p.lifetimeCostUsd, locale, 'USD'), detail: ops('costCurrency') },
+        ]} />
+        <p className={styles.note}>{ops('currencyNote')}</p>
+        <div className={styles.rowActions} style={{ marginTop: 16 }}>
+          <Btn as="a" href={`/admin?tab=payments&userId=${encodeURIComponent(userId)}`}>{ops('openPayments')}</Btn>
+          <Btn as="a" href={`/admin?tab=activity&userId=${encodeURIComponent(userId)}`}>{ops('openActivity')}</Btn>
+        </div>
+      </section>
 
       <div style={{ marginBottom: 8 }}>
         <ChartCard
           caption={t('detail.dailyCost')}
-          aside={t('detail.avgDaily', { amount: fmtCurrency(avgDaily, locale, currency) })}
+          aside={t('detail.avgDaily', { amount: fmtCurrency(avgDaily, locale, 'USD') })}
           minHeight={64}
         >
           {sparkPoints.length > 0 ? (
@@ -230,28 +230,28 @@ export default function AdminUserDetailPage({
       </div>
 
       <SubHeading>{t('detail.costByFeature')}</SubHeading>
-      <DataTable
+      <div className={styles.tableWrap}><DataTable
         columns={featColumns}
         rows={data.costByFeature}
         rowKey={(f) => f.key}
         emptyMessage="—"
         errorTitle={t('error.title')}
-      />
+      /></div>
 
       <SubHeading>{t('detail.interviewSessions')}</SubHeading>
-      <DataTable
+      <div className={styles.tableWrap}><DataTable
         columns={sessionColumns}
         rows={data.interviewSessions}
         rowKey={(s) => s.id}
         onRowClick={(s) => router.push(`/admin/sessions/${encodeURIComponent(s.id)}`)}
         emptyMessage="—"
         errorTitle={t('error.title')}
-      />
+      /></div>
 
       <SetPlanModal
         open={planOpen}
         currentTier={data.subscription.tier}
-        currency={currency}
+        currency={currency ?? undefined}
         submitting={setPlan.isPending}
         errorMessage={planError}
         onClose={() => setPlanOpen(false)}
@@ -270,33 +270,6 @@ export default function AdminUserDetailPage({
         }}
       />
     </>
-  );
-}
-
-function SmallStat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: '1px solid var(--rule)',
-        background: 'var(--surface)',
-        borderRadius: 14,
-        padding: '16px 18px',
-      }}
-    >
-      <div
-        style={{
-          fontSize: 'var(--fs-label)',
-          color: 'var(--text-muted)',
-          marginBottom: 9,
-          fontWeight: 600,
-        }}
-      >
-        {label}
-      </div>
-      <div className="robo-tnum" style={{ fontSize: 'var(--fs-stat)', lineHeight: 1, letterSpacing: '-0.03em', fontWeight: 600, color: 'var(--text)' }}>
-        {value}
-      </div>
-    </div>
   );
 }
 

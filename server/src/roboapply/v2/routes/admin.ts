@@ -30,11 +30,24 @@ import {
   getSessionDetail,
   setUserPlan,
 } from '../services/RAAdminAnalyticsService.js';
+import {
+  getOperationsOverview, getOperationsUsers, getOperationsPayments, getOperationsActivity,
+  type OperationsQuery,
+} from '../services/RAAdminOperationsService.js';
 
 const router = Router();
 
 // All routes admin-gated.
 router.use(requireAuth, requireAdmin);
+router.use((req, res, next) => {
+  try {
+    if (req.query.from !== undefined || req.query.to !== undefined) resolveRange(str(req.query.from), str(req.query.to), str(req.query.tz));
+    next();
+  } catch (error) {
+    if (error instanceof RangeError) return res.status(400).json({ success: false, code: 'invalid_range', error: error.message });
+    next(error);
+  }
+});
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
@@ -47,8 +60,63 @@ function intOr(v: unknown, fallback: number): number {
 // ─── CSV helper (small inline port; V2 can't import recruiter routes/*) ───────
 function escapeCsv(v: unknown): string {
   if (v == null) return '';
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const raw = String(v);
+  // User-controlled names/references must not become spreadsheet formulas.
+  const s = typeof v === 'string' && /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function operationsQuery(req: Request): OperationsQuery {
+  return {
+    range: resolveRange(str(req.query.from), str(req.query.to), str(req.query.tz)),
+    q: str(req.query.q), userId: str(req.query.userId), region: str(req.query.region), provider: str(req.query.provider),
+    type: str(req.query.type), status: str(req.query.status), currency: str(req.query.currency),
+    page: intOr(req.query.page, 1), pageSize: intOr(req.query.pageSize, 25),
+  };
+}
+
+router.get('/operations', async (req: Request, res: Response) => {
+  try { return res.json({ success: true, data: await getOperationsOverview(operationsQuery(req)) }); }
+  catch (error) {
+    if (error instanceof RangeError) return res.status(400).json({ success: false, code: 'invalid_range', error: error.message });
+    logger.error('RA_ADMIN', 'Operations overview failed', { error: String(error) }, req.requestId);
+    return res.status(500).json({ success: false, code: 'operations_failed', error: 'Failed to load operations' });
+  }
+});
+
+for (const [path, load] of [
+  ['/operations/users', getOperationsUsers], ['/payments', getOperationsPayments], ['/activity', getOperationsActivity],
+] as const) {
+  router.get(path, async (req: Request, res: Response) => {
+    try { return res.json({ success: true, data: await load(operationsQuery(req)) }); }
+    catch (error) {
+      if (error instanceof RangeError) return res.status(400).json({ success: false, code: 'invalid_range', error: error.message });
+      logger.error('RA_ADMIN', `${path} failed`, { error: String(error) }, req.requestId);
+      return res.status(500).json({ success: false, code: 'operations_failed', error: 'Failed to load operations' });
+    }
+  });
+  router.get(`${path}.csv`, async (req: Request, res: Response) => {
+    try {
+      const data = await load({ ...operationsQuery(req), page: 1, pageSize: 10000 }, true);
+      if (data.total > data.rows.length) return res.status(422).json({ success: false, code: 'export_too_large', error: 'Narrow the filters to export at most 10,000 records' });
+      const rows = data.rows.map((row) => 'subscription' in row
+        ? { ...row, subscription: undefined, subscriptionCurrency: row.subscription.currency, subscriptionAmountMinor: row.subscription.amountMinor }
+        : row);
+      const headers = path === '/payments'
+        ? ['id','userId','email','name','provider','type','status','region','amountMinor','currency','reference','tier','createdAt','paidAt']
+        : path === '/activity'
+          ? ['id','userId','email','name','region','type','feature','path','units','costUsd','source','createdAt']
+          : ['userId','email','name','role','isActive','region','tier','status','createdAt','subscriptionCurrency','subscriptionAmountMinor','loginEvents','featureEvents','usageUnits','periodCostUsd','lastLoginAt','lastActiveAt'];
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="roboapply-${path.split('/').at(-1)}.csv"`);
+      if ('coverage' in data) res.setHeader('X-Payment-Coverage', data.coverage.stripe);
+      return res.send('\uFEFF' + toCsv(headers, rows.map((r) => headers.map((h) => (r as Record<string, any>)[h]))));
+    } catch (error) {
+      if (error instanceof RangeError) return res.status(400).json({ success: false, code: 'invalid_range', error: error.message });
+      logger.error('RA_ADMIN', `${path}.csv failed`, { error: String(error) }, req.requestId);
+      return res.status(500).json({ success: false, code: 'operations_export_failed', error: 'Failed to export operations' });
+    }
+  });
 }
 function toCsv(headers: string[], rows: (string | number | null | undefined)[][]): string {
   const lines = [headers.map(escapeCsv).join(',')];
@@ -146,6 +214,9 @@ router.post('/users/:userId/plan', async (req: Request<{ userId: string }>, res:
   } catch (err) {
     if ((err as any)?.code === 'no_profile') {
       return res.status(409).json({ success: false, code: 'no_profile', error: 'User has no RoboApply (seeker) profile' });
+    }
+    if ((err as any)?.code === 'amount_required' || (err as any)?.code === 'invalid_currency') {
+      return res.status(400).json({ success: false, code: (err as any).code, error: (err as Error).message });
     }
     logger.error('RA_ADMIN', 'POST /users/:id/plan failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
     return res.status(500).json({ success: false, code: 'set_plan_failed', error: 'Failed to set plan' });
