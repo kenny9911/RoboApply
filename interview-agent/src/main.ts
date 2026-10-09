@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { config as loadEnv } from 'dotenv';
 import { cli, ServerOptions } from '@livekit/agents';
+import { installConnectTimeout, resolveConnectTimeoutMs } from './connect-timeout.js';
 
 // Container/host convention first (.env), local dev convention second
 // (.env.local wins if both define a var — dotenv never overrides an existing
@@ -101,12 +102,20 @@ const drainTimeoutMs = Number.parseInt(process.env.WORKER_DRAIN_TIMEOUT_MS ?? ''
 const lkHost = (() => {
   try { return new URL(process.env.LIVEKIT_URL!).host; } catch { return process.env.LIVEKIT_URL; }
 })();
+// Per-attempt cap on the registration WebSocket's connect (DNS + TCP + TLS).
+// Without it a black-holed SYN after a VPN/network flap holds each attempt for
+// the OS connect timeout (~75s on macOS) — see connect-timeout.ts. 0 disables.
+const connectTimeoutMs = resolveConnectTimeoutMs(process.env.WORKER_CONNECT_TIMEOUT_MS);
+try {
+  installConnectTimeout(new URL(process.env.LIVEKIT_URL!).hostname, connectTimeoutMs);
+} catch { /* unparseable LIVEKIT_URL — the SDK reports it on connect */ }
 console.info(
   `[interview-agent] ${pkg.name}@${pkg.version} agent_name=${AGENT_NAME} livekit=${lkHost} ` +
   `health=${healthHost ?? 'sdk-default'}:${healthPort ?? 'sdk-default(prod 8081)'} node=${process.version} ` +
   `idle_procs=${numIdleProcesses ?? 'sdk-default'} load_threshold=${loadThreshold ?? 'sdk-default'} ` +
   `job_mem_warn_mb=${jobMemoryWarnMB}${jobMemoryLimitMB ? ` job_mem_limit_mb=${jobMemoryLimitMB}` : ''} ` +
-  `max_retry=${maxRetry} drain_timeout_ms=${drainTimeoutMs ?? 'sdk-default(1h)'}`,
+  `max_retry=${maxRetry} connect_timeout_ms=${connectTimeoutMs || 'off'} ` +
+  `drain_timeout_ms=${drainTimeoutMs ?? 'sdk-default(1h)'}`,
 );
 
 cli.runApp(
