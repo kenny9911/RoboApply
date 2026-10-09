@@ -2,9 +2,12 @@
 
 // AuthProvider — client-side session source-of-truth.
 //
-// Wraps the React tree under app/providers.tsx. Loads /api/v1/seeker/auth/me
-// once on mount when the session_token cookie is present, then publishes
-// the result through context. Pages call `useAuth()` to read it.
+// Wraps the React tree under app/providers.tsx. Loads /api/v1/roboapply/auth/me
+// once on mount, then publishes the result through context. Pages call
+// `useAuth()` to read it. WP-10: also exposes the full `/auth/me` payload
+// (`me`: brand, onboarding, entitlements, flags, unreadCount, emailVerified)
+// and publishes the per-user flags to the capability resolver (lib/flags.ts),
+// clearing them on sign-out.
 //
 // Lightweight by design: pages render eagerly with `status === 'loading'`
 // and let the gated /(auth) routes redirect via middleware. The
@@ -24,6 +27,7 @@ import {
   type MeResponse,
   type RoboUserSummary,
 } from '../api/auth';
+import { useSetUserFlags } from '../flags';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -32,6 +36,8 @@ interface AuthContextValue {
   user: RoboUserSummary | null;
   profile: MeResponse['profile'] | null;
   onboardingState: MeResponse['onboardingState'] | null;
+  /** The whole `/auth/me` payload (null until signed in). */
+  me?: MeResponse | null;
   refresh: () => Promise<MeResponse | null>;
   setSession: (data: MeResponse) => void;
   clear: () => void;
@@ -46,20 +52,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [onboardingState, setOnboardingState] = useState<
     MeResponse['onboardingState'] | null
   >(null);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const setUserFlags = useSetUserFlags();
 
   const setSession = useCallback((data: MeResponse) => {
     setUser(data.user);
     setProfile(data.profile);
     setOnboardingState(data.onboardingState);
+    setMe(data);
+    setUserFlags(data.flags ?? null);
     setStatus('authenticated');
-  }, []);
+  }, [setUserFlags]);
 
   const clear = useCallback(() => {
     setUser(null);
     setProfile(null);
     setOnboardingState(null);
+    setMe(null);
+    setUserFlags(null);
     setStatus('unauthenticated');
-  }, []);
+  }, [setUserFlags]);
 
   const refresh = useCallback(async (): Promise<MeResponse | null> => {
     // Do NOT pre-check for the session cookie on the client: `session_token`
@@ -90,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       onboardingState,
+      me,
       refresh,
       setSession,
       clear,
@@ -99,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       onboardingState,
+      me,
       refresh,
       setSession,
       clear,

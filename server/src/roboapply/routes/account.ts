@@ -9,7 +9,8 @@
 //   POST /signout-all — revoke every session
 //   GET  /usage     — own usage by date + feature vs tier allowance (COUNTS
 //                     ONLY — never exposes internal cost/margin to the user)
-//   POST /delete    — GDPR delete (soft-disable + session revoke + audit)
+//   POST /delete    — GDPR delete (soft-disable + session revoke + audit +
+//                     confirmation email with the purge window; WP-10)
 //   POST /wipe-data — clear application data only (match history / queue /
 //                     activity / pipeline); account, profile + résumés stay
 //
@@ -23,7 +24,11 @@ import { Router, type Request, type Response } from 'express';
 // profile (usage queries by userId; delete updates 0 profile rows; password is
 // on the User row).
 import { requireAuth } from '../../middleware/auth.js';
-import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
+import { buildClearCookieOptions, SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
+import { authService } from '../../features/auth/service.js';
+import { isStrongEnoughPassword } from '../../features/auth/signupPolicy.js';
+import { getCurrentBrandId } from '../../lib/requestContext.js';
+import { getBrand, type BrandId } from '../../platform/brand/registry.js';
 import {
   seekerAuthService,
   SeekerWrongPasswordError,
@@ -133,8 +138,13 @@ router.post('/password', requireAuth, async (req: Request, res: Response) => {
   try {
     const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
     const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
-    if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, code: 'weak_password', error: 'New password must be at least 8 characters' });
+    // Same rule as signup (PRODUCT O0): ≥8 characters with a letter and a digit.
+    if (!isStrongEnoughPassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        code: 'weak_password',
+        error: 'Use at least 8 characters with at least one letter and one digit.',
+      });
     }
     // Keep the caller's current session alive; revoke the rest.
     const keepSessionToken =
@@ -176,7 +186,7 @@ router.post('/password', requireAuth, async (req: Request, res: Response) => {
 router.post('/signout-all', requireAuth, async (req: Request, res: Response) => {
   try {
     const count = await seekerAuthService.revokeAllSessions(req.user!.id);
-    res.clearCookie(SESSION_COOKIE_NAME);
+    res.clearCookie(SESSION_COOKIE_NAME, buildClearCookieOptions());
     return res.json({ success: true, data: { revoked: count } });
   } catch (err) {
     logger.error('RA_ACCOUNT', 'POST /signout-all failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
@@ -264,7 +274,13 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
     // the hard purge after the retention window: R2 interview artifacts +
     // resume originals first, then the User row (Prisma cascades).
     await seekerAuthService.softDeleteAccount(userId);
-    res.clearCookie(SESSION_COOKIE_NAME);
+    res.clearCookie(SESSION_COOKIE_NAME, buildClearCookieOptions());
+    // F-ACCT-06: confirmation email naming the purge window (GoApply ≤ 15
+    // days for PIPL). Best effort: the deletion stands even if mail fails.
+    const brandId: BrandId = ((req as Request & { brand?: { id?: BrandId } }).brand?.id ?? getCurrentBrandId()) || 'roboapply';
+    await authService
+      .sendAccountDeletedEmail({ userId, email: req.user?.email ?? '', brand: getBrand(brandId) })
+      .catch(() => undefined);
     logger.warn('RA_ACCOUNT', 'account soft-deleted (GDPR)', { userId, email: userEmail }, req.requestId);
     return res.json({ success: true, data: { ok: true, deactivated: true } });
   } catch (err) {

@@ -2,13 +2,24 @@
 //
 // Mounted at /api/v1/roboapply/auth/* in backend/src/index.ts.
 //
-//   POST /signup    — proxies seeker signup; on success also creates a
-//                     shell RoboApplyMission row for the new user so they
-//                     can hit the onboarding flow without a separate
-//                     account-create step.
-//   POST /login     — proxies seeker login.
-//   GET  /me        — proxies seeker /me + injects mission snapshot.
-//   POST /logout    — proxies seeker logout.
+//   POST /signup    — seeker signup (WP-10): agreements (`age_16_plus`
+//                     required; PDPA notice for zh-TW/TW), unchecked
+//                     marketing opt-in, entry attribution, brand + market
+//                     stamping, onboardingStep 'account', verification email.
+//                     An email that belongs to the OTHER brand gets a
+//                     "check your email" answer (200, no session) and a
+//                     notice in that inbox (H34; never a 409). Open: that
+//                     answer still differs from a new signup (201 + session);
+//                     making them identical needs verify-before-create
+//                     signup (owner decision). No V1 RoboApplyMission any more.
+//   POST /login     — seeker login; 409 account_other_brand only after the
+//                     password matched; new-device email.
+//   GET  /me        — user + profile + the WP-10 additions (brand,
+//                     onboarding, entitlements, flags, unreadCount,
+//                     emailVerified). `mission` is no longer returned.
+//   POST /logout    — logout.
+// Rate limits are DB-backed (platform/ratelimit): signup 5/min + 20/day per
+// IP, login 10/min per IP.
 //
 // RoboApply users ARE seeker users (one User row, one SeekerProfile row,
 // plus a RoboApplyMission row). The proxy keeps the auth surface unified
@@ -16,7 +27,10 @@
 // namespace and not need to know about /seeker/* legacy routes.
 
 import { Router, type Request, type Response } from 'express';
-import { rateLimit, requireAuth } from '../../middleware/auth.js';
+import { requireAuth } from '../../middleware/auth.js';
+import { rateLimit } from '../../platform/ratelimit/index.js';
+import { authService } from '../../features/auth/service.js';
+import { isAuthError } from '../../features/auth/errors.js';
 import {
   buildCookieOptions,
   buildClearCookieOptions,
@@ -38,7 +52,7 @@ import { getMissionForUser } from '../services/RoboApplyMissionService.js';
 import prisma from '../../lib/prisma.js';
 import { recordUserActivity } from '../../lib/userActivity.js';
 import { getCurrentBrandId } from '../../lib/requestContext.js';
-import { getBrand, type BrandId } from '../../platform/brand/registry.js';
+import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 
 const router = Router();
 
@@ -67,7 +81,57 @@ function clearSessionCookieOptions() {
   return buildClearCookieOptions();
 }
 
-const authRateLimit = rateLimit(5, 60_000);
+const signupRateLimit = rateLimit({ name: 'signupPerIp' });
+const loginRateLimit = rateLimit({ name: 'loginPerIp' });
+
+function requestBrand(req: Request): ProductBrand {
+  return getBrand(requestBrandId(req) ?? 'roboapply');
+}
+
+/** Edge country (Vercel); only decides whether the Taiwan PDPA notice applies. */
+function requestCountry(req: Request): string | null {
+  const raw = req.get('x-vercel-ip-country');
+  return raw && /^[A-Za-z]{2}$/.test(raw) ? raw.toUpperCase() : null;
+}
+
+/** Best-effort follow-ups after a sign-in/up never fail the request or add warn logs. */
+async function quietly(task: () => Promise<unknown>): Promise<void> {
+  try {
+    await task();
+  } catch {
+    // Each task logs its own failure (features/auth/service.ts `note`).
+  }
+}
+
+function asConsents(value: unknown): Array<{ type: string; granted: boolean; proseVersion: string }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
+    .slice(0, 20)
+    .map((c) => ({
+      type: String(c.type ?? ''),
+      granted: c.granted === true,
+      proseVersion: typeof c.proseVersion === 'string' ? c.proseVersion.slice(0, 40) : 'unknown',
+    }));
+}
+
+function asAttribution(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const v = value as Record<string, unknown>;
+  const s = (k: string) => (typeof v[k] === 'string' ? (v[k] as string) : undefined);
+  return {
+    from: s('from'),
+    jobId: s('jobId'),
+    action: v.action === 'apply' ? ('apply' as const) : undefined,
+    ref: s('ref'),
+    utmSource: s('utmSource'),
+    utmMedium: s('utmMedium'),
+    utmCampaign: s('utmCampaign'),
+    alert: s('alert'),
+    anonId: s('anonId'),
+    landingPath: s('landingPath'),
+  };
+}
 
 function isPlausibleEmail(email: unknown): email is string {
   if (typeof email !== 'string') return false;
@@ -89,7 +153,7 @@ function isPlausibleEmail(email: unknown): email is string {
  * creates an EMPTY RoboApplyMission shell so the new user can hit the
  * onboarding flow at /onboarding to flesh it out with intent + resume.
  */
-router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
+router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
   try {
     const { email, password, name, locale } = req.body ?? {};
     if (!isPlausibleEmail(email)) {
@@ -106,6 +170,7 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
         error: 'Password must be at least 8 characters',
       });
     }
+    const brand = requestBrand(req);
 
     const acceptLanguage = typeof req.headers['accept-language'] === 'string'
       ? (req.headers['accept-language'] as string)
@@ -141,34 +206,22 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
       acceptLanguage,
       source: 'roboapply_signup',
       brand: requestBrandId(req),
+      consents: asConsents(req.body?.consents),
+      marketingOptIn: req.body?.marketingOptIn === true,
+      attribution: asAttribution(req.body?.attribution),
+      timezone: typeof req.body?.timezone === 'string' ? req.body.timezone : null,
+      country: requestCountry(req),
     });
 
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
 
-    // RoboApplyMission shell — empty intent. The /onboarding flow will
-    // PATCH intent + tier + resume. We don't pre-fire the IntentParser here.
-    try {
-      await prisma.roboApplyMission.create({
-        data: {
-          userId: result.user.id,
-          intentText: '',
-          tier: 'free',
-          reviewMode: 'review_first',
-          dailyCap: 3,
-          locale: (result.user.locale ?? 'en'),
-          timezone: typeof req.body?.timezone === 'string' ? req.body.timezone : 'UTC',
-          enabled: false, // disabled until onboarding completes (intent + resume set)
-        },
-      });
-    } catch (err) {
-      // Non-fatal — user can re-create via POST /missions in onboarding.
-      logger.warn(
-        'ROBOAPPLY_AUTH',
-        'shell mission create failed on signup; will be retried at onboarding',
-        { userId: result.user.id, error: err instanceof Error ? err.message : String(err) },
-        req.requestId,
-      );
-    }
+    // No V1 RoboApplyMission shell any more (WP-10): onboarding is the
+    // server stage machine (SeekerProfile.onboardingStep = 'account').
+    const attribution = asAttribution(req.body?.attribution);
+    const userAgent = req.get('user-agent') ?? null;
+    await quietly(() => authService.afterAccountCreated(result.user.id, { attribution }, userAgent));
+    // Verification is not blocking (PRODUCT O0); it unlocks the free practice credit.
+    await quietly(() => authService.sendVerificationEmail({ userId: result.user.id, brand }));
 
     await recordUserActivity(req, {
       userId: result.user.id,
@@ -185,9 +238,34 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
         user: result.user,
         seekerProfile: result.seekerProfile,
         token: result.token,
+        // The first onboarding screen (situation on RoboApply, consent on GoApply).
+        next: authService.firstOnboardingRoute(brand),
       },
     });
   } catch (err) {
+    const code = (err as { code?: unknown } | null)?.code;
+    if (code === 'signup_other_brand') {
+      // H34: the same answer a fresh signup that must confirm its email would
+      // get, plus a notice to that inbox naming where the account lives.
+      const accountBrand = (err as { accountBrand?: BrandId }).accountBrand ?? 'roboapply';
+      await quietly(() =>
+        authService.sendOtherBrandNotice({
+          email: String(req.body?.email ?? '').trim().toLowerCase(),
+          visitingBrand: requestBrand(req),
+          accountBrand,
+          locale: typeof req.body?.locale === 'string' ? req.body.locale : null,
+        }),
+      );
+      return res.status(200).json({ success: true, data: { status: 'check_email' } });
+    }
+    if (isAuthError(err)) {
+      return res.status(err.status).json({
+        success: false,
+        code: err.code,
+        error: err.message,
+        ...(err.details !== undefined ? { details: err.details } : {}),
+      });
+    }
     if (err instanceof SeekerEmailTakenError) {
       return res.status(409).json({
         success: false,
@@ -206,7 +284,7 @@ router.post('/signup', authRateLimit, async (req: Request, res: Response) => {
  *
  * Body: { email, password }
  */
-router.post('/login', authRateLimit, async (req: Request, res: Response) => {
+router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body ?? {};
     if (!isPlausibleEmail(email) || typeof password !== 'string' || password.length === 0) {
@@ -228,6 +306,17 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
       market: result.user.market,
       statusCode: 200,
     });
+
+    // F-TRUST-01: email the account when this browser × OS is new for it.
+    await quietly(() =>
+      authService.notifyIfNewDevice({
+        userId: result.user.id,
+        email: result.user.email,
+        brand: requestBrand(req),
+        userAgent: req.get('user-agent') ?? null,
+        locale: result.user.locale ?? null,
+      }),
+    );
 
     return res.json({
       success: true,
@@ -283,8 +372,12 @@ router.post('/login', authRateLimit, async (req: Request, res: Response) => {
 /**
  * GET /api/v1/roboapply/auth/me
  *
- * Returns user + profile + mission. Mission may be null if shell-creation
- * failed at signup; clients should redirect to /onboarding in that case.
+ * Returns user + profile + the legacy `onboardingState` (read by the old
+ * setup panel until WP-30 replaces it) + the WP-10 additions: brand,
+ * onboarding {step, path, completed, nextRoute}, entitlements, flags,
+ * unreadCount, emailVerified. The V1 `mission` snapshot is no longer
+ * returned (it is still READ below for the legacy onboardingState
+ * heuristic; WP-75 removes that read with the V1 engine).
  */
 router.get(
   '/me',
@@ -336,13 +429,17 @@ router.get(
         autoOpens: typeof ob?.autoOpens === 'number' ? ob.autoOpens : 0,
       };
 
+      // Additive fields; a failure here never breaks /me (each part degrades
+      // to null inside, and a total failure omits them).
+      const additions = await authService.meAdditions(userId, requestBrand(req)).catch(() => null);
+
       return res.json({
         success: true,
         data: {
           user: req.user,
           profile,
-          mission,
           onboardingState,
+          ...(additions ?? {}),
           // There used to be a `jobApplyingEnabled` field here, mirroring the
           // JOB_APPLYING_ENABLED env var so the frontend could hide the
           // auto-apply surface. Auto-apply is gone (ruling R1), the four

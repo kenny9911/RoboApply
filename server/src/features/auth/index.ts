@@ -1,14 +1,21 @@
-// server/src/features/auth/index.ts — public surface of the auth area (FND-5; owner WP-10).
+// server/src/features/auth/index.ts — public surface of the auth area (WP-10).
+// Other areas import from here (or contract.ts) only.
 
-import { NotImplementedError } from '../../platform/http.js';
 import type { AuthMeAdditions, AuthMethodsResponse, ConsentView, IdentityView } from './contract.js';
+import { authService } from './service.js';
+import type { ProductBrand } from '../../platform/brand/registry.js';
+import { getCurrentBrand } from '../../platform/brand/brandContext.js';
 
 export * from './contract.js';
 export { createAccountRouter, createAuthRouter } from './routes.js';
+export { AuthError, authErrors } from './errors.js';
+export { createAuthFeatureService, onboardingFor, authService } from './service.js';
+export type { AuthFeatureServiceImpl, AuthServiceDeps, OAuthSignupContext } from './service.js';
 
+/** The FND-5 interface, now backed by the real service (brand from the current request/unit of work). */
 export interface AuthFeatureService {
   listMethods(): Promise<AuthMethodsResponse>;
-  /** Builds the additive `/auth/me` fields (brand, onboarding, entitlements, flags, unreadCount). */
+  /** Builds the additive `/auth/me` fields (brand, onboarding, entitlements, flags, unreadCount, emailVerified). */
   meAdditions(userId: string): Promise<AuthMeAdditions>;
   requestPasswordReset(email: string): Promise<void>;
   resetPassword(token: string, password: string): Promise<{ userId: string }>;
@@ -20,20 +27,24 @@ export interface AuthFeatureService {
   recordConsent(userId: string, input: { type: string; granted: boolean; proseVersion: string }): Promise<ConsentView>;
 }
 
-const notYet = (what: string) => async (): Promise<never> => {
-  throw new NotImplementedError(`auth.${what}`);
-};
+const brand = (): ProductBrand => getCurrentBrand();
 
-/** Stub until WP-10. */
 export const authFeatureService: AuthFeatureService = {
-  listMethods: notYet('listMethods'),
-  meAdditions: notYet('meAdditions'),
-  requestPasswordReset: notYet('requestPasswordReset'),
-  resetPassword: notYet('resetPassword'),
-  sendVerificationEmail: notYet('sendVerificationEmail'),
-  verifyEmail: notYet('verifyEmail'),
-  listIdentities: notYet('listIdentities'),
-  unlinkIdentity: notYet('unlinkIdentity'),
-  listConsents: notYet('listConsents'),
-  recordConsent: notYet('recordConsent'),
+  listMethods: async () => authService.listMethods({ brand: brand() }),
+  meAdditions: (userId) => authService.meAdditions(userId, brand()),
+  requestPasswordReset: (email) => authService.requestPasswordReset({ email, brand: brand() }),
+  resetPassword: async (token, password) => ({ userId: (await authService.resetPassword({ token, password, brand: brand() })).userId }),
+  sendVerificationEmail: async (userId) => {
+    await authService.sendVerificationEmail({ userId, brand: brand() });
+  },
+  verifyEmail: async (token) => {
+    const res = await authService.verifyEmail({ token, brand: brand() });
+    return { userId: res.signIn?.userId ?? '' };
+  },
+  listIdentities: (userId) => authService.listIdentities(userId),
+  unlinkIdentity: async (userId, identityId) => {
+    await authService.unlinkIdentity(userId, identityId);
+  },
+  listConsents: (userId) => authService.listConsents(userId),
+  recordConsent: (userId, input) => authService.recordConsent(userId, input),
 };

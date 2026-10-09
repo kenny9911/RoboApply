@@ -1,3 +1,148 @@
 {
-  "auth": {}
+  "auth": {
+    "common": {
+      "or": "or",
+      "backToSignIn": "Back to sign in"
+    },
+    "contextual": {
+      "signupDefault": "Create your free account",
+      "signupApply": "Create a free account to see how you fit {jobTitle}",
+      "signupJob": "Create a free account to save {jobTitle}",
+      "signupResumeCheck": "Create a free account to keep your resume check",
+      "signupSubtitle": "See which jobs fit you and what to fix first.",
+      "loginApply": "Sign in to see how you fit {jobTitle}"
+    },
+    "panel": {
+      "resumeCheck": "Keep your resume check, then tailor your resume for each job you choose.",
+      "job": "You were looking at {jobTitle}. Sign up to see how your resume fits it.",
+      "jobAtCompany": "You were looking at {jobTitle} at {company}. Sign up to see how your resume fits it."
+    },
+    "methods": {
+      "google": "Continue with Google",
+      "line": "Continue with LINE",
+      "useEmail": "Use email instead",
+      "needAgreements": "Tick the required boxes below first."
+    },
+    "agreements": {
+      "marketing": "Send me product news and tips",
+      "age": "I'm 16 or older",
+      "pdpa": "I have read the <notice>personal data notice</notice> (Taiwan Personal Data Protection Act).",
+      "legal": "By creating an account you agree to the <terms>Terms</terms> and <privacy>Privacy Policy</privacy>."
+    },
+    "signupForm": {
+      "emailInvalid": "Enter a valid email address.",
+      "rulesLabel": "Password rules",
+      "ruleLength": "At least 8 characters",
+      "ruleLetter": "At least one letter",
+      "ruleDigit": "At least one number",
+      "ruleMet": "(done)",
+      "weakPassword": "Use at least 8 characters with at least one letter and one number.",
+      "ageRequired": "Confirm that you are 16 or older to continue.",
+      "pdpaRequired": "Read and accept the personal data notice to continue.",
+      "emailTaken": "An account with this email already exists. <signin>Sign in instead.</signin>",
+      "submit": "Create account",
+      "submitting": "Creating your account…",
+      "checkEmailTitle": "Check your email",
+      "checkEmailBody": "We sent a message to {email}. Open it to continue."
+    },
+    "loginForm": {
+      "forgot": "Forgot password?",
+      "disabled": "This account is suspended. Contact support if you think this is a mistake.",
+      "deleted": "This account was deleted.",
+      "oauthError": "Sign-in with that provider did not finish. Try again, or use your email.",
+      "notSeeker": "This email belongs to an account that is not a job-seeker account. Use a different email to sign in."
+    },
+    "otherBrand": {
+      "title": "This account belongs to %OTHER_BRAND%",
+      "body": "This account belongs to %OTHER_BRAND%. Continue there.",
+      "cta": "Go to %OTHER_BRAND%"
+    },
+    "inApp": {
+      "title": "Open in your browser to continue with {provider}",
+      "body": "Sign-in with {provider} does not work inside this app. Open this page in your browser, or sign up with your email here.",
+      "copy": "Copy link",
+      "copied": "Link copied"
+    },
+    "errors": {
+      "rateLimited": "Too many attempts. Wait a minute and try again.",
+      "network": "Something went wrong. Check your connection and try again."
+    },
+    "forgot": {
+      "title": "Reset your password",
+      "subtitle": "Enter the email you signed up with. If it has an account, we will send a link that works for 30 minutes.",
+      "submit": "Send reset link",
+      "submitting": "Sending…",
+      "sentTitle": "Check your email",
+      "sentBody": "If {email} has an account, a reset link is on its way. The link works for 30 minutes.",
+      "unavailable": "Password reset by email is not available right now. Contact support to get back into your account."
+    },
+    "reset": {
+      "title": "Choose a new password",
+      "subtitle": "Saving it signs you out on every other device.",
+      "password": "New password",
+      "submit": "Save new password",
+      "submitting": "Saving…",
+      "invalid": "This reset link is not valid or was already used.",
+      "expired": "This reset link has expired.",
+      "requestNew": "Ask for a new link"
+    },
+    "verify": {
+      "working": "Confirming your email…",
+      "verifiedTitle": "Email confirmed",
+      "verifiedBody": "Your email is confirmed. Confirming it unlocks your free practice interview.",
+      "toSettings": "Go to Settings",
+      "failedTitle": "This link did not work",
+      "invalid": "The link is not valid or was already used.",
+      "expired": "The link has expired. Send a new one from Settings.",
+      "accountExistsTitle": "You already have an account",
+      "accountExistsBody": "An account with this email already exists. Nothing new was created, and no sign-in method was added to it. Sign in the way you usually do.",
+      "toSignIn": "Sign in"
+    },
+    "callback": {
+      "working": "Signing you in…",
+      "failed": "Sign-in did not finish",
+      "consentTitle": "One more step",
+      "consentBody": "Confirm the following to create your account.",
+      "emailTitle": "Add your email",
+      "emailBody": "{provider} did not share a confirmed email address. Add one and confirm it. Your account is created after you open the link we send.",
+      "emailSubmit": "Send confirmation link"
+    },
+    "gate": {
+      "redirecting": "This app is for job seekers. Redirecting you to {site}…"
+    },
+    "verifyBanner": {
+      "unverified": "Your email is not confirmed yet. Confirming it unlocks your free practice interview.",
+      "resend": "Send confirmation email",
+      "sent": "Sent. Check your inbox.",
+      "verified": "Email confirmed",
+      "justVerified": "Your email is now confirmed.",
+      "failed": "The email was not sent. Try again later."
+    },
+    "security": {
+      "methodsTitle": "Ways to sign in",
+      "provider": {
+        "email": "Email and password",
+        "google": "Google",
+        "line": "LINE",
+        "wechat": "WeChat",
+        "phone": "Phone"
+      },
+      "remove": "Remove",
+      "removing": "Removing…",
+      "lastMethod": "You need at least one way to sign in, so the last one cannot be removed.",
+      "lastUsed": "Last used {date}",
+      "added": "Added {date}",
+      "sessionsTitle": "Signed-in sessions",
+      "sessionsNote": "Each row is one signed-in browser. Device names and locations are not recorded.",
+      "sessionStarted": "Signed in {date}",
+      "thisDevice": "This device",
+      "signOutSession": "Sign out",
+      "loading": "Loading…",
+      "loadError": "This did not load.",
+      "retry": "Try again"
+    },
+    "danger": {
+      "confirmationEmail": "We will email you a confirmation that says when the deletion is final. You are signed out everywhere right away."
+    }
+  }
 }

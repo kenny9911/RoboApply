@@ -1,13 +1,12 @@
-// /verify-email/[token] — route shell (FND-6b). Email verification link.
-//
-// STUB. Owner: WP-10, who replaces this page. Renders inside the (public) sign-in layout.
-// Nothing links here until the owner ships and INT flips the entry.
+// /verify-email/[token] — confirm an email address (WP-10; F-ACCT-02), or
+// finish a LINE sign-up that needed a confirmed email.
 
 import type { Metadata } from 'next';
+import { VerifyEmailView } from '../../../../components/features/auth/VerifyEmailView';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: 'no-referrer' };
 
 export default async function VerifyEmailTokenPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  return <div hidden data-route-stub="/verify-email/[token]" data-owner="WP-10" data-param={token} />;
+  return <VerifyEmailView token={token} />;
 }

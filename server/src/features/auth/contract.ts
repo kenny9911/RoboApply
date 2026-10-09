@@ -34,6 +34,13 @@ export interface AuthMethodView {
 }
 export interface AuthMethodsResponse {
   methods: AuthMethodView[];
+  /**
+   * ISO-3166 alpha-2 country from the edge (`x-vercel-ip-country`), or null.
+   * Drives the LINE-first order and the Taiwan PDPA notice; never stored.
+   */
+  country: string | null;
+  /** True when signup must show the Taiwan PDPA notice line and its consent row (`tw_pdpa_notice`). */
+  pdpaNoticeRequired: boolean;
 }
 
 // ── Password reset ───────────────────────────────────────────────────────
@@ -55,7 +62,30 @@ const NextPath = z
   .string()
   .max(512)
   .regex(/^\/(?!\/)/, 'Use a path on this site.');
-export const OAuthStartQuerySchema = z.object({ next: NextPath.optional() });
+/**
+ * GET /auth/oauth/<provider>/start. From the signup page the visitor has
+ * already ticked the required boxes, so the start carries them (`age`,
+ * `pdpa`, `marketing`) plus locale, time zone and entry attribution; a new
+ * account created by the callback records them. From the login page they are
+ * absent, and a brand-new user is asked for them before the account exists.
+ */
+const Flag01 = z.enum(['0', '1']);
+export const OAuthStartQuerySchema = z.object({
+  next: NextPath.optional(),
+  age: Flag01.optional(),
+  pdpa: Flag01.optional(),
+  marketing: Flag01.optional(),
+  locale: z.string().max(10).optional(),
+  tz: z.string().max(64).optional(),
+  from: z.string().max(80).optional(),
+  job: z.string().max(64).optional(),
+  action: z.enum(['apply']).optional(),
+  ref: z.string().max(64).optional(),
+  utm_source: z.string().max(120).optional(),
+  utm_medium: z.string().max(120).optional(),
+  utm_campaign: z.string().max(120).optional(),
+  alert: z.string().max(200).optional(),
+});
 export const OAuthCallbackQuerySchema = z.object({
   code: z.string().max(2048).optional(),
   state: z.string().max(512).optional(),
@@ -97,10 +127,19 @@ export const SignupAdditionsSchema = z.object({
 
 export interface AuthMeAdditions {
   brand: { id: BrandId; name: string; market: 'intl' | 'cn' };
+  /**
+   * The onboarding stage. A fresh account is at `account` (written by signup);
+   * WP-10 points its `nextRoute` at the first onboarding screen (situation /
+   * consent), never back at /signup.
+   */
   onboarding: OnboardingMe;
-  entitlements: EntitlementSummary;
+  /** Null only when the credits service could not answer (never invented). */
+  entitlements: EntitlementSummary | null;
   flags: ResolvedFlags;
-  unreadCount: number;
+  /** Unread message-center items; null when unknown (never a guessed 0). */
+  unreadCount: number | null;
+  /** Email/password accounts start unverified; verification is not blocking. */
+  emailVerified: boolean;
 }
 
 // ── /account/identities ──────────────────────────────────────────────────
@@ -143,6 +182,93 @@ export const RecordConsentBodySchema = z
   .object({ type: z.string().min(1).max(60), granted: z.boolean(), proseVersion: z.string().min(1).max(40) })
   .strict();
 
+// ── OAuth callback (JSON form, called by app/auth/callback/<provider>) ───
+
+/**
+ * GET /auth/oauth/<provider>/callback answers JSON when the client asks for it
+ * (`Accept: application/json`), else 302s to `next`.
+ *   - `signed_in`: session cookie set; go to `next`.
+ *   - `email_required`: the provider returned no verified email; the user
+ *     enters one and verifies it before the account exists
+ *     (POST /auth/oauth/email).
+ * The callback must come from the browser that started the attempt: start
+ * sets a short-lived httpOnly cookie (`ra_oauth_state`) whose hash is stored
+ * with the state, and the callback refuses a state without it
+ * (`oauth_state_invalid`).
+ */
+export type OAuthCallbackResult =
+  | { status: 'signed_in'; next: string; isNewUser: boolean }
+  | { status: 'consent_required'; pendingToken: string; next: string; name: string | null; email: string | null }
+  | { status: 'email_required'; pendingToken: string; next: string; name: string | null };
+
+/** POST /auth/oauth/complete: a new OAuth user ticks the required signup boxes; the account is created. */
+export const OAuthCompleteBodySchema = z
+  .object({
+    pendingToken: z.string().min(16).max(512),
+    consents: z.array(SignupConsentSchema).max(20),
+    marketingOptIn: z.boolean().default(false),
+    locale: z.string().max(10).optional(),
+    timezone: z.string().max(64).optional(),
+  })
+  .strict();
+
+/**
+ * POST /auth/oauth/email: the provider gave no verified email (LINE often
+ * omits it); send a verification link that finishes the account. Gated on
+ * the capability of the provider recorded in the pending token.
+ */
+export const OAuthEmailBodySchema = z
+  .object({
+    pendingToken: z.string().min(16).max(512),
+    email: Email,
+    consents: z.array(SignupConsentSchema).max(20),
+    marketingOptIn: z.boolean().default(false),
+    locale: z.string().max(10).optional(),
+    timezone: z.string().max(64).optional(),
+  })
+  .strict();
+
+/**
+ * GET /auth/email/verify (JSON form): what the link did.
+ *   - `account_exists`: a LINE sign-up link for an address that already has
+ *     an account on this site. Nothing was linked or created; the person
+ *     signs in to that account the way they did before.
+ */
+export type VerifyEmailResult =
+  | { status: 'verified'; next: string }
+  | { status: 'signed_in'; next: string; isNewUser: boolean }
+  | { status: 'account_exists'; next: string };
+
+/** POST /auth/signup when the email belongs to the other brand: the normal "check your email" answer (no 409; H34). */
+export interface SignupCheckEmailResponse {
+  status: 'check_email';
+}
+
+// ── /account/sessions ─────────────────────────────────────────────────────
+
+export interface SessionView {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  /** The session making this request. */
+  current: boolean;
+}
+export interface SessionsResponse {
+  sessions: SessionView[];
+}
+export const SessionParamsSchema = z.object({ id: z.string().min(1).max(64) });
+
+/** GET /auth/email/status (S): drives the "verify your email" line in Settings. */
+export interface EmailStatusResponse {
+  email: string;
+  verified: boolean;
+  /** Email/password accounts get a verification email; OAuth-created accounts are verified by the provider. */
+  canResend: boolean;
+}
+
+/** Consent types every signup must grant (H29: both brands). */
+export const REQUIRED_SIGNUP_CONSENTS = ['age_16_plus'] as const;
+
 export const AUTH_ERROR_CODES = {
   invalidCredentials: 'invalid_credentials',
   tokenInvalid: 'token_invalid',
@@ -151,4 +277,14 @@ export const AUTH_ERROR_CODES = {
   ageConsentRequired: 'age_consent_required',
   emailUnverified: 'email_unverified',
   oauthStateInvalid: 'oauth_state_invalid',
+  pdpaConsentRequired: 'pdpa_consent_required',
+  unknownConsent: 'unknown_consent',
+  weakPassword: 'weak_password',
+  oauthFailed: 'oauth_failed',
+  emailTaken: 'email_taken',
+  accountDisabled: 'account_disabled',
+  accountDeleted: 'account_deleted',
+  consentLocked: 'consent_locked',
+  notSeekerAccount: 'not_a_seeker_account',
 } as const;
+export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[keyof typeof AUTH_ERROR_CODES];

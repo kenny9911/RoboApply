@@ -1,18 +1,16 @@
 'use client';
 
-// LineMethod — Continue with LINE (RoboApply, Taiwan)
-// (PRODUCT_PLAN.md F-ACCT-01; TASK_PLAN.md WP-10).
-//
-// STUB (FND repair, Wave 1). Owner: WP-10. Renders nothing. Rendered by
-// login/signup through components/auth/methods/registry.ts (`line`)
-// only when the method's capability is on, so a method whose keys are
-// missing never shows a dead button. A redirect method starts its OAuth round
-// trip at `startUrl` (GET /auth/methods).
+// LineMethod — "Continue with LINE" (RoboApply, Taiwan; TW-05, CN plan
+// WP-AUTH-CORE). Shown only when `auth.line` is on (LINE Login channel
+// configured) and listed first for zh-TW visitors and visitors from Taiwan.
+// When LINE shares no email, the callback page asks for one and the account
+// is created only after that email is confirmed.
 
 import type { AuthMethodProps } from './registry';
+import { OAuthButton } from './OAuthButton';
 
-export function LineMethod(_props: AuthMethodProps): null {
-  return null;
+export function LineMethod({ mode, next }: AuthMethodProps) {
+  return <OAuthButton provider="line" mode={mode} next={next} />;
 }
 
 export default LineMethod;

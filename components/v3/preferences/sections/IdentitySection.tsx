@@ -17,6 +17,7 @@ import {
 import { Btn } from '../../primitives';
 import { LanguageSwitcher } from '../../shell/LanguageSwitcher';
 import type { RAPreferences } from '../../../../lib/api/v2';
+import { EmailVerificationLine } from '../../../features/auth/SecuritySettings';
 
 export function IdentitySection({
   p,
@@ -96,6 +97,8 @@ export function IdentitySection({
         <PrefRow label={t('identity.email')}>
           <TextInput value={email} onChange={() => {}} ariaLabel={t('identity.email')} />
         </PrefRow>
+        {/* WP-10: confirmed or not, with a resend button (never blocking). */}
+        <EmailVerificationLine />
         <PrefRow label={t('identity.phone')}>
           <TextInput
             value={p.phone ?? ''}

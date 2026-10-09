@@ -1,15 +1,24 @@
 'use client';
 
-// /settings#account, #security and #danger — email and password, sessions and sign-out-all, sign-in methods, delete account (TASK_PLAN.md WP-10).
-//
-// STUB (FND-6b). Owner: WP-10. Renders nothing. Receives the section id
-// (`SettingsSectionProps`), since one area may own more than one section.
-// Until the owner takes the section over, /settings renders its existing
-// content for it (the page's renderers win over this component).
+// /settings#account, #security and #danger (WP-10). The settings page still
+// renders its legacy content for these sections (IdentitySection,
+// SecurityCard, DangerSection — which now embed the WP-10 pieces below);
+// this component is what the frame renders when no legacy renderer is
+// passed (components/features/settings/sectionComponents.ts, INT).
 
 import type { SettingsSectionProps } from '../settings/sectionComponents';
+import { EmailVerificationLine, SignedInSessions, SignInMethods } from './SecuritySettings';
 
-export function SettingsSection(_props: SettingsSectionProps): null {
+export function SettingsSection({ section }: SettingsSectionProps) {
+  if (section === 'account') return <EmailVerificationLine />;
+  if (section === 'security') {
+    return (
+      <>
+        <SignInMethods />
+        <SignedInSessions />
+      </>
+    );
+  }
   return null;
 }
 
