@@ -4,6 +4,7 @@
 // friends (ARCHITECTURE.md §2.12, §3.9; TASK_PLAN.md WP-23, WP-60). Mounts:
 //   /api/v1/roboapply/invites   (seeker; capability `invites` per route)
 //   /api/v1/public/events       (public/session; ≤50 events per batch, 120/min/anonId)
+//   /api/v1/roboapply/growth    (seeker; checklist read + dismiss — mount requested from INT)
 //
 // Events stay in our DB (no third-party pixels). For EEA/UK/CH visitors on
 // RoboApply nothing links to an `anonId` before the analytics consent. The
@@ -14,25 +15,20 @@ import { z } from 'zod';
 
 // ── Events ───────────────────────────────────────────────────────────────
 
-/** Initial registry; WP-23 owns `events.ts` and extends it (names are validated against it). */
-export const PRODUCT_EVENT_NAMES = [
-  'page_viewed',
-  'onboarding_step_viewed',
-  'onboarding_step_completed',
-  'onboarding_abandoned',
-  'feed_card_impression',
-  'feed_rating_submitted',
-  'job_saved',
-  'apply_clicked',
-  'tailor_started',
-  'tailor_finalized',
-  'practice_started',
-  'practice_completed',
-  'assistant_opened',
-  'extension_installed',
-  'upgrade_viewed',
-  'checkout_started',
-] as const;
+/**
+ * The registry lives in events.ts (names, allowed prop keys, consent rules);
+ * re-exported here so the web's type-only mirror sees it.
+ */
+export {
+  ANALYTICS_CONSENT_COOKIE,
+  ANON_ID_COOKIE,
+  CONSENT_REQUIRED_COUNTRIES,
+  EVENT_RETENTION_DAYS,
+  MAX_EVENTS_PER_BATCH,
+  PRODUCT_EVENTS,
+  PRODUCT_EVENT_NAMES,
+} from './events.js';
+export type { AnalyticsConsentChoice, EventPropValue, ProductEventName, ProductEventPropKey, ProductEventProps } from './events.js';
 
 export const ProductEventSchema = z
   .object({
@@ -51,7 +47,9 @@ export const EventsBatchBodySchema = z
   })
   .strict();
 export interface EventsBatchResponse {
+  /** Events stored. */
   accepted: number;
+  /** Events dropped (name not in the registry). */
   rejected: number;
 }
 
@@ -78,10 +76,24 @@ export type Touch = z.infer<typeof TouchSchema>;
 
 export const CHECKLIST_STEPS = ['tailor', 'practice', 'save_job'] as const;
 export type ChecklistStep = (typeof CHECKLIST_STEPS)[number];
+export function isChecklistStep(value: unknown): value is ChecklistStep {
+  return typeof value === 'string' && (CHECKLIST_STEPS as readonly string[]).includes(value);
+}
+
+/** The reward for finishing every step: deterministic, granted once (no raffle). */
+export const CHECKLIST_REWARD = { bucket: 'practice', credits: 1 } as const;
+
 export interface ChecklistState {
   steps: Record<ChecklistStep, boolean>;
   /** Reward (1 practice credit) granted once all three are done. */
   rewarded: boolean;
+  /** The user closed the card (it stays hidden). */
+  dismissed: boolean;
+}
+
+/** GET /api/v1/roboapply/growth/checklist and POST …/checklist/dismiss → data. */
+export interface ChecklistView extends ChecklistState {
+  reward: { bucket: typeof CHECKLIST_REWARD.bucket; credits: number };
 }
 
 // ── Invite friends (/invites, flag `invites`; WP-60) ─────────────────────
@@ -97,5 +109,7 @@ export const InviteEmailBodySchema = z.object({ emails: z.array(z.string().trim(
 
 export const GROWTH_ERROR_CODES = {
   unknownEvent: 'unknown_event',
+  /** The checklist store is not available on this deployment (schema request SR-23-1 not applied). */
+  checklistUnavailable: 'feature_disabled',
   inviteCap: 'invite_reward_cap',
 } as const;

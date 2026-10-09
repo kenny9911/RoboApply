@@ -1,3 +1,34 @@
 {
-  "growth": {}
+  "growth": {
+    "consent": {
+      "regionLabel": "Usage statistics choice",
+      "title": "Usage statistics",
+      "body": "Let %BRAND% remember this device with an anonymous ID, so we can see how your visits connect over time? If you say no, we only count single page visits and button taps and link them to nothing. The data stays in %BRAND%'s own database, is never shared with advertisers, and is deleted after 13 months.",
+      "allow": "Allow",
+      "reject": "Don't allow",
+      "privacy": "Privacy policy"
+    },
+    "checklist": {
+      "regionLabel": "Getting started",
+      "title": "Get started",
+      "intro": "Finish all three to get {credits, plural, one {# practice interview credit} other {# practice interview credits}}.",
+      "progress": "{done} of {total} done",
+      "steps": {
+        "tailor": "Tailor a resume for a job",
+        "practice": "Do a practice interview",
+        "save_job": "Save a job for later"
+      },
+      "actions": {
+        "tailor": "Pick a job",
+        "practice": "Practice",
+        "save_job": "Browse jobs"
+      },
+      "done": "Done",
+      "notDone": "Not done yet",
+      "rewarded": "All three done. {credits, plural, one {# practice interview credit was} other {# practice interview credits were}} added to your account.",
+      "pendingReward": "All three done. The practice interview credit has not been added yet.",
+      "close": "Close",
+      "closeLabel": "Hide the getting-started list"
+    }
+  }
 }
