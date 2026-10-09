@@ -31,6 +31,7 @@ export function DeleteAccountModal({
   email: string;
 }) {
   const t = useTranslations('settings');
+  const ta = useTranslations('auth');
   const router = useRouter();
   const auth = useAuth();
   const deleteAccount = useDeleteAccount();
@@ -148,6 +149,10 @@ export function DeleteAccountModal({
             }}
           />
         </div>
+
+        {/* WP-10 (F-ACCT-06): what happens next — a confirmation email states
+            when the deletion is final (30 days; 15 on the mainland site). */}
+        <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', margin: 0 }}>{ta('danger.confirmationEmail')}</p>
 
         {error ? (
           <p role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)', margin: 0 }}>

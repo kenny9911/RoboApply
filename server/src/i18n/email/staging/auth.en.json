@@ -1,3 +1,53 @@
 {
-  "auth": {}
+  "auth": {
+    "passwordReset": {
+      "subject": "Reset your %BRAND% password",
+      "preheader": "This link works for 30 minutes.",
+      "heading": "Reset your password",
+      "body": "Someone asked to reset the password for this %BRAND% account. Use the button below to choose a new one. The link works once and expires in 30 minutes.",
+      "cta": "Choose a new password",
+      "ignore": "If you did not ask for this, ignore this email. Your password stays the same.",
+      "sessions": "Resetting your password signs you out on every other device."
+    },
+    "emailVerify": {
+      "subject": "Confirm your email for %BRAND%",
+      "preheader": "One click confirms this address.",
+      "heading": "Confirm your email",
+      "body": "Confirm that this is your email address. You can keep using %BRAND% while you decide; confirming unlocks your free practice interview.",
+      "cta": "Confirm my email",
+      "expiry": "The link expires in 24 hours. You can send a new one from Settings."
+    },
+    "oauthEmail": {
+      "subject": "Finish creating your %BRAND% account",
+      "preheader": "Confirm this email to finish signing up with LINE.",
+      "heading": "Finish signing up",
+      "body": "You started creating a %BRAND% account with LINE. Confirm this email address to finish. The account is created only after you click the button.",
+      "cta": "Confirm and create my account",
+      "ignore": "If this was not you, ignore this email. No account is created."
+    },
+    "newDevice": {
+      "subject": "New sign-in to your %BRAND% account",
+      "preheader": "{browser} on {os}",
+      "heading": "New sign-in",
+      "body": "Your account was just signed in to from {browser} on {os} at {time} (UTC).",
+      "ifYou": "If this was you, you do not need to do anything.",
+      "ifNot": "If this was not you, reset your password now. Resetting signs you out everywhere else.",
+      "cta": "Reset my password"
+    },
+    "otherBrand": {
+      "subject": "Someone tried to sign up with your email",
+      "heading": "You already have an account",
+      "body": "Someone tried to create a %BRAND% account with this email address. This email already belongs to a %OTHER_BRAND% account, and one email can hold only one of the two.",
+      "useOther": "To keep using your account, sign in to %OTHER_BRAND%:",
+      "cta": "Sign in to %OTHER_BRAND%",
+      "ignore": "If this was not you, ignore this email. Nothing changed."
+    },
+    "accountDeleted": {
+      "subject": "Your %BRAND% account is scheduled for deletion",
+      "heading": "Your account is scheduled for deletion",
+      "body": "You asked us to delete your %BRAND% account. You have been signed out everywhere and can no longer sign in.",
+      "when": "We delete your account and its data within {days} days. Backups are cleared within 90 days after that.",
+      "notYou": "If you did not ask for this, reply to this email or contact support right away."
+    }
+  }
 }

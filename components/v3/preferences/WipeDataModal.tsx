@@ -74,8 +74,13 @@ export function WipeDataModal({
     });
   };
 
+  // WP-10: the wipe also clears the clone's application-data tables, reported
+  // per table under `clone` (additive field; older servers omit it).
+  const cloneCleared = done
+    ? Object.values((done as WipeDataResponse & { clone?: Record<string, number> }).clone ?? {}).reduce((a, b) => a + (Number(b) || 0), 0)
+    : 0;
   const totalCleared = done
-    ? done.trackerEntries + done.matchScores + done.runs + done.digests
+    ? done.trackerEntries + done.matchScores + done.runs + done.digests + cloneCleared
     : 0;
 
   return (

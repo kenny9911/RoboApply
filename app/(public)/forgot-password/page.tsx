@@ -1,12 +1,17 @@
-// /forgot-password — route shell (FND-6b). Request a password reset link.
-//
-// STUB. Owner: WP-10, who replaces this page. Renders inside the (public) sign-in layout.
-// Nothing links here until the owner ships and INT flips the entry.
+// /forgot-password — request a password reset link (WP-10; F-ACCT-02).
+// Renders inside the (public) sign-in layout. Never reveals whether an email
+// has an account.
 
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { ForgotPasswordView } from '../../../components/features/auth/PasswordResetViews';
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default function ForgotPasswordPage() {
-  return <div hidden data-route-stub="/forgot-password" data-owner="WP-10" />;
+  return (
+    <Suspense fallback={null}>
+      <ForgotPasswordView />
+    </Suspense>
+  );
 }

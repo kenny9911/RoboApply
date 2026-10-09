@@ -1,25 +1,26 @@
 'use client';
 
-// Gates the authenticated RoboApply shell by RoboHire role.
+// Gates the authenticated seeker shell by role (WP-10).
 //
-// RoboHire recruiters (user/internal/agency) share the session_token cookie
-// with RoboApply (COOKIE_DOMAIN=.robohire.io) and so can reach this app, but
-// the candidate product is not for them — they're full-page redirected to the
-// robohire.io/job-seeker bridge (where they're told to make a separate
-// candidate account with a different email). Job-seekers ('seeker'), GoHire
-// candidates ('candidate'), and admins pass through untouched.
-//
-// We deliberately do NOT block during the initial `loading` window — pages
-// render eagerly (see AuthProvider) and only a CONFIRMED recruiter is bounced,
-// so legit users never see a gating spinner.
+// Only a CONFIRMED recruiter account (role user/internal/agency/sales/
+// customer_success, lib/roles.ts) is sent to the RoboHire recruiter site's
+// /job-seeker bridge, with a localized line saying why. Seekers ('seeker'),
+// GoHire candidates ('candidate') and admins pass straight through, on both
+// brands — a seeker is never bounced, and nothing is decided while auth is
+// still `loading` (pages render eagerly; see AuthProvider).
 
 import { useEffect, type ReactNode } from 'react';
 import { useAuth } from '../lib/auth/AuthProvider';
 import { isRecruiterRole } from '../lib/roles';
 import { getRoboHireUrl } from '../lib/config';
+import { useOptionalTranslations } from '../lib/auth/optionalTranslations';
+
+/** The recruiter product's name; a source/product name, not this app's brand. */
+const RECRUITER_SITE = 'RoboHire';
 
 export function RoboApplyAccessGate({ children }: { children: ReactNode }) {
   const { status, user } = useAuth();
+  const t = useOptionalTranslations('auth');
   const blocked = status === 'authenticated' && isRecruiterRole(user?.role);
 
   useEffect(() => {
@@ -27,12 +28,14 @@ export function RoboApplyAccessGate({ children }: { children: ReactNode }) {
   }, [blocked]);
 
   if (blocked) {
+    const line = t('gate.redirecting', `This app is for job seekers. Redirecting you to ${RECRUITER_SITE}…`, { site: RECRUITER_SITE });
     return (
       <div
+        role="status"
         style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}
         className="flex min-h-screen items-center justify-center px-6 text-center text-sm"
       >
-        Redirecting you to RoboHire…
+        {line}
       </div>
     );
   }

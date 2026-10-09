@@ -19,13 +19,21 @@ import bcrypt from 'bcryptjs';
 import prisma from '../../../lib/prisma.js';
 import { createSeekerSession, generateJwt } from '../lib/seekerSession.js';
 import {
-  marketFromAcceptLanguage,
   normalizeLocale,
   type SeekerLocale,
   type SeekerMarket,
 } from '../lib/seekerLocale.js';
-import { SEEKER_CONSENT_PROSE_VERSION } from '../lib/seekerConsentTypes.js';
 import { parseBrandId, type BrandId } from '../../../platform/brand/registry.js';
+import { createSeekerAccount } from '../../../features/auth/accounts.js';
+import {
+  assertPassword,
+  marketForSignup,
+  onboardingEntryFrom,
+  safeTimezone,
+  validateSignupConsents,
+  type SignupAttributionInput,
+  type SignupConsentInput,
+} from '../../../features/auth/signupPolicy.js';
 
 const SALT_ROUNDS = 12;
 
@@ -45,6 +53,16 @@ export interface SeekerSignupInput {
    * brand, so an unstamped GoApply signup would be unusable.
    */
   brand?: BrandId;
+  /** Signup agreements (WP-10): `age_16_plus` required; `tw_pdpa_notice` for zh-TW/TW on RoboApply. */
+  consents?: SignupConsentInput[];
+  /** "Send me product news and tips" — unchecked by default; recorded as `marketing_email`. */
+  marketingOptIn?: boolean;
+  /** Entry attribution (F-ONB-02) → SeekerProfile.onboardingEntry. */
+  attribution?: SignupAttributionInput;
+  /** IANA time zone from the browser. */
+  timezone?: string | null;
+  /** Edge country (`x-vercel-ip-country`); only decides whether the PDPA notice applies. */
+  country?: string | null;
 }
 
 export interface SeekerLoginInput {
@@ -117,6 +135,20 @@ export class SeekerAccountOtherBrandError extends Error {
   }
 }
 
+/**
+ * Signup with an email that belongs to the OTHER brand (H34). Not shown to
+ * the visitor: the route answers the normal "check your email" response and
+ * emails the inbox where its account lives. `code` lets callers branch
+ * without importing the class.
+ */
+export class SeekerEmailOtherBrandError extends Error {
+  readonly code = 'signup_other_brand' as const;
+  constructor(readonly accountBrand: BrandId) {
+    super('This email belongs to an account on the other site.');
+    this.name = 'SeekerEmailOtherBrandError';
+  }
+}
+
 export class SeekerInvalidCredentialsError extends Error {
   constructor() {
     super('Invalid email or password');
@@ -144,20 +176,10 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
   if (!email || typeof email !== 'string') {
     throw new Error('Email is required');
   }
-  if (!password || typeof password !== 'string' || password.length < 8) {
-    throw new Error('Password must be at least 8 characters long');
-  }
+  // ≥8 characters with a letter and a digit (PRODUCT O0) → 422 weak_password.
+  assertPassword(password);
 
   const normalizedEmail = email.toLowerCase().trim();
-  const existing = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-    select: { id: true },
-  });
-  if (existing) {
-    throw new SeekerEmailTakenError();
-  }
-
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   // Fall THROUGH to Accept-Language when the explicit locale is unsupported.
   // `normalizeLocale(locale ?? acceptLanguage)` only consulted the header when
   // `locale` was absent: a caller passing an out-of-list tag ('zh-Hant-MO' is
@@ -166,54 +188,59 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
   // header/cookie-derived locale (roboapply/routes/auth.ts), so an unrecognised
   // value is a realistic input, not a programmer error.
   const resolvedLocale = normalizeLocale(locale) ?? normalizeLocale(acceptLanguage);
-  const market = marketFromAcceptLanguage(acceptLanguage ?? null);
+  const brandForPolicy: BrandId = input.brand ?? 'roboapply';
+
+  // Agreements first (422 before anything is looked up or written): the
+  // required `age_16_plus` on both brands, the PDPA notice for zh-TW/TW on
+  // RoboApply, and the marketing choice (unchecked by default).
+  const consentRows = validateSignupConsents({
+    brand: brandForPolicy,
+    consents: input.consents,
+    marketingOptIn: input.marketingOptIn,
+    locale: resolvedLocale,
+    country: input.country ?? null,
+  });
+
+  const existing = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, brand: true },
+  });
+  if (existing) {
+    const existingBrand = parseBrandId(existing.brand);
+    if (input.brand && existingBrand && existingBrand !== input.brand) {
+      // H34: no 409 here — the route answers "check your email" and the
+      // inbox gets the cross-brand notice.
+      throw new SeekerEmailOtherBrandError(existingBrand);
+    }
+    throw new SeekerEmailTakenError();
+  }
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  // ARCH §1.10: GoApply → 'cn'; RoboApply → 'tw' / 'jp' / 'other' from the
+  // locale the visitor chose (not from Accept-Language).
+  const market = marketForSignup(brandForPolicy, resolvedLocale);
   const source = input.source ?? 'organic';
 
-  // One transaction: User + SeekerProfile + initial consent row. The role
-  // invariant guard in lib/prisma.ts enforces roles[0] === role on the User
-  // create, so we set both together.
-  const created = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        email: normalizedEmail,
-        passwordHash,
-        name: name ?? null,
-        provider: 'email',
-        role: 'seeker',
-        roles: ['seeker'],
-        market,
-        ...(input.brand ? { brand: input.brand } : {}),
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        subscriptionTier: true,
-        market: true,
-      },
-    });
-    const profile = await tx.seekerProfile.create({
-      data: {
-        userId: user.id,
-        source,
-        locale: resolvedLocale,
-        market,
-        // Audit row for the implicit "I'm signing up for the seeker app"
-        // consent. Surface-specific consents (biometric, auto-apply, etc.)
-        // are collected at the screen that needs them.
-        consentRecords: {
-          create: {
-            consentType: 'seeker_app_optin',
-            granted: true,
-            proseVersion: SEEKER_CONSENT_PROSE_VERSION,
-          },
-        },
-      },
-      select: { id: true, source: true, readinessScore: true, locale: true },
-    });
-    return { user, profile };
-  });
+  // One transaction: User + SeekerProfile (onboardingStep 'account', entry,
+  // timezone) + the consent rows. The role invariant guard in lib/prisma.ts
+  // enforces roles[0] === role on the User create; createSeekerAccount sets
+  // both together.
+  const created = await prisma.$transaction((tx) =>
+    createSeekerAccount(tx, {
+      email: normalizedEmail,
+      passwordHash,
+      name: name ?? null,
+      provider: 'email',
+      emailVerified: false,
+      ...(input.brand ? { brand: input.brand } : {}),
+      market,
+      locale: resolvedLocale,
+      source,
+      consentRows,
+      entry: onboardingEntryFrom(input.attribution),
+      timezone: safeTimezone(input.timezone),
+    }),
+  );
 
   const session = await createSeekerSession(created.user.id);
   const token = generateJwt({ id: created.user.id, email: created.user.email });

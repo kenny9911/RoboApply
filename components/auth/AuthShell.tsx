@@ -2,6 +2,10 @@
 
 // Shared authentication chrome: a calm entry point, clear benefits, and
 // accessible form controls. Account actions remain in the route components.
+// WP-10: brand-neutral (the wordmark and footer read the current brand), and
+// the brand panel's lead follows the entry context (`from=resume-check`,
+// `action=apply`, `from=job`). Proof points are capabilities only — never
+// user counts or unverified multipliers.
 
 import {
   useId,
@@ -11,13 +15,16 @@ import {
   type ReactNode,
 } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ThemeToggle } from '../landing/ThemeToggle';
 import { BrandSymbol } from '../chrome/BrandSymbol';
 import { setLocaleCookie } from '../../lib/locale';
 import { useLocale, useTranslations } from 'next-intl';
 import { isLocale, localePath, READY_LOCALES } from '../../lib/localeConfig';
 import { cn } from '../../lib/utils';
+import { useBrand } from '../../lib/brand/BrandProvider';
+import { entryContext } from '../../lib/auth/entry';
+import { useEntryJob } from '../../hooks/auth/useAuthAccount';
 
 function AuthLogoSymbol() {
   return (
@@ -29,15 +36,16 @@ function AuthLogoSymbol() {
 
 export function AuthBrandMark({ className }: { className?: string }) {
   const locale = useLocale();
+  const brand = useBrand();
   return (
     <Link
       href={localePath(isLocale(locale) ? locale : 'en')}
       className={cn('auth-wordmark', className)}
-      aria-label="RoboApply"
+      aria-label={brand.name}
     >
       <AuthLogoSymbol />
       <span>
-        RoboApply
+        {brand.name}
         <span className="auth-wordmark-period" aria-hidden="true">
           .
         </span>
@@ -95,8 +103,30 @@ function FeatureCheck() {
   );
 }
 
+/**
+ * The panel's lead line for the entry context (resume check, a job, applying).
+ * The job's title and company come from looking up the `job` id; nothing is
+ * shown for a job that cannot be found.
+ */
+function ContextLead() {
+  const t = useTranslations('auth');
+  const params = useSearchParams();
+  const ctx = entryContext(params);
+  const job = useEntryJob(ctx.jobId);
+  if (ctx.kind === 'resume_check') return <p className="auth-lead">{t('panel.resumeCheck')}</p>;
+  if ((ctx.kind === 'apply' || ctx.kind === 'job') && job) {
+    return (
+      <p className="auth-lead">
+        {job.companyName ? t('panel.jobAtCompany', { jobTitle: job.title, company: job.companyName }) : t('panel.job', { jobTitle: job.title })}
+      </p>
+    );
+  }
+  return null;
+}
+
 export function AuthBrandPanel() {
   const t = useTranslations('auth.brand');
+  const brand = useBrand();
   return (
     <aside className="auth-brand">
       <div className="auth-brand__path" aria-hidden="true">
@@ -121,6 +151,7 @@ export function AuthBrandPanel() {
           {t.rich('headline', { em: (chunks) => <em>{chunks}</em> })}
         </p>
         <p className="auth-lead">{t('lead')}</p>
+        <ContextLead />
         <ul className="auth-features">
           <li className="auth-feature">
             <FeatureCheck />
@@ -136,7 +167,7 @@ export function AuthBrandPanel() {
           </li>
         </ul>
       </div>
-      <p className="auth-brand__foot">© RoboApply</p>
+      <p className="auth-brand__foot">© {brand.name}</p>
     </aside>
   );
 }

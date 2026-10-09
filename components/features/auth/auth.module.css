@@ -1,0 +1,269 @@
+/* components/features/auth/auth.module.css — WP-10 sign-in/sign-up pieces
+   that sit inside the existing .auth-card (styles/auth.css). Clarity tokens
+   only; light and dark follow the tokens; touch targets ≥ 44px. */
+
+.methods {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.oauthButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    border-color var(--dur-hover) var(--ease-out),
+    background var(--dur-hover) var(--ease-out);
+}
+.oauthButton:hover {
+  border-color: var(--text-muted);
+  background: var(--surface-2);
+}
+.oauthButton:focus-visible {
+  outline: none;
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
+}
+.oauthButton[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--action);
+  cursor: pointer;
+}
+.check a,
+.legal a,
+.inline a,
+.linkRow a {
+  color: var(--action);
+  text-underline-offset: 3px;
+}
+.check a:focus-visible,
+.legal a:focus-visible,
+.inline a:focus-visible,
+.linkRow a:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.agreements {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legal {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+}
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ruleMet {
+  color: var(--ok);
+}
+.ruleMark {
+  flex: none;
+  width: 16px;
+  text-align: center;
+}
+
+.linkRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -10px;
+  font-size: var(--fs-meta);
+}
+.linkRow a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.notice {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: 1.6;
+}
+.noticeTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+.notice p {
+  margin: 0;
+}
+
+.status {
+  margin-top: 32px;
+}
+
+.inline {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+/* Settings: sign-in methods and sessions (inside the existing Panel). */
+.settingsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+.settingsTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 56px;
+  padding: 8px 16px;
+  background: var(--surface);
+}
+.row + .row {
+  border-top: 1px solid var(--rule);
+}
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rowLabel {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.rowMeta {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--action-subtle);
+  color: var(--action);
+  font-size: var(--fs-label);
+  font-weight: 500;
+}
+.verifyLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.verifyOk {
+  color: var(--ok);
+}
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-meta);
+}
+
+@media (max-width: 600px) {
+  .methods {
+    margin-top: 24px;
+  }
+}

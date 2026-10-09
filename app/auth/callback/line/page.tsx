@@ -1,12 +1,17 @@
-// /auth/callback/line — route shell (FND-6b). LINE sign-in return (V2, hidden until configured).
-//
-// STUB. Owner: WP-10, who replaces this page. No shell: a transitional page.
-// Nothing links here until the owner ships and INT flips the entry.
+// /auth/callback/line — the OAuth redirect URI for Line sign-in (WP-10). No
+// app shell: a transitional page that finishes the sign-in through the API
+// and moves on (or asks for the signup agreements / an email first).
 
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { OAuthCallbackView } from '../../../../components/features/auth/OAuthCallbackView';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: 'no-referrer' };
 
 export default function AuthCallbackLinePage() {
-  return <div hidden data-route-stub="/auth/callback/line" data-owner="WP-10" />;
+  return (
+    <Suspense fallback={null}>
+      <OAuthCallbackView provider="line" />
+    </Suspense>
+  );
 }
