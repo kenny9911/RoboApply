@@ -10,8 +10,10 @@
 //     under a "Jobs" group. With an empty query we show quick-nav only.
 //   • ↑/↓ move the highlight across the flat result list; Enter selects;
 //     Esc closes. Selecting a nav item routes to it. Selecting a job routes to
-//     /jobs — the feed, not the posting: `app/(auth)/jobs/[id]` does not exist
-//     yet. Point this at `/jobs/${j.id}` in the same commit that adds it.
+//     `jobHref(id)` (destinations.ts): `/jobs/[id]` once the detail page has
+//     shipped (WP-34; INT flips `SURFACES_READY.jobDetail`), the feed before.
+//   • The nav targets are the visible nav entries for the brand and user
+//     (destinations.ts), so the palette never offers a page the rail hides.
 //   • The panel is --surface with a --rule border, so it flips with the theme
 //     instead of being a dark island in a light app; the backdrop stays a
 //     near-black scrim in both themes, which is what a scrim is for.
@@ -32,7 +34,7 @@ import { useQuery } from '@tanstack/react-query';
 import { raV2Api } from '../../../lib/api/v2';
 import type { SearchRunResponse } from '../../../lib/api/v2';
 import { IconSearch, IconArrow } from '../primitives/Iconset';
-import { DESTINATIONS } from './Sidebar';
+import { jobHref, useVisibleNav } from './destinations';
 
 // ── context ──────────────────────────────────────────────────────────
 interface PaletteCtx {
@@ -50,13 +52,6 @@ export function useCommandPalette(): PaletteCtx {
 
 const PANEL_BG = 'var(--surface)';
 
-// Quick-nav targets: the four destinations, read from the one array the
-// Sidebar and MobileNav also render, plus Settings — the palette is the only
-// keyboard route to a page that is otherwise two clicks into the avatar menu.
-const NAV_TARGETS: { href: string; labelKey: string }[] = [
-  ...DESTINATIONS.map((d) => ({ href: d.href, labelKey: d.labelKey })),
-  { href: '/settings', labelKey: 'settings' },
-];
 
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -94,6 +89,10 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   const [debounced, setDebounced] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Quick-nav targets: every visible nav entry (Settings included) — the
+  // same registry the Sidebar and the bottom bar render.
+  const nav = useVisibleNav();
+  const navTargets = useMemo(() => nav.all.map((e) => ({ href: e.href, labelKey: e.labelKey })), [nav.all]);
 
   // Reset + focus when opened.
   useEffect(() => {
@@ -125,8 +124,8 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   // Filter quick-nav by query.
   const navMatches = useMemo(() => {
     const ql = debounced.toLowerCase();
-    return NAV_TARGETS.filter((n) => !ql || t(n.labelKey).toLowerCase().includes(ql));
-  }, [debounced, t]);
+    return navTargets.filter((n) => !ql || t(n.labelKey).toLowerCase().includes(ql));
+  }, [debounced, t, navTargets]);
 
   // Flat selectable list: nav items first, then jobs.
   const flat = useMemo(
@@ -134,7 +133,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
       ...navMatches.map((n) => ({ type: 'nav' as const, href: n.href, label: t(n.labelKey) })),
       ...jobs.map((j) => ({
         type: 'job' as const,
-        href: '/jobs',
+        href: jobHref(j.id),
         label: `${j.title} · ${j.companyName}`,
       })),
     ],

@@ -13,3 +13,25 @@ export { EmptyState } from './EmptyState';
 export { Modal } from './Modal';
 export { Markdown } from './Markdown';
 export * from './Iconset';
+
+// FND-6a additions (ARCHITECTURE.md §10.2 rule 3): shared so no two areas
+// build their own.
+export { Drawer, type DrawerProps } from './Drawer';
+export { Sheet, type SheetProps } from './Sheet';
+export { Tabs, tabIds, tabPanelProps, type TabItem, type TabsProps } from './Tabs';
+export { Toaster, toast, dismissToast, useToasts, MAX_TOASTS, type ToastInput, type ToastItem, type ToastTone } from './Toast';
+export {
+  MIN_SAMPLE,
+  SourceNote,
+  SourcedValue,
+  isEstimate,
+  isPublishable,
+  isSuppressed,
+  type SourceNoteProps,
+  type SourcedLike,
+  type SourcedValueProps,
+} from './SourceNote';
+export { CreditNotice, creditsLeftOf, type CreditNoticeProps, type CreditBucketLike } from './CreditNotice';
+export { FitMeter, type FitMeterProps } from './FitMeter';
+export { FitTierLabel, resolveTier, type FitTierLabelProps } from './FitTierLabel';
+export { HonestyLine, type HonestyLineProps } from './HonestyLine';

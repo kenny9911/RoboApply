@@ -1,0 +1,23 @@
+/* styles/brands/goapply.css — GoApply's identity and action tokens.
+ *
+ * EMPTY PLACEHOLDER (FND-6a). Owner: WP-12, which fills it.
+ *
+ * Loaded once by app/globals.css. It may only redefine the brand tokens
+ * (scripts/check-design.mjs BRAND_TOKENS): --action, --action-hover,
+ * --action-ink, --action-subtle, --brand-mark, --brand-plane, --grad-brand,
+ * --grad-brand-hover, --grad-soft, --grad-panel — light and dark, scoped to
+ * the attribute app/layout.tsx sets on <html>:
+ *
+ *   html[data-brand='goapply'] { … }                       light
+ *   html[data-brand='goapply'][data-theme='dark'] { … }    dark
+ *
+ * Every pair must keep the 4.5:1 rules in docs/design-system.md (WP-12 adds
+ * the contrast test over both brands × both themes). RoboApply has no file:
+ * its tokens are the defaults in app/globals.css.
+ */
+
+html[data-brand='goapply'] {
+}
+
+html[data-brand='goapply'][data-theme='dark'] {
+}

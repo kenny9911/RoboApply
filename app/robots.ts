@@ -6,23 +6,18 @@
 import type { MetadataRoute } from 'next';
 
 import { SITE_URL } from '../lib/seo';
+import { PROTECTED_PREFIXES } from '../lib/proxyPaths';
 
-// The four destinations plus the two non-destination authed surfaces — the
-// same list as PROTECTED_PREFIXES in lib/proxyPaths.ts, and it should stay that
-// way: "requires a session" and "not worth crawling" are the same set here.
+// Every authenticated route — the same list as PROTECTED_PREFIXES in
+// lib/proxyPaths.ts (plus /api/), and it must stay that way: "requires a
+// session" and "not worth crawling" are the same set here
+// (__tests__/shell/routes.test.ts checks the output). /job-search is listed
+// through PROTECTED_PREFIXES like everything else.
 // The pre-2026 routes (/home, /tracker, /resumes, /queue, /activity, /account,
-// /preferences, /mock-interview, /plans, /choose-plan, /onboarding, /mission,
-// /apps) are gone; next.config.mjs redirects() 308s each one, and a crawler
-// following a stale link lands on a path this list already covers.
-const APP_PATHS = [
-  '/api/',
-  '/jobs',
-  '/resume',
-  '/applications',
-  '/practice',
-  '/settings',
-  '/admin',
-];
+// /preferences, /mock-interview, /plans, /choose-plan, /mission, /apps) are
+// gone; next.config.mjs redirects() 308s each one, and a crawler following a
+// stale link lands on a path this list already covers.
+const APP_PATHS: string[] = ['/api/', ...PROTECTED_PREFIXES];
 
 export default function robots(): MetadataRoute.Robots {
   return {

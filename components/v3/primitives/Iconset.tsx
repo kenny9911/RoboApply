@@ -238,4 +238,47 @@ export const IconHistory = (p: IconProps) => (
 );
 
 
+// ── Shell additions (FND-6a): nav entries for Ready to apply, Coaching,
+// Invite friends, the extension, the campus calendar, More and Ask. ──────
+export const IconCalendar = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3.5" y="5" width="17" height="15" rx="2" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </Icon>
+);
+export const IconGift = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3.5" y="8" width="17" height="4" rx="1" />
+    <path d="M5 12v8h14v-8M12 8v12M12 8c-1.5-3-5-3.5-5-1.25S10 8 12 8Zm0 0c1.5-3 5-3.5 5-1.25S14 8 12 8Z" />
+  </Icon>
+);
+export const IconPuzzle = (p: IconProps) => (
+  <Icon
+    d="M9 4.5a2 2 0 1 1 4 0V6h3.5a1 1 0 0 1 1 1v3.5H19a2 2 0 1 1 0 4h-1.5V18a1 1 0 0 1-1 1H13v-1.5a2 2 0 1 0-4 0V19H5.5a1 1 0 0 1-1-1v-3.5H6a2 2 0 1 0 0-4H4.5V7a1 1 0 0 1 1-1H9Z"
+    {...p}
+  />
+);
+export const IconMore = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="5.5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="18.5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+  </Icon>
+);
+export const IconChat = (p: IconProps) => (
+  <Icon d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 5 5Z" {...p} />
+);
+export const IconUsers = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="9" cy="8.5" r="3" />
+    <path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.8a3 3 0 0 1 0 5.4M17 14.2a5.5 5.5 0 0 1 3.5 4.8" />
+  </Icon>
+);
+export const IconInfo = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 11v5M12 8h.01" />
+  </Icon>
+);
+
 export { Icon };

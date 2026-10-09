@@ -1,0 +1,308 @@
+/* components/v3/primitives/primitives.module.css — styles for the primitives
+ * FND-6a adds (Drawer, Sheet, Tabs, Toast, CreditNotice, FitMeter,
+ * FitTierLabel, HonestyLine). Tokens only; light and dark come from the
+ * tokens themselves (ARCHITECTURE.md §10.2). */
+
+/* ── Overlay (Drawer + Sheet) ─────────────────────────────────────────── */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: var(--scrim);
+}
+.panel {
+  position: fixed;
+  z-index: 56;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--rule);
+  box-shadow: var(--e3);
+  outline: none;
+}
+.drawerRight {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 100vw);
+  border-width: 0 0 0 1px;
+}
+.drawerLeft {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(440px, 100vw);
+  border-width: 0 1px 0 0;
+}
+.drawerWide {
+  width: min(640px, 100vw);
+}
+.sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: min(88vh, 720px);
+  border-width: 1px 0 0 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@media (min-width: 761px) {
+  /* On a wide screen a sheet is a centred card rising from the bottom. */
+  .sheet {
+    left: 50%;
+    right: auto;
+    width: min(560px, 100vw);
+    transform: translateX(-50%);
+    border-width: 1px 1px 0 1px;
+  }
+}
+@media (max-width: 760px) {
+  .drawerRight,
+  .drawerLeft,
+  .drawerWide {
+    width: 100vw;
+    border-width: 0;
+  }
+}
+.grabber {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  margin-top: var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--rule-strong);
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5) var(--sp-3);
+}
+.title {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+.description {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-3)) 0 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.close:hover {
+  background: var(--surface-2);
+}
+.body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 var(--sp-5) var(--sp-5);
+}
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--rule);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drawerRight { animation: slideLeft var(--dur-modal) var(--ease-out); }
+  .drawerLeft { animation: slideRight var(--dur-modal) var(--ease-out); }
+  .scrim { animation: fade var(--dur-enter) var(--ease-out); }
+}
+@keyframes slideLeft { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slideRight { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+.tablist {
+  display: flex;
+  gap: var(--sp-1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rule);
+  scrollbar-width: none;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--action);
+  font-weight: 600;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: -2px;
+}
+.tabCount {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  text-align: center;
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+.toaster {
+  position: fixed;
+  z-index: 70;
+  right: var(--sp-5);
+  bottom: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: min(380px, calc(100vw - 2 * var(--sp-4)));
+  pointer-events: none;
+}
+@media (max-width: 760px) {
+  .toaster {
+    right: var(--sp-4);
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--e2);
+  font-size: var(--fs-meta);
+  pointer-events: auto;
+}
+.toastOk { border-color: var(--ok); }
+.toastWarn { border-color: var(--warn); }
+.toastDanger { border-color: var(--danger); }
+.toastMessage {
+  flex: 1 1 auto;
+  margin: 0;
+  line-height: 1.45;
+}
+.toastAction {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 var(--sp-2);
+  border: none;
+  background: transparent;
+  color: var(--action);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Fit ──────────────────────────────────────────────────────────────── */
+.fit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.fitHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.fitTrack {
+  position: relative;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.fitFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--r-pill);
+  background: var(--action);
+}
+.fitScore {
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.tier {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text);
+}
+.tier::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tierGreat { color: var(--action); }
+.tierGood { color: var(--ok); }
+.tierPossible { color: var(--text-2); }
+.tierUnlikely { color: var(--text-muted); }
+.tierUnknown { color: var(--text-muted); }
+
+/* ── Honesty and source lines ─────────────────────────────────────────── */
+.honesty {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* ── Credit notice ────────────────────────────────────────────────────── */
+.credit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.creditOut {
+  color: var(--warn);
+}
+.creditLink {
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--action);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}

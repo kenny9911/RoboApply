@@ -60,11 +60,13 @@ const nextConfig = {
     // proxy.ts now only gates auth and stamps x-pathname. THIS FUNCTION is the
     // only destination router in the app. Keep it that way.
     //
-    // ── The 2026 information architecture (OVERHAUL_RULINGS R1/D2) ──────────
+    // ── The 2026 information architecture (OVERHAUL_RULINGS R1/D2; the
+    // clone's IA is PRODUCT_PLAN.md §3.3–3.4, registry in
+    // components/v3/shell/destinations.ts) ─────────────────────────────────
     //
-    // Four destinations: /jobs · /resume · /applications · /practice, plus a
-    // /settings page behind the avatar menu. Everything below is a route this
-    // app once had. They are permanent (308) because the moves are permanent:
+    // Destinations: /jobs · /applications · /resume · /practice (+ the clone's
+    // /ready, /profile, … as they ship), plus /settings. Most entries below
+    // are routes this app once had. They are permanent (308) because the moves are permanent:
     // pre-launch, nobody has these bookmarked, but the landing page, old
     // emails, the sitemap and nine locale bundles all still point at some of
     // them, and a 404 on the first click after signup is not recoverable.
@@ -105,11 +107,18 @@ const nextConfig = {
       { source: '/account/billing/history', destination: '/settings/billing/history', permanent },
       { source: '/account/:path*', destination: '/settings', permanent },
 
-      // The signup funnel's two interstitials. Both are deleted: plan choice
-      // moved into /settings and the setup chat became a panel in the /jobs
-      // filter bar (C21), so a new account goes straight to the product.
+      // The signup funnel's plan interstitial is deleted: plan choice moved
+      // into /settings. (/onboarding is NOT redirected any more: it is the
+      // setup flow again — app/(onboarding)/onboarding/[step], PRODUCT §4 —
+      // and an authenticated prefix in lib/proxyPaths.ts. FND-6a.)
       { source: '/choose-plan', destination: '/jobs', permanent },
-      { source: '/onboarding', destination: '/jobs', permanent },
+
+      // /job-search is absorbed by the category browse at /jobs/explore
+      // (PRODUCT §3.4). Only the bare path moves: /job-search/developers (API
+      // keys) stays where it is, and this rule has no wildcard so it never
+      // matches it. Temporary (307) until WP-33 ships /jobs/explore for real,
+      // so browsers do not cache the move while the route is still a shell.
+      { source: '/job-search', destination: '/jobs/explore', permanent: false },
 
       // V1 shell routes. Neither had a V2 successor; the marketing page is the
       // honest landing for a link this old.

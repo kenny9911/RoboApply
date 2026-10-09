@@ -8,6 +8,8 @@
 @import '../styles/landing.css';
 @import '../styles/workspace.css';
 @import '../styles/discovery.css';
+/* Per-brand identity + action tokens, scoped to html[data-brand='goapply'] (FND-6a; filled by WP-12). */
+@import '../styles/brands/goapply.css';
 
 @config '../tailwind.config.ts';
 @source './';

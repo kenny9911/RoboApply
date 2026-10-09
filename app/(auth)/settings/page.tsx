@@ -1,33 +1,34 @@
 'use client';
 
-// /settings — ONE page, seven sections. Not a destination.
+// /settings — ONE page, sections chosen by the URL hash (/settings#billing).
+// Not a destination of its own: Settings sits in the nav's lower group.
 //
-// This replaces four routes: /preferences (eight screens), /plans, /account,
-// and the /account danger tail. OVERHAUL_RULINGS D2: there are exactly four
-// destinations (/jobs, /resume, /applications, /practice) and everything a user
-// only visits when something is wrong lives behind the avatar menu, here.
+// Which sections exist, in what order and per brand, is the registry in
+// components/features/settings/registry.ts (FND-6a; PRODUCT_PLAN.md §3.4):
 //
-// Sections, in order. The open section is the URL hash (/settings#billing),
-// read through hooks/useSettingsSection — the same hook the app Sidebar's
-// Settings group renders from, so the rail, the phone section row and every
-// deep link in the product agree on which section is open. The list itself is
-// SETTINGS_SECTIONS in that hook:
+//   Account        IdentitySection                       preferences (draft)
+//   Sign-in and security  SecurityCard                   account API
+//   Notifications  NotifSection                          preferences (draft)
+//   Plan and billing  the billing stack                  billing API
+//   Credits        CreditsCard                           billing API
+//   Privacy and data  DataSection                        preferences (draft)
+//   Appearance     AppearanceSection                     localStorage (theme)
+//   Your search    HuntSection + ResumeSection + BlocklistSection
+//   Danger zone    DangerSection                         destructive modals
+//   (+ consents, assistant, devices, connections, referrals, sensitive:
+//    rendered by their owning areas once ready)
 //
-//   Your search      HuntSection + BlocklistSection      preferences + goal
-//   Resume           ResumeSection                       preferences
-//   Notifications    NotifSection                        preferences
-//   Appearance       AppearanceSection                   localStorage (theme)
-//   Plan and billing the /plans billing stack            billing API
-//   Account          IdentitySection + DataSection + SecurityCard
-//   Danger zone      DangerSection                       destructive modals
+// This route renders the content that predates the clone; the frame
+// (<SettingsPage>) renders the section row and picks the open section. Old
+// deep links keep working: #notif → Notifications, #resume → Your search.
 //
 // Two independent write models live side by side and that is deliberate:
 //
-//   • The preference-backed sections share ONE draft + baseline + SaveBar,
-//     inherited unchanged from /preferences. `dirty` is a structural compare of
-//     { draft, seniorityIndex } against the server baseline, so Save clears it
-//     and Discard restores it. On Save we fire preferences.update with the full
-//     draft and goal.upsert with the seniority + salary band.
+//   • The preference-backed sections share ONE draft + baseline + SaveBar.
+//     `dirty` is a structural compare of { draft, seniorityIndex } against the
+//     server baseline, so Save clears it and Discard restores it. On Save we
+//     fire preferences.update with the full draft and goal.upsert with the
+//     seniority + salary band.
 //     FIELD SPLIT NOTE (contract): `seniority` + the salary band live on
 //     `goal`. The band (salaryMinK/MaxK) is ALSO kept on the prefs draft for
 //     the UI and mirrored to goal on save (goal stores absolute dollars; prefs
@@ -40,15 +41,11 @@
 // which we surface as a banner, refetch on, and strip (to /settings#billing,
 // so the section the user paid from stays open).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import {
-  SETTINGS_SECTIONS,
-  settingsSectionHref,
-  useSettingsSection,
-} from '../../../hooks/useSettingsSection';
+import { SettingsPage, settingsHref, type SettingsRenderers } from '../../../components/features/settings';
 import { usePreferences, useUpdatePreferences } from '../../../hooks/usePreferences';
 import { useGoal, useGoalMutation } from '../../../hooks/useGoal';
 import { useResumeList } from '../../../hooks/useResumes';
@@ -113,7 +110,7 @@ function seniorityToIndex(s: RASeniority | null): number {
   return i >= 0 ? i : 3;
 }
 
-export default function SettingsPage() {
+export default function SettingsRoute() {
   // One namespace, one translator. This page used to hold three (`t`, `tp`,
   // `ta`) because it was three routes — /preferences, /plans and /account —
   // each with its own namespace. Wave 5 merged them into `settings`, so the
@@ -131,16 +128,14 @@ export default function SettingsPage() {
   const updatePrefs = useUpdatePreferences();
   const upsertGoal = useGoalMutation();
 
-  const section = useSettingsSection();
-
   // A section switch is a new screen: start it at the top rather than wherever
   // the previous section's scroll left off. Plain scrollTop writes, because
   // .main is the scrollport on desktop and the document is on phones.
-  useEffect(() => {
+  const onSectionChange = useCallback(() => {
     const main = document.querySelector<HTMLElement>('.main');
     if (main) main.scrollTop = 0;
     document.documentElement.scrollTop = 0;
-  }, [section]);
+  }, []);
 
   // ── Preference draft + its server baseline (dirty compare + discard) ──
   const [draft, setDraft] = useState<RAPreferences | null>(null);
@@ -243,7 +238,7 @@ export default function SettingsPage() {
       if (flag === 'success') void planQ.refetch();
       // Strip the param so a refresh doesn't re-show the banner; the hash
       // keeps the billing section open.
-      router.replace(settingsSectionHref('billing'));
+      router.replace(settingsHref('billing'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -319,218 +314,19 @@ export default function SettingsPage() {
     });
   };
 
-  // ── Loading / empty guard for the preference-backed sections ─────────
-  if (prefsQuery.isLoading || !draft || !options) {
-    return (
-      <div className="pref">
-        <div className="pref-body">
-          <p className="pref-sub">{t('loading')}</p>
-        </div>
-      </div>
-    );
-  }
+  // ── Loading guard for the preference-backed sections ─────────────────
+  const loading = prefsQuery.isLoading || !draft || !options;
 
   const name = (profile?.name as string) || user?.name || user?.email || '';
   const email = (profile?.email as string) || user?.email || '';
 
-  return (
-    <div className="pref">
-      {/* Section row — phones only. On ≥760px the app Sidebar carries this
-       *  same list as a Settings group (one rail, not two); below that width
-       *  the Sidebar is hidden, and v3-preferences.css renders this as a sticky
-       *  horizontal scroller above the body, so every section — plan changes,
-       *  cancellation, account deletion — stays reachable on a phone. Before
-       *  this page existed a phone user could reach none of them.
-       *  Fragment anchors rather than buttons: the section IS the hash. */}
-      <aside className="pref-rail">
-        <div className="pref-rail-head">
-          <div className="pref-rail-title">{t('title')}</div>
-        </div>
-        <nav className="pref-nav" aria-label={t('title')}>
-          {SETTINGS_SECTIONS.map((s) => (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              className={`pref-nav-item ${section === s.id ? 'active' : ''} ${
-                s.danger ? 'danger' : ''
-              }`}
-              aria-current={section === s.id ? 'page' : undefined}
-            >
-              {t(`nav.${s.id}`)}
-            </a>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="pref-body">
-        {section === 'search' && (
-          <>
-            <HuntSection
-              p={draft}
-              set={set}
-              options={options}
-              seniorityIndex={seniorityIndex}
-              setSeniorityIndex={setSeniorityIndex}
-            />
-            <BlocklistSection p={draft} set={set} />
-          </>
-        )}
-
-        {section === 'resume' && (
-          <ResumeSection
-            p={draft}
-            set={set}
-            resumes={resumesQuery.data?.resumes ?? []}
-          />
-        )}
-
-        {section === 'notif' && <NotifSection p={draft} set={set} />}
-
-        {section === 'appearance' && <AppearanceSection />}
-
-        {section === 'billing' && (
-          <>
-            <PrefHeader
-              eyebrow={t('nav.billing')}
-              title={t('billing.title')}
-              sub={t('billing.sub')}
-            />
-
-            {billingBanner ? (
-              <div
-                role="status"
-                className="ra-settings-banner"
-                style={{
-                  border: `1px solid ${billingBanner === 'success' ? 'var(--ok)' : 'var(--rule)'}`,
-                  background:
-                    billingBanner === 'success' ? 'var(--ok-subtle)' : 'var(--surface)',
-                  color: billingBanner === 'success' ? 'var(--ok)' : 'var(--text-2)',
-                }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  {billingBanner === 'success' ? <IconCheck size={16} /> : <IconX size={16} />}
-                  {billingBanner === 'success'
-                    ? t('billing.checkout.success')
-                    : t('billing.checkout.cancel')}
-                </span>
-                <button
-                  type="button"
-                  aria-label={t('billing.checkout.dismiss')}
-                  onClick={() => setBillingBanner(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    display: 'grid',
-                  }}
-                >
-                  <IconX size={15} />
-                </button>
-              </div>
-            ) : null}
-
-            {checkoutError ? (
-              <div
-                role="alert"
-                className="ra-settings-banner"
-                style={{
-                  border: '1px solid var(--warn)',
-                  background: 'var(--warn-subtle)',
-                  color: 'var(--warn)',
-                }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <IconX size={16} />
-                  {t('billing.checkout_failed')}
-                </span>
-                <button
-                  type="button"
-                  aria-label={t('billing.checkout.dismiss')}
-                  onClick={() => setCheckoutError(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'inherit',
-                    cursor: 'pointer',
-                    display: 'grid',
-                  }}
-                >
-                  <IconX size={15} />
-                </button>
-              </div>
-            ) : null}
-
-            {planQ.isError ? (
-              <Panel>
-                <div role="alert" style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
-                  {t('error.title')}
-                </div>
-                <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>
-                  {t('error.body')}
-                </p>
-                <Btn variant="primary" onClick={() => void planQ.refetch()}>
-                  {t('error.retry')}
-                </Btn>
-              </Panel>
-            ) : planQ.isLoading || !planQ.data ? (
-              <p className="pref-sub">{t('loading')}</p>
-            ) : (
-              <>
-                <CurrentPlanCard
-                  plan={planQ.data}
-                  onManageBilling={onManageBilling}
-                  onCancel={() => cancelPlan.mutate()}
-                  managing={portal.isPending}
-                  canceling={cancelPlan.isPending}
-                />
-                <div style={{ marginTop: 16 }}>
-                  <CreditsCard credits={planQ.data.credits} />
-                </div>
-
-                {/* Which currency is a location rule — mainland China pays
-                 *  RMB by Alipay, everyone else US dollars by card — and the
-                 *  API has already applied it. This names it above the grid
-                 *  whose prices it explains, and offers the other market for
-                 *  when the location guess is wrong. */}
-                <CurrencyNote region={planQ.data.region} onSwitch={setRegionOverride} />
-
-                {!planQ.data.stripeConfigured && !planQ.data.alipayConfigured ? (
-                  <p
-                    role="status"
-                    style={{
-                      margin: '12px 0 0',
-                      fontSize: 'var(--fs-meta)',
-                      color: 'var(--text-muted)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t('billing.payments_unavailable')}
-                  </p>
-                ) : null}
-
-                <PlanCatalog
-                  plan={planQ.data}
-                  busy={checkout.isPending || alipay.isPending || cancelPlan.isPending}
-                  mode="in-app"
-                  onSelectPaid={onSelectPaid}
-                  onSelectFree={() => {
-                    /* no-op in-app; downgrade is per-card via onCancel */
-                  }}
-                  onCancel={() => cancelPlan.mutate()}
-                />
-
-                <BillingHistoryLink />
-              </>
-            )}
-          </>
-        )}
-
-        {section === 'account' && (
-          <>
-            <IdentitySection p={draft} set={set} name={name} email={email} />
-            <DataSection p={draft} set={set} />
-            {profileQ.data ? (
+  const renderers: SettingsRenderers =
+    loading || !draft || !options
+      ? {}
+      : {
+          account: () => <IdentitySection p={draft} set={set} name={name} email={email} />,
+          security: () =>
+            profileQ.data ? (
               <SecurityCard
                 hasPassword={profileQ.data.hasPassword}
                 provider={profileQ.data.provider}
@@ -542,18 +338,157 @@ export default function SettingsPage() {
                 onSignOutEverywhere={onSignOutEverywhere}
                 resetKey={securityResetKey}
               />
-            ) : null}
-          </>
-        )}
+            ) : profileQ.isError ? (
+              <BillingError onRetry={() => void profileQ.refetch()} />
+            ) : (
+              <p className="pref-sub">{t('loading')}</p>
+            ),
+          notifications: () => <NotifSection p={draft} set={set} />,
+          billing: () => (
+            <>
+              <PrefHeader eyebrow={t('nav.billing')} title={t('billing.title')} sub={t('billing.sub')} />
+              {billingBanner ? (
+                <div
+                  role="status"
+                  className="ra-settings-banner"
+                  style={{
+                    border: `1px solid ${billingBanner === 'success' ? 'var(--ok)' : 'var(--rule)'}`,
+                    background: billingBanner === 'success' ? 'var(--ok-subtle)' : 'var(--surface)',
+                    color: billingBanner === 'success' ? 'var(--ok)' : 'var(--text-2)',
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    {billingBanner === 'success' ? <IconCheck size={16} /> : <IconX size={16} />}
+                    {billingBanner === 'success' ? t('billing.checkout.success') : t('billing.checkout.cancel')}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('billing.checkout.dismiss')}
+                    onClick={() => setBillingBanner(null)}
+                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'grid' }}
+                  >
+                    <IconX size={15} />
+                  </button>
+                </div>
+              ) : null}
 
-        {section === 'danger' && (
-          <DangerSection onReset={discard} accountEmail={email} />
-        )}
+              {checkoutError ? (
+                <div
+                  role="alert"
+                  className="ra-settings-banner"
+                  style={{ border: '1px solid var(--warn)', background: 'var(--warn-subtle)', color: 'var(--warn)' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <IconX size={16} />
+                    {t('billing.checkout_failed')}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('billing.checkout.dismiss')}
+                    onClick={() => setCheckoutError(false)}
+                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', display: 'grid' }}
+                  >
+                    <IconX size={15} />
+                  </button>
+                </div>
+              ) : null}
+
+              {planQ.isError ? (
+                <BillingError onRetry={() => void planQ.refetch()} />
+              ) : planQ.isLoading || !planQ.data ? (
+                <p className="pref-sub">{t('loading')}</p>
+              ) : (
+                <>
+                  <CurrentPlanCard
+                    plan={planQ.data}
+                    onManageBilling={onManageBilling}
+                    onCancel={() => cancelPlan.mutate()}
+                    managing={portal.isPending}
+                    canceling={cancelPlan.isPending}
+                  />
+
+                  {/* Which currency is a location rule — mainland China pays
+                   *  RMB by Alipay, everyone else US dollars by card — and the
+                   *  API has already applied it. This names it above the grid
+                   *  whose prices it explains, and offers the other market for
+                   *  when the location guess is wrong. */}
+                  <CurrencyNote region={planQ.data.region} onSwitch={setRegionOverride} />
+
+                  {!planQ.data.stripeConfigured && !planQ.data.alipayConfigured ? (
+                    <p
+                      role="status"
+                      style={{ margin: '12px 0 0', fontSize: 'var(--fs-meta)', color: 'var(--text-muted)', textAlign: 'center' }}
+                    >
+                      {t('billing.payments_unavailable')}
+                    </p>
+                  ) : null}
+
+                  <PlanCatalog
+                    plan={planQ.data}
+                    busy={checkout.isPending || alipay.isPending || cancelPlan.isPending}
+                    mode="in-app"
+                    onSelectPaid={onSelectPaid}
+                    onSelectFree={() => {
+                      /* no-op in-app; downgrade is per-card via onCancel */
+                    }}
+                    onCancel={() => cancelPlan.mutate()}
+                  />
+
+                  <BillingHistoryLink />
+                </>
+              )}
+            </>
+          ),
+          credits: () =>
+            planQ.isError ? (
+              <BillingError onRetry={() => void planQ.refetch()} />
+            ) : planQ.isLoading || !planQ.data ? (
+              <p className="pref-sub">{t('loading')}</p>
+            ) : (
+              <CreditsCard credits={planQ.data.credits} />
+            ),
+          privacy: () => <DataSection p={draft} set={set} />,
+          appearance: () => <AppearanceSection />,
+          search: () => (
+            <>
+              <HuntSection
+                p={draft}
+                set={set}
+                options={options}
+                seniorityIndex={seniorityIndex}
+                setSeniorityIndex={setSeniorityIndex}
+              />
+              <ResumeSection p={draft} set={set} resumes={resumesQuery.data?.resumes ?? []} />
+              <BlocklistSection p={draft} set={set} />
+            </>
+          ),
+          danger: () => <DangerSection onReset={discard} accountEmail={email} />,
+        };
+
+  return (
+    <SettingsPage
+      loading={loading}
+      renderers={renderers}
+      onSectionChange={onSectionChange}
+      // Save bar — appears on dirty, clears on save/discard. Only the
+      // preference-backed sections can make it appear.
+      footer={dirty ? <SaveBar saving={saving} onDiscard={discard} onSave={save} /> : null}
+    />
+  );
+}
+
+/** The billing/account load failure: say what happened and what to do next. */
+function BillingError({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations('settings');
+  return (
+    <Panel>
+      <div role="alert" style={{ fontSize: 'var(--fs-body)', fontWeight: 600, marginBottom: 4 }}>
+        {t('error.title')}
       </div>
-
-      {/* Save bar — appears on dirty, clears on save/discard. Only the
-       *  preference-backed sections can make it appear. */}
-      {dirty && <SaveBar saving={saving} onDiscard={discard} onSave={save} />}
-    </div>
+      <p style={{ margin: '0 0 12px', fontSize: 'var(--fs-meta)', color: 'var(--text-2)' }}>{t('error.body')}</p>
+      <Btn variant="primary" onClick={onRetry}>
+        {t('error.retry')}
+      </Btn>
+    </Panel>
   );
 }

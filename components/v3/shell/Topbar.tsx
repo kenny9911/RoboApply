@@ -1,93 +1,103 @@
 'use client';
 
-// Topbar — the sticky header (.topbar). Left: the page name. Right
-// (.top-actions): the ⌘K search trigger, the theme toggle, the language
-// switcher, and the AvatarMenu.
+// Topbar — the sticky header (.topbar) (FND-6a; PRODUCT_PLAN.md §3.3).
+// Left: the page name (crumb). Right (.top-actions): ⌘K search, **Ask** (opens
+// the Assistant rail), the message-center slot, theme, language, avatar menu.
 //
-// The crumb is one level now. Two levels only ever said "Workspace / Today",
-// and with four destinations the section half carried no information — it was
-// the same word on five of six screens. CRUMB_MAP has an entry for every route
-// the shell renders; an unmatched path renders NO crumb rather than silently
-// falling back to "Workspace", which is how /plans, /account and /admin all
-// used to breadcrumb as a section they were not in.
+// The crumb is one level. It comes from the nav registry (destinations.ts
+// `crumbKeyFor`), so every destination names itself the same way in the rail,
+// the bottom bar and here; an unmatched path renders NO crumb rather than a
+// wrong one.
 //
-// The notification bell is gone. It had no feed behind it and no click
-// handler — a control that cannot do anything is the same species of claim as
-// the fabricated stat strip.
+// Ask renders only when the `copilot` capability is on AND the Assistant has
+// shipped (`SURFACES_READY.assistant`, flipped by INT; the dev override
+// NEXT_PUBLIC_SHOW_ALL_NAV shows it early). It opens the rail through
+// useOpenAssistant() — an explicit click, never a route change.
+//
+// The Inbox bell is the MessageCenterButton slot (WP-39b). It renders nothing
+// until a real feed exists: a bell that cannot do anything is a claim.
 //
 // Mobile: the topbar renders at every width, which is what makes the
-// AvatarMenu (Settings / Billing / Sign out) reachable on a phone at all. The
-// 240px search field collapses to an icon button below 760px so the row still
-// fits on a 375px screen.
+// AvatarMenu (Settings / Billing / Sign out) reachable on a phone. The 240px
+// search field collapses to an icon button below 760px; Ask keeps a 44px icon.
 
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Fragment } from 'react';
+
+import { useBrandId } from '../../../lib/brand/BrandProvider';
+import { useFlag } from '../../../lib/flags';
+import { useOpenAssistant } from '../../../hooks/shared/useOpenAssistant';
+import { MessageCenterButton } from '../../features/notifications/MessageCenterButton';
 import { useCommandPalette } from './CommandPalette';
 import { AvatarMenu } from './AvatarMenu';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
-import { IconSearch } from '../primitives/Iconset';
+import { SURFACES_READY, crumbKeyFor, showAllNav } from './destinations';
+import { IconChat, IconSearch } from '../primitives/Iconset';
+import styles from './shell.module.css';
 
-/** Route prefix → key in the `nav` namespace. Most-specific prefix first;
- *  every route the (auth) shell renders has an entry. */
-const CRUMB_MAP: { test: (p: string) => boolean; page: string }[] = [
-  // /settings/billing/history is the invoice list — it belongs to Billing, and
-  // must be tested before the plain /settings prefix.
-  { test: (p) => p.startsWith('/settings/billing'), page: 'billing' },
-  { test: (p) => p === '/settings' || p.startsWith('/settings/'), page: 'settings' },
-  { test: (p) => p === '/jobs' || p.startsWith('/jobs/') || p === '/job-search' || p.startsWith('/job-search/'), page: 'jobs' },
-  { test: (p) => p === '/resume' || p.startsWith('/resume/'), page: 'resume' },
-  { test: (p) => p === '/applications' || p.startsWith('/applications/'), page: 'applications' },
-  { test: (p) => p === '/practice' || p.startsWith('/practice/'), page: 'practice' },
-  { test: (p) => p === '/admin' || p.startsWith('/admin/'), page: 'admin' },
-];
+/** Ask is shown when the Assistant exists for this brand/user and has shipped. */
+export function useAskVisible(): boolean {
+  const copilot = useFlag('copilot');
+  return copilot && (SURFACES_READY.assistant || showAllNav());
+}
 
 export function Topbar() {
   const pathname = usePathname() ?? '';
   const t = useTranslations('nav');
   const palette = useCommandPalette();
+  const brandId = useBrandId();
+  const openAssistant = useOpenAssistant();
+  const askVisible = useAskVisible();
 
-  const crumb = CRUMB_MAP.find((c) => c.test(pathname));
-  const parts: string[] = crumb ? [t(crumb.page)] : [];
+  const crumbKey = crumbKeyFor(pathname, brandId);
+  const isAdmin = crumbKey === 'admin';
 
   return (
     <div className="topbar">
-      <div className="crumbs">
-        {parts.map((c, i, arr) => (
-          <Fragment key={c}>
-            <span className={i === arr.length - 1 ? 'now' : undefined}>{c}</span>
-            {i < arr.length - 1 ? <span className="sep">/</span> : null}
-          </Fragment>
-        ))}
-      </div>
+      <div className="crumbs">{crumbKey ? <span className="now">{t(crumbKey)}</span> : null}</div>
 
       <div className="top-actions">
-        {crumb?.page !== 'admin' ? <>
-        <button
-          type="button"
-          className="search max-[760px]:hidden"
-          onClick={palette.open}
-          aria-label={t('search_aria')}
-        >
-          <IconSearch size={13} />
-          <span className="grow">{t('search_placeholder')}</span>
-          <kbd>⌘K</kbd>
-        </button>
+        {!isAdmin ? (
+          <>
+            <button
+              type="button"
+              className="search max-[760px]:hidden"
+              onClick={palette.open}
+              aria-label={t('search_aria')}
+            >
+              <IconSearch size={13} />
+              <span className="grow">{t('search_placeholder')}</span>
+              <kbd>⌘K</kbd>
+            </button>
 
-        {/* Same action, phone width. Two elements rather than one that reflows,
-         *  because .search is a 240px input-shaped button and an icon button is
-         *  a different control, not a narrower one. */}
-        <button
-          type="button"
-          className="icon-btn hidden max-[760px]:grid"
-          onClick={palette.open}
-          aria-label={t('search_aria')}
-        >
-          <IconSearch size={15} />
-        </button>
+            {/* Same action, phone width. Two elements rather than one that
+             *  reflows, because .search is a 240px input-shaped button and an
+             *  icon button is a different control, not a narrower one. */}
+            <button
+              type="button"
+              className="icon-btn hidden max-[760px]:grid"
+              onClick={palette.open}
+              aria-label={t('search_aria')}
+            >
+              <IconSearch size={15} />
+            </button>
 
-        </> : null}
+            {askVisible ? (
+              <button
+                type="button"
+                className={styles.ask}
+                onClick={() => openAssistant({ source: 'topbar' })}
+                aria-label={t('ask_aria')}
+              >
+                <IconChat size={15} />
+                <span className={styles.askLabel}>{t('ask')}</span>
+              </button>
+            ) : null}
+          </>
+        ) : null}
+
+        <MessageCenterButton />
 
         <ThemeToggle />
 

@@ -1,117 +1,85 @@
 'use client';
 
-// (auth) route-group layout — the V3 authenticated app shell.
+// (auth) route-group layout — the authenticated app shell.
 //
-// Replaces the V2 LeftRail + BottomNav with the V3 nav shell
-// (docs/roboapply/v3/00-design-system.md §6):
+// The frame itself (rail, topbar, bottom bar, ⌘K, toasts) is AppShell in
+// components/v3/shell/HybridShell.tsx, shared with public pages that signed-in
+// users also use (R-23). The nav inside it is the per-brand registry in
+// components/v3/shell/destinations.ts (PRODUCT_PLAN.md §3.3).
 //
-//   .app grid → 248px Sidebar (md+) + scrollable .main with a sticky Topbar.
-//   < md → the Sidebar is hidden and a MobileNav bottom bar takes over.
-//   A live practice interview is a focused fullscreen mode → no Sidebar/Topbar
-//   (the screen owns its own LiveBar + back link).
+// A live practice interview is a focused fullscreen mode → no rail or topbar
+// (the screen owns its own LiveBar + back link): /practice/[id] but NOT
+// /report and NOT /custom/.
 //
-// Theme wiring: none, here. Appearance is a single light/dark bit written to
-// <html data-theme> by lib/theme's provider, so the shell needs no data-* of
-// its own. The wrapper used to carry data-accent / data-density /
-// data-aggressiveness / data-tone plus an imperative `--density` multiplier;
-// all four knobs are deleted (OVERHAUL_RULINGS.md R3).
+// LAYOUT SLOTS (FND-6a; each renders nothing until its owner fills it):
+//   CopilotRail        WP-51   the Assistant rail. Opens only on an explicit
+//                              action (useOpenAssistant); this layout never
+//                              touches it on navigation.
+//   AnnouncementModal  WP-61   "What's new"      — through lib/ui/popupGate.ts
+//   InstallPrompt      WP-55a  extension prompt  — through lib/ui/popupGate.ts
+//   TourOverlay        WP-30   first-visit tour on /jobs (stage `tour`)
+//   OutOfCreditsSheet  WP-21b  opens on a 402 credits_exhausted reported
+//                              through hooks/shared/useCreditGate.ts. Mounted
+//                              in the fullscreen practice room too, so an
+//                              exhausted bucket there is never a dead end.
 //
-// `.dark-canvas` is kept on the wrapper so surviving V2 pages (not yet
-// replaced by a V3 screen lane) still pick up the legacy retint rules in
-// globals.css. `.v3-root` scopes the V3 scrollbar styling.
+// The popup gate learns about page views here (one popup per view) and is
+// seeded once with the server's last-shown time (24 h between popups).
 //
-// The edge proxy (roboapply/proxy.ts) gates these paths; we don't re-check.
+// Gates, outermost first: AuthGate (signed-out visitors → /login?next=…, the
+// client backstop for soft navigations the edge proxy never sees), then
+// RoboApplyAccessGate (confirmed RoboHire recruiters → the /job-seeker
+// bridge). Nothing replaces the shell itself: a user with a stale session
+// must always keep the avatar menu (sign out), settings, locale and theme.
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { useTranslations } from 'next-intl';
-import { Sidebar, Topbar, MobileNav, CommandPaletteProvider } from '../../components/v3/shell';
+
+import { AppShell, isPracticeLivePath } from '../../components/v3/shell/HybridShell';
 import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
+import { CopilotRail } from '../../components/features/copilot/CopilotRail';
+import { AnnouncementModal } from '../../components/features/notifications/AnnouncementModal';
+import { OutOfCreditsSheet } from '../../components/features/credits';
+import { InstallPrompt } from '../../components/features/extension/InstallPrompt';
+import { TourOverlay } from '../../components/features/onboarding/TourOverlay';
+import { useAuth } from '../../lib/auth/useAuth';
+import { notePageView, usePopupGateSync } from '../../lib/ui/popupGate';
+
+/** Layout slots, rendered once beside the frame. */
+function AuthLayoutSlots() {
+  const pathname = usePathname() ?? '';
+  const { status } = useAuth();
+
+  // One popup per page view: every route change is a new view.
+  useEffect(() => {
+    notePageView(pathname);
+  }, [pathname]);
+  // 24 h between popups across devices: seed from RAUserUiState.
+  usePopupGateSync(status === 'authenticated');
+
+  return (
+    <>
+      <CopilotRail />
+      <AnnouncementModal />
+      <InstallPrompt mode="popup" />
+      <TourOverlay />
+      <OutOfCreditsSheet />
+    </>
+  );
+}
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
-  const t = useTranslations('nav');
-  const mainRef = useRef<HTMLElement>(null);
+  const fullscreen = isPracticeLivePath(pathname);
 
-  // The workspace scrolls inside main on desktop. Reset that region when the
-  // destination changes; same-page setting anchors keep their own position.
-  useEffect(() => {
-    if (!window.location.hash) mainRef.current?.scrollTo?.(0, 0);
-  }, [pathname]);
-
-  // A live practice interview = focused fullscreen (no shell). Setup + report
-  // keep the shell so the user can navigate away mid-flow: /practice/[id] but
-  // NOT /report and NOT /custom/.
-  const isPracticeLive =
-    /^\/practice\/[^/]+($|\/$)/.test(pathname) &&
-    !pathname.endsWith('/report') &&
-    !pathname.includes('/custom/');
-
-  // Fullscreen live interview — no grid, no shell.
-  const shell = isPracticeLive ? (
-    <div className="dark-canvas v3-root min-h-screen">
-      <main id="main-content" tabIndex={-1} className="min-h-screen">{children}</main>
-    </div>
-  ) : (
-    <CommandPaletteProvider>
-      <div className="dark-canvas v3-root">
-        <a className="workspace-skip" href="#main-content">{t('skip_content')}</a>
-        <div className="app">
-          {/* Sidebar — a direct grid child (248px). Hidden below 760px by
-           *  v3.css (`.app > .side`), where MobileNav takes over. */}
-          <Sidebar />
-
-          {/* Main column: sticky Topbar + scrollable content. */}
-          <main className="main" id="main-content" tabIndex={-1} ref={mainRef}>
-            <Topbar />
-            <div className="main-inner">{children}</div>
-          </main>
-        </div>
-
-        {/* Mobile bottom bar — shown below 760px (same breakpoint as the grid
-         *  collapse), hidden otherwise. */}
-        <MobileNav />
-      </div>
-    </CommandPaletteProvider>
-  );
-
-  // TWO gates wrap the shell, outermost first:
-  //   1. AuthGate — redirects UNauthenticated visitors to /login (?next=… round
-  //      trip). The client-side backstop for soft navigations (e.g. the logo
-  //      <Link>) and for any request the edge proxy doesn't gate.
-  //   2. RoboApplyAccessGate — bounces confirmed RoboHire recruiters to the
-  //      /job-seeker bridge (role check); everyone else falls through.
-  //
-  // ─── WHAT THE THIRD GATE WAS, AND WHY IT IS GONE ────────────────────────
-  //
-  // `ResumeGate` sat inside RoboApplyAccessGate and, for any authenticated
-  // candidate with ZERO résumés, REPLACED THIS ENTIRE SHELL with an upload
-  // prompt. Not the page slot — the shell. No Sidebar, no Topbar, no avatar
-  // menu, so no settings, no locale switch, no theme toggle and, decisively,
-  // NO SIGN-OUT. A user landing on it with a stale session had no way to
-  // recover except clearing cookies by hand: exactly the failure commit
-  // 212a2e6 exists to prevent, re-introduced one layer higher.
-  //
-  // It also captured nothing. A user could upload a résumé, satisfy the gate,
-  // and arrive at /jobs having told the product not one thing about what work
-  // they want — which is the whole reason first-run setup exists.
-  //
-  // Setup is now a PANEL inside app/(auth)/jobs/page.tsx (ONBOARDING_SPEC §2.1,
-  // "ResumeGate as a wall dies"). It gates /jobs only, because /jobs is the one
-  // screen that genuinely cannot do its job without a parsed résumé to compare
-  // against. /applications, /practice and /resume render normally with none:
-  // each already has an empty state that names the next action ("Save or apply
-  // to a job and it shows up here", "Start from scratch"), and /practice treats
-  // résumé text as optional context it simply omits.
-  //
-  // There used to be a fifth gate, JobApplyingGate, redirecting /home, /queue,
-  // /tracker and /activity when JOB_APPLYING_ENABLED was off. All four routes
-  // are gone and so is the flag (ruling C33) — /jobs IS the product, so there
-  // is nothing left to gate.
   return (
     <AuthGate>
-      <RoboApplyAccessGate>{shell}</RoboApplyAccessGate>
+      <RoboApplyAccessGate>
+        <AppShell fullscreen={fullscreen} slots={fullscreen ? <OutOfCreditsSheet /> : <AuthLayoutSlots />}>
+          {children}
+        </AppShell>
+      </RoboApplyAccessGate>
     </AuthGate>
   );
 }

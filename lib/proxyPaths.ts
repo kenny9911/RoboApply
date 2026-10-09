@@ -16,16 +16,26 @@
 //      landed to fix). Add a real destination that ISN'T here and the same hole
 //      reopens for it.
 //
-// The list is exactly the four destinations plus the two non-destination
-// authenticated surfaces (OVERHAUL_RULINGS D2). The old V1/V2 entries
-// (/mission, /apps, /home, /resumes, /tracker, /search, /insights, /queue,
-// /preferences, /mock-interview, /activity, /onboarding, /choose-plan, /plans,
-// /account) are gone: those routes no longer exist, and `next.config.mjs`
-// redirects() forwards each one to its successor BEFORE the proxy's gate would
-// have seen it — the 308 lands on a path that IS in this list, so a logged-out
-// visitor on an old bookmark still ends up at /login?next=/jobs.
+// The list is every authenticated top-level route (PRODUCT_PLAN.md §3.4):
+// the pre-clone destinations, /settings and /admin, plus the clone's
+// authenticated prefixes (FND-6a): /onboarding (setup screens, no longer a
+// redirect), /profile, /assistant, /ready, /inbox, /invite, /coaching and
+// /referrals. A route whose page has not shipped yet is still gated: a
+// signed-out visitor lands on /login, never on a stub.
 //
-// When you add a new authenticated top-level route, add it here.
+// The old V1/V2 entries (/mission, /apps, /home, /resumes, /tracker, /search,
+// /insights, /queue, /preferences, /mock-interview, /activity, /choose-plan,
+// /plans, /account) are gone: those routes no longer exist, and
+// `next.config.mjs` redirects() forwards each one to its successor BEFORE the
+// proxy's gate would have seen it — the 308 lands on a path that IS in this
+// list, so a logged-out visitor on an old bookmark still ends up at
+// /login?next=/jobs.
+//
+// Public pages that signed-in users also use (/campus, /job/*, /browse/*,
+// /extension, /pricing, /tools/*) are NOT here: they render HybridShell.
+//
+// When you add a new authenticated top-level route, add it here AND to
+// APP_PATHS in app/robots.ts (a test keeps the two equal).
 
 export const PROTECTED_PREFIXES = [
   // The four destinations.
@@ -34,10 +44,18 @@ export const PROTECTED_PREFIXES = [
   '/resume',
   '/applications',
   '/practice',
-  // Not destinations: settings lives behind the avatar menu, /admin behind a
-  // role check.
+  // Settings (lower nav group) and /admin (role check).
   '/settings',
   '/admin',
+  // The clone's authenticated routes (FND-6a; PRODUCT_PLAN.md §3.4).
+  '/onboarding',
+  '/profile',
+  '/assistant',
+  '/ready',
+  '/inbox',
+  '/invite',
+  '/coaching',
+  '/referrals',
 ] as const;
 
 /** True when `pathname` is exactly a protected prefix or nested under one. */
