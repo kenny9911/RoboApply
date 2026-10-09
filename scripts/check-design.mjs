@@ -7,7 +7,7 @@
 // exactly how the previous system accreted 31 font sizes, 141 sub-12px
 // declarations, 78 uppercase micro-labels and 46 accent-glow shadows.
 //
-//   npm run check:design
+//   npm run check:design            (`--root <dir>` checks another tree; tests use it)
 //
 // Exits non-zero on any violation. Wired into `prebuild`, so a violation fails
 // the build rather than shipping.
@@ -18,11 +18,24 @@
 // the user's own artifact and the scanner-readable PDF depends on those
 // conventions.
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const rootArg = process.argv.indexOf('--root');
+const ROOT = rootArg === -1 ? fileURLToPath(new URL('..', import.meta.url)) : process.argv[rootArg + 1];
+
+/**
+ * The only tokens a brand stylesheet (styles/brands/<brand>.css, scoped to
+ * `html[data-brand='<brand>']`) may redefine: identity and action, light and
+ * dark (ARCHITECTURE.md §1.6). Everything else — type, spacing, surfaces,
+ * text, status colours — is shared by both brands.
+ */
+export const BRAND_TOKENS = [
+  '--action', '--action-hover', '--action-ink', '--action-subtle',
+  '--brand-mark', '--brand-plane',
+  '--grad-brand', '--grad-brand-hover', '--grad-soft', '--grad-panel',
+];
 
 /** Files exempt from the type/case/family rules entirely. */
 const EXEMPT_FILES = new Set(['styles/v3-resume.css']);
@@ -51,6 +64,7 @@ function fail(file, line, rule, detail) {
 }
 
 function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === '.next' || entry === '.git') continue;
     const full = join(dir, entry);
@@ -62,12 +76,43 @@ function walk(dir, out = []) {
 
 // ── CSS ─────────────────────────────────────────────────────────────────────
 
+const listCss = (dir) =>
+  existsSync(join(ROOT, dir))
+    ? readdirSync(join(ROOT, dir))
+        .filter((f) => f.endsWith('.css'))
+        .sort()
+        .map((f) => `${dir}/${f}`)
+    : [];
+
+/** Brand stylesheets: the same rules, plus the brand-token restriction below. */
+const BRAND_CSS_FILES = listCss('styles/brands');
+
 const CSS_FILES = [
-  'app/globals.css',
-  ...readdirSync(join(ROOT, 'styles'))
-    .filter((f) => f.endsWith('.css'))
-    .map((f) => `styles/${f}`),
+  ...(existsSync(join(ROOT, 'app/globals.css')) ? ['app/globals.css'] : []),
+  ...listCss('styles'),
+  ...BRAND_CSS_FILES,
+  // Feature areas style themselves with colocated CSS Modules (ARCH §10.2).
+  ...walk(join(ROOT, 'components/features'))
+    .filter((f) => f.endsWith('.module.css'))
+    .map((f) => relative(ROOT, f))
+    .sort(),
 ].filter((f) => !EXEMPT_FILES.has(f));
+
+// ── Brand stylesheets: identity + action tokens only ────────────────────────
+
+for (const rel of BRAND_CSS_FILES) {
+  const src = readFileSync(join(ROOT, rel), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' '));
+  src.split('\n').forEach((line, i) => {
+    // Only declarations (`prop: value;`), not selectors or at-rules.
+    for (const m of line.matchAll(/(?:^|(?<=[{;]))\s*(-{0,2}[a-zA-Z][\w-]*)\s*:(?!:)[^;{}]*/g)) {
+      const prop = m[1];
+      if (/^[a-z-]+$/.test(prop) && line.trim().endsWith('{')) continue; // pseudo-selector like `a:hover {`
+      if (!BRAND_TOKENS.includes(prop)) {
+        fail(rel, i + 1, 'brand-token', `${prop} — a brand stylesheet may only redefine ${BRAND_TOKENS.join(' ')}`);
+      }
+    }
+  });
+}
 
 for (const rel of CSS_FILES) {
   const src = readFileSync(join(ROOT, rel), 'utf8');

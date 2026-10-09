@@ -36,6 +36,8 @@ export default defineConfig({
     // the worker's nodenext/ESM world, not this jsdom config.
     // Vitest 5 also discovers hidden directories. Nested agent worktrees are
     // separate checkouts whose tests must use their own source and config.
-    exclude: ['**/node_modules/**', '**/.claude/**', '**/.codex/**', '.next/**', 'dist/**', 'interview-agent/**'],
+    // The extension package (extension/, WP-55b) runs its own vitest:
+    // `npm --prefix extension test`.
+    exclude: ['**/node_modules/**', '**/.claude/**', '**/.codex/**', '.next/**', 'dist/**', 'interview-agent/**', 'extension/**'],
   },
 });
