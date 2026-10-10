@@ -24,7 +24,9 @@ raw = json.load(open(items_path))
 ITEMS = {w['id']: w for w in (raw['bundles'] if isinstance(raw, dict) else raw)}
 def git(*a, cwd=None, check=True):
     r = subprocess.run(['git', *a], cwd=cwd, capture_output=True, text=True)
-    if check and r.returncode: raise SystemExit(f'git {a[:3]} failed in {cwd}: {r.stderr}')
+    if check and r.returncode:
+        print(f'!! git {a[:3]} FAILED in {cwd}: {r.stderr.strip()}')
+        raise SystemExit(3)
     return r.stdout
 def namespaces(w):
     return [n.strip() for n in re.split(r'[,\s]+', re.sub(r'\(.*?\)', '', w.get('namespace') or '')) if n.strip()]
@@ -54,7 +56,7 @@ for wid in ids:
     if dry: continue
     # every change is owned/allowed (checked above), so stage the whole tree; naming paths
     # fails for deletions an agent already staged with `git rm`.
-    git('add', '-A', '--', '.', ':!next-env.d.ts', cwd=wt)
+    git('add', '-A', '--', '.', cwd=wt)   # next-env.d.ts is gitignored; naming an ignored path makes git add fail
     msg = f'feat(int): {w["title"]} ({wid})\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\n'
     subprocess.run(['git', 'commit', '-q', '-F', '-'], input=msg, text=True, cwd=wt, check=True)
     print('   committed', git('log', '--oneline', '-1', cwd=wt).strip())
