@@ -22,7 +22,7 @@ import {
   upcomingForUser,
 } from '../service.js';
 import { decodeCursor, encodeCursor, needsReverify, toEventView } from '../views.js';
-import type { CampusLlm } from '../extract.js';
+import { resolveCampusModel, type CampusLlm } from '../extract.js';
 import { CAMPUS_PAGE_SIZE, PatchCampusEventBodySchema, campusCompanySlug } from '../contract.js';
 import { DAY, NOW, eventRow, fakeCampusRepo, recordingLlm, serviceDeps } from './testkit.js';
 
@@ -213,6 +213,34 @@ describe('admin curation', () => {
     expect(out.evidence.applyClosesAt).toContain('10月31日');
     expect(repo.creates).toBe(0);
     expect(repo.events.size).toBe(0);
+  });
+
+  it('extract with only the shared stack set (no CN_ value): the real model rule resolves the shared model and fields are proposed', async () => {
+    const repo = fakeCampusRepo();
+    const seen: Array<{ model?: string; provider?: string; task?: string }> = [];
+    const llm: CampusLlm = {
+      chatWithUsage: async (_messages, options) => {
+        seen.push({ model: options.model, provider: options.provider, task: options.task });
+        return {
+          content: JSON.stringify({ companyName: { value: '示例科技', quote: '示例科技 2027届校园招聘' } }),
+          model: 'openai/gpt-6-luna',
+          usage: { promptTokens: 10, completionTokens: 10, totalTokens: 20 },
+        };
+      },
+    };
+    const env = { LLM_MODEL: 'openrouter/openai/gpt-6-luna' };
+    const out = await adminExtract(serviceDeps(repo, { llm, env, resolveModel: resolveCampusModel }), 'https://campus.example.cn/2027');
+    expect(out).toMatchObject({ aiGenerated: true, model: 'openai/gpt-6-luna', draft: { companyName: '示例科技' } });
+    // The shared selector, as RoboApply would use it; no provider is pinned.
+    expect(seen).toEqual([{ model: 'openrouter/openai/gpt-6-luna', provider: undefined, task: 'extract' }]);
+    expect(repo.creates).toBe(0);
+
+    // Behind the wall the same env has no usable model: the admin fills the form by hand.
+    await rejectsWith(
+      adminExtract(serviceDeps(repo, { llm, env: { ...env, CN_LLM_DOMESTIC_ONLY: 'true' }, resolveModel: resolveCampusModel }), 'https://campus.example.cn/2027'),
+      'ai_unavailable',
+    );
+    expect(seen).toHaveLength(1);
   });
 
   it('extract: a reply that is not JSON, or a transport error, answers ai_unavailable (extract_failed), never 500', async () => {

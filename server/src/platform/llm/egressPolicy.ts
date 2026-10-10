@@ -1,16 +1,19 @@
 // server/src/platform/llm/egressPolicy.ts
 //
 // Where an LLM call would actually SEND the prompt, and whether the brand may
-// send it there (TASK_PLAN.md R-13, ARCHITECTURE.md §1.8, WP-14).
+// send it there (owner ruling D5; GOAPPLY_PARITY_PLAN.md §3.3).
 //
 // brandPolicy.ts decides on a (provider, base URL) pair. This file supplies the
 // base URL the provider client really uses — the configured credential base
 // URL, else the provider's env override, else its built-in default — so the
 // decision is made on the endpoint host the request will hit, never on a
-// provider name. Both directions are enforced here:
+// provider name.
 //
-//   GoApply   only the domestic allowlist (deepseek, qwen, kimi, glm, doubao,
-//             minimax; newapi only on an allowlisted host); no BYOK.
+//   GoApply   by default every route RoboApply may use plus its domestic
+//             vendors. Behind the domestic-only wall (CN_LLM_DOMESTIC_ONLY or
+//             CN_RESIDENCY_STRICT): only the domestic allowlist (deepseek,
+//             qwen, kimi, glm, doubao, minimax; newapi only on an allowlisted
+//             host) and no BYOK.
 //   RoboApply a prompt that carries user data never reaches a mainland-China
 //             endpoint (api.deepseek.com, api.moonshot.cn, MiniMax China,
 //             DashScope, open.bigmodel.cn, volces.com, or a newapi gateway on

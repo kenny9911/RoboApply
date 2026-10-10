@@ -1,25 +1,31 @@
 // server/src/features/match/scorerRoute.ts
 //
-// Brand LLM-route check for the fit scorer (TASK_PLAN.md R-13; CN_TW_LAUNCH
-// L-3). The scorer model comes from `getTaskModel('matching')`, which is the
-// same for both brands until WP-14 resolves it per brand. Before any scorer
-// call MATCH asks whether that model's route is allowed for the current
-// brand; when it is not (e.g. a GoApply user and an international model) the
-// answer is "no model" — the pre-score labelled "Quick estimate"
-// (`ai_unavailable`) and the precompute cron skips. WP-14's enforcement
-// inside LLMService stays the authoritative check; this one keeps MATCH from
-// sending a GoApply resume abroad even before that lands.
+// Brand LLM-route check for the fit scorer (owner ruling D5;
+// GOAPPLY_PARITY_PLAN.md §3.3). The scorer model comes from the per-brand
+// resolver (`getTaskModel('matching')`, else the brand's default: GoApply's
+// own CN_ value when set, else the shared one). Before any scorer call MATCH
+// asks whether that model's route is allowed for the brand; when it is not
+// the answer is "no model": the pre-score labelled "Quick estimate"
+// (`ai_unavailable`), and the precompute cron skips. LLMService stays the
+// authoritative check; this one keeps MATCH from queueing work it would
+// refuse.
+//
+// What is refused: for RoboApply, a mainland-China endpoint (user data never
+// goes there). For GoApply nothing by default (it may use every route
+// RoboApply uses, plus its domestic vendors); behind the domestic-only wall
+// (CN_LLM_DOMESTIC_ONLY) every route that is not a mainland one; and, on its
+// own domestic stack, a bare model id with no provider of its own (no route).
 //
 // Pure: the provider is read from the model id's routing prefix — resolved
-// for the brand's LLM profile exactly as LLMService resolves it
-// (`resolveProviderPrefix`: on RoboApply `qwen/…` is an OpenRouter vendor
-// slug, on GoApply the native DashScope provider) — else the configured
-// default provider; the endpoint is the provider's env base URL (the same
+// for the brand's EFFECTIVE LLM profile exactly as LLMService resolves it
+// (`resolveSelectorRoute`: on the global profile `qwen/…` is an OpenRouter
+// vendor slug, on the domestic one the native DashScope provider) — else the
+// brand's provider mode; the endpoint is the provider's env base URL (the same
 // variables lib/llm/systemCredentials.ts reads), else its default host.
 
 import { checkLlmRoute, type EnvLike, type LlmRoute } from '../../platform/llm/brandPolicy.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
-import { resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
+import { DEFAULT_PROVIDER_MODE, resolveProviderPrefix, resolveSelectorRoute } from '../../services/llm/providerPrefixes.js';
 
 /** Env var holding each provider's base URL override (mirrors lib/llm/systemCredentials.ts). */
 const BASE_URL_ENV: Record<string, string> = {
@@ -55,29 +61,45 @@ export function prefixedProvider(model: string, profile: LlmProfile = 'global'):
   return head ? resolveProviderPrefix(head, profile) : null;
 }
 
-/** The provider and endpoint a scorer model id resolves to. */
+/**
+ * The provider and endpoint a scorer model id resolves to. `defaultProvider`
+ * is the brand's provider mode for an id without a routing prefix; with none,
+ * the global profile uses OpenRouter and the domestic one has no route
+ * (provider '').
+ */
 export function scorerRoute(
   model: string,
   defaultProvider: string | null | undefined,
   env: EnvLike = process.env,
   profile: LlmProfile = 'global',
+  defaultModel?: string | null,
 ): LlmRoute {
-  let provider = prefixedProvider(model, profile) ?? (defaultProvider || 'openrouter').trim().toLowerCase();
-  // LLMService's 'direct' mode sends an unprefixed vendor/model id to OpenRouter.
-  if (provider === 'direct') provider = 'openrouter';
+  const mode = (defaultProvider || '').trim().toLowerCase() || (profile === 'domestic_cn' ? '' : DEFAULT_PROVIDER_MODE);
+  const provider = resolveSelectorRoute(model, mode, defaultModel, profile).providerType;
   const envKey = BASE_URL_ENV[provider];
   const baseUrl = envKey ? env[envKey]?.trim() || null : null;
   return { provider, baseUrl, model };
 }
 
-/** May the scorer send this user's (PII-stripped) resume to `model` on `brand`? */
+/**
+ * May the scorer send this user's (PII-stripped) resume to `model` on `brand`?
+ * `profile` is the brand's effective LLM profile (default: the registry one).
+ */
 export function scorerRouteAllowed(
   brand: Pick<ProductBrand, 'id' | 'llmProfile'>,
   model: string,
   defaultProvider: string | null | undefined,
   env: EnvLike = process.env,
+  profile: LlmProfile = brand.llmProfile,
+  defaultModel?: string | null,
 ): boolean {
-  return checkLlmRoute({ ...scorerRoute(model, defaultProvider, env, brand.llmProfile), brand, carriesUserData: true, env }).allowed;
+  return checkLlmRoute({ ...scorerRoute(model, defaultProvider, env, profile, defaultModel), brand, carriesUserData: true, env }).allowed;
+}
+
+/** How an id without a routing prefix is routed for the brand (the rule LLMService uses). */
+async function routingDefaultsFor(brand: Pick<ProductBrand, 'id'>, env: EnvLike) {
+  const { getLlmRoutingDefaults } = await import('../../lib/llm/llmModels.js');
+  return getLlmRoutingDefaults(brand.id, env);
 }
 
 /** The configured default provider (LLM_PROVIDER, DB override first); null when unreadable. */
@@ -91,21 +113,25 @@ export async function configuredDefaultProvider(): Promise<string | null> {
 }
 
 /**
- * The default provider for an unprefixed model id on this brand. RoboApply:
- * the configured `LLM_PROVIDER` (DB override first). GoApply: its own
- * `CN_LLM_PROVIDER` only (R-03 brandEnv, no fallback to the global setting);
- * unset → null, which resolves to OpenRouter and is refused (fails closed).
+ * The provider mode for an unprefixed model id on this brand, for both brands
+ * from the same resolver (lib/llm getLlmRoutingDefaults): the brand's provider
+ * setting (GoApply: its own CN_LLM_PROVIDER or admin override, else the shared
+ * one), else OpenRouter. Null only for GoApply on its own domestic stack with
+ * no provider of its own: a bare id then has no route and is refused.
  */
 export async function defaultProviderFor(brand: Pick<ProductBrand, 'id' | 'llmProfile'>, env: EnvLike = process.env): Promise<string | null> {
-  if (brand.llmProfile === 'domestic_cn') return env.CN_LLM_PROVIDER?.trim().toLowerCase() || null;
-  return configuredDefaultProvider();
+  try {
+    return (await routingDefaultsFor(brand, env)).providerMode || null;
+  } catch {
+    return null;
+  }
 }
 
-/** The production check: reads the brand's default provider only when the model id names none. Fails closed. */
+/** The production check: the brand's effective profile, provider mode and default model. Fails closed. */
 export async function defaultScorerRouteAllowed(brand: Pick<ProductBrand, 'id' | 'llmProfile'>, model: string, env: EnvLike = process.env): Promise<boolean> {
   try {
-    const fallback = prefixedProvider(model, brand.llmProfile) ? null : await defaultProviderFor(brand, env);
-    return scorerRouteAllowed(brand, model, fallback, env);
+    const defaults = await routingDefaultsFor(brand, env);
+    return scorerRouteAllowed(brand, model, defaults.providerMode || null, env, defaults.profile, defaults.model);
   } catch {
     return false;
   }

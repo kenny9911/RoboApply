@@ -24,9 +24,10 @@ export function getActiveEnvironment(): ConfigEnvironment {
 
 /**
  * AppConfig key of one brand's override blob. RoboApply keeps the historical
- * key (`llm_stack.{env}`); GoApply has its own (`llm_stack.goapply.{env}`) and
- * never reads RoboApply's: R-13 forbids any fallback from the domestic stack to
- * the international one, including admin overrides.
+ * key (`llm_stack.{env}`); GoApply has its own (`llm_stack.goapply.{env}`).
+ * RoboApply never reads GoApply's blob. GoApply reads its own first and, for a
+ * setting neither that blob nor `CN_<NAME>` provides, RoboApply's (the shared
+ * stack; resolution order in llmModels.ts).
  */
 export function appConfigKeyFor(env: ConfigEnvironment, brandId: LlmStackBrand = 'roboapply'): string {
   return brandId === 'roboapply' ? `llm_stack.${env}` : `llm_stack.${brandId}.${env}`;
@@ -94,9 +95,14 @@ export type ModelKey = 'defaultModel' | 'fallbackModel' | PurposeKey;
 
 /**
  * purpose/core key → the env var that supplies its value when the DB override
- * is null. These are the UNPREFIXED (RoboApply) names; GoApply reads the same
- * name with the `CN_` prefix (`brandEnv`, TASK_PLAN R-03) and never falls back
- * to the unprefixed one.
+ * is null. These are the UNPREFIXED names: RoboApply's own, and the shared
+ * stack GoApply falls back to. GoApply reads `CN_<NAME>` first, as an optional
+ * override, and the unprefixed name when that is unset (per key; the full
+ * order, admin blobs included, is in llmModels.ts).
+ *
+ * This file imports nothing: platform/brand/brandEnv.ts reads this table (a
+ * model selector decides where a prompt goes), so an import from platform/brand
+ * here would be a cycle.
  */
 export const MODEL_ENV: Record<ModelKey, string> = {
   defaultModel: 'LLM_MODEL',
@@ -130,10 +136,10 @@ export const MODEL_ENV: Record<ModelKey, string> = {
 
 /**
  * Every model-selector env var a deployment can set, for both brands: the
- * unprefixed names RoboApply reads and their `CN_` twins GoApply reads (with
- * no fallback). Cost-coverage checks (check:llm-costs, verify-llm-brand)
- * scan this list, so a GoApply model can never bill at the default tier
- * unnoticed.
+ * unprefixed names (RoboApply's, and GoApply's fallback) and the `CN_`
+ * overrides GoApply reads first. Cost-coverage checks (check:llm-costs,
+ * verify-llm-brand) scan this list, so no model either brand can resolve
+ * bills at the default tier unnoticed.
  */
 export const ALL_BRAND_MODEL_ENV_VARS: readonly string[] = [
   ...Object.values(MODEL_ENV),
@@ -186,13 +192,14 @@ export function emptyLlmStackBlob(): LlmStackConfigBlob {
 
 /* ── Env-default snapshot — for the admin UI "inherits: X" display only ──────
  * Returns the RAW env value per key (or null). NOT used at runtime resolution
- * (the accessor reads env directly); purely the "what env provides" view. */
+ * (the accessor reads env directly); purely the "what env provides" view. For
+ * GoApply that is `CN_<NAME>`, else the shared `<NAME>` it falls back to. */
 export function buildEnvDefaultsSnapshot(brandId: LlmStackBrand = 'roboapply'): LlmStackConfigBlob {
-  const prefix = brandId === 'goapply' ? 'CN_' : '';
-  const envStr = (name: string): string | null => {
-    const v = process.env[`${prefix}${name}`];
+  const read = (name: string): string | null => {
+    const v = process.env[name];
     return v && v.trim() ? v.trim() : null;
   };
+  const envStr = (name: string): string | null => (brandId === 'goapply' ? read(`CN_${name}`) ?? read(name) : read(name));
   const envInt = (name: string): number | null => {
     const raw = parseInt((process.env[name] ?? '').trim(), 10);
     return Number.isFinite(raw) ? raw : null;

@@ -35,7 +35,9 @@ vi.mock('../../lib/requestContext.js', () => ({
   setByokInRequest: vi.fn(),
 }));
 
-vi.mock('../../lib/byokService.js', () => ({
+// The real brand predicate (isByokAllowedForBrand); only the key lookup is faked.
+vi.mock('../../lib/byokService.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/byokService.js')>()),
   resolveByok: vi.fn(async () => state.byok),
   touchByok: vi.fn(),
 }));
@@ -45,8 +47,8 @@ vi.mock('../../lib/llm/systemCredentials.js', () => ({
 }));
 
 vi.mock('../../lib/llm/llmModels.js', () => ({
-  getProviderSetting: () => state.providerMode,
-  getDefaultModel: () => 'openrouter/openai/default-model',
+  // What lib/llm resolves for RoboApply: the configured provider mode and default model.
+  getLlmRoutingDefaults: () => ({ profile: 'global', providerMode: state.providerMode, model: 'openrouter/openai/default-model' }),
   getFallbackModelSetting: () => state.fallbackModel,
 }));
 

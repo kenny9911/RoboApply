@@ -115,10 +115,53 @@ describe('helpers', () => {
 });
 
 describe('resolveCampusModel', () => {
-  it('needs a domestic model; CN_LLM_CAMPUS_MODEL wins', () => {
+  const WALL = { CN_LLM_DOMESTIC_ONLY: 'true' };
+
+  it('CN_LLM_CAMPUS_MODEL wins, then the enrichment model, then GoApply\'s own default', () => {
     expect(resolveCampusModel({}).available).toBe(false);
-    expect(resolveCampusModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toMatchObject({ available: true, model: 'deepseek/deepseek-chat', provider: 'deepseek' });
+    expect(resolveCampusModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ available: true, model: 'deepseek/deepseek-chat' });
+    expect(resolveCampusModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_ENRICH_MODEL: 'kimi/kimi-k2' }).model).toBe('kimi/kimi-k2');
     expect(resolveCampusModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_CAMPUS_MODEL: 'kimi/moonshot-v1-8k' }).model).toBe('kimi/moonshot-v1-8k');
-    expect(resolveCampusModel({ CN_LLM_MODEL: 'openai/gpt-4o' }).available).toBe(false);
+  });
+
+  it('with only the shared stack set, extraction proposes fields with the shared model (no CN_ value is needed)', () => {
+    expect(resolveCampusModel({ LLM_MODEL: 'openrouter/openai/gpt-6-luna' })).toEqual({ available: true, model: 'openrouter/openai/gpt-6-luna' });
+    expect(resolveCampusModel({ LLM_MODEL: 'openrouter/openai/gpt-6-luna', LLM_ENRICH_MODEL: 'openai/gpt-cheap' }).model).toBe('openai/gpt-cheap');
+    // LLM_CAMPUS_MODEL is read per key: the shared value when CN_LLM_CAMPUS_MODEL is unset.
+    expect(resolveCampusModel({ LLM_MODEL: 'x/y', LLM_CAMPUS_MODEL: 'openai/gpt-campus' }).model).toBe('openai/gpt-campus');
+    expect(resolveCampusModel({ LLM_CAMPUS_MODEL: 'openai/gpt-campus', CN_LLM_CAMPUS_MODEL: 'kimi/moonshot-v1-8k' }).model).toBe('kimi/moonshot-v1-8k');
+    // A model that is not a domestic one is fine by default.
+    expect(resolveCampusModel({ CN_LLM_MODEL: 'openai/gpt-4o' })).toEqual({ available: true, model: 'openai/gpt-4o' });
+  });
+
+  it('GoApply with its own provider: a shared campus model is qualified, so it is never sent to that provider', () => {
+    const own = { CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek-chat' };
+    expect(resolveCampusModel({ ...own, LLM_CAMPUS_MODEL: 'gpt-campus' }).model).toBe('openrouter/gpt-campus');
+    expect(resolveCampusModel(own)).toEqual({ available: true, model: 'deepseek-chat' });
+  });
+
+  it('behind the wall (CN_LLM_DOMESTIC_ONLY) the id must name a domestic provider, to which the call is pinned', () => {
+    expect(resolveCampusModel({ ...WALL, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ available: true, model: 'deepseek/deepseek-chat', provider: 'deepseek' });
+    expect(resolveCampusModel({ ...WALL, CN_LLM_CAMPUS_MODEL: 'kimi/moonshot-v1-8k' })).toEqual({ available: true, model: 'kimi/moonshot-v1-8k', provider: 'kimi' });
+    expect(resolveCampusModel({ ...WALL, CN_LLM_MODEL: 'openai/gpt-4o' }).available).toBe(false);
+    expect(resolveCampusModel({ ...WALL, CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_CAMPUS_MODEL: 'openai/gpt-4o' }).available).toBe(false);
+    expect(resolveCampusModel({ ...WALL, LLM_MODEL: 'openrouter/openai/gpt-6-luna' }).available).toBe(false);
+    expect(resolveCampusModel({ CN_RESIDENCY_STRICT: 'true', LLM_CAMPUS_MODEL: 'openai/gpt-campus' }).available).toBe(false);
+  });
+
+  it('behind the wall a shared campus model does not shadow GoApply\'s own mainland model', () => {
+    const own = { ...WALL, CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek/deepseek-chat' };
+    // The shared LLM_CAMPUS_MODEL is international: set aside, and the enrichment model (here GoApply's default) is used.
+    expect(resolveCampusModel({ ...own, LLM_CAMPUS_MODEL: 'openai/gpt-campus' })).toEqual({ available: true, model: 'deepseek/deepseek-chat', provider: 'deepseek' });
+    expect(resolveCampusModel({ ...own, LLM_CAMPUS_MODEL: 'openai/gpt-campus', LLM_ENRICH_MODEL: 'openai/gpt-cheap', LLM_MODEL: 'openrouter/openai/gpt-6-luna' })).toEqual({
+      available: true,
+      model: 'deepseek/deepseek-chat',
+      provider: 'deepseek',
+    });
+    expect(resolveCampusModel({ ...own, LLM_CAMPUS_MODEL: 'openai/gpt-campus', CN_LLM_ENRICH_MODEL: 'kimi/kimi-k2' })).toMatchObject({ available: true, model: 'kimi/kimi-k2', provider: 'kimi' });
+    // A shared campus model that names a mainland vendor is inherited.
+    expect(resolveCampusModel({ ...own, LLM_CAMPUS_MODEL: 'dashscope/qwen-plus' })).toEqual({ available: true, model: 'dashscope/qwen-plus', provider: 'dashscope' });
+    // A campus model GoApply set itself is its own choice: an international one is refused, not replaced.
+    expect(resolveCampusModel({ ...own, CN_LLM_CAMPUS_MODEL: 'openai/gpt-4o' }).available).toBe(false);
   });
 });

@@ -30,7 +30,8 @@ function deps(overrides: Partial<EnrichDeps> = {}): EnrichDeps {
     budget: async () => ({ allowed: true, retryAfterSec: 0, limit: 1 }),
     aiAllowed: async () => true,
     afterEnrich: async () => undefined,
-    env: {},
+    // A default model on the shared stack: without one enrichment finishes rules only before the budget is read.
+    env: { LLM_MODEL: 'stack-default-model' },
     now: () => new Date('2026-10-10T00:00:00.000Z'),
     ...overrides,
   };

@@ -1,8 +1,10 @@
 // server/src/features/copilot/budget.ts — the Assistant's daily model budget
 // per brand (ARCH §5.6; TASK_PLAN WP-50).
 //
-// `brandEnv(brand, 'COPILOT_DAILY_BUDGET_USD')` (RoboApply: COPILOT_DAILY_BUDGET_USD,
-// GoApply: CN_COPILOT_DAILY_BUDGET_USD, no fallback between them). Spend is
+// `brandEnv(brand, 'COPILOT_DAILY_BUDGET_USD')`, read per key (D5): RoboApply
+// reads COPILOT_DAILY_BUDGET_USD; GoApply reads CN_COPILOT_DAILY_BUDGET_USD
+// when it is set and otherwise the shared COPILOT_DAILY_BUDGET_USD. The budget
+// itself is still counted per brand (one counter each). Spend is
 // counted in micro-dollars in RARateCounter (one fixed UTC-day window per
 // brand, the same table as the rate limits). When the day's spend reaches the
 // budget, new turns are refused before any model call and nothing is charged.

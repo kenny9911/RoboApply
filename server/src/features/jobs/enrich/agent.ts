@@ -4,23 +4,30 @@
 // title, company, the posting text truncated to 6,000 characters and the ≤15
 // taxonomy candidates. Output: the JSON validated by `schema.ts`.
 //
-// Routing: the call carries `task: 'enrich'` (WP-14 resolves the per-brand
-// task model, brand policy and egress rules from it) and runs inside
-// `runWithBrand(<the job's brand>)`, so a GoApply job always resolves to the
-// CN model profile and passes WP-24's content-safety filter. This module
-// also names the model itself from the brand's env:
+// Routing: the call carries `task: 'enrich'` and runs inside
+// `runWithBrand(<the job's brand>)`, so a GoApply job is routed for GoApply
+// and passes WP-24's content-safety filter on whichever route it takes. This
+// module names the model through the shared resolver
+// (`getTaskModelOrDefault('enrich', brand)`, lib/llm), the same rule for both
+// brands:
 //   RoboApply: LLM_ENRICH_MODEL, else the stack default (LLM_MODEL);
-//   GoApply:   CN_LLM_ENRICH_MODEL, else CN_LLM_MODEL — never an unprefixed
-//              key (R-03/R-13) — and only when the id names a domestic
-//              provider (CN_DOMESTIC_PROVIDERS), which the call is pinned to
-//              via `options.provider`. Neither set, or a non-domestic id →
-//              no model: GoApply enrichment runs rules only (the AI part is
-//              "unavailable", not faked).
+//   GoApply:   CN_LLM_ENRICH_MODEL / CN_LLM_MODEL when set (optional
+//              overrides), else the shared LLM_ENRICH_MODEL / LLM_MODEL (D5).
+// No model anywhere → enrichment runs rules only (the AI part is
+// "unavailable", not faked).
+// Behind the domestic-only wall (CN_LLM_DOMESTIC_ONLY=true, or
+// CN_RESIDENCY_STRICT=true) a GoApply model id must name a domestic provider
+// (CN_DOMESTIC_PROVIDERS), which the call is then pinned to via
+// `options.provider`; any other id is refused and enrichment runs rules only.
+// A shared model that names no mainland vendor is not a fallback there (the
+// resolver sets it aside), so it never shadows GoApply's own default model.
 // The posting is untrusted text: the prompt fences it and says so.
 
 import { llmService, type LLMChatResult } from '../../../services/llm/LLMService.js';
 import type { LLMOptions, Message } from '../../../types/index.js';
-import { brandEnv, getBrand, runWithBrand, type BrandId, type ProductBrand } from '../../../platform/brand/index.js';
+import { getBrand, runWithBrand, type BrandId, type ProductBrand } from '../../../platform/brand/index.js';
+import { getTaskModelOrDefault } from '../../../lib/llm/llmTaskSettings.js';
+import { llmDomesticOnlyApplies } from '../../../platform/llm/brandPolicy.js';
 import type { TaxonomyCandidate } from './candidates.js';
 import { ENRICH_INPUT_CHARS, MAX_ENRICH_SKILLS, parseEnrichText, type EnrichLlmOutput } from './schema.js';
 
@@ -41,26 +48,27 @@ export const defaultEnrichLlm: EnrichLlm = {
 };
 
 export interface EnrichModelRoute {
-  /** Explicit model id, or undefined to use the stack default (RoboApply only). */
+  /** The model selector the call uses (the task model, else the brand's default); undefined when none is configured. */
   model: string | undefined;
   /**
-   * The provider the call is pinned to (GoApply: the domestic provider named
-   * by the model id's prefix). Passed as `options.provider`, so LLMService
-   * never re-routes the id through the global LLM_PROVIDER mode or OpenRouter.
+   * Set only behind the domestic-only wall: the domestic provider named by
+   * the model id's prefix, which the call is pinned to. Passed as
+   * `options.provider`, so LLMService never re-routes the id through a
+   * provider mode or OpenRouter.
    */
   provider?: string;
-  /** False when the brand has no usable model for this task (GoApply without a domestic CN_* model). */
+  /** False when there is no usable model for this task: none configured, or (behind the wall) not a domestic one. */
   available: boolean;
-  /** Why a configured GoApply model was refused (logs and tests). */
+  /** Why a configured GoApply model was refused behind the wall (logs and tests). */
   refused?: 'not_domestic_provider';
 }
 
 /**
- * Mainland providers LLMService can call directly (R-13: GoApply text stays
- * in-region). The id must carry one of these prefixes, e.g.
+ * Mainland providers LLMService can call directly. Behind the domestic-only
+ * wall a GoApply model id must carry one of these prefixes, e.g.
  * "deepseek/deepseek-chat" or "dashscope/qwen-plus". A bare id
- * ("deepseek-chat") would fall through to the global LLM_PROVIDER mode, and
- * "openrouter/…" is a foreign gateway, so both are refused.
+ * ("deepseek-chat") names no provider by itself, and "openrouter/…" is a
+ * foreign gateway, so both are refused there.
  *
  * Qwen, GLM and Doubao answer to their vendor name and their platform name
  * (WP-14: `qwen` / `dashscope`, `glm` / `zhipu`, `doubao` / `ark`). The
@@ -69,7 +77,7 @@ export interface EnrichModelRoute {
  * model id, so "dashscope/qwen-plus" calls the Qwen provider with model
  * "qwen-plus". `newapi/` (a self-hosted gateway) stays out: its host is not
  * known to be in-region from the id alone. The endpoint host behind each
- * provider's credential is WP-14's guard, not this module's.
+ * provider's credential is the route policy's guard, not this module's.
  */
 export const CN_DOMESTIC_PROVIDERS = ['deepseek', 'kimi', 'moonshot', 'minimax', 'qwen', 'dashscope', 'glm', 'zhipu', 'doubao', 'ark'] as const;
 
@@ -81,18 +89,29 @@ export function domesticProviderOf(model: string): string | null {
   return (CN_DOMESTIC_PROVIDERS as readonly string[]).includes(prefix) ? prefix : null;
 }
 
-/** The enrichment model for a brand, from env only (see the header). */
+/**
+ * The task-model rule shared by the enrichment, campus and fraud resolvers: a
+ * selector is usable as it is, except behind the domestic-only wall, where a
+ * GoApply selector must name a domestic provider and is pinned to it.
+ */
+export function taskModelRoute(
+  brand: ProductBrand | BrandId,
+  model: string | undefined,
+  env: Record<string, string | undefined> = process.env,
+): EnrichModelRoute {
+  const b = typeof brand === 'string' ? getBrand(brand) : brand;
+  const selector = model?.trim();
+  if (!selector) return { model: undefined, available: false };
+  if (!llmDomesticOnlyApplies(b, env)) return { model: selector, available: true };
+  const provider = domesticProviderOf(selector);
+  if (!provider) return { model: undefined, available: false, refused: 'not_domestic_provider' };
+  return { model: selector, provider, available: true };
+}
+
+/** The enrichment model for a brand: the `enrich` task model, else the brand's default (see the header). */
 export function resolveEnrichModel(brand: ProductBrand | BrandId, env: Record<string, string | undefined> = process.env): EnrichModelRoute {
   const b = typeof brand === 'string' ? getBrand(brand) : brand;
-  const task = brandEnv(b, 'LLM_ENRICH_MODEL', env);
-  if (b.market === 'cn') {
-    const model = (task ?? brandEnv(b, 'LLM_MODEL', env))?.trim();
-    if (!model) return { model: undefined, available: false };
-    const provider = domesticProviderOf(model);
-    if (!provider) return { model: undefined, available: false, refused: 'not_domestic_provider' };
-    return { model, provider, available: true };
-  }
-  return { model: task, available: true };
+  return taskModelRoute(b, getTaskModelOrDefault('enrich', b, env), env);
 }
 
 /** The brand whose market a job belongs to ('cn' → goapply, else roboapply). */

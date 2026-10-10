@@ -63,7 +63,34 @@ describe('provider selection', () => {
     await expect(checkInput(CLEAN_INPUT, goapplyCtx())).resolves.toMatchObject({ verdict: 'pass', provider: 'keyword_only' });
   });
 
-  it('a misconfigured provider fails closed with 503 ai_unavailable', async () => {
+  it('a misconfigured provider degrades to the keyword list with ONE warning: GoApply AI keeps running, filtered', async () => {
+    vi.stubEnv('CN_RESIDENCY_STRICT', '');
+    vi.stubEnv('CN_CONTENT_SAFETY_PROVIDER', 'aliyun_green'); // no ALIYUN_GREEN_* keys
+    vi.stubEnv('ALIYUN_GREEN_ACCESS_KEY_ID', '');
+    vi.stubEnv('ALIYUN_GREEN_ACCESS_KEY_SECRET', '');
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    reloadContentSafetyFromEnv();
+    await expect(checkInput(CLEAN_INPUT, goapplyCtx())).resolves.toMatchObject({ verdict: 'pass', provider: 'keyword_only' });
+    await expect(checkOutput(CLEAN_INPUT, goapplyCtx())).resolves.toMatchObject({ verdict: 'pass', provider: 'keyword_only' });
+    const blocked = BUILTIN_KEYWORD_LIST.entries.find((e) => e.action === 'block')!;
+    await expect(checkInput(`please: ${blocked.term}`, goapplyCtx())).rejects.toBeInstanceOf(ContentBlockedError);
+    // Said once, with the reason; never silent, never repeated per check.
+    const degradedWarnings = warnSpy.mock.calls.filter((c) => String(c[0]).includes('configuration problems'));
+    expect(degradedWarnings).toHaveLength(1);
+    expect(String(degradedWarnings[0]![1])).toMatch(/ACCESS_KEY/);
+    expect(errSpy).not.toHaveBeenCalled();
+
+    // The same for a typo in the provider name.
+    vi.stubEnv('CN_CONTENT_SAFETY_PROVIDER', 'aliyun-green');
+    reloadContentSafetyFromEnv();
+    await expect(checkInput(CLEAN_INPUT, goapplyCtx())).resolves.toMatchObject({ verdict: 'pass', provider: 'keyword_only' });
+    errSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('under CN_RESIDENCY_STRICT a misconfigured provider fails closed with 503 ai_unavailable', async () => {
+    vi.stubEnv('CN_RESIDENCY_STRICT', 'true');
     vi.stubEnv('CN_CONTENT_SAFETY_PROVIDER', 'aliyun_green'); // no ALIYUN_GREEN_* keys
     vi.stubEnv('ALIYUN_GREEN_ACCESS_KEY_ID', '');
     vi.stubEnv('ALIYUN_GREEN_ACCESS_KEY_SECRET', '');
@@ -76,6 +103,7 @@ describe('provider selection', () => {
       status: 503,
       body: { code: 'ai_unavailable', details: { reason: 'content_safety_unavailable', stage: 'input', cause: 'misconfigured' } },
     });
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('CN_RESIDENCY_STRICT'), expect.any(String));
     errSpy.mockRestore();
     warnSpy.mockRestore();
   });

@@ -5,11 +5,16 @@
 //   proposes fields → a person checks them against the page → saves a draft →
 //   verifies → publishes. Nothing here writes a row; nothing is auto-published.
 //
-// Routing: always under runWithBrand('goapply') so the call resolves to a
-// domestic CN_* model and passes WP-24's content-safety filter (R-13). Model:
-// CN_LLM_CAMPUS_MODEL when set, else the enrichment model (CN_LLM_ENRICH_MODEL,
-// else CN_LLM_MODEL); ids that do not name a domestic provider are refused and
-// the route answers 503 ai_unavailable (the admin fills the form by hand).
+// Routing: always under runWithBrand('goapply'), so the call is routed for
+// GoApply and passes WP-24's content-safety filter on whichever route it
+// takes. Model: CN_LLM_CAMPUS_MODEL when set (else the shared
+// LLM_CAMPUS_MODEL), else the enrichment model, which itself falls back to the
+// brand's default and to the shared stack (D5; lib/llm). No model anywhere →
+// the route answers 503 ai_unavailable and the admin fills the form by hand.
+// Behind the domestic-only wall (CN_LLM_DOMESTIC_ONLY=true) an id that does
+// not name a domestic provider is refused the same way; a shared
+// LLM_CAMPUS_MODEL that names none is set aside by the resolver, so the
+// enrichment model (GoApply's own, when it has one) is used instead.
 // No user data is in the prompt (an employer's public page only).
 //
 // Honesty (D3): dates come only from the official page. Every proposed field
@@ -20,8 +25,9 @@
 
 import { z } from 'zod';
 import { llmService, type LLMChatResult } from '../../../platform/llm/index.js';
-import { brandEnv, getBrand, runWithBrand, type EnvSource } from '../../../platform/brand/index.js';
-import { resolveEnrichModel } from '../../jobs/enrich/index.js';
+import { getBrand, runWithBrand, type EnvSource } from '../../../platform/brand/index.js';
+import { getEnvModelSetting } from '../../../lib/llm/llmModels.js';
+import { resolveEnrichModel, taskModelRoute } from '../../jobs/enrich/index.js';
 import type { LLMOptions, Message } from '../../../types/index.js';
 import {
   CAMPUS_EVENT_KINDS,
@@ -47,11 +53,18 @@ export interface CampusModelRoute {
   available: boolean;
 }
 
-/** The extractor model for GoApply, from env only. */
+/**
+ * The extractor model for GoApply: its campus model (CN_LLM_CAMPUS_MODEL, else
+ * the shared LLM_CAMPUS_MODEL), else the enrichment model. The same refusal
+ * rule as enrichment: only behind the domestic-only wall must the id name a
+ * domestic provider. Behind the wall `getEnvModelSetting` returns no shared
+ * campus model unless it names a mainland vendor, so an international shared
+ * value falls through to the enrichment model instead of being refused.
+ */
 export function resolveCampusModel(env: EnvSource = process.env): CampusModelRoute {
   const brand = getBrand('goapply');
-  const own = brandEnv(brand, 'LLM_CAMPUS_MODEL', env)?.trim();
-  const route = resolveEnrichModel(brand, own ? { ...env, CN_LLM_ENRICH_MODEL: own } : env);
+  const own = getEnvModelSetting('LLM_CAMPUS_MODEL', brand, env);
+  const route = own ? taskModelRoute(brand, own, env) : resolveEnrichModel(brand, env);
   return { model: route.model, ...(route.provider ? { provider: route.provider } : {}), available: route.available };
 }
 

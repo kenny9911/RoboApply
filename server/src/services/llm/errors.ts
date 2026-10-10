@@ -3,9 +3,14 @@
  * carries a `code` that server/src/platform/http.ts `mapError` turns into the
  * matching HTTP status:
  *
- *   AiUnavailableError         → 503 ai_unavailable (GoApply has no domestic
- *                                model configured, or its content-safety
- *                                check could not run: fail closed)
+ *   AiUnavailableError         → 503 ai_unavailable (GoApply runs on a
+ *                                provider of its own, or behind the
+ *                                domestic-only wall, and the call has no
+ *                                model or no route; or its content-safety
+ *                                check could not run: fail closed). GoApply
+ *                                on the shared stack without the wall never
+ *                                raises `no_model`: it uses the shared model
+ *                                as RoboApply does.
  *   ToolsUnsupportedError      → 500 internal (a configuration error: the
  *                                copilot model's provider cannot stream tools)
  *   LlmStreamInterruptedError  → the stream failed after text was emitted; the
@@ -17,7 +22,7 @@
  */
 
 export type AiUnavailableReason =
-  /** GoApply: no CN_LLM_PROVIDER/CN_LLM_MODEL (or task model) is configured. */
+  /** GoApply on its own (domestic) stack or behind the domestic-only wall: no usable model, or a bare model id and no provider of its own. */
   | 'no_model'
   /** GoApply: the content-safety provider errored or timed out (fail closed). */
   | 'content_safety_unavailable';

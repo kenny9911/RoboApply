@@ -1,3 +1,4 @@
+import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { getDefaultModel, getModelSetting, type LlmBrandArg } from './llmModels.js';
 import {
   parseReasoningEffort,
@@ -6,8 +7,9 @@ import {
 
 // ARCHITECTURE.md §1.8: the clone adds `copilot` (the Assistant: tool-capable,
 // streamed), `enrich` (cheap job enrichment) and `writing` (cover letters,
-// outreach). Each maps to LLM_<TASK>_MODEL, read as CN_LLM_<TASK>_MODEL on
-// GoApply (no fallback to the unprefixed variable).
+// outreach). Each maps to LLM_<TASK>_MODEL. GoApply reads CN_LLM_<TASK>_MODEL
+// as an optional override and otherwise the shared value (per key, see
+// llmModels.ts).
 export const LLM_TASKS = [
   'matching',
   'extract',
@@ -35,18 +37,19 @@ export function isLlmTask(value: unknown): value is LlmTask {
   return typeof value === 'string' && (LLM_TASKS as readonly string[]).includes(value);
 }
 
-/** Resolve a task model through the central DB-override → env seam (per brand). */
-export function getTaskModel(task: LlmTask, brand?: LlmBrandArg): string | undefined {
-  return getModelSetting(task, brand);
+/** Resolve a task model through the central per-brand, per-key seam (llmModels.ts). */
+export function getTaskModel(task: LlmTask, brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined {
+  return getModelSetting(task, brand, env);
 }
 
 /**
  * The task model, or the brand's default model when the task has none. The
  * clone tasks (copilot, enrich, writing) use this so a deployment that sets
- * only LLM_MODEL / CN_LLM_MODEL still works; it never crosses brands.
+ * only LLM_MODEL works for both brands: GoApply with no CN_LLM_* gets
+ * RoboApply's selector, and its own CN_LLM_<TASK>_MODEL / CN_LLM_MODEL when set.
  */
-export function getTaskModelOrDefault(task: LlmTask, brand?: LlmBrandArg): string | undefined {
-  return getTaskModel(task, brand) ?? getDefaultModel(brand);
+export function getTaskModelOrDefault(task: LlmTask, brand?: LlmBrandArg, env: EnvSource = process.env): string | undefined {
+  return getTaskModel(task, brand, env) ?? getDefaultModel(brand, env);
 }
 
 /** Read and validate a task effort at call time so env reloads take effect. */
