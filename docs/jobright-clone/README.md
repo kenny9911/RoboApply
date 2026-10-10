@@ -91,3 +91,10 @@ Most of these have a safe default, so the code does not wait on them.
 - What legitimately differs: the **job board, job sources and job-search APIs** per brand, and what follows from the market (default language, currency, payment rail, additional sign-in methods, legal footer).
 - Consent prompts, AI-generated labels and GoApply's additional features (campus calendar, 内推码, 一键填表, AI 面试 format) stay: they add to the product, they do not remove from it.
 - D1 (never submit an application) and D3 (never fabricate data) are unchanged and apply to both brands.
+
+## D6 — Per-market sources, pricing and payment rails (owner, 2026-10-11; binding)
+
+- **Job sources are per market.** Each market's job-search APIs and sources are researched and chosen on their own merits, together with the right way to search, retrieve and match jobs (`docs/jobright-clone/market/`).
+- **Prices are set per market**: a USD ladder for the international brand and a CNY ladder for mainland China. Catalog defaults carry real amounts; a plan is never "price not set".
+- **Mainland China pays with Alipay — the existing implementation. It must keep working exactly as it does.** New GoApply plans are mapped onto it additively; the request, callback and verification path is not rewritten.
+- **The international brand pays with Stripe**, implemented fully (subscriptions, one-time passes and packs, webhooks, cancel, refunds, portal).
