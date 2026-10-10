@@ -81,3 +81,13 @@ Most of these have a safe default, so the code does not wait on them.
 | Track A recording default | **Off.** Shipped on `main` in `8278e5f` (`INTERVIEW_ENGINE_RECORDING_ENABLED` is opt-in). WP-43 adds per-session consent, WP-63a the 90-day purge. |
 | OPS-B1 prices | **Use the PRODUCT_PLAN §6.3 proposals in test mode:** RoboApply Pro $9.99/week, $24.99/month, $59.99/quarter; 7-day pass $6.99; practice packs 5 for $9.99, 15 for $24.99. GoApply non-renewing passes ¥12 week / ¥39 month / ¥99 quarter; practice packs ¥29 / ¥79 (GoApply charging stays off until `CN_PAYMENTS_ENABLED`). No launch offer. Amounts live in the plan catalog config; Stripe test price IDs attach via `STRIPE_PRICE_<PLANKEY>` once a `sk_test_` key is in the clone `.env` (empty today — OPS-A9). |
 | OPS-A8 copy-gate additions | **Approved as listed in TASK_PLAN R-12** (incl. `unlimited`, `guarantee` affirmative, standalone ATS/JD, per-locale auto-apply bans, zh 北森/牛客). |
+
+## D5 — Brand parity (owner, 2026-10-11; binding, overrides TASK_PLAN R-13 / R-14 / R-15 and CN_TW gating)
+
+> "Both GoApply and RoboApply should have the same robust functionalities; the differences are the job board, job sources, job search APIs."
+
+- A capability that is on for RoboApply is **on for GoApply by default**. GoApply never ships a feature dark because a China-specific credential or licence is missing.
+- China-specific providers (`CN_LLM_*`, `CN_EMAIL_*`, `CN_LIVEKIT_*` / `CN_VOICE_*`, SMS, WeChat) are **optional overrides**: when set they are used; when absent GoApply **falls back to the shared stack** (the same LLM routing, email transport and voice infrastructure RoboApply uses).
+- What legitimately differs: the **job board, job sources and job-search APIs** per brand, and what follows from the market (default language, currency, payment rail, additional sign-in methods, legal footer).
+- Consent prompts, AI-generated labels and GoApply's additional features (campus calendar, 内推码, 一键填表, AI 面试 format) stay: they add to the product, they do not remove from it.
+- D1 (never submit an application) and D3 (never fabricate data) are unchanged and apply to both brands.
