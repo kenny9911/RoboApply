@@ -2,9 +2,11 @@
 // resume will download as (PRODUCT F-AGENT-03 "file naming", F-RES-15).
 //
 // The server names the real file (server/src/roboapply/v2/lib/resumeExport.ts
-// `buildExportFileName`); this mirrors its rules so Settings and the review
-// screen can show the name before anything is downloaded. Once a file was
-// recorded on the kit, the review shows the recorded name instead.
+// `buildExportFileName`); this mirrors its rules so Settings can show an
+// EXAMPLE of each style before anything is downloaded. The kit review does
+// not use it: there the name comes from the server (`kit.fileName`, the same
+// rules applied to the kit's own resume and job), so it is the name of the
+// file the user gets and does not change while the page loads.
 
 import type { AgentSettings } from '../../../lib/api/contracts/agent';
 

@@ -5,11 +5,13 @@
 //
 //   const chat = useCopilotChat();
 //   chat.send('Why do I fit this job?', { chip: 'why_fit' });
-//   chat.stop();            // Stop: aborts the stream, keeps the partial answer
+//   chat.stop();            // Stop: aborts the stream, tells the server to stop
+//                           // writing (stopTurn.ts), keeps the partial answer
 //   chat.retry();           // Try again after a retryable error
 //   chat.newChat({ jobId }) // New chat (optionally about a job)
 //   chat.newChat({ resumeId }) // New chat about one resume (F-RES-11)
 //   chat.openThread(id)     // continue a saved thread
+//   chat.refreshCards()     // read the stored cards of the answers on screen again
 //
 // A thread is created on the first message, with the job context if any. A
 // resume-scoped chat sends `resumeId` with every turn (the server scopes the
@@ -30,6 +32,7 @@ import type { COPILOT_CHIPS, MessageView } from '../../lib/api/contracts/copilot
 import { creditsExhaustedFrom, reportCreditsExhausted } from '../shared/useCreditGate';
 import { useInvalidateCredits } from '../shared/useCredits';
 import { copilotKeys } from './keys';
+import { requestStopTurn } from './stopTurn';
 import { markAssistantAiUnavailable } from './useCopilotAvailability';
 import { INITIAL_CHAT, chatReducer, type ChatMessage } from './turnState';
 
@@ -57,6 +60,12 @@ export interface CopilotChat {
   newChat: (opts?: { jobId?: string | null; resumeId?: string | null }) => void;
   openThread: (threadId: string, opts?: { jobId?: string | null; resumeId?: string | null }) => void;
   feedback: (messageId: string, value: 'up' | 'down', note?: string) => Promise<boolean>;
+  /**
+   * Read the stored cards of this thread's answers again (a card whose
+   * suggestion was already applied by an earlier click then shows what that
+   * click left in the thread). Never touches a streaming answer.
+   */
+  refreshCards: () => Promise<void>;
 }
 
 let localSeq = 0;
@@ -135,7 +144,11 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
   );
 
   const stop = useCallback(() => {
-    abortRef.current?.abort();
+    const running = abortRef.current;
+    if (!running) return;
+    running.abort();
+    // The abort may not reach the server through a proxy: name the thread to stop as well.
+    void requestStopTurn(stateRef.current.threadId);
   }, []);
 
   const retry = useCallback(async () => {
@@ -178,6 +191,17 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
     }
   }, []);
 
+  const refreshCards = useCallback(async () => {
+    const threadId = stateRef.current.threadId;
+    if (!threadId || stateRef.current.streamingId) return;
+    try {
+      const page = await listMessages(threadId, { limit: 100 });
+      dispatch({ type: 'cards', threadId, messages: page.items });
+    } catch {
+      // The cards keep what they show.
+    }
+  }, []);
+
   return {
     threadId: state.threadId,
     contextJobId,
@@ -192,5 +216,6 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
     newChat,
     openThread,
     feedback,
+    refreshCards,
   };
 }

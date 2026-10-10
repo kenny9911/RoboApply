@@ -131,6 +131,8 @@ export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
       return jobDetail(jobId);
     },
     scoreJob: async (_u, jobId) => fitView(jobId),
+    storedFit: async (_u, jobId) => fitView(jobId),
+    addedJobs: async () => [],
     companyProfile: async () => ({
       id: 'co_1',
       name: 'Acme',

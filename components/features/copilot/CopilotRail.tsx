@@ -7,17 +7,25 @@
 // Contract (FND-6a):
 //   • open state and requests come from `useAssistantRail()`; producers call
 //     `useOpenAssistant()` (Ask in the top bar, "Ask about this job", …);
-//   • it NEVER opens on route change — nothing here reads the pathname to
-//     open. The one restore is once per app load on a wide screen when the
-//     user left it open (useRailMemory, RAUserUiState `assistant.rail`);
+//   • it opens ONLY when the user asks. Nothing here opens it on a route
+//     change, and it is not reopened on a page load either: the rail is a
+//     modal drawer with a scrim, so reopening it by itself put a dialog over a
+//     page the user had just started using (hooks/copilot/useRailMemory.ts);
 //   • Drawer primitive (focus moves in, stays in, returns on close; Escape);
 //   • renders nothing when the `copilot` capability is off;
-//   • no AI entry (floating button, Cmd/Ctrl+J, restore) unless the user may
-//     ask (useCopilotAvailability: capability AND aiAllowed — the GoApply AI
+//   • no AI entry (floating button, Cmd/Ctrl+J) unless the user may ask
+//     (useCopilotAvailability: capability AND aiAllowed — the GoApply AI
 //     consent — AND no `ai_unavailable` this session). A request that opens
 //     the rail while the user may not ask is closed again once that is known;
-//   • on /assistant the page is the Assistant: no floating button, no
-//     restore, and Cmd/Ctrl+J is left alone (no second conversation).
+//   • on /assistant the page is the Assistant: no floating button and
+//     Cmd/Ctrl+J is left alone (no second conversation).
+//
+// The job on screen is the job in context. Ask in the top bar, the floating
+// button and Cmd/Ctrl+J carry no job, so on a job page (`/jobs/<id>`) an
+// empty chat takes that page's job: "Why do I fit this job?" then has a job
+// to be about. A conversation that is already under way is never replaced:
+// the thread then offers "New chat about this job" (CopilotThread, `pageJobId`).
+// The pathname is read for that only, never to open the rail.
 //
 // Also here: Cmd/Ctrl+J toggles it; the floating "Ask" button (hideable,
 // remembered in RAUserUiState); and at most one proactive nudge per session
@@ -51,6 +59,27 @@ function isNarrow(): boolean {
   }
 }
 
+/** The job a job page is about: `/jobs/<id>` (not the list, Explore, Added by you or the report). Pure. */
+export function jobIdOnPage(pathname: string): string | null {
+  const m = /^\/jobs\/([^/?#]+)\/?$/.exec(pathname);
+  if (!m || ['explore', 'added', 'report'].includes(m[1]!)) return null;
+  try {
+    return decodeURIComponent(m[1]!);
+  } catch {
+    return m[1]!;
+  }
+}
+
+const NON_TEXT_INPUTS = new Set(['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file', 'color', 'image', 'hidden']);
+
+/** True for an element the user types or picks in (a text field, a select, an editable region). Pure. */
+export function isEditingField(el: Element | null): boolean {
+  if (!el || !(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') return true;
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+  return el.tagName === 'INPUT' && !NON_TEXT_INPUTS.has(((el as HTMLInputElement).type || 'text').toLowerCase());
+}
+
 /** Cmd+J (macOS) / Ctrl+J elsewhere. Pure. */
 export function isRailShortcut(e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>): boolean {
   return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j';
@@ -67,17 +96,34 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
   // SURFACES_READY.assistant; the dev override shows it early) and only to a
   // user who may ask.
   const entryVisible = enabled && availability.canAsk && (SURFACES_READY.assistant || showAllNav());
-  const memory = useRailMemory({
-    enabled,
-    open: rail.open,
-    restore: onAssistantPage ? 'skip' : availability.loading ? 'wait' : availability.canAsk ? 'allow' : 'skip',
-  });
+  const memory = useRailMemory({ enabled });
+  const pageJobId = jobIdOnPage(pathname);
   const nudge = usePendingNudge();
   const t = useTranslations('assistant');
   const [prefill, setPrefill] = useState<{ text: string; seq: number } | null>(null);
   const handledSeq = useRef(0);
 
-  const fabVisible = entryVisible && memory.fabHidden === false && !rail.open && !onAssistantPage;
+  // The floating button sits over the bottom-right corner of the page. While the
+  // user is typing in a field of the page it steps aside, so it never covers the
+  // field or the buttons beside it; it is back as soon as the field is left.
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!entryVisible) return undefined;
+    const sync = () => setEditing(isEditingField(document.activeElement));
+    // After focusout the next element is focused a tick later.
+    const later = () => window.setTimeout(sync, 0);
+    document.addEventListener('focusin', sync);
+    document.addEventListener('focusout', later);
+    sync();
+    return () => {
+      document.removeEventListener('focusin', sync);
+      document.removeEventListener('focusout', later);
+    };
+  }, [entryVisible]);
+
+  /** The floating button belongs on this page (whether or not it is stepping aside right now). */
+  const fabOffered = entryVisible && memory.fabHidden === false && !rail.open && !onAssistantPage;
+  const fabVisible = fabOffered && !editing;
 
   // Each open request (a new seq) may carry a thread, a job or a prompt.
   useEffect(() => {
@@ -90,10 +136,26 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
     if (req.threadId) chat.openThread(req.threadId, { jobId: req.jobId ?? null, resumeId });
     else if (resumeId) {
       if (resumeId !== chat.contextResumeId) chat.newChat({ resumeId });
-    } else if (req.jobId && req.jobId !== chat.contextJobId) chat.newChat({ jobId: req.jobId });
+    } else if (req.jobId) {
+      if (req.jobId !== chat.contextJobId) chat.newChat({ jobId: req.jobId });
+    } else if (!chat.contextResumeId && !chat.threadId && chat.messages.length === 0 && !chat.streaming) {
+      // A request with no job of its own (Ask in the top bar, the floating button, Cmd/Ctrl+J)
+      // and nothing said yet: the chat is about the job on screen, or about no job when the
+      // page is not a job (a job left over from an earlier page would be the wrong one).
+      if ((pageJobId ?? null) !== chat.contextJobId) chat.newChat({ jobId: pageJobId });
+    }
     if (req.prompt) setPrefill({ text: req.prompt, seq: rail.seq });
-    // chat callbacks are stable; the contexts are read at request time on purpose.
+    // chat callbacks are stable; the contexts and the page are read at request time on purpose.
   }, [enabled, rail.seq, rail.request]);
+
+  // "New chat" on a job page: the new, empty chat is about that job too. A chat
+  // that has a job, a resume, a thread or a message already is left alone.
+  useEffect(() => {
+    if (!enabled || !rail.open || !pageJobId) return;
+    if (chat.contextJobId || chat.contextResumeId || chat.threadId || chat.messages.length > 0 || chat.streaming || chat.loading) return;
+    chat.newChat({ jobId: pageJobId });
+    // chat.newChat is stable; the fields above are the whole condition.
+  }, [enabled, rail.open, pageJobId, chat.contextJobId, chat.contextResumeId, chat.threadId, chat.messages.length, chat.streaming, chat.loading]);
 
   // A request that reached the rail while the user may not ask (another
   // area's Ask button, gated on the capability only) is closed once known.
@@ -118,10 +180,10 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
   }, [entryVisible, onAssistantPage, rail]);
 
   // Which nudge holds is the server's call (real signals only); asked while one could be shown.
-  useServerNudge({ enabled: fabVisible, route: pathname });
+  useServerNudge({ enabled: fabOffered, route: pathname });
 
   // One proactive nudge per session, through the popup gate.
-  const { granted } = usePopupGate('assistant:nudge', 'survey', { enabled: !!nudge && fabVisible });
+  const { granted } = usePopupGate('assistant:nudge', 'survey', { enabled: !!nudge && fabOffered });
   const showNudge = !!nudge && fabVisible && granted;
   useEffect(() => {
     if (showNudge) markNudgeShown();
@@ -180,6 +242,7 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
           onNavigate={onNavigate}
           canAsk={availability.canAsk}
           checking={availability.loading}
+          pageJobId={pageJobId}
           toolbarExtra={
             <>
               {!onAssistantPage ? <FullPageLink threadId={chat.threadId} onNavigate={rail.close} /> : null}

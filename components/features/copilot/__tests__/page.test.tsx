@@ -5,7 +5,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import AssistantRoute from '../../../../app/(auth)/assistant/page';
 import { SettingsSection } from '../SettingsSection';
-import { __resetAssistantAvailability, __resetRailRestore } from '../../../../hooks/copilot';
+import { __resetAssistantAvailability } from '../../../../hooks/copilot';
 import { CONSENTS, CREDITS, MEMORY_CONSENT, PROFILES, UI_STATE, installFetch, installPopupGate, ok, renderUi, sse, streamResponse, type Route } from './testkit';
 
 const nav = vi.hoisted(() => ({ params: new URLSearchParams(), push: vi.fn() }));
@@ -35,7 +35,6 @@ function routes(extra: Record<string, Route> = {}): Record<string, Route> {
 
 beforeEach(() => {
   nav.params = new URLSearchParams();
-  __resetRailRestore();
   __resetAssistantAvailability();
   installPopupGate();
 });

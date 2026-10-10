@@ -66,6 +66,7 @@ export const RETRYABLE_CODES: ReadonlySet<string> = new Set(['save_failed', 'str
 export type ChatAction =
   | { type: 'reset'; threadId?: string | null }
   | { type: 'load'; threadId: string; messages: MessageView[] }
+  | { type: 'cards'; threadId: string; messages: MessageView[] }
   | { type: 'user_sent'; text: string; chip?: string; userId: string; assistantId: string; at: string }
   | { type: 'thread'; threadId: string }
   | { type: 'event'; event: CopilotSseEvent }
@@ -158,6 +159,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       // Never replace a conversation that is streaming.
       if (state.streamingId) return state;
       return { ...state, threadId: action.threadId, messages: fromServer(action.messages) };
+    case 'cards': {
+      // The stored cards of the answers already on screen (a result an earlier click left in the
+      // thread shows up). Nothing else changes: local messages and the streaming answer stay.
+      if (state.threadId !== action.threadId) return state;
+      const stored = new Map(action.messages.map((m) => [m.id, m.cards] as const));
+      return {
+        ...state,
+        messages: state.messages.map((m) => {
+          const cards = stored.get(m.id);
+          return m.role === 'assistant' && m.id !== state.streamingId && Array.isArray(cards) ? { ...m, cards } : m;
+        }),
+      };
+    }
     case 'thread':
       return { ...state, threadId: action.threadId };
     case 'user_sent': {

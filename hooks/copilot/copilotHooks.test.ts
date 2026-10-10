@@ -18,6 +18,8 @@ import {
 } from './index';
 import { RoboApiError } from '../../lib/api/client';
 import { COPILOT_MEMORY_MAX, SendMessageBodySchema, COPILOT_CHIPS } from '../../server/src/features/copilot/contract';
+import { PROPOSAL_APPLYING as SERVER_PROPOSAL_APPLYING } from '../../server/src/features/copilot/proposals';
+import { PROPOSAL_APPLYING } from './useProposal';
 import { MEMORY_MAX } from '../../components/features/copilot/SettingsSection';
 import { COMPOSER_MAX } from '../../components/features/copilot/Composer';
 import { ASK_CHIPS } from '../../components/features/copilot/ChipBar';
@@ -107,6 +109,34 @@ describe('chatReducer', () => {
   });
 });
 
+describe('chatReducer: reading the stored cards again', () => {
+  const stored = (cards: unknown[]) => ({ id: 'msg_1', role: 'assistant' as const, content: 'ignored', cards: cards as never, createdAt: 'z', feedback: null });
+  const proposal = { type: 'credit_action', id: 'c1', data: { proposalId: 'p1', status: 'pending' } };
+  const result = { type: 'tailor_ready', id: 'c2', data: { href: '/resume/r?tailor=j&tailorSession=s' } };
+
+  it('takes the stored cards of an answer on screen (the result an earlier click left) and nothing else', () => {
+    let s = chatReducer(sent(), { type: 'event', event: { event: 'meta', data: { threadId: 'th_1', messageId: 'msg_1' } } });
+    s = chatReducer(s, { type: 'event', event: { event: 'delta', data: { text: 'Here is the plan.' } } });
+    s = chatReducer(s, { type: 'event', event: { event: 'card', data: proposal as never } });
+    s = chatReducer(s, { type: 'event', event: { event: 'done', data: { messageId: 'msg_1', usage: { inputTokens: 1, outputTokens: 1 }, creditsRemaining: 3 } } });
+    const next = chatReducer(s, { type: 'cards', threadId: 'th_1', messages: [stored([{ ...proposal, data: { ...proposal.data, status: 'applied' } }, result])] });
+    const answer = next.messages.at(-1)!;
+    expect(answer.cards.map((c) => c.id)).toEqual(['c1', 'c2']);
+    expect(answer.content).toBe('Here is the plan.');
+    // The question (a local message the server knows under another id) stays.
+    expect(next.messages).toHaveLength(2);
+    expect(next.messages[0]).toBe(s.messages[0]);
+  });
+
+  it('leaves a streaming answer and another thread alone', () => {
+    let streaming = chatReducer(sent(), { type: 'event', event: { event: 'meta', data: { threadId: 'th_1', messageId: 'msg_1' } } });
+    streaming = chatReducer(streaming, { type: 'event', event: { event: 'card', data: proposal as never } });
+    expect(chatReducer(streaming, { type: 'cards', threadId: 'th_1', messages: [stored([])] }).messages.at(-1)!.cards).toHaveLength(1);
+    const done = chatReducer(streaming, { type: 'event', event: { event: 'done', data: { messageId: 'msg_1', usage: { inputTokens: 1, outputTokens: 1 }, creditsRemaining: 3 } } });
+    expect(chatReducer(done, { type: 'cards', threadId: 'th_other', messages: [stored([])] })).toBe(done);
+  });
+});
+
 describe('proposal helpers', () => {
   const err = (code: string, details?: unknown) => new RoboApiError(code, { code, status: 409, payload: { code, details } });
 
@@ -116,8 +146,13 @@ describe('proposal helpers', () => {
     expect(proposalFailure(err('conflict', { reason: 'version_conflict', version: 4 }))).toEqual({ kind: 'conflict', details: { reason: 'version_conflict', version: 4 } });
     // The server's own shape: code version_conflict, details { currentVersion, card }.
     expect(proposalFailure(err('version_conflict', { currentVersion: 4, card: null }))).toEqual({ kind: 'conflict', details: { currentVersion: 4, card: null } });
-    // Already used or dismissed: closed, not a version conflict.
-    expect(proposalFailure(err('conflict', { reason: 'proposal_closed', status: 'applied' }))).toEqual({ kind: 'closed' });
+    // Already used or dismissed: closed, not a version conflict. The server names what became of it,
+    // so a card whose first click was answered too late can still show "applied".
+    expect(proposalFailure(err('conflict', { reason: 'proposal_closed', status: 'applied' }))).toEqual({ kind: 'closed', status: 'applied' });
+    expect(proposalFailure(err('conflict', { reason: 'proposal_closed', status: 'dismissed' }))).toEqual({ kind: 'closed', status: 'dismissed' });
+    // An earlier click is still being worked on: not applied yet (it may fail).
+    expect(proposalFailure(err('conflict', { reason: 'proposal_closed', status: 'applying' }))).toEqual({ kind: 'closed', status: 'applying' });
+    expect(proposalFailure(err('conflict', { reason: 'proposal_closed' }))).toEqual({ kind: 'closed' });
     // GoApply memory without the consent: ask it; the proposal stays pending.
     expect(proposalFailure(err('forbidden', { reason: 'copilot_memory_consent_required', consent: 'copilot_memory' }))).toEqual({ kind: 'consent' });
     expect(proposalFailure(err('conflict', { reason: 'memory_full', max: 50 }))).toEqual({ kind: 'failed', code: 'memory_full' });
@@ -156,5 +191,9 @@ describe('parity with the server contract', () => {
     expect(SendMessageBodySchema.safeParse({ text: 'x'.repeat(COMPOSER_MAX) }).success).toBe(true);
     expect(SendMessageBodySchema.safeParse({ text: 'x'.repeat(COMPOSER_MAX + 1) }).success).toBe(false);
     for (const chip of ASK_CHIPS) expect(COPILOT_CHIPS).toContain(chip);
+  });
+
+  it('the status of a suggestion whose earlier click is still being worked on', () => {
+    expect(PROPOSAL_APPLYING).toBe(SERVER_PROPOSAL_APPLYING);
   });
 });

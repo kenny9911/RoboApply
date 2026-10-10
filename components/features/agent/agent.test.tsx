@@ -58,8 +58,11 @@ import { KitReview } from './KitReview';
 import { KitRow } from './KitRow';
 import { ReadySearchCard } from './ReadySearchCard';
 import { SetupWizard, initialStep, wizardSteps } from './SetupWizard';
+import { ReadyIntro } from './ReadyIntro';
+import { PageHeader, isPlainText } from '../../v3/primitives/PageHeader';
+import { flagsWith } from '../../../__tests__/shell/helpers';
 import { KitAllowance } from './KitAllowance';
-import { eventLine, safeHttpUrl } from './KitParts';
+import { eventLine, isEmployerApplyPage, safeHttpUrl } from './KitParts';
 import { noTailorKey } from './PrepareSheet';
 import { customQuestionKey, questionsFor, sha256Hex } from './questions';
 import { previewFileName } from './fileName';
@@ -228,8 +231,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
+
+/** A published extension for RoboApply (the store id is build-time configuration). */
+const publishExtension = () => vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'abcdefghijklmnopabcdefghijklmnop');
 
 const ON = { agent: true };
 
@@ -527,6 +534,8 @@ describe('/ready/[jobId] kit review', () => {
     expect(await screen.findByTestId('verify-block')).toHaveTextContent('Check 2 details above before you use this resume.');
     const resume = screen.getByTestId('kit-resume');
     expect(within(resume).getByRole('button', { name: 'Use in this kit' })).toBeDisabled();
+    // Two fits can be on this page (today's by the title, the tailoring's here): each says what it is.
+    expect(within(resume).getByTestId('kit-fit-note')).toHaveTextContent('show your fit when this resume was tailored. The fit next to the job title is today\'s');
   });
 
   it('asks to save the checked resume first, then lets the user use it', async () => {
@@ -551,6 +560,7 @@ describe('/ready/[jobId] kit review', () => {
     const it0 = item({ state: 'ready_for_review', resumeVariantId: 'v0' });
     api.listQueue.mockResolvedValue({ items: [it0] });
     api.getKitDetail.mockResolvedValue(detailOf(it0, { aiAvailable: true }));
+    // (No tailoring, so no "fit when tailored" note either.)
     api.confirmKitPart.mockRejectedValueOnce(apiError(409, 'conflict', { reason: 'kit_unverified_claims', pending: 1 })).mockResolvedValueOnce(item({ state: 'approved' }));
     renderWithBrand(<KitReview jobId="job1" />, { flags: { ...ON, 'ai.text': true } });
     const resume = await screen.findByTestId('kit-resume');
@@ -807,7 +817,7 @@ describe('/ready/[jobId] kit review', () => {
     expect(screen.queryByRole('button', { name: "Undo · I didn't apply" })).toBeNull();
   });
 
-  it('shows the file name the kit will use and the kit history (GET /queue/:id/history)', async () => {
+  it('shows the kit history (GET /queue/:id/history); without the kit read no file name is guessed', async () => {
     api.listQueue.mockResolvedValue({ items: [item({ state: 'approved', resumeVariantId: 'v1' })] });
     api.getKitHistory.mockResolvedValue({
       items: [
@@ -816,8 +826,10 @@ describe('/ready/[jobId] kit review', () => {
       ],
     });
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
-    await waitFor(() => expect(screen.getByTestId('kit-file-name')).toHaveTextContent('Jane Doe - Acme - Data Analyst.pdf'));
     const history = await screen.findByTestId('kit-history');
+    // The server names the file; a name made up here would differ from the download.
+    expect(screen.queryByTestId('kit-file-name')).toBeNull();
+    expect(within(screen.getByTestId('kit-files')).getByRole('button', { name: 'Download resume (PDF)' })).toBeInTheDocument();
     const rows = within(history).getAllByRole('listitem');
     expect(rows[0]).toHaveTextContent('Now: Ready to open');
     expect(rows[0]).toHaveTextContent('You');
@@ -839,6 +851,67 @@ describe('/ready/[jobId] kit review', () => {
     renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
     await waitFor(() => expect(screen.getByTestId('kit-file-name')).toHaveTextContent('Jane Doe - Acme Corp - Analyst.pdf'));
     expect(await screen.findByTestId('kit-history')).toHaveTextContent('Cover letter chosen for this kit');
+  });
+
+  it('the file name is the server\'s on every load: nothing else is shown while the kit is read (verification finding)', async () => {
+    const it0 = item({ state: 'approved', resumeVariantId: 'v1' });
+    api.listQueue.mockResolvedValue({ items: [it0] });
+    let serve: (d: QueueItemDetail) => void = () => undefined;
+    api.getKitDetail.mockImplementation(() => new Promise<QueueItemDetail>((resolve) => (serve = resolve)));
+    renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
+    const files = await screen.findByTestId('kit-files');
+    // The job and the profile are known by now; the name still waits for the server.
+    await screen.findByRole('heading', { level: 1, name: 'Data Analyst' });
+    expect(screen.queryByTestId('kit-file-name')).toBeNull();
+    expect(files).not.toHaveTextContent('Acme');
+    serve({ ...detailOf(it0), kit: { ...detailOf(it0).kit, fileName: 'Jane Doe - Acme - Data Analyst' } });
+    await waitFor(() => expect(screen.getByTestId('kit-file-name')).toHaveTextContent('Jane Doe - Acme - Data Analyst.pdf'));
+  });
+
+  it('"Your answers" lists missing details in words, not as message keys (verification finding)', async () => {
+    api.listQueue.mockResolvedValue({
+      items: [
+        item({
+          state: 'ready_for_review',
+          missingFields: [
+            { key: 'firstName', label: 'profile.missing.firstName' },
+            { key: 'lastName', label: 'profile.missing.lastName' },
+            { key: 'custom', label: 'A plain label' },
+          ],
+        }),
+      ],
+    });
+    renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
+    const missing = await screen.findByTestId('kit-missing');
+    expect(missing).toHaveTextContent('First name');
+    expect(missing).toHaveTextContent('Last name');
+    expect(missing).toHaveTextContent('A plain label');
+    expect(missing).not.toHaveTextContent('profile.missing');
+  });
+
+  it('calls the application page "the company\'s" only when it is; a job board is named by its host (verification finding)', async () => {
+    api.listQueue.mockResolvedValue({ items: [item({ state: 'approved', resumeVariantId: 'v1' })] });
+    extraRoutes['GET /api/v1/roboapply/jobs/job1'] = () =>
+      ok({ ...jobDetail('job1', 'Data Analyst', { applyUrl: 'https://www.jobleads.com/job/123', source: { name: 'JobLeads', kind: 'provider', originalName: null } }), company: { domain: 'acme.example' } });
+    installNet();
+    const view = renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
+    const lead = await screen.findByTestId('kit-open-lead');
+    await waitFor(() => expect(lead).toHaveAttribute('data-page', 'other'));
+    expect(lead).toHaveTextContent('Opens the application page in a new tab and moves this job to Applied. The page is on jobleads.com.');
+    expect(lead).not.toHaveTextContent(/company|employer/i);
+    view.unmount();
+
+    extraRoutes['GET /api/v1/roboapply/jobs/job1'] = () => ok({ ...jobDetail('job1', 'Data Analyst', { applyUrl: 'https://careers.acme.example/apply/1' }), company: { domain: 'acme.example' } });
+    installNet();
+    renderWithBrand(<KitReview jobId="job1" />, { flags: ON });
+    await waitFor(() => expect(screen.getByTestId('kit-open-lead')).toHaveAttribute('data-page', 'employer'));
+    expect(screen.getByTestId('kit-open-lead')).toHaveTextContent("Opens the company's application page in a new tab and moves this job to Applied.");
+
+    expect(isEmployerApplyPage({ applyUrl: 'https://boards.greenhouse.io/acme/jobs/1', sourceKind: 'ats_public' })).toBe(true);
+    expect(isEmployerApplyPage({ applyUrl: 'https://notacme.example/apply', companyDomain: 'acme.example' })).toBe(false);
+    expect(isEmployerApplyPage({ applyUrl: 'https://acme.example/apply', companyDomain: 'https://www.acme.example/' })).toBe(true);
+    expect(isEmployerApplyPage({ applyUrl: 'javascript:alert(1)', sourceKind: 'ats_public' })).toBe(false);
+    expect(isEmployerApplyPage({ applyUrl: 'https://jobs.example.com/1' })).toBe(false);
   });
 
   it('names exactly what each history row shows', () => {
@@ -944,6 +1017,10 @@ describe('/ready/setup', () => {
     expect(initialStep('#extension', 'weekly', wizardSteps(false))).toBe('weekly');
     expect(initialStep('', 'done', wizardSteps(false))).toBe('profile');
 
+    // The server's "Get the extension" where that step is not shown: the last step (its Finish closes setup).
+    expect(initialStep('', 'extension', wizardSteps(false))).toBe('weekly');
+
+    publishExtension();
     api.getAgentSetup.mockResolvedValue(setupAt('calibrate', { profileMissing: [] }));
     renderWithBrand(<SetupWizard />, { flags: { agent: true, extension: true } });
     expect(await screen.findByRole('heading', { name: 'Step 2 of 5: Check your search' })).toBeInTheDocument();
@@ -1021,6 +1098,7 @@ describe('/ready/setup', () => {
   it('step 2 stays put with a plain message until 3 jobs are rated', async () => {
     window.history.replaceState(null, '', '/ready/setup#calibrate');
     api.getAgentSetup.mockResolvedValue(setupAt('calibrate'));
+    api.getSuggestions.mockResolvedValue({ items: [feedItem('j1', 'Analyst I'), feedItem('j2', 'Analyst II'), feedItem('j3', 'Analyst III')] });
     api.completeSetupStep.mockRejectedValueOnce(apiError(409, 'conflict', { reason: 'calibration_incomplete' }));
     renderWithBrand(<SetupWizard />, { flags: ON });
     await screen.findByTestId('setup-calibrate');
@@ -1152,6 +1230,7 @@ describe('/ready/setup', () => {
   });
 
   it('step 5 renders the inline extension prompt; "Skip for now" skips it on the server and goes to /ready', async () => {
+    publishExtension();
     window.history.replaceState(null, '', '/ready/setup#extension');
     renderWithBrand(<SetupWizard />, { flags: { agent: true, extension: true } });
     expect(await screen.findByTestId('setup-extension')).toBeInTheDocument();
@@ -1161,12 +1240,112 @@ describe('/ready/setup', () => {
   });
 
   it('with the extension connected, the last step says "Finish setup" and completes it', async () => {
+    publishExtension();
     window.history.replaceState(null, '', '/ready/setup#extension');
     api.getAgentSetup.mockResolvedValue(setupAt('extension', { extensionConnected: true }));
     renderWithBrand(<SetupWizard />, { flags: { agent: true, extension: true } });
     await screen.findByTestId('setup-extension');
     fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
     await waitFor(() => expect(api.completeSetupStep).toHaveBeenCalledWith({ step: 'extension', action: 'complete' }));
+  });
+
+  it('opens at the saved step when the capabilities arrive after the first render (verification finding: always step 1)', async () => {
+    // Capabilities are fetched on the client here, so the setup read starts disabled:
+    // a disabled query is "not loading" with no data, which used to open step 1.
+    extraRoutes['GET /api/v1/public/brand'] = () => ok({ id: 'roboapply', flags: { ...flagsWith({ agent: true }) } });
+    installNet();
+    api.getAgentSetup.mockResolvedValue(setupAt('answers', { profileMissing: [], calibrationDone: true }));
+    renderWithBrand(<SetupWizard />, { flags: null });
+    expect(await screen.findByRole('heading', { name: 'Step 3 of 4: Application answers' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Step 1 of/ })).not.toBeInTheDocument();
+  });
+
+  it('with nothing to rate, step 2 says so and offers "Rate jobs later" (verification finding: no way past it)', async () => {
+    window.history.replaceState(null, '', '/ready/setup#calibrate');
+    api.getAgentSetup.mockResolvedValue(setupAt('calibrate'));
+    api.getSuggestions.mockResolvedValue({ items: [] });
+    api.completeSetupStep.mockResolvedValueOnce(setupAt('answers'));
+    renderWithBrand(<SetupWizard />, { flags: { agent: true, 'jobs.feed': true } });
+    const step = await screen.findByTestId('setup-calibrate');
+    expect(await within(step).findByTestId('calibrate-none')).toHaveTextContent('No jobs fit your search right now.');
+    expect(within(step).getByTestId('calibrate-later')).toHaveTextContent('You can go on with setup and rate jobs later.');
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Rate jobs later' }));
+    await waitFor(() => expect(api.completeSetupStep).toHaveBeenCalledWith({ step: 'calibrate', action: 'skip' }));
+    expect(await screen.findByRole('heading', { name: 'Step 3 of 4: Application answers' })).toBeInTheDocument();
+  });
+
+  it('GoApply with the jobs list off: step 2 does not point at filters that are not there', async () => {
+    window.history.replaceState(null, '', '/ready/setup#calibrate');
+    api.getAgentSetup.mockResolvedValue(setupAt('calibrate'));
+    renderWithBrand(<SetupWizard />, { brand: 'goapply', flags: { agent: true } });
+    const step = await screen.findByTestId('setup-calibrate');
+    expect(await within(step).findByTestId('calibrate-none')).toHaveTextContent('There are no jobs to rate here yet.');
+    expect(screen.getByRole('button', { name: 'Rate jobs later' })).toBeInTheDocument();
+  });
+
+  it('jobs left to rate keep "Continue"; it turns into "Rate jobs later" only once every listed job is rated', async () => {
+    window.history.replaceState(null, '', '/ready/setup#calibrate');
+    api.getAgentSetup.mockResolvedValue(setupAt('calibrate'));
+    api.getSuggestions.mockResolvedValue({ items: [feedItem('j1', 'Analyst I')] });
+    api.submitCalibration.mockResolvedValue(setupAt('calibrate', { calibrationCount: 1 }));
+    renderWithBrand(<SetupWizard />, { flags: { agent: true, 'jobs.feed': true } });
+    const step = await screen.findByTestId('setup-calibrate');
+    expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
+    fireEvent.click(await within(step).findByRole('button', { name: 'Looks right' }));
+    expect(await screen.findByRole('button', { name: 'Rate jobs later' })).toBeInTheDocument();
+  });
+
+  it('the extension capability without a published extension: no "Get the extension" step, and Finish closes setup on the server (verification finding)', async () => {
+    // The server only knows the capability, so it still counts the step.
+    window.history.replaceState(null, '', '/ready/setup');
+    api.getAgentSetup.mockResolvedValue(setupAt('extension', { profileMissing: [], calibrationDone: true, weeklySaved: true }));
+    api.completeSetupStep.mockImplementation(async (b: { step: string }) => setupAt(b.step === 'extension' ? 'done' : 'extension'));
+    renderWithBrand(<SetupWizard />, { flags: { agent: true, extension: true } });
+    // Opens at the last step shown here, not at step 1.
+    expect(await screen.findByRole('heading', { name: 'Step 4 of 4: Weekly settings' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Setup steps' })).queryByRole('button', { name: /Get the extension/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/ready'));
+    expect(api.completeSetupStep.mock.calls.map((c) => c[0])).toEqual([
+      { step: 'weekly', action: 'complete' },
+      { step: 'extension', action: 'skip' },
+    ]);
+  });
+
+  it('Finish refused for jobs that are now there to rate offers the way back to step 2', async () => {
+    window.history.replaceState(null, '', '/ready/setup#weekly');
+    api.getAgentSetup.mockResolvedValue(setupAt('weekly'));
+    api.completeSetupStep.mockRejectedValueOnce(apiError(409, 'conflict', { reason: 'calibration_incomplete', step: 'calibrate' }));
+    renderWithBrand(<SetupWizard />, { flags: ON });
+    await screen.findByRole('heading', { name: 'Step 4 of 4: Weekly settings' });
+    fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
+    const alert = await screen.findByTestId('setup-step-error');
+    expect(alert).toHaveTextContent('Rate 3 jobs to finish this step.');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Go to “Check your search”' }));
+    expect(await screen.findByRole('heading', { name: 'Step 2 of 4: Check your search' })).toBeInTheDocument();
+  });
+
+  it('no paragraph inside a paragraph in the page headers (verification finding: hydration error on /ready and /ready/setup)', async () => {
+    const wizard = renderWithBrand(<SetupWizard />, { flags: ON });
+    await screen.findByRole('heading', { name: 'Set up Ready to apply' });
+    expect(wizard.container.querySelector('p p, p div, p section')).toBeNull();
+    expect(wizard.container.querySelector('.page-h [data-honesty="you_submit"]')).not.toBeNull();
+    wizard.unmount();
+    const intro = renderWithBrand(<ReadyIntro />, { flags: ON });
+    expect(intro.container.querySelector('p p, p div, p section')).toBeNull();
+    intro.unmount();
+    api.listQueue.mockResolvedValue({ items: [item()] });
+    const page = renderWithBrand(<ReadyRoute />, { flags: ON });
+    await screen.findByRole('heading', { level: 1, name: 'Ready to apply' });
+    expect(page.container.querySelector('p p, p div, p section')).toBeNull();
+    // Plain text still gets its paragraph.
+    page.unmount();
+    const plain = renderWithBrand(<PageHeader title="Title" sub="Plain words" />, { flags: ON });
+    expect(plain.container.querySelector('p.sub')).toHaveTextContent('Plain words');
+    expect(isPlainText('a')).toBe(true);
+    expect(isPlainText(['a', 1, null])).toBe(true);
+    expect(isPlainText(<span>a</span>)).toBe(false);
   });
 
   it('is unavailable with the flag off', async () => {

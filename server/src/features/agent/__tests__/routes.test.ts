@@ -134,6 +134,8 @@ describe('agent router: endpoints', () => {
   });
 
   it('setup, calibration and the step endpoint', async () => {
+    // The search has jobs to rate (with none, the step may be left for later).
+    state.overrides = { feedPreview: async () => ['j1', 'j2', 'j3', 'j4'].map((id) => feedItem(id, 'good')) };
     const s = await h.request<Env<{ step: string; checks: { calibrationCount: number } }>>('GET', `${BASE}/setup`, { host: RA });
     expect(s.body.data.step).toBe('profile');
     const c = await h.request<Env<{ checks: { calibrationCount: number } }>>('POST', `${BASE}/setup/calibration`, { host: RA, body: { jobId: 'j1', verdict: 'up' } });
@@ -148,6 +150,11 @@ describe('agent router: endpoints', () => {
     const short = await h.request<Env<unknown>>('POST', `${BASE}/setup/step`, { host: RA, body: { step: 'calibrate' } });
     expect(short.status).toBe(409);
     expect(short.body.details?.reason).toBe('calibration_incomplete');
+    // Nothing to rate: "Rate jobs later" moves on.
+    state.overrides = { feedPreview: async () => [] };
+    const later = await h.request<Env<{ step: string }>>('POST', `${BASE}/setup/step`, { host: RA, body: { step: 'calibrate', action: 'skip' } });
+    expect(later.status).toBe(200);
+    expect(later.body.data.step).toBe('answers');
   });
 
   it('queue: add, list, prepare (proposal, then confirm), history', async () => {

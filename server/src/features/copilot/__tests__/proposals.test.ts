@@ -9,6 +9,7 @@ vi.mock('../../../services/LoggerService.js', () => ({
 }));
 
 import { COPILOT_MEMORY_MAX, PROPOSAL_TTL_MS } from '../contract.js';
+import { COUNT_AFTER_WAIT_MS, PROPOSAL_APPLYING, UNSAVED_TURN_GRACE_MS } from '../proposals.js';
 import { NOW, USER, makeService, newThread, profile, runTurn, type Harness } from './testkit.js';
 
 async function proposalFrom(h: Harness, tool: string, args: unknown, contextJobId?: string): Promise<{ id: string; messageId: string; threadId: string }> {
@@ -44,6 +45,55 @@ describe('filter_change', () => {
     const list = await h.service.listMessages(USER, p.threadId, {});
     expect(list.items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'applied' });
     expect(list.items.at(-1)!.aiGenerated).toBe(true);
+  });
+
+  it('a second click on an applied proposal is told it was applied (so that card can show it)', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    await h.service.proposals.apply(USER, p.id);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ details: { reason: 'proposal_closed', status: 'applied' } });
+  });
+
+  it('answers "applied" even when the job count is slow or the card update fails', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      // The count after the change never answers (the diff's own counts, before the change, do).
+      h.areas.countForFilters.mockImplementation(() => (h.areas.patchFilters.mock.calls.length ? new Promise(() => undefined) : Promise.resolve({ count: 40, capped: false })) as never);
+      vi.spyOn(h.store, 'updateCards').mockRejectedValue(new Error('Unable to start a transaction in the given time.'));
+      const pending = h.service.proposals.apply(USER, p.id);
+      await vi.advanceTimersByTimeAsync(COUNT_AFTER_WAIT_MS + 10);
+      expect(await pending).toMatchObject({ applied: true, result: { version: 4, countAfter: null } });
+      // The stored card could not be updated; the thread still shows the proposal's own status.
+      const list = await h.service.listMessages(USER, p.threadId, {});
+      expect(list.items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'applied' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a suggestion whose reply is not in the thread long after it was made is closed, not applied', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    const row = h.db.$rows('rACopilotProposal').find((r) => r.id === p.id)!;
+    // The reply was never stored (another instance's save failed) and the grace time has passed.
+    row.createdAt = new Date(NOW.getTime() - UNSAVED_TURN_GRACE_MS - 1_000);
+    const messages = h.db.$rows('rACopilotMessage');
+    messages.splice(0, messages.length);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_expired', cause: 'turn_not_saved' } });
+    expect(h.areas.patchFilters).not.toHaveBeenCalled();
+    expect((await h.store.getProposal(p.id))!.status).toBe('expired');
+  });
+
+  it('a suggestion applied while its reply is still being written is not mistaken for an unsaved one', async () => {
+    const h = withTool('propose_filter_change', { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' });
+    const p = await proposalFrom(h, 'propose_filter_change', {});
+    const row = h.db.$rows('rACopilotProposal').find((r) => r.id === p.id)!;
+    row.createdAt = new Date(NOW.getTime() - 30_000);
+    const messages = h.db.$rows('rACopilotMessage');
+    messages.splice(0, messages.length);
+    expect(await h.service.proposals.apply(USER, p.id)).toMatchObject({ applied: true });
   });
 
   it('baseVersion mismatch → 409 version_conflict with a fresh diff card (a new pending proposal)', async () => {
@@ -96,6 +146,73 @@ describe('credit actions: charged only on apply', () => {
     const res = await h.service.proposals.apply(USER, p.id, { locale: 'en' });
     expect(h.areas.createTailorSession).toHaveBeenCalledWith(USER, { baseVariantId: 'res_1', jobId: 'job_1', idempotencyKey: `copilot:${p.id}`, locale: 'en' });
     expect(res.result).toMatchObject({ card: { type: 'tailor_ready', data: { sessionId: 'ts_1', href: '/resume/res_1?tailor=job_1&tailorSession=ts_1' } } });
+    expect(await storedCardStatus(h, p.messageId)).toEqual([
+      ['credit_action', 'applied'],
+      ['tailor_ready', undefined],
+    ]);
+  });
+
+  it('a second click while the paid action is still running is told "applying", never "applied" (review: "Done." shown for work that then failed)', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    let fail!: (err: unknown) => void;
+    h.areas.createTailorSession.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)) as never);
+    const first = h.service.proposals.apply(USER, p.id);
+    await vi.waitFor(() => expect(h.areas.createTailorSession).toHaveBeenCalledTimes(1));
+    // The proposal is claimed (its row says applied) but nothing has been made yet.
+    expect((await h.store.getProposal(p.id))!.status).toBe('applied');
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_closed', status: PROPOSAL_APPLYING } });
+    // Read again meanwhile (a reload, a second view): the card is not shown as done.
+    expect((await h.service.listMessages(USER, p.threadId, {})).items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'pending' });
+    // The first click fails: nothing ran, the proposal can be used again.
+    fail(Object.assign(new Error('none left'), { code: 'credits_exhausted', status: 402 }));
+    await expect(first).rejects.toMatchObject({ code: 'credits_exhausted' });
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    expect(h.areas.createTailorSession).toHaveBeenCalledTimes(1);
+    // Applied for real: only now is a second click told so.
+    await h.service.proposals.apply(USER, p.id);
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ details: { reason: 'proposal_closed', status: 'applied' } });
+    expect((await h.service.listMessages(USER, p.threadId, {})).items.at(-1)!.cards[0]!.data).toMatchObject({ status: 'applied' });
+  });
+
+  it('the click is answered when the stored card is slow to update; the update still lands (review: 30 to 90 s on a busy database)', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    const update = h.store.updateCards.bind(h.store);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.spyOn(h.store, 'updateCards').mockImplementation(async (id, fn) => {
+      await held;
+      return update(id, fn);
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const pending = h.service.proposals.apply(USER, p.id, { locale: 'en' });
+      await vi.advanceTimersByTimeAsync(COUNT_AFTER_WAIT_MS + 10);
+      expect(await pending).toMatchObject({ applied: true, result: { card: { type: 'tailor_ready' } } });
+      expect(await storedCardStatus(h, p.messageId)).toEqual([['credit_action', 'pending']]);
+    } finally {
+      vi.useRealTimers();
+    }
+    release();
+    await vi.waitFor(async () =>
+      expect(await storedCardStatus(h, p.messageId)).toEqual([
+        ['credit_action', 'applied'],
+        ['tailor_ready', undefined],
+      ]),
+    );
+  });
+
+  it('a card update that is run twice appends the result card once (review: a retried update doubled it)', async () => {
+    const h = withTool('tailor_resume', { jobId: 'job_1' });
+    const p = await proposalFrom(h, 'tailor_resume', {}, 'job_1');
+    const update = h.store.updateCards.bind(h.store);
+    // The first try was stored, its answer was lost, and the store tried again.
+    vi.spyOn(h.store, 'updateCards').mockImplementation(async (id, fn) => {
+      await update(id, fn);
+      await update(id, fn);
+    });
+    await h.service.proposals.apply(USER, p.id, { locale: 'en' });
     expect(await storedCardStatus(h, p.messageId)).toEqual([
       ['credit_action', 'applied'],
       ['tailor_ready', undefined],

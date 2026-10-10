@@ -26,6 +26,7 @@ import styles from './copilot.module.css';
 const TOOL_KEYS = [
   'search_jobs',
   'top_fit_jobs',
+  'added_jobs',
   'get_current_filters',
   'propose_filter_change',
   'analyze_fit',
@@ -48,6 +49,11 @@ const ERROR_KEYS = [
   'save_failed',
 ];
 
+/** The stored "Stopped." notice of a reply the user stopped (the live line is not shown twice). */
+function isStoppedNotice(card: { type: string; data: unknown }): boolean {
+  return card.type === 'notice' && (card.data as { code?: unknown } | null)?.code === 'stopped';
+}
+
 export interface MessageListProps {
   messages: ChatMessage[];
   ctx: CardContext;
@@ -59,6 +65,9 @@ function AssistantMessage({ m, isLast, ctx, onRetry, onFeedback }: { m: ChatMess
   const t = useTranslations('assistant');
   const tool = runningTool(m);
   const streaming = m.status === 'streaming';
+  // A suggestion can be used once its answer is finished and stored; never from an answer that could not be stored.
+  const turn = streaming ? ('streaming' as const) : m.status === 'error' && m.error?.code === 'save_failed' ? ('unsaved' as const) : undefined;
+  const cardCtx: CardContext = turn ? { ...ctx, turn } : ctx;
   return (
     <li className={styles.item} data-role="assistant" data-status={m.status}>
       <AssistantAvatar />
@@ -84,9 +93,9 @@ function AssistantMessage({ m, isLast, ctx, onRetry, onFeedback }: { m: ChatMess
           </p>
         ) : null}
         {m.cards.map((card) => (
-          <CopilotCardView key={card.id} card={card} ctx={ctx} />
+          <CopilotCardView key={card.id} card={card} ctx={cardCtx} />
         ))}
-        {m.status === 'stopped' ? <p className={styles.status}>{t('message.stopped')}</p> : null}
+        {m.status === 'stopped' && !m.cards.some(isStoppedNotice) ? <p className={styles.status}>{t('message.stopped')}</p> : null}
         {m.status === 'error' && m.error ? (
           <div className={styles.errorRow}>
             <p className={`${styles.status} ${styles.statusError}`} role="alert">

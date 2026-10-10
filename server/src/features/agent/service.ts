@@ -64,6 +64,7 @@ import {
   letterNeeded,
   meetsMinTier,
   postAsksForCoverLetter,
+  resumeHeadingName,
   setupMove,
   setupStepIndex,
   weekKeyFor,
@@ -190,6 +191,44 @@ type CreditUsage = Awaited<ReturnType<AgentDeps['creditUsage']>>;
 function creditLine(usage: CreditUsage | null, bucket: PrepareCreditLine['bucket'], cost: number): PrepareCreditLine {
   const u = usage?.lines[bucket];
   return u ? { bucket, cost, remaining: u.remaining, window: u.window, resetsAt: u.resetsAt.toISOString() } : { bucket, cost };
+}
+
+/** What "Not right" ratings rule out or push back (keys from `nameKey`). */
+export interface Dislikes {
+  /** `title|company` of "Wrong job title" ratings: left out. */
+  titleAtCompany: Set<string>;
+  /** Titles rated "Wrong job title": picked last at other companies. */
+  titles: Set<string>;
+  /** Companies rated "Company I don't want": left out. */
+  companies: Set<string>;
+}
+
+/** A title or a company name as it is compared: case, accents of width, punctuation and spacing do not count. */
+export function nameKey(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+/**
+ * Apply the user's "Not right" ratings to a best-fit-first list: leave out the
+ * rated title at the rated company and the unwanted companies, and move the
+ * rated title at other companies to the end (order otherwise kept). Pure.
+ */
+export function applyDislikes<T extends { title: string; company: { name: string } }>(items: readonly T[], dislikes: Dislikes): T[] {
+  if (!dislikes.titleAtCompany.size && !dislikes.titles.size && !dislikes.companies.size) return [...items];
+  const keep: T[] = [];
+  const last: T[] = [];
+  for (const item of items) {
+    const title = nameKey(item.title);
+    const company = nameKey(item.company?.name);
+    if (company && dislikes.companies.has(company)) continue;
+    if (dislikes.titleAtCompany.has(`${title}|${company}`)) continue;
+    (dislikes.titles.has(title) ? last : keep).push(item);
+  }
+  return [...keep, ...last];
 }
 
 export interface GenerateListOptions {
@@ -361,13 +400,31 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     return setup(userId);
   }
 
+  /**
+   * "Check your search" has nothing to rate: the jobs list is off for this
+   * account (GoApply with third-party postings off), the search matches no
+   * job, or every job it matches is rated or on the list already. Then the
+   * step cannot ask for 3 ratings (a wizard nobody can finish), so it may be
+   * left for later. A list that cannot be read counts the same: the user
+   * cannot rate what they cannot see.
+   */
+  async function nothingToRate(userId: string): Promise<boolean> {
+    try {
+      return (await suggestions(userId, { limit: 1 })).items.length === 0;
+    } catch (err) {
+      logger.warn('AGENT', 'calibration suggestions unavailable; the step may be left for later', { userId, error: err instanceof Error ? err.message : String(err) });
+      return true;
+    }
+  }
+
   async function completeStep(
     userId: string,
     input: { step: 'profile' | 'calibrate' | 'answers' | 'weekly' | 'extension'; action: 'complete' | 'skip' },
   ): Promise<SetupStepResponse> {
     const db = await deps.getDb();
-    if (input.action === 'skip' && input.step !== 'extension') {
-      throw new HttpError('conflict', 'Only "Get the extension" can be skipped.', { reason: AGENT_ERROR_CODES.stepNotSkippable });
+    // "Get the extension" can always be skipped; "Check your search" only when there is nothing to rate (below).
+    if (input.action === 'skip' && input.step !== 'extension' && input.step !== 'calibrate') {
+      throw new HttpError('conflict', 'This step cannot be skipped.', { reason: AGENT_ERROR_CODES.stepNotSkippable });
     }
     const row = await settingsRow(db, userId);
     const calibrated = readCalibration(row?.calibration).length >= CALIBRATION_REQUIRED;
@@ -376,7 +433,10 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     if (move.kind === 'out_of_order') {
       throw new HttpError('conflict', 'Finish the earlier setup steps first.', { reason: AGENT_ERROR_CODES.stepOutOfOrder, step: move.current });
     }
-    if (input.step === 'calibrate' && input.action === 'complete' && !calibrated) {
+    // Three ratings, unless there is nothing to rate ("Rate jobs later"): checked once, only when it decides something.
+    let ratingsWaived: boolean | null = null;
+    const mayLeaveRatings = async (): Promise<boolean> => calibrated || (ratingsWaived ??= await nothingToRate(userId));
+    if (input.step === 'calibrate' && move.kind === 'advance' && !(await mayLeaveRatings())) {
       throw new HttpError('conflict', `Rate ${CALIBRATION_REQUIRED} jobs first.`, { reason: AGENT_ERROR_CODES.calibrationIncomplete });
     }
     // An earlier step is a no-op, except that a stored step already shown as 'done' (the extension
@@ -384,8 +444,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     const next: SetupStep = move.kind === 'advance' ? move.next : move.current;
     const finishing = next === 'done' && !row?.setupCompletedAt;
     if (move.kind === 'noop' && !finishing) return { ...(await setup(userId)), firstList: null };
-    if (finishing && !calibrated) {
-      throw new HttpError('conflict', `Rate ${CALIBRATION_REQUIRED} jobs first.`, { reason: AGENT_ERROR_CODES.calibrationIncomplete });
+    if (finishing && !(await mayLeaveRatings())) {
+      throw new HttpError('conflict', `Rate ${CALIBRATION_REQUIRED} jobs first.`, { reason: AGENT_ERROR_CODES.calibrationIncomplete, step: 'calibrate' });
     }
     const data = { setupStep: next, ...(finishing ? { setupCompletedAt: deps.now() } : {}) };
     await db.rAAgentSettings.upsert({ where: { userId }, create: { userId, ...DEFAULT_AGENT_SETTINGS, ...data }, update: data });
@@ -412,18 +472,57 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     };
   }
 
+  /**
+   * What the user's "Not right" ratings say beyond the one job they were given
+   * for. A rating used to keep only that job id off the list, so "Wrong job
+   * title" on a post did nothing about the same title at the same company
+   * posted for another city. Now:
+   *   - "Wrong job title": that title at that company is left out, and the
+   *     title at other companies is picked last (after every other job);
+   *   - "Company I don't want": that company is left out.
+   * Only the user's own ratings are read; nothing is inferred from them.
+   */
+  async function dislikesOf(db: AgentDb, row: SettingsRow | null): Promise<Dislikes> {
+    const out: Dislikes = { titleAtCompany: new Set(), titles: new Set(), companies: new Set() };
+    const down = readCalibration(row?.calibration).filter((c) => c.verdict === 'down' && (c.reason === 'wrong_title' || c.reason === 'company'));
+    if (!down.length) return out;
+    const jobs = (await db.rAJob.findMany({ where: { id: { in: [...new Set(down.map((c) => c.jobId))] } }, select: { id: true, title: true, companyName: true } })) as Array<{
+      id: string;
+      title: string;
+      companyName: string;
+    }>;
+    const byId = new Map(jobs.map((j) => [j.id, j]));
+    for (const c of down) {
+      const job = byId.get(c.jobId);
+      if (!job) continue;
+      const title = nameKey(job.title);
+      const company = nameKey(job.companyName);
+      if (c.reason === 'company') {
+        if (company) out.companies.add(company);
+      } else if (title) {
+        out.titles.add(title);
+        if (company) out.titleAtCompany.add(`${title}|${company}`);
+      }
+    }
+    return out;
+  }
+
   /** Top-fit jobs not in the list yet (calibration "Show 3 more", "Add jobs"). */
   async function suggestions(userId: string, input: { limit?: number; exclude?: string }) {
     const db = await deps.getDb();
     if (!(await deps.flag('jobs.feed', userId))) return { items: [] };
     const limit = input.limit ?? 3;
     const skip = new Set((input.exclude ?? '').split(',').map((s) => s.trim()).filter(Boolean));
-    const ex = await excludedJobIds(db, userId, await settingsRow(db, userId));
+    const row = await settingsRow(db, userId);
+    const ex = await excludedJobIds(db, userId, row);
+    const dislikes = await dislikesOf(db, row);
     const preview = await deps.feedPreview(userId, { sort: 'best_fit', limit: PREVIEW_LIMIT });
-    const items = preview
-      .filter((j) => !skip.has(j.jobId) && !ex.queued.has(j.jobId) && !ex.rated.has(j.jobId))
-      .filter((j) => !j.tracker || j.tracker.status === 'bookmarked')
-      .slice(0, limit);
+    const items = applyDislikes(
+      preview
+        .filter((j) => !skip.has(j.jobId) && !ex.queued.has(j.jobId) && !ex.rated.has(j.jobId))
+        .filter((j) => !j.tracker || j.tracker.status === 'bookmarked'),
+      dislikes,
+    ).slice(0, limit);
     return { items };
   }
 
@@ -521,12 +620,15 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     if (want <= 0) return empty('target_reached', filtersDiffer);
 
     const ex = await excludedJobIds(db, userId, row);
+    const dislikes = await dislikesOf(db, row);
     const preview = await deps.feedPreview(userId, { filters: overrides as never, sort: 'best_fit', limit: PREVIEW_LIMIT });
-    const picks = preview
-      .filter((j) => j.fit && meetsMinTier(j.fit.tier, settings.minTier))
-      .filter((j) => !ex.queued.has(j.jobId) && !ex.down.has(j.jobId))
-      .filter((j) => !j.tracker || j.tracker.status === 'bookmarked')
-      .slice(0, want);
+    const picks = applyDislikes(
+      preview
+        .filter((j) => j.fit && meetsMinTier(j.fit.tier, settings.minTier))
+        .filter((j) => !ex.queued.has(j.jobId) && !ex.down.has(j.jobId))
+        .filter((j) => !j.tracker || j.tracker.status === 'bookmarked'),
+      dislikes,
+    ).slice(0, want);
 
     const created: QueueRow[] = [];
     for (const job of picks) {
@@ -675,12 +777,11 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     const jobs = await visibleJobs(db, userId, [item.jobId]);
     const job = jobs.get(item.jobId);
     if (!job) throw new HttpError('not_found', 'This job is not in your Ready to apply list.', { reason: AGENT_ERROR_CODES.notFound });
-    const [settings, rows, answers, ai, name, usage] = await Promise.all([
+    const [settings, rows, answers, ai, usage] = await Promise.all([
       settingsRow(db, userId).then(settingsFromRow),
       events(db, item.id),
       listAnswers(userId),
       deps.aiAvailable(userId).catch(() => false),
-      deps.profileName(userId).catch(() => null),
       deps.creditUsage(userId).catch(() => null),
     ]);
     let pendingClaims = 0;
@@ -708,20 +809,44 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
           used: decided.letter || (Boolean(item.coverLetterId) && ['approved', 'opened', 'applied'].includes(item.state)),
         },
         answers: answers.items,
-        fileName: item.resumeVariantId
-          ? kitFileName(settings.fileNameStyle, {
-              firstName: name?.firstName,
-              lastName: name?.lastName,
-              company: job.companyName,
-              role: job.title,
-              date: deps.now(),
-            })
-          : null,
+        fileName: await downloadName(db, userId, item, job, settings),
         aiAvailable: ai,
         revisionCost: ai ? { resume: creditLine(usage, 'tailor', 1), letter: creditLine(usage, 'cover_letter', 1) } : null,
       },
       history: rows.map(toKitEventView),
     };
+  }
+
+  /**
+   * The name the kit's resume downloads as, or null when the kit has no
+   * resume yet. It is worked out from the same things the export reads
+   * (RAResumeService.exportVariant), so the review shows the name of the file
+   * the user gets, the same on every load:
+   *   - the person's name is the resume's own first heading;
+   *   - the company and the job title come from the job the resume was made
+   *     for (a tailored copy) or, once the application was opened, from the
+   *     kit's own job (its tracker entry); an untailored resume that was not
+   *     opened yet names no job, because the export cannot know it;
+   *   - with no part known, the resume's own title.
+   */
+  async function downloadName(db: AgentDb, userId: string, item: QueueRow, job: JobRow, settings: AgentSettings): Promise<string | null> {
+    if (!item.resumeVariantId) return null;
+    const variant = await db.rAResumeVariant.findFirst({
+      where: { id: item.resumeVariantId, userId },
+      select: { name: true, resumeMarkdown: true, targetJobId: true, targetTitle: true, parsedData: true },
+    });
+    if (!variant) return null;
+    const namedJobId = variant.targetJobId ?? (item.trackerEntryId ? item.jobId : null);
+    const namedJob = !namedJobId ? null : namedJobId === job.id ? job : ((await visibleJobs(db, userId, [namedJobId])).get(namedJobId) ?? null);
+    const target = (variant.parsedData as { tailorTarget?: { company?: unknown; title?: unknown } } | null)?.tailorTarget ?? null;
+    const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+    return kitFileName(settings.fileNameStyle, {
+      name: resumeHeadingName(variant.resumeMarkdown),
+      company: namedJob?.companyName ?? text(target?.company),
+      role: namedJob?.title ?? text(target?.title) ?? text(variant.targetTitle),
+      date: deps.now(),
+      fallback: text(variant.name) ?? 'Resume',
+    });
   }
 
   // ── Prepare (F-AGENT-10: the cost before the work) ─────────────────────

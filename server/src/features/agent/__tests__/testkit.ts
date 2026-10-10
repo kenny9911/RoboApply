@@ -140,7 +140,6 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     extensionConnected: async (userId, brandId) =>
       (await db.rAExtensionDevice.findMany({ where: { userId, brand: brandId, revokedAt: null } })).length > 0,
     profileMissing: async () => [{ key: 'phone', label: 'profile.missing.phone' }],
-    profileName: async () => ({ firstName: 'Ana', lastName: 'Lima' }),
     feedPreview: async () => [],
     activeSearch: async () => ({ id: 'sp_main', name: 'Main', isDefault: true, isActive: true, version: 3, schemaVersion: 1, filters: {}, alertInstantMax: 0, alertDigest: null, createdAt: '', updatedAt: '' }) as never,
     patchSearch: async (_u, id, version) => ({ id, version: version + 1 }) as never,

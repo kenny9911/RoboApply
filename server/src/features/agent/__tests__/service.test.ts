@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { deriveKitEventKind, kitEventKind } from '../store.js';
+import { applyDislikes, nameKey } from '../service.js';
 import { NOW, feedItem, job, makeDb, makeDeps, seedItem, usageLine } from './testkit.js';
 
 const NOW_MS = NOW.getTime();
@@ -64,9 +65,11 @@ describe('setup (F-AGENT-02, C13)', () => {
 
   it('needs 3 verdicts before the calibration step completes, and keeps one verdict per job', async () => {
     const db = makeDb();
-    const { service } = makeDeps(db);
+    const { service } = makeDeps(db, 'roboapply', { feedPreview: async () => ['j1', 'j2', 'j3', 'j4'].map((id) => feedItem(id, 'good')) });
     expect((await service.completeStep('u1', { step: 'profile', action: 'complete' })).step).toBe('calibrate');
     await expect(service.completeStep('u1', { step: 'calibrate', action: 'complete' })).rejects.toMatchObject({ details: { reason: 'calibration_incomplete' } });
+    // "Rate jobs later" is not a way around jobs that are there to rate.
+    await expect(service.completeStep('u1', { step: 'calibrate', action: 'skip' })).rejects.toMatchObject({ details: { reason: 'calibration_incomplete' } });
     await service.calibrate('u1', { jobId: 'j1', verdict: 'up' });
     await service.calibrate('u1', { jobId: 'j1', verdict: 'down', reason: 'wrong_level' });
     await service.calibrate('u1', { jobId: 'j2', verdict: 'up' });
@@ -76,6 +79,45 @@ describe('setup (F-AGENT-02, C13)', () => {
     s = await service.completeStep('u1', { step: 'calibrate', action: 'complete' });
     expect(s.step).toBe('answers');
     await expect(service.calibrate('u1', { jobId: 'nope', verdict: 'up' })).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('with nothing to rate the calibration step can be left for later, and setup can be finished (verification finding: GoApply, feed off)', async () => {
+    const db = makeDb();
+    // The jobs list is off for this account: no suggestions, ever.
+    const { service } = makeDeps(db, 'goapply', { flag: async (key) => key !== 'jobs.feed' && key !== 'extension' });
+    await db.user.update({ where: { id: 'u1' }, data: { brand: 'goapply' } });
+    await service.completeStep('u1', { step: 'profile', action: 'complete' });
+    const later = await service.completeStep('u1', { step: 'calibrate', action: 'skip' });
+    expect(later.step).toBe('answers');
+    expect(later.checks).toMatchObject({ calibrationDone: false, calibrationCount: 0 });
+    await service.completeStep('u1', { step: 'answers', action: 'complete' });
+    const done = await service.completeStep('u1', { step: 'weekly', action: 'complete' });
+    expect(done.step).toBe('done');
+    expect(done.completedAt).toBeTruthy();
+  });
+
+  it('a search with no job left to rate lets Continue through as well (no dead end)', async () => {
+    const db = makeDb();
+    const preview = vi.fn(async () => [feedItem('j1', 'good')]);
+    const { service } = makeDeps(db, 'roboapply', { feedPreview: preview });
+    await service.completeStep('u1', { step: 'profile', action: 'complete' });
+    await expect(service.completeStep('u1', { step: 'calibrate', action: 'complete' })).rejects.toMatchObject({ details: { reason: 'calibration_incomplete' } });
+    // The only job the search has is rated: nothing is left to rate.
+    await service.calibrate('u1', { jobId: 'j1', verdict: 'down', reason: 'wrong_title' });
+    expect((await service.completeStep('u1', { step: 'calibrate', action: 'complete' })).step).toBe('answers');
+  });
+
+  it('jobs that turn up before Finish are rated first; the answer names the step to go back to', async () => {
+    const db = makeDb();
+    let jobs: ReturnType<typeof feedItem>[] = [];
+    const { service } = makeDeps(db, 'roboapply', { flag: async (key) => key !== 'extension', feedPreview: async () => jobs });
+    await service.completeStep('u1', { step: 'profile', action: 'complete' });
+    await service.completeStep('u1', { step: 'calibrate', action: 'skip' });
+    await service.completeStep('u1', { step: 'answers', action: 'complete' });
+    jobs = [feedItem('j1', 'good'), feedItem('j2', 'good'), feedItem('j3', 'good')];
+    await expect(service.completeStep('u1', { step: 'weekly', action: 'complete' })).rejects.toMatchObject({ details: { reason: 'calibration_incomplete', step: 'calibrate' } });
+    for (const jobId of ['j1', 'j2', 'j3']) await service.calibrate('u1', { jobId, verdict: 'up' });
+    expect((await service.completeStep('u1', { step: 'weekly', action: 'complete' })).step).toBe('done');
   });
 
   it('steps are finished in order: a later step is 409 setup_step_out_of_order, an earlier one changes nothing', async () => {
@@ -644,11 +686,16 @@ describe('review, approve, open, undo (R-19, ruling C11)', () => {
     await (db as unknown as { rAAnswerBankItem: { create: (a: unknown) => Promise<unknown> } }).rAAnswerBankItem.create({
       data: { userId: 'u1', questionKey: 'notice_period', questionText: 'Notice period?', answer: 'Two weeks', source: 'user', locale: 'en' },
     });
+    // The tailored copy the tailoring step wrote (the fake seam only names it).
+    await (db as unknown as { rAResumeVariant: { create: (a: unknown) => Promise<unknown> } }).rAResumeVariant.create({
+      data: { id: 'rv_tailored1', userId: 'u1', kind: 'tailored', isPrimary: false, name: 'Tailored', resumeMarkdown: '# Ana Lima\n\nAnalyst', targetJobId: 'j1', targetTitle: null, parsedData: null },
+    });
     const d = await service.detail('u1', id);
     expect(d.kit.resume).toMatchObject({ variantId: 'rv_tailored1', tailored: true, pendingClaims: 1, used: false });
     expect(d.kit.letter).toMatchObject({ coverLetterId: null, needed: false });
     expect(d.kit.answers.map((a) => a.questionKey)).toEqual(['notice_period']);
-    expect(d.kit.fileName).toBe('Ana_Lima_Company_j1_Role_j1');
+    // The name of the file the export will hand out (its rules: " - " between the parts).
+    expect(d.kit.fileName).toBe('Ana Lima - Company j1 - Role j1');
     expect(d.history.length).toBeGreaterThan(0);
   });
 });
@@ -940,5 +987,126 @@ describe('review findings: list pages and tab counts', () => {
     expect(seen).toEqual(['j1', 'j2', 'j3', 'j4', 'j5']);
     expect(cursor).toBeUndefined();
     await expect(service.listQueue('u1', { cursor: 'bm90LWEtY3Vyc29y' })).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+});
+
+describe('"Not right" ratings shape the weekly list beyond the one job (verification finding)', () => {
+  const settingsRow = (calibration: unknown[]) => ({
+    userId: 'u1',
+    weeklyTarget: 5,
+    minTier: 'good',
+    tailorEach: true,
+    coverLetterMode: 'never',
+    baseVariantId: null,
+    fileNameStyle: 'name_role',
+    setupStep: 'done',
+    calibration,
+    setupCompletedAt: new Date(),
+  });
+  const named = (jobId: string, title: string, company: string, tier: 'great' | 'good' = 'great') => ({ ...feedItem(jobId, tier), title, company: { id: null, name: company, logoUrl: null } });
+
+  it('"Wrong job title": the same title at the same company (another city) stays off the list; the title elsewhere is picked last', async () => {
+    const db = makeDb({
+      rAJob: [
+        job('j1', { title: 'Product Designer — Gaming Communities', companyName: 'General Intuition & Medal', location: 'New York' }),
+        job('j2', { title: 'Product Designer - Gaming communities', companyName: 'General Intuition & Medal', location: 'Los Angeles' }),
+        job('j3', { title: 'Product Designer — Gaming Communities', companyName: 'Other Studio' }),
+        job('j4', { title: 'UX Researcher', companyName: 'General Intuition & Medal' }),
+        job('j5', { title: 'Design Lead', companyName: 'Acme' }),
+      ],
+      rAAgentSettings: [settingsRow([{ jobId: 'j1', verdict: 'down', reason: 'wrong_title' }])],
+    });
+    const { service } = makeDeps(db, 'roboapply', {
+      feedPreview: async () => [
+        named('j2', 'Product Designer - Gaming communities', 'General Intuition & Medal'), // the reported case: best fit, same title and company
+        named('j3', 'Product Designer — Gaming Communities', 'Other Studio'),
+        named('j4', 'UX Researcher', 'General Intuition & Medal'),
+        named('j5', 'Design Lead', 'Acme', 'good'),
+      ],
+    });
+    const res = await service.generateList('u1', { source: 'user' });
+    const picked = (await rows(db, 'rAAgentQueueItem', { userId: 'u1' })).map((r) => r.jobId);
+    expect(picked).not.toContain('j2');
+    // Another title at that company is fine; the rated title elsewhere comes after everything else.
+    expect(res.items.map((i) => i.jobId)).toEqual(['j4', 'j5', 'j3']);
+  });
+
+  it('"Company I don\'t want" keeps that company off the list; other reasons only keep the rated job off', async () => {
+    const db = makeDb({
+      rAJob: [job('j1', { title: 'Analyst', companyName: 'Acme' }), job('j2', { title: 'Engineer', companyName: 'ACME' }), job('j3', { title: 'Analyst', companyName: 'Globex' }), job('j4', { title: 'Analyst', companyName: 'Initech' }), job('j5', { title: 'Analyst', companyName: 'Initech' })],
+      rAAgentSettings: [
+        settingsRow([
+          { jobId: 'j1', verdict: 'down', reason: 'company' },
+          { jobId: 'j4', verdict: 'down', reason: 'wrong_location' },
+        ]),
+      ],
+    });
+    const { service } = makeDeps(db, 'roboapply', {
+      feedPreview: async () => [named('j2', 'Engineer', 'ACME'), named('j3', 'Analyst', 'Globex'), named('j4', 'Analyst', 'Initech'), named('j5', 'Analyst', 'Initech')],
+    });
+    const res = await service.generateList('u1', { source: 'user' });
+    expect(res.items.map((i) => i.jobId)).toEqual(['j3', 'j5']);
+  });
+
+  it('the calibration suggestions follow the same ratings', async () => {
+    const db = makeDb({
+      rAJob: [job('j1', { title: 'Product Designer', companyName: 'Medal' }), job('j2', { title: 'Product Designer', companyName: 'Medal' }), job('j3', { title: 'Product Designer', companyName: 'Other' }), job('j4', { title: 'Researcher', companyName: 'Other' })],
+      rAAgentSettings: [{ ...settingsRow([{ jobId: 'j1', verdict: 'down', reason: 'wrong_title' }]), setupStep: 'calibrate', setupCompletedAt: null }],
+    });
+    const { service } = makeDeps(db, 'roboapply', {
+      feedPreview: async () => [named('j2', 'Product Designer', 'Medal'), named('j3', 'Product Designer', 'Other'), named('j4', 'Researcher', 'Other')],
+    });
+    expect((await service.suggestions('u1', { limit: 3 })).items.map((i) => i.jobId)).toEqual(['j4', 'j3']);
+  });
+
+  it('compares names without case, punctuation or spacing', () => {
+    expect(nameKey('Product Designer — Gaming Communities')).toBe(nameKey('product designer - gaming  communities'));
+    expect(nameKey('General Intuition & Medal')).toBe('general intuition medal');
+    expect(nameKey(null)).toBe('');
+    const none = { titleAtCompany: new Set<string>(), titles: new Set<string>(), companies: new Set<string>() };
+    const list = [named('a', 'X', 'Y')];
+    expect(applyDislikes(list, none)).toEqual(list);
+  });
+});
+
+describe('the kit file name is the name of the file the user downloads (verification finding: it changed between loads)', () => {
+  async function kitWith(db: Db, variant: Record<string, unknown>, itemOver: Record<string, unknown> = {}, style = 'name_company_role') {
+    await (db as unknown as { rAResumeVariant: { create: (a: unknown) => Promise<unknown> } }).rAResumeVariant.create({ data: { userId: 'u1', kind: 'tailored', isPrimary: false, ...variant } });
+    await (db as unknown as { rAAgentSettings: { create: (a: unknown) => Promise<unknown> } }).rAAgentSettings.create({
+      data: { userId: 'u1', weeklyTarget: 10, minTier: 'good', tailorEach: true, coverLetterMode: 'never', baseVariantId: null, fileNameStyle: style, setupStep: 'done', setupCompletedAt: new Date() },
+    });
+    return seedItem(db, { jobId: 'j1', state: 'ready_for_review', resumeVariantId: variant.id, ...itemOver });
+  }
+
+  it('a tailored resume: the name from the resume, then the company and the job, the same on every load', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db);
+    const id = await kitWith(db, { id: 'rv_t', name: 'Tailored for Company j1', resumeMarkdown: '# Ana Lima\n\nDesigner', targetJobId: 'j1', targetTitle: null, parsedData: null });
+    const first = (await service.detail('u1', id)).kit.fileName;
+    expect(first).toBe('Ana Lima - Company j1 - Role j1');
+    expect((await service.detail('u1', id)).kit.fileName).toBe(first);
+  });
+
+  it('a resume with no name in it still follows the chosen style with what is known', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db);
+    const id = await kitWith(db, { id: 'rv_t', name: 'Tailored', resumeMarkdown: 'Designer with no heading', targetJobId: 'j1', targetTitle: null, parsedData: null }, {}, 'company_role_name');
+    expect((await service.detail('u1', id)).kit.fileName).toBe('Company j1 - Role j1');
+  });
+
+  it('an untailored resume names the job only once the application was opened (the export cannot know it before)', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db);
+    const id = await kitWith(db, { id: 'rv_b', kind: 'base', name: 'My resume', resumeMarkdown: '# Ana Lima', targetJobId: null, targetTitle: null, parsedData: null });
+    expect((await service.detail('u1', id)).kit.fileName).toBe('Ana Lima');
+    await (db as unknown as { rAAgentQueueItem: { update: (a: unknown) => Promise<unknown> } }).rAAgentQueueItem.update({ where: { id }, data: { trackerEntryId: 'trk_j1' } });
+    expect((await service.detail('u1', id)).kit.fileName).toBe('Ana Lima - Company j1 - Role j1');
+  });
+
+  it('with nothing to name it by, the resume\'s own title', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db);
+    const id = await kitWith(db, { id: 'rv_b', kind: 'base', name: 'Product resume', resumeMarkdown: 'no heading', targetJobId: null, targetTitle: null, parsedData: null }, {}, 'name_role');
+    expect((await service.detail('u1', id)).kit.fileName).toBe('Product resume');
   });
 });

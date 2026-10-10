@@ -7,13 +7,18 @@
 //                   as it is when nothing was tailored
 //   KitLetterPart   the cover letter, copy / edit / use / ask for changes
 //   KitAnswersPart  the user's own answers with copy buttons
-//   KitFilesPart    the file name and downloads (recorded on the application)
+//   KitFilesPart    the file name and downloads (recorded on the application).
+//                   The name shown is the server's (`kit.fileName`, the export's
+//                   own rules): never a second guess made here, which used to
+//                   show one name while the page loaded and another after
 //   KitOpenPart     "Open application" → Applied at once + "Undo · I didn't apply"
 //   KitHistoryPart  what was prepared, used, opened and undone (audit rows,
 //                   GET /agent/queue/:id/history or the kit detail)
 //
-// D1: nothing here submits. "Open application" opens the employer's page; the
-// user fills and submits it there. The extension only fills when asked.
+// D1: nothing here submits. "Open application" opens the application page; the
+// user fills and submits it there. The extension only fills when asked. The
+// page is called "the company's" only when it is (`isEmployerApplyPage`): a
+// link to a job board is named by its host instead.
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -43,7 +48,7 @@ import type { QueueItemDetail } from '../../../lib/api/agent';
 import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
 import { useFlag } from '../../../lib/flags';
 import type { AgentSettings } from '../../../lib/api/contracts/agent';
-import { previewFileName } from './fileName';
+import { MissingLabel } from './MissingLabel';
 import { applicationHref, setupStepHref } from './states';
 import styles from './ready.module.css';
 
@@ -173,6 +178,36 @@ export function safeHttpUrl(url: string | null | undefined): string | null {
   }
 }
 
+/** The host of a web link without `www.`, or null. Pure. */
+export function hostOf(url: string | null | undefined): string | null {
+  const safe = safeHttpUrl(url);
+  if (!safe) return null;
+  try {
+    return new URL(safe).hostname.toLowerCase().replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True only when the application link is known to be the employer's own page:
+ * the post came from the company's own job board (`ats_public`), or the link's
+ * host is the company's domain (or under it). A job board, an aggregator or a
+ * link the user pasted is not called "the company's page". Pure.
+ */
+export function isEmployerApplyPage(input: { applyUrl: string | null | undefined; sourceKind?: string | null; companyDomain?: string | null }): boolean {
+  const host = hostOf(input.applyUrl);
+  if (!host) return false;
+  if (input.sourceKind === 'ats_public') return true;
+  const domain = (input.companyDomain ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/.*$/, '');
+  return !!domain && (host === domain || host.endsWith(`.${domain}`));
+}
+
 // ── Resume ──────────────────────────────────────────────────────────────────
 
 export interface KitResumePartProps {
@@ -215,7 +250,15 @@ export function KitResumePart({ item, jobId, detail = null, aiOk }: KitResumePar
       <h2 id="kit-resume-title" className={styles.cardTitle}>
         {t('review.resume.title')}
       </h2>
-      {sessionId && session.data ? <TailorResult session={session.data} /> : null}
+      {sessionId && session.data ? (
+        <>
+          {/* Two fits can be on this page: this one is a record of the tailoring, the header's is today's. */}
+          <p className={styles.muted} data-testid="kit-fit-note">
+            {t('review.resume.fitNote')}
+          </p>
+          <TailorResult session={session.data} />
+        </>
+      ) : null}
       {sessionId && session.isLoading ? <p className={styles.muted}>{t('loading')}</p> : null}
       {sessionId && session.isError ? <p className={styles.error}>{t('review.resume.loadFailed')}</p> : null}
       {!sessionId ? (
@@ -343,7 +386,7 @@ export function KitAnswersPart({ item }: { item: ReadyQueueItem }) {
           <ul className={styles.plainList}>
             {item.missingFields.map((m) => (
               <li key={m.key} className={styles.spread}>
-                <span className={styles.body}>{m.label}</span>
+                <MissingLabel label={m.label} className={styles.body} />
                 <span className={styles.missingTag}>{t('setup.profile.missing')}</span>
               </li>
             ))}
@@ -384,14 +427,16 @@ export function KitAnswersPart({ item }: { item: ReadyQueueItem }) {
 export function KitFilesPart({
   item,
   style,
-  parts,
   detail = null,
+  detailLoading = false,
 }: {
   item: ReadyQueueItem;
+  /** The chosen file name style (sent with the download; the server names the file). */
   style: AgentSettings['fileNameStyle'] | null;
-  parts: { name: string | null; company: string | null; role: string | null };
-  /** GET /agent/queue/:id: the server's suggested file name and the kit's resume. */
+  /** GET /agent/queue/:id: the name the resume downloads as, and the kit's resume. */
   detail?: QueueItemDetail | null;
+  /** The kit read is still on its way: no name is shown yet (never a guess that changes a moment later). */
+  detailLoading?: boolean;
 }) {
   const t = useTranslations('ready');
   const [busy, setBusy] = useState<'pdf' | 'docx' | null>(null);
@@ -399,8 +444,8 @@ export function KitFilesPart({
   const [saved, setSaved] = useState<string | null>(null);
   const history = useKitHistory(item.id, { enabled: !detail });
   const recorded = recordedFileNameOf(kitEventsOf(detail?.history ?? history.data?.items));
-  // The server's own name wins over the local preview of the same rules.
-  const preview = detail?.kit.fileName ?? (style ? previewFileName(style, parts) : '');
+  // One source for the name: the server, which uses the export's own rules.
+  const preview = detail?.kit.fileName ?? null;
   const shown = recorded ?? (preview ? `${preview}.pdf` : null);
   const variantId = detail?.kit.resume.variantId ?? item.resumeVariantId;
 
@@ -423,10 +468,18 @@ export function KitFilesPart({
       <h2 id="kit-files-title" className={styles.cardTitle}>
         {t('review.files.title')}
       </h2>
-      <p className={styles.muted}>{recorded ? t('review.files.recorded') : t('review.files.willBe')}</p>
-      <p className={styles.fileName} data-testid="kit-file-name">
-        {shown ?? '—'}
-      </p>
+      {shown ? (
+        <>
+          <p className={styles.muted}>{recorded ? t('review.files.recorded') : t('review.files.willBe')}</p>
+          <p className={styles.fileName} data-testid="kit-file-name">
+            {shown}
+          </p>
+        </>
+      ) : detailLoading ? (
+        <p className={styles.muted} role="status">
+          {t('loading')}
+        </p>
+      ) : null}
       {variantId ? (
         <div className={styles.row}>
           <Btn onClick={() => void download('pdf')} disabled={busy !== null}>
@@ -481,13 +534,16 @@ function openPendingTab(): Window | null {
 
 export interface KitOpenPartProps {
   item: ReadyQueueItem;
-  /** The job's employer link from the job read (null when it has none). */
+  /** The job's application link from the job read (null when it has none). */
   jobApplyUrl: string | null;
   /** The job read is still loading: Open waits for it. */
   jobLoading?: boolean;
+  /** Where the post came from (`job.source.kind`) and the company's domain: only they can make the link "the company's page". */
+  sourceKind?: string | null;
+  companyDomain?: string | null;
 }
 
-export function KitOpenPart({ item, jobApplyUrl, jobLoading = false }: KitOpenPartProps) {
+export function KitOpenPart({ item, jobApplyUrl, jobLoading = false, sourceKind = null, companyDomain = null }: KitOpenPartProps) {
   const t = useTranslations('ready');
   const format = useFormatter();
   const extensionOn = useFlag('extension');
@@ -500,6 +556,10 @@ export function KitOpenPart({ item, jobApplyUrl, jobLoading = false }: KitOpenPa
   const [undone, setUndone] = useState(false);
   const [undoExpired, setUndoExpired] = useState(false);
   const { error, setError, report } = useActionError();
+
+  // Called "the company's page" only when it is; otherwise the page is named by its host.
+  const employerPage = isEmployerApplyPage({ applyUrl: url, sourceKind, companyDomain });
+  const applyHost = employerPage ? null : hostOf(url);
 
   const opened = item.state === 'opened' || item.state === 'applied';
   if (!opened && item.state !== 'approved' && !justOpened) return null;
@@ -565,7 +625,10 @@ export function KitOpenPart({ item, jobApplyUrl, jobLoading = false }: KitOpenPa
       <HonestyLine kind="you_submit" />
       {!showUndoBox ? (
         <>
-          <p className={styles.muted}>{t('review.open.lead')}</p>
+          <p className={styles.muted} data-testid="kit-open-lead" data-page={employerPage ? 'employer' : 'other'}>
+            {employerPage ? t('review.open.lead') : t('review.open.leadNeutral')}
+            {applyHost ? ` ${t('review.open.host', { host: applyHost })}` : ''}
+          </p>
           <div className={styles.row}>
             <Btn variant="primary" onClick={() => void onOpen()} disabled={jobLoading || actions.pending !== null} aria-busy={jobLoading}>
               {t('review.open.button')}

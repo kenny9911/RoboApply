@@ -159,6 +159,31 @@ describe('threads and messages', () => {
   });
 });
 
+describe('POST /threads/:id/stop', () => {
+  it('stops the running reply by name and answers { stopped }', async () => {
+    holder.h = makeService({ rounds: [{ chunks: ['Working on it. '], hangUntilAbort: true }] });
+    const id = await thread();
+    const idle = await on.request<Env<{ stopped: boolean }>>('POST', `${BASE}/threads/${id}/stop`, { host: RA, body: {} });
+    expect(idle.status).toBe(200);
+    expect(idle.body.data).toEqual({ stopped: false });
+    // The stream stays open on purpose (as behind a proxy that never forwards the disconnect).
+    const res = await fetch(`${on.baseUrl}${BASE}/threads/${id}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-host': RA, 'Idempotency-Key': 'stop-1' },
+      body: JSON.stringify({ text: 'hi' }),
+    });
+    await holder.h.llm.hanging;
+    const stopped = await on.request<Env<{ stopped: boolean }>>('POST', `${BASE}/threads/${id}/stop`, { host: RA, body: {} });
+    expect(stopped.body.data).toEqual({ stopped: true });
+    await res.text();
+    await vi.waitFor(async () => {
+      const stored = await holder.h!.db.rACopilotMessage.findMany({ where: { role: 'assistant' } });
+      expect((stored[0] as { content: string }).content).toBe('Working on it.');
+    });
+    expect(holder.h.llm.calls[0]!.opts.signal?.aborted).toBe(true);
+  });
+});
+
 describe('proposals, feedback, memory, nudge', () => {
   it('apply and dismiss through the routes', async () => {
     holder.h = makeService({ rounds: [{ toolCalls: [{ name: 'remember', args: { fact: 'Likes remote work' } }, { name: 'remember', args: { fact: 'Avoids agencies' } }] }, { chunks: ['Check the cards.'] }] });

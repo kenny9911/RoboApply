@@ -11,6 +11,18 @@
 // sent to anyone (D1): an outreach draft comes back as text for the user to
 // copy and send themselves, with a link to the job's People tab where the
 // draft is kept. On reload the card shows the server's `data.status`.
+//
+// A second click: "Done." is said only for a click this card saw finish. When
+// the server answers that the suggestion is closed, the card never claims a
+// result it does not hold:
+//   • an earlier click is still being worked on (`applying`): the card stays
+//     open and says so; the work may still fail, and then the button works
+//     again. It does not tell the user to ask again (that would be a second
+//     paid action);
+//   • it was already applied (an earlier click whose answer was lost, or
+//     another tab): the closed line, and the thread's stored cards are read
+//     again (`ctx.refresh`), so the result that click left — the card with
+//     the link — shows up under this one.
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -89,6 +101,12 @@ export function CreditActionCard({ card, ctx }: CardProps) {
   const { status } = proposal;
   const out = status === 'applied' ? creditResult(data.action, proposal.result) : null;
 
+  const confirm = async () => {
+    const outcome = await proposal.apply();
+    // Applied by an earlier click: what it made is in the thread, not in this answer.
+    if (outcome.kind === 'closed' && outcome.status === 'applied') ctx.refresh?.();
+  };
+
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -110,8 +128,21 @@ export function CreditActionCard({ card, ctx }: CardProps) {
               {t('failed')}
             </p>
           ) : null}
+          {status === 'applying' ? (
+            <p className={styles.cardText} role="status" data-testid="proposal-applying">
+              {t('applying')}
+            </p>
+          ) : ctx.turn === 'streaming' ? (
+            <p className={styles.cardText} data-testid="proposal-waiting">
+              {t('waitForAnswer')}
+            </p>
+          ) : proposal.inProgress ? (
+            <p className={styles.cardText} role="status" data-testid="proposal-in-progress">
+              {t('inProgress')}
+            </p>
+          ) : null}
           <div className={styles.cardActions}>
-            <Btn variant="primary" disabled={status === 'applying'} onClick={() => void proposal.apply()}>
+            <Btn variant="primary" disabled={status === 'applying' || ctx.turn === 'streaming'} aria-busy={status === 'applying' || undefined} onClick={() => void confirm()}>
               {t(`credit.${data.action}.confirm`)}
             </Btn>
             <Btn variant="ghost" disabled={status === 'applying'} onClick={() => void proposal.dismiss()}>

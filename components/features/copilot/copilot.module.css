@@ -333,6 +333,26 @@
   padding: var(--sp-3) 0 0;
   background: var(--surface);
 }
+/* In the rail the scroller is the drawer body, which has --sp-5 of padding
+ * under its content. A sticky box stops at the content edge, so the questions
+ * scrolled past showed in that strip under the composer.
+ * Two rules, together:
+ *   1. the thread reaches down to the scroller's edge (it gives the strip back
+ *      with a negative margin and is that much taller), so the strip is part
+ *      of the thread wherever the chat is scrolled to, also at its end and
+ *      when the chat is shorter than the rail;
+ *   2. the composer sticks that much lower and pads itself by the same amount.
+ * The space under the composer's last line is then always one --sp-5, and
+ * nothing shows below it. Only while the composer is shown: the other rail
+ * views (saved chats, the prompt list) keep the drawer's own padding. */
+.thread[data-variant='rail'][data-composer] {
+  min-height: calc(100% + var(--sp-5));
+  margin-bottom: calc(-1 * var(--sp-5));
+}
+.thread[data-variant='rail'] .composer {
+  bottom: calc(-1 * var(--sp-5));
+  padding-bottom: var(--sp-5);
+}
 .composerBox {
   display: flex;
   align-items: flex-end;
@@ -357,6 +377,20 @@
   font-size: var(--fs-body);
   line-height: 1.45;
   resize: none;
+}
+/* The box grows with what is typed (where the browser can size a field by its
+ * content), up to max-height. The hint text stays on one line: a hint that is
+ * wider than the box is cut at the box's edge, not wrapped onto a second line
+ * that is cut through the middle. (Some browsers end it in "…"; Chromium does
+ * not, so the rail uses a hint short enough to fit: Composer `compact`.) */
+.input {
+  field-sizing: content;
+}
+.input::placeholder {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
 }
 .input:focus {
   outline: none;

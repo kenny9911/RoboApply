@@ -1,3 +1,23 @@
 {
-  "ready": {}
+  "ready": {
+    "intro": {
+      "point_open": "You open the application page and send the application yourself."
+    },
+    "setup": {
+      "calibrate": {
+        "later": "Rate jobs later",
+        "laterNote": "You can go on with setup and rate jobs later.",
+        "noFeed": "There are no jobs to rate here yet."
+      }
+    },
+    "review": {
+      "resume": {
+        "fitNote": "“Before” and “After” show your fit when this resume was tailored. The fit next to the job title is today's, so the two can differ."
+      },
+      "open": {
+        "leadNeutral": "Opens the application page in a new tab and moves this job to Applied.",
+        "host": "The page is on {host}."
+      }
+    }
+  }
 }

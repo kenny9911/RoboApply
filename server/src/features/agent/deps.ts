@@ -84,7 +84,6 @@ export interface AgentDeps {
   extensionConnected(userId: string, brand: string): Promise<boolean>;
 
   profileMissing(userId: string): Promise<Array<{ key: string; label: string }>>;
-  profileName(userId: string): Promise<{ firstName: string | null; lastName: string | null } | null>;
 
   feedPreview(userId: string, input: { filters?: Partial<FilterSet>; sort?: FeedSort; limit: number }): Promise<FeedItem[]>;
   activeSearch(userId: string): Promise<SearchProfileWire>;
@@ -179,11 +178,6 @@ export function defaultAgentDeps(): AgentDeps {
       const { profileService } = await import('../profile/index.js');
       const { missing } = await profileService.completeness(userId);
       return missing.map((m) => ({ key: m.key, label: m.label }));
-    },
-    async profileName(userId) {
-      const { profileService } = await import('../profile/index.js');
-      const p = await profileService.get(userId);
-      return { firstName: p.firstName ?? null, lastName: p.lastName ?? null };
     },
     async feedPreview(userId, input) {
       const { feedService } = await import('../feed/index.js');

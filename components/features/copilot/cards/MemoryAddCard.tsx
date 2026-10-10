@@ -23,7 +23,7 @@ import { initialProposalStatus, parseMemoryAdd } from './model';
 import type { CardProps } from './types';
 import styles from '../copilot.module.css';
 
-export function MemoryAddCard({ card }: CardProps) {
+export function MemoryAddCard({ card, ctx }: CardProps) {
   const t = useTranslations('assistant.cards');
   const qc = useQueryClient();
   const data = parseMemoryAdd(card.data);
@@ -48,7 +48,8 @@ export function MemoryAddCard({ card }: CardProps) {
       setRefused(false);
     }
     const out = await proposal.apply();
-    if (out.kind === 'applied') void qc.invalidateQueries({ queryKey: copilotKeys.memory() });
+    // Saved now, or by an earlier click (the card then shows the closed line): the list in Settings is read again.
+    if (out.kind === 'applied' || (out.kind === 'closed' && out.status === 'applied')) void qc.invalidateQueries({ queryKey: copilotKeys.memory() });
     else if (out.kind === 'consent') setRefused(true);
     else if (out.kind === 'failed') setCode(out.code);
   };
@@ -87,8 +88,17 @@ export function MemoryAddCard({ card }: CardProps) {
               {code === 'memory_full' ? t('memory.full') : t('failed')}
             </p>
           ) : null}
+          {ctx.turn === 'streaming' && !busy ? (
+            <p className={styles.cardText} data-testid="proposal-waiting">
+              {t('waitForAnswer')}
+            </p>
+          ) : proposal.inProgress && !busy ? (
+            <p className={styles.cardText} role="status" data-testid="proposal-in-progress">
+              {t('inProgress')}
+            </p>
+          ) : null}
           <div className={styles.cardActions}>
-            <Btn variant="primary" disabled={busy || (needsConsent && !consent.item)} onClick={() => void remember()}>
+            <Btn variant="primary" disabled={busy || ctx.turn === 'streaming' || (needsConsent && !consent.item)} onClick={() => void remember()}>
               {needsConsent ? t('memory.allow') : t('memory.remember')}
             </Btn>
             <Btn variant="ghost" disabled={busy} onClick={() => void proposal.dismiss()}>

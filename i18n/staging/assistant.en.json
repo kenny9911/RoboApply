@@ -1,3 +1,41 @@
 {
-  "assistant": {}
+  "assistant": {
+    "cards": {
+      "applying": "Working on it…",
+      "inProgress": "This is already being worked on. If nothing shows up in a minute, try again.",
+      "waitForAnswer": "You can use this once the answer is finished.",
+      "notSaved": "This suggestion was not saved with its answer, so it cannot be used. Ask again.",
+      "notice": {
+        "stopped": "Stopped."
+      },
+      "fit": {
+        "snapshot": "This is your fit when this answer was written. It changes when your resume or your search changes.",
+        "openJob": "See your fit now"
+      },
+      "jobList": {
+        "workModel": {
+          "remote": "Remote",
+          "hybrid": "Hybrid",
+          "onsite": "On-site"
+        },
+        "addedByYou": "Added by you"
+      }
+    },
+    "cheatsheet": {
+      "needsJob": "These questions are about one job. Open a job, then ask from there.",
+      "openJobs": "Open your jobs",
+      "needsJobHere": "These questions are about one job. This chat is not about the job on this page."
+    },
+    "tools": {
+      "added_jobs": "Looking at the jobs you added…"
+    },
+    "context": {
+      "noJob": "This chat is not about the job on this page.",
+      "otherJob": "This chat is about another job.",
+      "askPageJob": "New chat about this job"
+    },
+    "composer": {
+      "placeholderShort": "Ask a question"
+    }
+  }
 }

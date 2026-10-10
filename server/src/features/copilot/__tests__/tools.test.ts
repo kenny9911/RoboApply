@@ -13,7 +13,7 @@ import type { CopilotAreas, ToolContext } from '../types.js';
 import { opsToPatch } from '../tools/filters.js';
 import { PUBLIC_TOOLS, SEEKER_TOOLS, availableTools, runToolCall, serializeResult, toLlmTools, wrapData, TOOL_RESULT_MAX_CHARS } from '../tools/registry.js';
 import { FEATURE_EXPLANATIONS } from '../tools/you.js';
-import { NOW, USER, fakeAreas, makeService, newThread, runTurn, type FakeAreas } from './testkit.js';
+import { NOW, USER, fakeAreas, feedItem, fitView, makeService, newThread, runTurn, type FakeAreas } from './testkit.js';
 import { createCreditTestKit } from '../../../platform/credits/testkit.js';
 import { createNetworkFixture, jobRow } from '../../network/testkit.js';
 import { CROSS_AREA_DEFAULTS, createDefaultAreas } from '../areas.js';
@@ -125,6 +125,94 @@ describe('job tools (read only)', () => {
     const bad = await run('search_jobs', { filters: { workModels: ['moon'] } }, s);
     expect(bad.output.data).toMatchObject({ error: 'invalid_filters' });
     expectNoWrites(s.areas);
+  });
+
+  it('search_jobs "only jobs that list pay": the search\'s own filter, and no pay-less row on the card (verification finding)', async () => {
+    const s = ctxFor();
+    // The feed can still hand back a row without pay (the filter steps back beside a minimum pay).
+    s.areas.feedPreview.mockResolvedValue([feedItem(), feedItem({ jobId: 'job_2', title: 'BI Analyst', pay: null }), feedItem({ jobId: 'job_3', title: 'Staff Analyst', workModel: 'remote' })]);
+    const r = await run('search_jobs', { payListed: true, filters: { workModels: ['remote'] } }, s);
+    expect(s.areas.feedPreview).toHaveBeenCalledWith(USER, { q: undefined, filters: { workModels: ['remote'], includeUndisclosedPay: false }, sort: undefined, limit: 5 });
+    const data = r.output.data as { count: number; jobs: Array<{ jobId: string; pay: unknown }>; payListedOnly: boolean; listNote: string };
+    // What the model reads, the card and the allowed ids are one and the same set.
+    expect(data.jobs.map((j) => j.jobId)).toEqual(['job_1', 'job_3']);
+    expect(data.jobs.every((j) => j.pay !== 'not listed')).toBe(true);
+    expect(data.payListedOnly).toBe(true);
+    expect(data.listNote).toMatch(/exactly these jobs/);
+    const cardItems = (r.output.cards![0]!.data as { items: Array<{ jobId: string; pay: unknown; workModel: string }> }).items;
+    expect(cardItems.map((i) => i.jobId)).toEqual(['job_1', 'job_3']);
+    expect(cardItems.every((i) => i.pay)).toBe(true);
+    expect(cardItems[1]!.workModel).toBe('remote');
+    expect(r.output.jobIds).toEqual(['job_1', 'job_3']);
+    // The same when the model sets the filter itself.
+    const viaFilter = await run('search_jobs', { filters: { includeUndisclosedPay: false } }, s);
+    expect((viaFilter.output.data as { jobs: unknown[] }).jobs).toHaveLength(2);
+  });
+
+  it('added_jobs lists the user\'s own added jobs with their stored fit, also with GoApply postings off (verification finding)', async () => {
+    const added = [
+      { jobId: 'mine_1', title: '产品经理', companyName: '某公司', location: '上海', workModel: 'onsite' as const, applyUrl: null, sourceHost: null, addedAt: '2026-10-09T00:00:00.000Z', warnings: [], trackerStatus: 'bookmarked' },
+      { jobId: 'mine_2', title: 'Product Designer', companyName: 'General Intuition', location: null, workModel: null, applyUrl: 'https://boards.example/1', sourceHost: 'boards.example', addedAt: '2026-10-08T00:00:00.000Z', warnings: [], trackerStatus: null },
+    ];
+    const s = ctxFor({ brand: getBrand('goapply'), areasOver: { postingsAllowed: () => false, addedJobs: async () => added, storedFit: async (_u, jobId) => ({ ...fitView(jobId), tier: jobId === 'mine_1' ? 'great' : 'possible', score: jobId === 'mine_1' ? 84 : 51 }) } });
+    const names = (await availableTools('seeker', s.ctx)).map((t) => t.name);
+    expect(names).toContain('added_jobs');
+    expect(names).not.toContain('search_jobs');
+    const r = await run('added_jobs', {}, s, []);
+    expect(s.areas.addedJobs).toHaveBeenCalledWith(USER, { limit: 8 });
+    expect(s.areas.storedFit).toHaveBeenCalledTimes(2);
+    expect(s.areas.scoreJob).not.toHaveBeenCalled(); // never a model call for a list
+    const data = r.output.data as { count: number; jobs: Array<{ jobId: string; addedByUser: boolean; fit: { tier: string } | null; applicationStatus: string | null }> };
+    expect(data.jobs.map((j) => [j.jobId, j.fit?.tier, j.applicationStatus])).toEqual([
+      ['mine_1', 'great', 'bookmarked'],
+      ['mine_2', 'possible', null],
+    ]);
+    expect(r.output.jobIds).toEqual(['mine_1', 'mine_2']);
+    expect(r.output.cards?.[0]).toMatchObject({ type: 'job_list', data: { query: { added: true }, items: [{ jobId: 'mine_1', addedByUser: true, payKnown: false, pay: null }, { jobId: 'mine_2' }] } });
+    // The ids may now be read and scored.
+    const job = await run('get_job', { jobId: 'mine_1' }, s, r.output.jobIds);
+    expect(job.record.ok).toBe(true);
+    // The stored fits are read one at a time: a list never holds several database connections at once.
+    let open = 0;
+    let most = 0;
+    s.areas.storedFit.mockClear();
+    s.areas.storedFit.mockImplementation(async (_u: string, jobId: string) => {
+      open += 1;
+      most = Math.max(most, open);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      open -= 1;
+      return { ...fitView(jobId), tier: 'possible', score: 51 } as never;
+    });
+    s.areas.addedJobs.mockResolvedValue(Array.from({ length: 8 }, (_, i) => ({ ...added[1]!, jobId: `mine_${i + 10}` })));
+    const many = await run('added_jobs', {}, s, []);
+    expect((many.output.data as { count: number }).count).toBe(8);
+    expect(s.areas.storedFit).toHaveBeenCalledTimes(8);
+    expect(most).toBe(1);
+    // None added yet: said plainly, no card.
+    s.areas.addedJobs.mockResolvedValue([]);
+    const none = await run('added_jobs', {}, s, []);
+    expect(none.output.cards).toEqual([]);
+    expect(none.output.data).toMatchObject({ count: 0 });
+    expectNoWrites(s.areas);
+  });
+
+  it('search_jobs with keywords also finds a job the user added (asked about by company name)', async () => {
+    const s = ctxFor({
+      areasOver: {
+        feedPreview: async () => [],
+        addedJobs: async () => [
+          { jobId: 'mine_1', title: 'Product Designer', companyName: 'General Intuition & Medal', location: 'New York', workModel: 'onsite', applyUrl: null, sourceHost: null, addedAt: '2026-10-09T00:00:00.000Z', warnings: [], trackerStatus: null },
+          { jobId: 'mine_2', title: 'Data Analyst', companyName: 'Acme', location: null, workModel: null, applyUrl: null, sourceHost: null, addedAt: '2026-10-08T00:00:00.000Z', warnings: [], trackerStatus: null },
+        ],
+      },
+    });
+    const r = await run('search_jobs', { q: 'general intuition' }, s);
+    expect(r.output.jobIds).toEqual(['mine_1']);
+    expect((r.output.data as { jobs: Array<{ addedByUser?: boolean }> }).jobs[0]).toMatchObject({ addedByUser: true, company: 'General Intuition & Medal' });
+    // Without keywords the public search is not widened.
+    const plain = await run('search_jobs', {}, s);
+    expect(plain.output.jobIds).toEqual([]);
+    expect(s.areas.addedJobs).toHaveBeenCalledTimes(1);
   });
 
   it('analyze_fit uses the free score (never a credit) and labels a quick estimate', async () => {
