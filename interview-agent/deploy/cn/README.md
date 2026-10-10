@@ -1,4 +1,29 @@
-# GoApply interview worker (mainland China)
+# GoApply interview worker (mainland China, optional)
+
+**GoApply voice practice works without this worker.** With no `CN_LIVEKIT_URL`
+on the control plane, GoApply sessions run on the shared LiveKit project and
+are served by the shared worker (`RoboApply-Interview`), with the shared
+models, voices and speech recognition (owner ruling D5,
+`docs/jobright-clone/GOAPPLY_PARITY_PLAN.md` §3.5). This kit is the optional
+override for an operator who wants GoApply's media plane and models inside
+mainland China: set `CN_LIVEKIT_URL`, `CN_LIVEKIT_API_KEY` and
+`CN_LIVEKIT_API_SECRET` on the control plane and run this worker on that
+LiveKit project. A session keeps the plane it was created on, so switching
+does not move a live interview.
+
+Without this worker a `CN_LLM_INTERVIEW_MODEL` is still used: it writes the
+plan and the report of a GoApply practice. The live turns on the shared project
+run a LiveKit Inference model, so a domestic model that LiveKit Inference does
+not serve (Qwen, Kimi, GLM, Doubao, MiniMax) is not used for them; the shared
+interview model is, and the control plane logs that once. Running a domestic
+model live is what this worker is for. Under `CN_LLM_DOMESTIC_ONLY` or
+`CN_RESIDENCY_STRICT` the shared project is not used at all: until this worker
+and its plane exist, GoApply offers the written practice instead of voice.
+
+On its own plane the control plane reads only `CN_` values for the voice
+group: set `CN_LIVEKIT_AGENT_CALLBACK_SECRET` (this worker's
+`LIVEKIT_AGENT_CALLBACK_SECRET`) as well, or every callback of this worker is
+refused and its sessions end without a transcript.
 
 The same LiveKit voice worker as RoboApply's, registered as
 **`GoApply-Interview`**, with a domestic model stack selected by the backend
@@ -6,12 +31,12 @@ switch (`src/backends/`, WP-63b):
 
 | Piece | RoboApply worker | GoApply worker |
 |---|---|---|
-| Agent name | `RoboApply-Interview` | `GoApply-Interview` (`CN_INTERVIEW_ENGINE_AGENT_NAME` on the control plane) |
+| Agent name | `RoboApply-Interview` (dispatched for both brands on the shared project) | `GoApply-Interview` (dispatched only on GoApply's own project; `CN_INTERVIEW_ENGINE_AGENT_NAME` on the control plane) |
 | LLM | LiveKit Inference gateway (`LLM_BACKEND=gateway`) | OpenAI-compatible domestic endpoint (`LLM_BACKEND=openai_compatible`): DeepSeek, Qwen (DashScope), Kimi, GLM, Doubao (Ark), MiniMax |
 | STT | Inference `deepgram/nova-3` | DashScope Paraformer realtime (`STT_BACKEND=dashscope_paraformer`) |
 | TTS | Inference voice + optional OpenAI floor | DashScope CosyVoice (`TTS_BACKEND=dashscope_cosyvoice`), no OpenAI floor |
 | Callback secret | `LIVEKIT_AGENT_CALLBACK_SECRET` = control plane `LIVEKIT_AGENT_CALLBACK_SECRET` | `LIVEKIT_AGENT_CALLBACK_SECRET` = control plane `CN_LIVEKIT_AGENT_CALLBACK_SECRET` |
-| LiveKit | RoboApply project | GoApply project: CN-0 a separate LiveKit Cloud project in Asia, CN-1 self-hosted in Shanghai |
+| LiveKit | the shared project (`LIVEKIT_*`) | GoApply's own project (`CN_LIVEKIT_*`): a separate LiveKit Cloud project in Asia, or self-hosted in Shanghai (`CN_VOICE_PROVIDER=livekit_selfhosted`) |
 
 The `deploy/cn/Dockerfile` image pins the agent name and all three backends.
 The guard does not depend on those pins: a worker registered as
@@ -23,8 +48,11 @@ cannot reach the international gateway.
 
 ## What the control plane sends
 
-The GoApply control plane (WP-63a, `server/src/interview-engine/config.ts`)
-refuses to dispatch unless the session is domestic end to end:
+On GoApply's own plane the control plane
+(`server/src/interview-engine/config.ts`) sends this worker a domestic session
+when the matching overrides are set. Set all of them: this worker refuses
+anything else with `worker_config`, and the control plane logs a warning at the
+first session when one is missing (`voiceConfigProblems`).
 
 - `metadata.llm.model` is a raw domestic model id such as
   `deepseek/deepseek-chat` (`CN_LLM_INTERVIEW_LIVE_MODEL`, else the GoApply
@@ -44,12 +72,16 @@ endpoint outside the mainland allowlist ends the session with lifecycle error
 `worker_config` (reported to the control plane) instead of reaching another
 provider. `dashscope-intl.aliyuncs.com` (Singapore) is not on the allowlist.
 
-## Audio only
+## Camera and recording
 
 The worker never publishes or subscribes to video (the room input keeps the
-SDK default `videoEnabled: false`, and the GoApply join token already has
-`cameraPublish: false`). Recording is the control plane's job: audio only, to
-`CN_S3_*`, and only with `interview_recording` consent.
+SDK default `videoEnabled: false`). Whether the candidate's camera is published
+and whether video is recorded is the control plane's media policy, the same on
+both brands: recording needs the `interview_recording` consent, video frames
+the `interview_video` consent as well. `CN_INTERVIEW_CAMERA_PUBLISH=false` on
+the control plane restores a local camera preview and audio-only recording for
+GoApply. Recordings go to `CN_S3_*` when GoApply has its own bucket, else to
+the shared bucket.
 
 ## Build and run
 

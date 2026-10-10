@@ -19,15 +19,19 @@
 //                      → 'completed'; zero candidate turns → 'failed'/no_answer,
 //                      never charged)
 //
-// Per brand (WP-63a): every media-plane call goes through the session's
-// VoiceSessionProvider (../providers/), fixed at create from the request's
-// brand and stored on the row (`InterviewSession.brand` / `voiceProvider`,
-// SCHEMA-4). Readers go through `resolveSessionSeam(row)`: the columns, else
-// `liveMetrics.voiceSeam`, else the owner's `User.brand` — a null column is
-// never read as RoboApply. Session work that can arrive from anywhere (webhooks,
-// callbacks, crons) runs inside the session's brand, so S3, LLM routing and
-// content safety resolve for that brand: GoApply uses CN_LIVEKIT_*, the
-// 'GoApply-Interview' worker, CN_S3_* (audio only) and domestic models.
+// Per brand and plane (WP-63a; D5, GOAPPLY_PARITY_PLAN §3.5): every media-plane
+// call goes through the session's VoiceSessionProvider (../providers/), fixed
+// at create from the request's brand and stored on the row
+// (`InterviewSession.brand` / `voiceProvider`, SCHEMA-4; the LiveKit plane in
+// `liveMetrics.voiceSeam.stack`). Readers go through `resolveSessionSeam(row)`:
+// the columns, else `liveMetrics.voiceSeam`, else the owner's `User.brand` — a
+// null column is never read as RoboApply. Session work that can arrive from
+// anywhere (webhooks, callbacks, crons) runs inside the session's brand and on
+// its plane (`inSeam`), so storage, LLM routing and content safety resolve for
+// that brand. GoApply runs on the shared LiveKit project, worker, speech set
+// and bucket by default, and on its own (CN_LIVEKIT_*, 'GoApply-Interview',
+// DashScope speech, CN_S3_*) where those optional overrides are set; a session
+// stays on the plane it was created on.
 //
 // Ownership: every read/mutation is scoped to the owning user (the human user
 // OR the API-key owner for external sessions); cross-tenant access 404s.
@@ -43,17 +47,21 @@ import {
   getInterviewMediaPolicy,
   getSessionExpiryMinutes,
   getInterviewLlmRouting,
+  getLiveKitCreds,
   getWorkerLlmModel,
   getBlueprintModel,
   getPrepareTimeoutMs,
+  isLiveKitConfigured,
   isRecordingEnabled,
+  warnVoiceConfigProblemsOnce,
   InterviewEngineConfigError,
   type InterviewLlmRouting,
 } from '../config.js';
 import {
   assertBrandSpeech,
-  inBrand,
+  inSeam,
   isDefaultSeam,
+  resolveBrandSessionStt,
   resolveBrandSessionVoice,
   resolveBrandStt,
   resolveBrandVoice,
@@ -66,6 +74,8 @@ import {
   type VoiceSessionProvider,
 } from '../providers/index.js';
 import { getBrand, type BrandId } from '../../platform/brand/registry.js';
+import { cnLlmDomesticOnly } from '../../platform/brand/brandEnv.js';
+import type { WebhookSigner } from '../livekit/webhookReceiver.js';
 import { interviewR2Storage } from '../storage/r2Storage.js';
 import { normalizeLocale } from '../voice/voiceCatalog.js';
 import { findPersona, findSessionType, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
@@ -295,9 +305,10 @@ export interface ConnectionDetails {
   agentDispatched: boolean;
   recording: boolean;
   /**
-   * WP-63a: false when the brand keeps the camera as a local preview only
-   * (GoApply, CN L-11) — the token cannot publish a camera track, and the
-   * live room shows the camera to the candidate alone. Absent on Parley.
+   * False when the media policy keeps the camera as a local preview only
+   * (GoApply with CN_INTERVIEW_CAMERA_PUBLISH=false): the token cannot publish
+   * a camera track, and the live room shows the camera to the candidate alone.
+   * Absent on Parley.
    */
   cameraPublish?: boolean;
   /** Present only for Parley sessions: url/token are then empty and the
@@ -386,14 +397,19 @@ export class InterviewSessionService {
       }
     }
 
-    // WP-63a: the session runs on the requesting brand's media plane for its
-    // whole life. Resolving the provider here also refuses a reserved one
-    // (volcano / trtc → 503) before anything is persisted.
+    // WP-63a: the session runs on one media plane for its whole life: the
+    // shared LiveKit project, or GoApply's own when CN_LIVEKIT_URL is set (the
+    // seam records which). Resolving the provider here also refuses a reserved
+    // one (volcano / trtc → 503) before anything is persisted.
     const brand = getCurrentBrandOrDefault();
     const seam = voiceSeamForBrand(brand.id);
-    // The Parley pilot is an international service: a GoApply session never
-    // runs on it (it stays on the brand's own media plane instead).
-    const transport = brand.market === 'cn' ? undefined : input.transport;
+    // A half-set GoApply voice or speech group is never silent (PAR-1 P4-2).
+    warnVoiceConfigProblemsOnce(brand);
+    // The Parley pilot runs for every brand the caller chose it for (D5). Only
+    // under the operator's opt-in domestic-only wall does a GoApply session
+    // stay off it: Parley runs its own models, which the wall cannot vouch
+    // for, so the session takes the LiveKit path, where the wall is checked.
+    const transport = brand.market === 'cn' && cnLlmDomesticOnly() ? undefined : input.transport;
     if (transport !== 'parley') voiceProviderFor(seam);
 
     // A session created here is destined for the LiveKit worker. Validate the
@@ -405,8 +421,9 @@ export class InterviewSessionService {
     const candidateName = (input.candidateName ?? '').trim() || undefined;
     const resumeContext = (input.resumeContext ?? '').trim() || undefined;
 
-    // GoApply: domestic STT/TTS only — unconfigured → 503 before anything is
-    // persisted (never the international voice catalog).
+    // The shared voice catalog and STT on both brands; GoApply's DashScope
+    // speech when its CN pair is set (a foreign model in that pair → 503
+    // before anything is persisted).
     const voice = resolveBrandVoice(brand.id, language, persona.voiceGender);
     if (transport !== 'parley') resolveBrandStt(brand.id, language);
     const roomName = `ie-${randomUUID()}`;
@@ -423,7 +440,8 @@ export class InterviewSessionService {
       source,
       mode,
       requested: input.recording,
-      // CN L-11: GoApply records audio only, whatever was asked.
+      // One policy on both brands; false only under GoApply's operator
+      // opt-out (CN_INTERVIEW_CAMERA_PUBLISH=false): audio only, whatever was asked.
       allowVideo: getInterviewMediaPolicy(brand).recordVideo,
     });
     const practice: PracticeMeta | null =
@@ -493,7 +511,7 @@ export class InterviewSessionService {
       transport,
       jobId: job?.id,
       recording: recording.audio ? (recording.video ? 'audio+video' : 'audio') : 'off',
-      ...(isDefaultSeam(seam) ? {} : { brand: seam.brand, voiceProvider: seam.provider }),
+      ...(isDefaultSeam(seam) ? {} : { brand: seam.brand, voiceProvider: seam.provider, voiceStack: seam.stack }),
       requestId: input.requestId,
     });
     return created;
@@ -542,11 +560,11 @@ export class InterviewSessionService {
     const inflight = this.inflightPrepares.get(session.id);
     if (inflight) return inflight;
     const prepared = session;
-    const brand = (await resolveSessionSeam(prepared)).brand;
+    const seam = await resolveSessionSeam(prepared);
     // Another call may have started the same prepare while the brand was read.
     const raced = this.inflightPrepares.get(session.id);
     if (raced) return raced;
-    const run = inBrand(brand, () => this.runPrepare(prepared, params, brand)).finally(() => {
+    const run = inSeam(seam, () => this.runPrepare(prepared, params, seam.brand)).finally(() => {
       this.inflightPrepares.delete(session.id);
     });
     this.inflightPrepares.set(session.id, run);
@@ -674,7 +692,7 @@ export class InterviewSessionService {
   }): Promise<ConnectionDetails> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
     const seam = await resolveSessionSeam(session);
-    return inBrand(seam.brand, () => this.connectLoaded(session, params, seam));
+    return inSeam(seam, () => this.connectLoaded(session, params, seam));
   }
 
   private async connectLoaded(session: InterviewSession, params: { requestId?: string }, seam: VoiceSeam): Promise<ConnectionDetails> {
@@ -806,7 +824,7 @@ export class InterviewSessionService {
       // sufficient. Egress starts only for a session whose create-time
       // consent check said so; video frames only with the second opt-in.
       const consented = readPracticeRecording(session);
-      if (consented.audio && isRecordingEnabled(seam.brand) && interviewR2Storage.isConfigured()) {
+      if (consented.audio && isRecordingEnabled(seam.brand) && interviewR2Storage.canStore()) {
         recording = true;
         void this.startRecordingInBackground(
           provider,
@@ -952,8 +970,8 @@ export class InterviewSessionService {
     llmRouting: InterviewLlmRouting,
     brand: BrandId,
   ): InterviewRoomMetadata {
-    const stt = resolveBrandStt(brand, session.language);
-    // GoApply: every speech model in the worker metadata must be domestic.
+    // STT from the same speech set as the session's voice (never a mix).
+    const stt = resolveBrandSessionStt(brand, voice, session.language);
     assertBrandSpeech(brand, voice, stt);
     const blueprint = (session.blueprint ?? {}) as Record<string, unknown>;
     const openingInstruction = typeof blueprint.openingInstruction === 'string' ? blueprint.openingInstruction : `Greet the candidate and begin the ${session.interviewType} interview.`;
@@ -1280,20 +1298,21 @@ export class InterviewSessionService {
   // ─── Webhook handlers (LiveKit) ───────────────────────────────────────────
 
   /**
-   * @param params.signerBrand the brand whose LiveKit project signed the
-   *   webhook (`receiveBrandWebhook`). When given, an event for a session of
-   *   the other brand is ignored, so one brand's project can never touch the
-   *   other brand's sessions.
+   * @param params.signer the LiveKit project that signed the webhook
+   *   (`receiveBrandWebhook`: its API key and the brands on it). When given,
+   *   the event is processed only for a session that runs on that project, so
+   *   one project can never touch a session on another. Two brands on one
+   *   project (GoApply on the shared plane) are both served by it.
    */
-  async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string; signerBrand?: BrandId }): Promise<void> {
+  async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string; signer?: WebhookSigner }): Promise<void> {
     const where = params.egressId ? { egressId: params.egressId } : params.roomName ? { roomName: params.roomName } : null;
     if (!where) return;
     const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true, recordingConsent: true, userId: true, brand: true, voiceProvider: true } });
     if (!session) return;
     const seam = await resolveSessionSeam(session);
-    if (!webhookSignerMatches(params.signerBrand, seam, session.id, 'egress_ended')) return;
-    // A video session recorded without the camera opt-in is audio-only (H8);
-    // GoApply records audio only, always (CN L-11).
+    if (!webhookSignerMatches(params.signer, seam, session.id, 'egress_ended')) return;
+    // A video session recorded without the camera opt-in is audio-only (H8),
+    // and so is one under GoApply's camera opt-out.
     const recordedMode = session.mode === 'video' && readPracticeRecording(session).video && getInterviewMediaPolicy(seam.brand).recordVideo
       ? 'video'
       : 'voice';
@@ -1318,11 +1337,11 @@ export class InterviewSessionService {
     logger.info('INTERVIEW_ENGINE_SESSION', 'egress ended', { sessionId: session.id, sizeBytes: params.sizeBytes, durationSec: params.durationSec });
   }
 
-  /** @param signerBrand see handleEgressEnded. */
-  async handleRoomFinished(roomName: string, signerBrand?: BrandId): Promise<void> {
+  /** @param signer see handleEgressEnded. */
+  async handleRoomFinished(roomName: string, signer?: WebhookSigner): Promise<void> {
     const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true, liveMetrics: true, userId: true, brand: true, voiceProvider: true } });
     if (!session) return;
-    if (!webhookSignerMatches(signerBrand, await resolveSessionSeam(session), session.id, 'room_finished')) return;
+    if (!webhookSignerMatches(signer, await resolveSessionSeam(session), session.id, 'room_finished')) return;
     if (NON_FINALIZABLE.includes(session.status)) return;
     await this.finalize(session.id).catch((err) => {
       logger.error('INTERVIEW_ENGINE_SESSION', 'finalize from room_finished failed', {
@@ -1339,7 +1358,7 @@ export class InterviewSessionService {
   async finalize(sessionId: string, opts: { workerDrained?: boolean } = {}): Promise<InterviewSession> {
     const session = await prisma.interviewSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new InterviewNotFoundError();
-    return inBrand((await resolveSessionSeam(session)).brand, () => this.finalizeLoaded(session, opts));
+    return inSeam(await resolveSessionSeam(session), () => this.finalizeLoaded(session, opts));
   }
 
   private async finalizeLoaded(session: InterviewSession, opts: { workerDrained?: boolean }): Promise<InterviewSession> {
@@ -1417,7 +1436,7 @@ export class InterviewSessionService {
     // artifacts always match the scored transcript.
     const uploadTranscript = async (t: TranscriptTurn[]): Promise<{ key: string | null; text: string }> => {
       const text = renderTranscriptText(t, session.candidateName ?? 'Candidate');
-      if (!interviewR2Storage.isConfigured() || t.length === 0) return { key: null, text };
+      if (!interviewR2Storage.canStore() || t.length === 0) return { key: null, text };
       try {
         const jsonKey = interviewR2Storage.transcriptJsonKey(sessionId);
         const txtKey = interviewR2Storage.transcriptTextKey(sessionId);
@@ -1491,7 +1510,7 @@ export class InterviewSessionService {
     const durationSec = computeParticipationDurationSec(turns, wallClockSec);
 
     // Persist the report to R2 too (best-effort).
-    if (interviewR2Storage.isConfigured()) {
+    if (interviewR2Storage.canStore()) {
       try {
         await interviewR2Storage.putObject({
           key: interviewR2Storage.reportKey(sessionId),
@@ -1609,7 +1628,7 @@ export class InterviewSessionService {
       );
 
       // Refresh the R2 report sidecar with the rich version (best-effort).
-      if (interviewR2Storage.isConfigured()) {
+      if (interviewR2Storage.canStore()) {
         void interviewR2Storage.putObject({
           key: interviewR2Storage.reportKey(sessionId),
           body: JSON.stringify({ sessionId, richReport }, null, 2),
@@ -1826,9 +1845,10 @@ export class InterviewSessionService {
     let fallbackWorkerModel = storedWorkerModel(stored?.blueprint);
     if (!fallbackWorkerModel) {
       try {
-        // Legacy session rows predate the persisted liveLlm snapshot.
-        fallbackWorkerModel = getWorkerLlmModel();
-        // (Legacy rows are RoboApply rows: GoApply sessions always carry the snapshot.)
+        // Legacy session rows predate the persisted liveLlm snapshot. They are
+        // RoboApply rows (GoApply sessions always carry the snapshot), so the
+        // model is read for RoboApply whichever host the callback arrived on.
+        fallbackWorkerModel = getWorkerLlmModel('roboapply');
       } catch {
         // Usage is still recorded as `unreported`; metering must remain best-effort.
       }
@@ -1851,7 +1871,7 @@ export class InterviewSessionService {
    */
   async endByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<InterviewSession> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    return inBrand((await resolveSessionSeam(session)).brand, () => this.endLoaded(session));
+    return inSeam(await resolveSessionSeam(session), () => this.endLoaded(session));
   }
 
   private async endLoaded(session: InterviewSession): Promise<InterviewSession> {
@@ -1910,7 +1930,7 @@ export class InterviewSessionService {
    */
   async deleteByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<void> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    return inBrand((await resolveSessionSeam(session)).brand, () => this.deleteLoaded(session, params));
+    return inSeam(await resolveSessionSeam(session), () => this.deleteLoaded(session, params));
   }
 
   private async deleteLoaded(
@@ -1959,8 +1979,9 @@ export class InterviewSessionService {
     transcriptUrl: string | null;
   }> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    // Presigned links come from the session's own bucket (CN_S3_* on GoApply).
-    return inBrand((await resolveSessionSeam(session)).brand, () => this.reportLoaded(session));
+    // Presigned links come from the bucket of the session's brand (the shared
+    // bucket, or CN_S3_* when GoApply has its own).
+    return inSeam(await resolveSessionSeam(session), () => this.reportLoaded(session));
   }
 
   private async reportLoaded(session: InterviewSession): Promise<{
@@ -2178,6 +2199,7 @@ export class InterviewSessionService {
         jobId: job?.id ?? null,
       },
       input.locale,
+      input.knownValues,
     );
     const meta: TextPracticeMeta = {
       v: 1,
@@ -2277,13 +2299,16 @@ export class InterviewSessionService {
   }
 
   /**
-   * Each brand's worker carries its own secret (LIVEKIT_AGENT_CALLBACK_SECRET /
-   * CN_LIVEKIT_AGENT_CALLBACK_SECRET), and a callback may only touch a session
-   * of its own brand: the mainland worker's secret can never append to, end or
-   * meter a RoboApply session, nor the reverse. A secret no brand configured is
-   * refused before any database read; otherwise the session's brand (its
-   * stored seam: column, else liveMetrics, else the owner's brand) picks the
-   * one secret that is accepted. Constant-time compares.
+   * Each plane's worker carries its own secret (LIVEKIT_AGENT_CALLBACK_SECRET on
+   * the shared LiveKit project, CN_LIVEKIT_AGENT_CALLBACK_SECRET on GoApply's
+   * own), and a callback may only touch a session that runs on that plane: the
+   * mainland worker's secret can never append to, end or meter a session on
+   * the shared project, nor the reverse. Both brands' sessions on the shared
+   * project are served by its one worker and its one secret. A secret no plane
+   * configured is refused before any database read; otherwise the session's
+   * stored seam (brand: column, else liveMetrics, else the owner's brand; plane:
+   * `liveMetrics.voiceSeam.stack`) picks the one secret that is accepted.
+   * Constant-time compares.
    * An unknown session id passes here (there is nothing of another brand to
    * touch) and each callback handles not-found as before.
    */
@@ -2295,7 +2320,8 @@ export class InterviewSessionService {
     if (!id) return;
     const row = await prisma.interviewSession.findUnique({ where: { id }, select: { liveMetrics: true, userId: true, brand: true, voiceProvider: true } });
     if (!row) return;
-    const expected = getAgentCallbackSecret((await resolveSessionSeam(row)).brand);
+    const seam = await resolveSessionSeam(row);
+    const expected = getAgentCallbackSecret(seam.brand, seam.stack);
     if (!expected || !secretEquals(secret, expected)) throw new InterviewAuthError('Invalid callback secret');
   }
 }
@@ -2321,12 +2347,30 @@ function safeProvider(seam: VoiceSeam): VoiceSessionProvider | null {
   }
 }
 
-/** A webhook signed by one brand's LiveKit project acts only on that brand's
- *  sessions. No signer given (a caller that does not pass it) = accepted. */
-function webhookSignerMatches(signer: BrandId | undefined, seam: VoiceSeam, sessionId: string, event: string): boolean {
-  if (!signer || signer === seam.brand) return true;
-  logger.warn('INTERVIEW_ENGINE_WEBHOOK', 'ignored a webhook signed by another brand project', {
-    sessionId, event, signer, sessionBrand: seam.brand,
+/** The API key of the LiveKit project a session runs on, or null when that
+ *  plane is not configured any more. */
+function sessionPlaneApiKey(seam: VoiceSeam): string | null {
+  try {
+    return isLiveKitConfigured(seam.brand, seam.stack) ? getLiveKitCreds(seam.brand, seam.stack).apiKey : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A webhook acts only on a session that runs on the LiveKit project which
+ * signed it: the signing API key must be the key of the session's plane (plan
+ * §3.5). Several brands may share that project, so the brand alone never
+ * decides. When the session's plane can no longer be read, the brands on the
+ * signing project decide. No signer given (a caller that does not pass it) =
+ * accepted.
+ */
+function webhookSignerMatches(signer: WebhookSigner | undefined, seam: VoiceSeam, sessionId: string, event: string): boolean {
+  if (!signer) return true;
+  const planeKey = sessionPlaneApiKey(seam);
+  if (planeKey ? planeKey === signer.apiKey : signer.brands.includes(seam.brand)) return true;
+  logger.warn('INTERVIEW_ENGINE_WEBHOOK', 'ignored a webhook signed by another LiveKit project', {
+    sessionId, event, signerBrands: signer.brands, sessionBrand: seam.brand, sessionStack: seam.stack,
   });
   return false;
 }
@@ -2536,6 +2580,12 @@ export interface PracticeDeps {
   hasConsent(userId: string, type: PracticeConsentType): Promise<boolean>;
   markChecklistStep(userId: string, step: 'practice'): Promise<unknown>;
   grantPracticeCredit(userId: string, reason: FirstPracticeGrantReason, key: string): Promise<{ status: FirstPracticeGrantStatus }>;
+  /**
+   * The first free practice was already granted (or is being granted) under
+   * this reason key. Read-only. Used so an account that earned it by one
+   * verification is not granted a second one by the other.
+   */
+  hasPracticeGrant(userId: string, reason: FirstPracticeGrantReason): Promise<boolean>;
   currentMarket(): PracticeMarket;
   /**
    * Atomic jsonb merge of `patch` into the practice object of a live session
@@ -2566,6 +2616,8 @@ export interface PracticeDeps {
     userId: string,
     input: TextStartCall,
     locale?: string,
+    /** Never sent to the web-search vendor (the account name). */
+    knownValues?: ReadonlyArray<string | null | undefined>,
   ): Promise<{ sessionId: string; questions: TextPracticeQuestion[]; cnFormat?: TextPracticeCnFormat | null }>;
   textTurn(
     userId: string,
@@ -2680,6 +2732,12 @@ export interface TextPracticeStartInput {
   job: PracticeJob | null;
   creditExempt?: boolean;
   locale?: string;
+  /**
+   * Values the research query of the plan must not contain (the account name,
+   * as the live practice does with the candidate name): a role text that
+   * carries one is not sent to the web-search vendor.
+   */
+  knownValues?: ReadonlyArray<string | null | undefined>;
 }
 
 export interface TextPracticeStartResult {
@@ -2926,6 +2984,16 @@ const defaultPracticeDeps: PracticeDeps = {
     const credits = await import('../../platform/credits/index.js');
     return credits.grantPracticeCredit(userId, reason, key);
   },
+  async hasPracticeGrant(userId, reason) {
+    // The ledger key platform/credits/practice.ts writes for a grant:
+    // '<userId>:practice:<key>', and the first-practice key is its reason.
+    // 'released' = a grant that failed and may be tried again.
+    const row = await prisma.rACreditLedger.findUnique({
+      where: { idempotencyKey: `${userId}:practice:${reason}` },
+      select: { status: true },
+    });
+    return !!row && (row.status === 'committed' || row.status === 'reserved');
+  },
   currentMarket() {
     return getCurrentBrandOrDefault().market === 'cn' ? 'cn' : 'intl';
   },
@@ -2964,9 +3032,14 @@ const defaultPracticeDeps: PracticeDeps = {
     const credits = await import('../../lib/mockCreditService.js');
     return credits.debitForFinishedSession({ ...input, metadata: { practice: 'text' } });
   },
-  async textStart(userId, input, locale) {
-    const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
-    return mapTextErrors(() => raMockService.start(userId, input, locale));
+  async textStart(userId, input, locale, knownValues) {
+    const [{ raMockService }, { withSearchKnownValues }] = await Promise.all([
+      import('../../roboapply/v2/services/RAMockService.js'),
+      import('../../roboapply/v2/services/RAInterviewPromptService.js'),
+    ]);
+    // RAMockService.start does not forward known values to the prompt
+    // generator, so they are set for everything it runs.
+    return mapTextErrors(() => withSearchKnownValues(knownValues, () => raMockService.start(userId, input, locale)));
   },
   async textTurn(userId, input, locale) {
     const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
@@ -3069,7 +3142,7 @@ export async function resolvePracticeRecording(input: {
   source: InterviewSource;
   mode: InterviewMode;
   requested?: { audio?: boolean; video?: boolean } | null;
-  /** False where the brand never records video (GoApply, CN L-11). Default true. */
+  /** False where the media policy records no video (GoApply's operator opt-out). Default true. */
   allowVideo?: boolean;
 }): Promise<PracticeRecordingChoice> {
   const wantAudio = input.requested?.audio === true;
@@ -3089,7 +3162,12 @@ export async function resolvePracticeRecording(input: {
 }
 
 export interface FirstPracticeState {
-  /** How this brand verifies before the first free practice: email (RoboApply) or phone (GoApply). */
+  /**
+   * The verification this state is about. Verified: the one that earned the
+   * free practice. Not verified: the one still open for this account, which
+   * the UI prompts for (email for an account with a real address; phone for a
+   * GoApply account without one).
+   */
   method: 'email' | 'phone';
   verified: boolean;
   /** The grant result when verified (idempotent; null when not verified or unknown). */
@@ -3097,10 +3175,18 @@ export interface FirstPracticeState {
 }
 
 /**
- * Ruling C42: the first full practice is free after verification — email on
- * RoboApply (WP-10 grants it when the link is clicked), phone on GoApply. This
- * tops up the same idempotency key, so it never grants twice; it covers a
- * GoApply phone verification (no grant at bind time yet) and a failed grant.
+ * Ruling C42: the first full practice is free after verification. RoboApply:
+ * a verified email (WP-10 grants it when the link is clicked). GoApply: a
+ * verified email OR a verified phone, whichever the account has (D5; plan
+ * §3.5, G69): an email + password account does not need an SMS provider to
+ * earn it.
+ *
+ * This tops up the existing idempotency keys ('email_verified' /
+ * 'phone_verified'), so the same verification never grants twice, and it
+ * covers a verification whose grant failed or was never attempted. On GoApply
+ * the two keys are ONE entitlement: when the key of the other verification
+ * already holds a grant, nothing more is granted (an email-verified user who
+ * later verifies a phone does not get a second free practice).
  */
 export async function ensureFirstPracticeGrant(userId: string): Promise<FirstPracticeState> {
   let user: PracticeUserRow | null = null;
@@ -3109,24 +3195,32 @@ export async function ensureFirstPracticeGrant(userId: string): Promise<FirstPra
   } catch {
     user = null;
   }
-  const method: 'email' | 'phone' = user?.brand === 'goapply' ? 'phone' : 'email';
-  if (!user) return { method, verified: false, grant: null };
-  const verified =
-    method === 'phone'
-      ? !!(user.phoneE164 && user.phoneVerifiedAt)
-      // emailVerified defaults to true for grandfathered rows; only an explicit
-      // verification (emailVerifiedAt) earns the free practice here.
-      : !!(user.emailVerified && user.emailVerifiedAt && !user.emailIsPlaceholder);
-  if (!verified) return { method, verified, grant: null };
-  const reason: FirstPracticeGrantReason = method === 'phone' ? 'phone_verified' : 'email_verified';
+  const goapply = user?.brand === 'goapply';
+  if (!user) return { method: 'email', verified: false, grant: null };
+  // emailVerified defaults to true for grandfathered rows; only an explicit
+  // verification (emailVerifiedAt) of a real address earns the free practice.
+  const emailOk = !!(user.emailVerified && user.emailVerifiedAt && !user.emailIsPlaceholder);
+  const phoneOk = goapply && !!(user.phoneE164 && user.phoneVerifiedAt);
+  if (!emailOk && !phoneOk) {
+    // What is still open: an account with a real address verifies it; a
+    // GoApply account without one (phone or WeChat sign-up) verifies a phone.
+    return { method: goapply && user.emailIsPlaceholder ? 'phone' : 'email', verified: false, grant: null };
+  }
+  // The reason key of the verification that holds (phone first on GoApply).
+  const reason: FirstPracticeGrantReason = phoneOk ? 'phone_verified' : 'email_verified';
+  const method: 'email' | 'phone' = phoneOk ? 'phone' : 'email';
   try {
+    if (goapply) {
+      const other: FirstPracticeGrantReason = reason === 'phone_verified' ? 'email_verified' : 'phone_verified';
+      if (await practiceDeps.hasPracticeGrant(userId, other)) return { method, verified: true, grant: 'already_granted' };
+    }
     const res = await practiceDeps.grantPracticeCredit(userId, reason, reason);
-    return { method, verified, grant: res.status };
+    return { method, verified: true, grant: res.status };
   } catch (err) {
     logger.warn('INTERVIEW_ENGINE_SESSION', 'first practice grant failed', {
       userId, error: err instanceof Error ? err.message : String(err),
     });
-    return { method, verified, grant: 'failed' };
+    return { method, verified: true, grant: 'failed' };
   }
 }
 

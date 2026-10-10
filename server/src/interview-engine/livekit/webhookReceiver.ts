@@ -10,16 +10,19 @@
 // The route handler (routes/webhookRoutes.ts) MUST pass the RAW request body
 // string (not the parsed JSON) for signature verification to work.
 //
-// Per brand (WP-63a): RoboApply and GoApply run separate LiveKit projects
-// (LIVEKIT_* / CN_LIVEKIT_*) that may post to the same endpoint. The token's
-// `iss` claim is the signing API key, so the receiver picks the brand whose
-// key signed it and verifies with that brand's secret; a token no configured
+// Per plane (D5; GOAPPLY_PARITY_PLAN §3.5): the token's `iss` claim is the
+// signing API key. The receiver finds the configured LiveKit project with that
+// key (the shared one, or GoApply's own when CN_LIVEKIT_* is set), verifies
+// with that project's secret, and returns the key together with every brand
+// that runs on it. Two brands on one project is the default (GoApply without
+// CN_LIVEKIT_URL), so a webhook is matched to a session by the key of the
+// plane the session runs on, not by a single brand. A token no configured
 // project signed is rejected.
 
 import { createHash } from 'node:crypto';
 import { WebhookReceiver, type WebhookEvent } from 'livekit-server-sdk';
-import { getLiveKitCreds, isLiveKitConfigured } from '../config.js';
-import { BRAND_IDS, type BrandId } from '../../platform/brand/registry.js';
+import { configuredLiveKitPlanes, getLiveKitCreds } from '../config.js';
+import type { BrandId } from '../../platform/brand/registry.js';
 
 const receivers = new Map<string, WebhookReceiver>();
 
@@ -56,26 +59,30 @@ export function webhookIssuer(authHeader?: string): string | null {
 
 export interface ReceivedWebhook {
   event: WebhookEvent;
-  /** The brand whose LiveKit project signed the webhook. */
-  brand: BrandId;
+  /** The API key of the LiveKit project that signed the webhook (verified). */
+  apiKey: string;
+  /** Every brand whose new sessions run on that project now (both, on a shared project). */
+  brands: BrandId[];
 }
 
+/** Who signed a webhook, as the session handlers take it. */
+export type WebhookSigner = Pick<ReceivedWebhook, 'apiKey' | 'brands'>;
+
 /**
- * Verify + decode a LiveKit webhook from any configured brand project.
+ * Verify + decode a LiveKit webhook from any configured LiveKit project.
  * Throws if no configured project signed it (or the signature is invalid).
  */
 export async function receiveBrandWebhook(rawBody: string, authHeader?: string): Promise<ReceivedWebhook> {
-  const configured = BRAND_IDS.filter((id) => isLiveKitConfigured(id));
-  if (configured.length === 0) {
+  const planes = configuredLiveKitPlanes();
+  if (planes.length === 0) {
     // Same error the Wave 0 receiver raised when LiveKit was unset.
     getLiveKitCreds('roboapply');
   }
   const iss = webhookIssuer(authHeader);
-  const signer = configured.find((id) => getLiveKitCreds(id).apiKey === iss);
-  if (!signer) throw new Error('webhook was not signed by a configured LiveKit project');
-  const { apiKey, apiSecret } = getLiveKitCreds(signer);
-  const event = await receiverFor(apiKey, apiSecret).receive(rawBody, authHeader);
-  return { event, brand: signer };
+  const plane = planes.find((p) => p.apiKey === iss);
+  if (!plane) throw new Error('webhook was not signed by a configured LiveKit project');
+  const event = await receiverFor(plane.apiKey, plane.apiSecret).receive(rawBody, authHeader);
+  return { event, apiKey: plane.apiKey, brands: [...plane.brands] };
 }
 
 /**

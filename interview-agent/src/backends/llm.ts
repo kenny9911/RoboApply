@@ -23,7 +23,9 @@
 //             LLM_API_KEY is required: a vendor key is only ever sent to that
 //             vendor's own endpoint.
 //   endpoint  must be a mainland host (config.ts) or listed in DOMESTIC_HOSTS;
-//             anything else is refused (R-13: no international fallback).
+//             anything else is refused (the mainland worker has no
+//             international fallback; D5's shared-stack fallback is the
+//             control plane's choice of plane, never this worker's).
 // reasoning_effort is never sent on this backend (the domestic vendors do not
 // accept the OpenAI parameter).
 
@@ -39,7 +41,7 @@ export type LlmBackend = (typeof LLM_BACKENDS)[number];
  * The deployment's LLM backend. Unset means `gateway` on the RoboApply worker
  * and `openai_compatible` on the GoApply worker (isGoApplyWorker); a GoApply
  * worker that names `gateway` is refused, so a GoApply prompt, resume or
- * transcript can never reach LiveKit Inference (R-13), even when the worker
+ * transcript on GoApply's own plane can never reach LiveKit Inference, even when the worker
  * runs outside the deploy/cn image (dev supervisor, compose, a bare host).
  */
 export function resolveLlmBackend(env: Env = process.env): LlmBackend {

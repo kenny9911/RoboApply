@@ -12,6 +12,7 @@
 
 import { getCurrentBrandId, runWithBrand } from '../../lib/requestContext.js';
 import type { BrandId } from '../../platform/brand/registry.js';
+import { runOnVoiceStack, type VoiceStack } from '../config.js';
 
 function currentBrandId(): BrandId | undefined {
   try {
@@ -23,4 +24,15 @@ function currentBrandId(): BrandId | undefined {
 
 export function inBrand<T>(brand: BrandId, fn: () => T): T {
   return currentBrandId() === brand ? fn() : runWithBrand(brand, fn);
+}
+
+/**
+ * Run session work inside the session's brand AND on the media plane it was
+ * created on (`seam.stack`): LiveKit credentials, the agent name, the callback
+ * secret and base URL are then read from that plane for the whole call, so a
+ * CN_LIVEKIT_* value added or removed while the session is live does not move
+ * it. A seam with no stored stack runs on the plane the environment selects.
+ */
+export function inSeam<T>(seam: { brand: BrandId; stack?: VoiceStack }, fn: () => T): T {
+  return inBrand(seam.brand, () => runOnVoiceStack(seam.brand, seam.stack, fn));
 }

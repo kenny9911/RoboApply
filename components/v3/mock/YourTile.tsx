@@ -30,10 +30,10 @@ export interface LocalCameraPreview {
 }
 
 /**
- * The candidate's camera as a LOCAL self-view only (WP-63a, CN L-11): the
+ * The candidate's camera as a LOCAL self-view only (used when the server's
+ * media policy says the camera is not published): the
  * stream comes straight from getUserMedia and is never handed to the room, so
- * no video track is published, recorded or analysed. GoApply's live room uses
- * this in video mode. A getUserMedia that answers after it was superseded
+ * no video track is published, recorded or analysed. A getUserMedia that answers after it was superseded
  * (toggle, unmount) stops its own stream so the camera light never sticks.
  * `offState` is shown while it starts off (e.g. why the device check failed).
  */

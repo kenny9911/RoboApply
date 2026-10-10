@@ -16,10 +16,10 @@
 // gate as every other AI practice route FIRST. A GoApply user without a bound
 // phone (403 phone_binding_required) or without the AI consent (503
 // ai_unavailable) gets the refusal with zero model calls and zero searches.
-// With consent, a GoApply preview is written from the role and the job post
-// alone: the web search is an offshore service and is never called for GoApply
-// (webSearch.ts). RoboApply's search query is checked for personal
-// information before it is sent.
+// With the gate open the preview is the same on both brands (D5): grounded on
+// the job post, else on a web search of the role. The search query is checked
+// for personal information before it is sent, on either brand; a refused or
+// failed search degrades to a role-based preview, never an error.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../../middleware/auth.js';

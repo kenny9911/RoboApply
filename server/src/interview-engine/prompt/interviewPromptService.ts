@@ -264,8 +264,8 @@ export class InterviewPromptService {
 
   // ─── Shared stages ────────────────────────────────────────────────────────
 
-  /** Stage 1: market research (RoboApply only: webSearch.ts never searches for
-   *  GoApply, whose practices are planned from the role and job post alone).
+  /** Stage 1: market research, on both brands (D5): the query is a role text
+   *  and never carries the candidate's name (webSearch.ts checks it).
    *  When an authoritative JD is pasted we skip the
    *  board search (the JD already IS the requirements, and skipping saves a
    *  Tavily call + latency at launch). Otherwise we target real job boards and
@@ -292,7 +292,7 @@ export class InterviewPromptService {
         includeDomains: JOB_BOARD_DOMAINS,
         requestId: input.requestId,
         signal,
-        // GoApply never searches; RoboApply never sends the candidate's name.
+        // Neither brand sends the candidate's name to the search vendor.
         knownValues: [input.candidateName, ...(input.knownValues ?? [])],
       });
       const timedOut = new Promise<null>((resolve) => {

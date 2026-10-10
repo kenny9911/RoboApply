@@ -1,0 +1,7 @@
+{
+  "practice": {
+    "setup": {
+      "insufficientCreditsNoPurchase": "这场面试需要 {required} 个额度，你还有 {balance} 个。"
+    }
+  }
+}

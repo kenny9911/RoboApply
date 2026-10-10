@@ -508,3 +508,76 @@ test('buildSessionModels: a failing report is logged and the original error stil
   );
   assert.match(h.warnings.join('\n'), /worker_config report failed: callback down/);
 });
+
+// ── D5 parity: a GoApply session on the shared media plane ───────────────────
+//
+// With no CN_LIVEKIT_URL the control plane puts a GoApply session on the
+// shared LiveKit project and dispatches the worker registered there
+// (RoboApply-Interview, or RoboApply-Interview-Clone on the clone dev stack).
+// Its room metadata then carries the SHARED models: a LiveKit Inference LLM id,
+// the shared STT and a zh voice from the shared catalog. The metadata names no
+// brand, so the shared worker builds the session exactly as it builds a
+// RoboApply one. No worker code depends on the session's brand.
+
+const GOAPPLY_ON_SHARED_PLANE = {
+  llm: { model: 'openai/gpt-5.4', reasoningEffort: 'low' },
+  stt: { provider: 'deepgram', model: 'deepgram/nova-3', language: 'zh', fallbackModels: ['deepgram/nova-2'] },
+  voice: { provider: 'cartesia', model: 'cartesia/sonic-3', voiceId: 'zh-voice-1', languageCode: 'zh', label: 'Mandarin' },
+  language: 'zh',
+};
+
+for (const agentName of ['RoboApply-Interview', 'RoboApply-Interview-Clone']) {
+  test(`shared worker (${agentName}): a GoApply session carrying shared models runs on the gateway, like a RoboApply one`, async () => {
+    const env = { INTERVIEW_ENGINE_AGENT_NAME: agentName, OPENAI_API_KEY: 'sk' };
+    assert.equal(isGoApplyWorker(env), false);
+    assert.deepEqual(backendConfigProblems(env), []);
+    const h = sessionDeps(env, { speechFactories: speechFactories() });
+    const models = await buildSessionModels(GOAPPLY_ON_SHARED_PLANE, h.deps);
+    assert.equal(models.llm.backend, 'gateway');
+    assert.equal(models.stt.backend, 'gateway');
+    assert.equal(models.tts.backend, 'gateway');
+    // The LLM id and effort reach LiveKit Inference as sent; no domestic client is built.
+    assert.deepEqual(h.deps.llmFactories.calls.gateway, [{ model: 'openai/gpt-5.4', modelOptions: { reasoning_effort: 'low' } }]);
+    assert.equal(h.deps.llmFactories.calls.openaiCompatible.length, 0);
+    // Mandarin is pinned for STT and the zh voice is used as sent; DashScope is never loaded.
+    assert.deepEqual(h.deps.speechFactories.calls.gatewayStt, [{ model: 'deepgram/nova-3', language: 'zh', fallback: ['deepgram/nova-2'] }]);
+    assert.equal(h.deps.speechFactories.calls.loadDashScope, 0);
+    // Nothing was reported to the control plane: the session starts.
+    assert.deepEqual(h.posts, []);
+    // A CJK session lets a one-"word" answer interrupt (unspaced transcript).
+    assert.equal(interruptionFor(models.stt.backend, GOAPPLY_ON_SHARED_PLANE.language).minWords, 1);
+    await models.tts.tts.close();
+  });
+}
+
+test('the same metadata on the domestic-only GoApply worker is refused visibly (worker_config), never run on the gateway', async () => {
+  // GoApply's OWN plane dispatches GoApply-Interview. If the control plane has no
+  // CN speech pair or CN interview model there, the session fails with a reason
+  // the candidate's page can show, instead of a silent room.
+  const h = sessionDeps({ ...GOAPPLY, DASHSCOPE_API_KEY: 'k', DEEPSEEK_API_KEY: 'k' }, { speechFactories: speechFactories() });
+  await assert.rejects(buildSessionModels(GOAPPLY_ON_SHARED_PLANE, h.deps), (err) => isWorkerConfigError(err));
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.posts[0].path, lifecyclePath('sess-1'));
+  assert.equal(h.posts[0].body.event, 'error');
+  assert.equal(h.posts[0].body.reason, 'worker_config');
+  assert.match(h.posts[0].body.message, /only runs DashScope speech/);
+  assert.equal(h.deps.llmFactories.calls.gateway.length, 0);
+  assert.equal(h.deps.speechFactories.calls.gatewayStt.length, 0);
+  assert.equal(h.deps.speechFactories.calls.gatewayTts.length, 0);
+});
+
+test('the shared worker also runs GoApply’s optional DashScope speech when the control plane sends it and the key is there', async () => {
+  // CN speech pair set, no CN_LIVEKIT_URL: DashScope speech with a LiveKit Inference LLM.
+  const meta = {
+    ...GOAPPLY_ON_SHARED_PLANE,
+    stt: { provider: 'dashscope', model: 'dashscope/paraformer-realtime-v2', language: 'zh', fallbackModels: [] },
+    voice: { provider: 'dashscope', model: 'dashscope/cosyvoice-v2', voiceId: '', languageCode: 'zh', label: '普通话 · 女声' },
+  };
+  assert.equal(resolveSttBackend(meta.stt.model, { INTERVIEW_ENGINE_AGENT_NAME: 'RoboApply-Interview' }), 'dashscope_paraformer');
+  assert.equal(resolveTtsBackend(meta.voice.model, { INTERVIEW_ENGINE_AGENT_NAME: 'RoboApply-Interview' }), 'dashscope_cosyvoice');
+  // Without the DashScope key the shared worker says so (worker_config) rather than falling to the gateway.
+  const h = sessionDeps({ INTERVIEW_ENGINE_AGENT_NAME: 'RoboApply-Interview', OPENAI_API_KEY: 'sk' }, { speechFactories: speechFactories() });
+  await assert.rejects(buildSessionModels(meta, h.deps), (err) => isWorkerConfigError(err) && /DASHSCOPE_API_KEY/.test(err.message));
+  assert.equal(h.deps.speechFactories.calls.gatewayStt.length, 0);
+  assert.equal(h.deps.speechFactories.calls.gatewayTts.length, 0);
+});

@@ -14,10 +14,12 @@
 //                                                  mic [+cam in video mode] +
 //                                                  subscribe + data).
 //
-// Per brand (WP-63a): every call uses the LiveKit project of the brand of the
-// current unit of work (`getLiveKitCreds()` reads CN_LIVEKIT_* on GoApply).
-// The VoiceSessionProvider (../providers/) runs each call inside its session's
-// brand, so these signatures stay exactly as Wave 0 shipped them.
+// Per plane (WP-63a; D5): every call uses the LiveKit project of the current
+// unit of work: `getLiveKitCreds()` reads the shared LIVEKIT_* set, or
+// GoApply's own CN_LIVEKIT_* set when it has one. The VoiceSessionProvider
+// (../providers/) runs each call inside its session's brand and on the plane
+// the session was created on, so these signatures stay exactly as Wave 0
+// shipped them.
 
 import {
   AccessToken,
@@ -30,8 +32,8 @@ import { DataPacket_Kind, TrackSource } from '@livekit/protocol';
 import { getLiveKitCreds, getLiveKitHttpUrl, getJoinTokenTtlSeconds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
-// Memoized per LiveKit project (url + key): one brand's client is never
-// reused for the other brand's project.
+// Memoized per LiveKit project (url + key): a client is never reused for
+// another project. Two brands on the shared project share one client.
 const roomClients = new Map<string, RoomServiceClient>();
 const dispatchClients = new Map<string, AgentDispatchClient>();
 

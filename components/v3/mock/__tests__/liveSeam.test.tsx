@@ -1,7 +1,8 @@
-// WP-63a: the live room's per-brand pieces — the camera plan (GoApply keeps
-// the camera a local preview), the local preview hook, the connection check
-// (RTT / jitter → "practice in writing instead") and the device check's
-// local-only note.
+// WP-63a + D5: the live room's media pieces — the camera plan (published on
+// both brands; a local preview only when the server's media policy says so),
+// the local preview hook, the connection check (RTT / jitter → "practice in
+// writing instead") and the device check's local-only note. None of them takes
+// a brand or market: the server's answer decides.
 // Run: npx vitest run components/v3/mock/__tests__/liveSeam.test.tsx
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -39,27 +40,28 @@ function fakeMedia() {
 
 describe('cameraPlan', () => {
   const LOCAL_ON = { publish: false, localPreview: true, previewStartsOn: true };
-  it('GoApply video: local preview only, never published', () => {
-    expect(cameraPlan({ mode: 'video', market: 'cn', deviceOk: true })).toEqual(LOCAL_ON);
-    expect(cameraPlan({ mode: 'video', market: 'cn', cameraPublish: true, deviceOk: true })).toEqual(LOCAL_ON);
+  const PUBLISH = { publish: true, localPreview: false, previewStartsOn: false };
+  it('takes no brand or market: the same input gives the same plan on GoApply and RoboApply', () => {
+    // @ts-expect-error the market term is gone from the input (D5)
+    expect(cameraPlan({ mode: 'video', market: 'cn', deviceOk: true })).toEqual(PUBLISH);
+    // @ts-expect-error the market term is gone from the input (D5)
+    expect(cameraPlan({ mode: 'video', market: 'cn', cameraPublish: true, deviceOk: true })).toEqual(PUBLISH);
   });
-  it('GoApply: a camera that failed the check stays local-only, starting off', () => {
-    expect(cameraPlan({ mode: 'video', market: 'cn', deviceOk: false })).toEqual({ publish: false, localPreview: true, previewStartsOn: false });
-    expect(cameraPlan({ mode: 'video', market: 'intl', cameraPublish: false, deviceOk: false })).toEqual({ publish: false, localPreview: true, previewStartsOn: false });
+  it('a video practice publishes the camera (also against an older API that sends no policy)', () => {
+    expect(cameraPlan({ mode: 'video', cameraPublish: true, deviceOk: true })).toEqual(PUBLISH);
+    expect(cameraPlan({ mode: 'video', deviceOk: true })).toEqual(PUBLISH);
+    expect(cameraPlan({ mode: 'video', deviceOk: false })).toEqual({ publish: false, localPreview: false, previewStartsOn: false });
   });
-  it('follows the server when it says the camera stays local', () => {
-    expect(cameraPlan({ mode: 'video', market: 'intl', cameraPublish: false, deviceOk: true })).toEqual(LOCAL_ON);
+  it('follows the server when it says the camera stays local (the operator opt-out)', () => {
+    expect(cameraPlan({ mode: 'video', cameraPublish: false, deviceOk: true })).toEqual(LOCAL_ON);
   });
-  it('RoboApply video publishes as in Wave 0 (also against an older API)', () => {
-    const PUBLISH = { publish: true, localPreview: false, previewStartsOn: false };
-    expect(cameraPlan({ mode: 'video', market: 'intl', cameraPublish: true, deviceOk: true })).toEqual(PUBLISH);
-    expect(cameraPlan({ mode: 'video', market: 'intl', deviceOk: true })).toEqual(PUBLISH);
-    expect(cameraPlan({ mode: 'video', market: 'intl', deviceOk: false })).toEqual({ publish: false, localPreview: false, previewStartsOn: false });
+  it('local-only: a camera that failed the check stays local-only, starting off', () => {
+    expect(cameraPlan({ mode: 'video', cameraPublish: false, deviceOk: false })).toEqual({ publish: false, localPreview: true, previewStartsOn: false });
   });
   it('voice mode uses no camera at all', () => {
     const NONE = { publish: false, localPreview: false, previewStartsOn: false };
-    expect(cameraPlan({ mode: 'voice', market: 'intl', deviceOk: true })).toEqual(NONE);
-    expect(cameraPlan({ mode: 'voice', market: 'cn', deviceOk: true })).toEqual(NONE);
+    expect(cameraPlan({ mode: 'voice', deviceOk: true })).toEqual(NONE);
+    expect(cameraPlan({ mode: 'voice', cameraPublish: false, deviceOk: true })).toEqual(NONE);
   });
 });
 
@@ -186,21 +188,21 @@ describe('NetworkPrecheck', () => {
   });
 });
 
-describe('DeviceCheck per brand', () => {
-  it('GoApply video: says the camera is shown to the candidate only', () => {
+describe('DeviceCheck and the local-only camera note', () => {
+  it('local-only video: says the camera is shown to the candidate only', () => {
     fakeMedia();
     render(<DeviceCheck mode="video" cameraLocalOnly onJoin={() => undefined} onBack={() => undefined} />);
     expect(screen.getByText('live.cam.localOnly')).toBeTruthy();
   });
 
-  it('GoApply video before the note’s copy lands: shows nothing rather than the key path', () => {
+  it('local-only video before the note’s copy lands: shows nothing rather than the key path', () => {
     intl.has = false;
     fakeMedia();
     const { container } = render(<DeviceCheck mode="video" cameraLocalOnly onJoin={() => undefined} onBack={() => undefined} />);
     expect(container.textContent).not.toMatch(/live\.cam\./);
   });
 
-  it('RoboApply (and voice mode) carry no such note; no connection row without a probe', () => {
+  it('a published camera (and voice mode) carry no such note; no connection row without a probe', () => {
     fakeMedia();
     const { unmount } = render(<DeviceCheck mode="video" onJoin={() => undefined} onBack={() => undefined} />);
     expect(screen.queryByText('live.cam.localOnly')).toBeNull();

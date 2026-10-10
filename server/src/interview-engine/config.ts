@@ -35,25 +35,58 @@
 //     INTERVIEW_ENGINE_JOIN_TOKEN_TTL_SEC (default 3600)
 //     INTERVIEW_ENGINE_SESSION_EXPIRY_MIN (default 120)
 //     INTERVIEW_ENGINE_RECORDING_ENABLED  (default false — opt-in)
-//   Per brand (WP-63a, ARCHITECTURE.md §1.9, TASK_PLAN R-03): every LiveKit,
-//   S3, callback, recording and retention setting is read through
-//   `brandEnv(brand, NAME)` — unprefixed for RoboApply (exactly the Wave 0
-//   names above), `CN_` + NAME for GoApply, with NO fallback from CN_X to X:
-//     CN_LIVEKIT_URL / CN_LIVEKIT_API_KEY / CN_LIVEKIT_API_SECRET,
-//     CN_LIVEKIT_AGENT_CALLBACK_SECRET, CN_INTERVIEW_ENGINE_AGENT_NAME
-//        (default 'GoApply-Interview'), CN_S3_* (audio recordings + transcripts),
-//     CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL, CN_INTERVIEW_ENGINE_RECORDING_ENABLED,
-//     CN_LLM_INTERVIEW_LIVE_MODEL (+ _REASONING_EFFORT), CN_LLM_INTERVIEW_BLUEPRINT_MODEL,
-//     CN_INTERVIEW_ENGINE_STT_MODEL / _STT_FALLBACK_MODELS / _TTS_MODEL /
-//        _TTS_VOICE(_MALE) (domestic speech only: dashscope/…).
+//   Per brand (owner ruling D5; GOAPPLY_PARITY_PLAN.md §3.1, §3.5). RoboApply
+//   reads the unprefixed names above. For GoApply a `CN_` value is an OPTIONAL
+//   OVERRIDE; without it GoApply runs on the shared stack RoboApply uses:
+//     voice plane   CN_LIVEKIT_URL starts GoApply's own plane. Then every
+//        member is read as CN_ (CN_LIVEKIT_API_KEY / _API_SECRET,
+//        CN_LIVEKIT_AGENT_CALLBACK_SECRET, CN_VOICE_PROVIDER,
+//        CN_INTERVIEW_ENGINE_AGENT_NAME (default 'GoApply-Interview'),
+//        CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL) and the shared keys are never
+//        mixed in. Without it: the shared LiveKit project, its worker and its
+//        agent name (INTERVIEW_ENGINE_AGENT_NAME, else 'RoboApply-Interview').
+//        A session stores which of the two it was created on (`VoiceStack`)
+//        and keeps that plane for its life (`runOnVoiceStack`).
+//     speech        CN_INTERVIEW_ENGINE_STT_MODEL + _TTS_MODEL (both; then
+//        _STT_FALLBACK_MODELS / _TTS_VOICE(_MALE)) select DashScope speech.
+//        Without the pair: the shared voice catalog and STT.
+//     storage       CN_S3_BUCKET starts GoApply's own bucket (CN_S3_*);
+//        without it recordings and transcripts use the shared bucket.
+//     models        CN_LLM_INTERVIEW_MODEL / _LIVE_MODEL (+ _REASONING_EFFORT)
+//        / _BLUEPRINT_MODEL, each falling back to the shared name. On the
+//        shared plane the live worker runs LiveKit Inference: a CN model with
+//        no equivalent there still plans and scores the practice, and the
+//        live turns use the shared interview model.
+//     per key       CN_INTERVIEW_ENGINE_RECORDING_ENABLED,
+//        CN_INTERVIEW_RETENTION_DAYS (each falls back to the shared name).
+//   CN_INTERVIEW_CAMERA_PUBLISH=false — GoApply keeps the camera a local
+//     preview and records audio only (default: the same policy as RoboApply).
+//   CN_LLM_DOMESTIC_ONLY / CN_RESIDENCY_STRICT (operator opt-in): GoApply's
+//     live interviewer may only run a domestic model on GoApply's own plane.
+//     Until that plane exists voice is reported unavailable (`voiceRoutingProblem`)
+//     and the setup offers the written practice.
+//   CN_RESIDENCY_STRICT also requires a bucket of GoApply's own for NEW
+//     recordings and transcript files (`getR2WriteCreds`): without CN_S3_BUCKET
+//     nothing new is written to the shared bucket; what earlier sessions stored
+//     there stays readable and is still deleted on time.
 //   VOICE_PROVIDER / CN_VOICE_PROVIDER — livekit_cloud (default) |
 //     livekit_selfhosted | volcano | trtc (the last two reserved, unimplemented).
 //   INTERVIEW_RETENTION_DAYS / CN_INTERVIEW_RETENTION_DAYS — default 90, never
 //     longer than the 90 days both privacy notices publish.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+import * as llmModels from '../lib/llm/llmModels.js';
 import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
-import { brandEnv } from '../platform/brand/brandEnv.js';
-import { getBrand, DEFAULT_BRAND, type BrandId, type ProductBrand } from '../platform/brand/registry.js';
+import {
+  brandEnv,
+  brandEnvGroupProblems,
+  brandOwnEnv,
+  brandStack,
+  cnLlmDomesticOnly,
+  cnResidencyStrict,
+  parseBoolEnv,
+} from '../platform/brand/brandEnv.js';
+import { BRAND_IDS, getBrand, DEFAULT_BRAND, type BrandId, type ProductBrand } from '../platform/brand/registry.js';
 import { getCurrentBrandId } from '../lib/requestContext.js';
 import { isGoApplyDirectProvider } from '../platform/llm/brandPolicy.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../services/llm/reasoningEffort.js';
@@ -88,6 +121,68 @@ export function interviewBrand(brand?: InterviewBrandRef): ProductBrand {
   return getBrand(brand ?? safeCurrentBrandId() ?? DEFAULT_BRAND);
 }
 
+// ─── The media plane a brand runs on (D5; plan §3.5) ──────────────────────
+
+/**
+ * Which LiveKit plane a brand's session runs on: `own` = GoApply's own project
+ * (CN_LIVEKIT_URL is set, every member read as CN_), `shared` = the project
+ * RoboApply uses. RoboApply is always `shared`.
+ */
+export type VoiceStack = 'own' | 'shared';
+
+export function isVoiceStack(value: unknown): value is VoiceStack {
+  return value === 'own' || value === 'shared';
+}
+
+interface VoiceStackPin {
+  brand: BrandId;
+  stack: VoiceStack;
+}
+
+const pinnedVoiceStack = new AsyncLocalStorage<VoiceStackPin>();
+
+/**
+ * Run `fn` with the brand's media plane fixed to `stack`. A session records its
+ * plane at create; every later piece of session work runs through here, so
+ * adding or removing CN_LIVEKIT_* while a session is live never moves it to
+ * another LiveKit project, worker or callback secret. No stack (a row older
+ * than the stored stack, or RoboApply) = the plane the environment selects now.
+ */
+export function runOnVoiceStack<T>(brand: BrandId, stack: VoiceStack | null | undefined, fn: () => T): T {
+  if (!stack) return fn();
+  const current = pinnedVoiceStack.getStore();
+  if (current && current.brand === brand && current.stack === stack) return fn();
+  return pinnedVoiceStack.run({ brand, stack }, fn);
+}
+
+/**
+ * The plane of a brand: the explicit `stack`, else the one pinned for the
+ * current unit of work (`runOnVoiceStack`), else `brandStack(brand, 'voice')`
+ * (the `voice` group rule of platform/brand/brandEnv.ts).
+ */
+export function voiceStack(brand?: InterviewBrandRef, stack?: VoiceStack | null): VoiceStack {
+  const b = interviewBrand(brand);
+  if (b.market !== 'cn') return 'shared';
+  if (stack) return stack;
+  const pin = pinnedVoiceStack.getStore();
+  if (pin && pin.brand === b.id) return pin.stack;
+  return brandStack(b, 'voice');
+}
+
+function sharedEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+/**
+ * One member of the `voice` group, read wholly from the plane in use: CN_NAME
+ * on GoApply's own plane (undefined when unset, never the shared value), NAME
+ * on the shared one. With no pin this is exactly `brandEnv(brand, name)`.
+ */
+function voiceEnv(b: ProductBrand, name: string, stack?: VoiceStack | null): string | undefined {
+  return voiceStack(b, stack) === 'own' ? brandOwnEnv(b, name) : sharedEnv(name);
+}
+
 // ─── LiveKit ────────────────────────────────────────────────────────────
 
 export interface LiveKitCreds {
@@ -98,48 +193,104 @@ export interface LiveKitCreds {
   agentName: string | null;
 }
 
-export function isLiveKitConfigured(brand?: InterviewBrandRef): boolean {
+export function isLiveKitConfigured(brand?: InterviewBrandRef, stack?: VoiceStack | null): boolean {
   const b = interviewBrand(brand);
-  return !!(brandEnv(b, 'LIVEKIT_URL') && brandEnv(b, 'LIVEKIT_API_KEY') && brandEnv(b, 'LIVEKIT_API_SECRET'));
+  return !!(voiceEnv(b, 'LIVEKIT_URL', stack) && voiceEnv(b, 'LIVEKIT_API_KEY', stack) && voiceEnv(b, 'LIVEKIT_API_SECRET', stack));
 }
 
-/** Throws InterviewEngineConfigError if LiveKit is not configured for the brand. */
-export function getLiveKitCreds(brand?: InterviewBrandRef): LiveKitCreds {
-  const b = interviewBrand(brand);
-  const url = brandEnv(b, 'LIVEKIT_URL');
-  const apiKey = brandEnv(b, 'LIVEKIT_API_KEY');
-  const apiSecret = brandEnv(b, 'LIVEKIT_API_SECRET');
-  if (!url || !apiKey || !apiSecret) {
-    const p = b.market === 'cn' ? 'CN_' : '';
-    throw new InterviewEngineConfigError(
-      `LiveKit is not configured. Set ${p}LIVEKIT_URL, ${p}LIVEKIT_API_KEY, ${p}LIVEKIT_API_SECRET.`,
+const LIVEKIT_NAMES = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'] as const;
+
+/** What to set, named for the plane in use (never a mix of the two sets). */
+function liveKitNotConfiguredMessage(b: ProductBrand, stack: VoiceStack): string {
+  if (b.market !== 'cn') return `LiveKit is not configured. Set ${LIVEKIT_NAMES.join(', ')}.`;
+  if (stack === 'own') {
+    const missing = LIVEKIT_NAMES.map((n) => `CN_${n}`).filter((n) => !process.env[n]?.trim());
+    return (
+      `LiveKit is not configured for ${b.name}'s own plane (CN_LIVEKIT_URL selects it). ` +
+      `Set ${missing.join(', ') || LIVEKIT_NAMES.map((n) => `CN_${n}`).join(', ')}; the shared LIVEKIT_* values are never mixed in.`
     );
   }
-  return { url, apiKey, apiSecret, agentName: brandEnv(b, 'LIVEKIT_AGENT_NAME') || null };
+  return (
+    `LiveKit is not configured. ${b.name} uses the shared project: set ${LIVEKIT_NAMES.join(', ')} ` +
+    `(or all of ${LIVEKIT_NAMES.map((n) => `CN_${n}`).join(', ')} for a plane of its own).`
+  );
+}
+
+/** Throws InterviewEngineConfigError if LiveKit is not configured for the brand's plane. */
+export function getLiveKitCreds(brand?: InterviewBrandRef, stack?: VoiceStack | null): LiveKitCreds {
+  const b = interviewBrand(brand);
+  const plane = voiceStack(b, stack);
+  const url = voiceEnv(b, 'LIVEKIT_URL', plane);
+  const apiKey = voiceEnv(b, 'LIVEKIT_API_KEY', plane);
+  const apiSecret = voiceEnv(b, 'LIVEKIT_API_SECRET', plane);
+  if (!url || !apiKey || !apiSecret) throw new InterviewEngineConfigError(liveKitNotConfiguredMessage(b, plane));
+  return { url, apiKey, apiSecret, agentName: voiceEnv(b, 'LIVEKIT_AGENT_NAME', plane) || null };
 }
 
 /** The wss:// URL minus protocol coercion — used to derive the HTTPS host for
  *  the server-side service clients (RoomServiceClient/EgressClient want https). */
-export function getLiveKitHttpUrl(brand?: InterviewBrandRef): string {
-  const { url } = getLiveKitCreds(brand);
+export function getLiveKitHttpUrl(brand?: InterviewBrandRef, stack?: VoiceStack | null): string {
+  const { url } = getLiveKitCreds(brand, stack);
   return url.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
 }
 
-/** The worker's shared callback secret for one brand (each brand runs its own worker). */
-export function getAgentCallbackSecret(brand?: InterviewBrandRef): string | null {
-  return brandEnv(interviewBrand(brand), 'LIVEKIT_AGENT_CALLBACK_SECRET') || null;
+/** The callback secret of the worker on the brand's plane (the shared worker's
+ *  on the shared plane; CN_LIVEKIT_AGENT_CALLBACK_SECRET on GoApply's own). */
+export function getAgentCallbackSecret(brand?: InterviewBrandRef, stack?: VoiceStack | null): string | null {
+  return voiceEnv(interviewBrand(brand), 'LIVEKIT_AGENT_CALLBACK_SECRET', stack) || null;
 }
 
-/** Every configured callback secret, one per brand that has one. Only a
- *  cheap pre-filter: a callback is then checked against the secret of its
- *  session's brand alone (InterviewSessionService.assertCallbackSecret). */
+/** The planes a brand's sessions may be on: the shared one, and its own when it has one. */
+function voiceStacksOf(brand: BrandId): VoiceStack[] {
+  return brandStack(brand, 'voice') === 'own' ? ['shared', 'own'] : ['shared'];
+}
+
+/** Every configured callback secret, each once (two brands on one plane share
+ *  one). Only a cheap pre-filter: a callback is then checked against the
+ *  secret of its session's plane alone (InterviewSessionService.assertCallbackSecret). */
 export function getAgentCallbackSecrets(): string[] {
   const out: string[] = [];
-  for (const id of ['roboapply', 'goapply'] as BrandId[]) {
-    const s = getAgentCallbackSecret(id);
-    if (s && !out.includes(s)) out.push(s);
+  for (const id of BRAND_IDS) {
+    for (const stack of voiceStacksOf(id)) {
+      const s = getAgentCallbackSecret(id, stack);
+      if (s && !out.includes(s)) out.push(s);
+    }
   }
   return out;
+}
+
+/** One LiveKit project a webhook may be signed by, and the brands running on it now. */
+export interface LiveKitPlane {
+  apiKey: string;
+  apiSecret: string;
+  brands: BrandId[];
+}
+
+/**
+ * Every configured LiveKit project, keyed by its API key: the shared one and,
+ * when CN_LIVEKIT_* is set, GoApply's own. `brands` lists the brands whose
+ * NEW sessions use that key (both brands on the shared project by default).
+ * A half-set plane is not configured and is not listed.
+ */
+export function configuredLiveKitPlanes(): LiveKitPlane[] {
+  const planes: LiveKitPlane[] = [];
+  const add = (brand: BrandId, stack: VoiceStack, current: boolean) => {
+    if (!isLiveKitConfigured(brand, stack)) return;
+    const { apiKey, apiSecret } = getLiveKitCreds(brand, stack);
+    let plane = planes.find((p) => p.apiKey === apiKey && p.apiSecret === apiSecret);
+    if (!plane) {
+      plane = { apiKey, apiSecret, brands: [] };
+      planes.push(plane);
+    }
+    if (current && !plane.brands.includes(brand)) plane.brands.push(brand);
+  };
+  for (const id of BRAND_IDS) {
+    const now = brandStack(id, 'voice');
+    // The shared project still signs webhooks for sessions pinned to it before
+    // a brand got a plane of its own, so it stays listed.
+    for (const stack of voiceStacksOf(id)) add(id, stack, stack === now);
+  }
+  return planes;
 }
 
 /**
@@ -150,12 +301,18 @@ export function getAgentCallbackSecrets(): string[] {
  * MUST stay 'RoboApply-Interview' — the deployed contract; a stale
  * 'RoboHire-Interview' fallback once dispatched interviews to nobody on the
  * shared LiveKit project (silent-room outage, 2026-07-03).
+ *
+ * The name is the one the worker ON THE PLANE registers: on the shared project
+ * INTERVIEW_ENGINE_AGENT_NAME, else RoboApply's registry name, for both brands
+ * ('GoApply-Interview' is registered by nobody there and would leave a silent
+ * room); on GoApply's own plane CN_INTERVIEW_ENGINE_AGENT_NAME, else GoApply's
+ * registry name.
  */
-export function getInterviewAgentName(brand?: InterviewBrandRef): string {
+export function getInterviewAgentName(brand?: InterviewBrandRef, stack?: VoiceStack | null): string {
   const b = interviewBrand(brand);
-  // The registry carries the per-brand contract names ('RoboApply-Interview',
-  // 'GoApply-Interview'), so the two workers never take each other's rooms.
-  return brandEnv(b, 'INTERVIEW_ENGINE_AGENT_NAME') || b.interview.agentName;
+  const plane = voiceStack(b, stack);
+  const registryName = plane === 'own' ? b.interview.agentName : getBrand(DEFAULT_BRAND).interview.agentName;
+  return voiceEnv(b, 'INTERVIEW_ENGINE_AGENT_NAME', plane) || registryName;
 }
 
 // ─── Voice provider (VoiceSessionProvider seam, CN-E-06) ─────────────────
@@ -163,9 +320,9 @@ export function getInterviewAgentName(brand?: InterviewBrandRef): string {
 export const VOICE_PROVIDER_IDS = ['livekit_cloud', 'livekit_selfhosted', 'volcano', 'trtc'] as const;
 export type VoiceProviderId = (typeof VOICE_PROVIDER_IDS)[number];
 
-/** VOICE_PROVIDER / CN_VOICE_PROVIDER; unset or unknown → livekit_cloud. */
-export function getVoiceProviderId(brand?: InterviewBrandRef): VoiceProviderId {
-  const raw = (brandEnv(interviewBrand(brand), 'VOICE_PROVIDER') || '').toLowerCase();
+/** VOICE_PROVIDER (CN_VOICE_PROVIDER on GoApply's own plane only); unset or unknown → livekit_cloud. */
+export function getVoiceProviderId(brand?: InterviewBrandRef, stack?: VoiceStack | null): VoiceProviderId {
+  const raw = (voiceEnv(interviewBrand(brand), 'VOICE_PROVIDER', stack) || '').toLowerCase();
   return (VOICE_PROVIDER_IDS as readonly string[]).includes(raw) ? (raw as VoiceProviderId) : 'livekit_cloud';
 }
 
@@ -181,56 +338,94 @@ export interface R2Creds {
 }
 
 /**
- * S3/R2 creds for interview artifacts. Per brand (no cross-brand fallback):
- * RoboApply reads S3_* (and the AWS_* aliases), GoApply CN_S3_* (and
- * CN_AWS_*), so a missing CN bucket disables GoApply storage instead of
- * sending mainland recordings to the international bucket.
+ * S3/R2 creds for interview artifacts, read as one set (the `storage` group of
+ * brandEnv): RoboApply reads S3_* (and the AWS_* aliases). GoApply reads
+ * CN_S3_* (and CN_AWS_*) when CN_S3_BUCKET is set, with no shared key mixed
+ * in; without it GoApply's recordings and transcripts go to the shared bucket.
+ * Objects are keyed by session id (`interviews/<sessionId>/…`), so the two
+ * brands never collide there.
  */
 export function getR2Creds(brand?: InterviewBrandRef): R2Creds | null {
   const b = interviewBrand(brand);
-  const bucket = brandEnv(b, 'S3_BUCKET') || '';
-  const accessKeyId = brandEnv(b, 'S3_ACCESS_KEY_ID') || brandEnv(b, 'AWS_ACCESS_KEY_ID') || '';
-  const secretAccessKey = brandEnv(b, 'S3_SECRET_ACCESS_KEY') || brandEnv(b, 'AWS_SECRET_ACCESS_KEY') || '';
+  const creds = r2CredsFrom((name) => brandEnv(b, name));
+  if (creds && b.market === 'cn') noteInterviewStore(b);
+  return creds;
+}
+
+/** One complete store from one set of names, or null (never a mix of two sets). */
+function r2CredsFrom(read: (name: string) => string | undefined): R2Creds | null {
+  const bucket = read('S3_BUCKET') || '';
+  const accessKeyId = read('S3_ACCESS_KEY_ID') || read('AWS_ACCESS_KEY_ID') || '';
+  const secretAccessKey = read('S3_SECRET_ACCESS_KEY') || read('AWS_SECRET_ACCESS_KEY') || '';
   if (!bucket || !accessKeyId || !secretAccessKey) return null;
-  const endpoint = brandEnv(b, 'S3_ENDPOINT') || undefined;
-  if (b.market === 'cn' && sharesIntlStore(bucket, endpoint)) return null;
   return {
     bucket,
-    region: brandEnv(b, 'S3_REGION') || brandEnv(b, 'AWS_REGION') || 'auto',
-    endpoint,
+    region: read('S3_REGION') || read('AWS_REGION') || 'auto',
+    endpoint: read('S3_ENDPOINT') || undefined,
     accessKeyId,
     secretAccessKey,
-    forcePathStyle: ['true', '1', 'yes'].includes((brandEnv(b, 'S3_FORCE_PATH_STYLE') || '').toLowerCase()),
+    forcePathStyle: ['true', '1', 'yes'].includes((read('S3_FORCE_PATH_STYLE') || '').toLowerCase()),
   };
 }
 
-let warnedSharedStore = false;
-
-function storeEndpoint(value: string | undefined): string {
-  return (value || '').trim().toLowerCase().replace(/\/+$/, '');
+/**
+ * GoApply may not write NEW interview artifacts: the operator chose the strict
+ * mainland posture (CN_RESIDENCY_STRICT: mainland storage required, plan §4)
+ * and GoApply has no bucket of its own. Never true for RoboApply.
+ */
+export function interviewStorageWriteBlocked(brand?: InterviewBrandRef): boolean {
+  const b = interviewBrand(brand);
+  return b.market === 'cn' && cnResidencyStrict() && brandStack(b, 'storage') !== 'own';
 }
 
 /**
- * GoApply storage counts as NOT configured when CN_S3_BUCKET is the SAME
- * bucket as RoboApply's: the same name on the same endpoint (or both with no
- * endpoint). That would put mainland recordings and transcripts in the
- * international bucket, which CN L-11 forbids, so GoApply recording and
- * transcript upload stay off (and retention leaves the pointers for a later
- * run) until GoApply has its own bucket.
- *
- * The same bucket NAME on a different endpoint is fine: the storage client
- * (storage/r2Storage.ts) is cached per endpoint + bucket + access key id, so
- * each brand talks to its own store.
+ * The store NEW recordings and transcript files of the brand are written to:
+ * `getR2Creds`, except under CN_RESIDENCY_STRICT, where GoApply without
+ * CN_S3_BUCKET writes nothing (null: recording is not offered and the
+ * transcript stays in the database only). Reads and deletes keep using
+ * `getR2Creds`, so what earlier sessions stored in the shared bucket is still
+ * played back and still deleted on time.
  */
-function sharesIntlStore(cnBucket: string, cnEndpoint: string | undefined): boolean {
-  const intlBucket = (process.env.S3_BUCKET || '').trim();
-  if (!intlBucket || intlBucket !== cnBucket) return false;
-  if (storeEndpoint(process.env.S3_ENDPOINT) !== storeEndpoint(cnEndpoint)) return false;
-  if (!warnedSharedStore) {
-    warnedSharedStore = true;
-    console.warn('[interview-engine] CN_S3_BUCKET is the same bucket as S3_BUCKET (same name, same endpoint); GoApply interview storage stays off until it has its own bucket.');
-  }
-  return true;
+export function getR2WriteCreds(brand?: InterviewBrandRef): R2Creds | null {
+  const b = interviewBrand(brand);
+  return interviewStorageWriteBlocked(b) ? null : getR2Creds(b);
+}
+
+/**
+ * Stores that may still hold artifacts of this brand's EARLIER sessions. When
+ * GoApply has its own bucket (CN_S3_BUCKET), sessions created before it was
+ * set wrote to the shared bucket: deletes (retention, account purge, a user's
+ * own delete) must reach those objects too, or the published 90-day retention
+ * would silently miss them. Keys carry the session id, so a delete there can
+ * only ever hit that session's own objects. Empty for RoboApply and for
+ * GoApply on the shared bucket.
+ */
+export function getEarlierR2Creds(brand?: InterviewBrandRef): R2Creds[] {
+  const b = interviewBrand(brand);
+  if (b.market !== 'cn' || brandStack(b, 'storage') !== 'own') return [];
+  const shared = r2CredsFrom(sharedEnv);
+  return shared ? [shared] : [];
+}
+
+const notedInterviewStores = new Set<string>();
+
+/** Say once per process (and again if it changes) which store a GoApply
+ *  session's recordings and transcripts use. Variable names only. */
+function noteInterviewStore(b: ProductBrand): void {
+  const stack = brandStack(b, 'storage');
+  const key = `${b.id}:${stack}`;
+  if (notedInterviewStores.has(key)) return;
+  notedInterviewStores.add(key);
+  console.info(
+    stack === 'own'
+      ? `[interview-engine] ${b.name} interview recordings and transcripts use its own bucket (CN_S3_BUCKET).`
+      : `[interview-engine] ${b.name} interview recordings and transcripts use the shared bucket (S3_BUCKET); set CN_S3_BUCKET and its keys to give ${b.name} its own.`,
+  );
+}
+
+/** Test seam: forget which stores were announced. */
+export function __resetInterviewStoreNoteForTest(): void {
+  notedInterviewStores.clear();
 }
 
 export function isR2Configured(brand?: InterviewBrandRef): boolean {
@@ -340,8 +535,22 @@ export interface InterviewLlmRouting {
   reasoningEffort?: InterviewReasoningEffort;
 }
 
-function requireInterviewBackendModel(): string {
-  const model = getTaskModel('interview');
+/**
+ * The interview task model of a brand. RoboApply (and no brand context) keeps
+ * the Wave 0 read; GoApply reads CN_LLM_INTERVIEW_MODEL, else the shared
+ * LLM_INTERVIEW_MODEL (the per-key fallback of the model resolver).
+ */
+function interviewTaskModel(b: ProductBrand): string | undefined {
+  return b.market === 'cn' ? getTaskModel('interview', b) : getTaskModel('interview');
+}
+
+/** A per-key interview setting: CN_NAME, else NAME on GoApply; NAME on RoboApply. */
+function interviewEnv(b: ProductBrand, name: string): string | undefined {
+  return b.market === 'cn' ? brandEnv(b, name) : sharedEnv(name);
+}
+
+function requireInterviewBackendModel(b: ProductBrand): string {
+  const model = interviewTaskModel(b);
   if (!model) {
     throw new InterviewEngineConfigError(
       'Interview LLM is not configured. Set LLM_INTERVIEW_MODEL.',
@@ -361,25 +570,80 @@ function mapInterviewModelToWorker(backendModel: string, envName = 'LLM_INTERVIE
   return workerModel;
 }
 
-/** The selector the LIVE worker turns run on, before LiveKit mapping:
- *  LLM_INTERVIEW_LIVE_MODEL when set, else the interview task model (backward
- *  compatible). The ALIGNED_INTERVIEW_MODELS allowlist applies to THIS value. */
-function liveModelSelector(): { selector: string; envName: string } {
-  const live = process.env.LLM_INTERVIEW_LIVE_MODEL?.trim();
-  if (live) return { selector: live, envName: 'LLM_INTERVIEW_LIVE_MODEL' };
-  const model = getTaskModel('interview');
-  if (!model) {
-    throw new InterviewEngineConfigError(
-      'Interview LLM is not configured. Set LLM_INTERVIEW_MODEL (or LLM_INTERVIEW_LIVE_MODEL for the live worker).',
-    );
-  }
-  return { selector: model, envName: 'LLM_INTERVIEW_MODEL' };
+interface LiveSelector {
+  selector: string;
+  envName: string;
+  /** A value GoApply set for itself (a CN_ override), not the shared one. */
+  own: boolean;
 }
 
-/** LiveKit Inference model id for live interview turns. */
-export function getWorkerLlmModel(): string {
-  const { selector, envName } = liveModelSelector();
-  return mapInterviewModelToWorker(selector, envName);
+/**
+ * The selectors the LIVE worker turns may run on, in order, before LiveKit
+ * mapping: LLM_INTERVIEW_LIVE_MODEL when set, else the interview task model
+ * (backward compatible). GoApply reads each per key, its own value first:
+ * CN live, shared live, its own task model, the shared task model. The shared
+ * ones are read exactly as RoboApply reads them.
+ */
+function liveModelCandidates(b: ProductBrand): LiveSelector[] {
+  const out: LiveSelector[] = [];
+  const add = (selector: string | undefined, envName: string, own: boolean) => {
+    if (selector) out.push({ selector, envName, own });
+  };
+  if (b.market !== 'cn') {
+    add(sharedEnv('LLM_INTERVIEW_LIVE_MODEL'), 'LLM_INTERVIEW_LIVE_MODEL', false);
+    add(interviewTaskModel(b), 'LLM_INTERVIEW_MODEL', false);
+    return out;
+  }
+  add(brandOwnEnv(b, 'LLM_INTERVIEW_LIVE_MODEL'), 'CN_LLM_INTERVIEW_LIVE_MODEL', true);
+  add(sharedEnv('LLM_INTERVIEW_LIVE_MODEL'), 'LLM_INTERVIEW_LIVE_MODEL', false);
+  const sharedTask = getTaskModel('interview', DEFAULT_BRAND);
+  const ownTask = interviewTaskModel(b);
+  if (ownTask && ownTask !== sharedTask) {
+    // Its own value: CN_LLM_INTERVIEW_MODEL, or one set for it in the admin model settings.
+    add(ownTask, brandOwnEnv(b, 'LLM_INTERVIEW_MODEL') ? 'CN_LLM_INTERVIEW_MODEL' : `${b.name} interview model`, true);
+  }
+  add(sharedTask, 'LLM_INTERVIEW_MODEL', false);
+  return out;
+}
+
+interface LiveWorkerModel {
+  /** LiveKit Inference model id. */
+  workerModel: string;
+  /** GoApply's own selectors that have no LiveKit Inference equivalent and were passed over. */
+  passedOver: LiveSelector[];
+}
+
+/**
+ * The LiveKit Inference model of the live turns (the worker of the shared
+ * plane, and any gateway worker): the first candidate, mapped through the
+ * allowlist. A shared selector that does not map is a configuration error,
+ * for both brands alike. One of GoApply's OWN selectors that does not map
+ * (qwen, kimi, glm, doubao, minimax: an ordinary choice for its plans and
+ * reports) is passed over instead, so a China override never turns voice off
+ * (D5): the live turns then run on the shared interview model, and
+ * `voiceConfigProblems` says so. Only when no shared model is left to run on
+ * is that selector the error.
+ */
+function resolveLiveWorkerModel(b: ProductBrand): LiveWorkerModel {
+  const passedOver: LiveSelector[] = [];
+  for (const candidate of liveModelCandidates(b)) {
+    if (candidate.own && !LIVEKIT_MODEL_BY_BACKEND_SELECTOR.has(candidate.selector)) {
+      passedOver.push(candidate);
+      continue;
+    }
+    return { workerModel: mapInterviewModelToWorker(candidate.selector, candidate.envName), passedOver };
+  }
+  const first = passedOver[0];
+  if (first) mapInterviewModelToWorker(first.selector, first.envName); // throws, naming the variable
+  throw new InterviewEngineConfigError(
+    'Interview LLM is not configured. Set LLM_INTERVIEW_MODEL (or LLM_INTERVIEW_LIVE_MODEL for the live worker).',
+  );
+}
+
+/** LiveKit Inference model id for live interview turns (the worker of the
+ *  shared plane, and any gateway worker). */
+export function getWorkerLlmModel(brand?: InterviewBrandRef): string {
+  return resolveLiveWorkerModel(interviewBrand(brand)).workerModel;
 }
 
 /** True for LiveKit worker model ids that accept OpenAI's `reasoning_effort`
@@ -403,8 +667,13 @@ export function liveModelAcceptsReasoningEffort(workerModel: string | undefined)
  *  effort costs ~5 s of dead air per turn), so the live worker never inherits
  *  the blueprint/evaluation dial. `workerModel` defaults to the resolved live
  *  model; an unresolvable model yields no default effort. */
-export function getWorkerLlmReasoningEffort(workerModel?: string): InterviewReasoningEffort | undefined {
-  const effort = parseReasoningEffort(process.env.LLM_INTERVIEW_LIVE_REASONING_EFFORT);
+export function getWorkerLlmReasoningEffort(workerModel?: string, brand?: InterviewBrandRef): InterviewReasoningEffort | undefined {
+  const b = interviewBrand(brand);
+  return liveReasoningEffort(b, workerModel, interviewEnv(b, 'LLM_INTERVIEW_LIVE_REASONING_EFFORT'));
+}
+
+function liveReasoningEffort(b: ProductBrand, workerModel: string | undefined, raw: string | undefined): InterviewReasoningEffort | undefined {
+  const effort = parseReasoningEffort(raw);
   if (effort === 'max') {
     throw new InterviewEngineConfigError(
       'LLM_INTERVIEW_LIVE_REASONING_EFFORT=max is not supported by LiveKit Inference; use minimal, low, medium, or high.',
@@ -414,7 +683,7 @@ export function getWorkerLlmReasoningEffort(workerModel?: string): InterviewReas
   let model = workerModel;
   if (model === undefined) {
     try {
-      model = getWorkerLlmModel();
+      model = getWorkerLlmModel(b);
     } catch {
       model = undefined;
     }
@@ -422,54 +691,148 @@ export function getWorkerLlmReasoningEffort(workerModel?: string): InterviewReas
   return liveModelAcceptsReasoningEffort(model) ? 'low' : undefined;
 }
 
+/** GoApply set an interview model of its own (CN_LLM_INTERVIEW_MODEL or CN_LLM_INTERVIEW_LIVE_MODEL). */
+function cnInterviewModelSet(b: ProductBrand): boolean {
+  return !!(brandOwnEnv(b, 'LLM_INTERVIEW_MODEL') || brandOwnEnv(b, 'LLM_INTERVIEW_LIVE_MODEL'));
+}
+
 /**
- * GoApply (R-13): the live worker runs an OpenAI-compatible domestic model
- * (WP-63b `LLM_BACKEND=openai_compatible`), never LiveKit Inference's
- * international catalog. CN_LLM_INTERVIEW_LIVE_MODEL (else the GoApply
- * interview task model) is passed to the worker as-is, and must name a
- * GoApply direct provider (deepseek, qwen, kimi, glm, doubao, minimax).
+ * GoApply on its OWN plane with an interview model of its own (an optional
+ * override, D5): the GoApply worker runs an OpenAI-compatible domestic model
+ * (interview-agent `LLM_BACKEND=openai_compatible`), never LiveKit Inference.
+ * CN_LLM_INTERVIEW_LIVE_MODEL (else GoApply's interview task model) is passed
+ * to the worker as-is, and must name a GoApply direct provider (deepseek,
+ * qwen, kimi, glm, doubao, minimax).
  */
 function cnInterviewLlmRouting(brand: ProductBrand): InterviewLlmRouting {
   const backendModel = getTaskModel('interview', brand);
   if (!backendModel) {
     throw new InterviewEngineConfigError('GoApply interview LLM is not configured. Set CN_LLM_INTERVIEW_MODEL.');
   }
-  const workerModel = brandEnv(brand, 'LLM_INTERVIEW_LIVE_MODEL') || backendModel;
+  const workerModel = brandOwnEnv(brand, 'LLM_INTERVIEW_LIVE_MODEL') || backendModel;
   const provider = workerModel.split('/')[0]!.trim().toLowerCase();
   if (!isGoApplyDirectProvider(provider)) {
+    const name = brandOwnEnv(brand, 'LLM_INTERVIEW_LIVE_MODEL')
+      ? 'CN_LLM_INTERVIEW_LIVE_MODEL'
+      : brandOwnEnv(brand, 'LLM_INTERVIEW_MODEL') ? 'CN_LLM_INTERVIEW_MODEL' : 'LLM_INTERVIEW_MODEL';
     throw new InterviewEngineConfigError(
-      `CN_LLM_INTERVIEW_LIVE_MODEL="${workerModel}" is not a domestic model. Use deepseek/, qwen/, kimi/, glm/, doubao/ or minimax/.`,
+      `${name}="${workerModel}" is not a domestic model. Set CN_LLM_INTERVIEW_LIVE_MODEL (or CN_LLM_INTERVIEW_MODEL) to deepseek/, qwen/, kimi/, glm/, doubao/ or minimax/.`,
     );
   }
-  const effort = parseReasoningEffort(brandEnv(brand, 'LLM_INTERVIEW_LIVE_REASONING_EFFORT'));
+  const effort = parseReasoningEffort(brandOwnEnv(brand, 'LLM_INTERVIEW_LIVE_REASONING_EFFORT'));
   return { backendModel, workerModel, ...(effort && effort !== 'max' ? { reasoningEffort: effort } : {}) };
+}
+
+/**
+ * Which routing a GoApply session gets (D5; plan §3.5, G3, G54). The live
+ * worker model is written in the namespace of the worker that will run it, and
+ * the worker is decided by the plane:
+ *   shared plane   the shared (gateway) worker → RoboApply's resolution: the
+ *                  live selector (CN_ override, else the shared one) mapped
+ *                  through the same LiveKit Inference allowlist. A raw
+ *                  domestic id is never sent there: a CN model with no
+ *                  equivalent stays the backend model (plan and report) and
+ *                  the live turns run on the shared interview model
+ *                  (`resolveLiveWorkerModel`), so a China override never
+ *                  turns voice off.
+ *   own plane      with CN_LLM_INTERVIEW_MODEL / _LIVE_MODEL set: the domestic
+ *                  model, as-is, for GoApply's own worker. Without one:
+ *                  RoboApply's resolution (a gateway worker on GoApply's own
+ *                  LiveKit project).
+ * Under the opt-in domestic-only wall (CN_LLM_DOMESTIC_ONLY, or
+ * CN_RESIDENCY_STRICT) the interviewer must be a domestic model on GoApply's
+ * own plane: anything else is refused, never routed offshore. The practice
+ * gate reads that refusal (`voiceRoutingProblem`), so voice is then reported
+ * unavailable and the written practice is offered; a direct create is a 503.
+ */
+function usesCnInterviewRouting(b: ProductBrand): boolean {
+  const own = voiceStack(b) === 'own';
+  if (cnLlmDomesticOnly()) {
+    if (!own) {
+      throw new InterviewEngineConfigError(
+        'CN_LLM_DOMESTIC_ONLY is on: GoApply voice practice needs its own media plane and worker (CN_LIVEKIT_URL, CN_LIVEKIT_API_KEY, CN_LIVEKIT_API_SECRET) with a domestic CN_LLM_INTERVIEW_MODEL. The shared LiveKit project runs LiveKit Inference models.',
+      );
+    }
+    return true;
+  }
+  return own && cnInterviewModelSet(b);
 }
 
 /** Resolve the backend + worker pair once so a live-session claim is atomic
  *  with respect to hot configuration changes. The backend model (blueprint +
  *  evaluation) stays required: a session without it can never be prepared.
- *  RoboApply (and no brand context) keeps the Wave 0 resolution unchanged. */
+ *  RoboApply (and no brand context) keeps the Wave 0 resolution unchanged;
+ *  GoApply follows it too unless it runs its own worker (see above). */
 export function getInterviewLlmRouting(brand?: InterviewBrandRef): InterviewLlmRouting {
   const b = interviewBrand(brand);
-  if (b.market === 'cn') return cnInterviewLlmRouting(b);
-  const backendModel = requireInterviewBackendModel();
-  const workerModel = getWorkerLlmModel();
+  if (b.market === 'cn' && usesCnInterviewRouting(b)) return cnInterviewLlmRouting(b);
+  const backendModel = requireInterviewBackendModel(b);
+  const { workerModel, passedOver } = resolveLiveWorkerModel(b);
+  // An effort GoApply set for a live model of its own belongs to that model:
+  // when the model was passed over, the shared model runs with the shared effort.
+  const ownLivePassedOver = passedOver.some((c) => c.envName === 'CN_LLM_INTERVIEW_LIVE_MODEL');
+  const effort = ownLivePassedOver ? sharedEnv('LLM_INTERVIEW_LIVE_REASONING_EFFORT') : interviewEnv(b, 'LLM_INTERVIEW_LIVE_REASONING_EFFORT');
   return {
     backendModel,
     workerModel,
-    reasoningEffort: getWorkerLlmReasoningEffort(workerModel),
+    reasoningEffort: liveReasoningEffort(b, workerModel, effort),
   };
+}
+
+/**
+ * Why a NEW voice session of this brand cannot start, or null: the checks
+ * `createSession` makes before it persists anything (the interview model
+ * routing, the domestic-only wall, GoApply's own speech set), as one sentence.
+ * The practice gate reads it, so the setup offers the written practice instead
+ * of a voice option whose every start would answer 503.
+ */
+export function voiceRoutingProblem(brand?: InterviewBrandRef): string | null {
+  const b = interviewBrand(brand);
+  try {
+    getInterviewLlmRouting(b);
+    tryGetCnSpeechConfig(b);
+    return null;
+  } catch (err) {
+    if (err instanceof InterviewEngineConfigError) return err.message;
+    throw err;
+  }
 }
 
 // ─── Session-preparation (blueprint) model ─────────────────────────────────
 
 /** Model for the blueprint/prompt pipeline: LLM_INTERVIEW_BLUEPRINT_MODEL when
- *  set (e.g. a faster direct-provider model), else the interview task model. */
+ *  set (e.g. a faster direct-provider model), else the interview task model.
+ *  GoApply: CN_LLM_INTERVIEW_BLUEPRINT_MODEL, else the shared override, else
+ *  its interview task model. */
 export function getBlueprintModel(brand?: InterviewBrandRef): string | undefined {
   const b = interviewBrand(brand);
-  // GoApply never inherits the international blueprint override (R-13).
-  if (b.market === 'cn') return brandEnv(b, 'LLM_INTERVIEW_BLUEPRINT_MODEL') || getTaskModel('interview', b);
-  return process.env.LLM_INTERVIEW_BLUEPRINT_MODEL?.trim() || getTaskModel('interview');
+  if (b.market !== 'cn') return sharedEnv('LLM_INTERVIEW_BLUEPRINT_MODEL') || interviewTaskModel(b);
+  return blueprintSelector(b) || interviewTaskModel(b);
+}
+
+type EnvModelResolver = (envName: string, brand?: BrandId | ProductBrand) => string | undefined;
+
+/**
+ * The shared model resolver for a selector kept outside the stack table
+ * (lib/llm/llmModels.ts `getEnvModelSetting`, plan §3.3 and the §5 contract:
+ * the interview blueprint goes through the shared resolver, so a shared
+ * selector is qualified to a full route when GoApply has a provider of its
+ * own). It is delivered by the LLM bundle of the same wave, so it is looked up
+ * at call time: where it is not there, the plain per-key read (CN_ value, else
+ * the shared one) is the same rule without the qualification.
+ */
+function envModelResolver(): EnvModelResolver | undefined {
+  try {
+    const fn: unknown = Reflect.get(llmModels, 'getEnvModelSetting');
+    return typeof fn === 'function' ? (fn as EnvModelResolver) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function blueprintSelector(b: ProductBrand): string | undefined {
+  const resolve = envModelResolver();
+  return resolve ? resolve('LLM_INTERVIEW_BLUEPRINT_MODEL', b) : brandEnv(b, 'LLM_INTERVIEW_BLUEPRINT_MODEL');
 }
 
 /** Effort for the blueprint call: LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT when
@@ -519,13 +882,13 @@ export function getWorkerSttFallbackModels(): string[] {
   return raw.split(',').map((m) => m.trim()).filter(Boolean);
 }
 
-// ─── GoApply speech (STT / TTS) — domestic only (R-13, CN L-11) ────────────
+// ─── GoApply speech (STT / TTS): DashScope as an optional override ─────────
 
 /**
- * Speech providers a GoApply worker may stream the candidate's voice to.
- * DashScope (Paraformer STT, CosyVoice TTS) is what the GoApply worker
- * implements (WP-63b). LiveKit Inference's catalog (deepgram/, cartesia/,
- * elevenlabs/, …) is international and never allowed.
+ * Speech providers of GoApply's OWN speech set (CN_INTERVIEW_ENGINE_STT_MODEL +
+ * _TTS_MODEL): DashScope (Paraformer STT, CosyVoice TTS), which the worker
+ * implements (interview-agent plugins/dashscope). Without that pair GoApply
+ * uses the shared voice catalog and STT, like RoboApply.
  */
 export const GOAPPLY_SPEECH_PROVIDERS = ['dashscope'] as const;
 
@@ -547,30 +910,29 @@ export interface CnSpeechConfig {
 }
 
 /**
- * GoApply speech models (no fallback to the international names):
+ * GoApply's own speech set, or null when it has none (then the shared catalog
+ * applies). Own = BOTH models are set (the `speech` group of brandEnv):
  *   CN_INTERVIEW_ENGINE_STT_MODEL            e.g. dashscope/paraformer-realtime-v2
- *   CN_INTERVIEW_ENGINE_STT_FALLBACK_MODELS  optional, comma-separated, domestic too
  *   CN_INTERVIEW_ENGINE_TTS_MODEL            e.g. dashscope/cosyvoice-v2
+ *   CN_INTERVIEW_ENGINE_STT_FALLBACK_MODELS  optional, comma-separated, domestic too
  *   CN_INTERVIEW_ENGINE_TTS_VOICE(_MALE)     optional CosyVoice voice ids
- * Missing or non-domestic → InterviewEngineConfigError (503) before anything
- * is persisted or connected, so the worker metadata never names an
- * international STT/TTS for a GoApply session.
+ * One model of the pair without the other is NOT an own set: GoApply stays on
+ * the shared speech set and `voiceConfigProblems` names the missing variable.
+ * With the pair set, every model must be domestic: a foreign id is an
+ * InterviewEngineConfigError (503) before anything is persisted or connected,
+ * so the worker never gets a half-domestic speech set.
  */
-export function getCnSpeechConfig(brand?: InterviewBrandRef): CnSpeechConfig {
+export function tryGetCnSpeechConfig(brand?: InterviewBrandRef): CnSpeechConfig | null {
   const b = interviewBrand(brand);
-  const sttModel = brandEnv(b, 'INTERVIEW_ENGINE_STT_MODEL');
-  const ttsModel = brandEnv(b, 'INTERVIEW_ENGINE_TTS_MODEL');
-  if (!sttModel || !ttsModel) {
-    throw new InterviewEngineConfigError(
-      'GoApply interview speech is not configured. Set CN_INTERVIEW_ENGINE_STT_MODEL and CN_INTERVIEW_ENGINE_TTS_MODEL (dashscope/…).',
-    );
-  }
-  const sttFallbackModels = (brandEnv(b, 'INTERVIEW_ENGINE_STT_FALLBACK_MODELS') || '')
+  if (b.market !== 'cn' || brandStack(b, 'speech') !== 'own') return null;
+  const sttModel = brandOwnEnv(b, 'INTERVIEW_ENGINE_STT_MODEL')!;
+  const ttsModel = brandOwnEnv(b, 'INTERVIEW_ENGINE_TTS_MODEL')!;
+  const sttFallbackModels = (brandOwnEnv(b, 'INTERVIEW_ENGINE_STT_FALLBACK_MODELS') || '')
     .split(',').map((m) => m.trim()).filter(Boolean);
   for (const model of [sttModel, ttsModel, ...sttFallbackModels]) {
     if (!isGoApplySpeechModel(model)) {
       throw new InterviewEngineConfigError(
-        `GoApply speech model "${model}" is not a domestic provider. Use ${GOAPPLY_SPEECH_PROVIDERS.map((p) => `${p}/`).join(', ')}.`,
+        `GoApply speech model "${model}" is not a domestic provider. Use ${GOAPPLY_SPEECH_PROVIDERS.map((p) => `${p}/`).join(', ')}, or unset CN_INTERVIEW_ENGINE_STT_MODEL and CN_INTERVIEW_ENGINE_TTS_MODEL to use the shared speech set.`,
       );
     }
   }
@@ -578,23 +940,190 @@ export function getCnSpeechConfig(brand?: InterviewBrandRef): CnSpeechConfig {
     sttModel,
     sttFallbackModels,
     ttsModel,
-    voiceFemale: brandEnv(b, 'INTERVIEW_ENGINE_TTS_VOICE') || null,
-    voiceMale: brandEnv(b, 'INTERVIEW_ENGINE_TTS_VOICE_MALE') || null,
+    voiceFemale: brandOwnEnv(b, 'INTERVIEW_ENGINE_TTS_VOICE') || null,
+    voiceMale: brandOwnEnv(b, 'INTERVIEW_ENGINE_TTS_VOICE_MALE') || null,
   };
+}
+
+/**
+ * GoApply's own speech set; throws InterviewEngineConfigError when it has none.
+ * For callers that need DashScope specifically. A session resolves its speech
+ * through `tryGetCnSpeechConfig` (providers/speech.ts), which falls back to the
+ * shared catalog instead.
+ */
+export function getCnSpeechConfig(brand?: InterviewBrandRef): CnSpeechConfig {
+  const cfg = tryGetCnSpeechConfig(brand);
+  if (!cfg) {
+    throw new InterviewEngineConfigError(
+      'GoApply has no speech set of its own. Set CN_INTERVIEW_ENGINE_STT_MODEL and CN_INTERVIEW_ENGINE_TTS_MODEL (dashscope/…).',
+    );
+  }
+  return cfg;
+}
+
+// ─── What the voice and speech configuration really resolves to ───────────
+
+export interface VoiceConfigProblem {
+  /**
+   * 'voice' | 'speech': a group that is half set, or set but not in effect;
+   * 'worker': a combination the worker or the session create will refuse;
+   * 'storage': recordings and transcript files are not stored.
+   */
+  kind: 'voice' | 'speech' | 'worker' | 'storage';
+  /** One plain sentence. Variable names and model ids only, never a secret or a URL. */
+  message: string;
+}
+
+/**
+ * Configuration that is set but not in effect, or that the worker will refuse
+ * (PAR-1 request P4-2). `brandEnv` reads a half-set GoApply group wholly from
+ * the shared names; this says so instead of leaving it silent:
+ *   - CN_LIVEKIT_API_KEY / CN_VOICE_PROVIDER / … without CN_LIVEKIT_URL;
+ *   - CN_LIVEKIT_URL without its key or secret (voice is then off for GoApply:
+ *     the shared keys are never mixed into its own plane);
+ *   - its own plane without CN_LIVEKIT_AGENT_CALLBACK_SECRET (the worker's
+ *     callbacks are refused), or, outside production, without
+ *     CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL while the shared base URL is set
+ *     (the worker is sent to localhost);
+ *   - one speech model of the CN pair without the other;
+ *   - the CN speech pair while voice runs on the shared worker, which then
+ *     needs the DashScope key;
+ *   - GoApply's own plane dispatching the domestic-only 'GoApply-Interview'
+ *     worker with no domestic interview model or no DashScope speech;
+ *   - a CN interview model with no LiveKit Inference equivalent while voice
+ *     runs on the shared (gateway) worker: live turns use the shared model;
+ *   - a configuration no voice session can start on (`voiceRoutingProblem`:
+ *     the domestic-only wall without a plane of its own, no usable interview
+ *     model, a foreign model in the CN speech pair);
+ *   - CN_RESIDENCY_STRICT without a bucket of its own: nothing new is stored.
+ * Empty for RoboApply and for a clean configuration.
+ */
+export function voiceConfigProblems(brand?: InterviewBrandRef): VoiceConfigProblem[] {
+  const b = interviewBrand(brand);
+  if (b.market !== 'cn') return [];
+  const out: VoiceConfigProblem[] = [];
+  for (const p of brandEnvGroupProblems(b)) {
+    if (p.group !== 'voice' && p.group !== 'speech') continue;
+    out.push({
+      kind: p.group,
+      message:
+        `${b.name} ${p.group} settings ${p.set.join(', ')} are ignored because ${p.missingAnchors.join(' and ')} ` +
+        `${p.missingAnchors.length > 1 ? 'are' : 'is'} not set; ${b.name} uses the shared ${p.group} stack.`,
+    });
+  }
+  const own = brandStack(b, 'voice') === 'own';
+  // CN_LIVEKIT_URL selects the own plane; a missing key or secret there turns
+  // voice off (the shared keys are never mixed in), which must be said.
+  if (own && !isLiveKitConfigured(b, 'own')) {
+    out.push({ kind: 'voice', message: liveKitNotConfiguredMessage(b, 'own') });
+  }
+  // The voice group flips as a whole: the shared worker secret is not read on
+  // GoApply's own plane, so every transcript, usage and lifecycle callback of
+  // its worker would be a 401 and its sessions would end with no transcript.
+  if (own && !getAgentCallbackSecret(b, 'own')) {
+    out.push({
+      kind: 'voice',
+      message: `${b.name}'s own plane has no CN_LIVEKIT_AGENT_CALLBACK_SECRET: its worker's callbacks are refused (the shared LIVEKIT_AGENT_CALLBACK_SECRET is not used on that plane).`,
+    });
+  }
+  // Outside production there is no request origin to fall back to, and the
+  // shared base URL names the other plane's backend.
+  if (own && !isProductionRuntime() && !explicitCallbackBaseUrl(b, 'own') && explicitCallbackBaseUrl(b, 'shared')) {
+    out.push({
+      kind: 'voice',
+      message: `${b.name}'s own plane has no CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL: outside production its worker is sent to localhost (INTERVIEW_ENGINE_CALLBACK_BASE_URL, BACKEND_PUBLIC_URL and PUBLIC_BACKEND_URL are not used on that plane).`,
+    });
+  }
+  const ownSpeech = brandStack(b, 'speech') === 'own';
+  if (ownSpeech && !own) {
+    out.push({
+      kind: 'worker',
+      message: `${b.name}'s DashScope speech (CN_INTERVIEW_ENGINE_STT_MODEL, CN_INTERVIEW_ENGINE_TTS_MODEL) runs on the shared worker, which must have DASHSCOPE_API_KEY; without it each ${b.name} session fails when it connects.`,
+    });
+  }
+  const domesticWorker = own && getInterviewAgentName(b, 'own') === b.interview.agentName;
+  if (domesticWorker && !cnInterviewModelSet(b)) {
+    out.push({
+      kind: 'worker',
+      message: `${b.name} dispatches the ${b.interview.agentName} worker on its own plane, which runs domestic models only, but CN_LLM_INTERVIEW_MODEL is not set.`,
+    });
+  }
+  if (domesticWorker && !ownSpeech) {
+    out.push({
+      kind: 'worker',
+      message: `${b.name} dispatches the ${b.interview.agentName} worker on its own plane, which runs DashScope speech only, but CN_INTERVIEW_ENGINE_STT_MODEL and CN_INTERVIEW_ENGINE_TTS_MODEL are not both set.`,
+    });
+  }
+  // Only where voice would otherwise be offered (the plane is configured).
+  if (isLiveKitConfigured(b)) {
+    const routingProblem = voiceRoutingProblem(b);
+    if (routingProblem) {
+      out.push({ kind: 'worker', message: `${b.name} voice practice cannot start, so the written practice is offered instead: ${routingProblem}` });
+    } else if (!usesCnInterviewRouting(b)) {
+      // A gateway worker: say which of GoApply's own models it does not run.
+      const names = [...new Set(resolveLiveWorkerModel(b).passedOver.map((c) => c.envName))];
+      if (names.length) {
+        out.push({
+          kind: 'worker',
+          message:
+            `${b.name} voice practice runs on ${own ? 'a LiveKit Inference worker' : 'the shared LiveKit project, whose worker runs LiveKit Inference models'}. ` +
+            `${names.join(' and ')} ${names.length > 1 ? 'have' : 'has'} no LiveKit Inference equivalent, ` +
+            `so the live turns use the shared interview model (${b.name}'s own interview model still writes the plan and the report).` +
+            (own ? '' : ' Set CN_LIVEKIT_URL with a worker of its own to run it live.'),
+        });
+      }
+    }
+  }
+  if (interviewStorageWriteBlocked(b)) {
+    out.push({
+      kind: 'storage',
+      message: `CN_RESIDENCY_STRICT is on and ${b.name} has no bucket of its own (CN_S3_BUCKET and its keys): practice recordings and transcript files are not stored.`,
+    });
+  }
+  return out;
+}
+
+const warnedVoiceProblems = new Set<string>();
+
+/** Log each voice or speech configuration problem once per process (warn). */
+export function warnVoiceConfigProblemsOnce(brand?: InterviewBrandRef): VoiceConfigProblem[] {
+  let problems: VoiceConfigProblem[];
+  try {
+    problems = voiceConfigProblems(brand);
+  } catch {
+    // A log line must never break the request that asked for it.
+    return [];
+  }
+  for (const p of problems) {
+    if (warnedVoiceProblems.has(p.message)) continue;
+    warnedVoiceProblems.add(p.message);
+    console.warn(`[interview-engine] ${p.message}`);
+  }
+  return problems;
+}
+
+/** Test seam: forget which problems were logged. */
+export function __resetVoiceConfigWarningsForTest(): void {
+  warnedVoiceProblems.clear();
 }
 
 // ─── Callback wiring ──────────────────────────────────────────────────────
 
-function explicitCallbackBaseUrl(brand?: InterviewBrandRef): string | null {
+/**
+ * The explicit base URL of the plane in use (the `voice` group). On the shared
+ * plane: INTERVIEW_ENGINE_CALLBACK_BASE_URL, else BACKEND_PUBLIC_URL /
+ * PUBLIC_BACKEND_URL, for both brands (one worker, one backend to call). On
+ * GoApply's own plane: CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL only; the shared
+ * aliases name the other deployment.
+ */
+function explicitCallbackBaseUrl(brand?: InterviewBrandRef, stack?: VoiceStack | null): string | null {
   const b = interviewBrand(brand);
-  // GoApply's worker calls back to the GoApply deployment only
-  // (CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL); the shared public-URL aliases
-  // name the international backend, so they apply to RoboApply alone.
-  const explicit = b.market === 'cn'
-    ? brandEnv(b, 'INTERVIEW_ENGINE_CALLBACK_BASE_URL')
-    : process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() ||
-      process.env.BACKEND_PUBLIC_URL?.trim() ||
-      process.env.PUBLIC_BACKEND_URL?.trim();
+  const plane = voiceStack(b, stack);
+  const explicit = plane === 'own'
+    ? voiceEnv(b, 'INTERVIEW_ENGINE_CALLBACK_BASE_URL', plane)
+    : sharedEnv('INTERVIEW_ENGINE_CALLBACK_BASE_URL') ||
+      sharedEnv('BACKEND_PUBLIC_URL') ||
+      sharedEnv('PUBLIC_BACKEND_URL');
   return explicit ? explicit.replace(/\/+$/, '') : null;
 }
 
@@ -676,8 +1205,8 @@ export function resolveSessionCallbackBaseUrl(
 
 /** Base URL the agent worker uses to POST transcript / lifecycle callbacks.
  *  `persisted` is the per-session origin captured at create time (C13). */
-export function getCallbackBaseUrl(persisted?: string | null, brand?: InterviewBrandRef): string {
-  const explicit = explicitCallbackBaseUrl(brand);
+export function getCallbackBaseUrl(persisted?: string | null, brand?: InterviewBrandRef, stack?: VoiceStack | null): string {
+  const explicit = explicitCallbackBaseUrl(brand, stack);
   if (explicit) return explicit;
   if (persisted && /^https?:\/\//.test(persisted)) return persisted.replace(/\/+$/, '');
   return localCallbackBaseUrl();
@@ -696,7 +1225,8 @@ export function getSessionExpiryMinutes(): number {
 }
 
 /** Opt-in: recording practice audio/video to R2 needs an explicit true
- *  (INTERVIEW_ENGINE_RECORDING_ENABLED, CN_ on GoApply; default false). A
+ *  (INTERVIEW_ENGINE_RECORDING_ENABLED; GoApply reads its CN_ override first,
+ *  else the shared value; default false). A
  *  default-on recorder would store every practice session with no consent
  *  the moment storage credentials work. The env switch is necessary, never
  *  sufficient: each session also needs the user's recording consent (H8). */
@@ -710,7 +1240,7 @@ export function isRecordingEnabled(brand?: InterviewBrandRef): boolean {
 /** The retention both privacy notices publish for practice recordings and transcripts. */
 export const INTERVIEW_RETENTION_MAX_DAYS = 90;
 
-/** INTERVIEW_RETENTION_DAYS (CN_ on GoApply): a whole number of days, default
+/** INTERVIEW_RETENTION_DAYS (CN_ override first on GoApply): a whole number of days, default
  *  and maximum 90 — a shorter window is allowed, a longer one would break the
  *  published retention schedule, so it is capped. */
 export function getInterviewRetentionDays(brand?: InterviewBrandRef): number {
@@ -719,16 +1249,29 @@ export function getInterviewRetentionDays(brand?: InterviewBrandRef): number {
   return Math.min(INTERVIEW_RETENTION_MAX_DAYS, Math.floor(raw));
 }
 
-// ─── Media policy per brand (CN L-11) ──────────────────────────────────────
+// ─── Media policy (the same on both brands; D5, plan §3.5) ─────────────────
 
 export interface InterviewMediaPolicy {
-  /** The candidate may publish a camera track (GoApply: local preview only). */
+  /** The candidate may publish a camera track. */
   cameraPublish: boolean;
-  /** Video frames may be recorded (GoApply: audio only, always). */
+  /** Video frames may be recorded (still only with the session's two consents). */
   recordVideo: boolean;
 }
 
+/**
+ * Camera and video recording follow one policy on both brands: the camera is
+ * published in a video practice, and video frames are recorded only for a
+ * session with a live `interview_recording` AND `interview_video` consent
+ * (resolvePracticeRecording). CN_INTERVIEW_CAMERA_PUBLISH set to a false value
+ * is GoApply's operator opt-out: the camera stays a local preview and
+ * recordings are audio only (the former CN L-11 rule).
+ */
 export function getInterviewMediaPolicy(brand?: InterviewBrandRef): InterviewMediaPolicy {
-  const cn = interviewBrand(brand).market === 'cn';
-  return { cameraPublish: !cn, recordVideo: !cn };
+  const b = interviewBrand(brand);
+  // GoApply's own switch only (never an unprefixed twin). Set and not a true
+  // value = off, like the sibling off switches (CN_CAMPUS_CALENDAR_ENABLED):
+  // an unreadable value falls to the side that publishes nothing.
+  const optOut = b.market === 'cn' ? brandOwnEnv(b, 'INTERVIEW_CAMERA_PUBLISH') : undefined;
+  const on = optOut === undefined || parseBoolEnv(optOut);
+  return { cameraPublish: on, recordVideo: on };
 }

@@ -1,7 +1,10 @@
 // WP-66 — the cn branch of the written-practice prompt generator
 // (server/src/roboapply/v2/services/RAInterviewPromptService.ts): a GoApply
 // practice in a general type runs the AI-interview script with the zh question
-// sets and no web search; RoboApply runs the pipeline unchanged (regression).
+// sets (a fixed script: nothing to research); every other GoApply practice runs
+// the same general pipeline as RoboApply, web research included (D5; G9, G57),
+// with a role query that carries no personal information. RoboApply runs the
+// pipeline unchanged (regression).
 // No network, no model: the search and every agent are mocked.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,7 +34,7 @@ vi.mock('../../../../roboapply/v2/agents/RAInterviewQuestionsAgent.js', () => ({
 
 import { runWithBrand } from '../../../../lib/requestContext.js';
 import { CN_QUESTION_SETS, questionTip, storyQuestionCount } from '../index.js';
-import { RAInterviewPromptService, type RAInterviewPromptInput } from '../../../../roboapply/v2/services/RAInterviewPromptService.js';
+import { RAInterviewPromptService, withSearchKnownValues, type RAInterviewPromptInput } from '../../../../roboapply/v2/services/RAInterviewPromptService.js';
 
 const REQUIREMENTS = {
   roleSummary: 'Product role',
@@ -117,27 +120,85 @@ describe('RoboApply / intl (regression)', () => {
     expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('Job post (saved by the candidate):\nWe need a PM who ships.\n\nWeb evidence');
   });
 
-  it('a skill exercise on GoApply keeps the general pipeline but never runs the web search', async () => {
+  it('a skill exercise on GoApply runs the general pipeline with the web search, the job post first', async () => {
     const out = await service.generate(
       input({ market: 'cn', jdText: '负责用户增长', type: { id: 'technical', label: 'Live Coding', sub: 'x' } }),
     );
-    expect(m.search).not.toHaveBeenCalled();
+    expect(m.search).toHaveBeenCalledOnce();
     expect(m.strategy).toHaveBeenCalledOnce();
     expect(out.blueprint).not.toHaveProperty('cnFormat');
-    expect(out.webSources).toEqual([]);
-    expect(out.blueprint.webSources).toEqual([]);
-    expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('Job post (saved by the candidate):\n负责用户增长');
+    expect(out.webSources).toEqual([{ title: 'Web evidence', url: 'https://example.com/a' }]);
+    expect(out.blueprint.webSources).toEqual([{ title: 'Web evidence', url: 'https://example.com/a' }]);
+    expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('Job post (saved by the candidate):\n负责用户增长\n\nWeb evidence');
   });
 
-  it('a GoApply case practice with no job post sends nothing to the web search', async () => {
+  it('a GoApply case practice with no job post is planned with web evidence, from a query that is the role alone', async () => {
     await runWithBrand('goapply', () => service.generate(input({ type: { id: 'case', label: 'Case', sub: 'x' } })));
+    expect(m.search).toHaveBeenCalledOnce();
+    expect(m.search.mock.calls[0]![0]).toBe('产品经理 role requirements, key skills, and interview focus');
+    expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('Web evidence');
+  });
+
+  it('GoApply: a role text carrying personal information is never sent to the web search', async () => {
+    for (const role of ['产品经理 zhangwei@example.com', '产品经理 13800138000']) {
+      const out = await runWithBrand('goapply', () => service.generate(input({ role, type: { id: 'case', label: 'Case', sub: 'x' } })));
+      expect(out.webSources).toEqual([]);
+    }
     expect(m.search).not.toHaveBeenCalled();
+    expect(m.requirements).toHaveBeenCalledTimes(2);
+  });
+
+  it('a role text carrying the account name is not searched, and the practice is still planned (both brands)', async () => {
+    const cases: Array<['goapply' | 'roboapply', string, string]> = [
+      ['goapply', '张伟的产品经理面试', '张伟'],
+      ['goapply', 'Product Manager for Zhang Wei', 'Zhang Wei'],
+      ['roboapply', 'Product Manager (Jane Doe)', 'Jane Doe'],
+    ];
+    for (const [brand, role, name] of cases) {
+      const out = await runWithBrand(brand, () =>
+        service.generate(input({ role, type: { id: 'case', label: 'Case', sub: 'x' }, knownValues: [name] })),
+      );
+      expect(out.webSources, role).toEqual([]);
+      expect(out.seedQuestions.length, role).toBeGreaterThan(0);
+    }
+    expect(m.search).not.toHaveBeenCalled();
+    expect(m.requirements).toHaveBeenCalledTimes(3);
     expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('');
+    // The name is matched as a word: a role that merely contains its letters is searched.
+    await runWithBrand('goapply', () =>
+      service.generate(input({ role: 'Linux engineer', type: { id: 'case', label: 'Case', sub: 'x' }, knownValues: ['Li', '', null] })),
+    );
+    expect(m.search).toHaveBeenCalledOnce();
+  });
+
+  it('known values set around a start that does not forward them (RAMockService.start) are checked the same way', async () => {
+    const run = (role: string) =>
+      runWithBrand('goapply', () =>
+        withSearchKnownValues(['张伟'], () => service.generate(input({ role, type: { id: 'case', label: 'Case', sub: 'x' } }))),
+      );
+    expect((await run('张伟的产品经理面试')).webSources).toEqual([]);
+    expect(m.search).not.toHaveBeenCalled();
+    expect((await run('产品经理')).webSources).toEqual([{ title: 'Web evidence', url: 'https://example.com/a' }]);
+    expect(m.search).toHaveBeenCalledOnce();
+    // Outside the scope nothing lingers.
+    await runWithBrand('goapply', () => service.generate(input({ role: '张伟的产品经理面试', type: { id: 'case', label: 'Case', sub: 'x' } })));
+    expect(m.search).toHaveBeenCalledTimes(2);
+    // No values = no scope: the call is passed through.
+    expect(withSearchKnownValues(undefined, () => 'x')).toBe('x');
+    expect(withSearchKnownValues(['', null], () => 'y')).toBe('y');
+  });
+
+  it('GoApply: a failing search degrades to no evidence, never an error', async () => {
+    m.search.mockRejectedValue(new Error('search down'));
+    const out = await runWithBrand('goapply', () => service.generate(input({ type: { id: 'case', label: 'Case', sub: 'x' } })));
+    expect(out.webSources).toEqual([]);
+    expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('');
+    expect(m.strategy).toHaveBeenCalledOnce();
   });
 });
 
 describe('GoApply: the AI-interview format', () => {
-  it('runs the zh script with no web search, timing per question and one role question for the job', async () => {
+  it('runs the zh script (fixed, so nothing is researched), timing per question and one role question for the job', async () => {
     const out = await runWithBrand('goapply', () => service.generate(input({ jdText: '负责用户增长', durationMinutes: 30 })));
     expect(m.search).not.toHaveBeenCalled();
     expect(m.strategy).not.toHaveBeenCalled();
@@ -193,8 +254,9 @@ describe('GoApply: the AI-interview format', () => {
     async (minutes) => {
       const out = await runWithBrand('goapply', () => service.generate(input({ durationMinutes: minutes })));
       expect(out.blueprint).not.toHaveProperty('cnFormat');
-      expect(m.search).not.toHaveBeenCalled();
-      expect(out.webSources).toEqual([]);
+      // The general pipeline, as on RoboApply: web research included.
+      expect(m.search).toHaveBeenCalledOnce();
+      expect(out.webSources).toEqual([{ title: 'Web evidence', url: 'https://example.com/a' }]);
       expect(m.strategy.mock.calls[0]![0].durationMinutes).toBe(minutes);
       expect(out.interviewPrompt).not.toContain('## Format: AI-interview practice');
     },

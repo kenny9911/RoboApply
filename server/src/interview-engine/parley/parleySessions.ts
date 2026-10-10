@@ -29,6 +29,8 @@ import type { InterviewSession } from '../../generated/prisma/client.js';
 import prisma from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
 import { getAgentCallbackSecret, getCallbackBaseUrl } from '../config.js';
+import { inSeam } from '../providers/brandScope.js';
+import { readRowSeam } from '../providers/sessionSeam.js';
 import { asLiveMetrics, readSessionControl } from '../sessions/lifecycleHelpers.js';
 import type { LiveModelUsageItem } from '../billing/sessionCost.js';
 import type { InterviewMode, ResolvedVoice, TranscriptTurn } from '../types.js';
@@ -449,10 +451,23 @@ export async function handleParleyWebhook(sink: ParleySink, payload: ParleyWebho
   if (!sessionId || typeof data.sessionId !== 'string') return 'ignored';
   const session = await prisma.interviewSession.findUnique({
     where: { id: sessionId },
-    select: { id: true, status: true, liveMetrics: true, startedAt: true },
+    select: { id: true, status: true, liveMetrics: true, startedAt: true, brand: true, voiceProvider: true },
   });
   if (!session || !isParleySession(session)) return 'ignored';
   if (readParleyHandle(session.liveMetrics)?.sessionId !== data.sessionId) return 'ignored';
+  // A verified Parley event plays the worker's role, so it carries the worker
+  // secret of the SESSION's brand and plane, whichever host Parley called.
+  const seam = readRowSeam(session);
+  return seam ? inSeam(seam, () => applyParleyEvent(sink, payload, session)) : applyParleyEvent(sink, payload, session);
+}
+
+async function applyParleyEvent(
+  sink: ParleySink,
+  payload: ParleyWebhookPayload,
+  session: { id: string; status: string; startedAt: Date | null },
+): Promise<'handled' | 'ignored'> {
+  const data = payload.data ?? {};
+  const sessionId = session.id;
   const secret = requireSecret();
 
   if (payload.event === 'session.started') {

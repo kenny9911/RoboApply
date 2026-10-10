@@ -31,6 +31,7 @@ beforeAll(() => {
 
 const m = vi.hoisted(() => ({
   setup: vi.fn(),
+  preview: vi.fn(),
   create: vi.fn(),
   textStart: vi.fn(),
   push: vi.fn(),
@@ -48,7 +49,7 @@ const CREDITS = { balance: 5, periodAllotment: 1, tier: 'free', creditMinutes: 2
 
 vi.mock('../../../../lib/api/interviewEngine', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../../lib/api/interviewEngine')>()),
-  interviewEngineApi: { recent: vi.fn(async () => ({ sessions: [] })), remove: vi.fn(), preview: vi.fn() },
+  interviewEngineApi: { recent: vi.fn(async () => ({ sessions: [] })), remove: vi.fn(), preview: m.preview },
   practiceApi: { setup: m.setup, create: m.create, info: vi.fn(), practicedJobs: vi.fn() },
   textPracticeApi: {
     start: m.textStart,
@@ -313,12 +314,11 @@ describe('GoApply without voice', () => {
     expect(screen.queryByRole('heading', { name: 'Written practice' })).toBeNull();
   });
 
-  it('shows no market-requirements preview on GoApply', async () => {
+  it('the market-requirements preview is offered here too (it does not depend on voice)', async () => {
     m.setup.mockResolvedValue(setupPayload({ market: 'cn', voice: { available: false, reason: 'voice_unavailable' } }));
     renderWithProviders(goApply(<PracticePage />));
     await screen.findByTestId('practice-job-banner');
-    expect(screen.queryByRole('button', { name: 'Preview what you may be asked' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Preview/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Preview what you may be asked' })).toBeTruthy();
   });
 
   it('without a bound phone the AI practice cannot start and the notice links to binding', async () => {
@@ -375,7 +375,8 @@ describe('a new user with one credit', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('This interview needs 2.25 credits and you have 1. Add credits to continue.');
-    expect(within(alert).getByRole('link', { name: 'Get credits' })).toHaveAttribute('href', '/settings#billing');
+    // The plan picker itself, like the report's "get more" link.
+    expect(within(alert).getByRole('link', { name: 'Get credits' })).toHaveAttribute('href', '/settings/billing#plans');
     expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText('Verify your email to get your first practice interview free.')).toBeNull();
 
@@ -420,6 +421,115 @@ describe('a credit shortfall where nothing is on sale', () => {
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByRole('link', { name: 'Get credits' })).toBeTruthy();
     expect(alert).toHaveTextContent('Add credits to continue.');
+  });
+});
+
+describe('GoApply with the same capabilities as RoboApply (D5)', () => {
+  const CN = { market: 'cn', media: { cameraPublish: true, recordVideo: true } };
+
+  it('voice is offered whenever the server says it is available: the live interview starts, not the written one', async () => {
+    m.setup.mockResolvedValue(setupPayload(CN));
+    renderWithProviders(goApply(<PracticePage />));
+    await screen.findByTestId('practice-job-banner');
+    expect(screen.queryByRole('button', { name: 'Start the written practice' })).toBeNull();
+    // Video and voice are both offered, as on RoboApply.
+    fireEvent.click(await screen.findByRole('button', { name: /^Format/ }));
+    expect(await screen.findByRole('radio', { name: /Voice only/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Video call/ })).toBeTruthy();
+    fireEvent.click(await startButton());
+    await waitFor(() => expect(m.create).toHaveBeenCalledTimes(1));
+    expect(m.create.mock.calls[0][0]).toMatchObject({ jobId: 'j1', role: 'Backend Engineer' });
+    expect(m.textStart).not.toHaveBeenCalled();
+    await waitFor(() => expect(m.push).toHaveBeenCalledWith('/practice/sess1'));
+  });
+
+  it('shows the market-requirements preview and runs it on request', async () => {
+    m.setup.mockResolvedValue(setupPayload(CN));
+    m.preview.mockResolvedValue({
+      requirements: { roleSummary: 'Builds payment APIs', seniorityBar: 'Mid', mustHaveSkills: ['Go'], coreResponsibilities: [], successSignals: [], domainContext: '' },
+      webSources: [{ title: 'Backend Engineer at Acme', url: 'https://boards.example/1' }],
+      sampleQuestions: ['Tell me about a hard bug.'],
+      groundedOn: 'market',
+      domain: null,
+    });
+    renderWithProviders(goApply(<PracticePage />));
+    await screen.findByTestId('practice-job-banner');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview what you may be asked' }));
+    const run = (await screen.findByRole('button', { name: 'Show me' })) as HTMLButtonElement;
+    await waitFor(() => expect(run.disabled).toBe(false));
+    fireEvent.click(run);
+    await waitFor(() => expect(m.preview).toHaveBeenCalledTimes(1));
+    // The job post is what the preview is built from.
+    expect(m.preview.mock.calls[0][0]).toMatchObject({ jdText: 'Build APIs.' });
+    expect(await screen.findByText('Builds payment APIs')).toBeTruthy();
+    expect(screen.getByText('Tell me about a hard bug.')).toBeTruthy();
+  });
+
+  it('the preview stays behind GoApply’s AI consent gate: shown, but it cannot be run', async () => {
+    m.setup.mockResolvedValue(setupPayload({ ...CN, ai: { allowed: false, reason: 'ai_consent_required' }, voice: { available: false, reason: 'ai_consent_required' } }));
+    renderWithProviders(goApply(<PracticePage />));
+    await screen.findByTestId('practice-job-banner');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview what you may be asked' }));
+    const run = (await screen.findByRole('button', { name: 'Show me' })) as HTMLButtonElement;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(run.disabled).toBe(true);
+    expect(m.preview).not.toHaveBeenCalled();
+  });
+
+  it('a video practice can keep video too when the consent catalog offers it', async () => {
+    m.setup.mockResolvedValue(setupPayload(CN));
+    m.getConsents.mockResolvedValue({
+      brand: 'goapply',
+      items: [
+        consentItem('interview_recording', 'Keep the audio and transcript of my practice interviews.'),
+        consentItem('interview_video', 'Also keep the video of my practice interviews.'),
+      ],
+    });
+    renderWithProviders(goApply(<PracticePage />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Keep the audio and transcript of my practice interviews.' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Also keep the video/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save my choice' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByTestId('practice-recording-row')).toHaveTextContent('Audio, video and transcript');
+    fireEvent.click(await startButton());
+    await waitFor(() => expect(m.create).toHaveBeenCalledTimes(1));
+    expect(m.create.mock.calls[0][0].recording).toEqual({ audio: true, video: true });
+  });
+
+  it('until the catalog offers the video consent, only audio can be kept', async () => {
+    m.setup.mockResolvedValue(setupPayload(CN));
+    m.getConsents.mockResolvedValue({
+      brand: 'goapply',
+      items: [consentItem('interview_recording', 'Keep the audio and transcript of my practice interviews.')],
+    });
+    renderWithProviders(goApply(<PracticePage />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }));
+    await screen.findByRole('checkbox', { name: 'Keep the audio and transcript of my practice interviews.' });
+    expect(screen.queryByRole('checkbox', { name: /Also keep the video/ })).toBeNull();
+    expect(screen.getByText('Only audio can be kept. Video is never recorded.')).toBeTruthy();
+  });
+
+  it('the operator opt-out (the server says video is not recorded): the camera opt-in is not offered, on either brand', async () => {
+    const consents = {
+      items: [
+        consentItem('interview_recording', 'Keep the audio and transcript of my practice interviews.'),
+        consentItem('interview_video', 'Also keep the video of my practice interviews.'),
+      ],
+    };
+    m.getConsents.mockResolvedValue({ brand: 'goapply', ...consents });
+    m.setup.mockResolvedValue(setupPayload({ market: 'cn', media: { cameraPublish: false, recordVideo: false } }));
+    const view = renderWithProviders(goApply(<PracticePage />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }));
+    await screen.findByRole('checkbox', { name: 'Keep the audio and transcript of my practice interviews.' });
+    expect(screen.queryByRole('checkbox', { name: /Also keep the video/ })).toBeNull();
+    expect(screen.getByText('Only audio can be kept. Video is never recorded.')).toBeTruthy();
+    view.unmount();
+    // An older API that sends no policy keeps the opt-in (read as allowed).
+    m.setup.mockResolvedValue(setupPayload({ market: 'cn' }));
+    renderWithProviders(goApply(<PracticePage />));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }));
+    expect(await screen.findByRole('checkbox', { name: /Also keep the video/ })).toBeTruthy();
   });
 });
 

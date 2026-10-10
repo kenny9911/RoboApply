@@ -4,6 +4,8 @@
 // expose the human-readable master brief + seed questions instead.
 
 import type { InterviewSession } from '../../generated/prisma/client.js';
+import { isBrandId } from '../../platform/brand/registry.js';
+import { getInterviewMediaPolicy } from '../config.js';
 
 function sectionFailed(report: Record<string, unknown>, section: string): boolean {
   return Array.isArray(report.failedSections) && report.failedSections.includes(section);
@@ -84,5 +86,10 @@ export function toSessionDetail(s: InterviewSession) {
     cnReport: report.cn && typeof report.cn === 'object' ? report.cn : null,
     recordingAvailable: !!s.recordingKey,
     transcriptAvailable: !!s.transcriptKey || (Array.isArray(s.transcript) && s.transcript.length > 0),
+    // The media policy of the session's brand, known before the room is
+    // joined: false = a video practice keeps the camera as a local preview
+    // (the device check says so). The same on both brands unless GoApply's
+    // operator opt-out is set; the join token enforces it either way.
+    cameraPublish: s.mode === 'video' && getInterviewMediaPolicy(isBrandId(s.brand) ? s.brand : undefined).cameraPublish,
   };
 }

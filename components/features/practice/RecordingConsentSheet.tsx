@@ -30,6 +30,9 @@ export interface RecordingConsentSheetProps {
   onClose: () => void;
   /** The practice format: video can offer the second (camera) opt-in. */
   mode: 'voice' | 'video';
+  /** The server's media policy: false = video is never recorded here, so the
+   *  camera opt-in is not offered. Default true. */
+  videoAllowed?: boolean;
   /** The choice already made for this session (starts all-off). */
   initial?: PracticeRecordingRequest;
   /** Called with the confirmed choice after any new grants were recorded. */
@@ -38,7 +41,7 @@ export interface RecordingConsentSheetProps {
 
 type LoadState = 'loading' | 'ready' | 'error';
 
-export function RecordingConsentSheet({ open, onClose, mode, initial, onConfirm }: RecordingConsentSheetProps) {
+export function RecordingConsentSheet({ open, onClose, mode, videoAllowed = true, initial, onConfirm }: RecordingConsentSheetProps) {
   const t = useTranslations('practice.recording');
   const locale = useLocale();
   const audioId = useId();
@@ -75,7 +78,7 @@ export function RecordingConsentSheet({ open, onClose, mode, initial, onConfirm 
   }, [open, locale]);
 
   const audioItem = items.find((item) => item.type === 'interview_recording') ?? null;
-  const videoItem = mode === 'video' ? (items.find((item) => item.type === 'interview_video') ?? null) : null;
+  const videoItem = mode === 'video' && videoAllowed ? (items.find((item) => item.type === 'interview_video') ?? null) : null;
   const canRecord = state === 'ready' && audioItem !== null;
 
   async function save() {

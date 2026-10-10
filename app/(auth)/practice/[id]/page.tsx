@@ -33,11 +33,12 @@
 // second tab taking the seat (duplicate identity) stops and asks instead of
 // rejoining, so two tabs never evict each other in a loop.
 //
-// Per brand (WP-63a): the server picks the brand's media plane (GoApply:
-// CN LiveKit, 'GoApply-Interview'); the page only reads `connection.url`. On
-// GoApply — or whenever the connection says `cameraPublish: false` — the
-// camera is a LOCAL preview only: no video track is ever published
-// (cameraPlan + useLocalCameraPreview). The device check also rates the
+// Media plane and camera (WP-63a; D5): the server picks the media plane (the
+// shared LiveKit project, or GoApply's own); the page only reads
+// `connection.url`. A video practice publishes the camera on both brands.
+// Only when the server says `cameraPublish: false` (an operator opt-out) is
+// the camera a LOCAL preview: no video track is ever published (cameraPlan +
+// useLocalCameraPreview). The page reads the server's answer, never the brand. The device check also rates the
 // connection (NetworkPrecheck) and, on a weak one, offers to do the practice
 // in writing instead; that ends the unstarted live session (never charged)
 // and runs the written practice here.
@@ -70,7 +71,6 @@ import '@livekit/components-styles';
 
 import { useMockCatalog } from '../../../../hooks/useMockV3';
 import { useAuth } from '../../../../lib/auth/AuthProvider';
-import { useBrand } from '../../../../lib/brand/BrandProvider';
 import { TextPracticeRoom } from '../../../../components/features/practice';
 import type { NetworkAssessment } from '../../../../components/features/practice/NetworkPrecheck';
 import { useLocalCameraPreview } from '../../../../components/v3/mock/YourTile';
@@ -217,7 +217,6 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const t = useTranslations('practice');
   const router = useRouter();
-  const brand = useBrand();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [session, setSession] = useState<IESessionDetail | null>(null);
@@ -730,7 +729,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
         onNetworkResult={onNetworkResult}
         onSwitchToText={canSwitchToText ? () => void switchToText() : undefined}
         switchingToText={switchingToText}
-        cameraLocalOnly={brand.market === 'cn'}
+        // The server's media policy for this session (never the brand).
+        cameraLocalOnly={session.mode === 'video' && session.cameraPublish === false}
       />
     );
   }
@@ -822,12 +822,13 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  // WP-63a: publish the camera, keep it a local preview (GoApply, or the
-  // server said so), or leave it off (voice, or it failed in the check).
+  // Publish the camera, keep it a local preview (the server said so), or
+  // leave it off (voice, or it failed in the check). The connection's answer
+  // is the one the join token enforces; the session's is the same policy,
+  // read earlier for the device check.
   const camPlan = cameraPlan({
     mode: connection.mode,
-    cameraPublish: (connection as IEConnection & { cameraPublish?: boolean }).cameraPublish,
-    market: brand.market,
+    cameraPublish: connection.cameraPublish ?? session.cameraPublish,
     deviceOk: devicePlan === null || devicePlan.camera === 'ok',
   });
   const wantCamera = camPlan.publish;
