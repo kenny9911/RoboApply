@@ -1,9 +1,11 @@
 // server/src/features/index.ts — mounts every feature area (FND-5; TASK_PLAN.md §4.1.a).
 //
 // `server/src/app.ts` calls `mountFeatures(app)` ONCE, AFTER the legacy
-// routers (/auth, /missions, /runs, /digest, /settings, /billing, /account,
-// /v2, job-search, interview-engine), so every live legacy path keeps its
-// handler. Rules every area router follows:
+// routers that are still mounted (/auth, /billing, /account, /v2, job-search,
+// interview-engine, cron), so every live legacy path keeps its handler. The
+// V1 routers /missions, /runs, /digest and /settings were removed in WP-75;
+// of the /v2 aggregate, /queue, /activity, /integrations, /onboarding, /jobs
+// and /search are gone (WP-75, INT-13). Rules every area router follows:
 //   - declare only paths that do not exist today (never shadow a live path);
 //   - capability checks per route (`requireFlag(key)` after auth), never
 //     `router.use(requireFlag)` on a shared prefix;

@@ -1822,18 +1822,30 @@ These extend `/api/v1/roboapply/v2/resumes` (RES keeps the existing paths, so `u
 | GET/POST/DELETE `/network/contacts[/:id]` | S | user-owned contacts | — |
 | POST `/network/outreach-drafts` | S | `{ contactId?, jobId, channel }` → draft | `outreach_draft` |
 | PATCH `/network/outreach-drafts/:id` · POST `.../:id/copied` · POST `.../:id/sent` | S | edit; mark copied or sent (the product never sends) | — |
-| POST `/network/contacts/:id/lookup-email` | S | `501 provider_not_configured` until `CONTACT_EMAIL_PROVIDER` is set and `flags.contactEmailLookup` (RoboApply only) | `contact_lookup` |
+| POST `/network/contacts/:id/lookup-email` | S | `501 provider_not_configured` until `CONTACT_EMAIL_PROVIDER` is set and `flags.contactEmailLookup` (RoboApply only). As built: no provider adapter exists, so nothing reads `CONTACT_EMAIL_PROVIDER` and the route answers 501 whenever the flag lets it through | `contact_lookup` |
 | GET/PUT `/agent/settings` | S | `RAAgentSettings` | — |
-| GET `/agent/setup` | S | → `{ step, checks: { profileMissing[], calibrationDone, reportReady, extensionConnected } }` | — |
+| GET `/agent/setup` | S | → `{ step, checks: { profileMissing[], calibrationDone, reportReady, extensionConnected, calibrationCount, answersCount, weeklySaved, extensionAvailable }, completedAt }` | — |
 | POST `/agent/setup/calibration` | S | `{ jobId, verdict, note? }` (3 required) | — |
-| GET `/agent/suggestions` | S | top-fit jobs not yet queued | — |
-| GET/POST `/agent/queue` | S | list by state; `{ jobIds[] }` → items | ≤50 active items |
-| POST `/agent/queue/:id/prepare` | S | → returns a **credit proposal** (`{bucket, cost}` for tailor and letter per settings); on confirm the work runs | `tailor` / `cover_letter` on confirm |
-| POST `/agent/queue/:id/confirm` | S | `{ part:'resume'|'letter', decision:'use'|'revise', instruction? }` | — |
-| POST `/agent/queue/:id/open` | S | → `{ applyUrl, handoff: { jobId, variantId, coverLetterId } }`; state `opened` **and the tracker entry moves to `applied` at once** (same path as `apply-click`, ruling C11) | — |
+| POST `/agent/setup/step` | S | `{ step:'profile'\|'calibrate'\|'answers'\|'weekly'\|'extension', action:'complete'\|'skip' }` → setup state (only the extension step can be skipped); `firstList` when this call finished setup | — |
+| GET `/agent/suggestions?limit&exclude` | S | top-fit jobs not yet queued (`limit` ≤ 20; `exclude` = comma list of job ids for "Show 3 more") | — |
+| POST `/agent/list/generate` | S | `{ overrides?, more? }` → `{ weekKey, added, items[], filtersDiffer, reason:'no_feed'\|'no_matches'\|'queue_full'\|'target_reached'\|null }` (builds this week's list now, or adds another `weeklyTarget`) | — |
+| POST `/agent/search/save-to-main` | S | `{ filters, version }` → writes the Ready-to-apply filters to the main search (F-FILT-07, asked only when `filtersDiffer`) | — |
+| GET `/agent/badge` | S | → `{ readyNotOpened }` (kits prepared and not opened yet; the nav badge) | — |
+| GET `/agent/queue?state&weekKey&tab&cursor&limit` | S | → `{ items[], counts: { to_prepare, ready, done }, weekKey, nextCursor }`; `tab` = `to_prepare\|ready\|done`; `limit` default and max 200; pass `nextCursor` back as `cursor` (null on the last page) | — |
+| POST `/agent/queue` | S | `{ jobIds[], addedVia? }` → items (`addedVia` one of `suggestions\|feed\|copilot\|search\|manual`; `weekly` is server-only) | ≤50 active items |
+| GET `/agent/queue/:id` | S | the kit review screen → `{ item, kit: { resume: { variantId, tailorSessionId, pendingClaims, tailored, used }, letter: { coverLetterId, needed, used }, answers[], fileName, aiAvailable, revisionCost }, history[] }`. `kit.revisionCost` = `{ resume, letter }` credit lines (`{ bucket, cost, remaining?, window?, resetsAt? }`): what one "Revise" costs, shown before the user asks; null when AI is unavailable | — |
+| GET `/agent/queue/:id/history` | S | → `{ items: KitEvent[] }` (`kind: transition\|decision\|notice`, `actor: user\|system\|extension`) | — |
+| POST `/agent/queue/prepare` | S | `{ ids[] (≤30), confirm? }`: the same proposal/confirm as below for several kits ("Prepare kits") | `tailor` / `cover_letter` on confirm |
+| POST `/agent/queue/:id/prepare` | S | `{ confirm? }` → without `confirm` returns a **credit proposal** (`{bucket, cost}` for tailor and letter per settings); with `confirm: true` the work runs | `tailor` / `cover_letter` on confirm |
+| POST `/agent/queue/:id/confirm` | S | `{ part:'resume'|'letter', decision:'use'|'revise', instruction? }` (a revise spends `kit.revisionCost`; a kit cannot reach `approved` while `pendingClaims > 0`) | `tailor` / `cover_letter` on revise |
+| POST `/agent/queue/:id/open` | S | → `{ applyUrl, handoff: { jobId, variantId, coverLetterId }, trackerEntryId }`; state `opened` **and the tracker entry moves to `applied` at once** (same path as `apply-click`, ruling C11) | — |
 | POST `/agent/queue/:id/undo-applied` | S | reverts the tracker status ("Undo · I didn't apply") | — |
-| POST `/agent/queue/:id/applied` · `/skip` · DELETE | S | user-declared outcome | — |
-| GET/PUT `/agent/answers` | S | answer bank | — |
+| POST `/agent/queue/:id/applied` · `/skip` · `/restore` · DELETE | S | user-declared outcome; `restore` brings a skipped kit back | — |
+| GET/PUT `/agent/answers` | S | answer bank (`PUT { answers[] }`, ≤200) | — |
+| GET `/agent/answers/questions` | S | the common application questions for this brand (keys the bank is filled against) | — |
+| DELETE `/agent/answers/:key` | S | remove one saved answer | — |
+
+As built (INT-13, from `server/src/features/agent/{routes,contract}.ts`): every `/agent` route checks the `agent` capability per route (off → `404 feature_disabled`; no model for the brand → `503 ai_unavailable` on the AI steps). No route submits an application or calls an employer endpoint (D1). The legacy `/v2/queue` it replaced was deleted in WP-75. The legacy `/v2/jobs/:id`, `/v2/jobs/:id/score` and `/v2/search/run` routes were deleted in INT-13 (job detail and fit scoring: §3.4; search: `POST /feed/query`); `/v2/tracker`, `/v2/insights`, `/v2/resumes`, `/v2/goal`, `/v2/preferences`, `/v2/mock`, `/v2/discover` and `/v2/admin` stay mounted. `GET /v2/insights/weekly` and `POST /v2/insights/refresh` name a tracked job in the model prompt only when the viewer may read it (the brand's market, public or own import, and on GoApply with `CN_RECRUITMENT_INFO_MODE=off` no third-party posting).
 
 ### 3.8 Extension API (EXT), detailed in §6
 
@@ -1850,6 +1862,7 @@ These extend `/api/v1/roboapply/v2/resumes` (RES keeps the existing paths, so `u
 | POST `/ext/autofill-runs` | X | `{ host, atsType, url, jobId?, fieldsTotal }` → `{ runId }` (**reserves** an `autofill` credit) | `autofill` |
 | PATCH `/ext/autofill-runs/:id` | X | `{ fieldsFilled, outcome, userMarkedSubmitted? }` → commits (fieldsFilled > 0) or releases; `userMarkedSubmitted` → tracker `applied` with `appliedVia:'extension'` | — |
 | POST `/ext/answers` | X | `{ runId, question, fieldType, maxLength?, options?[] }` → `{ answer, source:'bank'|'ai', saveable }` (bank hit = free). Protected question types (work authorization, sponsorship, criminal history, EEO/disability/veteran, salary history/expectation, years of experience, degrees, certifications, clearance, notice period) never return `source:'ai'` | `ai_answer` on an AI answer |
+| POST `/ext/answers/save` (integration wave, INT-03) | X | `{ runId, question, answer }` → `201 { saved: true, questionKey }`: saves an answer the user approved in the side panel to the answer bank (F-EXT-04), so the next form gets it as a free bank hit. A protected question type (see above) → `422 invalid_request` with `details.reason = 'protected_question'` and `details.type` | — |
 | POST `/ext/resume-for-job` | X | `{ jobId, runId }` → `{ variantId, isTailored, fileName, downloadUrl (signed, 5 min) }` | — |
 | GET `/ext/files/:signedToken` | X | file bytes; records an `RAApplicationArtifact` | — |
 | POST `/ext/site-requests` | X | `{ host, url, note? }` | 10/day |
@@ -1861,6 +1874,7 @@ These extend `/api/v1/roboapply/v2/resumes` (RES keeps the existing paths, so `u
 |---|---|---|---|
 | GET `/credits` | S | → `{ buckets: [{bucket, cap \| 'unlimited', used, reserved, bonus, resetsAt, window}], plan }` | — |
 | GET `/credits/history?cursor` | S | ledger (committed) | — |
+| POST `/credits/cancel/survey` (integration wave, INT-02) | S | `{ reason?, note? }` (at least one of the two) → `204`, no body: records why the user is leaving in `RACancelSurvey` (SCHEMA-6) and nothing else: it does not cancel, send mail or write a product event. `503 storage_unavailable` while the table is absent | — |
 | GET `/billing/plans` | S/P | brand catalog with prices (from config) | — |
 | POST `/billing/checkout` | S | `{ planKey }` → Stripe `{ url }` (RoboApply) or `{ orderId, payUrl \| qrCodeUrl }` (GoApply, `rail` chosen in the body from `brand.paymentRails`) | — |
 | POST `/billing-cn/wechatpay` (new prefix; legacy `/billing` routes untouched) | S | `{ planKey \| purpose, relatedId? }` → `{ orderId, codeUrl }` (Native QR) or JSAPI params inside WeChat | flag `WECHATPAY_ENABLED` |
@@ -2706,6 +2720,8 @@ i18n/staging/<namespace>.en.json
 ---
 
 ## Appendix A. Environment variables introduced (FND adds names to `.env.example`; values are owner-supplied)
+
+> **As built (INT-13 audit).** The catalogue of record is the repository-root `.env.example`: every name the API or the web app reads, each with its purpose, per-brand names as `NAME` / `CN_NAME` (TASK_PLAN R-03, which replaced the `*_ROBOAPPLY` / `*_GOAPPLY` suffixes used in the table below). The table is kept as the design-time list; several of its names were renamed under R-03, and two groups name seams no code reads yet, so they are not in `.env.example`: `CONTACT_EMAIL_PROVIDER` / `CONTACT_EMAIL_PROVIDER_KEY` (no lookup adapter) and `ROBOHIRE_INVITE_SECRET` (no invitation webhook route).
 
 | Group | Names |
 |---|---|

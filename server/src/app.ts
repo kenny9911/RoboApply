@@ -12,6 +12,8 @@
 //   • Local dev / any Node host — `import './app.js'` (or run this file with
 //     tsx) starts an HTTP listener on PORT (default 4607) and, unless
 //     ROBOAPPLY_CRON_DISABLED, registers the in-process node-cron sweeps.
+//     SIGTERM / SIGINT drain running requests before the process exits
+//     (roboapply/schedulers/processLifecycle.ts).
 //   • Vercel serverless — `api/index.ts` imports the compiled `app` and
 //     `export default app`s it. `process.env.VERCEL` is set there, so we do
 //     NOT call app.listen() and we do NOT register node-cron (Vercel Cron
@@ -49,7 +51,8 @@ import roboapplyV2Router from './roboapply/v2/routes/index.js';
 import interviewEngineRouter from './interview-engine/routes/index.js';
 import stripeWebhookRouter from './roboapply/routes/stripeWebhook.js';
 import cronRouter from './cron/handlers.js';
-import { startRoboApplyCron } from './roboapply/schedulers/RoboApplyCronService.js';
+import { startRoboApplyCron, stopRoboApplyCron } from './roboapply/schedulers/RoboApplyCronService.js';
+import { installGracefulShutdown, trustProxySetting } from './roboapply/schedulers/processLifecycle.js';
 import { logger } from './services/LoggerService.js';
 import { createJobSearchRouters } from './job-search/routes.js';
 import { handleJobSearchBodyError } from './job-search/request-errors.js';
@@ -75,7 +78,12 @@ const app = express();
 // rate limiter (middleware/auth.ts `rateLimit`) bucketed all users together
 // and could 429 legitimate logins under concurrency. Trusting the proxy makes
 // `req.ip` the actual client address so the limiter is per-user again.
-app.set('trust proxy', true);
+//
+// How much is trusted is per deployment (`trustProxySetting`): `TRUST_PROXY`
+// when set; otherwise `true` on Vercel (unchanged) and one hop everywhere
+// else — the mainland gateway and `next dev` each put exactly one proxy in
+// front of this process, so only the entry that proxy wrote is believed.
+app.set('trust proxy', trustProxySetting());
 
 // ─── CORS ───────────────────────────────────────────────────────────────
 // Same-origin in production (the Next.js app and this API share each brand's
@@ -193,10 +201,26 @@ if (!process.env.VERCEL) {
   }
 
   const port = Number(process.env.PORT || 4607);
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     logger.info('SERVER', `RoboApply API listening on http://localhost:${port}`);
     // eslint-disable-next-line no-console
     console.log(`\n🚀 RoboApply API on http://localhost:${port}\n`);
+  });
+
+  // Rolling updates (mainland pods, any Node host) send SIGTERM: stop the
+  // cron mirror, stop accepting connections, let running requests finish,
+  // then close the database pool and exit. See processLifecycle.ts.
+  installGracefulShutdown({
+    server,
+    stopBackground: stopRoboApplyCron,
+    afterDrain: async () => {
+      const { default: prisma } = await import('./lib/prisma.js');
+      await prisma.$disconnect();
+    },
+    log: {
+      info: (message, meta) => logger.info('SERVER', message, meta),
+      warn: (message, meta) => logger.warn('SERVER', message, meta),
+    },
   });
 }
 

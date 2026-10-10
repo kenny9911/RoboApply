@@ -29,9 +29,12 @@
 //     the card; restating it third-person was the R11 root cause)
 //   - getLocaleDirective override (E12b): the strict enum-safe directive
 //     makes summary/strengths/gaps follow the user's UI locale. This
-//     intentionally changes the output language of every caller —
-//     POST /jobs/:id/score and the raScoreRefresh scheduler included —
-//     whenever a locale is threaded into run()
+//     intentionally changes the output language of every caller whenever a
+//     locale is threaded into run(). Callers today: the cross-bank search
+//     (RACrossBankSearchService) and the tailor diff's re-score
+//     (RAResumeAIService). The legacy POST /v2/jobs/:id/score route that
+//     also called it was deleted in INT-13; the product's fit scoring is
+//     features/match (scorer v3), not this agent.
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import {
@@ -265,7 +268,7 @@ Output ONLY the JSON object. No prose, no fences, no trailing newline noise.`;
   protected parseOutput(response: string): RAJobMatchScorerOutput {
     // Malformed output THROWS (never a score-0 fallback) — a zero fallback
     // would be persisted as a permanent cache row AND billed. Every caller
-    // (scoreRows, raScoreRefresh, the /jobs/:id/score route) try/catches
+    // (the cross-bank search, the tailor diff's re-score) try/catches
     // around run() and skips the pair on throw, costing the user nothing.
     if (!response || typeof response !== 'string') {
       throw new Error('RAJobMatchScorerAgent: unparseable scorer response');

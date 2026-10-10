@@ -4,7 +4,8 @@
 # INTERNAL_API_SECRET, CN_CANONICAL_ORIGIN, BAIDU_SITE_VERIFICATION, BRAND_HOST_MAP
 # and the legal-page values /legal/[doc] reads (CN_LEGAL_ENTITY_NAME,
 # CN_LEGAL_POSTAL_ADDRESS, CN_SUPPORT_EMAIL, CN_COMPLAINT_EMAIL,
-# CN_COMPLAINT_PHONE, CN_LEGAL_DOCS_VERSION); docs/runbooks/cn-deploy.md §4.
+# CN_COMPLAINT_PHONE, CN_LEGAL_DOCS_VERSION, and optionally
+# CN_TAKEDOWN_CONTACT); docs/runbooks/cn-deploy.md §4.
 # NEXT_PUBLIC_API_URL is a RUNTIME value here: server-side SEO reads
 # (lib/server/publicApi.ts) reach the API Service directly. The browser bundle
 # was built without it and calls /api/v1/* same-origin through the gateway.

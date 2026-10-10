@@ -67,8 +67,15 @@ still, keep the filled file outside the repo or in the cluster's secret store.
 
 Inside the mainland use reachable registries (build args in the Dockerfile
 header: `NODE_IMAGE`, `NPM_REGISTRY=https://registry.npmmirror.com`,
-`APT_MIRROR=mirrors.aliyun.com`). On ACK, `k8s.yaml` runs two replicas with a
-90-minute drain window; scale by replicas with the same agent name.
+`APT_MIRROR=mirrors.aliyun.com`).
+
+On ACK the worker is part of the mainland stack: its one manifest is
+[`deploy/cn/k8s/worker.yaml`](../../../deploy/cn/k8s/worker.yaml) (Deployment
+`worker`, Secret `goapply-worker-env`, 90-minute drain window), built and
+rolled out by `.github/workflows/deploy-cn.yml` from this Dockerfile. The
+base has `replicas: 0`; the release sets the count (`CN_WORKER_REPLICAS`).
+Scale by that count with the same agent name. `k8s.yaml` in this folder is
+only a pointer to that manifest.
 
 The worker prints one line per process at start, e.g.
 `backends llm_backend=openai_compatible stt_backend=dashscope_paraformer tts_backend=dashscope_cosyvoice dashscope_key=set`,

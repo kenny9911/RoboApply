@@ -2,8 +2,10 @@
 //
 // Deterministic preference-draft machinery for the onboarding chat:
 //
-//   - enum normalization tables (PRD §7 taxonomy) the PrefExtract agent's
-//     parseOutput runs every extracted value through (unknown values DROP);
+//   - enum normalization tables (PRD §7 taxonomy) every extracted value runs
+//     through (unknown values DROP); the resume seed (lib/raResumeSeed.ts,
+//     RAOnboardingResumeSeedAgent) is the caller left — the chat's
+//     preference-extract agent was deleted in INT-13;
 //   - deep-merge of extractor updates into the per-session draft
 //     (arrays union-with-cap; an explicit empty array clears; declined
 //     topics never write);
@@ -399,8 +401,8 @@ function normalizeCountry(value: unknown): string | null {
  * Coerce a raw extractor `updates` object into a clean
  * OnboardingDraftPreferences: every enum runs through its taxonomy table
  * (unknown → dropped), free text is trimmed/clipped, lists deduped + capped.
- * Used by RAOnboardingPrefExtractAgent.parseOutput and defensively re-applied
- * by mergeDraft. Never throws.
+ * Used by the resume seed (raResumeSeed.ts, RAOnboardingResumeSeedAgent) and
+ * defensively re-applied by mergeDraft. Never throws.
  */
 export function normalizeDraftUpdates(raw: unknown): OnboardingDraftPreferences {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};

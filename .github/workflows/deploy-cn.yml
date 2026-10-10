@@ -16,7 +16,8 @@
 #   optional NEXT_SERVER_ACTIONS_ENCRYPTION_KEY.
 # Repository variables: ALIYUN_ACR_NAMESPACE (default goapply), ACK_SLB_CERT_ID,
 #   CN_WORKER_REPLICAS (default 0), CN_NPM_REGISTRY, NEXT_PUBLIC_CN_EXT_ID,
-#   NEXT_PUBLIC_CN_EXT_STORE_URL.
+#   NEXT_PUBLIC_CN_EXT_STORE_URL, CN_PUBLIC_ASSET_BASE_URL (the https origin
+#   GoApply images are served from; build-time, see next.config.mjs).
 
 name: deploy-cn
 
@@ -89,9 +90,11 @@ jobs:
           - component: gateway
             context: .
             dockerfile: deploy/cn/Dockerfile.gateway
+          # The GoApply worker image: domestic LLM/STT/TTS pins (WP-63b), not the
+          # generic interview-agent/Dockerfile that RoboApply's worker uses.
           - component: worker
             context: interview-agent
-            dockerfile: interview-agent/Dockerfile
+            dockerfile: interview-agent/deploy/cn/Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -107,10 +110,15 @@ jobs:
           push: true
           provenance: false
           tags: ${{ secrets.ALIYUN_ACR_REGISTRY }}/${{ vars.ALIYUN_ACR_NAMESPACE || 'goapply' }}/goapply-${{ matrix.component }}:${{ github.sha }}
+          # Each Dockerfile declares the arguments it uses; the others are ignored.
+          # NEXT_DEPLOYMENT_ID and CN_PUBLIC_ASSET_BASE_URL are read by `next build`
+          # (version skew across web replicas; the image host next/image may load).
           build-args: |
             NPM_REGISTRY=${{ vars.CN_NPM_REGISTRY || 'https://registry.npmjs.org/' }}
             NEXT_PUBLIC_CN_EXT_ID=${{ vars.NEXT_PUBLIC_CN_EXT_ID }}
             NEXT_PUBLIC_CN_EXT_STORE_URL=${{ vars.NEXT_PUBLIC_CN_EXT_STORE_URL }}
+            NEXT_DEPLOYMENT_ID=${{ github.sha }}
+            CN_PUBLIC_ASSET_BASE_URL=${{ vars.CN_PUBLIC_ASSET_BASE_URL }}
           secrets: |
             next_actions_key=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
           cache-from: type=gha,scope=cn-${{ matrix.component }}

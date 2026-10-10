@@ -13,6 +13,12 @@ import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error — plain .mjs script, no type declarations
 import * as overlay from '../../deploy/cn/render-overlay.mjs';
+// @ts-expect-error — plain .mjs config, no type declarations
+import * as nextConfigModule from '../../next.config.mjs';
+
+type RemotePattern = { protocol: string; hostname: string; port?: string; pathname: string };
+const assetRemotePattern = nextConfigModule.assetRemotePattern as (raw: unknown) => RemotePattern | null;
+const imageRemotePatterns = nextConfigModule.imageRemotePatterns as (env?: Record<string, string | undefined>) => RemotePattern[];
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
@@ -30,7 +36,15 @@ function walk(dir: string): string[] {
     return statSync(join(ROOT, rel)).isDirectory() ? walk(rel) : [rel];
   });
 }
-const KIT_FILES = [...walk(CN), '.github/workflows/deploy-cn.yml', 'scripts/gen-cn-cronjobs.mjs', 'docs/runbooks/cn-deploy.md'];
+const WORKER_KIT = 'interview-agent/deploy/cn';
+const KIT_FILES = [
+  ...walk(CN),
+  ...walk(WORKER_KIT),
+  '.github/workflows/deploy-cn.yml',
+  '.github/workflows/ci.yml',
+  'scripts/gen-cn-cronjobs.mjs',
+  'docs/runbooks/cn-deploy.md',
+];
 
 /** NAME=value pairs of an env example file. */
 const envNames = (file: string) =>
@@ -248,6 +262,72 @@ describe('Kubernetes manifests', () => {
     expect(worker).toMatch(/terminationGracePeriodSeconds: 5400/);
   });
 
+  describe('one worker manifest (WP-76 + WP-63b reconciled)', () => {
+    const worker = k8s('worker.yaml');
+    const workerDockerfile = code(read(`${WORKER_KIT}/Dockerfile`));
+    /** The domestic pins: the manifest, the image and the compose smoke stack must agree. */
+    const PINS: Array<[string, string]> = [
+      ['INTERVIEW_ENGINE_AGENT_NAME', 'GoApply-Interview'],
+      ['WORKER_BRAND', 'goapply'],
+      ['LLM_BACKEND', 'openai_compatible'],
+      ['STT_BACKEND', 'dashscope_paraformer'],
+      ['TTS_BACKEND', 'dashscope_cosyvoice'],
+    ];
+
+    it('the kustomization lists exactly one worker, and the standalone recipe is only a pointer', () => {
+      const listed = [...code(k8s('kustomization.yaml')).matchAll(/^\s+-\s+(\S+\.yaml)$/gm)].map((m) => m[1]!);
+      expect(listed.filter((f) => /worker/.test(f))).toEqual(['worker.yaml']);
+      // One Deployment in the manifest, named `worker` (what the overlay scales and the workflow waits for).
+      expect(worker.match(/^kind: Deployment$/gm)).toHaveLength(1);
+      expect(worker).toMatch(/^metadata:\n {2}name: worker$/m);
+      const pointer = read(`${WORKER_KIT}/k8s.yaml`);
+      expect(code(pointer).trim()).toBe(''); // comments only: applying it creates nothing
+      expect(pointer).toContain('deploy/cn/k8s/worker.yaml');
+      // No other Deployment of the GoApply worker anywhere in the two kits.
+      const deployments = [...walk(CN), ...walk(WORKER_KIT)]
+        .filter((f) => /\.ya?ml$/.test(f))
+        .filter((f) => /^kind: Deployment$/m.test(code(read(f))) && /GoApply-Interview/.test(code(read(f))));
+      expect(deployments).toEqual([`${CN}/k8s/worker.yaml`]);
+    });
+
+    it('pins the brand guard and the domestic backends, with the same values as the image and compose', () => {
+      const compose = read(`${CN}/compose.yaml`);
+      const composeWorker = compose.slice(compose.indexOf('\n  worker:\n'), compose.indexOf('\nvolumes:'));
+      for (const [name, value] of PINS) {
+        expect(worker, name).toContain(`{ name: ${name}, value: "${value}" }`);
+        expect(workerDockerfile, name).toMatch(new RegExp(`\\b${name}=${value}\\b`));
+        expect(composeWorker, name).toContain(`${name}: ${value}`);
+      }
+      // Never a gateway backend on the mainland worker.
+      expect(code(worker)).not.toMatch(/value: "?gateway"?/);
+    });
+
+    it('uses the env names the worker reads (interview-agent/src/backends)', () => {
+      const backends = ['index.ts', 'llm.ts', 'speech.ts'].map((f) => read(`interview-agent/src/backends/${f}`)).join('\n');
+      const NAMES = ['LLM_BACKEND', 'LLM_BASE_URL', 'LLM_API_KEY', 'LLM_MODEL', 'STT_BACKEND', 'TTS_BACKEND', 'WORKER_BRAND', 'DASHSCOPE_API_KEY'];
+      for (const name of NAMES) expect(backends, name).toMatch(new RegExp(`\\b${name}\\b`));
+      // The values pinned above are ones the worker accepts.
+      expect(backends).toMatch(/LLM_BACKENDS = \['gateway', 'openai_compatible'\]/);
+      expect(backends).toMatch(/STT_BACKENDS = \['gateway', 'dashscope_paraformer'\]/);
+      expect(backends).toMatch(/TTS_BACKENDS = \['gateway', 'dashscope_cosyvoice'\]/);
+      // Every name is documented for the Secret (commented-out optional ones included)…
+      const example = read(`${WORKER_KIT}/worker.env.example`);
+      for (const name of NAMES) expect(example, name).toMatch(new RegExp(`^#? ?${name}=`, 'm'));
+      // …and the manifest names the Secret and where its names are listed.
+      expect(worker).toContain('secretRef: { name: goapply-worker-env }');
+      expect(worker).toContain('interview-agent/deploy/cn/worker.env.example');
+      for (const name of ['LLM_BASE_URL', 'LLM_API_KEY', 'LLM_MODEL', 'DASHSCOPE_API_KEY']) expect(worker, name).toContain(name);
+    });
+
+    it('never carries a credential value in the manifest or the example', () => {
+      for (const [name, value = ''] of envNames(`${WORKER_KIT}/worker.env.example`)) {
+        expect(name).toMatch(/^[A-Z][A-Z0-9_]*$/);
+        if (value) expect(/(SECRET|PASSWORD|_KEY$|_KEY_ID$|TOKEN)/.test(name!), `${name} has a value`).toBe(false);
+      }
+      expect(code(worker)).not.toMatch(/(API_KEY|SECRET), value:/);
+    });
+  });
+
   it('exposes only the gateway, with health checks and IPv6 where the cluster has it', () => {
     const files = readdirSync(join(ROOT, CN, 'k8s')).map((f) => k8s(f));
     const lbs = files.flatMap((t) => t.match(/type: LoadBalancer/g) ?? []);
@@ -298,9 +378,44 @@ describe('deploy-cn workflow', () => {
   it('checks cron parity before building, and builds all four images', () => {
     expect(body).toContain('node scripts/gen-cn-cronjobs.mjs --check');
     for (const c of ['web', 'api', 'gateway', 'worker']) expect(body).toMatch(new RegExp(`component: ${c}\\n`));
-    expect(body).toContain('dockerfile: interview-agent/Dockerfile');
+    // The GoApply worker is built from the mainland Dockerfile (domestic backend pins), not the generic one.
+    expect(body).toMatch(/component: worker\n\s+context: interview-agent\n\s+dockerfile: interview-agent\/deploy\/cn\/Dockerfile\n/);
+    expect(body).not.toContain('dockerfile: interview-agent/Dockerfile');
+    expect(existsSync(join(ROOT, 'interview-agent/deploy/cn/Dockerfile'))).toBe(true);
+    // Build-time values `next build` reads: the deployment id (version skew) and the GoApply image host.
+    expect(body).toContain('NEXT_DEPLOYMENT_ID=${{ github.sha }}');
+    expect(body).toContain('CN_PUBLIC_ASSET_BASE_URL=${{ vars.CN_PUBLIC_ASSET_BASE_URL }}');
     expect(body).toContain('node deploy/cn/render-overlay.mjs');
     expect(body).toContain('kubectl apply -k deploy/cn/overlays/release --dry-run=server');
+  });
+
+  describe('build arguments reach the web image', () => {
+    // Docker drops a build argument the Dockerfile does not declare, so a name
+    // the workflow passes but Dockerfile.web lacks never reaches `next build`.
+    const passed = [...(/build-args: \|\n((?: {12}\S.*\n)+)/.exec(body)?.[1] ?? '').matchAll(/^ {12}([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]!);
+    const buildStage = /\nFROM \$\{NODE_IMAGE\} AS build\n([\s\S]*?)\nFROM /.exec(code(read(`${CN}/Dockerfile.web`)))?.[1] ?? '';
+    const declared = new Set([...buildStage.matchAll(/^ARG ([A-Z][A-Z0-9_]*)\b/gm)].map((m) => m[1]!));
+    /**
+     * Passed by the workflow, not yet declared by deploy/cn/Dockerfile.web.
+     * That file is outside INT-13's ownership (handoff request to the
+     * orchestrator): add `ARG <NAME>=` to its build stage, then delete the
+     * name here. Until then the value is inert on the mainland build.
+     */
+    const PENDING_IN_DOCKERFILE_WEB = ['NEXT_DEPLOYMENT_ID', 'CN_PUBLIC_ASSET_BASE_URL'];
+
+    it('the workflow passes the five names the web build reads', () => {
+      expect(passed).toEqual(['NPM_REGISTRY', 'NEXT_PUBLIC_CN_EXT_ID', 'NEXT_PUBLIC_CN_EXT_STORE_URL', 'NEXT_DEPLOYMENT_ID', 'CN_PUBLIC_ASSET_BASE_URL']);
+      expect(declared.size).toBeGreaterThanOrEqual(6);
+    });
+
+    it('Dockerfile.web declares every one of them in its build stage, except the names still pending', () => {
+      expect(passed.filter((name) => !declared.has(name))).toEqual(PENDING_IN_DOCKERFILE_WEB.filter((name) => !declared.has(name)));
+    });
+
+    it('the pending list holds only names that are still undeclared (delete a name once Dockerfile.web declares it)', () => {
+      expect(PENDING_IN_DOCKERFILE_WEB.filter((name) => declared.has(name))).toEqual([]);
+      for (const name of PENDING_IN_DOCKERFILE_WEB) expect(passed, name).toContain(name);
+    });
   });
 
   it('uses secrets only through the secrets context, and writes the kubeconfig privately', () => {
@@ -312,6 +427,200 @@ describe('deploy-cn workflow', () => {
     expect(logins).toHaveLength(3);
     for (const m of logins) expect(m[2], m[1]).toMatch(/^\$\{\{ secrets\.ALIYUN_ACR_[A-Z]+ \}\}$/);
     expect(body).toMatch(/umask 077/);
+  });
+});
+
+describe('ci workflow (root gates + extension + interview-agent)', () => {
+  const wf = read('.github/workflows/ci.yml');
+  const body = code(wf);
+  const scriptsOf = (pkg: string) => Object.keys((JSON.parse(read(pkg)) as { scripts: Record<string, string> }).scripts);
+  const PACKAGES: Record<string, string[]> = {
+    '': scriptsOf('package.json'),
+    extension: scriptsOf('extension/package.json'),
+    'interview-agent': scriptsOf('interview-agent/package.json'),
+  };
+  /** Every `npm … run <script>` / `npm … test` step, with the package it runs in. */
+  const runs = [...body.matchAll(/^\s+(?:- )?run: npm(?: --prefix (\S+))? (?:run (\S+)|(test))\b.*$/gm)].map((m) => ({
+    pkg: m[1] ?? '',
+    script: (m[2] ?? m[3])!,
+  }));
+
+  it('runs on pull requests and on main, read-only, with no secrets and no deploy', () => {
+    expect(body).toMatch(/^on:\n {2}pull_request:\n {2}push:\n {4}branches: \[main\]$/m);
+    expect(body).toMatch(/^permissions:\n {2}contents: read$/m);
+    expect(body).not.toMatch(/secrets\./);
+    expect(body).not.toMatch(/\b(deploy|kubectl|vercel|docker|db push|db:push|prisma migrate)\b/i);
+  });
+
+  it('gives the root job a placeholder DATABASE_URL (closed loopback port, no password), and no other database setting', () => {
+    // A clean runner has no .env; without a connection string the Prisma client
+    // throws at import and every test file that imports it fails.
+    expect(read('server/src/lib/prisma.ts')).toMatch(/throw new Error\(\s*'DATABASE_URL is not set/);
+    const lines = body.split('\n').filter((l) => /DATABASE_URL/.test(l));
+    expect(lines).toEqual(['      DATABASE_URL: postgresql://ci@127.0.0.1:1/ci']);
+    // It sits in the root job's env block (the job that runs `npm test`), not at workflow level.
+    expect(body).toMatch(/\n {2}root:\n(?: {4}.*\n)*? {4}env:\n {6}DATABASE_URL: /);
+    // Nothing else that could point a test at a real service.
+    expect(body).not.toMatch(/\b(DIRECT_DATABASE_URL|REDIS_URL|[A-Z_]*API_KEY|[A-Z_]*SECRET)\b/);
+    expect(body).not.toMatch(/neon\.tech|amazonaws|aliyuncs|:5432/);
+  });
+
+  it('runs the four root gates', () => {
+    const root = runs.filter((r) => r.pkg === '').map((r) => r.script);
+    expect(root).toEqual(['typecheck:server', 'typecheck:web', 'test', 'check']);
+  });
+
+  it('runs the extension and the interview-agent typecheck and tests (root npm test runs neither)', () => {
+    expect(runs.filter((r) => r.pkg === 'extension').map((r) => r.script)).toEqual(['typecheck', 'test']);
+    expect(runs.filter((r) => r.pkg === 'interview-agent').map((r) => r.script)).toEqual(['typecheck', 'test']);
+    const exclude = /exclude: \[([^\]]*)\]/.exec(read('vitest.config.mts'))?.[1] ?? '';
+    expect(exclude).toContain("'interview-agent/**'");
+    expect(exclude).toContain("'extension/**'");
+  });
+
+  it('every command names a script that exists in its package.json', () => {
+    expect(runs.length).toBe(8);
+    for (const { pkg, script } of runs) expect(PACKAGES[pkg], `${pkg || 'root'}: ${script}`).toContain(script);
+  });
+
+  it('installs each package from its lockfile', () => {
+    expect(body.match(/^\s+- run: npm ci --no-audit --no-fund$/gm)).toHaveLength(2); // root job + extension job (root sources)
+    expect(body).toMatch(/npm --prefix extension ci /);
+    expect(body).toMatch(/npm --prefix interview-agent ci /);
+    for (const lock of ['package-lock.json', 'extension/package-lock.json', 'interview-agent/package-lock.json']) {
+      expect(existsSync(join(ROOT, lock)), lock).toBe(true);
+    }
+  });
+});
+
+describe('next/image remote patterns (CN_PUBLIC_ASSET_BASE_URL)', () => {
+  const INTL_HOSTS = ['r2.robohire.io', '**.r2.cloudflarestorage.com'];
+
+  it('adds nothing when the variable is unset or blank', () => {
+    expect(imageRemotePatterns({}).map((p) => p.hostname)).toEqual(INTL_HOSTS);
+    expect(imageRemotePatterns({ CN_PUBLIC_ASSET_BASE_URL: '  ' }).map((p) => p.hostname)).toEqual(INTL_HOSTS);
+    expect(assetRemotePattern(undefined)).toBeNull();
+    expect(assetRemotePattern('')).toBeNull();
+  });
+
+  it('adds exactly the parsed origin and base path, never a wildcard host', () => {
+    expect(assetRemotePattern('https://assets.example.cn/public/')).toEqual({ protocol: 'https', hostname: 'assets.example.cn', port: '', pathname: '/public/**' });
+    expect(assetRemotePattern(' https://Bucket.oss-cn-shanghai.aliyuncs.com ')).toEqual({
+      protocol: 'https',
+      hostname: 'bucket.oss-cn-shanghai.aliyuncs.com',
+      port: '',
+      pathname: '/**',
+    });
+    expect(assetRemotePattern('https://cdn.example.cn:8443/a/b?x=1#y')).toEqual({ protocol: 'https', hostname: 'cdn.example.cn', port: '8443', pathname: '/a/b/**' });
+    const patterns = imageRemotePatterns({ CN_PUBLIC_ASSET_BASE_URL: 'https://assets.example.cn/public' });
+    expect(patterns).toHaveLength(3);
+    expect(patterns[2]).toEqual({ protocol: 'https', hostname: 'assets.example.cn', port: '', pathname: '/public/**' });
+    expect(patterns[2]!.hostname).not.toContain('*');
+  });
+
+  it('fails closed on anything that is not a plain https URL of a real host', () => {
+    for (const bad of [
+      'http://assets.example.cn',
+      'assets.example.cn',
+      '//assets.example.cn/x',
+      'https://*.example.cn/x',
+      'https://**.aliyuncs.com',
+      'https://user:pass@assets.example.cn',
+      'https://localhost/x',
+      'https://assets.example.cn/a/*/b',
+      'https://assets.example.cn/**',
+      'ftp://assets.example.cn',
+      'not a url',
+    ]) {
+      expect(assetRemotePattern(bad), bad).toBeNull();
+      expect(imageRemotePatterns({ CN_PUBLIC_ASSET_BASE_URL: bad }).map((p) => p.hostname), bad).toEqual(INTL_HOSTS);
+    }
+  });
+
+  it('reads only the CN_ name (R-03: no unprefixed twin, no fallback)', () => {
+    expect(imageRemotePatterns({ PUBLIC_ASSET_BASE_URL: 'https://assets.example.com' }).map((p) => p.hostname)).toEqual(INTL_HOSTS);
+  });
+
+  it('the config uses the builder, sets no deploymentId, and the name is documented for the mainland build', () => {
+    const config = read('next.config.mjs');
+    expect(config).toMatch(/remotePatterns: imageRemotePatterns\(\)/);
+    // NEXT_DEPLOYMENT_ID is passed at build time instead: a config value that
+    // disagrees with the platform's fails the production build on Vercel.
+    expect(code(config.replace(/\/\/.*$/gm, ''))).not.toMatch(/^\s*deploymentId\s*:/m);
+    // Build-time, so it is documented as a build variable, not as a line of the pods' runtime Secret.
+    const webExample = read(`${CN}/cn.web.env.example`);
+    expect(webExample).toMatch(/^# .*CN_PUBLIC_ASSET_BASE_URL/m);
+    expect(webExample).toMatch(/^# .*NEXT_DEPLOYMENT_ID/m);
+    expect(envNames(`${CN}/cn.web.env.example`).map(([n]) => n)).not.toContain('CN_PUBLIC_ASSET_BASE_URL');
+  });
+});
+
+describe('env catalogue (.env.example and the mainland examples)', () => {
+  const root = read('.env.example');
+  /** Active (`NAME=`) and commented-out (`# NAME=`) entries of the root catalogue. */
+  const active = [...root.matchAll(/^([A-Z][A-Z0-9_]+)=(.*)$/gm)].map((m) => [m[1]!, m[2]!] as const);
+  const catalogue = new Set([...root.matchAll(/^#? ?([A-Z][A-Z0-9_]+)=/gm)].map((m) => m[1]!));
+  const mentions = (name: string) => new RegExp(`(?<![A-Z0-9_])${name}(?![A-Z0-9_])`).test(root);
+
+  it('lists each name once and holds no real value', () => {
+    const names = active.map(([n]) => n);
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([]);
+    for (const [label, re] of [
+      ['Stripe key', /\b[sr]k_(live|test)_[0-9A-Za-z]{8,}/],
+      ['AWS access key', /AKIA[0-9A-Z]{16}/],
+      ['Aliyun AccessKey id', /LTAI[0-9A-Za-z]{12,}/],
+      ['private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+      ['JWT', /\beyJ[0-9A-Za-z_-]{10,}\.[0-9A-Za-z_-]{10,}\./],
+    ] as const) {
+      expect(re.test(root), label).toBe(false);
+    }
+    // A secret-looking name carries no value, or an obvious placeholder.
+    for (const [name, value] of active) {
+      if (!/(SECRET|PASSWORD|PRIVATE_KEY|_API_KEY$|ACCESS_KEY|TOKEN$|ENCRYPTION_KEY)/.test(name)) continue;
+      expect(value.replace(/\s+#.*$/, '').trim(), name).toMatch(/^(|change-me-[a-z-]+)$/);
+    }
+    expect(root).toMatch(/^DATABASE_URL=postgresql:\/\/USER:PASSWORD@/m);
+  });
+
+  it('every name of the mainland examples is in the root catalogue', () => {
+    for (const file of [`${CN}/cn.env.example`, `${CN}/cn.web.env.example`]) {
+      for (const [name] of envNames(file)) expect(catalogue.has(name!), `${file}: ${name}`).toBe(true);
+    }
+  });
+
+  it('documents what the hot server and config files read', () => {
+    // The files INT-13 owns: any process.env name they read is in the catalogue.
+    const FILES = ['server/src/app.ts', 'server/src/roboapply/schedulers/processLifecycle.ts', 'server/src/roboapply/schedulers/RoboApplyCronService.ts', 'server/src/cron/handlers.ts', 'next.config.mjs'];
+    const read_ = new Set<string>();
+    for (const f of FILES) {
+      for (const m of read(f).matchAll(/\b(?:process\.)?env\.([A-Z][A-Z0-9_]{2,})\b/g)) read_.add(m[1]!);
+    }
+    expect(read_.size).toBeGreaterThan(8);
+    for (const name of read_) expect(mentions(name), name).toBe(true);
+    for (const name of ['TRUST_PROXY', 'SHUTDOWN_DRAIN_TIMEOUT_MS', 'CN_PUBLIC_ASSET_BASE_URL', 'NEXT_DEPLOYMENT_ID']) expect(mentions(name), name).toBe(true);
+  });
+
+  it('pairs the per-brand names with their CN_ twin (R-03) and keeps removed names out', () => {
+    for (const name of ['EMAIL_FROM', 'LIVEKIT_AGENT_NAME', 'CANONICAL_ORIGIN', 'SUPPORT_EMAIL', 'TOTP_ENCRYPTION_KEY', 'MIN_EXT_VERSION', 'SCORE_DAILY_BUDGET', 'COPILOT_DAILY_BUDGET_USD']) {
+      expect(catalogue.has(name), name).toBe(true);
+      expect(catalogue.has(`CN_${name}`), `CN_${name}`).toBe(true);
+    }
+    // Nothing reads these any more (INT-13 audit); RA_CROSSBANK_DAILY_CAP was a misspelling of …_DAILY_CALL_CAP.
+    for (const gone of [
+      'NEXT_PUBLIC_R2_PUBLIC_URL',
+      'NEXT_PUBLIC_LIVEKIT_URL',
+      'ALIPAY_APP_ID',
+      'ALIPAY_APP_PRIVATE_KEY',
+      'ALIPAY_PUBLIC_KEY',
+      'CONTACT_EMAIL_PROVIDER',
+      'CONTACT_EMAIL_PROVIDER_KEY',
+      'ROBOHIRE_INVITE_SECRET',
+      'RA_CROSSBANK_DAILY_CAP',
+    ]) {
+      expect(mentions(gone), gone).toBe(false);
+    }
+    expect(catalogue.has('RA_CROSSBANK_DAILY_CALL_CAP')).toBe(true);
+    expect(read('server/src/roboapply/v2/routes/discover.ts')).toContain('process.env.RA_CROSSBANK_DAILY_CALL_CAP');
   });
 });
 

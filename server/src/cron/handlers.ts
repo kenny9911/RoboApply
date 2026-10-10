@@ -146,6 +146,9 @@ function job(name: string, fn: () => Promise<unknown>) {
 // runs on its own /interview-cleanup cron; the cover-letter cache retention
 // that /cache-cleanup did now runs inside /account-purge (see
 // purgeLegacyCoverLetterCache above).
+// scripts/gen-cn-cronjobs.mjs still names five of them in EXCLUDED_CRONS on
+// purpose: __tests__/deploy/cronParity.test.ts asserts the auto-submit sweeps
+// can never be mirrored to the mainland stack, even if a route came back.
 
 // 1. Billing: renewal reminder (T-5d).
 router.get('/billing-renewal-reminder', job('billing-renewal-reminder', () => runRenewalReminderSweep({})));
