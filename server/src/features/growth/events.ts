@@ -63,6 +63,10 @@ export const PRODUCT_EVENTS = {
   checklist_viewed: { props: ['doneCount'] },
   checklist_item_clicked: { props: ['step'] },
   checklist_dismissed: { props: ['doneCount'] },
+  // Invite friends (F-GROW-01; WP-60). Never the code, never who was invited.
+  invite_viewed: { props: ['from', 'eligible'] },
+  invite_link_shared: { props: ['channel', 'from'] },
+  invite_landing_viewed: { props: ['signedIn'] },
 } as const satisfies Record<string, EventDefinition>;
 
 export type ProductEventName = keyof typeof PRODUCT_EVENTS;
@@ -200,8 +204,12 @@ const TOKEN_PATH_RE = new RegExp(
   `(^|/)(${TOKEN_PATH_PREFIXES.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})/[^/]+(?:/.*)?$`,
 );
 
-/** Replace the secret segment of a token route (and anything after it) with `:token`. */
+/** Invite links (`/r/<code>`, WP-60): the code identifies the inviter, so it is not stored. */
+const INVITE_PATH_RE = /^\/r\/[^/]+(?:\/.*)?$/;
+
+/** Replace the secret segment of a token route (and anything after it) with `:token`; invite codes with `:code`. */
 export function redactTokenPath(pathname: string): string {
+  if (INVITE_PATH_RE.test(pathname)) return '/r/:code';
   return pathname.replace(TOKEN_PATH_RE, '$1$2/:token');
 }
 

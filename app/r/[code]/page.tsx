@@ -1,21 +1,30 @@
-// /r/[code] — route shell (FND-6b). Invite link landing (attribution, then signup).
-//
-// STUB. Owner: WP-60, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /r/[code] — where an invite link lands (PRODUCT_PLAN.md F-GROW-01;
+// TASK_PLAN.md WP-60). Public page in HybridShell (R-23): the app shell with
+// a session, marketing chrome and the legal footer without one. Not indexed
+// (every code is personal). The code goes on to signup as `?ref=<code>`; the
+// server attaches it to the new account (growth.recordAttribution).
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../../components/v3/shell/HybridShell';
 import { LegalFooter } from '../../../components/features/market';
+import { InviteLanding } from '../../../components/features/growth';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: 'no-referrer' };
 
-export default async function RCodePage({ params }: { params: Promise<{ code: string }> }) {
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return '';
+  }
+}
+
+export default async function InviteLinkPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   return (
     <HybridShell from="invite" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/r/[code]" data-owner="WP-60" data-param={code} />
+      <InviteLanding code={safeDecode(code).slice(0, 32)} />
     </HybridShell>
   );
 }

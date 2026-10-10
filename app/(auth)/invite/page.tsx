@@ -1,8 +1,14 @@
-// /invite — route shell (FND-6b). Invite friends (flag `invites`).
-//
-// STUB. Owner: WP-60, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /invite — invite friends (PRODUCT_PLAN.md F-GROW-01; TASK_PLAN.md WP-60;
+// flag `invites`). Renders inside the (auth) app shell; the proxy requires a
+// session. The page content is a client component (it reads the person's link
+// and progress); with the capability off it says invites are not available.
+
+import type { Metadata } from 'next';
+
+import { InviteFriends } from '../../../components/features/growth';
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default function InvitePage() {
-  return <div hidden data-route-stub="/invite" data-owner="WP-60" />;
+  return <InviteFriends />;
 }
