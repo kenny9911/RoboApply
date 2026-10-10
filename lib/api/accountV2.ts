@@ -57,6 +57,21 @@ export function confirmStudentEmail(body: In<typeof AV.StudentEmailConfirmBodySc
   return call<AV.StudentStatus>('POST', `/api/v1/roboapply/account/student/verify-email/confirm`, { ...opts, body });
 }
 
+// ── Sign-in, second step (legacy auth router, not in the feature mount table) ──
+//
+// POST /api/v1/roboapply/auth/login/2fa — body { code } | { recoveryCode };
+// the challenge rides in the httpOnly `ra_2fa` cookie set by POST /auth/login
+// (401 `two_factor_required`). Success sets the session cookie.
+
+export interface LoginTwoFactorResult {
+  user: { id: string; email: string } | null;
+  twoFactor: { method: 'totp' | 'recovery'; recoveryCodesLeft: number };
+}
+
+export function completeTwoFactorSignIn(body: In<typeof AV.LoginTwoFactorBodySchema>, opts?: CallOptions): Promise<LoginTwoFactorResult> {
+  return call<LoginTwoFactorResult>('POST', '/api/v1/roboapply/auth/login/2fa', { ...opts, body });
+}
+
 /** Every wrapper of this area, for callers that prefer one import. */
 export const accountV2Api = {
   getTwoFactorStatus,
@@ -67,4 +82,5 @@ export const accountV2Api = {
   getStudentStatus,
   sendStudentEmailCode,
   confirmStudentEmail,
+  completeTwoFactorSignIn,
 };

@@ -9,14 +9,19 @@
 //     `planKey`, `userId`, `seekerProfileId`, `product: 'roboapply'` and the
 //     checkout acknowledgements, so the webhook can reconcile without guessing.
 // Promotion codes are V2 (F-BILL-11) and stay off unless
-// `STRIPE_PROMOTION_CODES=true`; no offer ships at launch.
+// `STRIPE_PROMOTION_CODES=true`; never on student plans; no offer ships at
+// launch. V2 (WP-79): a Taiwan buyer is charged the plan's Stripe TWD price
+// when the owner configured one (`order.country === 'TW'`), and student plans
+// need `order.studentVerified === true`.
 
-import { parseBoolEnv, type EnvSource } from '../../brand/brandEnv.js';
+import type { EnvSource } from '../../brand/brandEnv.js';
 import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
 import { BillingError } from '../errors.js';
 import { appOrigin, withQueryParam } from '../origins.js';
 import { getStripe as defaultGetStripe, type StripeClient } from '../stripeClient.js';
 import { CHECKOUT_ACK_PROSE_VERSION } from '../acknowledgements.js';
+import { isStudentPlan } from '../planCatalog.js';
+import { acceptsPromotionCode, usesTwdPrice } from '../planViews.js';
 import type { CheckoutOrder, CheckoutResult, PaymentRailImpl } from './types.js';
 
 export type StripeRailDb = Pick<ExtendedPrismaClient, 'seekerSubscription'>;
@@ -40,6 +45,7 @@ export function stripeCheckoutMetadata(order: CheckoutOrder): Record<string, str
     autoRenewAck: order.plan.requiresAutoRenewAck ? (order.acknowledgements.autoRenewAck ? 'yes' : 'no') : 'n/a',
     withdrawalWaiver: order.acknowledgements.withdrawalWaiver ? 'yes' : 'no',
     ackVersion: CHECKOUT_ACK_PROSE_VERSION,
+    currency: usesTwdPrice(order.plan, order.country) ? 'twd' : order.plan.currency.toLowerCase(),
   };
 }
 
@@ -73,6 +79,10 @@ export function createStripeRail(deps: StripeRailDeps = {}): PaymentRailImpl {
       if (!plan.sellable || !plan.stripePriceId) {
         throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: plan.key });
       }
+      if (isStudentPlan(plan) && order.studentVerified !== true) {
+        throw new BillingError('student_verification_required', 'Verify your school email to get the student price', { planKey: plan.key });
+      }
+      const priceId = usesTwdPrice(plan, order.country) ? plan.twdPrice!.stripePriceId : plan.stripePriceId;
       const customer = await ensureCustomer(stripe, order);
       const metadata = stripeCheckoutMetadata(order);
       const origin = appOrigin(order.brand, env);
@@ -87,7 +97,7 @@ export function createStripeRail(deps: StripeRailDeps = {}): PaymentRailImpl {
         session = await stripe.checkout.sessions.create({
           mode: subscription ? 'subscription' : 'payment',
           customer,
-          line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+          line_items: [{ price: priceId, quantity: 1 }],
           client_reference_id: order.user.id,
           metadata,
           ...(subscription
@@ -96,7 +106,7 @@ export function createStripeRail(deps: StripeRailDeps = {}): PaymentRailImpl {
           billing_address_collection: 'auto',
           success_url,
           cancel_url,
-          allow_promotion_codes: parseBoolEnv(env.STRIPE_PROMOTION_CODES),
+          allow_promotion_codes: acceptsPromotionCode(plan, env),
         });
       } catch (err) {
         throw new BillingError('payment_provider_error', 'The payment page could not be opened', {

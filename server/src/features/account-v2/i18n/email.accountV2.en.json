@@ -1,0 +1,21 @@
+{
+  "accountV2": {
+    "studentCode": {
+      "subject": "Your %BRAND% student code: {code}",
+      "preheader": "Enter this code to confirm your school email.",
+      "heading": "Confirm your school email",
+      "body": "Enter this code in %BRAND% to confirm that you can read this inbox. It works for {minutes} minutes.",
+      "codeLine": "Your code: {code}",
+      "ignore": "If you didn't ask for this, ignore this email. Nothing changes."
+    },
+    "winback": {
+      "subject": "Your %BRAND% paid plan ended a month ago",
+      "preheader": "Your account and your work are still there.",
+      "heading": "Your account is still here",
+      "body": "Your paid plan ended on {date}. Your resumes, saved jobs and applications are still in your account, and the free plan keeps working.",
+      "price": "If you want Pro, it costs {price} every {period}. You can cancel any time.",
+      "cta": "See plans",
+      "once": "This is the only email we send about it."
+    }
+  }
+}

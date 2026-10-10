@@ -113,7 +113,10 @@ export async function computeTwRevenue(input: {
 
   const fresh = isFxFresh(input.fx, input.now);
   const twdChargesWhole = Math.round(twdMinor / 100);
-  const revenueTwd = fresh && input.fx ? Math.round((usdMinor / 100) * input.fx.ratePerUsd) + twdChargesWhole : null;
+  // Only USD needs the reference rate; a year of TWD-only charges (Stripe
+  // TWD prices, WP-79) is known exactly without it.
+  const revenueTwd =
+    usdMinor === 0 ? twdChargesWhole : fresh && input.fx ? Math.round((usdMinor / 100) * input.fx.ratePerUsd) + twdChargesWhole : null;
   const warnAt = Math.round(TW_VAT_THRESHOLD_TWD * TW_WARN_RATIO);
   return {
     periodStart: start.toISOString(),

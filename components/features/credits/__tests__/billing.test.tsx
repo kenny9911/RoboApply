@@ -23,6 +23,17 @@ const account = vi.hoisted(() => ({
   switchConfirm: vi.fn(),
   portal: vi.fn(),
 }));
+// Account V2 (WP-79) cards inside the billing view: no network.
+const v2 = vi.hoisted(() => ({
+  getStudentStatus: vi.fn(),
+  getUiState: vi.fn(),
+  patchUiState: vi.fn(),
+}));
+vi.mock('../../../../lib/api/accountV2', async (orig) => {
+  const real = await orig<{ accountV2Api: Record<string, unknown> }>();
+  return { ...real, accountV2Api: { ...real.accountV2Api, getStudentStatus: v2.getStudentStatus } };
+});
+vi.mock('../../../../lib/api/uiState', () => ({ getUiState: v2.getUiState, patchUiState: v2.patchUiState }));
 vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...api }));
 vi.mock('../../../../lib/api/account', async (orig) => ({ ...(await orig<Record<string, unknown>>()), accountApi: account }));
 vi.mock('../../../../app/(auth)/settings/billing/actions', () => countryAction);
@@ -52,6 +63,10 @@ beforeEach(() => {
   atPhoneWidth();
   for (const fn of [...Object.values(api), ...Object.values(account), ...Object.values(countryAction)]) fn.mockReset();
   countryAction.visitorCountryAction.mockResolvedValue(null);
+  for (const fn of Object.values(v2)) fn.mockReset();
+  v2.getStudentStatus.mockResolvedValue({ verified: false, schoolDomain: null, verifiedAt: null, expiresAt: null, pendingDomain: null, available: false });
+  v2.getUiState.mockResolvedValue({ state: { tours: {}, dismissals: {}, popupLastShownAt: null, announcementsSeen: [], values: {} }, lastFeedVisitAt: null, updatedAt: null });
+  v2.patchUiState.mockImplementation(async () => ({ state: { tours: {}, dismissals: {}, popupLastShownAt: null, announcementsSeen: [], values: {} }, lastFeedVisitAt: null, updatedAt: null }));
   api.getCredits.mockResolvedValue(creditsResponse());
   api.getPlans.mockResolvedValue(plansView());
   api.getCreditHistory.mockResolvedValue({ items: [] });

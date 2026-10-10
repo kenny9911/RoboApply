@@ -35,6 +35,8 @@ export const BILLING_ERROR_STATUS = {
   no_profile: 409,
   /** The CN rail amount is not a whole yuan (the GoHire worker bills whole yuan). */
   price_not_whole_yuan: 503,
+  /** Student plans need a live school-email verification (WP-79; F-ACCT-02). */
+  student_verification_required: 403,
 } as const;
 
 export type BillingErrorCode = keyof typeof BILLING_ERROR_STATUS;

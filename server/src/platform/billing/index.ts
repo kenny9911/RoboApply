@@ -7,6 +7,8 @@
 //   Changes      cancelSubscription · quoteSwitch · confirmSwitch (Stripe)
 //   Policy       computeRefund (F-BILL-08) · activeOffers (none at launch)
 //   Money        fx reference (TWD line) · TW revenue monitor
+//   V2 (WP-79)   Taiwan prices (twdPrice / usesTwdPrice) · student discount ·
+//                promotion codes · winback sweep (runWinbackSweep)
 //
 // Importing this module registers the built-in Stripe and Alipay rails.
 
@@ -37,6 +39,7 @@ export {
   planDefinitionFor,
   quoteSwitch,
   stripePeriod,
+  switchPrice,
   toSubscriptionRow,
 } from './subscriptions.js';
 export type { BillingAccount, BillingDb, CancelInput, CancelOutcome, PlanState, PlanStatus, SubscriptionRow, SwitchQuote } from './subscriptions.js';
@@ -71,5 +74,16 @@ export type { TwRevenueReport } from './twRevenue.js';
 export { getStripe, setStripeClientForTests } from './stripeClient.js';
 export type { StripeClient } from './stripeClient.js';
 export { appOrigin, callbackOrigin, safeReturnPath } from './origins.js';
-export { buildPlanViews } from './planViews.js';
-export type { PlanView, PlanViewOptions } from './planViews.js';
+export { acceptsPromotionCode, buildPlanViews, promotionCodesEnabled, usesTwdPrice } from './planViews.js';
+export type { LocalPriceView, PlanView, PlanViewOptions } from './planViews.js';
+export {
+  WINBACK_AFTER_DAYS,
+  WINBACK_TEMPLATE,
+  WINBACK_WINDOW_DAYS,
+  createWinbackSweep,
+  defaultWinbackDeps,
+  runWinbackSweep,
+  winbackEmail,
+  winbackPrice,
+} from './winback.js';
+export type { WinbackDb, WinbackDeps, WinbackEmailParams } from './winback.js';
