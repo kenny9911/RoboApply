@@ -7,6 +7,8 @@
 
 > **2026-10-10 revision (binding).** Open application moves the job to Applied at once with Undo; the extension never detects submits and never types AI answers without per-field approval; no LinkedIn URL import and no applicant counts; "Recruiter-posted" replaces "Direct from employers" as the filter, with no ranking boost; one sample rule (≥20) for every aggregate; public counts use public rows only; no launch offer and no competitor price comparisons; auto-renewal, withdrawal-waiver, age-16 and analytics consents; "Tips and reminders" preference for promotional nudges; 个性化推荐 has no default; CN-0 names its offshore processors; sensitive CN/EEO fields never enter a prompt. `TASK_PLAN.md` §1–§2 carry the full rules.
 
+> **2026-10-11 revision (binding): owner rulings D5 and D6.** **D5:** GoApply and RoboApply have the same robust functionality; the differences are the job board, job sources and job-search APIs, plus what follows from the market (language, currency, prices, payment rail, extra sign-in methods, legal lines). A feature that is on for RoboApply is on for GoApply by default, on the shared stack; a China-specific provider is an optional override. GoApply's extras (校招日历, 内推码, 一键填表, the AI 面试 format), its consent prompts and its AI-generated labels stay: they add, they never remove. **D6:** job sources, prices and payment rails are set per market; GoApply pays through the existing Alipay rail and RoboApply through Stripe. Specifications: `GOAPPLY_PARITY_PLAN.md` and `market/MARKET_STRATEGY.md`. In this document that changes: §0, the GoApply `/pricing` row of §3.2, the legend of §5.0, the note of §5.3, the GoApply column of the rows marked "D5" in §5, §6.2 (practice), §6.3 (GoApply prices), §7.1 (channels) and §8.2 (staged depth). Anywhere else, a GoApply cell that makes a feature wait for a licence, a filing, a domestic model, mainland voice infrastructure or a payments switch is no longer the rule.
+
 > **How to use this document.** Section 5 (feature matrix) is the scope contract: every catalog feature ID has one decision per brand. Section 4 (onboarding) is screen-level spec. Section 6 (pricing) defines credit keys and plan keys that the foundation wave creates. Section 8 (MVP vs full) says how deep each area goes in each release, so the build can stop after any release without leaving dead ends. Where this plan and the catalog disagree, this plan wins. Where this plan and the binding owner decisions D1–D4 disagree, D1–D4 win.
 
 ---
@@ -19,6 +21,8 @@
 | D2 | Existing code may be overwritten where it conflicts. | We keep the resume editor/tailor/export, tracker, voice/video practice interviews, Stripe + Alipay billing, job providers, cross-bank search, Clarity tokens, 9-locale i18n and the copy/design gates. We replace the 8-card feed, the setup panel, the disconnected `/job-search` workspace, the dead V1 auto-apply engine and the fake integrations. |
 | D3 | **Never fabricate data a user relies on.** | Every number on screen has a named source (§9.3). Features that depend on proprietary data we lack are either rebuilt on honest sources or marked DEFER with the unblocking data source. |
 | D4 | Live interview fixes are **Wave 0** (Track A, already running). | This plan does not re-plan them. It only states the product requirements that depend on them (practice from a job, first practice free) and the success metrics they must hit. |
+| D5 | (2026-10-11) **Both brands have the same robust functionality**; only the job board, job sources and job-search APIs differ, plus what follows from the market. | Every "= intl" in the GoApply column means the same feature at the same depth, on by default. GoApply is never a reduced, seeker-tools-only product waiting for a licence or credential. Its additional features and consent prompts stay. |
+| D6 | (2026-10-11) **Sources, prices and payment rails are per market.** | GoApply: CNY ladder, one-time passes through the existing Alipay rail, purchasable by default. RoboApply: USD ladder through Stripe. A plan is never "price not set" (§6.3). |
 
 Also resolved from the catalog's open decisions: D-01 (supervised only, both brands), D-02 (international brand is RoboApply), D-06 (public pricing page, renewal reminders actually sent, one-click cancel), D-07 (no fake urgency, no fake anchors, no static counters). D-03, D-04, D-08 are addressed in §5 and §10.
 
@@ -174,9 +178,9 @@ All marketing pages are public, server-rendered, localized under `/{locale}/…`
 | Route | Page | Phase |
 |---|---|---|
 | `/`, `/en` | Home: 少填表、不错过截止、面试不慌 positioning; 校招日历 preview; AI面试 practice; free-core statement | MVP |
-| `/features/campus-calendar`, `/features/resume`, `/features/interview-practice`, `/features/assistant`, `/features/form-filler` | Feature pages (extension page V2) | MVP / V2 |
+| `/features/campus-calendar`, `/features/resume`, `/features/interview-practice`, `/features/assistant`, `/features/form-filler` | Feature pages (extension page V2). **D5:** GoApply also gets the pages RoboApply has for the same functions (`/features/job-matches`, `/features/resume-tailoring`, `/features/cover-letters`, `/features/ready-to-apply`) and one for 内推, and its home page offers the same visitor functions over GoApply data (quick search, counters, pricing summary, feature cards, ticker) | MVP / V2 |
 | `/campus`, `/campus/[company]` | Public 校招日历 (Baidu-indexable): programmes, 届别 windows, dates, official links, source and last-verified date | MVP |
-| `/pricing` | Free core + 会员 fee schedule (published as the network-recruitment rules require); shown "暂未开放" until CN-L-03 | MVP |
+| `/pricing` | Free core + 会员 fee schedule (published as the network-recruitment rules require). **D5 / D6:** the plans are purchasable by default through Alipay at the catalog's CNY amounts; "暂未开放" is shown only when the operator has switched charging off (`CN_PAYMENTS_ENABLED=false`) or the Alipay credential is not yet set | MVP |
 | `/legal/agreement`, `/legal/privacy`, `/legal/ai-disclosure`, `/legal/personal-info-list` | 用户协议, 隐私政策, AI 生成内容说明 and model disclosure, 个人信息收集清单 | MVP |
 | `/help` | Help + support | MVP |
 | Footer (all pages) | ICP 备案号, 公安备案号, 人力资源服务许可证号 (when held), AI model names and filing numbers | MVP (values from brand config) |
@@ -497,7 +501,7 @@ No toggle is pre-checked. A required consent already granted at sign-up **for th
 | Field | Control | Options / rules | Required | Default |
 |---|---|---|---|---|
 | `degree` (学历) | Chips | 大专 · 本科 · 硕士 · 博士 · 其他 | 应届/在校: yes; 社招: no | none |
-| `fullTime` (统招) | Toggle | — | No | On |
+| `fullTime` (统招) | Toggle | — | No | On. *As built (Wave FIX, FIX-8): an optional 是 / 否 with nothing preselected. Whether to restore the "On" default is an open owner decision (`requests/waveFIX-carryover.md`, Owner item 1); this row is updated when the owner rules.* |
 | `school` | Typeahead over the Ministry of Education's public list of higher-education institutions (985/211/双一流 marks from the official MOE lists, shown as information; the data file states its source and as-of date); free text allowed | School tier is **display and a user-side filter only, never a ranking input** | 应届/在校: yes | none |
 | `major` (专业) | Typeahead + free text | — | No | none |
 | Overseas school | Toggle "海外院校" switches the school field to free text | — | No | Off |
@@ -555,7 +559,7 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 
 **Decisions:** **BUILD** (full clone, new code) · **ADAPT** (cloned with a stated change) · **UPGRADE** (extend an existing RoboApply module, named) · **DEFER** (not now; says why and what unblocks it) · **SKIP** (never; says why).
 **Phases:** **MVP** (release 1) · **V2** (parity release) · **Later** (after parity, or gated on an external dependency) · **—** (not built).
-**cn column:** "= intl" means the same decision and phase as RoboApply. Every cn feature that shows jobs is additionally gated by `cn.jobFeed` (see §5.3 note). Every F-B2B ID is out of scope.
+**cn column:** "= intl" means the same decision and phase as RoboApply, on by default on the shared stack (D5). The job feed is **on** on GoApply; `CN_RECRUITMENT_INFO_MODE=off` is the operator's off switch (see the §5.3 note). A cell marked **D5** was changed on 2026-10-11 to remove a GoApply-only reduction. Every F-B2B ID is out of scope.
 
 **Honesty rules applied in every row (D3):**
 1. A number is shown only with its source (§9.3). Unknown is shown as "Not listed" / "未披露", never as zero or an estimate without a label.
@@ -568,8 +572,8 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
 | F-MKT-01 | Marketing shell + shared landing template | ADAPT: one landing template for all feature pages (hero, capability sample labelled "Example", how it works, FAQ with FAQPage JSON-LD, CTA). No testimonials until we have real, consented ones; no stat strip unless from §9.3. hreflang per locale. | = intl, zh-first; Baidu meta; ICP footer | MVP |
-| F-MKT-02 | Homepage with quick search + live job ticker | ADAPT: rewrite `components/landing/LandingContent.tsx`; quick search (title, country, city, remote) routes to `/browse/…` (V2) or signup (MVP). Ticker of newest real jobs that we may display publicly (`publicDisplay`), worded "Found {n} min ago · posted {date}" (the posted date is omitted when it is estimated) — V2 with public job pages. | ADAPT: ticker replaced by "正在网申" calendar strip | MVP / V2 |
-| F-MKT-03 | Feature landing pages | ADAPT: the `/features/*` set in §3.2; no H1B-only page (generalized visa page), no TNT page | ADAPT: cn feature set in §3.2 | MVP |
+| F-MKT-02 | Homepage with quick search + live job ticker | ADAPT: rewrite `components/landing/LandingContent.tsx`; quick search (title, country, city, remote) routes to `/browse/…` (V2) or signup (MVP). Ticker of newest real jobs that we may display publicly (`publicDisplay`), worded "Found {n} min ago · posted {date}" (the posted date is omitted when it is estimated) — V2 with public job pages. | **D5:** = intl over GoApply data (quick search, counters, ticker of publicly displayable jobs), plus the "正在网申" calendar strip. No number is invented: a counter with no data shows its honest empty state | MVP / V2 |
+| F-MKT-03 | Feature landing pages | ADAPT: the `/features/*` set in §3.2; no H1B-only page (generalized visa page), no TNT page | ADAPT: cn feature set in §3.2. **D5:** it includes the pages for job matches, resume tailoring, cover letters, Ready to apply and 内推 | MVP |
 | F-MKT-04 | Company and trust pages | BUILD: about, security (what we actually do), help, legal set per brand | BUILD: + 个人信息收集清单, AI disclosure, licence numbers | MVP |
 
 ### 5.2 Onboarding (F-ONB)
@@ -591,7 +595,7 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 
 ### 5.3 Feed (F-FEED)
 
-> **cn licensing note.** Showing, recommending or forwarding jobs in mainland China needs the 人力资源服务许可证 with 网络招聘 scope (CN-L-04) or a licensed partner (GoHire). GoApply ships with flag `cn.jobFeed` **off** until counsel confirms one of the two. With the flag off, GoApply is seeker-tools-only: 校招日历 (official programme links), resume, tailoring against **user-imported** jobs, tracker, practice interviews, Assistant. Every cn row marked "(feed)" is built in MVP but launched with the flag.
+> **cn feed note (rewritten for D5 and D6, 2026-10-11).** The GoApply job feed, recommendations and alerts are **on by default**; every cn row marked "(feed)" ships on. What makes that honest and lawful is how postings are shown, not a flag: every posting that does not come from GoHire shows its original publisher (`来源`), the original link and the date it was last verified; GoHire rows carry the licence line only when the licence values are configured; a posting with no working apply link is never listed; the feed header says where postings come from ("来自 N 家企业招聘官网") and never implies full-market coverage; nothing is scraped from a mainland job board. Today the feed is filled by public employer boards (postings located in mainland China, opened on the employer's own page), the user's imports and search deep links. GoHire's own jobs join once GoHire has a candidate-facing posting page: its `/jobs/<id>` address is "Page not found" today, so those rows are held, not shown. The operator's off switch is `CN_RECRUITMENT_INFO_MODE=off`; with it GoApply falls back to the seeker tools (校招日历, resume, tailoring against user-imported jobs, tracker, practice interviews, Assistant). Whether a public mainland launch needs the 人力资源服务许可证 or a licensed partner first remains counsel's question (CN-L-04).
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
@@ -609,7 +613,7 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 | F-FEED-12 | Report Issue | BUILD: Scam or fake · Job is closed · Wrong location · Wrong pay · Not remote · Other. A scam report hides the job for the reporter, queues it for admin review, and offers "Hide agency posts". | ADAPT: + 招转培/培训贷/收费 reasons feeding the anti-fraud list (CN-E-08) | MVP |
 | F-FEED-13 | Explore category browse | UPGRADE `/job-search` workspace into `/jobs/explore`: 20 function categories with live counts; provider results are **persisted to RAJob** so every result can be saved, scored, tailored and tracked | = intl | MVP |
 | F-FEED-14 | Ranking pipeline | BUILD: candidate retrieval (title taxonomy + keyword FTS + bank search) → deterministic fit components (§5.4) → freshness decay → company diversity → personal feedback adjustments. LLM is used for the fit narrative on top results, not for ranking every job. | = intl | MVP |
-| F-FEED-15 | Job ingestion, sources, freshness | BUILD scheduled ingest: RapidAPI providers + RoboHire bank (intl) persisted to `RAJob` with source, external id, posted date, last-seen date, apply URL; stale jobs archived after 2 missed refreshes or 45 days. Per-job extraction (skills, level, years, sponsorship text, pay) runs once per job. Card shows source and "Last checked {date}". | ADAPT: GoHire bank over TLS + curated calendar + user imports; never scrape BOSS/智联/51job/猎聘; anti-fraud classifier before indexing | MVP |
+| F-FEED-15 | Job ingestion, sources, freshness | BUILD scheduled ingest: RapidAPI providers + RoboHire bank (intl) persisted to `RAJob` with source, external id, posted date, last-seen date, apply URL; stale jobs archived after 2 missed refreshes or 45 days. Per-job extraction (skills, level, years, sponsorship text, pay) runs once per job. Card shows source and "Last checked {date}". | ADAPT (**D5 / D6**): public employer boards through their documented job-board APIs for postings located in mainland China (the source that fills the feed today) + the GoHire bank (synced over TLS or HTTPS; listed only once GoHire has a candidate-facing posting page) + curated calendar + user imports. No RapidAPI provider. Never scrape BOSS/智联/51job/猎聘/拉勾. Anti-fraud classifier before indexing, on every mainland row. Board and bank rows close when the source stops listing them, not by age | MVP |
 | F-FEED-16 | Visitor feed and search | DEFER to V2 with public job pages: visitors see real lists, no score, gate actions at signup after 20 cards | = intl (feed) | V2 |
 | F-FEED-17 | Explore AI (natural-language) search | UPGRADE the job-search agent planner: "remote data jobs in Berlin paying over €70k" → a filter diff card the user confirms (same card as F-ORION-04) | = intl | MVP |
 
@@ -630,12 +634,12 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 | F-JOB-01 | Header and layout | BUILD `/jobs/[id]` (CommandPalette already expects it): company, title, meta chips, pay or "Pay not listed", posted + last checked, source, primary action `Apply on company site`, Save, Share, Ask. Tabs: Overview · Company · People (V2). | = intl + 网申 window and 届别 for campus jobs | MVP |
 | F-JOB-02 | Overview body | UPGRADE `JobDetailModal` content: short summary (labelled "Summary written by AI from the job post"), then the posting's own Responsibilities, Qualifications, Benefits verbatim (cleaned Markdown). Work-authorization lines quoted verbatim. | = intl | MVP |
 | F-JOB-03 | Right rail "Boost your chances" | ADAPT: **Get ready for this job** checklist (the loop, ruling C43): `Saved → Resume tailored → Practiced → Applied` with actions Tailor my resume · Write a cover letter · Practice for this job · People at {company} (V2) · Add to Ready to apply. Credit cost shown on each action. | = intl (cover letter de-emphasized) | MVP |
-| F-JOB-04 | Company tab (Glassdoor, Crunchbase, leadership, news, H1B history) | ADAPT: only sourced facts — name, logo, website, size and industry when the provider gives them (source named), description from the posting, "{n} open jobs at {company} in RoboApply" (our count). Recent news (V2): web search via Tavily with publisher, date and link, labelled "Search results, not verified by RoboApply". Glassdoor, funding, leadership: SKIP until a licensed data provider (DEFER). Sponsorship history: DEFER to an ingest of US DOL OFLC public LCA disclosure files (government data, cited per year); not MVP. | ADAPT: company info from GoHire records; 企业性质 from official registration data only (Later, needs a data source) | MVP / V2 |
+| F-JOB-04 | Company tab (Glassdoor, Crunchbase, leadership, news, H1B history) | ADAPT: only sourced facts — name, logo, website, size and industry when the provider gives them (source named), description from the posting, "{n} open jobs at {company} in RoboApply" (our count). Recent news (V2): web search via Tavily with publisher, date and link, labelled "Search results, not verified by RoboApply". Glassdoor, funding, leadership: SKIP until a licensed data provider (DEFER). Sponsorship history: DEFER to an ingest of US DOL OFLC public LCA disclosure files (government data, cited per year); not MVP. | ADAPT: company info from the posting and its source record (employer board or GoHire); 企业性质 from official registration data only (Later, needs a data source). **D5:** recent company news follows its flag only, as on RoboApply | MVP / V2 |
 | F-JOB-05 | Similar jobs, closed-job handling | BUILD: similar jobs (same function, nearby fit); closed job shows "This job is no longer listed (last seen {date})" + similar jobs; tracker entry kept | = intl | MVP |
 | F-JOB-06 | Apply button variants, apply intercept | ADAPT: `Apply on company site` (opens applyUrl, moves to Applied with inline Undo, ruling R1/C11) · `Fill with extension` (V2) · `Add to Ready to apply`. Easy Apply and Direct Apply SKIP (D1). Intercept: if no tailored resume exists for this job, a one-time sheet offers "Tailor my resume first" / "Apply with my current resume" / "Don't ask again". | = intl | MVP |
 | F-JOB-07 | "Did you apply?" capture | ADAPT: ruling C11 — the card moves to Applied immediately on click with `Undo · I didn't apply`; no return modal | = intl | MVP |
 | F-JOB-08 | Share job | BUILD: copy link to the public job page (V2) or app link (MVP) | ADAPT: + WeChat share card (V2) | MVP |
-| F-JOB-09 | JobPosting structured data | BUILD on public `/job/[id]` pages; `validThrough` = last seen + 30 days; no invented salary | DEFER (Baidu has its own rules; with public cn pages) | V2 |
+| F-JOB-09 | JobPosting structured data | BUILD on public `/job/[id]` pages; `validThrough` = last seen + 30 days; no invented salary | **D5:** = intl. Public job pages, browse pages, the ticker and sitemaps follow the same gates as RoboApply (`PUBLIC_DISPLAY_PROVIDERS`, publicly listable rows); Baidu-specific markup can follow | V2 |
 
 ### 5.6 Filters and search (F-FILT)
 
@@ -644,7 +648,7 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 | F-FILT-01 | Basic criteria (function, excluded title, type, work model, country, location + radius, level, years, date posted) | BUILD server-side filters (replaces client-only `DiscoveryControls`): all listed fields; radius in km or mi by country; "Filters" panel with live count on `Show {N} jobs` | ADAPT: + 届别, 学历, 工作性质, 实习天数 | MVP |
 | F-FILT-02 | Compensation and sponsorship | ADAPT: minimum pay with currency and period (jobs without pay kept unless "Only jobs that list pay" is on); "I need visa sponsorship in {country}" → shows jobs that mention sponsorship first and hides jobs that say no sponsorship; exclude "clearance required" / "citizens only". Sponsorship filters and badges show the quote they rest on; "says no sponsorship" hides a job only when a negation keyword appears in the quote as well as in the AI label. | ADAPT: K/月 floor, 元/天 for 实习; tags 央国企/外企/可落户/事业编; school-tier filter (user-side, on postings that state a requirement; never a ranking input) | MVP |
 | F-FILT-03 | Interests (industry, excluded industry, skills, excluded skills, IC/manager) | BUILD | = intl | MVP |
-| F-FILT-04 | Company insights (companies, stage, agency, excluded companies) | ADAPT: include/exclude companies, company size (when known), hide agency posts; no funding stage | ADAPT: employer type instead of size | MVP |
+| F-FILT-04 | Company insights (companies, stage, agency, excluded companies) | ADAPT: include/exclude companies, company size (when known), hide agency posts; no funding stage | ADAPT: employer type tags. **D5:** the company-size filter is kept beside them (when the size is known) | MVP |
 | F-FILT-05 | Quick filter bar + active chips | BUILD: quick buttons (Country/location, Level, Job type, Work model, Date posted, Pay) + chips + fit-tier view filter `Great fits only · Good fits and better · Everything` with "Hiding {n} weaker fits. Show them." (ruling C2/C3) | = intl | MVP |
 | F-FILT-06 | Title/company search with typeahead | BUILD: typeahead ≥2 chars, 300 ms debounce, titles and companies from our index | = intl | MVP |
 | F-FILT-07 | "Save to default" from Agent | ADAPT: when filters change inside Ready to apply, ask "Use this for your main search too?" | = intl | MVP |
@@ -653,7 +657,7 @@ If the cn job feed is off (licensing, §5.3), the confirm screen shows only cale
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
-| F-ORION-01 | Floating chat panel | BUILD: right drawer on desktop, full-screen sheet on mobile; streaming answers; Stop; never auto-opens on navigation; threads persisted (Jobright has no history); "New chat". Voice input V2. Harvest `MessageBubble`, `StreamingText`, `Markdown`. | = intl, cn models only | MVP |
+| F-ORION-01 | Floating chat panel | BUILD: right drawer on desktop, full-screen sheet on mobile; streaming answers; Stop; never auto-opens on navigation; threads persisted (Jobright has no history); "New chat". Voice input V2. Harvest `MessageBubble`, `StreamingText`, `Markdown`. | = intl. **D5:** on the shared model stack by default (a domestic model is an optional override); the AI consent prompt, the AI-generated label and the content-safety filter stay; voice input is enabled as on RoboApply | MVP |
 | F-ORION-02 | Per-job quick actions | BUILD chips: Why I fit · What I'm missing · Resume tips for this job · Tailor my resume · Write a cover letter · Practice for this job · Similar jobs | = intl | MVP |
 | F-ORION-03 | Job fit analysis | UPGRADE scorer explanation into a structured card (experience, level, skills aligned / missing, education, gaps, highlights); credit `fit_analysis` | = intl | MVP |
 | F-ORION-04 | Chat-to-filter with diff | BUILD: Assistant proposes a diff card (added / changed / removed per field); nothing changes until `Apply changes`; then "Looks better / Not quite" | = intl | MVP |
@@ -721,7 +725,7 @@ D-04 resolved: **no purchased people data and no email finder in MVP.** People f
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
 | F-NET-01 | LinkedIn URL capture | ADAPT: optional field in profile and O7; used for deep links and outreach drafts, not for matching | SKIP | MVP |
-| F-NET-02 | Insider panel (3 buckets) | ADAPT: **People at {company}** tab with three buttons that open LinkedIn people search: people in this role at {company} · people at {company} who worked at {your past companies} · alumni of {your schools} at {company}. V2 adds "People you know" from the user's **own LinkedIn connections CSV export** (only name, company, position and connected-on date are kept — the email column is discarded; matched by company name; stored privately; deletable; explained in the privacy notice as third-party data). V2 adds the job's **hiring contact** for RoboHire-bank jobs only when the recruiter opted in through a RoboHire/GoHire opt-in record that we read by API (never backfilled); hidden until such a record exists. | ADAPT: 内推 hub (F-NET-08 cn) | MVP (deep links), V2 (import, hiring contact) |
+| F-NET-02 | Insider panel (3 buckets) | ADAPT: **People at {company}** tab with three buttons that open LinkedIn people search: people in this role at {company} · people at {company} who worked at {your past companies} · alumni of {your schools} at {company}. V2 adds "People you know" from the user's **own LinkedIn connections CSV export** (only name, company, position and connected-on date are kept — the email column is discarded; matched by company name; stored privately; deletable; explained in the privacy notice as third-party data). V2 adds the job's **hiring contact** for RoboHire-bank jobs only when the recruiter opted in through a RoboHire/GoHire opt-in record that we read by API (never backfilled); hidden until such a record exists. | ADAPT: 内推 hub (F-NET-08 cn). **D5:** the People tab also shows hiring contacts and people-you-know from the user's own import under the same mode as RoboApply, with 内推码 added | MVP (deep links), V2 (import, hiring contact) |
 | F-NET-03 | "Find more" deep link | BUILD (this is the MVP mechanism of F-NET-02) | SKIP | MVP |
 | F-NET-04 | Connect-on-LinkedIn note | ADAPT: AI-drafted note within LinkedIn's length limit, grounded in the job post and the user's resume ("Written from the job post and your resume."), Copy + Open LinkedIn; never sent by us; credit `outreach` | SKIP | MVP |
 | F-NET-05 | Work-email finder | DEFER: needs a licensed people-data provider and a privacy review (owner decision D-04); unblocked by a signed provider contract with opt-out handling | SKIP (PIPL) | Later |
@@ -738,7 +742,7 @@ D-04 resolved: **no purchased people data and no email finder in MVP.** People f
 | F-TRK-01 | Liked list | UPGRADE: Save for later on cards/detail writes tracker status `bookmarked` (wire the unused `useSaveJob`); `/applications?status=saved`; closed jobs grouped | = intl | MVP |
 | F-TRK-02 | Applied list with 5 statuses | UPGRADE `/applications`: views `By stage` (existing board, columns per ruling C1) · `By date` · `List` (search, status filter, counts); detail drawer with notes, dates, salary, files sent, follow-up draft, "who ended it" (They said no / I withdrew / Job was pulled) | ADAPT: stages 网申 → 测评 → 笔试 → AI面试 → 面试 → Offer → 三方 (+ 未通过 / 放弃) | MVP |
 | F-TRK-03 | Auto-capture into Applied | ADAPT: on `Apply on company site` and on kit `Open application` (both with Undo), when the user tells the extension they submitted (V2), on "Already applied" | = intl | MVP |
-| F-TRK-04 | External job import | BUILD `/jobs/added`: paste a URL (fetched with Firecrawl, extracted, user confirms fields) or enter manually; boards whose terms forbid scraping (LinkedIn, Indeed, Glassdoor, BOSS直聘, 智联, 猎聘, 51job, 脉脉, 104, 1111, Cake, Yourator — `IMPORT_FETCH_DENYLIST`) are never fetched: the user pastes the job text or saves it with the extension; imported jobs are private and never counted; the job becomes a full `RAJob` (user-owned source) with fit score, tailoring, practice and tracking; limits 10/day Free, 50/day Pro | = intl (the main cn input while `cn.jobFeed` is off) | MVP |
+| F-TRK-04 | External job import | BUILD `/jobs/added`: paste a URL (fetched with Firecrawl, extracted, user confirms fields) or enter manually; boards whose terms forbid scraping (LinkedIn, Indeed, Glassdoor, BOSS直聘, 智联, 猎聘, 51job, 脉脉, 104, 1111, Cake, Yourator — `IMPORT_FETCH_DENYLIST`) are never fetched: the user pastes the job text or saves it with the extension; imported jobs are private and never counted; the job becomes a full `RAJob` (user-owned source) with fit score, tailoring, practice and tracking; limits 10/day Free, 50/day Pro | = intl (the only job input on GoApply when the operator has switched the feed off) | MVP |
 
 ### 5.13 Interview prep (F-INT)
 
@@ -749,13 +753,13 @@ D-04 resolved: **no purchased people data and no email finder in MVP.** People f
 | F-INT-03 | Report and contribute questions | BUILD with F-INT-01 | = intl | V2 |
 | F-INT-04 | Interview passes | SKIP as a separate product: folded into Pro and Practice packs (§6.3) | SKIP | — |
 | F-INT-05 | AI Interviewer voice intake for employers | SKIP as employer intake (no employer loop yet). Its call state machine is the reference for the Wave 0 live-interview fixes (D4). | SKIP | — |
-| F-INT-06 | Scored AI mock interview | UPGRADE (differentiator): `Practice for this job` from every job, kit and tracker entry (prefills the job and resume); first full practice free after email verification (C42); report questions per ruling C16; depends on **Wave 0** reliability fixes | ADAPT: **AI面试 simulation** in the formats employers commonly use (copy: "模拟企业常用的 AI 面试形式"; no vendor names) (20–30 min, communication / logic / behaviour questions, STAR completeness, filler words); audio-first; video opt-in, analysed in session only; no face analysis; recordings off by default (both brands: recording only with `interview_recording` consent at setup, video needs a second opt-in, purge after 90 days); cn LiveKit/voice stack (CN-E-06) | MVP (intl), V2 (cn, gated on cn voice infra) |
+| F-INT-06 | Scored AI mock interview | UPGRADE (differentiator): `Practice for this job` from every job, kit and tracker entry (prefills the job and resume); first full practice free after email verification (C42); report questions per ruling C16; depends on **Wave 0** reliability fixes | ADAPT: **AI面试 simulation** in the formats employers commonly use (copy: "模拟企业常用的 AI 面试形式"; no vendor names) (20–30 min, communication / logic / behaviour questions, STAR completeness, filler words); audio-first; video opt-in, analysed in session only; no face analysis; recordings off by default (both brands: recording only with `interview_recording` consent at setup, video needs a second opt-in, purge after 90 days); **D5:** voice and video practice run on the shared LiveKit project, worker and speech models by default (a mainland media plane is an optional override), and the camera and video policy is the same as RoboApply's behind the per-session consents; `CN_INTERVIEW_CAMERA_PUBLISH=false` restores audio only | MVP (both brands) |
 
 ### 5.14 Coaching (F-COACH)
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
-| F-COACH-01 | 1:1 coaching booking | ADAPT: admin-managed roster of real coaches (`/admin/coaches`); `/coaching` lists active coaches with real bios; booking = the coach's own Cal.com (or similar) link, or a request form emailed to the coach and admin; payment handled by the coach in V2, by Stripe one-time checkout Later. Nav item and all upsells hidden while the roster is empty. No ratings until we have real post-session ratings (shown with count). | = intl, cn roster and WeChat contact instead of Cal.com | V2 |
+| F-COACH-01 | 1:1 coaching booking | ADAPT: admin-managed roster of real coaches (`/admin/coaches`); `/coaching` lists active coaches with real bios; booking = the coach's own Cal.com (or similar) link, or a request form emailed to the coach and admin; payment handled by the coach in V2, by Stripe one-time checkout Later. Nav item and all upsells hidden while the roster is empty. No ratings until we have real post-session ratings (shown with count). | = intl, cn roster and WeChat contact instead of Cal.com. **D5:** on by default on GoApply under the same rule (hidden while the roster is empty) | V2 |
 | F-COACH-02 | Coaching policies | BUILD a policy page per brand when coaching launches (lead time, cancellation, no-show) | = intl | V2 |
 | F-COACH-03 | Group deep-dive sessions | DEFER: needs real hosts and an events model | DEFER | Later |
 | F-COACH-04 | Weekly Pro office hour | DEFER: only if a real host commits; never advertised before | DEFER | Later |
@@ -777,13 +781,13 @@ D-04 resolved: **no purchased people data and no email finder in MVP.** People f
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
-| F-NOTIF-01 | Instant job alerts with frequency caps | BUILD: per saved search; frequency Off · 1/day · 2/day · 5/day · As they arrive (checked hourly after ingest); Free max 1/day, Pro all | ADAPT: in-app inbox + WeChat subscribe message (V2); email optional | MVP |
+| F-NOTIF-01 | Instant job alerts with frequency caps | BUILD: per saved search; frequency Off · 1/day · 2/day · 5/day · As they arrive (checked hourly after ingest); Free max 1/day, Pro all | ADAPT: in-app inbox + WeChat subscribe message (V2). **D5:** email alerts work by default through the shared transport, for users who have an email address | MVP |
 | F-NOTIF-02 | Daily / weekly digest | BUILD: the user picks Daily · Weekly · Off at onboarding O7 (Daily preselected because the digest is a service message with no upsell blocks); top new fits since the last email | = intl (in-app) | MVP |
 | F-NOTIF-03 | Logged-out job-alert signup | DEFER: needs double opt-in and resume-less matching; with public tools | SKIP | V2 |
 | F-NOTIF-04 | Unsubscribe with reason survey | BUILD: one-click unsubscribe (List-Unsubscribe header) + optional reason | = intl | MVP |
 | F-NOTIF-05 | Transactional emails | BUILD per §7 (verification, reset, receipts, renewal reminders, deletion, etc.) | ADAPT: SMS OTP only; others in-app/email | MVP |
 | F-NOTIF-06 | In-app nudges and offer banners | ADAPT: toasts and a shared one-prompt-per-24h budget; **no countdown banners**; offers only per §6.4 | = intl | MVP |
-| F-NOTIF-07 | Mobile push | DEFER with native apps; web push V2 for alerts and reminders | ADAPT: WeChat subscribe messages instead (V2) | V2 |
+| F-NOTIF-07 | Mobile push | DEFER with native apps; web push V2 for alerts and reminders | **D5:** = intl (web push on the shared keys) **plus** WeChat subscribe messages as an additional channel (V2) | V2 |
 | F-NOTIF-08 | Follow-up and interview reminders (gap at Jobright) | BUILD: follow-up reminder after 10 days without a reply (uses existing `followUpAt`), interview-date reminders, kit-not-opened reminder | ADAPT: + 网申截止 3-day and 1-day reminders | MVP |
 | F-NOTIF-09 | "What's new" announcements | BUILD server-driven announcements per brand/locale/cohort, max one shown, shares the prompt budget | = intl | V2 |
 | F-NOTIF-10 | SMS channel | SKIP for intl | ADAPT: OTP only, no links | MVP (cn OTP) |
@@ -792,7 +796,7 @@ D-04 resolved: **no purchased people data and no email finder in MVP.** People f
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
-| F-EXT-01 | Listing and distribution | BUILD "RoboApply for Chrome" (MV3, Chrome Web Store; Edge Add-ons too); minimal permissions (activeTab, scripting, storage); store copy states that the user submits | BUILD 一键网申插件 on Edge Add-ons + Chrome Web Store; test reachability on 3 carriers | V2 (cn Later) |
+| F-EXT-01 | Listing and distribution | BUILD "RoboApply for Chrome" (MV3, Chrome Web Store; Edge Add-ons too); minimal permissions (activeTab, scripting, storage); store copy states that the user submits | BUILD 一键填表 (the name ruled in TASK_PLAN R-11) on Edge Add-ons + Chrome Web Store; test reachability on 3 carriers. **D5:** the navigation entry and `/extension` page exist on GoApply under the same gates as RoboApply, with a store-listing fallback until the GoApply build is published | V2 |
 | F-EXT-02 | Autofill side panel | BUILD: side panel with job, fit tier, `Fill this form`, per-field checklist, editable answers; never clicks submit | ADAPT: modes 全部填写 / 只填空白 / 填写选中区域 | V2 |
 | F-EXT-03 | ATS coverage + site requests | BUILD for Greenhouse, Lever, Workday, Ashby, SmartRecruiters, iCIMS, Workable; "Request this site" | ADAPT: 北森, Moka, 大易, 飞书, big-tech portals | V2 |
 | F-EXT-04 | AI answers to questions | BUILD from the Application answers bank; new answers drafted per job appear **only in the side panel** and go into a field only when the user clicks `Use this answer` for that field; saved back on approval. Never AI-generated: work authorization, sponsorship, criminal history, EEO/disability/veteran, salary history or expectation, years of experience, degrees, certifications, clearance, notice period (bank/profile only, or left for the user). Credit `ai_answer` | = intl | V2 |
@@ -817,7 +821,7 @@ D-04 resolved: **no purchased people data and no email finder in MVP.** People f
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
-| F-ACCT-01 | Auth: Google, email, Apple | BUILD: email/password (exists) + Google OIDC (seeker flavour, not the recruiter `oauthLogin`) MVP; LINE Login for Taiwan V2; Apple only with a native app (Later) | ADAPT: phone + SMS OTP (MVP, gated on SMS signature CN-L-07), WeChat (V2), email fallback | MVP |
+| F-ACCT-01 | Auth: Google, email, Apple | BUILD: email/password (exists) + Google OIDC (seeker flavour, not the recruiter `oauthLogin`) MVP; LINE Login for Taiwan V2; Apple only with a native app (Later) | ADAPT (**D5**): email + password first, open sign-up, verification and password reset as on RoboApply; phone + SMS OTP and WeChat as additional methods that appear when their credentials are set (SMS signature CN-L-07). Google and LINE stay RoboApply's additional methods (a market difference; Google on GoApply is an owner decision) | MVP |
 | F-ACCT-02 | Password reset, verification | BUILD: forgot/reset password, email verification (non-blocking), student email verification (V2, for student pricing) | ADAPT: reset for email-fallback accounts; change phone (OTP to the old number or identity re-verification, plus OTP to the new number; other sessions revoked) | MVP |
 | F-ACCT-03 | Profile page + completion wizard | BUILD `/profile` (none exists): personal, education, work, skills, links, work authorization per country, application answers; profile ≠ resume (resume can update profile, never the reverse silently) | ADAPT: 基本信息 with optional 籍贯/政治面貌/照片 (never used for matching and never sent to any LLM; placed into documents by the renderer), 家庭成员 optional for 网申; photo field hidden in CN-0 | MVP |
 | F-ACCT-04 | EEO answers | ADAPT: US-only optional section, shown only to users targeting the US, used only by the extension, never sent to an LLM, deletable | SKIP | V2 |
@@ -832,7 +836,7 @@ Note: the catalog's §3.4 cites "F-ACCT-12" for `/candidate-preferences`; no suc
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
 | F-BILL-01 | Typed daily credits | BUILD credits/entitlements service per §6.2 (brand × plan × credit key, admin-editable), success-only debits (existing pattern), "Uses 1 tailoring credit · 1 left today" before spending | = intl | MVP |
-| F-BILL-02 | Plan picker (in-app only) | ADAPT: public `/pricing` + in-app plan sheet, real prices, "Save {x}%" computed from our own monthly price, no struck-through anchors | ADAPT: 会员 passes, shown when CN-L-03 is done | MVP |
+| F-BILL-02 | Plan picker (in-app only) | ADAPT: public `/pricing` + in-app plan sheet, real prices, "Save {x}%" computed from our own monthly price, no struck-through anchors | ADAPT (**D5 / D6**): 会员 passes with real CNY prices, shown and purchasable by default through Alipay; student passes for verified students; Alipay listed first, WeChat Pay when available | MVP |
 | F-BILL-03 | Subscription management | UPGRADE existing billing settings: current plan, renewal date, **one-click Cancel** (no survey required; survey optional after), switch plan (a quote sheet — amount today, new renewal price, next renewal date — before `Confirm`), Stripe portal, payment-failed state with retry; public `/cancel` page linked in every footer that works without signing in (email → one-time link → confirm; confirmation email) | ADAPT: passes don't renew; "续费" button + reminder | MVP |
 | F-BILL-04 | First-day countdown offer | SKIP the countdown; **no offer at launch**. An optional "Welcome price" is an owner decision (§6.4 rules) | SKIP at launch | — |
 | F-BILL-05 | 7-day trial offer | ADAPT: the 7-day pass (one-time, no auto-renew) replaces trials | = intl (周卡) | MVP |
@@ -850,15 +854,15 @@ Note: the catalog's §3.4 cites "F-ACCT-12" for `/candidate-preferences`; no suc
 | F-TOOL-01 | Tools hub + templated tool pages | ADAPT: a small hub with tools that **actually work**; no lander-only "tools" | ADAPT: 简历体检 + 校招日历 | V2 |
 | F-TOOL-02 | ATS resume checker | ADAPT: **Free resume check** without an account (upload → short report; full report after signup); persisted per-IP limit 3/day; files deleted after 24 h unless the user signs up | = intl | MVP |
 | F-TOOL-03 | Resume–job matcher | BUILD: paste a job link or text + resume → fit components and gap list; no account; same limits | = intl | V2 |
-| F-TOOL-04 | Job alert form | DEFER with F-NOTIF-03 | SKIP | V2 |
+| F-TOOL-04 | Job alert form | DEFER with F-NOTIF-03 | **D5:** = intl (signed-out job alerts work through the feed and email defaults) | V2 |
 | F-TOOL-05 | Grad jobs list | ADAPT: `/browse/graduate/[role]` with live inventory | ADAPT: `/campus` | V2 (cn MVP) |
 
 ### 5.22 SEO and programmatic pages (F-SEO)
 
 | ID | Jobright feature | RoboApply | GoApply | Phase |
 |---|---|---|---|---|
-| F-SEO-01 | Role taxonomy hubs | BUILD `/browse/[role]` from live inventory; page only when ≥10 live jobs; localized | DEFER (Baidu later) | V2 |
-| F-SEO-02 | Role × city | BUILD `/browse/[role]/[city]` (incl. Taipei, Hsinchu, Taichung, Kaohsiung) | DEFER | V2 |
+| F-SEO-01 | Role taxonomy hubs | BUILD `/browse/[role]` from live inventory; page only when ≥10 live jobs; localized | **D5:** = intl, under the same gates (`PUBLIC_DISPLAY_PROVIDERS`, live inventory, the minimum-rows rule); Baidu submission later | V2 |
+| F-SEO-02 | Role × city | BUILD `/browse/[role]/[city]` (incl. Taipei, Hsinchu, Taichung, Kaohsiung) | **D5:** = intl for mainland cities, under the same gates | V2 |
 | F-SEO-03 | Keyword landings | DEFER: thin-content risk | SKIP | Later |
 | F-SEO-04 | H1B role × city lists | ADAPT: `/browse/visa-sponsorship/[country]/[role]` from posting text that mentions sponsorship, with the method stated on the page | SKIP | V2 |
 | F-SEO-05 | Indexable job detail | BUILD `/job/[id]-[slug]` with JSON-LD | DEFER | V2 |
@@ -945,8 +949,8 @@ No existing ban blocks a feature name in this plan: we use "Ready to apply", "Fi
 | `job_import` | Added-by-you jobs | 10 / day | 10 / day | Up to 50 / day |
 | `ready_kits` | Jobs in the Ready to apply weekly list that get a prepared kit | 3 / week | 3 / week | Up to 30 / week |
 | `saved_searches` | Saved searches (count) | 1 | 1 | 10 |
-| `instant_alerts` | Instant alert emails per day | 1 | (in-app/WeChat) 1 | Up to "as they arrive" |
-| `practice` | Practice interview credits (1 credit = 20 minutes, existing `RA_MOCK_CREDIT_MINUTES`) | 1 on signup after email verification + 1 for finishing the getting-started checklist | 1 after phone verification + checklist reward | Included per plan (§6.3) + packs |
+| `instant_alerts` | Instant alert emails per day | 1 | 1 (email by default; also in-app and WeChat) | Up to "as they arrive" |
+| `practice` | Practice interview credits (1 credit = 20 minutes, existing `RA_MOCK_CREDIT_MINUTES`) | 1 on signup after email verification + 1 for finishing the getting-started checklist | 1 after a verified email **or** a verified phone (D5) + checklist reward | Included per plan (§6.3) + packs |
 
 Free-tool limits for visitors (no account): resume check 3 / day / IP, resume–job match 3 / day / IP (V2). All limits are persisted (not in-memory).
 
@@ -967,7 +971,9 @@ Free-tool limits for visitors (no account): resume check 3 / day / IP, resume–
 
 TWD price list (V2, Taiwan, Stripe TWD prices; owner sets final values, target parity within 10% of USD): Weekly NT$299, Monthly NT$749, Quarterly NT$1,790, 7-day pass NT$219, packs NT$299 / NT$749. Watch the NT$600k B2C VAT threshold (TW-06).
 
-**GoApply (CNY; switched on only after the operating ICP licence, CN-L-03)**
+**GoApply (CNY, Alipay; purchasable by default since D5 and D6, 2026-10-11)**
+
+The amounts below are the plan catalog's defaults (`market/MARKET_STRATEGY.md` §4.2), so no GoApply plan is ever "price not set". Whole yuan, tax-inclusive, one-time, 到期不自动续费. An operator may override an amount with `CN_PRICE_<PLANKEY>_FEN` (whole yuan only) and stop charging with `CN_PAYMENTS_ENABLED=false`; unset means on. Opening a payment needs only the Alipay rail's own credential (`ALIPAY_CALLBACK_SECRET`): until it is set the plans and prices show and no payment can be started, exactly as RoboApply without its Stripe key. *The earlier heading read "switched on only after the operating ICP licence, CN-L-03"; that licence is still the owner's legal track, but the code no longer waits for it.*
 
 | Plan key | Name | Price | Renewal | Practice credits included |
 |---|---|---|---|---|
@@ -977,6 +983,12 @@ TWD price list (V2, Taiwan, Stripe TWD prices; owner sets final values, target p
 | `pro_quarterly` | 会员季卡 | **¥99** (省 15% vs 3 × ¥39) | One-time 90-day pass | 3 per month |
 | `practice_pack_5` | 面试练习包 5 次 | **¥29** | — | 5 |
 | `practice_pack_15` | 面试练习包 15 次 | **¥79** | — | 15 |
+| `student_monthly` (verified students) | 学生月卡 | **¥29** | One-time 30-day pass | 3 |
+| `student_quarterly` (verified students) | 学生季卡 | **¥69** | One-time 90-day pass | 3 per month |
+
+What follows from the rail and stays different from RoboApply: passes do not renew, there are no promotion codes, no failed-renewal banner and no TWD line. `pro_weekly` is not defined for GoApply by design (an auto-renewing plan; the weekly product is `pro_week_pass`). Capability is equal: every paid row unlocks the same Pro column of §6.2 for the time it is live.
+
+**RoboApply prices under D6.** The USD ladder above is reviewed per market in `market/MARKET_STRATEGY.md` §4.1, which proposes $54.99 for the quarter and $9.99 for the 7-day pass and gives its reasons. Those values and the catalog defaults for RoboApply are applied in the market wave, not in the parity wave; until then this table is what the code sells.
 
 Internal pricing anchors (never shown in UI or marketing; competitor prices change): 超级简历 about ¥39/month; 职悟空 free; Jobright $17.99 / $39.99 / $89.99 as of 2026-10. RoboApply Pro Monthly ($24.99) is 37.5% below Jobright Turbo monthly ($39.99); GoApply 月卡 matches the local membership anchor while the free tier stays generous.
 
@@ -1015,10 +1027,10 @@ Not allowed: countdown banners, fake scarcity, retention popups for active subsc
 
 | Channel | RoboApply | GoApply |
 |---|---|---|
-| Email | Resend, per-brand From (`RoboApply <hello@…roboapply.io>`), per-brand templates in 9 locales | Optional (users may add an email); domestic sender (e.g. Aliyun DirectMail) |
+| Email | Resend, per-brand From (`RoboApply <hello@…roboapply.io>`), per-brand templates in 9 locales | **D5:** on by default through the shared transport, sender name GoApply (verification, password reset, alerts, lifecycle mail); a domestic sender (e.g. Aliyun DirectMail) or a verified `goapply.top` address is an optional override |
 | In-app inbox (`/inbox`) | Source of truth for every alert, reminder and notice | Same |
-| Web push | V2 (alerts, reminders) | — |
-| WeChat | — | V2: subscribe messages for 网申截止 and practice reminders (collected at "remind me" taps); service-account template messages for users who follow the 公众号 |
+| Web push | V2 (alerts, reminders) | **D5:** = RoboApply |
+| WeChat | — | An additional GoApply channel (it adds to email and web push, it does not replace them). V2: subscribe messages for 网申截止 and practice reminders (collected at "remind me" taps); service-account template messages for users who follow the 公众号 |
 | SMS | None | OTP only, no links |
 
 Global rules: at most **one lifecycle (non-alert, non-transactional) message per user per day**; alerts respect the user's frequency; quiet hours 21:00–08:00 local for anything non-transactional; every non-transactional email has one-click unsubscribe (RFC 8058 headers) and no emoji subject; lifecycle emails need no marketing consent only when they are about the user's own account activity (verification, finish setup, resume check ready, follow-up and interview reminders, Ready-to-apply list); **promotional nudges (§7.3 rows 5, 6 and 10, and the former Friday practice nudge) sit under one "Tips and reminders" preference — default off for EEA/UK/CH/CA visitors and GoApply, on elsewhere** (ePrivacy, CASL, PRC Advertising Law Art. 43); product news needs the opt-in.
@@ -1076,7 +1088,7 @@ Templates are per brand and locale; links use the brand's canonical host; produc
 | Practice (Wave 0 dependency) | Practice sessions that connect and finish; sessions failing to connect | ≥ 90% finish; < 2% connection failures |
 | Assistant | Answers with thumbs-down; filter diffs applied | < 15% thumbs-down; ≥ 40% of proposed diffs applied |
 | Alerts | Alert email click-through; unsubscribe rate | ≥ 8% CTR; < 0.5% per send |
-| Monetization | Free → paid within 30 days | 3–5% (intl); cn measured after CN-L-03 |
+| Monetization | Free → paid within 30 days | 3–5% (intl); cn measured from the first Alipay order (plans are on sale by default, D5 / D6) |
 | Trust | Refund rate; chargebacks; scam reports per 1k job views | < 3%; < 0.3%; tracked with admin SLA 48 h |
 | Honesty | Tailored exports with unverified inserted claims | 0 (blocked by design; monitored) |
 
@@ -1087,9 +1099,9 @@ Templates are per brand and locale; links use the brand's canonical host; produc
 | Area | MVP (release 1) | V2 (parity) | Later |
 |---|---|---|---|
 | Brand | Host-based brand, registry, tokens, names, metadata, legal footers, per-brand email From, CORS, cookies, locale clamp, cross-brand notices | — | Separate mainland deployment for GoApply (CN-E-01) |
-| Auth | Email/password, Google, reset, verification (intl); phone OTP (cn, flag until SMS signature) | LINE (TW), WeChat (cn), TOTP 2FA | Apple (with native apps) |
+| Auth | Email/password, reset, verification (both brands, D5); Google (intl); phone OTP (cn, an additional method once the SMS signature exists) | LINE (TW), WeChat (cn), TOTP 2FA | Apple (with native apps) |
 | Onboarding | All screens §4 both brands | Guided resume builder for intl | — |
-| Inventory | Scheduled ingest (providers + RoboHire bank), per-job extraction, archive; cn: GoHire bank + calendar curation + imports | More providers by country; DOL sponsorship data prep | Licensed company data |
+| Inventory | Scheduled ingest (providers + RoboHire bank), per-job extraction, archive; cn: public employer boards (mainland postings) + GoHire bank (listed once it has a posting page) + calendar curation + imports | More providers by country; DOL sponsorship data prep | Licensed company data |
 | Feed and detail | `/jobs` For you / Explore / Added by you, server filters, saved searches, sorts, cards, detail page, Not interested, Report, zero results, calibration | Visitor feed, public job pages, SEO | — |
 | Fit scoring | Published 5-component score with evidence, tiers, Keyword check, LLM fit analysis | "You and what employers ask" report | — |
 | Assistant | Drawer + full page, threads, job actions, filter diffs, sort, advice | Voice input, company cards, cn long-term memory | Visitor assistant |
@@ -1098,11 +1110,11 @@ Templates are per brand and locale; links use the brand's canonical host; produc
 | Ready to apply | Setup, weekly list, kits, review, Open application (moves to Applied with Undo) | Extension fill, and "Did you submit?" asked in the extension (the user says so) | — |
 | People | LinkedIn deep links, outreach drafts | Own-connections CSV import, opted-in RoboHire hiring contacts, cn 内推码 hub | Email finder (licensed), Send my profile, employer invitations |
 | Applications | Saved/applied capture, By stage / By date / List, drawer, reminders, cn stages | Offer comparison | — |
-| Interview prep | Practice for this job, first practice free (Wave 0 reliability), recording only with consent | Practice questions bank, cn AI面试 format on cn voice stack | Coding runner, cn 笔试/测评 sets |
+| Interview prep | Practice for this job, first practice free (Wave 0 reliability), recording only with consent | Practice questions bank, cn AI面试 format (on the shared voice stack by default, D5) | Coding runner, cn 笔试/测评 sets |
 | Coaching | — (hidden) | Admin roster + booking links | Paid booking, group sessions |
-| Extension | — | RoboApply for Chrome; cn 一键网申 (Later) | — |
+| Extension | — | RoboApply for Chrome; cn 一键填表 (entry and page on GoApply under the same gates, D5) | — |
 | Notifications | Inbox, instant/daily/weekly alerts, lifecycle emails §7, reminders, unsubscribe | Web push, WeChat subscribe messages, announcements | Native push |
-| Billing | Credits service, public pricing, Pro plans, 7-day pass, packs, legacy plan fold-in, renewal reminders, one-click cancel; cn pricing page only | TWD, student, coupons, WeChat Pay, cn charging after CN-L-03 | iOS mini-program IAP |
+| Billing | Credits service, public pricing, Pro plans, 7-day pass, packs, legacy plan fold-in, renewal reminders, one-click cancel; cn: the same, with CNY passes purchasable through Alipay by default (D5, D6) | TWD, student (both brands), coupons, WeChat Pay | iOS mini-program IAP |
 | Growth / SEO | Attribution, checklist reward, per-host robots/sitemap/llms.txt, free resume check | Invite friends, tools, programmatic browse pages | Compare pages, blog, GitHub lists |
 | Trust | DB rate limits, report + admin review, disclaimers, privacy/terms per brand, retention schedule, analytics consent (EEA/UK/CH), age 16+, `/cancel`, help | Bot protection on public pages | — |
 
@@ -1162,11 +1174,12 @@ Every claim, number, skill or keyword the AI inserts into a resume or cover lett
 
 | # | Item | Plan default until decided |
 |---|---|---|
-| O-1 | GoApply licensing path (D-03): GoHire's licensed entity vs new entity vs seeker-tools-only | `cn.jobFeed` off; seeker-tools-only mode ships |
+| O-1 | GoApply licensing path (D-03): GoHire's licensed entity vs new entity vs seeker-tools-only | **Changed by D5 (2026-10-11):** the job feed ships **on**, with a source line on every posting and no licence line unless the licence values are set. `CN_RECRUITMENT_INFO_MODE=off` gives the seeker-tools-only mode if the owner or counsel wants it |
 | O-2 | GoApply hosting (HK standalone build vs mainland + ICP) and data residency (shared DB vs separate cn DB, CN-E-01) | One codebase; cn data path built behind brand-scoped config so it can move |
 | O-3 | People-data provider for email lookup (D-04) | None; deep links + own-connections import |
 | O-4 | AI labels on cn exports (D-08) | Visible "AI 辅助生成" marker in app; metadata in exported files; counsel to confirm |
 | O-5 | Final TWD prices and whether to add ECPay/TapPay | USD in MVP; TWD via Stripe in V2 |
 | O-6 | RoboHire candidate-intake API for "Send my profile" and employer invitations | Deferred (Later) |
-| O-7 | LINE Login channel and WeChat Open Platform verification | Buttons hidden until configured |
+| O-7 | LINE Login channel and WeChat Open Platform verification | Buttons hidden until configured (additional sign-in methods; email + password works on both brands without them) |
+| O-9 | (D5) What GoApply still needs from the owner: the Alipay credential, optional mainland providers, three legal notes (cross-border processing, camera video, launch scope), a posting page in the GoHire product, listings, Google sign-in on GoApply | `GOAPPLY_PARITY_PLAN.md` §8. GoApply functions without any of them |
 | O-8 | Copy-gate additions in §5.25 | Proposed; feature agents follow them anyway |

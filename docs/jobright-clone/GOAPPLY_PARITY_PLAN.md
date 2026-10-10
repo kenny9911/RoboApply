@@ -237,7 +237,7 @@ Job sources and job-search providers; default language and locale set; currency 
 | `GOHIRE_SYNDICATION_URL` | the GoHire syndication endpoint (cursor, tombstones) once it exists | list endpoint |
 | `GOHIRE_PUBLIC_JOB_URL_TEMPLATE`, `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE` | the bank's candidate-facing posting page, `https://…{id}…`. Unset = the bank's rows are synced but not listed | unset (the old `/jobs/<id>` default is a 404 page) |
 | `JOB_PROVIDERS_ROBOAPPLY`, `JOB_PROVIDERS_GOAPPLY` | narrow a brand's provider list (subset) | registry list |
-| `ALLOWED_BRANDS` | brands a deployment serves | both |
+| `ALLOWED_BRANDS` (and `BRAND_LOCK`) | brands a deployment serves. A value that names no valid brand is not "unset": the deployment serves RoboApply only in every environment and startup logs the bad value (`allowedBrandsProblem`); it does not refuse the boot, except on the mainland kit, where RoboApply is not allowed | both |
 | removed | `CN_EXTERNAL_PROVIDERS`; `GOHIRE_PUBLIC_JOB_BASE_URL` and `ROBOHIRE_PUBLIC_JOB_BASE_URL` (ignored with a warning); `RA_V2_DISCOVER_DISABLED=true` and the "Stage switches" block of the CN kit; the `GOAPPLY_PREVIEW` LLM / mode / campus / sign-up exports of `scripts/dev-clone.sh` | |
 
 ---
@@ -430,10 +430,10 @@ Numbering follows the audit order: G1–G37 gating, G38–G80 providers, G81–G
 
 ## 7. Verification after all bundles merge
 
-Run by the orchestrator; PAR-10 writes the commands into `orch/parity-verify.md`.
+Run by the orchestrator. The commands, expected output and report format are in [`orch/parity-verify.md`](orch/parity-verify.md) (written by PAR-10); the list below is its summary.
 
 1. `npm run gen:brand` leaves no diff; `npm run typecheck:server`, `npm test`, `npm run check` pass.
-2. Start the dev stack with `GOAPPLY_PREVIEW=0`. `GET /api/v1/public/brand` for both hosts meets the acceptance of §3.2. With `SMS_DEV_CONSOLE` unset, GoApply `authMethods` still lists `email_password`.
+2. Start the dev stack with `GOAPPLY_PREVIEW=0`. `GET /api/v1/public/brand` for both hosts meets the acceptance of §3.2. With `SMS_DEV_CONSOLE` unset, GoApply `authMethods` still lists `email_password`. (As built by PAR-10: `scripts/dev-clone.sh` no longer reads `GOAPPLY_PREVIEW`, so a plain start is this case; it sets `SMS_DEV_CONSOLE=true` for the phone demo, so the second check starts the stack with `SMS_DEV_CONSOLE=false`. The exact commands are in `orch/parity-verify.md`.)
 3. GoApply, signed out: `/`, `/pricing`, `/tools/resume-check`, `/features/job-matches`, `/features/resume-tailoring`, `/features/cover-letters`, `/features/ready-to-apply`, `/developers/job-search`, `/campus`, `/legal/privacy` answer 200.
 4. GoApply, new account by email + password (no invite): verification email arrives; password reset works; upload a PDF resume and download the original; open the Assistant; start a written practice and a voice practice; open `/coaching` and `/extension`.
 5. Job sources: trigger `jobs-plan` and `jobs-ingest` for GoApply until the seed boards have been read once (no RapidAPI call is made for GoApply). At least 300 `RAJob` rows with `market = 'cn'` and `visibility = 'public'` exist from at least 10 seeded employer boards; every row has a provider id, a source, an apply URL on the employer's own site or ATS and a posted or last-verified date; the feed and `POST /feed/nl-query` return them; three sample apply URLs open that posting; the GoHire bank shows its synced, skipped and held counts and is listed only when `GOHIRE_PUBLIC_JOB_URL_TEMPLATE` is set; no row has `sourceBoard = 'jsearch'` and no row lacks an apply URL.

@@ -3,30 +3,27 @@
 # stack (web 3611 / API 4611) keeps working: API 4621, web 3621, and an interview worker
 # registered under its own agent name so it never takes the main stack's dispatches.
 #   RoboApply: http://localhost:3621     GoApply: http://goapply.localhost:3621
+#
+# Both brands run from the same .env (owner ruling D5, docs/jobright-clone/GOAPPLY_PARITY_PLAN.md).
+# GoApply needs no variable of its own: with only the shared credentials it has AI, the job
+# feed, email, voice practice and open sign-up, because every CN_<NAME> value is an optional
+# override of <NAME> and unset means the shared stack. Set a CN_ value in .env only to try a
+# China-specific provider. Nothing here turns a GoApply feature on or off.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export PORT=4621
 export NEXT_PUBLIC_API_URL=http://localhost:4621
 export NEXT_PUBLIC_SHOW_ALL_NAV="${NEXT_PUBLIC_SHOW_ALL_NAV:-true}"   # dev override: show not-yet-flipped nav entries
 export INTERVIEW_ENGINE_AGENT_NAME="${INTERVIEW_ENGINE_AGENT_NAME_CLONE:-RoboApply-Interview-Clone}"
-# Local GoApply preview (dev only). In production every one of these is gated on something
-# real — a mainland recruitment licence, SMS/WeChat credentials, a domestic model contract,
-# counsel sign-off (docs/jobright-clone/CN_TW_LAUNCH_PLAN.md) — so GoApply ships with them off.
-# This block turns on what this machine can honestly run, so the GoApply surfaces can be seen:
-#   - AI: DeepSeek (a domestic provider; uses DEEPSEEK_API_KEY from .env). GoApply never falls
-#     back to an international model, so without this its AI features stay hidden.
-#   - Phone sign-in: one-time codes are printed in the API log instead of being sent by SMS.
-#   - Job feed + campus calendar: shown as if the recruitment-info licence were in place.
-#   - Sign-up: open (no invite code).
-# Payments, WeChat login, email and voice interviews stay off: they need real credentials.
-# GOAPPLY_PREVIEW=0 ./scripts/dev-clone.sh runs GoApply exactly as production would.
-if [ "${GOAPPLY_PREVIEW:-1}" = "1" ]; then
-  export CN_LLM_PROVIDER="${CN_LLM_PROVIDER:-deepseek}"
-  export CN_LLM_MODEL="${CN_LLM_MODEL:-deepseek/deepseek-v4-flash}"
-  export SMS_DEV_CONSOLE="${SMS_DEV_CONSOLE:-true}"
-  export CN_RECRUITMENT_INFO_MODE="${CN_RECRUITMENT_INFO_MODE:-licensed}"
-  export CN_CAMPUS_CALENDAR_ENABLED="${CN_CAMPUS_CALENDAR_ENABLED:-true}"
-  export CN_SIGNUP_MODE="${CN_SIGNUP_MODE:-open}"
+# Phone sign-in demo (optional, dev only): one-time codes are printed in the API log instead
+# of being sent by SMS, so the GoApply phone tab can be tried without an SMS provider. Email
+# and password sign-in works on GoApply without it. SMS_DEV_CONSOLE=false hides the phone tab.
+export SMS_DEV_CONSOLE="${SMS_DEV_CONSOLE:-true}"
+# GOAPPLY_PREVIEW is retired: it used to switch on a GoApply preview profile (a domestic
+# model, the feed, the campus calendar, open sign-up). Those are defaults now, so the variable
+# is accepted and ignored for one release.
+if [ -n "${GOAPPLY_PREVIEW:-}" ]; then
+  echo "dev-clone: GOAPPLY_PREVIEW is no longer read; GoApply runs on the shared stack by default." >&2
 fi
 exec npx concurrently --kill-others --kill-signal SIGINT --names api,web,agent \
   "npx tsx watch server/src/app.ts" \

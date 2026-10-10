@@ -13,3 +13,9 @@ Kept in the repo because the session scratchpad lives in /tmp and does not survi
   (EN key exists, ICU parses, same argument names, same %BRAND% counts, no literal brand names)
   and deep-merges accepted leaves into the locale bundles.
 - `int-bundles.json` — the WP-93 final-wiring breakdown (14 bundles, disjoint ownership).
+- `parity-bundles.json` — the D5 parity wave (11 bundles, PAR-1 … PAR-11, disjoint ownership;
+  specification `../GOAPPLY_PARITY_PLAN.md`). `check-bundles.mjs <json>` checks the format and
+  that no path is owned twice. Handoffs are written to `handoffs-par/`.
+- `parity-verify.md` — the verification list to run on the clone dev stack after the parity
+  bundles are merged: commands, expected output, and which missing credentials are reported as
+  "not configured" instead of a failure.
