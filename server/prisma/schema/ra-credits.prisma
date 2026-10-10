@@ -102,3 +102,67 @@ model RACancelSurvey {
   @@index([brand, createdAt])
   @@index([userId])
 }
+
+// ── Market wave (MKT-0; MARKET_STRATEGY 4.4, 5.1 "Refunds and disputes", 5.2 rule A8). Additive:
+//    two new tables, no relation fields, no change to any existing billing table. ──
+
+/// One refund, withdrawal, dispute or manual CN refund (MARKET_STRATEGY ST-4, ST-9, AL-7). Idempotency stays on
+/// RACreditLedger claims; this row is the readable record (history marker, admin list, dispute flag). Insert-only.
+model RABillingRefund {
+  id                  String   @id @default(cuid())
+  userId              String
+  brand               String // 'roboapply' | 'goapply'
+  rail                String // 'stripe' | 'alipay' | 'wechatpay'
+  kind                String // 'refund' | 'withdrawal' | 'dispute' | 'manual_cn'
+  /// Stripe: '<chargeId>:<amount_refunded>' or 'dispute:<disputeId>'; CN: 'order:<AlipayOrder.id>'
+  externalRef         String
+  chargeId            String?
+  paymentIntentId     String?
+  invoiceId           String?
+  checkoutSessionId   String?
+  alipayOrderId       String?
+  planKey             String?
+  amountMinor         Int
+  currency            String
+  full                Boolean  @default(false)
+  entitlementReversed Boolean  @default(false)
+  reason              String?
+  /// Admin user id, 'self' (withdrawal) or 'stripe' (Dashboard refund, dispute)
+  actor               String?
+  note                String?  @db.Text
+  createdAt           DateTime @default(now())
+
+  @@unique([rail, externalRef])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([invoiceId])
+  @@index([alipayOrderId])
+  @@index([kind, createdAt])
+}
+
+/// Checkout acknowledgements kept after the account is deleted (California AB 2863: the later of 3 years after
+/// consent and 1 year after the subscription ends). Written by the account purge, removed by compliance-daily. ST-9.
+model RABillingConsentArchive {
+  id                  String    @id @default(cuid())
+  /// The deleted account's user id (no FK) and sha256 of its lower-cased email.
+  userId              String
+  emailHash           String
+  brand               String
+  consentType         String // 'auto_renew_ack' | 'withdrawal_waiver' | 'cn_pay_terms_ack'
+  proseHash           String?
+  proseVersion        String?
+  consentedAt         DateTime
+  subscriptionEndedAt DateTime?
+  stripeCustomerId    String?
+  retainUntil         DateTime
+  createdAt           DateTime  @default(now())
+
+  // One row per acknowledgement. Beyond the plan's list (MKT-0 review): the account purge can run twice
+  // (a retry after a blocked storage cleanup, two overlapping sweeps), and a read-then-insert cannot keep
+  // that to one row under concurrency. With this key the purge writes with
+  // createMany({ skipDuplicates: true }) (MKT-4A). The table is new, so the key is additive, and it could
+  // not be added safely once the table holds rows.
+  @@unique([userId, consentType, consentedAt])
+  @@index([retainUntil])
+  @@index([emailHash])
+  @@index([userId])
+}

@@ -423,6 +423,7 @@ model User {
   raTwoFactor            RATwoFactor? // SCHEMA-5 (SR-79-1)
   raStudentVerification  RAStudentVerification? // SCHEMA-5 (SR-79-2)
   raCancelSurveys        RACancelSurvey[] // SCHEMA-6 (SR-INT-1)
+  raUserEmbeddings       RAUserEmbedding[] // MKT-0 (SM-7): deleting the account removes its vectors
   raJobsOwned            RAJob[]                  @relation("RAJobOwner")
 
   @@unique([brand, phoneE164])
