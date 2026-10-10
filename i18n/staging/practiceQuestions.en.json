@@ -1,3 +1,254 @@
 {
-  "practiceQuestions": {}
+  "practiceQuestions": {
+    "title": "Practice questions",
+    "sub": "Rehearse with questions other %BRAND% users shared after their interviews, general questions our staff wrote, and questions written by AI from a job post. Each question says where it came from.",
+    "off": {
+      "title": "Practice questions aren't available here yet",
+      "sub": "You can still practise an interview for any job.",
+      "back": "Go to interview practice"
+    },
+    "source": {
+      "userReport": "Shared by a %BRAND% user, {period}",
+      "userReportNoDate": "Shared by a %BRAND% user",
+      "aiPractice": "Written by AI from the job post — not reported by candidates",
+      "curated": "Written by %BRAND% staff — not reported by candidates"
+    },
+    "categories": {
+      "label": "Question group",
+      "all": "All",
+      "behavioral": "About you and past work",
+      "role_specific": "Skills for the role",
+      "coding": "Coding",
+      "system_design": "System design",
+      "domain_design": "Design and modelling",
+      "hr": "HR round"
+    },
+    "difficulty": {
+      "easy": "Easier",
+      "medium": "Medium",
+      "hard": "Harder"
+    },
+    "card": {
+      "showGuide": "How to answer",
+      "hideGuide": "Hide how to answer",
+      "guideLoading": "Writing a guide for this question…",
+      "guideAiLine": "Guide written by AI. Check it against your own experience.",
+      "guideUnavailable": "A guide isn't available for this question right now.",
+      "guideError": "The guide wasn't written. Try again.",
+      "retry": "Try again",
+      "approach": "How to approach it",
+      "whatTheyTest": "What it checks",
+      "rubric": "What a strong answer includes",
+      "commonMistakes": "Common mistakes",
+      "followUps": "Possible follow-up questions",
+      "report": "Report"
+    },
+    "report": {
+      "title": "Report this question",
+      "reason": "What's wrong with it?",
+      "reasons": {
+        "wrong": "It's wrong or unclear",
+        "duplicate": "It repeats another question",
+        "offensive": "It's offensive",
+        "confidential": "It shares test content someone agreed to keep private",
+        "other": "Something else"
+      },
+      "note": "Details (optional)",
+      "send": "Send report",
+      "cancel": "Cancel",
+      "sent": "Thanks. Our staff will look at it.",
+      "hidden": "Thanks. It's hidden until our staff look at it.",
+      "error": "The report wasn't sent. Try again.",
+      "limit": "You've sent a lot of reports today. Try again tomorrow."
+    },
+    "errors": {
+      "phone": "Add a phone number to your account first.",
+      "limit": "You've reached today's limit. Try again tomorrow.",
+      "guideLimit": "You've opened a lot of new guides today. Try again tomorrow.",
+      "jobSetLimit": "You've written a lot of question sets today. Try again tomorrow.",
+      "shareLimit": "You've shared a lot of questions today. Try again tomorrow.",
+      "aiOff": "AI writing isn't available right now, so this can't be written.",
+      "safetyDown": "AI writing is paused for a moment. Try again later.",
+      "blocked": "This couldn't be written. Try another job or question.",
+      "notFound": "We couldn't find this.",
+      "generic": "Something went wrong. Try again."
+    },
+    "job": {
+      "loading": "Loading questions for this job…",
+      "loadError": "Questions for this job didn't load. Try again.",
+      "notFound": "We couldn't find this job.",
+      "title": "Practice for {title}",
+      "sub": "at {company}",
+      "practice": "Practice for this job",
+      "aiHeading": "Written by AI from this job post",
+      "writtenOn": "Written {date}",
+      "notWritten": "AI can write practice questions from this job post. They are practice material, not questions anyone reported.",
+      "write": "Write practice questions from this job post",
+      "writing": "Writing questions…",
+      "aiOff": "AI writing isn't available right now, so only questions shared by users show here.",
+      "thisCompany": "this company",
+      "reportsHeading": "Shared by %BRAND% users about {company}",
+      "seeAll": "See all questions about {company}",
+      "noReports": "No one has shared questions about {company} yet."
+    },
+    "companies": {
+      "heading": "Questions by company",
+      "sub": "Only questions %BRAND% users shared after their interviews and our staff checked.",
+      "searchLabel": "Search companies",
+      "searchPlaceholder": "Company name",
+      "search": "Search",
+      "loading": "Loading companies…",
+      "loadError": "Companies didn't load. Try again.",
+      "empty": "No one has shared questions yet. You can be the first.",
+      "emptySearch": "No shared questions for “{q}”.",
+      "count": "{count, plural, one {# shared question} other {# shared questions}}",
+      "latest": "most recent from {period}",
+      "source": "Count of questions shared with us, as of {date}",
+      "more": "Show more companies"
+    },
+    "company": {
+      "back": "All practice questions",
+      "title": "Questions about {company}",
+      "sub": "Only questions %BRAND% users shared after their interviews, checked by our staff. They are what people remember, not an official list from the company.",
+      "heading": "Shared by %BRAND% users",
+      "count": "{count, plural, one {# question} other {# questions}} shared by %BRAND% users",
+      "latest": "most recent from {period}",
+      "asOf": "as of {date}",
+      "loading": "Loading questions…",
+      "loadError": "Questions didn't load. Try again.",
+      "notFound": "We couldn't find this company.",
+      "empty": "No one has shared questions about {company} yet.",
+      "emptyGroup": "No shared questions in this group yet.",
+      "more": "Show more"
+    },
+    "curated": {
+      "heading": "General practice questions",
+      "sub": "Written by our staff. They don't come from any company.",
+      "loading": "Loading questions…",
+      "loadError": "Questions didn't load. Try again.",
+      "empty": "No questions in this group yet.",
+      "more": "Show more"
+    },
+    "share": {
+      "open": "Share a question you were asked",
+      "title": "Share a question you were asked",
+      "intro": "Our staff check every question before anyone sees it. It shows as shared by a %BRAND% user, with the month you were asked, never with your name.",
+      "rules": "Please don't share test or assessment questions you agreed to keep private, text copied from a test or a book, or anyone's name or contact details.",
+      "company": "Company",
+      "role": "Role (optional)",
+      "period": "When were you asked?",
+      "question": "The question",
+      "questionHint": "Write it in your own words, as you remember it.",
+      "submit": "Send for checking",
+      "cancel": "Cancel",
+      "done": "Done",
+      "sent": "Thanks. Our staff will check it before it shows.",
+      "error": "Your question wasn't sent. Check the fields and try again.",
+      "periodError": "Pick the month you were asked. It can't be later than this month.",
+      "companyError": "Add the company you interviewed with."
+    },
+    "admin": {
+      "title": "Practice questions",
+      "sub": "Check questions users shared before they show, look at reported questions and write general practice questions.",
+      "loading": "Loading…",
+      "loadError": "This list didn't load. Try again.",
+      "more": "Show more",
+      "tabsLabel": "Practice question lists",
+      "tabs": {
+        "pending": "Shared, to check",
+        "approved": "Published",
+        "rejected": "Turned down",
+        "reported": "Reported",
+        "hidden": "Hidden",
+        "curated": "Staff-written",
+        "write": "Write a question"
+      },
+      "empty": {
+        "pending": "Nothing to check right now.",
+        "approved": "No published questions yet.",
+        "rejected": "Nothing turned down yet.",
+        "reported": "No reported questions.",
+        "hidden": "No hidden questions.",
+        "curated": "No staff-written questions yet."
+      },
+      "contribution": {
+        "meta": "{company} · {role} · asked in {period}",
+        "metaNoRole": "{company} · asked in {period}",
+        "received": "Received {date}",
+        "decided": "Decided {date}",
+        "flagsTitle": "Check this before publishing",
+        "flags": {
+          "nda_or_test_content": "It may be test or assessment content under a non-disclosure agreement",
+          "copyright": "It may be copied from a copyrighted source",
+          "personal_info": "It contains contact details or an ID number",
+          "not_a_question": "It doesn't read like a question",
+          "too_long": "It's very long and may be a pasted test"
+        },
+        "publishForm": "Publish this question",
+        "rejectForm": "Turn down this question",
+        "titleLabel": "Short title",
+        "bodyLabel": "Question as it will show",
+        "companyLabel": "Company",
+        "categoryLabel": "Group",
+        "categoryPick": "Pick a group",
+        "localeLabel": "Language",
+        "localeHint": "The question and its answer guide show to readers of this language.",
+        "confirm": "I checked it: it isn't test content under a non-disclosure agreement or copied material, and it names no one",
+        "publish": "Publish",
+        "rejectReason": "Reason",
+        "rejectNote": "Note (optional)",
+        "reject": "Turn down",
+        "reasons": {
+          "nda_or_test_content": "Test or assessment content under a non-disclosure agreement",
+          "copyright": "Copied material",
+          "personal_info": "Names or contact details",
+          "not_a_question": "Not a question",
+          "duplicate": "Already published",
+          "offensive": "Offensive",
+          "other": "Other"
+        },
+        "alreadyDecided": "Someone already decided on this one.",
+        "confirmNeeded": "Tick the check box first.",
+        "editFlagsTitle": "Your edited wording needs a check before publishing",
+        "editFlagged": "Your edit was flagged. Check the wording, tick the check box, then publish.",
+        "invalid": "Check the fields: a title, the question (at least 10 characters) and the company.",
+        "error": "That didn't work. Try again."
+      },
+      "question": {
+        "status": {
+          "published": "Showing",
+          "hidden": "Hidden"
+        },
+        "reports": "{count, plural, =0 {no reports} one {# report} other {# reports}}",
+        "hide": "Hide",
+        "restore": "Show again",
+        "keep": "Keep showing",
+        "reviewNote": "Keeping it or showing it again clears its reports. It is hidden again only if enough people report it again.",
+        "error": "That didn't work. Try again."
+      },
+      "write": {
+        "formLabel": "Write a general practice question",
+        "intro": "General questions only. Never name a company or say a company asks it, and never copy questions from tests or books.",
+        "title": "Short title",
+        "body": "Question",
+        "category": "Group",
+        "difficulty": "Difficulty",
+        "difficultyNone": "Not set",
+        "locale": "Language",
+        "locales": {
+          "en": "English",
+          "zh": "Simplified Chinese",
+          "zh_TW": "Traditional Chinese",
+          "ja": "Japanese",
+          "ko": "Korean",
+          "es": "Spanish",
+          "fr": "French",
+          "pt": "Portuguese",
+          "de": "German"
+        },
+        "submit": "Publish question",
+        "error": "The question wasn't published. Check the fields and try again."
+      }
+    }
+  }
 }
