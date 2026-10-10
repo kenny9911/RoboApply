@@ -102,7 +102,7 @@ for (const target of Object.keys(TARGETS)) {
       }
     }
     rejectedTotal += r.rejected.length;
-    if (!dry && !only) writeFileSync(outPath, JSON.stringify(bundle, null, 2) + '\n');
+    if (!dry && !only && r.accepted > 0) writeFileSync(outPath, JSON.stringify(bundle, null, 2) + '\n');
   }
 }
 for (const [k, v] of Object.entries(report)) {
