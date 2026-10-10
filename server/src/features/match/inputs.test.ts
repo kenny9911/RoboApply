@@ -179,6 +179,13 @@ describe('stripResumeForScoring', () => {
     expect(out).toContain('在支付团队工作');
   });
 
+  it('runs the shared redactor first (platform/pii): labelled passport numbers go, content stays', () => {
+    const md = '## Experience\nPassport No. E12345678 (renewed)\nShipped payments in Go since 2019-03.';
+    const out = stripResumeForScoring(md);
+    expect(out).not.toContain('E12345678');
+    expect(out).toContain('Shipped payments in Go since 2019-03.');
+  });
+
   it('keeps ordinary lines that only start like a sensitive label', () => {
     const md = 'Photography: Lightroom\nAgents: LangChain\nRace conditions: fixed in the ledger\n地址解析服务：负责开发';
     const out = stripResumeForScoring(md);

@@ -1,8 +1,16 @@
-// /jobs/report — route shell (FND-6b). You and what employers ask: the competitiveness report (flag `competitiveness`).
-//
-// STUB. Owner: WP-77, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /jobs/report — "You and what employers ask" (PRODUCT F-MATCH-04; TASK_PLAN.md
+// WP-77; flag `competitiveness`). Linked from the /jobs header (WP-33) and the
+// Assistant's competitiveness card (`?job=<id>`); `?search=<id>` picks the
+// saved search. Renders inside the (auth) app shell.
+
+import { Suspense } from 'react';
+
+import { CompetitivenessReport } from '../../../../components/features/match';
 
 export default function JobsReportPage() {
-  return <div hidden data-route-stub="/jobs/report" data-owner="WP-77" />;
+  return (
+    <Suspense fallback={null}>
+      <CompetitivenessReport />
+    </Suspense>
+  );
 }

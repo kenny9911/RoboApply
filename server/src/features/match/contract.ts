@@ -77,7 +77,7 @@ export const KeywordExtractionSchema = z.array(
   z.object({ keyword: z.string(), importance: z.enum(['high', 'medium', 'low']), frequency: z.number() }).strict(),
 );
 
-/** `RAFitReport.report` — the CompetitivenessReport body (without id/createdAt). */
+/** `RAFitReport.report` — a `CompetitivenessReportBody` (kind 'competitiveness'); read back by `parseStoredReport`. */
 export const FitReportBodySchema = z.record(z.string(), z.unknown());
 
 // ── Shared fit views (scorer v3) ──────────────────────────────────────────
@@ -219,21 +219,154 @@ export interface KeywordCheckResponse {
   asOf: string;
 }
 
-// ── Competitiveness report (flag `competitiveness`; credit `competitiveness`; WP-77) ──
+// ── Competitiveness report: "You and what employers ask" (flag `competitiveness`; credit `competitiveness`; WP-77) ──
+//
+// Computed from our own job index for one saved search (PRODUCT F-MATCH-04):
+// the share of the search's posts whose stated degree / years / required
+// skills the user meets, the most requested skills ("asked for in X of Y
+// posts"), and "Broaden your search" options with real extra-job counts.
+// Deterministic: no model call. There is no applicant data, so nothing here
+// compares the user with other applicants (no "you outperform X%").
+//
+// D3: every comparative number is a `ReportSourced` with `sampleSize`;
+// aggregates below MIN_SAMPLE (20) are null ("Not enough data yet"), and a
+// sample under 20 posts suppresses the whole comparison (`suppressed`).
 
 export const CompetitivenessBodySchema = z.object({ searchProfileId: Id }).strict();
-/** D3: comparative numbers carry `{ value, source, sampleSize }`; suppressed below MIN_SAMPLE. */
-export interface CompetitivenessReport {
-  id: string;
-  searchProfileId: string;
-  /** Share of postings whose degree/years/skill requirements the user meets. */
-  meetsRequirements: { value: number; source: 'index'; sampleSize: number; asOf: string } | null;
-  /** "asked for in X of Y posts". */
-  topSkills: Array<{ skill: string; askedIn: number; outOf: number; youHave: boolean }>;
-  /** "Broaden your search" options with real extra-job counts. */
-  broaden: Array<{ label: string; filterDiff: unknown; extraJobs: number }>;
-  createdAt: string;
+export const CompetitivenessLatestQuerySchema = z.object({ searchProfileId: Id.optional() }).strict();
+
+/** How a report number was produced (rendered as the method sentence). */
+export type CompetitivenessMethod =
+  /** Counted over the newest posts of the saved search (`sample.size` of them). */
+  | 'newest_posts_sample'
+  /** A live count of the search's posts in our index (capped at 5,000). */
+  | 'search_count'
+  /** A live count: how many more posts the search shows with one filter removed. */
+  | 'filter_removal_count';
+
+/** Provenance of one report number; structurally a platform `Sourced<T>` (source = our job index). */
+export interface ReportSourced<T = number> {
+  value: T;
+  source: 'index';
+  /** Posts behind an aggregate (required on every share and "X of Y" number). */
+  sampleSize?: number;
+  /** ISO time the posts were read. */
+  asOf: string;
+  method: CompetitivenessMethod;
 }
+
+/** A share (0–1) of `sampleSize` posts; `met` is the numerator ("met of sampleSize"). */
+export interface ReportShare extends ReportSourced<number> {
+  sampleSize: number;
+  met: number;
+}
+
+export type RequirementKey = 'degree' | 'years' | 'skills';
+
+/**
+ * One requirement over the sample. A post "states" a degree when it names a
+ * level above none, years when it names a minimum above 0, and skills when
+ * it marks at least one skill as required. Posts that do not state it never
+ * count as a miss.
+ */
+export interface CompetitivenessRequirement {
+  key: RequirementKey;
+  /** Posts in the sample that state this requirement (sample composition). */
+  stated: number;
+  /** Of the posts that state it, the share whose requirement you meet; null below 20 or when your side is unknown. */
+  share: ReportShare | null;
+  /** False when your profile/resume does not show it (degree, dated experience, any skill). */
+  youKnown: boolean;
+  /** Yours: degree key ('bachelor'…), years (one decimal), or how many skills your profile/resume lists. */
+  yours: string | number | null;
+  /**
+   * What the stating posts typically ask: degree → the most common level
+   * (value = level key, `count` posts); years → the median minimum years.
+   * Null below 20 stating posts; never for skills.
+   */
+  typical: (ReportSourced<string | number> & { count?: number }) | null;
+}
+
+export interface CompetitivenessSkill {
+  skill: string;
+  /** "Asked for in X of Y posts": value = X, sampleSize = Y. */
+  askedIn: ReportSourced<number> & { sampleSize: number };
+  /** Your profile skills or resume text show it (the keyword-check rule). */
+  youHave: boolean;
+}
+
+export interface BroadenOption {
+  /** The FilterSet field this option removes. */
+  field: string;
+  /** Its current value (for the label). */
+  value: unknown;
+  /** `filtersPatch` for `PATCH /search-profiles/:id` (removes the field). */
+  patch: Record<string, null>;
+  /** Real count of extra posts the search shows without it. */
+  extraJobs: ReportSourced<number>;
+  /**
+   * The real figure may be higher than `extraJobs` ("+N or more"): the search
+   * or the relaxed search reached the 5,000 count ceiling, or the search's own
+   * count is unknown, so the difference of two capped counts is a lower bound.
+   */
+  capped: boolean;
+}
+
+/** The persisted body (`RAFitReport.report`, kind 'competitiveness'). */
+export interface CompetitivenessReportBody {
+  schemaVersion: 1;
+  searchProfileId: string;
+  searchProfileName: string;
+  searchProfileVersion: number;
+  asOf: string;
+  sample: { size: number; maxSize: number; method: 'newest_posts_sample' };
+  /** All posts in the search right now; null when it could not be counted. */
+  total: ReportSourced<number> | null;
+  totalCapped: boolean;
+  /** `too_few_posts`: under 20 posts in the sample; only Broaden options are shown. */
+  suppressed: 'too_few_posts' | null;
+  /** Share of the posts that state at least one requirement (and could be checked) whose stated requirements you all meet. */
+  meetsRequirements: ReportShare | null;
+  /** Sample composition: posts we could check, posts stating nothing, posts we could not check (your side unknown). */
+  overall: { checked: number; notStated: number; unknown: number };
+  requirements: CompetitivenessRequirement[];
+  /** Most requested skills, most asked first (stored up to the full length). */
+  topSkills: CompetitivenessSkill[];
+  broaden: BroadenOption[];
+}
+
+/** `POST /match/competitiveness` and `GET /match/competitiveness/latest`. */
+export interface CompetitivenessReport extends CompetitivenessReportBody {
+  id: string;
+  createdAt: string;
+  /** The saved search changed (or was deleted) since this report: run it again for current numbers. */
+  stale: boolean;
+  /** `competitivenessFull` (Pro): every skill and Broaden option; otherwise the first few. */
+  full: boolean;
+  /** Skills / options not shown on this plan. */
+  hiddenSkills: number;
+  hiddenBroaden: number;
+  /** A sellable plan shows the full report. */
+  upgradable: boolean;
+  /** True when this request spent a `competitiveness` credit. */
+  charged: boolean;
+  /** True only when `create` returned an identical report from earlier the same day (no credit). Always false from `latest`. */
+  reused: boolean;
+}
+
+/** Limits: sample size, and how many skills / options each plan shows. */
+export const COMPETITIVENESS_LIMITS = {
+  /** Newest posts of the search the report reads (the feed preview seam's ceiling). */
+  sampleMax: 50,
+  /** A skill must be asked for in at least this many posts to be listed. */
+  skillMinPosts: 2,
+  fullSkills: 15,
+  freeSkills: 5,
+  fullBroaden: 8,
+  freeBroaden: 3,
+  /** An identical report (same search version and your same inputs) from the last day is reused free. */
+  reuseHours: 24,
+} as const;
 
 export const MATCH_ERROR_CODES = {
   scoreCapReached: 'score_daily_cap',
@@ -241,4 +374,5 @@ export const MATCH_ERROR_CODES = {
   jobNotFound: 'job_not_found',
   variantNotFound: 'resume_variant_not_found',
   idempotencyKeyRequired: 'idempotency_key_required',
+  searchProfileNotFound: 'search_profile_not_found',
 } as const;

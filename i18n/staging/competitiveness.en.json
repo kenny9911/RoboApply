@@ -1,3 +1,115 @@
 {
-  "competitiveness": {}
+  "competitiveness": {
+    "meta": {
+      "title": "You and what employers ask"
+    },
+    "eyebrow": "Report",
+    "title": "You and what employers ask",
+    "intro": "How your profile and resume compare with what the posts in one of your saved searches ask for.",
+    "honesty": "This compares you with job posts, not with other people. We have no information about other applicants. It is not your chance of getting hired.",
+    "unavailable": {
+      "title": "This report isn't available",
+      "sub": "It isn't turned on for your account right now.",
+      "back": "Back to jobs"
+    },
+    "loading": "Loading the report…",
+    "loadError": "We couldn't load the report. Try again in a moment.",
+    "retry": "Try again",
+    "search": {
+      "label": "Saved search",
+      "single": "Saved search: {name}",
+      "none": "You don't have a saved search yet. Set up your job search first.",
+      "setUp": "Set up your search"
+    },
+    "job": {
+      "title": "This job",
+      "intro": "What this post asks for and what your resume shows.",
+      "open": "Back to the job"
+    },
+    "start": {
+      "title": "See how you compare with what these posts ask",
+      "intro": "We read the newest posts in this saved search and count:",
+      "point1": "how many ask for a degree, years of experience or skills you have",
+      "point2": "the skills they ask for most",
+      "point3": "filters you could remove to see more jobs, with real counts",
+      "run": "Create the report",
+      "running": "Counting posts…",
+      "noAi": "Counted from job posts. No AI is used."
+    },
+    "error": {
+      "generic": "We couldn't create the report. Nothing was charged. Try again.",
+      "outOfCredits": "You've used your reports for now.",
+      "notFound": "This saved search no longer exists. Pick another one."
+    },
+    "sample": {
+      "line": "From the {size, plural, one {newest post} other {# newest posts}} in this search.",
+      "lineWithTotal": "From the {size, plural, one {newest post} other {# newest posts}} in this search ({total} in all).",
+      "lineWithTotalCapped": "From the {size, plural, one {newest post} other {# newest posts}} in this search (more than {total} in all)."
+    },
+    "stale": "Your saved search changed after this report was made. Run it again to see current numbers.",
+    "reused": "Same search and profile as earlier today, so this is the same report. No credit was used.",
+    "notCharged": "There weren't enough posts to compare, so no credit was used.",
+    "suppressed": {
+      "title": "Not enough posts to compare yet",
+      "body": "This search has {size, plural, =0 {no recent posts} one {# recent post} other {# recent posts}}. We need at least {min} to give numbers you can rely on. Broadening your search can help."
+    },
+    "meets": {
+      "title": "Requirements you meet",
+      "headline": "{met} of {total} posts",
+      "share": "{percent} of posts",
+      "explain": "Posts that state a degree, years of experience or required skills, where you meet everything they state.",
+      "notStated": "{count, plural, one {# post states} other {# posts state}} none of these.",
+      "unknown": "{count, plural, one {# post} other {# posts}} we couldn't check because your profile doesn't show the detail it asks for.",
+      "fillProfile": "Add it to your profile",
+      "notEnough": "Not enough posts state these requirements to give a number."
+    },
+    "req": {
+      "degree": "Degree",
+      "years": "Years of experience",
+      "skills": "Required skills",
+      "stated": "{count, plural, =0 {No post states this} one {# post states this} other {# posts state this}}",
+      "yoursDegree": "Yours: {degree}",
+      "yoursYears": "Yours: {years, plural, one {# year} other {# years}}",
+      "yoursSkills": "Yours: {count, plural, one {# skill} other {# skills}} on your profile and resume",
+      "yoursUnknown": "Your profile doesn't show this yet.",
+      "share": "You meet it in {met} of {total} posts that state it",
+      "notEnough": "Not enough posts state this to give a number.",
+      "typicalDegree": "Most often asked: {degree} ({count, plural, one {# post} other {# posts}})",
+      "typicalYears": "Typical minimum asked: {years, plural, one {# year} other {# years}}"
+    },
+    "skills": {
+      "title": "Most requested skills",
+      "intro": "Skills these posts mark as required (or list, when they mark none).",
+      "askedIn": "Asked for in {count} of {total} posts",
+      "have": "On your profile or resume",
+      "missing": "Not on your profile or resume",
+      "none": "No skill is asked for in more than one of these posts.",
+      "hidden": "{count, plural, one {# more skill} other {# more skills}} in the full report with Pro.",
+      "hiddenPlan": "{count, plural, one {# more skill isn't} other {# more skills aren't}} shown on your plan.",
+      "addHint": "If you have any of the skills not shown on your resume, add them so employers can see them. Only add what is true.",
+      "editResume": "Edit your resume"
+    },
+    "broaden": {
+      "title": "Broaden your search",
+      "intro": "Removing one of these filters shows more jobs. The counts are live from our job index.",
+      "remove": "Remove: {filter}",
+      "extra": "+{count} jobs",
+      "extraCapped": "+{count} or more jobs",
+      "apply": "Remove this filter",
+      "applying": "Removing…",
+      "applied": "Removed. Run the report again to see the new numbers.",
+      "conflict": "Your saved search changed in the meantime. Reload the page and try again.",
+      "error": "We couldn't change the filter. Try again.",
+      "staleNote": "Run the report again before changing filters: these counts are for the earlier version of your search.",
+      "none": "None of your filters is holding back many jobs right now.",
+      "manyAlready": "Your search already has more than {total} posts, so removing a filter wouldn't change much.",
+      "hidden": "{count, plural, one {# more option} other {# more options}} in the full report with Pro.",
+      "hiddenPlan": "{count, plural, one {# more option isn't} other {# more options aren't}} shown on your plan."
+    },
+    "footer": {
+      "created": "Made {date}",
+      "rerun": "Run the report again",
+      "charged": "This report used 1 credit."
+    }
+  }
 }

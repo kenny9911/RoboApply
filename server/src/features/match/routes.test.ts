@@ -1,6 +1,7 @@
 // @vitest-environment node
 // WP-18 — MATCH routes: fit analysis (credit + Idempotency-Key), keyword check,
 // the score handler WP-34 mounts, auth and the competitiveness flag.
+// WP-77 — the competitiveness report routes (credit, Idempotency-Key, flag, latest).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/prisma.js', () => ({ default: {} }));
@@ -10,9 +11,11 @@ import { Router } from 'express';
 import { getBrand } from '../../platform/brand/registry.js';
 import { CreditsExhaustedError } from '../../platform/credits/errors.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
+import { createCompetitivenessService, type CompetitivenessService } from './CompetitivenessService.js';
 import { createMatchService, type MatchService } from './MatchService.js';
+import { createMemoryFitReportStore } from './reportStore.js';
 import { createMatchRouter, createScoreJobHandler } from './routes.js';
-import { createMemoryRepo } from './testkit.js';
+import { createMemoryReportInventory, createMemoryRepo, matchUser, reportJobs } from './testkit.js';
 
 const scorerRun = vi.fn();
 let exhausted = false;
@@ -35,9 +38,28 @@ function service(): MatchService {
   });
 }
 
+let reportExhausted = false;
+const reportJobRows = reportJobs(22, () => ({ educationLevel: 'bachelor' }));
+function reports(): CompetitivenessService {
+  return createCompetitivenessService({
+    inventory: createMemoryReportInventory({ samples: { sp1: reportJobRows.map((j) => j.id) } }),
+    store: createMemoryFitReportStore(),
+    userContext: async () => matchUser(),
+    getJobs: async (ids) => reportJobRows.filter((j) => ids.includes(j.id)),
+    withCredit: async (_opts, fn) => {
+      if (reportExhausted) throw new CreditsExhaustedError({ bucket: 'competitiveness', resetsAt: new Date('2026-10-17T00:00:00Z'), upgradable: true, cap: 1, window: 'week' });
+      return fn({ id: 'ledger_1' });
+    },
+    entitlements: async () => ({ full: false, upgradable: true }),
+    brand: () => getBrand('roboapply'),
+  });
+}
+
 let h: RouteHarness;
 const svc = service();
 const get = async () => svc;
+const reportSvc = reports();
+const getReports = async () => reportSvc;
 const auth = fakeAuth((req) => (req.headers['x-test-user'] ? { id: String(req.headers['x-test-user']) } : null));
 
 function jobsRouter() {
@@ -49,7 +71,8 @@ function jobsRouter() {
 beforeAll(async () => {
   h = await startRouteHarness({
     mounts: [
-      ['/api/v1/roboapply/match', createMatchRouter({ seekerAuth: [auth], env: {} }, get)],
+      ['/api/v1/roboapply/match', createMatchRouter({ seekerAuth: [auth], env: {} }, get, getReports)],
+      ['/api/v1/off/match', createMatchRouter({ seekerAuth: [auth], env: { FLAG_ROBOAPPLY_COMPETITIVENESS: 'false' } }, get, getReports)],
       ['/api/v1/roboapply/jobs', jobsRouter()],
     ],
   });
@@ -113,10 +136,51 @@ describe('GET /match/jobs/:id/keyword-check', () => {
   });
 });
 
-describe('competitiveness (WP-77) is still a stub', () => {
-  it('answers 501 not_implemented with a session', async () => {
-    const res = await h.request<{ code: string }>('GET', '/api/v1/roboapply/match/competitiveness/latest', { headers: U });
-    expect([501, 404]).toContain(res.status);
+describe('competitiveness report (WP-77)', () => {
+  const KEY = { ...U, 'Idempotency-Key': 'report-key-0001' };
+
+  it('401 without a session; 422 without an Idempotency-Key or with an unknown field', async () => {
+    expect((await h.request('POST', '/api/v1/roboapply/match/competitiveness', { body: { searchProfileId: 'sp1' } })).status).toBe(401);
+    expect((await h.request('GET', '/api/v1/roboapply/match/competitiveness/latest')).status).toBe(401);
+    const noKey = await h.request<{ details: { reason: string } }>('POST', '/api/v1/roboapply/match/competitiveness', { body: { searchProfileId: 'sp1' }, headers: U });
+    expect(noKey.status).toBe(422);
+    expect(noKey.body.details.reason).toBe('idempotency_key_required');
+    expect((await h.request('POST', '/api/v1/roboapply/match/competitiveness', { body: { searchProfileId: 'sp1', x: 1 }, headers: KEY })).status).toBe(422);
+    expect((await h.request('GET', '/api/v1/roboapply/match/competitiveness/latest?x=1', { headers: U })).status).toBe(422);
+  });
+
+  it('latest is null first; POST answers the report (402 when out of credits, 404 for an unknown search); latest then returns it', async () => {
+    const empty = await h.request<{ data: unknown }>('GET', '/api/v1/roboapply/match/competitiveness/latest', { headers: U });
+    expect(empty.status).toBe(200);
+    expect(empty.body.data).toBeNull();
+
+    reportExhausted = true;
+    const out = await h.request<{ code: string; details: { bucket: string } }>('POST', '/api/v1/roboapply/match/competitiveness', { body: { searchProfileId: 'sp1' }, headers: KEY });
+    expect(out.status).toBe(402);
+    expect(out.body).toMatchObject({ code: 'credits_exhausted', details: { bucket: 'competitiveness' } });
+    reportExhausted = false;
+
+    const res = await h.request<{ data: { id: string; charged: boolean; sample: { size: number }; meetsRequirements: { sampleSize: number } } }>(
+      'POST',
+      '/api/v1/roboapply/match/competitiveness',
+      { body: { searchProfileId: 'sp1' }, headers: KEY },
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ charged: true, sample: { size: 22 }, meetsRequirements: { sampleSize: 22 } });
+
+    const missing = await h.request<{ code: string }>('POST', '/api/v1/roboapply/match/competitiveness', { body: { searchProfileId: 'nope' }, headers: KEY });
+    expect(missing.status).toBe(404);
+
+    const latest = await h.request<{ data: { id: string; stale: boolean } }>('GET', '/api/v1/roboapply/match/competitiveness/latest?searchProfileId=sp1', { headers: U });
+    expect(latest.body.data).toMatchObject({ id: res.body.data.id, stale: false });
+  });
+
+  it('404 feature_disabled with the competitiveness flag off', async () => {
+    const res = await h.request<{ code: string }>('POST', '/api/v1/off/match/competitiveness', { body: { searchProfileId: 'sp1' }, headers: KEY });
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('feature_disabled');
+    const latest = await h.request<{ code: string }>('GET', '/api/v1/off/match/competitiveness/latest', { headers: U });
+    expect(latest.body.code).toBe('feature_disabled');
   });
 });
 

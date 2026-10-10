@@ -9,6 +9,7 @@
 import type { Market } from '../../platform/brand/registry.js';
 import { coerceFilterSet } from '../search/index.js';
 import { expandTaxonomyIds } from '../jobs/taxonomy/index.js';
+import { normalizeCompanyName } from '../jobs/normalize/index.js';
 import type { MatchDimension } from './contract.js';
 import type { MatchJobRecord, UserMatchInputs } from './context.js';
 import type { KeywordInput } from './keywordRows.js';
@@ -108,19 +109,12 @@ function toRecord(row: JobRow): MatchJobRecord {
 }
 
 /**
- * Approximate company-name key for looking up past employers in RACompany.
- * WP-16a owns the canonical normalizer; this mirrors its intent (lower case,
- * legal suffixes dropped) closely enough for an exact-key lookup.
+ * Company-name key for looking up past employers in RACompany.nameNormalized:
+ * the ingest pipeline's canonical normalizer (WP-16a), so the lookup and the
+ * stored key always agree.
  */
 export function companyKey(name: string): string {
-  return name
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[,.]/g, ' ')
-    .replace(/\b(inc|llc|ltd|limited|corp|corporation|co|company|gmbh|ag|sa|plc|pte|bv)\b/g, ' ')
-    .replace(/(股份有限公司|有限责任公司|有限公司|集团|集團)$/u, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeCompanyName(name);
 }
 
 function hasFraudFlags(v: unknown): boolean {
