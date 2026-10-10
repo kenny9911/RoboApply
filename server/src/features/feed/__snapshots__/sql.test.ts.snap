@@ -1,0 +1,508 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`predicates (one snapshot per FilterSet field) > a city with no coordinates and radius 0 matches the city in every script, remote passes 1`] = `
+{
+  "text": "(j."workModel" = 'remote' OR (lower(j."locationCity") = ANY($1::text[])))",
+  "values": [
+    [
+      "上海",
+      "shanghai",
+      "上海市",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > classYear 1`] = `
+{
+  "text": "(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $1) OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($2::text[])))",
+  "values": [
+    "class_year:%",
+    [
+      "class_year:2027",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > companies 1`] = `
+{
+  "text": "j."companyNameNormalized" = ANY($1::text[])",
+  "values": [
+    [
+      "acme",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > companySizes 1`] = `
+{
+  "text": "(c."sizeBand" IS NULL OR c."sizeBand" = ANY($1::text[]))",
+  "values": [
+    [
+      "201-500",
+      "501-1000",
+      "201-1000",
+      "5001+",
+      "5000+",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > country 1`] = `
+{
+  "text": "(j."locationCountry" = $1 OR (j."workModel" = 'remote' AND (j."remoteScope" = $2 OR j."remoteScope" = 'global')))",
+  "values": [
+    "US",
+    "US",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > dailyPay 1`] = `
+{
+  "text": "(j."employmentType" IS DISTINCT FROM 'internship' OR (j."salaryDisclosed" = true AND j."salaryCurrency" = 'CNY' AND (CASE j."salaryPeriod" WHEN 'day' THEN COALESCE(j."salaryMax", j."salaryMin") WHEN 'month' THEN COALESCE(j."salaryMax", j."salaryMin") / $1 END) >= $2) OR j."salaryDisclosed" = false)",
+  "values": [
+    21.75,
+    200,
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > degree 1`] = `
+{
+  "text": "(j."educationLevel" IS NULL OR j."educationLevel" = 'none' OR j."educationLevel" = ANY($1::text[]))",
+  "values": [
+    [
+      "associate",
+      "bachelor",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > employerTags 1`] = `
+{
+  "text": "j."employerTags" @> $1::text[]",
+  "values": [
+    [
+      "soe",
+      "foreign",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > employmentType 1`] = `
+{
+  "text": "(j."employmentType" = 'internship' OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($1::text[])) OR (EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($2::text[])) OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $3))))",
+  "values": [
+    [
+      "cn_hire:campus",
+    ],
+    [
+      "cn_hire:social",
+    ],
+    "cn_hire:%",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > excludeAgencies 1`] = `
+{
+  "text": "j."isAgency" IS NOT TRUE",
+  "values": [],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > excludeRequirements 1`] = `
+{
+  "text": "(j."citizenshipRequired" IS NOT TRUE AND j."clearanceRequired" IS NOT TRUE)",
+  "values": [],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > excludedCompanies 1`] = `
+{
+  "text": "j."companyNameNormalized" <> ALL($1::text[])",
+  "values": [
+    [
+      "globex",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > excludedIndustries 1`] = `
+{
+  "text": "NOT EXISTS (SELECT 1 FROM unnest(c."industries") AS ci(v) WHERE lower(ci.v) = ANY($1::text[]))",
+  "values": [
+    [
+      "gambling",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > excludedSkills 1`] = `
+{
+  "text": "NOT (j."skills" && $1::text[])",
+  "values": [
+    [
+      "java",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > excludedTitles 1`] = `
+{
+  "text": "NOT (j."titleNormalized" ILIKE ANY($1::text[]))",
+  "values": [
+    [
+      "%sales manager%",
+      "%100 remote%",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > hukouTag 1`] = `
+{
+  "text": "'hukou' = ANY(j."employerTags")",
+  "values": [],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > includeUndisclosedPay 1`] = `
+{
+  "text": "j."salaryDisclosed" = true",
+  "values": [],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > industries 1`] = `
+{
+  "text": "EXISTS (SELECT 1 FROM unnest(c."industries") AS ci(v) WHERE lower(ci.v) = ANY($1::text[]))",
+  "values": [
+    [
+      "fintech",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > internDays 1`] = `
+{
+  "text": "(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $1) OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE (CASE WHEN t.e->>'tag' ~ '^intern_days:[0-9]{1,2}$' THEN split_part(t.e->>'tag', ':', 2)::int END) BETWEEN $2 AND $3))",
+  "values": [
+    "intern_days:%",
+    3,
+    4,
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > jobTypes 1`] = `
+{
+  "text": "j."employmentType" = ANY($1::text[])",
+  "values": [
+    [
+      "full_time",
+      "contract",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > locations 1`] = `
+{
+  "text": "(j."workModel" = 'remote' OR (j."geoLat" BETWEEN $1 AND $2 AND j."geoLng" BETWEEN $3 AND $4 AND 6371 * 2 * asin(sqrt(power(sin(radians(j."geoLat" - $5) / 2), 2) + cos(radians($6)) * cos(radians(j."geoLat")) * power(sin(radians(j."geoLng" - $7) / 2), 2))) <= $8))",
+  "values": [
+    29.909785672475124,
+    30.630214327524875,
+    -98.1570790512494,
+    -97.32292094875059,
+    30.27,
+    30.27,
+    -97.74,
+    40,
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > needsSponsorship 1`] = `
+{
+  "text": "NOT (j."sponsorship" = 'not_offered' AND COALESCE(j."sponsorshipEvidence", '') ~* $1)",
+  "values": [
+    "\\m(no|not|unable|cannot|can't|won't|will not|does not|doesn't|without|ineligible)\\M|不|无法|無法|不提供|不支持",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > postedWithinDays 1`] = `
+{
+  "text": "j."postedAt" >= $1::timestamp(3)",
+  "values": [
+    "2026-10-03T12:00:00.000Z",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > q 1`] = `
+{
+  "text": "(j."searchText" ILIKE $1 OR $2 <% j."searchText")",
+  "values": [
+    "%data 50\\%%",
+    "data 50%",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > recruiterJobsOnly 1`] = `
+{
+  "text": "j."fromRecruiterBank" = true",
+  "values": [],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > roleType 1`] = `
+{
+  "text": "j."roleType" = $1",
+  "values": [
+    "manager",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > salary floor with undisclosed pay kept (default) admits undisclosed and other-currency jobs 1`] = `
+{
+  "text": "((j."salaryDisclosed" = true AND j."salaryCurrency" = $1 AND COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") >= $2) OR j."salaryDisclosed" = false OR COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") IS NULL OR j."salaryCurrency" IS DISTINCT FROM $3)",
+  "values": [
+    "USD",
+    83200,
+    "USD",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > salaryMin 1`] = `
+{
+  "text": "((j."salaryDisclosed" = true AND j."salaryCurrency" = $1 AND COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") >= $2) OR j."salaryDisclosed" = false OR COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") IS NULL OR j."salaryCurrency" IS DISTINCT FROM $3)",
+  "values": [
+    "USD",
+    120000,
+    "USD",
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > salaryMonthsMin 1`] = `
+{
+  "text": "(j."salaryMonths" IS NULL OR j."salaryMonths" >= $1)",
+  "values": [
+    13,
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > schoolTiers 1`] = `
+{
+  "text": "(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $1) OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($2::text[])))",
+  "values": [
+    "school_tier:%",
+    [
+      "school_tier:985",
+      "school_tier:211",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > seniority 1`] = `
+{
+  "text": "j."seniority" = ANY($1::text[])",
+  "values": [
+    [
+      "mid",
+      "senior",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > skills 1`] = `
+{
+  "text": "j."skills" && $1::text[]",
+  "values": [
+    [
+      "python",
+      "sql",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > taxonomyIds 1`] = `
+{
+  "text": "(j."taxonomyIds" && $1::text[])",
+  "values": [
+    [
+      "backend_engineer",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > titles 1`] = `
+{
+  "text": "(j."taxonomyIds" && $1::text[] OR j."titleNormalized" ILIKE ANY($2::text[]))",
+  "values": [
+    [
+      "data_analyst",
+    ],
+    [
+      "%data analyst%",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > workModels 1`] = `
+{
+  "text": "j."workModel" = ANY($1::text[])",
+  "values": [
+    [
+      "remote",
+    ],
+  ],
+}
+`;
+
+exports[`predicates (one snapshot per FilterSet field) > yearsRange 1`] = `
+{
+  "text": "(COALESCE(j."minYears", 0) <= $1 AND COALESCE(j."maxYears", j."minYears", 100) >= $2)",
+  "values": [
+    5,
+    2,
+  ],
+}
+`;
+
+exports[`scope > feed scope: market, canonical, live, not seed, no fraud flags, public or own, not hidden 1`] = `
+[
+  {
+    "text": "j."market" = $1",
+    "values": [
+      "intl",
+    ],
+  },
+  {
+    "text": "j."isCanonical" = true",
+    "values": [],
+  },
+  {
+    "text": "j."archivedAt" IS NULL",
+    "values": [],
+  },
+  {
+    "text": "j."closedAt" IS NULL",
+    "values": [],
+  },
+  {
+    "text": "j."sourceBoard" <> 'seed'",
+    "values": [],
+  },
+  {
+    "text": "(j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb)",
+    "values": [],
+  },
+  {
+    "text": "(j."visibility" = 'public' OR j."ownerUserId" = $1)",
+    "values": [
+      "u1",
+    ],
+  },
+  {
+    "text": "NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $1 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL)",
+    "values": [
+      "u1",
+    ],
+  },
+]
+`;
+
+exports[`statements > count: public rows only, capped inside (LIMIT cap + 1) 1`] = `
+{
+  "text": "SELECT count(*)::int AS "count" FROM (SELECT 1 FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $1 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND j."visibility" = 'public' AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $2 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND (j."taxonomyIds" && $3::text[]) AND j."workModel" = ANY($4::text[]) AND j."skills" && $5::text[] LIMIT $6) AS capped",
+  "values": [
+    "intl",
+    "u1",
+    [
+      "backend_engineer",
+    ],
+    [
+      "remote",
+    ],
+    [
+      "python",
+    ],
+    5001,
+  ],
+}
+`;
+
+exports[`statements > explore counts per L1 category over public live rows 1`] = `
+{
+  "text": "SELECT t.id AS "taxonomyId", count(*)::int AS "count" FROM "RAJob" j CROSS JOIN LATERAL unnest(j."taxonomyIds") AS t(id) WHERE j."market" = $1 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND j."visibility" = 'public' AND j."taxonomyIds" && $2::text[] AND t.id = ANY($3::text[]) GROUP BY t.id",
+  "values": [
+    "intl",
+    [
+      "software_engineering",
+      "data_analytics",
+    ],
+    [
+      "software_engineering",
+      "data_analytics",
+    ],
+  ],
+}
+`;
+
+exports[`statements > retrieval: GoApply deadline orders by a stated, quoted close date (China date) and keeps undated jobs after it 1`] = `
+{
+  "text": "SELECT j."id", j."market", j."visibility", j."ownerUserId", j."title", j."titleNormalized", j."companyName", j."companyNameNormalized", j."companyId", j."companyLogoUrl", j."taxonomyIds", j."primaryTaxonomyId", j."seniority", j."roleType", j."minYears", j."maxYears", j."educationLevel", j."skills", j."skillsDetail", j."workModel", j."remoteScope", j."location", j."locationCity", j."locationCountry", j."geoLat", j."geoLng", j."employmentType", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryPeriod", j."salaryAnnualMin", j."salaryAnnualMax", j."salaryDisclosed", j."salaryText", j."salaryMonths", j."sponsorship", j."sponsorshipEvidence", j."citizenshipRequired", j."clearanceRequired", j."employerTags", j."marketTags", j."postedAt", j."postedAtEstimated", j."firstSeenAt", j."lastSeenAt", j."expiresAt", j."sourceBoard", j."sourceName", j."originalSourceName", j."atsType", j."isAgency", j."fromRecruiterBank", j."employerVerified", j."sourcePriority", j."archivedAt", (j."benefits" IS NOT NULL AND length(j."benefits") > 0) AS "hasBenefits", length(j."descriptionPlain")::int AS "descriptionLength", c."industries" AS "companyIndustries", c."sizeBand" AS "companySizeBand", c."facts" AS "companyFacts", c."displayName" AS "companyDisplayName", c."logoUrl" AS "companyLogo" FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $1 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND (j."visibility" = 'public' OR j."ownerUserId" = $2) AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $3 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) ORDER BY (SELECT min(substring(t.e->>'tag' from 14 for 10)) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' ~ '^apply_closes:[0-9]{4}-[0-9]{2}-[0-9]{2}' AND length(btrim(COALESCE(t.e->>'evidenceQuote', ''))) > 0 AND substring(t.e->>'tag' from 14 for 10) >= $4) ASC NULLS LAST, j."postedAt" DESC NULLS LAST, j."id" DESC LIMIT $5",
+  "values": [
+    "cn",
+    "u1",
+    "u1",
+    "2026-10-10",
+    400,
+  ],
+}
+`;
+
+exports[`statements > retrieval: one window, newest first, LIMIT 1`] = `
+{
+  "text": "SELECT j."id", j."market", j."visibility", j."ownerUserId", j."title", j."titleNormalized", j."companyName", j."companyNameNormalized", j."companyId", j."companyLogoUrl", j."taxonomyIds", j."primaryTaxonomyId", j."seniority", j."roleType", j."minYears", j."maxYears", j."educationLevel", j."skills", j."skillsDetail", j."workModel", j."remoteScope", j."location", j."locationCity", j."locationCountry", j."geoLat", j."geoLng", j."employmentType", j."salaryMin", j."salaryMax", j."salaryCurrency", j."salaryPeriod", j."salaryAnnualMin", j."salaryAnnualMax", j."salaryDisclosed", j."salaryText", j."salaryMonths", j."sponsorship", j."sponsorshipEvidence", j."citizenshipRequired", j."clearanceRequired", j."employerTags", j."marketTags", j."postedAt", j."postedAtEstimated", j."firstSeenAt", j."lastSeenAt", j."expiresAt", j."sourceBoard", j."sourceName", j."originalSourceName", j."atsType", j."isAgency", j."fromRecruiterBank", j."employerVerified", j."sourcePriority", j."archivedAt", (j."benefits" IS NOT NULL AND length(j."benefits") > 0) AS "hasBenefits", length(j."descriptionPlain")::int AS "descriptionLength", c."industries" AS "companyIndustries", c."sizeBand" AS "companySizeBand", c."facts" AS "companyFacts", c."displayName" AS "companyDisplayName", c."logoUrl" AS "companyLogo" FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $1 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND (j."visibility" = 'public' OR j."ownerUserId" = $2) AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $3 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND (j."taxonomyIds" && $4::text[]) AND j."workModel" = ANY($5::text[]) AND j."skills" && $6::text[] AND j."postedAt" >= $7::timestamp(3) AND j."postedAt" < $8::timestamp(3) ORDER BY j."postedAt" DESC NULLS LAST, j."id" DESC LIMIT $9",
+  "values": [
+    "intl",
+    "u1",
+    "u1",
+    [
+      "backend_engineer",
+    ],
+    [
+      "remote",
+    ],
+    [
+      "python",
+    ],
+    "2026-09-26T12:00:00.000Z",
+    "2026-10-01T00:00:00.000Z",
+    400,
+  ],
+}
+`;

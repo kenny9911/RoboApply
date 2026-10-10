@@ -12,7 +12,7 @@
 // archivedAt IS NULL AND market = brand.market`.
 
 import { z } from 'zod';
-import type { FilterSet } from '../search/contract.js';
+import type { FilterSet, FilterSetPatch } from '../search/contract.js';
 
 const Id = z.string().min(1).max(64);
 
@@ -26,7 +26,10 @@ export type FitTier = (typeof FIT_TIER_LABELS)[number];
 export const FeedQueryBodySchema = z
   .object({
     searchProfileId: Id.optional(),
-    /** `deadline` is GoApply only. */
+    /**
+     * `deadline` is GoApply only: jobs whose posting states a 网申 close date
+     * (soonest first), then the rest newest first.
+     */
     sort: z.enum(FEED_SORTS).default('recommended'),
     q: z.string().trim().max(200).optional(),
     /** Partial FilterSet applied on top of the profile for this query only (validated by search.parseFilterSet). */
@@ -36,6 +39,13 @@ export const FeedQueryBodySchema = z
     fitTier: z.enum(['all', 'good', 'great']).optional(),
   })
   .strict();
+
+/**
+ * How the list was ordered. `recency` = date posted + filters only: GoApply
+ * users who turned 个性化推荐 off or have not chosen yet (PIPL Art. 24), where
+ * no fit score is used or shown.
+ */
+export type FeedOrder = 'personalized' | 'recency';
 
 export interface FitBadge {
   tier: FitTier;
@@ -50,13 +60,21 @@ export interface FitBadge {
 export interface FeedItem {
   jobId: string;
   title: string;
-  company: { id: string | null; name: string; logoUrl: string | null };
+  company: {
+    id: string | null;
+    name: string;
+    logoUrl: string | null;
+    /** Only with a provenance entry in RACompany.facts (D3); null renders "Not listed". */
+    sizeBand?: { value: string; source: string; asOf: string } | null;
+  };
   location: string | null;
   workModel: 'remote' | 'hybrid' | 'onsite' | null;
   employmentType: string | null;
   seniority: string | null;
   /** Null = "Pay not listed" (never 0). */
-  pay: { min: number | null; max: number | null; currency: string; period: 'year' | 'month' | 'day' | 'hour'; text: string | null } | null;
+  pay: { min: number | null; max: number | null; currency: string; period: 'year' | 'month' | 'week' | 'day' | 'hour'; text: string | null } | null;
+  /** CN "N薪" when the posting states it. */
+  payMonths?: number | null;
   postedAt: string | null;
   /** "Last checked {date}" from lastSeenAt. */
   lastSeenAt: string | null;
@@ -65,12 +83,46 @@ export interface FeedItem {
   fromRecruiterBank: boolean;
   employerVerified: boolean;
   isAgency: boolean;
-  /** At most 3, only from real fields. */
-  badges: Array<{ kind: 'direct_from_employer' | 'sponsorship' | 'new' | 'closing_soon' | 'market_tag'; label: string; quote?: string }>;
+  /**
+   * At most 3, fixed priority, only from real fields (PRODUCT F-FEED-05/07).
+   * `label` is a stable key the UI translates (for `market_tag` the tag id,
+   * e.g. 'soe'); `quote` is the posting's own words where the badge rests on
+   * one. `new` and `closing_soon` are reserved and never emitted (no urgency).
+   */
+  badges: FeedBadge[];
+  /** Null when nothing could be compared, or (GoApply) when personalisation is off. */
   fit: FitBadge | null;
   tracker: { status: string } | null;
-  /** GoApply 网申 window / 届别 when stated. */
-  campus?: { applyClosesAt: string | null; classYears: number[] } | null;
+  /**
+   * GoApply 网申 close date / 届别, only as the posting states them.
+   * `applyClosesAt` is the stated date (yyyy-mm-dd, China time) with its
+   * quote; null when the posting states none (RAJob.expiresAt is never shown:
+   * it is often an estimate).
+   */
+  campus?: { applyClosesAt: string | null; applyClosesQuote?: string | null; classYears: number[] } | null;
+  /** 0-based position in the feed session (impressions beacon); null outside a session. */
+  position?: number | null;
+}
+
+export const FEED_BADGE_KINDS = [
+  'direct_from_employer',
+  'sponsorship',
+  'no_sponsorship',
+  'clearance_required',
+  'citizens_only',
+  'market_tag',
+  'agency',
+  'remote',
+  'pay_listed',
+  'benefits_listed',
+  'new',
+  'closing_soon',
+] as const;
+export type FeedBadgeKind = (typeof FEED_BADGE_KINDS)[number];
+export interface FeedBadge {
+  kind: FeedBadgeKind;
+  label: string;
+  quote?: string;
 }
 
 export interface FeedQueryResponse {
@@ -80,6 +132,10 @@ export interface FeedQueryResponse {
   /** Jobs hidden by the fit-tier view filter: "Hiding {n} weaker fits." */
   hiddenByTier: number;
   sessionId: string;
+  /** `recency` when personalisation is off (GoApply): sorted by date posted and filters only. Always sent by WP-32. */
+  order?: FeedOrder;
+  /** The sort actually applied (`recommended`/`best_fit` fall back to `newest` when `order` is `recency`). Always sent by WP-32. */
+  sort?: FeedSort;
 }
 
 // ── GET /feed/counts ─────────────────────────────────────────────────────
@@ -110,11 +166,18 @@ export interface FilterDiffProposal {
   searchProfileId: string;
   baseVersion: number;
   ops: Array<{ op: 'add' | 'remove' | 'set'; path: string; value: unknown }>;
-  /** Job count after the change. */
+  /**
+   * The same change as a FilterSetPatch, ready for
+   * `PATCH /search-profiles/:id { baseVersion, filtersPatch }` (one PATCH).
+   */
+  patch: FilterSetPatch;
+  /** Job count after the change (capped at 5,000; null when it could not be counted). */
   countAfter: number | null;
 }
 export interface HideJobResponse {
   proposedFilterDiff: FilterDiffProposal | null;
+  /** Reasons with no one-step filter change open an editor instead (ARCH §4.9). */
+  editor?: 'location' | 'seniority' | null;
 }
 
 /** GoApply adds 招转培 / 培训贷 / 收费 reasons. */
@@ -140,11 +203,14 @@ export const FeedRatingBodySchema = z
 
 // ── Explore, NL query, new-count, skills-check ───────────────────────────
 
+export const ExploreQuerySchema = z.object({ locale: z.string().max(8).optional() });
 export interface ExploreCategory {
   taxonomyId: string;
   label: string;
   /** Live count (public canonical rows of the brand's market). */
   count: number;
+  /** The same count with its provenance (D3): live public postings in this market. */
+  sourced: { value: number; source: 'aggregate'; asOf: string; method: string };
 }
 export interface ExploreResponse {
   categories: ExploreCategory[];
@@ -154,14 +220,32 @@ export interface ExploreResponse {
 export const NlQueryBodySchema = z.object({ text: z.string().trim().min(2).max(500), searchProfileId: Id.optional() }).strict();
 export interface NlQueryResponse {
   diff: FilterDiffProposal;
+  /** The request parts that were not turned into filters, in the user's words (nothing is claimed to be checked). */
   explanation: string;
+  unmatched: string[];
 }
 
-export const NewCountQuerySchema = z.object({ since: z.iso.datetime().optional() });
+/**
+ * `since` overrides the stored last visit. `markVisited=true` stamps
+ * `RAUserUiState.lastFeedVisitAt` after counting (the first page of
+ * `POST /feed/query` stamps it too). A polling badge omits `markVisited`, so
+ * polling never resets the count it shows. (Contract change from TASK_PLAN
+ * WP-32 "new-count stamps lastFeedVisitAt": recorded in the WP-32 handoff.)
+ * Results are cached per user for 2 minutes.
+ */
+export const NewCountQuerySchema = z.object({
+  since: z.iso.datetime().optional(),
+  markVisited: z.enum(['true', 'false']).optional(),
+});
 export interface NewCountResponse {
-  /** Real count of ≥ Good fit jobs since the last visit. */
+  /**
+   * Real count of jobs first seen since the last visit: ≥ Good fit when
+   * personalised; every matching job when not (GoApply with 个性化推荐 off).
+   */
   count: number;
   since: string | null;
+  /** The count hit its ceiling (400 personalised, 5,000 otherwise): show "{count}+". */
+  capped?: boolean;
 }
 
 export interface SkillsCheckResponse {
@@ -184,10 +268,19 @@ export interface PublicFeedResponse {
 
 // ── Documented JSON columns (ra-feed.prisma) ─────────────────────────────
 
-/** `RAFeedSession.ranks`: `[{ jobId, fit, kind: 'pre'|'ai', rank }]` */
-export const FeedSessionRanksSchema = z.array(
-  z.object({ jobId: z.string(), fit: z.number().nullable(), kind: z.enum(['pre', 'ai']), rank: z.number() }).strict(),
-);
+const FeedSessionRankEntrySchema = z.object({ jobId: z.string(), fit: z.number().nullable(), kind: z.enum(['pre', 'ai']), rank: z.number() }).strict();
+/**
+ * `RAFeedSession.ranks`: `{ entries: [{ jobId, fit, kind: 'pre'|'ai', rank }], windowEndsId }`.
+ * `windowEndsId` is the id of the last row of a full retrieval window, paired
+ * with `windowEndsAt` as the keyset of the next older refill; it rides here
+ * until schema request SR-32-4 adds `RAFeedSession.windowEndsId`. The bare
+ * entries array (sessions written before the envelope; 30-minute TTL) is
+ * still read.
+ */
+export const FeedSessionRanksSchema = z.union([
+  z.array(FeedSessionRankEntrySchema),
+  z.object({ entries: z.array(FeedSessionRankEntrySchema), windowEndsId: z.string().nullable() }).strict(),
+]);
 /** `RAUserAffinity.{taxonomy,company,skill}Weights`: `{ [key]: -1..1 }` */
 export const AffinityWeightsSchema = z.record(z.string(), z.number().min(-1).max(1));
 /** `RAJobInteraction.detail` for kinds 'applied' | 'unapplied' | 'share' | 'copilot_open'. */
@@ -206,6 +299,75 @@ export interface LimitingFilter {
 export type { FilterSet };
 
 export const FEED_ERROR_CODES = {
-  refreshLimited: 'feed_refresh_limited',
-  ratingAlreadyToday: 'feed_rating_already_today',
+  refreshLimited: 'feed_refresh_limited', // 429 rate_limited { reason, retryAfterSec }
+  ratingAlreadyToday: 'feed_rating_already_today', // 409 conflict { reason }
+  sessionExpired: 'feed_session_expired', // 409 conflict { reason }: start again without a cursor
+  deadlineSortCnOnly: 'deadline_sort_cn_only', // 422 invalid_request { reason }
+  jobNotFound: 'job_not_found', // 404 not_found { reason }
+  noRole: 'nl_query_no_role', // 422 invalid_request { reason }: the text names no role
+} as const;
+
+// ── Ranking factors (public "How ranking works" page, /help/ranking, WP-40) ──
+
+/**
+ * Every factor of the Recommended order, with its weight. There is NO boost
+ * for recruiter-bank jobs (a filter only, ARCH §4.8). WP-40 lists these on
+ * /help/ranking; tests pin them so the page and the code cannot drift.
+ */
+export const RANKING_FACTORS = [
+  { key: 'fit', weight: 0.55, what: 'Fit score: the AI score when one exists, otherwise the quick estimate minus 5 points.' },
+  { key: 'freshness', weight: 0.2, what: 'How recently the job was posted: 100 × e^(−hours since posting / 72).' },
+  { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs, and companies you marked as preferred; fades 2% a day.' },
+  { key: 'source_quality', weight: 0.1, what: 'How complete the posting is: pay listed, a known application system, a real posting date, a detailed description.' },
+] as const;
+
+/**
+ * Ordering rules besides the weighted factors (also listed on /help/ranking).
+ * `sponsorship_first` applies under every sort, within each retrieval window
+ * (the newest 400 matching jobs, then the next older ones).
+ */
+export const ORDERING_RULES = [
+  {
+    key: 'sponsorship_first',
+    points: null,
+    when: 'You said you need visa sponsorship (RoboApply).',
+    what: 'Jobs whose posting mentions sponsorship come first, in the order you chose; jobs whose posting says it does not sponsor are hidden.',
+  },
+  {
+    key: 'skills_boost',
+    points: 10,
+    when: 'Skills is the only filter that narrows your list.',
+    what: 'Jobs that require more of your chosen skills rank higher in Recommended: up to 10 points, in proportion to how many of them the job asks for.',
+  },
+] as const;
+
+/** Points added to a Recommended rank for the career goal chosen in onboarding (`onboardingAnswers.goal`). */
+export const GOAL_ADJUSTMENTS = {
+  more_senior: { points: 6, when: 'The job is above the lowest level you selected.' },
+  management: { points: 6, when: 'The job manages people (role type or title).' },
+  higher_pay: { points: 6, when: 'The listed pay is above your minimum, in the same currency.' },
+  flexibility: { points: 4, when: 'The job is remote or hybrid.' },
+  new_industry: { points: 0, when: 'No adjustment.' },
+  different_role: { points: 0, when: 'No adjustment.' },
+  learn_skills: { points: 0, when: 'No adjustment.' },
+  work_life_balance: { points: 0, when: 'No adjustment.' },
+  job_security: { points: 0, when: 'No adjustment.' },
+} as const;
+
+/** Feed limits (ARCH §3.4, §3.10, §4.8). */
+export const FEED_LIMITS = {
+  pageSize: 20,
+  retrievalLimit: 400,
+  firstWindowDays: 14,
+  widenWindowDays: 45,
+  widenBelowRows: 60,
+  maxAgeDays: 120,
+  sessionTtlMin: 30,
+  countCap: 5000,
+  companyMaxPerWindow: 2,
+  companyWindow: 20,
+  freshnessHalfLifeHours: 72,
+  reportCloseThreshold: 3,
+  skillsCheckTop: 5,
+  skillsCheckList: 50,
 } as const;

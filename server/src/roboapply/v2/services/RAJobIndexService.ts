@@ -1,5 +1,13 @@
 // backend/src/roboapply/v2/services/RAJobIndexService.ts
 //
+// @deprecated (WP-32) — replaced by the feed area: `POST /api/v1/roboapply/feed/query`
+// (indexed retrieval, ranking, sessions; `q` for the CommandPalette search) via
+// `lib/api/feed.ts`, and `GET /jobs/:id` (WP-34) for the detail view. WP-75
+// unmounts /v2/search and deletes this file after a zero-importer grep.
+// Until then it stays answer-compatible but scoped like every feed read
+// (market of the request's brand, canonical, public, not closed, no fraud
+// flags) and capped at LEGACY_SEARCH_MAX_ROWS instead of loading every row.
+//
 // Job index queries against the `RAJob` table. Used by /search/run and the
 // job-detail page. Filters, sort modes, keyset pagination, facets.
 //
@@ -9,6 +17,10 @@
 // are cheap and the filter shapes match the stub byte-for-byte.
 
 import prisma from '../../../lib/prisma.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
+
+/** Hard cap on rows one legacy search reads (the feed replaces this path; WP-32). */
+export const LEGACY_SEARCH_MAX_ROWS = 500;
 
 export type RAWorkType = 'remote' | 'hybrid' | 'onsite';
 export type RAEmploymentType = 'full_time' | 'contract' | 'part_time' | 'internship';
@@ -135,6 +147,7 @@ export function toJobView(row: any): RAJobView {
 
 const DAY_MS = 86_400_000;
 
+/** @deprecated Use the feed area (`POST /feed/query`, WP-32) and `GET /jobs/:id` (WP-34). */
 export class RAJobIndexService {
   /** GET /search/run. Sort-by-match requires per-user joined `matchScoreCached`
    *  values which only exist for jobs the user has actively scored — we fall
@@ -148,7 +161,15 @@ export class RAJobIndexService {
     // applyUrls) — excluded defensively here, matching the onboarding lane's
     // deliberate exclusion (RAOnboardingRecommendService), so an un-archived
     // seed row can never leak into user-visible search/home results.
-    const where: any = { archivedAt: null, sourceBoard: { not: 'seed' } };
+    const where: any = {
+      archivedAt: null,
+      closedAt: null,
+      sourceBoard: { not: 'seed' },
+      // Scope (WP-32): the request brand's market only, canonical, public rows.
+      market: getCurrentBrandOrDefault().market,
+      isCanonical: true,
+      visibility: 'public',
+    };
     if (params.q && params.q.trim()) {
       const tokens = params.q
         .toLowerCase()
@@ -205,7 +226,10 @@ export class RAJobIndexService {
 
     // We need facets on cold-load (no cursor) -> need the full filtered set.
     // 200 rows max, so the inflated cost is trivial.
-    const rowsAll = await p.rAJob.findMany({ where, orderBy });
+    // Jobs with fraud flags stay out until reviewed (WP-17 / WP-41), as in the feed.
+    const rowsAll = (await p.rAJob.findMany({ where, orderBy, take: LEGACY_SEARCH_MAX_ROWS })).filter(
+      (r: any) => !Array.isArray(r.fraudFlags) || r.fraudFlags.length === 0,
+    );
 
     const bookmarks = await p.rATrackerEntry.findMany({
       where: { userId, jobId: { in: rowsAll.map((r: any) => r.id) }, deletedAt: null },
@@ -278,4 +302,5 @@ export class RAJobIndexService {
   }
 }
 
+/** @deprecated See RAJobIndexService. */
 export const raJobIndexService = new RAJobIndexService();
