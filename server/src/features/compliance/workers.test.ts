@@ -66,29 +66,61 @@ describe('legal documents', () => {
     expect(loadLegalDoc(roboapply, 'privacy', { env: { LEGAL_ENTITY_NAME: 'Example Ltd' } }).markdown).toContain('Example Ltd');
   });
 
-  it('privacy notices publish the retention schedule and minimum age; CN-0 names the offshore region', () => {
+  it('privacy notices publish the retention schedule and minimum age; the GoApply notice states cross-border processing from the stack in use', () => {
     const intl = loadLegalDoc(roboapply, 'privacy', { env: {} }).markdown;
     expect(intl).toContain('| Assistant conversations | 12 months |');
     expect(intl).toContain('16 or older');
     expect(intl).toContain('connected-on date');
-    const cn = loadLegalDoc(goapply, 'privacy', { env: { DEPLOY_REGION: '' } }).markdown;
+    const offshore = { DEPLOY_REGION: '', DATABASE_URL: 'postgresql://u:p@ep-quiet.us-west-2.aws.neon.tech/db', LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5' };
+    const cn = loadLegalDoc(goapply, 'privacy', { env: offshore }).markdown;
     expect(cn).toContain('| 求职助手对话 | 12 个月 |');
-    expect(cn).toContain('处理地区为美国');
+    // The processors and the AI destination come from configuration: the sentences of the consent itself.
+    expect(cn).toContain(
+      '你的个人信息会由中国大陆境外的服务处理或存储。境外处理方：数据库 Neon（美国，us-west-2）、AI 模型 openai（美国）。AI 请求会发送到这些 AI 服务：openai（美国）。只有在你单独同意后才会这样处理；撤回该同意会关闭并删除你的账号。',
+    );
+    // No country is typed in by hand any more, and nothing unconfigured is named.
+    expect(cn).not.toContain('处理地区为美国');
+    expect(cn).not.toContain('内测');
     expect(cn).not.toContain('境内处理和存储');
-    expect(loadLegalDoc(goapply, 'privacy', { env: { DEPLOY_REGION: 'cn-mainland' } }).markdown).toContain('境内处理和存储');
+    expect(loadLegalDoc(goapply, 'privacy', { env: { DEPLOY_REGION: '' } }).markdown).toContain('你的个人信息会由中国大陆境外的服务处理或存储。境外处理方的清单见“法律信息”页面。');
+    // A mainland deployment on the shared stack sends data abroad too, so it says so (not "stays in the mainland").
+    const mainlandShared = loadLegalDoc(goapply, 'privacy', { env: { ...offshore, DEPLOY_REGION: 'cn-mainland', DATABASE_URL: 'postgresql://u:p@10.0.0.12:5432/db' } }).markdown;
+    expect(mainlandShared).toContain('你的个人信息会由中国大陆境外的服务处理或存储。境外处理方：AI 模型 openai（美国）。');
+    expect(mainlandShared).not.toContain('境内处理和存储');
+    // Only a mainland deployment with a complete stack of its own says the data stays in the mainland.
+    const own = {
+      DEPLOY_REGION: 'cn-mainland',
+      CN_LLM_PROVIDER: 'deepseek',
+      CN_LLM_MODEL: 'deepseek-chat',
+      CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
+      CN_INTERVIEW_ENGINE_STT_MODEL: 'dashscope/paraformer',
+      CN_INTERVIEW_ENGINE_TTS_MODEL: 'dashscope/cosyvoice',
+      CN_S3_BUCKET: 'cn',
+      CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+      CN_VAPID_PUBLIC_KEY: 'pub',
+      CN_EMAIL_TRANSPORT: 'aliyun_dm',
+    };
+    expect(loadLegalDoc(goapply, 'privacy', { env: own }).markdown).toContain('你的个人信息在中国大陆境内处理和存储。');
   });
 
-  it('production GoApply serves documents only when CN_LEGAL_DOCS_VERSION is set and the file is approved', () => {
-    expect(() => loadLegalDoc(goapply, 'privacy', { env: { NODE_ENV: 'production' } })).toThrow(expect.objectContaining({ code: 'not_found' }));
-    // version set but the file is still a draft skeleton → still not served
-    expect(() => loadLegalDoc(goapply, 'privacy', { env: { NODE_ENV: 'production', CN_LEGAL_DOCS_VERSION: '2026-11' } })).toThrow(
-      expect.objectContaining({ code: 'not_found' }),
-    );
-    // RoboApply production: served, marked draft
+  it('GoApply legal documents are served by the same rule as RoboApply: a draft is served, marked as a draft, in production too (D5; G112)', () => {
+    for (const doc of ['terms', 'privacy', 'coaching', 'pi-collection-list', 'third-party-sharing', 'ai-content-labels', 'complaints']) {
+      const out = loadLegalDoc(goapply, doc, { env: { NODE_ENV: 'production' } });
+      expect(out, doc).toMatchObject({ doc, draft: true, version: null, locale: 'zh' });
+      expect(out.markdown.length, doc).toBeGreaterThan(50);
+      expect(out.markdown, doc).not.toMatch(/\{\{/);
+    }
+    // version set but the file is still a draft skeleton → served, still a draft, with the version shown
+    expect(loadLegalDoc(goapply, 'privacy', { env: { NODE_ENV: 'production', CN_LEGAL_DOCS_VERSION: '2026-11' } })).toMatchObject({ draft: true, version: '2026-11' });
+    // RoboApply production: served, marked draft (unchanged)
     expect(loadLegalDoc(roboapply, 'terms', { env: { NODE_ENV: 'production' } }).draft).toBe(true);
-    // the intl version var never unlocks GoApply (no cross-brand fallback)
+    // the intl version var never applies to GoApply (the documents version is a brand-own value)
     expect(loadLegalDoc(roboapply, 'terms', { env: { LEGAL_DOCS_VERSION: 'v1' } }).version).toBe('v1');
     expect(loadLegalDoc(goapply, 'terms', { env: { LEGAL_DOCS_VERSION: 'v1' } }).version).toBeNull();
+    // An unknown document is still a 404 on both brands.
+    for (const brand of [goapply, roboapply]) {
+      expect(() => loadLegalDoc(brand, 'no-such-doc', { env: { NODE_ENV: 'production' } })).toThrow(expect.objectContaining({ code: 'not_found' }));
+    }
   });
 
   it('front matter and placeholder helpers', () => {
@@ -250,13 +282,23 @@ describe('legal drafts (WP-93 content; every changed document stays a draft)', (
     expect(privacy).toContain('openrouter (openrouter.ai)');
     expect(privacy).toContain('Where this service runs: outside mainland China');
     expect(intl('terms')).toMatch(/\| \[O\*NET-SOC 2019[^\n]*CC BY 4\.0/);
+    // GoApply by default (rule open): requests go to the configured models, which can be abroad; no "mainland only" claim.
     const zh = cn('privacy');
-    expect(zh).toContain('只使用中国大陆境内的模型服务');
+    expect(zh).toContain('AI 请求会发送到“AI 模型”表中列出的模型服务，其中可能包括中国大陆境外的服务');
+    expect(zh).not.toContain('只使用中国大陆境内的模型服务');
     expect(zh).toContain('deepseek (api.deepseek.com)');
-    expect(zh).not.toContain('openrouter');
+    expect(zh).toContain('openrouter (openrouter.ai)');
     expect(zh).toContain('本服务的运行地点：中国大陆境外');
-    expect(zh).toContain('只在内存中读取，不保存原文件');
+    // Files are kept, as on RoboApply; the no-original rule is the opt-in CN_STORAGE_MODE=discard.
+    expect(zh).toContain('保存在我们自己的文件存储中');
+    expect(zh).not.toContain('只在内存中读取，不保存原文件');
+    expect(cn('privacy', { CN_STORAGE_MODE: 'discard' })).toContain('只在内存中读取，不保存原文件');
     expect(cn('privacy', { DEPLOY_REGION: 'cn-mainland' })).toContain('本服务的运行地点：中国大陆境内');
+    // Behind the domestic-only wall, and only then, it says mainland only and lists the domestic providers alone.
+    const walled = cn('privacy', { CN_LLM_DOMESTIC_ONLY: 'true' });
+    expect(walled).toContain('只使用中国大陆境内的模型服务');
+    expect(walled).toContain('deepseek (api.deepseek.com)');
+    expect(walled).not.toContain('openrouter');
   });
 
   it('the GoApply processor list adds Aliyun Content Moderation (mainland) when it is configured', () => {

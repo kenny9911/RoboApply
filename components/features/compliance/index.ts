@@ -9,7 +9,7 @@ export { LegalIndex, type LegalIndexProps } from './LegalIndex';
 export { LegalFooterView, type LegalFooterViewProps } from './LegalFooterView';
 export { AiBadgeView, type AiBadgeKind } from './AiBadgeView';
 export { RetentionTable } from './RetentionTable';
-export { DataAttributions, LlmEndpoints, ModelsTable, ProcessingFacts, ProcessorsTable } from './DisclosureTables';
+export { CrossBorderNotice, DataAttributions, LlmEndpoints, ModelsTable, ProcessingFacts, ProcessorsTable } from './DisclosureTables';
 export { WhyThisJob } from './WhyThisJob';
 export {
   LEGAL_BLOCKS,

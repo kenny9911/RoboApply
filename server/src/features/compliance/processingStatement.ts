@@ -9,7 +9,8 @@
 //   offshoreProcessors(brand, env)             the /legal processor rows in a known country other than mainland China
 //   unplacedProcessors(brand, env)             the /legal processor rows whose country is not known
 //   offshoreProcessorsSentence(brand, env, l)  "境外处理方：数据库 Neon（美国，us-west-2）、…。"
-//   aiPlaceSentence(brand, env, l)             "AI 请求只发送到中国大陆境内的 AI 服务。"
+//   aiPlaceSentence(brand, env, l)             where AI requests go, by the routing rule in force:
+//                                              mainland only / never the mainland / the AI services configured
 //
 // Nothing here is typed in by hand except the words for a purpose and a
 // country code. This is a signed consent text, so it states only what the
@@ -20,16 +21,22 @@
 //     ("country not listed", the words of the /legal table) — disclosed, but
 //     not asserted to be offshore;
 //   - a mainland processor (country CN) is in neither;
-//   - where the AI routing rule is "mainland only" (GoApply), no AI model row
-//     is listed at all: the router refuses every non-mainland endpoint, and
-//     the AI consent that follows says exactly that. A configured model whose
-//     vendor has no known country is therefore not an offshore processor.
+//   - where the AI routing rule is "mainland only" (GoApply behind the
+//     domestic-only wall), no AI model row is listed at all: the router
+//     refuses every non-mainland endpoint, and the AI sentence says exactly
+//     that. A configured model whose vendor has no known country is therefore
+//     not an offshore processor there;
+//   - where the rule is "open" (GoApply by default, D5: the shared model stack
+//     is its fallback) nothing is refused by rule, so the AI model rows are
+//     listed like any other processor and the AI sentence NAMES the AI
+//     services requests go to, with each one's country. It never says they
+//     stay in the mainland.
 // With nothing to name the sentence points at the Legal information page.
 
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { DisclosuresResponse, ProcessorPurpose } from './contract.js';
-import { configuredProcessors, llmEndpointFacts } from './disclosures.js';
+import { configuredModels, configuredProcessors, llmEndpointRule } from './disclosures.js';
 
 export type StatementLocale = 'zh' | 'en';
 type Processor = DisclosuresResponse['processors'][number];
@@ -45,6 +52,7 @@ const PURPOSE_WORDS: Readonly<Record<ProcessorPurpose, Record<StatementLocale, s
   ai_models: { zh: 'AI 模型', en: 'AI models' },
   storage: { zh: '文件存储', en: 'file storage' },
   content_safety: { zh: '内容安全审核', en: 'content safety checks' },
+  push: { zh: '推送通知', en: 'push notifications' },
 };
 
 /** Names for the country codes the disclosures can produce (VENDOR_COUNTRY, AWS_REGION_COUNTRY). Any other code is shown as the code. */
@@ -62,6 +70,7 @@ const COUNTRY_WORDS: Readonly<Record<string, Record<StatementLocale, string>>> =
   JP: { zh: '日本', en: 'Japan' },
   KR: { zh: '韩国', en: 'South Korea' },
   IN: { zh: '印度', en: 'India' },
+  CN: { zh: '中国大陆', en: 'mainland China' },
 };
 
 export function statementLocale(locale: string | null | undefined): StatementLocale {
@@ -70,7 +79,7 @@ export function statementLocale(locale: string | null | undefined): StatementLoc
 
 /** The /legal processor rows the cross-border consent may speak about: every row, minus AI models where AI is mainland-only by routing. */
 function consentRows(brand: ProductBrand, env: EnvSource): Processor[] {
-  const aiMainlandOnly = llmEndpointFacts(brand, env).rule === 'mainland_only';
+  const aiMainlandOnly = llmEndpointRule(brand, env) === 'mainland_only';
   return configuredProcessors(brand, env).filter((p) => !(aiMainlandOnly && p.purpose === 'ai_models'));
 }
 
@@ -123,13 +132,36 @@ export function offshoreProcessorsSentence(brand: ProductBrand, env: EnvSource =
 }
 
 /**
- * Where AI requests go, from the routing policy that enforces it
- * (`llmEndpointFacts(brand).rule`, the rule the /legal page prints).
+ * Where AI requests go, from the routing rule in force (`llmEndpointRule`,
+ * the rule the /legal page prints):
+ *   mainland_only  only AI services in mainland China (the wall refuses the rest);
+ *   no_mainland    never an AI service in mainland China (RoboApply);
+ *   open           the AI services configured for the brand, each named with
+ *                  its country (the vendors of the /legal models table). With
+ *                  no model configured it says requests may leave the mainland
+ *                  and points at the Legal information page.
  */
 export function aiPlaceSentence(brand: ProductBrand, env: EnvSource = process.env, locale?: string | null): string {
   const l = statementLocale(locale);
-  if (llmEndpointFacts(brand, env).rule === 'mainland_only') {
+  const rule = llmEndpointRule(brand, env);
+  if (rule === 'mainland_only') {
     return l === 'zh' ? 'AI 请求只发送到中国大陆境内的 AI 服务。' : 'AI requests are sent only to AI services in mainland China. ';
+  }
+  if (rule === 'open') {
+    const vendors: string[] = [];
+    const seen = new Set<string>();
+    for (const m of configuredModels(brand, env)) {
+      if (seen.has(m.vendor)) continue;
+      seen.add(m.vendor);
+      const country = m.region ? (COUNTRY_WORDS[m.region]?.[l] ?? m.region) : l === 'zh' ? '所在国家/地区未披露' : 'country not listed';
+      vendors.push(l === 'zh' ? `${m.vendor}（${country}）` : `${m.vendor} (${country})`);
+    }
+    if (vendors.length === 0) {
+      return l === 'zh'
+        ? 'AI 请求可能发送到中国大陆境外的 AI 服务，具体服务见“法律信息”页面。'
+        : 'AI requests may be sent to AI services outside mainland China. The Legal information page lists them. ';
+    }
+    return l === 'zh' ? `AI 请求会发送到这些 AI 服务：${vendors.join('、')}。` : `AI requests are sent to these AI services: ${vendors.join('; ')}. `;
   }
   return l === 'zh'
     ? '带有你的数据的 AI 请求不会发送到中国大陆境内的 AI 服务。'

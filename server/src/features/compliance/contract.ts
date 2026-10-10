@@ -22,7 +22,7 @@ export type ConsentProseLocale = (typeof CONSENT_PROSE_LOCALES)[number];
 // ── GET /compliance/disclosures (also public: /api/v1/public/legal/disclosures) ──
 
 /** What a processor does for us; the UI translates the code (legal.processors.<purpose>). */
-export const PROCESSOR_PURPOSES = ['database', 'hosting', 'email', 'voice', 'speech', 'payments', 'ai_models', 'storage', 'content_safety'] as const;
+export const PROCESSOR_PURPOSES = ['database', 'hosting', 'email', 'voice', 'speech', 'payments', 'ai_models', 'storage', 'content_safety', 'push'] as const;
 export type ProcessorPurpose = (typeof PROCESSOR_PURPOSES)[number];
 
 export interface AiModelDisclosure {
@@ -35,15 +35,29 @@ export interface AiModelDisclosure {
   region: string | null;
   /** Filing number of the model (GoApply, from CN_GENAI_DISCLOSURES); null when none is set. */
   filingNo: string | null;
+  /**
+   * Where the setting comes from: `own` = a setting only this brand reads
+   * (GoApply: a `CN_` value or its filing list), `shared` = the shared model
+   * stack (the one RoboApply runs on; GoApply's fallback, whether the value
+   * there is an env variable or the shared stack's admin override),
+   * `override` = the brand's own admin override stored in the database.
+   */
+  source: 'own' | 'shared' | 'override';
 }
 export interface DisclosuresResponse {
   brand: string;
   models: AiModelDisclosure[];
   /** Filing / licence numbers, only those set in env (GoApply). */
   filings: Partial<Record<'icp' | 'psb' | 'edi' | 'hrLicence' | 'genaiRegistration' | 'algorithmFiling', string>>;
-  /** Offshore processors named in the CN-0 notice (GoApply) or transfer countries (RoboApply). Derived from configuration. */
+  /** Every processor this deployment is configured to use for the brand (the stack it really resolves). Derived from configuration. */
   processors: Array<{ name: string; purpose: ProcessorPurpose; country: string | null; region: string | null }>;
-  /** GoApply CN-0: data is processed outside the mainland (DEPLOY_REGION != cn-mainland). */
+  /**
+   * GoApply: personal information leaves mainland China on this deployment,
+   * which is when the cross-border consent is asked. True when the deployment
+   * runs offshore, when part of GoApply's stack is the shared (offshore) one,
+   * or when a configured AI model is served outside the mainland. Always
+   * false for RoboApply.
+   */
   offshore: boolean;
   /** CN_GENAI_STATUS_NOTE verbatim, only when ops set it; never invented. */
   statusNote: string | null;
@@ -59,10 +73,12 @@ export interface DisclosuresResponse {
 export interface ProcessingFacts {
   /** Where this deployment runs. */
   region: 'cn-mainland' | 'offshore';
-  /** intl = RoboApply; cn0 = GoApply processed offshore (closed beta); cn1 = GoApply on the mainland. */
+  /** intl = RoboApply; cn0 = GoApply on a deployment outside the mainland; cn1 = GoApply on the mainland. */
   stage: 'intl' | 'cn0' | 'cn1';
-  /** Uploaded resume files: kept in the brand's own bucket, read in memory only, or uploads refused. */
+  /** Uploaded resume files: kept in the store the brand writes to, read in memory only, or uploads refused. */
   originalFiles: 'kept' | 'not_kept' | 'unavailable';
+  /** The store those files go to: GoApply's own bucket (`own`) or the shared one (`shared`; always for RoboApply). */
+  storage: 'own' | 'shared';
   /**
    * 'gohire_mainland' only when PDF uploads really go to the GoHire parser on a mainland server.
    * 'local' means only that: no outside parsing service is called. It does not
@@ -79,13 +95,14 @@ export interface ProcessingFacts {
 
 export interface LlmEndpointFacts {
   /**
-   * 'no_mainland'  — a prompt with user data never goes to a mainland-China model endpoint (RoboApply);
-   * 'mainland_only' — only domestic endpoints are used (GoApply).
+   * 'no_mainland'   a prompt with user data never goes to a mainland-China model endpoint (RoboApply);
+   * 'mainland_only' only domestic endpoints are used (GoApply with the domestic-only wall, CN_LLM_DOMESTIC_ONLY or CN_RESIDENCY_STRICT);
+   * 'open'          GoApply by default: requests go to the models configured for it, in or outside mainland China.
    */
-  rule: 'no_mainland' | 'mainland_only';
+  rule: 'no_mainland' | 'mainland_only' | 'open';
   /** Provider ids the brand may call, each with the host its client uses unless ops configured another base URL. */
   providers: Array<{ provider: string; host: string }>;
-  /** Mainland model hosts (exact or any subdomain): the allowlist for 'mainland_only', the refused list for 'no_mainland'. */
+  /** Mainland model hosts (exact or any subdomain): the allowlist for 'mainland_only', the refused list for 'no_mainland'; empty for 'open' (no host rule). */
   mainlandHosts: string[];
   /** Upstream providers excluded on OpenRouter because they run in mainland China ('no_mainland' only). */
   excludedUpstreams: string[];

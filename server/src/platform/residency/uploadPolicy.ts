@@ -1,24 +1,38 @@
 // server/src/platform/residency/uploadPolicy.ts
 //
-// What happens to a resume upload, per brand and deployment
-// (TASK_PLAN.md WP-15 "CN-0 storage rule", ruling H6, PRODUCT_PLAN.md G-resume).
+// What happens to a resume upload, per brand (owner ruling D5;
+// GOAPPLY_PARITY_PLAN.md §3.6; it supersedes the CN-0 storage rule of WP-15).
 //
-//   RoboApply           → original file kept (S3_* bucket, local disk in dev);
-//                         text stored as parsed.
-//   GoApply, CN-0       → no original file and no image/photo is ever kept:
-//   (offshore)            the file is parsed in memory, and the parsed text and
-//                         fields are redacted (government ID numbers, health
-//                         details) BEFORE anything is stored.
-//   GoApply, CN-1/CN-2  → original file kept only in the CN bucket (`CN_S3_*`);
-//   (cn-mainland)         without it the upload fails closed with
-//                         `503 storage_unavailable` — never the intl bucket.
+//   RoboApply → original file kept (S3_* bucket, local disk in dev); text
+//               stored as parsed.
+//   GoApply   → the same: the original is kept and the text is stored as
+//               parsed, in GoApply's own bucket when `CN_S3_BUCKET` starts
+//               one, otherwise on the shared store under a `goapply/` key
+//               prefix. A missing CN bucket never refuses an upload.
+//
+// Two operator choices change that for GoApply, and only when set:
+//   CN_STORAGE_MODE=redact   government ID numbers and health details are
+//                            removed from the parsed text and fields before
+//                            they are stored. The uploaded file is still kept
+//                            as uploaded.
+//   CN_STORAGE_MODE=discard  the former CN-0 rule: no original file and no
+//                            photo is kept, and the text is redacted as above.
+//   CN_RESIDENCY_STRICT=true originals may be kept only in GoApply's own
+//                            bucket on mainland object storage. Without one
+//                            the upload fails closed with `503
+//                            storage_unavailable` (never the shared bucket).
+//                            `discard` still wins: nothing is kept, so nothing
+//                            is refused.
+// An unknown CN_STORAGE_MODE value is read as `discard` (the careful reading
+// of a privacy switch) and reported at boot (`cnStorageModeProblem`).
 //
 // `applyResumeUploadPolicy` is the one function an upload path calls between
 // parsing and storing; `assertResumeUploadStorage` is the one it calls before
 // accepting the file.
 
-import { brandEnv, type EnvSource } from '../brand/brandEnv.js';
+import { brandEnv, brandOwnEnv, brandStack, cnResidencyStrict, type EnvSource } from '../brand/brandEnv.js';
 import { getBrand, type BrandId, type ProductBrand } from '../brand/registry.js';
+import { hostOf } from '../llm/brandPolicy.js';
 import {
   CN0_STORAGE_PII_KINDS,
   redactDeep,
@@ -28,6 +42,7 @@ import {
   type RedactionMarkerLocale,
 } from '../pii/redact.js';
 import { residencyStage, type ResidencyStage } from './deployRegion.js';
+import { isMainlandStorageHost } from './egressPolicy.js';
 
 /** HTTP 503 `storage_unavailable` (the `platform/http.ts` envelope maps `status`/`code`). */
 export class StorageUnavailableError extends Error {
@@ -56,37 +71,72 @@ export interface ResumeUploadPolicy {
   markerLocale: RedactionMarkerLocale;
 }
 
-/** The four `CN_S3_*` values GoApply needs before it may keep any file (no fallback to `S3_*`). */
+/** The four `CN_S3_*` values that make GoApply's own bucket complete (read as one set, never mixed with `S3_*`). */
 export const CN_STORAGE_ENV = ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const;
 
-/** True when the brand's own bucket is fully configured (`S3_*` for RoboApply, `CN_S3_*` for GoApply). */
+/**
+ * True when the store the brand writes to is configured. RoboApply: `S3_BUCKET`.
+ * GoApply: its own bucket when `CN_S3_BUCKET` starts one (then all four
+ * `CN_S3_*` values are needed), otherwise the shared `S3_BUCKET`.
+ */
 export function brandStorageConfigured(brand: BrandId | ProductBrand, env: EnvSource = process.env): boolean {
   const b = typeof brand === 'string' ? getBrand(brand) : brand;
-  if (b.market === 'cn') return CN_STORAGE_ENV.every((name) => Boolean(brandEnv(b, name, env)));
+  if (brandStack(b, 'storage', env) === 'own') return CN_STORAGE_ENV.every((name) => Boolean(brandEnv(b, name, env)));
   return Boolean(brandEnv(b, 'S3_BUCKET', env));
+}
+
+/** `CN_STORAGE_MODE`: what GoApply keeps of a resume upload. */
+export type CnStorageMode = 'store' | 'redact' | 'discard';
+export const CN_STORAGE_MODES: readonly CnStorageMode[] = ['store', 'redact', 'discard'];
+
+function rawCnStorageMode(env: EnvSource): string {
+  return (env.CN_STORAGE_MODE ?? '').trim().toLowerCase();
+}
+
+/**
+ * Unset → `store` (the same as RoboApply). A value that is none of the three
+ * modes is read as `discard`: an operator who set this switch asked for less
+ * to be kept, and a typo must not quietly keep everything.
+ */
+export function cnStorageMode(env: EnvSource = process.env): CnStorageMode {
+  const raw = rawCnStorageMode(env);
+  if (!raw) return 'store';
+  return (CN_STORAGE_MODES as readonly string[]).includes(raw) ? (raw as CnStorageMode) : 'discard';
+}
+
+/** The raw `CN_STORAGE_MODE` value when it is set and is not a known mode (startup reports it), else null. */
+export function cnStorageModeProblem(env: EnvSource = process.env): string | null {
+  const raw = rawCnStorageMode(env);
+  return raw && !(CN_STORAGE_MODES as readonly string[]).includes(raw) ? (env.CN_STORAGE_MODE ?? '').trim() : null;
+}
+
+/**
+ * Why GoApply's own bucket does not meet the strict mainland rule, or null
+ * when it does: `missing` = the four `CN_S3_*` values are not all set;
+ * `offshore` = `CN_S3_ENDPOINT` is not mainland object storage (or is the
+ * shared bucket's host). The rule itself applies only under
+ * `CN_RESIDENCY_STRICT`; boot reports the same facts as warnings otherwise.
+ */
+export function cnOwnStorageProblem(env: EnvSource = process.env): 'missing' | 'offshore' | null {
+  if (!CN_STORAGE_ENV.every((name) => Boolean(brandOwnEnv('goapply', name, env)))) return 'missing';
+  return isMainlandStorageHost(hostOf(brandOwnEnv('goapply', 'S3_ENDPOINT', env) ?? ''), env) ? null : 'offshore';
 }
 
 export function resumeUploadPolicy(brand: BrandId | ProductBrand, env: EnvSource = process.env): ResumeUploadPolicy {
   const b = typeof brand === 'string' ? getBrand(brand) : brand;
   const stage = residencyStage(b, env);
-  if (stage === 'intl') {
+  if (b.market !== 'cn') {
     return { brand: b.id, stage, originals: 'store', redactKinds: [], dropImages: false, markerLocale: 'en' };
   }
-  if (stage === 'cn0') {
-    return {
-      brand: b.id,
-      stage,
-      originals: 'discard',
-      redactKinds: CN0_STORAGE_PII_KINDS,
-      dropImages: true,
-      markerLocale: 'zh',
-    };
+  const mode = cnStorageMode(env);
+  if (mode === 'discard') {
+    return { brand: b.id, stage, originals: 'discard', redactKinds: CN0_STORAGE_PII_KINDS, dropImages: true, markerLocale: 'zh' };
   }
   return {
     brand: b.id,
     stage,
-    originals: brandStorageConfigured(b, env) ? 'store' : 'unavailable',
-    redactKinds: [],
+    originals: cnResidencyStrict(env) && cnOwnStorageProblem(env) ? 'unavailable' : 'store',
+    redactKinds: mode === 'redact' ? CN0_STORAGE_PII_KINDS : [],
     dropImages: false,
     markerLocale: 'zh',
   };
@@ -158,8 +208,10 @@ export interface AppliedResumeUploadPolicy<P = unknown> extends ResumeUploadCont
 
 /**
  * Apply the brand's storage rule to parsed upload content. Returns copies;
- * the input is not mutated. For RoboApply (and GoApply on the mainland stack)
- * the content comes back unchanged.
+ * the input is not mutated. The content comes back unchanged for RoboApply
+ * and, by default, for GoApply: government ID numbers and health details are
+ * removed only under `CN_STORAGE_MODE=redact` or `discard`, and photo fields
+ * only under `discard`.
  */
 export function applyResumeUploadPolicy<P>(
   brand: BrandId | ProductBrand,

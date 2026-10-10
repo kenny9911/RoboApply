@@ -2,7 +2,22 @@
   "legal": {
     "consents": {
       "textChanged": "这段文字在你作答后有改动。你当时的选择针对的是旧版本。",
-      "agreeCurrent": "同意当前文字"
+      "agreeCurrent": "同意当前文字",
+      "closeBodyCrossBorder": "本服务使用中国大陆境外的服务，没有此项授权无法继续提供服务。撤回后会立即关闭你的账号并删除你的数据，且无法恢复。"
+    },
+    "processors": {
+      "push": "推送通知"
+    },
+    "llmEndpoints": {
+      "open": "AI 请求会发送到“AI 模型”中列出的模型服务，其中可能包括中国大陆境外的服务。以下是可用的提供方，以及未另行配置时各自使用的地址："
+    },
+    "crossBorder": {
+      "applies": "你的个人信息会由中国大陆境外的服务处理或存储，具体服务见本页的清单。只有在你单独同意后才会这样处理；撤回该同意会关闭并删除你的账号。",
+      "none": "你的个人信息在中国大陆境内处理和存储。"
+    },
+    "explain": {
+      "quoteFromPosting": "来自职位描述：“{evidence}”",
+      "quoteFromResume": "来自你的简历：“{evidence}”"
     }
   }
 }

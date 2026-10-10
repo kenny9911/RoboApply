@@ -46,7 +46,7 @@ import {
   type ConsentContext,
 } from './consents.js';
 import { readExportForOwner, requestDataExport } from './dataExport.js';
-import { buildDisclosures, buildLegalFooter } from './disclosures.js';
+import { buildDisclosures, buildLegalFooter, loadAiStackSnapshot } from './disclosures.js';
 import { loadLegalDoc } from './legalDocs.js';
 import { adminListPiRequests, adminUpdatePiRequest, createPiRequest, listUserPiRequests, toPiRequestView } from './piRequests.js';
 import { retentionSchedule } from './retention.js';
@@ -71,12 +71,33 @@ function consentCtx(req: Request, brand: ProductBrand, locale: string, env?: Fea
   return { env: env ?? process.env, country: requestCountry(req), locale };
 }
 
+/**
+ * Start loading the AI stack snapshot when a router is built for the live
+ * process (at boot), so it is normally there before the first request. Every
+ * handler below still awaits it; this only helps synchronous callers in other
+ * areas that read a consent text without awaiting `loadAiStackSnapshot`.
+ */
+let warmStarted = false;
+function warmAiStackSnapshot(deps: FeatureRouterDeps): void {
+  if (deps.env || warmStarted) return;
+  warmStarted = true;
+  void loadAiStackSnapshot().catch(() => undefined);
+}
+
 export function createComplianceRouter(deps: FeatureRouterDeps = {}): Router {
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
   const env = deps.env ?? process.env;
+  warmAiStackSnapshot(deps);
 
-  router.get('/disclosures', ...auth, route(async () => buildDisclosures(getCurrentBrandOrDefault(), env)));
+  router.get(
+    '/disclosures',
+    ...auth,
+    route(async () => {
+      await loadAiStackSnapshot(env);
+      return buildDisclosures(getCurrentBrandOrDefault(), env);
+    }),
+  );
   router.get('/retention', ...auth, route(async () => ({ items: retentionSchedule(env) })));
 
   router.get(
@@ -161,11 +182,13 @@ const PUBLIC_CACHE = 'public, max-age=300';
 export function createLegalPublicRouter(deps: FeatureRouterDeps = {}): Router {
   const router = Router();
   const env = deps.env ?? process.env;
+  warmAiStackSnapshot(deps);
 
   router.get(
     '/footer',
     route(async (_req, res) => {
       res.setHeader('Cache-Control', PUBLIC_CACHE);
+      await loadAiStackSnapshot(env);
       return buildLegalFooter(getCurrentBrandOrDefault(), env);
     }),
   );
@@ -173,6 +196,7 @@ export function createLegalPublicRouter(deps: FeatureRouterDeps = {}): Router {
     '/disclosures',
     route(async (_req, res) => {
       res.setHeader('Cache-Control', PUBLIC_CACHE);
+      await loadAiStackSnapshot(env);
       return buildDisclosures(getCurrentBrandOrDefault(), env);
     }),
   );
@@ -191,6 +215,8 @@ export function createLegalPublicRouter(deps: FeatureRouterDeps = {}): Router {
       const brand = getCurrentBrandOrDefault();
       const locale = clampLocaleToBrand(brand, q.locale ?? brand.defaultLocale);
       const ctx = consentCtx(req, brand, locale, env);
+      // The texts and the cross-border requirement read the AI stack: same snapshot on every instance, so the hash a form sends back is one every instance serves.
+      await loadAiStackSnapshot(env);
       const items = consentDefinitionsFor(brand.id)
         .filter((d) => d.stage === 'signup' && isConsentApplicable(d, ctx))
         .map((d) => {
@@ -221,6 +247,7 @@ export function createLegalPublicRouter(deps: FeatureRouterDeps = {}): Router {
       // validate the slug shape here, the catalog there.
       const { doc } = parseParams(req, z.object({ doc: z.string().regex(/^[a-z0-9-]{1,40}$/) }));
       const q = parseQuery(req, LegalDocQuerySchema);
+      await loadAiStackSnapshot(env);
       const result = loadLegalDoc(getCurrentBrandOrDefault(), doc, { env, locale: q.locale });
       res.setHeader('Cache-Control', result.draft ? 'no-store' : PUBLIC_CACHE);
       return result;

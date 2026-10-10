@@ -8,10 +8,13 @@
 //   1. Delete R2 interview artifacts — interviews/<sessionId>/recording.mp4
 //      (the user's voice), transcript.json/.txt, report.json — for every
 //      InterviewSession the user owns, each inside the SESSION's brand
-//      (`sessionArtifactBrand`): a GoApply session's objects are deleted with
-//      the CN_S3_* store, never looked for in RoboApply's bucket.
+//      (`sessionArtifactBrand`): a GoApply session's objects are deleted in
+//      the store that brand's media uses.
 //   2. Delete stored resume originals (RAResumeVariant.originalFileKey,
-//      candidate keyspace of ResumeOriginalFileStorageService).
+//      candidate keyspace of ResumeOriginalFileStorageService). The key names
+//      its store: a GoApply original is under `goapply/` on the shared store,
+//      or under `cn/` in GoApply's own bucket (CN_S3_*), and is deleted there
+//      whatever the storage configuration is on the day of the purge.
 //   3. Delete the exact application files sent with applications
 //      (RAApplicationArtifact.storageKey; WP-10) through the registered
 //      artifact-storage deleter.
@@ -64,14 +67,15 @@ import {
 /**
  * Deletes one stored application artifact (RAApplicationArtifact.storageKey).
  * Returns true only when the object is confirmed gone (or never existed).
- * The default treats keys as objects of the configured S3/R2 bucket; the
- * artifact writer (WP-38 / WP-55a, per-brand buckets via WP-15) may register
- * its own deleter with `setArtifactStorageDeleter`.
+ * The default deletes the key in the store it names (shared store or
+ * GoApply's own bucket; local disk where the shared store is local disk); the
+ * artifact writer (WP-38 / WP-55a) may register its own deleter with
+ * `setArtifactStorageDeleter`.
  */
 export type ArtifactStorageDeleter = (key: string) => Promise<boolean>;
 
 const defaultArtifactDeleter: ArtifactStorageDeleter = (key) =>
-  resumeOriginalFileStorageService.deleteFile({ provider: 's3', key, fileName: null, mimeType: null });
+  resumeOriginalFileStorageService.deleteFile({ provider: resumeOriginalFileStorageService.providerOfKey(key), key, fileName: null, mimeType: null });
 
 let artifactDeleter: ArtifactStorageDeleter = defaultArtifactDeleter;
 
@@ -251,7 +255,7 @@ export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboard
  * Hard-delete ONE already-closed account now: stored files first, then the
  * User row and its cascades — the same steps as the sweep, without waiting
  * for the retention window. For statutory deadlines shorter than that window
- * (WP-13: withdrawing GoApply's CN-0 cross-border consent must purge within
+ * (WP-13: withdrawing GoApply's cross-border consent must purge within
  * the PIPL 15-working-day due date). Refuses, and changes nothing, when the
  * account is not closed (`SeekerProfile.deletedAt` unset) or holds a
  * non-seeker role. An account that no longer exists counts as purged.

@@ -10,11 +10,14 @@
 //   updated: 2026-10-10
 //   ---
 //
-// Publication rule (TASK_PLAN.md WP-13; CN plan WP-COMPLY):
-//   published = LEGAL_DOCS_VERSION is set for the brand (GoApply reads
-//               CN_LEGAL_DOCS_VERSION, R-03) AND the file is not `status: draft`.
-//   Unpublished documents render with a DRAFT banner — except on production
-//   GoApply, where they are not served at all (404 legal_doc_not_published).
+// Publication rule (TASK_PLAN.md WP-13; CN plan WP-COMPLY; D5 parity,
+// GOAPPLY_PARITY_PLAN.md §3.6), the same for both brands:
+//   published = LEGAL_DOCS_VERSION is set for the brand (a brand-own value:
+//               GoApply reads CN_LEGAL_DOCS_VERSION, never RoboApply's) AND the
+//               file is not `status: draft`.
+//   Unpublished documents are served with a DRAFT banner, in every
+//   environment. GoApply no longer answers 404 for a draft in production: a
+//   visitor can read the document that applies to them, marked as a draft.
 //
 // Placeholders (`{{name}}`) are filled from configuration; an unset value
 // renders "Not listed" / "未披露" — never an invented fact. The processing
@@ -31,10 +34,11 @@ import { fileURLToPath } from 'node:url';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import { HttpError } from '../../platform/http.js';
-import { COMPLIANCE_ERROR_CODES, resolveLegalDocSlug, type LegalDoc, type LegalDocResponse } from './contract.js';
-import { gohireParseForIntl, isOffshore } from './consents.js';
+import { resolveLegalDocSlug, type LegalDoc, type LegalDocResponse } from './contract.js';
+import { gohireParseForIntl } from './consents.js';
 import type { DisclosuresResponse } from './contract.js';
 import { buildDisclosures } from './disclosures.js';
+import { aiPlaceSentence, offshoreProcessorsSentence } from './processingStatement.js';
 import { retentionScheduleMarkdown } from './retention.js';
 
 export interface FrontMatter {
@@ -148,6 +152,12 @@ export function processingFactsMarkdown(f: DisclosuresResponse['processing'], zh
 export function llmEndpointsMarkdown(f: DisclosuresResponse['llmEndpoints'], zh: boolean): string {
   const providers = f.providers.map((p) => `${p.provider} (${p.host})`).join(zh ? '、' : ', ');
   const hosts = f.mainlandHosts.join(zh ? '、' : ', ');
+  if (f.rule === 'open') {
+    // GoApply by default: no host is allowed or refused by rule. The models in use are the models table.
+    return zh
+      ? `- AI 请求会发送到“AI 模型”表中列出的模型服务，其中可能包括中国大陆境外的服务。可用的提供方及其默认地址：${providers || '未披露'}。`
+      : `- AI requests go to the model services in the AI models table, which can include services outside mainland China. Providers we can use and the address each uses by default: ${providers || 'Not listed'}.`;
+  }
   if (zh) {
     return f.rule === 'mainland_only'
       ? [`- 只使用中国大陆境内的模型服务。可用的提供方及其默认地址：${providers || '未披露'}。`, `- 允许的模型服务地址（含其子域名）：${hosts}。`].join('\n')
@@ -181,6 +191,21 @@ export function dataAttributionsMarkdown(items: DisclosuresResponse['dataAttribu
     '| --- | --- | --- | --- | --- |',
     ...items.map((a) => `| ${a.url ? `[${a.name}](${a.url})` : a.name} | ${a.publisher} | ${ATTRIBUTION_PURPOSE[a.purpose]?.[zh ? 'zh' : 'en'] ?? a.purpose} | ${a.license} | ${a.asOf} |`),
   ].join('\n');
+}
+
+/**
+ * {{offshore_notice}} (GoApply privacy notice): what the cross-border consent
+ * says, in the document's language, or the mainland statement when nothing
+ * leaves the mainland on this deployment.
+ */
+export function crossBorderNoticeMarkdown(brand: ProductBrand, applies: boolean, env: EnvSource = process.env): string {
+  if (!applies) return '你的个人信息在中国大陆境内处理和存储。';
+  return (
+    '你的个人信息会由中国大陆境外的服务处理或存储。' +
+    offshoreProcessorsSentence(brand, env, 'zh') +
+    aiPlaceSentence(brand, env, 'zh') +
+    '只有在你单独同意后才会这样处理；撤回该同意会关闭并删除你的账号。'
+  );
 }
 
 /** Values for every placeholder the skeletons use. */
@@ -218,11 +243,11 @@ export function legalPlaceholderValues(brand: ProductBrand, env: EnvSource = pro
     // (TAKEDOWN_CONTACT / CN_TAKEDOWN_CONTACT); the support address until ops sets one.
     takedown_contact: brandEnv(brand, 'TAKEDOWN_CONTACT', env) ?? brandEnv(brand, 'SUPPORT_EMAIL', env) ?? brand.email.replyTo,
     minimum_age: '16',
-    offshore_notice: zh
-      ? isOffshore(env)
-        ? '当前内测阶段，你的个人信息在中国大陆境外处理和存储，处理地区为美国。只有在你单独同意后才会这样处理；撤回该同意会关闭并删除你的账户。'
-        : '你的个人信息在中国大陆境内处理和存储。'
-      : '',
+    // GoApply: stated only when personal information really leaves the
+    // mainland on this deployment, with the processors and the AI destination
+    // of the stack in use (the sentences of the consent itself). No country or
+    // processor is typed here.
+    offshore_notice: zh ? crossBorderNoticeMarkdown(brand, d.offshore, env) : '',
     gohire_parse_notice:
       !zh && gohireParseForIntl(env)
         ? 'Only if you agree when you upload: your resume is read by the GoHire parsing service, which runs on servers in mainland China.'
@@ -234,7 +259,7 @@ export function legalPlaceholderValues(brand: ProductBrand, env: EnvSource = pro
  * The publication state of one document file for a brand — the single rule
  * `loadLegalDoc` and `publishedLegalDocVersion` share (and app/legal/legalSource.ts
  * mirrors for the page):
- *   version   = the brand's LEGAL_DOCS_VERSION (GoApply: CN_LEGAL_DOCS_VERSION; R-03)
+ *   version   = the brand's LEGAL_DOCS_VERSION (GoApply: CN_LEGAL_DOCS_VERSION; brand-own, never shared)
  *   published = that version is set AND the file is not `status: draft`
  */
 function publicationOf(brand: ProductBrand, meta: FrontMatter, env: EnvSource): { version: string | null; draft: boolean } {
@@ -275,10 +300,8 @@ export function loadLegalDoc(brand: ProductBrand, slug: string, opts: LoadLegalD
   const source = readLegalSource(brand.market, resolved.file, env);
   if (!source) throw new HttpError('not_found');
   const { meta, body } = parseFrontMatter(source);
+  // A draft is served with `draft: true` (the page shows the DRAFT banner) on both brands.
   const { version, draft } = publicationOf(brand, meta, env);
-  if (draft && brand.market === 'cn' && env.NODE_ENV === 'production') {
-    throw new HttpError('not_found', 'This document is not published yet.', { reason: COMPLIANCE_ERROR_CODES.docNotPublished });
-  }
   return {
     doc: resolved.doc as LegalDoc,
     locale: brand.market === 'cn' ? 'zh' : 'en',

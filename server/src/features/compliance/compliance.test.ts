@@ -20,22 +20,29 @@ import {
 } from './aiLabel.js';
 import { ICP_LOOKUP_URL, LEGAL_FOOTER_DOCS, PROCESSOR_PURPOSES, resolveLegalDocSlug } from './contract.js';
 import { buildUserDataExport, exportSectionNames, type ExportDb } from './dataExport.js';
+import { transportNameFor } from '../../platform/email/index.js';
 import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
 import { OPENROUTER_MAINLAND_UPSTREAMS, PROVIDER_DEFAULT_BASE_URLS, checkLlmEgress } from '../../platform/llm/egressPolicy.js';
 import { residencySummary } from '../../platform/residency/summary.js';
 import { jobDataAttributions } from '../jobs/data/index.js';
 import {
+  WEB_PUSH_PROCESSOR_NAME,
+  aiLeavesMainland,
   buildDisclosures,
   buildLegalFooter,
   configuredModels,
+  configuredProcessors,
+  crossBorderConsentApplies,
   dataAttributions,
   llmEndpointFacts,
+  llmEndpointRule,
   parseGenaiDisclosures,
   parseModelId,
   processingFacts,
 } from './disclosures.js';
 import { EXPLAIN_KEYS, explainMatch, type ExplainDimension } from './explainMatch.js';
 import { processingFactsMarkdown } from './legalDocs.js';
+import { aiPlaceSentence, offshoreProcessors } from './processingStatement.js';
 import {
   addWorkingDays,
   adminListPiRequests,
@@ -230,11 +237,124 @@ describe('disclosures', () => {
     ]);
   });
 
-  it('GoApply models come only from CN_ env (no fallback to the intl stack)', () => {
+  it('GoApply models: the CN_ override when it is set, else the shared model (D5); RoboApply never reads a CN_ value', () => {
     const env = { LLM_MODEL: 'openrouter/x/y', CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek-chat', CN_GENAI_DISCLOSURES: '[{"model":"deepseek-chat","vendor":"deepseek","filingNo":"F-1"}]' };
-    expect(configuredModels(goapply, env)).toEqual([{ task: 'default', vendor: 'deepseek', model: 'deepseek-chat', region: 'CN', filingNo: 'F-1' }]);
-    expect(configuredModels(roboapply, env)).toEqual([{ task: 'default', vendor: 'openrouter', model: 'x/y', region: 'US', filingNo: null }]);
+    expect(configuredModels(goapply, env)).toEqual([{ task: 'default', vendor: 'deepseek', model: 'deepseek-chat', region: 'CN', filingNo: 'F-1', source: 'own' }]);
+    expect(configuredModels(roboapply, env)).toEqual([{ task: 'default', vendor: 'openrouter', model: 'x/y', region: 'US', filingNo: null, source: 'shared' }]);
     expect(configuredModels(goapply, {})).toEqual([]);
+    // No CN model at all: GoApply runs on the shared stack, and the disclosure names that stack.
+    const shared = { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5', LLM_COPILOT_MODEL: 'openrouter/anthropic/claude-x' };
+    expect(configuredModels(goapply, shared)).toEqual([
+      { task: 'default', vendor: 'openai', model: 'gpt-5', region: 'US', filingNo: null, source: 'shared' },
+      { task: 'assistant', vendor: 'openrouter', model: 'anthropic/claude-x', region: 'US', filingNo: null, source: 'shared' },
+    ]);
+    expect(configuredModels(goapply, shared).map(({ source: _s, ...m }) => m)).toEqual(configuredModels(roboapply, shared).map(({ source: _s, ...m }) => m));
+    // Per key: its own default model, the shared vision model. Each row says where it comes from.
+    const mixed = { ...shared, CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek-chat', LLM_VISION_MODEL: 'openrouter/google/gemini-x' };
+    expect(configuredModels(goapply, mixed).map((m) => [m.task, m.vendor, m.source])).toEqual([
+      ['default', 'deepseek', 'own'],
+      ['assistant', 'openrouter', 'shared'],
+      ['vision', 'openrouter', 'shared'],
+    ]);
+    // A bare model id takes the brand's provider: the CN one when set, else the shared one.
+    expect(configuredModels(goapply, { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'gpt-5' })[0]).toMatchObject({ vendor: 'openrouter', model: 'gpt-5' });
+  });
+
+  it('mixed stack: a bare id of the shared stack is served by the SHARED provider, never disclosed as GoApply\'s own (mainland) vendor', () => {
+    // GoApply has its own provider and default model; the vision model is left to the shared stack, as a bare id.
+    const env = {
+      DEPLOY_REGION: 'cn-mainland',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-5',
+      LLM_VISION_MODEL: 'gpt-5-vision',
+      CN_LLM_PROVIDER: 'deepseek',
+      CN_LLM_MODEL: 'deepseek-chat',
+    };
+    expect(configuredModels(goapply, env)).toEqual([
+      { task: 'default', vendor: 'deepseek', model: 'deepseek-chat', region: 'CN', filingNo: null, source: 'own' },
+      { task: 'vision', vendor: 'openai', model: 'gpt-5-vision', region: 'US', filingNo: null, source: 'shared' },
+    ]);
+    expect(aiLeavesMainland(goapply, env)).toBe(true);
+    expect(crossBorderConsentApplies(goapply, env)).toBe(true);
+    // The signed sentences and the processor list name the vendor the request really goes to.
+    expect(aiPlaceSentence(goapply, env, 'zh')).toBe('AI 请求会发送到这些 AI 服务：deepseek（中国大陆）、openai（美国）。');
+    expect(aiPlaceSentence(goapply, env, 'en')).toBe('AI requests are sent to these AI services: deepseek (mainland China); openai (United States). ');
+    expect(offshoreProcessors(goapply, env).map((p) => `${p.purpose}:${p.name}:${p.country}`)).toEqual(['ai_models:openai:US']);
+    expect(buildLegalFooter(goapply, env).aiModels.map((m) => `${m.vendor}/${m.model}`)).toEqual(['deepseek/deepseek-chat', 'openai/gpt-5-vision']);
+    // A bare id GoApply set for itself still takes GoApply's provider; with no provider of its own, the shared one.
+    expect(configuredModels(goapply, { ...env, CN_LLM_VISION_MODEL: 'deepseek-vl' }).map((m) => [m.task, m.vendor, m.source])).toEqual([
+      ['default', 'deepseek', 'own'],
+      ['vision', 'deepseek', 'own'],
+    ]);
+    expect(configuredModels(goapply, { LLM_PROVIDER: 'openai', CN_LLM_MODEL: 'gpt-5-mini' })).toEqual([
+      { task: 'default', vendor: 'openai', model: 'gpt-5-mini', region: 'US', filingNo: null, source: 'own' },
+    ]);
+    // RoboApply's rows are the shared stack's, whatever GoApply sets.
+    expect(configuredModels(roboapply, env).map((m) => [m.task, m.vendor, m.region])).toEqual([
+      ['default', 'openai', 'US'],
+      ['vision', 'openai', 'US'],
+    ]);
+  });
+
+  it('a row is placed with a mainland vendor only when the request really goes there: `qwen/…` and `moonshotai/…` on a gateway name the gateway', () => {
+    // A gateway namespace that carries a mainland vendor's name, in either dialect.
+    expect(parseModelId('moonshotai/kimi-k2', 'openrouter')).toEqual({ vendor: 'openrouter', model: 'moonshotai/kimi-k2' });
+    expect(parseModelId('moonshotai/kimi-k2', 'openrouter', 'domestic_cn')).toEqual({ vendor: 'openrouter', model: 'moonshotai/kimi-k2' });
+    // The real routes to the mainland keep their vendor: a routing prefix, an alias, a bare id on a mainland provider.
+    expect(parseModelId('moonshot/kimi-k2', 'openrouter')).toEqual({ vendor: 'moonshot', model: 'kimi-k2' });
+    expect(parseModelId('zhipu/glm-5', 'openrouter')).toEqual({ vendor: 'zhipu', model: 'glm-5' });
+    expect(parseModelId('qwen-plus', 'dashscope')).toEqual({ vendor: 'dashscope', model: 'qwen-plus' });
+    // Mode `direct`: a `vendor/model` id that pins no provider goes to OpenRouter.
+    expect(parseModelId('moonshotai/kimi-k2', 'direct')).toEqual({ vendor: 'openrouter', model: 'moonshotai/kimi-k2' });
+    // No provider mode at all in the domestic dialect: there is no route, so no vendor is named.
+    expect(parseModelId('moonshotai/kimi-k2', null, 'domestic_cn')).toEqual({ vendor: 'unknown', model: 'moonshotai/kimi-k2' });
+    // Vendors outside the mainland are named as before, gateway namespace or not.
+    expect(parseModelId('x-ai/grok-4', 'openrouter')).toEqual({ vendor: 'x-ai', model: 'grok-4' });
+    expect(parseModelId('openai/gpt-5', 'openrouter')).toEqual({ vendor: 'openai', model: 'gpt-5' });
+
+    expect(parseModelId('qwen/qwen-plus', 'deepseek', 'domestic_cn')).toEqual({ vendor: 'qwen', model: 'qwen-plus' });
+    expect(parseModelId('qwen/qwen3.8-flash', 'openrouter', 'global')).toEqual({ vendor: 'openrouter', model: 'qwen/qwen3.8-flash' });
+    expect(parseModelId('qwen/qwen3.8-flash', null)).toEqual({ vendor: 'openrouter', model: 'qwen/qwen3.8-flash' });
+    expect(parseModelId('qwen/qwen3.8-flash', 'direct')).toEqual({ vendor: 'openrouter', model: 'qwen/qwen3.8-flash' });
+    // `dashscope/` is the unambiguous spelling of the mainland endpoint in both dialects.
+    expect(parseModelId('dashscope/qwen-plus', 'openrouter', 'global')).toEqual({ vendor: 'dashscope', model: 'qwen-plus' });
+    const shared = { DEPLOY_REGION: 'cn-mainland', LLM_PROVIDER: 'openrouter', LLM_MODEL: 'qwen/qwen3.8-flash' };
+    // The shared selector goes to OpenRouter for both brands: disclosed as such, and it leaves the mainland.
+    for (const brand of [goapply, roboapply]) {
+      expect(configuredModels(brand, shared)).toEqual([{ task: 'default', vendor: 'openrouter', model: 'qwen/qwen3.8-flash', region: 'US', filingNo: null, source: 'shared' }]);
+    }
+    expect(aiLeavesMainland(goapply, shared)).toBe(true);
+    // The same words set by GoApply for itself mean Alibaba's own endpoint.
+    const own = { DEPLOY_REGION: 'cn-mainland', CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'qwen/qwen-plus' };
+    expect(configuredModels(goapply, own)).toEqual([{ task: 'default', vendor: 'qwen', model: 'qwen-plus', region: 'CN', filingNo: null, source: 'own' }]);
+    expect(aiLeavesMainland(goapply, own)).toBe(false);
+  });
+
+  it('behind the domestic-only wall a shared value that names no mainland vendor is not used, so it is not listed', () => {
+    const env = {
+      DEPLOY_REGION: 'cn-mainland',
+      CN_LLM_DOMESTIC_ONLY: 'true',
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'gpt-5',
+      LLM_VISION_MODEL: 'gpt-5-vision',
+      LLM_ENRICH_MODEL: 'deepseek/deepseek-chat',
+      // A gateway id that only carries a mainland vendor's name: it goes to the shared provider, so it is set aside too.
+      LLM_WRITING_MODEL: 'moonshotai/kimi-k2',
+      CN_LLM_PROVIDER: 'deepseek',
+      CN_LLM_MODEL: 'deepseek-chat',
+    };
+    expect(configuredModels(goapply, env).map((m) => [m.task, m.vendor, m.model, m.source])).toEqual([
+      ['default', 'deepseek', 'deepseek-chat', 'own'],
+    ]);
+    expect(aiLeavesMainland(goapply, env)).toBe(false);
+    expect(aiPlaceSentence(goapply, env, 'en')).toBe('AI requests are sent only to AI services in mainland China. ');
+    // A shared value that names a mainland vendor by itself is still a fallback behind the wall.
+    expect(configuredModels(goapply, { ...env, CN_LLM_MODEL: undefined, LLM_MODEL: 'deepseek/deepseek-v4' }).map((m) => [m.task, m.vendor, m.model, m.source])).toEqual([
+      ['default', 'deepseek', 'deepseek-v4', 'shared'],
+      ['enrich', 'deepseek', 'deepseek-chat', 'shared'],
+    ]);
+    // RoboApply does not read the wall.
+    expect(configuredModels(roboapply, env).map((m) => `${m.task}:${m.vendor}`)).toEqual(['default:openai', 'writing:openai', 'enrich:deepseek', 'vision:openai']);
   });
 
   it('processors are derived from configuration', () => {
@@ -251,8 +371,161 @@ describe('disclosures', () => {
     expect(neon('postgres://u@ep-a.ap-southeast-1.aws.neon.tech/db')).toMatchObject({ country: 'SG', region: 'ap-southeast-1' });
     expect(neon('postgres://u@ep-a.me-central-1.aws.neon.tech/db')).toMatchObject({ country: null, region: 'me-central-1' });
     expect(neon('postgres://u@ep-a.eastus2.azure.neon.tech/db')).toMatchObject({ country: null, region: null });
-    expect(buildDisclosures(goapply, { DEPLOY_REGION: 'cn-mainland' }).offshore).toBe(false);
     expect(buildDisclosures(roboapply, {}).offshore).toBe(false);
+  });
+});
+
+/** The shared stack of a deployment: what RoboApply runs on, and GoApply's fallback (D5). */
+const SHARED_STACK = {
+  DATABASE_URL: 'postgres://u@ep-a.us-east-2.aws.neon.tech/db',
+  VERCEL: '1',
+  RESEND_API_KEY: 're_k',
+  LIVEKIT_URL: 'wss://proj.livekit.cloud',
+  LIVEKIT_API_KEY: 'lk',
+  LIVEKIT_API_SECRET: 'ls',
+  DEEPGRAM_API_KEY: 'dg',
+  CARTESIA_API_KEY: 'ct',
+  S3_BUCKET: 'shared',
+  S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
+  S3_ACCESS_KEY_ID: 'i',
+  S3_SECRET_ACCESS_KEY: 's',
+  VAPID_PUBLIC_KEY: 'pub',
+  VAPID_PRIVATE_KEY: 'priv',
+  VAPID_SUBJECT: 'mailto:ops@example.com',
+  LLM_PROVIDER: 'openrouter',
+  LLM_MODEL: 'openai/gpt-5',
+  STRIPE_SECRET_KEY: 'sk_test_x',
+};
+
+/** A complete stack of GoApply's own on a mainland deployment. */
+const FULL_CN_STACK = {
+  DEPLOY_REGION: 'cn-mainland',
+  DATABASE_URL: 'postgresql://u:p@10.0.0.12:5432/goapply',
+  CN_LLM_PROVIDER: 'deepseek',
+  CN_LLM_MODEL: 'deepseek-chat',
+  CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
+  CN_LIVEKIT_API_KEY: 'lk',
+  CN_LIVEKIT_API_SECRET: 'ls',
+  CN_INTERVIEW_ENGINE_STT_MODEL: 'dashscope/paraformer',
+  CN_INTERVIEW_ENGINE_TTS_MODEL: 'dashscope/cosyvoice',
+  CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+  CN_S3_BUCKET: 'cn',
+  CN_S3_ACCESS_KEY_ID: 'i',
+  CN_S3_SECRET_ACCESS_KEY: 's',
+  CN_VAPID_PUBLIC_KEY: 'pub',
+  CN_VAPID_PRIVATE_KEY: 'priv',
+  CN_VAPID_SUBJECT: 'mailto:ops@goapply.example.cn',
+  CN_EMAIL_TRANSPORT: 'aliyun_dm',
+  ALIYUN_DM_ACCESS_KEY_ID: 'dm',
+  ALIYUN_DM_ACCESS_KEY_SECRET: 'dms',
+  ALIYUN_DM_ACCOUNT_NAME: 'noreply@goapply.example.cn',
+};
+
+describe('disclosures name the stack GoApply really uses (D5; G47)', () => {
+  const rows = (brand: typeof goapply, env: Record<string, string>) => configuredProcessors(brand, env).map((p) => `${p.purpose}:${p.name}`);
+
+  it('with the shared-only env GoApply lists the same processors as RoboApply (minus Stripe, its market rail), nothing else', () => {
+    const robo = rows(roboapply, SHARED_STACK);
+    expect(robo).toEqual([
+      'database:Neon',
+      'hosting:Vercel',
+      'email:Resend',
+      'voice:LiveKit Cloud',
+      'speech:Deepgram',
+      'speech:Cartesia',
+      'payments:Stripe',
+      'storage:Object storage',
+      `push:${WEB_PUSH_PROCESSOR_NAME}`,
+      'ai_models:openai',
+    ]);
+    const go = rows(goapply, SHARED_STACK);
+    // Email follows the transport GoApply really sends through (platform/email `transportNameFor`):
+    // Resend whenever that is its transport, never listed when no email is sent.
+    const goEmail = transportNameFor(goapply, SHARED_STACK) === 'resend' ? ['email:Resend'] : [];
+    expect(go).toEqual(robo.filter((r) => r !== 'payments:Stripe' && r !== 'email:Resend').flatMap((r) => (r === 'voice:LiveKit Cloud' ? [...goEmail, r] : [r])));
+    // An explicit Resend transport is listed whatever the default is.
+    expect(rows(goapply, { ...SHARED_STACK, CN_EMAIL_TRANSPORT: 'resend' })).toContain('email:Resend');
+    expect(rows(goapply, { ...SHARED_STACK, CN_EMAIL_TRANSPORT: 'none' })).not.toContain('email:Resend');
+    // Countries are the same facts too: the shared bucket has no country we can read.
+    expect(configuredProcessors(goapply, SHARED_STACK).find((p) => p.purpose === 'storage')).toEqual({ name: 'Object storage', purpose: 'storage', country: null, region: null });
+  });
+
+  it('nothing unconfigured is listed: an empty env lists no processor for either brand', () => {
+    expect(configuredProcessors(goapply, {})).toEqual([]);
+    expect(configuredProcessors(roboapply, {})).toEqual([]);
+    // A key without its group, or a transport without its key, is not a processor.
+    expect(rows(goapply, { VAPID_PUBLIC_KEY: 'pub' })).toEqual([]);
+    expect(rows(goapply, { CN_EMAIL_TRANSPORT: 'resend' })).toEqual([]);
+    expect(rows(goapply, { CN_EMAIL_TRANSPORT: 'aliyun_dm' })).toEqual([]);
+    expect(rows(goapply, { ALIPAY_API_URL: 'https://pay.example' })).toEqual([]);
+  });
+
+  it('GoApply-only processors appear when they are configured, and its own groups replace the shared ones', () => {
+    const go = rows(goapply, { ...SHARED_STACK, ...FULL_CN_STACK, ALIPAY_CALLBACK_SECRET: 'cb', CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green', ALIYUN_GREEN_ACCESS_KEY_ID: 'ak', ALIYUN_GREEN_ACCESS_KEY_SECRET: 'sk' });
+    expect(go).toEqual([
+      'hosting:Vercel',
+      'email:Aliyun DirectMail',
+      // Its own media plane, not on LiveKit Cloud.
+      'voice:LiveKit',
+      // Its own speech pair: the shared speech vendors are not used.
+      'payments:Alipay',
+      'storage:Object storage (CN)',
+      `push:${WEB_PUSH_PROCESSOR_NAME}`,
+      'content_safety:Aliyun Content Moderation',
+      'ai_models:deepseek',
+    ]);
+    // The kill switch stops the rail, so it is not a processor.
+    expect(rows(goapply, { ALIPAY_CALLBACK_SECRET: 'cb', CN_PAYMENTS_ENABLED: 'false' })).toEqual([]);
+    // RoboApply never lists a GoApply provider, whatever CN_ values exist.
+    const robo = rows(roboapply, { ...SHARED_STACK, ...FULL_CN_STACK, ALIPAY_CALLBACK_SECRET: 'cb' });
+    for (const cnOnly of ['email:Aliyun DirectMail', 'payments:Alipay', 'storage:Object storage (CN)', 'ai_models:deepseek', 'voice:LiveKit']) expect(robo).not.toContain(cnOnly);
+  });
+
+  it('a CN bucket is called "(CN)" only when its endpoint is mainland object storage', () => {
+    const own = (endpoint: string) => configuredProcessors(goapply, { CN_S3_BUCKET: 'cn', CN_S3_ENDPOINT: endpoint, CN_S3_ACCESS_KEY_ID: 'i', CN_S3_SECRET_ACCESS_KEY: 's' }).find((p) => p.purpose === 'storage');
+    expect(own('https://oss-cn-shanghai.aliyuncs.com')).toEqual({ name: 'Object storage (CN)', purpose: 'storage', country: 'CN', region: null });
+    expect(own('https://s3.us-east-1.amazonaws.com')).toEqual({ name: 'Object storage', purpose: 'storage', country: null, region: null });
+    expect(own('https://oss-cn-hongkong.aliyuncs.com')).toEqual({ name: 'Object storage', purpose: 'storage', country: null, region: null });
+  });
+
+  it('the AI endpoint rule: open by default, mainland_only only behind the domestic-only wall; RoboApply is always no_mainland', () => {
+    expect(llmEndpointRule(goapply, {})).toBe('open');
+    expect(llmEndpointRule(goapply, SHARED_STACK)).toBe('open');
+    // GoApply's own provider alone is not the wall: other routes are still reachable.
+    expect(llmEndpointRule(goapply, FULL_CN_STACK)).toBe('open');
+    expect(llmEndpointRule(goapply, { ...FULL_CN_STACK, CN_LLM_DOMESTIC_ONLY: 'true' })).toBe('mainland_only');
+    expect(llmEndpointRule(goapply, { ...FULL_CN_STACK, CN_RESIDENCY_STRICT: 'true' })).toBe('mainland_only');
+    // The wall with no domestic model: only mainland endpoints are allowed, so that is still what is said.
+    expect(llmEndpointRule(goapply, { CN_LLM_DOMESTIC_ONLY: 'true' })).toBe('mainland_only');
+    for (const env of [{}, SHARED_STACK, { CN_LLM_DOMESTIC_ONLY: 'true' }, { CN_RESIDENCY_STRICT: 'true' }]) expect(llmEndpointRule(roboapply, env)).toBe('no_mainland');
+  });
+
+  it('the cross-border flag: whenever personal information leaves the mainland on this deployment, and only then', () => {
+    // Offshore deployment: always.
+    expect(buildDisclosures(goapply, {}).offshore).toBe(true);
+    expect(buildDisclosures(goapply, { ...FULL_CN_STACK, DEPLOY_REGION: '' }).offshore).toBe(true);
+    // Mainland deployment on the shared stack (in whole or in part): yes.
+    expect(buildDisclosures(goapply, { DEPLOY_REGION: 'cn-mainland' }).offshore).toBe(true);
+    expect(buildDisclosures(goapply, { DEPLOY_REGION: 'cn-mainland', ...SHARED_STACK }).offshore).toBe(true);
+    expect(buildDisclosures(goapply, { ...FULL_CN_STACK, CN_S3_BUCKET: '' }).offshore).toBe(true);
+    expect(buildDisclosures(goapply, { ...FULL_CN_STACK, CN_EMAIL_TRANSPORT: 'resend' }).offshore).toBe(true);
+    // Mainland deployment with a complete stack of its own: no.
+    expect(buildDisclosures(goapply, FULL_CN_STACK).offshore).toBe(false);
+    expect(buildDisclosures(goapply, { ...FULL_CN_STACK, CN_LLM_DOMESTIC_ONLY: 'true' }).offshore).toBe(false);
+    // ...unless its own model provider is itself abroad (the env predicate alone cannot see that).
+    const ownButAbroad = { ...FULL_CN_STACK, CN_LLM_PROVIDER: 'openrouter', CN_LLM_MODEL: 'openai/gpt-5' };
+    expect(aiLeavesMainland(goapply, ownButAbroad)).toBe(true);
+    expect(crossBorderConsentApplies(goapply, ownButAbroad)).toBe(true);
+    expect(buildDisclosures(goapply, ownButAbroad).offshore).toBe(true);
+    // Behind the wall that route is refused, so nothing leaves.
+    expect(aiLeavesMainland(goapply, { ...ownButAbroad, CN_LLM_DOMESTIC_ONLY: 'true' })).toBe(false);
+    // A vendor whose country we cannot name is not assumed to be in the mainland.
+    expect(aiLeavesMainland(goapply, { ...FULL_CN_STACK, CN_LLM_PROVIDER: 'newapi', CN_LLM_MODEL: 'house-model' })).toBe(true);
+    // RoboApply: never.
+    for (const env of [{}, SHARED_STACK, FULL_CN_STACK]) {
+      expect(buildDisclosures(roboapply, env).offshore).toBe(false);
+      expect(aiLeavesMainland(roboapply, env)).toBe(false);
+    }
   });
 });
 
@@ -284,6 +557,10 @@ describe('disclosures rendered from the code that enforces them (WP-93)', () => 
       [goapply, {}],
       [goapply, { DEPLOY_REGION: 'cn-mainland' }],
       [goapply, { DEPLOY_REGION: 'cn-mainland', CN_S3_BUCKET: 'cn', CN_S3_ENDPOINT: 'https://oss-cn-shanghai.example.test', CN_S3_ACCESS_KEY_ID: 'a', CN_S3_SECRET_ACCESS_KEY: 's' }],
+      [goapply, { S3_BUCKET: 'b', S3_ENDPOINT: 'https://r2.example.test', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 's' }],
+      [goapply, { CN_STORAGE_MODE: 'redact' }],
+      [goapply, { CN_STORAGE_MODE: 'discard' }],
+      [goapply, { DEPLOY_REGION: 'cn-mainland', CN_RESIDENCY_STRICT: 'true' }],
     ];
     for (const [brand, env] of cases) {
       const r = residencySummary(brand, env);
@@ -291,6 +568,7 @@ describe('disclosures rendered from the code that enforces them (WP-93)', () => 
         region: r.region,
         stage: r.stage,
         originalFiles: r.originalFiles,
+        storage: r.storage,
         resumeParsing: r.resumeParsing,
         resumeParser: r.resumeParsing === 'gohire_mainland' ? 'GoHire' : null,
         redactedBeforeStorage: [...r.redactedBeforeStorage],
@@ -302,10 +580,15 @@ describe('disclosures rendered from the code that enforces them (WP-93)', () => 
     expect(processingFacts(goapply, { GOHIRE_API_KEY: 'k' })).toMatchObject({ resumeParsing: 'gohire_mainland', resumeParser: 'GoHire' });
     expect(processingFacts(roboapply, { GOHIRE_API_KEY: 'k' })).toMatchObject({ resumeParsing: 'local', resumeParser: null });
     expect(processingFacts(roboapply, { GOHIRE_API_KEY: 'k', GOHIRE_PARSE_BRANDS: 'roboapply,goapply' })).toMatchObject({ resumeParsing: 'gohire_mainland', resumeParser: 'GoHire' });
-    // CN-0 (GoApply offshore): the notice cannot claim more than the deployment does.
-    expect(processingFacts(goapply, {})).toMatchObject({ region: 'offshore', stage: 'cn0', originalFiles: 'not_kept', imagesDiscarded: true });
-    expect(processingFacts(goapply, {}).redactedBeforeStorage.length).toBeGreaterThan(0);
-    expect(processingFacts(roboapply, {})).toMatchObject({ region: 'offshore', stage: 'intl', redactedBeforeStorage: [], imagesDiscarded: false });
+    // GoApply by default (D5): files kept on the shared store, nothing redacted or discarded, exactly like RoboApply.
+    expect(processingFacts(goapply, {})).toMatchObject({ region: 'offshore', stage: 'cn0', originalFiles: 'kept', storage: 'shared', redactedBeforeStorage: [], imagesDiscarded: false });
+    expect(processingFacts(roboapply, {})).toMatchObject({ region: 'offshore', stage: 'intl', originalFiles: 'kept', storage: 'shared', redactedBeforeStorage: [], imagesDiscarded: false });
+    // The opt-in modes are stated as they are: the notice cannot claim more, or less, than the deployment does.
+    expect(processingFacts(goapply, { CN_STORAGE_MODE: 'discard' })).toMatchObject({ originalFiles: 'not_kept', imagesDiscarded: true });
+    expect(processingFacts(goapply, { CN_STORAGE_MODE: 'discard' }).redactedBeforeStorage.length).toBeGreaterThan(0);
+    expect(processingFacts(goapply, { CN_STORAGE_MODE: 'redact' })).toMatchObject({ originalFiles: 'kept', imagesDiscarded: false });
+    expect(processingFacts(goapply, { CN_STORAGE_MODE: 'redact' }).redactedBeforeStorage.length).toBeGreaterThan(0);
+    expect(processingFacts(goapply, { CN_RESIDENCY_STRICT: 'true' })).toMatchObject({ originalFiles: 'unavailable' });
   });
 
   it('the public response never carries the storage bucket endpoint (for some stores the host holds the account id)', () => {
@@ -353,22 +636,44 @@ describe('disclosures rendered from the code that enforces them (WP-93)', () => 
     expect(processingFactsMarkdown({ ...viaParser, resumeParser: null }, false)).toContain('not sent to a separate resume-parsing service');
   });
 
-  it('GoApply AI endpoints: only domestic providers on allowlisted hosts — every listed route passes the egress policy', () => {
-    const f = llmEndpointFacts(goapply, {});
-    expect(f.rule).toBe('mainland_only');
-    expect(f.excludedUpstreams).toEqual([]);
-    expect(f.mainlandHosts).toEqual([...MAINLAND_LLM_HOST_SUFFIXES]);
-    expect(f.providers.length).toBeGreaterThanOrEqual(5);
-    for (const p of f.providers) {
-      expect(GOAPPLY_DIRECT_PROVIDERS as readonly string[], p.provider).toContain(p.provider);
-      expect(p.host).toBe(hostOf(PROVIDER_DEFAULT_BASE_URLS[p.provider]));
-      expect(isMainlandLlmHost(p.host)).toBe(true);
-      expect(checkLlmEgress({ brand: goapply, provider: p.provider, env: {} }).allowed, p.provider).toBe(true);
+  it('GoApply AI endpoints behind the domestic-only wall: only domestic providers on allowlisted hosts, and every listed route passes the egress policy', () => {
+    for (const WALL of [{ CN_LLM_DOMESTIC_ONLY: 'true' }, { CN_RESIDENCY_STRICT: 'true' }]) {
+      const f = llmEndpointFacts(goapply, WALL);
+      expect(f.rule).toBe('mainland_only');
+      expect(f.excludedUpstreams).toEqual([]);
+      expect(f.mainlandHosts).toEqual([...MAINLAND_LLM_HOST_SUFFIXES]);
+      expect(f.providers.length).toBeGreaterThanOrEqual(5);
+      for (const p of f.providers) {
+        expect(GOAPPLY_DIRECT_PROVIDERS as readonly string[], p.provider).toContain(p.provider);
+        expect(p.host).toBe(hostOf(PROVIDER_DEFAULT_BASE_URLS[p.provider]));
+        expect(isMainlandLlmHost(p.host)).toBe(true);
+        expect(checkLlmEgress({ brand: goapply, provider: p.provider, env: WALL }).allowed, p.provider).toBe(true);
+      }
+      // No offshore provider is offered to GoApply behind the wall.
+      for (const offshore of ['openai', 'openrouter', 'anthropic', 'google']) expect(f.providers.map((p) => p.provider)).not.toContain(offshore);
+      // An ops-added domestic gateway host joins the allowlist.
+      expect(llmEndpointFacts(goapply, { ...WALL, CN_LLM_DOMESTIC_HOSTS: 'llm.internal.example.cn' }).mainlandHosts).toContain('llm.internal.example.cn');
     }
-    // No offshore provider is ever offered to GoApply.
-    for (const offshore of ['openai', 'openrouter', 'anthropic', 'google']) expect(f.providers.map((p) => p.provider)).not.toContain(offshore);
-    // An ops-added domestic gateway host joins the allowlist.
-    expect(llmEndpointFacts(goapply, { CN_LLM_DOMESTIC_HOSTS: 'llm.internal.example.cn' }).mainlandHosts).toContain('llm.internal.example.cn');
+  });
+
+  it('GoApply AI endpoints by default (rule open): every provider it can reach, RoboApply\'s and the domestic ones; no host rule is claimed', () => {
+    const f = llmEndpointFacts(goapply, {});
+    expect(f.rule).toBe('open');
+    // No host is allowed or refused by rule, so no list of hosts is published and no upstream is said to be excluded.
+    expect(f.mainlandHosts).toEqual([]);
+    expect(f.excludedUpstreams).toEqual([]);
+    const listed = f.providers.map((p) => p.provider);
+    // Everything RoboApply may use...
+    for (const p of llmEndpointFacts(roboapply, {}).providers) expect(listed, p.provider).toContain(p.provider);
+    for (const shared of ['openai', 'openrouter', 'anthropic']) expect(listed).toContain(shared);
+    // ...plus the domestic providers behind the wall list.
+    for (const p of llmEndpointFacts(goapply, { CN_LLM_DOMESTIC_ONLY: 'true' }).providers) expect(listed, p.provider).toContain(p.provider);
+    for (const p of f.providers) {
+      expect(p.host).toBe(hostOf(PROVIDER_DEFAULT_BASE_URLS[p.provider]));
+      expect(p.host).not.toBe('localhost');
+    }
+    // One row per host.
+    expect(new Set(f.providers.map((p) => p.host)).size).toBe(f.providers.length);
   });
 
   it('RoboApply AI endpoints: no mainland host is listed as usable; the refused hosts and upstreams are the policy lists', () => {
@@ -463,6 +768,16 @@ describe('legal footer (snapshot with and without env)', () => {
         "statusNote": null,
       }
     `);
+  });
+
+  it('the GoApply footer names the model it really runs on: the shared one when it has none of its own, never an unset CN_ name (D5)', () => {
+    const shared = { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5' };
+    expect(buildLegalFooter(goapply, shared).aiModels).toEqual([{ vendor: 'openai', model: 'gpt-5', filingNo: null }]);
+    // Its own model replaces it, with its filing number when one is set.
+    const own = { ...shared, CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek-chat', CN_GENAI_DISCLOSURES: '[{"model":"deepseek-chat","vendor":"deepseek","filingNo":"F-1"}]' };
+    expect(buildLegalFooter(goapply, own).aiModels).toEqual([{ vendor: 'deepseek', model: 'deepseek-chat', filingNo: 'F-1' }]);
+    // RoboApply's footer has no model line (a GoApply legal-footer item), whatever is configured.
+    expect(buildLegalFooter(roboapply, shared).aiModels).toEqual([]);
   });
 
   it('with env: every configured line, regulator links', () => {

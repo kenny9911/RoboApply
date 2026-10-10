@@ -3,8 +3,8 @@
 // LegalDocument — one legal document page body: title, DRAFT banner (until
 // counsel approves and ops sets the docs version), the markdown, the live
 // blocks ({{retention_schedule}}, {{ai_models}}, {{processors}},
-// {{processing_facts}}, {{llm_endpoints}}, {{data_attributions}}) and the list
-// of the brand's other documents.
+// {{processing_facts}}, {{llm_endpoints}}, {{data_attributions}},
+// {{offshore_notice}}) and the list of the brand's other documents.
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -12,7 +12,7 @@ import { useTranslations } from 'next-intl';
 import { Markdown } from '../../v3/primitives/Markdown';
 import type { ReactNode } from 'react';
 
-import { DataAttributions, LlmEndpoints, ModelsTable, ProcessingFacts, ProcessorsTable } from './DisclosureTables';
+import { CrossBorderNotice, DataAttributions, LlmEndpoints, ModelsTable, ProcessingFacts, ProcessorsTable } from './DisclosureTables';
 import { RetentionTable } from './RetentionTable';
 import { splitLegalBlocks, type LegalBlock, type LegalDocSlug, type LegalMarket } from './legalCatalog';
 import styles from './compliance.module.css';
@@ -47,6 +47,8 @@ export function LegalBlockView({ block, market }: { block: LegalBlock; market: L
       return <LlmEndpoints />;
     case 'data_attributions':
       return <DataAttributions />;
+    case 'offshore_notice':
+      return <CrossBorderNotice />;
   }
 }
 

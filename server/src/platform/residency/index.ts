@@ -1,6 +1,7 @@
 // server/src/platform/residency/index.ts — public surface of the data-residency
-// platform (WP-15): deploy region, egress policy, upload storage rule,
-// startup assertions and the processing summary.
+// platform (WP-15; D5 defaults, GOAPPLY_PARITY_PLAN.md §3.6): deploy region,
+// egress policy, upload storage rule, startup assertions and the processing
+// summary. The strict mainland posture is `CN_RESIDENCY_STRICT` (platform/brand).
 
 export {
   CN_MAINLAND,
@@ -33,16 +34,21 @@ export type { EgressCheckInput, EgressDecision, EgressPolicyCode, NoPiPayloadInp
 
 export {
   CN_STORAGE_ENV,
+  CN_STORAGE_MODES,
   StorageUnavailableError,
   applyResumeUploadPolicy,
   assertResumeUploadStorage,
   brandStorageConfigured,
+  cnOwnStorageProblem,
+  cnStorageMode,
+  cnStorageModeProblem,
   isImageUpload,
   mayStoreOriginal,
   resumeUploadPolicy,
 } from './uploadPolicy.js';
 export type {
   AppliedResumeUploadPolicy,
+  CnStorageMode,
   OriginalFileRule,
   ResumeUploadContent,
   ResumeUploadPolicy,
@@ -51,6 +57,7 @@ export type {
 export {
   DEFAULT_CN_DB_HOST_SUFFIXES,
   ResidencyStartupError,
+  TOPOLOGY_FAILURE_CODES,
   allowedDbHostSuffixes,
   assertResidencyAtStartup,
   checkResidency,
@@ -61,7 +68,7 @@ export {
 } from './startupAssertions.js';
 export type { ResidencyFailure, ResidencyFailureCode, ResidencyReport } from './startupAssertions.js';
 
-export { WriteBrandUnknownError, resolveWriteBrand } from './writeBrand.js';
+export { WriteBrandUnknownError, resolveOwnerWriteBrand, resolveWriteBrand } from './writeBrand.js';
 
 export { residencySummary } from './summary.js';
 export type { ResidencySummary } from './summary.js';

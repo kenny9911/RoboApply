@@ -8,8 +8,8 @@
 // redirect to the canonical slug.
 //
 // Public page in HybridShell (R-23). Documents are DRAFT until counsel approves
-// them and ops sets the docs version; drafts are never indexed, and production
-// GoApply serves nothing until CN_LEGAL_DOCS_VERSION is set (404).
+// them and ops sets the docs version (GoApply: CN_LEGAL_DOCS_VERSION). A draft
+// is served with the DRAFT banner on both brands and is never indexed.
 
 import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';

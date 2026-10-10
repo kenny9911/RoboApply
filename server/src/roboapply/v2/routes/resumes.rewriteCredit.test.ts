@@ -133,7 +133,8 @@ describe('POST /v2/resumes/:id/rewrite spends the rewrite credit', () => {
   it('one credit per rewrite, committed against the resume', async () => {
     const res = await post(BODY);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ rewrite: 'Built a weekly on-time delivery dashboard.' });
+    // The model wrote it, so it is charged and says so (`source`, additive).
+    expect(res.body).toEqual({ rewrite: 'Built a weekly on-time delivery dashboard.', source: 'model' });
     expect(rows('committed')).toHaveLength(1);
     expect(rows('committed')[0]).toMatchObject({ userId: 'u1', amount: 1, refType: 'resume_inline_rewrite', refId: 'rv_1' });
 

@@ -2,7 +2,22 @@
   "legal": {
     "consents": {
       "textChanged": "This text has changed since you answered. Your answer was given to the earlier version.",
-      "agreeCurrent": "Agree to this text"
+      "agreeCurrent": "Agree to this text",
+      "closeBodyCrossBorder": "This service relies on providers outside mainland China, so it cannot run without this consent. Withdrawing it closes your account now and deletes your data. This cannot be undone."
+    },
+    "processors": {
+      "push": "Push notifications"
+    },
+    "llmEndpoints": {
+      "open": "AI requests go to the model services listed under AI models. Some of them can be outside mainland China. These are the providers we can use, and the address each one uses unless we set another:"
+    },
+    "crossBorder": {
+      "applies": "Your personal information is processed or stored by services outside mainland China. The lists on this page name them. This happens only after you agree to it separately. Withdrawing that consent closes your account and deletes your data.",
+      "none": "Your personal information is processed and stored in mainland China."
+    },
+    "explain": {
+      "quoteFromPosting": "From the posting: “{evidence}”",
+      "quoteFromResume": "From your resume: “{evidence}”"
     }
   }
 }

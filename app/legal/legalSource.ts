@@ -2,14 +2,17 @@
 //
 // Reads content/legal/<market>/<file>.md, fills the inline placeholders from
 // this deployment's env and applies the publication rule shared with the API
-// (server/src/features/compliance/legalDocs.ts):
-//   published = <brand> LEGAL_DOCS_VERSION is set (GoApply: CN_LEGAL_DOCS_VERSION,
-//               no fallback across brands) AND the file is not `status: draft`.
-//   Unpublished → rendered with a DRAFT banner, except on production GoApply,
-//   where the page is a 404.
+// (server/src/features/compliance/legalDocs.ts), the same for both brands
+// (D5 parity, GOAPPLY_PARITY_PLAN.md §3.6):
+//   published = <brand> LEGAL_DOCS_VERSION is set (a brand-own value: GoApply
+//               reads CN_LEGAL_DOCS_VERSION, never RoboApply's) AND the file is
+//               not `status: draft`.
+//   Unpublished → rendered with a DRAFT banner, on GoApply as on RoboApply
+//   (production GoApply used to answer 404 for a draft).
 // Block placeholders ({{retention_schedule}}, {{ai_models}}, {{processors}},
-// {{processing_facts}}, {{llm_endpoints}}, {{data_attributions}}) are left in
-// place; the page renders them as live tables and lists.
+// {{processing_facts}}, {{llm_endpoints}}, {{data_attributions}},
+// {{offshore_notice}}) are left in place; the page renders them as live tables,
+// lists and notices from the facts the server derives.
 //
 // Deployment note: the files must ship with the server bundle
 // (`outputFileTracingIncludes` for /legal/[doc] — requested from INT).
@@ -42,7 +45,12 @@ export interface LoadedLegalDoc {
 
 export type LegalLoadResult = { kind: 'doc'; doc: LoadedLegalDoc } | { kind: 'redirect'; to: LegalDocSlug } | { kind: 'not_found' };
 
-/** `CN_` + name for GoApply, the bare name for RoboApply (R-03); blank = unset. */
+/**
+ * A brand-own value: `CN_` + name for GoApply, the bare name for RoboApply;
+ * blank = unset. Used only for identity values that never cross brands (legal
+ * entity, address, support mailbox, documents version; platform/brand
+ * BRAND_OWN_ENV), so there is no fallback to the shared name here.
+ */
 export function brandEnvValue(brand: Pick<LegalBrandInfo, 'market'>, name: string, env: EnvSource): string | null {
   const v = env[brand.market === 'cn' ? `CN_${name}` : name];
   const t = v?.trim();
@@ -59,10 +67,6 @@ export function parseFrontMatter(source: string): { meta: Record<string, string>
     if (kv) meta[kv[1]!] = kv[2]!.replace(/^['"]|['"]$/g, '').trim();
   }
   return { meta, body: text.slice(m[0].length) };
-}
-
-function isOffshore(env: EnvSource): boolean {
-  return (env.DEPLOY_REGION ?? '').trim().toLowerCase() !== 'cn-mainland';
 }
 
 function gohireParseForIntl(env: EnvSource): boolean {
@@ -89,11 +93,6 @@ export function inlineValues(brand: LegalBrandInfo, env: EnvSource): Record<stri
     // NDA / copyright complaints about shared questions; the support address until ops sets one.
     takedown_contact: brandEnvValue(brand, 'TAKEDOWN_CONTACT', env) ?? brandEnvValue(brand, 'SUPPORT_EMAIL', env) ?? brand.replyTo,
     minimum_age: '16',
-    offshore_notice: zh
-      ? isOffshore(env)
-        ? '当前内测阶段，你的个人信息在中国大陆境外处理和存储，处理地区为美国。只有在你单独同意后才会这样处理；撤回该同意会关闭并删除你的账户。'
-        : '你的个人信息在中国大陆境内处理和存储。'
-      : '',
     gohire_parse_notice:
       !zh && gohireParseForIntl(env)
         ? 'Only if you agree when you upload: your resume is read by the GoHire parsing service, which runs on servers in mainland China.'
@@ -128,8 +127,8 @@ export function loadLegalDocForPage(brand: LegalBrandInfo, slug: string, env: En
   if (!source) return { kind: 'not_found' };
   const { meta, body } = parseFrontMatter(source);
   const version = brandEnvValue(brand, 'LEGAL_DOCS_VERSION', env);
+  // A draft is served with the DRAFT banner on both brands, in every environment.
   const draft = !version || (meta.status ?? 'draft') === 'draft';
-  if (draft && brand.market === 'cn' && env.NODE_ENV === 'production') return { kind: 'not_found' };
   // Drop the first H1: the page renders the title itself.
   const withoutH1 = body.replace(/^\s*#\s+[^\n]+\n/, '');
   return {
@@ -148,8 +147,8 @@ export function loadLegalDocForPage(brand: LegalBrandInfo, slug: string, env: En
 
 /**
  * The documents the /legal index can link to for a brand: every document of
- * its footer list that loads under the publication rule (so production GoApply
- * lists nothing until its documents are published).
+ * its footer list that has a file for the brand's market. Drafts are listed
+ * too, marked as drafts.
  */
 export function listLegalDocsForPage(brand: LegalBrandInfo, locale: string | null, env: EnvSource = process.env): LoadedLegalDoc[] {
   const out: LoadedLegalDoc[] = [];

@@ -14,8 +14,10 @@
 // snapshot cache key). Brand comes from the caller (the request's brand);
 // market rules: cnFields + 籍贯/政治面貌/家庭成员/photo on GoApply only;
 // workAuth, Taiwan fields and EEO answers on RoboApply only; EEO also needs
-// the `eeoAnswers` flag; the photo is refused in CN-0 (DEPLOY_REGION is not
-// cn-mainland), where GoApply stores no photo at all (WP-15 rule).
+// the `eeoAnswers` flag; the GoApply photo is offered wherever the brand can
+// keep a file (its own bucket, else the shared store; D5). It is refused only
+// where nothing can be kept: no store at all, `CN_STORAGE_MODE=discard`, or
+// `CN_RESIDENCY_STRICT` without a mainland bucket.
 
 import type { ExtendedPrismaClient } from '../../lib/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -24,6 +26,7 @@ import { brandOfUser, getBrand, getCurrentBrandOrDefault, type ProductBrand } fr
 import { hasLiveConsent } from '../../platform/consent/index.js';
 import { isEnabled } from '../../platform/flags.js';
 import { isCnMainland } from '../../platform/residency/index.js';
+import { originalStorageConfigured } from '../../services/ResumeOriginalFileStorageService.js';
 import { CnProfileFieldsSchema } from '../onboarding-cn/index.js';
 import { hasTwAnswers } from '../tw/index.js';
 import {
@@ -152,7 +155,7 @@ export function createProfileService(deps: ProfileServiceDeps = {}) {
       twFields: market === 'intl' && tw.available,
       eeo: market === 'intl' && (await eeoEnabled(userId, brand)),
       cnSensitive: market === 'cn',
-      cnPhoto: market === 'cn' && isCnMainlandDeployment(env),
+      cnPhoto: market === 'cn' && originalStorageConfigured(brand.id, env),
     };
   }
 

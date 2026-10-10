@@ -3,15 +3,20 @@
 // Where this deployment runs, and what that means for GoApply data
 // (CN_TW_LAUNCH_PLAN.md §3, TASK_PLAN.md WP-15, ruling H6).
 //
-//   DEPLOY_REGION=cn-mainland → the mainland stack (CN-1/CN-2: Aliyun
-//                               Shanghai, CN database, CN object storage).
-//   unset                     → offshore (the Vercel + Neon stack). GoApply
-//                               rows here are the CN-0 closed beta.
+//   DEPLOY_REGION=cn-mainland → the mainland stack (Aliyun Shanghai, CN
+//                               database).
+//   unset                     → offshore (the Vercel + Neon stack), which
+//                               serves GoApply too.
+//
+// The region says where the deployment runs. It no longer decides what GoApply
+// may do (owner ruling D5): storage, egress and the boot checks follow the
+// stack GoApply resolves, and the strict mainland posture is the explicit
+// `CN_RESIDENCY_STRICT` switch (uploadPolicy.ts, egressPolicy.ts,
+// startupAssertions.ts). The stage below is kept as a fact for notices.
 //
 // Any other value is a configuration error: the startup assertions refuse to
 // boot on it, because a typo such as `cn_mainland` would otherwise switch the
-// mainland safeguards off silently. Until then it reads as offshore (the
-// stricter GoApply storage rule: keep no original file).
+// mainland topology checks off silently. Until then it reads as offshore.
 
 import { getBrand, type BrandId, type ProductBrand } from '../brand/registry.js';
 import type { EnvSource } from '../brand/brandEnv.js';
@@ -54,7 +59,7 @@ export function residencyStage(brand: BrandId | ProductBrand, env: EnvSource = p
   return isCnMainland(env) ? 'cn1' : 'cn0';
 }
 
-/** GoApply running offshore (CN-0): no original upload, no photo, redact before storage. */
+/** GoApply running offshore (the deployment is outside the mainland). A fact about the region, not a storage rule. */
 export function isCn0(brand: BrandId | ProductBrand, env: EnvSource = process.env): boolean {
   return residencyStage(brand, env) === 'cn0';
 }

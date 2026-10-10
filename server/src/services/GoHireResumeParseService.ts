@@ -4,7 +4,7 @@ import { logger } from './LoggerService.js';
 import type { BrandId } from '../platform/brand/registry.js';
 import { DEFAULT_GOHIRE_API_BASE, goHireParseActive } from '../platform/residency/egressPolicy.js';
 import { applyResumeUploadPolicy, isImageUpload } from '../platform/residency/uploadPolicy.js';
-import { resolveWriteBrand } from '../platform/residency/writeBrand.js';
+import { resolveOwnerWriteBrand, resolveWriteBrand } from '../platform/residency/writeBrand.js';
 import type {
   ParsedResume,
   WorkExperience,
@@ -31,22 +31,24 @@ import type {
  * full transcription) AND the structured fields, so a hit skips local
  * extraction and ResumeParseAgent entirely.
  *
- * NOT a hard dependency for PDFs. Every failure path returns null and the
- * caller falls back to the local pipeline — an unconfigured key, a non-PDF, an
- * oversized file, a timeout, a non-200, or a response too thin to be a real
- * parse. Image uploads are different: a caller that passes `allowImages`
- * (GoApply) gets a JPEG/PNG wrapped into a one-page PDF and sent here, and on
- * null it must fail the upload — never fall back to local vision OCR.
+ * NOT a hard dependency. Every failure path returns null and the caller falls
+ * back to the local pipeline: an unconfigured key, a non-PDF, an oversized
+ * file, a timeout, a non-200, or a response too thin to be a real parse. A
+ * caller that passes `allowImages` (GoApply) gets a JPEG/PNG wrapped into a
+ * one-page PDF and sent here first; on null it reads the image with the local
+ * pipeline, as RoboApply does.
  *
- * DATA RESIDENCY (TASK_PLAN.md R-16, CN_TW_LAUNCH_PLAN.md L-10, WP-15). The
- * API host resolves to a mainland-China server. It is used only for the brands
- * in `GOHIRE_PARSE_BRANDS` (default `goapply`); RoboApply uploads never reach
- * it unless the owner adds `roboapply` there after the privacy notice
- * discloses the transfer. Every call also passes the brand's egress policy
- * (`platform/residency/egressPolicy.ts`). For GoApply running offshore (CN-0)
- * the result is redacted before it is returned for storage — government ID
- * numbers and health details removed, photo fields dropped
- * (`platform/residency/uploadPolicy.ts`).
+ * ROUTING (TASK_PLAN.md R-16, CN_TW_LAUNCH_PLAN.md L-10; D5). The API host
+ * resolves to a mainland-China server. It is the preferred parser for the
+ * brands in `GOHIRE_PARSE_BRANDS` (default `goapply`), a routing preference
+ * and never a requirement: without `GOHIRE_API_KEY` GoApply uploads are read
+ * locally on the shared models. RoboApply uploads never reach it unless the
+ * owner adds `roboapply` there after the privacy notice discloses the
+ * transfer. Every call also passes the brand's egress policy
+ * (`platform/residency/egressPolicy.ts`). The result goes through the brand's
+ * storage rule before it is returned (`platform/residency/uploadPolicy.ts`):
+ * unchanged by default, redacted for GoApply under `CN_STORAGE_MODE=redact`
+ * or `discard`.
  */
 
 const DEFAULT_API_BASE = DEFAULT_GOHIRE_API_BASE;
@@ -361,7 +363,9 @@ export class GoHireResumeParseService {
    * GoHire parse API: enabled (`GOHIRE_PARSE_ENABLED=false` is the opt-out
    * switch), keyed, the brand is in `GOHIRE_PARSE_BRANDS` and the API host
    * passes the brand's egress policy (`goHireParseActive`). False when the
-   * brand cannot be known — no guessing RoboApply for a mainland transfer.
+   * brand cannot be known: no guessing RoboApply for a mainland transfer.
+   * Synchronous, so it asks the explicit brand, the unit of work and the
+   * deployment only; `parseResumeFile` also asks the owning user's brand.
    */
   isConfigured(brand?: BrandId): boolean {
     const brandId = resolveWriteBrand(brand);
@@ -378,8 +382,13 @@ export class GoHireResumeParseService {
     mimeType: string;
     requestId?: string;
     signal?: AbortSignal;
-    /** Brand that owns the upload (default: the current unit of work's brand). */
+    /** Brand that owns the upload (default: the current unit of work's brand, else the owner's). */
     brand?: BrandId;
+    /**
+     * The user who owns the file. With no `brand` and no unit of work (a
+     * worker), the user's stored brand decides whether the file may go here.
+     */
+    userId?: string;
     /**
      * Accept a JPEG/PNG image: it is wrapped into a one-page PDF in memory and
      * parsed like a scan. Off by default (images then return null).
@@ -388,7 +397,7 @@ export class GoHireResumeParseService {
   }): Promise<GoHireParseResult | null> {
     const { mimeType, requestId, signal } = params;
     let { buffer, fileName } = params;
-    const brandId = resolveWriteBrand(params.brand);
+    const brandId = await resolveOwnerWriteBrand(params.brand, params.userId);
 
     if (!brandId || !this.isConfigured(brandId)) return null;
 
@@ -482,7 +491,7 @@ export class GoHireResumeParseService {
         return null;
       }
 
-      // Brand storage rule (CN-0 GoApply: redact IDs and health details, drop photos).
+      // Brand storage rule: unchanged by default; GoApply under CN_STORAGE_MODE=redact|discard has IDs and health details removed.
       const applied = applyResumeUploadPolicy(brandId, { rawText, parsed });
       const result: GoHireParseResult = { rawText: applied.rawText, parsed: applied.parsed ?? parsed };
 
