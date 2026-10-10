@@ -492,10 +492,9 @@ export const ExcludedCompaniesEditor = (p: EditorProps) => <CompanyList {...p} f
 /** Boost only, never a filter (the legacy "target companies"). */
 export const PreferredCompaniesEditor = (p: EditorProps) => <CompanyList {...p} field="preferredCompanies" />;
 
-/** Company size (when known). RoboApply only: GoApply uses employer type. No funding-stage filter. */
-export function CompanySizeEditor({ draft, set, ctx }: EditorProps) {
+/** Company size (when known), on both brands; GoApply shows it beside employer type. No funding-stage filter. */
+export function CompanySizeEditor({ draft, set }: EditorProps) {
   const t = useTranslations('filters');
-  if (ctx.market === 'cn') return null;
   return (
     <OptionToggles
       label={t('fields.companySizes')}

@@ -33,7 +33,7 @@ export type { NetworkStore } from './store.js';
 export { parseLinkedInConnections, type ParsedConnection } from './connectionsCsv.js';
 export { runContactsSync } from './cron.js';
 
-/** AI for outreach drafts: the user's AI consent AND the brand's text model (R-13). */
+/** AI for outreach drafts: the user's AI consent AND the brand's AI text capability (`ai.text`; GoApply runs on the shared stack by default, D5). */
 export async function outreachAiAvailable(userId: string): Promise<boolean> {
   if (!(await aiAllowed(userId))) return false;
   return isEnabled('ai.text', { userId });

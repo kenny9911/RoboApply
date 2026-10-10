@@ -14,6 +14,7 @@
 
 import { call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as CJ from './contracts/cn/jobs';
+import { feedIsThin, feedSources } from './feed';
 
 /** A blacklist row (admin). */
 export type BlacklistEntryView = CJ.BlacklistEntryView;
@@ -46,6 +47,35 @@ export function adminAddBlacklist(body: In<typeof CJ.BlacklistEntryBodySchema>, 
 /** `cnJobs.admin.removeBlacklist` — DELETE /api/v1/roboapply/admin/cn/jobs/blacklist/:id */
 export function adminRemoveBlacklist(id: string, opts?: CallOptions): Promise<void> {
   return call<void>('DELETE', `/api/v1/roboapply/admin/cn/jobs/blacklist/${seg(id)}`, opts);
+}
+
+/**
+ * The GoApply list header, built only from what the feed response says its
+ * rows come from (D3; MARKET_STRATEGY §1.4). It never claims the whole market:
+ *   boards            来自 N 家企业招聘官网
+ *   gohire_and_boards 来自 GoHire 与 N 家企业招聘官网   (only when GoHire rows are listed)
+ *   gohire            来自 GoHire                       (GoHire rows, no board row)
+ * null when the response carries no `sources` or names no source at all: the
+ * header then says nothing rather than something untrue.
+ */
+export type CnFeedHeader =
+  | { kind: 'boards'; boards: number }
+  | { kind: 'gohire_and_boards'; boards: number }
+  | { kind: 'gohire' };
+
+export interface CnFeedSummary {
+  header: CnFeedHeader | null;
+  /** The server marked the result set thin: offer the search links on other job sites. */
+  thin: boolean;
+}
+
+export function cnFeedSummary(response: unknown): CnFeedSummary {
+  const sources = feedSources(response);
+  const thin = feedIsThin(response);
+  if (!sources) return { header: null, thin };
+  const boards = sources.employerBoards;
+  if (sources.gohire) return { header: boards > 0 ? { kind: 'gohire_and_boards', boards } : { kind: 'gohire' }, thin };
+  return { header: boards > 0 ? { kind: 'boards', boards } : null, thin };
 }
 
 /** Every wrapper of this area, for callers that prefer one import. */

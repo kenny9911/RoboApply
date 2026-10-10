@@ -182,7 +182,9 @@ describe('browser and path helpers', () => {
     expect(extensionFillsAts('roboapply', 'workday')).toBe(true);
     for (const type of EXTENSION_PER_PAGE_ATS) expect(extensionFillsAts('roboapply', type)).toBe(false);
     expect([...EXTENSION_PER_PAGE_ATS]).toEqual(['icims', 'taleo', 'successfactors']);
-    expect(extensionFillsAts('goapply', 'workday')).toBe(false);
+    // GoApply's list is a superset (D5): the same offer and the same hold.
+    expect(extensionFillsAts('goapply', 'workday')).toBe(true);
+    for (const type of EXTENSION_PER_PAGE_ATS) expect(extensionFillsAts('goapply', type)).toBe(false);
   });
 
   it('recognises job pages only', () => {
@@ -298,14 +300,12 @@ describe('ExtensionPage', () => {
     expect(screen.getByText(/looks for the application form when the page opens/)).toBeInTheDocument();
   });
 
-  it('GoApply lists its mainland portals only (WP-71), never Greenhouse / Lever / Ashby', async () => {
+  it('GoApply lists its mainland portals (WP-71) and the international forms RoboApply fills (a superset, D5)', async () => {
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cnextensionidcnextensionidcnexten');
     fakeExtension({ installed: false });
     renderWithBrand(<ExtensionPage />, { brand: 'goapply', flags: { extension: true } });
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
-    expect(screen.getByText(/Moka/)).toBeInTheDocument();
-    expect(screen.getByText(/Dayee/)).toBeInTheDocument();
-    expect(screen.queryByText(/Greenhouse/)).toBeNull();
+    expect(screen.getByText(/Application forms on Moka, Beisen, Feishu, Dayee, Greenhouse, Lever, Ashby, Workday, SmartRecruiters, iCIMS, Workable, Taleo,? and SuccessFactors\./)).toBeInTheDocument();
   });
 
   it('signed out: install link and Sign in, no setup card', async () => {
@@ -322,7 +322,7 @@ describe('ExtensionPage', () => {
     expect(screen.queryByRole('link', { name: 'Get the extension' })).toBeNull();
   });
 
-  it('GoApply installs only from its configured store (no Chrome Web Store default)', async () => {
+  it('GoApply installs from its configured store', async () => {
     vi.stubEnv('NEXT_PUBLIC_EXT_ID', '');
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cnextensionidcnextensionidcnexten');
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_STORE_URL', 'https://microsoftedge.microsoft.com/addons/detail/cnextensionidcnextensionidcnexten');
@@ -332,14 +332,28 @@ describe('ExtensionPage', () => {
     expect(await screen.findByRole('link', { name: 'Get the extension' })).toHaveAttribute('href', 'https://microsoftedge.microsoft.com/addons/detail/cnextensionidcnextensionidcnexten');
   });
 
-  it('GoApply without NEXT_PUBLIC_CN_EXT_STORE_URL shows no install link', async () => {
+  it('GoApply without NEXT_PUBLIC_CN_EXT_STORE_URL links to the listing of its id on its own store (the same rule as RoboApply)', async () => {
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cnextensionidcnextensionidcnexten');
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_STORE_URL', '');
-    expect(extensionStoreUrl('goapply')).toBeNull();
+    // Microsoft Edge Add-ons opens in mainland China; the Chrome Web Store does not (ARCH §6.8).
+    expect(extensionStoreUrl('goapply')).toBe('https://microsoftedge.microsoft.com/addons/detail/cnextensionidcnextensionidcnexten');
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'roboextensionidroboextensionidrob');
+    vi.stubEnv('NEXT_PUBLIC_EXT_STORE_URL', '');
+    expect(extensionStoreUrl('roboapply')).toBe('https://chromewebstore.google.com/detail/roboextensionidroboextensionidrob');
     fakeExtension({ installed: false });
     renderWithBrand(<ExtensionStatusCard />, { brand: 'goapply', flags: { extension: true } });
-    expect(await screen.findByRole('button', { name: 'I installed it' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Get the extension' })).toBeNull();
+    expect(await screen.findByRole('link', { name: 'Get the extension' })).toHaveAttribute('href', 'https://microsoftedge.microsoft.com/addons/detail/cnextensionidcnextensionidcnexten');
+  });
+
+  it('GoApply with no published id: no store link from either variable (never a broken link, never RoboApply’s listing)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', '');
+    vi.stubEnv('NEXT_PUBLIC_CN_EXT_STORE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'roboextensionidroboextensionidrob');
+    expect(extensionStoreUrl('goapply')).toBeNull();
+    expect(extensionStoreUrl('roboapply')).toBe('https://chromewebstore.google.com/detail/roboextensionidroboextensionidrob');
+    // A malformed override is ignored, not rendered.
+    vi.stubEnv('NEXT_PUBLIC_CN_EXT_STORE_URL', 'javascript:alert(1)');
+    expect(extensionStoreUrl('goapply')).toBeNull();
   });
 });
 

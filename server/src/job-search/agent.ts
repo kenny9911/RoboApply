@@ -3,19 +3,85 @@ import { jobSearchService, type SearchAudience } from './service.js';
 import { jobSearchQuota } from './quota.js';
 import { JobSearchAccessError } from './keys.js';
 import { parseAgentPlan, parseAgentSearchInput, type AgentPlan } from './agent-validation.js';
-import { JobSearchValidationError, defaultSearchCountry } from './validation.js';
+import { JobSearchValidationError } from './validation.js';
 import { deduplicateJobs, safeJobUrl } from './normalization.js';
 import { logger } from '../services/LoggerService.js';
+import { getCurrentBrandOrDefault, type ProductBrand } from '../platform/brand/index.js';
+import { isEnabled } from '../platform/flags.js';
 import type { AgentSearchInput, AgentSearchResult, ProviderInfo, ProviderStatus, SearchJob, SearchResult } from './types.js';
 
 export { parseAgentSearchInput } from './agent-validation.js';
-export interface AgentSearchContext { userId: string; apiKeyId?: string; requestId?: string; audience?: SearchAudience; signal?: AbortSignal }
+export interface AgentSearchContext {
+  userId: string; apiKeyId?: string; requestId?: string; audience?: SearchAudience; signal?: AbortSignal;
+  /** The brand the search is for (default: the brand of the current request). */
+  brand?: ProductBrand;
+}
+/** May the planner send this user's text to a model? (platform/consent `aiAllowed`.) */
+export type AiConsentCheck = (subject: { id: string; brand: string }) => Promise<boolean>;
 export type SearchPlanner = (input: AgentSearchInput, context: AgentSearchContext & { signal: AbortSignal }) => Promise<unknown>;
 type Service = Pick<typeof jobSearchService, 'providers' | 'search'>;
 type Quota = Pick<typeof jobSearchQuota, 'reserve' | 'finish'>;
 
 export class JobSearchAgentUnavailableError extends JobSearchAccessError {
   constructor() { super('agent_unavailable', 503, 'The search planner is unavailable. Try again, or use keyword search.'); }
+}
+
+/** The user has not agreed to AI use (GoApply's consent). Keyword search needs no model and stays open. */
+export class JobSearchAiOffError extends JobSearchAccessError {
+  constructor() { super('ai_off', 403, 'Turn on AI features in your settings to search by description, or use keyword search.'); }
+}
+
+/** A GoApply account that signed in with WeChat and has no verified phone (CN-L-08 real name). */
+export class JobSearchPhoneBindingError extends JobSearchAccessError {
+  constructor() { super('phone_binding_required', 403, 'Add a phone number to your account to search by description, or use keyword search.'); }
+}
+
+/** The brand's AI text capability is off (operator switch, or GoApply's content filter is not usable). */
+export class JobSearchAiUnavailableError extends JobSearchAccessError {
+  constructor() { super('ai_unavailable', 503, 'Search by description is not available right now. Use keyword search.'); }
+}
+
+/**
+ * What must hold before the planner sends a user's text to a model. It throws
+ * the refusal (a JobSearchAccessError) and resolves when the planner may run.
+ */
+export type PlannerGate = (subject: { userId: string; brand: ProductBrand }) => Promise<void>;
+
+export interface PlannerGateChecks {
+  /** True when the account must bind a phone first (features/auth-cn `phoneBindingRequired`). */
+  phoneBindingRequired: (userId: string) => Promise<boolean>;
+  /** The user's AI consent (platform/consent `aiAllowed`): RoboApply always, GoApply with the live grant. */
+  aiAllowed: AiConsentCheck;
+  /** The brand's `ai.text` capability for this user (platform/flags `isEnabled`). */
+  aiTextEnabled: (subject: { userId: string; brand: ProductBrand }) => Promise<boolean>;
+}
+
+const CONFIGURED_CHECKS: PlannerGateChecks = {
+  phoneBindingRequired: async (userId) => (await import('../features/auth-cn/index.js')).phoneBindingRequired(userId),
+  aiAllowed: async (subject) => (await import('../platform/consent/index.js')).aiAllowed(subject),
+  aiTextEnabled: ({ userId, brand }) => isEnabled('ai.text', { userId, brand }),
+};
+
+/**
+ * The one gate for the planner's model call, the same three checks every other
+ * route that sends a user's text to a model passes (TASK_PLAN §2.2, H4;
+ * roboapply/v2/lib/legacyAiGates.ts; POST /feed/nl-query), in the same order:
+ *   1. GoApply: a WeChat account has a verified phone (403 phone_binding_required).
+ *      The rule is a mainland one, so it is not looked up for another market,
+ *      as in the feed's phone gate.
+ *   2. the user's AI consent (403 ai_off): RoboApply is always allowed, with no lookup.
+ *   3. the brand's `ai.text` capability (503 ai_unavailable): an operator's
+ *      FLAG_<BRAND>_AI_TEXT=false, a per-user override, or an unusable GoApply
+ *      content filter stops the call instead of being ignored.
+ * A failed lookup throws, so the gate fails closed.
+ */
+export function createPlannerGate(checks: Partial<PlannerGateChecks> = {}): PlannerGate {
+  const c = { ...CONFIGURED_CHECKS, ...checks };
+  return async ({ userId, brand }) => {
+    if (brand.market === 'cn' && (await c.phoneBindingRequired(userId))) throw new JobSearchPhoneBindingError();
+    if (!(await c.aiAllowed({ id: userId, brand: brand.id }))) throw new JobSearchAiOffError();
+    if (!(await c.aiTextEnabled({ userId, brand }))) throw new JobSearchAiUnavailableError();
+  };
 }
 
 const PLANNER_PROMPT = `You translate a candidate's job-search request into a small executable search plan. Return ONE pure JSON object, no markdown, explanations, jobs, application links, tools, or URLs.
@@ -63,10 +129,24 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Search cancelled.', 'AbortError');
 }
 
-function eligibleProviders(service: Service, input: AgentSearchInput, audience: SearchAudience, linkedinOnly: boolean): ProviderInfo[] {
-  return service.providers(audience).filter(provider =>
-    (!input.providers || input.providers.includes(provider.id)) && (!linkedinOnly || ['linkedin', 'jsearch'].includes(provider.id)),
+/** The sources a LinkedIn-only search can run on. */
+const LINKEDIN_CAPABLE = ['linkedin', 'jsearch'];
+
+function eligibleProviders(service: Service, input: AgentSearchInput, audience: SearchAudience, linkedinOnly: boolean, brand: ProductBrand): ProviderInfo[] {
+  return service.providers(audience, brand).filter(provider =>
+    (!input.providers || input.providers.includes(provider.id)) && (!linkedinOnly || LINKEDIN_CAPABLE.includes(provider.id)),
   );
+}
+
+/** True when the brand's source list has a LinkedIn-capable source at all (configured or not). GoApply's has none. */
+function offersLinkedIn(service: Service, audience: SearchAudience, brand: ProductBrand): boolean {
+  return service.providers(audience, brand).some(provider => LINKEDIN_CAPABLE.includes(provider.id));
+}
+
+/** The user's own words about LinkedIn, for disclosure when the site cannot restrict a search to it. */
+function linkedInWish(request: string): string[] {
+  const clauses = request.split(/[\n;；。!?]+/).map(item => item.trim()).filter(item => /linkedin|领英|領英/i.test(item));
+  return clauses.length ? clauses.flatMap(item => item.match(/.{1,240}/gu) ?? []) : ['LinkedIn'];
 }
 
 function unresolvedPreferences(request: string, plan: AgentPlan): string[] {
@@ -79,8 +159,8 @@ function unresolvedPreferences(request: string, plan: AgentPlan): string[] {
   return [...new Set([...literal, ...plan.unverifiedPreferences])].slice(0, 12);
 }
 
-function resolvePlan(input: AgentSearchInput, plan: AgentPlan): AgentSearchResult['agent'] {
-  const criteria: AgentSearchResult['agent']['criteria'] = { country: plan.country ?? defaultSearchCountry() };
+function resolvePlan(input: AgentSearchInput, plan: AgentPlan, brand: ProductBrand, linkedinOffered: boolean): AgentSearchResult['agent'] {
+  const criteria: AgentSearchResult['agent']['criteria'] = { country: plan.country ?? brand.defaultCountry.toLowerCase() };
   for (const key of ['location', 'remote', 'datePosted', 'employmentTypes'] as const) if (plan[key] !== undefined) Object.assign(criteria, { [key]: plan[key] });
   // Soft work-mode wishes cannot become hard filters through model overreach.
   const softRemote = /(?:prefer|ideally|nice.to.have).{0,40}remote|remote.{0,30}(?:prefer|ideally)|希望.{0,15}(?:遠距|远程)|できれば.{0,20}リモート/i.test(input.request);
@@ -88,10 +168,16 @@ function resolvePlan(input: AgentSearchInput, plan: AgentPlan): AgentSearchResul
   if (softRemote && !hardRemote) delete criteria.remote;
   for (const key of ['country', 'location', 'remote', 'datePosted', 'employmentTypes'] as const) if (input[key] !== undefined) Object.assign(criteria, { [key]: input[key] });
   if (!criteria.location) delete criteria.location;
+  const wantsLinkedInOnly = input.linkedinOnly ?? plan.linkedinOnly ?? false;
+  const unverified = unresolvedPreferences(input.request, plan);
+  // A site with no LinkedIn-capable source cannot restrict a search to
+  // LinkedIn. The planned search still runs on the site's sources, and the
+  // wish is disclosed as not applied instead of failing after the model call.
+  const undeliverable = wantsLinkedInOnly && !linkedinOffered;
   return {
     queries: plan.queries, mode: 'planned', criteria,
-    unverifiedPreferences: unresolvedPreferences(input.request, plan),
-    linkedinOnly: input.linkedinOnly ?? plan.linkedinOnly ?? false,
+    unverifiedPreferences: undeliverable ? [...new Set([...linkedInWish(input.request), ...unverified])].slice(0, 12) : unverified,
+    linkedinOnly: wantsLinkedInOnly && linkedinOffered,
   };
 }
 
@@ -117,10 +203,11 @@ function combineStatuses(searches: AgentSearchResult['searches']): ProviderStatu
   return [...combined.values()];
 }
 
-export function createJobSearchAgent(dependencies: { service?: Service; quota?: Quota; planner?: SearchPlanner; planningTimeoutMs?: number } = {}) {
+export function createJobSearchAgent(dependencies: { service?: Service; quota?: Quota; planner?: SearchPlanner; planningTimeoutMs?: number; gate?: PlannerGate } = {}) {
   const service = dependencies.service ?? jobSearchService;
   const quota = dependencies.quota ?? jobSearchQuota;
   const planner = dependencies.planner ?? configuredSearchPlanner;
+  const gate = dependencies.gate ?? createPlannerGate();
 
   async function plan(input: AgentSearchInput, context: AgentSearchContext): Promise<AgentPlan> {
     const timeout = dependencies.planningTimeoutMs ?? Number(process.env.JOB_SEARCH_AGENT_TIMEOUT_MS ?? 15000);
@@ -154,11 +241,20 @@ export function createJobSearchAgent(dependencies: { service?: Service; quota?: 
     throwIfAborted(context.signal);
     const audience = context.audience ?? 'website';
     const requestId = context.requestId ?? randomUUID();
-    const initial = eligibleProviders(service, input, audience, input.linkedinOnly === true);
+    const brand = context.brand ?? getCurrentBrandOrDefault();
+    const linkedinOffered = offersLinkedIn(service, audience, brand);
+    // An explicit LinkedIn-only request on a site with no LinkedIn-capable
+    // source can never be met: say so before any reservation or model call.
+    if (input.linkedinOnly === true && !linkedinOffered) throw new JobSearchValidationError('linkedinOnly', 'This site has no LinkedIn source. Remove linkedinOnly to search its sources.');
+    const initial = eligibleProviders(service, input, audience, input.linkedinOnly === true, brand);
     if (!initial.some(provider => provider.enabled)) throw new JobSearchAccessError('providers_unavailable', 503, 'No selected job source is available for this search.');
+    // Before any reservation or model call: the planner sends the user's text
+    // to a model, so it passes the same gate as every other AI action.
+    await gate({ userId: context.userId, brand });
+    throwIfAborted(context.signal);
     // Reserve BEFORE planning: an invalid/unavailable planner still consumed
     // runtime work. Query one reuses this reservation, never double-charges it.
-    let reservation: string | undefined = await quota.reserve(context.userId, context.apiKeyId, requestId);
+    let reservation: string | undefined = await quota.reserve(context.userId, context.apiKeyId, requestId, brand);
     let reservedAt = Date.now();
     let reservationStatus = 503;
     const finish = async () => {
@@ -169,8 +265,8 @@ export function createJobSearchAgent(dependencies: { service?: Service; quota?: 
     };
     try {
       throwIfAborted(context.signal);
-      const agent = resolvePlan(input, await plan(input, { ...context, requestId }));
-      const candidates = eligibleProviders(service, input, audience, agent.linkedinOnly);
+      const agent = resolvePlan(input, await plan(input, { ...context, requestId }), brand, linkedinOffered);
+      const candidates = eligibleProviders(service, input, audience, agent.linkedinOnly, brand);
       if (!candidates.some(provider => provider.enabled)) throw new JobSearchAccessError('providers_unavailable', 503, 'No permitted source can run the planned search.');
       // LinkedIn-only plans query only configured LinkedIn-capable sources.
       // The service re-checks audience rights and kill switches for every query.
@@ -182,7 +278,7 @@ export function createJobSearchAgent(dependencies: { service?: Service; quota?: 
         throwIfAborted(context.signal);
         if (index > 0) {
           try {
-            reservation = await quota.reserve(context.userId, context.apiKeyId, requestId);
+            reservation = await quota.reserve(context.userId, context.apiKeyId, requestId, brand);
             reservedAt = Date.now(); reservationStatus = 503;
             throwIfAborted(context.signal);
           } catch (error) {
@@ -197,7 +293,7 @@ export function createJobSearchAgent(dependencies: { service?: Service; quota?: 
         }
         try {
           throwIfAborted(context.signal);
-          const result = await service.search({ query, ...agent.criteria, providers, limit: 50 }, { audience, requestId, signal: context.signal });
+          const result = await service.search({ query, ...agent.criteria, providers, limit: 50 }, { audience, requestId, signal: context.signal, brand, userId: context.userId });
           throwIfAborted(context.signal);
           const jobs = agent.linkedinOnly ? result.jobs.filter(isLinkedInJob) : result.jobs;
           const statuses = sourceCounts(result, jobs, agent.linkedinOnly);

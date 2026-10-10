@@ -5,9 +5,9 @@
 // and, for AI actions, what it costs from the server's credit summary
 // (never computed here, never "unlimited"). Steps we cannot observe say so
 // instead of guessing (Practiced: sessions are not linked to jobs yet).
-// AI actions (tailor, cover letter, practice) need `ai.text`: GoApply
-// without a configured domestic model shows no entry to them (R-04/R-13);
-// links to things already made stay.
+// AI actions (tailor, cover letter, practice) need `ai.text`: a brand whose
+// AI text is off shows no entry to them (R-04; on by default on both brands,
+// D5); links to things already made stay.
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';

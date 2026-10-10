@@ -5,7 +5,9 @@
 // (20 per page, cursor), a sentinel that loads the next page when it scrolls
 // into view plus a "Show more jobs" button for keyboards and old browsers,
 // and "That's every job…" at the end. A job the user hid leaves the list at
-// once; nothing else is filtered on the client.
+// once. On GoApply a public posting that names no source is not shown (D3:
+// no card without a source); the server never sends one, so this only guards
+// the rule. Nothing else is filtered on the client.
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -14,6 +16,7 @@ import { Btn } from '../../v3/primitives';
 import type { FeedListState } from '../../../hooks/feed/useFeed';
 import { useImpressions } from '../../../hooks/feed/useImpressions';
 import { JobCard } from './JobCard';
+import { hasNamedSource } from './cardModel';
 import styles from './feed.module.css';
 
 export const SKELETON_COUNT = 4;
@@ -37,7 +40,10 @@ export function FeedList({ feed, market, activeJobId = null, onOpen, onSeen, emp
   const t = useTranslations('jobs.workspace');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const sentinel = useRef<HTMLDivElement>(null);
-  const items = useMemo(() => feed.items.filter((i) => !hidden.has(i.jobId)), [feed.items, hidden]);
+  const items = useMemo(
+    () => feed.items.filter((i) => !hidden.has(i.jobId) && (market !== 'cn' || hasNamedSource(i))),
+    [feed.items, hidden, market],
+  );
   const tiers = useMemo(() => new Map(feed.items.map((i) => [i.jobId, i.fit?.tier ?? null])), [feed.items]);
   const observe = useImpressions({ sessionId: feed.sessionId, onSeen: (id) => onSeen?.(id), tierOf: (id) => tiers.get(id) ?? null });
 

@@ -18,6 +18,7 @@ export interface SearchSource {
   provider: ProviderId;
   id: string;
   applyUrl: string;
+  /** Who published the posting (the employer's board, the recruiter bank); null when unknown. */
   publisher: string | null;
   /** Original source posting retained when direct-apply URLs replace it. */
   sourceUrl?: string | null;
@@ -57,8 +58,9 @@ export interface ProviderInfo {
   name: string;
   enabled: boolean;
   reason?: ProviderUnavailableReason;
+  /** Empty for `index`, the service's own index of ingested postings. */
   homepage: string;
-  sourceType: 'aggregator' | 'ats' | 'board';
+  sourceType: 'aggregator' | 'ats' | 'board' | 'index';
 }
 
 export interface ProviderStatus {

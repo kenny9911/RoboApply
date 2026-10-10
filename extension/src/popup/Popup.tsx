@@ -98,7 +98,8 @@ export function Popup({ deps }: { deps: PopupDeps }) {
       setPage({ kind: 'board', site: board.siteName });
       return;
     }
-    const formSite = deps.adapterSet === 'intl' ? intlFormSiteForUrl(url) : null;
+    // Both builds ship the international adapters (GoApply's set is a superset).
+    const formSite = intlFormSiteForUrl(url);
     if (formSite) {
       setPage({ kind: 'openForm', site: formSite.siteName });
       return;

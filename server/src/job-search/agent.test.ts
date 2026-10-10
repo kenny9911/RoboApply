@@ -1,13 +1,18 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../lib/prisma.js', () => ({ default: {} }));
+/** The database the configured gate reads (auth-cn phone binding); empty unless a test fills it. */
+const db = vi.hoisted(() => ({}) as Record<string, unknown>);
+vi.mock('../lib/prisma.js', () => ({ default: db }));
 vi.mock('../services/LoggerService.js', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 const llm = vi.hoisted(() => ({ chat: vi.fn(), model: vi.fn() }));
 vi.mock('../services/llm/LLMService.js', () => ({ llmService: { chat: llm.chat } }));
 vi.mock('../lib/llm/llmModels.js', () => ({ getModelSetting: llm.model }));
-import { configuredSearchPlanner, createJobSearchAgent, isLinkedInJob, JobSearchAgentUnavailableError, type SearchPlanner } from './agent.js';
+import { configuredSearchPlanner, createJobSearchAgent, createPlannerGate, isLinkedInJob, JobSearchAgentUnavailableError, JobSearchAiOffError, JobSearchAiUnavailableError, JobSearchPhoneBindingError, type SearchPlanner } from './agent.js';
+import { getBrand } from '../platform/brand/registry.js';
+import { setConsentLookup } from '../platform/consent/index.js';
 import { parseAgentPlan, parseAgentSearchInput } from './agent-validation.js';
 import { SearchQuotaError } from './quota.js';
+import { JobSearchValidationError } from './validation.js';
 import { getCurrentUserId } from '../lib/requestContext.js';
 import { createJobSearchService } from './service.js';
 import type { AgentSearchInput, ProviderInfo, SearchJob, SearchResult } from './types.js';
@@ -232,5 +237,196 @@ describe('LinkedIn provenance and audience rights', () => {
     expect(response.jobs[0].sources.every(source => source.provider === 'jsearch')).toBe(true);
     expect(activeSearch).toHaveBeenCalledTimes(1);
     expect(quota.reserve).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the planner gate (phone binding, AI consent and the AI text capability before any model call)', () => {
+  const GO = getBrand('goapply');
+  const RA = getBrand('roboapply');
+  const INDEX: ProviderInfo[] = [{ id: 'index', name: 'Job index', enabled: true, sourceType: 'index', homepage: '' }];
+  const REQUEST = { request: '找上海的数据分析师职位，最近一周发布' };
+  function gateSetup(state: { unbound?: boolean; consent?: boolean; aiText?: boolean } = {}) {
+    const base = setup({ queries: ['数据分析师'], location: '上海', datePosted: 'week', unverifiedPreferences: [] });
+    base.service.providers.mockReturnValue(INDEX);
+    const phoneBindingRequired = vi.fn(async () => state.unbound === true);
+    const aiAllowed = vi.fn(async () => state.consent !== false);
+    const aiTextEnabled = vi.fn(async () => state.aiText !== false);
+    const agent = createJobSearchAgent({ service: base.service as never, quota: base.quota as never, planner: base.planner, gate: createPlannerGate({ phoneBindingRequired, aiAllowed, aiTextEnabled }) });
+    return { ...base, agent, phoneBindingRequired, aiAllowed, aiTextEnabled };
+  }
+  const untouched = ({ planner, quota, service }: ReturnType<typeof gateSetup>) => {
+    expect(planner).not.toHaveBeenCalled(); expect(quota.reserve).not.toHaveBeenCalled(); expect(service.search).not.toHaveBeenCalled();
+  };
+
+  it('GoApply WeChat account with no verified phone: 403 phone_binding_required, no reservation, no planner call, no search', async () => {
+    const s = gateSetup({ unbound: true });
+    const refused = s.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' });
+    await expect(refused).rejects.toBeInstanceOf(JobSearchPhoneBindingError);
+    await expect(refused).rejects.toMatchObject({ code: 'phone_binding_required', status: 403 });
+    expect(s.phoneBindingRequired).toHaveBeenCalledWith('owner');
+    // The phone rule comes first, as on every other GoApply AI route.
+    expect(s.aiAllowed).not.toHaveBeenCalled(); expect(s.aiTextEnabled).not.toHaveBeenCalled();
+    untouched(s);
+  });
+
+  it('without the consent: 403 ai_off, no reservation, no planner call, no search', async () => {
+    const s = gateSetup({ consent: false });
+    const refused = s.agent.search(REQUEST, { ...CONTEXT, brand: GO });
+    await expect(refused).rejects.toBeInstanceOf(JobSearchAiOffError);
+    await expect(refused).rejects.toMatchObject({ code: 'ai_off', status: 403 });
+    expect(s.aiAllowed).toHaveBeenCalledWith({ id: 'owner', brand: 'goapply' });
+    expect(s.aiTextEnabled).not.toHaveBeenCalled();
+    untouched(s);
+  });
+
+  it('AI text switched off for the brand: 503 ai_unavailable, no reservation, no planner call, no search', async () => {
+    const s = gateSetup({ aiText: false });
+    const refused = s.agent.search(REQUEST, { ...CONTEXT, brand: GO });
+    await expect(refused).rejects.toBeInstanceOf(JobSearchAiUnavailableError);
+    await expect(refused).rejects.toMatchObject({ code: 'ai_unavailable', status: 503 });
+    expect(s.aiTextEnabled).toHaveBeenCalledWith({ userId: 'owner', brand: GO });
+    untouched(s);
+  });
+
+  it('the configured ai.text rule: FLAG_GOAPPLY_AI_TEXT=false refuses on GoApply and leaves RoboApply open; FLAG_ROBOAPPLY_AI_TEXT=false refuses on RoboApply', async () => {
+    const gate = createPlannerGate({ phoneBindingRequired: async () => false, aiAllowed: async () => true });
+    vi.stubEnv('FLAG_GOAPPLY_AI_TEXT', 'false');
+    await expect(gate({ userId: 'owner', brand: GO })).rejects.toMatchObject({ code: 'ai_unavailable', status: 503 });
+    await expect(gate({ userId: 'owner', brand: RA })).resolves.toBeUndefined();
+    vi.unstubAllEnvs();
+    vi.stubEnv('FLAG_ROBOAPPLY_AI_TEXT', 'false');
+    await expect(gate({ userId: 'owner', brand: RA })).rejects.toMatchObject({ code: 'ai_unavailable' });
+  });
+
+  it('the configured gate, nothing injected: a GoApply WeChat account with no verified phone is refused; with one, and the consent, the planner runs', async () => {
+    const account = { brand: 'goapply', phoneE164: null as string | null, phoneVerifiedAt: null as Date | null };
+    db.user = { findUnique: vi.fn(async () => account) };
+    db.rAAuthIdentity = { findFirst: vi.fn(async () => ({ id: 'wechat-identity' })) };
+    setConsentLookup(async () => ({ consentType: 'ai_resume_parsing', granted: true, createdAt: new Date() }));
+    const build = () => {
+      const base = setup({ queries: ['数据分析师'], unverifiedPreferences: [] });
+      base.service.providers.mockReturnValue(INDEX);
+      return base;
+    };
+    try {
+      const refused = build();
+      await expect(refused.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' })).rejects.toMatchObject({ code: 'phone_binding_required', status: 403 });
+      expect(refused.planner).not.toHaveBeenCalled(); expect(refused.quota.reserve).not.toHaveBeenCalled();
+      account.phoneE164 = '+8613800000000'; account.phoneVerifiedAt = new Date();
+      const allowed = build();
+      await expect(allowed.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' })).resolves.toMatchObject({ agent: { queries: ['数据分析师'] } });
+      expect(allowed.planner).toHaveBeenCalledTimes(1);
+      // The same account with AI text switched off for GoApply: refused by the third check.
+      vi.stubEnv('FLAG_GOAPPLY_AI_TEXT', 'false');
+      const off = build();
+      await expect(off.agent.search(REQUEST, { ...CONTEXT, brand: GO })).rejects.toMatchObject({ code: 'ai_unavailable', status: 503 });
+      expect(off.planner).not.toHaveBeenCalled(); expect(off.quota.reserve).not.toHaveBeenCalled();
+    } finally { setConsentLookup(null); delete db.user; delete db.rAAuthIdentity; }
+  });
+
+  it('a failed phone lookup fails closed: no reservation and no planner call', async () => {
+    const s = gateSetup();
+    s.phoneBindingRequired.mockRejectedValueOnce(new Error('database offline'));
+    await expect(s.agent.search(REQUEST, { ...CONTEXT, brand: GO })).rejects.toThrow('database offline');
+    untouched(s);
+  });
+
+  it('with a bound phone, the consent and AI text on: plans, then searches the GoApply sources as the user, with the brand default country', async () => {
+    const { agent, planner, service, quota, events } = gateSetup();
+    const response = await agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' });
+    expect(planner).toHaveBeenCalledTimes(1);
+    expect(service.providers).toHaveBeenCalledWith('api', GO);
+    expect(service.search).toHaveBeenCalledWith(
+      expect.objectContaining({ query: '数据分析师', country: 'cn', location: '上海', datePosted: 'week' }),
+      expect.objectContaining({ audience: 'api', brand: GO, userId: 'owner' }),
+    );
+    expect(response.agent.criteria).toMatchObject({ country: 'cn', location: '上海' });
+    expect(events).toEqual(['reserve:1', 'plan', 'search:数据分析师', 'finish:reservation-1']);
+    // The reservation is made against GoApply's budget, not RoboApply's.
+    expect(quota.reserve).toHaveBeenCalledWith('owner', 'key', 'agent-fixture', GO);
+  });
+
+  it('RoboApply: the phone rule is not looked up, the consent rule is asked with its brand, and the configured gate allows it with no lookup', async () => {
+    const s = gateSetup();
+    s.service.providers.mockReturnValue(PROVIDERS);
+    await s.agent.search(INPUT, { ...CONTEXT, brand: RA });
+    expect(s.phoneBindingRequired).not.toHaveBeenCalled();
+    expect(s.aiAllowed).toHaveBeenCalledWith({ id: 'owner', brand: 'roboapply' });
+    expect(s.quota.reserve).toHaveBeenCalledWith('owner', undefined, 'agent-fixture', RA);
+    // The configured gate with nothing injected: no refusal, the plan runs.
+    const plain = setup();
+    await expect(plain.agent.search(INPUT, { ...CONTEXT, brand: RA })).resolves.toMatchObject({ agent: { mode: 'planned' } });
+    expect(plain.service.search.mock.calls[0][0]).toMatchObject({ country: 'tw' });
+  });
+
+  it('the configured consent rule refuses a GoApply user with no live consent record and allows one with it', async () => {
+    const lookup = vi.fn(async () => null as { consentType: string; granted: boolean; createdAt: Date } | null);
+    setConsentLookup(lookup);
+    // The configured consent rule; the phone and AI text checks are stated.
+    const gate = createPlannerGate({ phoneBindingRequired: async () => false, aiTextEnabled: async () => true });
+    const build = () => {
+      const base = setup({ queries: ['数据分析师'], unverifiedPreferences: [] });
+      base.service.providers.mockReturnValue(INDEX);
+      return { ...base, agent: createJobSearchAgent({ service: base.service as never, quota: base.quota as never, planner: base.planner, gate }) };
+    };
+    try {
+      const refused = build();
+      await expect(refused.agent.search(REQUEST, { ...CONTEXT, brand: GO })).rejects.toMatchObject({ code: 'ai_off' });
+      expect(refused.planner).not.toHaveBeenCalled();
+      lookup.mockResolvedValue({ consentType: 'ai_resume_parsing', granted: true, createdAt: new Date() });
+      const allowed = build();
+      await expect(allowed.agent.search(REQUEST, { ...CONTEXT, brand: GO })).resolves.toMatchObject({ agent: { queries: ['数据分析师'] } });
+      expect(allowed.planner).toHaveBeenCalledTimes(1);
+    } finally { setConsentLookup(null); }
+  });
+
+  it('no source (the mode is off or the index is not granted to keys) is answered before the gate', async () => {
+    const s = gateSetup({ consent: false });
+    s.service.providers.mockReturnValue(INDEX.map((p) => ({ ...p, enabled: false, reason: 'not_licensed' as const })));
+    await expect(s.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api' })).rejects.toMatchObject({ code: 'providers_unavailable' });
+    expect(s.phoneBindingRequired).not.toHaveBeenCalled(); expect(s.aiAllowed).not.toHaveBeenCalled();
+  });
+});
+
+describe('LinkedIn-only on a site with no LinkedIn-capable source (GoApply)', () => {
+  const GO = getBrand('goapply');
+  const INDEX: ProviderInfo[] = [{ id: 'index', name: 'Job index', enabled: true, sourceType: 'index', homepage: '' }];
+  const open = createPlannerGate({ phoneBindingRequired: async () => false, aiAllowed: async () => true, aiTextEnabled: async () => true });
+  function linkedInSetup(plan: unknown) {
+    const base = setup(plan);
+    base.service.providers.mockReturnValue(INDEX);
+    return { ...base, agent: createJobSearchAgent({ service: base.service as never, quota: base.quota as never, planner: base.planner, gate: open }) };
+  }
+
+  it('an explicit linkedinOnly is a 400 before any reservation or model call', async () => {
+    const { agent, planner, quota, service } = linkedInSetup({ queries: ['数据分析师'], unverifiedPreferences: [] });
+    const refused = agent.search({ request: '找上海的数据分析师职位，最近一周发布', linkedinOnly: true }, { ...CONTEXT, brand: GO });
+    await expect(refused).rejects.toBeInstanceOf(JobSearchValidationError);
+    await expect(refused).rejects.toMatchObject({ field: 'linkedinOnly' });
+    expect(planner).not.toHaveBeenCalled(); expect(quota.reserve).not.toHaveBeenCalled(); expect(service.search).not.toHaveBeenCalled();
+  });
+
+  it('a planned linkedinOnly is not applied: the search runs on the index and the wish is disclosed in the user\'s words', async () => {
+    const { agent, service, events } = linkedInSetup({ queries: ['数据分析师'], linkedinOnly: true, unverifiedPreferences: [] });
+    const response = await agent.search({ request: '找上海的数据分析师职位。只要领英上的职位' }, { ...CONTEXT, brand: GO });
+    expect(response.agent.linkedinOnly).toBe(false);
+    expect(response.agent.unverifiedPreferences).toContain('只要领英上的职位');
+    // The planned search ran on the site's own source: nothing was filtered to LinkedIn postings.
+    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: '数据分析师', providers: undefined }), expect.objectContaining({ brand: GO }));
+    expect(response.jobs).toHaveLength(1);
+    expect(events).toEqual(['reserve:1', 'plan', 'search:数据分析师', 'finish:reservation-1']);
+  });
+
+  it('a planned linkedinOnly with no LinkedIn wording in the request is disclosed by name', async () => {
+    const { agent } = linkedInSetup({ queries: ['数据分析师'], linkedinOnly: true, unverifiedPreferences: ['五险一金'] });
+    const response = await agent.search({ request: '找上海的数据分析师职位，最近一周发布' }, { ...CONTEXT, brand: GO });
+    expect(response.agent).toMatchObject({ linkedinOnly: false, unverifiedPreferences: ['LinkedIn', '五险一金'] });
+  });
+
+  it('RoboApply is unchanged: a planned linkedinOnly still restricts the search to its LinkedIn-capable sources', async () => {
+    const base = setup({ ...PLAN, queries: ['software engineer'], linkedinOnly: true });
+    const response = await base.agent.search({ request: 'Find software engineer jobs in Taipei, LinkedIn only.' }, { ...CONTEXT, brand: getBrand('roboapply') });
+    expect(response.agent.linkedinOnly).toBe(true);
+    expect(base.service.search).toHaveBeenCalledWith(expect.objectContaining({ providers: ['jsearch'] }), expect.anything());
   });
 });

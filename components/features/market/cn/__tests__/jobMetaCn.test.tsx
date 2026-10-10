@@ -13,7 +13,10 @@ const api = vi.hoisted(() => ({ getExternalLinks: vi.fn() }));
 vi.mock('../../../../../lib/api/cnJobs', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...api }));
 
 import { MarketJobMeta } from '../../MarketJobMeta';
-import { ExternalSearchLinks, ExternalSearchPanel, SalaryCn, readCnMeta, withOwnImport } from '..';
+import { CnFeedSources, ExternalSearchLinks, ExternalSearchPanel, SalaryCn, cnApplyCopy, readCnListing, readCnMeta, withListing, withOwnImport } from '..';
+import { cnFeedSummary } from '../../../../../lib/api/cnJobs';
+import { listingApply, listingSource } from '../../../../../lib/api/feed';
+import { feedItem, feedItemCnBank, feedItemCnBoard, feedResponseCnBoards } from '../../../../../__tests__/fixtures/feed';
 
 const META = {
   cn: {
@@ -75,13 +78,13 @@ describe('JobMetaCn (card)', () => {
     expect(META.cn).not.toHaveProperty('ownImport');
   });
 
-  it('"Last checked" shows our crawl date separately from the posting\'s own "Updated" date', () => {
+  it('"Last verified" shows our crawl date separately from the posting\'s own "Updated" date', () => {
     const { unmount } = renderWithBrand(<MarketJobMeta jobId="j1" meta={{ cn: { ...META.cn, lastCheckedAt: '2026-10-10T00:00:00.000Z' } }} variant="card" />, { brand: 'goapply' });
-    expect(screen.getByText(/^Last checked /)).toBeInTheDocument();
+    expect(screen.getByText(/^Last verified /)).toBeInTheDocument();
     expect(screen.getByText(/^Updated /)).toBeInTheDocument();
     unmount();
     renderWithBrand(<MarketJobMeta jobId="j1" meta={META} variant="detail" />, { brand: 'goapply' });
-    expect(screen.queryByText(/Last checked/)).toBeNull();
+    expect(screen.queryByText(/Last verified/)).toBeNull();
   });
 
   it('a tag without a quote never renders; quoted tags carry their quote', () => {
@@ -123,6 +126,132 @@ describe('JobMetaCn (card)', () => {
     expect(screen.getByText('Asks you to pay first')).toBeInTheDocument();
     expect(screen.getByText('The post says: “入职需缴纳押金500元”')).toBeInTheDocument();
     expect(container.querySelectorAll('[data-ai-label]')).toHaveLength(1);
+  });
+});
+
+// Parity wave (JC-1): every mainland posting that is not a recruiter-bank row
+// names its original publisher, links to the original posting and says when it
+// was last verified. The facts come from the contract's `source` / `apply`
+// (lib/api/feed.ts readers), handed to the slot by `withListing`.
+describe('JobMetaCn with the listing contract', () => {
+  const BOARD_META = {
+    cn: {
+      sourceLine: { kind: 'source', sourceName: 'SmartRecruiters', originalSourceName: null, licence: null },
+      salary: { text: null, disclosed: false },
+      updatedAt: '2026-10-09T00:00:00.000Z',
+      expiresAt: null,
+      tags: [],
+      classYears: [],
+      warnings: [],
+    },
+  };
+  const board = { source: listingSource(feedItemCnBoard), apply: listingApply(feedItemCnBoard) };
+  const bank = { source: listingSource(feedItemCnBank), apply: listingApply(feedItemCnBank) };
+
+  it.each(['card', 'detail'] as const)('%s: a board row shows 来源：the employer, the original link and the last-verified date', (variant) => {
+    renderWithBrand(<MarketJobMeta jobId="j1" meta={withListing(BOARD_META, board)} variant={variant} />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-source')).toHaveTextContent('Source: 示例科技有限公司');
+    expect(screen.getByTestId('job-meta-cn')).not.toHaveTextContent('SmartRecruiters');
+    const link = screen.getByTestId('cn-original-link');
+    expect(link).toHaveAttribute('href', 'https://jobs.smartrecruiters.com/ExampleTech/744000012345678');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+    expect(link).toHaveTextContent('Original posting');
+    expect(screen.getByTestId('job-meta-cn')).toHaveTextContent(/Last verified .*2026/);
+    // No pay stated: "Pay not listed", never a figure and never "negotiable".
+    expect(screen.getByText('Pay not listed')).toBeInTheDocument();
+  });
+
+  it('a recruiter-bank row keeps the bank as its source, with the licence line only when the server sent one', () => {
+    renderWithBrand(<MarketJobMeta jobId="j1" meta={withListing(META, bank)} variant="detail" />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-source')).toHaveTextContent('Source: GoHire');
+    expect(screen.getByText('某某人力资源有限公司, HR service licence 1100001234')).toBeInTheDocument();
+    expect(screen.getByTestId('cn-original-link')).toHaveAttribute('href', 'https://www.gohire.top/postings/9001');
+  });
+
+  it('a board row with no publisher in the contract falls back to the names the card meta has, never to nothing', () => {
+    const noOriginal = { source: { ...board.source, original: null }, apply: board.apply };
+    renderWithBrand(<MarketJobMeta jobId="j1" meta={withListing(BOARD_META, noOriginal)} variant="card" />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-source')).toHaveTextContent('Source: SmartRecruiters');
+  });
+
+  it('the user’s own job says "Added by you" and gets no original link', () => {
+    const own = { source: { name: null, original: null, url: 'https://example.com/x', lastVerifiedAt: null, via: 'import' as const }, apply: { url: null, target: null } };
+    const noName = { cn: { ...BOARD_META.cn, sourceLine: { kind: 'source', sourceName: null, originalSourceName: null, licence: null } } };
+    renderWithBrand(<MarketJobMeta jobId="j1" meta={withListing(withOwnImport(noName, true), own)} variant="card" />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-source')).toHaveTextContent('Added by you');
+    expect(screen.queryByTestId('cn-original-link')).toBeNull();
+  });
+
+  it('withListing changes nothing without a cn block; readCnListing drops malformed values', () => {
+    const noCn = { ats_public: { country: 'TW' } };
+    expect(withListing(noCn, board)).toBe(noCn);
+    expect(withListing(null, board)).toBeNull();
+    expect(withListing(BOARD_META, null)).toBe(BOARD_META);
+    expect(readCnListing(BOARD_META)).toEqual({ original: null, url: null, lastVerifiedAt: null, via: null, applyTarget: null });
+    const bad = { cn: { ...BOARD_META.cn, listing: { original: ' ', url: 'javascript:alert(1)', lastVerifiedAt: 7, via: 'scrape', applyTarget: 'us' } } };
+    expect(readCnListing(bad)).toEqual({ original: null, url: null, lastVerifiedAt: null, via: null, applyTarget: null });
+    expect(readCnListing(withListing(BOARD_META, board))).toEqual({
+      original: '示例科技有限公司',
+      url: 'https://jobs.smartrecruiters.com/ExampleTech/744000012345678',
+      lastVerifiedAt: '2026-10-11T02:00:00.000Z',
+      via: 'ats',
+      applyTarget: 'employer',
+    });
+  });
+
+  it('a pay line that only says 面议 is shown as "Pay not listed"', () => {
+    for (const text of ['面议', '薪资面议', '待遇面議']) {
+      const meta = { cn: { ...BOARD_META.cn, salary: { text, disclosed: true } } };
+      expect(readCnMeta(meta)!.salary).toEqual({ text: null, disclosed: false });
+    }
+    expect(readCnMeta({ cn: { ...BOARD_META.cn, salary: { text: '15-25K，可面议', disclosed: true } } })!.salary).toEqual({ text: '15-25K，可面议', disclosed: true });
+  });
+
+  it('cnApplyCopy: the employer’s careers site for a board row, the bank’s page for a bank row, nothing guessed otherwise', () => {
+    expect(cnApplyCopy(board)).toEqual({ labelKey: 'apply.employer', hintKey: 'apply.employerHint', name: '' });
+    expect(cnApplyCopy(bank)).toEqual({ labelKey: 'apply.bank', hintKey: 'apply.bankHint', name: 'GoHire' });
+    expect(cnApplyCopy({ source: listingSource(feedItem), apply: listingApply(feedItem) })).toBeNull();
+  });
+});
+
+describe('CnFeedSources (the list header)', () => {
+  it('says how many employer careers sites the postings come from, and that it is not the whole market', () => {
+    renderWithBrand(<CnFeedSources header={cnFeedSummary(feedResponseCnBoards).header} />, { brand: 'goapply' });
+    const line = screen.getByTestId('cn-feed-sources');
+    expect(line).toHaveTextContent('From 27 employer careers sites.');
+    expect(line).toHaveTextContent('not every job on the market');
+    expect(line).not.toHaveTextContent('GoHire');
+  });
+
+  it('names GoHire only when the response says GoHire rows are listed', () => {
+    const both = renderWithBrand(<CnFeedSources header={cnFeedSummary({ ...feedResponseCnBoards, sources: { gohire: true, employerBoards: 1 } }).header} />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-feed-sources')).toHaveTextContent('From GoHire and 1 employer careers site.');
+    both.unmount();
+    renderWithBrand(<CnFeedSources header={cnFeedSummary({ sources: { gohire: true, employerBoards: 0 } }).header} />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-feed-sources')).toHaveTextContent('From GoHire.');
+  });
+
+  it('says nothing when the response names no source, and nothing on RoboApply', () => {
+    expect(cnFeedSummary({ items: [] })).toEqual({ header: null, thin: false });
+    expect(cnFeedSummary({ sources: { gohire: false, employerBoards: 0 }, thin: true })).toEqual({ header: null, thin: true });
+    expect(cnFeedSummary({ sources: { gohire: 'yes', employerBoards: '27' } })).toEqual({ header: null, thin: false });
+    const none = renderWithBrand(<CnFeedSources header={null} />, { brand: 'goapply' });
+    expect(screen.queryByTestId('cn-feed-sources')).toBeNull();
+    none.unmount();
+    renderWithBrand(<CnFeedSources header={{ kind: 'boards', boards: 27 }} />, { brand: 'roboapply' });
+    expect(screen.queryByTestId('cn-feed-sources')).toBeNull();
+  });
+});
+
+describe('ExternalSearchPanel under a thin result set', () => {
+  it('says few jobs match instead of saying nothing is listed', () => {
+    api.getExternalLinks.mockResolvedValue({ links: [] });
+    renderWithBrand(<ExternalSearchPanel variant="thin" initialQuery="数据分析师" />, { brand: 'goapply' });
+    const panel = screen.getByTestId('cn-external-search');
+    expect(panel).toHaveAttribute('data-variant', 'thin');
+    expect(panel).toHaveTextContent('Only a few jobs match here.');
+    expect(panel).not.toHaveTextContent('does not list jobs from other sites');
   });
 });
 

@@ -35,11 +35,15 @@ describe('coaching policy', () => {
     expect(doc.markdown).toMatch(/takes no payment for coaching/);
   });
 
-  it('the GoApply text exists for when the cn map lists it (requested from INT)', () => {
+  it('GoApply publishes its own coaching policy at /legal/coaching (the page links to it)', () => {
     const src = readLegalSource('cn', 'coaching')!;
     expect(src).toMatch(/不会通过本平台的支付渠道收取辅导费用/);
-    // Until INT adds `coaching` to LEGAL_DOC_FILES.cn, GoApply answers 404 for /legal/coaching.
-    if (!LEGAL_DOC_FILES.cn.coaching) expect(() => loadLegalDoc(getBrand('goapply'), 'coaching', { env: { NODE_ENV: 'test' } })).toThrow();
-    else expect(loadLegalDoc(getBrand('goapply'), 'coaching', { env: { NODE_ENV: 'test' } }).markdown).not.toMatch(/\{\{/);
+    // The cn map lists it, so the coaching page's policy link resolves on GoApply too.
+    expect(LEGAL_DOC_FILES.cn.coaching).toBe('coaching');
+    const ga = getBrand('goapply');
+    const doc = loadLegalDoc(ga, 'coaching', { env: { NODE_ENV: 'test' } });
+    expect(doc.markdown).not.toMatch(/\{\{|%BRAND%/);
+    expect(doc.markdown).toContain(ga.name);
+    expect(doc.markdown).not.toContain(getBrand('roboapply').name);
   });
 });

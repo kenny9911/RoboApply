@@ -36,7 +36,7 @@ import { TailorButton } from '../tailor';
 import { useAiConsent } from '../../../hooks/copilot';
 import { useLaunchPractice } from '../../../hooks/shared/useLaunchPractice';
 import { useBrand } from '../../../lib/brand';
-import { useFlag, useHiringContactsMode } from '../../../lib/flags';
+import { useFlag } from '../../../lib/flags';
 import {
   useAddTrackerNote,
   usePatchTrackerEntry,
@@ -330,18 +330,16 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
 }
 
 /**
- * May this user be offered an AI follow-up draft here? The brand has an AI
- * text model, the user's AI consent is on (GoApply; fails closed while
- * unknown), and on GoApply hiring-contact drafts are allowed. The server
- * checks again before any credit or model call.
+ * May this user be offered an AI follow-up draft here? One rule for both
+ * brands (D5): the brand's AI text runs and the user's AI consent is on
+ * (GoApply; fails closed while unknown). A follow-up needs no hiring contact,
+ * and the server writes drafts in every contacts mode, so the mode is not
+ * part of the rule. The server checks again before any credit or model call.
  */
 export function useFollowUpDraftAllowed(): boolean {
   const aiText = useFlag('ai.text');
   const consent = useAiConsent({ enabled: aiText });
-  const { market } = useTrackerColumns();
-  const hiringContacts = useHiringContactsMode();
-  if (!aiText || !consent.allowed) return false;
-  return market !== 'cn' || hiringContacts !== 'off';
+  return aiText && consent.allowed;
 }
 
 function FollowUpDraft(props: { jobId: string; trackerEntryId: string; companyName: string }) {

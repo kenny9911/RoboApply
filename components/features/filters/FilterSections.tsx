@@ -77,7 +77,8 @@ export function sectionEditors(market: Market): Array<{ id: DrawerSection; edito
   const interests: Editor[] = [IndustriesEditor, ExcludedIndustriesEditor, SkillsEditor, ExcludedSkillsEditor, RoleTypeEditor];
   const companies: Editor[] =
     market === 'cn'
-      ? [CompaniesEditor, ExcludedCompaniesEditor, PreferredCompaniesEditor, EmployerTagsEditor, AgencyEditor, RecruiterEditor]
+      ? // GoApply keeps company size beside its employer tags (D5: the server accepts `companySizes` for both markets).
+        [CompaniesEditor, ExcludedCompaniesEditor, PreferredCompaniesEditor, CompanySizeEditor, EmployerTagsEditor, AgencyEditor, RecruiterEditor]
       : [CompaniesEditor, ExcludedCompaniesEditor, PreferredCompaniesEditor, CompanySizeEditor, AgencyEditor, RecruiterEditor];
   const out: Array<{ id: DrawerSection; editors: Editor[] }> = [
     { id: 'basic', editors: basic },

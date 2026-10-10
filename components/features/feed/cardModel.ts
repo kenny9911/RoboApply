@@ -23,7 +23,7 @@
 //   • at most 3 badges, fixed priority.
 
 import type { FeedItem } from '../../../lib/api/contracts/feed';
-import type { MarketCardMeta } from '../market';
+import { marketPayLineText, type MarketCardMeta } from '../market';
 
 export type CardBadge =
   | { kind: 'direct' }
@@ -146,6 +146,18 @@ export function sourceLine(item: FeedItem): SourceLine {
   }
 }
 
+/**
+ * GoApply shows no card without a source (D3; MARKET_STRATEGY §1.4): a public
+ * posting must name where it was published. The user's own added jobs have no
+ * publisher and say "Added by you" instead, so they always pass. Pure.
+ */
+export function hasNamedSource(item: FeedItem): boolean {
+  if (item.source?.kind === 'user_import') return true;
+  const source = item.source as (FeedItem['source'] & { original?: unknown }) | undefined;
+  const named = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+  return named(source?.name) || named(source?.original);
+}
+
 export interface PayText {
   /** Already formatted amount or range ("$120K–$150K"), or the post's own text. */
   amount: string;
@@ -170,14 +182,16 @@ function money(locale: string, currency: string, value: number, period: string):
 
 /**
  * Pay for the card, or null for "Pay not listed". `range` builds "{min}–{max}"
- * (the caller passes the translated pattern). GoApply prefers the post's text.
+ * (the caller passes the translated pattern). GoApply prefers the post's text,
+ * and never prints a line that only says 面议: with no figures that is null.
  */
 export function payText(
   pay: FeedItem['pay'],
   opts: { locale: string; market: 'intl' | 'cn'; range: (min: string, max: string) => string; from: (a: string) => string; upTo: (a: string) => string },
 ): PayText | null {
   if (!pay) return null;
-  const text = typeof pay.text === 'string' ? pay.text.trim() : '';
+  // GoApply: a pay line that only says 面议 states no pay (market `marketPayLineText`).
+  const text = marketPayLineText(opts.market, pay.text);
   if (opts.market === 'cn' && text) return { amount: text, period: null };
   const min = typeof pay.min === 'number' && Number.isFinite(pay.min) && pay.min > 0 ? pay.min : null;
   const max = typeof pay.max === 'number' && Number.isFinite(pay.max) && pay.max > 0 ? pay.max : null;

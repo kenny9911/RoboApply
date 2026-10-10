@@ -22,6 +22,7 @@
 
 import { call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as D from './contracts/jobs/detail';
+import { listingApply, listingSource, type ListingApply, type ListingSource } from './feed';
 import type * as CO from './contracts/jobs/companies';
 
 /** `jobs.get` — GET /api/v1/roboapply/jobs/:id */
@@ -92,6 +93,23 @@ export function getCompanyH1b(id: string, opts?: CallOptions): Promise<CO.H1bHis
 /** `companies.jobs` — GET /api/v1/roboapply/companies/:id/jobs */
 export function getCompanyJobs(id: string, query?: In<typeof CO.CompanyJobsQuerySchema>, opts?: CallOptions): Promise<CO.CompanyJobsResponse> {
   return call<CO.CompanyJobsResponse>('GET', withQuery(`/api/v1/roboapply/companies/${seg(id)}/jobs`, query), opts);
+}
+
+/**
+ * The job page's listing facts, read from the detail response with the same
+ * safe defaults as the feed card (lib/api/feed.ts). The contract puts `apply`
+ * and the extended `source` on the job; a response from before it has
+ * `job.applyUrl` and `job.source.{ name, kind, originalName }`, which give the
+ * same answers.
+ */
+export interface JobListing {
+  source: ListingSource;
+  apply: ListingApply;
+}
+
+export function jobListing(detail: Pick<D.JobDetailResponse, 'job'> | null | undefined): JobListing {
+  const job = detail?.job ?? null;
+  return { source: listingSource(job), apply: listingApply(job) };
 }
 
 /** Every wrapper of this area, for callers that prefer one import. */

@@ -1,15 +1,12 @@
 // /developers/job-search — the Job Search API reference (public).
 //
-// A RoboApply product: on GoApply the API answers 404 feature_disabled
-// (server/src/job-search/routes.ts), so this page is a 404 there too (R-04).
-
-import { notFound } from 'next/navigation';
+// Offered on both brands (D5): RoboApply searches its job-source providers,
+// GoApply searches its own index of mainland postings. The page states it
+// when the site's job listings are switched off.
 
 import { JobSearchDeveloperGuide } from '../../../components/job-search/JobSearchDeveloperGuide';
-import { jobSearchAvailable } from '../../../components/job-search/metadata';
 import '../../../styles/job-search.css';
 
-export default async function JobSearchApiPage() {
-  if (!(await jobSearchAvailable())) notFound();
+export default function JobSearchApiPage() {
   return <JobSearchDeveloperGuide />;
 }

@@ -5,13 +5,17 @@
 // user already has for a job — the same number its feed card shows — else the
 // deterministic quick estimate, labelled as one. Unknown fit renders "—",
 // never 0, and any score carries the honesty line under the list. Pay keeps the post's own period (weekly too)
-// or its words; only pay the post doesn't state renders "Pay not listed".
-// The caller renders this only while `jobs.recommendations` is on (R-14).
+// or its words; only pay the post doesn't state renders "Pay not listed". On
+// GoApply a line that only says 面议 states no pay (market `marketPayWords`).
+// The caller renders this only while `jobs.recommendations` is on (on by default on both
+// brands; GoApply's off switch is CN_RECRUITMENT_INFO_MODE=off).
 
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { HonestyLine } from '../../v3/primitives';
+import { useBrand } from '../../../lib/brand';
+import { marketPayWords } from '../market';
 import { useSimilarJobs } from '../../../hooks/job';
 import type { SimilarJobItem } from '../../../lib/api/contracts/jobs/detail';
 import { jobDetailHref, payLine } from './format';
@@ -22,11 +26,14 @@ export { jobDetailHref };
 function SimilarCard({ item, onOpen }: { item: SimilarJobItem; onOpen?: (jobId: string) => void }) {
   const t = useTranslations('jobDetail');
   const locale = useLocale();
+  const brand = useBrand();
   const pay = payLine(item.pay, locale);
   const period = pay ? t(`header.period.${pay.period}`) : '';
+  // Pay in words by the market's rule: GoApply never prints 面议 (it reads "Pay not listed").
+  const payWords = marketPayWords(brand.market, item);
   const payText = !pay
-    ? item.payText
-      ? t('header.payAsStated', { text: item.payText })
+    ? payWords
+      ? t('header.payAsStated', { text: payWords })
       : t('header.payNotListed')
     : pay.kind === 'exact'
       ? t('header.payExact', { amount: pay.amount, period })

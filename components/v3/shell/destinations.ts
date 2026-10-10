@@ -31,17 +31,22 @@
 //   ready, cn.ready        /ready      WP-53   shown with `agent`
 //   cn.campus              /campus     WP-58   shown with `jobs.campusCalendar`
 //   cn.referrals           /referrals  WP-54   shown with `cn.referralCodes`
-//   extension              /extension  WP-55a  shown with `extension` + gate `extensionPublished`
+//   extension, cn.extension  /extension  WP-55a  shown with `extension` + gate `extensionPublished`
 //   invite, cn.invite      /invite     WP-60   shown with `invites` + gate `invitesLive`
 //                                              (GoApply: only once its phone and
 //                                              WeChat sign-ups carry the invite)
-//   coaching               /coaching   WP-72   shown with `coaching` + gate `coachRoster`
+//   coaching, cn.coaching  /coaching   WP-72   shown with `coaching` + gate `coachRoster`
 //   SURFACES_READY.assistant           WP-51   the Topbar's Ask button, with `copilot`
-// GoApply has no 求职辅导 entry: its `coaching` flag is off; add one (lower
-// group, gate `coachRoster`) only if GoApply ever turns coaching on.
+//
+// Parity (D5; GOAPPLY_PARITY_PLAN §3.11). GoApply has the same entries under
+// the same gates as RoboApply: 职位 carries no flag (with the job feed switched
+// off the page itself says so and still offers the user's own added jobs),
+// 求职辅导 shows when GoApply's roster has a coach, and the extension entry
+// shows when GoApply's extension has a store id. What GoApply adds stays
+// (校招日历, 内推码).
 //
 // Existing destinations (Jobs, Applications, Resume, Interview prep, Settings,
-// Admin) carry no flag on RoboApply, so the rail never flickers for them.
+// Admin) carry no flag on either brand, so the rail never flickers for them.
 //
 // `mobile`: a slot number on the bottom bar (1–4; the fifth slot is More), or
 // 'more' for the More sheet, or null (desktop only).
@@ -129,16 +134,18 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'admin', href: '/admin', labelKey: 'admin', icon: IconBolt, group: 'lower', brands: RA, flag: null, badge: null, mobile: null, ready: true, gate: 'admin', match: under('/admin') },
 
   // ── GoApply · top (职位 · 校招日历 · 待投递 · 投递记录 · 简历 · 面试练习 · 我的资料) ──
-  { id: 'cn.jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: GA, flag: 'jobs.feed', badge: 'jobs', mobile: 1, ready: true, match: matchJobs },
+  { id: 'cn.jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: GA, flag: null, badge: 'jobs', mobile: 1, ready: true, match: matchJobs },
   { id: 'cn.campus', href: '/campus', labelKey: 'campus', mobileLabelKey: 'campus_short', icon: IconCalendar, group: 'top', brands: GA, flag: 'jobs.campusCalendar', badge: null, mobile: 2, ready: true, match: under('/campus') },
   { id: 'cn.ready', href: '/ready', labelKey: 'cn_ready', icon: IconCheck, group: 'top', brands: GA, flag: 'agent', badge: 'ready', mobile: 'more', ready: true, match: under('/ready') },
   { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 3, ready: true, match: under('/applications') },
   { id: 'cn.resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/resume') },
   { id: 'cn.practice', href: '/practice', labelKey: 'cn_practice', mobileLabelKey: 'cn_practice_short', icon: IconSparkle, group: 'top', brands: GA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
   { id: 'cn.profile', href: '/profile', labelKey: 'cn_profile', icon: IconPerson, group: 'top', brands: GA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
-  // ── GoApply · lower (内推 · 邀请好友 · 设置 · 会员 badge) ─────────────────
+  // ── GoApply · lower (求职辅导 · 内推 · 邀请好友 · 浏览器插件 · 设置 · 会员 badge) ──
+  { id: 'cn.coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: GA, flag: 'coaching', badge: null, mobile: 'more', ready: true, gate: 'coachRoster', match: under('/coaching') },
   { id: 'cn.referrals', href: '/referrals', labelKey: 'cn_referrals', icon: IconUsers, group: 'lower', brands: GA, flag: 'cn.referralCodes', badge: null, mobile: 'more', ready: true, match: under('/referrals') },
   { id: 'cn.invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: GA, flag: 'invites', badge: null, mobile: 'more', ready: true, gate: 'invitesLive', match: under('/invite') },
+  { id: 'cn.extension', href: '/extension', labelKey: 'extension', icon: IconPuzzle, group: 'lower', brands: GA, flag: 'extension', badge: null, mobile: null, ready: true, gate: 'extensionPublished', match: under('/extension') },
   { id: 'cn.settings', href: '/settings', labelKey: 'settings', icon: IconSettings, group: 'lower', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/settings') },
   { id: 'cn.admin', href: '/admin', labelKey: 'admin', icon: IconBolt, group: 'lower', brands: GA, flag: null, badge: null, mobile: null, ready: true, gate: 'admin', match: under('/admin') },
 ];
@@ -225,9 +232,10 @@ export function buildNav(ctx: NavVisibilityContext, entries: readonly NavEntry[]
 }
 
 /**
- * The signed-in home: the first visible top entry. On GoApply with the job
- * feed off (R-14) that is 校招日历 when the calendar is on, else 投递记录 —
- * so the logo and post-login redirects never land on a hidden page.
+ * The signed-in home: the first visible top entry, which is Jobs / 职位 on
+ * both brands (neither carries a flag). The fallback covers a registry whose
+ * top group is empty (the `ready` revert, or a test), so the logo and the
+ * post-login redirect never land on a hidden page.
  */
 export function homeHref(nav: Pick<VisibleNav, 'top'>): string {
   return nav.top[0]?.href ?? '/settings';

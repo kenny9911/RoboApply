@@ -2,6 +2,35 @@
   "jobsCn": {
     "fit": {
       "logistics": "Location and pay"
+    },
+    "searchApi": {
+      "exampleNote": "Replace {origin} with the address of this site and {key} with your API key.",
+      "agentIntro": "Describe the work you want in a sentence. The request is turned into focused searches over the postings collected here. The owner of the key must have AI features turned on in their settings, and an account that signed in with WeChat needs a verified phone number. Keyword search works without either.",
+      "sources": "Results come from the postings collected here: jobs located in mainland China, read from employers' public careers pages and, when they are listed, from {sourceName}. This is not the whole market. Every result names where it was published and links to the original posting. The site operator decides whether keys can read these postings. Until that is turned on, a request made with a key returns an error. This endpoint does not submit applications.",
+      "keyScope": "A key works only on this site. It does not work on other sites."
+    },
+    "source": {
+      "original": "Original posting"
+    },
+    "dates": {
+      "lastVerified": "Last verified {date}"
+    },
+    "apply": {
+      "employer": "Apply on the employer's careers site",
+      "employerHint": "Opens the employer's careers site in a new tab. You send the application there.",
+      "bank": "Apply on {name}",
+      "bankHint": "Opens this job's page on {name} in a new tab. You send the application there."
+    },
+    "header": {
+      "boards": "From {count, plural, one {# employer careers site} other {# employer careers sites}}.",
+      "gohireAndBoards": "From {sourceName} and {count, plural, one {# employer careers site} other {# employer careers sites}}.",
+      "gohire": "From {sourceName}.",
+      "coverage": "These are the postings collected here, not every job on the market."
+    },
+    "external": {
+      "panel": {
+        "thinIntro": "Only a few jobs match here. You can run the same search on other job sites, then add the jobs you like so you can track them and prepare for them here."
+      }
     }
   }
 }

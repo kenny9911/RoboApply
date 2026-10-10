@@ -1,9 +1,10 @@
 'use client';
 
-// PeopleTab — "People at {company}" (PRODUCT F-NET-02/03). MVP: three LinkedIn
-// people searches the user opens themselves; we look nobody up and contact
-// nobody. The `PeoplePanel` slot (WP-54) adds imported connections and opted-in
-// hiring contacts in V2 (and the GoApply 内推 hub).
+// PeopleTab — "People at {company}" (PRODUCT F-NET-02/03). RoboApply: three
+// LinkedIn people searches the user opens themselves (the server sends none
+// for GoApply); we look nobody up and contact nobody. The `PeoplePanel` slot
+// (WP-54) adds opted-in hiring contacts and the user's own connections on
+// both brands (D5), and GoApply's 内推码 under them.
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';

@@ -4,15 +4,18 @@
 // §5.11 F-NET; TASK_PLAN.md WP-54). WP-34's PeopleTab renders it under the
 // three LinkedIn search deep links it owns.
 //
-// RoboApply (`hiringContacts` mode):
-//   - `on`: "People you know at {company}" from the user's own imported
-//     LinkedIn connections (with an import prompt when there are none), and
-//     the job's hiring contact — shown only when a recruiter opted in through
-//     a RoboHire opt-in record (the section is absent until one exists);
-//   - every mode but `off`: "Write a message" (LinkedIn note, email, referral
-//     ask, follow-up) — drafts the user copies and sends themselves.
-// GoApply (`cn.referralCodes`): moderated 内推码 for this company and the
-// 内推请求 message draft for WeChat.
+// Both brands (`hiringContacts` mode; D5):
+//   - `on`: the job's hiring contact, shown only when a recruiter opted in
+//     through a RoboHire / GoHire opt-in record (the section is absent until
+//     one exists), and "People you know at {company}" from the user's own
+//     imported connections;
+//   - every mode but `off`: "Write a message" — drafts the user copies and
+//     sends themselves (the channels differ per market: a LinkedIn note on
+//     RoboApply, a WeChat referral request on GoApply).
+// RoboApply adds the import prompt when nothing was imported yet. GoApply
+// (`cn.referralCodes`) adds the moderated 内推码 for this company, under the
+// people. With nobody to show GoApply shows no people section at all (no
+// empty sections), only what exists.
 //
 // Every person shown is a real record with its own source named on its row
 // (imported LinkedIn connection, added by you, or opted-in recruiter; D3); nothing is
@@ -60,7 +63,7 @@ function PersonRow({ person, onWrite, canWrite }: { person: ContactView; onWrite
           </p>
         ) : null}
         {person.connectedOn ? (
-          <p className={styles.muted}>{t('connectedOn', { date: format.dateTime(new Date(person.connectedOn), { year: 'numeric', month: 'short' }) })}</p>
+          <p className={styles.muted}>{t('connectedOn', { date: format.dateTime(new Date(person.connectedOn), { year: 'numeric', month: 'short', timeZone: 'UTC' }) })}</p>
         ) : null}
       </div>
       {canWrite ? (
@@ -99,7 +102,9 @@ export function PeoplePanel({ jobId, companyName }: PeoplePanelProps) {
   }
 
   const data = q.data;
-  if (!cn && data.mode === 'off') return null;
+  const codes = cn && referralCodes;
+  // Nothing to show: no people, no message drafts (mode off) and no referral codes.
+  if (data.mode === 'off' && !codes) return null;
 
   const known = [...data.fromYourSchools, ...data.fromYourCompanies];
   const contacts = [...data.recruiters, ...known];
@@ -111,9 +116,7 @@ export function PeoplePanel({ jobId, companyName }: PeoplePanelProps) {
 
   return (
     <div className={styles.panel} data-testid="people-panel">
-      {cn && referralCodes ? <ReferralCodesForCompany companyName={companyName} /> : null}
-
-      {!cn && data.mode === 'on' && data.recruiters.length ? (
+      {data.mode === 'on' && data.recruiters.length ? (
         <section className={styles.section} data-testid="hiring-contacts">
           <h3 className={styles.title}>{t('recruitersTitle')}</h3>
           <ul className={styles.list}>
@@ -124,7 +127,8 @@ export function PeoplePanel({ jobId, companyName }: PeoplePanelProps) {
         </section>
       ) : null}
 
-      {!cn && data.mode === 'on' ? (
+      {/* GoApply shows this section only when there is someone in it (its import prompt names LinkedIn). */}
+      {data.mode === 'on' && (!cn || known.length > 0) ? (
         <section className={styles.section} data-testid="people-you-know">
           <h3 className={styles.title}>{t('knownTitle', { company: companyName })}</h3>
           {known.length ? (
@@ -149,6 +153,8 @@ export function PeoplePanel({ jobId, companyName }: PeoplePanelProps) {
           )}
         </section>
       ) : null}
+
+      {codes ? <ReferralCodesForCompany companyName={companyName} /> : null}
 
       <div id={`compose-${jobId}`}>
         <OutreachComposer

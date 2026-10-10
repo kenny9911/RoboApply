@@ -36,6 +36,9 @@
     },
     "composer": {
       "placeholderShort": "Ask a question"
+    },
+    "voice": {
+      "vendorNotice": "Your browser turns your speech into text with its own speech service. The browser maker processes the audio, which may happen outside mainland China."
     }
   }
 }

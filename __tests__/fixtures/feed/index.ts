@@ -69,6 +69,83 @@ export const feedItemCnRecency = {
   },
 } satisfies F.FeedItem;
 
+// ── The listing contract (parity plan §5: "source line and apply target") ──
+//
+// A feed item and a job detail expose `apply: { url, target }` and
+// `source: { name, original, url, lastVerifiedAt, via }`; the feed response
+// carries `sources: { gohire, employerBoards }` and `thin`. The fixtures below
+// are typed as the contract's additions on top of the item, so they are valid
+// both before and after the server contract names those fields.
+
+/** The contract's additions to a feed item. */
+export interface ListingContractFields {
+  apply: { url: string; target: 'gohire' | 'employer' };
+  source: F.FeedItem['source'] & { original: string; url: string; lastVerifiedAt: string; via: 'bank' | 'ats' | 'import' };
+}
+export type FeedItemWithListing = Omit<F.FeedItem, 'source'> & ListingContractFields;
+
+/** GoApply: a mainland posting read from an employer's careers board. No pay stated. */
+export const feedItemCnBoard: FeedItemWithListing = {
+  ...feedItemCnRecency,
+  jobId: 'job_fixture_cn_board_1',
+  title: '数据分析师',
+  company: { id: 'co_fixture_cn_1', name: '示例科技有限公司', logoUrl: null },
+  location: '上海',
+  pay: null,
+  fromRecruiterBank: false,
+  lastSeenAt: '2026-10-11T02:00:00.000Z',
+  source: {
+    name: 'SmartRecruiters',
+    kind: 'ats_public',
+    original: '示例科技有限公司',
+    url: 'https://jobs.smartrecruiters.com/ExampleTech/744000012345678',
+    lastVerifiedAt: '2026-10-11T02:00:00.000Z',
+    via: 'ats',
+  },
+  apply: { url: 'https://careers.example-tech.cn/jobs/744000012345678', target: 'employer' },
+  cardMeta: {
+    cn: {
+      sourceLine: { kind: 'source', sourceName: 'SmartRecruiters', originalSourceName: null, licence: null },
+      salary: { text: null, disclosed: false },
+      updatedAt: '2026-10-09T00:00:00.000Z',
+      lastCheckedAt: '2026-10-11T02:00:00.000Z',
+      expiresAt: null,
+      tags: [],
+      classYears: [],
+      warnings: [],
+    },
+  },
+};
+
+/** GoApply: a recruiter-bank row (listed only once the bank has a candidate-facing posting page). */
+export const feedItemCnBank: FeedItemWithListing = {
+  ...feedItemCnRecency,
+  jobId: 'job_fixture_cn_bank_1',
+  fromRecruiterBank: true,
+  source: {
+    name: 'GoHire',
+    kind: 'bank',
+    original: 'GoHire',
+    url: 'https://www.gohire.top/postings/9001',
+    lastVerifiedAt: '2026-10-10T08:00:00.000Z',
+    via: 'bank',
+  },
+  apply: { url: 'https://www.gohire.top/postings/9001', target: 'gohire' },
+};
+
+/** GoApply feed response: employer-board rows only, and a thin result set. */
+export const feedResponseCnBoards = {
+  items: [feedItemCnBoard],
+  cursor: null,
+  endOfFeed: true,
+  hiddenByTier: 0,
+  sessionId: 'sess_fixture_cn_1',
+  order: 'recency' as const,
+  sort: 'newest' as const,
+  sources: { gohire: false, employerBoards: 27 },
+  thin: true,
+};
+
 export const feedQueryResponse = {
   items: [feedItem],
   cursor: null,

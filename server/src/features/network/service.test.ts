@@ -157,6 +157,65 @@ describe('connectionsForJob', () => {
   });
 });
 
+// D5: the network area serves both markets with one rule. GoApply's People tab
+// shows the same buckets from GoApply's own data: the GoHire recruiter who
+// posted the job (opt-in record required) and the user's own connections.
+describe('connectionsForJob on GoApply (market cn)', () => {
+  function cnSetup(opts: Parameters<typeof setup>[0] = {}) {
+    const f = setup({ brand: BRANDS.goapply, ...opts });
+    f.store.jobs.clear();
+    f.store.jobs.set('job_cn', jobRow({ id: 'job_cn', market: 'cn', sourceBoard: 'gohire', title: '后端开发工程师' }));
+    f.posters.set('gohire:bank_job_1', 'u_9');
+    return f;
+  }
+  const cnRecruiter = (over: Record<string, unknown> = {}) =>
+    recruiter({ market: 'cn', sourceRef: 'gohire:u_9|optin:opt_1@2026-09-01T00:00:00.000Z', fullName: '王招聘', firstName: '王', ...over });
+
+  it('mode on: the opted-in GoHire recruiter who posted the job, named with its source, and the user’s own connections', async () => {
+    const f = cnSetup();
+    f.store.contacts.push(cnRecruiter());
+    await f.service.importConnections(U, { text: CSV, fileName: 'Connections.csv' });
+    const res = await f.service.connectionsForJob(U, 'job_cn');
+    expect(res.mode).toBe('on');
+    expect(res.recruiters.map((r) => r.fullName)).toEqual(['王招聘']);
+    expect(res.recruiters[0]).toMatchObject({ source: 'bank_recruiter', sourceName: 'GoHire', optedInAt: '2026-09-01T00:00:00.000Z' });
+    expect(res.fromYourCompanies.map((c) => c.fullName)).toEqual(['Ada Lovelace']);
+    expect(res.importedCount).toBe(2);
+  });
+
+  it('the same honesty rules: no opt-in record, a colleague, or a recruiter of the other bank is never returned', async () => {
+    const f = cnSetup();
+    f.store.contacts.push(cnRecruiter({ id: 'rec_no_record', sourceRef: 'gohire:u_9' }));
+    f.store.contacts.push(cnRecruiter({ id: 'rec_colleague', sourceRef: 'gohire:u_10|optin:opt_9@2026-09-02T00:00:00.000Z', consentBasis: 'recruiter_opt_in:opt_9' }));
+    // A RoboHire recruiter row (market intl) never shows on a GoApply job.
+    f.store.contacts.push(recruiter());
+    expect((await f.service.connectionsForJob(U, 'job_cn')).recruiters).toEqual([]);
+  });
+
+  it('with nobody there, every bucket is empty (the page shows no empty section)', async () => {
+    const f = cnSetup();
+    const res = await f.service.connectionsForJob(U, 'job_cn');
+    expect(res).toMatchObject({ mode: 'on', recruiters: [], fromYourCompanies: [], fromYourSchools: [], importedCount: 0 });
+  });
+
+  it('mode deeplinks_only and off return no people, as on RoboApply', async () => {
+    for (const mode of ['deeplinks_only', 'off'] as const) {
+      const f = cnSetup({ mode });
+      f.store.contacts.push(cnRecruiter());
+      const res = await f.service.connectionsForJob(U, 'job_cn');
+      expect(res.mode).toBe(mode);
+      expect(res.recruiters).toEqual([]);
+      expect(res.fromYourCompanies).toEqual([]);
+    }
+  });
+
+  it('a RoboApply job is not readable from GoApply, and the reverse', async () => {
+    const f = cnSetup();
+    f.store.jobs.set('job_1', jobRow());
+    expect(await code(f.service.connectionsForJob(U, 'job_1'))).toMatchObject({ code: 'not_found' });
+  });
+});
+
 describe('connections import', () => {
   it('imports name, company, position and date; no email is stored', async () => {
     const f = setup();

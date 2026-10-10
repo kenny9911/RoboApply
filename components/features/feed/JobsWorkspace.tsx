@@ -18,9 +18,15 @@
 //   split detail  desktop `?job=<id>` renders JobDetailPanel (WP-34) beside
 //                 the list; on a phone a job opens as /jobs/[id]
 //
-// GoApply without a licensed feed (`jobs.feed` off, R-14): no list at all —
-// only the way to jobs the user adds, and "Search other job sites" (links the
-// user opens themselves, started from their saved search words; CN L-5).
+// The feed is on by default on both brands (D5). With `jobs.feed` switched
+// off (GoApply: CN_RECRUITMENT_INFO_MODE=off) there is no list at all, only
+// the way to jobs the user adds and, on GoApply, "Search other job sites"
+// (links the user opens themselves, started from their saved search words).
+//
+// GoApply header (D3; MARKET_STRATEGY §1.4): under the intro, a line built
+// from the response's own `sources` says where the postings come from, and a
+// thin result set shows the same search links under the list. Both read the
+// first page from the query cache (useFeedFirstPage); nothing is requested twice.
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -31,7 +37,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FilterBar } from '../filters';
 import { GettingStartedChecklist } from '../growth';
 import { JobDetailPanel } from '../job';
-import { ExternalSearchPanel } from '../market';
+import { CnFeedSources, ExternalSearchPanel } from '../market';
+import { cnFeedSummary } from '../../../lib/api/cnJobs';
+import { useFeedFirstPage } from './useFeedFirstPage';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { useActiveSearchProfile } from '../../../hooks/search';
@@ -94,6 +102,18 @@ export function JobsWorkspace() {
     enabled: feedOn && !profiles.isPending,
   });
 
+  // What the server said about this list: where its rows come from, whether
+  // it is thin, and whether it is ordered by date (GoApply header; D3).
+  const firstPage = useFeedFirstPage({
+    searchProfileId: profile?.id ?? null,
+    version: profile?.version ?? null,
+    sort: sortsFor(market).includes(sort) ? sort : 'recommended',
+    fitTier,
+  });
+  const cnSummary = market === 'cn' && feedOn ? cnFeedSummary(firstPage) : { header: null, thin: false };
+  // Ordered by date posted (personalised ranking is off): the intro must not say "ranked by your resume".
+  const byDate = feedOn && firstPage?.order === 'recency';
+
   const listKey = `${profile?.id ?? ''}:${profile?.version ?? 0}:${sort}:${fitTier}`;
   const [seenCount, markSeen] = useSeenCounter(listKey);
   const calibration = useCalibration({ seenCount, enabled: feedOn && feed.items.length > 0 });
@@ -148,7 +168,9 @@ export function JobsWorkspace() {
     <div className={styles.workspace}>
       <header className={styles.head}>
         <h1 className={styles.title}>{t('title')}</h1>
-        <p className={styles.intro}>{t('intro')}</p>
+        <p className={styles.intro}>{byDate ? t('introByDate') : t('intro')}</p>
+        {/* GoApply only (renders nothing on RoboApply): where the postings below come from. */}
+        <CnFeedSources header={cnSummary.header} />
         {reportOn && feedOn ? (
           <div className={styles.headLinks}>
             <Link href="/jobs/report" className={styles.link}>
@@ -232,6 +254,8 @@ export function JobsWorkspace() {
                 </aside>
               ) : null}
             </div>
+            {/* GoApply only: few results, so the same search on other job sites is one tap away. */}
+            {cnSummary.thin ? <ExternalSearchPanel variant="thin" initialQuery={profile?.filters.q ?? profile?.filters.titles?.[0] ?? null} /> : null}
           </>
         )}
       </div>

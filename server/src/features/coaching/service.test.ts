@@ -121,9 +121,17 @@ describe('pure helpers', () => {
     expect(coachingAdminAddress(ra, { COACHING_ADMIN_EMAIL: 'Coaches <coaches@ra.example.test>' })).toBe('coaches@ra.example.test');
     expect(coachingAdminAddress(ra, { SUPPORT_EMAIL: 'help@ra.example.test' })).toBe('help@ra.example.test');
     expect(coachingAdminAddress(ra, {})).toBe(ra.email.replyTo);
-    // No fallback across brands (R-03).
+    // Mailboxes are identity: they never cross brands, whatever else GoApply shares (parity plan P3).
     expect(coachingAdminAddress(ga, { COACHING_ADMIN_EMAIL: 'coaches@ra.example.test' })).toBe(ga.email.replyTo);
-    expect(coachingAdminAddress(ga, { CN_COACHING_ADMIN_EMAIL: 'coach@ga.example.test' })).toBe('coach@ga.example.test');
+    expect(coachingAdminAddress(ga, { SUPPORT_EMAIL: 'help@ra.example.test' })).toBe(ga.email.replyTo);
+    expect(coachingAdminAddress(ga, { COACHING_ADMIN_EMAIL: 'coaches@ra.example.test', SUPPORT_EMAIL: 'help@ra.example.test', RESEND_API_KEY: 're_test' })).toBe(ga.email.replyTo);
+    // GoApply's own order: CN_COACHING_ADMIN_EMAIL, else CN_SUPPORT_EMAIL, else its registry reply-to.
+    expect(coachingAdminAddress(ga, { CN_COACHING_ADMIN_EMAIL: 'coach@ga.example.test', CN_SUPPORT_EMAIL: 'help@ga.example.test' })).toBe('coach@ga.example.test');
+    expect(coachingAdminAddress(ga, { CN_SUPPORT_EMAIL: '客服 <help@ga.example.test>', SUPPORT_EMAIL: 'help@ra.example.test' })).toBe('help@ga.example.test');
+    expect(coachingAdminAddress(ga, {})).toBe(ga.email.replyTo);
+    expect(ga.email.replyTo).not.toBe(ra.email.replyTo);
+    // And GoApply's values never reach RoboApply.
+    expect(coachingAdminAddress(ra, { CN_COACHING_ADMIN_EMAIL: 'coach@ga.example.test', CN_SUPPORT_EMAIL: 'help@ga.example.test' })).toBe(ra.email.replyTo);
   });
 
   it('schemas: http(s) links only, rate keys are minutes, request body is strict', () => {
@@ -231,6 +239,12 @@ describe('booking request', () => {
     await expect(svc().request('goapply', { userId: 'gu1' }, 'c5', { ...gaBody, shareConsent: true })).resolves.toEqual({ received: true });
     // A phone-only account's placeholder address never counts as verified.
     expect(sent[0]!.params).toMatchObject({ replyEmailVerified: false });
+    // With only the shared stack configured the staff copy still goes to a GoApply mailbox.
+    const staff = sent.find((m) => (m.params as { audience: string }).audience === 'admin')!;
+    expect((staff as unknown as { to: string }).to).toBe(getBrand('goapply').email.replyTo);
+    sent = [];
+    await expect(svc({ CN_SUPPORT_EMAIL: 'help@ga.example.test', SUPPORT_EMAIL: 'help@ra.example.test' }).request('goapply', { userId: 'gu1' }, 'c5', { ...gaBody, shareConsent: true })).resolves.toEqual({ received: true });
+    expect((sent.find((m) => (m.params as { audience: string }).audience === 'admin') as unknown as { to: string }).to).toBe('help@ga.example.test');
     // RoboApply does not ask for it.
     sent = [];
     await expect(svc().request('roboapply', { userId: 'u1' }, 'c1', body)).resolves.toEqual({ received: true });

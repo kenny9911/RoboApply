@@ -89,7 +89,7 @@ describe('marketMetaCoversBasics', () => {
 });
 
 describe('feed card — GoApply (cn) with cardMeta', () => {
-  it('shows ONE pay line, one "Updated", one "Last checked" and one source, all from the market slot', () => {
+  it('shows ONE pay line, one "Updated", one "Last verified" and one source, all from the market slot', () => {
     installFetch({});
     renderFeed(card(cnItem({ cardMeta: CN_META }), 'cn'), { brand: 'goapply' });
     const el = screen.getByTestId('job-card');
@@ -98,7 +98,7 @@ describe('feed card — GoApply (cn) with cardMeta', () => {
     expect(within(el).queryByTestId('source-line')).toBeNull();
     expect(within(el).getAllByText('15-25K·14薪')).toHaveLength(1);
     expect(within(el).getAllByText(/^Updated /)).toHaveLength(1);
-    expect(within(el).getAllByText(/^Last checked /)).toHaveLength(1);
+    expect(within(el).getAllByText(/^Last verified /)).toHaveLength(1);
     expect(within(el).queryByText(/^Posted /)).toBeNull();
     const slot = within(el).getByTestId('job-meta-cn');
     expect(slot).toHaveTextContent('Source: GoHire');
