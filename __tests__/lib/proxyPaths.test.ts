@@ -7,8 +7,50 @@
 // by name rather than by iterating the array (which would pass trivially if the
 // array were emptied).
 
+//
+// INT-12 (WP-93 "no dead ends" (c)) adds the check against the route tree:
+// every page under app/(auth) and app/(onboarding) is protected, every other
+// page is public, and no prefix is left guarding nothing.
+
 import { describe, it, expect } from 'vitest';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { isProtectedPath, PROTECTED_PREFIXES } from '../../lib/proxyPaths';
+
+const APP = join(process.cwd(), 'app');
+
+/** Route groups whose pages need a session. */
+const SIGNED_IN_GROUPS = ['(auth)', '(onboarding)'];
+
+interface AppPage {
+  /** Path under app/, e.g. `(auth)/jobs/[id]`. */
+  dir: string;
+  /** A concrete URL for the route. */
+  url: string;
+  signedIn: boolean;
+}
+
+function appPages(): AppPage[] {
+  const out: AppPage[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(join(APP, dir))) {
+      const rel = dir ? `${dir}/${name}` : name;
+      if (statSync(join(APP, rel)).isDirectory()) walk(rel);
+      else if (name === 'page.tsx') {
+        const segments = dir.split('/').filter(Boolean);
+        const url =
+          '/' +
+          segments
+            .filter((seg) => !/^\(.+\)$/.test(seg))
+            .map((seg) => (seg.startsWith('[...') ? 'a/b' : seg.startsWith('[') ? 'x1' : seg))
+            .join('/');
+        out.push({ dir, url, signedIn: SIGNED_IN_GROUPS.includes(segments[0] ?? '') });
+      }
+    }
+  };
+  walk('');
+  return out;
+}
 
 describe('proxyPaths.isProtectedPath', () => {
   it('protects all four destinations and their sub-routes', () => {
@@ -83,4 +125,44 @@ describe('proxyPaths.isProtectedPath', () => {
     expect(isProtectedPath('/jobseeker')).toBe(false);
     expect(isProtectedPath('/settings-export')).toBe(false);
   });
+
+  describe('against the route tree (app/)', () => {
+    const pages = appPages();
+
+    it('finds the pages (guards the checks below against running on nothing)', () => {
+      expect(pages.filter((p) => p.signedIn).length).toBeGreaterThan(30);
+      expect(pages.filter((p) => !p.signedIn).length).toBeGreaterThan(20);
+    });
+
+    it('every shipped signed-in route is protected', () => {
+      const open = pages.filter((p) => p.signedIn && !isProtectedPath(p.url)).map((p) => `${p.dir} → ${p.url}`);
+      expect(open).toEqual([]);
+    });
+
+    it('every public route is public', () => {
+      const gated = pages.filter((p) => !p.signedIn && isProtectedPath(p.url)).map((p) => `${p.dir} → ${p.url}`);
+      expect(gated).toEqual([]);
+    });
+
+    it('every protected prefix still guards at least one signed-in page (no dead prefix)', () => {
+      const dead = PROTECTED_PREFIXES.filter((prefix) => !pages.some((p) => p.signedIn && (p.url === prefix || p.url.startsWith(`${prefix}/`))));
+      expect(dead).toEqual([]);
+    });
+
+    it('the first segment of every signed-in page is a protected prefix (the list and the tree agree)', () => {
+      const firsts = new Set(pages.filter((p) => p.signedIn).map((p) => `/${p.url.split('/')[1]}`));
+      expect([...firsts].sort()).toEqual([...PROTECTED_PREFIXES].sort());
+    });
+
+    it('/job-search keeps its prefix: the old search page is gone, the API-key page under it is not, and the bare path redirects', () => {
+      expect(existsSync(join(APP, '(auth)/job-search/page.tsx'))).toBe(false);
+      expect(existsSync(join(APP, '(auth)/job-search/developers/page.tsx'))).toBe(true);
+      const nextConfig = readFileSync(join(process.cwd(), 'next.config.mjs'), 'utf8');
+      expect(nextConfig).toMatch(/source: '\/job-search', destination: '\/jobs\/explore'/);
+      // The redirect lands on a protected path, so a signed-out visitor still ends at /login.
+      expect(isProtectedPath('/jobs/explore')).toBe(true);
+      expect(isProtectedPath('/job-search/developers')).toBe(true);
+    });
+  });
 });
+

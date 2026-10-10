@@ -139,15 +139,79 @@ function normalizeCode(
 // covers its own subtree, and only at mount.
 //
 // This is the global safety net: the first `auth_expired` that surfaces on a
-// protected route drops the dead credentials and hard-navigates to /login
-// with a return path. Guarded because a stranded page tends to fire a burst
-// of parallel 401s (auth/me + session + resumes + config…).
+// protected route runs the registered session cleanups (below), drops the
+// dead credentials and hard-navigates to /login with a return path. Guarded
+// because a stranded page tends to fire a burst of parallel 401s (auth/me +
+// session + resumes + config…).
 let authExpiredRecoveryFired = false;
+
+// ─── Session cleanups ───────────────────────────────────────────────────────
+//
+// Things this browser must forget when a session ends here: the web-push
+// subscription of the account that is leaving, unsent resume-builder drafts.
+// They live in feature code (hooks/pwa, hooks/resume), which `lib` must not
+// import, so the app shell REGISTERS them (components/v3/shell/
+// signOutCleanup.ts) and this module only runs what is registered.
+//
+// Order matters: a cleanup may still need the session (deleting the push row
+// is an authenticated call), so the stale-session recovery below runs them
+// BEFORE it clears the cookie. They can never hold the recovery back: each
+// one is isolated (a throw or a rejection is swallowed) and the whole batch is
+// given SESSION_CLEANUP_TIMEOUT_MS.
+
+export type SessionCleanup = () => void | Promise<void>;
+
+/** Upper bound for all registered cleanups together before the session is cleared anyway. */
+export const SESSION_CLEANUP_TIMEOUT_MS = 4000;
+
+const sessionCleanups = new Set<SessionCleanup>();
+
+/** Register a cleanup; returns the function that removes it again. */
+export function registerSessionCleanup(cleanup: SessionCleanup): () => void {
+  sessionCleanups.add(cleanup);
+  return () => {
+    sessionCleanups.delete(cleanup);
+  };
+}
+
+/**
+ * Run every registered cleanup. Never rejects; resolves when all have
+ * settled or after `timeoutMs`, whichever is first.
+ */
+export async function runSessionCleanups(timeoutMs: number = SESSION_CLEANUP_TIMEOUT_MS): Promise<void> {
+  if (sessionCleanups.size === 0) return;
+  const work = Promise.all(
+    [...sessionCleanups].map(async (cleanup) => {
+      try {
+        await cleanup();
+      } catch {
+        // One failing cleanup never stops the others or the sign-out.
+      }
+    }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  await Promise.race([work.then(() => undefined), timeout]);
+  if (timer) clearTimeout(timer);
+}
 
 function recoverFromExpiredSession(): void {
   if (authExpiredRecoveryFired) return;
   authExpiredRecoveryFired = true;
 
+  // Nothing registered (a page outside the app shell): keep the recovery
+  // synchronous. Otherwise the cleanups go first; their own API calls 401 like
+  // everything else on a dead session, and land on the guard above.
+  if (sessionCleanups.size === 0) {
+    clearExpiredSessionAndLeave();
+    return;
+  }
+  void runSessionCleanups().then(clearExpiredSessionAndLeave, clearExpiredSessionAndLeave);
+}
+
+function clearExpiredSessionAndLeave(): void {
   // Drop the localStorage bearer fallback too — left in place it would ride
   // along on every request after re-login and mask the fresh cookie.
   try {

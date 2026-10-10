@@ -13,12 +13,18 @@ export {
   type SettingsSectionId,
   type SettingsVisibilityContext,
 } from './registry';
-export { SECTION_COMPONENTS, type SettingsSectionProps } from './sectionComponents';
+export {
+  SECTION_COMPONENTS,
+  SECTION_EXTRAS,
+  sectionExtrasFor,
+  type SettingsSectionExtra,
+  type SettingsSectionProps,
+} from './sectionComponents';
 export {
   activeSectionFor,
   syncSettingsSectionHash,
   useActiveSettingsSection,
   useVisibleSettingsSections,
 } from './useSettingsSection';
-export { SettingsPage, type SettingsPageProps, type SettingsRenderers } from './SettingsPage';
+export { SettingsPage, type SettingsPageProps, type SettingsRenderers, type SettingsRouteExtras } from './SettingsPage';
 export { SettingsRail } from './SettingsRail';

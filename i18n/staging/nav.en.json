@@ -69,7 +69,8 @@
         "index": "jobs listed with us",
         "ai": "AI estimate",
         "bank": "recruiter posts on {sourceName}",
-        "other": "another source"
+        "other": "another source",
+        "user_reports": "users who shared questions"
       }
     },
     "credits": {
@@ -78,6 +79,25 @@
       "none_left": "None left {window, select, day {today} week {this week} other {this month}}.",
       "none_left_until": "None left {window, select, day {today} week {this week} other {this month}}. More on {date}.",
       "see_pro": "See Pro"
-    }
+    },
+    "settingsNotes": {
+      "intent_sub": "Free text, kept with your settings. It does not filter your jobs.",
+      "group_lists": "Your own lists",
+      "lists_sub": "Notes for you. To hide jobs, change the filters in a saved search.",
+      "save_failed": "Your changes were not saved. Try again.",
+      "sign_out_failed": "You are still signed in. Try again."
+    },
+    "jump_aria": "Jump to a page",
+    "jump_placeholder": "Jump to a page…",
+    "palette": {
+      "placeholder_pages": "Jump to a page…",
+      "empty_pages": "No page with that name.",
+      "error": "The search did not work. Try again.",
+      "search_jobs": "Search jobs for “{query}”",
+      "empty_jobs": "No job in your list matches. The filters of your saved search apply here too.",
+      "refresh_limited": "You have searched or refreshed the job list many times in the last few minutes. Wait a few minutes, then try again."
+    },
+    "settingsEmpty": "This section did not load. Reload the page to try again.",
+    "signing_out": "Signing out…"
   }
 }

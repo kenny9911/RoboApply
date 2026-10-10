@@ -8,10 +8,11 @@
 // The entries come from ONE registry, `destinations.ts` (PRODUCT_PLAN.md §3.3,
 // per brand). The rail never decides on its own what exists: an entry shows
 // only for its brand, when its page is ready, when its capability flag is on
-// and when its gate (admin role, coach roster) passes. RoboApply today shows
-// Jobs · Applications · Resume · Interview prep, then Settings (+ Admin);
-// Ready to apply, Profile, Coaching, Invite friends and Get the extension
-// appear as INT flips their `ready` bit.
+// and when its gate (admin role, coach roster, invite programme, published
+// extension) passes. Every destination is ready since INT-12, so on RoboApply
+// the rail is Jobs · Ready to apply · Applications · Resume · Interview prep ·
+// Profile, then Coaching, Invite friends, Get the extension, Settings
+// (+ Admin) — each only while its flag and gate allow it.
 //
 // Badges are named by the entry and computed by the owning area's hook
 // (hooks/shared/navBadges.ts). The rail draws what the hook returns and

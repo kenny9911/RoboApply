@@ -106,12 +106,16 @@ export function TextInput({
   placeholder,
   prefix,
   ariaLabel,
+  readOnly = false,
 }: {
   value: string;
-  onChange: (v: string) => void;
+  /** Omit together with `readOnly` for a value this page shows but does not edit. */
+  onChange?: (v: string) => void;
   placeholder?: string;
   prefix?: ReactNode;
   ariaLabel?: string;
+  /** Shown, selectable and announced as read-only; never an input that silently ignores typing. */
+  readOnly?: boolean;
 }) {
   return (
     <div className="pref-input-wrap">
@@ -121,7 +125,9 @@ export function TextInput({
         value={value || ''}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        onChange={(e) => onChange(e.target.value)}
+        readOnly={readOnly}
+        aria-readonly={readOnly || undefined}
+        onChange={(e) => onChange?.(e.target.value)}
       />
     </div>
   );

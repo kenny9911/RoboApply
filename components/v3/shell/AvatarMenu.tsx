@@ -35,6 +35,7 @@ import {
 } from 'react';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { logout } from '../../../lib/api/auth';
+import { cleanUpDeviceOnSignOut, leaveSignedOut } from './signOutCleanup';
 
 /** Initials for the trigger. Two letters from a name, else from the address. */
 export function monogramFor(source: string | null | undefined): string {
@@ -82,6 +83,9 @@ export function AvatarMenu() {
   const [pendingFocus, setPendingFocus] = useState<number | null>(null);
   const menuId = useId();
   const triggerId = useId();
+  // True from the Sign out click until the page leaves (see signOut below).
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutInFlight = useRef(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -163,13 +167,30 @@ export function AvatarMenu() {
   }
 
   /**
-   * Sign out. The server route is deliberately sessionless (it clears the
-   * cookie even for a token it cannot validate), so this works from a stranded
-   * session too. The hard navigation is not laziness: it drops the TanStack
-   * cache, which still holds the previous account's jobs and applications.
+   * Sign out, in this order:
+   *   1. forget this device (signOutCleanup.ts): the push subscription is
+   *      removed while the session can still authorise it, then unsent
+   *      resume-builder drafts are cleared from this browser. It never throws
+   *      and gives up by itself after a few seconds, so it cannot block 2–4;
+   *   2. end the server session (the route is deliberately sessionless: it
+   *      clears the cookie even for a token it cannot validate, so this works
+   *      from a stranded session too);
+   *   3. clear the client;
+   *   4. a HARD navigation — not laziness: it drops the TanStack cache, which
+   *      still holds the previous account's jobs and applications.
    */
   async function signOut() {
-    setOpen(false);
+    // One sign-out at a time. Step 1 can take a few seconds on a slow push
+    // service, so the menu stays open and its item reads "Signing out…" until
+    // the page leaves; a second click or Enter does nothing.
+    if (signOutInFlight.current) return;
+    signOutInFlight.current = true;
+    setSigningOut(true);
+    try {
+      await cleanUpDeviceOnSignOut();
+    } catch {
+      // Belt and braces: the cleanup swallows its own errors.
+    }
     try {
       window.localStorage.removeItem('auth_token');
     } catch {
@@ -182,7 +203,7 @@ export function AvatarMenu() {
       // leaving the user on an authenticated-looking screen is worse.
     }
     clear();
-    window.location.assign('/login');
+    leaveSignedOut();
   }
 
   return (
@@ -248,10 +269,12 @@ export function AvatarMenu() {
             type="button"
             role="menuitem"
             tabIndex={-1}
-            style={ITEM_STYLE}
+            style={signingOut ? { ...ITEM_STYLE, cursor: 'default', color: 'var(--text-muted)' } : ITEM_STYLE}
+            aria-disabled={signingOut || undefined}
+            aria-busy={signingOut || undefined}
             onClick={() => void signOut()}
           >
-            {t('sign_out')}
+            {signingOut ? t('signing_out') : t('sign_out')}
           </button>
         </div>
       ) : null}

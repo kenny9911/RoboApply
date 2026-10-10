@@ -8,16 +8,21 @@
 //   hybrid   public pages          HybridShell: app shell signed in,
 //                                  marketing chrome + legal footer signed out
 // Plus: each shell names its owner, public stubs are not indexed, authenticated
-// shells are behind the proxy's login gate and public ones are not, and
-// /jobs/explore serves the job search that /job-search used to.
+// shells are behind the proxy's login gate and public ones are not.
 //
 // Owners replace these pages without touching this file: the render, marker,
 // owner and noindex checks run only while the page still carries its
 // `data-route-stub` marker; the page-exists and proxy-gate checks always run
 // (proxyPaths is a hot file, so its answers do not move under a WP).
+//
+// INT-12 (WP-93 "no dead ends"): every owner has shipped, so NO page may
+// still carry the marker — "no route shell is still a stub" below fails if one
+// comes back. The stub-only checks stay as the contract a future shell would
+// have to meet. /jobs/explore is the category browse (WP-33's Explore); the
+// old search workspace and its /job-search page are deleted.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ReactElement } from 'react';
 import { screen, within } from '@testing-library/react';
@@ -67,9 +72,6 @@ vi.mock('../../components/features/visitor', () => ({
 }));
 vi.mock('../../components/features/market', () => ({
   LegalFooter: () => <footer data-testid="legal-footer" />,
-}));
-vi.mock('../../components/job-search/JobSearchWorkspace', () => ({
-  JobSearchWorkspace: () => <i data-testid="job-search-workspace" />,
 }));
 
 import AuthLayout from '../../app/(auth)/layout';
@@ -201,6 +203,56 @@ beforeEach(() => {
   mockAuthState.value = buildAuthValue();
 });
 
+/** Every route of §4.1.b plus the dynamic ones the list leaves out. */
+const ALL_SHELL_DIRS = [
+  ...[...AUTH, PRACTICE_QUESTIONS, ...PUBLIC_GROUP, ...BARE, ...HYBRID].map((s) => s.dir),
+  '(auth)/jobs/[id]',
+  '(auth)/jobs/explore',
+  '(onboarding)/onboarding',
+  '(onboarding)/onboarding/[step]',
+];
+
+describe('no route shell is still a stub (INT-12, WP-93 "no dead ends")', () => {
+  it.each(ALL_SHELL_DIRS)('app/%s/page.tsx is its owner’s page', (dir) => {
+    expect(existsSync(join(ROOT, 'app', dir, 'page.tsx'))).toBe(true);
+    expect(isStubPage(dir), `${dir} still carries data-route-stub`).toBe(false);
+  });
+
+  it('no page anywhere under app/ carries the stub marker', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(join(ROOT, 'app', dir))) {
+        const rel = dir ? `${dir}/${name}` : name;
+        if (statSync(join(ROOT, 'app', rel)).isDirectory()) walk(rel);
+        else if (/\.(tsx|ts)$/.test(name) && readFileSync(join(ROOT, 'app', rel), 'utf8').includes('data-route-stub=')) offenders.push(rel);
+      }
+    };
+    walk('');
+    expect(offenders).toEqual([]);
+  });
+
+  it('the old job search page is gone; /jobs/explore is the category browse', () => {
+    expect(existsSync(join(ROOT, 'app/(auth)/job-search/page.tsx'))).toBe(false);
+    // What is left under components/job-search is the API-key and developer-guide UI only.
+    expect(readdirSync(join(ROOT, 'components/job-search')).sort()).toEqual([
+      'ApiKeyWorkspace.tsx',
+      'JobSearchDeveloperGuide.tsx',
+      'countries.ts',
+      'format.ts',
+      'messages.en.json',
+      'metadata.ts',
+    ]);
+    expect(existsSync(join(ROOT, 'scripts/job-search-preview'))).toBe(false);
+    expect(existsSync(join(ROOT, 'components/v3/today'))).toBe(false);
+    const explore = readFileSync(join(ROOT, 'app/(auth)/jobs/explore/page.tsx'), 'utf8');
+    expect(explore).toMatch(/import \{ Explore \} from '[^']*components\/features\/feed'/);
+    expect(explore).not.toMatch(/components\/job-search/);
+    // The API-key page under the old prefix stays, behind the gate.
+    expect(existsSync(join(ROOT, 'app/(auth)/job-search/developers/page.tsx'))).toBe(true);
+    expect(isProtectedPath('/job-search/developers')).toBe(true);
+  });
+});
+
 describe('every §4.1.b route has a page', () => {
   const all = [...AUTH, PRACTICE_QUESTIONS, ...PUBLIC_GROUP, ...BARE, ...HYBRID];
   it.each([
@@ -261,15 +313,10 @@ describe('authenticated shells render inside the app shell', () => {
     expect(panel.closest('.main-inner')).not.toBeNull();
   });
 
-  it('/jobs/explore serves the job search that /job-search used to', async () => {
+  it('/jobs/explore is behind the gate and keeps its metadata layout', async () => {
     expect(isProtectedPath('/jobs/explore')).toBe(true);
-    if (!readFileSync(join(ROOT, 'app/(auth)/jobs/explore/page.tsx'), 'utf8').includes('JobSearchWorkspace')) return;
-    nav.pathname = '/jobs/explore';
-    renderWithBrand(<AuthLayout>{await pageElement({ dir: '(auth)/jobs/explore' })}</AuthLayout>, { flags: {} });
-    expect(screen.getByTestId('job-search-workspace').closest('.main-inner')).not.toBeNull();
     const layout = await import('../../app/(auth)/jobs/explore/layout');
     expect(typeof layout.generateMetadata).toBe('function');
-    expect(isProtectedPath('/jobs/explore')).toBe(true);
   });
 });
 

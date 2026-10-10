@@ -7,9 +7,11 @@
 // from URLSearchParams (per CTO FE-2) and passes them in; this hook just
 // keys the cache off the params and returns the response.
 //
-// We do NOT paginate yet (V2.0 ships single-page results in the left rail
-// — 50 fixture rows fit comfortably). When live ingest lands we can swap
-// to `useInfiniteQuery` here without touching the call site.
+// @deprecated The job search is the feed (`queryFeed({ q })`, lib/api/feed.ts).
+// The ⌘K palette moved there in INT-12 and the /job-search page is deleted;
+// the one importer left is components/v3/resume-editor/TailorModal.tsx, which
+// INT-10 retires. Delete this file with that import (post-merge join J6),
+// together with the frozen client's `search` slice.
 
 import { useQuery } from '@tanstack/react-query';
 import { raV2Api } from '../lib/api/v2';

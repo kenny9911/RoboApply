@@ -1,16 +1,15 @@
 'use client';
 
-// Settings § Resume — the default-résumé picker.
+// Settings § Your search — the main-resume picker.
 //
-// Extracted from IdentitySection when the eight-screen /preferences route
-// collapsed into the single /settings page (OVERHAUL_RULINGS R1/D2). The picker
-// is its own settings section because "which résumé does everything start
-// from?" is a question about the résumé, not about who the user is. Reads the
-// résumé library (useResumeList, passed in by the page) and writes
-// `defaultResumeId` to preferences.
+// "Which resume does everything start from?" Reads the resume library
+// (useResumeList, passed in by the page) and writes `defaultResumeId` to
+// preferences. One group under the saved searches: the section already has
+// its H1 (the setup sentence, SearchIntro), so this block has no header of
+// its own (INT-12 removed a second H1 that repeated the group label).
 
 import { useTranslations } from 'next-intl';
-import { PrefHeader, PrefGroup } from '../controls';
+import { PrefGroup } from '../controls';
 import type { RAPreferences } from '../../../../lib/api/v2';
 import type { RAResumeVariantSummary } from '../../../../hooks/useResumes';
 
@@ -27,12 +26,6 @@ export function ResumeSection({
 
   return (
     <>
-      <PrefHeader
-        eyebrow={t('identity.group_default_resume')}
-        title={t('identity.group_default_resume')}
-        sub={t('identity.sub')}
-      />
-
       <PrefGroup label={t('identity.group_default_resume')}>
         {resumes.length === 0 ? (
           <div className="pref-row-sub">{t('identity.no_resumes')}</div>

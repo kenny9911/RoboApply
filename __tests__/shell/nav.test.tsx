@@ -3,8 +3,11 @@
 //
 // Acceptance covered here:
 //   • nav differs per brand;
-//   • a flagged-off entry is absent (and a not-ready entry is absent unless
-//     NEXT_PUBLIC_SHOW_ALL_NAV=true);
+//   • a flagged-off entry is absent;
+//   • INT-12 (WP-93) flipped every destination to ready: each flipped entry
+//     shows exactly when its flag (and gate) is on, per brand, with NO dev
+//     override; `ready: false` on one entry still takes that entry out
+//     (the one-line revert), and NEXT_PUBLIC_SHOW_ALL_NAV still overrides it;
 //   • a badge renders the hook's value and nothing for null;
 //   • mobile shows 5 slots: 4 destinations + More (我的 on GoApply), and More
 //     opens a sheet with the registry's `mobile: 'more'` entries.
@@ -47,13 +50,17 @@ import { Sidebar } from '../../components/v3/shell/Sidebar';
 import { MobileNav } from '../../components/v3/shell/MobileNav';
 import {
   NAV_ENTRIES,
+  SURFACES_READY,
   buildNav,
   crumbKeyFor,
   entriesForBrand,
+  extensionPublishedFor,
   homeHref,
+  invitesLiveFor,
   jobHref,
   type NavVisibilityContext,
 } from '../../components/v3/shell/destinations';
+import { INVITE_REWARD_BRANDS } from '../../hooks/growth/useInvites';
 import { normalizeBadge } from '../../hooks/shared/navBadges';
 
 const railHrefs = () =>
@@ -94,6 +101,7 @@ describe('registry (pure)', () => {
   });
 
   it('RoboApply full IA follows PRODUCT §3.3 order when everything is on', () => {
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id'); // the extension is published
     const nav = buildNav(ctx({ showAll: true, isAdmin: true, coachRoster: true, flags: flagsWith({ agent: true, coaching: true, invites: true, extension: true }) }));
     expect(nav.top.map((e) => e.href)).toEqual(['/jobs', '/ready', '/applications', '/resume', '/practice', '/profile']);
     expect(nav.lower.map((e) => e.href)).toEqual(['/coaching', '/invite', '/extension', '/settings', '/admin']);
@@ -109,12 +117,15 @@ describe('registry (pure)', () => {
         flags: flagsWith({ 'jobs.feed': true, 'jobs.campusCalendar': true, agent: true, 'cn.referralCodes': true, invites: true }),
       }),
     );
+    // 邀请好友 joins once GoApply's phone and WeChat sign-ups carry the invite
+    // (INT-01 adds 'goapply' to INVITE_REWARD_BRANDS); the entry follows it.
+    const cnInvite = invitesLiveFor('goapply') ? ['/invite'] : [];
     expect(nav.top.map((e) => e.href)).toEqual(['/jobs', '/campus', '/ready', '/applications', '/resume', '/practice', '/profile']);
-    expect(nav.lower.map((e) => e.href)).toEqual(['/referrals', '/invite', '/settings']);
+    expect(nav.lower.map((e) => e.href)).toEqual(['/referrals', ...cnInvite, '/settings']);
     // 职位 · 校招 · 投递 · 面试 (+ 我的)
     expect(nav.mobile.map((e) => e.href)).toEqual(['/jobs', '/campus', '/applications', '/practice']);
     // 简历, 资料, 待投递, 设置 live under 我的.
-    expect(nav.more.map((e) => e.href)).toEqual(['/ready', '/resume', '/profile', '/referrals', '/invite', '/settings']);
+    expect(nav.more.map((e) => e.href)).toEqual(['/ready', '/resume', '/profile', '/referrals', ...cnInvite, '/settings']);
   });
 
   it('the nav differs per brand', () => {
@@ -138,14 +149,88 @@ describe('registry (pure)', () => {
     expect(nav.all.every((e) => e.flag === null)).toBe(true);
   });
 
-  it('not-ready entries need the dev override; gates need admin / a coach roster', () => {
-    const flags = flagsWith({ agent: true, coaching: true });
-    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('ready');
-    expect(buildNav(ctx({ flags, showAll: true })).all.map((e) => e.id)).toContain('ready');
-    expect(buildNav(ctx({ flags, showAll: true })).all.map((e) => e.id)).not.toContain('coaching');
-    expect(buildNav(ctx({ flags, showAll: true, coachRoster: true })).all.map((e) => e.id)).toContain('coaching');
+  it('gates still decide: admin role, a coach roster, a brand whose sign-ups carry the invite', () => {
+    const flags = flagsWith({ agent: true, coaching: true, invites: true });
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('coaching');
+    expect(buildNav(ctx({ flags, coachRoster: true })).all.map((e) => e.id)).toContain('coaching');
     expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('admin');
     expect(buildNav(ctx({ flags, isAdmin: true })).all.map((e) => e.id)).toContain('admin');
+    // Invite friends: RoboApply runs the programme; GoApply only once wired.
+    expect(invitesLiveFor('roboapply')).toBe(true);
+    expect(invitesLiveFor('goapply')).toBe(INVITE_REWARD_BRANDS.includes('goapply'));
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).toContain('invite');
+    expect(buildNav(ctx({ brandId: 'goapply', flags })).all.map((e) => e.id).includes('cn.invite')).toBe(invitesLiveFor('goapply'));
+    // The dev override skips `ready` only, never a gate.
+    expect(buildNav(ctx({ flags, showAll: true })).all.map((e) => e.id)).not.toContain('coaching');
+    expect(buildNav(ctx({ brandId: 'goapply', flags, showAll: true })).all.map((e) => e.id).includes('cn.invite')).toBe(invitesLiveFor('goapply'));
+  });
+
+  it('Get the extension needs a published extension (a store id), not just the flag: /extension can only say "not available" before', () => {
+    const flags = flagsWith({ extension: true });
+    expect(extensionPublishedFor('roboapply')).toBe(false);
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).not.toContain('extension');
+    expect(buildNav(ctx({ flags, showAll: true })).all.map((e) => e.id)).not.toContain('extension');
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', '  ');
+    expect(extensionPublishedFor('roboapply')).toBe(false);
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
+    expect(extensionPublishedFor('roboapply')).toBe(true);
+    expect(extensionPublishedFor('goapply')).toBe(false); // GoApply has its own id (NEXT_PUBLIC_CN_EXT_ID)
+    expect(buildNav(ctx({ flags })).all.map((e) => e.id)).toContain('extension');
+    expect(buildNav(ctx({ flags: flagsWith() })).all.map((e) => e.id)).not.toContain('extension');
+  });
+
+  // INT-12 (WP-93): the flips. One row per flipped entry: brand, the flag
+  // that shows it, and what else it needs. No dev override anywhere here.
+  const FLIPPED: Array<{
+    id: string;
+    brand: 'roboapply' | 'goapply';
+    href: string;
+    flag: string;
+    needs?: Partial<NavVisibilityContext>;
+    /** Build-time env the entry also needs. */
+    env?: [string, string];
+  }> = [
+    { id: 'ready', brand: 'roboapply', href: '/ready', flag: 'agent' },
+    { id: 'cn.ready', brand: 'goapply', href: '/ready', flag: 'agent' },
+    { id: 'cn.campus', brand: 'goapply', href: '/campus', flag: 'jobs.campusCalendar' },
+    { id: 'cn.referrals', brand: 'goapply', href: '/referrals', flag: 'cn.referralCodes' },
+    { id: 'extension', brand: 'roboapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_EXT_ID', 'ext-store-id'] },
+    { id: 'invite', brand: 'roboapply', href: '/invite', flag: 'invites' },
+    { id: 'coaching', brand: 'roboapply', href: '/coaching', flag: 'coaching', needs: { coachRoster: true } },
+  ];
+
+  it('every destination is ready (INT-12 flipped the last eight) and the Ask surface is on', () => {
+    expect(NAV_ENTRIES.filter((e) => !e.ready).map((e) => e.id)).toEqual([]);
+    expect(SURFACES_READY).toEqual({ assistant: true, jobDetail: true });
+    // cn.invite is flipped too; it shows with the invites programme (previous test).
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.invite')).toMatchObject({ ready: true, flag: 'invites', gate: 'invitesLive', brands: ['goapply'] });
+    // GoApply has no coaching entry (its coaching flag is off; add one only if that changes).
+    expect(entriesForBrand('goapply').some((e) => e.href === '/coaching')).toBe(false);
+  });
+
+  it.each(FLIPPED)('$id ($brand): shown with $flag on, absent with it off, and never on the other brand', ({ id, brand, href, flag, needs, env }) => {
+    const on = flagsWith({ [flag]: true } as never);
+    if (env) {
+      // Without it the flag alone is not enough.
+      expect(buildNav(ctx({ brandId: brand, ...needs, flags: on })).all.map((e) => e.id)).not.toContain(id);
+      vi.stubEnv(env[0], env[1]);
+    }
+    const visible = (over: Partial<NavVisibilityContext>) => buildNav(ctx({ brandId: brand, ...needs, ...over })).all.map((e) => e.id);
+    expect(visible({ flags: on })).toContain(id);
+    expect(visible({ flags: flagsWith() })).not.toContain(id);
+    expect(visible({ flags: null })).not.toContain(id); // fail closed while flags load
+    const other = brand === 'roboapply' ? 'goapply' : 'roboapply';
+    expect(buildNav(ctx({ brandId: other, ...needs, flags: on })).all.map((e) => e.id)).not.toContain(id);
+    expect(NAV_ENTRIES.find((e) => e.id === id)).toMatchObject({ href, flag, ready: true });
+  });
+
+  it('one entry can be taken back out with `ready: false` (the revert), and the dev override shows it again', () => {
+    const flags = flagsWith({ agent: true });
+    const reverted = NAV_ENTRIES.map((e) => (e.id === 'ready' ? { ...e, ready: false } : e));
+    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).not.toContain('ready');
+    expect(buildNav(ctx({ flags, showAll: true }), reverted).all.map((e) => e.id)).toContain('ready');
+    // Nothing else moved.
+    expect(buildNav(ctx({ flags }), reverted).all.map((e) => e.id)).toEqual(buildNav(ctx({ flags })).all.map((e) => e.id).filter((x) => x !== 'ready'));
   });
 
   it('crumbs come from the registry, most specific first; unknown paths get none', () => {
@@ -198,8 +283,27 @@ describe('Sidebar per brand', () => {
     expect(railHrefs()).toEqual(['/applications', '/resume', '/practice', '/profile', '/settings']);
   });
 
-  it('shows not-ready entries only with NEXT_PUBLIC_SHOW_ALL_NAV, and still only when flagged on', () => {
-    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+  it('GoApply shows 校招日历, 待投递 and 内推 with their flags on (no dev override)', () => {
+    renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.campusCalendar': true, agent: true, 'cn.referralCodes': true } });
+    expect(railHrefs()).toEqual(['/campus', '/ready', '/applications', '/resume', '/practice', '/profile', '/referrals', '/settings']);
+    expect(screen.getByRole('link', { name: 'Campus calendar' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'To apply' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Referral codes' })).toBeInTheDocument();
+  });
+
+  it('RoboApply shows Get the extension once it is flagged on and published; Coaching waits for a roster', () => {
+    const unpublished = renderWithBrand(<Sidebar />, { flags: { extension: true, coaching: true } });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
+    unpublished.unmount();
+
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
+    // The roster query has no network here, so Coaching stays hidden (fail closed) and the rest shows.
+    renderWithBrand(<Sidebar />, { flags: { extension: true, coaching: true } });
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/extension', '/settings']);
+    expect(screen.getByRole('link', { name: 'Get the extension' })).toBeInTheDocument();
+  });
+
+  it('shows the flipped entries with no dev override, and still only when flagged on', () => {
     renderWithBrand(<Sidebar />, { flags: { agent: true, invites: true } });
     const hrefs = railHrefs();
     expect(hrefs).toContain('/ready');
@@ -211,7 +315,6 @@ describe('Sidebar per brand', () => {
   });
 
   it('a badge renders the hook value; null renders nothing', () => {
-    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
     badgeValues.jobs = { kind: 'count', count: 7 };
     badgeValues.ready = null;
     badgeValues.applications = { kind: 'count', count: 2 };
@@ -250,7 +353,6 @@ describe('MobileNav per brand', () => {
   });
 
   it('GoApply: 5 slots — 职位 · 校招 · 投递 · 面试 · 我的', () => {
-    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
     renderWithBrand(<MobileNav />, { brand: 'goapply', flags: { 'jobs.feed': true, 'jobs.campusCalendar': true } });
     const bar = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(within(bar).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([
@@ -265,7 +367,6 @@ describe('MobileNav per brand', () => {
   });
 
   it('More opens a sheet with the brand’s More entries; a link closes it', async () => {
-    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
     renderWithBrand(<MobileNav />, { brand: 'goapply', flags: { agent: true } });
     fireEvent.click(screen.getByRole('button', { name: 'Me' }));
     const sheet = await screen.findByRole('dialog', { name: 'Me' });

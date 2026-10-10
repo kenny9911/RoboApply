@@ -10,9 +10,15 @@
 // stay valid after a fill, and the render-nothing checks run only while the
 // component's file still carries its `STUB (FND…)` header (a filled component
 // is tested by its owner).
+//
+// INT-12 (WP-93 "no dead ends"): every seam is filled. "no seam is still a
+// stub" below fails if a `STUB (FND…)` header, a `stubStep` or an unregistered
+// settings section comes back, so a ready surface can never mount a component
+// that renders nothing by design. The render-nothing cases stay as the
+// contract a future stub would have to meet.
 
 import { describe, it, expect, expectTypeOf, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ComponentProps, ComponentType, ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
@@ -63,8 +69,10 @@ import { AUTH_METHOD_COMPONENTS, type AuthMethodProps } from '../../components/a
 import { EmailMethod } from '../../components/auth/methods/EmailMethod';
 import { GoogleMethod } from '../../components/auth/methods/GoogleMethod';
 import { LineMethod } from '../../components/auth/methods/LineMethod';
-import { SECTION_COMPONENTS } from '../../components/features/settings/sectionComponents';
-import type { SettingsSectionId } from '../../components/features/settings/registry';
+import { SECTION_COMPONENTS, SECTION_EXTRAS } from '../../components/features/settings/sectionComponents';
+import { SETTINGS_REGISTRY, type SettingsSectionId } from '../../components/features/settings/registry';
+import { TwoFactorSettings } from '../../components/features/account-v2';
+import { FinishSetupSettingsLine } from '../../components/features/onboarding';
 import type { SettingsSectionProps } from '../../components/features/settings/sectionComponents';
 import type { PublicFeedItem } from '../../lib/api/contracts/feed';
 import type { StepResponse as OnboardingStepResponse } from '../../lib/api/contracts/onboarding';
@@ -213,15 +221,88 @@ describe('seams are wired before their owners fill them (no hot-file edit needed
     });
   });
 
-  it('the six area-owned settings sections are registered', () => {
-    expect(SECTION_COMPONENTS).toMatchObject({
+  it('every area-owned settings section is registered (INT-12 added notifications and search)', () => {
+    expect(SECTION_COMPONENTS).toEqual({
+      notifications: notifications.NotificationsSettingsSection,
+      billing: credits.CreditsSettingsSection,
+      credits: credits.CreditsSettingsSection,
+      privacy: compliance.ComplianceSettingsSection,
       consents: compliance.ComplianceSettingsSection,
+      appearance: brand.BrandSettingsSection,
+      search: search.SearchSettingsSection,
       assistant: copilot.CopilotSettingsSection,
       devices: extension.ExtensionSettingsSection,
       connections: network.NetworkSettingsSection,
       referrals: growth.GrowthSettingsSection,
       sensitive: profile.ProfileSettingsSection,
     });
+  });
+
+  it('the area blocks inside a section are registered: finish-setup, two-step sign-in, GoApply phone number', () => {
+    expect(SECTION_EXTRAS.account?.map((e) => e.component)).toEqual([FinishSetupSettingsLine]);
+    expect(SECTION_EXTRAS.security?.map((e) => e.component)).toEqual([TwoFactorSettings, authCn.ChangePhoneSection]);
+    expect(SECTION_EXTRAS.security?.find((e) => e.component === authCn.ChangePhoneSection)?.brands).toEqual(['goapply']);
+  });
+});
+
+describe('no seam is still a stub (INT-12, WP-93 "no dead ends")', () => {
+  const F = 'components/features';
+  /** Every seam file FND-6b created as a stub. */
+  const SEAM_FILES = [
+    `${F}/job/JobDetailPanel.tsx`,
+    `${F}/network/PeoplePanel.tsx`,
+    `${F}/offers/OfferSection.tsx`,
+    `${F}/offers/OfferComparison.tsx`,
+    `${F}/visitor/VisitorFeed.tsx`,
+    `${F}/growth/GettingStartedChecklist.tsx`,
+    `${F}/credits/OutOfCreditsSheet.tsx`,
+    `${F}/market/LegalFooter.tsx`,
+    `${F}/market/AiGeneratedBadge.tsx`,
+    `${F}/market/PriceReference.tsx`,
+    `${F}/auth-cn/PhoneMethod.tsx`,
+    `${F}/auth-cn/WechatMethod.tsx`,
+    'components/auth/methods/EmailMethod.tsx',
+    'components/auth/methods/GoogleMethod.tsx',
+    'components/auth/methods/LineMethod.tsx',
+    `${F}/extension/FillWithExtensionButton.tsx`,
+    `${F}/coaching/PracticeReportCoachLine.tsx`,
+    `${F}/practice-cn/CnReport.tsx`,
+    `${F}/notify-cn/SubscribeOnTap.tsx`,
+    ...['auth', 'search', 'notifications', 'credits', 'compliance', 'brand', 'copilot', 'extension', 'network', 'growth', 'profile'].map(
+      (area) => `${F}/${area}/SettingsSection.tsx`,
+    ),
+  ];
+
+  it.each(SEAM_FILES)('%s is filled', (file) => {
+    expect(stillStub(file), `${file} still carries its STUB (FND…) header`).toBe(false);
+  });
+
+  it('no file under components/, app/, hooks/ or lib/ carries a STUB (FND…) header', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(join(process.cwd(), dir))) {
+        if (name === 'node_modules' || name.startsWith('.')) continue;
+        const rel = `${dir}/${name}`;
+        if (statSync(join(process.cwd(), rel)).isDirectory()) walk(rel);
+        else if (/\.(tsx?|mjs)$/.test(name) && !/\.test\.tsx?$/.test(name) && stillStub(rel)) offenders.push(rel);
+      }
+    };
+    for (const root of ['components', 'app', 'hooks', 'lib']) walk(root);
+    expect(offenders).toEqual([]);
+  });
+
+  it('no GoApply onboarding step is still the stub step', () => {
+    for (const step of onboardingCn.CN_ONBOARDING_STEPS) {
+      const Step = onboardingCn.CN_ONBOARDING_STEP_COMPONENTS[step];
+      expect((Step as { name?: string }).name, step).not.toBe('stubStep');
+    }
+  });
+
+  it('every settings section has content: an area component or one of the three route renderers', () => {
+    const routeRendered = ['account', 'security', 'danger'];
+    for (const s of SETTINGS_REGISTRY) {
+      expect(!!SECTION_COMPONENTS[s.id] || routeRendered.includes(s.id), `#${s.id}`).toBe(true);
+    }
   });
 });
 

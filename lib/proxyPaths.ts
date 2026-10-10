@@ -18,10 +18,19 @@
 //
 // The list is every authenticated top-level route (PRODUCT_PLAN.md §3.4):
 // the pre-clone destinations, /settings and /admin, plus the clone's
-// authenticated prefixes (FND-6a): /onboarding (setup screens, no longer a
-// redirect), /profile, /assistant, /ready, /inbox, /invite, /coaching and
-// /referrals. A route whose page has not shipped yet is still gated: a
-// signed-out visitor lands on /login, never on a stub.
+// authenticated prefixes (FND-6a): /onboarding, /profile, /assistant, /ready,
+// /inbox, /invite, /coaching and /referrals.
+//
+// It is checked against the route tree (INT-12; __tests__/lib/proxyPaths.test.ts):
+// every first segment under app/(auth) and app/(onboarding) must be in this
+// list, and no page outside those two groups may sit under one of these
+// prefixes. So a new signed-in page cannot ship ungated, and a public page
+// cannot end up behind the login gate by accident.
+//
+// `/job-search` stays although its page is gone (INT-12 deleted the old
+// search workspace): `next.config.mjs` redirects the bare path to
+// /jobs/explore before the gate sees it, but /job-search/developers (the API
+// key page) is still a signed-in page under this prefix.
 //
 // The old V1/V2 entries (/mission, /apps, /home, /resumes, /tracker, /search,
 // /insights, /queue, /preferences, /mock-interview, /activity, /choose-plan,
@@ -38,7 +47,7 @@
 // APP_PATHS in app/robots.ts (a test keeps the two equal).
 
 export const PROTECTED_PREFIXES = [
-  // The four destinations.
+  // The four destinations (+ /job-search for /job-search/developers).
   '/jobs',
   '/job-search',
   '/resume',

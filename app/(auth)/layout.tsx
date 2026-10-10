@@ -24,6 +24,15 @@
 //                              through hooks/shared/useCreditGate.ts. Mounted
 //                              in the fullscreen practice room too, so an
 //                              exhausted bucket there is never a dead end.
+//   PaymentFailedBanner WP-21b above the page while the last renewal payment
+//                              failed (INT-12). Only where plans renew by
+//                              themselves (market intl; GoApply sells passes
+//                              that end on their own), and not under
+//                              /settings, where "Plan and billing" shows the
+//                              same banner itself. It cannot be gated on the
+//                              credit summary: a past-due subscription is no
+//                              longer "live" there, so the summary already
+//                              reads Free exactly when the banner matters.
 //
 // The popup gate learns about page views here (one popup per view) and is
 // seeded once with the server's last-shown time (24 h between popups).
@@ -42,11 +51,12 @@ import { AuthGate } from '../../components/AuthGate';
 import { RoboApplyAccessGate } from '../../components/RoboApplyAccessGate';
 import { CopilotRail } from '../../components/features/copilot/CopilotRail';
 import { AnnouncementModal } from '../../components/features/notifications/AnnouncementModal';
-import { OutOfCreditsSheet } from '../../components/features/credits';
+import { OutOfCreditsSheet, PaymentFailedBanner } from '../../components/features/credits';
 import { InstallPrompt } from '../../components/features/extension/InstallPrompt';
 import { TourOverlay } from '../../components/features/onboarding/TourOverlay';
 import { ToolResultClaimHost } from '../../components/features/tools';
 import { useAuth } from '../../lib/auth/useAuth';
+import { useBrand } from '../../lib/brand/BrandProvider';
 import { notePageView, usePopupGateSync } from '../../lib/ui/popupGate';
 
 /** Layout slots, rendered once beside the frame. */
@@ -73,6 +83,15 @@ function AuthLayoutSlots() {
   );
 }
 
+/** The failed-renewal banner above the page (see the header for where it shows). */
+function PaymentFailedSlot() {
+  const pathname = usePathname() ?? '';
+  const brand = useBrand();
+  if (brand.market !== 'intl') return null;
+  if (pathname === '/settings' || pathname.startsWith('/settings/')) return null;
+  return <PaymentFailedBanner />;
+}
+
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '';
   const fullscreen = isPracticeLivePath(pathname);
@@ -81,6 +100,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <AuthGate>
       <RoboApplyAccessGate>
         <AppShell fullscreen={fullscreen} slots={fullscreen ? <OutOfCreditsSheet /> : <AuthLayoutSlots />}>
+          {fullscreen ? null : <PaymentFailedSlot />}
           {children}
         </AppShell>
       </RoboApplyAccessGate>
