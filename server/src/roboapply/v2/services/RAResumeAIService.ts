@@ -25,6 +25,14 @@
 //
 // Ownership: every method loads the variant scoped to `{ id, userId }` and
 // 404s otherwise (single-user product — no team scope; see raVisibility.ts).
+//
+// WP-36a: `tailorDiff` is @deprecated — tailoring moved to tailor sessions
+// (server/src/features/resume/tailor, POST /v2/resumes/tailor-sessions: a
+// `tailor` credit, claim verification, finalize). Until the editor's
+// TailorModal moves over (WP-36b), the legacy path is kept honest: the prompt
+// carries `resumeForLlm(base)` (no name, contact block or sensitive lines),
+// the header is put back after the model ran, and the two scores are real
+// fit scores or null — never a pseudo-score or a heuristic uplift (D3).
 
 import prisma from '../../../lib/prisma.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
@@ -39,7 +47,7 @@ import {
 import { RAResumeTailorAgent } from '../agents/RAResumeTailorAgent.js';
 import { RAJobMatchScorerAgent } from '../agents/RAJobMatchScorerAgent.js';
 import { getResumeAIMessages, format } from '../lib/raResumeAIMessages.js';
-import { resumeAiAvailable, resumeForLlm } from '../../../features/resume/index.js';
+import { mergeTailored, resumeAiAvailable, resumeForLlm, TAILOR_SECTIONS } from '../../../features/resume/index.js';
 
 // ─── Public wire types (mirror lib/api/v2/types.ts) ───────────────────────
 
@@ -60,10 +68,12 @@ export interface RATailorDiff {
   jobId: string | null;
   companyName: string;
   roleTitle: string;
-  matchBefore: number;
-  matchAfter: number;
-  /** True when matchAfter is a heuristic estimate rather than a real re-score
-   *  of the tailored resume (see resolveTailorScores). The UI can label it. */
+  /** Real fit score of the base resume for this job, or null when none exists
+   *  (D3: never a made-up number). */
+  matchBefore: number | null;
+  /** Real re-score of the tailored resume, or null. */
+  matchAfter: number | null;
+  /** Always false since WP-36a: no estimate is ever sent (kept for the wire shape). */
   estimated: boolean;
   changes: RATailorChange[];
 }
@@ -514,69 +524,35 @@ export function applyTailorSelections(
   return md.replace(/\n{3,}/g, '\n\n');
 }
 
-// ─── Match-score estimation for the diff (matchBefore / matchAfter) ────────
+// ─── Fit scores for the diff (matchBefore / matchAfter) ────────────────────
 //
-// Running TWO full match-scorer passes (base + tailored) would double the
-// cost of a tailor-diff. Instead we read any cached base score and estimate
-// the tailored lift from how much structurally changed — deterministic, and
-// good enough for the editor's "72 → 94" affordance. If no cached score
-// exists, we derive a stable pseudo-score from the (resume, job) pair so the
-// same call always returns the same numbers.
-
-function hashToRange(seed: string, min: number, max: number): number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return min + (h % (max - min + 1));
-}
-
-function estimateScores(
-  cachedBase: number | null,
-  changeCount: number,
-  seed: string,
-): { matchBefore: number; matchAfter: number } {
-  const matchBefore =
-    typeof cachedBase === 'number' && cachedBase >= 0 && cachedBase <= 100
-      ? Math.round(cachedBase)
-      : hashToRange(seed + ':before', 58, 78);
-  // Each material change is worth a few points, capped so we never claim 100.
-  const lift = Math.min(22, 4 + changeCount * 3);
-  const matchAfter = Math.min(97, matchBefore + lift);
-  return { matchBefore, matchAfter };
-}
+// D3: both numbers are real or both are null. The base score is the cached
+// AI fit score of this (resume, job) pair (the job-detail score panel writes
+// it); the tailored score is one re-score of the tailored text through the
+// match scorer. Without a cached base score, a job, or a successful tailor,
+// the diff carries null and the client shows "—". The old hash-seeded
+// pseudo-score and the "+3 per change" uplift are gone.
 
 export interface TailorScoreResult {
-  matchBefore: number;
-  matchAfter: number;
-  /** True when matchAfter is the deterministic heuristic estimate; false when
-   *  it is a REAL re-score of the tailored resume through the match scorer. */
-  estimated: boolean;
+  matchBefore: number | null;
+  matchAfter: number | null;
+  /** Always false: an estimate is never sent. */
+  estimated: false;
 }
 
 /**
- * Resolve the tailor-diff's matchBefore / matchAfter.
- *
- * Cost-capped honesty: when we already hold a REAL cached base score (the
- * job-detail score panel populates it) AND the tailor produced real tailored
- * markdown against a real JD, we re-score ONLY the tailored resume (one extra
- * scorer call) for a genuine matchAfter — `estimated: false`. Otherwise (no
- * cached base, no job context, tailor/​scorer failure) we fall back to the
- * deterministic heuristic and honestly flag `estimated: true` rather than
- * present a fabricated uplift as a real ATS score.
- *
- * `rescoreTailored` is injected so this decision logic is unit-testable
- * without an LLM (see __test). It is only invoked on the real-score path.
+ * Resolve the tailor-diff's matchBefore / matchAfter. `rescoreTailored` is
+ * injected so the decision logic is unit-testable without an LLM; it runs only
+ * when a real cached base score exists.
  */
 export async function resolveTailorScores(opts: {
   cachedBase: number | null;
   agentSucceeded: boolean;
   hasJobContext: boolean;
-  changeCount: number;
-  seed: string;
   rescoreTailored: () => Promise<number>;
 }): Promise<TailorScoreResult> {
-  const { cachedBase, agentSucceeded, hasJobContext, changeCount, seed, rescoreTailored } = opts;
-  const haveRealBase =
-    typeof cachedBase === 'number' && cachedBase >= 0 && cachedBase <= 100;
+  const { cachedBase, agentSucceeded, hasJobContext, rescoreTailored } = opts;
+  const haveRealBase = typeof cachedBase === 'number' && cachedBase >= 0 && cachedBase <= 100;
   if (agentSucceeded && hasJobContext && haveRealBase) {
     try {
       const matchAfter = await rescoreTailored();
@@ -588,11 +564,10 @@ export async function resolveTailorScores(opts: {
         };
       }
     } catch {
-      /* fall through to the estimate below */
+      /* fall through: no numbers */
     }
   }
-  const est = estimateScores(cachedBase, changeCount, seed);
-  return { ...est, estimated: true };
+  return { matchBefore: null, matchAfter: null, estimated: false };
 }
 
 /** Fold full-width digits (U+FF10–U+FF19) onto ASCII so the numeric comparison
@@ -781,6 +756,7 @@ export class RAResumeAIService {
   }
 
   // ── tailorDiff ──
+  /** @deprecated WP-36a: use tailor sessions (`getTailorService()` in features/resume). */
   async tailorDiff(userId: string, id: string, body: TailorDiffInput, locale?: string): Promise<ResumeTailorDiffResult> {
     const manualCompany = (body?.targetCompany ?? '').trim();
     const manualTitle = (body?.targetTitle ?? '').trim();
@@ -842,7 +818,11 @@ export class RAResumeAIService {
               },
             },
           });
-          if (scoreRow && typeof scoreRow.score === 'number') cachedBase = scoreRow.score;
+          // Only a real AI fit score of THIS version of the resume counts (D3).
+          const fresh =
+            !scoreRow?.resumeContentHashAtScore || scoreRow.resumeContentHashAtScore === variant.resumeContentHash;
+          const isAi = !scoreRow?.scoreKind || scoreRow.scoreKind === 'ai';
+          if (scoreRow && typeof scoreRow.score === 'number' && fresh && isAi) cachedBase = scoreRow.score;
         } catch {
           /* no cached score — estimate below */
         }
@@ -850,7 +830,6 @@ export class RAResumeAIService {
     }
 
     const requestId = getCurrentRequestId() ?? undefined;
-    const seed = `${id}:${jobId ?? `${body.jdText ?? ''}${manualCompany}${manualTitle}`.slice(0, 32)}`;
     let agentSucceeded = false;
     let tailoredMd = baseMd;
     let changeSummary = '';
@@ -861,7 +840,8 @@ export class RAResumeAIService {
       const agent = new RAResumeTailorAgent();
       const out = await agent.run(
         {
-          baseResumeMarkdown: baseMd,
+          // Prompt hygiene: no name, contact block, photo, 籍贯, birth date or family lines.
+          baseResumeMarkdown: resumeForLlm(baseMd),
           jobTitle,
           companyName: targetCompanyName,
           jobDescription,
@@ -871,7 +851,8 @@ export class RAResumeAIService {
         { requestId, locale },
       );
       if (out && out.tailoredResumeMarkdown && out.tailoredResumeMarkdown.trim()) {
-        tailoredMd = out.tailoredResumeMarkdown;
+        // Put the header and sensitive lines back (the model never saw them).
+        tailoredMd = mergeTailored(baseMd, out.tailoredResumeMarkdown, TAILOR_SECTIONS);
         changeSummary = out.changeSummary ?? '';
         citationGuardPassed = out.citationGuardPassed;
         agentSucceeded = true;
@@ -890,19 +871,17 @@ export class RAResumeAIService {
 
     // Real matchAfter: re-score the tailored resume through the match scorer
     // when we already hold a real cached base score (cost-capped to +1 call);
-    // otherwise fall back to the labeled estimate. The scorer shares requestId
-    // so its tokens roll into the single ra_resume_tailor cost — no extra debit.
+    // otherwise both are null (D3). The scorer shares requestId so its tokens
+    // roll into the single ra_resume_tailor cost — no extra debit.
     const { matchBefore, matchAfter, estimated } = await resolveTailorScores({
       cachedBase,
       agentSucceeded,
       hasJobContext: jobDescription.trim().length > 0,
-      changeCount: changes.length,
-      seed,
       rescoreTailored: async () => {
         const scorer = new RAJobMatchScorerAgent();
         const out = await scorer.run(
           {
-            resumeMarkdown: tailoredMd,
+            resumeMarkdown: resumeForLlm(tailoredMd),
             jobTitle,
             jobDescription,
             jobQualifications: parsedJD?.qualifications ?? '',
@@ -1056,7 +1035,6 @@ export const __test = {
   splitSections,
   bulletsOf,
   deriveChanges,
-  estimateScores,
   hasFabricatedNumber,
   fallbackBulletRewrite,
   fallbackSummaryOptions,

@@ -48,6 +48,20 @@ export interface RAResumeTailorInput {
   jobDescription: string;
   parsedJD?: RAResumeTailorParsedJD;
   complexity: RAResumeTailorComplexity;
+  // ── Tailor sessions (WP-36a) ──
+  /** Sections the model may change ('summary' | 'experience' | 'skills' |
+   *  'projects' | 'education'); omitted → any. The service also enforces it
+   *  when it merges the result back (features/resume/tailor/blocks.ts). */
+  sections?: string[];
+  /** Experience 'quick' (reword and reorder existing bullets only) or 'full'. */
+  experienceDepth?: 'quick' | 'full';
+  /** The user's optional instruction (≤1000 chars). */
+  instruction?: string;
+  /** Missing keywords the user confirmed they have — the ONLY new keywords
+   *  the model may add. */
+  confirmedKeywords?: string[];
+  /** `profileSnapshotForLlm(userId).text` (never sensitive fields). */
+  profileContext?: string;
 }
 
 /** Where a tailored line traces back to in the base resume. */
@@ -235,7 +249,13 @@ export class RAResumeTailorAgent extends BaseAgent<
 
 4. **Citation table.** For every line in the tailored resume that contains a NUMBER, emit one entry in \`citationsByLine\` mapping the tailored line's 0-based index → the base resume's source line index. Use \`sourceLineIndex: -1\` for purely structural lines (headings, blank, etc.) — but lines with digits MUST cite a real source line. \`sourceText\` is the ONE field that is NOT written in the output language: it is a verbatim copy of the base-resume line, in whatever language that line is already in. Never translate, reword, or clean it up — it exists so a human can diff the claim against the source.
 
-5. **Change summary.** ≤ 200 words. Bullet list of what you changed and why. The samples that follow are English only because this prompt is; they illustrate the LEVEL OF DETAIL to give (which bullet, which employer, why), not the language to write in — write the summary itself in the output language. E.g. "Reordered Stripe bullets to lead with payments work (matches JD)". "Cut sentence about Jira admin work (not relevant)".
+5. **Facts from the job posting are never the candidate's own.** Do not write the employer's name, products, team or tools into the candidate's experience, and do not copy sentences from the posting. Add a keyword the base resume does not show ONLY when it is listed under "Keywords the candidate confirmed".
+
+6. **Sections and structure.** When a "Sections you may change" list is given, change only those sections and copy every other section exactly. Keep every \`##\` heading and every \`###\` entry line (employer · title · dates) exactly as written. Do not add a name, contact line, photo or personal details: they are added back after you answer.
+
+7. **Every change is checked.** Anything you add that the base resume does not show (a number, a skill, a new sentence) is shown to the candidate, who must confirm it is true before the resume can be used. Prefer reframing what is already there.
+
+8. **Change summary.** ≤ 200 words. Bullet list of what you changed and why. The samples that follow are English only because this prompt is; they illustrate the LEVEL OF DETAIL to give (which bullet, which employer, why), not the language to write in — write the summary itself in the output language. E.g. "Reordered Stripe bullets to lead with payments work (matches JD)". "Cut sentence about Jira admin work (not relevant)".
 
 ## Output schema (STRICT JSON, no prose around it, no code fences)
 
@@ -278,6 +298,29 @@ Output ONLY the JSON object.`;
         ? '(No job description provided — tailor toward the company and title above using only what the base resume demonstrates.)'
         : '(No target details provided — sharpen the base resume on its own terms; invent nothing.)';
     parts.push(`## Target job\n${targetBlock}Description:\n${description || noDescription}`);
+    const sections = Array.isArray(input.sections) ? input.sections.map((x) => clipString(x, 40)).filter(Boolean) : [];
+    if (sections.length > 0) {
+      parts.push(`## Sections you may change\n${sections.map((x) => `- ${x}`).join('\n')}\n(Copy every other section exactly.)`);
+    }
+    if (input.experienceDepth === 'quick') {
+      parts.push('## Experience: quick\nKeep every existing bullet. Reword and reorder them; do not add, merge or drop bullets.');
+    } else if (input.experienceDepth === 'full') {
+      parts.push('## Experience: full\nYou may rewrite, merge, reorder or drop bullets. Never add work the base resume does not show.');
+    }
+    const confirmed = Array.isArray(input.confirmedKeywords)
+      ? input.confirmedKeywords.map((k) => clipString(k, 60)).filter(Boolean).slice(0, 30)
+      : [];
+    if (confirmed.length > 0) {
+      parts.push(`## Keywords the candidate confirmed they have\n${confirmed.map((k) => `- ${k}`).join('\n')}\n(Work each into the most fitting existing line; never invent where it was used.)`);
+    }
+    const instruction = clipString(input.instruction, 1_000);
+    if (instruction) {
+      parts.push(`## The candidate's instruction (follow it unless it breaks a hard rule)\n${instruction}`);
+    }
+    const profile = clipString(input.profileContext, 3_000);
+    if (profile) {
+      parts.push(`## Candidate profile (context only; anything you add from it is shown to the candidate to confirm)\n${profile}`);
+    }
     if (input.parsedJD) {
       const pj = input.parsedJD;
       const blocks: string[] = [];

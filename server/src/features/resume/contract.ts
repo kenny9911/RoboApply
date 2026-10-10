@@ -232,10 +232,35 @@ export interface KeywordReportResponse {
   keywordSource: 'extraction' | 'posting';
 }
 
-// ── Tailor sessions (credit `tailor`) ────────────────────────────────────
+// ── Tailor sessions (credit `tailor`; WP-36a) ────────────────────────────
+//
+// Flow (PRODUCT_PLAN.md F-RES-09/10/15; ruling C12):
+//   POST /tailor-sessions            one `tailor` credit (Idempotency-Key); the
+//                                    tailored copy is written as a new resume
+//                                    version (`resultVariantId`) in `review`
+//   PATCH /tailor-sessions/:id/claims/:claimId
+//                                    Verify details: kept · removed · edited
+//   POST /tailor-sessions/:id/finalize
+//                                    409 `unverified_claims` while any claim is
+//                                    pending; marks the checklist step 'tailor'
+// Every keyword, number or statement in the tailored copy that the base resume
+// does not show is a `pending` claim. The result version carries
+// `RAResumeVariant.unverifiedClaims` = pending count, which blocks export
+// (WP-36b via `unverifiedClaimsCount`).
 
 export const TAILOR_MODES = ['fast', 'guided'] as const;
+export type TailorMode = (typeof TAILOR_MODES)[number];
 export const TAILOR_SECTIONS = ['summary', 'experience', 'skills', 'projects', 'education'] as const;
+export type TailorSection = (typeof TAILOR_SECTIONS)[number];
+/** Optional instruction length (PRODUCT F-RES-09). */
+export const TAILOR_INSTRUCTION_MAX = 1000;
+/**
+ * Experience "quick" (reword and reorder the bullets that are there) or
+ * "full" (bullets may be rewritten, merged or dropped) — PRODUCT F-RES-09.
+ * Stored in `RATailorSession.sections` as 'work_quick' | 'work_full'.
+ */
+export const EXPERIENCE_DEPTHS = ['quick', 'full'] as const;
+export type ExperienceDepth = (typeof EXPERIENCE_DEPTHS)[number];
 
 export const CreateTailorSessionBodySchema = z
   .object({
@@ -244,37 +269,100 @@ export const CreateTailorSessionBodySchema = z
     jd: JdSnapshot.optional(),
     mode: z.enum(TAILOR_MODES),
     sections: z.array(z.enum(TAILOR_SECTIONS)).min(1).max(5),
-    customPrompt: z.string().max(1000).optional(),
+    customPrompt: z.string().max(TAILOR_INSTRUCTION_MAX).optional(),
     /** Missing keywords the user confirmed they have. */
     keywords: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
+    /** How far the Experience section may change (only read when 'experience' is picked). */
+    experienceDepth: z.enum(EXPERIENCE_DEPTHS).default('quick'),
   })
   .strict()
   .refine((v) => Boolean(v.jobId) !== Boolean(v.jd), { message: 'Send either jobId or jd.' });
 
 export const CLAIM_KINDS = ['keyword', 'number', 'claim'] as const;
+export type ClaimKind = (typeof CLAIM_KINDS)[number];
 export const CLAIM_STATUSES = ['pending', 'kept', 'removed', 'edited'] as const;
+export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+/**
+ * Why a line needs the user's check:
+ *   new_number     a number the base resume does not have (CitationGuard)
+ *   new_keyword    a skill or keyword the base resume does not show
+ *   new_statement  a new sentence that does not come from the base resume
+ *   posting_text   words taken from the job posting (never the candidate's own fact)
+ */
+export const CLAIM_REASONS = ['new_number', 'new_keyword', 'new_statement', 'posting_text'] as const;
+export type ClaimReason = (typeof CLAIM_REASONS)[number];
 /** `RATailorSession.claims` (documented JSON column). */
 export const TailorClaimSchema = z
   .object({
     id: z.string(),
+    /** The line as it stands in the tailored version (the user's text once edited). */
     text: z.string(),
     kind: z.enum(CLAIM_KINDS),
     status: z.enum(CLAIM_STATUSES),
     evidence: z.object({ source: z.literal('resume'), ref: z.string() }).strict().optional(),
+    /** The words in `text` the base resume does not show (numbers, keywords). */
+    terms: z.array(z.string()).optional(),
+    reasons: z.array(z.enum(CLAIM_REASONS)).optional(),
+    /** Heading of the section the line is in. */
+    section: z.string().optional(),
+    /** The base resume line this one replaced, or null for a new line. */
+    original: z.string().nullable().optional(),
+    /** What the AI wrote, kept after an edit for the record. */
+    proposed: z.string().optional(),
+    /**
+     * Every place the line appears, in document order, when the AI wrote the
+     * same line more than once. A decision applies to every copy; Remove
+     * restores each copy to the base line it replaced (or deletes it).
+     */
+    copies: z
+      .array(z.object({ section: z.string().optional(), original: z.string().nullable() }).strict())
+      .optional(),
   })
   .strict();
 export const TailorClaimsSchema = z.array(TailorClaimSchema);
+export type TailorClaim = z.infer<typeof TailorClaimSchema>;
+
+export type TailorChangeKind = 'rewrite' | 'add' | 'remove';
+export interface TailorChange {
+  section: string;
+  /** '' for an added line. */
+  before: string;
+  /** '' for a removed line. */
+  after: string;
+  kind?: TailorChangeKind;
+}
+
+export type TailorSessionStatus = 'generating' | 'review' | 'finalized' | 'failed';
 
 export interface TailorSessionView {
   id: string;
-  status: 'generating' | 'review' | 'finalized' | 'failed';
+  status: TailorSessionStatus;
   baseVariantId: string;
   jobId: string | null;
+  /** 0–100 fit score of the base resume for this job (AI fit score), or null ("—"). */
   scoreBefore: number | null;
+  /** 0–100 fit score of the tailored version, or null ("—"). */
   scoreAfter: number | null;
-  changes: Array<{ section: string; before: string; after: string }>;
-  claims: Array<z.infer<typeof TailorClaimSchema>>;
+  changes: TailorChange[];
+  claims: TailorClaim[];
   resultVariantId: string | null;
+  // ── WP-36a additions ──
+  mode: TailorMode;
+  /** The picked sections (TAILOR_SECTIONS values). */
+  sections: string[];
+  /** Experience depth when 'experience' was picked, else null. */
+  experienceDepth: ExperienceDepth | null;
+  /** The job the copy was tailored for (job record or pasted posting). */
+  target: { title: string | null; company: string | null };
+  /** Claims still waiting for "Verify details"; export and finalize need 0. */
+  pendingClaims: number;
+  /** The two scores as sourced values (D3); null when not computed. */
+  fit: { before: SourcedNumber | null; after: SourcedNumber | null };
+  /** The tailored text is AI output (AiGeneratedBadge on GoApply). */
+  aiWritten: true;
+  /** Why the session failed: the AI step failed, or the request stopped. */
+  failure: 'ai_failed' | 'stopped' | null;
+  createdAt: string;
 }
 export const TailorSessionParamsSchema = z.object({ id: Id });
 export const ClaimParamsSchema = z.object({ id: Id, claimId: z.string().min(1).max(64) });
@@ -315,4 +403,9 @@ export const RESUME_ERROR_CODES = {
   /** Every AI version added numbers that are not in the resume (409). */
   citationGuard: 'citation_guard',
   sessionNotFound: 'tailor_session_not_found',
+  /** The session is not in review (still generating, failed or finalized) (409). */
+  sessionNotReviewable: 'tailor_session_not_reviewable',
+  claimNotFound: 'tailor_claim_not_found',
+  /** A removed claim cannot be decided again; the claim's line changed (409). */
+  claimLocked: 'tailor_claim_locked',
 } as const;
