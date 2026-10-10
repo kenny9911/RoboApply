@@ -17,6 +17,8 @@
 #     --build-arg APT_MIRROR=mirrors.aliyun.com \
 #     -t registry.cn-shanghai.aliyuncs.com/<namespace>/goapply-interview-agent:<tag> .
 # Run (secrets from a file, never baked in): see README.md and worker.env.example.
+# CI: .github/workflows/deploy-cn.yml builds this file (context interview-agent/)
+# as the `goapply-worker` image that deploy/cn/k8s/worker.yaml runs.
 
 ARG NODE_IMAGE=node:24-slim
 

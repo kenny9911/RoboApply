@@ -10,25 +10,23 @@
 // `structuredClone`) so mutations within the stub never bleed into other
 // stubs or back into the source module — important when a single Vitest
 // run swaps modules between tests.
+//
+// INT-13 (wave5 WP-93 #49) deleted the fixtures of the removed V2 slices
+// (queue, activity, integrations, saved searches, insights, keywords): the
+// stub stopped reading them in WP-75 and nothing else imported them.
 
 export { FIXTURE_JOBS } from './jobs';
 export { FIXTURE_GOAL } from './goal';
 export { FIXTURE_TRACKER } from './tracker';
 export { FIXTURE_RESUMES } from './resumes';
-export { FIXTURE_SAVED_SEARCHES } from './savedSearches';
-export { FIXTURE_INSIGHT } from './insights';
-export { FIXTURE_KEYWORDS } from './keywords';
 
 // ── V3 fixtures ───────────────────────────────────────────────────────
-export { FIXTURE_QUEUE } from './queue';
-export { FIXTURE_ACTIVITY, FIXTURE_AGENT_STATS } from './activity';
 export {
   FIXTURE_MOCK_CATALOG,
   FIXTURE_MOCK_QUESTIONS,
   type FixtureMockQuestion,
 } from './mockCatalog';
 export { FIXTURE_MOCK_SESSIONS, FIXTURE_MOCK_SCORE } from './mockSessions';
-export { FIXTURE_INTEGRATIONS } from './integrations';
 export { FIXTURE_PREFERENCES, FIXTURE_PREFERENCE_OPTIONS } from './preferences';
 export {
   FIXTURE_AI_REWRITES,

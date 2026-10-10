@@ -1,77 +1,30 @@
-# Kubernetes (Aliyun ACK, cn-shanghai) recipe — GoApply interview voice worker.
-# Mirrors ../k8s.yaml with the GoApply name, the deploy/cn image and its
-# domestic backend pins. No inbound ports: the worker dials out to the GoApply
-# LiveKit server and calls back to the GoApply API.
+# GoApply interview voice worker on Kubernetes (Aliyun ACK, cn-shanghai).
 #
-#   kubectl create namespace goapply
-#   kubectl -n goapply create secret generic goapply-interview-agent-env \
-#     --from-env-file=worker.env          # filled from worker.env.example;
-#                                         # gitignored (deploy/cn/.gitignore), never commit it
-#   kubectl -n goapply apply -f k8s.yaml
+# This file is a pointer. It defines nothing: applying it creates no object.
 #
-# Replace <namespace>/<tag> with the ACR repository the CI pushes to.
-
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: goapply-interview-agent
-  namespace: goapply
-  labels: { app: goapply-interview-agent, brand: goapply }
-spec:
-  replicas: 2
-  selector:
-    matchLabels: { app: goapply-interview-agent }
-  template:
-    metadata:
-      labels: { app: goapply-interview-agent, brand: goapply }
-    spec:
-      # Drain window: running interviews (20–30 min AI面试 practice) finish
-      # before the pod is killed.
-      terminationGracePeriodSeconds: 5400
-      containers:
-        - name: worker
-          image: registry.cn-shanghai.aliyuncs.com/<namespace>/goapply-interview-agent:<tag>
-          envFrom:
-            - secretRef: { name: goapply-interview-agent-env }
-          env:
-            # Repeated from the image so a different image can't drop them.
-            - { name: INTERVIEW_ENGINE_AGENT_NAME, value: GoApply-Interview }
-            - { name: WORKER_BRAND, value: goapply }
-            - { name: LLM_BACKEND, value: openai_compatible }
-            - { name: STT_BACKEND, value: dashscope_paraformer }
-            - { name: TTS_BACKEND, value: dashscope_cosyvoice }
-            - { name: WORKER_NUM_IDLE_PROCESSES, value: "1" }
-          ports:
-            - { containerPort: 8081, name: health }
-          readinessProbe:
-            httpGet: { path: /, port: health }
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          livenessProbe:
-            httpGet: { path: /, port: health }
-            initialDelaySeconds: 20
-            periodSeconds: 30
-          resources:
-            requests: { cpu: "1", memory: 1Gi }
-            limits: { cpu: "2", memory: 2Gi }
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: goapply-interview-agent
-  namespace: goapply
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: goapply-interview-agent
-  minReplicas: 2
-  maxReplicas: 8
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target: { type: Utilization, averageUtilization: 50 }
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 3600
+# The worker's Deployment lives in ONE place, the mainland stack's kustomize
+# base, next to the API, web and gateway it runs with:
+#
+#   deploy/cn/k8s/worker.yaml            (listed in deploy/cn/k8s/kustomization.yaml)
+#
+# WP-63b's standalone recipe that used to be here (Deployment
+# `goapply-interview-agent` + an HPA, Secret `goapply-interview-agent-env`) was
+# folded into that manifest in the integration wave (INT-13). What changed:
+#
+#   - name:     Deployment `worker` in namespace `goapply`
+#   - image:    `goapply-worker`, built from interview-agent/deploy/cn/Dockerfile
+#               by .github/workflows/deploy-cn.yml and rewritten to the ACR name
+#               by deploy/cn/render-overlay.mjs
+#   - secret:   `goapply-worker-env`, filled from ./worker.env.example
+#               (kubectl -n goapply create secret generic goapply-worker-env \
+#                  --from-env-file=<filled copy of worker.env.example>)
+#   - pins:     INTERVIEW_ENGINE_AGENT_NAME=GoApply-Interview, WORKER_BRAND=goapply,
+#               LLM_BACKEND=openai_compatible, STT_BACKEND=dashscope_paraformer,
+#               TTS_BACKEND=dashscope_cosyvoice (unchanged)
+#   - replicas: 0 in the base; the release overlay sets the count
+#               (--worker-replicas / CI variable CN_WORKER_REPLICAS). The CPU
+#               autoscaler was not carried over: the overlay sets `replicas` on
+#               every rollout, which would fight an HPA. Scale by the count.
+#   - drain:    terminationGracePeriodSeconds 5400 (unchanged)
+#
+# Deploy: docs/runbooks/cn-deploy.md. Render offline: kubectl kustomize deploy/cn/k8s

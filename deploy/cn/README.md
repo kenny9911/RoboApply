@@ -11,6 +11,7 @@ Containers, routing, Kubernetes manifests and scripts that run the same commit a
 | `Dockerfile.gateway` (+ `.dockerignore`), `nginx.conf` | nginx routing that mirrors `vercel.json`; visitor address from the SLB hop only |
 | `gateway-listen-ipv6.sh` | Gateway start-up step: adds the IPv6 listener only when the kernel has IPv6 |
 | `k8s/` | Kustomize base: namespace, api, web, worker, gateway, network policies, CronJobs |
+| `k8s/worker.yaml` | The one manifest of the interview voice worker. Image from `interview-agent/deploy/cn/Dockerfile`, Secret `goapply-worker-env` (names in `interview-agent/deploy/cn/worker.env.example`), `replicas: 0` until voice is configured |
 | `k8s/cronjobs.yaml` | **Generated** from `vercel.json` by `scripts/gen-cn-cronjobs.mjs`; do not edit |
 | `render-overlay.mjs` | Writes the release overlay (ACR image names, tag, SLB certificate, worker replicas) |
 | `preflight.mjs` | CN-1 readiness check (API initContainer) |

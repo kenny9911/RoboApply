@@ -1,17 +1,31 @@
-# The interview voice worker (image built from interview-agent/Dockerfile),
-# registered with LiveKit as GoApply-Interview.
+# The GoApply interview voice worker, registered with LiveKit as
+# GoApply-Interview. This is the ONE worker manifest of the mainland stack:
+# WP-63b's standalone recipe (interview-agent/deploy/cn/k8s.yaml) was folded
+# into it and is now a pointer to this file.
+#
+# Image: built from interview-agent/deploy/cn/Dockerfile (context
+# interview-agent/) by .github/workflows/deploy-cn.yml. That image pins the
+# domestic backends; the same pins are repeated under `env` below so another
+# image cannot drop them. The worker also enforces them in code: a worker named
+# GoApply-Interview (or with WORKER_BRAND=goapply) refuses every LiveKit
+# Inference gateway backend (interview-agent/src/backends).
 #
 # replicas: 0 in this base. Voice practice on the mainland needs the CN-1
 # LiveKit (self-hosted, CN plan L-11 / C-16) and the domestic LLM/STT/TTS
-# backend (WP-63b). Until both exist GoApply users get text practice, which
-# needs no worker. The deploy overlay sets the count (deploy/cn/render-overlay.mjs
-# --worker-replicas, CI variable CN_WORKER_REPLICAS).
+# credentials. Until both exist GoApply users get text practice, which needs no
+# worker. The deploy overlay sets the count (deploy/cn/render-overlay.mjs
+# --worker-replicas, CI variable CN_WORKER_REPLICAS). Scale by that count with
+# the same agent name; there is no autoscaler here, because the overlay sets
+# `replicas` on every rollout and would fight one.
 #
-# Secrets from `goapply-worker-env`: LIVEKIT_URL / LIVEKIT_API_KEY /
-# LIVEKIT_API_SECRET of the CN LiveKit, LIVEKIT_AGENT_CALLBACK_SECRET (=
-# CN_LIVEKIT_AGENT_CALLBACK_SECRET on the API), and the backend variables
-# WP-63b documents (LLM_BACKEND, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-# STT_BACKEND, TTS_BACKEND, DASHSCOPE_API_KEY, …).
+# Secret `goapply-worker-env` (names in interview-agent/deploy/cn/worker.env.example):
+#   LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET   the CN LiveKit project
+#   LIVEKIT_AGENT_CALLBACK_SECRET                         = CN_LIVEKIT_AGENT_CALLBACK_SECRET on the API
+#   DASHSCOPE_API_KEY                                     Paraformer STT, CosyVoice TTS (and Qwen)
+#   DEEPSEEK_API_KEY / KIMI_API_KEY / GLM_API_KEY / …     only the LLM vendors in use
+#   LLM_BASE_URL + LLM_API_KEY (+ LLM_MODEL)              optional: one mainland endpoint for every model
+# Pinned below, never in the Secret: INTERVIEW_ENGINE_AGENT_NAME, WORKER_BRAND,
+# LLM_BACKEND, STT_BACKEND, TTS_BACKEND.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,7 +48,8 @@ spec:
       automountServiceAccountToken: false
       imagePullSecrets:
         - name: acr-pull
-      # Drain window: SIGTERM lets running interviews finish before the pod goes.
+      # Drain window: SIGTERM lets running interviews (20–30 min AI面试 practice)
+      # finish before the pod goes.
       terminationGracePeriodSeconds: 5400
       containers:
         - name: worker
@@ -44,6 +59,11 @@ spec:
           env:
             - { name: NODE_ENV, value: "production" }
             - { name: INTERVIEW_ENGINE_AGENT_NAME, value: "GoApply-Interview" }
+            # Brand guard and domestic backend pins (same values as the image).
+            - { name: WORKER_BRAND, value: "goapply" }
+            - { name: LLM_BACKEND, value: "openai_compatible" }
+            - { name: STT_BACKEND, value: "dashscope_paraformer" }
+            - { name: TTS_BACKEND, value: "dashscope_cosyvoice" }
             - { name: WORKER_NUM_IDLE_PROCESSES, value: "1" }
             - { name: WORKER_HEALTH_HOST, value: "0.0.0.0" }
             - { name: WORKER_HEALTH_PORT, value: "8081" }

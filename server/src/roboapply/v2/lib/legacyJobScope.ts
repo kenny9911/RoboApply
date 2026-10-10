@@ -1,20 +1,21 @@
-// server/src/roboapply/v2/lib/legacyJobScope.ts — who may read a job through the legacy /v2 routes.
+// server/src/roboapply/v2/lib/legacyJobScope.ts — which job rows a legacy /v2 service may read.
 //
-// The deprecated /v2 job readers (`GET /v2/jobs/:id` and its sub-routes,
-// `POST /v2/search/run`, `RAResumeAIService` job context) stay mounted for the
-// legacy client until WP-75 deletes them. They must apply the same scope as
-// the job-detail area (WP-34 `loadJob`) and the GoApply recruitment-info mode
-// (R-14, WP-41):
+// The legacy job routes themselves (`GET /v2/jobs/:id`, `POST /v2/search/run`)
+// are deleted (INT-13). What still reads a job by id from the legacy code is:
+//   - `RAResumeService` (tailor / duplicate with a target job),
+//   - `RAResumeAIService` (job context for a rewrite),
+//   - `RAInsightService` (titles of the tracked jobs named in the weekly summary).
+// Each applies the same scope as the job-detail area (WP-34 `loadJob`) and the
+// GoApply recruitment-info mode (R-14, WP-41):
 //   - the request brand's market only;
 //   - public rows, or the viewer's own private import (never another user's);
 //   - never a seed demo row;
 //   - GoApply with `CN_RECRUITMENT_INFO_MODE=off`: no third-party posting.
-// A refused row answers exactly like a missing one (no existence leak).
+// A refused row is treated exactly like a missing one (no existence leak).
 
-import type { NextFunction, Request, Response } from 'express';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import type { EnvSource } from '../../../platform/brand/index.js';
-import { cnPostingVisible, cnPostingsWhere } from '../../../features/cn/jobs/index.js';
+import { cnPostingVisible } from '../../../features/cn/jobs/index.js';
 import prisma from '../../../lib/prisma.js';
 
 export interface LegacyJobScopeRow {
@@ -25,7 +26,16 @@ export interface LegacyJobScopeRow {
   sourceBoard?: unknown;
 }
 
-/** May this viewer read this job through a legacy /v2 route? */
+/** The columns `legacyJobVisible` needs; spread into a Prisma `select`. */
+export const LEGACY_JOB_SCOPE_SELECT = {
+  market: true,
+  visibility: true,
+  ownerUserId: true,
+  provider: true,
+  sourceBoard: true,
+} as const;
+
+/** May this viewer read this job through a legacy /v2 service? */
 export function legacyJobVisible(
   row: LegacyJobScopeRow | null | undefined,
   userId: string,
@@ -39,28 +49,8 @@ export function legacyJobVisible(
   return cnPostingVisible(row, userId, opts.env ?? process.env);
 }
 
-/** Extra `where` for legacy list queries: on GoApply, the recruitment-info mode (own imports only when off). */
-export function legacyJobListScope(userId: string, opts: { market?: string; env?: EnvSource } = {}): Record<string, unknown> | null {
-  const market = opts.market ?? getCurrentBrandOrDefault().market;
-  return market === 'cn' ? cnPostingsWhere(userId, opts.env ?? process.env) : null;
-}
-
 /** The job row, or null when it does not exist or the viewer may not read it. */
 export async function loadLegacyVisibleJob(userId: string, jobId: string): Promise<any | null> {
   const row = await (prisma as any).rAJob.findUnique({ where: { id: jobId } });
   return legacyJobVisible(row, userId) ? row : null;
-}
-
-/** Router guard for `/:id` routes: 404 `not_found` (the legacy shape) unless the viewer may read the job. */
-export async function requireLegacyVisibleJob(req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const userId = req.user?.id;
-    if (!userId || !(await loadLegacyVisibleJob(userId, req.params.id))) {
-      res.status(404).json({ error: 'not_found' });
-      return;
-    }
-    next();
-  } catch (err) {
-    next(err);
-  }
 }

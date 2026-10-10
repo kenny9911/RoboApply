@@ -16,7 +16,9 @@
 #   docker compose -f deploy/cn/compose.yaml exec -e CRON_API_URL=http://localhost:4607 \
 #     api node deploy/cn/cron-call.mjs /api/v1/cron/queue-drain
 #
-# The interview worker is behind --profile voice (needs the CN LiveKit and WP-63b's backend).
+# The interview worker is behind --profile voice (needs the CN LiveKit and the
+# domestic LLM/STT/TTS keys). Fill deploy/cn/.env.cn.worker from
+# interview-agent/deploy/cn/worker.env.example first.
 
 name: goapply-cn
 
@@ -101,12 +103,19 @@ services:
     image: goapply-worker:local
     build:
       context: ../../interview-agent
+      # The mainland worker image (domestic backend pins), same as CI and ACK.
+      dockerfile: deploy/cn/Dockerfile
     env_file:
+      # Filled from interview-agent/deploy/cn/worker.env.example.
       - path: .env.cn.worker
         required: true
     environment:
       NODE_ENV: production
       INTERVIEW_ENGINE_AGENT_NAME: GoApply-Interview
+      WORKER_BRAND: goapply
+      LLM_BACKEND: openai_compatible
+      STT_BACKEND: dashscope_paraformer
+      TTS_BACKEND: dashscope_cosyvoice
     stop_grace_period: 65m
     restart: unless-stopped
 
