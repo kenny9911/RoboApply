@@ -168,13 +168,14 @@ function renderOn(brand: BrandId, ui: ReactElement, flags: Partial<ResolvedFlags
 }
 
 describe('JobPage — WeChat share card (GoApply only)', () => {
-  it('GoApply: "{title} · {company}", the place and the pay as listed, linking the job in the app', () => {
+  it('GoApply: "{title} · {company}", the place and the pay as listed, linking this public page (not the signed-in app path)', () => {
     mockAuthState.value = buildAuthValue();
     renderOn('goapply', <JobPage job={job()} signupHref="/signup" />);
     const card = screen.getByTestId('wechat-share');
     expect(card).toHaveAttribute('data-title', 'Backend Engineer · Acme');
     expect(card.getAttribute('data-description')).toMatch(/^Taipei, Taiwan · .*1,200,000 – .*1,600,000 a year$/);
-    expect(card).toHaveAttribute('data-path', '/jobs/cmjob1');
+    // Anyone who opens the shared card can read the page: /jobs/<id> would send them to sign-in.
+    expect(card).toHaveAttribute('data-path', '/job/cmjob1-backend-engineer-acme');
   });
 
   it('pay stated only in words is shared as stated', () => {
@@ -208,6 +209,64 @@ describe('JobPage — WeChat share card (GoApply only)', () => {
   });
 });
 
+describe('JobPage — GoApply display lines (last checked, GoHire licence)', () => {
+  const LICENCE = { holder: '示例人力资源有限公司', number: '(沪)人服证字[2026]第0100001号' };
+
+  it('browse cards: GoApply adds the last-checked date under the source; RoboApply cards are unchanged', () => {
+    const cn = renderOn('goapply', <BrowsePage data={page()} signupHref="/signup" />);
+    const card = cn.container.querySelector('[data-job-id="cmjob1"]') as HTMLElement;
+    expect(within(card).getByText('Source: RoboHire')).toBeInTheDocument();
+    expect(card.querySelector('[data-last-checked]')?.textContent).toMatch(/^Last checked .*2026/);
+    cn.unmount();
+    const unknown = renderOn('goapply', <BrowsePage data={page({ jobs: [job({ lastVerifiedAt: null })] })} signupHref="/signup" />);
+    expect(unknown.container.querySelector('[data-last-checked]')).toBeNull();
+    unknown.unmount();
+    const ra = renderOn('roboapply', <BrowsePage data={page()} signupHref="/signup" />);
+    expect(ra.container.querySelector('[data-last-checked]')).toBeNull();
+  });
+
+  it('GoApply: the source block shows the source, the original link and the date we last checked the posting', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    renderOn('goapply', <JobPage job={job({ sourceName: '示例科技招聘官网', lastVerifiedAt: '2026-10-09T00:00:00.000Z' })} signupHref="/signup" />);
+    const source = screen.getByText('Source').closest('div')!;
+    expect(within(source).getByText(/示例科技招聘官网/)).toBeInTheDocument();
+    expect(within(source).getByRole('link', { name: 'View the original posting' })).toHaveAttribute('href', 'https://jobs.acme.example/1');
+    expect(within(source).getByText(/^Last checked .*2026/)).toBeInTheDocument();
+    // No licence was sent: none is printed.
+    expect(source.querySelector('[data-licence]')).toBeNull();
+  });
+
+  it('GoApply: a GoHire bank posting prints the licence the API sent, holder and number as given', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    renderOn('goapply', <JobPage job={job({ sourceName: 'GoHire', licence: LICENCE })} signupHref="/signup" />);
+    const line = screen.getByText('Source').closest('div')!.querySelector('[data-licence]')!;
+    expect(line.textContent).toBe(`${LICENCE.holder}, HR service licence ${LICENCE.number}`);
+  });
+
+  it('an unknown date or an API response without the fields prints neither line', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    const older = { ...job() } as Record<string, unknown>;
+    delete older.lastVerifiedAt;
+    delete older.licence;
+    for (const j of [job({ lastVerifiedAt: null }), older as never]) {
+      const view = renderOn('goapply', <JobPage job={j} signupHref="/signup" />);
+      const source = screen.getByText('Source').closest('div')!;
+      expect(source.querySelector('[data-last-checked]')).toBeNull();
+      expect(source.querySelector('[data-licence]')).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('RoboApply: the page is unchanged (neither line, even when the API sends the date)', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    renderOn('roboapply', <JobPage job={job({ licence: LICENCE })} signupHref="/signup" />);
+    const source = screen.getByText('Source').closest('div')!;
+    expect(source.querySelector('[data-last-checked]')).toBeNull();
+    expect(source.querySelector('[data-licence]')).toBeNull();
+    expect(screen.queryByText(/Last checked/)).toBeNull();
+  });
+});
+
 describe('JobPage — visitor assistant (flag `visitorAssistant`)', () => {
   it('RoboApply, signed out, flag on: mounted with the job as its page context', () => {
     mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
@@ -217,17 +276,27 @@ describe('JobPage — visitor assistant (flag `visitorAssistant`)', () => {
     expect(JSON.parse(el.getAttribute('data-context')!)).toEqual({ path: '/job/cmjob1-backend-engineer-acme', role: 'Backend Engineer', city: 'Taipei', country: 'TW' });
   });
 
-  it('absent with the flag off, for a signed-in user, and on GoApply', () => {
+  it('GoApply, signed out, flag on: mounted too (the widget itself asks for the AI consent tick)', () => {
     mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
-    const off = renderOn('roboapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: false });
-    expect(screen.queryByTestId('visitor-assistant')).toBeNull();
-    off.unmount();
-    const cn = renderOn('goapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
-    expect(screen.queryByTestId('visitor-assistant')).toBeNull();
-    cn.unmount();
+    renderOn('goapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
+    const el = screen.getByTestId('visitor-assistant');
+    expect(el).toHaveAttribute('data-from', 'job');
+    expect(JSON.parse(el.getAttribute('data-context')!)).toMatchObject({ path: '/job/cmjob1-backend-engineer-acme', role: 'Backend Engineer' });
+  });
+
+  it('absent with the flag off (the default on both brands) and for a signed-in user', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const off = renderOn(brand, <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: false });
+      expect(screen.queryByTestId('visitor-assistant')).toBeNull();
+      off.unmount();
+    }
     mockAuthState.value = buildAuthValue();
-    renderOn('roboapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
-    expect(screen.queryByTestId('visitor-assistant')).toBeNull();
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const signedIn = renderOn(brand, <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
+      expect(screen.queryByTestId('visitor-assistant')).toBeNull();
+      signedIn.unmount();
+    }
   });
 });
 

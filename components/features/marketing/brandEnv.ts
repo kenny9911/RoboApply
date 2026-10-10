@@ -1,8 +1,11 @@
 // components/features/marketing/brandEnv.ts — per-brand config the marketing
-// pages read on the server (R-03: unprefixed = RoboApply, `CN_` = GoApply, no
-// fallback across brands). Pure: callers pass the env (process.env on the
-// server; a table in tests). Mirrors server/src/features/support/service.ts
-// `supportAddress` so the page shows the same inbox the form sends to.
+// pages read on the server. Only identity values are read here (the support
+// inbox, the operating entity). They are brand-own (plan §3.1,
+// `BRAND_OWN_ENV`): unprefixed = RoboApply, `CN_` = GoApply, and they never
+// fall back across brands, so one brand's entity or inbox never shows on the
+// other (D3). Pure: callers pass the env (process.env on the server; a table
+// in tests). Mirrors server/src/features/support/service.ts `supportAddress`
+// so the page shows the same inbox the form sends to.
 
 import type { ProductBrand } from '../../../lib/brand/registry.generated';
 

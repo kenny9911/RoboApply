@@ -5,7 +5,7 @@
 //   /browse/{role}                          role
 //   /browse/{role}/{city}                   role_city (Taipei, Hsinchu, Taichung, Kaohsiung, …)
 //   /browse/remote/{role}                   remote_role
-//   /browse/visa-sponsorship/{country}/{role} sponsorship_role
+//   /browse/visa-sponsorship/{country}/{role} sponsorship_role (RoboApply only: `pageTypeOpen`)
 //   /browse/entry-level, /browse/internships segment
 //   /browse/graduate/{role}                 graduate_role
 //   /job/{id}-{slug}                        public job page
@@ -27,7 +27,18 @@ import {
   type SeoRoleRef,
   type SeoSegment,
 } from './contract.js';
+import type { Market } from '../../platform/brand/registry.js';
 import type { JobScope } from './scope.js';
+
+/**
+ * Does this market have this page type? Visa sponsorship is a question of the
+ * international market only (GOAPPLY_PARITY_PLAN 3.12), so GoApply builds,
+ * lists and serves no `sponsorship_role` page. Every reader and the rebuild
+ * ask this one rule.
+ */
+export function pageTypeOpen(type: string, market: Market): boolean {
+  return type !== 'sponsorship_role' || market !== 'cn';
+}
 
 // ── Job slugs ─────────────────────────────────────────────────────────────
 

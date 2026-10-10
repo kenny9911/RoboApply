@@ -222,7 +222,6 @@ export async function publicJobHtmlStatus(
 ): Promise<410 | null> {
   const m = /^\/job\/([^/]+)\/?$/.exec(pathname);
   if (!m) return null;
-  if (getBrand(brandId).market === 'cn') return null; // GoApply job pages are deferred (404)
   const id = parseJobIdSlug(m[1]!);
   if (!id) return null;
   try {

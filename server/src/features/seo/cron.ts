@@ -2,12 +2,14 @@
 //
 // Called by server/src/cron/handlers.ts inside `runWithBrand(brand, …)` with a
 // 240 s budget. Per brand:
-//   1. skip at once when browse pages are off (`seo.browse`) or deferred
-//      (GoApply) — under 2 s with nothing due;
+//   1. skip at once when browse pages are off (`seo.browse`), or when the
+//      brand shows no public postings (GoApply with
+//      CN_RECRUITMENT_INFO_MODE=off) — under 2 s with nothing due;
 //   2. enumerate candidate pages from real inventory (grouped counts of
 //      publicly listable jobs: roles and their taxonomy parents, role × city,
-//      remote, quote-backed sponsorship by country, graduate, the two
-//      segments) plus every page already stored;
+//      remote, quote-backed sponsorship by country (RoboApply only:
+//      `pageTypeOpen`), graduate, the two segments) plus every page already
+//      stored;
 //   3. per page, most jobs first, until the budget runs low: exact stats
 //      (the same reader the page uses), indexable = jobCount ≥ floor, an
 //      English title / h1 / intro built from a template whose numbers are
@@ -16,8 +18,8 @@
 //      the web's `/api/revalidate` (secret-gated), which runs
 //      `revalidateTag(tag, 'max')`;
 //   5. brands indexed by Baidu push newly indexable URLs to Baidu's push API
-//      when `CN_BAIDU_PUSH_TOKEN` is set (GoApply; nothing to push while its
-//      browse pages are deferred).
+//      when `CN_BAIDU_PUSH_TOKEN` is set (GoApply).
+// Both brands run the same rebuild over their own market's rows (D5).
 
 import { brandEnv, type EnvSource, type ProductBrand } from '../../platform/brand/index.js';
 import { isEnabled as platformIsEnabled } from '../../platform/flags.js';
@@ -26,10 +28,10 @@ import { logger } from '../../services/LoggerService.js';
 import { findCity, type CityRecord } from '../jobs/geo/index.js';
 import { getTaxonomyNode, taxonomyAncestors, type TaxonomyNode } from '../jobs/taxonomy/index.js';
 import { INDEX_FLOORS, SEO_SEGMENTS, SeoPageParamsSchema, type SeoPageType } from './contract.js';
-import { browseTarget, seoCacheTag, targetFromParams, type BrowseTarget } from './paths.js';
+import { browseTarget, pageTypeOpen, seoCacheTag, targetFromParams, type BrowseTarget } from './paths.js';
 import { defaultSeoRepo, type SeoPageRow, type SeoRepo } from './repo.js';
 import { allowedPublicBoards, type JobScope, type ScopeContext } from './scope.js';
-import { createSeoService, type SeoService } from './service.js';
+import { createSeoService, publicListingsOpen, type SeoService } from './service.js';
 import { introNumbersMatch, introText, isIndexable } from './stats.js';
 
 /** Stop starting new pages when this little budget is left (the run still reports). */
@@ -115,9 +117,12 @@ export async function collectCandidates(repo: SeoRepo, ctx: ScopeContext): Promi
   await scoped({ remote: true }, 'remote_role');
   await scoped({ seniority: ['intern_newgrad'], internship: false }, 'graduate_role');
 
-  for (const g of await repo.groupCounts({ sponsorshipOffered: true }, ctx, ['primaryTaxonomyId', 'locationCountry'], GROUP_LIMIT)) {
-    const role = roleOf(g.keys.primaryTaxonomyId);
-    if (role && g.keys.locationCountry && g.count >= INDEX_FLOORS.sponsorship_role) add(browseTarget('sponsorship_role', { role, country: g.keys.locationCountry }), g.count);
+  // Visa-sponsorship pages exist on the international market only.
+  if (pageTypeOpen('sponsorship_role', ctx.market)) {
+    for (const g of await repo.groupCounts({ sponsorshipOffered: true }, ctx, ['primaryTaxonomyId', 'locationCountry'], GROUP_LIMIT)) {
+      const role = roleOf(g.keys.primaryTaxonomyId);
+      if (role && g.keys.locationCountry && g.count >= INDEX_FLOORS.sponsorship_role) add(browseTarget('sponsorship_role', { role, country: g.keys.locationCountry }), g.count);
+    }
   }
 
   for (const segment of SEO_SEGMENTS) add(browseTarget('segment', { segment }), 0);
@@ -173,8 +178,8 @@ export function createSeoRebuild(deps: SeoRebuildDeps = {}): CronTask {
     const { brand, budget } = ctx;
     const env = deps.env ?? process.env;
     const fetchImpl: FetchLike = deps.fetch ?? ((url, init) => fetch(url, init));
-    // GoApply: browse pages are deferred (TASK_PLAN WP-56); nothing to build or push yet.
-    if (brand.market === 'cn') return { skipped: 'not_for_market' };
+    // GoApply's off switch for postings: nothing to build, revalidate or push.
+    if (!publicListingsOpen(brand, env)) return { skipped: 'postings_off' };
     const browseOn = deps.isEnabled ? await deps.isEnabled('seo.browse', brand) : await platformIsEnabled('seo.browse', { brand, env });
     if (!browseOn) return { skipped: 'disabled' };
 
@@ -188,7 +193,7 @@ export function createSeoRebuild(deps: SeoRebuildDeps = {}): CronTask {
     const candidates = await collectCandidates(repo, scopeCtx);
     const seen = new Set(candidates.map((c) => keyOf(c.target.type, c.target.slug)));
     for (const row of prev.values()) {
-      if (seen.has(keyOf(row.type, row.slug))) continue;
+      if (seen.has(keyOf(row.type, row.slug)) || !pageTypeOpen(row.type, brand.market)) continue;
       const params = SeoPageParamsSchema.safeParse(row.params);
       const target = params.success ? targetFromParams(row.type, params.data) : null;
       if (target) candidates.push({ target, weight: row.jobCount });

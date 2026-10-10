@@ -10,6 +10,11 @@
 // The list is the public read (CDN-cacheable, server-rendered for crawlers);
 // a signed-in user's reminders come from /subscriptions. Everything shown is
 // a published entry a person checked against the official page.
+//
+// The calendar is on by default on GoApply (D5) and starts empty: staff add
+// programmes one by one, and none is ever invented (D3). So an empty,
+// unfiltered calendar says it is being put together; "no programmes match"
+// is said only when the visitor's own filters are what left the list empty.
 
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -83,6 +88,7 @@ export function CampusCalendar({ initial = null, filter = {} }: CampusCalendarPr
   const list = useCampusList(applied, sameAsInitial ? initial : null);
   const reminderFor = useReminders(`${pathname}${toQuery(applied)}`);
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+  const filtered = Object.keys(applied).length > 0;
 
   const apply = (next: CampusFilter) => {
     const clean: CampusFilter = {
@@ -170,7 +176,15 @@ export function CampusCalendar({ initial = null, filter = {} }: CampusCalendarPr
         ) : list.isError && !items.length ? (
           <EmptyState title={t('list.error')} action={<Btn onClick={() => void list.refetch()}>{t('list.retry')}</Btn>} />
         ) : !items.length ? (
-          <EmptyState title={t('list.empty')} sub={t('list.emptySub')} />
+          filtered ? (
+            <div data-campus-empty="filtered">
+              <EmptyState title={t('list.empty')} sub={t('list.emptySub')} />
+            </div>
+          ) : (
+            <div data-campus-empty="compiling">
+              <EmptyState title={t('list.compiling')} sub={t('list.compilingSub')} />
+            </div>
+          )
         ) : (
           <ul className={styles.list}>
             {items.map((ev) => (

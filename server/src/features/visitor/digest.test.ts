@@ -2,7 +2,7 @@
 //
 // WP-78 logged-out alert sends: only confirmed subscriptions, only when due,
 // real totals, never a zero-job email, purge of unconfirmed and departed
-// addresses, capability off → nothing, budget respected, GoApply links.
+// addresses, capability off → nothing, budget respected, public job links on both brands.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -159,10 +159,23 @@ describe('anon alert digest', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('GoApply links go through signup (no public job pages there)', () => {
-    expect(digestJobHref({ id: 'j1', title: '数据分析师', companyName: '某公司' }, GO, 'https://www.goapply.top')).toBe(
-      'https://www.goapply.top/signup?from=alert&next=%2Fjobs%2Fj1',
-    );
+  it('both brands link the public job page, each on its own origin', () => {
+    // A CJK title has no ASCII slug: the path is the id alone.
+    expect(digestJobHref({ id: 'j1', title: '数据分析师', companyName: '某公司' }, GO, 'https://www.goapply.top')).toBe('https://www.goapply.top/job/j1?from=alert');
+    expect(digestJobHref({ id: 'j2', title: 'Data Analyst', companyName: 'Bosch' }, GO, 'https://www.goapply.top')).toBe('https://www.goapply.top/job/j2-data-analyst-bosch?from=alert');
+    expect(digestJobHref({ id: 'j2', title: 'Data Analyst', companyName: 'Bosch' }, ROBO, 'https://www.roboapply.io')).toBe('https://www.roboapply.io/job/j2-data-analyst-bosch?from=alert');
+  });
+
+  it('a GoApply digest is sent with public job links and the GoApply signup link', async () => {
+    const { repo, send, run } = setup();
+    repo.rows.push(sub({ id: 'cn1', brand: 'goapply', email: 'reader@example.cn', locale: 'zh', filters: {} }));
+    repo.jobs.push(job('cnjob', 1, { title: '数据分析师', companyName: '示例科技' }));
+    const res = await run(GO);
+    expect(res).toMatchObject({ sent: 1 });
+    const params = send.mock.calls[0]![0].params as { jobs: Array<{ href: string }>; signupUrl: string };
+    expect(params.jobs[0]!.href).toBe('https://www.goapply.top/job/cnjob?from=alert');
+    expect(params.signupUrl).toBe('https://www.goapply.top/signup?from=alert');
+    expect(JSON.stringify(params)).not.toContain('next=%2Fjobs');
   });
 
   it('shows pay only as the posting lists it', () => {

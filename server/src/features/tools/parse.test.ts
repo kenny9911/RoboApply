@@ -27,7 +27,7 @@ import { getBrand } from '../../platform/brand/registry.js';
 import { HttpError } from '../../platform/http.js';
 import { bySeverity, runChecklist, runRequirementRows } from './checks.js';
 import { CN_RESUME_MD, FILES, POSTING, WEAK_RESUME_MD } from './fixtures.js';
-import { defaultParseUpload, nameFromFile, stripControl, textToMarkdown, withReadableDates } from './parse.js';
+import { anonymousAiAllowed, defaultParseUpload, nameFromFile, stripControl, textToMarkdown, withReadableDates } from './parse.js';
 
 afterEach(() => vi.resetAllMocks());
 
@@ -166,16 +166,39 @@ describe('defaultParseUpload', () => {
     expect((await defaultParseUpload(input('goapply'))).via).toBe('local_text');
   });
 
-  it('GoApply never runs the structured parse for an anonymous visitor, even with ai.text on', async () => {
+  it('GoApply runs the structured parse only for a run that carried the ticked notice', async () => {
     m.gohire.mockResolvedValue(null);
     m.pdf.mockResolvedValue(PLAIN_TEXT);
     m.isEnabled.mockResolvedValue(true);
     m.agent.mockResolvedValue({ name: 'Sam Rivera', experience: [], education: [], skills: [] });
-    const out = await defaultParseUpload(input('goapply'));
+    // No notice on the run (a caller that did not go through the service's check): never a model.
+    const without = await defaultParseUpload(input('goapply'));
     expect(m.agent).not.toHaveBeenCalled();
     expect(m.llmChat).not.toHaveBeenCalled();
+    expect(without.via).toBe('local_text');
+    expect(without.markdown).toContain('## Experience');
+    // With the notice: the same structured parse RoboApply runs.
+    const withNotice = await defaultParseUpload({ ...input('goapply'), consented: true });
+    expect(m.agent).toHaveBeenCalledTimes(1);
+    expect(withNotice.via).toBe('local_ai');
+    expect(m.isEnabled).toHaveBeenLastCalledWith('ai.text', { brand: expect.objectContaining({ id: 'goapply' }) });
+  });
+
+  it('GoApply with the notice but the text model off: the deterministic text pass', async () => {
+    m.gohire.mockResolvedValue(null);
+    m.pdf.mockResolvedValue(PLAIN_TEXT);
+    m.isEnabled.mockResolvedValue(false);
+    const out = await defaultParseUpload({ ...input('goapply'), consented: true });
+    expect(m.agent).not.toHaveBeenCalled();
     expect(out.via).toBe('local_text');
-    expect(out.markdown).toContain('## Experience');
+  });
+
+  it('anonymousAiAllowed: RoboApply always; GoApply only with the ticked notice', () => {
+    expect(anonymousAiAllowed(getBrand('roboapply'))).toBe(true);
+    expect(anonymousAiAllowed(getBrand('roboapply'), false)).toBe(true);
+    expect(anonymousAiAllowed(getBrand('goapply'))).toBe(false);
+    expect(anonymousAiAllowed(getBrand('goapply'), false)).toBe(false);
+    expect(anonymousAiAllowed(getBrand('goapply'), true)).toBe(true);
   });
 
   it('no readable text → 422 file_unreadable', async () => {

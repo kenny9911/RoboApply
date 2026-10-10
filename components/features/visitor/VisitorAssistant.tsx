@@ -5,6 +5,12 @@
 // POST /api/v1/public/copilot (SSE), which answers with page-scoped public
 // tools only (public job search, pay as posted, how the site works).
 //
+// GoApply: AI answers need the visitor's consent, and a visitor has no
+// account to hold one. So the panel shows a consent line with an unticked
+// box; nothing can be asked until it is ticked, and every turn carries the
+// consent version (VISITOR_CONSENT_VERSION). The server refuses a turn
+// without it (422 consent_required). RoboApply shows no box.
+//
 // Honesty: nothing typed here is stored (the server keeps no thread); the
 // answers never talk about the visitor's fit (there is no resume); every
 // answer is labelled as AI (and carries AiGeneratedBadge where required);
@@ -16,7 +22,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 
 import { useLocale, useTranslations } from 'next-intl';
 
 import { RoboApiError } from '../../../lib/api/client';
-import { apiErrorCode } from '../../../lib/api/contracts/wire';
+import { apiErrorCode, apiErrorReason } from '../../../lib/api/contracts/wire';
 import type { CopilotCard, CopilotSseEvent } from '../../../lib/api/contracts/copilot';
 import type { PublicFeedItem } from '../../../lib/api/contracts/feed';
 import { sendVisitorTurn } from '../../../lib/api/visitor';
@@ -25,7 +31,7 @@ import { Btn, Sheet } from '../../v3/primitives';
 import { CopilotCardView } from '../copilot';
 import { AiGeneratedBadge } from '../market';
 import { payText } from '../feed';
-import { signupHref, visitorJobHref } from './model';
+import { VISITOR_CONSENT_VERSION, signupHref, visitorJobHref } from './model';
 import styles from './visitor.module.css';
 
 export interface VisitorPageContext {
@@ -41,7 +47,7 @@ export interface VisitorAssistantProps {
   from: string;
 }
 
-type TurnError = 'rateLimited' | 'unavailable' | 'generic';
+type TurnError = 'rateLimited' | 'unavailable' | 'consent' | 'generic';
 
 interface Turn {
   id: string;
@@ -58,12 +64,13 @@ const VISITOR_CARDS = new Set(['job_list', 'salary', 'notice']);
 export function errorKind(err: unknown): TurnError {
   const code = apiErrorCode(err);
   const status = err instanceof RoboApiError ? err.status : undefined;
+  if (apiErrorReason(err) === 'consent_required') return 'consent';
   if (code === 'rate_limited' || status === 429) return 'rateLimited';
   if (code === 'ai_unavailable' || code === 'feature_disabled' || status === 503 || status === 404) return 'unavailable';
   return 'generic';
 }
 
-function JobsCard({ card, from }: { card: CopilotCard; from: string }) {
+function JobsCard({ card }: { card: CopilotCard }) {
   const t = useTranslations('visitor');
   const locale = useLocale();
   const brand = useBrand();
@@ -83,7 +90,7 @@ function JobsCard({ card, from }: { card: CopilotCard; from: string }) {
           });
           return (
             <li key={job.jobId}>
-              <Link href={visitorJobHref(job, brand.market, `${from}-assistant`)} className={styles.cardLink}>
+              <Link href={visitorJobHref(job)} className={styles.cardLink}>
                 {job.title}
               </Link>
               <span className={styles.meta}>
@@ -101,6 +108,13 @@ function JobsCard({ card, from }: { card: CopilotCard; from: string }) {
 
 export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
   const t = useTranslations('visitor.assistant');
+  const brand = useBrand();
+  // GoApply: the consent line must be ticked before a question is sent.
+  const needsConsent = brand.market === 'cn';
+  const [consented, setConsented] = useState(false);
+  const consentId = useId();
+  const consentDetailId = useId();
+  const locked = needsConsent && !consented;
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -119,7 +133,7 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
   const ask = useCallback(
     async (question: string) => {
       const q = question.trim().slice(0, 1000);
-      if (!q || busy) return;
+      if (!q || busy || locked) return;
       const id = `turn-${++seq.current}`;
       setTurns((all) => [...all, { id, question: q, answer: '', cards: [], status: 'writing' }]);
       setText('');
@@ -128,7 +142,7 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
       abortRef.current = controller;
       try {
         await sendVisitorTurn(
-          { text: q, pageContext },
+          { text: q, pageContext, ...(needsConsent ? { consent: VISITOR_CONSENT_VERSION } : {}) },
           {
             signal: controller.signal,
             onEvent: (e: CopilotSseEvent) => {
@@ -158,13 +172,16 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
         patch(id, (x) => (x.status === 'writing' || x.status === 'lookingUp' ? { ...x, status: x.answer ? 'done' : 'error', error: x.answer ? undefined : 'generic' } : x));
       } catch (err) {
         if (controller.signal.aborted) return;
-        patch(id, (x) => ({ ...x, status: 'error', error: errorKind(err) }));
+        const kind = errorKind(err);
+        // The server did not accept the consent (a newer version of the line): ask again.
+        if (kind === 'consent') setConsented(false);
+        patch(id, (x) => ({ ...x, status: 'error', error: kind }));
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         setBusy(false);
       }
     },
-    [busy, pageContext, patch],
+    [busy, locked, needsConsent, pageContext, patch],
   );
 
   const onSubmit = (e: FormEvent) => {
@@ -188,11 +205,22 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
       <Sheet open={open} onClose={close} title={t('title')} description={t('intro')} initialFocusRef={inputRef}>
         <div className={styles.assistant} data-visitor-assistant="panel">
           <p className={styles.muted}>{t('note')}</p>
+          {needsConsent && (locked || turns.length === 0) ? (
+            <div className={styles.field} data-visitor-consent={consented ? 'given' : 'needed'}>
+              <label htmlFor={consentId} className={styles.check}>
+                <input id={consentId} type="checkbox" checked={consented} onChange={(e) => setConsented(e.target.checked)} disabled={busy} aria-describedby={consentDetailId} />
+                <span>{t('consent.label')}</span>
+              </label>
+              <p className={styles.muted} id={consentDetailId}>
+                {t('consent.detail')} <Link href={brand.legal.privacyPath}>{t('consent.privacyLink')}</Link>
+              </p>
+            </div>
+          ) : null}
           {turns.length === 0 ? (
             <ul className={styles.chips}>
               {chips.map((c) => (
                 <li key={c}>
-                  <button type="button" className={styles.chip} onClick={() => void ask(t(`chips.${c}`))} disabled={busy}>
+                  <button type="button" className={styles.chip} onClick={() => void ask(t(`chips.${c}`))} disabled={busy || locked}>
                     {t(`chips.${c}`)}
                   </button>
                 </li>
@@ -223,7 +251,7 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
                     </p>
                   ) : null}
                   {turn.cards.map((card) =>
-                    card.type === 'job_list' ? <JobsCard key={card.id} card={card} from={from} /> : <CopilotCardView key={card.id} card={card} ctx={{ onNavigate: close }} />,
+                    card.type === 'job_list' ? <JobsCard key={card.id} card={card} /> : <CopilotCardView key={card.id} card={card} ctx={{ onNavigate: close }} />,
                   )}
                   {turn.status === 'error' ? (
                     <div className={styles.notice} role="alert">
@@ -251,6 +279,7 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
               maxLength={1000}
               rows={2}
               placeholder={t('placeholder')}
+              disabled={locked}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -259,7 +288,7 @@ export function VisitorAssistant({ pageContext, from }: VisitorAssistantProps) {
                 }
               }}
             />
-            <Btn type="submit" variant="primary" disabled={busy || !text.trim()}>
+            <Btn type="submit" variant="primary" disabled={busy || locked || !text.trim()}>
               {t('send')}
             </Btn>
           </form>

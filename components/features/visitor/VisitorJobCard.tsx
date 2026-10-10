@@ -21,8 +21,6 @@ import styles from './visitor.module.css';
 export interface VisitorJobCardProps {
   item: VisitorFeedItem;
   market: 'intl' | 'cn';
-  /** Signup attribution for jobs without a public page. */
-  from: string;
 }
 
 function asFeedItem(item: VisitorFeedItem): FeedItem {
@@ -76,7 +74,7 @@ function Badge({ badge, locale }: { badge: CardBadge; locale: string }) {
   );
 }
 
-export function VisitorJobCard({ item, market, from }: VisitorJobCardProps) {
+export function VisitorJobCard({ item, market }: VisitorJobCardProps) {
   const t = useTranslations('visitor.card');
   const locale = useLocale();
   const feedItem = asFeedItem(item);
@@ -92,7 +90,7 @@ export function VisitorJobCard({ item, market, from }: VisitorJobCardProps) {
   const checked = shortDate(item.lastSeenAt, locale);
   const src = sourceLine(feedItem);
   const badges = cardBadges(feedItem);
-  const href = visitorJobHref(item, market, from);
+  const href = visitorJobHref(item);
 
   return (
     <article className={styles.card} data-job-id={item.jobId}>

@@ -27,10 +27,11 @@
 //     GET /results/:id and the claim answer 404 without the matching cookie,
 //     so a leaked result id alone opens nothing. The web never puts a result
 //     id in a URL.
-//   - GoApply in CN-0 (the offshore, invite-only closed beta): the tools are
-//     off (404 feature_disabled; /config says `available: false`) — an open,
-//     anonymous upload would send mainland visitors' resumes offshore outside
-//     the invite-only beta and its cross-border consent.
+//   - Both brands (D5). GoApply asks the visitor to tick a processing notice
+//     first (TOOLS_CONSENT_VERSION): it names the automated and AI read, the
+//     outside resume-reading service when one is active, and that the file is
+//     processed outside mainland China when the deployment is offshore or
+//     GoApply runs on the shared stack. No tick, no read (422 consent_required).
 //   - The resume check is the deterministic checklist (no AI pass, no number):
 //     a label, counts by severity and the top issues; the rest after signup.
 //   - The resume–job check is the deterministic requirement rows of the
@@ -86,8 +87,10 @@ export const TOOLS_ACCEPTED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt'] as co
  * GoApply processes a visitor's resume only after the visitor ticks the tool's
  * processing notice (there is no account to hold an `ai_resume_parsing` grant).
  * The form sends this version back; anything else answers 422 `consent_required`.
+ * v3 (2026-10-11): the notice names the AI read, and says the file is processed
+ * outside mainland China whenever GoApply runs on the shared stack or offshore.
  */
-export const TOOLS_CONSENT_VERSION = 'tools-processing.2026-10-10.v2';
+export const TOOLS_CONSENT_VERSION = 'tools-processing.2026-10-11.v3';
 
 /**
  * The browser-binding cookie: a random nonce, HttpOnly, SameSite=Lax, scoped
@@ -139,7 +142,7 @@ export const ResumeJobMatchFieldsSchema = z.object({
 
 /** GET /config */
 export interface ToolsConfigView {
-  /** False when the tools are off for this brand and stage (GoApply CN-0): hide them. */
+  /** Whether the tools run here. True on both brands; the web hides them when it is false. */
   available: boolean;
   /** Runs a day per IP, for each tool. */
   perIpPerDay: number;
@@ -155,7 +158,10 @@ export interface ToolsConfigView {
   /** GoApply: the processing notice must be ticked (send `consent=<consentVersion>`). */
   consentRequired: boolean;
   consentVersion: string | null;
-  /** GoApply offshore beta (CN-0): the notice says the resume is processed outside mainland China. */
+  /**
+   * GoApply, when the deployment is offshore or the brand runs on the shared
+   * stack: the notice says the resume is processed outside mainland China.
+   */
   processedOutsideMainland: boolean;
   /**
    * GoApply: the outside resume-reading service a file may be sent to (named

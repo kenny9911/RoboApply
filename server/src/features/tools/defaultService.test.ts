@@ -5,6 +5,7 @@
 // `resume_limit` (409 at the route).
 
 import { describe, expect, it, vi } from 'vitest';
+import { BRANDS } from '../../platform/brand/registry.js';
 
 const m = vi.hoisted(() => {
   class ResumeLimitError extends Error {
@@ -25,8 +26,16 @@ describe('default tools service', () => {
     expect(getToolsService()).toBe(s);
     for (const k of ['config', 'run', 'getResult', 'claim', 'purge'] as const) expect(typeof s[k]).toBe('function');
     expect(typeof surface.toolsOpen).toBe('function');
+    expect(typeof surface.processedOutsideMainland).toBe('function');
     // No server-side claim by result id: a result is kept only from the browser that ran it.
     expect(surface).not.toHaveProperty('claimToolResult');
+  });
+
+  it('the production gate is open for both brands whatever the deployment region', () => {
+    for (const env of [{}, { DEPLOY_REGION: 'cn-mainland' }, { DEPLOY_REGION: 'us' }]) {
+      expect(surface.toolsOpen(BRANDS.goapply, env)).toBe(true);
+      expect(surface.toolsOpen(BRANDS.roboapply, env)).toBe(true);
+    }
   });
 
   it('keeps the resume as a base resume and maps a full list to resume_limit', async () => {

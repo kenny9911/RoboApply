@@ -12,7 +12,7 @@
 // one English document. GoApply's `/en` is reachable but not indexed
 // (GoApply's SEO locale is zh only).
 //
-// RoboApply's localized homes carry the same live job ticker as `/`
+// The localized homes of both brands carry the same live job ticker as `/`
 // (app/page.tsx): its own Suspense boundary, so the page streams without it
 // and a slow or failed read shows no ticker (never invented counts).
 
@@ -22,7 +22,7 @@ import { notFound } from 'next/navigation';
 
 import { GoApplyHome, JsonLd, RoboApplyHome } from '../../components/features/marketing';
 import { JobTicker } from '../../components/features/seo/server';
-import { CN_HOME_FAQ_KEYS, HOME_FAQ_KEYS } from '../../components/features/marketing/catalog';
+import { HOME_FAQ_KEYS, cnHomeFaqKeys } from '../../components/features/marketing/catalog';
 import { RememberLocale } from '../../components/landing/RememberLocale';
 import { getBrand } from '../../lib/brand/registry.generated';
 import { isLocale, isLocaleIn } from '../../lib/localeConfig';
@@ -54,21 +54,19 @@ export default async function LocalizedLandingPage({ params }: LocaleParams) {
     path: homePath(brand, locale),
     name: messageAt(locale, brand.id, `${ns}.meta.title`, brand.name),
     description: messageAt(locale, brand.id, `${ns}.meta.description`),
-    faq: faqFromMessages(locale, brand.id, `${ns}.faq`, cn ? CN_HOME_FAQ_KEYS : HOME_FAQ_KEYS),
+    // GoApply: only the questions that hold whatever the operator switched off (see cnHomeFaqKeys).
+    faq: faqFromMessages(locale, brand.id, `${ns}.faq`, cn ? cnHomeFaqKeys(false) : HOME_FAQ_KEYS),
   });
+  const ticker = (
+    <Suspense fallback={null}>
+      <JobTicker />
+    </Suspense>
+  );
   return (
     <>
       <RememberLocale locale={locale} />
       <JsonLd json={json} />
-      {cn ? <GoApplyHome /> : (
-        <RoboApplyHome
-          ticker={
-            <Suspense fallback={null}>
-              <JobTicker />
-            </Suspense>
-          }
-        />
-      )}
+      {cn ? <GoApplyHome ticker={ticker} /> : <RoboApplyHome ticker={ticker} />}
     </>
   );
 }

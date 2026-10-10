@@ -22,17 +22,11 @@ export async function toolsMetadata(key: 'hub' | 'resumeCheck' | 'resumeJobMatch
 }
 
 /**
- * Whether the free tools run for this brand and stage. Mirrors the server's
- * `toolsOpen` (server/src/features/tools/service.ts): GoApply on the offshore
- * stack (CN-0, the invite-only closed beta; DEPLOY_REGION is not
- * `cn-mainland`) has no free tools, so their pages 404 and the hub lists none.
+ * Whether the free tools run for this brand. Mirrors the server's `toolsOpen`
+ * (server/src/features/tools/service.ts): open on both brands and on every
+ * stack (D5). GoApply's extra step is the processing notice the visitor ticks
+ * on the tool page, not a closed page.
  */
-export function freeToolsOpen(brandId: BrandId, env: Record<string, string | undefined> = process.env): boolean {
-  if (getBrand(brandId).market !== 'cn') return true;
-  return (env.DEPLOY_REGION ?? '').trim().toLowerCase() === 'cn-mainland';
-}
-
-/** `freeToolsOpen` for the brand of this request. */
-export async function freeToolsOpenForRequest(): Promise<boolean> {
-  return freeToolsOpen(await getServerBrandId());
+export function freeToolsOpen(_brandId: BrandId): boolean {
+  return true;
 }

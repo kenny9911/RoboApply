@@ -7,6 +7,8 @@
 // A gated feature (capability off, extension not published, people data not
 // opted in) has no UI entry (R-04): its body renders only once the flag is
 // known to be on; when it is off the page says it isn't available.
+// A page that `needs` a default-on capability (catalog.ts) prints at once and
+// says it isn't available only once that capability is known to be off.
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -102,7 +104,9 @@ function Unavailable() {
 export function FeaturePage({ def }: { def: FeatureDef }) {
   const visible = useFeatureVisible(def);
   const { status } = useCapabilities();
-  if (def.gate === null || visible) return <FeatureBody def={def} />;
+  // An ungated page prints at once; `visible` is false for it only when the
+  // capability it needs is known to be off (then: "not available").
+  if (visible) return <FeatureBody def={def} />;
   // Fail closed: nothing until the capabilities are known, then "not available".
   if (status === 'loading') return <div className={styles.section} aria-busy="true" />;
   return <Unavailable />;

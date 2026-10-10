@@ -14,7 +14,7 @@ import {
   ORDERING_RULES as SERVER_RULES,
   RANKING_FACTORS as SERVER_FACTORS,
 } from '../../../../server/src/features/feed/contract';
-import { COMPANY_SPREAD, FEATURES, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, featuresFor, findFeature } from '../catalog';
+import { CN_HOME_FAQ_KEYS, COMPANY_SPREAD, FEATURES, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, brandPlansRenew, cnHomeFaqKeys, featuresFor, findFeature, indexableFeaturePaths } from '../catalog';
 import { HERO_COUNT_MIN, browseHref, buildSignupHref, fromSlug, heroCount, popularListHref, slugify } from '../links';
 
 describe('buildSignupHref (PRODUCT §3.2 CTA rule)', () => {
@@ -85,7 +85,56 @@ describe('site map per brand (PRODUCT §3.2)', () => {
       'referrals',
       'chrome-extension',
     ]);
-    expect(featuresFor('goapply').map((f) => f.slug)).toEqual(['campus-calendar', 'resume', 'interview-practice', 'assistant', 'form-filler']);
+    expect(featuresFor('goapply').map((f) => f.slug)).toEqual([
+      'job-matches',
+      'resume-tailoring',
+      'cover-letters',
+      'ready-to-apply',
+      'campus-calendar',
+      'resume',
+      'interview-practice',
+      'assistant',
+      'referral-codes',
+      'form-filler',
+    ]);
+  });
+
+  // D5: every capability the brands share has a page on both, under the same gate.
+  it('GoApply has a page for every shared RoboApply capability, with the same gate', () => {
+    const shared = ['job-matches', 'resume-tailoring', 'cover-letters', 'ready-to-apply', 'assistant'] as const;
+    for (const slug of shared) {
+      const ra = findFeature('roboapply', slug)!;
+      const ga = findFeature('goapply', slug)!;
+      expect(ga, slug).not.toBeNull();
+      expect([slug, ga.gate]).toEqual([slug, ra.gate]);
+      expect([slug, ga.key]).toEqual([slug, ra.key]);
+    }
+    // Interview practice exists on both; GoApply's has a written mode, so it needs AI text only.
+    expect(findFeature('goapply', 'interview-practice')?.gate).toBe('ai.text');
+    // The extension page per brand, and GoApply's own pages.
+    expect(findFeature('goapply', 'form-filler')?.gate).toBe(findFeature('roboapply', 'chrome-extension')?.gate);
+    expect(findFeature('goapply', 'referral-codes')).toMatchObject({ key: 'referralCodes', gate: 'cn.referralCodes' });
+    expect(findFeature('goapply', 'campus-calendar')?.gate).toBe('jobs.campusCalendar');
+    // Market-specific, RoboApply only.
+    expect(findFeature('goapply', 'visa-sponsorship')).toBeNull();
+    expect(findFeature('roboapply', 'referral-codes')).toBeNull();
+    // What GoApply's sitemap lists: the ungated pages only (one rule: isFeatureIndexable).
+    expect(indexableFeaturePaths('goapply')).toEqual(['/features/job-matches', '/features/resume-tailoring', '/features/cover-letters', '/features/resume']);
+  });
+
+  it('GoApply: what is about listed jobs follows jobs.feed (the page, the home question), and only that', () => {
+    // The job-matches page stays ungated (indexable) and names the capability it needs.
+    expect(findFeature('goapply', 'job-matches')).toMatchObject({ gate: null, needs: 'jobs.feed' });
+    expect(featuresFor('goapply').filter((f) => f.needs).map((f) => f.slug)).toEqual(['job-matches']);
+    expect(featuresFor('roboapply').some((f) => f.needs)).toBe(false);
+    // Home FAQ: every question while the feed is on; without it, all but "Where do the jobs come from?".
+    expect(cnHomeFaqKeys(true)).toEqual([...CN_HOME_FAQ_KEYS]);
+    expect(cnHomeFaqKeys(false)).toEqual(['q1', 'q2', 'q3', 'q5', 'q6']);
+  });
+
+  it('plans renew on RoboApply only (GoApply sells one-time passes)', () => {
+    expect(brandPlansRenew({ market: 'intl' })).toBe(true);
+    expect(brandPlansRenew({ market: 'cn' })).toBe(false);
   });
 
   it('a slug of the other brand is not found', () => {

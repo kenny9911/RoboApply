@@ -4,13 +4,18 @@
 //   GET  /api/v1/public/feed            20 items max, no fit, re-checked against the
 //                                       public-page predicate, public job path, cache
 //                                       headers, 429 from the per-IP limiter,
-//                                       404 feature_disabled with `jobs.feed` off (GoApply mode off)
-//   POST /api/v1/public/copilot         SSE of the visitor turn; 404 with the flag off;
-//                                       503 ai_unavailable on GoApply; 429 from the limiter;
-//                                       422 on a bad body; envelope error before the stream
-//   /api/v1/public/alerts               202 signup, confirm GET (no change) + POST,
-//                                       unsubscribe (works with alerts off), 404 with alerts off,
-//                                       404 signup without an email transport
+//                                       on by default on GoApply; 404 feature_disabled only
+//                                       with CN_RECRUITMENT_INFO_MODE=off
+//   POST /api/v1/public/copilot         SSE of the visitor turn; 404 with the flag off (the
+//                                       default on both brands); GoApply with the flag on:
+//                                       422 consent_required without the ticked consent
+//                                       version, the same turn as RoboApply with it;
+//                                       429 from the limiter; 422 on a bad body; envelope
+//                                       error before the stream
+//   /api/v1/public/alerts               202 signup on both brands with only the shared email
+//                                       credentials, confirm GET (no change) + POST,
+//                                       unsubscribe, 404 with alerts off (flag, or GoApply
+//                                       mode off), 501 signup without an email transport
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { RequestHandler } from 'express';
@@ -25,7 +30,7 @@ import { startRouteHarness, type RouteHarness } from '../../test/routeHarness.js
 import type { PublicFeedItem } from '../feed/contract.js';
 import { createPublicFeedRouter, createPublicFeedService, publicPathFor } from '../feed/publicRoutes.js';
 import { VisitorAlertsService } from './alerts.js';
-import type { AnonAlertView, VisitorFeedResponse } from './contract.js';
+import { VISITOR_CONSENT_VERSION, VisitorTurnBodySchema, type AnonAlertView, type VisitorFeedResponse } from './contract.js';
 import { createVisitorAlertsRouter, createVisitorCopilotRouter, publicCardOnly, type VisitorTurnFn } from './routes.js';
 import { createMemoryVisitorAlertsRepo } from './testkit.js';
 import { getBrand } from '../../platform/brand/registry.js';
@@ -36,16 +41,22 @@ const ROBO_HOST = 'localhost:3621';
 const GO_HOST = 'goapply.localhost:3621';
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const SECRET = { EMAIL_UNSUBSCRIBE_SECRET: 'route-secret' };
+/**
+ * "On" with only shared credentials: no CN_ value at all (D5). The visitor
+ * assistant is the one opt-in (its registry default is off on both brands).
+ */
 const ENV_ON = {
-  // RoboApply's assistant is opted in explicitly (the plan's default is off; FND sets the registry).
   FLAG_ROBOAPPLY_VISITOR_ASSISTANT: 'true',
-  // GoApply with the visitor assistant forced on and a domestic model configured: only the consent gate stops it.
   FLAG_GOAPPLY_VISITOR_ASSISTANT: 'true',
-  CN_LLM_PROVIDER: 'deepseek',
-  DEEPSEEK_API_KEY: 'k',
-  CN_LLM_MODEL: 'deepseek-chat',
-  RESEND_API_KEY: 'k', CN_RECRUITMENT_INFO_MODE: 'licensed', CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'GoApply <noreply@mail.goapply.top>', ...SECRET };
+  RESEND_API_KEY: 'k',
+  ...SECRET,
+};
 const ENV_OFF = { FLAG_ROBOAPPLY_VISITOR_ASSISTANT: 'false', FLAG_ROBOAPPLY_JOBS_ALERTS: 'false', ...SECRET };
+/** GoApply's operator off switches, each named explicitly. */
+const ENV_CN_MODE_OFF = { ...ENV_ON, CN_RECRUITMENT_INFO_MODE: 'off' };
+const ENV_CN_ALERTS_FLAG_OFF = { ...ENV_ON, FLAG_GOAPPLY_JOBS_ALERTS: 'false' };
+const ENV_CN_EMAIL_NONE = { ...ENV_ON, CN_EMAIL_TRANSPORT: 'none' };
+const ENV_CN_AI_OFF = { ...ENV_ON, CN_CONTENT_SAFETY_PROVIDER: 'nonsense' };
 
 function item(id: string, extra: Record<string, unknown> = {}): PublicFeedItem {
   return {
@@ -119,12 +130,18 @@ beforeAll(async () => {
     env: {},
     mounts: [
       ['/on/feed', createPublicFeedRouter({ env: ENV_ON, publicFeed: feedDeps })],
-      ['/off/feed', createPublicFeedRouter({ env: {}, publicFeed: feedDeps })],
+      ['/default/feed', createPublicFeedRouter({ env: {}, publicFeed: feedDeps })],
+      ['/modeoff/feed', createPublicFeedRouter({ env: ENV_CN_MODE_OFF, publicFeed: feedDeps })],
       ['/on/copilot', createVisitorCopilotRouter({ env: ENV_ON, visitorCopilot: { turn: turnSpy, rateLimiter: fakeLimiter, stillPublic: copilotStillPublic, now: () => NOW } })],
       ['/off/copilot', createVisitorCopilotRouter({ env: ENV_OFF, visitorCopilot: { turn: turnSpy, rateLimiter: passThrough } })],
+      ['/default/copilot', createVisitorCopilotRouter({ env: SECRET, visitorCopilot: { turn: turnSpy, rateLimiter: passThrough } })],
+      ['/aioff/copilot', createVisitorCopilotRouter({ env: ENV_CN_AI_OFF, visitorCopilot: { turn: turnSpy, rateLimiter: passThrough } })],
       ['/on/alerts', createVisitorAlertsRouter({ env: ENV_ON, visitorAlerts: alerts })],
       ['/off/alerts', createVisitorAlertsRouter({ env: ENV_OFF, visitorAlerts: alerts })],
       ['/nomail/alerts', createVisitorAlertsRouter({ env: SECRET, visitorAlerts: alerts })],
+      ['/modeoff/alerts', createVisitorAlertsRouter({ env: ENV_CN_MODE_OFF, visitorAlerts: alerts })],
+      ['/flagoff/alerts', createVisitorAlertsRouter({ env: ENV_CN_ALERTS_FLAG_OFF, visitorAlerts: alerts })],
+      ['/cnnomail/alerts', createVisitorAlertsRouter({ env: ENV_CN_EMAIL_NONE, visitorAlerts: alerts })],
     ],
   });
 });
@@ -154,15 +171,22 @@ describe('GET /public/feed', () => {
     expect(publicList).not.toHaveBeenCalled();
   });
 
-  it('GoApply items have no public page (path null); mode off → 404 feature_disabled', async () => {
-    const res = await h.request<Env<VisitorFeedResponse>>('GET', '/on/feed?role=x', { host: GO_HOST });
-    expect(res.status).toBe(200);
-    expect(res.body.data.items[0]!.path).toBeNull();
-    // Market cn: the CDN keeps a list 60 s, so a mode switched off is not outlived by cached postings.
-    expect(res.headers.get('cache-control')).toBe('public, max-age=0, s-maxage=60');
-    const off = await h.request<Env<unknown>>('GET', '/off/feed', { host: GO_HOST });
+  it('GoApply lists postings by default (no CN_ value); CN_RECRUITMENT_INFO_MODE=off → 404 feature_disabled', async () => {
+    for (const mount of ['/on/feed', '/default/feed']) {
+      const res = await h.request<Env<VisitorFeedResponse>>('GET', `${mount}?role=x`, { host: GO_HOST });
+      expect(res.status, mount).toBe(200);
+      expect(res.body.data.items.length, mount).toBeGreaterThan(0);
+      // The item's page is the public job page or null (an older feed build); never an app path.
+      const path = res.body.data.items[0]!.path;
+      expect(path === null || path.startsWith('/job/'), mount).toBe(true);
+      // Market cn: the CDN keeps a list 60 s, so a mode switched off is not outlived by cached postings.
+      expect(res.headers.get('cache-control'), mount).toBe('public, max-age=0, s-maxage=60');
+    }
+    const off = await h.request<Env<unknown>>('GET', '/modeoff/feed', { host: GO_HOST });
     expect(off.status).toBe(404);
     expect(off.body.code).toBe('feature_disabled');
+    // The switch is GoApply's: RoboApply still lists with it set.
+    expect((await h.request('GET', '/modeoff/feed?role=y', { host: ROBO_HOST })).status).toBe(200);
   });
 
   it('422 on a bad country, 429 from the per-IP limiter', async () => {
@@ -262,7 +286,7 @@ describe('POST /public/copilot', () => {
     expect(res.body.code).toBe('ai_unavailable');
   });
 
-  it('422 on a bad body, 429 from the limiter, 404 with the flag off, 503 on GoApply', async () => {
+  it('422 on a bad body, 429 from the limiter, 404 with the flag off', async () => {
     expect((await h.request('POST', '/on/copilot', { host: ROBO_HOST, body: { text: '' } })).status).toBe(422);
     limited = true;
     try {
@@ -273,13 +297,108 @@ describe('POST /public/copilot', () => {
     const off = await h.request<Env<unknown>>('POST', '/off/copilot', { host: ROBO_HOST, body });
     expect(off.status).toBe(404);
     expect(off.body.code).toBe('feature_disabled');
+    // The registry default is off on both brands: no override → 404, with or without the consent.
+    for (const host of [ROBO_HOST, GO_HOST]) {
+      const res = await h.request<Env<unknown>>('POST', '/default/copilot', { host, body: { ...body, consent: VISITOR_CONSENT_VERSION } });
+      expect(res.status, host).toBe(404);
+      expect(res.body.code, host).toBe('feature_disabled');
+    }
+  });
+
+  it('RoboApply is unchanged: no consent is asked, and one that is sent is not passed on', async () => {
+    turnImpl = async () => ({
+      async *[Symbol.asyncIterator]() {
+        yield { event: 'done', data: { messageId: 'm9' } };
+      },
+    });
     turnSpy.mockClear();
-    const go = await h.request<Env<unknown>>('POST', '/on/copilot', { host: GO_HOST, body });
-    expect(go.status).toBe(503);
-    expect(go.body).toMatchObject({ code: 'ai_unavailable', details: { reason: 'visitor_ai_consent_unavailable' } });
+    expect((await h.request('POST', '/on/copilot', { host: ROBO_HOST, body })).status).toBe(200);
+    expect((await h.request('POST', '/on/copilot', { host: ROBO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION } })).status).toBe(200);
+    expect(turnSpy).toHaveBeenCalledTimes(2);
+    for (const call of turnSpy.mock.calls) expect(call[0]).toEqual(body);
+  });
+});
+
+describe('POST /public/copilot on GoApply (flag on, shared stack only)', () => {
+  const body = { text: '上海有哪些数据分析岗位？', pageContext: { path: '/browse/data-analyst', role: '数据分析师' } };
+  const ok: VisitorTurnFn = async () => ({
+    async *[Symbol.asyncIterator]() {
+      yield { event: 'meta', data: { threadId: 'visitor', messageId: 'g1' } };
+      yield { event: 'delta', data: { text: '这里是公开职位。' } };
+      yield { event: 'done', data: { messageId: 'g1' } };
+    },
+  });
+
+  it('without the consent: 422 consent_required, no model call, and the visitor allowance is not used', async () => {
+    turnImpl = ok;
+    turnSpy.mockClear();
+    // The limiter would refuse: the consent check answers first, so a refused turn costs nothing.
+    limited = true;
+    try {
+      for (const bad of [body, { ...body, consent: '' }, { ...body, consent: 'yes' }, { ...body, consent: 'visitor-assistant.2026-01-01.v0' }]) {
+        const res = await h.request<Env<unknown>>('POST', '/on/copilot', { host: GO_HOST, body: bad });
+        expect(res.status).toBe(422);
+        expect(res.body).toMatchObject({ code: 'invalid_request', details: { reason: 'consent_required', consentVersion: VISITOR_CONSENT_VERSION } });
+      }
+    } finally {
+      limited = false;
+    }
     expect(turnSpy).not.toHaveBeenCalled();
-    // GoApply's registry default is off: no override → 404.
-    expect((await h.request('POST', '/off/copilot', { host: GO_HOST, body })).status).toBe(404);
+  });
+
+  it('with the ticked consent version: the visitor gets an answer, in Chinese, through the same turn as RoboApply', async () => {
+    turnImpl = ok;
+    turnSpy.mockClear();
+    const res = await h.request('POST', '/on/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION }, headers: { 'x-robo-locale': 'zh' } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    expect(res.text).toContain('这里是公开职位。');
+    expect(res.text).toContain('event: done');
+    // The Assistant receives the turn only (no consent field), with public tools and the visitor's locale.
+    expect(turnSpy).toHaveBeenCalledWith(body, expect.objectContaining({ tools: 'public', locale: 'zh' }));
+  });
+
+  it('job cards are re-checked against the public-page rules for GoApply too', async () => {
+    turnImpl = async () => ({
+      async *[Symbol.asyncIterator]() {
+        yield { event: 'card', data: { type: 'job_list', id: 'c1', data: { items: [item('ok'), item('expired')] } } };
+        yield { event: 'done', data: { messageId: 'g2' } };
+      },
+    });
+    copilotStillPublic.mockClear();
+    const res = await h.request('POST', '/on/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION } });
+    expect(copilotStillPublic).toHaveBeenCalledWith(['ok', 'expired'], expect.objectContaining({ id: 'goapply', market: 'cn' }), NOW);
+    expect(res.text).toContain('"jobId":"ok"');
+    expect(res.text).not.toContain('expired');
+  });
+
+  it('the limiter and a bad body still apply once the consent is there', async () => {
+    limited = true;
+    try {
+      expect((await h.request('POST', '/on/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION } })).status).toBe(429);
+    } finally {
+      limited = false;
+    }
+    expect((await h.request('POST', '/on/copilot', { host: GO_HOST, body: { text: '', pageContext: { path: '/' }, consent: VISITOR_CONSENT_VERSION } })).status).toBe(422);
+    expect((await h.request('POST', '/on/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION, extra: 1 } })).status).toBe(422);
+  });
+
+  it('off switch: an unusable content-safety filter turns GoApply AI off (503 ai_unavailable), consent or not; RoboApply is not affected', async () => {
+    turnImpl = ok;
+    turnSpy.mockClear();
+    const go = await h.request<Env<unknown>>('POST', '/aioff/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION } });
+    expect(go.status).toBe(503);
+    expect(go.body.code).toBe('ai_unavailable');
+    expect(turnSpy).not.toHaveBeenCalled();
+    expect((await h.request('POST', '/aioff/copilot', { host: ROBO_HOST, body })).status).toBe(200);
+  });
+
+  it('the body schema: consent is optional text, unknown keys are refused', () => {
+    expect(VisitorTurnBodySchema.safeParse(body).success).toBe(true);
+    expect(VisitorTurnBodySchema.safeParse({ ...body, consent: VISITOR_CONSENT_VERSION }).success).toBe(true);
+    expect(VisitorTurnBodySchema.safeParse({ ...body, consent: 'x'.repeat(65) }).success).toBe(false);
+    expect(VisitorTurnBodySchema.safeParse({ ...body, other: true }).success).toBe(false);
+    expect(VISITOR_CONSENT_VERSION).toMatch(/^visitor-assistant\.\d{4}-\d{2}-\d{2}\.v\d+$/);
   });
 });
 
@@ -353,5 +472,52 @@ describe('/public/alerts', () => {
     expect(nomail.status).toBe(501);
     expect(nomail.body.code).toBe('provider_not_configured');
     expect(sendConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('/public/alerts on GoApply (shared email credentials only)', () => {
+  const signup = { email: 'Reader@Example.cn', filters: { q: '数据分析师', locations: [{ label: '上海', city: '上海', country: 'CN' }] }, frequency: 'weekly', locale: 'zh', consent: true };
+
+  it('202 pending_confirmation and the confirmation mail is sent, with no CN_ value set', async () => {
+    sendConfirm.mockClear();
+    const res = await h.request<Env<unknown>>('POST', '/on/alerts', { host: GO_HOST, body: signup });
+    expect(res.status).toBe(202);
+    expect(res.body.data).toEqual({ status: 'pending_confirmation' });
+    expect(sendConfirm).toHaveBeenCalledTimes(1);
+    expect(sendConfirm).toHaveBeenCalledWith(expect.objectContaining({ brand: expect.objectContaining({ id: 'goapply' }), to: 'reader@example.cn', locale: 'zh' }));
+    expect(repo.rows.find((r) => r.email === 'reader@example.cn')).toMatchObject({ brand: 'goapply', status: 'pending', cadence: 'weekly' });
+    // The consent tick is required on GoApply exactly as on RoboApply.
+    expect((await h.request('POST', '/on/alerts', { host: GO_HOST, body: { ...signup, consent: false } })).status).toBe(422);
+  });
+
+  it('off switch CN_RECRUITMENT_INFO_MODE=off: every alerts route is 404 feature_disabled on GoApply, not on RoboApply', async () => {
+    sendConfirm.mockClear();
+    const off = await h.request<Env<unknown>>('POST', '/modeoff/alerts', { host: GO_HOST, body: { ...signup, email: 'off@example.cn' } });
+    expect(off.status).toBe(404);
+    expect(off.body.code).toBe('feature_disabled');
+    expect((await h.request('GET', '/modeoff/alerts/confirm?token=route-token-abcdefghijklmnop', { host: GO_HOST })).status).toBe(404);
+    expect((await h.request('POST', '/modeoff/alerts/unsubscribe', { host: GO_HOST, body: { token: 'x'.repeat(20) } })).status).toBe(404);
+    expect(sendConfirm).not.toHaveBeenCalled();
+    expect(repo.rows.some((r) => r.email === 'off@example.cn')).toBe(false);
+    expect((await h.request('POST', '/modeoff/alerts', { host: ROBO_HOST, body: { ...signup, email: 'intl-mode@example.com', locale: 'en' } })).status).toBe(202);
+  });
+
+  it('off switch FLAG_GOAPPLY_JOBS_ALERTS=false: 404 feature_disabled', async () => {
+    const off = await h.request<Env<unknown>>('POST', '/flagoff/alerts', { host: GO_HOST, body: { ...signup, email: 'flag@example.cn' } });
+    expect(off.status).toBe(404);
+    expect(off.body.code).toBe('feature_disabled');
+  });
+
+  it('off switch CN_EMAIL_TRANSPORT=none, or no email credentials at all: 501 provider_not_configured, nothing stored', async () => {
+    sendConfirm.mockClear();
+    for (const mount of ['/cnnomail/alerts', '/nomail/alerts']) {
+      const res = await h.request<Env<unknown>>('POST', mount, { host: GO_HOST, body: { ...signup, email: 'nomail@example.cn' } });
+      expect(res.status, mount).toBe(501);
+      expect(res.body.code, mount).toBe('provider_not_configured');
+    }
+    expect(sendConfirm).not.toHaveBeenCalled();
+    expect(repo.rows.some((r) => r.email === 'nomail@example.cn')).toBe(false);
+    // CN_EMAIL_TRANSPORT is GoApply's switch: RoboApply still signs up with it set.
+    expect((await h.request('POST', '/cnnomail/alerts', { host: ROBO_HOST, body: { ...signup, email: 'intl-mail@example.com', locale: 'en' } })).status).toBe(202);
   });
 });

@@ -1,12 +1,19 @@
 // server/src/features/seo/routes.ts — public SEO reads (WP-56).
 // Mounted by features/index.ts at /api/v1/public/seo (public; no session).
 //
-//   GET /page?path&country   browse page data      flag `seo.browse`; RoboApply only (GoApply browse deferred)
-//   GET /hub                 indexable browse pages flag `seo.browse`; RoboApply only
-//   GET /jobs/:id            public job page data   404 unknown / not public, 410 closed; GoApply deferred → 404
-//   GET /ticker              newest public jobs     GoApply: empty (its home shows the campus strip)
+//   GET /page?path&country   browse page data      flag `seo.browse`
+//   GET /hub                 indexable browse pages flag `seo.browse`
+//   GET /jobs/:id            public job page data   404 unknown / not public, 410 closed
+//   GET /ticker              newest public jobs
 //   GET /sitemap             sitemap partitions
 //   GET /sitemap/:part       one partition (`roles-<n>`, `jobs-<n>`)
+//
+// Both brands run under the same gates (D5; plan §3.11): the `seo.browse`
+// flag, PUBLIC_DISPLAY_PROVIDERS and `isPubliclyListable` (scope.ts). Each
+// brand reads only its own market's rows. GoApply keeps one off switch:
+// `CN_RECRUITMENT_INFO_MODE=off` shows no posting anywhere, so the page, hub
+// and job routes answer 404 feature_disabled and the ticker and sitemaps
+// answer empty (`publicListingsOpen` in service.ts).
 //
 // Every response carries Cache-Control (success: SEO_CACHE_CONTROL /
 // SEO_SITEMAP_CACHE_CONTROL; 404 short; 410 longer; everything else
@@ -139,18 +146,6 @@ function seoRoute<T>(cacheControl: string, handler: (req: Request, res: Response
   });
 }
 
-/**
- * GoApply: browse pages and public job pages are deferred (TASK_PLAN WP-56;
- * PRODUCT F-SEO-05 cn = DEFER) → 404 feature_disabled, before any read.
- */
-const intlOnly: RequestHandler = (req, res, next) => {
-  if (brandOf(req).market === 'cn') {
-    res.status(404).json({ success: false, code: 'feature_disabled', error: 'This feature is not available.' });
-    return;
-  }
-  next();
-};
-
 export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
   const router = Router();
   const env = deps.env ?? process.env;
@@ -163,9 +158,12 @@ export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
     next();
   });
 
+  // GoApply with the recruitment-info mode off: no posting on any public route.
+  const postingsOn = requireCnRecruitmentInfo({ env });
+
   router.get(
     '/page',
-    intlOnly,
+    postingsOn,
     requireFlag('seo.browse', { env }),
     seoRoute(SEO_CACHE_CONTROL, async (req) => {
       const query = parseQuery(req, SeoPageQuerySchema);
@@ -178,7 +176,7 @@ export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
 
   router.get(
     '/hub',
-    intlOnly,
+    postingsOn,
     requireFlag('seo.browse', { env }),
     seoRoute(SEO_CACHE_CONTROL, async (req) => {
       const brand = brandOf(req);
@@ -190,9 +188,7 @@ export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
 
   router.get(
     '/jobs/:id',
-    intlOnly,
-    // Kept for when GoApply job pages ship: postings stay hidden while recruitment-info mode is off (R41-1b).
-    requireCnRecruitmentInfo({ env }),
+    postingsOn,
     seoRoute(SEO_CACHE_CONTROL, async (req) => {
       const { id } = parseParams(req, SeoJobParamsSchema);
       const brand = brandOf(req);
@@ -207,7 +203,6 @@ export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
     seoRoute(SEO_CACHE_CONTROL, async (req) => {
       const brand = brandOf(req);
       assertBrandEcho(req, brand);
-      if (brand.market === 'cn') return service().ticker(brand);
       await limit(req);
       return service().ticker(brand);
     }),
@@ -218,7 +213,7 @@ export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
     seoRoute(SEO_SITEMAP_CACHE_CONTROL, async (req) => {
       const brand = brandOf(req);
       assertBrandEcho(req, brand);
-      if (brand.market !== 'cn') await limit(req);
+      await limit(req);
       return service().sitemapIndex(brand);
     }),
   );
@@ -229,7 +224,6 @@ export function createSeoPublicRouter(deps: SeoRouterDeps = {}): Router {
       const { part } = parseParams(req, SitemapPartParamsSchema);
       const brand = brandOf(req);
       assertBrandEcho(req, brand);
-      if (brand.market === 'cn') throw new HttpError('not_found');
       await limit(req);
       return service().sitemapPart(brand, part);
     }),

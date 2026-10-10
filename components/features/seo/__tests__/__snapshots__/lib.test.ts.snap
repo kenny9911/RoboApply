@@ -20,6 +20,10 @@ GoApply（https://www.goapply.top/）是面向中国大陆学生和求职者的�
 - [安全 Security](https://www.goapply.top/security)
 - [帮助 Help](https://www.goapply.top/help)
 - [校招日历 Campus calendar](https://www.goapply.top/campus)
+- [免费工具 Free tools](https://www.goapply.top/tools)
+
+## Crawling
+- Public job pages (/job/...) are not open to AI crawlers; see robots.txt.
 "
 `;
 
@@ -224,7 +228,7 @@ exports[`robots per host > roboapply 1`] = `
 }
 `;
 
-exports[`static sitemap per host > GoApply: zh-CN home with the cross-domain en / zh-Hant alternates; /campus when live, never /browse 1`] = `
+exports[`static sitemap per host > GoApply: zh-CN home with the cross-domain en / zh-Hant alternates; /campus and /browse when live 1`] = `
 [
   {
     "alternates": {
@@ -252,6 +256,9 @@ exports[`static sitemap per host > GoApply: zh-CN home with the cross-domain en 
   },
   {
     "loc": "https://www.goapply.top/signup",
+  },
+  {
+    "loc": "https://www.goapply.top/browse",
   },
   {
     "loc": "https://www.goapply.top/campus",

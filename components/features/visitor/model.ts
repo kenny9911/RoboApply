@@ -6,6 +6,14 @@ import type { AnonAlertFilters } from '../../../lib/api/contracts/visitor';
 /** The visitor list never shows more than this before the signup gate (server twin: VISITOR_FEED_LIMIT). */
 export const VISITOR_FEED_LIMIT = 20;
 
+/**
+ * The consent version a GoApply visitor ticks before the visitor assistant
+ * answers (server twin: VISITOR_CONSENT_VERSION in
+ * server/src/features/visitor/contract.ts; the widget test compares the two).
+ * The text it stands for is `visitor.assistant.consent.*`.
+ */
+export const VISITOR_CONSENT_VERSION = 'visitor-assistant.2026-10-11.v1';
+
 /** `/signup?from=<from>` (and `next` when given). */
 export function signupHref(from: string, next?: string | null): string {
   const qs = new URLSearchParams({ from });
@@ -14,14 +22,12 @@ export function signupHref(from: string, next?: string | null): string {
 }
 
 /**
- * Where a job on a visitor surface opens: its public page when the brand has
- * them (the server sends `path`; `/job/<id>` 301s to the canonical slug), else
- * signup that then opens the job in the app.
+ * Where a job on a visitor surface opens: its public page, on both brands
+ * (D5). The server sends `path`; without it `/job/<id>` 301s to the canonical
+ * slug. A visitor is never sent to an app page they cannot see.
  */
-export function visitorJobHref(job: { jobId: string; path?: string | null }, market: 'intl' | 'cn', from: string): string {
-  if (job.path) return job.path;
-  if (market === 'intl') return `/job/${encodeURIComponent(job.jobId)}`;
-  return signupHref(from, `/jobs/${job.jobId}`);
+export function visitorJobHref(job: { jobId: string; path?: string | null }): string {
+  return job.path || `/job/${encodeURIComponent(job.jobId)}`;
 }
 
 /** `/tools/job-alerts` prefilled with the page's search. */

@@ -22,6 +22,7 @@ export function job(over: Partial<PublicJobDetail> = {}): PublicJobDetail {
     pay: { min: 1_200_000, max: 1_600_000, currency: 'TWD', period: 'year' },
     postedAt: '2026-10-01T00:00:00.000Z',
     firstSeenAt: '2026-10-02T00:00:00.000Z',
+    lastVerifiedAt: '2026-10-09T00:00:00.000Z',
     sourceName: 'RoboHire',
     originalSourceName: null,
     sponsorshipQuote: null,
@@ -39,6 +40,7 @@ export function job(over: Partial<PublicJobDetail> = {}): PublicJobDetail {
     salaryText: null,
     company: { name: 'Acme', website: 'https://acme.example', logoUrl: null },
     canonicalPath: '/job/cmjob1-backend-engineer-acme',
+    licence: null,
     ...over,
   };
 }

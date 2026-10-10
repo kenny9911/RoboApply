@@ -4,10 +4,15 @@
 // enforces it too.
 //
 //   Start from an official page  paste the employer's own URL → the server
-//                                reads that one page → the CN model suggests
+//                                reads that one page → the AI model suggests
 //                                fields, each with the sentence it rests on
 //                                (AI label) → staff check and save a DRAFT.
-//                                "Fill in by hand" skips the model.
+//                                The model is GoApply's own when one is set
+//                                (CN_LLM_*), otherwise the shared one (D5), so
+//                                reading a page works with no CN model; it is
+//                                refused (503 ai_unavailable) only when AI is
+//                                off on the server. "Fill in by hand" skips
+//                                the model.
 //   Entries by status            Drafts / Published / Archived. Each entry:
 //                                "I checked it against the official page"
 //                                (verifiedAt + verifiedBy), then Publish
@@ -54,7 +59,11 @@ const KNOWN_ERRORS = [
 type KnownError = (typeof KNOWN_ERRORS)[number];
 const isKnown = (v: string | null | undefined): v is KnownError => !!v && (KNOWN_ERRORS as readonly string[]).includes(v);
 
-/** The localized message key for a failed admin call: the specific reason when known, else the error code (e.g. ai_unavailable / no_model). */
+/**
+ * The localized message key for a failed admin call: the specific reason when
+ * known, else the error code. `ai_unavailable` (with any reason this page does
+ * not know, such as the older `no_model`) reads "AI is off on this server".
+ */
 export function errorKey(err: unknown): KnownError | 'generic' {
   const reason = apiErrorReason(err);
   if (isKnown(reason)) return reason;

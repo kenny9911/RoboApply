@@ -4,8 +4,15 @@
 //   - below-floor pages are noindex; public counts ignore private rows;
 //   - only PUBLIC_DISPLAY_PROVIDERS / consented bank jobs appear publicly;
 //   - closed jobs answer 410;
-//   - GoApply: browse and job pages deferred (404 feature_disabled), a seeded
-//     GoHire posting appears on no route (R41-1b), the ticker is empty;
+//   - GoApply runs under the same gates (D5): a listable cn posting has a
+//     public page and is in the cn ticker, sitemap and browse pages; a row of
+//     a provider outside PUBLIC_DISPLAY_PROVIDERS never is; seo.browse off is
+//     404 on both brands; CN_RECRUITMENT_INFO_MODE=off shows it on no route
+//     (R41-1b); the brands never read each other's market;
+//   - a job page carries the last-checked date; GoApply's carries GoHire's
+//     licence on a GoHire bank posting only when both env values are set;
+//   - visa-sponsorship browse pages are RoboApply's: 404 on GoApply, never in
+//     its hub or roles sitemap;
 //   - per-IP limit (429 + Retry-After + no-store): direct callers by their IP,
 //     the Next server by the visitor IP it forwards; the real limiter's key,
 //     skip and fail-open paths;
@@ -51,7 +58,9 @@ const repo = createMemorySeoRepo([
   seoJob({ id: 'estjob', ...backend, title: 'Estimated Date Role', postedAtEstimated: true, firstSeenAt: new Date('2026-10-09T23:00:00Z') }),
   seoJob({ id: 'privjob', ...backend, visibility: 'private', title: 'Own import' }),
   // A GoHire posting on the cn market (public display recorded).
-  seoJob({ id: 'job_gh', market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', title: '产品经理', companyName: '示例科技', locationCountry: 'CN', locationCity: '上海' }),
+  seoJob({ id: 'job_gh', market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', title: '产品经理', companyName: '示例科技', location: '上海', locationCountry: 'CN', locationCity: '上海', taxonomyIds: ['product', 'product_management', 'product_manager'] }),
+  // A cn row of a provider that is not in PUBLIC_DISPLAY_PROVIDERS: never public.
+  seoJob({ id: 'job_cn_board', market: 'cn', fromRecruiterBank: false, sourceBoard: 'greenhouse', sourceName: 'Example careers', title: 'CN BOARD ROW', companyName: '未列出的来源', locationCountry: 'CN', locationCity: '北京' }),
 ]);
 
 function deps(over: Partial<SeoRouterDeps> = {}, env: Record<string, string> = ENV): SeoRouterDeps {
@@ -167,36 +176,199 @@ describe('public job pages', () => {
   });
 });
 
-describe('GoApply', () => {
-  it('browse pages are deferred: 404 feature_disabled', async () => {
-    for (const p of ['/page?path=backend-engineer', '/hub']) {
-      const res = await h.request<Body>('GET', `${BASE}${p}`, { host: GA });
-      expect(res.status, p).toBe(404);
-      expect(res.body.code, p).toBe('feature_disabled');
+describe('GoApply: the same gates as RoboApply (D5)', () => {
+  const OFF = { ...ENV, CN_RECRUITMENT_INFO_MODE: 'off' };
+
+  it('a listable cn posting has a public job page, with no CN_ switch set', async () => {
+    const res = await h.request<{ data: { job: Record<string, unknown> } }>('GET', `${BASE}/jobs/job_gh`, { host: GA });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe(SEO_CACHE_CONTROL);
+    // A CJK title has no ASCII slug: the canonical path is the id alone.
+    expect(res.body.data.job).toMatchObject({ id: 'job_gh', title: '产品经理', companyName: '示例科技', canonicalPath: '/job/job_gh' });
+    // Mainland display rule: the date we last found the posting at its source. No licence is configured: none is sent.
+    expect(res.body.data.job).toMatchObject({ lastVerifiedAt: '2026-10-01T00:00:00.000Z', licence: null, sourceName: 'GoHire' });
+  });
+
+  it('the licence line: a GoHire bank posting on GoApply, only when holder and number are both set; never on another source or on RoboApply', async () => {
+    const licence = { holder: '示例人力资源有限公司', number: '(沪)人服证字[2026]第0100001号' };
+    const read = async (env: Record<string, string>, id: string, host: string) => {
+      const hh = await harness(deps({}, env), env);
+      try {
+        const res = await hh.request<{ data: { job: { licence: unknown; lastVerifiedAt: unknown } } }>('GET', `${BASE}/jobs/${id}`, { host });
+        expect(res.status, `${id} ${host}`).toBe(200);
+        return res.body.data.job;
+      } finally {
+        await hh.close();
+      }
+    };
+    const both = { ...ENV, PUBLIC_DISPLAY_PROVIDERS: 'ats_public', CN_HR_LICENCE_HOLDER: licence.holder, CN_HR_LICENCE_NUMBER: licence.number };
+    expect((await read(both, 'job_gh', GA)).licence).toEqual(licence);
+    // An employer-board posting is not GoHire's: the last-checked date, no licence.
+    expect(await read(both, 'job_cn_board', GA)).toMatchObject({ licence: null, lastVerifiedAt: '2026-10-01T00:00:00.000Z' });
+    // Half a licence is no licence (D3).
+    expect((await read({ ...ENV, CN_HR_LICENCE_HOLDER: licence.holder }, 'job_gh', GA)).licence).toBeNull();
+    // RoboApply never prints it, whatever GoApply has configured.
+    expect(await read(both, 'job1', RA)).toMatchObject({ licence: null, lastVerifiedAt: '2026-10-01T00:00:00.000Z' });
+  });
+
+  it('visa-sponsorship browse pages are RoboApply\'s: 404 on GoApply, and a stored one is in neither its hub nor its roles sitemap', async () => {
+    const quoted = { sponsorship: 'offered', sponsorshipEvidence: 'Visa sponsorship is available.', taxonomyIds: ['software_engineering', 'swe_backend', 'backend_engineer'] };
+    const r = createMemorySeoRepo(
+      [
+        ...seoJobs(6, { ...quoted, market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', locationCountry: 'CN', locationCity: '上海', location: '上海' }),
+        ...seoJobs(6, { ...quoted, locationCountry: 'US', locationCity: 'Austin', location: 'Austin' }),
+      ],
+      (['goapply', 'roboapply'] as const).flatMap((brand) => [
+        { brand, locale: 'x', type: 'sponsorship_role', slug: 'cn/backend-engineer', params: { taxonomyId: 'backend_engineer', country: brand === 'goapply' ? 'CN' : 'US', segment: 'visa-sponsorship' }, title: 't', h1: 't', intro: '', stats: {}, jobCount: 6, indexable: true, lastBuiltAt: NOW },
+        { brand, locale: 'x', type: 'role', slug: 'backend-engineer', params: { taxonomyId: 'backend_engineer' }, title: 't', h1: 't', intro: '', stats: {}, jobCount: 6, indexable: true, lastBuiltAt: NOW },
+      ]),
+    );
+    const hh = await harness({ env: ENV, service: createSeoService({ repo: r, env: ENV, now: () => NOW, isEnabled: async () => true }), limit: async () => undefined });
+    try {
+      const cn = await hh.request<Body>('GET', `${BASE}/page?path=visa-sponsorship/cn/backend-engineer`, { host: GA });
+      expect(cn.status).toBe(404);
+      expect(cn.body.code).toBe('not_found');
+      // The role page over the same rows is live on GoApply.
+      expect((await hh.request<Body>('GET', `${BASE}/page?path=backend-engineer`, { host: GA })).status).toBe(200);
+      const kinds = async (host: string) => ((await hh.request<{ data: { pages: Array<{ kind: string }> } }>('GET', `${BASE}/hub`, { host })).body.data.pages.map((p) => p.kind).sort());
+      expect(await kinds(GA)).toEqual(['role']);
+      expect(await kinds(RA)).toEqual(['role', 'sponsorship']);
+      const paths = async (host: string) => ((await hh.request<{ data: { urls: Array<{ path: string }> } }>('GET', `${BASE}/sitemap/roles-1`, { host })).body.data.urls.map((u) => u.path).sort());
+      expect(await paths(GA)).toEqual(['/browse/backend-engineer']);
+      expect(await paths(RA)).toEqual(['/browse/backend-engineer', '/browse/visa-sponsorship/us/backend-engineer']);
+      // RoboApply keeps its sponsorship pages.
+      const us = await hh.request<Body>('GET', `${BASE}/page?path=visa-sponsorship/us/backend-engineer`, { host: RA });
+      expect(us.status).toBe(200);
+      expect((us.body.data as Record<string, any>).type).toBe('sponsorship_role');
+    } finally {
+      await hh.close();
     }
   });
 
-  it('mode off: the seeded GoHire posting appears on no route; ticker and sitemap answer empty [R41-1b]', async () => {
-    const job = await h.request<Body>('GET', `${BASE}/jobs/job_gh`, { host: GA });
-    expect(job.status).toBe(404);
-    const ticker = await h.request<Body>('GET', `${BASE}/ticker`, { host: GA });
+  it('it appears in the cn ticker and the cn sitemap; RoboApply rows do not', async () => {
+    const ticker = await h.request<{ data: { items: Array<{ id: string; path: string }> } }>('GET', `${BASE}/ticker`, { host: GA });
     expect(ticker.status).toBe(200);
-    expect(ticker.body.data).toMatchObject({ items: [] });
-    const sitemap = await h.request<Body>('GET', `${BASE}/sitemap`, { host: GA });
-    expect(sitemap.body.data).toMatchObject({ parts: [] });
-    expect(JSON.stringify([job.body, ticker.body, sitemap.body])).not.toContain('产品经理');
+    expect(ticker.body.data.items).toEqual([expect.objectContaining({ id: 'job_gh', path: '/job/job_gh' })]);
+    const idx = await h.request<{ data: { parts: Array<{ name: string; count: number }>; surfaces: { browse: boolean } } }>('GET', `${BASE}/sitemap`, { host: GA });
+    expect(idx.body.data.parts).toEqual([{ name: 'jobs-1', count: 1, lastmod: null }]);
+    expect(idx.body.data.surfaces.browse).toBe(true);
+    const part = await h.request<{ data: { urls: Array<{ path: string }> } }>('GET', `${BASE}/sitemap/jobs-1`, { host: GA });
+    expect(part.status).toBe(200);
+    expect(part.body.data.urls.map((u) => u.path)).toEqual(['/job/job_gh']);
   });
 
-  it('job pages stay deferred even with the mode allowing postings (PRODUCT F-SEO-05 cn = DEFER)', async () => {
-    const env = { ...ENV, CN_RECRUITMENT_INFO_MODE: 'licensed' };
-    const on = await harness(deps({}, env), env);
+  it('browse pages and the hub answer on GoApply over cn rows only', async () => {
+    const page = await h.request<Body>('GET', `${BASE}/page?path=product-manager`, { host: GA });
+    expect(page.status).toBe(200);
+    const d = page.body.data as Record<string, any>;
+    expect(d.stats.jobCount).toMatchObject({ value: 1, source: 'index' });
+    expect(d.jobs.map((j: { title: string }) => j.title)).toEqual(['产品经理']);
+    // Every public card carries the source and the date we last found the posting there.
+    expect(d.jobs[0]).toMatchObject({ sourceName: 'GoHire', lastVerifiedAt: '2026-10-01T00:00:00.000Z' });
+    // One job is below the floor: the page renders and is noindex, exactly as on RoboApply.
+    expect(d.indexable).toBe(false);
+    const hub = await h.request<Body>('GET', `${BASE}/hub`, { host: GA });
+    expect(hub.status).toBe(200);
+    expect(hub.body.data).toMatchObject({ pages: [] });
+    // The backend rows are intl rows: none of them is counted on GoApply.
+    const other = await h.request<Body>('GET', `${BASE}/page?path=backend-engineer`, { host: GA });
+    expect((other.body.data as Record<string, any>).stats.jobCount.value).toBe(0);
+  });
+
+  it('a row from a provider outside PUBLIC_DISPLAY_PROVIDERS is on no GoApply route; listing the provider opens it', async () => {
+    const job = await h.request<Body>('GET', `${BASE}/jobs/job_cn_board`, { host: GA });
+    expect(job.status).toBe(404);
+    const ticker = await h.request<Body>('GET', `${BASE}/ticker`, { host: GA });
+    const part = await h.request<Body>('GET', `${BASE}/sitemap/jobs-1`, { host: GA });
+    expect(JSON.stringify([job.body, ticker.body, part.body])).not.toMatch(/CN BOARD ROW|job_cn_board/);
+
+    const env = { ...ENV, PUBLIC_DISPLAY_PROVIDERS: 'ats_public' };
+    const listed = await harness(deps({}, env), env);
     try {
-      const res = await on.request<Body>('GET', `${BASE}/jobs/job_gh`, { host: GA });
-      expect(res.status).toBe(404);
-      expect(res.body.code).toBe('feature_disabled');
-      expect(res.text).not.toContain('产品经理');
+      expect((await listed.request<Body>('GET', `${BASE}/jobs/job_cn_board`, { host: GA })).status).toBe(200);
+      const t = await listed.request<{ data: { items: Array<{ id: string }> } }>('GET', `${BASE}/ticker`, { host: GA });
+      expect(t.body.data.items.map((i) => i.id).sort()).toEqual(['job_cn_board', 'job_gh']);
     } finally {
-      await on.close();
+      await listed.close();
+    }
+  });
+
+  it('seo.browse off: /page and /hub are 404 feature_disabled on both brands; job pages do not depend on it', async () => {
+    const env = { INTERNAL_API_SECRET: 'internal-secret' };
+    // The real flag resolver (registry default: off on both brands).
+    const off = await startRouteHarness({ env, mounts: [[BASE, createSeoPublicRouter({ env, service: createSeoService({ repo, env, now: () => NOW }), limit: async () => undefined })]] });
+    try {
+      for (const host of [RA, GA]) {
+        for (const p of ['/page?path=backend-engineer', '/hub']) {
+          const res = await off.request<Body>('GET', `${BASE}${p}`, { host });
+          expect(res.status, `${host} ${p}`).toBe(404);
+          expect(res.body.code, `${host} ${p}`).toBe('feature_disabled');
+        }
+        const idx = await off.request<{ data: { parts: Array<{ name: string }>; surfaces: { browse: boolean; alerts: boolean } } }>('GET', `${BASE}/sitemap`, { host });
+        expect(idx.body.data.surfaces.browse, host).toBe(false);
+        // Signed-out job alerts are on by default on both brands: /tools/job-alerts may be listed and indexed.
+        expect(idx.body.data.surfaces.alerts, host).toBe(true);
+        expect(idx.body.data.parts.map((x) => x.name), host).toEqual(['jobs-1']);
+        expect((await off.request<Body>('GET', `${BASE}/sitemap/roles-1`, { host })).status, host).toBe(404);
+      }
+      expect((await off.request<Body>('GET', `${BASE}/jobs/job_gh`, { host: GA })).status).toBe(200);
+      expect((await off.request<Body>('GET', `${BASE}/jobs/job1`, { host: RA })).status).toBe(200);
+    } finally {
+      await off.close();
+    }
+  });
+
+  it('CN_RECRUITMENT_INFO_MODE=off: the posting appears on no route; ticker and sitemap answer empty [R41-1b]', async () => {
+    const off = await harness(deps({}, OFF), OFF);
+    try {
+      for (const p of ['/jobs/job_gh', '/page?path=product-manager', '/hub']) {
+        const res = await off.request<Body>('GET', `${BASE}${p}`, { host: GA });
+        expect(res.status, p).toBe(404);
+        expect(res.body.code, p).toBe('feature_disabled');
+        expect(res.text, p).not.toContain('产品经理');
+      }
+      const ticker = await off.request<Body>('GET', `${BASE}/ticker`, { host: GA });
+      expect(ticker.status).toBe(200);
+      expect(ticker.body.data).toMatchObject({ items: [] });
+      const sitemap = await off.request<Body>('GET', `${BASE}/sitemap`, { host: GA });
+      expect(sitemap.body.data).toMatchObject({ parts: [], surfaces: { browse: false } });
+      expect((await off.request<Body>('GET', `${BASE}/sitemap/jobs-1`, { host: GA })).status).toBe(404);
+      expect(JSON.stringify([ticker.body, sitemap.body])).not.toContain('产品经理');
+      // The switch is GoApply's: RoboApply answers as before.
+      expect((await off.request<Body>('GET', `${BASE}/jobs/job1`, { host: RA })).status).toBe(200);
+      expect((await off.request<{ data: { items: unknown[] } }>('GET', `${BASE}/ticker`, { host: RA })).body.data.items.length).toBeGreaterThan(0);
+    } finally {
+      await off.close();
+    }
+  });
+
+  it('surfaces.alerts follows the brand\'s jobs.alerts capability (its off switches included)', async () => {
+    const alertsOn = async (env: Record<string, string>, host: string) => {
+      const hh = await startRouteHarness({ env, mounts: [[BASE, createSeoPublicRouter({ env, service: createSeoService({ repo, env, now: () => NOW }), limit: async () => undefined })]] });
+      try {
+        return (await hh.request<{ data: { surfaces: { alerts: boolean } } }>('GET', `${BASE}/sitemap`, { host })).body.data.surfaces.alerts;
+      } finally {
+        await hh.close();
+      }
+    };
+    expect(await alertsOn({}, GA)).toBe(true);
+    expect(await alertsOn({ CN_RECRUITMENT_INFO_MODE: 'off' }, GA)).toBe(false);
+    expect(await alertsOn({ FLAG_GOAPPLY_JOBS_ALERTS: 'false' }, GA)).toBe(false);
+    // GoApply's switches do not reach RoboApply, and RoboApply has its own.
+    expect(await alertsOn({ CN_RECRUITMENT_INFO_MODE: 'off', FLAG_GOAPPLY_JOBS_ALERTS: 'false' }, RA)).toBe(true);
+    expect(await alertsOn({ FLAG_ROBOAPPLY_JOBS_ALERTS: 'false' }, RA)).toBe(false);
+  });
+
+  it('the per-IP limit covers GoApply reads too', async () => {
+    const limited = await harness(deps({ limit: async () => { throw new HttpError('rate_limited', undefined, { retryAfterSec: 30 }); } }));
+    try {
+      for (const p of ['/ticker', '/sitemap', '/sitemap/jobs-1', '/jobs/job_gh']) {
+        const res = await limited.request<Body>('GET', `${BASE}${p}`, { host: GA });
+        expect(res.status, p).toBe(429);
+        expect(res.headers.get('cache-control'), p).toBe('no-store');
+      }
+    } finally {
+      await limited.close();
     }
   });
 });

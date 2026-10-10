@@ -105,6 +105,8 @@ function serviceFor(markdown: string, profile: GradeProfile, now: () => Date): R
     runAiPass: async () => unsupported('runAiPass'),
     rewrite: async () => unsupported('rewrite'),
     logAiLabel: async () => undefined,
+    // Skill names as the posting spells them ("Python", not "python"), like the signed-in keyword check.
+    keywordCasing: 'posting',
     now,
   });
 }

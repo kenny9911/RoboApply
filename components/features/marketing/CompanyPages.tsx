@@ -21,6 +21,7 @@ import { useBrand } from '../../../lib/brand';
 import { CancelFooterLink } from '../credits';
 import { COMPANY_SPREAD, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, HELP_FAQ_KEYS, ORDERING_RULES, OTHER_SORTS, RANKING_FACTORS } from './catalog';
 import { ContactForm } from './ContactForm';
+import { useMarketingFlag, useMarketingFlagOff } from './hooks';
 import { Faq } from './Sections';
 import styles from './marketing.module.css';
 
@@ -99,14 +100,20 @@ export function AboutPage({ entity, supportEmail }: AboutPageProps) {
 export function SecurityPage({ supportEmail }: { supportEmail: string }) {
   const t = useTranslations('landing.security');
   const brand = useBrand();
+  // Email is on by default on both brands, so the sentence is part of the page
+  // as the server sends it and goes away only once email is known to be off.
+  const emailOff = useMarketingFlagOff('notify.email');
   return (
     <>
       <Intro id="security-title" title={t('title')} lead={t('lead')} />
       <Block id="security-account" title={t('accountTitle')}>
         <ul className={styles.list}>
-          {(['account1', 'account2', 'account3', 'account4'] as const).map((k) => (
-            <li key={k}>{t(k)}</li>
-          ))}
+          {(['account1', 'account2', 'account3', 'account4'] as const)
+            // "We email you about a new sign-in" is true only where email can be sent.
+            .filter((k) => k !== 'account3' || !emailOff)
+            .map((k) => (
+              <li key={k}>{t(k)}</li>
+            ))}
         </ul>
       </Block>
       <Block id="security-data" title={t('dataTitle')}>
@@ -273,6 +280,12 @@ export function RankingPage() {
       </Block>
       <Block id="ranking-other" title={t('otherSortsTitle')}>
         <p className={styles.body}>{t('otherSorts', Object.fromEntries(OTHER_SORTS.map((s) => [s.param, sort(s.sort)])))}</p>
+        {/* GoApply's sort menu has a fourth sort (campus deadlines); the page names it too. */}
+        {brand.market === 'cn' ? (
+          <p className={`${styles.body} ${styles.spaced}`} data-ranking-deadline-sort="">
+            {t('deadlineSort', { deadline: sort('deadline') })}
+          </p>
+        ) : null}
         {brand.market === 'cn' ? <p className={`${styles.body} ${styles.spaced}`}>{t('cnNote')}</p> : null}
       </Block>
     </>

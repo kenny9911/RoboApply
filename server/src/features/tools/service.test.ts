@@ -4,7 +4,8 @@
 // notice, the persisted 3-a-day allowance per tool (fail closed; an
 // unreadable file uses no check), the attempts guard, the 24 h hash cache
 // (does not count), the short report (top issues only, labelled 'rules', no
-// score), the requirement rows (no score), GoApply closed in CN-0, results
+// score), the requirement rows (no score), GoApply open on every stack with
+// the notice ticked (and the outside-the-mainland line where it applies), results
 // bound to the browser that ran them (visitor cookie), the signup claim
 // (idempotent, other users 404, expiry 404, resume limit 409 that
 // un-claims), result reads and the purge.
@@ -30,6 +31,8 @@ import {
   isVisitorId,
   looksLike,
   newVisitorId,
+  processedOutsideMainland,
+  toolsOpen,
   type ToolsRate,
   type ToolsService,
   type UploadedFile,
@@ -40,8 +43,20 @@ const T0 = new Date('2026-10-10T12:00:00.000Z');
 /** The visitor cookie of "this browser", and of another one. */
 const V = 'v'.repeat(43);
 const OTHER_BROWSER = 'w'.repeat(43);
-/** GoApply on the mainland stack (CN-1): the tools are open. */
+/** GoApply on the mainland stack. The tools are open there and offshore alike. */
 const MAINLAND = { DEPLOY_REGION: 'cn-mainland' };
+/** GoApply on a mainland deployment with every China-specific provider set: nothing resolves to the shared stack. */
+const MAINLAND_OWN_STACK = {
+  ...MAINLAND,
+  CN_LLM_PROVIDER: 'deepseek',
+  CN_LLM_MODEL: 'deepseek-chat',
+  CN_LIVEKIT_URL: 'wss://cn.livekit.example',
+  CN_INTERVIEW_ENGINE_STT_MODEL: 'paraformer',
+  CN_INTERVIEW_ENGINE_TTS_MODEL: 'cosyvoice',
+  CN_S3_BUCKET: 'goapply-cn',
+  CN_VAPID_PUBLIC_KEY: 'pk',
+  CN_EMAIL_TRANSPORT: 'aliyun_dm',
+};
 
 function file(buffer: Buffer, name = 'resume.txt', mimetype = 'text/plain'): UploadedFile {
   return { buffer, originalname: name, mimetype, size: buffer.byteLength };
@@ -387,38 +402,61 @@ describe('resume and job check', () => {
     expect(r.kind).toBe('resume_job_match');
     expect(r.postingTitle).toBe('Backend Engineer');
     expect(r.rows.map((row) => row.key)).toEqual(expect.arrayContaining(['title', 'years', 'education', 'skills', 'keywords']));
-    expect(r.hardSkills.missing).toEqual(expect.arrayContaining(['python', 'kubernetes']));
+    // Skills are spelled as the posting spells them, like the signed-in keyword check.
+    expect(r.hardSkills.missing).toEqual(expect.arrayContaining(['Python', 'Kubernetes']));
     expect(r).not.toHaveProperty('score10');
     expect(r).not.toHaveProperty('fit');
   });
 });
 
 describe('GoApply', () => {
-  it('CN-0 (offshore closed beta): the tools are off — config says so, runs, reads and claims are 404 feature_disabled', async () => {
+  it('open on every stack with no CN_ switch set: config says available, and a run with the notice ticked answers', async () => {
     const g = setup('goapply', { markdown: CN_RESUME_MD });
     const c = await g.service.config('x');
-    expect(c.available).toBe(false);
-    expect(c.remainingByTool).toEqual({ resume_check: null, resume_job_match: null });
-    const e = await rejection(g.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt(CN_RESUME_MD)), fields: { consent: TOOLS_CONSENT_VERSION } }));
-    expect(e.status).toBe(404);
-    expect(e.code).toBe('feature_disabled');
-    expect(g.parse).not.toHaveBeenCalled();
-    expect(g.rate.attempts.size).toBe(0);
-    expect(g.store.rows).toHaveLength(0);
-    await expect(g.service.getResult('a'.repeat(43), V)).rejects.toMatchObject({ code: 'feature_disabled' });
-    await expect(g.service.claim({ id: 'u' }, 'a'.repeat(43), V)).rejects.toMatchObject({ code: 'feature_disabled' });
-    // RoboApply on the same offshore deployment is open.
-    expect((await setup('roboapply').service.config('x')).available).toBe(true);
+    expect(c).toMatchObject({ available: true, consentRequired: true, consentVersion: TOOLS_CONSENT_VERSION });
+    expect(c.remainingByTool).toEqual({ resume_check: 3, resume_job_match: 3 });
+    const r = (await g.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt(CN_RESUME_MD)), fields: { consent: TOOLS_CONSENT_VERSION } })) as ResumeCheckReport;
+    expect(r.kind).toBe('resume_check');
+    expect(r.profile).toBe('cn');
+    expect(g.parse).toHaveBeenCalledTimes(1);
+    expect(g.store.rows).toHaveLength(1);
+    // The same browser reads its result again; nothing answers feature_disabled.
+    await expect(g.service.getResult(r.resultId, V)).resolves.toMatchObject({ kind: 'resume_check' });
+    await expect(g.service.getResult('a'.repeat(43), V)).rejects.toMatchObject({ code: 'not_found' });
+    // The resume and job check answers too.
+    const m = await g.service.run('resume_job_match', {
+      visitor: V,
+      ip: 'x',
+      file: file(FILES.txt(CN_RESUME_MD)),
+      fields: { consent: TOOLS_CONSENT_VERSION, postingTitle: POSTING.title, postingText: POSTING.text },
+    });
+    expect(m.kind).toBe('resume_job_match');
+    // RoboApply on the same deployment is open as before, with no notice.
+    expect(await setup('roboapply').service.config('x')).toMatchObject({ available: true, consentRequired: false, processedOutsideMainland: false });
+  });
+
+  it('the run tells the parser the notice was ticked on GoApply (so the AI read may run); RoboApply needs no notice', async () => {
+    const g = setup('goapply', { markdown: CN_RESUME_MD });
+    await g.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt(CN_RESUME_MD)), fields: { consent: TOOLS_CONSENT_VERSION } });
+    expect(g.parse).toHaveBeenCalledWith(expect.objectContaining({ consented: true, brand: expect.objectContaining({ id: 'goapply' }) }));
+    await s.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt()), fields: {} });
+    expect(s.parse).toHaveBeenCalledWith(expect.objectContaining({ consented: false, brand: expect.objectContaining({ id: 'roboapply' }) }));
   });
 
   it('needs the processing notice ticked before anything is read', async () => {
-    const g = setup('goapply', { markdown: CN_RESUME_MD, env: MAINLAND });
+    const g = setup('goapply', { markdown: CN_RESUME_MD });
     const e = await rejection(g.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt(CN_RESUME_MD)), fields: {} }));
+    expect(e.status).toBe(422);
     expect(reason(e)).toBe('consent_required');
     expect(g.parse).not.toHaveBeenCalled();
     expect(g.rate.used.size).toBe(0);
     const wrong = await rejection(g.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt(CN_RESUME_MD)), fields: { consent: 'yes' } }));
     expect(reason(wrong)).toBe('consent_required');
+    // An earlier version of the notice did not name the AI read: it is not accepted.
+    const old = await rejection(g.service.run('resume_check', { visitor: V, ip: 'x', file: file(FILES.txt(CN_RESUME_MD)), fields: { consent: 'tools-processing.2026-10-10.v2' } }));
+    expect(reason(old)).toBe('consent_required');
+    expect(g.parse).not.toHaveBeenCalled();
+    expect(g.store.rows).toHaveLength(0);
   });
 
   it('the cn checklist runs, and the stored result records the notice version and when it was ticked', async () => {
@@ -432,9 +470,22 @@ describe('GoApply', () => {
     expect(s.store.rows[0]!.payload.consent).toBeUndefined();
   });
 
-  it('config asks for the notice on the mainland stack, where nothing is processed offshore', async () => {
-    const mainland = await setup('goapply', { env: MAINLAND }).service.config('x');
-    expect(mainland).toMatchObject({ available: true, consentRequired: true, consentVersion: TOOLS_CONSENT_VERSION, processedOutsideMainland: false });
+  it('the notice says "processed outside the mainland" when the deployment is offshore or GoApply runs on the shared stack', async () => {
+    // Offshore deployment, shared stack: the state of a deployment with only shared credentials.
+    expect((await setup('goapply').service.config('x')).processedOutsideMainland).toBe(true);
+    // Mainland deployment, but no China-specific provider: the shared processors are offshore.
+    expect((await setup('goapply', { env: MAINLAND }).service.config('x')).processedOutsideMainland).toBe(true);
+    // Offshore deployment with GoApply's own providers: the deployment itself is outside the mainland.
+    const { DEPLOY_REGION: _region, ...ownOffshore } = MAINLAND_OWN_STACK;
+    expect((await setup('goapply', { env: ownOffshore }).service.config('x')).processedOutsideMainland).toBe(true);
+    // Mainland deployment on GoApply's own stack: nothing leaves, so the line is not shown.
+    const own = await setup('goapply', { env: MAINLAND_OWN_STACK }).service.config('x');
+    expect(own).toMatchObject({ available: true, consentRequired: true, consentVersion: TOOLS_CONSENT_VERSION, processedOutsideMainland: false });
+    expect(processedOutsideMainland(getBrand('goapply'), MAINLAND_OWN_STACK)).toBe(false);
+    // Never RoboApply's line.
+    expect(processedOutsideMainland(getBrand('roboapply'), {})).toBe(false);
+    expect(toolsOpen(getBrand('goapply'), {})).toBe(true);
+    expect(toolsOpen(getBrand('roboapply'), {})).toBe(true);
   });
 
   it('config names the outside resume-reading service only when it is active for the brand', async () => {

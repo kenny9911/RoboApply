@@ -15,17 +15,16 @@
 // No testimonials, no user counts, no static stats, no competitor names or
 // prices. Every CTA → /signup?from=home… preserving job/ref/utm_*.
 
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { useBrand } from '../../../lib/brand';
-import { HOME_FAQ_KEYS, featuresFor, type FeatureDef } from './catalog';
+import { HOME_FAQ_KEYS } from './catalog';
 import { useIndexStats } from './hooks';
 import { heroCount } from './links';
-import { Faq, HomeExample, IndexCounters, PricingSummary, QuickSearch } from './Sections';
+import { Faq, FeatureGrid, HomeExample, IndexCounters, PricingSummary, QuickSearch } from './Sections';
 import { SignupLink } from './SignupLink';
-import { SitePage, useFeatureVisible } from './SiteChrome';
+import { SitePage } from './SiteChrome';
 import styles from './marketing.module.css';
 
 const VERBS = ['find', 'understand', 'fix', 'practice'] as const;
@@ -42,18 +41,6 @@ export function HomeHeroSub() {
   );
 }
 
-function FeatureCard({ def }: { def: FeatureDef }) {
-  const t = useTranslations(`landing.features.${def.brand}.${def.key}`);
-  const visible = useFeatureVisible(def);
-  if (!visible) return null;
-  return (
-    <Link href={`/features/${def.slug}`} className={styles.card} data-feature-link={def.slug}>
-      <span className={styles.stepNumber}>{t('eyebrow')}</span>
-      <span className={styles.h3}>{t('title')}</span>
-    </Link>
-  );
-}
-
 export interface RoboApplyHomeProps {
   /** The live job ticker, rendered on the server by the route (components/features/seo/server). */
   ticker?: ReactNode;
@@ -62,7 +49,6 @@ export interface RoboApplyHomeProps {
 export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
   const t = useTranslations('landing.home');
   const tc = useTranslations('landing.cta');
-  const tf = useTranslations('landing.features.common');
   const brand = useBrand();
   return (
     <SitePage from="home" localeLinks>
@@ -106,18 +92,7 @@ export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
         </div>
       </section>
 
-      <section className={styles.sectionAlt} id="features" aria-labelledby="home-features-title">
-        <div className={styles.wrap}>
-          <h2 className={styles.h2} id="home-features-title">
-            {tf('allFeatures')}
-          </h2>
-          <div className={styles.grid3}>
-            {featuresFor(brand.id).map((def) => (
-              <FeatureCard key={def.slug} def={def} />
-            ))}
-          </div>
-        </div>
-      </section>
+      <FeatureGrid />
 
       <IndexCounters />
       {ticker}

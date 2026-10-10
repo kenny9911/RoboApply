@@ -20,7 +20,7 @@ export const WEAK_RESUME_MD = [
 
 export const PRC_ID = '11010519491231002X';
 
-/** A GoApply-style resume that carries a PRC ID number (CN-0 must not store it). */
+/** A GoApply-style resume that carries a PRC ID number (not stored under CN_STORAGE_MODE=redact). */
 export const CN_RESUME_MD = [
   '# 李明',
   `邮箱 li@example.test · 身份证号：${PRC_ID}`,

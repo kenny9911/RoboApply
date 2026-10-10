@@ -5,25 +5,37 @@
 // Every price comes from GET /billing/plans (the plan catalog config), every
 // cap from GET /support/credit-caps (the credit catalog), never from copy.
 // "Save N%" is the server's own computation against our monthly price. A plan
-// without a configured price shows "Price not set yet". GoApply shows the fee
-// schedule with "Not open yet" until CN payments open (R-15). Pro caps are
-// printed ("Up to N a day"), never "unlimited". No competitor prices.
+// without a configured price shows "Price not set yet". Pro caps are printed
+// ("Up to N a day"), never "unlimited". No competitor prices.
+//
+// The page follows the plans API on both brands (D5, D6): GoApply lists its
+// CNY passes and packs with their amounts exactly as RoboApply lists its USD
+// plans. "Not open yet" shows only while the API says `paymentsOpen: false`
+// (no payment rail can charge right now), never because of the brand. A plan
+// that can be bought carries its button: checkout for a signed-in visitor,
+// sign-up otherwise.
+//
+// What follows from the payment rail (legitimately different): RoboApply's
+// plans renew, so it prints the renewal and cancel rules; GoApply sells
+// one-time passes only, so it prints that they never renew (`brandPlansRenew`).
 //
 // Nothing here lists a feature the visitor can't use (R-04, D3): job-list
-// rows and copy need `jobs.feed` (off on GoApply while
-// CN_RECRUITMENT_INFO_MODE is off, R-14), alert rows `jobs.alerts`, AI rows
-// `ai.text` (R-13), and the campus calendar line `jobs.campusCalendar`.
+// rows and copy need `jobs.feed`, alert rows `jobs.alerts` and a working mail
+// transport (`notify.email`), AI rows `ai.text`, and the campus calendar line
+// `jobs.campusCalendar`.
 
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { usePlans } from '../../../hooks/credits/usePlans';
+import { useAuth } from '../../../lib/auth/useAuth';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import type { CreditCapsResponse } from '../../../lib/api/contracts/support';
 import { useBrand } from '../../../lib/brand';
 import { formatMoney } from '../../../lib/pricing';
 import { CancelFooterLink } from '../credits';
 import { PriceReference } from '../market';
-import { PRICING_FAQ_KEYS, extensionStoreId } from './catalog';
+import { PRICING_FAQ_KEYS, brandPlansRenew, extensionStoreId } from './catalog';
 import { useCreditCaps, useMarketingFlag } from './hooks';
 import { Faq } from './Sections';
 import { SignupLink } from './SignupLink';
@@ -36,17 +48,33 @@ function periodOf(plan: CatalogPlan): Period {
   return plan.interval === 'week' ? 'week' : plan.interval === 'quarter' ? 'quarter' : 'month';
 }
 
-function PlanCard({ plan, open }: { plan: CatalogPlan & { savingsPercent?: number | null; monthlyEquivalentMinor?: number | null }; open: boolean }) {
+/** Where a signed-in visitor buys a plan: the in-app plan picker with this plan selected. */
+export function checkoutHref(planKey: string): string {
+  return `/settings/billing?plan=${encodeURIComponent(planKey)}#plans`;
+}
+
+interface PlanCardProps {
+  plan: CatalogPlan & { savingsPercent?: number | null; monthlyEquivalentMinor?: number | null };
+  /** GET /billing/plans said no plan can be bought right now. */
+  notOpen: boolean;
+  signedIn: boolean;
+}
+
+function PlanCard({ plan, notOpen, signedIn }: PlanCardProps) {
   const t = useTranslations('landing.pricingPage');
   const tc = useTranslations('credits');
   const locale = useLocale();
   const brand = useBrand();
   const period = periodOf(plan);
   const price = plan.amountMinor !== null ? tc(`price.${period}`, { price: formatMoney(locale, plan.amountMinor, plan.currency) }) : null;
+  const nameKey = `plans.${brand.id}.${plan.key}`;
+  // A plan the bundle has no name for yet shows the catalog's own label, never a key.
+  const name = tc.has(nameKey) ? tc(nameKey) : plan.defaultLabel;
+  const buyable = !notOpen && plan.sellable;
   return (
     <article className={`${styles.card} ${plan.isDefaultSelection ? styles.cardFeatured : ''}`} data-plan={plan.key}>
-      <h3 className={styles.h3}>{tc(`plans.${brand.id}.${plan.key}`)}</h3>
-      {!open ? <span className={styles.badge}>{t('notOpen')}</span> : null}
+      <h3 className={styles.h3}>{name}</h3>
+      {notOpen ? <span className={styles.badge}>{t('notOpen')}</span> : null}
       <p className={styles.price}>{price ?? t('notSet')}</p>
       {plan.amountMinor !== null && plan.currency === 'USD' ? <PriceReference amountMinor={plan.amountMinor} currency="USD" /> : null}
       {plan.monthlyEquivalentMinor ? (
@@ -62,6 +90,17 @@ function PlanCard({ plan, open }: { plan: CatalogPlan & { savingsPercent?: numbe
       ) : null}
       {plan.kind !== 'pack' && plan.practice ? (
         <p className={styles.muted}>{t('practiceCredits', { count: plan.practice.credits, per: plan.practice.per })}</p>
+      ) : null}
+      {buyable ? (
+        signedIn ? (
+          <Link className={styles.ctaSecondary} href={checkoutHref(plan.key)} data-plan-cta="checkout">
+            {t('choosePlan')}
+          </Link>
+        ) : (
+          <SignupLink from={`pricing:${plan.key}`} variant="secondary">
+            {t('signupToBuy')}
+          </SignupLink>
+        )
       ) : null}
     </article>
   );
@@ -80,7 +119,10 @@ function CapsTable() {
   const agent = useMarketingFlag('agent');
   const ai = useMarketingFlag('ai.text');
   const feed = useMarketingFlag('jobs.feed');
-  const alerts = useMarketingFlag('jobs.alerts');
+  // Instant alerts are emails: no row without a working mail transport.
+  const alertsFlag = useMarketingFlag('jobs.alerts');
+  const email = useMarketingFlag('notify.email');
+  const alerts = alertsFlag && email;
   const extension = useMarketingFlag('extension') && extensionStoreId(brand.id) !== null;
   if (!data) return null;
   const shown = data.buckets.filter((b) => {
@@ -135,10 +177,12 @@ export function PricingPage() {
   const locale = useLocale();
   const brand = useBrand();
   const plans = usePlans();
-  const cn = brand.market === 'cn';
+  const { status } = useAuth();
+  const renews = brandPlansRenew(brand);
   const feed = useMarketingFlag('jobs.feed');
   const campus = useMarketingFlag('jobs.campusCalendar');
-  const open = plans.data?.paymentsOpen ?? !cn;
+  // Only the plans API can say that nothing can be bought; unknown is not "closed".
+  const notOpen = plans.data?.paymentsOpen === false;
   const paid = (plans.data?.plans ?? []).filter((p) => p.kind !== 'free');
   return (
     <>
@@ -148,7 +192,11 @@ export function PricingPage() {
             {t('title')}
           </h1>
           <p className={styles.lead}>{t('sub')}</p>
-          {!open ? <p className={`${styles.lead} ${styles.spaced}`}>{t('notOpenNote')}</p> : null}
+          {notOpen ? (
+            <p className={`${styles.lead} ${styles.spaced}`} data-pricing-not-open="">
+              {t('notOpenNote')}
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -173,7 +221,7 @@ export function PricingPage() {
               </SignupLink>
             </article>
             {paid.map((p) => (
-              <PlanCard key={p.key} plan={p} open={open} />
+              <PlanCard key={p.key} plan={p} notOpen={notOpen} signedIn={status === 'authenticated'} />
             ))}
           </div>
         </div>
@@ -202,9 +250,7 @@ export function PricingPage() {
             <h2 className={styles.h2} id="pricing-refund-title">
               {t('refundTitle')}
             </h2>
-            {cn ? (
-              <p className={styles.body}>{t('cnRefund')}</p>
-            ) : (
+            {renews ? (
               <>
                 <ul className={styles.list}>
                   <li>{t('refund1')}</li>
@@ -218,13 +264,23 @@ export function PricingPage() {
                   </a>
                 </p>
               </>
+            ) : (
+              <>
+                <ul className={styles.list} data-pass-refunds="">
+                  <li>{t('passRefund1')}</li>
+                  <li>{t('passRefund2')}</li>
+                </ul>
+                <p className={styles.spaced}>
+                  <a className={styles.inlineLink} href="/help">
+                    {t('passRefundHow')}
+                  </a>
+                </p>
+              </>
             )}
           </div>
           <div>
             <h2 className={styles.h2}>{t('renewTitle')}</h2>
-            {cn ? (
-              <p className={styles.body}>{t('cnPasses')}</p>
-            ) : (
+            {renews ? (
               <>
                 <ul className={styles.list}>
                   <li>{t('renew1')}</li>
@@ -234,6 +290,8 @@ export function PricingPage() {
                   <CancelFooterLink className={styles.inlineLink} />
                 </p>
               </>
+            ) : (
+              <p className={styles.body}>{t('cnPasses')}</p>
             )}
           </div>
         </div>

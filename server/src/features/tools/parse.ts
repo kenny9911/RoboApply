@@ -10,12 +10,12 @@
 //   - RoboApply: always the local parser. A RoboApply owner opt-in to GoHire
 //     parsing (OD-3) needs the `intl_cross_border_cn_parse` consent, which an
 //     anonymous visitor cannot give, so the tool never sends it there;
-//   - local parser: text extraction, then
-//       RoboApply: the structured parse when the brand's text model is on
-//         (`ai.text`); `aiAllowed` is always true on RoboApply;
-//       GoApply: never a model. `aiAllowed` (TASK_PLAN §2.2) is true there
-//         only with an `ai_resume_parsing` grant, which an anonymous visitor
-//         cannot hold, and the tool's processing notice does not cover AI;
+//   - local parser: text extraction, then the structured parse when the
+//     brand's text model is on (`ai.text`) and the visitor may be read by a
+//     model (`anonymousAiAllowed`): always on RoboApply; on GoApply only for
+//     a run that carried the ticked processing notice, which names the AI
+//     read (there is no account to hold an `ai_resume_parsing` grant, so the
+//     notice of this one run is the consent);
 //     otherwise a deterministic heading pass over the text (`textToMarkdown`).
 // The result is markdown in the shape the resume check rules read. It is the
 // file as parsed — roles are bold lines or plain lines, not the editor's `###`
@@ -32,6 +32,12 @@ export interface ParseInput {
   fileName: string;
   mimeType: string;
   brand: ProductBrand;
+  /**
+   * GoApply: this run carried the ticked processing notice
+   * (TOOLS_CONSENT_VERSION; the service refuses the run without it). The
+   * notice covers the AI read, so the structured parse may run.
+   */
+  consented?: boolean;
   requestId?: string;
   signal?: AbortSignal;
 }
@@ -235,17 +241,18 @@ async function extractLocalText(input: ParseInput): Promise<string> {
   return stripControl(normalizeExtractedText(text ?? ''));
 }
 
-/** The production parser path (see the header). Throws 422 `file_unreadable` when no text comes out. */
 /**
  * May the structured parse (a model call) run for this anonymous visitor?
- * Mirrors `aiAllowed` without a user: RoboApply yes (still subject to the
- * brand's `ai.text` flag); GoApply no — there is no account to hold the
- * `ai_resume_parsing` grant.
+ * Mirrors `aiAllowed` without a user, and is still subject to the brand's
+ * `ai.text` flag. RoboApply: yes. GoApply: only when the run carried the
+ * ticked processing notice (`consented`); a visitor has no account to hold an
+ * `ai_resume_parsing` grant, so the notice of the run is what allows it.
  */
-export function anonymousAiAllowed(brand: ProductBrand): boolean {
-  return brand.market !== 'cn';
+export function anonymousAiAllowed(brand: ProductBrand, consented = false): boolean {
+  return brand.market !== 'cn' || consented === true;
 }
 
+/** The production parser path (see the header). Throws 422 `file_unreadable` when no text comes out. */
 export const defaultParseUpload: ParseUpload = async (input) => {
   const name = nameFromFile(input.fileName);
 
@@ -273,7 +280,7 @@ export const defaultParseUpload: ParseUpload = async (input) => {
   }
   if (rawText.trim().length < 20) throw unreadable();
 
-  if (anonymousAiAllowed(input.brand) && (await isEnabled('ai.text', { brand: input.brand }))) {
+  if (anonymousAiAllowed(input.brand, input.consented) && (await isEnabled('ai.text', { brand: input.brand }))) {
     try {
       const { resumeParseAgent } = await import('../../agents/ResumeParseAgent.js');
       const parsed = await resumeParseAgent.parse(rawText, input.requestId, input.signal);

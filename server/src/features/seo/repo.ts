@@ -25,6 +25,8 @@ export interface SeoJobRow extends ScopeRow, PayRow {
   postedAt: Date | null;
   postedAtEstimated: boolean;
   firstSeenAt: Date;
+  /** When the source last listed the posting (our last successful check of it). */
+  lastSeenAt: Date | null;
   updatedAt: Date;
 }
 
@@ -113,6 +115,7 @@ const CARD_SELECT = {
   postedAt: true,
   postedAtEstimated: true,
   firstSeenAt: true,
+  lastSeenAt: true,
   updatedAt: true,
   expiresAt: true,
   closedAt: true,

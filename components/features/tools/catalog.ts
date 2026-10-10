@@ -26,8 +26,9 @@ export const TOOLS: readonly ToolEntry[] = [
 
 /**
  * The hub card for signed-out job alerts (F-TOOL-04). `flags`: every one must
- * be on for the card to show — `jobs.alerts` (off on GoApply while it lists no
- * third-party posts) and `notify.email` (a working mail transport). They are
+ * be on for the card to show — `jobs.alerts` (on by default on both brands;
+ * off on GoApply only with CN_RECRUITMENT_INFO_MODE=off) and `notify.email`
+ * (a working mail transport). They are
  * the same two the form itself checks, so the card never leads to "not
  * available here".
  */
@@ -67,7 +68,7 @@ export const CLIENT_LIMITS = {
  * (runtime mirror of TOOLS_CONSENT_VERSION in server/src/features/tools/contract.ts;
  * a test keeps them equal).
  */
-export const CLIENT_CONSENT_VERSION = 'tools-processing.2026-10-10.v2';
+export const CLIENT_CONSENT_VERSION = 'tools-processing.2026-10-11.v3';
 
 /**
  * Signup / sign-in link that carries the tool context: `from` (brand panel

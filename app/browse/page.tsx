@@ -1,7 +1,8 @@
 // /browse — the hub of job lists (TASK_PLAN.md WP-56; ruling C26: the
 // marketing footer's "Popular job lists" and the quick search land under
 // /browse). Lists come from `seo-rebuild` (indexable pages only, real
-// counts). GoApply: deferred → 404; flag `seo.browse` off → 404.
+// counts). Both brands: flag `seo.browse` off → 404 (the API answers
+// feature_disabled; on GoApply also while CN_RECRUITMENT_INFO_MODE is off).
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -21,13 +22,12 @@ export async function generateMetadata(): Promise<Metadata> {
     path: '/browse',
     title: `${t('browse.hub.title')} | ${req.brand.name}`,
     description: t('browse.hub.sub'),
-    indexable: req.brand.market !== 'cn',
+    indexable: true,
   });
 }
 
 export default async function BrowseHubPage() {
   const req = await seoRequest();
-  if (req.brand.market === 'cn') notFound();
   const res = await loadBrowseHub(req.brand.id, { clientIp: req.clientIp });
   if (res.status !== 'ok') notFound();
   return (

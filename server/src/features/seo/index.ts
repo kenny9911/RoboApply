@@ -5,15 +5,17 @@
 //   - `toPublicCard` / `jobPath` / `jobIdSlug`: the public job card and URL of a job row;
 //   - `publicJobWhere` / `basePublicWhere` / `allowedPublicBoards`: the predicate
 //     for jobs a public surface may show (TASK_PLAN §2.2, ARCH §9.4);
+//   - `publicListingsOpen(brand, env)`: false only on GoApply with
+//     CN_RECRUITMENT_INFO_MODE=off (no public posting anywhere);
 //   - `createMemorySeoRepo` / `seoJob` (testkit): mount the router without a
 //     database in another area's route tests (`{ service: createSeoService({ repo }) }`).
 
 export * from './contract.js';
 export { createSeoPublicRouter, isInternalRequest, seoRateLimiter, SEO_RATE_LIMIT_NAME } from './routes.js';
 export type { SeoRouterDeps } from './routes.js';
-export { createSeoService, defaultSeoService, toPublicCard, toPublicDetail, SeoGoneError } from './service.js';
+export { cnLicenceFor, createSeoService, defaultSeoService, publicListingsOpen, toPublicCard, toPublicDetail, SeoGoneError } from './service.js';
 export type { SeoService, SeoServiceDeps } from './service.js';
-export { jobIdSlug, jobPath, parseIdSlug, resolveBrowsePath, classifyBrowsePath, seoCacheTag } from './paths.js';
+export { jobIdSlug, jobPath, pageTypeOpen, parseIdSlug, resolveBrowsePath, classifyBrowsePath, seoCacheTag } from './paths.js';
 export { allowedPublicBoards, basePublicWhere, publicDisplayProviders, publicJobWhere } from './scope.js';
 export type { JobScope, ScopeContext } from './scope.js';
 export { createMemorySeoRepo, seoJob, seoJobs } from './testkit.js';

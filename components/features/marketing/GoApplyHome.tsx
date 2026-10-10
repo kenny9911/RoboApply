@@ -1,31 +1,57 @@
 'use client';
 
 // GoApply home (`/`, `/en`) — TASK_PLAN.md WP-40, PRODUCT §1.2/§3.2,
-// F-MKT-01/02 (cn), F-TOOL-05 (cn campus link-out).
+// F-MKT-01/02 (cn), F-TOOL-05 (cn campus link-out); owner ruling D5.
 //
-//   少填表、不错过截止、面试不慌 → three pillars → 校招日历 preview (only when
-//   the `jobs.campusCalendar` capability is on; R-14) → AI面试 practice →
-//   free-core statement → FAQ → final CTA. The ICP / 公安备案 / licence lines
-//   come from the legal footer (WP-13) and show only when configured.
+//   少填表、不错过截止、面试不慌 → three pillars → the feature cards → real
+//   counters → the job ticker slot → quick search → 校招日历 preview → AI面试
+//   practice → the pricing summary (free core + the preselected pass) → FAQ →
+//   final CTA.
 //
-// AI practice (the interview pillar, the hero clause and the practice
-// section) shows only while `ai.text` is on: GoApply's AI stays off until a
-// domestic model and content safety are configured (R-13), and a disabled
-// feature has no UI entry (R-04). "Paid plans are not open yet" shows only
-// while /billing/plans says so (R-15).
+// The same visitor functions as the RoboApply home, over GoApply's own data
+// (D5): the counters, the ticker and the quick search read the `market = 'cn'`
+// index, the prices come from GET /billing/plans (CNY passes), the cards come
+// from GoApply's feature catalog. What differs is the market's own: the copy,
+// the campus calendar, one country.
 //
-// Never names an AI-interview vendor; never claims voice practice (GoApply's
-// `ai.interviewVoice` is off); never claims auto-submission.
+// Honesty (D3): the counters and the ticker render only real rows and nothing
+// when the index is empty or small; the campus preview lists only published
+// programmes; no number is ever a placeholder. `ticker` is a server-rendered
+// slot: the route passes <JobTicker />, which renders nothing without public
+// jobs. The ICP / 公安备案 / licence lines come from the legal footer (WP-13)
+// and show only when configured.
+//
+// Capabilities (R-04: a disabled feature has no UI entry): the campus preview
+// needs `jobs.campusCalendar`; AI practice (the interview pillar, the hero
+// clause and the practice section) needs `ai.text`, which is on by default on
+// GoApply and off only when the operator turned AI off; the line about
+// speaking with an AI interviewer needs `ai.interviewVoice`. "Paid plans are
+// not open yet" shows only while /billing/plans says `paymentsOpen: false`.
+//
+// Listed jobs (`jobs.feed`, on by default; the operator's
+// CN_RECRUITMENT_INFO_MODE=off turns it off): the counters are a number, so
+// they show only once the capability is known to be on. The ticker, the quick
+// search, the "Where do the jobs come from?" question and the job-matches
+// card are part of the page as the server sends it and are removed once the
+// capability is known to be off. The ticker's API also answers empty in that
+// mode, and the route leaves that question out of the FAQ JSON-LD
+// (`cnHomeFaqKeys(false)`), so structured data never says more than the page.
+//
+// Never names an AI-interview vendor; never claims that an application is
+// submitted for the user (D1).
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { usePlans } from '../../../hooks/credits/usePlans';
 import { listPublicCampusEvents } from '../../../lib/api/campus';
-import { CN_HOME_FAQ_KEYS } from './catalog';
-import { useMarketingFlag } from './hooks';
-import { Faq } from './Sections';
+import { useBrand } from '../../../lib/brand';
+import { CAMPUS_TIME_ZONE } from '../campus/format';
+import { cnHomeFaqKeys } from './catalog';
+import { useMarketingFlag, useMarketingFlagOff } from './hooks';
+import { Faq, FeatureGrid, IndexCounters, PricingSummary, QuickSearch } from './Sections';
 import { SignupLink } from './SignupLink';
 import { SitePage } from './SiteChrome';
 import styles from './marketing.module.css';
@@ -56,9 +82,11 @@ export function CampusPreview() {
   });
   if (!on) return null;
   const items = (query.data?.items ?? []).slice(0, CAMPUS_PREVIEW_MAX);
+  // Campus dates are Beijing-time dates: formatting in the viewer's zone would
+  // show the day before west of it, and change the text after hydration.
   const date = (iso: string | null) => {
     const d = iso ? new Date(iso) : null;
-    return d && !Number.isNaN(d.getTime()) ? format.dateTime(d, { dateStyle: 'medium' }) : null;
+    return d && !Number.isNaN(d.getTime()) ? format.dateTime(d, { dateStyle: 'medium', timeZone: CAMPUS_TIME_ZONE }) : null;
   };
   return (
     <section className={styles.sectionAlt} aria-labelledby="campus-preview-title" data-campus-preview="">
@@ -99,10 +127,19 @@ export function CampusPreview() {
   );
 }
 
-export function GoApplyHome() {
+export interface GoApplyHomeProps {
+  /** The live job ticker, rendered on the server by the route (components/features/seo/server). */
+  ticker?: ReactNode;
+}
+
+export function GoApplyHome({ ticker = null }: GoApplyHomeProps = {}) {
   const t = useTranslations('landing.cnHome');
   const tc = useTranslations('landing.cta');
+  const brand = useBrand();
   const ai = useMarketingFlag('ai.text');
+  const voice = useMarketingFlag('ai.interviewVoice');
+  const feedOn = useMarketingFlag('jobs.feed');
+  const feedOff = useMarketingFlagOff('jobs.feed');
   const plans = usePlans();
   const pillars = PILLARS.filter((key) => key !== 'interview' || ai);
   return (
@@ -124,7 +161,7 @@ export function GoApplyHome() {
         </div>
       </section>
 
-      <section className={styles.section} id="features" aria-labelledby="cn-pillars-title">
+      <section className={styles.section} aria-labelledby="cn-pillars-title">
         <div className={styles.wrap}>
           <h2 className={styles.h2} id="cn-pillars-title">
             {t('pillars.title')}
@@ -140,6 +177,14 @@ export function GoApplyHome() {
         </div>
       </section>
 
+      <FeatureGrid />
+
+      {feedOn ? <IndexCounters /> : null}
+      {feedOff ? null : ticker}
+      {feedOff ? null : (
+        <QuickSearch countries={brand.countries} examples={{ role: t('search.rolePlaceholder'), city: t('search.cityPlaceholder') }} />
+      )}
+
       <CampusPreview />
 
       {ai ? (
@@ -149,6 +194,11 @@ export function GoApplyHome() {
               {t('practice.title')}
             </h2>
             <p className={styles.body}>{t('practice.sub')}</p>
+            {voice ? (
+              <p className={styles.body} data-cn-practice-voice="">
+                {t('practice.voice')}
+              </p>
+            ) : null}
             <div className={`${styles.actions} ${styles.spaced}`}>
               <SignupLink from="home:practice" variant="secondary">
                 {t('practice.cta')}
@@ -158,22 +208,9 @@ export function GoApplyHome() {
         </section>
       ) : null}
 
-      <section className={styles.sectionAlt} id="free" aria-labelledby="cn-free-title">
-        <div className={`${styles.wrap} ${styles.narrow}`}>
-          <h2 className={styles.h2} id="cn-free-title">
-            {t('free.title')}
-          </h2>
-          <p className={styles.body}>{t('free.body')}</p>
-          {plans.data?.paymentsOpen === false ? <p className={styles.body}>{t('free.notOpen')}</p> : null}
-          <div className={`${styles.actions} ${styles.spaced}`}>
-            <Link className={styles.inlineLink} href="/pricing">
-              {t('free.pricing')}
-            </Link>
-          </div>
-        </div>
-      </section>
+      <PricingSummary from="home:pricing" ns="landing.cnHome.pricing" id="free" note={plans.data?.paymentsOpen === false ? t('pricing.notOpen') : null} />
 
-      <Faq id="faq" title={t('faq.title')} items={CN_HOME_FAQ_KEYS.map((k) => ({ q: t(`faq.${k}.q`), a: t(`faq.${k}.a`) }))} />
+      <Faq id="faq" title={t('faq.title')} items={cnHomeFaqKeys(!feedOff).map((k) => ({ q: t(`faq.${k}.q`), a: t(`faq.${k}.a`) }))} />
 
       <section className={styles.sectionAlt} aria-labelledby="cn-final-title">
         <div className={`${styles.wrap} ${styles.narrow}`}>

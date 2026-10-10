@@ -20,6 +20,10 @@ GoApply（https://www.goapply.top/）是面向中国大陆学生和求职者的�
 - [安全 Security](https://www.goapply.top/security)
 - [帮助 Help](https://www.goapply.top/help)
 - [校招日历 Campus calendar](https://www.goapply.top/campus)
+- [免费工具 Free tools](https://www.goapply.top/tools)
+
+## Crawling
+- Public job pages (/job/...) are not open to AI crawlers; see robots.txt.
 "
 `;
 
@@ -129,6 +133,9 @@ exports[`crawl files on the goapply host > sitemap.xml 1`] = `
   <sitemap>
     <loc>https://www.goapply.top/sitemaps/static.xml</loc>
   </sitemap>
+  <sitemap>
+    <loc>https://www.goapply.top/sitemaps/jobs-1.xml</loc>
+  </sitemap>
 </sitemapindex>
 "
 `;
@@ -159,10 +166,28 @@ exports[`crawl files on the goapply host > sitemaps/static.xml 1`] = `
     <loc>https://www.goapply.top/help/ranking</loc>
   </url>
   <url>
+    <loc>https://www.goapply.top/features/job-matches</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/features/resume-tailoring</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/features/cover-letters</loc>
+  </url>
+  <url>
     <loc>https://www.goapply.top/features/resume</loc>
   </url>
   <url>
     <loc>https://www.goapply.top/tools</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/tools/resume-check</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/tools/resume-job-match</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/tools/job-alerts</loc>
   </url>
   <url>
     <loc>https://www.goapply.top/signup</loc>

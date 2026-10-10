@@ -178,7 +178,16 @@ describe('ToolsHub', () => {
     await waitFor(() => expect(screen.getByText(/Up to 3 checks a day with each tool/)).toBeTruthy());
   });
 
-  it('where the tools are off (GoApply CN-0) it lists no tool, says so, and keeps the campus link', async () => {
+  it('GoApply lists both tools by default, like RoboApply (D5)', async () => {
+    const { container } = renderTool(<ToolsHub />, { brand: 'goapply' });
+    const cards = [...container.querySelectorAll('[data-tool-card]')].map((c) => c.getAttribute('data-tool-card'));
+    expect(cards).toEqual(['resume-check', 'resume-job-match']);
+    expect(container.querySelector('[data-notice="unavailable"]')).toBeNull();
+    expect(container.querySelector('[data-honesty="automated"]')).not.toBeNull();
+    await waitFor(() => expect(screen.getByText(/Up to 3 checks a day with each tool/)).toBeTruthy());
+  });
+
+  it('where a page says the tools are off it lists no tool, says so, and keeps the campus link', async () => {
     const { container } = renderTool(<ToolsHub toolsOpen={false} />, { brand: 'goapply', flags: { 'jobs.campusCalendar': true } });
     const cards = [...container.querySelectorAll('[data-tool-card]')].map((c) => c.getAttribute('data-tool-card'));
     expect(cards).toEqual(['campus']);
@@ -239,16 +248,21 @@ describe('ToolsHub', () => {
     expect(container.querySelector('[data-tool-card="resume-check"]')).not.toBeNull();
   });
 
-  it('GoApply: no job-alerts card while it lists no third-party posts; in Chinese once alerts and email are on', () => {
-    const off = renderTool(<ToolsHub toolsOpen={false} />, { brand: 'goapply', flags: { 'jobs.alerts': false, 'notify.email': true, 'jobs.campusCalendar': true } });
+  it('GoApply: the job-alerts card under the same two capabilities, last, in Chinese; hidden when alerts are switched off', () => {
+    const off = renderTool(<ToolsHub />, { brand: 'goapply', flags: { 'jobs.alerts': false, 'notify.email': true, 'jobs.campusCalendar': true } });
     expect(off.container.querySelector('[data-tool-card="job-alerts"]')).toBeNull();
     off.unmount();
-    // The card does not depend on the upload tools being open (CN-0).
-    const on = renderTool(<ToolsHub toolsOpen={false} />, { brand: 'goapply', flags: { 'jobs.alerts': true, 'notify.email': true }, locale: 'zh' });
+    const on = renderTool(<ToolsHub />, { brand: 'goapply', flags: { 'jobs.alerts': true, 'notify.email': true, 'jobs.campusCalendar': true }, locale: 'zh' });
+    const cards = [...on.container.querySelectorAll('[data-tool-card]')].map((c) => c.getAttribute('data-tool-card'));
+    expect(cards).toEqual(['resume-check', 'campus', 'resume-job-match', 'job-alerts']);
     const card = on.container.querySelector('[data-tool-card="job-alerts"]') as HTMLElement;
     expect(within(card).getByRole('heading').textContent).toBe('职位邮件提醒');
     expect(card.getAttribute('href')).toBe('/tools/job-alerts');
     expect(intlErrors).toEqual([]);
+    on.unmount();
+    // The card does not depend on the upload tools being listed.
+    const closed = renderTool(<ToolsHub toolsOpen={false} />, { brand: 'goapply', flags: { 'jobs.alerts': true, 'notify.email': true } });
+    expect(closed.container.querySelector('[data-tool-card="job-alerts"]')).not.toBeNull();
   });
 
   it('GoApply without the campus capability has no campus entry', () => {
@@ -367,7 +381,7 @@ describe('resume check', () => {
 
   it('GoApply: the notice must be ticked (unticked by default) and is sent with its version', async () => {
     api.getToolsConfig.mockResolvedValue(
-      config({ consentRequired: true, consentVersion: 'tools-processing.v1', processedOutsideMainland: true, parserName: 'GoHire' }),
+      config({ consentRequired: true, consentVersion: 'tools-processing.vX', processedOutsideMainland: true, parserName: 'GoHire' }),
     );
     api.runResumeCheck.mockResolvedValue(checkReport({ profile: 'cn' }));
     const { container } = renderTool(<ToolRunner kind="resume_check" />, { brand: 'goapply' });
@@ -379,9 +393,11 @@ describe('resume check', () => {
     expect(box.checked).toBe(false);
     await waitFor(() => expect(container.querySelector('[data-consent="tools"]')?.textContent).toMatch(/GoHire/));
     const notice = container.querySelector('[data-consent="tools"]')?.textContent ?? '';
-    expect(notice).toMatch(/GoApply reads this resume with automated software/);
+    // The notice names the AI read (the structured parse runs only after this tick).
+    expect(notice).toMatch(/GoApply reads this resume with automated software, including an AI model/);
     expect(notice).toMatch(/sent to GoHire, the resume-reading service GoApply uses, on servers in mainland China/);
-    expect(notice).toMatch(/outside mainland China/);
+    expect(notice).toMatch(/processed outside mainland China by the service providers named in the privacy notice/);
+    expect(notice).not.toMatch(/beta|United States/);
     expect(screen.getByRole('link', { name: 'Privacy notice' })).toBeTruthy();
     chooseFile(pdf());
     fireEvent.click(screen.getByRole('button', { name: 'Check my resume' }));
@@ -390,7 +406,19 @@ describe('resume check', () => {
     fireEvent.click(box);
     fireEvent.click(screen.getByRole('button', { name: 'Check my resume' }));
     await waitFor(() => expect(api.runResumeCheck).toHaveBeenCalled());
-    expect((api.runResumeCheck.mock.calls[0]![0] as FormData).get('consent')).toBe('tools-processing.v1');
+    expect((api.runResumeCheck.mock.calls[0]![0] as FormData).get('consent')).toBe('tools-processing.vX');
+  });
+
+  it('GoApply in Chinese: a stored translation of the old notice is never shown under the new consent version', async () => {
+    api.getToolsConfig.mockResolvedValue(config({ consentRequired: true, consentVersion: 'tools-processing.vX', processedOutsideMainland: true, parserName: null }));
+    const { container } = renderTool(<ToolRunner kind="resume_check" />, { brand: 'goapply', locale: 'zh' });
+    await waitFor(() => expect(container.querySelector('[data-consent="tools"]')?.textContent).toMatch(/outside mainland China|中国大陆以外/));
+    const notice = container.querySelector('[data-consent="tools"]')?.textContent ?? '';
+    // The sentence the tick agrees to names the AI read, in the new English text or its Chinese translation.
+    expect(notice).toMatch(/including an AI model|包括 AI 模型/);
+    // The old Chinese sentences (no AI read; "during the beta … in the United States") never render.
+    expect(notice).not.toMatch(/用自动化软件读取这份简历/);
+    expect(notice).not.toMatch(/测试期间|美国/);
   });
 
   it('GoApply: when /config fails the notice still shows, and the contract version is sent', async () => {

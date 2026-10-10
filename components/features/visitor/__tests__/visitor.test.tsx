@@ -1,11 +1,14 @@
 // WP-78 visitor UI:
 //   VisitorFeed      ≤ 20 public cards, never a score, the signup gate after the
 //                    list, empty/error states, nothing when `jobs.feed` is off,
-//                    the alerts link (jobs.alerts + notify.email), the assistant
-//                    launcher only for signed-out visitors on RoboApply with the flag
+//                    the alerts link (jobs.alerts + notify.email, either brand), the
+//                    assistant launcher for signed-out visitors with the flag, on
+//                    both brands
 //   VisitorAssistant one SSE turn with the page context, streamed text replaced by
 //                    the guarded final text, AI label, job cards open public pages,
-//                    rate limit → signup prompt, seeker cards dropped
+//                    rate limit → signup prompt, seeker cards dropped; GoApply: the
+//                    consent line must be ticked first and its version goes with
+//                    every turn
 //   JobAlertsForm    off → "not available", validation (email, consent), the filters
 //                    sent, the same "check your inbox" answer, rate limit message
 //   AlertConfirm     read without change → Confirm → on; invalid link; left list
@@ -36,7 +39,8 @@ import { RoboApiError } from '../../../../lib/api/client';
 import type { CopilotSseEvent } from '../../../../lib/api/contracts/copilot';
 import type { VisitorFeedItem } from '../../../../lib/api/contracts/visitor';
 import { AlertConfirm, JobAlertsForm, VisitorAssistant, VisitorFeed } from '..';
-import { alertFilters, alertsHref, filtersLabel, looksLikeEmail, signupHref, visitorJobHref } from '../model';
+import { VISITOR_CONSENT_VERSION, alertFilters, alertsHref, filtersLabel, looksLikeEmail, signupHref, visitorJobHref } from '../model';
+import { VISITOR_CONSENT_VERSION as SERVER_CONSENT_VERSION } from '../../../../server/src/features/visitor/contract';
 import { intlErrors, renderVisitor } from './render';
 
 function item(i: number, extra: Partial<VisitorFeedItem> = {}): VisitorFeedItem {
@@ -119,10 +123,22 @@ describe('VisitorFeed', () => {
     expect(await screen.findByRole('link', { name: 'Data Analyst 1' })).toBeInTheDocument();
   });
 
-  it('GoApply items without a public page link to signup that then opens the job', async () => {
-    api.getPublicFeed.mockResolvedValue({ items: [item(3, { path: null })], asOf: '' });
+  it('GoApply items open their public job page too (the path the server sends, else /job/<id>)', async () => {
+    api.getPublicFeed.mockResolvedValue({ items: [item(3, { path: null }), item(4, { title: '数据分析师', path: '/job/j4' })], asOf: '' });
     renderVisitor(<VisitorFeed from="campus" />, { brand: 'goapply', flags: FEED_ON });
-    expect(await screen.findByRole('link', { name: 'Data Analyst 3' })).toHaveAttribute('href', '/signup?from=campus&next=%2Fjobs%2Fj3');
+    expect(await screen.findByRole('link', { name: 'Data Analyst 3' })).toHaveAttribute('href', '/job/j3');
+    expect(screen.getByRole('link', { name: '数据分析师' })).toHaveAttribute('href', '/job/j4');
+    expect(document.body.innerHTML).not.toContain('next=%2Fjobs');
+  });
+
+  it('GoApply shows the alerts link under the same two capabilities', async () => {
+    api.getPublicFeed.mockResolvedValue({ items: [item(1)], asOf: '' });
+    renderVisitor(<VisitorFeed from="browse" query={{ role: '护士', city: '上海', country: 'CN' }} />, { brand: 'goapply', flags: { ...FEED_ON, 'jobs.alerts': true, 'notify.email': true } });
+    expect(await screen.findByRole('link', { name: 'Get new jobs like these by email' })).toHaveAttribute('href', `/tools/job-alerts?role=${encodeURIComponent('护士')}&city=${encodeURIComponent('上海')}&country=CN`);
+    cleanup();
+    renderVisitor(<VisitorFeed from="browse" />, { brand: 'goapply', flags: { ...FEED_ON, 'jobs.alerts': true } });
+    await screen.findByRole('link', { name: 'Data Analyst 1' });
+    expect(screen.queryByText('Get new jobs like these by email')).toBeNull();
   });
 
   it('alerts link only with jobs.alerts and notify.email; carries the search', async () => {
@@ -135,7 +151,7 @@ describe('VisitorFeed', () => {
     expect(await screen.findByRole('link', { name: 'Get new jobs like these by email' })).toHaveAttribute('href', '/tools/job-alerts?role=Nurse&city=Taichung&country=TW');
   });
 
-  it('assistant launcher: flag on + signed out + RoboApply only', async () => {
+  it('assistant launcher: flag on + signed out, on both brands', async () => {
     api.getPublicFeed.mockResolvedValue({ items: [item(1)], asOf: '' });
     renderVisitor(<VisitorFeed from="browse" />, { flags: { ...FEED_ON, visitorAssistant: true } });
     expect(await screen.findByRole('button', { name: 'Ask about these jobs' })).toBeInTheDocument();
@@ -145,6 +161,10 @@ describe('VisitorFeed', () => {
     expect(screen.queryByRole('button', { name: 'Ask about these jobs' })).toBeNull();
     cleanup();
     renderVisitor(<VisitorFeed from="browse" />, { brand: 'goapply', flags: { ...FEED_ON, visitorAssistant: true } });
+    expect(await screen.findByRole('button', { name: 'Ask about these jobs' })).toBeInTheDocument();
+    cleanup();
+    // The flag is off by default on GoApply as on RoboApply: no launcher.
+    renderVisitor(<VisitorFeed from="browse" />, { brand: 'goapply', flags: FEED_ON });
     await screen.findByRole('link', { name: 'Data Analyst 1' });
     expect(screen.queryByRole('button', { name: 'Ask about these jobs' })).toBeNull();
     cleanup();
@@ -211,6 +231,69 @@ describe('VisitorAssistant', () => {
     expect(within(dialog).queryByText(/90%/)).toBeNull();
     expect(within(dialog).getByText('AI answer')).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Data Analyst 7' })).toHaveAttribute('href', '/job/j7');
+    // RoboApply: no consent box, and no consent field on the turn.
+    expect(dialog.querySelector('[data-visitor-consent]')).toBeNull();
+    expect(within(dialog).queryByRole('checkbox')).toBeNull();
+  });
+
+  it('GoApply: nothing can be asked until the consent line is ticked; then every turn carries the consent version', async () => {
+    stream([
+      { event: 'meta', data: { threadId: 'visitor', messageId: 'm1' } },
+      { event: 'card', data: { type: 'job_list', id: 'c1', data: { items: [item(8, { path: null })], visitor: true } } },
+      { event: 'done', data: { messageId: 'm1', usage: { inputTokens: 1, outputTokens: 1 }, creditsRemaining: null, content: 'Here are public jobs.' } },
+    ]);
+    renderVisitor(<VisitorAssistant pageContext={ctx} from="browse" />, { brand: 'goapply', flags: { visitorAssistant: true } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask about these jobs' }));
+    const dialog = await screen.findByRole('dialog');
+    const box = within(dialog).getByRole('checkbox', { name: 'I agree that GoApply sends my questions to an AI model to answer them.' });
+    expect(box).not.toBeChecked();
+    expect(within(dialog).getByText(/may process your question outside mainland China/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Privacy notice' })).toHaveAttribute('href', '/legal/privacy');
+    // Locked: chips, the box and Send do nothing.
+    const chip = within(dialog).getByRole('button', { name: 'Which of these jobs can be done remotely?' });
+    expect(chip).toBeDisabled();
+    const input = within(dialog).getByLabelText('Your question');
+    expect(input).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
+    fireEvent.click(chip);
+    expect(api.sendVisitorTurn).not.toHaveBeenCalled();
+    // Ticked: the question goes out with the version of the line that was ticked.
+    fireEvent.click(box);
+    expect(box).toBeChecked();
+    expect(chip).toBeEnabled();
+    fireEvent.click(chip);
+    expect(await within(dialog).findByText('Here are public jobs.')).toBeInTheDocument();
+    expect(api.sendVisitorTurn).toHaveBeenCalledWith(
+      { text: 'Which of these jobs can be done remotely?', pageContext: ctx, consent: VISITOR_CONSENT_VERSION },
+      expect.objectContaining({ onEvent: expect.any(Function) }),
+    );
+    // A listed job opens its public page, never an app page.
+    expect(within(dialog).getByRole('link', { name: 'Data Analyst 8' })).toHaveAttribute('href', '/job/j8');
+    // After the first answer the box is gone; a second question still carries the version.
+    expect(dialog.querySelector('[data-visitor-consent]')).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText('Your question'), { target: { value: 'And pay?' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(api.sendVisitorTurn).toHaveBeenCalledTimes(2));
+    expect(api.sendVisitorTurn.mock.calls[1]![0]).toEqual({ text: 'And pay?', pageContext: ctx, consent: VISITOR_CONSENT_VERSION });
+  });
+
+  it('GoApply: a turn the server refuses for consent says so and asks for the tick again', async () => {
+    api.sendVisitorTurn.mockRejectedValue(
+      new RoboApiError('consent', { code: 'invalid_request', status: 422, payload: { code: 'invalid_request', details: { reason: 'consent_required' } } }),
+    );
+    renderVisitor(<VisitorAssistant pageContext={ctx} from="browse" />, { brand: 'goapply', flags: { visitorAssistant: true } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask about these jobs' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'How does GoApply work?' }));
+    expect(await within(dialog).findByText('Tick the box above first. GoApply answers with AI only after you agree.')).toBeInTheDocument();
+    const again = within(dialog).getByRole('checkbox');
+    expect(again).not.toBeChecked();
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
+  it('the consent version the widget sends is the one the server checks', () => {
+    expect(VISITOR_CONSENT_VERSION).toBe(SERVER_CONSENT_VERSION);
   });
 
   it('typing and Enter sends; rate limit shows the signup prompt', async () => {
@@ -339,9 +422,10 @@ describe('AlertConfirm', () => {
 describe('model', () => {
   it('links, filters and labels', () => {
     expect(signupHref('browse')).toBe('/signup?from=browse');
-    expect(visitorJobHref({ jobId: 'a', path: '/job/a-x' }, 'intl', 'b')).toBe('/job/a-x');
-    expect(visitorJobHref({ jobId: 'a' }, 'intl', 'b')).toBe('/job/a');
-    expect(visitorJobHref({ jobId: 'a', path: null }, 'cn', 'b')).toBe('/signup?from=b&next=%2Fjobs%2Fa');
+    // One rule for both brands: the public job page (the server's path, else /job/<id>).
+    expect(visitorJobHref({ jobId: 'a', path: '/job/a-x' })).toBe('/job/a-x');
+    expect(visitorJobHref({ jobId: 'a' })).toBe('/job/a');
+    expect(visitorJobHref({ jobId: 'a', path: null })).toBe('/job/a');
     expect(alertsHref({})).toBe('/tools/job-alerts');
     expect(alertsHref({ country: 'tw' })).toBe('/tools/job-alerts');
     expect(alertFilters({ role: ' ', city: '', country: 'US', remoteOnly: false })).toEqual({ country: 'US' });

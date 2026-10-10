@@ -495,21 +495,32 @@ export function sitemapIndexXml(sitemaps: ReadonlyArray<{ loc: string; lastmod?:
 }
 
 /**
- * The free-tool pages a brand's static sitemap lists (WP-57, WP-78):
- *   /tools                 the hub, on both brands;
- *   /tools/<tool>          each tool page, only where the tools run
- *                          (`toolsOpen`: false on GoApply while CN-0, where
- *                          those pages answer 404);
- *   /tools/job-alerts      signed-out job alerts — RoboApply only (the page
- *                          is `noindex` on GoApply).
+ * The free-tool pages a brand's static sitemap lists (WP-57, WP-78). One rule
+ * for both brands (D5):
+ *   /tools                 the hub;
+ *   /tools/<tool>          each tool page, where the tools run (`toolsOpen`);
+ *   /tools/job-alerts      signed-out job alerts, while the brand's
+ *                          `jobs.alerts` capability is on (`alerts`; the page
+ *                          is `noindex` when it is off, and a sitemap never
+ *                          lists a URL its own page marks noindex).
  * `toolPaths` are the tool pages' own paths (components/features/tools
  * catalog), passed in so this module stays free of component imports. Pure.
  */
-export function toolSitemapPaths(brandId: BrandId, opts: { toolsOpen: boolean; toolPaths: readonly string[] }): string[] {
+export function toolSitemapPaths(opts: { toolsOpen: boolean; toolPaths: readonly string[]; alerts: boolean }): string[] {
   const out = ['/tools'];
   if (opts.toolsOpen) out.push(...opts.toolPaths);
-  if (getBrand(brandId).market !== 'cn') out.push('/tools/job-alerts');
+  if (opts.alerts) out.push('/tools/job-alerts');
   return out;
+}
+
+/**
+ * Whether signed-out job alerts are live for a brand, from the sitemap index's
+ * `surfaces`. Only an explicit `false` turns them off: the capability is on by
+ * default on both brands, so a response without the field (an older API build)
+ * or a failed read counts as on.
+ */
+export function alertsSurfaceOn(surfaces: { alerts?: boolean } | null | undefined): boolean {
+  return surfaces?.alerts !== false;
 }
 
 /**
@@ -521,14 +532,15 @@ export function toolSitemapPaths(brandId: BrandId, opts: { toolsOpen: boolean; t
  */
 export function staticSitemapEntries(
   brandId: BrandId,
-  opts: { featurePaths: readonly string[]; surfaces: { browse: boolean; campus: boolean }; toolPaths?: readonly string[] },
+  opts: { featurePaths: readonly string[]; surfaces: { browse: boolean; campus: boolean; alerts?: boolean }; toolPaths?: readonly string[] },
 ): SitemapEntry[] {
   const brand = getBrand(brandId);
   const languages = brandLanguageAlternates(brand.id);
   const homes = SEO_READY_LOCALES.filter((l) => brand.seoLocales.includes(l)).map((l) => homePath(brand, l));
   const out: SitemapEntry[] = [...new Set(homes)].map((p) => ({ loc: brandUrl(brand.id, p), alternates: languages }));
   const pages = ['/pricing', '/about', '/security', '/help', '/help/ranking', ...opts.featurePaths, ...(opts.toolPaths ?? []), '/signup'];
-  if (opts.surfaces.browse && brand.market !== 'cn') pages.push('/browse');
+  // Both brands: `/browse` is listed whenever the brand's `seo.browse` surface is live.
+  if (opts.surfaces.browse) pages.push('/browse');
   if (opts.surfaces.campus && brand.market === 'cn') pages.push('/campus');
   for (const p of [...new Set(pages)]) out.push({ loc: brandUrl(brand.id, p) });
   return out;
@@ -579,6 +591,10 @@ export function llmsTxt(brandId: BrandId, opts: { campus?: boolean } = {}): stri
       `- [安全 Security](${url('/security')})`,
       `- [帮助 Help](${url('/help')})`,
       ...(opts.campus ? [`- [校招日历 Campus calendar](${url('/campus')})`] : []),
+      `- [免费工具 Free tools](${url('/tools')})`,
+      '',
+      '## Crawling',
+      '- Public job pages (/job/...) are not open to AI crawlers; see robots.txt.',
       '',
     ].join('\n');
   }

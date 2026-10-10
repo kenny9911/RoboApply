@@ -7,7 +7,7 @@
 // s-maxage 3600), so Vercel's CDN (keyed on host + path + query) serves
 // repeat requests and the two brands never share an entry.
 //
-//   GET /page?path=<browse path>[&country=XX]  → SeoPageResponse     (flag `seo.browse`; RoboApply only)
+//   GET /page?path=<browse path>[&country=XX]  → SeoPageResponse     (flag `seo.browse`)
 //   GET /hub                                   → SeoHubResponse      (flag `seo.browse`)
 //   GET /jobs/:id                              → { job: PublicJobDetail } | 404 | 410 gone (closed)
 //   GET /ticker                                → TickerResponse
@@ -28,7 +28,11 @@
 //   - intros are templates filled from `stats` only (never extra facts); the
 //     stored English intro is checked number by number against `stats`;
 //   - a closed job answers 410; `datePosted` is omitted when the posted date
-//     was estimated; pay only when the posting disclosed it.
+//     was estimated; pay only when the posting disclosed it;
+//   - every job card and job page carries the date we last found the posting
+//     at its source; a GoApply job page also carries GoHire's licence for a
+//     GoHire bank posting when it is configured (MARKET_STRATEGY 1.4);
+//   - visa-sponsorship pages are RoboApply's: GoApply has none (`pageTypeOpen`).
 
 import { z } from 'zod';
 
@@ -163,6 +167,8 @@ export interface PublicJobCard {
   postedAt: string | null;
   /** When we first saw the posting. */
   firstSeenAt: string;
+  /** When we last found the posting at its source (`RAJob.lastSeenAt`); null when unknown. */
+  lastVerifiedAt: string | null;
   /** Where we got the posting (display name), or null. */
   sourceName: string | null;
   /** The original publisher when it differs. */
@@ -189,6 +195,12 @@ export interface PublicJobDetail extends PublicJobCard {
   company: { name: string; website: string | null; logoUrl: string | null };
   /** Canonical path; differs from the request when the slug was wrong (the page 301s). */
   canonicalPath: string;
+  /**
+   * GoApply, GoHire bank postings only: GoHire's HR-service licence, when both
+   * CN_HR_LICENCE_HOLDER and CN_HR_LICENCE_NUMBER are set. Null everywhere
+   * else (never a made-up licence).
+   */
+  licence: { holder: string; number: string } | null;
 }
 
 export interface PublicJobResponse {
@@ -290,8 +302,12 @@ export interface TickerResponse {
 
 export interface SitemapIndexResponse {
   parts: Array<{ name: string; count: number; lastmod: string | null }>;
-  /** Public surfaces the static sitemap may list. */
-  surfaces: { browse: boolean; campus: boolean };
+  /**
+   * Public surfaces the static sitemap may list: `/browse` (`seo.browse`),
+   * `/campus` (`jobs.campusCalendar`) and `/tools/job-alerts` (`jobs.alerts`).
+   * A reader treats a missing `alerts` as on (the capability's default).
+   */
+  surfaces: { browse: boolean; campus: boolean; alerts: boolean };
 }
 
 export interface SitemapPartResponse {

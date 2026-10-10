@@ -3,7 +3,7 @@
 // WP-57 route tests: every free-tool route answers through the platform
 // envelope — multipart upload (200, 422 with a reason, 413-sized files as
 // 422 file_too_large), the persisted allowance (429 + Retry-After), the
-// GoApply notice by host (and GoApply closed in CN-0), the HttpOnly visitor
+// GoApply notice by host (GoApply open on every stack, D5), the HttpOnly visitor
 // cookie a run sets, result reads (422 bad id, 404 unknown or without the
 // browser's cookie), the per-IP guard on the result routes and the claim
 // (401 without a session, 404 from another browser, 200 with both). Public:
@@ -63,7 +63,7 @@ const deps = (env: Record<string, string>): ToolsServiceDeps => ({
   env,
   now: () => NOW,
 });
-// GoApply on the mainland stack (tools open); a second router on the offshore stack (GoApply CN-0: closed).
+// GoApply on the mainland stack; a second router on an offshore deployment with only shared credentials (open too).
 const service = createToolsService(deps({ DEPLOY_REGION: 'cn-mainland' }));
 const offshore = createToolsService(deps({}));
 const CN0 = '/cn0/tools';
@@ -210,15 +210,21 @@ describe('free tool routes', () => {
     expect(yes.body.data.profile).toBe('cn');
   });
 
-  it('GoApply in CN-0 (offshore stack): config says unavailable and a run is 404 feature_disabled', async () => {
+  it('GoApply on an offshore deployment with no CN_ value: available, the notice names processing outside the mainland, a ticked run answers 200', async () => {
     const host = { 'x-forwarded-host': 'goapply.top', ...ip('10.0.1.2') };
     const cfg = await h.request<Env<ToolsConfigView>>('GET', `${CN0}/config`, { host: 'goapply.top' });
-    expect(cfg.body.data.available).toBe(false);
-    const run = await upload('/resume-check', { resume: txt(), consent: TOOLS_CONSENT_VERSION }, host, CN0);
-    expect(run.status).toBe(404);
-    expect(run.body.code).toBe('feature_disabled');
-    // RoboApply on the same stack is open.
-    expect((await h.request<Env<ToolsConfigView>>('GET', `${CN0}/config`)).body.data.available).toBe(true);
+    expect(cfg.status).toBe(200);
+    expect(cfg.body.data).toMatchObject({ available: true, consentRequired: true, consentVersion: TOOLS_CONSENT_VERSION, processedOutsideMainland: true });
+    const no = await upload('/resume-check', { resume: txt() }, host, CN0);
+    expect(no.status).toBe(422);
+    expect(no.body.details?.reason).toBe('consent_required');
+    const run = await upload<ResumeCheckReport>('/resume-check', { resume: txt(), consent: TOOLS_CONSENT_VERSION }, host, CN0);
+    expect(run.status).toBe(200);
+    expect(run.body.data.profile).toBe('cn');
+    const match = await upload('/resume-job-match', { resume: txt(), consent: TOOLS_CONSENT_VERSION, postingTitle: POSTING.title, postingText: POSTING.text }, host, CN0);
+    expect(match.status).toBe(200);
+    // RoboApply on the same stack: open, no notice, no outside-the-mainland line.
+    expect((await h.request<Env<ToolsConfigView>>('GET', `${CN0}/config`)).body.data).toMatchObject({ available: true, consentRequired: false, processedOutsideMainland: false });
   });
 
   it('GET /results/:id → short view with this browser’s cookie; 404 without it or from another browser; 422 for a malformed id', async () => {

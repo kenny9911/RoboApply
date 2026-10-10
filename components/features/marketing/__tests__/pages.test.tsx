@@ -1,5 +1,7 @@
-// WP-40 subpages: /pricing (prices and caps from config, GoApply "not open
-// yet"), /features gating (fail closed), the support contact form (only
+// WP-40 subpages: /pricing (prices and caps from the plans API on both
+// brands; "not open yet" only when that API says so; a buy button on every
+// plan that can be bought), /features gating (fail closed) and GoApply's
+// pages for the shared capabilities, the support contact form (only
 // "sent" when the API confirms; email fallback), /help/ranking (every
 // factor), /about (entity only when configured), /security (per brand).
 
@@ -12,6 +14,8 @@ const api = vi.hoisted(() => ({
   sendSupportMessage: vi.fn(),
   getPlans: vi.fn(),
 }));
+const auth = vi.hoisted(() => ({ status: 'unauthenticated' as 'loading' | 'authenticated' | 'unauthenticated' }));
+vi.mock('../../../../lib/auth/useAuth', () => ({ useAuth: () => ({ status: auth.status, user: auth.status === 'authenticated' ? { id: 'u1' } : null }) }));
 
 vi.mock('../../../../lib/api/support', () => ({
   getIndexStats: api.getIndexStats,
@@ -35,10 +39,10 @@ import { capsFromCatalog } from '../../../../server/src/features/support/service
 import { RoboApiError } from '../../../../lib/api/client';
 import { plansView } from '../../credits/__tests__/fixtures';
 import { sortsFor } from '../../feed/SortMenu';
-import { findFeature, OTHER_SORTS } from '../catalog';
+import { featuresFor, findFeature, OTHER_SORTS } from '../catalog';
 import { AboutPage, HelpPage, RankingPage, SecurityPage } from '../CompanyPages';
 import { FeaturePage } from '../FeaturePage';
-import { PricingPage } from '../PricingPage';
+import { PricingPage, checkoutHref } from '../PricingPage';
 import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
 import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
@@ -56,7 +60,23 @@ const RA_ON = { 'ai.text': true, 'jobs.feed': true, 'jobs.alerts': true } as con
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  auth.status = 'unauthenticated';
 });
+
+/**
+ * GoApply plans as GET /billing/plans sends them with a rail that can charge
+ * (the default once the Alipay credential is set): every paid plan sellable.
+ * `open: false` is the same catalog with no rail able to charge.
+ */
+function cnPlans(open = true) {
+  const view = plansView('goapply');
+  return {
+    ...view,
+    paymentsOpen: open,
+    checkout: { ...view.checkout, rails: open ? ['alipay' as const] : [] },
+    plans: view.plans.map((p) => ({ ...p, sellable: open && p.kind !== 'free', unsellableReason: null })),
+  };
+}
 
 describe('/pricing', () => {
   it('prints every RoboApply plan from the catalog with its renewal rule', async () => {
@@ -76,17 +96,33 @@ describe('/pricing', () => {
     expect(screen.getByTestId('cancel-footer-link')).toHaveAttribute('href', '/cancel');
     // CTA keeps utm_*
     expect(card('free').getByRole('link', { name: 'Start free' })).toHaveAttribute('href', '/signup?from=pricing%3Afree&utm_source=ads');
+    // Every plan that can be bought has its button: sign-up for a visitor…
+    expect(card('pro_monthly').getByRole('link', { name: 'Create a free account to buy' })).toHaveAttribute('href', '/signup?from=pricing%3Apro_monthly&utm_source=ads');
+    expect(card('practice_pack_5').getByRole('link', { name: 'Create a free account to buy' })).toBeInTheDocument();
+  });
+
+  it('a signed-in visitor goes from a plan to checkout with that plan selected', async () => {
+    auth.status = 'authenticated';
+    const { container } = renderMarketing(<PricingPage />, { flags: RA_ON });
+    await waitFor(() => expect(container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
+    const link = within(container.querySelector('[data-plan="pro_monthly"]') as HTMLElement).getByRole('link', { name: 'Choose this plan' });
+    expect(link).toHaveAttribute('href', '/settings/billing?plan=pro_monthly#plans');
+    expect(checkoutHref('pro week pass')).toBe('/settings/billing?plan=pro%20week%20pass#plans');
+    expect(screen.queryByRole('link', { name: 'Create a free account to buy' })).toBeNull();
   });
 
   it('a plan without a configured price says so instead of inventing one', async () => {
     api.getPlans.mockImplementation(async () => plansView('roboapply', {}));
     const { container } = renderMarketing(<PricingPage />);
     await waitFor(() => expect(container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
-    expect(within(container.querySelector('[data-plan="pro_monthly"]') as HTMLElement).getByText('Price not set yet')).toBeInTheDocument();
+    const monthly = within(container.querySelector('[data-plan="pro_monthly"]') as HTMLElement);
+    expect(monthly.getByText('Price not set yet')).toBeInTheDocument();
+    // A plan that cannot be sold has no buy button.
+    expect(monthly.queryByRole('link')).toBeNull();
   });
 
   it('prints caps from the credit catalog ("Up to N a day", never unlimited)', async () => {
-    const { container } = renderMarketing(<PricingPage />, { flags: { ...RA_ON, copilot: true, agent: true } });
+    const { container } = renderMarketing(<PricingPage />, { flags: { ...RA_ON, 'notify.email': true, copilot: true, agent: true } });
     await waitFor(() => expect(container.querySelector('[data-caps-table]')).not.toBeNull());
     const table = within(container.querySelector('[data-caps-table]') as HTMLElement);
     const row = (name: string) => within(table.getByRole('row', { name: new RegExp(`^${name}`) }));
@@ -107,21 +143,114 @@ describe('/pricing', () => {
     expect(container.querySelector('[data-caps-table]')!.textContent).not.toMatch(/Assistant messages|Ready-to-apply kits/);
   });
 
-  it('GoApply shows the fee schedule as not open yet (R-15)', async () => {
-    api.getPlans.mockImplementation(async () => plansView('goapply'));
-    api.getCreditCaps.mockImplementation(async () => capsFromCatalog(DEFAULT_CREDIT_CATALOG.goapply));
-    const { container } = renderMarketing(<PricingPage />, { brand: 'goapply' });
-    await waitFor(() => expect(container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
-    expect(screen.getByText(/Paid plans can't be bought yet/)).toBeInTheDocument();
-    const monthly = within(container.querySelector('[data-plan="pro_monthly"]') as HTMLElement);
-    expect(monthly.getByText('Not open yet')).toBeInTheDocument();
-    expect(monthly.getByText('¥39, paid once')).toBeInTheDocument();
-    expect(screen.getByText('Refund rules will be published before paid plans open.')).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/RoboApply|\$/);
+  // FIX-8 carry-over: an instant alert is an email, so the row needs a mail transport too.
+  it.each(['roboapply', 'goapply'] as const)('%s: the instant-alert row needs job alerts and email', async (brand) => {
+    if (brand === 'goapply') {
+      api.getPlans.mockImplementation(async () => cnPlans());
+      api.getCreditCaps.mockImplementation(async () => capsFromCatalog(DEFAULT_CREDIT_CATALOG.goapply));
+    }
+    const noMail = renderMarketing(<PricingPage />, { brand, flags: { ...RA_ON, 'notify.email': false } });
+    await waitFor(() => expect(noMail.container.querySelector('[data-caps-table]')).not.toBeNull());
+    expect(noMail.container.querySelector('[data-cap-row="instant_alerts"]')).toBeNull();
+    expect(noMail.container.querySelector('[data-cap-row="saved_searches"]')).not.toBeNull();
+    noMail.unmount();
+    const on = renderMarketing(<PricingPage />, { brand, flags: { ...RA_ON, 'notify.email': true } });
+    await waitFor(() => expect(on.container.querySelector('[data-cap-row="instant_alerts"]')).not.toBeNull());
   });
 
-  it('GoApply without the job feed, alerts or AI lists none of them (R-04, R-13, R-14)', async () => {
-    api.getPlans.mockImplementation(async () => plansView('goapply'));
+  // D5 / D6 (G108): GoApply's page follows the plans API exactly as RoboApply's does.
+  it('GoApply lists the week, month and quarter passes and the two practice packs with their CNY amounts and a buy button', async () => {
+    api.getPlans.mockImplementation(async () => cnPlans());
+    api.getCreditCaps.mockImplementation(async () => capsFromCatalog(DEFAULT_CREDIT_CATALOG.goapply));
+    const { container } = renderMarketing(<PricingPage />, { brand: 'goapply', flags: RA_ON });
+    await waitFor(() => expect(container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
+    const card = (key: string) => within(container.querySelector(`[data-plan="${key}"]`) as HTMLElement);
+    const expected: Array<[string, string, string]> = [
+      ['pro_week_pass', 'Member week pass', '¥12, paid once'],
+      ['pro_monthly', 'Member 30-day pass', '¥39, paid once'],
+      ['pro_quarterly', 'Member 90-day pass', '¥99, paid once'],
+      ['practice_pack_5', 'Practice pack (5 interviews)', '¥29, paid once'],
+      ['practice_pack_15', 'Practice pack (15 interviews)', '¥79, paid once'],
+    ];
+    for (const [key, name, price] of expected) {
+      expect(card(key).getByRole('heading', { name })).toBeInTheDocument();
+      expect(card(key).getByText(price)).toBeInTheDocument();
+      expect(card(key).getByRole('link', { name: 'Create a free account to buy' })).toHaveAttribute('href', `/signup?from=pricing%3A${key}&utm_source=ads`);
+      expect(card(key).queryByText('Not open yet')).toBeNull();
+    }
+    expect(card('pro_monthly').getByText(/30 days of Pro\. One payment; it doesn't renew\./)).toBeInTheDocument();
+    expect(card('pro_week_pass').getByText(/7 days of Pro/)).toBeInTheDocument();
+    expect(card('practice_pack_15').getByText(/15 practice interviews, usable for 12 months/)).toBeInTheDocument();
+    // Nothing on the page says payments are closed, and nothing is priced in dollars.
+    expect(container.querySelector('[data-pricing-not-open]')).toBeNull();
+    expect(screen.queryByText(/Paid plans can't be bought yet|Not open yet/)).toBeNull();
+    expect(screen.queryByText(/Refund rules will be published before paid plans open/)).toBeNull();
+    expect(container.textContent).not.toMatch(/RoboApply|\$/);
+    // What follows from the rail: one-time passes, their refund rules, no cancel entry.
+    expect(screen.getByText('Memberships are one-time passes. They never renew automatically.')).toBeInTheDocument();
+    const refunds = within(container.querySelector('[data-pass-refunds]') as HTMLElement);
+    expect(refunds.getByText(/within 7 days \(48 hours for the week pass\)/)).toBeInTheDocument();
+    expect(refunds.getByText(/A practice pack can be refunded while none of its practice interviews has been used/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ask for a refund from the Help page' })).toHaveAttribute('href', '/help');
+    expect(screen.queryByTestId('cancel-footer-link')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Read the refund policy' })).toBeNull();
+  });
+
+  it('GoApply, signed in: each pass leads to checkout', async () => {
+    auth.status = 'authenticated';
+    api.getPlans.mockImplementation(async () => cnPlans());
+    const { container } = renderMarketing(<PricingPage />, { brand: 'goapply' });
+    await waitFor(() => expect(container.querySelector('[data-plan="pro_quarterly"]')).not.toBeNull());
+    for (const key of ['pro_week_pass', 'pro_monthly', 'pro_quarterly', 'practice_pack_5', 'practice_pack_15']) {
+      expect(within(container.querySelector(`[data-plan="${key}"]`) as HTMLElement).getByRole('link', { name: 'Choose this plan' })).toHaveAttribute('href', `/settings/billing?plan=${key}#plans`);
+    }
+  });
+
+  it('"Not open yet" shows only when the plans API says no plan can be bought, on either brand; prices stay', async () => {
+    api.getPlans.mockImplementation(async () => cnPlans(false));
+    const go = renderMarketing(<PricingPage />, { brand: 'goapply' });
+    await waitFor(() => expect(go.container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
+    expect(screen.getByText(/Paid plans can't be bought yet/)).toBeInTheDocument();
+    const monthly = within(go.container.querySelector('[data-plan="pro_monthly"]') as HTMLElement);
+    expect(monthly.getByText('Not open yet')).toBeInTheDocument();
+    expect(monthly.getByText('¥39, paid once')).toBeInTheDocument();
+    expect(monthly.queryByRole('link')).toBeNull();
+    go.unmount();
+    // The same rule on RoboApply: no Stripe key on the deployment → the same note.
+    api.getPlans.mockImplementation(async () => ({ ...plansView('roboapply'), paymentsOpen: false }));
+    const ra = renderMarketing(<PricingPage />, { flags: RA_ON });
+    await waitFor(() => expect(ra.container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
+    expect(within(ra.container.querySelector('[data-plan="pro_monthly"]') as HTMLElement).getByText('Not open yet')).toBeInTheDocument();
+    expect(within(ra.container.querySelector('[data-plan="pro_monthly"]') as HTMLElement).queryByRole('link')).toBeNull();
+  });
+
+  it('while the plans are loading or could not be read, nothing claims payments are closed', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    api.getPlans.mockImplementation(() => new Promise((r) => (release = r)));
+    const { container } = renderMarketing(<PricingPage />, { brand: 'goapply' });
+    expect(screen.getByText('Loading plans…')).toBeInTheDocument();
+    expect(container.querySelector('[data-pricing-not-open]')).toBeNull();
+    expect(screen.queryByText('Not open yet')).toBeNull();
+    release(cnPlans());
+    await waitFor(() => expect(container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
+    expect(container.querySelector('[data-pricing-not-open]')).toBeNull();
+  });
+
+  it('a plan the bundle has no name for yet shows the catalog label, never a message key', async () => {
+    api.getPlans.mockImplementation(async () => {
+      const view = cnPlans();
+      const monthly = view.plans.find((p) => p.key === 'pro_monthly')!;
+      return { ...view, plans: [...view.plans, { ...monthly, key: 'student_monthly', defaultLabel: '学生月卡', amountMinor: 2900, isDefaultSelection: false }] };
+    });
+    const { container } = renderMarketing(<PricingPage />, { brand: 'goapply' });
+    await waitFor(() => expect(container.querySelector('[data-plan="student_monthly"]')).not.toBeNull());
+    const card = within(container.querySelector('[data-plan="student_monthly"]') as HTMLElement);
+    expect(card.getByRole('heading').textContent).not.toMatch(/credits\.plans|plans\.goapply/);
+    expect(card.getByText('¥29, paid once')).toBeInTheDocument();
+  });
+
+  it('GoApply with the job feed, alerts or AI switched off lists none of them (R-04)', async () => {
+    api.getPlans.mockImplementation(async () => cnPlans());
     api.getCreditCaps.mockImplementation(async () => capsFromCatalog(DEFAULT_CREDIT_CATALOG.goapply));
     const { container } = renderMarketing(<PricingPage />, {
       brand: 'goapply',
@@ -168,6 +297,99 @@ describe('/features/[slug]', () => {
     renderMarketing(<FeaturePage def={def} />, { flags: { agent: true } });
     expect(screen.getByRole('heading', { level: 1, name: /Each week, applications prepared/ })).toBeInTheDocument();
     expect(screen.getByText(/You open each application and submit it yourself/)).toBeInTheDocument();
+  });
+
+  // D5 (G118): GoApply's pages for the capabilities both brands share, plus 内推码.
+  it.each([
+    ['job-matches', 'Jobs ranked by fit, with the reason in plain words', { 'jobs.feed': true }],
+    ['resume-tailoring', 'A version of your resume for each job', {}],
+    ['cover-letters', 'A cover letter for this job, from your own resume', {}],
+    ['ready-to-apply', 'Each week, applications prepared for you to review', { agent: true }],
+    ['referral-codes', "Referral codes for the company you're applying to", { 'cn.referralCodes': true }],
+  ] as const)('GoApply /features/%s renders its page with an Example, three steps and two questions', (slug, title, flags) => {
+    const def = findFeature('goapply', slug)!;
+    const { container } = renderMarketing(<FeaturePage def={def} />, { brand: 'goapply', flags });
+    expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(within(container.querySelector('[data-example]') as HTMLElement).getByText('Example')).toBeInTheDocument();
+    expect(container.querySelectorAll('ol li')).toHaveLength(3);
+    expect(container.querySelectorAll('#feature-faq article')).toHaveLength(2);
+    const text = container.textContent ?? '';
+    // No raw message key, no other brand, and no claim that anything is submitted for the user (D1).
+    expect(text).not.toMatch(/landing\.features|RoboApply|%BRAND%/);
+    expect(text).not.toMatch(/auto-?appl|apply for you|submit(s|ted)? for you|we apply|one-click apply/i);
+    for (const a of container.querySelectorAll('a[href^="/signup"]')) {
+      expect(a.getAttribute('href')).toBe(`/signup?from=feature%3A${slug}&utm_source=ads`);
+    }
+  });
+
+  it('GoApply job matches says where jobs come from and that it does not cover the whole market (D3)', () => {
+    renderMarketing(<FeaturePage def={findFeature('goapply', 'job-matches')!} />, { brand: 'goapply', flags: { 'jobs.feed': true } });
+    expect(screen.getByText(/Each job names its source and links to the original post/)).toBeInTheDocument();
+    expect(screen.getByText(/GoApply does not list every job on the market/)).toBeInTheDocument();
+    expect(screen.getByText(/apply there yourself/)).toBeInTheDocument();
+  });
+
+  // The page is about listed jobs. `jobs.feed` is on by default, so the page is ungated (server HTML,
+  // indexable); it goes away only once the operator is known to have closed postings.
+  it('GoApply job matches: printed before the capabilities are known, "not available" once jobs.feed is known to be off', () => {
+    const def = findFeature('goapply', 'job-matches')!;
+    expect(def).toMatchObject({ gate: null, needs: 'jobs.feed' });
+    const pending = vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+    try {
+      const unknown = renderWithProviders(
+        <BrandProvider brand={clientBrandFor('goapply')} initialCapabilities={null}>
+          <FeaturePage def={def} />
+        </BrandProvider>,
+        { intlMessages: messagesFor('goapply') },
+      );
+      expect(screen.getByRole('heading', { level: 1, name: 'Jobs ranked by fit, with the reason in plain words' })).toBeInTheDocument();
+      unknown.unmount();
+    } finally {
+      pending.mockRestore();
+    }
+    const off = renderMarketing(<FeaturePage def={def} />, { brand: 'goapply', flags: { 'jobs.feed': false } });
+    expect(off.container.querySelector('[data-feature-unavailable]')).not.toBeNull();
+    expect(screen.queryByText(/Each job names its source/)).toBeNull();
+    off.unmount();
+    // RoboApply's page has no such switch: it prints whatever the flags say.
+    expect(findFeature('roboapply', 'job-matches')!.needs).toBeUndefined();
+    renderMarketing(<FeaturePage def={findFeature('roboapply', 'job-matches')!} />, { flags: { 'jobs.feed': false } });
+    expect(screen.getByRole('heading', { level: 1, name: 'Jobs ranked by fit, with the reason in plain words' })).toBeInTheDocument();
+  });
+
+  it('GoApply ready-to-apply and referral codes say plainly what they do not do', () => {
+    const kit = renderMarketing(<FeaturePage def={findFeature('goapply', 'ready-to-apply')!} />, { brand: 'goapply', flags: { agent: true } });
+    expect(screen.getByText(/You open each application and submit it yourself/)).toBeInTheDocument();
+    expect(screen.getByText('No. It never submits an application or contacts an employer.')).toBeInTheDocument();
+    kit.unmount();
+    renderMarketing(<FeaturePage def={findFeature('goapply', 'referral-codes')!} />, { brand: 'goapply', flags: { 'cn.referralCodes': true } });
+    expect(screen.getAllByText(/It does not decide the outcome/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Codes that are sold or traded are refused/)).toBeInTheDocument();
+  });
+
+  it('GoApply gated pages fail closed like RoboApply’s: "not available" while the capability is off', () => {
+    for (const [slug, flags] of [['ready-to-apply', { agent: false }], ['referral-codes', { 'cn.referralCodes': false }], ['assistant', { copilot: false }]] as const) {
+      const view = renderMarketing(<FeaturePage def={findFeature('goapply', slug)!} />, { brand: 'goapply', flags });
+      expect(view.container.querySelector('[data-feature-unavailable]'), slug).not.toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('every GoApply feature page has complete copy in English and in the staged Chinese', async () => {
+    const en = (messagesFor('goapply') as { landing: { features: { goapply: Record<string, Record<string, unknown>> } } }).landing.features.goapply;
+    const zhStaged = (await import('../../../../i18n/staging/landing.zh.json')).default.landing.features.goapply as Record<string, Record<string, unknown>>;
+    const zhBundle = (loadMessages('zh', 'goapply') as { landing: { features: { goapply: Record<string, Record<string, unknown>> } } }).landing.features.goapply;
+    const shape = (o: unknown): string[] => (o && typeof o === 'object' ? Object.entries(o as Record<string, unknown>).flatMap(([k, v]) => (typeof v === 'string' ? [k] : shape(v).map((c) => `${k}.${c}`))).sort() : []);
+    const reference = shape(en.resume);
+    // metaTitle, metaDescription, eyebrow, title, sub, three sample lines, three steps and two questions.
+    expect(reference).toHaveLength(18);
+    for (const def of featuresFor('goapply')) {
+      expect([def.key, shape(en[def.key])]).toEqual([def.key, reference]);
+      // Chinese: already in the bundle (older pages) or staged by this change (the new ones).
+      const zh = zhStaged[def.key] ?? zhBundle[def.key];
+      expect([def.key, shape(zh)]).toEqual([def.key, reference]);
+      expect(JSON.stringify(zh)).toMatch(/[一-鿿]/);
+    }
   });
 
   it('interview practice needs voice on RoboApply and AI text on GoApply', () => {
@@ -262,6 +484,18 @@ describe('/help/ranking', () => {
     expect(screen.getByText(/On GoApply, if personalised recommendations are off/)).toBeInTheDocument();
   });
 
+  // FIX-7 carry-over: GoApply's sort menu has a fourth sort; the page names it with the menu's own label.
+  it('GoApply names its fourth sort (applications closing soonest); RoboApply, which has no such sort, does not', () => {
+    const go = renderMarketing(<RankingPage />, { brand: 'goapply' });
+    expect(sortsFor('cn')).toContain('deadline');
+    expect(go.container.querySelector('[data-ranking-deadline-sort]')).toHaveTextContent('Applications closing soonest lists jobs by the date their applications close, soonest first.');
+    go.unmount();
+    const ra = renderMarketing(<RankingPage />);
+    expect(sortsFor('intl')).not.toContain('deadline');
+    expect(ra.container.querySelector('[data-ranking-deadline-sort]')).toBeNull();
+    expect(ra.container.textContent).not.toMatch(/Applications closing soonest/);
+  });
+
   // INT-06 (wave3 WP-93 #17): the rules and goal points the ranking code applies.
   it('shows the two ordering rules and the points each career goal adds (the contract numbers)', () => {
     const { container } = renderMarketing(<RankingPage />);
@@ -349,6 +583,31 @@ describe('/help/ranking names the other sorts as the sort menu does', () => {
 });
 
 describe('/about and /security', () => {
+  // FIX-8 carry-over: "we email you about a new sign-in" is said only where email can be sent.
+  it.each(['roboapply', 'goapply'] as const)('%s /security says "we email you" unless email is known to be off', (brand) => {
+    const on = renderMarketing(<SecurityPage supportEmail="support@example.test" />, { brand, flags: { 'notify.email': true } });
+    expect(screen.getByText(/we email you/)).toBeInTheDocument();
+    on.unmount();
+    // Before the capabilities arrive (the server HTML, the first paint) the sentence is there: email is on by default.
+    const pending = vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+    try {
+      const unknown = renderWithProviders(
+        <BrandProvider brand={clientBrandFor(brand)} initialCapabilities={null}>
+          <SecurityPage supportEmail="support@example.test" />
+        </BrandProvider>,
+        { intlMessages: messagesFor(brand) },
+      );
+      expect(screen.getByText(/we email you/)).toBeInTheDocument();
+      unknown.unmount();
+    } finally {
+      pending.mockRestore();
+    }
+    renderMarketing(<SecurityPage supportEmail="support@example.test" />, { brand, flags: { 'notify.email': false } });
+    expect(screen.queryByText(/we email you/)).toBeNull();
+    // The other account facts stay.
+    expect(screen.getByText(/Passwords are stored only as salted one-way hashes/)).toBeInTheDocument();
+  });
+
   it('names the operating entity only when configured', () => {
     const first = renderMarketing(<AboutPage entity={null} supportEmail="support@roboapply.io" />);
     expect(screen.getByText('Company details are listed in the terms of service.')).toBeInTheDocument();
@@ -359,7 +618,7 @@ describe('/about and /security', () => {
   });
 
   it('describes AI routing per brand', () => {
-    const ra = renderMarketing(<SecurityPage supportEmail="support@roboapply.io" />);
+    const ra = renderMarketing(<SecurityPage supportEmail="support@roboapply.io" />, { flags: { 'notify.email': true } });
     expect(screen.getByText(/never sent to AI services in mainland China/)).toBeInTheDocument();
     expect(screen.getByText(/we email you/)).toBeInTheDocument();
     ra.unmount();
