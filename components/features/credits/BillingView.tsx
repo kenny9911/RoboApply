@@ -5,6 +5,9 @@
 // plan (renewal or end date, practice interviews left), Manage payment
 // (Stripe portal), one-click Cancel with the once-only 7-day-pass link,
 // "Buy another pass" for passes, the plan sheet, and the invoice history link.
+// V2 (WP-79): the one quarterly suggestion (inline, once, dismissible) under
+// the current plan, and student verification above the plan sheet (only
+// when the `student` capability is on).
 
 import Link from 'next/link';
 import { useState } from 'react';
@@ -17,6 +20,8 @@ import { useSubscriptionState, type SubscriptionState } from '../../../hooks/cre
 import { CancelSubscription } from './CancelSubscription';
 import { PaymentFailedBanner } from './PaymentFailedBanner';
 import { PlanPicker } from './PlanPicker';
+import { QuarterlySuggestion } from './QuarterlySuggestion';
+import { StudentVerification } from '../account-v2';
 import { parseDate, planNameKey } from './labels';
 import styles from './credits.module.css';
 
@@ -33,6 +38,8 @@ export function BillingView({ visitorCountry, requestedPlan, navigate }: Billing
     <div className={styles.stack} data-testid="billing-view">
       <PaymentFailedBanner navigate={navigate} />
       <CurrentPlanCard sub={sub} navigate={navigate} />
+      <QuarterlySuggestion />
+      <StudentVerification />
       <section className={styles.card} aria-labelledby="billing-plans">
         <h2 className={styles.h2} id="billing-plans">
           {t('planSheet.title')}

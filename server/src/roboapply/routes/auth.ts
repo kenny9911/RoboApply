@@ -15,7 +15,13 @@
 //                     making them identical needs verify-before-create
 //                     signup (owner decision). No V1 RoboApplyMission any more.
 //   POST /login     — seeker login; 409 account_other_brand only after the
-//                     password matched; new-device email.
+//                     password matched; new-device email. Two-step sign-in
+//                     (WP-79 hook): when the account has it on, the session
+//                     just minted is revoked, no cookie or token is sent, and
+//                     the answer is 401 `two_factor_required` with a
+//                     short-lived httpOnly challenge cookie (`ra_2fa`).
+//   POST /login/2fa — the second step: a current authenticator code or a
+//                     recovery code → the normal login response.
 //   GET  /me        — user + profile + the WP-10 additions (brand,
 //                     onboarding, entitlements, flags, unreadCount,
 //                     emailVerified). `mission` is no longer returned.
@@ -55,6 +61,18 @@ import prisma from '../../lib/prisma.js';
 import { recordUserActivity } from '../../lib/userActivity.js';
 import { getCurrentBrandId } from '../../lib/requestContext.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
+import {
+  ACCOUNT_V2_ERROR_CODES,
+  CHALLENGE_COOKIE,
+  LoginTwoFactorBodySchema,
+  completeLoginChallenge,
+  loginChallengeDeps,
+  startLoginChallenge,
+  type LoginChallengeDeps,
+  type TwoFactorRequiredDetails,
+} from '../../features/account-v2/index.js';
+import { HttpError } from '../../platform/http.js';
+import { generateJwt } from '../engine/lib/seekerSession.js';
 
 const router = Router();
 
@@ -85,6 +103,27 @@ function clearSessionCookieOptions() {
 
 const signupRateLimit = rateLimit({ name: 'signupPerIp' });
 const loginRateLimit = rateLimit({ name: 'loginPerIp' });
+
+// ── Two-step sign-in hook (WP-79) ───────────────────────────────────────
+// The second step is checked in features/account-v2 (loginChallenge.ts);
+// this router only carries the challenge between the two requests.
+
+let challengeDepsFactory: () => LoginChallengeDeps = loginChallengeDeps;
+
+/** Tests only: replace the sign-in gate's collaborators (null restores the defaults). */
+export function setLoginChallengeDepsForTests(factory: (() => LoginChallengeDeps) | null): void {
+  challengeDepsFactory = factory ?? loginChallengeDeps;
+}
+
+const CHALLENGE_COOKIE_PATH = '/api/v1/roboapply/auth';
+
+function challengeCookieOptions(req: Request, maxAgeSec: number) {
+  return buildCookieOptions(req, { sameSite: 'lax', maxAge: maxAgeSec * 1000, path: CHALLENGE_COOKIE_PATH });
+}
+
+function clearChallengeCookie(req: Request, res: Response): void {
+  res.clearCookie(CHALLENGE_COOKIE, buildClearCookieOptions(req, { path: CHALLENGE_COOKIE_PATH }));
+}
 
 function requestBrand(req: Request): ProductBrand {
   return getBrand(requestBrandId(req) ?? 'roboapply');
@@ -314,6 +353,39 @@ router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
     }
 
     const result = await seekerAuthService.login({ email, password, brand: requestBrandId(req) });
+
+    // WP-79: the password matched; a second factor may still be required.
+    // Nothing that authenticates (cookie, session token, JWT) leaves this
+    // handler unless the gate says the session stands.
+    let gate: Awaited<ReturnType<typeof startLoginChallenge>>;
+    try {
+      gate = await startLoginChallenge(challengeDepsFactory(), {
+        userId: result.user.id,
+        brand: requestBrand(req),
+        sessionToken: result.sessionToken,
+        login: { user: result.user, seekerProfile: result.seekerProfile },
+      });
+    } catch (gateErr) {
+      logger.error('ROBOAPPLY_AUTH', 'two-step sign-in check failed; refusing sign-in', {
+        error: gateErr instanceof Error ? gateErr.message : String(gateErr),
+      }, req.requestId);
+      return res.status(503).json({
+        success: false,
+        code: 'two_factor_unavailable',
+        error: 'Sign-in is not available right now. Try again in a minute.',
+      });
+    }
+    if (gate.kind === 'challenge') {
+      res.cookie(CHALLENGE_COOKIE, gate.token, challengeCookieOptions(req, gate.expiresInSec));
+      const details: TwoFactorRequiredDetails = { next: '/login/2fa', methods: ['totp', 'recovery'], expiresInSec: gate.expiresInSec };
+      return res.status(401).json({
+        success: false,
+        code: ACCOUNT_V2_ERROR_CODES.twoFactorRequired,
+        error: 'Enter the code from your authenticator app to finish signing in.',
+        details,
+      });
+    }
+
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
 
     await recordUserActivity(req, {
@@ -384,6 +456,79 @@ router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
     const message = err instanceof Error ? err.message : 'Login failed';
     logger.warn('ROBOAPPLY_AUTH', 'login failed', { message }, req.requestId);
     return res.status(401).json({ success: false, code: 'login_failed', error: message });
+  }
+});
+
+/**
+ * POST /api/v1/roboapply/auth/login/2fa
+ *
+ * Body: { code } or { recoveryCode } (+ challengeToken for cookie-less
+ * clients). The challenge cookie from POST /login identifies the sign-in.
+ */
+router.post('/login/2fa', loginRateLimit, async (req: Request, res: Response) => {
+  const parsed = LoginTwoFactorBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, code: 'invalid_request', error: 'Enter the 6-digit code or a recovery code.' });
+  }
+  const cookieToken = (req.cookies?.[CHALLENGE_COOKIE] as string | undefined) || undefined;
+  const token = cookieToken ?? parsed.data.challengeToken;
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      code: ACCOUNT_V2_ERROR_CODES.challengeInvalid,
+      error: 'This sign-in step has expired. Sign in again.',
+    });
+  }
+  const factor = parsed.data.code ? { code: parsed.data.code } : { recoveryCode: parsed.data.recoveryCode! };
+  try {
+    const done = await completeLoginChallenge(challengeDepsFactory(), { token, brand: requestBrand(req), factor });
+    clearChallengeCookie(req, res);
+    res.cookie(SESSION_COOKIE_NAME, done.sessionToken, sessionCookieOptions());
+
+    const login = (done.login ?? {}) as { user?: { id: string; email: string; market?: string | null; locale?: string | null }; seekerProfile?: unknown };
+    const user = login.user ?? null;
+    await recordUserActivity(req, {
+      userId: done.userId,
+      eventType: 'login',
+      path: '/api/v1/roboapply/auth/login/2fa',
+      sessionToken: done.sessionToken,
+      market: user?.market ?? undefined,
+      statusCode: 200,
+    });
+    if (user?.email) {
+      await quietly(() =>
+        authService.notifyIfNewDevice({
+          userId: done.userId,
+          email: user.email,
+          brand: requestBrand(req),
+          userAgent: req.get('user-agent') ?? null,
+          locale: user.locale ?? null,
+        }),
+      );
+    }
+    return res.json({
+      success: true,
+      data: {
+        user,
+        seekerProfile: login.seekerProfile ?? null,
+        token: user?.email ? generateJwt({ id: done.userId, email: user.email }) : undefined,
+        twoFactor: { method: done.method, recoveryCodesLeft: done.recoveryCodesLeft },
+      },
+    });
+  } catch (err) {
+    if (err instanceof HttpError) {
+      const details = (err.details ?? {}) as { reason?: string };
+      const code = details.reason ?? err.code;
+      if (code === ACCOUNT_V2_ERROR_CODES.challengeInvalid) clearChallengeCookie(req, res);
+      if (err.headers) for (const [k, v] of Object.entries(err.headers)) res.setHeader(k, v);
+      return res.status(err.status).json({ success: false, code, error: err.message, details: err.details });
+    }
+    logger.error('ROBOAPPLY_AUTH', 'two-step sign-in failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
+    return res.status(503).json({
+      success: false,
+      code: 'two_factor_unavailable',
+      error: 'Sign-in is not available right now. Try again in a minute.',
+    });
   }
 });
 

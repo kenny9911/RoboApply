@@ -166,3 +166,147 @@ export function twdReferenceAmount(usdMinor: number, ratePerUsd: number): number
   if (!Number.isFinite(usdMinor) || usdMinor <= 0 || !(ratePerUsd > 0)) return null;
   return Math.round((usdMinor / 100) * ratePerUsd);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account V2 (WP-79; PRODUCT_PLAN.md §6.3–§6.4, F-BILL-06, TW-06). Pure
+// helpers for the plan sheet's V2 lines and the one quarterly suggestion.
+// Every amount still comes from the server catalog.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A plan's price as this buyer is charged: the Taiwan price when the server sent one, else the base price. */
+export interface DisplayPrice {
+  amountMinor: number | null;
+  currency: string;
+  /** "Save N%" in that currency (null when there is no real saving). */
+  savingsPercent: number | null;
+  /** Weekly plans: about this much a month, in that currency. */
+  monthlyEquivalentMinor: number | null;
+  /** True when this is a real local-currency price (no reference line needed). */
+  local: boolean;
+  /** Student plans: % below the regular price, computed in this same currency. */
+  studentDiscountPercent: number | null;
+}
+
+export interface PricedPlanLike {
+  key: string;
+  interval: string | null;
+  amountMinor: number | null;
+  currency: string;
+  passDays?: number | null;
+  localPrice?: {
+    currency: string;
+    amountMinor: number;
+    savingsPercent: number | null;
+    monthlyEquivalentMinor: number | null;
+    studentDiscountPercent?: number | null;
+  } | null;
+  studentDiscountPercent?: number | null;
+}
+
+export function displayPrice(plan: PricedPlanLike, monthly: PricedPlanLike | null | undefined): DisplayPrice {
+  if (plan.localPrice) {
+    return {
+      amountMinor: plan.localPrice.amountMinor,
+      currency: plan.localPrice.currency,
+      savingsPercent: plan.localPrice.savingsPercent,
+      monthlyEquivalentMinor: plan.localPrice.monthlyEquivalentMinor,
+      local: true,
+      studentDiscountPercent: plan.localPrice.studentDiscountPercent ?? null,
+    };
+  }
+  const months = plan.key === 'pro_quarterly' || plan.key === 'student_quarterly' || plan.passDays === 90 ? 3 : 0;
+  return {
+    amountMinor: plan.amountMinor,
+    currency: plan.currency,
+    savingsPercent: months ? savingsPercent(plan.amountMinor, monthly?.amountMinor, months) : null,
+    monthlyEquivalentMinor: plan.interval === 'week' ? monthlyEquivalentMinor(plan.amountMinor) : null,
+    local: false,
+    studentDiscountPercent: plan.studentDiscountPercent ?? null,
+  };
+}
+
+/** The monthly plan → the quarterly plan it may be switched to. */
+export const QUARTERLY_SWITCH: Readonly<Record<string, string>> = {
+  pro_monthly: 'pro_quarterly',
+  student_monthly: 'student_quarterly',
+};
+
+/** ui-state keys (server-side, follow the user across devices). */
+export const QUARTERLY_SUGGESTION_KEYS = {
+  /** First time this browser saw the user on a monthly plan (ISO). */
+  monthlySeenAt: 'billing.monthlySeenAt',
+  /** The suggestion was shown (ISO); it is never shown again. */
+  shownAt: 'billing.quarterlySuggestion.shownAt',
+  /** Dismissal key ("No thanks"). */
+  dismissal: 'billing.quarterlySuggestion',
+} as const;
+
+export const QUARTERLY_SUGGESTION_AFTER_DAYS = 30;
+
+export interface QuarterlySuggestion {
+  targetKey: string;
+  currency: string;
+  quarterlyMinor: number;
+  /** 3 × the monthly price, the honest comparison. */
+  threeMonthsMinor: number;
+  savingsPercent: number;
+}
+
+/** A plan's price in `currency`: its base price, else its Taiwan price (sent as `localPrice` or `twdPrice`); null when not configured in it. */
+function priceIn(
+  plan: { amountMinor: number | null; currency: string; localPrice?: { currency: string; amountMinor: number } | null; twdPrice?: { amountMinor: number } | null },
+  currency: string,
+): number | null {
+  if (plan.currency.toUpperCase() === currency) return plan.amountMinor;
+  if (plan.localPrice && plan.localPrice.currency.toUpperCase() === currency) return plan.localPrice.amountMinor;
+  if (currency === 'TWD' && plan.twdPrice) return plan.twdPrice.amountMinor;
+  return null;
+}
+
+/**
+ * The one "switch to quarterly" suggestion (PRODUCT_PLAN.md §6.4: monthly
+ * subscriber after 30 days; once, ever; dismissible forever). Null unless:
+ * the plan renews monthly and is not cancelled; we first saw it as monthly at
+ * least 30 days ago (`monthlySeenAt` — never earlier than the truth, since
+ * the user was monthly at least that long); the quarterly plan is on sale and
+ * really cheaper than 3 months of monthly; and it was never shown or
+ * dismissed. The saving is computed from the two real prices, rounded down.
+ */
+export function quarterlySuggestion(input: {
+  planKey: string | null;
+  willRenew: boolean;
+  legacy: boolean;
+  monthlySeenAt: string | null;
+  shownAt: string | null;
+  dismissed: boolean;
+  now: Date;
+  /**
+   * The currency the subscription is charged in (billing plan `current.currency`).
+   * A switch is charged in that currency (a TWD subscription moves only to a
+   * TWD price), so both amounts are read in it; unknown → no suggestion.
+   */
+  subscriptionCurrency: string | null;
+  plans: ReadonlyArray<{
+    key: string;
+    amountMinor: number | null;
+    currency: string;
+    sellable: boolean;
+    localPrice?: { currency: string; amountMinor: number } | null;
+    twdPrice?: { amountMinor: number } | null;
+  }>;
+}): QuarterlySuggestion | null {
+  const targetKey = input.planKey ? QUARTERLY_SWITCH[input.planKey] : undefined;
+  if (!targetKey || !input.willRenew || input.legacy || input.shownAt || input.dismissed || !input.monthlySeenAt) return null;
+  const seen = Date.parse(input.monthlySeenAt);
+  if (!Number.isFinite(seen) || input.now.getTime() - seen < QUARTERLY_SUGGESTION_AFTER_DAYS * 86_400_000) return null;
+  const monthly = input.plans.find((p) => p.key === input.planKey);
+  const quarterly = input.plans.find((p) => p.key === targetKey);
+  const currency = input.subscriptionCurrency?.trim().toUpperCase() || null;
+  if (!monthly || !quarterly || !quarterly.sellable || !currency) return null;
+  const monthlyMinor = priceIn(monthly, currency);
+  const quarterlyMinor = priceIn(quarterly, currency);
+  if (monthlyMinor === null || quarterlyMinor === null) return null;
+  const pct = savingsPercent(quarterlyMinor, monthlyMinor, 3);
+  if (pct === null) return null;
+  return { targetKey, currency, quarterlyMinor, threeMonthsMinor: monthlyMinor * 3, savingsPercent: pct };
+}

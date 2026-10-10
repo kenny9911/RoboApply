@@ -33,7 +33,9 @@ import { Btn } from '../../v3/primitives/Btn';
 import { PriceReference, PriceReferenceCountry } from '../market/PriceReference';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
-import { monthlyEquivalentMinor, requiresWithdrawalWaiver, savingsPercent } from '../../../lib/pricing';
+import { QUARTERLY_SWITCH, displayPrice, requiresWithdrawalWaiver } from '../../../lib/pricing';
+import { apiErrorCode } from '../../../lib/api/contracts/wire';
+import { useStudentStatus } from '../account-v2';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import { initialSelection, monthlyPlan, plansExtras, usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
 import { checkoutRedirectUrl, usePlanCheckout } from '../../../hooks/credits/useBillingActions';
@@ -42,7 +44,7 @@ import { useVisitorCountry } from '../../../hooks/credits/useVisitorCountry';
 import { useCredits } from '../../../hooks/shared/useCredits';
 import { cn } from '../../../lib/utils';
 import { SwitchQuoteSheet } from './SwitchQuoteSheet';
-import { money, planMonths, planNameKey, pricePeriod } from './labels';
+import { money, planNameKey, pricePeriod } from './labels';
 import styles from './credits.module.css';
 
 export const CHECKOUT_RETURN_PATH = '/settings/billing/return';
@@ -85,9 +87,13 @@ export function checkoutReturnPath(plan: Pick<CatalogPlan, 'key' | 'kind'>, prac
 
 export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNavigate }: PlanPickerProps) {
   const t = useTranslations('credits');
+  const tv = useTranslations('accountV2');
   const locale = useLocale();
   const brand = useBrand();
-  const studentEnabled = useFlag('student');
+  const studentFlag = useFlag('student');
+  const student = useStudentStatus();
+  // Student plans are offered only to a verified student (the server refuses the rest).
+  const studentEnabled = studentFlag && student.data?.verified === true;
   const plansQ = usePlans();
   const sub = useSubscriptionState();
   const credits = useCredits();
@@ -141,7 +147,10 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const proPlans = plans.filter((p) => {
     if (p.kind !== 'subscription' && p.kind !== 'pass') return false;
     if (!onProSubscription) return true;
-    return p.kind === 'pass' && (sub.cancelAtPeriodEnd || p.key === requestedPlan);
+    if (p.kind === 'pass') return sub.cancelAtPeriodEnd || p.key === requestedPlan;
+    // Only the quarterly plan asked for by the one quarterly suggestion is
+    // offered, as a switch; every other change goes through the payment portal.
+    return !sub.cancelAtPeriodEnd && p.key === requestedPlan && !!sub.planKey && QUARTERLY_SWITCH[sub.planKey] === p.key;
   });
   const packs = plans.filter((p) => p.kind === 'pack');
   const offered = [...proPlans, ...packs];
@@ -153,10 +162,11 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const plan = offered.find((p) => p.key === selected) ?? null;
   // Passes and packs can be bought again; only a running subscription is "Your plan".
   const isCurrent = (p: CatalogPlan) => p.kind === 'subscription' && sub.profile === 'pro' && !sub.legacy && sub.planKey === p.key;
-  const legacySwitch = !!plan && sub.legacy && plan.kind === 'subscription';
+  const legacySwitch = !!plan && plan.kind === 'subscription' && (sub.legacy || onProSubscription);
   const needsAck = !!plan && plan.requiresAutoRenewAck;
   const period = plan ? pricePeriod(plan) : 'once';
-  const price = plan ? money(locale, plan.amountMinor, plan.currency) : '—';
+  const shown = plan ? displayPrice(plan, monthly) : null;
+  const price = shown ? money(locale, shown.amountMinor, shown.currency) : '—';
   const canContinue =
     !!plan &&
     plan.sellable &&
@@ -197,10 +207,12 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
     const current = isCurrent(p);
     const disabled = !p.sellable || current;
     const per = pricePeriod(p);
-    const amount = money(locale, p.amountMinor, p.currency);
-    const weekly = p.interval === 'week' ? monthlyEquivalentMinor(p.amountMinor) : null;
-    const months = planMonths(p);
-    const save = months ? savingsPercent(p.amountMinor, monthly?.amountMinor, months) : null;
+    const d = displayPrice(p, monthly);
+    const amount = money(locale, d.amountMinor, d.currency);
+    const weekly = d.monthlyEquivalentMinor;
+    const save = d.savingsPercent;
+    // In the currency shown: the TWD percentage next to a TWD price, never the USD one.
+    const studentPct = d.studentDiscountPercent;
     return (
       <label
         key={p.key}
@@ -218,14 +230,16 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
         <span className={styles.optionBody}>
           <span className={styles.h3}>{name ? t(name) : p.defaultLabel}</span>
           <span className={styles.price}>{t(`price.${per}`, { price: amount })}</span>
-          {weekly !== null ? <span className={styles.muted}>{t('monthlyEquivalent', { price: money(locale, weekly, p.currency) })}</span> : null}
+          {weekly !== null ? <span className={styles.muted}>{t('monthlyEquivalent', { price: money(locale, weekly, d.currency) })}</span> : null}
           {save !== null ? <span className={styles.tag}>{t('save', { pct: save })}</span> : null}
+          {studentPct !== null ? <span className={styles.tag}>{tv('plans.studentTag', { pct: studentPct })}</span> : null}
           {p.kind === 'pass' ? <span className={styles.muted}>{t('passNote', { days: p.passDays ?? 0 })}</span> : null}
           {p.kind === 'pack' && p.practice ? (
             <span className={styles.muted}>{t('packNote', { credits: p.practice.credits, months: p.practice.validMonths ?? 12 })}</span>
           ) : null}
           {p.kind === 'subscription' ? <span className={styles.muted}>{t('renewsNote', { period: per })}</span> : null}
-          {p.currency === 'USD' && p.amountMinor !== null ? <PriceReference amountMinor={p.amountMinor} currency="USD" /> : null}
+          {d.local ? <span className={styles.muted}>{tv('plans.localPrice')}</span> : null}
+          {!d.local && p.currency === 'USD' && p.amountMinor !== null ? <PriceReference amountMinor={p.amountMinor} currency="USD" /> : null}
           {current ? <span className={styles.tag}>{t('planSheet.yourPlan')}</span> : null}
           {!p.sellable && !current ? <span className={styles.muted}>{t('planSheet.notAvailable')}</span> : null}
         </span>
@@ -268,9 +282,10 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
 
         {checkout.isError ? (
           <p className={styles.error} role="alert">
-            {t('planSheet.error')}
+            {apiErrorCode(checkout.error) === 'student_verification_required' ? tv('plans.studentRequired') : t('planSheet.error')}
           </p>
         ) : null}
+        {plan?.promotionCodes && !legacySwitch ? <p className={styles.muted}>{tv('plans.promotionCode')}</p> : null}
         {qrCodeUrl ? (
           <div className={styles.notice}>
             <p className={styles.body}>{t('planSheet.scanToPay')}</p>

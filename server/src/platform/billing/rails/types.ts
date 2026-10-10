@@ -35,6 +35,18 @@ export interface CheckoutOrder {
   cancelPath?: string;
   /** CN rails: how the payer pays (WeChat Pay: Native QR / H5 / JSAPI). */
   context?: { tradeType?: 'native' | 'h5' | 'jsapi'; openId?: string };
+  /**
+   * Buyer's country from the edge (WP-79): 'TW' charges the plan's Taiwan
+   * price when one is configured — the same rule the plan sheet showed.
+   * Omitted → the plan's base currency.
+   */
+  country?: string | null;
+  /**
+   * The buyer holds a live student verification (WP-79). Student plans are
+   * refused unless this is exactly `true`; the caller reads it from
+   * `studentService.isVerified(userId)` (features/account-v2).
+   */
+  studentVerified?: boolean;
 }
 
 export type CheckoutResult =

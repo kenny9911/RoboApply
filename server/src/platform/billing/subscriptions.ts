@@ -23,7 +23,7 @@ import type { ExtendedPrismaClient } from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
 import { parseBrandId, type BrandId } from '../brand/registry.js';
 import { BillingError } from './errors.js';
-import { PLAN_DEFINITIONS, isLegacyPlanKey, isPlanKey, type CatalogPlan, type PlanDefinition } from './planCatalog.js';
+import { PLAN_DEFINITIONS, isLegacyPlanKey, isPlanKey, isStudentPlan, type CatalogPlan, type PlanDefinition } from './planCatalog.js';
 import type { StripeClient } from './stripeClient.js';
 
 export type BillingDb = Pick<ExtendedPrismaClient, 'user' | 'seekerProfile' | 'seekerSubscription'>;
@@ -219,6 +219,11 @@ export interface StripeDeps {
   getStripe: () => StripeClient | null;
   db: BillingDb;
   now?: () => Date;
+  /**
+   * The account holds a live student verification (WP-79). A switch TO a
+   * student plan is refused unless this is exactly `true`.
+   */
+  studentVerified?: boolean;
 }
 
 export async function cancelSubscription(account: BillingAccount, input: CancelInput, deps: StripeDeps): Promise<CancelOutcome> {
@@ -278,7 +283,7 @@ function itemOf(sub: Stripe.Subscription): Stripe.SubscriptionItem {
   return item;
 }
 
-function assertSwitchable(account: BillingAccount, target: CatalogPlan, now: Date): SubscriptionRow {
+function assertSwitchable(account: BillingAccount, target: CatalogPlan, now: Date, deps: Pick<StripeDeps, 'studentVerified'>): SubscriptionRow {
   const plan = describePlan(account, now);
   const sub = account.subscription;
   if (!sub || !plan.live || !sub.stripeSubscriptionId) throw new BillingError('no_subscription', 'There is no auto-renewing plan to switch');
@@ -286,36 +291,54 @@ function assertSwitchable(account: BillingAccount, target: CatalogPlan, now: Dat
     throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: target.key });
   }
   if (sub.planKey === target.key) throw new BillingError('switch_not_available', 'You are already on this plan');
+  if (isStudentPlan(target) && deps.studentVerified !== true) {
+    throw new BillingError('student_verification_required', 'Verify your school email to get the student price', { planKey: target.key });
+  }
   return sub;
+}
+
+/**
+ * The target price in the running subscription's currency: a Taiwan (TWD)
+ * subscription switches to the target's TWD price, or not at all (Stripe
+ * cannot mix currencies on one subscription, and we never guess a price).
+ */
+export function switchPrice(stripeSub: { currency?: string | null }, target: CatalogPlan): { priceId: string; amountMinor: number } {
+  if ((stripeSub.currency ?? '').toLowerCase() === 'twd') {
+    if (!target.twdPrice) throw new BillingError('switch_not_available', 'This plan has no Taiwan price yet', { planKey: target.key });
+    return { priceId: target.twdPrice.stripePriceId, amountMinor: target.twdPrice.amountMinor };
+  }
+  return { priceId: target.stripePriceId!, amountMinor: target.amountMinor! };
 }
 
 export async function quoteSwitch(account: BillingAccount, target: CatalogPlan, deps: StripeDeps): Promise<SwitchQuote> {
   const now = (deps.now ?? (() => new Date()))();
-  const sub = assertSwitchable(account, target, now);
+  const sub = assertSwitchable(account, target, now, deps);
   const stripe = deps.getStripe();
   if (!stripe) throw new BillingError('rail_not_configured', 'Card payments are not set up', { rail: 'stripe' });
   const prorationDate = Math.floor(now.getTime() / 1000);
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
   const item = itemOf(stripeSub);
+  const price = switchPrice(stripeSub, target);
   const preview = await stripe.invoices.createPreview({
     customer: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
     subscription: stripeSub.id,
     subscription_details: {
-      items: [{ id: item.id, price: target.stripePriceId! }],
+      items: [{ id: item.id, price: price.priceId }],
       proration_behavior: 'always_invoice',
       proration_date: prorationDate,
     },
   });
+  const priceIdOf = price.priceId;
   const newLine = preview.lines?.data?.find((l) => {
     const price = (l as unknown as { pricing?: { price_details?: { price?: string } }; price?: { id?: string } | null });
-    return price.pricing?.price_details?.price === target.stripePriceId || price.price?.id === target.stripePriceId;
+    return price.pricing?.price_details?.price === priceIdOf || price.price?.id === priceIdOf;
   });
   const periodEnd = newLine?.period?.end ?? item.current_period_end;
   return {
     planKey: target.key,
     currency: (preview.currency ?? target.currency).toUpperCase(),
     amountDueTodayMinor: Math.max(0, preview.amount_due ?? 0),
-    newRenewalPriceMinor: target.amountMinor!,
+    newRenewalPriceMinor: price.amountMinor,
     nextRenewalDate: new Date(periodEnd * 1000).toISOString(),
     prorationDate,
   };
@@ -336,7 +359,7 @@ export async function confirmSwitch(
   ack: ConfirmSwitchAck,
 ): Promise<{ planKey: string; stripeSubscriptionId: string }> {
   const now = (deps.now ?? (() => new Date()))();
-  const sub = assertSwitchable(account, target, now);
+  const sub = assertSwitchable(account, target, now, deps);
   // The new plan renews on new terms (price and interval), so it needs its own
   // acknowledgement, exactly like a new checkout (PRODUCT §6.3, H24).
   if (target.requiresAutoRenewAck && ack.autoRenewAck !== true) {
@@ -350,9 +373,10 @@ export async function confirmSwitch(
   if (!stripe) throw new BillingError('rail_not_configured', 'Card payments are not set up', { rail: 'stripe' });
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
   const item = itemOf(stripeSub);
+  const price = switchPrice(stripeSub, target);
   await ack.record();
   await stripe.subscriptions.update(stripeSub.id, {
-    items: [{ id: item.id, price: target.stripePriceId! }],
+    items: [{ id: item.id, price: price.priceId }],
     proration_behavior: 'always_invoice',
     proration_date: prorationDate,
     cancel_at_period_end: false,

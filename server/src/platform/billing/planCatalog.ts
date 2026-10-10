@@ -13,6 +13,15 @@
 // A plan whose price is unset is listed but not sellable, so `/pricing` can
 // show the schedule (GoApply: "暂未开放") and nothing is purchasable.
 //
+// V2 additions (WP-79; PRODUCT_PLAN.md §6.3, TW-06, R-25):
+//   - Taiwan prices: STRIPE_PRICE_<PLANKEY>_TWD (a Stripe TWD price id) and
+//     STRIPE_PRICE_<PLANKEY>_TWD_CENTS (its amount in TWD minor units, e.g.
+//     NT$749 = 74900). Both set → `twdPrice`; otherwise Taiwan keeps the USD
+//     price with the reference line. Hidden until configured.
+//   - Student plans (`student_monthly`, `student_quarterly`) are priced like
+//     any plan; their discount is computed from the two configured prices
+//     (`studentDiscountPercent`, rounded down), never from copy.
+//
 // Rules carried here so every caller gets them right:
 //   - weekly plans are never the default selection (H24);
 //   - auto-renewing plans need the unticked acknowledgement (consent
@@ -82,12 +91,22 @@ export interface PlanDefinition {
 
 export type UnsellableReason = 'free' | 'price_unset' | 'payments_disabled';
 
+/** A real price in a second currency (Taiwan, V2). */
+export interface LocalPrice {
+  currency: 'TWD';
+  /** Minor units (NT$749 = 74900). */
+  amountMinor: number;
+  stripePriceId: string;
+}
+
 export interface CatalogPlan extends PlanDefinition {
   currency: ProductBrand['currency'];
   /** Display amount in minor units (cents / fen); null when not configured. */
   amountMinor: number | null;
   /** Stripe price id (RoboApply); null on GoApply (amount-priced passes) and when unset. */
   stripePriceId: string | null;
+  /** Taiwan price (Stripe TWD), only when both env values are set and the plan is sellable. */
+  twdPrice: LocalPrice | null;
   sellable: boolean;
   unsellableReason: UnsellableReason | null;
   /** Needs the unticked "renews automatically" acknowledgement at checkout. */
@@ -146,6 +165,12 @@ export function priceEnvNames(brand: BrandId, key: PlanKey): string[] {
   return brand === 'goapply' ? [`CN_PRICE_${seg}_FEN`, 'CN_PAYMENTS_ENABLED'] : [`STRIPE_PRICE_${seg}`, `STRIPE_PRICE_${seg}_CENTS`];
 }
 
+/** The optional Taiwan price variables of a RoboApply plan. */
+export function twdPriceEnvNames(key: PlanKey): [string, string] {
+  const seg = envKeySegment(key);
+  return [`STRIPE_PRICE_${seg}_TWD`, `STRIPE_PRICE_${seg}_TWD_CENTS`];
+}
+
 function readMinor(env: EnvSource, name: string): number | null {
   const raw = env[name]?.trim();
   if (!raw || !/^\d+$/.test(raw)) return null;
@@ -161,23 +186,31 @@ function readString(env: EnvSource, name: string): string | null {
 function priceFor(
   def: PlanDefinition,
   env: EnvSource,
-): { amountMinor: number | null; stripePriceId: string | null; sellable: boolean; unsellableReason: UnsellableReason | null } {
-  if (def.kind === 'free') return { amountMinor: 0, stripePriceId: null, sellable: false, unsellableReason: 'free' };
+): { amountMinor: number | null; stripePriceId: string | null; twdPrice: LocalPrice | null; sellable: boolean; unsellableReason: UnsellableReason | null } {
+  if (def.kind === 'free') return { amountMinor: 0, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'free' };
   const seg = envKeySegment(def.key);
   if (def.brand === 'goapply') {
     const amountMinor = readMinor(env, `CN_PRICE_${seg}_FEN`);
-    if (amountMinor === null) return { amountMinor: null, stripePriceId: null, sellable: false, unsellableReason: 'price_unset' };
+    if (amountMinor === null) return { amountMinor: null, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'price_unset' };
     if (!parseBoolEnv(env.CN_PAYMENTS_ENABLED)) {
-      return { amountMinor, stripePriceId: null, sellable: false, unsellableReason: 'payments_disabled' };
+      return { amountMinor, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'payments_disabled' };
     }
-    return { amountMinor, stripePriceId: null, sellable: true, unsellableReason: null };
+    return { amountMinor, stripePriceId: null, twdPrice: null, sellable: true, unsellableReason: null };
   }
   const stripePriceId = readString(env, `STRIPE_PRICE_${seg}`);
   const amountMinor = readMinor(env, `STRIPE_PRICE_${seg}_CENTS`);
   if (!stripePriceId || amountMinor === null) {
-    return { amountMinor, stripePriceId, sellable: false, unsellableReason: 'price_unset' };
+    return { amountMinor, stripePriceId, twdPrice: null, sellable: false, unsellableReason: 'price_unset' };
   }
-  return { amountMinor, stripePriceId, sellable: true, unsellableReason: null };
+  return { amountMinor, stripePriceId, twdPrice: twdPriceFor(def.key, env), sellable: true, unsellableReason: null };
+}
+
+/** The Taiwan price of a plan, or null unless both variables are set (never derived from the USD price). */
+export function twdPriceFor(key: PlanKey, env: EnvSource = process.env): LocalPrice | null {
+  const [idName, centsName] = twdPriceEnvNames(key);
+  const stripePriceId = readString(env, idName);
+  const amountMinor = readMinor(env, centsName);
+  return stripePriceId && amountMinor !== null ? { currency: 'TWD', amountMinor, stripePriceId } : null;
 }
 
 /**
@@ -212,10 +245,41 @@ export function hasSellableProPlan(brand: BrandId, env: EnvSource = process.env)
   return getPlanCatalog(brand, env).some((p) => p.sellable && p.entitlementProfile === 'pro' && p.phase === 'mvp');
 }
 
-/** Find the plan a Stripe price id belongs to (webhook reconciliation). */
+/** Find the plan a Stripe price id belongs to (webhook reconciliation); Taiwan price ids count too. */
 export function planKeyForStripePrice(priceId: string | null | undefined, env: EnvSource = process.env): PlanKey | null {
   if (!priceId) return null;
-  return getPlanCatalog('roboapply', env).find((p) => p.stripePriceId === priceId)?.key ?? null;
+  return getPlanCatalog('roboapply', env).find((p) => p.stripePriceId === priceId || p.twdPrice?.stripePriceId === priceId)?.key ?? null;
+}
+
+// ── Student plans (V2) ──────────────────────────────────────────────────
+
+/** The regular plan each student plan is a discount of. */
+export const STUDENT_BASE_PLAN: Readonly<Partial<Record<PlanKey, PlanKey>>> = {
+  student_monthly: 'pro_monthly',
+  student_quarterly: 'pro_quarterly',
+};
+
+export function isStudentPlan(plan: Pick<PlanDefinition, 'requiresFlag'> | null | undefined): boolean {
+  return plan?.requiresFlag === 'student';
+}
+
+/**
+ * How much cheaper a student plan is than its regular plan, from the two
+ * configured prices, rounded DOWN (the claim is never larger than the real
+ * saving). Null when either price is unknown or there is no saving. The
+ * product target is 30% (PRODUCT_PLAN.md §6.3); the number shown is always
+ * this computed one.
+ */
+export function studentDiscountPercent(
+  plan: Pick<CatalogPlan, 'key' | 'amountMinor'>,
+  catalog: ReadonlyArray<Pick<CatalogPlan, 'key' | 'amountMinor'>>,
+): number | null {
+  const baseKey = STUDENT_BASE_PLAN[plan.key];
+  const base = baseKey ? catalog.find((p) => p.key === baseKey) : undefined;
+  if (!base || base.amountMinor === null || plan.amountMinor === null || base.amountMinor <= 0) return null;
+  if (plan.amountMinor >= base.amountMinor) return null;
+  const pct = Math.floor(((base.amountMinor - plan.amountMinor) / base.amountMinor) * 100);
+  return pct > 0 ? pct : null;
 }
 
 /**
