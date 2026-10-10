@@ -77,10 +77,15 @@ export function useCampusSubscriptions(enabled: boolean) {
   return useQuery({ queryKey: campusKeys.subscriptions(), queryFn: ({ signal }) => listCampusSubscriptions({ signal }), enabled, retry: false });
 }
 
+/**
+ * Save a deadline reminder. `channel` is 'wechat' when the person accepted
+ * WeChat's subscribe prompt at the tap (then the last reminder also arrives
+ * in WeChat); otherwise the reminder lives in the inbox.
+ */
 export function useSubscribeEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (eventId: string) => subscribeCampus({ kind: 'event', eventId, channel: 'in_app' }),
+    mutationFn: (v: { eventId: string; channel: 'in_app' | 'wechat' }) => subscribeCampus({ kind: 'event', eventId: v.eventId, channel: v.channel }),
     onSuccess: () => qc.invalidateQueries({ queryKey: campusKeys.subscriptions() }),
   });
 }

@@ -188,6 +188,14 @@ export interface StoredNotificationCenter {
   v: 1;
   /** Channel choices per configurable category (normalized; `in_app` always present). */
   channels?: Partial<Record<NotificationCategory, NotificationChannel[]>>;
+  /**
+   * Opt-in channels (push, WeChat) the person turned OFF in Settings, per
+   * category: recorded when a saved choice drops a channel that was on. Only
+   * this blocks `enableChannelIfDefault` (an accepted WeChat prompt, WP-73);
+   * a list that merely never had the channel does not. Cleared when the
+   * person turns the channel on again.
+   */
+  channelsOff?: Partial<Record<NotificationCategory, NotificationChannel[]>>;
   quietHours?: { start: string; end: string };
   /** The country the regional default was resolved for (first seen; keeps the email gate and the settings page in agreement). */
   regionCountry?: string;

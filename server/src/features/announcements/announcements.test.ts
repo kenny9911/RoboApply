@@ -64,9 +64,10 @@ function facts(over: Partial<AudienceFacts> = {}): AudienceFacts {
 }
 
 /**
- * The fake Prisma has no JSON-path filters; evaluate `PUBLISHED_WHERE`
- * (`cohort.active === true`) the way Postgres would, so the query's own
- * filter (not the in-memory guard) decides what `take` counts.
+ * The fake Prisma has no JSON-path filters; evaluate `PUBLISHED_WHERE` (the
+ * column is true, or the column is null and `cohort.active === true`) the way
+ * Postgres would, so the query's own filter (not the in-memory guard) decides
+ * what `take` counts.
  */
 function withJsonPathFilter(db: ReturnType<typeof createFakePrisma>) {
   const model = (db as unknown as { rAAnnouncement: { findMany: (a: Record<string, unknown>) => Promise<Record<string, unknown>[]> } }).rAAnnouncement;
@@ -79,14 +80,14 @@ function withJsonPathFilter(db: ReturnType<typeof createFakePrisma>) {
       findMany: async (args: Record<string, unknown> = {}) => {
         calls.push(args);
         const where = { ...((args.where as Record<string, unknown>) ?? {}) };
-        const json = where.cohort as { path?: string[]; equals?: unknown } | undefined;
-        if (!json?.path) return findMany(args);
-        delete where.cohort;
+        if (JSON.stringify(where.OR) !== JSON.stringify(PUBLISHED_WHERE.OR)) return findMany(args);
+        delete where.OR;
         const take = args.take as number | undefined;
         const rows = await findMany({ ...args, where, take: undefined });
         const kept = rows.filter((r) => {
+          if (r.active === true) return true;
           const c = r.cohort as Record<string, unknown> | null;
-          return c !== null && typeof c === 'object' && c[json.path![0]!] === json.equals;
+          return (r.active === null || r.active === undefined) && c !== null && typeof c === 'object' && c.active === true;
         });
         return take === undefined ? kept : kept.slice(0, take);
       },
@@ -177,7 +178,7 @@ describe('cohort and selection', () => {
   });
 });
 
-describe('stored row adapter (SR-61-1 interim)', () => {
+describe('stored row adapter (SR-61-1: the publish switch)', () => {
   it('reads the publish switch from the cohort JSON and drops malformed parts', () => {
     const rec = fromRow({
       id: 'a',
@@ -196,6 +197,11 @@ describe('stored row adapter (SR-61-1 interim)', () => {
     expect(Object.keys(rec.content)).toEqual(['en']);
     expect(readActive({ plans: ['pro'] })).toBe(false);
     expect(fromRow({ ...rec, content: {}, cohort: { plans: ['pro'], active: false } }).cohort).toEqual({ plans: ['pro'] });
+    // The column wins when it is set; null or absent falls back to the JSON key.
+    expect(readActive({ active: true }, false)).toBe(false);
+    expect(readActive({ active: false }, true)).toBe(true);
+    expect(readActive({ active: true }, null)).toBe(true);
+    expect(readActive({}, null)).toBe(false);
   });
 
   it('listInWindow filters drafts in the query, so drafts never crowd out a published one', async () => {
@@ -240,7 +246,63 @@ describe('stored row adapter (SR-61-1 interim)', () => {
     expect(next.announcement?.id).toBe('fresh');
   });
 
-  it.todo('SR-61-1: reads and writes RAAnnouncement.active (column) once SCHEMA-4 adds it, falling back to cohort.active for older rows');
+  it('SR-61-1: reads and writes RAAnnouncement.active (column), falling back to cohort.active for older rows', async () => {
+    const fake = createFakePrisma({ defaults: { rAAnnouncement: { priority: 100, cohort: {} } } });
+    const rows = fake.$rows('rAAnnouncement');
+    const base = { brand: 'roboapply', locales: ['en'], content: { en: text('Hi') }, startsAt: new Date(T0.getTime() - HOUR), endsAt: new Date(T0.getTime() + HOUR), createdAt: T0 };
+    // Rows from before the column (active is null): the JSON key is the switch.
+    rows.push({ id: 'oldLive', key: 'old.live', priority: 10, cohort: { active: true }, active: null, ...base });
+    rows.push({ id: 'oldDraft', key: 'old.draft', priority: 11, cohort: { active: false }, active: null, ...base });
+    rows.push({ id: 'oldBare', key: 'old.bare', priority: 12, cohort: {}, active: null, ...base });
+    // Rows where the column is set: it wins over whatever the JSON says.
+    rows.push({ id: 'colLive', key: 'col.live', priority: 20, cohort: { active: false }, active: true, ...base });
+    rows.push({ id: 'colDraft', key: 'col.draft', priority: 21, cohort: { active: true }, active: false, ...base });
+    const { db: wrapped, calls } = withJsonPathFilter(fake);
+    const repo = createPrismaAnnouncementsRepo(async () => wrapped as never);
+
+    // Read: the published filter is the OR of both forms, never the column alone.
+    expect(PUBLISHED_WHERE).toEqual({ OR: [{ active: true }, { active: null, cohort: { path: ['active'], equals: true } }] });
+    const listed = await repo.listInWindow('roboapply', T0);
+    expect(listed.map((r) => r.id)).toEqual(['oldLive', 'colLive']);
+    expect(calls[0]!.where).toMatchObject(PUBLISHED_WHERE);
+    expect((calls[0]!.select as Record<string, unknown>).active).toBe(true);
+    expect(Object.fromEntries((await repo.list({ brand: 'roboapply' })).map((r) => [r.id, r.active]))).toEqual({
+      oldLive: true,
+      oldDraft: false,
+      oldBare: false,
+      colLive: true,
+      colDraft: false,
+    });
+
+    // Write: create sets the column (and mirrors it in the cohort JSON for code that only knows the key).
+    const created = await repo.create({
+      key: 'new.one',
+      brand: 'roboapply',
+      locales: ['en'],
+      content: { en: text('New') },
+      cohort: { plans: ['pro'] },
+      active: true,
+      priority: 5,
+      startsAt: base.startsAt,
+      endsAt: base.endsAt,
+    });
+    expect(created).toMatchObject({ active: true, cohort: { plans: ['pro'] } });
+    const stored = () => Object.fromEntries(rows.map((r) => [r.key as string, { active: r.active, cohort: r.cohort }]));
+    expect(stored()['new.one']).toEqual({ active: true, cohort: { plans: ['pro'], active: true } });
+
+    // Update: unpublishing writes the column; an older row moves onto the column the first time its switch or cohort is saved.
+    expect((await repo.update(created.id, { active: false })).active).toBe(false);
+    expect(stored()['new.one']).toEqual({ active: false, cohort: { plans: ['pro'], active: false } });
+    expect((await repo.update('oldLive', { cohort: { plans: ['free'] } })).active).toBe(true);
+    expect(stored()['old.live']).toEqual({ active: true, cohort: { plans: ['free'], active: true } });
+    expect((await repo.update('oldDraft', { active: true })).active).toBe(true);
+    expect(stored()['old.draft']).toEqual({ active: true, cohort: { active: true } });
+    // A change that touches neither leaves an older row as it was (still read through the fallback).
+    await repo.update('oldBare', { priority: 99 });
+    expect(stored()['old.bare']).toEqual({ active: null, cohort: {} });
+
+    expect((await repo.listInWindow('roboapply', T0)).map((r) => r.id).sort()).toEqual(['colLive', 'oldDraft', 'oldLive'].sort());
+  });
 });
 
 // ── Routes ───────────────────────────────────────────────────────────────
@@ -336,8 +398,8 @@ describe('announcement routes', () => {
     });
     expect(ok.status).toBe(200);
     expect(ok.body.data).toMatchObject({ active: true, status: 'live', missingLocales: [], priority: 10, locales: ['zh-TW'] });
-    // Stored: the switch rides in the cohort JSON until SR-61-1.
-    expect(db.$rows('rAAnnouncement')[0]!.cohort).toEqual({ active: true });
+    // Stored: the column (SR-61-1), mirrored in the cohort JSON for readers that only know the key.
+    expect(db.$rows('rAAnnouncement')[0]).toMatchObject({ active: true, cohort: { active: true } });
   });
 
   it('admin: create refuses unpublishable or duplicate records; list filters; delete', async () => {

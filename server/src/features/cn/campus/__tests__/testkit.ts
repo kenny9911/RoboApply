@@ -3,7 +3,7 @@
 
 import type { LLMChatResult } from '../../../../platform/llm/index.js';
 import type { CampusLlm } from '../extract.js';
-import type { CampusNotifyRepository, DueReminder } from '../notify.js';
+import type { CampusNotifyRepository, CampusProfile, DueReminder } from '../notify.js';
 import type { CampusEventWrite, CampusRepository } from '../repository.js';
 import type { CampusServiceDeps } from '../service.js';
 import type { FetchedPage } from '../source.js';
@@ -161,7 +161,7 @@ export function fakeCampusRepo(events: CampusEventRow[] = []): FakeCampusRepo {
 /** Notify repository over the same in-memory state, plus an inbox ledger. */
 export interface FakeNotifyRepo extends CampusNotifyRepository {
   inbox: Array<{ userId: string; templateKey: string; eventId: string }>;
-  profileOf: Map<string, { locale: string | null; timezone: string | null }>;
+  profileOf: Map<string, CampusProfile>;
 }
 
 /** `lock: false` makes withFollowLock a no-op (to show what the lock prevents). */
@@ -198,6 +198,13 @@ export function fakeNotifyRepo(campus: FakeCampusRepo, opts: { lock?: boolean } 
     },
     async followers(brand, normalized, cls) {
       return [...new Set(campus.subs.filter((s) => s.kind === 'company' && s.brand === brand && s.companyNameNormalized === normalized && s.graduationClass === cls).map((s) => s.userId))];
+    },
+    async emailFollowers(brand, normalized, cls, userIds) {
+      return new Set(
+        campus.subs
+          .filter((s) => s.kind === 'company' && s.brand === brand && s.companyNameNormalized === normalized && s.graduationClass === cls && s.channel === 'email' && userIds.includes(s.userId))
+          .map((s) => s.userId),
+      );
     },
     async alreadyNotified(userIds, eventId) {
       return new Set(repo.inbox.filter((i) => i.eventId === eventId && i.templateKey === 'campus.followed' && userIds.includes(i.userId)).map((i) => i.userId));

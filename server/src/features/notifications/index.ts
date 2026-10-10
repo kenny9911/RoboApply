@@ -6,6 +6,9 @@
 //   notificationCenterService.create(input)         — producers (tracker reminders WP-38, alerts WP-39a,
 //                                                     kits WP-52, campus WP-58, billing WP-21a); rows may also
 //                                                     be written directly (category in either vocabulary)
+//   notificationCenterService.enableChannelIfDefault(userId, brand, category, 'wechat')
+//                                                   — WP-73: an accepted WeChat prompt opts the category in
+//                                                     to WeChat unless the person turned WeChat off in Settings
 //   notificationEmailPreferenceGate                 — WP-39a registers it with `setEmailPreferenceGate`
 //                                                     (or composes it with its own quiet-hours/frequency checks)
 //   tipsRemindersDefault / categoryOf               — pure helpers
@@ -15,7 +18,7 @@ import type { EmailPreferenceGate } from '../../platform/email/index.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import { NotificationCenterService, type CreateNotificationInput } from './service.js';
-import type { NotificationPreferencesView } from './contract.js';
+import type { NotificationCategory, NotificationPreferencesView } from './contract.js';
 
 export * from './contract.js';
 export { createEmailPublicRouter, createNotificationsRouter } from './routes.js';
@@ -26,6 +29,7 @@ export {
   availableChannels,
   categoryForList,
   configurableCategoriesFor,
+  defaultChannelChoice,
   effectiveChannels,
   emailUnavailableReason,
   registerInvitationResponder,
@@ -56,6 +60,12 @@ export interface NotificationCenterFacade {
    */
   preferencesFor(userId: string, brand?: ProductBrand): Promise<NotificationPreferencesView | null>;
   /**
+   * An accepted opt-in prompt (WeChat's subscribe prompt, WP-73) turns the
+   * channel on for the category, unless the person turned that channel off in
+   * Settings ('off': nothing is written).
+   */
+  enableChannelIfDefault: NotificationCenterService['enableChannelIfDefault'];
+  /**
    * Store the request's edge country (`x-vercel-ip-country`) for the regional
    * "Tips and reminders" default the first time it is seen (WP-10 calls it at
    * signup / login / `/auth/me`). A no-op once a country is known. Never throws.
@@ -74,6 +84,8 @@ export const notificationCenterService: NotificationCenterFacade = {
   create: (input) => svc().create(input),
   allowsEmail: (input) => svc().allowsEmail(input),
   preferencesFor: (userId, brand) => svc().preferencesFor(userId, brand ?? getCurrentBrandOrDefault()),
+  enableChannelIfDefault: (userId: string, brand: ProductBrand, category: NotificationCategory, channel: 'push' | 'wechat') =>
+    svc().enableChannelIfDefault(userId, brand, category, channel),
   rememberRegion: async (userId, country) => {
     try {
       await svc().rememberRegion(userId, country);

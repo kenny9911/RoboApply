@@ -269,6 +269,8 @@ describe('notification settings', () => {
     });
     expect(await goSvc.allowsEmail({ brand: GO, userId: 'go', email: 'go@example.test', list: 'alerts' })).toBe(false);
     expect(await goSvc.allowsEmail({ brand: GO, userId: 'go', email: 'go@example.test', list: 'digest' })).toBe(false);
+    // Reminder email does not depend on `jobs.alerts`: the campus emails (网申截止, a followed company's programme) are on this list.
+    expect(await goSvc.allowsEmail({ brand: GO, userId: 'go', email: 'go@example.test', list: 'reminders' })).toBe(true);
     db.$rows('rAAnonAlertSubscription').push({ id: 'a_go', brand: 'goapply', emailHash: hashEmail('anon@example.test'), status: 'confirmed' });
     expect(await goSvc.allowsEmail({ brand: GO, userId: null, email: 'anon@example.test', list: 'alerts' })).toBe(false);
   });
@@ -358,6 +360,114 @@ describe('notification settings', () => {
 });
 
 // ── Email preference gate ────────────────────────────────────────────────
+
+describe('opt-in channels: an accepted prompt turns the channel on, only an explicit "off" blocks it (WP-93 #23)', () => {
+  let db: Fake;
+  const WECHAT = { wechat: true, email: false, alerts: false, invitations: false };
+  const ctx = { id: 'sp_go', userId: 'go', brand: GO };
+  const center = () => readCenter(db.$rows('seekerProfile').find((r) => r.id === 'sp_go')!.notificationPreferences);
+  beforeEach(() => {
+    db = createFakePrisma();
+    seed(db, { userId: 'go', profileId: 'sp_go', brand: 'goapply', country: 'CN', placeholder: true });
+  });
+
+  it('no stored choice: stores the default list plus the channel, once', async () => {
+    const svc = service(db, WECHAT);
+    expect((await svc.preferencesFor('go', GO))!.channels.reminder).toEqual(['in_app']);
+    expect(await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('enabled');
+    expect(center().channels).toEqual({ reminder: ['in_app', 'email', 'wechat'] });
+    expect((await svc.preferencesFor('go', GO))!.channels.reminder).toEqual(['in_app', 'wechat']);
+    expect(await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('already');
+    // Legacy keys beside `center` are kept.
+    db.$rows('seekerProfile')[0]!.notificationPreferences = { matchAlerts: false, quietHours: { start: '22:00', end: '07:00' } };
+    await svc.enableChannelIfDefault('go', GO, 'alert', 'wechat');
+    expect(db.$rows('seekerProfile')[0]!.notificationPreferences).toMatchObject({ matchAlerts: false, quietHours: { start: '22:00', end: '07:00' } });
+    // The legacy "no match alerts" choice still keeps alert email off: only the new channel is added to it.
+    expect(center().channels!.alert).toEqual(['in_app', 'wechat']);
+  });
+
+  it('a stored list that never had the channel gets it added and keeps the rest (email off stays off)', async () => {
+    db.$rows('seekerProfile')[0]!.notificationPreferences = { center: { v: 1, channels: { reminder: ['in_app'] }, unsubscribed: { reminders: '2026-10-01T00:00:00.000Z' } } };
+    const svc = service(db, WECHAT);
+    expect(await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('enabled');
+    expect(center()).toMatchObject({ channels: { reminder: ['in_app', 'wechat'] }, unsubscribed: { reminders: '2026-10-01T00:00:00.000Z' } });
+  });
+
+  it('turning the switch off in Settings is remembered; the prompt never overrules it; turning it on again lifts it', async () => {
+    const svc = service(db, WECHAT);
+    await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat');
+    await svc.patchPreferences(ctx, { channels: { reminder: ['in_app'] } });
+    expect(center().channelsOff).toEqual({ reminder: ['wechat'] });
+    expect(await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('off');
+    // Email could not be offered to this account (no address yet), so it was not theirs to turn off: it stays stored.
+    expect(center().channels!.reminder).toEqual(['in_app', 'email']);
+    // Per category: reminders off says nothing about tips.
+    expect(await svc.enableChannelIfDefault('go', GO, 'tips', 'wechat')).toBe('enabled');
+    await svc.patchPreferences(ctx, { channels: { reminder: ['in_app', 'wechat'] } });
+    expect(center().channelsOff).toBeUndefined();
+    expect(await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('already');
+  });
+
+  it('saving a category whose channel was never on is not an "off"', async () => {
+    const svc = service(db, { ...WECHAT, email: true });
+    db.$rows('user')[0]!.emailIsPlaceholder = false;
+    // They only turn reminder email off; WeChat was never on for them.
+    await svc.patchPreferences(ctx, { channels: { reminder: ['in_app'] } });
+    expect(center().channelsOff).toBeUndefined();
+    expect(await svc.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('enabled');
+  });
+
+  it('a save while the channel is not offered is not an "off": the stored choice is kept', async () => {
+    // WeChat accepted earlier, then the brand's WeChat notices become unavailable (credentials missing).
+    db.$rows('seekerProfile')[0]!.notificationPreferences = { center: { v: 1, channels: { reminder: ['in_app', 'email', 'wechat'] } } };
+    db.$rows('user')[0]!.emailIsPlaceholder = false;
+    const down = service(db, { ...WECHAT, wechat: false, email: true });
+    // The page shows inbox and email only; the person turns reminder email off.
+    const view = await down.patchPreferences(ctx, { channels: { reminder: ['in_app'] } });
+    expect(view.channels.reminder).toEqual(['in_app']);
+    expect(center().channelsOff).toBeUndefined();
+    expect(center().channels!.reminder).toEqual(['in_app', 'wechat']);
+    // WeChat is back: still on, and a newly accepted prompt is not answered "off".
+    const up = service(db, { ...WECHAT, email: true });
+    expect((await up.preferencesFor('go', GO))!.channels.reminder).toEqual(['in_app', 'wechat']);
+    expect(await up.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('already');
+
+    // Same when the stored list never had WeChat: a later prompt turns it on.
+    db.$rows('seekerProfile')[0]!.notificationPreferences = { center: { v: 1, channels: { reminder: ['in_app', 'email'] } } };
+    await down.patchPreferences(ctx, { channels: { reminder: ['in_app'] } });
+    expect(center().channelsOff).toBeUndefined();
+    expect(await up.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('enabled');
+
+    // An explicit "off" recorded earlier survives a save made while the channel is not offered.
+    db.$rows('seekerProfile')[0]!.notificationPreferences = { center: { v: 1, channels: { reminder: ['in_app'] }, channelsOff: { reminder: ['wechat'] } } };
+    await down.patchPreferences(ctx, { channels: { reminder: ['in_app', 'email'] } });
+    expect(center().channelsOff).toEqual({ reminder: ['wechat'] });
+    expect(await up.enableChannelIfDefault('go', GO, 'reminder', 'wechat')).toBe('off');
+  });
+
+  it('a carried-over email channel does not undo an email unsubscribe', async () => {
+    // Email is in the stored list and the reminders list is unsubscribed; email is not offered at the time of the save.
+    db.$rows('seekerProfile')[0]!.notificationPreferences = { center: { v: 1, channels: { reminder: ['in_app', 'email'] }, unsubscribed: { reminders: '2026-10-01T00:00:00.000Z' } } };
+    const svc = service(db, WECHAT); // email not offered
+    await svc.patchPreferences(ctx, { channels: { reminder: ['in_app', 'wechat'] } });
+    expect(center()).toMatchObject({ channels: { reminder: ['in_app', 'wechat', 'email'] }, unsubscribed: { reminders: '2026-10-01T00:00:00.000Z' } });
+    // Choosing email in a save is what re-subscribes.
+    db.$rows('user')[0]!.emailIsPlaceholder = false;
+    await service(db, { ...WECHAT, email: true }).patchPreferences(ctx, { channels: { reminder: ['in_app', 'email', 'wechat'] } });
+    expect(center().unsubscribed?.reminders).toBeUndefined();
+  });
+
+  it('nothing to choose: locked categories and accounts without a profile', async () => {
+    const svc = service(db, WECHAT);
+    expect(await svc.enableChannelIfDefault('go', GO, 'billing', 'wechat')).toBe('not_applicable');
+    expect(await svc.enableChannelIfDefault('ghost', GO, 'reminder', 'wechat')).toBe('not_applicable');
+    expect(center().channels).toBeUndefined();
+  });
+
+  it('readCenter keeps only real opt-in channels in channelsOff', () => {
+    expect(readCenter({ center: { channelsOff: { reminder: ['wechat', 'email', 'nope', 'wechat'], bogus: ['push'], tips: 'x', alert: [] } } }).channelsOff).toEqual({ reminder: ['wechat'] });
+  });
+});
 
 describe('email preference gate (allowsEmail)', () => {
   let db: Fake;

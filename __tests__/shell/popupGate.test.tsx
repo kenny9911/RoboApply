@@ -10,6 +10,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 import {
   POPUP_GAP_MS,
+  POPUP_PRIORITY,
   POPUP_STORAGE_KEY,
   __setPopupGate,
   createPopupGate,
@@ -105,6 +106,58 @@ describe('createPopupGate', () => {
     ];
     await h.flush();
     expect(await Promise.all(results)).toEqual([false, true, false, false]);
+  });
+
+  it('install_prompt (the PWA install prompt) is the lowest priority: anything else asking in the same moment wins', async () => {
+    expect(POPUP_PRIORITY.install_prompt).toBeLessThan(Math.min(POPUP_PRIORITY.announcement, POPUP_PRIORITY.survey, POPUP_PRIORITY.extension_prompt, POPUP_PRIORITY.offer));
+    for (const other of ['announcement', 'survey', 'extension_prompt', 'offer'] as const) {
+      const h = harness();
+      h.gate.notePageView('/jobs');
+      // Asked first, still loses: priority decides, not the order of mounting.
+      const install = h.gate.request('pwa:install', 'install_prompt');
+      const rival = h.gate.request(`${other}:1`, other);
+      await h.flush();
+      expect(await Promise.all([install, rival]), other).toEqual([false, true]);
+      expect(h.gate.snapshot().shownThisView).toBe(`${other}:1`);
+    }
+  });
+
+  it('install_prompt keeps both rules: one prompt per page view, and the 24 h budget in both directions', async () => {
+    const h = harness();
+    h.gate.notePageView('/jobs');
+    // Alone, it is shown and starts the 24 h gap like any non-essential popup.
+    const install = h.gate.request('pwa:install', 'install_prompt');
+    await h.flush();
+    expect(await install).toBe(true);
+    expect(h.persist).toHaveBeenCalledTimes(1);
+    // Same page view: the slot is spent, even for a higher priority.
+    const sameView = h.gate.request('offer:1', 'offer');
+    await h.flush();
+    expect(await sameView).toBe(false);
+    // Next page view within 24 h: nothing else pops up either.
+    h.gate.notePageView('/applications');
+    h.advance(POPUP_GAP_MS - 60_000);
+    const tooSoon = h.gate.request('announcement:1', 'announcement');
+    await h.flush();
+    expect(await tooSoon).toBe(false);
+
+    // And the other way round: after another popup, the install prompt waits out the gap.
+    const g = harness();
+    g.gate.notePageView('/jobs');
+    const news = g.gate.request('announcement:1', 'announcement');
+    await g.flush();
+    expect(await news).toBe(true);
+    g.gate.notePageView('/resume');
+    g.advance(POPUP_GAP_MS - 1);
+    const early = g.gate.request('pwa:install', 'install_prompt');
+    await g.flush();
+    expect(await early).toBe(false);
+    g.gate.notePageView('/jobs');
+    g.advance(1);
+    const onTime = g.gate.request('pwa:install', 'install_prompt');
+    await g.flush();
+    expect(await onTime).toBe(true);
+    expect(g.persist).toHaveBeenCalledTimes(2);
   });
 
   it('an essential popup skips the gap, takes the view slot and does not restart the gap', async () => {

@@ -100,7 +100,7 @@ export function createNotificationsRouter(deps: NotificationsRouterDeps = {}): R
       // The first poll stores the edge country, so the "Tips and reminders"
       // default applies before the person ever opens Settings (once per process).
       await service.rememberRegionOnce(profile, requestCountry(req));
-      return { count: await service.unreadCountForProfile(profile.id, brandOf(req)) };
+      return { count: await service.unreadCountForProfile(profile.id, brandOf(req), profile.userId) };
     }),
   );
 

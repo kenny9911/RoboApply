@@ -83,7 +83,9 @@ describe('sendEmail', () => {
     const result = await runWithBrand('roboapply', () =>
       sendEmail({ template: 'test.reset', to: 'Ana@Example.com', userId: 'u1', locale: 'en', params: { url: 'https://x.test/r', name: 'Ana' } }, deps()),
     );
-    expect(result).toEqual({ status: 'sent', provider: 'resend', providerId: 'msg_1' });
+    expect(result).toEqual({ status: 'sent', provider: 'resend', providerId: 'msg_1', logId: expect.any(String) });
+    // The id is the RAEmailLog row of this email (what RAAlertDelivery.emailLogId stores).
+    expect(result.logId).toBe(db.$rows('rAEmailLog')[0]!.id);
     expect(sent).toHaveLength(1);
     const m = sent[0]!;
     expect(m.from).toBe('RoboApply <noreply@roboapply.io>');
@@ -132,8 +134,8 @@ describe('sendEmail', () => {
       deps(),
     );
     const malformed = await sendEmail({ template: 'test.reset', to: 'not-an-email', brand: 'roboapply', params: { url: 'https://x' } }, deps());
-    expect(placeholder).toEqual({ status: 'suppressed', reason: 'placeholder_address' });
-    expect(malformed).toEqual({ status: 'suppressed', reason: 'invalid_address' });
+    expect(placeholder).toEqual({ status: 'suppressed', reason: 'placeholder_address', logId: null });
+    expect(malformed).toEqual({ status: 'suppressed', reason: 'invalid_address', logId: null });
     expect(sent).toHaveLength(0);
     expect(db.$rows('rAEmailLog').map((r) => r.status)).toEqual(['suppressed', 'suppressed']);
     expect(classifyAddress('a@b.INVALID')).toBe('placeholder_address');
@@ -143,7 +145,7 @@ describe('sendEmail', () => {
     const { t, sent } = fakeTransport();
     registerEmailTransport('resend', t);
     const input = { template: 'test.alert', to: 'a@b.test', userId: 'u9', brand: 'roboapply' as const, params: { count: 3 } };
-    expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'no_preference_gate' });
+    expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'no_preference_gate', logId: null });
 
     setEmailPreferenceGate(async ({ list, category }) => list === 'alerts' && category === 'alert');
     const ok = await sendEmail(input, deps());
@@ -161,11 +163,11 @@ describe('sendEmail', () => {
     expect(m.html).toContain('Unsubscribe');
 
     setEmailPreferenceGate(async () => false);
-    expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'preference_off' });
+    expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'preference_off', logId: null });
     setEmailPreferenceGate(async () => {
       throw new Error('db down');
     });
-    expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'preference_off' });
+    expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'preference_off', logId: null });
   });
 
   it('GoApply sends only through its own configured transport and sender', async () => {
@@ -173,11 +175,12 @@ describe('sendEmail', () => {
     registerEmailTransport('resend', t);
     const base = { template: 'test.reset', to: 'li@example.cn', brand: 'goapply' as const, params: { url: 'https://x' } };
     // No CN_EMAIL_TRANSPORT → no email (matches the notify.email capability).
-    expect(await sendEmail(base, deps())).toEqual({ status: 'suppressed', reason: 'transport_not_configured' });
+    expect(await sendEmail(base, deps())).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
     // Resend without CN_EMAIL_FROM is still not configured (no fallback to the intl sender).
     expect(await sendEmail(base, { ...deps(), env: { ...ENV, CN_EMAIL_TRANSPORT: 'resend', EMAIL_FROM: 'X <x@roboapply.io>' } })).toEqual({
       status: 'suppressed',
       reason: 'transport_not_configured',
+      logId: null,
     });
     const env = { ...ENV, CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'Whatever <noreply@mail.goapply.top>' };
     expect((await sendEmail(base, { ...deps(), env })).status).toBe('sent');
@@ -196,6 +199,7 @@ describe('sendEmail', () => {
       status: 'failed',
       provider: 'resend',
       reason: 'resend_422: bad from',
+      logId: expect.any(String),
     });
     defineEmailTemplate({
       key: 'test.missing_key',
@@ -211,7 +215,35 @@ describe('sendEmail', () => {
     const { t } = fakeTransport();
     registerEmailTransport('resend', t);
     db = createFakePrisma({ failOn: { 'rAEmailLog.create': new Error('relation "RAEmailLog" does not exist') } });
-    expect((await sendEmail({ template: 'test.reset', to: 'a@b.test', brand: 'roboapply', params: { url: 'u' } }, deps())).status).toBe('sent');
+    const r = await sendEmail({ template: 'test.reset', to: 'a@b.test', brand: 'roboapply', params: { url: 'u' } }, deps());
+    expect(r.status).toBe('sent');
+    // No log row, so no id to link to.
+    expect(r.logId).toBeNull();
+  });
+
+  it('returns the log row id only for an email that reached the transport (WP-93: RAAlertDelivery.emailLogId)', async () => {
+    // sent: the id of its row
+    const ok = fakeTransport();
+    registerEmailTransport('resend', ok.t);
+    const sentResult = await sendEmail({ template: 'test.reset', to: 'a@b.test', brand: 'roboapply', params: { url: 'u' } }, deps());
+    expect(sentResult.status).toBe('sent');
+    // failed at the provider: still "the email" of this send
+    const bad = fakeTransport({ ok: false, error: 'provider 500' });
+    registerEmailTransport('resend', bad.t);
+    const failedResult = await sendEmail({ template: 'test.reset', to: 'a@b.test', brand: 'roboapply', params: { url: 'u' } }, deps());
+    expect(failedResult).toMatchObject({ status: 'failed', reason: 'provider 500' });
+    // gated (alert with the preference gate closed) and skipped (bad address, no transport): a row is logged, no id is returned
+    setEmailPreferenceGate(async () => false);
+    const gated = await sendEmail({ template: 'test.alert', to: 'a@b.test', userId: 'u1', brand: 'roboapply', params: { count: 2 } }, deps());
+    const skipped = await sendEmail({ template: 'test.reset', to: 'nobody', brand: 'roboapply', params: { url: 'u' } }, deps());
+    const noTransport = await sendEmail({ template: 'test.reset', to: 'a@b.test', brand: 'goapply', params: { url: 'u' } }, { db: db as unknown as EmailDb, env: { JWT_SECRET: 'jwt-test-secret' } });
+    const rows = db.$rows('rAEmailLog');
+    expect(rows.map((r) => r.status)).toEqual(['sent', 'failed', 'suppressed', 'suppressed', 'suppressed']);
+    expect(sentResult.logId).toBe(rows[0]!.id);
+    expect(failedResult.logId).toBe(rows[1]!.id);
+    expect(gated).toEqual({ status: 'suppressed', reason: 'preference_off', logId: null });
+    expect(skipped).toEqual({ status: 'suppressed', reason: 'invalid_address', logId: null });
+    expect(noTransport).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
   });
 
   it('needs a brand: explicit or from context', async () => {

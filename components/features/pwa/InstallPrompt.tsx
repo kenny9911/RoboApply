@@ -6,7 +6,10 @@
 // session on, only when the browser can install (Chromium's captured
 // `beforeinstallprompt`, or iOS Safari's manual Add to Home Screen), never
 // when already installed or inside WeChat. It is an unprompted popup, so it
-// asks lib/ui/popupGate.ts first (one per page view, 24 h between popups).
+// asks lib/ui/popupGate.ts first (one per page view, 24 h between popups) with
+// its own `install_prompt` priority, the lowest: when "What's new", a survey,
+// the extension prompt or an offer asks in the same moment, that one is shown
+// and the install prompt waits for another visit (it has not been marked shown).
 // Not an app-download modal: a bottom sheet with "Install" / "Not now".
 //
 // Mounted once in the authenticated shell (layout slot; see the WP-61 handoff).
@@ -22,6 +25,7 @@ import { useInstallPrompt } from '../../../hooks/pwa';
 import styles from './pwa.module.css';
 
 export const PWA_INSTALL_POPUP_KEY = 'pwa:install';
+export const PWA_INSTALL_POPUP_PRIORITY = 'install_prompt' as const;
 
 export function PwaInstallPrompt() {
   const t = useTranslations('pwa.install');
@@ -31,7 +35,7 @@ export function PwaInstallPrompt() {
   // Latch: once granted, keep the platform we offered even after markShown().
   const [offered, setOffered] = useState<'prompt' | 'ios' | null>(null);
   const [open, setOpen] = useState(false);
-  const { granted } = usePopupGate(PWA_INSTALL_POPUP_KEY, 'announcement', { enabled: authed && prompt.eligible && offered === null });
+  const { granted } = usePopupGate(PWA_INSTALL_POPUP_KEY, PWA_INSTALL_POPUP_PRIORITY, { enabled: authed && prompt.eligible && offered === null });
 
   useEffect(() => {
     if (!granted || offered !== null || !prompt.platform) return;

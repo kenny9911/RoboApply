@@ -187,7 +187,48 @@ describe('SubscribeOnTap inside WeChat', () => {
     expect(api.subscribeWechatMessages).toHaveBeenLastCalledWith(expect.objectContaining({ results: { deadline_reminder: 'reject' } }));
   });
 
-  it('points to notification settings when WeChat is off there', async () => {
+  it('sends what the reminder is about and tells the caller the answer before the control’s click runs', async () => {
+    const order: string[] = [];
+    const onAnswer = vi.fn((a: { accepted: boolean }) => void order.push(`answer:${a.accepted}`));
+    const onClick = vi.fn(() => void order.push('click'));
+    const { container } = renderWithBrand(
+      <SubscribeOnTap template="deadline_reminder" eventId="ev_1" onAnswer={onAnswer}>
+        <button type="button" onClick={onClick}>
+          截止提醒
+        </button>
+      </SubscribeOnTap>,
+      { brand: 'goapply', flags: onFlags },
+    );
+    await waitFor(() => expect(openTag(container)).not.toBeNull());
+    act(() => {
+      openTag(container)!.dispatchEvent(successEvent({ [TPL]: JSON.stringify({ status: 'accept' }) }));
+    });
+    expect(api.subscribeWechatMessages).toHaveBeenCalledWith({ templateKeys: ['deadline_reminder'], scene: 'campus_deadline', eventId: 'ev_1', results: { deadline_reminder: 'accept' } });
+    expect(order).toEqual(['answer:true', 'click']);
+    // Refused, then a WeChat error: the caller hears "not accepted" each time, and the reminder still runs.
+    act(() => {
+      openTag(container)!.dispatchEvent(successEvent({ [TPL]: JSON.stringify({ status: 'reject' }) }));
+    });
+    act(() => {
+      openTag(container)!.dispatchEvent(new CustomEvent('error', { detail: { errCode: 1 } }));
+    });
+    expect(order).toEqual(['answer:true', 'click', 'answer:false', 'click', 'answer:false', 'click']);
+    await act(async () => undefined);
+  });
+
+  it('an accepted prompt needs no trip to the settings: no notice when the server turned WeChat on', async () => {
+    // What the server answers after an accept with no earlier choice (the default): recorded, and WeChat is on.
+    const { container } = renderTap();
+    await waitFor(() => expect(openTag(container)).not.toBeNull());
+    act(() => {
+      openTag(container)!.dispatchEvent(successEvent({ [TPL]: JSON.stringify({ status: 'accept' }) }));
+    });
+    await act(async () => undefined);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('link', { name: enStaging.notifyCn.subscribe.settingsLink })).toBeNull();
+  });
+
+  it('only someone who turned WeChat off in settings is told the reminder stays in the inbox', async () => {
     api.subscribeWechatMessages.mockResolvedValueOnce({ recorded: ['deadline_reminder'], canDeliver: true, wechatChannelOn: false });
     const { container } = renderTap();
     await waitFor(() => expect(openTag(container)).not.toBeNull());

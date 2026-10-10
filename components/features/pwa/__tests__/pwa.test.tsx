@@ -371,6 +371,31 @@ describe('PwaInstallPrompt', () => {
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 
+  it('asks the gate as install_prompt, the lowest priority: news asking in the same moment is shown and the install prompt is not used up', async () => {
+    window.localStorage.setItem(PWA_SESSION_COUNT_KEY, '1');
+    const queue: Array<() => void> = [];
+    const gate = createPopupGate({ now: () => Date.now(), loadLocal: () => null, saveLocal: () => undefined, persist: () => undefined, schedule: (fn) => void queue.push(fn) });
+    __setPopupGate(gate);
+    gate.notePageView('/jobs');
+    const asked = vi.spyOn(gate, 'request');
+    const net = installFetch({ [`GET ${UI}`]: () => ok(uiState()), [`PATCH ${UI}`]: () => ok(uiState()) });
+    renderUi(<PwaInstallPrompt />);
+    fireInstallEvent();
+    await waitFor(() => expect(asked).toHaveBeenCalledWith('pwa:install', 'install_prompt', { essential: false }));
+    // "What's new" mounts in the same moment, after the install prompt asked.
+    const news = gate.request('announcement:a1', 'announcement');
+    await act(async () => {
+      queue.splice(0).forEach((fn) => fn());
+      await Promise.resolve();
+    });
+    expect(await news).toBe(true);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId('pwa-install-prompt')).toBeNull();
+    // Not shown, so not marked as shown: it can be offered on a later visit.
+    expect(net.to('PATCH', UI)).toHaveLength(0);
+    expect(window.localStorage.getItem(PWA_INSTALL_SHOWN_KEY)).toBeNull();
+  });
+
   it('stays hidden when the account already saw it or another popup holds the page view', async () => {
     window.localStorage.setItem(PWA_SESSION_COUNT_KEY, '3');
     window.sessionStorage.setItem(PWA_SESSION_MARK_KEY, '1');

@@ -1,9 +1,10 @@
 // server/src/features/notify-cn/index.ts — public surface (FND-5; owner WP-73).
 //
 // Other areas import notify-cn only from here:
-//   - `notifyCnService().sendNotice({ userId, template, params, href, notificationId })`
-//     for producers that write their own inbox row (campus 网申截止 WP-58,
-//     practice report ready, WeChat Pay success). Params per template:
+//   - `notifyCnService().sendNotice({ userId, template, params, href, notificationId, eventId })`
+//     for producers that write their own inbox row (campus 网申截止 WP-58 — wired:
+//     the final reminder of a 'wechat' subscription; practice report ready and
+//     WeChat Pay success are not wired yet). Params per template:
 //     `NOTICE_PARAM_SCHEMAS` (contract.ts). Returns a DeliveryResult; never
 //     throws for expected skips.
 //   - the `wechat_mp` delivery channel is registered with

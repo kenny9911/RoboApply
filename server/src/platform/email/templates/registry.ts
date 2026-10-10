@@ -22,7 +22,7 @@
 // `email.send` must make sure the template module is imported by the worker
 // (WP-39a's notifications/workers.ts imports its senders' template modules).
 
-import type { ProductBrand } from '../../brand/registry.js';
+import type { Market, ProductBrand } from '../../brand/registry.js';
 import type { EmailTranslator } from '../i18n.js';
 import type { UnsubscribeList } from '../unsubscribe.js';
 import type { EmailCategory } from './_shell.js';
@@ -53,6 +53,12 @@ export interface EmailTemplate<P = Record<string, unknown>> {
   category: EmailCategory;
   /** List an unsubscribe removes the person from; defaults by category. */
   list?: UnsubscribeList;
+  /**
+   * Markets the email exists in (default: every market). `sendEmail` never
+   * sends it on a brand of another market (suppressed, `not_for_market`):
+   * e.g. the GoApply campus-calendar notices have nothing to link to on RoboApply.
+   */
+  markets?: readonly Market[];
   render(ctx: TemplateContext<P>): TemplateBody;
 }
 

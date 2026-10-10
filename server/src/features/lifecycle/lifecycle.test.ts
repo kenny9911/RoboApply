@@ -10,7 +10,7 @@ import { NOTIFY_TEMPLATES } from '../../platform/email/templates/notify/index.js
 import type { NotifyMessage } from '../alerts/deliver.js';
 import type { PreferenceFacts } from '../alerts/preferences.js';
 import type { Recipient } from '../alerts/repo.js';
-import type { LifecyclePerson, LifecycleRepo } from './repo.js';
+import { createPrismaLifecycleRepo, resumeCheckViewSignalSince, type LifecyclePerson, type LifecycleRepo, type PrismaLifecycleRepoOptions } from './repo.js';
 import { LIFECYCLE_STEPS, TIPS_STEPS, dayBudgetUsed, eligibleSteps, stepForTemplate, type SentRecord } from './rules.js';
 import { CANDIDATE_PAGE, canSendWith, createLifecycleTask, runForPerson, type LifecycleDeps } from './service.js';
 
@@ -91,8 +91,6 @@ describe('lifecycle rules (PRODUCT §7.3)', () => {
     expect(eligibleSteps(p, NOW, false)).toEqual([]);
   });
 
-  // Row 4 end to end needs a reliable server-side view signal; until then the repo reports `viewed: null`.
-  it.todo('SR-39a-1: the repo reads RAResumeGrade.viewedAt (stamped by WP-22) and row 4 goes out when the check is unopened after 24 h');
 
   it('day 3 tailoring tip and day 5 practice tip only with "Tips and reminders" on', () => {
     const p = person({ createdAt: new Date(NOW.getTime() - 5 * DAY - HOUR), onboardingStep: 'done', history: [sent('welcome', new Date(NOW.getTime() - 5 * DAY))] });
@@ -241,6 +239,26 @@ describe('lifecycle service', () => {
     expect(await runForPerson(p, recipient('goapply'), prefs({ brand: 'goapply', country: 'CN', tipsGranted: true, ...tz }), cn, on.deps, noon)).toEqual({ sent: 'tips_first_tailor' });
   });
 
+  it('the tailoring tip with no job to name opens the job list, or the resume page where the job list is closed', async () => {
+    const p = person({ brand: 'goapply', createdAt: new Date(NOW.getTime() - 5 * DAY - HOUR), onboardingStep: 'done', history: [sent('welcome', new Date(NOW.getTime() - 5 * DAY))] });
+    const cn = getBrand('goapply');
+    const cnPrefs = prefs({ brand: 'goapply', country: 'CN', tipsGranted: true, timeZone: 'Asia/Shanghai' });
+    const noon = new Date('2026-10-10T04:00:00Z'); // 12:00 Shanghai
+    // GoApply with the recruitment-info mode off: no posting is named and /jobs is closed.
+    const closed = makeDeps(p, { topJob: null });
+    expect(await runForPerson(p, recipient('goapply'), cnPrefs, cn, { ...closed.deps, jobsOpen: () => false }, noon)).toEqual({ sent: 'tips_first_tailor' });
+    expect(closed.sentMsgs[0]).toMatchObject({ templateKey: NOTIFY_TEMPLATES.tipsFirstTailor, params: { job: null, fallbackHref: '/resume' }, href: '/resume' });
+    // The job list is open but nothing fits yet: the list itself.
+    const open = makeDeps(p, { topJob: null });
+    expect(await runForPerson(p, recipient('goapply'), cnPrefs, cn, { ...open.deps, jobsOpen: () => true }, noon)).toEqual({ sent: 'tips_first_tailor' });
+    expect(open.sentMsgs[0]).toMatchObject({ params: { job: null }, href: '/jobs' });
+    expect(open.sentMsgs[0]!.params).not.toHaveProperty('fallbackHref');
+    // A job to name wins wherever it is allowed.
+    const fit = makeDeps(p);
+    await runForPerson(p, recipient('goapply'), cnPrefs, cn, { ...fit.deps, jobsOpen: () => true }, noon);
+    expect(fit.sentMsgs[0]).toMatchObject({ params: { job: { id: 'j1' } }, href: '/jobs/j1?from=tips' });
+  });
+
   it('the practice tip needs a real unused credit (it replaces the Friday nudge)', async () => {
     const p = person({ createdAt: new Date(NOW.getTime() - 5 * DAY - HOUR), onboardingStep: 'done', hasTailored: true, history: [sent('welcome', new Date(NOW.getTime() - 5 * DAY))] });
     const none = makeDeps(p, { credits: 0 });
@@ -313,5 +331,135 @@ describe('lifecycle service', () => {
     expect(await canSendWith('u1', 'tips_practice', NOW, de)).toBe(false);
     const busy = makeDeps(person({ history: [sent('interview_date_reminder', new Date(NOW.getTime() - HOUR))] }));
     expect(await canSendWith('u1', 'follow_up_reminder', NOW, busy.deps)).toBe(false);
+  });
+});
+
+// ── Repo: the resume-check view signal (SR-39a-1) ────────────────────────
+
+type GradeRow = { userId: string; variantId: string; completedAt: Date | null; counts: unknown; viewedAt: Date | null };
+
+/** The reads `people()` makes, over fixed rows (no database). */
+function lifecycleDb(grades: GradeRow[], opts: { createdAt?: Date } = {}) {
+  const gradeArgs: Array<{ select?: Record<string, unknown> }> = [];
+  const none = { findMany: async () => [] };
+  const db = {
+    user: {
+      findMany: async () => [
+        {
+          id: 'u1',
+          brand: 'roboapply',
+          createdAt: opts.createdAt ?? new Date(NOW.getTime() - 2 * DAY),
+          lastActiveAt: new Date(NOW.getTime() - 30 * HOUR),
+          seekerProfile: { onboardingStep: 'done', onboardingCompletedAt: new Date(NOW.getTime() - 2 * DAY) },
+          raProfile: null,
+        },
+      ],
+    },
+    // The welcome row already went out, so row 4 is the next one due.
+    seekerNotification: { findMany: async () => [{ userId: 'u1', templateKey: NOTIFY_TEMPLATES.welcome, createdAt: new Date(NOW.getTime() - 2 * DAY) }] },
+    rAEmailLog: none,
+    rARateCounter: none,
+    rAResumeGrade: {
+      findMany: async (args: { select?: Record<string, unknown> }) => {
+        gradeArgs.push(args);
+        return grades;
+      },
+    },
+    rATailorSession: none,
+    mockInterviewCreditLedger: none,
+    rASearchProfile: none,
+  };
+  return { getDb: (async () => db) as unknown as NonNullable<PrismaLifecycleRepoOptions['getDb']>, gradeArgs };
+}
+
+const grade = (over: Partial<GradeRow> = {}): GradeRow => ({
+  userId: 'u1',
+  variantId: 'rv1',
+  completedAt: new Date(NOW.getTime() - 25 * HOUR),
+  counts: { urgent: 2, critical: 1, optional: 4 },
+  viewedAt: null,
+  ...over,
+});
+
+describe('lifecycle repo: resume check view signal (SR-39a-1)', () => {
+  const brand = getBrand('roboapply');
+  // The stamp went live 10 days ago: every check in these tests was completed after it, unless a test says otherwise.
+  const env = { RESUME_CHECK_VIEW_SIGNAL_SINCE: new Date(NOW.getTime() - 10 * DAY).toISOString() };
+
+  it('reads RAResumeGrade.viewedAt, and row 4 goes out when the check is unopened after 24 h', async () => {
+    const { getDb, gradeArgs } = lifecycleDb([grade()]);
+    const repo = createPrismaLifecycleRepo({ getDb, env });
+    const p = (await repo.people(['u1'], NOW)).get('u1')!;
+    expect(gradeArgs[0]!.select).toMatchObject({ viewedAt: true });
+    expect(p.resumeCheck).toEqual({ resumeId: 'rv1', completedAt: new Date(NOW.getTime() - 25 * HOUR), issueCount: 3, viewed: false });
+    expect(eligibleSteps(p, NOW, false)).toEqual(['resume_check_ready']);
+    // End to end through the service: the message names the real resume and the real count.
+    const { deps, sentMsgs, recorded } = makeDeps(p);
+    expect(await runForPerson(p, recipient(), prefs(), brand, { ...deps, repo: { ...deps.repo, people: repo.people } }, NOW)).toEqual({ sent: 'resume_check_ready' });
+    expect(sentMsgs[0]).toMatchObject({
+      category: 'reminder',
+      templateKey: NOTIFY_TEMPLATES.resumeCheckReady,
+      params: { resumeId: 'rv1', issueCount: 3 },
+      href: '/resume/rv1/check',
+    });
+    expect(recorded).toEqual([{ userId: 'u1', templateKey: NOTIFY_TEMPLATES.resumeCheckReady, at: NOW }]);
+  });
+
+  it('an opened check is never announced: the first check, or any later one the person opened', async () => {
+    const opened = createPrismaLifecycleRepo({ env, getDb: lifecycleDb([grade({ viewedAt: new Date(NOW.getTime() - 20 * HOUR) })]).getDb });
+    const a = (await opened.people(['u1'], NOW)).get('u1')!;
+    expect(a.resumeCheck?.viewed).toBe(true);
+    expect(eligibleSteps(a, NOW, false)).toEqual([]);
+    // First check unopened, but they ran and opened a second one.
+    const later = createPrismaLifecycleRepo({
+      env,
+      getDb: lifecycleDb([grade(), grade({ variantId: 'rv2', completedAt: new Date(NOW.getTime() - 3 * HOUR), viewedAt: new Date(NOW.getTime() - 2 * HOUR) })]).getDb,
+    });
+    const b = (await later.people(['u1'], NOW)).get('u1')!;
+    expect(b.resumeCheck).toMatchObject({ resumeId: 'rv1', viewed: true });
+    expect(eligibleSteps(b, NOW, false)).toEqual([]);
+  });
+
+  it('not before 24 h, and no check means no message', async () => {
+    const fresh = createPrismaLifecycleRepo({ env, getDb: lifecycleDb([grade({ completedAt: new Date(NOW.getTime() - 2 * HOUR) })]).getDb });
+    expect(eligibleSteps((await fresh.people(['u1'], NOW)).get('u1')!, NOW, false)).toEqual([]);
+    const noCheck = createPrismaLifecycleRepo({ env, getDb: lifecycleDb([]).getDb });
+    const p = (await noCheck.people(['u1'], NOW)).get('u1')!;
+    expect(p.resumeCheck).toBeNull();
+    expect(eligibleSteps(p, NOW, false)).toEqual([]);
+  });
+
+  it('a check completed before the stamp went live is "not known", never "unopened": nothing is sent for it', async () => {
+    // Completed 25 h ago, stamp live since 2 h ago: viewedAt is null whether or not the person read it.
+    const cutoff = { RESUME_CHECK_VIEW_SIGNAL_SINCE: new Date(NOW.getTime() - 2 * HOUR).toISOString() };
+    const before = createPrismaLifecycleRepo({ env: cutoff, getDb: lifecycleDb([grade()]).getDb });
+    const p = (await before.people(['u1'], NOW)).get('u1')!;
+    expect(p.resumeCheck).toMatchObject({ resumeId: 'rv1', viewed: null });
+    expect(eligibleSteps(p, NOW, false)).toEqual([]);
+    // Opened since (the stamp is there): known as viewed.
+    const openedSince = createPrismaLifecycleRepo({ env: cutoff, getDb: lifecycleDb([grade({ viewedAt: new Date(NOW.getTime() - HOUR) })]).getDb });
+    expect((await openedSince.people(['u1'], NOW)).get('u1')!.resumeCheck?.viewed).toBe(true);
+    // The go-live time is not set, or cannot be read: no check is known as unopened (row 4 stays off).
+    for (const unset of [{}, { RESUME_CHECK_VIEW_SIGNAL_SINCE: '' }, { RESUME_CHECK_VIEW_SIGNAL_SINCE: 'soon' }]) {
+      const repo = createPrismaLifecycleRepo({ env: unset, getDb: lifecycleDb([grade()]).getDb });
+      const q = (await repo.people(['u1'], NOW)).get('u1')!;
+      expect(q.resumeCheck?.viewed).toBeNull();
+      expect(eligibleSteps(q, NOW, false)).toEqual([]);
+    }
+    expect(resumeCheckViewSignalSince({ RESUME_CHECK_VIEW_SIGNAL_SINCE: '2026-10-12T00:00:00Z' })).toEqual(new Date('2026-10-12T00:00:00Z'));
+    expect(resumeCheckViewSignalSince({})).toBeNull();
+  });
+
+  it('GoApply in recruitment-info mode off: the tailoring tip names no posting', async () => {
+    const scores = vi.fn(async () => [{ jobId: 'job_gh', score: 90, job: { title: '产品经理', companyName: '示例科技' } }]);
+    const db = { rAJobMatchScore: { findMany: scores }, rAJobUserState: { findMany: async () => [] } };
+    const getDb = (async () => db) as unknown as NonNullable<PrismaLifecycleRepoOptions['getDb']>;
+    const off = createPrismaLifecycleRepo({ getDb, env: { CN_RECRUITMENT_INFO_MODE: 'off' } });
+    expect(await off.topFitJob('u1', 'cn')).toBeNull();
+    expect(scores).not.toHaveBeenCalled();
+    const on = createPrismaLifecycleRepo({ getDb, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } });
+    expect(await on.topFitJob('u1', 'cn')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
+    // RoboApply is not affected by the GoApply mode.
+    expect(await off.topFitJob('u1', 'intl')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
   });
 });

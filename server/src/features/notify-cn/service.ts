@@ -2,7 +2,11 @@
 //
 //   recordSubscribe   POST /notify-cn/subscribe-messages: store each accepted
 //                     one-time prompt (only for accounts linked to the 公众号;
-//                     otherwise nothing could ever be delivered, so nothing is kept)
+//                     otherwise nothing could ever be delivered, so nothing is kept).
+//                     Accepting the prompt IS the opt-in to WeChat for that
+//                     kind of message: the category's channel choice gets
+//                     WeChat added unless the person turned WeChat off in
+//                     Settings (only that explicit "off" blocks delivery)
 //   jsSdkConfig       GET /notify-cn/js-sdk-signature: JS-SDK config for a
 //                     GoApply page URL (share card + subscribe prompt)
 //   sendNotice        what producers and the `wechat_mp` delivery channel call:
@@ -59,6 +63,11 @@ export interface NotifyCnServiceDeps {
   now?: () => Date;
   /** The person's notification settings (WP-39b); lazy by default. */
   preferences?: (userId: string, brand: ProductBrand) => Promise<NotificationPreferencesView | null>;
+  /**
+   * Turn WeChat on for a category after an accepted prompt, unless the person
+   * turned it off in Settings (WP-39b `enableChannelIfDefault`); lazy by default.
+   */
+  optInWechat?: (userId: string, brand: ProductBrand, category: string) => Promise<unknown>;
 }
 
 export type NoticeOutcome = DeliveryResult & { skippedReason?: WechatSkipReason | 'error' };
@@ -75,6 +84,12 @@ export async function loadPreferences(userId: string, brand: ProductBrand): Prom
   return (await import('../notifications/index.js')).notificationCenterService.preferencesFor(userId, brand);
 }
 
+/** Lazy, like `loadPreferences`. Locked categories (billing) have no choice to make and answer 'not_applicable'. */
+export async function optInWechatChannel(userId: string, brand: ProductBrand, category: string): Promise<unknown> {
+  const { notificationCenterService } = await import('../notifications/index.js');
+  return notificationCenterService.enableChannelIfDefault(userId, brand, category as 'reminder', 'wechat');
+}
+
 /** Same-site path only (no scheme, no `//host`, no backslash). */
 export function safePath(href: string | null | undefined): string | null {
   return typeof href === 'string' && href.startsWith('/') && !href.startsWith('//') && !href.includes('\\') && href.length <= 500 ? href : null;
@@ -86,6 +101,7 @@ export class NotifyCnService {
   private readonly env: () => EnvSource;
   private readonly now: () => Date;
   private readonly preferences: (userId: string, brand: ProductBrand) => Promise<NotificationPreferencesView | null>;
+  private readonly optInWechat: (userId: string, brand: ProductBrand, category: string) => Promise<unknown>;
 
   constructor(deps: NotifyCnServiceDeps = {}) {
     this.repo = deps.repo ?? createPrismaNotifyCnRepo();
@@ -93,6 +109,22 @@ export class NotifyCnService {
     this.env = () => deps.env ?? process.env;
     this.now = deps.now ?? (() => new Date());
     this.preferences = deps.preferences ?? loadPreferences;
+    this.optInWechat = deps.optInWechat ?? optInWechatChannel;
+  }
+
+  /**
+   * An accepted prompt is the person's "yes" to WeChat for these templates'
+   * categories. Best effort: a failed write leaves the grant in place and the
+   * person can still switch WeChat on in Settings.
+   */
+  private async optIn(userId: string, brand: ProductBrand, templates: readonly WechatTemplateKey[]): Promise<void> {
+    for (const category of new Set(templates.map((k) => CATEGORY_FOR_TEMPLATE[k]))) {
+      try {
+        await this.optInWechat(userId, brand, category);
+      } catch (err) {
+        logger.warn('NOTIFY_CN', 'could not turn WeChat on for the category after an accepted prompt', { category, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
   }
 
   /** `notify.wechat` on for GoApply (credentials present). */
@@ -128,6 +160,8 @@ export class NotifyCnService {
       .map((g) => ({ templateKey: g.key, templateId: g.cfg.id, scene: body.scene, eventId: body.eventId ?? null, source: 'client' as const }));
     const stored = grants.length ? await this.repo.addGrants(userId, brand.id, grants, now) : {};
     const recorded = WECHAT_TEMPLATE_KEYS.filter((k) => (stored[k] ?? 0) > 0);
+    // Before the settings are read below, so `wechatChannelOn` already reflects the opt-in.
+    if (recorded.length) await this.optIn(userId, brand, recorded);
 
     const relevant = recorded.length ? recorded : requested;
     const prefs = relevant.length ? await this.preferences(userId, brand) : null;
@@ -299,7 +333,11 @@ export class NotifyCnService {
       const dedupeKey = createTime ? `wx:${openid}:${createTime}:${item.TemplateId}` : null;
       return key ? [{ templateKey: key, templateId: item.TemplateId!, source: 'wechat' as const, dedupeKey }] : [];
     });
-    if (grants.length) await this.repo.addGrants(userId, brand.id, grants, this.now());
+    if (grants.length) {
+      await this.repo.addGrants(userId, brand.id, grants, this.now());
+      // The same opt-in as the page's report, in case that report never arrived.
+      await this.optIn(userId, brand, grants.map((g) => g.templateKey));
+    }
   }
 
   /** The person turned a template off in WeChat's settings: their remaining grants for it are void. */

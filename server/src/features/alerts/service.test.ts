@@ -23,7 +23,7 @@ interface World {
   jobs: Array<JobCardRow & { firstSeenAt: Date; postedAt: Date | null; market: string }>;
   hidden: Set<string>;
   tracked: Set<string>;
-  deliveries: Array<{ id: string; userId: string; searchProfileId: string; kind: string; jobIds: string[]; sentAt: Date }>;
+  deliveries: Array<{ id: string; userId: string; searchProfileId: string; kind: string; jobIds: string[]; sentAt: Date; emailLogId?: string | null }>;
   scores: Map<string, ScoredJob>;
   noReply: number;
   claimFails: boolean;
@@ -104,6 +104,10 @@ function makeRepo(w: World): AlertsRepo {
       w.deliveries.push(row);
       return { id: row.id };
     },
+    async setDeliveryEmailLog(deliveryId, emailLogId) {
+      const d = w.deliveries.find((x) => x.id === deliveryId);
+      if (d) d.emailLogId = emailLogId;
+    },
     async jobCards(ids) {
       return w.jobs.filter((j) => ids.includes(j.id));
     },
@@ -175,31 +179,33 @@ interface Harness {
   preScore: ReturnType<typeof vi.fn>;
 }
 
-function harness(w: World, opts: { planMax?: number; prefs?: Partial<PreferenceFacts>; alertsEnabled?: boolean; emailEnabled?: boolean } = {}): Harness {
+function harness(
+  w: World,
+  opts: { planMax?: number; prefs?: Partial<PreferenceFacts>; alertsEnabled?: boolean; emailEnabled?: boolean; emailResult?: (n: number) => SendEmailResult } = {},
+): Harness {
   const inApp: InAppRow[] = [];
   const emails: SendEmailInput[] = [];
   const deliverDeps: DeliverDeps = {
     createInApp: async (row) => (inApp.push(row), { id: `n${inApp.length}` }),
     markEmailed: async () => undefined,
-    sendEmail: async (input): Promise<SendEmailResult> => (emails.push(input), { status: 'sent', provider: 'resend' }),
+    // Like the platform `sendEmail`: a sent email answers with its RAEmailLog id.
+    sendEmail: async (input): Promise<SendEmailResult> => (emails.push(input), opts.emailResult?.(emails.length) ?? { status: 'sent', provider: 'resend', logId: `log${emails.length}` }),
     channels: (b) => deliveryChannels(b.id),
     emailEnabled: () => opts.emailEnabled ?? true,
     now: () => w.clock.now,
   };
   const preScore = vi.fn(async (_userId: string, ids: string[]) => ids.flatMap((id) => (w.scores.has(id) ? [w.scores.get(id)!] : [])));
-  return {
-    inApp,
-    emails,
+  const deps: JobAlertsDeps = {
+    repo: makeRepo(w),
+    // The one candidate seam; reads `deps.repo` at call time so a test can swap the repo.
+    candidates: (q) => deps.repo.candidateJobIds(q),
+    prefs: { load: async () => prefsFor(opts.prefs) },
     preScore,
-    deps: {
-      repo: makeRepo(w),
-      prefs: { load: async () => prefsFor(opts.prefs) },
-      preScore,
-      planInstantMax: async () => opts.planMax ?? 100,
-      deliver: (msg) => deliverMessage(msg, deliverDeps),
-      alertsEnabled: () => opts.alertsEnabled ?? true,
-    },
+    planInstantMax: async () => opts.planMax ?? 100,
+    deliver: (msg) => deliverMessage(msg, deliverDeps),
+    alertsEnabled: () => opts.alertsEnabled ?? true,
   };
+  return { inApp, emails, preScore, deps };
 }
 
 function ctx(w: World, brandId: BrandId = 'roboapply'): CronContext {
@@ -230,6 +236,46 @@ describe('job-alerts: instant', () => {
     // the pre-score never sees excluded jobs
     expect(h.preScore.mock.calls[0]![1]).not.toContain('j3');
     expect(w.profiles[0]!.alertLastInstantAt).toEqual(w.clock.now);
+  });
+
+  it('stores the email log id on the delivery when an email carried the alert (RAAlertDelivery.emailLogId)', async () => {
+    const w = makeWorld();
+    const h = harness(w);
+    await createJobAlertsTask(() => h.deps)(ctx(w));
+    expect(h.emails).toHaveLength(1);
+    expect(w.deliveries[0]).toMatchObject({ kind: 'instant', emailLogId: 'log1' });
+  });
+
+  it('leaves emailLogId empty when no email went out (email off, or the send was gated)', async () => {
+    const off = makeWorld();
+    await createJobAlertsTask(() => harness(off, { emailEnabled: false }).deps)(ctx(off));
+    expect(off.deliveries).toHaveLength(1);
+    expect(off.deliveries[0]!.emailLogId ?? null).toBeNull();
+    // Gated by the preference gate: sendEmail answers suppressed with no log id.
+    const gated = makeWorld();
+    const h = harness(gated, { emailResult: () => ({ status: 'suppressed', reason: 'preference_off', logId: null }) });
+    await createJobAlertsTask(() => h.deps)(ctx(gated));
+    expect(h.emails).toHaveLength(1);
+    expect(gated.deliveries[0]!.emailLogId ?? null).toBeNull();
+    // The in-app row is still written: the alert itself was delivered.
+    expect(h.inApp).toHaveLength(1);
+  });
+
+  it('a failed link write never fails the alert', async () => {
+    const w = makeWorld();
+    const h = harness(w);
+    h.deps.repo = { ...h.deps.repo, setDeliveryEmailLog: async () => { throw new Error('db down'); } };
+    expect(await createJobAlertsTask(() => h.deps)(ctx(w))).toMatchObject({ instantSent: 1, errors: 0 });
+  });
+
+  it('takes its candidates from the one injectable seam (join J4 points it at the feed)', async () => {
+    const w = makeWorld();
+    const h = harness(w);
+    const asked: Array<{ searchProfileId: string; userId: string; market: string; limit: number }> = [];
+    h.deps.candidates = async (q) => (asked.push({ searchProfileId: q.searchProfileId, userId: q.userId, market: q.market, limit: q.limit }), { ids: ['j3'], truncated: false });
+    await createJobAlertsTask(() => h.deps)(ctx(w));
+    expect(asked).toEqual([{ searchProfileId: 'sp1', userId: 'u1', market: 'intl', limit: 100 }]);
+    expect(w.deliveries[0]!.jobIds).toEqual(['j3']);
   });
 
   it('never sends a zero-job alert (nothing new, or nothing at Possible or better)', async () => {

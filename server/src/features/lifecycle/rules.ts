@@ -111,7 +111,10 @@ export interface LifecycleFacts {
   /**
    * `viewed`: true / false when known, null when there is no reliable signal.
    * Null counts as viewed (fail closed): row 4 is sent only on a known
-   * "not viewed" (SR-39a-1 `RAResumeGrade.viewedAt`, stamped by WP-22).
+   * "not viewed". The repo reads it from `RAResumeGrade.viewedAt` (SR-39a-1),
+   * which the resume-check GET stamps on the owner's first read; a check
+   * completed before that stamp went live (RESUME_CHECK_VIEW_SIGNAL_SINCE) is
+   * null, never false.
    */
   resumeCheck: { resumeId: string; completedAt: Date; issueCount: number | null; viewed: boolean | null } | null;
   hasTailored: boolean;

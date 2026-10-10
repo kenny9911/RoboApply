@@ -13,6 +13,12 @@
 // scoped by the profile. Legacy auto-apply / recruiter-activity rows are never
 // shown (HIDDEN_LEGACY_TYPES).
 //
+// GoApply recruitment-info mode (R-14, R41-1b): while
+// `CN_RECRUITMENT_INFO_MODE=off` no inbox row that carries a third-party
+// posting is returned, counted or opened on GoApply (job-alert rows written
+// while the mode allowed postings, and any row whose params embed job cards).
+// The rows stay stored; they show again when the mode allows postings.
+//
 // Settings live in `SeekerProfile.notificationPreferences.center` (JSON; the
 // legacy keys beside it are kept). "Tips and reminders" is the
 // `tips_reminders` consent record; without one the regional default applies
@@ -65,7 +71,7 @@ import {
 
 export type NotificationsDb = Pick<
   typeof prisma,
-  'seekerNotification' | 'seekerProfile' | 'seekerConsentRecord' | 'user' | 'rAProfile' | 'rAAnonAlertSubscription' | 'rAPersonalInfoRequest' | '$transaction'
+  'seekerNotification' | 'seekerProfile' | 'seekerConsentRecord' | 'user' | 'rAProfile' | 'rAAnonAlertSubscription' | 'rAPersonalInfoRequest' | 'rAJob' | '$transaction'
 >;
 
 /** Which channels this account may use on this brand. */
@@ -90,6 +96,55 @@ export interface NotificationServiceDeps {
   env?: EnvSource;
   now?: () => Date;
   capabilities?: CapabilityResolver;
+}
+
+// ── Recruitment-info mode (GoApply) ─────────────────────────────────────
+
+/** Inbox templates whose whole message is a list of third-party postings (WP-39a job alerts and digests). */
+export const POSTING_TEMPLATE_KEYS: readonly string[] = ['notify.job_alert_instant', 'notify.job_alert_digest'];
+/**
+ * Templates whose params name one posting by id (`params.jobId`, with its
+ * title and company as flat params): the ready-list kit reminder (WP-52). The
+ * tracker's reminders also carry a `jobId`, but they are about the person's
+ * own applications and stay.
+ */
+export const JOB_REF_TEMPLATE_KEYS: readonly string[] = ['notify.kit_not_opened'];
+/**
+ * Other templates whose rows may name one posting: the tailoring tip embeds
+ * the person's top-fit posting as a card (`params.job`), and the kit reminder
+ * names one by id. Checked row by row; the unread count reads only these.
+ */
+export const MAY_EMBED_POSTING_TEMPLATE_KEYS: readonly string[] = ['notify.tips_first_tailor', ...JOB_REF_TEMPLATE_KEYS];
+/** Unread rows of those templates read per person for the count and "mark all read" (a person has a handful). */
+const MAY_EMBED_SCAN_LIMIT = 200;
+/** `relatedEntityType` of a job-alert delivery row. */
+export const POSTING_ENTITY_TYPE = 'alert_delivery';
+
+/**
+ * The `where` fragment that leaves out rows which are job alerts. Null-safe on
+ * purpose: SQL `NOT IN` drops NULLs, and most rows have no template key.
+ */
+export const NO_POSTING_ROWS_WHERE = {
+  AND: [
+    { OR: [{ templateKey: null }, { templateKey: { notIn: [...POSTING_TEMPLATE_KEYS] } }] },
+    { OR: [{ relatedEntityType: null }, { relatedEntityType: { not: POSTING_ENTITY_TYPE } }] },
+  ],
+};
+
+/** Job cards a row's params embed: `params.jobs` (alerts, digests) and `params.job` (tips). */
+export function embeddedPostings(params: unknown): Array<Record<string, unknown>> {
+  if (!isObject(params)) return [];
+  const out: Array<Record<string, unknown>> = [];
+  if (Array.isArray(params.jobs)) for (const j of params.jobs) if (isObject(j)) out.push(j);
+  if (isObject(params.job) && typeof params.job.title === 'string') out.push(params.job);
+  return out;
+}
+
+/** The posting a row names by id (`JOB_REF_TEMPLATE_KEYS`), or null. */
+export function referencedJobId(row: { templateKey?: string | null; params: unknown }): string | null {
+  if (!row.templateKey || !JOB_REF_TEMPLATE_KEYS.includes(row.templateKey) || !isObject(row.params)) return null;
+  const id = row.params.jobId;
+  return typeof id === 'string' && id ? id : null;
 }
 
 export interface ProfileRef {
@@ -161,6 +216,36 @@ export function decodeCursor(cursor: string | undefined): { createdAt: Date; id:
 
 // ── Stored settings (pure) ──────────────────────────────────────────────
 
+/** Channels that are opt-in per device or subscription (never part of the default). */
+export const OPT_IN_CHANNELS = ['push', 'wechat'] as const satisfies readonly NotificationChannel[];
+export type OptInChannel = (typeof OPT_IN_CHANNELS)[number];
+
+/**
+ * Keep `channelsOff` in step with a newly saved choice: an opt-in channel that
+ * was on and is now left out was turned off by the person; one that is in the
+ * list is on (again).
+ */
+export function noteChannelsOff(
+  center: StoredNotificationCenter,
+  cat: NotificationCategory,
+  previous: readonly NotificationChannel[] | undefined,
+  next: readonly NotificationChannel[],
+  /** Channels the account could use for this save. One that was not offered was not the person's to turn off. Absent = all. */
+  available?: ReadonlySet<NotificationChannel>,
+): void {
+  const off = new Set(center.channelsOff?.[cat] ?? []);
+  for (const ch of OPT_IN_CHANNELS) {
+    if (available && !available.has(ch)) continue;
+    if (next.includes(ch)) off.delete(ch);
+    else if (previous?.includes(ch)) off.add(ch);
+  }
+  const all = { ...(center.channelsOff ?? {}) };
+  if (off.size) all[cat] = [...off];
+  else delete all[cat];
+  if (Object.keys(all).length) center.channelsOff = all;
+  else delete center.channelsOff;
+}
+
 /** Tolerant read of `notificationPreferences.center`. */
 export function readCenter(raw: unknown): StoredNotificationCenter {
   const root = isObject(raw) ? raw : {};
@@ -173,6 +258,15 @@ export function readCenter(raw: unknown): StoredNotificationCenter {
       channels[cat as NotificationCategory] = normalizeChannelList(list);
     }
     out.channels = channels;
+  }
+  if (isObject(src.channelsOff)) {
+    const off: StoredNotificationCenter['channelsOff'] = {};
+    for (const [cat, list] of Object.entries(src.channelsOff)) {
+      if (!(NOTIFICATION_CATEGORIES as readonly string[]).includes(cat) || !Array.isArray(list)) continue;
+      const kept = list.filter((c): c is NotificationChannel => (OPT_IN_CHANNELS as readonly unknown[]).includes(c));
+      if (kept.length) off[cat as NotificationCategory] = [...new Set(kept)];
+    }
+    if (Object.keys(off).length) out.channelsOff = off;
   }
   if (isObject(src.quietHours) && typeof src.quietHours.start === 'string' && typeof src.quietHours.end === 'string') {
     out.quietHours = { start: src.quietHours.start, end: src.quietHours.end };
@@ -281,6 +375,17 @@ export function effectiveChannels(
     out[cat] = normalizeChannelList(base).filter((c) => avail.has(c));
   }
   return out;
+}
+
+/**
+ * The channel list a configurable category has while the person never chose:
+ * the inbox and email (push and WeChat are opt-in per device / subscription).
+ * Not filtered by availability, so storing it keeps email on for someone who
+ * adds an address later, exactly as the unstored default does.
+ */
+export function defaultChannelChoice(cat: NotificationCategory, legacy: { matchAlerts?: unknown } = {}): NotificationChannel[] {
+  if (cat === 'alert' && legacy.matchAlerts === false) return ['in_app'];
+  return ['in_app', 'email'];
 }
 
 /** The unsubscribe lists a category's email channel answers to. */
@@ -432,12 +537,75 @@ export class NotificationCenterService {
     this.caps = deps.capabilities ?? defaultCapabilities(deps.env);
   }
 
-  private baseWhere(profileId: string, brandId: string) {
+  private baseWhere(profileId: string, brandId: string, hidePostings = false) {
     return {
       seekerProfileId: profileId,
       type: { notIn: [...HIDDEN_LEGACY_TYPES] },
       OR: [{ brand: brandId }, { brand: null }],
+      ...(hidePostings ? NO_POSTING_ROWS_WHERE : {}),
     };
+  }
+
+  /** GoApply with the recruitment-info mode off: no inbox row may carry a third-party posting. */
+  private async hidesPostings(brand: ProductBrand): Promise<boolean> {
+    if (brand.market !== 'cn') return false;
+    const { cnJobCapabilities } = await import('../cn/jobs/index.js');
+    return !cnJobCapabilities(this.env).postings;
+  }
+
+  /**
+   * Second layer under `NO_POSTING_ROWS_WHERE`, for rows of any other template
+   * that name a posting, checked with the same rule as every other job reader
+   * (`filterCnPostings`):
+   *   - embedded job cards (`params.job`, `params.jobs`) are postings of the
+   *     brand's market;
+   *   - a row that names a posting by id (`JOB_REF_TEMPLATE_KEYS`: the kit
+   *     reminder) is checked against the stored job, so a kit for the person's
+   *     own imported job stays. When the job is gone the row is left out too:
+   *     nothing shows it was the person's own, and its link is dead anyway.
+   * A row that may not be shown is left out whole (its title and body were
+   * written from that posting). `viewerId` is the inbox owner's user id.
+   */
+  private async withoutPostings<T extends { params: unknown; templateKey?: string | null }>(rows: T[], brand: ProductBrand, viewerId: string | null): Promise<T[]> {
+    if (!rows.length || !(await this.hidesPostings(brand))) return rows;
+    const { filterCnPostings } = await import('../cn/jobs/index.js');
+    const jobIds = [...new Set(rows.map(referencedJobId).filter((id): id is string => id !== null))];
+    const jobs = jobIds.length
+      ? await this.db.rAJob.findMany({
+          where: { id: { in: jobIds } },
+          select: { id: true, market: true, visibility: true, ownerUserId: true, sourceBoard: true },
+        })
+      : [];
+    const jobOf = new Map(jobs.map((j) => [j.id, j]));
+    return rows.filter((row) => {
+      const cards = embeddedPostings(row.params).map((card) => ({ visibility: 'public', ...card, market: brand.market }));
+      if (filterCnPostings(cards, null, this.env).length !== cards.length) return false;
+      const jobId = referencedJobId(row);
+      if (!jobId) return true;
+      const job = jobOf.get(jobId);
+      return Boolean(job) && filterCnPostings([{ ...job!, market: brand.market }], viewerId, this.env).length === 1;
+    });
+  }
+
+  /**
+   * Ids of the unread rows the row check hides (rows the SQL filter cannot
+   * tell apart): empty unless the brand hides postings.
+   */
+  private async hiddenUnreadIds(where: Record<string, unknown>, brand: ProductBrand, viewerId: string | null): Promise<string[]> {
+    const maybe = await this.db.seekerNotification.findMany({
+      where: { ...where, templateKey: { in: [...MAY_EMBED_POSTING_TEMPLATE_KEYS] } },
+      select: { id: true, templateKey: true, params: true },
+      take: MAY_EMBED_SCAN_LIMIT,
+    });
+    if (!maybe.length) return [];
+    const shown = new Set((await this.withoutPostings(maybe, brand, viewerId)).map((r) => r.id));
+    return maybe.filter((r) => !shown.has(r.id)).map((r) => r.id);
+  }
+
+  /** The user id behind a seeker profile id (the viewer for the "own import" check). */
+  private async viewerOf(profileId: string): Promise<string | null> {
+    const p = await this.db.seekerProfile.findUnique({ where: { id: profileId }, select: { userId: true } });
+    return p?.userId ?? null;
   }
 
   async profileFor(userId: string): Promise<ProfileRef | null> {
@@ -451,14 +619,15 @@ export class NotificationCenterService {
     const limit = Math.min(Math.max(query.limit ?? DEFAULT_PAGE_SIZE, 1), 50);
     const after = decodeCursor(query.cursor);
     if (query.cursor && !after) throw new HttpError('invalid_request', 'The cursor is not valid.', { where: 'query', field: 'cursor' });
+    const base = this.baseWhere(profile.id, brand.id, await this.hidesPostings(brand));
     const where = after
       ? {
           AND: [
-            this.baseWhere(profile.id, brand.id),
+            base,
             { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] },
           ],
         }
-      : this.baseWhere(profile.id, brand.id);
+      : base;
     const rows = await this.db.seekerNotification.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -466,29 +635,41 @@ export class NotificationCenterService {
       select: VIEW_SELECT,
     });
     const page = rows.slice(0, limit);
+    // The cursor follows the stored rows, so a row left out below never stalls paging.
     const last = page[page.length - 1];
     return {
-      items: page.map((r) => toView(r)),
+      items: (await this.withoutPostings(page, brand, profile.userId)).map((r) => toView(r)),
       cursor: rows.length > limit && last ? encodeCursor(last) : null,
     };
   }
 
-  async unreadCountForProfile(profileId: string, brand: ProductBrand): Promise<number> {
-    return this.db.seekerNotification.count({ where: { ...this.baseWhere(profileId, brand.id), readAt: null } });
+  /** `viewerId` is the profile's user id; looked up when the caller does not have it. */
+  async unreadCountForProfile(profileId: string, brand: ProductBrand, viewerId?: string | null): Promise<number> {
+    const hide = await this.hidesPostings(brand);
+    const where = { ...this.baseWhere(profileId, brand.id, hide), readAt: null };
+    const count = await this.db.seekerNotification.count({ where });
+    if (!hide || !count) return count;
+    // The list also leaves out rows of other templates that name a posting
+    // (at most a few per person): take them off the count so the badge agrees.
+    const hidden = await this.hiddenUnreadIds(where, brand, viewerId ?? (await this.viewerOf(profileId)));
+    return Math.max(0, count - hidden.length);
   }
 
   /** Unread messages for a user (0 when the account has no seeker profile). */
   async unreadCount(userId: string, brand: ProductBrand): Promise<number> {
     const profile = await this.profileFor(userId);
-    return profile ? this.unreadCountForProfile(profile.id, brand) : 0;
+    return profile ? this.unreadCountForProfile(profile.id, brand, profile.userId) : 0;
   }
 
   private async ownRow(profile: ProfileRef, brand: ProductBrand, id: string) {
     const row = await this.db.seekerNotification.findFirst({
-      where: { id, ...this.baseWhere(profile.id, brand.id) },
+      where: { id, ...this.baseWhere(profile.id, brand.id, await this.hidesPostings(brand)) },
       select: VIEW_SELECT,
     });
-    if (!row) throw new HttpError('not_found', 'This message does not exist.', { reason: NOTIFICATIONS_ERROR_CODES.notFound });
+    // A row that may not be shown answers like a missing one (no existence leak).
+    if (!row || !(await this.withoutPostings([row], brand, profile.userId)).length) {
+      throw new HttpError('not_found', 'This message does not exist.', { reason: NOTIFICATIONS_ERROR_CODES.notFound });
+    }
     return row;
   }
 
@@ -499,8 +680,12 @@ export class NotificationCenterService {
   }
 
   async markAllRead(profile: ProfileRef, brand: ProductBrand): Promise<{ updated: number }> {
+    // Hidden rows stay unread: "mark all read" covers what the person could see.
+    const hide = await this.hidesPostings(brand);
+    const where = { ...this.baseWhere(profile.id, brand.id, hide), readAt: null };
+    const hidden = hide ? await this.hiddenUnreadIds(where, brand, profile.userId) : [];
     const res = await this.db.seekerNotification.updateMany({
-      where: { ...this.baseWhere(profile.id, brand.id), readAt: null },
+      where: hidden.length ? { ...where, id: { notIn: hidden } } : where,
       data: { readAt: this.now() },
     });
     return { updated: res.count };
@@ -680,8 +865,16 @@ export class NotificationCenterService {
             channels: bad,
           });
         }
-        next[cat as NotificationCategory] = normalizeChannelList(list ?? []);
-        if (next[cat as NotificationCategory]!.includes('email')) clearUnsubscribed(center, LISTS_FOR_CATEGORY[cat] ?? []);
+        const previous = next[cat as NotificationCategory];
+        // The page lists only the channels the account can use right now. A
+        // stored channel that is not offered for this save (WeChat or push
+        // switched off for the brand, no email address yet) was not left out
+        // by the person: it stays stored, and is not recorded as turned off.
+        const notOffered = (previous ?? []).filter((c) => !available.has(c));
+        next[cat as NotificationCategory] = normalizeChannelList([...(list ?? []), ...notOffered]);
+        noteChannelsOff(center, cat as NotificationCategory, previous, next[cat as NotificationCategory]!, available);
+        // Only a choice the person made in this save re-subscribes (not a carried-over channel).
+        if ((list ?? []).includes('email')) clearUnsubscribed(center, LISTS_FOR_CATEGORY[cat] ?? []);
       }
       center.channels = next;
       dirty = true;
@@ -755,6 +948,41 @@ export class NotificationCenterService {
         proseHash: hash,
       },
     });
+  }
+
+  /**
+   * Opt a category in to an opt-in channel (WeChat, push) unless the person
+   * turned that channel off: the channel is added to their stored choice (or
+   * to the default list when they never chose), so Settings shows it as on and
+   * they can turn it off there. Only an explicit "off" blocks it — a choice
+   * saved in Settings that dropped the channel (`channelsOff`). A list that
+   * merely never had the channel (an email unsubscribe, a choice made before
+   * the channel existed) is not a "no".
+   *
+   * WP-73: an accepted WeChat subscribe prompt is the opt-in to WeChat for
+   * that kind of message. Returns the channel's state afterwards:
+   *   'enabled'  written now          'already'  the stored choice includes it
+   *   'off'      the person turned it off in Settings (nothing written)
+   *   'not_applicable'  no seeker profile, or the category has no channel choices
+   */
+  async enableChannelIfDefault(
+    userId: string,
+    _brand: ProductBrand,
+    category: NotificationCategory,
+    channel: OptInChannel,
+  ): Promise<'enabled' | 'already' | 'off' | 'not_applicable'> {
+    if (!(CONFIGURABLE_CATEGORIES as readonly string[]).includes(category)) return 'not_applicable';
+    const profile = await this.db.seekerProfile.findUnique({ where: { userId }, select: { id: true, notificationPreferences: true } });
+    if (!profile) return 'not_applicable';
+    const raw = profile.notificationPreferences;
+    const center = readCenter(raw);
+    if (center.channelsOff?.[category]?.includes(channel)) return 'off';
+    const stored = center.channels?.[category];
+    if (stored?.includes(channel)) return 'already';
+    const legacy = isObject(raw) ? raw : {};
+    center.channels = { ...(center.channels ?? {}), [category]: normalizeChannelList([...(stored ?? defaultChannelChoice(category, legacy)), channel]) };
+    await this.db.seekerProfile.update({ where: { id: profile.id }, data: { notificationPreferences: writeCenter(raw, center) } });
+    return 'enabled';
   }
 
   /**

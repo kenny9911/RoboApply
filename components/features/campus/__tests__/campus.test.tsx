@@ -21,10 +21,22 @@ vi.mock('../../../../lib/auth/AuthProvider', () => ({
   useAuth: () => mockAuthState.value,
 }));
 const subscribeOnTap = vi.hoisted(() => vi.fn());
+/** What WeChat's prompt answered at the next tap (null: no prompt was shown, e.g. outside WeChat). */
+const wechatAnswer = vi.hoisted(() => ({ next: null as null | boolean }));
 vi.mock('../../notify-cn', () => ({
-  SubscribeOnTap: ({ template, children }: { template: string; children: unknown }) => {
-    subscribeOnTap(template);
-    return <div data-testid="subscribe-on-tap">{children as never}</div>;
+  SubscribeOnTap: ({ template, eventId, onAnswer, children }: { template: string; eventId?: string; onAnswer?: (a: { accepted: boolean }) => void; children: unknown }) => {
+    subscribeOnTap(template, eventId);
+    // Like the real wrapper: the answer reaches the caller before the wrapped control's own click runs.
+    return (
+      <div
+        data-testid="subscribe-on-tap"
+        onClickCapture={() => {
+          if (wechatAnswer.next !== null) onAnswer?.({ accepted: wechatAnswer.next });
+        }}
+      >
+        {children as never}
+      </div>
+    );
   },
 }));
 const api = vi.hoisted(() => ({
@@ -65,6 +77,7 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   router.replace.mockReset();
   subscribeOnTap.mockReset();
+  wechatAnswer.next = null;
   mockAuthState.value = buildAuthValue();
   api.listPublicCampusEvents.mockResolvedValue(LIST);
   api.listCampusSubscriptions.mockResolvedValue({ items: [] });
@@ -131,7 +144,8 @@ describe('/campus calendar', () => {
     const card = screen.getByRole('article', { name: '2027届校园招聘' });
     const btn = await within(card).findByRole('button', { name: 'Deadline reminder' });
     expect(btn.closest('[data-testid="subscribe-on-tap"]')).not.toBeNull();
-    expect(subscribeOnTap).toHaveBeenCalledWith('deadline_reminder');
+    // The wrapper is told which programme the reminder is for (the id WeChat's permission is kept under).
+    expect(subscribeOnTap).toHaveBeenCalledWith('deadline_reminder', 'ev_1');
     expect(within(card).getByText('Reminders go out 3 days and 1 day before applications close.')).toBeInTheDocument();
     api.listCampusSubscriptions.mockResolvedValue({ items: [{ id: 'sub_1', kind: 'event', eventId: 'ev_1', companyName: null, graduationClass: null, channel: 'in_app', createdAt: '', event: null }] });
     fireEvent.click(btn);
@@ -140,6 +154,30 @@ describe('/campus calendar', () => {
     expect(on).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(on);
     await waitFor(() => expect(api.unsubscribeCampus).toHaveBeenCalledWith('sub_1'));
+  });
+
+  it('a reminder set with WeChat’s prompt accepted is saved as a WeChat reminder; refused or no prompt stays an inbox reminder', async () => {
+    renderWithBrand(<CampusCalendar initial={LIST} />, { brand: 'goapply' });
+    const card = screen.getByRole('article', { name: '2027届校园招聘' });
+    const btn = await within(card).findByRole('button', { name: 'Deadline reminder' });
+
+    wechatAnswer.next = true;
+    fireEvent.click(btn);
+    await waitFor(() => expect(api.subscribeCampus).toHaveBeenLastCalledWith({ kind: 'event', eventId: 'ev_1', channel: 'wechat' }));
+
+    // The answer belongs to one tap: a later tap with the prompt refused is an inbox reminder again.
+    wechatAnswer.next = false;
+    fireEvent.click(await within(card).findByRole('button', { name: 'Deadline reminder' }));
+    await waitFor(() => expect(api.subscribeCampus).toHaveBeenLastCalledWith({ kind: 'event', eventId: 'ev_1', channel: 'in_app' }));
+
+    // An accept, then a tap where no prompt was shown (the tag was taken away): not carried over.
+    wechatAnswer.next = true;
+    fireEvent.click(await within(card).findByRole('button', { name: 'Deadline reminder' }));
+    await waitFor(() => expect(api.subscribeCampus).toHaveBeenLastCalledWith({ kind: 'event', eventId: 'ev_1', channel: 'wechat' }));
+    wechatAnswer.next = null;
+    fireEvent.click(await within(card).findByRole('button', { name: 'Deadline reminder' }));
+    await waitFor(() => expect(api.subscribeCampus).toHaveBeenCalledTimes(4));
+    expect(api.subscribeCampus).toHaveBeenLastCalledWith({ kind: 'event', eventId: 'ev_1', channel: 'in_app' });
   });
 
   it('filters go into the URL and the list query', async () => {

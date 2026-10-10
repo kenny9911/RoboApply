@@ -55,7 +55,15 @@ export interface LifecycleDeps {
   setupRoute(brandId: BrandId, stage: string | null): string;
   /** Atomic once-a-day claim per person (DB-backed counter). */
   claimDay(userId: string, now: Date): Promise<boolean>;
+  /**
+   * Is the job list (`/jobs`) open on this brand? False on GoApply while the
+   * recruitment-info mode is off. Absent = open.
+   */
+  jobsOpen?(brand: ProductBrand): boolean;
 }
+
+/** Where the tailoring tip opens when it names no job and the job list is closed: the person's resumes. */
+export const TAILOR_TIP_NO_JOBS_HREF = '/resume';
 
 /** People evaluated per chunk (one batch read each). */
 const CHUNK = 100;
@@ -84,7 +92,14 @@ async function planStep(step: LifecycleStep, person: LifecyclePerson, brand: Pro
     }
     case 'tips_first_tailor': {
       const job = await deps.repo.topFitJob(person.userId, brand.market);
-      return { step, category, params: { job }, href: job ? `/jobs/${encodeURIComponent(job.id)}?from=tips` : '/jobs' };
+      if (job) return { step, category, params: { job }, href: `/jobs/${encodeURIComponent(job.id)}?from=tips` };
+      // No job to name. Where the job list is closed (GoApply with the
+      // recruitment-info mode off) the tip opens the resume page instead of
+      // a page that answers "not available"; the email uses the same link.
+      if (deps.jobsOpen && !deps.jobsOpen(brand)) {
+        return { step, category, params: { job: null, fallbackHref: TAILOR_TIP_NO_JOBS_HREF }, href: TAILOR_TIP_NO_JOBS_HREF };
+      }
+      return { step, category, params: { job: null }, href: '/jobs' };
     }
     case 'tips_practice': {
       if (prefs.practiceNudgeOptOut) return null; // they turned off the old Friday practice nudge
@@ -263,6 +278,7 @@ export async function defaultLifecycleDeps(): Promise<LifecycleDeps> {
         cnIdentity,
       }),
     setupRoute: (brandId, stage) => (stage ? routeForStage(brandId, stage) : null) ?? '/onboarding',
+    jobsOpen: (b) => isEnabledForBrand('jobs.feed', b),
     claimDay: async (userId, now) => {
       const r = await consumeRateLimit({ key: `lifecycle:day:${userId}`, windows: [{ limit: 1, windowSec: 86_400 }], now });
       return r.allowed;

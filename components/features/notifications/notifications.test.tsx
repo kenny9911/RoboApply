@@ -21,6 +21,21 @@ import { UnsubscribeFlow } from './UnsubscribeFlow';
 import { icuArguments } from './messageText';
 import { UNREAD_POLL_MS } from '../../../hooks/notifications';
 
+// The push opt-in needs a browser that can do push and the server's VAPID key;
+// jsdom has neither. The device state is a double: `pushDevice.current` is what
+// the browser + server would report (null = the real hook, i.e. unsupported).
+const pushDevice = vi.hoisted(() => ({ current: null as null | { status: string; available: boolean } }));
+vi.mock('../../../hooks/pwa', async (orig) => {
+  const real = await orig<typeof import('../../../hooks/pwa')>();
+  return {
+    ...real,
+    usePushSubscription: (opts?: { enabled?: boolean }) =>
+      pushDevice.current && opts?.enabled !== false
+        ? { ...pushDevice.current, pending: false, error: null, enable: vi.fn(async () => true), disable: vi.fn(async () => undefined) }
+        : real.usePushSubscription(opts),
+  };
+});
+
 vi.mock('next/navigation', async (orig) => {
   const real = await orig<typeof import('next/navigation')>();
   return { ...real, usePathname: () => '/jobs', useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }) };
@@ -94,6 +109,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  pushDevice.current = null;
 });
 
 describe('icuArguments', () => {
@@ -191,6 +207,49 @@ describe('MessageList', () => {
     expect(screen.queryByText('stored A')).toBeNull();
     // No title and no template → the category name, never an invented line.
     expect(screen.getAllByText('Reminder').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('renders the campus templates from the stored params: the official close in Beijing time, the followed class year', async () => {
+    installFetch({
+      [`GET ${N}`]: () =>
+        ok({
+          items: [
+            msg({
+              id: 'c1',
+              category: 'reminder',
+              templateKey: 'campus.deadline',
+              // 31 Oct 23:59 in Beijing (15:59 UTC): the day shown must be the Beijing day whatever the reader's zone.
+              params: { eventId: 'ev1', company: 'Example Tech', companySlug: 'example-tech', program: '2027 Campus Hiring', closesAt: '2026-10-31T15:59:00.000Z', officialUrl: 'https://campus.example.cn/2027', timeZone: 'Asia/Shanghai', days: 1 },
+              title: '示例科技：网申明天截止',
+              body: '2027届校园招聘 网申将于 10月31日 23:59（北京时间）截止（以官网为准）。',
+              href: '/campus/example-tech',
+            }),
+            msg({
+              id: 'c2',
+              category: 'reminder',
+              templateKey: 'campus.followed',
+              params: { eventId: 'ev1', company: 'Example Tech', companySlug: 'example-tech', program: '2027 Campus Hiring', graduationClass: '2027届' },
+              title: '你关注的示例科技发布了2027届项目',
+              body: '2027届校园招聘 已加入校招日历，附官网链接。',
+            }),
+            // A close time that cannot be read, and a class with no year: the stored text is shown, nothing is made up.
+            msg({ id: 'c3', category: 'reminder', templateKey: 'campus.deadline', params: { company: 'Other Co', program: 'P', closesAt: 'soon' }, title: 'Stored deadline title', body: 'Stored deadline body' }),
+            msg({ id: 'c4', category: 'reminder', templateKey: 'campus.followed', params: { company: 'Other Co', program: 'P', graduationClass: '应届' }, title: 'Stored follow title', body: null }),
+          ],
+          cursor: null,
+        }),
+    });
+    renderUi(<MessageList />);
+    expect(await screen.findByText('Example Tech: applications close on Oct 31')).toBeInTheDocument();
+    expect(screen.getByText('2027 Campus Hiring closes on Oct 31, 23:59 (Beijing time), as stated on the official page.')).toBeInTheDocument();
+    expect(screen.getByText('Example Tech posted its class of 2027 programme')).toBeInTheDocument();
+    expect(screen.getByText('2027 Campus Hiring is now on the campus calendar, with its official link.')).toBeInTheDocument();
+    // Templated rows never mix in the stored text.
+    expect(screen.queryByText('示例科技：网申明天截止')).toBeNull();
+    expect(screen.queryByText('你关注的示例科技发布了2027届项目')).toBeNull();
+    expect(screen.getByText('Stored deadline title')).toBeInTheDocument();
+    expect(screen.getByText('Stored deadline body')).toBeInTheDocument();
+    expect(screen.getByText('Stored follow title')).toBeInTheDocument();
   });
 
   it('shows an honest empty state', async () => {
@@ -321,6 +380,45 @@ describe('NotificationsSettings (/settings#notifications)', () => {
     expect(screen.queryByLabelText('Email summary')).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Job alerts: Email' })).toBeNull();
     expect(net.to('GET', SP)).toHaveLength(0);
+  });
+
+  it('"Alerts on this device" sits with the channel switches only while web push is on for the brand', async () => {
+    // A browser that can do push, and a server with its keys: only the flag decides.
+    pushDevice.current = { status: 'off', available: true };
+    const routes = { [`GET ${N}/preferences`]: () => ok(prefs({ availableChannels: ['in_app', 'email', 'push'] })) };
+
+    // Flag off (GoApply always; RoboApply until the VAPID keys are set): no opt-in, no dead entry.
+    installFetch(routes);
+    const off = renderUi(<NotificationsSettings />, { flags: { webPush: false, 'jobs.alerts': false } });
+    await screen.findByRole('heading', { name: 'Where messages go' });
+    expect(screen.queryByTestId('push-opt-in')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Get alerts on this device' })).toBeNull();
+    off.unmount();
+
+    installFetch(routes);
+    renderUi(<NotificationsSettings />, { brand: 'goapply', flags: { webPush: false, 'jobs.alerts': false } });
+    await screen.findByRole('heading', { name: 'Where messages go' });
+    expect(screen.queryByTestId('push-opt-in')).toBeNull();
+  });
+
+  it('with web push on, the opt-in is inside "Where messages go", after the channel rows', async () => {
+    pushDevice.current = { status: 'off', available: true };
+    installFetch({ [`GET ${N}/preferences`]: () => ok(prefs({ availableChannels: ['in_app', 'email', 'push'] })) });
+    renderUi(<NotificationsSettings />, { flags: { webPush: true, 'jobs.alerts': false } });
+    const group = (await screen.findByRole('heading', { name: 'Where messages go' })).closest('section')!;
+    const optIn = await within(group).findByTestId('push-opt-in');
+    expect(within(optIn).getByRole('heading', { name: 'Alerts on this device' })).toBeInTheDocument();
+    // Nothing asks the browser until the person clicks.
+    expect(within(optIn).getByRole('button', { name: 'Get alerts on this device' })).toBeEnabled();
+    const rows = within(group).getAllByRole('switch');
+    expect(rows[rows.length - 1]!.compareDocumentPosition(optIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('with web push on but a browser that cannot do push, the opt-in stays hidden', async () => {
+    installFetch({ [`GET ${N}/preferences`]: () => ok(prefs()) });
+    renderUi(<NotificationsSettings />, { flags: { webPush: true, 'jobs.alerts': false } });
+    await screen.findByRole('heading', { name: 'Where messages go' });
+    expect(screen.queryByTestId('push-opt-in')).toBeNull();
   });
 
   it('a failed save says so', async () => {

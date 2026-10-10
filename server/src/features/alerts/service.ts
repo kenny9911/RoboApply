@@ -9,15 +9,19 @@
 //     "no reply for 10 days" count);
 //   - nothing in quiet hours (21:00–08:00 local, or the person's own), never
 //     a zero-job send, each send recorded in `RAAlertDelivery` and mirrored
-//     in-app (then email and the registered channels).
+//     in-app (then email and the registered channels). When an email carried
+//     the alert, its `RAEmailLog` id is stored on the delivery (`emailLogId`).
 // GoApply sends alerts only when `jobs.alerts` is on (R-14: recruitment-info
-// mode ≠ off). No LLM call is made here: fit is the deterministic pre-score.
+// mode ≠ off); the candidate seam (`deps.candidates`, candidates.ts) and the
+// card reader apply the mode again, so no posting leaks if the flag and the
+// mode ever disagree. No LLM call is made here: fit is the deterministic pre-score.
 
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import type { CronResult, CronTask } from '../../platform/queue/index.js';
 import { logger } from '../../services/LoggerService.js';
 import type { AlertJobCard, AlertJobPay } from '../../platform/email/templates/notify/index.js';
 import { NOTIFY_TEMPLATES } from '../../platform/email/templates/notify/index.js';
+import type { AlertCandidateSource } from './candidates.js';
 import type { DeliverOutcome, NotifyMessage } from './deliver.js';
 import type { PreferenceFacts, PreferencesRepo } from './preferences.js';
 import type { AlertProfileRow, AlertsRepo, JobCardRow, Recipient } from './repo.js';
@@ -36,6 +40,12 @@ import { digestDue, inQuietHours, parseDigestCadence, startOfLocalDay, type Dige
 
 export interface JobAlertsDeps {
   repo: AlertsRepo;
+  /**
+   * Where instant alerts and digests take their candidate jobs from: the one
+   * selection seam (candidates.ts). Production wraps the source in the
+   * recruitment-info mode gate; join J4 points the source at the feed.
+   */
+  candidates: AlertCandidateSource;
   prefs: PreferencesRepo;
   /** Deterministic pre-score (`matchService.preScoreMany`); runs inside the brand context. */
   preScore(userId: string, jobIds: string[]): Promise<ScoredJob[]>;
@@ -124,7 +134,7 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
       const params: Record<string, unknown> = instant
         ? { search, jobs: cards }
         : { search, cadence: kind === 'digest_weekly' ? 'weekly' : 'daily', jobs: cards, moreCount: extra.moreCount ?? null, noReplyCount: extra.noReplyCount ?? null };
-      await deps.deliver({
+      const outcome = await deps.deliver({
         recipient,
         kind: instant ? 'instant' : kind === 'digest_weekly' ? 'digest_weekly' : 'digest_daily',
         category: 'alert',
@@ -134,6 +144,13 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
         relatedEntity: { type: 'alert_delivery', id: delivery.id },
         prefs: prefs.prefs,
       });
+      // Link the delivery to its email (none when email was off, gated or skipped). Never fails the send.
+      const emailLogId = outcome?.email?.logId;
+      if (emailLogId) {
+        await deps.repo
+          .setDeliveryEmailLog(delivery.id, emailLogId)
+          .catch((e: unknown) => logger.warn('ALERTS', 'could not link the delivery to its email log', { deliveryId: delivery.id, error: e instanceof Error ? e.message : String(e) }));
+      }
       return true;
     }
 
@@ -171,7 +188,9 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
         if (allowance.reason !== 'spacing' && allowance.reason !== 'off') stats.capped += 1;
         return;
       }
-      const cands = await deps.repo.candidateJobIds({
+      const cands = await deps.candidates({
+        searchProfileId: row.id,
+        userId: row.userId,
         market: brand.market,
         filters: row.filters,
         since: instantSince(row.alertLastInstantAt, now),
@@ -220,7 +239,9 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
     async function digest(row: AlertProfileRow, recipient: Recipient, prefs: PreferenceFacts): Promise<void> {
       const cadence: DigestCadence | null = parseDigestCadence(row.alertDigest);
       if (!cadence || !digestDue(cadence, now, prefs.timeZone, row.alertLastDigestAt)) return;
-      const cands = await deps.repo.candidateJobIds({
+      const cands = await deps.candidates({
+        searchProfileId: row.id,
+        userId: row.userId,
         market: brand.market,
         filters: row.filters,
         since: digestSince(cadence, row.alertLastDigestAt, now, prefs.timeZone),
@@ -281,9 +302,10 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
 
 /** Production wiring (lazy so importing the cron module opens no pool). */
 export async function defaultJobAlertsDeps(): Promise<JobAlertsDeps> {
-  const [{ createPrismaAlertsRepo }, { createPrismaPreferencesRepo }, { matchService }, { entitlementService }, { isEnabledForBrand }, deliverMod, idx] =
+  const [{ createPrismaAlertsRepo }, { modeGatedCandidates }, { createPrismaPreferencesRepo }, { matchService }, { entitlementService }, { isEnabledForBrand }, deliverMod, idx] =
     await Promise.all([
       import('./repo.js'),
+      import('./candidates.js'),
       import('./preferences.js'),
       import('../match/index.js'),
       import('../../platform/credits/index.js'),
@@ -292,8 +314,12 @@ export async function defaultJobAlertsDeps(): Promise<JobAlertsDeps> {
       import('./index.js'),
     ]);
   const deliverDeps = deliverMod.defaultDeliverDeps((b) => idx.deliveryChannels(b.id));
+  const repo = createPrismaAlertsRepo();
   return {
-    repo: createPrismaAlertsRepo(),
+    repo,
+    // J4: replace the source with `(q) => feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit })`
+    // (INT-05); keep the gate around it.
+    candidates: modeGatedCandidates((q) => repo.candidateJobIds(q)),
     prefs: createPrismaPreferencesRepo(),
     preScore: async (userId, jobIds) =>
       (await matchService.preScoreMany(userId, jobIds)).map((r) => ({ jobId: r.jobId, score: r.score, tier: r.tier, topGap: r.topGap })),

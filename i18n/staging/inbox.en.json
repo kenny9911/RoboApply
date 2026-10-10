@@ -52,6 +52,16 @@
           "title": "Interview with {company} soon",
           "body": "You can practice for this job before it starts."
         }
+      },
+      "campus": {
+        "deadline": {
+          "title": "{company}: applications close on {closesDay}",
+          "body": "{program} closes on {closes} (Beijing time), as stated on the official page."
+        },
+        "followed": {
+          "title": "{company} posted its class of {classYear} programme",
+          "body": "{program} is now on the campus calendar, with its official link."
+        }
       }
     },
     "settings": {
