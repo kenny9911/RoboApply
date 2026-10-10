@@ -1,8 +1,9 @@
-// /admin/coaches — route shell (FND-6b). Admin: coach roster.
-//
-// STUB. Owner: WP-72, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/coaches — the coach list for both sites (WP-72). Admin only; the
+// console checks the role and the API enforces it. Renders inside the (auth)
+// app shell.
+
+import { AdminCoachesConsole } from '../../../../components/features/coaching';
 
 export default function AdminCoachesPage() {
-  return <div hidden data-route-stub="/admin/coaches" data-owner="WP-72" />;
+  return <AdminCoachesConsole />;
 }

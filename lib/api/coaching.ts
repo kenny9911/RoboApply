@@ -1,6 +1,7 @@
 // lib/api/coaching.ts — Coaching roster and booking requests (user + admin).
 //
-// Thin typed wrappers over the area contract (FND-7). Owner: WP-72.
+// Thin typed wrappers over the area contract (FND-7). Owner: WP-72. There is
+// no bookings endpoint in V2 (no bookings data; /coaching/bookings 404s).
 // Request types are the contract's zod input types; response types are the
 // contract's views. Change a signature here only together with its contract.
 //
@@ -27,28 +28,28 @@ export function getCoach(id: string, opts?: CallOptions): Promise<CO.CoachView> 
 }
 
 /** `coaching.request` — POST /api/v1/roboapply/coaching/coaches/:id/request */
-export function requestCoach(id: string, body: In<typeof CO.CoachRequestBodySchema>, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/coaching/coaches/${seg(id)}/request`, { ...opts, body });
+export function requestCoach(id: string, body: In<typeof CO.CoachRequestBodySchema>, opts?: CallOptions): Promise<CO.CoachRequestResponse> {
+  return call<CO.CoachRequestResponse>('POST', `/api/v1/roboapply/coaching/coaches/${seg(id)}/request`, { ...opts, body });
 }
 
 /** `coaching.admin.list` — GET /api/v1/roboapply/admin/coaching/coaches */
-export function adminListCoaches(query?: In<typeof CO.AdminCoachesQuerySchema>, opts?: CallOptions): Promise<Items<CO.CoachView>> {
-  return call<Items<CO.CoachView>>('GET', withQuery(`/api/v1/roboapply/admin/coaching/coaches`, query), opts);
+export function adminListCoaches(query?: In<typeof CO.AdminCoachesQuerySchema>, opts?: CallOptions): Promise<Items<CO.AdminCoachView>> {
+  return call<Items<CO.AdminCoachView>>('GET', withQuery(`/api/v1/roboapply/admin/coaching/coaches`, query), opts);
 }
 
 /** `coaching.admin.create` — POST /api/v1/roboapply/admin/coaching/coaches */
-export function adminCreateCoach(body: In<typeof CO.CoachBodySchema>, opts?: CallOptions): Promise<CO.CoachView> {
-  return call<CO.CoachView>('POST', `/api/v1/roboapply/admin/coaching/coaches`, { ...opts, body });
+export function adminCreateCoach(body: In<typeof CO.CoachBodySchema>, opts?: CallOptions): Promise<CO.AdminCoachView> {
+  return call<CO.AdminCoachView>('POST', `/api/v1/roboapply/admin/coaching/coaches`, { ...opts, body });
 }
 
 /** `coaching.admin.update` — PATCH /api/v1/roboapply/admin/coaching/coaches/:id */
-export function adminUpdateCoach(id: string, body: In<typeof CO.PatchCoachBodySchema> = {}, opts?: CallOptions): Promise<CO.CoachView> {
-  return call<CO.CoachView>('PATCH', `/api/v1/roboapply/admin/coaching/coaches/${seg(id)}`, { ...opts, body });
+export function adminUpdateCoach(id: string, body: In<typeof CO.PatchCoachBodySchema> = {}, opts?: CallOptions): Promise<CO.AdminCoachView> {
+  return call<CO.AdminCoachView>('PATCH', `/api/v1/roboapply/admin/coaching/coaches/${seg(id)}`, { ...opts, body });
 }
 
 /** `coaching.admin.delete` — DELETE /api/v1/roboapply/admin/coaching/coaches/:id */
-export function adminDeleteCoach(id: string, opts?: CallOptions): Promise<void> {
-  return call<void>('DELETE', `/api/v1/roboapply/admin/coaching/coaches/${seg(id)}`, opts);
+export function adminDeleteCoach(id: string, opts?: CallOptions): Promise<{ deleted: true }> {
+  return call<{ deleted: true }>('DELETE', `/api/v1/roboapply/admin/coaching/coaches/${seg(id)}`, opts);
 }
 
 /** Every wrapper of this area, for callers that prefer one import. */
