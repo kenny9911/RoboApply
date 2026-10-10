@@ -1,0 +1,40 @@
+/* components/features/notify-cn — GoApply WeChat notices (WP-73).
+   Clarity tokens only; light/dark come from app/globals.css. The wrapper
+   keeps the wrapped control's own size (44 px targets stay 44 px); WeChat's
+   open tag is laid over it, transparent, so the tap reaches WeChat first. */
+
+.wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.openTag {
+  position: absolute;
+  inset: 0;
+  display: block;
+  z-index: 1;
+}
+
+.notice {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}

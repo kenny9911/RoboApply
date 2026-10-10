@@ -1,3 +1,11 @@
 {
-  "notifyCn": {}
+  "notifyCn": {
+    "subscribe": {
+      "channelOff": "你在通知设置中关闭了微信提醒，这条提醒只会出现在站内消息里。",
+      "settingsLink": "通知设置"
+    },
+    "share": {
+      "defaultDescription": "在 %BRAND% 查看职位详情"
+    }
+  }
 }
