@@ -74,6 +74,11 @@ export interface DeliverDeps {
 
 export interface DeliverOutcome {
   notificationId: string | null;
+  /**
+   * The platform's answer for the email, or null when no email was attempted.
+   * `email.logId` is the `RAEmailLog` row of an email that reached the
+   * transport; the job-alerts task stores it on `RAAlertDelivery.emailLogId`.
+   */
   email: SendEmailResult | null;
   channels: Record<string, DeliveryResult>;
 }

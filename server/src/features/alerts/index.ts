@@ -38,12 +38,15 @@ export {
 } from './preferences.js';
 export type { PreferenceFacts, PreferencesRepo, StoredNotificationPrefs } from './preferences.js';
 export { createPrismaAlertsRepo, deliverableEmail } from './repo.js';
-export type { AlertProfileRow, AlertsRepo, JobCardRow, Recipient } from './repo.js';
+export type { AlertProfileRow, AlertsRepo, JobCardRow, PrismaAlertsRepoOptions, Recipient } from './repo.js';
+export { defaultPostingsAllowed, modeGatedCandidates } from './candidates.js';
+export type { AlertCandidateQuery, AlertCandidateSource, AlertCandidates, PostingsAllowed } from './candidates.js';
 export { instantAllowance, selectAlertJobs } from './selection.js';
 export {
   DEFAULT_QUIET_HOURS,
   digestDue,
   inQuietHours,
+  isValidTimeZone,
   localDayKey,
   normalizeQuietHours,
   localTime,

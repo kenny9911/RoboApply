@@ -13,6 +13,12 @@
 //                         use (email needs a real address and the `notify.email`
 //                         capability; "This device" with web push, WeChat with
 //                         its capability). The inbox is always on.
+//   Alerts on this device right under the switches while `webPush` is on for the
+//                         brand (never on GoApply): the one place that asks the
+//                         browser for permission, and only on a click (WP-61
+//                         `PushOptIn`). It adds "This device" to the job-alert
+//                         and reminder rows above. Hidden when the flag is off,
+//                         so there is no entry for a missing capability.
 //   Tips and reminders    the consent switch, described by the exact consent text
 //                         the record hashes, with the regional default named
 //                         (off for EEA/UK/CH/CA visitors and GoApply).
@@ -26,6 +32,7 @@ import { PrefHeader } from '../../v3/preferences/controls';
 import { Btn } from '../../v3/primitives/Btn';
 import { toast } from '../../v3/primitives/Toast';
 import { useProfileLabel } from '../filters';
+import { PushOptIn } from '../pwa';
 import { useFlag } from '../../../lib/flags';
 import {
   useSearchProfiles,
@@ -248,6 +255,8 @@ function CategoryRow({ view, category, save, pending }: { view: NotificationPref
 function ChannelsGroup({ view }: { view: NotificationPreferencesView }) {
   const t = useTranslations('inbox.settings');
   const { save, pending } = useSave();
+  // No push entry while web push is off for the brand (PushOptIn also checks the browser and the server keys).
+  const webPush = useFlag('webPush');
   return (
     <section className={styles.group} aria-labelledby="notif-channels">
       <h2 id="notif-channels" className={styles.groupTitle}>
@@ -257,6 +266,7 @@ function ChannelsGroup({ view }: { view: NotificationPreferencesView }) {
       {view.configurableCategories.map((c) => (
         <CategoryRow key={c} view={view} category={c} save={save} pending={pending} />
       ))}
+      {webPush ? <PushOptIn className={styles.pushOptIn} /> : null}
       <p className={styles.help}>{t('lockedNote')}</p>
       <p className={styles.help}>{t('quietNote', { start: view.quietHours.start, end: view.quietHours.end })}</p>
     </section>

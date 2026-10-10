@@ -21,6 +21,9 @@
 //   4. the person's notification settings list WeChat for the category
 //      (`preferencesFor(...).channels[category]` includes 'wechat'; billing
 //      is a locked category that always uses every available channel).
+//      Accepting the prompt in 3 turns this on by itself (WP-39b
+//      `enableChannelIfDefault`); only a person who turned WeChat off in
+//      Settings stays off.
 // SMS is never used for these notices (it stays sign-in codes only).
 
 import { z } from 'zod';
@@ -75,7 +78,9 @@ export interface SubscribeMessagesResponse {
   canDeliver: boolean;
   /**
    * Whether the person's notification settings let WeChat carry the recorded
-   * templates' categories. False → the client points to the settings page.
+   * templates' categories. An accepted prompt turns WeChat on, so this is
+   * false only when the person turned WeChat off in Settings: then the client
+   * says the reminder stays in the inbox and links to the settings.
    */
   wechatChannelOn: boolean;
 }

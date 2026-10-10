@@ -4,7 +4,8 @@
       "alerts": "You get this email because job alerts are on for your saved search \"{search}\" in %BRAND%.",
       "digestDaily": "You get this email because you chose a daily job summary for your saved search \"{search}\" in %BRAND%.",
       "digestWeekly": "You get this email because you chose a weekly job summary for your saved search \"{search}\" in %BRAND%.",
-      "reminders": "You get this email because it is about your %BRAND% account and the jobs you track. You can turn these reminders off."
+      "reminders": "You get this email because it is about your %BRAND% account and the jobs you track. You can turn these reminders off.",
+      "campusFollow": "You get this email because you follow {company} on the %BRAND% campus calendar."
     },
     "common": {
       "payNotListed": "Pay not listed",
@@ -129,6 +130,14 @@
       "body": "Applications for {program} at {company} close on {date}. Apply on the official page.",
       "cta": "Open the official page",
       "preheader": "{program} closes on {date}."
+    },
+    "campusFollowed": {
+      "subjectYear": "{company} posted its class of {year} campus programme",
+      "subject": "{company} posted a new campus programme",
+      "heading": "A company you follow posted a programme",
+      "body": "{program} at {company} is now on the campus calendar, with the link to its official page. Check the dates there before you apply.",
+      "cta": "See the programme",
+      "preheader": "{program} is on the campus calendar."
     }
   }
 }

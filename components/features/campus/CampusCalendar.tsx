@@ -43,9 +43,9 @@ export function useReminders(returnTo: string): (eventId: string) => ReminderSta
     for (const s of subs.data?.items ?? []) if (s.kind === 'event' && s.eventId) m.set(s.eventId, s.id);
     return m;
   }, [subs.data]);
-  const pendingId = subscribe.isPending ? subscribe.variables : null;
+  const pendingId = subscribe.isPending ? (subscribe.variables?.eventId ?? null) : null;
   const pendingSub = unsubscribe.isPending ? unsubscribe.variables : null;
-  const errorId = subscribe.isError ? subscribe.variables : null;
+  const errorId = subscribe.isError ? (subscribe.variables?.eventId ?? null) : null;
   return useCallback(
     (eventId: string): ReminderState => {
       const subscriptionId = byEvent.get(eventId) ?? null;
@@ -54,7 +54,7 @@ export function useReminders(returnTo: string): (eventId: string) => ReminderSta
         subscriptionId,
         pending: pendingId === eventId || (subscriptionId !== null && pendingSub === subscriptionId),
         error: errorId === eventId || (subscriptionId !== null && unsubscribe.isError && unsubscribe.variables === subscriptionId),
-        onSubscribe: (id) => subscribe.mutate(id),
+        onSubscribe: (id, channel) => subscribe.mutate({ eventId: id, channel: channel ?? 'in_app' }),
         onUnsubscribe: (id) => unsubscribe.mutate(id),
         returnTo,
       };

@@ -54,7 +54,11 @@ export const NOTIFY_SAMPLES: Record<NotifyTemplateKey, Record<string, unknown>> 
   [NOTIFY_TEMPLATES.readyListReady]: { count: 8 },
   [NOTIFY_TEMPLATES.kitNotOpened]: { jobId: 'job1', title: 'Backend Engineer', company: 'Acme' },
   [NOTIFY_TEMPLATES.campusDeadline]: { eventId: 'ev1', company: '某科技公司', program: '2027 校园招聘', closesAt: '2026-10-20T15:59:00.000Z', officialUrl: 'https://careers.example.cn/campus' },
+  [NOTIFY_TEMPLATES.campusFollowed]: { eventId: 'ev1', company: '某科技公司', companySlug: '某科技公司', program: '2027 校园招聘', graduationClass: '2027届' },
 };
+
+/** GoApply's own email transport and sender (R-03: no fallback to the international one). */
+const CN_EMAIL_ENV = { CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'GoApply <noreply@goapply.top>' };
 
 // Emoji and pictographs (PRODUCT §7.1: no emoji subjects).
 const EMOJI = /\p{Extended_Pictographic}/u;
@@ -177,6 +181,20 @@ describe('notify email templates', () => {
     }
   });
 
+  it('the tailoring tip with no job opens /jobs, or the same-site fallback it is given (never an outside link)', () => {
+    const brand = getBrand('goapply');
+    const t = createEmailTranslator(brand, 'en');
+    const tpl = getEmailTemplate(NOTIFY_TEMPLATES.tipsFirstTailor)!;
+    const link = (params: Record<string, unknown>) => tpl.render({ brand, t, origin: brand.canonicalOrigin, params }).bodyText.split('\n').pop();
+    expect(link({ job: null })).toBe('Tailor my resume: https://www.goapply.top/jobs');
+    expect(link({ job: null, fallbackHref: '/resume' })).toBe('Tailor my resume: https://www.goapply.top/resume');
+    for (const bad of ['https://evil.example/x', '//evil.example', 'resume', '', 42, '/a b']) {
+      expect(link({ job: null, fallbackHref: bad })).toBe('Tailor my resume: https://www.goapply.top/jobs');
+    }
+    // A named job always links to that job.
+    expect(link({ job: { id: 'job1', title: 'Analyst', company: 'Acme' }, fallbackHref: '/resume' })).toBe('Tailor my resume: https://www.goapply.top/jobs/job1?from=tips');
+  });
+
   it('GoApply welcome starts at the campus calendar when that is the first-value route', () => {
     const brand = getBrand('goapply');
     const t = createEmailTranslator(brand, 'zh');
@@ -200,15 +218,91 @@ describe('every notify send carries RFC 8058 List-Unsubscribe headers', () => {
 
   it.each(NOTIFY_TEMPLATE_KEYS)('%s', async (key) => {
     const db = createFakePrisma();
+    // A market-only template is sent on a brand of its market (GoApply for the campus follow notice).
+    const cnOnly = getEmailTemplate(key)!.markets?.includes('cn') === true && !getEmailTemplate(key)!.markets?.includes('intl');
     const r = await sendEmail(
-      { template: key, to: 'person@example.com', userId: 'u1', locale: 'en', params: NOTIFY_SAMPLES[key], brand: 'roboapply' },
-      { db: db as unknown as EmailDb, env: ENV },
+      { template: key, to: 'person@example.com', userId: 'u1', locale: 'en', params: NOTIFY_SAMPLES[key], brand: cnOnly ? 'goapply' : 'roboapply' },
+      { db: db as unknown as EmailDb, env: cnOnly ? { ...ENV, ...CN_EMAIL_ENV } : ENV },
     );
     expect(r.status).toBe('sent');
     const msg = sent[0]!;
-    expect(msg.headers?.['List-Unsubscribe']).toMatch(/^<https:\/\/www\.roboapply\.io\/api\/v1\/public\/email\/unsubscribe\?token=/);
+    expect(msg.headers?.['List-Unsubscribe']).toMatch(
+      cnOnly ? /^<https:\/\/www\.goapply\.top\/api\/v1\/public\/email\/unsubscribe\?token=/ : /^<https:\/\/www\.roboapply\.io\/api\/v1\/public\/email\/unsubscribe\?token=/,
+    );
     expect(msg.headers?.['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     expect(msg.text).toContain('/unsubscribe/');
     expect(msg.subject).not.toMatch(EMOJI);
+  });
+});
+
+describe('notify.campus_followed (GoApply follow-a-company notice)', () => {
+  const ENV = { RESEND_API_KEY: 're_test', JWT_SECRET: 'jwt-test-secret', NODE_ENV: 'test', ...CN_EMAIL_ENV };
+  const PARAMS = NOTIFY_SAMPLES[NOTIFY_TEMPLATES.campusFollowed];
+  let sent: EmailMessage[];
+  let db: ReturnType<typeof createFakePrisma>;
+  const send = (over: { brand?: BrandId; env?: Record<string, string>; params?: Record<string, unknown>; locale?: string } = {}) =>
+    sendEmail(
+      { template: NOTIFY_TEMPLATES.campusFollowed, to: 'student@example.cn', userId: 'u1', locale: over.locale ?? 'en', params: over.params ?? PARAMS, brand: over.brand ?? 'goapply' },
+      { db: db as unknown as EmailDb, env: over.env ?? ENV },
+    );
+  beforeEach(() => {
+    sent = [];
+    db = createFakePrisma();
+    resetEmailTransportsForTests();
+    registerEmailTransport('resend', { name: 'resend', isConfigured: () => true, send: async (m) => (sent.push(m), { ok: true, providerId: 'm1' }) });
+  });
+  afterEach(() => resetEmailTransportsForTests());
+
+  it('is on the `reminders` list (like the 网申截止 email and its own inbox row), for GoApply only', () => {
+    const tpl = getEmailTemplate(NOTIFY_TEMPLATES.campusFollowed)!;
+    expect(tpl).toMatchObject({ category: 'alert', list: 'reminders', markets: ['cn'] });
+    expect(getEmailTemplate(NOTIFY_TEMPLATES.campusDeadline)!.list).toBe('reminders');
+  });
+
+  it('gate closed: nothing is sent (preference gate off, or no gate installed)', async () => {
+    const gate = vi.fn(async () => false);
+    setEmailPreferenceGate(gate);
+    expect(await send()).toEqual({ status: 'suppressed', reason: 'preference_off', logId: null });
+    // The gate is asked about the reminders list for this person.
+    expect(gate).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', list: 'reminders', category: 'alert', template: NOTIFY_TEMPLATES.campusFollowed }));
+    setEmailPreferenceGate(null);
+    expect(await send()).toEqual({ status: 'suppressed', reason: 'no_preference_gate', logId: null });
+    expect(sent).toHaveLength(0);
+  });
+
+  it('gate open: sent from GoApply with the company, the programme, the campus link and one-click unsubscribe', async () => {
+    setEmailPreferenceGate(async () => true);
+    const r = await send();
+    expect(r).toMatchObject({ status: 'sent', provider: 'resend' });
+    const msg = sent[0]!;
+    expect(msg.from).toBe('GoApply <noreply@goapply.top>');
+    expect(msg.subject).toBe('某科技公司 posted its class of 2027 campus programme');
+    expect(msg.text).toContain('2027 校园招聘 at 某科技公司 is now on the campus calendar');
+    expect(msg.text).toContain(`https://www.goapply.top/campus/${encodeURIComponent('某科技公司')}`);
+    expect(msg.text).toContain('you follow 某科技公司 on the GoApply campus calendar');
+    expect(msg.headers?.['List-Unsubscribe']).toMatch(/^<https:\/\/www\.goapply\.top\/api\/v1\/public\/email\/unsubscribe\?token=/);
+    expect(msg.headers?.['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+    expect(msg.subject).not.toMatch(EMOJI);
+  });
+
+  it('gate open but the brand cannot send email (the other gate): nothing is sent', async () => {
+    setEmailPreferenceGate(async () => true);
+    // GoApply without CN_EMAIL_TRANSPORT: the `notify.email` capability is off.
+    expect(await send({ env: { RESEND_API_KEY: 're_test', JWT_SECRET: 'jwt-test-secret' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
+    expect(sent).toHaveLength(0);
+  });
+
+  it('never goes out on RoboApply, even with every gate open', async () => {
+    const gate = vi.fn(async () => true);
+    setEmailPreferenceGate(gate);
+    expect(await send({ brand: 'roboapply' })).toEqual({ status: 'suppressed', reason: 'not_for_market', logId: null });
+    expect(gate).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('names no year when the followed class carries none', async () => {
+    setEmailPreferenceGate(async () => true);
+    await send({ params: { ...PARAMS, graduationClass: '应届' } });
+    expect(sent[0]!.subject).toBe('某科技公司 posted a new campus programme');
   });
 });

@@ -7,7 +7,8 @@
 // For every send it:
 //   1. takes the brand from the argument (workers) or the current context;
 //   2. refuses malformed and `.invalid` addresses (GoApply's placeholder
-//      `…@users.goapply.invalid`, CN plan L-8) → `suppressed`;
+//      `…@users.goapply.invalid`, CN plan L-8) and a template that does not
+//      exist in the brand's market (`template.markets`) → `suppressed`;
 //   3. for non-transactional mail (alerts, tips, marketing) asks the
 //      preference gate (WP-39a registers it; none registered → suppressed:
 //      nothing promotional goes out by default);
@@ -20,7 +21,11 @@
 //      RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` headers;
 //   6. writes one `RAEmailLog` row (status sent | failed | suppressed; the
 //      address is stored only as sha256).
-// It never throws for delivery problems; it returns the outcome.
+// It never throws for delivery problems; it returns the outcome. For a message
+// that reached the transport (sent or failed) the outcome carries `logId`, the
+// id of its `RAEmailLog` row, so a producer can link its own record to the
+// email (`RAAlertDelivery.emailLogId`). A message that was skipped or gated
+// (suppressed) has no email to point at: `logId` is null.
 
 import prisma from '../../lib/prisma.js';
 import { getCurrentBrand } from '../brand/brandContext.js';
@@ -48,6 +53,7 @@ export type SendStatus = 'sent' | 'failed' | 'suppressed';
 export type SuppressReason =
   | 'invalid_address'
   | 'placeholder_address'
+  | 'not_for_market'
   | 'transport_not_configured'
   | 'preference_off'
   | 'no_preference_gate'
@@ -75,6 +81,14 @@ export interface SendEmailResult {
   provider?: string;
   providerId?: string;
   reason?: SuppressReason | string;
+  /**
+   * The `RAEmailLog` row of an email that reached the transport (status
+   * `sent`, or `failed` at the provider). Null when nothing was handed to a
+   * transport (suppressed: bad address, preference off, no transport, render
+   * failure) or when the log row could not be written. Optional so callers and
+   * fakes written before the field keep compiling; `sendEmail` always sets it.
+   */
+  logId?: string | null;
 }
 
 /** Decides whether a non-transactional email may go to this person (WP-39a). */
@@ -195,10 +209,14 @@ export async function sendEmail<P>(input: SendEmailInput<P>, deps: EmailServiceD
   const template = typeof input.template === 'string' ? getEmailTemplate(input.template) : input.template;
   if (!template) throw new Error(`email: unknown template "${String(input.template)}"`);
   const userId = input.userId ?? null;
-  const log = (r: SendEmailResult) => writeLog(deps.db ?? prisma, brand, template.key, input.to, userId, r);
+  // `attempted`: the message was handed to a transport, so its log row is "the email" a producer may link to.
+  const log = (r: SendEmailResult, attempted = false) => writeLog(deps.db ?? prisma, brand, template.key, input.to, userId, r, attempted);
 
   const addr = classifyAddress(input.to);
   if (addr !== 'ok') return log({ status: 'suppressed', reason: addr });
+
+  // A market-only template (e.g. GoApply's campus notices) is never sent on the other brand.
+  if (template.markets && !template.markets.includes(brand.market)) return log({ status: 'suppressed', reason: 'not_for_market' });
 
   const category = template.category;
   const list = category === 'transactional' ? undefined : (template.list ?? defaultListFor(category));
@@ -263,9 +281,9 @@ export async function sendEmail<P>(input: SendEmailInput<P>, deps: EmailServiceD
   }
 
   const sent = await transport.send(message);
-  if (sent.ok) return log({ status: 'sent', provider: transport.name, providerId: sent.providerId });
+  if (sent.ok) return log({ status: 'sent', provider: transport.name, providerId: sent.providerId }, true);
   logger.warn('EMAIL', `send failed for ${template.key}`, { provider: transport.name, error: sent.error });
-  return log({ status: 'failed', provider: transport.name, reason: sent.error });
+  return log({ status: 'failed', provider: transport.name, reason: sent.error }, true);
 }
 
 async function writeLog(
@@ -275,9 +293,11 @@ async function writeLog(
   to: string,
   userId: string | null,
   result: SendEmailResult,
+  attempted: boolean,
 ): Promise<SendEmailResult> {
+  let logId: string | null = null;
   try {
-    await db.rAEmailLog.create({
+    const row = await db.rAEmailLog.create({
       data: {
         brand: brand.id,
         userId,
@@ -288,12 +308,14 @@ async function writeLog(
         status: result.status,
         error: result.reason ? String(result.reason).slice(0, 1000) : null,
       },
+      select: { id: true },
     });
+    logId = attempted && row && typeof row.id === 'string' ? row.id : null;
   } catch (err) {
     // The log must never decide whether mail goes out.
     logger.warn('EMAIL', 'RAEmailLog write failed', { template, error: errText(err) });
   }
-  return result;
+  return { ...result, logId };
 }
 
 function errText(err: unknown): string {

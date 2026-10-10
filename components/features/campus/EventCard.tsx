@@ -6,8 +6,13 @@
 // · 官网链接 · 最后核实 {date}" (+ "待核实" after 14 days). When the details
 // were read from another page (sourceUrl), the source name links to it. Actions: "Apply on
 // company site" (opens the official page; D1 — we never apply) and the
-// 截止提醒 deadline reminder, wrapped in WP-73's SubscribeOnTap.
+// 截止提醒 deadline reminder, wrapped in WP-73's SubscribeOnTap. Inside WeChat
+// the tap also shows WeChat's one-time subscribe prompt for this programme;
+// when the person accepts it the reminder is saved as a WeChat reminder
+// (channel 'wechat': the last reminder also arrives in WeChat), otherwise as
+// an inbox reminder.
 
+import { useRef } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 
@@ -18,6 +23,9 @@ import type { CampusEventView } from '../../../lib/api/contracts/cn/campus';
 import { CAMPUS_TIME_ZONE, companyHref, hostOf, safeExternal, windowState, yearOfClass } from './format';
 import styles from './campus.module.css';
 
+/** Where a deadline reminder goes besides the inbox (the inbox row is always written). */
+export type ReminderChannel = 'in_app' | 'wechat';
+
 export interface ReminderState {
   /** Session known and signed in. */
   signedIn: boolean;
@@ -25,7 +33,8 @@ export interface ReminderState {
   subscriptionId: string | null;
   pending: boolean;
   error: boolean;
-  onSubscribe: (eventId: string) => void;
+  /** `channel` is 'wechat' when the person accepted WeChat's prompt at this tap; default the inbox. */
+  onSubscribe: (eventId: string, channel?: ReminderChannel) => void;
   onUnsubscribe: (subscriptionId: string) => void;
   /** Where sign-in returns to. */
   returnTo: string;
@@ -174,6 +183,8 @@ export function EventCard({ event, reminder, hideCompanyLink = false, now = new 
 
 function ReminderButton({ event, state, reminder }: { event: CampusEventView; state: ReturnType<typeof windowState>; reminder: ReminderState }) {
   const t = useTranslations('campus.remind');
+  // WeChat's answer at this tap; SubscribeOnTap reports it right before the button's own click.
+  const wechatAccepted = useRef(false);
   if (state === 'closed') return null;
   if (!event.applyClosesAt) return <p className={styles.hint}>{t('noDate')}</p>;
   if (!reminder.signedIn) {
@@ -191,8 +202,22 @@ function ReminderButton({ event, state, reminder }: { event: CampusEventView; st
           {reminder.pending ? t('saving') : t('on')}
         </Btn>
       ) : (
-        <SubscribeOnTap template="deadline_reminder">
-          <Btn aria-pressed="false" disabled={reminder.pending} onClick={() => reminder.onSubscribe(event.id)}>
+        <SubscribeOnTap
+          template="deadline_reminder"
+          eventId={event.id}
+          onAnswer={(answer) => {
+            wechatAccepted.current = answer.accepted;
+          }}
+        >
+          <Btn
+            aria-pressed="false"
+            disabled={reminder.pending}
+            onClick={() => {
+              const channel: ReminderChannel = wechatAccepted.current ? 'wechat' : 'in_app';
+              wechatAccepted.current = false;
+              reminder.onSubscribe(event.id, channel);
+            }}
+          >
             {reminder.pending ? t('saving') : t('set')}
           </Btn>
         </SubscribeOnTap>

@@ -448,3 +448,9 @@
     min-height: 44px;
   }
 }
+
+/* "Get alerts on this device" (WP-61 PushOptIn) inside "Where messages go":
+   a quieter surface than the group around it, so it reads as one more row. */
+.pushOptIn {
+  background: var(--surface-2);
+}

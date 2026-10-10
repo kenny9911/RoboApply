@@ -5,6 +5,8 @@
 // the re-engagement count) are separate calls the service makes only when a
 // row would otherwise be sent.
 
+import type prismaClient from '../../lib/prisma.js';
+import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
 import { LIFECYCLE_TEMPLATE_KEYS, type LifecycleFacts, type SentRecord } from './rules.js';
 
@@ -33,7 +35,28 @@ export interface LifecycleRepo {
   activeSearch(userId: string): Promise<{ name: string; filters: unknown } | null>;
 }
 
-async function db() {
+type LifecycleDb = Pick<
+  typeof prismaClient,
+  | 'user'
+  | 'seekerNotification'
+  | 'rAEmailLog'
+  | 'rARateCounter'
+  | 'rAResumeGrade'
+  | 'rATailorSession'
+  | 'mockInterviewCreditLedger'
+  | 'rASearchProfile'
+  | 'rAJobMatchScore'
+  | 'rAJobUserState'
+>;
+
+export interface PrismaLifecycleRepoOptions {
+  /** Tests pass a fake client; production loads Prisma on first use. */
+  getDb?: () => Promise<LifecycleDb>;
+  /** Where the GoApply recruitment-info mode is read from (default `process.env`). */
+  env?: EnvSource;
+}
+
+async function defaultDb(): Promise<LifecycleDb> {
   return (await import('../../lib/prisma.js')).default;
 }
 
@@ -57,6 +80,22 @@ export function sentMarkerKey(userId: string, templateKey: string): string {
   return `${SENT_MARKER_PREFIX}${userId}:${templateKey}`;
 }
 
+/**
+ * Env: the ISO time the resume-check view stamp went live (the release that
+ * started writing `RAResumeGrade.viewedAt`). A check completed before it has
+ * `viewedAt = null` whether or not it was opened, so only checks completed
+ * from this time on can be known as "not viewed". Unset or unreadable: no
+ * check is known as unopened and lifecycle row 4 is not sent.
+ */
+export const RESUME_CHECK_VIEW_SIGNAL_SINCE_ENV = 'RESUME_CHECK_VIEW_SIGNAL_SINCE';
+
+export function resumeCheckViewSignalSince(env: EnvSource = process.env): Date | null {
+  const raw = env[RESUME_CHECK_VIEW_SIGNAL_SINCE_ENV];
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const at = new Date(raw.trim());
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
 function cnIdentityOf(v: unknown): LifecyclePerson['cnIdentity'] {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const id = (v as { identity?: unknown }).identity;
@@ -72,7 +111,9 @@ function issueCountOf(counts: unknown): number | null {
   return (urgent ?? 0) + (critical ?? 0);
 }
 
-export function createPrismaLifecycleRepo(): LifecycleRepo {
+export function createPrismaLifecycleRepo(options: PrismaLifecycleRepoOptions = {}): LifecycleRepo {
+  const db = options.getDb ?? defaultDb;
+  const env = options.env ?? process.env;
   return {
     async candidates({ brandId, now, afterId, limit }) {
       const p = await db();
@@ -109,6 +150,7 @@ export function createPrismaLifecycleRepo(): LifecycleRepo {
       if (!ids.length) return out;
       const p = await db();
       const since = new Date(now.getTime() - HISTORY_DAYS * DAY);
+      const viewSignalSince = resumeCheckViewSignalSince(env);
       const keys = [...LIFECYCLE_TEMPLATE_KEYS];
       const markerKeys = new Map<string, { userId: string; templateKey: string }>();
       for (const id of ids) for (const k of keys) markerKeys.set(sentMarkerKey(id, k), { userId: id, templateKey: k });
@@ -138,7 +180,7 @@ export function createPrismaLifecycleRepo(): LifecycleRepo {
         }),
         p.rAResumeGrade.findMany({
           where: { userId: { in: ids }, status: 'done', completedAt: { not: null } },
-          select: { userId: true, variantId: true, completedAt: true, counts: true },
+          select: { userId: true, variantId: true, completedAt: true, counts: true, viewedAt: true },
           orderBy: { createdAt: 'asc' },
         }),
         p.rATailorSession.findMany({ where: { userId: { in: ids }, status: 'finalized' }, select: { userId: true }, distinct: ['userId'] }),
@@ -162,7 +204,16 @@ export function createPrismaLifecycleRepo(): LifecycleRepo {
       }
 
       const firstGrade = new Map<string, (typeof grades)[number]>();
-      for (const g of grades) if (!firstGrade.has(g.userId)) firstGrade.set(g.userId, g);
+      // SR-39a-1: `viewedAt` is stamped on the owner's first authenticated read
+      // of a completed check. Opening ANY completed check counts: the message is
+      // about the person's first check, and whoever opened a later one has seen
+      // what the message would point to. A null stamp only means "not opened"
+      // for a check completed after the stamp went live (`viewSignalSince`).
+      const viewedAny = new Set<string>();
+      for (const g of grades) {
+        if (!firstGrade.has(g.userId)) firstGrade.set(g.userId, g);
+        if (g.viewedAt) viewedAny.add(g.userId);
+      }
       const tailoredSet = new Set(tailored.map((r) => r.userId));
       const practicedSet = new Set(practiced.map((r) => r.userId));
       const searchSet = new Set(searches.map((r) => r.userId));
@@ -180,9 +231,16 @@ export function createPrismaLifecycleRepo(): LifecycleRepo {
           history: history.get(u.id) ?? [],
           resumeCheck:
             g && g.completedAt
-              ? // No reliable "viewed" signal exists yet (nothing emits resume_check_viewed, and
-                // product events are consent-gated): unknown → row 4 is not sent. SR-39a-1.
-                { resumeId: g.variantId, completedAt: g.completedAt, issueCount: issueCountOf(g.counts), viewed: null }
+              ? // `viewed` is the server's own record (RAResumeGrade.viewedAt), not a
+                // consent-gated product event. false = completed after the stamp
+                // went live and never opened; null = completed before it (or the
+                // go-live time is not set), so whether it was opened is not known.
+                {
+                  resumeId: g.variantId,
+                  completedAt: g.completedAt,
+                  issueCount: issueCountOf(g.counts),
+                  viewed: viewedAny.has(u.id) ? true : viewSignalSince && g.completedAt.getTime() >= viewSignalSince.getTime() ? false : null,
+                }
               : null,
           hasTailored: tailoredSet.has(u.id),
           practiceUsed: practicedSet.has(u.id),
@@ -193,6 +251,12 @@ export function createPrismaLifecycleRepo(): LifecycleRepo {
     },
 
     async topFitJob(userId, market) {
+      // R-14 / R41-1b: on GoApply with the recruitment-info mode off no message
+      // names a third-party posting, so the tip goes out without a job.
+      if (market === 'cn') {
+        const { cnJobCapabilities } = await import('../cn/jobs/index.js');
+        if (!cnJobCapabilities(env).postings) return null;
+      }
       const p = await db();
       const rows = await p.rAJobMatchScore.findMany({
         where: {

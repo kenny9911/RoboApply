@@ -11,8 +11,10 @@
 //      server, so it cannot be back-dated), mirrored in localStorage so the
 //      gap still holds when the ui-state API is unavailable.
 //   3. When several popups ask during the same moment (a page mounting), the
-//      highest priority wins: announcement < survey < extension prompt <
-//      offer. Requests are collected for a short window, then decided once.
+//      highest priority wins: install prompt < announcement < survey <
+//      extension prompt < offer. Requests are collected for a short window,
+//      then decided once. The PWA install prompt is the lowest: it can wait
+//      for any other day, while news, a survey or an offer is about now.
 //   4. `essential` popups (a legal notice that must be acknowledged) skip the
 //      24 h gap but still take the page view's one slot, and do not reset the
 //      gap.
@@ -34,10 +36,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import { getUiState, recordPopupShown } from '../api/uiState';
 
-export type PopupPriority = 'announcement' | 'survey' | 'extension_prompt' | 'offer';
+export type PopupPriority = 'install_prompt' | 'announcement' | 'survey' | 'extension_prompt' | 'offer';
 
 /** Higher wins. */
 export const POPUP_PRIORITY: Record<PopupPriority, number> = {
+  install_prompt: 0,
   announcement: 1,
   survey: 2,
   extension_prompt: 3,

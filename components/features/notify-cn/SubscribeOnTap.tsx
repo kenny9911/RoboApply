@@ -9,9 +9,17 @@
 // nothing could ever be delivered), it renders its children unchanged.
 // Otherwise WeChat's own `wx-open-subscribe` tag is laid, invisible, over the
 // control: the tap opens WeChat's prompt, the answer is recorded
-// (POST /notify-cn/subscribe-messages), and then the wrapped control's own
-// click runs, whatever the person answered. If the person's notification
-// settings keep WeChat off for reminders, one line points to the settings.
+// (POST /notify-cn/subscribe-messages, with `eventId` when the caller names
+// what the reminder is about, so the permission is kept for that reminder),
+// the caller hears the answer (`onAnswer`, before its control's click, so the
+// click can save the reminder as a WeChat one), and then the wrapped control's
+// own click runs, whatever the person answered.
+//
+// Accepting the prompt is the opt-in to WeChat for these reminders: the server
+// turns the WeChat channel on by itself. Only someone who turned WeChat
+// reminders off in their notification settings stays off; for them one line
+// says the reminder stays in the inbox and links to the settings, because an
+// accepted prompt would otherwise look like a promise of a WeChat message.
 //
 // The invisible tag must never make the control untappable, so it is not
 // laid (or is taken away) when:
@@ -34,9 +42,30 @@ import styles from './notifyCn.module.css';
 /** Server message templates (IDs come from env; a template without an ID never sends). */
 export type SubscribeTemplate = 'deadline_reminder' | 'report_ready' | 'payment_success';
 
+export interface SubscribeAnswer {
+  /** True when the person accepted WeChat's prompt for this template (one message allowed). */
+  accepted: boolean;
+}
+
 export interface SubscribeOnTapProps {
   template: SubscribeTemplate;
   children: ReactNode;
+}
+
+/** The wrapper's full props: the two every caller passes, plus what a caller with a specific reminder adds. */
+export interface SubscribeOnTapOptions extends SubscribeOnTapProps {
+  /**
+   * What the reminder is about (e.g. the campus event id). Sent with the
+   * accepted prompt so the notice about this item spends this permission and
+   * not one given for another item.
+   */
+  eventId?: string;
+  /**
+   * Called with WeChat's answer right before the wrapped control's own click
+   * runs (also `accepted: false` when WeChat reports an error). Not called
+   * when no prompt was shown (outside WeChat, tag unusable).
+   */
+  onAnswer?: (answer: SubscribeAnswer) => void;
 }
 
 /** Mirrors the server's SCENE_FOR_TEMPLATE (contract.ts). */
@@ -62,8 +91,11 @@ export function controlDisabled(el: HTMLElement): boolean {
   return (el as HTMLButtonElement).disabled === true || el.getAttribute('aria-disabled') === 'true';
 }
 
-export function SubscribeOnTap({ template, children }: SubscribeOnTapProps) {
+export function SubscribeOnTap({ template, eventId, onAnswer, children }: SubscribeOnTapOptions) {
   const t = useTranslations('notifyCn.subscribe');
+  // Read at tap time: a new callback or id must not tear the open tag down.
+  const latest = useRef({ eventId, onAnswer });
+  latest.current = { eventId, onAnswer };
   const enabled = useWechatEnabled();
   const ready = useWechatReady(enabled);
   const wrapRef = useRef<HTMLSpanElement>(null);
@@ -106,14 +138,20 @@ export function SubscribeOnTap({ template, children }: SubscribeOnTapProps) {
     const onSuccess = (e: Event) => {
       const detail = (e as CustomEvent<{ subscribeDetails?: unknown }>).detail;
       const results = parseSubscribeDetails(detail?.subscribeDetails, { [template]: templateId });
+      const about = latest.current.eventId;
       if (Object.keys(results).length) {
-        subscribeWechatMessages({ templateKeys: [template], scene: SCENE[template], results })
+        subscribeWechatMessages({ templateKeys: [template], scene: SCENE[template], ...(about ? { eventId: about } : {}), results })
+          // Off only when the person turned WeChat off in settings (an accepted prompt turns it on otherwise).
           .then((res) => setChannelOff(res.recorded.length > 0 && !res.wechatChannelOn))
           .catch(() => undefined);
       }
+      latest.current.onAnswer?.({ accepted: results[template] === 'accept' });
       forward();
     };
-    const onError = () => forward();
+    const onError = () => {
+      latest.current.onAnswer?.({ accepted: false });
+      forward();
+    };
     tag.addEventListener('success', onSuccess);
     tag.addEventListener('error', onError);
     const observer = new MutationObserver(sync);

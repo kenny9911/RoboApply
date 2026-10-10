@@ -22,6 +22,12 @@
 //   notify.ready_list_ready     reminders list  row 9  (producer: WP-52)
 //   notify.kit_not_opened       reminders list  F-NOTIF-08 (producer: WP-52)
 //   notify.campus_deadline      reminders list  GoApply 网申截止 (producer: WP-58)
+//   notify.campus_followed      reminders list  GoApply only: a followed company published a
+//                                               campus programme (producer: WP-58 follow notices).
+//                                               Not the alerts list: alert email is off for
+//                                               everyone while `jobs.alerts` is off (GoApply with
+//                                               the recruitment-info mode off), and the campus
+//                                               calendar is open in that mode.
 //
 // Honesty: every number in these emails is a real count passed in by the
 // sender; pay is the posting's own figure or "Pay not listed"; no emoji in
@@ -45,6 +51,7 @@ export const NOTIFY_TEMPLATES = {
   readyListReady: 'notify.ready_list_ready',
   kitNotOpened: 'notify.kit_not_opened',
   campusDeadline: 'notify.campus_deadline',
+  campusFollowed: 'notify.campus_followed',
 } as const;
 
 export type NotifyTemplateKey = (typeof NOTIFY_TEMPLATES)[keyof typeof NOTIFY_TEMPLATES];
@@ -433,6 +440,17 @@ export const resumeCheckReadyEmail = defineEmailTemplate<ResumeCheckReadyParams>
 export interface TipsFirstTailorParams {
   /** The user's top-fit job, when one is known. */
   job: { id: string; title: string; company: string } | null;
+  /**
+   * Same-site path the button opens when no job is named and the job list is
+   * closed for the brand (GoApply with the recruitment-info mode off: `/resume`).
+   * Absent: `/jobs`.
+   */
+  fallbackHref?: string | null;
+}
+
+/** A same-site path (`/resume`), or null: never an absolute or protocol-relative URL from params. */
+function sitePath(v: unknown): string | null {
+  return typeof v === 'string' && /^\/(?!\/)[^\s\\]*$/.test(v) ? v : null;
 }
 
 export const tipsFirstTailorEmail = defineEmailTemplate<TipsFirstTailorParams>({
@@ -446,7 +464,7 @@ export const tipsFirstTailorEmail = defineEmailTemplate<TipsFirstTailorParams>({
       heading: t('notify.tipsTailor.heading'),
       paragraphs: [job ? t('notify.tipsTailor.bodyJob', { title: job.title, company: job.company }) : t('notify.tipsTailor.body')],
       cta: t('notify.tipsTailor.cta'),
-      href: job ? `/jobs/${encodeURIComponent(job.id)}?from=tips` : '/jobs',
+      href: job ? `/jobs/${encodeURIComponent(job.id)}?from=tips` : (sitePath(params.fallbackHref) ?? '/jobs'),
       preheader: t('notify.tipsTailor.preheader'),
     });
   },
@@ -649,6 +667,56 @@ export const campusDeadlineEmail = defineEmailTemplate<CampusDeadlineParams>({
   },
 });
 
+export interface CampusFollowedParams {
+  /** RACampusEvent id. */
+  eventId: string;
+  company: string;
+  /** Path segment of the company's campus page (`/campus/{slug}`), which lists the programme with its official link. */
+  companySlug: string;
+  program: string;
+  /** The 届别 the person follows, as stored (e.g. "2027届"). */
+  graduationClass: string;
+}
+
+/** "2027届" → 2027; null when the stored value carries no year (then the copy names no year). */
+export function classYearOf(graduationClass: string | null | undefined): number | null {
+  const m = /(20\d{2})/.exec(graduationClass ?? '');
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Follow-a-company notice (GoApply's campus calendar): a company the person
+ * follows published a programme for their class year. Facts only: the
+ * company, the programme and where it is listed. Non-transactional, on the
+ * `reminders` list: the same list as the 网申截止 email and the same switch
+ * ("Reminders") as its inbox row, so it does not depend on `jobs.alerts`
+ * (off on GoApply while the recruitment-info mode is off, when the campus
+ * calendar is still open). It carries the unsubscribe link and passes both
+ * email gates; it exists on GoApply only (`markets`).
+ */
+export const campusFollowedEmail = defineEmailTemplate<CampusFollowedParams>({
+  key: NOTIFY_TEMPLATES.campusFollowed,
+  category: 'alert',
+  list: 'reminders',
+  markets: ['cn'],
+  render(ctx) {
+    const { t, params } = ctx;
+    const year = classYearOf(params.graduationClass);
+    // A string, so no locale puts a thousands separator in the year.
+    const vars = { company: params.company, program: params.program, year: year ? String(year) : '' };
+    const href = params.companySlug ? `/campus/${encodeURIComponent(params.companySlug)}` : `/campus?event=${encodeURIComponent(params.eventId)}`;
+    return simpleBody(ctx, {
+      subject: t(year ? 'notify.campusFollowed.subjectYear' : 'notify.campusFollowed.subject', vars),
+      heading: t('notify.campusFollowed.heading', vars),
+      paragraphs: [t('notify.campusFollowed.body', vars)],
+      cta: t('notify.campusFollowed.cta'),
+      href,
+      preheader: t('notify.campusFollowed.preheader', vars),
+      reasonText: t('notify.reasons.campusFollow', vars),
+    });
+  },
+});
+
 /** Every notify template, by key (for the in-app mirror and tests). */
 export const NOTIFY_EMAIL_TEMPLATES: Readonly<Record<NotifyTemplateKey, EmailTemplate<any>>> = {
   [NOTIFY_TEMPLATES.jobAlertInstant]: jobAlertInstantEmail,
@@ -664,6 +732,7 @@ export const NOTIFY_EMAIL_TEMPLATES: Readonly<Record<NotifyTemplateKey, EmailTem
   [NOTIFY_TEMPLATES.readyListReady]: readyListReadyEmail,
   [NOTIFY_TEMPLATES.kitNotOpened]: kitNotOpenedEmail,
   [NOTIFY_TEMPLATES.campusDeadline]: campusDeadlineEmail,
+  [NOTIFY_TEMPLATES.campusFollowed]: campusFollowedEmail,
 };
 
 export function isNotifyTemplateKey(key: string): key is NotifyTemplateKey {

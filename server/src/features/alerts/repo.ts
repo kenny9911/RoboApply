@@ -4,6 +4,9 @@
 // imported lazily so importing the area never opens a pool). The service and
 // its tests talk to `AlertsRepo` only.
 
+import type { Prisma } from '../../generated/prisma/client.js';
+import type prismaClient from '../../lib/prisma.js';
+import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
 import { coerceFilterSet } from '../search/index.js';
 import { jobWhereForFilters } from './jobFilters.js';
@@ -66,6 +69,9 @@ export interface AlertsRepo {
   releaseInstant(profileId: string, claimedAt: Date, previous: Date | null): Promise<void>;
   releaseDigest(profileId: string, claimedAt: Date, previous: Date | null): Promise<void>;
   createDelivery(input: { userId: string; searchProfileId: string; kind: 'instant' | 'digest_daily' | 'digest_weekly'; jobIds: string[] }): Promise<{ id: string }>;
+  /** Link the delivery to the email that carried it (`RAEmailLog.id`, from `sendEmail`). */
+  setDeliveryEmailLog(deliveryId: string, emailLogId: string): Promise<void>;
+  /** Card rows for `jobIds`. A GoApply third-party posting is left out while the recruitment-info mode is off. */
   jobCards(jobIds: readonly string[]): Promise<JobCardRow[]>;
   /** Applications in "applied" with no change for 10 days (real count). */
   noReplyCount(userId: string, now: Date): Promise<number>;
@@ -73,8 +79,28 @@ export interface AlertsRepo {
   countMatchingJobs(input: { market: Market; filters: unknown; since: Date }): Promise<number>;
 }
 
-async function db() {
+type AlertsDb = Pick<typeof prismaClient, 'rASearchProfile' | 'user' | 'rAJob' | 'rAJobUserState' | 'rATrackerEntry' | 'rAAlertDelivery'>;
+
+export interface PrismaAlertsRepoOptions {
+  /** Tests pass a fake client; production loads Prisma on first use. */
+  getDb?: () => Promise<AlertsDb>;
+  /** Where the recruitment-info mode is read from (default `process.env`). */
+  env?: EnvSource;
+}
+
+async function defaultDb(): Promise<AlertsDb> {
   return (await import('../../lib/prisma.js')).default;
+}
+
+/**
+ * R-14 / R41-1b: the `where` fragment every alert query over GoApply jobs
+ * ANDs in. Alerts have no viewer-owned rows (own imports never alert), so the
+ * viewer is null: mode off → no row at all; otherwise public postings.
+ */
+async function cnModeWhere(market: Market, env: EnvSource): Promise<Prisma.RAJobWhereInput[]> {
+  if (market !== 'cn') return [];
+  const { cnPostingsWhere } = await import('../cn/jobs/index.js');
+  return [cnPostingsWhere(null, env) as Prisma.RAJobWhereInput];
 }
 
 async function expandTaxonomy(): Promise<(ids: readonly string[]) => string[]> {
@@ -98,7 +124,9 @@ const NO_REPLY_DAYS = 10;
 /** A sent job is not sent again for the same search within this window. */
 const RESEND_WINDOW_MS = 30 * DAY_MS;
 
-export function createPrismaAlertsRepo(): AlertsRepo {
+export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): AlertsRepo {
+  const db = options.getDb ?? defaultDb;
+  const env = options.env ?? process.env;
   return {
     async dueProfiles({ brandId, now, afterId, limit }) {
       const p = await db();
@@ -169,6 +197,7 @@ export function createPrismaAlertsRepo(): AlertsRepo {
         where: {
           AND: [
             where,
+            ...(await cnModeWhere(market, env)),
             { firstSeenAt: { gt: since } },
             ...(postedSince ? [{ OR: [{ postedAt: null }, { postedAt: { gte: postedSince } }] }] : []),
           ],
@@ -240,12 +269,22 @@ export function createPrismaAlertsRepo(): AlertsRepo {
       return row;
     },
 
+    async setDeliveryEmailLog(deliveryId, emailLogId) {
+      const p = await db();
+      await p.rAAlertDelivery.updateMany({ where: { id: deliveryId }, data: { emailLogId } });
+    },
+
     async jobCards(jobIds) {
       if (!jobIds.length) return [];
       const p = await db();
-      return p.rAJob.findMany({
+      const rows = await p.rAJob.findMany({
         where: { id: { in: [...jobIds] } },
         select: {
+          // What the mode check reads (dropped from the card below).
+          market: true,
+          visibility: true,
+          ownerUserId: true,
+          sourceBoard: true,
           id: true,
           title: true,
           companyName: true,
@@ -260,6 +299,10 @@ export function createPrismaAlertsRepo(): AlertsRepo {
           salaryDisclosed: true,
         },
       });
+      // Second layer under the candidate query: a posting picked while the mode
+      // allowed it never reaches an alert, digest or inbox row once the mode is off.
+      const { filterCnPostings } = await import('../cn/jobs/index.js');
+      return filterCnPostings(rows, null, env).map(({ market: _m, visibility: _v, ownerUserId: _o, sourceBoard: _s, ...card }) => card);
     },
 
     async noReplyCount(userId, now) {
@@ -277,7 +320,8 @@ export function createPrismaAlertsRepo(): AlertsRepo {
       const { Prisma } = await import('../../generated/prisma/client.js');
       // Flagged jobs never count (same rule as the candidate list).
       const noFraud = { OR: [{ fraudFlags: { equals: Prisma.AnyNull } }, { fraudFlags: { equals: [] } }] };
-      return p.rAJob.count({ where: { AND: [where, noFraud, { firstSeenAt: { gt: since } }] } });
+      // Mode off on GoApply: the count is 0, so no "N new jobs" message goes out either.
+      return p.rAJob.count({ where: { AND: [where, ...(await cnModeWhere(market, env)), noFraud, { firstSeenAt: { gt: since } }] } });
     },
   };
 }

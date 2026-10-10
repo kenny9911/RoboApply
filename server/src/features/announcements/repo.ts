@@ -1,13 +1,20 @@
 // server/src/features/announcements/repo.ts — `RAAnnouncement` access (typed Prisma).
 //
-// NARROW ADAPTER for schema request SR-61-1. The contract has a publish switch
-// (`active`); the table has no column for it yet. Until SCHEMA-4 adds
-// `RAAnnouncement.active Boolean @default(false)`, the switch is kept inside
-// the `cohort` JSON under the reserved key `active` (never part of the
-// cohort the admin edits: `AnnouncementCohortSchema` is strict and the
-// adapter strips it). Rows without the key read as drafts, so nothing is
-// shown by accident. After the push, switch `readActive`/`writeRow` to the
-// column (reading the JSON key as a fallback for rows written before).
+// The publish switch (SR-61-1). SCHEMA-4 added `RAAnnouncement.active
+// Boolean?` — nullable, no default, and no backfill has run. So:
+//   - writes set the COLUMN (create always; update whenever the switch or the
+//     cohort changes) and keep the same value under the reserved `active` key
+//     of the `cohort` JSON, where it lived before the column, so a row written
+//     now still reads right for code that only knows the JSON key (a rollback,
+//     an older deployment during a release);
+//   - reads use the column when it is non-null, else `cohort.active` (null = a
+//     row from before the column). Rows with neither read as drafts, so
+//     nothing is shown by accident;
+//   - the "published" filter is `PUBLISHED_WHERE`, an OR of both forms. Never
+//     `{ active: true }` alone until the owner has run the backfill: rows
+//     published before the column would silently disappear.
+// The reserved key is never part of the cohort the admin edits
+// (`AnnouncementCohortSchema` is strict and the adapter strips it).
 
 import type { Prisma } from '../../generated/prisma/client.js';
 import type prismaClient from '../../lib/prisma.js';
@@ -54,6 +61,8 @@ interface Row {
   locales: string[];
   content: Prisma.JsonValue;
   cohort: Prisma.JsonValue;
+  /** The column (SR-61-1); null/absent = a row written before it existed. */
+  active?: boolean | null;
   priority: number;
   startsAt: Date;
   endsAt: Date;
@@ -64,8 +73,12 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** SR-61-1 interim: the publish switch inside the cohort JSON. */
-export function readActive(cohortJson: unknown): boolean {
+/**
+ * The publish switch: the column when it is set, else the reserved key in
+ * the cohort JSON (rows from before the column).
+ */
+export function readActive(cohortJson: unknown, column?: boolean | null): boolean {
+  if (typeof column === 'boolean') return column;
   return isObject(cohortJson) && cohortJson.active === true;
 }
 
@@ -88,7 +101,7 @@ export function fromRow(row: Row): AnnouncementRecord {
     locales: [...row.locales],
     content,
     cohort: cohort.success ? cohort.data : {},
-    active: readActive(row.cohort),
+    active: readActive(row.cohort, row.active),
     priority: row.priority,
     startsAt: row.startsAt,
     endsAt: row.endsAt,
@@ -96,17 +109,20 @@ export function fromRow(row: Row): AnnouncementRecord {
   };
 }
 
-/** The stored cohort JSON (cohort + the interim publish switch). */
+/** The stored cohort JSON (cohort + the mirrored publish switch; see the file header). */
 export function cohortJson(cohort: AnnouncementCohort, active: boolean): Prisma.InputJsonValue {
   return { ...cohort, active } as Prisma.InputJsonValue;
 }
 
 /**
- * SR-61-1 interim: the "published" filter on the JSON key, so drafts never
- * take one of the `take` slots of `listInWindow`. Once the column exists this
- * becomes `{ active: true }` (index `[brand, active, startsAt, endsAt]`).
+ * The "published" filter, applied in the query so drafts never take one of
+ * the `take` slots of `listInWindow`: the column says so, or the column is
+ * still null and the JSON key says so. Do not reduce it to `{ active: true }`
+ * (index `[brand, active, startsAt, endsAt]`) before the backfill has run.
  */
-export const PUBLISHED_WHERE = { cohort: { path: ['active'], equals: true } } satisfies Prisma.RAAnnouncementWhereInput;
+export const PUBLISHED_WHERE = {
+  OR: [{ active: true }, { active: null, cohort: { path: ['active'], equals: true } }],
+} satisfies Prisma.RAAnnouncementWhereInput;
 
 /** Rows `listInWindow` reads at most (published, in window, not seen, lowest priority first). */
 export const LIST_IN_WINDOW_LIMIT = 50;
@@ -118,6 +134,7 @@ const SELECT = {
   locales: true,
   content: true,
   cohort: true,
+  active: true,
   priority: true,
   startsAt: true,
   endsAt: true,
@@ -171,6 +188,7 @@ export function createPrismaAnnouncementsRepo(getDb: () => Promise<Db> = default
           locales: input.locales,
           content: input.content as Prisma.InputJsonValue,
           cohort: cohortJson(input.cohort, input.active),
+          active: input.active,
           priority: input.priority,
           startsAt: input.startsAt,
           endsAt: input.endsAt,
@@ -188,7 +206,10 @@ export function createPrismaAnnouncementsRepo(getDb: () => Promise<Db> = default
       if (patch.locales) data.locales = patch.locales;
       if (patch.content) data.content = patch.content as Prisma.InputJsonValue;
       if (patch.cohort !== undefined || patch.active !== undefined) {
-        data.cohort = cohortJson(patch.cohort ?? now.cohort, patch.active ?? now.active);
+        const active = patch.active ?? now.active;
+        data.cohort = cohortJson(patch.cohort ?? now.cohort, active);
+        // Also moves a row from before the column onto it (same value it read as).
+        data.active = active;
       }
       if (patch.priority !== undefined) data.priority = patch.priority;
       if (patch.startsAt) data.startsAt = patch.startsAt;

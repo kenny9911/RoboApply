@@ -8,10 +8,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The message center (used for the real opt-in tests below) imports the Prisma client module.
+vi.mock('../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
+
 import * as sms from '../../platform/sms/index.js';
 import { getBrand } from '../../platform/brand/registry.js';
+import { createUnsubscribeToken } from '../../platform/email/unsubscribe.js';
+import { createFakePrisma } from '../../test/fakePrisma.js';
 import { deliverMessage, deliveryChannels, resetDeliveryChannelsForTests, type DeliverDeps } from '../alerts/index.js';
-import type { NotificationPreferencesView } from '../notifications/index.js';
+import { NotificationCenterService, UnsubscribeService, type NotificationPreferencesView, type NotificationsDb } from '../notifications/index.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { createWechatMpChannel, registerWechatMpChannel, WECHAT_MP_CHANNEL_ID } from './channel.js';
 import { grantKind, MAX_LIVE_GRANTS, type ClaimedGrant, type GrantInput, type NotifyCnRepo } from './repo.js';
@@ -132,8 +138,10 @@ function makeService(opts: { links?: Record<string, string>; env?: Record<string
   const mem = memRepo(opts.links ?? { u1: 'openid_u1' });
   const api = opts.api ?? fakeApi();
   const preferences = vi.fn(async () => (opts.prefs === undefined ? WECHAT_ON : opts.prefs));
-  const service = new NotifyCnService({ repo: mem.repo, api, env: opts.env ?? ENV, now: () => NOW, preferences });
-  return { service, api, preferences, ...mem };
+  // The settings write is the message center's; here only that it is asked for (no database).
+  const optInWechat = vi.fn(async (_userId: string, _brand: unknown, _category: string) => 'enabled');
+  const service = new NotifyCnService({ repo: mem.repo, api, env: opts.env ?? ENV, now: () => NOW, preferences, optInWechat });
+  return { service, api, preferences, optInWechat, ...mem };
 }
 
 const goapply = getBrand('goapply');
@@ -199,11 +207,127 @@ describe('recordSubscribe (POST /subscribe-messages)', () => {
     expect(s.live('u1', 'deadline_reminder')).toBe(MAX_LIVE_GRANTS);
   });
 
+  it('an accepted prompt asks the message center to turn WeChat on for the category; a refusal or an unlinked account does not', async () => {
+    const s = makeService();
+    await s.service.recordSubscribe('u1', goapply, { templateKeys: ['deadline_reminder'], scene: 'campus_deadline', eventId: 'ev_1', results: { deadline_reminder: 'accept' } });
+    expect(s.optInWechat.mock.calls.map((c) => [c[0], c[2]])).toEqual([['u1', 'reminder']]);
+    const refused = makeService();
+    await refused.service.recordSubscribe('u1', goapply, { templateKeys: ['deadline_reminder'], scene: 'campus_deadline', results: { deadline_reminder: 'reject' } });
+    expect(refused.optInWechat).not.toHaveBeenCalled();
+    const unlinked = makeService({ links: {} });
+    await unlinked.service.recordSubscribe('u1', goapply, { templateKeys: ['deadline_reminder'], scene: 'campus_deadline', results: { deadline_reminder: 'accept' } });
+    expect(unlinked.optInWechat).not.toHaveBeenCalled();
+  });
+
+  it('a failed settings write keeps the grant (the person can still switch WeChat on in Settings)', async () => {
+    const s = makeService({ prefs: WECHAT_OFF });
+    s.optInWechat.mockRejectedValueOnce(new Error('db down'));
+    const res = await s.service.recordSubscribe('u1', goapply, { templateKeys: ['deadline_reminder'], scene: 'campus_deadline', results: { deadline_reminder: 'accept' } });
+    expect(res).toEqual({ recorded: ['deadline_reminder'], canDeliver: true, wechatChannelOn: false });
+    expect(s.live('u1', 'deadline_reminder')).toBe(1);
+  });
+
   it('is GoApply-only and off without credentials', async () => {
     await expect(makeService().service.recordSubscribe('u1', roboapply, { templateKeys: ['deadline_reminder'], scene: 'campus_deadline', results: {} })).rejects.toMatchObject({ code: 'feature_disabled' });
     await expect(
       makeService({ env: {} }).service.recordSubscribe('u1', goapply, { templateKeys: ['deadline_reminder'], scene: 'campus_deadline', results: {} }),
     ).rejects.toMatchObject({ code: 'feature_disabled' });
+  });
+});
+
+// ── WeChat opt-in from the prompt (WP-93 #23), over the real message center ──
+
+describe('an accepted prompt is the WeChat opt-in', () => {
+  const TAP = { templateKeys: ['deadline_reminder' as const], scene: 'campus_deadline' as const, eventId: 'ev_1', results: { deadline_reminder: 'accept' as const } };
+  const NOTICE = { userId: 'u1', template: 'deadline_reminder' as const, params: DEADLINE_PARAMS, href: '/campus/acme', eventId: 'ev_1' };
+
+  /** GoApply account with a phone-only (placeholder) address, the real settings service over an in-memory database. */
+  function world(storedPrefs: unknown = null) {
+    const db = createFakePrisma();
+    db.$rows('user').push({ id: 'u1', email: '8613800000000@users.goapply.invalid', emailIsPlaceholder: true, brand: 'goapply' });
+    db.$rows('seekerProfile').push({ id: 'sp1', userId: 'u1', market: null, notificationPreferences: storedPrefs, weeklyNudgeOptOut: false });
+    const center = new NotificationCenterService({
+      db: db as unknown as NotificationsDb,
+      env: ENV,
+      now: () => NOW,
+      capabilities: async () => ({ email: false, push: false, wechat: true, invitations: false, alerts: false }),
+    });
+    const mem = memRepo({ u1: 'openid_u1' });
+    const api = fakeApi();
+    const service = new NotifyCnService({
+      repo: mem.repo,
+      api,
+      env: ENV,
+      now: () => NOW,
+      preferences: (userId, brand) => center.preferencesFor(userId, brand),
+      optInWechat: (userId, brand, category) => center.enableChannelIfDefault(userId, brand, category as 'reminder', 'wechat'),
+    });
+    const stored = () => (db.$rows('seekerProfile')[0]!.notificationPreferences as { center?: { channels?: Record<string, string[]>; channelsOff?: Record<string, string[]> } } | null)?.center;
+    const ctx = { id: 'sp1', userId: 'u1', brand: goapply };
+    return { db, center, service, api, stored, ctx, ...mem };
+  }
+
+  it('default settings (no stored choice): accept → WeChat is on for reminders and the notice is delivered', async () => {
+    const w = world();
+    // Before the tap: WeChat is opt-in, so the default leaves it out and nothing could be delivered.
+    expect((await w.center.preferencesFor('u1', goapply))!.channels.reminder).toEqual(['in_app']);
+    const res = await w.service.recordSubscribe('u1', goapply, TAP);
+    expect(res).toEqual({ recorded: ['deadline_reminder'], canDeliver: true, wechatChannelOn: true });
+    // Stored as the default list plus WeChat, so Settings shows the switch on and email still follows the default later.
+    expect(w.stored()!.channels).toEqual({ reminder: ['in_app', 'email', 'wechat'] });
+    expect((await w.center.getPreferences(w.ctx)).channels.reminder).toEqual(['in_app', 'wechat']);
+    expect(await w.service.sendNotice(NOTICE)).toEqual({ delivered: true, providerRef: 'm1' });
+    expect(w.api.sendSubscribeMessage).toHaveBeenCalledTimes(1);
+    // Other categories are untouched.
+    expect(w.stored()!.channels!.tips).toBeUndefined();
+  });
+
+  it('explicit off: someone who turned WeChat off in Settings stays off, the grant is kept, nothing is sent', async () => {
+    const w = world();
+    await w.service.recordSubscribe('u1', goapply, TAP);
+    // They open Settings and turn the WeChat switch off for reminders.
+    await w.center.patchPreferences(w.ctx, { channels: { reminder: ['in_app'] } });
+    // Email is not offered to this account right now, so it was not theirs to turn off: it stays stored and follows the default later.
+    expect(w.stored()).toMatchObject({ channels: { reminder: ['in_app', 'email'] }, channelsOff: { reminder: ['wechat'] } });
+    // A later accepted prompt does not overrule that choice.
+    const res = await w.service.recordSubscribe('u1', goapply, { ...TAP, eventId: 'ev_2' });
+    expect(res).toEqual({ recorded: ['deadline_reminder'], canDeliver: true, wechatChannelOn: false });
+    expect(w.stored()!.channels).toEqual({ reminder: ['in_app', 'email'] });
+    expect(await w.service.sendNotice(NOTICE)).toEqual({ delivered: false, skippedReason: 'preference_off' });
+    expect(w.api.sendSubscribeMessage).not.toHaveBeenCalled();
+    expect(w.live('u1', 'deadline_reminder')).toBe(2);
+    // Turning the switch back on in Settings lifts it; the kept grant is then used.
+    await w.center.patchPreferences(w.ctx, { channels: { reminder: ['in_app', 'wechat'] } });
+    expect(w.stored()!.channelsOff).toBeUndefined();
+    expect((await w.service.sendNotice(NOTICE)).delivered).toBe(true);
+  });
+
+  it('a stored list that never had WeChat is not an "off" (an email unsubscribe, a choice saved earlier)', async () => {
+    // Unsubscribed from reminder emails through a link: the list is stored without email, WeChat was never on.
+    const w = world();
+    const env = { ...ENV, EMAIL_UNSUBSCRIBE_SECRET: 'test-unsubscribe-secret-0123456789' };
+    const unsub = new UnsubscribeService({ db: w.db as unknown as NotificationsDb, center: w.center, env, now: () => NOW });
+    const token = createUnsubscribeToken({ brand: 'goapply', list: 'reminders', userId: 'u1', email: 'someone@example.test', env, now: NOW });
+    await unsub.unsubscribe(token, goapply);
+    expect(w.stored()!.channels).toEqual({ reminder: ['in_app'] });
+    expect((await w.service.recordSubscribe('u1', goapply, TAP)).wechatChannelOn).toBe(true);
+    // Email stays off (their unsubscribe holds); only WeChat was added.
+    expect(w.stored()!.channels).toEqual({ reminder: ['in_app', 'wechat'] });
+    expect((await w.service.sendNotice(NOTICE)).delivered).toBe(true);
+  });
+
+  it('WeChat’s own acceptance event opts in too, when the page’s report never arrived', async () => {
+    const w = world();
+    await w.service.handleServerMessage(signed(), Buffer.from(popupEvent('openid_u1', [['Tpl_Deadline_01', 'accept']])));
+    expect(w.stored()!.channels).toEqual({ reminder: ['in_app', 'email', 'wechat'] });
+    expect((await w.service.sendNotice({ ...NOTICE, eventId: null })).delivered).toBe(true);
+  });
+
+  it('billing notices need no opt-in (always sent on every available channel) and write no choice', async () => {
+    const w = world();
+    const res = await w.service.recordSubscribe('u1', goapply, { templateKeys: ['payment_success'], scene: 'payment', results: { payment_success: 'accept' } });
+    expect(res).toEqual({ recorded: ['payment_success'], canDeliver: true, wechatChannelOn: true });
+    expect(w.stored()?.channels).toBeUndefined();
   });
 });
 
@@ -311,7 +435,7 @@ describe('sendNotice', () => {
 
   it('grants given for an older template id are used up, not sent with the new id', async () => {
     const s = await withGrant({ env: { ...ENV, WECHAT_MP_TEMPLATE_DEADLINE: 'Tpl_Old_00001' } });
-    const svc = new NotifyCnService({ repo: s.repo, api: s.api, env: ENV, now: () => NOW, preferences: async () => WECHAT_ON });
+    const svc = new NotifyCnService({ repo: s.repo, api: s.api, env: ENV, now: () => NOW, preferences: async () => WECHAT_ON, optInWechat: async () => 'already' });
     expect(await svc.sendNotice({ userId: 'u1', template: 'deadline_reminder', params: DEADLINE_PARAMS, href: null })).toEqual({ delivered: false, skippedReason: 'no_subscription' });
     expect(s.api.sendSubscribeMessage).not.toHaveBeenCalled();
     expect(s.live('u1', 'deadline_reminder')).toBe(0);

@@ -12,6 +12,18 @@
 //      only when the subscription's channel is 'email', or when the user has
 //      no seeker profile and so no inbox (WP-39a still applies the user's
 //      channel/quiet-hour checks). 'in_app' and 'wechat' get the inbox row.
+//      A 'wechat' subscription (the person accepted WeChat's prompt at the
+//      截止提醒 tap) also gets ONE WeChat notice, with the final (1-day)
+//      reminder: each accepted prompt allows one message, so it is spent on
+//      the reminder that matters most. It goes out after the inbox row is
+//      written and mirrors it (`notifyCnService().sendNotice`, which checks
+//      the linked account, the person's settings and the accepted prompt).
+//      Quiet hours (21:00–08:00 in the person's time zone, or their own): a
+//      WeChat notice is a push, and most deadlines are stated as 23:59, so the
+//      final window opens at about midnight. A WeChat subscription's final
+//      reminder therefore waits, unclaimed, for the first run after quiet
+//      hours end; the inbox row and the notice then go out together. It does
+//      not wait when the programme would close before that run.
 //      The relative phrase ("明天截止", "3天后截止") is the real number of
 //      Beijing calendar days left, not the window label.
 //   2. Follow a company: when a programme of a followed company and the
@@ -20,7 +32,15 @@
 //      written under a per-programme Postgres advisory lock so a publish and
 //      the hourly run cannot both send it). Run right after publish (service
 //      onPublished) and again hourly for programmes verified in the last 7
-//      days, so a failed run catches up.
+//      days, so a failed run catches up. A follower whose subscription's
+//      channel is 'email' also gets the `notify.campus_followed` email
+//      (reminders list, like the inbox row's category; the platform's email
+//      gates decide whether it is sent).
+//
+// Inbox rows carry a template key and params (`CAMPUS_INBOX_TEMPLATES`): the
+// message center renders `inbox.templates.campus.{deadline,followed}` in the
+// reader's language. The stored title and body are the fallback for a client
+// that does not know the key.
 //
 // Inbox links open the company's page (/campus/{slug}), where the programme is
 // listed with its official link.
@@ -35,13 +55,15 @@ import { EMAIL_SEND_KIND, getEmailTemplate, type EmailSendPayload } from '../../
 import { NOTIFY_TEMPLATES } from '../../../platform/email/templates/notify/index.js';
 import { enqueue, type CronContext, type CronResult } from '../../../platform/queue/index.js';
 import { logger } from '../../../services/LoggerService.js';
+import { DEFAULT_QUIET_HOURS, inQuietHours, isValidTimeZone, msUntilQuietEnds, parseStoredPrefs, type QuietHours } from '../../alerts/index.js';
 import type { CreateNotificationInput } from '../../notifications/index.js';
+import type { WechatNoticeInput } from '../../notify-cn/index.js';
 import { CAMPUS_FOLLOW_WINDOW_DAYS, CAMPUS_REMINDER_DAYS, CAMPUS_TIME_ZONE, campusCompanySlug, normalizeCampusCompany } from './contract.js';
 import { CAMPUS_EVENT_SELECT, DAY_MS, type CampusEventRow } from './views.js';
 
 type Db = typeof prismaClient;
 
-/** Inbox template keys (client-rendered under `inbox.templates.*` once INT adds them; the stored title/body are the fallback). */
+/** Inbox template keys, client-rendered as `inbox.templates.campus.{deadline,followed}`; the stored title/body are the fallback. */
 export const CAMPUS_INBOX_TEMPLATES = {
   deadline: 'campus.deadline',
   followed: 'campus.followed',
@@ -68,12 +90,21 @@ export interface CampusNotifyRepository {
   recentlyPublished(market: string, since: Date, now: Date, take: number): Promise<CampusEventRow[]>;
   /** Users of the brand following this company (normalized) for this 届别. */
   followers(brand: BrandId, companyNameNormalized: string, graduationClass: string): Promise<string[]>;
+  /** Of `userIds`, the followers of this company and 届别 who asked for the notice by email (subscription channel 'email'). */
+  emailFollowers?(brand: BrandId, companyNameNormalized: string, graduationClass: string, userIds: string[]): Promise<Set<string>>;
   /** Users among `userIds` who already have a follow notice for this programme. */
   alreadyNotified(userIds: string[], eventId: string): Promise<Set<string>>;
   /** Run `fn` while holding the programme's follow-notice lock (one sender at a time per programme). */
   withFollowLock<T>(eventId: string, fn: () => Promise<T>): Promise<T>;
-  /** Seeker locale and time zone per user (absent = no seeker profile). */
-  profiles(userIds: string[]): Promise<Map<string, { locale: string | null; timezone: string | null }>>;
+  /** Seeker locale, time zone and own quiet hours per user (absent = no seeker profile; no `quietHours` = the default). */
+  profiles(userIds: string[]): Promise<Map<string, CampusProfile>>;
+}
+
+export interface CampusProfile {
+  locale: string | null;
+  timezone: string | null;
+  /** The person's own quiet hours from Settings; absent or null = 21:00–08:00. */
+  quietHours?: QuietHours | null;
 }
 
 export interface CampusNotifyDeps {
@@ -81,7 +112,12 @@ export interface CampusNotifyDeps {
   createNotification?: (input: CreateNotificationInput) => Promise<{ id: string }>;
   enqueueEmail?: (payload: EmailSendPayload, opts: { brand: BrandId; userId: string; dedupeKey: string }) => Promise<unknown>;
   emailTemplateRegistered?: (key: string) => boolean;
+  /** One WeChat 公众号 notice (WP-73 `sendNotice`); never throws for expected skips. */
+  sendWechat?: (input: WechatNoticeInput<'deadline_reminder'>) => Promise<{ delivered: boolean; skippedReason?: string }>;
 }
+
+/** The reminder that carries the WeChat notice: the last one before the close. */
+export const WECHAT_REMINDER_DAYS = Math.min(...CAMPUS_REMINDER_DAYS);
 
 /** The reminder window a subscription is in now (3 or 1 days before close), or null. */
 export function reminderWindow(closesAt: Date, now: Date): { days: number; start: Date } | null {
@@ -90,6 +126,24 @@ export function reminderWindow(closesAt: Date, now: Date): { days: number; start
   const days = [...CAMPUS_REMINDER_DAYS].sort((a, b) => a - b).find((d) => left <= d * DAY_MS);
   if (days === undefined) return null;
   return { days, start: new Date(closesAt.getTime() - days * DAY_MS) };
+}
+
+/** The reminders cron runs hourly: a reminder that waits is picked up at most this long after quiet hours end. */
+const RUN_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Should a reminder that also goes out as a WeChat notice wait for the
+ * morning? True inside the person's quiet hours (their own, else 21:00–08:00;
+ * in their time zone, else Beijing time) when the programme still closes after
+ * the first run that follows them. False when it closes sooner: a late-night
+ * notice is better than none.
+ */
+export function wechatReminderWaits(closesAt: Date, now: Date, profile: Pick<CampusProfile, 'timezone' | 'quietHours'>): boolean {
+  const tz = isValidTimeZone(profile.timezone) ? profile.timezone.trim() : CAMPUS_TIME_ZONE;
+  const quiet = profile.quietHours ?? DEFAULT_QUIET_HOURS;
+  if (!inQuietHours(now, tz, quiet)) return false;
+  const nextRunAfterQuiet = now.getTime() + msUntilQuietEnds(now, tz, quiet) + RUN_INTERVAL_MS;
+  return closesAt.getTime() > nextRunAfterQuiet;
 }
 
 // Asia/Shanghai has had no daylight saving since 1991: a fixed UTC+8.
@@ -150,17 +204,22 @@ export function followedText(event: Pick<CampusEventRow, 'companyName' | 'title'
 const defaultCreate = async (input: CreateNotificationInput): Promise<{ id: string }> =>
   (await import('../../notifications/index.js')).notificationCenterService.create(input);
 
+/** WeChat's sender, loaded on first use (the notify-cn area registers its routes and channel on import). */
+const defaultSendWechat: NonNullable<CampusNotifyDeps['sendWechat']> = async (input) =>
+  (await import('../../notify-cn/index.js')).notifyCnService().sendNotice(input);
+
 /** The company's page, which lists the programme with its official link. */
 const href = (companyName: string) => `/campus/${encodeURIComponent(campusCompanySlug(companyName))}`;
 
-async function tryCreate(create: NonNullable<CampusNotifyDeps['createNotification']>, input: CreateNotificationInput): Promise<boolean> {
+/** The inbox row's id, or null when it was not written. */
+async function tryCreate(create: NonNullable<CampusNotifyDeps['createNotification']>, input: CreateNotificationInput): Promise<string | null> {
   try {
-    await create(input);
-    return true;
+    const row = await create(input);
+    return row?.id ?? null;
   } catch (err) {
     // No seeker profile (404) or a write failure: the email (when allowed) still goes.
     logger.warn('CAMPUS', 'inbox row not written', { userId: input.userId, error: err instanceof Error ? err.message : String(err) });
-    return false;
+    return null;
   }
 }
 
@@ -169,7 +228,8 @@ export async function notifyFollowers(event: CampusEventRow, brand: BrandId, dep
   if (event.status !== 'published' || !event.verifiedAt) return 0;
   const repo = deps.repo ?? defaultCampusNotifyRepository();
   const create = deps.createNotification ?? defaultCreate;
-  const userIds = await repo.followers(brand, normalizeCampusCompany(event.companyName), event.graduationClass);
+  const normalized = normalizeCampusCompany(event.companyName);
+  const userIds = await repo.followers(brand, normalized, event.graduationClass);
   if (!userIds.length) return 0;
   // Read-then-write under the programme's lock: a publish and an overlapping
   // hourly run wait for each other, and the second sees the first one's rows.
@@ -178,24 +238,42 @@ export async function notifyFollowers(event: CampusEventRow, brand: BrandId, dep
     const todo = userIds.filter((u) => !done.has(u));
     if (!todo.length) return 0;
     const profiles = await repo.profiles(todo);
+    // Email only for followers who chose it, and only when the template is there to render.
+    const emailReady = (deps.emailTemplateRegistered ?? ((k: string) => Boolean(getEmailTemplate(k))))(NOTIFY_TEMPLATES.campusFollowed);
+    const wantsEmail = emailReady && repo.emailFollowers ? await repo.emailFollowers(brand, normalized, event.graduationClass, todo) : new Set<string>();
+    const sendEmail = deps.enqueueEmail ?? ((payload, opts) => enqueue(EMAIL_SEND_KIND, payload, opts));
     let sent = 0;
     for (const userId of todo) {
       const profile = profiles.get(userId);
       if (!profile) continue; // no seeker profile → no inbox to write to (and no ledger): skipped
       const text = followedText(event, profile.locale);
-      const ok = await tryCreate(create, {
+      const params = {
+        eventId: event.id,
+        company: event.companyName,
+        companySlug: campusCompanySlug(event.companyName),
+        program: event.title,
+        graduationClass: event.graduationClass,
+      };
+      const rowId = await tryCreate(create, {
         userId,
         brand,
         category: 'reminder',
         templateKey: CAMPUS_INBOX_TEMPLATES.followed,
-        params: { eventId: event.id, company: event.companyName, program: event.title, graduationClass: event.graduationClass },
+        params,
         title: text.title,
         body: text.body,
         href: href(event.companyName),
         relatedEntityType: 'campus_event',
         relatedEntityId: event.id,
       });
-      if (ok) sent += 1;
+      if (!rowId) continue;
+      sent += 1;
+      if (wantsEmail.has(userId)) {
+        // The inbox row is the once-per-programme ledger; the dedupe key covers a retried run.
+        await Promise.resolve(sendEmail({ template: NOTIFY_TEMPLATES.campusFollowed, userId, params }, { brand, userId, dedupeKey: `campus.followed:${event.id}:${userId}` })).catch(
+          (err: unknown) => logger.warn('CAMPUS', 'follow email not queued', { userId, error: err instanceof Error ? err.message : String(err) }),
+        );
+      }
     }
     return sent;
   });
@@ -210,18 +288,21 @@ export async function produceCampusReminders(ctx: CronContext, deps: CampusNotif
   const create = deps.createNotification ?? defaultCreate;
   const emailReady = (deps.emailTemplateRegistered ?? ((k: string) => Boolean(getEmailTemplate(k))))(NOTIFY_TEMPLATES.campusDeadline);
   const sendEmail = deps.enqueueEmail ?? ((payload, opts) => enqueue(EMAIL_SEND_KIND, payload, opts));
+  const sendWechat = deps.sendWechat ?? defaultSendWechat;
 
   let reminders = 0;
   let inApp = 0;
   let emails = 0;
+  let wechat = 0;
   let alreadySent = 0;
+  let deferred = 0;
   let scanned = 0;
   let cursor: string | null = null;
   for (let page = 0; page < REMINDER_MAX_PAGES; page += 1) {
     if (page > 0 && ctx.budget.exhausted(5_000)) break;
     const due = await repo.dueReminders(brand, market, ctx.now, cursor, REMINDER_BATCH);
     scanned += due.length;
-    const profiles = due.length ? await repo.profiles([...new Set(due.map((d) => d.userId))]) : new Map();
+    const profiles: Map<string, CampusProfile> = due.length ? await repo.profiles([...new Set(due.map((d) => d.userId))]) : new Map();
     for (const d of due) {
       const closes = d.event.applyClosesAt;
       const window = closes ? reminderWindow(closes, ctx.now) : null;
@@ -230,12 +311,19 @@ export async function produceCampusReminders(ctx: CronContext, deps: CampusNotif
         alreadySent += 1;
         continue;
       }
+      const profile = profiles.get(d.userId);
+      // The reminder that is pushed to WeChat keeps quiet hours: left unclaimed,
+      // so the first run after they end writes the inbox row and sends the notice.
+      const pushesWechat = Boolean(profile) && d.channel === 'wechat' && window.days <= WECHAT_REMINDER_DAYS;
+      if (pushesWechat && wechatReminderWaits(closes, ctx.now, profile!)) {
+        deferred += 1;
+        continue;
+      }
       if (ctx.budget.exhausted(2_000)) break;
       if (!(await repo.claimReminder(d.subscriptionId, window.start, ctx.now))) {
         alreadySent += 1;
         continue;
       }
-      const profile = profiles.get(d.userId) as { locale: string | null; timezone: string | null } | undefined;
       const daysLeft = calendarDaysLeft(closes, ctx.now);
       const text = deadlineText(d.event, daysLeft, profile?.locale);
       const params = {
@@ -248,8 +336,9 @@ export async function produceCampusReminders(ctx: CronContext, deps: CampusNotif
         timeZone: CAMPUS_TIME_ZONE,
         days: daysLeft,
       };
+      let notificationId: string | null = null;
       if (profile) {
-        const ok = await tryCreate(create, {
+        notificationId = await tryCreate(create, {
           userId: d.userId,
           brand,
           category: 'reminder',
@@ -261,7 +350,27 @@ export async function produceCampusReminders(ctx: CronContext, deps: CampusNotif
           relatedEntityType: 'campus_event',
           relatedEntityId: d.event.id,
         });
-        if (ok) inApp += 1;
+        if (notificationId) inApp += 1;
+      }
+      // WeChat: once, with the final reminder, for a subscription made with
+      // WeChat's prompt accepted, and only as a mirror of the inbox row. The
+      // event id is the one the tap sent, so this notice spends the permission
+      // given for this programme and not one given for another.
+      if (notificationId && pushesWechat) {
+        try {
+          const out = await sendWechat({
+            userId: d.userId,
+            template: 'deadline_reminder',
+            params: { company: params.company, program: params.program, closesAt: params.closesAt, days: daysLeft },
+            href: href(d.event.companyName),
+            notificationId,
+            eventId: d.event.id,
+          });
+          if (out.delivered) wechat += 1;
+        } catch (err) {
+          // The inbox row is the reminder; a WeChat failure never fails the run.
+          logger.warn('CAMPUS', 'WeChat notice not sent', { userId: d.userId, error: err instanceof Error ? err.message : String(err) });
+        }
       }
       // Email only when the user chose it, or when there is no inbox to write to.
       if (emailReady && (d.channel === 'email' || !profile)) {
@@ -286,13 +395,18 @@ export async function produceCampusReminders(ctx: CronContext, deps: CampusNotif
     const recent = await repo.recentlyPublished(market, since, ctx.now, 200);
     for (const ev of recent) {
       if (ctx.budget.exhausted(2_000)) break;
-      followNotices += await notifyFollowers(ev, brand, { repo, createNotification: create });
+      followNotices += await notifyFollowers(ev, brand, {
+        repo,
+        createNotification: create,
+        enqueueEmail: deps.enqueueEmail,
+        emailTemplateRegistered: deps.emailTemplateRegistered,
+      });
     }
   }
 
   const processed = reminders + followNotices;
   if (!processed && !scanned && !alreadySent) return { skipped: 'no_work', processed: 0, followNotices: 0 };
-  return { processed, reminders, inApp, emails, alreadySent, followNotices, candidates: scanned };
+  return { processed, reminders, inApp, emails, wechat, alreadySent, deferred, followNotices, candidates: scanned };
 }
 
 // ── Prisma repository ──
@@ -343,6 +457,15 @@ export function createCampusNotifyRepository(getDb: () => Promise<Db>): CampusNo
       });
       return [...new Set(rows.map((r) => r.userId))];
     },
+    async emailFollowers(brand, companyNameNormalized, graduationClass, userIds) {
+      if (!userIds.length) return new Set();
+      const db = await getDb();
+      const rows = await db.rACampusSubscription.findMany({
+        where: { kind: 'company', companyNameNormalized, graduationClass, channel: 'email', userId: { in: userIds }, user: { brand } },
+        select: { userId: true },
+      });
+      return new Set(rows.map((r) => r.userId));
+    },
     async alreadyNotified(userIds, eventId) {
       if (!userIds.length) return new Set();
       const db = await getDb();
@@ -366,11 +489,14 @@ export function createCampusNotifyRepository(getDb: () => Promise<Db>): CampusNo
       );
     },
     async profiles(userIds) {
-      const out = new Map<string, { locale: string | null; timezone: string | null }>();
+      const out = new Map<string, CampusProfile>();
       if (!userIds.length) return out;
       const db = await getDb();
-      const rows = await db.seekerProfile.findMany({ where: { userId: { in: userIds } }, select: { userId: true, locale: true, timezone: true } });
-      for (const r of rows) out.set(r.userId, { locale: r.locale, timezone: r.timezone });
+      const rows = await db.seekerProfile.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, locale: true, timezone: true, notificationPreferences: true },
+      });
+      for (const r of rows) out.set(r.userId, { locale: r.locale, timezone: r.timezone, quietHours: parseStoredPrefs(r.notificationPreferences).quietHours ?? null });
       return out;
     },
   };
