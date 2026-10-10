@@ -14,6 +14,10 @@
 
 import { roboApi } from './client';
 import { API_BASE } from '../config';
+import { apiUrl, call, seg, withQuery, type CallOptions, type In } from './contracts/wire';
+import type * as AD from './contracts/admin';
+import type * as CR from './contracts/cn/referrals';
+import type { RefundQuoteResponse } from './contracts/credits';
 
 const BASE = '/api/v1/roboapply/v2/admin';
 
@@ -357,3 +361,150 @@ export function adminCsvUrl(
 ): string {
   return `${API_BASE}${BASE}/${which}.csv${qs(params)}`;
 }
+
+// ── Admin console additions (WP-74) ────────────────────────────────────
+//
+// Thin typed wrappers over server/src/features/admin/contract.ts (mounted at
+// /api/v1/roboapply/admin), plus the admin endpoints of other areas this
+// console renders: the GoApply referral-code queue (WP-54) and the refund
+// quote (WP-21a). Personal-information requests use lib/api/compliance.ts.
+//
+// Endpoints:
+//   GET    /api/v1/roboapply/admin/system
+//   GET    /api/v1/roboapply/admin/system/queue
+//   POST   /api/v1/roboapply/admin/system/queue/:id/retry
+//   GET    /api/v1/roboapply/admin/costs          (+ costs.csv, browser download)
+//   GET    /api/v1/roboapply/admin/safety
+//   GET    /api/v1/roboapply/admin/reports
+//   POST   /api/v1/roboapply/admin/reports/:id/resolve
+//   GET    /api/v1/roboapply/admin/overrides
+//   POST   /api/v1/roboapply/admin/overrides
+//   DELETE /api/v1/roboapply/admin/overrides/:id
+//   GET    /api/v1/roboapply/admin/copilot-feedback
+//   GET    /api/v1/roboapply/admin/cn/referrals/queue
+//   POST   /api/v1/roboapply/admin/referrals/:id/moderate   (WP-54 service + audit row)
+//   GET    /api/v1/roboapply/admin/credits/refund-quote
+
+
+const CONSOLE = '/api/v1/roboapply/admin';
+
+export type {
+  AdminFeedbackItem,
+  AdminFeedbackResponse,
+  AdminOverrideView,
+  AdminOverridesResponse,
+  AlertHit,
+  AlertKey,
+  BrandHealth,
+  CostRow,
+  CostsResponse,
+  ProviderUsageRow,
+  QueueKindRow,
+  ReportItem,
+  ReportsResponse,
+  ResolveDecision,
+  SafetyEventView,
+  SafetyResponse,
+  SystemStatusResponse,
+  WorkItemView,
+  WorkItemsResponse,
+} from './contracts/admin';
+export type { ReferralQueueItem, ReferralQueueResponse } from './contracts/cn/referrals';
+export type { RefundQuoteResponse } from './contracts/credits';
+
+/** `admin.system` — GET /api/v1/roboapply/admin/system */
+export function getSystemStatus(query?: In<typeof AD.SystemQuerySchema>, opts?: CallOptions): Promise<AD.SystemStatusResponse> {
+  return call<AD.SystemStatusResponse>('GET', withQuery(`${CONSOLE}/system`, query), opts);
+}
+
+/** `admin.queue` — GET /api/v1/roboapply/admin/system/queue */
+export function listWorkItems(query?: In<typeof AD.QueueListQuerySchema>, opts?: CallOptions): Promise<AD.WorkItemsResponse> {
+  return call<AD.WorkItemsResponse>('GET', withQuery(`${CONSOLE}/system/queue`, query), opts);
+}
+
+/** `admin.retryWorkItem` — POST /api/v1/roboapply/admin/system/queue/:id/retry */
+export function retryWorkItem(id: string, opts?: CallOptions): Promise<AD.RetryWorkItemResponse> {
+  return call<AD.RetryWorkItemResponse>('POST', `${CONSOLE}/system/queue/${seg(id)}/retry`, opts);
+}
+
+/** `admin.costs` — GET /api/v1/roboapply/admin/costs */
+export function getCosts(query?: In<typeof AD.CostsQuerySchema>, opts?: CallOptions): Promise<AD.CostsResponse> {
+  return call<AD.CostsResponse>('GET', withQuery(`${CONSOLE}/costs`, query), opts);
+}
+
+/** Download link for `GET /api/v1/roboapply/admin/costs.csv` (an anchor `href`). */
+export function costsCsvUrl(query?: In<typeof AD.CostsQuerySchema>): string {
+  return apiUrl(withQuery(`${CONSOLE}/costs.csv`, query));
+}
+
+/** `admin.safety` — GET /api/v1/roboapply/admin/safety */
+export function getSafety(query?: In<typeof AD.SafetyQuerySchema>, opts?: CallOptions): Promise<AD.SafetyResponse> {
+  return call<AD.SafetyResponse>('GET', withQuery(`${CONSOLE}/safety`, query), opts);
+}
+
+/** `admin.reports` — GET /api/v1/roboapply/admin/reports */
+export function listReports(query?: In<typeof AD.ReportsQuerySchema>, opts?: CallOptions): Promise<AD.ReportsResponse> {
+  return call<AD.ReportsResponse>('GET', withQuery(`${CONSOLE}/reports`, query), opts);
+}
+
+/** `admin.resolveReport` — POST /api/v1/roboapply/admin/reports/:id/resolve */
+export function resolveReport(id: string, body: In<typeof AD.ResolveReportBodySchema>, opts?: CallOptions): Promise<AD.ResolveReportResponse> {
+  return call<AD.ResolveReportResponse>('POST', `${CONSOLE}/reports/${seg(id)}/resolve`, { ...opts, body });
+}
+
+/** `admin.overrides` — GET /api/v1/roboapply/admin/overrides */
+export function listOverrides(query?: In<typeof AD.AdminOverridesQuerySchema>, opts?: CallOptions): Promise<AD.AdminOverridesResponse> {
+  return call<AD.AdminOverridesResponse>('GET', withQuery(`${CONSOLE}/overrides`, query), opts);
+}
+
+/** `admin.createOverride` — POST /api/v1/roboapply/admin/overrides */
+export function createOverride(body: In<typeof AD.AdminCreateOverrideBodySchema>, opts?: CallOptions): Promise<AD.AdminOverrideView> {
+  return call<AD.AdminOverrideView>('POST', `${CONSOLE}/overrides`, { ...opts, body });
+}
+
+/** `admin.deleteOverride` — DELETE /api/v1/roboapply/admin/overrides/:id */
+export function deleteOverride(id: string, query?: In<typeof AD.DeleteOverrideQuerySchema>, opts?: CallOptions): Promise<null> {
+  return call<null>('DELETE', withQuery(`${CONSOLE}/overrides/${seg(id)}`, query), opts);
+}
+
+/** `admin.copilotFeedback` — GET /api/v1/roboapply/admin/copilot-feedback */
+export function listCopilotFeedback(query?: In<typeof AD.CopilotFeedbackQuerySchema>, opts?: CallOptions): Promise<AD.AdminFeedbackResponse> {
+  return call<AD.AdminFeedbackResponse>('GET', withQuery(`${CONSOLE}/copilot-feedback`, query), opts);
+}
+
+/** `cn.referrals.admin.queue` — GET /api/v1/roboapply/admin/cn/referrals/queue (WP-54) */
+export function listReferralQueue(query?: In<typeof CR.ReferralQueueQuerySchema>, opts?: CallOptions): Promise<CR.ReferralQueueResponse> {
+  return call<CR.ReferralQueueResponse>('GET', withQuery(`${CONSOLE}/cn/referrals/queue`, query), opts);
+}
+
+/**
+ * `admin.moderateReferral` — POST /api/v1/roboapply/admin/referrals/:id/moderate.
+ * Same body and rules as WP-54's /admin/cn/referrals/:id/moderate, plus a
+ * SeekerActivityLog audit row (the console uses this one).
+ */
+export function moderateReferralCode(id: string, body: In<typeof CR.ModerateReferralCodeBodySchema>, opts?: CallOptions): Promise<{ id: string; status: string }> {
+  return call<{ id: string; status: string }>('POST', `${CONSOLE}/referrals/${seg(id)}/moderate`, { ...opts, body });
+}
+
+/** `credits.admin.refundQuote` — GET /api/v1/roboapply/admin/credits/refund-quote?userId (WP-21a) */
+export function getRefundQuote(userId: string, opts?: CallOptions): Promise<RefundQuoteResponse> {
+  return call<RefundQuoteResponse>('GET', withQuery(`${CONSOLE}/credits/refund-quote`, { userId }), opts);
+}
+
+export const adminConsoleApi = {
+  getSystemStatus,
+  listWorkItems,
+  retryWorkItem,
+  getCosts,
+  costsCsvUrl,
+  getSafety,
+  listReports,
+  resolveReport,
+  listOverrides,
+  createOverride,
+  deleteOverride,
+  listCopilotFeedback,
+  listReferralQueue,
+  moderateReferralCode,
+  getRefundQuote,
+};

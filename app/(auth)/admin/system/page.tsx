@@ -1,8 +1,9 @@
-// /admin/system — route shell (FND-6b). Admin: system status.
-//
-// STUB. Owner: WP-74, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/system — platform health, cost by SKU × brand × day, Assistant
+// feedback and GoApply content safety (WP-74; ARCHITECTURE.md §10.4).
+// Admin only: the console checks the role and every API route enforces it.
+
+import { SystemConsole } from '../../../../components/v3/admin';
 
 export default function AdminSystemPage() {
-  return <div hidden data-route-stub="/admin/system" data-owner="WP-74" />;
+  return <SystemConsole />;
 }
