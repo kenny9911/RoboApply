@@ -10,7 +10,11 @@
 
 export const EXT_TOKEN_PREFIX = 'rax_';
 export const EXT_TOKEN_RE = /^rax_[A-Za-z0-9_-]{20,}$/;
-export const PAIR_CODE_RE = /^[A-Z0-9]{8}$/;
+/** 8 characters, no 0/O/1/I (the server's alphabet). */
+export const PAIR_CODE_RE = /^[A-HJ-NP-Z2-9]{8}$/;
+/** What the extension sends as its device name and `browser` when it redeems a pair code. */
+export const EXT_BROWSER_NAMES = ['Chrome', 'Edge'] as const;
+export type ExtBrowserName = (typeof EXT_BROWSER_NAMES)[number];
 
 /** Question types that never get an AI answer (answer bank / profile only, or left to the user). */
 export const PROTECTED_QUESTION_TYPES = [
@@ -29,6 +33,8 @@ export const PROTECTED_QUESTION_TYPES = [
   'certification',
   'clearance',
   'notice_period',
+  /** Grades and test scores (GPA, 绩点, 排名, 成绩, 四六级 / CET, IELTS, TOEFL): the user's own record, never drafted. */
+  'grades',
 ] as const;
 export type ProtectedQuestionType = (typeof PROTECTED_QUESTION_TYPES)[number];
 
@@ -38,13 +44,20 @@ export type AutofillOutcome = (typeof AUTOFILL_OUTCOMES)[number];
 export type BrandIdWire = 'roboapply' | 'goapply';
 export type FitTier = 'great' | 'good' | 'possible' | 'unlikely';
 
-/** GET /ext/me */
+/**
+ * GET /ext/me. `flags.aiAnswers` is true only when AI drafts may be offered
+ * for this account (the account's AI consent — aiAllowed() on GoApply — and a
+ * text model for the brand); anything else hides "Write a draft".
+ */
 export interface ExtMeResponse {
   user: { id: string; email: string | null; firstName: string | null };
   brand: { id: BrandIdWire; name: string };
   entitlements: unknown;
-  flags: Record<string, unknown>;
-  profileCompleteness: number;
+  flags: Record<string, unknown> & { aiAnswers?: boolean };
+  /** 0–100, or null when the profile could not be read. */
+  profileCompleteness: number | null;
+  /** Below this version the server asks for an update (null = any). */
+  minExtVersion?: string | null;
 }
 
 export interface WorkAuthEntry {
@@ -57,13 +70,22 @@ export interface BankAnswer {
   questionKey: string;
   questionText: string;
   answer: string;
+  /**
+   * `ai_confirmed`: a draft the user approved on one employer's form ("Save
+   * this answer"). It fills by itself only into the same question; for a
+   * similar one it is offered as a draft. Absent / `user`: typed in the app.
+   */
+  source?: 'user' | 'ai_confirmed';
 }
 
 /**
  * GET /ext/autofill-profile. `profile` carries the profile view's keys
- * (firstName, lastName, contactEmail, phoneE164, addressLine1, city, region,
- * postalCode, country, links, headline …); `sensitive` is null without the
- * `autofill_sensitive` consent.
+ * (firstName, middleName, lastName, contactEmail, phoneE164, addressLine1,
+ * city, region, postalCode, country, links, headline …); `education[]` rows
+ * carry school, degree, major; `experience[]` rows company, title, current.
+ * `sensitive` is null without the `autofill_sensitive` consent; with it,
+ * `sensitive.eeo` holds gender, race (or ethnicity), hispanicLatino, veteran,
+ * disability and pronouns as the words a form shows.
  */
 export interface AutofillProfile {
   profile: Record<string, unknown>;
@@ -91,8 +113,9 @@ export interface PageJobBody {
   descriptionText: string;
 }
 export interface PageJobResponse {
-  jobId?: string;
-  fit?: FitChip;
+  /** The matching job in the user's listings; null (or absent) when the page is not one of them. */
+  jobId?: string | null;
+  fit?: FitChip | null;
 }
 
 export interface CreateAutofillRunBody {
@@ -102,11 +125,23 @@ export interface CreateAutofillRunBody {
   jobId?: string;
   fieldsTotal: number;
 }
+/**
+ * One run, and one form-fill credit, per application: asking again for the
+ * same application (the next page of a page-by-page form, or a reloaded tab)
+ * returns the first run with `reused: true` and what its earlier pages reported.
+ */
 export interface CreateAutofillRunResponse {
   runId: string;
+  /** The job the server linked the run to (null: not one of the user's jobs). */
+  jobId?: string | null;
+  reused?: boolean;
+  fieldsFilled?: number;
+  fieldsTotal?: number;
 }
+/** `fieldsFilled` / `fieldsTotal` are running totals for the whole application. Sent after each fill pass and again with `userMarkedSubmitted`. */
 export interface PatchAutofillRunBody {
   fieldsFilled: number;
+  fieldsTotal?: number;
   outcome: AutofillOutcome;
   userMarkedSubmitted?: boolean;
 }
@@ -119,14 +154,36 @@ export interface AnswerQuestionBody {
   maxLength?: number;
   options?: string[];
 }
+/**
+ * A protected question with no saved answer is not answered: the server
+ * refuses it (`details.reason = 'protected_question'`, `details.type`).
+ */
 export interface AnswerQuestionResponse {
   answer: string | null;
   source: 'bank' | 'ai' | 'none';
   saveable: boolean;
+  questionType?: ProtectedQuestionType | 'free_text';
+  reason?: string | null;
 }
 
+/** POST /ext/answers/save — "Save this answer": an answer the user approved goes to their saved answers. Free. */
+export interface SaveAnswerBody {
+  runId: string;
+  question: string;
+  answer: string;
+}
+export interface SaveAnswerResponse {
+  saved: true;
+  questionKey: string;
+}
+
+/**
+ * POST /ext/resume-for-job. `jobId` is left out on a page that is not one of
+ * the user's jobs: the server then returns the main resume (and records the
+ * download on no application).
+ */
 export interface ResumeForJobBody {
-  jobId: string;
+  jobId?: string;
   runId: string;
 }
 export interface ResumeForJobResponse {
@@ -134,6 +191,7 @@ export interface ResumeForJobResponse {
   isTailored: boolean;
   fileName: string;
   downloadUrl: string;
+  tailoredNeedsReview?: boolean;
 }
 
 export interface SiteRequestBody {
@@ -142,16 +200,22 @@ export interface SiteRequestBody {
   note?: string;
 }
 
+/** POST /ext/pair-codes/redeem → `{ token }`. */
 export interface RedeemPairCodeBody {
   code: string;
   name: string;
-  browser?: string;
+  browser?: ExtBrowserName;
   extVersion?: string;
 }
 
 /** The platform envelope (server/src/platform/http.ts). */
 export type Envelope<T> = { success: true; data: T } | { success: false; code: string; error?: string; details?: unknown };
 
+/**
+ * Area reasons. The server keeps the envelope `code` generic and puts these
+ * in `details.reason` (a refused protected question is `invalid_request` with
+ * `details.reason = 'protected_question'` and `details.type`).
+ */
 export const EXTENSION_ERROR_CODES = {
   deviceRevoked: 'device_revoked',
   pairCodeInvalid: 'pair_code_invalid',
@@ -162,3 +226,9 @@ export const EXTENSION_ERROR_CODES = {
   /** resume-for-job named a job other than the one the autofill run is linked to. */
   runJobMismatch: 'run_job_mismatch',
 } as const;
+
+/** The area reason of a failed call: `details.reason`, else the envelope code. */
+export function errorReason(result: { code: string; details?: unknown }): string {
+  const reason = (result.details as { reason?: unknown } | null | undefined)?.reason;
+  return typeof reason === 'string' && reason ? reason : result.code;
+}

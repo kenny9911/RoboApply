@@ -5,7 +5,8 @@
 // The protected types (work authorization, sponsorship, criminal history,
 // EEO / disability / veteran, personal facts such as birth date or 政治面貌,
 // salary history or expectation, years of experience, degrees,
-// certifications, clearance, notice period) are facts about the person. They
+// certifications, clearance, notice period, grades and test scores) are
+// facts about the person. They
 // come only from the answer bank or the profile, or are left for the user —
 // a model never writes them. Everything else is `free_text`, which AI may
 // draft for the side panel.
@@ -30,6 +31,33 @@
 // "yes" saved for the UK is never offered for a US question.
 
 import type { ProtectedQuestionType, QuestionType } from './contract.js';
+
+/**
+ * Grades and test scores. 成绩 and 排名 also mean achievements and rankings at
+ * work ("请描述你在上一份工作中取得的主要成绩"), and "academic performance" or
+ * "test results" turn up in open questions, so those words count only with a
+ * study context next to them, or as the whole field label. Mirrored in
+ * extension/src/mapping/questions.ts (keep the two lists the same).
+ */
+export const GRADES_RE = new RegExp(
+  [
+    // The whole label and nothing else: "成绩", "排名情况", "Academic performance", "Exam results".
+    String.raw`^[\s*:：?？()（）]*(?:成绩|成績|排名|academic\s+(?:performance|results?)|(?:test|exam(?:ination)?)\s+results?)(?:情况|情況)?[\s*:：?？()（）]*$`,
+    String.raw`\bgpa\b|\bgrades\b|grade\s+(?:point|average)|class\s+rank|academic\s+(?:rank(?:ing)?|standing|record)`,
+    String.raw`academic\s+(?:performance|results?)\s*[(:（：-]?\s*(?:gpa|grades?|scores?|marks?|percentage)`,
+    String.raw`(?:test|exam(?:ination)?)\s+scores?|\byour\s+exam(?:ination)?\s+results?`,
+    String.raw`\b(?:sat|act|gre|gmat|lsat|toeic|jlpt|hsk)\s*(?:scores?|results?|level|成绩|成績|分数|分數)`,
+    String.raw`\bielts\b|\btoefl\b|\bcet[-\s]?[46]\b|\btem[-\s]?[48]\b`,
+    '绩点|績點|四六级|四六級|四级|六级|四級|六級|英语等级|英語等級|雅思|托福|专四|专八|專四|專八|平均分|均分|考试分数|考試分數',
+    // 成绩 with a study word in front (在校成绩, 大学期间取得的成绩), right after a subject
+    // or an exam (英语成绩, 笔试成绩), or as 成绩单 / 成绩排名.
+    '(?:学习|學習|在校|学业|學業|学校|學校|学期|學期|本科|硕士|碩士|博士|研究生|大学|大學|高中|高考).{0,8}成[绩績]',
+    '(?:课程|課程|专业课|專業課|各科|考试|考試|笔试|筆試|英语|英語|外语|外語).{0,2}成[绩績]|成[绩績](?:单|單|排名)',
+    // 排名 of a class, year or major, or given as a share ("排名前10%").
+    String.raw`(?:专业|專業|年级|年級|班级|班級|综合|綜合|学业|學業|学习|學習|院系|同届|同屆|成绩|成績)排名|排名.{0,4}(?:前\s*\d|\d+\s*%|百分)`,
+  ].join('|'),
+  'i',
+);
 
 const RULES: ReadonlyArray<[ProtectedQuestionType, RegExp]> = [
   [
@@ -64,6 +92,9 @@ const RULES: ReadonlyArray<[ProtectedQuestionType, RegExp]> = [
     /years?\s+(of\s+)?(professional\s+|relevant\s+|work\s+|industry\s+|hands-on\s+)?experience|how\s+many\s+years|how\s+long\s+have\s+you|number\s+of\s+years|years?\s+(in|with|of|using|working)\b|berufserfahrung|jahre(n)?\s+(an\s+)?erfahrung|ann[ée]es\s+d.exp[ée]rience|a[ñn]os\s+de\s+experiencia|anos\s+de\s+experi[êe]ncia|anni\s+di\s+esperienza|jaren?\s+(werk)?ervaring|経験年数|実務経験|경력|工作年限|从业年限|從業年限|几年|幾年|多少年|年经验|年經驗|年工作经验|经验年限|經驗年限/i,
   ],
   ['clearance', /clearance|security\s+(vetting|check)|\bts\/sci\b|sicherheitsüberprüfung|habilitation|安全许可|安全審查|政审|政審/i],
+  // Grades and test scores (WP-93): the user's own record. Before `degree` and
+  // `certification`, so "CET-4 certificate score" and "学位课程绩点" read as grades.
+  ['grades', GRADES_RE],
   ['degree', /\bdegree\b|bachelor|master'?s|\bph\.?d\b|doctorate|level\s+of\s+education|highest\s+education|diploma|graduated|abschluss|studium|diplôme|dipl[oô]me|t[íi]tulo\s+universitario|licenciatura|gradua[çc][ãa]o|laurea|opleidingsniveau|最終学歴|학력|학위|学历|學歷|学位|學位|毕业|畢業/i],
   ['certification', /certif|licen[cs]e[ds]?\b|licensure|accredit|zertifi|führerschein|permis\s+de\s+conduire|licencia|carteira\s+de\s+habilita|patente|rijbewijs|資格|免許|자격증|면허|证书|證書|资格证|資格證|执照|執照/i],
   [
@@ -285,6 +316,12 @@ export interface BankEntry {
   questionKey: string;
   questionText: string;
   answer: string;
+  /**
+   * Who wrote it: `user` typed it in the app; `ai_confirmed` is a draft the
+   * user approved for one employer's form ("Save this answer"). The extension
+   * fills an `ai_confirmed` answer by itself only into the same question.
+   */
+  source?: 'user' | 'ai_confirmed';
 }
 
 /**

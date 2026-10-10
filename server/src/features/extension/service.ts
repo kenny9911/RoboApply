@@ -24,6 +24,12 @@
 //     "nothing filled" report that later reports filled fields is charged
 //     once (a fresh credit keyed to the run); `charged` always reflects the
 //     ledger, never a guess from the run row.
+//   - One run, one credit, per application (R4): `createRun` returns the run
+//     the same device started for the same host and job (or, without a job,
+//     the same page URL without its query string) in the last two hours, and
+//     reserves nothing. Page-by-page forms report running totals.
+//   - "Save this answer" (F-EXT-04) writes the user's approved answer to their
+//     answer bank; never for a protected question type.
 //   - Sensitive answers leave only with a live `autofill_sensitive` consent:
 //     `sensitiveAnswersForAutofill()` (the profile's encrypted store) and
 //     answer-bank entries that are sensitive (EEO, disability, veteran,
@@ -34,10 +40,12 @@ import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { brandEnv } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { HttpError } from '../../platform/http.js';
-import { CreditReplayError, type CreditService } from '../../platform/credits/index.js';
+import { CreditReplayError, STALE_RESERVATION_MS, type CreditService } from '../../platform/credits/index.js';
 import { logger } from '../../services/LoggerService.js';
 import {
+  AUTOFILL_RUN_REUSE_MS,
   type AnswerQuestionResponse,
+  type AutofillEeoAnswers,
   type AutofillProfile,
   type CreateAutofillRunResponse,
   type CreateDeviceResponse,
@@ -49,7 +57,9 @@ import {
   type PageJobResponse,
   type PairCodeResponse,
   type PatchAutofillRunResponse,
+  type ProtectedQuestionType,
   type ResumeForJobResponse,
+  type SaveAnswerResponse,
   type SaveJobResponse,
 } from './contract.js';
 import type { z } from 'zod';
@@ -61,6 +71,7 @@ import type {
   PatchAutofillRunBodySchema,
   RedeemPairCodeBodySchema,
   ResumeForJobBodySchema,
+  SaveAnswerBodySchema,
   SaveJobBodySchema,
   SiteRequestBodySchema,
   UninstallSurveyBodySchema,
@@ -131,6 +142,8 @@ export interface ExtensionDeps {
   };
   /** The user's answer bank (Ready to apply, WP-52). */
   answerBank(userId: string): Promise<BankEntry[]>;
+  /** Save an answer the user approved in the panel to their answer bank (F-EXT-04); returns its key. */
+  saveBankAnswer(userId: string, input: { questionText: string; answer: string; locale: string }): Promise<{ questionKey: string }>;
   /** Tell Ready to apply the user says they submitted (D1: the only signal). */
   markAgentSubmitted(userId: string, jobId: string): Promise<void>;
   entitlements(userId: string): Promise<unknown>;
@@ -184,6 +197,11 @@ function runNotFound(): HttpError {
   return new HttpError('not_found', 'This fill run was not found.', { reason: EXTENSION_ERROR_CODES.runNotFound });
 }
 
+/** `422 invalid_request` with `details.reason = 'protected_question'` and `details.type` (the protected type). */
+function protectedQuestion(type: ProtectedQuestionType, message = 'This question is about you. Answer it yourself, or save your answer in your profile.'): HttpError {
+  return new HttpError('invalid_request', message, { reason: EXTENSION_ERROR_CODES.protectedQuestion, type });
+}
+
 function soft(what: string, p: Promise<unknown>): Promise<void> {
   return p.then(
     () => undefined,
@@ -202,6 +220,141 @@ export function pageUrlWithoutQuery(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Query parameters that name the job on forms whose path is the same for
+ * every job: Greenhouse embeds (`…/embed/job_app?token=…`, `?gh_jid=…`),
+ * Taleo (`jobapply.ftl?job=…`), SuccessFactors (`career?career_job_req_id=…`)
+ * and the like. Lower-case.
+ */
+const JOB_QUERY_KEYS: ReadonlySet<string> = new Set([
+  'gh_jid',
+  'token',
+  'job',
+  'jobid',
+  'job_id',
+  'jid',
+  'id',
+  'pid',
+  'req',
+  'reqid',
+  'req_id',
+  'jobreqid',
+  'career_job_req_id',
+  'requisitionid',
+  'requisition_id',
+  'posting',
+  'postingid',
+  'posting_id',
+  'position',
+  'positionid',
+  'position_id',
+  'postid',
+  'post_id',
+  'vacancy',
+  'vacancyid',
+  'recruitid',
+  'recruit_id',
+]);
+
+/**
+ * The page a run belongs to when it is not a job we know (R4 run reuse;
+ * stored in `RAAutofillRun.pageUrl`): the URL without its query string and
+ * fragment. When the query names the job (JOB_QUERY_KEYS) a short hash of
+ * those parameters follows as `#job=<hash>`, so two applications that share a
+ * path (`…/embed/job_app?token=1` and `?token=2`) never share a run and a
+ * credit. Tracking parameters are ignored, and no query value is stored.
+ */
+export function runPageKey(url: string): string | null {
+  const base = pageUrlWithoutQuery(url);
+  if (!base) return null;
+  const pairs: string[] = [];
+  for (const [k, v] of new URL(url).searchParams) {
+    const key = k.toLowerCase();
+    if (JOB_QUERY_KEYS.has(key) && v.trim()) pairs.push(`${key}=${v.trim()}`);
+  }
+  return pairs.length ? `${base}#job=${sha256Hex(pairs.sort().join('&')).slice(0, 16)}` : base;
+}
+
+/**
+ * The origin signed file links are built on. Requests that reach the API on
+ * one of the brand's production hosts (apex, www, api, or a proxy that kept
+ * the forwarded host) get the brand's canonical origin: store builds of the
+ * extension hold a host permission for that origin only and refuse a file
+ * link on any other. Dev and preview hosts keep the origin of the request.
+ */
+export function canonicalApiOrigin(brand: Pick<ProductBrand, 'hosts' | 'canonicalOrigin'>, requestOrigin: string): string {
+  const fallback = requestOrigin.replace(/\/$/, '');
+  try {
+    const host = new URL(requestOrigin).hostname.toLowerCase();
+    if (brand.hosts.some((h) => host === h || host.endsWith(`.${h}`))) return brand.canonicalOrigin.replace(/\/$/, '');
+  } catch {
+    // Not a URL: use what the request said.
+  }
+  return fallback;
+}
+
+/** The profile's stored EEO codes (features/profile EEO_OPTIONS) as the words application forms show. */
+const EEO_WORDS = {
+  gender: { female: 'Female', male: 'Male', non_binary: 'Non-binary', decline: 'Decline to self-identify' },
+  race: {
+    hispanic_latino: 'Hispanic or Latino',
+    white: 'White',
+    black: 'Black or African American',
+    asian: 'Asian',
+    native_american: 'American Indian or Alaska Native',
+    pacific_islander: 'Native Hawaiian or Other Pacific Islander',
+    two_or_more: 'Two or More Races',
+    decline: 'Decline to self-identify',
+  },
+  veteran: {
+    protected_veteran: 'I identify as one or more of the classifications of a protected veteran',
+    not_veteran: 'I am not a protected veteran',
+    decline: "I don't wish to answer",
+  },
+  disability: {
+    yes: 'Yes, I have a disability, or have had one in the past',
+    no: 'No, I do not have a disability and have not had one in the past',
+    decline: 'I do not want to answer',
+  },
+} as const satisfies Record<string, Record<string, string>>;
+
+function word(table: Record<string, string>, code: unknown): string | undefined {
+  return typeof code === 'string' && Object.hasOwn(table, code) ? table[code] : undefined;
+}
+
+/**
+ * `sensitive.eeo` for the extension: the keys its resolver reads (gender,
+ * race, hispanicLatino, veteran, disability, pronouns) with the words a form
+ * shows. Only what the user answered: "Hispanic or Latino" is the only race
+ * answer that also answers the separate Hispanic/Latino question; any other
+ * answer leaves that question to the user (nothing is inferred).
+ */
+export function eeoForAutofill(stored: unknown): AutofillEeoAnswers | null {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
+  const s = stored as Record<string, unknown>;
+  const out: AutofillEeoAnswers = {};
+  const gender = word(EEO_WORDS.gender, s.gender);
+  if (gender) out.gender = gender;
+  const race = word(EEO_WORDS.race, s.raceEthnicity);
+  if (race) out.race = race;
+  if (s.raceEthnicity === 'hispanic_latino') out.hispanicLatino = 'Yes';
+  const veteran = word(EEO_WORDS.veteran, s.veteranStatus);
+  if (veteran) out.veteran = veteran;
+  const disability = word(EEO_WORDS.disability, s.disabilityStatus);
+  if (disability) out.disability = disability;
+  if (typeof s.pronouns === 'string' && s.pronouns.trim()) out.pronouns = s.pronouns.trim();
+  return Object.keys(out).length ? out : null;
+}
+
+/** The sensitive block as it leaves the server: `eeo` in the extension's shape, everything else as stored. */
+function sensitiveForWire(sensitive: Record<string, unknown> | null): AutofillProfile['sensitive'] {
+  if (!sensitive) return null;
+  const { eeo: storedEeo, ...rest } = sensitive;
+  const eeo = eeoForAutofill(storedEeo);
+  const out: Record<string, unknown> = { ...rest, ...(eeo ? { eeo } : {}) };
+  return Object.keys(out).length ? (out as AutofillProfile['sensitive']) : null;
 }
 
 /** The model returned nothing usable; thrown inside `withCredit` so the `ai_answer` reservation is released. */
@@ -279,6 +432,25 @@ export function createExtensionService(deps: ExtensionDeps) {
     }
   }
 
+  /**
+   * A reused run that has not been charged yet must hold a credit before the
+   * next fill, as a new run would. Its first reservation is gone when an
+   * earlier pass reported "nothing filled" (released then), or when the run
+   * never reported and the stale-reservation job may have released it. In
+   * those cases the run's own late key is reserved now, so an account with no
+   * credits left gets `credits_exhausted` here instead of a fill that is never
+   * charged. A run that already filled a field is charged; nothing to do.
+   */
+  async function holdCreditForReusedRun(userId: string, run: RunRow): Promise<void> {
+    if (!run.creditLedgerId || run.fieldsFilled > 0) return;
+    const stale = deps.now().getTime() - run.createdAt.getTime() >= STALE_RESERVATION_MS;
+    if (run.outcome === 'started' && !stale) return;
+    // Give back whatever the run still holds (a no-op when it was released), then reserve again.
+    await soft('release autofill reservation', deps.credits.release(run.creditLedgerId, 'run_reused'));
+    const held = await deps.credits.reserve({ userId, bucket: 'autofill', idempotencyKey: `ext-run-late:${run.id}`, refType: 'autofill_run', refId: run.id, brand: brandId() });
+    await deps.repo.updateRun(run.id, { creditLedgerId: held.id, outcome: 'started' });
+  }
+
   return {
     // ── Pairing and devices (session) ─────────────────────────────────────
 
@@ -321,17 +493,20 @@ export function createExtensionService(deps: ExtensionDeps) {
 
     async me(userId: string): Promise<ExtMeResponse> {
       const brand = deps.brand();
-      const [user, profile, entitlements, flags] = await Promise.all([
+      const [user, profile, entitlements, flags, ai] = await Promise.all([
         deps.repo.userBrand(userId),
         deps.profile.get(userId).catch(() => null),
         deps.entitlements(userId),
         deps.flags(userId),
+        // Fails closed: when the check itself fails, drafts are not offered.
+        deps.aiAvailability(userId).catch(() => 'ai_unavailable' as const),
       ]);
       return {
         user: { id: userId, email: user?.email ?? null, firstName: profile?.firstName ?? null },
         brand: { id: brand.id, name: brand.name },
         entitlements,
-        flags,
+        // `aiAnswers`: aiAllowed(user) AND the brand's text model (the same check POST /ext/answers makes).
+        flags: { ...flags, aiAnswers: ai === 'ok' },
         profileCompleteness: profile ? Math.max(0, Math.min(100, Math.round(profile.completeness))) : null,
         minExtVersion: minExtVersion(),
       };
@@ -347,13 +522,18 @@ export function createExtensionService(deps: ExtensionDeps) {
       ]);
       const links: Record<string, string> = {};
       for (const [k, v] of Object.entries(p.links ?? {})) if (typeof v === 'string' && v) links[k] = v;
+      // The contact address the user gave, else the one they sign in with.
+      const contactEmail = p.contactEmail ?? user?.email ?? null;
       return {
         profile: {
           firstName: p.firstName,
           middleName: p.middleName,
           lastName: p.lastName,
           headline: p.headline,
-          email: p.contactEmail ?? user?.email ?? null,
+          contactEmail,
+          phoneE164: p.phoneE164,
+          // Older extension builds read `email` / `phone`.
+          email: contactEmail,
           phone: p.phoneE164,
           phoneType: p.phoneType,
           addressLine1: p.addressLine1,
@@ -361,6 +541,7 @@ export function createExtensionService(deps: ExtensionDeps) {
           region: p.region,
           postalCode: p.postalCode,
           country: p.country,
+          links,
           summary: p.summary,
           skills: p.skills.map((s) => s.name),
           languages: p.languages,
@@ -374,8 +555,8 @@ export function createExtensionService(deps: ExtensionDeps) {
         // Sensitive saved answers only with the `autofill_sensitive` consent (ARCH §3.8, §6.4).
         answers: bank
           .filter((b) => b.answer.trim() && (consent || !isSensitiveBankEntry(b)))
-          .map((b) => ({ questionKey: b.questionKey, questionText: b.questionText, answer: b.answer })),
-        sensitive: sensitive && Object.keys(sensitive).length ? sensitive : null,
+          .map((b) => ({ questionKey: b.questionKey, questionText: b.questionText, answer: b.answer, ...(b.source ? { source: b.source } : {}) })),
+        sensitive: sensitiveForWire(sensitive && Object.keys(sensitive).length ? sensitive : null),
       };
     },
 
@@ -431,6 +612,25 @@ export function createExtensionService(deps: ExtensionDeps) {
         if (!visible(job, userId)) job = null;
       }
       const jobId = job?.id ?? null;
+      const host = body.host.toLowerCase();
+      const pageUrl = runPageKey(body.url);
+
+      // R4: one run and one credit per application. The same device on the same
+      // host for the same job (or the same page, when it is not a job we know)
+      // gets the run it started in the last two hours; nothing more is reserved.
+      const earlier = await deps.repo.findReusableRun({
+        userId,
+        deviceId,
+        host,
+        jobId,
+        pageUrl: jobId ? null : pageUrl,
+        since: new Date(deps.now().getTime() - AUTOFILL_RUN_REUSE_MS),
+      });
+      if (earlier) {
+        await holdCreditForReusedRun(userId, earlier);
+        return { runId: earlier.id, jobId: earlier.jobId, reused: true, fieldsFilled: earlier.fieldsFilled, fieldsTotal: earlier.fieldsTotal };
+      }
+
       const trackerEntryId = jobId ? await deps.repo.trackerEntryFor(userId, jobId) : null;
 
       const reservation = await deps.credits.reserve({
@@ -450,7 +650,8 @@ export function createExtensionService(deps: ExtensionDeps) {
           deviceId,
           jobId,
           trackerEntryId,
-          host: body.host.toLowerCase(),
+          host,
+          pageUrl,
           atsType: body.atsType,
           fieldsTotal: body.fieldsTotal,
           creditLedgerId: reservation.id,
@@ -464,7 +665,9 @@ export function createExtensionService(deps: ExtensionDeps) {
 
     async patchRun(userId: string, runId: string, body: Body<typeof PatchAutofillRunBodySchema>): Promise<PatchAutofillRunResponse> {
       const run = await ownRun(userId, runId);
+      // Running totals for the whole application: they never go down.
       const fieldsFilled = Math.max(run.fieldsFilled, body.fieldsFilled);
+      const fieldsTotal = Math.max(run.fieldsTotal, body.fieldsTotal ?? 0);
       let charged = false;
       if (run.creditLedgerId) {
         if (fieldsFilled > 0) charged = await chargeRun(userId, run);
@@ -488,7 +691,7 @@ export function createExtensionService(deps: ExtensionDeps) {
         }
       }
 
-      const updated = await deps.repo.updateRun(run.id, { fieldsFilled, outcome: body.outcome, userMarkedSubmitted, trackerEntryId });
+      const updated = await deps.repo.updateRun(run.id, { fieldsFilled, fieldsTotal, outcome: body.outcome, userMarkedSubmitted, trackerEntryId });
       return {
         runId: updated.id,
         outcome: body.outcome,
@@ -501,8 +704,9 @@ export function createExtensionService(deps: ExtensionDeps) {
     },
 
     /**
-     * One answer for one question. Order: the user's bank (free) → nothing for
-     * a protected type or a choice field → an AI draft (one `ai_answer`).
+     * One answer for one question. Order: the user's bank (free) → a protected
+     * type is refused (`protected_question` with `details.type`) → nothing for
+     * a choice field → an AI draft (one `ai_answer`).
      */
     async answer(userId: string, body: Body<typeof AnswerQuestionBodySchema>, idempotencyKey: string | null): Promise<AnswerQuestionResponse> {
       const run = await ownRun(userId, body.runId);
@@ -518,8 +722,9 @@ export function createExtensionService(deps: ExtensionDeps) {
         return { answer: clip(hit.answer, max), source: 'bank', saveable: false, questionType, reason: null };
       }
 
-      // Facts about the person are never written by a model (ruling H2).
-      if (isProtectedQuestionType(questionType)) return none('protected');
+      // Facts about the person are never written by a model (ruling H2). Refused
+      // with the type, so the panel can say why and stop offering a draft.
+      if (isProtectedQuestionType(questionType)) throw protectedQuestion(questionType);
       if (body.fieldType !== 'text' && body.fieldType !== 'textarea') return none('choice_field');
       // The rules cannot vouch for a question in another language: no draft (fails closed).
       if (!draftableLanguage(body.question)) return none('unsupported_language');
@@ -558,6 +763,23 @@ export function createExtensionService(deps: ExtensionDeps) {
       await soft('ai answer count', deps.repo.incrementAiAnswers(run.id));
       await soft('ai label log', deps.logAiLabel(userId, run.id));
       return { answer, source: 'ai', saveable: true, questionType: 'free_text', reason: null };
+    },
+
+    /**
+     * "Save this answer" (F-EXT-04): an answer the user approved in the panel
+     * goes to their answer bank, under the question as the form asked it.
+     * Free. A protected question type is refused — those facts are kept in the
+     * profile or in Ready to apply's own questions, never taken from a draft —
+     * and so is a question whose saved answer would be sensitive.
+     */
+    async saveAnswer(userId: string, body: Body<typeof SaveAnswerBodySchema>): Promise<SaveAnswerResponse> {
+      await ownRun(userId, body.runId);
+      const questionType = classifyQuestion(body.question);
+      const refusal = 'This answer is about you. Save it in your profile instead.';
+      if (isProtectedQuestionType(questionType)) throw protectedQuestion(questionType, refusal);
+      if (isSensitiveBankEntry({ questionKey: '', questionText: body.question })) throw protectedQuestion('personal', refusal);
+      const { questionKey } = await deps.saveBankAnswer(userId, { questionText: body.question, answer: body.answer, locale: deps.brand().defaultLocale });
+      return { saved: true, questionKey };
     },
 
     /**
@@ -602,7 +824,8 @@ export function createExtensionService(deps: ExtensionDeps) {
         variantId: chosen.id,
         isTailored,
         fileName: `${buildExportFileName(null, { fallback: chosen.name })}.pdf`,
-        downloadUrl: `${apiOrigin.replace(/\/$/, '')}/api/v1/roboapply/ext/files/${token}`,
+        // On the brand's canonical API origin in production (the only origin a store build may fetch from).
+        downloadUrl: `${canonicalApiOrigin(deps.brand(), apiOrigin)}/api/v1/roboapply/ext/files/${token}`,
         tailoredNeedsReview,
       };
     },

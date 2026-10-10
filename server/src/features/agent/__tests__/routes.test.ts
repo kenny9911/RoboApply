@@ -120,6 +120,19 @@ describe('agent router: endpoints', () => {
     expect((await h.request('PUT', `${BASE}/settings`, { host: RA, body: { weeklyTarget: 7 } })).status).toBe(422);
   });
 
+  it('settings carry which search the lists come from; `filterOverrides: null` forgets Ready-only changes (SR-52-1)', async () => {
+    type S = { listFilters: { searchProfileId: string | null; overrides: Record<string, unknown> | null } };
+    state.overrides = { feedPreview: async () => [feedItem('j1', 'great')] };
+    await h.request('POST', `${BASE}/list/generate`, { host: RA, body: { overrides: { workModels: ['remote'] }, more: true } });
+    const kept = await h.request<Env<S>>('GET', `${BASE}/settings`, { host: RA });
+    expect(kept.body.data.listFilters).toEqual({ searchProfileId: null, overrides: { workModels: ['remote'] } });
+    // Only null is accepted here: the filters themselves are set through the list request.
+    expect((await h.request('PUT', `${BASE}/settings`, { host: RA, body: { filterOverrides: { workModels: ['onsite'] } } })).status).toBe(422);
+    const cleared = await h.request<Env<S>>('PUT', `${BASE}/settings`, { host: RA, body: { filterOverrides: null } });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data.listFilters).toEqual({ searchProfileId: null, overrides: null });
+  });
+
   it('setup, calibration and the step endpoint', async () => {
     const s = await h.request<Env<{ step: string; checks: { calibrationCount: number } }>>('GET', `${BASE}/setup`, { host: RA });
     expect(s.body.data.step).toBe('profile');

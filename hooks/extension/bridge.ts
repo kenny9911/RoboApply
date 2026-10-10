@@ -4,8 +4,11 @@
 // page (ARCHITECTURE.md §6.3). The page reaches the extension through
 // `chrome.runtime.sendMessage(<extension id>, message)`, which works only in
 // Chromium browsers and only for the brand's own hosts (the extension's
-// `externally_connectable`). Messages are the contract's `ExtWebMessage`
-// (`ping`, `pair`); WP-55b answers them.
+// `externally_connectable`). Messages are the contract's `ExtWebMessage`:
+//   { type: 'ping' }                   → { ok, brand, version, connected }
+//   { type: 'pair', token, apiOrigin } → { ok }   (the extension accepts it
+//       only from the brand's own hosts, for an API origin of the same brand)
+// extension/src/background/router.ts answers them.
 //
 // The device token goes from the API response straight into the `pair`
 // message: it is never written to page storage.
@@ -61,12 +64,13 @@ export const EXTENSION_ATS_BY_BRAND: Record<BrandId, ReadonlyArray<{ type: strin
 };
 
 /**
- * Forms filled page by page: until one run covers a whole application (R4,
- * WP-93) every page reserves its own autofill credit, so job pages do not
- * offer the extension for them. Mirrors the server's
+ * Page-by-page forms job pages do not offer the extension for yet. Workday
+ * left this list with R4 (WP-93): one run, and one autofill credit, covers
+ * every page of a Workday application. The rest load a new page per step and
+ * wait for a check against a live form. Mirrors the server's
  * `EXTENSION_PER_PAGE_ATS_TYPES` (a test keeps them equal).
  */
-export const EXTENSION_PER_PAGE_ATS: readonly string[] = ['workday', 'icims', 'taleo', 'successfactors'];
+export const EXTENSION_PER_PAGE_ATS: readonly string[] = ['icims', 'taleo', 'successfactors'];
 
 /**
  * Whether a job page offers the brand's extension for this ATS type. The
@@ -133,10 +137,17 @@ export function __setExtensionBridge(next: ExtensionBridge | null): void {
 
 export const PING_TIMEOUT_MS = 1500;
 
-/** The installed extension's answer to `ping`, or null when it is not there. */
-export async function pingExtension(extensionId: string): Promise<ExtPingReply | null> {
-  const reply = await bridge.send<ExtPingReply>(extensionId, { type: 'ping' }, PING_TIMEOUT_MS);
-  return reply && reply.ok === true && typeof reply.version === 'string' ? reply : null;
+/**
+ * The installed extension's answer to `ping`, or null when it is not there
+ * (or it is the other brand's build). `connected`: the extension holds a
+ * device token. Builds from before WP-93 said `paired`; both are read.
+ */
+export async function pingExtension(extensionId: string, brand?: BrandId): Promise<ExtPingReply | null> {
+  const reply = await bridge.send<Partial<ExtPingReply> & { paired?: boolean }>(extensionId, { type: 'ping' }, PING_TIMEOUT_MS);
+  if (!reply || reply.ok !== true || typeof reply.version !== 'string') return null;
+  const replyBrand = reply.brand === 'goapply' || reply.brand === 'roboapply' ? reply.brand : null;
+  if (brand && replyBrand && replyBrand !== brand) return null;
+  return { ok: true, brand: replyBrand ?? brand ?? 'roboapply', version: reply.version, connected: reply.connected === true || reply.paired === true };
 }
 
 /** Hand a fresh device token to the extension. */

@@ -12,10 +12,12 @@
 //     attempt the kit is marked `failed` ('internal') instead of rethrowing,
 //     so no kit stays `preparing` (the ready-weekly sweep covers a worker that
 //     never got that far).
+//   - 'agent.record-files': record the kit's resume file on the application
+//     after "Open application" (WP-93).
 
 import type { WorkerDefinition } from '../../platform/queue/index.js';
 import { PermanentWorkError } from '../../platform/queue/index.js';
-import type { PreparePayload } from './deps.js';
+import type { PreparePayload, RecordFilesPayload } from './deps.js';
 import { AGENT_WORK_KINDS } from './kinds.js';
 
 export { AGENT_WORK_KINDS } from './kinds.js';
@@ -46,4 +48,26 @@ export const prepareWorker: WorkerDefinition = {
   },
 };
 
-export const workers: WorkerDefinition[] = [prepareWorker];
+function asFilesPayload(value: unknown): RecordFilesPayload {
+  const p = (value ?? {}) as Partial<RecordFilesPayload>;
+  if (typeof p.queueItemId !== 'string' || typeof p.userId !== 'string') throw new PermanentWorkError('agent.record-files: bad payload');
+  return { queueItemId: p.queueItemId, userId: p.userId };
+}
+
+/**
+ * 'agent.record-files': after "Open application", record the resume the user
+ * sends on the application (RAApplicationArtifact through the resume export,
+ * channel `agent`). Queued so the export never delays opening the form; an
+ * error is retried once. Never submits anything (D1): it writes our own record.
+ */
+export const recordFilesWorker: WorkerDefinition = {
+  kind: AGENT_WORK_KINDS.agentRecordFiles,
+  concurrency: 2,
+  async handler(item) {
+    const payload = asFilesPayload(item.payload);
+    const { getAgentService } = await import('./service.js');
+    await getAgentService().recordKitFiles(payload);
+  },
+};
+
+export const workers: WorkerDefinition[] = [prepareWorker, recordFilesWorker];

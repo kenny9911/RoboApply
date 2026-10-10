@@ -83,12 +83,12 @@ describe('internal messages', () => {
   it('redeems an 8-character code and stores the token', async () => {
     const fetch = vi.fn(async () => json({ success: true, data: { token: TOKEN } }));
     const { router, store } = setup({ fetch });
-    const res = (await router.handleInternal({ type: 'redeem', code: 'ab12-cd34' })) as { ok: boolean; data: { connected: boolean } };
+    const res = (await router.handleInternal({ type: 'redeem', code: 'ab23-cd45' })) as { ok: boolean; data: { connected: boolean } };
     expect(res.ok).toBe(true);
     expect(res.data.connected).toBe(true);
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://www.roboapply.io/api/v1/roboapply/ext/pair-codes/redeem');
-    expect(JSON.parse(String(init.body))).toEqual({ code: 'AB12CD34', name: 'Chrome', browser: 'Chrome', extVersion: '1.0.0' });
+    expect(JSON.parse(String(init.body))).toEqual({ code: 'AB23CD45', name: 'Chrome', browser: 'Chrome', extVersion: '1.0.0' });
     expect((store.data[AUTH_KEY] as { token: string }).token).toBe(TOKEN);
   });
 

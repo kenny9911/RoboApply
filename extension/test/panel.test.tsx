@@ -59,6 +59,39 @@ describe('Panel', () => {
     expect(api.ops().filter((o) => o === 'answer')).toHaveLength(1);
   });
 
+  it('"Save this answer" appears only after the user used a draft, and saves on the click (F-EXT-04)', async () => {
+    const { panel, api } = renderPanel();
+    await panel.findByText('Great fit');
+    fireEvent.click(panel.getByRole('button', { name: 'Fill this form' }));
+    await panel.findByText(/8 of 13 fields filled\./);
+    expect(panel.queryByRole('button', { name: 'Save this answer' })).toBeNull();
+    const why = panel.getByText('Why do you want to work at Example Co?').closest('li') as HTMLElement;
+    fireEvent.click(within(why).getByRole('button', { name: 'Write a draft' }));
+    await within(why).findByRole('textbox', { name: /Draft answer for/ });
+    expect(within(why).queryByRole('button', { name: 'Save this answer' })).toBeNull();
+    await act(async () => {
+      fireEvent.click(within(why).getByRole('button', { name: 'Use this answer' }));
+    });
+    const save = await within(why).findByRole('button', { name: 'Save this answer' });
+    expect(api.ops()).not.toContain('saveAnswer');
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    expect(await within(why).findByText('Saved to your answers.')).toBeTruthy();
+    expect(api.calls.at(-1)).toEqual({ op: 'saveAnswer', body: { runId: 'run_1', question: 'Why do you want to work at Example Co?', answer: 'I like small teams that ship often.' } });
+    expect(within(why).queryByRole('button', { name: 'Save this answer' })).toBeNull();
+  });
+
+  it('a single-page form keeps "Fill this form" and never offers a page-by-page fill', async () => {
+    const { panel } = renderPanel();
+    await panel.findByText('Great fit');
+    expect(panel.getByRole('button', { name: 'Fill this form' })).toBeTruthy();
+    expect(panel.queryByRole('button', { name: 'Fill this page' })).toBeNull();
+    fireEvent.click(panel.getByRole('button', { name: 'Fill this form' }));
+    await panel.findByText(/8 of 13 fields filled\./);
+    expect(panel.queryByText("You're on a new page of this form.")).toBeNull();
+  });
+
   it('asks whether the user submitted, and records only a Yes', async () => {
     const { panel, api } = renderPanel();
     await panel.findByText('Great fit');

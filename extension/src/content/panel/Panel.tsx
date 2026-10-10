@@ -9,8 +9,14 @@
 // a fill can be repeated for the next step of a portal form, the review line
 // "请核对后自行提交" outlines the portal's own submit control, and AI text
 // carries the AiGeneratedBadge-style label (CnControls.tsx).
+// Page-by-page forms (Workday; R4): the button reads "Fill this page", and
+// when the form moves to its next page the panel offers it again. The fill
+// session — and its run, so one form-fill credit — lasts as long as the panel.
+// The panel learns about a new page only when the user comes back to it
+// (pointer or focus on the panel) or uses the toolbar button; it never
+// watches the page.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AtsAdapter, JobOnPage } from '../../adapters/types';
 import { useTranslations, type TFunction } from '../../i18n/index';
@@ -30,6 +36,17 @@ export interface PanelProps {
   webOrigin: string;
   /** cn market: AI drafts carry the AI-generated label (they always say they are AI-written). */
   market: 'intl' | 'cn';
+  /**
+   * Page-by-page forms only: `current()` names the page the user is on (null
+   * when the form shows none). Absent on single-page forms. `oneRun`: the
+   * pages change in place, so one run (one form fill) covers the whole
+   * application (ONE_RUN_MULTI_PAGE) and the panel says so; without it the
+   * panel promises nothing about the cost — a page that loads as a new
+   * document may start its own run.
+   */
+  steps?: { current: () => string | null; oneRun?: boolean };
+  /** Receives a function that makes the panel look at the page again (the content controller calls it on a toolbar click). */
+  onRegisterRefresh?: (refresh: () => void) => void;
   onCollapse: () => void;
 }
 
@@ -100,6 +117,24 @@ function ItemRow({ item, session, market, t }: { item: ChecklistItem; session: F
       </div>
       {detail ? <p className="meta">{detail}</p> : null}
       {item.sensitive && item.status === 'filled' ? <p className="meta">{item.cnKey ? cnText('item.checkSensitive') : t('item.checkSensitive')}</p> : null}
+      {item.status === 'filled' && item.savable && !item.saved ? (
+        <div className="row">
+          <button type="button" className="btn quiet" disabled={item.saving} onClick={() => void session.saveDraftAnswer(item.id)}>
+            {item.saving ? t('draft.saving') : t('draft.save')}
+          </button>
+          <span className="meta muted">{t('draft.saveHint')}</span>
+        </div>
+      ) : null}
+      {item.saved ? (
+        <p className="meta" role="status">
+          {t('draft.saved')}
+        </p>
+      ) : null}
+      {item.saveError ? (
+        <p className="meta" role="alert">
+          {item.saveError === 'protected' ? t('draft.saveProtected') : t('draft.saveFailed')}
+        </p>
+      ) : null}
       {item.canDraft && !item.draft && item.status !== 'filled' ? (
         <div className="row">
           <button type="button" className="btn" disabled={item.drafting} onClick={() => void session.requestDraft(item.id)}>
@@ -138,12 +173,12 @@ function ItemRow({ item, session, market, t }: { item: ChecklistItem; session: F
   );
 }
 
-export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }: PanelProps) {
+export function Panel({ adapter, doc, url, api, webOrigin, market, steps, onRegisterRefresh, onCollapse }: PanelProps) {
   const t = useTranslations('extension');
   const job: JobOnPage | null = useMemo(() => adapter.readJob(doc), [adapter, doc]);
   const [connection, setConnection] = useState<Connection>('checking');
   const [me, setMe] = useState<ExtMeResponse | null>(null);
-  const [page, setPage] = useState<{ jobId?: string; fit?: FitChip } | null>(null);
+  const [page, setPage] = useState<{ jobId?: string | null; fit?: FitChip | null } | null>(null);
   const [session, setSession] = useState<FillSession | null>(null);
   const [state, setState] = useState<SessionState | null>(null);
 
@@ -171,22 +206,44 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
     };
   }, [api, job, url]);
 
+  // Page-by-page forms: the page the user is on now, and the page the last fill covered.
+  const multiPage = Boolean(steps);
+  const oneRun = steps?.oneRun === true;
+  const [stepNow, setStepNow] = useState<string | null>(() => steps?.current() ?? null);
+  const [filledStep, setFilledStep] = useState<string | null | undefined>(undefined);
+  const checkStep = useCallback(() => {
+    if (!steps) return;
+    const now = steps.current();
+    setStepNow((prev) => (prev === now ? prev : now));
+  }, [steps]);
+  useEffect(() => {
+    onRegisterRefresh?.(checkStep);
+  }, [onRegisterRefresh, checkStep]);
+
   const [fills, setFills] = useState(0);
+  // One session per panel: every fill of this application shares its run (one form-fill credit).
+  const sessionRef = useRef<FillSession | null>(null);
   const startFill = (mode: FillMode = 'all', inScope: InScope | null = null) => {
-    const s = new FillSession({ adapter, doc, url, api, jobId: page?.jobId ?? null, aiAvailable: aiAvailableFrom(me), onChange: setState });
+    const s = sessionRef.current ?? new FillSession({ adapter, doc, url, api, jobId: page?.jobId ?? null, aiAvailable: aiAvailableFrom(me), multiPage, onChange: setState });
+    sessionRef.current = s;
     setSession(s);
-    setState(s.getState());
     setFills((n) => n + 1);
-    void s.start({ mode, inScope });
+    const step = steps?.current() ?? null;
+    setStepNow(step);
+    setFilledStep(step);
+    void s.start({ mode, inScope, pageKey: step ?? '', jobId: page?.jobId ?? null });
+    setState(s.getState());
   };
   const cn = market === 'cn';
 
   const counts = state ? summarize(state.items) : null;
   const filling = state?.phase === 'filling';
   const done = state?.phase === 'done';
+  /** The form moved to another page since the last fill: offer "Fill this page" again. */
+  const newPage = multiPage && done && filledStep !== undefined && stepNow !== filledStep;
 
   return (
-    <section className="panel" aria-labelledby="ra-panel-title" data-ra-ext-panel="">
+    <section className="panel" aria-labelledby="ra-panel-title" data-ra-ext-panel="" onPointerEnter={checkStep} onFocusCapture={checkStep}>
       <header className="head">
         <div>
           <h2 className="title" id="ra-panel-title">
@@ -222,9 +279,31 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
             </div>
 
             {!cn && (!state || state.phase === 'idle' || state.phase === 'error') ? (
-              <button type="button" className="btn primary" onClick={() => startFill()}>
-                {t('panel.fill')}
-              </button>
+              <>
+                <button type="button" className="btn primary" onClick={() => startFill()}>
+                  {multiPage ? t('panel.fillPage') : t('panel.fill')}
+                </button>
+                {multiPage ? (
+                  <p className="meta muted">
+                    {t('panel.pageByPage')}
+                    {oneRun ? ` ${t('panel.oneFill')}` : ''}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+            {!cn && newPage ? (
+              <div className="card" role="status">
+                <p className="strong">{t('panel.newPage')}</p>
+                <p className="meta">
+                  {t('panel.newPageHint')}
+                  {oneRun ? ` ${t('panel.newPageNoCost')}` : ''}
+                </p>
+                <div className="row" style={{ marginTop: 'var(--sp-2)' }}>
+                  <button type="button" className="btn primary" style={{ width: 'auto' }} onClick={() => startFill()}>
+                    {t('panel.fillPage')}
+                  </button>
+                </div>
+              </div>
             ) : null}
             {cn && (!state || state.phase !== 'filling') && !done ? <CnFillModes doc={doc} again={false} onStart={startFill} /> : null}
             {filling ? (

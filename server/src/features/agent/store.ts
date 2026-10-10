@@ -50,6 +50,9 @@ export interface SettingsRow {
   setupStep: string;
   calibration: unknown;
   setupCompletedAt: Date | null;
+  /** SCHEMA-4 (SR-52-1); absent on rows read before the columns were selected. */
+  searchProfileId?: string | null;
+  filterOverrides?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -81,6 +84,8 @@ export interface KitEventRow {
   fromState: string | null;
   toState: string;
   actor: string;
+  /** SCHEMA-4 (SR-52-3): 'transition' | 'decision' | 'notice'; null on rows written before the column. */
+  kind?: string | null;
   detail: unknown;
   createdAt: Date;
 }
@@ -168,9 +173,12 @@ export function isJobClosed(job: Pick<JobRow, 'closedAt' | 'archivedAt'>): boole
   return job.closedAt != null || job.archivedAt != null;
 }
 
-export function jobSummary(job: JobRow | null | undefined): QueueJobSummary | null {
+export type QueueFit = NonNullable<QueueJobSummary['fit']>;
+
+export function jobSummary(job: JobRow | null | undefined, fit?: QueueFit | null): QueueJobSummary | null {
   if (!job) return null;
   return {
+    ...(fit ? { fit } : {}),
     title: job.title,
     companyName: job.companyName,
     location: job.location ?? null,
@@ -189,7 +197,7 @@ function asAddedVia(v: string): QueueAddedVia {
   return (QUEUE_ADDED_VIA as readonly string[]).includes(v) ? (v as QueueAddedVia) : 'manual';
 }
 
-export function toQueueView(row: QueueRow, job?: JobRow | null): QueueItemView {
+export function toQueueView(row: QueueRow, job?: JobRow | null, fit?: QueueFit | null): QueueItemView {
   const state: QueueState = isQueueState(row.state) ? row.state : 'failed';
   return {
     id: row.id,
@@ -204,7 +212,7 @@ export function toQueueView(row: QueueRow, job?: JobRow | null): QueueItemView {
     openedAt: row.openedAt ? row.openedAt.toISOString() : null,
     userMarkedSubmitted: row.userMarkedSubmitted,
     updatedAt: row.updatedAt.toISOString(),
-    job: job === undefined ? undefined : jobSummary(job),
+    job: job === undefined ? undefined : jobSummary(job, fit),
     tailorSessionId: row.tailorSessionId,
     lastError: row.lastError,
     tab: tabOf(state),
@@ -216,10 +224,23 @@ export function readDetail(value: unknown): KitEventDetail {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as KitEventDetail) : {};
 }
 
-export function kitEventKind(row: Pick<KitEventRow, 'fromState' | 'toState' | 'detail'>): KitEventView['kind'] {
-  const detail = readDetail(row.detail);
-  if (row.fromState === row.toState) return detail.notice ? 'notice' : 'decision';
+export const KIT_EVENT_KINDS = ['transition', 'decision', 'notice'] as const;
+export type KitEventKind = (typeof KIT_EVENT_KINDS)[number];
+
+/** What a row is, from its states alone: a decision or a notice leaves the state as it was. */
+export function deriveKitEventKind(fromState: string | null, toState: string, detail: unknown): KitEventKind {
+  if (fromState === toState) return readDetail(detail).notice ? 'notice' : 'decision';
   return 'transition';
+}
+
+/**
+ * The kind of a history row: the stored column when the writer set it, else
+ * derived (rows from before the column read null — never taken as 'transition').
+ */
+export function kitEventKind(row: Pick<KitEventRow, 'fromState' | 'toState' | 'detail' | 'kind'>): KitEventView['kind'] {
+  const stored = row.kind;
+  if (typeof stored === 'string' && (KIT_EVENT_KINDS as readonly string[]).includes(stored)) return stored as KitEventKind;
+  return deriveKitEventKind(row.fromState, row.toState, row.detail);
 }
 
 export function toKitEventView(row: KitEventRow): KitEventView {
@@ -291,7 +312,7 @@ export async function transitionItem(
       });
     }
     await tx.rAAgentKitEvent.create({
-      data: { userId: item.userId, queueItemId: item.id, fromState: item.state, toState: to, actor: options.actor, detail: json(options.detail) },
+      data: { userId: item.userId, queueItemId: item.id, fromState: item.state, toState: to, actor: options.actor, kind: 'transition', detail: json(options.detail) },
     });
     const row = await tx.rAAgentQueueItem.findUnique({ where: { id: item.id }, select: QUEUE_SELECT });
     return row as QueueRow;
@@ -301,7 +322,7 @@ export async function transitionItem(
 /** A history row that is not a state change: a user decision or a notice (fromState = toState = current state). */
 export async function recordKitNote(db: AgentDb, item: QueueRow, actor: KitActor, detail: KitEventDetail): Promise<void> {
   await db.rAAgentKitEvent.create({
-    data: { userId: item.userId, queueItemId: item.id, fromState: item.state, toState: item.state, actor, detail: json(detail) },
+    data: { userId: item.userId, queueItemId: item.id, fromState: item.state, toState: item.state, actor, kind: detail.notice ? 'notice' : 'decision', detail: json(detail) },
   });
 }
 

@@ -7,6 +7,7 @@
 // after that starts with a user click. It never watches submits.
 // The state lives in controller.ts (testable without chrome.*).
 
+import { ONE_RUN_MULTI_PAGE, formStepKey, isMultiPage } from '../adapters/intl/index';
 import { brandConfig, buildEnv } from '../env';
 import type { ContentMessage } from '../shared/messages';
 import { runtimeApi } from './bridge';
@@ -43,6 +44,9 @@ function main(): void {
         api: runtimeApi(),
         webOrigin: webOrigin(),
         market: brand.market,
+        // Page-by-page forms: the panel offers "Fill this page" again on each page. Only the
+        // forms known to stay on one run say that the whole application uses one form fill.
+        steps: isMultiPage(adapter) ? { current: () => formStepKey(adapter, document), oneRun: ONE_RUN_MULTI_PAGE.includes(adapter.id) } : undefined,
         brand: brand.id,
         dev: env.dev,
         open,

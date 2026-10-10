@@ -26,7 +26,7 @@ import type { ProductBrand } from '../../platform/brand/registry.js';
 import type { CronContext, CronResult } from '../../platform/queue/index.js';
 import { NOTIFY_TEMPLATES, type NotifyUserInput, type NotifyUserResult } from '../alerts/index.js';
 import { READY_NOT_OPENED_STATES } from './contract.js';
-import { isJobClosed, readDetail, recordKitNote, transitionItem, QUEUE_SELECT, type AgentDb, type QueueRow } from './store.js';
+import { isJobClosed, kitEventKind, readDetail, recordKitNote, transitionItem, QUEUE_SELECT, type AgentDb, type QueueRow } from './store.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -84,9 +84,10 @@ async function noticesSent(db: AgentDb, itemIds: string[], notice: string): Prom
   if (!itemIds.length) return new Set();
   const rows = await db.rAAgentKitEvent.findMany({
     where: { queueItemId: { in: itemIds }, actor: 'system' },
-    select: { queueItemId: true, fromState: true, toState: true, detail: true },
+    select: { queueItemId: true, fromState: true, toState: true, kind: true, detail: true },
   });
-  return new Set(rows.filter((r) => r.fromState === r.toState && readDetail(r.detail).notice === notice).map((r) => r.queueItemId));
+  // The `kind` column when the writer set it, else derived (rows from before the column).
+  return new Set(rows.filter((r) => kitEventKind(r) === 'notice' && readDetail(r.detail).notice === notice).map((r) => r.queueItemId));
 }
 
 interface Outcome {
@@ -266,12 +267,12 @@ async function listReadyPage(
   })) as Array<{ id: string; userId: string; weekKey: string }>;
   const ledger = await db.rAAgentKitEvent.findMany({
     where: { queueItemId: { in: all.map((a) => a.id) }, actor: 'system' },
-    select: { queueItemId: true, fromState: true, toState: true, detail: true },
+    select: { queueItemId: true, fromState: true, toState: true, kind: true, detail: true },
   });
   const itemKey = new Map(all.map((a) => [a.id, `${a.userId}|${a.weekKey}`]));
   const notified = new Set(
     ledger
-      .filter((e) => e.fromState === e.toState && readDetail(e.detail).notice === 'ready_list_ready')
+      .filter((e) => kitEventKind(e) === 'notice' && readDetail(e.detail).notice === 'ready_list_ready')
       .map((e) => itemKey.get(e.queueItemId))
       .filter((k): k is string => Boolean(k)),
   );

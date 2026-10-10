@@ -105,6 +105,20 @@ describe('protectedQuestionType', () => {
     ['Earliest available date', 'notice_period'],
     ['最快到岗时间', 'notice_period'],
     ['何時可以入職？', 'notice_period'],
+    // Grades and test scores (server type `grades`, WP-93)
+    ['What is your GPA?', 'grades'],
+    ['Cumulative grade point average', 'grades'],
+    ['Class rank', 'grades'],
+    ['IELTS or TOEFL score', 'grades'],
+    ['CET-6 score', 'grades'],
+    ['绩点', 'grades'],
+    ['专业排名', 'grades'],
+    ['在校成绩', 'grades'],
+    ['四六级成绩', 'grades'],
+    ['成绩', 'grades'],
+    ['排名：', 'grades'],
+    ['大学期间取得的成绩', 'grades'],
+    ['Academic performance', 'grades'],
   ])('%s → %s', (label, type) => {
     expect(protectedQuestionType(label)).toBe(type);
   });
@@ -131,6 +145,7 @@ describe('protectedQuestionType', () => {
         'certification',
         'clearance',
         'notice period',
+        'gpa',
       ].map((l) => protectedQuestionType(l)),
     );
     expect([...covered].sort()).toEqual([...PROTECTED_QUESTION_TYPES].sort());
@@ -249,6 +264,20 @@ describe('resolveField', () => {
     expect(bankAnswerFor('Why do you want to work here', answers)?.answer).toBe('A');
     expect(bankAnswerFor('Why do you want to work here today?', answers)?.answer).toBe('A');
     expect(bankAnswerFor('What do you do for fun?', answers)).toBeNull();
+  });
+
+  it('an answer saved from the panel (ai_confirmed) matches only the same question, never another employer’s close wording', () => {
+    const acme = 'Please tell us in a few sentences why you are interested in working at Acme';
+    const globex = 'Please tell us in a few sentences why you are interested in working at Globex';
+    const saved = { questionKey: 'custom:0123456789abcdef', questionText: acme, answer: 'I admire Acme and its rockets.' };
+    // Typed in the app (or an older server that sends no source): a close wording still matches.
+    expect(bankAnswerFor(globex, [saved])?.answer).toBe(saved.answer);
+    expect(bankAnswerFor(globex, [{ ...saved, source: 'user' }])?.answer).toBe(saved.answer);
+    // Saved from the panel for Acme's form: the same question only.
+    const confirmed = [{ ...saved, source: 'ai_confirmed' as const }];
+    expect(bankAnswerFor(globex, confirmed)).toBeNull();
+    expect(bankAnswerFor(`${acme}?`, confirmed)?.answer).toBe(saved.answer);
+    expect(resolveField({ label: globex, kind: 'textarea', required: true } as never, null, null, { ...sampleProfile(), answers: confirmed })).toBeNull();
   });
 
   it('never answers one country’s work-authorization question with another country’s saved answer', () => {

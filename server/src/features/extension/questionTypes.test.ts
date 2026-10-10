@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PROTECTED_QUESTION_TYPES, type QuestionType } from './contract.js';
-import { ADVERSARIAL_PROTECTED_TYPED, PROTECTED_SAMPLES, UNSUPPORTED_LANGUAGE_FREE_TEXT } from './questionSamples.js';
+import { ADVERSARIAL_PROTECTED_TYPED, FREE_TEXT_NOT_GRADES, PROTECTED_SAMPLES, UNSUPPORTED_LANGUAGE_FREE_TEXT } from './questionSamples.js';
 import { BANK_MATCH_THRESHOLD, classifyQuestion, draftableLanguage, findBankAnswer, normalizeQuestion, questionSimilarity } from './questionTypes.js';
 
 const FREE_TEXT = [
@@ -33,6 +33,12 @@ describe('classifyQuestion', () => {
 
   it.each(FREE_TEXT)('free text: %s', (q) => {
     expect(classifyQuestion(q)).toBe('free_text');
+  });
+
+  // 成绩 / 排名 / "academic performance" outside a study context are open questions (GoApply drafts them).
+  it.each(FREE_TEXT_NOT_GRADES)('a grade word in another sense stays free text: %s', (q) => {
+    expect(classifyQuestion(q)).toBe('free_text');
+    expect(draftableLanguage(q)).toBe(true);
   });
 
   it.each(ADVERSARIAL_PROTECTED_TYPED)('adversarial: %s → %s', (q, type) => {

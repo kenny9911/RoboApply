@@ -86,8 +86,32 @@ export const AgentSettingsSchema = z
     fileNameStyle: z.enum(FILE_NAME_STYLES),
   })
   .strict();
-export const PutAgentSettingsBodySchema = AgentSettingsSchema.partial().strict();
+/**
+ * PUT /agent/settings. `filterOverrides: null` forgets the filter changes made
+ * inside Ready to apply (the lists then use the main search as it is). Setting
+ * them happens through POST /agent/list/generate `overrides` ("No, only this list").
+ */
+export const PutAgentSettingsBodySchema = AgentSettingsSchema.partial()
+  .extend({ filterOverrides: z.null().optional() })
+  .strict();
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
+
+/**
+ * Which search Ready to apply's lists come from (SCHEMA-4, SR-52-1). Every
+ * list — the weekly one the cron builds and the ones built on demand — uses
+ * the same pair.
+ */
+export interface AgentListFilters {
+  /** A saved search other than the active one, or null (the user's active search). */
+  searchProfileId: string | null;
+  /** Filter changes made inside Ready to apply (a FilterSet patch on top of that search; a removed filter is `null`), or null. */
+  overrides: Record<string, unknown> | null;
+}
+
+/** GET / PUT /agent/settings. */
+export interface AgentSettingsResponse extends AgentSettings {
+  listFilters?: AgentListFilters;
+}
 
 /** Defaults (PRODUCT F-AGENT-03): 10 a week, Good fit and better, tailor each, letter only when asked. */
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
@@ -175,6 +199,12 @@ export interface QueueJobSummary {
   closed: boolean;
   /** The post's own text asks for a cover letter (a literal phrase match, never a guess). */
   asksForCoverLetter: boolean;
+  /**
+   * The same deterministic fit the Jobs list shows before a job is scored
+   * ("Quick estimate"), on GET /agent/queue only. Absent or null when it is
+   * not known (or fit is not shown to this account): the row then shows none.
+   */
+  fit?: { tier: 'great' | 'good' | 'possible' | 'unlikely'; score: number } | null;
 }
 
 export interface QueueItemView {
@@ -315,6 +345,7 @@ export const KitEventDetailSchema = z
     artifactId: z.string().optional(),
     fileName: z.string().optional(),
     creditLedgerId: z.string().optional(),
+    // `artifactId` / `fileName` on the move to `opened`: the resume file recorded on the application (WP-93).
     // ── WP-52 ──
     /** A decision row: the user used or revised a part. */
     part: z.enum(['resume', 'letter']).optional(),
@@ -345,7 +376,13 @@ export const SuggestionsQuerySchema = z.object({
 /** POST /agent/list/generate — build this week's list now (or add more). */
 export const GenerateListBodySchema = z
   .object({
-    /** Filter changes made inside Ready to apply (a FilterSet patch over the main search). */
+    /**
+     * Filter changes made inside Ready to apply (a FilterSet patch over the main
+     * search: changed fields only, a removed filter as `null`). They are kept
+     * (`RAAgentSettings.filterOverrides`) and used for
+     * every later list, the weekly one included, until the user removes them
+     * (PUT /agent/settings `filterOverrides: null`). Left out: the kept ones apply.
+     */
     overrides: z.record(z.string(), z.unknown()).optional(),
     /** Add another `weeklyTarget` jobs even when this week's list is full. */
     more: z.boolean().optional(),

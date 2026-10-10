@@ -73,6 +73,10 @@ export function defaultExtensionDeps(): ExtensionDeps {
         throw err;
       }
     },
+    async saveBankAnswer(userId, input) {
+      const { agentService } = await import('../agent/index.js');
+      return agentService.saveApprovedAnswer(userId, input);
+    },
     async markAgentSubmitted(userId, jobId) {
       const { agentService } = await import('../agent/index.js');
       try {

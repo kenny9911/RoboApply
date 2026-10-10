@@ -16,8 +16,10 @@ import type { ApplyClickResponse } from '../jobs/detail/index.js';
 import type { TailorSessionView } from '../resume/index.js';
 import type { ApplyMark } from '../tracker/index.js';
 import type { NotifyUserInput, NotifyUserResult } from '../alerts/index.js';
+import { logger } from '../../services/LoggerService.js';
+import type { FileNameStyle } from './contract.js';
 import { AGENT_WORK_KINDS } from './kinds.js';
-import type { AgentDb } from './store.js';
+import type { AgentDb, QueueFit } from './store.js';
 
 export interface PreparePayload {
   queueItemId: string;
@@ -29,6 +31,30 @@ export interface PreparePayload {
   /** 'all' = a new kit; 'resume' = revise the resume only. */
   part: 'all' | 'resume';
   instruction?: string;
+}
+
+/** `agent.record-files`: record the kit's resume file on the application after "Open application". */
+export interface RecordFilesPayload {
+  queueItemId: string;
+  userId: string;
+}
+
+/**
+ * The legacy resume service (export + RAApplicationArtifact record, WP-36b).
+ * Loaded by a computed path, like the extension does: it pulls the résumé
+ * parsers, whose untyped packages the web typecheck (which reaches this file
+ * through features/index.ts) cannot see. The shape below is the slice used here.
+ */
+export const RESUME_SERVICE_MODULE = '../../roboapply/v2/services/RAResumeService.js';
+interface ResumeServiceModule {
+  raResumeService: {
+    exportVariant(
+      userId: string,
+      id: string,
+      req: { format: 'pdf' | 'docx'; nameStyle?: FileNameStyle | null; trackerEntryId?: string | null; channel?: 'download' | 'agent' | 'extension'; locale?: string | null; brand: 'roboapply' | 'goapply'; market: 'intl' | 'cn' },
+    ): Promise<{ fileName: string; artifactId: string | null }>;
+  };
+  registerResumeArtifactDeleters(): Promise<void>;
 }
 
 export interface CreditUsageLine {
@@ -65,6 +91,16 @@ export interface AgentDeps {
   patchSearch(userId: string, id: string, version: number, patch: unknown): Promise<SearchProfileWire>;
   /** True when `overrides` change the effective filters of `base`. */
   filtersDiffer(base: FilterSet, overrides: Record<string, unknown>, market: 'intl' | 'cn'): Promise<boolean>;
+  /** True when `base` with `overrides` on top is a filter set the feed accepts. */
+  filtersValid(base: FilterSet, overrides: Record<string, unknown>, market: 'intl' | 'cn'): Promise<boolean>;
+  /** One of the user's saved searches, or null when it is gone. */
+  searchProfile(userId: string, id: string): Promise<SearchProfileWire | null>;
+  /**
+   * The deterministic fit ("Quick estimate", no model call) of jobs on the
+   * list, by job id. Empty when fit is not shown to this account (GoApply
+   * without 个性化推荐) or it could not be read: rows then show none.
+   */
+  fitsFor(userId: string, jobIds: string[]): Promise<Map<string, QueueFit>>;
 
   recordApplyClick(userId: string, jobId: string): Promise<ApplyClickResponse>;
   /** Undo the apply-click move; `reverted` is false when the tracker still says Applied (too old, or moved since). */
@@ -89,6 +125,14 @@ export interface AgentDeps {
   releaseKit(reservationId: string, reason: string): Promise<void>;
 
   enqueuePrepare(payload: PreparePayload, dedupeKey: string): Promise<void>;
+  /** Queue recording the kit's resume file on the application (after "Open application"; never blocks it). */
+  enqueueRecordFiles(payload: RecordFilesPayload, dedupeKey: string): Promise<void>;
+  /**
+   * Export the resume as the file the user sends and record its exact bytes
+   * on the application (RAApplicationArtifact, channel `agent`), so it shows
+   * with the application's files. `artifactId` is null when nothing was recorded.
+   */
+  recordResumeFile(userId: string, input: { variantId: string; trackerEntryId: string; nameStyle: FileNameStyle }): Promise<{ artifactId: string | null; fileName: string }>;
   /** Start a short drain after the response (Vercel `waitUntil`); the queue-drain cron covers the rest. */
   kickPrepare(): void;
   notify(input: NotifyUserInput): Promise<NotifyUserResult>;
@@ -165,6 +209,35 @@ export function defaultAgentDeps(): AgentDeps {
       const a = stableStringify(normalizeFilterSet(base));
       const b = stableStringify(normalizeFilterSet(merged.value));
       return a !== b;
+    },
+    async filtersValid(base, overrides, market) {
+      const { parseFilterSet } = await import('../search/index.js');
+      return parseFilterSet({ ...base, ...overrides }, { market }).ok;
+    },
+    async searchProfile(userId, id) {
+      const { searchProfileService } = await import('../search/index.js');
+      try {
+        return await searchProfileService.get(userId, id);
+      } catch {
+        return null;
+      }
+    },
+    async fitsFor(userId, jobIds) {
+      const out = new Map<string, QueueFit>();
+      if (!jobIds.length) return out;
+      try {
+        const brand = getCurrentBrandOrDefault();
+        const [{ isFeedPersonalized }, { matchService }] = await Promise.all([import('../feed/index.js'), import('../match/index.js')]);
+        // GoApply: no fit is used or shown without a live 个性化推荐 grant (the feed's own rule).
+        if (!(await isFeedPersonalized(userId, brand.market))) return out;
+        for (const r of await matchService.preScoreMany(userId, [...new Set(jobIds)])) {
+          if (r.tier && typeof r.score === 'number' && Number.isFinite(r.score)) out.set(r.jobId, { tier: r.tier, score: r.score });
+        }
+      } catch (err) {
+        logger.warn('AGENT', 'fit not read for the list (rows show none)', { error: err instanceof Error ? err.message : String(err) });
+        out.clear();
+      }
+      return out;
     },
     async recordApplyClick(userId, jobId) {
       const { jobDetailService } = await import('../jobs/detail/index.js');
@@ -268,6 +341,29 @@ export function defaultAgentDeps(): AgentDeps {
     async enqueuePrepare(payload, dedupeKey) {
       const { enqueue } = await import('../../platform/queue/index.js');
       await enqueue(AGENT_WORK_KINDS.agentPrepare, payload, { dedupeKey, userId: payload.userId, maxAttempts: 2 });
+    },
+    async enqueueRecordFiles(payload, dedupeKey) {
+      const { enqueue, kickDrain } = await import('../../platform/queue/index.js');
+      await enqueue(AGENT_WORK_KINDS.agentRecordFiles, payload, { dedupeKey, userId: payload.userId, maxAttempts: 2 });
+      void Promise.resolve()
+        .then(() => kickDrain([AGENT_WORK_KINDS.agentRecordFiles]))
+        .catch(() => undefined);
+    },
+    async recordResumeFile(userId, input) {
+      const { raResumeService, registerResumeArtifactDeleters } = (await import(RESUME_SERVICE_MODULE)) as ResumeServiceModule;
+      // The stored bytes are purged with the account and by the artifact retention (WP-10 / WP-13 deleters).
+      await registerResumeArtifactDeleters().catch((err: unknown) => logger.warn('AGENT', 'artifact deleters not registered', { error: String(err) }));
+      const brand = getCurrentBrandOrDefault();
+      const out = await raResumeService.exportVariant(userId, input.variantId, {
+        format: 'pdf',
+        nameStyle: input.nameStyle,
+        trackerEntryId: input.trackerEntryId,
+        channel: 'agent',
+        brand: brand.id,
+        market: brand.market,
+        locale: null,
+      });
+      return { artifactId: out.artifactId, fileName: out.fileName };
     },
     kickPrepare() {
       void import('../../platform/queue/index.js').then(({ kickDrain }) => kickDrain([AGENT_WORK_KINDS.agentPrepare])).catch(() => undefined);

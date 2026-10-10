@@ -2,6 +2,14 @@
 //
 //   node scripts/build.mjs --brand=roboapply|goapply --target=chrome|edge [--dev]
 //                          [--api-origin=http://127.0.0.1:4799] [--out=dist/x] [--all]
+//   node scripts/build.mjs --brand=goapply --store=edge|chrome|crx
+//
+// GoApply builds follow GOAPPLY_DISTRIBUTION (src/brands/goapply): `--store`
+// picks the build target that store receives (Edge Add-ons first), `--all`
+// builds one folder per store, and the store name, short name, description
+// and toolbar title come from the strings it names (`extension-cn.manifest`
+// in i18n/staging/extension-cn.{en,zh}.json), written to `_locales/en` and
+// `_locales/zh_CN` (the GoApply default locale).
 //
 // Output (default dist/<brand>-<target>[-dev]/) is an unpacked MV3 extension:
 // manifest.json, sw.js (module), content.js, popup.html/js, _locales/, icons/.
@@ -34,9 +42,41 @@ export function parseArgs(argv) {
   };
   const brand = get('brand') ?? 'roboapply';
   const target = get('target') ?? 'chrome';
+  const store = typeof get('store') === 'string' ? get('store') : undefined;
   if (!BRANDS.includes(brand)) throw new Error(`--brand must be one of ${BRANDS.join(', ')}`);
   if (!TARGETS.includes(target)) throw new Error(`--target must be one of ${TARGETS.join(', ')}`);
-  return { brand, target, dev: get('dev') === true, apiOrigin: typeof get('api-origin') === 'string' ? get('api-origin') : undefined, out: get('out'), all: get('all') === true };
+  return { brand, target, store, dev: get('dev') === true, apiOrigin: typeof get('api-origin') === 'string' ? get('api-origin') : undefined, out: get('out'), all: get('all') === true };
+}
+
+/** The strings that name a RoboApply build in the stores. */
+export const DEFAULT_MANIFEST_STRINGS_KEY = 'extension.manifest';
+
+/**
+ * One build, resolved against the GoApply distribution: `--store` names the
+ * build target that store receives; without it `--target` is used as given.
+ * Returns the target, the strings key and the default output folder name.
+ */
+export function resolveBuild(opts, distribution) {
+  if (opts.store !== undefined) {
+    if (opts.brand !== 'goapply') throw new Error('--store is for --brand=goapply');
+    if (!distribution.stores.includes(opts.store)) throw new Error(`--store must be one of ${distribution.stores.join(', ')}`);
+  }
+  const goapply = opts.brand === 'goapply';
+  const target = opts.store ? distribution.buildTarget[opts.store] : opts.target;
+  return {
+    ...opts,
+    target,
+    stringsKey: goapply ? distribution.manifestStringsKey : DEFAULT_MANIFEST_STRINGS_KEY,
+    outName: `${opts.brand}-${opts.store ?? target}${opts.dev ? '-dev' : ''}`,
+  };
+}
+
+/** `--all`: RoboApply for every target, GoApply for every store of its distribution (Edge Add-ons first). */
+export function allBuilds(opts, distribution) {
+  return [
+    ...TARGETS.map((target) => ({ ...opts, brand: 'roboapply', target, store: undefined, out: undefined })),
+    ...distribution.stores.map((store) => ({ ...opts, brand: 'goapply', target: distribution.buildTarget[store], store, out: undefined })),
+  ];
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -64,13 +104,23 @@ export function loadMessages() {
   return { en, others };
 }
 
+/** GoApply's own manifest strings, staged per language: `{ en, zh }` (a missing file is left out). */
+export function loadCnMessages() {
+  const out = {};
+  for (const locale of ['en', 'zh']) {
+    const file = join(REPO_ROOT, `i18n/staging/extension-cn.${locale}.json`);
+    if (existsSync(file)) out[locale] = JSON.parse(readFileSync(file, 'utf8'));
+  }
+  return out;
+}
+
 function lookup(bundle, path) {
   return path.split('.').reduce((cur, k) => (isObj(cur) ? cur[k] : undefined), bundle);
 }
 
 /** `_locales/<lang>/messages.json` for the manifest's name, description and action title. */
-export function manifestMessages(bundle, fallback, brandName, target) {
-  const pick = (key) => lookup(bundle, `extension.manifest.${key}`) ?? lookup(fallback, `extension.manifest.${key}`);
+export function manifestMessages(bundle, fallback, brandName, target, stringsKey = DEFAULT_MANIFEST_STRINGS_KEY) {
+  const pick = (key) => lookup(bundle, `${stringsKey}.${key}`) ?? lookup(fallback, `${stringsKey}.${key}`);
   const sub = (s) => String(s ?? '').replace(/%BRAND%/g, brandName);
   const name = target === 'edge' ? pick('nameEdge') : pick('nameChrome');
   return {
@@ -79,6 +129,26 @@ export function manifestMessages(bundle, fallback, brandName, target) {
     extDescription: { message: sub(pick('description')).slice(0, 132) },
     actionTitle: { message: sub(pick('actionTitle')) },
   };
+}
+
+/**
+ * Every `_locales` folder of one build: `{ en: {...}, zh_CN: {...} }`.
+ * `staged` holds strings staged outside src/i18n, per locale (GoApply's
+ * `extension-cn` files); they are read under the translated bundle of the
+ * same locale, so a merged translation wins. A locale without the build's
+ * manifest strings gets no folder (English always does).
+ */
+export function localeMessagesFor({ brandName, target, stringsKey = DEFAULT_MANIFEST_STRINGS_KEY, en, others = {}, staged = {} }) {
+  const bundles = { en, ...others };
+  for (const [locale, extra] of Object.entries(staged)) bundles[locale] = deepMerge(deepMerge({}, extra), bundles[locale] ?? {});
+  const out = {};
+  for (const [locale, bundle] of Object.entries(bundles)) {
+    const folder = CHROME_LOCALE[locale];
+    if (!folder) continue;
+    if (locale !== 'en' && !lookup(bundle, stringsKey)) continue;
+    out[folder] = manifestMessages(bundle, bundles.en, brandName, target, stringsKey);
+  }
+  return out;
 }
 
 // ── icons (plain brand-colour tiles until brand artwork exists) ─────────────
@@ -130,15 +200,28 @@ async function loadManifestModule(tmpDir) {
   return import(`${pathToFileURL(outfile).href}?t=${Date.now()}`);
 }
 
-export async function buildOne(opts) {
-  const pkg = JSON.parse(readFileSync(join(EXT_ROOT, 'package.json'), 'utf8'));
-  const outDir = resolve(EXT_ROOT, opts.out ?? `dist/${opts.brand}-${opts.target}${opts.dev ? '-dev' : ''}`);
+/** GOAPPLY_DISTRIBUTION as the build sees it (bundled from src/brands/goapply through src/manifest.ts). */
+export async function loadDistribution() {
   const tmpDir = join(EXT_ROOT, '.build-tmp');
-  rmSync(outDir, { recursive: true, force: true });
-  mkdirSync(outDir, { recursive: true });
+  mkdirSync(tmpDir, { recursive: true });
+  try {
+    return (await loadManifestModule(tmpDir)).GOAPPLY_DISTRIBUTION;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+export async function buildOne(input) {
+  const pkg = JSON.parse(readFileSync(join(EXT_ROOT, 'package.json'), 'utf8'));
+  const tmpDir = join(EXT_ROOT, '.build-tmp');
   mkdirSync(tmpDir, { recursive: true });
 
-  const { buildManifest, manifestViolations, getExtBrand } = await loadManifestModule(tmpDir);
+  const { buildManifest, manifestViolations, getExtBrand, GOAPPLY_DISTRIBUTION } = await loadManifestModule(tmpDir);
+  const opts = resolveBuild(input, GOAPPLY_DISTRIBUTION);
+  const outDir = resolve(EXT_ROOT, opts.out ?? `dist/${opts.outName}`);
+  rmSync(outDir, { recursive: true, force: true });
+  mkdirSync(outDir, { recursive: true });
+
   const manifest = buildManifest({ brand: opts.brand, target: opts.target, dev: opts.dev, version: pkg.version, apiOrigin: opts.apiOrigin });
   const violations = manifestViolations(manifest);
   if (violations.length) throw new Error(`manifest policy:\n  ${violations.join('\n  ')}`);
@@ -164,14 +247,20 @@ export async function buildOne(opts) {
   copyFileSync(join(EXT_ROOT, 'src/popup/popup.html'), join(outDir, 'popup.html'));
 
   writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  const locales = { en, ...others };
-  for (const [locale, bundle] of Object.entries(locales)) {
-    const folder = CHROME_LOCALE[locale];
-    if (!folder) continue;
-    if (locale !== 'en' && !lookup(bundle, 'extension.manifest')) continue;
+  const locales = localeMessagesFor({
+    brandName,
+    target: opts.target,
+    stringsKey: opts.stringsKey,
+    en,
+    others,
+    staged: opts.brand === 'goapply' ? loadCnMessages() : {},
+  });
+  // Chrome refuses an extension whose default locale has no messages file.
+  if (!locales[manifest.default_locale]) throw new Error(`no _locales/${manifest.default_locale} strings for ${opts.brand} (${opts.stringsKey})`);
+  for (const [folder, messages] of Object.entries(locales)) {
     const dir = join(outDir, '_locales', folder);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'messages.json'), `${JSON.stringify(manifestMessages(bundle, en, brandName, opts.target), null, 2)}\n`);
+    writeFileSync(join(dir, 'messages.json'), `${JSON.stringify(messages, null, 2)}\n`);
   }
 
   const action = (opts.brand === 'goapply' ? tokens.goLight : tokens.light).match(/--action:\s*(#[0-9A-Fa-f]{6})/)?.[1] ?? '#4F3DCA';
@@ -179,7 +268,7 @@ export async function buildOne(opts) {
   for (const size of [16, 32, 48, 128]) writeFileSync(join(outDir, 'icons', `${size}.png`), tilePng(size, action));
 
   rmSync(tmpDir, { recursive: true, force: true });
-  return { outDir, manifest };
+  return { outDir, manifest, locales };
 }
 
 async function main(argv) {
@@ -190,12 +279,10 @@ async function main(argv) {
     return 1;
   }
   const opts = parseArgs(argv);
-  const jobs = opts.all
-    ? BRANDS.flatMap((brand) => TARGETS.map((target) => ({ ...opts, brand, target, out: undefined })))
-    : [opts];
+  const jobs = opts.all ? allBuilds(opts, await loadDistribution()) : [opts];
   for (const job of jobs) {
-    const { outDir } = await buildOne(job);
-    console.log(`✓ built ${job.brand} for ${job.target}${job.dev ? ' (dev)' : ''} → ${outDir}`);
+    const { outDir, manifest } = await buildOne(job);
+    console.log(`✓ built ${job.brand} for ${job.store ?? job.target}${job.dev ? ' (dev)' : ''} → ${outDir} (default locale ${manifest.default_locale})`);
   }
   return 0;
 }

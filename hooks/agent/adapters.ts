@@ -1,27 +1,19 @@
 // hooks/agent/adapters.ts — the narrow, typed reads Ready to apply makes on
 // top of the agent contract (WP-53; contract: server/src/features/agent/contract.ts).
 //
-// WP-52 adds optional fields to the FND `QueueItemView` (`tailorSessionId`,
-// `lastError`, `tab`) and new reads (kit detail, kit history). Until its
-// contract merges, the fields are read here through narrow guards and the new
-// shapes are mirrored in lib/api/agent.ts. A field the server does not send
-// reads as "unknown" (null / undefined) and the UI hides what it cannot
-// show; nothing is guessed (D3).
+// The shapes are the contract's own (lib/api/agent.ts re-exports them; no
+// mirror types since WP-93). What the server sends is still read through
+// narrow guards: a field it does not send reads as "unknown" (null /
+// undefined) and the UI hides what it cannot show; nothing is guessed (D3).
 
 import type { QueueItemView, QueueState } from '../../lib/api/contracts/agent';
-import type { KitEventView, QueueJobSummary, QueueTab } from '../../lib/api/agent';
+import type { KitEventView, QueueJobSummary } from '../../lib/api/agent';
 import type { BucketSummary } from '../shared/useCredits';
 
 export type { KitEventView } from '../../lib/api/agent';
 
-/** A queue item plus the optional fields WP-52 sends. */
-export type ReadyQueueItem = QueueItemView & {
-  /** The job as WP-52 stores it on the list (saves one job read per row). */
-  job?: QueueJobSummary | null;
-  tailorSessionId?: string | null;
-  lastError?: string | null;
-  tab?: QueueTab;
-};
+/** A queue item as /ready reads it (the contract's view: `job`, `tailorSessionId`, `lastError`, `tab` are optional there). */
+export type ReadyQueueItem = QueueItemView;
 
 const STATES: readonly QueueState[] = ['picked', 'preparing', 'ready_for_review', 'approved', 'opened', 'applied', 'skipped', 'expired', 'failed'];
 const ACTORS = new Set(['user', 'system', 'extension']);
@@ -47,13 +39,17 @@ export function kitEventsOf(raw: unknown): KitEventView[] | undefined {
   const rows: KitEventView[] = [];
   for (const r of raw as Array<Record<string, unknown>>) {
     if (!r || typeof r !== 'object' || typeof r.id !== 'string' || !isState(r.toState) || typeof r.createdAt !== 'string') continue;
+    const fromState = isState(r.fromState) ? r.fromState : null;
+    const detail = r.detail && typeof r.detail === 'object' ? (r.detail as Record<string, unknown>) : null;
     rows.push({
       id: r.id,
-      ...(typeof r.kind === 'string' && KINDS.has(r.kind) ? { kind: r.kind as KitEventView['kind'] } : {}),
-      fromState: isState(r.fromState) ? r.fromState : null,
+      // The server's kind; a row without one is read by the same rule the server uses
+      // (a decision or a notice leaves the state as it was), never as a transition by default.
+      kind: typeof r.kind === 'string' && KINDS.has(r.kind) ? (r.kind as KitEventView['kind']) : fromState === r.toState ? (detail?.notice ? 'notice' : 'decision') : 'transition',
+      fromState,
       toState: r.toState,
       actor: typeof r.actor === 'string' && ACTORS.has(r.actor) ? (r.actor as KitEventView['actor']) : 'system',
-      detail: r.detail && typeof r.detail === 'object' ? (r.detail as Record<string, unknown>) : null,
+      detail,
       createdAt: r.createdAt,
     });
   }
@@ -83,7 +79,19 @@ export function jobSummaryOf(item: ReadyQueueItem): QueueJobSummary | null {
     hasApplyUrl: r.hasApplyUrl === true,
     closed: r.closed === true,
     asksForCoverLetter: r.asksForCoverLetter === true,
+    ...(fitOf(r.fit) ? { fit: fitOf(r.fit) } : {}),
   };
+}
+
+const FIT_TIERS = new Set(['great', 'good', 'possible', 'unlikely']);
+
+/** The fit the list row carries, when the server sent a complete one (tier and a 0–100 score). */
+function fitOf(raw: unknown): NonNullable<QueueJobSummary['fit']> | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const f = raw as Record<string, unknown>;
+  if (typeof f.tier !== 'string' || !FIT_TIERS.has(f.tier)) return null;
+  if (typeof f.score !== 'number' || !Number.isFinite(f.score)) return null;
+  return { tier: f.tier as NonNullable<QueueJobSummary['fit']>['tier'], score: f.score };
 }
 
 /** The raw code of why preparing failed, when the server says (never shown as is). */
@@ -122,9 +130,9 @@ export function failedReasonOf(code: string | null): FailedReason | null {
 }
 
 /**
- * The weekly cap a Pro plan would give for this bucket. `EntitlementService`
- * knows it (`proCap`) but `BucketSummary` does not carry it yet (request to
- * the credits owner); until it does this returns null and nothing is shown.
+ * The weekly cap a Pro plan would give for this bucket: `proCap` on the
+ * credits summary's bucket (the credits area adds it; INT-02). A summary
+ * without it reads null and the "Pro: up to N kits a week" line is not shown.
  */
 export function proCapOf(summary: BucketSummary | null | undefined): number | null {
   const v = (summary as { proCap?: unknown } | null | undefined)?.proCap;

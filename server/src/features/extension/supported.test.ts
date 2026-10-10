@@ -36,7 +36,8 @@ describe('supported ATS types', () => {
   });
 
   // Wave 5 gate: job pages offer the extension only on hosts its adapters run on,
-  // and not for page-by-page forms until one run covers an application (R4, WP-93).
+  // and not for the page-by-page forms that may still start a run per page
+  // (iCIMS, Taleo, SuccessFactors; Workday is covered by one run since R4, WP-93).
   it('every fillable type has host patterns; the matcher follows Chrome match-pattern rules', () => {
     expect(Object.keys(EXTENSION_ATS_HOST_PATTERNS).sort()).toEqual([...EXTENSION_ATS_TYPES_BY_MARKET.intl, ...EXTENSION_ATS_TYPES_BY_MARKET.cn].sort());
     expect(matchesExtensionHostPattern('https://acme.jobs.feishu.cn/x', 'https://*.jobs.feishu.cn/*')).toBe(true);
@@ -53,8 +54,12 @@ describe('supported ATS types', () => {
     expect(extensionOffersFill('intl', 'lever', 'https://api.lever.co/v0/postings/acme/1')).toBe(false);
     expect(extensionOffersFill('intl', 'workable', 'https://acme.workable.com/j/1')).toBe(false);
     expect(extensionOffersFill('intl', 'workable', 'https://apply.workable.com/acme/j/1')).toBe(true);
-    expect(extensionOffersFill('intl', 'workday', 'https://acme.wd5.myworkdayjobs.com/External/job/1')).toBe(false);
+    // R4 (WP-93): one run covers a Workday application, so job pages offer it again.
+    expect(extensionOffersFill('intl', 'workday', 'https://acme.wd5.myworkdayjobs.com/External/job/1')).toBe(true);
+    expect(extensionOffersFill('intl', 'workday', 'https://acme.myworkday.com/External/job/1')).toBe(false);
     expect(extensionOffersFill('intl', 'icims', 'https://careers-acme.icims.com/jobs/1/job')).toBe(false);
+    expect(extensionOffersFill('intl', 'taleo', 'https://acme.taleo.net/careersection/2/jobapply.ftl')).toBe(false);
+    expect(extensionOffersFill('intl', 'successfactors', 'https://acme.successfactors.com/career?company=a')).toBe(false);
     expect(extensionOffersFill('cn', 'moka', 'https://app.mokahr.com/apply/acme/1')).toBe(true);
     expect(extensionOffersFill('cn', 'feishu', 'https://jobs.bytedance.com/campus/position/1')).toBe(false);
     expect(extensionOffersFill('cn', 'greenhouse', 'https://boards.greenhouse.io/acme/jobs/1')).toBe(false);
@@ -65,6 +70,8 @@ describe('supported ATS types', () => {
   it('the web button never offers a page-by-page form', () => {
     expect(extensionFillsAts('roboapply', 'greenhouse')).toBe(true);
     for (const t of EXTENSION_PER_PAGE_ATS_TYPES) expect(extensionFillsAts('roboapply', t)).toBe(false);
+    expect([...EXTENSION_PER_PAGE_ATS_TYPES]).not.toContain('workday');
+    expect(extensionFillsAts('roboapply', 'workday')).toBe(true);
     expect(extensionFillsAts('goapply', 'greenhouse')).toBe(false);
   });
 });

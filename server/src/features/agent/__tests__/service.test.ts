@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
+import { deriveKitEventKind, kitEventKind } from '../store.js';
 import { NOW, feedItem, job, makeDb, makeDeps, seedItem, usageLine } from './testkit.js';
 
 const NOW_MS = NOW.getTime();
@@ -29,6 +30,8 @@ describe('settings', () => {
       coverLetterMode: 'when_required',
       baseVariantId: null,
       fileNameStyle: 'name_company_role',
+      // Lists come from the active search with no changes of their own (SR-52-1).
+      listFilters: { searchProfileId: null, overrides: null },
     });
     const saved = await service.putSettings('u1', { weeklyTarget: 5, minTier: 'great', baseVariantId: 'rv_base' });
     expect(saved).toMatchObject({ weeklyTarget: 5, minTier: 'great', baseVariantId: 'rv_base', tailorEach: true });
@@ -166,9 +169,104 @@ describe('weekly list (F-AGENT-04)', () => {
     const { service } = makeDeps(db, 'roboapply', { feedPreview: async () => [feedItem('j1', 'great')], patchSearch: patch });
     const r = await service.generateList('u1', { source: 'user', overrides: { workModels: ['remote'] } });
     expect(r.filtersDiffer).toBe(true);
-    expect((await service.generateList('u1', { source: 'user', more: true })).filtersDiffer).toBe(false);
+    // "No, only this list": the change is kept for Ready to apply's next lists (SR-52-1).
+    expect((await service.getSettings('u1')).listFilters).toEqual({ searchProfileId: null, overrides: { workModels: ['remote'] } });
+    expect((await service.generateList('u1', { source: 'user', more: true })).filtersDiffer).toBe(true);
+    // "Yes": the main search takes the filters, and Ready to apply keeps none of its own.
     await service.saveToMain('u1', { filters: { workModels: ['remote'] }, version: 3 });
     expect(patch).toHaveBeenCalledWith('u1', 'sp_main', 3, { workModels: ['remote'] });
+    expect((await service.getSettings('u1')).listFilters).toEqual({ searchProfileId: null, overrides: null });
+    expect((await service.generateList('u1', { source: 'user', more: true })).filtersDiffer).toBe(false);
+  });
+
+  it('Ready-only filter changes are used for every later list, and can be removed (SR-52-1)', async () => {
+    const db = makeDb();
+    const previews: unknown[] = [];
+    const { service } = makeDeps(db, 'roboapply', {
+      feedPreview: async (_u, input) => {
+        previews.push(input.filters);
+        return [feedItem('j1', 'great'), feedItem('j2', 'great')];
+      },
+    });
+    await service.putSettings('u1', { weeklyTarget: 5 });
+    await service.generateList('u1', { source: 'user', overrides: { workModels: ['remote'], postedWithinDays: 7 }, more: true });
+    // The weekly cron and an on-demand list without a body both use what was kept.
+    await service.generateList('u1', { source: 'cron' });
+    await service.generateList('u1', { source: 'user', more: true });
+    expect(previews).toEqual([
+      { workModels: ['remote'], postedWithinDays: 7 },
+      { workModels: ['remote'], postedWithinDays: 7 },
+      { workModels: ['remote'], postedWithinDays: 7 },
+    ]);
+    // New changes replace the kept ones; the cron never writes any.
+    await service.generateList('u1', { source: 'user', overrides: { workModels: ['hybrid'] }, more: true });
+    expect((await service.getSettings('u1')).listFilters?.overrides).toEqual({ workModels: ['hybrid'] });
+    await service.generateList('u1', { source: 'cron', overrides: { workModels: ['onsite'] } });
+    expect((await service.getSettings('u1')).listFilters?.overrides).toEqual({ workModels: ['hybrid'] });
+    // "Use my main search only".
+    const cleared = await service.putSettings('u1', { filterOverrides: null });
+    expect(cleared).toMatchObject({ weeklyTarget: 5, listFilters: { searchProfileId: null, overrides: null } });
+    await service.generateList('u1', { source: 'cron' });
+    expect(previews.at(-1)).toBeUndefined();
+  });
+
+  it('a change that removes a filter of the main search is kept as null and applied as "not set"', async () => {
+    const db = makeDb();
+    const previews: unknown[] = [];
+    const base = { id: 'sp_main', name: 'Main', isDefault: true, isActive: true, version: 3, schemaVersion: 1, filters: { q: 'designer', workModels: ['onsite'] }, alertInstantMax: 0, alertDigest: null, createdAt: '', updatedAt: '' };
+    const { service } = makeDeps(db, 'roboapply', {
+      activeSearch: async () => base as never,
+      feedPreview: async (_u, input) => {
+        previews.push(input.filters);
+        return [feedItem('j1', 'great')];
+      },
+    });
+    await service.generateList('u1', { source: 'user', overrides: { workModels: null, postedWithinDays: 7 }, more: true });
+    expect(previews[0]).toEqual({ workModels: undefined, postedWithinDays: 7 });
+    expect(Object.keys(previews[0] as object)).toContain('workModels');
+    expect((await service.getSettings('u1')).listFilters?.overrides).toEqual({ workModels: null, postedWithinDays: 7 });
+    await service.generateList('u1', { source: 'cron', more: true });
+    expect(previews[1]).toEqual({ workModels: undefined, postedWithinDays: 7 });
+  });
+
+  it('filters the request carries are refused when they do not parse; kept ones that stopped parsing never block a list', async () => {
+    const db = makeDb({ rAAgentSettings: [{ userId: 'u1', weeklyTarget: 5, minTier: 'good', tailorEach: true, coverLetterMode: 'never', baseVariantId: null, fileNameStyle: 'name_role', setupStep: 'done', calibration: [], setupCompletedAt: new Date(), filterOverrides: { salaryMin: 'lots' } }] });
+    const previews: unknown[] = [];
+    const { service } = makeDeps(db, 'roboapply', {
+      filtersValid: async (_b, o) => typeof o.salaryMin !== 'string',
+      feedPreview: async (_u, input) => {
+        previews.push(input.filters);
+        return [feedItem('j1', 'great')];
+      },
+    });
+    const r = await service.generateList('u1', { source: 'cron' });
+    expect(r).toMatchObject({ added: 1, filtersDiffer: false });
+    expect(previews).toEqual([undefined]);
+    await expect(service.generateList('u1', { source: 'user', overrides: { salaryMin: 'lots' } })).rejects.toMatchObject({ code: 'invalid_request', details: { reason: 'invalid_filters' } });
+  });
+
+  it('a saved search other than the active one replaces its filters (RAAgentSettings.searchProfileId)', async () => {
+    const db = makeDb({ rAAgentSettings: [{ userId: 'u1', weeklyTarget: 5, minTier: 'good', tailorEach: true, coverLetterMode: 'never', baseVariantId: null, fileNameStyle: 'name_role', setupStep: 'done', calibration: [], setupCompletedAt: new Date(), searchProfileId: 'sp_other', filterOverrides: { postedWithinDays: 3 } }] });
+    const previews: unknown[] = [];
+    const base = { id: 'sp_main', name: 'Main', isDefault: true, isActive: true, version: 3, schemaVersion: 1, filters: { q: 'designer', workModels: ['onsite'] }, alertInstantMax: 0, alertDigest: null, createdAt: '', updatedAt: '' };
+    const searchProfile = vi.fn(async (_u: string, id: string) => (id === 'sp_other' ? ({ ...base, id: 'sp_other', filters: { q: 'engineer' } } as never) : null));
+    const { service } = makeDeps(db, 'roboapply', {
+      activeSearch: async () => base as never,
+      searchProfile,
+      feedPreview: async (_u, input) => {
+        previews.push(input.filters);
+        return [feedItem('j1', 'great')];
+      },
+    });
+    await service.generateList('u1', { source: 'cron' });
+    // The other search's own keys, none of the active search's, then Ready to apply's changes.
+    expect(previews[0]).toEqual({ q: 'engineer', workModels: undefined, postedWithinDays: 3 });
+    expect(searchProfile).toHaveBeenCalledWith('u1', 'sp_other');
+    expect((await service.getSettings('u1')).listFilters).toEqual({ searchProfileId: 'sp_other', overrides: { postedWithinDays: 3 } });
+    // A saved search that is gone: the active search with the kept changes.
+    searchProfile.mockResolvedValue(null);
+    await service.generateList('u1', { source: 'cron', more: true });
+    expect(previews[1]).toEqual({ postedWithinDays: 3 });
   });
 
   it('does nothing when the job feed is off (GoApply recruitment-info mode off)', async () => {
@@ -217,6 +315,25 @@ describe('queue', () => {
     const ready = await service.listQueue('u1', { tab: 'to_prepare' });
     expect(ready.items.map((i) => i.jobId)).toEqual(['j1']);
     expect(all.weekKey).toBe('2026-W42');
+    // No fit known: the summary carries none (the row shows none).
+    expect(all.items.every((i) => i.job && !('fit' in i.job))).toBe(true);
+  });
+
+  it('list rows carry the fit when it is known, and none when it is not shown or cannot be read', async () => {
+    const db = makeDb();
+    await seedItem(db, { jobId: 'j1', state: 'picked' });
+    await seedItem(db, { jobId: 'j2', state: 'picked' });
+    const fitsFor = vi.fn(async (_u: string, ids: string[]) => new Map(ids.filter((id) => id === 'j1').map((id) => [id, { tier: 'good' as const, score: 72 }])));
+    const { service } = makeDeps(db, 'roboapply', { fitsFor });
+    const list = await service.listQueue('u1', {});
+    expect(list.items.find((i) => i.jobId === 'j1')!.job).toMatchObject({ title: 'Role j1', fit: { tier: 'good', score: 72 } });
+    expect(list.items.find((i) => i.jobId === 'j2')!.job).not.toHaveProperty('fit');
+    expect(fitsFor).toHaveBeenCalledWith('u1', expect.arrayContaining(['j1', 'j2']));
+    // GoApply without 个性化推荐 (the seam answers nothing), or a failing read: the list still loads.
+    const none = makeDeps(db, 'roboapply', { fitsFor: async () => new Map() });
+    expect((await none.service.listQueue('u1', {})).items.every((i) => !i.job?.fit)).toBe(true);
+    const broken = makeDeps(db, 'roboapply', { fitsFor: async () => Promise.reject(new Error('down')) });
+    expect((await broken.service.listQueue('u1', {})).items).toHaveLength(2);
   });
 
   it('the badge counts kits that are ready and not opened', async () => {
@@ -378,6 +495,53 @@ describe('review, approve, open, undo (R-19, ruling C11)', () => {
     void db;
   });
 
+  it('Open application records the resume on the application (an artifact with the tracker entry) and answers alreadyApplied', async () => {
+    const { service, calls, id } = await readyKit();
+    await service.confirmPart('u1', id, { part: 'resume', decision: 'use' });
+    const opened = await service.open('u1', id);
+    expect(opened).toMatchObject({ trackerEntryId: 'trk_j1', alreadyApplied: false });
+    // Queued, never inline: opening the form does not wait for the export.
+    expect(calls.files).toEqual([]);
+    expect(calls.recordFiles).toEqual([{ queueItemId: id, userId: 'u1' }]);
+
+    // The `agent.record-files` worker: the export carries the application's tracker entry.
+    expect(await service.recordKitFiles(calls.recordFiles[0]!)).toBe('recorded');
+    expect(calls.files).toEqual([{ variantId: 'rv_tailored1', trackerEntryId: 'trk_j1', nameStyle: 'name_company_role' }]);
+    const history = await service.history('u1', id);
+    const move = history.items.find((e) => e.toState === 'opened' && e.fromState === 'approved')!;
+    expect(move.detail).toMatchObject({ via: 'apply_click', alreadyApplied: false, artifactId: 'art_1', fileName: 'Ana_Lima_Company_Role.pdf' });
+    // A retried job, or opening the form again, records nothing twice.
+    expect(await service.recordKitFiles(calls.recordFiles[0]!)).toBe('already');
+    await service.open('u1', id);
+    expect(calls.recordFiles).toHaveLength(1);
+    expect(calls.files).toHaveLength(1);
+  });
+
+  it('a job that was already Applied still gets its file recorded; an undone kit, or a kit with no resume, records nothing', async () => {
+    const applied = await readyKit({
+      recordApplyClick: async (_u, jobId) => ({ applyUrl: 'https://x.test', atsType: null, extensionSupported: false, trackerEntryId: `trk_${jobId}`, alreadyApplied: true }),
+    });
+    await applied.service.confirmPart('u1', applied.id, { part: 'resume', decision: 'use' });
+    expect((await applied.service.open('u1', applied.id)).alreadyApplied).toBe(true);
+    expect(await applied.service.recordKitFiles(applied.calls.recordFiles[0]!)).toBe('recorded');
+    expect(applied.calls.files[0]).toMatchObject({ trackerEntryId: 'trk_j1' });
+
+    const undone = await readyKit();
+    await undone.service.confirmPart('u1', undone.id, { part: 'resume', decision: 'use' });
+    await undone.service.open('u1', undone.id);
+    await undone.service.undoApplied('u1', undone.id);
+    expect(await undone.service.recordKitFiles(undone.calls.recordFiles[0]!)).toBe('stale');
+    expect(undone.calls.files).toEqual([]);
+    expect(await undone.service.recordKitFiles({ queueItemId: 'nope', userId: 'u1' })).toBe('stale');
+    expect(await undone.service.recordKitFiles({ queueItemId: undone.id, userId: 'u2' })).toBe('stale');
+  });
+
+  it('a queue that cannot take the file job never blocks opening the application', async () => {
+    const { service, id } = await readyKit({ enqueueRecordFiles: async () => Promise.reject(new Error('queue down')) });
+    await service.confirmPart('u1', id, { part: 'resume', decision: 'use' });
+    await expect(service.open('u1', id)).resolves.toMatchObject({ applyUrl: 'https://jobs.example.test/j1', item: { state: 'opened' } });
+  });
+
   it('Undo does not touch the tracker when the job was already Applied before opening', async () => {
     const { service, calls, id } = await readyKit({
       recordApplyClick: async (_u, jobId) => ({ applyUrl: 'https://x.test', atsType: null, extensionSupported: false, trackerEntryId: `trk_${jobId}`, alreadyApplied: true }),
@@ -522,6 +686,76 @@ describe('answer bank (F-AGENT-03)', () => {
     expect(a).toMatchObject({ questionKey: 'political_status', answer: '群众' });
     expect(a!.lastUsedAt).toBeTruthy();
     expect(service.questions().items.some((q) => q.key === 'family_members')).toBe(true);
+  });
+});
+
+describe('answer bank: an answer approved in the extension (F-EXT-04)', () => {
+  it('saves it under the question as the form asked it, as ai_confirmed; the same question again replaces it', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db);
+    const first = await service.saveApprovedAnswer('u1', { questionText: '  Why do you want to   work at Acme? ', answer: ' The mission. ' });
+    expect(first.questionKey).toMatch(/^custom:[a-f0-9]{16}$/);
+    let items = (await service.listAnswers('u1')).items;
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ questionKey: first.questionKey, questionText: 'Why do you want to work at Acme?', answer: 'The mission.', source: 'ai_confirmed', locale: 'en' });
+    const again = await service.saveApprovedAnswer('u1', { questionText: 'why do you want to work at acme?', answer: 'The team.', locale: 'en' });
+    expect(again.questionKey).toBe(first.questionKey);
+    items = (await service.listAnswers('u1')).items;
+    expect(items.map((a) => a.answer)).toEqual(['The team.']);
+    await expect(service.saveApprovedAnswer('u1', { questionText: '   ', answer: 'x' })).rejects.toMatchObject({ code: 'invalid_request' });
+    await expect(service.saveApprovedAnswer('u1', { questionText: 'Why us?', answer: '  ' })).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('GoApply saves in its own default language', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db, 'goapply');
+    await service.saveApprovedAnswer('u1', { questionText: '为什么想加入我们？', answer: '因为团队。' });
+    expect((await service.listAnswers('u1')).items[0]).toMatchObject({ locale: 'zh', source: 'ai_confirmed' });
+  });
+});
+
+describe('kit history kinds (SCHEMA-4, SR-52-3)', () => {
+  it('every new row carries its kind: transition, decision and notice', async () => {
+    const db = makeDb();
+    const { service } = makeDeps(db, 'roboapply', { feedPreview: async () => [feedItem('j1', 'great')] });
+    const list = await service.generateList('u1', { source: 'user' });
+    const id = list.items[0]!.id;
+    await (db as unknown as { rAAgentQueueItem: { update: (a: unknown) => Promise<unknown> } }).rAAgentQueueItem.update({ where: { id }, data: { state: 'preparing' } });
+    await service.runPrepare({ queueItemId: id, userId: 'u1', attempt: 1, reservationId: 'r1', part: 'all' });
+    await service.confirmPart('u1', id, { part: 'resume', decision: 'use' });
+    const stored = await rows(db, 'rAAgentKitEvent', { queueItemId: id });
+    // null → picked, the "list ready" notice, preparing → ready, the "use" decision, ready → approved.
+    expect(stored.map((e) => [e.fromState, e.toState, e.kind])).toEqual([
+      [null, 'picked', 'transition'],
+      ['picked', 'picked', 'notice'],
+      ['preparing', 'ready_for_review', 'transition'],
+      ['ready_for_review', 'ready_for_review', 'decision'],
+      ['ready_for_review', 'approved', 'transition'],
+    ]);
+    expect(stored.every((e) => typeof e.kind === 'string')).toBe(true);
+    expect((await service.history('u1', id)).items.map((e) => e.kind)).toEqual(['transition', 'notice', 'transition', 'decision', 'transition']);
+  });
+
+  it('a row from before the column (kind null) is derived, never read as a transition', async () => {
+    const db = makeDb();
+    const id = await seedItem(db, { jobId: 'j1', state: 'ready_for_review' });
+    const ev = (db as unknown as { rAAgentKitEvent: { create: (a: unknown) => Promise<unknown> } }).rAAgentKitEvent;
+    const at = (n: number) => new Date(NOW_MS + n * 1000);
+    await ev.create({ data: { userId: 'u1', queueItemId: id, fromState: 'preparing', toState: 'ready_for_review', actor: 'system', kind: null, detail: null, createdAt: at(1) } });
+    await ev.create({ data: { userId: 'u1', queueItemId: id, fromState: 'ready_for_review', toState: 'ready_for_review', actor: 'user', kind: null, detail: { part: 'resume', decision: 'use' }, createdAt: at(2) } });
+    await ev.create({ data: { userId: 'u1', queueItemId: id, fromState: 'ready_for_review', toState: 'ready_for_review', actor: 'system', kind: null, detail: { notice: 'kit_not_opened', sent: true }, createdAt: at(3) } });
+    // A stored kind wins over what the states suggest; an unknown value is derived.
+    await ev.create({ data: { userId: 'u1', queueItemId: id, fromState: 'ready_for_review', toState: 'ready_for_review', actor: 'system', kind: 'notice', detail: null, createdAt: at(4) } });
+    await ev.create({ data: { userId: 'u1', queueItemId: id, fromState: 'ready_for_review', toState: 'ready_for_review', actor: 'user', kind: 'something_else', detail: null, createdAt: at(5) } });
+    const { service } = makeDeps(db);
+    expect((await service.history('u1', id)).items.map((e) => e.kind)).toEqual(['transition', 'decision', 'notice', 'notice', 'decision']);
+    expect(kitEventKind({ fromState: 'approved', toState: 'approved', detail: null, kind: null })).toBe('decision');
+    expect(kitEventKind({ fromState: 'approved', toState: 'approved', detail: null })).toBe('decision');
+    expect(kitEventKind({ fromState: 'approved', toState: 'opened', detail: null, kind: null })).toBe('transition');
+    expect(deriveKitEventKind('approved', 'approved', { notice: 'kit_not_opened' })).toBe('notice');
+    // The legacy "use" decision still counts toward approving the kit.
+    const approved = await service.confirmPart('u1', id, { part: 'resume', decision: 'use' });
+    expect(approved.state).toBe('approved');
   });
 });
 

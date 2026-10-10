@@ -38,7 +38,7 @@ describe('extension strings', () => {
       'fit.tier': ['great', 'good', 'possible', 'unlikely'],
       status: ['filled', 'needs_you', 'skipped'],
       source: ['profile', 'bank', 'resume', 'ai'],
-      note: ['protected', 'no_value', 'no_option', 'not_pressed', 'resume_no_job', 'resume_unavailable', 'cover_letter', 'file_failed', 'disabled', 'undone', 'ai_unavailable', 'draft_failed'],
+      note: ['protected', 'no_value', 'no_option', 'not_pressed', 'resume_unavailable', 'cover_letter', 'file_failed', 'disabled', 'undone', 'ai_unavailable', 'draft_failed'],
       error: ['credits_exhausted', 'feature_disabled', 'not_connected', 'rate_limited', 'network', 'unknown'],
     };
     for (const [prefix, list] of Object.entries(families)) for (const k of list) expect(keys.has(`extension.${prefix}.${k}`), `${prefix}.${k}`).toBe(true);

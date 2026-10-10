@@ -7,7 +7,7 @@ import { getBrand, type BrandId } from '../../../platform/brand/registry.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import type { FeedItem } from '../../feed/index.js';
 import type { TailorSessionView } from '../../resume/index.js';
-import type { AgentDeps, CreditUsageLine, PreparePayload } from '../deps.js';
+import type { AgentDeps, CreditUsageLine, PreparePayload, RecordFilesPayload } from '../deps.js';
 import { createAgentService } from '../service.js';
 import type { AgentDb } from '../store.js';
 
@@ -17,7 +17,7 @@ export function makeDb(seed: Record<string, Record<string, unknown>[]> = {}) {
   return createFakePrisma({
     timestampFields: ['createdAt', 'updatedAt'],
     defaults: {
-      rAAgentSettings: { setupStep: 'profile', calibration: [], setupCompletedAt: null },
+      rAAgentSettings: { setupStep: 'profile', calibration: [], setupCompletedAt: null, searchProfileId: null, filterOverrides: null },
       rAAgentQueueItem: {
         trackerEntryId: null,
         resumeVariantId: null,
@@ -30,7 +30,7 @@ export function makeDb(seed: Record<string, Record<string, unknown>[]> = {}) {
         userMarkedSubmitted: false,
         state: 'picked',
       },
-      rAAgentKitEvent: { fromState: null, detail: null },
+      rAAgentKitEvent: { fromState: null, kind: null, detail: null },
       rAAnswerBankItem: { lastUsedAt: null },
     },
     seed: {
@@ -124,6 +124,9 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     marks: [] as string[],
     undoMarks: [] as string[],
     notices: [] as unknown[],
+    previews: [] as Array<Parameters<AgentDeps['feedPreview']>[1]>,
+    recordFiles: [] as RecordFilesPayload[],
+    files: [] as Array<Parameters<AgentDeps['recordResumeFile']>[1]>,
   };
   let n = 0;
   const deps: AgentDeps = {
@@ -142,6 +145,9 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     activeSearch: async () => ({ id: 'sp_main', name: 'Main', isDefault: true, isActive: true, version: 3, schemaVersion: 1, filters: {}, alertInstantMax: 0, alertDigest: null, createdAt: '', updatedAt: '' }) as never,
     patchSearch: async (_u, id, version) => ({ id, version: version + 1 }) as never,
     filtersDiffer: async (_base, overridesIn) => Object.keys(overridesIn).length > 0,
+    filtersValid: async () => true,
+    searchProfile: async () => null,
+    fitsFor: async () => new Map(),
     recordApplyClick: async (_u, jobId) => {
       calls.applyClicks.push(jobId);
       return { applyUrl: `https://jobs.example.test/${jobId}`, atsType: null, extensionSupported: false, trackerEntryId: `trk_${jobId}`, alreadyApplied: false };
@@ -186,6 +192,13 @@ export function makeDeps(db: ReturnType<typeof makeDb>, brand: BrandId = 'roboap
     },
     enqueuePrepare: async (payload) => {
       calls.enqueued.push(payload);
+    },
+    enqueueRecordFiles: async (payload) => {
+      calls.recordFiles.push(payload);
+    },
+    recordResumeFile: async (_u, input) => {
+      calls.files.push(input);
+      return { artifactId: `art_${calls.files.length}`, fileName: 'Ana_Lima_Company_Role.pdf' };
     },
     kickPrepare: () => undefined,
     notify: async (input) => {

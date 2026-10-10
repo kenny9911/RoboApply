@@ -4,8 +4,9 @@
 //
 // The job's title, company and place come from the list item itself (WP-52's
 // `job` summary), so the list makes no read per row. Only when an item has no
-// summary does the row read the job (shared cache with the job page); the fit
-// label shows only then, because the summary carries no fit. Nothing is
+// summary does the row read the job (shared cache with the job page). The fit
+// label is the one the list sent with the row (`job.fit`), or the job read's
+// when there is no summary; a row without either shows none. Nothing is
 // filled in when it cannot be read.
 // Actions follow the kit's real state only:
 //   picked / failed     select for "Prepare kits" · Prepare · Skip
@@ -46,7 +47,8 @@ export function KitRow({ item, selectable = false, selected = false, onSelect, o
   const title = summary?.title ?? job.data?.job.title ?? null;
   const company = (summary ? summary.companyName || null : job.data?.job.companyName) ?? null;
   const place = summary?.location ?? null;
-  const fit = summary ? null : (job.data?.fit ?? null);
+  // The fit the list sent with the row, else the job read's (only made when the row has no summary).
+  const fit = summary ? (summary.fit ?? null) : (job.data?.fit ?? null);
   const name = title ?? t('row.unknownJob');
   const showSelect = selectable && canPrepare(item.state);
   const run = async (action: Extract<KitAction, 'skip' | 'restore' | 'remove'>) => {

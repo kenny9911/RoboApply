@@ -64,7 +64,7 @@ describe('detection on mainland portals', () => {
   });
 });
 
-describe('GoApply distribution values (inert until INT wires scripts/build.mjs to them)', () => {
+describe('GoApply distribution values (scripts/build.mjs reads them; test/build.test.ts)', () => {
   for (const store of GOAPPLY_DISTRIBUTION.stores) {
     it(`${store}: the build target it names produces a policy-clean GoApply manifest with every portal adapter's hosts`, () => {
       const m = buildManifest({ brand: 'goapply', target: GOAPPLY_DISTRIBUTION.buildTarget[store], dev: false, version: '1.0.0' }) as {

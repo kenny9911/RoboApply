@@ -34,6 +34,8 @@ function endpoint(call: ApiCall): { method: string; path: string; body?: unknown
       return { method: 'PATCH', path: `/autofill-runs/${encodeURIComponent(call.id)}`, body: call.body };
     case 'answer':
       return { method: 'POST', path: '/answers', body: call.body, idempotencyKey: call.idempotencyKey };
+    case 'saveAnswer':
+      return { method: 'POST', path: '/answers/save', body: call.body };
     case 'resumeForJob':
       return { method: 'POST', path: '/resume-for-job', body: call.body };
     case 'siteRequest':
