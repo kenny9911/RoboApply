@@ -1,3 +1,142 @@
 {
-  "visitor": {}
+  "visitor": {
+    "feed": {
+      "title": "Recent jobs for this page",
+      "sub": "Up to 20 recent public jobs. You can look without an account.",
+      "listLabel": "Recent public jobs",
+      "loading": "Loading jobs…",
+      "error": "We couldn't load jobs right now.",
+      "retry": "Try again",
+      "empty": "No public jobs for this page right now.",
+      "asOf": "Updated {time}",
+      "alertsLink": "Get new jobs like these by email",
+      "fitNote": "Fit scores need your resume, so they show only after you sign up."
+    },
+    "card": {
+      "payNotListed": "Pay not listed",
+      "placeNotListed": "Place not listed",
+      "range": "{min}–{max}",
+      "from": "From {amount}",
+      "upTo": "Up to {amount}",
+      "payPeriod": {
+        "year": "{amount} a year",
+        "month": "{amount} a month",
+        "week": "{amount} a week",
+        "day": "{amount} a day",
+        "hour": "{amount} an hour"
+      },
+      "workModel": {
+        "remote": "Remote",
+        "hybrid": "Hybrid",
+        "onsite": "On-site"
+      },
+      "posted": "Posted {date}",
+      "lastChecked": "Last checked {date}",
+      "source": {
+        "provider": "Found on {name}",
+        "bank": "Posted on {sourceName} by a recruiter",
+        "ats_public": "From the {name} careers page"
+      },
+      "badge": {
+        "direct": "Direct from employer",
+        "agency": "Staffing agency",
+        "sponsorshipOffered": "Visa sponsorship mentioned",
+        "sponsorshipNotOffered": "Says no visa sponsorship",
+        "clearance": "Security clearance required",
+        "citizens": "Citizens only",
+        "closes": "Applications close {date}"
+      }
+    },
+    "gate": {
+      "title": "See every job for your search, and how well each one fits you",
+      "body": "A free account shows every job for your search, compares each one with your resume, and keeps track of where you applied. You still apply on each company's site yourself.",
+      "cta": "Create a free account",
+      "login": "Sign in",
+      "openJobs": "Open your jobs"
+    },
+    "assistant": {
+      "launcher": "Ask about these jobs",
+      "title": "Ask about this page",
+      "intro": "Ask about the jobs on this page, pay as the posts list it, or how %BRAND% works. Answers do not use a resume and never say how well you fit a job.",
+      "note": "Answers are written by AI and can be wrong. Nothing you type here is saved.",
+      "placeholder": "Ask a question",
+      "inputLabel": "Your question",
+      "send": "Send",
+      "you": "You",
+      "aiLabel": "AI answer",
+      "writing": "Writing an answer…",
+      "lookingUp": "Looking up jobs…",
+      "chips": {
+        "remote": "Which of these jobs can be done remotely?",
+        "pay": "What do jobs like these pay?",
+        "how": "How does %BRAND% work?"
+      },
+      "errors": {
+        "rateLimited": "That's the limit for questions without an account. Create a free account to keep asking.",
+        "unavailable": "The assistant is not available right now.",
+        "generic": "Something went wrong. Try again."
+      },
+      "signupCta": "Create a free account"
+    },
+    "alerts": {
+      "eyebrow": "Free tool",
+      "title": "Get new jobs by email",
+      "sub": "No account needed. Pick a job and a place, and we email new public jobs once a day or once a week.",
+      "unavailable": "Job alerts by email are not available here.",
+      "loading": "Loading…",
+      "email": "Email address",
+      "emailHint": "We send a confirmation link first. Nothing else is sent until you press it.",
+      "role": "Job title or keywords",
+      "rolePlaceholder": "For example: data analyst",
+      "city": "City",
+      "cityPlaceholder": "For example: Taipei",
+      "country": "Country or region",
+      "countryAny": "Any",
+      "remote": "Remote jobs only",
+      "frequency": "How often",
+      "daily": "Once a day",
+      "weekly": "Once a week",
+      "consent": "Email me new jobs for this search. I can stop them with one click in any email.",
+      "privacy": "We keep your address only to send these alerts. Sign-ups that are not confirmed are deleted after 72 hours.",
+      "submit": "Send confirmation email",
+      "submitting": "Sending…",
+      "sentTitle": "Check your inbox",
+      "sentBody": "If {email} can get alerts, a confirmation link is on its way. Nothing is sent until you press it. The link works for 72 hours.",
+      "another": "Set up another alert",
+      "signupInstead": "Want alerts that use your resume? Create a free account.",
+      "errors": {
+        "email": "Enter a valid email address.",
+        "consent": "Tick the box to agree to these emails.",
+        "rateLimited": "Too many sign-ups from this network today. Try again tomorrow.",
+        "generic": "We couldn't send that. Try again."
+      },
+      "meta": {
+        "title": "Job alerts by email",
+        "description": "Get new public jobs for one search by email, once a day or once a week. No account needed; stop with one click."
+      }
+    },
+    "confirm": {
+      "loading": "Checking your link…",
+      "searchAny": "any job",
+      "cadence": {
+        "daily": "once a day",
+        "weekly": "once a week"
+      },
+      "pendingTitle": "Confirm your job alerts",
+      "pendingBody": "{email} will get new jobs for “{search}” {cadence}.",
+      "confirm": "Confirm job alerts",
+      "confirming": "Confirming…",
+      "confirmedTitle": "Your job alerts are on",
+      "confirmedBody": "New jobs for “{search}” will be emailed {cadence}. Every email has a one-click unsubscribe link.",
+      "unsubscribedTitle": "These alerts are off",
+      "unsubscribedBody": "This address left these alerts. Sign up again if you want them back.",
+      "invalidTitle": "This link doesn't work any more",
+      "invalidBody": "Confirmation links work for 72 hours. Sign up again to get a new one.",
+      "again": "Sign up again",
+      "unavailable": "Job alerts by email are not available here.",
+      "error": "We couldn't check this link. Try again.",
+      "retry": "Try again",
+      "seeJobs": "Create a free account"
+    }
+  }
 }
