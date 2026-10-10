@@ -1,8 +1,13 @@
-// /coaching — route shell (FND-6b). Coach roster with booking links (flag `coaching`; hidden while the roster is empty).
+// /coaching — the coach list (WP-72; PRODUCT_PLAN.md §5.14 F-COACH-01).
+// Renders inside the (auth) app shell. The nav entry shows only when the
+// `coaching` capability is on and the site's list has a coach; the page
+// itself says "not available here" when the capability is off.
 //
-// STUB. Owner: WP-72, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// There is deliberately no /coaching/bookings route in V2 (no bookings data):
+// that path 404s (asserted in components/features/coaching/__tests__).
 
-export default function CoachingPage() {
-  return <div hidden data-route-stub="/coaching" data-owner="WP-72" />;
+import { CoachingPage } from '../../../components/features/coaching';
+
+export default function CoachingRoute() {
+  return <CoachingPage />;
 }

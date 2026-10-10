@@ -1,3 +1,26 @@
 {
-  "coaching": {}
+  "coaching": {
+    "bookingRequest": {
+      "subject": "Coaching request from {name}: {topic}",
+      "subjectAdmin": "Coaching request for {coach}: {topic}",
+      "heading": "New coaching request",
+      "intro": "{name} would like a session with you, {coach}. They found you on the %BRAND% coach list.",
+      "introAdmin": "A user sent this request to {coach} from the %BRAND% coach list. This is your copy.",
+      "fieldFrom": "From",
+      "fieldTopic": "Topic",
+      "fieldLength": "Session length",
+      "fieldTimes": "Times that suit them",
+      "fieldCoach": "Coach",
+      "fieldAccount": "Account",
+      "fieldAddress": "Reply address",
+      "addressUnverified": "Typed by the user in the request form. %BRAND% has not checked that it is theirs.",
+      "minutes": "{minutes} minutes",
+      "notGiven": "Not given",
+      "next": "To accept, reply to this email or write to {email} to agree on a time and price.",
+      "nextAdmin": "The coach answers the user directly. Follow up if the coach asks for help.",
+      "payment": "The user pays the coach directly. %BRAND% takes no payment for coaching.",
+      "reason": "You get this email because you agreed to be listed as a coach on %BRAND% and a user asked for a session.",
+      "reasonAdmin": "You get this email because you look after the %BRAND% coach list."
+    }
+  }
 }
