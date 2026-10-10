@@ -1,0 +1,25 @@
+{
+  "name": "paraformer-invalid-key",
+  "kind": "stt",
+  "source": "Protocol reference fixture: frames follow the DashScope WebSocket API reference examples (duplex run-task / continue-task / finish-task envelope); not a live capture. Re-record with dist/plugins/dashscope/record-fixture.js when a DASHSCOPE_API_KEY is available.",
+  "model": "paraformer-realtime-v2",
+  "frames": [
+    {
+      "dir": "client",
+      "action": "run-task"
+    },
+    {
+      "dir": "server",
+      "json": {
+        "header": {
+          "task_id": "{{task_id}}",
+          "event": "task-failed",
+          "attributes": {},
+          "error_code": "InvalidApiKey",
+          "error_message": "Invalid API-key provided."
+        },
+        "payload": {}
+      }
+    }
+  ]
+}

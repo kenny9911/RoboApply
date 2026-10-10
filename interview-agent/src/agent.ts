@@ -11,34 +11,40 @@
 // preemptive generation + tuned endpointing/interruption thresholds.
 // STT (Deepgram Nova-3) → LLM (required per metadata) → TTS via
 // the LiveKit Inference gateway (OpenAI tts-1 as the local floor).
+// The GoApply worker swaps in its domestic stack through the backend switch
+// (backends/, WP-63b): LLM_BACKEND=openai_compatible and DashScope
+// Paraformer STT / CosyVoice TTS (plugins/dashscope/).
 //
 // This file ONLY defines the agent (default export). The worker is launched
 // from main.ts via cli.runApp, which points `ServerOptions.agent` at this file
 // so job subprocesses import the default export.
 
 import { config as loadEnv } from 'dotenv';
-import { inference, voice, defineAgent, type JobContext, type JobProcess } from '@livekit/agents';
+import { voice, defineAgent, type JobContext, type JobProcess } from '@livekit/agents';
 import * as silero from '@livekit/agents-plugin-silero';
-import * as openai from '@livekit/agents-plugin-openai';
 import { errorMessage, SessionLifecycle } from './session-lifecycle.js';
-import { InterviewTtsFallback } from './tts-fallback.js';
-import { SafeOpenAiTts } from './safe-openai-tts.js';
 import { ClientReadyGate, parseClientMessage, resolveClientReadyTimeoutMs } from './client-signals.js';
 import { createClientEndHandler } from './client-end.js';
 import { createPoster, EagerTurnDeduper, TranscriptSender, type TranscriptRole } from './callbacks.js';
 import { charLength, planOpening } from './opening.js';
 import { resolveLiveLlm, type LlmMetaBlock } from './live-model.js';
+// Model backend switch (WP-63b): gateway (RoboApply, unchanged) or the GoApply
+// domestic stack (OpenAI-compatible LLM + DashScope Paraformer/CosyVoice).
+import {
+  backendConfigProblems,
+  buildSessionModels,
+  describeBackends,
+  interruptionFor,
+  sttLanguage,
+  type SttMeta,
+  type VoiceMeta,
+} from './backends/index.js';
 
 // Job subprocesses import this file; ensure they have the env too (inherited
 // from the parent in most cases, but load defensively).
 loadEnv({ path: '.env.local' });
 
 const CALLBACK_SECRET = process.env.LIVEKIT_AGENT_CALLBACK_SECRET ?? '';
-
-/** Valid OpenAI TTS voice names — used to validate a metadata voice override. */
-const OPENAI_VOICES = new Set([
-  'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer',
-]);
 
 // Per-turn latency metrics batching. 30s flush keeps the control plane current
 // without per-turn HTTP chatter; 200/batch keeps a single POST body small
@@ -123,28 +129,11 @@ interface RoomMeta {
   /** Planned interview length — drives the elapsed-time system notes so the
    *  model has an actual clock to "manage its time" against. */
   durationMinutes?: number;
-  voice?: { provider?: string; model?: string; voiceId?: string; languageCode?: string };
-  stt?: { provider?: string; model?: string; language?: string; fallbackModels?: string[] };
+  voice?: VoiceMeta;
+  stt?: SttMeta;
   llm?: LlmMetaBlock;
   /** Optional explicit live-turn model (C12); overrides `llm` when present. */
   liveLlm?: LlmMetaBlock;
-}
-
-/** Map an interview locale to a valid inference STT language code. The
- *  interview language is KNOWN, so we PIN it — otherwise STT defaults to English
- *  and mis-transcribes e.g. Mandarin speech as English gibberish. zh-TW/zh-CN
- *  both map to 'zh' (Scribe/Deepgram use one Mandarin code). */
-function sttLanguage(raw: string | undefined): string {
-  const s = (raw || 'en').toLowerCase();
-  if (s.startsWith('zh') || s.startsWith('cmn')) return 'zh';
-  if (s.startsWith('ja')) return 'ja';
-  if (s.startsWith('ko')) return 'ko';
-  if (s.startsWith('es')) return 'es';
-  if (s.startsWith('fr')) return 'fr';
-  if (s.startsWith('pt')) return 'pt';
-  if (s.startsWith('de')) return 'de';
-  if (s.startsWith('en')) return 'en';
-  return 'multi'; // unknown → multilingual auto-detect
 }
 
 /** End-of-turn endpointing per language. CJK speakers pause longer at turn
@@ -160,89 +149,16 @@ function endpointingFor(language: string): { minDelay: number; maxDelay: number 
   return { minDelay: 600, maxDelay: 2500 };
 }
 
-function buildStt(stt: RoomMeta['stt'], language: string) {
-  // Deepgram Nova-3 via LiveKit Inference. Two reasons over Scribe v2 Realtime:
-  //  1. Idle-TOLERANT — it keeps the Inference stream alive through the initial
-  //     silent window (greeting + before the candidate speaks). Scribe idle-closes
-  //     that window ("session closed due to agent inactivity", code 2007) and the
-  //     Agents SDK closes the WHOLE AgentSession on a single unrecoverable STT
-  //     error (no tolerance counter, unlike LLM/TTS) — so that idle-close was
-  //     aborting the greeting. (See livekit/agents#4255: Scribe v2 unreliable via
-  //     Inference.)
-  //  2. As of the 2026 expansions Nova-3 covers Mandarin (Simplified + Traditional),
-  //     Japanese, Spanish, French, German, Portuguese, etc., so PINNING the known
-  //     interview language transcribes correctly (no English-default mis-hearing).
-  // `fallback` configures server-side LiveKit Inference failover: a provider error
-  // on the primary fails over WITHOUT the agent seeing the unrecoverable error.
-  const fallback = (stt?.fallbackModels ?? []).filter(Boolean);
-  return new inference.STT({
-    model: stt?.model ?? 'deepgram/nova-3',
-    language: sttLanguage(stt?.language ?? language),
-    ...(fallback.length ? { fallback } : {}),
-  });
-}
-
-function buildLlm(meta: RoomMeta) {
-  const live = resolveLiveLlm(meta);
-  if (!live) {
-    throw new Error(
-      'interview room metadata is missing llm.model; configure LLM_INTERVIEW_LIVE_MODEL or LLM_INTERVIEW_MODEL on the control plane',
-    );
-  }
-  const { model, reasoningEffort } = live;
-  return new inference.LLM({
-    model,
-    ...(reasoningEffort
-      ? { modelOptions: { reasoning_effort: reasoningEffort } }
-      : {}),
-  });
-}
-
-function buildTts(voiceMeta: RoomMeta['voice'], sessionId?: string) {
-  const model = voiceMeta?.model?.trim();
-  const voiceId = voiceMeta?.voiceId?.trim();
-  const language = voiceMeta?.languageCode?.trim() || undefined;
-
-  // Read the optional direct-provider key after dotenv has loaded. A configured
-  // key can still be out of quota; the fallback handles that as a provider
-  // failure, never as a guarantee that speech is available.
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
-  const floorVoice = voiceId && OPENAI_VOICES.has(voiceId) ? voiceId : 'nova';
-  const floor = openaiKey ? new SafeOpenAiTts({
-    model: 'tts-1',
-    voice: floorVoice as openai.TTSVoices,
-    apiKey: openaiKey,
-  }) : null;
-
-  if (model && model.includes('/')) {
-    try {
-      const primary = new inference.TTS({
-        model,
-        ...(voiceId ? { voice: voiceId } : {}),
-        ...(language ? { language } : {}),
-      });
-      // The catalog selects supported gateway voices. ElevenLabs was retired
-      // from LiveKit Inference on 2026-08-31, so it cannot be a gateway fallback.
-      // Handle mid-stream/zero-frame failures locally without the SDK 1.6.2
-      // recovery loop, which calls unsupported inference.TTS.synthesize().
-      return new InterviewTtsFallback(floor ? [primary, floor] : [primary]);
-    } catch (err) {
-      console.warn(
-        `[interview-agent] session_id=${sessionId ?? 'unknown'} inference.TTS init failed; using OpenAI floor:`,
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  }
-
-  // Legacy bare model ids use the direct-provider path.
-  if (floor) return new InterviewTtsFallback([floor]);
-  throw new Error('no TTS available: gateway voice unusable and OPENAI_API_KEY unset');
-}
-
 export default defineAgent({
   // Load Silero VAD once per worker process; reused across jobs.
   prewarm: async (proc: JobProcess) => {
     proc.userData.vad = await silero.VAD.load();
+    // Backend switch summary + deployment-level misconfiguration, once per
+    // process, so a broken GoApply worker is visible before its first session.
+    console.info(`[interview-agent] backends ${describeBackends()}`);
+    for (const problem of backendConfigProblems()) {
+      console.error(`[interview-agent] CONFIG: ${problem}`);
+    }
   },
 
   entry: async (ctx: JobContext) => {
@@ -285,16 +201,27 @@ export default defineAgent({
     //    fully stops → lower perceived latency (preemptiveTts stays off).
     //  - VAD end-of-turn detection (see turnDetection below for why not the
     //    semantic turn detector).
-    //  - interruption: barge-in needs ~0.6s of speech AND ≥2 transcribed words,
-    //    so a stray "mhm"/cough/echo doesn't stop the interviewer.
+    //  - interruption: barge-in needs ~0.6s of speech AND ≥2 transcribed words
+    //    (≥1 for unspaced CJK transcripts), so a stray "mhm"/cough/echo doesn't
+    //    stop the interviewer.
     //  - endpointing min/maxDelay: snappy but patient end-of-turn detection,
     //    widened for CJK (see endpointingFor).
-    const sessionTts = buildTts(meta.voice, sessionId);
+    //  Models come from the backend switch (backends/): the gateway for
+    //  RoboApply, the domestic stack for GoApply. A worker misconfiguration
+    //  (missing DashScope key, foreign endpoint, …) is reported to the control
+    //  plane as lifecycle error `worker_config` instead of a silent room.
+    const { tts: builtTts, stt: builtStt, llm: builtLlm } = await buildSessionModels(meta, {
+      sessionId,
+      post: createPoster({ baseUrl: callbackBase, secret: CALLBACK_SECRET, warn: (m) => swarn(m) }),
+      warn: (m) => swarn(m),
+      error: (m) => serror(m),
+    });
+    const sessionTts = builtTts.tts;
     const lifecycle = new SessionLifecycle(() => sessionTts.close(), swarn);
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,
-      stt: buildStt(meta.stt, meta.language ?? 'en'),
-      llm: buildLlm(meta),
+      stt: builtStt.stt,
+      llm: builtLlm.llm,
       tts: sessionTts,
       turnHandling: {
         // VAD-based end-of-turn. The multilingual semantic model's inference is
@@ -313,7 +240,10 @@ export default defineAgent({
         // (The adaptive backchannel classifier is off in prod without the
         // inference EOT endpoint, so minWords is the real content guard here;
         // Inference STT streams word-aligned transcripts, so minWords is honored.)
-        interruption: { enabled: true, minDuration: 600, minWords: 2 },
+        // The SDK counts words by whitespace, so unspaced CJK transcripts
+        // (Paraformer, zh/ja/ko sessions) count as one word: those use
+        // minWords=1 and rely on minDuration (see interruptionFor).
+        interruption: interruptionFor(builtStt.backend, meta.stt?.language ?? meta.language),
         // Draft the reply preemptively (LLM only) before the candidate fully
         // stops → lower perceived latency. preemptiveTts stays FALSE: with
         // preemptive TTS on, a speculative turn is synthesized then discarded
@@ -899,7 +829,9 @@ export default defineAgent({
       `stt:${meta.stt?.model ?? 'deepgram/nova-3'}` +
       `${meta.stt?.fallbackModels?.length ? `(+fallback ${meta.stt.fallbackModels.join(',')})` : ''}, ` +
       `tts:${meta.voice?.model ?? 'tts-1 (local floor)'}, voiceId:${meta.voice?.voiceId ?? '-'}, ` +
-      `voiceProvider:${meta.voice?.provider ?? 'openai'}}`,
+      `voiceProvider:${meta.voice?.provider ?? 'openai'}} ` +
+      `backends={llm:${builtLlm.backend}${builtLlm.host ? `@${builtLlm.host}` : ''}, stt:${builtStt.backend}, ` +
+      `tts:${builtTts.backend}${builtTts.backend === 'gateway' ? '' : ` voice=${builtTts.voice ?? '-'}`}}`,
     );
   },
 });
