@@ -6,6 +6,13 @@
 //   - RoboApply at roboapply.io (international, including Taiwan)
 //   - GoApply   at goapply.top  (mainland China)
 //
+// Owner ruling D5 (GOAPPLY_PARITY_PLAN.md): both brands have the same
+// functionality. A product flag that is on for RoboApply is on for GoApply.
+// What differs follows from the market: job sources, language, currency,
+// payment rails, sign-in methods beyond email + password, legal lines, and the
+// market-specific data features (h1bHistory, eeoAnswers; campusCalendar,
+// cn.referralCodes).
+//
 // Rules for this file (the mirror `lib/brand/registry.generated.ts` is a byte
 // copy, compiled by Node, Next server, Next client and the proxy):
 //   - ZERO imports and NO env reads. Env-dependent values (secrets, overrides,
@@ -45,7 +52,7 @@ export interface BrandFlags {
   /** Coaching roster (also needs a non-empty roster to show in nav). */
   coaching: boolean;
   interviewBank: boolean;
-  /** Voice practice. GoApply stays false until a mainland media plane exists. */
+  /** Voice practice. Both brands; the media plane comes from the `voice` env group (GoApply: own when CN_LIVEKIT_URL is set, else the shared one). */
   interviewVoice: boolean;
   /** ARCH name for the invite-friends programme; superseded by `invites` (F19). Resolved equal to `invites`. */
   referrals: boolean;
@@ -58,7 +65,7 @@ export interface BrandFlags {
   companyFunding: boolean;
   /** US DOL LCA public data; RoboApply only. */
   h1bHistory: boolean;
-  /** Campus calendar product surface (GoApply). The capability `jobs.campusCalendar` adds the R-14 mode rule. */
+  /** Campus calendar product surface (GoApply). The capability `jobs.campusCalendar` is the same switch; `CN_CAMPUS_CALENDAR_ENABLED=false` turns it off. */
   campusCalendar: boolean;
   /** EEO answers in the profile/autofill. False for GoApply. */
   eeoAnswers: boolean;
@@ -96,7 +103,7 @@ export interface ProductBrand {
   /** Local development hosts, lowercase, no port. */
   devHosts: string[];
   canonicalOrigin: string;
-  /** Documented cookie domain. The session cookie uses `brandEnv(brand, 'COOKIE_DOMAIN')` (R-03) and only on matching hosts. */
+  /** Documented cookie domain. The session cookie uses `brandEnv(brand, 'COOKIE_DOMAIN')` (brand-own: never the other brand's value) and only on matching hosts. */
   cookieDomain: string;
   defaultLocale: RoboLocale;
   locales: RoboLocale[];
@@ -107,11 +114,26 @@ export interface ProductBrand {
   countries: string[];
   currency: 'USD' | 'CNY';
   paymentRails: PaymentRail[];
-  /** Methods the brand offers when configured; the resolver drops unconfigured ones. */
+  /**
+   * Methods the brand offers when configured, in display order; the resolver
+   * drops unconfigured ones. Email + password is first on both brands. The
+   * additional methods are a market difference.
+   */
   authMethods: AuthMethod[];
   marketingOptInDefault: boolean;
+  /**
+   * The brand's job sources (the per-market difference D5 names). Adapters
+   * registered for the market (`ats_public` employer boards) join this list in
+   * the ingest layer.
+   */
   jobProviders: JobProvider[];
+  /**
+   * The profile used when the brand has its OWN model provider. GoApply with
+   * no CN_LLM_PROVIDER / CN_LLM_MODEL runs on the shared stack with the
+   * `global` profile (the effective profile is resolved in the LLM layer).
+   */
   llmProfile: LlmProfile;
+  /** Prefix of the brand's optional override variables (`brandEnv`). */
   llmEnvPrefix: '' | 'CN_';
   interview: { agentName: string; envPrefix: '' | 'CN_' };
   email: {
@@ -119,6 +141,7 @@ export interface ProductBrand {
     /** Default only; the email platform reads `brandEnv(brand, 'EMAIL_FROM')` first. */
     fromAddress: string;
     replyTo: string;
+    /** The PREFERRED transport, used when its credentials are set. GoApply falls back to the shared Resend account (CN_EMAIL_TRANSPORT picks; `none` turns email off). */
     transport: 'resend' | 'aliyun_dm';
   };
   assets: { mark: string; logo: string; og: string; favicon: string; appleTouch: string };
@@ -160,7 +183,8 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
     paymentRails: ['stripe'],
     authMethods: ['email_password', 'google', 'line'],
     marketingOptInDefault: false,
-    jobProviders: ['activejobs', 'bank_robohire', 'linkedin', 'jsearch', 'user_import'],
+    // `linkedin` is not a source: not subscribed and not to be (MARKET_STRATEGY M-4).
+    jobProviders: ['activejobs', 'bank_robohire', 'jsearch', 'user_import'],
     llmProfile: 'global',
     llmEnvPrefix: '',
     interview: { agentName: 'RoboApply-Interview', envPrefix: '' },
@@ -225,8 +249,13 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
     countries: ['CN'],
     currency: 'CNY',
     paymentRails: ['alipay', 'wechatpay'],
-    authMethods: ['phone_otp', 'wechat', 'email_password'],
+    // Email first, as on RoboApply. Phone and WeChat appear beside it when their
+    // credentials exist. Google and LINE stay RoboApply-only (not reachable from
+    // mainland networks): a market sign-in difference.
+    authMethods: ['email_password', 'phone_otp', 'wechat'],
     marketingOptInDefault: false,
+    // Mainland sources. Employer boards join through the market-registered
+    // `ats_public` adapter. JSearch is not a GoApply source (MARKET_STRATEGY M-6).
     jobProviders: ['bank_gohire', 'user_import'],
     llmProfile: 'domestic_cn',
     llmEnvPrefix: 'CN_',
@@ -253,11 +282,11 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       copilot: true,
       agent: true,
       extension: true,
-      coaching: false,
+      coaching: true,
       interviewBank: true,
-      interviewVoice: false,
+      interviewVoice: true,
       referrals: true,
-      webPush: false,
+      webPush: true,
       contactEmailLookup: false,
       hiringContacts: 'deeplinks_only',
       companyFunding: false,
@@ -270,7 +299,7 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       offers: true,
       visitorAssistant: false,
       totp: true,
-      student: false,
+      student: true,
       competitiveness: true,
       companyNews: false,
       'seo.browse': false,

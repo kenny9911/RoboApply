@@ -1,7 +1,7 @@
 // server/src/platform/brand/runtime.ts
 //
 // Env-dependent brand resolution for Express (ARCHITECTURE.md §1.2–§1.3,
-// TASK_PLAN.md R-01/R-03). The registry stays pure; everything that reads
+// TASK_PLAN.md R-01; deployment scope per GOAPPLY_PARITY_PLAN.md §3.2). The registry stays pure; everything that reads
 // process.env lives here. Every function takes an optional `env` so tests can
 // pass a fixed table instead of mutating process.env.
 //
@@ -21,8 +21,13 @@
 // aliases) and BRAND_LOCK (a single brand). A request that resolves to a
 // brand this deployment does not serve is refused by the middleware. With
 // one allowed brand, unknown hosts (crons, the *.vercel.app host) resolve to
-// it. Unset ALLOWED_BRANDS = both brands outside production, RoboApply only
-// in production, so goapply.top cannot go live by accident.
+// it. With neither variable set a deployment serves BOTH brands in every
+// environment (D5): goapply.top is served as soon as its DNS points here.
+// ALLOWED_BRANDS and BRAND_LOCK narrow a deployment: ALLOWED_BRANDS=roboapply
+// keeps GoApply closed, and the mainland kit sets ALLOWED_BRANDS=goapply.
+// A scope variable that is set but names no brand (a typo) is not "unset": the
+// deployment serves the default brand only, and `allowedBrandsProblem` names
+// the bad tokens for the startup log.
 
 import { timingSafeEqual } from 'node:crypto';
 import {
@@ -88,20 +93,74 @@ export function brandLock(env: EnvSource = process.env): BrandId | null {
   return allowed.length === 1 ? allowed[0]! : null;
 }
 
-/** Brands this deployment serves. */
-export function allowedBrands(env: EnvSource = process.env): BrandId[] {
-  const lock = parseBrandId(env.BRAND_LOCK);
-  if (lock) return [lock];
-  const raw = env.ALLOWED_BRANDS;
-  if (raw && raw.trim()) {
-    const ids = raw
-      .split(',')
-      .map((s) => parseBrandId(s))
-      .filter((id): id is BrandId => id !== null);
-    const unique = [...new Set(ids)];
-    if (unique.length > 0) return unique;
+/** A deployment-scope value that names no brand (a typo such as `roboaply`). */
+export interface AllowedBrandsProblem {
+  /** Each token that is not a brand id or alias, with the variable it was read from. */
+  invalid: { variable: 'BRAND_LOCK' | 'ALLOWED_BRANDS'; token: string }[];
+  /** True when no valid id was left, so the deployment closed to the default brand alone. */
+  failedClosed: boolean;
+  /** The brands the deployment serves as a result. */
+  serves: BrandId[];
+}
+
+/**
+ * The deployment scope and what was wrong with it. One reading for
+ * `allowedBrands` and `allowedBrandsProblem`, so they cannot disagree.
+ *
+ * A scope variable that is SET but names no brand is a typo, not "unset": the
+ * deployment then serves the default brand only (fail closed). Without this
+ * rule `ALLOWED_BRANDS=roboaply` would open GoApply, its crons and its queue
+ * drains, because unset means both brands. On the mainland kit the same typo
+ * leaves RoboApply as the only brand, which the residency check refuses at
+ * boot (`intl_brand_on_mainland`): loud, not silent.
+ */
+function readScope(env: EnvSource): AllowedBrandsProblem {
+  const invalid: AllowedBrandsProblem['invalid'] = [];
+
+  const lockRaw = (env.BRAND_LOCK ?? '').trim();
+  if (lockRaw) {
+    const lock = parseBrandId(lockRaw);
+    if (lock) return { invalid, failedClosed: false, serves: [lock] };
+    invalid.push({ variable: 'BRAND_LOCK', token: lockRaw });
   }
-  return isProduction(env) ? [DEFAULT_BRAND] : [...BRAND_IDS];
+
+  const listRaw = (env.ALLOWED_BRANDS ?? '').trim();
+  const ids: BrandId[] = [];
+  for (const part of listRaw.split(',')) {
+    const token = part.trim();
+    if (!token) continue;
+    const id = parseBrandId(token);
+    if (!id) invalid.push({ variable: 'ALLOWED_BRANDS', token });
+    else if (!ids.includes(id)) ids.push(id);
+  }
+  if (ids.length > 0) return { invalid, failedClosed: false, serves: ids };
+  // Set, yet nothing but separators (`,`): still not a brand.
+  if (listRaw && !invalid.some((entry) => entry.variable === 'ALLOWED_BRANDS')) {
+    invalid.push({ variable: 'ALLOWED_BRANDS', token: listRaw });
+  }
+  if (invalid.length > 0) return { invalid, failedClosed: true, serves: [DEFAULT_BRAND] };
+  return { invalid, failedClosed: false, serves: [...BRAND_IDS] };
+}
+
+/**
+ * Brands this deployment serves: BRAND_LOCK, else ALLOWED_BRANDS, else both
+ * brands (in every environment, production included). A scope variable that is
+ * set but names no brand closes the deployment to the default brand
+ * (`allowedBrandsProblem` says why).
+ */
+export function allowedBrands(env: EnvSource = process.env): BrandId[] {
+  return readScope(env).serves;
+}
+
+/**
+ * What is wrong with BRAND_LOCK / ALLOWED_BRANDS, or null when every token
+ * names a brand. Startup logs it: a partly wrong list (`roboapply,gopply`) is
+ * narrowed to its valid ids, and a list with no valid id closes the deployment
+ * to the default brand. Tokens are brand names, never secrets.
+ */
+export function allowedBrandsProblem(env: EnvSource = process.env): AllowedBrandsProblem | null {
+  const scope = readScope(env);
+  return scope.invalid.length > 0 ? scope : null;
 }
 
 export function isBrandAllowed(id: BrandId, env: EnvSource = process.env): boolean {
@@ -166,8 +225,9 @@ function stripLeadingDot(domain: string): string {
 }
 
 /**
- * Cookie domain for a brand on a host (R-03: `COOKIE_DOMAIN` for RoboApply,
- * `CN_COOKIE_DOMAIN` for GoApply, no fallback across brands).
+ * Cookie domain for a brand on a host (`COOKIE_DOMAIN` for RoboApply,
+ * `CN_COOKIE_DOMAIN` for GoApply; a brand-own name, so it never falls back
+ * across brands).
  *  - Unset → undefined (host-only cookie; today's behaviour when unset).
  *  - Set and the host ends with it → the configured domain.
  *  - Set but the host does not match (previews, localhost) → undefined, so

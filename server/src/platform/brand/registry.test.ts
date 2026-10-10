@@ -105,9 +105,52 @@ describe('brand registry', () => {
     expect(go.llmProfile).toBe('domestic_cn');
     expect(go.llmEnvPrefix).toBe('CN_');
     expect(go.interview.agentName).toBe('GoApply-Interview');
-    expect(go.jobProviders).not.toContain('linkedin');
     expect(robo.flags.hiringContacts).toBe('deeplinks_only');
     expect(go.flags.hiringContacts).toBe('deeplinks_only');
+  });
+
+  it('D5: every product flag that is on for RoboApply is on for GoApply, except the two that belong to its market', () => {
+    const robo = BRANDS.roboapply.flags as unknown as Record<string, boolean | string>;
+    const go = BRANDS.goapply.flags as unknown as Record<string, boolean | string>;
+    const roboOnly = Object.keys(robo).filter((key) => robo[key] === true && go[key] !== true);
+    expect(roboOnly.sort()).toEqual(['eeoAnswers', 'h1bHistory']);
+    for (const key of ['coaching', 'interviewVoice', 'webPush', 'student'] as const) {
+      expect(BRANDS.goapply.flags[key], key).toBe(true);
+      expect(BRANDS.roboapply.flags[key], key).toBe(true);
+    }
+    // GoApply's extras add; they never remove.
+    const goOnly = Object.keys(go).filter((key) => go[key] === true && robo[key] !== true);
+    expect(goOnly.sort()).toEqual(['campusCalendar', 'cn.referralCodes']);
+    expect(Object.keys(go).sort()).toEqual(Object.keys(robo).sort());
+  });
+
+  it('sign-in: email + password first on both brands; the additional methods are a market difference', () => {
+    expect(BRANDS.goapply.authMethods).toEqual(['email_password', 'phone_otp', 'wechat']);
+    expect(BRANDS.roboapply.authMethods).toEqual(['email_password', 'google', 'line']);
+    for (const id of BRAND_IDS) expect(BRANDS[id].authMethods[0]).toBe('email_password');
+    // Google and LINE stay RoboApply-only; phone and WeChat stay GoApply-only.
+    expect(BRANDS.goapply.authMethods).not.toContain('google');
+    expect(BRANDS.goapply.authMethods).not.toContain('line');
+    expect(BRANDS.roboapply.authMethods).not.toContain('phone_otp');
+    expect(BRANDS.roboapply.authMethods).not.toContain('wechat');
+  });
+
+  it('job sources are per market (D6; MARKET_STRATEGY M-4, M-6)', () => {
+    expect(BRANDS.goapply.jobProviders).toEqual(['bank_gohire', 'user_import']);
+    expect(BRANDS.roboapply.jobProviders).toEqual(['activejobs', 'bank_robohire', 'jsearch', 'user_import']);
+    // JSearch is not a GoApply source; LinkedIn is nobody's.
+    expect(BRANDS.goapply.jobProviders).not.toContain('jsearch');
+    for (const id of BRAND_IDS) expect(BRANDS[id].jobProviders).not.toContain('linkedin');
+    // A recruiter bank feeds its own market only.
+    expect(BRANDS.goapply.jobProviders).not.toContain('bank_robohire');
+    expect(BRANDS.roboapply.jobProviders).not.toContain('bank_gohire');
+    for (const id of BRAND_IDS) expect(BRANDS[id].jobProviders).toContain('user_import');
+  });
+
+  it('payment rails are per market: Stripe for RoboApply, Alipay first for GoApply (D6)', () => {
+    expect(BRANDS.roboapply.paymentRails).toEqual(['stripe']);
+    expect(BRANDS.goapply.paymentRails[0]).toBe('alipay');
+    expect(BRANDS.goapply.paymentRails).not.toContain('stripe');
   });
 
   it('carries no legal facts it does not know (D3)', () => {

@@ -10,6 +10,7 @@ import { NextRequest } from 'next/server';
 
 import {
   allowedBrands,
+  allowedBrandsProblem,
   brandLock,
   clampLocalePath,
   parseBrandHostMap,
@@ -20,6 +21,7 @@ import {
 import { getBrand } from '../../lib/brand/registry.generated';
 import { brandIdFromRequestParts } from '../../lib/server/brand';
 import { devBrandHeader } from '../../lib/api/client';
+import * as server from '../../server/src/platform/brand/runtime';
 import { resolveBrandFromRequest } from '../../server/src/platform/brand/runtime';
 import { proxy } from '../../proxy';
 import { CLAMPED_FROM_COOKIE } from '../../lib/proxyPaths';
@@ -112,11 +114,66 @@ describe('resolveWebBrand — overrides only on dev/preview hosts', () => {
 });
 
 describe('deployment scope (ALLOWED_BRANDS / BRAND_LOCK)', () => {
-  it('unset = both brands outside production, RoboApply only in production', () => {
+  it('unset = both brands in every environment, production included (D5)', () => {
     expect(allowedBrands(DEV)).toEqual(['roboapply', 'goapply']);
-    expect(allowedBrands(PROD)).toEqual(['roboapply']);
-    expect(resolveWebBrand({ host: 'goapply.top' }, PROD)).toMatchObject({ brandId: 'goapply', allowed: false });
+    expect(allowedBrands(PROD)).toEqual(['roboapply', 'goapply']);
+    expect(allowedBrands({})).toEqual(['roboapply', 'goapply']);
+    expect(brandLock(PROD)).toBeNull();
+    expect(resolveWebBrand({ host: 'goapply.top' }, PROD)).toMatchObject({ brandId: 'goapply', source: 'host', allowed: true });
+    expect(resolveWebBrand({ host: 'www.goapply.top' }, PROD)).toMatchObject({ brandId: 'goapply', allowed: true });
     expect(resolveWebBrand({ host: 'roboapply.io' }, PROD).allowed).toBe(true);
+    expect(resolveWebBrand({ host: 'internal.example' }, PROD)).toMatchObject({ brandId: 'roboapply', source: 'default', allowed: true });
+  });
+
+  it('ALLOWED_BRANDS narrows a deployment in every environment', () => {
+    const intlOnly = { ...PROD, ALLOWED_BRANDS: 'roboapply' };
+    expect(allowedBrands(intlOnly)).toEqual(['roboapply']);
+    expect(resolveWebBrand({ host: 'goapply.top' }, intlOnly)).toMatchObject({ brandId: 'goapply', allowed: false });
+    expect(resolveWebBrand({ host: 'roboapply.io' }, intlOnly).allowed).toBe(true);
+    const cnOnly = { ...PROD, ALLOWED_BRANDS: 'goapply' };
+    expect(resolveWebBrand({ host: 'goapply.top' }, cnOnly).allowed).toBe(true);
+    expect(resolveWebBrand({ host: 'roboapply.io' }, cnOnly)).toMatchObject({ brandId: 'roboapply', allowed: false });
+    expect(resolveWebBrand({ host: 'goapply.localhost' }, { ...DEV, ALLOWED_BRANDS: 'roboapply' })).toMatchObject({ brandId: 'goapply', allowed: false });
+  });
+
+  it('agrees with the Express twin (server/src/platform/brand/runtime.ts) on the scope of every configuration', () => {
+    for (const env of [
+      {},
+      DEV,
+      PROD,
+      PROD_BOTH,
+      { ...PROD, ALLOWED_BRANDS: 'roboapply' },
+      { ...PROD, ALLOWED_BRANDS: 'cn' },
+      { ...PROD, ALLOWED_BRANDS: 'nonsense' },
+      { ...DEV, ALLOWED_BRANDS: 'roboaply' },
+      { ...PROD, ALLOWED_BRANDS: 'roboapply,gopply' },
+      { ...PROD, ALLOWED_BRANDS: ',' },
+      { ...PROD, ALLOWED_BRANDS: 'goapply,' },
+      { ...PROD, ALLOWED_BRANDS: '  ' },
+      { ...PROD, BRAND_LOCK: 'goapply' },
+      { ...PROD, BRAND_LOCK: 'gopply' },
+      { ...PROD, BRAND_LOCK: 'gopply', ALLOWED_BRANDS: 'cn' },
+      { ...DEV, BRAND_LOCK: 'intl', ALLOWED_BRANDS: 'cn' },
+      { ...DEV, BRAND_LOCK: 'intl', ALLOWED_BRANDS: 'nonsense' },
+    ]) {
+      expect(allowedBrands(env), JSON.stringify(env)).toEqual(server.allowedBrands(env));
+      expect(brandLock(env), JSON.stringify(env)).toEqual(server.brandLock(env));
+      expect(allowedBrandsProblem(env), JSON.stringify(env)).toEqual(server.allowedBrandsProblem(env));
+    }
+  });
+
+  it('a scope variable that names no brand fails closed to the default brand, never open to both', () => {
+    for (const env of [
+      { ...PROD, ALLOWED_BRANDS: 'roboaply' },
+      { ...DEV, ALLOWED_BRANDS: 'nonsense' },
+      { ...PROD, BRAND_LOCK: 'gopply' },
+    ]) {
+      expect(allowedBrands(env), JSON.stringify(env)).toEqual(['roboapply']);
+      expect(resolveWebBrand({ host: 'goapply.top' }, env)).toMatchObject({ brandId: 'goapply', allowed: false });
+      expect(resolveWebBrand({ host: 'roboapply.io' }, env).allowed).toBe(true);
+      expect(allowedBrandsProblem(env)).toMatchObject({ failedClosed: true, serves: ['roboapply'] });
+    }
+    expect(allowedBrandsProblem(PROD)).toBeNull();
   });
 
   it('a locked deployment serves unknown hosts as its brand', () => {

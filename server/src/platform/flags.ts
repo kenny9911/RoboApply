@@ -1,13 +1,29 @@
 // server/src/platform/flags.ts
 //
 // The one capability resolver (TASK_PLAN.md R-04; ARCHITECTURE.md §1.6
-// "flags"; CN_TW_LAUNCH_PLAN.md §2.3 "capabilities"). Keys = ARCH BrandFlags
+// "flags"; CN_TW_LAUNCH_PLAN.md §2.3 "capabilities"; requirements and defaults
+// per owner ruling D5, GOAPPLY_PARITY_PLAN.md §3.2). Keys = ARCH BrandFlags
 // ∪ CN §2.3 capability keys ∪ the plan's additions (invites,
 // cn.referralCodes, hiringContacts, offers, visitorAssistant, totp, student,
 // competitiveness).
 //
-//   enabled(key) = requirementsMet(key)                 ← credentials, env, legal mode (cannot be overridden)
+//   enabled(key) = requirementsMet(key)                 ← credentials, off switches (cannot be overridden)
 //                  AND (userOverride ?? envOverride ?? registryDefault)
+//
+// D5 (brand parity): a capability that is on for RoboApply is on for GoApply
+// by default. A requirement is the credential the capability really needs, read
+// through `brandEnv` (an optional CN_ override, else the shared stack). No
+// requirement tests a China-only credential, a licence mode or a payments
+// switch any more. What used to be a prerequisite survives as an OFF switch:
+//   CN_RECRUITMENT_INFO_MODE=off        no GoApply job feed, recommendations or alerts
+//   CN_CAMPUS_CALENDAR_ENABLED=false    no campus calendar
+//   CN_EMAIL_TRANSPORT=none             no GoApply email (and no password reset)
+//   CN_PAYMENTS_ENABLED=false           GoApply stops charging (both CN rails)
+//   FLAG_GOAPPLY_<KEY>=false            any product switch
+// Market-specific keys stay with their market: auth.google, auth.line,
+// pay.stripe, fx.reference, h1bHistory, eeoAnswers (RoboApply); auth.phoneOtp,
+// auth.wechat*, notify.wechat, cn.referralCodes, legal.footer.* (GoApply, each
+// only when its own value is set).
 //
 //   - registryDefault: `brand.flags[key]` (true for pure capability keys,
 //     whose applicability lives in their requirement: auth methods, rails…)
@@ -20,22 +36,21 @@
 // A disabled feature has no UI entry; its router answers 404
 // `feature_disabled` (`requireFlag`). A disabled AI capability answers 503
 // `ai_unavailable`, and so does an AI-only product flag
-// (`AI_DEPENDENT_FLAGS`) whose product switch is on but whose brand has no
-// text model (R-13: no CN model → GoApply AI features hidden).
+// (`AI_DEPENDENT_FLAGS`) whose product switch is on but whose brand cannot run
+// AI text (GoApply with an unusable content-safety filter).
 //
 // `campusCalendar` (ARCH product flag) and `jobs.campusCalendar` (CN §2.3
-// capability) are ONE switch: both carry the R-14 requirement and both resolve
+// capability) are ONE switch: both carry the same requirement and both resolve
 // from the `campusCalendar` registry value and its overrides
 // (FLAG_<BRAND>_CAMPUS_CALENDAR, `flag:campusCalendar`), so UI reading either
-// key and the router gated on `jobs.campusCalendar` always agree. Nothing is simulated when credentials are missing
-// (CN plan §5: "a feature whose credentials are absent is hidden").
+// key and the router gated on `jobs.campusCalendar` always agree. Nothing is
+// simulated when a credential is missing: the capability is off.
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { getCurrentBrandOrDefault } from './brand/brandContext.js';
 import { envSet, parseBoolEnv, brandEnv, type EnvSource } from './brand/brandEnv.js';
 import type { BrandFlags, BrandId, HiringContactsMode, ProductBrand } from './brand/registry.js';
 import { contentSafetyReadiness } from './llm/contentSafety/config.js';
-import { checkLlmEgress } from './llm/egressPolicy.js';
 
 /** Product flags held in the registry (booleans only; hiringContacts is a mode). */
 export type ProductFlagKey = Exclude<keyof BrandFlags, 'hiringContacts'>;
@@ -116,44 +131,38 @@ export type ResolvedFlags = Record<FlagKey, boolean> & { hiringContacts: HiringC
 
 export type CnRecruitmentInfoMode = 'off' | 'partner_deeplink' | 'licensed';
 
-/** R-14: `CN_RECRUITMENT_INFO_MODE` (default `off`). */
+/**
+ * `CN_RECRUITMENT_INFO_MODE`: how GoApply shows recruitment information.
+ * Unset (or any unknown value) is `licensed`: the feed is on by default (D5).
+ * `partner_deeplink` when set. `off` only when the value is literally `off`:
+ * it is the operator's off switch, never the result of a missing value.
+ */
 export function cnRecruitmentInfoMode(env: EnvSource = process.env): CnRecruitmentInfoMode {
   const v = (env.CN_RECRUITMENT_INFO_MODE || '').trim().toLowerCase();
-  return v === 'partner_deeplink' || v === 'licensed' ? v : 'off';
+  if (v === 'off') return 'off';
+  return v === 'partner_deeplink' ? 'partner_deeplink' : 'licensed';
 }
 
-/**
- * GoApply LLM providers allowed by R-13 together with the vendor key each
- * needs. `newapi` (an OpenAI-compatible gateway) has no entry: it counts only
- * when its base host passes the brand's egress policy (`cnLlmConfigured`).
- */
-const CN_LLM_PROVIDER_KEYS: Record<string, string> = {
-  deepseek: 'DEEPSEEK_API_KEY',
-  qwen: 'DASHSCOPE_API_KEY',
-  dashscope: 'DASHSCOPE_API_KEY',
-  kimi: 'KIMI_API_KEY',
-  moonshot: 'KIMI_API_KEY',
-  glm: 'GLM_API_KEY',
-  doubao: 'ARK_API_KEY',
-  ark: 'ARK_API_KEY',
-  minimax: 'MINIMAX_API_KEY',
-};
+const CN_RECRUITMENT_INFO_MODES: readonly string[] = ['off', 'partner_deeplink', 'licensed'] satisfies readonly CnRecruitmentInfoMode[];
 
 /**
- * A domestic text model is configured for the brand. `CN_LLM_PROVIDER=newapi`
- * needs NEWAPI_API_KEY and NEWAPI_BASE_URL, and the gateway's host must be one
- * `checkLlmEgress` allows for the brand (the mainland allowlist) — the same
- * decision LLMService makes before it sends a prompt. The GoApply DB override
- * is not read here (this errs on the side of hiding AI).
+ * The raw `CN_RECRUITMENT_INFO_MODE` when it is set and is not one of
+ * `off | partner_deeplink | licensed`, else null. An unknown value is read as
+ * `licensed` (above), so `CN_RECRUITMENT_INFO_MODE=false` leaves the job feed
+ * ON although the operator meant to close it. The sibling switches accept
+ * false/0/no/off; this one is a mode, and only the word `off` closes it. Startup
+ * logs the value returned here so the mistake is never silent.
  */
-function cnLlmConfigured(brand: ProductBrand, env: EnvSource): boolean {
-  const provider = (env.CN_LLM_PROVIDER || '').trim().toLowerCase();
-  if (provider === 'newapi') {
-    if (!envSet(env, 'NEWAPI_API_KEY', 'NEWAPI_BASE_URL', 'CN_LLM_MODEL')) return false;
-    return checkLlmEgress({ brand, provider, model: env.CN_LLM_MODEL, env }).allowed;
-  }
-  const keyName = CN_LLM_PROVIDER_KEYS[provider];
-  return Boolean(keyName && envSet(env, keyName, 'CN_LLM_MODEL'));
+export function cnRecruitmentInfoModeProblem(env: EnvSource = process.env): string | null {
+  const raw = (env.CN_RECRUITMENT_INFO_MODE ?? '').trim();
+  if (!raw) return null;
+  return CN_RECRUITMENT_INFO_MODES.includes(raw.toLowerCase()) ? null : raw;
+}
+
+/** An off switch: the variable is set and does not parse as true. Unset or blank is not "off". */
+function switchedOff(env: EnvSource, name: string): boolean {
+  const raw = env[name];
+  return typeof raw === 'string' && raw.trim() !== '' && !parseBoolEnv(raw);
 }
 
 function isProduction(env: EnvSource): boolean {
@@ -172,14 +181,21 @@ function smsConfigured(env: EnvSource): boolean {
   return !isProduction(env) && parseBoolEnv(env.SMS_DEV_CONSOLE);
 }
 
+/**
+ * The brand can send email. RoboApply: Resend. GoApply: `CN_EMAIL_TRANSPORT`
+ * picks the transport. `aliyun_dm` needs the three Aliyun DirectMail keys,
+ * `none` is the off switch, and anything else (unset, `resend`) is the shared
+ * Resend account. No `CN_EMAIL_FROM` is required: the email platform falls back
+ * to the shared verified sender with GoApply's display name.
+ */
 function emailConfigured(brand: ProductBrand, env: EnvSource): boolean {
   if (brand.market !== 'cn') return envSet(env, 'RESEND_API_KEY');
   const transport = (env.CN_EMAIL_TRANSPORT || '').trim().toLowerCase();
   if (transport === 'aliyun_dm') {
     return envSet(env, 'ALIYUN_DM_ACCESS_KEY_ID', 'ALIYUN_DM_ACCESS_KEY_SECRET', 'ALIYUN_DM_ACCOUNT_NAME');
   }
-  if (transport === 'resend') return envSet(env, 'RESEND_API_KEY', 'CN_EMAIL_FROM');
-  return false; // unset or 'none'
+  if (transport === 'none') return false;
+  return envSet(env, 'RESEND_API_KEY');
 }
 
 /**
@@ -187,7 +203,9 @@ function emailConfigured(brand: ProductBrand, env: EnvSource): boolean {
  * (`mailto:` or `https://`). The same rule as `vapidConfig` in
  * features/push/config.ts, which the routes and the worker use: with the pair
  * set and the subject missing they answer "not configured", so the flag must
- * not offer push then.
+ * not offer push then. Both brands: GoApply reads the `push` group through
+ * `brandEnv` (its own CN_VAPID_* set when CN_VAPID_PUBLIC_KEY is set, else the
+ * shared pair).
  */
 function vapidUsable(brand: ProductBrand, env: EnvSource): boolean {
   const publicKey = brandEnv(brand, 'VAPID_PUBLIC_KEY', env)?.trim();
@@ -196,17 +214,22 @@ function vapidUsable(brand: ProductBrand, env: EnvSource): boolean {
   return Boolean(publicKey && privateKey && subject && /^(mailto:|https:\/\/)/i.test(subject));
 }
 
-function cnPaymentsEnabled(env: EnvSource): boolean {
-  return parseBoolEnv(env.CN_PAYMENTS_ENABLED);
+/**
+ * The GoApply payments kill switch: `CN_PAYMENTS_ENABLED` is set and parses
+ * false. Unset means on (D5): the variable is no longer a prerequisite.
+ */
+export function cnPaymentsKilled(env: EnvSource = process.env): boolean {
+  return switchedOff(env, 'CN_PAYMENTS_ENABLED');
 }
 
 function aiTextConfigured(brand: ProductBrand, env: EnvSource): boolean {
-  // RoboApply keeps today's stack (unprefixed env + DB override, resolved by
-  // LLMService); its AI is always on. GoApply needs its own domestic model,
-  // with no fallback to the international stack (R-13), and a usable
-  // content-safety filter (WP-24): a misconfigured filter hides the AI
-  // features instead of letting every call fail closed with 503.
-  return brand.llmProfile === 'domestic_cn' ? cnLlmConfigured(brand, env) && contentSafetyReadiness(env).usable : true;
+  // Both brands run on a text model by default: RoboApply on the shared stack
+  // (unprefixed env + DB override, resolved by LLMService), GoApply on its own
+  // domestic model when one is set and on the shared stack otherwise (D5). So
+  // no model credential is tested here. GoApply calls also pass a
+  // content-safety filter (WP-24), on the shared route too: an unusable filter
+  // hides the AI features instead of letting every call fail closed with 503.
+  return brand.market === 'cn' ? contentSafetyReadiness(env).usable : true;
 }
 
 // ── Requirement probes ──────────────────────────────────────────────────────
@@ -244,7 +267,12 @@ const VOICE_PROVIDER_IDS = ['livekit_cloud', 'livekit_selfhosted', 'volcano', 't
 /** Ids with an implementation (interview-engine/providers IMPLEMENTED_VOICE_PROVIDERS). */
 const IMPLEMENTED_VOICE_PROVIDER_IDS: readonly string[] = ['livekit_cloud', 'livekit_selfhosted'];
 
-/** The brand's selected voice provider has an implementation and its credentials are set. */
+/**
+ * The brand's selected voice provider has an implementation and its credentials
+ * are set. Every name is in the `voice` group of `brandEnv`, so GoApply uses
+ * its own plane when CN_LIVEKIT_URL is set and the shared LiveKit project
+ * otherwise, never a mix of the two.
+ */
 function voiceMediaAvailable(brand: ProductBrand, env: EnvSource): boolean {
   if (voiceProbe && env === process.env) return voiceProbe(brand.id);
   const raw = (brandEnv(brand, 'VOICE_PROVIDER', env) || '').toLowerCase();
@@ -284,16 +312,21 @@ function wechatPayReady(brand: ProductBrand, env: EnvSource): boolean {
 }
 
 /**
- * Product flags whose surface is LLM-only: they need the brand's text model
- * (`ai.text`) as a requirement, so GoApply without a configured domestic model
- * hides them (R-13) and their routes answer 503 `ai_unavailable`.
+ * Product flags whose surface is LLM-only: they carry the `ai.text`
+ * requirement, so when a brand cannot run AI text they are hidden and their
+ * routes answer 503 `ai_unavailable`.
  */
 export const AI_DEPENDENT_FLAGS: ReadonlySet<FlagKey> = new Set<FlagKey>(['copilot', 'agent', 'visitorAssistant', 'competitiveness']);
 
-/** R-14 campus calendar requirement, shared by `campusCalendar` and `jobs.campusCalendar`. */
+/**
+ * Campus calendar requirement, shared by `campusCalendar` and
+ * `jobs.campusCalendar`: the brand has the surface (registry value), and on
+ * GoApply `CN_CAMPUS_CALENDAR_ENABLED=false` is the off switch. It no longer
+ * depends on the recruitment-info mode.
+ */
 function campusCalendarAllowed(brand: ProductBrand, env: EnvSource): boolean {
   if (!brand.flags.campusCalendar) return false;
-  return brand.market === 'cn' ? cnRecruitmentInfoMode(env) !== 'off' || parseBoolEnv(env.CN_CAMPUS_CALENDAR_ENABLED) : true;
+  return brand.market === 'cn' ? !switchedOff(env, 'CN_CAMPUS_CALENDAR_ENABLED') : true;
 }
 
 /** `jobs.campusCalendar` is an alias: it resolves exactly as `campusCalendar`. */
@@ -302,8 +335,8 @@ function canonicalKey(key: FlagKey): FlagKey {
 }
 
 /**
- * Requirement checks that no override can bypass: credentials, env, legal
- * mode and brand applicability. Product flags without a requirement return true.
+ * Requirement checks that no override can bypass: credentials, operator off
+ * switches and brand applicability. Product flags without a requirement return true.
  */
 export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSource = process.env): boolean {
   const cn = brand.market === 'cn';
@@ -324,18 +357,21 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
       return brand.authMethods.includes('wechat') && envSet(env, 'WECHAT_MINI_APP_ID', 'WECHAT_MINI_APP_SECRET');
     case 'auth.passwordReset':
       return brand.authMethods.includes('email_password') && emailConfigured(brand, env);
-    // ── payments (brand-locked rails; R-15) ─────────────────────────────
+    // ── payments (brand-locked rails; D6) ───────────────────────────────
     case 'pay.stripe':
       return brand.paymentRails.includes('stripe') && envSet(env, 'STRIPE_SECRET_KEY');
     case 'pay.alipay':
-      return brand.paymentRails.includes('alipay') && cnPaymentsEnabled(env) && envSet(env, 'ALIPAY_API_URL', 'ALIPAY_CALLBACK_SECRET');
+      // The rail's own credential is the callback secret, the equal of
+      // STRIPE_SECRET_KEY (it is what refuses a forged notify). The worker URL
+      // has a default in the rail, so ALIPAY_API_URL is not required.
+      return brand.paymentRails.includes('alipay') && !cnPaymentsKilled(env) && envSet(env, 'ALIPAY_CALLBACK_SECRET');
     case 'pay.wechatpay':
       // Merchant credentials, the WeChat Pay public key + id that verify
       // notifies, and the collecting entity matching the merchant's legal name
-      // (`wechatPayReadiness`, OPS C-13) — and nothing before CN_PAYMENTS_ENABLED.
+      // (`wechatPayReadiness`, OPS C-13). CN_PAYMENTS_ENABLED=false stops it.
       return (
         brand.paymentRails.includes('wechatpay') &&
-        cnPaymentsEnabled(env) &&
+        !cnPaymentsKilled(env) &&
         envSet(
           env,
           'WECHATPAY_MCH_ID',
@@ -352,14 +388,14 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
     case 'ai.text':
       return aiTextConfigured(brand, env);
     case 'ai.vision':
-      return cn ? cnLlmConfigured(brand, env) && envSet(env, 'CN_LLM_VISION_MODEL') : true;
+      // Same as `ai.text`: the vision model falls back to the shared stack.
+      return aiTextConfigured(brand, env);
     case 'ai.interviewVoice':
       // The media plane only. Whether the product offers voice is the
       // `interviewVoice` switch (registry default, FLAG_<BRAND>_INTERVIEW_VOICE,
-      // per-user override), applied in `isEnabledForBrand` — so GoApply voice
-      // can be turned on by config once its CN_LIVEKIT_* plane exists.
+      // per-user override), applied in `isEnabledForBrand`.
       return voiceMediaAvailable(brand, env);
-    // ── jobs (R-14) ──────────────────────────────────────────────────────
+    // ── jobs (on by default; CN_RECRUITMENT_INFO_MODE=off is the off switch) ──
     case 'jobs.feed':
     case 'jobs.recommendations':
     case 'jobs.alerts':
@@ -393,7 +429,7 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
     case 'legal.footer.genaiFiling':
       return cn && (envSet(env, 'CN_GENAI_APP_REGISTRATION_NO') || envSet(env, 'CN_GENAI_DISCLOSURES'));
     case 'legal.footer.aiDisclosure':
-      // The model name shows as soon as one is configured (CN plan §5.3).
+      // The model line shows whenever the brand's AI runs (CN plan §5.3).
       return Boolean(brand.legal.aiModelDisclosure) && aiTextConfigured(brand, env);
     case 'legal.footer.complaints':
       return cn && (envSet(env, 'CN_COMPLAINT_EMAIL') || envSet(env, 'CN_COMPLAINT_PHONE'));
@@ -402,10 +438,10 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
       return true; // gated by the `extension` product flag below
     // ── web push (WP-61) ─────────────────────────────────────────────────
     case 'webPush':
-      // Never on a mainland brand (no override can change that), and only
-      // with a usable VAPID config: without it nothing could be delivered.
-      return !cn && vapidUsable(brand, env);
-    // ── AI-only product surfaces (R-13) ──────────────────────────────────
+      // Both brands, and only with a usable VAPID config: without it nothing
+      // could be delivered.
+      return vapidUsable(brand, env);
+    // ── AI-only product surfaces ─────────────────────────────────────────
     case 'copilot':
     case 'agent':
     case 'visitorAssistant':
@@ -460,8 +496,8 @@ export function isEnabledForBrand(
 }
 
 /**
- * True when an AI-dependent product flag is off ONLY because the brand has no
- * text model: its product switch (registry/env/user override) is on. Used by
+ * True when an AI-dependent product flag is off ONLY because the brand cannot
+ * run AI text: its product switch (registry/env/user override) is on. Used by
  * `requireFlag` to answer 503 `ai_unavailable` instead of 404.
  */
 export function offOnlyForAi(key: FlagKey, brand: ProductBrand, env: EnvSource, userOverrides: UserFlagOverrides = {}): boolean {

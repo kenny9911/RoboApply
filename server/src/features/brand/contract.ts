@@ -31,7 +31,7 @@ export const PublicBrandSchema = z.object({
   defaultCountry: z.string().length(2),
   /** Only the methods that are configured on this deployment, in display order. */
   authMethods: z.array(AuthMethodSchema),
-  /** Only the rails that can take a payment right now (R-15). */
+  /** Only the rails that can take a payment right now (the rail's credential is set and it is not switched off). */
   paymentRails: z.array(PaymentRailSchema),
   flags: ResolvedFlagsSchema,
   otherBrand: z.object({ id: BrandIdSchema, name: z.string(), canonicalOrigin: z.string().url() }),
