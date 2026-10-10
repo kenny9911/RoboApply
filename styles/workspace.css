@@ -84,6 +84,22 @@
 .crumbs .now::before { content: ''; width: 7px; height: 7px; border: 1px solid var(--action); border-radius: 2px; }
 .search { background: var(--surface); width: 255px; border-radius: var(--r-pill); }
 .search kbd { border-radius: 5px; background: var(--bg); }
+/* The app topbar (.main > .topbar) never grows wider than its column. The
+ * page name and the buttons keep their size; the search pill is the one
+ * flexible thing in the row, so it narrows (its label ends in an ellipsis)
+ * when the rail leaves less room than 255px plus the buttons need — a tablet
+ * in portrait. Below 760px the pill is replaced by an icon button and the page
+ * name gives way instead (see the 760px block below and styles/v3.css).
+ * Scoped to `.main > .topbar` for two reasons: PageHeader reuses .top-actions
+ * for a page's own buttons, which must keep wrapping, and the onboarding
+ * header (app/(onboarding)/layout.tsx) reuses .topbar > .crumbs for the brand
+ * name beside three buttons, where none of this squeezing is wanted. */
+.main > .topbar { gap: var(--sp-3); }
+.main > .topbar > .crumbs { flex: 0 0 auto; white-space: nowrap; }
+.main > .topbar > .top-actions { flex: 0 1 auto; min-width: 0; }
+.main > .topbar > .top-actions > * { flex-shrink: 0; }
+.main > .topbar > .top-actions > .search { flex-shrink: 1; min-width: 0; }
+.search .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .icon-btn { background: transparent; border-color: transparent; border-radius: 50%; }
 .icon-btn:hover { background: var(--surface); }
 .top-actions { gap: 10px; }
@@ -165,6 +181,8 @@
   .rb-create-card { padding: 22px; }
 }
 @media (min-width: 761px) and (max-width: 1000px) {
+  /* Leave what room there is to the label; the shortcut still works. */
+  .search kbd { display: none; }
   .rb-create { grid-template-columns: 1fr; }
   .rb-create-card { min-height: 0; flex-direction: row; }
   .rb-create-card .rb-create-arrow { position: static; }
@@ -175,7 +193,35 @@
   .main { overflow: visible; }
   .main-inner { padding: 28px 20px calc(100px + env(safe-area-inset-bottom)); }
   .topbar { min-height: 68px; padding: 12px 20px; }
+  /* Six controls (search, Ask, inbox, theme, language, account) are 248px
+   * before any gap, so on a phone the page name gets what is left: about 80px
+   * at 375–393px wide, 66px at 360px. The buttons keep their size and the
+   * name is what gives way. A name of several words wraps at the space onto
+   * two lines ("Ready to / apply"). A single word wider than the line is
+   * hyphenated where the browser has a dictionary for the language
+   * ("Bewer-bungen"); where it has none it is NOT split at an arbitrary
+   * letter — Chrome does not hyphenate a capitalised English word, and
+   * `overflow-wrap: anywhere` gave "Applicatio / ns" — it stays on one line
+   * and ends in an ellipsis ("Applicati…"). Past two lines it also ends in an
+   * ellipsis. `min-width: 0` is what lets a flex item become narrower than
+   * its text. The gap between the buttons closes from 6px to 2px below 432px
+   * to give the name that room (their borders are transparent, so the icons
+   * still sit 27px apart). The square marker is decoration and is dropped. */
   .top-actions { gap: 6px; }
+  .main > .topbar { gap: var(--sp-2); }
+  .main > .topbar > .top-actions { flex: 0 0 auto; margin-left: auto; gap: clamp(2px, calc((100vw - 372px) / 10), 6px); }
+  .main > .topbar > .crumbs { flex: 1 1 auto; min-width: 0; white-space: normal; }
+  .main > .topbar > .crumbs .now {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    hyphens: auto;
+    line-height: 1.25;
+  }
+  .main > .topbar > .crumbs .now::before { display: none; }
   .page-h { margin-bottom: 26px; gap: 20px; }
   .page-h .sub { max-width: none; }
   .workspace-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -192,4 +238,9 @@
 @media (max-width: 380px) {
   .main-inner, .topbar { padding-left: 14px; padding-right: 14px; }
   .crumbs { max-width: 90px; }
+}
+@media (max-width: 340px) {
+  /* Under 30px is not room for a name; the page's own heading carries it.
+   * App topbar only: the onboarding header has room for its brand name. */
+  .main > .topbar > .crumbs { display: none; }
 }

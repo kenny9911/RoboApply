@@ -18,8 +18,16 @@
 // until a real feed exists: a bell that cannot do anything is a claim.
 //
 // Mobile: the topbar renders at every width, which is what makes the
-// AvatarMenu (Settings / Billing / Sign out) reachable on a phone. The 240px
-// search field collapses to an icon button below 760px; Ask keeps a 44px icon.
+// AvatarMenu (Settings / Billing / Sign out) reachable on a phone. The search
+// pill gives way to an icon button at 760px and below; Ask keeps a 44px icon;
+// the page name wraps to two lines before it pushes a button off screen.
+//
+// Which of the two search buttons shows is decided in styles/v3.css
+// (`.top-actions .search` / `.top-actions .search-compact`), NOT with Tailwind
+// utilities here: `.search` and `.icon-btn` set `display` in stylesheets that
+// app/globals.css imports unlayered, and an unlayered rule beats every
+// `@layer utilities` rule — `max-[760px]:hidden` on them does nothing
+// (components/v3/shell/topbarResponsive.test.ts).
 
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -66,7 +74,7 @@ export function Topbar() {
           <>
             <button
               type="button"
-              className="search max-[760px]:hidden"
+              className="search"
               onClick={palette.open}
               aria-label={searchAria}
             >
@@ -77,10 +85,11 @@ export function Topbar() {
 
             {/* Same action, phone width. Two elements rather than one that
              *  reflows, because .search is a 240px input-shaped button and an
-             *  icon button is a different control, not a narrower one. */}
+             *  icon button is a different control, not a narrower one. Only
+             *  one is ever displayed, so only one is in the tab order. */}
             <button
               type="button"
-              className="icon-btn hidden max-[760px]:grid"
+              className="icon-btn search-compact"
               onClick={palette.open}
               aria-label={searchAria}
             >

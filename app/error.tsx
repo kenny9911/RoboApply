@@ -6,92 +6,56 @@
 // Kept minimal (no nested `<Link>` wrapping a `<RoboButton>` etc.) because
 // the prerender path can't serialize complex children reliably.
 //
-// Shared theme with self-contained fallbacks when the root stylesheet fails.
+// Words: the translated bundles, read through errorCopy.ts, which falls back
+// to English instead of throwing — the error being shown may have come from
+// the translation layer itself. Styles: inline with literal fallbacks, for
+// when the root stylesheet is what failed.
+//
+// "Try again" calls `retry` (Next 16.3+): it re-fetches and re-renders the
+// segment. `reset` only re-renders with what is already in memory, so it
+// repeats a crash that came from the data. It stays as the fallback.
 
 import { useEffect } from 'react';
 
-const wrap: React.CSSProperties = {
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '24px',
-  background: 'var(--bg, #FCFCFE)',
-  color: 'var(--text, #20202B)',
-  fontFamily:
-    "var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif)",
-};
-
-const cardStyle: React.CSSProperties = { textAlign: 'center', maxWidth: '480px' };
-
-const titleStyle: React.CSSProperties = {
-  fontSize: '2rem',
-  fontWeight: 600,
-  letterSpacing: '-0.02em',
-  margin: 0,
-};
-
-const subStyle: React.CSSProperties = { marginTop: '12px', color: 'var(--text-2, #525162)' };
-
-const btnPrimary: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '12px 24px',
-  borderRadius: '8px',
-  color: 'var(--action-ink, #FFFFFF)',
-  fontWeight: 600,
-  background: 'var(--action, #4F3DCA)',
-  boxShadow:
-    'var(--e1, 0 2px 6px rgba(32, 32, 43, 0.08))',
-  border: 'none',
-  cursor: 'pointer',
-};
-
-const btnGhost: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '12px 24px',
-  borderRadius: '8px',
-  color: 'var(--text-2, #525162)',
-  fontWeight: 500,
-  background: 'transparent',
-  border: '1px solid var(--rule, #E3E0EE)',
-  textDecoration: 'none',
-};
+import { useErrorCopy, useIsSignedIn } from '../components/v3/shell/errorCopy';
+import { errorPageStyles as s } from '../components/v3/shell/errorPage.styles';
 
 export default function RouteError({
   error,
   reset,
+  retry,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
+  retry?: () => void;
 }) {
+  const copy = useErrorCopy();
+  const signedIn = useIsSignedIn();
+
   useEffect(() => {
     // eslint-disable-next-line no-console
     console.error('[roboapply-app] uncaught error', error);
   }, [error]);
 
   return (
-    <main style={wrap}>
-      <div style={cardStyle}>
-        <h1 style={titleStyle}>Something on this page failed to load</h1>
-        <p style={subStyle}>
-          Nothing you saved was lost. Try again, and if it keeps failing,
-          reload the page.
-        </p>
-        <div
-          style={{
-            marginTop: '24px',
-            display: 'flex',
-            gap: '12px',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          <button type="button" onClick={() => reset()} style={btnPrimary}>
-            Try again
+    <main style={s.wrap}>
+      <div style={s.card}>
+        <h1 style={s.title}>{copy('error_title')}</h1>
+        <p style={s.body}>{copy('error_body')}</p>
+        <div style={s.actions}>
+          <button type="button" onClick={() => (retry ?? reset)()} style={s.primary}>
+            {copy('try_again')}
           </button>
-          <a href="/jobs" style={btnGhost}>
-            Go to Jobs
-          </a>
+          {/* A plain <a>: a full page load is the point after a crash. */}
+          {signedIn ? (
+            <a href="/jobs" style={s.ghost}>
+              {copy('go_home')}
+            </a>
+          ) : (
+            <a href="/" style={s.ghost}>
+              {copy('go_site_home')}
+            </a>
+          )}
         </div>
       </div>
     </main>

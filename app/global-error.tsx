@@ -7,15 +7,48 @@
 // layout (which calls cookies() and providers — fragile under SSG).
 //
 // Shared theme with self-contained fallbacks when the root stylesheet fails.
+//
+// Language: the root layout is gone, and with it the message provider, so
+// this page has its own three strings per locale
+// (components/v3/shell/globalErrorCopy.ts — the `errors` strings of the nine
+// bundles, copied, and held equal to them by app/errorPages.test.tsx).
+//
+// The first render is English (the server cannot be asked which language, and
+// hydration needs the same markup); the reader's language is applied on mount
+// from the `robo_locale` cookie, else the browser's languages.
+
+import { useEffect, useState } from 'react';
+
+import { getCookieLocale } from '../lib/locale';
+import { GLOBAL_ERROR_COPY } from '../components/v3/shell/globalErrorCopy';
+import { LOCALES, matchLocale, type RoboLocale } from '../lib/localeConfig';
+
+function readerLocale(): RoboLocale {
+  try {
+    const fromCookie = getCookieLocale();
+    if (fromCookie) return fromCookie;
+    const tags = typeof navigator === 'undefined' ? [] : navigator.languages?.length ? [...navigator.languages] : [navigator.language];
+    return matchLocale(tags.filter(Boolean), LOCALES) ?? 'en';
+  } catch {
+    return 'en';
+  }
+}
 
 export default function GlobalError({
   reset,
+  retry,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
+  /** Next 16.3+: re-fetch and re-render. `reset` re-renders only. */
+  retry?: () => void;
 }) {
+  const [locale, setLocale] = useState<RoboLocale>('en');
+  useEffect(() => setLocale(readerLocale()), []);
+  const copy = GLOBAL_ERROR_COPY[locale] ?? GLOBAL_ERROR_COPY.en;
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         style={{
           margin: 0,
@@ -36,23 +69,23 @@ export default function GlobalError({
               fontSize: '2rem',
               fontWeight: 600,
               letterSpacing: '-0.02em',
+              lineHeight: 1.2,
               margin: 0,
             }}
           >
-            Something on this page failed to load
+            {copy.title}
           </h1>
-          <p style={{ marginTop: '12px', color: 'var(--text-2, #525162)' }}>
-            Nothing you saved was lost. Try again, and if it keeps failing,
-            reload the page.
-          </p>
+          <p style={{ marginTop: '12px', color: 'var(--text-2, #525162)' }}>{copy.body}</p>
           <div style={{ marginTop: '24px' }}>
             <button
               type="button"
-              onClick={() => reset()}
+              onClick={() => (retry ?? reset)()}
               style={{
                 padding: '12px 24px',
                 borderRadius: '8px',
                 color: 'var(--action-ink, #FFFFFF)',
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
                 fontWeight: 600,
                 background: 'var(--action, #4F3DCA)',
                 boxShadow:
@@ -61,7 +94,7 @@ export default function GlobalError({
                 cursor: 'pointer',
               }}
             >
-              Try again
+              {copy.tryAgain}
             </button>
           </div>
         </div>

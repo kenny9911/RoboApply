@@ -933,7 +933,7 @@
       "closed": "Job was pulled"
     },
     "column": {
-      "aria": "{name}, {count} jobs"
+      "aria": "{name}, {count, plural, one {# job} other {# jobs}}"
     },
     "outcome": {
       "label": "How it ended",
@@ -3315,7 +3315,7 @@
   },
   "errors": {
     "not_found_title": "That page does not exist",
-    "not_found_body": "The address may be wrong, or the page may have moved. Go to your jobs and start from there.",
+    "not_found_body": "The address may be wrong, or the page may have moved.",
     "error_title": "Something on this page failed to load",
     "error_body": "Nothing you saved was lost. Try again, and if it keeps failing, reload the page.",
     "try_again": "Try again",
