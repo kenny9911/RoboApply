@@ -1,26 +1,30 @@
 // backend/src/roboapply/v2/agents/RACareerInsightAgent.ts
 //
-// RoboApply V2 Agent #5 — Weekly insight card for the /insights page. Per
-// docs/roboapply/v2/04-backend-spec.md §6 — narrative generation with
-// a CitationGuard pass over the cited tracker IDs.
+// Weekly summary for the top card of /applications?view=date (ruling C40;
+// WP-38). Narrative generation with a CitationGuard pass over the cited
+// tracker IDs.
 //
-// Contract (BE3 Wave 4):
-//   Input  : { goal: RACareerGoal, trackerEntriesLast4Weeks, resumeVariants }
+// Contract:
+//   Input  : { goal | null, weekFacts, trackerEntriesLast4Weeks, resumeVariants }
 //   Output : { headline, bodyMarkdown, citedTrackerIds, recommendations }
+//
+// Honesty: the week's counts are computed by the tracker (features/tracker
+// facts.ts) and handed to the model as facts; the model may restate them but
+// never invent numbers, companies or events. Free-text notes arrive already
+// redacted (RAInsightService). The UI labels the output as AI-written
+// (GoApply: AiGeneratedBadge).
 //
 // CitationGuard substep:
 //   Every tracker-id placeholder in the model output (we ask for
-//   `[[tracker:cm_tr_XXXXX]]` markers) must reference an entry in the
-//   `trackerEntriesLast4Weeks` input. Hallucinated IDs are stripped
-//   from the body and removed from `citedTrackerIds` before persistence.
+//   `[[tracker:<id>]]` markers) must reference an entry in the
+//   `trackerEntriesLast4Weeks` input. Unknown IDs are stripped from the body
+//   and removed from `citedTrackerIds` before persistence.
 //
 // Notes:
-//   - Temperature 0.4 (warm narrative; not deterministic but not freewheeling)
+//   - Temperature 0.3
 //   - Model: configured LLM stack (or RA_V2_CAREER_INSIGHT_MODEL override)
-//   - Max output 1500 tokens
-//   - Quota: BE2's scheduler writes `ra_career_insight` SKU on success.
-//   - Length cap ≤ 600 words (per spec §2.6 RACareerInsight definition);
-//     enforced in parseOutput.
+//   - Max output 1500 tokens; body ≤ 600 words (enforced in parseOutput)
+//   - Billing: RAInsightService writes the `ra_insight` deduction log.
 
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
@@ -66,8 +70,20 @@ export interface RAResumeVariantLike {
   lastEditedAt: string;
 }
 
+export interface RAWeekFactsLike {
+  weekStart: string;
+  weekEnd: string;
+  applied: number;
+  interviews: number;
+  offers: number;
+  ended: number;
+  noReply10d: number;
+}
+
 export interface RACareerInsightInput {
-  goal: RACareerGoalLike;
+  goal: RACareerGoalLike | null;
+  /** Counts computed from the tracker; the only numbers the summary may state about this week. */
+  weekFacts?: RAWeekFactsLike | null;
   trackerEntriesLast4Weeks: RATrackerEntryLike[];
   resumeVariants: RAResumeVariantLike[];
 }
@@ -170,7 +186,7 @@ export class RACareerInsightAgent extends BaseAgent<
   }
 
   protected getTemperature(): number {
-    return 0.4;
+    return 0.3;
   }
 
   protected getMaxTokens(): number | undefined {
@@ -197,31 +213,33 @@ export class RACareerInsightAgent extends BaseAgent<
   }
 
   protected getAgentPrompt(): string {
-    return `${currentBrandPersona('career-coach narrator')}. Read a candidate's career goal, their last 4 weeks of job-tracker activity, and their resume variants. Emit ONE warm, opinionated weekly insight card.
+    return `${currentBrandPersona('job-search summary writer')}. Read a candidate's career goal (if any), this week's counts, their last 4 weeks of applications, and their resume versions. Write ONE short weekly summary card.
 
 ## Hard rules
 
-1. **Specificity beats generality.** Name actual companies. Name actual job titles. Reference exact tracker entries. NEVER produce "you applied to a few jobs this week" filler.
+1. **Facts only.** State what happened, using the counts in "This week" and the listed applications. Never invent a number, a company, a reply, an interview or an outcome. Never predict whether they will get a job or an offer.
 
-2. **Tracker ID citations.** When you reference a specific tracker entry, embed its id in this exact form: \`[[tracker:<id>]]\`. The user-facing app will link these. NEVER invent a tracker id — only use ids from the \`trackerEntriesLast4Weeks\` input.
+2. **Be specific.** Name actual companies and job titles from the input. No filler sentences.
 
-3. **Length.** \`bodyMarkdown\` is at most 600 words. Shorter is fine. Headline is one short clause ≤ 80 chars.
+3. **Tracker ID citations.** When you refer to a specific application, embed its id in this exact form: \`[[tracker:<id>]]\`. Only use ids from the input.
 
-4. **Tone.** Warm, opinionated, no marketing voice. Address the candidate in the second person — never in the third person, never as "the user". If the candidate's pace is below the goal, say so directly. If they're crushing it, celebrate it.
+4. **Length.** \`bodyMarkdown\` is at most 600 words; shorter is better. The headline is one plain sentence of at most 80 characters.
 
-5. **Recommendations.** 1-3 actionable next steps. Each:
-   - \`title\` — what to do, in plain everyday wording, naming the specific thing (the shape of "Tailor your resume for the Stripe Sr PM role" — that sample shows the level of specificity to hit, it is not an instruction about which language to write in)
+5. **Plain language.** Short sentences, second person ("you"). No idioms, slang, jokes, praise words or pressure. No first-person voice: nobody is speaking. If applications are below the weekly goal, say so plainly with the two numbers.
+
+6. **Next steps.** 1-3 concrete next steps. Each:
+   - \`title\` — what to do, naming the specific thing (for example, the shape of "Tailor your resume for the Stripe product manager job"; the sample shows the level of detail, not the language to write in)
    - \`action\` — one of: \`create_resume\` | \`apply_to_job\` | \`save_search\` | \`edit_goal\`
-   - \`targetId\` — the relevant tracker id, resume id, or saved-search id when applicable
+   - \`targetId\` — the relevant tracker id or resume id when there is one
 
 ## Output schema (STRICT JSON, no prose around it, no code fences)
 
 {
   "headline": "string (≤80 chars)",
   "bodyMarkdown": "string (≤600 words, may contain [[tracker:<id>]] markers)",
-  "citedTrackerIds": ["cm_tr_xxx", "cm_tr_yyy"],
+  "citedTrackerIds": ["<id>", "<id>"],
   "recommendations": [
-    { "title": "string", "action": "apply_to_job", "targetId": "cm_tr_xxx" }
+    { "title": "string", "action": "apply_to_job", "targetId": "<id>" }
   ]
 }
 
@@ -229,17 +247,31 @@ Output ONLY the JSON object.`;
   }
 
   protected formatInput(input: RACareerInsightInput, locale?: string): string {
-    const goalBlock = [
-      `Target title: ${input.goal.targetTitle}`,
-      input.goal.targetDate ? `Target date: ${input.goal.targetDate}` : '',
-      `Weekly application goal: ${input.goal.weeklyApplicationGoal}`,
-      input.goal.targetSalaryMin
-        ? `Salary range: ${input.goal.targetSalaryMin}-${input.goal.targetSalaryMax ?? '?'} ${input.goal.targetSalaryCurrency ?? 'USD'}`
-        : '',
-      input.goal.preferredWorkType ? `Preferred work: ${input.goal.preferredWorkType}` : '',
-      input.goal.seniority ? `Seniority: ${input.goal.seniority}` : '',
-      input.goal.notesMarkdown ? `Notes: ${clipString(input.goal.notesMarkdown, 800)}` : '',
-    ].filter(Boolean).join('\n');
+    const goal = input.goal;
+    const goalBlock = goal
+      ? [
+          `Target title: ${goal.targetTitle}`,
+          goal.targetDate ? `Target date: ${goal.targetDate}` : '',
+          `Weekly application goal: ${goal.weeklyApplicationGoal}`,
+          goal.targetSalaryMin
+            ? `Salary range: ${goal.targetSalaryMin}-${goal.targetSalaryMax ?? '?'} ${goal.targetSalaryCurrency ?? ''}`.trim()
+            : '',
+          goal.preferredWorkType ? `Preferred work: ${goal.preferredWorkType}` : '',
+          goal.seniority ? `Seniority: ${goal.seniority}` : '',
+          goal.notesMarkdown ? `Notes: ${clipString(goal.notesMarkdown, 800)}` : '',
+        ].filter(Boolean).join('\n')
+      : '';
+    const f = input.weekFacts;
+    const factsBlock = f
+      ? [
+          `Week: ${f.weekStart} to ${f.weekEnd}`,
+          `Applications marked applied this week: ${f.applied}`,
+          `Applications that reached an interview stage this week: ${f.interviews}`,
+          `Applications that reached an offer this week: ${f.offers}`,
+          `Applications that ended this week: ${f.ended}`,
+          `Applications with no reply for 10+ days (now): ${f.noReply10d}`,
+        ].join('\n')
+      : '';
 
     const trackerBlock = input.trackerEntriesLast4Weeks.slice(0, 80).map((t) => {
       const role = t.job?.title ?? t.externalSnapshot?.title ?? '(role)';
@@ -271,9 +303,10 @@ Output ONLY the JSON object.`;
     return [
       ...(languageLine ? [languageLine, ''] : []),
       `## Goal\n${goalBlock || '(no goal set)'}`,
+      `\n## This week (counted from the tracker)\n${factsBlock || '(not available)'}`,
       `\n## Tracker entries (last 4 weeks)\n${trackerBlock || '(no entries)'}`,
       `\n## Resume variants\n${resumesBlock || '(none)'}`,
-      `\nWrite this week's insight card. Output ONLY the JSON.`,
+      `\nWrite this week's summary card. Output ONLY the JSON.`,
     ].join('\n');
   }
 
@@ -365,7 +398,7 @@ Output ONLY the JSON object.`;
   ): Promise<RACareerInsightOutput> {
     const result = await this.execute(
       input,
-      input.goal.targetTitle,
+      input.goal?.targetTitle || 'weekly summary',
       options.requestId,
       options.locale,
       pickCareerInsightModel(),

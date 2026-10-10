@@ -1,64 +1,64 @@
 // backend/src/roboapply/v2/routes/insights.ts
 //
-// Mounted at /api/v1/roboapply/v2/insights.
+// Mounted at /api/v1/roboapply/v2/insights. The weekly card on
+// /applications?view=date (ruling C40; WP-38).
 //
-//   GET  /weekly   — returns the cached row for the requested week (or null)
-//   POST /refresh  — regenerate via RACareerInsightAgent (1/hour cooldown)
+//   GET  /weekly?weekStartUtc=YYYY-MM-DD — the week's counts + the AI summary
+//                                          for that week when one exists
+//   POST /refresh                        — write this week's AI summary
+//                                          (1 per hour per user; 503
+//                                          ai_unavailable without consent or model;
+//                                          403 phone_binding_required for a GoApply
+//                                          WeChat account without a verified phone)
 //
-// `/refresh` cooldown is enforced in the service via an in-memory map; the
-// 429 carries `code: 'rate_limited'`.
+// Responses use the platform envelope (`{ success, data }`); the web reads
+// them through lib/api/tracker.ts.
 
-import { Router, type Request, type Response } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { requireAuth } from '../lib/raAuth.js';
 import { getRequestLocale } from '../lib/raLocale.js';
-import { logger } from '../../../services/LoggerService.js';
-import {
-  raInsightService,
-  InsightRateLimitedError,
-  weekRangeFor,
-} from '../services/RAInsightService.js';
+import { parseQuery, requireUserId, route } from '../../../platform/http.js';
+import { HOUR, rateLimit, type RateWindow } from '../../../platform/ratelimit/index.js';
+import { WeeklyInsightQuerySchema } from '../../../features/tracker/index.js';
+import { requirePhoneBound } from '../../../features/auth-cn/index.js';
+import { raInsightService, type InsightService } from '../services/RAInsightService.js';
 
-const router = Router();
+export const INSIGHT_REFRESH_LIMIT_NAME = 'insightRefreshPerUser';
+export const INSIGHT_REFRESH_WINDOWS: readonly RateWindow[] = [{ limit: 1, windowSec: HOUR }];
 
-router.get('/weekly', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const wkRaw = req.query.weekStartUtc;
-    const week =
-      typeof wkRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(wkRaw)
-        ? wkRaw
-        : undefined;
-    const { insight, weekStartUtc } = await raInsightService.getWeekly(userId, week);
-    return res.json({
-      insight,
-      week: weekRangeFor(weekStartUtc),
-      // Stub returns null; cron-scheduled generation is BE3 territory.
-      nextGenerationAt: null,
-    });
-  } catch (err) {
-    logger.error('RA_V2_INSIGHT', 'weekly failed', {
-      userId: req.user?.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
+export interface InsightsRouterOptions {
+  service?: InsightService;
+  auth?: RequestHandler[];
+  limiter?: (name: string, windows: readonly RateWindow[]) => RequestHandler;
+  /** GoApply WeChat accounts bind a phone before AI features (403 phone_binding_required; WP-11). */
+  phoneGate?: RequestHandler;
+}
 
-router.post('/refresh', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const insight = await raInsightService.refresh(userId, getRequestLocale(req));
-    return res.json({ insight });
-  } catch (err) {
-    if (err instanceof InsightRateLimitedError) {
-      return res.status(429).json({ error: 'rate_limited' });
-    }
-    logger.error('RA_V2_INSIGHT', 'refresh failed', {
-      userId: req.user?.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
+export function createInsightsRouter(options: InsightsRouterOptions = {}): Router {
+  const router = Router();
+  const service = options.service ?? raInsightService;
+  const auth = options.auth ?? [requireAuth];
+  const limiter = options.limiter ?? ((name, windows) => rateLimit({ name, windows, by: 'user' }));
+  const phoneGate = options.phoneGate ?? requirePhoneBound();
 
-export default router;
+  router.get(
+    '/weekly',
+    ...auth,
+    route(async (req) => {
+      const { weekStartUtc } = parseQuery(req, WeeklyInsightQuerySchema);
+      return service.getWeekly(requireUserId(req), weekStartUtc);
+    }),
+  );
+
+  router.post(
+    '/refresh',
+    ...auth,
+    phoneGate,
+    limiter(INSIGHT_REFRESH_LIMIT_NAME, INSIGHT_REFRESH_WINDOWS),
+    route(async (req) => service.refresh(requireUserId(req), getRequestLocale(req))),
+  );
+
+  return router;
+}
+
+export default createInsightsRouter();

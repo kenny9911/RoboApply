@@ -1,43 +1,112 @@
-// server/src/features/tracker/routes.ts — STUB (FND-5). Owner: WP-38.
+// server/src/features/tracker/routes.ts — the new tracker paths (WP-38).
 //
 // Mounted by features/index.ts at /api/v1/roboapply/v2/tracker AFTER the
-// legacy V2 router. Only new paths are declared here.
+// legacy V2 router. The legacy router's `GET /:id` hands the reserved ids
+// `follow-ups` and `export.csv` on with `next()`, so both reach this router.
 //
-// KNOWN SHADOW (WP-38 request): the legacy tracker router declares
-// `GET /:id`, so `GET /follow-ups` and `GET /export.csv` reach the legacy
-// handler first (it answers 404 not_found for those ids) until WP-38, which
-// owns roboapply/v2/routes/tracker.ts, declares them before `/:id` there or
-// lets non-cuid ids fall through with `next()`. `/:id/events` and
-// `/:id/artifacts` have two segments and are not shadowed.
+//   GET  /follow-ups        facts: no reply in 10 days, follow-up due, interview tomorrow, deadline soon
+//   GET  /export.csv        every application as CSV (5 a day per user)
+//   GET  /:id/events        timeline (newest first; reminder ledger rows hidden)
+//   POST /:id/events        add a note to the timeline
+//   GET  /:id/artifacts     the exact files sent with this application
 
 import { Router, type RequestHandler } from 'express';
-import type { ZodType } from 'zod';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
-import { markStub, NotImplementedError, parseBody, parseParams, parseQuery, route } from '../../platform/http.js';
+import { getRequestLocale } from '../../roboapply/v2/lib/raLocale.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/index.js';
+import { HttpError, parseBody, parseParams, requireUserId, route } from '../../platform/http.js';
+import { DAY, rateLimit, type RateWindow } from '../../platform/ratelimit/index.js';
 import type { FeatureRouterDeps } from '../index.js';
-import { AddTrackerNoteBodySchema, TrackerEntryParamsSchema } from './contract.js';
+import { AddTrackerNoteBodySchema, TRACKER_EXPORT_DAILY_LIMIT, TrackerEntryParamsSchema, type FollowUpsResponse } from './contract.js';
+import { trackerCsv } from './csv.js';
+import type { TrackerMarket } from './stages.js';
+import { trackerCore, TrackerDuplicateError, TrackerInvalidInputError, TrackerNotFoundError, type TrackerCore } from './service.js';
 
-function stub(what: string, s: { params?: ZodType; query?: ZodType; body?: ZodType } = {}): RequestHandler {
-  return markStub(
-    route(async (req) => {
-      if (s.params) parseParams(req, s.params);
-      if (s.query) parseQuery(req, s.query);
-      if (s.body) parseBody(req, s.body);
-      throw new NotImplementedError(what);
-    }),
-  );
+export const TRACKER_EXPORT_LIMIT_NAME = 'trackerExportPerUser';
+export const TRACKER_EXPORT_WINDOWS: readonly RateWindow[] = [{ limit: TRACKER_EXPORT_DAILY_LIMIT, windowSec: DAY }];
+
+export interface TrackerRouterOptions {
+  core?: TrackerCore;
+  /** Rate-limit factory (tests inject a recorder). */
+  limiter?: (name: string, windows: readonly RateWindow[]) => RequestHandler;
 }
 
-export function createTrackerRouter(deps: FeatureRouterDeps = {}): Router {
+const defaultLimiter = (name: string, windows: readonly RateWindow[]): RequestHandler => rateLimit({ name, windows, by: 'user' });
+
+/** Map the tracker's domain errors onto the platform envelope. */
+export function trackerHttpError(err: unknown): never {
+  if (err instanceof TrackerNotFoundError) throw new HttpError('not_found', err.message, { reason: err.reason });
+  if (err instanceof TrackerDuplicateError) throw new HttpError('conflict', err.message, { reason: err.reason });
+  if (err instanceof TrackerInvalidInputError) throw new HttpError('invalid_request', err.message, { reason: err.reason });
+  throw err;
+}
+
+async function guarded<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    return trackerHttpError(err);
+  }
+}
+
+export function createTrackerRouter(deps: FeatureRouterDeps = {}, options: TrackerRouterOptions = {}): Router {
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
-  const p = { params: TrackerEntryParamsSchema };
+  const core = options.core ?? trackerCore;
+  const limiter = options.limiter ?? defaultLimiter;
 
-  router.get('/follow-ups', ...auth, stub('tracker.followUps'));
-  router.get('/export.csv', ...auth, stub('tracker.exportCsv'));
-  router.get('/:id/events', ...auth, stub('tracker.events', p));
-  router.post('/:id/events', ...auth, stub('tracker.addNote', { ...p, body: AddTrackerNoteBodySchema }));
-  router.get('/:id/artifacts', ...auth, stub('tracker.artifacts', p));
+  router.get(
+    '/follow-ups',
+    ...auth,
+    route(async (req): Promise<FollowUpsResponse> => ({ items: await core.followUps(requireUserId(req)) })),
+  );
+
+  router.get(
+    '/export.csv',
+    ...auth,
+    limiter(TRACKER_EXPORT_LIMIT_NAME, TRACKER_EXPORT_WINDOWS),
+    route(async (req, res) => {
+      const userId = requireUserId(req);
+      const entries = await core.exportEntries(userId);
+      const csv = trackerCsv(entries, getRequestLocale(req), getCurrentBrandOrDefault().market as TrackerMarket);
+      const stamp = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="applications-${stamp}.csv"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(200).send(csv);
+    }),
+  );
+
+  router.get(
+    '/:id/events',
+    ...auth,
+    route(async (req) => {
+      const { id } = parseParams(req, TrackerEntryParamsSchema);
+      return { items: await guarded(() => core.events(requireUserId(req), id)) };
+    }),
+  );
+
+  router.post(
+    '/:id/events',
+    ...auth,
+    route(
+      async (req) => {
+        const { id } = parseParams(req, TrackerEntryParamsSchema);
+        const { note } = parseBody(req, AddTrackerNoteBodySchema);
+        return guarded(() => core.addNote(requireUserId(req), id, note));
+      },
+      { status: 201 },
+    ),
+  );
+
+  router.get(
+    '/:id/artifacts',
+    ...auth,
+    route(async (req) => {
+      const { id } = parseParams(req, TrackerEntryParamsSchema);
+      return { items: await guarded(() => core.artifacts(requireUserId(req), id)) };
+    }),
+  );
 
   return router;
 }

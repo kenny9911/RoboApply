@@ -1,268 +1,217 @@
 // backend/src/roboapply/v2/services/RAInsightService.ts
 //
-// Weekly career insight. GET /weekly returns the latest cached row for the
-// week; POST /refresh regenerates via RACareerInsightAgent (BE3-owned).
-// Rate-limited to 1 refresh per hour per user — enforced in-process. Quota:
-// `ra_insight` SKU on success.
+// The weekly card on /applications?view=date (ruling C40; WP-38).
+//
+//   getWeekly(userId, week?) → the week's counts (always, from the user's own
+//                               tracker rows) + the AI summary for that week
+//                               when one was written
+//   refresh(userId, locale)  → writes this week's AI summary with
+//                               RACareerInsightAgent (route: 1 per hour)
+//
+// Honesty (D3, WP-38): the counts are real counts; the summary exists only
+// when a model wrote it and is flagged `aiGenerated` (GoApply renders
+// AiGeneratedBadge). There is no canned fallback narrative any more: rows the
+// pre-clone code stored with `modelUsed = 'deterministic'` are never shown.
+// AI consent (TASK_PLAN §2.2): no LLM call unless `aiAllowed(user)` and the
+// brand's `ai.text` capability is on. Free-text notes are redacted before
+// they reach the prompt.
 
-import prisma from '../../../lib/prisma.js';
+import type { Prisma } from '../../../generated/prisma/client.js';
+import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../../lib/deductionCost.js';
 import { getCurrentRequestId } from '../../../lib/requestContext.js';
 import { logger } from '../../../services/LoggerService.js';
-import { pickCareerInsightModel } from '../agents/RACareerInsightAgent.js';
+import { aiAllowed as defaultAiAllowed } from '../../../platform/consent/index.js';
+import { isEnabledForBrand } from '../../../platform/flags.js';
+import { HttpError } from '../../../platform/http.js';
+import { LLM_PII_KINDS, redactPii } from '../../../platform/pii/index.js';
+import {
+  trackerCore,
+  weekStartFor,
+  type TrackerCore,
+  type WeeklyFacts,
+  type WeeklyInsightResponse,
+  type WeeklyInsightView,
+} from '../../../features/tracker/index.js';
+import type { RACareerInsightInput, RACareerInsightOutput } from '../agents/RACareerInsightAgent.js';
 
-export interface RACareerInsightView {
-  id: string;
-  userId: string;
-  weekStartUtc: string;
-  summaryMarkdown: string;
-  citedTrackerIds: string[];
-  metrics: {
-    applicationsCount: number;
-    interviewsCount: number;
-    offerCount: number;
-    weeksToOfferEstimate: number | null;
-    recruiterViewsCount: number | null;
-    topSkillsObserved: string[];
-  } | null;
-  modelUsed: string;
-  citationGuardPassed: boolean;
-  generatedAt: string;
-  createdAt: string;
+/** The marker the pre-clone fallback wrote; such rows hold canned text and are never shown. */
+export const DETERMINISTIC_MODEL = 'deterministic';
+const DAY_MS = 86_400_000;
+
+type InsightDb = Pick<ExtendedPrismaClient, 'rACareerInsight' | 'rACareerGoal' | 'rATrackerEntry' | 'rAResumeVariant' | 'rAJob'>;
+
+export interface InsightServiceDeps {
+  getDb?: () => Promise<InsightDb>;
+  tracker?: Pick<TrackerCore, 'weeklyFacts'>;
+  aiAllowed?: (userId: string) => Promise<boolean>;
+  /** The brand's `ai.text` capability (default: the flag resolver). */
+  aiTextEnabled?: () => boolean;
+  runAgent?: (input: RACareerInsightInput, locale?: string) => Promise<RACareerInsightOutput & { model: string }>;
+  now?: () => Date;
 }
 
-function isoDate(d: any): string {
-  if (d instanceof Date) return d.toISOString();
-  return String(d);
-}
-
-function isoDateOnly(d: any): string {
-  if (d instanceof Date) return d.toISOString().slice(0, 10);
-  return String(d).slice(0, 10);
-}
-
-function toView(row: any): RACareerInsightView {
-  return {
-    id: row.id,
-    userId: row.userId,
-    weekStartUtc: isoDateOnly(row.weekStartUtc),
-    summaryMarkdown: row.summaryMarkdown ?? '',
-    citedTrackerIds: Array.isArray(row.citedTrackerIds) ? row.citedTrackerIds : [],
-    metrics: (row.metrics as RACareerInsightView['metrics']) ?? null,
-    modelUsed: row.modelUsed ?? '',
-    citationGuardPassed: !!row.citationGuardPassed,
-    generatedAt: isoDate(row.generatedAt),
-    createdAt: isoDate(row.createdAt),
-  };
-}
-
-export function currentWeekStartUtc(): string {
-  const now = new Date();
-  const dow = now.getUTCDay();
-  const sunday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow),
-  );
-  return sunday.toISOString().slice(0, 10);
+export function currentWeekStartUtc(now: Date = new Date()): string {
+  return weekStartFor(now);
 }
 
 export function weekRangeFor(weekStartUtc: string): { startUtc: string; endUtc: string } {
-  const start = new Date(weekStartUtc + 'T00:00:00.000Z');
-  const end = new Date(start.getTime() + 6 * 86_400_000);
+  const start = new Date(`${weekStartUtc}T00:00:00.000Z`);
+  return { startUtc: weekStartUtc, endUtc: new Date(start.getTime() + 6 * DAY_MS).toISOString().slice(0, 10) };
+}
+
+interface InsightRow {
+  id: string;
+  weekStartUtc: Date;
+  summaryMarkdown: string;
+  citedTrackerIds: string[];
+  modelUsed: string;
+  generatedAt: Date;
+}
+
+export function toInsightView(row: InsightRow): WeeklyInsightView | null {
+  if (!row.summaryMarkdown.trim() || row.modelUsed === DETERMINISTIC_MODEL) return null;
   return {
-    startUtc: start.toISOString().slice(0, 10),
-    endUtc: end.toISOString().slice(0, 10),
+    id: row.id,
+    weekStartUtc: row.weekStartUtc.toISOString().slice(0, 10),
+    summaryMarkdown: row.summaryMarkdown,
+    citedTrackerIds: row.citedTrackerIds ?? [],
+    aiGenerated: true,
+    modelUsed: row.modelUsed,
+    generatedAt: row.generatedAt.toISOString(),
   };
 }
 
-function computeMetrics(tracker: any[]): RACareerInsightView['metrics'] {
+function metricsFrom(facts: WeeklyFacts): Prisma.InputJsonValue {
   return {
-    applicationsCount: tracker.filter((t) => !!t.dateApplied).length,
-    interviewsCount: tracker.filter((t) => t.status === 'interviewing').length,
-    offerCount: tracker.filter(
-      (t) => t.status === 'accepted' || t.status === 'negotiating',
-    ).length,
-    weeksToOfferEstimate: null,
-    recruiterViewsCount: null,
-    topSkillsObserved: [],
+    applicationsCount: facts.applied,
+    interviewsCount: facts.interviews,
+    offerCount: facts.offers,
+    endedCount: facts.ended,
+    noReply10dCount: facts.noReply10d,
   };
 }
 
-// In-memory throttle: 1 refresh / hour per user. Matches stub semantics. Lost
-// on restart — acceptable for a developer-facing refresh button.
-const lastRefreshAt = new Map<string, number>();
-const COOLDOWN_MS = 60 * 60 * 1000;
+const redact = (text: string | null | undefined): string | null =>
+  text ? redactPii(text, { kinds: LLM_PII_KINDS }).text : null;
 
-export class InsightRateLimitedError extends Error {
-  constructor() {
-    super('Already refreshed recently');
-    this.name = 'InsightRateLimitedError';
-  }
+const defaultGetDb = async (): Promise<InsightDb> => (await import('../../../lib/prisma.js')).default;
+
+async function defaultRunAgent(input: RACareerInsightInput, locale?: string) {
+  const { RACareerInsightAgent, pickCareerInsightModel } = await import('../agents/RACareerInsightAgent.js');
+  const out = await new RACareerInsightAgent().run(input, { locale, requestId: getCurrentRequestId() ?? undefined });
+  return { ...out, model: pickCareerInsightModel() };
 }
 
-export class RAInsightService {
-  /** GET /weekly. Returns null when no row for the week. */
-  async getWeekly(
-    userId: string,
-    weekStartUtc?: string,
-  ): Promise<{ insight: RACareerInsightView | null; weekStartUtc: string }> {
-    const p = prisma as any;
-    const week = weekStartUtc ?? currentWeekStartUtc();
-    const row = await p.rACareerInsight.findUnique({
-      where: {
-        userId_weekStartUtc: {
-          userId,
-          weekStartUtc: new Date(week + 'T00:00:00.000Z'),
-        },
-      },
-    });
-    return { insight: row ? toView(row) : null, weekStartUtc: week };
+function passThroughAiError(err: unknown): void {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === 'content_blocked' || code === 'ai_unavailable' || code === 'phone_binding_required') throw err;
+}
+
+export function createInsightService(deps: InsightServiceDeps = {}) {
+  const getDb = deps.getDb ?? defaultGetDb;
+  const tracker = deps.tracker ?? trackerCore;
+  const allowed = deps.aiAllowed ?? ((userId: string) => defaultAiAllowed(userId));
+  const aiTextEnabled = deps.aiTextEnabled ?? (() => isEnabledForBrand('ai.text'));
+  const runAgent = deps.runAgent ?? defaultRunAgent;
+  const clock = deps.now ?? (() => new Date());
+
+  async function aiAvailable(userId: string): Promise<boolean> {
+    if (!aiTextEnabled()) return false;
+    return allowed(userId);
   }
 
-  /** POST /refresh. Throws InsightRateLimitedError when called within the
-   *  cooldown window. Calls BE3's `RACareerInsightAgent` if a goal exists,
-   *  otherwise falls back to a deterministic summary. On agent success,
-   *  writes a `ra_insight` deduction log row. */
-  async refresh(userId: string, locale?: string): Promise<RACareerInsightView> {
-    const last = lastRefreshAt.get(userId) ?? 0;
-    if (Date.now() - last < COOLDOWN_MS) {
-      throw new InsightRateLimitedError();
-    }
-    const p = prisma as any;
-    const week = currentWeekStartUtc();
+  return {
+    async getWeekly(userId: string, weekStartUtc?: string): Promise<WeeklyInsightResponse> {
+      const db = await getDb();
+      const week = weekStartUtc ?? currentWeekStartUtc(clock());
+      const [row, facts, ai] = await Promise.all([
+        db.rACareerInsight.findUnique({ where: { userId_weekStartUtc: { userId, weekStartUtc: new Date(`${week}T00:00:00.000Z`) } } }),
+        tracker.weeklyFacts(userId, week),
+        aiAvailable(userId),
+      ]);
+      return { insight: row ? toInsightView(row) : null, facts, week: weekRangeFor(week), aiAvailable: ai };
+    },
 
-    const [goal, tracker, resumes] = await Promise.all([
-      p.rACareerGoal.findUnique({ where: { userId } }),
-      p.rATrackerEntry.findMany({
-        where: {
-          userId,
-          deletedAt: null,
-          updatedAt: { gte: new Date(Date.now() - 28 * 86_400_000) },
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: 100,
-      }),
-      p.rAResumeVariant.findMany({
-        where: { userId, deletedAt: null },
-        orderBy: { lastEditedAt: 'desc' },
-        take: 20,
-      }),
-    ]);
+    /** Write this week's AI summary. Throws `ai_unavailable` when consent, model or the call is missing. */
+    async refresh(userId: string, locale?: string): Promise<WeeklyInsightResponse> {
+      if (!(await aiAvailable(userId))) throw new HttpError('ai_unavailable', 'AI summaries are not available for this account.');
+      const db = await getDb();
+      const now = clock();
+      const week = currentWeekStartUtc(now);
+      const [goal, entries, resumes, facts] = await Promise.all([
+        db.rACareerGoal.findUnique({ where: { userId } }),
+        db.rATrackerEntry.findMany({
+          where: { userId, deletedAt: null, updatedAt: { gte: new Date(now.getTime() - 28 * DAY_MS) } },
+          orderBy: { updatedAt: 'desc' },
+          take: 100,
+        }),
+        db.rAResumeVariant.findMany({ where: { userId, deletedAt: null }, orderBy: { lastEditedAt: 'desc' }, take: 20 }),
+        tracker.weeklyFacts(userId, week),
+      ]);
+      const jobIds = [...new Set(entries.map((e) => e.jobId).filter((x): x is string => Boolean(x)))];
+      const jobs = jobIds.length ? await db.rAJob.findMany({ where: { id: { in: jobIds } }, select: { id: true, title: true, companyName: true } }) : [];
+      const jobById = new Map(jobs.map((j) => [j.id, j]));
 
-    let summary = '';
-    let citedTrackerIds: string[] = [];
-    let metrics: RACareerInsightView['metrics'] = null;
-    let modelUsed = 'deterministic';
-    let citationGuardPassed = true;
-    let agentSucceeded = false;
-
-    if (goal) {
-      try {
-        const selectedModel = pickCareerInsightModel();
-        const { RACareerInsightAgent } = await import(
-          '../agents/RACareerInsightAgent.js'
-        );
-        const agent = new RACareerInsightAgent();
-        const out = await agent.run({
-          goal: {
-            targetTitle: goal.targetTitle,
-            targetDate: goal.targetDate
-              ? (goal.targetDate instanceof Date
-                  ? goal.targetDate.toISOString().slice(0, 10)
-                  : String(goal.targetDate))
-              : null,
-            weeklyApplicationGoal: goal.weeklyApplicationGoal ?? 5,
-            targetSalaryMin: goal.targetSalaryMin ?? null,
-            targetSalaryMax: goal.targetSalaryMax ?? null,
-            targetSalaryCurrency: goal.targetSalaryCurrency ?? null,
-            preferredWorkType: goal.preferredWorkType ?? null,
-            seniority: goal.seniority ?? null,
-            notesMarkdown: goal.notesMarkdown ?? null,
-          },
-          trackerEntriesLast4Weeks: (tracker as any[]).map((t) => ({
+      const input: RACareerInsightInput = {
+        goal: goal
+          ? {
+              targetTitle: goal.targetTitle,
+              targetDate: goal.targetDate ? goal.targetDate.toISOString().slice(0, 10) : null,
+              weeklyApplicationGoal: goal.weeklyApplicationGoal ?? 5,
+              targetSalaryMin: goal.targetSalaryMin ?? null,
+              targetSalaryMax: goal.targetSalaryMax ?? null,
+              targetSalaryCurrency: goal.targetSalaryCurrency ?? null,
+              preferredWorkType: (goal.preferredWorkType as 'remote' | 'hybrid' | 'onsite' | null) ?? null,
+              seniority: goal.seniority ?? null,
+              notesMarkdown: redact(goal.notesMarkdown),
+            }
+          : null,
+        weekFacts: facts,
+        trackerEntriesLast4Weeks: entries.map((t) => {
+          const job = t.jobId ? jobById.get(t.jobId) : undefined;
+          const snap = (t.externalSnapshot && typeof t.externalSnapshot === 'object' ? t.externalSnapshot : null) as { title?: string; companyName?: string } | null;
+          return {
             id: t.id,
             status: t.status,
             excitementStars: t.excitementStars ?? null,
-            dateSaved: t.dateSaved instanceof Date
-              ? t.dateSaved.toISOString()
-              : String(t.dateSaved),
-            dateApplied: t.dateApplied
-              ? (t.dateApplied instanceof Date
-                  ? t.dateApplied.toISOString()
-                  : String(t.dateApplied))
-              : null,
-            notesMarkdown: t.notesMarkdown ?? null,
-            externalSnapshot: t.externalSnapshot ?? null,
-          })),
-          resumeVariants: (resumes as any[]).map((r) => ({
-            id: r.id,
-            name: r.name,
-            kind: r.kind,
-            targetJobId: r.targetJobId ?? null,
-            lastEditedAt: r.lastEditedAt instanceof Date
-              ? r.lastEditedAt.toISOString()
-              : String(r.lastEditedAt),
-          })),
-        }, { locale });
-        const headline = typeof out?.headline === 'string' ? out.headline : '';
-        const body = typeof out?.bodyMarkdown === 'string' ? out.bodyMarkdown : '';
-        summary = headline ? `## ${headline}\n\n${body}` : body;
-        citedTrackerIds = Array.isArray(out?.citedTrackerIds) ? out.citedTrackerIds : [];
-        metrics = computeMetrics(tracker as any[]);
-        citationGuardPassed = true;
-        modelUsed = selectedModel;
-        agentSucceeded = true;
+            dateSaved: t.dateSaved.toISOString(),
+            dateApplied: t.dateApplied ? t.dateApplied.toISOString() : null,
+            notesMarkdown: redact(t.notesMarkdown),
+            job: job ? { title: job.title, companyName: job.companyName } : null,
+            externalSnapshot: snap ? { title: snap.title, companyName: snap.companyName } : null,
+          };
+        }),
+        resumeVariants: resumes.map((r) => ({ id: r.id, name: r.name, kind: r.kind, lastEditedAt: r.lastEditedAt.toISOString() })),
+      };
+
+      let out: RACareerInsightOutput & { model: string };
+      try {
+        out = await runAgent(input, locale);
       } catch (err) {
-        logger.warn('RA_V2_INSIGHT', 'insight agent failed; using deterministic fallback', {
-          userId,
-          weekStartUtc: week,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        passThroughAiError(err);
+        logger.warn('RA_V2_INSIGHT', 'insight agent failed', { userId, weekStartUtc: week, error: err instanceof Error ? err.message : String(err) });
+        throw new HttpError('ai_unavailable', 'The summary could not be written. Try again later.');
       }
-    }
+      const summary = out.headline ? `## ${out.headline}\n\n${out.bodyMarkdown}` : out.bodyMarkdown;
+      if (!summary.trim()) throw new HttpError('ai_unavailable', 'The summary could not be written. Try again later.');
 
-    if (!agentSucceeded) {
-      const recent = (tracker as any[])
-        .filter((t) => t.status === 'applied' || t.status === 'interviewing')
-        .slice(0, 2)
-        .map((t) => t.id);
-      citedTrackerIds = recent;
-      summary =
-        `## Week summary\n\nYou're moving steadily through the funnel. ` +
-        `Top priority this week: keep momentum on your active interviews ` +
-        `and follow up on applications past their 5-day window.`;
-      metrics = computeMetrics(tracker as any[]);
-      citationGuardPassed = false;
-    }
-
-    const row = await p.rACareerInsight.upsert({
-      where: {
-        userId_weekStartUtc: {
-          userId,
-          weekStartUtc: new Date(week + 'T00:00:00.000Z'),
-        },
-      },
-      create: {
-        userId,
-        weekStartUtc: new Date(week + 'T00:00:00.000Z'),
+      const weekDate = new Date(`${week}T00:00:00.000Z`);
+      const values = {
         summaryMarkdown: summary,
-        citedTrackerIds,
-        metrics: (metrics ?? {}) as any,
-        modelUsed,
-        citationGuardPassed,
-        generatedAt: new Date(),
-      },
-      update: {
-        summaryMarkdown: summary,
-        citedTrackerIds,
-        metrics: (metrics ?? {}) as any,
-        modelUsed,
-        citationGuardPassed,
-        generatedAt: new Date(),
-      },
-    });
+        citedTrackerIds: out.citedTrackerIds,
+        metrics: metricsFrom(facts),
+        modelUsed: out.model,
+        citationGuardPassed: true,
+        generatedAt: now,
+      };
+      const row = await db.rACareerInsight.upsert({
+        where: { userId_weekStartUtc: { userId, weekStartUtc: weekDate } },
+        create: { userId, weekStartUtc: weekDate, ...values },
+        update: values,
+      });
 
-    if (agentSucceeded) {
       const cost = costPatchFromTally(getCurrentRequestId());
       await writeDeductionLog({
         userId,
@@ -273,23 +222,13 @@ export class RAInsightService {
         requestId: getCurrentRequestId() ?? null,
         relatedEntityType: 'ra_career_insight',
         relatedEntityId: row.id,
-        metadata: {
-          ...cost.metadata,
-          source: 'roboapply_v2',
-          agent: 'RACareerInsightAgent',
-        },
+        metadata: { ...cost.metadata, source: 'roboapply_v2', agent: 'RACareerInsightAgent' },
       });
-    }
-
-    lastRefreshAt.set(userId, Date.now());
-    logger.info('RA_V2_INSIGHT', 'insight refreshed', {
-      userId,
-      insightId: row.id,
-      weekStartUtc: week,
-      agentSucceeded,
-    });
-    return toView(row);
-  }
+      logger.info('RA_V2_INSIGHT', 'insight written', { userId, insightId: row.id, weekStartUtc: week });
+      return { insight: toInsightView(row), facts, week: weekRangeFor(week), aiAvailable: true };
+    },
+  };
 }
 
-export const raInsightService = new RAInsightService();
+export type InsightService = ReturnType<typeof createInsightService>;
+export const raInsightService: InsightService = createInsightService();
