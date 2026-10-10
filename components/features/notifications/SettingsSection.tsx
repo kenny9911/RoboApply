@@ -1,16 +1,17 @@
 'use client';
 
-// /settings#notifications — alert frequency, "Tips and reminders" and transactional mail (TASK_PLAN.md WP-39b).
-//
-// STUB (FND-6b). Owner: WP-39b. Renders nothing. Receives the section id
+// /settings#notifications — alert frequency, channels, "Tips and reminders"
+// and the always-sent notices (TASK_PLAN.md WP-39b). Receives the section id
 // (`SettingsSectionProps`), since one area may own more than one section.
-// Until the owner takes the section over, /settings renders its existing
-// content for it (the page's renderers win over this component).
+// Today the settings page reaches this content through
+// components/v3/preferences/sections/NotifSection.tsx; INT wires this
+// component into SECTION_COMPONENTS and drops the page's legacy renderer.
 
 import type { SettingsSectionProps } from '../settings/sectionComponents';
+import { NotificationsSettings } from './NotificationsSettings';
 
-export function SettingsSection(_props: SettingsSectionProps): null {
-  return null;
+export function SettingsSection(_props: SettingsSectionProps) {
+  return <NotificationsSettings />;
 }
 
 export default SettingsSection;

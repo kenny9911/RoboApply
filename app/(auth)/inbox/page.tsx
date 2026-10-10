@@ -1,8 +1,8 @@
-// /inbox — route shell (FND-6b). Message center: alerts, reminders, announcements, billing notices.
-//
-// STUB. Owner: WP-39b, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /inbox — the message center (WP-39b; PRODUCT_PLAN.md §3.4, F-NOTIF-01, F-NET-09).
+// Renders inside the (auth) app shell.
 
-export default function InboxPage() {
-  return <div hidden data-route-stub="/inbox" data-owner="WP-39b" />;
+import { InboxPage } from '../../../components/features/notifications';
+
+export default function Page() {
+  return <InboxPage />;
 }
