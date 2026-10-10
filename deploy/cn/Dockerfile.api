@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.7
+#
+# GoApply mainland stack (CN-1) — the Express API in listen mode (WP-76).
+#
+# Same commit, same code as the Vercel function (api/index.ts imports the same
+# server/dist/app.js). Off Vercel, server/src/app.ts calls app.listen(PORT);
+# ROBOAPPLY_CRON_DISABLED=true keeps node-cron off because the Kubernetes
+# CronJobs (deploy/cn/k8s/cronjobs.yaml) call /api/v1/cron/* instead.
+#
+# Build from the repository root (the per-Dockerfile ignore file
+# deploy/cn/Dockerfile.api.dockerignore keeps .env files and other local state
+# out of the build context):
+#
+#   docker build -f deploy/cn/Dockerfile.api -t goapply-api .
+#   docker build --check -f deploy/cn/Dockerfile.api .        # lint only, builds nothing
+#
+# Inside the mainland, point npm at a mirror:
+#   --build-arg NPM_REGISTRY=https://registry.npmmirror.com/
+# and the base image at an ACR copy:
+#   --build-arg NODE_IMAGE=registry.cn-shanghai.aliyuncs.com/<namespace>/node:24-slim
+#
+# No secret is baked in: every credential arrives at runtime from the
+# goapply-api-env Kubernetes Secret.
+
+ARG NODE_IMAGE=node:24-slim
+
+# ── Stage 1: dependencies + prisma generate + tsc ──────────────────────────
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ARG PRISMA_ENGINES_MIRROR=
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+    PRISMA_ENGINES_MIRROR=${PRISMA_ENGINES_MIRROR} \
+    NEXT_TELEMETRY_DISABLED=1 \
+    CHECKPOINT_DISABLE=1
+
+# `postinstall` runs `prisma generate`, which needs the config and the schema.
+COPY package.json package-lock.json prisma.config.ts ./
+COPY server/prisma ./server/prisma
+RUN npm ci --no-audit --no-fund
+
+COPY server ./server
+RUN npm run build:server \
+    && npm prune --omit=dev --no-audit --no-fund
+
+# ── Stage 2: runtime ───────────────────────────────────────────────────────
+FROM ${NODE_IMAGE}
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# The root package.json carries "type": "module"; server/package.json marks
+# server/dist as ESM. server/src stays because the email i18n bundles and the
+# PDF fonts (server/assets) are read from disk at runtime, exactly like the
+# Vercel function's `includeFiles: server/**`.
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/server ./server
+COPY content/legal ./content/legal
+COPY deploy/cn/cron-call.mjs deploy/cn/preflight.mjs ./deploy/cn/
+
+ENV NODE_ENV=production \
+    PORT=4607 \
+    ROBOAPPLY_CRON_DISABLED=true \
+    DEPLOY_REGION=cn-mainland \
+    ALLOWED_BRANDS=goapply \
+    FILE_LOGGING=false
+
+EXPOSE 4607
+USER node
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||4607)+'/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "server/dist/app.js"]

@@ -1,0 +1,158 @@
+# deploy-cn — build the GoApply mainland images and roll them out on ACK (WP-76).
+#
+# Same commit as the Vercel (RoboApply) deployment, built twice: Vercel uses its
+# Git integration; this workflow builds web, api, worker and gateway images,
+# pushes them to Aliyun ACR (Shanghai) and applies deploy/cn/k8s on ACK.
+# Runbook: docs/runbooks/cn-deploy.md.
+#
+# - Manual only (workflow_dispatch). Nothing deploys on push.
+# - Skips with a notice when ALIYUN_ACR_REGISTRY or ACK_KUBECONFIG_B64 is not
+#   configured, so forks and the pre-CN-1 repository stay green.
+# - Never changes a database schema. Schema changes on the mainland database are
+#   applied by hand, once the owner confirms each one (runbook §6).
+#
+# Repository secrets: ALIYUN_ACR_REGISTRY, ALIYUN_ACR_USERNAME, ALIYUN_ACR_PASSWORD,
+#   ACK_KUBECONFIG_B64 (base64 kubeconfig of a deploy-only service account),
+#   optional NEXT_SERVER_ACTIONS_ENCRYPTION_KEY.
+# Repository variables: ALIYUN_ACR_NAMESPACE (default goapply), ACK_SLB_CERT_ID,
+#   CN_WORKER_REPLICAS (default 0), CN_NPM_REGISTRY, NEXT_PUBLIC_CN_EXT_ID,
+#   NEXT_PUBLIC_CN_EXT_STORE_URL.
+
+name: deploy-cn
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Roll the new images out on ACK after pushing them (false = build and push only)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-cn
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Check CN credentials
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        env:
+          ACR_REGISTRY: ${{ secrets.ALIYUN_ACR_REGISTRY }}
+          ACK_KUBECONFIG_B64: ${{ secrets.ACK_KUBECONFIG_B64 }}
+        run: |
+          if [ -z "$ACR_REGISTRY" ] || [ -z "$ACK_KUBECONFIG_B64" ]; then
+            echo "::notice title=deploy-cn skipped::ALIYUN_ACR_REGISTRY or ACK_KUBECONFIG_B64 is not configured. Nothing was built, pushed or deployed (docs/runbooks/cn-deploy.md)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  verify:
+    name: Verify the deploy kit
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: CronJobs match vercel.json
+        run: node scripts/gen-cn-cronjobs.mjs --check
+      - name: Deploy kit tests
+        run: npx vitest run __tests__/deploy
+
+  build:
+    name: Build and push ${{ matrix.component }}
+    needs: [gate, verify]
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - component: web
+            context: .
+            dockerfile: deploy/cn/Dockerfile.web
+          - component: api
+            context: .
+            dockerfile: deploy/cn/Dockerfile.api
+          - component: gateway
+            context: .
+            dockerfile: deploy/cn/Dockerfile.gateway
+          - component: worker
+            context: interview-agent
+            dockerfile: interview-agent/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ALIYUN_ACR_REGISTRY }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          provenance: false
+          tags: ${{ secrets.ALIYUN_ACR_REGISTRY }}/${{ vars.ALIYUN_ACR_NAMESPACE || 'goapply' }}/goapply-${{ matrix.component }}:${{ github.sha }}
+          build-args: |
+            NPM_REGISTRY=${{ vars.CN_NPM_REGISTRY || 'https://registry.npmjs.org/' }}
+            NEXT_PUBLIC_CN_EXT_ID=${{ vars.NEXT_PUBLIC_CN_EXT_ID }}
+            NEXT_PUBLIC_CN_EXT_STORE_URL=${{ vars.NEXT_PUBLIC_CN_EXT_STORE_URL }}
+          secrets: |
+            next_actions_key=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
+          cache-from: type=gha,scope=cn-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=cn-${{ matrix.component }}
+
+  deploy:
+    name: Roll out on ACK
+    needs: [gate, build]
+    if: needs.gate.outputs.enabled == 'true' && inputs.deploy
+    runs-on: ubuntu-latest
+    environment: cn-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - name: Write the kubeconfig
+        env:
+          ACK_KUBECONFIG_B64: ${{ secrets.ACK_KUBECONFIG_B64 }}
+        run: |
+          umask 077
+          printf '%s' "$ACK_KUBECONFIG_B64" | base64 -d > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+      - name: Render the release overlay
+        env:
+          ACR_REGISTRY: ${{ secrets.ALIYUN_ACR_REGISTRY }}
+          ACR_NAMESPACE: ${{ vars.ALIYUN_ACR_NAMESPACE || 'goapply' }}
+          SLB_CERT_ID: ${{ vars.ACK_SLB_CERT_ID }}
+          WORKER_REPLICAS: ${{ vars.CN_WORKER_REPLICAS || '0' }}
+        run: |
+          if [ -z "$SLB_CERT_ID" ]; then
+            echo "::error title=deploy-cn::Set the repository variable ACK_SLB_CERT_ID (SLB certificate of the ICP-filed domain). HTTPS terminates at the SLB."
+            exit 1
+          fi
+          node deploy/cn/render-overlay.mjs \
+            --registry "$ACR_REGISTRY" --namespace "$ACR_NAMESPACE" --tag "$GITHUB_SHA" \
+            --slb-cert-id "$SLB_CERT_ID" --worker-replicas "$WORKER_REPLICAS" \
+            --out deploy/cn/overlays/release
+      - name: Server-side dry run
+        run: kubectl apply -k deploy/cn/overlays/release --dry-run=server
+      - name: Apply
+        run: kubectl apply -k deploy/cn/overlays/release
+      - name: Wait for the rollout
+        run: |
+          for d in api web gateway worker; do
+            kubectl -n goapply rollout status "deployment/$d" --timeout=15m
+          done

@@ -1,0 +1,5 @@
+# Build context for deploy/cn/Dockerfile.gateway: only the nginx configuration
+# and its IPv6 start-up script.
+*
+!deploy/cn/nginx.conf
+!deploy/cn/gateway-listen-ipv6.sh

@@ -1,0 +1,114 @@
+# deploy/cn/compose.yaml — the mainland stack on one machine, for smoke tests
+# of the images before they go to ACK (WP-76). Not a production deployment.
+#
+#   cp deploy/cn/cn.env.example deploy/cn/.env.cn     # fill it; .env* files are git-ignored
+#   docker compose -f deploy/cn/compose.yaml config    # validate, builds nothing
+#   docker compose -f deploy/cn/compose.yaml --profile localdb up --build
+#   open http://goapply.localhost:8080                 # the gateway (brand from the Host header)
+#
+# With --profile localdb a throwaway Postgres runs as `db`; set in .env.cn
+#   DATABASE_URL=postgresql://goapply@db:5432/goapply
+#   CN_ALLOWED_DB_HOST_SUFFIXES=db
+# and push the schema to THAT local database yourself (docs/runbooks/cn-deploy.md §6).
+# Without the profile, point DATABASE_URL at any database you are allowed to use.
+#
+# There are no CronJobs here. Run one sweep by hand:
+#   docker compose -f deploy/cn/compose.yaml exec -e CRON_API_URL=http://localhost:4607 \
+#     api node deploy/cn/cron-call.mjs /api/v1/cron/queue-drain
+#
+# The interview worker is behind --profile voice (needs the CN LiveKit and WP-63b's backend).
+
+name: goapply-cn
+
+services:
+  db:
+    profiles: ["localdb"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: goapply
+      POSTGRES_DB: goapply
+      # Throwaway local database on the compose network only (no published port).
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - goapply-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goapply -d goapply"]
+      interval: 5s
+      retries: 20
+
+  preflight:
+    image: goapply-api:local
+    build:
+      context: ../..
+      dockerfile: deploy/cn/Dockerfile.api
+    env_file:
+      - path: .env.cn
+        required: true
+    environment: &cn-api-env
+      NODE_ENV: production
+      PORT: "4607"
+      DEPLOY_REGION: cn-mainland
+      ALLOWED_BRANDS: goapply
+      ROBOAPPLY_CRON_DISABLED: "true"
+      FILE_LOGGING: "false"
+    command: ["node", "deploy/cn/preflight.mjs"]
+    restart: "no"
+
+  api:
+    image: goapply-api:local
+    env_file:
+      - path: .env.cn
+        required: true
+    environment: *cn-api-env
+    depends_on:
+      preflight:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    image: goapply-web:local
+    build:
+      context: ../..
+      dockerfile: deploy/cn/Dockerfile.web
+    env_file:
+      - path: .env.cn
+        required: true
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      DEPLOY_REGION: cn-mainland
+      ALLOWED_BRANDS: goapply
+      NEXT_PUBLIC_API_URL: http://api:4607
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  gateway:
+    image: goapply-gateway:local
+    build:
+      context: ../..
+      dockerfile: deploy/cn/Dockerfile.gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+  worker:
+    profiles: ["voice"]
+    image: goapply-worker:local
+    build:
+      context: ../../interview-agent
+    env_file:
+      - path: .env.cn.worker
+        required: true
+    environment:
+      NODE_ENV: production
+      INTERVIEW_ENGINE_AGENT_NAME: GoApply-Interview
+    stop_grace_period: 65m
+    restart: unless-stopped
+
+volumes:
+  goapply-db:

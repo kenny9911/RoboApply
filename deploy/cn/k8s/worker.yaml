@@ -1,0 +1,65 @@
+# The interview voice worker (image built from interview-agent/Dockerfile),
+# registered with LiveKit as GoApply-Interview.
+#
+# replicas: 0 in this base. Voice practice on the mainland needs the CN-1
+# LiveKit (self-hosted, CN plan L-11 / C-16) and the domestic LLM/STT/TTS
+# backend (WP-63b). Until both exist GoApply users get text practice, which
+# needs no worker. The deploy overlay sets the count (deploy/cn/render-overlay.mjs
+# --worker-replicas, CI variable CN_WORKER_REPLICAS).
+#
+# Secrets from `goapply-worker-env`: LIVEKIT_URL / LIVEKIT_API_KEY /
+# LIVEKIT_API_SECRET of the CN LiveKit, LIVEKIT_AGENT_CALLBACK_SECRET (=
+# CN_LIVEKIT_AGENT_CALLBACK_SECRET on the API), and the backend variables
+# WP-63b documents (LLM_BACKEND, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
+# STT_BACKEND, TTS_BACKEND, DASHSCOPE_API_KEY, …).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: goapply-worker
+    app.kubernetes.io/part-of: goapply
+spec:
+  replicas: 0
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: goapply-worker
+        app.kubernetes.io/part-of: goapply
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: acr-pull
+      # Drain window: SIGTERM lets running interviews finish before the pod goes.
+      terminationGracePeriodSeconds: 5400
+      containers:
+        - name: worker
+          image: goapply-worker
+          envFrom:
+            - secretRef: { name: goapply-worker-env }
+          env:
+            - { name: NODE_ENV, value: "production" }
+            - { name: INTERVIEW_ENGINE_AGENT_NAME, value: "GoApply-Interview" }
+            - { name: WORKER_NUM_IDLE_PROCESSES, value: "1" }
+            - { name: WORKER_HEALTH_HOST, value: "0.0.0.0" }
+            - { name: WORKER_HEALTH_PORT, value: "8081" }
+          ports:
+            - { name: health, containerPort: 8081 }
+          readinessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }

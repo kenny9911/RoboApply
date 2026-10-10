@@ -1,0 +1,106 @@
+# The nginx gateway (deploy/cn/Dockerfile.gateway; routes per deploy/cn/nginx.conf)
+# behind an Aliyun SLB created by the ACK cloud controller.
+#
+# This base exposes HTTP on port 80 only. The deploy overlay
+# (deploy/cn/render-overlay.mjs --slb-cert-id) adds the HTTPS listener on 443
+# with the certificate of the ICP-filed domain and redirects 80 → 443. The
+# annotation names are those of the ACK cloud-controller-manager; check them
+# against the CCM version of your cluster before the first apply.
+#
+# Visitor address: the listeners are layer 7 (http/https), so the SLB opens its
+# own connections to the pods from its backend range (100.64.0.0/10) and puts
+# the visitor's address at the end of X-Forwarded-For (CLB layer-7 listeners
+# always add it). nginx.conf trusts only that range, takes the visitor from
+# X-Forwarded-For and OVERWRITES the header for the API and web. Check after the
+# first deploy (docs/runbooks/cn-deploy.md §7): a request sent with a forged
+# X-Forwarded-For must be logged with your real address.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/name: goapply-gateway
+    app.kubernetes.io/part-of: goapply
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: goapply-gateway
+        app.kubernetes.io/part-of: goapply
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: acr-pull
+      terminationGracePeriodSeconds: 330
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+      containers:
+        - name: nginx
+          image: goapply-gateway
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 30
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "10"] }
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/name: goapply-gateway
+    app.kubernetes.io/part-of: goapply
+  annotations:
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-address-type: "internet"
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-protocol-port: "http:80"
+    # Forward the listener protocol as X-Forwarded-Proto (https behind the 443 listener).
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-xforwardedfor-proto: "on"
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-health-check-flag: "on"
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-health-check-type: "http"
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-health-check-uri: "/healthz"
+spec:
+  type: LoadBalancer
+  # Only nodes running a gateway pod take SLB traffic: no second hop through
+  # another node. This does NOT carry the visitor's address — with a layer-7
+  # listener the connection comes from the SLB; the address travels in
+  # X-Forwarded-For and nginx.conf resolves it (set_real_ip_from).
+  externalTrafficPolicy: Local
+  # IPv6 (CN-E-02): dual-stack where the cluster supports it; a single-stack
+  # cluster falls back to IPv4. See the runbook §3 for the SLB side.
+  ipFamilyPolicy: PreferDualStack
+  selector:
+    app.kubernetes.io/name: goapply-gateway
+  ports:
+    - { name: http, port: 80, targetPort: http, protocol: TCP }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-gateway
