@@ -469,7 +469,7 @@ describe('lifecycle repo: resume check view signal (SR-39a-1)', () => {
     expect(resumeCheckViewSignalSince({})).toBeNull();
   });
 
-  it('GoApply in recruitment-info mode off: the tailoring tip names no posting', async () => {
+  it('GoApply with CN_RECRUITMENT_INFO_MODE=off: the tailoring tip names no posting; with nothing set it does (D5 default)', async () => {
     const scores = vi.fn(async () => [{ jobId: 'job_gh', score: 90, job: { title: '产品经理', companyName: '示例科技' } }]);
     const db = { rAJobMatchScore: { findMany: scores }, rAJobUserState: { findMany: async () => [] } };
     const getDb = (async () => db) as unknown as NonNullable<PrismaLifecycleRepoOptions['getDb']>;
@@ -478,6 +478,8 @@ describe('lifecycle repo: resume check view signal (SR-39a-1)', () => {
     expect(scores).not.toHaveBeenCalled();
     const on = createPrismaLifecycleRepo({ getDb, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } });
     expect(await on.topFitJob('u1', 'cn')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
+    const byDefault = createPrismaLifecycleRepo({ getDb, env: {} });
+    expect(await byDefault.topFitJob('u1', 'cn')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
     // RoboApply is not affected by the GoApply mode.
     expect(await off.topFitJob('u1', 'intl')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
   });

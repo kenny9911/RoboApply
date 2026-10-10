@@ -491,7 +491,7 @@ describe('default candidate query', () => {
       });
 
     fake = createFakePrisma({ seed });
-    await produceTrackerReminders(ctx('goapply'), { ...deps(), getDb: async () => brandless(fake) as never, loadCandidates: undefined, env: {} });
+    await produceTrackerReminders(ctx('goapply'), { ...deps(), getDb: async () => brandless(fake) as never, loadCandidates: undefined, env: { CN_RECRUITMENT_INFO_MODE: 'off' } });
     expect(notify.mock.calls.map((c) => c[0].params.company)).toEqual(['我的导入公司']);
     expect(JSON.stringify(notify.mock.calls)).not.toContain('示例科技');
     expect(ledger().map((e) => e.entryId)).toEqual(['e_own']);
@@ -499,6 +499,12 @@ describe('default candidate query', () => {
     notify.mockClear();
     fake = createFakePrisma({ seed });
     await produceTrackerReminders(ctx('goapply'), { ...deps(), getDb: async () => brandless(fake) as never, loadCandidates: undefined, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } });
+    expect(notify.mock.calls.map((c) => c[0].params.company).sort()).toEqual(['我的导入公司', '示例科技有限公司'].sort());
+
+    // Nothing set: postings are on by default (D5), so both get their reminder.
+    notify.mockClear();
+    fake = createFakePrisma({ seed });
+    await produceTrackerReminders(ctx('goapply'), { ...deps(), getDb: async () => brandless(fake) as never, loadCandidates: undefined, env: {} });
     expect(notify.mock.calls.map((c) => c[0].params.company).sort()).toEqual(['我的导入公司', '示例科技有限公司'].sort());
   });
 });

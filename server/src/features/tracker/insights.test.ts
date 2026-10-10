@@ -17,7 +17,8 @@ import { createFakePrisma } from '../../test/fakePrisma.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import type { WeeklyFacts } from './index.js';
 import { createInsightsRouter, INSIGHT_REFRESH_LIMIT_NAME } from '../../roboapply/v2/routes/insights.js';
-import { createInsightService, DETERMINISTIC_MODEL, type InsightServiceDeps } from '../../roboapply/v2/services/RAInsightService.js';
+import { createInsightService, DETERMINISTIC_MODEL, refreshWeek, type InsightServiceDeps } from '../../roboapply/v2/services/RAInsightService.js';
+import { WeeklyInsightQuerySchema, WeeklyInsightRefreshBodySchema } from './contract.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const FACTS: WeeklyFacts = { weekStart: '2026-10-04', weekEnd: '2026-10-10', applied: 3, interviews: 1, offers: 0, ended: 1, noReply10d: 2 };
@@ -86,7 +87,20 @@ describe('getWeekly', () => {
     });
     const out = await createInsightService(deps()).getWeekly('u1');
     expect(out).toEqual({ insight: null, facts: FACTS, week: { startUtc: '2026-10-04', endUtc: '2026-10-10' }, aiAvailable: true });
-    expect(weeklyFacts).toHaveBeenCalledWith('u1', '2026-10-04');
+    // No zone asked for: the tracker falls back to the stored one.
+    expect(weeklyFacts).toHaveBeenCalledWith('u1', '2026-10-04', null);
+  });
+
+  it('the reader’s zone reaches the weekly counts, so the week is bucketed in the zone the page shows (FIX-3 carry-over)', async () => {
+    await createInsightService(deps()).getWeekly('u1', '2026-10-04', 'America/Los_Angeles');
+    expect(weeklyFacts).toHaveBeenLastCalledWith('u1', '2026-10-04', 'America/Los_Angeles');
+    // The query schema takes an IANA name; an unknown name is not an error (the tracker falls back to the stored zone).
+    expect(WeeklyInsightQuerySchema.parse({ weekStartUtc: '2026-10-04', tz: 'Asia/Shanghai' })).toEqual({ weekStartUtc: '2026-10-04', tz: 'Asia/Shanghai' });
+    expect(WeeklyInsightQuerySchema.parse({})).toEqual({});
+    expect(WeeklyInsightQuerySchema.safeParse({ tz: 'x'.repeat(65) }).success).toBe(false);
+    expect(WeeklyInsightRefreshBodySchema.parse({ weekStartUtc: '2026-10-04', tz: 'Asia/Shanghai' })).toEqual({ weekStartUtc: '2026-10-04', tz: 'Asia/Shanghai' });
+    expect(WeeklyInsightRefreshBodySchema.safeParse({ weekStartUtc: 'last week' }).success).toBe(false);
+    expect(WeeklyInsightRefreshBodySchema.safeParse({ extra: 1 }).success).toBe(false);
   });
 
   it('returns an AI summary flagged aiGenerated, and aiAvailable=false without consent', async () => {
@@ -132,6 +146,27 @@ describe('refresh', () => {
     expect(out.insight).toMatchObject({ aiGenerated: true, modelUsed: 'test/model', summaryMarkdown: expect.stringContaining('## Three applications this week') });
     expect(fake.$rows('rACareerInsight')[0]).toMatchObject({ metrics: { applicationsCount: 3, interviewsCount: 1, offerCount: 0 } });
     expect(billing.writeDeductionLog).toHaveBeenCalledWith(expect.objectContaining({ sku: 'ra_insight', userId: 'u1' }));
+  });
+
+  it('writes the summary under the week the page shows, with the counts of the reader’s zone; never under an older week', async () => {
+    // The reader is already in next week (a zone ahead of UTC at the week boundary).
+    const ahead = await createInsightService(deps()).refresh('u1', 'zh', { weekStartUtc: '2026-10-11', tz: 'Asia/Shanghai' });
+    expect(weeklyFacts).toHaveBeenLastCalledWith('u1', '2026-10-11', 'Asia/Shanghai');
+    expect(ahead.week).toEqual({ startUtc: '2026-10-11', endUtc: '2026-10-17' });
+    expect((fake.$rows('rACareerInsight')[0] as { weekStartUtc: Date }).weekStartUtc.toISOString()).toBe('2026-10-11T00:00:00.000Z');
+    // The stored summary is found by the GET for that same week.
+    expect((await createInsightService(deps()).getWeekly('u1', '2026-10-11', 'Asia/Shanghai')).insight).not.toBeNull();
+    // Without a week the summary is for the current UTC week and the stored zone, as before.
+    await createInsightService(deps()).refresh('u1', 'en');
+    expect(weeklyFacts).toHaveBeenLastCalledWith('u1', '2026-10-04', null);
+    // An older (or far) week is refused: the summary is written from recent activity, never back-dated.
+    runAgent.mockClear();
+    for (const weekStartUtc of ['2026-09-20', '2026-10-25', '2026-10-05']) {
+      await expect(createInsightService(deps()).refresh('u1', 'en', { weekStartUtc })).rejects.toMatchObject({ code: 'invalid_request', details: { reason: 'not_current_week', currentWeekStartUtc: '2026-10-04' } });
+    }
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(refreshWeek(null, NOW)).toBe('2026-10-04');
+    expect(refreshWeek('2026-09-27', NOW)).toBe('2026-09-27');
   });
 
   it('maps a failed call to ai_unavailable and lets content_blocked through', async () => {

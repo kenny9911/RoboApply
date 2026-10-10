@@ -19,9 +19,13 @@
 //   "I applied", undo — runs under a transaction-scoped advisory lock
 //   (`trackerEntryLockKey`), so concurrent first clicks or saves never
 //   create two live entries
-//   similar jobs are empty while `jobs.recommendations` is off (R-14)
+//   similar jobs are empty while `jobs.recommendations` is off (on GoApply
+//   that is CN_RECRUITMENT_INFO_MODE=off; on by default, D5); a public mainland
+//   posting with no usable apply link is never a similar job (feed/sourceLine.ts
+//   `cnListable`)
 //   share         public page only with publicDisplay, else the app link
-//   companyNews   V2, dark (see `companyNewsEnabled`)
+//   companyNews   V2: the `companyNews` flag and a configured search only, on
+//                 both brands (no market term, D5)
 //
 // D1: nothing here contacts an employer. "Applied" is what the user did on
 // the employer's own page (or told us), never something we submitted.
@@ -36,6 +40,7 @@ import type { CompanyProfile } from '../companies/contract.js';
 import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 import { cnPostingVisible } from '../../cn/jobs/index.js';
+import { cnListableWhere } from '../../feed/contract.js';
 import { OUTCOME_STATUS } from '../../tracker/contract.js';
 import {
   JOB_DETAIL_ERROR_CODES,
@@ -211,9 +216,9 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
   async function loadJob(userId: string, jobId: string): Promise<JobRow> {
     const row = (await db.rAJob.findUnique({ where: { id: jobId }, select: JOB_ROW_SELECT })) as JobRow | null;
     if (!row || !isVisibleTo(row, userId, deps.brand().market)) throw notFound();
-    // GoApply recruitment-info mode (R-14, WP-41 R41-1b): in mode `off` a
-    // third-party posting is invisible (same 404 as a missing job); the user's
-    // own import stays visible. Non-cn rows pass through. (Wave 3 gate fix.)
+    // GoApply recruitment-info mode (WP-41 R41-1b; on by default, D5): with the
+    // mode set to `off` a third-party posting is invisible (same 404 as a
+    // missing job); the user's own import stays visible. Non-cn rows pass through.
     if (!cnPostingVisible(row, userId, deps.env ?? process.env)) throw notFound();
     return row;
   }
@@ -286,6 +291,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       closedAt: null,
       id: { not: row.id },
       ...(row.locationCountry ? { locationCountry: row.locationCountry } : {}),
+      // Mainland: a posting with no usable apply link is never recommended (the feed's own rule).
+      ...(row.market === 'cn' ? { AND: [cnListableWhere()] } : {}),
     };
     return row.primaryTaxonomyId ? { ...base, primaryTaxonomyId: row.primaryTaxonomyId } : { ...base, titleNormalized: row.titleNormalized };
   }
@@ -597,7 +604,9 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
 
     async companyNews(userId, jobId) {
       const brand = deps.brand();
-      if (brand.market !== 'intl' || !(await flag('companyNews', userId)) || !deps.searchNews) {
+      // The `companyNews` flag and a configured search only: no market term (D5). The search itself
+      // carries the company name and nothing personal, and answers "no news" where it may not run.
+      if (!(await flag('companyNews', userId)) || !deps.searchNews) {
         throw new HttpError('feature_disabled');
       }
       const row = await loadJob(userId, jobId);

@@ -371,7 +371,22 @@ export interface WeeklyInsightResponse {
   aiAvailable: boolean;
 }
 
-export const WeeklyInsightQuerySchema = z.object({ weekStartUtc: DateOnly.optional() });
+/**
+ * The reader's time zone, an IANA name ("Asia/Shanghai"), as the CSV export's
+ * `?tz=` takes it: the service checks the name and falls back to the stored
+ * zone for a missing or unknown one, so a bad name is never an error.
+ */
+const TimeZoneName = z.string().trim().min(1).max(64);
+
+/** GET /insights/weekly?weekStartUtc&tz — `tz` buckets the week's counts in the zone the page shows dates in. */
+export const WeeklyInsightQuerySchema = z.object({ weekStartUtc: DateOnly.optional(), tz: TimeZoneName.optional() });
+
+/**
+ * POST /insights/refresh — the week the page shows (the one it asked the GET
+ * for) and the reader's zone. Both optional: without them the summary is for
+ * the current UTC week, in the stored zone.
+ */
+export const WeeklyInsightRefreshBodySchema = z.object({ weekStartUtc: DateOnly.optional(), tz: TimeZoneName.optional() }).strict();
 
 /** CSV export: 5/day. */
 export const TRACKER_EXPORT_DAILY_LIMIT = 5;

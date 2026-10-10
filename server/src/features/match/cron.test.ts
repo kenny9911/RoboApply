@@ -36,23 +36,24 @@ function setup(
     users?: number;
     brand?: 'roboapply' | 'goapply';
     model?: string;
-    realPolicy?: boolean;
+    /** The brand LLM-route policy's verdict for the scorer model (default: allowed). */
+    routeVerdict?: boolean;
     /** The ids the feed preview lists for a user (default: every seeded job, in order). */
     preview?: (userId: string) => string[];
-    /** GoApply recruitment-info mode (default: postings allowed, so a GoApply run has candidates). */
+    /** GoApply recruitment-info mode. Default: not set, which allows postings (D5), so a GoApply run has candidates. */
     cnMode?: 'off' | 'partner_deeplink' | 'licensed';
   } = {},
 ) {
   const brandId = opts.brand ?? 'roboapply';
   const model = opts.model ?? MODEL;
-  const routeAllowed = opts.realPolicy ? undefined : () => true;
+  const routeAllowed = () => opts.routeVerdict ?? true;
   const jobs = Array.from({ length: opts.jobs ?? 30 }, (_, i) => jobRecord({ id: `job${i}`, skills: i % 2 ? ['typescript'] : ['typescript', 'go'] }));
   const repo = createMemoryRepo({
     jobs: brandId === 'goapply' ? jobs.map((j) => ({ ...j, market: 'cn' as const })) : jobs,
     active: Array.from({ length: opts.users ?? 1 }, (_, i) => ({ id: i === 0 ? 'u1' : `u${i + 1}`, brand: brandId, lastActiveAt: new Date(NOW.getTime() - 3600_000 * (i + 1)) })),
   });
   const { consume, counts } = counters();
-  const env = { SCORE_PRECOMPUTE_PER_USER_DAY: opts.perUser, SCORE_DAILY_BUDGET: opts.budget, CN_RECRUITMENT_INFO_MODE: opts.cnMode ?? 'partner_deeplink' };
+  const env = { SCORE_PRECOMPUTE_PER_USER_DAY: opts.perUser, SCORE_DAILY_BUDGET: opts.budget, ...(opts.cnMode ? { CN_RECRUITMENT_INFO_MODE: opts.cnMode } : {}) };
   const candidateIds = vi.fn(async (userId: string, limit: number) => (opts.preview ? opts.preview(userId) : jobs.map((j) => j.id)).slice(0, limit));
   const service = createMatchService({ repo, resolveModel: () => model, routeAllowed, aiAllowed: async () => true, consume, brand: () => getBrand(brandId), env, now: () => NOW });
   const enqueued: Array<{ kind: string; payload: unknown; options: Record<string, unknown> }> = [];
@@ -81,13 +82,18 @@ describe('score-precompute', () => {
     expect(again).toMatchObject({ enqueued: 0 });
   });
 
-  it('GoApply with an international scorer model: skips the run, queues nothing (brand LLM policy, R-13)', async () => {
-    const s = setup({ brand: 'goapply', model: 'openrouter/openai/gpt-5.6-luna', realPolicy: true });
-    expect(await s.task(s.ctx)).toEqual({ skipped: 'ai_unavailable' });
-    expect(s.enqueued).toHaveLength(0);
-    expect(s.consume).not.toHaveBeenCalled();
+  // Which routes a brand may use is the LLM policy's own rule (match/scorerRoute.ts and platform/llm, PAR-2: under
+  // D5 GoApply uses the shared stack unless CN_LLM_DOMESTIC_ONLY is set). This area only has to follow its verdict.
+  it('GoApply: a scorer model the brand LLM policy refuses skips the run and queues nothing; an allowed one is queued', async () => {
+    const refused = setup({ brand: 'goapply', routeVerdict: false });
+    expect(await refused.task(refused.ctx)).toEqual({ skipped: 'ai_unavailable' });
+    expect(refused.enqueued).toHaveLength(0);
+    expect(refused.consume).not.toHaveBeenCalled();
 
-    const domestic = setup({ brand: 'goapply', model: 'deepseek/deepseek-chat', realPolicy: true, perUser: '2' });
+    // The shared model (no CN_ value anywhere) once the policy allows it: GoApply's public postings are queued, mode unset.
+    const shared = setup({ brand: 'goapply', perUser: '2' });
+    expect(await shared.task(shared.ctx)).toMatchObject({ enqueued: 2 });
+    const domestic = setup({ brand: 'goapply', model: 'deepseek/deepseek-chat', perUser: '2' });
     expect(await domestic.task(domestic.ctx)).toMatchObject({ enqueued: 2 });
   });
 
@@ -160,10 +166,13 @@ describe('score-precompute', () => {
     expect(await clean.task(clean.ctx)).toMatchObject({ failed: 0 });
   });
 
-  it('GoApply with recruitment-info mode off: a third-party posting is never queued for scoring (R-14)', async () => {
-    const s = setup({ brand: 'goapply', model: 'deepseek/deepseek-chat', realPolicy: true, cnMode: 'off' });
+  it('GoApply with CN_RECRUITMENT_INFO_MODE=off: a third-party posting is never queued for scoring; with nothing set it is', async () => {
+    const s = setup({ brand: 'goapply', cnMode: 'off' });
     expect(await s.task(s.ctx)).toMatchObject({ enqueued: 0 });
     expect(s.enqueued).toHaveLength(0);
+
+    const byDefault = setup({ brand: 'goapply', perUser: '3' });
+    expect(await byDefault.task(byDefault.ctx)).toMatchObject({ enqueued: 3 });
   });
 
   it('GoApply users without AI consent are skipped (zero model work queued)', async () => {

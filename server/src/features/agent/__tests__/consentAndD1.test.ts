@@ -70,21 +70,32 @@ describe('AI consent off (production gate)', () => {
   });
 });
 
-describe('R-14: GoApply recruitment-info mode off', () => {
-  it('the production visibility seam hides third-party postings and keeps the user\'s own imports', async () => {
+describe('GoApply recruitment-info mode: the production visibility seam', () => {
+  const jobs = [
+    { id: 'gh', market: 'cn', visibility: 'public', ownerUserId: null },
+    { id: 'own', market: 'cn', visibility: 'private', ownerUserId: 'u1' },
+    { id: 'intl', market: 'intl', visibility: 'public', ownerUserId: null },
+  ];
+  const withMode = async <T,>(mode: string | undefined, fn: () => Promise<T>): Promise<T> => {
     const prev = process.env.CN_RECRUITMENT_INFO_MODE;
-    delete process.env.CN_RECRUITMENT_INFO_MODE;
+    if (mode === undefined) delete process.env.CN_RECRUITMENT_INFO_MODE;
+    else process.env.CN_RECRUITMENT_INFO_MODE = mode;
     try {
-      const jobs = [
-        { id: 'gh', market: 'cn', visibility: 'public', ownerUserId: null },
-        { id: 'own', market: 'cn', visibility: 'private', ownerUserId: 'u1' },
-        { id: 'intl', market: 'intl', visibility: 'public', ownerUserId: null },
-      ];
-      const visible = await defaultAgentDeps().visibleJobs(jobs, 'u1');
-      expect(visible.map((j) => j.id)).toEqual(['own', 'intl']);
+      return await fn();
     } finally {
-      if (prev !== undefined) process.env.CN_RECRUITMENT_INFO_MODE = prev;
+      if (prev === undefined) delete process.env.CN_RECRUITMENT_INFO_MODE;
+      else process.env.CN_RECRUITMENT_INFO_MODE = prev;
     }
+  };
+
+  it('CN_RECRUITMENT_INFO_MODE=off hides third-party postings and keeps the user\'s own imports', async () => {
+    const visible = await withMode('off', () => defaultAgentDeps().visibleJobs(jobs, 'u1'));
+    expect(visible.map((j) => j.id)).toEqual(['own', 'intl']);
+  });
+
+  it('nothing set: third-party postings are visible (D5: the feed is on by default)', async () => {
+    const visible = await withMode(undefined, () => defaultAgentDeps().visibleJobs(jobs, 'u1'));
+    expect(visible.map((j) => j.id)).toEqual(['gh', 'own', 'intl']);
   });
 });
 

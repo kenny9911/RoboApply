@@ -4,7 +4,8 @@
 // WP-93 #44 and #46). `GET /v2/jobs/:id` and `POST /v2/search/run` are gone
 // (index.unmounted.test.ts keeps them at 404), so this file now covers the
 // readers that are left:
-//   - `legacyJobVisible` itself (market, own import, seed rows, R-14 mode);
+//   - `legacyJobVisible` itself (market, own import, seed rows, the GoApply
+//     recruitment-info mode: on by default under D5, `off` set explicitly here);
 //   - `loadLegacyVisibleJob` (RAResumeService / RAResumeAIService);
 //   - the weekly summary (`RAInsightService.refresh`): with
 //     CN_RECRUITMENT_INFO_MODE=off a GoApply summary names no third-party
@@ -60,10 +61,10 @@ describe('legacyJobVisible', () => {
   it('GoApply, mode off: no third-party posting; the own import is readable', () => {
     expect(legacyJobVisible(byId('cn_gohire'), 'u1', { market: 'cn', env: OFF })).toBe(false);
     expect(legacyJobVisible(byId('cn_own'), 'u1', { market: 'cn', env: OFF })).toBe(true);
-    // Unset means off (R-14 default).
-    expect(legacyJobVisible(byId('cn_gohire'), 'u1', { market: 'cn', env: {} })).toBe(false);
     // Control: once the mode allows postings the same row is readable (the check is not vacuous).
     expect(legacyJobVisible(byId('cn_gohire'), 'u1', { market: 'cn', env: ON })).toBe(true);
+    // Unset means on (D5 default): the posting is readable.
+    expect(legacyJobVisible(byId('cn_gohire'), 'u1', { market: 'cn', env: {} })).toBe(true);
   });
 
   it("another user's private import, another market's job, a seed row and a missing row are refused", () => {
@@ -87,7 +88,7 @@ describe('loadLegacyVisibleJob (resume services)', () => {
   let prevMode: string | undefined;
   beforeEach(() => {
     prevMode = process.env.CN_RECRUITMENT_INFO_MODE;
-    delete process.env.CN_RECRUITMENT_INFO_MODE;
+    process.env.CN_RECRUITMENT_INFO_MODE = 'off';
     fake.db = createFakePrisma({ seed: { rAJob: ROWS } });
   });
   afterEach(() => {
@@ -101,6 +102,12 @@ describe('loadLegacyVisibleJob (resume services)', () => {
       expect(await loadLegacyVisibleJob('u1', 'cn_other')).toBeNull();
       expect(await loadLegacyVisibleJob('u1', 'nope')).toBeNull();
       expect((await loadLegacyVisibleJob('u1', 'cn_own'))?.id).toBe('cn_own');
+    });
+    // Nothing set (D5 default): the GoHire posting is readable on GoApply; another user's import still is not.
+    delete process.env.CN_RECRUITMENT_INFO_MODE;
+    await runWithBrand('goapply', async () => {
+      expect((await loadLegacyVisibleJob('u1', 'cn_gohire'))?.id).toBe('cn_gohire');
+      expect(await loadLegacyVisibleJob('u1', 'cn_other')).toBeNull();
     });
     await runWithBrand('roboapply', async () => {
       expect((await loadLegacyVisibleJob('u1', 'intl_public'))?.id).toBe('intl_public');
@@ -163,7 +170,7 @@ describe('weekly summary (RAInsightService.refresh) names only jobs the viewer m
 
   beforeEach(() => {
     prevMode = process.env.CN_RECRUITMENT_INFO_MODE;
-    delete process.env.CN_RECRUITMENT_INFO_MODE;
+    process.env.CN_RECRUITMENT_INFO_MODE = 'off';
     seen = null;
     runAgent.mockClear();
   });
@@ -191,6 +198,12 @@ describe('weekly summary (RAInsightService.refresh) names only jobs the viewer m
 
   it('GoApply, postings allowed: the same entry is named (the check is not vacuous)', async () => {
     process.env.CN_RECRUITMENT_INFO_MODE = 'partner_deeplink';
+    await runWithBrand('goapply', () => service(seed()).refresh('u1', 'zh'));
+    expect(named().t_gohire).toEqual({ job: { title: 'GoHire PM', companyName: 'Bank Employer' }, externalSnapshot: { title: 'GoHire PM', companyName: 'Bank Employer' } });
+  });
+
+  it('GoApply, nothing set (D5 default): the same entry is named', async () => {
+    delete process.env.CN_RECRUITMENT_INFO_MODE;
     await runWithBrand('goapply', () => service(seed()).refresh('u1', 'zh'));
     expect(named().t_gohire).toEqual({ job: { title: 'GoHire PM', companyName: 'Bank Employer' }, externalSnapshot: { title: 'GoHire PM', companyName: 'Bank Employer' } });
   });
@@ -256,7 +269,7 @@ describe('stored weekly summary (RAInsightService.getWeekly) is re-checked on ev
   let prevMode: string | undefined;
   beforeEach(() => {
     prevMode = process.env.CN_RECRUITMENT_INFO_MODE;
-    delete process.env.CN_RECRUITMENT_INFO_MODE;
+    process.env.CN_RECRUITMENT_INFO_MODE = 'off';
   });
   afterEach(() => {
     if (prevMode === undefined) delete process.env.CN_RECRUITMENT_INFO_MODE;
@@ -275,9 +288,9 @@ describe('stored weekly summary (RAInsightService.getWeekly) is re-checked on ev
     process.env.CN_RECRUITMENT_INFO_MODE = 'off';
     const read = await runWithBrand('goapply', () => service(db).getWeekly('u1'));
     expect(read).toEqual({ insight: null, facts: FACTS, week: { startUtc: '2026-10-04', endUtc: '2026-10-10' }, aiAvailable: true });
-    // Unset means off as well (R-14 default).
+    // Unset means on (D5 default): the stored text is shown again.
     delete process.env.CN_RECRUITMENT_INFO_MODE;
-    expect((await runWithBrand('goapply', () => service(db).getWeekly('u1'))).insight).toBeNull();
+    expect((await runWithBrand('goapply', () => service(db).getWeekly('u1'))).insight?.summaryMarkdown).toContain('Bank Employer');
   });
 
   it('GoApply, mode off: a summary that named only the own import (or no job row) is still shown', async () => {
@@ -308,7 +321,11 @@ describe('stored weekly summary (RAInsightService.getWeekly) is re-checked on ev
     expect((await runWithBrand('goapply', () => service(db).getWeekly('u1'))).insight).toBeNull();
     process.env.CN_RECRUITMENT_INFO_MODE = 'partner_deeplink';
     expect((await runWithBrand('goapply', () => service(db).getWeekly('u1'))).insight).not.toBeNull();
+    // Nothing set is not "off" (D5): shown on GoApply too.
     delete process.env.CN_RECRUITMENT_INFO_MODE;
+    expect((await runWithBrand('goapply', () => service(db).getWeekly('u1'))).insight).not.toBeNull();
+    // RoboApply never depends on the GoApply switch.
+    process.env.CN_RECRUITMENT_INFO_MODE = 'off';
     expect((await runWithBrand('roboapply', () => service(db).getWeekly('u1'))).insight).not.toBeNull();
   });
 });

@@ -1,6 +1,7 @@
-// server/src/features/jobs/import/firecrawl.ts — the only way an imported
-// link is read (WP-35; ARCH §3.4 / threat model: "fetched by Firecrawl, never
-// by our server directly; response size cap").
+// server/src/features/jobs/import/firecrawl.ts — how an imported link is read
+// (WP-35; ARCH §3.4 / threat model: "fetched by Firecrawl, not by our server
+// directly; response size cap"). The one other reader is directFetch.ts, used
+// only on a mainland deployment when this provider cannot be used or reached.
 //
 // One POST to the Firecrawl scrape API with the link; we get back the page's
 // main text (markdown), its raw HTML (for the structured job data) and its

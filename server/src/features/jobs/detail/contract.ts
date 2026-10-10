@@ -16,13 +16,18 @@
 //     that the posting does not state is `null` ("Pay not listed", never 0);
 //     sponsorship and requirement lines are verbatim quotes from the post;
 //     the AI summary is labelled as AI; company news is labelled "Search
-//     results, not verified by %BRAND%".
+//     results, not verified by %BRAND%";
+//   - source and apply contract (GOAPPLY_PARITY_PLAN §5, the same fields as the
+//     feed card; rules in feed/sourceLine.ts): `job.apply { url, target }`,
+//     `job.source { …, original, url, lastVerifiedAt, via }` and `job.salary`
+//     (null when the posting states no pay). D1: `apply.url` is a link the
+//     user opens; nothing is submitted for them.
 
 import { z } from 'zod';
 import type { Sourced } from '../../../platform/http.js';
 import type { HiringContactsMode } from '../../../platform/brand/registry.js';
 import type { CompanyProfile } from '../companies/contract.js';
-import type { FeedItem } from '../../feed/contract.js';
+import type { ApplyLink, FeedItem, SalaryLine, SourceFacts } from '../../feed/contract.js';
 import { ScoreJobBodySchema as MatchScoreJobBodySchema, type FitTierKey, type MatchDimension, type MatchFitView } from '../../match/contract.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 
@@ -81,6 +86,20 @@ export interface JobDetail {
   /** Citizenship / clearance lines, each with the posting's own words. */
   requirements: Array<{ tag: JobRequirementTag; quote: string }>;
   applyUrl: string | null;
+  /**
+   * The posting's own apply link with where it leads: 'gohire' (the GoHire
+   * posting page, a GoHire bank row), 'employer' (the employer's careers site
+   * or ATS page, an employer-board row) or null (not known: a user's own
+   * import, an aggregator's link). Null when there is no usable link. `url`
+   * equals `applyUrl` whenever that is an http(s) link. Always sent.
+   */
+  apply?: ApplyLink | null;
+  /**
+   * Pay as the posting states it (`text` is the line as posted where there is
+   * one); null when the posting states no pay ("薪资未披露" / "Pay not
+   * listed"; never 面议). Agrees with `pay` / `payText`, which stay. Always sent.
+   */
+  salary?: SalaryLine | null;
   postedAt: string | null;
   /** True when the posting date is our first-seen date, not the employer's. */
   postedAtEstimated: boolean;
@@ -89,8 +108,14 @@ export interface JobDetail {
   closedAt: string | null;
   /** 'closed' = no longer listed (expired, removed or archived). */
   status: 'open' | 'closed';
-  /** Where we got the posting; `kind` drives the source line. */
-  source: { name: string; kind: FeedItem['source']['kind']; originalName: string | null };
+  /**
+   * Where we got the posting; `kind` drives the source line. `original` (the
+   * original publisher: the employer for an employer-board row), `url` (the
+   * original posting link), `lastVerifiedAt` (when we last saw it live) and
+   * `via` ('bank' | 'ats' | 'import'; absent for an aggregator row) are the
+   * facts every mainland posting shows (来源 / 原始链接 / 最后核验); always sent.
+   */
+  source: { name: string; kind: FeedItem['source']['kind']; originalName: string | null } & Partial<SourceFacts>;
   fromRecruiterBank: boolean;
   employerVerified: boolean;
   isAgency: boolean;
@@ -204,7 +229,8 @@ export interface SimilarJobItem extends Omit<FeedItem, 'pay'> {
 /**
  * GET /jobs/:id/similar — same role family and country, excluding hidden and
  * flagged jobs; best fit first. Empty while `jobs.recommendations` is off
- * (GoApply with CN_RECRUITMENT_INFO_MODE=off; R-14).
+ * (GoApply with CN_RECRUITMENT_INFO_MODE=off; on by default). On GoApply a
+ * public posting with no usable apply link is never listed.
  */
 export interface SimilarJobsResponse {
   items: SimilarJobItem[];

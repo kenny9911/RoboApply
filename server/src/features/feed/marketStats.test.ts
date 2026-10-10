@@ -2,7 +2,8 @@
 //
 // REQ-50-01 / REQ-64-01: `marketStats.salary` — posted pay from our own index
 // only, over the public-aggregate rows (TASK_PLAN §2.2), published only at
-// N ≥ MIN_SAMPLE; on GoApply nothing while CN_RECRUITMENT_INFO_MODE is off.
+// N ≥ MIN_SAMPLE; on GoApply the figures show by default (D5) and nothing is
+// shown while CN_RECRUITMENT_INFO_MODE is set to off.
 // A fake database evaluates the `where`: no Prisma, no network.
 
 import { describe, expect, it, vi } from 'vitest';
@@ -141,14 +142,23 @@ describe('marketStats.salary', () => {
   });
 });
 
-describe('marketStats on GoApply (R-14)', () => {
+describe('marketStats on GoApply (recruitment-info mode; on by default, D5)', () => {
   const rows = many(MIN_SAMPLE + 2, (i) => job({ id: `c${i}`, market: 'cn', salaryMin: 15_000, salaryMax: 20_000, salaryCurrency: 'CNY', salaryPeriod: 'month' }));
+  const OFF = { CN_RECRUITMENT_INFO_MODE: 'off' };
 
   it('mode off shows nothing: no count and no figure, even with enough postings in the index', async () => {
-    const out = await createMarketStats({ db: async () => fakeDb(rows), env: {} }).salary({ market: 'cn', taxonomyId: 'data_analyst', now: NOW });
+    const out = await createMarketStats({ db: async () => fakeDb(rows), env: OFF }).salary({ market: 'cn', taxonomyId: 'data_analyst', now: NOW });
     expect(out).toMatchObject({ totalCount: 0, listedCount: 0, median: null, p25: null, p75: null, currency: null, period: null });
-    const sample = await createMarketStats({ db: async () => fakeDb(rows), env: {} }).salarySample({ market: 'cn', taxonomyId: 'data_analyst', currency: 'CNY', now: NOW });
+    const sample = await createMarketStats({ db: async () => fakeDb(rows), env: OFF }).salarySample({ market: 'cn', taxonomyId: 'data_analyst', currency: 'CNY', now: NOW });
     expect(sample).toMatchObject({ rows: [], totalCount: 0 });
+  });
+
+  it('default (nothing set): the same rows give the figures', async () => {
+    const out = await createMarketStats({ db: async () => fakeDb(rows), env: {} }).salary({ market: 'cn', taxonomyId: 'data_analyst', now: NOW });
+    expect(out).toMatchObject({ totalCount: MIN_SAMPLE + 2, listedCount: MIN_SAMPLE + 2, currency: 'CNY', period: 'month' });
+    expect(out.median?.value).toBe(17_500);
+    const sample = await createMarketStats({ db: async () => fakeDb(rows), env: {} }).salarySample({ market: 'cn', taxonomyId: 'data_analyst', currency: 'CNY', now: NOW });
+    expect(sample.totalCount).toBe(MIN_SAMPLE + 2);
   });
 
   it('control: with postings allowed the same rows give the figures; fraud-flagged postings never count', async () => {
@@ -168,8 +178,10 @@ describe('marketStats on GoApply (R-14)', () => {
 
   it('the filter itself: mode off ANDs a predicate that matches no row; RoboApply is not affected by the mode', () => {
     const q = { market: 'cn' as const, title: '数据分析师', now: NOW };
-    expect((salaryWhere(q, {}) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ id: { in: [] } }] });
+    expect((salaryWhere(q, { CN_RECRUITMENT_INFO_MODE: 'off' }) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ id: { in: [] } }] });
     expect((salaryWhere(q, { CN_RECRUITMENT_INFO_MODE: 'licensed' }) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ visibility: 'public' }] });
+    // Nothing set: the public postings (D5 default).
+    expect((salaryWhere(q, {}) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ visibility: 'public' }] });
     const intl = salaryWhere({ ...q, market: 'intl' }, {}) as { AND: Array<Record<string, unknown>> };
     expect(intl.AND[0]).toEqual({ market: 'intl', visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null });
     expect(JSON.stringify(intl)).not.toContain('fraudFlags');

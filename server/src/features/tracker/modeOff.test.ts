@@ -1,11 +1,14 @@
 // @vitest-environment node
 //
-// WP-93 #8 (R41-1b; R-14, CN-L-04): with CN_RECRUITMENT_INFO_MODE=off the
+// WP-93 #8 (R41-1b; CN-L-04), restated for D5: postings show by default on
+// GoApply, and the kill switch is set explicitly here. With
+// CN_RECRUITMENT_INFO_MODE=off the
 // tracker never returns a third-party posting on GoApply. One GoHire posting
 // and one own import are seeded through the service seam (the fake database
 // behind `createTrackerCore`); every reader is called.
 //   mode off            only the import (and a job the user typed in)
 //   partner_deeplink    both
+//   nothing set         both (the default)
 // The central route scan (cn/jobs/__tests__/modeOff.routes.test.ts) lists the
 // tracker under NOT_EXERCISED until this file exists (join J8).
 
@@ -27,8 +30,10 @@ const U = 'u1';
 const GA = 'goapply.localhost:3621';
 const BASE = '/api/v1/roboapply/v2/tracker';
 
-const MODE_OFF: Record<string, string> = {};
+const MODE_OFF: Record<string, string> = { CN_RECRUITMENT_INFO_MODE: 'off' };
 const MODE_ON: Record<string, string> = { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' };
+/** Nothing set: postings are shown (D5 default). */
+const MODE_DEFAULT: Record<string, string> = {};
 
 const job = (over: Record<string, unknown>) => ({
   companyLogoUrl: null,
@@ -225,6 +230,14 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=partner_deeplink: both the posting a
     await expect(on().bulk(U, { ids: ['e_gh', 'e_own'], patch: { status: 'offer' } })).resolves.toMatchObject({ updated: 2 });
   });
 
+  it('default (nothing set): the GoHire posting is returned too', async () => {
+    const byDefault = coreFor(MODE_DEFAULT);
+    const res = await byDefault.list(U, {});
+    expect(res.entries.map((e) => e.id).sort()).toEqual(['e_gh', 'e_own', 'e_typed']);
+    expect(thirdPartyPostings(res)).toHaveLength(1);
+    expect((await byDefault.getById(U, 'e_gh')).job).toMatchObject({ companyName: '示例科技有限公司', visibility: 'public' });
+  });
+
   it('another user\'s private import is never visible, whatever the mode', async () => {
     db.$rows('rATrackerEntry').push(entry('e_theirs', 'job_theirs'));
     expect((await on().list(U, {})).entries.map((e) => e.id)).not.toContain('e_theirs');
@@ -233,7 +246,7 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=partner_deeplink: both the posting a
 });
 
 describe('RoboApply is not affected by the GoApply mode', () => {
-  it('an intl posting stays in the tracker with the mode unset', async () => {
+  it('an intl posting stays in the tracker with the mode off', async () => {
     db = createFakePrisma({
       timestampFields: ['createdAt', 'updatedAt', 'dateSaved'],
       seed: { rAJob: [job({ id: 'job_us', title: 'Data Analyst', companyName: 'Acme', applyUrl: 'https://acme.example/1', market: 'intl', visibility: 'public', ownerUserId: null })], rATrackerEntry: [entry('e_us', 'job_us')], rATrackerEvent: [] },

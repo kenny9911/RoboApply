@@ -32,8 +32,10 @@ import {
   toCampusInfo,
   toPay,
   toRequirements,
+  toJobDetail,
   toSections,
   toSponsorship,
+  type JobRow,
 } from './view.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -161,9 +163,9 @@ function setup(opts: { jobs?: Record<string, unknown>[]; seed?: Record<string, R
     hiringContacts: async () => 'deeplinks_only',
     marketMeta: () => ({}),
     extensionAts: () => new Set(['greenhouse']),
-    // GoApply rows below model a recruitment-info mode that allows postings;
-    // the mode-off case has its own test ('GoApply recruitment-info mode off').
-    env: { CN_RECRUITMENT_INFO_MODE: 'licensed' },
+    // Nothing set: GoApply postings are shown by default (D5). The off switch
+    // has its own test ('GoApply with CN_RECRUITMENT_INFO_MODE=off').
+    env: {},
     ...opts.deps,
   };
   return { db, deps, flags, markChecklistStep, service: createJobDetailService(deps) };
@@ -260,7 +262,24 @@ describe('view rules (D3)', () => {
     // "Server, barista or bartender", "Finance manager / controller", "Chef or cook", "NLP and LLM engineer".
     expect(searchRole({ title: 'Barista', primaryTaxonomyId: 'server' })).toBe('Barista');
     expect(searchRole({ title: 'Barista (Part-time) - Downtown', primaryTaxonomyId: 'server' })).toBe('Barista');
-    expect(searchRole({ title: 'Sr. Manager, Strategic Finance - EMEA', primaryTaxonomyId: 'finance_leader' })).toBe('Manager');
+    // A bare one-word role keeps the field named after its comma (FIX-3 carry-over): "Manager" alone finds no one useful.
+    expect(searchRole({ title: 'Sr. Manager, Strategic Finance - EMEA', primaryTaxonomyId: 'finance_leader' })).toBe('Strategic Finance Manager');
+    expect(searchRole({ title: 'Director, Product Management (Remote)', primaryTaxonomyId: 'finance_leader' })).toBe('Product Management Director');
+    // A short field is a field: only a code written in capitals (EMEA, APAC, UK) is a region.
+    expect(searchRole({ title: 'Director, Legal', primaryTaxonomyId: 'finance_leader' })).toBe('Legal Director');
+    expect(searchRole({ title: 'Analyst, Risk', primaryTaxonomyId: 'finance_leader' })).toBe('Risk Analyst');
+    expect(searchRole({ title: 'Manager, Tax', primaryTaxonomyId: 'finance_leader' })).toBe('Tax Manager');
+    expect(searchRole({ title: 'Specialist, Audit - APAC', primaryTaxonomyId: 'finance_leader' })).toBe('Audit Specialist');
+    expect(searchRole({ title: 'Manager, APAC', primaryTaxonomyId: 'finance_leader' })).toBe('Manager');
+    expect(searchRole({ title: 'Manager, UK, Tax', primaryTaxonomyId: 'finance_leader' })).toBe('Tax Manager');
+    expect(searchRole({ title: 'Manager, Remote', primaryTaxonomyId: 'finance_leader' })).toBe('Manager');
+    expect(searchRole({ title: 'Engineer, II', primaryTaxonomyId: 'finance_leader' })).toBe('Engineer');
+    // What follows the comma is a place, an arrangement or a level: not a field, so nothing is added.
+    for (const title of ['Zymurgist, London', 'Zymurgist, Germany', 'Zymurgist, EMEA', 'Zymurgist, Remote', 'Zymurgist, Senior', 'Zymurgist, Part-time', 'Zymurgist, Night Shift 2']) {
+      expect(searchRole({ title }), title).toBe('Zymurgist');
+    }
+    // A role that already has its own words is not rearranged.
+    expect(searchRole({ title: 'Line Cook, Pastry', primaryTaxonomyId: 'chef' })).toBe('Line Cook');
     expect(searchRole({ title: 'Line Cook', primaryTaxonomyId: 'chef' })).toBe('Line Cook');
     expect(searchRole({ title: 'Senior LLM Engineer (Remote)', primaryTaxonomyId: 'nlp_engineer' })).toBe('LLM Engineer');
     // Unplaced, and the title matches a grouped role: the title's own words.
@@ -281,6 +300,96 @@ describe('view rules (D3)', () => {
 });
 
 // ── Service ───────────────────────────────────────────────────────────────
+
+// ── Source and apply contract on the job page (GOAPPLY_PARITY_PLAN §5; MARKET_STRATEGY M-7, JC-1) ──
+
+describe('job page: source line, apply target, salary (the same rule as the feed card)', () => {
+  const cnBoard = (over: Record<string, unknown> = {}) =>
+    job({
+      id: 'b1',
+      market: 'cn',
+      companyName: '示例汽车（中国）投资有限公司',
+      sourceBoard: 'smartrecruiters',
+      sourceName: '示例汽车 · SmartRecruiters',
+      originalSourceName: null,
+      applyUrl: 'https://jobs.smartrecruiters.com/ExampleAuto/123-apply',
+      sourceUrl: 'https://jobs.smartrecruiters.com/ExampleAuto/123',
+      atsType: 'smartrecruiters',
+      ...over,
+    });
+  const cnBank = (over: Record<string, unknown> = {}) =>
+    job({ id: 'g1', market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true, applyUrl: 'https://jobs.gohire.example/p/g1', sourceUrl: 'https://jobs.gohire.example/p/g1', ...over });
+
+  it('a board row on GoApply: the employer as the original publisher, its original link, a last-verified date, apply.target employer', async () => {
+    const s = setup({ brand: cn, jobs: [cnBoard()] });
+    const { job: view } = await s.service.get('u1', 'b1');
+    expect(view.source).toEqual({
+      name: '示例汽车 · SmartRecruiters',
+      kind: 'ats_public',
+      originalName: null,
+      original: '示例汽车（中国）投资有限公司',
+      url: 'https://jobs.smartrecruiters.com/ExampleAuto/123',
+      lastVerifiedAt: NOW.toISOString(),
+      via: 'ats',
+    });
+    expect(view.apply).toEqual({ url: 'https://jobs.smartrecruiters.com/ExampleAuto/123-apply', target: 'employer' });
+    expect(view.applyUrl).toBe(view.apply!.url);
+    expect(view.lastSeenAt).toBe(view.source.lastVerifiedAt);
+  });
+
+  it('a bank row: apply.target gohire and its GoHire page', async () => {
+    const s = setup({ brand: cn, jobs: [cnBank()] });
+    const { job: view } = await s.service.get('u1', 'g1');
+    expect(view.apply).toEqual({ url: 'https://jobs.gohire.example/p/g1', target: 'gohire' });
+    expect(view.source).toMatchObject({ name: 'GoHire', kind: 'bank', via: 'bank', lastVerifiedAt: NOW.toISOString() });
+  });
+
+  it("the user's own import: via import, no claim about where its link leads; no link → apply null (never invented)", () => {
+    const own = job({ market: 'cn', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', sourceName: null, applyUrl: 'https://www.zhipin.example/job/1' }) as unknown as JobRow;
+    expect(toJobDetail(own, NOW).apply).toEqual({ url: 'https://www.zhipin.example/job/1', target: null });
+    expect(toJobDetail(own, NOW).source).toMatchObject({ kind: 'user_import', via: 'import', original: null });
+    const pasted = toJobDetail({ ...own, applyUrl: '' }, NOW);
+    expect(pasted.apply).toBeNull();
+    expect(pasted.applyUrl).toBeNull();
+  });
+
+  it('RoboApply: an aggregator row carries no `via` and no claimed target; a board the page does not know is never called an employer board', () => {
+    const agg = toJobDetail(job() as unknown as JobRow, NOW);
+    expect(agg.source).toEqual({ name: 'Active Jobs DB', kind: 'provider', originalName: null, original: null, url: 'https://boards.greenhouse.io/acme/jobs/1', lastVerifiedAt: NOW.toISOString() });
+    expect(agg.apply).toEqual({ url: 'https://boards.greenhouse.io/acme/jobs/1', target: null });
+    // `kind` keeps the page's own reading for an unknown board; the contract facts do not claim a board.
+    const unknown = toJobDetail(job({ sourceBoard: 'manual' }) as unknown as JobRow, NOW);
+    expect(unknown.source.kind).toBe('ats_public');
+    expect(unknown.source).not.toHaveProperty('via');
+    expect(unknown.apply?.target).toBeNull();
+    // A LinkedIn link is never the original link.
+    expect(toJobDetail(job({ sourceUrl: 'https://www.linkedin.com/jobs/view/1', applyUrl: 'https://www.linkedin.com/jobs/view/1' }) as unknown as JobRow, NOW).source.url).toBeNull();
+  });
+
+  it('salary: null when the posting states no pay (薪资未披露), never 面议; the posting’s words with N薪 otherwise', () => {
+    const none = toJobDetail(cnBoard({ salaryDisclosed: false, salaryMin: null, salaryMax: null, salaryText: null }) as unknown as JobRow, NOW);
+    expect(none.salary).toBeNull();
+    expect(none.pay).toBeNull();
+    expect(toJobDetail(cnBoard({ salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: '面议' }) as unknown as JobRow, NOW).salary).toBeNull();
+    expect(toJobDetail(cnBoard({ salaryDisclosed: false, salaryMin: 10_000, salaryMax: 20_000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryText: '面议' }) as unknown as JobRow, NOW).salary).toBeNull();
+    const stated = toJobDetail(cnBoard({ salaryDisclosed: true, salaryMin: 18_000, salaryMax: 28_000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryMonths: 15, salaryText: '18-28K·15薪' }) as unknown as JobRow, NOW);
+    expect(stated.salary).toEqual({ text: '18-28K·15薪', min: 18_000, max: 28_000, currency: 'CNY', period: 'month', months: 15 });
+    // Stated pay the mainland notation has no line for (another currency, a weekly rate) keeps its figures; a stored 0 is no figure.
+    const cnUsd = toJobDetail(cnBoard({ salaryDisclosed: true, salaryMin: 8_000, salaryMax: 12_000, salaryCurrency: 'USD', salaryPeriod: 'month', salaryText: null }) as unknown as JobRow, NOW);
+    expect(cnUsd.pay).toMatchObject({ min: 8_000, max: 12_000, currency: 'USD' });
+    expect(cnUsd.salary).toEqual({ text: null, min: 8_000, max: 12_000, currency: 'USD', period: 'month', months: null });
+    const cnWeekly = toJobDetail(cnBoard({ salaryDisclosed: true, salaryMin: 2_000, salaryMax: 3_000, salaryCurrency: 'CNY', salaryPeriod: 'week', salaryText: null }) as unknown as JobRow, NOW);
+    expect(cnWeekly.salary).toMatchObject({ min: 2_000, max: 3_000, currency: 'CNY', period: 'week' });
+    expect(toJobDetail(cnBoard({ salaryDisclosed: true, salaryMin: 0, salaryMax: 0, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryText: null }) as unknown as JobRow, NOW).salary).toBeNull();
+    // RoboApply: agrees with `pay` / `payText`.
+    const usd = toJobDetail(job({ salaryDisclosed: true, salaryMin: 120_000, salaryMax: 150_000 }) as unknown as JobRow, NOW);
+    expect(usd.pay).toMatchObject({ min: 120_000, max: 150_000 });
+    expect(usd.salary).toEqual({ text: null, min: 120_000, max: 150_000, currency: 'USD', period: 'year', months: null });
+    expect(toJobDetail(job({ salaryDisclosed: false }) as unknown as JobRow, NOW).salary).toBeNull();
+    const words = toJobDetail(job({ salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: 'Up to $90,000 a year' }) as unknown as JobRow, NOW);
+    expect(words.salary).toMatchObject({ text: words.payText, min: null, max: null });
+  });
+});
 
 describe('GET /jobs/:id (service)', () => {
   it('answers the honest view: verbatim sections, quotes, sourced company, cached fit + explanation, checklist, People', async () => {
@@ -373,7 +482,7 @@ describe('GET /jobs/:id (service)', () => {
     const { EXTENSION_ATS_TYPES_BY_MARKET, extensionOffersFill } = await import('../../extension/contract.js');
     const deps = { extensionAts: () => new Set<string>([...EXTENSION_ATS_TYPES_BY_MARKET.intl, ...EXTENSION_ATS_TYPES_BY_MARKET.cn]), extensionFillsJob: () => extensionOffersFill };
     const supported = async (brand: typeof intl, over: Record<string, unknown>) => {
-      const s = setup({ brand, jobs: [job({ market: brand.market, ...over })], deps: brand === cn ? { ...deps, env: { CN_RECRUITMENT_INFO_MODE: 'licensed' } } : deps });
+      const s = setup({ brand, jobs: [job({ market: brand.market, ...over })], deps });
       const detail = (await s.service.get('u1', 'j1')).autofill.supported;
       const click = (await s.service.recordApplyClick('u1', 'j1')).extensionSupported;
       expect(click).toBe(detail);
@@ -387,13 +496,16 @@ describe('GET /jobs/:id (service)', () => {
     expect(await supported(intl, { atsType: 'successfactors', applyUrl: 'https://career5.sapsf.eu/career?company=acme' })).toBe(false);
     expect(await supported(cn, { atsType: 'feishu', applyUrl: 'https://jobs.bytedance.com/campus/position/1' })).toBe(false);
     expect(await supported(cn, { atsType: 'feishu', applyUrl: 'https://acme.jobs.feishu.cn/index/position/1' })).toBe(true);
-    expect(await supported(cn, { atsType: 'greenhouse', applyUrl: 'https://boards.greenhouse.io/acme/jobs/1' })).toBe(false);
+    // An international board on GoApply: the page says whatever the extension area's own rule says for that market
+    // (GoApply's portal list becomes a superset in the parity wave; this area only has to follow it).
+    const greenhouse = 'https://boards.greenhouse.io/acme/jobs/1';
+    expect(await supported(cn, { atsType: 'greenhouse', applyUrl: greenhouse })).toBe(extensionOffersFill('cn', 'greenhouse', greenhouse));
   });
 
-  it('GoApply recruitment-info mode off (R-14, R41-1b): a third-party posting is a 404 everywhere; the user’s own import still opens', async () => {
+  it('GoApply with CN_RECRUITMENT_INFO_MODE=off (R41-1b): a third-party posting is a 404 everywhere; the user’s own import still opens; with nothing set it opens (D5)', async () => {
     const gohire = job({ id: 'gh1', market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true });
     const own = job({ id: 'own1', market: 'cn', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' });
-    const s = setup({ brand: cn, jobs: [gohire, own], deps: { env: {} } });
+    const s = setup({ brand: cn, jobs: [gohire, own], deps: { env: { CN_RECRUITMENT_INFO_MODE: 'off' } } });
     await expect(s.service.get('u1', 'gh1')).rejects.toMatchObject({ code: 'not_found' });
     await expect(s.service.similar('u1', 'gh1')).rejects.toMatchObject({ code: 'not_found' });
     await expect(s.service.recordApplyClick('u1', 'gh1')).rejects.toMatchObject({ code: 'not_found' });
@@ -401,6 +513,10 @@ describe('GET /jobs/:id (service)', () => {
     await expect(s.service.get('u2', 'own1')).rejects.toMatchObject({ code: 'not_found' });
     const on = setup({ brand: cn, jobs: [gohire], deps: { env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } } });
     expect((await on.service.get('u1', 'gh1')).job.id).toBe('gh1');
+    // The default: nothing set means postings are shown.
+    const byDefault = setup({ brand: cn, jobs: [gohire, own], deps: { env: {} } });
+    expect((await byDefault.service.get('u1', 'gh1')).job.id).toBe('gh1');
+    expect((await byDefault.service.get('u1', 'own1')).job.id).toBe('own1');
   });
 
   it('GoApply campus job: the employer’s verified programme window and 届别, behind jobs.campusCalendar', async () => {
@@ -798,16 +914,50 @@ describe('save, share, similar, company news', () => {
     expect((await s.service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['j2']);
   });
 
-  it('company news is dark until the flag is on, RoboApply only, labelled as search results', async () => {
+  it('company news is dark until the flag is on, labelled as search results, and follows the flag only on both brands (D5)', async () => {
     const searchNews = vi.fn(async () => [{ title: 'Acme raises prices', url: 'https://news.example.com/a', publisher: 'news.example.com', publishedAt: null }]);
     const s = setup({ deps: { searchNews } });
     await expect(s.service.companyNews('u1', 'j1')).rejects.toMatchObject({ code: 'feature_disabled' });
     s.flags.add('companyNews');
     await expect(s.service.companyNews('u1', 'j1')).resolves.toMatchObject({ kind: 'search_results', items: [{ publisher: 'news.example.com' }] });
     expect(searchNews).toHaveBeenCalledWith(intl, 'Acme');
-    const go = setup({ brand: cn, jobs: [job({ market: 'cn' })], deps: { searchNews } });
-    go.flags.add('companyNews');
+    // GoApply: the same rule. Dark without the flag (FLAG_GOAPPLY_COMPANY_NEWS), news with it: no market term.
+    const go = setup({ brand: cn, jobs: [job({ market: 'cn', companyName: '示例科技' })], deps: { searchNews } });
     await expect(go.service.companyNews('u1', 'j1')).rejects.toMatchObject({ code: 'feature_disabled' });
+    go.flags.add('companyNews');
+    await expect(go.service.companyNews('u1', 'j1')).resolves.toMatchObject({ kind: 'search_results', items: [{ publisher: 'news.example.com' }] });
+    expect(searchNews).toHaveBeenLastCalledWith(cn, '示例科技');
+    // No search configured: dark on either brand, flag or not.
+    const noSearch = setup({ brand: cn, jobs: [job({ market: 'cn' })], deps: { searchNews: undefined } });
+    noSearch.flags.add('companyNews');
+    await expect(noSearch.service.companyNews('u1', 'j1')).rejects.toMatchObject({ code: 'feature_disabled' });
+    // The job scope is unchanged: with the recruitment-info mode off a third-party posting is still a 404 there.
+    const off = setup({ brand: cn, jobs: [job({ market: 'cn' })], deps: { searchNews, env: { CN_RECRUITMENT_INFO_MODE: 'off' } } });
+    off.flags.add('companyNews');
+    await expect(off.service.companyNews('u1', 'j1')).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('GoApply similar jobs: a public posting with no usable apply link is never listed; the rule does not touch RoboApply', async () => {
+    const cnJob = (over: Record<string, unknown> = {}) => job({ market: 'cn', locationCountry: 'CN', sourceBoard: 'smartrecruiters', sourceName: '示例 · SmartRecruiters', ...over });
+    const s = setup({
+      brand: cn,
+      jobs: [
+        cnJob(),
+        cnJob({ id: 'ok', applyUrl: 'https://careers.example.cn/jobs/2' }),
+        cnJob({ id: 'empty', applyUrl: '' }),
+        cnJob({ id: 'blank', applyUrl: '  ' }),
+        cnJob({ id: 'script', applyUrl: 'javascript:alert(1)' }),
+      ],
+    });
+    expect((await s.service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['ok']);
+    expect((await s.service.get('u1', 'j1')).similarIds).toEqual(['ok']);
+    // Every similar card carries its source facts and its own apply link.
+    const [card] = (await s.service.similar('u1', 'j1')).items;
+    expect(card!.apply).toEqual({ url: 'https://careers.example.cn/jobs/2', target: 'employer' });
+    expect(card!.source).toMatchObject({ kind: 'ats_public', via: 'ats', original: 'Acme', url: 'https://careers.example.cn/jobs/2', lastVerifiedAt: NOW.toISOString() });
+    // RoboApply keeps its own rule: nothing changes there.
+    const robo = setup({ jobs: [job(), job({ id: 'nolink', applyUrl: '' })] });
+    expect((await robo.service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['nolink']);
   });
 });
 

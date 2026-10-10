@@ -17,7 +17,11 @@ import {
   runFraudCheck,
 } from '../service.js';
 import { flagKey } from '../fraud/flags.js';
+import { FRAUD_DOMESTIC_PROVIDERS, resolveFraudModel } from '../fraud/llm.js';
 import { CN_MODEL_ENV, NOW, cnJob, fakeDeps, fakeLlm, fakeRepo } from './testkit.js';
+
+/** A deployment with only the shared model stack: no CN_ value anywhere (the D5 default). */
+const SHARED_MODEL_ENV = { LLM_MODEL: 'openrouter/openai/gpt-5.6-luna', OPENROUTER_API_KEY: 'k' };
 import type { MarketHookContext } from '../../../jobs/marketHooks.js';
 
 const ingest: MarketHookContext = { brand: 'goapply', market: 'cn', stage: 'ingest' };
@@ -32,6 +36,110 @@ function seeded1() {
   deps.repo.jobs.set('job_1', cnJob({ descriptionPlain: FEE, fraudFlags: [{ rule: 'upfront_fee', evidence: FEE, at: '2026-10-02T00:00:00.000Z', method: 'keywords' }] }));
   return deps;
 }
+
+// MARKET_STRATEGY §1.5, JC-7: recruiter phone numbers and WeChat ids are removed from an indexed
+// mainland posting before it is stored, and the mainland fraud rules run on every market cn row.
+describe('afterNormalize: mainland text rules on every source', () => {
+  /** A posting read from a public employer board, as the normalizer hands it to the hook. */
+  const boardJob = (text: string, over: Record<string, unknown> = {}) => ({
+    market: 'cn' as const,
+    provider: 'ats_public',
+    sourceBoard: 'smartrecruiters',
+    sourceName: '示例汽车 · SmartRecruiters',
+    title: '后端工程师',
+    companyName: '示例汽车（中国）投资有限公司',
+    description: text,
+    descriptionPlain: text,
+    notes: [] as string[],
+    ...over,
+  });
+
+  it('a phone number and a WeChat id in a board posting are removed before it is stored; the rest of the text is untouched', async () => {
+    const text = '岗位职责：负责后端服务开发。\n薪资 13000-18000元/月，13薪。\n有意者请联系王经理，电话：13800138000（微信同号），或加微信 hr_wang2026 沟通。';
+    const out = await cnAfterNormalize(boardJob(text), ingest, fakeDeps());
+    for (const column of [out.description, out.descriptionPlain] as string[]) {
+      expect(column).not.toMatch(/13800138000|hr_wang2026|微信同号/);
+      expect(column).toContain('岗位职责：负责后端服务开发。');
+      expect(column).toContain('薪资 13000-18000元/月，13薪。');
+      expect(column).toContain('有意者请联系王经理');
+    }
+    expect(out.notes).toEqual(['contact_info_removed']);
+    // The source name of a board row is the adapter's, not GoHire.
+    expect(out.sourceName).toBe('示例汽车 · SmartRecruiters');
+  });
+
+  it('markup is kept as it is: only the detail leaves an HTML description', async () => {
+    const html = '<p>职责：负责后端开发。</p><p>联系电话：010-12345678 转 801</p>';
+    const out = await cnAfterNormalize(boardJob(html, { descriptionPlain: '职责：负责后端开发。\n联系电话：010-12345678 转 801' }), ingest, fakeDeps());
+    expect(out.description).toBe('<p>职责：负责后端开发。</p><p></p>');
+    expect(out.descriptionPlain).toBe('职责：负责后端开发。');
+  });
+
+  it('a board posting in HTML with the label in one tag and the id outside it: neither stored column shows the id', async () => {
+    const html = '<p>职责：负责后端开发。</p><p><strong>微信：</strong>hr_zhang01</p><ul><li>加微信&nbsp;<b>hr_li2026</b></li><li>Tel:&nbsp;400-820-8820</li></ul>';
+    const out = await cnAfterNormalize(boardJob(html, { descriptionPlain: '职责：负责后端开发。\n微信： hr_zhang01\n• 加微信 hr_li2026\n• Tel: 400-820-8820' }), ingest, fakeDeps());
+    for (const column of [out.description, out.descriptionPlain] as string[]) {
+      expect(column).not.toMatch(/hr_zhang01|hr_li2026|400-820-8820/);
+      expect(column).toContain('职责：负责后端开发。');
+    }
+    // The markup is still markup.
+    expect(out.description).toBe('<p>职责：负责后端开发。</p><p><strong></strong></p><ul><li><b></b></li><li></li></ul>');
+    expect(out.notes).toEqual(['contact_info_removed']);
+  });
+
+  it('an English board posting that names WeChat as a channel, and one with a reference number, are stored as written', async () => {
+    const text = 'Own our social channels (WeChat: official accounts, mini programs; Douyin).\nRequisition ID: 0755-1234-5678\n岗位编号：010-2026-0001';
+    const html = `<p>${text.split('\n').join('</p><p>')}</p>`;
+    const out = await cnAfterNormalize(boardJob(html, { descriptionPlain: text }), ingest, fakeDeps());
+    expect(out.description).toBe(html);
+    expect(out.descriptionPlain).toBe(text);
+    expect(out.notes).toEqual([]);
+  });
+
+  it('a posting with no contact detail is stored byte for byte, with no note', async () => {
+    const text = '负责后端服务开发，熟悉微信小程序开发与微信 SDK。\n月薪 15000-25000 元，2027 届毕业生可投。';
+    const job = boardJob(text);
+    const out = await cnAfterNormalize(job, ingest, fakeDeps());
+    expect(out.description).toBe(text);
+    expect(out.descriptionPlain).toBe(text);
+    expect(out.notes).toEqual([]);
+  });
+
+  it('the same rule for a GoHire bank row; a user’s own import keeps its text as pasted (their private copy)', async () => {
+    const text = '销售代表。联系手机 139-1234-5678。';
+    const bank = await cnAfterNormalize({ market: 'cn', provider: 'bank_gohire', title: '销售代表', companyName: 'A公司', descriptionPlain: text }, ingest, fakeDeps());
+    expect(bank.descriptionPlain).toBe('销售代表。');
+    const own = await cnAfterNormalize({ market: 'cn', provider: 'user_import', visibility: 'private', title: '销售代表', companyName: 'A公司', descriptionPlain: text }, importCtx, fakeDeps());
+    expect(own.descriptionPlain).toBe(text);
+    // Another market is not this hook's concern.
+    const intl = { market: 'intl' as const, provider: 'ats_public', title: 'Sales', descriptionPlain: 'Call +86 139-1234-5678.' };
+    expect(await cnAfterNormalize(intl, { brand: 'roboapply', market: 'intl', stage: 'ingest' }, fakeDeps())).toBe(intl);
+  });
+
+  it('the mainland fraud rules and the posting tags run on a board row too, on the text that is stored', async () => {
+    const text = `面向2027届毕业生。${FEE}咨询电话：13800138000。`;
+    const out = await cnAfterNormalize(boardJob(text), ingest, fakeDeps());
+    expect(out.fraudFlags).toEqual([expect.objectContaining({ rule: 'upfront_fee', method: 'keywords', evidence: FEE })]);
+    expect(out.marketTags).toEqual([{ tag: 'class_year:2027', evidenceQuote: '面向2027届毕业生。', evidenceUrl: null }]);
+    // Every stored quote exists in the stored text.
+    for (const flag of out.fraudFlags as Array<{ evidence: string }>) expect(out.descriptionPlain as string).toContain(flag.evidence);
+    expect(out.descriptionPlain).not.toContain('13800138000');
+  });
+
+  it('quotes carry the posting’s own punctuation: they are cut from the text as written, not from its width-folded copy', async () => {
+    const written = '本岗位面向2027届毕业生（校招）。\n网申截止时间：2026年11月30日。';
+    const folded = written.normalize('NFKC');
+    expect(folded).not.toBe(written);
+    const out = await cnAfterNormalize(boardJob(written, { descriptionPlain: folded }), ingest, fakeDeps());
+    const quotes = (out.marketTags as Array<{ tag: string; evidenceQuote: string }>).map((t) => [t.tag, t.evidenceQuote]);
+    expect(quotes).toContainEqual(['apply_closes:2026-11-30', '网申截止时间：2026年11月30日。']);
+    expect(quotes).toContainEqual(['class_year:2027', '本岗位面向2027届毕业生（校招）。']);
+    for (const [, quote] of quotes) expect(written).toContain(quote);
+    // A row with no as-written text falls back to the plain copy.
+    const plainOnly = await cnAfterNormalize({ market: 'cn', provider: 'ats_public', title: 't', companyName: 'c', descriptionPlain: folded }, ingest, fakeDeps());
+    expect((plainOnly.marketTags as Array<{ tag: string }>).map((t) => t.tag)).toEqual(expect.arrayContaining(['apply_closes:2026-11-30', 'class_year:2027']));
+  });
+});
 
 describe('afterNormalize', () => {
   it('names GoHire, flags keyword fraud and reads 届别', async () => {
@@ -169,7 +277,7 @@ describe('afterEnrich', () => {
     expect((deps.repo.jobs.get('job_1')!.marketTags as Array<{ tag: string }>).map((t) => t.tag)).toEqual(['hukou', 'cn_hire:campus', 'apply_closes:2026-11-30']);
   });
 
-  it('queues the LLM check for gray wording with no flag, only when a CN model exists', async () => {
+  it('queues the LLM check for gray wording with no flag, only when a model is configured (a CN model, or the shared one: D5)', async () => {
     const gray = cnJob({ descriptionPlain: '宝妈兼职，时间自由，日结。' });
     const noModel = fakeDeps();
     await cnAfterEnrich(gray, enrich, noModel);
@@ -178,6 +286,14 @@ describe('afterEnrich', () => {
     await cnAfterEnrich(gray, enrich, withModel);
     expect(withModel.enqueued).toEqual(['job_1']);
     expect(withModel.enqueuedHashes[0]).toMatch(/^[0-9a-f]{40}$/);
+    // No CN_ value at all: the shared model runs the second opinion.
+    const shared = fakeDeps({ env: SHARED_MODEL_ENV });
+    await cnAfterEnrich(gray, enrich, shared);
+    expect(shared.enqueued).toEqual(['job_1']);
+    // The domestic-only wall refuses the shared model: nothing is queued.
+    const walled = fakeDeps({ env: { ...SHARED_MODEL_ENV, CN_LLM_DOMESTIC_ONLY: 'true' } });
+    await cnAfterEnrich(gray, enrich, walled);
+    expect(walled.enqueued).toEqual([]);
     // Plain postings never cost an LLM call.
     const plain = fakeDeps({ env: CN_MODEL_ENV });
     await cnAfterEnrich(cnJob(), enrich, plain);
@@ -235,7 +351,7 @@ describe('LLM check worker', () => {
     expect(options).toMatchObject({ model: 'deepseek/deepseek-chat', provider: 'deepseek', temperature: 0, carriesUserData: false });
   });
 
-  it('no CN model → no call; own import without AI consent → zero LLM calls', async () => {
+  it('no model configured anywhere → no call; own import without AI consent → zero LLM calls', async () => {
     const llm = fakeLlm();
     expect(await runFraudCheck('job_1', fakeDeps({ llm, repo: fakeRepo([lure]) }))).toEqual({ status: 'skipped', reason: 'unavailable' });
     const own = cnJob({ ...lure, visibility: 'private', ownerUserId: 'u1' });
@@ -244,11 +360,66 @@ describe('LLM check worker', () => {
     expect(llm.chatWithUsage).not.toHaveBeenCalled();
   });
 
-  it('a non-domestic model id is refused (R-13)', async () => {
+  it('the second opinion runs on the shared model when GoApply has no model of its own (D5)', async () => {
+    const llm = fakeLlm('{"flags":[{"rule":"telecom_lure","quote":"需先垫付任务金额"}]}');
+    const deps = fakeDeps({ env: SHARED_MODEL_ENV, llm, repo: fakeRepo([lure]) });
+    expect(await runFraudCheck('job_1', deps)).toMatchObject({ status: 'checked', flagged: 1 });
+    const options = llm.chatWithUsage.mock.calls[0]![1];
+    expect(options).toMatchObject({ model: SHARED_MODEL_ENV.LLM_MODEL, carriesUserData: false });
+    // Not a mainland prefix: no provider is forced, the model layer routes it as it does for RoboApply.
+    expect(options).not.toHaveProperty('provider');
+    // The flag is stored like any other.
+    expect(deps.repo.jobs.get('job_1')!.fraudFlags).toEqual([expect.objectContaining({ rule: 'telecom_lure', method: 'llm' })]);
+  });
+
+  it('a non-domestic model id is refused only under the domestic-only wall (CN_LLM_DOMESTIC_ONLY or CN_RESIDENCY_STRICT)', async () => {
+    for (const wall of [{ CN_LLM_DOMESTIC_ONLY: 'true' }, { CN_RESIDENCY_STRICT: 'true' }]) {
+      for (const model of [{ CN_LLM_MODEL: 'openrouter/openai/gpt-5' }, SHARED_MODEL_ENV, { LLM_MODEL: 'deepseek-chat' }]) {
+        const llm = fakeLlm();
+        const deps = fakeDeps({ env: { ...model, ...wall }, llm, repo: fakeRepo([lure]) });
+        expect(await runFraudCheck('job_1', deps), JSON.stringify({ ...model, ...wall })).toEqual({ status: 'skipped', reason: 'unavailable' });
+        expect(llm.chatWithUsage).not.toHaveBeenCalled();
+      }
+    }
+    // Under the wall a mainland model still runs.
     const llm = fakeLlm();
-    const deps = fakeDeps({ env: { CN_LLM_MODEL: 'openrouter/openai/gpt-5' }, llm, repo: fakeRepo([lure]) });
-    expect(await runFraudCheck('job_1', deps)).toEqual({ status: 'skipped', reason: 'unavailable' });
-    expect(llm.chatWithUsage).not.toHaveBeenCalled();
+    await runFraudCheck('job_1', fakeDeps({ env: { ...CN_MODEL_ENV, CN_LLM_DOMESTIC_ONLY: 'true' }, llm, repo: fakeRepo([lure]) }));
+    expect(llm.chatWithUsage.mock.calls[0]![1]).toMatchObject({ model: 'deepseek/deepseek-chat', provider: 'deepseek' });
+    // Without the wall the same non-domestic CN model is used as named.
+    const open = fakeLlm();
+    await runFraudCheck('job_1', fakeDeps({ env: { CN_LLM_MODEL: 'openrouter/openai/gpt-5' }, llm: open, repo: fakeRepo([lure]) }));
+    expect(open.chatWithUsage.mock.calls[0]![1]).toMatchObject({ model: 'openrouter/openai/gpt-5' });
+  });
+
+  it('model order: the fraud model, then the enrichment model, then the default; a CN_ value wins over the shared one, key by key', () => {
+    expect(resolveFraudModel({})).toEqual({ model: undefined, available: false });
+    expect(resolveFraudModel(SHARED_MODEL_ENV)).toEqual({ model: SHARED_MODEL_ENV.LLM_MODEL, available: true });
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_ENRICH_MODEL: 'openrouter/google/gemini-3.8-flash' }).model).toBe('openrouter/google/gemini-3.8-flash');
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_ENRICH_MODEL: 'x/enrich', LLM_FRAUD_MODEL: 'x/fraud' }).model).toBe('x/fraud');
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ model: 'deepseek/deepseek-chat', provider: 'deepseek', available: true });
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'x/fraud', CN_LLM_FRAUD_MODEL: 'kimi/moonshot-v1-8k' })).toEqual({ model: 'kimi/moonshot-v1-8k', provider: 'kimi', available: true });
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, CN_LLM_DOMESTIC_ONLY: 'true' })).toEqual({ model: undefined, available: false, refused: 'not_domestic_provider' });
+    expect(resolveFraudModel({ CN_LLM_DOMESTIC_ONLY: 'true' })).toEqual({ model: undefined, available: false });
+  });
+
+  it('GoApply with its own LLM stack never passes a shared model id to its own provider', () => {
+    // A CN provider and a shared task model: the shared id is not used; the call names no model (the model layer picks GoApply's default).
+    const own = { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k' };
+    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'openrouter/x/fraud', LLM_ENRICH_MODEL: 'openrouter/x/enrich' })).toEqual({ model: undefined, available: true });
+    // Its own names still apply, in the same order.
+    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ model: 'deepseek/deepseek-chat', provider: 'deepseek', available: true });
+    expect(resolveFraudModel({ ...own, CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_ENRICH_MODEL: 'kimi/moonshot-v1-8k', LLM_FRAUD_MODEL: 'openrouter/x/fraud' }).model).toBe('kimi/moonshot-v1-8k');
+  });
+
+  it('under the wall every mainland provider prefix is accepted, with its vendor and platform names', () => {
+    expect([...FRAUD_DOMESTIC_PROVIDERS].sort()).toEqual(['ark', 'dashscope', 'deepseek', 'doubao', 'glm', 'kimi', 'minimax', 'moonshot', 'qwen', 'zhipu']);
+    for (const provider of FRAUD_DOMESTIC_PROVIDERS) {
+      expect(resolveFraudModel({ CN_LLM_MODEL: `${provider}/some-model`, CN_LLM_DOMESTIC_ONLY: 'true' }), provider).toEqual({ model: `${provider}/some-model`, provider, available: true });
+    }
+    // A self-hosted gateway, a foreign gateway and a bare id are not mainland routes by their name.
+    for (const model of ['newapi/qwen-plus', 'openrouter/deepseek/deepseek-chat', 'deepseek-chat', 'deepseek/']) {
+      expect(resolveFraudModel({ CN_LLM_MODEL: model, CN_LLM_DOMESTIC_ONLY: 'true' }).available, model).toBe(false);
+    }
   });
 
   it('CN_LLM_FRAUD_MODEL wins when set', async () => {

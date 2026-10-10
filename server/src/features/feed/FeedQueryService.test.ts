@@ -600,3 +600,139 @@ describe('counts and the search seams', () => {
     expect(repo.sessions.size).toBe(0);
   });
 });
+
+// ── Source header, thin results and the mainland apply-link rule (GOAPPLY_PARITY_PLAN §3.9, §5) ──
+
+describe('GoApply: where postings come from, thin results, and no posting without an apply link', () => {
+  const cn = () => ctx({ market: 'cn', brandId: 'goapply' });
+  const cnRow = (id: string, over: Partial<Parameters<typeof feedRow>[0]> = {}) =>
+    feedRow({ id, market: 'cn', sourceBoard: 'smartrecruiters', sourceName: '示例 · SmartRecruiters', companyName: '示例公司', companyNameNormalized: '示例公司', postedAt: daysAgo(1), firstSeenAt: daysAgo(1), ...over });
+
+  beforeEach(() => {
+    personalized = false;
+  });
+
+  it('sources: employer boards are counted from the rows the query can reach; gohire only when a GoHire row is listed', async () => {
+    repo.rows.push(
+      cnRow('b1', { companyNameNormalized: 'bosch', sourceBoard: 'smartrecruiters' }),
+      cnRow('b2', { companyNameNormalized: 'bosch', sourceBoard: 'smartrecruiters' }),
+      cnRow('b3', { companyNameNormalized: 'riot', sourceBoard: 'greenhouse' }),
+      cnRow('b4', { companyNameNormalized: 'veeva', sourceBoard: 'lever' }),
+      // Not a board: the user's own import and another market's row never count.
+      cnRow('own', { visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', companyNameNormalized: 'mine' }),
+      feedRow({ id: 'intl1', sourceBoard: 'greenhouse', companyNameNormalized: 'acme' }),
+    );
+    const boardsOnly = await service().query(cn(), { sort: 'newest' });
+    expect(boardsOnly.sources).toEqual({ gohire: false, employerBoards: 3 });
+    expect(boardsOnly.items.map((i) => i.jobId).sort()).toEqual(['b1', 'b2', 'b3', 'b4', 'own']);
+
+    repo.rows.push(cnRow('g1', { sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true, companyNameNormalized: 'bank co' }));
+    const withBank = await service().query(cn(), { sort: 'newest' });
+    expect(withBank.sources).toEqual({ gohire: true, employerBoards: 3 });
+    // The header statement reads public rows of this market only, whoever asks.
+    const stmt = repo.sourceQueries.at(-1)!;
+    expect(stmt.text).toContain(`j."visibility" = 'public'`);
+    expect(stmt.text).not.toContain('"ownerUserId" =');
+    expect(stmt.values).toContain('cn');
+  });
+
+  it('sources is counted, never guessed: a failed count leaves the field off and the list still answers; RoboApply sends none', async () => {
+    repo.rows.push(cnRow('b1'));
+    repo.failSources = true;
+    const res = await service().query(cn(), { sort: 'newest' });
+    expect(res.items.map((i) => i.jobId)).toEqual(['b1']);
+    expect(res).not.toHaveProperty('sources');
+    repo.failSources = false;
+
+    personalized = true;
+    seed(3);
+    const intl = await service().query(ctx(), { sort: 'newest' });
+    expect(intl).not.toHaveProperty('sources');
+    expect(repo.sourceQueries.filter((q) => q.values.includes('intl'))).toHaveLength(0);
+    expect(intl.thin).toBe(true);
+  });
+
+  it('thin: true under the thin-result threshold (60), false at or above it, on every page', async () => {
+    for (let i = 0; i < 59; i++) repo.rows.push(cnRow(`t${String(i).padStart(2, '0')}`, { postedAt: new Date(daysAgo(1).getTime() - i * 60_000), companyNameNormalized: `co${i}` }));
+    const thin = await service().query(cn(), { sort: 'newest' });
+    expect(thin.thin).toBe(true);
+    expect((await service().query(cn(), { sort: 'newest', cursor: thin.cursor! })).thin).toBe(true);
+    repo.rows.push(cnRow('t59', { postedAt: daysAgo(2), companyNameNormalized: 'co59' }));
+    const enough = await service().query(cn(), { sort: 'newest' });
+    expect(enough.thin).toBe(false);
+    // An empty list is thin too (the web shows the search links to other sites).
+    repo.rows = [];
+    const empty = await service().query(cn(), { sort: 'newest' });
+    expect(empty).toMatchObject({ items: [], thin: true, sources: { gohire: false, employerBoards: 0 } });
+  });
+
+  it('thin is about the whole list: 30 recent postings and 100 older ones is not a thin list, on any page', async () => {
+    // Employer-board postings stay open for months: the first window (45 days) holds 30, the list (120 days) 130.
+    for (let i = 0; i < 30; i++) repo.rows.push(cnRow(`n${String(i).padStart(3, '0')}`, { postedAt: new Date(daysAgo(2).getTime() - i * 3_600_000), companyNameNormalized: `new${i}` }));
+    for (let i = 0; i < 100; i++) repo.rows.push(cnRow(`o${String(i).padStart(3, '0')}`, { postedAt: new Date(daysAgo(60).getTime() - i * 8 * 3_600_000), companyNameNormalized: `old${i}` }));
+    const first = await service().query(cn(), { sort: 'newest' });
+    expect(first.items).toHaveLength(20);
+    expect(first.cursor).not.toBeNull();
+    expect(first.thin).toBe(false);
+    // Paging on reaches the older postings: the list was never thin.
+    let page = first;
+    const seen = new Set(first.items.map((i) => i.jobId));
+    while (page.cursor) {
+      page = await service().query(cn(), { sort: 'newest', cursor: page.cursor });
+      expect(page.thin).toBe(false);
+      for (const item of page.items) seen.add(item.jobId);
+    }
+    expect(seen.size).toBe(130);
+  });
+
+  it('thin is known on the first page: 30 postings and nothing older is thin although a second page follows', async () => {
+    for (let i = 0; i < 30; i++) repo.rows.push(cnRow(`n${String(i).padStart(3, '0')}`, { postedAt: new Date(daysAgo(2).getTime() - i * 3_600_000), companyNameNormalized: `new${i}` }));
+    const first = await service().query(cn(), { sort: 'newest' });
+    expect(first.cursor).not.toBeNull();
+    expect(first.thin).toBe(true);
+    // Without the count nothing says the list is short until it ends: not thin while more may come, thin at the end.
+    repo.failSources = true;
+    const blind = await service().query(cn(), { sort: 'newest' });
+    expect(blind.thin).toBe(false);
+    const last = await service().query(cn(), { sort: 'newest', cursor: blind.cursor! });
+    expect(last).toMatchObject({ endOfFeed: true, thin: true });
+    repo.failSources = false;
+  });
+
+  it('a public mainland row with no usable apply link reaches no list, count seam, sample, alert or preview; the own import does', async () => {
+    repo.rows.push(
+      cnRow('ok'),
+      cnRow('empty', { applyUrl: '' }),
+      cnRow('blank', { applyUrl: '   ' }),
+      cnRow('nolink', { applyUrl: null }),
+      cnRow('script', { applyUrl: 'javascript:alert(1)' }),
+      cnRow('own', { visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', applyUrl: '' }),
+    );
+    const findById = async () => ({ ...profile(), userId: 'u1', brand: 'goapply' as const });
+    const svc = service({ search: { getActive: async () => profile(), get: async () => profile(), findById } as unknown as FeedServiceDeps['search'] });
+    const listed = await svc.query(cn(), { sort: 'newest' });
+    expect(listed.items.map((i) => i.jobId).sort()).toEqual(['ok', 'own']);
+    // No listed public mainland item is without its apply link.
+    for (const item of listed.items.filter((i) => i.source.kind !== 'user_import')) expect(item.apply?.url).toMatch(/^https?:/);
+    expect(await svc.sampleForFilters(cn(), {}, { limit: 400 })).toEqual(['ok']);
+    const preview = await svc.preview(cn(), { limit: 10, sort: 'newest' });
+    expect(preview.map((i) => i.jobId).sort()).toEqual(['ok', 'own']);
+    // The preview seam (the Assistant's tools, the job-search `index` provider) carries the same contract fields.
+    expect(preview.find((i) => i.jobId === 'ok')).toMatchObject({ apply: { url: 'https://jobs.example.com/apply/ok', target: 'employer' }, source: { via: 'ats', original: '示例公司' } });
+    expect((await svc.alertCandidates({ market: 'cn', now: NOW }, 'sp1', { since: daysAgo(30), limit: 100 })).ids).toEqual(['ok']);
+    // Every statement over the mainland index carries the guard (count statements included).
+    await svc.countForFilters(cn(), {});
+    const cnStatements = repo.queries.filter((q) => q.values.includes('cn') && /FROM "RAJob" j LEFT JOIN/.test(q.text));
+    expect(cnStatements.length).toBeGreaterThan(4);
+    for (const q of cnStatements) expect(q.text).toContain(`(j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://')`);
+  });
+
+  it('RoboApply statements are unchanged by the mainland rule', async () => {
+    personalized = true;
+    seed(2);
+    repo.rows[0]!.applyUrl = '';
+    const res = await service().query(ctx(), { sort: 'newest' });
+    expect(res.items).toHaveLength(2);
+    expect(repo.queries.every((q) => !q.text.includes('"applyUrl" ~*'))).toBe(true);
+  });
+});

@@ -6,7 +6,8 @@
 //   - `RAResumeAIService` (job context for a rewrite),
 //   - `RAInsightService` (titles of the tracked jobs named in the weekly summary).
 // Each applies the same scope as the job-detail area (WP-34 `loadJob`) and the
-// GoApply recruitment-info mode (R-14, WP-41):
+// GoApply recruitment-info mode (WP-41; postings are readable by default,
+// D5, and `off` is the kill switch):
 //   - the request brand's market only;
 //   - public rows, or the viewer's own private import (never another user's);
 //   - never a seed demo row;

@@ -103,7 +103,7 @@ export interface MatchServiceDeps {
   scorer?: ScorerLike;
   /** The model the scorer will use, or null when none is configured for this brand. */
   resolveModel?: () => string | null;
-  /** Brand LLM-route policy (R-13) for the resolved model; false → no model call ("Quick estimate"). */
+  /** Brand LLM-route policy (match/scorerRoute.ts) for the resolved model; false → no model call ("Quick estimate"). */
   routeAllowed?: (brand: ProductBrand, model: string) => boolean | Promise<boolean>;
   aiAllowed?: (userId: string) => Promise<boolean>;
   consume?: (input: { key: string; windows: readonly RateWindow[]; cost?: number }) => Promise<RateLimitResult>;
@@ -227,7 +227,8 @@ async function defaultCostLog(input: CostLogInput): Promise<void> {
 /**
  * A job the user may see on this brand: same market; public or their own
  * import. On GoApply a third-party posting also needs the recruitment-info
- * mode to allow postings (R-14): with CN_RECRUITMENT_INFO_MODE=off only the
+ * mode to allow postings (it does by default, D5): with
+ * CN_RECRUITMENT_INFO_MODE=off only the
  * user's own imports can be scored, analysed or keyword-checked. The same
  * answer as cn/jobs `cnPostingVisible` (a test keeps the two equal), read from
  * the platform's mode resolver so MATCH does not load the GoApply jobs area.

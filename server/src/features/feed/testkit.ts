@@ -10,6 +10,7 @@
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { AffinityState } from './affinity.js';
 import type { ActionJob, CardExtrasRow, FeedRepo, FeedSessionRecord, InteractionWrite } from './repo.js';
+import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
 import type { FeedJobRow } from './types.js';
 
 export function feedRow(over: Partial<FeedJobRow> & { id: string }): FeedJobRow {
@@ -63,6 +64,8 @@ export function feedRow(over: Partial<FeedJobRow> & { id: string }): FeedJobRow 
     sourceBoard: 'activejobs',
     sourceName: 'Active Jobs DB',
     originalSourceName: null,
+    applyUrl: `https://jobs.example.com/apply/${over.id}`,
+    sourceUrl: `https://jobs.example.com/posting/${over.id}`,
     atsType: 'greenhouse',
     isAgency: null,
     fromRecruiterBank: false,
@@ -114,6 +117,10 @@ export class FakeFeedRepo implements FeedRepo {
   tracker = new Map<string, string>();
   skills: string[] = [];
   goal: string | null = null;
+  /** `sourcesSql` statements seen (the header facts are computed from `rows` with the statement's market and visibility scope). */
+  sourceQueries: SqlLike[] = [];
+  /** Make the header-facts statement fail (the list must still answer). */
+  failSources = false;
   /** Count statements: return this (or a function of the statement). */
   countResponder: (sql: SqlLike) => number = () => 0;
   categoryCounts: Array<{ taxonomyId: string; count: number }> = [];
@@ -151,6 +158,17 @@ export class FakeFeedRepo implements FeedRepo {
       .map((id) => ({ id, sourceUrl: null, applyUrl: null, locations: null, fraudFlags: null, descriptionPlain: null, ...(this.cardExtras.get(id) ?? {}) }));
   }
 
+  async querySources(sql: Prisma.Sql) {
+    const s = { text: sql.text, values: sql.values };
+    this.queries.push(s);
+    this.sourceQueries.push(s);
+    if (this.failSources) throw new Error('sources unavailable');
+    // Only the scope is honoured here (market, public rows, the apply-link guard, the age floor); the filter SQL is snapshot-tested.
+    const rows = this.select({ text: s.text.replace(/LIMIT \$\d+\s*$/, ''), values: s.values }).filter((r) => r.visibility === 'public');
+    const boards = new Set(rows.filter((r) => !r.fromRecruiterBank && EMPLOYER_BOARD_SOURCES.includes(r.sourceBoard)).map((r) => `${r.sourceBoard}:${r.companyNameNormalized}`));
+    return { gohire: rows.some((r) => r.fromRecruiterBank && r.sourceBoard === GOHIRE_SOURCE_BOARD), employerBoards: boards.size, listed: rows.length };
+  }
+
   async publicPageIds(ids: string[]) {
     return new Set(ids.filter((id) => !this.notPublicPage.has(id)));
   }
@@ -165,6 +183,8 @@ export class FakeFeedRepo implements FeedRepo {
     // `(visibility = 'public' OR ownerUserId = $n)` shows the owner's imports; a bare `visibility = 'public'` does not.
     const owner = (valueAfter(s, /j\."ownerUserId" = \$(\d+)/) as string | undefined) ?? null;
     let rows = this.rows.filter(this.visible(user, market ?? null, owner));
+    // The mainland apply-link guard of `scopePredicates`: a public row is listed only with an http(s) apply link.
+    if (/j\."visibility" <> 'public' OR j\."applyUrl" ~\* /.test(s.text)) rows = rows.filter((r) => r.visibility !== 'public' || /^\s*https?:\/\//i.test(r.applyUrl ?? ''));
     if (/j\."publicDisplay" = true/.test(s.text)) rows = rows.filter((r) => !this.notPublicDisplay.has(r.id));
     const notExpiredAt = valueAfter(s, /j\."expiresAt" IS NULL OR j\."expiresAt" > \$(\d+)/) as Date | undefined;
     if (notExpiredAt) rows = rows.filter((r) => !r.expiresAt || r.expiresAt > notExpiredAt);

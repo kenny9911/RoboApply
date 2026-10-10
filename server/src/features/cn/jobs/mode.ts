@@ -1,12 +1,17 @@
-// server/src/features/cn/jobs/mode.ts — GoApply recruitment-info mode (R-14, CN L-4, CN-L-04).
+// server/src/features/cn/jobs/mode.ts — GoApply recruitment-info mode (D5, GOAPPLY_PARITY_PLAN §3.2; CN L-4).
 //
-// `CN_RECRUITMENT_INFO_MODE = off | partner_deeplink | licensed` (default off).
+// `CN_RECRUITMENT_INFO_MODE = off | partner_deeplink | licensed`. The feed is
+// ON by default: unset (and any unknown value) resolves to `licensed`; only
+// the literal `off` closes it (the operator's kill switch). This supersedes
+// TASK_PLAN R-14, whose default was `off`.
 // The capability keys `jobs.feed`, `jobs.recommendations` and `jobs.alerts`
 // already follow the mode in platform/flags.ts (one resolver, R-04); this
 // module adds what the job readers need on top of the flags:
 //
 //   - `cnJobCapabilities(env)`   the mode, the three capabilities, how apply
-//                                opens and the GoHire licence line (env-set only);
+//                                opens and the GoHire licence line (env-set only:
+//                                no licence line unless CN_HR_LICENCE_HOLDER and
+//                                CN_HR_LICENCE_NUMBER are both set, D3);
 //   - `isThirdPartyPosting(job)` any posting that is not the user's own import;
 //   - `cnPostingVisible(job, viewerId, env)` / `filterCnPostings(...)` /
 //     `assertCnPostingVisible(...)` per-row checks for readers that are not
@@ -15,8 +20,9 @@
 //     queries over GoApply jobs;
 //   - `requireCnRecruitmentInfo(env)` middleware: GoApply + mode off → 404
 //     feature_disabled (RoboApply passes through).
-// In mode `off` GoApply is a seeker toolkit: the user's own imported jobs,
-// resume, tracker, practice. No GoHire posting, ever, reaches a GoApply user.
+// With the mode set to `off` GoApply is a seeker toolkit: the user's own
+// imported jobs, resume, tracker, practice. No third-party posting reaches a
+// GoApply user while the switch is off.
 
 import type { RequestHandler } from 'express';
 import { getCurrentBrandOrDefault, type EnvSource, type ProductBrand } from '../../../platform/brand/index.js';
@@ -25,14 +31,14 @@ import { HttpError, fail } from '../../../platform/http.js';
 
 export type { CnRecruitmentInfoMode };
 
-/** The mode from env (default `off`). */
+/** The mode from env (default `licensed`; `off` only for the literal `off`). */
 export function cnRecruitmentMode(env: EnvSource = process.env): CnRecruitmentInfoMode {
   return cnRecruitmentInfoMode(env);
 }
 
 export interface CnJobCapabilities {
   mode: CnRecruitmentInfoMode;
-  /** Third-party postings (GoHire bank, partner feeds) may be shown, recommended and alerted. */
+  /** Third-party postings (employer boards, GoHire bank, partner feeds) may be shown, recommended and alerted. */
   postings: boolean;
   feed: boolean;
   recommendations: boolean;
@@ -48,7 +54,7 @@ function envValue(env: EnvSource, key: string): string | null {
   return typeof v === 'string' && v.trim() ? v.trim() : null;
 }
 
-/** What the mode allows (R-14). */
+/** What the mode allows. On by default (D5); everything is false only with the mode set to `off`. */
 export function cnJobCapabilities(env: EnvSource = process.env): CnJobCapabilities {
   const mode = cnRecruitmentMode(env);
   const on = mode !== 'off';

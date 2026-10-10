@@ -6,13 +6,18 @@
 // `job_import` (Idempotency-Key) spent only when a job is saved.
 //
 // Flow (the work runs in the request, ≤60 s):
-//   1. POST { url }     → the page is read through Firecrawl (never by our
-//                         server: no SSRF), the job fields are pulled out of
+//   1. POST { url }     → the page is read through Firecrawl (not by our
+//                         server), the job fields are pulled out of
 //                         the page's structured job data (schema.org
 //                         JobPosting) or its title/text, and come back as a
 //                         DRAFT (`needs_fields`). Nothing is stored and no
 //                         credit is spent. Hosts on IMPORT_FETCH_DENYLIST are
 //                         never fetched: `needs_text` ("Paste the job text").
+//                         On a mainland deployment, when the provider cannot
+//                         be used or reached, the server reads the one page
+//                         itself under the SSRF rules of directFetch.ts
+//                         (public addresses only, pinned connection, every
+//                         redirect re-checked) before asking for a paste.
 //   2. POST { manual }  → the user's confirmed (or typed) fields become a
 //                         private RAJob (`visibility='private'`,
 //                         `sourceBoard='user_import'`), or the matching public
@@ -22,6 +27,13 @@
 // verified by us). Imported jobs never appear in counts or public pages.
 
 import { z } from 'zod';
+
+// The linear HTML reader (html.ts: a pure module with no import). Re-exported
+// here so another area that reads posting markup (cn/jobs/text.ts; the shared
+// normalizer, if it takes `tagsOnly`) uses the same reader through the
+// contract instead of a pattern over the document.
+export { scanHtml, tagsOnly } from './html.js';
+export type { HtmlVisitor, ScanOptions } from './html.js';
 
 /**
  * Default IMPORT_FETCH_DENYLIST (env adds more). Boards whose terms forbid
@@ -89,7 +101,7 @@ export type ImportStatus = (typeof IMPORT_STATUSES)[number];
 export const IMPORT_REASONS = [
   /** The site does not allow copying its posts (IMPORT_FETCH_DENYLIST). */
   'blocked_site',
-  /** Reading links is not available here (no Firecrawl key, or GoApply on the mainland stack). */
+  /** The link could not be read here (no fetch provider, or on a mainland deployment the page could not be read by the server either): paste the text. */
   'fetch_unavailable',
   /** The page could not be opened. */
   'fetch_failed',

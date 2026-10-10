@@ -1,11 +1,15 @@
 // @vitest-environment node
-// WP-41 acceptance (R-14, CN-L-04): with CN_RECRUITMENT_INFO_MODE=off no
-// GoApply route returns third-party postings. Route tests across the feed,
+// WP-41 acceptance (CN-L-04), restated for D5 (GOAPPLY_PARITY_PLAN §3.2): the
+// GoApply feed is ON by default, and `CN_RECRUITMENT_INFO_MODE=off` is the
+// operator's kill switch. Every "off" case below sets the switch explicitly
+// (MODE_OFF); MODE_DEFAULT (nothing set) is asserted to show postings. With
+// the switch off no GoApply route returns third-party postings. Route tests across the feed,
 // job and alert routers as mounted by features/index.ts (FEATURE_MOUNTS),
 // with injected auth and no database.
 //
 //   - POSTING_ONLY (feed, public feed, visitor alerts): every route answers
-//     404 feature_disabled on GoApply in mode off (and not in partner mode);
+//     404 feature_disabled on GoApply in mode off (and not with nothing set,
+//     nor in partner mode);
 //   - SCANNED (job detail, SEO job pages, this area, and since the INT wave:
 //     Ready to apply, the extension, People, MATCH and saved searches): every
 //     implemented route is called and its 2xx body scanned; each reader must
@@ -25,8 +29,9 @@
 //     file only checks that those test files are still there;
 //   - the two legacy routers outside FEATURE_MOUNTS that return postings (INT
 //     gate): the job-search API (`/api/v1/job-search`, `/api/v1/roboapply/v2/
-//     job-search`) is closed on GoApply in every mode, checked here with the
-//     real brand middleware; `POST /v2/discover/run` is covered by
+//     job-search`) is closed on GoApply while the mode is off, checked here
+//     with the real brand middleware (what it answers with postings allowed is
+//     the job-search area's own test, PAR-8); `POST /v2/discover/run` is covered by
 //     roboapply/v2/routes/legacyAiGates.test.ts (COVERED_ELSEWHERE).
 
 import { readFileSync } from 'node:fs';
@@ -88,13 +93,6 @@ const COVERED_ELSEWHERE: Record<string, string> = {
   // Legacy cross-bank search (not a feature mount): GoApply + mode off → 404 before any bank read or model call.
   'v2.discover': '../roboapply/v2/routes/legacyAiGates.test.ts',
 };
-/**
- * GoApply AI-dependent routers (`agent`) answer 503 without a domestic model,
- * so the scan would see no 2xx body. This is a model CONFIGURATION for the
- * capability check only; nothing here calls a model.
- */
-const CN_AI_ENV = { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'test-key', CN_LLM_MODEL: 'deepseek/deepseek-chat' };
-
 const passThrough: RequestHandler = (_req, _res, next) => next();
 const mountOf = (id: string): FeatureMount => {
   const m = FEATURE_MOUNTS.find((x) => x.id === id);
@@ -239,7 +237,8 @@ function agentRouter(env: Record<string, string>): Router {
     feedPreview: async () => [agentFeedItem('job_gh', 'good')],
     flag: async () => true,
   });
-  return createAgentRouter(baseDeps({ ...CN_AI_ENV, ...env }), { service });
+  // D5: GoApply's AI-dependent routers are on with no CN model (the shared stack), so no model env is needed here.
+  return createAgentRouter(baseDeps(env), { service });
 }
 
 /** Extension (WP-55a): the real ExtensionService; every seam it does not need here fails loudly. */
@@ -413,19 +412,24 @@ async function callAll(h: RouteHarness, mount: FeatureMount): Promise<Array<{ ro
   return out;
 }
 
-const MODE_OFF = {};
+/** The operator's kill switch, set explicitly (D5: unset no longer means off). */
+const MODE_OFF = { CN_RECRUITMENT_INFO_MODE: 'off' };
 const MODE_ON = { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' };
+/** Nothing set: the feed is on (`licensed`). */
+const MODE_DEFAULT: Record<string, string> = {};
 
 let off: RouteHarness;
 let on: RouteHarness;
+let byDefault: RouteHarness;
 beforeAll(async () => {
   setFlagOverrideLoader(async () => []);
   off = await harnessFor(MODE_OFF, [...POSTING_ONLY, ...SCANNED]);
   on = await harnessFor(MODE_ON, POSTING_ONLY);
+  byDefault = await harnessFor(MODE_DEFAULT, [...POSTING_ONLY, 'jobs.detail']);
 });
 afterAll(async () => {
   setFlagOverrideLoader(null);
-  await Promise.all([off?.close(), on?.close()]);
+  await Promise.all([off?.close(), on?.close(), byDefault?.close()]);
 });
 
 describe('GoApply, CN_RECRUITMENT_INFO_MODE=off', () => {
@@ -440,6 +444,18 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=off', () => {
 
   it.each(POSTING_ONLY)('%s: the same routes are not feature_disabled once the mode allows postings', async (id) => {
     for (const { route, res } of await callAll(on, mountOf(id))) expect(res.body?.code, route).not.toBe('feature_disabled');
+  });
+
+  it.each(POSTING_ONLY)('%s: with nothing set the routes are open too (D5: the feed is on by default)', async (id) => {
+    const results = await callAll(byDefault, mountOf(id));
+    expect(results.length).toBeGreaterThan(0);
+    for (const { route, res } of results) expect(res.body?.code, route).not.toBe('feature_disabled');
+  });
+
+  it('jobs.detail: with nothing set a GoHire posting opens (D5 default)', async () => {
+    const res = await byDefault.request<unknown>('GET', `${mountOf('jobs.detail').path}/job_gh`, { host: GA });
+    expect(res.status).toBe(200);
+    expect(thirdPartyPostings(res.body).length).toBeGreaterThan(0);
   });
 
   for (const id of SCANNED) {
@@ -612,11 +628,12 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=off', () => {
 
 // ── The legacy job-search API (app.ts mounts; not in FEATURE_MOUNTS) ────────
 //
-// A RoboApply product that returns third-party postings from the RapidAPI
-// providers and the hiring index and runs a planner model. On GoApply both
-// routers are closed in EVERY mode (the recruitment-info mode does not open
-// them), before the key or session lookup. The fakes below would return a
-// posting, so "closed" is the gate's doing; RoboApply is the control.
+// It returns third-party postings and runs a planner model. On GoApply both
+// routers answer 404 feature_disabled while the recruitment-info mode is off,
+// and nothing is searched or planned. (D5 opens the API on GoApply when the
+// feed is on, over GoApply's own index; that case belongs to the job-search
+// area's tests, PAR-8.) The fakes below would return a posting, so "closed"
+// is the gate's doing; RoboApply is the control.
 
 const JOB_SEARCH_MOUNTS = { api: '/api/v1/job-search', website: '/api/v1/roboapply/v2/job-search' } as const;
 
@@ -640,11 +657,11 @@ function jobSearchHarness(env: Record<string, string>) {
   return startRouteHarness({ env, mounts: [[JOB_SEARCH_MOUNTS.api, routers.api], [JOB_SEARCH_MOUNTS.website, routers.website]] }).then((h) => ({ h, routes, calls }));
 }
 
-describe('legacy job-search API on GoApply', () => {
+describe('job-search API on GoApply', () => {
   const BODY: Record<string, unknown> = { '/search': { query: '产品经理', country: 'cn' }, '/agent/search': { request: '找上海的产品经理职位' }, '/keys': { name: 'App' } };
 
-  it.each([['mode off', MODE_OFF], ['postings allowed', MODE_ON]])('%s: every route of both routers answers 404 feature_disabled; nothing is looked up, searched or planned', async (_name, env) => {
-    const { h, routes, calls } = await jobSearchHarness(env);
+  it('mode off: every route of both routers answers 404 feature_disabled; nothing is searched or planned', async () => {
+    const { h, routes, calls } = await jobSearchHarness(MODE_OFF);
     try {
       let called = 0;
       for (const side of ['api', 'website'] as const) {
@@ -658,7 +675,7 @@ describe('legacy job-search API on GoApply', () => {
         }
       }
       expect(called).toBeGreaterThanOrEqual(8);
-      expect(calls).toEqual({ search: 0, agent: 0, keys: 0, auth: 0 });
+      expect(calls).toMatchObject({ search: 0, agent: 0 });
     } finally {
       await h.close();
     }

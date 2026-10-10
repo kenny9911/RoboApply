@@ -34,6 +34,9 @@ export function cnJob(over: Partial<CnFraudJob> = {}): CnFraudJob {
     archivedAt: null,
     createdAt: new Date('2026-10-01T00:00:00.000Z'),
     ...over,
+    // The two text columns hold the same posting (as written, and its folded copy): a fixture that
+    // sets only the plain one means that text for both, as every writer stores it.
+    ...(over.descriptionPlain !== undefined && over.description === undefined ? { description: over.descriptionPlain } : {}),
   };
 }
 

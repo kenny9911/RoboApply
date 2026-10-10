@@ -23,6 +23,7 @@ import {
   roleTaxonomyIds,
   rowsByIdSql,
   scopePredicates,
+  sourcesSql,
 } from './sql.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -180,6 +181,64 @@ describe('scope', () => {
     expect(bare).not.toContain('fromRecruiterBank');
     // A signed-in feed is unchanged: neither rule.
     expect(scopePredicates({ market: 'intl', userId: 'u1', now: NOW }).map((s) => show(s)!.text).join(' ')).not.toMatch(/expiresAt|fromRecruiterBank/);
+  });
+});
+
+describe('mainland apply-link rule (a public posting with no usable apply URL is never listed)', () => {
+  const GUARD = `(j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://')`;
+  const texts = (parts: Prisma.Sql[]) => parts.map((s) => show(s)!.text);
+
+  it('every market cn scope carries it: signed-in list, counts, the visitor list', () => {
+    expect(texts(scopePredicates({ market: 'cn', userId: 'u1', now: NOW }))).toContain(GUARD);
+    expect(texts(scopePredicates({ market: 'cn', userId: 'u1', now: NOW, publicOnly: true }))).toContain(GUARD);
+    expect(texts(scopePredicates({ market: 'cn', userId: null, now: NOW, publicOnly: true, publicDisplayOnly: true, ignoreHidden: true }))).toContain(GUARD);
+  });
+
+  it('it never hides the user\'s own import (private rows pass), and RoboApply statements do not carry it', () => {
+    // The predicate is an OR on visibility: a private row is not tested for a link.
+    expect(GUARD.startsWith(`(j."visibility" <> 'public' OR `)).toBe(true);
+    expect(texts(scopePredicates({ market: 'intl', userId: 'u1', now: NOW })).join(' ')).not.toContain('applyUrl');
+    expect(texts(scopePredicates({ market: 'intl', userId: null, now: NOW, publicOnly: true })).join(' ')).not.toContain('applyUrl');
+  });
+
+  it('the list, the id seams (samples, alert candidates), later pages and the counts all go through that scope', () => {
+    const scope = { market: 'cn' as const, userId: 'u1', now: NOW };
+    for (const sql of [
+      retrievalSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }),
+      jobIdsSql({ scope: { ...scope, publicOnly: true }, filters: {}, fields: FILTER_FIELDS, from: null, orderBy: 'first_seen', limit: 100 }),
+      rowsByIdSql(scope, ['a']),
+      countSql({ scope, filters: {}, fields: FILTER_FIELDS, cap: 5000 }),
+      exploreCountsSql('cn', ['software_engineering']),
+      sourcesSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null }),
+    ]) {
+      expect(show(sql)!.text).toContain(GUARD);
+    }
+  });
+});
+
+describe('feed header facts (sourcesSql)', () => {
+  it('one aggregate over the public rows the query can reach: any GoHire bank row, and distinct employer boards', () => {
+    const sql = show(sourcesSql({ scope: { market: 'cn', userId: 'u1', now: NOW }, filters: { workModels: ['onsite'] }, fields: FILTER_FIELDS, from: new Date('2026-06-12T12:00:00Z') }))!;
+    expect(sql).toMatchSnapshot();
+    // Public rows only, whoever asks: the user's own imports are not a source of the index.
+    expect(sql.text).toContain(`j."visibility" = 'public'`);
+    expect(sql.text).not.toContain('j."ownerUserId" =');
+    // A board is one (ATS, board token); bank rows are never counted as boards.
+    expect(sql.text).toContain(`count(DISTINCT (j."sourceBoard" || ':' || CASE WHEN position(':' in j."externalId") > 1 THEN split_part(j."externalId", ':', 1) ELSE j."companyNameNormalized" END))`);
+    expect(sql.text).toContain(`FILTER (WHERE j."fromRecruiterBank" = false AND j."sourceBoard" = ANY(`);
+    // How many rows that is: the service reads it to know a list is short before paging to its end (`thin`).
+    expect(sql.text).toContain('count(*)::int AS "listed"');
+    expect(sql.values).toContain('gohire');
+    expect(sql.values.find((v) => Array.isArray(v) && v.includes('smartrecruiters'))).toEqual(expect.arrayContaining(['greenhouse', 'lever', 'ashby', 'smartrecruiters']));
+    // The query's own filters and the list's age floor apply.
+    expect(sql.text).toContain('j."workModel" = ANY(');
+    expect(sql.text).toContain('j."postedAt" >= ');
+    expect(sql.text).not.toMatch(/LIMIT/);
+  });
+
+  it('a browse passes its category predicate', () => {
+    const sql = show(sourcesSql({ scope: { market: 'cn', userId: 'u1', now: NOW, publicOnly: true }, filters: {}, fields: [], extra: [browseTaxonomySql(['software_engineering'])], from: null }))!;
+    expect(sql.text).toContain('j."taxonomyIds" && ');
   });
 });
 

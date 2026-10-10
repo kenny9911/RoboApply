@@ -105,6 +105,11 @@ export interface FeedRepo {
   publicBoards(): Promise<string[]>;
   /** Run a count statement from sql.ts (`SELECT count(*)::int AS "count"`). */
   queryCount(sql: Prisma.Sql): Promise<number>;
+  /**
+   * Run `sourcesSql`: the feed header facts (is any GoHire bank row listed, and how many employer boards) and
+   * `listed`, the number of public rows the query can reach.
+   */
+  querySources(sql: Prisma.Sql): Promise<{ gohire: boolean; employerBoards: number; listed: number }>;
   /** Run the Explore count statement. */
   queryCategoryCounts(sql: Prisma.Sql): Promise<Array<{ taxonomyId: string; count: number }>>;
   /** Cached v3 AI scores for this user's current resume (content hash + prompt version must match). */
@@ -221,6 +226,12 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
       const p = await getDb();
       const rows = await p.$queryRaw<Array<{ count: number | bigint }>>(sql);
       return Number(rows[0]?.count ?? 0);
+    },
+
+    async querySources(sql) {
+      const p = await getDb();
+      const rows = await p.$queryRaw<Array<{ gohire: boolean | null; employerBoards: number | bigint | null; listed: number | bigint | null }>>(sql);
+      return { gohire: rows[0]?.gohire === true, employerBoards: Number(rows[0]?.employerBoards ?? 0), listed: Number(rows[0]?.listed ?? 0) };
     },
 
     async queryCategoryCounts(sql) {

@@ -66,10 +66,11 @@ describe('postedPayWhere', () => {
     expect(JSON.stringify(w)).toContain('fraudFlags');
   });
 
-  // Wave 5 gate: GoApply shows no third-party postings while CN_RECRUITMENT_INFO_MODE is off.
-  it('on GoApply with CN_RECRUITMENT_INFO_MODE off, matches no posting; with postings allowed, the public rows', () => {
+  // GoApply shows no third-party postings while CN_RECRUITMENT_INFO_MODE is set to off; by default (D5) it does.
+  it('on GoApply with CN_RECRUITMENT_INFO_MODE off, matches no posting; by default and with postings allowed, the public rows', () => {
     const q = { market: 'cn' as const, taxonomyId: null, title: '数据分析师', country: null, city: null, now: AS_OF };
-    expect((postedPayWhere(q, {}) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ id: { in: [] } }] });
+    expect((postedPayWhere(q, { CN_RECRUITMENT_INFO_MODE: 'off' }) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ id: { in: [] } }] });
+    expect((postedPayWhere(q, {}) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ visibility: 'public' }] });
     expect((postedPayWhere(q, { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' }) as { AND: unknown[] }).AND).toContainEqual({ OR: [{ visibility: 'public' }] });
     const intl = postedPayWhere({ ...q, market: 'intl' }, {}) as { AND: unknown[] };
     expect(JSON.stringify(intl)).not.toContain('"in":[]');

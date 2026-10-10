@@ -71,6 +71,9 @@ describe('pay (F-SAL-01 cn)', () => {
     expect(formatCnSalary({ salaryMin: 15000, salaryMax: 25000, salaryCurrency: 'CNY' })).toBeNull();
     expect(formatCnSalary({ salaryMin: 5000, salaryMax: 6000, salaryCurrency: 'USD', salaryPeriod: 'month' })).toBeNull();
     expect(cnSalary({ salaryDisclosed: true, salaryText: '薪资优厚' })).toEqual({ text: null, disclosed: false });
+    // A stored 0 is a source's "nothing here", never pay: no "0K" line.
+    expect(cnSalary({ salaryDisclosed: true, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryMin: 0, salaryMax: 0 })).toEqual({ text: null, disclosed: false });
+    expect(cnSalary({ salaryDisclosed: true, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryMin: 0, salaryMax: 20000 }).text).toBe('20K以内');
   });
 });
 
@@ -360,7 +363,7 @@ describe('buildCnCardMeta', () => {
 
   it('source, updated and expiry on the card; quoted tags only; no counts', () => {
     const meta = buildCnCardMeta(gohire, { licence: LICENCE });
-    expect(meta.sourceLine).toEqual({ kind: 'direct', sourceName: 'GoHire', originalSourceName: null, licence: LICENCE });
+    expect(meta.sourceLine).toEqual({ kind: 'direct', sourceName: 'GoHire', originalSourceName: null, original: null, url: null, via: 'bank', licence: LICENCE });
     // "Updated" is the posting's own date; when we last saw it is "Last checked" (D3).
     expect(meta.updatedAt).toBe('2026-10-01T00:00:00.000Z');
     expect(meta.lastCheckedAt).toBe('2026-10-09T00:00:00.000Z');
@@ -377,6 +380,45 @@ describe('buildCnCardMeta', () => {
     expect(buildCnCardMeta({ ...gohire, isAgency: true }, { licence: LICENCE }).sourceLine.kind).toBe('source');
     const other = buildCnCardMeta({ sourceName: '某招聘官网', fromRecruiterBank: false }, { licence: LICENCE });
     expect(other.sourceLine).toMatchObject({ kind: 'source', sourceName: '某招聘官网', licence: null });
+  });
+
+  // MARKET_STRATEGY §1.4 display rules (M-7, JC-1): every non-GoHire mainland posting shows
+  // 来源：{original publisher}, the original link and 最后核验 {date}.
+  it('an employer-board posting names the employer as its original publisher, with the original link and the last-verified date', () => {
+    const board = {
+      market: 'cn',
+      sourceBoard: 'smartrecruiters',
+      sourceName: '示例汽车 · SmartRecruiters',
+      originalSourceName: null,
+      companyName: '示例汽车（中国）投资有限公司',
+      fromRecruiterBank: false,
+      visibility: 'public',
+      sourceUrl: 'https://jobs.smartrecruiters.com/ExampleAuto/123',
+      applyUrl: 'https://jobs.smartrecruiters.com/ExampleAuto/123-apply',
+      lastSeenAt: new Date('2026-10-09T00:00:00Z'),
+    };
+    const meta = buildCnCardMeta(board, { licence: LICENCE });
+    expect(meta.sourceLine).toEqual({
+      kind: 'source',
+      sourceName: '示例汽车 · SmartRecruiters',
+      originalSourceName: null,
+      original: '示例汽车（中国）投资有限公司',
+      url: 'https://jobs.smartrecruiters.com/ExampleAuto/123',
+      via: 'ats',
+      // Never a licence line on a posting that is not GoHire's, whatever env holds.
+      licence: null,
+    });
+    expect(meta.lastCheckedAt).toBe('2026-10-09T00:00:00.000Z');
+    // The same facts as the feed item's `source` (one rule: feed/sourceLine.ts).
+    const item = publicItem(feedRow({ id: 'b1', ...board, lastSeenAt: board.lastSeenAt }));
+    expect(item.source).toMatchObject({ original: meta.sourceLine.original, url: meta.sourceLine.url, via: meta.sourceLine.via, lastVerifiedAt: meta.lastCheckedAt });
+    // A pipeline job (no bank flag or board name yet) is read from its provider.
+    expect(buildCnCardMeta({ provider: 'ats_public', companyName: '示例' }, { licence: null }).sourceLine).toMatchObject({ via: 'ats', original: '示例' });
+    expect(buildCnCardMeta({ provider: 'user_import', visibility: 'private', applyUrl: 'https://www.zhipin.example/job/1' }, { licence: null }).sourceLine).toMatchObject({ via: 'import', original: null, url: 'https://www.zhipin.example/job/1' });
+    // A source nobody knows is never called a board, a bank or an import; a non-http link is no link.
+    const unknown = buildCnCardMeta({ sourceBoard: 'mystery', sourceName: '某招聘官网', sourceUrl: 'javascript:alert(1)' }, { licence: null }).sourceLine;
+    expect(unknown).not.toHaveProperty('via');
+    expect(unknown.url).toBeNull();
   });
 
   it("warnings show on the user's own import", () => {
@@ -436,6 +478,19 @@ describe('marketHooks registration', () => {
     const out = cardMeta({ market: 'cn', provider: 'bank_gohire', salaryDisclosed: false }, { brand: 'goapply', market: 'cn', stage: 'card' });
     expect(out.cn).toMatchObject({ sourceLine: { sourceName: 'GoHire' }, salary: { text: null, disclosed: false } });
     expect(cardMeta({ market: 'intl' }, { brand: 'roboapply', market: 'intl', stage: 'card' }).cn).toBeUndefined();
+  });
+
+  it('the default (no CN_RECRUITMENT_INFO_MODE) shows cards with no licence line unless both CN_HR_LICENCE_* values are set (D3, D5)', () => {
+    const card = (env: Record<string, string>) =>
+      (createCnJobsHooks({ env: () => env, deps: () => { throw new Error('not used'); } }).cardMeta!({ market: 'cn', provider: 'bank_gohire' }, { brand: 'goapply', market: 'cn', stage: 'card' }) as { sourceLine: { sourceName: string; licence: unknown } }).sourceLine;
+    expect(card({})).toMatchObject({ sourceName: 'GoHire', licence: null });
+    expect(card({ CN_HR_LICENCE_HOLDER: LICENCE.holder }).licence).toBeNull();
+    expect(card({ CN_HR_LICENCE_NUMBER: LICENCE.number }).licence).toBeNull();
+    expect(card({ CN_HR_LICENCE_HOLDER: LICENCE.holder, CN_HR_LICENCE_NUMBER: LICENCE.number }).licence).toEqual(LICENCE);
+    // An employer-board posting never carries it.
+    const hooks = createCnJobsHooks({ env: () => ({ CN_HR_LICENCE_HOLDER: LICENCE.holder, CN_HR_LICENCE_NUMBER: LICENCE.number }), deps: () => { throw new Error('not used'); } });
+    const board = hooks.cardMeta!({ market: 'cn', sourceBoard: 'greenhouse', sourceName: '示例 · Greenhouse', companyName: '示例' }, { brand: 'goapply', market: 'cn', stage: 'card' }) as { sourceLine: { licence: unknown } };
+    expect(board.sourceLine.licence).toBeNull();
   });
 
   it('licence line follows the mode and env', () => {
