@@ -1,0 +1,514 @@
+// server/src/features/jobs/detail/service.ts — job detail service (WP-34).
+//
+//   get           GET /jobs/:id: the job, its company (sourced facts only),
+//                 the cached fit (no model call), "Why this job", tracker and
+//                 checklist state, similar ids, autofill, People links,
+//                 market card meta
+//   similar       GET /jobs/:id/similar
+//   save/unsave   tracker `bookmarked` upsert / soft delete; save calls
+//                 growth.markChecklistStep('save_job') every time (C20)
+//   recordApplyClick / markApplied / undoApplied
+//                 tracker → applied at once (R1/C11), idempotent, undoable;
+//                 `alreadyApplied` tells callers when nothing changed (no
+//                 Undo then), and undo only reverts a recent move made by
+//                 apply-click or "I applied"
+//   tracker writes for one (user, job) run under a transaction-scoped
+//   advisory lock (`trackerEntryLockKey`), so concurrent first clicks or
+//   saves never create two live entries
+//   similar jobs are empty while `jobs.recommendations` is off (R-14)
+//   share         public page only with publicDisplay, else the app link
+//   companyNews   V2, dark (see `companyNewsEnabled`)
+//
+// D1: nothing here contacts an employer. "Applied" is what the user did on
+// the employer's own page (or told us), never something we submitted.
+// Every read is market-scoped; a private import is visible only to its owner.
+
+import type prisma from '../../../lib/prisma.js';
+import { HttpError } from '../../../platform/http.js';
+import type { ProductBrand } from '../../../platform/brand/registry.js';
+import type { HiringContactsMode } from '../../../platform/brand/registry.js';
+import type { EnvSource } from '../../../platform/brand/brandEnv.js';
+import type { CompanyProfile } from '../companies/contract.js';
+import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
+import type { MatchExplanation } from '../../compliance/contract.js';
+import {
+  JOB_DETAIL_ERROR_CODES,
+  UNDO_APPLIED_WINDOW_MS,
+  type ApplyClickResponse,
+  type CompanyNewsResponse,
+  type JobCampusInfo,
+  type JobDetailResponse,
+  type JobTrackerState,
+  type MarkAppliedResponse,
+  type SaveJobResponse,
+  type ShareResponse,
+  type SimilarJobsResponse,
+  type UndoAppliedResponse,
+} from './contract.js';
+import {
+  JOB_ROW_SELECT,
+  isClosed,
+  isFlagged,
+  isPreApply,
+  isVisibleTo,
+  peopleSearchLinks,
+  shareTarget,
+  toCampusInfo,
+  toChecklist,
+  toCompanySummary,
+  toFitBadge,
+  toJobDetail,
+  toSimilarItem,
+  toTrackerState,
+  type CampusEventRow,
+  type JobRow,
+  type TrackerRow,
+} from './view.js';
+
+export type JobDetailDb = Pick<
+  typeof prisma,
+  | 'rAJob'
+  | 'rATrackerEntry'
+  | 'rATrackerEvent'
+  | 'rAJobUserState'
+  | 'rAJobInteraction'
+  | 'rAResumeVariant'
+  | 'rACoverLetter'
+  | 'rACampusEvent'
+  | '$transaction'
+>;
+
+/** What a tracker write needs inside its transaction. */
+type TrackerTx = Pick<typeof prisma, 'rATrackerEntry' | 'rATrackerEvent' | '$executeRaw'>;
+
+/**
+ * Advisory-lock key for one user's tracker entry on one job. The (userId,
+ * jobId) partial-unique rule lives in application code (RATrackerEntry), so
+ * every writer that may create an entry takes this lock first.
+ */
+export function trackerEntryLockKey(userId: string, jobId: string): string {
+  return `ra_tracker_entry:${userId}:${jobId}`;
+}
+
+/** Flags this service reads (a key the resolver does not know yet resolves false). */
+export type DetailFlag = 'extension' | 'jobs.campusCalendar' | 'jobs.recommendations' | 'companyNews';
+
+/** `payload.via` values of a move to Applied that "Undo · I didn't apply" may revert. */
+const UNDOABLE_VIA = new Set(['apply_click', 'manual']);
+
+export interface JobDetailServiceDeps {
+  db: JobDetailDb;
+  brand: () => ProductBrand;
+  env?: EnvSource;
+  now?: () => Date;
+  /** Company profile for a signed-in viewer (public rows counted); throws 404 when missing. */
+  companyProfile?: (companyId: string) => Promise<CompanyProfile>;
+  /** Cached fit or quick estimate; never a model call. */
+  cachedFit?: (userId: string, jobId: string) => Promise<MatchFitView | null>;
+  preScore?: (userId: string, jobIds: string[]) => Promise<PreScoreResult[]>;
+  explain?: (input: { market: 'intl' | 'cn'; personalized: boolean; fit: MatchFitView }) => MatchExplanation;
+  /** GoApply: a live `personalized_recommendation` grant; RoboApply: always true. */
+  personalized?: (userId: string, brand: ProductBrand) => Promise<boolean>;
+  /** Past employers and schools from the profile (for the People search links). */
+  peopleContext?: (userId: string) => Promise<{ pastCompanies: string[]; schools: string[] }>;
+  /** Practice for this job; null while practice sessions are not linked to jobs (SR-34-1). */
+  practicedForJob?: (userId: string, jobId: string) => Promise<boolean | null>;
+  markChecklistStep?: (userId: string, step: 'save_job') => Promise<unknown>;
+  isEnabled?: (key: DetailFlag, userId: string) => Promise<boolean>;
+  hiringContacts?: (userId: string) => Promise<HiringContactsMode>;
+  marketMeta?: (row: JobRow, brand: ProductBrand) => Record<string, Record<string, unknown>>;
+  searchNews?: (brand: ProductBrand, companyName: string) => Promise<JobDetailNewsItems | null>;
+  /** ATS types the extension can fill (WP-55a/WP-70 register them). */
+  extensionAts?: () => ReadonlySet<string>;
+  log?: (message: string, meta: Record<string, unknown>) => void;
+}
+
+type JobDetailNewsItems = CompanyNewsResponse['items'];
+
+export const SIMILAR_LIMIT = 6;
+export const SIMILAR_CANDIDATES = 40;
+
+export interface JobDetailServiceImpl {
+  get(userId: string, jobId: string): Promise<JobDetailResponse>;
+  similar(userId: string, jobId: string): Promise<SimilarJobsResponse>;
+  save(userId: string, jobId: string): Promise<SaveJobResponse>;
+  unsave(userId: string, jobId: string): Promise<SaveJobResponse>;
+  recordApplyClick(userId: string, jobId: string): Promise<ApplyClickResponse>;
+  markApplied(userId: string, jobId: string, appliedAt?: string): Promise<MarkAppliedResponse>;
+  undoApplied(userId: string, jobId: string): Promise<UndoAppliedResponse>;
+  share(userId: string, jobId: string): Promise<ShareResponse>;
+  companyNews(userId: string, jobId: string): Promise<CompanyNewsResponse>;
+}
+
+const TRACKER_SELECT = { id: true, status: true, dateApplied: true, tailoredVariantId: true, coverLetterId: true } as const;
+
+function notFound(): HttpError {
+  return new HttpError('not_found', 'Job not found.', { code: JOB_DETAIL_ERROR_CODES.notFound });
+}
+
+export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailServiceImpl {
+  const { db } = deps;
+  const now = deps.now ?? (() => new Date());
+  const log = deps.log ?? (() => {});
+  const flag = async (key: DetailFlag, userId: string) => {
+    try {
+      return deps.isEnabled ? await deps.isEnabled(key, userId) : false;
+    } catch {
+      return false;
+    }
+  };
+  /** Optional enrichments never break the page: a failing one contributes nothing. */
+  async function soft<T>(what: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      log('job detail: optional part failed', { what, error: err instanceof Error ? err.message : String(err) });
+      return fallback;
+    }
+  }
+
+  async function loadJob(userId: string, jobId: string): Promise<JobRow> {
+    const row = (await db.rAJob.findUnique({ where: { id: jobId }, select: JOB_ROW_SELECT })) as JobRow | null;
+    if (!row || !isVisibleTo(row, userId, deps.brand().market)) throw notFound();
+    return row;
+  }
+
+  /** Run a tracker write for (userId, jobId) under its advisory lock. */
+  async function withEntryLock<T>(userId: string, jobId: string, fn: (tx: TrackerTx) => Promise<T>): Promise<T> {
+    return db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${trackerEntryLockKey(userId, jobId)}))`;
+      return fn(tx as unknown as TrackerTx);
+    });
+  }
+
+  async function trackerOf(userId: string, jobId: string, client: Pick<TrackerTx, 'rATrackerEntry'> = db): Promise<TrackerRow | null> {
+    return (await client.rATrackerEntry.findFirst({
+      where: { userId, jobId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: TRACKER_SELECT,
+    })) as TrackerRow | null;
+  }
+
+  async function interaction(userId: string, jobId: string, kind: string, detail?: Record<string, unknown>) {
+    await soft('interaction', () => db.rAJobInteraction.create({ data: { userId, jobId, kind, ...(detail ? { detail: detail as object } : {}) } }), null);
+  }
+
+  async function touchUserState(userId: string, jobId: string, data: { viewedAt?: Date; applyClickedAt?: Date }) {
+    await soft(
+      'userState',
+      () =>
+        db.rAJobUserState.upsert({
+          where: { userId_jobId: { userId, jobId } },
+          create: { userId, jobId, ...data },
+          update: data,
+        }),
+      null,
+    );
+  }
+
+  async function campusFor(userId: string, row: JobRow): Promise<JobCampusInfo | null> {
+    if (row.market !== 'cn' || row.seniority !== 'intern_newgrad') return null;
+    if (!(await flag('jobs.campusCalendar', userId))) return null;
+    const where = {
+      market: 'cn',
+      status: 'published',
+      kind: 'application',
+      ...(row.companyId ? { companyId: row.companyId } : { companyName: row.companyName }),
+    };
+    const events = (await db.rACampusEvent.findMany({
+      where,
+      orderBy: [{ applyClosesAt: 'desc' }],
+      take: 5,
+      select: { title: true, graduationClass: true, applyOpensAt: true, applyClosesAt: true, officialUrl: true, verifiedAt: true },
+    })) as CampusEventRow[];
+    // The open (or next) programme first, otherwise the most recent one.
+    const t = now().getTime();
+    const open = events.filter((e) => !e.applyClosesAt || e.applyClosesAt.getTime() >= t).sort((a, b) => (a.applyClosesAt?.getTime() ?? Infinity) - (b.applyClosesAt?.getTime() ?? Infinity));
+    return toCampusInfo(open[0] ?? events[0] ?? null, now());
+  }
+
+  function similarWhere(row: JobRow) {
+    const base = {
+      market: row.market,
+      visibility: 'public',
+      isCanonical: true,
+      archivedAt: null,
+      closedAt: null,
+      id: { not: row.id },
+      ...(row.locationCountry ? { locationCountry: row.locationCountry } : {}),
+    };
+    return row.primaryTaxonomyId ? { ...base, primaryTaxonomyId: row.primaryTaxonomyId } : { ...base, titleNormalized: row.titleNormalized };
+  }
+
+  /** Drop fraud-flagged jobs and the ones this user hid. */
+  async function visibleCandidates<T extends { id: string; fraudFlags: unknown }>(userId: string, candidates: T[]): Promise<T[]> {
+    const clean = candidates.filter((c) => !isFlagged(c.fraudFlags));
+    if (!clean.length) return [];
+    const hidden = await db.rAJobUserState.findMany({
+      where: { userId, jobId: { in: clean.map((c) => c.id) }, hiddenAt: { not: null } },
+      select: { jobId: true },
+    });
+    const hiddenIds = new Set(hidden.map((h) => h.jobId));
+    return clean.filter((c) => !hiddenIds.has(c.id));
+  }
+
+  async function similarRows(userId: string, row: JobRow): Promise<JobRow[]> {
+    const candidates = (await db.rAJob.findMany({
+      where: similarWhere(row),
+      orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
+      take: SIMILAR_CANDIDATES,
+      select: JOB_ROW_SELECT,
+    })) as JobRow[];
+    return visibleCandidates(userId, candidates);
+  }
+
+  /** `similarIds` for GET /:id: an id-only query, newest first, no scoring (GET /:id/similar ranks by fit). */
+  async function similarIdsOf(userId: string, row: JobRow): Promise<string[]> {
+    const candidates = await db.rAJob.findMany({
+      where: similarWhere(row),
+      orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
+      take: SIMILAR_LIMIT * 3,
+      select: { id: true, fraudFlags: true },
+    });
+    return (await visibleCandidates(userId, candidates)).slice(0, SIMILAR_LIMIT).map((c) => c.id);
+  }
+
+  async function rankSimilar(userId: string, row: JobRow): Promise<{ rows: JobRow[]; pre: Map<string, PreScoreResult> }> {
+    const rows = await similarRows(userId, row);
+    const pre = new Map<string, PreScoreResult>();
+    if (rows.length && deps.preScore) {
+      for (const p of await soft('preScore', () => deps.preScore!(userId, rows.map((r) => r.id)), [] as PreScoreResult[])) pre.set(p.jobId, p);
+    }
+    // Best fit first (unknown fit last), then newest.
+    const order = rows.map((r, i) => ({ r, i, s: pre.get(r.id)?.score ?? null }));
+    order.sort((a, b) => (a.s === null ? (b.s === null ? a.i - b.i : 1) : b.s === null ? -1 : b.s - a.s || a.i - b.i));
+    return { rows: order.slice(0, SIMILAR_LIMIT).map((o) => o.r), pre };
+  }
+
+  async function writeStatus(
+    userId: string,
+    row: JobRow,
+    opts: { appliedAt: Date; via: 'apply_click' | 'manual'; source: string },
+  ): Promise<{ entry: TrackerRow; changed: boolean }> {
+    return withEntryLock(userId, row.id, (tx) => writeStatusLocked(tx, userId, row, opts));
+  }
+
+  async function writeStatusLocked(
+    tx: TrackerTx,
+    userId: string,
+    row: JobRow,
+    opts: { appliedAt: Date; via: 'apply_click' | 'manual'; source: string },
+  ): Promise<{ entry: TrackerRow; changed: boolean }> {
+    const existing = await trackerOf(userId, row.id, tx);
+    if (existing && !isPreApply(existing.status)) return { entry: existing, changed: false };
+    let entry: TrackerRow;
+    if (existing) {
+      entry = (await tx.rATrackerEntry.update({
+        where: { id: existing.id },
+        data: { status: 'applied', dateApplied: existing.dateApplied ?? opts.appliedAt, appliedVia: 'manual' },
+        select: TRACKER_SELECT,
+      })) as TrackerRow;
+    } else {
+      entry = (await tx.rATrackerEntry.create({
+        data: {
+          userId,
+          jobId: row.id,
+          status: 'applied',
+          dateApplied: opts.appliedAt,
+          appliedVia: 'manual',
+          source: opts.source,
+          externalSnapshot: { title: row.title, companyName: row.companyName, location: row.location, applyUrl: row.applyUrl },
+        },
+        select: TRACKER_SELECT,
+      })) as TrackerRow;
+    }
+    await tx.rATrackerEvent.create({
+      data: { entryId: entry.id, userId, kind: 'status', fromValue: existing?.status ?? null, toValue: 'applied', payload: { via: opts.via } },
+    });
+    return { entry, changed: true };
+  }
+
+  return {
+    async get(userId, jobId) {
+      const brand = deps.brand();
+      const row = await loadJob(userId, jobId);
+      const [tracker, tailored, letter, practiced, profile, fit, campus, similarIds, people, autofillOn] = await Promise.all([
+        trackerOf(userId, jobId),
+        db.rAResumeVariant.findFirst({
+          where: { userId, targetJobId: jobId, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        }),
+        db.rACoverLetter.findFirst({ where: { userId, jobId, deletedAt: null }, orderBy: { updatedAt: 'desc' }, select: { id: true } }),
+        soft('practiced', () => (deps.practicedForJob ? deps.practicedForJob(userId, jobId) : Promise.resolve(null)), null),
+        row.companyId && deps.companyProfile ? soft('company', () => deps.companyProfile!(row.companyId!), null) : Promise.resolve(null),
+        deps.cachedFit ? soft('fit', () => deps.cachedFit!(userId, jobId), null) : Promise.resolve(null),
+        soft('campus', () => campusFor(userId, row), null),
+        soft('similar', async () => ((await flag('jobs.recommendations', userId)) ? similarIdsOf(userId, row) : []), [] as string[]),
+        soft(
+          'people',
+          async () => {
+            const mode: HiringContactsMode = deps.hiringContacts ? await deps.hiringContacts(userId) : 'deeplinks_only';
+            if (mode === 'off') return { mode, searchLinks: [] };
+            const ctx = deps.peopleContext ? await soft('peopleContext', () => deps.peopleContext!(userId), { pastCompanies: [], schools: [] }) : { pastCompanies: [], schools: [] };
+            return { mode, searchLinks: peopleSearchLinks(row, ctx, brand.market) };
+          },
+          { mode: 'off' as HiringContactsMode, searchLinks: [] },
+        ),
+        flag('extension', userId),
+      ]);
+      const personalized = fit && deps.personalized ? await soft('personalized', () => deps.personalized!(userId, brand), false) : false;
+      const explanation =
+        fit && deps.explain ? deps.explain({ market: brand.market === 'cn' ? 'cn' : 'intl', personalized, fit }) : null;
+      await touchUserState(userId, jobId, { viewedAt: now() });
+      const atsType = row.atsType ?? null;
+      return {
+        job: toJobDetail(row, now(), campus),
+        company: toCompanySummary(row, profile),
+        fit,
+        explanation,
+        tracker: toTrackerState(tracker),
+        checklist: toChecklist(tracker, tailored?.id ?? null, letter?.id ?? null, practiced),
+        similarIds,
+        autofill: { supported: autofillOn && !!atsType && (deps.extensionAts?.().has(atsType) ?? false), atsType },
+        people,
+        marketMeta: deps.marketMeta ? deps.marketMeta(row, brand) : {},
+      };
+    },
+
+    async similar(userId, jobId) {
+      const row = await loadJob(userId, jobId);
+      if (!(await flag('jobs.recommendations', userId))) return { items: [] };
+      const { rows, pre } = await rankSimilar(userId, row);
+      if (!rows.length) return { items: [] };
+      const trackers = await db.rATrackerEntry.findMany({
+        where: { userId, jobId: { in: rows.map((r) => r.id) }, deletedAt: null },
+        select: { jobId: true, status: true },
+      });
+      const byJob = new Map(trackers.map((t) => [t.jobId, { status: t.status }]));
+      return { items: rows.map((r) => toSimilarItem(r, now(), toFitBadge(pre.get(r.id)), byJob.get(r.id) ?? null)) };
+    },
+
+    async save(userId, jobId) {
+      const row = await loadJob(userId, jobId);
+      const entry = await withEntryLock(userId, jobId, async (tx) => {
+        const existing = await trackerOf(userId, jobId, tx);
+        if (existing) return existing;
+        const created = (await tx.rATrackerEntry.create({
+          data: {
+            userId,
+            jobId,
+            status: 'bookmarked',
+            source: 'feed',
+            externalSnapshot: { title: row.title, companyName: row.companyName, location: row.location, applyUrl: row.applyUrl },
+          },
+          select: TRACKER_SELECT,
+        })) as TrackerRow;
+        await tx.rATrackerEvent.create({ data: { entryId: created.id, userId, kind: 'status', fromValue: null, toValue: 'bookmarked', payload: { via: 'save' } } });
+        return created;
+      });
+      await interaction(userId, jobId, 'save');
+      // Every save counts (idempotent on the growth side; ruling C20). Never blocks the save.
+      if (deps.markChecklistStep) await soft('checklist', () => deps.markChecklistStep!(userId, 'save_job'), null);
+      return { tracker: toTrackerState(entry) };
+    },
+
+    async unsave(userId, jobId) {
+      await loadJob(userId, jobId);
+      const entry = await trackerOf(userId, jobId);
+      if (!entry) return { tracker: null };
+      if (!isPreApply(entry.status)) {
+        throw new HttpError('conflict', 'This job is already in your applications.', { code: JOB_DETAIL_ERROR_CODES.inTracker, status: entry.status });
+      }
+      await db.rATrackerEntry.update({ where: { id: entry.id }, data: { deletedAt: now() } });
+      await interaction(userId, jobId, 'unsave');
+      return { tracker: null };
+    },
+
+    async recordApplyClick(userId, jobId) {
+      const row = await loadJob(userId, jobId);
+      if (isClosed(row)) throw new HttpError('conflict', 'This job is no longer listed.', { code: JOB_DETAIL_ERROR_CODES.closed });
+      const applyUrl = row.applyUrl?.trim() || null;
+      // Nowhere to send the user: nothing moves to Applied ("I applied" covers this case).
+      if (!applyUrl) throw new HttpError('conflict', 'This job has no application link.', { code: JOB_DETAIL_ERROR_CODES.noApplyLink });
+      const at = now();
+      const { entry, changed } = await writeStatus(userId, row, { appliedAt: at, via: 'apply_click', source: 'feed' });
+      await touchUserState(userId, jobId, { applyClickedAt: at });
+      if (changed) await interaction(userId, jobId, 'apply_click');
+      const atsType = row.atsType ?? null;
+      const extOn = await flag('extension', userId);
+      return {
+        applyUrl,
+        atsType,
+        extensionSupported: extOn && !!atsType && (deps.extensionAts?.().has(atsType) ?? false),
+        trackerEntryId: entry.id,
+        alreadyApplied: !changed,
+      };
+    },
+
+    async markApplied(userId, jobId, appliedAt) {
+      const row = await loadJob(userId, jobId);
+      const at = appliedAt ? new Date(appliedAt) : now();
+      if (at.getTime() > now().getTime() + 60_000) throw new HttpError('invalid_request', 'The date applied is in the future.');
+      const { entry, changed } = await writeStatus(userId, row, { appliedAt: at, via: 'manual', source: 'manual' });
+      if (changed) await interaction(userId, jobId, 'applied');
+      return { tracker: toTrackerState(entry)!, alreadyApplied: !changed };
+    },
+
+    async undoApplied(userId, jobId) {
+      await loadJob(userId, jobId);
+      const result = await withEntryLock(userId, jobId, async (tx) => {
+        const entry = await trackerOf(userId, jobId, tx);
+        if (!entry || entry.status !== 'applied') return { next: entry, reverted: false };
+        const last = (await tx.rATrackerEvent.findFirst({
+          where: { entryId: entry.id, kind: 'status', toValue: 'applied' },
+          orderBy: { createdAt: 'desc' },
+          select: { fromValue: true, payload: true, createdAt: true },
+        })) as { fromValue: string | null; payload: unknown; createdAt: Date | null } | null;
+        // Only a recent move made by apply-click or "I applied" is undone; an
+        // older application, or a move made in the tracker, stays as it is.
+        const via = last?.payload && typeof last.payload === 'object' ? (last.payload as { via?: unknown }).via : undefined;
+        const recent = !!last?.createdAt && now().getTime() - new Date(last.createdAt).getTime() <= UNDO_APPLIED_WINDOW_MS;
+        if (!last || typeof via !== 'string' || !UNDOABLE_VIA.has(via) || !recent) return { next: entry, reverted: false };
+        const previous = last.fromValue ?? null;
+        let next: TrackerRow | null;
+        if (previous && isPreApply(previous)) {
+          next = (await tx.rATrackerEntry.update({
+            where: { id: entry.id },
+            data: { status: previous, dateApplied: null, appliedVia: null },
+            select: TRACKER_SELECT,
+          })) as TrackerRow;
+        } else {
+          // The click created the entry: undo removes it (soft delete), as if never applied.
+          await tx.rATrackerEntry.update({ where: { id: entry.id }, data: { deletedAt: now() } });
+          next = null;
+        }
+        await tx.rATrackerEvent.create({
+          data: { entryId: entry.id, userId, kind: 'status', fromValue: 'applied', toValue: next ? next.status : 'removed', payload: { via: 'undo' } },
+        });
+        return { next, reverted: true };
+      });
+      if (result.reverted) await interaction(userId, jobId, 'unapplied');
+      return { tracker: toTrackerState(result.next) };
+    },
+
+    async share(userId, jobId) {
+      const row = await loadJob(userId, jobId);
+      await interaction(userId, jobId, 'share');
+      return shareTarget(deps.brand(), row);
+    },
+
+    async companyNews(userId, jobId) {
+      const brand = deps.brand();
+      if (brand.market !== 'intl' || !(await flag('companyNews', userId)) || !deps.searchNews) {
+        throw new HttpError('feature_disabled');
+      }
+      const row = await loadJob(userId, jobId);
+      const items = (await deps.searchNews(brand, row.companyName)) ?? [];
+      return { items, kind: 'search_results', fetchedAt: now().toISOString() };
+    },
+  };
+}
+
+/** Exposed for tests and other callers that already hold a tracker entry view. */
+export type { JobTrackerState };

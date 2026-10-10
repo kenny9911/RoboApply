@@ -2,6 +2,11 @@
 
 // hooks/useJobDetail.ts
 //
+// @deprecated (WP-34) — use `hooks/job` (`useJob`, `useSimilarJobs`) and
+// `hooks/shared/useJobActions` over `lib/api/jobs.ts` (GET /api/v1/roboapply/jobs/:id).
+// `components/v3/today/*` still imports this until WP-33's rework lands;
+// WP-75 deletes it after a zero-importer grep.
+//
 // Read a single job (with optional matchScore + keywords). Used by:
 //   • /search right pane (selected job id from URL state)
 //   • /jobs/[id] standalone full-page detail
@@ -26,6 +31,7 @@ function jobKey(id: string | null | undefined, params: JobGetParams | undefined)
   return ['v2', 'job', id ?? '', params ?? {}] as const;
 }
 
+/** @deprecated Use `useJob` from hooks/job (WP-34). */
 export function useJobDetail(
   id: string | null | undefined,
   params?: JobGetParams,
@@ -42,6 +48,7 @@ export function useJobDetail(
   });
 }
 
+/** @deprecated Use `useJobActions(jobId).save()` from hooks/shared (WP-34). */
 export function useSaveJob() {
   const qc = useQueryClient();
   return useMutation<JobSaveResponse, Error, { id: string; excitementStars?: number }>(
@@ -58,6 +65,7 @@ export function useSaveJob() {
   );
 }
 
+/** @deprecated Use `useJobActions(jobId).applyOnCompanySite()` / `.markApplied()` (WP-34). */
 export function useApplyJob() {
   const qc = useQueryClient();
   return useMutation<JobApplyResponse, Error, { id: string; body: JobApplyBody }>({

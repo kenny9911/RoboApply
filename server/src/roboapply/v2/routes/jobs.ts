@@ -1,5 +1,16 @@
 // backend/src/roboapply/v2/routes/jobs.ts
 //
+// @deprecated (WP-34) — replaced by the job-detail area
+// `server/src/features/jobs/detail/` mounted at /api/v1/roboapply/jobs:
+//   GET /v2/jobs/:id         → GET  /jobs/:id
+//   POST /v2/jobs/:id/save   → POST /jobs/:id/save
+//   POST /v2/jobs/:id/apply  → POST /jobs/:id/apply-click (tracker → applied with Undo)
+//                              or POST /jobs/:id/applied ("I applied")
+//   POST /v2/jobs/:id/score  → POST /jobs/:id/score (scorer v3, PII-stripped, 80/day cap)
+// Kept mounted (from the hot file v2/routes/index.ts) for the legacy V2 client
+// (`lib/api/v2`, `hooks/useJobDetail.ts`, `components/v3/today/*`) until
+// WP-75 unmounts and deletes it after a zero-importer grep.
+//
 // Mounted at /api/v1/roboapply/v2/jobs.
 //
 //   GET  /:id            — job detail (with optional matchScore + keywords)
