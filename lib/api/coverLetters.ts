@@ -1,25 +1,26 @@
-// lib/api/coverLetters.ts — Cover letters.
+// lib/api/coverLetters.ts — Cover letters (WP-37).
 //
-// Thin typed wrappers over the area contract (FND-7). Owner: WP-37.
-// Request types are the contract's zod input types; response types are the
-// contract's views. Change a signature here only together with its contract.
+// Thin typed wrappers over the area contract (FND-7). Request types are the
+// contract's zod input types; response types are the contract's views.
+// Change a signature here only together with its contract.
 //
 // Endpoints:
 //   GET    /api/v1/roboapply/cover-letters
-//   POST   /api/v1/roboapply/cover-letters
+//   POST   /api/v1/roboapply/cover-letters                      (credit cover_letter; Idempotency-Key)
 //   GET    /api/v1/roboapply/cover-letters/:id
 //   PATCH  /api/v1/roboapply/cover-letters/:id
 //   DELETE /api/v1/roboapply/cover-letters/:id
 //   POST   /api/v1/roboapply/cover-letters/:id/rewrite
+//   POST   /api/v1/roboapply/cover-letters/:id/regenerate       (credit cover_letter; Idempotency-Key)
 //   POST   /api/v1/roboapply/cover-letters/:id/restore
-//   GET    /api/v1/roboapply/cover-letters/:id/export
+//   GET    /api/v1/roboapply/cover-letters/:id/export           (a file: use the URL)
 
-import { apiUrl, call, type CallOptions, type In, type Items, seg, withQuery } from './contracts/wire';
+import { apiUrl, call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as CL from './contracts/coverletter';
 
 /** `coverLetter.list` — GET /api/v1/roboapply/cover-letters */
-export function listCoverLetters(query?: In<typeof CL.ListLettersQuerySchema>, opts?: CallOptions): Promise<Items<CL.CoverLetterView>> {
-  return call<Items<CL.CoverLetterView>>('GET', withQuery(`/api/v1/roboapply/cover-letters`, query), opts);
+export function listCoverLetters(query?: In<typeof CL.ListLettersQuerySchema>, opts?: CallOptions): Promise<CL.ListLettersResponse> {
+  return call<CL.ListLettersResponse>('GET', withQuery(`/api/v1/roboapply/cover-letters`, query), opts);
 }
 
 /** `coverLetter.create` — POST /api/v1/roboapply/cover-letters */
@@ -38,8 +39,8 @@ export function patchCoverLetter(id: string, body: In<typeof CL.PatchLetterBodyS
 }
 
 /** `coverLetter.delete` — DELETE /api/v1/roboapply/cover-letters/:id */
-export function deleteCoverLetter(id: string, opts?: CallOptions): Promise<void> {
-  return call<void>('DELETE', `/api/v1/roboapply/cover-letters/${seg(id)}`, opts);
+export function deleteCoverLetter(id: string, opts?: CallOptions): Promise<CL.DeleteLetterResponse> {
+  return call<CL.DeleteLetterResponse>('DELETE', `/api/v1/roboapply/cover-letters/${seg(id)}`, opts);
 }
 
 /** `coverLetter.rewrite` — POST /api/v1/roboapply/cover-letters/:id/rewrite */
@@ -47,12 +48,17 @@ export function rewriteCoverLetter(id: string, body: In<typeof CL.RewriteLetterB
   return call<CL.CoverLetterView>('POST', `/api/v1/roboapply/cover-letters/${seg(id)}/rewrite`, { ...opts, body });
 }
 
+/** `coverLetter.regenerate` — POST /api/v1/roboapply/cover-letters/:id/regenerate */
+export function regenerateCoverLetter(id: string, body: In<typeof CL.RegenerateLetterBodySchema> = {}, opts?: CallOptions): Promise<CL.CoverLetterView> {
+  return call<CL.CoverLetterView>('POST', `/api/v1/roboapply/cover-letters/${seg(id)}/regenerate`, { ...opts, body });
+}
+
 /** `coverLetter.restore` — POST /api/v1/roboapply/cover-letters/:id/restore */
 export function restoreCoverLetter(id: string, body: In<typeof CL.RestoreLetterBodySchema>, opts?: CallOptions): Promise<CL.CoverLetterView> {
   return call<CL.CoverLetterView>('POST', `/api/v1/roboapply/cover-letters/${seg(id)}/restore`, { ...opts, body });
 }
 
-/** `coverLetter.export` — GET /api/v1/roboapply/cover-letters/:id/export */
+/** `coverLetter.export` — GET /api/v1/roboapply/cover-letters/:id/export (a download link) */
 export function coverLetterExportUrl(id: string, query: In<typeof CL.ExportLetterQuerySchema>): string {
   return apiUrl(withQuery(`/api/v1/roboapply/cover-letters/${seg(id)}/export`, query));
 }
@@ -65,6 +71,7 @@ export const coverLettersApi = {
   patchCoverLetter,
   deleteCoverLetter,
   rewriteCoverLetter,
+  regenerateCoverLetter,
   restoreCoverLetter,
   coverLetterExportUrl,
 };
