@@ -139,13 +139,68 @@ describe('grade', () => {
     expect(res.grade!.status).toBe('done');
     expect(res.grade!.method).toBe('rules');
     expect(res.grade!.aiSkipped).toBe('credits_exhausted');
-    expect(res.grade!.issues.some((i) => i.source === 'ai')).toBe(false);
+    // No NEW AI finding: the only AI issue is the one carried from the last check.
+    expect(res.grade!.issues.filter((i) => i.source === 'ai').every((i) => i.carriedOver === true)).toBe(true);
     expect(res.grade!.issues.length).toBeGreaterThan(0);
     expect(h.runAiPass).not.toHaveBeenCalled();
     const b = await bucket(h.kit, 'resume_check');
     expect([b.used, b.reserved]).toEqual([1, 0]);
     // The reason survives a reload.
     expect((await h.service.latest(USER, 'rv_1')).grade!.aiSkipped).toBe('credits_exhausted');
+  });
+
+  it('a re-check without the AI pass keeps what the last AI pass found: never "fixed", never 100', async () => {
+    // QA: Fair 62 with two spelling issues → one weak opener fixed → "Check
+    // again" with no credit left → "Excellent 100" and "Fixed: Spelling".
+    const first = await h.service.grade(USER, 'rv_1');
+    expect(first.grade!.issues.find((i) => i.type === 'spelling')).toMatchObject({ evidence: 'recieve', source: 'ai' });
+    const weak = first.grade!.issues.find((i) => i.type === 'weak_verb')!;
+    await h.service.applyFix(USER, 'rv_1', weak.id, 'Opened the store every morning.');
+    h.runAiPass.mockClear();
+
+    const second = await h.service.grade(USER, 'rv_1'); // no resume_check credit left
+    expect(second.grade!.method).toBe('rules');
+    expect(h.runAiPass).not.toHaveBeenCalled();
+    const spelling = second.grade!.issues.filter((i) => i.type === 'spelling');
+    expect(spelling).toHaveLength(1);
+    expect(spelling[0]).toMatchObject({ evidence: 'recieve', source: 'ai', carriedOver: true, severity: 'urgent' });
+    // The typo is still in the resume, so it still counts.
+    expect(second.grade!.counts!.urgent).toBe(first.grade!.counts!.urgent);
+    expect(second.grade!.label).toBe('fair');
+    expect(second.grade!.score!).toBeLessThan(100);
+    expect(new Set(second.grade!.issues.map((i) => i.id)).size).toBe(second.grade!.issues.length);
+
+    // A third check without the AI pass carries it again (from the carried copy).
+    const third = await h.service.grade(USER, 'rv_1');
+    expect(third.grade!.issues.filter((i) => i.type === 'spelling' && i.carriedOver)).toHaveLength(1);
+
+    const latest = await h.service.latest(USER, 'rv_1');
+    expect(latest.previous!.aiIssueTypes).toEqual(['spelling']);
+  });
+
+  it('a carried issue whose text is gone is dropped, and the previous check names it as AI-only', async () => {
+    const first = await h.service.grade(USER, 'rv_1');
+    expect(first.grade!.issues.some((i) => i.type === 'spelling')).toBe(true);
+    const md = h.store.variants.get('rv_1')!.resumeMarkdown.replace('recieve', 'receive');
+    await h.store.saveMarkdown(USER, 'rv_1', md);
+    const second = await h.service.grade(USER, 'rv_1');
+    expect(second.grade!.method).toBe('rules');
+    // Not carried (the word is gone) — and not provably fixed either: the
+    // comparison gets the AI-only types so the report can say "not checked".
+    expect(second.grade!.issues.some((i) => i.type === 'spelling')).toBe(false);
+    const latest = await h.service.latest(USER, 'rv_1');
+    expect(latest.previous!.issueTypes).toContain('spelling');
+    expect(latest.previous!.aiIssueTypes).toEqual(['spelling']);
+  });
+
+  it('a check that runs the AI pass carries nothing', async () => {
+    h = setup({ ai: false });
+    h.setAi(true);
+    await h.service.grade(USER, 'rv_1');
+    await h.kit.credits.grant({ userId: USER, bucket: 'resume_check', amount: 1, reason: 'test', idempotencyKey: 'g1' });
+    const second = await h.service.grade(USER, 'rv_1');
+    expect(second.grade!.method).toBe('rules_ai');
+    expect(second.grade!.issues.some((i) => i.carriedOver)).toBe(false);
   });
 
   it('other credit errors still fail the check', async () => {

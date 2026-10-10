@@ -118,10 +118,25 @@ export function NewLetterForm({ jobId, trackerEntryId, aiAvailable, onCreated, o
         )}
       </div>
 
-      <label className={styles.field}>
-        <span className={styles.label}>{t('form.resumeLabel')}</span>
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor="cl-resume">
+          {t('form.resumeLabel')}
+        </label>
         {resumes.isLoading ? (
           <span className={styles.hint}>{t('form.resumeLoading')}</span>
+        ) : resumes.isError ? (
+          // The list failed: say so and offer a retry. Never "add a resume
+          // first" — the user may have several.
+          <div className={styles.stack} data-testid="cl-resume-error">
+            <p className={styles.error} role="alert">
+              {t('form.resumeError')}
+            </p>
+            <div className={styles.actions}>
+              <Btn type="button" variant="ghost" onClick={() => void resumes.refetch()} disabled={resumes.isFetching}>
+                {t('form.resumeRetry')}
+              </Btn>
+            </div>
+          </div>
         ) : list.length === 0 ? (
           <span className={styles.notice}>
             {t('form.noResume')}{' '}
@@ -130,7 +145,7 @@ export function NewLetterForm({ jobId, trackerEntryId, aiAvailable, onCreated, o
             </a>
           </span>
         ) : (
-          <select className={styles.select} value={chosenResume} onChange={(e) => setResumeId(e.target.value)}>
+          <select id="cl-resume" className={styles.select} value={chosenResume} onChange={(e) => setResumeId(e.target.value)}>
             {list.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.isPrimary ? t('form.resumePrimary', { name: r.name }) : r.name}
@@ -138,7 +153,7 @@ export function NewLetterForm({ jobId, trackerEntryId, aiAvailable, onCreated, o
             ))}
           </select>
         )}
-      </label>
+      </div>
 
       <fieldset className={styles.field}>
         <legend className={styles.label}>{t('tone.label')}</legend>

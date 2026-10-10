@@ -94,6 +94,10 @@ function renderReport(focusIssueId?: string) {
   return { onIntlError };
 }
 
+function render0() {
+  return renderWithProviders(<ResumeCheckReport resumeId="rv_1" />, { onIntlError: vi.fn() });
+}
+
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.markResumeCheckOpened.mockResolvedValue(undefined);
@@ -242,6 +246,45 @@ describe('ResumeCheckReport', () => {
     expect(screen.getByText('Last time: Needs work, 40 of 100')).toBeInTheDocument();
     expect(screen.getByText('2 → 1')).toBeInTheDocument();
     expect(screen.getByText('Email address')).toBeInTheDocument(); // fixed since last time
+  });
+
+  it('a re-check without the AI read: carried issues are marked, and nothing AI-only is called fixed', async () => {
+    // QA: "Excellent 100 … Fixed since last time: Weak openers, Spelling" after a re-check with no credit.
+    const carried = issue({ id: 'spelling-1', type: 'spelling', severity: 'urgent', section: 'other', anchor: null, evidence: 'recieve', params: { word: 'recieve', suggestion: 'receive' }, source: 'ai', carriedOver: true });
+    api.getLatestGrade.mockResolvedValue(
+      latest({
+        grade: gradeView({ method: 'rules', aiSkipped: 'credits_exhausted', rulesChecked: 19, issues: [carried], counts: { urgent: 1, critical: 0, optional: 0 }, score: 85 }),
+        previous: {
+          id: 'g1', label: 'fair', score: 62, counts: { urgent: 2, critical: 1, optional: 0 },
+          issueTypes: ['spelling', 'summary_vague', 'weak_verb'], aiIssueTypes: ['spelling', 'summary_vague'], createdAt: NOW,
+        },
+      }),
+    );
+    const { container } = render0();
+    expect(await screen.findByText('From your last check. Not checked again this time.')).toBeInTheDocument();
+    const fixedList = screen.getByText('Fixed since last time').nextElementSibling!;
+    expect(fixedList.textContent).toContain('Weak openers');
+    expect(fixedList.textContent).not.toContain('Spelling');
+    expect(fixedList.textContent).not.toContain('summary');
+    // The vague-summary finding was neither found again nor checked: "not checked", not "fixed".
+    const notChecked = container.querySelector('[data-compare="not-checked"]')!;
+    expect(notChecked.textContent).toContain('Not checked this time');
+    expect(notChecked.querySelectorAll('li')).toHaveLength(1);
+    // The carried spelling issue is still an issue, so it is in neither list.
+    expect(notChecked.textContent).not.toContain('Spelling');
+  });
+
+  it('a check with the AI read lists what it no longer finds as fixed', async () => {
+    api.getLatestGrade.mockResolvedValue(
+      latest({
+        grade: gradeView({ issues: ISSUES.filter((i) => i.type !== 'spelling') }),
+        previous: { id: 'g1', label: 'fair', score: 62, counts: { urgent: 1, critical: 2, optional: 1 }, issueTypes: ['spelling', 'weak_verb'], aiIssueTypes: ['spelling'], createdAt: NOW },
+      }),
+    );
+    const { container } = render0();
+    const fixedList = (await screen.findByText('Fixed since last time')).nextElementSibling!;
+    expect(fixedList.textContent).toContain('Spelling');
+    expect(container.querySelector('[data-compare="not-checked"]')).toBeNull();
   });
 
   it('starts a check (credit line shown) and re-renders the result', async () => {

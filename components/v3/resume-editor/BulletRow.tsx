@@ -25,6 +25,7 @@ import { useTranslations } from 'next-intl';
 
 import { Markdown, IconX, IconCheck, IconRefresh } from '../primitives';
 import { AI_ACTIONS } from './constants';
+import { findPlaceholders } from '../../../lib/resumeAnalyzer';
 import { AiGeneratedBadge } from '../../features/market';
 import type {
   RAResumeRewriteAction,
@@ -125,6 +126,7 @@ export function BulletRow({
   }, [requestFocus]);
 
   const weak = isWeakBullet(text);
+  const blanks = findPlaceholders(text);
   // Empty bullets are always in edit mode — a read-only empty row is untypeable.
   const showEditor = editing || !text.trim();
 
@@ -177,7 +179,7 @@ export function BulletRow({
   const activeLabel = active ? t(`action.${active}.label`) : '';
 
   return (
-    <div className={`rb-bullet ${weak ? 'weak' : ''}`}>
+    <div className={`rb-bullet ${weak || blanks.length ? 'weak' : ''}`} data-placeholder={blanks.length ? 'true' : undefined}>
       <div className="rb-bullet-row">
         <span className="rb-bullet-dot">•</span>
         {showEditor ? (
@@ -265,7 +267,12 @@ export function BulletRow({
         </div>
       </div>
 
-      {weak && !draft && !busy ? (
+      {/* A blank an accepted AI suggestion left ("[X]", "[n=__]"): the line is not ready to send. */}
+      {blanks.length && !draft && !busy ? (
+        <div className="rb-bullet-flag" role="status" data-flag="placeholder">
+          <span aria-hidden="true">⚠</span> {t('bullet.placeholder_flag', { placeholders: blanks.join(' ') })}
+        </div>
+      ) : weak && !draft && !busy ? (
         <div className="rb-bullet-flag">
           <span aria-hidden="true">⚠</span> {t('bullet.flag')}
         </div>

@@ -357,3 +357,68 @@ export function analyzeResume(resume: StructuredResume): AnalyzerReport {
 
   return { score, issues, counts };
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Unfilled placeholders
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A bracketed blank an AI suggestion left for the user to fill in: "[X]",
+ * "[n=__]", "[before → after]". The rewrite agent never invents a number; it
+ * writes one of these instead (RAResumeRewriteAgent rule 1). Accepted as is,
+ * the line "…for [X] products across [n=__] planning periods" used to be
+ * exported and tailored with no warning anywhere.
+ *
+ * Kept identical to server/src/features/resume/check/placeholders.ts (the
+ * Resume check rule); a test compares the two on the same lines.
+ */
+const PLACEHOLDER_RE =
+  /\[(?:\s*(?:x{1,3}|n|#|\?{1,3}|tbd|todo)\s*|[^\]\n]{0,30}_{2,}[^\]\n]{0,30}|[^\]\n]{0,24}(?:→|->)[^\]\n]{0,24}|\s*(?:number|amount|metric|percent(?:age)?|team size|数量|数字|数值|百分比|人数|金额|比例)\s*)\](?!\()/gi;
+
+/** The placeholders in a text, in order (a markdown link "[text](url)" is not one). */
+export function findPlaceholders(text: string): string[] {
+  return Array.from((text ?? '').matchAll(PLACEHOLDER_RE), (m) => m[0]);
+}
+
+/**
+ * The lines of a resume's markdown that still carry a placeholder, as plain
+ * text (no bullet mark, heading mark or bold), in document order. For callers
+ * that hold the stored text and not the editor's structured resume (the
+ * download dialog opened from an application).
+ */
+export function placeholderLinesOfMarkdown(markdown: string): string[] {
+  const out: string[] = [];
+  for (const raw of (markdown ?? '').split('\n')) {
+    if (findPlaceholders(raw).length === 0) continue;
+    const text = raw
+      .replace(/^\s*(?:#{1,6}|[-*•·]|\d+[.)、])\s+/, '')
+      // Only `**`: underscores are part of a blank ("[n=__]").
+      .replace(/\*\*/g, '')
+      .trim();
+    if (text) out.push(text);
+  }
+  return out;
+}
+
+export interface PlaceholderLine {
+  /** The whole line that carries the placeholder(s). */
+  text: string;
+  placeholders: string[];
+  /** Editor anchor of the section the line is in. */
+  anchor: string;
+}
+
+/** Every line of the resume that still has a placeholder, in document order. */
+export function resumePlaceholders(resume: StructuredResume): PlaceholderLine[] {
+  const out: PlaceholderLine[] = [];
+  const add = (text: string, anchor: string) => {
+    const placeholders = findPlaceholders(text);
+    if (placeholders.length) out.push({ text: text.trim(), placeholders, anchor });
+  };
+  add(resume.summary, 'section-summary');
+  for (const e of resume.experiences) for (const b of e.bullets) add(b, `exp-${e.id}`);
+  for (const ed of resume.education) for (const b of ed.bullets) add(b, 'section-education');
+  for (const sk of resume.skills) add(sk, 'section-skills');
+  for (const x of resume.extraSections) for (const line of x.markdown.split('\n')) add(line.replace(/^\s*[-*•]\s+/, ''), 'section-projects');
+  return out;
+}

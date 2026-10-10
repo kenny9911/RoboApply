@@ -13,7 +13,9 @@
 // The grade is a checklist result, never a chance of passing. With AI off
 // (GoApply without the AI consent, or no model) the fix panel is hidden and
 // the method line says spelling was not checked. With no resume check credit
-// left the checklist still runs and the method line says so.
+// left the checklist still runs and the method line says so; what the last AI
+// read found is then carried over (marked "not checked again") or listed as
+// "not checked this time" — never as fixed.
 //
 // WP-65: the 4-step tour (ResumeTour, F-RES-07) points at the parts marked
 // `data-tour` (grade, filters, issues, recheck).
@@ -326,8 +328,13 @@ export function Comparison({ current, previous }: { current: GradeView; previous
   const now = current.counts ?? { urgent: 0, critical: 0, optional: 0 };
   const before = previous.counts;
   const currentTypes = new Set(current.issues.map((i) => i.type));
-  const fixed = previous.issueTypes.filter((type) => !currentTypes.has(type));
+  // A check that ran without the AI pass did not look for what only the AI
+  // pass finds (spelling, a vague summary): those are "not checked this
+  // time", never "fixed".
+  const unchecked = current.method === 'rules_ai' ? [] : (previous.aiIssueTypes ?? []).filter((type) => !currentTypes.has(type));
+  const fixed = previous.issueTypes.filter((type) => !currentTypes.has(type) && !unchecked.includes(type));
   const fixedNames = fixed.map((type) => issueTypeName(t, type)).filter((n): n is string => Boolean(n));
+  const uncheckedNames = unchecked.map((type) => issueTypeName(t, type)).filter((n): n is string => Boolean(n));
   const same = before ? SEVERITIES.every((s) => before[s] === now[s]) && fixed.length === 0 : false;
   return (
     <section className={styles.card} aria-labelledby="rc-compare">
@@ -362,6 +369,18 @@ export function Comparison({ current, previous }: { current: GradeView; previous
         <p className={`${styles.muted} ${styles.mt3}`}>
           {t('compare.same')}
         </p>
+      ) : null}
+      {uncheckedNames.length ? (
+        <div data-compare="not-checked">
+          <p className={`${styles.muted} ${styles.mt3}`}>{t('compare.notChecked')}</p>
+          <ul className={styles.fixedList}>
+            {uncheckedNames.map((n) => (
+              <li key={n} className={styles.chip}>
+                {n}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </section>
   );

@@ -80,6 +80,8 @@ export function EditorToolbar({
           value={name}
           onChange={(e) => onRename(e.target.value)}
           aria-label={t('toolbar.rename')}
+          // A long name is cut with an ellipsis; the full name stays readable on hover.
+          title={name}
           style={{
             background: 'transparent',
             border: 0,
@@ -103,9 +105,13 @@ export function EditorToolbar({
               onClick={() => setIssuesOpen((o) => !o)}
               disabled={!report}
               aria-expanded={issuesOpen}
-              title={t('analyzer.title')}
+              // This number is the editor's own quick score (it moves as you
+              // type). It is not the Resume check result; the label and the
+              // hint say so, so the two are never read as one score.
+              title={t('toolbar.quick_score_hint')}
+              aria-label={`${t('toolbar.quick_score')} ${strength}. ${t('toolbar.quick_score_hint')}`}
             >
-              <span className="rb-strength-lbl">{t('toolbar.strength')}</span>
+              <span className="rb-strength-lbl">{t('toolbar.quick_score')}</span>
               <span className="rb-strength-bar">
                 <span className="fill" style={{ width: `${strength}%` }} />
               </span>

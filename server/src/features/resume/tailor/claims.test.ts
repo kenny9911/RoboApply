@@ -242,6 +242,83 @@ describe('applyClaimDecision', () => {
     expect(r.claim).toMatchObject({ status: 'edited', text: 'Automated two dashboards.', proposed: c.text });
   });
 
+  describe('a line that replaced the user\u2019s own text (QA: Remove left an empty Summary)', () => {
+    // The zh-TW case: the AI wrote the summary again in another language, so
+    // the new line shares nothing with the base line.
+    const base = ['# Maya', '## Summary', 'Data analyst with 4 years of experience in logistics.', '## Experience', '### Northwind · Data Analyst · 2022 – Present', '- Built a weekly delivery dashboard.', '- Wrote SQL queries to find late shipments.', ''].join('\n');
+    const result = ['# Maya', '## Summary', '具有四年物流營運資料分析經驗的資料分析師。', '## Experience', '### Northwind · Data Analyst · 2022 – Present', '- 建立每週準時交付儀表板。', '- 撰寫 SQL 查詢以找出延遲出貨的原因。', ''].join('\n');
+
+    it('is one "before → after" change, not an add and a remove', () => {
+      const changes = diffChanges(base, result);
+      expect(changes.filter((c) => c.kind === 'remove')).toEqual([]);
+      expect(changes.find((c) => c.section === 'Summary')).toMatchObject({ kind: 'rewrite', before: 'Data analyst with 4 years of experience in logistics.' });
+      expect(changes.filter((c) => c.section === 'Experience').map((c) => c.before)).toEqual(['Built a weekly delivery dashboard.', 'Wrote SQL queries to find late shipments.']);
+    });
+
+    it('Remove puts back what the resume said before; removing every claim gives the base resume back', () => {
+      let md = result;
+      const claims = extractClaims({ baseMarkdown: base, resultMarkdown: result });
+      const summary = claims.find((c) => c.section === 'Summary')!;
+      expect(summary.original).toBe('Data analyst with 4 years of experience in logistics.');
+      md = applyClaimDecision(md, summary, { status: 'removed' }).markdown;
+      expect(md).toContain('## Summary\nData analyst with 4 years of experience in logistics.');
+      for (const c of claims.filter((x) => x !== summary)) md = applyClaimDecision(md, c, { status: 'removed' }).markdown;
+      expect(md).toBe(base);
+    });
+
+    it('a line added under one employer never takes the place of a line dropped under another', () => {
+      const b = ['## Experience', '### Acme · Analyst · 2021 – present', '- Built reports.', '### Beta · Analyst · 2019 – 2021', '- Cleaned data in Excel.', ''].join('\n');
+      const r = ['## Experience', '### Acme · Analyst · 2021 – present', '- Built reports.', '- Presented findings to 30 managers.', '### Beta · Analyst · 2019 – 2021', ''].join('\n');
+      const changes = diffChanges(b, r);
+      expect(changes).toEqual([
+        { section: 'Experience', before: '', after: 'Presented findings to 30 managers.', kind: 'add' },
+        { section: 'Experience', before: 'Cleaned data in Excel.', after: '', kind: 'remove' },
+      ]);
+    });
+  });
+
+  describe('an uploaded resume: bold role heads are entry lines too', () => {
+    const base = ['## Experience', '', '**Data Analyst — Northwind Freight** · June 2022 – Present · Portland, OR', '- Built a weekly delivery dashboard.', '', '## Skills', '', '**Tools:** Tableau · Excel', ''].join('\n');
+
+    it('a role line the model changed is put back; a skills label line may change', () => {
+      const tailored = ['## Experience', '', '**Senior Data Analyst — Northwind Freight** · 2021 – Present', '- Built a weekly delivery dashboard for dispatch.', '', '## Skills', '', '**Tools:** Tableau · Excel · SQL', ''].join('\n');
+      const merged = mergeTailored(base, tailored, ['experience', 'skills']);
+      expect(merged).toContain('**Data Analyst — Northwind Freight** · June 2022 – Present · Portland, OR');
+      expect(merged).not.toContain('Senior Data Analyst');
+      expect(merged).toContain('**Tools:** Tableau · Excel · SQL');
+      // The role line is not a change; the bullet and the skills line are.
+      expect(diffChanges(base, merged).map((c) => c.section)).toEqual(['Experience', 'Skills']);
+    });
+  });
+
+  describe('a line that starts in bold outside an entry section is ordinary text', () => {
+    const base = ['# Maya', '## Summary', 'Data analyst with 4 years in logistics.', '', '## Skills', 'Tableau · Excel', ''].join('\n');
+    const tailored = ['## Summary', '**Data analyst** — 4 years in logistics analytics, focused on on-time delivery.', '', '## Skills', '**Tools** — Tableau · Excel · SQL', ''].join('\n');
+    const lines = (md: string) => md.split('\n').filter((l) => l.trim());
+
+    it('the summary and skills lines are kept, and reported as rewrites of the base lines', () => {
+      const merged = mergeTailored(base, tailored, ['summary', 'skills']);
+      expect(lines(merged)).toEqual(['# Maya', '## Summary', '**Data analyst** — 4 years in logistics analytics, focused on on-time delivery.', '## Skills', '**Tools** — Tableau · Excel · SQL']);
+      const changes = diffChanges(base, merged);
+      expect(changes.filter((c) => c.kind === 'remove')).toEqual([]);
+      expect(changes.find((c) => c.section === 'Summary')).toMatchObject({ kind: 'rewrite', before: 'Data analyst with 4 years in logistics.' });
+    });
+
+    it('Remove on the summary claim puts the base line back (never an empty Summary)', () => {
+      const merged = mergeTailored(base, tailored, ['summary', 'skills']);
+      const claims = extractClaims({ baseMarkdown: base, resultMarkdown: merged });
+      let md = merged;
+      for (const c of claims) md = applyClaimDecision(md, c, { status: 'removed' }).markdown;
+      expect(claims.length).toBeGreaterThan(0);
+      expect(lines(md)).toEqual(lines(base));
+    });
+
+    it('a bold-only line in a summary is kept too', () => {
+      const merged = mergeTailored(base, ['## Summary', '**Logistics data analyst**', 'Four years of delivery reporting.', ''].join('\n'), ['summary']);
+      expect(merged).toContain('**Logistics data analyst**');
+    });
+  });
+
   describe('a line the AI wrote more than once', () => {
     const base = ['## Experience', '### Acme · Analyst · 2021 – present', '- Built reports.', '### Beta · Analyst · 2019 – 2021', '- Cleaned data in Excel.', ''].join('\n');
     const result = [

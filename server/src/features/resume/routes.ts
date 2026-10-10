@@ -14,7 +14,7 @@
 //   POST /grades/:gradeId/cancel        → CancelGradeResponse                  (releases the reserved credit)
 //   POST /:id/issues/:issueId/fix       { variant, instruction? } → FixIssueResponse (credit rewrite; 503 ai_unavailable without AI consent)
 //   POST /:id/issues/:issueId/apply     { text } → ApplyFixResponse           (AI text lands in the resume: stamps aiAssistedAt once)
-//   POST /:id/keyword-report            { jobId } | { jd } → KeywordReportResponse (deterministic; free)
+//   POST /:id/keyword-report            { jobId } | { jd } | { tailorSessionId } → KeywordReportResponse (deterministic; free)
 // WP-36a routes (tailor sessions; ruling C12):
 //   POST  /tailor-sessions                      CreateTailorSessionBody → TailorSessionView (credit tailor; Idempotency-Key;
 //                                               503 ai_unavailable without AI consent; GoApply WeChat accounts
@@ -272,7 +272,9 @@ export function createResumeSuiteRouter(deps: FeatureRouterDeps = {}, options: R
       const userId = requireUserId(req);
       const { id } = parseParams(req, ResumeIdParamsSchema);
       const body = parseBody(req, KeywordReportBodySchema);
-      return (await svc()).keywordReport(userId, id, body);
+      // A tailor session names its own posting (the job, or the pasted text kept on it).
+      const target = 'tailorSessionId' in body ? await (await tailor()).postingOf(userId, body.tailorSessionId) : body;
+      return (await svc()).keywordReport(userId, id, target);
     }),
   );
 

@@ -278,6 +278,33 @@ describe('TailorResult', () => {
     expect(screen.getAllByRole('meter')).toHaveLength(1);
   });
 
+  it('change rows: a default section title follows the interface language, the resume\u2019s own title stays, marks are not shown', () => {
+    renderWithProviders(
+      <TailorResult
+        session={sessionView({
+          changes: [
+            { section: 'Summary', before: 'Old summary.', after: 'New summary.', kind: 'rewrite' },
+            { section: '实习经历', before: '', after: '**框架：** pandas', kind: 'add' },
+          ],
+        })}
+      />,
+    );
+    const rows = document.querySelectorAll('[data-kind]');
+    expect(rows[0]!.textContent).toContain('Summary');
+    expect(rows[1]!.textContent).toContain('实习经历');
+    expect(rows[1]!.textContent).toContain('框架： pandas');
+    expect(rows[1]!.textContent).not.toContain('**');
+  });
+
+  it('the result shows the keyword check of the tailored text, for a job and for a pasted posting', async () => {
+    api.getKeywordReport.mockResolvedValue({ ...KEYWORDS, rows: [{ key: 'skills', status: 'warn', params: { met: 1, total: 2 }, label: 'Hard skills', detail: '' }] });
+    renderWithProviders(<TailorResult session={sessionView({ jobId: null, resultVariantId: 'rv_2' })} />);
+    await waitFor(() => expect(api.getKeywordReport).toHaveBeenCalledWith('rv_2', { tailorSessionId: 'ts_1' }, expect.anything()));
+    expect(await screen.findByText('Keyword check')).toBeInTheDocument();
+    // The result has its own before / after scores: the grid does not repeat a fit score.
+    expect(screen.queryByText('Fit score for this resume')).toBeNull();
+  });
+
   it('shows AI labels and change cards', async () => {
     renderWithProviders(<TailorResult session={sessionView()} />);
     expect(screen.getByTestId('ai-badge')).toBeInTheDocument();
@@ -353,6 +380,14 @@ describe('ClaimCard', () => {
     fireEvent.change(box, { target: { value: 'Automated two weekly reports.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onDecide).toHaveBeenLastCalledWith({ status: 'edited', text: 'Automated two weekly reports.' }));
+  });
+
+  it('markdown marks of a resume line are not shown as text (QA: raw "**框架：**")', () => {
+    const onDecide = vi.fn();
+    renderWithProviders(<ul><ClaimCard claim={claim({ id: 'c7', text: '**框架：** pandas · PyTorch', original: '**Frameworks:** pandas' })} onDecide={onDecide} /></ul>);
+    expect(screen.getByText('框架： pandas · PyTorch')).toBeInTheDocument();
+    expect(screen.getByText('Your resume said: Frameworks: pandas')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('**');
   });
 
   it('a line the AI wrote in several places says the choice applies to each copy', () => {
@@ -454,6 +489,7 @@ describe('target step: which job is this for? (INT-10)', () => {
   });
 
   it('pasting a posting → Generate sends jd { title, company, text } and no jobId', async () => {
+    api.getKeywordReport.mockResolvedValue({ ...KEYWORDS, skillGaps: ['Snowflake', 'dbt'], keywordSource: 'posting' });
     api.createTailorSession.mockResolvedValue(sessionView({ jobId: null }));
     api.getTailorSession.mockResolvedValue(sessionView({ jobId: null }));
     openSheet();
@@ -470,13 +506,21 @@ describe('target step: which job is this for? (INT-10)', () => {
 
     expect(await screen.findByText('What should change?')).toBeInTheDocument();
     expect(screen.getByTestId('tailor-target')).toHaveTextContent('Tailoring for: Sales Analyst at Globex');
-    // A pasted posting has no stored skill list: no keyword read, no keyword step.
-    expect(api.getKeywordReport).not.toHaveBeenCalled();
-    expect(screen.queryByText('Skills this job asks for that your resume does not show')).toBeNull();
+    // A pasted posting gets the same skills step as a job: the skills are read from the pasted text
+    // (QA: a pasted post naming Snowflake, dbt and Looker had no keyword step).
+    await waitFor(() =>
+      expect(api.getKeywordReport).toHaveBeenCalledWith('rv_1', { jd: { title: 'Sales Analyst', company: 'Globex', text: POSTING_TEXT } }, expect.anything()),
+    );
+    expect(screen.getByText('Skills this job asks for that your resume does not show')).toBeInTheDocument();
+    // The server's list of skill gaps is offered as is (never the raw keyword rows).
+    expect(await screen.findByRole('checkbox', { name: 'Snowflake' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'forecasting' })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Snowflake' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
     await waitFor(() => expect(api.createTailorSession).toHaveBeenCalledTimes(1));
     const body = api.createTailorSession.mock.calls[0]![0];
+    expect(body.keywords).toEqual(['Snowflake']);
     expect(body.jd).toEqual({ title: 'Sales Analyst', company: 'Globex', text: POSTING_TEXT });
     expect(body).not.toHaveProperty('jobId');
     expect(body.baseVariantId).toBe('rv_1');

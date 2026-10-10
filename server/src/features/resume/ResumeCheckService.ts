@@ -44,7 +44,7 @@ import {
 } from './contract.js';
 import type { AiPassInput, AiPassOutput } from './check/aiPass.js';
 import { aiIssues } from './check/aiPass.js';
-import { hasInventedNumber, inventedNumbers } from './check/citationGuard.js';
+import { hasInventedNumber, inventedNumbers, quotedIn } from './check/citationGuard.js';
 import { isSensitiveLine, resumeForLlm } from './check/resumeText.js';
 import { runRules, withIds } from './check/rules.js';
 import { gradeIssues } from './check/score.js';
@@ -82,6 +82,12 @@ export interface ResumeCheckDeps {
    * this, never one too high.
    */
   hasTemplate?: () => boolean;
+  /**
+   * How the keyword report writes terms: 'posting' = in the posting's own
+   * casing ("SQL", "Power BI"). Left out, the lists stay as the skill list
+   * and the vocabulary hold them (lower case), as before.
+   */
+  keywordCasing?: 'posting' | 'as_listed';
   now?: () => Date;
   timeoutMs?: number;
 }
@@ -181,6 +187,7 @@ export class ResumeCheckService {
       score: row.score,
       counts: parseCounts(row.counts),
       issueTypes: [...new Set(issues.map((i) => i.type))],
+      aiIssueTypes: [...new Set(issues.filter((i) => i.source === 'ai').map((i) => i.type))],
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -279,6 +286,15 @@ export class ResumeCheckService {
         }
       }
 
+      // No AI pass this time (no credit, AI off, or it failed): what the last
+      // AI pass found is not "fixed" just because nobody looked. Its issues
+      // whose text is still in the resume are brought forward, marked as not
+      // checked again, and count in the score like any other issue.
+      if (method === 'rules') {
+        const carried = await this.carriedAiIssues(userId, variantId, row.id, variant.resumeMarkdown);
+        if (carried.length) issues = withIds([...rules.map(({ id: _id, ...rest }) => rest), ...carried]);
+      }
+
       // The completion write is conditional on the row still being `running`,
       // so a cancel that lands at any point before it wins: no result, no commit.
       const { score, label, counts } = gradeIssues(issues);
@@ -318,6 +334,38 @@ export class ResumeCheckService {
       if (reservation) await this.safeRelease(reservation.id, 'grade_failed');
       throw err;
     }
+  }
+
+  /**
+   * AI-pass issues of the last check that had any, still true of this text:
+   * a misspelled word that is still there, a summary that is still the same
+   * line. An issue whose text is gone is dropped (the user changed it; it is
+   * shown as "not checked", never as fixed — see `GradeSummaryView.aiIssueTypes`).
+   * Never fails the check: on a read error nothing is carried.
+   */
+  private async carriedAiIssues(userId: string, variantId: string, currentGradeId: string, markdown: string): Promise<Array<Omit<GradeIssue, 'id'>>> {
+    let rows: GradeRow[];
+    try {
+      rows = await this.deps.store.listGrades(userId, variantId, 20);
+    } catch (err) {
+      logger.warn('RESUME_CHECK', 'previous checks not read; no AI issue carried over', { userId, variantId, error: err instanceof Error ? err.message : String(err) });
+      return [];
+    }
+    const prior = rows
+      .filter((r) => r.id !== currentGradeId && r.status === 'done')
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .find((r) => methodOf(r.model) === 'rules_ai' || parseIssues(r.issues).some((i) => i.source === 'ai'));
+    if (!prior) return [];
+    const seen = resumeForLlm(markdown);
+    const out: Array<Omit<GradeIssue, 'id'>> = [];
+    for (const { id: _id, ...issue } of parseIssues(prior.issues)) {
+      if (issue.source !== 'ai') continue;
+      const quote = (issue.target ?? issue.evidence ?? '').trim();
+      if (!quote) continue;
+      const still = issue.target ? markdown.includes(quote) : quotedIn(quote, seen);
+      if (still) out.push({ ...issue, carriedOver: true });
+    }
+    return out;
   }
 
   /**
@@ -494,12 +542,14 @@ export class ResumeCheckService {
           ? { score: fitRow.score, tier: fitRow.tier, generatedAt: fitRow.generatedAt, stale: fitRow.resumeContentHashAtScore !== variant.resumeContentHash }
           : null,
         now: this.now(),
+        casing: this.deps.keywordCasing,
       });
     }
     return buildKeywordReport({
       resumeMarkdown: variant.resumeMarkdown,
       job: { title: body.jd.title, text: body.jd.text },
       now: this.now(),
+      casing: this.deps.keywordCasing,
     });
   }
 

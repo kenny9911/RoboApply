@@ -12,8 +12,9 @@
 //     model ran (TASK_PLAN.md §2.2);
 //   - only the sections the user picked may change; every other section is
 //     the base text, byte for byte;
-//   - `###` entry lines (employer · title · dates) never change: a changed one
-//     is replaced with the base line at the same position.
+//   - entry lines (employer · title · dates: `###`, or the bold head of an
+//     uploaded resume) never change: a changed one is replaced with the base
+//     line at the same position.
 
 import { isSensitiveLine, sectionKeyOf, stripMarkdown } from '../check/resumeText.js';
 import type { ResumeSectionKey, TailorChange, TailorSection } from '../contract.js';
@@ -30,6 +31,25 @@ export interface Block {
 
 const H2_RE = /^\s*##\s+(.+?)\s*$/;
 const H3_RE = /^\s*###\s+/;
+/**
+ * The bold head an uploaded resume uses for an entry ("**Data Analyst —
+ * Northwind** · 2022 – Present": bold from the start, then nothing or a
+ * separator). A labelled skills line ("**Tools:** Jira") is not one.
+ */
+const BOLD_HEAD_RE = /^\s*\*\*(?![^*]*[:：]\s*\*\*)[^*]+\*\*\s*(?:$|[·|—–-]\s)/;
+/** Sections that hold entries (a role, a project, a school). Same set as check/resumeText.ts. */
+const ENTRY_KEYS: ReadonlySet<Block['key']> = new Set<Block['key']>(['experience', 'projects', 'education']);
+
+/**
+ * An entry line (employer · title · dates): a `###` line anywhere, or a bold
+ * head inside a section that holds entries. In Summary or Skills a line that
+ * starts in bold ("**Data analyst** — 4 years in logistics", "**Tools** —
+ * Tableau · Excel") is ordinary text: treated as an entry it was dropped as
+ * "an employer the base does not have", which emptied the section.
+ */
+function isEntryLine(line: string, key: Block['key']): boolean {
+  return H3_RE.test(line) || (ENTRY_KEYS.has(key) && BOLD_HEAD_RE.test(line));
+}
 const BULLET_PREFIX_RE = /^(\s*(?:[-*•·]|\d+[.)、])\s+)/;
 
 export function splitBlocks(markdown: string): Block[] {
@@ -91,13 +111,13 @@ function headingNorm(h: string | null): string {
 }
 
 /** Keep the base `###` entry lines: a changed or new one becomes the base line at that position. */
-function pinEntryLines(baseLines: string[], tailoredLines: string[]): string[] {
-  const baseEntries = baseLines.filter((l) => H3_RE.test(l));
+function pinEntryLines(baseLines: string[], tailoredLines: string[], key: Block['key']): string[] {
+  const baseEntries = baseLines.filter((l) => isEntryLine(l, key));
   const baseSet = new Set(baseEntries.map((l) => normLine(l)));
   let entryIndex = -1;
   const out: string[] = [];
   for (const line of tailoredLines) {
-    if (!H3_RE.test(line)) {
+    if (!isEntryLine(line, key)) {
       out.push(line);
       continue;
     }
@@ -132,7 +152,7 @@ export function mergeTailored(baseMarkdown: string, tailoredMarkdown: string, se
     if (!t) return b;
     used.add(t);
     const sensitive = b.lines.filter((l) => l.trim() && isSensitiveLine(l));
-    const body = pinEntryLines(b.lines, t.lines).filter((l) => !isSensitiveLine(l));
+    const body = pinEntryLines(b.lines, t.lines, b.key).filter((l) => !isSensitiveLine(l));
     return { ...b, lines: withTrailingBlank([...sensitive, ...body]) };
   });
 
@@ -199,13 +219,30 @@ export const REWRITE_SIMILARITY = 0.3;
 export const MAX_CHANGES = 60;
 
 function contentLines(block: Block): string[] {
-  return block.lines.filter((l) => l.trim() && !H3_RE.test(l)).map((l) => l.trim());
+  return block.lines.filter((l) => l.trim() && !isEntryLine(l, block.key)).map((l) => l.trim());
+}
+
+/** Each content line of a block → the `###` entry it sits under ('' above the first entry). */
+function entryOfLines(block: Block): Map<string, string> {
+  const out = new Map<string, string>();
+  let entry = '';
+  for (const raw of block.lines) {
+    if (!raw.trim()) continue;
+    if (isEntryLine(raw, block.key)) {
+      entry = normLine(raw);
+      continue;
+    }
+    // The first place a line appears decides (the same text under two entries is rare).
+    if (!out.has(raw.trim())) out.set(raw.trim(), entry);
+  }
+  return out;
 }
 
 /**
  * Line changes from `baseMarkdown` to `resultMarkdown`, per section: an added
  * line, a removed line, or a rewritten line paired with the most similar
- * base line of the same section. Reordered lines are not changes.
+ * base line of the same section — or, when none is similar, with a base line
+ * the section lost (a replacement). Reordered lines are not changes.
  *
  * `limit` caps the list for display only. Claim extraction must call this
  * uncapped (the default), so no added line past the cap goes unchecked.
@@ -228,6 +265,7 @@ export function diffChanges(baseMarkdown: string, resultMarkdown: string, header
     const rNorm = new Set(rLines.map(normLine));
     const freeBase = bLines.filter((l) => !rNorm.has(normLine(l)));
     const pairedBase = new Set<string>();
+    const sectionChanges: TailorChange[] = [];
     for (const line of rLines) {
       if (bNorm.has(normLine(line))) continue;
       let best: string | null = null;
@@ -242,11 +280,36 @@ export function diffChanges(baseMarkdown: string, resultMarkdown: string, header
       }
       if (best && bestSim >= REWRITE_SIMILARITY) {
         pairedBase.add(best);
-        changes.push({ section, before: lineContent(best), after: lineContent(line), kind: 'rewrite' });
+        sectionChanges.push({ section, before: lineContent(best), after: lineContent(line), kind: 'rewrite' });
       } else {
-        changes.push({ section, before: '', after: lineContent(line), kind: 'add' });
+        sectionChanges.push({ section, before: '', after: lineContent(line), kind: 'add' });
       }
     }
+    // A new line that stands where a base line was dropped REPLACES it, however
+    // little the two share (a summary written from scratch, a line in another
+    // language). Pair them in order, so the change reads "before → after" and
+    // "Remove" in Verify details puts the base line back. Left as an unpaired
+    // add + remove, removing the new line deleted the user's own text with it
+    // (an empty Summary in the saved version).
+    // Only inside the same `###` entry: a line dropped under one employer is
+    // never "replaced" by a line added under another.
+    const dropped = freeBase.filter((l) => !pairedBase.has(l));
+    if (dropped.length > 0 && b) {
+      const baseEntry = entryOfLines(b);
+      const resultEntry = entryOfLines(r);
+      const addedLines = rLines.filter((l) => !bNorm.has(normLine(l)));
+      sectionChanges.forEach((change, i) => {
+        if (change.kind !== 'add') return;
+        const entry = resultEntry.get(addedLines[i]!) ?? '';
+        const at = dropped.findIndex((l) => (baseEntry.get(l) ?? '') === entry);
+        if (at < 0) return;
+        const [before] = dropped.splice(at, 1);
+        pairedBase.add(before!);
+        change.before = lineContent(before!);
+        change.kind = 'rewrite';
+      });
+    }
+    changes.push(...sectionChanges);
     for (const line of freeBase) {
       if (!pairedBase.has(line)) changes.push({ section, before: lineContent(line), after: '', kind: 'remove' });
     }

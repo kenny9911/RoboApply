@@ -26,6 +26,7 @@ import { Suspense, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 
+import { parseResumeMarkdown } from '../../../lib/resumeStructure';
 import {
   PageHeader,
   Btn,
@@ -38,6 +39,7 @@ import {
   CreateCard,
   ResumeCard,
   ImportModal,
+  joinPhrase,
   type CreateSource,
   type ImportSource,
   type ImportCreateContext,
@@ -202,24 +204,29 @@ export default function ResumesPage() {
     return createMut.mutateAsync(buildCreateBody(ctx));
   }
 
-  // Per-source cosmetic ingest rows shown during the "parsing" animation.
-  function ingestRows(source: ImportSource, ctx: ImportCreateContext) {
-    if (source === 'scratch') {
-      return [
-        { k: t('ingest.scratch.template'), v: t('ingest.scratch.template_v') },
-        { k: t('ingest.scratch.sections'), v: t('ingest.scratch.sections_v') },
-        { k: t('ingest.scratch.ai'), v: t('ingest.scratch.ai_v') },
-        { k: t('ingest.scratch.ready'), v: t('ingest.scratch.ready_v') },
-      ];
-    }
-    const readValue = ctx.fileName ?? t('import.demo_file_name');
+  // What a new draft from a template is made of, shown while it is created.
+  // (A file shows nothing of the kind: see importFacts.)
+  function ingestRows(source: ImportSource) {
+    if (source !== 'scratch') return [];
     return [
-      { k: t('ingest.import.read'), v: readValue },
-      { k: t('ingest.import.identity'), v: t('ingest.import.identity_v') },
-      { k: t('ingest.import.experience'), v: t('ingest.import.experience_v') },
-      { k: t('ingest.import.education'), v: t('ingest.import.education_v') },
-      { k: t('ingest.import.skills'), v: t('ingest.import.skills_v') },
-      { k: t('ingest.import.cleaned'), v: t('ingest.import.cleaned_v') },
+      { k: t('ingest.scratch.template'), v: t('ingest.scratch.template_v') },
+      { k: t('ingest.scratch.sections'), v: t('ingest.scratch.sections_v') },
+      { k: t('ingest.scratch.ai'), v: t('ingest.scratch.ai_v') },
+      { k: t('ingest.scratch.ready'), v: t('ingest.scratch.ready_v') },
+    ];
+  }
+
+  // What was actually read from an uploaded file: counted from the saved
+  // resume, after the server answered. A section the file did not have says
+  // so (D3: no fixed "Experience ✓ Roles · titles · dates" list, no made-up count).
+  function importFacts(variant: RAResumeVariant) {
+    const read = parseResumeMarkdown(variant.resumeMarkdown ?? '');
+    const row = (k: string, count: number, v: string) => ({ k, v: count > 0 ? v : t('ingest.found.none'), found: count > 0 });
+    return [
+      row(t('ingest.import.identity'), read.contact.fullName ? 1 : 0, read.contact.fullName),
+      row(t('ingest.import.experience'), read.experiences.length, t('ingest.found.roles', { count: read.experiences.length })),
+      row(t('ingest.import.education'), read.education.length, t('ingest.found.schools', { count: read.education.length })),
+      row(t('ingest.import.skills'), read.skills.length, t('ingest.found.skills', { count: read.skills.length })),
     ];
   }
 
@@ -235,7 +242,7 @@ export default function ResumesPage() {
     templateEditorial: t('import.template.editorial'),
     scratchHint: t('import.scratch_hint'),
     dropTitle: t('import.drop.title'),
-    dropSub: t('import.drop.sub'),
+    dropSub: t('import.drop.formats'),
     fileReady: t('import.drop.ready'),
     linkedinStepsTitle: t('import.linkedin.steps_title'),
     linkedinStep1: t('import.linkedin.step1'),
@@ -250,7 +257,7 @@ export default function ResumesPage() {
     doneTitleScratch: t('import.done.title_scratch'),
     doneTitleImport: t('import.done.title_import'),
     doneBodyScratch: t('import.done.body_scratch'),
-    doneBodyImport: t('import.done.body_import'),
+    doneBodyImport: t('import.done.body_read'),
     cancel: t('import.cancel'),
     createDraft: t('import.create_draft'),
     parseWithAi: t('import.parse_with_ai'),
@@ -321,7 +328,8 @@ export default function ResumesPage() {
       <PageHeader
         eyebrow={t('eyebrow')}
         eyebrowLive
-        title={`${t('title_lead')} ${t('title_accent')}${t('title_after')}`}
+        // `title_after` is a suffix (".", "的履歷。", "를 만들어요."): it attaches with no space.
+        title={`${joinPhrase(t('title_lead'), t('title_accent'))}${t('title_after')}`}
         sub={t('subtitle')}
       />
 
@@ -399,7 +407,7 @@ export default function ResumesPage() {
         />
       ) : sorted.length === 0 ? (
         <EmptyState
-          title={`${t('empty.title_lead')} ${t('empty.title_accent')}`}
+          title={joinPhrase(t('empty.title_lead'), t('empty.title_accent'))}
           sub={t('empty.sub')}
           action={
             <Btn variant="primary" onClick={() => handleSelect('scratch')}>
@@ -478,6 +486,8 @@ export default function ResumesPage() {
           lostResponseCodes={LOST_RESPONSE_CODES}
           onCheckList={handleCheckList}
           ingestRows={ingestRows}
+          readingLabel={(file) => t('import.reading', { file })}
+          doneFacts={importFacts}
           onCreate={handleCreate}
           onClose={() => setImporting(null)}
           onDone={handleDone}

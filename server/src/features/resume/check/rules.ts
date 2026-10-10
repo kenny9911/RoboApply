@@ -8,6 +8,7 @@
 
 import type { GradeIssue, GradeProfile, IssueType } from '../contract.js';
 import { ISSUE_DEFINITIONS } from './taxonomy.js';
+import { findPlaceholders } from './placeholders.js';
 import {
   isCjkText,
   parseResume,
@@ -246,6 +247,22 @@ export function runRules(input: RuleInput): GradeIssue[] {
     if (units <= max) continue;
     long += 1;
     if (long <= 3) push('bullet_too_long', { target: b.text, params: { units, max } });
+  }
+
+  // ── unfilled placeholders ("[X]", "[n=__]") ──
+  // Every line that still has one, wherever it is (a bullet, the summary, a
+  // skills line): it would be sent with the brackets in it.
+  let blanks = 0;
+  for (const s of r.sections) {
+    for (const text of [...s.body, ...s.bullets.map((b) => b.text)]) {
+      const found = findPlaceholders(text);
+      if (found.length === 0) continue;
+      blanks += 1;
+      if (blanks > MAX_INSTANCES) continue;
+      const d = ISSUE_DEFINITIONS.placeholder_unfilled;
+      const section = s.key === 'contact' || s.key === 'layout' ? d.section : s.key;
+      push('placeholder_unfilled', { section, anchor: anchorFor(section), target: text, evidence: found.join(' '), params: { placeholder: found[0]!, count: found.length } });
+    }
   }
 
   // ── buzzwords ──

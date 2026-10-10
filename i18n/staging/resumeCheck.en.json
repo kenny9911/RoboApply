@@ -1,3 +1,18 @@
 {
-  "resumeCheck": {}
+  "resumeCheck": {
+    "carried": "From your last check. Not checked again this time.",
+    "compare": {
+      "notChecked": "Not checked this time"
+    },
+    "issue": {
+      "placeholder_unfilled": {
+        "title": "Unfilled blank: {placeholder}",
+        "why": "This line still has a blank where your own number goes. A reader would see the brackets.",
+        "how": "Put in the real number, or rewrite the line without it. Never guess a figure."
+      }
+    },
+    "typeName": {
+      "placeholder_unfilled": "Unfilled blanks"
+    }
+  }
 }

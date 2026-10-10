@@ -40,7 +40,7 @@ import {
   type FileNameStyleKey,
   type PageSize,
 } from '../lib/resumeExport.js';
-import { legacyJobVisible, loadLegacyVisibleJob } from '../lib/legacyJobScope.js';
+import { LEGACY_JOB_SCOPE_SELECT, legacyJobVisible, loadLegacyVisibleJob } from '../lib/legacyJobScope.js';
 
 export type RAResumeKind = 'base' | 'tailored_for_jd' | 'from_template';
 
@@ -204,6 +204,19 @@ export interface ExportRequest {
   nameStyle?: FileNameStyleKey | null;
   /** Record the exact file on this application (RAApplicationArtifact). */
   trackerEntryId?: string | null;
+  /**
+   * With no `trackerEntryId`: record the file on the user's own application
+   * for the job this version was tailored for, when there is one (a download
+   * from the editor or the hub names no application; WP-95).
+   */
+  autoTrack?: boolean;
+  /**
+   * The file carries a photo from the user's device. A photo is never stored
+   * on our servers, so an application found by `autoTrack` then records the
+   * file's name and sha256 without keeping a copy. (A named `trackerEntryId`
+   * is made without the photo by the route.)
+   */
+  photoInFile?: boolean;
   /** 'download' (hub/editor) | 'agent' | 'extension'. */
   channel?: 'download' | 'agent' | 'extension';
   locale?: string | null;
@@ -349,8 +362,8 @@ export async function findBaseDuplicateId(
   return dup?.id ?? null;
 }
 
-/** The columns `legacyJobVisible` reads (market, visibility, owner, source). */
-const JOB_SCOPE_SELECT = { market: true, visibility: true, ownerUserId: true, provider: true, sourceBoard: true } as const;
+/** The columns `legacyJobVisible` reads (market, visibility, owner, source). One definition, type-checked against the model. */
+const JOB_SCOPE_SELECT = LEGACY_JOB_SCOPE_SELECT;
 
 function isoDate(d: any): string {
   if (d instanceof Date) return d.toISOString();
@@ -1003,7 +1016,9 @@ export class RAResumeService {
    * machine-readable AI marks on both brands, plus the visible footer on
    * GoApply when CN_AI_EXPORT_EXPLICIT_LABEL is on, and GoApply writes one
    * RAAiContentLabelLog row. With `trackerEntryId` the exact bytes are stored
-   * and an RAApplicationArtifact row records sha256 + storage key.
+   * and an RAApplicationArtifact row records sha256 + storage key. With
+   * `autoTrack` the same record is made on the user's application for the job
+   * this version was tailored for, when one exists.
    */
   async exportVariant(userId: string, id: string, req: ExportRequest): Promise<ExportResult> {
     const p = prisma as any;
@@ -1021,6 +1036,25 @@ export class RAResumeService {
       });
       if (!tracker) throw new TrackerEntryNotFoundError();
     }
+    // A download that names no application (the editor, the hub): a version
+    // tailored for a job belongs to the user's application for that job, so
+    // the file is recorded there. Never fails the download.
+    let autoTracked = false;
+    if (!tracker && req.autoTrack && variant.targetJobId) {
+      try {
+        tracker = await p.rATrackerEntry.findFirst({
+          where: { userId, jobId: variant.targetJobId, deletedAt: null },
+          select: { id: true, jobId: true, externalSnapshot: true },
+        });
+        autoTracked = Boolean(tracker);
+      } catch (err) {
+        logger.warn('RA_V2_RESUME', 'application for the tailored version not read; the file is not recorded', {
+          userId,
+          resumeId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     // File-name parts come only from data we hold (never invented), and a job
     // lends its company and title only when this user may read it here: the
@@ -1033,7 +1067,9 @@ export class RAResumeService {
       : null;
     const job = legacyJobVisible(jobRow, userId, { market: req.market }) ? jobRow : null;
     const snapshot = (tracker?.externalSnapshot ?? null) as { title?: unknown; companyName?: unknown } | null;
-    const tailorTarget = (variant.parsedData as { tailorTarget?: { company?: string | null; title?: string | null } } | null)?.tailorTarget ?? null;
+    const tailorTarget =
+      (variant.parsedData as { tailorTarget?: { company?: string | null; title?: string | null } } | null)?.tailorTarget ??
+      (job || snapshot ? null : await this.pastedTarget(userId, variant));
     const markdown: string = variant.resumeMarkdown ?? '';
     const candidateName = /^#\s+(.+)$/m.exec(markdown)?.[1]?.replace(/[*_`]/g, '').trim() ?? null;
     const company = job?.companyName ?? (typeof snapshot?.companyName === 'string' ? snapshot.companyName : null) ?? tailorTarget?.company ?? null;
@@ -1065,43 +1101,58 @@ export class RAResumeService {
 
     let artifactId: string | null = null;
     let storageKey: string | null = null;
+    // A photo from the user's device is never stored: an application found by
+    // `autoTrack` then gets the record (name, sha256) without a kept copy.
+    const keepCopy = !(autoTracked && req.photoInFile);
+    if (tracker && !keepCopy) {
+      logger.info('RA_V2_RESUME', 'export recorded without a stored copy (the file carries a device photo)', { userId, resumeId: id });
+    }
     if (tracker) {
       const { resumeOriginalFileStorageService } = await import('../../../services/ResumeOriginalFileStorageService.js');
-      try {
-        const stored = await resumeOriginalFileStorageService.saveFile({
-          buffer,
-          fileName,
-          mimeType: CONTENT_TYPES[req.format],
-          size: buffer.byteLength,
-          userId,
-          keyspace: ARTIFACT_KEYSPACE,
-          brand: req.brand,
-          requestId: getCurrentRequestId() ?? undefined,
-        });
-        storageKey = stored?.key ?? null;
-      } catch (err) {
-        // The download still works; the record keeps the hash without a stored copy.
-        logger.warn('RA_V2_RESUME', 'export file not stored', {
-          userId,
-          resumeId: id,
-          error: err instanceof Error ? err.message : String(err),
-        });
+      if (keepCopy) {
+        try {
+          const stored = await resumeOriginalFileStorageService.saveFile({
+            buffer,
+            fileName,
+            mimeType: CONTENT_TYPES[req.format],
+            size: buffer.byteLength,
+            userId,
+            keyspace: ARTIFACT_KEYSPACE,
+            brand: req.brand,
+            requestId: getCurrentRequestId() ?? undefined,
+          });
+          storageKey = stored?.key ?? null;
+        } catch (err) {
+          // The download still works; the record keeps the hash without a stored copy.
+          logger.warn('RA_V2_RESUME', 'export file not stored', {
+            userId,
+            resumeId: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
-      const artifact = await p.rAApplicationArtifact.create({
-        data: {
-          userId,
-          trackerEntryId: tracker.id,
-          kind: 'resume',
-          variantId: variant.id,
-          fileName,
-          format: req.format,
-          fileSha256: sha,
-          storageKey,
-          channel: req.channel ?? 'download',
-        },
-        select: { id: true },
-      });
-      artifactId = artifact.id;
+      try {
+        const artifact = await p.rAApplicationArtifact.create({
+          data: {
+            userId,
+            trackerEntryId: tracker.id,
+            kind: 'resume',
+            variantId: variant.id,
+            fileName,
+            format: req.format,
+            fileSha256: sha,
+            storageKey,
+            channel: req.channel ?? 'download',
+          },
+          select: { id: true },
+        });
+        artifactId = artifact.id;
+      } catch (err) {
+        // The caller named this application: the record is part of the request.
+        if (!autoTracked) throw err;
+        // Found by `autoTrack`: the user asked for a download, which still works.
+        logger.warn('RA_V2_RESUME', 'export not recorded on the application', { userId, resumeId: id, error: err instanceof Error ? err.message : String(err) });
+      }
     }
 
     if (compliance && aiContentId) {
@@ -1117,6 +1168,31 @@ export class RAResumeService {
       aiLabelled: Boolean(aiContentId),
     });
     return { buffer, fileName, ext: req.format, contentType: CONTENT_TYPES[req.format], sha256: sha, artifactId, storageKey, aiContentId };
+  }
+
+  /**
+   * The company and title a version was tailored for when it came from a
+   * PASTED posting: there is no job row, the target is on the tailor session
+   * that made the version (`RATailorSession.jdSnapshot`). Without it the file
+   * of such a version was named with the candidate's name only, whatever name
+   * style was picked. Null when the version has no such session; never throws.
+   */
+  private async pastedTarget(userId: string, variant: { id: string; kind?: string | null; sourceKind?: string | null }): Promise<{ company: string | null; title: string | null } | null> {
+    if (variant.kind !== 'tailored_for_jd' && variant.sourceKind !== 'tailored') return null;
+    try {
+      const session = await (prisma as any).rATailorSession.findFirst({
+        where: { userId, resultVariantId: variant.id },
+        orderBy: { createdAt: 'desc' },
+        select: { jdSnapshot: true },
+      });
+      const jd = (session?.jdSnapshot ?? null) as { title?: unknown; company?: unknown } | null;
+      const title = typeof jd?.title === 'string' && jd.title.trim() ? jd.title.trim() : null;
+      const company = typeof jd?.company === 'string' && jd.company.trim() ? jd.company.trim() : null;
+      return title || company ? { company, title } : null;
+    } catch (err) {
+      logger.debug('RA_V2_RESUME', 'tailor session not read for the file name', { userId, resumeId: variant.id, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
   }
 
   async patch(userId: string, id: string, body: ResumePatchInput): Promise<RAResumeVariantView> {

@@ -11,7 +11,7 @@ const { chat } = vi.hoisted(() => ({ chat: vi.fn() }));
 vi.mock('../../../services/llm/LLMService.js', () => ({ llmService: { chat, getModel: () => 'test-model' }, LLMService: class {} }));
 vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 
-import { RAResumeTailorAgent } from '../../../roboapply/v2/agents/RAResumeTailorAgent.js';
+import { RAResumeTailorAgent, resumeDocumentLocale } from '../../../roboapply/v2/agents/RAResumeTailorAgent.js';
 import { createCreditTestKit } from '../../../platform/credits/testkit.js';
 import { TailorService } from './TailorService.js';
 import { createMemoryTailorStore, memoryTailorJob, memoryTailorVariant } from './memoryStore.js';
@@ -54,6 +54,56 @@ describe('RAResumeTailorAgent prompt (tailor sessions)', () => {
     expect(prompt).toContain("Facts from the job posting are never the candidate's own");
     expect(prompt).toContain('Keywords the candidate confirmed');
     expect(prompt).toMatch(/Keep every `##` heading/);
+  });
+});
+
+describe('RAResumeTailorAgent output language (the resume decides, not the interface)', () => {
+  const EN_RESUME = [
+    '# Maya Lindqvist',
+    '## Summary',
+    'Data analyst with 4 years of experience turning operations data into dashboards and forecasts for logistics teams.',
+    '## Experience',
+    '- Built a weekly on-time delivery dashboard in Tableau used by 12 dispatch managers.',
+  ].join('\n');
+  const ZH_RESUME = ['# 林知远', '## Experience', '- 负责用户增长数据分析，搭建周报看板，覆盖 12 个业务团队的数据需求。', '- 使用 SQL 与 Python 完成留存分析，并向产品团队汇报结论。'].join('\n');
+  const TW_RESUME = ['# 林知遠', '## 工作經歷', '- 負責使用者成長數據分析，建立週報看板，涵蓋 12 個業務團隊的資料需求。', '- 使用 SQL 與 Python 完成留存分析，並向產品團隊報告結論。'].join('\n');
+
+  it('detects the language a resume is written in', () => {
+    expect(resumeDocumentLocale(EN_RESUME)).toBe('en');
+    // English section titles from an upload do not make a Chinese resume English.
+    expect(resumeDocumentLocale(ZH_RESUME)).toBe('zh');
+    expect(resumeDocumentLocale(TW_RESUME)).toBe('zh-TW');
+    // A Chinese name or company in an English resume does not make it Chinese.
+    expect(resumeDocumentLocale(`${EN_RESUME}\n- Worked with 字节跳动 on a data project.`)).toBe('en');
+    expect(resumeDocumentLocale('SQL')).toBeNull();
+    expect(resumeDocumentLocale('')).toBeNull();
+  });
+
+  it('an English resume stays English when the interface is zh-TW (and a Chinese one stays Chinese under en)', async () => {
+    class Probe extends RAResumeTailorAgent {
+      seen: Array<string | undefined> = [];
+      async execute(_input: unknown, _jd?: string, _req?: string, locale?: string) {
+        this.seen.push(locale);
+        return { tailoredResumeMarkdown: '- x', changeSummary: '', citationsByLine: {} } as never;
+      }
+    }
+    const probe = new Probe();
+    const base = { jobTitle: 'Analyst', jobDescription: 'Build dashboards.', complexity: 'standard' as const };
+    await probe.run({ ...base, baseResumeMarkdown: EN_RESUME }, { locale: 'zh-TW' });
+    await probe.run({ ...base, baseResumeMarkdown: ZH_RESUME }, { locale: 'en' });
+    // Too short to tell: the interface language is the fallback.
+    await probe.run({ ...base, baseResumeMarkdown: '- SQL' }, { locale: 'zh-TW' });
+    expect(probe.seen).toEqual(['en', 'zh', 'zh-TW']);
+  });
+
+  it('the directive names the resume language and forbids translating the document', () => {
+    const exposed = new RAResumeTailorAgent() as unknown as { getLocaleDirective(locale: string): string | null; formatInput(input: unknown, locale?: string): string };
+    const directive = exposed.getLocaleDirective('en') ?? '';
+    expect(directive).toContain('The base resume is written in English');
+    expect(directive).toContain('Never translate it');
+    expect(directive).not.toContain('interface language is');
+    const user = exposed.formatInput({ baseResumeMarkdown: EN_RESUME, jobTitle: 'Analyst', jobDescription: 'x', complexity: 'standard' }, 'en');
+    expect(user).toContain('OUTPUT LANGUAGE: English');
   });
 });
 

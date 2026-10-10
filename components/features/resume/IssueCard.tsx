@@ -109,6 +109,11 @@ export function IssueCard({ issue, fix, editorHref, onApplied, focused = false }
         <div className={styles.grow}>
           <span className={styles.sevText}>{t(`severity.${issue.severity}`)}</span>
           <h4 className={styles.issueTitle}>{text.title}</h4>
+          {issue.carriedOver ? (
+            <p className={styles.muted} data-carried="true">
+              {t('carried')}
+            </p>
+          ) : null}
         </div>
       </div>
 

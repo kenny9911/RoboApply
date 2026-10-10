@@ -19,7 +19,9 @@ import { AiGeneratedBadge } from '../market';
 import { useResume } from '../../../hooks/useResumes';
 import { useFinalizeTailor, useTailorClaim } from '../../../hooks/tailor';
 import type { TailorChange, TailorSessionView } from '../../../lib/api/contracts/resume';
+import { KeywordReport } from '../resume/KeywordReport';
 import { ClaimCard } from './ClaimCard';
+import { plainInline, sectionLabel } from './text';
 import { TailorError } from './TailorError';
 import styles from './Tailor.module.css';
 
@@ -123,6 +125,17 @@ export function TailorResult({ session, onFinalized, onOpenResume, onClose }: Ta
         <TailorError error={claim.error} />
       </section>
 
+      {/* Keyword check of the tailored text against the posting (F-RES-08), for a job and for a pasted posting. */}
+      {session.resultVariantId ? (
+        <section className={styles.section} data-testid="tailor-keyword-grid">
+          <KeywordReport
+            resumeId={session.resultVariantId}
+            tailorSession={{ id: session.id, version: `${session.status}:${session.claims.map((c) => c.status[0]).join('')}` }}
+            hideFit
+          />
+        </section>
+      ) : null}
+
       <section className={styles.section}>
         <Tabs<Tab>
           ariaLabel={t('tabs.label')}
@@ -186,6 +199,7 @@ export function TailorResult({ session, onFinalized, onOpenResume, onClose }: Ta
 
 function ChangeList({ changes }: { changes: TailorChange[] }) {
   const t = useTranslations('tailor.result');
+  const ts = useTranslations('tailor.setup.section');
   if (changes.length === 0) return <p className={styles.sub}>{t('noChanges')}</p>;
   return (
     <ul className={styles.changes}>
@@ -195,18 +209,19 @@ function ChangeList({ changes }: { changes: TailorChange[] }) {
           <li key={`${c.section}-${i}`} className={styles.change} data-kind={kind}>
             <div className={styles.row}>
               <span className={styles.changeKind}>{t(`change.${kind}`)}</span>
-              <span className={styles.sub}>{c.section}</span>
+              {/* A default section title follows the interface language; a title the user wrote stays as written. */}
+              <span className={styles.sub}>{sectionLabel(c.section, (key) => ts(key))}</span>
             </div>
             {c.before ? (
               <p className={styles.before}>
                 <span className="sr-only">{t('change.before')}: </span>
-                {c.before}
+                {plainInline(c.before)}
               </p>
             ) : null}
             {c.after ? (
               <p className={styles.after}>
                 <span className="sr-only">{t('change.after')}: </span>
-                {c.after}
+                {plainInline(c.after)}
               </p>
             ) : null}
           </li>

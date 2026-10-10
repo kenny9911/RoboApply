@@ -43,11 +43,11 @@ export interface ParsedResume {
 }
 
 const HEADING_RULES: Array<{ key: ResumeSectionKey; re: RegExp }> = [
-  { key: 'summary', re: /summary|profile|about|objective|自我评价|个人评价|自我介绍|个人总结|个人简介|个人优势|简介|自我評價|個人簡介/i },
+  { key: 'summary', re: /summary|profile|about|objective|自我评价|个人评价|自我介绍|个人总结|个人简介|个人优势|简介|自我評價|個人簡介|個人摘要|個人總結/i },
   { key: 'experience', re: /experience|employment|work history|career|internship|工作经历|工作经验|实习|实践经历|职业经历|工作經歷|實習/i },
   { key: 'projects', re: /project|项目|專案|項目/i },
   { key: 'education', re: /education|academic|教育|学历|學歷/i },
-  { key: 'skills', re: /skill|competenc|technolog|tools|技能|证书|資格|證書|专业能力/i },
+  { key: 'skills', re: /skill|competenc|technolog|tools|技能|证书|資格|證書|证照|證照|专业能力|专长|專長/i },
   { key: 'contact', re: /contact|基本信息|个人信息|联系方式|個人資料|聯絡/i },
 ];
 
@@ -58,6 +58,9 @@ export function sectionKeyOf(heading: string): ResumeSectionKey {
 }
 
 const BULLET_RE = /^\s*(?:[-*•·]|\d+[.)、])\s+/;
+
+/** Sections whose bold lines are entry heads (a role, a project, a school). */
+const ENTRY_SECTIONS: ReadonlySet<ResumeSectionKey> = new Set<ResumeSectionKey>(['experience', 'projects', 'education']);
 
 export function stripMarkdown(s: string): string {
   return s
@@ -108,6 +111,16 @@ export function parseResume(markdown: string): ParsedResume {
     const section: ResumeSection = current;
     if (h3) {
       section.entries.push(stripMarkdown(h3[1]!));
+      entryIndex = section.entries.length - 1;
+      return;
+    }
+    // An uploaded resume writes its entry heads in bold, not as `###`
+    // ("**数据分析实习生 — 星河科技** · 2025.06 - 2025.09"). They are entries
+    // too: read as body text, an upload had no roles at all, and the cn check
+    // reported "no internship" for a resume with two. A labelled skills line
+    // ("**Tools:** Jira") is not an entry.
+    if (ENTRY_SECTIONS.has(section.key) && /^\*\*[^*]+\*\*/.test(line) && !/^\*\*[^*]*[:：]\s*\*\*/.test(line) && line.length <= 200) {
+      section.entries.push(stripMarkdown(line));
       entryIndex = section.entries.length - 1;
       return;
     }

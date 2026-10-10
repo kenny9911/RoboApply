@@ -23,7 +23,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Markdown } from '../primitives';
-import { knownOrder, type KnownSectionKind, type StructuredResume } from '../../../lib/resumeStructure';
+import { knownOrder, skillLines, type KnownSectionKind, type StructuredResume } from '../../../lib/resumeStructure';
 import {
   SPACING_PRESETS,
   formatDatesIn,
@@ -185,6 +185,13 @@ export function ResumePaper({
               <li key={i}>{sk}</li>
             ))}
           </ul>
+        ) : resume.skillGroups?.some((g) => g.label) ? (
+          // Labelled lines ("Tools: Zendesk · Jira"), as the export prints them.
+          skillLines(resume).map((line, i) => (
+            <div key={i} className="rb-paper-text" data-skills="grouped">
+              <Markdown>{line}</Markdown>
+            </div>
+          ))
         ) : (
           <div className="rb-paper-text">{skills.join(' · ')}</div>
         ),

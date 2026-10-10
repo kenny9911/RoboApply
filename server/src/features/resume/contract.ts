@@ -62,6 +62,8 @@ export const ISSUE_TYPES = [
   'buzzwords',
   'skills_too_few',
   'length_too_long',
+  // a bracketed blank an AI suggestion left for the user to fill in ("[X]", "[n=__]")
+  'placeholder_unfilled',
   // AI pass (only when AI is allowed)
   'spelling',
   'summary_vague',
@@ -101,6 +103,12 @@ export const GradeIssueSchema = z
     fixable: z.boolean().optional(),
     /** 'rules' (deterministic) or 'ai' (the AI pass found it). */
     source: z.enum(['rules', 'ai']).optional(),
+    /**
+     * True for an AI-pass issue brought forward from the last check because
+     * the AI pass did not run this time (no credit, AI off, or it failed) and
+     * the text it points at is still in the resume. It was not checked again.
+     */
+    carriedOver: z.boolean().optional(),
   })
   .strict();
 export type GradeIssue = z.infer<typeof GradeIssueSchema>;
@@ -144,6 +152,12 @@ export interface GradeSummaryView {
   counts: GradeCounts | null;
   /** Distinct issue types of that check (what was fixed = previous − current). */
   issueTypes: string[];
+  /**
+   * The types among `issueTypes` that only the AI pass can find (spelling, a
+   * vague summary). A check that ran without the AI pass cannot call these
+   * fixed: it did not look. (Optional on the wire type: older stubs omit it.)
+   */
+  aiIssueTypes?: string[];
   createdAt: string;
 }
 
@@ -197,7 +211,16 @@ const JdSnapshot = z.object({ title: z.string().trim().min(1).max(200), company:
 /** `RATailorSession.jdSnapshot` (documented JSON column): a pasted posting. */
 export const JdSnapshotSchema = JdSnapshot;
 
-export const KeywordReportBodySchema = z.union([z.object({ jobId: Id }).strict(), z.object({ jd: JdSnapshot }).strict()]);
+/**
+ * The posting to check against: a job, a pasted posting, or the posting of one
+ * of the user's tailor sessions (the result view of a pasted-posting session
+ * has no other way to name it: the pasted text lives on the session).
+ */
+export const KeywordReportBodySchema = z.union([
+  z.object({ jobId: Id }).strict(),
+  z.object({ jd: JdSnapshot }).strict(),
+  z.object({ tailorSessionId: Id }).strict(),
+]);
 export const KEYWORD_ROW_KEYS = ['title', 'years', 'education', 'skills', 'keywords'] as const;
 export type KeywordRowKey = (typeof KEYWORD_ROW_KEYS)[number];
 export type KeywordRowStatus = 'pass' | 'warn' | 'fail' | 'unknown';
@@ -228,6 +251,14 @@ export interface KeywordReportResponse {
   rows: KeywordReportRow[];
   keywords: { matched: string[]; missing: string[] };
   hardSkills: { matched: string[]; missing: string[] };
+  /**
+   * Skills the posting asks for that the resume does not show (hard skills,
+   * then keywords; no duplicates). Tailoring offers exactly these for the
+   * user to confirm. Only extracted skills and vocabulary terms are ever in
+   * it, never plain frequent words of the posting. (Optional on the wire
+   * type: older stubs omit it.)
+   */
+  skillGaps?: string[];
   /** Where the job's keywords came from: the stored extraction or the posting text. */
   keywordSource: 'extraction' | 'posting';
 }

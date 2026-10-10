@@ -6,6 +6,22 @@
 // extraction (`RAKeywordExtraction`), the job's normalized fields and the
 // MATCH row when one exists. No LLM.
 //
+// What counts as a keyword. The stored extraction holds the posting's skills
+// first and then plain TF-IDF terms of the text ("paid", "status", "了解",
+// "28k"): frequent words, not requirements. Offering those as "skills this job
+// asks for" asked users to tick "curiosity" and "angeles". Only these are
+// listed here:
+//   - the job's own skill list (`RAJob.skills`), and extraction rows that are
+//     in it or are marked required (importance 'high': only skills are);
+//   - hard-skill vocabulary terms the posting text names (the only source for
+//     a pasted posting). A job that has its own skill list and stored rows
+//     gets no vocabulary terms on top of them, and a term that is also an
+//     everyday word ("sales", "API", "招聘", "测试"; "unity", "sketch") counts
+//     only when the skill list, a required row or the job title names it, or
+//     when the posting writes it as a tool name ("Unity", "Sketch").
+// With `casing: 'posting'` terms are shown in the posting's own casing ("SQL",
+// "dbt"), and "R or Python" is met by either.
+//
 // No second scale: the only score shown is the 0–100 fit score from the MATCH
 // row (as a Sourced value), or nothing. A requirement the posting does not
 // state, or a fact the resume does not show, is `unknown` ("Not listed"),
@@ -13,7 +29,7 @@
 
 import type { KeywordReportResponse, KeywordReportRow, KeywordRowStatus, SourcedNumber } from '../contract.js';
 import { containsTerm, parseResume, sectionsOf, stripMarkdown, type ParsedResume } from '../check/resumeText.js';
-import { ACRONYM_STOPLIST, HARD_SKILLS_CN, HARD_SKILLS_EN } from './vocabulary.js';
+import { EVERYDAY_TERMS, HARD_SKILLS_CN, HARD_SKILLS_EN, NON_SKILL_TERMS, WORD_LIKE_TOOL_NAMES } from './vocabulary.js';
 
 export interface KeywordJobInput {
   title: string;
@@ -44,6 +60,14 @@ export interface KeywordReportInput {
   extraction?: KeywordExtractionInput | null;
   fit?: FitRowInput | null;
   now?: Date;
+  /**
+   * How terms are written in the lists: 'posting' = as the posting writes
+   * them ("SQL", "Power BI", "dbt"); 'as_listed' = as the skill list or the
+   * vocabulary holds them (lower case). The signed-in product asks for
+   * 'posting' (features/resume/index.ts); a caller that says nothing keeps
+   * the lists it had.
+   */
+  casing?: 'posting' | 'as_listed';
 }
 
 const MAX_KEYWORDS = 20;
@@ -80,17 +104,79 @@ function dedupe(list: string[]): string[] {
   return out;
 }
 
-/** Vocabulary terms (and repeated acronyms) found in a posting. */
-export function termsFromPosting(text: string): string[] {
-  const found = [...HARD_SKILLS_EN, ...HARD_SKILLS_CN].filter((t) => containsTerm(text, t));
-  const acronyms = new Map<string, number>();
-  for (const m of text.matchAll(/(?<![\p{L}\p{N}])[A-Z][A-Z0-9]{1,5}(?![\p{L}\p{N}])/gu)) {
-    const a = m[0];
-    if (ACRONYM_STOPLIST.has(a)) continue;
-    acronyms.set(a, (acronyms.get(a) ?? 0) + 1);
+const VOCABULARY: readonly string[] = [...HARD_SKILLS_EN, ...HARD_SKILLS_CN];
+const VOCABULARY_SET: ReadonlySet<string> = new Set(VOCABULARY);
+
+const normTerm = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * Is the term written as a name somewhere in the text: capitalised, and either
+ * inside a sentence ("experience with Unity") or leading a list ("Excel, SQL
+ * and Tableau")? "Unity is one of our values." and "Sketch out ideas" are not.
+ */
+function writtenAsName(term: string, text: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'giu');
+  for (const m of text.matchAll(re)) {
+    if (!/^\p{Lu}/u.test(m[0])) continue;
+    const at = m.index ?? 0;
+    const before = text.slice(text.lastIndexOf('\n', at - 1) + 1, at).trim();
+    const sentenceStart = before === '' || /^[-*•·▪◦]$|^\d+[.)]$/.test(before) || /[.!?。！？]$/.test(before);
+    if (!sentenceStart) return true;
+    if (/^\s*(?:[,，、;；/&)]|\r?\n|$|\s(?:and|or)\s)/i.test(text.slice(at + m[0].length))) return true;
   }
-  const repeated = [...acronyms.entries()].filter(([, n]) => n >= 2).map(([a]) => a);
-  return dedupe([...found, ...repeated]);
+  return false;
+}
+
+/** May a vocabulary term found in the posting text be listed as something the job asks for? */
+function namedAsSkill(term: string, text: string, confirmed: ReadonlySet<string>, title: string): boolean {
+  if (confirmed.has(term)) return true;
+  if (EVERYDAY_TERMS.has(term)) return containsTerm(title, term);
+  if (WORD_LIKE_TOOL_NAMES.has(term)) return containsTerm(title, term) || writtenAsName(term, text);
+  return true;
+}
+
+/**
+ * Vocabulary terms a posting names. (Repeated capitals used to count as well;
+ * they were mostly the employer's initials, so they no longer do.)
+ *
+ * `confirmed`: normalized terms the job's skill list or a required-skill row
+ * names; `title`: the job title. An everyday word of the vocabulary counts
+ * only with one of those behind it (see vocabulary.ts).
+ */
+export function termsFromPosting(text: string, confirmed: ReadonlySet<string> = new Set(), title = ''): string[] {
+  return dedupe(VOCABULARY.filter((t) => containsTerm(text, t) && namedAsSkill(t, text, confirmed, title)));
+}
+
+/** False for anything that cannot be a skill: a pay figure ("28k"), a filler word, a possessive ("children's"). */
+export function plausibleSkill(term: string): boolean {
+  const t = normTerm(term);
+  if (!t || t.length > 60) return false;
+  if (NON_SKILL_TERMS.has(t)) return false;
+  if (/^[\d.,]+\s*[kw万千]?\+?$/.test(t)) return false;
+  if (/^[\p{L}]+['’](?:s|re|ve|ll|d|t)$/u.test(t)) return false;
+  if (t.length < 2 && !/^[cr]$/.test(t)) return false;
+  return /[\p{L}]/u.test(t);
+}
+
+/** The alternatives of "R or Python" / "Java 或 Go"; a plain term is its own alternative. */
+function alternatives(term: string): string[] {
+  const parts = term.split(/\s+(?:or|或)\s+|或者/i).map((p) => p.trim()).filter(Boolean);
+  return parts.length > 1 ? parts : [term];
+}
+
+/** True when the text shows the term (any alternative of an "A or B" term). */
+export function showsTerm(haystack: string, term: string): boolean {
+  return alternatives(term).some((alt) => containsTerm(haystack, alt));
+}
+
+/** The term as the posting writes it ("sql" → "SQL", "dbt" stays "dbt"); unchanged when the posting does not name it. */
+export function displayTerm(term: string, postingText: string): string {
+  const t = term.trim();
+  if (!t || /[㐀-鿿]/.test(t) || !postingText) return t;
+  const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  const m = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').exec(postingText);
+  return m ? m[0].replace(/\s+/g, ' ') : t;
 }
 
 export function requiredYearsFrom(text: string): number | null {
@@ -239,23 +325,48 @@ export function buildKeywordReport(input: KeywordReportInput): KeywordReportResp
   const r = parseResume(input.resumeMarkdown);
   const haystack = r.plain;
 
-  const jobSkills = dedupe([...(input.job.skills ?? [])]).slice(0, 25);
-  const hardSkillList = jobSkills.length > 0 ? jobSkills : [...HARD_SKILLS_EN, ...HARD_SKILLS_CN].filter((t) => containsTerm(input.job.text, t));
-  const fromExtraction = (input.extraction?.keywords ?? [])
-    .filter((k) => k && typeof k.keyword === 'string')
+  const postingText = input.job.text ?? '';
+  const cased = (t: string) => (input.casing === 'posting' ? displayTerm(t, postingText) : t);
+  const show = (list: string[]) => dedupe(list.filter(plausibleSkill).map(cased));
+  const jobSkills = show([...(input.job.skills ?? [])]).slice(0, 25);
+  const extractionRows = (input.extraction?.keywords ?? []).filter((k) => k && typeof k.keyword === 'string');
+  // What the job itself says it asks for: its skill list and its required rows.
+  const skillSet = new Set((input.job.skills ?? []).map(normTerm));
+  const confirmed = new Set([...skillSet, ...extractionRows.filter((k) => k.importance === 'high').map((k) => normTerm(k.keyword))]);
+  const vocabulary = termsFromPosting(postingText, confirmed, input.job.title ?? '');
+  const named = new Set(vocabulary.map(normTerm));
+  const hardSkillList = jobSkills.length > 0 ? jobSkills : show(vocabulary);
+
+  // Extraction rows that are skills: the job's own skill list, a required
+  // skill, or a vocabulary term the posting names as one. The TF-IDF rows of
+  // the same list are words of the text, not requirements, and are never shown.
+  const fromExtraction = extractionRows
+    .filter((k) => {
+      const t = normTerm(k.keyword);
+      if (confirmed.has(t)) return true;
+      if (!VOCABULARY_SET.has(t)) return false;
+      return named.has(t) || !(EVERYDAY_TERMS.has(t) || WORD_LIKE_TOOL_NAMES.has(t));
+    })
     .sort((a, b) => importanceRank(b.importance) - importanceRank(a.importance))
     .map((k) => k.keyword);
-  const keywordSource: KeywordReportResponse['keywordSource'] = fromExtraction.length > 0 ? 'extraction' : 'posting';
-  const keywordList = dedupe(fromExtraction.length > 0 ? fromExtraction : termsFromPosting(input.job.text)).slice(0, MAX_KEYWORDS);
+  const keywordSource: KeywordReportResponse['keywordSource'] = extractionRows.length > 0 ? 'extraction' : 'posting';
+  // The keywords row. A job with its own skill list and stored skill rows is
+  // described by those: scanning its text on top of them listed whatever
+  // vocabulary word the boilerplate happened to contain ("招聘", "销售",
+  // "测试"). The text scan is the source only when the job has no skill list
+  // (a pasted posting) or no usable row. It may repeat terms of the skills
+  // row (the lists shown to the user are merged without duplicates).
+  const keywordList = show(jobSkills.length > 0 && fromExtraction.length > 0 ? fromExtraction : [...fromExtraction, ...vocabulary]).slice(0, MAX_KEYWORDS);
 
   const split = (list: string[]) => {
     const matched: string[] = [];
     const missing: string[] = [];
-    for (const k of list) (containsTerm(haystack, k) ? matched : missing).push(k);
+    for (const k of list) (showsTerm(haystack, k) ? matched : missing).push(k);
     return { matched, missing };
   };
   const hardSkills = split(hardSkillList);
   const keywords = split(keywordList);
+  const skillGaps = dedupe([...hardSkills.missing, ...keywords.missing]).slice(0, MAX_KEYWORDS);
 
   const rows: KeywordReportRow[] = [
     titleRow(input.job, r),
@@ -272,7 +383,7 @@ export function buildKeywordReport(input: KeywordReportInput): KeywordReportResp
     fitTier = input.fit.tier;
   }
 
-  return { fit, fitTier, rows, keywords, hardSkills, keywordSource };
+  return { fit, fitTier, rows, keywords, hardSkills, skillGaps, keywordSource };
 }
 
 function importanceRank(i: string | undefined): number {

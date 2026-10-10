@@ -17,7 +17,14 @@ import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.j
 import type { EnvSource } from '../../../platform/brand/index.js';
 import { cnPostingVisible } from '../../../features/cn/jobs/index.js';
 import prisma from '../../../lib/prisma.js';
+import type { Prisma } from '../../../generated/prisma/client.js';
 
+/**
+ * `provider` stays optional on the row type: `cnPostingVisible` reads it when a
+ * caller hands in a job-like object that carries one. `RAJob` itself has no
+ * such column (a user's own import is `visibility: 'private'` + `ownerUserId`),
+ * so it is never selected.
+ */
 export interface LegacyJobScopeRow {
   market?: unknown;
   visibility?: unknown;
@@ -26,14 +33,18 @@ export interface LegacyJobScopeRow {
   sourceBoard?: unknown;
 }
 
-/** The columns `legacyJobVisible` needs; spread into a Prisma `select`. */
+/**
+ * The `RAJob` columns `legacyJobVisible` needs; spread into a Prisma `select`.
+ * `satisfies Prisma.RAJobSelect` makes a column that is not on the model a
+ * type error here, even though the callers reach Prisma through `as any`
+ * (selecting a non-existent `provider` made every resume list answer 500).
+ */
 export const LEGACY_JOB_SCOPE_SELECT = {
   market: true,
   visibility: true,
   ownerUserId: true,
-  provider: true,
   sourceBoard: true,
-} as const;
+} as const satisfies Prisma.RAJobSelect;
 
 /** May this viewer read this job through a legacy /v2 service? */
 export function legacyJobVisible(

@@ -125,6 +125,11 @@ export const ISSUE_DEFINITIONS: Record<IssueType, IssueDefinition> = {
     why: 'This resume is likely longer than two pages, and readers rarely get that far.',
     how: 'Keep it to one or two pages: cut older or less relevant bullets.',
   },
+  placeholder_unfilled: {
+    type: 'placeholder_unfilled', severity: 'urgent', section: 'experience', profiles: BOTH, fixable: false, source: 'rules',
+    why: 'This line still has a blank like [X] where your own number goes. A reader would see the brackets.',
+    how: 'Put in the real number, or rewrite the line without it. Never guess a figure.',
+  },
   spelling: {
     type: 'spelling', severity: 'urgent', section: 'other', profiles: BOTH, fixable: false, source: 'ai',
     why: 'Spelling mistakes are noticed quickly and look careless.',
