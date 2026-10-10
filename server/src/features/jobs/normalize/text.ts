@@ -28,6 +28,17 @@ export function cleanText(input: string | null | undefined): string {
   return stripControl(String(input).normalize('NFKC')).trim();
 }
 
+/**
+ * Text kept as its author wrote it, for display: control characters removed
+ * and trimmed, canonical composition only (NFC). Unlike `cleanText` it does
+ * not fold compatibility forms, so Chinese full-width punctuation ("：", "，",
+ * "（）") stays what the posting used. Parsing still reads the NFKC form.
+ */
+export function asWritten(input: string | null | undefined): string {
+  if (!input) return '';
+  return stripControl(String(input).normalize('NFC')).trim();
+}
+
 /** A trimmed, cleaned string or null when empty. */
 export function cleanOrNull(input: unknown): string | null {
   if (typeof input !== 'string') return null;

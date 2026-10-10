@@ -12,9 +12,9 @@
 // D3: until the feed counts (WP-32) `count` is null and the drawer says
 // "Show jobs" without a number; nothing here invents one.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useLocale } from 'next-intl';
+import { useLocale, useMessages } from 'next-intl';
 
 import { countFilters, getLimitingFilters, getTaxonomy, suggestSkills } from '../../lib/api/search';
 import { searchCompanies } from '../../lib/api/jobs';
@@ -115,18 +115,62 @@ export function useSkillSuggestions(q: string) {
   });
 }
 
-/** id → label for every taxonomy node in the UI locale (one cached GET /taxonomy). */
-export function useTaxonomyLabels(options: { enabled?: boolean } = {}): Map<string, string> {
+type TaxonomyMessages = Partial<Record<'categories' | 'groups' | 'roles', Record<string, string>>>;
+
+export interface TaxonomyLabelState {
+  labels: Map<string, string>;
+  /** False while the tree is still loading: hold a label rather than show a raw id. */
+  ready: boolean;
+}
+
+/**
+ * id → label in the UI language. The server's tree has English and Simplified
+ * Chinese only, so every other language takes the translated names from the
+ * `taxonomy` messages (categories, groups, roles) and falls back to the
+ * server's English where a name is not translated yet. Pure, for tests.
+ */
+export function localizedTaxonomyLabels(
+  nodes: ReadonlyArray<{ id: string; label: string }>,
+  locale: string,
+  messages: TaxonomyMessages | null | undefined,
+): Map<string, string> {
+  const out = new Map(nodes.map((n) => [n.id, n.label] as const));
+  // en and zh are the server's own curated names.
+  if (locale === 'en' || locale === 'zh' || !messages) return out;
+  for (const group of ['categories', 'groups', 'roles'] as const) {
+    for (const [id, label] of Object.entries(messages[group] ?? {})) {
+      if (out.has(id) && typeof label === 'string' && label.trim()) out.set(id, label);
+    }
+  }
+  return out;
+}
+
+/** {@link useTaxonomyLabels} plus whether the labels have arrived. */
+export function useTaxonomyLabelState(options: { enabled?: boolean } = {}): TaxonomyLabelState {
   const locale = useLocale();
+  const messages = (useMessages() as { taxonomy?: TaxonomyMessages }).taxonomy;
   const query = useQuery({
     queryKey: searchKeys.taxonomy('', locale),
     queryFn: () => getTaxonomy({ locale }),
     enabled: options.enabled ?? true,
     staleTime: 60 * 60_000,
-    select: (r) => new Map(r.nodes.map((n) => [n.id, n.label] as const)),
     retry: false,
   });
-  return query.data ?? EMPTY_LABELS;
+  const nodes = query.data?.nodes;
+  const labels = useMemo(() => (nodes ? localizedTaxonomyLabels(nodes, locale, messages) : EMPTY_LABELS), [nodes, locale, messages]);
+  // A failed load is "ready" too: the caller falls back to a readable form of the id.
+  return { labels, ready: !!nodes || query.isError };
+}
+
+/** id → label for every taxonomy node in the UI locale (one cached GET /taxonomy). */
+export function useTaxonomyLabels(options: { enabled?: boolean } = {}): Map<string, string> {
+  return useTaxonomyLabelState(options).labels;
+}
+
+/** A taxonomy id nobody has a name for ("swe_backend" → "Swe backend"): never the raw id. */
+export function readableTaxonomyId(id: string): string {
+  const words = id.replace(/[_-]+/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : id;
 }
 
 const EMPTY_LABELS: Map<string, string> = new Map();

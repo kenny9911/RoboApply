@@ -30,6 +30,7 @@ import {
   SENIORITY_LEVELS,
   WORK_MODELS,
   classYearOptions,
+  isCountryWideLocation,
   sponsorshipCountry,
   type FilterField,
   type FilterLocation,
@@ -211,26 +212,33 @@ export function LocationEditor({ draft, set, ctx }: EditorProps) {
       ) : null}
       {locations.length ? (
         <ul className={styles.tags} aria-label={t('fields.locations')}>
-          {locations.map((l, i) => (
-            <li key={`${l.label}-${i}`} className={styles.tag}>
-              <span className={styles.tagText}>{l.label}</span>
-              <select
-                className={styles.select}
-                aria-label={t('controls.radius')}
-                value={l.radiusKm}
-                onChange={(e) => update(i, Number(e.target.value) as FilterLocation['radiusKm'])}
-              >
-                {RADIUS_KM.map((km) => (
-                  <option key={km} value={km}>
-                    {labels.radius(km, l.country ?? unitCountry)}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className={styles.chipRemove} aria-label={t('controls.remove', { label: l.label })} onClick={() => remove(i)}>
-                <IconX size={14} />
-              </button>
-            </li>
-          ))}
+          {locations.map((l, i) => {
+            // A country with no city is the whole country: its name, and no distance to pick.
+            const whole = isCountryWideLocation(l);
+            const name = whole ? labels.value('locations', l, draft) : l.label;
+            return (
+              <li key={`${l.label}-${i}`} className={styles.tag}>
+                <span className={styles.tagText}>{name}</span>
+                {whole ? null : (
+                  <select
+                    className={styles.select}
+                    aria-label={t('controls.radius')}
+                    value={l.radiusKm}
+                    onChange={(e) => update(i, Number(e.target.value) as FilterLocation['radiusKm'])}
+                  >
+                    {RADIUS_KM.map((km) => (
+                      <option key={km} value={km}>
+                        {labels.radius(km, l.country ?? unitCountry)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button type="button" className={styles.chipRemove} aria-label={t('controls.remove', { label: name })} onClick={() => remove(i)}>
+                  <IconX size={14} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       <div className={styles.row}>

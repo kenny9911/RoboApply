@@ -26,7 +26,7 @@ export {
   yearsFromText,
 } from './level.js';
 export type { YearsRange } from './level.js';
-export { annualize, currencyFromText, normalizeSalary, parseSalaryText, payFromDescription, periodFromLabel, periodFromText } from './salary.js';
+export { annualize, currencyFromText, normalizeSalary, parseSalaryText, payFromDescription, payPlausible, periodFromLabel, periodFromText, statesAmount, withoutPayLabel } from './salary.js';
 export type { ParsedPay, SalaryInput, SalaryResult } from './salary.js';
 export { NO_APPLICANT_COUNT_PROVIDERS, PROVIDER_META, applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, sourceFields } from './source.js';
 export type { ProviderMeta, SourceFields } from './source.js';

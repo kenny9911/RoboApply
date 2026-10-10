@@ -125,6 +125,19 @@ describe('fixtures: LinkedIn Job Search API (en)', () => {
   });
 });
 
+describe('FIX-3: the stored description keeps the posting\'s own punctuation', () => {
+  it('full-width punctuation is not folded to half-width in what the page shows; parsing still reads the folded text', () => {
+    const text = '岗位职责：负责后端服务开发（Go、MySQL），参与架构设计。\n薪资：18-28K·15薪\n网申截止：2026年11月30日';
+    const job = normalizeProviderJob({ title: '后端开发工程师', company: '示例科技', description: text, market: 'cn', country: 'CN' } as never, 'user_import');
+    expect(job.description).toBe(text);
+    expect(job.description).toContain('：');
+    expect(job.description).toContain('（Go、MySQL），');
+    // The parse input is still folded, and pay is still read from it.
+    expect(job.descriptionPlain).toContain('岗位职责:负责后端服务开发(Go、MySQL),参与架构设计。');
+    expect(job).toMatchObject({ salaryMin: 18000, salaryMax: 28000, salaryMonths: 15, salaryText: '18-28K·15薪' });
+  });
+});
+
 describe('fixtures: JSearch (zh-TW, en)', () => {
   it('TW 面議 with the NT$40k floor sentence: pay not disclosed, verbatim text kept, nothing estimated', () => {
     expect(jsTw()).toMatchObject({
@@ -142,7 +155,7 @@ describe('fixtures: JSearch (zh-TW, en)', () => {
       salaryMax: null,
       salaryAnnualMin: null,
       salaryCurrency: null,
-      salaryText: '待遇:待遇面議(經常性薪資達4萬元或以上)',
+      salaryText: '待遇面議(經常性薪資達4萬元或以上)',
       seniority: 'senior',
       minYears: 3,
       primaryTaxonomyId: 'backend_engineer',

@@ -9,9 +9,13 @@
 //   title_level  taxonomy overlap × seniority factor × stated eligibility
 //                (same role or inside the user's target group = 1.0, same
 //                group 0.6, same category 0.3; seniority 0 levels apart = 1,
-//                1 = 0.7, 2 = 0.3, else 0, unknown 0.8). A stated degree
-//                requirement (and, on GoApply, a stated 届别) the user does
-//                not meet halves it. School tier is NEVER an input (C15).
+//                1 = 0.7, 2 = 0.3, else 0, unknown 0.8). The seniority is
+//                the RESUME's (most recent title, else years of experience),
+//                never the Level chips of the search: the same resume and
+//                job give the same score whatever the user is filtering by.
+//                A stated degree requirement (and, on GoApply, a stated 届别)
+//                the user does not meet halves it. School tier is NEVER an
+//                input (C15).
 //   skills       |job ∩ user| / min(|job|, 10)
 //   industry     the employer's industries ∩ the user's past employers' industries
 //   logistics    location / pay / visa, each met | not met | not stated;
@@ -20,7 +24,19 @@
 //
 // A `not_stated` component drops out and the remaining weights renormalize.
 // With nothing to compare at all the score is null ("—"), never 0.
+//
+// Honesty limits on the total (FIX-3; D3). Renormalizing alone let one small
+// component speak for the whole job: a post that states no skills and whose
+// role we could not place scored 100 "Great fit" from "the location matches".
+//   · Neither the role nor the skills could be compared → no score at all
+//     (null, "—"): location, pay and industry say nothing about the work.
+//   · Only one of the two could be compared → never Great (capped just under
+//     the Great threshold).
+//   · Under half of the comparable weight was compared → Possible at most.
+//   · The job is two or more levels away from the resume's level (an
+//     internship for a senior engineer) → Possible at most.
 
+import { seniorityFromTitle } from '../jobs/normalize/index.js';
 import { bestTaxonomyMatch, taxonomyAncestors, getTaxonomyNode } from '../jobs/taxonomy/index.js';
 import { SENIORITY_LEVELS, type FilterLocation, type SalaryMin } from '../search/index.js';
 import {
@@ -32,6 +48,7 @@ import {
   type PreScoreResult,
 } from './contract.js';
 import { tierFor } from './config.js';
+import { dedupeTerms, displayTerm, isEverydayWord, showingTerms, termKey, termParts, titleShows } from './terms.js';
 
 // ── Inputs ────────────────────────────────────────────────────────────────
 
@@ -65,6 +82,12 @@ export interface MatchJob {
   salaryAnnualMin: number | null;
   salaryAnnualMax: number | null;
   salaryCurrency: string | null;
+  /**
+   * The pay as the posting writes it ("18-28K·15薪", "$90k–$110k a year").
+   * Shown as the pay evidence instead of the annualized figures the check
+   * compares with, which the posting never states.
+   */
+  payAsPosted?: string | null;
   sponsorship: string | null;
   sponsorshipEvidence: string | null;
   /** From the employer's RACompany row (sourced); empty when unknown. */
@@ -80,7 +103,13 @@ export interface MatchUser {
   market: string;
   targetTaxonomyIds: string[];
   targetTitles: string[];
+  /** The Level chips of the search. Passed to the AI scorer as the user's stated target; NOT an input of the pre-score. */
   targetSeniority: string[];
+  /**
+   * The level the resume shows (context.ts). When absent it is derived here
+   * from `recentTitle` and `yearsExperience` (`resumeSeniority`).
+   */
+  resumeSeniority?: string | null;
   /** Profile skills ∪ the primary resume's parsed skills (display form). */
   skills: string[];
   /**
@@ -138,14 +167,71 @@ export function mentions(textNorm: string, term: string): boolean {
   return textNorm.includes(t);
 }
 
+/** What the check reads about the user: their skills, the resume text, and (for a practice a title shows) the latest title. */
+export type ShownSource = Pick<MatchUser, 'skills' | 'resumeTextNorm'> & { recentTitle?: string | null };
+
+/** The term itself, or its singular / plural ("REST APIs" on the post, "REST API" on the resume). */
+function spellings(term: string): string[] {
+  const t = term.trim();
+  const out = [t];
+  const m = t.match(/^(.*?)([A-Za-z]+)$/);
+  if (m) {
+    const [, head, last] = m as unknown as [string, string, string];
+    if (/s$/i.test(last) && last.length > 3) out.push(`${head}${last.replace(/ies$/i, 'y').replace(/s$/i, '')}`);
+    else out.push(`${head}${last}s`);
+  }
+  return [...new Set(out)];
+}
+
+/** Is `term` in the person's own skill list (profile ∪ parsed resume)? */
+function inSkillList(user: ShownSource, term: string, skillSet: Set<string>): boolean {
+  if (skillSet.has(skillKey(term))) return true;
+  const key = termKey(term);
+  return user.skills.some((s) => termKey(s) === key);
+}
+
+function literallyShown(user: ShownSource, term: string, skillSet: Set<string>): boolean {
+  if (inSkillList(user, term, skillSet)) return true;
+  // One character ("C", "R") says nothing in lower-cased prose ("Series C"): the skill list only.
+  if ([...term.trim()].length < 2) return false;
+  return !!user.resumeTextNorm && spellings(term).some((v) => mentions(user.resumeTextNorm!, v));
+}
+
 /**
- * Does the user show `term`? Their skill list (profile ∪ parsed resume), or a
- * whole-word mention in the resume text. One rule for the score, the fit
- * card and the keyword check, so they never disagree about the same skill.
+ * Does the user show `term`, and by what? `via` is null when the resume or
+ * the skill list names the term itself; otherwise it is the named technology
+ * (or the title) that shows it: a post asking for "relational databases" is
+ * met by a resume that lists PostgreSQL, "software engineering" by a Software
+ * Engineer. Only specific → general (terms.ts); the caller can say which.
+ *
+ * A named technology that is also an everyday word (rest, excel, swift,
+ * react, oracle…) shows the broader term only from the skill list: "handed
+ * the rest of the migration" is not REST, and "Account manager at Oracle" is
+ * not a database. Its unmistakable forms ("REST API", "Oracle Database")
+ * count from the text like any other name.
  */
-export function userShows(user: Pick<MatchUser, 'skills' | 'resumeTextNorm'>, term: string, skillSet?: Set<string>): boolean {
+export function shownVia(user: ShownSource, term: string, skillSet?: Set<string>): { shown: boolean; via: string | null } {
   const set = skillSet ?? new Set(user.skills.map(skillKey));
-  return set.has(skillKey(term)) || (!!user.resumeTextNorm && mentions(user.resumeTextNorm, term));
+  if (literallyShown(user, term, set)) return { shown: true, via: null };
+  for (const specific of showingTerms(term)) {
+    const named = isEverydayWord(specific) ? inSkillList(user, specific, set) : literallyShown(user, specific, set);
+    if (named) return { shown: true, via: displayTerm(specific) };
+  }
+  if (titleShows(user.recentTitle, term)) return { shown: true, via: user.recentTitle!.trim() };
+  // "TypeScript/Node.js" is shown by a resume that shows each of the two.
+  const parts = termParts(term);
+  if (parts.length > 1 && parts.every((p) => shownVia(user, p, set).shown)) return { shown: true, via: null };
+  return { shown: false, via: null };
+}
+
+/**
+ * Does the user show `term`? Their skill list (profile ∪ parsed resume), a
+ * whole-word mention in the resume text, or a named technology that shows it
+ * (`shownVia`). One rule for the score, the fit card and the keyword check,
+ * so they never disagree about the same skill.
+ */
+export function userShows(user: ShownSource, term: string, skillSet?: Set<string>): boolean {
+  return shownVia(user, term, skillSet).shown;
 }
 
 function uniqueBy<T>(items: T[], key: (t: T) => string): T[] {
@@ -238,6 +324,35 @@ export function seniorityFactor(targets: string[], jobSeniority: string | null):
   return distance === 0 ? 1 : distance === 1 ? 0.7 : distance === 2 ? 0.3 : 0;
 }
 
+/**
+ * The level a resume shows: the level its most recent title states ("Senior
+ * Software Engineer", "Engineering Intern"), else the band the years of
+ * (non-internship) experience imply. Null when the resume shows neither.
+ */
+export function resumeSeniority(recentTitle: string | null | undefined, yearsExperience: number | null | undefined): string | null {
+  const stated = recentTitle ? seniorityFromTitle(recentTitle) : null;
+  if (stated) return stated;
+  if (yearsExperience === null || yearsExperience === undefined || !Number.isFinite(yearsExperience) || yearsExperience < 0) return null;
+  if (yearsExperience < 1) return 'intern_newgrad';
+  if (yearsExperience < 3) return 'entry';
+  if (yearsExperience < 6) return 'mid';
+  if (yearsExperience < 10) return 'senior';
+  return 'lead_staff';
+}
+
+/** The user's own level for scoring: the resume's, never the search's Level chips. */
+export function userLevel(user: Pick<MatchUser, 'resumeSeniority' | 'recentTitle' | 'yearsExperience'>): string | null {
+  return user.resumeSeniority !== undefined ? user.resumeSeniority : resumeSeniority(user.recentTitle, user.yearsExperience);
+}
+
+/** Levels between the resume and the job (0 = same); null when either side is unknown. */
+export function levelGap(user: Pick<MatchUser, 'resumeSeniority' | 'recentTitle' | 'yearsExperience'>, jobSeniority: string | null): number | null {
+  const mine = userLevel(user);
+  const u = mine ? SENIORITY_ORDER.indexOf(mine) : -1;
+  const j = jobSeniority ? SENIORITY_ORDER.indexOf(jobSeniority) : -1;
+  return u < 0 || j < 0 ? null : Math.abs(u - j);
+}
+
 /** Best overlap between the user's targets and the job's role (null when either side is unknown). */
 export function titleOverlap(user: MatchUser, job: MatchJob): number | null {
   const targets = userTargets(user);
@@ -259,7 +374,8 @@ export function titleLevelDimension(user: MatchUser, job: MatchJob, weights: Mat
   if (overlap === null) return dim('title_level', weights, null);
   const evidence: MatchEvidence[] = [ev(job.title, 'posting', 'title')];
   if (job.seniority) evidence.push(ev(job.seniority, 'posting', 'seniority'));
-  let factor = seniorityFactor(user.targetSeniority, job.seniority);
+  const mine = userLevel(user);
+  let factor = seniorityFactor(mine ? [mine] : [], job.seniority);
   // Eligibility the posting states (F-MATCH-01: education inside "title and level";
   // GoApply: 届别/学历). Never school tier.
   if (degreeMeets(user.highestDegree, job.educationLevel) === false) {
@@ -275,13 +391,17 @@ export function titleLevelDimension(user: MatchUser, job: MatchJob, weights: Mat
 
 // ── skills ────────────────────────────────────────────────────────────────
 
-/** The posting's skills, required ones first (display form, de-duplicated). */
+/**
+ * The posting's skills, required ones first, one entry per thing and in the
+ * spelling a reader expects (terms.ts: "typescript/node.js" is dropped next
+ * to "TypeScript" and "Node.js"; "go" is written "Go").
+ */
 export function jobSkillList(job: MatchJob): Array<{ skill: string; required: boolean }> {
   const detail = (job.skillsDetail ?? []).filter((s) => s && typeof s.skill === 'string' && s.skill.trim());
   const fromDetail = detail.map((s) => ({ skill: s.skill.trim(), required: s.required === true }));
   const fromList = job.skills.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ skill: s.trim(), required: false }));
   const merged = uniqueBy([...fromDetail.filter((s) => s.required), ...fromDetail, ...fromList], (s) => skillKey(s.skill));
-  return merged;
+  return dedupeTerms(merged, (s) => s.skill).map((s) => ({ skill: displayTerm(s.skill), required: s.required }));
 }
 
 export function splitSkills(user: MatchUser, job: MatchJob): { aligned: string[]; missing: string[]; missingRequired: string[] } {
@@ -414,6 +534,8 @@ export function logisticsChecks(user: MatchUser, job: MatchJob): LogisticsChecks
 }
 
 function payText(job: MatchJob): string {
+  // The posting's own words first: "18-28K·15薪" is what it says, "CNY 270000–420000" is our arithmetic.
+  if (job.payAsPosted?.trim()) return job.payAsPosted.trim();
   const cur = job.salaryCurrency ?? '';
   const lo = job.salaryAnnualMin;
   const hi = job.salaryAnnualMax;
@@ -457,8 +579,31 @@ export function overlapAndGap(user: MatchUser, job: MatchJob): { topOverlap: str
   return { topOverlap: aligned[0] ?? null, topGap: missingRequired[0] ?? missing[0] ?? null };
 }
 
+/**
+ * The most a quick estimate may claim for what was actually compared (see the
+ * header): null = no score at all, else an upper limit for the total.
+ */
+export function preScoreLimit(dimensions: MatchDimension[], gap: number | null, tiers: MatchTiers): number | null {
+  const scored = (key: MatchDimensionKey) => dimensions.some((d) => d.key === key && d.status === 'scored' && d.score !== null && d.weight > 0);
+  const role = scored('title_level');
+  const skills = scored('skills');
+  // Location, pay and industry alone say nothing about the work itself.
+  if (!role && !skills) return null;
+  let limit = 100;
+  if (!role || !skills) limit = Math.min(limit, tiers.great - 1);
+  // career_path is never stated in the pre-score, so it is not part of what could have been compared.
+  const comparable = dimensions.filter((d) => d.key !== 'career_path' && d.weight > 0);
+  const total = comparable.reduce((sum, d) => sum + d.weight, 0);
+  const compared = comparable.filter((d) => d.status === 'scored' && d.score !== null).reduce((sum, d) => sum + d.weight, 0);
+  if (total > 0 && compared / total < 0.5) limit = Math.min(limit, tiers.good - 1);
+  if (gap !== null && gap >= 2) limit = Math.min(limit, tiers.good - 1);
+  return Math.max(0, limit);
+}
+
 export function preScore(user: MatchUser, job: MatchJob, config: PreScoreConfig): PreScoreResult {
   const dimensions = preScoreDimensions(user, job, config.weights);
-  const score = combineDimensions(dimensions);
+  const combined = combineDimensions(dimensions);
+  const limit = preScoreLimit(dimensions, levelGap(user, job.seniority), config.tiers);
+  const score = combined === null || limit === null ? null : Math.min(combined, limit);
   return { jobId: job.id, score, tier: tierFor(score, config.tiers), kind: 'pre', dimensions, ...overlapAndGap(user, job) };
 }

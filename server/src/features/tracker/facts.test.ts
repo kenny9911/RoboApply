@@ -8,7 +8,21 @@ import { describe, expect, it } from 'vitest';
 import { CN_TRACKER_LADDER } from '../cn/tracker/index.js';
 import type { TrackerEntryView } from './contract.js';
 import { csvCell, trackerCsv } from './csv.js';
-import { computeFollowUps, computeWeeklyFacts, daysBetween, weekRange, weekStartFor, type FactEntry } from './facts.js';
+import {
+  computeFollowUps,
+  computeWeeklyFacts,
+  daysBetween,
+  isCalendarDay,
+  userDayKey,
+  weekRange,
+  weekStartFor,
+  zoneOffsetLabel,
+  zoneOffsetMinutes,
+  zonedDayKey,
+  zonedDayStart,
+  zonedMinute,
+  type FactEntry,
+} from './facts.js';
 import { INTL_TRACKER_LADDER, isStageDetailAllowed, isStatusAllowed, ladderFor, outcomeForStatus } from './stages.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -113,6 +127,77 @@ describe('weeks', () => {
       ended: 1,
       noReply10d: 0,
     });
+  });
+});
+
+describe('FIX-3: weeks and days are the user\'s own (the click at 02:25 on Sunday Oct 11 in Taipei)', () => {
+  // 02:25 local on Sunday Oct 11 in UTC+8 = 18:25 UTC on Saturday Oct 10.
+  const CLICK = new Date('2026-10-10T18:25:07.412Z');
+  const TPE = 'Asia/Taipei';
+  const LA = 'America/Los_Angeles';
+
+  it('zone helpers: offsets, the start of a day and the day of a moment', () => {
+    expect(zoneOffsetMinutes(CLICK, TPE)).toBe(480);
+    expect(zoneOffsetMinutes(CLICK, LA)).toBe(-420); // daylight time in October
+    expect(zoneOffsetMinutes(new Date('2026-12-10T18:25:00Z'), LA)).toBe(-480);
+    expect(zoneOffsetLabel(CLICK, TPE)).toBe('UTC+08:00');
+    expect(zoneOffsetLabel(CLICK, LA)).toBe('UTC-07:00');
+    expect(zoneOffsetLabel(CLICK, 'UTC')).toBe('UTC');
+    expect(zoneOffsetLabel(CLICK, 'Asia/Kolkata')).toBe('UTC+05:30');
+    expect(zonedDayStart('2026-10-11', TPE).toISOString()).toBe('2026-10-10T16:00:00.000Z');
+    expect(zonedDayStart('2026-10-11', LA).toISOString()).toBe('2026-10-11T07:00:00.000Z');
+    // The day clocks go back in Los Angeles (Nov 1, 2026) still starts at its own midnight.
+    expect(zonedDayStart('2026-11-01', LA).toISOString()).toBe('2026-11-01T07:00:00.000Z');
+    expect(zonedDayStart('2026-11-02', LA).toISOString()).toBe('2026-11-02T08:00:00.000Z');
+    expect(zonedDayKey(CLICK, TPE)).toBe('2026-10-11');
+    expect(zonedDayKey(CLICK, LA)).toBe('2026-10-10');
+    expect(zonedMinute(CLICK, TPE)).toBe('2026-10-11 02:25');
+    // An unknown zone is UTC, never an exception.
+    expect(zonedDayKey(CLICK, 'Not/AZone')).toBe('2026-10-10');
+    expect(zonedDayKey(CLICK, null)).toBe('2026-10-10');
+  });
+
+  it('a picked calendar day keeps its day; a moment takes the day it happened on for the user', () => {
+    const picked = new Date('2026-10-02T00:00:00.000Z');
+    expect(isCalendarDay(picked)).toBe(true);
+    expect(isCalendarDay(CLICK)).toBe(false);
+    expect(userDayKey(picked, LA)).toBe('2026-10-02'); // not Oct 1
+    expect(userDayKey(CLICK, TPE)).toBe('2026-10-11');
+  });
+
+  it('the week of that click is the one starting Sunday Oct 11, and it is counted there', () => {
+    expect(weekStartFor(CLICK)).toBe('2026-10-04'); // the UTC week, which the card used to show
+    expect(weekStartFor(CLICK, TPE)).toBe('2026-10-11');
+    expect(weekRange('2026-10-11', TPE)).toEqual({
+      start: new Date('2026-10-10T16:00:00.000Z'),
+      end: new Date('2026-10-17T16:00:00.000Z'),
+      startUtc: '2026-10-11',
+      endUtc: '2026-10-17',
+    });
+    const entries = [entry({ id: 'sun', dateApplied: CLICK }), entry({ id: 'picked', dateApplied: new Date('2026-10-17T00:00:00.000Z') }), entry({ id: 'next', dateApplied: new Date('2026-10-18T00:00:00.000Z') })];
+    const events = [{ entryId: 'sun', kind: 'status', toValue: 'first_call', createdAt: new Date('2026-10-10T17:00:00.000Z') }];
+    const thisWeek = computeWeeklyFacts(entries, events, '2026-10-11', CLICK, 'intl', TPE);
+    expect(thisWeek).toMatchObject({ weekStart: '2026-10-11', weekEnd: '2026-10-17', applied: 2, interviews: 1 });
+    // In the user's last week it is not counted (the UTC week would have counted it there).
+    expect(computeWeeklyFacts(entries, events, '2026-10-04', CLICK, 'intl', TPE)).toMatchObject({ applied: 0, interviews: 0 });
+    expect(computeWeeklyFacts(entries, events, '2026-10-04', CLICK, 'intl')).toMatchObject({ applied: 1, interviews: 1 });
+  });
+
+  it('CSV: days and the interview time are the user\'s, and the interview says its zone', () => {
+    const row: TrackerEntryView = {
+      id: 'e1', userId: 'u1', jobId: null, status: 'interviewing', excitementStars: 0, maxSalary: null, maxSalaryCurrency: 'USD', notesMarkdown: null,
+      dateSaved: '2026-10-10T18:20:00.000Z', dateApplied: CLICK.toISOString(), deadline: '2026-10-30', followUpAt: '2026-10-25T00:00:00.000Z', appliedVia: 'manual', linkedRunId: null, job: null,
+      externalSnapshot: { title: 'Analyst', companyName: 'Acme', applyUrl: null }, createdAt: '2026-10-10T18:20:00.000Z', updatedAt: CLICK.toISOString(), source: 'manual', stageDetail: null, outcome: null,
+      interviewAt: '2026-10-20T02:30:00.000Z', offer: null, tailoredVariantId: null, coverLetterId: null,
+    };
+    const line = (tz?: string) => trackerCsv([row], 'en', 'intl', tz ? { timeZone: tz } : {}).split('\r\n')[1]!.split(',');
+    // Saved, applied, interview, follow-up, deadline (columns 5–9).
+    expect(line(TPE).slice(4, 9)).toEqual(['2026-10-11', '2026-10-11', '2026-10-20 10:30 UTC+08:00', '2026-10-25', '2026-10-30']);
+    expect(line(LA).slice(4, 9)).toEqual(['2026-10-10', '2026-10-10', '2026-10-19 19:30 UTC-07:00', '2026-10-25', '2026-10-30']);
+    // No zone known: UTC, and it says so.
+    expect(line().slice(4, 9)).toEqual(['2026-10-10', '2026-10-10', '2026-10-20 02:30 UTC', '2026-10-25', '2026-10-30']);
+    // A salary with no amount writes no currency.
+    expect(line(TPE).slice(9, 11)).toEqual(['', '']);
   });
 });
 

@@ -1,3 +1,7 @@
 {
-  "jobs": {}
+  "jobs": {
+    "card": {
+      "firstSeen": "First seen {date}"
+    }
+  }
 }

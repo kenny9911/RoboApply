@@ -26,8 +26,9 @@ export {
   useLimitingFilters,
   useSkillSuggestions,
   useTaxonomyLabels,
+  useTaxonomyLabelState,
   useTitleSuggestions,
 } from './useFilterQueries';
 export type { FilterCountState } from './useFilterQueries';
-export { syncSponsorshipAnswer, useApplyFilters } from './useApplyFilters';
-export type { ApplyFiltersInput, ApplyFiltersResult } from './useApplyFilters';
+export { syncSponsorshipAnswer, useApplyFilters, useOptimisticFilters } from './useApplyFilters';
+export type { ApplyFiltersInput, ApplyFiltersResult, OptimisticFilters } from './useApplyFilters';

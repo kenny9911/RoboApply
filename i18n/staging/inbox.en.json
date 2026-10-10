@@ -1,3 +1,9 @@
 {
-  "inbox": {}
+  "inbox": {
+    "alertJobs": {
+      "label": "Jobs in this alert",
+      "item": "{title} at {company}",
+      "more": "{count, plural, one {And # more job in the list.} other {And # more jobs in the list.}}"
+    }
+  }
 }

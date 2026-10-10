@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { annualize, currencyFromText, normalizeSalary, parseSalaryText, payFromDescription, periodFromLabel, periodFromText } from './salary.js';
+import { annualize, currencyFromText, normalizeSalary, parseSalaryText, payFromDescription, payPlausible, periodFromLabel, periodFromText, statesAmount } from './salary.js';
 
 describe('parseSalaryText', () => {
   type Row = [string, { country?: string; market?: 'intl' | 'cn' }, Partial<{ min: number | null; max: number | null; currency: string | null; period: string | null; months: number | null; negotiable: boolean }> | null];
@@ -131,7 +131,7 @@ describe('payFromDescription', () => {
   });
 
   it('falls back to a negotiable statement, else null', () => {
-    expect(payFromDescription('工作內容：開發\n待遇：待遇面議（經常性薪資達4萬元或以上）', { country: 'TW' })).toMatchObject({ negotiable: true, text: '待遇:待遇面議(經常性薪資達4萬元或以上)' });
+    expect(payFromDescription('工作內容：開發\n待遇：待遇面議（經常性薪資達4萬元或以上）', { country: 'TW' })).toMatchObject({ negotiable: true, text: '待遇面議(經常性薪資達4萬元或以上)' });
     expect(payFromDescription('Great team. Salary: $5,000 bonus', { country: 'US' })).toBeNull();
     expect(payFromDescription('No pay words here', {})).toBeNull();
     expect(payFromDescription(null)).toBeNull();
@@ -192,8 +192,63 @@ describe('normalizeSalary', () => {
     expect(normalizeSalary({})).toMatchObject({ salaryDisclosed: false, salaryMin: null, salaryText: null });
     expect(normalizeSalary({ min: 'abc', max: -5 })).toMatchObject({ salaryDisclosed: false });
     expect(normalizeSalary({ min: 120000, currency: 'US Dollars' })).toMatchObject({ salaryCurrency: null, salaryPeriod: null, salaryAnnualMin: null, salaryDisclosed: true });
-    expect(normalizeSalary({ min: 1, currency: 'RMB', period: 'month' }).salaryCurrency).toBe('CNY');
-    expect(normalizeSalary({ min: 1, currency: 'NTD', period: 'month' }).salaryCurrency).toBe('TWD');
+    expect(normalizeSalary({ min: 10000, currency: 'RMB', period: 'month' }).salaryCurrency).toBe('CNY');
+    expect(normalizeSalary({ min: 40000, currency: 'NTD', period: 'month' }).salaryCurrency).toBe('TWD');
+  });
+});
+
+describe('FIX-3: figures that cannot be pay, and words that are not pay text', () => {
+  it('"$60,000K-$90,000K" an hour (60 million dollars an hour) is not stored as an amount; the words are kept', () => {
+    // What the provider sent for "Jr. Software Developer": structured fields and the typo they came from.
+    const fromFields = normalizeSalary({ min: 60_000_000, max: 90_000_000, currency: 'USD', period: 'hour', text: '$60,000K-$90,000K', country: 'US' });
+    expect(fromFields).toMatchObject({ salaryMin: null, salaryMax: null, salaryAnnualMin: null, salaryAnnualMax: null, salaryDisclosed: false, salaryText: '$60,000K-$90,000K' });
+    const fromText = normalizeSalary({ text: '$60,000K-$90,000K an hour', country: 'US' });
+    expect(fromText).toMatchObject({ salaryMin: null, salaryMax: null, salaryAnnualMax: null, salaryDisclosed: false });
+  });
+
+  it.each([
+    [{ min: 60_000_000, max: 90_000_000, currency: 'USD', period: 'hour' }, false],
+    [{ min: 60_000, max: 90_000, currency: 'USD', period: 'hour' }, false], // $60,000 an hour
+    [{ min: 15, max: 15, currency: 'USD', period: 'year' }, false], // $15 a year
+    [{ min: 20, max: 65_000, currency: 'USD', period: 'year' }, false], // an hourly and a yearly figure as one range
+    [{ min: 60_000, max: 90_000, currency: 'USD', period: 'year' }, true],
+    [{ min: 30, max: 45, currency: 'USD', period: 'hour' }, true],
+    [{ min: 450, max: 450, currency: 'USD', period: 'hour' }, true], // a senior contractor's rate
+    [{ min: 18_000, max: 28_000, currency: 'CNY', period: 'month', months: 15 }, true],
+    [{ min: 200, max: 300, currency: 'CNY', period: 'day' }, true],
+    [{ min: 40_000, max: 50_000, currency: 'TWD', period: 'month' }, true],
+    [{ min: 6_000_000, max: 9_000_000, currency: 'JPY', period: 'year' }, true],
+    [{ min: 50_000_000, max: 80_000_000, currency: 'KRW', period: 'year' }, true],
+    [{ min: 15_000_000, max: 30_000_000, currency: 'VND', period: 'month' }, true],
+    [{ min: 1_200_000, max: 1_200_000, currency: 'INR', period: 'year' }, true],
+    [{ min: 120_000, max: null, currency: null, period: null }, true], // unknown currency and period: not judged
+    [{ min: 90_000_000_000, max: null, currency: null, period: null }, false],
+    [{ min: null, max: null, currency: 'USD', period: 'year' }, true],
+  ])('payPlausible(%j) → %s', (pay, expected) => {
+    expect(payPlausible(pay)).toBe(expected);
+  });
+
+  it('"Competitive Pay and Benefits, …" in a description keeps only the words about pay, and is not a stated amount', () => {
+    const desc = 'About the role.\nCompetitive Pay and Benefits, including medical, dental, vision and a 401k match with 15 days of PTO.';
+    const parsed = payFromDescription(desc, { country: 'US' });
+    expect(parsed).toMatchObject({ negotiable: true, text: 'Competitive Pay' });
+    expect(statesAmount(parsed!.text)).toBe(false);
+    // Rows stored before this rule: the benefits sentence is not a figure either.
+    expect(statesAmount('Competitive Pay and Benefits, including medical, dental, vision and a 401k match')).toBe(false);
+    expect(statesAmount('面議')).toBe(false);
+    expect(statesAmount('Competitive')).toBe(false);
+  });
+
+  it.each(['$60,000K-$90,000K', '$90k–$110k a year', '18-28K·15薪', '待遇面議(經常性薪資達4萬元或以上)', '月薪四萬元以上', '200-300元/天', 'USD 120,000'])('statesAmount(%s) is true', (text) => {
+    expect(statesAmount(text)).toBe(true);
+  });
+
+  it('a description pay line is kept without its own label (the row is already labelled: "薪资 薪资:18-28K·15薪")', () => {
+    expect(payFromDescription('岗位职责：开发\n薪资：18-28K·15薪', { market: 'cn', country: 'CN' })).toMatchObject({ min: 18000, max: 28000, months: 15, text: '18-28K·15薪' });
+    expect(normalizeSalary({ description: '任职要求：本科\n薪资：18-28K·15薪', market: 'cn', country: 'CN' }).salaryText).toBe('18-28K·15薪');
+    expect(payFromDescription('Salary range: $90,000 - $110,000 a year', { country: 'US' })!.text).toBe('$90,000 - $110,000 a year');
+    // A provider's own pay field is kept as given.
+    expect(normalizeSalary({ text: '薪资：18-28K·15薪', market: 'cn', country: 'CN' }).salaryText).toBe('薪资:18-28K·15薪');
   });
 });
 
@@ -213,7 +268,7 @@ describe('review regressions: no pay from benefit lines (D3)', () => {
   });
 
   it('still reads real pay clauses, without the bonus or equity clause that follows', () => {
-    expect(payFromDescription('Salary: $120k-$150k plus annual bonus', { country: 'US' })).toMatchObject({ min: 120000, max: 150000, currency: 'USD', period: null, text: 'Salary: $120k-$150k' });
+    expect(payFromDescription('Salary: $120k-$150k plus annual bonus', { country: 'US' })).toMatchObject({ min: 120000, max: 150000, currency: 'USD', period: null, text: '$120k-$150k' });
     expect(payFromDescription('Base pay between $90,000 and $110,000 per year, with equity.', { country: 'US' })).toMatchObject({ min: 90000, max: 110000, period: 'year' });
     expect(payFromDescription('USD 150,000 - 180,000 annual base salary', { country: 'US' })).toMatchObject({ min: 150000, max: 180000, currency: 'USD', period: 'year' });
     expect(payFromDescription('岗位职责…\n薪资范围 20-30K，五险一金，年终奖2-4个月', { country: 'CN', market: 'cn' })).toMatchObject({ min: 20000, max: 30000, currency: 'CNY' });

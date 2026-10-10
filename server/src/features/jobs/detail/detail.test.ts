@@ -25,6 +25,7 @@ import { NEWS_CACHE_MAX, clearNewsCache, newsCacheSize, searchCompanyNews, toNew
 import {
   classYearsOf,
   peopleSearchLinks,
+  searchRole,
   shareTarget,
   slugify,
   toBadges,
@@ -239,6 +240,34 @@ describe('view rules (D3)', () => {
     expect(links[1]!.params.companies).toBe('Globex, Initech');
     expect(links[2]!.url).toBeNull();
     expect(peopleSearchLinks({ title: 'x', companyName: 'Acme' }, { pastCompanies: [], schools: [] }, 'cn')).toEqual([]);
+  });
+
+  it('FIX-3: the role search uses the role, not the whole posting headline', () => {
+    const headline = 'Product Designer - Gaming Communities (In-Office NYC)';
+    const [role] = peopleSearchLinks({ title: headline, companyName: 'General Intuition & Medal' }, { pastCompanies: [], schools: [] }, 'intl');
+    const keywords = new URL(role!.url!).searchParams.get('keywords');
+    expect(keywords).toBe('"General Intuition & Medal" Product designer');
+    expect(role!.params).toEqual({ company: 'General Intuition & Medal', title: 'Product designer' });
+    // The role the job was placed in wins; an unplaced title loses its notes and level words.
+    expect(searchRole({ title: 'Sr. SWE II (Payments)', primaryTaxonomyId: 'backend_engineer' })).toBe('Backend engineer');
+    expect(searchRole({ title: 'Senior Software Engineer, Backend' })).toBe('Backend engineer');
+    expect(searchRole({ title: 'Senior Zymurgist II - Night Shift (Portland, OR)' })).toBe('Zymurgist');
+    expect(searchRole({ title: 'Lead Zymurgist | Brewery' })).toBe('Zymurgist');
+    expect(searchRole({ title: 'Zymurgist' })).toBe('Zymurgist');
+  });
+
+  it('People: a taxonomy name that groups several roles is not used as the search words', () => {
+    // "Server, barista or bartender", "Finance manager / controller", "Chef or cook", "NLP and LLM engineer".
+    expect(searchRole({ title: 'Barista', primaryTaxonomyId: 'server' })).toBe('Barista');
+    expect(searchRole({ title: 'Barista (Part-time) - Downtown', primaryTaxonomyId: 'server' })).toBe('Barista');
+    expect(searchRole({ title: 'Sr. Manager, Strategic Finance - EMEA', primaryTaxonomyId: 'finance_leader' })).toBe('Manager');
+    expect(searchRole({ title: 'Line Cook', primaryTaxonomyId: 'chef' })).toBe('Line Cook');
+    expect(searchRole({ title: 'Senior LLM Engineer (Remote)', primaryTaxonomyId: 'nlp_engineer' })).toBe('LLM Engineer');
+    // Unplaced, and the title matches a grouped role: the title's own words.
+    expect(searchRole({ title: 'Bartender' })).toBe('Bartender');
+    const links = peopleSearchLinks({ title: 'Barista', companyName: 'Blue Bottle', primaryTaxonomyId: 'server' }, { pastCompanies: [], schools: [] }, 'intl');
+    expect(links[0]).toMatchObject({ kind: 'role', params: { company: 'Blue Bottle', title: 'Barista' } });
+    expect(new URL(links[0]!.url!).searchParams.get('keywords')).toBe('"Blue Bottle" Barista');
   });
 
   it('campus: 届别 parsed; official link required; stale verification flagged', () => {
@@ -705,17 +734,47 @@ describe('save, share, similar, company news', () => {
     expect(res.items[0]!.payText).toBeNull();
   });
 
-  it('similar: weekly pay and pay stated in words are kept (never "not listed")', async () => {
+  it('FIX-3: a similar job with a stored AI score shows that score and its kind (the number the feed card shows), not a second estimate', async () => {
+    const preScore = async (_u: string, ids: string[]): Promise<PreScoreResult[]> =>
+      ids.map((id) => ({ jobId: id, score: id === 'j2' ? 59 : 87, tier: id === 'j2' ? 'possible' : 'great', kind: id === 'j2' ? 'ai' : 'pre', dimensions: [], topOverlap: null, topGap: null }));
+    const { service } = setup({ jobs: [job(), job({ id: 'j2' }), job({ id: 'j3' })], deps: { preScore } });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items.map((i) => [i.jobId, i.fit?.score, i.fit?.kind])).toEqual([
+      ['j3', 87, 'pre'],
+      ['j2', 59, 'ai'],
+    ]);
+  });
+
+  it('similar: weekly pay and a pay text that states an amount are kept (never "not listed")', async () => {
     const { service } = setup({
       jobs: [
         job(),
         job({ id: 'jw', salaryMin: 1200, salaryMax: 1500, salaryPeriod: 'week', salaryDisclosed: true }),
-        job({ id: 'jt', salaryText: 'Competitive', salaryDisclosed: false }),
+        job({ id: 'jt', salaryText: '待遇面議(經常性薪資達4萬元或以上)', salaryDisclosed: false }),
       ],
     });
     const items = (await service.similar('u1', 'j1')).items;
     expect(items.find((i) => i.jobId === 'jw')!.pay).toMatchObject({ min: 1200, max: 1500, period: 'week' });
-    expect(items.find((i) => i.jobId === 'jt')).toMatchObject({ pay: null, payText: 'Competitive' });
+    expect(items.find((i) => i.jobId === 'jt')).toMatchObject({ pay: null, payText: '待遇面議(經常性薪資達4萬元或以上)' });
+  });
+
+  it('FIX-3: words with no amount are not "Pay as stated", and a figure that cannot be pay is not shown as a number', async () => {
+    const { service } = setup({
+      jobs: [
+        job(),
+        // A benefits sentence stored as pay text before the normalizer kept only the pay words.
+        job({ id: 'jb', salaryText: 'Competitive Pay and Benefits, including medical, dental and a 401k match', salaryDisclosed: false }),
+        job({ id: 'jc', salaryText: 'Competitive', salaryDisclosed: false }),
+        // "$60,000K-$90,000K" read as dollars an hour.
+        job({ id: 'jx2', salaryMin: 60_000_000, salaryMax: 90_000_000, salaryCurrency: 'USD', salaryPeriod: 'hour', salaryDisclosed: true, salaryText: '$60,000K-$90,000K' }),
+      ],
+    });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items.find((i) => i.jobId === 'jb')).toMatchObject({ pay: null, payText: null });
+    expect(items.find((i) => i.jobId === 'jc')).toMatchObject({ pay: null, payText: null });
+    // The post's own words stay available; no "$60,000,000 an hour".
+    expect(items.find((i) => i.jobId === 'jx2')).toMatchObject({ pay: null, payText: '$60,000K-$90,000K' });
+    expect((await service.get('u1', 'jx2')).job).toMatchObject({ pay: null, payText: '$60,000K-$90,000K' });
   });
 
   it('GET /:id lists similar ids without scoring them; GET /:id/similar ranks', async () => {

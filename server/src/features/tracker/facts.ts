@@ -90,16 +90,103 @@ export function computeFollowUps(entries: readonly FactEntry[], now: Date, marke
   );
 }
 
-/** Sunday-anchored UTC week containing `d` (YYYY-MM-DD). */
-export function weekStartFor(d: Date): string {
-  const sunday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay()));
-  return sunday.toISOString().slice(0, 10);
+// ── The user's own calendar (FIX-3) ────────────────────────────────────────
+//
+// A tracker date is either a moment (the instant the user marked a job
+// applied) or a calendar day the user picked (stored as UTC midnight). A
+// moment belongs to the day and the week it happened in FOR THE USER: 02:25
+// on Sunday Oct 11 in Taipei is 18:25 UTC on Saturday Oct 10, and counting it
+// in the UTC week put it in last week. The zone is the IANA name captured at
+// signup (`SeekerProfile.timezone`); 'UTC' when unknown or invalid.
+
+function safeZone(tz: string | null | undefined): string {
+  if (!tz) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return 'UTC';
+  }
 }
 
-export function weekRange(weekStart: string): { start: Date; end: Date; startUtc: string; endUtc: string } {
-  const start = new Date(`${weekStart}T00:00:00.000Z`);
-  const end = new Date(start.getTime() + 7 * DAY_MS);
-  return { start, end, startUtc: weekStart, endUtc: new Date(end.getTime() - DAY_MS).toISOString().slice(0, 10) };
+const zoneFormats = new Map<string, Intl.DateTimeFormat>();
+function wallClock(at: Date, tz: string): { y: number; m: number; d: number; h: number; min: number; s: number } {
+  let f = zoneFormats.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    zoneFormats.set(tz, f);
+  }
+  const p: Record<string, number> = {};
+  for (const part of f.formatToParts(at)) if (part.type !== 'literal') p[part.type] = Number(part.value);
+  return { y: p.year!, m: p.month!, d: p.day!, h: p.hour! % 24, min: p.minute!, s: p.second! };
+}
+
+/** Minutes the zone is ahead of UTC at `at` (480 for Taipei, -420 for Los Angeles in summer). */
+export function zoneOffsetMinutes(at: Date, timeZone: string | null | undefined): number {
+  const w = wallClock(at, safeZone(timeZone));
+  const wall = Date.UTC(w.y, w.m - 1, w.d, w.h, w.min, w.s);
+  return Math.round((wall - Math.floor(at.getTime() / 1000) * 1000) / 60_000);
+}
+
+/** The instant a calendar day starts in the zone (DST-safe). */
+export function zonedDayStart(dayKey: string, timeZone: string | null | undefined): Date {
+  const utcMidnight = new Date(`${dayKey}T00:00:00.000Z`);
+  const first = utcMidnight.getTime() - zoneOffsetMinutes(utcMidnight, timeZone) * 60_000;
+  return new Date(utcMidnight.getTime() - zoneOffsetMinutes(new Date(first), timeZone) * 60_000);
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** `YYYY-MM-DD` of a moment in the zone. */
+export function zonedDayKey(at: Date, timeZone: string | null | undefined): string {
+  const w = wallClock(at, safeZone(timeZone));
+  return `${w.y}-${pad2(w.m)}-${pad2(w.d)}`;
+}
+
+/** `YYYY-MM-DD HH:mm` of a moment in the zone. */
+export function zonedMinute(at: Date, timeZone: string | null | undefined): string {
+  const w = wallClock(at, safeZone(timeZone));
+  return `${w.y}-${pad2(w.m)}-${pad2(w.d)} ${pad2(w.h)}:${pad2(w.min)}`;
+}
+
+/** "UTC+08:00" / "UTC-07:00" / "UTC" for the zone at a moment. */
+export function zoneOffsetLabel(at: Date, timeZone: string | null | undefined): string {
+  const min = zoneOffsetMinutes(at, timeZone);
+  if (min === 0) return 'UTC';
+  const abs = Math.abs(min);
+  return `UTC${min > 0 ? '+' : '-'}${pad2(Math.floor(abs / 60))}:${pad2(abs % 60)}`;
+}
+
+/** A stored date that is a picked calendar day (exactly UTC midnight), not a moment. */
+export function isCalendarDay(d: Date): boolean {
+  return d.getTime() % DAY_MS === 0;
+}
+
+/** The calendar day a stored tracker date falls on for the user: a picked day as it is, a moment in their zone. */
+export function userDayKey(d: Date, timeZone: string | null | undefined): string {
+  return isCalendarDay(d) ? d.toISOString().slice(0, 10) : zonedDayKey(d, timeZone);
+}
+
+/** Sunday-anchored week containing `d` (YYYY-MM-DD), in the zone (UTC by default). */
+export function weekStartFor(d: Date, timeZone: string | null | undefined = 'UTC'): string {
+  const day = new Date(`${zonedDayKey(d, timeZone)}T00:00:00.000Z`);
+  return new Date(day.getTime() - day.getUTCDay() * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * The seven days from `weekStart`, as instants in the zone. `startUtc` /
+ * `endUtc` are the first and last calendar day of the week (names kept from
+ * the UTC-only version; they are day keys, not instants).
+ */
+export function weekRange(weekStart: string, timeZone: string | null | undefined = 'UTC'): { start: Date; end: Date; startUtc: string; endUtc: string } {
+  const firstDay = new Date(`${weekStart}T00:00:00.000Z`);
+  const nextWeek = new Date(firstDay.getTime() + 7 * DAY_MS).toISOString().slice(0, 10);
+  return {
+    start: zonedDayStart(weekStart, timeZone),
+    end: zonedDayStart(nextWeek, timeZone),
+    startUtc: weekStart,
+    endUtc: new Date(firstDay.getTime() + 6 * DAY_MS).toISOString().slice(0, 10),
+  };
 }
 
 export interface FactEvent {
@@ -120,9 +207,17 @@ export function computeWeeklyFacts(
   weekStart: string,
   now: Date,
   market: TrackerMarket,
+  timeZone: string | null | undefined = 'UTC',
 ): WeeklyFacts {
-  const { start, end, startUtc, endUtc } = weekRange(weekStart);
+  const { start, end, startUtc, endUtc } = weekRange(weekStart, timeZone);
   const inWeek = (d: Date | null) => d !== null && d.getTime() >= start.getTime() && d.getTime() < end.getTime();
+  // "Applied on" may be a day the user picked: it counts by its day, not by where UTC midnight falls in their zone.
+  const dayInWeek = (d: Date | null) => {
+    if (d === null) return false;
+    if (!isCalendarDay(d)) return inWeek(d);
+    const key = d.toISOString().slice(0, 10);
+    return key >= startUtc && key <= endUtc;
+  };
   const weekEvents = events.filter((ev) => inWeek(ev.createdAt));
   const ids = (pred: (ev: FactEvent) => boolean) => new Set(weekEvents.filter(pred).map((ev) => ev.entryId));
 
@@ -138,7 +233,7 @@ export function computeWeeklyFacts(
   return {
     weekStart: startUtc,
     weekEnd: endUtc,
-    applied: entries.filter((e) => inWeek(e.dateApplied)).length,
+    applied: entries.filter((e) => dayInWeek(e.dateApplied)).length,
     interviews: interviews.size,
     offers: offers.size,
     ended: ended.size,

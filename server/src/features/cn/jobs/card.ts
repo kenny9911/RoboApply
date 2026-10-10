@@ -136,10 +136,14 @@ export function formatCnSalary(job: Record<string, unknown>): string | null {
   }
 }
 
+/** The label a pasted pay line carries ("薪资：18-28K·15薪"); the row it is shown in is already labelled 薪资. */
+const PAY_LABEL = /^\s*(?:薪资|薪資|薪酬|待遇|月薪|年薪|日薪|时薪|時薪|工资|工資|薪水|salary|pay)(?:范围|範圍|\s+range)?\s*[:：]\s*/i;
+
 /** The pay line for a GoApply card. */
 export function cnSalary(job: Record<string, unknown>): CnCardMeta['salary'] {
   if (job.salaryDisclosed !== true) return { text: null, disclosed: false };
-  const verbatim = str(job.salaryText);
+  const stored = str(job.salaryText);
+  const verbatim = stored ? stored.replace(PAY_LABEL, '').trim() || stored : null;
   if (verbatim && HAS_FIGURE.test(verbatim)) return { text: verbatim.slice(0, 80), disclosed: true };
   const structured = formatCnSalary(job);
   return structured ? { text: structured, disclosed: true } : { text: null, disclosed: false };
@@ -453,8 +457,33 @@ export function mergePostingTags(existing: unknown, next: readonly MarketTagEntr
 
 // ── Card meta ────────────────────────────────────────────────────────────
 
+/** Calendar date in China (UTC+8, no daylight time) as yyyy-mm-dd; the feed's `cnDate` rule. */
+function cnToday(now: Date): string {
+  return new Date(now.getTime() + 8 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/**
+ * The application close date the posting states (`apply_closes:<date>` with
+ * its quote), as the last second of that day in Beijing time. A posting can
+ * state several (a first batch that has closed, a second still open): the
+ * soonest one that has not passed is the deadline, the same date the feed's
+ * deadline sort and filter use (`statedCloseSql`). When every stated date has
+ * passed, the latest of them. Null when the posting states none.
+ */
+export function statedCloseAt(marketTags: unknown, now: Date = new Date()): string | null {
+  const dates = readMarketTags(marketTags)
+    .map((t) => /^apply_closes:(\d{4}-\d{2}-\d{2})$/.exec(t.tag)?.[1])
+    .filter((d): d is string => !!d && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)))
+    .sort();
+  if (!dates.length) return null;
+  const today = cnToday(now);
+  const date = dates.find((d) => d >= today) ?? dates[dates.length - 1]!;
+  // 23:59:59 in Asia/Shanghai (UTC+8, no daylight time).
+  return `${date}T15:59:59.000Z`;
+}
+
 /** `CnCardMeta` for one GoApply job (marketHooks.cardMeta). */
-export function buildCnCardMeta(job: Record<string, unknown>, caps: Pick<CnJobCapabilities, 'licence'>): CnCardMeta {
+export function buildCnCardMeta(job: Record<string, unknown>, caps: Pick<CnJobCapabilities, 'licence'>, now: Date = new Date()): CnCardMeta {
   const sourceName = sourceNameOf(job);
   const isGoHire = sourceName === GOHIRE_SOURCE_NAME;
   const ownImport = job.visibility === 'private' || job.provider === 'user_import';
@@ -469,7 +498,9 @@ export function buildCnCardMeta(job: Record<string, unknown>, caps: Pick<CnJobCa
     // "Updated" is the source's own date; our crawl time is only ever "Last checked" (D3).
     updatedAt: iso(job.postedAt),
     lastCheckedAt: iso(job.lastSeenAt),
-    expiresAt: iso(job.expiresAt),
+    // The application close date the posting itself states (网申截止：2026年11月30日) comes first;
+    // a job with no source expiry (every pasted import) used to read "截止日期未注明" despite stating one.
+    expiresAt: statedCloseAt(job.marketTags, now) ?? iso(job.expiresAt),
     tags: cnTags(job),
     classYears: cnClassYears(job),
     warnings: ownImport ? cnFlagsOf(job.fraudFlags).map((f) => ({ rule: f.rule, evidence: f.evidence, ai: f.method === 'llm' })) : [],

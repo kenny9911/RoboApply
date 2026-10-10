@@ -32,6 +32,17 @@ describe('FeedItem', () => {
     expect(publicItem(feedRow({ id: 'b', salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: null })).pay).toBeNull();
   });
 
+  it('FIX-3: a stored figure that cannot be pay is not shown as a number ("$60,000,000–$90,000,000 an hour")', () => {
+    const typo = feedRow({ id: 'typo', salaryDisclosed: true, salaryMin: 60_000_000, salaryMax: 90_000_000, salaryCurrency: 'USD', salaryPeriod: 'hour', salaryText: '$60,000K-$90,000K' });
+    expect(publicItem(typo).pay).toBeNull();
+    // Real pay is untouched, in every period.
+    expect(publicItem(feedRow({ id: 'ok', salaryDisclosed: true, salaryMin: 60_000, salaryMax: 90_000, salaryCurrency: 'USD', salaryPeriod: 'year' })).pay).toMatchObject({ min: 60_000, max: 90_000, period: 'year' });
+    expect(publicItem(feedRow({ id: 'hr', salaryDisclosed: true, salaryMin: 40, salaryMax: 55, salaryCurrency: 'USD', salaryPeriod: 'hour' })).pay).toMatchObject({ min: 40, max: 55, period: 'hour' });
+    // Words with no amount are not pay text; words with one are.
+    expect(publicItem(feedRow({ id: 'w', salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: 'Competitive Pay and Benefits' })).pay).toBeNull();
+    expect(publicItem(feedRow({ id: 'x', salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: '18-28K·15薪' })).pay).toMatchObject({ text: '18-28K·15薪' });
+  });
+
   it('GoApply: N薪 and the 届别 / 网申 close date only as the posting states them', () => {
     const now = new Date('2026-10-10T12:00:00Z');
     const item = publicItem(

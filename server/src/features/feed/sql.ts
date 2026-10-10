@@ -27,7 +27,7 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../jobs/normalize/index.js';
-import { findCity } from '../jobs/geo/index.js';
+import { findCity, resolveCountry } from '../jobs/geo/index.js';
 import { expandTaxonomyIds, matchTitle } from '../jobs/taxonomy/index.js';
 import { includesUndisclosedPay, type FilterField, type FilterSet } from '../search/index.js';
 
@@ -136,8 +136,22 @@ function cityNames(loc: { city?: string; country?: string; label: string }): str
   return lowerList([name, rec?.name ?? '', rec?.zh ?? '', rec?.zhHant ?? '', ...(rec?.aliases ?? [])]);
 }
 
-/** One location: radius search (bounding box, then haversine) or same city; remote jobs pass. */
+/**
+ * A location entry that names a country and no city means the whole country
+ * ("Anywhere in United States": `{ label: 'US', country: 'US', radiusKm: 0 }`,
+ * what onboarding stores). Its radius is meaningless and is ignored. An entry
+ * whose label is a known city of that country is still that city.
+ */
+export function isCountryWideLocation(loc: NonNullable<FilterSet['locations']>[number]): boolean {
+  if (!loc.country || loc.city || loc.lat !== undefined || loc.lng !== undefined) return false;
+  const first = loc.label.split(',')[0]?.trim() ?? '';
+  if (resolveCountry(first)?.code === loc.country || resolveCountry(loc.label.trim())?.code === loc.country) return true;
+  return !findCity(first, { country: loc.country });
+}
+
+/** One location: the whole country, a radius search (bounding box, then haversine) or same city; remote jobs pass. */
 function locationSql(loc: NonNullable<FilterSet['locations']>[number]): Prisma.Sql {
+  if (isCountryWideLocation(loc)) return Prisma.sql`(j."locationCountry" = ${loc.country})`;
   let lat = loc.lat;
   let lng = loc.lng;
   if ((lat === undefined || lng === undefined) && loc.radiusKm > 0) {

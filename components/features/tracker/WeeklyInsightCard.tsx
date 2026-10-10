@@ -17,12 +17,23 @@ import { PhoneBindingNotice } from '../auth-cn';
 import { useRefreshWeeklyInsight, useWeeklyInsight } from '../../../hooks/tracker/useTracker';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import type { TrackerEntryView } from '../../../lib/api/contracts/tracker';
-import { entryCompany, entryRole, useDateFormat } from './shared';
+import { entryCompany, entryRole, localWeekStart, useDateFormat, weekStartOfDay } from './shared';
 import styles from './tracker.module.css';
 
 export interface WeeklyInsightCardProps {
   /** Entries used to name the applications the summary cites. */
   entries: readonly TrackerEntryView[];
+  /** The moment "this week" is read from (tests pin it); the clock by default. */
+  now?: Date;
+}
+
+/**
+ * The week the card shows and whether the server's current (UTC) week is that
+ * same week. Pure, for tests.
+ */
+export function shownWeek(now: Date): { week: string; sameAsServerWeek: boolean } {
+  const week = localWeekStart(now);
+  return { week, sameAsServerWeek: week === weekStartOfDay(now.toISOString().slice(0, 10)) };
 }
 
 /** The model cites applications by id; show their names instead. */
@@ -36,11 +47,17 @@ export function nameCitations(markdown: string, ids: readonly string[], entries:
   return out;
 }
 
-export function WeeklyInsightCard({ entries }: WeeklyInsightCardProps) {
+export function WeeklyInsightCard({ entries, now }: WeeklyInsightCardProps) {
   const t = useTranslations('applications');
   const { day } = useDateFormat();
-  const { data, isLoading, isError } = useWeeklyInsight();
-  const refresh = useRefreshWeeklyInsight();
+  // "This week" is the reader's week (their own Sunday), not the UTC one: on a
+  // Sunday morning in Taipei the UTC week has not turned yet.
+  // A summary is written for the server's current week (UTC). For the few hours
+  // a week in which that is not the week on screen, none is offered rather than
+  // one about a different week.
+  const { week, sameAsServerWeek: sameWeek } = useMemo(() => shownWeek(now ?? new Date()), [now]);
+  const { data, isLoading, isError } = useWeeklyInsight(week);
+  const refresh = useRefreshWeeklyInsight(week);
   const facts = data?.facts;
   const value = (n: number | undefined) => (facts && typeof n === 'number' ? n : '—');
   const summary = useMemo(
@@ -90,7 +107,7 @@ export function WeeklyInsightCard({ entries }: WeeklyInsightCardProps) {
         </div>
       ) : null}
 
-      {data?.aiAvailable ? (
+      {data?.aiAvailable && sameWeek ? (
         <div className={styles.weeklyActions}>
           <Btn variant="default" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
             {refresh.isPending ? t('weekly.writing') : data.insight ? t('weekly.rewrite') : t('weekly.write')}

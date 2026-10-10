@@ -45,8 +45,15 @@ import { createImportLimitStore, type ImportLimitStore } from './limits.js';
 import { createPrismaImportRepository, type ImportRepository } from './repository.js';
 import { checkImportUrl, isDeniedHost, normalizeHost } from './urlPolicy.js';
 
-/** Enrichment gets this long inside the request; after that it continues in the queue. */
-export const IMPORT_ENRICH_TIMEOUT_MS = 45_000;
+/**
+ * Enrichment gets this long inside the request; after that it continues in
+ * the queue. Kept well under every gateway's limit (FIX-3): at 45 s the job
+ * was saved and the credit spent, but the browser got a 500 from the gateway
+ * about 40 s in, so the person saw an error and the list did not show a job
+ * that existed. Enrichment that needs longer loses nothing by finishing in the
+ * queue.
+ */
+export const IMPORT_ENRICH_TIMEOUT_MS = 12_000;
 
 /** Where a save comes from (credit ref and logs). */
 export type SaveSource = 'import' | 'extension' | 'assistant';

@@ -126,6 +126,25 @@ export function toJobUpdateData(update: EnrichUpdate): Prisma.RAJobUpdateInput {
   return data;
 }
 
+/** How long a cost user found missing is not tried again (a user created meanwhile is picked up without a restart). */
+export const MISSING_COST_USER_RECHECK_MS = 60 * 60_000;
+/** Cost user ids the database has no account for → when to try again (process-wide: one warning per id per window). */
+const missingCostUsers = new Map<string, number>();
+const now = () => Date.now();
+
+/** Tests only. */
+export function resetMissingCostUsersForTests(): void {
+  missingCostUsers.clear();
+}
+
+/** The foreign key from a usage row to its user failed (Prisma P2003 on `userId`). */
+function isMissingUser(err: unknown): boolean {
+  const e = err as { code?: unknown; message?: unknown; meta?: { field_name?: unknown; constraint?: unknown } } | null;
+  if (!e || typeof e !== 'object') return false;
+  const text = `${typeof e.message === 'string' ? e.message : ''} ${typeof e.meta?.field_name === 'string' ? e.meta.field_name : ''} ${typeof e.meta?.constraint === 'string' ? e.meta.constraint : ''}`;
+  return (e.code === 'P2003' || /foreign key constraint/i.test(text)) && /userId/i.test(text);
+}
+
 export function createPrismaEnrichRepository(db: EnrichDb = prisma): EnrichRepository {
   return {
     async loadJob(jobId) {
@@ -154,6 +173,12 @@ export function createPrismaEnrichRepository(db: EnrichDb = prisma): EnrichRepos
       });
     },
     async logCost(entry) {
+      // The cost user is not a real account here: said once (see below), then skipped.
+      const skipUntil = missingCostUsers.get(entry.userId);
+      if (skipUntil !== undefined) {
+        if (now() < skipUntil) return;
+        missingCostUsers.delete(entry.userId);
+      }
       try {
         await db.usageDeductionLog.create({
           data: {
@@ -176,6 +201,17 @@ export function createPrismaEnrichRepository(db: EnrichDb = prisma): EnrichRepos
           select: { id: true },
         });
       } catch (err) {
+        if (isMissingUser(err)) {
+          // Configuration, not a failure of this job: the system user id (RA_SYSTEM_USER_ID /
+          // CN_RA_SYSTEM_USER_ID, OPS-A2) is unset or names no account. One warning, not an error per job.
+          missingCostUsers.set(entry.userId, now() + MISSING_COST_USER_RECHECK_MS);
+          logger.warn('JOB_ENRICH', 'enrichment cost rows are not being written: the system user id names no account. Set RA_SYSTEM_USER_ID (CN_RA_SYSTEM_USER_ID for GoApply) to a real user; rows are skipped until then', {
+            userId: entry.userId,
+            brand: entry.brand,
+            recheckInMinutes: MISSING_COST_USER_RECHECK_MS / 60_000,
+          });
+          return;
+        }
         logger.error('JOB_ENRICH', 'failed to write the enrichment cost row', {
           jobId: entry.jobId,
           userId: entry.userId,

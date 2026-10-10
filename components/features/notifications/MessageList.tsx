@@ -6,7 +6,8 @@
 // Each row: an unread dot, the category ("Job alert", "Reminder", …), the
 // relative time, a localized title/body (template + params, else the stored
 // text) and, when the message has a link, the whole row opens it and marks the
-// message read. Invitations (flag `invitations`) carry their two answers.
+// message read. A job alert lists the jobs it is about, each with its own
+// link. Invitations (flag `invitations`) carry their two answers.
 // Nothing here is a nudge: rows exist only because a producer wrote a real
 // message.
 
@@ -26,7 +27,7 @@ import {
   useRespondToInvitation,
   type NotificationView,
 } from '../../../hooks/notifications';
-import { useMessageText } from './messageText';
+import { MAX_MESSAGE_JOBS, messageJobs, useMessageText } from './messageText';
 import styles from './notifications.module.css';
 
 export interface MessageListProps {
@@ -83,6 +84,9 @@ function MessageRow({ n, onNavigate, invitations }: { n: NotificationView; onNav
   );
 
   const showInvitation = n.category === 'invitation' && invitations;
+  // A job alert names its jobs: each one is listed with its own link (the row itself opens the whole list).
+  const jobs = messageJobs(n);
+  const shownJobs = jobs.slice(0, MAX_MESSAGE_JOBS);
   return (
     <li className={styles.item}>
       {n.href ? (
@@ -103,6 +107,27 @@ function MessageRow({ n, onNavigate, invitations }: { n: NotificationView; onNav
       ) : (
         <div className={cn(styles.itemInner, styles.itemStatic)}>{content}</div>
       )}
+      {shownJobs.length ? (
+        <div className={styles.jobs} data-testid="message-jobs">
+          <ul className={styles.jobList} aria-label={t('alertJobs.label')}>
+            {shownJobs.map((j) => (
+              <li key={j.id}>
+                <Link
+                  href={j.href}
+                  className={styles.jobLink}
+                  onClick={() => {
+                    read();
+                    onNavigate?.();
+                  }}
+                >
+                  {j.company ? t('alertJobs.item', { title: j.title, company: j.company }) : j.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {jobs.length > shownJobs.length ? <p className={styles.status}>{t('alertJobs.more', { count: jobs.length - shownJobs.length })}</p> : null}
+        </div>
+      ) : null}
       {showInvitation ? (
         <div className={styles.actions}>
           <InvitationActions n={n} />

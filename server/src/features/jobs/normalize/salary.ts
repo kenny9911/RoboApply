@@ -24,6 +24,16 @@
 //     "401k matching", "a $5,000 signing bonus and annual salary review",
 //     "3-5 years of experience, paid annually" and 年终奖2-4个月 are not pay.
 //   - A single stated bound stays single: "from $150k" has no maximum.
+//   - A figure that cannot be pay for its period ("$60,000K-$90,000K an hour"
+//     = 60 million dollars an hour, a posting typo) is NOT stored as an
+//     amount: the job counts as not listing pay and its words are kept in
+//     salaryText (`payPlausible`). Readers apply the same rule to rows stored
+//     before it existed (feed cards, job detail, the "Highest pay" sort).
+//   - "Competitive pay" / 面議 found in a description keeps only the words
+//     that say so (not the rest of the sentence: "Competitive Pay and
+//     Benefits, including medical…" is not pay text). `statesAmount` tells a
+//     reader whether a pay text carries a figure worth showing as "Pay as
+//     stated".
 
 import type { SalaryPeriod, SalarySource } from './types.js';
 
@@ -266,6 +276,9 @@ const PLAN_TOKEN_RE = /\b(?:401|403|457)\s*\(?[kb]\)?(?=\W|$)/gi;
 const CURRENCY_AFTER = String.raw`(?:USD|TWD|NTD|CNY|RMB|HKD|SGD|GBP|EUR|CAD|AUD|INR|JPY|元|塊|块)`;
 const MARKED_AMOUNT_RE = new RegExp(String.raw`${CUR_PREFIX}\s*\d|\d[\d,，.]*\s*(?:k|K|千|万|萬|w|W)?\s*${CURRENCY_AFTER}`);
 const CJK_UNIT_AMOUNT_RE = /\d\s*(?:k|K|千|万|萬)/;
+/** A leading label on a pay line ("Salary:", "Pay range -", "薪资：", "薪資範圍："). */
+const PAY_LABEL_RE =
+  /^\s*(?:(?:the\s+)?(?:annual\s+|base\s+|hourly\s+|monthly\s+)?(?:salary|pay|compensation|wage|remuneration)(?:\s+(?:range|rate|band))?|薪资|薪資|待遇|月薪|年薪|时薪|時薪|日薪|薪酬|工资|工資|薪水)(?:范围|範圍)?\s*[:：]\s*/i;
 /** How far (characters) the figure may sit from the pay word. */
 const PAY_WINDOW = 48;
 
@@ -291,6 +304,37 @@ function isPayClause(clause: string): boolean {
   return /\d/.test(clause.slice(start, end));
 }
 
+/**
+ * The words of a description line that say pay is negotiable, with the TW
+ * legal-floor sentence when it comes with them ("待遇面議（經常性薪資達4萬元
+ * 或以上）"). A verbatim slice of the line, never the whole sentence.
+ */
+function negotiablePhrase(line: string): string | null {
+  const s = line.normalize('NFKC').replace(/\s+/g, ' ').trim();
+  const m = s.match(NEGOTIABLE_RE);
+  if (!m || m.index == null) return null;
+  let start = m.index;
+  let end = m.index + m[0].length;
+  const floor = s.match(TW_FLOOR_RE);
+  if (floor && floor.index != null) {
+    start = Math.min(start, floor.index);
+    end = Math.max(end, floor.index + floor[0].length);
+  }
+  // A bracket the floor sentence sits in closes with it.
+  if (/^[)）]/.test(s.slice(end))) end += 1;
+  return s.slice(start, end).trim().slice(0, 80) || null;
+}
+
+/**
+ * A description's pay line without its own label: "薪资：18-28K·15薪" →
+ * "18-28K·15薪", "Salary: $90k–$110k a year" → "$90k–$110k a year". The UI
+ * already labels the row, so the label would be printed twice.
+ */
+export function withoutPayLabel(text: string): string {
+  const stripped = text.replace(PAY_LABEL_RE, '').trim();
+  return stripped || text;
+}
+
 /** The first pay statement in the description's pay clauses (a range or an explicit period), else null. */
 export function payFromDescription(description: string | null | undefined, opts: { country?: string | null; market?: 'intl' | 'cn' } = {}): ParsedPay | null {
   if (!description) return null;
@@ -299,9 +343,11 @@ export function payFromDescription(description: string | null | undefined, opts:
   for (const line of lines) {
     if (!PAY_WORD_RE.test(line)) continue;
     // "待遇面議（經常性薪資達4萬元或以上）": a TW negotiable statement is read on the whole line.
-    const whole = parseSalaryText(line, opts);
+    // Benefit-plan names ("401k") are not figures and must not hide the statement.
+    const whole = parseSalaryText(line.replace(PLAN_TOKEN_RE, ' '), opts);
     if (whole?.negotiable) {
-      negotiable ??= whole;
+      // Keep the words that say it, not the rest of the sentence around them.
+      negotiable ??= { ...whole, text: negotiablePhrase(line) ?? whole.text };
       continue;
     }
     for (const clause of payClauses(line)) {
@@ -309,7 +355,7 @@ export function payFromDescription(description: string | null | undefined, opts:
       const parsed = parseSalaryText(clause, opts);
       if (!parsed || parsed.negotiable) continue;
       const isRange = parsed.min != null && parsed.max != null && parsed.min !== parsed.max;
-      if (isRange || parsed.period) return parsed;
+      if (isRange || parsed.period) return { ...parsed, text: withoutPayLabel(parsed.text) };
     }
   }
   return negotiable;
@@ -318,6 +364,58 @@ export function payFromDescription(description: string | null | undefined, opts:
 // ── Assembly ───────────────────────────────────────────────────────────────
 
 const PERIOD_FACTOR: Record<SalaryPeriod, number> = { hour: 2080, day: 260, week: 52, month: 12, year: 1 };
+
+// ── Plausibility ───────────────────────────────────────────────────────────
+
+/**
+ * Order of magnitude of one US dollar in each currency. Used ONLY to decide
+ * whether a stated figure can be pay at all (never shown, never used to
+ * convert an amount). An unlisted currency is treated like the largest
+ * common one for the upper limit and skips the lower limit.
+ */
+const UNITS_PER_USD: Readonly<Record<string, number>> = {
+  USD: 1, EUR: 1, GBP: 1, CHF: 1, CAD: 1.4, AUD: 1.5, NZD: 1.7, SGD: 1.3,
+  CNY: 7, HKD: 8, MOP: 8, TWD: 32, JPY: 150, KRW: 1400, INR: 85, MYR: 4.5, THB: 35, PHP: 58, IDR: 16_000, VND: 25_000,
+  AED: 3.7, SAR: 3.75, QAR: 3.6, ILS: 3.7, TRY: 35, EGP: 50, ZAR: 18, NGN: 1500, KES: 130,
+  SEK: 10.5, NOK: 10.5, DKK: 7, PLN: 4, CZK: 23, RON: 4.6, HUF: 360,
+  BRL: 5.5, MXN: 18, ARS: 1000, CLP: 950, COP: 4000,
+};
+/** A year of pay outside this band (in US-dollar magnitude) is not pay: about 25 cents an hour to 10 million a year. */
+const PLAUSIBLE_ANNUAL_USD = { min: 500, max: 10_000_000 } as const;
+/** A "range" whose top is this many times its bottom mixes two things ("$20 - $65,000"). */
+const PLAUSIBLE_RANGE_RATIO = 50;
+
+/**
+ * Can these figures be pay for their period? False for "$60,000,000 an hour"
+ * or "$15 a year". Unknown period: only an impossible yearly figure fails.
+ * Pure; shared by the normalizer and by every reader of stored rows.
+ */
+export function payPlausible(p: { min: number | null | undefined; max: number | null | undefined; currency: string | null | undefined; period: string | null | undefined; months?: number | null }): boolean {
+  const amounts = [p.min, p.max].filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0);
+  if (!amounts.length) return true;
+  const lo = Math.min(...amounts);
+  const hi = Math.max(...amounts);
+  if (hi / lo > PLAUSIBLE_RANGE_RATIO) return false;
+  const code = p.currency?.trim().toUpperCase() ?? '';
+  const known = UNITS_PER_USD[code];
+  const scale = known ?? 1500;
+  const period = p.period && p.period in PERIOD_FACTOR ? (p.period as SalaryPeriod) : null;
+  const factor = period === 'month' && p.months && p.months >= 12 && p.months <= 24 ? p.months : period ? PERIOD_FACTOR[period] : 1;
+  if ((hi * factor) / scale > PLAUSIBLE_ANNUAL_USD.max) return false;
+  if (period && known !== undefined && (lo * factor) / scale < PLAUSIBLE_ANNUAL_USD.min) return false;
+  return true;
+}
+
+/**
+ * Does a pay text carry a figure ("$90k", "4萬元", "18-28K·15薪")? Words alone
+ * ("Competitive pay and benefits", 面議) are not something to show as "Pay
+ * as stated"; benefit-plan names ("401k") are not figures.
+ */
+export function statesAmount(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const s = text.normalize('NFKC').replace(PLAN_TOKEN_RE, ' ');
+  return MARKED_AMOUNT_RE.test(s) || CJK_UNIT_AMOUNT_RE.test(s) || /[一二三四五六七八九十百千两兩]+\s*(?:万|萬|千)?\s*(?:元|塊|块)|[一二三四五六七八九十百两兩]+\s*(?:万|萬)/.test(s);
+}
 
 /** Annualize an amount in its own currency (null when the period is unknown). */
 export function annualize(amount: number | null, period: SalaryPeriod | null, months?: number | null): number | null {
@@ -344,6 +442,8 @@ function currencyCode(v: string | null | undefined): string | null {
 function assemble(p: { min: number | null; max: number | null; currency: string | null; period: SalaryPeriod | null; months: number | null }, source: SalarySource, text: string | null): SalaryResult {
   let { min, max } = p;
   if (min != null && max != null && min > max) [min, max] = [max, min];
+  // A figure that cannot be pay for its period is a typo in the posting: keep its words, store no amount.
+  if (!payPlausible({ min, max, currency: p.currency, period: p.period, months: p.months })) return { ...NONE, salaryText: text };
   const months = p.period === 'month' && p.months && p.months >= 12 && p.months <= 24 ? p.months : null;
   return {
     salaryMin: min != null ? Math.round(min) : null,

@@ -337,7 +337,8 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
 
       {slotHasBasics ? null : (
         <div className={styles.meta} data-testid="card-meta">
-          <span>{posted ? t('posted', { date: posted }) : t('postedUnknown')}</span>
+          {/* A date we assigned (first seen, or the day the user added the job) is not called the posting date. */}
+          <span>{posted ? (item.postedAtEstimated ? t('firstSeen', { date: posted }) : t('posted', { date: posted })) : t('postedUnknown')}</span>
           {checked ? <span>{t('lastChecked', { date: checked })}</span> : null}
           {source ? (
             <span data-testid="source-line">

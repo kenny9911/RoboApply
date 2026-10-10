@@ -4,7 +4,7 @@
 // site name / text; every value names its source; nothing invented.
 
 import { describe, expect, it } from 'vitest';
-import { cleanPageText, extractDraft, findJobPosting, missingRequired, titleFromPage } from './extract.js';
+import { cleanPageText, extractDraft, findJobPosting, missingRequired, titleAndCompanyFromPage, titleFromPage, withoutPageChrome } from './extract.js';
 import type { ScrapedPage } from './firecrawl.js';
 
 const LINK = 'https://careers.acme.example/jobs/42';
@@ -86,6 +86,58 @@ describe('extractDraft', () => {
     const r = extractDraft(page({ markdown: 'Sign in' }), LINK);
     expect(r.foundAnything).toBe(false);
     expect(r.missingFields).toEqual(['title', 'company', 'description']);
+  });
+});
+
+describe('FIX-3: a Greenhouse-style page (no job data): the company is read from the title, and only the posting is kept', () => {
+  const markdown = [
+    '[Acme Careers](https://acme.example)',
+    'Open roles',
+    'About us',
+    '# Staff Data Engineer',
+    'Austin, TX',
+    '',
+    LONG,
+    '',
+    'What you will do',
+    '- Own the ingestion pipelines.',
+    '',
+    'Apply for this job',
+    'First Name *',
+    'Last Name *',
+    'Resume/CV *',
+    'Submit application',
+    'Powered by Greenhouse',
+  ].join('\n');
+
+  it('"Job Application for X at Y" gives the title and the company, labelled as read from the page title', () => {
+    const r = extractDraft(page({ markdown, meta: { title: 'Job Application for Staff Data Engineer at Acme Robotics' } }), LINK);
+    expect(r.draft).toMatchObject({ title: 'Staff Data Engineer', company: 'Acme Robotics' });
+    expect(r.draft.sources).toMatchObject({ title: 'page_title', company: 'page_title', description: 'page_text' });
+    expect(r.missingFields).toEqual([]);
+    expect(titleAndCompanyFromPage('Job Application for Staff Data Engineer at Acme Robotics')).toEqual({ title: 'Staff Data Engineer', company: 'Acme Robotics' });
+    // Any other title is not split on a guess.
+    expect(titleAndCompanyFromPage('Staff Data Engineer at Acme Robotics')).toBeNull();
+    expect(titleAndCompanyFromPage('Staff Data Engineer | Acme')).toBeNull();
+    expect(titleAndCompanyFromPage(null)).toBeNull();
+  });
+
+  it('the description starts at the job\'s own heading and stops before the application form', () => {
+    const r = extractDraft(page({ markdown, meta: { title: 'Job Application for Staff Data Engineer at Acme Robotics' } }), LINK);
+    const d = r.draft.description!;
+    expect(d.startsWith('Staff Data Engineer\nAustin, TX')).toBe(true);
+    expect(d).toContain(LONG);
+    expect(d).toContain('- Own the ingestion pipelines.');
+    for (const chrome of ['Acme Careers', 'Open roles', 'About us', 'Apply for this job', 'First Name', 'Resume/CV', 'Submit application', 'Powered by Greenhouse']) expect(d, chrome).not.toContain(chrome);
+  });
+
+  it('nothing is cut when the page has no such markers, and a usable text is never traded for a fragment', () => {
+    const plain = `Some heading\n\n${LONG}\n\nMore about the role.`;
+    expect(cleanPageText(plain, 'A title that is not on the page')).toBe(plain);
+    expect(withoutPageChrome(plain, null)).toBe(plain);
+    // The form marker right under the heading would leave nothing: the whole text is kept.
+    const tiny = `Staff Data Engineer\nApply for this job\n${LONG}`;
+    expect(cleanPageText(tiny, 'Staff Data Engineer')).toBe(tiny);
   });
 });
 

@@ -163,6 +163,21 @@ describe('new tracker paths', () => {
     expect(TRACKER_EXPORT_WINDOWS).toEqual([{ limit: 5, windowSec: 86400 }]);
   });
 
+  it('GET /export.csv?tz= writes dates in the zone the page shows them in (an account with no stored zone)', async () => {
+    // 18:25 UTC on Oct 10 is 02:25 on Oct 11 in Taipei and 11:25 on Oct 10 in Los Angeles.
+    await createEntry({ jobId: 'job1', status: 'applied', dateApplied: '2026-10-10T18:25:07.412Z' });
+    const csv = async (query: string) => (await h.request('GET', `${BASE}/export.csv${query}`, { host: RA })).text as string;
+    expect(await csv('')).toContain('2026-10-10');
+    const taipei = await csv('?tz=Asia%2FTaipei');
+    expect(taipei).toContain('2026-10-11');
+    expect(taipei).not.toContain('2026-10-10');
+    expect(await csv('?tz=America%2FLos_Angeles')).toContain('2026-10-10');
+    // An unknown name is ignored, not an error.
+    const bad = await h.request('GET', `${BASE}/export.csv?tz=Mars%2FOlympus`, { host: RA });
+    expect(bad.status).toBe(200);
+    expect(bad.text).toContain('2026-10-10');
+  });
+
   it('events: add a note, then read the timeline', async () => {
     const entry = await createEntry({ jobId: 'job1' });
     const add = await h.request<Env<{ kind: string }>>('POST', `${BASE}/${entry.id}/events`, { host: RA, body: { note: 'Called the recruiter.' } });

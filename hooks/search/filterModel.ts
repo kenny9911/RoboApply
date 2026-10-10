@@ -191,10 +191,24 @@ export interface FilterChange {
   to?: unknown;
 }
 
+/**
+ * A toggle stored as `false` filters nothing (the user answered "No" to "I
+ * need visa sponsorship"), so for display it is the same as no filter. The
+ * one exception is `includeUndisclosedPay`, whose `false` IS the filter.
+ */
+function withoutOffToggles(fs: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fs)) {
+    if (v === false && k !== 'includeUndisclosedPay') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 /** Field-by-field changes (FIELD_ORDER), the shape the server's diffFilterSets returns. */
 export function diffFilters(before: FilterSet, after: FilterSet): FilterChange[] {
-  const a = normalizeFilters(before) as Record<string, unknown>;
-  const b = normalizeFilters(after) as Record<string, unknown>;
+  const a = withoutOffToggles(normalizeFilters(before) as Record<string, unknown>);
+  const b = withoutOffToggles(normalizeFilters(after) as Record<string, unknown>);
   const changes: FilterChange[] = [];
   for (const field of FIELD_ORDER) {
     const from = a[field];
@@ -238,6 +252,34 @@ export function activeFilterCount(fs: FilterSet): number {
 /** `includeUndisclosedPay` defaults to true: "Only jobs that list pay" is off by default. */
 export function onlyListedPay(fs: FilterSet): boolean {
   return fs.includeUndisclosedPay === false;
+}
+
+// ── Locations: a country with no city is the whole country ───────────────
+
+/** English name of a country code ("US" → "United States"); null where Intl has none. */
+function englishCountryName(code: string): string | null {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "Anywhere in United States": an entry that names a country and no city
+ * (onboarding stores `{ label: 'US', country: 'US', radiusKm: 0 }`). Its
+ * radius means nothing and is never shown. The label must name the country
+ * (its code or English name, alone or at the end: "Anywhere in United
+ * States"), so a city typed without a `city` field is still a city. The
+ * server twin is `isCountryWideLocation` in server/src/features/feed/sql.ts
+ * (it also knows the city table).
+ */
+export function isCountryWideLocation(l: FilterLocation): boolean {
+  if (!l.country || l.city || l.lat !== undefined || l.lng !== undefined) return false;
+  const label = l.label.trim().toLowerCase();
+  if (label === l.country.toLowerCase()) return true;
+  const name = englishCountryName(l.country)?.toLowerCase();
+  return !!name && (label === name || label.endsWith(` ${name}`));
 }
 
 // ── Radius: km everywhere, miles where people measure distance in miles ──

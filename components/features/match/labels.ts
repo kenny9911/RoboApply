@@ -36,11 +36,33 @@ export function useDegreeLabel(): (value: string | number | null | undefined) =>
   };
 }
 
+/**
+ * A quote as the person wrote it, without the markdown markup of the resume
+ * it was read from ("**Technical:** …", "- Led the rewrite…"). The server
+ * removes it for new scores (match/evidence.ts `plainQuote`); this covers
+ * scores stored before it did.
+ */
+export function plainQuote(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|(?:[-*+•▪●◦]|\d{1,3}[.)])\s+)+/, '')
+        .replace(/\[([^\]\n]+)\]\((?:[^)\n]*)\)/g, '$1')
+        .replace(/(\*\*|__)(?=\S)([^\n]*?\S)\1/g, '$2')
+        .replace(/`([^`\n]+)`/g, '$1')
+        .replace(/\*\*|__|`/g, ''),
+    )
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function useEvidenceText(): (e: MatchEvidence) => string {
   const t = useTranslations('fit');
   const degree = useDegreeLabel();
   return (e) => {
-    if (!e.ref || !EVIDENCE_REFS.has(e.ref)) return t('compared.evidence.quote', { text: e.text });
+    if (!e.ref || !EVIDENCE_REFS.has(e.ref)) return t('compared.evidence.quote', { text: plainQuote(e.text) });
     let text = e.text;
     if (e.ref === 'education_required') text = degree(e.text) ?? e.text;
     if (e.ref === 'seniority' && LEVELS.has(e.text)) text = t(`seniority.${e.text}`);

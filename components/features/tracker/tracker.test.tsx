@@ -6,7 +6,7 @@
 // the cover letter rows), each hidden when its flag or AI is off; and
 // `/applications?entry=<id>`.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), params: new URLSearchParams() }));
@@ -77,11 +77,13 @@ import { RoboApiError } from '../../../lib/api/client';
 import type { TrackerEntryView, WeeklyInsightResponse } from '../../../lib/api/contracts/tracker';
 import ApplicationsPage from '../../../app/(auth)/applications/page';
 import { AddJobSheet } from './AddJobSheet';
-import { ByDateView, groupByWeek } from './ByDateView';
+import { ByDateView, groupByWeek, weekOf } from './ByDateView';
+import { EntryRow } from './EntryRow';
+import { dayKeyOf, fromDateInput, isDateOnly, toDateInput, withTimeZone } from './shared';
 import { FollowUpBanner } from './FollowUpBanner';
 import { ListView } from './ListView';
-import { buildPatch, letterHrefFor, TrackerDrawer } from './TrackerDrawer';
-import { nameCitations, WeeklyInsightCard } from './WeeklyInsightCard';
+import { buildPatch, formFrom, isRealChange, letterHrefFor, TrackerDrawer } from './TrackerDrawer';
+import { nameCitations, shownWeek, WeeklyInsightCard } from './WeeklyInsightCard';
 
 function entry(over: Partial<TrackerEntryView> = {}): TrackerEntryView {
   return {
@@ -390,6 +392,113 @@ describe('TrackerDrawer: files and the application\'s cover letter (WP-93)', () 
   });
 });
 
+describe('FIX-3: tracker dates follow the reader\'s own calendar (UTC+8, 02:25 on Sunday Oct 11)', () => {
+  const realTz = process.env.TZ;
+  beforeAll(() => {
+    process.env.TZ = 'Asia/Taipei';
+  });
+  afterAll(() => {
+    if (realTz === undefined) delete process.env.TZ;
+    else process.env.TZ = realTz;
+  });
+
+  // "Mark applied" at 02:25 local on Sunday Oct 11 = 18:25 UTC on Saturday Oct 10.
+  const CLICK = '2026-10-10T18:25:07.412Z';
+
+  it('a moment is that reader\'s day; a picked calendar day stays that day', () => {
+    expect(new Date(CLICK).getDate()).toBe(11); // the test really runs in UTC+8
+    expect(dayKeyOf(CLICK)).toBe('2026-10-11');
+    expect(toDateInput(CLICK)).toBe('2026-10-11'); // the drawer said 2026-10-10
+    // A day picked in the drawer (or sent as a day) is not shifted by the zone.
+    expect(isDateOnly('2026-10-02T00:00:00.000Z')).toBe(true);
+    expect(isDateOnly('2026-10-02')).toBe(true);
+    expect(isDateOnly(CLICK)).toBe(false);
+    expect(toDateInput('2026-10-02T00:00:00.000Z')).toBe('2026-10-02');
+    expect(toDateInput(fromDateInput('2026-10-02'))).toBe('2026-10-02');
+    expect(toDateInput(null)).toBe('');
+  });
+
+  it('the row says "Applied Oct 11, 2026", the day History shows for the same click', () => {
+    renderWithBrand(<EntryRow entry={entry({ dateApplied: CLICK })} onOpen={() => {}} />);
+    expect(screen.getByText('Applied Oct 11, 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/Oct 10/)).toBeNull();
+  });
+
+  it('a picked day is shown as that day west of UTC too', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      renderWithBrand(<EntryRow entry={entry({ dateApplied: '2026-10-02T00:00:00.000Z' })} onOpen={() => {}} />);
+      expect(screen.getByText('Applied Oct 2, 2026')).toBeInTheDocument();
+      expect(toDateInput('2026-10-02T00:00:00.000Z')).toBe('2026-10-02');
+      // 18:25 UTC on Oct 10 is still Oct 10 in Los Angeles.
+      expect(dayKeyOf(CLICK)).toBe('2026-10-10');
+    } finally {
+      process.env.TZ = 'Asia/Taipei';
+    }
+  });
+
+  it('weeks are the reader\'s weeks: that Sunday click starts the week of Oct 11', () => {
+    expect(weekOf(CLICK)).toBe('2026-10-11');
+    expect(weekOf('2026-10-10T10:00:00.000Z')).toBe('2026-10-04'); // Saturday evening local
+    expect(weekOf('2026-10-06T00:00:00.000Z')).toBe('2026-10-04'); // a picked day
+    const groups = groupByWeek([entry({ id: 'sun', dateApplied: CLICK }), entry({ id: 'sat', dateApplied: '2026-10-10T10:00:00.000Z' })]);
+    expect(groups.map((g) => [g.week, g.entries.map((e) => e.id)])).toEqual([
+      ['2026-10-11', ['sun']],
+      ['2026-10-04', ['sat']],
+    ]);
+  });
+
+  it('"This week" asks for the reader\'s week and offers no summary while the server\'s week is a different one', async () => {
+    const now = new Date('2026-10-10T18:25:00.000Z');
+    expect(shownWeek(now)).toEqual({ week: '2026-10-11', sameAsServerWeek: false });
+    expect(shownWeek(new Date('2026-10-07T12:00:00.000Z'))).toEqual({ week: '2026-10-04', sameAsServerWeek: true });
+    api.getWeeklyInsight.mockResolvedValue(weekly({ aiAvailable: true, week: { startUtc: '2026-10-11', endUtc: '2026-10-17' } }));
+    renderWithBrand(<WeeklyInsightCard entries={[]} now={now} />);
+    expect(await screen.findByText('Oct 11, 2026 to Oct 17, 2026')).toBeInTheDocument();
+    expect(api.getWeeklyInsight).toHaveBeenCalledWith('2026-10-11');
+    expect(screen.queryByRole('button', { name: 'Write a summary' })).toBeNull();
+  });
+});
+
+describe('FIX-3: the drawer', () => {
+  it('GoApply: the salary currency starts from the brand (CNY), never a stored "USD" with no amount, and is saved with the first amount', async () => {
+    // A row created before the fix: no amount, the database default currency.
+    const e = entry({ maxSalary: null, maxSalaryCurrency: 'USD' });
+    renderWithBrand(<TrackerDrawer entry={e} onClose={() => {}} />, { brand: 'goapply' });
+    const dialog = await screen.findByRole('dialog');
+    const currency = within(dialog).getByLabelText('Currency') as HTMLInputElement;
+    expect(currency.value).toBe('CNY');
+    expect(buildPatch(e, { ...formFrom(e, 'CNY') }, 'CNY')).toEqual({});
+    expect(buildPatch(e, { ...formFrom(e, 'CNY'), maxSalary: '25000' }, 'CNY')).toEqual({ maxSalary: 25000, maxSalaryCurrency: 'CNY' });
+    // An amount that already has a currency keeps it.
+    const hkd = entry({ maxSalary: 30000, maxSalaryCurrency: 'HKD' });
+    expect(buildPatch(hkd, { ...formFrom(hkd, 'CNY'), maxSalary: '32000' }, 'CNY')).toEqual({ maxSalary: 32000 });
+  });
+
+  it('RoboApply keeps USD as the starting currency', async () => {
+    renderWithBrand(<TrackerDrawer entry={entry()} onClose={() => {}} />);
+    const dialog = await screen.findByRole('dialog');
+    expect((within(dialog).getByLabelText('Currency') as HTMLInputElement).value).toBe('USD');
+  });
+
+  it('history: the first stage is "Added at Saved" (not "Moved from Saved to Saved") and a move to the same stage is not listed', async () => {
+    api.listTrackerEvents.mockResolvedValue({
+      items: [
+        { id: 'ev3', kind: 'status', fromValue: 'bookmarked', toValue: 'applied', payload: { via: 'apply_click' }, at: '2026-10-10T18:25:07.412Z' },
+        { id: 'ev2', kind: 'status', fromValue: 'bookmarked', toValue: 'bookmarked', payload: {}, at: '2026-10-09T10:00:00.000Z' },
+        { id: 'ev1', kind: 'status', fromValue: null, toValue: 'bookmarked', payload: { via: 'save' }, at: '2026-10-08T10:00:00.000Z' },
+      ],
+    });
+    renderWithBrand(<TrackerDrawer entry={entry()} onClose={() => {}} />);
+    expect(await screen.findByText('Added at Saved')).toBeInTheDocument();
+    expect(screen.getByText('Moved from Saved to Applied')).toBeInTheDocument();
+    expect(screen.queryByText('Moved from Saved to Saved')).toBeNull();
+    expect(isRealChange({ kind: 'status', fromValue: 'applied', toValue: 'applied', payload: {} })).toBe(false);
+    expect(isRealChange({ kind: 'status', fromValue: 'applied', toValue: null, payload: { undo: true, removed: true } })).toBe(true);
+    expect(isRealChange({ kind: 'note', fromValue: null, toValue: null, payload: { text: 'x' } })).toBe(true);
+  });
+});
+
 describe('buildPatch', () => {
   it('maps form values to the PATCH body', () => {
     const e = entry({ status: 'rejected', outcome: 'they_said_no' });
@@ -456,7 +565,7 @@ describe('WeeklyInsightCard (ruling C40)', () => {
       }),
     );
     api.refreshWeeklyInsight.mockRejectedValue(new RoboApiError('x', { status: 503, payload: { code: 'ai_unavailable' } }));
-    renderWithBrand(<WeeklyInsightCard entries={[entry()]} />, { brand: 'goapply' });
+    renderWithBrand(<WeeklyInsightCard entries={[entry()]} now={new Date('2026-10-07T12:00:00.000Z')} />, { brand: 'goapply' });
     expect(await screen.findByText('You applied to Acme, Data Analyst this week.')).toBeInTheDocument();
     expect(screen.getByText(/Written by AI from your applications/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Write it again' }));
@@ -543,11 +652,20 @@ describe('AddJobSheet', () => {
 });
 
 describe('/applications page', () => {
+  it('withTimeZone adds the zone as one query value and leaves the link alone without one', () => {
+    const url = 'http://api.test/api/v1/roboapply/v2/tracker/export.csv';
+    expect(withTimeZone(url, 'Asia/Taipei')).toBe(`${url}?tz=Asia%2FTaipei`);
+    expect(withTimeZone(`${url}?a=1`, 'America/Los_Angeles')).toBe(`${url}?a=1&tz=America%2FLos_Angeles`);
+    expect(withTimeZone(url, null)).toBe(url);
+  });
+
   it('shows By stage by default, no Offers tab without the flag, and the CSV link', async () => {
     renderWithBrand(<ApplicationsPage />);
     expect(screen.getByRole('tab', { name: 'By stage' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: 'Offers' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Download as CSV' })).toHaveAttribute('href', 'http://api.test/api/v1/roboapply/v2/tracker/export.csv');
+    // The CSV link carries the reader's time zone, so the file's dates are the ones the page shows.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(screen.getByRole('link', { name: 'Download as CSV' })).toHaveAttribute('href', `http://api.test/api/v1/roboapply/v2/tracker/export.csv?tz=${encodeURIComponent(zone)}`);
     for (const name of ['Saved', 'Applied', 'First call', 'Interviewing', 'Final round', 'Offer', 'Rejected']) {
       expect(await screen.findByRole('heading', { name, level: 2 })).toBeInTheDocument();
     }

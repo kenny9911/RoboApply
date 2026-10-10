@@ -42,6 +42,22 @@ describe('detectCnFraudSignals: fixtures', () => {
   });
 });
 
+describe('FIX-3: each flag quotes its own sentence', () => {
+  it('"要求先交钱" quotes the fee sentence, not the training-loan sentence above it', () => {
+    const posting = ['岗位：客服专员', '培训期间培训费用可办理分期贷款，零压力入学。', '入职当天需先交 500 元服装费，离职时退还。', '工作地点：广州。'].join('\n');
+    const byRule = Object.fromEntries(detectCnFraudSignals(posting).map((s) => [s.rule, s.quote]));
+    expect(byRule.training_loan).toBe('培训期间培训费用可办理分期贷款，零压力入学。');
+    expect(byRule.upfront_fee).toBe('入职当天需先交 500 元服装费，离职时退还。');
+  });
+
+  it('a rule whose only support is a sentence another rule quotes still quotes it (nothing is invented)', () => {
+    const posting = '培训费用可办理分期贷款。';
+    const signals = detectCnFraudSignals(posting);
+    expect(signals.map((s) => s.rule)).toEqual(['training_loan', 'upfront_fee']);
+    expect(new Set(signals.map((s) => s.quote))).toEqual(new Set(['培训费用可办理分期贷款。']));
+  });
+});
+
 describe('detectCnFraudSignals: reassurances and ordinary jobs do not flag', () => {
   const CLEAN = [
     '本公司招聘不收取任何费用，无需押金。',

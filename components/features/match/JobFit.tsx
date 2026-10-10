@@ -7,7 +7,7 @@
 import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives';
-import { useJobFit } from '../../../hooks/match';
+import { useJobFit, useRewriteFitText } from '../../../hooks/match';
 import type { MatchFitView } from '../../../lib/api/contracts/match';
 import { DimensionList } from './DimensionList';
 import { FitScore } from './FitScore';
@@ -16,9 +16,17 @@ import styles from './match.module.css';
 
 export interface JobFitViewProps {
   fit: MatchFitView;
+  /**
+   * Rewrite the AI-written parts in the reader's language. Offered only when
+   * they were written in another one (`fit.summaryLocaleStale`): the text is
+   * never left in the wrong language without saying so.
+   */
+  rewrite?: { run: () => void; pending: boolean; failed: boolean };
 }
 
-const uniq = (xs: string[]) => xs.filter((v, i, a) => a.findIndex((x) => x.toLowerCase() === v.toLowerCase()) === i);
+/** One chip per term: case, spacing and punctuation do not make a second one ("Node.js" / "nodejs" / "NODE JS"). */
+const chipKey = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[\s._\-/]+/g, '');
+export const uniq = (xs: string[]) => xs.filter((v, i, a) => !!chipKey(v) && a.findIndex((x) => chipKey(x) === chipKey(v)) === i);
 
 /**
  * Overlap and gap chips: the complete deterministic skill split (the posting's
@@ -26,13 +34,35 @@ const uniq = (xs: string[]) => xs.filter((v, i, a) => a.findIndex((x) => x.toLow
  * verified (in the post; in your resume or not). AI strengths/gaps are the
  * labelled sentences.
  */
-export function JobFitView({ fit }: JobFitViewProps) {
+export function JobFitView({ fit, rewrite }: JobFitViewProps) {
+  const t = useTranslations('fit.otherLanguage');
+  const written = fit.kind === 'ai' && (!!fit.summary || fit.strengths.length > 0 || fit.gaps.length > 0);
+  const stale = written && fit.summaryLocaleStale === true;
   const aligned = uniq([...fit.skills.aligned, ...fit.keywordsMatched]);
-  const missing = uniq([...fit.skills.missing, ...fit.keywordsMissing]);
+  // A term the resume shows is never also listed as missing.
+  const have = new Set(aligned.map(chipKey));
+  const missing = uniq([...fit.skills.missing, ...fit.keywordsMissing]).filter((s) => !have.has(chipKey(s)));
   return (
     <div className={styles.score} data-testid="job-fit">
       <section className={styles.section}>
         <FitScore fit={fit} />
+        {stale ? (
+          <div className={styles.actions} data-testid="fit-other-language">
+            <p className={styles.muted} role="status">
+              {t('note')}
+            </p>
+            {rewrite ? (
+              <Btn className={styles.action} onClick={rewrite.run} disabled={rewrite.pending}>
+                {rewrite.pending ? t('rewriting') : t('rewrite')}
+              </Btn>
+            ) : null}
+            {rewrite?.failed ? (
+              <p className={styles.alert} role="alert">
+                {t('failed')}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </section>
       <div className={styles.twoUp}>
         <WhyYouFit strengths={fit.strengths} aligned={aligned} listed={fit.skills.listed} />
@@ -46,6 +76,7 @@ export function JobFitView({ fit }: JobFitViewProps) {
 export function JobFit({ jobId, resumeVariantId }: { jobId: string; resumeVariantId?: string | null }) {
   const t = useTranslations('fit');
   const q = useJobFit(jobId, { resumeVariantId });
+  const rewrite = useRewriteFitText(jobId, { resumeVariantId });
   if (q.isPending) {
     return (
       <section className={styles.section} aria-busy="true">
@@ -71,5 +102,5 @@ export function JobFit({ jobId, resumeVariantId }: { jobId: string; resumeVarian
       </section>
     );
   }
-  return <JobFitView fit={q.data} />;
+  return <JobFitView fit={q.data} rewrite={{ run: () => rewrite.mutate(), pending: rewrite.isPending, failed: rewrite.isError }} />;
 }

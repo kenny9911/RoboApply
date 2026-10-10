@@ -24,7 +24,10 @@ vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 import { RoboApiError } from '../../../lib/api/client';
 import type { FitAnalysisCard as Card, KeywordRow, MatchDimension, MatchFitView } from '../../../lib/api/contracts/match';
 import { renderWithProviders } from '../../../__tests__/utils/renderWithProviders';
+import { renderWithBrand } from '../../../__tests__/shell/helpers';
 import { DimensionList, FitAnalysisCard, FitAnalysisView, FitScore, JobFit, JobFitView, KeywordCheck, WhatYoureMissing, WhyYouFit } from './index';
+import { uniq } from './JobFit';
+import { plainQuote } from './labels';
 
 const LINE = 'This is not your chance of getting hired.';
 const AI_LINE = 'Written with AI. Check every line before you use it.';
@@ -221,9 +224,127 @@ describe('KeywordCheck', () => {
     expect(within(byRow('years')).getByText('Not shown on your resume')).toBeInTheDocument();
     expect(within(byRow('years')).getByText('They ask for 5+ years')).toBeInTheDocument();
     expect(within(byRow('education')).getByText('Not stated in the post')).toBeInTheDocument();
-    expect(within(byRow('skills')).getByText('1 of 2 mentioned in your resume')).toBeInTheDocument();
+    expect(within(byRow('skills')).getByText('1 of 2 shown by your resume')).toBeInTheDocument();
     expect(within(byRow('skills')).getByLabelText('Kubernetes: Not mentioned in your resume (Required)')).toBeInTheDocument();
     expect(within(byRow('keywords')).getByText('Not met')).toBeInTheDocument();
+  });
+});
+
+describe('FIX-3: the keyword check', () => {
+  it('says what counted when a broader term is met by something the resume names', () => {
+    renderWithProviders(
+      <KeywordCheck
+        rows={[
+          {
+            key: 'skills',
+            status: 'partly',
+            need: null,
+            have: null,
+            found: 2,
+            total: 3,
+            items: [
+              { term: 'Relational databases', found: true, via: 'PostgreSQL' },
+              { term: 'TypeScript', found: true },
+              { term: 'Kubernetes', found: false },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByLabelText('Relational databases: your resume shows PostgreSQL')).toBeInTheDocument();
+    expect(screen.getByText('from PostgreSQL')).toBeInTheDocument();
+    expect(screen.getByLabelText('TypeScript: Mentioned in your resume')).toBeInTheDocument();
+    expect(screen.getByLabelText('Kubernetes: Not mentioned in your resume')).toBeInTheDocument();
+  });
+
+  it('the same words on both sides (本科 asked, 本科 held) and a repeated term do not collide as React keys', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      renderWithProviders(
+        <KeywordCheck
+          rows={[
+            { key: 'education', status: 'met', need: '本科', have: '本科', found: null, total: null, items: [] },
+            { key: 'keywords', status: 'met', need: null, have: null, found: 2, total: 2, items: [{ term: 'Go', found: true }, { term: 'Go', found: true }] },
+          ]}
+        />,
+      );
+      expect(screen.getAllByText('本科')).toHaveLength(2);
+      expect(errors.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('same key'))).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it('prints its title once: a caller with its own "Keyword check" heading turns the inner one off', () => {
+    renderWithProviders(
+      <section aria-label="outer">
+        <h3>Keyword check</h3>
+        <KeywordCheck rows={[]} withHeading={false} />
+      </section>,
+    );
+    expect(screen.getAllByText('Keyword check')).toHaveLength(1);
+    expect(screen.getByTestId('fit-keyword-check')).toHaveAccessibleName('Keyword check');
+  });
+
+  it('one chip per term on the fit card, and nothing the resume shows is also listed as missing', () => {
+    const view = fit({
+      skills: { aligned: ['TypeScript', 'Node.js'], missing: ['Kubernetes'], listed: 3 },
+      keywordsMatched: ['typescript', 'NodeJS', 'Payments'],
+      keywordsMissing: ['kubernetes', 'node.js', 'gRPC'],
+    });
+    renderWithProviders(<JobFitView fit={view} />);
+    const chips = (id: string) => Array.from(screen.getByTestId(id).querySelectorAll('li[class*="chip"]')).map((li) => li.textContent?.replace('✓', '').trim());
+    expect(chips('fit-why')).toEqual(['TypeScript', 'Node.js', 'Payments']);
+    expect(chips('fit-missing')).toEqual(['Kubernetes', 'gRPC']);
+    expect(uniq(['Go', 'go ', 'GO', 'Rust'])).toEqual(['Go', 'Rust']);
+  });
+
+  it('a stored quote is shown without the markdown of the resume it was read from', () => {
+    renderWithProviders(
+      <DimensionList
+        dimensions={[
+          { key: 'skills', weight: 30, score: 70, status: 'scored', evidence: [{ text: '**Technical:** TypeScript, Go', source: 'resume' }, { text: '- Led the rewrite of the ingestion service', source: 'resume' }] },
+        ]}
+      />,
+    );
+    expect(screen.getByText('“Technical: TypeScript, Go”')).toBeInTheDocument();
+    expect(screen.getByText('“Led the rewrite of the ingestion service”')).toBeInTheDocument();
+    expect(plainQuote('1. Shipped `v2` of the [API](https://x.test)')).toBe('Shipped v2 of the API');
+  });
+});
+
+describe('FIX-3: fit text written in another language is marked, and can be rewritten', () => {
+  it('says so and offers the rewrite; a text in the reader\'s language shows nothing', () => {
+    const run = vi.fn();
+    const stale = renderWithProviders(<JobFitView fit={fit({ summaryLocaleStale: true })} rewrite={{ run, pending: false, failed: false }} />);
+    expect(screen.getByTestId('fit-other-language')).toHaveTextContent('The written parts of this analysis are in another language. The score is the same.');
+    fireEvent.click(screen.getByRole('button', { name: 'Rewrite them in this language' }));
+    expect(run).toHaveBeenCalledTimes(1);
+    stale.unmount();
+    const busy = renderWithProviders(<JobFitView fit={fit({ summaryLocaleStale: true })} rewrite={{ run, pending: true, failed: true }} />);
+    expect(screen.getByRole('button', { name: 'Rewriting…' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent("We couldn't rewrite it. Try again.");
+    busy.unmount();
+    renderWithProviders(<JobFitView fit={fit()} rewrite={{ run, pending: false, failed: false }} />);
+    expect(screen.queryByTestId('fit-other-language')).toBeNull();
+  });
+
+  it('a quick estimate has no written parts, so nothing is marked', () => {
+    renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], summaryLocaleStale: true })} />);
+    expect(screen.queryByTestId('fit-other-language')).toBeNull();
+  });
+});
+
+describe('FIX-3: GoApply names no visa in the fit breakdown', () => {
+  it('the logistics part is "Location and pay" on GoApply and keeps its name on RoboApply', () => {
+    const dims: MatchDimension[] = [{ key: 'logistics', weight: 10, score: 100, status: 'scored', evidence: [{ text: '18-28K·15薪', source: 'posting', ref: 'pay_met' }] }];
+    const cn = renderWithBrand(<DimensionList dimensions={dims} />, { brand: 'goapply' });
+    expect(screen.getByText('Location and pay')).toBeInTheDocument();
+    expect(screen.queryByText(/visa/i)).toBeNull();
+    expect(screen.getByText(/18-28K·15薪/)).toBeInTheDocument();
+    cn.unmount();
+    renderWithProviders(<DimensionList dimensions={dims} />);
+    expect(screen.getByText('Location, pay, and visa')).toBeInTheDocument();
   });
 });
 

@@ -491,6 +491,31 @@ describe('/jobs workspace', () => {
     expect(net.to('PATCH', `${PROFILES}/sp_main`)[0].body).toEqual({ baseVersion: 3, filtersPatch: { workModels: null } });
   });
 
+  it('FIX-3: a limiting list filter is named in words (never "undefined · Within NaN mi")', async () => {
+    // The server sends the whole list as the value of a list field (the relaxation removes all of it).
+    const us = { label: 'US', country: 'US', radiusKm: 0 };
+    const austin = { label: 'Austin, TX', city: 'Austin', country: 'US', lat: 30.27, lng: -97.74, radiusKm: 40 };
+    const profile = searchProfile({ filters: { locations: [us, austin], workModels: ['hybrid', 'onsite'] } as never });
+    const net = installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([profile])),
+        [`POST ${FEED}/query`]: () => ok(page([])),
+        [`GET ${PROFILES}/sp_main/limiting`]: () =>
+          ok({ available: true, items: [{ field: 'locations', value: [us, austin], removalGain: 47 }, { field: 'workModels', value: ['hybrid', 'onsite'], removalGain: 5 }] }),
+        [`PATCH ${PROFILES}/sp_main`]: () => ok(searchProfile({ version: 4, filters: { workModels: ['hybrid', 'onsite'] } })),
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    const panel = await screen.findByTestId('zero-results');
+    const buttons = await within(panel).findAllByRole('button', { name: /^Remove / });
+    expect(buttons[0]).toHaveTextContent('Remove Locations: Anywhere in United States, Austin, TX · Within 25 mi');
+    expect(buttons[1]).toHaveTextContent('Remove Work model: Hybrid, On-site');
+    expect(panel.textContent).not.toMatch(/undefined|NaN/);
+    fireEvent.click(buttons[0]);
+    await waitFor(() => expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(1));
+    expect(net.to('PATCH', `${PROFILES}/sp_main`)[0].body).toEqual({ baseVersion: 3, filtersPatch: { locations: null } });
+  });
+
   it('zero results without counts says so and shows no number', async () => {
     installFetch(
       baseRoutes({

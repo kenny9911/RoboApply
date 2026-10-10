@@ -115,8 +115,9 @@ export interface MatchFitView {
   /**
    * Terms the model picked from the post, kept only when verified on the
    * server: each appears in the posting, and the resume/profile does
-   * (`keywordsMatched`) or does not (`keywordsMissing`) mention it. Empty for
-   * a quick estimate.
+   * (`keywordsMatched`) or does not (`keywordsMissing`) show it. Listed once
+   * each, in the usual spelling, and never a term `skills` already lists.
+   * Empty for a quick estimate.
    */
   keywordsMatched: string[];
   keywordsMissing: string[];
@@ -138,12 +139,19 @@ export interface MatchFitView {
   cached: boolean;
 }
 
-/** A deterministic pre-score (feed, extension). No LLM, ~0.1 ms per job. */
+/**
+ * One job's fit for a list. `preScore()` always answers the deterministic
+ * quick estimate (`kind: 'pre'`; no LLM, ~0.1 ms per job).
+ * `matchService.preScoreMany` answers the score every surface shows: the
+ * stored AI score when the user has one for the job (`kind: 'ai'`, never a new
+ * model call), else the quick estimate — so the feed, Similar jobs, alerts and
+ * the Assistant never show two numbers for one job.
+ */
 export interface PreScoreResult {
   jobId: string;
   score: number | null;
   tier: FitTierKey | null;
-  kind: 'pre';
+  kind: 'pre' | 'ai';
   dimensions: MatchDimension[];
   topOverlap: string | null;
   topGap: string | null;
@@ -209,8 +217,13 @@ export interface KeywordRow {
   /** For skills/keywords: how many of `total` your resume mentions. */
   found: number | null;
   total: number | null;
-  /** For skills/keywords: each term and whether your resume mentions it. */
-  items: Array<{ term: string; found: boolean; required?: boolean }>;
+  /**
+   * For skills/keywords: each term and whether your resume shows it. `via` is
+   * set when the resume does not name the term itself but names something
+   * that shows it ("relational databases" via "PostgreSQL"), so the reader
+   * sees what counted.
+   */
+  items: Array<{ term: string; found: boolean; required?: boolean; via?: string }>;
 }
 export interface KeywordCheckResponse {
   jobId: string;

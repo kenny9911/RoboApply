@@ -46,6 +46,11 @@ export interface MatchRepo {
   /** The given variant, or the user's primary (else most recent) resume. */
   getResume(userId: string, variantId?: string | null): Promise<ResumeRecord | null>;
   getScore(userId: string, jobId: string, variantId: string): Promise<ScoreRecord | null>;
+  /**
+   * The stored AI scores of `jobIds` for this resume content and prompt (the
+   * same rows the feed shows): job id → score, tier and components.
+   */
+  listAiScores(input: { userId: string; jobIds: string[]; resumeVariantId: string; resumeContentHash: string; promptVersion: string }): Promise<Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>>;
   saveScore(row: ScoreWrite): Promise<ScoreRecord>;
   updateVariantCachedScore(variantId: string, score: number): Promise<void>;
   getKeywords(jobId: string): Promise<KeywordInput[] | null>;
@@ -87,6 +92,7 @@ const JOB_SELECT = {
   salaryAnnualMin: true,
   salaryAnnualMax: true,
   salaryCurrency: true,
+  salaryText: true,
   sponsorship: true,
   sponsorshipEvidence: true,
   marketTags: true,
@@ -250,6 +256,18 @@ export function createPrismaMatchRepo(): MatchRepo {
         take: limit,
       });
       return rows.map((r) => r.id);
+    },
+
+    async listAiScores({ userId, jobIds, resumeVariantId, resumeContentHash, promptVersion }) {
+      const out = new Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>();
+      if (!jobIds.length) return out;
+      const p = await db();
+      const rows = await p.rAJobMatchScore.findMany({
+        where: { userId, resumeVariantId, jobId: { in: jobIds }, scoreKind: 'ai', promptVersion, resumeContentHashAtScore: resumeContentHash },
+        select: { jobId: true, score: true, tier: true, dimensions: true },
+      });
+      for (const r of rows) out.set(r.jobId, { score: r.score, tier: r.tier, dimensions: r.dimensions });
+      return out;
     },
 
     async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion }) {

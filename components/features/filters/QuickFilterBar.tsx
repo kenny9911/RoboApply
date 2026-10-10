@@ -14,7 +14,7 @@ import { Sheet } from '../../v3/primitives/Sheet';
 import { Btn } from '../../v3/primitives/Btn';
 import { toast } from '../../v3/primitives/Toast';
 import { cn } from '../../../lib/utils';
-import { useApplyFilters } from '../../../hooks/search/useApplyFilters';
+import { useApplyFilters, useOptimisticFilters } from '../../../hooks/search/useApplyFilters';
 import { activeFilterCount, mergePatch, patchBetween, type FilterField, type FilterSet, type FilterSetPatch, type Market } from '../../../hooks/search/filterModel';
 import type { SearchProfile } from '../../../hooks/search/useSearchProfiles';
 import {
@@ -72,10 +72,12 @@ export interface QuickFilterBarProps {
   onApplied?: (profile: SearchProfile) => void;
 }
 
-export function QuickFilterBar({ profile, onApplied }: QuickFilterBarProps) {
+export function QuickFilterBar({ profile: saved, onApplied }: QuickFilterBarProps) {
   const t = useTranslations('filters');
   const ctx = useEditorContext();
   const { apply, isPending } = useApplyFilters();
+  // Buttons and sheets start from the filters as the user just left them (pending changes included).
+  const { profile } = useOptimisticFilters(saved);
   const [openId, setOpenId] = useState<QuickFilterId | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draft, setDraft] = useState<FilterSet>({});

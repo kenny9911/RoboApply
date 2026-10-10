@@ -16,6 +16,7 @@ import type { NotificationPreferencesView, NotificationView } from '../../../lib
 import { NotifSection } from '../../v3/preferences/sections/NotifSection';
 import { MessageCenterButton, formatUnread } from './MessageCenterButton';
 import { MessageList } from './MessageList';
+import { messageJobs } from './messageText';
 import { NotificationsSettings } from './NotificationsSettings';
 import { UnsubscribeFlow } from './UnsubscribeFlow';
 import { icuArguments } from './messageText';
@@ -207,6 +208,36 @@ describe('MessageList', () => {
     expect(screen.queryByText('stored A')).toBeNull();
     // No title and no template → the category name, never an invented line.
     expect(screen.getAllByText('Reminder').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('FIX-3: a job alert lists the jobs it is about, each with its own link; the row still opens the list', async () => {
+    const jobs = [
+      { id: 'cm1', title: 'Backend Engineer', company: 'Acme', href: '/jobs/cm1?from=alert&imp=d1', tier: 'good', gap: null },
+      { id: 'cm2', title: 'Platform Engineer', company: 'Globex', href: '/jobs/cm2?from=alert&imp=d1', tier: 'great', gap: 'Go' },
+      { id: 'bad', title: 'Phish', company: 'X', href: 'https://evil.example/jobs/1' }, // not one of our pages: its own id is used instead
+      { id: '', title: '', company: 'Nobody' }, // nothing to show
+    ];
+    const net = installFetch({
+      [`GET ${N}`]: () => ok({ items: [msg({ id: 'a1', category: 'alert', templateKey: 'alerts.instant', params: { search: 'Data roles', jobs }, href: '/jobs?from=alert', title: 'stored' })], cursor: null }),
+      [`POST ${N}/a1/read`]: () => ok({ ok: true }),
+    });
+    renderUi(<MessageList />);
+    // The count is the number of jobs the message lists.
+    expect(await screen.findByText('4 new jobs fit “Data roles”')).toBeInTheDocument();
+    const list = within(screen.getByTestId('message-jobs')).getByRole('list', { name: 'Jobs in this alert' });
+    const links = within(list).getAllByRole('link');
+    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Backend Engineer at Acme', '/jobs/cm1?from=alert&imp=d1'],
+      ['Platform Engineer at Globex', '/jobs/cm2?from=alert&imp=d1'],
+      ['Phish at X', '/jobs/bad'],
+    ]);
+    expect(messageJobs({ params: { jobs } })).toHaveLength(3);
+    expect(messageJobs({ params: { search: 'x' } })).toEqual([]);
+    expect(messageJobs({ params: null })).toEqual([]);
+    // More than five: the rest are counted.
+    const many = Array.from({ length: 8 }, (_, i) => ({ id: `j${i}`, title: `Job ${i}`, company: 'Co', href: `/jobs/j${i}` }));
+    expect(messageJobs({ params: { jobs: many } })).toHaveLength(8);
+    expect(net.calls.length).toBeGreaterThan(0);
   });
 
   it('renders the campus templates from the stored params: the official close in Beijing time, the followed class year', async () => {

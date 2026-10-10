@@ -367,6 +367,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
           dateApplied: opts.appliedAt,
           appliedVia: 'manual',
           source: opts.source,
+          // Never the column's "USD" default: the posting's currency, or none (the drawer starts from the brand's).
+          maxSalaryCurrency: row.salaryCurrency ?? null,
           externalSnapshot: { title: row.title, companyName: row.companyName, location: row.location, applyUrl: row.applyUrl },
         },
         select: TRACKER_SELECT,
@@ -452,6 +454,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
             jobId,
             status: 'bookmarked',
             source: 'feed',
+            maxSalaryCurrency: row.salaryCurrency ?? null,
             externalSnapshot: { title: row.title, companyName: row.companyName, location: row.location, applyUrl: row.applyUrl },
           },
           select: TRACKER_SELECT,

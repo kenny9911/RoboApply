@@ -425,6 +425,45 @@ describe('follow-ups and summary', () => {
   });
 });
 
+describe('FIX-3: "this week" in the user\'s time zone', () => {
+  it('an application marked at 02:25 on Sunday in Taipei counts in the week that starts that Sunday', async () => {
+    const fake = createFakePrisma({ seed: { rAJob: [{ id: 'job1', title: 'Analyst', companyName: 'Acme', market: 'intl', visibility: 'public', ownerUserId: null }], rATrackerEntry: [], rATrackerEvent: [] } });
+    const at = new Date('2026-10-10T18:25:07.412Z');
+    const zoned = (timeZone: string) => createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => at, market: () => 'intl', timeZone: async () => timeZone });
+    const taipei = zoned('Asia/Taipei');
+    const { id } = await taipei.create('u1', { jobId: 'job1', status: 'applied', dateApplied: at.toISOString() });
+    await taipei.patch('u1', id, { status: 'first_call' });
+    expect(await taipei.timeZone('u1')).toBe('Asia/Taipei');
+    expect(await taipei.weeklyFacts('u1', '2026-10-11')).toMatchObject({ weekStart: '2026-10-11', weekEnd: '2026-10-17', applied: 1, interviews: 1 });
+    expect(await taipei.weeklyFacts('u1', '2026-10-04')).toMatchObject({ applied: 0, interviews: 0 });
+    // The same rows for someone in UTC belong to the week of Oct 4.
+    expect(await zoned('UTC').weeklyFacts('u1', '2026-10-04')).toMatchObject({ applied: 1, interviews: 1 });
+  });
+
+  it('the zone the browser reports wins over the stored one; an unknown name falls back', async () => {
+    // An account with no stored zone (older and seeded accounts), read from Taipei.
+    const fake = createFakePrisma({ seed: { rAJob: [{ id: 'job1', title: 'Analyst', companyName: 'Acme', market: 'intl', visibility: 'public', ownerUserId: null }], rATrackerEntry: [], rATrackerEvent: [] } });
+    const at = new Date('2026-10-10T18:25:07.412Z');
+    const c = createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => at, market: () => 'intl' });
+    const { id } = await c.create('u1', { jobId: 'job1', status: 'applied', dateApplied: at.toISOString() });
+    await c.patch('u1', id, { status: 'first_call' });
+    expect(await c.timeZone('u1')).toBe('UTC');
+    expect(await c.timeZone('u1', ' Asia/Taipei ')).toBe('Asia/Taipei');
+    for (const bad of ['Mars/Olympus', '', '   ', 'x'.repeat(200), null, undefined]) expect(await c.timeZone('u1', bad)).toBe('UTC');
+    // The page groups this move under Sunday Oct 11 in Taipei; so does the count.
+    expect(await c.weeklyFacts('u1', '2026-10-11', 'Asia/Taipei')).toMatchObject({ weekStart: '2026-10-11', applied: 1, interviews: 1 });
+    expect(await c.weeklyFacts('u1', '2026-10-04', 'Asia/Taipei')).toMatchObject({ applied: 0, interviews: 0 });
+    expect(await c.weeklyFacts('u1', '2026-10-04')).toMatchObject({ applied: 1, interviews: 1 });
+    expect(await c.weeklyFacts('u1', '2026-10-04', 'Mars/Olympus')).toMatchObject({ applied: 1, interviews: 1 });
+  });
+
+  it('without a stored zone the brand fallback is used and nothing throws', async () => {
+    const fake = createFakePrisma({ seed: { rAJob: [], rATrackerEntry: [], rATrackerEvent: [] } });
+    const c = createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => NOW, market: () => 'intl' });
+    expect(await c.timeZone('u1')).toBe('UTC');
+  });
+});
+
 describe('updateOffer (WP-64 seam)', () => {
   it('writes Prisma.DbNull, never a literal null, when the offer is cleared (REQ-64-05)', async () => {
     const entry = await core.create('u1', { jobId: 'job1' });

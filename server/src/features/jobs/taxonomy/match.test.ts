@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { bestTaxonomyMatch, matchTitle, normalizeTitle, searchTaxonomy, stripLevelWords } from './match.js';
+import { taxonomyAncestors } from './taxonomy.js';
 
 describe('normalizeTitle', () => {
   it('folds case, width, punctuation, bracketed notes and tech spellings', () => {
@@ -14,6 +15,50 @@ describe('normalizeTitle', () => {
   it('removes level words in the second pass', () => {
     expect(stripLevelWords('senior software engineer ii')).toBe('software engineer');
     expect(stripLevelWords('高级java开发工程师')).toBe('java开发工程师');
+  });
+});
+
+describe('FIX-3: "architect" beside software words is a software architect, not Design', () => {
+  const category = (title: string) => {
+    const m = bestTaxonomyMatch(title);
+    return m ? [m.id, taxonomyAncestors(m.id).find((n) => n.level === 1)!.id] : null;
+  };
+
+  it.each([
+    // The titles Explore listed under "Design".
+    'Lead AI Architect',
+    'Full Stack Architect with AI',
+    'Java Backend Architect',
+    'Principal Architect - Machine Learning',
+    'Senior Platform Architect',
+    'Integration Architect (Remote)',
+    'IT Architect',
+    'Salesforce Architect',
+  ])('%s → software_architect, in Software engineering', (title) => {
+    expect(category(title)).toEqual(['software_architect', 'software_engineering']);
+  });
+
+  it.each([
+    ['Solutions Architect', 'cloud_engineer', 'it_infrastructure'],
+    ['Cloud Solutions Architect', 'cloud_engineer', 'it_infrastructure'],
+    ['Data Architect', 'data_architect', 'data_ai'],
+    ['Security Architect', 'security_architect', 'security'],
+    ['Enterprise Architect', 'software_architect', 'software_engineering'],
+  ])('a named tech architect keeps its own role: %s → %s', (title, id, cat) => {
+    expect(category(title)).toEqual([id, cat]);
+  });
+
+  it.each(['Architect', 'Senior Architect', 'Project Architect', 'Landscape Architect', 'Licensed Architect - Healthcare', 'Architectural Designer', 'Interior Architect', 'Project Architect, Data Centers', '建筑师'])(
+    'the building profession stays in Design: %s',
+    (title) => {
+      expect(category(title)?.[1]).toBe('design');
+    },
+  );
+
+  it('no title with a software word lands in the building role', () => {
+    for (const title of ['AI Architect', 'ML Architect', 'Backend Architect', 'Cloud Architect', 'Systems Architect', 'Application Architect', 'Technical Architect', 'Network Architect', 'Database Architect', '软件架构师', '架构师']) {
+      expect(bestTaxonomyMatch(title)?.id, title).not.toBe('architect');
+    }
   });
 });
 

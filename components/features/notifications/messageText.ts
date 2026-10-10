@@ -83,6 +83,42 @@ export const DERIVED_PARAMS: Readonly<Record<string, (raw: Record<string, unknow
   },
 };
 
+/** One job an alert message is about (the producer's `params.jobs` card). */
+export interface MessageJob {
+  id: string;
+  title: string;
+  company: string | null;
+  /** In-app link to that job (`/jobs/<id>?…`); never an outside address. */
+  href: string;
+}
+
+/** Jobs shown under a message; the rest are counted, not listed. */
+export const MAX_MESSAGE_JOBS = 5;
+
+/**
+ * The jobs a message lists (job alerts store them in `params.jobs`), read
+ * defensively: an entry without a title, or whose link is not one of our own
+ * job pages, is left out. Nothing is fetched or invented.
+ */
+export function messageJobs(n: Pick<NotificationView, 'params'>): MessageJob[] {
+  const raw = (n.params as { jobs?: unknown } | null)?.jobs;
+  if (!Array.isArray(raw)) return [];
+  const out: MessageJob[] = [];
+  const seen = new Set<string>();
+  for (const j of raw) {
+    if (!j || typeof j !== 'object') continue;
+    const { id, title, company, href } = j as Record<string, unknown>;
+    if (typeof title !== 'string' || !title.trim()) continue;
+    const link = typeof href === 'string' && /^\/jobs\/[^/?#\s]+(?:[?#]\S*)?$/.test(href) ? href : typeof id === 'string' && /^[\w-]+$/.test(id) ? `/jobs/${encodeURIComponent(id)}` : null;
+    if (!link) continue;
+    const key = typeof id === 'string' && id ? id : link;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: key, title: title.trim(), company: typeof company === 'string' && company.trim() ? company.trim() : null, href: link });
+  }
+  return out;
+}
+
 export function useMessageText(): (n: NotificationView) => MessageText {
   const t = useTranslations('inbox');
   const format = useFormatter();
@@ -90,6 +126,9 @@ export function useMessageText(): (n: NotificationView) => MessageText {
     (n: NotificationView) => {
       const fallbackTitle = n.title ?? t(`categories.${n.category}`);
       const params = icuParams(n.params);
+      // "{count} new jobs": the number of jobs the message itself lists, when the producer did not store it.
+      const listed = Array.isArray((n.params as { jobs?: unknown } | null)?.jobs) ? (n.params as { jobs: unknown[] }).jobs.length : 0;
+      if (listed > 0 && !('count' in params)) params.count = listed;
       const derive = n.templateKey ? DERIVED_PARAMS[n.templateKey] : undefined;
       if (derive && n.params) {
         try {

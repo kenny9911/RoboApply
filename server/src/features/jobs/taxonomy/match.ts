@@ -13,6 +13,13 @@
 // Roles marked `generic` ("Software engineer") lose 0.15 so a specific role
 // wins whenever both match. Below `minScore` (0.6) there is no match: an
 // honest "unknown" beats a wrong category (D3).
+//
+// One word, two professions (FIX-3). "Architect" alone is the building
+// profession (Design › Industrial, interior and architecture), but in a title
+// beside software words ("Lead AI Architect", "Java Backend Architect",
+// "Principal Architect - Machine Learning") it is a software architect. Such a
+// title is matched to the software role instead (`CONTEXT_REDIRECTS`), unless
+// it names the building profession outright ("Landscape Architect").
 
 import { TAXONOMY_NODES, taxonomyAncestors, taxonomyLabel, type TaxonomyLevel, type TaxonomyNode } from './taxonomy.js';
 
@@ -106,6 +113,36 @@ function buildPhrases(nodes: readonly TaxonomyNode[]): Phrase[] {
   return out;
 }
 
+/** Words that make "architect" a software role. */
+const SOFTWARE_CONTEXT = new Set(
+  (
+    'software ai ml machine learning genai llm data cloud aws azure gcp java python dotnet csharp cpp golang go javascript typescript nodejs ' +
+    'backend frontend fullstack full stack web mobile ios android api apis platform platforms systems system solution solutions enterprise ' +
+    'application applications app apps integration integrations infrastructure devops security cyber cybersecurity network networks it ' +
+    'technical technology tech digital database databases salesforce sap oracle servicenow workday dynamics microservices kubernetes ' +
+    'blockchain crypto embedded firmware iot analytics bi erp crm saas identity storage compute middleware automation'
+  ).split(/\s+/),
+);
+
+/**
+ * A role whose one-word name means another role beside context words. Only
+ * the bare word is redirected: a longer synonym of the role ("landscape
+ * architect") names it outright and stays.
+ */
+const CONTEXT_REDIRECTS: ReadonlyArray<{ from: string; word: string; to: string; context: ReadonlySet<string> }> = [
+  // Chinese has two words (建筑师 / 架构师), so only the English word needs this.
+  { from: 'architect', word: 'architect', to: 'software_architect', context: SOFTWARE_CONTEXT },
+];
+
+function redirectFor(phrase: Phrase, titleTokens: readonly string[], title: string): string | null {
+  for (const r of CONTEXT_REDIRECTS) {
+    if (phrase.nodeId !== r.from || phrase.text !== r.word) continue;
+    if (title === phrase.text) return null; // the bare word is the role as named
+    if (titleTokens.some((t) => r.context.has(t))) return r.to;
+  }
+  return null;
+}
+
 const ROLE_NODES = TAXONOMY_NODES.filter((n) => n.level === 3);
 const ROLE_PHRASES = buildPhrases(ROLE_NODES);
 const ALL_PHRASES = buildPhrases(TAXONOMY_NODES);
@@ -152,13 +189,29 @@ export function matchTitle(title: string, options: { limit?: number; minScore?: 
   const stripped = stripLevelWords(raw);
   const variants = [...new Set([raw, stripped].filter(Boolean))].map((v) => ({ text: v, tokens: v.split(' ') }));
   const best = new Map<string, TitleMatch>();
+  // Does the title name the building profession outright ("landscape architect", "project architect")?
+  const namedOutright = new Set<string>();
+  for (const phrase of ROLE_PHRASES) {
+    if (!CONTEXT_REDIRECTS.some((r) => r.from === phrase.nodeId && r.word !== phrase.text)) continue;
+    if (variants.some((v) => scorePhrase(v.text, v.tokens, phrase) > 0)) namedOutright.add(phrase.nodeId);
+  }
   for (const phrase of ROLE_PHRASES) {
     let score = 0;
-    for (const v of variants) score = Math.max(score, scorePhrase(v.text, v.tokens, phrase));
+    let via = variants[0]!;
+    for (const v of variants) {
+      const sc = scorePhrase(v.text, v.tokens, phrase);
+      if (sc > score) {
+        score = sc;
+        via = v;
+      }
+    }
     if (!score) continue;
-    if (NODE_BY_ID.get(phrase.nodeId)?.generic) score -= 0.15;
-    const cur = best.get(phrase.nodeId);
-    if (!cur || score > cur.score) best.set(phrase.nodeId, { id: phrase.nodeId, level: 3, score: Math.round(score * 1000) / 1000, matched: phrase.text });
+    // "architect" beside software words is the software role, not the building one.
+    const redirected = namedOutright.has(phrase.nodeId) ? null : redirectFor(phrase, via.tokens, via.text);
+    const nodeId = redirected ?? phrase.nodeId;
+    if (NODE_BY_ID.get(nodeId)?.generic) score -= 0.15;
+    const cur = best.get(nodeId);
+    if (!cur || score > cur.score) best.set(nodeId, { id: nodeId, level: 3, score: Math.round(score * 1000) / 1000, matched: phrase.text });
   }
   return [...best.values()]
     .filter((m) => m.score >= minScore)

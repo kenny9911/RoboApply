@@ -7,12 +7,15 @@ import {
   combineDimensions,
   degreeMeets,
   industryDimension,
+  levelGap,
   locationCheck,
   logisticsDimension,
   needsSponsorshipFor,
   payCheck,
   preScore,
   preScoreDimensions,
+  preScoreLimit,
+  resumeSeniority,
   seniorityFactor,
   skillKey,
   skillsDimension,
@@ -24,7 +27,8 @@ import {
   visaCheck,
 } from './preScore.js';
 import { buildKeywordRows } from './keywordRows.js';
-import { matchJob, matchUser } from './testkit.js';
+import { payAsPosted, toMatchJob } from './context.js';
+import { jobRecord, matchJob, matchUser } from './testkit.js';
 
 const W = { ...DEFAULT_MATCH_WEIGHTS };
 const CFG = { weights: W, tiers: { ...DEFAULT_MATCH_TIERS } };
@@ -66,7 +70,7 @@ describe('seniority factor', () => {
 
 describe('title_level = taxonomy overlap × seniority × stated eligibility', () => {
   it('scores overlap × factor and cites the posting title', () => {
-    const d = titleLevelDimension(matchUser({ targetSeniority: ['mid'] }), matchJob({ seniority: 'senior' }), W);
+    const d = titleLevelDimension(matchUser({ recentTitle: 'Software Engineer', yearsExperience: 4 }), matchJob({ seniority: 'senior' }), W);
     expect(d).toMatchObject({ key: 'title_level', status: 'scored', score: 70, weight: 35 });
     expect(d.evidence[0]).toEqual({ text: 'Backend Engineer', source: 'posting', ref: 'title' });
   });
@@ -130,14 +134,15 @@ describe('skills = |job ∩ user| / min(|job|, 10)', () => {
     const resume = 'Senior engineer. Ran our Kubernetes clusters and wrote Go services.';
     const user = matchUser({ skills: ['TypeScript'], resumeTextNorm: normalizeText(resume) });
     const job = matchJob({ skills: ['typescript', 'go', 'kubernetes', 'rust'], skillsDetail: null });
-    expect(splitSkills(user, job)).toEqual({ aligned: ['typescript', 'go', 'kubernetes'], missing: ['rust'], missingRequired: [] });
+    // Stored lower case, shown in the usual spelling.
+    expect(splitSkills(user, job)).toEqual({ aligned: ['TypeScript', 'Go', 'Kubernetes'], missing: ['Rust'], missingRequired: [] });
     expect(skillsDimension(user, job, W).score).toBe(75);
-    expect(skillsDimension(user, job, W).evidence).toContainEqual({ text: 'rust', source: 'posting', ref: 'skill_missing' });
+    expect(skillsDimension(user, job, W).evidence).toContainEqual({ text: 'Rust', source: 'posting', ref: 'skill_missing' });
     const skillsRow = buildKeywordRows({ job: { ...job, minYears: null }, user, resumeText: resume, keywords: null }).find((r) => r.key === 'skills')!;
-    expect(skillsRow.items.filter((i) => !i.found).map((i) => i.term)).toEqual(['rust']);
+    expect(skillsRow.items.filter((i) => !i.found).map((i) => i.term)).toEqual(['Rust']);
     // Whole words only: "Go" is not found inside "Google".
     const google = matchUser({ skills: [], resumeTextNorm: normalizeText('Worked at Google.') });
-    expect(splitSkills(google, matchJob({ skills: ['go'], skillsDetail: null })).missing).toEqual(['go']);
+    expect(splitSkills(google, matchJob({ skills: ['go'], skillsDetail: null })).missing).toEqual(['Go']);
   });
 
   it('skillKey normalizes punctuation and case', () => {
@@ -208,12 +213,113 @@ describe('logistics (deterministic, never a constant)', () => {
     expect(needsSponsorshipFor(matchUser({ needsSponsorship: true, workAuth: [{ country: 'US', authorized: true, sponsorship: 'no' }] }), tw)).toBe(true);
   });
 
+  it('FIX-3: pay evidence is the posting\'s own words when it has them (18-28K·15薪), never our annual arithmetic', () => {
+    const cnUser = matchUser({ market: 'cn', country: 'CN', locations: [], salaryMin: { amount: 15000, currency: 'CNY', period: 'month' } });
+    const cnJob = matchJob({ market: 'cn', locationCountry: 'CN', locationCity: '上海', salaryCurrency: 'CNY', salaryAnnualMin: 270000, salaryAnnualMax: 420000, payAsPosted: '18-28K·15薪' });
+    const pay = logisticsDimension(cnUser, cnJob, W).evidence.find((e) => e.ref === 'pay_met');
+    expect(pay).toEqual({ text: '18-28K·15薪', source: 'posting', ref: 'pay_met' });
+    // No words from the posting: the compared figures, as before.
+    const bare = logisticsDimension(cnUser, { ...cnJob, payAsPosted: null }, W).evidence.find((e) => e.ref === 'pay_met');
+    expect(bare?.text).toBe('CNY 270000–420000');
+    // GoApply has no visa part at all.
+    expect(logisticsDimension(cnUser, cnJob, W).evidence.some((e) => e.ref?.startsWith('visa'))).toBe(false);
+    // The record → job mapping drops a label the pasted line carried and words with no amount.
+    expect(payAsPosted('薪资：18-28K·15薪')).toBe('18-28K·15薪');
+    expect(payAsPosted('Salary: $90,000 - $110,000 a year')).toBe('$90,000 - $110,000 a year');
+    expect(payAsPosted('面议')).toBeNull();
+    expect(payAsPosted(null)).toBeNull();
+    expect(toMatchJob(jobRecord({ salaryText: '薪资:18-28K·15薪' })).payAsPosted).toBe('18-28K·15薪');
+  });
+
   it('averages the stated checks; all not stated → not stated', () => {
     const half = logisticsDimension(matchUser({ salaryMin: { amount: 100000, currency: 'EUR', period: 'year' } }), matchJob(), W);
     expect(half.score).toBe(50);
     expect(half.evidence.map((e) => e.ref)).toEqual(['location_met', 'pay_not_met']);
     const none = logisticsDimension(matchUser({ locations: [], workModels: [], country: null, salaryMin: null }), matchJob(), W);
     expect(none.status).toBe('not_stated');
+  });
+});
+
+describe('FIX-3: the quick estimate is about the resume, and only claims what it compared', () => {
+  // An 8-year engineer whose latest title states no level.
+  const senior = matchUser({ recentTitle: 'Software Engineer', yearsExperience: 8 });
+
+  it.each([
+    ['Senior Software Engineer', 2, 'senior'], // the title states it
+    ['Software Engineer', 8, 'senior'], // else the years
+    ['Software Engineer', 4, 'mid'],
+    ['Software Engineer', 1.5, 'entry'],
+    ['Software Engineer', 0, 'intern_newgrad'],
+    ['Software Engineering Intern', 0.3, 'intern_newgrad'],
+    ['Principal Engineer', 12, 'lead_staff'],
+    ['VP of Engineering', 15, 'director_exec'],
+    ['Software Engineer', null, null],
+    [null, null, null],
+  ])('resume level: %s, %s years → %s', (title, years, level) => {
+    expect(resumeSeniority(title as string | null, years as number | null)).toBe(level);
+  });
+
+  it('the Level chips of the search do not change the score (same resume, same job)', () => {
+    const job = matchJob({ seniority: 'senior' });
+    const scores = [['senior'], [], ['mid'], ['intern_newgrad', 'entry'], ['director_exec']].map(
+      (targetSeniority) => preScore({ ...senior, targetSeniority }, job, CFG).score,
+    );
+    expect(new Set(scores).size).toBe(1);
+    expect(titleLevelDimension({ ...senior, targetSeniority: ['intern_newgrad'] }, job, W).score).toBe(100);
+  });
+
+  it('a role two or more levels from the resume is never Great, however well the rest lines up', () => {
+    // Everything else is perfect: same role, every skill, same industry, location and pay met.
+    const perfect = { skills: ['typescript', 'go'], skillsDetail: null };
+    for (const seniority of ['intern_newgrad', 'entry']) {
+      const r = preScore(senior, matchJob({ ...perfect, seniority }), CFG);
+      expect(r.score, seniority).toBeLessThan(CFG.tiers.good);
+      expect(r.tier, seniority).not.toBe('great');
+      expect(r.tier, seniority).not.toBe('good');
+    }
+    // One level away or the same level is not limited.
+    expect(preScore(senior, matchJob({ ...perfect, seniority: 'senior' }), CFG).tier).toBe('great');
+    expect(preScore(senior, matchJob({ ...perfect, seniority: 'mid' }), CFG).score).toBeGreaterThanOrEqual(CFG.tiers.good);
+    // An unknown level on either side limits nothing (never inferred).
+    expect(levelGap(senior, null)).toBeNull();
+    expect(levelGap(matchUser({ recentTitle: null, yearsExperience: null }), 'senior')).toBeNull();
+  });
+
+  it('a post with no skills and a role we cannot place gets NO score from location and pay alone (it used to be 100 "Great fit")', () => {
+    const job = matchJob({ title: 'Cleared Zzz', taxonomyIds: [], primaryTaxonomyId: null, skills: [], skillsDetail: null, companyIndustries: [] });
+    const dims = preScoreDimensions(senior, job, W);
+    expect(dims.filter((d) => d.status === 'scored').map((d) => d.key)).toEqual(['logistics']);
+    expect(combineDimensions(dims)).toBe(100); // what renormalizing alone would have claimed
+    const r = preScore(senior, job, CFG);
+    expect(r).toMatchObject({ score: null, tier: null, topGap: null, topOverlap: null });
+  });
+
+  it('a post that states no skills cannot be Great: the role and the logistics alone are capped under the Great line', () => {
+    const r = preScore(senior, matchJob({ skills: [], skillsDetail: null }), CFG);
+    expect(r.dimensions.find((d) => d.key === 'skills')!.status).toBe('not_stated');
+    expect(r.score).toBe(CFG.tiers.great - 1);
+    expect(r.tier).toBe('good');
+    // The same goes for skills without a role we can compare.
+    const noRole = preScore(senior, matchJob({ title: 'Zzz', taxonomyIds: [], primaryTaxonomyId: null, skills: ['typescript', 'go'] }), CFG);
+    expect(noRole.score).toBe(CFG.tiers.great - 1);
+  });
+
+  it('under half of the comparable weight compared → Possible at most', () => {
+    // Only the role (35 of 90) could be compared.
+    const user = matchUser({ ...senior, employerIndustries: [], locations: [], workModels: [], country: null, salaryMin: null });
+    const r = preScore(user, matchJob({ skills: [], skillsDetail: null }), CFG);
+    expect(r.dimensions.filter((d) => d.status === 'scored').map((d) => d.key)).toEqual(['title_level']);
+    expect(r.score).toBe(CFG.tiers.good - 1);
+    expect(r.tier).toBe('possible');
+  });
+
+  it('the limit never raises a score and leaves a fully compared job alone', () => {
+    const full = preScore(senior, matchJob(), CFG);
+    expect(full.score).toBe(combineDimensions(full.dimensions));
+    expect(preScoreLimit(full.dimensions, 0, CFG.tiers)).toBe(100);
+    const unrelated = preScore(senior, matchJob({ taxonomyIds: ['sales', 'account_executive'], primaryTaxonomyId: 'account_executive', title: 'Account Executive', skills: ['salesforce'] }), CFG);
+    expect(unrelated.score).toBe(combineDimensions(unrelated.dimensions));
+    expect(unrelated.tier === 'great' || unrelated.tier === 'good').toBe(false);
   });
 });
 
@@ -250,7 +356,7 @@ describe('combining and tiers', () => {
     const r = preScore(matchUser(), matchJob({ skillsDetail: [{ skill: 'Kubernetes', required: true }] }), CFG);
     expect(r.kind).toBe('pre');
     expect(r.topGap).toBe('Kubernetes');
-    expect(r.topOverlap).toBe('typescript');
+    expect(r.topOverlap).toBe('TypeScript');
     expect(r.tier).toBe(tierForScore(r.score!));
   });
 

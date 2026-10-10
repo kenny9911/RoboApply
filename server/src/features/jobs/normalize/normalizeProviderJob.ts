@@ -26,7 +26,7 @@ import {
 } from './level.js';
 import { normalizeSalary } from './salary.js';
 import { applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, PROVIDER_META, sourceFields } from './source.js';
-import { cleanOrNull, cleanText, hostOf, htmlToPlain, normalizeCompanyName, normalizeJobTitle, safeUrl, truncate } from './text.js';
+import { asWritten, cleanOrNull, cleanText, hostOf, htmlToPlain, normalizeCompanyName, normalizeJobTitle, safeUrl, truncate } from './text.js';
 import type { NormalizedJob, NormalizedLocation, NormalizeContext, NormalizeProvider, ProviderJobInput, Seniority } from './types.js';
 import { resolveWorkModel } from './workModel.js';
 import { foldTwToCn } from './zhVariants.js';
@@ -84,6 +84,9 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
 
   const descriptionRaw = cleanText(raw.descriptionHtml) || cleanText(raw.description);
   const descriptionPlain = htmlToPlain(descriptionRaw);
+  // What the page shows: the posting's own text with its own punctuation (FIX-3). Everything parsed
+  // from the description (pay, years, work model, search text) still reads the NFKC form above.
+  const descriptionShown = asWritten(raw.descriptionHtml) || asWritten(raw.description);
 
   // ── Location ──
   // The provider's separate city / region / country fields describe the first
@@ -278,7 +281,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     maxYears: years?.max ?? null,
     skills,
 
-    description: descriptionRaw,
+    description: descriptionShown,
     descriptionPlain,
 
     postedAt: posted.postedAt,

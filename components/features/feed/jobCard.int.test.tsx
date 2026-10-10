@@ -149,6 +149,18 @@ describe('feed card — GoApply (cn) with cardMeta', () => {
   });
 });
 
+describe('FIX-3: a date we assigned is "First seen", as on the job page', () => {
+  it('a job with an estimated posting date (a job the user added, or one with no date at its source) never says "Posted"', () => {
+    installFetch({});
+    const { unmount } = renderFeed(card({ ...feedItem(1), postedAtEstimated: true }, 'intl'));
+    expect(within(screen.getByTestId('card-meta')).getByText(/^First seen /)).toBeInTheDocument();
+    expect(within(screen.getByTestId('card-meta')).queryByText(/^Posted /)).toBeNull();
+    unmount();
+    renderFeed(card({ ...feedItem(1), postedAtEstimated: false }, 'intl'));
+    expect(within(screen.getByTestId('card-meta')).getByText(/^Posted /)).toBeInTheDocument();
+  });
+});
+
 describe('feed card — RoboApply (intl) is unchanged', () => {
   it('pay, posted, last checked and source are on the card, cn meta or not', () => {
     installFetch({});

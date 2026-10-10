@@ -77,6 +77,12 @@ export interface FeedItem {
   /** CN "N薪" when the posting states it. */
   payMonths?: number | null;
   postedAt: string | null;
+  /**
+   * True when `postedAt` is not the posting's own date but the day we first
+   * saw the job (or the user added it): the card says "First seen {date}",
+   * as the job page does, never "Posted {date}".
+   */
+  postedAtEstimated?: boolean;
   /** "Last checked {date}" from lastSeenAt. */
   lastSeenAt: string | null;
   /** Source line, e.g. aggregator + original host, or `{sourceName}`. */

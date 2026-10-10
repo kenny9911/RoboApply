@@ -110,6 +110,7 @@ export function toMatchRecord(row: FeedJobRow): MatchJobRecord {
     salaryAnnualMin: row.salaryAnnualMin,
     salaryAnnualMax: row.salaryAnnualMax,
     salaryCurrency: row.salaryCurrency,
+    salaryText: row.salaryText,
     sponsorship: row.sponsorship,
     sponsorshipEvidence: row.sponsorshipEvidence,
     marketTags: row.marketTags,

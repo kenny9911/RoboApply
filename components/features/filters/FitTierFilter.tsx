@@ -10,7 +10,7 @@ import { useTranslations } from 'next-intl';
 
 import { toast } from '../../v3/primitives/Toast';
 import { FIT_TIERS, type FilterSet } from '../../../hooks/search/filterModel';
-import { useApplyFilters } from '../../../hooks/search/useApplyFilters';
+import { useApplyFilters, useOptimisticFilters } from '../../../hooks/search/useApplyFilters';
 import type { SearchProfile } from '../../../hooks/search/useSearchProfiles';
 import { SegmentedChoice } from './FilterControls';
 import { useEditorContext } from './FilterSections';
@@ -25,12 +25,15 @@ export interface FitTierFilterProps {
   onApplied?: (profile: SearchProfile) => void;
 }
 
-export function FitTierFilter({ profile, hiddenCount, onApplied }: FitTierFilterProps) {
+export function FitTierFilter({ profile: saved, hiddenCount, onApplied }: FitTierFilterProps) {
   const t = useTranslations('filters');
   const ctx = useEditorContext();
   const { apply } = useApplyFilters();
-  if (!profile) return null;
+  // The choice shows at once; its write is queued behind any change still being saved (useApplyFilters).
+  const { profile, saving } = useOptimisticFilters(saved);
+  if (!profile || !saved) return null;
   const tier: Tier = profile.filters.fitTier ?? 'all';
+  const savedTier: Tier = saved.filters.fitTier ?? 'all';
 
   const choose = async (next: Tier) => {
     if (next === tier) return;
@@ -48,7 +51,8 @@ export function FitTierFilter({ profile, hiddenCount, onApplied }: FitTierFilter
         value={tier}
         onChange={(v) => void choose(v)}
       />
-      {tier !== 'all' && hiddenCount !== null && hiddenCount > 0 ? (
+      {/* The count belongs to the saved view: it is not shown against a choice still being saved. */}
+      {tier !== 'all' && tier === savedTier && !saving && hiddenCount !== null && hiddenCount > 0 ? (
         <p className={styles.hiding} role="status">
           <span>{t('fit.hiding', { count: hiddenCount })}</span>
           <button type="button" className={styles.linkBtn} onClick={() => void choose('all')}>

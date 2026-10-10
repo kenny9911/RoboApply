@@ -45,7 +45,9 @@ export function ZeroResults({ profile }: ZeroResultsProps) {
     const f = field as FilterField;
     const name = labels.field(f);
     if (value === undefined || value === null || typeof value === 'boolean') return name;
-    return `${name}: ${labels.value(f, value, profile?.filters)}`;
+    // The server sends a list field's whole list (the relaxation removes all of it): label every item.
+    const text = labels.values(f, value, profile?.filters);
+    return text ? `${name}: ${text}` : name;
   };
 
   return (

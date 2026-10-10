@@ -140,28 +140,44 @@ function negated(sentence: Sentence, index: number, feeLike: boolean): boolean {
   return EMPLOYER_PAYS.test(sentence.norm.slice(start, end));
 }
 
-function firstMatch(sentences: Sentence[], spec: RuleSpec): string | null {
-  for (const sentence of sentences) {
+/** Every sentence that supports a rule (not negated), in posting order: its index and the quote around the match. */
+function matchesOf(sentences: Sentence[], spec: RuleSpec): Array<{ sentence: number; quote: string }> {
+  const out: Array<{ sentence: number; quote: string }> = [];
+  sentences.forEach((sentence, i) => {
     for (const re of spec.patterns) {
       const global = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
       let m: RegExpExecArray | null;
       while ((m = global.exec(sentence.norm))) {
-        if (!negated(sentence, m.index, spec.feeLike)) return quoteAround(sentence, m.index);
+        if (!negated(sentence, m.index, spec.feeLike)) {
+          out.push({ sentence: i, quote: quoteAround(sentence, m.index) });
+          return;
+        }
         if (m[0].length === 0) global.lastIndex += 1;
       }
     }
-  }
-  return null;
+  });
+  return out;
 }
 
-/** Keyword signals in a posting (at most one per rule, the first sentence that supports it). */
+/**
+ * Keyword signals in a posting: at most one per rule, each resting on its own
+ * sentence where the posting has one. A sentence can support two rules ("培训
+ * 费用可分期" names a training fee and a loan); a later rule takes the first
+ * supporting sentence no earlier rule already quotes, so "要求先交钱" quotes
+ * "入职先交 500 元服装费", not the training-loan sentence above it. When a
+ * rule's only support is a sentence another rule quotes, it quotes that one.
+ */
 export function detectCnFraudSignals(text: string): CnFraudSignal[] {
   if (!text.trim()) return [];
   const sentences = splitSentences(text);
   const out: CnFraudSignal[] = [];
+  const quoted = new Set<number>();
   for (const spec of RULES) {
-    const quote = firstMatch(sentences, spec);
-    if (quote) out.push({ rule: spec.rule, quote });
+    const found = matchesOf(sentences, spec);
+    if (!found.length) continue;
+    const own = found.find((f) => !quoted.has(f.sentence)) ?? found[0]!;
+    quoted.add(own.sentence);
+    out.push({ rule: spec.rule, quote: own.quote });
   }
   return out;
 }

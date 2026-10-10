@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl';
 
 import type { TrackerEntryView } from '../../../lib/api/contracts/tracker';
 import { EntryRow } from './EntryRow';
-import { useDateFormat } from './shared';
+import { dayKeyOf, useDateFormat, weekStartOfDay } from './shared';
 import { WeeklyInsightCard } from './WeeklyInsightCard';
 import styles from './tracker.module.css';
 
@@ -18,10 +18,13 @@ export interface ByDateViewProps {
   onOpen: (id: string) => void;
 }
 
-/** Sunday-anchored UTC week start (YYYY-MM-DD), the same weeks the server counts. */
+/**
+ * The Sunday that starts the week of a tracker date, counted in the reader's
+ * own calendar: something applied at 02:25 on Sunday in Taipei belongs to the
+ * week that starts that Sunday, not to the UTC week that ended hours later.
+ */
 export function weekOf(iso: string): string {
-  const d = new Date(iso);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay())).toISOString().slice(0, 10);
+  return weekStartOfDay(dayKeyOf(iso) || iso.slice(0, 10));
 }
 
 export function groupByWeek(entries: readonly TrackerEntryView[]): Array<{ week: string; entries: TrackerEntryView[] }> {
