@@ -1,6 +1,12 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Router } from 'express';
+
+// The voice parity test imports the interview engine, whose module graph
+// reaches lib/prisma.ts (which opens a pool and loads .env files into
+// process.env). Nothing here talks to a database.
+vi.mock('../lib/prisma.js', () => ({ default: {} }));
+
 import {
   CAPABILITY_KEYS,
   FLAG_KEYS,
@@ -14,16 +20,26 @@ import {
   requireFlag,
   resolveFlags,
   setFlagOverrideLoader,
+  setVoiceAvailabilityProbe,
+  setWechatPayReadinessProbe,
 } from './flags.js';
 import { BRANDS } from './brand/registry.js';
 import { fakeAuth, startRouteHarness } from '../test/routeHarness.js';
+import { IMPLEMENTED_VOICE_PROVIDERS, voiceAvailable } from '../interview-engine/providers/index.js';
+import { VOICE_PROVIDER_IDS } from '../interview-engine/config.js';
+import { wechatPayReadiness } from './billing/rails/wechatpay.js';
 
 const robo = BRANDS.roboapply;
 const go = BRANDS.goapply;
 const EMPTY = { NODE_ENV: 'test' };
 const CN_MODEL = { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' };
 
-afterEach(() => setFlagOverrideLoader(null));
+afterEach(() => {
+  setFlagOverrideLoader(null);
+  setVoiceAvailabilityProbe(null);
+  setWechatPayReadinessProbe(null);
+  vi.unstubAllEnvs();
+});
 
 describe('flag keys', () => {
   it('cover ARCH BrandFlags ∪ CN §2.3 capabilities ∪ the plan additions', () => {
@@ -285,5 +301,271 @@ describe('requireFlag', () => {
     } finally {
       await h.close();
     }
+  });
+});
+
+// ── WP-93 requirement checks (carry-over wave 4 #7, wave 2 optional) ───────
+
+describe('webPush: not a mainland brand AND a usable VAPID config (key pair + subject)', () => {
+  const VAPID = { VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: 'priv', VAPID_SUBJECT: 'mailto:push@example.com' };
+
+  it('the key pair without a subject the push services accept is not enough', () => {
+    const pair = { VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: 'priv' };
+    expect(isEnabledForBrand('webPush', robo, pair)).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...pair, VAPID_SUBJECT: '  ' })).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...pair, VAPID_SUBJECT: 'push@example.com' })).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...pair, VAPID_SUBJECT: 'http://example.com' })).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...pair, VAPID_SUBJECT: 'https://example.com/contact' })).toBe(true);
+    expect(isEnabledForBrand('webPush', robo, { ...pair, VAPID_SUBJECT: 'MAILTO:push@example.com' })).toBe(true);
+    // Forcing the switch on never stands in for the subject.
+    expect(isEnabledForBrand('webPush', robo, { ...pair, FLAG_ROBOAPPLY_WEB_PUSH: 'true' }, { webPush: true })).toBe(false);
+  });
+
+  it('is on for RoboApply only with both keys', () => {
+    const SUBJECT = { VAPID_SUBJECT: VAPID.VAPID_SUBJECT };
+    expect(isEnabledForBrand('webPush', robo, VAPID)).toBe(true);
+    expect(isEnabledForBrand('webPush', robo, EMPTY)).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, SUBJECT)).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...SUBJECT, VAPID_PUBLIC_KEY: 'pub' })).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...SUBJECT, VAPID_PRIVATE_KEY: 'priv' })).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, { ...SUBJECT, VAPID_PUBLIC_KEY: 'pub', VAPID_PRIVATE_KEY: '  ' })).toBe(false);
+    // An override cannot stand in for the keys.
+    expect(isEnabledForBrand('webPush', robo, { FLAG_ROBOAPPLY_WEB_PUSH: 'true' })).toBe(false);
+    expect(isEnabledForBrand('webPush', robo, EMPTY, { webPush: true })).toBe(false);
+    // The product switch still turns it off.
+    expect(isEnabledForBrand('webPush', robo, { ...VAPID, FLAG_ROBOAPPLY_WEB_PUSH: 'false' })).toBe(false);
+    expect(resolveFlags(robo, VAPID).webPush).toBe(true);
+  });
+
+  it('GoApply never gets webPush, whatever is configured or overridden', () => {
+    const everything = {
+      ...VAPID,
+      CN_VAPID_PUBLIC_KEY: 'pub',
+      CN_VAPID_PRIVATE_KEY: 'priv',
+      CN_VAPID_SUBJECT: 'mailto:a@b.cn',
+      FLAG_GOAPPLY_WEB_PUSH: 'true',
+    };
+    expect(isEnabledForBrand('webPush', go, everything)).toBe(false);
+    expect(isEnabledForBrand('webPush', go, everything, { webPush: true })).toBe(false);
+    expect(resolveFlags(go, everything, { webPush: true }).webPush).toBe(false);
+    // Any other mainland brand too: the rule is the market, not the brand id.
+    const cnWithSwitch = { ...go, flags: { ...go.flags, webPush: true } };
+    expect(isEnabledForBrand('webPush', cnWithSwitch, everything, { webPush: true })).toBe(false);
+  });
+
+  it('a per-user override reaches isEnabled only on top of the requirement', async () => {
+    setFlagOverrideLoader(async () => [{ key: 'flag:webPush', value: true, expiresAt: null, createdAt: new Date() }]);
+    expect(await isEnabled('webPush', { userId: 'u1', brand: go, env: VAPID })).toBe(false);
+    expect(await isEnabled('webPush', { userId: 'u1', brand: robo, env: EMPTY })).toBe(false);
+    expect(await isEnabled('webPush', { userId: 'u1', brand: robo, env: VAPID })).toBe(true);
+  });
+});
+
+describe('pay.wechatpay: credentials, the notify public key and the entity match', () => {
+  const FULL: Record<string, string> = {
+    CN_PAYMENTS_ENABLED: 'true',
+    WECHATPAY_MCH_ID: '1900000001',
+    WECHATPAY_APP_ID: 'wx1234567890abcdef',
+    WECHATPAY_API_V3_KEY: 'k'.repeat(32),
+    WECHATPAY_MCH_CERT_SERIAL: 'SERIAL01',
+    WECHATPAY_MCH_PRIVATE_KEY: 'merchant-private-key-pem',
+    WECHATPAY_PUBLIC_KEY: 'wechatpay-public-key-pem',
+    WECHATPAY_PUBLIC_KEY_ID: 'PUB_KEY_ID_01',
+    CN_PAYMENT_COLLECTING_ENTITY: '示例（上海）科技有限公司',
+    WECHATPAY_MERCHANT_ENTITY: '示例(上海)科技有限公司',
+  };
+
+  it('is on for GoApply with every requirement', () => {
+    expect(isEnabledForBrand('pay.wechatpay', go, FULL)).toBe(true);
+    expect(resolveFlags(go, FULL)['pay.wechatpay']).toBe(true);
+  });
+
+  it.each(Object.keys(FULL))('is off without %s', (name) => {
+    const env = { ...FULL };
+    delete env[name];
+    expect(isEnabledForBrand('pay.wechatpay', go, env)).toBe(false);
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...FULL, [name]: '  ' })).toBe(false);
+  });
+
+  it('is off when the collecting entity is not the merchant, or the APIv3 key is not 32 bytes', () => {
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...FULL, WECHATPAY_MERCHANT_ENTITY: '另一家有限公司' })).toBe(false);
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...FULL, WECHATPAY_API_V3_KEY: 'short' })).toBe(false);
+    // The intl collecting entity is not GoApply's (R-03: no fallback from CN_X to X).
+    const { CN_PAYMENT_COLLECTING_ENTITY: _cn, ...rest } = FULL;
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...rest, PAYMENT_COLLECTING_ENTITY: FULL.WECHATPAY_MERCHANT_ENTITY })).toBe(false);
+  });
+
+  it('the requirement equals wechatPayReadiness(brand, env).ready for every configuration', () => {
+    const variants: Array<Record<string, string>> = [FULL, {}];
+    for (const name of Object.keys(FULL)) {
+      if (name === 'CN_PAYMENTS_ENABLED') continue;
+      const without = { ...FULL };
+      delete without[name];
+      variants.push(without, { ...FULL, [name]: '   ' }, { ...FULL, [name]: '""' });
+    }
+    variants.push(
+      { ...FULL, WECHATPAY_API_V3_KEY: 'short' },
+      { ...FULL, WECHATPAY_API_V3_KEY: 'k'.repeat(33) },
+      { ...FULL, WECHATPAY_API_V3_KEY: '密'.repeat(32) }, // 32 characters, 96 bytes
+      { ...FULL, WECHATPAY_API_V3_KEY: ` ${'k'.repeat(32)} ` },
+      { ...FULL, WECHATPAY_MERCHANT_ENTITY: '另一家有限公司' },
+      { ...FULL, WECHATPAY_MERCHANT_ENTITY: ' 示例 （上海） 科技有限公司 ' },
+      { ...FULL, CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.', WECHATPAY_MERCHANT_ENTITY: 'EXAMPLE  COLLECTING CO.' },
+      { ...FULL, CN_PAYMENT_COLLECTING_ENTITY: 'Example (Shanghai) Ltd', WECHATPAY_MERCHANT_ENTITY: 'Example （Shanghai） Ltd' },
+      { ...FULL, WECHATPAY_MCH_PRIVATE_KEY: '"-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----"' },
+      { ...FULL, WECHATPAY_PUBLIC_KEY: "'  '" },
+      { ...FULL, PAYMENT_COLLECTING_ENTITY: FULL.CN_PAYMENT_COLLECTING_ENTITY!, CN_PAYMENT_COLLECTING_ENTITY: '' },
+    );
+    let ready = 0;
+    for (const env of variants) {
+      const table = { ...env, CN_PAYMENTS_ENABLED: 'true' };
+      for (const brand of [go, robo]) {
+        const expected = wechatPayReadiness(brand, table).ready;
+        expect(isEnabledForBrand('pay.wechatpay', brand, table), `${brand.id} ${JSON.stringify(env)}`).toBe(expected);
+        if (expected) ready += 1;
+      }
+    }
+    expect(variants.length).toBeGreaterThan(30);
+    expect(ready).toBeGreaterThanOrEqual(5); // the matrix covers both outcomes
+  });
+
+  it('once startup registers wechatPayReadiness, the rail decides', () => {
+    const probe = vi.fn(() => false);
+    setWechatPayReadinessProbe(probe);
+    expect(isEnabledForBrand('pay.wechatpay', go, FULL)).toBe(false);
+    expect(probe).toHaveBeenCalledWith(go, FULL);
+    probe.mockReturnValue(true);
+    expect(isEnabledForBrand('pay.wechatpay', go, FULL)).toBe(true);
+    // CN_PAYMENTS_ENABLED and the brand's rails are still checked first.
+    probe.mockClear();
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...FULL, CN_PAYMENTS_ENABLED: 'false' })).toBe(false);
+    expect(isEnabledForBrand('pay.wechatpay', robo, FULL)).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('stays off until CN_PAYMENTS_ENABLED, off on RoboApply, and no override turns it on', () => {
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...FULL, CN_PAYMENTS_ENABLED: 'false' })).toBe(false);
+    expect(isEnabledForBrand('pay.wechatpay', robo, FULL)).toBe(false);
+    const { WECHATPAY_PUBLIC_KEY_ID: _id, ...noKeyId } = FULL;
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...noKeyId, FLAG_GOAPPLY_PAY_WECHATPAY: 'true' }, { 'pay.wechatpay': true })).toBe(false);
+    expect(isEnabledForBrand('pay.wechatpay', go, { ...FULL, FLAG_GOAPPLY_PAY_WECHATPAY: 'false' })).toBe(false);
+  });
+});
+
+describe('ai.interviewVoice: the media plane of the brand AND the interviewVoice switch', () => {
+  const LK = { LIVEKIT_URL: 'wss://x', LIVEKIT_API_KEY: 'k', LIVEKIT_API_SECRET: 's' };
+  const CN_LK = { CN_LIVEKIT_URL: 'wss://cn', CN_LIVEKIT_API_KEY: 'k', CN_LIVEKIT_API_SECRET: 's' };
+
+  it('RoboApply: on with its LiveKit credentials and an implemented provider', () => {
+    expect(isEnabledForBrand('ai.interviewVoice', robo, LK)).toBe(true);
+    expect(isEnabledForBrand('ai.interviewVoice', robo, { ...LK, VOICE_PROVIDER: 'livekit_selfhosted' })).toBe(true);
+    expect(isEnabledForBrand('ai.interviewVoice', robo, { ...LK, VOICE_PROVIDER: 'something-unknown' })).toBe(true); // unknown → livekit_cloud
+    for (const name of Object.keys(LK)) {
+      const env: Record<string, string> = { ...LK };
+      delete env[name];
+      expect(isEnabledForBrand('ai.interviewVoice', robo, env), name).toBe(false);
+    }
+    // A reserved provider has no implementation: voice is off even with credentials.
+    expect(isEnabledForBrand('ai.interviewVoice', robo, { ...LK, VOICE_PROVIDER: 'volcano' })).toBe(false);
+    expect(isEnabledForBrand('ai.interviewVoice', robo, { ...LK, VOICE_PROVIDER: 'trtc' })).toBe(false);
+    // GoApply's plane is not RoboApply's.
+    expect(isEnabledForBrand('ai.interviewVoice', robo, CN_LK)).toBe(false);
+    // The product switch still decides.
+    expect(isEnabledForBrand('ai.interviewVoice', robo, { ...LK, FLAG_ROBOAPPLY_INTERVIEW_VOICE: 'false' })).toBe(false);
+    expect(isEnabledForBrand('ai.interviewVoice', robo, LK, { interviewVoice: false })).toBe(false);
+  });
+
+  it('GoApply: off by default, and config can now turn it on (switch + CN plane)', () => {
+    expect(go.flags.interviewVoice).toBe(false);
+    expect(isEnabledForBrand('ai.interviewVoice', go, CN_LK)).toBe(false); // registry switch off
+    expect(isEnabledForBrand('ai.interviewVoice', go, { ...CN_LK, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true' })).toBe(true);
+    expect(isEnabledForBrand('ai.interviewVoice', go, CN_LK, { interviewVoice: true })).toBe(true);
+    expect(isEnabledForBrand('ai.interviewVoice', go, { ...CN_LK, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true', CN_VOICE_PROVIDER: 'livekit_selfhosted' })).toBe(true);
+    // The switch alone is not enough: no fallback to RoboApply's plane (R-03), no reserved provider.
+    expect(isEnabledForBrand('ai.interviewVoice', go, { FLAG_GOAPPLY_INTERVIEW_VOICE: 'true' })).toBe(false);
+    expect(isEnabledForBrand('ai.interviewVoice', go, { ...LK, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true' })).toBe(false);
+    expect(isEnabledForBrand('ai.interviewVoice', go, { ...CN_LK, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true', CN_VOICE_PROVIDER: 'volcano' })).toBe(false);
+    expect(isEnabledForBrand('ai.interviewVoice', go, { ...CN_LK, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true', CN_VOICE_PROVIDER: 'trtc' })).toBe(false);
+    // RoboApply's provider setting does not leak into GoApply.
+    expect(isEnabledForBrand('ai.interviewVoice', go, { ...CN_LK, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true', VOICE_PROVIDER: 'volcano' })).toBe(true);
+  });
+
+  it('the requirement equals voiceAvailable(brand) of interview-engine/providers for every provider id', () => {
+    const NAMES = ['VOICE_PROVIDER', 'CN_VOICE_PROVIDER', ...Object.keys(LK), ...Object.keys(CN_LK), 'FLAG_ROBOAPPLY_INTERVIEW_VOICE', 'FLAG_GOAPPLY_INTERVIEW_VOICE'];
+    const providerValues = [undefined, 'nonsense', ...VOICE_PROVIDER_IDS];
+    let compared = 0;
+    for (const brand of [robo, go]) {
+      const prefix = brand.market === 'cn' ? 'CN_' : '';
+      for (const provider of providerValues) {
+        for (const creds of [{}, LK, CN_LK, { ...LK, ...CN_LK }, { LIVEKIT_URL: 'wss://x', CN_LIVEKIT_URL: 'wss://cn' }]) {
+          const table: Record<string, string> = { ...creds, FLAG_GOAPPLY_INTERVIEW_VOICE: 'true' };
+          if (provider) table[`${prefix}VOICE_PROVIDER`] = provider;
+          for (const name of NAMES) vi.stubEnv(name, table[name] ?? '');
+          expect(isEnabledForBrand('ai.interviewVoice', brand, table), `${brand.id} ${provider} ${Object.keys(creds).join(',')}`).toBe(voiceAvailable(brand.id));
+          compared += 1;
+        }
+      }
+    }
+    expect(compared).toBe(2 * providerValues.length * 5);
+    // The two id lists this file mirrors.
+    expect([...IMPLEMENTED_VOICE_PROVIDERS].sort()).toEqual(['livekit_cloud', 'livekit_selfhosted']);
+    expect([...VOICE_PROVIDER_IDS].sort()).toEqual(['livekit_cloud', 'livekit_selfhosted', 'trtc', 'volcano']);
+  });
+
+  it('once startup registers voiceAvailable, every process.env call goes through it', () => {
+    const probe = vi.fn((brand: string) => brand === 'goapply');
+    setVoiceAvailabilityProbe(probe);
+    vi.stubEnv('FLAG_GOAPPLY_INTERVIEW_VOICE', 'true');
+    vi.stubEnv('FLAG_ROBOAPPLY_INTERVIEW_VOICE', '');
+    expect(isEnabledForBrand('ai.interviewVoice', go, process.env)).toBe(true);
+    expect(isEnabledForBrand('ai.interviewVoice', robo, process.env)).toBe(false);
+    expect(probe).toHaveBeenCalledWith('goapply');
+    expect(probe).toHaveBeenCalledWith('roboapply');
+    // The switch is still applied on top of the probe.
+    vi.stubEnv('FLAG_GOAPPLY_INTERVIEW_VOICE', 'false');
+    expect(isEnabledForBrand('ai.interviewVoice', go, process.env)).toBe(false);
+    // A caller-supplied table is read from the table, not from the probe.
+    probe.mockClear();
+    expect(isEnabledForBrand('ai.interviewVoice', robo, LK)).toBe(true);
+    expect(probe).not.toHaveBeenCalled();
+  });
+});
+
+describe('GoApply text model through a newapi gateway (CN_LLM_PROVIDER=newapi)', () => {
+  const GATEWAY = { CN_LLM_PROVIDER: 'newapi', NEWAPI_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' };
+
+  it('counts only when the gateway host passes the egress policy', () => {
+    expect(isEnabledForBrand('ai.text', go, { ...GATEWAY, NEWAPI_BASE_URL: 'https://api.deepseek.com/v1' })).toBe(true);
+    expect(isEnabledForBrand('ai.text', go, { ...GATEWAY, NEWAPI_BASE_URL: 'https://gateway.dashscope.aliyuncs.com/v1' })).toBe(true);
+    // An offshore or unknown gateway never unlocks GoApply AI.
+    expect(isEnabledForBrand('ai.text', go, { ...GATEWAY, NEWAPI_BASE_URL: 'https://openrouter.ai/api/v1' })).toBe(false);
+    expect(isEnabledForBrand('ai.text', go, { ...GATEWAY, NEWAPI_BASE_URL: 'https://newapi.example.com/v1' })).toBe(false);
+    expect(isEnabledForBrand('ai.text', go, { ...GATEWAY, NEWAPI_BASE_URL: 'https://api.deepseek.com.evil.example/v1' })).toBe(false);
+    expect(isEnabledForBrand('ai.text', go, { ...GATEWAY, NEWAPI_BASE_URL: 'https://dashscope-intl.aliyuncs.com/v1' })).toBe(false);
+  });
+
+  it('needs the key, the base URL and the model', () => {
+    const ok = { ...GATEWAY, NEWAPI_BASE_URL: 'https://api.deepseek.com/v1' };
+    for (const name of ['NEWAPI_API_KEY', 'NEWAPI_BASE_URL', 'CN_LLM_MODEL']) {
+      const env: Record<string, string> = { ...ok };
+      delete env[name];
+      expect(isEnabledForBrand('ai.text', go, env), name).toBe(false);
+    }
+    // The AI-only product flags follow.
+    expect(isEnabledForBrand('copilot', go, ok)).toBe(go.flags.copilot);
+    expect(isEnabledForBrand('ai.vision', go, { ...ok, CN_LLM_VISION_MODEL: 'qwen-vl' })).toBe(true);
+    expect(isEnabledForBrand('ai.vision', go, { ...ok, NEWAPI_BASE_URL: 'https://openrouter.ai/api/v1', CN_LLM_VISION_MODEL: 'qwen-vl' })).toBe(false);
+  });
+
+  it('an allowlisted extra domestic host is honoured, as LLMService would', () => {
+    const env = { ...GATEWAY, NEWAPI_BASE_URL: 'https://llm.internal.example.cn/v1' };
+    expect(isEnabledForBrand('ai.text', go, env)).toBe(false);
+    expect(isEnabledForBrand('ai.text', go, { ...env, CN_LLM_DOMESTIC_HOSTS: 'llm.internal.example.cn' })).toBe(true);
+    expect(isEnabledForBrand('ai.text', go, { ...env, CN_LLM_DOMESTIC_HOSTS: 'other.example.cn' })).toBe(false);
+  });
+
+  it('competitiveness stays an AI-dependent flag (owner decision, deferred)', async () => {
+    const { AI_DEPENDENT_FLAGS } = await import('./flags.js');
+    expect(AI_DEPENDENT_FLAGS.has('competitiveness')).toBe(true);
   });
 });

@@ -7,7 +7,9 @@
 //
 //   1. Delete R2 interview artifacts — interviews/<sessionId>/recording.mp4
 //      (the user's voice), transcript.json/.txt, report.json — for every
-//      InterviewSession the user owns.
+//      InterviewSession the user owns, each inside the SESSION's brand
+//      (`sessionArtifactBrand`): a GoApply session's objects are deleted with
+//      the CN_S3_* store, never looked for in RoboApply's bucket.
 //   2. Delete stored resume originals (RAResumeVariant.originalFileKey,
 //      candidate keyspace of ResumeOriginalFileStorageService).
 //   3. Delete the exact application files sent with applications
@@ -44,8 +46,10 @@ import prisma from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
 import { interviewR2Storage } from '../../interview-engine/storage/r2Storage.js';
 import { resumeOriginalFileStorageService } from '../../services/ResumeOriginalFileStorageService.js';
+import { inBrand } from '../../interview-engine/providers/brandScope.js';
+import { VOICE_SEAM_KEY, readVoiceSeam } from '../../interview-engine/providers/sessionSeam.js';
 import { runWithBrand } from '../../lib/requestContext.js';
-import { parseBrandId } from '../../platform/brand/registry.js';
+import { parseBrandId, type BrandId } from '../../platform/brand/registry.js';
 import { growthService } from '../../features/growth/index.js';
 import { purgeAuthTokens } from '../../features/auth/tokens.js';
 import {
@@ -115,23 +119,46 @@ interface UserPurgeOutcome {
 }
 
 /**
+ * The brand whose storage holds a session's artifacts (WP-63a R9):
+ *   1. `InterviewSession.brand` when the row carries it (SCHEMA-4);
+ *   2. else the voice seam stored at create in `liveMetrics` (GoApply and
+ *      non-default sessions write one; default RoboApply rows write nothing);
+ *   3. else the account's brand.
+ * A recording is written by the session's media plane, so it sits in that
+ * brand's bucket even when the purge runs under another brand.
+ */
+export function sessionArtifactBrand(session: { brand?: string | null; liveMetrics?: unknown }, userBrand: BrandId): BrandId {
+  const own = parseBrandId(session.brand);
+  if (own) return own;
+  const metrics = session.liveMetrics;
+  if (metrics && typeof metrics === 'object' && !Array.isArray(metrics) && VOICE_SEAM_KEY in metrics) {
+    return readVoiceSeam(metrics).brand;
+  }
+  return userBrand;
+}
+
+/**
  * Purge one user's stored artifacts, then the user row. Returns blocked=true
  * (row kept, retried next run) when any storage delete cannot be confirmed.
  */
-async function purgeUser(userId: string): Promise<UserPurgeOutcome> {
-  // ── 1. Interview artifacts (R2) ──
+async function purgeUser(userId: string, userBrand: BrandId): Promise<UserPurgeOutcome> {
+  // ── 1. Interview artifacts (R2 / S3), each in its session's brand ──
   const sessions = await prisma.interviewSession.findMany({
     where: { userId },
-    select: { id: true, recordingKey: true, transcriptKey: true },
+    select: { id: true, recordingKey: true, transcriptKey: true, brand: true, liveMetrics: true },
   });
-  if (sessions.length > 0 && !interviewR2Storage.isConfigured()) {
-    // Can't clean what we can't reach. Deleting the rows now would orphan any
-    // objects that do exist, so hold the user until R2 creds are present.
-    return { blocked: true, reason: 'r2_not_configured', interviewSessionsCleaned: 0, resumeOriginalsDeleted: 0 };
+  const byBrand = sessions.map((s) => ({ session: s, brand: sessionArtifactBrand(s, userBrand) }));
+  for (const brand of new Set(byBrand.map((x) => x.brand))) {
+    if (!inBrand(brand, () => interviewR2Storage.isConfigured())) {
+      // Can't clean what we can't reach. Deleting the rows now would orphan any
+      // objects that do exist, so hold the user until that brand's storage
+      // credentials are present.
+      return { blocked: true, reason: `r2_not_configured${brand === userBrand ? '' : ` (${brand})`}`, interviewSessionsCleaned: 0, resumeOriginalsDeleted: 0 };
+    }
   }
   let artifactFailures = 0;
-  for (const s of sessions) {
-    const { failed } = await interviewR2Storage.deleteSessionArtifacts(s.id, [s.recordingKey, s.transcriptKey]);
+  for (const { session: s, brand } of byBrand) {
+    const { failed } = await inBrand(brand, () => interviewR2Storage.deleteSessionArtifacts(s.id, [s.recordingKey, s.transcriptKey]));
     artifactFailures += failed;
   }
 
@@ -251,7 +278,8 @@ export async function purgeAccountNow(userId: string): Promise<{ blocked: boolea
     logger.warn('RA_ACCOUNT_PURGE', 'immediate purge refused: non-seeker roles need manual review', { userId, role: candidate.role, roles: candidate.roles });
     return { blocked: true, reason: 'unsafe_role' };
   }
-  const outcome = await runWithBrand(parseBrandId(candidate.brand) ?? 'roboapply', () => purgeUser(userId));
+  const brand = parseBrandId(candidate.brand) ?? 'roboapply';
+  const outcome = await runWithBrand(brand, () => purgeUser(userId, brand));
   if (outcome.blocked) {
     logger.warn('RA_ACCOUNT_PURGE', 'immediate purge blocked — user kept for retry', { userId, reason: outcome.reason });
     return { blocked: true, reason: outcome.reason };
@@ -322,7 +350,8 @@ export async function runAccountPurgeSweep(
 
   for (const c of due) {
     try {
-      const outcome = await runWithBrand(parseBrandId(c.brand) ?? 'roboapply', () => purgeUser(c.userId));
+      const brand = parseBrandId(c.brand) ?? 'roboapply';
+      const outcome = await runWithBrand(brand, () => purgeUser(c.userId, brand));
       summary.resumeOriginalsDeleted += outcome.resumeOriginalsDeleted;
       if (outcome.blocked) {
         summary.blocked += 1;

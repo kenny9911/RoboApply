@@ -7,8 +7,9 @@
 //               no fallback across brands) AND the file is not `status: draft`.
 //   Unpublished → rendered with a DRAFT banner, except on production GoApply,
 //   where the page is a 404.
-// Block placeholders ({{retention_schedule}}, {{ai_models}}, {{processors}})
-// are left in place; the page renders them as live tables.
+// Block placeholders ({{retention_schedule}}, {{ai_models}}, {{processors}},
+// {{processing_facts}}, {{llm_endpoints}}, {{data_attributions}}) are left in
+// place; the page renders them as live tables and lists.
 //
 // Deployment note: the files must ship with the server bundle
 // (`outputFileTracingIncludes` for /legal/[doc] — requested from INT).
@@ -17,7 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { BrandId } from '../../lib/brand/registry.generated';
-import { resolveLegalDocSlug, type LegalDocSlug, type LegalMarket } from '../../components/features/compliance/legalCatalog';
+import { LEGAL_BLOCKS, legalDocsFor, resolveLegalDocSlug, type LegalDocSlug, type LegalMarket } from '../../components/features/compliance/legalCatalog';
 
 export type EnvSource = Record<string, string | undefined>;
 
@@ -83,6 +84,10 @@ export function inlineValues(brand: LegalBrandInfo, env: EnvSource): Record<stri
     complaint_email: (zh ? env.CN_COMPLAINT_EMAIL?.trim() : '') || missing,
     complaint_phone: (zh ? env.CN_COMPLAINT_PHONE?.trim() : '') || missing,
     version: brandEnvValue(brand, 'LEGAL_DOCS_VERSION', env) ?? (zh ? '草稿' : 'Draft'),
+    // Who collects GoApply payments (CN_PAYMENT_COLLECTING_ENTITY), named in the 用户协议.
+    collecting_entity: brandEnvValue(brand, 'PAYMENT_COLLECTING_ENTITY', env) ?? missing,
+    // NDA / copyright complaints about shared questions; the support address until ops sets one.
+    takedown_contact: brandEnvValue(brand, 'TAKEDOWN_CONTACT', env) ?? brandEnvValue(brand, 'SUPPORT_EMAIL', env) ?? brand.replyTo,
     minimum_age: '16',
     offshore_notice: zh
       ? isOffshore(env)
@@ -96,7 +101,7 @@ export function inlineValues(brand: LegalBrandInfo, env: EnvSource): Record<stri
   };
 }
 
-const BLOCK = new Set(['retention_schedule', 'ai_models', 'processors']);
+const BLOCK = new Set<string>(LEGAL_BLOCKS);
 
 export function fillInline(body: string, values: Record<string, string>): string {
   return body.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (all, key: string) => (BLOCK.has(key) ? all : key in values ? values[key]! : all));
@@ -139,4 +144,18 @@ export function loadLegalDocForPage(brand: LegalBrandInfo, slug: string, env: En
       lang: brand.market === 'cn' ? 'zh' : 'en',
     },
   };
+}
+
+/**
+ * The documents the /legal index can link to for a brand: every document of
+ * its footer list that loads under the publication rule (so production GoApply
+ * lists nothing until its documents are published).
+ */
+export function listLegalDocsForPage(brand: LegalBrandInfo, locale: string | null, env: EnvSource = process.env): LoadedLegalDoc[] {
+  const out: LoadedLegalDoc[] = [];
+  for (const slug of legalDocsFor(brand.market, locale)) {
+    const r = loadLegalDocForPage(brand, slug, env);
+    if (r.kind === 'doc') out.push(r.doc);
+  }
+  return out;
 }

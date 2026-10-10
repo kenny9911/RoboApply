@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { brandEnvValue, fillInline, inlineValues, loadLegalDocForPage, type LegalBrandInfo } from './legalSource';
+import { LEGAL_BLOCKS } from '../../components/features/compliance/legalCatalog';
+import { brandEnvValue, fillInline, inlineValues, listLegalDocsForPage, loadLegalDocForPage, type LegalBrandInfo } from './legalSource';
 
 const RA: LegalBrandInfo = { id: 'roboapply', market: 'intl', name: 'RoboApply', replyTo: 'support@roboapply.io' };
 const GA: LegalBrandInfo = { id: 'goapply', market: 'cn', name: 'GoApply', replyTo: 'support@goapply.top' };
@@ -15,7 +16,10 @@ describe('/legal/[doc] loader', () => {
     expect(r.doc.body).toContain('Example Ltd');
     expect(r.doc.body).toContain('{{retention_schedule}}');
     expect(r.doc.body).toContain('{{ai_models}}');
-    expect(r.doc.body).not.toMatch(/\{\{(?!retention_schedule|ai_models|processors)/);
+    // Only block placeholders stay (the page renders them live); every inline one is filled.
+    expect(r.doc.body).toContain('{{processing_facts}}');
+    expect(r.doc.body).toContain('{{llm_endpoints}}');
+    expect(r.doc.body).not.toMatch(new RegExp(`\\{\\{(?!${LEGAL_BLOCKS.join('|')})`));
     expect(r.doc.body).not.toMatch(/^# /m); // the page renders the title
   });
 
@@ -53,5 +57,55 @@ describe('/legal/[doc] loader', () => {
     expect(inlineValues(GA, {}).entity_name).toBe('未披露');
     expect(inlineValues(RA, { GOHIRE_PARSE_BRANDS: 'goapply,roboapply' }).gohire_parse_notice).toContain('mainland China');
     expect(fillInline('{{brand}} {{ai_models}} {{unknown}}', { brand: 'X' })).toBe('X {{ai_models}} {{unknown}}');
+  });
+});
+
+describe('WP-93: inline values and the /legal index list', () => {
+  it('the takedown contact is TAKEDOWN_CONTACT, else the support address — per brand, no cross-brand fallback', () => {
+    expect(inlineValues(RA, {}).takedown_contact).toBe('support@roboapply.io');
+    expect(inlineValues(RA, { SUPPORT_EMAIL: 'help@example.test' }).takedown_contact).toBe('help@example.test');
+    expect(inlineValues(RA, { TAKEDOWN_CONTACT: 'takedown@example.test', SUPPORT_EMAIL: 'help@example.test' }).takedown_contact).toBe('takedown@example.test');
+    expect(inlineValues(GA, { TAKEDOWN_CONTACT: 'takedown@example.test' }).takedown_contact).toBe('support@goapply.top');
+    expect(inlineValues(GA, { CN_TAKEDOWN_CONTACT: 'jubao@example.cn' }).takedown_contact).toBe('jubao@example.cn');
+  });
+
+  it('the collecting entity is CN_PAYMENT_COLLECTING_ENTITY, never invented', () => {
+    expect(inlineValues(GA, {}).collecting_entity).toBe('未披露');
+    expect(inlineValues(GA, { PAYMENT_COLLECTING_ENTITY: 'Intl Co' }).collecting_entity).toBe('未披露');
+    expect(inlineValues(GA, { CN_PAYMENT_COLLECTING_ENTITY: '示例（上海）科技有限公司' }).collecting_entity).toBe('示例（上海）科技有限公司');
+    const doc = loadLegalDocForPage(GA, 'terms', { NODE_ENV: 'development', CN_PAYMENT_COLLECTING_ENTITY: '示例（上海）科技有限公司' });
+    expect(doc.kind === 'doc' && doc.doc.body).toContain('收款主体：示例（上海）科技有限公司');
+    expect(doc.kind === 'doc' && doc.doc.body).toContain('不会自动续费');
+  });
+
+  it('every document of both brands leaves only block placeholders for the page', () => {
+    const blocks = new RegExp(`\\{\\{(?!${LEGAL_BLOCKS.join('|')})`);
+    for (const [brand, docs] of [
+      [RA, ['terms', 'privacy', 'cookies', 'ai-disclosure', 'subscription-terms', 'refunds', 'tw-pdpa-notice']],
+      [GA, ['terms', 'privacy', 'pi-collection-list', 'third-party-sharing', 'ai-content-labels', 'complaints']],
+    ] as const) {
+      for (const doc of docs) {
+        const r = loadLegalDocForPage(brand, doc, { NODE_ENV: 'development' });
+        expect(r.kind, `${brand.id}/${doc}`).toBe('doc');
+        if (r.kind === 'doc') expect(r.doc.body, `${brand.id}/${doc}`).not.toMatch(blocks);
+      }
+    }
+  });
+
+  it('the index lists what can be served: every footer document in development, nothing on production GoApply', () => {
+    const ra = listLegalDocsForPage(RA, 'en', { NODE_ENV: 'production' });
+    expect(ra.map((d) => d.doc)).toEqual(['terms', 'privacy', 'cookies', 'ai-disclosure', 'subscription-terms', 'refunds']);
+    expect(ra.every((d) => d.draft)).toBe(true);
+    expect(listLegalDocsForPage(RA, 'zh-TW', {}).map((d) => d.doc)).toContain('tw-pdpa-notice');
+    expect(listLegalDocsForPage(GA, 'zh', { NODE_ENV: 'development' }).map((d) => d.doc)).toEqual([
+      'terms',
+      'privacy',
+      'pi-collection-list',
+      'third-party-sharing',
+      'ai-content-labels',
+      'complaints',
+    ]);
+    expect(listLegalDocsForPage(GA, 'zh', { NODE_ENV: 'production' })).toEqual([]);
+    expect(listLegalDocsForPage(GA, 'zh', { NODE_ENV: 'production', CN_LEGAL_DOCS_VERSION: 'v1' })).toEqual([]); // files are still drafts
   });
 });

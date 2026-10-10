@@ -18,8 +18,21 @@ _[Counsel: EU/UK representative, if required.]_
 
 - Account: email address, name, sign-in method, and the language you choose.
 - What you give us: resumes, profile details, job preferences, saved jobs and applications you track, and practice interview answers.
-- How you use the product: jobs you view, save or hide, and product events (see "Analytics").
-- People you import: if you import your LinkedIn connections, we keep only each person's name, company, position and connected-on date. They stay private to your account and you can delete them anytime.
+- How you use the product: jobs you view, save or hide, and product events (see "Analytics and cookies").
+- Free tools without an account: the resume file you upload is read to produce the result. The result and the text read from the file are deleted after 24 hours.
+- Job alerts without an account: your email address and the filters you chose, until you unsubscribe.
+
+## People you import (information about other people)
+
+If you import your LinkedIn connections file, you give us information about other people. This is what happens to it:
+
+- Kept, for each person: name, company, position and connected-on date.
+- Discarded when the file is read: the email address and profile link columns, and every other column.
+- The file itself is not kept. We keep its name and how many rows it had.
+- What it is used for: showing you people you know at a company, and drafting a message that you send yourself. We never contact these people.
+- They stay private to your account. You can delete all of them anytime in Settings.
+
+_[Counsel: legal basis and notice duties for third-party data (GDPR Art. 14).]_
 
 _[Counsel: legal bases for each purpose.]_
 
@@ -31,9 +44,15 @@ Models we use and where they run:
 
 {{ai_models}}
 
-Your data is never sent to an AI endpoint in mainland China, as the main model or as a fallback.
+Where AI requests may go:
+
+{{llm_endpoints}}
 
 ## Who processes your data, and where
+
+{{processing_facts}}
+
+Companies that process data for us:
 
 {{processors}}
 
@@ -43,7 +62,15 @@ _[Counsel: transfer mechanisms for each country (for example SCCs).]_
 
 ## Analytics and cookies
 
-We run no advertising pixels. Visitors in the EEA, the UK and Switzerland are asked before any analytics identifier is set. See the cookie notice.
+We keep our own product usage events; we run no advertising pixels.
+
+- `ra_analytics_consent` remembers whether you allowed analytics, so we do not ask on every page.
+- `ra_anon` is an anonymous id that links your visits to each other and, if you sign up, to your account. It is set only after you allow analytics where we must ask first (the EEA, the UK and Switzerland).
+- If you do not allow analytics, we still count page visits, but each visit stands alone: no id is stored and the counts are not linked to each other or to an account.
+- Product usage events are deleted after 13 months.
+- `ra_tool_visitor` is set when you use a free tool without an account. It lasts 24 hours and is strictly necessary: it lets the same browser open its own result again and keeps the daily limit fair. It is not used for analytics.
+
+You can change your analytics choice anytime with the "Privacy choices" link at the bottom of any page. See the cookie notice.
 
 ## How long we keep data
 

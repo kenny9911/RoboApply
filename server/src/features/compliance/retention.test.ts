@@ -2,8 +2,29 @@
 //
 // Retention schedule: one test per row (TASK_PLAN.md WP-13 acceptance).
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/prisma.js', () => ({ default: {} }));
+
+import { getBrand } from '../../platform/brand/registry.js';
+import { createBudget } from '../../platform/queue/index.js';
+import { AUTH_TOKEN_KINDS, TOKEN_TTL_MS } from '../auth/tokens.js';
+import { TOOLS_LIMITS } from '../tools/contract.js';
+import { createToolsPurge } from '../tools/cron.js';
+import { createMemoryToolsStore } from '../tools/memoryStore.js';
+import type { ToolResultPayload } from '../tools/store.js';
+import { ANON_ALERT_CONFIRM_TTL_HOURS, ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS } from '../visitor/contract.js';
+import { createAnonAlertDigestTask } from '../visitor/digest.js';
+import type { VisitorAlertsRepo } from '../visitor/repo.js';
+import { RETENTION_ENFORCERS } from './contract.js';
 import {
+  BILLING_CONSENT_KEEP,
+  BILLING_CONSENT_TYPES,
+  JOB_INTERACTION_KINDS_KEPT,
+  KNOWN_DEVICE_KEEP,
+  KNOWN_DEVICE_TOKEN_KIND,
   RETENTION_BATCH,
   RETENTION_RULES,
   backupRetentionFromEnv,
@@ -78,10 +99,15 @@ describe('retention schedule (published values)', () => {
       application_artifacts: '180 days · compliance-daily',
       inactive_accounts: '24 months · not_automated',
       auth_tokens: '24 hours · compliance-daily',
+      known_devices: '90 days · compliance-daily',
       ai_label_logs: '180 days · compliance-daily',
       content_safety_events: '180 days · compliance-daily',
-      // WP-63a's job is still a stub: not claimed as automatic.
       interview_recordings: '90 days · interview-retention',
+      tool_results: '24 hours · tools-purge',
+      anon_alerts_unconfirmed: '72 hours · visitor-alerts',
+      anon_alerts_unsubscribed: '30 days · visitor-alerts',
+      // A minimum (3 years), not a deletion.
+      billing_consent_records: '36 months · kept_minimum',
       data_exports: '7 days · compliance-daily',
       // The provider's window is not assumed: "Not listed" until ops sets it.
       backups: 'Not listed · provider',
@@ -142,7 +168,41 @@ describe('retention rows', () => {
   it('job_interactions: 13 months, brand via user', async () => {
     const { db, calls } = recorder({ rAJobInteraction: [{ id: 'i1' }] });
     expect(await rule('job_interactions').run!(ctx(db))).toEqual({ deleted: 1 });
-    expect(firstWhere(calls, 'rAJobInteraction')).toEqual({ createdAt: { lt: new Date('2025-09-10T05:00:00.000Z') }, user: { brand: 'goapply' } });
+    expect(firstWhere(calls, 'rAJobInteraction')).toEqual({
+      createdAt: { lt: new Date('2025-09-10T05:00:00.000Z') },
+      kind: { notIn: ['admin_review'] },
+      user: { brand: 'goapply' },
+    });
+  });
+
+  it("job_interactions: admin review decisions (kind 'admin_review') are left out of the 13-month rule", async () => {
+    expect(JOB_INTERACTION_KINDS_KEPT).toEqual(['admin_review']);
+    // Apply the rule's own `where` to rows the way the database would.
+    const old = new Date('2025-01-01T00:00:00.000Z');
+    const table = [
+      { id: 'view-old', kind: 'view', createdAt: old, user: { brand: 'goapply' } },
+      { id: 'save-old', kind: 'save', createdAt: old, user: { brand: 'goapply' } },
+      { id: 'review-old', kind: 'admin_review', createdAt: old, user: { brand: 'goapply' } },
+      { id: 'view-new', kind: 'view', createdAt: new Date('2026-10-01T00:00:00.000Z'), user: { brand: 'goapply' } },
+      { id: 'view-other-brand', kind: 'view', createdAt: old, user: { brand: 'roboapply' } },
+    ];
+    type Where = { createdAt: { lt: Date }; kind: { notIn: string[] }; user: { brand: string } };
+    const deletedIds: string[] = [];
+    const db = {
+      rAJobInteraction: {
+        findMany: async ({ where }: { where: Where }) =>
+          table
+            .filter((r) => !deletedIds.includes(r.id))
+            .filter((r) => r.createdAt < where.createdAt.lt && !where.kind.notIn.includes(r.kind) && r.user.brand === where.user.brand)
+            .map((r) => ({ id: r.id })),
+        deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+          deletedIds.push(...where.id.in);
+          return { count: where.id.in.length };
+        },
+      },
+    } as unknown as RetentionDb;
+    expect(await rule('job_interactions').run!(ctx(db))).toEqual({ deleted: 2 });
+    expect(deletedIds.sort()).toEqual(['save-old', 'view-old']);
   });
 
   it('feed_impressions: 13 months', async () => {
@@ -276,6 +336,46 @@ describe('retention rows', () => {
     expect(firstWhere(calls, 'rAPhoneOtp')).toEqual({ brand: 'goapply', expiresAt: { lt: cutoff } });
   });
 
+  it('known_devices: the mark goes once 90 days have passed since the last sign-in from that device', async () => {
+    const { db, calls } = recorder({ rAAuthToken: [{ id: 'd1' }, { id: 'd2' }] });
+    expect(await rule('known_devices').run!(ctx(db))).toEqual({ deleted: 2 });
+    // `expiresAt` = last sign-in + the mark's lifetime, so "expired" is exactly "90 days since the last sign-in".
+    expect(firstWhere(calls, 'rAAuthToken')).toEqual({ brand: 'goapply', kind: 'known_device', expiresAt: { lte: NOW } });
+    expect(calls.find((c) => c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['d1', 'd2'] } } });
+    expect(rule('known_devices').keep).toEqual({ amount: 90, unit: 'days' });
+    // The published period is the lifetime the sign-in code gives a mark, and the kind is the one it writes.
+    expect(TOKEN_TTL_MS.known_device).toBe(KNOWN_DEVICE_KEEP.amount * 24 * 60 * 60 * 1000);
+    expect(AUTH_TOKEN_KINDS.knownDevice).toBe(KNOWN_DEVICE_TOKEN_KIND);
+  });
+
+  it('known_devices: a device used inside the 90 days is not selected; other token kinds are not this rule', async () => {
+    const lastSignIn = (daysAgo: number) => new Date(NOW.getTime() - daysAgo * 86_400_000 + TOKEN_TTL_MS.known_device);
+    const table = [
+      { id: 'stale', brand: 'goapply', kind: 'known_device', expiresAt: lastSignIn(91) },
+      { id: 'edge', brand: 'goapply', kind: 'known_device', expiresAt: lastSignIn(90) },
+      { id: 'recent', brand: 'goapply', kind: 'known_device', expiresAt: lastSignIn(10) },
+      { id: 'reset-link', brand: 'goapply', kind: 'password_reset', expiresAt: lastSignIn(200) },
+      { id: 'other-brand', brand: 'roboapply', kind: 'known_device', expiresAt: lastSignIn(200) },
+    ];
+    type Where = { brand: string; kind: string; expiresAt: { lte: Date } };
+    const gone: string[] = [];
+    const db = {
+      rAAuthToken: {
+        findMany: async ({ where }: { where: Where }) =>
+          table
+            .filter((r) => !gone.includes(r.id))
+            .filter((r) => r.brand === where.brand && r.kind === where.kind && r.expiresAt <= where.expiresAt.lte)
+            .map((r) => ({ id: r.id })),
+        deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+          gone.push(...where.id.in);
+          return { count: where.id.in.length };
+        },
+      },
+    } as unknown as RetentionDb;
+    await rule('known_devices').run!(ctx(db));
+    expect(gone.sort()).toEqual(['edge', 'stale']);
+  });
+
   it('ai_label_logs: 180 days', async () => {
     const { db, calls } = recorder({ rAAiContentLabelLog: [{ id: 'l1' }] });
     expect(await rule('ai_label_logs').run!(ctx(db))).toEqual({ deleted: 1 });
@@ -300,6 +400,107 @@ describe('retention rows', () => {
   it('backups: provider setting, period from configuration only', () => {
     expect(rule('backups').enforcedBy).toBe('provider');
     expect(rule('backups').keep).toBeNull();
+  });
+});
+
+describe('rows enforced by another job: the job exists, is scheduled, and uses the published period', () => {
+  const handlers = readFileSync(fileURLToPath(new URL('../../cron/handlers.ts', import.meta.url)), 'utf8');
+
+  it('every enforcedBy value is a known enforcer, and every job-backed one is wired into a platform cron', () => {
+    const scheduled: Record<string, RegExp | null> = {
+      'compliance-daily': /brandCronJob\('compliance-daily'/,
+      'account-purge': /account-purge/,
+      'interview-retention': /runInterviewRetention/,
+      'tools-purge': /task: runToolsPurge/,
+      'visitor-alerts': /task: runAnonAlertDigests/,
+      provider: null,
+      not_automated: null,
+      kept_minimum: null,
+    };
+    expect(Object.keys(scheduled).sort()).toEqual([...RETENTION_ENFORCERS].sort());
+    for (const r of RETENTION_RULES) {
+      expect(RETENTION_ENFORCERS, r.id).toContain(r.enforcedBy);
+      const wired = scheduled[r.enforcedBy];
+      if (wired) expect(handlers, `${r.id} → ${r.enforcedBy}`).toMatch(wired);
+    }
+    // The rows this bundle added name a job; none of them is "Not automated yet".
+    for (const id of ['known_devices', 'tool_results', 'anon_alerts_unconfirmed', 'anon_alerts_unsubscribed']) {
+      expect(['compliance-daily', 'tools-purge', 'visitor-alerts'], id).toContain(rule(id).enforcedBy);
+    }
+    expect(RETENTION_RULES.filter((r) => r.enforcedBy === 'not_automated').map((r) => r.id)).toEqual(['inactive_accounts']);
+  });
+
+  it('tool_results (24 hours): runToolsPurge deletes a result once its window has passed, not before', async () => {
+    expect(rule('tool_results')).toMatchObject({ keep: { amount: TOOLS_LIMITS.cacheHours, unit: 'hours' }, enforcedBy: 'tools-purge' });
+    expect(rule('tool_results').run).toBeUndefined();
+    const payload: ToolResultPayload = {
+      v: 1,
+      tool: 'resume_check',
+      cacheKey: 'k',
+      report: { kind: 'resume_check', label: 'fair', counts: { urgent: 0, critical: 1, optional: 0 }, issues: [], rulesChecked: 10, profile: 'intl' },
+      resume: { markdown: '# A', name: 'a' },
+    };
+    const store = createMemoryToolsStore();
+    const created = new Date('2026-10-09T05:00:00.000Z');
+    const keepMs = rule('tool_results').keep!.amount * 3_600_000;
+    await store.create({ brand: 'roboapply', tokenHash: 'h1', payload, expiresAt: new Date(created.getTime() + keepMs) });
+    const task = createToolsPurge(() => store);
+    const at = (now: Date) => ({ name: 'reminders', brand: getBrand('roboapply'), budget: createBudget(10_000), now });
+    expect(await task(at(new Date(created.getTime() + keepMs - 60_000)))).toEqual({ skipped: 'no_work', processed: 0 });
+    expect(store.rows).toHaveLength(1);
+    expect(await task(at(new Date(created.getTime() + keepMs)))).toEqual({ processed: 1 });
+    expect(store.rows).toHaveLength(0);
+  });
+
+  it('signed-out job alerts: the visitor-alerts job purges unconfirmed rows at 72 h and unsubscribed rows at 30 days', async () => {
+    expect(rule('anon_alerts_unconfirmed')).toMatchObject({ keep: { amount: ANON_ALERT_CONFIRM_TTL_HOURS, unit: 'hours' }, enforcedBy: 'visitor-alerts' });
+    expect(rule('anon_alerts_unsubscribed')).toMatchObject({ keep: { amount: ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS, unit: 'days' }, enforcedBy: 'visitor-alerts' });
+    expect(ANON_ALERT_CONFIRM_TTL_HOURS).toBe(72);
+    expect(ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS).toBe(30);
+
+    const purge = vi.fn(async () => ({ pending: 2, unsubscribed: 1 }));
+    const repo = { purge, due: vi.fn(async () => []) } as unknown as VisitorAlertsRepo;
+    // Alerts switched off for the brand: the purge still runs with the published cut-offs.
+    const task = createAnonAlertDigestTask({ repo, alertsEnabled: async () => false, send: vi.fn(), origin: () => 'https://example.test' });
+    const out = await task({ name: 'job-alerts', brand: getBrand('goapply'), budget: createBudget(10_000), now: NOW });
+    expect(out).toMatchObject({ skipped: 'disabled', purged: { pending: 2, unsubscribed: 1 } });
+    expect(purge).toHaveBeenCalledWith('goapply', {
+      pendingBefore: retentionCutoff(rule('anon_alerts_unconfirmed').keep!, NOW),
+      unsubscribedBefore: retentionCutoff(rule('anon_alerts_unsubscribed').keep!, NOW),
+    });
+  });
+
+  it('billing consent records (auto_renew_ack …) are kept at least 3 years: a minimum row, and no rule here can delete a consent record', async () => {
+    expect(rule('billing_consent_records')).toMatchObject({ keep: { amount: 36, unit: 'months' }, enforcedBy: 'kept_minimum' });
+    expect(rule('billing_consent_records').run).toBeUndefined();
+    expect(BILLING_CONSENT_KEEP).toEqual({ amount: 36, unit: 'months' });
+    expect(BILLING_CONSENT_TYPES).toEqual(expect.arrayContaining(['auto_renew_ack', 'withdrawal_waiver']));
+    expect(rule('billing_consent_records').covers).toContain('auto_renew_ack');
+    // Run every rule far in the future against a database that records each model touched.
+    const touched = new Set<string>();
+    const db = new Proxy(
+      {},
+      {
+        get(_t, model: string) {
+          touched.add(model);
+          return { findMany: async () => [], deleteMany: async () => ({ count: 0 }), count: async () => 0 };
+        },
+      },
+    ) as unknown as RetentionDb;
+    for (const brand of ['roboapply', 'goapply'] as const) await runRetention({ db, brand, now: new Date('2040-01-01T00:00:00.000Z') });
+    expect(touched.size).toBeGreaterThan(5);
+    expect([...touched].filter((m) => /consent/i.test(m))).toEqual([]);
+    // The retention source never names the consent ledger's delegate at all.
+    const source = readFileSync(fileURLToPath(new URL('./retention.ts', import.meta.url)), 'utf8');
+    expect(source).not.toMatch(/seekerConsentRecord\s*\./);
+  });
+
+  it('rows already present before this bundle: content-safety checks 6 months, Assistant messages 12 months', () => {
+    expect(rule('content_safety_events')).toMatchObject({ keep: { amount: 180, unit: 'days' }, enforcedBy: 'compliance-daily' });
+    expect(rule('assistant_messages')).toMatchObject({ keep: { amount: 12, unit: 'months' }, enforcedBy: 'compliance-daily' });
+    // Owner decision pending (deferred): the inactive-accounts row stays unautomated.
+    expect(rule('inactive_accounts')).toMatchObject({ enforcedBy: 'not_automated' });
+    expect(rule('inactive_accounts').run).toBeUndefined();
   });
 });
 

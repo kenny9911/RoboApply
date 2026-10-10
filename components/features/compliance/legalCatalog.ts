@@ -82,8 +82,12 @@ export function legalDocsFor(market: LegalMarket, locale?: string | null): Legal
   return base;
 }
 
-/** Block placeholders rendered as live components on the page. */
-export const LEGAL_BLOCKS = ['retention_schedule', 'ai_models', 'processors'] as const;
+/**
+ * Block placeholders rendered as live components on the page. The last three
+ * come from the code that enforces them (residency summary, the AI routing
+ * policy lists, the job data sources) — never typed into a document.
+ */
+export const LEGAL_BLOCKS = ['retention_schedule', 'ai_models', 'processors', 'processing_facts', 'llm_endpoints', 'data_attributions'] as const;
 export type LegalBlock = (typeof LEGAL_BLOCKS)[number];
 
 export type LegalSegment = { kind: 'markdown'; text: string } | { kind: 'block'; block: LegalBlock };
@@ -91,7 +95,7 @@ export type LegalSegment = { kind: 'markdown'; text: string } | { kind: 'block';
 /** Split a document body at block placeholders (on their own line). */
 export function splitLegalBlocks(body: string): LegalSegment[] {
   const out: LegalSegment[] = [];
-  const re = /^[ \t]*\{\{\s*(retention_schedule|ai_models|processors)\s*\}\}[ \t]*$/gm;
+  const re = new RegExp(`^[ \\t]*\\{\\{\\s*(${LEGAL_BLOCKS.join('|')})\\s*\\}\\}[ \\t]*$`, 'gm');
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(body))) {

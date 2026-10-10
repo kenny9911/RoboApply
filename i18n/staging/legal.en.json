@@ -33,7 +33,8 @@
       "genaiRegistration": "Generative AI service registration {number}",
       "algorithmFiling": "Algorithm filing {number}",
       "complaintsEmail": "Complaints: {email}",
-      "complaintsPhone": "Complaints phone: {phone}"
+      "complaintsPhone": "Complaints phone: {phone}",
+      "privacyChoices": "Privacy choices"
     },
     "page": {
       "eyebrow": "Legal",
@@ -68,7 +69,8 @@
       "speech": "Speech recognition and voice",
       "payments": "Payments",
       "ai_models": "AI models",
-      "storage": "File storage"
+      "storage": "File storage",
+      "content_safety": "Content safety checks"
     },
     "retention": {
       "title": "How long we keep data",
@@ -79,7 +81,8 @@
       "enforced": {
         "auto": "Deleted automatically",
         "provider": "Set by our database provider",
-        "manual": "Not automated yet"
+        "manual": "Not automated yet",
+        "minimum": "Kept at least this long; deleted with your account"
       },
       "rows": {
         "assistant_messages": "Assistant conversations",
@@ -91,9 +94,14 @@
         "application_artifacts": "Copies of files used for applications",
         "inactive_accounts": "Accounts with no sign-in (after a 30-day notice email)",
         "auth_tokens": "Sign-in codes and links, after they expire",
+        "known_devices": "Devices you signed in from, after the last sign-in from that device",
         "ai_label_logs": "AI content label records",
         "content_safety_events": "Content safety check records",
         "interview_recordings": "Practice interview recordings and transcripts",
+        "tool_results": "Free tool results (the report and the text read from your file)",
+        "anon_alerts_unconfirmed": "Job alert sign-ups you did not confirm, after the last confirmation link",
+        "anon_alerts_unsubscribed": "Job alerts you unsubscribed from without an account (with the email address)",
+        "billing_consent_records": "Records that you agreed to a plan renewing automatically or to purchase terms",
         "data_exports": "Your data export files",
         "backups": "Database backups"
       }
@@ -208,6 +216,54 @@
         "turnOff": "To sort jobs without your profile, turn off “Rank jobs using my profile” in Settings.",
         "turnOn": "To sort jobs by fit, turn on “Rank jobs using my profile” in Settings."
       }
+    },
+    "processing": {
+      "region": "{where, select, mainland {This service runs in mainland China.} other {This service runs outside mainland China.}}",
+      "files": "{state, select, kept {Resume files you upload are kept in our own file storage.} not_kept {Resume files you upload are read in memory only. The original file is not kept.} other {File upload is off on this deployment.}}",
+      "parsing": "{mode, select, outside_mainland {Your resume is read by the {service} parsing service on servers in mainland China.} other {Your resume is not sent to a separate resume-parsing service. When AI reads it, including scanned pages and images, it goes to an AI model provider.}}",
+      "redacted": "Removed from the resume text before it is stored: {kinds}.",
+      "images": "Photos and images in a resume are not stored.",
+      "pii": {
+        "email": "email addresses",
+        "phone": "phone numbers",
+        "address": "street addresses",
+        "prc_id": "mainland China ID numbers",
+        "tw_id": "Taiwan ID numbers",
+        "us_ssn": "US Social Security numbers",
+        "gov_id": "other government ID numbers",
+        "health": "health details",
+        "known_value": "identifiers you entered in your profile"
+      }
+    },
+    "llmEndpoints": {
+      "rule": "{rule, select, mainland_only {Only AI services in mainland China are used. These are the providers we can use, and the address each one uses unless we set another:} other {A request that carries your data is never sent to an AI service in mainland China. These are the providers we can use, and the address each one uses unless we set another:}}",
+      "hosts": "{rule, select, mainland_only {AI addresses that are allowed (and their subdomains):} other {AI addresses that are never used (and their subdomains):}}",
+      "excluded": "When a request goes through a gateway, these upstream providers are left out:",
+      "colProvider": "Provider",
+      "colHost": "Address"
+    },
+    "attributions": {
+      "none": "No dataset that requires attribution is in use.",
+      "colDataset": "Dataset",
+      "colPublisher": "Publisher",
+      "colUsedFor": "Used for",
+      "colLicence": "Licence",
+      "colAsOf": "Copy dated",
+      "purpose": {
+        "job_locations": "City names and positions for job locations",
+        "role_categories": "Job role categories",
+        "agency_marking": "Marking posts from staffing and recruitment firms"
+      }
+    },
+    "index": {
+      "title": "Legal",
+      "sub": "Our documents, and what this service does with your data. The lists below come from how the service is set up right now.",
+      "docsTitle": "Documents",
+      "processingTitle": "Where your data is processed",
+      "aiTitle": "AI",
+      "endpointsTitle": "Where AI requests can go",
+      "attributionsTitle": "Data we credit",
+      "attributionsSub": "Datasets we use under a licence that asks for credit."
     }
   }
 }

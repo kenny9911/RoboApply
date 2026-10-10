@@ -6,7 +6,10 @@
 //   explainMatch — the PIPL Art. 24 "Why this job" lines (feed WP-33, job WP-34);
 //   validateSignupConsents / initialConsentFormState / recordConsent / listConsents
 //     — signup and onboarding (WP-10, WP-11, WP-31) and /account/consents;
-//   registerExportSection / registerArtifactStorageDeleter — extension points.
+//   registerExportSection / registerArtifactStorageDeleter — extension points;
+//   publishedLegalDocVersion(brand, doc, env) — the version of a PUBLISHED
+//     legal document, null while it is a draft (billing-cn records it with
+//     `cn_pay_terms_ack`; no acceptance is recorded against a draft).
 
 import type { ImplicitAiLabel } from './contract.js';
 import { explicitFooterLine, implicitLabelMetadata, logAiContentLabel, type ImplicitLabelInput } from './aiLabel.js';
@@ -43,7 +46,8 @@ export {
 export type { ConsentContext, ConsentDefinition, RecordConsentInput, SignupConsentCheck, SubmittedConsent } from './consents.js';
 export { addWorkingDays, piRequestDueAt } from './piRequests.js';
 export { RETENTION_RULES, registerArtifactStorageDeleter, retentionCutoff, retentionSchedule } from './retention.js';
-export { buildDisclosures, buildLegalFooter } from './disclosures.js';
+export { buildDisclosures, buildLegalFooter, dataAttributions, llmEndpointFacts, processingFacts } from './disclosures.js';
+export { legalDocsVersion, publishedLegalDocVersion } from './legalDocs.js';
 export { registerExportSection } from './dataExport.js';
 
 export interface ComplianceService {
