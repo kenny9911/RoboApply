@@ -57,6 +57,11 @@ model RAJobMatchScore {
   locale               String?
   /// Logistics depend on the user's pay/location preferences at score time.
   searchProfileVersion Int?
+  // ── Market wave (MKT-0; MARKET_STRATEGY 2.2, 2.3). Additive. ──
+  /// RAJob content hash (title + requirements + skills) at score time; a changed posting makes the row stale. SM-5.
+  jobContentHash       String?
+  /// 'fit_v3' | 'fit_v4': the rubric the stored components follow. SM-5, SM-8.
+  rubricVersion        String?
 
   @@unique([userId, jobId, resumeVariantId])
   @@index([userId, score(sort: Desc)])

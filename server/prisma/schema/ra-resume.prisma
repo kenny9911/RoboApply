@@ -168,6 +168,8 @@ model RATailorSession {
   keywordsSelected String[]         @default([])
   scoreBefore      Int?
   scoreAfter       Int?
+  /// { before: FitSnapshot | null, after: FitSnapshot | null } with FitSnapshot = { score, tier, kind, rubric, estimator, model, scoredAt } (strategy 2.2 I6). SM-5 (MKT-0, additive).
+  fitSnapshot      Json?
   /// `[{ id, text, kind: 'keyword'|'number'|'claim',
   ///    status: 'pending'|'kept'|'removed'|'edited', evidence?: { source: 'resume', ref },
   ///    copies?: [{ section?, original }] }]` — one claim covers every copy of a line (WP-36a).

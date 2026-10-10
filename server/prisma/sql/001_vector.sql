@@ -1,0 +1,30 @@
+-- 001_vector.sql — run ONCE by the owner on each database, AFTER 000_extensions.sql
+-- and BEFORE the db push that adds the embedding tables (market wave, bundle MKT-0;
+-- docs/jobright-clone/market/MARKET_STRATEGY.md 2.3 "Stack constraints", SM-7; the
+-- order of the steps is in server/prisma/sql/README.md).
+--
+-- The push creates three columns of type halfvec(1024):
+--   RAJobEmbedding.embedding, RAUserEmbedding.embedding and RASkill.embedding
+-- (server/prisma/schema/ra-retrieval.prisma and ra-skills.prisma). That type comes
+-- from the pgvector extension (halfvec needs pgvector 0.7.0 or newer), so the
+-- extension has to exist first or the push fails on the first of those tables.
+--
+-- This file installs the extension and nothing else. The tables and their indexes
+-- are declared in the Prisma schema, not here, because `prisma db push` drops
+-- whatever the schema does not declare.
+--
+-- No HNSW index: the Prisma 7.10 schema cannot declare one (its index types are
+-- BTree, Hash, Gist, Gin, SpGist and Brin), and an HNSW index made by hand would be
+-- dropped by the next push. Retrieval therefore scans exactly over the filtered
+-- rows. When a market passes about 200,000 live rows the index is needed, and how
+-- the schema is migrated then is an owner decision.
+--
+-- Idempotent: safe to run again. Neon ships pgvector. On any other host (the
+-- mainland stack's PostgreSQL) confirm first that the instance offers the `vector`
+-- extension at 0.7.0 or newer; this file has not been run there, and the `localdb`
+-- image of deploy/cn/compose.yaml does not ship the extension at all
+-- (server/prisma/sql/README.md, "Databases that are not Neon").
+--
+-- Confirm after running it, before the push (it must print 0.7.0 or newer):
+--   SELECT extversion FROM pg_extension WHERE extname = 'vector'
+CREATE EXTENSION IF NOT EXISTS vector;

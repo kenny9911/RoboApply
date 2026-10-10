@@ -225,6 +225,36 @@ model RAJob {
   /// The provider licence allows public redisplay (ARCH §9.4). Default off.
   publicDisplay Boolean   @default(false)
 
+  // ── Market wave (MKT-0; MARKET_STRATEGY 2.3 and 7 item 11). Additive. ──
+  /// K2 exact dedupe key '{ats}:{tenant}:{postingId}' parsed from the apply or source URL. JI-5.
+  atsPostingKey     String?
+  /// Who states RAJob.sponsorship: 'posting_quote' | 'provider:<provider id>' (a provider's reading, labelled as such). JI-7, JI-11.
+  sponsorshipSource String?
+  /// Taiwan 鄉鎮市區 as posted, e.g. '竹北市'. JT-7.
+  locationDistrict  String?
+  /// 'day' | 'evening' | 'night' | 'rotating' | 'part_time' from the source's own field; null = not stated. JT-7.
+  workShift         String?
+  /// Score 0..1 of the deterministic title-to-role match (taxonomy/match.ts) that produced primaryTaxonomyId; null = never matched. SM-2.
+  titleMatchScore   Float?   @db.Real
+  /// Canonical RASkill ids of the posting's skills, required first. SM-6.
+  skillIds          String[] @default([])
+  /// Lexical document (title, role labels en/zh/zhHant, canonical skill labels and aliases, summary, requirements head). CJK segmented in the application; Traditional folded to Simplified in this token copy only. Never displayed. SM-7.
+  searchDoc         String?  @db.Text
+  // Raw SQL on RAJob (MKT-2H, MKT-3C, MKT-4F): list the columns you need. Never `SELECT *`, `SELECT j.*` or
+  // `RETURNING *`, and never return searchTsv bare: @prisma/adapter-pg has no mapping for the built-in type
+  // tsvector and throws UnsupportedNativeDataType on the result. Use it in WHERE / ORDER BY (`@@`,
+  // `ts_rank_cd(...)`), or return `"searchTsv"::text`. The client itself never selects this column.
+  /// to_tsvector('simple', searchDoc), written by the application in the same statement as searchDoc. NOT a generated column (prisma db push cannot express one). SM-7.
+  searchTsv         Unsupported("tsvector")?
+  /// sha1 of the content a fit depends on: title + requirements text + skills. SM-5, SM-7.
+  contentHash       String?
+  /// Language of the posting text: 'en' | 'zh-Hans' | 'zh-Hant' | 'ja' | 'ko' | other BCP-47 primary tag. SM-7, SM-11.
+  lang              String?
+  /// { v: 1, contentHash, model, extractedAt, items: [{ id, kind: 'skill'|'experience'|'education'|'domain'|'scope', text (verbatim from the posting), importance: 'must'|'preferred' }] }. SM-8.
+  requirements      Json?
+  /// Dense vector side row (ra-retrieval.prisma); read and written with raw SQL only. SM-7.
+  embedding         RAJobEmbedding?
+
   userStates     RAJobUserState[]
   /// GoApply admin fraud reviews of this job (SCHEMA-3, SR-41-2).
   cnFraudReviews RACnFraudReview[]
@@ -257,6 +287,14 @@ model RAJob {
   // SCHEMA-3 (WP-42, optional): ATS board reads `sourceBoard = ? AND externalId
   // LIKE '<board>:%'`; text_pattern_ops lets the prefix use a btree.
   @@index([sourceBoard, externalId(ops: raw("text_pattern_ops"))])
+  // Market wave (MKT-0): K2 posting identity (JI-5), Taiwan district filter (JT-7),
+  // canonical skills (SM-6) and the lexical retrieval leg (SM-7). The text-search
+  // index is declared here because prisma db push drops an index the schema does
+  // not declare.
+  @@index([market, atsPostingKey])
+  @@index([market, locationCountry, locationDistrict])
+  @@index([skillIds], type: Gin)
+  @@index([searchTsv], type: Gin)
 }
 
 // ── Jobright clone: INGEST models (FND-1b; ARCH §2.4) ──────────────────────
@@ -377,12 +415,29 @@ model RACareerSiteSource {
   lastSyncedAt DateTime?
   lastJobCount Int?
   lastError    String?
+  // ── Market wave (MKT-0). Additive: origin, coverage and sync state of a board. ──
+  /// 'admin' | 'seed' | 'import' | 'discovered'. JI-3.
+  origin         String    @default("admin")
+  /// For origin 'discovered': '<sourceBoard>:<externalId>' of the row that named the board, or 'user_import'. JI-3.
+  discoveredFrom String?
+  /// ISO alpha-2 codes the board is read for; empty = every country the brands serve. JI-3, JC-4, JT-5.
+  countries      String[]  @default([])
+  /// Consecutive hard sync failures; 3 disables the source. JI-4.
+  failCount      Int       @default(0)
+  /// When a sync last added or closed a posting (adaptive interval). JI-4.
+  lastChangeAt   DateTime?
+  /// When the board is next due; null = now; also the sync lease. JI-4.
+  nextSyncAt     DateTime?
+  /// Set when three failures disabled the source; its rows are archived 48 h later. JI-4.
+  disabledAt     DateTime?
   createdBy    String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   @@unique([ats, boardToken])
   @@index([market, enabled, lastSyncedAt])
+  /// Due boards for the sync worker (MKT-0; JI-4).
+  @@index([enabled, nextSyncAt])
 }
 
 /// Admin decision on a reported or scam-flagged job ("Reports to review",
@@ -406,4 +461,30 @@ model RAJobReview {
   clearedRules String[] @default([])
 
   @@index([jobId, at(sort: Desc)])
+}
+
+/// Public sponsor registers beside the DOL LCA table RAH1bEmployerStat: USCIS H-1B Employer Data Hub and the UK Register
+/// of Licensed Sponsors. Company facts with source and date; never a job-level label. JI-11.
+model RASponsorRegisterEntry {
+  id                     String   @id @default(cuid())
+  /// 'uscis_h1b_hub' | 'uk_sponsor_register'
+  source                 String
+  /// ISO alpha-2
+  country                String
+  employerNameNormalized String
+  employerName           String
+  /// 'FY2025' for USCIS, '' for the UK register
+  period                 String   @default("")
+  approvals              Int?
+  denials                Int?
+  town                   String?
+  rating                 String?
+  routes                 String[] @default([])
+  sourceFile             String
+  sourceUrl              String
+  asOf                   DateTime
+  importedAt             DateTime @default(now())
+
+  @@unique([source, employerNameNormalized, period])
+  @@index([country, employerNameNormalized])
 }

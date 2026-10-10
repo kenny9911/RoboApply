@@ -99,5 +99,7 @@ model RAUserAffinity {
   taxonomyWeights Json     @default("{}")
   companyWeights  Json     @default("{}")
   skillWeights    Json     @default("{}")
+  /// { normalizedTitleKey: -1..0 } negative weights from "Not interested: wrong title". SM-12 (MKT-0, additive).
+  titleWeights    Json     @default("{}")
   updatedAt       DateTime @updatedAt
 }
