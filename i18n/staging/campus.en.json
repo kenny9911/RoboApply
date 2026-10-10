@@ -1,3 +1,200 @@
 {
-  "campus": {}
+  "campus": {
+    "meta": {
+      "title": "Campus recruitment calendar",
+      "description": "Application windows for graduate programmes, copied from each employer's official page, with the source link and the date we last checked it.",
+      "companyTitle": "{company} campus programmes",
+      "companyDescription": "{company} graduate programmes and application dates, from the official page, with the source link and the date we last checked it."
+    },
+    "page": {
+      "eyebrow": "Campus calendar",
+      "title": "Campus recruitment calendar",
+      "sub": "Application windows from employers' official pages. Every entry links to its source and shows when staff last checked it.",
+      "honesty": "Dates are copied from the official page. Confirm them on the employer's site before you apply.",
+      "unavailableTitle": "The campus calendar isn't available here",
+      "unavailableSub": "It may not be offered on this site yet."
+    },
+    "filters": {
+      "label": "Filter programmes",
+      "class": "Graduating class",
+      "classAny": "Any class",
+      "classOption": "Class of {year}",
+      "role": "Role",
+      "rolePlaceholder": "e.g. Product",
+      "city": "City",
+      "cityPlaceholder": "e.g. Shanghai",
+      "openNow": "Taking applications now",
+      "apply": "Show programmes",
+      "clear": "Clear filters"
+    },
+    "list": {
+      "label": "Programmes",
+      "loading": "Loading programmes…",
+      "error": "We couldn't load the calendar.",
+      "retry": "Try again",
+      "empty": "No programmes match these filters.",
+      "emptySub": "Programmes appear here after staff check them against the employer's official page.",
+      "more": "Show more",
+      "loadingMore": "Loading…"
+    },
+    "event": {
+      "classTag": "Class of {year}",
+      "window": "Applications {opens} – {closes}",
+      "closes": "Applications close {date}",
+      "opens": "Applications open {date}",
+      "noClose": "Close date not listed",
+      "closed": "Applications closed",
+      "openNow": "Taking applications",
+      "notYetOpen": "Not open yet",
+      "timeZone": "Beijing time",
+      "stagesTitle": "Stages",
+      "stage": {
+        "wangshen": "Online application",
+        "ceping": "Online assessment",
+        "bishi": "Written test",
+        "mianshi": "Interviews",
+        "offer": "Offers",
+        "info_session": "Info session"
+      },
+      "kind": {
+        "application": "Application",
+        "test": "Test",
+        "interview": "Interview",
+        "info_session": "Info session"
+      },
+      "stageRange": "{start} – {end}",
+      "stageFrom": "from {date}",
+      "stageUntil": "until {date}",
+      "stageNoDate": "date not listed",
+      "cities": "Cities",
+      "roles": "Roles",
+      "notListed": "Not listed",
+      "source": "Source: {source}",
+      "sourceLinked": "Source: <link>{source}</link>",
+      "sourceAria": "Source page: {source} (opens in a new tab)",
+      "officialPage": "Official page",
+      "officialPageAria": "Official page of {company} (opens in a new tab)",
+      "verified": "Last checked {date}",
+      "needsCheck": "Needs re-check",
+      "needsCheckHint": "Not checked in the last 14 days. Confirm the dates on the official page.",
+      "apply": "Apply on company site",
+      "applyAria": "Apply on {company}'s site (opens in a new tab)",
+      "companyLink": "All {company} programmes"
+    },
+    "remind": {
+      "set": "Deadline reminder",
+      "on": "Reminder on",
+      "off": "Turn off the reminder",
+      "hint": "Reminders go out 3 days and 1 day before applications close.",
+      "signIn": "Sign in for deadline reminders",
+      "noDate": "No close date to remind you about",
+      "closed": "Applications have closed",
+      "saving": "Saving…",
+      "error": "We couldn't save the reminder. Try again."
+    },
+    "follow": {
+      "title": "Follow {company}",
+      "sub": "Get a message in your inbox when {company} posts a programme for your class.",
+      "class": "Your graduating class",
+      "button": "Follow",
+      "following": "Following for the class of {year}",
+      "unfollow": "Unfollow",
+      "signIn": "Sign in to follow {company}",
+      "saving": "Saving…",
+      "error": "We couldn't save that. Try again."
+    },
+    "company": {
+      "eyebrow": "Campus calendar",
+      "title": "{company} campus programmes",
+      "sub": "Programmes from the official page, with the date staff last checked each one.",
+      "back": "All programmes"
+    },
+    "admin": {
+      "title": "Campus calendar entries",
+      "sub": "Add programmes from employers' official pages only. Check every field against the page, then publish.",
+      "loading": "Loading…",
+      "notAdmin": "Only staff can edit the campus calendar.",
+      "extract": {
+        "title": "Start from an official page",
+        "sub": "Paste the employer's own campus page. One page is read; the fields below are a suggestion until you check them.",
+        "url": "Official page URL",
+        "urlPlaceholder": "https://campus.example.com/2027",
+        "button": "Read the page",
+        "reading": "Reading the page…",
+        "manual": "Fill in by hand",
+        "aiNote": "Suggested by AI from the page. Check each field against the page before saving.",
+        "evidence": "On the page: “{quote}”",
+        "dropped": "Not filled because the page doesn't state it: {fields}",
+        "fromPage": "Read from {url}"
+      },
+      "errors": {
+        "aggregator_source": "That site lists other employers' programmes. Use the employer's own page.",
+        "not_a_web_address": "That isn't a public web address.",
+        "page_unreachable": "The page couldn't be read. Fill in the fields by hand from the page.",
+        "extract_failed": "The page couldn't be read automatically. Fill in the fields by hand from the page.",
+        "ai_unavailable": "Reading pages with AI is off on this server. Fill in the fields by hand.",
+        "apply_window_inverted": "The close date is before the open date.",
+        "campus_event_not_verified": "Check this entry against the official page before publishing.",
+        "generic": "That didn't work. Try again."
+      },
+      "form": {
+        "titleNew": "New entry",
+        "titleEdit": "Edit entry",
+        "companyName": "Company",
+        "title": "Programme name",
+        "graduationClass": "Graduating class",
+        "kind": "Type",
+        "applyOpensAt": "Applications open (Beijing time)",
+        "applyClosesAt": "Applications close (Beijing time)",
+        "cities": "Cities",
+        "roles": "Roles",
+        "listHint": "Separate with commas",
+        "officialUrl": "Official page URL",
+        "sourceName": "Source name",
+        "sourceUrl": "Source URL (only if not the official page)",
+        "sourceNote": "Staff note",
+        "stages": "Stages",
+        "stageKind": "Stage",
+        "stageStart": "Starts",
+        "stageEnd": "Ends",
+        "stageNote": "Note",
+        "addStage": "Add a stage",
+        "removeStage": "Remove stage",
+        "save": "Save as draft",
+        "saveEdit": "Save changes",
+        "saving": "Saving…",
+        "cancel": "Cancel",
+        "editClearsCheck": "Changing a fact clears the last check; a published entry goes back to draft until it's checked again."
+      },
+      "tabs": {
+        "label": "Entries by status",
+        "draft": "Drafts",
+        "published": "Published",
+        "archived": "Archived"
+      },
+      "empty": {
+        "draft": "No drafts.",
+        "published": "Nothing published yet.",
+        "archived": "Nothing archived."
+      },
+      "item": {
+        "notChecked": "Not checked yet",
+        "checkedBy": "Checked {date} by {name}",
+        "checkedAt": "Checked {date}",
+        "edit": "Edit",
+        "verify": "I checked it against the official page",
+        "verifyAgain": "Checked again today",
+        "publish": "Publish",
+        "archive": "Archive",
+        "delete": "Delete draft",
+        "working": "Working…",
+        "confirmArchive": "Archive this programme? It comes off the calendar and can't be published again.",
+        "confirmArchiveYes": "Archive it",
+        "confirmDelete": "Delete this draft? This can't be undone.",
+        "confirmDeleteYes": "Delete it",
+        "cancel": "Cancel"
+      },
+      "more": "Show more"
+    }
+  }
 }

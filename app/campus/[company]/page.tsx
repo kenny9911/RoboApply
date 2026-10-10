@@ -1,21 +1,46 @@
-// /campus/[company] — route shell (FND-6b). One company's campus programmes.
+// /campus/[company] — one employer's campus programmes (WP-58).
 //
-// STUB. Owner: WP-58, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// Public page in HybridShell (R-23). Server-rendered from the public API;
+// capability off or a company with nothing published ⇒ 404.
 
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 import { HybridShell } from '../../../components/v3/shell/HybridShell';
 import { LegalFooter } from '../../../components/features/market';
+import { CampusCompany } from '../../../components/features/campus';
+import { campusMetadata, readCampusCompany } from '../../../components/features/campus/serverData';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+type Params = Promise<{ company: string }>;
 
-export default async function CampusCompanyPage({ params }: { params: Promise<{ company: string }> }) {
-  const { company } = await params;
+function slugOf(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const slug = slugOf((await params).company);
+  const read = await readCampusCompany(slug);
+  const company = read.status === 'ok' ? read.data.companyName : slug;
+  return campusMetadata({
+    path: `/campus/${encodeURIComponent(slug)}`,
+    titleKey: 'campus.meta.companyTitle',
+    descriptionKey: 'campus.meta.companyDescription',
+    vars: { company },
+    indexable: read.status === 'ok',
+  });
+}
+
+export default async function CampusCompanyPage({ params }: { params: Params }) {
+  const slug = slugOf((await params).company);
+  const read = await readCampusCompany(slug);
+  if (read.status === 'disabled' || read.status === 'not_found') notFound();
   return (
     <HybridShell from="campus" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/campus/[company]" data-owner="WP-58" data-param={company} />
+      <CampusCompany slug={slug} initial={read.status === 'ok' ? read.data : null} />
     </HybridShell>
   );
 }
