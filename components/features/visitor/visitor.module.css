@@ -1,0 +1,533 @@
+/* components/features/visitor/visitor.module.css — visitor surfaces (WP-78):
+ * the public job list with its signup gate, the visitor assistant launcher
+ * and sheet, the job alerts form and the confirm page. Clarity tokens only;
+ * light and dark come from the tokens; both brands restyle through the
+ * action tokens. 44 px touch targets; works from 375 px. */
+
+/* ── Shared ─────────────────────────────────────────────────────────── */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-4) var(--sp-7);
+  box-sizing: border-box;
+}
+
+.intro {
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--grad-soft);
+  border: 1px solid var(--rule);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.h2 {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.body {
+  margin: 0;
+  max-width: 68ch;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-2);
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--danger);
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-2);
+}
+
+/* ── Feed ───────────────────────────────────────────────────────────── */
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  box-sizing: border-box;
+}
+
+.feedHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 760px) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  height: 100%;
+  padding: var(--sp-4);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  box-sizing: border-box;
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--action-subtle);
+  color: var(--action);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.cardTitles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+}
+
+.cardLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.cardLink:hover {
+  color: var(--action);
+  text-decoration: underline;
+}
+.cardLink:focus-visible {
+  outline: none;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-focus);
+}
+
+.company {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+.unknown {
+  color: var(--text-muted);
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.badge {
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-2);
+}
+
+/* ── Signup gate ────────────────────────────────────────────────────── */
+.gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--rule);
+  background: var(--grad-panel);
+}
+
+.gateTitle {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  line-height: var(--lh-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.gateActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.gateCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-md);
+  background: var(--grad-brand);
+  color: var(--action-ink);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-decoration: none;
+  align-self: flex-start;
+}
+.gateCta:hover {
+  background: var(--grad-brand-hover);
+}
+.gateCta:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.gateSecondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--fs-body);
+  color: var(--action);
+  text-decoration: none;
+}
+.gateSecondary:hover {
+  color: var(--action-hover);
+  text-decoration: underline;
+}
+.gateSecondary:focus-visible {
+  outline: none;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-focus);
+}
+
+.alertsLink {
+  composes: gateSecondary;
+  align-self: flex-start;
+}
+
+/* ── Visitor assistant ──────────────────────────────────────────────── */
+.launcher {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  min-height: 44px;
+  padding: 0 var(--sp-5);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--grad-brand);
+  color: var(--action-ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: var(--shadow-lift);
+  cursor: pointer;
+}
+.launcher:hover {
+  background: var(--grad-brand-hover);
+}
+.launcher:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.assistant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-meta);
+  text-align: left;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--action);
+}
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.chip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.question {
+  align-self: flex-end;
+  max-width: 85%;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--action-subtle);
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.answerLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.answerText {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.answerCard {
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.answerJobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.answerJobs li {
+  display: flex;
+  flex-direction: column;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+.input,
+.textInput {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  box-sizing: border-box;
+}
+.input {
+  flex: 1 1 auto;
+  resize: vertical;
+}
+.input:focus-visible,
+.textInput:focus-visible {
+  outline: none;
+  border-color: var(--action);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ── Alerts form ────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+}
+
+@media (min-width: 760px) {
+  .fieldRow {
+    grid-template-columns: 2fr 1.5fr 1.5fr;
+  }
+}
+
+.label {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-height: 44px;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.check input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--action);
+}
