@@ -19,7 +19,7 @@ import { useTranslations } from 'next-intl';
 
 import { useBrand } from '../../../lib/brand';
 import { CancelFooterLink } from '../credits';
-import { COMPANY_SPREAD, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, HELP_FAQ_KEYS, ORDERING_RULES, RANKING_FACTORS } from './catalog';
+import { COMPANY_SPREAD, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, HELP_FAQ_KEYS, ORDERING_RULES, OTHER_SORTS, RANKING_FACTORS } from './catalog';
 import { ContactForm } from './ContactForm';
 import { Faq } from './Sections';
 import styles from './marketing.module.css';
@@ -186,6 +186,8 @@ export function HelpPage({ supportEmail }: { supportEmail: string }) {
 
 export function RankingPage() {
   const t = useTranslations('landing.ranking');
+  // The sort names are the sort menu's own labels, never a second copy of them.
+  const sort = useTranslations('jobs.workspace.sort');
   const brand = useBrand();
   const tiers = FIT_TIER_FLOORS;
   const rules = ORDERING_RULES.filter((r) => (r.markets as readonly string[]).includes(brand.market));
@@ -270,7 +272,7 @@ export function RankingPage() {
         </ul>
       </Block>
       <Block id="ranking-other" title={t('otherSortsTitle')}>
-        <p className={styles.body}>{t('otherSorts')}</p>
+        <p className={styles.body}>{t('otherSorts', Object.fromEntries(OTHER_SORTS.map((s) => [s.param, sort(s.sort)])))}</p>
         {brand.market === 'cn' ? <p className={`${styles.body} ${styles.spaced}`}>{t('cnNote')}</p> : null}
       </Block>
     </>

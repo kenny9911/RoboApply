@@ -16,14 +16,23 @@ const { notFound, brand } = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ notFound, redirect: vi.fn() }));
 vi.mock('../../../../lib/server/brand', () => ({ getServerBrandId: async () => brand.id }));
+// The static sitemap asks the API which surfaces are live; no API in a unit test.
+vi.mock('../../../../lib/server/publicApi', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  loadSitemapIndex: async () => ({ status: 'ok', data: { surfaces: { browse: false, campus: false } } }),
+}));
 
 import RootPage, { generateMetadata as rootMetadata } from '../../../../app/page';
 import LocalePage, { generateMetadata as localeMetadata } from '../../../../app/[locale]/page';
 import FeatureRoute, { generateMetadata as featureMetadata } from '../../../../app/features/[slug]/page';
 import PricingRoute, { generateMetadata as pricingMetadata } from '../../../../app/pricing/page';
-import { generateMetadata as rankingMetadata } from '../../../../app/help/ranking/page';
+import HelpRoute from '../../../../app/help/page';
+import HelpRankingRoute, { generateMetadata as rankingMetadata } from '../../../../app/help/ranking/page';
+import { GET as sitemapRoute } from '../../../../app/sitemaps/[file]/route';
 import { brandLanguageAlternates, homeMetadata } from '../../../../lib/seo';
+import { HybridShell } from '../../../v3/shell/HybridShell';
 import { JobTicker } from '../../seo/server';
+import { featuresFor, indexableFeaturePaths, isFeatureIndexable } from '../catalog';
 import { GoApplyHome } from '../GoApplyHome';
 import { JsonLd } from '../JsonLd';
 import { RoboApplyHome } from '../RoboApplyHome';
@@ -149,6 +158,36 @@ describe('feature and subpage routes', () => {
     expect(open.robots).toMatchObject({ index: true });
     expect((await featureMetadata(slug('ready-to-apply'))).robots).toMatchObject({ index: false });
     expect((await featureMetadata(slug('nope'))).robots).toMatchObject({ index: false });
+  });
+
+  // FIX-7: /sitemaps/static.xml lists four RoboApply feature pages while the
+  // footer links more. That is the rule, not a gap: a gated page is noindex,
+  // and a sitemap never lists a URL its own page marks noindex.
+  it('the static sitemap lists exactly the feature pages that are indexable, on both brands', async () => {
+    for (const id of ['roboapply', 'goapply'] as const) {
+      brand.id = id;
+      const xml = await (await sitemapRoute(new Request('https://example.test/sitemaps/static.xml'), { params: Promise.resolve({ file: 'static.xml' }) })).text();
+      const listed = [...xml.matchAll(/<loc>[^<]*?(\/features\/[a-z-]+)<\/loc>/g)].map((m) => m[1]!);
+      expect(listed.sort()).toEqual(indexableFeaturePaths(id).sort());
+      for (const def of featuresFor(id)) {
+        const robots = (await featureMetadata(slug(def.slug))).robots as { index: boolean };
+        expect([def.slug, robots.index]).toEqual([def.slug, isFeatureIndexable(def)]);
+        expect([def.slug, listed.includes(`/features/${def.slug}`)]).toEqual([def.slug, robots.index]);
+      }
+    }
+    expect(indexableFeaturePaths('roboapply')).toEqual(['/features/job-matches', '/features/resume-tailoring', '/features/cover-letters', '/features/visa-sponsorship']);
+    for (const gated of ['ready-to-apply', 'interview-practice', 'assistant']) expect(indexableFeaturePaths('roboapply')).not.toContain(`/features/${gated}`);
+  });
+
+  // FIX-7: "How ranking works" is reached from the signed-in job list. The
+  // route renders inside HybridShell, which gives a visitor with a session the
+  // app shell (rail, top bar, bottom bar — the way back to the app) and shows
+  // Sign in / Get started only without one (__tests__/shell/layout.test.tsx).
+  it('/help and /help/ranking render inside HybridShell, never a signed-out-only header', async () => {
+    for (const route of [await HelpRankingRoute(), await HelpRoute()] as El[]) {
+      expect(route.type).toBe(HybridShell);
+      expect((route.props as { from?: string }).from).toBe('help');
+    }
   });
 
   it('subpages canonicalize on the request brand origin', async () => {

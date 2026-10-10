@@ -9,12 +9,18 @@
 // links). "Free tools" (/tools) is in both the header and the footer (the
 // header nav is hidden on a phone); it shows where the tools run
 // (useFreeToolsLinked: always on RoboApply, on GoApply once they are open).
+//
+// Appearance: the header's light/dark button needs room a phone header does
+// not have in every language (brand, language, "Iniciar sesión"), so below
+// 760 px the home pages carry the same switch, with its label, in the footer.
 
+import { MoonIcon, SunIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { useBrand } from '../../../lib/brand';
+import { DEFAULT_THEME, useTheme } from '../../../lib/theme';
 import { SEO_READY_LOCALES, LOCALE_LABELS, isLocaleIn, localePath } from '../../../lib/localeConfig';
 import { LanguageMenu } from '../../landing/LanguageMenu';
 import { ThemeToggle } from '../../v3/shell/ThemeToggle';
@@ -51,7 +57,8 @@ export function SiteHeader({ from }: { from: string }) {
           </Link>
         </nav>
         <div className={styles.headerActions}>
-          <LanguageMenu label={t('label')} />
+          {/* Its own name ("Change language"), not this nav's label. */}
+          <LanguageMenu />
           <ThemeToggle className={`icon-btn ${styles.hideSmall}`} />
           <Link className={styles.navLink} href="/login">
             {t('signIn')}
@@ -111,13 +118,34 @@ function PopularLists() {
   );
 }
 
+/**
+ * The light/dark switch of the home pages on a phone (CSS shows it below
+ * 760 px only, where the header's icon button is hidden). Same state and
+ * strings as the header button: lib/theme, `nav.theme_to_*`.
+ */
+function FooterThemeSwitch() {
+  const t = useTranslations('nav');
+  const { theme, toggle, hydrated } = useTheme();
+  // The server's default until mounted, so the label matches the SSR'd HTML (lib/theme `hydrated`).
+  const dark = (hydrated ? theme : DEFAULT_THEME.theme) === 'dark';
+  const Icon = dark ? SunIcon : MoonIcon;
+  return (
+    <button type="button" className={styles.footerTheme} onClick={toggle} data-footer-theme="">
+      <Icon width={16} height={16} aria-hidden="true" />
+      {t(dark ? 'theme_to_light' : 'theme_to_dark')}
+    </button>
+  );
+}
+
 export interface MarketingFooterProps {
   /** Show the crawlable locale links (the home pages' hreflang cluster). */
   localeLinks?: boolean;
+  /** Carry the light/dark switch on a phone (pages whose header hides it there: the home pages). */
+  themeSwitch?: boolean;
 }
 
 /** The site footer. Its <footer> landmark is LegalFooter's (a footer may not nest another). */
-export function MarketingFooter({ localeLinks = false }: MarketingFooterProps) {
+export function MarketingFooter({ localeLinks = false, themeSwitch = false }: MarketingFooterProps) {
   const t = useTranslations('landing.site.footer');
   const brand = useBrand();
   const features = featuresFor(brand.id);
@@ -189,6 +217,7 @@ export function MarketingFooter({ localeLinks = false }: MarketingFooterProps) {
           <PopularLists />
         </nav>
         <div className={styles.footerBottom}>
+          {themeSwitch ? <FooterThemeSwitch /> : null}
           {localeLinks && locales.length > 1 ? (
             <nav aria-label={t('langTitle')} className={styles.localeLinks}>
               {locales.map((code) => (
@@ -218,7 +247,7 @@ export function SitePage({ from, children, localeLinks }: { from: string; childr
       <main id="main-content" tabIndex={-1} className={styles.main}>
         {children}
       </main>
-      <MarketingFooter localeLinks={localeLinks} />
+      <MarketingFooter localeLinks={localeLinks} themeSwitch />
     </div>
   );
 }

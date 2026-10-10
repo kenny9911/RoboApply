@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 import { ResumeCheckService, type ResumeCheckStore } from '../resume/index.js';
 import type { GradeCounts, GradeIssue, GradeLabel, GradeProfile, KeywordReportResponse } from '../resume/contract.js';
+import { withEntryHeadings } from './entries.js';
 
 type GradeRow = Awaited<ReturnType<ResumeCheckStore['createGrade']>>;
 type VariantRow = NonNullable<Awaited<ReturnType<ResumeCheckStore['findVariant']>>>;
@@ -140,13 +141,17 @@ export async function runChecklist(markdown: string, profile: GradeProfile, now:
   };
 }
 
-/** The deterministic requirement rows for (resume, pasted posting). */
+/**
+ * The deterministic requirement rows for (resume, pasted posting). The rows
+ * read roles and dates from entry headings, which a freshly uploaded file does
+ * not have (entries.ts), so they get the view that has them.
+ */
 export async function runRequirementRows(
   markdown: string,
   posting: { title: string; text: string },
   profile: GradeProfile,
   now: () => Date = () => new Date(),
 ): Promise<KeywordReportResponse> {
-  const service = serviceFor(markdown, profile, now);
+  const service = serviceFor(withEntryHeadings(markdown), profile, now);
   return service.keywordReport(TOOL_USER, TOOL_VARIANT, { jd: { title: posting.title, company: '', text: posting.text } });
 }

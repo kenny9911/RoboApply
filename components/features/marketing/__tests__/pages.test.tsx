@@ -34,11 +34,16 @@ import { DEFAULT_CREDIT_CATALOG } from '../../../../server/src/platform/credits/
 import { capsFromCatalog } from '../../../../server/src/features/support/service';
 import { RoboApiError } from '../../../../lib/api/client';
 import { plansView } from '../../credits/__tests__/fixtures';
-import { findFeature } from '../catalog';
+import { sortsFor } from '../../feed/SortMenu';
+import { findFeature, OTHER_SORTS } from '../catalog';
 import { AboutPage, HelpPage, RankingPage, SecurityPage } from '../CompanyPages';
 import { FeaturePage } from '../FeaturePage';
 import { PricingPage } from '../PricingPage';
-import { renderMarketing } from './render';
+import { BrandProvider } from '../../../../lib/brand/BrandProvider';
+import { clientBrandFor } from '../../../../lib/brand/client';
+import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
+import { loadMessages } from '../../../../lib/i18n';
+import { messagesFor, renderMarketing } from './render';
 
 beforeEach(() => {
   api.getPlans.mockImplementation(async () => plansView('roboapply'));
@@ -288,6 +293,58 @@ describe('/help/ranking', () => {
     expect(screen.queryByRole('heading', { name: /Two more rules|More rules/ })).toBeNull();
     expect(screen.getByText('Each job gets a ranking score out of 100 from the four factors. The rule below adds points to that score.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/goals? below/);
+  });
+});
+
+// FIX-7: the page said "Best fit" while the sort menu said "Your best fits".
+describe('/help/ranking names the other sorts as the sort menu does', () => {
+  const sortLabels = (brand: 'roboapply' | 'goapply') => (messagesFor(brand) as { jobs: { workspace: { sort: Record<string, string> } } }).jobs.workspace.sort;
+
+  it('prints the menu’s own labels, whatever they are', () => {
+    renderMarketing(<RankingPage />);
+    const labels = sortLabels('roboapply');
+    expect(labels.best_fit).toBe('Your best fits');
+    expect(screen.getByText(`${labels.newest}, ${labels.best_fit} and ${labels.highest_pay} each sort by that one thing only.`)).toBeInTheDocument();
+    expect(screen.queryByText(/Best fit and Highest pay/)).toBeNull();
+  });
+
+  it('follows a renamed sort without a second edit', () => {
+    const messages = JSON.parse(JSON.stringify(messagesFor('roboapply'))) as { jobs: { workspace: { sort: Record<string, string> } } };
+    messages.jobs.workspace.sort.best_fit = 'Closest to your resume';
+    renderWithProviders(
+      <BrandProvider brand={clientBrandFor('roboapply')}>
+        <RankingPage />
+      </BrandProvider>,
+      { intlMessages: messages as never },
+    );
+    expect(screen.getByText(/^Newest, Closest to your resume and Highest pay each sort/)).toBeInTheDocument();
+  });
+
+  it('lists exactly the sorts the feed offers besides Recommended, each with a placeholder in the sentence', () => {
+    expect(OTHER_SORTS.map((s) => s.sort)).toEqual(sortsFor('intl').filter((s) => s !== 'recommended'));
+    for (const s of OTHER_SORTS) expect(sortsFor('cn')).toContain(s.sort);
+    const sentence = (messagesFor('roboapply') as { landing: { ranking: Record<string, string> } }).landing.ranking.otherSorts!;
+    for (const s of OTHER_SORTS) expect(sentence).toContain(`{${s.param}}`);
+  });
+
+  // Review of FIX-7: a new key would have shown the English sentence in every
+  // other locale until it was translated. The key keeps its name, so each
+  // locale shows its own sentence — spelled out or with placeholders.
+  it.each(['zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'] as const)('%s keeps a translated sentence, never the English one', (locale) => {
+    const messages = loadMessages(locale, 'goapply') as { landing: { ranking: Record<string, string> }; jobs: { workspace: { sort: Record<string, string> } } };
+    expect(messages.landing.ranking.otherSortsNamed).toBeUndefined();
+    const view = renderWithProviders(
+      <BrandProvider brand={clientBrandFor('goapply')}>
+        <RankingPage />
+      </BrandProvider>,
+      { intlMessages: messages as never, intlLocale: locale },
+    );
+    const text = view.container.querySelector('[aria-labelledby="ranking-other"]')?.textContent ?? '';
+    expect(text).not.toMatch(/each sort by that one thing only|sort by that one thing/);
+    expect(text).not.toMatch(/\{\w+\}/);
+    // Newest and Highest pay are named as the menu names them in every locale today.
+    expect(text).toContain(messages.jobs.workspace.sort.newest);
+    expect(text).toContain(messages.jobs.workspace.sort.highest_pay);
   });
 });
 

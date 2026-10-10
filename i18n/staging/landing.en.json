@@ -1,3 +1,7 @@
 {
-  "landing": {}
+  "landing": {
+    "ranking": {
+      "otherSorts": "{newest}, {bestFit} and {highestPay} each sort by that one thing only."
+    }
+  }
 }

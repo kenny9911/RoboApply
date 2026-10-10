@@ -1,6 +1,11 @@
 // /sitemaps/<file>.xml — one sitemap of the index (ARCHITECTURE.md §9.5):
 //   static.xml   home cluster (hreflang: brand.seoLocales + the cross-domain
-//                alternates), marketing subpages, indexable feature pages,
+//                alternates), marketing subpages, indexable feature pages
+//                (the ungated ones only: a gated feature page — on RoboApply
+//                /features/ready-to-apply, /interview-practice, /assistant,
+//                /referrals, /chrome-extension — is noindex, so it is not
+//                listed here even though the footer links it; the rule is
+//                `isFeatureIndexable` in the marketing catalog),
 //                the free tools (/tools on both brands; the tool pages only
 //                where the tools run, so not on GoApply while CN-0;
 //                /tools/job-alerts on RoboApply only), signup, and /browse
@@ -9,7 +14,7 @@
 // Anything else → 404. (There is no campus-<n> partition: the public campus
 // API lists programmes page by page, not URLs — see the INT-06 handoff.)
 
-import { featuresFor } from '../../../components/features/marketing/catalog';
+import { indexableFeaturePaths } from '../../../components/features/marketing/catalog';
 import { TOOLS, toolHref } from '../../../components/features/tools/catalog';
 import { getBrand } from '../../../lib/brand/registry.generated';
 import { brandUrl, staticSitemapEntries, toolSitemapPaths, urlsetXml } from '../../../lib/seo';
@@ -26,9 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ file: s
     const surfaces = await loadSitemapIndex(brand.id)
       .then((r) => (r.status === 'ok' ? r.data.surfaces : { browse: false, campus: false }))
       .catch(() => ({ browse: false, campus: false }));
-    const featurePaths = featuresFor(brand.id)
-      .filter((f) => f.gate === null)
-      .map((f) => `/features/${f.slug}`);
+    const featurePaths = indexableFeaturePaths(brand.id);
     const toolPaths = toolSitemapPaths(brand.id, { toolsOpen: freeToolsOpen(brand.id), toolPaths: TOOLS.map(toolHref) });
     return new Response(urlsetXml(staticSitemapEntries(brand.id, { featurePaths, surfaces, toolPaths })), { headers: HEADERS });
   }
