@@ -23,5 +23,6 @@ export {
   signupInputs,
   signupLinkCodes,
   useSignupInputs,
+  useSignupInputsHost,
   useSignupPolicy,
 } from './shared';

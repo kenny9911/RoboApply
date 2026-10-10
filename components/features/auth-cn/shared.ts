@@ -15,7 +15,8 @@
 //   - the WeChat in-app browser check (`MicroMessenger`),
 //   - the two codes a sign-up link can carry: the invite-friends code
 //     (`?ref=`, from /r/<code>) that says who invited the visitor, and the
-//     closed-beta access code (`?invite=`) that the invite field asks for.
+//     access code (`?invite=`) that the invite field asks for while sign-up
+//     is invite-only.
 //
 // Wire shapes (audited against the server, INT-01): the auth-cn routes and
 // the `requirePhoneBound()` gate write their reason in `code`
@@ -115,7 +116,7 @@ export interface SignupInputs {
   /** Ticked boxes by `consentKey` (never pre-ticked). */
   granted: Record<string, boolean>;
   invite: string;
-  /** Which component renders the checkboxes (the first one to claim it). */
+  /** Which component renders the checkboxes (`useSignupInputsHost`). */
   host: 'phone' | 'wechat' | 'email' | null;
 }
 
@@ -146,6 +147,44 @@ export const signupInputs = {
 export function useSignupInputs(): [SignupInputs, (patch: Partial<SignupInputs>) => void] {
   const value = useSyncExternalStore(signupInputs.subscribe, signupInputs.get, signupInputs.get);
   return [value, signupInputs.set];
+}
+
+type SignupInputsHost = NonNullable<SignupInputs['host']>;
+
+/**
+ * Who renders the one set of boxes when several askers are on the page: a
+ * form before the WeChat button, and the phone form (which needs them for
+ * sign-in too) before the email form.
+ */
+const HOST_RANK: Record<SignupInputsHost, number> = { wechat: 1, email: 2, phone: 3 };
+
+/**
+ * Asks to render the shared agreement boxes (and the invite field). Returns
+ * true while `who` holds the role. One set of boxes per page: the role goes to
+ * the highest-ranked asker that is mounted, whatever the order the components
+ * mount in, and moves on when that component leaves (a tab change on the
+ * sign-in card). A component that leaves while holding the role clears the
+ * ticks, so a box is never found ticked by a page opened later.
+ */
+export function useSignupInputsHost(who: SignupInputsHost, wanted = true): boolean {
+  const [value] = useSignupInputs();
+  useEffect(() => {
+    if (!wanted) return;
+    const current = signupInputs.get().host;
+    if (current === who) return;
+    if (current === null || HOST_RANK[current] < HOST_RANK[who]) {
+      signupInputs.set({ host: who });
+      // An access code in the link (`?invite=`) starts the invite field.
+      prefillAccessCode();
+    }
+  }, [wanted, who, value.host]);
+  useEffect(() => {
+    if (!wanted) return undefined;
+    return () => {
+      if (signupInputs.get().host === who) signupInputs.reset();
+    };
+  }, [wanted, who]);
+  return wanted && value.host === who;
 }
 
 /** Satisfied when the policy has loaded with its texts and every required box is ticked for the text now shown. */
@@ -236,8 +275,9 @@ type Query = { get(name: string): string | null } | null | undefined;
  *   - `ref`: the invite-friends code (`?ref=<code>`; `?invite=<code>` when it
  *     reads as one). Sent with the sign-up so the friend who shared the link
  *     is credited; the server checks it and ignores anything else.
- *   - `accessCode`: a closed-beta access code in `?invite=` (the other
- *     shape), offered as the starting value of the invite field.
+ *   - `accessCode`: an access code in `?invite=` (the other shape; needed
+ *     only while sign-up is invite-only), offered as the starting value of
+ *     the invite field.
  */
 export function signupLinkCodes(query: Query): { ref: string | null; accessCode: string | null } {
   const ref = (query?.get('ref') ?? '').trim().slice(0, 64);

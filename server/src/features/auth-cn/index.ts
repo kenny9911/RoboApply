@@ -3,12 +3,23 @@
 // Other areas import auth-cn only from here:
 //   - `authCnService.hasBoundPhone(userId)` / `phoneBindingRequired(userId)`
 //   - `assertPhoneBound(userId)` and the `requirePhoneBound()` gate for AI
-//     routes (403 phone_binding_required for WeChat accounts without a phone)
+//     routes (403 phone_binding_required for WeChat accounts without a phone,
+//     only while a phone can be bound: `phoneBindingAvailable(env)`, i.e. an
+//     SMS provider is live)
 //   - email signup in invite mode (WP-10): `isInviteRedeemable(brand, code)`
 //     for early feedback, then `redeemInviteInTx(tx, brand, code)` INSIDE the
 //     transaction that creates the User (a failed redemption rolls the
 //     account back; the last use of a code cannot be spent twice)
-//   - `goapplySignupOpen(env)` / `cnSignupMode(env)` / `requiredSignupConsents(env)`
+//   - `goapplySignupOpen(env)` / `cnSignupMode(env)` (sign-up is open by
+//     default; `CN_SIGNUP_MODE=invite|closed` narrows it)
+//   - `await requiredSignupConsents(env)`: the ONE list of consents a new
+//     account must grant (the sign-up types plus what the compliance catalog
+//     requires at sign-up); the form and the email, phone and WeChat paths
+//     all read it
+//   - `crossBorderConsentRequired(env)`: offshore deployment or shared stack
+//   - `cnSignupModeProblem(env)` / `cnSignupModeWarning(env)`: an unknown
+//     `CN_SIGNUP_MODE` value and its log line (the phone-auth router logs it
+//     once when it is built)
 
 import type { BrandId } from '../../platform/brand/registry.js';
 import { parseBrandId } from '../../platform/brand/registry.js';
@@ -20,8 +31,18 @@ import { hasBoundPhone } from './phoneBinding.js';
 export * from './contract.js';
 export { createAuthCnAdminRouter, createPhoneAuthRouter, createWechatAuthRouter } from './routes.js';
 export { AuthCnError } from './errors.js';
-export { assertPhoneBound, hasBoundPhone, phoneBindingRequired, requirePhoneBound } from './phoneBinding.js';
-export { cnSignupMode, goapplySignupOpen, isCn0, requiredSignupConsents, requiredSignupConsentsWithProse } from './signupPolicy.js';
+export { assertPhoneBound, hasBoundPhone, phoneBindingAvailable, phoneBindingRequired, requirePhoneBound } from './phoneBinding.js';
+export {
+  cnSignupMode,
+  cnSignupModeProblem,
+  cnSignupModeWarning,
+  crossBorderConsentRequired,
+  goapplySignupOpen,
+  isCn0,
+  requiredSignupConsents,
+  requiredSignupConsentsWithProse,
+  type SignupMode,
+} from './signupPolicy.js';
 export { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './accounts.js';
 export { redeemInviteIn, type InviteTx } from './inviteService.js';
 

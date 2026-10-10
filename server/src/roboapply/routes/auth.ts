@@ -237,7 +237,8 @@ function isPlausibleEmail(email: unknown): email is string {
  *
  * Creates the User + SeekerProfile via seekerAuthService.signup at the
  * onboarding stage `account`. GoApply hosts go through GoApply's signup
- * rules (invite, CN-0 consents) inside the same service call.
+ * rules (its consents; an invite only with CN_SIGNUP_MODE=invite; open by
+ * default) inside the same service call.
  */
 router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
   try {

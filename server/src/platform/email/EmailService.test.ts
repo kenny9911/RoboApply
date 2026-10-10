@@ -9,6 +9,11 @@ vi.mock('../../lib/prisma.js', () => ({ default: {} }));
 import { runWithBrand } from '../../lib/requestContext.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
 import { BRANDS } from '../brand/registry.js';
+import { isEnabledForBrand } from '../flags.js';
+// The real templates (they register themselves on import).
+import { AUTH_EMAIL_KEYS } from './templates/auth/index.js';
+import './templates/billing/index.js';
+import { NOTIFY_TEMPLATES } from './templates/notify/index.js';
 import {
   button,
   classifyAddress,
@@ -26,6 +31,7 @@ import {
   sendEmail,
   setEmailPreferenceGate,
   transportFor,
+  transportNameFor,
   verifyUnsubscribeToken,
   type EmailDb,
   type EmailMessage,
@@ -170,27 +176,163 @@ describe('sendEmail', () => {
     expect(await sendEmail(input, deps())).toEqual({ status: 'suppressed', reason: 'preference_off', logId: null });
   });
 
-  it('GoApply sends only through its own configured transport and sender', async () => {
+  // D5 (GOAPPLY_PARITY_PLAN.md §3.4): a missing China transport never turns GoApply mail off.
+  it('GoApply with only the shared Resend key sends through Resend from the shared verified sender, under its own name', async () => {
     const { t, sent } = fakeTransport();
     registerEmailTransport('resend', t);
     const base = { template: 'test.reset', to: 'li@example.cn', brand: 'goapply' as const, params: { url: 'https://x' } };
-    // No CN_EMAIL_TRANSPORT → no email (matches the notify.email capability).
-    expect(await sendEmail(base, deps())).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
-    // Resend without CN_EMAIL_FROM is still not configured (no fallback to the intl sender).
-    expect(await sendEmail(base, { ...deps(), env: { ...ENV, CN_EMAIL_TRANSPORT: 'resend', EMAIL_FROM: 'X <x@roboapply.io>' } })).toEqual({
-      status: 'suppressed',
-      reason: 'transport_not_configured',
-      logId: null,
+    const env = { ...ENV, ROBOAPPLY_EMAIL_FROM: 'RoboApply <hello@mail.roboapply.io>', EMAIL_FROM: 'RoboHire <noreply@updates.robohire.io>' };
+    expect(Object.keys(env).some((name) => name.startsWith('CN_'))).toBe(false);
+
+    expect(await sendEmail(base, { ...deps(), env })).toEqual({ status: 'sent', provider: 'resend', providerId: 'msg_1', logId: expect.any(String) });
+    const m = sent[0]!;
+    // The shared address, GoApply's display name: never "RoboApply <…>".
+    expect(m.from).toBe('GoApply <hello@mail.roboapply.io>');
+    expect(m.html).toContain('lang="zh"');
+    // Nothing of the other brand in the message itself: no name, no origin, no reply-to, no legal line.
+    expect(m.html).not.toMatch(/RoboApply|roboapply\.io|RoboHire/);
+    expect(m.text).not.toMatch(/RoboApply|roboapply\.io|RoboHire/);
+    expect(m.replyTo).toBeUndefined();
+    expect(m.html).toContain('https://www.goapply.top/settings#notifications');
+    expect(db.$rows('rAEmailLog')[0]).toMatchObject({ brand: 'goapply', provider: 'resend', status: 'sent' });
+
+    // Without ROBOAPPLY_EMAIL_FROM the shared EMAIL_FROM address; with neither, the registry address.
+    await sendEmail(base, { ...deps(), env: { ...ENV, EMAIL_FROM: 'RoboHire <noreply@updates.robohire.io>' } });
+    expect(sent[1]!.from).toBe('GoApply <noreply@updates.robohire.io>');
+    await sendEmail(base, deps());
+    expect(sent[2]!.from).toBe('GoApply <noreply@goapply.top>');
+    // CN_EMAIL_FROM takes over once GoApply has a verified sender of its own; `resend` spelled out is the same transport.
+    await sendEmail(base, { ...deps(), env: { ...env, CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'Whatever <noreply@mail.goapply.top>' } });
+    expect(sent[3]!.from).toBe('GoApply <noreply@mail.goapply.top>');
+  });
+
+  it('GoApply, only RESEND_API_KEY and ROBOAPPLY_EMAIL_FROM: verification, password-reset, alert and billing mails all go out via Resend as "GoApply <shared address>"', async () => {
+    const { t, sent } = fakeTransport();
+    registerEmailTransport('resend', t);
+    setEmailPreferenceGate(async () => true);
+    const env = { RESEND_API_KEY: 're_test', JWT_SECRET: 'jwt-test-secret', ROBOAPPLY_EMAIL_FROM: 'RoboApply <hello@mail.roboapply.io>' };
+    const mails: Array<[string, Record<string, unknown>]> = [
+      [AUTH_EMAIL_KEYS.emailVerify, { path: '/verify-email/tok' }],
+      [AUTH_EMAIL_KEYS.passwordReset, { path: '/reset-password/tok' }],
+      [NOTIFY_TEMPLATES.jobAlertInstant, { search: '后端 上海', jobs: [{ id: 'job1', title: '后端工程师', company: '某科技公司', place: '上海', remote: false, pay: null, tier: 'good', gap: null, href: '/jobs/job1?from=alert' }] }],
+      ['billing.cancel_confirmed', { planKey: 'pro_monthly', cancelledAt: '2026-10-10T08:00:00.000Z', accessUntil: '2026-10-30T00:00:00.000Z' }],
+      ['billing.payment_failed', { planKey: 'pro_weekly', amountMinor: 1200, currency: 'CNY' }],
+    ];
+    for (const [template, params] of mails) {
+      const res = await sendEmail({ template, to: 'li@example.cn', userId: 'g1', brand: 'goapply', params }, { ...deps(), env });
+      expect(res, template).toMatchObject({ status: 'sent', provider: 'resend' });
+    }
+    expect(sent).toHaveLength(mails.length);
+    for (const m of sent) {
+      expect(m.from).toBe('GoApply <hello@mail.roboapply.io>');
+      expect(m.html).toContain('lang="zh"');
+      // The shared address is the only thing borrowed: no RoboApply name or origin in the message.
+      expect(`${m.subject} ${m.html} ${m.text}`).not.toMatch(/RoboApply|roboapply\.io/);
+      expect(m.replyTo).toBeUndefined();
+    }
+    // Links go to GoApply's own origin.
+    expect(sent[0]!.text).toContain('https://www.goapply.top/verify-email/tok');
+    expect(sent[1]!.text).toContain('https://www.goapply.top/reset-password/tok');
+    expect(db.$rows('rAEmailLog').map((r) => [r.brand, r.provider, r.status])).toEqual(mails.map(() => ['goapply', 'resend', 'sent']));
+  });
+
+  it('GoApply reply-to and legal lines stay its own on the shared transport; RoboApply values never appear', async () => {
+    const { t, sent } = fakeTransport();
+    registerEmailTransport('resend', t);
+    const base = { template: 'test.reset', to: 'li@example.cn', brand: 'goapply' as const, params: { url: 'https://x' } };
+    const intl = { SUPPORT_EMAIL: 'help@roboapply.io', LEGAL_ENTITY_NAME: 'RoboApply Inc.', LEGAL_POSTAL_ADDRESS: '100 Example Ave', CANONICAL_ORIGIN: 'https://intl.example' };
+    await sendEmail(base, { ...deps(), env: { ...ENV, ROBOAPPLY_EMAIL_FROM: 'hello@mail.roboapply.io', ...intl } });
+    expect(sent[0]!.replyTo).toBeUndefined();
+    expect(sent[0]!.html).not.toMatch(/RoboApply Inc\.|100 Example Ave|intl\.example|help@roboapply\.io/);
+    await sendEmail(base, {
+      ...deps(),
+      env: { ...ENV, ROBOAPPLY_EMAIL_FROM: 'hello@mail.roboapply.io', ...intl, CN_SUPPORT_EMAIL: 'help@goapply.top', CN_LEGAL_ENTITY_NAME: '某某科技有限公司', CN_LEGAL_POSTAL_ADDRESS: '上海市' },
     });
-    const env = { ...ENV, CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'Whatever <noreply@mail.goapply.top>' };
-    expect((await sendEmail(base, { ...deps(), env })).status).toBe('sent');
-    expect(sent[0]!.from).toBe('GoApply <noreply@mail.goapply.top>');
-    expect(sent[0]!.html).toContain('lang="zh"');
-    // aliyun_dm is registered statically (WP-15 fills the stub in place): with it
-    // selected, GoApply never falls back to Resend; until it reports configured,
-    // sends are suppressed rather than faked.
-    const dm = transportFor(BRANDS.goapply, { ...env, CN_EMAIL_TRANSPORT: 'aliyun_dm', ALIYUN_DM_ACCESS_KEY_ID: 'a', ALIYUN_DM_ACCESS_KEY_SECRET: 'b', ALIYUN_DM_ACCOUNT_NAME: 'c' });
-    expect(dm === null || dm.name === 'aliyun_dm').toBe(true);
+    expect(sent[1]!.replyTo).toBe('help@goapply.top');
+    expect(sent[1]!.html).toContain('某某科技有限公司');
+    expect(sent[1]!.html).toContain('上海市');
+    expect(sent[1]!.html).not.toMatch(/RoboApply Inc\.|100 Example Ave/);
+  });
+
+  it('CN_EMAIL_TRANSPORT picks the transport: aliyun_dm with its keys uses DirectMail, none suppresses, a missing key suppresses', async () => {
+    const resend = fakeTransport();
+    registerEmailTransport('resend', resend.t);
+    const dmSent: EmailMessage[] = [];
+    registerEmailTransport('aliyun_dm', {
+      name: 'aliyun_dm',
+      isConfigured: () => true,
+      send: async (m) => {
+        dmSent.push(m);
+        return { ok: true, providerId: 'dm_1' };
+      },
+    });
+    const base = { template: 'test.reset', to: 'li@example.cn', brand: 'goapply' as const, params: { url: 'https://x' } };
+    const ALIYUN = { ALIYUN_DM_ACCESS_KEY_ID: 'a', ALIYUN_DM_ACCESS_KEY_SECRET: 'b', ALIYUN_DM_ACCOUNT_NAME: 'noreply@mail.goapply.top' };
+    const shared = { ...ENV, ROBOAPPLY_EMAIL_FROM: 'hello@mail.roboapply.io' };
+
+    // DirectMail, never Resend, and never the shared sender address.
+    expect(await sendEmail(base, { ...deps(), env: { ...shared, ...ALIYUN, CN_EMAIL_TRANSPORT: 'aliyun_dm' } })).toMatchObject({ status: 'sent', provider: 'aliyun_dm', providerId: 'dm_1' });
+    expect(resend.sent).toHaveLength(0);
+    expect(dmSent[0]!.from).toBe('GoApply <noreply@goapply.top>');
+    // aliyun_dm selected without its keys: suppressed, no silent fall back to Resend.
+    expect(await sendEmail(base, { ...deps(), env: { ...shared, CN_EMAIL_TRANSPORT: 'aliyun_dm' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
+    // none: the operator's off switch.
+    expect(await sendEmail(base, { ...deps(), env: { ...shared, ...ALIYUN, CN_EMAIL_TRANSPORT: 'none' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
+    // No Resend key at all: nothing to fall back to.
+    expect(await sendEmail(base, { ...deps(), env: { JWT_SECRET: 'jwt-test-secret' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
+    // Each suppressed row names the transport that send would have used.
+    expect(db.$rows('rAEmailLog').map((r) => [r.status, r.provider])).toEqual([
+      ['sent', 'aliyun_dm'],
+      ['suppressed', 'aliyun_dm'],
+      ['suppressed', 'none'],
+      ['suppressed', 'resend'],
+    ]);
+    expect(resend.sent).toHaveLength(0);
+    expect(dmSent).toHaveLength(1);
+    // RoboApply never reads CN_EMAIL_TRANSPORT.
+    expect((await sendEmail({ ...base, brand: 'roboapply' }, { ...deps(), env: { ...shared, CN_EMAIL_TRANSPORT: 'none' } })).status).toBe('sent');
+  });
+
+  it('transportNameFor is the effective transport (the processor list reads it)', () => {
+    const go = BRANDS.goapply;
+    expect(transportNameFor(go, {})).toBe('resend');
+    expect(transportNameFor(go, { CN_EMAIL_TRANSPORT: '' })).toBe('resend');
+    expect(transportNameFor(go, { CN_EMAIL_TRANSPORT: ' Resend ' })).toBe('resend');
+    expect(transportNameFor(go, { CN_EMAIL_TRANSPORT: 'something-else' })).toBe('resend');
+    expect(transportNameFor(go, { CN_EMAIL_TRANSPORT: 'Aliyun_DM' })).toBe('aliyun_dm');
+    expect(transportNameFor(go, { CN_EMAIL_TRANSPORT: 'NONE' })).toBe('none');
+    for (const v of ['aliyun_dm', 'none', 'resend']) expect(transportNameFor(BRANDS.roboapply, { CN_EMAIL_TRANSPORT: v })).toBe('resend');
+  });
+
+  it('transportFor is non-null exactly when the notify.email capability is on (both brands, every transport setting)', () => {
+    const configured = (name: string): EmailTransport => ({ name, isConfigured: () => true, send: async () => ({ ok: true }) });
+    registerEmailTransport('resend', configured('resend'));
+    registerEmailTransport('aliyun_dm', configured('aliyun_dm'));
+    const RESEND = { RESEND_API_KEY: 're_test' };
+    const ALIYUN = { ALIYUN_DM_ACCESS_KEY_ID: 'a', ALIYUN_DM_ACCESS_KEY_SECRET: 'b', ALIYUN_DM_ACCOUNT_NAME: 'c' };
+    const credentials: Array<Record<string, string>> = [{}, RESEND, ALIYUN, { ...RESEND, ...ALIYUN }, { ...RESEND, ALIYUN_DM_ACCESS_KEY_ID: 'a' }];
+    const settings: Array<Record<string, string>> = [{}, { CN_EMAIL_TRANSPORT: 'resend' }, { CN_EMAIL_TRANSPORT: 'aliyun_dm' }, { CN_EMAIL_TRANSPORT: 'none' }, { CN_EMAIL_TRANSPORT: 'ses' }, { CN_EMAIL_FROM: 'noreply@mail.goapply.top' }];
+    let on = 0;
+    for (const brand of [BRANDS.roboapply, BRANDS.goapply]) {
+      for (const creds of credentials) {
+        for (const setting of settings) {
+          const env = { ...creds, ...setting };
+          const enabled = isEnabledForBrand('notify.email', brand, env);
+          const transport = transportFor(brand, env);
+          expect(transport !== null, `${brand.id} ${JSON.stringify(env)}`).toBe(enabled);
+          expect(isEnabledForBrand('auth.passwordReset', brand, env), `${brand.id} reset ${JSON.stringify(env)}`).toBe(enabled);
+          if (transport) {
+            on += 1;
+            expect(transport.name).toBe(transportNameFor(brand, env));
+          }
+        }
+      }
+    }
+    // The table really exercises both answers.
+    expect(on).toBeGreaterThan(10);
+    expect(on).toBeLessThan(2 * credentials.length * settings.length);
+    // The headline case: GoApply, the shared key and nothing else.
+    expect(transportFor(BRANDS.goapply, RESEND)?.name).toBe('resend');
   });
 
   it('records transport failures and render failures as failed, never throwing', async () => {
@@ -259,7 +401,19 @@ describe('sender, origin and legal footer config', () => {
     expect(fromFor(BRANDS.roboapply, { ROBOAPPLY_EMAIL_FROM: 'RA <hi@mail.roboapply.io>', EMAIL_FROM: 'x <y@z.io>' })).toBe(
       'RoboApply <hi@mail.roboapply.io>',
     );
-    expect(fromFor(BRANDS.goapply, { EMAIL_FROM: 'x <y@roboapply.io>' })).toBe('GoApply <noreply@goapply.top>');
+    // GoApply: its own address first; on Resend the shared verified sender; the registry address last.
+    expect(fromFor(BRANDS.goapply, {})).toBe('GoApply <noreply@goapply.top>');
+    expect(fromFor(BRANDS.goapply, { EMAIL_FROM: 'x <y@roboapply.io>' })).toBe('GoApply <y@roboapply.io>');
+    expect(fromFor(BRANDS.goapply, { ROBOAPPLY_EMAIL_FROM: 'RA <hi@mail.roboapply.io>', EMAIL_FROM: 'x <y@z.io>' })).toBe('GoApply <hi@mail.roboapply.io>');
+    expect(fromFor(BRANDS.goapply, { CN_EMAIL_FROM: 'GA <noreply@mail.goapply.top>', ROBOAPPLY_EMAIL_FROM: 'hi@mail.roboapply.io' })).toBe('GoApply <noreply@mail.goapply.top>');
+    // An unusable CN_EMAIL_FROM is skipped, not sent.
+    expect(fromFor(BRANDS.goapply, { CN_EMAIL_FROM: 'not an address', ROBOAPPLY_EMAIL_FROM: 'hi@mail.roboapply.io' })).toBe('GoApply <hi@mail.roboapply.io>');
+    // The shared sender is borrowed on Resend only: never on DirectMail, never when email is off.
+    expect(fromFor(BRANDS.goapply, { CN_EMAIL_TRANSPORT: 'aliyun_dm', ROBOAPPLY_EMAIL_FROM: 'hi@mail.roboapply.io', EMAIL_FROM: 'y@z.io' })).toBe('GoApply <noreply@goapply.top>');
+    expect(fromFor(BRANDS.goapply, { CN_EMAIL_TRANSPORT: 'none', ROBOAPPLY_EMAIL_FROM: 'hi@mail.roboapply.io' })).toBe('GoApply <noreply@goapply.top>');
+    expect(fromFor(BRANDS.goapply, { CN_EMAIL_TRANSPORT: 'aliyun_dm', CN_EMAIL_FROM: 'noreply@mail.goapply.top' })).toBe('GoApply <noreply@mail.goapply.top>');
+    // RoboApply never reads the CN sender.
+    expect(fromFor(BRANDS.roboapply, { CN_EMAIL_FROM: 'noreply@mail.goapply.top' })).toBe('RoboApply <noreply@roboapply.io>');
     expect(emailOrigin(BRANDS.goapply, { CN_CANONICAL_ORIGIN: 'https://staging.goapply.top/' })).toBe('https://staging.goapply.top');
     expect(emailOrigin(BRANDS.goapply, { CANONICAL_ORIGIN: 'https://intl.example' })).toBe('https://www.goapply.top');
   });

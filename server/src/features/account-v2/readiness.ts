@@ -10,13 +10,14 @@
 // A path is `gated: true` only together with the call in its file; the
 // readiness test fails if a path is marked gated here without it. Every path
 // below is gated since the integration wave (INT-01), so enrolment opens
-// wherever the storage and the brand's sealing key exist. A NEW way to sign
+// wherever the storage and a sealing key the brand can use exist (GoApply:
+// its own `CN_TOTP_ENCRYPTION_KEY` or the shared key; sealing.ts). A NEW way to sign
 // in must be added here ungated first (which closes enrolment again) and
 // flipped in the change that wires its gate.
 
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId } from '../../platform/brand/registry.js';
-import { totpKey } from './sealing.js';
+import { totpKeys } from './sealing.js';
 
 export interface SignInPath {
   id: string;
@@ -103,7 +104,8 @@ export function totpAvailability(
   const paths = (input.paths ?? SIGN_IN_PATHS).filter((p) => !p.markets || p.markets.includes(brand.market));
   const ungated = paths.filter((p) => !p.gated).map((p) => p.id);
   if (!input.storeAvailable) return { available: false, reason: 'storage_unavailable', ungated };
-  if (!totpKey(brand.id, input.env)) return { available: false, reason: 'key_missing', ungated };
+  // Any usable key will do: GoApply's own, or the shared one it falls back to (sealing.ts).
+  if (!totpKeys(brand.id, input.env).length) return { available: false, reason: 'key_missing', ungated };
   if (ungated.length) return { available: false, reason: 'sign_in_paths_ungated', ungated };
   return { available: true, reason: null, ungated };
 }

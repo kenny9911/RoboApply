@@ -12,10 +12,17 @@
 //   3. for non-transactional mail (alerts, tips, marketing) asks the
 //      preference gate (WP-39a registers it; none registered → suppressed:
 //      nothing promotional goes out by default);
-//   4. picks the transport by brand: RoboApply → Resend; GoApply →
-//      `CN_EMAIL_TRANSPORT` (`resend` with `CN_EMAIL_FROM`, `aliyun_dm` —
-//      registered here, live once WP-15 fills its stub — unset/`none` → no email, matching the
-//      `notify.email` capability);
+//   4. picks the transport by brand (`transportNameFor`; GOAPPLY_PARITY_PLAN.md
+//      §3.4, owner ruling D5): RoboApply → Resend. GoApply → the shared Resend
+//      account too, unless `CN_EMAIL_TRANSPORT` says `aliyun_dm` (Aliyun
+//      DirectMail with its own keys) or `none` (no GoApply email). A missing
+//      China transport never turns GoApply mail off. The From address follows
+//      (`fromFor`): `CN_EMAIL_FROM` when set, else on Resend the shared
+//      verified sender, always under GoApply's display name. Reply-To and
+//      every legal line stay GoApply's own (`CN_SUPPORT_EMAIL`, `CN_LEGAL_*`):
+//      RoboApply's entity, origin or support inbox never appears in GoApply
+//      mail. `transportFor` is non-null exactly when the `notify.email`
+//      capability's requirement is met;
 //   5. renders the template in the brand × locale, wraps it in the shell, and
 //      for non-transactional mail adds the signed unsubscribe link and the
 //      RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` headers;
@@ -132,11 +139,20 @@ export function resetEmailTransportsForTests(): void {
   preferenceGate = null;
 }
 
-/** Transport name for the brand: 'resend' for RoboApply; `CN_EMAIL_TRANSPORT` for GoApply ('none' when unset). */
-export function transportNameFor(brand: ProductBrand, env: EnvSource = process.env): string {
+export type EmailTransportName = 'resend' | 'aliyun_dm' | 'none';
+
+/**
+ * The effective transport of the brand. RoboApply: `resend`. GoApply:
+ * `aliyun_dm` or `none` when `CN_EMAIL_TRANSPORT` says so, otherwise `resend`
+ * (unset, `resend` or any other value): the shared Resend account is the
+ * fallback, so GoApply sends mail with no China transport configured (D5).
+ * The same reading as the `notify.email` requirement in platform/flags.ts and
+ * as `brandUsesSharedStack`; the processor list reads it too (plan §5).
+ */
+export function transportNameFor(brand: ProductBrand, env: EnvSource = process.env): EmailTransportName {
   if (brand.market !== 'cn') return 'resend';
   const v = (env.CN_EMAIL_TRANSPORT || '').trim().toLowerCase();
-  return v === 'resend' || v === 'aliyun_dm' ? v : 'none';
+  return v === 'aliyun_dm' || v === 'none' ? v : 'resend';
 }
 
 /** The configured transport, or null (no email on this brand/deployment). */
@@ -158,25 +174,35 @@ export function addressOf(from: string): string | null {
 /**
  * From header: always the brand's display name, with the address from config.
  * RoboApply reads `ROBOAPPLY_EMAIL_FROM` (the product sender today), then
- * `EMAIL_FROM`; GoApply reads only `CN_EMAIL_FROM` (R-03, no fallback to the
- * international sender). The registry address is the last resort.
+ * `EMAIL_FROM`. GoApply reads `CN_EMAIL_FROM` first; when it is unset and the
+ * mail goes out through Resend, it uses the shared verified sender
+ * (`ROBOAPPLY_EMAIL_FROM`, then `EMAIL_FROM`), because `noreply@goapply.top`
+ * is not a verified domain on the shared Resend account; `CN_EMAIL_FROM` takes
+ * over once it is. On Aliyun DirectMail the shared sender is never borrowed
+ * (the transport sends from its own verified account). The registry address
+ * is the last resort. Only the address is shared: the display name is the
+ * brand's (`GoApply <…>`), never the name configured with the shared address.
  */
 export function fromFor(brand: ProductBrand, env: EnvSource = process.env): string {
+  const own = brandEnv(brand, 'EMAIL_FROM', env);
   const candidates =
     brand.market === 'cn'
-      ? [brandEnv(brand, 'EMAIL_FROM', env)]
-      : [env.ROBOAPPLY_EMAIL_FROM?.trim(), brandEnv(brand, 'EMAIL_FROM', env)];
+      ? [own, ...(transportNameFor(brand, env) === 'resend' ? [env.ROBOAPPLY_EMAIL_FROM?.trim(), env.EMAIL_FROM?.trim()] : [])]
+      : [env.ROBOAPPLY_EMAIL_FROM?.trim(), own];
   const address = candidates.map((c) => (c ? addressOf(c) : null)).find(Boolean) ?? brand.email.fromAddress;
   return `${brand.email.fromName} <${address}>`;
 }
 
-/** Reply-To only when ops configured a support mailbox (`SUPPORT_EMAIL` / `CN_SUPPORT_EMAIL`). */
+/**
+ * Reply-To only when ops configured the brand's own support mailbox
+ * (`SUPPORT_EMAIL` / `CN_SUPPORT_EMAIL`; brand-own, never the other brand's).
+ */
 export function replyToFor(brand: ProductBrand, env: EnvSource = process.env): string | undefined {
   const v = brandEnv(brand, 'SUPPORT_EMAIL', env);
   return v && addressOf(v) ? (addressOf(v) as string) : undefined;
 }
 
-/** Public origin for links: `CANONICAL_ORIGIN` / `CN_CANONICAL_ORIGIN`, else the registry origin. */
+/** Public origin for links: `CANONICAL_ORIGIN` / `CN_CANONICAL_ORIGIN` (brand-own), else the registry origin. */
 export function emailOrigin(brand: ProductBrand, env: EnvSource = process.env): string {
   return (brandEnv(brand, 'CANONICAL_ORIGIN', env) || brand.canonicalOrigin).replace(/\/+$/, '');
 }
@@ -210,7 +236,7 @@ export async function sendEmail<P>(input: SendEmailInput<P>, deps: EmailServiceD
   if (!template) throw new Error(`email: unknown template "${String(input.template)}"`);
   const userId = input.userId ?? null;
   // `attempted`: the message was handed to a transport, so its log row is "the email" a producer may link to.
-  const log = (r: SendEmailResult, attempted = false) => writeLog(deps.db ?? prisma, brand, template.key, input.to, userId, r, attempted);
+  const log = (r: SendEmailResult, attempted = false) => writeLog(deps.db ?? prisma, brand, template.key, input.to, userId, r, attempted, env);
 
   const addr = classifyAddress(input.to);
   if (addr !== 'ok') return log({ status: 'suppressed', reason: addr });
@@ -294,6 +320,7 @@ async function writeLog(
   userId: string | null,
   result: SendEmailResult,
   attempted: boolean,
+  env: EnvSource,
 ): Promise<SendEmailResult> {
   let logId: string | null = null;
   try {
@@ -303,7 +330,8 @@ async function writeLog(
         userId,
         template,
         toHash: hashEmail(to ?? ''),
-        provider: result.provider ?? transportNameFor(brand),
+        // For a message that never reached a transport: the transport this send would have used.
+        provider: result.provider ?? transportNameFor(brand, env),
         providerId: result.providerId ?? null,
         status: result.status,
         error: result.reason ? String(result.reason).slice(0, 1000) : null,

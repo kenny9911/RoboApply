@@ -1,7 +1,10 @@
 // server/src/features/push/routes.ts — web push subscriptions (WP-61).
-// Mounted by features/index.ts at /api/v1/roboapply/push. Capability `webPush` per route
-// (404 feature_disabled on GoApply); the service also refuses GoApply on its
-// own, so a flag override cannot turn push on there.
+// Mounted by features/index.ts at /api/v1/roboapply/push. Both brands are
+// served (owner ruling D5), each behind its `webPush` capability per route
+// (404 feature_disabled when the brand's flag is off: FLAG_<BRAND>_WEB_PUSH=false)
+// and its VAPID set: GoApply uses its own CN_VAPID_* set when CN_VAPID_PUBLIC_KEY
+// is set and the shared VAPID_* pair otherwise. The service, the channel and
+// the worker check the same two things for the brand of the row they handle.
 //
 //   GET    /vapid-public-key     → { publicKey }   (501 provider_not_configured, reason push_not_configured)
 //   POST   /subscriptions        body PushSubscription.toJSON() (+ userAgent) → PushSubscriptionView

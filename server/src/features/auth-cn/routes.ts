@@ -41,6 +41,7 @@ import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
 import { getCurrentBrandOrDefault, type BrandedRequest } from '../../platform/brand/brandContext.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { requireFlag } from '../../platform/flags.js';
+import { logger } from '../../services/LoggerService.js';
 import { HttpError, parseBody, parseQuery, requireUserId } from '../../platform/http.js';
 import { clientIp } from '../../platform/ratelimit/index.js';
 import {
@@ -75,8 +76,9 @@ import {
 } from './contract.js';
 import { currentSessionToken, issueSessionCookie } from './accounts.js';
 import { cnRoute } from './errors.js';
+import { phoneBindingAvailable } from './phoneBinding.js';
 import { createAuthCnServices, type AuthCnServices } from './services.js';
-import { buildSignupPolicy } from './signupPolicy.js';
+import { buildSignupPolicy, cnSignupModeWarning } from './signupPolicy.js';
 import { OAUTH_STATE_TTL_MS, returnLocation } from './wechatAuthService.js';
 
 /** The first-party visitor id cookie (growth `ANON_ID_COOKIE`; lib/analytics.ts sets it). */
@@ -157,7 +159,22 @@ function services(deps: FeatureRouterDeps, overrides?: Partial<AuthCnServices>):
   return { ...createAuthCnServices({ env: deps.env, ...(overrides?.db ? { db: overrides.db } : {}) }), ...overrides };
 }
 
+/** Warnings already logged in this process (the routers are built once at boot, and again by tests). */
+const loggedSignupModeWarnings = new Set<string>();
+
+/**
+ * A mistyped `CN_SIGNUP_MODE` (`off`, `invite-only`, ...) leaves GoApply
+ * sign-up OPEN. Say so once, loudly, where the operator reads the boot log.
+ */
+function logSignupModeProblem(env: FeatureRouterDeps['env']): void {
+  const warning = cnSignupModeWarning(env ?? process.env);
+  if (!warning || loggedSignupModeWarnings.has(warning)) return;
+  loggedSignupModeWarnings.add(warning);
+  logger.error('AUTH_CN', warning);
+}
+
 export function createPhoneAuthRouter(deps: FeatureRouterDeps = {}, overrides?: Partial<AuthCnServices>): Router {
+  logSignupModeProblem(deps.env);
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
   const maybeAuth = [...(deps.optionalAuth ?? [optionalAuth])];
@@ -320,7 +337,8 @@ export function createWechatAuthRouter(deps: FeatureRouterDeps = {}, overrides?:
         returnLocation({
           result: 'ok',
           next: outcome.nextRoute,
-          ...(outcome.phoneBound ? {} : { bind: '1' as const }),
+          // Ask for a number only when one can be bound here (an SMS provider is live).
+          ...(outcome.phoneBound || !phoneBindingAvailable(deps.env ?? process.env) ? {} : { bind: '1' as const }),
           ...(outcome.isNew ? { new: '1' as const } : {}),
         }),
       );

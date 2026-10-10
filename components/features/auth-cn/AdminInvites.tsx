@@ -1,7 +1,8 @@
 'use client';
 
-// AdminInvites — /admin/invites: GoApply invite codes for the CN-0 closed beta
-// (CN_TW_LAUNCH_PLAN.md §3; TASK_PLAN.md WP-11). Codes are created for the
+// AdminInvites — /admin/invites: GoApply invite codes, asked for at sign-up
+// only when the operator sets CN_SIGNUP_MODE=invite (open by default, D5;
+// CN_TW_LAUNCH_PLAN.md §3; TASK_PLAN.md WP-11). Codes are created for the
 // site the admin is on, shown once (stored hashed), and listed with their
 // uses and status. Counts come from the invite rows themselves.
 

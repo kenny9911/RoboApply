@@ -1,4 +1,5 @@
-// server/src/features/auth-cn/inviteService.ts — GoApply invite codes (CN-0 closed beta;
+// server/src/features/auth-cn/inviteService.ts — GoApply invite codes, used only when the
+// operator sets `CN_SIGNUP_MODE=invite` (sign-up is open by default, D5;
 // CN_TW_LAUNCH_PLAN.md §3; TASK_PLAN.md WP-11).
 //
 // Codes are generated here, shown ONCE to the admin who creates them, and

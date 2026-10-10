@@ -7,14 +7,18 @@
 //                         `instant_alerts`; "As they arrive" on Pro, never
 //                         "unlimited") and the email summary — one
 //                         PATCH /search-profiles/:id with baseVersion (WP-20).
-//                         Only while `jobs.alerts` is on (R-04: off on GoApply
-//                         until recruitment-info mode allows alerts).
+//                         Only while `jobs.alerts` is on (both brands by
+//                         default; CN_RECRUITMENT_INFO_MODE=off turns GoApply's
+//                         off). The email summary is hidden while the brand
+//                         sends no email (`emailUnavailableReason` is
+//                         'not_offered').
 //   Where messages go     per category, one switch per channel the account can
 //                         use (email needs a real address and the `notify.email`
 //                         capability; "This device" with web push, WeChat with
 //                         its capability). The inbox is always on.
 //   Alerts on this device right under the switches while `webPush` is on for the
-//                         brand (never on GoApply): the one place that asks the
+//                         brand (both brands, D5; the flag alone decides): the
+//                         one place that asks the
 //                         browser for permission, and only on a click (WP-61
 //                         `PushOptIn`). It adds "This device" to the job-alert
 //                         and reminder rows above. Hidden when the flag is off,
@@ -97,7 +101,7 @@ function Switch({
 
 // ── Job alerts (per saved search) ───────────────────────────────────────
 
-function SearchAlertRow({ profile, list }: { profile: SearchProfile; list: SearchProfileList }) {
+function SearchAlertRow({ profile, list, emailOffered }: { profile: SearchProfile; list: SearchProfileList; emailOffered: boolean }) {
   const t = useTranslations('inbox.settings');
   const label = useProfileLabel(list.profiles)(profile);
   const update = useUpdateSearchProfile();
@@ -132,28 +136,31 @@ function SearchAlertRow({ profile, list }: { profile: SearchProfile; list: Searc
             ))}
           </select>
         </label>
-        <label className={styles.selectLabel} htmlFor={digestId}>
-          {t('digest')}
-          <select
-            id={digestId}
-            className={styles.select}
-            value={profile.alertDigest ?? 'none'}
-            disabled={update.isPending}
-            onChange={(e) => patch({ alertDigest: e.target.value === 'none' ? null : (e.target.value as 'daily' | 'weekly') })}
-          >
-            {(['none', 'daily', 'weekly'] as const).map((d) => (
-              <option key={d} value={d}>
-                {t(`digestOptions.${d}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* The summary is an email: no control for it while this brand sends no email (it would never arrive). */}
+        {emailOffered ? (
+          <label className={styles.selectLabel} htmlFor={digestId}>
+            {t('digest')}
+            <select
+              id={digestId}
+              className={styles.select}
+              value={profile.alertDigest ?? 'none'}
+              disabled={update.isPending}
+              onChange={(e) => patch({ alertDigest: e.target.value === 'none' ? null : (e.target.value as 'daily' | 'weekly') })}
+            >
+              {(['none', 'daily', 'weekly'] as const).map((d) => (
+                <option key={d} value={d}>
+                  {t(`digestOptions.${d}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function AlertsGroup() {
+function AlertsGroup({ emailOffered }: { emailOffered: boolean }) {
   const t = useTranslations('inbox.settings');
   const q = useSearchProfiles();
   return (
@@ -173,7 +180,7 @@ function AlertsGroup() {
       ) : (
         <>
           {q.data.profiles.map((p) => (
-            <SearchAlertRow key={p.id} profile={p} list={q.data!} />
+            <SearchAlertRow key={p.id} profile={p} list={q.data!} emailOffered={emailOffered} />
           ))}
           {q.data.upgradable && q.data.maxInstantAlerts < 100 ? <p className={styles.help}>{t('alertsProNote')}</p> : null}
         </>
@@ -255,7 +262,8 @@ function CategoryRow({ view, category, save, pending }: { view: NotificationPref
 function ChannelsGroup({ view }: { view: NotificationPreferencesView }) {
   const t = useTranslations('inbox.settings');
   const { save, pending } = useSave();
-  // No push entry while web push is off for the brand (PushOptIn also checks the browser and the server keys).
+  // No push entry while web push is off for the brand: the flag alone decides, on both brands
+  // (PushOptIn also checks the browser and the server keys).
   const webPush = useFlag('webPush');
   return (
     <section className={styles.group} aria-labelledby="notif-channels">
@@ -276,12 +284,18 @@ function ChannelsGroup({ view }: { view: NotificationPreferencesView }) {
 export function NotificationsSettings() {
   const t = useTranslations('inbox.settings');
   const prefs = useNotificationPreferences();
-  // R-04: no alert controls while alerts are off for this brand (they would never arrive).
+  // No alert controls while alerts are off for this brand (they would never
+  // arrive). On by default on both brands; CN_RECRUITMENT_INFO_MODE=off turns
+  // GoApply's off.
   const alertsOn = useFlag('jobs.alerts');
+  // The server's answer, so the rule is one for both brands: 'not_offered'
+  // means this brand sends no email now (no email key, or
+  // CN_EMAIL_TRANSPORT=none on GoApply). Shown until the answer is in.
+  const emailOffered = prefs.data?.emailUnavailableReason !== 'not_offered';
   return (
     <div className={styles.settings} data-testid="notifications-settings">
       <PrefHeader eyebrow={t('eyebrow')} title={t('title')} sub={t('sub')} />
-      {alertsOn ? <AlertsGroup /> : null}
+      {alertsOn ? <AlertsGroup emailOffered={emailOffered} /> : null}
       {prefs.isLoading ? (
         <p className={styles.status}>{t('loading')}</p>
       ) : prefs.isError || !prefs.data ? (

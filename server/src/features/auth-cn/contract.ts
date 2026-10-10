@@ -90,7 +90,7 @@ const ConsentInput = ConsentInputSchema;
 
 /**
  * The invite-friends code the visitor arrived with (`/r/<code>` → `?ref=`).
- * Separate from `inviteCode` (the closed-beta access code): it only says who
+ * Separate from `inviteCode` (the access code of `CN_SIGNUP_MODE=invite`): it only says who
  * invited this person, and is read when the account turns out to be new.
  * An unreadable value is ignored, never an error.
  */
@@ -102,7 +102,7 @@ export const VerifyCodeBodySchema = z
     phone: CnPhoneSchema,
     code: OtpCodeSchema,
     consents: z.array(ConsentInput).max(20).optional(),
-    /** Required on signup when CN_SIGNUP_MODE=invite (CN-0). */
+    /** Required on signup only when CN_SIGNUP_MODE=invite (the default mode is `open`). */
     inviteCode: z.string().trim().min(4).max(32).optional(),
     next: z.string().max(512).regex(/^\/(?!\/)/).optional(),
     ref: FriendRef,
@@ -189,9 +189,9 @@ export interface SignupPolicyConsent {
 
 /** GET /auth/phone/policy?locale= — what the G0 form needs before the first code. GoApply only. */
 export interface SignupPolicyResponse {
-  /** False in production until counsel-approved documents and a live method exist (CN §2.3 rule 4). */
+  /** True unless the operator closed sign-up (`CN_SIGNUP_MODE=closed`). Email + password needs no other method. */
   signupOpen: boolean;
-  /** CN_SIGNUP_MODE=invite: new accounts need an invite code. */
+  /** `CN_SIGNUP_MODE=invite` only: new accounts need an invite code. False in the default (`open`) mode. */
   inviteRequired: boolean;
   /**
    * Consents a NEW account must grant at signup (existing accounts send none),
@@ -215,10 +215,12 @@ export const AUTH_CN_CONSENT_PROSE_VERSION = 'authCn.2026-10-10.v1';
  * Consents every new GoApply account grants at signup (G0 agreement checkbox):
  * the user agreement + privacy policy (`pipl_basic_processing`) with the age
  * attestation (`age_16_plus`), plus the separate cross-border consent while
- * data is processed outside the mainland (CN-0; H6).
+ * GoApply data is processed outside the mainland: an offshore deployment, or
+ * the shared stack in use (`crossBorderConsentRequired`, signupPolicy.ts; H6,
+ * GOAPPLY_PARITY_PLAN.md §3.6).
  */
-export function requiredSignupConsentTypes(cn0: boolean): string[] {
-  return cn0 ? ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'] : ['pipl_basic_processing', 'age_16_plus'];
+export function requiredSignupConsentTypes(crossBorder: boolean): string[] {
+  return crossBorder ? ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'] : ['pipl_basic_processing', 'age_16_plus'];
 }
 
 /**

@@ -1,9 +1,9 @@
-// WP-61: "Get alerts on this device" (permission only after a click; nothing
-// on GoApply), the install prompt (once, after the second session, through
+// WP-61: "Get alerts on this device" (permission only after a click, on both
+// brands), the install prompt (once, after the second session, through
 // the popup gate) and "What's new" (one announcement, through the popup gate,
 // marked seen when shown). Network is a fetch double; data is fictional.
 
-import type { ReactElement, ReactNode } from 'react';
+import { StrictMode, type ReactElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -32,7 +32,7 @@ import { AnnouncementModal } from '../../notifications/AnnouncementModal';
 import { PushOptIn } from '../PushOptIn';
 import { PwaInstallPrompt } from '../InstallPrompt';
 import { WhatsNew, isInternalHref } from '../WhatsNew';
-import { PWA_SESSION_COUNT_KEY, PWA_SESSION_MARK_KEY, PWA_INSTALL_SHOWN_KEY, forgetPushDeviceOnSignOut } from '../../../../hooks/pwa';
+import { PWA_SESSION_COUNT_KEY, PWA_SESSION_MARK_KEY, PWA_INSTALL_SHOWN_KEY, boundToAnotherKey, forgetPushDeviceOnSignOut, urlBase64ToUint8Array } from '../../../../hooks/pwa';
 import { pushChannelPatch } from '../PushOptIn';
 
 const P = '/api/v1/roboapply/push';
@@ -101,18 +101,45 @@ afterEach(() => {
 // ── Push opt-in ──────────────────────────────────────────────────────────
 
 describe('PushOptIn', () => {
-  function installBrowserPush(opts: { permission?: NotificationPermission; answer?: NotificationPermission; existing?: boolean } = {}) {
-    const subscription = {
-      endpoint: 'https://fcm.googleapis.com/fcm/send/dev1',
-      toJSON: () => ({ endpoint: 'https://fcm.googleapis.com/fcm/send/dev1', expirationTime: null, keys: { p256dh: 'pk', auth: 'ak' } }),
-      unsubscribe: vi.fn(async () => true),
+  /**
+   * `existingKey`: the VAPID public key the browser's existing subscription was
+   * made with (a real browser reports it as `options.applicationServerKey`).
+   * With it the double behaves like a browser: `subscribe()` with another key
+   * throws while that subscription exists, and after `unsubscribe()` it hands
+   * out a NEW subscription (another endpoint) bound to the key it was given.
+   */
+  function installBrowserPush(opts: { permission?: NotificationPermission; answer?: NotificationPermission; existing?: boolean; existingKey?: string } = {}) {
+    type Sub = {
+      endpoint: string;
+      toJSON: () => { endpoint: string; expirationTime: null; keys: { p256dh: string; auth: string } };
+      unsubscribe: ReturnType<typeof vi.fn>;
+      options?: { applicationServerKey: ArrayBuffer };
     };
-    let current: typeof subscription | null = opts.existing ? subscription : null;
+    let current: Sub | null = null;
+    const make = (id: string, key?: Uint8Array<ArrayBuffer>): Sub => {
+      const sub: Sub = {
+        endpoint: `https://fcm.googleapis.com/fcm/send/${id}`,
+        toJSON: () => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${id}`, expirationTime: null, keys: { p256dh: 'pk', auth: 'ak' } }),
+        unsubscribe: vi.fn(async () => {
+          if (current === sub) current = null;
+          return true;
+        }),
+        ...(key ? { options: { applicationServerKey: key.buffer } } : {}),
+      };
+      return sub;
+    };
+    const subscription = make('dev1', opts.existingKey ? urlBase64ToUint8Array(opts.existingKey) : undefined);
+    current = opts.existing ? subscription : null;
     const pushManager = {
       getSubscription: vi.fn(async () => current),
-      subscribe: vi.fn(async () => {
-        current = subscription;
-        return subscription;
+      subscribe: vi.fn(async (init: { applicationServerKey: Uint8Array<ArrayBuffer> }) => {
+        if (!opts.existingKey) {
+          current = subscription;
+          return subscription;
+        }
+        if (current) throw new DOMException('A subscription with a different applicationServerKey already exists', 'InvalidStateError');
+        current = make('dev2', init.applicationServerKey);
+        return current;
       }),
     };
     const registration = { pushManager };
@@ -226,6 +253,131 @@ describe('PushOptIn', () => {
     expect(await screen.findByRole('button', { name: 'Get alerts on this device' })).toBeTruthy();
   });
 
+  // The server now signs with another VAPID pair than the one this device
+  // subscribed with (GoApply moved from the shared pair to CN_VAPID_*).
+  const OLD_KEY = KEY.replace('BEl62', 'BEl63');
+  const DEV2 = 'https://fcm.googleapis.com/fcm/send/dev2';
+
+  it('boundToAnotherKey: true only when the browser reports a different key; the same key and an unknown key keep the subscription', () => {
+    const made = (key?: string) => ({ options: key ? { applicationServerKey: urlBase64ToUint8Array(key).buffer } : undefined }) as unknown as PushSubscription;
+    expect(urlBase64ToUint8Array(OLD_KEY)).not.toEqual(urlBase64ToUint8Array(KEY));
+    expect(boundToAnotherKey(made(OLD_KEY), KEY)).toBe(true);
+    expect(boundToAnotherKey(made(KEY), KEY)).toBe(false);
+    expect(boundToAnotherKey(made(), KEY)).toBe(false);
+    expect(boundToAnotherKey({} as PushSubscription, KEY)).toBe(false);
+    expect(boundToAnotherKey(made(OLD_KEY), 'not base64 !')).toBe(false);
+  });
+
+  it('a device that is on but subscribed with the old key is renewed on load without asking: old subscription dropped here and on the server, new one stored', async () => {
+    const browser = installBrowserPush({ permission: 'granted', existing: true, existingKey: OLD_KEY });
+    window.localStorage.setItem('ra_push_subscription_id', 'sub_1');
+    const net = installFetch({
+      [`GET ${P}/vapid-public-key`]: () => ok({ publicKey: KEY }),
+      [`POST ${P}/subscriptions/lookup`]: () => ok({ subscription: VIEW }),
+      [`DELETE ${P}/subscriptions/sub_1`]: () => ok(null),
+      [`POST ${P}/subscriptions`]: () => ok({ ...VIEW, id: 'sub_2' }, 201),
+      [`GET ${N}`]: () => ok(prefsView()),
+    });
+    renderUi(<PushOptIn />, { brand: 'goapply', flags: { webPush: true } });
+    await waitFor(() => expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(1), { timeout: 4000 });
+    expect(browser.subscription.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(net.to('DELETE', `${P}/subscriptions/sub_1`)).toHaveLength(1);
+    expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(1);
+    expect(browser.pushManager.subscribe.mock.calls[0]![0].applicationServerKey).toEqual(urlBase64ToUint8Array(KEY));
+    expect(net.to('POST', `${P}/subscriptions`)[0]!.body).toMatchObject({ endpoint: DEV2 });
+    // Nothing is asked and nothing is registered: the permission and the worker were already there.
+    expect(browser.requestPermission).not.toHaveBeenCalled();
+    expect(browser.serviceWorker.register).not.toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'Stop alerts on this device' })).toBeTruthy();
+    await waitFor(() => expect(window.localStorage.getItem('ra_push_subscription_id')).toBe('sub_2'));
+  });
+
+  it('the renewal runs once and leaves the button usable when React runs effects twice (strict mode)', async () => {
+    const browser = installBrowserPush({ permission: 'granted', existing: true, existingKey: OLD_KEY });
+    const net = installFetch({
+      [`GET ${P}/vapid-public-key`]: () => ok({ publicKey: KEY }),
+      [`POST ${P}/subscriptions/lookup`]: () => ok({ subscription: VIEW }),
+      [`DELETE ${P}/subscriptions/sub_1`]: () => ok(null),
+      [`POST ${P}/subscriptions`]: () => ok({ ...VIEW, id: 'sub_2' }, 201),
+      [`GET ${N}`]: () => ok(prefsView()),
+    });
+    renderUi(
+      <StrictMode>
+        <PushOptIn />
+      </StrictMode>,
+      { flags: { webPush: true } },
+    );
+    await waitFor(() => expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(1), { timeout: 4000 });
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Stop alerts on this device' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(1);
+    expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(1);
+  });
+
+  it('when that renewal fails the device reads as off, and a click subscribes with the served key', async () => {
+    const browser = installBrowserPush({ permission: 'granted', existing: true, existingKey: OLD_KEY });
+    let stored = 0;
+    const net = installFetch({
+      [`GET ${P}/vapid-public-key`]: () => ok({ publicKey: KEY }),
+      [`POST ${P}/subscriptions/lookup`]: () => ok({ subscription: VIEW }),
+      [`DELETE ${P}/subscriptions/sub_1`]: () => ok(null),
+      [`POST ${P}/subscriptions`]: () => {
+        stored += 1;
+        return stored === 1 ? fail(500, 'internal') : ok({ ...VIEW, id: 'sub_2' }, 201);
+      },
+      [`GET ${N}`]: () => ok(prefsView()),
+      [`PATCH ${N}`]: () => ok(prefsView()),
+    });
+    renderUi(<PushOptIn />, { flags: { webPush: true } });
+    const button = await screen.findByRole('button', { name: 'Get alerts on this device' }, { timeout: 4000 });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await waitFor(() => expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(2), { timeout: 4000 });
+    // The subscription made during the failed renewal already uses the served key: it is reused, not replaced again.
+    expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(1);
+    expect(net.to('POST', `${P}/subscriptions`)[1]!.body).toMatchObject({ endpoint: DEV2 });
+    expect(await screen.findByRole('button', { name: 'Stop alerts on this device' })).toBeTruthy();
+  });
+
+  it('a pruned device still holding a subscription made with the old key: a click replaces it instead of registering it again', async () => {
+    const browser = installBrowserPush({ permission: 'granted', existing: true, existingKey: OLD_KEY });
+    const net = installFetch({
+      [`GET ${P}/vapid-public-key`]: () => ok({ publicKey: KEY }),
+      [`POST ${P}/subscriptions/lookup`]: () => ok({ subscription: null }),
+      [`POST ${P}/subscriptions`]: () => ok({ ...VIEW, id: 'sub_2' }, 201),
+      [`GET ${N}`]: () => ok(prefsView()),
+      [`PATCH ${N}`]: () => ok(prefsView()),
+    });
+    renderUi(<PushOptIn />, { brand: 'goapply', flags: { webPush: true } });
+    const button = await screen.findByRole('button', { name: 'Get alerts on this device' });
+    // Not this account's row (pruned): nothing is renewed on load.
+    expect(browser.pushManager.subscribe).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await waitFor(() => expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(1), { timeout: 4000 });
+    expect(browser.subscription.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(browser.pushManager.subscribe.mock.calls[0]![0].applicationServerKey).toEqual(urlBase64ToUint8Array(KEY));
+    expect(net.to('POST', `${P}/subscriptions`)[0]!.body).toMatchObject({ endpoint: DEV2 });
+    expect(net.to('DELETE', `${P}/subscriptions/sub_1`)).toHaveLength(0);
+    expect(await screen.findByRole('button', { name: 'Stop alerts on this device' })).toBeTruthy();
+  });
+
+  it('a device subscribed with the key the server still serves is left alone', async () => {
+    const browser = installBrowserPush({ permission: 'granted', existing: true, existingKey: KEY });
+    const net = installFetch({
+      [`GET ${P}/vapid-public-key`]: () => ok({ publicKey: KEY }),
+      [`POST ${P}/subscriptions/lookup`]: () => ok({ subscription: VIEW }),
+      [`GET ${N}`]: () => ok(prefsView()),
+    });
+    renderUi(<PushOptIn />, { flags: { webPush: true } });
+    expect(await screen.findByRole('button', { name: 'Stop alerts on this device' })).toBeTruthy();
+    await waitFor(() => expect(net.to('GET', `${P}/vapid-public-key`)).toHaveLength(1));
+    expect(browser.subscription.unsubscribe).not.toHaveBeenCalled();
+    expect(browser.pushManager.subscribe).not.toHaveBeenCalled();
+    expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(0);
+  });
+
   it('when saving "This device" to the channels fails: no "Alerts are on", the error shows and the new subscription is removed', async () => {
     const browser = installBrowserPush();
     const net = installFetch({
@@ -310,7 +462,26 @@ describe('PushOptIn', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('renders nothing on GoApply (no web push), without VAPID keys, or without browser support', async () => {
+  it('GoApply with web push on (the shared VAPID pair): the same opt-in; a click asks the browser and subscribes', async () => {
+    const browser = installBrowserPush();
+    const net = installFetch({
+      [`GET ${P}/vapid-public-key`]: () => ok({ publicKey: KEY }),
+      [`POST ${P}/subscriptions`]: () => ok(VIEW, 201),
+      [`GET ${N}`]: () => ok(prefsView()),
+      [`PATCH ${N}`]: (c) => ok({ ...prefsView(), channels: { ...prefsView().channels, ...(c.body as { channels: object }).channels } }),
+    });
+    renderUi(<PushOptIn />, { brand: 'goapply', flags: { webPush: true } });
+    const button = await screen.findByRole('button', { name: 'Get alerts on this device' });
+    expect(browser.requestPermission).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await waitFor(() => expect(net.to('POST', `${P}/subscriptions`)).toHaveLength(1), { timeout: 4000 });
+    expect(browser.requestPermission).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Stop alerts on this device' })).toBeTruthy();
+  });
+
+  it('renders nothing while the webPush flag is off (either brand: FLAG_<BRAND>_WEB_PUSH=false or no keys), without VAPID keys, or without browser support', async () => {
     const browser = installBrowserPush();
     const net = installFetch({ [`GET ${P}/vapid-public-key`]: () => fail(501, 'provider_not_configured', { reason: 'push_not_configured' }) });
     const cn = renderUi(<PushOptIn />, { brand: 'goapply', flags: { webPush: false } });

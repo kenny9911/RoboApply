@@ -2,6 +2,13 @@
   "auth": {
     "brand": {
       "feature_interview_written": "针对目标职位的练习面试"
+    },
+    "methods": {
+      "tabs": {
+        "label": "登录方式",
+        "email_password": "邮箱",
+        "phone_otp": "手机号"
+      }
     }
   }
 }

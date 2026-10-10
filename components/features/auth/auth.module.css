@@ -44,6 +44,51 @@
   cursor: not-allowed;
 }
 
+/* More than one form on the card (GoApply with an SMS provider: email,
+   phone): tabs over the open form. Each tab takes an equal share, so two
+   short Chinese labels do not sit in a corner of a 390px card. */
+.methodTabs {
+  margin-top: var(--sp-6);
+}
+.methodTabs > [role='tab'] {
+  flex: 1;
+  justify-content: center;
+}
+.methodPanel {
+  margin-top: var(--sp-5);
+}
+.methodPanel:focus {
+  outline: none;
+}
+.methodPanel :global(.auth-form) {
+  margin-top: 0;
+}
+
+/* Redirect methods drawn below the forms (WeChat). Nothing is left behind
+   when the method renders nothing in this browser. */
+.methodsAfter {
+  margin-top: var(--sp-5);
+}
+.methodsAfter:empty {
+  display: none;
+}
+
+/* Room for the analytics consent banner under the card, so the banner never
+   covers the card's last link. The banner publishes its height while it is
+   open (`--analytics-consent-h`, components/features/growth/
+   AnalyticsConsent.tsx); 0 when there is no banner. On the two-column layout
+   the banner docks under the brand panel, so nothing is reserved there. */
+.consentReserve {
+  flex: none;
+  width: 100%;
+  height: var(--analytics-consent-h, 0px);
+}
+@media (min-width: 1024px) {
+  .consentReserve {
+    display: none;
+  }
+}
+
 .divider {
   display: flex;
   align-items: center;

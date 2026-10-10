@@ -13,7 +13,8 @@
 // scoped by the profile. Legacy auto-apply / recruiter-activity rows are never
 // shown (HIDDEN_LEGACY_TYPES).
 //
-// GoApply recruitment-info mode (R-14, R41-1b): while
+// GoApply recruitment-info off switch (R41-1b; postings are on by default,
+// D5): while the operator sets
 // `CN_RECRUITMENT_INFO_MODE=off` no inbox row that carries a third-party
 // posting is returned, counted or opened on GoApply (job-alert rows written
 // while the mode allowed postings, and any row whose params embed job cards).
@@ -301,7 +302,13 @@ export function normalizeChannelList(list: readonly unknown[]): NotificationChan
   return [...set];
 }
 
-/** Channels the account can receive: in-app always; email/push/wechat by capability (email also needs a real address). */
+/**
+ * Channels the account can receive: in-app always; email/push/wechat by
+ * capability (email also needs a real address). The same rule on both brands:
+ * GoApply has email and this-device push through the shared stack, and WeChat
+ * notices in addition when their credentials are set. A missing WeChat
+ * credential removes nothing (D5).
+ */
 export function availableChannels(caps: ChannelCapabilities, hasRealEmail: boolean): NotificationChannel[] {
   const out: NotificationChannel[] = ['in_app'];
   if (caps.email && hasRealEmail) out.push('email');

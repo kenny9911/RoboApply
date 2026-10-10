@@ -1,10 +1,11 @@
 // @vitest-environment node
 //
 // WP-11 acceptance (accounts): one flow sign-in/sign-up; new accounts need the
-// signup consents (CN-0: pipl_cross_border → 422 without it), an invite in
-// invite mode, and an open signup gate in production; placeholder email never
-// receives mail; bind + merge; phone change needs both proofs and revokes the
-// other sessions.
+// signup consents (pipl_cross_border whenever data leaves the mainland → 422
+// without it). Sign-up is open by default in every environment (D5); an
+// invite is needed only with CN_SIGNUP_MODE=invite and CN_SIGNUP_MODE=closed
+// refuses new accounts. Placeholder email never receives mail; bind + merge;
+// phone change needs both proofs and revokes the other sessions.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getBrand } from '../../platform/brand/registry.js';
@@ -15,7 +16,8 @@ import { AuthCnError } from './errors.js';
 import { hashInviteCode } from './inviteService.js';
 import { sha256 } from './phoneAuthService.js';
 import { CONSENT_PROSE_VERSION, listConsents, type ConsentDb } from '../compliance/index.js';
-import { BASE_ENV, buildServices, clock, cn0Consents, CN0_CONSENTS, CN0_CONSENTS_NO_HASH, fakeDb, recordingSms } from './__tests__/testkit.js';
+import { crossBorderConsentRequired } from './signupPolicy.js';
+import { BASE_ENV, buildServices, clock, cn0Consents, CN0_CONSENTS, CN0_CONSENTS_NO_HASH, CN_OWN_STACK_ENV, fakeDb, recordingSms } from './__tests__/testkit.js';
 
 const goapply = getBrand('goapply');
 const PHONE = '+8613812345678';
@@ -127,10 +129,27 @@ describe('verifyAndSignIn — new number', () => {
     });
   });
 
-  it('mainland deployment (CN-1) does not ask for the cross-border consent', async () => {
-    const { s, send } = setup({ ...BASE_ENV, DEPLOY_REGION: 'cn-mainland' });
+  it('a mainland deployment on the shared stack still asks for the cross-border consent (data leaves the mainland)', async () => {
+    // DEPLOY_REGION alone does not keep the data in the mainland: with no CN_ provider GoApply runs on the shared stack.
+    const env = { ...BASE_ENV, DEPLOY_REGION: 'cn-mainland' };
+    expect(crossBorderConsentRequired(env)).toBe(true);
+    const { s, send, fake } = setup(env);
     await send(PHONE, 'login', '111111');
-    const consents = CN0_CONSENTS.filter((c) => c.type !== 'pipl_cross_border');
+    const without = cn0Consents(env).filter((c) => c.type !== 'pipl_cross_border');
+    const err = await s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: without, ip: '1.1.1.1' }).catch((e) => e);
+    expect(err).toMatchObject({ code: 'consent_required', status: 422, details: { missing: ['pipl_cross_border'] } });
+    expect(fake.$rows('user')).toHaveLength(0);
+    await expect(s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: cn0Consents(env), ip: '1.1.1.1' })).resolves.toMatchObject({
+      isNewUser: true,
+    });
+  });
+
+  it('a mainland deployment where every GoApply stack is its own does not ask for the cross-border consent', async () => {
+    const env = { ...BASE_ENV, ...CN_OWN_STACK_ENV };
+    expect(crossBorderConsentRequired(env)).toBe(false);
+    const { s, send } = setup(env);
+    await send(PHONE, 'login', '111111');
+    const consents = cn0Consents(env).filter((c) => c.type !== 'pipl_cross_border');
     await expect(s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents, ip: '1.1.1.1' })).resolves.toMatchObject({
       isNewUser: true,
     });
@@ -152,32 +171,37 @@ describe('verifyAndSignIn — new number', () => {
     ).resolves.toBe('consent_required');
   });
 
-  it('production: closed until CN_LEGAL_DOCS_VERSION is set; existing accounts still sign in', async () => {
+  it('production with no legal-documents version: sign-up is open, with no invite code', async () => {
     const env = { ...BASE_ENV, NODE_ENV: 'production', SMS_DEV_CONSOLE: '' };
+    expect(env).not.toHaveProperty('CN_LEGAL_DOCS_VERSION');
+    expect(env).not.toHaveProperty('CN_SIGNUP_MODE');
+    const { s, send } = setup(env);
+    await send(PHONE, 'login', '111111');
+    await expect(s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: cn0Consents(env), ip: '1.1.1.1' })).resolves.toMatchObject({
+      isNewUser: true,
+    });
+  });
+
+  it('CN_SIGNUP_MODE=closed: no new account (signup_closed, the code stays usable); existing accounts still sign in', async () => {
+    const env = { ...BASE_ENV, CN_SIGNUP_MODE: 'closed' };
     const seed = {
       user: [{ id: 'u_old', email: 'x@users.goapply.invalid', brand: 'goapply', phoneE164: NEW_PHONE, phoneVerifiedAt: new Date(), isActive: true }],
       seekerProfile: [{ id: 'p_old', userId: 'u_old', onboardingStep: 'done', deletedAt: null }],
     };
-    const { s, send } = setup(env, seed);
+    const { s, send, fake } = setup(env, seed);
     await send(PHONE, 'login', '111111');
-    await expect(errCode(s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: CN0_CONSENTS, ip: '1.1.1.1' }))).resolves.toBe(
-      'signup_closed',
-    );
+    const refused = await s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: cn0Consents(env), ip: '1.1.1.1' }).catch((e) => e);
+    expect(refused).toMatchObject({ code: 'signup_closed', status: 403 });
+    expect(fake.$rows('user')).toHaveLength(1);
     await send(NEW_PHONE, 'login', '222222');
     await expect(s.phone.verifyAndSignIn({ brand: goapply, phoneE164: NEW_PHONE, code: '222222', ip: '1.1.1.1' })).resolves.toMatchObject({
       userId: 'u_old',
       isNewUser: false,
     });
-
-    const open = setup({ ...env, CN_LEGAL_DOCS_VERSION: '2026-10-01' });
-    await open.send(PHONE, 'login', '111111');
-    await expect(
-      open.s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: CN0_CONSENTS, ip: '1.1.1.1' }),
-    ).resolves.toMatchObject({ isNewUser: true });
   });
 });
 
-describe('verifyAndSignIn — invite mode (CN-0)', () => {
+describe('verifyAndSignIn — invite mode (CN_SIGNUP_MODE=invite)', () => {
   const env = { ...BASE_ENV, CN_SIGNUP_MODE: 'invite' };
   const invite = (over: Record<string, unknown> = {}) => ({
     id: 'inv1',

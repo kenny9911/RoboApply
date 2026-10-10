@@ -929,7 +929,7 @@ describe('`next` to a free tool page (WP-57)', () => {
 });
 
 describe('GoApply accounts are never created by a provider sign-in', () => {
-  it('refuses with signup_closed and creates nothing (phone, WeChat and the email form apply the invite and CN-0 consents)', async () => {
+  it('refuses with signup_closed and creates nothing: Google and LINE stay RoboApply’s methods (the email form, phone and WeChat apply GoApply’s sign-up rules)', async () => {
     finish.mockResolvedValue({ provider: 'google', subject: 'g-cn', email: 'cn@example.test', emailVerified: true, name: null, avatarUrl: null });
     const svc = service();
     const { url, binder } = await svc.startOAuth({

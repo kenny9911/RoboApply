@@ -8,15 +8,16 @@
 // nothing when the usable flow for this browser is off (QR inside WeChat is
 // useless; the 公众号 flow only works inside WeChat).
 //
-// The same G0 agreement applies: when the phone form is on the page it hosts
-// the boxes (shared store), otherwise this component renders them. The
+// The same G0 agreement applies: when a form on the page shows the boxes (the
+// phone form, or the email sign-up form) it hosts them (shared store);
+// otherwise this component renders them above its button. The
 // button stays disabled until they are ticked. The ticked consents travel in
 // the POST body of `startWechatSignIn` (never in a URL, so a shared link can
 // never grant them); the browser then goes to the returned WeChat URL. A new
 // WeChat account is sent to /bind-phone first (AI features need a verified
 // number).
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { startWechatSignIn } from '../../../lib/api/authCn';
@@ -28,12 +29,12 @@ import {
   currentSignupLinkCodes,
   errorMessage,
   isConsentOutdated,
-  prefillAccessCode,
   safeNextPath,
   shownConsentsFromPolicy,
   signupInputs,
   useIsWechatBrowser,
   useSignupInputs,
+  useSignupInputsHost,
   useSignupPolicy,
 } from './shared';
 import styles from './AuthCn.module.css';
@@ -48,31 +49,25 @@ function WechatGlyph() {
   );
 }
 
-export function WechatMethod({ mode, next }: AuthMethodProps) {
+export function WechatMethod({ mode, next, follows }: AuthMethodProps) {
   const t = useTranslations('authCn');
   const { flags } = useCapabilities();
   const inWechat = useIsWechatBrowser();
   const policyQuery = useSignupPolicy();
   const policy = policyQuery.data;
   const [inputs] = useSignupInputs();
-  const [hostsConsents, setHostsConsents] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const phoneOn = flags?.['auth.phoneOtp'] === true;
   const flowOn = inWechat ? flags?.['auth.wechatInApp'] === true : flags?.['auth.wechatWeb'] === true;
 
-  // Render the agreement here only when no phone form is on the page.
-  useEffect(() => {
-    if (phoneOn) return undefined;
-    if (signupInputs.get().host === null) {
-      signupInputs.set({ host: 'wechat' });
-      prefillAccessCode();
-      setHostsConsents(true);
-      return () => signupInputs.reset();
-    }
-    return undefined;
-  }, [phoneOn]);
+  // The button needs the agreement boxes ticked (a WeChat sign-in can create
+  // an account). It renders them itself only while no form on the page does:
+  // a form outranks it (`useSignupInputsHost`), so there is always one set.
+  const hostsConsents = useSignupInputsHost('wechat', flowOn);
+  // "or" above the button whenever another method is drawn above it.
+  const showDivider = follows ?? phoneOn;
 
   if (!flowOn) return null;
 
@@ -111,7 +106,7 @@ export function WechatMethod({ mode, next }: AuthMethodProps) {
 
   return (
     <div className={styles.form}>
-      {phoneOn ? (
+      {showDivider ? (
         <div className={styles.divider} aria-hidden="true">
           {t('wechat.or')}
         </div>

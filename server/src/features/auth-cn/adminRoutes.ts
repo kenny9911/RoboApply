@@ -5,8 +5,8 @@
 //   POST /invites   creates codes for the request's brand; the raw codes are
 //                   in this response only (stored hashed).
 //
-// Invite codes exist only for a mainland-market brand (GoApply, CN-0 closed
-// beta). On any other host both routes answer 404 feature_disabled (R-04).
+// Invite codes exist only for a mainland-market brand (GoApply). They are
+// asked for at sign-up only with `CN_SIGNUP_MODE=invite`; the default is open. On any other host both routes answer 404 feature_disabled (R-04).
 
 import { Router, type Request } from 'express';
 import { requireAuth } from '../../middleware/auth.js';

@@ -218,8 +218,30 @@ describe('two-step sign-in on the phone and WeChat routes (2fa-gate:issue-sessio
     seed.rAAuthIdentity![0]!.appId = 'wx_mini';
     const t = await start({ seed, codes: { m1: { openid: 'openid-1' } } });
     const res = await t.harness.request<Env>('POST', `${WX_API}/mini/login`, { host: GO, body: { code: 'm1' } });
-    expectChallenge(res, t.fake, 'u1', '/login/2fa?next=%2Fresume');
+    // GoApply's first route after sign-in is the campus calendar by default (D5: on with no CN_ value).
+    expectChallenge(res, t.fake, 'u1', '/login/2fa?next=%2Fcampus');
     expect(JSON.stringify(res.body)).not.toContain('sessionToken');
+  });
+
+  it('mini-program login: the first route is /resume only with both the campus calendar and the job feed switched off', async () => {
+    const seed = () => {
+      const rows = wechatSeed({ rATwoFactor: [twoFactorOn('u1')] });
+      rows.rAAuthIdentity![0]!.appId = 'wx_mini';
+      return rows;
+    };
+    let open: { close(): Promise<void> } | null = null;
+    const login = async (env: Record<string, string>) => {
+      // One server at a time; the last one is closed by the suite's afterEach.
+      await open?.close();
+      const t = await start({ seed: seed(), codes: { m1: { openid: 'openid-1' } }, env: { ...BASE_ENV, ...env } });
+      open = t.harness;
+      const res = await t.harness.request<Env>('POST', `${WX_API}/mini/login`, { host: GO, body: { code: 'm1' } });
+      return (res.body.details as { next?: string } | undefined)?.next;
+    };
+    await expect(login({ CN_CAMPUS_CALENDAR_ENABLED: 'false', CN_RECRUITMENT_INFO_MODE: 'off' })).resolves.toBe('/login/2fa?next=%2Fresume');
+    // One switch alone leaves the other surface as the first route.
+    await expect(login({ CN_CAMPUS_CALENDAR_ENABLED: 'false' })).resolves.toBe('/login/2fa?next=%2Fjobs');
+    await expect(login({ CN_RECRUITMENT_INFO_MODE: 'off' })).resolves.toBe('/login/2fa?next=%2Fcampus');
   });
 
   it('bind that merges into the account owning the number: that account’s two-step sign-in still applies', async () => {

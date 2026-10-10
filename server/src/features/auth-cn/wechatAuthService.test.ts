@@ -111,7 +111,11 @@ describe('callback', () => {
     expect(user).toMatchObject({ brand: 'goapply', provider: 'wechat', emailIsPlaceholder: true, phoneE164: null });
     expect(fake.$rows('rAAuthIdentity')[0]).toMatchObject({ provider: 'wechat', appId: 'wx_open', subject: 'o_web', unionId: 'U1', userId: user.id });
     expect(fake.$rows('seekerConsentRecord').map((r) => r.consentType)).toEqual(['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border']);
-    if (out.kind === 'session') await expect(phoneBindingRequired(out.userId, fake as never)).resolves.toBe(true);
+    if (out.kind !== 'session') throw new Error('expected a session');
+    // SMS is live here (BASE_ENV: the dev console): the WeChat-only account binds a phone before AI.
+    await expect(phoneBindingRequired(out.userId, fake as never, BASE_ENV)).resolves.toBe(true);
+    // With no SMS provider nobody can bind a number, so the same account is not asked to (D5).
+    await expect(phoneBindingRequired(out.userId, fake as never, { NODE_ENV: 'production' })).resolves.toBe(false);
   });
 
   it('is bound to the browser that started it: no or another nonce → oauth_state_invalid, state not spent', async () => {
@@ -156,6 +160,29 @@ describe('callback', () => {
     const { s } = setup({ env: { ...BASE_ENV, CN_SIGNUP_MODE: 'invite' }, codes: { c1: { openid: 'o_web' } } });
     const state = (await begin(s, { brand: goapply, flow: 'web', consents: CN0_CONSENTS }));
     await expect(cb(s, { brand: goapply, flow: 'web', code: 'c1', state })).resolves.toEqual({ kind: 'error', code: 'invite_invalid' });
+  });
+
+  it('by default a new WeChat account needs no invite; CN_SIGNUP_MODE=closed refuses it while linked accounts still sign in', async () => {
+    expect(BASE_ENV).not.toHaveProperty('CN_SIGNUP_MODE');
+    const open = setup({ codes: { c1: { openid: 'o_web' } } });
+    const s1 = await begin(open.s, { brand: goapply, flow: 'web', consents: CN0_CONSENTS });
+    await expect(cb(open.s, { brand: goapply, flow: 'web', code: 'c1', state: s1 })).resolves.toMatchObject({ kind: 'session', isNew: true });
+
+    const env = { ...BASE_ENV, CN_SIGNUP_MODE: 'closed' };
+    const closed = setup({
+      env,
+      codes: { c1: { openid: 'o_new' }, c2: { openid: 'o_known' } },
+      seed: {
+        user: [{ id: 'u_known', email: 'k@users.goapply.invalid', brand: 'goapply', isActive: true, phoneE164: null, phoneVerifiedAt: null }],
+        seekerProfile: [{ id: 'p_known', userId: 'u_known', onboardingStep: 'done', deletedAt: null }],
+        rAAuthIdentity: [{ id: 'i_known', userId: 'u_known', brand: 'goapply', provider: 'wechat', appId: 'wx_open', subject: 'o_known', unionId: null }],
+      },
+    });
+    const s2 = await begin(closed.s, { brand: goapply, flow: 'web', consents: cn0Consents(env) });
+    await expect(cb(closed.s, { brand: goapply, flow: 'web', code: 'c1', state: s2 })).resolves.toEqual({ kind: 'error', code: 'signup_closed' });
+    expect(closed.fake.$rows('user')).toHaveLength(1);
+    const s3 = await begin(closed.s, { brand: goapply, flow: 'web' });
+    await expect(cb(closed.s, { brand: goapply, flow: 'web', code: 'c2', state: s3 })).resolves.toMatchObject({ kind: 'session', isNew: false, userId: 'u_known' });
   });
 
   it('state is single use, brand-bound, flow-bound and expires', async () => {
@@ -283,17 +310,28 @@ describe('phone binding gate (AI features)', () => {
     ],
   };
 
-  it('blocks only GoApply WeChat accounts without a verified phone', async () => {
+  it('blocks only GoApply WeChat accounts without a verified phone, while a phone can be bound', async () => {
     const { db } = fakeDb(seed);
-    await expect(phoneBindingRequired('wx', db)).resolves.toBe(true);
-    await expect(phoneBindingRequired('ph', db)).resolves.toBe(false);
-    await expect(phoneBindingRequired('em', db)).resolves.toBe(false);
-    await expect(phoneBindingRequired('intl', db)).resolves.toBe(false);
+    await expect(phoneBindingRequired('wx', db, BASE_ENV)).resolves.toBe(true);
+    await expect(phoneBindingRequired('ph', db, BASE_ENV)).resolves.toBe(false);
+    await expect(phoneBindingRequired('em', db, BASE_ENV)).resolves.toBe(false);
+    await expect(phoneBindingRequired('intl', db, BASE_ENV)).resolves.toBe(false);
     await expect(hasBoundPhone('ph', db)).resolves.toBe(true);
     await expect(hasBoundPhone('wx', db)).resolves.toBe(false);
-    const err = await assertPhoneBound('wx', db).catch((e) => e);
+    const err = await assertPhoneBound('wx', db, BASE_ENV).catch((e) => e);
     expect(err).toBeInstanceOf(AuthCnError);
     expect(err).toMatchObject({ code: 'phone_binding_required', status: 403, details: { bindRoute: '/bind-phone' } });
+  });
+
+  it('WeChat credentials with no SMS provider: the WeChat-only account passes every AI gate', async () => {
+    const { db } = fakeDb(seed);
+    const { SMS_DEV_CONSOLE: _console, ...noSms } = BASE_ENV;
+    expect(noSms.WECHAT_OPEN_APP_ID).toBeTruthy();
+    await expect(phoneBindingRequired('wx', db, noSms)).resolves.toBe(false);
+    await expect(assertPhoneBound('wx', db, noSms)).resolves.toBeUndefined();
+    // A live provider brings the rule back (the dev console never counts in production).
+    await expect(phoneBindingRequired('wx', db, { ...noSms, NODE_ENV: 'production', SMS_DEV_CONSOLE: 'true' })).resolves.toBe(false);
+    await expect(phoneBindingRequired('wx', db, { ...noSms, SMS_DEV_CONSOLE: 'true' })).resolves.toBe(true);
   });
 });
 

@@ -24,8 +24,10 @@
 // them; a NEW account started that way ends with consent_required.
 //
 // A WeChat account without a verified phone must bind one before any AI
-// feature (phone_binding_required); the callback tells the web client
-// (`bind=1`) so it goes to /bind-phone first.
+// feature (phone_binding_required) while a phone can be bound on this
+// deployment (an SMS provider is live; phoneBinding.ts). The callback then
+// tells the web client (`bind=1`) so it goes to /bind-phone first. With no SMS
+// provider nothing is asked and the account uses AI like any other.
 
 import crypto from 'node:crypto';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';

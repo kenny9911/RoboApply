@@ -7,6 +7,7 @@ export {
   PUSH_SW_URL,
   SIGN_OUT_PUSH_TIMEOUT_MS,
   VAPID_QUERY_KEY,
+  boundToAnotherKey,
   deviceLabel,
   forgetPushDeviceOnSignOut,
   pushSupported,

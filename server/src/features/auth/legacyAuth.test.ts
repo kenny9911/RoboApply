@@ -7,15 +7,17 @@
 //     a verification email, no V1 mission;
 //   - signup with an other-brand email → the normal "check your email"
 //     answer + a notice email (no 409);
-//   - GoApply email signup (INT-01): invite mode needs a redeemable invite,
-//     spent with the account; the agreement, the age confirmation and the
-//     CN-0 cross-border consent are required and stored with the prose hash;
+//   - GoApply email signup (INT-01, D5): open by default, in production too,
+//     with no invite code; CN_SIGNUP_MODE=invite needs a redeemable invite,
+//     spent with the account; closed refuses; the agreement, the age
+//     confirmation and the cross-border consent are required and stored with
+//     the prose hash;
 //   - login on the wrong brand → 409 with otherBrandUrl only after the
 //     password matches, else invalid_credentials;
 //   - /auth/me contract (additions present, `mission` dropped);
 //   - frontend/backend session cookie names aligned; new-device email.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
 
 const h = vi.hoisted(() => ({ db: null as unknown, emails: [] as Array<{ template: string; to: string; brand: unknown }> }));
@@ -285,10 +287,61 @@ describe('signup attribution and region through the route (INT-01)', () => {
   });
 });
 
-describe('POST /auth/signup on GoApply (invite mode, CN-0 consents)', () => {
-  // The test process has no CN_SIGNUP_MODE (→ invite, the default), no
-  // DEPLOY_REGION (→ data is processed outside the mainland: CN-0) and is not
-  // production (→ signup open).
+describe('POST /auth/signup on GoApply by default (open sign-up, D5)', () => {
+  // The test process has no CN_SIGNUP_MODE (→ open, the default), no
+  // CN_LEGAL_DOCS_VERSION, no SMS provider and no WeChat credentials.
+  const shownZh = async () => (await buildSignupPolicy(getBrand('goapply'), process.env, 'zh')).requiredConsents;
+  const sent = (shown: Awaited<ReturnType<typeof shownZh>>) => shown.map((c) => ({ type: c.type, granted: true, proseVersion: 'client', proseHash: c.prose!.hash }));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('production: the required consents create the account with no invite code, a session and a verification email', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    for (const name of ['CN_SIGNUP_MODE', 'CN_LEGAL_DOCS_VERSION', 'CN_SMS_PROVIDER', 'SMS_DEV_CONSOLE', 'WECHAT_OPEN_APP_ID', 'WECHAT_MP_APP_ID']) vi.stubEnv(name, '');
+    const policy = await buildSignupPolicy(getBrand('goapply'), process.env, 'zh');
+    expect(policy).toMatchObject({ signupOpen: true, inviteRequired: false, methods: { phoneOtp: false, wechatWeb: false, wechatInApp: false } });
+
+    const res = await signup({ email: 'xin@example.test', password: 'abcdefg1', locale: 'zh', consents: sent(policy.requiredConsents) }, GO);
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ user: { email: 'xin@example.test' }, next: '/onboarding/consent' });
+    expect(res.headers.get('set-cookie')).toContain(`${SESSION_COOKIE_NAME}=`);
+    expect(db().$rows('user')[0]).toMatchObject({ brand: 'goapply', market: 'cn', role: 'seeker', emailVerified: false });
+    const consentTypes = db().$rows('seekerConsentRecord').map((r) => String(r.consentType));
+    expect(consentTypes).toEqual(expect.arrayContaining(['age_16_plus', 'pipl_basic_processing', 'pipl_cross_border']));
+    expect(consentTypes).not.toContain('marketing_email');
+    expect(h.emails).toEqual([expect.objectContaining({ template: 'auth.email_verify', to: 'xin@example.test' })]);
+    // No invite table was touched.
+    expect(db().$rows('rABrandInvite')).toEqual([]);
+  });
+
+  it('the consents are still required: without them → 422 consent_required, nothing written', async () => {
+    const res = await signup({ email: 'xin@example.test', password: 'abcdefg1', consents: AGE }, GO);
+    expect([res.status, res.body.code]).toEqual([422, 'consent_required']);
+    expect(db().$rows('user')).toEqual([]);
+  });
+
+  it('CN_SIGNUP_MODE=closed → 403 signup_closed, nothing written, even with a valid invite code', async () => {
+    vi.stubEnv('CN_SIGNUP_MODE', 'closed');
+    db().$rows('rABrandInvite').push({ id: 'inv1', brand: 'goapply', codeHash: hashInviteCode('ABCDE-FGHJK'), maxUses: 1, uses: 0, expiresAt: null, note: null, createdAt: new Date() });
+    const res = await signup({ email: 'xin@example.test', password: 'abcdefg1', consents: sent(await shownZh()), inviteCode: 'ABCDE-FGHJK' }, GO);
+    expect([res.status, res.body.code]).toEqual([403, 'signup_closed']);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(db().$rows('user')).toEqual([]);
+    expect(db().$rows('rABrandInvite')[0]!.uses).toBe(0);
+    // RoboApply is not affected by GoApply's switch.
+    const robo = await signup({ email: 'ana@example.test', password: 'abcdefg1', consents: AGE });
+    expect(robo.status).toBe(201);
+  });
+});
+
+describe('POST /auth/signup on GoApply (invite mode: CN_SIGNUP_MODE=invite, CN-0 consents)', () => {
+  // The operator made sign-up invite-only. The test process has no
+  // DEPLOY_REGION (→ data is processed outside the mainland: CN-0).
+  beforeAll(() => {
+    vi.stubEnv('CN_SIGNUP_MODE', 'invite');
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
   // What the form sends: every required consent of the sign-up policy with
   // the hash of the text shown beside its box (GET /auth/phone/policy).
   type Shown = Awaited<ReturnType<typeof buildSignupPolicy>>['requiredConsents'];

@@ -39,7 +39,7 @@ const AGE = [{ type: 'age_16_plus', granted: true, proseVersion: 'v1' }];
 const ROBO = 'localhost:3621';
 
 let db: ReturnType<typeof createFakePrisma>;
-let sent: Array<{ template: string; params: Record<string, unknown> }>;
+let sent: Array<{ template: string; params: Record<string, unknown>; brand?: string }>;
 let signedIn: { id: string } | null;
 
 function seed() {
@@ -64,7 +64,7 @@ function makeService(env: Record<string, string>) {
     env,
     now: () => T0,
     sendEmail: async (input) => {
-      sent.push({ template: String(input.template), params: input.params });
+      sent.push({ template: String(input.template), params: input.params, brand: typeof input.brand === 'string' ? input.brand : input.brand?.id });
       return { status: 'sent' };
     },
     createSession: async (userId) => {
@@ -168,6 +168,57 @@ describe('password reset', () => {
     expect(cookieOf(ok.headers)).toContain(`${SESSION_COOKIE_NAME}=sess-1`);
     const again = await on.request<{ code: string }>('POST', `${A}/password/reset`, { host: ROBO, body: { token, password: 'abcdefg1' } });
     expect([again.status, again.body.code]).toEqual([400, 'token_invalid']);
+  });
+});
+
+// D5 (GOAPPLY_PARITY_PLAN.md §3.4): GoApply has no China email transport here,
+// only the shared Resend key. Reset and verification work as on RoboApply.
+describe('password reset and email verification on a GoApply host with only the shared email transport', () => {
+  const GO = 'goapply.localhost:3621';
+  const SHARED = { NODE_ENV: 'development', RESEND_API_KEY: 're_test' };
+  let shared: RouteHarness;
+  let none: RouteHarness;
+  beforeAll(async () => {
+    expect(Object.keys(SHARED).some((name) => name.startsWith('CN_'))).toBe(false);
+    shared = await build(SHARED as never);
+    none = await build({ ...SHARED, CN_EMAIL_TRANSPORT: 'none' } as never);
+  });
+  afterAll(async () => {
+    await Promise.all([shared.close(), none.close()]);
+  });
+  beforeEach(() => {
+    db.$rows('user').push({ id: 'g1', email: 'li@example.cn', brand: 'goapply', role: 'seeker', isActive: true, emailVerified: false, emailIsPlaceholder: false, passwordHash: 'h', createdAt: T0 });
+    db.$rows('seekerProfile').push({ id: 'pg1', userId: 'g1', locale: 'zh', deletedAt: null, onboardingStep: 'done' });
+  });
+
+  it('forgot → the reset mail is sent for GoApply; reset signs in', async () => {
+    expect((await shared.request('POST', `${A}/password/forgot`, { host: GO, body: { email: 'li@example.cn' } })).status).toBe(204);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ template: 'auth.password_reset', brand: 'goapply' });
+    const ok = await shared.request<{ data: { next: string } }>('POST', `${A}/password/reset`, { host: GO, body: { token: tokenFromLastEmail(), password: 'abcdefg1' } });
+    expect(ok.status).toBe(200);
+    expect(cookieOf(ok.headers)).toContain(`${SESSION_COOKIE_NAME}=`);
+    // A RoboApply address asked for on the GoApply host: the same 204, and no GoApply reset mail.
+    sent.length = 0;
+    expect((await shared.request('POST', `${A}/password/forgot`, { host: GO, body: { email: 'ana@example.test' } })).status).toBe(204);
+    expect(sent.filter((m) => m.template === 'auth.password_reset')).toEqual([]);
+  });
+
+  it('verification: the mail is sent for GoApply and the link verifies', async () => {
+    signedIn = { id: 'g1' };
+    expect((await shared.request('POST', `${A}/email/verify/send`, { host: GO })).status).toBe(204);
+    expect(sent.at(-1)).toMatchObject({ template: 'auth.email_verify', brand: 'goapply' });
+    const json = await shared.request<{ data: { status: string } }>('GET', `${A}/email/verify?token=${tokenFromLastEmail()}`, { host: GO, headers: JSON_ACCEPT });
+    expect(json.body.data.status).toBe('verified');
+    expect(db.$rows('user').find((u) => u.id === 'g1')!.emailVerified).toBe(true);
+  });
+
+  it('CN_EMAIL_TRANSPORT=none is the off switch: reset answers 404 on GoApply and still works on RoboApply', async () => {
+    const off = await none.request<{ code: string }>('POST', `${A}/password/forgot`, { host: GO, body: { email: 'li@example.cn' } });
+    expect([off.status, off.body.code]).toEqual([404, 'feature_disabled']);
+    expect(sent).toEqual([]);
+    expect((await none.request('POST', `${A}/password/forgot`, { host: ROBO, body: { email: 'ana@example.test' } })).status).toBe(204);
+    expect(sent).toHaveLength(1);
   });
 });
 

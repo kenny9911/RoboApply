@@ -28,7 +28,14 @@ import {
   type NotificationsResponse,
   type UnsubscribePreview,
 } from '../index.js';
-import { decodeCursor, encodeCursor, readCenter, tipsConsentProse } from '../service.js';
+import { decodeCursor, defaultCapabilities, encodeCursor, readCenter, tipsConsentProse } from '../service.js';
+import { isEnabledForBrand, setFlagOverrideLoader } from '../../../platform/flags.js';
+import { deliverMessage, type DeliverDeps } from '../../alerts/index.js';
+import { PushService, createWebPushChannel } from '../../push/index.js';
+import { createPrismaPushRepo } from '../../push/repo.js';
+import { NotifyCnService, createWechatMpChannel } from '../../notify-cn/index.js';
+// The campus deadline template (a GoApply reminder) registers itself on import.
+import '../../../platform/email/templates/notify/index.js';
 
 const ROBO = getBrand('roboapply');
 const GO = getBrand('goapply');
@@ -745,6 +752,118 @@ describe('routes', () => {
       expect(fb.at(-1)).toEqual({ list: 'alerts', reason: 'too_many', note: 'note 5', at: T0.toISOString() });
       expect((await h.request('POST', `${P}/survey`, { body: { token, reason: 'because' } })).status).toBe(422);
     });
+  });
+});
+
+// D5 (GOAPPLY_PARITY_PLAN.md §3.4, gap G76): with only the shared credentials
+// GoApply has the same channels as RoboApply. WeChat notices are an additional
+// GoApply channel when their credentials exist; their absence removes nothing.
+describe('GoApply channel selection on the shared stack (no WeChat credentials)', () => {
+  const SHARED = {
+    ...SECRET_ENV,
+    RESEND_API_KEY: 're_test',
+    VAPID_PUBLIC_KEY: 'BPublicKeyForTests',
+    VAPID_PRIVATE_KEY: 'privateKeyForTests',
+    VAPID_SUBJECT: 'mailto:support@example.test',
+  };
+  // No per-user flag overrides (the default loader reads the database).
+  beforeAll(() => setFlagOverrideLoader(async () => []));
+  afterAll(() => setFlagOverrideLoader(null));
+
+  it('the default capability resolver: email and this-device push on for both brands, WeChat off, with no CN_ value', async () => {
+    expect(Object.keys(SHARED).some((name) => name.startsWith('CN_') || name.startsWith('WECHAT_'))).toBe(false);
+    const caps = defaultCapabilities(SHARED);
+    const go = await caps('u1', GO);
+    const robo = await caps('u1', ROBO);
+    expect(go).toMatchObject({ email: true, push: true, wechat: false, alerts: true });
+    expect({ email: go.email, push: go.push, wechat: go.wechat }).toEqual({ email: robo.email, push: robo.push, wechat: robo.wechat });
+    // Each off switch closes exactly its channel, on GoApply only.
+    expect(await defaultCapabilities({ ...SHARED, CN_EMAIL_TRANSPORT: 'none' })('u1', GO)).toMatchObject({ email: false, push: true });
+    expect(await defaultCapabilities({ ...SHARED, FLAG_GOAPPLY_WEB_PUSH: 'false' })('u1', GO)).toMatchObject({ email: true, push: false });
+    expect(await defaultCapabilities({ ...SHARED, CN_EMAIL_TRANSPORT: 'none', FLAG_GOAPPLY_WEB_PUSH: 'false' })('u1', ROBO)).toMatchObject({ email: true, push: true });
+    // WeChat notices join when their credentials are set; nothing else changes.
+    const withWechat = await defaultCapabilities({ ...SHARED, WECHAT_MP_APP_ID: 'wx', WECHAT_MP_APP_SECRET: 's', WECHAT_MP_TOKEN: 't' })('u1', GO);
+    expect(withWechat).toMatchObject({ email: true, push: true, wechat: true });
+  });
+
+  it('the settings view of a GoApply account offers in-app, email and this device; a WeChat-only account (no real address) still gets push', async () => {
+    const db = createFakePrisma();
+    seed(db, { userId: 'go', profileId: 'sp_go', brand: 'goapply', country: 'CN', email: 'li@example.cn' });
+    seed(db, { userId: 'wx', profileId: 'sp_wx', brand: 'goapply', country: 'CN', placeholder: true, email: 'u-1@users.goapply.invalid' });
+    const svc = new NotificationCenterService({ db: db as unknown as NotificationsDb, env: SHARED, now: () => T0 });
+    const view = await svc.getPreferences({ id: 'sp_go', userId: 'go', brand: GO });
+    expect(view).toMatchObject({ availableChannels: ['in_app', 'email', 'push'], emailUnavailableReason: null });
+    expect(view.configurableCategories).toEqual(expect.arrayContaining(['alert', 'reminder', 'tips']));
+    expect(view.channels.reminder).toEqual(expect.arrayContaining(['in_app', 'email']));
+    const wx = await svc.getPreferences({ id: 'sp_wx', userId: 'wx', brand: GO });
+    expect(wx).toMatchObject({ availableChannels: ['in_app', 'push'], emailUnavailableReason: 'no_address' });
+    // The reminder email list is open to the account with a real address.
+    expect(await svc.allowsEmail({ brand: GO, userId: 'go', email: 'li@example.cn', list: 'reminders' })).toBe(true);
+  });
+
+  it('a GoApply reminder is delivered in-app, by email and by web push; the WeChat channel is skipped, never a blocker', async () => {
+    const db = createFakePrisma({
+      seed: {
+        rAPushSubscription: [{ id: 's1', userId: 'go', brand: 'goapply', endpoint: 'https://fcm.googleapis.com/fcm/send/go', p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 }],
+        seekerNotification: [],
+      },
+      defaults: { rAPushSubscription: { failedCount: 0, lastOkAt: null, userAgent: null } },
+    });
+    const pushed: string[] = [];
+    const push = new PushService({
+      repo: createPrismaPushRepo(async () => db as never),
+      sender: async (target) => (pushed.push(target.endpoint), { ok: true, statusCode: 201 }),
+      env: SHARED,
+      now: () => T0,
+    });
+    const webPush = createWebPushChannel({
+      service: () => push,
+      preferences: async () => ({ channels: { reminder: ['in_app', 'email', 'push'] } }) as unknown as NotificationPreferencesView,
+      copy: () => ({ title: '网申即将截止', body: null }),
+      env: SHARED,
+    });
+    // The real WeChat channel on the same env: no WECHAT_MP_* → unconfigured.
+    const wechat = createWechatMpChannel({ service: () => new NotifyCnService({ env: SHARED, repo: {} as never }) });
+    expect(wechat.isConfigured()).toBe(false);
+    expect(webPush.isConfigured()).toBe(true);
+
+    const emails: Array<{ template: string; to: string; brand: string }> = [];
+    const deps: DeliverDeps = {
+      createInApp: async (row) => {
+        db.$rows('seekerNotification').push({ id: 'n1', ...row, pushSentAt: null, emailSentAt: null });
+        return { id: 'n1' };
+      },
+      markEmailed: async (id, at) => {
+        db.$rows('seekerNotification').find((r) => r.id === id)!.emailSentAt = at;
+      },
+      sendEmail: async (input) => {
+        emails.push({ template: String(input.template), to: input.to, brand: typeof input.brand === 'string' ? input.brand : input.brand!.id });
+        return { status: 'sent', provider: 'resend', logId: 'log1' };
+      },
+      channels: () => [webPush, wechat],
+      emailEnabled: (brand) => isEnabledForBrand('notify.email', brand, SHARED),
+      now: () => T0,
+    };
+    const outcome = await deliverMessage(
+      {
+        recipient: { userId: 'go', seekerProfileId: 'sp_go', brand: 'goapply', locale: 'zh', email: 'li@example.cn' } as never,
+        kind: 'instant',
+        category: 'reminder',
+        templateKey: 'notify.campus_deadline',
+        params: { eventId: 'ev1', company: '某科技公司', program: '2027 校园招聘', closesAt: '2026-10-20T15:59:00.000Z', officialUrl: 'https://careers.example.cn/campus' },
+        href: '/campus',
+      },
+      deps,
+    );
+    expect(outcome.notificationId).toBe('n1');
+    expect(db.$rows('seekerNotification')[0]).toMatchObject({ brand: 'goapply', category: 'reminder', seekerProfileId: 'sp_go' });
+    expect(outcome.email).toMatchObject({ status: 'sent' });
+    expect(emails).toEqual([{ template: 'notify.campus_deadline', to: 'li@example.cn', brand: 'goapply' }]);
+    expect(outcome.channels.web_push).toEqual({ delivered: true });
+    expect(pushed).toEqual(['https://fcm.googleapis.com/fcm/send/go']);
+    expect(outcome.channels.wechat_mp).toEqual({ delivered: false, skippedReason: 'not_configured' });
+    expect(db.$rows('seekerNotification')[0]!.emailSentAt).toEqual(T0);
+    expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
   });
 });
 

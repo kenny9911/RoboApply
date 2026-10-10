@@ -9,17 +9,19 @@
 //                                    404/410 → deleted now; other failures count up
 //                                    and the device is dropped after PUSH_POLICY.maxFailures.
 //
-// Every entry point refuses a brand web push does not serve
-// (`webPushServesBrand`: GoApply / any `cn` brand) on its own, whatever the
-// `webPush` flag resolves to: the HTTP ones with 404 `feature_disabled`, the
-// senders by sending nothing.
+// Both brands are served (D5). The routes are gated on the `webPush` flag of
+// the request's brand (404 `feature_disabled` when off, e.g.
+// FLAG_GOAPPLY_WEB_PUSH=false); without the brand's VAPID set the HTTP entry
+// points answer 501 `provider_not_configured` and the senders send nothing.
+// Every row and every send is scoped to one brand, so a GoApply device never
+// receives a RoboApply message and the reverse.
 
 import type { z } from 'zod';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import { HttpError } from '../../platform/http.js';
 import { logger } from '../../services/LoggerService.js';
-import { vapidConfig, webPushServesBrand, type VapidConfig } from './config.js';
+import { vapidConfig, type VapidConfig } from './config.js';
 import {
   isAllowedPushEndpoint,
   PUSH_ERROR_CODES,
@@ -90,22 +92,13 @@ export class PushService {
     this.now = deps.now ?? (() => new Date());
   }
 
-  /** The brand's VAPID config; null when missing or when web push does not serve the brand. */
+  /** The brand's VAPID config (its own `CN_VAPID_*` set or the shared one, through `brandEnv`); null when missing. */
   config(brand: Brandish): VapidConfig | null {
-    const b = brandOf(brand);
-    if (!webPushServesBrand(b)) return null;
-    return vapidConfig(b, this.env);
-  }
-
-  /** 404 `feature_disabled` for GoApply (or any brand web push does not serve), even when a flag override is on. */
-  private requireServed(brand: Brandish): ProductBrand {
-    const b = brandOf(brand);
-    if (!webPushServesBrand(b)) throw new HttpError('feature_disabled');
-    return b;
+    return vapidConfig(brandOf(brand), this.env);
   }
 
   private requireConfig(brand: Brandish): VapidConfig {
-    const cfg = this.config(this.requireServed(brand));
+    const cfg = this.config(brand);
     if (!cfg) {
       throw new HttpError('provider_not_configured', 'Alerts on this device are not available right now.', { reason: PUSH_ERROR_CODES.vapidUnset });
     }
@@ -117,7 +110,7 @@ export class PushService {
   }
 
   async subscribe(userId: string, brand: Brandish, body: z.output<typeof CreatePushSubscriptionBodySchema>): Promise<PushSubscriptionView> {
-    const b = this.requireServed(brand);
+    const b = brandOf(brand);
     this.requireConfig(b);
     if (!isAllowedPushEndpoint(body.endpoint)) {
       throw new HttpError('invalid_request', 'This browser’s push service is not supported.', {
@@ -151,13 +144,13 @@ export class PushService {
    * server pruned reads as off, and turning it on re-claims the endpoint.
    */
   async lookup(userId: string, brand: Brandish, endpoint: string): Promise<PushSubscriptionLookupResponse> {
-    const b = this.requireServed(brand);
+    const b = brandOf(brand);
     const row = await this.repo.findByEndpoint(endpoint);
     if (!row || row.userId !== userId || row.brand !== b.id) return { subscription: null };
     return { subscription: toSubscriptionView(row) };
   }
 
-  /** The person's devices on the brand (none for a brand web push does not serve, or without VAPID keys). */
+  /** The person's devices on the brand (none without VAPID keys). */
   async devicesFor(userId: string, brand: Brandish): Promise<PushSubscriptionRow[]> {
     const b = brandOf(brand);
     if (!this.config(b)) return [];

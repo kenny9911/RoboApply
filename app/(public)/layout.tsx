@@ -5,9 +5,14 @@
 // components/features/auth/auth.module.css, built on the Clarity tokens so
 // dark/light and both brands track automatically. The brand panel reads the
 // entry query (`from`, `action`, `job`), hence the Suspense boundary.
+//
+// Under the card the pane keeps room for the analytics consent banner while
+// it is open (one column; zero height otherwise), so the banner never covers
+// the card's last link ("Already have an account? Sign in").
 
 import { Suspense, type ReactNode } from 'react';
 import { AuthBrandPanel, AuthUtilities } from '../../components/auth/AuthShell';
+import styles from '../../components/features/auth/auth.module.css';
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
@@ -18,6 +23,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       <div className="auth-pane">
         <AuthUtilities />
         {children}
+        <div className={styles.consentReserve} aria-hidden="true" data-consent-reserve="" />
       </div>
     </div>
   );

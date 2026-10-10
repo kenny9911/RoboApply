@@ -71,6 +71,30 @@
   }
 }
 
+/* Sign-in and sign-up pages (the split layout, styles/auth.css `.auth-split`).
+   The card ends near the bottom of the window, so the banner must not sit on
+   its last link ("Already have an account? Sign in").
+   - Two columns (≥1024px): the banner docks under the brand panel on the left
+     and never touches the form.
+   - One column: there is no bottom navigation to clear, and the layout
+     reserves the banner's height below the card (`--analytics-consent-h`,
+     components/features/auth/auth.module.css `.consentReserve`). */
+@media (max-width: 760px) {
+  :global(body:has(.auth-split)) .consent {
+    bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  }
+}
+@media (min-width: 1024px) {
+  :global(body:has(.auth-split)) .consent {
+    left: calc(14px + var(--sp-4));
+    right: auto;
+    bottom: calc(14px + var(--sp-4) + env(safe-area-inset-bottom));
+    width: calc(50vw - 21px - 2 * var(--sp-4));
+    max-width: 720px;
+    margin: 0;
+  }
+}
+
 /* ── Getting-started checklist ────────────────────────────────────────── */
 .checklist {
   background: var(--surface);
