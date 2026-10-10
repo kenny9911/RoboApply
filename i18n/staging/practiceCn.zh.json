@@ -1,3 +1,72 @@
 {
-  "practiceCn": {}
+  "practiceCn": {
+    "format": {
+      "label": "AI 面试练习",
+      "sub": "模拟企业常用的 AI 面试形式：逐题限时作答，包括自我介绍、经历类问题、情景题和逻辑题，约 20–30 分钟。",
+      "timing": "思考时间 {prep} 秒，作答不超过 {answer} 秒。"
+    },
+    "report": {
+      "title": "AI 面试练习结果",
+      "format": "本练习模拟企业常用的 AI 面试形式。以下结果只反映本次练习，不代表真实面试的结果。",
+      "loading": "正在检查你的回答…",
+      "noAnswers": "还没有可以检查的回答。回答几道题后即可看到这些结果。",
+      "areas": {
+        "title": "三个方面",
+        "communication": "沟通表达",
+        "communicationHint": "表达清楚、流畅，口头禅少。",
+        "logic": "逻辑结构",
+        "logicHint": "先说结论，再分点展开，最后简短总结。",
+        "behaviour": "经历类回答",
+        "behaviourHint": "用真实经历讲清情况、任务、行动和结果。",
+        "value": "{value} / 100",
+        "basis": {
+          "ai_review": "来源：本次练习的 AI 点评",
+          "text_checks": "来源：对你回答的文字检查",
+          "mixed": "来源：本次练习的点评（部分 AI 点评未完成）",
+          "star_check": "来源：下方的 STAR 检查"
+        }
+      },
+      "star": {
+        "title": "经历类回答的 STAR 检查",
+        "explain": "STAR 指情况（Situation）、任务（Task）、行动（Action）、结果（Result）。好的经历回答四项都有。",
+        "summary": "{total} 个经历类回答中，{complete} 个四项齐全。",
+        "none": "本次练习没有回答经历类问题。",
+        "missingMost": "最常缺少：{part}。",
+        "answer": "第 {n} 个回答",
+        "question": "问题：{question}",
+        "noQuestion": "未记录问题",
+        "questionSource": "问题由 AI 面试官提出；四项检查是对你本人回答的关键词检查。",
+        "found": "{part}：有",
+        "missing": "{part}：缺少",
+        "part": {
+          "situation": "情况",
+          "task": "任务",
+          "action": "行动",
+          "result": "结果"
+        },
+        "tip": {
+          "situation": "先交代事情发生的时间和场景。",
+          "task": "说明你当时要完成什么、目标是什么。",
+          "action": "按步骤说你自己具体做了什么。",
+          "result": "最后说清带来了什么变化，有数字更好。"
+        }
+      },
+      "fillers": {
+        "title": "口头禅",
+        "total": "{count, plural, =0 {没有发现口头禅。} other {共 # 次口头禅}}",
+        "rateChars": "每 100 字 {rate} 次",
+        "rateWords": "每 100 词 {rate} 次",
+        "top": "出现最多：",
+        "item": "{word} ×{count}",
+        "note": "根据转写文字统计。语音转文字可能漏字或多字。"
+      },
+      "how": {
+        "summary": "这些检查是怎么做的",
+        "areasAi": "沟通表达和逻辑结构来自本次练习的 AI 点评；经历类回答来自 STAR 检查。这些结果都不能预测真实面试。",
+        "areasText": "沟通表达和逻辑结构来自对你回答的文字检查，不是 AI 点评；经历类回答来自 STAR 检查。这些结果都不能预测真实面试。",
+        "star": "回答中出现对应的提示词即算有这一项，例如“当时”（情况）、“目标”或“负责”（任务）、“我首先”（行动）、“结果”或具体数字（结果）。",
+        "fillers": "口头禅：“嗯”“呃”每次都算；“啊”“额”只在单独出现时算；“那个”“就是”“然后”只在停顿前或重复时算；另有“怎么说呢”“对吧”等短语。"
+      }
+    }
+  }
 }

@@ -11,6 +11,21 @@
 // Researched across 8 industry clusters (see project memory). The 7 original ids
 // (screening/behavioral/technical/system/case/culture/panel) are preserved —
 // past sessions reference them.
+//
+// Market formats (WP-66): a format may be scoped to a market. The cn
+// AI-interview format (features/cn/interview) is registered here for market
+// `cn` only: `getFormat()` resolves it by id, `formatsAsTypes('cn')` lists it
+// first, and the default intl list (`formatsAsTypes()`, INTERVIEW_TYPES) is
+// unchanged for RoboApply.
+
+import {
+  CN_AI_INTERVIEW_FORMAT_ID,
+  CN_FORMAT_BLUEPRINT_DIRECTIVE,
+  CN_FORMAT_DEFAULT_MINUTES,
+  CN_FORMAT_FOCUS_AREAS,
+} from '../../features/cn/interview/index.js';
+
+export type FormatMarket = 'intl' | 'cn';
 
 export interface InterviewFormat {
   id: string;
@@ -22,6 +37,8 @@ export interface InterviewFormat {
   focusAreas: string[];
   /** Role-category names this format suits, or ['All'] for cross-industry formats. */
   suitedRoleCategories: string[];
+  /** Markets that list this format; absent = intl only. */
+  markets?: readonly FormatMarket[];
 }
 
 export const INTERVIEW_FORMATS: InterviewFormat[] = [
@@ -279,14 +296,41 @@ export const INTERVIEW_FORMATS: InterviewFormat[] = [
   },
 ];
 
-const BY_ID = new Map(INTERVIEW_FORMATS.map((f) => [f.id, f]));
+/**
+ * Formats listed only on one market. The cn AI-interview practice (WP-66): the
+ * one-way, timed format mainland employers commonly use for campus and
+ * early-career hiring. Labels here are the engine's English catalog labels;
+ * GoApply's UI labels come from its own bundle (practiceCn).
+ */
+export const MARKET_FORMATS: InterviewFormat[] = [
+  {
+    id: CN_AI_INTERVIEW_FORMAT_ID,
+    labelEn: "AI Interview Practice",
+    subEn: "Timed one-way format: self-introduction, story questions, situational and structured-thinking questions",
+    minutes: CN_FORMAT_DEFAULT_MINUTES,
+    blueprintDirective: CN_FORMAT_BLUEPRINT_DIRECTIVE,
+    focusAreas: [...CN_FORMAT_FOCUS_AREAS],
+    suitedRoleCategories: ["All"],
+    markets: ["cn"],
+  },
+];
 
+const BY_ID = new Map([...INTERVIEW_FORMATS, ...MARKET_FORMATS].map((f) => [f.id, f]));
+
+/** Any registered format by id (intl or market-scoped). */
 export function getFormat(id?: string | null): InterviewFormat | undefined {
   return id ? BY_ID.get(id) : undefined;
 }
 
+/** The formats a market lists: its own formats first, then the shared intl list. */
+export function formatsForMarket(market: FormatMarket = 'intl'): InterviewFormat[] {
+  if (market === 'intl') return INTERVIEW_FORMATS;
+  return [...MARKET_FORMATS.filter((f) => f.markets?.includes(market)), ...INTERVIEW_FORMATS];
+}
+
 /** Thin {id,label,sub,minutes,suitedRoleCategories} projection for the catalog /
- *  picker — never leaks the blueprintDirective over the wire. */
-export function formatsAsTypes(): Array<{ id: string; label: string; sub: string; minutes: number; suitedRoleCategories: string[] }> {
-  return INTERVIEW_FORMATS.map((f) => ({ id: f.id, label: f.labelEn, sub: f.subEn, minutes: f.minutes, suitedRoleCategories: f.suitedRoleCategories }));
+ *  picker — never leaks the blueprintDirective over the wire. The default
+ *  (intl) list is the 28 researched formats, unchanged. */
+export function formatsAsTypes(market: FormatMarket = 'intl'): Array<{ id: string; label: string; sub: string; minutes: number; suitedRoleCategories: string[] }> {
+  return formatsForMarket(market).map((f) => ({ id: f.id, label: f.labelEn, sub: f.subEn, minutes: f.minutes, suitedRoleCategories: f.suitedRoleCategories }));
 }
