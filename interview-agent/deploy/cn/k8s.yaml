@@ -1,0 +1,77 @@
+# Kubernetes (Aliyun ACK, cn-shanghai) recipe — GoApply interview voice worker.
+# Mirrors ../k8s.yaml with the GoApply name, the deploy/cn image and its
+# domestic backend pins. No inbound ports: the worker dials out to the GoApply
+# LiveKit server and calls back to the GoApply API.
+#
+#   kubectl create namespace goapply
+#   kubectl -n goapply create secret generic goapply-interview-agent-env \
+#     --from-env-file=worker.env          # filled from worker.env.example;
+#                                         # gitignored (deploy/cn/.gitignore), never commit it
+#   kubectl -n goapply apply -f k8s.yaml
+#
+# Replace <namespace>/<tag> with the ACR repository the CI pushes to.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goapply-interview-agent
+  namespace: goapply
+  labels: { app: goapply-interview-agent, brand: goapply }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: goapply-interview-agent }
+  template:
+    metadata:
+      labels: { app: goapply-interview-agent, brand: goapply }
+    spec:
+      # Drain window: running interviews (20–30 min AI面试 practice) finish
+      # before the pod is killed.
+      terminationGracePeriodSeconds: 5400
+      containers:
+        - name: worker
+          image: registry.cn-shanghai.aliyuncs.com/<namespace>/goapply-interview-agent:<tag>
+          envFrom:
+            - secretRef: { name: goapply-interview-agent-env }
+          env:
+            # Repeated from the image so a different image can't drop them.
+            - { name: INTERVIEW_ENGINE_AGENT_NAME, value: GoApply-Interview }
+            - { name: WORKER_BRAND, value: goapply }
+            - { name: LLM_BACKEND, value: openai_compatible }
+            - { name: STT_BACKEND, value: dashscope_paraformer }
+            - { name: TTS_BACKEND, value: dashscope_cosyvoice }
+            - { name: WORKER_NUM_IDLE_PROCESSES, value: "1" }
+          ports:
+            - { containerPort: 8081, name: health }
+          readinessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: goapply-interview-agent
+  namespace: goapply
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: goapply-interview-agent
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 50 }
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 3600

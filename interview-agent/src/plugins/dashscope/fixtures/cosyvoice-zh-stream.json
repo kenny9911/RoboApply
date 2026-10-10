@@ -1,0 +1,99 @@
+{
+  "name": "cosyvoice-zh-stream",
+  "kind": "tts",
+  "source": "Protocol reference fixture: frames follow the DashScope WebSocket API reference examples (duplex run-task / continue-task / finish-task envelope); not a live capture. Re-record with dist/plugins/dashscope/record-fixture.js when a DASHSCOPE_API_KEY is available.",
+  "model": "cosyvoice-v2",
+  "frames": [
+    {
+      "dir": "client",
+      "action": "run-task"
+    },
+    {
+      "dir": "server",
+      "json": {
+        "header": {
+          "task_id": "{{task_id}}",
+          "event": "task-started",
+          "attributes": {}
+        },
+        "payload": {}
+      }
+    },
+    {
+      "dir": "client",
+      "action": "continue-task"
+    },
+    {
+      "dir": "server",
+      "json": {
+        "header": {
+          "task_id": "{{task_id}}",
+          "event": "result-generated",
+          "attributes": {}
+        },
+        "payload": {
+          "output": {
+            "sentence": {
+              "index": 0,
+              "words": []
+            }
+          },
+          "usage": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "base64": "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"
+    },
+    {
+      "dir": "server",
+      "base64": "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"
+    },
+    {
+      "dir": "client",
+      "action": "finish-task"
+    },
+    {
+      "dir": "server",
+      "base64": "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"
+    },
+    {
+      "dir": "server",
+      "json": {
+        "header": {
+          "task_id": "{{task_id}}",
+          "event": "result-generated",
+          "attributes": {}
+        },
+        "payload": {
+          "output": {
+            "sentence": {
+              "index": 0,
+              "words": []
+            }
+          },
+          "usage": {
+            "characters": 14
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "json": {
+        "header": {
+          "task_id": "{{task_id}}",
+          "event": "task-finished",
+          "attributes": {}
+        },
+        "payload": {
+          "output": {},
+          "usage": {
+            "characters": 14
+          }
+        }
+      }
+    }
+  ]
+}
