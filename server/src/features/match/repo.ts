@@ -7,8 +7,6 @@
 // area never opens a pool).
 
 import type { Market } from '../../platform/brand/registry.js';
-import { coerceFilterSet } from '../search/index.js';
-import { expandTaxonomyIds } from '../jobs/taxonomy/index.js';
 import { normalizeCompanyName } from '../jobs/normalize/index.js';
 import type { MatchDimension } from './contract.js';
 import type { MatchJobRecord, UserMatchInputs } from './context.js';
@@ -53,8 +51,6 @@ export interface MatchRepo {
   getKeywords(jobId: string): Promise<KeywordInput[] | null>;
   /** Users of a brand active since `since`, most recent first. */
   activeUsers(brandId: string, since: Date, limit: number): Promise<string[]>;
-  /** Recent public canonical jobs for the precompute candidate set. */
-  candidateJobs(input: { market: Market; userId: string; filters: unknown; since: Date; limit: number }): Promise<MatchJobRecord[]>;
   /** Of `jobIds`, those with a fresh v3 AI score for this resume content and model. */
   freshAiScoredJobIds(input: { userId: string; jobIds: string[]; resumeVariantId: string; resumeContentHash: string; modelUsed: string; promptVersion: string }): Promise<Set<string>>;
 }
@@ -115,10 +111,6 @@ function toRecord(row: JobRow): MatchJobRecord {
  */
 export function companyKey(name: string): string {
   return normalizeCompanyName(name);
-}
-
-function hasFraudFlags(v: unknown): boolean {
-  return Array.isArray(v) && v.length > 0;
 }
 
 async function db() {
@@ -258,27 +250,6 @@ export function createPrismaMatchRepo(): MatchRepo {
         take: limit,
       });
       return rows.map((r) => r.id);
-    },
-
-    async candidateJobs({ market, userId, filters, since, limit }) {
-      const p = await db();
-      const f = coerceFilterSet(filters, { market }).value;
-      const roles = f.taxonomyIds?.length ? expandTaxonomyIds(f.taxonomyIds) : [];
-      const rows = await p.rAJob.findMany({
-        where: {
-          market,
-          isCanonical: true,
-          archivedAt: null,
-          closedAt: null,
-          OR: [{ visibility: 'public' }, { ownerUserId: userId }],
-          postedAt: { gte: since },
-          ...(roles.length ? { taxonomyIds: { hasSome: roles } } : {}),
-        },
-        select: JOB_SELECT,
-        orderBy: { postedAt: 'desc' },
-        take: limit,
-      });
-      return rows.filter((r) => !hasFraudFlags(r.fraudFlags)).map((r) => toRecord(r as JobRow));
     },
 
     async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion }) {

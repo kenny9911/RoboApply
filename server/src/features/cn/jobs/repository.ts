@@ -15,12 +15,18 @@
 import type prismaClient from '../../../lib/prisma.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { logger } from '../../../services/LoggerService.js';
+import type { DeductionSku } from '../../../lib/matchBilling.js';
 
 /** Feed report reasons (features/feed/contract.ts REPORT_REASONS) that feed the anti-fraud list (F-FEED-12 cn). */
 export const FRAUD_REPORT_REASONS = ['scam', 'training_loan', 'pay_to_work', 'fee_required'] as const;
 
-/** Cost rows reuse the enrichment SKU with `metadata.task` until SKU `ra_cn_fraud_check` is registered (handoff request). */
-export const FRAUD_COST_SKU = 'ra_job_enrich';
+/**
+ * The fraud check's own cost SKU (registered in raFeatureCatalog.ts and the
+ * DeductionSku union): a platform cost under the brand's system user, shown
+ * apart from job enrichment. `metadata.task` is kept for rows written before
+ * the SKU existed (those sit under `ra_job_enrich`).
+ */
+export const FRAUD_COST_SKU = 'ra_cn_fraud_check' satisfies DeductionSku;
 
 export interface CnFraudJob {
   id: string;

@@ -28,7 +28,7 @@ import {
 } from './competitiveness.js';
 import { createCompetitivenessService } from './CompetitivenessService.js';
 import { toMatchJob } from './context.js';
-import { previewOverrides, sampleFilters } from './reportInventory.js';
+import { sampleFilters } from './reportInventory.js';
 import { createMemoryFitReportStore } from './reportStore.js';
 import { defaultProviderFor } from './scorerRoute.js';
 import { createMemoryReportInventory, jobRecord, matchUser, reportJobs, searchProfileWire } from './testkit.js';
@@ -283,12 +283,9 @@ describe('view, hash and stored rows', () => {
 });
 
 describe('report inventory helpers', () => {
-  it('the sample never applies the fit-tier view; another saved search replaces every active filter', () => {
+  it('the sample never applies the fit-tier view (a view filter would bias it toward good fits)', () => {
     expect(sampleFilters({ fitTier: 'great', workModels: ['remote'] })).toEqual({ workModels: ['remote'] });
-    const active = searchProfileWire({ id: 'a', filters: { workModels: ['onsite'], q: 'go', fitTier: 'good' } });
-    expect(previewOverrides(active, active)).toEqual({ fitTier: 'all' });
-    const other = searchProfileWire({ id: 'b', filters: { seniority: ['senior'], fitTier: 'great' } });
-    expect(previewOverrides(active, other)).toEqual({ workModels: undefined, q: undefined, seniority: ['senior'], fitTier: 'all' });
+    expect(sampleFilters({})).toEqual({});
   });
 });
 

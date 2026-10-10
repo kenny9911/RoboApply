@@ -568,5 +568,19 @@ describe('review regressions: end to end', () => {
     const job = normalizeProviderJob({ ...base, sourceUrl: 'https://www.indeed.com/viewjob?jk=1' }, 'jsearch', { now });
     expect(job.originalHost).toBe('careers.acme.example');
   });
-  it.todo('SCHEMA-2 RAJob.originalHost: the WP-16b upsert persists originalHost once the column exists');
+  it('SCHEMA-2 RAJob.originalHost: the WP-16b upsert persists originalHost (insert column, VALUES and ON CONFLICT … SET)', async () => {
+    const { UPSERT_COLUMNS, buildJobUpsertSql, toUpsertRow } = await import('../ingest/upsert.js');
+    const job = normalizeProviderJob({ ...base, sourceUrl: 'https://www.indeed.com/viewjob?jk=1' }, 'jsearch', { now });
+    expect(job.originalHost).toBe('careers.acme.example');
+    const row = toUpsertRow(job, null, 'cjobid000000000000000000');
+    expect(row.originalHost).toBe('careers.acme.example');
+    const sql = buildJobUpsertSql([row]);
+    const text = sql.text.replace(/\s+/g, ' ');
+    expect(text).toMatch(/INSERT INTO "RAJob" \([^)]*"originalHost"/);
+    expect(text).toContain('"originalHost" = EXCLUDED."originalHost"');
+    expect(sql.values[UPSERT_COLUMNS.indexOf('originalHost')]).toBe('careers.acme.example');
+    // A posting with no usable host stores NULL, never a job board's or LinkedIn's host.
+    const none = toUpsertRow(normalizeProviderJob({ ...base, applyUrl: 'https://www.linkedin.com/jobs/view/1', sourceUrl: null }, 'linkedin', { now }), null);
+    expect(none.originalHost === null || !/linkedin/.test(none.originalHost)).toBe(true);
+  });
 });

@@ -7,6 +7,17 @@
 //   countForFilters / limitingFilters   "Show N jobs" and "What's limiting your results"
 //   hide / unhide / report / impressions / rating / explore / nlQuery / newCount / skillsCheck
 //   preview / publicList                Assistant tools (WP-50) and the visitor list (WP-78)
+//   sampleForFilters / alertCandidates  job ids for a filter set with the feed's own filter
+//                                       semantics, no ranking and no session (WP-77, WP-39a)
+//
+// Browse: `query` with `overrides.taxonomyIds` and no `searchProfileId` lists a
+// category the way the Explore tile counts it — market and visibility rules
+// only, public rows, none of the user's saved filters.
+//
+// GoApply recruitment-info mode (R-14): the routes are gated as a whole by the
+// `jobs.feed` capability. The seams other areas call (counts, limiting
+// filters, preview, public list, samples, alert candidates) check the mode
+// themselves, so with CN_RECRUITMENT_INFO_MODE=off they return nothing.
 //
 // GoApply: with 个性化推荐 off or not yet chosen the list is ordered by date
 // posted and filters only, and no fit is used or shown (PIPL Art. 24; R-14 and
@@ -14,13 +25,30 @@
 // only model call here; it goes through `aiAllowed()` and the per-brand LLM layer.
 
 import { createHash } from 'node:crypto';
+import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { Market } from '../../platform/brand/registry.js';
+import { cnRecruitmentInfoMode } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
 import { logger } from '../../services/LoggerService.js';
+import type { ExplainMatchInput } from '../compliance/index.js';
+import type { MatchExplanation } from '../compliance/contract.js';
+import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
 import { taxonomyCategories, taxonomyLabel } from '../jobs/taxonomy/index.js';
-import { preScore, skillKey, toMatchJob, SCORER_PROMPT_VERSION, type MatchService, type MatchUser, type PreScoreResult } from '../match/index.js';
+import {
+  MatchDimensionsSchema,
+  preScore,
+  skillKey,
+  splitSkills,
+  toMatchJob,
+  SCORER_PROMPT_VERSION,
+  type MatchDimension,
+  type MatchService,
+  type MatchUser,
+  type PreScoreResult,
+} from '../match/index.js';
 import {
   FILTER_FIELDS,
+  coerceFilterSet,
   mergeFilterSet,
   normalizeFilterSet,
   parseFilterSet,
@@ -68,7 +96,18 @@ import {
   type RankContext,
 } from './ranking.js';
 import type { FeedRepo, FeedSessionRecord } from './repo.js';
-import { cnDate, countSql, exploreCountsSql, filterPredicates, retrievalSql, rowsByIdSql, type SqlScope } from './sql.js';
+import {
+  browseTaxonomySql,
+  cardExtrasSql,
+  cnDate,
+  countSql,
+  exploreCountsSql,
+  filterPredicates,
+  jobIdsSql,
+  retrievalSql,
+  rowsByIdSql,
+  type SqlScope,
+} from './sql.js';
 import { requiredSkills, toMatchRecord, type FeedCtx, type FeedJobRow } from './types.js';
 import { normalizeCompanyName, normalizeSkills } from '../jobs/normalize/index.js';
 
@@ -83,7 +122,7 @@ const UNSPECIFIC_HIDE: ReadonlySet<string> = new Set(['not_interested', 'other']
 export interface FeedServiceDeps {
   repo: FeedRepo;
   match: Pick<MatchService, 'userContext' | 'config'>;
-  search: Pick<SearchProfileService, 'getActive' | 'get'>;
+  search: Pick<SearchProfileService, 'getActive' | 'get'> & Partial<Pick<SearchProfileService, 'findById'>>;
   /** RoboApply: always; GoApply: a live `personalized_recommendation` grant (fails closed). */
   personalized: (userId: string, market: Market) => Promise<boolean>;
   /** Feed refresh without a cursor: 20 per 10 min per user. */
@@ -95,6 +134,16 @@ export interface FeedServiceDeps {
   planner: (text: string, ctx: { userId: string; locale: string }) => Promise<PlannerPlan>;
   now?: () => Date;
   exploreTtlMs?: number;
+  /**
+   * May this market's third-party postings be shown (GoApply R-14)? Default:
+   * always outside `cn`; on `cn` only while CN_RECRUITMENT_INFO_MODE allows it.
+   */
+  postingsAllowed?: (market: Market) => boolean;
+  env?: EnvSource;
+  /** `marketHooks.cardMeta` (CN / TW card lines). Absent → items carry no `cardMeta`. May load its hooks on first use. */
+  cardMeta?: (job: MarketHookJob, ctx: MarketHookContext) => Record<string, Record<string, unknown>> | Promise<Record<string, Record<string, unknown>>>;
+  /** `explainMatch` (PIPL Art. 24 "Why this job"). Absent → items carry no `explanation`. */
+  explain?: (input: ExplainMatchInput) => MatchExplanation;
 }
 
 export interface FeedQueryInput {
@@ -106,13 +155,53 @@ export interface FeedQueryInput {
   fitTier?: 'all' | 'good' | 'great';
 }
 
+/** Options of the unranked id seams. */
+export interface SampleOptions {
+  /** The only order: newest first (no ranking, no fit). */
+  order?: 'newest';
+  /** At most 400 (FEED_LIMITS.retrievalLimit). */
+  limit: number;
+  /** Public rows only (never the user's own imported jobs). Default true. */
+  publicOnly?: boolean;
+}
+
+export interface AlertCandidateOptions {
+  /** Jobs first seen after this moment. */
+  since: Date;
+  limit: number;
+  /** Also require `postedAt` on or after this (instant alerts skip old postings we only just found). */
+  postedSince?: Date | null;
+}
+
+export interface AlertCandidates {
+  /** Newest first by when we first saw the job; hidden jobs of the profile's owner are left out. */
+  ids: string[];
+  /** More than `limit` jobs matched: a count built from `ids` is a floor, not a total (D3). */
+  truncated: boolean;
+}
+
 type HideReason = (typeof HIDE_REASONS)[number];
 type ReportReason = (typeof REPORT_REASONS)[number];
 type RatingReason = (typeof RATING_REASONS)[number];
 
+interface ScoreEntry {
+  badge: Candidate['badge'];
+  fit: number | null;
+  /** The stored AI score's dimensions (scorer v3), when the badge is an AI score. */
+  aiDimensions?: MatchDimension[] | null;
+}
+
 interface Scored {
   user: MatchUser | null;
-  byId: Map<string, { badge: Candidate['badge']; fit: number | null }>;
+  byId: Map<string, ScoreEntry>;
+}
+
+/** The id and version a browse session is hashed under (it reads no search profile). */
+const BROWSE_PROFILE = { id: 'browse', version: 0 } as const;
+
+function aiDimensionsOf(v: unknown): MatchDimension[] | null {
+  const parsed = MatchDimensionsSchema.safeParse(v);
+  return parsed.success && parsed.data.length ? parsed.data : null;
 }
 
 interface Window {
@@ -142,6 +231,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   const newCountTtl = deps.newCountTtlMs ?? 2 * 60_000;
   const newCountCache = new Map<string, { at: number; res: NewCountResponse }>();
 
+  /** Third-party postings may be shown in this market (GoApply recruitment-info mode, R-14). */
+  function postingsAllowed(market: Market): boolean {
+    if (deps.postingsAllowed) return deps.postingsAllowed(market);
+    // The platform's one resolver of the mode (R-04); cn/jobs `cnJobCapabilities().postings` is this same test.
+    return market !== 'cn' || cnRecruitmentInfoMode(deps.env ?? process.env) !== 'off';
+  }
+
   /** GoApply: a live 个性化推荐 grant (fails closed); RoboApply: always. */
   function isPersonalized(userId: string, market: Market): Promise<boolean> {
     return deps.personalized(userId, market).catch(() => market !== 'cn');
@@ -167,8 +263,17 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return normalizeFilterSet(parsed.value);
   }
 
-  function scopeOf(ctx: Pick<FeedCtx, 'market' | 'userId' | 'now'>): SqlScope {
-    return { market: ctx.market, userId: ctx.userId, now: ctx.now };
+  function scopeOf(ctx: Pick<FeedCtx, 'market' | 'userId' | 'now'>, browse = false): SqlScope {
+    return { market: ctx.market, userId: ctx.userId, now: ctx.now, ...(browse ? { publicOnly: true } : {}) };
+  }
+
+  /**
+   * Browse = a category list from Explore: `overrides.taxonomyIds` with no
+   * `searchProfileId`. It reads none of the user's saved filters.
+   */
+  function isBrowse(input: Pick<FeedQueryInput, 'searchProfileId' | 'overrides'>): boolean {
+    const ids = input.overrides?.taxonomyIds;
+    return !input.searchProfileId && Array.isArray(ids) && ids.length > 0;
   }
 
   // ── Retrieval ─────────────────────────────────────────────────────────
@@ -186,9 +291,21 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     ctx: FeedCtx,
     filters: FilterSet,
     range: { from: Date | null; to: Date | null; toId?: string | null; orderBy?: 'posted' | 'deadline' },
+    browse = false,
   ): Promise<Window> {
     const rows = await repo.queryRows(
-      retrievalSql({ scope: scopeOf(ctx), filters, fields: FILTER_FIELDS, from: range.from, to: range.to, toId: range.toId ?? null, orderBy: range.orderBy, limit: L.retrievalLimit }),
+      retrievalSql({
+        scope: scopeOf(ctx, browse),
+        filters,
+        // A browse matches the category the way the Explore tile counts it (browseTaxonomySql).
+        fields: browse ? FILTER_FIELDS.filter((f) => f !== 'taxonomyIds' && f !== 'titles') : FILTER_FIELDS,
+        extra: browse ? [browseTaxonomySql(filters.taxonomyIds ?? [])] : undefined,
+        from: range.from,
+        to: range.to,
+        toId: range.toId ?? null,
+        orderBy: range.orderBy,
+        limit: L.retrievalLimit,
+      }),
     );
     const last = rows.length >= L.retrievalLimit ? rows[rows.length - 1] : undefined;
     if (last?.postedAt) return { rows, windowEndsAt: last.postedAt, windowEndsId: last.id };
@@ -202,22 +319,22 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   }
 
   /** First window: 14 days, widened to 45 under 60 rows; a posted-within filter is one window. */
-  async function firstWindow(ctx: FeedCtx, filters: FilterSet, sort: FeedSort): Promise<Window> {
+  async function firstWindow(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, browse = false): Promise<Window> {
     if (sort === 'deadline') {
       // One window over the age floor: stated close dates first, then the rest newest first (no refill).
-      const w = await retrieve(ctx, filters, { from: floorOf(filters, ctx.now), to: null, orderBy: 'deadline' });
+      const w = await retrieve(ctx, filters, { from: floorOf(filters, ctx.now), to: null, orderBy: 'deadline' }, browse);
       return { rows: w.rows, windowEndsAt: floorOf(filters, ctx.now), windowEndsId: null };
     }
-    if (filters.postedWithinDays) return retrieve(ctx, filters, { from: floorOf(filters, ctx.now), to: null });
-    let w = await retrieve(ctx, filters, { from: new Date(ctx.now.getTime() - L.firstWindowDays * DAY_MS), to: null });
-    if (w.rows.length < L.widenBelowRows) w = await retrieve(ctx, filters, { from: new Date(ctx.now.getTime() - L.widenWindowDays * DAY_MS), to: null });
+    if (filters.postedWithinDays) return retrieve(ctx, filters, { from: floorOf(filters, ctx.now), to: null }, browse);
+    let w = await retrieve(ctx, filters, { from: new Date(ctx.now.getTime() - L.firstWindowDays * DAY_MS), to: null }, browse);
+    if (w.rows.length < L.widenBelowRows) w = await retrieve(ctx, filters, { from: new Date(ctx.now.getTime() - L.widenWindowDays * DAY_MS), to: null }, browse);
     return w;
   }
 
   // ── Scoring and ranking ───────────────────────────────────────────────
 
   async function score(ctx: FeedCtx, rows: FeedJobRow[], personalized: boolean): Promise<Scored> {
-    const byId = new Map<string, { badge: Candidate['badge']; fit: number | null }>();
+    const byId = new Map<string, ScoreEntry>();
     if (!personalized) {
       for (const r of rows) byId.set(r.id, { badge: null, fit: null });
       return { user: null, byId };
@@ -234,7 +351,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       }
       const a = ai.get(r.id);
       const aiScore: AiScore | null = a ? { score: a.score, tier: (a.tier as AiScore['tier']) ?? null } : null;
-      byId.set(r.id, { badge: fitBadge(pre, aiScore, cfg.tiers), fit: fitOf(aiScore?.score, pre?.score) });
+      byId.set(r.id, { badge: fitBadge(pre, aiScore, cfg.tiers), fit: fitOf(aiScore?.score, pre?.score), aiDimensions: a ? aiDimensionsOf(a.dimensions) : null });
     }
     return { user, byId };
   }
@@ -286,16 +403,67 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return rows[0]?.market ?? null;
   }
 
-  async function items(ctx: FeedCtx, cands: Candidate[], user: MatchUser | null, offset: number): Promise<FeedItem[]> {
-    const tracker = await repo.trackerStates(ctx.userId, cands.map((c) => c.row.id));
-    return cands.map((c, i) =>
-      toFeedItem(c.row, { user, fit: c.badge, tracker: tracker.has(c.row.id) ? { status: tracker.get(c.row.id)! } : null, position: offset + i, now: ctx.now }),
-    );
+  /**
+   * "Why this job" for one card (PIPL Art. 24). Not personalised (GoApply
+   * without 个性化推荐): the recency explanation, no reasons. Personalised: the
+   * scored dimensions behind the badge — the stored AI dimensions for an AI
+   * score, else the deterministic pre-score's. No badge → no explanation.
+   */
+  function explanationFor(ctx: FeedCtx, c: CardCandidate, user: MatchUser | null, personalized: boolean): MatchExplanation | undefined {
+    if (!deps.explain) return undefined;
+    const market = ctx.market === 'cn' ? 'cn' : 'intl';
+    try {
+      if (!personalized) return deps.explain({ market, personalized: false });
+      if (!c.badge || !user) return undefined;
+      const job = toMatchJob(toMatchRecord(c.row));
+      const dimensions = c.badge.kind === 'ai' && c.aiDimensions?.length ? c.aiDimensions : preScore(user, job, deps.match.config()).dimensions;
+      const { aligned, missing } = splitSkills(user, job);
+      return deps.explain({ market, personalized: true, score: c.badge.score, kind: c.badge.kind, dimensions, skills: { aligned, missing } });
+    } catch (err) {
+      logger.warn('FEED', 'explanation failed for a job', { jobId: c.row.id, error: err instanceof Error ? err.message : String(err) });
+      return undefined;
+    }
+  }
+
+  /** `marketHooks.cardMeta` for the cards of one page (CN / TW lines); a card without market lines carries none. */
+  async function cardMetaFor(ctx: Pick<FeedCtx, 'market' | 'brandId'>, rows: FeedJobRow[]): Promise<Map<string, Record<string, Record<string, unknown>>>> {
+    const out = new Map<string, Record<string, Record<string, unknown>>>();
+    if (!deps.cardMeta || !rows.length) return out;
+    let extras = new Map<string, Record<string, unknown>>();
+    try {
+      extras = new Map((await repo.queryCardExtras(cardExtrasSql(rows.map((r) => r.id)))).map((e) => [e.id, e]));
+    } catch (err) {
+      logger.warn('FEED', 'card extras unavailable; market lines use the card fields only', { error: err instanceof Error ? err.message : String(err) });
+    }
+    const hookCtx: MarketHookContext = { brand: ctx.brandId as MarketHookContext['brand'], market: ctx.market, stage: 'card' };
+    for (const row of rows) {
+      const meta = await deps.cardMeta({ ...row, ...(extras.get(row.id) ?? {}), market: ctx.market } as MarketHookJob, hookCtx);
+      if (meta && Object.keys(meta).length) out.set(row.id, meta);
+    }
+    return out;
+  }
+
+  type CardCandidate = Pick<Candidate, 'row' | 'badge'> & { aiDimensions?: MatchDimension[] | null };
+
+  async function items(ctx: FeedCtx, cands: CardCandidate[], user: MatchUser | null, offset: number | null, personalized: boolean): Promise<FeedItem[]> {
+    const [tracker, meta] = await Promise.all([repo.trackerStates(ctx.userId, cands.map((c) => c.row.id)), cardMetaFor(ctx, cands.map((c) => c.row))]);
+    return cands.map((c, i) => {
+      const item = toFeedItem(c.row, {
+        user,
+        fit: c.badge,
+        tracker: tracker.has(c.row.id) ? { status: tracker.get(c.row.id)! } : null,
+        position: offset === null ? null : offset + i,
+        now: ctx.now,
+        cardMeta: meta.get(c.row.id),
+        explanation: explanationFor(ctx, c, user, personalized),
+      });
+      return item;
+    });
   }
 
   // ── Sessions ──────────────────────────────────────────────────────────
 
-  function queryHash(input: { profile: SearchProfileWire; filters: FilterSet; sort: FeedSort; order: FeedOrder; market: Market }): string {
+  function queryHash(input: { profile: Pick<SearchProfileWire, 'id' | 'version'>; filters: FilterSet; sort: FeedSort; order: FeedOrder; market: Market }): string {
     return sha(stableStringify({ p: input.profile.id, v: input.profile.version, f: input.filters, s: input.sort, o: input.order, m: input.market }));
   }
 
@@ -311,8 +479,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     rc: RankContext;
     /** Rows and scores already in memory (page 1 avoids a second fetch). */
     rowCache: Map<string, FeedJobRow>;
-    scoreCache: Map<string, { badge: Candidate['badge']; fit: number | null }>;
+    scoreCache: Map<string, ScoreEntry>;
     user: MatchUser | null;
+    /** A category list from Explore: public rows, no saved filters. */
+    browse: boolean;
   }
 
   /** Append the next older window(s) until `need` ids exist or the age floor is reached (≤3 windows a request). */
@@ -323,7 +493,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     for (let i = 0; i < 3 && s.jobIds.length < need && olderRemain(s, floor) && state.sort !== 'deadline'; i++) {
       const to = s.windowEndsAt;
       const from = new Date(Math.max(floor.getTime(), to.getTime() - L.widenWindowDays * DAY_MS));
-      const w = await retrieve(state.ctx, state.filters, { from, to, toId: s.windowEndsId });
+      const w = await retrieve(state.ctx, state.filters, { from, to, toId: s.windowEndsId }, state.browse);
       const known = new Set(s.jobIds);
       const fresh = w.rows.filter((r) => !known.has(r.id));
       const scored = await score(state.ctx, fresh, state.personalized);
@@ -334,7 +504,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       const ranked = rankRows(fresh, scored, state.sort, state.rc, state.filters, state.personalized, head);
       for (const c of ranked.kept) {
         state.rowCache.set(c.row.id, c.row);
-        state.scoreCache.set(c.row.id, { badge: c.badge, fit: c.fit });
+        state.scoreCache.set(c.row.id, scored.byId.get(c.row.id) ?? { badge: c.badge, fit: c.fit });
       }
       const prevRanks = Array.isArray(s.ranks) ? s.ranks : [];
       s = {
@@ -356,7 +526,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   async function rowsFor(state: QueryState, ids: string[]): Promise<FeedJobRow[]> {
     const missing = ids.filter((id) => !state.rowCache.has(id));
     if (missing.length) {
-      const rows = await repo.queryRows(rowsByIdSql(scopeOf(state.ctx), missing));
+      const rows = await repo.queryRows(rowsByIdSql(scopeOf(state.ctx, state.browse), missing));
       for (const r of rows) state.rowCache.set(r.id, r);
     }
     return ids.map((id) => state.rowCache.get(id)).filter((r): r is FeedJobRow => !!r);
@@ -373,13 +543,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       state.user = state.user ?? scored.user;
       for (const [id, v] of scored.byId) state.scoreCache.set(id, v);
     }
-    const cands: Candidate[] = rows.map((row) => ({ row, ...(state.scoreCache.get(row.id) ?? { badge: null, fit: null }), rank: 0 }));
+    const cands: CardCandidate[] = rows.map((row) => ({ row, ...(state.scoreCache.get(row.id) ?? { badge: null, fit: null }) }));
     const floor = floorOf(state.filters, s.createdAt);
     const exhausted = state.sort === 'deadline' || !olderRemain(s, floor);
     const nextOffset = offset + L.pageSize;
     const more = nextOffset < s.jobIds.length || !exhausted;
     return {
-      items: await items(state.ctx, cands, state.user, offset),
+      items: await items(state.ctx, cands, state.user, offset, state.personalized),
       cursor: more ? `${s.id}:${nextOffset}` : null,
       endOfFeed: !more,
       hiddenByTier: Math.max(0, s.totalEstimate - s.jobIds.length),
@@ -405,14 +575,16 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
         );
       }
     }
-    const profile = await loadProfile(ctx.userId, input.searchProfileId);
+    const browse = isBrowse(input);
+    // A browse reads no search profile: the category, the market and the visibility rules only.
+    const profile: Pick<SearchProfileWire, 'id' | 'version' | 'filters'> = browse ? { ...BROWSE_PROFILE, filters: {} } : await loadProfile(ctx.userId, input.searchProfileId);
     const filters = effectiveFilters(ctx.market, profile.filters, input);
     const personalized = await isPersonalized(ctx.userId, ctx.market);
     const order: FeedOrder = personalized ? 'personalized' : 'recency';
     const sort: FeedSort = personalized || (input.sort !== 'recommended' && input.sort !== 'best_fit') ? input.sort : 'newest';
     const hash = queryHash({ profile, filters, sort, order, market: ctx.market });
     const rc = await rankContext(ctx, filters, personalized);
-    const state: QueryState = { ctx, filters, sort, personalized, rc, rowCache: new Map(), scoreCache: new Map(), user: null };
+    const state: QueryState = { ctx, filters, sort, personalized, rc, rowCache: new Map(), scoreCache: new Map(), user: null, browse };
 
     if (cursor) {
       const session = await repo.getSession(cursor.sessionId, ctx.userId);
@@ -420,18 +592,18 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       return page(state, session, cursor.offset, order);
     }
 
-    const w = await firstWindow(ctx, filters, sort);
+    const w = await firstWindow(ctx, filters, sort, browse);
     const scored = await score(ctx, w.rows, personalized);
     state.user = scored.user;
     const ranked = rankRows(w.rows, scored, sort, rc, filters, personalized);
     for (const c of ranked.kept) {
       state.rowCache.set(c.row.id, c.row);
-      state.scoreCache.set(c.row.id, { badge: c.badge, fit: c.fit });
+      state.scoreCache.set(c.row.id, scored.byId.get(c.row.id) ?? { badge: c.badge, fit: c.fit });
     }
     const session = await repo.createSession({
       userId: ctx.userId,
-      searchProfileId: profile.id,
-      profileVersion: profile.version,
+      searchProfileId: browse ? null : profile.id,
+      profileVersion: browse ? null : profile.version,
       sort,
       queryHash: hash,
       jobIds: ranked.kept.map((c) => c.row.id),
@@ -441,14 +613,16 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       windowEndsId: w.windowEndsId,
       expiresAt: new Date(ctx.now.getTime() + L.sessionTtlMin * 60_000),
     });
-    // Opening the list is a visit: the Jobs badge counts from here.
-    await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
+    // Opening the list is a visit: the Jobs badge counts from here (a category browse is not).
+    if (!browse) await repo.stampFeedVisit(ctx.userId, ctx.now).catch((err) => logger.warn('FEED', 'could not stamp the feed visit', { error: String(err) }));
     return page(state, session, 0, order);
   }
 
   // ── Counts ────────────────────────────────────────────────────────────
 
   async function countFor(ctx: Pick<FeedCtx, 'market' | 'userId' | 'now'>, filters: FilterSet): Promise<FeedCountResult> {
+    // Counts are of third-party postings only (public rows): none may be shown → none are counted.
+    if (!postingsAllowed(ctx.market)) return { count: 0, capped: false };
     const n = await repo.queryCount(countSql({ scope: scopeOf(ctx), filters, fields: FILTER_FIELDS, cap: L.countCap }));
     return { count: Math.min(n, L.countCap), capped: n > L.countCap };
   }
@@ -462,6 +636,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   /** One count query per candidate relaxation; the gain is how many jobs that filter removes. */
   async function limitingFilters(ctx: FeedCtx, searchProfileId: string): Promise<LimitingFilter[]> {
     const profile = await loadProfile(ctx.userId, searchProfileId);
+    if (!postingsAllowed(ctx.market)) return [];
     const base = await countFor(ctx, profile.filters);
     const cands = relaxations(profile.filters);
     const out: LimitingFilter[] = [];
@@ -580,7 +755,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const cats = taxonomyCategories();
     let hit = exploreCache.get(ctx.market);
     if (!hit || ctx.now.getTime() - hit.at > exploreTtl) {
-      const rows = await repo.queryCategoryCounts(exploreCountsSql(ctx.market, cats.map((c) => c.id)));
+      // The same age floor as the lists, so a tile's count is what its browse list can reach.
+      const rows = await repo.queryCategoryCounts(exploreCountsSql(ctx.market, cats.map((c) => c.id), floorOf({}, ctx.now)));
       hit = { at: ctx.now.getTime(), counts: new Map(rows.map((r) => [r.taxonomyId, r.count])), asOf: ctx.now };
       exploreCache.set(ctx.market, hit);
     }
@@ -671,7 +847,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const scored = await score(ctx, w.rows, personalized);
     const rc = await rankContext(ctx, filters, personalized);
     const ranked = rankRows(w.rows, scored, eff, rc, filters, personalized);
-    return { cands: ranked.kept.slice(0, limit), user: scored.user };
+    const cands: CardCandidate[] = ranked.kept.slice(0, limit).map((c) => ({ row: c.row, badge: c.badge, aiDimensions: scored.byId.get(c.row.id)?.aiDimensions ?? null }));
+    return { cands, user: scored.user, personalized };
   }
 
   async function skillsCheck(ctx: FeedCtx): Promise<SkillsCheckResponse> {
@@ -701,24 +878,82 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   // ── Seams for other areas ─────────────────────────────────────────────
 
   async function preview(ctx: FeedCtx, input: { q?: string; filters?: Partial<FilterSet>; sort?: FeedSort; limit: number }): Promise<FeedItem[]> {
+    if (!postingsAllowed(ctx.market)) return [];
     const profile = await loadProfile(ctx.userId);
     const filters = effectiveFilters(ctx.market, profile.filters, { overrides: input.filters as Record<string, unknown> | undefined, q: input.q });
     const sort = input.sort === 'deadline' && ctx.market !== 'cn' ? 'recommended' : (input.sort ?? 'recommended');
-    const { cands, user } = await topRanked(ctx, filters, sort, Math.max(1, Math.min(50, input.limit)));
-    const tracker = await repo.trackerStates(ctx.userId, cands.map((c) => c.row.id));
-    return cands.map((c) => toFeedItem(c.row, { user, fit: c.badge, tracker: tracker.has(c.row.id) ? { status: tracker.get(c.row.id)! } : null, position: null, now: ctx.now }));
+    const { cands, user, personalized } = await topRanked(ctx, filters, sort, Math.max(1, Math.min(50, input.limit)));
+    return items(ctx, cands, user, null, personalized);
   }
 
+  /**
+   * Job ids for a filter set, newest first: the feed's own filter semantics
+   * (radius, posted-within, GoApply fields, market, lifecycle, fraud and
+   * hidden-state rules), with no ranking, no fit and no session. `publicOnly`
+   * (the default) leaves the user's own imported jobs out in the query itself,
+   * so an aggregate over the sample counts public rows only (TASK_PLAN §2.2).
+   */
+  async function sampleForFilters(ctx: Pick<FeedCtx, 'market' | 'userId' | 'now'>, filters: FilterSet, opts: SampleOptions): Promise<string[]> {
+    if (!postingsAllowed(ctx.market)) return [];
+    const limit = Math.max(1, Math.min(L.retrievalLimit, Math.floor(opts.limit)));
+    const scope: SqlScope = { ...scopeOf(ctx), publicOnly: opts.publicOnly !== false };
+    const { fitTier: _view, ...rest } = filters;
+    return repo.queryIds(jobIdsSql({ scope, filters: rest, fields: FILTER_FIELDS, from: floorOf(rest, ctx.now), limit, orderBy: 'posted' }));
+  }
+
+  /**
+   * Candidate jobs for a saved search's alert: public rows first seen after
+   * `since` that pass the search's filters exactly as the feed applies them.
+   * No ranking and no feed session; the alert sender picks and scores.
+   * Runs for the profile's owner (their hidden jobs are left out).
+   */
+  async function alertCandidates(ctx: Pick<FeedCtx, 'market' | 'now'>, searchProfileId: string, opts: AlertCandidateOptions): Promise<AlertCandidates> {
+    if (!postingsAllowed(ctx.market)) return { ids: [], truncated: false };
+    const profile = deps.search.findById ? await deps.search.findById(searchProfileId) : null;
+    if (!profile) return { ids: [], truncated: false };
+    const limit = Math.max(1, Math.min(L.retrievalLimit, Math.floor(opts.limit)));
+    const parsed = parseFilterSet(profile.filters, { market: ctx.market });
+    const { fitTier: _view, ...filters } = normalizeFilterSet(parsed.ok ? parsed.value : coerceFilterSet(profile.filters, { market: ctx.market }).value);
+    const scope: SqlScope = { market: ctx.market, userId: profile.userId, now: ctx.now, publicOnly: true };
+    const ids = await repo.queryIds(
+      jobIdsSql({
+        scope,
+        filters,
+        fields: FILTER_FIELDS,
+        // Instant alerts pass their own posted floor (an undated posting still counts);
+        // otherwise the feed's age floor (120 days, or the search's "posted within").
+        from: opts.postedSince ?? floorOf(filters, ctx.now),
+        allowUndated: !!opts.postedSince,
+        firstSeenAfter: opts.since,
+        limit: limit + 1,
+        orderBy: 'first_seen',
+      }),
+    );
+    return { ids: ids.slice(0, limit), truncated: ids.length > limit };
+  }
+
+  /**
+   * The visitor list. Every row passes the public-page rules the SEO pages use
+   * (seo `basePublicWhere`: public, canonical, open, not expired, no fraud
+   * flag, `publicDisplay`, and a source still allowed to be redisplayed), so a
+   * removed, closed or private job is never listed — nor named by the visitor
+   * assistant, which reads this list. The rules are part of the statement, so
+   * its LIMIT counts listable rows (newer rows that fail a rule do not push
+   * valid older ones out); `publicPageIds` then checks every row once more
+   * with the SEO predicate itself.
+   */
   async function publicList(ctx: { market: Market; now: Date }, input: { role?: string; city?: string; country?: string; limit: number }): Promise<PublicFeedItem[]> {
+    if (!postingsAllowed(ctx.market)) return [];
     const raw: Record<string, unknown> = {};
     if (input.role?.trim()) raw.q = input.role.trim();
     if (input.country) raw.country = input.country;
     if (input.city?.trim()) raw.locations = [{ label: input.city.trim(), city: input.city.trim(), ...(input.country ? { country: input.country } : {}), radiusKm: 0 }];
     const parsed = parseFilterSet(raw, { market: ctx.market });
     const filters = parsed.ok ? parsed.value : {};
+    const publicBoards = await repo.publicBoards();
     const rows = await repo.queryRows(
       retrievalSql({
-        scope: { market: ctx.market, userId: null, now: ctx.now, publicOnly: true, publicDisplayOnly: true, ignoreHidden: true },
+        scope: { market: ctx.market, userId: null, now: ctx.now, publicOnly: true, publicDisplayOnly: true, publicBoards, ignoreHidden: true },
         filters,
         fields: FILTER_FIELDS,
         from: new Date(ctx.now.getTime() - L.widenWindowDays * DAY_MS),
@@ -726,7 +961,9 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
         limit: Math.max(1, Math.min(50, input.limit)),
       }),
     );
-    return rows.map((r) => publicItem(r, null, ctx.now));
+    if (!rows.length) return [];
+    const allowed = await repo.publicPageIds(rows.map((r) => r.id), ctx.market, ctx.now);
+    return rows.filter((r) => allowed.has(r.id)).map((r) => publicItem(r, null, ctx.now));
   }
 
   async function countForFilters(ctx: Pick<FeedCtx, 'market' | 'userId' | 'now'>, filters: FilterSet): Promise<FeedCountResult> {
@@ -756,6 +993,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     skillsCheck,
     preview,
     publicList,
+    sampleForFilters,
+    alertCandidates,
     recordInteraction,
     now,
     /** Test helper: drop the Explore cache. */

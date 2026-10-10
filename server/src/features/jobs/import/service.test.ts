@@ -28,7 +28,7 @@ import { FIRECRAWL_SCRAPE_URL, scrapeJobPage } from './firecrawl.js';
 import { draftImportId } from './importId.js';
 import { createImportLimitStore, type CounterDelegate } from './limits.js';
 import { createPrismaImportRepository } from './repository.js';
-import { createJobImportService, type JobImportDeps } from './service.js';
+import { createJobImportService, storedWarnings, type JobImportDeps } from './service.js';
 import { createCompanyReadService, type CompaniesDb } from '../companies/index.js';
 import type { ImportJobResponse, ManualJob } from './contract.js';
 
@@ -484,6 +484,38 @@ describe('status, list and remove', () => {
     });
     await expect(svc.status('u1', 'garbage')).rejects.toMatchObject({ code: 'not_found' });
     await expect(svc.status('u1', 'job_missing')).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('GoApply: the cn hook’s warnings for an own import reach the draft, the saved job and GET /jobs/import/:id (WP-41 → WP-35)', async () => {
+    brandId = 'goapply';
+    const cnFlag = { rule: 'cn_training_loan', evidence: '入职需办理培训贷', at: NOW.toISOString(), method: 'keywords' };
+    // What cnAfterNormalize returns at stage 'import': the flags on the job and `cnFraudWarnings` for the form.
+    afterNormalize.mockImplementation(async (job: MarketHookJob) => ({ ...job, fraudFlags: [cnFlag], cnFraudWarnings: [{ rule: cnFlag.rule, evidence: cnFlag.evidence }] }));
+    const svc = service();
+    const saved = await svc.importJob('u1', { manual: manual({ title: '销售专员', company: '示例科技有限公司' }) });
+    expect(saved.warnings).toEqual([{ rule: 'cn_training_loan', evidence: '入职需办理培训贷' }]);
+    expect(await svc.status('u1', saved.importId)).toEqual({
+      status: 'done',
+      jobId: saved.jobId,
+      missingFields: [],
+      warnings: [{ rule: 'cn_training_loan', evidence: '入职需办理培训贷' }],
+      reason: null,
+    });
+    expect((await svc.listAdded('u1', { limit: 20 })).items[0]!.warnings).toEqual([{ rule: 'cn_training_loan', evidence: '入职需办理培训贷' }]);
+
+    // A hook that reports only `cnFraudWarnings` (no fraudFlags) is still shown and stored.
+    afterNormalize.mockImplementation(async (job: MarketHookJob) => ({ ...job, cnFraudWarnings: [{ rule: 'cn_fee_required', evidence: '需缴纳押金' }] }));
+    const other = await svc.importJob('u1', { manual: manual({ title: '客服专员', company: '另一家公司' }) });
+    expect(other.warnings).toEqual([{ rule: 'cn_fee_required', evidence: '需缴纳押金' }]);
+    expect((await svc.status('u1', other.importId)).warnings).toEqual([{ rule: 'cn_fee_required', evidence: '需缴纳押金' }]);
+  });
+
+  it('storedWarnings: every stored flag once; GoApply fraud flags via cnImportWarnings; nothing for a clean job', () => {
+    const cnFlags = [{ rule: 'cn_training_loan', evidence: '培训贷', at: NOW.toISOString(), method: 'keywords' }];
+    expect(storedWarnings({ market: 'cn', fraudFlags: cnFlags })).toEqual([{ rule: 'cn_training_loan', evidence: '培训贷' }]);
+    expect(storedWarnings({ market: 'intl', fraudFlags: [{ rule: 'intl_pay_to_apply', evidence: 'pay a fee', at: NOW.toISOString() }] })).toEqual([{ rule: 'intl_pay_to_apply', evidence: 'pay a fee' }]);
+    expect(storedWarnings({ market: 'cn', fraudFlags: null })).toEqual([]);
+    expect(storedWarnings({ fraudFlags: 'not a list' })).toEqual([]);
   });
 
   it('lists only the user’s live imports, newest first, with tracker status and a cursor', async () => {

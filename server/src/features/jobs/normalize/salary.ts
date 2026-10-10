@@ -154,10 +154,10 @@ export function currencyFromText(text: string, country: string | null, market: '
 
 // ── Amounts ────────────────────────────────────────────────────────────────
 
-const NEGOTIABLE_RE = /待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议|依公司規定|依公司规定|按公司规定|\bnegotiable\b|\bcompetitive (?:salary|pay|compensation)\b|\bDOE\b|depending on experience|commensurate with experience/i;
+export const NEGOTIABLE_RE = /待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议|依公司規定|依公司规定|按公司规定|\bnegotiable\b|\bcompetitive (?:salary|pay|compensation)\b|\bDOE\b|depending on experience|commensurate with experience/i;
 /** TW legal floor sentence accompanying 面議 (Employment Services Act Art. 5). */
 // The digit lookbehinds keep "104萬以上" / "140,000以上" (real figures) out of the scrub.
-const TW_FLOOR_RE =
+export const TW_FLOOR_RE =
   /(?:經常性)?(?:薪資|薪资|月薪)?\s*(?:達|达)?\s*(?:新台幣|NT\$)?\s*(?<![\d.,，〇一二三四五六七八九十百千])(?:4|四)\s*萬(?:元)?\s*(?:或)?以上|(?:經常性)?薪資達\s*(?<![\d.,，])40,?000\s*元?\s*(?:或)?以上/;
 
 const CUR_PREFIX = String.raw`(?:US\$|NT\$|HK\$|S\$|A\$|AU\$|C\$|CA\$|R\$|MX\$|JP¥|USD|TWD|NTD|CNY|RMB|HKD|SGD|GBP|EUR|CAD|AUD|INR|JPY|[$£€¥￥₹₩])`;

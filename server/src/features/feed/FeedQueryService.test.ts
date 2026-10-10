@@ -549,7 +549,10 @@ describe('counts and the search seams', () => {
   it('For you / Saved / Added by you / Applied', async () => {
     repo.countResponder = () => 123;
     repo.tracker.set('a', 'bookmarked').set('b', 'applied').set('c', 'bookmarked');
-    repo.rows.push(feedRow({ id: 'imp', visibility: 'private', ownerUserId: 'u1' }));
+    // "Added by you" = the user's own imports that are still open (WP-35): sourceBoard 'user_import', not archived.
+    repo.rows.push(feedRow({ id: 'imp', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' }));
+    repo.rows.push(feedRow({ id: 'imp_gone', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', archivedAt: NOW }));
+    repo.rows.push(feedRow({ id: 'imp_other', visibility: 'private', ownerUserId: 'u2', sourceBoard: 'user_import' }));
     expect(await service().counts(ctx())).toEqual({ forYou: 123, saved: 2, external: 1, applied: 1 });
   });
 

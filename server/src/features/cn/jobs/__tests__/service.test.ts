@@ -47,6 +47,17 @@ describe('afterNormalize', () => {
     expect(out.cnFraudWarnings).toBeUndefined();
   });
 
+  it('reads 校招, 网申截止, 实习天数 and 院校层次 next to 届别 — each with its sentence, only when the posting states it', async () => {
+    const text = '面向2027届校园招聘。\n每周至少实习4天。\n985/211院校本科及以上优先。\n网申截止时间：2026年11月30日。';
+    const out = await cnAfterNormalize({ market: 'cn', provider: 'bank_gohire', title: '后端开发实习生', companyName: 'A公司', descriptionPlain: text }, ingest, fakeDeps());
+    const tags = out.marketTags as Array<{ tag: string; evidenceQuote: string }>;
+    expect(tags.map((t) => t.tag).sort()).toEqual(['apply_closes:2026-11-30', 'class_year:2027', 'cn_hire:campus', 'intern_days:4', 'school_tier:211', 'school_tier:985']);
+    expect(tags.every((t) => text.includes(t.evidenceQuote))).toBe(true);
+    // A posting that states none of it gets no tags (the column stays NULL).
+    const plain = await cnAfterNormalize({ market: 'cn', provider: 'bank_gohire', title: '后端工程师', companyName: 'A公司', descriptionPlain: '负责后端服务开发。' }, ingest, fakeDeps());
+    expect(plain.marketTags).toBeNull();
+  });
+
   it('user import gets warnings (WP-35 shows them before saving)', async () => {
     const out = await cnAfterNormalize({ market: 'cn', provider: 'user_import', title: '客服', companyName: 'B', descriptionPlain: FEE }, importCtx, fakeDeps());
     expect(out.cnFraudWarnings).toEqual([{ rule: 'upfront_fee', evidence: FEE }]);
@@ -80,13 +91,51 @@ describe('afterNormalize', () => {
     expect(byId.fraudFlags).toBeNull();
   });
 
-  it('a review-log read failure at normalize does not drop the job', async () => {
+  it('a review-log read failure at ingest does not drop the job and writes no new flag: a flag an admin cleared is never raised again by an outage', async () => {
+    // job_1's fee sentence was cleared by an admin; the review log then becomes unreadable.
+    const deps = seeded1();
+    await resolveFraud(deps, 'job_1', { decision: 'clear' }, 'admin_1');
+    deps.store.reviewsCached = async () => {
+      throw new Error('db down');
+    };
+    const reingest = { market: 'cn' as const, provider: 'bank_gohire', sourceBoard: 'gohire', externalId: 'gh_job_1', title: '储备干部', companyName: 'A公司', descriptionPlain: FEE };
+    const out = await cnAfterNormalize(reingest, ingest, deps);
+    // Ingest stores flags add-only, so nothing may be emitted while "cleared" is unknown.
+    expect(out.fraudFlags).toBeNull();
+    expect(out.title).toBe('储备干部');
+    expect(out.sourceName).toBe('GoHire');
+    // Flags the job arrived with pass through untouched (not replaced, not dropped).
+    const carried = [{ rule: 'training_loan', evidence: '培训贷', at: '2026-10-01T00:00:00.000Z', method: 'llm' }];
+    expect((await cnAfterNormalize({ ...reingest, fraudFlags: carried }, ingest, deps)).fraudFlags).toEqual(carried);
+    // The tags do not depend on the review log.
+    expect((await cnAfterNormalize({ ...reingest, descriptionPlain: `面向2027届毕业生。${FEE}` }, ingest, deps)).marketTags).toEqual([
+      { tag: 'class_year:2027', evidenceQuote: '面向2027届毕业生。', evidenceUrl: null },
+    ]);
+  });
+
+  it('with the review log unreadable, afterEnrich (which retries) is what flags the posting; an import still warns the user before saving', async () => {
     const deps = fakeDeps();
     deps.store.reviewsCached = async () => {
       throw new Error('db down');
     };
+    // Import: the user sees the warning before saving, and the import is enriched next.
+    const imported = await cnAfterNormalize({ market: 'cn', provider: 'user_import', title: '客服', companyName: 'B', descriptionPlain: FEE }, importCtx, deps);
+    expect(imported.cnFraudWarnings).toEqual([{ rule: 'upfront_fee', evidence: FEE }]);
+    // Ingest: nothing now; the enrichment hook reads the log itself and flags the stored row.
+    const ingested = await cnAfterNormalize({ market: 'cn', title: '客服', companyName: 'B', descriptionPlain: FEE }, ingest, deps);
+    expect(ingested.fraudFlags).toBeNull();
+    deps.repo.jobs.set('job_9', cnJob({ id: 'job_9', descriptionPlain: FEE, fraudFlags: null }));
+    await cnAfterEnrich({ ...cnJob({ id: 'job_9', descriptionPlain: FEE, fraudFlags: null }) } as never, enrich, deps);
+    expect(deps.repo.jobs.get('job_9')!.fraudFlags).toEqual([expect.objectContaining({ rule: 'upfront_fee', method: 'keywords' })]);
+  });
+
+  it('a blacklist read failure alone keeps the keyword flags (the cleared set is known)', async () => {
+    const deps = fakeDeps();
+    deps.store.blacklistCached = async () => {
+      throw new Error('db down');
+    };
     const out = await cnAfterNormalize({ market: 'cn', title: '客服', companyName: 'B', descriptionPlain: FEE }, ingest, deps);
-    expect(out.fraudFlags).toEqual([expect.objectContaining({ rule: 'upfront_fee' })]);
+    expect(out.fraudFlags).toEqual([expect.objectContaining({ rule: 'upfront_fee', method: 'keywords' })]);
   });
 
   it('intl jobs pass through untouched', async () => {
@@ -105,6 +154,19 @@ describe('afterEnrich', () => {
     expect(saved.fraudFlags).toEqual([intl, expect.objectContaining({ rule: 'upfront_fee' })]);
     expect(saved.marketTags).toEqual([expect.objectContaining({ tag: 'class_year:2026' })]);
     expect(deps.enqueued).toEqual([]);
+  });
+
+  it('re-reads the posting tags on the stored row: a tag the posting no longer states is dropped, enrichment’s own tags stay', async () => {
+    const deps = fakeDeps();
+    const hukou = { tag: 'hukou', evidenceQuote: '可落户上海', evidenceUrl: null };
+    const stale = [
+      hukou,
+      { tag: 'cn_hire:social', evidenceQuote: '社招', evidenceUrl: null },
+      { tag: 'apply_closes:2026-10-01', evidenceQuote: '网申截止时间：2026年10月1日', evidenceUrl: null },
+    ];
+    deps.repo.jobs.set('job_1', cnJob({ descriptionPlain: '负责后端开发。', marketTags: stale }));
+    await cnAfterEnrich({ ...cnJob({ descriptionPlain: '本岗位校招。\n网申截止时间：2026年11月30日。' }), marketTags: stale }, enrich, deps);
+    expect((deps.repo.jobs.get('job_1')!.marketTags as Array<{ tag: string }>).map((t) => t.tag)).toEqual(['hukou', 'cn_hire:campus', 'apply_closes:2026-11-30']);
   });
 
   it('queues the LLM check for gray wording with no flag, only when a CN model exists', async () => {

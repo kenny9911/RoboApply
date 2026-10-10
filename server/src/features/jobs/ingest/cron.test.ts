@@ -128,7 +128,41 @@ describe('crons', () => {
     expect(texts.some((t) => t.includes('information_schema.columns'))).toBe(true);
     expect(texts.some((t) => t.includes(`'source_removed'`))).toBe(false);
     expect(texts.find((t) => t.startsWith('UPDATE "RAJob"'))).toContain(`"closeReason" = 'expired'`);
-    expect(texts.at(-1)).toContain('WITH ranked AS');
+    expect(texts.some((t) => t.includes('WITH ranked AS'))).toBe(true);
+    // Then the enrichment catch-up reads (nothing to queue here), after the dedupe repair.
+    expect(res).toMatchObject({ enrichQueued: 0 });
+    expect(texts.at(-1)).toContain('"enrichVersion"');
+    expect(texts.findIndex((t) => t.includes('WITH ranked AS'))).toBeLessThan(texts.findIndex((t) => t.includes('"enrichVersion" <')));
+  });
+
+  it('jobs-maintain queues the enrichment catch-up under the cron’s brand and kicks the drain', async () => {
+    installStubs([stubAdapter('jsearch')]);
+    const { db } = createIngestFake();
+    const stale = [{ id: 'old1' }, { id: 'old2' }];
+    const raw = db.$queryRaw.bind(db);
+    (db as unknown as { $queryRaw: unknown }).$queryRaw = async (first: unknown, ...rest: unknown[]) => {
+      const text = (first as { text?: string; strings?: string[] }).text ?? (first as { strings?: string[] }).strings?.join('?') ?? '';
+      if (text.includes('"enrichVersion" <')) return stale;
+      return (raw as (...a: unknown[]) => Promise<unknown>)(first, ...rest);
+    };
+    const queued: Array<{ kind: string; payload: unknown; options?: { brand?: string; dedupeKey?: string } }> = [];
+    const kick = vi.fn();
+    setIngestCronDepsForTests({
+      db,
+      env: {},
+      kick,
+      enqueueMany: async (items) => {
+        queued.push(...items);
+        return { inserted: items.length };
+      },
+    });
+    const res = await runJobsMaintain({ ...ctx(), name: 'jobs-maintain' });
+    expect(res).toMatchObject({ enrichQueued: 2 });
+    expect(queued.map((q) => [q.kind, q.payload, q.options?.brand])).toEqual([
+      ['job.enrich', { jobId: 'old1' }, 'roboapply'],
+      ['job.enrich', { jobId: 'old2' }, 'roboapply'],
+    ]);
+    expect(kick).toHaveBeenCalledWith(['job.enrich']);
   });
 
   it('jobs-maintain with the SR-16b-1 columns runs the per-query rule once per metered search provider', async () => {
@@ -143,12 +177,13 @@ describe('crons', () => {
 });
 
 describe('maintenance SQL', () => {
-  it('expires public non-bank postings past their expiry or 45 days old', () => {
+  it('expires public postings past their expiry or 45 days old — never a bank job or a public ATS board posting (WP-42)', () => {
     const rec = toRecordedSql('$executeRaw', buildExpireSql('intl'), []);
     expect(rec.text).toMatchSnapshot();
     expect(rec.text).toContain(`"closeReason" = 'expired'`);
     expect(rec.text).toContain('"sourceBoard" <> ALL(');
-    expect(rec.values).toEqual(['intl', ['robohire', 'gohire'], 45]);
+    // The banks and the ats_public boards: their own sync closes what the source stopped listing.
+    expect(rec.values).toEqual(['intl', ['robohire', 'gohire', 'greenhouse', 'lever', 'ashby', 'smartrecruiters'], 45]);
   });
 
   it('archives a job only after 2 counted runs of the query that last returned it, inside that query\'s date window', () => {

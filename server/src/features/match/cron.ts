@@ -8,8 +8,13 @@
 //   1. skip users without AI consent (GoApply `aiAllowed=false`: zero model
 //      calls), without a resume, or whose per-user precompute allowance
 //      (SCORE_PRECOMPUTE_PER_USER_DAY, default 25) is spent;
-//   2. pre-score recent candidate jobs from their active search profile;
+//   2. pre-score the candidate jobs the feed would list for them (the feed's
+//      `preview` seam: their active search with the feed's own filters, order
+//      and visibility rules), so AI scores land on the jobs they will see;
 //   3. queue `job.score` for the best pre-scores that have no fresh AI score.
+// One user's failure (their profile, their search, the feed preview) is
+// logged and counted; the run goes on with the next user, so a user whose
+// preview throws cannot block everyone behind them run after run.
 // The brand's daily budget (brandEnv SCORE_DAILY_BUDGET, default 20,000) is
 // checked here (skip when spent) and charged per model call by the worker.
 // The AI score is a platform cost, never a user credit.
@@ -22,7 +27,6 @@ import {
   PRECOMPUTE_ACTIVE_DAYS,
   PRECOMPUTE_CANDIDATES,
   PRECOMPUTE_MAX_USERS,
-  PRECOMPUTE_WINDOW_DAYS,
   SCORE_WINDOW_SEC,
   precomputePerUserDay,
   scoreCounterKeys,
@@ -30,6 +34,7 @@ import {
 } from './config.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
+import { logger } from '../../services/LoggerService.js';
 import { defaultScorerRouteAllowed } from './scorerRoute.js';
 import type { MatchService } from './MatchService.js';
 import type { MatchRepo } from './repo.js';
@@ -44,6 +49,13 @@ export interface PrecomputeDeps {
   routeAllowed?: (brand: ProductBrand, model: string) => boolean | Promise<boolean>;
   consume: (input: { key: string; windows: readonly RateWindow[]; cost?: number }) => Promise<RateLimitResult>;
   enqueue: (kind: string, payload: JobScorePayload, options: EnqueueOptions) => Promise<EnqueuedItem>;
+  /**
+   * The ids of the jobs the feed lists first for this user (feed `preview`),
+   * at most `limit`. Empty for a user whose list is not personalised (GoApply
+   * without 个性化推荐: no fit is used or shown, so none is computed) and when
+   * the brand may not show postings.
+   */
+  candidateIds: (userId: string, limit: number, brand: ProductBrand) => Promise<string[]>;
   env?: EnvSource;
 }
 
@@ -74,33 +86,29 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
     if (!users.length) return { skipped: 'no_work', processed: 0 };
 
     const perUserCap = precomputePerUserDay(deps.env);
-    const since = new Date(ctx.now.getTime() - PRECOMPUTE_WINDOW_DAYS * DAY_MS);
     let processed = 0;
     let enqueued = 0;
     let skippedConsent = 0;
+    let failed = 0;
 
-    for (const userId of users) {
-      if (ctx.budget.exhausted(RESERVE_MS) || budgetLeft <= 0) break;
-      processed += 1;
+    /** One user's share of the run: the number of `job.score` items newly queued for them. */
+    const queueForUser = async (userId: string): Promise<number> => {
       const userKey = scoreCounterKeys.precompute(brand.id, userId);
       const userWindow = [{ limit: perUserCap, windowSec: SCORE_WINDOW_SEC }];
       const allowance = (await deps.consume({ key: userKey, windows: userWindow, cost: 0 })).remaining;
-      if (allowance <= 0) continue;
+      if (allowance <= 0) return 0;
       if (!(await deps.aiAllowed(userId))) {
         skippedConsent += 1;
-        continue;
+        return 0;
       }
-      const { user, resume } = await deps.service.userContext(userId);
-      if (!resume) continue;
-      const candidates = await deps.repo.candidateJobs({
-        market: brand.market,
-        userId,
-        // The active search profile's roles (any level); none → recent jobs of the market.
-        filters: user.targetTaxonomyIds.length ? { taxonomyIds: user.targetTaxonomyIds } : null,
-        since,
-        limit: PRECOMPUTE_CANDIDATES,
-      });
-      if (!candidates.length) continue;
+      const { resume } = await deps.service.userContext(userId);
+      if (!resume) return 0;
+      // Candidates = the feed's own list for this user (no second, narrower query).
+      const ids = await deps.candidateIds(userId, PRECOMPUTE_CANDIDATES, brand);
+      if (!ids.length) return 0;
+      const rows = new Map((await deps.repo.getJobs(ids)).map((r) => [r.id, r]));
+      const candidates = ids.map((id) => rows.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
+      if (!candidates.length) return 0;
       const pre = (await deps.service.preScoreJobs(userId, candidates)).filter((p) => p.score !== null);
       pre.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       const fresh = await deps.repo.freshAiScoredJobIds({
@@ -113,22 +121,50 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
       });
       const picks = pre.filter((p) => !fresh.has(p.jobId)).slice(0, Math.min(allowance, budgetLeft));
       let queuedForUser = 0;
-      for (const p of picks) {
-        const item = await deps.enqueue(
-          MATCH_WORK_KINDS.jobScore,
-          { userId, jobId: p.jobId, resumeVariantId: resume.id },
-          { dedupeKey: dedupeKey(userId, p.jobId, resume.resumeContentHash, model), userId, brand: brand.id, priority: 200 },
-        );
-        if (item.created) queuedForUser += 1;
+      try {
+        for (const p of picks) {
+          const item = await deps.enqueue(
+            MATCH_WORK_KINDS.jobScore,
+            { userId, jobId: p.jobId, resumeVariantId: resume.id },
+            { dedupeKey: dedupeKey(userId, p.jobId, resume.resumeContentHash, model), userId, brand: brand.id, priority: 200 },
+          );
+          if (item.created) queuedForUser += 1;
+        }
+      } finally {
+        // What was queued is charged even when a later enqueue failed.
+        if (queuedForUser > 0) {
+          budgetLeft -= queuedForUser;
+          enqueued += queuedForUser;
+          await deps.consume({ key: userKey, windows: userWindow, cost: queuedForUser });
+        }
       }
-      if (queuedForUser > 0) {
-        await deps.consume({ key: userKey, windows: userWindow, cost: queuedForUser });
-        budgetLeft -= queuedForUser;
-        enqueued += queuedForUser;
+      return queuedForUser;
+    };
+
+    for (const userId of users) {
+      if (ctx.budget.exhausted(RESERVE_MS) || budgetLeft <= 0) break;
+      processed += 1;
+      try {
+        await queueForUser(userId);
+      } catch (err) {
+        failed += 1;
+        logger.warn('MATCH_PRECOMPUTE', 'skipped a user whose precompute failed; continuing with the next', {
+          brand: brand.id,
+          userId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
-    return { processed, enqueued, skippedConsent };
+    return { processed, enqueued, skippedConsent, failed };
   };
+}
+
+/** Feed `preview` (lazy: the feed area imports MATCH). Runs inside the cron's `runWithBrand`. */
+async function defaultCandidateIds(userId: string, limit: number, brand: ProductBrand): Promise<string[]> {
+  const { feedService, isFeedPersonalized } = await import('../feed/index.js');
+  if (!(await isFeedPersonalized(userId, brand.market))) return [];
+  const items = await feedService.preview(userId, { sort: 'recommended', limit });
+  return items.map((i) => i.jobId);
 }
 
 async function defaultDeps(): Promise<PrecomputeDeps> {
@@ -152,6 +188,7 @@ async function defaultDeps(): Promise<PrecomputeDeps> {
     },
     consume: (input) => consumeRateLimit(input),
     enqueue: (kind, payload, options) => queue.enqueue(kind, payload, options),
+    candidateIds: defaultCandidateIds,
   };
 }
 

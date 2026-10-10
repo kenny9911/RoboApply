@@ -1,20 +1,18 @@
 // server/src/features/match/reportInventory.ts
 //
 // Where the competitiveness report reads the saved search and its posts —
-// only through the search and feed seams (TASK_PLAN.md §2.1 rule 4). The
-// preview seam lists what the user's feed lists for that search: the brand's
-// market, canonical rows, hidden jobs excluded — and, because it has no
-// public-only switch, the user's own imported (private) jobs too. Those are
-// dropped by the service (CompetitivenessService.samplePosts) before any
-// aggregate is counted: aggregates count public rows only (TASK_PLAN §2.2).
-// The live counts (`countForFilters`, `limitingFilters`) are public-only.
+// only through the search and feed seams (TASK_PLAN.md §2.1 rule 4).
 //
 //   getProfile    search `searchProfileService.get` (404 for another user's id)
-//   sampleJobIds  feed `preview` sorted newest, fit-tier view off: the newest
-//                 posts of the search (the seam's ceiling is 50 posts; a
-//                 dedicated sample seam is a handoff request to the feed area)
+//   sampleJobIds  feed `sampleForFilters`: the search's newest posts by id,
+//                 with the feed's own filter rules, no ranking, PUBLIC rows
+//                 only (the query itself leaves the user's own imported jobs
+//                 out, so nothing is dropped afterwards) and at most 400
 //   count         feed `countForFilters` (capped at 5,000)
 //   limiting      feed `limitingFilters`: real counts per removable filter
+// Aggregates count public rows only (TASK_PLAN §2.2); the live counts are
+// public-only too. On GoApply with recruitment-info mode off every seam
+// answers empty, so the report is suppressed.
 //
 // Imports are lazy: the feed area imports MATCH, so a static import here
 // would be a cycle.
@@ -35,23 +33,18 @@ export function sampleFilters(filters: FilterSet): FilterSet {
   return rest;
 }
 
-/**
- * Overrides that make the feed preview (which starts from the ACTIVE search)
- * read exactly `target`'s filters: every key of the active search is cleared
- * first, then `target`'s keys are set, and the fit-tier view is turned off.
- */
-export function previewOverrides(active: Pick<SearchProfileWire, 'id' | 'filters'>, target: Pick<SearchProfileWire, 'id' | 'filters'>): Partial<FilterSet> {
-  const cleared: Record<string, undefined> = {};
-  if (active.id !== target.id) for (const k of Object.keys(active.filters)) cleared[k] = undefined;
-  return { ...cleared, ...(active.id === target.id ? {} : sampleFilters(target.filters)), fitTier: 'all' } as Partial<FilterSet>;
-}
+/** The feed sample seam's ceiling (FEED_LIMITS.retrievalLimit). */
+export const SAMPLE_SEAM_MAX = 400;
 
 async function searchSeam() {
   return import('../search/index.js');
 }
 
-async function feedSeam() {
-  return (await import('../feed/index.js')).feedService;
+type FeedSeam = (typeof import('../feed/index.js'))['feedService'];
+let feedSeamLoad: Promise<FeedSeam> | null = null;
+/** One load shared by every caller (the report asks for the sample, the count and the limiting filters at once). */
+function feedSeam(): Promise<FeedSeam> {
+  return (feedSeamLoad ??= import('../feed/index.js').then((m) => m.feedService));
 }
 
 async function withSearchErrors<T>(fn: () => Promise<T>): Promise<T> {
@@ -70,11 +63,12 @@ export function createDefaultReportInventory(): ReportInventory {
       return withSearchErrors(() => searchProfileService.get(userId, id));
     },
     async sampleJobIds(userId, profile, limit) {
-      const { searchProfileService } = await searchSeam();
-      const active = await withSearchErrors(() => searchProfileService.getActive(userId));
       const feed = await feedSeam();
-      const items = await feed.preview(userId, { filters: previewOverrides(active, profile), sort: 'newest', limit });
-      return items.map((i) => i.jobId);
+      return feed.sampleForFilters(userId, sampleFilters(profile.filters), {
+        order: 'newest',
+        limit: Math.max(1, Math.min(SAMPLE_SEAM_MAX, Math.floor(limit))),
+        publicOnly: true,
+      });
     },
     async count(userId, filters) {
       return (await feedSeam()).countForFilters(userId, sampleFilters(filters));

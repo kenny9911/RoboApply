@@ -53,6 +53,9 @@ export interface SourceFetchContext {
   requestId?: string;
 }
 
+/** RAJob.closeReason values a source's own closure may write. */
+export type SourceCloseReason = 'bank_closed' | 'source_removed';
+
 export interface SourceFetchResult {
   /** Postings in the normalizer's input shape. */
   jobs: ProviderJobInput[];
@@ -64,10 +67,17 @@ export interface SourceFetchResult {
   exhausted?: boolean;
   /**
    * Cursor adapters: postings the source closed, unpublished or turned back
-   * into drafts since the last cursor (their RAJob rows are archived with
-   * closeReason 'bank_closed').
+   * into drafts since the last cursor. Their RAJob rows are archived with
+   * `closeReason` (below).
    */
   closedExternalIds?: string[];
+  /**
+   * Why `closedExternalIds` were closed, stored as RAJob.closeReason:
+   * 'bank_closed' (the default: a recruiter bank closed the job) or
+   * 'source_removed' (a public job board stopped listing it). Both are
+   * revived if the source lists the posting again.
+   */
+  closeReason?: SourceCloseReason;
   /** Set when the source was unavailable; the query is retried later and nothing is written. */
   error?: string | null;
 }

@@ -9,12 +9,16 @@
 //                 growth.markChecklistStep('save_job') every time (C20)
 //   recordApplyClick / markApplied / undoApplied
 //                 tracker → applied at once (R1/C11), idempotent, undoable;
-//                 `alreadyApplied` tells callers when nothing changed (no
-//                 Undo then), and undo only reverts a recent move made by
-//                 apply-click or "I applied"
-//   tracker writes for one (user, job) run under a transaction-scoped
-//   advisory lock (`trackerEntryLockKey`), so concurrent first clicks or
-//   saves never create two live entries
+//                 every apply response carries `alreadyApplied` (true when
+//                 nothing changed: no Undo then). Undo reverts a move to
+//                 Applied made in the last 24 h by ANY apply action —
+//                 the apply click, "I applied", opening a Ready to apply kit
+//                 (`agent_open`) or the extension's "I submitted" — and
+//                 never a stage change made by hand in the tracker
+//   every tracker write for one (user, job) — save, unsave, apply click,
+//   "I applied", undo — runs under a transaction-scoped advisory lock
+//   (`trackerEntryLockKey`), so concurrent first clicks or saves never
+//   create two live entries
 //   similar jobs are empty while `jobs.recommendations` is off (R-14)
 //   share         public page only with publicDisplay, else the app link
 //   companyNews   V2, dark (see `companyNewsEnabled`)
@@ -32,8 +36,10 @@ import type { CompanyProfile } from '../companies/contract.js';
 import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 import { cnPostingVisible } from '../../cn/jobs/index.js';
+import { OUTCOME_STATUS } from '../../tracker/contract.js';
 import {
   JOB_DETAIL_ERROR_CODES,
+  UNDOABLE_APPLY_VIA,
   UNDO_APPLIED_WINDOW_MS,
   type ApplyClickResponse,
   type CompanyNewsResponse,
@@ -95,7 +101,15 @@ export function trackerEntryLockKey(userId: string, jobId: string): string {
 export type DetailFlag = 'extension' | 'jobs.campusCalendar' | 'jobs.recommendations' | 'companyNews';
 
 /** `payload.via` values of a move to Applied that "Undo · I didn't apply" may revert. */
-const UNDOABLE_VIA = new Set(['apply_click', 'manual']);
+const UNDOABLE_VIA: ReadonlySet<string> = new Set(UNDOABLE_APPLY_VIA);
+
+/** A recorded move: the tracker core writes `created` when the apply action made the entry, `status` otherwise. */
+interface MoveEvent {
+  kind: string;
+  fromValue: string | null;
+  payload: unknown;
+  createdAt: Date | null;
+}
 
 export interface JobDetailServiceDeps {
   db: JobDetailDb;
@@ -112,7 +126,7 @@ export interface JobDetailServiceDeps {
   personalized?: (userId: string, brand: ProductBrand) => Promise<boolean>;
   /** Past employers and schools from the profile (for the People search links). */
   peopleContext?: (userId: string) => Promise<{ pastCompanies: string[]; schools: string[] }>;
-  /** Practice for this job; null while practice sessions are not linked to jobs (SR-34-1). */
+  /** Has the user completed a practice for this job (live or written)? Null only when the seam is absent or fails. */
   practicedForJob?: (userId: string, jobId: string) => Promise<boolean | null>;
   markChecklistStep?: (userId: string, step: 'save_job') => Promise<unknown>;
   /**
@@ -154,6 +168,12 @@ export interface JobDetailServiceImpl {
 }
 
 const TRACKER_SELECT = { id: true, status: true, dateApplied: true, tailoredVariantId: true, coverLetterId: true } as const;
+
+/** Who ended it, for an ended stage (the tracker's own rule: `OUTCOME_STATUS` read backwards); null otherwise. */
+function outcomeOfStatus(status: string): string | null {
+  for (const [outcome, ended] of Object.entries(OUTCOME_STATUS)) if (ended === status) return outcome;
+  return null;
+}
 
 function notFound(): HttpError {
   return new HttpError('not_found', 'Job not found.', { code: JOB_DETAIL_ERROR_CODES.notFound });
@@ -453,7 +473,17 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       if (!isPreApply(entry.status)) {
         throw new HttpError('conflict', 'This job is already in your applications.', { code: JOB_DETAIL_ERROR_CODES.inTracker, status: entry.status });
       }
-      await db.rATrackerEntry.update({ where: { id: entry.id }, data: { deletedAt: now() } });
+      // Under the entry lock, re-read: an apply click may have moved it since.
+      const movedTo = await withEntryLock(userId, jobId, async (tx): Promise<string | null> => {
+        const current = await trackerOf(userId, jobId, tx);
+        if (!current) return null;
+        if (!isPreApply(current.status)) return current.status;
+        await tx.rATrackerEntry.update({ where: { id: current.id }, data: { deletedAt: now() } });
+        return null;
+      });
+      if (movedTo) {
+        throw new HttpError('conflict', 'This job is already in your applications.', { code: JOB_DETAIL_ERROR_CODES.inTracker, status: movedTo });
+      }
       await interaction(userId, jobId, 'unsave');
       return { tracker: null };
     },
@@ -499,26 +529,51 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       const result = await withEntryLock(userId, jobId, async (tx) => {
         const entry = await trackerOf(userId, jobId, tx);
         if (!entry || entry.status !== 'applied') return { next: entry, reverted: false };
+        // The newest move INTO Applied, whoever recorded it: this service writes a
+        // `status` event; the tracker core (Ready to apply, the extension)
+        // writes `status`, or `created` when the apply action made the entry.
         const last = (await tx.rATrackerEvent.findFirst({
-          where: { entryId: entry.id, kind: 'status', toValue: 'applied' },
+          where: { entryId: entry.id, kind: { in: ['status', 'created'] }, toValue: 'applied' },
           orderBy: { createdAt: 'desc' },
-          select: { fromValue: true, payload: true, createdAt: true },
-        })) as { fromValue: string | null; payload: unknown; createdAt: Date | null } | null;
-        // Only a recent move made by apply-click or "I applied" is undone; an
-        // older application, or a move made in the tracker, stays as it is.
-        const via = last?.payload && typeof last.payload === 'object' ? (last.payload as { via?: unknown }).via : undefined;
+          select: { kind: true, fromValue: true, payload: true, createdAt: true },
+        })) as MoveEvent | null;
+        // Only a recent move made by an apply action is undone; an older
+        // application, or a stage change made by hand in the tracker (no
+        // apply `via`), stays as it is.
+        const payload = last?.payload && typeof last.payload === 'object' ? (last.payload as Record<string, unknown>) : {};
+        const via = payload.via;
         const recent = !!last?.createdAt && now().getTime() - new Date(last.createdAt).getTime() <= UNDO_APPLIED_WINDOW_MS;
         if (!last || typeof via !== 'string' || !UNDOABLE_VIA.has(via) || !recent) return { next: entry, reverted: false };
-        const previous = last.fromValue ?? null;
+        const previous = last.kind === 'created' ? null : (last.fromValue ?? null);
+        // The move stamped the applied date unless it says the entry already had one
+        // (the tracker core then records the channel it replaced).
+        const hadDate = 'previousAppliedVia' in payload && payload.stampedDateApplied !== true;
+        const restoreVia = typeof payload.previousAppliedVia === 'string' ? payload.previousAppliedVia : null;
         let next: TrackerRow | null;
-        if (previous && isPreApply(previous)) {
+        if (previous) {
+          // Back to where it was: Saved, or (a re-application) the ended stage it had.
+          // The move to Applied cleared who ended it; an ended stage gets that
+          // back, as the tracker's own undo does (the export and the weekly
+          // facts read `outcome`).
+          const outcome = outcomeOfStatus(previous);
+          const before = outcome
+            ? ((await tx.rATrackerEntry.findFirst({ where: { id: entry.id }, select: { outcome: true } })) as { outcome: string | null } | null)
+            : null;
           next = (await tx.rATrackerEntry.update({
             where: { id: entry.id },
-            data: { status: previous, dateApplied: null, appliedVia: null },
+            data: {
+              ...(hadDate ? { status: previous, appliedVia: restoreVia } : { status: previous, dateApplied: null, appliedVia: null }),
+              ...(outcome ? { outcome } : {}),
+            },
             select: TRACKER_SELECT,
           })) as TrackerRow;
+          if (outcome) {
+            await tx.rATrackerEvent.create({
+              data: { entryId: entry.id, userId, kind: 'outcome', fromValue: before?.outcome ?? null, toValue: outcome, payload: { via: 'undo' } },
+            });
+          }
         } else {
-          // The click created the entry: undo removes it (soft delete), as if never applied.
+          // The apply action created the entry: undo removes it (soft delete), as if never applied.
           await tx.rATrackerEntry.update({ where: { id: entry.id }, data: { deletedAt: now() } });
           next = null;
         }

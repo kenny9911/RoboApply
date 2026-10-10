@@ -436,6 +436,18 @@ exports[`scope > feed scope: market, canonical, live, not seed, no fraud flags, 
 ]
 `;
 
+exports[`statements > card extras: by id, the posting text only for rows that carry market tags 1`] = `
+{
+  "text": "SELECT j."id", j."sourceUrl", j."applyUrl", j."locations", j."fraudFlags", CASE WHEN jsonb_typeof(j."marketTags") = 'array' AND jsonb_array_length(j."marketTags") > 0 THEN j."descriptionPlain" END AS "descriptionPlain" FROM "RAJob" j WHERE j."id" = ANY($1::text[])",
+  "values": [
+    [
+      "j1",
+      "j2",
+    ],
+  ],
+}
+`;
+
 exports[`statements > count: public rows only, capped inside (LIMIT cap + 1) 1`] = `
 {
   "text": "SELECT count(*)::int AS "count" FROM (SELECT 1 FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $1 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND j."visibility" = 'public' AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $2 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND (j."taxonomyIds" && $3::text[]) AND j."workModel" = ANY($4::text[]) AND j."skills" && $5::text[] LIMIT $6) AS capped",
@@ -469,6 +481,27 @@ exports[`statements > explore counts per L1 category over public live rows 1`] =
       "software_engineering",
       "data_analytics",
     ],
+  ],
+}
+`;
+
+exports[`statements > job ids (report sample): ids only, the list’s scope and predicates, newest first, LIMIT 1`] = `
+{
+  "text": "SELECT j."id" FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $1 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND j."visibility" = 'public' AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $2 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND (j."taxonomyIds" && $3::text[]) AND j."workModel" = ANY($4::text[]) AND j."skills" && $5::text[] AND j."postedAt" >= $6::timestamp(3) ORDER BY j."postedAt" DESC NULLS LAST, j."id" DESC LIMIT $7",
+  "values": [
+    "intl",
+    "u1",
+    [
+      "backend_engineer",
+    ],
+    [
+      "remote",
+    ],
+    [
+      "python",
+    ],
+    "2026-06-12T12:00:00.000Z",
+    400,
   ],
 }
 `;

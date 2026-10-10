@@ -16,8 +16,10 @@ import { fakeAuth, startRouteHarness, type RouteHarness } from '../../../test/ro
 import type { CompanyProfile } from '../companies/contract.js';
 import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
 import { REQUIREMENT_TAGS } from '../enrich/reconcile.js';
+import { cardMeta } from '../marketHooks.js';
 import { JOB_REQUIREMENT_TAGS, type JobDetailResponse } from './contract.js';
 import { createJobDetailRouter } from './routes.js';
+import { practicedForJobFrom } from './defaultService.js';
 import { createJobDetailService, trackerEntryLockKey, type JobDetailDb, type JobDetailServiceDeps } from './service.js';
 import { NEWS_CACHE_MAX, clearNewsCache, newsCacheSize, searchCompanyNews, toNewsItems } from './newsSearch.js';
 import {
@@ -465,6 +467,141 @@ describe('apply-click, I applied, undo (R1/C11; D1)', () => {
     expect(db.$rows('rATrackerEntry')[0]).toMatchObject({ status: 'applied', deletedAt: null });
   });
 
+  // ── WP-93 (WP-34 ↔ WP-38): one Undo for every apply action ──────────────
+
+  it('Undo reverts a move made by opening a Ready to apply kit (via agent_open): a saved job goes back to Saved', async () => {
+    const { service, db } = setup({
+      seed: {
+        rATrackerEntry: [{ ...appliedEntry, dateApplied: NOW, createdAt: new Date(NOW.getTime() - 5 * DAY) }],
+        // What the tracker core records for a move of an existing entry (trackerCore.markApplied).
+        rATrackerEvent: [appliedEvent({ fromValue: 'bookmarked', payload: { stampedDateApplied: true, via: 'agent_open', applyMark: true }, createdAt: new Date(NOW.getTime() - 60_000) })],
+      },
+    });
+    expect(await service.undoApplied('u1', 'j1')).toEqual({ tracker: { id: 't1', status: 'bookmarked', dateApplied: null } });
+    expect(db.$rows('rATrackerEntry')[0]).toMatchObject({ status: 'bookmarked', dateApplied: null, appliedVia: null, deletedAt: null });
+    const events = db.$rows('rATrackerEvent');
+    expect(events.at(-1)).toMatchObject({ kind: 'status', fromValue: 'applied', toValue: 'bookmarked', payload: { via: 'undo' } });
+    expect(db.$rows('rAJobInteraction').map((r) => r.kind)).toContain('unapplied');
+  });
+
+  it('Undo reverts the extension’s "I submitted" (via extension), including an entry that move created', async () => {
+    const { service, db } = setup({
+      seed: {
+        rATrackerEntry: [{ ...appliedEntry, dateApplied: NOW, createdAt: new Date(NOW.getTime() - 3_600_000) }],
+        // The tracker core records the creation itself when the apply action made the entry.
+        rATrackerEvent: [appliedEvent({ kind: 'created', fromValue: null, payload: { source: 'extension', via: 'extension', applyMark: true }, createdAt: new Date(NOW.getTime() - 3_600_000) })],
+      },
+    });
+    expect(await service.undoApplied('u1', 'j1')).toEqual({ tracker: null });
+    expect(db.$rows('rATrackerEntry')[0]!.deletedAt).toBeInstanceOf(Date);
+    expect(db.$rows('rATrackerEvent').at(-1)).toMatchObject({ fromValue: 'applied', toValue: 'removed', payload: { via: 'undo' } });
+  });
+
+  it('Undo of an extension move on an entry that already had an applied date keeps that date and restores the earlier channel', async () => {
+    const earlier = new Date(NOW.getTime() - 40 * DAY);
+    const { service, db } = setup({
+      seed: {
+        rATrackerEntry: [{ ...appliedEntry, dateApplied: earlier, appliedVia: 'extension', createdAt: earlier }],
+        // A re-application from an ended entry: the date was already there, so the move records the channel it replaced.
+        rATrackerEvent: [appliedEvent({ fromValue: 'rejected', payload: { via: 'extension', previousAppliedVia: 'manual', applyMark: true }, createdAt: new Date(NOW.getTime() - 60_000) })],
+      },
+    });
+    expect(await service.undoApplied('u1', 'j1')).toEqual({ tracker: { id: 't1', status: 'rejected', dateApplied: earlier.toISOString() } });
+    // The re-application cleared who ended it; undo puts that back with the stage (the export and weekly facts read it).
+    expect(db.$rows('rATrackerEntry')[0]).toMatchObject({ status: 'rejected', appliedVia: 'manual', outcome: 'they_said_no', deletedAt: null });
+    const events = db.$rows('rATrackerEvent').slice(-2);
+    expect(events[0]).toMatchObject({ kind: 'outcome', fromValue: null, toValue: 'they_said_no', payload: { via: 'undo' } });
+    expect(events[1]).toMatchObject({ kind: 'status', fromValue: 'applied', toValue: 'rejected', payload: { via: 'undo' } });
+  });
+
+  it.each([
+    ['withdrawn', 'i_withdrew'],
+    ['closed', 'job_pulled'],
+  ])('Undo back to an ended stage restores its outcome (%s → %s); back to Saved writes none', async (ended, outcome) => {
+    const moved = { fromValue: ended, payload: { via: 'agent_open', previousAppliedVia: 'manual', applyMark: true }, createdAt: new Date(NOW.getTime() - 60_000) };
+    const back = setup({ seed: { rATrackerEntry: [{ ...appliedEntry, outcome: null }], rATrackerEvent: [appliedEvent(moved)] } });
+    expect((await back.service.undoApplied('u1', 'j1')).tracker?.status).toBe(ended);
+    expect(back.db.$rows('rATrackerEntry')[0]).toMatchObject({ status: ended, outcome });
+
+    const saved = setup({ seed: { rATrackerEntry: [{ ...appliedEntry, outcome: null }], rATrackerEvent: [appliedEvent({ fromValue: 'bookmarked', payload: { via: 'agent_open' }, createdAt: new Date(NOW.getTime() - 60_000) })] } });
+    expect((await saved.service.undoApplied('u1', 'j1')).tracker?.status).toBe('bookmarked');
+    expect(saved.db.$rows('rATrackerEntry')[0]!.outcome ?? null).toBeNull();
+    expect(saved.db.$rows('rATrackerEvent').map((e) => e.kind)).not.toContain('outcome');
+  });
+
+  it.each(['apply_click', 'manual', 'agent_open', 'extension'])('the 24 h limit: a %s move is undone at 23 h 59 min and left alone after 24 h', async (via) => {
+    const inside = setup({
+      seed: {
+        rATrackerEntry: [{ ...appliedEntry }],
+        rATrackerEvent: [appliedEvent({ fromValue: 'bookmarked', payload: { via }, createdAt: new Date(NOW.getTime() - (DAY - 60_000)) })],
+      },
+    });
+    expect((await inside.service.undoApplied('u1', 'j1')).tracker?.status).toBe('bookmarked');
+
+    const outside = setup({
+      seed: {
+        rATrackerEntry: [{ ...appliedEntry }],
+        rATrackerEvent: [appliedEvent({ fromValue: 'bookmarked', payload: { via }, createdAt: new Date(NOW.getTime() - (DAY + 1000)) })],
+      },
+    });
+    expect((await outside.service.undoApplied('u1', 'j1')).tracker?.status).toBe('applied');
+    expect(outside.db.$rows('rATrackerEntry')[0]).toMatchObject({ status: 'applied', deletedAt: null });
+    expect(outside.db.$rows('rATrackerEvent')).toHaveLength(1);
+    expect(outside.db.$rows('rAJobInteraction').map((r) => r.kind)).not.toContain('unapplied');
+  });
+
+  it('only the NEWEST move into Applied counts: an old undoable move behind a recent hand edit is not undone', async () => {
+    const { service, db } = setup({
+      seed: {
+        rATrackerEntry: [{ ...appliedEntry }],
+        rATrackerEvent: [
+          appliedEvent({ id: 'ev1', fromValue: 'bookmarked', payload: { via: 'agent_open', applyMark: true }, createdAt: new Date(NOW.getTime() - 3 * 3_600_000) }),
+          // The user then set the stage by hand in the tracker (no apply `via`).
+          appliedEvent({ id: 'ev2', fromValue: 'interviewing', payload: { via: 'tracker' }, createdAt: new Date(NOW.getTime() - 3_600_000) }),
+        ],
+      },
+    });
+    expect((await service.undoApplied('u1', 'j1')).tracker?.status).toBe('applied');
+    expect(db.$rows('rATrackerEvent')).toHaveLength(2);
+  });
+
+  it('every apply response carries alreadyApplied (false on the move, true on a repeat) — click and "I applied" alike', async () => {
+    const { service } = setup({ jobs: [job(), job({ id: 'j2' })] });
+    const click = await service.recordApplyClick('u1', 'j1');
+    expect(click).toHaveProperty('alreadyApplied', false);
+    expect(await service.recordApplyClick('u1', 'j1')).toHaveProperty('alreadyApplied', true);
+    expect(await service.markApplied('u1', 'j1')).toHaveProperty('alreadyApplied', true);
+    expect(await service.markApplied('u1', 'j2')).toHaveProperty('alreadyApplied', false);
+    expect(await service.recordApplyClick('u1', 'j2')).toHaveProperty('alreadyApplied', true);
+  });
+
+  it('apply click, "I applied", undo, save and unsave all take the (user, job) advisory lock', async () => {
+    const { service, db } = setup();
+    const key = trackerEntryLockKey('u1', 'j1');
+    const locks = () => db.$sql.calls.filter((c) => c.text.includes('pg_advisory_xact_lock') && c.values.includes(key)).length;
+    await service.save('u1', 'j1');
+    expect(locks()).toBe(1);
+    await service.unsave('u1', 'j1');
+    expect(locks()).toBe(2);
+    await service.recordApplyClick('u1', 'j1');
+    expect(locks()).toBe(3);
+    await service.undoApplied('u1', 'j1');
+    expect(locks()).toBe(4);
+    await service.markApplied('u1', 'j1');
+    expect(locks()).toBe(5);
+  });
+
+  // ── WP-35: the user's own imported job ──────────────────────────────────
+
+  it('a private import with no link answers 409 no_apply_link on an apply click and moves nothing; "I applied" still works', async () => {
+    const mine = job({ id: 'imp', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', sourceName: null, applyUrl: '', companyId: null });
+    const { service, db } = setup({ jobs: [mine] });
+    await expect(service.recordApplyClick('u1', 'imp')).rejects.toMatchObject({ code: 'conflict', details: { code: 'no_apply_link' } });
+    expect(db.$rows('rATrackerEntry')).toHaveLength(0);
+    expect(db.$rows('rAJobInteraction').map((r) => r.kind)).not.toContain('apply_click');
+    expect((await service.markApplied('u1', 'imp')).tracker.status).toBe('applied');
+  });
+
   it('a job without an application link is not moved to Applied by a click', async () => {
     const { service, db } = setup({ jobs: [job({ applyUrl: '  ' })] });
     await expect(service.recordApplyClick('u1', 'j1')).rejects.toMatchObject({ code: 'conflict', details: { code: 'no_apply_link' } });
@@ -507,6 +644,15 @@ describe('save, share, similar, company news', () => {
     expect(markChecklistStep).toHaveBeenCalledWith('u1', 'save_job');
     const failing = setup({ deps: { markChecklistStep: async () => Promise.reject(new Error('growth down')) } });
     await expect(failing.service.save('u1', 'j1')).resolves.toMatchObject({ tracker: { status: 'bookmarked' } });
+  });
+
+  it('save accepts the user’s own private import (WP-35); another user’s import stays a 404', async () => {
+    const mine = job({ id: 'imp', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', sourceName: null, companyId: null });
+    const { service, db } = setup({ jobs: [mine] });
+    expect((await service.save('u1', 'imp')).tracker?.status).toBe('bookmarked');
+    expect(db.$rows('rATrackerEntry')).toHaveLength(1);
+    await expect(service.save('u2', 'imp')).rejects.toMatchObject({ code: 'not_found' });
+    expect(db.$rows('rATrackerEntry')).toHaveLength(1);
   });
 
   it('feed affinity learns from a new save, an apply click and "I applied" (once each; a failure never blocks)', async () => {
@@ -732,6 +878,145 @@ describe('routes', () => {
   });
 });
 
+describe('market card meta on the job page (WP-33 #7: the same cardMeta as the feed card)', () => {
+  // The production dep: marketHooks.cardMeta over the job row in the brand's market.
+  const marketMeta: JobDetailServiceDeps['marketMeta'] = (row, brand) => cardMeta({ ...row, market: brand.market }, { brand: brand.id, market: brand.market, stage: 'card' });
+
+  it('the row the hooks get carries locations, the plain posting text, N薪 and the expiry date', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const { service } = setup({
+      jobs: [job({ locations: [{ city: 'Taipei', country: 'TW' }], descriptionPlain: 'Plain text.', salaryMonths: 14, expiresAt: new Date('2026-11-01T00:00:00Z') })],
+      deps: {
+        marketMeta: (row) => {
+          seen.push(row as unknown as Record<string, unknown>);
+          return {};
+        },
+      },
+    });
+    await service.get('u1', 'j1');
+    expect(seen[0]).toMatchObject({
+      salaryText: null,
+      salaryDisclosed: false,
+      marketTags: expect.any(Array),
+      sourceName: 'Active Jobs DB',
+      sourceUrl: null,
+      applyUrl: 'https://boards.greenhouse.io/acme/jobs/1',
+      sourceBoard: 'activejobs',
+      atsType: 'greenhouse',
+      locationCountry: 'US',
+      locations: [{ city: 'Taipei', country: 'TW' }],
+      descriptionPlain: 'Plain text.',
+      salaryMonths: 14,
+      expiresAt: new Date('2026-11-01T00:00:00Z'),
+    });
+  });
+
+  it('Taiwan: a posting whose only Taiwan signal is one of its locations gets the tw meta, with a permit tag its text still states', async () => {
+    const tw = job({
+      locationCountry: null,
+      location: 'Taipei / Singapore',
+      locations: [{ city: 'Singapore', country: 'SG' }, { city: 'Taipei', country: 'TW' }],
+      salaryDisclosed: false,
+      salaryText: '待遇面議（經常性薪資達4萬元或以上）',
+      sourceBoard: 'greenhouse',
+      sourceName: 'Appier · Greenhouse',
+      sourceUrl: 'https://boards.greenhouse.io/appier/jobs/1',
+      descriptionPlain: '我們可協助申請工作許可。',
+      marketTags: [{ tag: 'tw_work_permit_support', evidenceQuote: '可協助申請工作許可', evidenceUrl: null }],
+    });
+    const { service } = setup({ jobs: [tw], deps: { marketMeta } });
+    const meta = (await service.get('u1', 'j1')).marketMeta as { ats_public: { country: string; pay: Record<string, unknown>; permitTags: Array<{ tag: string }>; source: Record<string, unknown> } };
+    expect(meta.ats_public).toMatchObject({
+      country: 'TW',
+      // 面議 is "pay not listed"; the Art. 5 floor clause is not shown as an amount on the card line.
+      pay: { text: '待遇面議', disclosed: false, negotiable: true },
+      source: { name: 'Appier · Greenhouse', url: 'https://boards.greenhouse.io/appier/jobs/1', board: 'greenhouse' },
+    });
+    expect(meta.ats_public.permitTags.map((t) => t.tag)).toEqual(['tw_work_permit_support']);
+  });
+
+  it('GoApply: the cn meta carries the source line, pay in the posting’s words with N薪, and the source’s expiry date', async () => {
+    const cnJob = job({
+      market: 'cn',
+      locationCountry: 'CN',
+      sourceBoard: 'gohire',
+      sourceName: 'GoHire',
+      fromRecruiterBank: true,
+      employerVerified: true,
+      isAgency: false,
+      salaryDisclosed: true,
+      salaryText: null,
+      salaryMin: 15000,
+      salaryMax: 25000,
+      salaryCurrency: 'CNY',
+      salaryPeriod: 'month',
+      salaryMonths: 13,
+      expiresAt: new Date('2026-11-01T00:00:00Z'),
+      marketTags: [{ tag: 'hukou', evidenceQuote: '可落户上海', evidenceUrl: null }],
+    });
+    const { service } = setup({ jobs: [cnJob], brand: cn, deps: { marketMeta } });
+    const meta = (await service.get('u1', 'j1')).marketMeta as { cn: Record<string, unknown> };
+    expect(meta.cn).toMatchObject({
+      sourceLine: { kind: 'direct', sourceName: 'GoHire' },
+      salary: { text: '15-25K·13薪', disclosed: true },
+      expiresAt: '2026-11-01T00:00:00.000Z',
+      tags: [{ tag: 'hukou', evidenceQuote: '可落户上海' }],
+    });
+  });
+
+  it('a RoboApply job outside Taiwan has no market meta', async () => {
+    const { service } = setup({ deps: { marketMeta } });
+    expect((await service.get('u1', 'j1')).marketMeta).toEqual({});
+  });
+});
+
 describe('practice link (SR-34-1)', () => {
-  it.todo('SR-34-1 checklist.practiced is true once a practice session for this job exists (RAMockSession.raJobId)');
+  it('SR-34-1 checklist.practiced is true once a practice session for this job exists (RAMockSession.jobId)', async () => {
+    // The interview area's seam: job id → when the user last completed a practice for it.
+    // A written practice is a scored RAMockSession with `jobId` set; a live one an InterviewSession.
+    const mockSessions = [
+      { userId: 'u1', jobId: 'j1', practiceCompletedAt: '2026-10-09T10:00:00.000Z' },
+      { userId: 'u1', jobId: 'j2', practiceCompletedAt: null }, // started, never answered
+      { userId: 'u2', jobId: 'j3', practiceCompletedAt: '2026-10-08T10:00:00.000Z' }, // someone else's
+    ];
+    const practicedJobs = vi.fn(async (userId: string, jobIds: string[]) =>
+      Object.fromEntries(
+        mockSessions.filter((s) => s.userId === userId && jobIds.includes(s.jobId) && s.practiceCompletedAt).map((s) => [s.jobId, s.practiceCompletedAt as string]),
+      ),
+    );
+    const { service } = setup({
+      jobs: [job(), job({ id: 'j2' }), job({ id: 'j3' })],
+      deps: { practicedForJob: practicedForJobFrom(practicedJobs) },
+    });
+    expect((await service.get('u1', 'j1')).checklist.practiced).toBe(true);
+    expect(practicedJobs).toHaveBeenCalledWith('u1', ['j1']);
+    expect((await service.get('u1', 'j2')).checklist.practiced).toBe(false);
+    expect((await service.get('u1', 'j3')).checklist.practiced).toBe(false);
+  });
+
+  it('the production service reads interviewSessionService.practicedJobs (live sessions and written practice)', async () => {
+    const practicedJobs = vi.fn(async () => ({ j1: '2026-10-09T10:00:00.000Z' }));
+    vi.doMock('../../../interview-engine/sessions/InterviewSessionService.js', () => ({ interviewSessionService: { practicedJobs } }));
+    try {
+      const { defaultPracticedJobs } = await import('./defaultService.js');
+      expect(await practicedForJobFrom(defaultPracticedJobs)('u1', 'j1')).toBe(true);
+      expect(await practicedForJobFrom(defaultPracticedJobs)('u1', 'j9')).toBe(false);
+      expect(practicedJobs).toHaveBeenCalledWith('u1', ['j1']);
+    } finally {
+      vi.doUnmock('../../../interview-engine/sessions/InterviewSessionService.js');
+    }
+  });
+
+  it('a practice seam outage never breaks the page: the step reads unknown (null), not "not practiced"', async () => {
+    const { service } = setup({
+      deps: {
+        practicedForJob: practicedForJobFrom(async () => {
+          throw new Error('interview store down');
+        }),
+      },
+    });
+    const res = await service.get('u1', 'j1');
+    expect(res.job.id).toBe('j1');
+    expect(res.checklist.practiced).toBeNull();
+  });
 });

@@ -222,6 +222,10 @@ describe('dedupe key, search text and dates', () => {
     expect(resolveExpiresAt('jsearch', '1970-01-01', posted)?.toISOString()).toBe('2026-11-15T00:00:00.000Z');
     expect(resolveExpiresAt('jsearch', null, null)).toBeNull();
     expect(resolveExpiresAt('bank_gohire', '2026-12-01', posted)).toBeNull();
+    // WP-42: a public ATS board posting never expires by date (the board sync closes it).
+    expect(resolveExpiresAt('ats_public', null, posted)).toBeNull();
+    expect(resolveExpiresAt('ats_public', '2026-12-01', posted)).toBeNull();
+    expect(resolveExpiresAt('user_import', null, posted)).toBeNull();
     expect(resolveExpiresAt('bank_robohire', null, posted)).toBeNull();
     expect(resolveExpiresAt('user_import', null, posted)).toBeNull();
   });

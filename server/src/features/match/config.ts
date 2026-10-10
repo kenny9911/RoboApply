@@ -30,10 +30,8 @@ export const DEFAULT_PRECOMPUTE_PER_USER_DAY = 25;
 export const PRECOMPUTE_ACTIVE_DAYS = 7;
 /** Users looked at per cron run per brand (most recent first). */
 export const PRECOMPUTE_MAX_USERS = 200;
-/** Candidate jobs pre-scored per user before the top N is queued. */
-export const PRECOMPUTE_CANDIDATES = 200;
-/** Candidate window: postings from the last N days. */
-export const PRECOMPUTE_WINDOW_DAYS = 14;
+/** Candidate jobs per user: the top of their feed (the feed preview seam lists at most 50). */
+export const PRECOMPUTE_CANDIDATES = 50;
 
 export const SCORE_WINDOW_SEC = DAY;
 

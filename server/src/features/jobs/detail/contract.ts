@@ -227,25 +227,27 @@ export interface ApplyClickResponse {
   trackerEntryId: string;
   /**
    * True when nothing changed: the job was already Applied or at a later
-   * stage. Callers offer "Undo · I didn't apply" only when this is false
-   * (the server always sets it; optional only for older fixtures).
+   * stage. Callers offer "Undo · I didn't apply" only when this is false.
+   * Every apply response carries it.
    */
-  alreadyApplied?: boolean;
+  alreadyApplied: boolean;
 }
 
 /** POST /jobs/:id/applied — mark applied manually ("I applied"). */
 export const MarkAppliedBodySchema = z.object({ appliedAt: z.iso.datetime().optional() }).strict();
 export interface MarkAppliedResponse {
   tracker: JobTrackerState;
-  /** True when nothing changed (already Applied or later): offer no Undo. */
-  alreadyApplied?: boolean;
+  /** True when nothing changed (already Applied or later): offer no Undo. Every apply response carries it. */
+  alreadyApplied: boolean;
 }
 
 /**
- * DELETE /jobs/:id/applied — "Undo · I didn't apply". Reverts only a recent
- * (UNDO_APPLIED_WINDOW_MS) move to Applied made by apply-click or "I
- * applied"; anything else (an older application, a move made in the
- * tracker) is left as it is and answered unchanged.
+ * DELETE /jobs/:id/applied — "Undo · I didn't apply". Reverts a recent
+ * (UNDO_APPLIED_WINDOW_MS, 24 h) move to Applied that one of the apply
+ * actions made, whichever surface it came from (`UNDOABLE_APPLY_VIA`: the
+ * apply click, "I applied", opening a Ready to apply kit, the extension's
+ * "I submitted"). Anything else (an older application, a stage change made
+ * by hand in the tracker) is left as it is and answered unchanged.
  */
 export interface UndoAppliedResponse {
   tracker: JobTrackerState | null;
@@ -282,6 +284,9 @@ export const JOB_DETAIL_ERROR_CODES = {
 
 /** How long after the move to Applied "Undo · I didn't apply" still reverts it. */
 export const UNDO_APPLIED_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** `payload.via` of a move to Applied that "Undo · I didn't apply" may revert (the tracker's `ApplyVia`). */
+export const UNDOABLE_APPLY_VIA = ['apply_click', 'manual', 'agent_open', 'extension'] as const;
 
 /** Tier word for a fit (re-exported for the UI). */
 export type { FitTierKey };

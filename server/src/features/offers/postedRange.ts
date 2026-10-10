@@ -13,17 +13,16 @@
 // period (the offer's own when it has enough rows, else the largest group).
 // Fewer than MIN_SAMPLE (20) rows → no range (null) and only the counts.
 //
-// Read-only and typed (`PostedPayDb` is a Pick of the client). The same query
-// shape lives in copilot/salaryStats.ts (REQ-50-01 asks the jobs/feed owner
-// for `marketStats.salary()`); when that seam lands, swap `createPrismaPostedPay`
-// for it (request REQ-64-01) — the pure `summarizePostedPay` stays.
+// The rows come from the feed area's `marketStats` (REQ-50-01 / REQ-64-01):
+// this file no longer reads RAJob itself. `postedPayWhere` is that seam's
+// filter (`marketSalaryWhere`), kept under its old name for callers and tests;
+// the pure `summarizePostedPay` (the offer's currency and period) stays here.
 
 import type { Prisma } from '../../generated/prisma/client.js';
 import { MIN_SAMPLE, meetsMinSample, type Sourced } from '../../platform/http.js';
 import type { EnvSource } from '../../platform/brand/index.js';
 import type { Market } from '../../platform/brand/registry.js';
-import { cnPostingsWhere } from '../cn/jobs/index.js';
-import { NOT_FRAUD_FLAGGED } from '../onboarding-cn/index.js';
+import { createMarketStats, marketSalaryWhere, type MarketStatsDb } from '../feed/index.js';
 import { bestTaxonomyMatch, getTaxonomyNode } from '../jobs/taxonomy/index.js';
 import type { PostedRange } from './contract.js';
 
@@ -66,13 +65,8 @@ export interface JobScopeRow {
   locationCity: string | null;
 }
 
-export type PostedPayDb = {
-  rAJob: {
-    findMany(args: { where: Prisma.RAJobWhereInput; select: Record<keyof PostedPayRow, true>; orderBy: Prisma.RAJobOrderByWithRelationInput; take: number }): Promise<PostedPayRow[]>;
-    count(args: { where: Prisma.RAJobWhereInput }): Promise<number>;
-    findFirst(args: { where: Prisma.RAJobWhereInput; select: Record<keyof JobScopeRow, true> }): Promise<JobScopeRow | null>;
-  };
-};
+/** The database the feed's market-stats reader needs (tests pass a fake). */
+export type PostedPayDb = MarketStatsDb;
 
 /**
  * The role for a job: its primary taxonomy node, else its most specific
@@ -102,21 +96,12 @@ export function roleScopeFor(job: JobScopeRow | null, fallbackTitle: string | nu
 
 /**
  * The public-aggregate `where` plus the role and place (no currency: that is
- * the "listed" part). On GoApply it also ANDs `cnPostingsWhere(null, env)`:
- * with CN_RECRUITMENT_INFO_MODE off that matches nothing (Wave 5 gate).
+ * the "listed" part) — the feed seam's filter. On GoApply it also excludes
+ * fraud-flagged postings and ANDs `cnPostingsWhere(null, env)`: with
+ * CN_RECRUITMENT_INFO_MODE off that matches nothing (Wave 5 gate).
  */
 export function postedPayWhere(q: Omit<PostedPayQuery, 'currency'>, env: EnvSource = process.env): Prisma.RAJobWhereInput {
-  const since = new Date(q.now.getTime() - POSTED_LOOKBACK_DAYS * 86_400_000);
-  const and: Prisma.RAJobWhereInput[] = [
-    { market: q.market, visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null },
-    { postedAt: { gte: since } },
-  ];
-  if (q.market === 'cn') and.push(NOT_FRAUD_FLAGGED, cnPostingsWhere(null, env) as Prisma.RAJobWhereInput);
-  if (q.taxonomyId) and.push({ taxonomyIds: { has: q.taxonomyId } });
-  else if (q.title) and.push({ title: { contains: q.title, mode: 'insensitive' } });
-  if (q.country) and.push({ locationCountry: q.country });
-  if (q.city) and.push({ locationCity: { equals: q.city, mode: 'insensitive' } });
-  return { AND: and };
+  return marketSalaryWhere(q, env);
 }
 
 function quantile(sorted: number[], q: number): number {
@@ -183,31 +168,18 @@ export interface PostedPaySource {
   summary(q: PostedPayQuery & { preferredPeriod: string }): Promise<PostedPaySummary>;
 }
 
+/**
+ * Posted pay through the feed area's `marketStats` seam: the seam selects the
+ * rows (public-aggregate filter, GoApply mode and fraud rules), this area
+ * summarises them in the offer's currency and period.
+ */
 export function createPrismaPostedPay(getDb: () => Promise<PostedPayDb>, opts: { env?: EnvSource } = {}): PostedPaySource {
+  const stats = createMarketStats({ db: getDb, env: opts.env });
   return {
-    async jobScope(jobId) {
-      const db = await getDb();
-      return db.rAJob.findFirst({
-        where: { id: jobId },
-        select: { title: true, taxonomyIds: true, primaryTaxonomyId: true, locationCountry: true, locationCity: true },
-      });
-    },
+    jobScope: (jobId) => stats.jobRole(jobId),
     async summary(q) {
-      const db = await getDb();
-      const where = postedPayWhere(q, opts.env ?? process.env);
-      const listedWhere: Prisma.RAJobWhereInput = {
-        AND: [where, { salaryCurrency: q.currency }, { OR: [{ salaryMin: { gt: 0 } }, { salaryMax: { gt: 0 } }] }],
-      };
-      const [rows, totalCount] = await Promise.all([
-        db.rAJob.findMany({
-          where: listedWhere,
-          select: { salaryMin: true, salaryMax: true, salaryCurrency: true, salaryPeriod: true },
-          orderBy: { postedAt: 'desc' },
-          take: POSTED_ROW_CAP,
-        }),
-        db.rAJob.count({ where }),
-      ]);
-      return summarizePostedPay(rows, { currency: q.currency, preferredPeriod: q.preferredPeriod, totalCount, asOf: q.now });
+      const sample = await stats.salarySample({ market: q.market, taxonomyId: q.taxonomyId, title: q.title, country: q.country, city: q.city, now: q.now, currency: q.currency });
+      return summarizePostedPay(sample.rows, { currency: q.currency, preferredPeriod: q.preferredPeriod, totalCount: sample.totalCount, asOf: q.now });
     },
   };
 }

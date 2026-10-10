@@ -8,7 +8,21 @@ import { describe, expect, it } from 'vitest';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { normalizeSql } from '../../test/sqlSnapshot.js';
 import { FILTER_FIELDS, type FilterField, type FilterSet } from '../search/index.js';
-import { annualFloor, cnDate, countSql, exploreCountsSql, filterPredicates, predicateFor, retrievalSql, roleTaxonomyIds, rowsByIdSql, scopePredicates } from './sql.js';
+import {
+  annualFloor,
+  browseTaxonomySql,
+  cardExtrasSql,
+  cnDate,
+  countSql,
+  exploreCountsSql,
+  filterPredicates,
+  jobIdsSql,
+  predicateFor,
+  retrievalSql,
+  roleTaxonomyIds,
+  rowsByIdSql,
+  scopePredicates,
+} from './sql.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const intl = { market: 'intl' as const, now: NOW };
@@ -130,6 +144,22 @@ describe('scope', () => {
     expect(texts).toContain(`j."publicDisplay" = true`);
     expect(texts.join(' ')).not.toContain('RAJobUserState');
   });
+
+  it('the visitor list carries the public-page rules in the statement: not expired, and a recruiter-bank row or a board still allowed', () => {
+    const scope = { market: 'intl' as const, userId: null, now: NOW, publicOnly: true, publicDisplayOnly: true, ignoreHidden: true };
+    const withBoards = scopePredicates({ ...scope, publicBoards: ['activejobs', 'greenhouse'] }).map((s) => show(s)!);
+    expect(withBoards.map((s) => s.text)).toEqual(expect.arrayContaining([
+      '(j."expiresAt" IS NULL OR j."expiresAt" > $1::timestamp(3))',
+      '(j."fromRecruiterBank" = true OR j."sourceBoard" = ANY($1::text[]))',
+    ]));
+    expect(withBoards.find((s) => s.text.includes('ANY('))!.values).toEqual([['activejobs', 'greenhouse']]);
+    // No board list given: the expiry rule still applies, the board rule is left to the caller's re-check.
+    const bare = scopePredicates(scope).map((s) => show(s)!.text).join(' ');
+    expect(bare).toContain('j."expiresAt" >');
+    expect(bare).not.toContain('fromRecruiterBank');
+    // A signed-in feed is unchanged: neither rule.
+    expect(scopePredicates({ market: 'intl', userId: 'u1', now: NOW }).map((s) => show(s)!.text).join(' ')).not.toMatch(/expiresAt|fromRecruiterBank/);
+  });
 });
 
 describe('statements', () => {
@@ -195,6 +225,75 @@ describe('statements', () => {
 
   it('explore counts per L1 category over public live rows', () => {
     expect(show(exploreCountsSql('intl', ['software_engineering', 'data_analytics']))).toMatchSnapshot();
+  });
+
+  it('explore counts can carry the lists’ age floor (a tile then counts what its browse list reaches)', () => {
+    const sql = show(exploreCountsSql('intl', ['software_engineering'], new Date('2026-06-12T12:00:00Z')));
+    expect(sql?.text).toContain('j."postedAt" >= $');
+    expect(sql?.values).toContain('2026-06-12T12:00:00.000Z');
+    expect(sql?.text).toContain(`j."visibility" = 'public'`);
+  });
+
+  it('browse: the category predicate matches the category id itself and every role under it, as a bare AND part', () => {
+    const cat = show(browseTaxonomySql(['software_engineering']))!;
+    expect(cat.text).toBe('j."taxonomyIds" && $1::text[]');
+    const ids = cat.values[0] as string[];
+    expect(ids[0]).toBe('software_engineering');
+    expect(ids).toContain('backend_engineer');
+    const sql = show(
+      retrievalSql({
+        scope: { market: 'intl', userId: 'u1', now: NOW, publicOnly: true },
+        filters: { taxonomyIds: ['software_engineering'] },
+        fields: FILTER_FIELDS.filter((f) => f !== 'taxonomyIds' && f !== 'titles'),
+        extra: [browseTaxonomySql(['software_engineering'])],
+        from: null,
+        to: null,
+        limit: 400,
+      }),
+    )!;
+    expect(sql.text).toContain('AND j."taxonomyIds" && $');
+    expect(sql.text).not.toContain('(j."taxonomyIds" && $');
+    expect(sql.text).toContain(`j."visibility" = 'public'`);
+    expect(sql.text).not.toContain('j."ownerUserId" = ');
+    // The user's own hidden jobs still stay out of a browse.
+    expect(sql.text).toContain('"hiddenAt" IS NOT NULL');
+  });
+
+  it('job ids (report sample): ids only, the list’s scope and predicates, newest first, LIMIT', () => {
+    const sql = show(
+      jobIdsSql({ scope: { market: 'intl', userId: 'u1', now: NOW, publicOnly: true }, filters, fields: FILTER_FIELDS, from: new Date('2026-06-12T12:00:00Z'), limit: 400, orderBy: 'posted' }),
+    );
+    expect(sql).toMatchSnapshot();
+    expect(sql?.text).toMatch(/^SELECT j\."id" FROM/);
+    expect(sql?.text).not.toContain('j."ownerUserId"');
+    expect(sql?.values.at(-1)).toBe(400);
+  });
+
+  it('job ids (alert candidates): first seen after `since`, newest in our index first; an undated posting passes the posted floor', () => {
+    const sql = show(
+      jobIdsSql({
+        scope: { market: 'cn', userId: 'u1', now: NOW, publicOnly: true },
+        filters: { classYear: 2027 },
+        fields: FILTER_FIELDS,
+        from: new Date('2026-10-09T12:00:00Z'),
+        allowUndated: true,
+        firstSeenAfter: new Date('2026-10-10T09:00:00Z'),
+        limit: 101,
+        orderBy: 'first_seen',
+      }),
+    )!;
+    expect(sql.text).toContain('(j."postedAt" IS NULL OR j."postedAt" >= $');
+    expect(sql.text).toContain('j."firstSeenAt" > $');
+    expect(sql.text).toContain('ORDER BY j."firstSeenAt" DESC, j."id" DESC');
+    expect(sql.values).toContain('class_year:%');
+    expect(sql.text).toContain('"hiddenAt" IS NOT NULL');
+  });
+
+  it('card extras: by id, the posting text only for rows that carry market tags', () => {
+    const sql = show(cardExtrasSql(['j1', 'j2']))!;
+    expect(sql).toMatchSnapshot();
+    expect(sql.values).toEqual([['j1', 'j2']]);
+    expect(sql.text).toContain('jsonb_array_length(j."marketTags") > 0 THEN j."descriptionPlain" END');
   });
 
   it('all predicates together compose (no field throws)', () => {

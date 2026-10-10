@@ -20,6 +20,7 @@ export type {
   IngestProvider,
   IngestQueryParams,
   JobSourceAdapter,
+  SourceCloseReason,
   SourceFetchContext,
   SourceFetchResult,
   SourceQuery,

@@ -63,6 +63,25 @@ describe('first read: legacy migration', () => {
   });
 });
 
+describe('findById (the feed’s alert-candidate seam)', () => {
+  it('returns the owner, the version and the stored filters as written; null for an unknown id; reads only that row', async () => {
+    const { svc, fake } = setup({
+      seed: {
+        rASearchProfile: [
+          { id: 'sp_a', userId: 'u1', name: 'A', isDefault: true, isActive: true, version: 4, schemaVersion: 1, filters: { workModels: ['remote'], classYear: 2027 }, alertInstantMax: 1, alertDigest: null, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
+          { id: 'sp_b', userId: 'u2', name: 'B', isDefault: true, isActive: true, version: 1, schemaVersion: 1, filters: {}, alertInstantMax: 0, alertDigest: null, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
+        ],
+      },
+    });
+    // The filters are not coerced here: the caller knows its market (a GoApply-only field stays as stored).
+    expect(await svc.findById('sp_a')).toEqual({ id: 'sp_a', userId: 'u1', version: 4, filters: { workModels: ['remote'], classYear: 2027 } });
+    expect(await svc.findById('missing')).toBeNull();
+    // No migration, no lock, no write: a background read never creates a profile.
+    expect(fake.$sql.texts()).toEqual([]);
+    expect(fake.$rows('rASearchProfile')).toHaveLength(2);
+  });
+});
+
 describe('create', () => {
   it('enforces the saved_searches entitlement (Free 1, Pro 10)', async () => {
     const { svc, setAccount } = setup();

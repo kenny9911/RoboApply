@@ -16,8 +16,23 @@ import { z } from 'zod';
 /** Bump when the prompt, schema or reconcile rules change materially; old rows re-enrich. */
 export const ENRICH_VERSION = 1;
 
-/** `RAJob.enrichModel` when no model ran (rules only). */
+/**
+ * `RAJob.enrichModel` when no model ran and a model pass is still owed: the
+ * brand had no usable model, or LLM enrichment was switched off
+ * (ENRICH_DAILY_JOBS=0). jobs-maintain queues these rows for one model pass
+ * once a model and a budget exist.
+ */
 export const RULES_ONLY_MODEL = 'rules';
+
+/**
+ * `RAJob.enrichModel` when the row is rules-only and a model pass would not
+ * change that at this ENRICH_VERSION: the posting has nothing a model could
+ * add, the owner has not allowed AI, or the model call failed on its last
+ * attempt. jobs-maintain never selects this value, so such a job is not
+ * re-run every time its finished work item is pruned from the queue. A
+ * changed posting or a new ENRICH_VERSION enriches the row again.
+ */
+export const RULES_CHECKED_MODEL = 'rules_checked';
 
 /** Input cap for the posting text sent to the model (ARCH §4.5). */
 export const ENRICH_INPUT_CHARS = 6000;

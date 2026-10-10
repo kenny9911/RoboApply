@@ -22,6 +22,8 @@ import { emptyTally, ingestForProfileWith, type TargetedIngestResult } from './r
 import { ingestAllowed } from './cron.js';
 
 export { runJobsIngest, runJobsMaintain, runJobsPlan, ingestAllowed } from './cron.js';
+/** A provider's daily call limit from env (admin "Limits" page reads it here, never from a copy). */
+export { dailyCallLimit } from './config.js';
 export { JOBS_INGEST_WORK_KINDS, workers } from './workers.js';
 export { rapidApiCountry, rapidApiSearchParams } from './adapters/rapidApi.js';
 export { readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';

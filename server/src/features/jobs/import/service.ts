@@ -25,6 +25,7 @@ import { CreditReplayError, creditService, type CreditService } from '../../../p
 import { normalizeProviderJob, type NormalizedJob } from '../normalize/index.js';
 import { afterNormalize as marketAfterNormalize, type MarketHookContext, type MarketHookJob } from '../marketHooks.js';
 import { detectScamSignals, enqueueJobEnrich, enrichJob, type EnrichOutcome } from '../enrich/index.js';
+import { cnImportWarnings } from '../../cn/jobs/index.js';
 import {
   IMPORT_ERROR_CODES,
   type AddedJobItem,
@@ -119,6 +120,17 @@ export function warningsFrom(value: unknown): ImportWarning[] {
     out.push({ rule, evidence });
   }
   return out;
+}
+
+/**
+ * Warnings stored on a job: every `fraudFlags` entry (rule-based scam
+ * signals, and on GoApply the fraud rules), plus `cnImportWarnings(job)` for
+ * a mainland job so a GoApply fraud flag is shown however it was recorded.
+ */
+export function storedWarnings(job: { fraudFlags: unknown; market?: string | null }): ImportWarning[] {
+  const flags = Array.isArray(job.fraudFlags) ? job.fraudFlags : [];
+  const cn = job.market === 'cn' ? cnImportWarnings({ fraudFlags: job.fraudFlags }) : [];
+  return warningsFrom([...flags, ...cn]);
 }
 
 function notFound(): HttpError {
@@ -220,6 +232,8 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
     try {
       const hooked = await d.afterNormalize(job, { brand: brand.id, market: brand.market, stage: 'import', userId });
       flags.push(...(Array.isArray(hooked.fraudFlags) ? (hooked.fraudFlags as typeof flags) : []));
+      // GoApply: the warnings the cn hook prepared for a user's own import (WP-41 `cnFraudWarnings`).
+      flags.push(...warningsFrom(hooked.cnFraudWarnings).map((w) => ({ ...w, at: now })));
     } catch (err) {
       logger.warn('JOB_IMPORT', 'market hook failed on an import preview', { error: err instanceof Error ? err.message : String(err) });
     }
@@ -299,7 +313,7 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
       status: 'done',
       jobId,
       missingFields: [],
-      warnings: warningsFrom(stored?.fraudFlags),
+      warnings: stored ? storedWarnings(stored) : [],
       reason: null,
       draft: null,
       matched,
@@ -447,7 +461,7 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
         const own = job.ownerUserId === userId;
         if (job.visibility !== 'public' && !own) throw notFound();
         if (own && job.archivedAt) throw notFound();
-        return { status: 'done', jobId, missingFields: [], warnings: warningsFrom(job.fraudFlags), reason: null };
+        return { status: 'done', jobId, missingFields: [], warnings: storedWarnings(job), reason: null };
       }
       const claims = verifyDraftImportId(importId, userId, { env: d.env, now: d.now() });
       if (!claims) throw notFound();
@@ -468,7 +482,7 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
         applyUrl: r.applyUrl || null,
         sourceHost: hostOfUrl(r.applyUrl || null),
         addedAt: r.createdAt.toISOString(),
-        warnings: warningsFrom(r.fraudFlags),
+        warnings: storedWarnings(r),
         trackerStatus: statuses.get(r.id) ?? null,
       }));
       const last = page[page.length - 1];
