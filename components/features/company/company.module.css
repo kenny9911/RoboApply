@@ -1,0 +1,143 @@
+/* components/features/company — the Company tab (WP-34). Clarity tokens
+   only; facts on a solid surface, each with its source line. */
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.label {
+  margin: 0;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.factLabel {
+  margin: 0;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.factValue {
+  margin: 0;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.factValue a,
+.newsLink {
+  color: var(--action);
+  text-underline-offset: 2px;
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.body {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  max-width: 68ch;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.source {
+  margin: 0;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.jobs,
+.news {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jobLink {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  justify-content: center;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.jobLink:hover {
+  border-color: var(--action);
+}
+
+.jobLink:focus-visible,
+.newsLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.jobTitle {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.newsItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  justify-content: center;
+}
