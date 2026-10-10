@@ -1,8 +1,14 @@
-// /referrals — route shell (FND-6b). GoApply 内推 hub (flag `cn.referralCodes`).
-//
-// STUB. Owner: WP-54, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /referrals — the GoApply 内推码 hub (WP-54; PRODUCT F-NET-08 cn; flag `cn.referralCodes`).
+// Renders inside the (auth) app shell. `?company=` pre-fills the company
+// filter (the job page's "See all referral codes"). With the capability off
+// the page says it is not available (there is no nav entry then).
 
-export default function ReferralsPage() {
-  return <div hidden data-route-stub="/referrals" data-owner="WP-54" />;
+import { ReferralHub } from '../../../components/features/network';
+
+type Search = Record<string, string | string[] | undefined>;
+
+export default async function ReferralsPage({ searchParams }: { searchParams?: Promise<Search> }) {
+  const sp: Search = (await searchParams) ?? {};
+  const company = typeof sp.company === 'string' && sp.company.trim() ? sp.company.trim().slice(0, 120) : null;
+  return <ReferralHub initialCompany={company} />;
 }
