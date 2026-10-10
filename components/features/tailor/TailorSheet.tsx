@@ -2,9 +2,11 @@
 
 // TailorSheet — the tailor flow in a sheet (bottom sheet on phones, a centred
 // card on wide screens). When no resume is given, the user first picks the
-// base resume to copy (their main resume first). Re-opening a session
-// (`sessionId`) never asks for a base: the session already has one, so the
-// sheet loads it and goes straight to Verify details.
+// base resume to copy (their main resume first). When no job is given (the
+// editor's Tailor button), the user then says which job it is for: one of
+// their saved jobs, or a posting they paste (TailorTarget). Re-opening a
+// session (`sessionId`) never asks for either: the session already has both,
+// so the sheet loads it and goes straight to Verify details.
 
 import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -15,12 +17,17 @@ import { useTailorSession } from '../../../hooks/tailor';
 import type { TailorSessionView } from '../../../lib/api/contracts/resume';
 import { TailorError } from './TailorError';
 import { TailorFlow } from './TailorFlow';
+import { TailorTarget, type TailorTargetValue } from './TailorTarget';
 import styles from './Tailor.module.css';
 
 export interface TailorSheetProps {
   open: boolean;
   onClose: () => void;
-  /** The job to tailor for. May be omitted when re-opening a session (a pasted posting has none). */
+  /**
+   * The job to tailor for. Omitted with no `sessionId` → the user picks a saved
+   * job or pastes the posting first. Omitted with a `sessionId` → the
+   * session's own job or pasted posting.
+   */
   jobId?: string | null;
   /** Base resume; omitted → the picker (or the session's base when `sessionId` is set). */
   resumeId?: string | null;
@@ -34,15 +41,35 @@ export interface TailorSheetProps {
 
 export function TailorSheet({ open, onClose, jobId = null, resumeId = null, sessionId = null, jobTitle = null, onFinalized, onOpenResume }: TailorSheetProps) {
   const t = useTranslations('tailor.sheet');
+  const tTarget = useTranslations('tailor.target');
   const [picked, setPicked] = useState<string | null>(null);
+  const [target, setTarget] = useState<TailorTargetValue | null>(null);
   const base = resumeId ?? picked;
   const handlers = { onClose, onFinalized, onOpenResume };
+  // No job and no session to re-open: ask which job this is for.
+  const needsTarget = !jobId && !sessionId;
+  const targetTitle = target ? (target.kind === 'job' ? target.title : target.jd.title) : null;
+  const targetCompany = target ? (target.kind === 'job' ? target.company : target.jd.company || null) : null;
   let body: ReactNode;
   if (sessionId && !base) body = <SessionFlow sessionId={sessionId} jobId={jobId} {...handlers} />;
-  else if (base) body = <TailorFlow resumeId={base} jobId={jobId} sessionId={sessionId} {...handlers} />;
-  else body = <BasePicker onPick={setPicked} />;
+  else if (!base) body = <BasePicker onPick={setPicked} />;
+  else if (needsTarget && !target) body = <TailorTarget onPick={setTarget} />;
+  else {
+    body = (
+      <TailorFlow
+        resumeId={base}
+        jobId={jobId ?? (target?.kind === 'job' ? target.jobId : null)}
+        jd={target?.kind === 'posting' ? target.jd : null}
+        sessionId={sessionId}
+        targetLabel={targetTitle ? (targetCompany ? tTarget('chosenWithCompany', { title: targetTitle, company: targetCompany }) : targetTitle) : null}
+        onChangeTarget={needsTarget ? () => setTarget(null) : undefined}
+        {...handlers}
+      />
+    );
+  }
+  const heading = jobTitle ?? targetTitle;
   return (
-    <Sheet open={open} onClose={onClose} title={jobTitle ? t('titleFor', { title: jobTitle }) : t('title')}>
+    <Sheet open={open} onClose={onClose} title={heading ? t('titleFor', { title: heading }) : t('title')}>
       {body}
     </Sheet>
   );

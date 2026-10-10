@@ -31,6 +31,8 @@ export interface GradeRow {
   creditLedgerId: string | null;
   createdAt: Date;
   completedAt: Date | null;
+  /** When the owner first opened the finished check (`RAResumeGrade.viewedAt`); null until then. */
+  viewedAt?: Date | null;
 }
 
 export interface NewGrade {
@@ -83,6 +85,13 @@ export interface ResumeCheckStore {
   findGrade(userId: string, gradeId: string): Promise<GradeRow | null>;
   /** Newest first. */
   listGrades(userId: string, variantId: string, limit: number): Promise<GradeRow[]>;
+  /**
+   * Stamp `viewedAt` on a finished check the first time its owner opens it.
+   * True when this call set it; false when it was already set, the check is
+   * not finished, or it is not the user's. Optional: a store with no owner
+   * (the signed-out free tool) has nothing to stamp.
+   */
+  markGradeViewed?(userId: string, gradeId: string, at: Date): Promise<boolean>;
   /** A job the user may see: public, or one the user added. */
   findJob(userId: string, jobId: string): Promise<JobRow | null>;
   findKeywordExtraction(jobId: string): Promise<{ keywords: unknown } | null>;
@@ -90,8 +99,10 @@ export interface ResumeCheckStore {
   /**
    * Writes new markdown the way RAResumeService.patch does: new
    * `resumeContentHash` (which marks fit scores stale) and `lastEditedAt`.
+   * `aiAssisted` stamps `RAResumeVariant.aiAssistedAt` once (text a model
+   * wrote went into the resume), so exports carry the AI marks.
    */
-  saveMarkdown(userId: string, variantId: string, markdown: string): Promise<{ resumeContentHash: string }>;
+  saveMarkdown(userId: string, variantId: string, markdown: string, opts?: { aiAssisted?: boolean }): Promise<{ resumeContentHash: string }>;
   /**
    * At-most-once grant per (user, reason), across server instances: runs `fn`
    * while holding a per-(user, reason) lock (Postgres: a transaction-scoped
@@ -175,6 +186,11 @@ export function createPrismaResumeCheckStore(): ResumeCheckStore {
       const p = await db();
       return p.rAResumeGrade.findMany({ where: { userId, variantId }, orderBy: { createdAt: 'desc' }, take: limit });
     },
+    async markGradeViewed(userId, gradeId, at) {
+      const p = await db();
+      const res = await p.rAResumeGrade.updateMany({ where: { id: gradeId, userId, status: 'done', viewedAt: null }, data: { viewedAt: at } });
+      return res.count > 0;
+    },
     async findJob(userId, jobId) {
       const p = await db();
       return p.rAJob.findFirst({
@@ -202,14 +218,19 @@ export function createPrismaResumeCheckStore(): ResumeCheckStore {
         select: { score: true, tier: true, generatedAt: true, resumeContentHashAtScore: true },
       });
     },
-    async saveMarkdown(userId, variantId, markdown) {
+    async saveMarkdown(userId, variantId, markdown, opts) {
       const p = await db();
       const resumeContentHash = resumeContentHashOf(markdown);
+      const now = new Date();
       const res = await p.rAResumeVariant.updateMany({
         where: { id: variantId, userId, deletedAt: null },
-        data: { resumeMarkdown: markdown, resumeContentHash, lastEditedAt: new Date() },
+        data: { resumeMarkdown: markdown, resumeContentHash, lastEditedAt: now },
       });
       if (res.count === 0) throw new Error('resume variant not found');
+      if (opts?.aiAssisted) {
+        // Stamped once: the first time AI-written text lands in this resume.
+        await p.rAResumeVariant.updateMany({ where: { id: variantId, userId, aiAssistedAt: null }, data: { aiAssistedAt: now } });
+      }
       return { resumeContentHash };
     },
     async withGrantClaim(userId, reason, fn) {

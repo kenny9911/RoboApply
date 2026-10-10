@@ -10,7 +10,7 @@ import { hasInventedNumber, inventedNumbers, quotedIn } from './citationGuard.js
 import { parseResume, resumeForLlm, textUnits } from './resumeText.js';
 import { runRules } from './rules.js';
 import { countBySeverity, gradeIssues, labelFor, scoreIssues } from './score.js';
-import { ISSUE_DEFINITIONS, rulesCountFor } from './taxonomy.js';
+import { ISSUE_DEFINITIONS, TEMPLATE_RULES, rulesCountFor } from './taxonomy.js';
 import { GOOD_INTL } from './fixtures.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -166,11 +166,16 @@ describe('issue taxonomy table', () => {
     expect(rulesCountFor('cn', false)).toBeGreaterThan(rulesCountFor('intl', false) - 2);
   });
 
-  it('layout_columns: fires on the editor template keys, is not counted until layout is stored', () => {
+  it('layout_columns: fires on the editor template keys and is counted now that layouts are saved (layout.template)', () => {
     for (const key of ['two-column', 'two_column', 'split']) expect(types(rules(GOOD_INTL, 'intl', key))).toContain('layout_columns');
     for (const key of ['ats-clean', 'modern', 'compact']) expect(types(rules(GOOD_INTL, 'intl', key))).not.toContain('layout_columns');
-    const all = Object.values(ISSUE_DEFINITIONS).filter((d) => d.profiles.includes('intl') && d.source === 'rules').length;
-    expect(rulesCountFor('intl', false)).toBe(all - 1);
+    for (const profile of ['intl', 'cn'] as const) {
+      const all = Object.values(ISSUE_DEFINITIONS).filter((d) => d.profiles.includes(profile) && d.source === 'rules').length;
+      expect(rulesCountFor(profile, false)).toBe(all);
+      // Text with no template (the signed-out free tool) cannot be judged on it.
+      expect(rulesCountFor(profile, false, { template: false })).toBe(all - TEMPLATE_RULES.length);
+    }
+    expect(TEMPLATE_RULES).toEqual(['layout_columns']);
   });
 });
 

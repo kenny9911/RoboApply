@@ -1,16 +1,21 @@
-// backend/src/roboapply/v2/routes/resumes.ts
+// server/src/roboapply/v2/routes/resumes.ts
 //
 // Mounted at /api/v1/roboapply/v2/resumes.
 //
 //   GET    /                — list variant summaries (newest lastEditedAt first)
-//   POST   /                — create (kind discriminator: base|tailored_for_jd|from_template)
+//   POST   /                — create (kind discriminator: base|tailored_for_jd|from_template).
+//                             `tailored_for_jd` runs a tailor session: one
+//                             `tailor` credit (send `Idempotency-Key`), the
+//                             claim check, `unverifiedClaims`; answers
+//                             `{ resume, tailorSessionId, pendingClaims }`
 //   GET    /:id             — single variant (owner-only)
 //   PATCH  /:id             — name + markdown patch (stale-marks downstream scores)
 //   DELETE /:id             — soft delete (409 if only base + tracker dependents)
-//   POST   /:id/rewrite     — V3 inline AI rewrite (bullet | summary | skills)
-//   POST   /:id/tailor-diff — V3 propose a tailor diff for a job (does NOT create a variant)
-//   (rewrite + tailor-diff answer 503 ai_unavailable when the user's AI consent
-//   is off or the brand has no text model; WP-22, TASK_PLAN.md §2.2)
+//   POST   /:id/rewrite     — V3 inline AI rewrite (bullet | summary | skills);
+//                             503 ai_unavailable when the user's AI consent is
+//                             off or the brand has no text model (WP-22)
+//   POST   /:id/tailor-diff — retired: 410 gone (use POST /tailor-sessions)
+//   POST   /:id/tailor-apply — retired: 410 gone (use POST /tailor-sessions)
 //   GET    /:id/coach-tips  — V3 editor coach tips (free, deterministic)
 //   PATCH  /:id/layout      — template, page size, spacing, accent, date format (WP-36b)
 //   GET    /:id/export      — PDF/DOCX; 409 unverified_claims; records the file
@@ -25,12 +30,24 @@
 // Hub rules (WP-36b): up to 5 base resumes (409 resume_limit_reached);
 // tailored versions do not count. Uploads check the brand's file storage
 // first (503 storage_unavailable on the mainland stack without CN_S3_*).
+// Uploads and LinkedIn PDF imports share a persisted cap of 10 a day per user
+// (429 rate_limited + Retry-After, details.reason resume_upload_daily_limit).
+// POST /upload on RoboApply reads the file with the local parser when the form
+// carries `localParser=1`, and always for a user without a live
+// `intl_cross_border_cn_parse` grant (the GoHire parser is never used then).
+// GoApply ignores `localParser`: GoHire is its in-country parser.
+// GoApply: a file is read only with the user's AI consent (`ai_resume_parsing`);
+// without it both upload routes answer 503 ai_unavailable (details.reason
+// ai_consent_required) before the file is read, and no model is called.
 // There is no LinkedIn URL import (TASK_PLAN.md H9).
 //
-// Quota note: `tailored_for_jd` create + `/rewrite` + `/tailor-diff` are
-// LLM ops — they write a `ra_resume_tailor` deduction row on SUCCESS only
-// (failures / graceful fallbacks pay zero). `/coach-tips` is free.
+// Tailoring (INT-10): every tailored version comes from a tailor session
+// (features/resume/tailor). The old tailor-diff / tailor-apply pair skipped
+// the `tailor` credit, the claim check and `unverifiedClaims`; its last caller
+// (the editor's TailorModal) is gone, so both routes answer 410. They keep the
+// GoApply phone and AI-consent gates in front, as before.
 
+import crypto from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../lib/raAuth.js';
@@ -45,7 +62,8 @@ import {
 import { resumeOriginalFileStorageService } from '../../../services/ResumeOriginalFileStorageService.js';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import { PatchLayoutBodySchema, getLayoutService } from '../../../features/resume/index.js';
-import { HttpError } from '../../../platform/http.js';
+import { HttpError, fail, mapError } from '../../../platform/http.js';
+import { AuthCnError } from '../../../features/auth-cn/index.js';
 import {
   BASE_RESUME_LIMIT,
   raResumeService,
@@ -53,7 +71,9 @@ import {
   ResumeInUseError,
   ResumeLimitError,
   ResumeNotFoundError,
+  ResumeParseConsentError,
   ResumeUploadError,
+  ResumeUploadLimitError,
   ResumeValidationError,
   TrackerEntryNotFoundError,
   UnverifiedClaimsError,
@@ -67,7 +87,6 @@ import {
   ResumeNotFoundError as ResumeAINotFoundError,
   RewriteValidationError,
   type RewriteInput,
-  type TailorDiffInput,
 } from '../services/RAResumeAIService.js';
 
 const router = Router();
@@ -105,6 +124,25 @@ function requireUploadStorage(req: Request, res: Response, next: (err?: any) => 
     }
     next(err);
   }
+}
+
+/** 429 `rate_limited` with `Retry-After` once the day's uploads are used up. */
+function uploadLimitResponse(res: Response, err: ResumeUploadLimitError): Response {
+  return fail(res, 'rate_limited', err.message, {
+    reason: 'resume_upload_daily_limit',
+    limit: err.limit,
+    retryAfterSec: err.retryAfterSec,
+  });
+}
+
+/** 503 `ai_unavailable` for a GoApply upload without the AI consent (nothing was read). */
+function parseConsentResponse(res: Response): Response {
+  return res.status(503).json({ error: 'ai_unavailable', code: 'ai_unavailable', details: { reason: 'ai_consent_required' } });
+}
+
+/** A multipart flag is on when it is `1` or `true`. */
+function flagOn(value: unknown): boolean {
+  return typeof value === 'string' && /^(?:1|true)$/i.test(value.trim());
 }
 
 const VALID_KINDS: RAResumeKind[] = ['base', 'tailored_for_jd', 'from_template'];
@@ -170,7 +208,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const body = (req.body ?? {}) as ResumeCreateInput & { kind?: string };
+    const body = (req.body ?? {}) as { kind?: string; name?: unknown } & Record<string, unknown>;
     if (!body.kind || !VALID_KINDS.includes(body.kind as RAResumeKind)) {
       return res.status(422).json({
         error: 'invalid_kind',
@@ -201,11 +239,32 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
         return res.status(422).json({ error: 'templateKey_required' });
       }
     }
-    const resume = await raResumeService.create(userId, body as ResumeCreateInput, getRequestLocale(req));
+    if (body.kind === 'tailored_for_jd') {
+      // A tailor session: one `tailor` credit, the claim check, unverifiedClaims.
+      const header = req.get('Idempotency-Key')?.trim();
+      const result = await raResumeService.createTailoredForJob(
+        userId,
+        { name: body.name as string, basedOnVariantId: (body as any).basedOnVariantId, targetJobId: (body as any).targetJobId },
+        { idempotencyKey: header && header.length <= 120 ? header : `legacy-tailor:${crypto.randomUUID()}`, locale: getRequestLocale(req) },
+      );
+      return res.status(201).json(result);
+    }
+    const resume = await raResumeService.create(userId, body as unknown as ResumeCreateInput, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
     if (err instanceof ResumeLimitError) {
       return res.status(409).json(limitBody());
+    }
+    // GoApply: a WeChat account binds a phone before any AI feature.
+    if (err instanceof AuthCnError) {
+      return res.status(err.status).json({ success: false, code: err.code, error: err.message, ...(err.details ? { details: err.details } : {}) });
+    }
+    // Tailor-session errors keep their platform envelope (404 not_found,
+    // 503 ai_unavailable, 402 credits_exhausted, 409 conflict, …).
+    const mapped = mapError(err);
+    if (!mapped.unexpected) {
+      for (const [k, v] of Object.entries(mapped.headers)) res.setHeader(k, v);
+      return res.status(mapped.status).json({ ...mapped.body, error: mapped.body.code, message: mapped.body.error });
     }
     if (err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });
@@ -243,12 +302,22 @@ router.post('/upload', requireAuth, requireUploadStorage, handleResumeUpload, as
       mimeType: file.mimetype || 'application/octet-stream',
       name: nameRaw || undefined,
       idempotencyKey: keyRaw && keyRaw.length <= 200 ? keyRaw : undefined,
+      // RoboApply: `localParser=1` keeps the file on this server (no GoHire
+      // parse). The service also forces it for a RoboApply user without the
+      // `intl_cross_border_cn_parse` grant, and ignores the flag on GoApply.
+      localParser: flagOn(req.body?.localParser),
       requestId: (req as any).requestId,
     }, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
     if (err instanceof ResumeLimitError) {
       return res.status(409).json(limitBody());
+    }
+    if (err instanceof ResumeUploadLimitError) {
+      return uploadLimitResponse(res, err);
+    }
+    if (err instanceof ResumeParseConsentError) {
+      return parseConsentResponse(res);
     }
     if (err instanceof ResumeUploadError) {
       return res.status(422).json({ error: err.code, code: err.code });
@@ -291,6 +360,12 @@ router.post('/import-linkedin', requireAuth, requireUploadStorage, handleResumeU
   } catch (err) {
     if (err instanceof ResumeLimitError) {
       return res.status(409).json(limitBody());
+    }
+    if (err instanceof ResumeUploadLimitError) {
+      return uploadLimitResponse(res, err);
+    }
+    if (err instanceof ResumeParseConsentError) {
+      return parseConsentResponse(res);
     }
     if (err instanceof ResumeUploadError) {
       return res.status(422).json({ error: err.code, code: err.code });
@@ -595,78 +670,18 @@ router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, re
   }
 });
 
-// POST /:id/tailor-diff — propose a tailor diff for a (resume, job) pair.
-router.post('/:id/tailor-diff', requireAuth, ...legacyAiGates(), async (req: Request<{ id: string }>, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const body = (req.body ?? {}) as TailorDiffInput;
-    const result = await raResumeAIService.tailorDiff(userId, req.params.id, body, getRequestLocale(req));
-    return res.json(result);
-  } catch (err) {
-    if (err instanceof ResumeAINotFoundError) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    if (err instanceof AiUnavailableError) {
-      return res.status(503).json({ error: 'ai_unavailable', code: 'ai_unavailable' });
-    }
-    if (err instanceof RewriteValidationError) {
-      return res.status(422).json({ error: err.message });
-    }
-    logger.error('RA_V2_RESUMES', 'tailorDiff failed', {
-      userId: req.user?.id,
-      resumeId: req.params.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-// POST /:id/tailor-apply — persist a tailor PREVIEW as a new tailored variant.
-// Deterministic: no LLM re-run and no new charge (the tailor was billed at
-// /tailor-diff). Body: { tailoredResumeMarkdown, changes?, acceptedChangeIds?,
-// targetJobId?, targetCompany?, targetTitle?, name? }. `acceptedChangeIds`
-// (omitted = accept all) reverts the deselected reversible changes in the
-// tailored markdown before persisting. targetCompany/targetTitle carry the
-// manual-target lineage when there is no saved job.
-router.post('/:id/tailor-apply', requireAuth, ...legacyAiGates(), async (req: Request<{ id: string }>, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const body = (req.body ?? {}) as {
-      tailoredResumeMarkdown?: string;
-      changes?: unknown;
-      acceptedChangeIds?: unknown;
-      targetJobId?: string;
-      targetCompany?: string;
-      targetTitle?: string;
-      name?: string;
-    };
-    const resume = await raResumeService.applyTailoredMarkdown(userId, req.params.id, {
-      tailoredResumeMarkdown: String(body.tailoredResumeMarkdown ?? ''),
-      changes: Array.isArray(body.changes) ? (body.changes as any) : [],
-      acceptedChangeIds: Array.isArray(body.acceptedChangeIds)
-        ? (body.acceptedChangeIds as string[])
-        : null,
-      targetJobId: typeof body.targetJobId === 'string' ? body.targetJobId : undefined,
-      targetCompany: typeof body.targetCompany === 'string' ? body.targetCompany : undefined,
-      targetTitle: typeof body.targetTitle === 'string' ? body.targetTitle : undefined,
-      name: typeof body.name === 'string' ? body.name : undefined,
-    });
-    return res.status(201).json({ resume });
-  } catch (err) {
-    if (err instanceof ResumeNotFoundError) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    if (err instanceof ResumeValidationError) {
-      return res.status(422).json({ error: err.message });
-    }
-    logger.error('RA_V2_RESUMES', 'tailorApply failed', {
-      userId: req.user?.id,
-      resumeId: req.params.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
+// POST /:id/tailor-diff and /:id/tailor-apply — retired (INT-10). Tailoring
+// is POST /tailor-sessions (one `tailor` credit, claim check, Verify details).
+// 410 after the same gates as before, so a caller without the GoApply phone or
+// the AI consent still gets 403 / 503 first and no model is ever called here.
+function tailorRetired(_req: Request, res: Response): Response {
+  return fail(res, 'gone', 'Tailoring moved. Start it from a job or from the resume editor.', {
+    reason: 'legacy_tailor_retired',
+    replacement: 'POST /api/v1/roboapply/v2/resumes/tailor-sessions',
+  });
+}
+router.post('/:id/tailor-diff', requireAuth, ...legacyAiGates(), tailorRetired);
+router.post('/:id/tailor-apply', requireAuth, ...legacyAiGates(), tailorRetired);
 
 // GET /:id/coach-tips — editor coach tips (free, deterministic).
 router.get('/:id/coach-tips', requireAuth, async (req: Request<{ id: string }>, res: Response) => {

@@ -28,7 +28,7 @@ vi.mock('../auth-cn', () => ({
 }));
 vi.mock('../market', () => ({ AiGeneratedBadge: () => <span data-testid="ai-badge">AI generated</span> }));
 
-import { BaseSlots, ResumeHubMeta, ResumeHubTabs, TailoredVersions, groupTailored } from './ResumeHub';
+import { BaseSlots, ResumeHubMeta, ResumeHubTabs, TailoredVersions, groupTailored, verifyDetailsHref } from './ResumeHub';
 import { LayoutPanel } from './LayoutPanel';
 import { resolveLayout } from './layout';
 import { DownloadModal } from '../../v3/resume-editor/DownloadModal';
@@ -115,6 +115,49 @@ describe('tailored versions per job', () => {
     expect(screen.getByRole('link', { name: 'Acme v2' })).toHaveAttribute('href', '/resume/t2');
     expect(screen.getByText('2 details to check')).toBeInTheDocument();
     expect(screen.getAllByText(/From Main/)).toHaveLength(2);
+  });
+
+  describe('"Verify details" on tailored copies (INT-10)', () => {
+    const versions = (over: Array<Partial<ResumeSummary>>) => over.map((o, i) => summary({ id: `t${i + 1}`, name: `Version ${i + 1}`, kind: 'tailored_for_jd', targetJobId: 'j1', targetJobCompany: 'Acme', targetJobTitle: 'Engineer', basedOnVariantId: 'b1', ...o }));
+
+    it('a copy with details to check is marked "Verify details" and links to ?tailorSession=<id>', () => {
+      renderWithProviders(
+        <TailoredVersions resumes={versions([{ unverifiedClaims: 2, tailorSessionId: 'ts_42' }])} baseNames={new Map([['b1', 'Main']])} formatDate={() => 'Oct 5, 2026'} />,
+      );
+      const link = screen.getByRole('link', { name: 'Verify details in Version 1' });
+      expect(link).toHaveTextContent('Verify details');
+      expect(link).toHaveAttribute('href', '/resume?tailorSession=ts_42');
+      expect(verifyDetailsHref('ts 4/2')).toBe('/resume?tailorSession=ts%204%2F2');
+      // The count stays next to it.
+      expect(screen.getByText('2 details to check')).toBeInTheDocument();
+      // The version itself still opens in the editor.
+      expect(screen.getByRole('link', { name: 'Version 1' })).toHaveAttribute('href', '/resume/t1');
+    });
+
+    it('only copies with unverified details are marked; a finished copy carries no mark even with a session id', () => {
+      renderWithProviders(
+        <TailoredVersions
+          resumes={versions([
+            { unverifiedClaims: 1, tailorSessionId: 'ts_a' },
+            { unverifiedClaims: 0, tailorSessionId: 'ts_b' },
+            { tailorSessionId: null },
+          ])}
+          baseNames={new Map()}
+          formatDate={() => 'Oct 5, 2026'}
+        />,
+      );
+      const links = screen.getAllByRole('link', { name: /^Verify details in/ });
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAttribute('href', '/resume?tailorSession=ts_a');
+      expect(screen.getByText('1 detail to check')).toBeInTheDocument();
+      expect(document.querySelectorAll('[data-verify]')).toHaveLength(1);
+    });
+
+    it('a copy with details to check but no session to re-open (an older row) shows the count without a dead link', () => {
+      renderWithProviders(<TailoredVersions resumes={versions([{ unverifiedClaims: 3, tailorSessionId: null }])} baseNames={new Map()} formatDate={() => ''} />);
+      expect(screen.getByText('3 details to check')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /^Verify details/ })).toBeNull();
+    });
   });
 
   it('explains the empty state', () => {

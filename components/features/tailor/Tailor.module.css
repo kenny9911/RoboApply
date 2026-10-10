@@ -135,6 +135,72 @@
   box-shadow: var(--shadow-focus);
 }
 
+/* Target step (which job is this for): single-line fields and the posting box. */
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--action);
+  box-shadow: var(--shadow-focus);
+}
+
+.posting {
+  min-height: 160px;
+}
+
+.targetList {
+  max-height: 264px;
+  overflow-y: auto;
+}
+
+.targetLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.targetLine strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.linkButton {
+  min-height: 44px;
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: none;
+  color: var(--action);
+  font: inherit;
+  font-size: var(--fs-meta);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkButton:focus-visible {
+  outline: none;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-focus);
+}
+
 .counter {
   align-self: flex-end;
   font-size: var(--fs-meta);

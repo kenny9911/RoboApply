@@ -237,6 +237,30 @@
   font-weight: 600;
 }
 
+.verifyRow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.verifyLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sp-1);
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.verifyLink:focus-visible {
+  outline: none;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-focus);
+}
+
 /* ── Layout panel ─────────────────────────────────────────────────────── */
 .layoutDetails {
   margin: 0 0 var(--sp-3);

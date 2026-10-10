@@ -4,7 +4,9 @@
 //   <ResumeHubTabs active="resumes" />     Resumes · Cover letters (/resume/letters)
 //   <BaseSlots used={n} />                 "{n} of 5 resumes" (tailored versions not counted)
 //   <ResumeHubMeta resume … />             Primary badge / Make primary + target title
-//   <TailoredVersions items … />           tailored versions grouped per job
+//   <TailoredVersions items … />           tailored versions grouped per job; one with
+//                                          details still to check links to "Verify details"
+//                                          (`/resume?tailorSession=<id>`, the tailor flow)
 //
 // Data comes from the page (useResumeList); mutations are passed in, so these
 // stay presentational and testable. Counts are real list lengths (D3).
@@ -137,6 +139,11 @@ export function groupTailored(resumes: readonly ResumeSummary[]): TailoredGroup[
   return out;
 }
 
+/** Re-open a tailor session on "Verify details" (TailorLaunchHost on the hub reads the query). */
+export function verifyDetailsHref(tailorSessionId: string): string {
+  return `/resume?tailorSession=${encodeURIComponent(tailorSessionId)}`;
+}
+
 export interface TailoredVersionsProps {
   resumes: readonly ResumeSummary[];
   /** Name of the base resume a version came from, by id. */
@@ -171,7 +178,15 @@ export function TailoredVersions({ resumes, baseNames, formatDate }: TailoredVer
                   {t('tailored.edited', { when: formatDate(v.lastEditedAt) })}
                 </span>
                 {v.unverifiedClaims && v.unverifiedClaims > 0 ? (
-                  <span className={styles.verifyTag}>{t('tailored.verify', { count: v.unverifiedClaims })}</span>
+                  <span className={styles.verifyRow} data-verify={v.id}>
+                    <span className={styles.verifyTag}>{t('tailored.verify', { count: v.unverifiedClaims })}</span>
+                    {/* The session that made this version: re-opens the tailor flow on Verify details. */}
+                    {v.tailorSessionId ? (
+                      <Link href={verifyDetailsHref(v.tailorSessionId)} className={styles.verifyLink} aria-label={t('tailored.verify_aria', { name: v.name })}>
+                        {t('tailored.verify_cta')}
+                      </Link>
+                    ) : null}
+                  </span>
                 ) : null}
               </li>
             ))}

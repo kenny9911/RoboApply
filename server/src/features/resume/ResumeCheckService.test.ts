@@ -19,6 +19,7 @@ vi.mock('../../services/llm/LLMService.js', () => {
 import { createCreditTestKit, type CreditTestKit } from '../../platform/credits/testkit.js';
 import { HttpError } from '../../platform/http.js';
 import { ResumeCheckService, actionFor, type ResumeCheckDeps } from './ResumeCheckService.js';
+import { rulesCountFor } from './check/taxonomy.js';
 import { createMemoryResumeCheckStore, memoryVariant, type MemoryResumeCheckStore } from './memoryStore.js';
 import { GOOD_INTL } from './check/fixtures.js';
 import type { AiPassOutput } from './check/aiPass.js';
@@ -76,6 +77,8 @@ function setup(options: { market?: 'intl' | 'cn'; ai?: boolean; aiOutput?: AiPas
     runAiPass,
     rewrite,
     logAiLabel,
+    // As in defaultResumeCheckDeps(): these are stored resumes.
+    hasTemplate: () => true,
     now: () => NOW,
     timeoutMs: 1000,
   };
@@ -402,5 +405,54 @@ describe('actionFor', () => {
     expect(actionFor('longer', 'x')).toBe('expand');
     expect(actionFor('ai', 'no_numbers')).toBe('metrics');
     expect(actionFor('ai', 'summary_vague')).toBe('improve');
+  });
+});
+
+describe('saved layout and the rule count (INT-10)', () => {
+  it('a saved two-column template raises layout_columns, and the rule is part of the count', async () => {
+    const h = setup({ ai: false });
+    h.store.variants.set('rv_two', memoryVariant(USER, 'rv_two', GOOD_INTL, { template: 'two_column' }));
+    const two = await h.service.grade(USER, 'rv_two');
+    expect(two.grade!.issues.map((i) => i.type)).toContain('layout_columns');
+    const one = await h.service.grade(USER, 'rv_good');
+    expect(one.grade!.issues.map((i) => i.type)).not.toContain('layout_columns');
+    // Same checklist for both: the template rule is checked either way.
+    expect(two.grade!.rulesChecked).toBe(one.grade!.rulesChecked);
+    expect(one.grade!.rulesChecked).toBe(rulesCountFor('intl', false));
+  });
+
+  it('text with no template (the signed-out free tool) leaves the template rule out of the count', async () => {
+    const h = setup({ ai: false });
+    const tool = new ResumeCheckService({ ...h.deps, hasTemplate: () => false });
+    const res = await tool.grade(USER, 'rv_good');
+    expect(res.grade!.rulesChecked).toBe(rulesCountFor('intl', false) - 1);
+  });
+
+  it('a service built without hasTemplate never counts the template rule (the count is never one too high)', async () => {
+    const h = setup({ ai: false });
+    const { hasTemplate: _omit, ...withoutTemplate } = h.deps;
+    void _omit;
+    const res = await new ResumeCheckService(withoutTemplate).grade(USER, 'rv_good');
+    expect(res.grade!.rulesChecked).toBe(rulesCountFor('intl', false, { template: false }));
+    expect(res.grade!.rulesChecked).toBe(rulesCountFor('intl', false) - 1);
+  });
+
+  it.each(['intl', 'cn'] as const)('the signed-out free tool (%s) reports the count without the template rule', async (profile) => {
+    // features/tools builds its own ResumeCheckService over pasted text.
+    const { runChecklist } = await import('../tools/checks.js');
+    const r = await runChecklist(GOOD_INTL, profile, () => NOW);
+    expect(r.rulesChecked).toBe(rulesCountFor(profile, false, { template: false }));
+    expect(r.issues.map((i) => i.type)).not.toContain('layout_columns');
+  });
+});
+
+describe('applyFix provenance (INT-10)', () => {
+  it('stamps the resume as AI-assisted when an AI version is applied', async () => {
+    const h = setup();
+    const graded = await h.service.grade(USER, 'rv_1', { idempotencyKey: 'k-prov' });
+    const issue = graded.grade!.issues.find((i) => i.fixable && i.target)!;
+    expect(h.store.aiAssisted.has('rv_1')).toBe(false);
+    await h.service.applyFix(USER, 'rv_1', issue.id, 'Opened the store every morning and ran the till.');
+    expect(h.store.aiAssisted.has('rv_1')).toBe(true);
   });
 });

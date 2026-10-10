@@ -10,10 +10,10 @@
 //
 // WP-22 routes (ARCH §3.6):
 //   POST /:id/grade                     { targetTitle? } → GradeStartResponse   (credit resume_check for the AI pass)
-//   GET  /:id/grade/latest              → LatestGradeResponse
+//   GET  /:id/grade/latest[?opened=1]   → LatestGradeResponse                  (opened=1, sent by the report page only: stamps viewedAt on a finished check, first view only)
 //   POST /grades/:gradeId/cancel        → CancelGradeResponse                  (releases the reserved credit)
 //   POST /:id/issues/:issueId/fix       { variant, instruction? } → FixIssueResponse (credit rewrite; 503 ai_unavailable without AI consent)
-//   POST /:id/issues/:issueId/apply     { text } → ApplyFixResponse
+//   POST /:id/issues/:issueId/apply     { text } → ApplyFixResponse           (AI text lands in the resume: stamps aiAssistedAt once)
 //   POST /:id/keyword-report            { jobId } | { jd } → KeywordReportResponse (deterministic; free)
 // WP-36a routes (tailor sessions; ruling C12):
 //   POST  /tailor-sessions                      CreateTailorSessionBody → TailorSessionView (credit tailor; Idempotency-Key;
@@ -230,7 +230,11 @@ export function createResumeSuiteRouter(deps: FeatureRouterDeps = {}, options: R
     route(async (req) => {
       const userId = requireUserId(req);
       const { id } = parseParams(req, ResumeIdParamsSchema);
-      return (await svc()).latest(userId, id);
+      // Only the report page sends `?opened=1` (the owner has the finished
+      // check on screen): that stamps RAResumeGrade.viewedAt once. The editor
+      // summary, the tailor flow and the onboarding dock read this endpoint
+      // too, and must not count as opening the check.
+      return (await svc()).latest(userId, id, { opened: req.query.opened === '1' });
     }),
   );
 

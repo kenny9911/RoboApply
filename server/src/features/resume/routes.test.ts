@@ -63,9 +63,72 @@ describe('resume check routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.grade!.status).toBe('done');
     expect(res.body.data.grade!.targetTitle).toBe('Store lead');
+    // Nothing is stamped by running the check: only the owner opening it does.
+    expect(store.grades.find((g) => g.id === res.body.data.gradeId)!.viewedAt).toBeNull();
     const latest = await h.request<Env<LatestGradeResponse>>('GET', `${BASE}/rv_1/grade/latest`);
     expect(latest.body.data.grade!.id).toBe(res.body.data.gradeId);
     expect(latest.body.data.aiAvailable).toBe(true);
+  });
+
+  it('a plain GET /:id/grade/latest never stamps viewedAt (the editor, tailoring and the onboarding dock read it too)', async () => {
+    const row = () => store.grades.find((g) => g.variantId === 'rv_1' && g.status === 'done')!;
+    expect(row().viewedAt).toBeNull();
+    for (const path of [`${BASE}/rv_1/grade/latest`, `${BASE}/rv_1/grade/latest?opened=0`, `${BASE}/rv_1/grade/latest?opened=true`, `${BASE}/rv_1/grade/latest?opened=`]) {
+      const res = await h.request<Env<LatestGradeResponse>>('GET', path);
+      expect(res.status).toBe(200);
+      expect(res.body.data.grade!.status).toBe('done');
+    }
+    expect(row().viewedAt).toBeNull();
+  });
+
+  it('GET /:id/grade/latest?opened=1 (the report page) stamps viewedAt on the finished check, on the first view only', async () => {
+    const row = () => store.grades.find((g) => g.variantId === 'rv_1' && g.status === 'done')!;
+    const opened = await h.request<Env<LatestGradeResponse>>('GET', `${BASE}/rv_1/grade/latest?opened=1`);
+    expect(opened.status).toBe(200);
+    expect(opened.body.data.grade!.id).toBe(row().id);
+    const first = row().viewedAt;
+    expect(first).toBeInstanceOf(Date);
+    const again = await h.request<Env<LatestGradeResponse>>('GET', `${BASE}/rv_1/grade/latest?opened=1`);
+    expect(again.status).toBe(200);
+    expect(row().viewedAt).toBe(first);
+  });
+
+  it('does not stamp viewedAt for a signed-out request, a running check, or a server-side read', async () => {
+    store.variants.set('rv_view', memoryVariant(USER, 'rv_view', WEAK));
+    const running = await store.createGrade({ userId: USER, variantId: 'rv_view', contentHash: 'h', targetTitle: null, creditLedgerId: null });
+    await h.request('GET', `${BASE}/rv_view/grade/latest?opened=1`);
+    expect(store.grades.find((g) => g.id === running.id)!.viewedAt).toBeNull();
+
+    await store.updateGrade(running.id, { status: 'done', grade: 'B', score: 80, counts: {}, issues: [], completedAt: new Date() });
+    const anon = await h.request('GET', `${BASE}/rv_view/grade/latest?opened=1`, { headers: { 'x-test-anon': '1' } });
+    expect(anon.status).toBe(401);
+    // Another area reading the check (the Assistant) is not the owner opening it.
+    await service.latest(USER, 'rv_view');
+    expect(store.grades.find((g) => g.id === running.id)!.viewedAt).toBeNull();
+
+    await h.request('GET', `${BASE}/rv_view/grade/latest?opened=1`);
+    expect(store.grades.find((g) => g.id === running.id)!.viewedAt).toBeInstanceOf(Date);
+  });
+
+  it('never stamps a check that belongs to someone else', async () => {
+    store.variants.set('rv_other', memoryVariant('user_other', 'rv_other', WEAK));
+    const theirs = await store.createGrade({ userId: 'user_other', variantId: 'rv_other', contentHash: 'h', targetTitle: null, creditLedgerId: null });
+    await store.updateGrade(theirs.id, { status: 'done', grade: 'B', score: 80, counts: {}, issues: [], completedAt: new Date() });
+    const res = await h.request('GET', `${BASE}/rv_other/grade/latest?opened=1`);
+    expect(res.status).toBe(404);
+    expect(store.grades.find((g) => g.id === theirs.id)!.viewedAt).toBeNull();
+  });
+
+  it('a stamp that cannot be written never fails the read', async () => {
+    store.variants.set('rv_soft', memoryVariant(USER, 'rv_soft', WEAK));
+    const g = await store.createGrade({ userId: USER, variantId: 'rv_soft', contentHash: 'h', targetTitle: null, creditLedgerId: null });
+    await store.updateGrade(g.id, { status: 'done', grade: 'B', score: 80, counts: {}, issues: [], completedAt: new Date() });
+    const spy = vi.spyOn(store, 'markGradeViewed').mockRejectedValueOnce(new Error('db down'));
+    const res = await h.request<Env<LatestGradeResponse>>('GET', `${BASE}/rv_soft/grade/latest?opened=1`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.grade!.id).toBe(g.id);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 
   it('422 on an invalid body', async () => {
@@ -114,6 +177,9 @@ describe('resume check routes', () => {
     const applied = await h.request<Env<{ applied: boolean }>>('POST', `${BASE}/rv_1/issues/${issue.id}/apply`, { body: { text: fix.body.data.suggestions[0]!.text } });
     expect(applied.status).toBe(200);
     expect(store.variants.get('rv_1')!.resumeMarkdown).toContain('- Opened the store each morning.');
+    // AI-written text landed in the resume: the variant is stamped (exports then carry the AI marks).
+    expect(store.aiAssisted.has('rv_1')).toBe(true);
+    expect(store.aiAssisted.has('rv_good')).toBe(false);
   });
 
   it('503 ai_unavailable for fixes without AI consent (no LLM call)', async () => {

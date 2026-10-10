@@ -23,13 +23,32 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { IconX, IconArrow } from '../primitives';
-import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
+import { apiErrorCode, apiErrorDetails, apiErrorReason } from '../../../lib/api/contracts/wire';
 import { FILE_NAME_STYLES, downloadResumeExport, type FileNameStyle } from '../../../lib/api/resumes';
 import { WechatBrowserBanner } from '../../features/auth-cn';
 import { AiGeneratedBadge } from '../../features/market';
 import styles from '../../features/resume/ResumeHub.module.css';
 
 type Format = 'pdf' | 'docx' | 'txt' | 'md';
+
+/**
+ * How many inserted details block this download, or null when the failure is
+ * something else. Read from where the server puts it (INT-10 audit):
+ *   - the export route answers 409 `{ error, code: 'unverified_claims',
+ *     details: { count } }` — the reason is in `code`;
+ *   - the tailor-session routes answer `code: 'unverified_claims'` with
+ *     `details: { pending }`;
+ *   - a platform-envelope answer would carry `code: 'conflict'` with
+ *     `details.reason: 'unverified_claims'`.
+ * All three block the same way. A count that is missing or not a positive
+ * number is shown as 1 (something is unverified; we do not invent how many).
+ */
+export function unverifiedClaimsOf(err: unknown): number | null {
+  if (apiErrorCode(err) !== 'unverified_claims' && apiErrorReason(err) !== 'unverified_claims') return null;
+  const details = apiErrorDetails<{ count?: unknown; pending?: unknown }>(err);
+  const n = Number(details?.count ?? details?.pending);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
+}
 
 interface Props {
   resumeId: string;
@@ -84,12 +103,9 @@ export function DownloadModal({
         await downloadResumeExport(resumeId, { format, nameStyle, trackerEntryId, ...(photo ? { photo } : {}) }, resumeName);
         onClose();
       } catch (err) {
-        if (apiErrorCode(err) === 'unverified_claims') {
-          const count = Number(apiErrorDetails<{ count?: number }>(err)?.count ?? 1);
-          setBlockedCount(count > 0 ? count : 1);
-        } else {
-          setError(true);
-        }
+        const unverified = unverifiedClaimsOf(err);
+        if (unverified !== null) setBlockedCount(unverified);
+        else setError(true);
       } finally {
         setBusy(null);
       }

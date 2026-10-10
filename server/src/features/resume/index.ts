@@ -9,6 +9,7 @@
 //   `getTailorService()`                              the tailor session service (routes, other areas)
 //   `getBuilderService()`                             guided builder (WP-65)
 //   `getLayoutService()`                              layout save + fit to one page (WP-65; also the legacy PATCH /:id/layout)
+//   `primaryVariantId(userId)`                        the user's primary resume, else the most recent, else null (Assistant; REQ-50-03)
 
 import { creditService } from '../../platform/credits/index.js';
 import { aiAllowed } from '../../platform/consent/aiAllowed.js';
@@ -24,6 +25,7 @@ import { BuilderService, type BuilderServiceDeps } from './builder/BuilderServic
 import { LayoutService, type LayoutServiceDeps } from './layout/LayoutService.js';
 import { createPrismaLayoutStore } from './layout/store.js';
 import { HttpError } from '../../platform/http.js';
+import { primaryVariantId } from './primaryVariant.js';
 
 export * from './contract.js';
 export { createResumeSuiteRouter } from './routes.js';
@@ -48,6 +50,8 @@ export type { LayoutServiceDeps } from './layout/LayoutService.js';
 export { LAYOUT_KEYS, mergeLayout } from './layout/merge.js';
 export { fitToPage, compressAt, FIT_FLOORS } from './layout/fitToPage.js';
 export type { LayoutStore } from './layout/store.js';
+export { primaryVariantId, setPrimaryVariantLookup } from './primaryVariant.js';
+export type { PrimaryVariantLookup } from './primaryVariant.js';
 
 /** AI for resume features: the user's AI consent AND the brand's text model (R-13). */
 export async function resumeAiAvailable(userId: string): Promise<boolean> {
@@ -65,6 +69,8 @@ export function defaultResumeCheckDeps(): ResumeCheckDeps {
     aiAvailable: resumeAiAvailable,
     profile: brandMarket,
     market: brandMarket,
+    // Stored resumes always have a template (the saved one, or the default).
+    hasTemplate: () => true,
     runAiPass: async (input, options) => {
       const { ResumeCheckAgent } = await import('./check/ResumeCheckAgent.js');
       return new ResumeCheckAgent().run(input, { ...options, requestId: getCurrentRequestId() ?? undefined });
@@ -149,6 +155,8 @@ export interface ResumeSuiteService {
     input: { baseVariantId: string; jobId: string; idempotencyKey: string; sections?: TailorSection[]; mode?: 'fast' | 'guided'; locale?: string },
   ): Promise<TailorSessionView>;
   keywordReport(userId: string, variantId: string, jobId: string): Promise<KeywordReportResponse>;
+  /** The user's primary resume id; otherwise their most recently edited one; null when they have none. */
+  primaryVariantId(userId: string): Promise<string | null>;
 }
 
 export const resumeSuiteService: ResumeSuiteService = {
@@ -172,6 +180,7 @@ export const resumeSuiteService: ResumeSuiteService = {
   async keywordReport(userId, variantId, jobId) {
     return getResumeCheckService().keywordReport(userId, variantId, { jobId });
   },
+  primaryVariantId,
 };
 
 export const unverifiedClaimsCount = (variantId: string) => resumeSuiteService.unverifiedClaimsCount(variantId);

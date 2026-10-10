@@ -29,12 +29,26 @@ export interface TailorFlowProps {
   jd?: { title: string; company: string; text: string } | null;
   /** Re-open an existing session (e.g. from the resume hub's "Verify details"). */
   sessionId?: string | null;
+  /** The job the user picked in the target step ("Title at Company"), shown above the setup. */
+  targetLabel?: string | null;
+  /** Go back to the target step (before anything is generated). */
+  onChangeTarget?: () => void;
   onClose?: () => void;
   onFinalized?: (session: TailorSessionView) => void;
   onOpenResume?: (resultVariantId: string) => void;
 }
 
-export function TailorFlow({ resumeId, jobId = null, jd = null, sessionId: initialSessionId = null, onClose, onFinalized, onOpenResume }: TailorFlowProps) {
+export function TailorFlow({
+  resumeId,
+  jobId = null,
+  jd = null,
+  sessionId: initialSessionId = null,
+  targetLabel = null,
+  onChangeTarget,
+  onClose,
+  onFinalized,
+  onOpenResume,
+}: TailorFlowProps) {
   const t = useTranslations('tailor');
   const availability = useTailorAvailability(resumeId);
   const { prefs, remember } = useTailorPrefs();
@@ -118,6 +132,18 @@ export function TailorFlow({ resumeId, jobId = null, jd = null, sessionId: initi
 
   return (
     <div className={styles.flow}>
+      {targetLabel ? (
+        <p className={styles.targetLine} data-testid="tailor-target">
+          <span>
+            {t('target.chosenLabel')} <strong>{targetLabel}</strong>
+          </span>
+          {onChangeTarget ? (
+            <button type="button" className={styles.linkButton} onClick={onChangeTarget}>
+              {t('target.change')}
+            </button>
+          ) : null}
+        </p>
+      ) : null}
       <TailorSetup
         resumeId={resumeId}
         jobId={jobId}

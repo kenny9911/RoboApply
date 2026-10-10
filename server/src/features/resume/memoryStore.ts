@@ -12,6 +12,8 @@ export interface MemoryResumeCheckStore extends ResumeCheckStore {
   extractions: Map<string, { keywords: unknown }>;
   fitRows: Array<FitRow & { userId: string; jobId: string; variantId: string }>;
   grantReasons: Array<{ userId: string; reason: string }>;
+  /** Variant ids whose `aiAssistedAt` was stamped by `saveMarkdown(..., { aiAssisted: true })`. */
+  aiAssisted: Set<string>;
 }
 
 const sha = resumeContentHashOf;
@@ -30,8 +32,10 @@ export function createMemoryResumeCheckStore(options: { now?: () => Date } = {})
   const fitRows: MemoryResumeCheckStore['fitRows'] = [];
   const grantReasons: MemoryResumeCheckStore['grantReasons'] = [];
   const claimLocks = new Map<string, Promise<void>>();
+  const aiAssisted = new Set<string>();
 
   return {
+    aiAssisted,
     variants,
     grades,
     jobs,
@@ -60,6 +64,7 @@ export function createMemoryResumeCheckStore(options: { now?: () => Date } = {})
         // Strictly increasing, so "newest first" is stable within one test.
         createdAt: new Date(now().getTime() + seq),
         completedAt: null,
+        viewedAt: null,
       };
       grades.push(row);
       return { ...row };
@@ -94,6 +99,12 @@ export function createMemoryResumeCheckStore(options: { now?: () => Date } = {})
         .slice(0, limit)
         .map((g) => ({ ...g }));
     },
+    async markGradeViewed(userId, gradeId, at) {
+      const row = grades.find((g) => g.id === gradeId && g.userId === userId);
+      if (!row || row.status !== 'done' || row.viewedAt) return false;
+      row.viewedAt = at;
+      return true;
+    },
     async findJob(userId, jobId) {
       const j = jobs.get(jobId);
       if (!j) return null;
@@ -106,11 +117,12 @@ export function createMemoryResumeCheckStore(options: { now?: () => Date } = {})
     async findFitRow(userId, jobId, variantId) {
       return fitRows.find((f) => f.userId === userId && f.jobId === jobId && f.variantId === variantId) ?? null;
     },
-    async saveMarkdown(userId, variantId, markdown) {
+    async saveMarkdown(userId, variantId, markdown, opts) {
       const v = variants.get(variantId);
       if (!v || v.userId !== userId) throw new Error('variant not found');
       v.resumeMarkdown = markdown;
       v.resumeContentHash = sha(markdown);
+      if (opts?.aiAssisted) aiAssisted.add(variantId);
       return { resumeContentHash: v.resumeContentHash };
     },
     async withGrantClaim(userId, reason, fn) {

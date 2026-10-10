@@ -22,3 +22,4 @@ export {
   type TailorPrefs,
   type TailorSectionKey,
 } from './useTailorPrefs';
+export { TAILOR_TARGET_LIMIT, targetJobsOf, useTailorTargets, type TailorTargetJob } from './useTailorTargets';

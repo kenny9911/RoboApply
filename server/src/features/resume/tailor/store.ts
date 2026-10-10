@@ -72,7 +72,12 @@ export interface GenerationResult {
 
 export interface TailorStore {
   findVariant(userId: string, variantId: string): Promise<TailorVariantRow | null>;
-  /** A job the user may see in this market: public, or one the user added. */
+  /**
+   * A job the user may see in this market: public, or one the user added. On
+   * GoApply the recruitment-info mode applies too (R-14): with the mode off
+   * only the user's own imports can be tailored for, so a third-party posting
+   * never reaches the model or a session's target line.
+   */
   findJob(userId: string, jobId: string, market: string): Promise<TailorJobRow | null>;
   /** The job's stored keyword extraction terms ([] when none). */
   findKeywordTerms(jobId: string): Promise<string[]>;
@@ -98,6 +103,11 @@ export interface TailorStore {
   finalize(userId: string, sessionId: string): Promise<boolean>;
   /** `RAResumeVariant.unverifiedClaims` of a version (0 when unknown). */
   unverifiedClaims(variantId: string): Promise<number>;
+  /**
+   * The user's sessions still in `review` whose tailored version is one of
+   * `variantIds` (the hub's "Verify details" links), newest first.
+   */
+  findReviewSessions(userId: string, variantIds: readonly string[]): Promise<Array<{ id: string; resultVariantId: string }>>;
 }
 
 const json = (v: unknown) => v as Prisma.InputJsonValue;
@@ -134,8 +144,10 @@ export function createPrismaTailorStore(): TailorStore {
     },
     async findJob(userId, jobId, market) {
       const p = await db();
+      // GoApply (R-14): the same rule every other job reader applies.
+      const modeScope = market === 'cn' ? [(await import('../../cn/jobs/index.js')).cnPostingsWhere(userId)] : [];
       return p.rAJob.findFirst({
-        where: { id: jobId, market, OR: [{ visibility: 'public' }, { ownerUserId: userId }] },
+        where: { id: jobId, market, AND: [{ OR: [{ visibility: 'public' }, { ownerUserId: userId }] }, ...modeScope] },
         select: { id: true, title: true, companyName: true, descriptionPlain: true, qualifications: true, responsibilities: true, skills: true },
       });
     },
@@ -239,6 +251,16 @@ export function createPrismaTailorStore(): TailorStore {
       const p = await db();
       const row = await p.rAResumeVariant.findUnique({ where: { id: variantId }, select: { unverifiedClaims: true } });
       return row?.unverifiedClaims ?? 0;
+    },
+    async findReviewSessions(userId, variantIds) {
+      if (variantIds.length === 0) return [];
+      const p = await db();
+      const rows = await p.rATailorSession.findMany({
+        where: { userId, status: 'review', resultVariantId: { in: [...variantIds] } },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, resultVariantId: true },
+      });
+      return rows.flatMap((r) => (r.resultVariantId ? [{ id: r.id, resultVariantId: r.resultVariantId }] : []));
     },
   };
 }

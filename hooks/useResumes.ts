@@ -31,6 +31,7 @@ import {
   downloadResumeExport,
   patchResume,
   patchResumeLayout,
+  uploadResume,
   type ResumeExportOptions,
   type ResumeExportResult,
   type ResumeHubPatch,
@@ -47,10 +48,6 @@ import type {
   ResumeCreateBody,
   ResumeRewriteBody,
   ResumeRewriteResponse,
-  ResumeTailorDiffBody,
-  ResumeTailorDiffResponse,
-  ResumeTailorApplyBody,
-  ResumeTailorApplyResponse,
 } from '../lib/api/v2/types';
 
 /** The hub's variant (legacy shape + WP-36b fields). */
@@ -71,8 +68,8 @@ export const resumeKeys = {
 };
 
 /** V3 inline-AI query keys (namespaced `['v3', …]` per the build rules). The
- *  rewrite + tailor-diff surfaces are mutations (LLM calls on demand); only
- *  coach tips is a cacheable read. */
+ *  rewrite surface is a mutation (an LLM call on demand); only coach tips is a
+ *  cacheable read. */
 export const resumeV3Keys = {
   coachTips: (id: string) => ['v3', 'resumes', 'coachTips', id] as const,
 };
@@ -167,15 +164,18 @@ export function useDeleteResumeMutation(): UseMutationResult<
 }
 
 /** Upload + parse a résumé file → new base variant. Used by the resume library
- *  "Upload a résumé" flow and the first-run ResumeGate. */
+ *  "Upload a résumé" flow and the first-run ResumeGate. `localParser: true`
+ *  asks the server to read the file on its own servers only (it already does
+ *  so for a user who has not agreed to the outside parsing service). */
 export function useUploadResumeMutation(): UseMutationResult<
   RAResumeVariant,
   Error,
-  { file: File; name?: string }
+  { file: File; name?: string; localParser?: boolean }
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ file, name }): Promise<RAResumeVariant> => {
+    mutationFn: async ({ file, name, localParser }): Promise<RAResumeVariant> => {
+      if (localParser) return uploadResume(file, { name, localParser: true });
       const r = await raV2Api.resumes.upload(file, name ? { name } : undefined);
       return r.resume as RAResumeVariant;
     },
@@ -240,7 +240,8 @@ export function useSetPrimaryResumeMutation(): UseMutationResult<
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// V3 inline AI — rewrite / tailor diff / coach tips (Route 4)
+// V3 inline AI — rewrite / coach tips (Route 4). Tailoring is hooks/tailor
+// (tailor sessions); the legacy tailor-diff / tailor-apply hooks are gone.
 // ─────────────────────────────────────────────────────────────────────
 
 /** Inline AI rewrite (bullet / summary / skills). A mutation because each call
@@ -250,32 +251,6 @@ export function useResumeRewrite(
 ): UseMutationResult<ResumeRewriteResponse, Error, ResumeRewriteBody> {
   return useMutation({
     mutationFn: (body: ResumeRewriteBody) => raV2Api.resumes.rewrite(id, body),
-  });
-}
-
-/** Propose a tailor diff for a job. Does NOT create the variant — the preview
- *  is materialized via `useResumeTailorApply` (which persists the previewed
- *  markdown directly, with no second LLM call). */
-export function useResumeTailorDiff(
-  id: string,
-): UseMutationResult<ResumeTailorDiffResponse, Error, ResumeTailorDiffBody> {
-  return useMutation({
-    mutationFn: (body: ResumeTailorDiffBody) =>
-      raV2Api.resumes.tailorDiff(id, body),
-  });
-}
-
-/** Persist a tailor preview as a new tailored variant. Deterministic — no LLM
- *  re-run, no second charge. Invalidates the list so the new variant appears. */
-export function useResumeTailorApply(
-  id: string,
-): UseMutationResult<ResumeTailorApplyResponse, Error, ResumeTailorApplyBody> {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ResumeTailorApplyBody) => raV2Api.resumes.tailorApply(id, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: resumeKeys.all });
-    },
   });
 }
 

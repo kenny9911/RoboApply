@@ -127,6 +127,24 @@
       "reload": "Reload",
       "retry": "Try again"
     },
-    "checking": "Checking what is available for your account…"
+    "checking": "Checking what is available for your account…",
+    "target": {
+      "title": "Which job is this for?",
+      "sub": "Pick one of your saved jobs, or paste the job post. Your resume is tailored for that job only.",
+      "savedTitle": "Your saved jobs",
+      "savedLoading": "Loading your saved jobs…",
+      "savedEmpty": "You have no saved jobs yet. Paste the job post below.",
+      "savedError": "Your saved jobs did not load. You can still paste the job post below.",
+      "pasteTitle": "Or paste the job post",
+      "jobTitleLabel": "Job title",
+      "companyLabel": "Company (optional)",
+      "textLabel": "Text of the job post",
+      "textHint": "Paste the full text of the job post.",
+      "textShort": "Paste at least {min} characters ({count} so far).",
+      "continue": "Continue",
+      "chosenLabel": "Tailoring for:",
+      "chosenWithCompany": "{title} at {company}",
+      "change": "Change job"
+    }
   }
 }

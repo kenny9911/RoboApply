@@ -3,6 +3,9 @@
 // (before/after fit score with source or "—", change cards, Verify details:
 // Yes keep · Remove · I did something similar → edit), finalize blocked while
 // a claim is pending, checklist refresh, AI badge, error copy, launch host.
+// INT-10: the target step ("Which job is this for?") when the flow starts
+// without a job (the editor's Tailor button): pick a saved job or paste the
+// posting, which becomes `jobId` or `jd: { title, company, text }`.
 // Renders through the real en.json + staged English, so a missing key fails.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,6 +59,9 @@ vi.mock('../../../../hooks/useResumes', () => ({
   }),
 }));
 
+const tracker = vi.hoisted(() => ({ listTracker: vi.fn() }));
+vi.mock('../../../../lib/api/tracker', () => tracker);
+
 const growth = vi.hoisted(() => ({ refreshChecklist: vi.fn(async () => undefined) }));
 vi.mock('../../../../hooks/growth', () => growth);
 
@@ -68,8 +74,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(nav.search),
 }));
 
-import { ClaimCard, TailorButton, TailorFlow, TailorLaunchHost, TailorResult } from '..';
-import { readTailorPrefs, tailorErrorKind, writeTailorPrefs } from '../../../../hooks/tailor';
+import { ClaimCard, TailorButton, TailorFlow, TailorLaunchHost, TailorResult, TailorSheet, TailorTarget, postingOf } from '..';
+import { readTailorPrefs, tailorErrorKind, targetJobsOf, writeTailorPrefs } from '../../../../hooks/tailor';
 
 const NOW = '2026-10-10T12:00:00.000Z';
 
@@ -122,10 +128,22 @@ function sessionView(over: Partial<TailorSessionView> = {}): TailorSessionView {
   };
 }
 
+/** Tracker rows as GET /v2/tracker sends them (only the fields the target step reads). */
+const TRACKED = [
+  { id: 'te_1', jobId: 'job_9', job: { title: 'Data Analyst', companyName: 'Acme' } },
+  { id: 'te_2', jobId: null, job: null, externalSnapshot: { title: 'Typed by hand', companyName: 'No posting' } },
+  { id: 'te_3', jobId: 'job_7', job: { title: 'BI Engineer', companyName: '' } },
+  { id: 'te_4', jobId: 'job_9', job: { title: 'Data Analyst', companyName: 'Acme' } },
+];
+
+const POSTING_TEXT = 'We need an analyst who builds SQL reports and Tableau dashboards for the sales team every week.';
+
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getLatestGrade.mockResolvedValue(latest(true));
   api.getKeywordReport.mockResolvedValue(KEYWORDS);
+  tracker.listTracker.mockReset();
+  tracker.listTracker.mockResolvedValue({ entries: TRACKED, statusCounts: {}, total: TRACKED.length });
   flags.aiText = true;
   gate.runs = 0;
   gate.keys = [];
@@ -390,6 +408,164 @@ describe('TailorLaunchHost', () => {
     const picks = screen.getAllByRole('button').filter((b) => /resume/i.test(b.textContent ?? '') && !/close/i.test(b.getAttribute('aria-label') ?? ''));
     expect(picks[0]).toHaveTextContent('Main resume');
     expect(screen.queryByText('Tailored')).toBeNull();
+  });
+});
+
+describe('target step: which job is this for? (INT-10)', () => {
+  const openSheet = (props: Partial<React.ComponentProps<typeof TailorSheet>> = {}) =>
+    renderWithProviders(<TailorSheet open onClose={vi.fn()} resumeId="rv_1" {...props} />);
+
+  it('with no job, the sheet asks for one before any setup or credit', async () => {
+    openSheet();
+    expect(await screen.findByText('Which job is this for?')).toBeInTheDocument();
+    expect(screen.getByText('Your saved jobs')).toBeInTheDocument();
+    expect(screen.getByText('Or paste the job post')).toBeInTheDocument();
+    // The setup (and its credit line) is not on screen yet, and nothing was created.
+    expect(screen.queryByText('What should change?')).toBeNull();
+    expect(api.createTailorSession).not.toHaveBeenCalled();
+    expect(gate.runs).toBe(0);
+  });
+
+  it('lists the user\'s saved jobs that have a posting, once each; hand-typed entries are not offered', async () => {
+    openSheet();
+    expect(await screen.findByRole('button', { name: /Data Analyst\s*Acme/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'BI Engineer' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Data Analyst/ })).toHaveLength(1);
+    expect(screen.queryByText('Typed by hand')).toBeNull();
+    expect(tracker.listTracker).toHaveBeenCalledWith({ limit: 30, sortBy: 'updated', sortDir: 'desc' }, expect.anything());
+  });
+
+  it('picking a saved job → the setup for that job; Generate sends its jobId', async () => {
+    api.createTailorSession.mockResolvedValue(sessionView());
+    api.getTailorSession.mockResolvedValue(sessionView());
+    openSheet();
+    fireEvent.click(await screen.findByRole('button', { name: /Data Analyst\s*Acme/ }));
+    expect(await screen.findByText('What should change?')).toBeInTheDocument();
+    expect(screen.getByTestId('tailor-target')).toHaveTextContent('Tailoring for: Data Analyst at Acme');
+    // The sheet heading names the job, and the skill list is read for it.
+    expect(screen.getByRole('heading', { name: 'Tailor your resume for Data Analyst' })).toBeInTheDocument();
+    await waitFor(() => expect(api.getKeywordReport).toHaveBeenCalledWith('rv_1', { jobId: 'job_9' }, expect.anything()));
+    fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
+    await waitFor(() => expect(api.createTailorSession).toHaveBeenCalledTimes(1));
+    const body = api.createTailorSession.mock.calls[0]![0];
+    expect(body).toMatchObject({ baseVariantId: 'rv_1', jobId: 'job_9', mode: 'guided' });
+    expect(body).not.toHaveProperty('jd');
+    expect(gate.runs).toBe(1);
+  });
+
+  it('pasting a posting → Generate sends jd { title, company, text } and no jobId', async () => {
+    api.createTailorSession.mockResolvedValue(sessionView({ jobId: null }));
+    api.getTailorSession.mockResolvedValue(sessionView({ jobId: null }));
+    openSheet();
+    const go = await screen.findByRole('button', { name: 'Continue' });
+    expect(go).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: '  Sales Analyst ' } });
+    fireEvent.change(screen.getByLabelText('Company (optional)'), { target: { value: 'Globex' } });
+    fireEvent.change(screen.getByLabelText('Text of the job post'), { target: { value: 'Too short.' } });
+    expect(go).toBeDisabled();
+    expect(screen.getByText('Paste at least 50 characters (10 so far).')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Text of the job post'), { target: { value: `  ${POSTING_TEXT}  ` } });
+    expect(go).toBeEnabled();
+    fireEvent.click(go);
+
+    expect(await screen.findByText('What should change?')).toBeInTheDocument();
+    expect(screen.getByTestId('tailor-target')).toHaveTextContent('Tailoring for: Sales Analyst at Globex');
+    // A pasted posting has no stored skill list: no keyword read, no keyword step.
+    expect(api.getKeywordReport).not.toHaveBeenCalled();
+    expect(screen.queryByText('Skills this job asks for that your resume does not show')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
+    await waitFor(() => expect(api.createTailorSession).toHaveBeenCalledTimes(1));
+    const body = api.createTailorSession.mock.calls[0]![0];
+    expect(body.jd).toEqual({ title: 'Sales Analyst', company: 'Globex', text: POSTING_TEXT });
+    expect(body).not.toHaveProperty('jobId');
+    expect(body.baseVariantId).toBe('rv_1');
+  });
+
+  it('the company is optional; the title and at least 50 characters of text are not', () => {
+    expect(postingOf('Analyst', '', POSTING_TEXT)).toEqual({ title: 'Analyst', company: '', text: POSTING_TEXT });
+    expect(postingOf('', 'Globex', POSTING_TEXT)).toBeNull();
+    expect(postingOf('Analyst', 'Globex', 'x'.repeat(49))).toBeNull();
+    expect(postingOf('Analyst', 'Globex', 'x'.repeat(50))).not.toBeNull();
+    expect(postingOf('A'.repeat(201), '', POSTING_TEXT)).toBeNull();
+  });
+
+  it('"Change job" goes back to the target step before anything is generated', async () => {
+    openSheet();
+    fireEvent.click(await screen.findByRole('button', { name: 'BI Engineer' }));
+    expect(await screen.findByTestId('tailor-target')).toHaveTextContent('Tailoring for: BI Engineer');
+    fireEvent.click(screen.getByRole('button', { name: 'Change job' }));
+    expect(await screen.findByText('Which job is this for?')).toBeInTheDocument();
+    expect(api.createTailorSession).not.toHaveBeenCalled();
+  });
+
+  it('no saved jobs: says so and still offers the paste form', async () => {
+    tracker.listTracker.mockResolvedValue({ entries: [], statusCounts: {}, total: 0 });
+    openSheet();
+    expect(await screen.findByText('You have no saved jobs yet. Paste the job post below.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Text of the job post')).toBeInTheDocument();
+  });
+
+  it('saved jobs fail to load: the paste form still works and a retry is offered', async () => {
+    tracker.listTracker.mockRejectedValue(new Error('offline'));
+    openSheet();
+    expect(await screen.findByText('Your saved jobs did not load. You can still paste the job post below.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+  });
+
+  it('without a resume the base picker comes first, then the target step', async () => {
+    renderWithProviders(<TailorSheet open onClose={vi.fn()} />);
+    expect(await screen.findByText('Which resume should we start from?')).toBeInTheDocument();
+    expect(screen.queryByText('Which job is this for?')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Main resume/ }));
+    expect(await screen.findByText('Which job is this for?')).toBeInTheDocument();
+  });
+
+  it('a job in the URL or a session to re-open never shows the target step', async () => {
+    const withJob = openSheet({ jobId: 'job_1' });
+    expect(await screen.findByText('What should change?')).toBeInTheDocument();
+    expect(screen.queryByText('Which job is this for?')).toBeNull();
+    expect(screen.queryByTestId('tailor-target')).toBeNull();
+    withJob.unmount();
+    api.getTailorSession.mockResolvedValue(sessionView({ jobId: null }));
+    openSheet({ sessionId: 'ts_1' });
+    expect(await screen.findByText('Verify details')).toBeInTheDocument();
+    expect(screen.queryByText('Which job is this for?')).toBeNull();
+    expect(tracker.listTracker).not.toHaveBeenCalled();
+  });
+
+  it('AI off: the target step can be answered, then one plain line; no session, no credit', async () => {
+    api.getLatestGrade.mockResolvedValue(latest(false));
+    openSheet();
+    fireEvent.click(await screen.findByRole('button', { name: 'BI Engineer' }));
+    expect(await screen.findByTestId('tailor-ai-off')).toBeInTheDocument();
+    expect(api.createTailorSession).not.toHaveBeenCalled();
+    expect(gate.runs).toBe(0);
+  });
+
+  it('TailorTarget reports the choice to its caller', async () => {
+    const onPick = vi.fn();
+    renderWithProviders(<TailorTarget onPick={onPick} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Data Analyst\s*Acme/ }));
+    expect(onPick).toHaveBeenCalledWith({ kind: 'job', jobId: 'job_9', title: 'Data Analyst', company: 'Acme' });
+  });
+
+  it('targetJobsOf keeps only entries with a job, once per job, a blank company as null', () => {
+    expect(targetJobsOf(TRACKED as never)).toEqual([
+      { jobId: 'job_9', title: 'Data Analyst', company: 'Acme' },
+      { jobId: 'job_7', title: 'BI Engineer', company: null },
+    ]);
+  });
+
+  it('target step copy renders from the bundles (no dotted paths, no banned shorthand)', async () => {
+    const onIntlError = vi.fn();
+    renderWithProviders(<TailorSheet open onClose={vi.fn()} resumeId="rv_1" />, { onIntlError });
+    await screen.findByText('Which job is this for?');
+    const real = onIntlError.mock.calls.filter(([e]) => !String((e as Error)?.message ?? e).includes('ENVIRONMENT_FALLBACK'));
+    expect(real).toEqual([]);
+    expect(document.body.textContent).not.toMatch(/tailor\.[a-z]+\.[a-zA-Z.]+/);
+    expect(document.body.textContent).not.toMatch(/\bJD\b|\bATS\b/);
   });
 });
 

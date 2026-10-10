@@ -97,6 +97,29 @@ describe('tailor session routes', () => {
     expect(long.status).toBe(422);
   });
 
+  it('the target step\'s body: jd { title, company, text } with no jobId is accepted; neither, or a short posting, is 422 (INT-10)', async () => {
+    // Its own account, so the credits of the other cases are untouched.
+    const asUser = { 'x-test-user': 'u_jd' };
+    store.variants.set('rv_jd', memoryTailorVariant('u_jd', 'rv_jd', BASE_MD));
+    const { jobId: _jobId, ...rest } = BODY;
+    const noJob = { ...rest, baseVariantId: 'rv_jd' };
+    const jd = { title: 'Sales Analyst', company: '', text: 'We need an analyst who builds Tableau dashboards and SQL reports for sales.' };
+    tailor.mockClear();
+    const ok = await h.request<Env<TailorSessionView>>('POST', `${BASE_PATH}/tailor-sessions`, { body: { ...noJob, jd }, headers: { ...asUser, 'Idempotency-Key': 'jd-route-1' } });
+    expect(ok.status).toBe(200);
+    expect(ok.body.data).toMatchObject({ jobId: null, status: 'review', target: { title: 'Sales Analyst', company: null } });
+    expect(tailor).toHaveBeenCalledTimes(1);
+
+    tailor.mockClear();
+    const neither = await h.request<Env<unknown>>('POST', `${BASE_PATH}/tailor-sessions`, { body: noJob, headers: asUser });
+    expect(neither.status).toBe(422);
+    const short = await h.request<Env<unknown>>('POST', `${BASE_PATH}/tailor-sessions`, { body: { ...noJob, jd: { ...jd, text: 'Too short.' } }, headers: asUser });
+    expect(short.status).toBe(422);
+    const untitled = await h.request<Env<unknown>>('POST', `${BASE_PATH}/tailor-sessions`, { body: { ...noJob, jd: { ...jd, title: '  ' } }, headers: asUser });
+    expect(untitled.status).toBe(422);
+    expect(tailor).not.toHaveBeenCalled();
+  });
+
   it('503 ai_unavailable without AI consent, zero model calls', async () => {
     ai = false;
     tailor.mockClear();

@@ -243,6 +243,15 @@
   flex-direction: column;
   gap: var(--sp-3);
 }
+/* The issue a link pointed at (/resume/<id>/check?issue=<id>). */
+.issueFocused {
+  border-color: var(--action);
+  box-shadow: var(--shadow-focus);
+  scroll-margin-top: var(--sp-6);
+}
+.issue:focus {
+  outline: none;
+}
 .issueHead {
   display: flex;
   align-items: flex-start;

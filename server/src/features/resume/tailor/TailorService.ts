@@ -9,6 +9,7 @@
 //   finalize(userId, id)          409 unverified_claims while any claim is pending;
 //                                 marks the checklist step 'tailor' once
 //   unverifiedClaimsCount(id)     the export guard (WP-36b) and the extension (WP-55a)
+//   reviewSessionIds(userId, ids) the hub's "Verify details" links (version → session in review)
 //
 // AI consent (TASK_PLAN.md §2.2): `aiAvailable` = aiAllowed(user) AND the
 // brand's `ai.text`. When false, `create` answers 503 ai_unavailable before
@@ -442,5 +443,22 @@ export class TailorService {
 
   async unverifiedClaimsCount(variantId: string): Promise<number> {
     return this.deps.store.unverifiedClaims(variantId);
+  }
+
+  // ── hub: "Verify details" links ──
+
+  /**
+   * For each tailored version that still has details to check: the id of the
+   * session in review that made it (variant id → session id). A version with
+   * no such session is absent.
+   */
+  async reviewSessionIds(userId: string, variantIds: readonly string[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    if (variantIds.length === 0) return out;
+    for (const row of await this.deps.store.findReviewSessions(userId, variantIds)) {
+      // Newest first: keep the first session seen for a version.
+      out[row.resultVariantId] ??= row.id;
+    }
+    return out;
   }
 }

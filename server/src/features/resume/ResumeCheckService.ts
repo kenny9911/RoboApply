@@ -72,6 +72,16 @@ export interface ResumeCheckDeps {
   rewrite: (input: RAResumeRewriteInput & { instruction?: string }, options: { locale?: string; signal?: AbortSignal }) => Promise<RAResumeRewriteAgentOutput>;
   /** GoApply AI-content label log (WP-13 seam); failures are logged, never thrown. */
   logAiLabel: (input: { userId: string; contentId: string; kind: string }) => Promise<void>;
+  /**
+   * True when the resumes this service checks have a template: a stored
+   * resume always does (the saved one, or the default), so the default deps
+   * in `features/resume/index.ts` say true. Left out, it is false: text with
+   * no template (the signed-out free tool checks pasted text) cannot be
+   * judged on the template rules, so they stay out of the "checked against N
+   * rules" count. The count can then be one too low for a caller that forgot
+   * this, never one too high.
+   */
+  hasTemplate?: () => boolean;
   now?: () => Date;
   timeoutMs?: number;
 }
@@ -155,7 +165,7 @@ export class ResumeCheckService {
       profile: p,
       method,
       aiSkipped: aiSkippedOf(row.model),
-      rulesChecked: method ? rulesCountFor(p, method === 'rules_ai') : null,
+      rulesChecked: method ? rulesCountFor(p, method === 'rules_ai', { template: this.deps.hasTemplate?.() ?? false }) : null,
       targetTitle: row.targetTitle,
       contentHash: row.contentHash,
       createdAt: row.createdAt.toISOString(),
@@ -310,10 +320,26 @@ export class ResumeCheckService {
     }
   }
 
-  async latest(userId: string, variantId: string): Promise<LatestGradeResponse> {
+  /**
+   * The newest check of a resume. `opened: true` is the owner looking at the
+   * report (the authenticated GET with `?opened=1`, sent by the report page
+   * only): a finished check gets `RAResumeGrade.viewedAt` the first time,
+   * which the lifecycle "check not opened" reminder reads. Every other reader
+   * (the editor summary, tailoring, the onboarding dock, the Assistant, jobs)
+   * reads without stamping.
+   */
+  async latest(userId: string, variantId: string, opts: { opened?: boolean } = {}): Promise<LatestGradeResponse> {
     const variant = await this.variantOrThrow(userId, variantId);
     const [rows, aiAvailable] = await Promise.all([this.deps.store.listGrades(userId, variantId, 20), this.deps.aiAvailable(userId)]);
     const gradeRow = rows.find((r) => r.status !== 'cancelled') ?? null;
+    if (opts.opened && gradeRow && gradeRow.status === 'done' && !gradeRow.viewedAt) {
+      try {
+        await this.deps.store.markGradeViewed?.(userId, gradeRow.id, new Date());
+      } catch (err) {
+        // The read never fails because the stamp could not be written.
+        logger.warn('RESUME_CHECK', 'viewedAt not stamped', { userId, gradeId: gradeRow.id, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
     const previousRow = gradeRow
       ? (rows.find((r) => r.id !== gradeRow.id && r.status === 'done' && r.createdAt.getTime() < gradeRow.createdAt.getTime()) ?? null)
       : null;
@@ -432,7 +458,9 @@ export class ResumeCheckService {
     if (at < 0) throw new HttpError('conflict', 'This text changed since the check. Run the check again.', { reason: 'target_changed' });
     const replacement = issue.section === 'summary' ? text.trim() : text.replace(/\s*\n+\s*/g, ' ').trim();
     const next = md.slice(0, at) + replacement + md.slice(at + target.length);
-    const saved = await this.deps.store.saveMarkdown(userId, variantId, next);
+    // This endpoint only ever applies an AI version (as written, or edited by
+    // the user first), so the resume now holds AI-written text.
+    const saved = await this.deps.store.saveMarkdown(userId, variantId, next, { aiAssisted: true });
     return { applied: true, resumeContentHash: saved.resumeContentHash };
   }
 

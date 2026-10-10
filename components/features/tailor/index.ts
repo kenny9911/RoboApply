@@ -3,7 +3,8 @@
 //
 //   <TailorButton jobId=… />              entry on any job surface (hidden when AI is off)
 //   <TailorLaunchHost resumeId=… />       runs the flow from `?tailor=<jobId>` (resume pages)
-//   <TailorSheet open jobId=… />          the flow in a sheet (with the base-resume picker)
+//   <TailorSheet open jobId=… />          the flow in a sheet (with the base-resume picker; with no
+//                                         jobId the user picks a saved job or pastes the posting)
 //   <TailorFlow resumeId=… jobId=… />     the flow inline
 
 export { TailorFlow, type TailorFlowProps } from './TailorFlow';
@@ -14,3 +15,4 @@ export { TailorSetup, INSTRUCTION_MAX, type TailorSetupProps, type TailorSetupVa
 export { TailorResult, type TailorResultProps } from './TailorResult';
 export { ClaimCard, type ClaimCardProps } from './ClaimCard';
 export { TailorError } from './TailorError';
+export { TailorTarget, postingOf, POSTING_TEXT_MIN, type PastedPosting, type TailorTargetProps, type TailorTargetValue } from './TailorTarget';

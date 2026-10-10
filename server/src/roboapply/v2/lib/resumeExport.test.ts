@@ -4,16 +4,14 @@
 // fallback (Latin Extended, Greek, Cyrillic, Hangul, kana, zh and zh-TW), and
 // two-column paging.
 //
-// Lives in the WP's own folder (TASK_PLAN.md §2 ownership); INT may move it
-// next to the module. The module is loaded by path so the web type-check does
-// not pull pdfkit (untyped, server-only) in.
+// Sits next to the module (moved from components/features/resume/server by INT-10).
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-import { implicitLabelMetadata } from '../../../../server/src/features/compliance/aiLabel.js';
+import { implicitLabelMetadata } from '../../../features/compliance/aiLabel.js';
 
 type FaceKey = 'latin' | 'sc' | 'tc' | 'kr' | 'jp';
 interface FontFaces {
@@ -45,7 +43,7 @@ interface ExportModule {
   splitFontRuns(text: string, chain: readonly FontFaces[]): Array<{ text: string; face: FaceKey | 'std' }>;
   unicodeFontFor(locale?: string | null): FontFaces | null;
 }
-const EXPORT_MODULE = '../../../../server/src/roboapply/v2/lib/resumeExport.js';
+const EXPORT_MODULE = './resumeExport.js';
 const X = (await import(/* @vite-ignore */ EXPORT_MODULE)) as ExportModule;
 const {
   buildExportFileName,

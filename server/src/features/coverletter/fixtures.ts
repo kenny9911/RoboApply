@@ -94,8 +94,10 @@ export interface FixtureOptions {
   footerEnabled?: boolean;
   rewriteLimit?: number;
   unverified?: number;
-  /** Keep pasted posts (the SR-37-1 column); false behaves like the Prisma twin today. */
+  /** Keep pasted posts (`RACoverLetter.postingSnapshot`); false = a store that keeps none (older rows read like this). */
   keepPostings?: boolean;
+  /** Use this posting store instead of the in-memory one (the Prisma adapter over a fake database). */
+  postings?: CoverLetterDeps['postings'];
   now?: () => Date;
 }
 
@@ -159,7 +161,7 @@ export function createFixture(options: FixtureOptions): Fixture {
         if (input.brand === 'goapply') labelLogs.push({ kind: input.kind, artifactId: input.artifactId, contentId: input.contentId, provider: input.provider });
       },
     },
-    postings: {
+    postings: options.postings ?? {
       read: async (id) => (options.keepPostings === false ? null : (postings.get(id) ?? null)),
       write: async (id, snapshot) => {
         if (options.keepPostings !== false) postings.set(id, snapshot);

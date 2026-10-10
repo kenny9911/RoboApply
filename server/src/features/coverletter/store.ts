@@ -246,3 +246,57 @@ export function createPrismaCoverLetterStore(): CoverLetterStore {
     },
   };
 }
+
+// ── Pasted job posts (SR-37-1: RACoverLetter.postingSnapshot) ──────────────
+
+/** `RACoverLetter.postingSnapshot`: the pasted job post a letter was written from. */
+export interface StoredPosting {
+  title: string;
+  company: string;
+  text: string;
+}
+
+/** The stored JSON as a posting, or null when the column is empty or not a posting. */
+export function parseStoredPosting(raw: unknown): StoredPosting | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.title !== 'string' || typeof r.text !== 'string' || !r.text.trim()) return null;
+  return { title: r.title, company: typeof r.company === 'string' ? r.company : '', text: r.text };
+}
+
+/** The slice of Prisma the posting store uses (tests pass a recording fake). */
+export interface PostingDb {
+  rACoverLetter: {
+    findFirst(args: { where: { id: string; deletedAt: null }; select: { postingSnapshot: true } }): Promise<{ postingSnapshot: unknown } | null>;
+    updateMany(args: { where: { id: string; deletedAt: null }; data: { postingSnapshot: Prisma.InputJsonValue } }): Promise<{ count: number }>;
+  };
+}
+
+export interface PostingStore {
+  read(letterId: string): Promise<StoredPosting | null>;
+  write(letterId: string, snapshot: StoredPosting): Promise<void>;
+}
+
+/**
+ * Keeps the pasted job post on its letter so rewrite and regenerate can read
+ * it again. Letters written from a job id store nothing here (the post is
+ * re-read from the job). The service reads the letter with the user's scope
+ * before it reads or writes the snapshot.
+ */
+export function createPrismaPostingStore(getDb?: () => Promise<PostingDb>): PostingStore {
+  const db = getDb ?? (async () => (await import('../../lib/prisma.js')).default as unknown as PostingDb);
+  return {
+    async read(letterId) {
+      const p = await db();
+      const row = await p.rACoverLetter.findFirst({ where: { id: letterId, deletedAt: null }, select: { postingSnapshot: true } });
+      return parseStoredPosting(row?.postingSnapshot);
+    },
+    async write(letterId, snapshot) {
+      const p = await db();
+      await p.rACoverLetter.updateMany({
+        where: { id: letterId, deletedAt: null },
+        data: { postingSnapshot: json({ title: snapshot.title, company: snapshot.company, text: snapshot.text }) },
+      });
+    },
+  };
+}

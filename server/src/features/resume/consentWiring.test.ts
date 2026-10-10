@@ -27,6 +27,7 @@ vi.mock('../../platform/flags.js', async (importOriginal) => ({
 import { createCreditTestKit } from '../../platform/credits/testkit.js';
 import { defaultResumeCheckDeps, resumeAiAvailable } from './index.js';
 import { ResumeCheckService } from './ResumeCheckService.js';
+import { rulesCountFor } from './check/taxonomy.js';
 import { createMemoryResumeCheckStore, memoryVariant } from './memoryStore.js';
 
 const USER = 'u_consent';
@@ -52,6 +53,10 @@ describe('resume check consent wiring (defaultResumeCheckDeps)', () => {
     const { grade } = await service.grade(USER, 'rv_1');
     expect(grade!.status).toBe('done');
     expect(grade!.method).toBe('rules');
+    // INT-10: the production wiring checks stored resumes, which always have a
+    // template, so the template rule is part of the count.
+    expect(defaultResumeCheckDeps().hasTemplate?.()).toBe(true);
+    expect(grade!.rulesChecked).toBe(rulesCountFor('intl', false));
     expect(grade!.aiSkipped).toBe('ai_unavailable');
     expect(grade!.issues.some((i) => i.source === 'ai')).toBe(false);
     const weak = grade!.issues.find((i) => i.fixable)!;

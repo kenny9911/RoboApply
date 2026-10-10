@@ -30,10 +30,15 @@
         "no_job": "Job not saved",
         "from": "From {name}",
         "edited": "Edited {when}",
-        "verify": "{count, plural, one {1 detail to check} other {# details to check}}"
+        "verify": "{count, plural, one {1 detail to check} other {# details to check}}",
+        "verify_cta": "Verify details",
+        "verify_aria": "Verify details in {name}"
       },
       "errors": {
-        "storage_unavailable": "File storage isn't available right now. Try again later."
+        "storage_unavailable": "File storage isn't available right now. Try again later.",
+        "upload_daily_limit": "You have uploaded {limit} resume files today, which is the daily limit. Try again tomorrow.",
+        "image_unreadable": "This image could not be read right now. Upload a PDF or Word file instead.",
+        "ai_off": "Reading a resume file uses AI, which is off for your account. Turn on AI processing in Settings, or build your resume step by step instead."
       }
     },
     "layout": {

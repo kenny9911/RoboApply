@@ -11,6 +11,7 @@ import type { GradeIssue, GradeView, KeywordReportResponse, LatestGradeResponse 
 
 const api = vi.hoisted(() => ({
   getLatestGrade: vi.fn(),
+  markResumeCheckOpened: vi.fn(),
   startGrade: vi.fn(),
   cancelGrade: vi.fn(),
   fixIssue: vi.fn(),
@@ -87,14 +88,15 @@ function latest(over: Partial<LatestGradeResponse> = {}): LatestGradeResponse {
 /** Intl errors other than the test environment's missing default time zone. */
 const realIntlErrors = (fn: ReturnType<typeof vi.fn>) => fn.mock.calls.filter(([e]) => !String((e as Error)?.message ?? e).includes('ENVIRONMENT_FALLBACK'));
 
-function renderReport() {
+function renderReport(focusIssueId?: string) {
   const onIntlError = vi.fn();
-  renderWithProviders(<ResumeCheckReport resumeId="rv_1" />, { onIntlError });
+  renderWithProviders(<ResumeCheckReport resumeId="rv_1" focusIssueId={focusIssueId} />, { onIntlError });
   return { onIntlError };
 }
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
+  api.markResumeCheckOpened.mockResolvedValue(undefined);
   gate.left = 3;
   gate.runs = 0;
 });
@@ -116,6 +118,61 @@ describe('ResumeCheckReport', () => {
     expect(screen.getByRole('button', { name: /1\s*Fix first/ })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/resumeCheck\.|\bATS\b/);
     expect(realIntlErrors(onIntlError)).toEqual([]);
+  });
+
+  describe('?issue=<id> (the Assistant links to /resume/<id>/check?issue=<id>)', () => {
+    it('opens on that issue: scrolled into view, focused, details shown, and marked', async () => {
+      const scrolled = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrolled;
+      try {
+        api.getLatestGrade.mockResolvedValue(latest());
+        const { onIntlError } = renderReport('layout_table-1');
+        await screen.findByRole('heading', { name: 'Fair' });
+        const card = document.getElementById('issue-layout_table-1')!;
+        expect(card).toHaveAttribute('data-focused', 'true');
+        await waitFor(() => expect(document.activeElement).toBe(card));
+        expect(scrolled).toHaveBeenCalledTimes(1);
+        expect(scrolled.mock.instances[0]).toBe(card);
+        // Its details are open without a click (a non-urgent issue starts closed otherwise).
+        expect(card.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+        expect(card).toHaveTextContent('Why it matters');
+        // No other card is marked or opened by the link.
+        const other = document.getElementById('issue-weak_verb-1')!;
+        expect(other).not.toHaveAttribute('data-focused');
+        expect(other.querySelector('button[aria-expanded="true"]')).toBeNull();
+        expect(document.querySelector('[data-focus-missing]')).toBeNull();
+        expect(realIntlErrors(onIntlError)).toEqual([]);
+      } finally {
+        Element.prototype.scrollIntoView = original;
+      }
+    });
+
+    it('says so when the linked issue is not in the latest check, and focuses nothing', async () => {
+      api.getLatestGrade.mockResolvedValue(latest());
+      const { onIntlError } = renderReport('gone-9');
+      expect(await screen.findByText('The issue you opened is not in the latest check. It may already be fixed.')).toBeInTheDocument();
+      expect(document.querySelector('[data-focused="true"]')).toBeNull();
+      expect(realIntlErrors(onIntlError)).toEqual([]);
+    });
+
+    it('the page passes ?issue= to the report (first value, trimmed; junk ignored)', async () => {
+      const { default: Page } = await import('../../../app/(auth)/resume/[id]/check/page');
+      const props = async (query?: Record<string, string | string[]>) =>
+        ((await Page({ params: Promise.resolve({ id: 'rv_1' }), searchParams: query ? Promise.resolve(query) : undefined })) as { props: Record<string, unknown> }).props;
+      expect(await props({ issue: ' weak_verb-1 ' })).toEqual({ resumeId: 'rv_1', focusIssueId: 'weak_verb-1' });
+      expect(await props({ issue: ['a-1', 'b-2'] })).toEqual({ resumeId: 'rv_1', focusIssueId: 'a-1' });
+      expect(await props({ issue: 'x'.repeat(121) })).toEqual({ resumeId: 'rv_1', focusIssueId: null });
+      expect(await props()).toEqual({ resumeId: 'rv_1', focusIssueId: null });
+    });
+
+    it('without ?issue= nothing is focused and no note shows', async () => {
+      api.getLatestGrade.mockResolvedValue(latest());
+      renderReport();
+      await screen.findByRole('heading', { name: 'Fair' });
+      expect(document.querySelector('[data-focused="true"]')).toBeNull();
+      expect(document.querySelector('[data-focus-missing]')).toBeNull();
+    });
   });
 
   it('filters by priority', async () => {
@@ -251,6 +308,74 @@ describe('ResumeCheckReport', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run the check' }));
     await waitFor(() => expect(api.startGrade).toHaveBeenCalled());
     expect(gate.runs).toBe(0);
+  });
+
+  describe('telling the server the check was opened (RAResumeGrade.viewedAt)', () => {
+    it('the finished report says so once, however often the page re-renders or refetches', async () => {
+      api.getLatestGrade.mockResolvedValue(latest());
+      renderReport();
+      expect(await screen.findByRole('heading', { name: 'Fair' })).toBeInTheDocument();
+      await waitFor(() => expect(api.markResumeCheckOpened).toHaveBeenCalledTimes(1));
+      expect(api.markResumeCheckOpened).toHaveBeenCalledWith('rv_1');
+      // Filtering re-renders the report; the same check is not reported twice.
+      fireEvent.click(screen.getByRole('button', { name: /1\s*Fix first/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^All/ }));
+      expect(api.markResumeCheckOpened).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failed call changes nothing on the page', async () => {
+      api.getLatestGrade.mockResolvedValue(latest());
+      api.markResumeCheckOpened.mockRejectedValue(new Error('offline'));
+      renderReport();
+      expect(await screen.findByRole('heading', { name: 'Fair' })).toBeInTheDocument();
+      await waitFor(() => expect(api.markResumeCheckOpened).toHaveBeenCalledTimes(1));
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('nothing is sent before there is a finished check on screen', async () => {
+      api.getLatestGrade.mockResolvedValue(latest({ grade: null }));
+      renderReport();
+      expect(await screen.findByRole('button', { name: 'Run the check' })).toBeInTheDocument();
+      expect(api.markResumeCheckOpened).not.toHaveBeenCalled();
+    });
+
+    it('a running check is not opened; the report it turns into is', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        api.getLatestGrade
+          .mockResolvedValueOnce(latest({ grade: gradeView({ status: 'running', label: null, score: null, counts: null, issues: [] }) }))
+          .mockResolvedValue(latest());
+        renderReport();
+        expect(await screen.findByRole('button', { name: 'Cancel the check' })).toBeInTheDocument();
+        expect(api.markResumeCheckOpened).not.toHaveBeenCalled();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(RUNNING_POLL_MS + 50);
+        });
+        expect(await screen.findByRole('heading', { name: 'Fair' })).toBeInTheDocument();
+        await waitFor(() => expect(api.markResumeCheckOpened).toHaveBeenCalledTimes(1));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a new check after a re-check is reported as opened too', async () => {
+      api.getLatestGrade.mockResolvedValueOnce(latest());
+      api.startGrade.mockResolvedValue({ gradeId: 'g3', grade: gradeView({ id: 'g3' }) });
+      api.getLatestGrade.mockResolvedValue(latest({ grade: gradeView({ id: 'g3' }) }));
+      renderReport();
+      expect(await screen.findByRole('heading', { name: 'Fair' })).toBeInTheDocument();
+      await waitFor(() => expect(api.markResumeCheckOpened).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getAllByRole('button', { name: 'Check again' })[0]!);
+      await waitFor(() => expect(api.markResumeCheckOpened).toHaveBeenCalledTimes(2));
+    });
+
+    it('other readers of the latest check (the editor popover) never say it was opened', async () => {
+      api.getLatestGrade.mockResolvedValue(latest());
+      const report = analyzeResume(parseResumeMarkdown(''));
+      renderWithProviders(<AnalyzerPanel report={report} resumeId="rv_1" onJump={() => {}} onClose={() => {}} />);
+      expect(await screen.findByText('Last check: Fair · 1 to fix first')).toBeInTheDocument();
+      expect(api.markResumeCheckOpened).not.toHaveBeenCalled();
+    });
   });
 
   it('a running check can be cancelled', async () => {

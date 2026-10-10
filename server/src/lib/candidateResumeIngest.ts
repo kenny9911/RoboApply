@@ -1,20 +1,34 @@
-// backend/src/lib/candidateResumeIngest.ts
+// server/src/lib/candidateResumeIngest.ts
 //
-// Candidate-app (RoboApply) resume ingest. Reuses RoboHire's PURE parse
-// functions — text extraction → ResumeParseAgent → summary — WITHOUT touching
-// the recruiter `Resume` table or recruiter match quota. Original bytes are
-// persisted to candidate-scoped object storage (a distinct keyspace, so they
-// never co-mingle with recruiter resume originals).
+// Candidate-app resume ingest. Reuses RoboHire's PURE parse functions — text
+// extraction → ResumeParseAgent → summary — WITHOUT touching the recruiter
+// `Resume` table or recruiter match quota. Original bytes are persisted to
+// candidate-scoped object storage (a distinct keyspace, so they never
+// co-mingle with recruiter resume originals).
+//
+// Residency (TASK_PLAN.md WP-15, REQ-WP15-03): the brand of the upload decides
+// where the file may be parsed and what may be stored.
+//   - GoHire's parse service is called only for a brand it is switched on for,
+//     with that brand passed explicitly, and never for a RoboApply upload
+//     when the caller sets `forceLocalParser` (a user without the cross-border
+//     consent). GoApply ignores that flag: GoHire is its in-country parser.
+//   - GoApply images go to GoHire only; when it cannot read one the upload
+//     fails (`image_parse_unavailable`). No local vision OCR for them.
+//   - After parse and summary, on EVERY path, `applyResumeUploadPolicy(brand, …)`
+//     decides what is handed back for storage: on GoApply offshore (CN-0)
+//     government ID numbers and health details are redacted and photo fields
+//     dropped, and no original file is kept.
+//   - The original goes to the brand's own bucket, or nowhere.
 //
 // Lives in `lib/` on purpose: the boundary-locked V2 routes
-// (backend/src/roboapply/v2/*) may import `lib/*` but NOT `services/*`
+// (server/src/roboapply/v2/*) may import `lib/*` but NOT `services/*`
 // (scripts/check-roboapply-v2-boundary.mjs). This module is the single seam
 // through which V2 reaches PDFService / DocumentParsingService /
 // ResumeSummaryService / ResumeOriginalFileStorageService.
 //
 // Quota: parsing is FREE (mirrors recruiter upload-parse, which also does not
-// debit match quota). No writeDeductionLog here. The only billable RoboApply
-// resume op remains `ra_resume_tailor` in RAResumeService.
+// debit match quota). No writeDeductionLog here. The caller keeps the per-user
+// daily upload cap (RAResumeService).
 
 import path from 'node:path';
 import { pdfService } from '../services/PDFService.js';
@@ -28,6 +42,9 @@ import {
   type ResumeOriginalFileRef,
 } from '../services/ResumeOriginalFileStorageService.js';
 import { logger } from '../services/LoggerService.js';
+import { getBrand, type BrandId } from '../platform/brand/registry.js';
+import { applyResumeUploadPolicy, isImageUpload } from '../platform/residency/uploadPolicy.js';
+import { resolveWriteBrand } from '../platform/residency/writeBrand.js';
 import type { ParsedResume, SkillsDetailed } from '../types/index.js';
 
 // Candidate resume originals get their OWN keyspace so they are never
@@ -145,29 +162,69 @@ export async function ingestCandidateResume(params: {
    *  user-facing prose rendered on the résumé card, so it must come back in the
    *  locale the user is reading the app in (not the résumé's own language). */
   locale?: string | null;
+  /** Brand that owns the upload (default: the brand of the current request or unit of work). */
+  brand?: BrandId;
+  /**
+   * RoboApply: read the file with the local parser only, with no call to the
+   * GoHire parse service. Set for a RoboApply user who has not agreed to
+   * `intl_cross_border_cn_parse`, or when the caller asks for the local parser.
+   * Ignored on GoApply: GoHire is the in-country parser there, and the local
+   * pipeline can end in vision OCR on a scanned PDF, which GoApply does not use.
+   */
+  forceLocalParser?: boolean;
 }): Promise<CandidateResumeIngestResult> {
   const { buffer, fileName, mimeType, userId, requestId, textTransform } = params;
-  const storeOriginal = params.storeOriginal !== false;
+
+  // Residency (TASK_PLAN.md WP-15, REQ-WP15-03). The brand decides where the
+  // file may be parsed and what may be stored. When it cannot be known (no
+  // request context on a deployment that serves both brands) the stricter
+  // GoApply rule applies: nothing goes to GoHire or to a bucket, and the text
+  // is redacted before it is returned.
+  const brandId = resolveWriteBrand(params.brand);
+  const policyBrand: BrandId = brandId ?? 'goapply';
+  const cnMarket = getBrand(policyBrand).market === 'cn';
+  const imageUpload = isImageUpload(mimeType, fileName);
 
   // 1+2. Extract text, then parse to structured JSON.
   //
   // PREFERRED PATH: GoHire's parse-resume endpoint does both in ONE call and is
-  // the primary route for plain PDF uploads. The local pipeline
-  // (pdftotext → rasterize → vision-LLM OCR → ResumeParseAgent) FABRICATES
-  // image-only scans: three passes over one scanned Chinese résumé produced
-  // three different candidates, phone numbers and universities, each persisted
-  // as parseStatus='parsed'. See GoHireResumeParseService for the evidence.
+  // the primary route for plain PDF uploads where the brand may use it. The
+  // local pipeline (pdftotext → rasterize → vision-LLM OCR → ResumeParseAgent)
+  // is not reliable on image-only scans: the vision model can return text that
+  // is not on the page. See GoHireResumeParseService.
   //
   // The LinkedIn import path is deliberately excluded: it supplies a
   // `textTransform` that strips "Save to PDF" footers from the extracted text
   // BEFORE parsing, and a remote parse returns text and structure together with
-  // no seam to apply it. That path keeps the local pipeline unchanged.
+  // no seam to apply it. That path keeps the local pipeline.
+  //
+  // GoApply images go to GoHire only (CN plan G-resume): an image is never
+  // handed to local vision OCR. When GoHire cannot read it the upload fails.
   let rawText: string;
   let parsed: ParsedResume | undefined;
 
-  const remoteParse = textTransform
-    ? null
-    : await goHireResumeParseService.parseResumeFile({ buffer, fileName, mimeType, requestId });
+  const cnImage = cnMarket && imageUpload;
+  // The local-parser flag is a RoboApply privacy choice; it never takes a
+  // GoApply file off the in-country parser.
+  const forceLocal = params.forceLocalParser === true && !cnMarket;
+  const useRemote = cnImage || (!textTransform && !forceLocal);
+  const remoteParse = useRemote && brandId
+    ? await goHireResumeParseService.parseResumeFile({
+        buffer,
+        fileName,
+        mimeType,
+        requestId,
+        brand: brandId,
+        allowImages: cnImage,
+      })
+    : null;
+
+  if (cnImage && !remoteParse) {
+    throw new CandidateResumeIngestError(
+      'image_parse_unavailable',
+      'This image could not be read right now. Upload a PDF or Word file instead.',
+    );
+  }
 
   if (remoteParse) {
     rawText = cleanText(normalizeExtractedText(remoteParse.rawText));
@@ -246,12 +303,26 @@ export async function ingestCandidateResume(params: {
     markdown = rawText;
   }
   if (!markdown.trim()) markdown = rawText;
+
+  // 4. The brand's storage rule, on EVERY path (GoHire, local PDF fallback,
+  // Word/text, LinkedIn text): on GoApply offshore (CN-0) government ID numbers
+  // and health details are redacted and photo fields dropped before anything is
+  // handed back for storage. RoboApply content comes back as parsed.
+  const applied = applyResumeUploadPolicy(policyBrand, { rawText, markdown, parsed, summary, highlight });
+  rawText = applied.rawText;
+  markdown = applied.markdown ?? markdown;
+  parsed = applied.parsed ?? parsed;
+  summary = applied.summary ?? '';
+  highlight = applied.highlight ?? '';
+
   const displayName =
     str(parsed.name).trim() || cleanNameFromFilename(fileName) || 'My résumé';
 
-  // 4. Persist original bytes to candidate-scoped storage (best-effort).
+  // 5. Persist original bytes to the brand's own storage (best-effort). Never
+  // when the brand's rule says discard, and never without a known brand.
+  const storeOriginal = params.storeOriginal !== false && applied.storeOriginal && Boolean(brandId);
   let original: CandidateResumeOriginalRef | null = null;
-  if (storeOriginal && resumeOriginalFileStorageService.isConfigured()) {
+  if (storeOriginal && brandId && resumeOriginalFileStorageService.isConfigured(brandId)) {
     try {
       const stored = await resumeOriginalFileStorageService.saveFile({
         buffer,
@@ -261,6 +332,7 @@ export async function ingestCandidateResume(params: {
         userId,
         requestId,
         keyspace: CANDIDATE_KEYSPACE,
+        brand: brandId,
       });
       if (stored) {
         original = {
