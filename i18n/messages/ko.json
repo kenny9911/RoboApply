@@ -1704,7 +1704,9 @@
         "off": "카메라 꺼짐",
         "turnOn": "켜기",
         "allow": "눌러서 카메라 허용하기",
-        "enable": "켜기"
+        "enable": "켜기",
+        "localOnly": "카메라 화면은 나만 볼 수 있어요. 면접관에게 전송되거나 녹화되지 않아요.",
+        "localOnlyShort": "나만 볼 수 있어요"
       },
       "expired": {
         "title": "이 세션은 끝났어요",
@@ -1801,6 +1803,18 @@
             "error": "카메라가 켜지지 않았어요. 카메라 설정을 확인한 뒤 다시 시도해 주세요."
           }
         }
+      },
+      "network": {
+        "checking": "확인하는 중…",
+        "fair": "보통",
+        "fairBody": "연결이 조금 느려요. 그래도 면접은 진행할 수 있을 거예요.",
+        "good": "좋음",
+        "label": "연결 상태",
+        "poor": "약함",
+        "poorBody": "연결이 약해서 음성 면접이 끊길 수 있어요. 글로 연습하는 방법도 있어요.",
+        "retry": "다시 확인",
+        "switchToText": "글로 연습하기로 바꾸기",
+        "switching": "전환하는 중…"
       }
     },
     "report": {
@@ -1889,6 +1903,101 @@
         "title": "이 면접은 채점할 수 없어요",
         "body": "면접이 끝나기 전에 멈춰서 리포트가 없어요."
       }
+    },
+    "first": {
+      "email": "이메일을 인증하면 첫 연습 면접을 무료로 할 수 있어요.",
+      "emailAction": "이메일 인증",
+      "phone": "인증된 전화번호를 추가하면 첫 연습 면접을 무료로 할 수 있어요.",
+      "phoneAction": "전화번호 추가"
+    },
+    "gate": {
+      "consent": "AI 연습을 하려면 AI 처리에 동의해야 해요. 설정에서 켤 수 있어요.",
+      "consentAction": "설정 열기",
+      "phone": "AI 연습을 사용하기 전에 전화번호를 추가해 주세요.",
+      "phoneAction": "전화번호 추가",
+      "startText": "글로 하는 연습 시작",
+      "voiceUnavailable": "여기서는 아직 음성 연습을 사용할 수 없어서 이번 연습은 글로 진행해요."
+    },
+    "job": {
+      "clear": "이 공고 없이 연습하기",
+      "closed": "이 공고는 더 이상 올라와 있지 않아요. 그래도 이 공고로 연습할 수 있어요.",
+      "eyebrow": "이 공고로 연습 중",
+      "notFound": "이 공고는 여기서 볼 수 없어요. 직무를 고르거나 공고를 붙여넣어 주세요.",
+      "resume": {
+        "chosen": "내가 고른 이력서를 사용해요: {name}",
+        "latest": "가장 최근 이력서를 사용해요: {name}",
+        "none": "등록된 이력서가 없어요. 면접관은 공고만 바탕으로 진행해요.",
+        "primary": "기본 이력서를 사용해요: {name}",
+        "tailored": "이 공고에 맞춘 이력서를 사용해요: {name}"
+      },
+      "title": "{company} · {title}"
+    },
+    "mode": {
+      "video": {
+        "desc": "화상 통화처럼 카메라를 켜고 해요. 얼굴이 아니라 답변을 채점해요."
+      },
+      "voice": {
+        "desc": "전화 통화처럼 음성만 사용해요. 답변의 구조부터 잡을 때 좋아요."
+      }
+    },
+    "questionsLink": "연습 질문",
+    "recording": {
+      "audio": "음성과 대화록",
+      "audioVideo": "음성, 영상, 대화록",
+      "change": "변경",
+      "label": "녹음·녹화",
+      "off": "끔",
+      "sheet": {
+        "error": "선택을 저장하지 못했어요. 다시 시도해 주세요.",
+        "keepOff": "녹음·녹화 끈 채로 두기",
+        "loading": "불러오는 중…",
+        "save": "선택 저장",
+        "saving": "저장하는 중…",
+        "sub": "여기서 켜지 않으면 녹음·녹화는 꺼진 상태로 유지돼요.",
+        "title": "이 연습을 녹음·녹화해 둘까요?",
+        "unavailable": "동의 안내문을 불러오지 못해서 녹음·녹화는 꺼진 상태로 유지돼요.",
+        "videoNeedsAudio": "영상도 보관하려면 첫 번째 항목을 선택해 주세요.",
+        "videoNotOffered": "음성만 보관할 수 있어요. 영상은 녹화하지 않아요.",
+        "voiceOnly": "음성 연습이라 보관할 영상이 없어요.",
+        "withdraw": "이 동의는 설정에서 언제든지 철회할 수 있어요."
+      },
+      "unavailable": "연습 면접은 녹음·녹화하지 않아요."
+    },
+    "reportEnd": {
+      "again": "다시 연습하기",
+      "againForJob": "이 공고로 다시 연습하기",
+      "cost": "연습 크레딧을 사용해요. {balance}개 남았어요.",
+      "costUnknown": "연습 크레딧을 사용해요.",
+      "forJob": "대상: {company} · {title}",
+      "getMore": "연습 팩 또는 Pro 이용하기",
+      "none": "남은 연습 크레딧이 없어요.",
+      "recordingOff": "녹음·녹화 꺼짐: 이 연습의 음성이나 영상은 보관하지 않았어요.",
+      "scoreNote": "점수는 이번 연습에서 한 답변을 바탕으로 해요. 실제 면접 결과를 예측하지는 않아요.",
+      "scoresTitle": "답변 채점 결과"
+    },
+    "text": {
+      "again": "새로 시작하기",
+      "answerLabel": "내 답변",
+      "error": "문제가 생겼어요. 다시 시도해 주세요.",
+      "exit": "설정으로 돌아가기",
+      "finish": "결과 보기",
+      "gaps": "보완할 점",
+      "hint": "힌트",
+      "interviewer": "면접관",
+      "intro": "질문마다 글로 답해 주세요. 천천히 해도 괜찮아요.",
+      "overall": "종합",
+      "question": "질문 {n} / {total}",
+      "resultTitle": "내 결과",
+      "retry": "다시 시도",
+      "scoreNote": "점수는 이번 연습에서 한 답변을 바탕으로 해요. 실제 면접 결과를 예측하지는 않아요.",
+      "scoring": "채점하는 중…",
+      "send": "답변 보내기",
+      "sending": "보내는 중…",
+      "skip": "이 질문 건너뛰기",
+      "starting": "질문을 준비하는 중…",
+      "strengths": "잘한 점",
+      "title": "글로 하는 연습",
+      "you": "나"
     }
   },
   "settings": {
@@ -8263,6 +8372,1893 @@
         "great": "오직",
         "possible": "최소"
       }
+    }
+  },
+  "onboarding": {
+    "basics": {
+      "addCity": "도시 추가",
+      "addCustom": "‘{title}’ 추가",
+      "anywhereIn": "{country} 전 지역",
+      "citiesLabel": "{country}의 도시",
+      "cityPlaceholder": "도시 추가",
+      "countriesLabel": "어디에서 일하고 싶나요?",
+      "countriesRequired": "한 곳 이상 골라주세요.",
+      "functionsHint": "구체적인 직무명을 3개까지 골라주세요. Enter 키를 누르면 직접 입력한 직무명을 추가할 수 있어요.",
+      "functionsLabel": "직무명",
+      "functionsPlaceholder": "직무명 입력",
+      "functionsRequired": "직무명을 하나 이상 추가해 주세요.",
+      "jobTypes": {
+        "contract": "계약직",
+        "full_time": "풀타임",
+        "internship": "인턴십",
+        "part_time": "파트타임"
+      },
+      "jobTypesLabel": "고용 형태",
+      "jobTypesRequired": "고용 형태를 하나 이상 골라주세요.",
+      "remoteOk": "원격 공고 포함",
+      "remove": "{label} 삭제",
+      "sponsorship": {
+        "no": "아니요",
+        "not_sure": "잘 모르겠어요",
+        "yes": "네"
+      },
+      "sponsorshipLabel": "{country}에서 일하려면 회사의 비자 또는 취업 허가 스폰서십이 필요한가요?",
+      "titleExplore": "어떤 직무를 고려하고 있나요?",
+      "titleUrgent": "다음에 어떤 일을 하고 싶나요?",
+      "tooBroad": "범위가 넓은 직무명이에요. 더 구체적인 직무명을 고르면 결과가 더 좋아져요.",
+      "tooMany": "직무명은 3개까지 고를 수 있어요.",
+      "tooManyCities": "도시는 모두 합쳐 5개까지 고를 수 있어요."
+    },
+    "confirm": {
+      "aiSuggested": "AI가 이력서를 바탕으로 제안했어요. 쓰기 전에 확인해 주세요.",
+      "alertHint": "새 공고 목록만 보내요. 팁과 혜택 안내는 따로 설정해요.",
+      "alertLabel": "나와 맞는 새 공고를 이메일로 받기",
+      "alerts": {
+        "daily": "매일",
+        "off": "끔",
+        "weekly": "매주"
+      },
+      "countNote": "‘잘 맞음’ 이상인 공고만 세었어요.",
+      "diagnostics": {
+        "broaden": "직무명을 더 추가하거나 더 넓은 직무명을 써 보세요.",
+        "levels": "아래에서 경력 수준을 더 골라주세요.",
+        "places": "도시나 국가를 더 추가하거나 원격 공고를 포함해 보세요."
+      },
+      "diagnosticsTitle": "결과가 적을 수 있는 이유",
+      "editSearch": "찾는 조건 바꾸기",
+      "extraHint": "최대 3개예요.",
+      "extraLabel": "이력서에 있는 이 직무명도 추가할까요?",
+      "heard": {
+        "ai_assistant": "AI 어시스턴트 (예: ChatGPT)",
+        "friend": "친구나 동료",
+        "instagram": "Instagram",
+        "linkedin": "LinkedIn",
+        "other": "기타",
+        "reddit": "Reddit",
+        "school": "학교 또는 취업지원센터",
+        "search_engine": "검색 엔진",
+        "tiktok": "TikTok",
+        "youtube": "YouTube"
+      },
+      "heardLabel": "%BRAND%를 어떻게 알게 됐나요? (선택)",
+      "heardNone": "하나 선택",
+      "heardOther": "어디인지 알려주세요",
+      "levels": {
+        "director_plus": "디렉터 이상",
+        "entry": "신입 (0–2년)",
+        "internship": "인턴십",
+        "lead_staff": "리드 / 스태프",
+        "mid": "중간 경력 (2–5년)",
+        "senior": "시니어 (5년 이상)"
+      },
+      "levelsLabel": "경력 수준",
+      "levelsRequired": "경력 수준을 하나 이상 골라주세요.",
+      "linkedinInvalid": "LinkedIn 프로필 링크를 넣어주세요. 예: https://www.linkedin.com/in/your-name",
+      "linkedinLabel": "LinkedIn 프로필 (선택)",
+      "linkedinPlaceholder": "https://www.linkedin.com/in/your-name",
+      "submit": "내 공고 보기",
+      "suggested": "이력서를 바탕으로 제안",
+      "title": "{count, plural, other {나와 맞는 공고를 #개 찾았어요. 아래 내용을 확인해 주세요.}}",
+      "titleCapped": "나와 맞는 공고를 {count}개 이상 찾았어요. 아래 내용을 확인해 주세요.",
+      "titleNone": "아직 잘 맞는 공고를 찾지 못했어요. 아래에서 검색 조건을 바꿔 보세요.",
+      "titlePending": "아직 공고를 확인하는 중이에요. 아래 내용을 확인해 주세요.",
+      "tooManyExtra": "직무명은 3개까지 추가할 수 있어요."
+    },
+    "countries": {
+      "AU": "호주",
+      "CA": "캐나다",
+      "DE": "독일",
+      "ES": "스페인",
+      "FR": "프랑스",
+      "GB": "영국",
+      "HK": "홍콩",
+      "IE": "아일랜드",
+      "JP": "일본",
+      "KR": "한국",
+      "NL": "네덜란드",
+      "NZ": "뉴질랜드",
+      "PT": "포르투갈",
+      "REMOTE": "지역 무관 원격",
+      "SG": "싱가포르",
+      "TW": "대만",
+      "US": "미국"
+    },
+    "finish": {
+      "banner": "{count, plural, other {초기 설정 마치기 — #단계 남음}}",
+      "dismiss": "지금은 숨기기",
+      "resume": "초기 설정 계속하기",
+      "settingsAction": "초기 설정 마치기",
+      "settingsLine": "{count, plural, other {초기 설정이 #단계 남았어요.}}"
+    },
+    "frame": {
+      "back": "뒤로",
+      "errors": {
+        "conflict": "먼저 앞 단계를 마쳐주세요.",
+        "invalid": "다시 확인해야 하는 답변이 있어요.",
+        "rate_limited": "시도 횟수가 너무 많아요. 잠시 기다렸다가 다시 시도해 주세요.",
+        "unavailable": "이 단계는 아직 사용할 수 없어요.",
+        "unknown": "문제가 생겼어요. 답변은 그대로 있어요. 다시 시도해 주세요."
+      },
+      "leave": "나중에 마치기",
+      "leaveHint": "답변은 저장됐어요. 공고 페이지에서 초기 설정을 마칠 수 있어요.",
+      "loadError": "초기 설정을 불러오지 못했어요.",
+      "loading": "초기 설정을 불러오는 중…",
+      "next": "다음",
+      "progress": "{total}단계 중 {current}단계",
+      "retry": "다시 시도",
+      "saving": "저장하는 중…",
+      "skip": "건너뛰기"
+    },
+    "goal": {
+      "groups": {
+        "change": "방향 바꾸기",
+        "day_to_day": "더 나은 일상",
+        "move_up": "더 높은 단계로"
+      },
+      "options": {
+        "different_role": "다른 종류의 직무",
+        "flexibility": "유연한 근무 시간이나 근무지",
+        "higher_pay": "더 높은 급여",
+        "job_security": "고용 안정",
+        "learn_skills": "새로운 기술 배우기",
+        "management": "관리자 직무",
+        "more_senior": "더 높은 직급",
+        "new_industry": "새로운 업계",
+        "work_life_balance": "일과 삶의 균형"
+      },
+      "required": "하나를 고르거나 이 단계를 건너뛰어 주세요.",
+      "title": "다음 일자리에서 무엇을 얻고 싶나요?"
+    },
+    "matching": {
+      "anywhere": "원하는 지역",
+      "asideTitle": "다음에 할 수 있는 일",
+      "background": "공고를 더 확인하고 있어요. 확인이 끝나는 대로 목록에 채워져요.",
+      "cards": {
+        "practice": "면접 연습하기",
+        "practiceBody": "이 직무에서 실제로 나올 만한 질문에 답하고 피드백을 받아요.",
+        "ready": "지원 준비 키트 — 제출은 직접",
+        "readyBody": "지원 자료를 준비해 드려요. 확인과 제출은 회사 사이트에서 직접 해요.",
+        "tailor": "공고마다 맞춘 이력서",
+        "tailorBody": "나에 대한 사실만 사용해서 이력서를 공고의 요건에 맞춰요."
+      },
+      "continue": "계속",
+      "continueAnyway": "그래도 계속",
+      "error": "검색하는 중에 문제가 생겼어요.",
+      "phaseDone": "완료",
+      "phasePending": "아직 안 끝남",
+      "phaseSkipped": "건너뜀",
+      "phases": {
+        "comparing": "공고를 이력서와 비교하는 중",
+        "ranking": "목록 순위를 정하는 중",
+        "reading": "이력서를 읽는 중",
+        "readingSkipped": "추가한 이력서 없음",
+        "saving": "찾는 조건을 저장하는 중",
+        "searching": "채용 출처에서 검색하는 중: {title} · {place}",
+        "searchingGeneric": "채용 출처에서 검색하는 중"
+      },
+      "subtitle": "단계가 끝날 때마다 해당 줄에 완료 표시가 돼요.",
+      "support": "도움이 필요한가요? 도움말 페이지를 확인해 주세요.",
+      "title": "공고를 찾는 중",
+      "tryAgain": "다시 시도",
+      "yourTitles": "원하는 직무명"
+    },
+    "preferences": {
+      "addSkill": "기술 추가",
+      "industries": {
+        "ai_ml": "AI / ML",
+        "b2b_saas": "B2B SaaS",
+        "bio_pharma": "바이오 / 제약",
+        "climate": "기후",
+        "consumer": "소비자 제품·서비스",
+        "cybersecurity": "사이버 보안",
+        "developer_tools": "개발자 도구",
+        "ecommerce": "이커머스",
+        "edtech": "에듀테크",
+        "fintech": "핀테크",
+        "gaming": "게임",
+        "hardware": "하드웨어",
+        "healthtech": "헬스테크",
+        "legal_tech": "리걸테크",
+        "logistics": "물류",
+        "manufacturing": "제조",
+        "marketplaces": "마켓플레이스",
+        "media": "미디어",
+        "real_estate": "부동산"
+      },
+      "industriesHint": "최대 5개예요.",
+      "industriesLabel": "업계",
+      "payAmount": "금액",
+      "payCurrency": "통화",
+      "payHint": "급여가 나와 있지 않은 공고도 ‘급여 정보 없음’으로 표시해서 계속 보여줘요.",
+      "payInvalid": "0보다 큰 금액을 입력하거나 비워 두세요.",
+      "payLabel": "최소 급여",
+      "payPeriod": "기준 기간",
+      "payPeriods": {
+        "hour": "시간",
+        "month": "월",
+        "year": "연"
+      },
+      "removeSkill": "{label} 삭제",
+      "sizes": {
+        "1-50": "1–50",
+        "10000+": "10,000+",
+        "1001-10000": "1,001–10,000",
+        "201-1000": "201–1,000",
+        "51-200": "51–200",
+        "any": "규모 무관"
+      },
+      "sizesHint": "회사 규모가 나와 있지 않은 공고가 많아요. 규모 정보가 없는 공고도 계속 보여줘요.",
+      "sizesLabel": "회사 규모",
+      "skillPlaceholder": "기술 추가",
+      "skillsHint": "최대 15개예요.",
+      "skillsLabel": "기술",
+      "title": "그 밖에 나에게 맞는 일자리의 조건이 있나요? 모두 선택 사항이에요.",
+      "tooManyIndustries": "업계는 5개까지 고를 수 있어요.",
+      "tooManySkills": "기술은 15개까지 고를 수 있어요.",
+      "workModels": {
+        "hybrid": "하이브리드",
+        "onsite": "사무실 출근",
+        "remote": "원격"
+      },
+      "workModelsLabel": "근무 방식"
+    },
+    "resume": {
+      "consent": {
+        "agree": "허용하고 계속",
+        "checking": "파일을 어떻게 읽을 수 있는지 확인하는 중…",
+        "decline": "허용 안 함",
+        "declined": "파일을 그곳으로 보내지 않아요. 이 방법 없이는 PDF 파일을 읽을 수 없으니, Word나 텍스트 파일을 올리거나, 내용을 붙여넣거나, 건너뛰고 나중에 프로필에서 정보를 추가해 주세요.",
+        "loadError": "파일을 어떻게 읽게 될지 확인하지 못해서 파일 올리기를 잠시 멈췄어요. 다시 시도하거나 내용을 붙여넣어 주세요.",
+        "retry": "다시 시도",
+        "title": "파일을 어떻게 읽을까요?"
+      },
+      "errors": {
+        "dailyLimit": "오늘 이력서를 10개 추가했어요. 내일 다시 시도하거나 이미 있는 이력서를 사용해 주세요.",
+        "failed": "이력서를 저장하는 중에 문제가 생겼어요. 다시 시도해 주세요.",
+        "pdfNeedsConsent": "꺼 둔 읽기 옵션 없이는 이 PDF를 읽을 수 없어요. Word나 텍스트 파일을 올리거나 내용을 붙여넣어 주세요.",
+        "tooLarge": "이 파일은 15 MB보다 커요.",
+        "unreadable": "이 파일을 읽지 못했어요. PDF로 시도하거나 내용을 붙여넣어 주세요.",
+        "wrongType": "PDF, Word 또는 텍스트 파일을 사용해 주세요."
+      },
+      "linkedin": {
+        "body": "LinkedIn 프로필에서 ‘더 보기’를 열고 ‘PDF로 저장’을 선택한 뒤, 그 파일을 여기에 올려주세요.",
+        "choose": "LinkedIn PDF 올리기",
+        "title": "LinkedIn 프로필 사용하기"
+      },
+      "paste": {
+        "hint": "200자 이상이어야 해요.",
+        "label": "이력서 내용",
+        "submit": "이 내용 사용하기",
+        "title": "내용 붙여넣기",
+        "tooShort": "200자 이상 붙여넣어 주세요."
+      },
+      "privacy": "이력서는 공고 순위를 정하고 지원 자료 초안을 쓰는 데 사용해요. 직접 보내지 않는 한 회사에 공유되지 않아요.",
+      "privacyLink": "개인정보 처리방침",
+      "ready": "준비됨: {name}",
+      "reuse": {
+        "label": "내 이력서",
+        "submit": "이 이력서 사용하기",
+        "title": "이미 있는 이력서 사용하기"
+      },
+      "skip": "건너뛰기 — 내 답변만 사용",
+      "submit": "내 공고 찾기",
+      "title": "공고마다 비교할 수 있도록 이력서를 추가해 주세요",
+      "upload": {
+        "choose": "파일 선택",
+        "drop": "또는 여기에 놓아주세요",
+        "hint": "PDF, Word 또는 텍스트 파일, 최대 15 MB.",
+        "hintNoPdf": "Word 또는 텍스트 파일, 최대 15 MB.",
+        "title": "파일 올리기",
+        "uploading": "{name} 읽는 중…"
+      }
+    },
+    "situation": {
+      "required": "계속하려면 두 질문에 모두 답해 주세요.",
+      "seekerLabel": "나를 가장 잘 설명하는 것은 무엇인가요?",
+      "seekerType": {
+        "career_change": "커리어 전환 또는 경력 공백 후 복귀",
+        "experienced": "경력직",
+        "recent_graduate": "최근 졸업자 (졸업한 지 2년 이내)",
+        "student": "학생"
+      },
+      "timing": {
+        "asap": "가능한 한 빨리",
+        "just_looking": "어떤 공고가 있는지 둘러보는 중",
+        "next_few_months": "앞으로 몇 달 안에"
+      },
+      "timingLabel": "새 일을 언제 시작하고 싶나요?",
+      "title": "알맞게 검색할 수 있도록 간단한 질문 두 가지에 답해 주세요"
+    },
+    "skillsCheck": {
+      "added": "프로필 기술에 추가했어요",
+      "askedIn": "목록의 공고 {total}개 중 {count}개에서 요구해요",
+      "cancel": "취소",
+      "confirmNo": "{skill} 기술을 요구하는 공고를 숨기는 필터가 추가돼요.",
+      "confirmNoAction": "필터 추가",
+      "failed": "저장하지 못했어요. 다시 시도해 주세요.",
+      "hidden": "이 기술을 요구하는 공고는 숨겨요",
+      "no": "아니요",
+      "title": "이 기술들을 가지고 있나요?",
+      "yes": "네"
+    },
+    "snapshot": {
+      "count": "{title} · {place}: 최근 {days}일 동안 채용 중인 공고 {count, plural, other {#개}}",
+      "error": "지금은 수치를 볼 수 없어요.",
+      "footnote": "%BRAND%에 등록된 채용 공고를 기준으로 해요. 매일 업데이트돼요.",
+      "loading": "채용 중인 공고를 세는 중…",
+      "none": "이 지역에는 이 직무명으로 채용 중인 공고가 아직 없어요. 더 넓은 직무명이나 다른 도시로 찾아보세요.",
+      "pay": "공고 {total}개 중 {listed}개에 급여가 나와 있어요. 나와 있는 급여 범위의 중간값: {range} ({period} 기준).",
+      "payBasis": "급여가 {currency} 기준으로 나와 있는 공고 {sample}개를 바탕으로 했어요.",
+      "period": {
+        "hour": "시간",
+        "month": "월",
+        "year": "연"
+      },
+      "skills": "가장 많이 요구하는 기술: {skills}",
+      "title": "지금 채용 중인 공고"
+    },
+    "tips": {
+      "close": "닫기",
+      "dismiss": "확인",
+      "resumeCheck": "{count, plural, =0 {이력서 점검 결과가 준비됐어요.} other {이력서 점검 결과가 준비됐어요. 고칠 곳이 #곳 있어요.}}",
+      "resumeCheckAction": "점검 결과 보기",
+      "scoreBody": "‘아주 잘 맞음’, ‘잘 맞음’, ‘가능성 있음’, ‘맞기 어려움’은 내 이력서를 공고의 요건과 비교한 결과예요.",
+      "scoreLine": "이건 합격 확률이 아니에요.",
+      "scoreTitle": "적합 점수 읽는 법"
+    },
+    "tour": {
+      "cards": {
+        "fit": "맞는 이유와 빠진 것",
+        "fitBody": "공고마다 이력서가 요건에 맞는 부분과 맞지 않는 부분을 보여줘요.",
+        "practice": "면접 연습하기",
+        "practiceBody": "이 직무에서 실제로 나올 만한 질문으로 연습하고 피드백을 받아요.",
+        "ready": "지원 준비 키트 — 제출은 직접",
+        "readyBody": "지원 자료를 준비해 드려요. 확인과 제출은 회사 사이트에서 직접 해요.",
+        "tailor": "공고마다 맞춘 이력서",
+        "tailorBody": "나에 대한 사실만 사용해서 이력서를 공고 하나에 맞춰요."
+      },
+      "close": "둘러보기 닫기",
+      "label": "시작 둘러보기",
+      "next": "다음 팁",
+      "position": "{current} / {total}",
+      "prev": "이전 팁",
+      "start": "시작",
+      "title": "여기서 할 수 있는 일"
+    }
+  },
+  "people": {
+    "composer": {
+      "again": "다른 초안 쓰기",
+      "aiLabel": "AI가 쓴 초안이에요. 보내기 전에 한 줄씩 모두 확인해 주세요.",
+      "aiOff": "지금은 초안 작성을 사용할 수 없어요. 메시지를 직접 쓰는 것은 가능해요.",
+      "body": "메시지",
+      "channel": {
+        "email": "이메일",
+        "follow_up": "지원 후 후속 연락",
+        "linkedin_note": "LinkedIn 인맥 신청 메시지",
+        "referral_ask": "사내 추천 부탁하기",
+        "wechat": "WeChat용 사내 추천 요청"
+      },
+      "channelLabel": "메시지 종류",
+      "copied": "복사했어요",
+      "copy": "복사",
+      "counter": "{count} / {max}자",
+      "draftOf": "{channel} · {date}",
+      "error": {
+        "ai_unavailable": "지금은 초안 작성을 사용할 수 없어요. 나중에 다시 시도해 주세요.",
+        "content_blocked": "이 초안을 쓰지 못했어요. 다른 종류의 메시지로 시도해 주세요.",
+        "credits_exhausted": "지금 쓸 수 있는 메시지 초안을 모두 사용했어요.",
+        "failed": "문제가 생겼어요. 다시 시도해 주세요.",
+        "not_found": "이 공고나 사람은 더 이상 볼 수 없어요.",
+        "phone_binding_required": "초안 작성을 사용하려면 계정에 전화번호를 추가해 주세요.",
+        "safety_unavailable": "안전 검사가 작동하지 않아 초안 작성을 잠시 멈췄어요. 나중에 다시 시도해 주세요.",
+        "too_long": "이 종류의 메시지로는 너무 길어요."
+      },
+      "grounding": "공고와 이력서를 바탕으로 썼어요.",
+      "history": "이 공고에 쓴 초안",
+      "intro": "%BRAND%가 초안을 써요. 확인한 뒤 직접 보내주세요.",
+      "markSent": "보냈어요",
+      "openLinkedIn": "LinkedIn 열기",
+      "openMail": "이메일 앱에서 열기",
+      "openMailHint": "이메일 앱이 이 초안과 함께 열려요. 받는 사람 주소는 직접 넣어주세요.",
+      "save": "변경 내용 저장",
+      "saveError": "변경 내용을 저장하지 못했어요.",
+      "saved": "저장됨",
+      "savedOnApplication": "이 지원 기록에 함께 저장했어요.",
+      "sentOn": "{date}에 보낸 것으로 표시했어요.",
+      "subject": "제목",
+      "title": "메시지 쓰기",
+      "toLabel": "받는 사람",
+      "toNobody": "특정한 사람 없음",
+      "write": "초안 쓰기",
+      "writing": "쓰는 중…",
+      "youSend": "%BRAND%는 메시지를 보내지 않아요. 메시지는 직접 보내요."
+    },
+    "panel": {
+      "connectedOn": "{date}에 인맥 맺음",
+      "error": "사람들을 불러오지 못했어요. 나중에 다시 시도해 주세요.",
+      "importCta": "LinkedIn 인맥 가져오기",
+      "importHint": "여기에 이미 아는 사람이 있는지 확인해 보세요. 각 사람의 이름, 회사, 직책, 인맥을 맺은 날짜만 보관해요.",
+      "knownIntro": "이 사람들은 나만 볼 수 있어요.",
+      "knownTitle": "{company}에서 일하는 아는 사람",
+      "loading": "사람들을 불러오는 중…",
+      "noneKnown": "가져온 인맥 중에 {company}에서 일하는 사람이 없어요.",
+      "recruiterSince": "{date}부터 연락 가능",
+      "recruiterSource": "지원자의 연락을 받기로 한 {sourceName} 채용 담당자",
+      "recruitersTitle": "채용 담당자",
+      "retry": "다시 시도",
+      "schoolsTitle": "{company}에서 일하는 같은 학교 출신",
+      "sourceAdded": "내가 추가함",
+      "sourceImported": "가져온 LinkedIn 인맥에서",
+      "writeTo": "{name} 님에게 메시지 쓰기"
+    },
+    "referrals": {
+      "allYears": "모든 연도",
+      "bindPhoneCta": "전화번호 추가",
+      "copied": "복사했어요",
+      "copyCode": "코드 복사",
+      "delete": "삭제",
+      "deleted": "코드를 삭제했어요",
+      "empty": "아직 여기에 공유된 코드가 없어요.",
+      "error": {
+        "expiry_past": "이미 지난 날짜예요.",
+        "failed": "문제가 생겼어요. 다시 시도해 주세요.",
+        "feature_disabled": "여기서는 사내 추천 코드를 사용할 수 없어요.",
+        "phone_binding_required": "코드를 공유하거나 신고하려면 인증된 휴대전화 번호를 추가해 주세요.",
+        "referral_already_reported": "이미 신고한 코드예요.",
+        "referral_code_duplicate": "이 코드는 이미 등록됐거나 검토를 기다리고 있어요.",
+        "referral_contact_details": "전화번호, WeChat ID, 이메일, 링크는 빼 주세요.",
+        "referral_share_limit": "코드는 하루에 10개까지 공유할 수 있어요. 내일 다시 시도해 주세요.",
+        "storage_unavailable": "지금은 사내 추천 코드를 사용할 수 없어요."
+      },
+      "expires": "{date}까지 사용",
+      "fieldCode": "사내 추천 코드",
+      "fieldCompany": "회사",
+      "fieldExpires": "사용 기한 (선택)",
+      "fieldNote": "메모 (선택)",
+      "fieldProgramme": "프로그램 (선택)",
+      "filterClassYear": "졸업 연도",
+      "filterCompany": "회사",
+      "forCompany": "{company} 사내 추천 코드",
+      "honesty": "사내 추천 코드는 지원서가 회사에 전달되도록 도와줘요. 결과를 결정하지는 않아요.",
+      "loadMore": "더 보기",
+      "mineTitle": "내가 공유한 코드",
+      "noExpiry": "종료일 정보 없음",
+      "noneForCompany": "아직 {company} 사내 추천 코드를 공유한 사람이 없어요.",
+      "notePlaceholder": "예: 기술 직무에만 사용 가능",
+      "programme": "프로그램",
+      "reason": {
+        "expired": "만료됐어요",
+        "invalid": "사용할 수 없어요",
+        "other": "그 밖의 문제",
+        "paid": "돈을 요구해요",
+        "spam": "스팸이거나 사내 추천 코드가 아니에요"
+      },
+      "rejectReason": {
+        "contact_details": "연락처는 넣을 수 없어요.",
+        "duplicate": "이미 등록된 코드예요.",
+        "expired": "만료된 코드예요.",
+        "not_a_referral_code": "사내 추천 코드가 아니에요.",
+        "other": "검토 담당자가 등록하지 않았어요.",
+        "paid_or_traded": "돈을 내야 하는 코드는 허용되지 않아요."
+      },
+      "report": "신고",
+      "reportNote": "자세한 내용 (선택)",
+      "reportReason": "무엇이 문제인가요?",
+      "reportSubmit": "신고",
+      "reportTitle": "이 코드 신고하기",
+      "reported": "고마워요. 검토 담당자가 확인할게요.",
+      "reportedAlready": "이 코드를 신고했어요.",
+      "rules": "전화번호, WeChat ID, 이메일, 링크는 넣지 마세요. 돈을 내야 하는 코드는 공유하지 마세요.",
+      "search": "검색",
+      "seeAll": "사내 추천 코드 모두 보기",
+      "shareSubmit": "공유하고 검토 받기",
+      "shareTitle": "사내 추천 코드 공유하기",
+      "shared": "%BRAND% 사용자가 공유함, {date}",
+      "sharedPending": "고마워요. 검토 담당자가 확인한 뒤에 코드가 표시돼요.",
+      "sharing": "공유하는 중…",
+      "status": {
+        "approved": "등록됨",
+        "expired": "만료됨",
+        "pending": "검토 대기 중",
+        "rejected": "등록 안 됨"
+      },
+      "sub": "다른 %BRAND% 사용자가 공유한 코드예요. 표시되기 전에 검토 담당자가 하나씩 확인해요.",
+      "title": "사내 추천 코드",
+      "unavailable": "여기서는 사내 추천 코드를 사용할 수 없어요."
+    },
+    "settings": {
+      "cancel": "취소",
+      "count": "{count, plural, =0 {가져온 인맥 없음} other {인맥 #명 가져옴}}",
+      "deleteAll": "가져온 인맥 모두 삭제",
+      "deleteConfirm": "모두 삭제",
+      "deleteConfirmBody": "가져온 사람이 모두 삭제돼요. 나중에 파일을 다시 가져올 수 있어요.",
+      "deleteConfirmTitle": "가져온 인맥을 모두 삭제할까요?",
+      "deleted": "{count, plural, =0 {삭제할 인맥이 없어요} other {인맥 #명을 삭제했어요}}",
+      "error": {
+        "connections_csv_unreadable": "이 파일은 LinkedIn 데이터에 들어 있는 Connections.csv가 아니에요.",
+        "connections_file_missing": "먼저 Connections.csv 파일을 선택해 주세요.",
+        "connections_file_too_large": "인맥 목록이라고 하기에는 파일이 너무 커요.",
+        "connections_import_limit": "오늘 3번 가져왔어요. 내일 다시 시도해 주세요.",
+        "failed": "가져오지 못했어요. 다시 시도해 주세요.",
+        "feature_disabled": "인맥 가져오기는 아직 사용할 수 없어요."
+      },
+      "howTo": "LinkedIn에서 ‘설정’을 열고 ‘데이터 보호’, ‘데이터 사본 받기’ 순서로 들어가 주세요. ‘1촌(Connections)’을 선택하면 LinkedIn에서 Connections.csv라는 파일을 이메일로 보내줘요.",
+      "intro": "LinkedIn 인맥 목록을 가져오면 회사에 이미 아는 사람이 있는지 볼 수 있어요.",
+      "keep": "각 사람의 이름, 회사, 직책, 인맥을 맺은 날짜를 보관해요. 파일에 있는 이메일 주소와 프로필 링크는 파일을 읽을 때 버려요.",
+      "last": "마지막으로 가져온 날: {date}",
+      "limit": "하루에 {limit}번 가져올 수 있어요. 오늘 가져온 횟수: {count}번.",
+      "list": {
+        "error": "사람 목록을 불러오지 못했어요. 나중에 다시 시도해 주세요.",
+        "loadingMore": "불러오는 중…",
+        "more": "더 보기",
+        "private": "이 목록은 나만 볼 수 있어요.",
+        "role": "{company} · {title}",
+        "title": "내가 가져온 사람들"
+      },
+      "private": "나만 볼 수 있어요. 회사에 아는 사람이 있는지 보여주는 데만 쓰고, 계정을 삭제하면 함께 삭제돼요.",
+      "result": "{rows, plural, other {#줄}} 중 {imported, plural, =0 {새로 추가된 사람이 없어요} other {#명을 새로 추가했어요}}.",
+      "title": "LinkedIn 인맥",
+      "unavailable": "인맥 가져오기는 아직 사용할 수 없어요.",
+      "upload": "Connections.csv 선택",
+      "uploading": "가져오는 중…"
+    }
+  },
+  "resumeBuilder": {
+    "ai": {
+      "add": "추가",
+      "blocked": "{count, plural, one {내가 쓰지 않은 숫자가 들어가서 제안 #개를 뺐어요.} other {내가 쓰지 않은 숫자가 들어가서 제안 #개를 뺐어요.}}",
+      "busy": "제안을 쓰는 중…",
+      "errors": {
+        "blocked": "이 내용은 사용할 수 없었어요. 메모를 다른 표현으로 바꿔 보세요.",
+        "citationGuard": "모든 제안에 메모에 없는 숫자가 들어가서 하나도 보여드리지 않았어요. 다시 쓰기 횟수는 사용하지 않았어요.",
+        "credits": "지금 쓸 수 있는 다시 쓰기를 모두 사용했어요. 직접 계속 쓸 수 있어요.",
+        "generic": "문제가 생겼어요. 다시 쓰기 횟수는 사용하지 않았어요. 다시 시도해 주세요.",
+        "noSuggestion": "제안을 받지 못했어요. 다시 쓰기 횟수는 사용하지 않았어요. 다시 시도하거나 메모에 내용을 더 자세히 적어주세요.",
+        "unavailable": "지금은 글쓰기 도움을 사용할 수 없어요. 직접 계속 쓸 수 있어요."
+      },
+      "note": "내 메모를 바탕으로 AI가 썼어요. 하나씩 읽어 보고 사실인 것만 추가해 주세요.",
+      "notesFirst": "먼저 메모를 몇 줄 적어주세요. 제안은 내가 쓴 내용만 사용해요.",
+      "off": "내 계정에서 글쓰기 도움이 꺼져 있어서, 여기 있는 내용은 AI 모델로 보내지 않아요. 모든 부분을 직접 쓸 수 있어요.",
+      "suggestBullets": "내 메모로 성과 줄 제안받기",
+      "suggestSelfEvaluation": "내 소개 문단 제안받기",
+      "suggestSummary": "요약 제안받기",
+      "use": "이 제안 사용"
+    },
+    "assistant": {
+      "ask": "이 이력서에 대해 어시스턴트에게 물어보기",
+      "prompt": "이력서를 수정하고 있어요. 더 좋아지도록 도와주세요."
+    },
+    "docLanguage": {
+      "en": "영어",
+      "hint": "이력서를 쓴 언어예요. 나중에 항목 제목을 다른 언어로 바꿔 내려받을 수 있어요.",
+      "label": "이력서 언어",
+      "zh": "중국어(간체)",
+      "zhTW": "중국어(번체)"
+    },
+    "editor": {
+      "details": "사진과 인적 사항",
+      "order": "항목 순서",
+      "photoAlt": "내 이력서 사진"
+    },
+    "entry": {
+      "add": {
+        "campus": "활동 추가",
+        "education": "학교 추가",
+        "experience": "경력 추가",
+        "internship": "인턴십 추가",
+        "projects": "프로젝트 추가"
+      },
+      "label": "{n}번째 항목",
+      "remove": "삭제"
+    },
+    "errors": {
+      "generic": "이력서를 만들지 못했어요. 입력한 내용은 그대로 있어요. 다시 시도해 주세요.",
+      "limit": "이미 이력서가 {limit}개 있어요. 새로 추가하려면 하나를 삭제해 주세요.",
+      "name_required": "계속하려면 이름을 입력해 주세요.",
+      "title_required": "계속하려면 원하는 직무 이름을 입력해 주세요."
+    },
+    "field": {
+      "add": "추가",
+      "addBullet": "성과 줄 추가",
+      "autobiography": "자전적 소개글",
+      "autobiographyHint": "몇 문단이면 돼요. 살아온 배경, 배운 점, 이런 일을 하고 싶은 이유를 적어주세요.",
+      "availableFrom": "입사 가능 시기",
+      "awards": "수상 경력",
+      "awardsHint": "한 줄에 하나씩, 연도와 함께 적어주세요.",
+      "bulletN": "성과 줄 {n}",
+      "bullets": "성과 줄",
+      "campusOrganization": "동아리 또는 단체",
+      "campusTitle": "역할",
+      "certificates": "자격증",
+      "certificatesHint": "하나를 누르면 추가돼요. 점수를 보여주고 싶으면 점수도 적어주세요.",
+      "cities": "근무 희망 도시",
+      "city": "도시",
+      "degree": "학위",
+      "details": "수강 과목, 논문, 그 밖의 내용",
+      "detailsHint": "한 줄에 하나씩 적어주세요. 선택 사항이에요.",
+      "email": "이메일",
+      "end": "종료",
+      "endHint": "아직 계속하고 있다면 비워 두세요.",
+      "fullName": "이름",
+      "gpa": "성적 또는 석차(선택)",
+      "link": "링크(선택)",
+      "links": "링크",
+      "linksHint": "LinkedIn, 포트폴리오 또는 GitHub. 쉼표로 구분해 주세요.",
+      "location": "지역",
+      "major": "전공",
+      "moreBullets": "추가 성과 줄",
+      "nativePlace": "출신지",
+      "notes": "여기서 어떤 일을 했나요?",
+      "notesHint": "간단한 메모면 충분해요. 무슨 일을 어떻게 했고 어떤 결과가 나왔는지 적어주세요. 여기에 쓴 내용만 사용돼요.",
+      "organization": "회사 또는 기관",
+      "phone": "전화",
+      "politicalStatus": "정치적 신분",
+      "projectName": "프로젝트 이름",
+      "quickAdd": "빠른 추가",
+      "removeBullet": "성과 줄 {n} 삭제",
+      "removeTag": "{tag} 삭제",
+      "role": "맡은 역할",
+      "salary": "희망 급여",
+      "salaryAmount": "금액",
+      "salaryAmountHint": "평소 말하는 대로 적어주세요. 예: 월급 범위",
+      "salaryKind": {
+        "amount": "구체적인 금액",
+        "company_policy": "회사 규정에 따름",
+        "negotiable": "협의 가능",
+        "none": "적지 않기"
+      },
+      "school": "학교",
+      "selfEvaluation": "내 소개",
+      "selfEvaluationHint": "서너 문장이면 돼요. 강점을 말할 때마다 예를 하나씩 들어주세요.",
+      "skills": "기술",
+      "star": {
+        "action": "행동",
+        "actionHint": "무엇을 어떤 순서로 했나요?",
+        "result": "결과",
+        "resultHint": "내가 한 일로 무엇이 달라졌나요? 숫자는 실제 숫자가 있을 때만 써주세요.",
+        "situation": "상황",
+        "situationHint": "어떤 상황이었나요? 어떤 문제가 있었나요?",
+        "task": "과제",
+        "taskHint": "내가 맡은 일은 무엇이었나요?"
+      },
+      "start": "시작",
+      "summary": "요약",
+      "summaryHint": "짧게 써주세요. 하는 일, 잘하는 것, 찾고 있는 일을 적으면 돼요.",
+      "targetTitle": "원하는 직무 이름",
+      "title": "직함"
+    },
+    "fit": {
+      "already": "{pages, plural, one {이미 #쪽에 들어가요.} other {이미 #쪽에 들어가요.}} 바뀐 것은 없어요.",
+      "busy": "맞추는 중…",
+      "error": "이력서를 쪽수에 맞추지 못했어요. 바뀐 것은 없어요. 다시 시도해 주세요.",
+      "fitted": "{pages, plural, one {이제 #쪽에 들어가요.} other {이제 #쪽에 들어가요.}} 간격, 여백, 글자 크기만 바뀌었어요.",
+      "one": "한 쪽에 맞추기",
+      "tooLong": "{target, plural, one {글을 지우지 않고는 #쪽에 맞출 수 없을 만큼 길어요.} other {글을 지우지 않고는 #쪽에 맞출 수 없을 만큼 길어요.}} 바뀐 것은 없어요. 성과 줄 몇 개를 줄여 보세요.",
+      "two": "두 쪽에 맞추기",
+      "undo": "실행 취소",
+      "undone": "간격, 여백, 글자 크기를 원래대로 되돌렸어요."
+    },
+    "header": {
+      "eyebrow": "이력서",
+      "sub": "짧은 질문 몇 가지에 답해 주세요. ‘선택’으로 표시된 단계는 건너뛸 수 있고, 모든 내용은 나중에 편집기에서 바꿀 수 있어요.",
+      "title": "단계별로 이력서 만들기"
+    },
+    "layout": {
+      "bullet": {
+        "dash": "줄표",
+        "hollow": "속이 빈 원",
+        "label": "글머리 기호",
+        "solid": "속이 찬 점"
+      },
+      "campus": {
+        "desc": "A4, 한두 쪽, 학력이 맨 앞에 와요. 학생과 최근 졸업자를 위한 서식이에요.",
+        "name": "캠퍼스"
+      },
+      "eduOrder": {
+        "after_experience": "경력 뒤",
+        "as_written": "지금 위치 그대로",
+        "before_experience": "경력 앞",
+        "label": "학력"
+      },
+      "headingLanguage": {
+        "as_written": "작성한 그대로",
+        "en": "영어",
+        "hint": "항목 제목만 바뀌어요. 내가 쓴 글은 그대로예요.",
+        "label": "내려받는 파일의 항목 제목",
+        "zh": "중국어(간체)",
+        "zhTW": "중국어(번체)"
+      },
+      "justify": "글을 양쪽 끝에 맞춰 정렬하기",
+      "skillsLayout": {
+        "columns": "여러 단으로",
+        "grouped": "작성한 그대로",
+        "inline": "한 줄로",
+        "label": "기술"
+      }
+    },
+    "links": {
+      "backToResumes": "이력서 전체로 돌아가기"
+    },
+    "loadError": "이력서 작성 화면을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
+    "loading": "이력서 작성 화면을 불러오는 중…",
+    "nav": {
+      "back": "뒤로",
+      "create": "이력서 만들기",
+      "creating": "만드는 중…",
+      "next": "다음",
+      "review": "검토",
+      "skip": "건너뛰기"
+    },
+    "order": {
+      "down": "{section} 아래로 옮기기",
+      "hint": "항목을 위나 아래로 옮길 수 있어요. 안에 있는 글은 바뀌지 않아요.",
+      "known": {
+        "education": "학력",
+        "experience": "경력",
+        "skills": "기술",
+        "summary": "요약"
+      },
+      "tooFew": "순서를 바꾸려면 항목을 하나 더 추가해 주세요.",
+      "untitled": "제목 없는 항목",
+      "up": "{section} 위로 옮기기"
+    },
+    "personal": {
+      "intro": "이 정보는 선택 사항이에요. 내려받는 파일에만 들어가요. AI 모델로 보내거나 공고에 대한 내 순위를 매기는 데 쓰는 일은 없어요."
+    },
+    "photo": {
+      "alt": "내 이력서 사진",
+      "choose": "사진 고르기",
+      "errors": {
+        "tooLarge": "사진이 너무 커요. 더 작은 사진을 써보세요.",
+        "unsupported": "JPEG 또는 PNG 사진을 사용해 주세요."
+      },
+      "hint": "사진은 이 브라우저에만 남아요. 내려받을 때 추가되고, 저희 서버에는 저장되지 않아요.",
+      "label": "내려받는 파일에 내 사진 넣기",
+      "remove": "사진 삭제",
+      "replace": "사진 바꾸기"
+    },
+    "progress": "{total}단계 중 {current}단계",
+    "prompts": {
+      "bullets": "성과 줄은 내가 한 일로 시작하고, 그다음 어떻게 했는지, 그다음 어떤 결과가 나왔는지 순서로 써주세요. 숫자는 실제 숫자일 때만 써주세요.",
+      "star": "프로젝트마다 상황, 내 과제, 내가 한 일, 결과의 네 부분으로 짧게 나눠 설명해 주세요."
+    },
+    "retry": "다시 시도",
+    "review": {
+      "after": "다음으로 이력서가 편집기에서 열려요. 거기서 표현, 항목 순서, 레이아웃을 바꿀 수 있어요.",
+      "edit": "수정",
+      "editStep": "{step} 수정",
+      "empty": "비어 있음",
+      "filled": "작성함"
+    },
+    "step": {
+      "autobiography": {
+        "hint": "살아온 배경, 나를 만든 경험, 이런 일을 하고 싶은 이유를 적어주세요.",
+        "title": "자전적 소개글"
+      },
+      "awards": {
+        "hint": "장학금, 수상, 대회 경력을 한 줄에 하나씩 적어주세요.",
+        "title": "수상 경력"
+      },
+      "basics": {
+        "hint": "이름과 회사가 나에게 연락할 방법이에요.",
+        "title": "연락처"
+      },
+      "campus": {
+        "hint": "동아리, 학생 단체, 봉사 활동, 리더 역할이에요.",
+        "title": "교내 활동"
+      },
+      "certificates": {
+        "hint": "자격증, 어학 시험, 면허예요. 점수를 보여주고 싶으면 점수도 적어주세요.",
+        "title": "자격증과 기술"
+      },
+      "education": {
+        "hint": "학교, 학위, 기간이에요. 성적은 이력서에 넣고 싶을 때만 적어주세요.",
+        "title": "학력"
+      },
+      "experience": {
+        "hint": "지금까지 일한 곳을 최근 것부터 적어주세요.",
+        "title": "근무 경력"
+      },
+      "intent": {
+        "hint": "목표로 하는 직무 이름이에요. 이력서 맨 위에 들어가요.",
+        "title": "원하는 직무"
+      },
+      "internship": {
+        "hint": "인턴십을 최근 것부터 적어주세요.",
+        "title": "인턴십"
+      },
+      "personal": {
+        "hint": "모두 선택 사항이에요. 알리고 싶지 않은 것은 비워 두세요.",
+        "title": "사진과 인적 사항"
+      },
+      "projects": {
+        "hint": "내가 할 수 있는 일을 보여주는 수업, 개인, 업무 프로젝트예요.",
+        "title": "프로젝트"
+      },
+      "review": {
+        "hint": "단계마다 확인한 다음 이력서를 만들어 주세요. 이력서는 편집기에서 열려요.",
+        "title": "검토"
+      },
+      "selfEvaluation": {
+        "hint": "내 강점을 내 말로 쓴 짧은 문단이에요.",
+        "title": "내 소개"
+      },
+      "skills": {
+        "hint": "질문을 받으면 기꺼이 답할 수 있는 도구, 언어, 그 밖의 기술이에요.",
+        "title": "기술"
+      },
+      "summary": {
+        "hint": "하는 일과 찾고 있는 일을 두세 문장으로 적어주세요.",
+        "title": "요약"
+      }
+    },
+    "stepsLabel": "작성 단계",
+    "tour": {
+      "back": "뒤로",
+      "done": "완료",
+      "end": "안내 끝내기",
+      "next": "다음",
+      "progress": "{current} / {total}",
+      "replay": "화면 안내 보기",
+      "steps": {
+        "filters": {
+          "body": "먼저 고칠 문제부터 시작하세요. 그룹을 누르면 그 문제들만 볼 수 있어요.",
+          "title": "우선순위별 문제"
+        },
+        "grade": {
+          "body": "내 이력서가 체크리스트에서 받은 결과예요. 면접 기회를 얻을지 예측하는 것은 아니에요.",
+          "title": "내 등급"
+        },
+        "issues": {
+          "body": "문제마다 무엇을 찾았고 왜 중요한지 알려줘요. 열어서 고치는 방법을 본 다음 편집기에서 고쳐주세요.",
+          "title": "문제 고치기"
+        },
+        "recheck": {
+          "body": "수정한 뒤에 다시 점검해 주세요. 지난 점검 이후 달라진 점을 보여드려요.",
+          "title": "다시 점검하기"
+        }
+      }
+    }
+  },
+  "resumeCheck": {
+    "back": "편집기로 돌아가기",
+    "checkedAt": "점검: {when}",
+    "compare": {
+      "fixed": "지난번 이후 고친 문제",
+      "previous": "지난번: {label}, {score} / 100",
+      "row": "{before} → {after}",
+      "same": "문제 개수는 아직 그대로예요.",
+      "title": "지난 점검 이후"
+    },
+    "detail": {
+      "evidence": "내 이력서에서",
+      "hide": "자세한 내용 숨기기",
+      "how": "고치는 방법",
+      "show": "자세한 내용 보기",
+      "why": "중요한 이유"
+    },
+    "editor": {
+      "last": "지난 점검: {label} · 먼저 고칠 문제 {urgent}개",
+      "open": "전체 점검 열기",
+      "quick": "수정하면서 하는 빠른 점검",
+      "run": "이력서 전체 점검 실행",
+      "staleNote": "그 뒤에 이력서를 수정했어요.",
+      "title": "이력서 점검"
+    },
+    "empty": {
+      "body": "무엇을 고쳐야 하는지 우선순위대로 보여드려요. 문제마다 짧은 이유와 고치는 방법이 함께 나와요.",
+      "creditAi": "이력서 점검 크레딧 1개를 사용해요.",
+      "creditLeft": "이력서 점검 크레딧 1개를 사용해요({left}개 남음).",
+      "creditNone": "이력서 점검 크레딧이 남아 있지 않아요. 체크리스트 점검은 그대로 되지만 맞춤법은 확인하지 않아요.",
+      "cta": "점검 실행",
+      "noAi": "체크리스트만 점검해요. 내 계정에서 AI 점검이 꺼져 있어요. 크레딧은 사용하지 않아요.",
+      "targetLabel": "목표 직무(선택)",
+      "targetPlaceholder": "예: 데이터 분석가",
+      "title": "이 이력서 점검하기"
+    },
+    "entry": {
+      "aria": "{name} 이력서 점검",
+      "cta": "이력서 점검"
+    },
+    "errors": {
+      "ai_unavailable": "지금은 AI를 사용할 수 없어요.",
+      "already_running": "이 이력서는 이미 점검이 진행 중이에요.",
+      "credits_exhausted": "지금 쓸 수 있는 이력서 점검을 모두 사용했어요.",
+      "failed": "점검을 실행하지 못했어요. 다시 시도해 주세요.",
+      "not_found": "이 이력서를 찾을 수 없어요."
+    },
+    "failed": {
+      "body": "크레딧을 사용하지 않았어요.",
+      "retry": "다시 시도",
+      "title": "점검이 끝나지 않았어요"
+    },
+    "filter": {
+      "all": "전체 ({count})",
+      "label": "우선순위별로 문제 보기"
+    },
+    "fix": {
+      "again": "다른 버전 쓰기",
+      "applied": "이력서에 반영했어요.",
+      "applyFailed": "이력서를 수정하지 못했어요. 편집기를 열어 거기서 바꿔주세요.",
+      "blocked": "이력서에 없는 숫자가 들어가서 {count, plural, one {AI 버전 #개} other {AI 버전 #개}}를 숨겼어요.",
+      "cancelEdit": "취소",
+      "credit": "AI 버전 하나마다 다시 쓰기 크레딧 1개를 사용해요.",
+      "creditLeft": "AI 버전 하나마다 다시 쓰기 크레딧 1개를 사용해요({left}개 남음).",
+      "edit": "수정",
+      "editLabel": "AI 버전 수정",
+      "errors": {
+        "ai_unavailable": "지금은 AI 버전을 사용할 수 없어요. 크레딧을 사용하지 않았어요.",
+        "changed": "점검한 뒤에 이 글이 바뀌었어요. 점검을 다시 실행해 주세요.",
+        "citation_guard": "AI 버전에 이력서에 없는 숫자가 들어가서 보여드리지 않았어요. 크레딧을 사용하지 않았어요.",
+        "credits_exhausted": "지금 쓸 수 있는 다시 쓰기 크레딧을 모두 사용했어요.",
+        "failed": "AI 버전을 받지 못했어요. 크레딧을 사용하지 않았어요. 다시 시도해 주세요."
+      },
+      "instructionLabel": "참고할 점이 있나요? (선택)",
+      "instructionPlaceholder": "예: 팀 규모를 언급해 주세요",
+      "longer": "더 길게",
+      "review": "사용하기 전에 읽어 보세요. 이미 이력서에 있는 사실만 사용해요.",
+      "save": "이력서에 저장",
+      "shorter": "더 짧게",
+      "stronger": "더 힘 있게",
+      "suggestion": "AI 버전",
+      "use": "이 버전 사용",
+      "write": "AI 버전 쓰기",
+      "writing": "AI 버전을 쓰는 중"
+    },
+    "focus": {
+      "gone": "열어 본 문제가 최근 점검에는 없어요. 이미 고쳐졌을 수 있어요."
+    },
+    "honesty": "이력서를 위한 체크리스트예요. 회사에서 답이 올지 예측하지는 않아요.",
+    "issue": {
+      "bullet_too_long": {
+        "how": "성과 줄 하나는 한두 줄 안에 써주세요. 한 일과 결과를 담으면 돼요.",
+        "title": "긴 성과 줄",
+        "why": "성과 줄이 길면 훑어보기 어려워요."
+      },
+      "buzzwords": {
+        "how": "말하려는 장점을 보여주는 구체적인 예로 바꿔주세요.",
+        "title": "흔한 표현: {terms}",
+        "why": "어느 이력서에나 있는 표현으로는 읽는 사람이 나에 대해 알 수 있는 것이 없어요."
+      },
+      "cn_english_cert_missing": {
+        "how": "영어 자격증이나 점수가 있다면 기술과 자격증 항목에 적어주세요.",
+        "title": "영어 자격증 없음",
+        "why": "영어 수준(CET-4/6, IELTS, TOEFL)을 확인하는 회사가 많아요."
+      },
+      "cn_internship_missing": {
+        "how": "인턴십 항목을 추가해 주세요. 인턴십 경험이 없다면 비중 있는 프로젝트나 교내 활동을 적어주세요.",
+        "title": "인턴십(实习) 없음",
+        "why": "학생과 신규 졸업자의 경우, 회사가 가장 먼저 찾는 경험이 인턴십이에요."
+      },
+      "cn_personal_details_optional": {
+        "how": "회사가 요구할 때만 남겨 두세요.",
+        "title": "선택 인적 사항 ({label})",
+        "why": "籍贯, 政治面貌, 생년월일 같은 정보는 대부분의 이력서에서 선택 사항이에요."
+      },
+      "cn_photo_optional": {
+        "how": "회사가 요구할 때만 단정한 최근 사진을 넣어 주세요.",
+        "title": "사진(선택)",
+        "why": "사진은 선택 사항이에요. 요구하는 회사도 있지만, 요구하지 않는 회사가 많아요."
+      },
+      "cn_self_evaluation_missing": {
+        "how": "구호 같은 말 대신 구체적인 강점을 두세 문장으로 적어주세요.",
+        "title": "자기 평가(自我评价) 없음",
+        "why": "중국의 많은 회사는 짧은 자기 평가가 있기를 기대해요."
+      },
+      "contact_email_missing": {
+        "how": "매일 확인하는 이메일 주소를 적어주세요.",
+        "title": "이메일 주소 없음",
+        "why": "회사가 나에게 답할 방법이 필요해요."
+      },
+      "contact_name_missing": {
+        "how": "첫 줄에 이름을 적어주세요.",
+        "title": "맨 위에 이름 없음",
+        "why": "맨 위에 이름이 없으면 누구의 이력서인지 아무도 알 수 없어요."
+      },
+      "contact_phone_missing": {
+        "how": "전화번호를 적어주세요.",
+        "title": "전화번호 없음",
+        "why": "첫 대화 일정을 잡으려고 전화하는 회사가 많아요."
+      },
+      "layout_columns": {
+        "how": "한 단짜리 서식을 사용해 주세요.",
+        "title": "두 단 레이아웃",
+        "why": "회사 프로그램이 이 부분을 읽지 못할 수 있어요. 두 단을 가로질러 읽으면서 줄이 뒤섞일 수 있어요."
+      },
+      "layout_image": {
+        "how": "이미지를 빼고 그 정보를 글로 적어주세요.",
+        "title": "이력서에 이미지가 있음",
+        "why": "회사 프로그램이 이 부분을 읽지 못할 수 있어요. 이미지, 아이콘, 차트 안에 있는 글자는 읽을 수 없어요."
+      },
+      "layout_symbols": {
+        "how": "기호를 일반 단어로 바꿔주세요. 예를 들어 아이콘 대신 “이메일:”이라고 적어요.",
+        "title": "기호 또는 이모지 ({symbol})",
+        "why": "회사 프로그램이 이 부분을 읽지 못할 수 있어요. 이모지와 장식용 기호는 이상한 글자로 바뀔 수 있어요."
+      },
+      "layout_table": {
+        "how": "표를 일반 줄이나 글머리 기호 목록으로 바꿔주세요.",
+        "title": "이력서에 표가 있음",
+        "why": "회사 프로그램이 이 부분을 읽지 못할 수 있어요. 채용 프로그램이 이력서를 읽을 때 표는 뒤섞여 나오는 일이 많아요."
+      },
+      "length_too_long": {
+        "how": "한두 쪽으로 맞춰 주세요. 오래됐거나 관련이 적은 성과 줄을 빼면 돼요.",
+        "title": "두 쪽을 넘는 분량",
+        "why": "이 이력서는 두 쪽을 넘을 가능성이 높아요. 읽는 사람이 거기까지 읽는 일은 드물어요."
+      },
+      "no_numbers": {
+        "how": "실제 숫자가 있는 곳에는 숫자를 넣어주세요. 인원, 시간, 금액, 물량, 비율 같은 숫자예요. 추측해서 쓰지는 마세요.",
+        "title": "숫자가 있는 결과가 적음 (성과 줄 {total}개 중 {withNumbers}개)",
+        "why": "측정할 수 있는 결과를 보여주는 성과 줄이 적어요."
+      },
+      "section_education_missing": {
+        "how": "학교, 학위, 기간을 적은 학력 항목을 추가해 주세요.",
+        "title": "학력 항목 없음",
+        "why": "학력 조건을 적어 둔 공고가 많고, 읽는 사람도 이를 확인해요."
+      },
+      "section_experience_missing": {
+        "how": "일한 곳, 인턴십, 비중 있는 프로젝트를 적은 경력 항목을 추가해 주세요.",
+        "title": "경력 항목 없음",
+        "why": "읽는 사람 대부분이 가장 먼저 찾는 것이 경력이에요."
+      },
+      "section_skills_missing": {
+        "how": "실제로 쓰는 도구와 방법을 적은 기술 항목을 추가해 주세요.",
+        "title": "기술 항목 없음",
+        "why": "읽는 사람과 프로그램은 공고에서 요구하는 도구를 기술 목록에서 찾아요."
+      },
+      "skills_too_few": {
+        "how": "사용하는 도구, 언어, 방법을 {min}개 이상 적어주세요.",
+        "title": "짧은 기술 목록 ({count}개 적음)",
+        "why": "기술 목록이 짧으면 공고에서 요구하는 도구가 드러나지 않을 수 있어요."
+      },
+      "spelling": {
+        "how": "혹시 “{suggestion}” 아닌가요?",
+        "title": "맞춤법 오류일 수 있음: “{word}”",
+        "why": "맞춤법 오류는 금방 눈에 띄고 꼼꼼하지 않다는 인상을 줘요."
+      },
+      "summary_missing": {
+        "how": "짧은 요약을 추가해 주세요. 내 직무, 가장 강한 분야, 다음에 하고 싶은 일을 담아요.",
+        "title": "요약 없음",
+        "why": "맨 위의 두 문장은 읽는 사람이 자세한 내용을 읽기 전에 내가 어떤 일을 하는지 알려줘요."
+      },
+      "summary_too_long": {
+        "how": "두세 문장으로 줄여주세요.",
+        "title": "긴 요약",
+        "why": "읽는 사람은 이력서 윗부분을 훑어봐요. 요약이 길면 건너뛰게 돼요."
+      },
+      "summary_too_short": {
+        "how": "내 직무, 가장 강한 분야, 결과 하나를 두세 문장으로 써주세요.",
+        "title": "아주 짧은 요약",
+        "why": "요약이 아주 짧으면 내가 왜 맞는 사람인지 전해지지 않아요."
+      },
+      "summary_vague": {
+        "how": "내 직무, 가장 강한 분야, 실제 결과 하나를 적어주세요.",
+        "title": "구체적이지 않은 요약",
+        "why": "요약이 구체적이지 않아서 많은 사람에게 해당할 수 있는 내용이에요."
+      },
+      "weak_verb": {
+        "how": "내가 한 일로 시작해 주세요. 예: 만들었다, 이끌었다, 줄였다, 출시했다.",
+        "title": "약한 시작 표현: “{opener}”",
+        "why": "“담당했다” 같은 표현으로 시작하면 내가 한 일이 아니라 맡은 업무를 설명하게 돼요."
+      }
+    },
+    "keywords": {
+      "count": "{total}개 중 {met}개",
+      "eduBelow": "내 학위가 공고에 적힌 수준보다 낮아요.",
+      "eduMet": "내 학위가 공고에 적힌 수준을 충족해요.",
+      "eduNotFound": "이력서에서 학위를 찾지 못했어요.",
+      "eduNotListed": "공고에 학력 수준이 적혀 있지 않아요.",
+      "error": "키워드 점검을 불러오지 못했어요.",
+      "fit": "이 이력서의 적합 점수",
+      "fitHonesty": "이건 합격 확률이 아니에요.",
+      "fitNone": "이 이력서 버전의 적합 점수는 아직 없어요.",
+      "fromPosting": "공고 본문에서 읽은 키워드예요.",
+      "honest": "빠진 키워드는 나에게 사실일 때만 추가해 주세요.",
+      "loading": "공고를 읽는 중",
+      "matched": "이력서에 있음",
+      "missing": "이력서에 없음",
+      "none": "없음",
+      "row": {
+        "education": "학력",
+        "keywords": "키워드",
+        "skills": "전문 기술",
+        "title": "직무명",
+        "years": "경력 연차"
+      },
+      "status": {
+        "fail": "미충족",
+        "pass": "충족",
+        "unknown": "정보 없음",
+        "warn": "일부 충족"
+      },
+      "sub": "이 공고가 요구하는 것과, 내 이력서에 그것이 나와 있는지 보여줘요.",
+      "title": "키워드 점검",
+      "titleFail": "이력서에 이 직무명이 나와 있지 않아요. 이 일을 한 적이 있다면 제목이나 요약에 그 직무명을 적어주세요.",
+      "titlePass": "이력서에 이 직무명이나 비슷한 직무명이 나와 있어요.",
+      "titleWarn": "이력서에 관련된 직무명이 나와 있어요.",
+      "yearsDetail": "{required}년 이상을 요구해요. 날짜가 적힌 내 경력을 합치면 약 {found}년이에요.",
+      "yearsNoDates": "이력서에서 날짜가 적힌 경력을 찾지 못했어요.",
+      "yearsNotListed": "공고에 경력 연수가 적혀 있지 않아요."
+    },
+    "label": {
+      "excellent": "매우 좋음",
+      "fair": "보통",
+      "good": "좋음",
+      "needs_work": "보완 필요"
+    },
+    "method": "규칙 {rules}개를 기준으로 점검했어요{ai, select, yes {. 맞춤법과 요약이 구체적인지는 AI가 추가로 읽고 확인했어요} other {}}.",
+    "methodAiFailed": "맞춤법은 확인하지 못했어요. AI 읽기가 끝나지 않았어요. 크레딧을 사용하지 않았어요.",
+    "methodNoAi": "내 계정에서 AI 점검이 꺼져 있어서 맞춤법은 확인하지 않았어요.",
+    "methodNoCredit": "맞춤법은 확인하지 않았어요. 이력서 점검 크레딧이 남아 있지 않아요. 체크리스트 점검은 무료예요.",
+    "noIssues": "이 체크리스트에서는 고칠 것이 없어요.",
+    "openEditor": "편집기에서 열기",
+    "running": {
+      "body": "최대 45초 걸릴 수 있어요.",
+      "cancel": "점검 취소",
+      "title": "이력서를 점검하는 중"
+    },
+    "score": "체크리스트 점수 {score} / 100",
+    "section": {
+      "contact": "연락처",
+      "education": "학력",
+      "experience": "경력",
+      "layout": "레이아웃",
+      "other": "기타",
+      "projects": "프로젝트",
+      "skills": "기술",
+      "summary": "요약"
+    },
+    "severity": {
+      "critical": "중요",
+      "optional": "고치면 좋음",
+      "urgent": "먼저 고치기"
+    },
+    "stale": {
+      "body": "점검한 뒤에 이 이력서를 수정했어요.",
+      "cta": "다시 점검하기"
+    },
+    "sub": "이 이력서를 위한 체크리스트예요. 무엇을 먼저 고칠지, 왜 중요한지, 어떻게 고치는지 알려줘요.",
+    "targetTitle": "점검 기준 직무: {title}",
+    "title": "이력서 점검",
+    "typeName": {
+      "bullet_too_long": "긴 성과 줄",
+      "buzzwords": "흔한 표현",
+      "cn_english_cert_missing": "영어 자격증",
+      "cn_internship_missing": "인턴십(实习)",
+      "cn_personal_details_optional": "선택 인적 사항",
+      "cn_photo_optional": "사진",
+      "cn_self_evaluation_missing": "자기 평가(自我评价)",
+      "contact_email_missing": "이메일 주소",
+      "contact_name_missing": "이름",
+      "contact_phone_missing": "전화번호",
+      "layout_columns": "두 단 레이아웃",
+      "layout_image": "이미지",
+      "layout_symbols": "기호 또는 이모지",
+      "layout_table": "표",
+      "length_too_long": "분량",
+      "no_numbers": "숫자가 있는 결과",
+      "section_education_missing": "학력 항목",
+      "section_experience_missing": "경력 항목",
+      "section_skills_missing": "기술 항목",
+      "skills_too_few": "짧은 기술 목록",
+      "spelling": "맞춤법",
+      "summary_missing": "요약",
+      "summary_too_long": "긴 요약",
+      "summary_too_short": "짧은 요약",
+      "summary_vague": "구체적이지 않은 요약",
+      "weak_verb": "약한 시작 표현"
+    }
+  },
+  "seo": {
+    "breadcrumb": {
+      "browse": "채용공고 목록",
+      "home": "홈"
+    },
+    "browse": {
+      "children": {
+        "city": "{city} 지역",
+        "count": "{count, plural, one {공고 #건} other {공고 #건}}",
+        "graduate": "신규 졸업자 대상",
+        "remote": "원격만",
+        "title": "이 목록 좁히기"
+      },
+      "empty": {
+        "body": "목록은 공개적으로 보여드릴 수 있는 채용 중인 공고를 바탕으로 매일 업데이트돼요.",
+        "title": "지금은 이 목록에 공고가 없어요"
+      },
+      "eyebrow": "채용공고 목록",
+      "filtered": "{country} 공고만 보여드려요.",
+      "hub": {
+        "empty": "아직 채용공고 목록이 없어요. 곧 다시 확인해 주세요.",
+        "sub": "공개적으로 보여드릴 수 있는 채용 중인 공고로 만든 목록이에요. 공고가 충분히 모이면 목록이 검색 엔진에 나와요.",
+        "title": "채용공고 목록"
+      },
+      "intro": {
+        "count": "{count, plural, one {이 목록에 채용 중인 공고가 #건 있어요.} other {이 목록에 채용 중인 공고가 #건 있어요.}}",
+        "empty": "지금은 이 목록에 채용 중인 공고가 없어요. 목록은 매일 업데이트돼요.",
+        "median": "공고에 적힌 연봉의 중앙값은 {median}(공고 {sampleSize}건 기준)이에요.",
+        "new": "{newLast7d, plural, =0 {지난 7일 동안 추가된 공고는 없어요.} one {지난 7일 동안 #건이 추가됐어요.} other {지난 7일 동안 #건이 추가됐어요.}}",
+        "pay": "{payListed, plural, =0 {급여가 적힌 공고는 없어요.} one {#건에 급여가 적혀 있어요.} other {#건에 급여가 적혀 있어요.}}"
+      },
+      "jobsTitle": "이 목록의 최신 공고",
+      "metaDescription": "{count, plural, =0 {지금은 이 목록에 채용 중인 공고가 없어요.} one {현재 올라와 있는 채용 중인 공고 #건.} other {현재 올라와 있는 채용 중인 공고 #건.}} 급여는 공고에 적혀 있을 때만 보여드려요. 지원은 회사 사이트에서 직접 해요.",
+      "method": "이 목록을 만드는 방법: 회사가 비자 스폰서십을 제공한다고 공고에 적혀 있을 때만 그 공고를 넣고, 해당 문장을 함께 보여드려요. 스폰서십에 대한 언급이 없는 공고는 빠져요. 그렇다고 그 회사들이 스폰서십을 제공하지 않는다는 뜻은 아니에요.",
+      "short": "이 목록은 아직 짧아서 검색 엔진에 나오지 않아요.",
+      "showAll": "전체 목록 보기",
+      "signup": {
+        "body": "무료 계정을 만들면 공고를 적합도 순으로 볼 수 있어요. 공고마다 요구하는데 내 이력서에는 아직 없는 것도 함께 보여드려요.",
+        "cta": "무료 계정 만들기",
+        "title": "공고마다 내 이력서와 얼마나 맞는지 확인하세요"
+      },
+      "stats": {
+        "companyCount": "{name} ({count})",
+        "jobCount": "채용 중인 공고",
+        "label": "이 목록 정보",
+        "medianPay": "공고에 적힌 연봉 중앙값",
+        "newLast7d": "지난 7일 동안 추가됨",
+        "payListed": "급여가 적힌 공고",
+        "payListedValue": "{count}건 중 {payListed}건",
+        "topCompanies": "공고가 가장 많은 회사"
+      },
+      "title": {
+        "graduate_role": "신규 졸업자 대상 {role} 채용공고",
+        "remote_role": "원격 {role} 채용공고",
+        "role": "{role} 채용공고",
+        "role_city": "{city} {role} 채용공고",
+        "segment_entry": "신입 채용공고",
+        "segment_internships": "인턴십",
+        "sponsorship_role": "{country} 비자 스폰서십 제공 {role} 채용공고"
+      },
+      "unknown": {
+        "body": "더 흔히 쓰는 직무 이름으로 찾아보거나 아래 목록 중 하나를 골라주세요.",
+        "title": "‘{role}’ 채용공고 목록은 아직 없어요"
+      },
+      "unknownCity": {
+        "body": "가까운 더 큰 도시로 찾아보거나 아래 목록 중 하나를 골라주세요.",
+        "title": "‘{city}’의 {role} 채용공고 목록은 아직 없어요"
+      },
+      "up": {
+        "hub": "전체 채용공고 목록",
+        "role": "{role} 채용공고 전체"
+      }
+    },
+    "card": {
+      "found": "발견일: {date}",
+      "payNotListed": "급여 정보 없음",
+      "posted": "게시일: {date}",
+      "source": "출처: {sourceName}",
+      "sponsorQuote": "공고 원문: “{quote}”"
+    },
+    "employment": {
+      "contract": "계약직",
+      "full_time": "풀타임",
+      "internship": "인턴십",
+      "part_time": "파트타임"
+    },
+    "job": {
+      "about": "직무 소개",
+      "applyNote": "지원은 회사 사이트에서 직접 해요. %BRAND%는 지원서를 보내지 않아요.",
+      "applyOnSite": "회사 사이트에서 지원하기",
+      "benefits": "복리후생",
+      "closes": "마감일",
+      "employment": "고용 형태",
+      "facts": "공고 정보",
+      "location": "근무지",
+      "metaDescription": "{company}의 {title} 공고. 공고를 읽고 회사 사이트에서 지원하세요.",
+      "metaTitle": "{title} | {company}",
+      "notFound": {
+        "body": "마감됐거나 출처에서 삭제했을 수 있어요.",
+        "home": "홈으로 가기",
+        "title": "이 공고는 더 이상 올라와 있지 않아요"
+      },
+      "notListed": "정보 없음",
+      "openInApp": "%BRAND%에서 열기",
+      "originalPublisher": "최초 게시: {name}",
+      "pay": "급여",
+      "posted": "게시일",
+      "postedUnknown": "정보 없음 (처음 발견: {date})",
+      "qualifications": "회사가 요구하는 것",
+      "responsibilities": "하게 될 일",
+      "seeFit": "내 이력서와 얼마나 맞는지 보기",
+      "source": "출처",
+      "viewOriginal": "원본 공고 보기",
+      "workModel": "근무 방식"
+    },
+    "pay": {
+      "period": {
+        "day": "일급",
+        "hour": "시급",
+        "month": "월급",
+        "week": "주급",
+        "year": "연봉"
+      },
+      "range": "{period} {min} – {max}",
+      "single": "{period} {amount}"
+    },
+    "ticker": {
+      "foundDays": "{n, plural, one {#일} other {#일}} 전 발견",
+      "foundHours": "{n, plural, one {#시간} other {#시간}} 전 발견",
+      "foundMinutes": "{n, plural, one {#분} other {#분}} 전 발견",
+      "note": "공개적으로 보여드릴 수 있는 최신 공고예요.",
+      "posted": "{date} 게시",
+      "title": "방금 찾은 공고"
+    },
+    "workModel": {
+      "hybrid": "하이브리드",
+      "office": "사무실 근무",
+      "remote": "원격"
+    }
+  },
+  "tailor": {
+    "checking": "내 계정에서 쓸 수 있는 기능을 확인하는 중…",
+    "entry": {
+      "aria": "{title} 공고에 이력서 맞추기",
+      "button": "이력서 맞추기"
+    },
+    "error": {
+      "aiFailed": "이력서 맞추기를 끝내지 못했어요. 크레딧은 차감되지 않았어요. 다시 시도해 주세요.",
+      "aiUnavailable": "지금은 내 계정에서 AI 이력서 맞추기를 쓸 수 없어요.",
+      "conflict": "이 줄이 바뀌었어요. 새로고침하면 최신 버전을 볼 수 있어요.",
+      "contentBlocked": "이 요청은 처리할 수 없었어요. 요청 사항을 바꿔서 다시 시도해 주세요.",
+      "creditsExhausted": "지금 쓸 수 있는 이력서 맞추기 크레딧을 모두 썼어요.",
+      "generic": "문제가 생겼어요. 다시 시도해 주세요.",
+      "inProgress": "이 이력서 맞추기가 아직 진행 중이에요. 잠시 기다려 주세요.",
+      "notFound": "이 이력서 맞추기 작업을 찾을 수 없어요.",
+      "notReviewable": "공고에 맞춘 이 버전은 더 이상 여기서 바꿀 수 없어요.",
+      "reload": "새로고침",
+      "retry": "다시 시도",
+      "safetyUnavailable": "AI 이력서 맞추기가 잠시 멈춰 있어요. 나중에 다시 시도해 주세요.",
+      "stopped": "이력서 맞추기가 끝나기 전에 멈췄어요. 크레딧은 차감되지 않았어요. 다시 시작해 주세요."
+    },
+    "picker": {
+      "empty": "먼저 이력서를 추가한 다음, 이 공고에 맞춰 보세요.",
+      "error": "이력서를 불러오지 못했어요. 다시 시도해 주세요.",
+      "loading": "이력서를 불러오는 중…",
+      "primary": "기본 이력서",
+      "sub": "사본을 만들어 써요. 원본은 그대로예요.",
+      "title": "어떤 이력서로 시작할까요?"
+    },
+    "result": {
+      "change": {
+        "add": "추가됨",
+        "after": "변경 후",
+        "before": "변경 전",
+        "remove": "삭제됨",
+        "rewrite": "다시 씀"
+      },
+      "close": "완료",
+      "compare": {
+        "after": "공고에 맞춘 버전",
+        "before": "내 이력서",
+        "error": "이 버전을 불러오지 못했어요. 다시 시도해 주세요.",
+        "loading": "두 버전을 불러오는 중…"
+      },
+      "done": "저장했어요. 이 버전은 내 이력서 목록에 있어요.",
+      "finalize": "이 이력서 사용하기",
+      "finalizing": "저장 중…",
+      "noChanges": "고른 항목에서는 바꿀 것이 없었어요.",
+      "open": "이 이력서 열기",
+      "pendingBlock": "{count, plural, one {이 이력서를 사용하기 전에 내용 1개를 확인해 주세요.} other {이 이력서를 사용하기 전에 내용 #개를 확인해 주세요.}}",
+      "scoreAfter": "변경 후",
+      "scoreAfterPending": "모든 내용을 확인하고 이 이력서를 사용하면 볼 수 있어요.",
+      "scoreBefore": "변경 전",
+      "scoreHeading": "적합 점수",
+      "scoreNone": "이 버전의 적합 점수는 볼 수 없어요.",
+      "scoreValue": "{score} / 100",
+      "tabs": {
+        "changes": "변경 내용 ({count})",
+        "compare": "비교",
+        "label": "공고에 맞춘 이력서 보기"
+      },
+      "title": "공고에 맞춘 내 이력서",
+      "titleFor": "{title} 공고에 맞춘 이력서"
+    },
+    "running": {
+      "sub": "최대 1분 정도 걸려요. 이 창을 열어 두세요.",
+      "title": "이력서를 공고에 맞추는 중"
+    },
+    "setup": {
+      "cost": "이력서 맞추기 크레딧 1개를 써요. 끝나지 않으면 크레딧은 차감되지 않아요.",
+      "depth": {
+        "full": "전체: 줄을 다시 쓰거나 합치거나 뺄 수 있어요",
+        "quick": "간단히: 이미 있는 내용의 표현과 순서를 바꿔요"
+      },
+      "depthLabel": "‘경력’ 항목을 얼마나 바꿔도 될까요?",
+      "fastAction": "빠르게 맞추기",
+      "fastSub": "지난번 설정을 써요: {sections}.",
+      "fastTitle": "빠르게 맞추기",
+      "generate": "내 이력서 맞추기",
+      "generating": "맞추는 중…",
+      "instructionCount": "{max}자 중 {count}자",
+      "instructionHint": "예: 리포트 작성 업무를 맨 앞에 두고, 한 쪽 분량으로 맞춰 주세요.",
+      "instructionLabel": "참고할 점이 있나요? (선택)",
+      "keywordsLoading": "공고를 읽는 중…",
+      "keywordsNone": "이 공고에 나온 기술이 이미 내 이력서에 나와 있어요.",
+      "keywordsSub": "실제로 가진 기술만 체크해 주세요. 체크한 것만 넣고 그 밖의 것은 넣지 않아요.",
+      "keywordsTitle": "이 공고가 요구하지만 내 이력서에 나와 있지 않은 기술",
+      "keywordsUnavailable": "이 공고의 기술 목록을 볼 수 없어요. 이력서 맞추기는 그대로 할 수 있어요.",
+      "section": {
+        "education": "학력",
+        "experience": "경력",
+        "projects": "프로젝트",
+        "skills": "기술",
+        "summary": "요약"
+      },
+      "sectionsNone": "항목을 하나 이상 골라주세요.",
+      "sectionsSub": "이 항목들만 다시 써요. 나머지는 내가 쓴 그대로예요.",
+      "sectionsTitle": "무엇을 바꿀까요?"
+    },
+    "sheet": {
+      "loading": "공고에 맞춘 이력서를 여는 중…",
+      "title": "공고에 이력서 맞추기",
+      "titleFor": "{title} 공고에 이력서 맞추기"
+    },
+    "target": {
+      "change": "공고 바꾸기",
+      "chosenLabel": "맞출 공고:",
+      "chosenWithCompany": "{company}의 {title}",
+      "companyLabel": "회사 (선택)",
+      "continue": "계속",
+      "jobTitleLabel": "직무 이름",
+      "pasteTitle": "또는 채용 공고 붙여넣기",
+      "savedEmpty": "아직 저장한 공고가 없어요. 아래에 채용 공고를 붙여넣어 주세요.",
+      "savedError": "저장한 공고를 불러오지 못했어요. 아래에 채용 공고를 붙여넣는 것은 그대로 할 수 있어요.",
+      "savedLoading": "저장한 공고를 불러오는 중…",
+      "savedTitle": "저장한 공고",
+      "sub": "저장한 공고 중 하나를 고르거나 채용 공고를 붙여넣어 주세요. 이력서는 그 공고에만 맞춰져요.",
+      "textHint": "채용 공고 전체 내용을 붙여넣어 주세요.",
+      "textLabel": "채용 공고 내용",
+      "textShort": "{min}자 이상 붙여넣어 주세요 (지금까지 {count}자).",
+      "title": "어떤 공고에 맞출까요?"
+    },
+    "verify": {
+      "allDone": "모든 내용을 확인했어요.",
+      "cancel": "취소",
+      "copies": "이 줄은 {count}번 나와요. 선택한 내용이 모든 줄에 적용돼요.",
+      "editLabel": "실제로 한 일을 적어주세요",
+      "keep": "네, 그대로 둘게요",
+      "reason": {
+        "new_keyword": "내 이력서에 없던 기술",
+        "new_number": "내 이력서에 없던 숫자",
+        "new_statement": "내 업무에 대한 새로운 내용",
+        "posting_text": "내 이력서가 아니라 채용 공고에서 가져온 표현"
+      },
+      "remove": "삭제",
+      "save": "저장",
+      "similar": "비슷한 일을 했어요",
+      "status": {
+        "edited": "직접 수정함",
+        "kept": "그대로 둠",
+        "removed": "삭제함"
+      },
+      "sub": "이 줄들에는 전에 내 이력서에 없던 내용이 있어요. 사실인 줄만 남겨 주세요.",
+      "terms": "여기에 새로 들어간 표현: {terms}",
+      "title": "내용 확인하기",
+      "was": "이력서의 원래 내용: {text}"
+    }
+  },
+  "taxonomy": {
+    "categories": {
+      "administration": "사무 행정",
+      "consulting": "컨설팅, 전략, 공공 부문",
+      "customer": "고객 지원과 고객 성공",
+      "data_ai": "데이터와 AI",
+      "design": "디자인",
+      "education": "교육과 연구",
+      "engineering": "엔지니어링",
+      "finance": "금융과 회계",
+      "hardware": "하드웨어와 전자",
+      "healthcare": "의료와 생명과학",
+      "hospitality": "숙박·외식과 여행",
+      "it_infrastructure": "IT와 인프라",
+      "legal": "법무와 컴플라이언스",
+      "manufacturing": "제조와 기능직",
+      "marketing": "마케팅과 그로스",
+      "media": "미디어와 콘텐츠",
+      "operations": "운영과 공급망",
+      "people": "인사와 HR",
+      "product": "프로덕트와 프로그램 관리",
+      "sales": "영업과 사업 개발",
+      "security": "보안",
+      "software_engineering": "소프트웨어 엔지니어링"
+    },
+    "groups": {
+      "accounting": "회계와 감사",
+      "admin_roles": "행정과 사무",
+      "aero_auto": "항공우주와 자동차",
+      "banking": "은행과 자산 관리",
+      "business_development": "사업 개발과 파트너십",
+      "business_operations": "사업 운영",
+      "civil_construction": "토목과 건설",
+      "clinical": "임상 진료",
+      "compliance": "컴플라이언스와 규제",
+      "consulting_roles": "컨설팅과 전략",
+      "customer_service": "고객 서비스와 지원",
+      "customer_success": "고객 성공",
+      "data_analytics": "데이터 과학과 분석",
+      "data_engineering": "데이터 엔지니어링",
+      "devops_cloud": "DevOps와 클라우드",
+      "digital_marketing": "디지털·그로스 마케팅",
+      "education_support": "교육과정, 학생 상담, 행정",
+      "financial_analysis": "재무 분석과 투자",
+      "food_service": "외식 서비스",
+      "hardware_design": "하드웨어 설계",
+      "health_admin": "의료 행정과 임상 연구",
+      "hotel_travel": "호텔과 여행",
+      "human_resources": "인사",
+      "it_ops": "IT 운영과 지원",
+      "legal_roles": "법무",
+      "life_sciences": "생명과학 연구",
+      "marketing_brand": "마케팅과 브랜드",
+      "mechanical_manufacturing": "기계와 제조",
+      "ml_ai": "머신러닝과 AI",
+      "online_operations": "온라인 운영",
+      "process_energy": "화학, 에너지, 환경",
+      "product_design": "프로덕트·UX 디자인",
+      "product_management": "프로덕트 관리",
+      "production": "생산",
+      "program_management": "프로그램과 프로젝트 관리",
+      "public_sector": "정부와 비영리 단체",
+      "recruiting": "채용",
+      "research": "연구",
+      "robotics": "로보틱스와 자율 시스템",
+      "sales_roles": "영업",
+      "security_engineering": "보안 엔지니어링",
+      "security_governance": "보안 거버넌스와 리더십",
+      "semiconductors": "반도체",
+      "spatial_design": "산업 디자인, 인테리어, 건축",
+      "supply_chain": "공급망과 물류",
+      "swe_backend": "백엔드와 플랫폼",
+      "swe_frontend": "프런트엔드와 모바일",
+      "swe_leadership": "엔지니어링 리더십과 아키텍처",
+      "swe_quality": "품질과 테스트",
+      "swe_systems": "임베디드와 시스템 소프트웨어",
+      "teaching": "수업과 강의",
+      "trades": "기능직과 운송",
+      "video_production": "영상, 사진, 크리에이터",
+      "visual_design": "비주얼, 브랜드, 게임 아트",
+      "writing_editorial": "글쓰기, 편집, 번역"
+    }
+  },
+  "tools": {
+    "allowance": {
+      "left": "{count, plural, =0 {오늘 남은 무료 점검 없음} one {오늘 무료 점검 #회 남음} other {오늘 무료 점검 #회 남음}}",
+      "limit": "무료 점검은 하루 최대 {limit}회"
+    },
+    "back": "무료 도구 전체 보기",
+    "check": {
+      "eyebrow": "무료 도구",
+      "running": "이력서를 읽고 있어요. 최대 1분 정도 걸릴 수 있어요.",
+      "sub": "이력서를 올려 주세요. 체크리스트에 따라 점검하고, 먼저 고칠 부분을 보여드려요.",
+      "submit": "내 이력서 점검하기",
+      "title": "이력서 점검"
+    },
+    "claim": {
+      "alreadySaved": "이 이력서는 이미 계정에 저장되어 있어요.",
+      "body": "점검한 이력서를 내 이력서 목록에 추가하고 전체 리포트를 확인하세요.",
+      "cta": "보관하기",
+      "done": "저장했어요. 이제 내 이력서 목록에 있어요.",
+      "error": "저장하지 못했어요. 다시 시도해 주세요.",
+      "gone": "이 결과는 더 이상 볼 수 없어요. 결과는 점검을 실행한 브라우저에서 24시간 동안 보관돼요. 점검을 다시 실행해 주세요.",
+      "limit": "계정에 보관할 수 있는 이력서 개수가 이미 다 찼어요. 하나를 삭제한 뒤 다시 시도해 주세요.",
+      "openCheck": "전체 점검 결과 열기",
+      "openResumes": "내 이력서로 가기",
+      "saving": "저장 중",
+      "title": "이 이력서를 내 계정에 보관하기"
+    },
+    "consent": {
+      "label": "%BRAND%가 이 리포트를 만들기 위해 자동화된 소프트웨어로 이 이력서를 읽는 데 동의해요. 계정을 만들지 않으면 {hours}시간 뒤에 삭제돼요.",
+      "offshore": "베타 기간에는 중국 본토 밖인 미국에서 처리돼요.",
+      "privacyLink": "개인정보 처리방침",
+      "readingService": "파일은 %BRAND%가 이용하는 이력서 읽기 서비스인 {service}의 중국 본토 서버로 전송될 수 있어요.",
+      "whereUnknown": "누가 읽고 어디에서 처리되는지는 개인정보 처리방침에 나와 있어요."
+    },
+    "errors": {
+      "consent_required": "%BRAND%가 이 이력서를 읽을 수 있도록 확인란에 체크해 주세요.",
+      "file_missing": "이력서 파일을 골라주세요.",
+      "file_too_large": "이 파일은 {mb}MB보다 커요.",
+      "file_unreadable": "이 파일에서 글자를 읽지 못했어요. 스캔본이나 사진이라면 문서 작성 프로그램에서 저장한 PDF로 시도해 보세요.",
+      "file_wrong_type": "PDF, Word 또는 일반 텍스트 파일을 사용해 주세요.",
+      "generic": "문제가 생겼어요. 다시 시도해 주세요.",
+      "network": "오프라인 상태인 것 같아요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
+      "posting_title_missing": "직무 이름을 입력해 주세요.",
+      "posting_too_long": "채용 공고 내용이 너무 길어요. 주요 부분만 붙여넣어 주세요.",
+      "posting_too_short": "채용 공고 내용 전체를 붙여넣어 주세요 ({min}자 이상).",
+      "rate_limited": "이 도구의 오늘 무료 점검 {limit}회를 모두 썼어요. 내일 다시 시도하거나, 무료 계정을 만들어 계속 이용하세요.",
+      "rate_limited_unknown": "이 도구의 오늘 무료 점검을 모두 썼어요. 내일 다시 시도하거나, 무료 계정을 만들어 계속 이용하세요.",
+      "result_expired": "이 결과는 24시간이 지나 삭제됐어요. 점검을 다시 실행해 주세요.",
+      "result_missing": "이 결과를 열지 못했어요. 결과는 점검을 실행한 브라우저에서만, 24시간 동안 열 수 있어요. 점검을 다시 실행해 주세요.",
+      "run_in_progress": "이미 점검이 진행 중이에요. 끝날 때까지 기다린 뒤 다시 시도해 주세요.",
+      "too_many_attempts": "오늘 시도한 횟수가 너무 많아요. 내일 다시 시도해 주세요."
+    },
+    "hub": {
+      "campus": {
+        "body": "졸업생 대상 채용 프로그램의 지원 일정이에요. 각 회사의 공식 페이지에서 가져왔어요.",
+        "title": "캠퍼스 채용 캘린더"
+      },
+      "eyebrow": "무료 도구",
+      "honesty": "이 점검은 자동으로 이루어져요. 내 이력서에 적힌 내용을 보여줄 뿐, 회사에서 연락이 올지를 예측하지는 않아요.",
+      "jobAlerts": {
+        "body": "검색 조건 하나에 맞는 새 공고를 매일 또는 매주 이메일로 받아 보세요. 계정은 필요 없어요.",
+        "title": "이메일 공고 알림"
+      },
+      "listLabel": "도구",
+      "open": "열기",
+      "resumeCheck": {
+        "body": "이력서를 올려 주세요. 먼저 고칠 부분, 그것이 중요한 이유, 고치는 방법을 볼 수 있어요.",
+        "title": "이력서 점검"
+      },
+      "resumeJobMatch": {
+        "body": "채용 공고 내용을 붙여넣어 주세요. 내 이력서에 어떤 요구 사항이 나와 있고 어떤 단어가 빠져 있는지 볼 수 있어요.",
+        "title": "이력서와 공고 비교 점검"
+      },
+      "sub": "계정은 필요 없어요. 도구마다 하루 최대 {limit}회까지 점검할 수 있어요.",
+      "subNoLimit": "계정은 필요 없어요.",
+      "title": "구직을 위한 무료 도구"
+    },
+    "match": {
+      "eyebrow": "무료 도구",
+      "linkNotice": "링크처럼 보여요. 무료 도구는 링크를 열지 않아요. 링크 말고 채용 공고 내용을 붙여넣어 주세요. 계정이 있으면 링크로 공고를 추가할 수 있어요.",
+      "postingText": "공고 내용",
+      "postingTextHint": "공고 전체 내용을 붙여넣어 주세요 ({min}자 이상).",
+      "postingTitle": "직무 이름",
+      "postingTitleHint": "공고에 적힌 그대로 입력해 주세요.",
+      "running": "이력서와 채용 공고 내용을 비교하고 있어요. 최대 1분 정도 걸릴 수 있어요.",
+      "sub": "채용 공고 내용을 붙여넣으면 그 요구 사항 중 어떤 것이 내 이력서에 나와 있는지 볼 수 있어요.",
+      "submit": "비교하기",
+      "title": "이력서와 공고 비교 점검"
+    },
+    "matchReport": {
+      "count": "{total}개 중 {met}개",
+      "eduBelow": "내 학위가 공고에 적힌 수준보다 낮아요.",
+      "eduMet": "내 학위가 공고에 적힌 수준을 충족해요.",
+      "eduNotFound": "이력서에서 학위를 찾지 못했어요.",
+      "eduNotListed": "공고에 학력 수준이 나와 있지 않아요.",
+      "honest": "빠진 단어는 실제로 나에게 해당할 때만 넣어 주세요.",
+      "matched": "이력서에 있음",
+      "missing": "이력서에 없음",
+      "noScore": "요구 사항과 단어를 비교한 결과예요. 적합 점수가 아니고, 합격 확률도 아니에요.",
+      "none": "없음",
+      "row": {
+        "education": "학력",
+        "keywords": "키워드",
+        "skills": "직무 기술",
+        "title": "직무명",
+        "years": "경력 연차"
+      },
+      "status": {
+        "fail": "미충족",
+        "pass": "충족",
+        "unknown": "나와 있지 않음",
+        "warn": "일부 충족"
+      },
+      "title": "내 이력서와 ‘{title}’",
+      "titleFail": "내 이력서에 이 직무명이 나와 있지 않아요. 이 일을 해본 적이 있다면 제목이나 요약에 적어 주세요.",
+      "titlePass": "내 이력서에 이 직무명이나 비슷한 직무명이 나와 있어요.",
+      "titleWarn": "내 이력서에 관련된 직무명이 나와 있어요.",
+      "yearsDetail": "{required}년 이상을 요구해요. 날짜가 적힌 내 경력을 합하면 약 {found}년이에요.",
+      "yearsNoDates": "이력서에서 날짜가 적힌 경력을 찾지 못했어요.",
+      "yearsNotListed": "공고에 경력 연수가 나와 있지 않아요."
+    },
+    "meta": {
+      "hub": {
+        "description": "이력서를 점검하거나 채용 공고와 비교해 보세요. 무료이고 계정은 필요 없어요.",
+        "title": "무료 구직 도구"
+      },
+      "resumeCheck": {
+        "description": "이력서를 올리면 먼저 고칠 부분, 그것이 중요한 이유, 고치는 방법을 자동 체크리스트로 받아 볼 수 있어요. 계정은 필요 없어요.",
+        "title": "무료 이력서 점검"
+      },
+      "resumeJobMatch": {
+        "description": "채용 공고 내용을 붙여넣으면 그 요구 사항과 키워드 중 어떤 것이 내 이력서에 나와 있는지 볼 수 있어요. 무료이고 계정은 필요 없어요.",
+        "title": "이력서를 채용 공고와 비교하기"
+      }
+    },
+    "privacy": "파일은 보관하지 않아요. 리포트와 파일에서 읽은 글은 {hours}시간 뒤에 삭제돼요. 다만 계정을 만들어 보관하면 삭제되지 않아요. 결과는 이 브라우저에서만 열 수 있어요.",
+    "report": {
+      "again": "다른 파일 점검하기",
+      "allIssues": "고칠 부분 전체",
+      "automated": "자동 체크리스트",
+      "automatedNote": "소프트웨어가 규칙 {rules}개에 따라 점검했어요. 사람이 검토한 것이 아니고, 회사에서 연락이 올지를 예측한 것도 아니에요.",
+      "automatedNoteNoCount": "소프트웨어가 점검했어요. 사람이 검토한 것이 아니고, 회사에서 연락이 올지를 예측한 것도 아니에요.",
+      "cached": "오늘 이미 점검한 파일이라 이번에는 무료 점검 횟수를 쓰지 않았어요.",
+      "countsLabel": "찾은 문제",
+      "deletes": "이 리포트는 {when}에 삭제돼요.",
+      "how": "고치는 방법",
+      "label": {
+        "excellent": "아주 좋음",
+        "fair": "보통",
+        "good": "좋음",
+        "needs_work": "보완 필요"
+      },
+      "more": "전체 리포트에 {count, plural, one {문제가 #개 더} other {문제가 #개 더}} 있어요.",
+      "noIssues": "이 체크리스트에서는 고칠 부분이 없어요.",
+      "quote": "내 이력서에서",
+      "resultLabel": "결과",
+      "severity": {
+        "critical": "중요",
+        "optional": "고치면 좋음",
+        "urgent": "먼저 고치기"
+      },
+      "topIssues": "먼저 고칠 부분",
+      "why": "중요한 이유"
+    },
+    "signup": {
+      "bodyCheck": "무료 계정을 만들면 모든 문제를 보고, 이 이력서를 보관하고, 편집기에서 고칠 수 있어요.",
+      "bodyMatch": "무료 계정을 만들면 이 이력서를 보관하고, 이 공고에 맞추고, 적합 점수와 그 이유를 볼 수 있어요.",
+      "cta": "무료 계정 만들기",
+      "login": "계정이 있어요",
+      "titleCheck": "전체 리포트를 보고 고치기",
+      "titleMatch": "이 이력서를 공고에 맞추기"
+    },
+    "unavailable": "무료 이력서 점검은 아직 여기서 쓸 수 없어요.",
+    "upload": {
+      "choose": "파일 선택",
+      "hint": "PDF, Word 또는 일반 텍스트 파일, 최대 {mb}MB.",
+      "label": "내 이력서",
+      "none": "선택한 파일 없음",
+      "replace": "다른 파일 선택",
+      "selected": "선택한 파일: {name}"
+    }
+  },
+  "visitor": {
+    "alerts": {
+      "another": "다른 알림 만들기",
+      "city": "도시",
+      "cityPlaceholder": "예: 타이베이",
+      "consent": "이 검색의 새 공고를 이메일로 보내 주세요. 어느 이메일에서든 클릭 한 번으로 그만 받을 수 있어요.",
+      "country": "국가 또는 지역",
+      "countryAny": "전체",
+      "daily": "하루에 한 번",
+      "email": "이메일 주소",
+      "emailHint": "먼저 확인 링크를 보내드려요. 링크를 누르기 전에는 다른 것은 보내지 않아요.",
+      "errors": {
+        "consent": "이 이메일을 받는 데 동의하려면 체크해 주세요.",
+        "email": "올바른 이메일 주소를 입력해 주세요.",
+        "generic": "보내지 못했어요. 다시 시도해 주세요.",
+        "rateLimited": "오늘 이 네트워크에서 들어온 신청이 너무 많아요. 내일 다시 시도해 주세요."
+      },
+      "eyebrow": "무료 도구",
+      "frequency": "받는 주기",
+      "loading": "불러오는 중…",
+      "meta": {
+        "description": "검색 조건 하나에 맞는 새 공개 공고를 하루에 한 번 또는 일주일에 한 번 이메일로 받아 보세요. 계정은 필요 없고, 클릭 한 번으로 그만 받을 수 있어요.",
+        "title": "이메일 공고 알림"
+      },
+      "privacy": "이메일 주소는 이 알림을 보내는 데만 보관해요. 확인하지 않은 신청은 72시간 뒤에 삭제돼요.",
+      "remote": "원격 근무 공고만",
+      "role": "직무 이름 또는 키워드",
+      "rolePlaceholder": "예: 데이터 분석가",
+      "sentBody": "{email} 주소로 알림을 받을 수 있다면 확인 링크를 보냈어요. 링크를 누르기 전에는 아무것도 보내지 않아요. 링크는 72시간 동안 쓸 수 있어요.",
+      "sentTitle": "받은편지함을 확인해 주세요",
+      "signupInstead": "내 이력서를 반영한 알림을 받고 싶으신가요? 무료 계정을 만들어 보세요.",
+      "sub": "계정은 필요 없어요. 직무와 지역을 고르면 새 공개 공고를 하루에 한 번 또는 일주일에 한 번 이메일로 보내드려요.",
+      "submit": "확인 이메일 보내기",
+      "submitting": "보내는 중…",
+      "title": "새 공고를 이메일로 받기",
+      "unavailable": "이메일 공고 알림은 여기서 쓸 수 없어요.",
+      "weekly": "일주일에 한 번"
+    },
+    "assistant": {
+      "aiLabel": "AI 답변",
+      "chips": {
+        "how": "%BRAND%는 어떻게 작동하나요?",
+        "pay": "이런 공고는 급여가 어느 정도인가요?",
+        "remote": "이 공고 중 원격으로 일할 수 있는 것은 무엇인가요?"
+      },
+      "errors": {
+        "generic": "문제가 생겼어요. 다시 시도해 주세요.",
+        "rateLimited": "계정 없이 할 수 있는 질문 한도에 도달했어요. 무료 계정을 만들면 계속 질문할 수 있어요.",
+        "unavailable": "지금은 어시스턴트를 쓸 수 없어요."
+      },
+      "inputLabel": "내 질문",
+      "intro": "이 페이지의 공고, 공고에 적힌 급여, %BRAND%의 작동 방식에 대해 물어보세요. 답변에는 이력서를 쓰지 않고, 내가 공고에 얼마나 맞는지는 말하지 않아요.",
+      "launcher": "이 공고들에 대해 물어보기",
+      "lookingUp": "공고를 찾아보는 중…",
+      "note": "답변은 AI가 쓰며 틀릴 수 있어요. 여기에 입력한 내용은 저장되지 않아요.",
+      "placeholder": "질문을 입력해 주세요",
+      "send": "보내기",
+      "signupCta": "무료 계정 만들기",
+      "title": "이 페이지에 대해 물어보기",
+      "writing": "답변을 쓰는 중…",
+      "you": "나"
+    },
+    "card": {
+      "badge": {
+        "agency": "채용 대행사",
+        "citizens": "시민권자만",
+        "clearance": "보안 인가 필요",
+        "closes": "지원 마감: {date}",
+        "direct": "회사 직접 등록",
+        "sponsorshipNotOffered": "비자 스폰서십 없다고 적혀 있음",
+        "sponsorshipOffered": "비자 스폰서십 언급 있음"
+      },
+      "from": "{amount}부터",
+      "lastChecked": "마지막 확인: {date}",
+      "payNotListed": "급여 정보 없음",
+      "payPeriod": {
+        "day": "일급 {amount}",
+        "hour": "시급 {amount}",
+        "month": "월급 {amount}",
+        "week": "주급 {amount}",
+        "year": "연봉 {amount}"
+      },
+      "placeNotListed": "근무 지역 정보 없음",
+      "posted": "게시일: {date}",
+      "range": "{min}–{max}",
+      "source": {
+        "ats_public": "{name} 채용 페이지에서 가져옴",
+        "bank": "채용 담당자가 {sourceName}에 올린 공고",
+        "provider": "{name}에서 찾음"
+      },
+      "upTo": "최대 {amount}",
+      "workModel": {
+        "hybrid": "하이브리드",
+        "onsite": "사무실 근무",
+        "remote": "원격"
+      }
+    },
+    "confirm": {
+      "again": "다시 신청하기",
+      "cadence": {
+        "daily": "하루에 한 번",
+        "weekly": "일주일에 한 번"
+      },
+      "confirm": "공고 알림 확인하기",
+      "confirmedBody": "‘{search}’ 검색에 맞는 새 공고를 {cadence} 이메일로 보내드려요. 모든 이메일에 클릭 한 번으로 수신을 거부할 수 있는 링크가 있어요.",
+      "confirmedTitle": "공고 알림이 켜졌어요",
+      "confirming": "확인하는 중…",
+      "error": "이 링크를 확인하지 못했어요. 다시 시도해 주세요.",
+      "invalidBody": "확인 링크는 72시간 동안 쓸 수 있어요. 다시 신청하면 새 링크를 받을 수 있어요.",
+      "invalidTitle": "이 링크는 더 이상 쓸 수 없어요",
+      "loading": "링크를 확인하는 중…",
+      "pendingBody": "{email} 주소로 ‘{search}’ 검색에 맞는 새 공고를 {cadence} 보내드려요.",
+      "pendingTitle": "공고 알림을 확인해 주세요",
+      "retry": "다시 시도",
+      "searchAny": "모든 공고",
+      "seeJobs": "무료 계정 만들기",
+      "unavailable": "이메일 공고 알림은 여기서 쓸 수 없어요.",
+      "unsubscribedBody": "이 주소는 이 알림을 그만 받기로 했어요. 다시 받고 싶으면 다시 신청해 주세요.",
+      "unsubscribedTitle": "이 알림은 꺼져 있어요"
+    },
+    "feed": {
+      "alertsLink": "이런 새 공고를 이메일로 받기",
+      "asOf": "업데이트: {time}",
+      "empty": "지금은 이 페이지에 보여드릴 공개 공고가 없어요.",
+      "error": "지금은 공고를 불러오지 못했어요.",
+      "fitNote": "적합 점수에는 내 이력서가 필요해서, 가입한 뒤에만 표시돼요.",
+      "listLabel": "최근 공개 공고",
+      "loading": "공고를 불러오는 중…",
+      "retry": "다시 시도",
+      "sub": "최근 공개 공고를 최대 20개까지 보여드려요. 계정 없이도 볼 수 있어요.",
+      "title": "이 페이지의 최근 공고"
+    },
+    "gate": {
+      "body": "무료 계정을 만들면 내 검색에 맞는 모든 공고를 보고, 공고마다 내 이력서와 비교하고, 어디에 지원했는지 기록해 둘 수 있어요. 지원은 여전히 각 회사 사이트에서 직접 해요.",
+      "cta": "무료 계정 만들기",
+      "login": "로그인",
+      "openJobs": "내 공고 열기",
+      "title": "내 검색에 맞는 모든 공고와, 공고마다 나에게 얼마나 맞는지 확인하세요"
     }
   }
 }

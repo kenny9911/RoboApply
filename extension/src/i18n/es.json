@@ -1,0 +1,141 @@
+{
+  "extension": {
+    "connect": {
+      "body": "Conecta %BRAND% para llenar formularios con tu perfil.",
+      "open": "Abrir %BRAND% para conectar",
+      "title": "Conecta tu cuenta"
+    },
+    "draft": {
+      "aiBadge": "Generado por AI",
+      "aiDisclosure": "Este texto fue generado por un modelo de AI.",
+      "aiLabel": "Escrito por AI. Edítalo y úsalo solo si es cierto en tu caso.",
+      "bankLabel": "De tus respuestas guardadas",
+      "cost": "Usa 1 crédito de respuesta de AI.",
+      "dismiss": "Descartar",
+      "editLabel": "Borrador de respuesta para: {question}",
+      "save": "Guardar esta respuesta",
+      "saveFailed": "No se pudo guardar esta respuesta. Inténtalo otra vez.",
+      "saveHint": "La próxima vez, los formularios con esta pregunta se llenan con tus respuestas guardadas.",
+      "saveProtected": "Las respuestas sobre ti se guardan en tu perfil, no aquí.",
+      "saved": "Guardada en tus respuestas.",
+      "saving": "Guardando…",
+      "use": "Usar esta respuesta",
+      "write": "Escribir un borrador",
+      "writing": "Escribiendo…"
+    },
+    "error": {
+      "credits_exhausted": "Ya usaste tus llenados de formularios por ahora.",
+      "credits_exhaustedUntil": "Ya usaste tus llenados de formularios por ahora. Tendrás más el {time}.",
+      "feature_disabled": "El llenado de formularios no está disponible para tu cuenta.",
+      "network": "No se puede conectar con %BRAND% en este momento. Revisa tu conexión e inténtalo otra vez.",
+      "not_connected": "Primero conecta %BRAND%. Abre %BRAND% y luego inténtalo otra vez.",
+      "rate_limited": "Demasiados intentos en poco tiempo. Espera un minuto e inténtalo otra vez.",
+      "unknown": "Algo salió mal. No se envió nada. Inténtalo otra vez."
+    },
+    "fit": {
+      "note": "Esto no es tu probabilidad de que te contraten.",
+      "quickEstimate": "Estimación rápida",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "Encaja bien",
+        "great": "Encaja muy bien",
+        "possible": "Posible",
+        "unlikely": "Poco probable"
+      }
+    },
+    "item": {
+      "checkSensitive": "Respuesta sensible. Revísala antes de enviar.",
+      "unlabelled": "Campo sin etiqueta"
+    },
+    "job": {
+      "untitled": "Empleo de esta página"
+    },
+    "launcher": {
+      "label": "Abrir %BRAND% para llenar este formulario",
+      "text": "Llenar este formulario"
+    },
+    "manifest": {
+      "actionTitle": "Llenar este formulario",
+      "description": "Llena formularios de postulación con tu perfil de %BRAND%. Tú revisas cada respuesta y envías la postulación por tu cuenta.",
+      "nameChrome": "%BRAND% para Chrome",
+      "nameEdge": "%BRAND% para Edge",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "Los borradores no están disponibles para tu cuenta en este momento.",
+      "cover_letter": "Adjunta tú una carta de presentación, o escribe primero una en %BRAND%.",
+      "disabled": "Este campo está bloqueado en el formulario.",
+      "draft_failed": "No se pudo escribir el borrador. Inténtalo otra vez o responde tú.",
+      "file_failed": "No se pudo adjuntar el archivo. Adjúntalo tú.",
+      "no_option": "Ninguna de las opciones coincidió con tu perfil. Elige una tú.",
+      "no_value": "Tu perfil todavía no tiene este dato.",
+      "not_pressed": "Esta opción necesita un clic en el formulario. Selecciónala tú.",
+      "protected": "Responde esta pregunta tú. Nunca se escriben borradores para preguntas como esta.",
+      "resume_unavailable": "No se pudo cargar tu currículum. Adjúntalo tú.",
+      "undone": "Se dejó como estaba."
+    },
+    "panel": {
+      "checking": "Revisando tu conexión…",
+      "checklist": "Campos de este formulario",
+      "collapse": "Ocultar panel",
+      "fill": "Llenar este formulario",
+      "fillPage": "Llenar esta página",
+      "filling": "Llenando tus datos…",
+      "newPage": "Estás en una página nueva de este formulario.",
+      "newPageHint": "Llena también esta página.",
+      "newPageNoCost": "Es la misma postulación, así que no usa otro llenado de formulario.",
+      "noFields": "No se encontraron campos en esta página. Desplázate hasta el formulario o abre la página de postulación y luego inténtalo otra vez.",
+      "oneFill": "Toda la postulación usa 1 llenado de formulario.",
+      "pageByPage": "Este formulario tiene varias páginas. Llena cada página y luego usa el botón del propio formulario para continuar.",
+      "site": "Formulario en {site}",
+      "submitYourself": "Revisa el formulario y luego envíalo por tu cuenta.",
+      "summary": "Se llenaron {filled} de {total} campos.",
+      "summaryNeedsYou": "Necesitan tu atención: {count}.",
+      "title": "Llenar este formulario",
+      "undo": "Deshacer el llenado automático",
+      "undoPartial": "Opciones que no se pueden deshacer aquí: {count}. Cámbialas en el formulario.",
+      "undone": "Campos que se dejaron como estaban: {count}."
+    },
+    "popup": {
+      "boardBody": "Empleo en {site}. No se lee nada de esta página hasta que elijas una acción.",
+      "checkFit": "Revisar el encaje",
+      "codeConnect": "Conectar con código",
+      "codeInvalid": "Ese código no funciona. Los códigos tienen 8 letras o números y vencen después de 10 minutos.",
+      "codeLabel": "O ingresa el código de 8 caracteres de %BRAND%",
+      "connected": "Conectado.",
+      "disconnect": "Desconectar",
+      "noFit": "Todavía no hay nivel de encaje para este empleo. Ábrelo en %BRAND% para verlo.",
+      "noJobFound": "No se encontró ningún empleo en esta página.",
+      "openFormSite": "En {site}, abre el formulario de postulación y luego elige «Llenar este formulario».",
+      "otherSite": "Los formularios de este sitio todavía no se pueden llenar.",
+      "plannedSite": "Los formularios de {site} todavía no se pueden llenar.",
+      "reconnect": "Volver a conectar %BRAND%",
+      "reconnectBody": "Este navegador se desconectó de tu cuenta. Conéctalo otra vez para seguir llenando formularios.",
+      "requestSite": "Solicitar este sitio",
+      "requested": "Solicitud enviada. Gracias.",
+      "saveJob": "Guardar empleo",
+      "saved": "Guardado en tus empleos. Solo tú puedes verlo.",
+      "title": "%BRAND%",
+      "version": "Versión {version}"
+    },
+    "source": {
+      "ai": "Tu borrador editado",
+      "bank": "De tus respuestas guardadas",
+      "profile": "De tu perfil",
+      "resume": "Tu currículum: {fileName}"
+    },
+    "status": {
+      "filled": "Llenado",
+      "needs_you": "Necesita tu atención",
+      "skipped": "En blanco"
+    },
+    "submitted": {
+      "later": "Cuando la envíes, márcala como enviada en tus candidaturas.",
+      "notYet": "Todavía no",
+      "question": "¿Enviaste esta postulación?",
+      "thanks": "Se movió a Enviadas en tus candidaturas.",
+      "thanksNoJob": "Gracias. Añádela a tus candidaturas en %BRAND%.",
+      "yes": "Sí, la envié"
+    }
+  }
+}

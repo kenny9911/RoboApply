@@ -1,0 +1,141 @@
+{
+  "extension": {
+    "connect": {
+      "body": "%BRAND%를 연결하면 내 프로필로 양식을 채울 수 있어요.",
+      "open": "%BRAND%를 열어 연결하기",
+      "title": "내 계정 연결하기"
+    },
+    "draft": {
+      "aiBadge": "AI 생성",
+      "aiDisclosure": "이 글은 AI 모델이 생성했어요.",
+      "aiLabel": "AI가 쓴 글이에요. 직접 고친 뒤, 나에게 사실인 내용일 때만 사용해 주세요.",
+      "bankLabel": "저장한 답변에서 가져옴",
+      "cost": "AI 답변 크레딧 1개를 사용해요.",
+      "dismiss": "닫기",
+      "editLabel": "다음 질문의 답변 초안: {question}",
+      "save": "이 답변 저장",
+      "saveFailed": "이 답변을 저장하지 못했어요. 다시 시도해 주세요.",
+      "saveHint": "다음부터 이 질문이 있는 양식은 저장한 답변으로 채워져요.",
+      "saveProtected": "나에 대한 답변은 여기가 아니라 프로필에 보관돼요.",
+      "saved": "내 답변에 저장했어요.",
+      "saving": "저장 중…",
+      "use": "이 답변 사용",
+      "write": "초안 쓰기",
+      "writing": "쓰는 중…"
+    },
+    "error": {
+      "credits_exhausted": "지금 쓸 수 있는 양식 채우기 횟수를 모두 사용했어요.",
+      "credits_exhaustedUntil": "지금 쓸 수 있는 양식 채우기 횟수를 모두 사용했어요. {time}부터 다시 쓸 수 있어요.",
+      "feature_disabled": "이 계정에서는 양식 채우기를 사용할 수 없어요.",
+      "network": "지금 %BRAND%에 연결할 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
+      "not_connected": "먼저 %BRAND%를 연결해 주세요. %BRAND%를 연 뒤 다시 시도해 주세요.",
+      "rate_limited": "짧은 시간에 너무 여러 번 시도했어요. 1분 뒤에 다시 시도해 주세요.",
+      "unknown": "문제가 생겼어요. 아무것도 제출되지 않았어요. 다시 시도해 주세요."
+    },
+    "fit": {
+      "note": "이건 합격 확률이 아니에요.",
+      "quickEstimate": "간단 추정",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "잘 맞음",
+        "great": "아주 잘 맞음",
+        "possible": "가능성 있음",
+        "unlikely": "맞기 어려움"
+      }
+    },
+    "item": {
+      "checkSensitive": "민감한 답변이에요. 제출하기 전에 확인해 주세요.",
+      "unlabelled": "이름 없는 입력란"
+    },
+    "job": {
+      "untitled": "이 페이지의 채용 공고"
+    },
+    "launcher": {
+      "label": "%BRAND%를 열어 이 양식 채우기",
+      "text": "이 양식 채우기"
+    },
+    "manifest": {
+      "actionTitle": "이 양식 채우기",
+      "description": "%BRAND% 프로필로 입사 지원 양식을 채워요. 모든 답변은 직접 확인하고, 지원서도 직접 제출해요.",
+      "nameChrome": "Chrome용 %BRAND%",
+      "nameEdge": "Edge용 %BRAND%",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "지금은 이 계정에서 초안을 사용할 수 없어요.",
+      "cover_letter": "자기소개서는 직접 첨부하거나, 먼저 %BRAND%에서 써 주세요.",
+      "disabled": "양식에서 이 입력란이 잠겨 있어요.",
+      "draft_failed": "초안을 쓰지 못했어요. 다시 시도하거나 직접 답해 주세요.",
+      "file_failed": "파일을 첨부하지 못했어요. 직접 첨부해 주세요.",
+      "no_option": "프로필과 맞는 선택지가 없었어요. 직접 골라 주세요.",
+      "no_value": "프로필에 아직 이 정보가 없어요.",
+      "not_pressed": "이 선택지는 양식에서 클릭해야 해요. 직접 골라 주세요.",
+      "protected": "이 질문은 직접 답해 주세요. 이런 질문에는 초안을 절대 쓰지 않아요.",
+      "resume_unavailable": "이력서를 불러오지 못했어요. 직접 첨부해 주세요.",
+      "undone": "원래대로 되돌렸어요."
+    },
+    "panel": {
+      "checking": "연결 상태를 확인하는 중…",
+      "checklist": "이 양식의 입력란",
+      "collapse": "패널 숨기기",
+      "fill": "이 양식 채우기",
+      "fillPage": "이 페이지 채우기",
+      "filling": "내 정보를 채우는 중…",
+      "newPage": "이 양식의 새 페이지예요.",
+      "newPageHint": "이 페이지도 채워 주세요.",
+      "newPageNoCost": "같은 지원서라서 양식 채우기 횟수를 더 쓰지 않아요.",
+      "noFields": "이 페이지에서 입력란을 찾지 못했어요. 양식이 있는 곳으로 스크롤하거나 지원 페이지를 연 뒤 다시 시도해 주세요.",
+      "oneFill": "지원서 전체에 양식 채우기 1회를 사용해요.",
+      "pageByPage": "이 양식은 여러 페이지예요. 페이지마다 채운 뒤, 양식에 있는 버튼을 눌러 다음으로 넘어가 주세요.",
+      "site": "{site}의 양식",
+      "submitYourself": "양식을 확인한 뒤 직접 제출해 주세요.",
+      "summary": "입력란 {total}개 중 {filled}개를 채웠어요.",
+      "summaryNeedsYou": "{count}개는 직접 채워야 해요.",
+      "title": "이 양식 채우기",
+      "undo": "채운 내용 되돌리기",
+      "undoPartial": "선택 항목 {count}개는 여기서 되돌릴 수 없어요. 양식에서 직접 바꿔 주세요.",
+      "undone": "입력란 {count}개를 원래대로 되돌렸어요."
+    },
+    "popup": {
+      "boardBody": "{site}의 채용 공고예요. 작업을 선택하기 전에는 이 페이지의 내용을 읽지 않아요.",
+      "checkFit": "적합도 확인",
+      "codeConnect": "코드로 연결",
+      "codeInvalid": "이 코드는 사용할 수 없어요. 코드는 문자나 숫자 8자리이고, 10분이 지나면 만료돼요.",
+      "codeLabel": "또는 %BRAND%에 표시된 8자리 코드 입력",
+      "connected": "연결됐어요.",
+      "disconnect": "연결 해제",
+      "noFit": "이 공고의 적합도는 아직 없어요. %BRAND%에서 공고를 열면 확인할 수 있어요.",
+      "noJobFound": "이 페이지에서 채용 공고를 찾지 못했어요.",
+      "openFormSite": "{site}에서 지원 양식을 연 뒤 ‘이 양식 채우기’를 선택해 주세요.",
+      "otherSite": "이 사이트의 양식은 아직 채울 수 없어요.",
+      "plannedSite": "{site}의 양식은 아직 채울 수 없어요.",
+      "reconnect": "%BRAND% 다시 연결하기",
+      "reconnectBody": "이 브라우저와 내 계정의 연결이 해제됐어요. 양식을 계속 채우려면 다시 연결해 주세요.",
+      "requestSite": "이 사이트 요청하기",
+      "requested": "요청을 보냈어요. 감사해요.",
+      "saveJob": "공고 저장",
+      "saved": "내 공고에 저장했어요. 나만 볼 수 있어요.",
+      "title": "%BRAND%",
+      "version": "버전 {version}"
+    },
+    "source": {
+      "ai": "내가 고친 초안",
+      "bank": "저장한 답변에서 가져옴",
+      "profile": "프로필에서 가져옴",
+      "resume": "내 이력서: {fileName}"
+    },
+    "status": {
+      "filled": "채움",
+      "needs_you": "직접 채워야 함",
+      "skipped": "비워 둠"
+    },
+    "submitted": {
+      "later": "제출한 뒤에는 지원 현황에서 ‘지원함’으로 표시해 주세요.",
+      "notYet": "아직 안 했어요",
+      "question": "이 지원서를 제출했나요?",
+      "thanks": "지원 현황에서 ‘지원함’으로 옮겼어요.",
+      "thanksNoJob": "감사해요. %BRAND%의 지원 현황에 추가해 주세요.",
+      "yes": "네, 제출했어요"
+    }
+  }
+}

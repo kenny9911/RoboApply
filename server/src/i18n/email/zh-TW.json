@@ -1,1 +1,411 @@
-{}
+{
+  "accountV2": {
+    "studentCode": {
+      "body": "請在 %BRAND% 輸入這組驗證碼，確認你能讀取這個信箱。驗證碼 {minutes} 分鐘內有效。",
+      "codeLine": "你的驗證碼：{code}",
+      "heading": "確認你的學校電子郵件",
+      "ignore": "如果這不是你提出的要求，請忽略這封信。不會有任何變更。",
+      "preheader": "輸入這組驗證碼，確認你的學校電子郵件。",
+      "subject": "你的 %BRAND% 學生驗證碼：{code}"
+    },
+    "winback": {
+      "body": "你的付費方案已在 {date} 結束。你的履歷、儲存的職缺和應徵紀錄都還在帳號裡，免費版也照常可以使用。",
+      "cta": "查看方案",
+      "heading": "你的帳號還在",
+      "once": "關於這件事，我們只會寄這一封信。",
+      "preheader": "你的帳號和你做過的內容都還在。",
+      "price": "如果你想使用 Pro，費用是{period} {price}。你隨時可以取消。",
+      "subject": "你的 %BRAND% 付費方案已在一個月前結束"
+    }
+  },
+  "auth": {
+    "accountDeleted": {
+      "body": "你要求我們刪除你的 %BRAND% 帳號。你已在所有裝置上登出，之後無法再登入。",
+      "heading": "你的帳號已排定刪除",
+      "notYou": "如果這不是你提出的要求，請立刻回覆這封信或聯絡客服。",
+      "subject": "你的 %BRAND% 帳號已排定刪除",
+      "when": "我們會在 {days} 天內刪除你的帳號和其中的資料。備份會在那之後的 90 天內清除。"
+    },
+    "emailVerify": {
+      "body": "請確認這是你的電子郵件地址。在你決定之前，仍然可以繼續使用 %BRAND%；確認之後，就能使用你的免費練習面試。",
+      "cta": "確認我的電子郵件",
+      "expiry": "這個連結會在 24 小時後失效。你可以到「設定」重新寄送。",
+      "heading": "確認你的電子郵件",
+      "preheader": "點一下就能確認這個地址。",
+      "subject": "確認你在 %BRAND% 使用的電子郵件"
+    },
+    "newDevice": {
+      "body": "你的帳號剛剛在 {time}（UTC）從 {os} 上的 {browser} 登入。",
+      "cta": "重設我的密碼",
+      "heading": "新的登入",
+      "ifNot": "如果這不是你，請立刻重設密碼。重設後，你會在其他所有裝置上登出。",
+      "ifYou": "如果這是你本人，不需要做任何事。",
+      "preheader": "{os} 上的 {browser}",
+      "subject": "你的 %BRAND% 帳號有新的登入"
+    },
+    "oauthEmail": {
+      "body": "你開始用 LINE 建立 %BRAND% 帳號。請確認這個電子郵件地址以完成建立。只有在你按下按鈕後，帳號才會建立。",
+      "cta": "確認並建立我的帳號",
+      "heading": "完成註冊",
+      "ignore": "如果這不是你，請忽略這封信。不會建立任何帳號。",
+      "preheader": "確認這個電子郵件，完成用 LINE 註冊。",
+      "subject": "完成建立你的 %BRAND% 帳號"
+    },
+    "otherBrand": {
+      "body": "有人嘗試用這個電子郵件地址建立 %BRAND% 帳號。這個電子郵件已經屬於一個 %OTHER_BRAND% 帳號，而一個電子郵件只能用於兩者其中之一。",
+      "cta": "登入 %OTHER_BRAND%",
+      "heading": "你已經有帳號了",
+      "ignore": "如果這不是你，請忽略這封信。沒有任何變更。",
+      "subject": "有人嘗試用你的電子郵件註冊",
+      "useOther": "要繼續使用你的帳號，請登入 %OTHER_BRAND%："
+    },
+    "passwordReset": {
+      "body": "有人要求重設這個 %BRAND% 帳號的密碼。請用下方按鈕設定新密碼。這個連結只能使用一次，並會在 30 分鐘後失效。",
+      "cta": "設定新密碼",
+      "heading": "重設密碼",
+      "ignore": "如果這不是你提出的要求，請忽略這封信。你的密碼不會改變。",
+      "preheader": "這個連結 30 分鐘內有效。",
+      "sessions": "重設密碼後，你會在其他所有裝置上登出。",
+      "subject": "重設你的 %BRAND% 密碼"
+    }
+  },
+  "billing": {
+    "annualReminder": {
+      "body": "你從 {since} 開始使用 {plan}。它{period}續訂一次，費用是 {price}。下一次續訂日期是 {date}。",
+      "heading": "每年一次的訂閱確認",
+      "subject": "你的 %BRAND% 訂閱仍在生效中"
+    },
+    "cancelConfirmed": {
+      "accessEnded": "你的帳號現在是免費版。",
+      "accessUntil": "你的付費功能可以使用到 {date}。之後你的帳號會改為免費版。",
+      "body": "我們已取消 {plan}。它不會續訂，你也不會再為它被收費。",
+      "cta": "查看你的方案",
+      "heading": "你的方案已取消",
+      "received": "我們在 {at} 收到你的取消申請。",
+      "subject": "你的 %BRAND% 方案已取消"
+    },
+    "cancelLink": {
+      "body": "有人要求取消這個電子郵件地址的 %BRAND% 方案。請在 {minutes} 分鐘內用下方按鈕確認。這個連結只能使用一次。",
+      "cta": "取消我的方案",
+      "heading": "確認取消",
+      "ignore": "如果這不是你提出的要求，請忽略這封信。不會有任何變更。",
+      "subject": "取消 %BRAND% 方案的連結"
+    },
+    "cancelNone": {
+      "body": "有人要求取消這個電子郵件地址的 %BRAND% 方案，但這個帳號沒有會續訂的方案。不會收取任何費用。",
+      "cta": "查看你的方案",
+      "heading": "沒有可以取消的方案",
+      "subject": "沒有可以取消的 %BRAND% 方案"
+    },
+    "footer": "你會收到這封信，是因為它和你的 %BRAND% 方案與付款有關。",
+    "paymentFailed": {
+      "body": "{plan} 的款項 {price} 沒有付款成功。我們會在接下來幾天內再試。",
+      "cta": "更新付款方式",
+      "heading": "我們無法從你的卡片扣款",
+      "keep": "請更新付款方式，才能保留你的方案。如果最後一次嘗試仍然失敗，你的帳號會改為免費版。你已經有的點數仍然是你的。",
+      "subject": "你的 %BRAND% 付款沒有成功"
+    },
+    "periods": {
+      "month": "每月",
+      "period": "每個計費週期",
+      "quarter": "每 3 個月",
+      "week": "每週"
+    },
+    "planNames": {
+      "legacy": "練習方案（舊版）",
+      "practice_pack_15": "練習包（15 場）",
+      "practice_pack_5": "練習包（5 場）",
+      "pro": "Pro",
+      "pro_monthly": "Pro 月繳",
+      "pro_monthlyCn": "Pro 月通行證",
+      "pro_quarterly": "Pro 季繳",
+      "pro_quarterlyCn": "Pro 季通行證",
+      "pro_week_pass": "7 天通行證",
+      "pro_week_passCn": "Pro 週通行證",
+      "pro_weekly": "Pro 週繳",
+      "student_monthly": "學生月繳",
+      "student_quarterly": "學生季繳"
+    },
+    "renewalReminder": {
+      "bodyAuto": "{plan} 會在 {date} 自動續訂，費用是{period} {price}。",
+      "bodyManual": "{plan} 會在 {date} 到期。它不會續訂，也不會收取任何費用。如果想繼續使用 Pro，請再買一張通行證。",
+      "bodyManualLegacy": "{plan} 會在 {date} 到期。它不會續訂，也不會收取任何費用。如果想繼續練習，請查看目前的方案。",
+      "cancelLine": "不想續訂？在那之前，隨時可以點一下就取消。你的付費功能可以使用到已付費的期間結束為止。",
+      "ctaAuto": "管理或取消",
+      "ctaManual": "查看通行證",
+      "ctaManualLegacy": "查看方案",
+      "headingAuto": "你的方案即將續訂",
+      "headingManual": "你的通行證即將到期",
+      "subjectAuto": "你的 %BRAND% 方案將在 {date} 續訂",
+      "subjectManual": "你的 %BRAND% 通行證將在 {date} 到期"
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "addressUnverified": "由使用者在申請表單中輸入。%BRAND% 沒有確認過這是對方本人的地址。",
+      "fieldAccount": "帳號",
+      "fieldAddress": "回覆地址",
+      "fieldCoach": "教練",
+      "fieldFrom": "申請人",
+      "fieldLength": "諮詢時間長度",
+      "fieldTimes": "對方方便的時間",
+      "fieldTopic": "主題",
+      "heading": "新的教練諮詢申請",
+      "intro": "{coach}，{name} 想向你申請一次諮詢。對方是在 %BRAND% 的教練名單上找到你的。",
+      "introAdmin": "有一位使用者從 %BRAND% 的教練名單向 {coach} 送出這份申請。這是給你的副本。",
+      "minutes": "{minutes} 分鐘",
+      "next": "如果要接受，請回覆這封信或寫信到 {email}，和對方談定時間和價格。",
+      "nextAdmin": "教練會直接回覆使用者。如果教練請你協助，請接手處理。",
+      "notGiven": "未提供",
+      "payment": "使用者會直接付款給教練。%BRAND% 不收取任何教練諮詢的款項。",
+      "reason": "你會收到這封信，是因為你同意列在 %BRAND% 的教練名單上，而且有使用者申請諮詢。",
+      "reasonAdmin": "你會收到這封信，是因為你負責管理 %BRAND% 的教練名單。",
+      "subject": "{name} 的教練諮詢申請：{topic}",
+      "subjectAdmin": "給 {coach} 的教練諮詢申請：{topic}"
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "body": "我們已整理好一份你的 %BRAND% 資料。請登入並開啟「設定」→「隱私」來下載。檔案會在 {days, plural, one {# 天} other {# 天}}後刪除。",
+      "cta": "開啟設定",
+      "heading": "你的資料匯出已準備好",
+      "subject": "你的 %BRAND% 資料匯出已準備好"
+    }
+  },
+  "growth": {
+    "footer": "你會收到這封信，是因為它和你 %BRAND% 帳號裡的點數有關。",
+    "referralReward": {
+      "cta": "開始練習面試",
+      "invitee": {
+        "body": "你透過朋友的邀請連結加入並完成了設定，所以我們已將{credits, plural, one {練習面試點數 # 點} other {練習面試點數 # 點}}加到你的帳號。",
+        "heading": "你獲得了{credits, plural, one {練習面試點數 # 點} other {練習面試點數 # 點}}",
+        "subject": "你的邀請點數可以使用了"
+      },
+      "inviter": {
+        "body": "有一位透過你的邀請連結註冊的朋友已驗證帳號並完成設定，所以我們已將{credits, plural, one {練習面試點數 # 點} other {練習面試點數 # 點}}加到你的帳號。",
+        "heading": "你獲得了{credits, plural, one {練習面試點數 # 點} other {練習面試點數 # 點}}",
+        "subject": "你邀請的朋友已完成設定"
+      },
+      "note": "點數僅供 %BRAND% 的練習面試使用，沒有現金價值。"
+    }
+  },
+  "notify": {
+    "campusDeadline": {
+      "body": "{company} 的 {program} 將在 {date} 截止應徵。請到官方頁面應徵。",
+      "cta": "開啟官方頁面",
+      "heading": "應徵截止日快到了",
+      "preheader": "{program} 將在 {date} 截止。",
+      "subject": "{company}：{program} 將在 {date} 截止應徵"
+    },
+    "campusFollowed": {
+      "body": "{company} 的 {program} 已加入校園徵才行事曆，並附上官方頁面的連結。應徵前，請先到官方頁面確認日期。",
+      "cta": "查看這個計畫",
+      "heading": "你追蹤的公司公布了徵才計畫",
+      "preheader": "{program} 已加入校園徵才行事曆。",
+      "subject": "{company} 公布了新的校園徵才計畫",
+      "subjectYear": "{company} 公布了 {year} 年畢業生的校園徵才計畫"
+    },
+    "common": {
+      "fitNote": "適合度是拿職缺說明和你的履歷比對出來的。這不是你被錄取的機率。",
+      "gapLine": "你的履歷上還沒有：{skill}",
+      "payNotListed": "未列出薪資",
+      "payPerDay": "日薪 {amount}",
+      "payPerHour": "時薪 {amount}",
+      "payPerMonth": "月薪 {amount}",
+      "payPerWeek": "週薪 {amount}",
+      "payPerYear": "年薪 {amount}",
+      "placeNotListed": "未列出地點",
+      "remote": "遠端",
+      "tierGood": "還算適合",
+      "tierGreat": "很適合",
+      "tierPossible": "可能適合",
+      "viewJob": "查看職缺"
+    },
+    "finishSetup": {
+      "body": "你目前填的回答都已儲存。完成設定後，就能看到符合你搜尋的職缺，以及履歷上該修改的地方。",
+      "cta": "繼續設定",
+      "heading": "接著上次繼續",
+      "preheader": "你的回答已儲存。準備好了再完成設定。",
+      "subject": "完成 %BRAND% 的設定"
+    },
+    "followUp": {
+      "body": "你在 {date} 應徵了 {company} 的 {title}。已經 {days} 天沒有回覆。寫一封簡短、有禮貌的後續信，是很正常的做法。",
+      "cta": "開啟這筆應徵紀錄",
+      "heading": "該追蹤進度了嗎？",
+      "preheader": "已 {days} 天沒有回覆。",
+      "subject": "{company} 已 {days} 天沒有回覆"
+    },
+    "interview": {
+      "body": "你在 {company} 的 {title} 面試排在 {date}。先做一次簡短的練習，可以幫助你做好準備。",
+      "cta": "針對這個職缺練習",
+      "heading": "你的面試快到了",
+      "preheader": "{title} 的面試在 {date}。",
+      "subject": "{company} 的面試在 {date}"
+    },
+    "jobAlertDigest": {
+      "cta": "查看所有新職缺",
+      "headingDaily": "你的每日職缺摘要",
+      "headingWeekly": "你的每週職缺摘要",
+      "introDaily": "{count, plural, one {從昨天到現在，有 # 個新職缺符合你已儲存的搜尋「{search}」。} other {從昨天到現在，有 # 個新職缺符合你已儲存的搜尋「{search}」。}}",
+      "introDailyNoTotal": "{count, plural, one {以下是從昨天到現在符合你已儲存的搜尋「{search}」的 # 個新職缺。} other {以下是從昨天到現在符合你已儲存的搜尋「{search}」的 # 個新職缺。}}你可以在 %BRAND% 查看所有新職缺。",
+      "introWeekly": "{count, plural, one {本週有 # 個新職缺符合你已儲存的搜尋「{search}」。} other {本週有 # 個新職缺符合你已儲存的搜尋「{search}」。}}",
+      "introWeeklyNoTotal": "{count, plural, one {以下是本週符合你已儲存的搜尋「{search}」的 # 個新職缺。} other {以下是本週符合你已儲存的搜尋「{search}」的 # 個新職缺。}}你可以在 %BRAND% 查看所有新職缺。",
+      "more": "{count, plural, one {還有 # 個新職缺也符合。請到 %BRAND% 查看。} other {還有 # 個新職缺也符合。請到 %BRAND% 查看。}}",
+      "subjectDaily": "從昨天到現在，有 {count, plural, one {# 個新職缺符合你的搜尋} other {# 個新職缺符合你的搜尋}}",
+      "subjectDailyNoTotal": "從昨天到現在，有新職缺符合你的搜尋",
+      "subjectWeekly": "本週有 {count, plural, one {# 個新職缺符合你的搜尋} other {# 個新職缺符合你的搜尋}}",
+      "subjectWeeklyNoTotal": "本週有新職缺符合你的搜尋",
+      "trackerCta": "開啟你的應徵紀錄",
+      "trackerLine": "{count, plural, one {有 # 筆應徵已 10 天沒有回覆。} other {有 # 筆應徵已 10 天沒有回覆。}}"
+    },
+    "jobAlertInstant": {
+      "cta": "查看你的所有職缺",
+      "heading": "{count, plural, one {你的搜尋有 # 個新職缺} other {你的搜尋有 # 個新職缺}}",
+      "intro": "{count, plural, one {以下職缺是最近刊登的，符合你已儲存的搜尋「{search}」。} other {以下職缺是最近刊登的，符合你已儲存的搜尋「{search}」。}}",
+      "subject": "「{search}」有 {count, plural, one {# 個新職缺} other {# 個新職缺}}"
+    },
+    "kitReady": {
+      "body": "針對 {company} 的 {title} 調整的履歷和回答已經準備好。請先檢查，再自己到公司網站應徵。",
+      "cta": "檢查應徵準備包",
+      "heading": "你的應徵準備包已準備好，可以檢查了",
+      "preheader": "檢查 {title} 的應徵準備包。",
+      "subject": "{title} 的應徵準備包已準備好"
+    },
+    "readyList": {
+      "body": "{count, plural, one {有 # 個職缺已準備好，等你檢查。} other {有 # 個職缺已準備好，等你檢查。}}要開啟哪些由你決定，每一筆應徵都由你自己送出。",
+      "cta": "查看清單",
+      "heading": "你本週的清單",
+      "preheader": "有職缺已準備好，等你檢查。",
+      "subject": "本週的「準備應徵」清單準備好了"
+    },
+    "reasons": {
+      "alerts": "你會收到這封信，是因為你在 %BRAND% 為已儲存的搜尋「{search}」開啟了職缺通知。",
+      "campusFollow": "你會收到這封信，是因為你在 %BRAND% 的校園徵才行事曆上追蹤了 {company}。",
+      "digestDaily": "你會收到這封信，是因為你在 %BRAND% 為已儲存的搜尋「{search}」選擇了每日職缺摘要。",
+      "digestWeekly": "你會收到這封信，是因為你在 %BRAND% 為已儲存的搜尋「{search}」選擇了每週職缺摘要。",
+      "reminders": "你會收到這封信，是因為它和你的 %BRAND% 帳號以及你追蹤的職缺有關。你可以關閉這些提醒。"
+    },
+    "resumeCheck": {
+      "body": "我們看過你的履歷，並列出了該先修改的地方。",
+      "bodyCount": "{count, plural, =0 {我們看過你的履歷，沒有發現急著要修改的地方。} one {我們看過你的履歷，發現 # 個該先修改的地方。} other {我們看過你的履歷，發現 # 個該先修改的地方。}}",
+      "cta": "查看你的履歷檢查",
+      "heading": "你的履歷檢查已完成",
+      "preheader": "看看履歷上該先修改哪些地方。",
+      "subject": "你的履歷檢查已完成"
+    },
+    "tipsPractice": {
+      "body": "你有一場免費的練習面試。開口回答面試問題，並取得哪些地方可以改進的說明。任何內容都不會提供給雇主。",
+      "bodyCredit": "你有一場練習面試可以使用。開口回答面試問題，並取得哪些地方可以改進的說明。任何內容都不會提供給雇主。",
+      "cta": "開始練習",
+      "heading": "試試練習面試",
+      "preheader": "開口回答面試問題，並取得改進說明。",
+      "subject": "你的免費練習面試可以使用了",
+      "subjectCredit": "你的練習面試可以使用了"
+    },
+    "tipsReEngagement": {
+      "body": "{count, plural, one {從 {date} 到現在，有 # 個新職缺符合你已儲存的搜尋「{search}」。} other {從 {date} 到現在，有 # 個新職缺符合你已儲存的搜尋「{search}」。}}",
+      "cta": "查看新職缺",
+      "heading": "你上次造訪後的新職缺",
+      "preheader": "有新職缺符合你已儲存的搜尋。",
+      "subject": "從 {date} 到現在，有 {count, plural, one {# 個新職缺符合你的搜尋} other {# 個新職缺符合你的搜尋}}"
+    },
+    "tipsTailor": {
+      "body": "針對單一職缺調整的履歷版本，會把職缺說明要求的技能放在最前面。每一處變更都由你檢查後再使用。",
+      "bodyJob": "{company} 的 {title} 是目前最適合你的職缺之一。針對這個職缺調整的履歷版本，會把職缺說明要求的技能放在最前面。每一處變更都由你檢查後再使用。",
+      "cta": "調整我的履歷",
+      "heading": "讓雇主看到他們要求的技能",
+      "preheader": "針對單一職缺的履歷版本，每一處變更都由你檢查。",
+      "subject": "針對你喜歡的職缺調整履歷",
+      "subjectJob": "針對 {title} 調整履歷"
+    },
+    "welcome": {
+      "heading": "歡迎使用 %BRAND%",
+      "intro": "這裡有三件可以先做的事。每一項都會直接帶你過去。",
+      "preheader": "在 %BRAND% 可以先做的三件事。",
+      "stepCampus": "查看校園徵才日期",
+      "stepJobs": "查看符合你搜尋的職缺",
+      "stepPractice": "練習一場面試",
+      "stepResume": "檢查你的履歷",
+      "stepTracker": "掌握你的應徵進度",
+      "subject": "歡迎使用 %BRAND%：可以先做的三件事"
+    }
+  },
+  "tracker": {
+    "csv": {
+      "header": {
+        "appliedOn": "應徵日期",
+        "company": "公司",
+        "currency": "幣別",
+        "deadline": "截止日",
+        "followUpOn": "追蹤日期",
+        "interview": "面試",
+        "link": "連結",
+        "notes": "備註",
+        "outcome": "怎麼結束的",
+        "salary": "薪資",
+        "savedOn": "儲存日期",
+        "source": "新增來源",
+        "stage": "階段",
+        "title": "職稱"
+      },
+      "outcome": {
+        "i_withdrew": "我主動退出",
+        "job_pulled": "職缺被撤掉了",
+        "they_said_no": "對方拒絕了"
+      },
+      "stage": {
+        "accepted": "錄取",
+        "ai_interview": "AI 面試",
+        "applied": "已應徵",
+        "applying": "已應徵",
+        "assessment": "測驗",
+        "bookmarked": "已儲存",
+        "closed": "職缺被撤掉了",
+        "final_round": "最後一關",
+        "first_call": "第一次通話",
+        "interviewing": "面試中",
+        "negotiating": "錄取",
+        "offer": "錄取",
+        "rejected": "未錄取",
+        "signed": "已簽約",
+        "withdrawn": "已退出",
+        "written_test": "筆試"
+      }
+    },
+    "inbox": {
+      "deadline": "{days, plural, =0 {{name} 今天截止應徵。} =1 {{name} 明天截止應徵。} other {{name} 將在 # 天後截止應徵。}}",
+      "followUpDue": "今天是你為 {name} 設定的追蹤日期。",
+      "interview": "24 小時內有 {name} 的面試。",
+      "noReply": "{name} 已 {days, plural, one {# 天} other {# 天}}沒有回覆。",
+      "unnamed": "這筆應徵紀錄"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "body": "有人（希望是你本人）要求 %BRAND% {cadence, select, daily {每天一次} other {每週一次}}把「{search}」的新職缺寄到這個地址。",
+        "cta": "確認職缺通知",
+        "heading": "確認你的職缺通知",
+        "ignore": "如果這不是你，請忽略這封信。除非按下連結，否則不會寄出任何信；連結會在 {hours} 小時後失效。",
+        "preheader": "按下按鈕，開始接收職缺通知。",
+        "subject": "確認你在 %BRAND% 的職缺通知"
+      },
+      "digest": {
+        "heading": "{count, plural, one {你的通知有 # 個新職缺} other {你的通知有 # 個新職缺}}",
+        "intro": "「{search}」自上一封信以來的新職缺。",
+        "more": "{count, plural, one {還有 # 個職缺也符合。} other {還有 # 個職缺也符合。}}",
+        "pay": "{period, select, year {年薪 } month {月薪 } week {週薪 } day {日薪 } hour {時薪 } other {}}{amount}",
+        "payNotListed": "未列出薪資",
+        "placeNotListed": "未列出地點",
+        "preheader": "你的通知有新職缺。",
+        "reason": "你會收到這封信，是因為你在 %BRAND% 確認了「{search}」的職缺通知。你沒有帳號。",
+        "remote": "遠端",
+        "signup": "建立免費帳號，看看每個職缺和你的履歷有多適合。",
+        "signupCta": "建立免費帳號",
+        "subject": "「{search}」有 {count, plural, one {# 個新職缺} other {# 個新職缺}}",
+        "viewJob": "查看職缺"
+      },
+      "searchAny": "任何職缺"
+    }
+  }
+}

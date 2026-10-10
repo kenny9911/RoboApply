@@ -49,5 +49,144 @@
       "description": "用你在 %BRAND% 的资料填写网申表单。每一项由你核对，申请由你自己提交。",
       "actionTitle": "一键填表"
     }
+  },
+  "extension": {
+    "connect": {
+      "body": "连接 %BRAND%，用你的个人资料填写表单。",
+      "open": "打开 %BRAND% 进行连接",
+      "title": "连接你的账号"
+    },
+    "draft": {
+      "aiBadge": "AI 生成",
+      "aiDisclosure": "这段文字由 AI 模型生成。",
+      "aiLabel": "由 AI 生成。请先修改，内容符合你的真实情况时再使用。",
+      "bankLabel": "来自你保存的答案",
+      "cost": "消耗 1 个 AI 回答额度。",
+      "dismiss": "关闭",
+      "editLabel": "答案草稿：{question}",
+      "save": "保存这个答案",
+      "saveFailed": "这个答案没有保存成功。请重试。",
+      "saveHint": "下次表单里再出现这个问题时，会用你保存的答案来填。",
+      "saveProtected": "关于你本人的答案保存在个人资料里，不保存在这里。",
+      "saved": "已保存到你的答案。",
+      "saving": "保存中…",
+      "use": "使用这个答案",
+      "write": "写一份草稿",
+      "writing": "生成中…"
+    },
+    "error": {
+      "credits_exhausted": "你的填表次数暂时用完了。",
+      "credits_exhaustedUntil": "你的填表次数暂时用完了。{time} 起有新的次数。",
+      "feature_disabled": "你的账号无法使用填表功能。",
+      "network": "暂时无法连接 %BRAND%。请检查网络后重试。",
+      "not_connected": "请先连接 %BRAND%。打开 %BRAND%，然后再试一次。",
+      "rate_limited": "短时间内尝试次数太多。请等一分钟再试。",
+      "unknown": "出了点问题，没有提交任何内容。请重试。"
+    },
+    "fit": {
+      "note": "这不是你被录用的概率。",
+      "quickEstimate": "快速估算",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "较合适",
+        "great": "很合适",
+        "possible": "可能合适",
+        "unlikely": "不太合适"
+      }
+    },
+    "item": {
+      "checkSensitive": "敏感问题的答案，提交前请核对。",
+      "unlabelled": "未标注的栏位"
+    },
+    "job": {
+      "untitled": "本页面的职位"
+    },
+    "launcher": {
+      "label": "打开 %BRAND% 一键填表",
+      "text": "一键填表"
+    },
+    "manifest": {
+      "actionTitle": "一键填表",
+      "description": "用你在 %BRAND% 的个人资料填写网申表单。每一项由你核对，申请由你自己提交。",
+      "nameChrome": "%BRAND% Chrome 版",
+      "nameEdge": "%BRAND% Edge 版",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "你的账号暂时无法使用草稿功能。",
+      "cover_letter": "请自行上传求职信，或先在 %BRAND% 里写一封。",
+      "disabled": "这个栏位在表单里已被锁定。",
+      "draft_failed": "草稿没有生成成功。请重试，或自行作答。",
+      "file_failed": "文件没有上传成功，请自行上传。",
+      "no_option": "没有选项与你的个人资料相符，请自行选择。",
+      "no_value": "你的个人资料里还没有这项信息。",
+      "not_pressed": "这个选项需要在表单上点击，请自行选择。",
+      "protected": "这个问题请自行作答。这类问题从不生成草稿。",
+      "resume_unavailable": "你的简历没有加载出来，请自行上传。",
+      "undone": "已恢复原样。"
+    },
+    "panel": {
+      "checking": "正在检查连接…",
+      "checklist": "这份表单的栏位",
+      "collapse": "收起面板",
+      "fill": "一键填表",
+      "fillPage": "填写本页",
+      "filling": "正在填写你的信息…",
+      "newPage": "你已进入这份表单的新一页。",
+      "newPageHint": "这一页也请填写。",
+      "newPageNoCost": "这是同一份申请，不会多用填表次数。",
+      "noFields": "这个页面上没有找到栏位。请滚动到表单处，或打开申请页面，然后再试一次。",
+      "oneFill": "整份申请使用 1 次填表次数。",
+      "pageByPage": "这份表单有多页。每填完一页，请用表单自己的按钮进入下一页。",
+      "site": "{site} 表单",
+      "submitYourself": "请检查表单，然后自己提交。",
+      "summary": "{total} 个栏位中已填写 {filled} 个。",
+      "summaryNeedsYou": "{count} 个需要你处理。",
+      "title": "一键填表",
+      "undo": "撤销填写",
+      "undoPartial": "有 {count} 个选项无法在这里撤销，请在表单上修改。",
+      "undone": "已恢复 {count} 个栏位。"
+    },
+    "popup": {
+      "boardBody": "{site} 上的职位。在你选择操作之前，不会读取这个页面上的任何内容。",
+      "checkFit": "查看匹配度",
+      "codeConnect": "用连接码连接",
+      "codeInvalid": "这个连接码无效。连接码由 8 位字母或数字组成，10 分钟后失效。",
+      "codeLabel": "或输入 %BRAND% 提供的 8 位连接码",
+      "connected": "已连接。",
+      "disconnect": "断开连接",
+      "noFit": "这个职位还没有匹配度。在 %BRAND% 中打开它即可查看。",
+      "noJobFound": "这个页面上没有找到职位。",
+      "openFormSite": "在 {site} 上打开申请表单，然后选择“一键填表”。",
+      "otherSite": "暂时还不能填写这个网站上的表单。",
+      "plannedSite": "暂时还不能填写 {site} 上的表单。",
+      "reconnect": "重新连接 %BRAND%",
+      "reconnectBody": "这个浏览器已与你的账号断开连接。重新连接后才能继续填写表单。",
+      "requestSite": "申请支持这个网站",
+      "requested": "请求已发送，谢谢。",
+      "saveJob": "保存职位",
+      "saved": "已保存到你的职位，只有你能看到。",
+      "title": "%BRAND%",
+      "version": "版本 {version}"
+    },
+    "source": {
+      "ai": "你修改过的草稿",
+      "bank": "来自你保存的答案",
+      "profile": "来自你的个人资料",
+      "resume": "你的简历：{fileName}"
+    },
+    "status": {
+      "filled": "已填写",
+      "needs_you": "需要你处理",
+      "skipped": "留空"
+    },
+    "submitted": {
+      "later": "提交后，请在申请记录里把它标记为“已申请”。",
+      "notYet": "还没有",
+      "question": "你提交这份申请了吗？",
+      "thanks": "已在申请记录里移到“已申请”。",
+      "thanksNoJob": "谢谢。请在 %BRAND% 里把它添加到申请记录。",
+      "yes": "是的，我已提交"
+    }
   }
 }

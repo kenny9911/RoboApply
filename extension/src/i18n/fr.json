@@ -1,0 +1,141 @@
+{
+  "extension": {
+    "connect": {
+      "body": "Connecte %BRAND% pour remplir les formulaires avec ton profil.",
+      "open": "Ouvrir %BRAND% pour connecter ton compte",
+      "title": "Connecte ton compte"
+    },
+    "draft": {
+      "aiBadge": "Généré par AI",
+      "aiDisclosure": "Ce texte a été généré par un modèle AI.",
+      "aiLabel": "Écrit par AI. Modifie-le, puis ne l'utilise que si c'est vrai pour toi.",
+      "bankLabel": "De tes réponses enregistrées",
+      "cost": "Utilise 1 crédit de réponse AI.",
+      "dismiss": "Ignorer",
+      "editLabel": "Brouillon de réponse pour : {question}",
+      "save": "Enregistrer cette réponse",
+      "saveFailed": "Cette réponse n'a pas pu être enregistrée. Réessaie.",
+      "saveHint": "La prochaine fois, les formulaires qui posent cette question seront remplis à partir de tes réponses enregistrées.",
+      "saveProtected": "Les réponses qui te concernent sont conservées dans ton profil, pas ici.",
+      "saved": "Enregistrée dans tes réponses.",
+      "saving": "Enregistrement…",
+      "use": "Utiliser cette réponse",
+      "write": "Écrire un brouillon",
+      "writing": "Rédaction…"
+    },
+    "error": {
+      "credits_exhausted": "Tu as utilisé tes remplissages de formulaire pour l'instant.",
+      "credits_exhaustedUntil": "Tu as utilisé tes remplissages de formulaire pour l'instant. Tu en auras d'autres le {time}.",
+      "feature_disabled": "Le remplissage de formulaires n'est pas disponible pour ton compte.",
+      "network": "Impossible de joindre %BRAND% pour l'instant. Vérifie ta connexion et réessaie.",
+      "not_connected": "Connecte d'abord %BRAND%. Ouvre %BRAND%, puis réessaie.",
+      "rate_limited": "Trop de tentatives en peu de temps. Attends une minute, puis réessaie.",
+      "unknown": "Un problème est survenu. Rien n'a été envoyé. Réessaie."
+    },
+    "fit": {
+      "note": "Ce n'est pas ta probabilité d'être recruté.",
+      "quickEstimate": "Estimation rapide",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "Bien adapté",
+        "great": "Très adapté",
+        "possible": "Possible",
+        "unlikely": "Peu probable"
+      }
+    },
+    "item": {
+      "checkSensitive": "Réponse sensible. Vérifie-la avant d'envoyer.",
+      "unlabelled": "Champ sans libellé"
+    },
+    "job": {
+      "untitled": "Offre sur cette page"
+    },
+    "launcher": {
+      "label": "Ouvrir %BRAND% pour remplir ce formulaire",
+      "text": "Remplir ce formulaire"
+    },
+    "manifest": {
+      "actionTitle": "Remplir ce formulaire",
+      "description": "Remplit les formulaires de candidature avec ton profil %BRAND%. Tu vérifies chaque réponse et envoies la candidature toi-même.",
+      "nameChrome": "%BRAND% pour Chrome",
+      "nameEdge": "%BRAND% pour Edge",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "Les brouillons ne sont pas disponibles sur ton compte pour l'instant.",
+      "cover_letter": "Joins toi-même une lettre de motivation, ou écris-en une d'abord dans %BRAND%.",
+      "disabled": "Ce champ est verrouillé dans le formulaire.",
+      "draft_failed": "Le brouillon n'a pas pu être écrit. Réessaie ou réponds toi-même.",
+      "file_failed": "Le fichier n'a pas pu être joint. Joins-le toi-même.",
+      "no_option": "Aucun des choix ne correspond à ton profil. Choisis-en un toi-même.",
+      "no_value": "Ton profil ne contient pas encore cette information.",
+      "not_pressed": "Ce choix demande un clic dans le formulaire. Sélectionne-le toi-même.",
+      "protected": "Réponds toi-même à celle-ci. Aucun brouillon n'est jamais écrit pour ce type de question.",
+      "resume_unavailable": "Ton CV n'a pas pu être chargé. Joins-le toi-même.",
+      "undone": "Remis comme avant."
+    },
+    "panel": {
+      "checking": "Vérification de ta connexion…",
+      "checklist": "Champs de ce formulaire",
+      "collapse": "Masquer le panneau",
+      "fill": "Remplir ce formulaire",
+      "fillPage": "Remplir cette page",
+      "filling": "Saisie de tes informations…",
+      "newPage": "Tu es sur une nouvelle page de ce formulaire.",
+      "newPageHint": "Remplis aussi cette page.",
+      "newPageNoCost": "C'est la même candidature, donc ça n'utilise aucun remplissage de formulaire en plus.",
+      "noFields": "Aucun champ trouvé sur cette page. Fais défiler jusqu'au formulaire, ou ouvre la page de candidature, puis réessaie.",
+      "oneFill": "Toute la candidature utilise 1 remplissage de formulaire.",
+      "pageByPage": "Ce formulaire a plusieurs pages. Remplis chaque page, puis passe à la suivante avec le bouton du formulaire lui-même.",
+      "site": "Formulaire sur {site}",
+      "submitYourself": "Vérifie le formulaire, puis envoie-le toi-même.",
+      "summary": "Champs remplis : {filled} sur {total}.",
+      "summaryNeedsYou": "À compléter toi-même : {count}.",
+      "title": "Remplir ce formulaire",
+      "undo": "Annuler le remplissage",
+      "undoPartial": "Choix impossibles à annuler ici : {count}. Modifie-les dans le formulaire.",
+      "undone": "Champs remis comme avant : {count}."
+    },
+    "popup": {
+      "boardBody": "Offre sur {site}. Rien n'est lu sur cette page tant que tu n'as pas choisi une action.",
+      "checkFit": "Vérifier l'adéquation",
+      "codeConnect": "Connecter avec un code",
+      "codeInvalid": "Ce code ne fonctionne pas. Les codes comptent 8 lettres ou chiffres et expirent au bout de 10 minutes.",
+      "codeLabel": "Ou saisis le code à 8 caractères fourni par %BRAND%",
+      "connected": "Connecté.",
+      "disconnect": "Déconnecter",
+      "noFit": "Pas encore de note pour cette offre. Ouvre-la dans %BRAND% pour en voir une.",
+      "noJobFound": "Aucune offre trouvée sur cette page.",
+      "openFormSite": "Sur {site}, ouvre le formulaire de candidature, puis choisis « Remplir ce formulaire ».",
+      "otherSite": "Les formulaires de ce site ne peuvent pas encore être remplis.",
+      "plannedSite": "Les formulaires sur {site} ne peuvent pas encore être remplis.",
+      "reconnect": "Reconnecter %BRAND%",
+      "reconnectBody": "Ce navigateur a été déconnecté de ton compte. Reconnecte-le pour continuer à remplir des formulaires.",
+      "requestSite": "Demander ce site",
+      "requested": "Demande envoyée. Merci.",
+      "saveJob": "Garder l'offre",
+      "saved": "Gardée dans tes offres. Visible uniquement par toi.",
+      "title": "%BRAND%",
+      "version": "Version {version}"
+    },
+    "source": {
+      "ai": "Ton brouillon modifié",
+      "bank": "De tes réponses enregistrées",
+      "profile": "De ton profil",
+      "resume": "Ton CV : {fileName}"
+    },
+    "status": {
+      "filled": "Rempli",
+      "needs_you": "À compléter toi-même",
+      "skipped": "Laissé vide"
+    },
+    "submitted": {
+      "later": "Quand tu l'auras envoyée, marque-la comme envoyée dans tes candidatures.",
+      "notYet": "Pas encore",
+      "question": "As-tu envoyé cette candidature ?",
+      "thanks": "Déplacée dans « Envoyées », dans tes candidatures.",
+      "thanksNoJob": "Merci. Ajoute-la à tes candidatures dans %BRAND%.",
+      "yes": "Oui, je l'ai envoyée"
+    }
+  }
+}

@@ -1,1 +1,411 @@
-{}
+{
+  "accountV2": {
+    "studentCode": {
+      "body": "이 메일함을 직접 확인할 수 있다는 것을 인증하려면 %BRAND%에 이 코드를 입력해 주세요. 코드는 {minutes}분 동안 쓸 수 있어요.",
+      "codeLine": "인증 코드: {code}",
+      "heading": "학교 이메일을 인증해 주세요",
+      "ignore": "요청한 적이 없다면 이 이메일은 무시해 주세요. 아무것도 바뀌지 않아요.",
+      "preheader": "이 코드를 입력해 학교 이메일을 인증해 주세요.",
+      "subject": "%BRAND% 학생 인증 코드: {code}"
+    },
+    "winback": {
+      "body": "유료 요금제가 {date}에 끝났어요. 이력서, 저장한 공고, 지원 내역은 계정에 그대로 있고, 무료 요금제는 계속 쓸 수 있어요.",
+      "cta": "요금제 보기",
+      "heading": "계정은 그대로 있어요",
+      "once": "이 내용으로 보내드리는 이메일은 이번 한 번뿐이에요.",
+      "preheader": "계정과 작업한 내용은 그대로 있어요.",
+      "price": "Pro를 원한다면 {period}마다 {price}에 이용할 수 있어요. 언제든지 해지할 수 있어요.",
+      "subject": "%BRAND% 유료 요금제가 한 달 전에 끝났어요"
+    }
+  },
+  "auth": {
+    "accountDeleted": {
+      "body": "%BRAND% 계정 삭제를 요청하셨어요. 모든 기기에서 로그아웃됐고, 이제 로그인할 수 없어요.",
+      "heading": "계정이 삭제될 예정이에요",
+      "notYou": "요청한 적이 없다면 바로 이 이메일에 답장하거나 고객 지원에 문의해 주세요.",
+      "subject": "%BRAND% 계정이 삭제될 예정이에요",
+      "when": "계정과 계정 데이터는 {days}일 안에 삭제돼요. 백업은 그 뒤 90일 안에 지워져요."
+    },
+    "emailVerify": {
+      "body": "이 이메일 주소가 본인 주소가 맞는지 인증해 주세요. 아직 인증하지 않아도 %BRAND%를 계속 쓸 수 있어요. 인증하면 무료 연습 면접을 이용할 수 있어요.",
+      "cta": "이메일 인증하기",
+      "expiry": "링크는 24시간 뒤에 만료돼요. 설정에서 새 링크를 보낼 수 있어요.",
+      "heading": "이메일을 인증해 주세요",
+      "preheader": "클릭 한 번으로 이 주소를 인증할 수 있어요.",
+      "subject": "%BRAND%에서 쓸 이메일을 인증해 주세요"
+    },
+    "newDevice": {
+      "body": "방금 {os}의 {browser}에서 이 계정에 로그인한 기록이 있어요. 시각: {time}(UTC).",
+      "cta": "비밀번호 재설정하기",
+      "heading": "새 로그인",
+      "ifNot": "본인이 아니라면 지금 비밀번호를 재설정해 주세요. 재설정하면 다른 모든 곳에서 로그아웃돼요.",
+      "ifYou": "본인이 맞다면 아무것도 하지 않아도 돼요.",
+      "preheader": "{os}의 {browser}",
+      "subject": "%BRAND% 계정에 새 로그인이 있었어요"
+    },
+    "oauthEmail": {
+      "body": "LINE으로 %BRAND% 계정을 만들기 시작하셨어요. 마치려면 이 이메일 주소를 인증해 주세요. 버튼을 눌러야만 계정이 만들어져요.",
+      "cta": "인증하고 계정 만들기",
+      "heading": "가입을 마쳐 주세요",
+      "ignore": "본인이 아니라면 이 이메일은 무시해 주세요. 계정은 만들어지지 않아요.",
+      "preheader": "LINE으로 시작한 가입을 마치려면 이 이메일을 인증해 주세요.",
+      "subject": "%BRAND% 계정 만들기를 마쳐 주세요"
+    },
+    "otherBrand": {
+      "body": "누군가 이 이메일 주소로 %BRAND% 계정을 만들려고 했어요. 이 이메일은 이미 %OTHER_BRAND% 계정에 쓰이고 있고, 이메일 주소 하나로는 두 서비스 중 한 곳의 계정만 만들 수 있어요.",
+      "cta": "%OTHER_BRAND%에 로그인",
+      "heading": "이미 계정이 있어요",
+      "ignore": "본인이 아니라면 이 이메일은 무시해 주세요. 바뀐 것은 없어요.",
+      "subject": "누군가 내 이메일로 가입하려고 했어요",
+      "useOther": "계정을 계속 쓰려면 %OTHER_BRAND%에 로그인해 주세요:"
+    },
+    "passwordReset": {
+      "body": "누군가 이 %BRAND% 계정의 비밀번호 재설정을 요청했어요. 아래 버튼을 눌러 새 비밀번호를 정해 주세요. 링크는 한 번만 쓸 수 있고 30분 뒤에 만료돼요.",
+      "cta": "새 비밀번호 정하기",
+      "heading": "비밀번호 재설정",
+      "ignore": "요청한 적이 없다면 이 이메일은 무시해 주세요. 비밀번호는 그대로 유지돼요.",
+      "preheader": "이 링크는 30분 동안 쓸 수 있어요.",
+      "sessions": "비밀번호를 재설정하면 다른 모든 기기에서 로그아웃돼요.",
+      "subject": "%BRAND% 비밀번호 재설정"
+    }
+  },
+  "billing": {
+    "annualReminder": {
+      "body": "{since}부터 {plan} 요금제를 이용하고 있어요. {period}마다 {price}에 갱신돼요. 다음 갱신은 {date}에 이루어져요.",
+      "heading": "해마다 보내드리는 구독 안내",
+      "subject": "%BRAND% 구독이 계속 유지되고 있어요"
+    },
+    "cancelConfirmed": {
+      "accessEnded": "지금 계정은 무료 요금제예요.",
+      "accessUntil": "유료 기능은 {date}까지 계속 쓸 수 있어요. 그 뒤에는 계정이 무료 요금제로 바뀌어요.",
+      "body": "{plan} 요금제를 해지했어요. 더 이상 갱신되지 않고, 이 요금제로 다시 결제되지 않아요.",
+      "cta": "내 요금제 보기",
+      "heading": "요금제가 해지됐어요",
+      "received": "{at}에 해지 요청을 받았어요.",
+      "subject": "%BRAND% 요금제가 해지됐어요"
+    },
+    "cancelLink": {
+      "body": "누군가 이 이메일 주소의 %BRAND% 요금제 해지를 요청했어요. {minutes}분 안에 아래 버튼을 눌러 확인해 주세요. 링크는 한 번만 쓸 수 있어요.",
+      "cta": "요금제 해지하기",
+      "heading": "해지를 확인해 주세요",
+      "ignore": "요청한 적이 없다면 이 이메일은 무시해 주세요. 아무것도 바뀌지 않아요.",
+      "subject": "%BRAND% 요금제 해지 링크"
+    },
+    "cancelNone": {
+      "body": "누군가 이 이메일 주소의 %BRAND% 요금제 해지를 요청했지만, 이 계정에는 갱신되는 요금제가 없어요. 결제되는 금액은 없어요.",
+      "cta": "내 요금제 보기",
+      "heading": "해지할 요금제가 없어요",
+      "subject": "해지할 %BRAND% 요금제가 없어요"
+    },
+    "footer": "%BRAND% 요금제와 결제에 관한 내용이라 이 이메일을 보내드려요.",
+    "paymentFailed": {
+      "body": "{plan} 요금제의 {price} 결제에 실패했어요. 앞으로 며칠 동안 다시 시도할게요.",
+      "cta": "결제 수단 변경",
+      "heading": "카드로 결제하지 못했어요",
+      "keep": "요금제를 유지하려면 결제 수단을 변경해 주세요. 마지막 시도까지 실패하면 계정이 무료 요금제로 바뀌어요. 이미 가지고 있는 크레딧은 그대로 남아요.",
+      "subject": "%BRAND% 결제가 처리되지 않았어요"
+    },
+    "periods": {
+      "month": "한 달",
+      "period": "결제 주기",
+      "quarter": "3개월",
+      "week": "일주일"
+    },
+    "planNames": {
+      "legacy": "연습 요금제 (기존)",
+      "practice_pack_15": "연습 팩 (15회)",
+      "practice_pack_5": "연습 팩 (5회)",
+      "pro": "Pro",
+      "pro_monthly": "Pro 월간",
+      "pro_monthlyCn": "Pro 월간 이용권",
+      "pro_quarterly": "Pro 분기",
+      "pro_quarterlyCn": "Pro 분기 이용권",
+      "pro_week_pass": "7일 이용권",
+      "pro_week_passCn": "Pro 주간 이용권",
+      "pro_weekly": "Pro, 주간 결제",
+      "student_monthly": "학생 월간",
+      "student_quarterly": "학생 분기"
+    },
+    "renewalReminder": {
+      "bodyAuto": "{date}에 {plan} 요금제가 자동으로 갱신되고, {period}마다 {price}씩 결제돼요.",
+      "bodyManual": "{date}에 {plan} 이용 기간이 끝나요. 갱신되지 않고, 결제되는 금액도 없어요. Pro를 계속 쓰려면 이용권을 새로 구매해 주세요.",
+      "bodyManualLegacy": "{date}에 {plan} 이용 기간이 끝나요. 갱신되지 않고, 결제되는 금액도 없어요. 연습을 계속하려면 현재 요금제를 확인해 보세요.",
+      "cancelLine": "갱신을 원하지 않나요? 그 전에 언제든지 클릭 한 번으로 해지할 수 있어요. 유료 기능은 결제한 기간이 끝날 때까지 계속 쓸 수 있어요.",
+      "ctaAuto": "관리 또는 해지",
+      "ctaManual": "이용권 보기",
+      "ctaManualLegacy": "요금제 보기",
+      "headingAuto": "요금제가 곧 갱신돼요",
+      "headingManual": "이용권이 곧 끝나요",
+      "subjectAuto": "%BRAND% 요금제가 {date}에 갱신돼요",
+      "subjectManual": "%BRAND% 이용권이 {date}에 끝나요"
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "addressUnverified": "사용자가 요청 양식에 직접 입력한 주소예요. 본인 주소인지는 %BRAND%가 확인하지 않았어요.",
+      "fieldAccount": "계정",
+      "fieldAddress": "답장 받을 주소",
+      "fieldCoach": "코치",
+      "fieldFrom": "보낸 사람",
+      "fieldLength": "세션 길이",
+      "fieldTimes": "사용자가 가능한 시간",
+      "fieldTopic": "주제",
+      "heading": "새 코칭 요청",
+      "intro": "{coach} 님, {name} 님이 세션을 요청했어요. %BRAND% 코치 목록에서 코치님을 보고 요청했어요.",
+      "introAdmin": "한 사용자가 %BRAND% 코치 목록에서 {coach} 님에게 이 요청을 보냈어요. 이 이메일은 참고용 사본이에요.",
+      "minutes": "{minutes}분",
+      "next": "수락하려면 이 이메일에 답장하거나 {email} 주소로 연락해서 시간과 가격을 정해 주세요.",
+      "nextAdmin": "코치가 사용자에게 직접 답해요. 코치가 도움을 요청하면 이어서 챙겨 주세요.",
+      "notGiven": "입력하지 않음",
+      "payment": "사용자가 코치에게 직접 비용을 내요. %BRAND%는 코칭에 대해 어떤 비용도 받지 않아요.",
+      "reason": "%BRAND% 코치 목록에 올라가는 데 동의하셨고, 한 사용자가 세션을 요청해서 이 이메일을 보내드려요.",
+      "reasonAdmin": "%BRAND% 코치 목록을 관리하고 계셔서 이 이메일을 보내드려요.",
+      "subject": "{name} 님의 코칭 요청: {topic}",
+      "subjectAdmin": "{coach} 님에게 온 코칭 요청: {topic}"
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "body": "%BRAND% 데이터 사본을 준비했어요. 로그인한 뒤 설정 → 개인정보와 데이터에서 내려받아 주세요. 파일은 {days, plural, one {#일} other {#일}} 뒤에 삭제돼요.",
+      "cta": "설정 열기",
+      "heading": "데이터 내보내기가 준비됐어요",
+      "subject": "%BRAND% 데이터 내보내기가 준비됐어요"
+    }
+  },
+  "growth": {
+    "footer": "%BRAND% 계정의 크레딧에 관한 내용이라 이 이메일을 보내드려요.",
+    "referralReward": {
+      "cta": "연습 면접 시작하기",
+      "invitee": {
+        "body": "친구의 초대 링크로 가입하고 초기 설정을 마쳐서, 계정에 {credits, plural, one {연습 면접 크레딧 #개} other {연습 면접 크레딧 #개}}를 추가했어요.",
+        "heading": "{credits, plural, one {연습 면접 크레딧 #개} other {연습 면접 크레딧 #개}}를 받았어요",
+        "subject": "초대 크레딧이 준비됐어요"
+      },
+      "inviter": {
+        "body": "내 초대 링크로 가입한 친구가 계정을 인증하고 초기 설정을 마쳐서, 내 계정에 {credits, plural, one {연습 면접 크레딧 #개} other {연습 면접 크레딧 #개}}를 추가했어요.",
+        "heading": "{credits, plural, one {연습 면접 크레딧 #개} other {연습 면접 크레딧 #개}}를 받았어요",
+        "subject": "초대한 친구가 초기 설정을 마쳤어요"
+      },
+      "note": "크레딧은 %BRAND%의 연습 면접에 쓰는 것이고, 현금 가치가 없어요."
+    }
+  },
+  "notify": {
+    "campusDeadline": {
+      "body": "{company}의 {program} 지원이 {date}에 마감돼요. 공식 페이지에서 지원해 주세요.",
+      "cta": "공식 페이지 열기",
+      "heading": "지원 마감일이 다가오고 있어요",
+      "preheader": "{program} 지원이 {date}에 마감돼요.",
+      "subject": "{company}: {program} 지원이 {date}에 마감돼요"
+    },
+    "campusFollowed": {
+      "body": "{company}의 {program} 항목이 공식 페이지 링크와 함께 캠퍼스 채용 일정에 올라왔어요. 지원하기 전에 공식 페이지에서 날짜를 확인해 주세요.",
+      "cta": "프로그램 보기",
+      "heading": "팔로우한 회사가 프로그램을 올렸어요",
+      "preheader": "{program} 항목이 캠퍼스 채용 일정에 올라왔어요.",
+      "subject": "{company}에서 새 캠퍼스 채용 프로그램을 올렸어요",
+      "subjectYear": "{company}에서 {year}년 졸업자 대상 캠퍼스 채용 프로그램을 올렸어요"
+    },
+    "common": {
+      "fitNote": "적합도는 채용 공고와 내 이력서를 비교한 결과예요. 합격 확률이 아니에요.",
+      "gapLine": "아직 내 이력서에 없는 항목: {skill}",
+      "payNotListed": "급여 정보 없음",
+      "payPerDay": "일급 {amount}",
+      "payPerHour": "시급 {amount}",
+      "payPerMonth": "월급 {amount}",
+      "payPerWeek": "주급 {amount}",
+      "payPerYear": "연봉 {amount}",
+      "placeNotListed": "근무지 정보 없음",
+      "remote": "원격",
+      "tierGood": "잘 맞음",
+      "tierGreat": "아주 잘 맞음",
+      "tierPossible": "가능성 있음",
+      "viewJob": "공고 보기"
+    },
+    "finishSetup": {
+      "body": "지금까지 입력한 답변은 저장돼 있어요. 초기 설정을 마치면 내 검색에 맞는 공고와 이력서에서 고칠 부분을 볼 수 있어요.",
+      "cta": "초기 설정 계속하기",
+      "heading": "멈춘 곳부터 이어서 해 보세요",
+      "preheader": "답변은 저장돼 있어요. 준비되면 초기 설정을 마쳐 주세요.",
+      "subject": "%BRAND% 초기 설정을 마쳐 주세요"
+    },
+    "followUp": {
+      "body": "{date}에 {company}의 {title} 공고에 지원했어요. {days}일째 답이 없어요. 짧고 정중한 확인 연락은 흔히 하는 일이에요.",
+      "cta": "이 지원 내역 열기",
+      "heading": "확인 연락을 해 볼 때일까요?",
+      "preheader": "{days}일째 답이 없어요.",
+      "subject": "{company}에서 {days}일째 답이 없어요"
+    },
+    "interview": {
+      "body": "{company}의 {title} 면접이 {date}에 있어요. 짧게 연습해 보면 준비하는 데 도움이 될 수 있어요.",
+      "cta": "이 공고로 연습하기",
+      "heading": "면접이 다가오고 있어요",
+      "preheader": "{date}에 {title} 면접이 있어요.",
+      "subject": "{date}에 {company} 면접이 있어요"
+    },
+    "jobAlertDigest": {
+      "cta": "새 공고 모두 보기",
+      "headingDaily": "일간 공고 요약",
+      "headingWeekly": "주간 공고 요약",
+      "introDaily": "{count, plural, one {어제 이후 저장한 검색 ‘{search}’에 맞는 새 공고가 #건 있어요.} other {어제 이후 저장한 검색 ‘{search}’에 맞는 새 공고가 #건 있어요.}}",
+      "introDailyNoTotal": "{count, plural, one {어제 이후 저장한 검색 ‘{search}’에 맞는 새 공고 #건을 보내드려요.} other {어제 이후 저장한 검색 ‘{search}’에 맞는 새 공고 #건을 보내드려요.}} 새 공고는 %BRAND%에서 모두 볼 수 있어요.",
+      "introWeekly": "{count, plural, one {이번 주에 저장한 검색 ‘{search}’에 맞는 새 공고가 #건 있어요.} other {이번 주에 저장한 검색 ‘{search}’에 맞는 새 공고가 #건 있어요.}}",
+      "introWeeklyNoTotal": "{count, plural, one {이번 주에 저장한 검색 ‘{search}’에 맞는 새 공고 #건을 보내드려요.} other {이번 주에 저장한 검색 ‘{search}’에 맞는 새 공고 #건을 보내드려요.}} 새 공고는 %BRAND%에서 모두 볼 수 있어요.",
+      "more": "{count, plural, one {맞는 새 공고가 #건 더 있어요. %BRAND%에서 확인해 보세요.} other {맞는 새 공고가 #건 더 있어요. %BRAND%에서 확인해 보세요.}}",
+      "subjectDaily": "어제 이후 {count, plural, one {내 검색에 맞는 새 공고 #건} other {내 검색에 맞는 새 공고 #건}}",
+      "subjectDailyNoTotal": "어제 이후 내 검색에 맞는 새 공고가 있어요",
+      "subjectWeekly": "이번 주 {count, plural, one {내 검색에 맞는 새 공고 #건} other {내 검색에 맞는 새 공고 #건}}",
+      "subjectWeeklyNoTotal": "이번 주 내 검색에 맞는 새 공고가 있어요",
+      "trackerCta": "지원 현황 열기",
+      "trackerLine": "{count, plural, one {지원 #건이 10일째 답이 없어요.} other {지원 #건이 10일째 답이 없어요.}}"
+    },
+    "jobAlertInstant": {
+      "cta": "내 공고 전체 보기",
+      "heading": "{count, plural, one {내 검색에 맞는 새 공고 #건} other {내 검색에 맞는 새 공고 #건}}",
+      "intro": "{count, plural, one {최근에 올라온 공고이고, 저장한 검색 ‘{search}’에 맞아요.} other {최근에 올라온 공고들이고, 저장한 검색 ‘{search}’에 맞아요.}}",
+      "subject": "‘{search}’ 검색에 맞는 {count, plural, one {새 공고 #건} other {새 공고 #건}}"
+    },
+    "kitReady": {
+      "body": "{company}의 {title} 공고에 맞춘 이력서와 답변이 준비됐어요. 내용을 확인한 뒤 회사 사이트에서 직접 지원해 주세요.",
+      "cta": "키트 확인하기",
+      "heading": "확인할 키트가 준비됐어요",
+      "preheader": "{title} 공고의 키트를 확인해 보세요.",
+      "subject": "{title} 공고의 지원 키트가 준비됐어요"
+    },
+    "readyList": {
+      "body": "{count, plural, one {확인할 공고 #건이 준비됐어요.} other {확인할 공고 #건이 준비됐어요.}} 어떤 공고를 열지는 내가 정하고, 지원서는 매번 내가 직접 제출해요.",
+      "cta": "목록 확인하기",
+      "heading": "이번 주 목록",
+      "preheader": "확인할 공고가 준비됐어요.",
+      "subject": "이번 주 ‘지원 준비’ 목록이 준비됐어요"
+    },
+    "reasons": {
+      "alerts": "%BRAND%에서 저장한 검색 ‘{search}’의 공고 알림이 켜져 있어서 이 이메일을 보내드려요.",
+      "campusFollow": "%BRAND% 캠퍼스 채용 일정에서 팔로우 중인 회사({company})의 소식이라 이 이메일을 보내드려요.",
+      "digestDaily": "%BRAND%에서 저장한 검색 ‘{search}’의 일간 공고 요약을 받기로 선택해서 이 이메일을 보내드려요.",
+      "digestWeekly": "%BRAND%에서 저장한 검색 ‘{search}’의 주간 공고 요약을 받기로 선택해서 이 이메일을 보내드려요.",
+      "reminders": "%BRAND% 계정과 내가 관리하는 공고에 관한 내용이라 이 이메일을 보내드려요. 이 리마인더는 끌 수 있어요."
+    },
+    "resumeCheck": {
+      "body": "이력서를 읽고 먼저 고칠 부분을 정리했어요.",
+      "bodyCount": "{count, plural, =0 {이력서를 읽어 봤는데 급하게 고칠 부분은 없었어요.} one {이력서를 읽고 먼저 고칠 부분 #가지를 찾았어요.} other {이력서를 읽고 먼저 고칠 부분 #가지를 찾았어요.}}",
+      "cta": "이력서 점검 결과 보기",
+      "heading": "이력서 점검 결과가 준비됐어요",
+      "preheader": "이력서에서 먼저 고칠 부분을 확인해 보세요.",
+      "subject": "이력서 점검 결과가 준비됐어요"
+    },
+    "tipsPractice": {
+      "body": "무료 연습 면접을 이용할 수 있어요. 면접 질문에 소리 내어 답하고, 보완할 점을 정리한 메모를 받아 보세요. 회사에는 아무것도 공유되지 않아요.",
+      "bodyCredit": "바로 쓸 수 있는 연습 면접이 있어요. 면접 질문에 소리 내어 답하고, 보완할 점을 정리한 메모를 받아 보세요. 회사에는 아무것도 공유되지 않아요.",
+      "cta": "연습 시작하기",
+      "heading": "연습 면접을 해 보세요",
+      "preheader": "면접 질문에 소리 내어 답하고 메모를 받아 보세요.",
+      "subject": "무료 연습 면접을 지금 쓸 수 있어요",
+      "subjectCredit": "연습 면접을 지금 쓸 수 있어요"
+    },
+    "tipsReEngagement": {
+      "body": "{count, plural, one {{date} 이후 저장한 검색 ‘{search}’에 맞는 새 공고가 #건 있어요.} other {{date} 이후 저장한 검색 ‘{search}’에 맞는 새 공고가 #건 있어요.}}",
+      "cta": "새 공고 보기",
+      "heading": "지난 방문 이후 올라온 새 공고",
+      "preheader": "저장한 검색에 맞는 새 공고가 있어요.",
+      "subject": "{date} 이후 {count, plural, one {내 검색에 맞는 새 공고 #건} other {내 검색에 맞는 새 공고 #건}}"
+    },
+    "tipsTailor": {
+      "body": "공고 하나에 맞춘 이력서 버전은 그 공고에서 요구하는 기술을 앞쪽에 배치해요. 바뀐 내용은 쓰기 전에 모두 직접 확인해요.",
+      "bodyJob": "{company}의 {title} 공고는 지금까지 본 공고 중 나와 가장 잘 맞는 편이에요. 이 공고에 맞춘 이력서 버전은 공고에서 요구하는 기술을 앞쪽에 배치해요. 바뀐 내용은 쓰기 전에 모두 직접 확인해요.",
+      "cta": "내 이력서 맞추기",
+      "heading": "회사가 요구한 기술을 먼저 보여 주세요",
+      "preheader": "공고 하나에 맞춘 이력서 버전이에요. 바뀐 내용은 모두 직접 확인해요.",
+      "subject": "마음에 드는 공고에 이력서를 맞춰 보세요",
+      "subjectJob": "{title} 공고에 이력서를 맞춰 보세요"
+    },
+    "welcome": {
+      "heading": "%BRAND%에 오신 것을 환영해요",
+      "intro": "먼저 해 볼 세 가지예요. 항목을 누르면 해당 화면으로 바로 이동해요.",
+      "preheader": "%BRAND%에서 먼저 해 볼 세 가지.",
+      "stepCampus": "캠퍼스 채용 일정 보기",
+      "stepJobs": "내 검색에 맞는 공고 보기",
+      "stepPractice": "면접 연습하기",
+      "stepResume": "이력서 점검하기",
+      "stepTracker": "지원 현황 관리하기",
+      "subject": "%BRAND%에 오신 것을 환영해요: 먼저 해 볼 세 가지"
+    }
+  },
+  "tracker": {
+    "csv": {
+      "header": {
+        "appliedOn": "지원한 날",
+        "company": "회사",
+        "currency": "통화",
+        "deadline": "마감일",
+        "followUpOn": "확인할 날짜",
+        "interview": "면접",
+        "link": "링크",
+        "notes": "메모",
+        "outcome": "어떻게 끝났는지",
+        "salary": "급여",
+        "savedOn": "저장한 날",
+        "source": "추가한 경로",
+        "stage": "단계",
+        "title": "직무 이름"
+      },
+      "outcome": {
+        "i_withdrew": "내가 그만뒀어요",
+        "job_pulled": "채용이 취소됐어요",
+        "they_said_no": "회사가 거절했어요"
+      },
+      "stage": {
+        "accepted": "합격",
+        "ai_interview": "AI 면접",
+        "applied": "지원함",
+        "applying": "지원함",
+        "assessment": "인적성 검사",
+        "bookmarked": "저장함",
+        "closed": "채용 취소",
+        "final_round": "최종 면접",
+        "first_call": "1차 통화",
+        "interviewing": "면접 중",
+        "negotiating": "합격",
+        "offer": "합격",
+        "rejected": "불합격",
+        "signed": "계약 완료",
+        "withdrawn": "지원 취소",
+        "written_test": "필기시험"
+      }
+    },
+    "inbox": {
+      "deadline": "{days, plural, =0 {{name} 지원이 오늘 마감돼요.} =1 {{name} 지원이 내일 마감돼요.} other {{name} 지원이 #일 뒤에 마감돼요.}}",
+      "followUpDue": "오늘은 {name}에 확인 연락을 하기로 한 날이에요.",
+      "interview": "24시간 안에 {name} 면접이 있어요.",
+      "noReply": "{name}에서 {days, plural, one {#일} other {#일}}째 답이 없어요.",
+      "unnamed": "이 공고"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "body": "누군가(아마 본인)가 ‘{search}’ 검색의 새 공고를 {cadence, select, daily {하루에 한 번} other {일주일에 한 번}} 이 주소로 보내 달라고 %BRAND%에 요청했어요.",
+        "cta": "공고 알림 신청 확인",
+        "heading": "공고 알림 신청을 확인해 주세요",
+        "ignore": "본인이 아니라면 이 이메일은 무시해 주세요. 링크를 누르지 않으면 아무것도 보내지 않아요. 링크는 {hours}시간 뒤에는 쓸 수 없어요.",
+        "preheader": "버튼을 누르면 공고 알림이 시작돼요.",
+        "subject": "%BRAND% 공고 알림 신청을 확인해 주세요"
+      },
+      "digest": {
+        "heading": "{count, plural, one {내 알림에 맞는 새 공고 #건} other {내 알림에 맞는 새 공고 #건}}",
+        "intro": "지난 이메일 이후 ‘{search}’ 검색에 새로 올라온 공고예요.",
+        "more": "{count, plural, one {맞는 공고가 #건 더 있어요.} other {맞는 공고가 #건 더 있어요.}}",
+        "pay": "{period, select, year {연봉 } month {월급 } week {주급 } day {일급 } hour {시급 } other {}}{amount}",
+        "payNotListed": "급여 정보 없음",
+        "placeNotListed": "근무지 정보 없음",
+        "preheader": "내 알림에 맞는 새 공고가 있어요.",
+        "reason": "%BRAND%에서 ‘{search}’ 검색의 공고 알림을 받기로 확인해서 이 이메일을 보내드려요. 계정은 없는 상태예요.",
+        "remote": "원격",
+        "signup": "무료 계정을 만들면 공고마다 내 이력서와 얼마나 맞는지 볼 수 있어요.",
+        "signupCta": "무료 계정 만들기",
+        "subject": "‘{search}’ 검색에 맞는 {count, plural, one {새 공고 #건} other {새 공고 #건}}",
+        "viewJob": "공고 보기"
+      },
+      "searchAny": "모든 공고"
+    }
+  }
+}

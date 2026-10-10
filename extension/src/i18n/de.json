@@ -1,0 +1,141 @@
+{
+  "extension": {
+    "connect": {
+      "body": "Verbinde %BRAND%, um Formulare mit deinem Profil auszufüllen.",
+      "open": "%BRAND% öffnen und verbinden",
+      "title": "Konto verbinden"
+    },
+    "draft": {
+      "aiBadge": "KI-generiert",
+      "aiDisclosure": "Dieser Text wurde von einem KI-Modell erstellt.",
+      "aiLabel": "Von KI geschrieben. Bearbeite den Text und nutze ihn nur, wenn er auf dich zutrifft.",
+      "bankLabel": "Aus deinen gespeicherten Antworten",
+      "cost": "Verbraucht 1 Credit für KI-Antworten.",
+      "dismiss": "Ausblenden",
+      "editLabel": "Antwortentwurf für: {question}",
+      "save": "Diese Antwort speichern",
+      "saveFailed": "Diese Antwort konnte nicht gespeichert werden. Versuch es erneut.",
+      "saveHint": "Beim nächsten Mal werden Formulare mit dieser Frage aus deinen gespeicherten Antworten ausgefüllt.",
+      "saveProtected": "Antworten zu deiner Person werden in deinem Profil gespeichert, nicht hier.",
+      "saved": "In deinen Antworten gespeichert.",
+      "saving": "Wird gespeichert…",
+      "use": "Diese Antwort verwenden",
+      "write": "Entwurf schreiben",
+      "writing": "Wird geschrieben…"
+    },
+    "error": {
+      "credits_exhausted": "Du hast deine Formularausfüllungen vorerst aufgebraucht.",
+      "credits_exhaustedUntil": "Du hast deine Formularausfüllungen vorerst aufgebraucht. Mehr gibt es ab {time}.",
+      "feature_disabled": "Das Ausfüllen von Formularen ist für dein Konto nicht verfügbar.",
+      "network": "%BRAND% ist gerade nicht erreichbar. Prüf deine Verbindung und versuch es erneut.",
+      "not_connected": "Verbinde zuerst %BRAND%. Öffne %BRAND% und versuch es dann erneut.",
+      "rate_limited": "Zu viele Versuche in kurzer Zeit. Warte eine Minute und versuch es dann erneut.",
+      "unknown": "Etwas ist schiefgelaufen. Es wurde nichts abgesendet. Versuch es erneut."
+    },
+    "fit": {
+      "note": "Das ist nicht deine Chance, eingestellt zu werden.",
+      "quickEstimate": "Schnelle Einschätzung",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "Passt gut",
+        "great": "Passt sehr gut",
+        "possible": "Möglich",
+        "unlikely": "Unwahrscheinlich"
+      }
+    },
+    "item": {
+      "checkSensitive": "Sensible Antwort. Prüf sie, bevor du absendest.",
+      "unlabelled": "Feld ohne Beschriftung"
+    },
+    "job": {
+      "untitled": "Stelle auf dieser Seite"
+    },
+    "launcher": {
+      "label": "%BRAND% öffnen, um dieses Formular auszufüllen",
+      "text": "Formular ausfüllen"
+    },
+    "manifest": {
+      "actionTitle": "Formular ausfüllen",
+      "description": "Füllt Bewerbungsformulare mit deinem %BRAND%-Profil aus. Du prüfst jede Antwort und sendest die Bewerbung selbst ab.",
+      "nameChrome": "%BRAND% für Chrome",
+      "nameEdge": "%BRAND% für Edge",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "Entwürfe sind für dein Konto gerade nicht verfügbar.",
+      "cover_letter": "Häng selbst ein Anschreiben an oder schreib zuerst eines in %BRAND%.",
+      "disabled": "Dieses Feld ist im Formular gesperrt.",
+      "draft_failed": "Der Entwurf konnte nicht geschrieben werden. Versuch es erneut oder antworte selbst.",
+      "file_failed": "Die Datei konnte nicht angehängt werden. Häng sie selbst an.",
+      "no_option": "Keine der Optionen passt zu deinem Profil. Wähl selbst eine aus.",
+      "no_value": "Das steht noch nicht in deinem Profil.",
+      "not_pressed": "Diese Auswahl braucht einen Klick im Formular. Wähl sie selbst aus.",
+      "protected": "Beantworte diese Frage selbst. Für solche Fragen werden nie Entwürfe geschrieben.",
+      "resume_unavailable": "Dein Lebenslauf konnte nicht geladen werden. Häng ihn selbst an.",
+      "undone": "Wieder so wie vorher."
+    },
+    "panel": {
+      "checking": "Verbindung wird geprüft…",
+      "checklist": "Felder in diesem Formular",
+      "collapse": "Panel ausblenden",
+      "fill": "Formular ausfüllen",
+      "fillPage": "Diese Seite ausfüllen",
+      "filling": "Deine Angaben werden eingetragen…",
+      "newPage": "Du bist auf einer neuen Seite dieses Formulars.",
+      "newPageHint": "Füll auch diese Seite aus.",
+      "newPageNoCost": "Es ist dieselbe Bewerbung, also wird keine weitere Formularausfüllung verbraucht.",
+      "noFields": "Auf dieser Seite wurden keine Felder gefunden. Scroll zum Formular oder öffne die Bewerbungsseite und versuch es dann erneut.",
+      "oneFill": "Die ganze Bewerbung verbraucht 1 Formularausfüllung.",
+      "pageByPage": "Dieses Formular hat mehrere Seiten. Füll jede Seite aus und geh dann mit dem Button des Formulars weiter.",
+      "site": "Formular auf {site}",
+      "submitYourself": "Prüf das Formular und sende es dann selbst ab.",
+      "summary": "{filled} von {total} Feldern ausgefüllt.",
+      "summaryNeedsYou": "Braucht dich: {count}.",
+      "title": "Formular ausfüllen",
+      "undo": "Ausfüllen rückgängig machen",
+      "undoPartial": "Auswahlfelder, die sich hier nicht rückgängig machen lassen: {count}. Ändere sie im Formular.",
+      "undone": "Zurückgesetzte Felder: {count}."
+    },
+    "popup": {
+      "boardBody": "Stelle auf {site}. Auf dieser Seite wird nichts gelesen, bis du eine Aktion wählst.",
+      "checkFit": "Passung prüfen",
+      "codeConnect": "Mit Code verbinden",
+      "codeInvalid": "Dieser Code funktioniert nicht. Codes haben 8 Buchstaben oder Ziffern und laufen nach 10 Minuten ab.",
+      "codeLabel": "Oder gib den 8-stelligen Code aus %BRAND% ein",
+      "connected": "Verbunden.",
+      "disconnect": "Verbindung trennen",
+      "noFit": "Für diese Stelle gibt es noch keine Passung. Öffne sie in %BRAND%, um eine zu sehen.",
+      "noJobFound": "Auf dieser Seite wurde keine Stelle gefunden.",
+      "openFormSite": "Öffne auf {site} das Bewerbungsformular und wähle dann „Formular ausfüllen“.",
+      "otherSite": "Formulare auf dieser Website können noch nicht ausgefüllt werden.",
+      "plannedSite": "Formulare auf {site} können noch nicht ausgefüllt werden.",
+      "reconnect": "%BRAND% erneut verbinden",
+      "reconnectBody": "Dieser Browser wurde von deinem Konto getrennt. Verbinde ihn erneut, um weiter Formulare auszufüllen.",
+      "requestSite": "Diese Website anfragen",
+      "requested": "Anfrage gesendet. Danke.",
+      "saveJob": "Stelle speichern",
+      "saved": "In deinen Stellen gespeichert. Nur du kannst sie sehen.",
+      "title": "%BRAND%",
+      "version": "Version {version}"
+    },
+    "source": {
+      "ai": "Dein bearbeiteter Entwurf",
+      "bank": "Aus deinen gespeicherten Antworten",
+      "profile": "Aus deinem Profil",
+      "resume": "Dein Lebenslauf: {fileName}"
+    },
+    "status": {
+      "filled": "Ausgefüllt",
+      "needs_you": "Braucht dich",
+      "skipped": "Leer gelassen"
+    },
+    "submitted": {
+      "later": "Wenn du sie abgesendet hast, markiere sie in deinen Bewerbungen als „Beworben“.",
+      "notYet": "Noch nicht",
+      "question": "Hast du diese Bewerbung abgesendet?",
+      "thanks": "In deinen Bewerbungen nach „Beworben“ verschoben.",
+      "thanksNoJob": "Danke. Füg sie in %BRAND% zu deinen Bewerbungen hinzu.",
+      "yes": "Ja, ich habe sie abgesendet"
+    }
+  }
+}

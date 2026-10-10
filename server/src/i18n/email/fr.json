@@ -1,1 +1,411 @@
-{}
+{
+  "accountV2": {
+    "studentCode": {
+      "body": "Saisis ce code dans %BRAND% pour confirmer que tu as accès à cette boîte mail. Il est valable {minutes} minutes.",
+      "codeLine": "Ton code : {code}",
+      "heading": "Confirme l'e-mail de ton école",
+      "ignore": "Si tu n'as rien demandé, ignore cet e-mail. Rien ne change.",
+      "preheader": "Saisis ce code pour confirmer l'e-mail de ton école.",
+      "subject": "Ton code étudiant %BRAND% : {code}"
+    },
+    "winback": {
+      "body": "Ton offre payante a pris fin le {date}. Tes CV, tes offres d'emploi gardées et tes candidatures sont toujours dans ton compte, et l'offre gratuite continue de fonctionner.",
+      "cta": "Voir les offres d'abonnement",
+      "heading": "Ton compte est toujours là",
+      "once": "C'est le seul e-mail que nous envoyons à ce sujet.",
+      "preheader": "Ton compte et ton travail sont toujours là.",
+      "price": "Si tu veux Pro, cela coûte {price} par {period}. Tu peux annuler à tout moment.",
+      "subject": "Ton offre payante %BRAND% a pris fin il y a un mois"
+    }
+  },
+  "auth": {
+    "accountDeleted": {
+      "body": "Tu nous as demandé de supprimer ton compte %BRAND%. Ton compte a été déconnecté partout et tu ne peux plus te connecter.",
+      "heading": "La suppression de ton compte est programmée",
+      "notYou": "Si tu n'as pas fait cette demande, réponds à cet e-mail ou contacte le support tout de suite.",
+      "subject": "La suppression de ton compte %BRAND% est programmée",
+      "when": "Nous supprimons ton compte et ses données sous {days} jours. Les sauvegardes sont effacées dans les 90 jours qui suivent."
+    },
+    "emailVerify": {
+      "body": "Confirme que cette adresse e-mail est bien la tienne. Tu peux continuer à utiliser %BRAND% le temps de te décider ; confirmer débloque ton entretien d'entraînement gratuit.",
+      "cta": "Confirmer mon e-mail",
+      "expiry": "Le lien expire dans 24 heures. Tu peux en envoyer un nouveau depuis les Réglages.",
+      "heading": "Confirme ton e-mail",
+      "preheader": "Un clic suffit pour confirmer cette adresse.",
+      "subject": "Confirme ton e-mail pour %BRAND%"
+    },
+    "newDevice": {
+      "body": "Une connexion à ton compte vient d'avoir lieu depuis {browser} sur {os}, le {time} (UTC).",
+      "cta": "Réinitialiser mon mot de passe",
+      "heading": "Nouvelle connexion",
+      "ifNot": "Si ce n'était pas toi, réinitialise ton mot de passe maintenant. La réinitialisation te déconnecte partout ailleurs.",
+      "ifYou": "Si c'était toi, tu n'as rien à faire.",
+      "preheader": "{browser} sur {os}",
+      "subject": "Nouvelle connexion à ton compte %BRAND%"
+    },
+    "oauthEmail": {
+      "body": "Tu as commencé à créer un compte %BRAND% avec LINE. Confirme cette adresse e-mail pour terminer. Le compte n'est créé qu'une fois que tu as cliqué sur le bouton.",
+      "cta": "Confirmer et créer mon compte",
+      "heading": "Termine ton inscription",
+      "ignore": "Si ce n'était pas toi, ignore cet e-mail. Aucun compte n'est créé.",
+      "preheader": "Confirme cet e-mail pour terminer ton inscription avec LINE.",
+      "subject": "Termine la création de ton compte %BRAND%"
+    },
+    "otherBrand": {
+      "body": "Quelqu'un a essayé de créer un compte %BRAND% avec cette adresse e-mail. Cette adresse appartient déjà à un compte %OTHER_BRAND%, et une même adresse ne peut avoir que l'un des deux.",
+      "cta": "Se connecter à %OTHER_BRAND%",
+      "heading": "Tu as déjà un compte",
+      "ignore": "Si ce n'était pas toi, ignore cet e-mail. Rien n'a changé.",
+      "subject": "Quelqu'un a essayé de s'inscrire avec ton e-mail",
+      "useOther": "Pour continuer à utiliser ton compte, connecte-toi à %OTHER_BRAND% :"
+    },
+    "passwordReset": {
+      "body": "Quelqu'un a demandé à réinitialiser le mot de passe de ce compte %BRAND%. Utilise le bouton ci-dessous pour en choisir un nouveau. Le lien ne fonctionne qu'une fois et expire dans 30 minutes.",
+      "cta": "Choisir un nouveau mot de passe",
+      "heading": "Réinitialise ton mot de passe",
+      "ignore": "Si tu n'as rien demandé, ignore cet e-mail. Ton mot de passe reste le même.",
+      "preheader": "Ce lien est valable 30 minutes.",
+      "sessions": "Réinitialiser ton mot de passe te déconnecte de tous tes autres appareils.",
+      "subject": "Réinitialise ton mot de passe %BRAND%"
+    }
+  },
+  "billing": {
+    "annualReminder": {
+      "body": "Tu as {plan} depuis le {since}. Le renouvellement se fait au prix de {price} par {period}. Le prochain renouvellement aura lieu le {date}.",
+      "heading": "Un point annuel sur ton abonnement",
+      "subject": "Ton abonnement %BRAND% est toujours actif"
+    },
+    "cancelConfirmed": {
+      "accessEnded": "Ton compte est maintenant sur l'offre gratuite.",
+      "accessUntil": "Tes fonctions payantes restent actives jusqu'au {date}. Ensuite, ton compte passe à l'offre gratuite.",
+      "body": "Nous avons annulé {plan}. Il n'y aura pas de renouvellement et plus rien ne te sera facturé pour cette offre.",
+      "cta": "Voir ton offre",
+      "heading": "Ton offre est annulée",
+      "received": "Nous avons reçu ta demande d'annulation le {at}.",
+      "subject": "Ton offre %BRAND% est annulée"
+    },
+    "cancelLink": {
+      "body": "Quelqu'un a demandé à annuler l'offre %BRAND% liée à cette adresse e-mail. Utilise le bouton ci-dessous dans les {minutes} minutes pour confirmer. Le lien ne fonctionne qu'une fois.",
+      "cta": "Annuler mon offre",
+      "heading": "Confirme ton annulation",
+      "ignore": "Si tu n'as rien demandé, ignore cet e-mail. Rien ne change.",
+      "subject": "Ton lien pour annuler ton offre %BRAND%"
+    },
+    "cancelNone": {
+      "body": "Quelqu'un a demandé à annuler une offre %BRAND% pour cette adresse e-mail, mais ce compte n'a aucune offre qui se renouvelle. Rien ne sera facturé.",
+      "cta": "Voir ton offre",
+      "heading": "Il n'y a rien à annuler",
+      "subject": "Aucune offre %BRAND% à annuler"
+    },
+    "footer": "Tu reçois cet e-mail parce qu'il concerne ton offre %BRAND% et tes paiements.",
+    "paymentFailed": {
+      "body": "Le paiement de {price} pour {plan} a échoué. Nous réessaierons dans les prochains jours.",
+      "cta": "Mettre à jour le moyen de paiement",
+      "heading": "Nous n'avons pas pu débiter ta carte",
+      "keep": "Mets à jour ton moyen de paiement pour garder ton offre. Si la dernière tentative échoue, ton compte passe à l'offre gratuite. Les crédits que tu as déjà restent à toi.",
+      "subject": "Ton paiement %BRAND% n'est pas passé"
+    },
+    "periods": {
+      "month": "mois",
+      "period": "période de facturation",
+      "quarter": "trimestre",
+      "week": "semaine"
+    },
+    "planNames": {
+      "legacy": "Offre d'entraînement (ancienne)",
+      "practice_pack_15": "Pack d'entraînement (15)",
+      "practice_pack_5": "Pack d'entraînement (5)",
+      "pro": "Pro",
+      "pro_monthly": "Pro mensuel",
+      "pro_monthlyCn": "Pass Pro d'un mois",
+      "pro_quarterly": "Pro trimestriel",
+      "pro_quarterlyCn": "Pass Pro d'un trimestre",
+      "pro_week_pass": "Pass 7 jours",
+      "pro_week_passCn": "Pass Pro d'une semaine",
+      "pro_weekly": "Pro, facturé chaque semaine",
+      "student_monthly": "Étudiant mensuel",
+      "student_quarterly": "Étudiant trimestriel"
+    },
+    "renewalReminder": {
+      "bodyAuto": "{plan} se renouvelle automatiquement le {date} au prix de {price} par {period}.",
+      "bodyManual": "{plan} prend fin le {date}. Il n'y a pas de renouvellement et rien ne sera facturé. Achète un autre pass si tu veux garder Pro.",
+      "bodyManualLegacy": "{plan} prend fin le {date}. Il n'y a pas de renouvellement et rien ne sera facturé. Consulte les offres actuelles si tu veux continuer à t'entraîner.",
+      "cancelLine": "Tu ne veux pas de renouvellement ? Annule à tout moment avant cette date, en un clic. Tes fonctions payantes restent actives jusqu'à la fin de la période que tu as payée.",
+      "ctaAuto": "Gérer ou annuler",
+      "ctaManual": "Voir les pass",
+      "ctaManualLegacy": "Voir les offres d'abonnement",
+      "headingAuto": "Ton offre se renouvelle bientôt",
+      "headingManual": "Ton pass prend fin bientôt",
+      "subjectAuto": "Ton offre %BRAND% se renouvelle le {date}",
+      "subjectManual": "Ton pass %BRAND% prend fin le {date}"
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "addressUnverified": "Saisie par l'utilisateur dans le formulaire de demande. %BRAND% n'a pas vérifié qu'elle lui appartient.",
+      "fieldAccount": "Compte",
+      "fieldAddress": "Adresse de réponse",
+      "fieldCoach": "Coach",
+      "fieldFrom": "De",
+      "fieldLength": "Durée de la séance",
+      "fieldTimes": "Créneaux qui lui conviennent",
+      "fieldTopic": "Sujet",
+      "heading": "Nouvelle demande de coaching",
+      "intro": "{name} aimerait une séance avec toi, {coach}. Cette personne a trouvé ton profil sur la liste des coachs %BRAND%.",
+      "introAdmin": "Un utilisateur a envoyé cette demande à {coach} depuis la liste des coachs %BRAND%. Ceci est ta copie.",
+      "minutes": "{minutes} minutes",
+      "next": "Pour accepter, réponds à cet e-mail ou écris à {email} pour convenir d'un horaire et d'un prix.",
+      "nextAdmin": "Le coach répond directement à l'utilisateur. Assure le suivi si le coach demande de l'aide.",
+      "notGiven": "Non précisé",
+      "payment": "L'utilisateur paie le coach directement. %BRAND% ne perçoit aucun paiement pour le coaching.",
+      "reason": "Tu reçois cet e-mail parce que tu as accepté de figurer comme coach sur %BRAND% et qu'un utilisateur a demandé une séance.",
+      "reasonAdmin": "Tu reçois cet e-mail parce que tu t'occupes de la liste des coachs %BRAND%.",
+      "subject": "Demande de coaching de {name} : {topic}",
+      "subjectAdmin": "Demande de coaching pour {coach} : {topic}"
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "body": "Nous avons préparé une copie de tes données %BRAND%. Connecte-toi et ouvre Réglages → Confidentialité pour la télécharger. Le fichier est supprimé au bout de {days, plural, one {# jour} other {# jours}}.",
+      "cta": "Ouvrir les Réglages",
+      "heading": "Ton export de données est prêt",
+      "subject": "Ton export de données %BRAND% est prêt"
+    }
+  },
+  "growth": {
+    "footer": "Tu reçois cet e-mail parce qu'il concerne les crédits de ton compte %BRAND%.",
+    "referralReward": {
+      "cta": "Commencer un entretien d'entraînement",
+      "invitee": {
+        "body": "Tu as créé ton compte avec le lien d'invitation d'un ami et terminé la configuration, nous avons donc ajouté {credits, plural, one {# crédit d'entretien d'entraînement} other {# crédits d'entretien d'entraînement}} à ton compte.",
+        "heading": "Tu as reçu {credits, plural, one {# crédit d'entretien d'entraînement} other {# crédits d'entretien d'entraînement}}",
+        "subject": "Ton crédit d'invitation est prêt"
+      },
+      "inviter": {
+        "body": "Un ami qui s'est inscrit avec ton lien d'invitation a vérifié son compte et terminé la configuration, nous avons donc ajouté {credits, plural, one {# crédit d'entretien d'entraînement} other {# crédits d'entretien d'entraînement}} à ton compte.",
+        "heading": "Tu as reçu {credits, plural, one {# crédit d'entretien d'entraînement} other {# crédits d'entretien d'entraînement}}",
+        "subject": "Un ami que tu as invité a terminé la configuration"
+      },
+      "note": "Les crédits servent aux entretiens d'entraînement sur %BRAND%. Ils n'ont aucune valeur monétaire."
+    }
+  },
+  "notify": {
+    "campusDeadline": {
+      "body": "Les candidatures pour {program} chez {company} ferment le {date}. Postule sur la page officielle.",
+      "cta": "Ouvrir la page officielle",
+      "heading": "La date limite de candidature approche",
+      "preheader": "{program} ferme le {date}.",
+      "subject": "{company} : les candidatures pour {program} ferment le {date}"
+    },
+    "campusFollowed": {
+      "body": "{program} chez {company} figure maintenant dans le calendrier campus, avec le lien vers sa page officielle. Vérifie les dates sur cette page avant de postuler.",
+      "cta": "Voir le programme",
+      "heading": "Une entreprise que tu suis a publié un programme",
+      "preheader": "{program} est dans le calendrier campus.",
+      "subject": "{company} a publié un nouveau programme campus",
+      "subjectYear": "{company} a publié son programme campus pour la promotion {year}"
+    },
+    "common": {
+      "fitNote": "L'adéquation compare l'annonce avec ton CV. Ce n'est pas ta probabilité d'être recruté.",
+      "gapLine": "Pas encore dans ton CV : {skill}",
+      "payNotListed": "Salaire non indiqué",
+      "payPerDay": "{amount} par jour",
+      "payPerHour": "{amount} par heure",
+      "payPerMonth": "{amount} par mois",
+      "payPerWeek": "{amount} par semaine",
+      "payPerYear": "{amount} par an",
+      "placeNotListed": "Lieu non indiqué",
+      "remote": "Télétravail",
+      "tierGood": "Bien adapté",
+      "tierGreat": "Très adapté",
+      "tierPossible": "Possible",
+      "viewJob": "Voir l'offre"
+    },
+    "finishSetup": {
+      "body": "Tes réponses jusqu'ici sont enregistrées. Termine la configuration pour voir les offres qui correspondent à ta recherche et ce qu'il faut corriger dans ton CV.",
+      "cta": "Continuer la configuration",
+      "heading": "Reprends là où tu en étais",
+      "preheader": "Tes réponses sont enregistrées. Termine la configuration quand tu veux.",
+      "subject": "Termine la configuration de %BRAND%"
+    },
+    "followUp": {
+      "body": "Tu as postulé au poste {title} chez {company} le {date}. Aucune réponse depuis {days} jours. Une relance courte et polie est tout à fait normale.",
+      "cta": "Ouvrir cette candidature",
+      "heading": "C'est le moment de relancer ?",
+      "preheader": "Aucune réponse depuis {days} jours.",
+      "subject": "{company} : aucune réponse depuis {days} jours"
+    },
+    "interview": {
+      "body": "Ton entretien pour le poste {title} chez {company} a lieu le {date}. Un court entraînement peut t'aider à te préparer.",
+      "cta": "S'entraîner pour cette offre",
+      "heading": "Ton entretien approche",
+      "preheader": "Entretien pour {title} le {date}.",
+      "subject": "Entretien avec {company} le {date}"
+    },
+    "jobAlertDigest": {
+      "cta": "Voir toutes les nouvelles offres",
+      "headingDaily": "Ton récapitulatif quotidien des offres",
+      "headingWeekly": "Ton récapitulatif hebdomadaire des offres",
+      "introDaily": "{count, plural, one {# nouvelle offre correspond à ta recherche enregistrée « {search} » depuis hier.} other {# nouvelles offres correspondent à ta recherche enregistrée « {search} » depuis hier.}}",
+      "introDailyNoTotal": "{count, plural, one {Voici # nouvelle offre qui correspond à ta recherche enregistrée « {search} » depuis hier.} other {Voici # nouvelles offres qui correspondent à ta recherche enregistrée « {search} » depuis hier.}} Tu peux voir toutes les nouvelles offres dans %BRAND%.",
+      "introWeekly": "{count, plural, one {# nouvelle offre correspond à ta recherche enregistrée « {search} » cette semaine.} other {# nouvelles offres correspondent à ta recherche enregistrée « {search} » cette semaine.}}",
+      "introWeeklyNoTotal": "{count, plural, one {Voici # nouvelle offre qui correspond à ta recherche enregistrée « {search} » cette semaine.} other {Voici # nouvelles offres qui correspondent à ta recherche enregistrée « {search} » cette semaine.}} Tu peux voir toutes les nouvelles offres dans %BRAND%.",
+      "more": "{count, plural, one {# autre nouvelle offre correspond aussi. Retrouve-la dans %BRAND%.} other {# autres nouvelles offres correspondent aussi. Retrouve-les dans %BRAND%.}}",
+      "subjectDaily": "{count, plural, one {# nouvelle offre correspond à ta recherche} other {# nouvelles offres correspondent à ta recherche}} depuis hier",
+      "subjectDailyNoTotal": "De nouvelles offres correspondent à ta recherche depuis hier",
+      "subjectWeekly": "{count, plural, one {# nouvelle offre correspond à ta recherche} other {# nouvelles offres correspondent à ta recherche}} cette semaine",
+      "subjectWeeklyNoTotal": "De nouvelles offres correspondent à ta recherche cette semaine",
+      "trackerCta": "Ouvrir tes candidatures",
+      "trackerLine": "{count, plural, one {# candidature est sans réponse depuis 10 jours.} other {# candidatures sont sans réponse depuis 10 jours.}}"
+    },
+    "jobAlertInstant": {
+      "cta": "Voir toutes tes offres",
+      "heading": "{count, plural, one {# nouvelle offre pour ta recherche} other {# nouvelles offres pour ta recherche}}",
+      "intro": "{count, plural, one {Cette offre a été publiée récemment et correspond à ta recherche enregistrée « {search} ».} other {Ces offres ont été publiées récemment et correspondent à ta recherche enregistrée « {search} ».}}",
+      "subject": "{count, plural, one {# nouvelle offre} other {# nouvelles offres}} pour « {search} »"
+    },
+    "kitReady": {
+      "body": "Ton CV adapté et tes réponses pour le poste {title} chez {company} sont prêts. Relis-les, puis postule toi-même sur le site de l'entreprise.",
+      "cta": "Relire le kit",
+      "heading": "Ton kit est prêt à être relu",
+      "preheader": "Relis ton kit pour {title}.",
+      "subject": "Ton kit de candidature pour {title} est prêt"
+    },
+    "readyList": {
+      "body": "{count, plural, one {# offre est prête à être consultée.} other {# offres sont prêtes à être consultées.}} C'est toi qui choisis lesquelles ouvrir, et tu envoies chaque candidature toi-même.",
+      "cta": "Consulter la liste",
+      "heading": "Ta liste de la semaine",
+      "preheader": "Des offres prêtes à être consultées.",
+      "subject": "La liste Prêt à postuler de cette semaine est prête"
+    },
+    "reasons": {
+      "alerts": "Tu reçois cet e-mail parce que les alertes d'offres sont activées pour ta recherche enregistrée « {search} » dans %BRAND%.",
+      "campusFollow": "Tu reçois cet e-mail parce que tu suis {company} dans le calendrier campus %BRAND%.",
+      "digestDaily": "Tu reçois cet e-mail parce que tu as choisi un récapitulatif quotidien des offres pour ta recherche enregistrée « {search} » dans %BRAND%.",
+      "digestWeekly": "Tu reçois cet e-mail parce que tu as choisi un récapitulatif hebdomadaire des offres pour ta recherche enregistrée « {search} » dans %BRAND%.",
+      "reminders": "Tu reçois cet e-mail parce qu'il concerne ton compte %BRAND% et les offres que tu suis. Tu peux désactiver ces rappels."
+    },
+    "resumeCheck": {
+      "body": "Nous avons lu ton CV et listé ce qu'il faut corriger en premier.",
+      "bodyCount": "{count, plural, =0 {Nous avons lu ton CV et n'avons rien trouvé d'urgent à corriger.} one {Nous avons lu ton CV et trouvé # point à corriger en premier.} other {Nous avons lu ton CV et trouvé # points à corriger en premier.}}",
+      "cta": "Voir la vérification de ton CV",
+      "heading": "La vérification de ton CV est prête",
+      "preheader": "Découvre ce qu'il faut corriger en premier dans ton CV.",
+      "subject": "La vérification de ton CV est prête"
+    },
+    "tipsPractice": {
+      "body": "Tu as un entretien d'entraînement gratuit. Réponds à voix haute à des questions d'entretien et reçois des notes sur ce que tu peux améliorer. Rien n'est partagé avec les employeurs.",
+      "bodyCredit": "Tu as un entretien d'entraînement disponible. Réponds à voix haute à des questions d'entretien et reçois des notes sur ce que tu peux améliorer. Rien n'est partagé avec les employeurs.",
+      "cta": "Commencer l'entraînement",
+      "heading": "Essaie un entretien d'entraînement",
+      "preheader": "Réponds à voix haute à des questions d'entretien et reçois des notes.",
+      "subject": "Ton entretien d'entraînement gratuit est disponible",
+      "subjectCredit": "Ton entretien d'entraînement est disponible"
+    },
+    "tipsReEngagement": {
+      "body": "{count, plural, one {# nouvelle offre correspond à ta recherche enregistrée « {search} » depuis le {date}.} other {# nouvelles offres correspondent à ta recherche enregistrée « {search} » depuis le {date}.}}",
+      "cta": "Voir les nouvelles offres",
+      "heading": "De nouvelles offres depuis ta dernière visite",
+      "preheader": "De nouvelles offres correspondent à ta recherche enregistrée.",
+      "subject": "{count, plural, one {# nouvelle offre correspond à ta recherche} other {# nouvelles offres correspondent à ta recherche}} depuis le {date}"
+    },
+    "tipsTailor": {
+      "body": "Une version de ton CV pour une offre précise met en avant les compétences que l'annonce demande. Tu relis chaque modification avant de l'utiliser.",
+      "bodyJob": "{title} chez {company} fait partie des offres qui te correspondent le mieux jusqu'ici. Une version de ton CV pour cette offre met en avant les compétences que l'annonce demande. Tu relis chaque modification avant de l'utiliser.",
+      "cta": "Adapter mon CV",
+      "heading": "Montre aux employeurs les compétences qu'ils demandent",
+      "preheader": "Une version de ton CV pour une offre précise, où tu relis chaque modification.",
+      "subject": "Adapte ton CV à une offre qui te plaît",
+      "subjectJob": "Adapte ton CV pour {title}"
+    },
+    "welcome": {
+      "heading": "Bienvenue sur %BRAND%",
+      "intro": "Voici trois choses à faire en premier. Chacune t'y emmène directement.",
+      "preheader": "Trois choses à faire en premier dans %BRAND%.",
+      "stepCampus": "Voir les dates de recrutement sur les campus",
+      "stepJobs": "Voir les offres pour ta recherche",
+      "stepPractice": "S'entraîner à un entretien",
+      "stepResume": "Vérifier ton CV",
+      "stepTracker": "Suivre tes candidatures",
+      "subject": "Bienvenue sur %BRAND% : trois choses à faire en premier"
+    }
+  },
+  "tracker": {
+    "csv": {
+      "header": {
+        "appliedOn": "Envoyée le",
+        "company": "Entreprise",
+        "currency": "Devise",
+        "deadline": "Date limite",
+        "followUpOn": "Relancer le",
+        "interview": "Entretien",
+        "link": "Lien",
+        "notes": "Notes",
+        "outcome": "Comment ça s'est terminé",
+        "salary": "Salaire",
+        "savedOn": "Gardée le",
+        "source": "Ajoutée depuis",
+        "stage": "Étape",
+        "title": "Intitulé du poste"
+      },
+      "outcome": {
+        "i_withdrew": "Je me suis retiré",
+        "job_pulled": "Le poste a été annulé",
+        "they_said_no": "Ils ont dit non"
+      },
+      "stage": {
+        "accepted": "Proposition",
+        "ai_interview": "Entretien AI",
+        "applied": "Envoyée",
+        "applying": "Envoyée",
+        "assessment": "Évaluation",
+        "bookmarked": "Gardée",
+        "closed": "Poste annulé",
+        "final_round": "Dernier tour",
+        "first_call": "Premier échange",
+        "interviewing": "Entretiens en cours",
+        "negotiating": "Proposition",
+        "offer": "Proposition",
+        "rejected": "Refusée",
+        "signed": "Contrat signé",
+        "withdrawn": "Retirée",
+        "written_test": "Test écrit"
+      }
+    },
+    "inbox": {
+      "deadline": "{days, plural, =0 {Les candidatures pour {name} ferment aujourd'hui.} =1 {Les candidatures pour {name} ferment demain.} other {Les candidatures pour {name} ferment dans # jours.}}",
+      "followUpDue": "Ta date de relance pour {name}, c'est aujourd'hui.",
+      "interview": "Entretien avec {name} dans les 24 heures.",
+      "noReply": "Aucune réponse pour {name} depuis {days, plural, one {# jour} other {# jours}}.",
+      "unnamed": "cette candidature"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "body": "Quelqu'un (toi, nous l'espérons) a demandé à %BRAND% d'envoyer à cette adresse les nouvelles offres pour « {search} », {cadence, select, daily {une fois par jour} other {une fois par semaine}}.",
+        "cta": "Confirmer les alertes d'offres",
+        "heading": "Confirme tes alertes d'offres",
+        "ignore": "Si ce n'était pas toi, ignore cet e-mail. Rien ne sera envoyé tant que personne n'a cliqué sur le lien, et celui-ci cesse de fonctionner au bout de {hours} heures.",
+        "preheader": "Clique sur le bouton pour activer tes alertes d'offres.",
+        "subject": "Confirme tes alertes d'offres %BRAND%"
+      },
+      "digest": {
+        "heading": "{count, plural, one {# nouvelle offre pour ton alerte} other {# nouvelles offres pour ton alerte}}",
+        "intro": "Nouveautés depuis ton dernier e-mail, pour « {search} ».",
+        "more": "{count, plural, one {# autre offre correspond aussi.} other {# autres offres correspondent aussi.}}",
+        "pay": "{amount} {period, select, year {par an} month {par mois} week {par semaine} day {par jour} hour {par heure} other {}}",
+        "payNotListed": "Salaire non indiqué",
+        "placeNotListed": "Lieu non indiqué",
+        "preheader": "De nouvelles offres pour ton alerte.",
+        "reason": "Tu reçois cet e-mail parce que tu as confirmé des alertes d'offres pour « {search} » sur %BRAND%. Tu n'as pas de compte.",
+        "remote": "Télétravail",
+        "signup": "Crée un compte gratuit pour voir à quel point chaque offre correspond à ton CV.",
+        "signupCta": "Créer un compte gratuit",
+        "subject": "{count, plural, one {# nouvelle offre} other {# nouvelles offres}} pour « {search} »",
+        "viewJob": "Voir l'offre"
+      },
+      "searchAny": "tout poste"
+    }
+  }
+}

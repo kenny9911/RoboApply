@@ -47,6 +47,413 @@
       "followUpDue": "今天是你为 {name} 设定的跟进日期。",
       "interview": "{name} 的面试将在 24 小时内开始。",
       "deadline": "{days, plural, =0 {{name} 的网申今天截止。} =1 {{name} 的网申明天截止。} other {{name} 的网申还有 # 天截止。}}"
+    },
+    "csv": {
+      "header": {
+        "appliedOn": "申请日期",
+        "company": "公司",
+        "currency": "币种",
+        "deadline": "截止日期",
+        "followUpOn": "跟进日期",
+        "interview": "面试时间",
+        "link": "链接",
+        "notes": "备注",
+        "outcome": "怎么结束的",
+        "salary": "薪资",
+        "savedOn": "保存日期",
+        "source": "添加来源",
+        "stage": "阶段",
+        "title": "职位名称"
+      },
+      "outcome": {
+        "i_withdrew": "我主动退出",
+        "job_pulled": "职位被撤了",
+        "they_said_no": "对方拒绝了"
+      },
+      "stage": {
+        "accepted": "录用",
+        "ai_interview": "AI 面试",
+        "applied": "已申请",
+        "applying": "已申请",
+        "assessment": "测评",
+        "bookmarked": "已保存",
+        "closed": "职位被撤了",
+        "final_round": "最终面试",
+        "first_call": "首次通话",
+        "interviewing": "面试中",
+        "negotiating": "录用",
+        "offer": "录用",
+        "rejected": "未录用",
+        "signed": "已签约",
+        "withdrawn": "已退出",
+        "written_test": "笔试"
+      }
+    },
+    "inbox": {
+      "deadline": "{days, plural, =0 {{name} 的申请今天截止。} =1 {{name} 的申请明天截止。} other {{name} 的申请还有 # 天截止。}}",
+      "followUpDue": "今天是你为 {name} 设定的跟进日期。",
+      "interview": "{name} 的面试将在 24 小时内开始。",
+      "noReply": "{name} 已 {days, plural, other {# 天}}没有回复。",
+      "unnamed": "这份申请"
+    }
+  },
+  "accountV2": {
+    "studentCode": {
+      "body": "在 %BRAND% 中输入这个验证码，以确认你能查看这个邮箱。验证码 {minutes} 分钟内有效。",
+      "codeLine": "你的验证码：{code}",
+      "heading": "验证你的学校邮箱",
+      "ignore": "如果这不是你本人的操作，请忽略这封邮件。不会有任何变化。",
+      "preheader": "输入这个验证码，验证你的学校邮箱。",
+      "subject": "你的 %BRAND% 学生验证码：{code}"
+    },
+    "winback": {
+      "body": "你的付费套餐已于 {date} 到期。你的简历、保存的职位和申请记录都还在你的账号里，免费版可以继续使用。",
+      "cta": "查看套餐",
+      "heading": "你的账号还在",
+      "once": "关于这件事，我们只发这一封邮件。",
+      "preheader": "你的账号和里面的内容都还在。",
+      "price": "如果你想用 Pro，价格是{period} {price}。你可以随时取消。",
+      "subject": "你的 %BRAND% 付费套餐已在一个月前到期"
+    }
+  },
+  "auth": {
+    "accountDeleted": {
+      "body": "你申请了删除你的 %BRAND% 账号。你已在所有设备上退出登录，之后无法再登录。",
+      "heading": "你的账号即将被删除",
+      "notYou": "如果这不是你本人的操作，请立即回复这封邮件或联系客服。",
+      "subject": "你的 %BRAND% 账号即将被删除",
+      "when": "我们会在 {days} 天内删除你的账号及其数据。备份会在此后 90 天内清除。"
+    },
+    "emailVerify": {
+      "body": "请确认这是你的邮箱地址。在你决定之前，可以继续使用 %BRAND%；完成验证后，你的免费面试练习即可使用。",
+      "cta": "验证我的邮箱",
+      "expiry": "链接将在 24 小时后失效。你可以在设置里重新发送。",
+      "heading": "验证你的邮箱",
+      "preheader": "点一下即可验证这个邮箱。",
+      "subject": "验证你的 %BRAND% 邮箱"
+    },
+    "newDevice": {
+      "body": "你的账号刚刚在 {os} 的 {browser} 上登录，时间是 {time}（UTC）。",
+      "cta": "重置我的密码",
+      "heading": "新的登录",
+      "ifNot": "如果这不是你本人，请立即重置密码。重置后，你会在其他所有设备上退出登录。",
+      "ifYou": "如果是你本人，无需任何操作。",
+      "preheader": "{os} 上的 {browser}",
+      "subject": "你的 %BRAND% 账号有新的登录"
+    },
+    "oauthEmail": {
+      "body": "你正在用 LINE 创建 %BRAND% 账号。验证这个邮箱地址即可完成。只有在你点击按钮后，账号才会创建。",
+      "cta": "验证并创建我的账号",
+      "heading": "完成注册",
+      "ignore": "如果这不是你本人，请忽略这封邮件。不会创建任何账号。",
+      "preheader": "验证这个邮箱，即可完成用 LINE 注册。",
+      "subject": "完成创建你的 %BRAND% 账号"
+    },
+    "otherBrand": {
+      "body": "有人尝试用这个邮箱地址创建 %BRAND% 账号。这个邮箱已属于一个 %OTHER_BRAND% 账号，而一个邮箱只能注册两者中的一个。",
+      "cta": "登录 %OTHER_BRAND%",
+      "heading": "你已经有账号了",
+      "ignore": "如果这不是你本人，请忽略这封邮件。没有任何改动。",
+      "subject": "有人尝试用你的邮箱注册",
+      "useOther": "要继续使用你的账号，请登录 %OTHER_BRAND%："
+    },
+    "passwordReset": {
+      "body": "有人申请重置这个 %BRAND% 账号的密码。点击下方按钮设置新密码。链接只能使用一次，30 分钟后失效。",
+      "cta": "设置新密码",
+      "heading": "重置密码",
+      "ignore": "如果这不是你本人的操作，请忽略这封邮件。你的密码不会改变。",
+      "preheader": "链接 30 分钟内有效。",
+      "sessions": "重置密码后，你会在其他所有设备上退出登录。",
+      "subject": "重置你的 %BRAND% 密码"
+    }
+  },
+  "billing": {
+    "annualReminder": {
+      "body": "你从 {since} 起一直在使用 {plan}。它{period}续费一次，每次 {price}。下次续费日期是 {date}。",
+      "heading": "你的订阅年度提醒",
+      "subject": "你的 %BRAND% 订阅仍在生效"
+    },
+    "cancelConfirmed": {
+      "accessEnded": "你的账号现在是免费版。",
+      "accessUntil": "付费功能可以用到 {date}。之后你的账号会转为免费版。",
+      "body": "我们已取消 {plan}。它不会再续费，你也不会再为它被扣款。",
+      "cta": "查看你的套餐",
+      "heading": "你的套餐已取消",
+      "received": "我们于 {at} 收到了你的取消请求。",
+      "subject": "你的 %BRAND% 套餐已取消"
+    },
+    "cancelLink": {
+      "body": "有人申请取消这个邮箱地址名下的 %BRAND% 套餐。请在 {minutes} 分钟内点击下方按钮确认。链接只能使用一次。",
+      "cta": "取消我的套餐",
+      "heading": "确认取消",
+      "ignore": "如果这不是你本人的操作，请忽略这封邮件。不会有任何变化。",
+      "subject": "取消 %BRAND% 套餐的链接"
+    },
+    "cancelNone": {
+      "body": "有人申请取消这个邮箱地址名下的 %BRAND% 套餐，但这个账号没有会自动续费的套餐。不会产生任何扣款。",
+      "cta": "查看你的套餐",
+      "heading": "没有需要取消的套餐",
+      "subject": "没有可取消的 %BRAND% 套餐"
+    },
+    "footer": "你收到这封邮件，是因为它与你的 %BRAND% 套餐和付款有关。",
+    "paymentFailed": {
+      "body": "{plan} 的 {price} 付款没有成功。我们会在接下来几天内重试。",
+      "cta": "更新付款方式",
+      "heading": "我们没能从你的银行卡扣款",
+      "keep": "请更新付款方式，以保留你的套餐。如果最后一次重试仍未成功，你的账号会转为免费版。你已有的额度仍然归你。",
+      "subject": "你的 %BRAND% 付款没有成功"
+    },
+    "periods": {
+      "month": "每月",
+      "period": "每个计费周期",
+      "quarter": "每 3 个月",
+      "week": "每周"
+    },
+    "planNames": {
+      "legacy": "练习套餐（旧版）",
+      "practice_pack_15": "面试练习包（15 次）",
+      "practice_pack_5": "面试练习包（5 次）",
+      "pro": "Pro",
+      "pro_monthly": "Pro 月付",
+      "pro_monthlyCn": "Pro 会员月卡",
+      "pro_quarterly": "Pro 季付",
+      "pro_quarterlyCn": "Pro 会员季卡",
+      "pro_week_pass": "7 天卡",
+      "pro_week_passCn": "Pro 会员周卡",
+      "pro_weekly": "Pro 周付",
+      "student_monthly": "学生月付",
+      "student_quarterly": "学生季付"
+    },
+    "renewalReminder": {
+      "bodyAuto": "{plan} 将于 {date} 自动续费，{period} {price}。",
+      "bodyManual": "{plan} 将于 {date} 到期。它不会续费，也不会产生任何扣款。如果想继续使用 Pro，可以再买一张时长卡。",
+      "bodyManualLegacy": "{plan} 将于 {date} 到期。它不会续费，也不会产生任何扣款。如果想继续练习，可以看看现有的套餐。",
+      "cancelLine": "不想续费？在那之前随时可以取消，点一下就行。在已付费周期结束前，你的付费功能仍可使用。",
+      "ctaAuto": "管理或取消",
+      "ctaManual": "查看时长卡",
+      "ctaManualLegacy": "查看套餐",
+      "headingAuto": "你的套餐即将续费",
+      "headingManual": "你的时长卡即将到期",
+      "subjectAuto": "你的 %BRAND% 套餐将于 {date} 续费",
+      "subjectManual": "你的 %BRAND% 时长卡将于 {date} 到期"
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "addressUnverified": "由用户在请求表单中填写。%BRAND% 没有核实这是否是对方本人的邮箱。",
+      "fieldAccount": "账号",
+      "fieldAddress": "回复邮箱",
+      "fieldCoach": "教练",
+      "fieldFrom": "来自",
+      "fieldLength": "辅导时长",
+      "fieldTimes": "对方方便的时间",
+      "fieldTopic": "咨询内容",
+      "heading": "新的辅导请求",
+      "intro": "{coach}，{name} 想和你约一次辅导。对方是在 %BRAND% 教练列表中找到你的。",
+      "introAdmin": "有用户通过 %BRAND% 教练列表向 {coach} 发送了这条请求。这是发给你的副本。",
+      "minutes": "{minutes} 分钟",
+      "next": "如果接受，请回复这封邮件，或写信到 {email}，与对方商定时间和价格。",
+      "nextAdmin": "教练会直接回复用户。如果教练需要协助，请跟进。",
+      "notGiven": "未填写",
+      "payment": "用户直接向教练付款。%BRAND% 不收取任何辅导费用。",
+      "reason": "你收到这封邮件，是因为你同意在 %BRAND% 上作为教练展示，并且有用户向你发送了辅导请求。",
+      "reasonAdmin": "你收到这封邮件，是因为你负责管理 %BRAND% 教练列表。",
+      "subject": "来自 {name} 的辅导请求：{topic}",
+      "subjectAdmin": "给 {coach} 的辅导请求：{topic}"
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "body": "我们已准备好一份你的 %BRAND% 数据副本。请登录后打开“设置 → 隐私与数据”下载。文件会在 {days, plural, other {# 天}}后删除。",
+      "cta": "打开设置",
+      "heading": "你的数据导出已准备好",
+      "subject": "你的 %BRAND% 数据导出已准备好"
+    }
+  },
+  "growth": {
+    "footer": "你收到这封邮件，是因为它与你 %BRAND% 账号的额度有关。",
+    "referralReward": {
+      "cta": "开始面试练习",
+      "invitee": {
+        "body": "你通过好友的邀请链接加入并完成了设置，所以我们给你的账号添加了 {credits, plural, other {# 次面试练习}}。",
+        "heading": "你获得了 {credits, plural, other {# 次面试练习}}",
+        "subject": "你的邀请额度可以使用了"
+      },
+      "inviter": {
+        "body": "一位通过你的邀请链接注册的好友已验证账号并完成设置，所以我们给你的账号添加了 {credits, plural, other {# 次面试练习}}。",
+        "heading": "你获得了 {credits, plural, other {# 次面试练习}}",
+        "subject": "你邀请的好友已完成设置"
+      },
+      "note": "额度仅用于 %BRAND% 的面试练习，不能兑换现金。"
+    }
+  },
+  "notify": {
+    "campusDeadline": {
+      "body": "{company} 的 {program} 网申将于 {date} 截止。请前往官网申请。",
+      "cta": "打开官网",
+      "heading": "网申即将截止",
+      "preheader": "{program} 将于 {date} 截止。",
+      "subject": "{company}：{program} 网申将于 {date} 截止"
+    },
+    "campusFollowed": {
+      "body": "{company} 的 {program} 已加入校招日历，并附有官网链接。申请前请在官网核对日期。",
+      "cta": "查看项目",
+      "heading": "你关注的公司发布了校招项目",
+      "preheader": "{program} 已加入校招日历。",
+      "subject": "{company} 发布了新的校招项目",
+      "subjectYear": "{company} 发布了 {year} 届校招项目"
+    },
+    "common": {
+      "fitNote": "匹配度比较的是职位描述和你的简历。这不是你被录用的概率。",
+      "gapLine": "你的简历里还没有：{skill}",
+      "payNotListed": "薪资未披露",
+      "payPerDay": "{amount}/天",
+      "payPerHour": "{amount}/小时",
+      "payPerMonth": "{amount}/月",
+      "payPerWeek": "{amount}/周",
+      "payPerYear": "{amount}/年",
+      "placeNotListed": "地点未注明",
+      "remote": "远程",
+      "tierGood": "较合适",
+      "tierGreat": "很合适",
+      "tierPossible": "可能合适",
+      "viewJob": "查看职位"
+    },
+    "finishSetup": {
+      "body": "你目前填写的内容已保存。完成设置后，就能看到符合你搜索条件的职位，以及简历上需要修改的地方。",
+      "cta": "继续设置",
+      "heading": "接着上次继续",
+      "preheader": "你填写的内容已保存。准备好后再完成设置。",
+      "subject": "完成 %BRAND% 的设置"
+    },
+    "followUp": {
+      "body": "你在 {date} 申请了 {company} 的 {title}，已经 {days} 天没有回复。发一条简短、礼貌的跟进消息是很正常的。",
+      "cta": "打开这份申请",
+      "heading": "该跟进了吗？",
+      "preheader": "已 {days} 天没有回复。",
+      "subject": "{company} 已 {days} 天没有回复"
+    },
+    "interview": {
+      "body": "你在 {company} 的 {title} 面试定在 {date}。先做一次简短的练习，有助于做好准备。",
+      "cta": "针对这个职位练习",
+      "heading": "你的面试快到了",
+      "preheader": "{title} 的面试在 {date}。",
+      "subject": "{company} 的面试在 {date}"
+    },
+    "jobAlertDigest": {
+      "cta": "查看全部新职位",
+      "headingDaily": "你的每日职位汇总",
+      "headingWeekly": "你的每周职位汇总",
+      "introDaily": "{count, plural, other {昨天以来，有 # 个新职位符合你保存的搜索“{search}”。}}",
+      "introDailyNoTotal": "{count, plural, other {以下是昨天以来符合你保存的搜索“{search}”的 # 个新职位。}}你可以在 %BRAND% 里查看所有新职位。",
+      "introWeekly": "{count, plural, other {本周有 # 个新职位符合你保存的搜索“{search}”。}}",
+      "introWeeklyNoTotal": "{count, plural, other {以下是本周符合你保存的搜索“{search}”的 # 个新职位。}}你可以在 %BRAND% 里查看所有新职位。",
+      "more": "{count, plural, one {另有 # 个新职位也符合。请在 %BRAND% 里查看。} other {另有 # 个新职位也符合。请在 %BRAND% 里查看。}}",
+      "subjectDaily": "昨天以来，{count, plural, other {有 # 个新职位符合你的搜索}}",
+      "subjectDailyNoTotal": "昨天以来，有新职位符合你的搜索",
+      "subjectWeekly": "本周{count, plural, other {有 # 个新职位符合你的搜索}}",
+      "subjectWeeklyNoTotal": "本周有新职位符合你的搜索",
+      "trackerCta": "打开你的申请记录",
+      "trackerLine": "{count, plural, other {有 # 份申请已 10 天没有回复。}}"
+    },
+    "jobAlertInstant": {
+      "cta": "查看你的全部职位",
+      "heading": "{count, plural, other {# 个新职位符合你的搜索}}",
+      "intro": "{count, plural, =1 {这个职位是最近发布的，符合你保存的搜索“{search}”。} other {这些职位是最近发布的，符合你保存的搜索“{search}”。}}",
+      "subject": "“{search}”有 {count, plural, other {# 个新职位}}"
+    },
+    "kitReady": {
+      "body": "针对 {company} 的 {title}，你的定制简历和回答已经备好。请先检查，然后自己到公司官网申请。",
+      "cta": "检查材料包",
+      "heading": "你的材料包已备好，等你检查",
+      "preheader": "检查你针对 {title} 的材料包。",
+      "subject": "你针对 {title} 的申请材料包已备好"
+    },
+    "readyList": {
+      "body": "{count, plural, other {有 # 个职位已备好，等你检查。}}打开哪些由你决定，每份申请都由你自己提交。",
+      "cta": "查看列表",
+      "heading": "你本周的列表",
+      "preheader": "有职位已备好，等你检查。",
+      "subject": "本周的“待投递”列表已备好"
+    },
+    "reasons": {
+      "alerts": "你收到这封邮件，是因为你在 %BRAND% 里为保存的搜索“{search}”开启了职位提醒。",
+      "campusFollow": "你收到这封邮件，是因为你在 %BRAND% 校招日历上关注了 {company}。",
+      "digestDaily": "你收到这封邮件，是因为你在 %BRAND% 里为保存的搜索“{search}”选择了每日职位汇总。",
+      "digestWeekly": "你收到这封邮件，是因为你在 %BRAND% 里为保存的搜索“{search}”选择了每周职位汇总。",
+      "reminders": "你收到这封邮件，是因为它与你的 %BRAND% 账号和你跟踪的职位有关。你可以关闭这些提醒。"
+    },
+    "resumeCheck": {
+      "body": "我们看了你的简历，列出了需要优先修改的地方。",
+      "bodyCount": "{count, plural, =0 {我们看了你的简历，没有发现急需修改的地方。} other {我们看了你的简历，发现有 # 处需要优先修改。}}",
+      "cta": "查看简历检查结果",
+      "heading": "你的简历检查已完成",
+      "preheader": "看看简历上需要优先修改的地方。",
+      "subject": "你的简历检查已完成"
+    },
+    "tipsPractice": {
+      "body": "你有一次免费的面试练习。开口回答面试问题，并得到改进建议。任何内容都不会分享给企业。",
+      "bodyCredit": "你有一次面试练习可以使用。开口回答面试问题，并得到改进建议。任何内容都不会分享给企业。",
+      "cta": "开始练习",
+      "heading": "试一次面试练习",
+      "preheader": "开口回答面试问题，并得到反馈。",
+      "subject": "你的免费面试练习可以使用了",
+      "subjectCredit": "你的面试练习可以使用了"
+    },
+    "tipsReEngagement": {
+      "body": "{count, plural, other {自 {date} 以来，有 # 个新职位符合你保存的搜索“{search}”。}}",
+      "cta": "查看新职位",
+      "heading": "你上次访问后的新职位",
+      "preheader": "有新职位符合你保存的搜索。",
+      "subject": "自 {date} 以来，{count, plural, other {有 # 个新职位符合你的搜索}}"
+    },
+    "tipsTailor": {
+      "body": "为某个职位定制的简历版本，会把职位描述要求的技能放在最前面。每处改动都由你检查后再使用。",
+      "bodyJob": "{company} 的 {title} 是目前与你最匹配的职位之一。为这个职位定制的简历版本，会把职位描述要求的技能放在最前面。每处改动都由你检查后再使用。",
+      "cta": "定制我的简历",
+      "heading": "让企业看到他们要求的技能",
+      "preheader": "为某个职位定制的简历版本，每处改动都由你检查。",
+      "subject": "为你喜欢的职位定制简历",
+      "subjectJob": "为 {title} 定制简历"
+    },
+    "welcome": {
+      "heading": "欢迎使用 %BRAND%",
+      "intro": "可以先做这三件事。每一项都会直接带你到对应的页面。",
+      "preheader": "在 %BRAND% 里先做的三件事。",
+      "stepCampus": "查看校招日期",
+      "stepJobs": "查看符合你搜索条件的职位",
+      "stepPractice": "练习一次面试",
+      "stepResume": "检查你的简历",
+      "stepTracker": "跟踪你的申请",
+      "subject": "欢迎使用 %BRAND%：先做这三件事"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "body": "有人（希望是你本人）请 %BRAND% 把“{search}”的新职位发到这个邮箱，{cadence, select, daily {每天一次} other {每周一次}}。",
+        "cta": "确认职位提醒",
+        "heading": "确认你的职位提醒",
+        "ignore": "如果这不是你本人，请忽略这封邮件。只要没有点击链接，就不会发送任何内容；链接会在 {hours} 小时后失效。",
+        "preheader": "点击按钮，开启你的职位提醒。",
+        "subject": "确认你在 %BRAND% 的职位提醒"
+      },
+      "digest": {
+        "heading": "{count, plural, other {你的职位提醒有 # 个新职位}}",
+        "intro": "上一封邮件之后，“{search}”的新职位。",
+        "more": "{count, plural, other {另有 # 个职位也符合。}}",
+        "pay": "{amount}{period, select, year {/年} month {/月} week {/周} day {/天} hour {/小时} other {}}",
+        "payNotListed": "薪资未披露",
+        "placeNotListed": "地点未注明",
+        "preheader": "你的职位提醒有新职位。",
+        "reason": "你收到这封邮件，是因为你在 %BRAND% 上确认了“{search}”的职位提醒。你没有账号。",
+        "remote": "远程",
+        "signup": "注册免费账号，查看每个职位与你简历的匹配度。",
+        "signupCta": "免费注册",
+        "subject": "“{search}”有 {count, plural, other {# 个新职位}}",
+        "viewJob": "查看职位"
+      },
+      "searchAny": "任意职位"
     }
   }
 }

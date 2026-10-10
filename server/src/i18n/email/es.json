@@ -1,1 +1,411 @@
-{}
+{
+  "accountV2": {
+    "studentCode": {
+      "body": "Ingresa este código en %BRAND% para confirmar que puedes leer esta bandeja de entrada. Funciona durante {minutes} minutos.",
+      "codeLine": "Tu código: {code}",
+      "heading": "Confirma tu correo institucional",
+      "ignore": "Si no lo pediste, ignora este correo. No cambia nada.",
+      "preheader": "Ingresa este código para confirmar tu correo institucional.",
+      "subject": "Tu código de estudiante de %BRAND%: {code}"
+    },
+    "winback": {
+      "body": "Tu plan de pago terminó el {date}. Tus currículums, empleos guardados y candidaturas siguen en tu cuenta, y el plan gratis sigue funcionando.",
+      "cta": "Ver planes",
+      "heading": "Tu cuenta sigue aquí",
+      "once": "Este es el único correo que enviamos sobre esto.",
+      "preheader": "Tu cuenta y tu trabajo siguen ahí.",
+      "price": "Si quieres Pro, cuesta {price} cada {period}. Puedes cancelar cuando quieras.",
+      "subject": "Tu plan de pago de %BRAND% terminó hace un mes"
+    }
+  },
+  "auth": {
+    "accountDeleted": {
+      "body": "Nos pediste eliminar tu cuenta de %BRAND%. Se cerró tu sesión en todas partes y ya no puedes iniciar sesión.",
+      "heading": "Tu cuenta está programada para eliminarse",
+      "notYou": "Si no lo pediste, responde a este correo o contacta a soporte de inmediato.",
+      "subject": "Tu cuenta de %BRAND% está programada para eliminarse",
+      "when": "Eliminamos tu cuenta y sus datos en un plazo de {days} días. Las copias de seguridad se borran en los 90 días siguientes."
+    },
+    "emailVerify": {
+      "body": "Confirma que esta es tu dirección de correo. Puedes seguir usando %BRAND% mientras lo decides; al confirmarla se desbloquea tu entrevista de práctica gratis.",
+      "cta": "Confirmar mi correo",
+      "expiry": "El enlace vence en 24 horas. Puedes enviar uno nuevo desde Ajustes.",
+      "heading": "Confirma tu correo",
+      "preheader": "Con un clic confirmas esta dirección.",
+      "subject": "Confirma tu correo para %BRAND%"
+    },
+    "newDevice": {
+      "body": "Se acaba de iniciar sesión en tu cuenta desde {browser} en {os}, el {time} (UTC).",
+      "cta": "Restablecer mi contraseña",
+      "heading": "Nuevo inicio de sesión",
+      "ifNot": "Si no fuiste tú, restablece tu contraseña ahora. Al restablecerla se cierra tu sesión en todos los demás lugares.",
+      "ifYou": "Si fuiste tú, no necesitas hacer nada.",
+      "preheader": "{browser} en {os}",
+      "subject": "Nuevo inicio de sesión en tu cuenta de %BRAND%"
+    },
+    "oauthEmail": {
+      "body": "Empezaste a crear una cuenta de %BRAND% con LINE. Confirma esta dirección de correo para terminar. La cuenta se crea solo después de que hagas clic en el botón.",
+      "cta": "Confirmar y crear mi cuenta",
+      "heading": "Termina de registrarte",
+      "ignore": "Si no fuiste tú, ignora este correo. No se crea ninguna cuenta.",
+      "preheader": "Confirma este correo para terminar de registrarte con LINE.",
+      "subject": "Termina de crear tu cuenta de %BRAND%"
+    },
+    "otherBrand": {
+      "body": "Alguien intentó crear una cuenta de %BRAND% con esta dirección de correo. Este correo ya pertenece a una cuenta de %OTHER_BRAND%, y un correo solo puede tener una de las dos.",
+      "cta": "Iniciar sesión en %OTHER_BRAND%",
+      "heading": "Ya tienes una cuenta",
+      "ignore": "Si no fuiste tú, ignora este correo. No cambió nada.",
+      "subject": "Alguien intentó registrarse con tu correo",
+      "useOther": "Para seguir usando tu cuenta, inicia sesión en %OTHER_BRAND%:"
+    },
+    "passwordReset": {
+      "body": "Alguien pidió restablecer la contraseña de esta cuenta de %BRAND%. Usa el botón de abajo para elegir una nueva. El enlace funciona una sola vez y vence en 30 minutos.",
+      "cta": "Elegir una contraseña nueva",
+      "heading": "Restablece tu contraseña",
+      "ignore": "Si no lo pediste, ignora este correo. Tu contraseña sigue siendo la misma.",
+      "preheader": "Este enlace funciona durante 30 minutos.",
+      "sessions": "Al restablecer tu contraseña se cierra tu sesión en todos los demás dispositivos.",
+      "subject": "Restablece tu contraseña de %BRAND%"
+    }
+  },
+  "billing": {
+    "annualReminder": {
+      "body": "Tienes {plan} desde el {since}. Se renueva cada {period} por {price}. Próxima renovación: {date}.",
+      "heading": "Una revisión anual de tu suscripción",
+      "subject": "Tu suscripción de %BRAND% sigue activa"
+    },
+    "cancelConfirmed": {
+      "accessEnded": "Ahora tu cuenta está en el plan Gratis.",
+      "accessUntil": "Tus funciones de pago siguen activas hasta el {date}. Después, tu cuenta pasa al plan Gratis.",
+      "body": "Cancelamos {plan}. No se renovará y no se te volverá a cobrar por este plan.",
+      "cta": "Ver tu plan",
+      "heading": "Tu plan está cancelado",
+      "received": "Recibimos tu cancelación el {at}.",
+      "subject": "Tu plan de %BRAND% está cancelado"
+    },
+    "cancelLink": {
+      "body": "Alguien pidió cancelar el plan de %BRAND% de esta dirección de correo. Usa el botón de abajo en los próximos {minutes} minutos para confirmar. El enlace funciona una sola vez.",
+      "cta": "Cancelar mi plan",
+      "heading": "Confirma tu cancelación",
+      "ignore": "Si no lo pediste, ignora este correo. No cambia nada.",
+      "subject": "Tu enlace para cancelar tu plan de %BRAND%"
+    },
+    "cancelNone": {
+      "body": "Alguien pidió cancelar un plan de %BRAND% de esta dirección de correo, pero esta cuenta no tiene ningún plan que se renueve. No se cobrará nada.",
+      "cta": "Ver tu plan",
+      "heading": "No hay nada que cancelar",
+      "subject": "No hay ningún plan de %BRAND% que cancelar"
+    },
+    "footer": "Recibes este correo porque trata sobre tu plan y tus pagos de %BRAND%.",
+    "paymentFailed": {
+      "body": "El pago de {price} por {plan} falló. Lo intentaremos otra vez en los próximos días.",
+      "cta": "Actualizar método de pago",
+      "heading": "No pudimos cobrar a tu tarjeta",
+      "keep": "Actualiza tu método de pago para conservar tu plan. Si el último intento falla, tu cuenta pasa al plan Gratis. Los créditos que ya tienes siguen siendo tuyos.",
+      "subject": "Tu pago de %BRAND% no se completó"
+    },
+    "periods": {
+      "month": "mes",
+      "period": "período de facturación",
+      "quarter": "3 meses",
+      "week": "semana"
+    },
+    "planNames": {
+      "legacy": "Plan de práctica (anterior)",
+      "practice_pack_15": "Paquete de práctica (15)",
+      "practice_pack_5": "Paquete de práctica (5)",
+      "pro": "Pro",
+      "pro_monthly": "Pro mensual",
+      "pro_monthlyCn": "Pase Pro mensual",
+      "pro_quarterly": "Pro trimestral",
+      "pro_quarterlyCn": "Pase Pro trimestral",
+      "pro_week_pass": "Pase de 7 días",
+      "pro_week_passCn": "Pase Pro semanal",
+      "pro_weekly": "Pro, con cobro semanal",
+      "student_monthly": "Estudiante mensual",
+      "student_quarterly": "Estudiante trimestral"
+    },
+    "renewalReminder": {
+      "bodyAuto": "{plan} se renueva automáticamente el {date} por {price} cada {period}.",
+      "bodyManual": "{plan} termina el {date}. No se renueva y no se cobrará nada. Compra otro pase si quieres conservar Pro.",
+      "bodyManualLegacy": "{plan} termina el {date}. No se renueva y no se cobrará nada. Consulta los planes actuales si quieres seguir practicando.",
+      "cancelLine": "¿No quieres que se renueve? Cancela con un clic en cualquier momento antes de esa fecha. Tus funciones de pago siguen activas hasta el final del período que pagaste.",
+      "ctaAuto": "Administrar o cancelar",
+      "ctaManual": "Ver pases",
+      "ctaManualLegacy": "Ver planes",
+      "headingAuto": "Tu plan se renueva pronto",
+      "headingManual": "Tu pase termina pronto",
+      "subjectAuto": "Tu plan de %BRAND% se renueva el {date}",
+      "subjectManual": "Tu pase de %BRAND% termina el {date}"
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "addressUnverified": "La escribió el usuario en el formulario de solicitud. %BRAND% no ha comprobado que sea suya.",
+      "fieldAccount": "Cuenta",
+      "fieldAddress": "Dirección de respuesta",
+      "fieldCoach": "Coach",
+      "fieldFrom": "De",
+      "fieldLength": "Duración de la sesión",
+      "fieldTimes": "Horarios que le convienen",
+      "fieldTopic": "Tema",
+      "heading": "Nueva solicitud de coaching",
+      "intro": "{name} quiere una sesión contigo, {coach}. Te encontró en la lista de coaches de %BRAND%.",
+      "introAdmin": "Un usuario envió esta solicitud a {coach} desde la lista de coaches de %BRAND%. Esta es tu copia.",
+      "minutes": "{minutes} minutos",
+      "next": "Para aceptar, responde a este correo o escribe a {email} para acordar un horario y un precio.",
+      "nextAdmin": "El coach le responde directamente al usuario. Da seguimiento si el coach pide ayuda.",
+      "notGiven": "Sin indicar",
+      "payment": "El usuario le paga directamente al coach. %BRAND% no recibe ningún pago por el coaching.",
+      "reason": "Recibes este correo porque aceptaste aparecer como coach en %BRAND% y un usuario pidió una sesión.",
+      "reasonAdmin": "Recibes este correo porque te encargas de la lista de coaches de %BRAND%.",
+      "subject": "Solicitud de coaching de {name}: {topic}",
+      "subjectAdmin": "Solicitud de coaching para {coach}: {topic}"
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "body": "Preparamos una copia de tus datos de %BRAND%. Inicia sesión y abre Ajustes → Privacidad para descargarla. El archivo se elimina después de {days, plural, one {# día} other {# días}}.",
+      "cta": "Abrir Ajustes",
+      "heading": "Tu exportación de datos está lista",
+      "subject": "Tu exportación de datos de %BRAND% está lista"
+    }
+  },
+  "growth": {
+    "footer": "Recibes este correo porque trata sobre los créditos de tu cuenta de %BRAND%.",
+    "referralReward": {
+      "cta": "Empezar una entrevista de práctica",
+      "invitee": {
+        "body": "Te uniste con el enlace de invitación de un amigo y terminaste la configuración, así que añadimos {credits, plural, one {# crédito de entrevista de práctica} other {# créditos de entrevista de práctica}} a tu cuenta.",
+        "heading": "Recibiste {credits, plural, one {# crédito de entrevista de práctica} other {# créditos de entrevista de práctica}}",
+        "subject": "Tu crédito por invitación está listo"
+      },
+      "inviter": {
+        "body": "Un amigo que se registró con tu enlace de invitación verificó su cuenta y terminó la configuración, así que añadimos {credits, plural, one {# crédito de entrevista de práctica} other {# créditos de entrevista de práctica}} a tu cuenta.",
+        "heading": "Recibiste {credits, plural, one {# crédito de entrevista de práctica} other {# créditos de entrevista de práctica}}",
+        "subject": "Un amigo que invitaste terminó la configuración"
+      },
+      "note": "Los créditos son para entrevistas de práctica en %BRAND%. No tienen valor en efectivo."
+    }
+  },
+  "notify": {
+    "campusDeadline": {
+      "body": "Las postulaciones para {program} en {company} cierran el {date}. Postula en la página oficial.",
+      "cta": "Abrir la página oficial",
+      "heading": "Se acerca la fecha límite para postular",
+      "preheader": "{program} cierra el {date}.",
+      "subject": "{company}: las postulaciones para {program} cierran el {date}"
+    },
+    "campusFollowed": {
+      "body": "{program} en {company} ya está en el calendario de reclutamiento universitario, con el enlace a su página oficial. Revisa ahí las fechas antes de postular.",
+      "cta": "Ver el programa",
+      "heading": "Una empresa que sigues publicó un programa",
+      "preheader": "{program} está en el calendario de reclutamiento universitario.",
+      "subject": "{company} publicó un nuevo programa de reclutamiento universitario",
+      "subjectYear": "{company} publicó su programa de reclutamiento universitario para la promoción {year}"
+    },
+    "common": {
+      "fitNote": "El encaje compara el anuncio con tu currículum. No es tu probabilidad de que te contraten.",
+      "gapLine": "Todavía no está en tu currículum: {skill}",
+      "payNotListed": "Sueldo no indicado",
+      "payPerDay": "{amount} por día",
+      "payPerHour": "{amount} por hora",
+      "payPerMonth": "{amount} por mes",
+      "payPerWeek": "{amount} por semana",
+      "payPerYear": "{amount} por año",
+      "placeNotListed": "Ubicación no indicada",
+      "remote": "Remoto",
+      "tierGood": "Encaja bien",
+      "tierGreat": "Encaja muy bien",
+      "tierPossible": "Posible",
+      "viewJob": "Ver empleo"
+    },
+    "finishSetup": {
+      "body": "Tus respuestas hasta ahora están guardadas. Termina la configuración para ver empleos para tu búsqueda y qué corregir en tu currículum.",
+      "cta": "Continuar la configuración",
+      "heading": "Sigue donde lo dejaste",
+      "preheader": "Tus respuestas están guardadas. Termina la configuración cuando quieras.",
+      "subject": "Termina de configurar %BRAND%"
+    },
+    "followUp": {
+      "body": "Postulaste a {title} en {company} el {date}. No ha habido respuesta en {days} días. Un mensaje de seguimiento breve y cortés es normal.",
+      "cta": "Abrir esta candidatura",
+      "heading": "¿Es momento de dar seguimiento?",
+      "preheader": "Sin respuesta desde hace {days} días.",
+      "subject": "Sin respuesta de {company} desde hace {days} días"
+    },
+    "interview": {
+      "body": "Tu entrevista para {title} en {company} es el {date}. Una práctica breve puede ayudarte a prepararte.",
+      "cta": "Practicar para este empleo",
+      "heading": "Se acerca tu entrevista",
+      "preheader": "Entrevista para {title} el {date}.",
+      "subject": "Entrevista con {company} el {date}"
+    },
+    "jobAlertDigest": {
+      "cta": "Ver todos los empleos nuevos",
+      "headingDaily": "Tu resumen diario de empleos",
+      "headingWeekly": "Tu resumen semanal de empleos",
+      "introDaily": "{count, plural, one {# empleo nuevo encaja con tu búsqueda guardada «{search}» desde ayer.} other {# empleos nuevos encajan con tu búsqueda guardada «{search}» desde ayer.}}",
+      "introDailyNoTotal": "{count, plural, one {Aquí tienes # empleo nuevo que encaja con tu búsqueda guardada «{search}» desde ayer.} other {Aquí tienes # empleos nuevos que encajan con tu búsqueda guardada «{search}» desde ayer.}} Puedes ver todos los empleos nuevos en %BRAND%.",
+      "introWeekly": "{count, plural, one {# empleo nuevo encaja con tu búsqueda guardada «{search}» esta semana.} other {# empleos nuevos encajan con tu búsqueda guardada «{search}» esta semana.}}",
+      "introWeeklyNoTotal": "{count, plural, one {Aquí tienes # empleo nuevo que encaja con tu búsqueda guardada «{search}» esta semana.} other {Aquí tienes # empleos nuevos que encajan con tu búsqueda guardada «{search}» esta semana.}} Puedes ver todos los empleos nuevos en %BRAND%.",
+      "more": "{count, plural, one {También encaja # empleo nuevo más. Míralo en %BRAND%.} other {También encajan # empleos nuevos más. Míralos en %BRAND%.}}",
+      "subjectDaily": "{count, plural, one {# empleo nuevo encaja con tu búsqueda} other {# empleos nuevos encajan con tu búsqueda}} desde ayer",
+      "subjectDailyNoTotal": "Hay empleos nuevos que encajan con tu búsqueda desde ayer",
+      "subjectWeekly": "{count, plural, one {# empleo nuevo encaja con tu búsqueda} other {# empleos nuevos encajan con tu búsqueda}} esta semana",
+      "subjectWeeklyNoTotal": "Hay empleos nuevos que encajan con tu búsqueda esta semana",
+      "trackerCta": "Abrir tus candidaturas",
+      "trackerLine": "{count, plural, one {# candidatura lleva 10 días sin respuesta.} other {# candidaturas llevan 10 días sin respuesta.}}"
+    },
+    "jobAlertInstant": {
+      "cta": "Ver todos tus empleos",
+      "heading": "{count, plural, one {# empleo nuevo para tu búsqueda} other {# empleos nuevos para tu búsqueda}}",
+      "intro": "{count, plural, one {Este empleo se publicó hace poco y encaja con tu búsqueda guardada «{search}».} other {Estos empleos se publicaron hace poco y encajan con tu búsqueda guardada «{search}».}}",
+      "subject": "{count, plural, one {# empleo nuevo} other {# empleos nuevos}} para «{search}»"
+    },
+    "kitReady": {
+      "body": "Tu currículum adaptado y tus respuestas para {title} en {company} están listos. Revísalos y luego postula tú en el sitio de la empresa.",
+      "cta": "Revisar el kit",
+      "heading": "Tu kit está listo para revisar",
+      "preheader": "Revisa tu kit para {title}.",
+      "subject": "Tu kit de postulación para {title} está listo"
+    },
+    "readyList": {
+      "body": "{count, plural, one {# empleo está listo para que lo revises.} other {# empleos están listos para que los revises.}} Tú decides cuáles abrir, y cada candidatura la envías tú.",
+      "cta": "Revisar la lista",
+      "heading": "Tu lista de esta semana",
+      "preheader": "Empleos listos para que los revises.",
+      "subject": "Ya puedes revisar la lista Listo para postular de esta semana"
+    },
+    "reasons": {
+      "alerts": "Recibes este correo porque las alertas de empleo están activadas para tu búsqueda guardada «{search}» en %BRAND%.",
+      "campusFollow": "Recibes este correo porque sigues a {company} en el calendario de reclutamiento universitario de %BRAND%.",
+      "digestDaily": "Recibes este correo porque elegiste un resumen diario de empleos para tu búsqueda guardada «{search}» en %BRAND%.",
+      "digestWeekly": "Recibes este correo porque elegiste un resumen semanal de empleos para tu búsqueda guardada «{search}» en %BRAND%.",
+      "reminders": "Recibes este correo porque trata sobre tu cuenta de %BRAND% y los empleos a los que das seguimiento. Puedes desactivar estos recordatorios."
+    },
+    "resumeCheck": {
+      "body": "Leímos tu currículum e hicimos una lista de qué corregir primero.",
+      "bodyCount": "{count, plural, =0 {Leímos tu currículum y no encontramos nada urgente que corregir.} one {Leímos tu currículum y encontramos # cosa que corregir primero.} other {Leímos tu currículum y encontramos # cosas que corregir primero.}}",
+      "cta": "Ver la revisión de tu currículum",
+      "heading": "La revisión de tu currículum está lista",
+      "preheader": "Mira qué corregir primero en tu currículum.",
+      "subject": "La revisión de tu currículum está lista"
+    },
+    "tipsPractice": {
+      "body": "Tienes una entrevista de práctica gratis. Responde preguntas de entrevista en voz alta y recibe notas sobre qué mejorar. No se comparte nada con los empleadores.",
+      "bodyCredit": "Tienes una entrevista de práctica lista. Responde preguntas de entrevista en voz alta y recibe notas sobre qué mejorar. No se comparte nada con los empleadores.",
+      "cta": "Empezar la práctica",
+      "heading": "Prueba una entrevista de práctica",
+      "preheader": "Responde preguntas de entrevista en voz alta y recibe notas.",
+      "subject": "Tu entrevista de práctica gratis está lista para usar",
+      "subjectCredit": "Tu entrevista de práctica está lista para usar"
+    },
+    "tipsReEngagement": {
+      "body": "{count, plural, one {# empleo nuevo encaja con tu búsqueda guardada «{search}» desde el {date}.} other {# empleos nuevos encajan con tu búsqueda guardada «{search}» desde el {date}.}}",
+      "cta": "Ver los empleos nuevos",
+      "heading": "Empleos nuevos desde tu última visita",
+      "preheader": "Hay empleos nuevos que encajan con tu búsqueda guardada.",
+      "subject": "{count, plural, one {# empleo nuevo encaja con tu búsqueda} other {# empleos nuevos encajan con tu búsqueda}} desde el {date}"
+    },
+    "tipsTailor": {
+      "body": "Una versión de tu currículum para un empleo pone primero las habilidades que pide el anuncio. Tú revisas cada cambio antes de usarla.",
+      "bodyJob": "{title} en {company} es uno de los empleos que mejor encajan contigo hasta ahora. Una versión de tu currículum para este empleo pone primero las habilidades que pide el anuncio. Tú revisas cada cambio antes de usarla.",
+      "cta": "Adaptar mi currículum",
+      "heading": "Muestra a los empleadores las habilidades que pidieron",
+      "preheader": "Una versión del currículum para un empleo, con cada cambio revisado por ti.",
+      "subject": "Adapta tu currículum para un empleo que te guste",
+      "subjectJob": "Adapta tu currículum para {title}"
+    },
+    "welcome": {
+      "heading": "Te damos la bienvenida a %BRAND%",
+      "intro": "Aquí tienes tres cosas para hacer primero. Cada una te lleva directo ahí.",
+      "preheader": "Tres cosas para hacer primero en %BRAND%.",
+      "stepCampus": "Ver fechas de reclutamiento universitario",
+      "stepJobs": "Ver empleos para tu búsqueda",
+      "stepPractice": "Practicar una entrevista",
+      "stepResume": "Revisar tu currículum",
+      "stepTracker": "Llevar el registro de tus candidaturas",
+      "subject": "Te damos la bienvenida a %BRAND%: tres cosas para hacer primero"
+    }
+  },
+  "tracker": {
+    "csv": {
+      "header": {
+        "appliedOn": "Enviada el",
+        "company": "Empresa",
+        "currency": "Moneda",
+        "deadline": "Fecha límite",
+        "followUpOn": "Fecha de seguimiento",
+        "interview": "Entrevista",
+        "link": "Enlace",
+        "notes": "Notas",
+        "outcome": "Cómo terminó",
+        "salary": "Salario",
+        "savedOn": "Guardada el",
+        "source": "Añadida desde",
+        "stage": "Etapa",
+        "title": "Puesto"
+      },
+      "outcome": {
+        "i_withdrew": "Me retiré",
+        "job_pulled": "Retiraron el puesto",
+        "they_said_no": "Dijeron que no"
+      },
+      "stage": {
+        "accepted": "Oferta",
+        "ai_interview": "Entrevista con AI",
+        "applied": "Enviada",
+        "applying": "Enviada",
+        "assessment": "Evaluación",
+        "bookmarked": "Guardada",
+        "closed": "Retiraron el puesto",
+        "final_round": "Ronda final",
+        "first_call": "Primera llamada",
+        "interviewing": "En entrevistas",
+        "negotiating": "Oferta",
+        "offer": "Oferta",
+        "rejected": "Rechazada",
+        "signed": "Firmada",
+        "withdrawn": "Retirada",
+        "written_test": "Prueba escrita"
+      }
+    },
+    "inbox": {
+      "deadline": "{days, plural, =0 {Las postulaciones para {name} cierran hoy.} =1 {Las postulaciones para {name} cierran mañana.} other {Las postulaciones para {name} cierran en # días.}}",
+      "followUpDue": "Tu fecha de seguimiento para {name} es hoy.",
+      "interview": "Entrevista con {name} en las próximas 24 horas.",
+      "noReply": "Sin respuesta de {name} desde hace {days, plural, one {# día} other {# días}}.",
+      "unnamed": "esta candidatura"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "body": "Alguien, esperamos que tú, pidió a %BRAND% enviar a esta dirección empleos nuevos para «{search}» {cadence, select, daily {una vez al día} other {una vez a la semana}}.",
+        "cta": "Confirmar alertas de empleo",
+        "heading": "Confirma tus alertas de empleo",
+        "ignore": "Si no fuiste tú, ignora este correo. No se enviará nada a menos que se presione el enlace, y este deja de funcionar después de {hours} horas.",
+        "preheader": "Presiona el botón para empezar a recibir tus alertas de empleo.",
+        "subject": "Confirma tus alertas de empleo de %BRAND%"
+      },
+      "digest": {
+        "heading": "{count, plural, one {# empleo nuevo para tu alerta} other {# empleos nuevos para tu alerta}}",
+        "intro": "Empleos nuevos desde tu último correo, para «{search}».",
+        "more": "{count, plural, one {También coincide # empleo más.} other {También coinciden # empleos más.}}",
+        "pay": "{amount} {period, select, year {por año} month {por mes} week {por semana} day {por día} hour {por hora} other {}}",
+        "payNotListed": "Sueldo no indicado",
+        "placeNotListed": "Ubicación no indicada",
+        "preheader": "Empleos nuevos para tu alerta.",
+        "reason": "Recibes este correo porque confirmaste las alertas de empleo para «{search}» en %BRAND%. No tienes una cuenta.",
+        "remote": "Remoto",
+        "signup": "Crea una cuenta gratis para ver qué tan bien encaja cada empleo con tu currículum.",
+        "signupCta": "Crear una cuenta gratis",
+        "subject": "{count, plural, one {# empleo nuevo} other {# empleos nuevos}} para «{search}»",
+        "viewJob": "Ver empleo"
+      },
+      "searchAny": "cualquier empleo"
+    }
+  }
+}

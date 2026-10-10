@@ -1,0 +1,141 @@
+{
+  "extension": {
+    "connect": {
+      "body": "Conecte o %BRAND% para preencher formulários com o seu perfil.",
+      "open": "Abra o %BRAND% para conectar",
+      "title": "Conecte sua conta"
+    },
+    "draft": {
+      "aiBadge": "Gerado por AI",
+      "aiDisclosure": "Este texto foi gerado por um modelo de AI.",
+      "aiLabel": "Escrito por AI. Edite e só use se for verdade no seu caso.",
+      "bankLabel": "Das suas respostas salvas",
+      "cost": "Usa 1 crédito de resposta por AI.",
+      "dismiss": "Ocultar",
+      "editLabel": "Rascunho de resposta para: {question}",
+      "save": "Salvar esta resposta",
+      "saveFailed": "Não foi possível salvar esta resposta. Tente de novo.",
+      "saveHint": "Da próxima vez, formulários com esta pergunta serão preenchidos com as suas respostas salvas.",
+      "saveProtected": "Respostas sobre você ficam no seu perfil, não aqui.",
+      "saved": "Salva nas suas respostas.",
+      "saving": "Salvando…",
+      "use": "Usar esta resposta",
+      "write": "Escrever um rascunho",
+      "writing": "Escrevendo…"
+    },
+    "error": {
+      "credits_exhausted": "Você já usou seus preenchimentos de formulário por enquanto.",
+      "credits_exhaustedUntil": "Você já usou seus preenchimentos de formulário por enquanto. Você terá mais em {time}.",
+      "feature_disabled": "O preenchimento de formulários não está disponível para a sua conta.",
+      "network": "Não foi possível acessar o %BRAND% agora. Verifique sua conexão e tente de novo.",
+      "not_connected": "Primeiro conecte o %BRAND%. Abra o %BRAND% e tente de novo.",
+      "rate_limited": "Tentativas demais em pouco tempo. Espere um minuto e tente de novo.",
+      "unknown": "Algo deu errado. Nada foi enviado. Tente de novo."
+    },
+    "fit": {
+      "note": "Isso não é a sua chance de ser contratado.",
+      "quickEstimate": "Estimativa rápida",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "Encaixa bem",
+        "great": "Encaixa muito bem",
+        "possible": "Possível",
+        "unlikely": "Pouco provável"
+      }
+    },
+    "item": {
+      "checkSensitive": "Resposta sensível. Confira antes de enviar.",
+      "unlabelled": "Campo sem nome"
+    },
+    "job": {
+      "untitled": "Vaga desta página"
+    },
+    "launcher": {
+      "label": "Abrir o %BRAND% para preencher este formulário",
+      "text": "Preencher este formulário"
+    },
+    "manifest": {
+      "actionTitle": "Preencher este formulário",
+      "description": "Preenche formulários de candidatura com seu perfil do %BRAND%. Você confere cada resposta e é você quem envia a candidatura.",
+      "nameChrome": "%BRAND% para Chrome",
+      "nameEdge": "%BRAND% para Edge",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "Rascunhos não estão disponíveis para a sua conta no momento.",
+      "cover_letter": "Anexe uma carta de apresentação por conta própria ou escreva uma no %BRAND% antes.",
+      "disabled": "Este campo está bloqueado no formulário.",
+      "draft_failed": "Não foi possível escrever o rascunho. Tente de novo ou responda por conta própria.",
+      "file_failed": "Não foi possível anexar o arquivo. Anexe por conta própria.",
+      "no_option": "Nenhuma das opções corresponde ao seu perfil. Escolha uma por conta própria.",
+      "no_value": "Seu perfil ainda não tem essa informação.",
+      "not_pressed": "Esta opção precisa de um clique no formulário. Selecione por conta própria.",
+      "protected": "Responda esta por conta própria. Rascunhos nunca são escritos para perguntas como esta.",
+      "resume_unavailable": "Não foi possível carregar seu currículo. Anexe por conta própria.",
+      "undone": "Voltou a ficar como estava."
+    },
+    "panel": {
+      "checking": "Verificando sua conexão…",
+      "checklist": "Campos deste formulário",
+      "collapse": "Ocultar painel",
+      "fill": "Preencher este formulário",
+      "fillPage": "Preencher esta página",
+      "filling": "Preenchendo seus dados…",
+      "newPage": "Você está em uma nova página deste formulário.",
+      "newPageHint": "Preencha esta página também.",
+      "newPageNoCost": "É a mesma candidatura, então não usa outro preenchimento de formulário.",
+      "noFields": "Nenhum campo encontrado nesta página. Role até o formulário ou abra a página de candidatura e tente de novo.",
+      "oneFill": "A candidatura inteira usa 1 preenchimento de formulário.",
+      "pageByPage": "Este formulário tem várias páginas. Preencha cada página e use o botão do próprio formulário para avançar.",
+      "site": "Formulário em {site}",
+      "submitYourself": "Confira o formulário e depois envie por conta própria.",
+      "summary": "Campos preenchidos: {filled} de {total}.",
+      "summaryNeedsYou": "Precisam de você: {count}.",
+      "title": "Preencher este formulário",
+      "undo": "Desfazer preenchimento",
+      "undoPartial": "Opções que não podem ser desfeitas aqui: {count}. Altere no formulário.",
+      "undone": "Campos restaurados: {count}."
+    },
+    "popup": {
+      "boardBody": "Vaga em {site}. Nada nesta página é lido até você escolher uma ação.",
+      "checkFit": "Ver encaixe",
+      "codeConnect": "Conectar com código",
+      "codeInvalid": "Esse código não funciona. Os códigos têm 8 letras ou números e expiram depois de 10 minutos.",
+      "codeLabel": "Ou digite o código de 8 caracteres do %BRAND%",
+      "connected": "Conectado.",
+      "disconnect": "Desconectar",
+      "noFit": "Ainda não há nível de encaixe para esta vaga. Abra a vaga no %BRAND% para ver.",
+      "noJobFound": "Nenhuma vaga encontrada nesta página.",
+      "openFormSite": "Em {site}, abra o formulário de candidatura e escolha Preencher este formulário.",
+      "otherSite": "Ainda não é possível preencher formulários neste site.",
+      "plannedSite": "Ainda não é possível preencher formulários em {site}.",
+      "reconnect": "Reconectar o %BRAND%",
+      "reconnectBody": "Este navegador foi desconectado da sua conta. Conecte de novo para continuar preenchendo formulários.",
+      "requestSite": "Solicitar este site",
+      "requested": "Solicitação enviada. Obrigado.",
+      "saveJob": "Salvar vaga",
+      "saved": "Salva nas suas vagas. Só você pode ver.",
+      "title": "%BRAND%",
+      "version": "Versão {version}"
+    },
+    "source": {
+      "ai": "Seu rascunho editado",
+      "bank": "Das suas respostas salvas",
+      "profile": "Do seu perfil",
+      "resume": "Seu currículo: {fileName}"
+    },
+    "status": {
+      "filled": "Preenchido",
+      "needs_you": "Precisa de você",
+      "skipped": "Deixado em branco"
+    },
+    "submitted": {
+      "later": "Quando você enviar, marque como enviada nas suas candidaturas.",
+      "notYet": "Ainda não",
+      "question": "Você enviou esta candidatura?",
+      "thanks": "Movida para Enviadas nas suas candidaturas.",
+      "thanksNoJob": "Obrigado. Adicione esta candidatura às suas candidaturas no %BRAND%.",
+      "yes": "Sim, eu enviei"
+    }
+  }
+}

@@ -1,1 +1,411 @@
-{}
+{
+  "accountV2": {
+    "studentCode": {
+      "body": "このメールアドレス宛てのメールを受け取れることを確認するため、%BRAND%にこのコードを入力してください。コードは{minutes}分間有効です。",
+      "codeLine": "確認コード：{code}",
+      "heading": "学校のメールアドレスを確認",
+      "ignore": "お心当たりがない場合は、このメールを無視してください。何も変更されません。",
+      "preheader": "このコードを入力して、学校のメールアドレスを確認してください。",
+      "subject": "%BRAND%の学生確認コード：{code}"
+    },
+    "winback": {
+      "body": "有料プランは{date}に終了しました。履歴書、保存した求人、応募の記録はアカウントに残っており、無料プランは引き続きご利用いただけます。",
+      "cta": "プランを見る",
+      "heading": "アカウントはそのまま残っています",
+      "once": "この件についてお送りするメールは、この1通のみです。",
+      "preheader": "アカウントと作成した内容は、そのまま残っています。",
+      "price": "Proをご希望の場合、料金は{period}ごとに{price}です。いつでも解約できます。",
+      "subject": "%BRAND%の有料プランの終了から1か月が経ちました"
+    }
+  },
+  "auth": {
+    "accountDeleted": {
+      "body": "%BRAND%アカウントの削除のご依頼を承りました。すべての端末からログアウトされており、今後はログインできません。",
+      "heading": "アカウントの削除が予定されています",
+      "notYou": "お心当たりがない場合は、すぐにこのメールに返信するか、サポートまでご連絡ください。",
+      "subject": "%BRAND%アカウントの削除が予定されています",
+      "when": "アカウントとそのデータは、{days}日以内に削除します。バックアップは、その後90日以内に消去されます。"
+    },
+    "emailVerify": {
+      "body": "このメールアドレスがご自身のものであることを確認してください。確認がお済みでなくても、%BRAND%は引き続きご利用いただけます。確認すると、無料の練習面接が利用できるようになります。",
+      "cta": "メールアドレスを確認する",
+      "expiry": "リンクの有効期限は24時間です。新しいリンクは「設定」から送信できます。",
+      "heading": "メールアドレスの確認",
+      "preheader": "1クリックでこのメールアドレスを確認できます。",
+      "subject": "%BRAND%のメールアドレスをご確認ください"
+    },
+    "newDevice": {
+      "body": "{time}（UTC）に、{os}の{browser}からアカウントへのログインがありました。",
+      "cta": "パスワードを再設定する",
+      "heading": "新しいログイン",
+      "ifNot": "お心当たりがない場合は、今すぐパスワードを再設定してください。再設定すると、ほかのすべての端末からログアウトされます。",
+      "ifYou": "ご自身によるログインの場合、対応は不要です。",
+      "preheader": "{os}の{browser}",
+      "subject": "%BRAND%アカウントへの新しいログイン"
+    },
+    "oauthEmail": {
+      "body": "LINEを使った%BRAND%アカウントの作成が開始されました。完了するには、このメールアドレスを確認してください。アカウントは、ボタンをクリックした後にはじめて作成されます。",
+      "cta": "確認してアカウントを作成する",
+      "heading": "登録を完了してください",
+      "ignore": "お心当たりがない場合は、このメールを無視してください。アカウントは作成されません。",
+      "preheader": "このメールアドレスを確認して、LINEでの登録を完了してください。",
+      "subject": "%BRAND%アカウントの作成を完了してください"
+    },
+    "otherBrand": {
+      "body": "このメールアドレスで%BRAND%アカウントを作成しようとした方がいます。このメールアドレスはすでに%OTHER_BRAND%アカウントで使われており、1つのメールアドレスで持てるのは、どちらか一方のアカウントのみです。",
+      "cta": "%OTHER_BRAND%にログイン",
+      "heading": "すでにアカウントをお持ちです",
+      "ignore": "お心当たりがない場合は、このメールを無視してください。何も変更されていません。",
+      "subject": "あなたのメールアドレスで登録しようとした方がいます",
+      "useOther": "アカウントを引き続き使うには、%OTHER_BRAND%にログインしてください："
+    },
+    "passwordReset": {
+      "body": "この%BRAND%アカウントのパスワードを再設定する依頼がありました。下のボタンから新しいパスワードを設定してください。リンクは1回のみ有効で、30分で期限が切れます。",
+      "cta": "新しいパスワードを設定",
+      "heading": "パスワードを再設定",
+      "ignore": "お心当たりがない場合は、このメールを無視してください。パスワードは変更されません。",
+      "preheader": "このリンクは30分間有効です。",
+      "sessions": "パスワードを再設定すると、ほかのすべての端末からログアウトされます。",
+      "subject": "%BRAND%のパスワードを再設定"
+    }
+  },
+  "billing": {
+    "annualReminder": {
+      "body": "{since}から{plan}をご利用いただいています。{period}ごとに{price}で更新されます。次回の更新日は{date}です。",
+      "heading": "サブスクリプションの年1回のご確認",
+      "subject": "%BRAND%のサブスクリプションは現在も有効です"
+    },
+    "cancelConfirmed": {
+      "accessEnded": "アカウントは現在、無料プランです。",
+      "accessUntil": "有料機能は{date}までご利用いただけます。その後、アカウントは無料プランに移行します。",
+      "body": "{plan}を解約しました。今後は更新されず、このプランの料金が再び請求されることはありません。",
+      "cta": "プランを確認する",
+      "heading": "プランを解約しました",
+      "received": "{at}に解約のお申し出を受け付けました。",
+      "subject": "%BRAND%のプランを解約しました"
+    },
+    "cancelLink": {
+      "body": "このメールアドレスの%BRAND%プランについて、解約の依頼がありました。確定するには、{minutes}分以内に下のボタンを押してください。リンクは1回のみ有効です。",
+      "cta": "プランを解約する",
+      "heading": "解約の確認",
+      "ignore": "お心当たりがない場合は、このメールを無視してください。何も変更されません。",
+      "subject": "%BRAND%プランの解約用リンク"
+    },
+    "cancelNone": {
+      "body": "このメールアドレスの%BRAND%プランについて解約の依頼がありましたが、このアカウントには更新されるプランがありません。料金が請求されることはありません。",
+      "cta": "プランを確認する",
+      "heading": "解約するプランはありません",
+      "subject": "解約する%BRAND%プランはありません"
+    },
+    "footer": "このメールは、%BRAND%のプランとお支払いに関するお知らせとしてお送りしています。",
+    "paymentFailed": {
+      "body": "{plan}の料金{price}のお支払いを処理できませんでした。今後数日のうちに再試行します。",
+      "cta": "お支払い方法を更新",
+      "heading": "カードに請求できませんでした",
+      "keep": "プランを継続するには、お支払い方法を更新してください。最後の再試行も失敗した場合、アカウントは無料プランに移行します。すでにお持ちのクレジットは、そのまま残ります。",
+      "subject": "%BRAND%のお支払いを処理できませんでした"
+    },
+    "periods": {
+      "month": "1か月",
+      "period": "請求期間",
+      "quarter": "3か月",
+      "week": "1週間"
+    },
+    "planNames": {
+      "legacy": "練習プラン（旧プラン）",
+      "practice_pack_15": "練習パック（15回）",
+      "practice_pack_5": "練習パック（5回）",
+      "pro": "Pro",
+      "pro_monthly": "Pro 月払い",
+      "pro_monthlyCn": "Pro 1か月パス",
+      "pro_quarterly": "Pro 3か月払い",
+      "pro_quarterlyCn": "Pro 3か月パス",
+      "pro_week_pass": "7日間パス",
+      "pro_week_passCn": "Pro 1週間パス",
+      "pro_weekly": "Pro 週払い",
+      "student_monthly": "学生 月払い",
+      "student_quarterly": "学生 3か月払い"
+    },
+    "renewalReminder": {
+      "bodyAuto": "{plan}は{date}に自動で更新されます。料金は{period}ごとに{price}です。",
+      "bodyManual": "{plan}は{date}に終了します。更新はされず、料金も請求されません。Proを続けたい場合は、パスをもう一度ご購入ください。",
+      "bodyManualLegacy": "{plan}は{date}に終了します。更新はされず、料金も請求されません。練習を続けたい場合は、現在のプランをご覧ください。",
+      "cancelLine": "更新を希望されない場合は、その日までにいつでも1クリックで解約できます。有料機能は、お支払い済みの期間が終わるまでご利用いただけます。",
+      "ctaAuto": "プランを管理・解約する",
+      "ctaManual": "パスを見る",
+      "ctaManualLegacy": "プランを見る",
+      "headingAuto": "プランがまもなく更新されます",
+      "headingManual": "パスがまもなく終了します",
+      "subjectAuto": "%BRAND%のプランは{date}に更新されます",
+      "subjectManual": "%BRAND%のパスは{date}に終了します"
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "addressUnverified": "ユーザーが依頼フォームに入力したものです。本人のものかどうか、%BRAND%は確認していません。",
+      "fieldAccount": "アカウント",
+      "fieldAddress": "返信先アドレス",
+      "fieldCoach": "コーチ",
+      "fieldFrom": "依頼者",
+      "fieldLength": "セッションの長さ",
+      "fieldTimes": "都合のよい時間帯",
+      "fieldTopic": "相談内容",
+      "heading": "新しいコーチングの依頼",
+      "intro": "{coach}さん、{name}さんがあなたとのセッションを希望しています。%BRAND%のコーチの一覧であなたを見つけた方です。",
+      "introAdmin": "ユーザーが%BRAND%のコーチの一覧から、{coach}さんにこの依頼を送りました。これはあなた宛ての控えです。",
+      "minutes": "{minutes}分",
+      "next": "依頼を受ける場合は、このメールに返信するか{email}宛てに連絡して、日時と料金を相談して決めてください。",
+      "nextAdmin": "コーチがユーザーに直接返信します。コーチから手助けを求められた場合は、対応してください。",
+      "notGiven": "記入なし",
+      "payment": "料金は、ユーザーがコーチに直接支払います。%BRAND%はコーチングの料金を受け取りません。",
+      "reason": "このメールは、あなたが%BRAND%にコーチとして掲載されることに同意しており、ユーザーからセッションの依頼があったためお送りしています。",
+      "reasonAdmin": "このメールは、あなたが%BRAND%のコーチの一覧を管理しているためお送りしています。",
+      "subject": "{name}さんからのコーチングの依頼：{topic}",
+      "subjectAdmin": "{coach}さんへのコーチングの依頼：{topic}"
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "body": "%BRAND%のデータのコピーをご用意しました。ログインして「設定」→「プライバシー」を開くと、ダウンロードできます。ファイルは{days, plural, other {#日}}後に削除されます。",
+      "cta": "設定を開く",
+      "heading": "データのエクスポートの準備ができました",
+      "subject": "%BRAND%のデータのエクスポートの準備ができました"
+    }
+  },
+  "growth": {
+    "footer": "このメールは、%BRAND%アカウントのクレジットに関するお知らせとしてお送りしています。",
+    "referralReward": {
+      "cta": "練習面接を始める",
+      "invitee": {
+        "body": "ご友人の招待リンクから登録し、初期設定を完了されたため、{credits, plural, other {練習面接に使える#クレジット}}をアカウントに追加しました。",
+        "heading": "{credits, plural, other {練習面接に使える#クレジット}}を受け取りました",
+        "subject": "招待のクレジットをご利用いただけます"
+      },
+      "inviter": {
+        "body": "あなたの招待リンクから登録したご友人が、アカウントの確認と初期設定を完了したため、{credits, plural, other {練習面接に使える#クレジット}}をアカウントに追加しました。",
+        "heading": "{credits, plural, other {練習面接に使える#クレジット}}を受け取りました",
+        "subject": "招待したご友人が初期設定を完了しました"
+      },
+      "note": "クレジットは、%BRAND%の練習面接に使うためのものです。現金としての価値はありません。"
+    }
+  },
+  "notify": {
+    "campusDeadline": {
+      "body": "{company}の{program}の応募は、{date}に締め切られます。応募は公式ページから行ってください。",
+      "cta": "公式ページを開く",
+      "heading": "応募の締め切りが近づいています",
+      "preheader": "{program}は{date}に締め切られます。",
+      "subject": "{company}：{program}の応募は{date}に締め切られます"
+    },
+    "campusFollowed": {
+      "body": "{company}の{program}が新卒採用カレンダーに追加されました。公式ページへのリンクも掲載しています。応募の前に、公式ページで日程をご確認ください。",
+      "cta": "プログラムを見る",
+      "heading": "フォロー中の企業がプログラムを公開しました",
+      "preheader": "{program}が新卒採用カレンダーに追加されました。",
+      "subject": "{company}が新しい新卒採用プログラムを公開しました",
+      "subjectYear": "{company}が{year}年卒向けの新卒採用プログラムを公開しました"
+    },
+    "common": {
+      "fitNote": "適合度は、求人票と履歴書を比べたものです。採用される確率ではありません。",
+      "gapLine": "履歴書にまだ記載なし：{skill}",
+      "payNotListed": "給与の記載なし",
+      "payPerDay": "日給 {amount}",
+      "payPerHour": "時給 {amount}",
+      "payPerMonth": "月給 {amount}",
+      "payPerWeek": "週給 {amount}",
+      "payPerYear": "年収 {amount}",
+      "placeNotListed": "勤務地の記載なし",
+      "remote": "リモート",
+      "tierGood": "よく合う",
+      "tierGreat": "とても合う",
+      "tierPossible": "可能性あり",
+      "viewJob": "求人を見る"
+    },
+    "finishSetup": {
+      "body": "これまでの回答は保存されています。初期設定を完了すると、検索条件に合う求人と、履歴書の直すべき点を確認できます。",
+      "cta": "初期設定を続ける",
+      "heading": "中断したところから再開できます",
+      "preheader": "回答は保存されています。ご都合のよいときに初期設定を完了してください。",
+      "subject": "%BRAND%の初期設定を完了してください"
+    },
+    "followUp": {
+      "body": "{date}に{company}の{title}に応募しました。それから{days}日間、返信がありません。短く丁寧なフォローアップの連絡をするのは、一般的なことです。",
+      "cta": "この応募を開く",
+      "heading": "フォローアップの連絡をしますか？",
+      "preheader": "{days}日間、返信がありません。",
+      "subject": "{company}から{days}日間、返信がありません"
+    },
+    "interview": {
+      "body": "{company}の{title}の面接は{date}です。短い練習をしておくと、準備に役立ちます。",
+      "cta": "この求人に向けて練習する",
+      "heading": "面接が近づいています",
+      "preheader": "{date}に{title}の面接があります。",
+      "subject": "{date}に{company}との面接があります"
+    },
+    "jobAlertDigest": {
+      "cta": "新着求人をすべて見る",
+      "headingDaily": "毎日の求人まとめ",
+      "headingWeekly": "毎週の求人まとめ",
+      "introDaily": "{count, plural, other {昨日以降、保存した検索条件「{search}」に合う新着求人が#件あります。}}",
+      "introDailyNoTotal": "{count, plural, other {昨日以降の新着求人から、保存した検索条件「{search}」に合う#件をお届けします。}}新着求人はすべて%BRAND%でご覧いただけます。",
+      "introWeekly": "{count, plural, other {今週、保存した検索条件「{search}」に合う新着求人が#件あります。}}",
+      "introWeeklyNoTotal": "{count, plural, other {今週の新着求人から、保存した検索条件「{search}」に合う#件をお届けします。}}新着求人はすべて%BRAND%でご覧いただけます。",
+      "more": "{count, plural, one {このほかにも、条件に合う新着求人が#件あります。%BRAND%でご覧ください。} other {このほかにも、条件に合う新着求人が#件あります。%BRAND%でご覧ください。}}",
+      "subjectDaily": "昨日以降、{count, plural, other {検索条件に合う新着求人が#件あります}}",
+      "subjectDailyNoTotal": "昨日以降、検索条件に合う新着求人があります",
+      "subjectWeekly": "今週、{count, plural, other {検索条件に合う新着求人が#件あります}}",
+      "subjectWeeklyNoTotal": "今週、検索条件に合う新着求人があります",
+      "trackerCta": "「応募」を開く",
+      "trackerLine": "{count, plural, other {10日間返信のない応募が#件あります。}}"
+    },
+    "jobAlertInstant": {
+      "cta": "求人をすべて見る",
+      "heading": "{count, plural, other {検索条件に合う新着求人が#件あります}}",
+      "intro": "{count, plural, other {最近掲載された、保存した検索条件「{search}」に合う求人です。}}",
+      "subject": "「{search}」の{count, plural, other {新着求人#件}}"
+    },
+    "kitReady": {
+      "body": "{company}の{title}に合わせた履歴書と回答の準備ができました。内容を確認したうえで、企業サイトからご自身で応募してください。",
+      "cta": "キットを確認する",
+      "heading": "キットを確認できるようになりました",
+      "preheader": "{title}のキットをご確認ください。",
+      "subject": "{title}の応募用キットの準備ができました"
+    },
+    "readyList": {
+      "body": "{count, plural, other {#件の求人を確認できます。}}どれを開くかはあなたが決め、応募はすべてご自身で提出します。",
+      "cta": "リストを確認する",
+      "heading": "今週のリスト",
+      "preheader": "確認できる求人があります。",
+      "subject": "今週の「応募準備」リストの用意ができました"
+    },
+    "reasons": {
+      "alerts": "このメールは、%BRAND%で保存した検索条件「{search}」の求人アラートがオンになっているためお送りしています。",
+      "campusFollow": "このメールは、%BRAND%の新卒採用カレンダーで{company}をフォローしているためお送りしています。",
+      "digestDaily": "このメールは、%BRAND%で保存した検索条件「{search}」について、毎日の求人まとめを選択されているためお送りしています。",
+      "digestWeekly": "このメールは、%BRAND%で保存した検索条件「{search}」について、毎週の求人まとめを選択されているためお送りしています。",
+      "reminders": "このメールは、%BRAND%アカウントと、あなたが記録している求人に関するお知らせとしてお送りしています。これらのリマインダーはオフにできます。"
+    },
+    "resumeCheck": {
+      "body": "履歴書を読み、最初に直すべき点をまとめました。",
+      "bodyCount": "{count, plural, =0 {履歴書を読みましたが、急いで直すべき点は見つかりませんでした。} other {履歴書を読み、最初に直すべき点が#件見つかりました。}}",
+      "cta": "履歴書の点検結果を見る",
+      "heading": "履歴書の点検が完了しました",
+      "preheader": "履歴書で最初に直すべき点をご確認ください。",
+      "subject": "履歴書の点検が完了しました"
+    },
+    "tipsPractice": {
+      "body": "無料の練習面接をご利用いただけます。面接の質問に声に出して答えると、改善点についての指摘を受け取れます。企業に共有される情報はありません。",
+      "bodyCredit": "練習面接をご利用いただけます。面接の質問に声に出して答えると、改善点についての指摘を受け取れます。企業に共有される情報はありません。",
+      "cta": "練習を始める",
+      "heading": "練習面接を試してみましょう",
+      "preheader": "面接の質問に声に出して答えると、指摘を受け取れます。",
+      "subject": "無料の練習面接をご利用いただけます",
+      "subjectCredit": "練習面接をご利用いただけます"
+    },
+    "tipsReEngagement": {
+      "body": "{count, plural, other {{date}以降、保存した検索条件「{search}」に合う新着求人が#件あります。}}",
+      "cta": "新着求人を見る",
+      "heading": "前回のご利用以降の新着求人",
+      "preheader": "保存した検索条件に合う新着求人があります。",
+      "subject": "{date}以降、{count, plural, other {検索条件に合う新着求人が#件あります}}"
+    },
+    "tipsTailor": {
+      "body": "1つの求人に合わせた履歴書では、求人票で求められているスキルを先頭に配置します。すべての変更は、使う前にご自身で確認します。",
+      "bodyJob": "{company}の{title}は、これまでの求人のなかで特によく合う求人の1つです。この求人に合わせた履歴書では、求人票で求められているスキルを先頭に配置します。すべての変更は、使う前にご自身で確認します。",
+      "cta": "履歴書を求人に合わせる",
+      "heading": "企業が求めているスキルを示しましょう",
+      "preheader": "1つの求人に合わせた履歴書です。すべての変更をご自身で確認します。",
+      "subject": "気になる求人に履歴書を合わせましょう",
+      "subjectJob": "{title}に履歴書を合わせましょう"
+    },
+    "welcome": {
+      "heading": "%BRAND%へようこそ",
+      "intro": "最初にしておきたい3つのことをご紹介します。それぞれのリンクから、そのページへ直接移動できます。",
+      "preheader": "%BRAND%で最初にしておきたい3つのこと。",
+      "stepCampus": "新卒採用の日程を見る",
+      "stepJobs": "検索条件に合う求人を見る",
+      "stepPractice": "面接を練習する",
+      "stepResume": "履歴書を点検する",
+      "stepTracker": "応募状況を記録する",
+      "subject": "%BRAND%へようこそ：最初にしておきたい3つのこと"
+    }
+  },
+  "tracker": {
+    "csv": {
+      "header": {
+        "appliedOn": "応募日",
+        "company": "企業",
+        "currency": "通貨",
+        "deadline": "締め切り",
+        "followUpOn": "連絡予定日",
+        "interview": "面接",
+        "link": "リンク",
+        "notes": "メモ",
+        "outcome": "終わり方",
+        "salary": "給与",
+        "savedOn": "保存日",
+        "source": "追加元",
+        "stage": "段階",
+        "title": "職種名"
+      },
+      "outcome": {
+        "i_withdrew": "自分から辞退した",
+        "job_pulled": "募集が取り下げられた",
+        "they_said_no": "企業から断られた"
+      },
+      "stage": {
+        "accepted": "内定",
+        "ai_interview": "AI面接",
+        "applied": "応募済み",
+        "applying": "応募済み",
+        "assessment": "適性検査",
+        "bookmarked": "保存済み",
+        "closed": "募集取り下げ",
+        "final_round": "最終面接",
+        "first_call": "一次面談",
+        "interviewing": "面接中",
+        "negotiating": "内定",
+        "offer": "内定",
+        "rejected": "不採用",
+        "signed": "内定承諾済み",
+        "withdrawn": "辞退",
+        "written_test": "筆記試験"
+      }
+    },
+    "inbox": {
+      "deadline": "{days, plural, =0 {{name}の応募は今日が締め切りです。} =1 {{name}の応募は明日が締め切りです。} other {{name}の応募は#日後に締め切られます。}}",
+      "followUpDue": "{name}へのフォローアップ予定日は今日です。",
+      "interview": "{name}との面接が24時間以内にあります。",
+      "noReply": "{name}から{days, plural, other {#日間}}、返信がありません。",
+      "unnamed": "この応募先"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "body": "どなたか（おそらくご本人）から、「{search}」の新着求人を{cadence, select, daily {1日1回} other {週1回}}このメールアドレスに送るよう、%BRAND%に依頼がありました。",
+        "cta": "求人アラートの登録を確定する",
+        "heading": "求人アラートの登録を確定してください",
+        "ignore": "お心当たりがない場合は、このメールを無視してください。リンクが押されないかぎり何も送信されず、リンクは{hours}時間後に使えなくなります。",
+        "preheader": "ボタンを押すと、求人アラートが始まります。",
+        "subject": "%BRAND%の求人アラートの登録を確定してください"
+      },
+      "digest": {
+        "heading": "{count, plural, other {アラートの条件に合う新着求人が#件あります}}",
+        "intro": "「{search}」について、前回のメール以降の新着求人です。",
+        "more": "{count, plural, other {このほかにも、条件に合う求人が#件あります。}}",
+        "pay": "{period, select, year {年収 {amount}} month {月給 {amount}} week {週給 {amount}} day {日給 {amount}} hour {時給 {amount}} other {{amount}}}",
+        "payNotListed": "給与の記載なし",
+        "placeNotListed": "勤務地の記載なし",
+        "preheader": "アラートの条件に合う新着求人があります。",
+        "reason": "このメールは、%BRAND%で「{search}」の求人アラートの登録を確定されたためお送りしています。アカウントはお持ちではありません。",
+        "remote": "リモート",
+        "signup": "無料アカウントを作成すると、各求人が履歴書にどのくらい合うかを確認できます。",
+        "signupCta": "無料アカウントを作成",
+        "subject": "「{search}」の{count, plural, other {新着求人#件}}",
+        "viewJob": "求人を見る"
+      },
+      "searchAny": "すべての求人"
+    }
+  }
+}

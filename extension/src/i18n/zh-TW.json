@@ -1,0 +1,141 @@
+{
+  "extension": {
+    "connect": {
+      "body": "連結 %BRAND%，就能用你的個人檔案填寫表單。",
+      "open": "開啟 %BRAND% 進行連結",
+      "title": "連結你的帳號"
+    },
+    "draft": {
+      "aiBadge": "AI 生成",
+      "aiDisclosure": "這段文字由 AI 模型生成。",
+      "aiLabel": "由 AI 撰寫。請先編輯，並且只在內容符合你的真實情況時使用。",
+      "bankLabel": "來自你儲存的答案",
+      "cost": "使用 1 點 AI 回答點數。",
+      "dismiss": "關閉",
+      "editLabel": "答案草稿：{question}",
+      "save": "儲存這個答案",
+      "saveFailed": "這個答案沒有儲存成功。請重試。",
+      "saveHint": "下次表單出現這個問題時，會用你儲存的答案填入。",
+      "saveProtected": "關於你的答案會存在你的個人檔案裡，不是存在這裡。",
+      "saved": "已儲存到你的答案。",
+      "saving": "儲存中…",
+      "use": "使用這個答案",
+      "write": "寫草稿",
+      "writing": "撰寫中…"
+    },
+    "error": {
+      "credits_exhausted": "你目前的表單填寫次數已經用完。",
+      "credits_exhaustedUntil": "你目前的表單填寫次數已經用完。將於 {time} 補回。",
+      "feature_disabled": "你的帳號無法使用表單填寫功能。",
+      "network": "目前無法連上 %BRAND%。請檢查你的網路連線後重試。",
+      "not_connected": "請先連結 %BRAND%。開啟 %BRAND%，然後重試。",
+      "rate_limited": "短時間內嘗試次數太多。請等一分鐘再試。",
+      "unknown": "出了點問題。沒有送出任何內容。請重試。"
+    },
+    "fit": {
+      "note": "這不是你被錄取的機率。",
+      "quickEstimate": "快速估算",
+      "score": "{score} / 100",
+      "tier": {
+        "good": "還算適合",
+        "great": "很適合",
+        "possible": "可能適合",
+        "unlikely": "不太適合"
+      }
+    },
+    "item": {
+      "checkSensitive": "敏感答案。送出前請先核對。",
+      "unlabelled": "未標示名稱的欄位"
+    },
+    "job": {
+      "untitled": "這個頁面上的職缺"
+    },
+    "launcher": {
+      "label": "開啟 %BRAND% 來填寫這份表單",
+      "text": "填寫這份表單"
+    },
+    "manifest": {
+      "actionTitle": "填寫這份表單",
+      "description": "用你在 %BRAND% 的個人檔案填寫應徵表單。每個答案都由你核對，應徵也由你自己送出。",
+      "nameChrome": "%BRAND% Chrome 版",
+      "nameEdge": "%BRAND% Edge 版",
+      "shortName": "%BRAND%"
+    },
+    "note": {
+      "ai_unavailable": "你的帳號目前無法使用草稿功能。",
+      "cover_letter": "請自己附上求職信，或先在 %BRAND% 寫一封。",
+      "disabled": "這個欄位在表單上已鎖定。",
+      "draft_failed": "草稿沒有撰寫成功。請重試，或自己回答。",
+      "file_failed": "檔案沒有附加成功。請自己附上。",
+      "no_option": "沒有任何選項符合你的個人檔案。請自己選一個。",
+      "no_value": "你的個人檔案還沒有這項資料。",
+      "not_pressed": "這個選項需要在表單上點選。請自己選。",
+      "protected": "這一題請自己回答。這類問題一律不會撰寫草稿。",
+      "resume_unavailable": "你的履歷沒有載入成功。請自己附上。",
+      "undone": "已恢復原狀。"
+    },
+    "panel": {
+      "checking": "正在檢查你的連結狀態…",
+      "checklist": "這份表單上的欄位",
+      "collapse": "隱藏面板",
+      "fill": "填寫這份表單",
+      "fillPage": "填寫這一頁",
+      "filling": "正在填入你的資料…",
+      "newPage": "你已經來到這份表單的新一頁。",
+      "newPageHint": "也請填寫這一頁。",
+      "newPageNoCost": "這是同一份應徵，所以不會多用表單填寫次數。",
+      "noFields": "這個頁面上找不到欄位。請捲動到表單位置，或開啟應徵頁面，然後重試。",
+      "oneFill": "整份應徵會使用 1 次表單填寫。",
+      "pageByPage": "這份表單有好幾頁。每填完一頁，請用表單本身的按鈕前往下一頁。",
+      "site": "{site} 上的表單",
+      "submitYourself": "請檢查表單，再由你自己送出。",
+      "summary": "{total} 個欄位中，已填寫 {filled} 個。",
+      "summaryNeedsYou": "{count} 個需要你處理。",
+      "title": "填寫這份表單",
+      "undo": "復原自動填寫",
+      "undoPartial": "有 {count} 個選項無法在這裡復原。請在表單上修改。",
+      "undone": "已復原 {count} 個欄位。"
+    },
+    "popup": {
+      "boardBody": "{site} 上的職缺。在你選擇操作之前，不會讀取這個頁面上的任何內容。",
+      "checkFit": "查看適合度",
+      "codeConnect": "用代碼連結",
+      "codeInvalid": "這組代碼無效。代碼是 8 個英文字母或數字，10 分鐘後會失效。",
+      "codeLabel": "或輸入 %BRAND% 上顯示的 8 碼代碼",
+      "connected": "已連結。",
+      "disconnect": "取消連結",
+      "noFit": "這個職缺還沒有適合度。請在 %BRAND% 開啟它來查看。",
+      "noJobFound": "這個頁面上找不到職缺。",
+      "openFormSite": "請在 {site} 開啟應徵表單，然後選擇「填寫這份表單」。",
+      "otherSite": "這個網站上的表單目前還無法填寫。",
+      "plannedSite": "{site} 上的表單目前還無法填寫。",
+      "reconnect": "重新連結 %BRAND%",
+      "reconnectBody": "這個瀏覽器和你帳號的連結已中斷。請重新連結，才能繼續填寫表單。",
+      "requestSite": "建議支援這個網站",
+      "requested": "建議已送出，謝謝。",
+      "saveJob": "儲存職缺",
+      "saved": "已儲存到你的職缺。只有你看得到。",
+      "title": "%BRAND%",
+      "version": "版本 {version}"
+    },
+    "source": {
+      "ai": "你編輯過的草稿",
+      "bank": "來自你儲存的答案",
+      "profile": "來自你的個人檔案",
+      "resume": "你的履歷：{fileName}"
+    },
+    "status": {
+      "filled": "已填寫",
+      "needs_you": "需要你處理",
+      "skipped": "保留空白"
+    },
+    "submitted": {
+      "later": "等你送出後，請在應徵紀錄裡把它標示為已應徵。",
+      "notYet": "還沒",
+      "question": "你送出這份應徵了嗎？",
+      "thanks": "已移到應徵紀錄的「已應徵」。",
+      "thanksNoJob": "謝謝。請到 %BRAND% 把它加進你的應徵紀錄。",
+      "yes": "是，我已經送出"
+    }
+  }
+}
