@@ -19,7 +19,7 @@ import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/route
 import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { createAuthCnAdminRouter, createPhoneAuthRouter, createWechatAuthRouter, WECHAT_NONCE_COOKIE } from './routes.js';
-import { BASE_ENV, buildServices, clock, CN0_CONSENTS, fakeDb, fakeWechatFetch, recordingSms } from './__tests__/testkit.js';
+import { BASE_ENV, buildServices, clock, cn0Consents, CN0_CONSENTS, fakeDb, fakeWechatFetch, recordingSms } from './__tests__/testkit.js';
 import { CONSENT_PROSE_VERSION, consentProseHash, listConsents, type ConsentDb } from '../compliance/consents.js';
 import { getBrand } from '../../platform/brand/registry.js';
 
@@ -133,12 +133,35 @@ describe('phone sign-in', () => {
     expect(en[0]!.prose.text).toContain('Privacy Policy');
     // FIX-8: the processors and their regions come from the deployment's configuration (the /legal
     // disclosures), never from a hard-coded list; this test deployment configures none.
-    expect(zh[2]!.prose.text).toContain('中国大陆境外处理和存储');
-    expect(zh[2]!.prose.text).not.toMatch(/美国东部|%OFFSHORE_PROCESSORS%/);
+    // The sentence itself is the consent catalog's (features/compliance); what matters here is
+    // that it says the data leaves the mainland and that no placeholder reaches the page.
+    expect(zh[2]!.prose.text).toContain('中国大陆境外');
+    expect(zh[2]!.prose.text).not.toMatch(/美国东部|%OFFSHORE_PROCESSORS%|%AI_PLACE%/);
     // No language, or one GoApply is not read in: the Chinese text.
     expect(await get('')).toEqual(zh);
     expect(await get('?locale=ja')).toEqual(zh);
     expect(await get('?locale=' + 'x'.repeat(400))).toEqual(zh);
+  });
+
+  it('policy by default (no CN_SIGNUP_MODE): sign-up open, no invite code, in production with no documents version, SMS or WeChat too', async () => {
+    const dev = await start();
+    const res = await dev.harness.request<Env>('GET', `${PHONE_API}/policy`, { host: GO });
+    expect(res.body.data).toMatchObject({ signupOpen: true, inviteRequired: false });
+    await dev.harness.close();
+
+    const prod = await start({ env: { NODE_ENV: 'production', JWT_SECRET: 'test-secret', CN_CANONICAL_ORIGIN: 'https://www.goapply.top' } });
+    const bare = await prod.harness.request<Env>('GET', `${PHONE_API}/policy`, { host: 'www.goapply.top' });
+    expect(bare.status).toBe(200);
+    expect(bare.body.data).toMatchObject({
+      signupOpen: true,
+      inviteRequired: false,
+      methods: { phoneOtp: false, wechatWeb: false, wechatInApp: false },
+    });
+    await prod.harness.close();
+
+    const closed = await start({ env: { ...BASE_ENV, CN_SIGNUP_MODE: 'closed' } });
+    const shut = await closed.harness.request<Env>('GET', `${PHONE_API}/policy`, { host: GO });
+    expect(shut.body.data).toMatchObject({ signupOpen: false, inviteRequired: false });
   });
 
   it('policy reflects invite mode and the CN-0 consents', async () => {
@@ -338,6 +361,22 @@ describe('WeChat', () => {
     // The nonce cookie is cleared.
     expect(set.some((c) => c.startsWith(`${WECHAT_NONCE_COOKIE}=;`))).toBe(true);
     expect(fake.$rows('seekerConsentRecord')).toHaveLength(3);
+  });
+
+  it('WeChat callback with no SMS provider: signed in with no `bind=1` (nobody can bind a number there)', async () => {
+    const { SMS_DEV_CONSOLE: _console, ...noSms } = BASE_ENV;
+    const { harness } = await start({ env: noSms, codes: { c1: { openid: 'o1' } } });
+    const started = await harness.request<Env>('POST', `${WX_API}/start`, { host: GO, body: { flow: 'web', consents: cn0Consents(noSms) } });
+    expect(started.status).toBe(200);
+    const state = new URL(started.body.data!.url as string).searchParams.get('state')!;
+    const cb = await callback(harness, `code=c1&state=${encodeURIComponent(state)}`, nonceCookie(started));
+    expect(cb.status).toBe(302);
+    const back = new URL(cb.headers.get('location')!, 'https://www.goapply.top');
+    expect(Object.fromEntries(back.searchParams)).toEqual({ result: 'ok', next: '/onboarding/consent', new: '1' });
+    expect(cb.headers.getSetCookie().some((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`))).toBe(true);
+    // The phone routes are not offered there either.
+    const send = await harness.request<Env>('POST', `${PHONE_API}/send-code`, { host: GO, body: { phone: '13812345678', purpose: 'bind' } });
+    expect([send.status, send.body.code]).toEqual([404, 'feature_disabled']);
   });
 
   it('login CSRF: a callback URL opened in a browser without the nonce cookie signs nobody in', async () => {

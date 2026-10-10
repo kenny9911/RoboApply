@@ -17,7 +17,7 @@ import {
   totpStep,
   verifyTotp,
 } from '../totp.js';
-import { SealError, seal, totpKey, unseal } from '../sealing.js';
+import { SealError, seal, totpKey, totpKeyProblems, totpKeyWarning, totpKeys, unseal, unsealWithAny } from '../sealing.js';
 import { RecoveryCodeSchema } from '../contract.js';
 
 const RFC_SECRET = Buffer.from('12345678901234567890');
@@ -115,13 +115,74 @@ describe('recovery codes', () => {
 describe('sealing', () => {
   const KEY_HEX = 'a'.repeat(64);
 
-  it('reads the brand key (hex or base64) with no cross-brand fallback', () => {
+  const CN_HEX = 'c'.repeat(64);
+
+  it('reads the key as hex or base64; GoApply uses its own key when set and the shared key otherwise', () => {
     expect(totpKey('roboapply', { TOTP_ENCRYPTION_KEY: KEY_HEX })).toHaveLength(32);
     expect(totpKey('roboapply', { TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64') })).toHaveLength(32);
-    expect(totpKey('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX })).toBeNull();
-    expect(totpKey('goapply', { CN_TOTP_ENCRYPTION_KEY: KEY_HEX })).toHaveLength(32);
     expect(totpKey('roboapply', { TOTP_ENCRYPTION_KEY: 'short' })).toBeNull();
     expect(totpKey('roboapply', {})).toBeNull();
+    // The fallback (D5): GoApply with only the shared key seals with it.
+    expect(totpKey('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX })).toEqual(Buffer.from(KEY_HEX, 'hex'));
+    expect(totpKey('goapply', { CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual(Buffer.from(CN_HEX, 'hex'));
+    // Both set: new secrets use the CN key.
+    expect(totpKey('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual(Buffer.from(CN_HEX, 'hex'));
+    expect(totpKey('goapply', {})).toBeNull();
+    // RoboApply never reads the CN key.
+    expect(totpKey('roboapply', { CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toBeNull();
+    expect(totpKey('roboapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual(Buffer.from(KEY_HEX, 'hex'));
+  });
+
+  it('totpKeys lists the own key, then the shared key, without blanks, malformed values or duplicates', () => {
+    const shared = Buffer.from(KEY_HEX, 'hex');
+    const cn = Buffer.from(CN_HEX, 'hex');
+    expect(totpKeys('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual([cn, shared]);
+    expect(totpKeys('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX })).toEqual([shared]);
+    expect(totpKeys('goapply', { CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual([cn]);
+    expect(totpKeys('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: '  ' })).toEqual([shared]);
+    expect(totpKeys('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: 'short' })).toEqual([shared]);
+    expect(totpKeys('goapply', { TOTP_ENCRYPTION_KEY: 'short', CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual([cn]);
+    expect(totpKeys('goapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: KEY_HEX })).toEqual([shared]);
+    expect(totpKeys('goapply', {})).toEqual([]);
+    expect(totpKeys('roboapply', { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual([shared]);
+    expect(totpKeys('roboapply', { CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual([]);
+  });
+
+  it('a key variable that is set but unusable is skipped and NAMED (never silent), with what happens now; the value is never in the message', () => {
+    expect(totpKeyProblems({})).toEqual([]);
+    expect(totpKeyProblems({ TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual([]);
+    expect(totpKeyProblems({ TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: '   ' })).toEqual([]);
+    // A wrong-length CN key: GoApply quietly seals with the shared key, so it is reported.
+    const badCn = { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(63) };
+    expect(totpKeys('goapply', badCn)).toEqual([Buffer.from(KEY_HEX, 'hex')]);
+    expect(totpKeyProblems(badCn)).toEqual(['CN_TOTP_ENCRYPTION_KEY']);
+    expect(totpKeyWarning('CN_TOTP_ENCRYPTION_KEY', badCn)).toBe(
+      'CN_TOTP_ENCRYPTION_KEY is set but is not a 32-byte key (base64, or 64 hex characters); the brand seals new two-step secrets with the shared TOTP_ENCRYPTION_KEY instead. Fix the value or remove it.',
+    );
+    expect(totpKeyWarning('CN_TOTP_ENCRYPTION_KEY', badCn)).not.toContain('ccc');
+    // No usable shared key behind it: two-step sign-in is unavailable on GoApply.
+    expect(totpKeyWarning('CN_TOTP_ENCRYPTION_KEY', { CN_TOTP_ENCRYPTION_KEY: 'short' })).toContain('the brand has no usable key');
+    // The shared key itself.
+    expect(totpKeyProblems({ TOTP_ENCRYPTION_KEY: 'short', CN_TOTP_ENCRYPTION_KEY: CN_HEX })).toEqual(['TOTP_ENCRYPTION_KEY']);
+    expect(totpKeyWarning('TOTP_ENCRYPTION_KEY', { TOTP_ENCRYPTION_KEY: 'short' })).toContain('unavailable for every brand without a key of its own');
+    expect(totpKeyProblems({ TOTP_ENCRYPTION_KEY: 'short', CN_TOTP_ENCRYPTION_KEY: 'short' })).toEqual(['TOTP_ENCRYPTION_KEY', 'CN_TOTP_ENCRYPTION_KEY']);
+  });
+
+  it('a secret sealed with the shared key still opens after a CN key is added; new secrets use the CN key', () => {
+    const before = { TOTP_ENCRYPTION_KEY: KEY_HEX };
+    const after = { TOTP_ENCRYPTION_KEY: KEY_HEX, CN_TOTP_ENCRYPTION_KEY: CN_HEX };
+    const old = seal(RFC_SECRET_B32, totpKey('goapply', before)!, 'user_1');
+    expect(unsealWithAny(old, totpKeys('goapply', after), 'user_1')).toBe(RFC_SECRET_B32);
+    const fresh = seal(RFC_SECRET_B32, totpKey('goapply', after)!, 'user_1');
+    expect(unseal(fresh, Buffer.from(CN_HEX, 'hex'), 'user_1')).toBe(RFC_SECRET_B32);
+    expect(() => unseal(fresh, Buffer.from(KEY_HEX, 'hex'), 'user_1')).toThrow(SealError);
+    expect(unsealWithAny(fresh, totpKeys('goapply', after), 'user_1')).toBe(RFC_SECRET_B32);
+    // The user id still binds the secret, whichever key opens it.
+    expect(() => unsealWithAny(old, totpKeys('goapply', after), 'user_2')).toThrow(SealError);
+    // The shared key taken away: the old secret no longer opens (recovery codes remain); no key at all is a SealError too.
+    expect(() => unsealWithAny(old, totpKeys('goapply', { CN_TOTP_ENCRYPTION_KEY: CN_HEX }), 'user_1')).toThrow(SealError);
+    expect(() => unsealWithAny(old, [], 'user_1')).toThrow(SealError);
+    expect(() => unsealWithAny('v0.x.y.z', totpKeys('goapply', after), 'user_1')).toThrow(SealError);
   });
 
   it('round-trips, and refuses another user or another key', () => {

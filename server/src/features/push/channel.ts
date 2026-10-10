@@ -4,8 +4,11 @@
 // every job alert, reminder and lifecycle message that `deliverMessage` fans
 // out (in-app first, then email, then the registered channels) is mirrored to
 // the person's devices when they subscribed. The channel:
-//   - serves RoboApply only (`webPush` flag; GoApply has no web push);
-//   - is unconfigured without VAPID keys (the runner skips it);
+//   - serves both brands (D5), each behind its own `webPush` flag and VAPID
+//     set (GoApply: `CN_VAPID_*` when `CN_VAPID_PUBLIC_KEY` is set, else the
+//     shared pair);
+//   - is unconfigured when no brand has VAPID keys (the runner skips it); a
+//     message for a brand without keys is skipped 'not_configured';
 //   - checks its own subscriptions FIRST (one cheap read; none → skipped
 //     'no_subscription'), so the many people without a device never pay for
 //     the preferences view;
@@ -20,7 +23,7 @@ import { getBrand, type ProductBrand } from '../../platform/brand/registry.js';
 import { isEnabledForBrand } from '../../platform/flags.js';
 import { inAppCopy, registerDeliveryChannel, type DeliveryChannel, type DeliveryMessage, type DeliveryResult } from '../alerts/index.js';
 import type { NotificationPreferencesView } from '../notifications/index.js';
-import { vapidConfig, WEB_PUSH_BRANDS, webPushServesBrand } from './config.js';
+import { vapidConfig, WEB_PUSH_BRANDS } from './config.js';
 import type { PushPayload } from './contract.js';
 import { pushService, safeHref, type PushService } from './service.js';
 
@@ -56,18 +59,24 @@ export function createWebPushChannel(deps: WebPushChannelDeps = {}): DeliveryCha
   const preferences = deps.preferences ?? loadPushPreferences;
   const copy = deps.copy ?? ((brand, locale, templateKey, params) => inAppCopy(brand, locale, templateKey, params, ''));
 
+  /** Why this brand cannot push right now, or null when it can. */
+  const brandReady = (brand: ProductBrand): 'feature_disabled' | 'not_configured' | null => {
+    if (!isEnabledForBrand('webPush', brand, env())) return 'feature_disabled';
+    return vapidConfig(brand, env()) === null ? 'not_configured' : null;
+  };
+
   return {
     id: WEB_PUSH_CHANNEL_ID,
     brands: WEB_PUSH_BRANDS,
+    // The runner asks once for the channel, not per brand: on when any brand can push.
     isConfigured() {
-      const brand = getBrand('roboapply');
-      return vapidConfig(brand, env()) !== null && isEnabledForBrand('webPush', brand, env());
+      return WEB_PUSH_BRANDS.some((id) => brandReady(getBrand(id)) === null);
     },
     async deliver(msg: DeliveryMessage): Promise<DeliveryResult> {
       const brand = getBrand(msg.brand);
-      if (!webPushServesBrand(brand) || !isEnabledForBrand('webPush', brand, env())) {
-        return { delivered: false, skippedReason: 'feature_disabled' };
-      }
+      // This brand's own switch and keys (FLAG_GOAPPLY_WEB_PUSH=false turns GoApply off and leaves RoboApply on).
+      const notReady = brandReady(brand);
+      if (notReady) return { delivered: false, skippedReason: notReady };
       const svc = service();
       const devices = await svc.devicesFor(msg.userId, brand);
       if (!devices.length) return { delivered: false, skippedReason: 'no_subscription' };

@@ -107,11 +107,14 @@ export function recordingSms(result: Partial<SmsSendResult> = {}) {
   };
 }
 
+/**
+ * No `CN_SIGNUP_MODE`: sign-up is open by default (D5). A test that wants the
+ * invite or the closed mode sets it.
+ */
 export const BASE_ENV: EnvSource = {
   NODE_ENV: 'test',
   JWT_SECRET: 'test-secret',
   SMS_DEV_CONSOLE: 'true',
-  CN_SIGNUP_MODE: 'open',
   WECHAT_OPEN_APP_ID: 'wx_open',
   WECHAT_OPEN_APP_SECRET: 'open_secret',
   WECHAT_MP_APP_ID: 'wx_mp',
@@ -119,6 +122,31 @@ export const BASE_ENV: EnvSource = {
   WECHAT_MINI_APP_ID: 'wx_mini',
   WECHAT_MINI_APP_SECRET: 'mini_secret',
   CN_CANONICAL_ORIGIN: 'https://www.goapply.top',
+};
+
+/**
+ * A mainland deployment on which nothing of GoApply leaves the mainland: every
+ * stack is its own (`brandUsesSharedStack('goapply')` is false). The only
+ * shape in which a new account is not asked for the cross-border consent.
+ */
+// The values are the ones the consent catalog's own test uses for "a complete
+// stack of its own on the mainland" (features/compliance/consents.test.ts,
+// `MAINLAND_OWN`, PAR-5): the catalog also looks at WHERE the configured AI
+// model is served, and only a vendor it knows to be in the mainland (here
+// `deepseek`) counts as staying there. So this env means "nothing leaves the
+// mainland" to the sign-up predicate and to the catalog alike.
+export const CN_OWN_STACK_ENV: EnvSource = {
+  DEPLOY_REGION: 'cn-mainland',
+  DATABASE_URL: 'postgresql://u:p@10.0.0.12:5432/goapply',
+  CN_LLM_PROVIDER: 'deepseek',
+  CN_LLM_MODEL: 'deepseek-chat',
+  CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
+  CN_INTERVIEW_ENGINE_STT_MODEL: 'dashscope/paraformer',
+  CN_INTERVIEW_ENGINE_TTS_MODEL: 'dashscope/cosyvoice',
+  CN_S3_BUCKET: 'cn',
+  CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+  CN_VAPID_PUBLIC_KEY: 'pub',
+  CN_EMAIL_TRANSPORT: 'aliyun_dm',
 };
 
 const CN0_TYPES = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'] as const;

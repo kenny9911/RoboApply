@@ -2,9 +2,11 @@
 //
 // Resend HTTP transport (refactored from the legacy server/src/services/EmailService.ts
 // call, which is now a shim over this file). RoboApply always sends through
-// Resend; GoApply uses it only when `CN_EMAIL_TRANSPORT=resend` (Aliyun
-// DirectMail is registered by WP-15 through `registerEmailTransport`).
-// The API key is a vendor key, read unprefixed (`RESEND_API_KEY`, R-03).
+// Resend. GoApply sends through it too, on the shared account, unless
+// `CN_EMAIL_TRANSPORT` is `aliyun_dm` (Aliyun DirectMail, transports/
+// aliyunDirectMail.ts) or `none` (D5; `transportNameFor` in EmailService.ts).
+// The API key is a vendor key shared by both brands, read unprefixed
+// (`RESEND_API_KEY`).
 
 export interface EmailMessage {
   /** RFC 5322 From, e.g. `RoboApply <noreply@roboapply.io>`. */

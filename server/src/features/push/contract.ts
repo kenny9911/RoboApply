@@ -1,8 +1,12 @@
 // server/src/features/push/contract.ts
 //
-// Web push (RoboApply; ARCHITECTURE.md §8.4; TASK_PLAN.md WP-61). Mount:
-// /api/v1/roboapply/push, capability `webPush` per route (off on GoApply:
-// FCM / Mozilla push endpoints are unreliable from the mainland). Opt-in only
+// Web push, both brands (ARCHITECTURE.md §8.4; TASK_PLAN.md WP-61;
+// GOAPPLY_PARITY_PLAN.md, owner ruling D5). Mount: /api/v1/roboapply/push,
+// capability `webPush` per route, per brand. GoApply is on by default with
+// the shared VAPID pair (its own CN_VAPID_* set is an optional override);
+// FCM and Mozilla push endpoints are unreliable from the mainland, so on
+// GoApply a browser that cannot reach them simply never gets a subscription
+// and the other channels (inbox, email, WeChat) carry the alert. Opt-in only
 // after a user action ("Get alerts on this device"); permission is never
 // requested on page load. Failed endpoints are pruned.
 

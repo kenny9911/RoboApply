@@ -3,13 +3,15 @@
 // Aliyun DirectMail transport for GoApply (`CN_EMAIL_TRANSPORT=aliyun_dm`;
 // CN_TW_LAUNCH_PLAN.md §2.1, §5.2; ARCHITECTURE.md §8.1; TASK_PLAN.md WP-15).
 // platform/email/EmailService.ts registers it statically under 'aliyun_dm'.
+// It is an optional override (D5): without it GoApply mail goes out through
+// the shared Resend account, so nothing here is needed for GoApply to send.
 //
 // API: `SingleSendMail` (RPC style, version 2015-11-23), POSTed as a form to
 // `https://dm.aliyuncs.com/` (region cn-hangzhou) or `dm.<region>.aliyuncs.com`.
 // Requests are signed with the Aliyun RPC signature v1 (HMAC-SHA1 over the
 // canonicalized, percent-encoded, sorted parameters; key = secret + "&").
 //
-// Credentials are vendor keys read unprefixed (R-03): ALIYUN_DM_ACCESS_KEY_ID,
+// Credentials are vendor keys read unprefixed: ALIYUN_DM_ACCESS_KEY_ID,
 // ALIYUN_DM_ACCESS_KEY_SECRET, ALIYUN_DM_ACCOUNT_NAME (the verified sender
 // address, e.g. noreply@mail.goapply.top), optional ALIYUN_DM_REGION
 // (default cn-hangzhou). The From display name comes from the message

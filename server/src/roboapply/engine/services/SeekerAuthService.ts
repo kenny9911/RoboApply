@@ -203,12 +203,13 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
   // Agreements first (422 before anything is looked up or written).
   //   RoboApply: the required `age_16_plus`, the PDPA notice for zh-TW/TW and
   //   the marketing choice (unchecked by default).
-  //   GoApply: features/auth/goapplySignup.ts — signup open (production needs
-  //   the approved documents), the required consents incl. the CN-0
-  //   cross-border one (each stored with the version and hash of the text the
-  //   form showed, which the form sends back as `proseHash`) and,
-  //   in invite mode, a redeemable invite code. The invite is spent inside
-  //   the account-creation transaction below.
+  //   GoApply: features/auth/goapplySignup.ts — signup open by default in
+  //   every environment (`CN_SIGNUP_MODE=closed` refuses), the required
+  //   consents incl. the cross-border one while data leaves the mainland
+  //   (each stored with the version and hash of the text the form showed,
+  //   which the form sends back as `proseHash`) and, only with
+  //   `CN_SIGNUP_MODE=invite`, a redeemable invite code. The invite is spent
+  //   inside the account-creation transaction below.
   let consentRows: ConsentRow[];
   let goapplyPlan: GoApplySignupPlan | null = null;
   if (input.brand === 'goapply') {

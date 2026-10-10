@@ -24,6 +24,7 @@ import {
 import { GATE_COVERAGE, SIGN_IN_PATHS, gateCoverage, totpAvailability, type SignInPath } from '../readiness.js';
 import { createMemoryTwoFactorStore, createPrismaTwoFactorStore } from '../store.js';
 import { totpAt } from '../totp.js';
+import { SealError, unseal } from '../sealing.js';
 import { TwoFactorService, type TwoFactorDeps } from '../twoFactor.js';
 
 const ROBO = getBrand('roboapply');
@@ -132,11 +133,18 @@ describe('readiness', () => {
     }
   });
 
-  it('needs the storage and the brand key', () => {
+  it('needs the storage and a key the brand can use (GoApply: its own or the shared one)', () => {
     expect(totpAvailability(ROBO, { env: ENV, storeAvailable: false, paths: ALL_GATED }).reason).toBe('storage_unavailable');
     expect(totpAvailability(ROBO, { env: {}, storeAvailable: true, paths: ALL_GATED }).reason).toBe('key_missing');
-    expect(totpAvailability(GO, { env: ENV, storeAvailable: true, paths: ALL_GATED }).reason).toBe('key_missing');
     expect(totpAvailability(ROBO, { env: ENV, storeAvailable: true, paths: ALL_GATED })).toEqual({ available: true, reason: null, ungated: [] });
+    // GoApply with only the shared TOTP_ENCRYPTION_KEY is available (D5).
+    expect(totpAvailability(GO, { env: ENV, storeAvailable: true, paths: ALL_GATED })).toEqual({ available: true, reason: null, ungated: [] });
+    expect(totpAvailability(GO, { env: { CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) }, storeAvailable: true, paths: ALL_GATED }).available).toBe(true);
+    // key_missing only when neither key is set (or usable).
+    expect(totpAvailability(GO, { env: {}, storeAvailable: true, paths: ALL_GATED }).reason).toBe('key_missing');
+    expect(totpAvailability(GO, { env: { CN_TOTP_ENCRYPTION_KEY: 'short', TOTP_ENCRYPTION_KEY: '' }, storeAvailable: true, paths: ALL_GATED }).reason).toBe('key_missing');
+    // RoboApply never borrows the CN key.
+    expect(totpAvailability(ROBO, { env: { CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) }, storeAvailable: true, paths: ALL_GATED }).reason).toBe('key_missing');
   });
 
   it('marks a path gated only when its file carries that path\'s own marker', () => {
@@ -194,9 +202,41 @@ describe('readiness', () => {
     const status = await t.svc.status('u1', ROBO);
     expect(status.available).toBe(true);
     await expect(t.svc.enrol('u1', ROBO, 'u@example.test')).resolves.toMatchObject({ secret: expect.any(String) });
-    // GoApply needs its own sealing key; the paths no longer hold it back.
-    expect(totpAvailability(GO, { env: ENV, storeAvailable: true })).toMatchObject({ available: false, reason: 'key_missing', ungated: [] });
-    expect(totpAvailability(GO, { env: { CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) }, storeAvailable: true }).ungated).toEqual([]);
+    // GoApply with only the shared key is open on the real path list too; nothing holds it back.
+    expect(totpAvailability(GO, { env: ENV, storeAvailable: true })).toEqual({ available: true, reason: null, ungated: [] });
+    expect(totpAvailability(GO, { env: { CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) }, storeAvailable: true })).toEqual({ available: true, reason: null, ungated: [] });
+    expect(totpAvailability(GO, { env: {}, storeAvailable: true })).toMatchObject({ available: false, reason: 'key_missing', ungated: [] });
+  });
+
+  it('GoApply with only TOTP_ENCRYPTION_KEY enrols and verifies; after CN_TOTP_ENCRYPTION_KEY is added the old secret still opens and new ones use the CN key', async () => {
+    let env: Record<string, string> = { ...ENV };
+    const t = setup({ env: () => env, signInPaths: undefined });
+    expect((await t.svc.status('g1', GO)).available).toBe(true);
+    const { secret } = await t.svc.enrol('g1', GO, 'li@example.cn');
+    const { recoveryCodes } = await t.svc.verify('g1', GO, totpAt(secret, t.now()), 'sess_current');
+    expect(recoveryCodes).toHaveLength(10);
+    expect((await t.svc.status('g1', GO)).enabled).toBe(true);
+    const sealedWithShared = (await t.store.find('g1'))!.secretSealed;
+    expect(unseal(sealedWithShared, Buffer.from(ENV.TOTP_ENCRYPTION_KEY, 'hex'), 'g1')).toBe(secret);
+
+    // The operator adds a CN key later: the existing account still passes its second step.
+    env = { ...ENV, CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) };
+    t.tick(60);
+    await expect(t.svc.checkSecondFactor('g1', GO, { code: totpAt(secret, t.now()) })).resolves.toMatchObject({ ok: true, method: 'totp' });
+    expect((await t.store.find('g1'))!.secretSealed).toBe(sealedWithShared);
+
+    // A new enrolment is sealed with the CN key, not the shared one.
+    const next = await t.svc.enrol('g2', GO, 'wang@example.cn');
+    const sealedWithCn = (await t.store.find('g2'))!.secretSealed;
+    expect(unseal(sealedWithCn, Buffer.from('c'.repeat(64), 'hex'), 'g2')).toBe(next.secret);
+    expect(() => unseal(sealedWithCn, Buffer.from(ENV.TOTP_ENCRYPTION_KEY, 'hex'), 'g2')).toThrow(SealError);
+    await expect(t.svc.verify('g2', GO, totpAt(next.secret, t.now()), 'sess_current')).resolves.toMatchObject({ recoveryCodes: expect.any(Array) });
+
+    // The shared key removed while only the CN key stays: the old secret cannot be opened (a recovery code still works).
+    env = { CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) };
+    t.tick(60);
+    await rejectsWith(t.svc.checkSecondFactor('g1', GO, { code: totpAt(secret, t.now()) }), 'provider_not_configured', 'totp_key_missing');
+    await expect(t.svc.checkSecondFactor('g1', GO, { recoveryCode: recoveryCodes[0]! })).resolves.toMatchObject({ ok: true, method: 'recovery' });
   });
 
   it('closes again as soon as a path is listed ungated (a new way to sign in starts ungated)', async () => {

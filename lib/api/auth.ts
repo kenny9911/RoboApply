@@ -115,7 +115,7 @@ export interface SignupPayload {
   marketingOptIn?: boolean;
   attribution?: SignupAttribution;
   timezone?: string;
-  /** GoApply: the invite code, required while sign-up is invite-only. */
+  /** GoApply: the invite code, required only when the operator made sign-up invite-only (`inviteRequired`). */
   inviteCode?: string;
 }
 

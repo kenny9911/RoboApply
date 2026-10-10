@@ -57,7 +57,11 @@ export const NOTIFY_SAMPLES: Record<NotifyTemplateKey, Record<string, unknown>> 
   [NOTIFY_TEMPLATES.campusFollowed]: { eventId: 'ev1', company: '某科技公司', companySlug: '某科技公司', program: '2027 校园招聘', graduationClass: '2027届' },
 };
 
-/** GoApply's own email transport and sender (R-03: no fallback to the international one). */
+/**
+ * GoApply with a verified sender of its own. Optional (D5): with neither value
+ * GoApply mail goes out through the shared Resend account (covered below and
+ * in EmailService.test.ts).
+ */
 const CN_EMAIL_ENV = { CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'GoApply <noreply@goapply.top>' };
 
 // Emoji and pictographs (PRODUCT §7.1: no emoji subjects).
@@ -285,10 +289,21 @@ describe('notify.campus_followed (GoApply follow-a-company notice)', () => {
     expect(msg.subject).not.toMatch(EMOJI);
   });
 
+  it('gate open and only the shared Resend key (no CN_EMAIL_TRANSPORT): the notice goes out through the shared transport as GoApply', async () => {
+    setEmailPreferenceGate(async () => true);
+    const shared = { RESEND_API_KEY: 're_test', JWT_SECRET: 'jwt-test-secret', ROBOAPPLY_EMAIL_FROM: 'RoboApply <hello@mail.roboapply.io>' };
+    expect(await send({ env: shared })).toMatchObject({ status: 'sent', provider: 'resend' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.from).toBe('GoApply <hello@mail.roboapply.io>');
+    expect(sent[0]!.html).not.toMatch(/RoboApply|roboapply\.io/);
+    expect(sent[0]!.headers?.['List-Unsubscribe']).toMatch(/^<https:\/\/www\.goapply\.top\//);
+  });
+
   it('gate open but the brand cannot send email (the other gate): nothing is sent', async () => {
     setEmailPreferenceGate(async () => true);
-    // GoApply without CN_EMAIL_TRANSPORT: the `notify.email` capability is off.
-    expect(await send({ env: { RESEND_API_KEY: 're_test', JWT_SECRET: 'jwt-test-secret' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
+    // CN_EMAIL_TRANSPORT=none is the operator's off switch; so is a deployment with no email key at all.
+    expect(await send({ env: { RESEND_API_KEY: 're_test', JWT_SECRET: 'jwt-test-secret', CN_EMAIL_TRANSPORT: 'none' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
+    expect(await send({ env: { JWT_SECRET: 'jwt-test-secret' } })).toEqual({ status: 'suppressed', reason: 'transport_not_configured', logId: null });
     expect(sent).toHaveLength(0);
   });
 

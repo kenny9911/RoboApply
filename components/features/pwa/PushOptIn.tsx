@@ -4,7 +4,7 @@
 //
 // The ONLY place the browser's notification permission is requested, and
 // only when the person clicks the button. Renders nothing when web push is
-// off for the brand (`webPush`; always off on GoApply), when the browser
+// off for the brand (the `webPush` flag alone decides, on both brands), when the browser
 // cannot do push, or when the server has no VAPID keys (no UI entry for a
 // missing capability). Turning it on also adds "This device" to the job-alert
 // and reminder channels in the notification settings (WP-39b), so alerts

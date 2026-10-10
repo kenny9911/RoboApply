@@ -16,6 +16,7 @@ import type { ProductBrand } from '../../platform/brand/registry.js';
 import { requireFlag } from '../../platform/flags.js';
 import { parseBody, requireUserId, route } from '../../platform/http.js';
 import { rateLimit, rateLimitWindows } from '../../platform/ratelimit/index.js';
+import { logger } from '../../services/LoggerService.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
   RegenerateRecoveryBodySchema,
@@ -25,6 +26,7 @@ import {
   TotpVerifyBodySchema,
 } from './contract.js';
 import { StudentService, defaultStudentDeps } from './student.js';
+import { totpKeyProblems, totpKeyWarning } from './sealing.js';
 import { TwoFactorService, defaultTwoFactorDeps, type SecondFactor } from './twoFactor.js';
 
 export interface AccountV2RouterDeps extends FeatureRouterDeps {
@@ -75,7 +77,22 @@ function localeOf(req: Request): string | null {
 
 /** 10 code checks per 15 minutes per user (enrol confirm, disable, new recovery codes). */
 
+/** Key warnings already logged in this process (the router is built once at boot, and again by tests). */
+const loggedKeyWarnings = new Set<string>();
+
+/** A sealing-key variable that is set but unusable is skipped, never fatal; say so once in the boot log. */
+function logTotpKeyProblems(env: FeatureRouterDeps['env']): void {
+  const source = env ?? process.env;
+  for (const name of totpKeyProblems(source)) {
+    const warning = totpKeyWarning(name, source);
+    if (loggedKeyWarnings.has(warning)) continue;
+    loggedKeyWarnings.add(warning);
+    logger.warn('ACCOUNT_2FA', warning);
+  }
+}
+
 export function createTwoFactorRouter(deps: AccountV2RouterDeps = {}): Router {
+  logTotpKeyProblems(deps.env);
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
   const on = requireFlag('totp', { env: deps.env });

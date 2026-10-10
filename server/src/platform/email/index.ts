@@ -17,6 +17,7 @@ export {
 export type {
   EmailDb,
   EmailPreferenceGate,
+  EmailTransportName,
   EmailServiceDeps,
   SendEmailInput,
   SendEmailResult,

@@ -1,4 +1,4 @@
-// lib/api/push.ts — Web push subscriptions (RoboApply).
+// lib/api/push.ts — Web push subscriptions (both brands, behind the `webPush` flag).
 //
 // Thin typed wrappers over the area contract (FND-7). Owner: WP-61.
 // Request types are the contract's zod input types; response types are the

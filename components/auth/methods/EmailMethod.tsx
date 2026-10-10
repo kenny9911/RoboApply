@@ -17,10 +17,10 @@
 //           to the other brand gets the same "check your email" screen.
 //           GoApply: its own agreement boxes (the user agreement, the age
 //           confirmation and, while data is processed outside the mainland,
-//           the separate cross-border consent) and, while sign-up is
-//           invite-only, the invite code. They are the same boxes the phone
-//           form shows (one shared set); this form renders them only when no
-//           other method on the page does. Each box shows the text the
+//           the separate cross-border consent) and, only when the operator
+//           made sign-up invite-only, the invite code. They are the same
+//           boxes the phone form shows (one shared set); this form renders
+//           them unless the phone form is on the page. Each box shows the text the
 //           sign-up policy serves, and the form sends that text's hash, so
 //           the stored consent record names what was on screen. If the text
 //           changed meanwhile (422 consent_required, `outdated`), the new
@@ -29,7 +29,7 @@
 //           screen (the visitor asked to keep a result there).
 // No partial-signup capture: nothing is sent before the visitor submits.
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -54,10 +54,10 @@ import {
   agreementSatisfied,
   authCnErrorMessage,
   isConsentOutdated,
-  prefillAccessCode,
   shownConsentsFromPolicy,
   signupInputs,
   useSignupInputs,
+  useSignupInputsHost,
   useSignupPolicy,
 } from '../../features/auth-cn';
 import styles from '../../features/auth/auth.module.css';
@@ -166,19 +166,12 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
   const agreements = entry?.agreements ?? { age: false, pdpa: false, marketing: false, pdpaRequired: false };
 
   // GoApply: the agreement boxes and the invite code live in the store the
-  // phone form and the WeChat button share. This form shows them only when
-  // neither of those is on the page.
+  // phone form and the WeChat button share. This form shows them unless the
+  // phone form is on the page too (one set of boxes; `useSignupInputsHost`).
   const policyQuery = useSignupPolicy(cn);
   const policy = policyQuery.data;
   const [cnInputs] = useSignupInputs();
-  const [hostsCnInputs, setHostsCnInputs] = useState(false);
-  useEffect(() => {
-    if (!cn || signupInputs.get().host !== null) return undefined;
-    signupInputs.set({ host: 'email' });
-    prefillAccessCode();
-    setHostsCnInputs(true);
-    return () => signupInputs.reset();
-  }, [cn]);
+  const hostsCnInputs = useSignupInputsHost('email', cn);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -257,7 +250,7 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
       else if (code === 'weak_password' || code === 'invalid_password') setError({ key: 'signupForm.weakPassword' });
       else if (code === 'invalid_email') setError({ key: 'signupForm.emailInvalid' });
       else if (code === 'rate_limited') setError({ key: 'errors.rateLimited' });
-      // Shown only when the server says sign-up is closed (GoApply in production before its documents are approved).
+      // Shown only when the server says sign-up is closed (GoApply with `CN_SIGNUP_MODE=closed`).
       else if (code === 'signup_closed') setError({ key: 'signupForm.closed' });
       else setError({ key: 'signup.error_generic' });
     } finally {
@@ -276,6 +269,12 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
 
   return (
     <form onSubmit={onSubmit} className="auth-form" noValidate>
+      {/* The operator closed sign-up (CN_SIGNUP_MODE=closed): say so before the visitor fills the form in. */}
+      {cn && policy && !policy.signupOpen ? (
+        <div className={styles.notice} role="status" data-testid="signup-closed">
+          <p>{tCn('signupClosed')}</p>
+        </div>
+      ) : null}
       <AuthField
         label={t('signup.email')}
         type="email"

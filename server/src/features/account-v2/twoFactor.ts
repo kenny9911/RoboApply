@@ -14,6 +14,10 @@
 // the check (readiness.ts). A user who already has it on keeps it on whatever
 // the configuration: the challenge never switches itself off. Recovery codes
 // work without the sealing key, so a lost key never locks anyone out for good.
+//
+// Key (sealing.ts): GoApply seals with `CN_TOTP_ENCRYPTION_KEY` when set, else
+// with the shared `TOTP_ENCRYPTION_KEY`, and opens a stored secret with either,
+// so adding a CN key later locks nobody out.
 
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
@@ -21,7 +25,7 @@ import { HttpError, type ErrorCode } from '../../platform/http.js';
 import type { TotpEnrolResponse, TotpVerifyResponse, TwoFactorStatus } from './contract.js';
 import { ACCOUNT_V2_ERROR_CODES } from './contract.js';
 import { totpAvailability, type SignInPath } from './readiness.js';
-import { SealError, seal, totpKey, unseal } from './sealing.js';
+import { SealError, seal, totpKey, totpKeys, unsealWithAny } from './sealing.js';
 import { StoreUnavailableError, createPrismaTwoFactorStore, type TwoFactorRow, type TwoFactorStore } from './store.js';
 import { generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, matchRecoveryCode, otpauthUri, verifyTotp } from './totp.js';
 
@@ -132,10 +136,12 @@ export class TwoFactorService {
   }
 
   private openSecret(row: TwoFactorRow, brand: ProductBrand): string {
-    const key = totpKey(brand.id, this.d.env());
-    if (!key) throw fail('provider_not_configured', ACCOUNT_V2_ERROR_CODES.keyMissing, 'Codes cannot be checked right now. Use a recovery code.');
+    // Every key the brand may have sealed with: GoApply's own key, then the
+    // shared one. A secret sealed before a CN key was added still opens.
+    const keys = totpKeys(brand.id, this.d.env());
+    if (!keys.length) throw fail('provider_not_configured', ACCOUNT_V2_ERROR_CODES.keyMissing, 'Codes cannot be checked right now. Use a recovery code.');
     try {
-      return unseal(row.secretSealed, key, row.userId);
+      return unsealWithAny(row.secretSealed, keys, row.userId);
     } catch (err) {
       if (err instanceof SealError) {
         throw fail('provider_not_configured', ACCOUNT_V2_ERROR_CODES.keyMissing, 'Codes cannot be checked right now. Use a recovery code.');

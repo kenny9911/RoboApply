@@ -14,6 +14,14 @@
 //      non-modal banner. "Allow" and "Don't allow" carry identical weight.
 //      Before a choice nothing is stored on the device and nothing is linked.
 //
+// The banner must never sit on top of the last thing on a page (the "Already
+// have an account? Sign in" link of the sign-up card was covered at 1280×900).
+// While it is open it publishes the room it takes at the bottom of the window
+// as `--analytics-consent-h` on <html>; a page that ends near the bottom edge
+// reserves that room (the sign-in layout, app/(public)/layout.tsx). On the
+// two-column sign-in layout it docks under the brand panel instead of the
+// form (growth.module.css).
+//
 // The banner appears once the page is idle, so it never competes with the
 // first paint or becomes the page's largest element. It is a docked notice,
 // not a modal, so it does not take the popup gate's one-per-view slot
@@ -112,11 +120,46 @@ export function AnalyticsConsent({ country }: AnalyticsConsentProps) {
   );
 }
 
+/** The CSS variable that carries the room the open banner takes at the bottom of the window. */
+export const CONSENT_RESERVE_VAR = '--analytics-consent-h';
+/** Space kept between the banner and the content above it. */
+const CONSENT_RESERVE_GAP = 12;
+
+/**
+ * Publishes how much of the window's bottom the banner covers (its height plus
+ * its distance from the bottom edge) while it is mounted, and clears it after.
+ */
+function useConsentReserve(ref: { current: HTMLElement | null }): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof document === 'undefined') return undefined;
+    const root = document.documentElement;
+    const publish = () => {
+      const rect = el.getBoundingClientRect();
+      // Not laid out (hidden, or no layout engine): nothing is covered.
+      if (rect.height <= 0) return;
+      const covered = Math.max(0, Math.ceil(window.innerHeight - rect.top));
+      root.style.setProperty(CONSENT_RESERVE_VAR, `${covered + CONSENT_RESERVE_GAP}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(publish) : null;
+    observer?.observe(el);
+    window.addEventListener('resize', publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', publish);
+      root.style.removeProperty(CONSENT_RESERVE_VAR);
+    };
+  }, [ref]);
+}
+
 function ConsentBanner({ onChoose }: { onChoose: (choice: AnalyticsConsentChoice) => void }) {
   const t = useTranslations('growth.consent');
   const titleId = useId();
+  const bannerRef = useRef<HTMLElement | null>(null);
+  useConsentReserve(bannerRef);
   return (
-    <section className={styles.consent} role="region" aria-label={t('regionLabel')} aria-describedby={titleId}>
+    <section ref={bannerRef} className={styles.consent} role="region" aria-label={t('regionLabel')} aria-describedby={titleId} data-analytics-consent="">
       <div className={styles.consentText}>
         <p id={titleId} className={styles.consentTitle}>
           {t('title')}

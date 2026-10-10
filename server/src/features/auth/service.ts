@@ -650,9 +650,11 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       };
     }
 
-    // GoApply accounts are created by phone, WeChat or the email form, which
-    // apply its signup rules (invite in invite mode, the CN-0 consents). A
-    // provider sign-in never creates one.
+    // GoApply accounts are created by the email form, phone or WeChat, which
+    // apply its signup rules (its consents; an invite only in invite mode).
+    // Google and LINE stay RoboApply's methods (D5: sign-in methods beyond
+    // email + password are a market difference), so a provider sign-in never
+    // creates a GoApply account.
     if (brand.market === 'cn') throw authErrors.signupClosed();
 
     // A brand-new account needs the signup agreements first (H29).

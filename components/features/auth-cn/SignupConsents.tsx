@@ -2,7 +2,8 @@
 
 // SignupConsents — the G0 boxes a new GoApply account must tick: one box per
 // required consent of the sign-up policy (the agreement to the user agreement
-// and privacy policy, the age confirmation and, in CN-0, the separate
+// and privacy policy, the age confirmation and, while GoApply data leaves the
+// mainland (offshore deployment or the shared stack), the separate
 // cross-border consent naming every offshore processor; PIPL, TASK_PLAN.md
 // H6). No box is ever pre-ticked.
 //

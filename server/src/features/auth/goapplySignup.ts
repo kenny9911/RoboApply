@@ -1,17 +1,20 @@
 // server/src/features/auth/goapplySignup.ts
 //
 // What an email + password signup on GoApply must satisfy before the account
-// exists (CN_TW_LAUNCH_PLAN.md §2.3 rule 4, §3; TASK_PLAN.md H6; INT-01). The
-// phone and WeChat flows (features/auth-cn) apply the same rules; this is the
-// email twin, called by SeekerAuthService.signup.
+// exists (GOAPPLY_PARITY_PLAN.md §3.7, owner ruling D5; TASK_PLAN.md H6;
+// INT-01). The phone and WeChat flows (features/auth-cn) apply the same rules;
+// this is the email twin, called by SeekerAuthService.signup.
 //
-//   - Production: closed unless counsel-approved documents are configured
-//     (`goapplySignupOpen`, 403 signup_closed).
+//   - Open by default, in every environment: no legal-documents version, SMS
+//     provider or WeChat credential is needed. Only `CN_SIGNUP_MODE=closed`
+//     refuses (`goapplySignupOpen`, 403 signup_closed).
 //   - Consents: the required types come from auth-cn `requiredSignupConsents`
-//     (the agreement, the age confirmation and, while data is processed
-//     outside the mainland, the separate cross-border consent). They are
-//     checked through the compliance catalog. A missing one → 422
-//     consent_required with `details.missing`.
+//     (the agreement, the age confirmation and, while GoApply data is
+//     processed outside the mainland, offshore deployment or shared stack, the
+//     separate cross-border consent, plus any other sign-up consent the
+//     compliance catalog requires on this deployment). It is the same list
+//     the form's boxes are built from and the phone and WeChat paths check.
+//     A missing one → 422 consent_required with `details.missing`.
 //   - What is stored is what was shown. The form shows, beside each box, the
 //     catalog prose that GET /auth/phone/policy served (`prose.text`) and
 //     sends that text's hash back (`proseHash`). A row is written only when
@@ -21,7 +24,7 @@
 //     served (the wording changed while the form was open), is refused with
 //     422 consent_required and `details.outdated`, and the form reloads the
 //     text. The client's `proseVersion` string is never stored.
-//   - Invite mode (`CN_SIGNUP_MODE=invite`, the default): a code is required
+//   - Invite mode (`CN_SIGNUP_MODE=invite`, opt-in): a code is required
 //     (422 invite_invalid, `details.missing` when absent). It is checked
 //     early (no use spent) and spent by `redeemInvite(tx)` INSIDE the
 //     transaction that creates the User, so a failed redemption rolls the
@@ -37,9 +40,7 @@ import { AuthCnError, cnSignupMode, goapplySignupOpen, requiredSignupConsents, t
 import {
   CONSENT_PROSE_VERSION,
   findConsentDefinition,
-  isConsentApplicable,
   servedConsentProseByHash,
-  validateSignupConsents as validateAgainstCatalog,
   type ConsentDefinition,
   type ConsentProseLocale,
 } from '../compliance/index.js';
@@ -104,7 +105,6 @@ export async function planGoApplyEmailSignup(
   if (!goapplySignupOpen(env)) throw new AuthCnError('signup_closed');
 
   const brand = getBrand(BRAND);
-  const ctx = { env };
 
   // The visitor's answers, latest per type. An unknown type is refused, as on the phone flow.
   const answers = new Map<string, boolean>();
@@ -116,18 +116,14 @@ export async function planGoApplyEmailSignup(
     else shownHash.delete(c.type);
   }
 
-  // Checked against the catalog with the server's prose version. Types the
-  // catalog does not offer here are left out rather than failing the signup.
-  const submitted = [...answers]
-    .filter(([type]) => {
-      const def = findConsentDefinition(BRAND, type);
-      return Boolean(def && isConsentApplicable(def, ctx));
-    })
-    .map(([type, granted]) => ({ type, granted, proseVersion: CONSENT_PROSE_VERSION }));
-  const check = validateAgainstCatalog(BRAND, submitted, ctx);
-  const policy = requiredSignupConsents(env);
-  const required = new Set<string>([...policy.map((r) => r.type), ...check.missing]);
-  const missing = [...required].filter((type) => answers.get(type) !== true);
+  // The one list of required consents (auth-cn `requiredSignupConsents`): the
+  // sign-up types plus everything the compliance catalog requires at sign-up
+  // on this deployment. The form's boxes come from the same list, so nothing
+  // is demanded here that was not on the page. A submitted type that is not
+  // required is ignored rather than failing the sign-up.
+  const policy = await requiredSignupConsents(env);
+  const required = policy.map((r) => r.type);
+  const missing = required.filter((type) => answers.get(type) !== true);
   if (missing.length) throw new AuthCnError('consent_required', { missing });
 
   // Each row names the text that was on screen: the served text whose hash

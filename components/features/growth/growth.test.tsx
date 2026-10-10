@@ -37,7 +37,9 @@ import {
   TOKEN_PATH_PREFIXES as WEB_TOKEN_PREFIXES,
 } from '../../../lib/analytics';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
-import { AnalyticsConsent } from './AnalyticsConsent';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { AnalyticsConsent, CONSENT_RESERVE_VAR } from './AnalyticsConsent';
 import { GettingStartedChecklist } from './GettingStartedChecklist';
 import type { ChecklistView } from '../../../lib/api/contracts/growth';
 import {
@@ -233,6 +235,44 @@ describe('AnalyticsConsent', () => {
     expect(cookie(ANALYTICS_CONSENT_COOKIE)).toBe('granted');
     expect(cookie(ANON_ID_COOKIE)).not.toBeNull();
     expect(screen.queryByRole('region', { name: 'Usage statistics choice' })).toBeNull();
+  });
+
+  // Wave FIX carry-over: the banner covered "Already have an account? Sign in" on /signup at 1280×900.
+  it('while open it publishes the room it takes at the bottom of the window, and clears it once a choice is made', async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const banner = this.hasAttribute('data-analytics-consent');
+      // A 96px banner docked 16px above the bottom edge of the window.
+      const top = banner ? window.innerHeight - 112 : 0;
+      return { top, bottom: top + (banner ? 96 : 0), left: 0, right: 0, width: 0, height: banner ? 96 : 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const root = document.documentElement;
+      expect(root.style.getPropertyValue(CONSENT_RESERVE_VAR)).toBe('');
+      renderWithBrand(<AnalyticsConsent country="DE" />);
+      await screen.findByRole('region', { name: 'Usage statistics choice' });
+      // Height + distance from the bottom edge + a 12px gap.
+      await waitFor(() => expect(root.style.getPropertyValue(CONSENT_RESERVE_VAR)).toBe('124px'));
+      fireEvent.click(screen.getByRole('button', { name: "Don't allow" }));
+      expect(root.style.getPropertyValue(CONSENT_RESERVE_VAR)).toBe('');
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
+  it('the sign-in layout keeps that room under the card, and on two columns the banner docks under the brand panel', () => {
+    const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
+    // One column: a reserve element under the card, as tall as the banner says (0 without a banner).
+    expect(read('app/(public)/layout.tsx')).toMatch(/\{children\}\s*<div className=\{styles\.consentReserve\}/);
+    const auth = read('components/features/auth/auth.module.css');
+    expect(auth).toMatch(/\.consentReserve \{[^}]*height: var\(--analytics-consent-h, 0px\)/);
+    expect(CONSENT_RESERVE_VAR).toBe('--analytics-consent-h');
+    // Two columns: the banner leaves the form's half of the window.
+    const growth = read('components/features/growth/growth.module.css');
+    const desktop = /@media \(min-width: 1024px\) \{\s*:global\(body:has\(\.auth-split\)\) \.consent \{([^}]*)\}/.exec(growth)?.[1] ?? '';
+    expect(desktop).toContain('right: auto');
+    expect(desktop).toMatch(/width: calc\(50vw/);
+    // The split layout switches to two columns at the same width.
+    expect(read('styles/auth.css')).toMatch(/@media \(min-width: 1024px\) \{\s*\.auth-split \{\s*grid-template-columns: 1fr 1fr;/);
   });
 
   it('Reject keeps the visitor unlinked and the banner can be reopened', async () => {

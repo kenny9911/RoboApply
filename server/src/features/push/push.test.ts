@@ -26,6 +26,7 @@ import {
   safeHref,
   serializePayload,
   vapidConfig,
+  WEB_PUSH_BRANDS,
   webPushServesBrand,
   type PushSender,
   type PushSendResult,
@@ -72,8 +73,25 @@ describe('config and payload helpers', () => {
     expect(vapidConfig('roboapply', VAPID)).toEqual({ publicKey: VAPID.VAPID_PUBLIC_KEY, privateKey: VAPID.VAPID_PRIVATE_KEY, subject: VAPID.VAPID_SUBJECT });
     expect(vapidConfig('roboapply', { ...VAPID, VAPID_PRIVATE_KEY: '' })).toBeNull();
     expect(vapidConfig('roboapply', { ...VAPID, VAPID_SUBJECT: 'support@example.test' })).toBeNull();
-    // GoApply reads CN_-prefixed names only (no fallback to RoboApply's keys).
-    expect(vapidConfig('goapply', VAPID)).toBeNull();
+  });
+
+  it('GoApply uses the shared VAPID set unless CN_VAPID_PUBLIC_KEY starts a set of its own (never a mix)', () => {
+    // No CN_ value: the shared pair (D5).
+    expect(vapidConfig('goapply', VAPID)).toEqual(vapidConfig('roboapply', VAPID));
+    // Its own complete set wins, and RoboApply never reads it.
+    expect(vapidConfig('goapply', { ...VAPID, ...CN_VAPID })).toEqual({ publicKey: CN_VAPID.CN_VAPID_PUBLIC_KEY, privateKey: CN_VAPID.CN_VAPID_PRIVATE_KEY, subject: CN_VAPID.CN_VAPID_SUBJECT });
+    expect(vapidConfig('roboapply', { ...VAPID, ...CN_VAPID })).toMatchObject({ publicKey: VAPID.VAPID_PUBLIC_KEY });
+    expect(vapidConfig('roboapply', CN_VAPID)).toBeNull();
+    // An own set that is started and not finished is not configured: the shared private key is never paired with the CN public key.
+    expect(vapidConfig('goapply', { ...VAPID, CN_VAPID_PUBLIC_KEY: 'BCnPublicKey' })).toBeNull();
+    expect(vapidConfig('goapply', { ...VAPID, CN_VAPID_PUBLIC_KEY: 'BCnPublicKey', CN_VAPID_PRIVATE_KEY: 'cnPrivateKey' })).toBeNull();
+    // A CN private key or subject without the CN public key does not start a set: the shared set is used whole.
+    expect(vapidConfig('goapply', { ...VAPID, CN_VAPID_PRIVATE_KEY: 'cnPrivateKey' })).toEqual(vapidConfig('roboapply', VAPID));
+    // No keys anywhere: nothing.
+    expect(vapidConfig('goapply', {})).toBeNull();
+    expect(WEB_PUSH_BRANDS).toEqual(['roboapply', 'goapply']);
+    expect(webPushServesBrand('goapply')).toBe(true);
+    expect(webPushServesBrand('roboapply')).toBe(true);
   });
 
   it('accepts only https endpoints on known browser push services', () => {
@@ -140,49 +158,86 @@ describe('/push routes', () => {
     expect((await h.request('POST', '/api/v1/roboapply/push/subscriptions', { body: sub(1) })).status).toBe(401);
   });
 
-  it('GoApply has no web push: every route answers 404 feature_disabled', async () => {
-    for (const [method, path, body] of [
-      ['GET', '/vapid-public-key', undefined],
-      ['POST', '/subscriptions', sub(1)],
-      ['DELETE', '/subscriptions/x', undefined],
-    ] as const) {
-      const res = await h.request<{ code: string }>(method, `/api/v1/roboapply/push${path}`, { ...as('u1', 'goapply.localhost:3621'), body });
-      expect(res.status, path).toBe(404);
-      expect(res.body.code).toBe('feature_disabled');
-    }
+  const GO = 'goapply.localhost:3621';
+
+  it('GoApply with the shared VAPID env: a user subscribes, the row is GoApply’s, and a send reaches only that brand’s device', async () => {
+    expect(isEnabledForBrand('webPush', getBrand('goapply'), VAPID)).toBe(true);
+    const key = await h.request<{ data: { publicKey: string } }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('g1', GO));
+    expect(key.status).toBe(200);
+    expect(key.body.data).toEqual({ publicKey: VAPID.VAPID_PUBLIC_KEY });
+
+    const created = await h.request<{ data: { id: string } }>('POST', '/api/v1/roboapply/push/subscriptions', { ...as('g1', GO), body: sub('go') });
+    expect(created.status).toBe(201);
+    expect(db.$rows('rAPushSubscription')).toEqual([expect.objectContaining({ userId: 'g1', brand: 'goapply', endpoint: FCM('go') })]);
+    const mine = await h.request<{ data: { subscription: { id: string } | null } }>('POST', '/api/v1/roboapply/push/subscriptions/lookup', { ...as('g1', GO), body: { endpoint: FCM('go') } });
+    expect(mine.body.data.subscription?.id).toBe(created.body.data.id);
+    // The same person's row is not visible from the RoboApply host: rows are per brand.
+    const other = await h.request<{ data: { subscription: unknown } }>('POST', '/api/v1/roboapply/push/subscriptions/lookup', { ...as('g1'), body: { endpoint: FCM('go') } });
+    expect(other.body.data).toEqual({ subscription: null });
+
+    const service = makeService(db, sender.sender);
+    const before = sender.calls.length;
+    expect(await service.sendToUser('g1', 'goapply', { title: '提醒', body: null, href: '/inbox', tag: 't' })).toMatchObject({ subscriptions: 1, sent: 1 });
+    expect(sender.calls.slice(before).map((c) => c.endpoint)).toEqual([FCM('go')]);
+    expect(await service.sendToUser('g1', 'roboapply', { title: 'x', body: null, href: '/inbox', tag: 't' })).toMatchObject({ subscriptions: 0, sent: 0 });
+
+    const gone = await h.request('DELETE', `/api/v1/roboapply/push/subscriptions/${created.body.data.id}`, as('g1', GO));
+    expect(gone.status).toBeLessThan(300);
+    expect(db.$rows('rAPushSubscription')).toHaveLength(0);
   });
 
-  it('GoApply stays off in the push area itself, even with a FLAG override and CN_VAPID_* keys', async () => {
-    const env = { ...VAPID, ...CN_VAPID, FLAG_GOAPPLY_WEB_PUSH: 'true' };
-    // The flag itself is never on for a mainland brand (WP-93), and the service refuses as well.
-    expect(isEnabledForBrand('webPush', getBrand('goapply'), env)).toBe(false);
-    expect(webPushServesBrand('goapply')).toBe(false);
-    expect(webPushServesBrand('roboapply')).toBe(true);
+  it('CN_VAPID_* (public key, private key, subject) switch GoApply to its own pair; RoboApply keeps the shared one', async () => {
+    const env = { ...VAPID, ...CN_VAPID };
     const cnDb = fakeDb();
     const service = makeService(cnDb, sender.sender, env);
     const hCn = await startRouteHarness({ env, mounts: [['/api/v1/roboapply/push', createPushRouter({ seekerAuth: auth, env, service })]] });
+    try {
+      const go = await hCn.request<{ data: { publicKey: string } }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1', GO));
+      expect(go.body.data).toEqual({ publicKey: CN_VAPID.CN_VAPID_PUBLIC_KEY });
+      const robo = await hCn.request<{ data: { publicKey: string } }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1'));
+      expect(robo.body.data).toEqual({ publicKey: VAPID.VAPID_PUBLIC_KEY });
+    } finally {
+      await hCn.close();
+    }
+  });
+
+  it('FLAG_GOAPPLY_WEB_PUSH=false turns GoApply off (404 on every route, nothing stored) and leaves RoboApply on', async () => {
+    const env = { ...VAPID, FLAG_GOAPPLY_WEB_PUSH: 'false' };
+    expect(isEnabledForBrand('webPush', getBrand('goapply'), env)).toBe(false);
+    expect(isEnabledForBrand('webPush', getBrand('roboapply'), env)).toBe(true);
+    const cnDb = fakeDb();
+    const service = makeService(cnDb, sender.sender, env);
+    const hOff = await startRouteHarness({ env, mounts: [['/api/v1/roboapply/push', createPushRouter({ seekerAuth: auth, env, service })]] });
     try {
       for (const [method, path, body] of [
         ['GET', '/vapid-public-key', undefined],
         ['POST', '/subscriptions', sub(1)],
         ['POST', '/subscriptions/lookup', { endpoint: FCM(1) }],
+        ['DELETE', '/subscriptions/x', undefined],
       ] as const) {
-        const res = await hCn.request<{ code: string }>(method, `/api/v1/roboapply/push${path}`, { ...as('u1', 'goapply.localhost:3621'), body });
+        const res = await hOff.request<{ code: string }>(method, `/api/v1/roboapply/push${path}`, { ...as('u1', GO), body });
         expect(res.status, path).toBe(404);
         expect(res.body.code).toBe('feature_disabled');
       }
       expect(cnDb.$rows('rAPushSubscription')).toHaveLength(0);
-      // Nothing is sent to a goapply row either, whatever the flag says.
-      cnDb.$rows('rAPushSubscription').push({ id: 'g1', userId: 'u1', brand: 'goapply', endpoint: FCM('g1'), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 });
-      const calls = sender.calls.length;
-      expect(await service.sendToUser('u1', 'goapply', { title: 't', body: null, href: '/inbox', tag: 't' })).toMatchObject({ subscriptions: 0, sent: 0 });
-      expect(await service.devicesFor('u1', 'goapply')).toEqual([]);
-      expect(sender.calls.length).toBe(calls);
-      // RoboApply on the same router still works.
-      expect((await hCn.request('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1'))).status).toBe(200);
+      expect((await hOff.request('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1'))).status).toBe(200);
     } finally {
-      await hCn.close();
+      await hOff.close();
     }
+  });
+
+  it('GoApply without any VAPID keys, or with an own set left unfinished: hidden (404), and nothing is sent to a stored row', async () => {
+    const none = await hNoKeys.request<{ code: string }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1', GO));
+    expect([none.status, none.body.code]).toEqual([404, 'feature_disabled']);
+    // CN_VAPID_PUBLIC_KEY alone starts an own set that has no private key: GoApply has no usable pair.
+    const half = { ...VAPID, CN_VAPID_PUBLIC_KEY: 'BCnPublicKey' };
+    expect(isEnabledForBrand('webPush', getBrand('goapply'), half)).toBe(false);
+    const cnDb = fakeDb({ rAPushSubscription: [{ id: 'g1', userId: 'u1', brand: 'goapply', endpoint: FCM('g1'), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 }] });
+    const service = makeService(cnDb, sender.sender, half);
+    const calls = sender.calls.length;
+    expect(await service.sendToUser('u1', 'goapply', { title: 't', body: null, href: '/inbox', tag: 't' })).toMatchObject({ subscriptions: 0, sent: 0 });
+    expect(await service.devicesFor('u1', 'goapply')).toEqual([]);
+    expect(sender.calls.length).toBe(calls);
   });
 
   it('lookup says "on" only for the caller’s own row (shared device, pruned device)', async () => {
@@ -355,11 +410,50 @@ describe('web_push delivery channel', () => {
     return { db, s, channel, preferences, copy };
   }
 
-  it('serves RoboApply only and is unconfigured without VAPID keys', () => {
-    expect(setup().channel.brands).toEqual(['roboapply']);
+  it('serves both brands and is unconfigured when no brand can push', () => {
+    expect(setup().channel.brands).toEqual(['roboapply', 'goapply']);
     expect(setup().channel.isConfigured()).toBe(true);
     expect(createWebPushChannel({ env: {} }).isConfigured()).toBe(false);
-    expect(createWebPushChannel({ env: { ...VAPID, FLAG_ROBOAPPLY_WEB_PUSH: 'false' } }).isConfigured()).toBe(false);
+    // One brand switched off: the channel still runs for the other.
+    expect(createWebPushChannel({ env: { ...VAPID, FLAG_ROBOAPPLY_WEB_PUSH: 'false' } }).isConfigured()).toBe(true);
+    expect(createWebPushChannel({ env: { ...VAPID, FLAG_GOAPPLY_WEB_PUSH: 'false' } }).isConfigured()).toBe(true);
+    expect(createWebPushChannel({ env: { ...VAPID, FLAG_ROBOAPPLY_WEB_PUSH: 'false', FLAG_GOAPPLY_WEB_PUSH: 'false' } }).isConfigured()).toBe(false);
+    // Only GoApply has keys (its own set): the channel is on for it.
+    expect(createWebPushChannel({ env: CN_VAPID }).isConfigured()).toBe(true);
+  });
+
+  it('GoApply: a notification is delivered through the push channel with the shared VAPID pair, to GoApply devices only', async () => {
+    const db = fakeDb({
+      rAPushSubscription: [
+        { id: 'g1', userId: 'u1', brand: 'goapply', endpoint: FCM('go'), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 },
+        { id: 'r1', userId: 'u1', brand: 'roboapply', endpoint: FCM('robo'), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 },
+      ],
+      seekerNotification: [{ id: 'n1', pushSentAt: null }],
+    });
+    const s = recordingSender();
+    const preferences = vi.fn(async () => prefs({ reminder: ['in_app', 'push'] }));
+    const copy = vi.fn(() => ({ title: '网申即将截止', body: null }));
+    const channel = createWebPushChannel({ service: () => makeService(db, s.sender, ENV), preferences, copy, env: ENV });
+    const go = { ...message, brand: 'goapply' as const, locale: 'zh', category: 'reminder', templateKey: 'notify.campusDeadline' };
+    expect(await channel.deliver(go)).toEqual({ delivered: true });
+    expect(s.calls.map((c) => c.endpoint)).toEqual([FCM('go')]);
+    expect(copy).toHaveBeenCalledWith(getBrand('goapply'), 'zh', 'notify.campusDeadline', { count: 2 });
+    expect(preferences).toHaveBeenCalledWith('u1', expect.objectContaining({ id: 'goapply' }));
+    expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
+  });
+
+  it('GoApply off switch and missing keys are per brand: feature_disabled / not_configured, and RoboApply still delivers', async () => {
+    const off = { ...VAPID, FLAG_GOAPPLY_WEB_PUSH: 'false' };
+    const preferences = vi.fn(async () => prefs({ alert: ['push'] }));
+    const flagged = createWebPushChannel({ env: off, preferences });
+    expect(await flagged.deliver({ ...message, brand: 'goapply' })).toEqual({ delivered: false, skippedReason: 'feature_disabled' });
+    // An own set left unfinished: the flag's requirement fails for GoApply.
+    const half = createWebPushChannel({ env: { ...VAPID, CN_VAPID_PUBLIC_KEY: 'BCnPublicKey' }, preferences });
+    expect(await half.deliver({ ...message, brand: 'goapply' })).toEqual({ delivered: false, skippedReason: 'feature_disabled' });
+    expect(preferences).not.toHaveBeenCalled();
+    const robo = setup();
+    const roboChannel = createWebPushChannel({ service: () => makeService(robo.db, robo.s.sender, off), preferences: robo.preferences, copy: robo.copy, env: off });
+    expect(await roboChannel.deliver(message)).toEqual({ delivered: true });
   });
 
   it('sends the in-app message’s own text and stamps pushSentAt', async () => {
@@ -370,7 +464,7 @@ describe('web_push delivery channel', () => {
     expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
   });
 
-  it('skips when push is not chosen for the category, with no device, or on GoApply', async () => {
+  it('skips when push is not chosen for the category, with no device, or with no device on that brand', async () => {
     const off = setup({ prefsView: prefs({ alert: ['in_app', 'email'] }) });
     expect(await off.channel.deliver(message)).toEqual({ delivered: false, skippedReason: 'preference_off' });
     expect(off.s.calls).toHaveLength(0);
@@ -379,12 +473,11 @@ describe('web_push delivery channel', () => {
     expect(await noDevice.channel.deliver(message)).toEqual({ delivered: false, skippedReason: 'no_subscription' });
     // No device → the preferences view is never loaded.
     expect(noDevice.preferences).not.toHaveBeenCalled();
+    // A GoApply message never reaches a RoboApply device of the same person: no GoApply row → no subscription.
     const cn = setup();
-    expect(await cn.channel.deliver({ ...message, brand: 'goapply' })).toEqual({ delivered: false, skippedReason: 'feature_disabled' });
+    expect(await cn.channel.deliver({ ...message, brand: 'goapply' })).toEqual({ delivered: false, skippedReason: 'no_subscription' });
+    expect(cn.s.calls).toHaveLength(0);
     expect(cn.preferences).not.toHaveBeenCalled();
-    // A GoApply flag override does not open the channel either.
-    const cnOverride = createWebPushChannel({ env: { ...VAPID, ...CN_VAPID, FLAG_GOAPPLY_WEB_PUSH: 'true' }, preferences: cn.preferences });
-    expect(await cnOverride.deliver({ ...message, brand: 'goapply' })).toEqual({ delivered: false, skippedReason: 'feature_disabled' });
     const failed = setup({ outcome: { ok: false, statusCode: 500, gone: false, message: 'x' } });
     expect(await failed.channel.deliver(message)).toEqual({ delivered: false, skippedReason: 'send_failed' });
     expect(failed.db.$rows('seekerNotification')[0]!.pushSentAt).toBeNull();
@@ -417,13 +510,13 @@ describe('web_push delivery channel', () => {
     expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
   });
 
-  it('registers itself with alerts for RoboApply only (idempotent)', () => {
+  it('registers itself with alerts for both brands (idempotent)', () => {
     resetDeliveryChannelsForTests();
     const a = registerWebPushChannel();
     const b = registerWebPushChannel();
     expect(a).toBe(b);
     expect(deliveryChannels('roboapply').map((c) => c.id)).toEqual(['web_push']);
-    expect(deliveryChannels('goapply')).toEqual([]);
+    expect(deliveryChannels('goapply').map((c) => c.id)).toEqual(['web_push']);
     resetDeliveryChannelsForTests();
   });
 });
@@ -449,7 +542,8 @@ describe('push.send worker', () => {
     const service = makeService(db, s.sender);
     expect(await handlePushSend(base, service, pushOn, VAPID)).toEqual({ sent: 1, pruned: 0 });
     expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
-    await expect(handlePushSend({ ...base, brand: 'goapply' }, service, pushOn)).rejects.toMatchObject({ name: 'PermanentWorkError' });
+    // A brand that is not a brand at all is a bad item.
+    await expect(handlePushSend({ ...base, brand: 'nobody' }, service, pushOn, VAPID)).rejects.toMatchObject({ name: 'PermanentWorkError' });
     await expect(handlePushSend({ userId: 'u1' }, service, pushOn)).rejects.toMatchObject({ name: 'PermanentWorkError' });
     await expect(handlePushSend({ ...base, category: undefined }, service, pushOn)).rejects.toMatchObject({ name: 'PermanentWorkError' });
     await expect(handlePushSend(base, makeService(db, s.sender, {}), pushOn)).rejects.toMatchObject({ name: 'PermanentWorkError' });
@@ -482,11 +576,31 @@ describe('push.send worker', () => {
       message: expect.stringMatching(/disabled/),
     });
     expect(s.calls).toHaveLength(0);
-    // A GoApply item stays dead even with a GoApply override.
+    // The same switch for GoApply: FLAG_GOAPPLY_WEB_PUSH=false kills a GoApply item at once.
     await expect(
-      handlePushSend({ ...base, brand: 'goapply' }, makeService(db, s.sender, { ...VAPID, ...CN_VAPID }), preferences, { ...CN_VAPID, FLAG_GOAPPLY_WEB_PUSH: 'true' }),
-    ).rejects.toMatchObject({ name: 'PermanentWorkError' });
+      handlePushSend({ ...base, brand: 'goapply' }, makeService(db, s.sender), preferences, { ...VAPID, FLAG_GOAPPLY_WEB_PUSH: 'false' }),
+    ).rejects.toMatchObject({ name: 'PermanentWorkError', message: expect.stringMatching(/disabled/) });
     expect(preferences).not.toHaveBeenCalled();
+  });
+
+  it('a GoApply item is delivered with the shared VAPID pair (no RoboApply-only refusal), to GoApply devices only', async () => {
+    const db = fakeDb({
+      rAPushSubscription: [
+        { id: 'g1', userId: 'u1', brand: 'goapply', endpoint: FCM('go'), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 },
+        { id: 'r1', userId: 'u1', brand: 'roboapply', endpoint: FCM('robo'), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 },
+      ],
+      seekerNotification: [{ id: 'n9', pushSentAt: null }],
+    });
+    const s = recordingSender();
+    const preferences = vi.fn(pushOn);
+    expect(await handlePushSend({ ...base, brand: 'goapply' }, makeService(db, s.sender), preferences, VAPID)).toEqual({ sent: 1, pruned: 0 });
+    expect(s.calls.map((c) => c.endpoint)).toEqual([FCM('go')]);
+    expect(preferences).toHaveBeenCalledWith('u1', expect.objectContaining({ id: 'goapply' }));
+    expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
+    // Its own pair, once configured, is the one used: the service built on that env has a config for GoApply.
+    const own = makeService(db, s.sender, { ...VAPID, ...CN_VAPID });
+    expect(own.config('goapply')).toMatchObject({ publicKey: CN_VAPID.CN_VAPID_PUBLIC_KEY });
+    expect(own.config('roboapply')).toMatchObject({ publicKey: VAPID.VAPID_PUBLIC_KEY });
   });
 
   it('completes without loading preferences when the person has no device', async () => {

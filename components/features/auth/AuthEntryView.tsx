@@ -7,10 +7,12 @@
 //     methods/registry.ts); a method without credentials never renders.
 //     LINE is offered only to zh-TW visitors and visitors from Taiwan, and
 //     then first (PRODUCT O0 row 3).
-//   - RoboApply: provider buttons, "or", then the email form.
-//     GoApply: phone (WP-11) first, WeChat, and email behind "其他方式"
-//     (the fallback; `layoutAuthMethods` in the registry decides). The email
-//     form opens in place; with no other method available it is shown at once.
+//   - Email + password is the first method on both brands (D5).
+//     RoboApply: provider buttons, "or", then the email form.
+//     GoApply: the email form; with an SMS provider the phone form is a tab
+//     beside it (email open first); WeChat below, after its own "or".
+//     Nothing sits behind another control unless the brand lists a secondary
+//     method (`layoutAuthMethods` in the registry; no brand does today).
 //   - Contextual title from `action=apply` / `job` / `from`; the job title is
 //     looked up by id (never taken from the URL) and shown only when found.
 //     Every query parameter is carried to the other page.
@@ -25,8 +27,10 @@ import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { AUTH_METHOD_COMPONENTS, layoutAuthMethods, useAuthMethods, type AuthMethodEntry } from '../../auth/methods/registry';
+import type { AuthMethod } from '../../../lib/brand/registry.generated';
 import { AuthEntryProvider, type SignupAgreements } from '../../auth/agreements';
 import { AuthBrandMark, AuthError } from '../../auth/AuthShell';
+import { Tabs, tabPanelProps } from '../../v3/primitives/Tabs';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { carriedQuery, entryContext, safeNext, signupAttribution } from '../../../lib/auth/entry';
 import { useAuthMethodsInfo, useEntryJob } from '../../../hooks/auth/useAuthAccount';
@@ -62,6 +66,21 @@ export function filterAndOrder(methods: AuthMethodEntry[], opts: { locale: strin
   return line && lineAudience ? [line, ...rest] : rest;
 }
 
+const FORM_TABS_ID = 'auth-method';
+
+/**
+ * Pure: where each method the visitor sees is drawn. Forms keep the brand's
+ * order (the first is the open one). A redirect method goes above the forms
+ * unless its registry entry says `after`.
+ */
+export function placeAuthMethods(methods: readonly AuthMethodEntry[]): { forms: AuthMethodEntry[]; before: AuthMethodEntry[]; after: AuthMethodEntry[] } {
+  return {
+    forms: methods.filter((m) => m.kind === 'form'),
+    before: methods.filter((m) => m.kind === 'redirect' && m.placement !== 'after'),
+    after: methods.filter((m) => m.kind === 'redirect' && m.placement === 'after'),
+  };
+}
+
 export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
   const t = useTranslations('auth');
   const tCn = useTranslations('authCn');
@@ -86,13 +105,14 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
   const ctx = entryContext(params);
   const job = useEntryJob(ctx.jobId);
   const methods = useMemo(() => filterAndOrder(registryMethods, { locale, country }), [registryMethods, locale, country]);
-  // GoApply keeps email behind "其他方式" while another way to sign in exists (G0 row 6).
+  // Shown at once / behind "Other ways to sign in" (empty for both brands today).
   const layout = useMemo(() => layoutAuthMethods(brand.id, methods), [brand.id, methods]);
-  const redirects = layout.primary.filter((m) => m.kind === 'redirect');
-  const forms = layout.primary.filter((m) => m.kind === 'form');
-  const emailEntry = methods.find((m) => m.id === 'email_password');
-  const otherForms = forms.filter((m) => m.id !== 'email_password');
+  const { forms, before, after } = useMemo(() => placeAuthMethods(layout.primary), [layout.primary]);
   const emailBehindLink = layout.secondary.some((m) => m.id === 'email_password');
+  const emailEntry = emailBehindLink ? methods.find((m) => m.id === 'email_password') : undefined;
+  // Several forms are tabs; the brand's first one is open until the visitor picks another.
+  const [pickedForm, setPickedForm] = useState<AuthMethod | null>(null);
+  const openForm = forms.find((m) => m.id === pickedForm) ?? forms[0];
 
   const errorCode = params?.get('error');
   // A job title appears only when the looked-up job exists (never from the URL).
@@ -121,9 +141,9 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
     locale,
   };
 
-  const render = (m: AuthMethodEntry) => {
+  const render = (m: AuthMethodEntry, follows?: boolean) => {
     const Method = AUTH_METHOD_COMPONENTS[m.id];
-    return <Method key={m.id} mode={mode} next={next} />;
+    return <Method key={m.id} mode={mode} next={next} {...(follows === undefined ? {} : { follows })} />;
   };
 
   const query = carriedQuery(params);
@@ -141,31 +161,45 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
       ) : null}
 
       <AuthEntryProvider value={entryValue}>
-        {otherForms.length > 0 ? <div className={styles.methods}>{otherForms.map(render)}</div> : null}
-        {redirects.length > 0 ? <div className={styles.methods}>{redirects.map(render)}</div> : null}
+        {before.length > 0 ? <div className={styles.methods}>{before.map((m) => render(m))}</div> : null}
+        {before.length > 0 && openForm ? (
+          <div className={styles.divider} role="separator">
+            {t('common.or')}
+          </div>
+        ) : null}
+        {forms.length > 1 && openForm ? (
+          <>
+            <Tabs
+              className={styles.methodTabs}
+              ariaLabel={t('methods.tabs.label')}
+              idBase={FORM_TABS_ID}
+              value={openForm.id}
+              onChange={setPickedForm}
+              tabs={forms.map((m) => ({ id: m.id, label: t(`methods.tabs.${m.id}`) }))}
+            />
+            {/* The panel holds a form whose first field is focusable: no tab stop of its own. */}
+            <div {...tabPanelProps(FORM_TABS_ID, openForm.id)} tabIndex={-1} className={styles.methodPanel} data-auth-form={openForm.id}>
+              {render(openForm)}
+            </div>
+          </>
+        ) : openForm ? (
+          openForm.id === 'email_password' ? render(openForm) : <div className={styles.methods}>{render(openForm)}</div>
+        ) : null}
+        {after.length > 0 ? <div className={styles.methodsAfter}>{after.map((m) => render(m, Boolean(openForm) || before.length > 0))}</div> : null}
         {emailEntry ? (
-          emailBehindLink && !showEmail ? (
+          !showEmail ? (
             <div className={styles.methods}>
               <button type="button" className={styles.oauthButton} data-testid="auth-other-methods-toggle" onClick={() => setShowEmail(true)}>
                 {brand.market === 'cn' ? tCn('otherMethods') : t('methods.useEmail')}
               </button>
             </div>
-          ) : emailBehindLink ? (
+          ) : (
             <div id="auth-other-methods" ref={otherMethodsRef}>
               <div className={styles.divider} role="separator">
                 {tCn('otherMethodsEmail')}
               </div>
               {render(emailEntry)}
             </div>
-          ) : (
-            <>
-              {redirects.length > 0 || otherForms.length > 0 ? (
-                <div className={styles.divider} role="separator">
-                  {t('common.or')}
-                </div>
-              ) : null}
-              {render(emailEntry)}
-            </>
           )
         ) : null}
       </AuthEntryProvider>

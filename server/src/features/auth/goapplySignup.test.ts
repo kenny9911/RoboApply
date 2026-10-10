@@ -1,12 +1,13 @@
 // @vitest-environment node
 //
-// GoApply email signup rules (INT-01; wave 2 carry-over "GoApply email signup
-// gate"): closed in production without the approved documents; the required
-// consents (incl. the CN-0 cross-border one) checked against the compliance
-// catalog; each stored record carries the version and hash of the text the
-// form showed (the prose GET /auth/phone/policy served), never a hash of a
-// wording the person did not see; in invite mode an invite that is checked
-// early and spent inside the caller's transaction.
+// GoApply email signup rules (INT-01; GOAPPLY_PARITY_PLAN.md §3.7, D5): open by
+// default in every environment (no documents version, SMS or WeChat needed);
+// the required consents (incl. the cross-border one whenever data leaves the
+// mainland) checked against the compliance catalog; each stored record carries
+// the version and hash of the text the form showed (the prose GET
+// /auth/phone/policy served), never a hash of a wording the person did not
+// see; only with CN_SIGNUP_MODE=invite an invite that is checked early and
+// spent inside the caller's transaction; CN_SIGNUP_MODE=closed refuses.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +17,7 @@ vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), war
 import { getBrand } from '../../platform/brand/registry.js';
 import { CONSENT_PROSE_VERSION, consentProseHash, findConsentDefinition, resolveConsentProse } from '../compliance/consents.js';
 import { buildSignupPolicy } from '../auth-cn/signupPolicy.js';
+import { CN_OWN_STACK_ENV } from '../auth-cn/__tests__/testkit.js';
 import { planGoApplyEmailSignup, shownConsentProse, type GoApplyInviteSeam } from './goapplySignup.js';
 
 const goapply = getBrand('goapply');
@@ -25,8 +27,11 @@ const hashOf = (type: string, locale: 'zh' | 'en' = 'zh') => resolveConsentProse
 const granted = (...types: string[]) =>
   types.map((type) => ({ type, granted: true, proseVersion: 'client-string', ...(findConsentDefinition('goapply', type) ? { proseHash: hashOf(type) } : {}) }));
 const CN0 = granted('pipl_basic_processing', 'age_16_plus', 'pipl_cross_border');
-const OPEN = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' };
-const INVITE = { NODE_ENV: 'test' };
+/** The default: no CN_SIGNUP_MODE. */
+const OPEN = { NODE_ENV: 'test' };
+const INVITE = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'invite' };
+/** Production with only the shared credentials: no CN_LEGAL_DOCS_VERSION, no SMS, no WeChat. */
+const PROD = { NODE_ENV: 'production', RESEND_API_KEY: 're_test' };
 
 function invites(redeemable = true) {
   const seam: GoApplyInviteSeam & { checked: string[]; spent: Array<[unknown, string]> } = {
@@ -54,27 +59,42 @@ async function code(p: Promise<unknown>): Promise<{ code?: string; status?: numb
 }
 
 describe('planGoApplyEmailSignup', () => {
-  it('is closed in production until the approved documents are configured', async () => {
-    expect(await code(planGoApplyEmailSignup({ consents: CN0 }, { env: { NODE_ENV: 'production', CN_SIGNUP_MODE: 'open' } }))).toMatchObject({
-      code: 'signup_closed',
-      status: 403,
-    });
-    await expect(
-      planGoApplyEmailSignup({ consents: CN0 }, { env: { NODE_ENV: 'production', CN_SIGNUP_MODE: 'open', CN_LEGAL_DOCS_VERSION: '2026-11' } }),
-    ).resolves.toMatchObject({ inviteRequired: false });
+  it('production with no documents version, SMS or WeChat: the account is planned without an invite code', async () => {
+    const seam = invites();
+    const plan = await planGoApplyEmailSignup({ consents: CN0 }, { env: PROD, invites: seam });
+    expect(plan.inviteRequired).toBe(false);
+    expect(plan.consentRows.map((r) => r.consentType).sort()).toEqual(['age_16_plus', 'pipl_basic_processing', 'pipl_cross_border']);
+    await plan.redeemInvite({ rABrandInvite: {} } as never);
+    expect([seam.checked, seam.spent]).toEqual([[], []]);
+    // The same answer whatever the documents version says: it is not a gate.
+    await expect(planGoApplyEmailSignup({ consents: CN0 }, { env: { ...PROD, CN_LEGAL_DOCS_VERSION: '2026-11' } })).resolves.toMatchObject({ inviteRequired: false });
   });
 
-  it('requires the agreement, the age confirmation and (outside the mainland) the cross-border consent', async () => {
+  it('CN_SIGNUP_MODE=closed answers signup_closed before anything else is looked at', async () => {
+    for (const env of [{ ...PROD, CN_SIGNUP_MODE: 'closed' }, { ...OPEN, CN_SIGNUP_MODE: 'closed' }, { ...PROD, CN_SIGNUP_MODE: 'closed', CN_LEGAL_DOCS_VERSION: '2026-11' }]) {
+      const seam = invites();
+      expect(await code(planGoApplyEmailSignup({ consents: undefined, inviteCode: 'ABCDE-FGHJK' }, { env, invites: seam }))).toMatchObject({ code: 'signup_closed', status: 403 });
+      expect(seam.checked).toEqual([]);
+    }
+  });
+
+  it('requires the agreement, the age confirmation and, while data leaves the mainland, the cross-border consent', async () => {
     expect(await code(planGoApplyEmailSignup({ consents: granted('age_16_plus') }, { env: OPEN }))).toMatchObject({
       code: 'consent_required',
       status: 422,
       details: { missing: expect.arrayContaining(['pipl_basic_processing', 'pipl_cross_border']) },
     });
     expect(await code(planGoApplyEmailSignup({ consents: undefined }, { env: OPEN }))).toMatchObject({ code: 'consent_required' });
-    // Processed in the mainland (CN-1): no cross-border consent is asked for or stored.
-    const mainland = await planGoApplyEmailSignup({ consents: granted('pipl_basic_processing', 'age_16_plus') }, { env: { ...OPEN, DEPLOY_REGION: 'cn-mainland' } });
+    // A mainland deployment on the shared stack still sends data out of the mainland: the consent is required.
+    expect(await code(planGoApplyEmailSignup({ consents: granted('pipl_basic_processing', 'age_16_plus') }, { env: { ...OPEN, DEPLOY_REGION: 'cn-mainland' } }))).toMatchObject({
+      code: 'consent_required',
+      details: { missing: ['pipl_cross_border'] },
+    });
+    // Mainland, and every GoApply stack its own: nothing leaves, so the consent is neither asked for nor stored.
+    const own = { ...OPEN, ...CN_OWN_STACK_ENV };
+    const mainland = await planGoApplyEmailSignup({ consents: granted('pipl_basic_processing', 'age_16_plus') }, { env: own });
     expect(mainland.consentRows.map((r) => r.consentType).sort()).toEqual(['age_16_plus', 'pipl_basic_processing']);
-    const mainlandExtra = await planGoApplyEmailSignup({ consents: CN0 }, { env: { ...OPEN, DEPLOY_REGION: 'cn-mainland' } });
+    const mainlandExtra = await planGoApplyEmailSignup({ consents: CN0 }, { env: own });
     expect(mainlandExtra.consentRows.map((r) => r.consentType)).not.toContain('pipl_cross_border');
   });
 

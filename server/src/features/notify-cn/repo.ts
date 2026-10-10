@@ -18,8 +18,11 @@
 //     runs in a SERIALIZABLE transaction, so the pairing and the live-grant
 //     cap hold under concurrent taps and retries;
 //   - a delivered message stamps `SeekerNotification.pushSentAt` on the
-//     in-app row it mirrors (GoApply has no web push, so the column is free
-//     there; WP-39a carry-over).
+//     in-app row it mirrors, but only while the column is still empty. GoApply
+//     has web push too (owner ruling D5), which stamps the same column when a
+//     device took the message. So on a GoApply row `pushSentAt` means
+//     "mirrored to a device or to WeChat", the time of the web push when both
+//     happened. Nothing reads the column as a guard (WP-39a carry-over).
 // Schema request SR-73-1 (handoff) documents the token kind; no DDL needed.
 
 import crypto from 'node:crypto';

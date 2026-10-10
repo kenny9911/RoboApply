@@ -390,7 +390,8 @@ describe('getInvites', () => {
     h.setNow(new Date());
     const growth = createGrowthService({ db: h.fake as unknown as GrowthDb, attachReferral: h.service.attachFromSignup, now: () => new Date() });
     const checks: string[] = [];
-    const env = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' };
+    // No CN_SIGNUP_MODE: GoApply sign-up is open by default (D5), so no access code is involved.
+    const env = { NODE_ENV: 'test' };
     const phone = createPhoneAuthService({
       db: h.fake as unknown as AuthCnDb,
       otp: { verifyCode: async () => ({ otpId: 'otp1' }), spend: async () => undefined } as never,
@@ -439,7 +440,7 @@ describe('getInvites', () => {
     const crossPhone = createPhoneAuthService({
       db: other.fake as unknown as AuthCnDb,
       otp: { verifyCode: async () => ({ otpId: 'otp2' }), spend: async () => undefined } as never,
-      env: { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' },
+      env: { NODE_ENV: 'test' },
       now: () => new Date(),
       consume: async () => ({ allowed: true, retryAfterSec: 0, remaining: 1, windows: [] }),
       hooks: { recordAttribution: (u, t, o) => crossGrowth.recordAttribution(u, t, o), checkReferral: async () => undefined, grantPhoneCredit: async () => undefined },

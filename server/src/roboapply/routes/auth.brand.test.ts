@@ -99,12 +99,13 @@ const CN0 = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map((t
   // The hash of the text the form shows beside the box (the compliance catalog prose in Chinese).
   proseHash: resolveConsentProse(findConsentDefinition('goapply', type)!, getBrand('goapply'), 'zh').hash,
 }));
-const OPEN_ENV = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' };
+/** The default: sign-up is open with no CN_SIGNUP_MODE. */
+const OPEN_ENV = { NODE_ENV: 'test' };
 
 describe('SeekerAuthService brand stamping and gate', () => {
   it('signup writes User.brand from the request brand; no brand → column default', async () => {
     m.findUnique.mockResolvedValue(null);
-    // GoApply's own signup rules apply (features/auth/goapplySignup.ts); here in open mode.
+    // GoApply's own signup rules apply (features/auth/goapplySignup.ts); open mode is the default.
     await seekerAuthService.signup({ email: 'new@example.test', password: 'long-password1', brand: 'goapply', consents: CN0, env: OPEN_ENV });
     expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'goapply', market: 'cn' });
     await seekerAuthService.signup({ email: 'new2@example.test', password: 'long-password1', consents: AGE });
@@ -144,24 +145,41 @@ describe('legacy /auth routes pass the host brand', () => {
 
   const body = { email: 'u@example.test', password: 'right-password' };
 
-  it('email signup on the GoApply host goes through GoApply’s rules: no invite → 422, RoboApply’s agreement alone → 422, nothing created', async () => {
-    // Invite mode is the default; the full flow (invite spent in the
-    // transaction, consent rows with the prose hash) is covered on an
-    // in-memory database in features/auth/legacyAuth.test.ts.
+  it('email signup on the GoApply host goes through GoApply’s rules: its consents create a GoApply account with no invite; RoboApply’s agreement alone → 422', async () => {
+    // Open is the default. The full flow (consent rows with the prose hash, the
+    // invite and closed modes) is covered on an in-memory database in
+    // features/auth/legacyAuth.test.ts.
     m.findUnique.mockResolvedValue(null);
-    const noInvite = await h.request<{ code: string; details?: { missing?: boolean } }>('POST', '/api/v1/roboapply/auth/signup', {
-      host: GOAPPLY,
-      body: { ...body, password: 'long-password1', consents: CN0 },
-    });
-    expect([noInvite.status, noInvite.body.code, noInvite.body.details?.missing]).toEqual([422, 'invite_invalid', true]);
     const ageOnly = await h.request<{ code: string }>('POST', '/api/v1/roboapply/auth/signup', {
       host: GOAPPLY,
-      body: { ...body, password: 'long-password1', consents: AGE, inviteCode: 'ABCDE-FGHJK' },
+      body: { ...body, password: 'long-password1', consents: AGE },
     });
     expect([ageOnly.status, ageOnly.body.code]).toEqual([422, 'consent_required']);
     expect(m.userCreate).not.toHaveBeenCalled();
-    expect(noInvite.headers.get('set-cookie')).toBeNull();
     expect(ageOnly.headers.get('set-cookie')).toBeNull();
+
+    const created = await h.request<{ code?: string }>('POST', '/api/v1/roboapply/auth/signup', {
+      host: GOAPPLY,
+      body: { ...body, password: 'long-password1', consents: CN0 },
+    });
+    expect(created.status).toBe(201);
+    expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'goapply', market: 'cn' });
+  });
+
+  it('CN_SIGNUP_MODE=invite on the GoApply host: no invite code → 422 invite_invalid (missing), nothing created', async () => {
+    vi.stubEnv('CN_SIGNUP_MODE', 'invite');
+    try {
+      m.findUnique.mockResolvedValue(null);
+      const noInvite = await h.request<{ code: string; details?: { missing?: boolean } }>('POST', '/api/v1/roboapply/auth/signup', {
+        host: GOAPPLY,
+        body: { ...body, password: 'long-password1', consents: CN0 },
+      });
+      expect([noInvite.status, noInvite.body.code, noInvite.body.details?.missing]).toEqual([422, 'invite_invalid', true]);
+      expect(m.userCreate).not.toHaveBeenCalled();
+      expect(noInvite.headers.get('set-cookie')).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('email signup on the RoboApply host still creates a RoboApply account', async () => {

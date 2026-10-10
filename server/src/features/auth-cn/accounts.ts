@@ -150,7 +150,7 @@ export function currentSessionToken(req: Request): string | null {
   return typeof header === 'string' && header ? header : null;
 }
 
-/** First-value route for GoApply (R-14: /campus → /jobs → /resume). */
+/** First-value route for GoApply (/campus → /jobs → /resume; the campus calendar and the feed are on by default, D5). */
 export async function firstValueFor(brand: ProductBrand, env: EnvSource): Promise<string> {
   const [campusCalendar, jobsFeed] = await Promise.all([
     isEnabled('jobs.campusCalendar', { brand, env }),

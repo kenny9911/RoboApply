@@ -8,15 +8,15 @@
 // SMS provider never shows a dead form.
 //
 // G0 rules: every required consent has its own box (the agreement, the age
-// confirmation and, in CN-0, the cross-border consent), each unchecked and
+// confirmation and, while data leaves the mainland, the cross-border consent), each unchecked and
 // showing the text the sign-up policy serves; both buttons stay disabled
 // until all of them are ticked;
 // +86 only (`^1[3-9]\d{9}$`, "请输入正确的手机号"); 获取验证码 with a 60 s
 // countdown; one flow — a new number creates an account, a known one signs
-// in; invite code when sign-up is invite-only. The SMS carries only the code
+// in; invite code only when sign-up is invite-only (`CN_SIGNUP_MODE=invite`). The SMS carries only the code
 // and the brand name.
 
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
@@ -37,12 +37,12 @@ import {
   maskPhoneInput,
   normalizePhoneInput,
   OTP_RE,
-  prefillAccessCode,
   safeNextPath,
   shownConsentsFromPolicy,
   signupInputs,
   useCountdown,
   useSignupInputs,
+  useSignupInputsHost,
   useSignupPolicy,
 } from './shared';
 import styles from './AuthCn.module.css';
@@ -66,13 +66,9 @@ export function PhoneMethod({ mode, next, onSuccess }: AuthMethodProps) {
   const [error, setError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
 
-  // The phone form hosts the shared agreement boxes (the WeChat button reads them).
-  useEffect(() => {
-    signupInputs.set({ host: 'phone' });
-    // A closed-beta access code in the link (`?invite=`) starts the invite field.
-    prefillAccessCode();
-    return () => signupInputs.reset();
-  }, []);
+  // The phone form hosts the shared agreement boxes (the WeChat button reads
+  // them). A new number creates an account, so it needs them for sign-in too.
+  useSignupInputsHost('phone');
 
   const inviteMode = policy?.inviteRequired === true;
   const inviteVisible = inviteMode && (mode === 'signup' || showInvite);

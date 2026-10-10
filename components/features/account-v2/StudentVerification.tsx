@@ -2,7 +2,8 @@
 
 // StudentVerification — confirm a school email for the student price
 // (F-ACCT-02, V2; PRODUCT_PLAN.md §6.3). Shown in /settings#billing above the
-// plan sheet when the `student` capability is on (RoboApply). School address
+// plan sheet when the `student` capability is on (both brands; mainland
+// `*.edu.cn` addresses are eligible). School address
 // → 6-digit code by email → confirmed for 12 months; the student plans then
 // appear in the plan sheet. Renders nothing when the capability is off or the
 // storage is not there yet (`available: false`).

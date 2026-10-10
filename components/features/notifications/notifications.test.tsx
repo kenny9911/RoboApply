@@ -389,11 +389,22 @@ describe('NotificationsSettings (/settings#notifications)', () => {
     expect(screen.queryByRole('switch', { name: 'Job alerts: Email' })).toBeNull();
   });
 
-  it('when the brand does not send email, a user with an address is not told to add one', async () => {
+  it('when the brand does not send email, a user with an address is not told to add one, and there is no email summary to choose', async () => {
     setup(prefs({ availableChannels: ['in_app'], emailUnavailableReason: 'not_offered', channels: { ...prefs().channels, alert: ['in_app'], reminder: ['in_app'], tips: ['in_app'] } }));
     expect(await screen.findByRole('switch', { name: 'Send tips and reminders' })).toBeInTheDocument();
     expect(screen.queryByText(/Add an email address/)).toBeNull();
     expect(screen.queryByRole('switch', { name: 'Reminders: Email' })).toBeNull();
+    // The alert rows stay (the inbox still gets alerts); only the email summary goes.
+    expect(await screen.findByLabelText('Instant alerts')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email summary')).toBeNull();
+  });
+
+  it('GoApply by default (email through the shared transport, job alerts on): the same email switches and email summary as RoboApply', async () => {
+    const net = setup(prefs(), {}, { brand: 'goapply', flags: { 'jobs.alerts': true, 'notify.email': true } });
+    expect(await screen.findByRole('switch', { name: 'Job alerts: Email' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Reminders: Email' })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Email summary')).toBeInTheDocument();
+    expect(net.to('GET', SP)).toHaveLength(1);
   });
 
   it('RoboApply with job alerts on shows the per-search alert controls', async () => {
@@ -403,7 +414,7 @@ describe('NotificationsSettings (/settings#notifications)', () => {
     expect(net.to('GET', SP)).toHaveLength(1);
   });
 
-  it('GoApply with job alerts off has no alert controls and never asks for saved searches (R-04)', async () => {
+  it('GoApply with job alerts switched off (CN_RECRUITMENT_INFO_MODE=off) has no alert controls and never asks for saved searches', async () => {
     const net = setup(prefs({ configurableCategories: ['reminder', 'tips'] }), {}, { brand: 'goapply', flags: {} });
     expect(await screen.findByRole('switch', { name: 'Send tips and reminders' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Job alerts' })).toBeNull();
@@ -418,7 +429,7 @@ describe('NotificationsSettings (/settings#notifications)', () => {
     pushDevice.current = { status: 'off', available: true };
     const routes = { [`GET ${N}/preferences`]: () => ok(prefs({ availableChannels: ['in_app', 'email', 'push'] })) };
 
-    // Flag off (GoApply always; RoboApply until the VAPID keys are set): no opt-in, no dead entry.
+    // Flag off (either brand until VAPID keys are set, or FLAG_<BRAND>_WEB_PUSH=false): no opt-in, no dead entry.
     installFetch(routes);
     const off = renderUi(<NotificationsSettings />, { flags: { webPush: false, 'jobs.alerts': false } });
     await screen.findByRole('heading', { name: 'Where messages go' });
@@ -427,9 +438,17 @@ describe('NotificationsSettings (/settings#notifications)', () => {
     off.unmount();
 
     installFetch(routes);
-    renderUi(<NotificationsSettings />, { brand: 'goapply', flags: { webPush: false, 'jobs.alerts': false } });
+    const goOff = renderUi(<NotificationsSettings />, { brand: 'goapply', flags: { webPush: false, 'jobs.alerts': false } });
     await screen.findByRole('heading', { name: 'Where messages go' });
     expect(screen.queryByTestId('push-opt-in')).toBeNull();
+    goOff.unmount();
+
+    // GoApply with the flag on (the shared VAPID pair): the same opt-in as RoboApply.
+    installFetch(routes);
+    renderUi(<NotificationsSettings />, { brand: 'goapply', flags: { webPush: true, 'jobs.alerts': false } });
+    const group = (await screen.findByRole('heading', { name: 'Where messages go' })).closest('section')!;
+    const optIn = await within(group).findByTestId('push-opt-in');
+    expect(within(optIn).getByRole('button', { name: 'Get alerts on this device' })).toBeEnabled();
   });
 
   it('with web push on, the opt-in is inside "Where messages go", after the channel rows', async () => {

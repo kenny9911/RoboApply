@@ -17,11 +17,21 @@
 // through the subscribe upsert. It never requests permission and never
 // registers the service worker on load (ARCHITECTURE.md §8.4).
 //
+// A browser subscription is bound for life to the VAPID public key it was
+// created with. When the server starts signing with another key (a brand
+// moves from the shared pair to its own: CN_VAPID_* on GoApply), every send
+// to the old subscription is refused. So a subscription made with another
+// key than the one the server serves now is never reused: `enable()` replaces
+// it, and on mount a device that is "on" for this account is renewed quietly
+// (the permission is already granted and the worker already registered, so
+// nothing is asked). A browser that does not tell which key a subscription
+// uses is left alone.
+//
 // `forgetPushDeviceOnSignOut()` is for the sign-out flow: it deletes this
 // device's row (when it is the signed-in account's) and unsubscribes the
 // browser, so a signed-out account stops getting alerts on a shared device.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { createPushSubscription, deletePushSubscription, getVapidPublicKey, lookupPushSubscription } from '../../lib/api/push';
@@ -79,6 +89,29 @@ export function deviceLabel(userAgent: string): string {
             ? 'Linux'
             : null;
   return os ? `${browser} on ${os}` : browser;
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * True when `sub` was created with another VAPID key than `publicKey` (the
+ * one the server signs with now), so no send can reach it. False when they
+ * match and also when the browser does not expose the subscription's key or
+ * the served key cannot be read: unknown is never a reason to drop a
+ * working subscription.
+ */
+export function boundToAnotherKey(sub: PushSubscription, publicKey: string): boolean {
+  try {
+    const own = sub.options?.applicationServerKey;
+    if (!own) return false;
+    return !sameBytes(new Uint8Array(own), urlBase64ToUint8Array(publicKey));
+  } catch {
+    return false;
+  }
 }
 
 export function pushSupported(): boolean {
@@ -176,6 +209,28 @@ export async function forgetPushDeviceOnSignOut(): Promise<void> {
   if (timer) clearTimeout(timer);
 }
 
+/**
+ * The browser's subscription for the key the server serves now. One made
+ * with that key (or with a key the browser does not tell) is reused; one
+ * made with another key is dropped first, here and on the server (best
+ * effort: a row the server keeps is pruned after its failed sends), because
+ * `subscribe()` refuses a second key while the old subscription exists.
+ */
+async function subscriptionForKey(reg: ServiceWorkerRegistration, publicKey: string): Promise<PushSubscription> {
+  const existing = await reg.pushManager.getSubscription();
+  if (existing && !boundToAnotherKey(existing, publicKey)) return existing;
+  if (existing) {
+    try {
+      await deleteOwnRow(existing);
+    } catch {
+      /* the old row can no longer be delivered to; the server prunes it */
+    }
+    writeId(null);
+    await existing.unsubscribe();
+  }
+  return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+}
+
 function subscriptionBody(sub: PushSubscription) {
   const json = sub.toJSON();
   return {
@@ -191,6 +246,10 @@ export function usePushSubscription({ enabled = true }: { enabled?: boolean } = 
   const [status, setStatus] = useState<PushDeviceStatus>(supported ? 'checking' : 'unsupported');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<'failed' | null>(null);
+  /** This account's live subscription in this browser, as found on mount (null until then, or when it is not theirs). */
+  const ownedSub = useRef<PushSubscription | null>(null);
+  /** One quiet renewal per mount: a browser that keeps reporting the old key must not loop. */
+  const renewed = useRef(false);
 
   const vapid = useQuery({
     queryKey: VAPID_QUERY_KEY,
@@ -224,6 +283,7 @@ export function usePushSubscription({ enabled = true }: { enabled?: boolean } = 
         const id = await ownedSubscriptionId(sub, abort.signal);
         if (!live) return;
         writeId(id);
+        ownedSub.current = id ? sub : null;
         setStatus(id ? 'on' : 'off');
       } catch {
         if (live) setStatus('off');
@@ -234,6 +294,38 @@ export function usePushSubscription({ enabled = true }: { enabled?: boolean } = 
       abort.abort();
     };
   }, [supported]);
+
+  // The server signs with another key than this device's subscription was
+  // made with (see the header): renew it. This account already chose alerts
+  // here and the browser already granted them, so nothing is asked. If it
+  // cannot be renewed the device reads as off and a click tries again.
+  const servedKey = vapid.data?.publicKey ?? null;
+  useEffect(() => {
+    const stale = ownedSub.current;
+    if (!supported || status !== 'on' || !servedKey || !stale || renewed.current) return undefined;
+    if (!boundToAnotherKey(stale, servedKey)) return undefined;
+    renewed.current = true;
+    setPending(true);
+    // No "still mounted" guard on purpose: the renewal runs once per mount
+    // (`renewed`), so it must finish and clear `pending` even when React
+    // re-runs this effect (strict mode); a state update after unmount is a no-op.
+    void (async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/');
+        if (!reg || permission() !== 'granted') throw new Error('push_not_renewable');
+        const sub = await subscriptionForKey(reg, servedKey);
+        const view = await createPushSubscription(subscriptionBody(sub));
+        writeId(view.id);
+        ownedSub.current = sub;
+      } catch {
+        ownedSub.current = null;
+        setStatus('off');
+      } finally {
+        setPending(false);
+      }
+    })();
+    return undefined;
+  }, [supported, status, servedKey]);
 
   const enable = useCallback(async () => {
     if (!supported || !vapid.data) return false;
@@ -247,11 +339,10 @@ export function usePushSubscription({ enabled = true }: { enabled?: boolean } = 
       }
       const reg = await navigator.serviceWorker.register(PUSH_SW_URL, { scope: '/' });
       await navigator.serviceWorker.ready;
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapid.data.publicKey) }));
+      const sub = await subscriptionForKey(reg, vapid.data.publicKey);
       const view = await createPushSubscription(subscriptionBody(sub));
       writeId(view.id);
+      ownedSub.current = sub;
       setStatus('on');
       return true;
     } catch {
@@ -273,6 +364,7 @@ export function usePushSubscription({ enabled = true }: { enabled?: boolean } = 
       await deleteOwnRow(sub);
       writeId(null);
       if (sub) await sub.unsubscribe();
+      ownedSub.current = null;
       setStatus('off');
     } catch {
       setError('failed');

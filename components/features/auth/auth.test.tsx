@@ -5,7 +5,7 @@
 // reset pages and the settings pieces.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), search: '' }));
 const api = vi.hoisted(() => ({
@@ -40,10 +40,10 @@ vi.mock('../../../lib/api/authCn', async (importOriginal) => ({ ...(await import
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
 import { buildAuthValue, mockAuthState } from '../../../__tests__/utils/mockAuth';
 import { RoboApiError } from '../../../lib/api/client';
-import { AuthEntryView, filterAndOrder } from './AuthEntryView';
+import { AuthEntryView, filterAndOrder, placeAuthMethods } from './AuthEntryView';
 import { ForgotPasswordView, ResetPasswordView } from './PasswordResetViews';
 import { SignedInSessions, SignInMethods } from './SecuritySettings';
-import { AUTH_METHOD_REGISTRY, SECONDARY_AUTH_METHODS, layoutAuthMethods } from '../../auth/methods/registry';
+import { AUTH_METHOD_REGISTRY, SECONDARY_AUTH_METHODS, authMethodsFor, layoutAuthMethods } from '../../auth/methods/registry';
 import { signupInputs } from '../auth-cn/shared';
 import { SecurityCard } from '../../v3/account/security';
 
@@ -54,7 +54,7 @@ beforeEach(() => {
   nav.search = '';
   api.getAuthMethods.mockResolvedValue({ methods: [], country: null, pdpaNoticeRequired: false });
   api.getEntryJob.mockResolvedValue(null);
-  cnApi.getSignupPolicy.mockResolvedValue(CN0_INVITE_POLICY);
+  cnApi.getSignupPolicy.mockResolvedValue(CN0_POLICY);
   signupInputs.reset();
   mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null, refresh: vi.fn(async () => null) as never });
   Object.defineProperty(window, 'location', {
@@ -66,10 +66,10 @@ beforeEach(() => {
 
 const ON = { 'auth.google': true, 'auth.line': true, 'auth.passwordReset': true };
 
-/** GoApply while invite-only and processed outside the mainland (the defaults). */
-const CN0_INVITE_POLICY = {
+/** GoApply by default (D5): sign-up open, no invite code; data processed outside the mainland. */
+const CN0_POLICY = {
   signupOpen: true,
-  inviteRequired: true,
+  inviteRequired: false,
   // Each required consent with the text the form shows beside its box (the
   // compliance catalog prose), its version and its hash.
   requiredConsents: [
@@ -85,9 +85,15 @@ const CN0_INVITE_POLICY = {
   legal: { termsPath: '/legal/terms', privacyPath: '/legal/privacy' },
 };
 
+/** The operator made sign-up invite-only (`CN_SIGNUP_MODE=invite`). */
+const CN0_INVITE_POLICY = { ...CN0_POLICY, inviteRequired: true };
+
 function wireError(status: number, code: string, details?: Record<string, unknown>) {
   return new RoboApiError('x', { status, code, payload: { success: false, code, error: 'x', ...(details ? { details } : {}) } });
 }
+
+/** The email field when the forms are tabs (the tab panel is labelled "Email" too). */
+const emailBox = () => screen.getByRole('textbox', { name: 'Email' });
 
 function fill(label: RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -272,20 +278,54 @@ describe('login', () => {
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
   });
 
-  it('GoApply keeps email behind "其他方式" (Other ways to sign in) when another method exists', () => {
-    renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: { 'auth.wechatWeb': true } });
-    expect(screen.queryByLabelText(/^Email$/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
-    // The email form opens in place and takes focus.
+  it('GoApply shows the email form first, with nothing behind another control, when no other method is configured', () => {
+    renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: { 'auth.passwordReset': true } });
     expect(screen.getByLabelText(/^Email$/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Email$/)).toHaveFocus();
+    expect(screen.getByLabelText(/^Password$/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Other ways to sign in' })).toBeNull();
+    // One form: no tabs to choose from.
+    expect(screen.queryByRole('tablist')).toBeNull();
+    // Email works through the shared transport, so the reset link is there (the flag decides).
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
   });
 
-  it('GoApply with no other method available shows the email form at once (never an empty card)', () => {
-    renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: {} });
-    expect(screen.getByLabelText(/^Email$/)).toBeInTheDocument();
+  it('GoApply with WeChat configured: the email form is still first and open; WeChat sits below it with the agreement boxes', async () => {
+    renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: { 'auth.wechatWeb': true } });
+    const email = screen.getByLabelText(/^Email$/);
+    const wechat = await screen.findByRole('button', { name: 'Continue with WeChat' });
+    expect(email.compareDocumentPosition(wechat) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Other ways to sign in' })).toBeNull();
+    // A WeChat sign-in can create an account, and the sign-in form has no boxes of its own: WeChat shows the one set.
+    expect(await screen.findAllByRole('checkbox')).toHaveLength(3);
+    expect(wechat).toHaveAttribute('aria-disabled', 'true');
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+    expect(wechat).toHaveAttribute('aria-disabled', 'false');
+  });
+
+  it('GoApply with an SMS provider: the phone form is a tab beside the email form, and email is the open one', async () => {
+    renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: { 'auth.phoneOtp': true, 'auth.wechatWeb': true } });
+    const tabs = within(screen.getByRole('tablist', { name: 'Ways to sign in' })).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Email', 'Phone']);
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+    expect(emailBox()).toBeInTheDocument();
+    expect(screen.queryByLabelText('Phone number')).toBeNull();
+    // The sign-in form has no boxes, so the WeChat button below shows them (one set).
+    expect(await screen.findAllByRole('checkbox')).toHaveLength(3);
+
+    fireEvent.click(tabs[1]!);
+    expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Email' })).toBeNull();
+    // The phone form takes the boxes over: still one set on the page.
+    await waitFor(() => expect(screen.getByRole('tabpanel').querySelectorAll('input[type="checkbox"]')).toHaveLength(3));
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Continue with WeChat' })).toBeInTheDocument();
+
+    // Back to email: the boxes return to the WeChat button, never two sets and never none.
+    fireEvent.click(tabs[0]!);
+    expect(emailBox()).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(3));
+    expect(screen.getByRole('tabpanel').querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
   });
 
   it('RoboApply never hides the email form', () => {
@@ -346,8 +386,73 @@ describe('signup: `next` and the contextual title for the free tools', () => {
   });
 });
 
-describe('GoApply email sign-up (invite mode, CN-0 consents)', () => {
-  const openEmail = () => fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
+describe('GoApply email sign-up (open by default)', () => {
+  it('asks for no invite code: the email form with GoApply’s own boxes, all unticked, and nothing hidden', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    expect(screen.getByLabelText(/^Email$/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Other ways to sign in' })).toBeNull();
+    const boxes = await screen.findAllByRole('checkbox');
+    expect(boxes).toHaveLength(3);
+    for (const box of boxes) expect(box).not.toBeChecked();
+    expect(screen.queryByLabelText('Invite code')).toBeNull();
+    expect(screen.queryByText('Sign-up with email is not open yet. Existing accounts can still sign in.')).toBeNull();
+  });
+
+  it('creates the account with the consents and no invite code', async () => {
+    api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/consent' });
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    for (const box of await screen.findAllByRole('checkbox')) fireEvent.click(box);
+    fill(/^Email$/, 'xin@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/consent'));
+    const sent = api.signup.mock.calls[0]![0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('inviteCode');
+    expect((sent.consents as Array<{ type: string }>).map((c) => c.type)).toEqual(['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border']);
+  });
+
+  it('with WeChat configured the email sign-up form carries the one set of boxes and the WeChat button below reads them', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: { 'auth.wechatWeb': true } });
+    const wechat = await screen.findByRole('button', { name: 'Continue with WeChat' });
+    const boxes = await screen.findAllByRole('checkbox');
+    expect(boxes).toHaveLength(3);
+    const form = screen.getByLabelText(/^Email$/).closest('form')!;
+    for (const box of boxes) expect(form.contains(box)).toBe(true);
+    expect(form.compareDocumentPosition(wechat) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(wechat).toHaveAttribute('aria-disabled', 'true');
+    for (const box of boxes) fireEvent.click(box);
+    expect(wechat).toHaveAttribute('aria-disabled', 'false');
+  });
+
+  it('with an SMS provider the sign-up card opens on the email tab, which carries the boxes; the phone tab takes them over', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: { 'auth.phoneOtp': true } });
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Email', 'Phone']);
+    expect(emailBox()).toBeInTheDocument();
+    expect(await screen.findAllByRole('checkbox')).toHaveLength(3);
+    fireEvent.click(tabs[1]!);
+    expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(3));
+    // A tab change starts the boxes again: none is found ticked.
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
+  });
+});
+
+describe('GoApply email sign-up (CN_SIGNUP_MODE=closed)', () => {
+  it('says sign-up is closed before the form is filled in; RoboApply never shows it', async () => {
+    cnApi.getSignupPolicy.mockResolvedValue({ ...CN0_POLICY, signupOpen: false });
+    const go = renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    expect(await screen.findByTestId('signup-closed')).toHaveTextContent('Sign-up is not open yet. Existing accounts can still sign in.');
+    go.unmount();
+    renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
+    expect(screen.queryByTestId('signup-closed')).toBeNull();
+  });
+});
+
+describe('GoApply email sign-up (invite mode: CN_SIGNUP_MODE=invite, CN-0 consents)', () => {
+  beforeEach(() => {
+    cnApi.getSignupPolicy.mockResolvedValue(CN0_INVITE_POLICY);
+  });
 
   it('with no other method on the page the email form shows GoApply’s own boxes and the invite field, all unticked', async () => {
     renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
@@ -462,23 +567,25 @@ describe('GoApply email sign-up (invite mode, CN-0 consents)', () => {
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
-  it('next to the phone form it shares that form’s boxes instead of showing a second set', async () => {
+  it('next to the phone tab there is still one set of boxes and one invite field, and the email form sends their hashes', async () => {
     cnApi.getSignupPolicy.mockResolvedValue({ ...CN0_INVITE_POLICY, methods: { phoneOtp: true, wechatWeb: false, wechatInApp: false } });
     api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/consent' });
     renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: { 'auth.phoneOtp': true } });
     await screen.findByLabelText('Invite code');
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
-    openEmail();
-    // Still one set of boxes and one invite field.
-    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    // The phone tab and back: still one set of boxes and one invite field.
+    fireEvent.click(screen.getByRole('tab', { name: 'Phone' }));
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(3));
+    expect(screen.getAllByLabelText('Invite code')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('tab', { name: 'Email' }));
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(3));
     expect(screen.getAllByLabelText('Invite code')).toHaveLength(1);
     for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
     fill(/^Invite code$/, 'ABCDE-FGHJK');
-    fill(/^Email$/, 'xin@example.test');
+    fireEvent.change(emailBox(), { target: { value: 'xin@example.test' } });
     fill(/^Password$/, 'abcdefg1');
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     await waitFor(() => expect(api.signup).toHaveBeenCalledWith(expect.objectContaining({ inviteCode: 'ABCDE-FGHJK', consents: expect.any(Array) })));
-    // The shared boxes carry the same texts, so the email form still sends their hashes.
     const sent = (api.signup.mock.calls.at(-1)![0] as { consents: Array<{ proseHash?: string }> }).consents;
     expect(sent.map((c) => c.proseHash)).toEqual(['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)]);
   });
@@ -498,24 +605,31 @@ describe('GoApply email sign-up (invite mode, CN-0 consents)', () => {
   });
 });
 
-describe('which methods sit behind "Other ways to sign in"', () => {
+describe('where the methods sit on the card', () => {
   const R = AUTH_METHOD_REGISTRY;
   const ids = (list: Array<{ id: string }>) => list.map((m) => m.id);
 
-  it('GoApply: email is secondary while phone or WeChat is available; RoboApply has none', () => {
-    expect(SECONDARY_AUTH_METHODS).toEqual({ roboapply: [], goapply: ['email_password'] });
-    const go = layoutAuthMethods('goapply', [R.phone_otp, R.wechat, R.email_password]);
-    expect([ids(go.primary), ids(go.secondary)]).toEqual([['phone_otp', 'wechat'], ['email_password']]);
-    const wechatOnly = layoutAuthMethods('goapply', [R.wechat, R.email_password]);
-    expect([ids(wechatOnly.primary), ids(wechatOnly.secondary)]).toEqual([['wechat'], ['email_password']]);
+  it('no brand keeps a method behind "Other ways to sign in": email + password is first on both (D5)', () => {
+    expect(SECONDARY_AUTH_METHODS).toEqual({ roboapply: [], goapply: [] });
+    const go = layoutAuthMethods('goapply', authMethodsFor('goapply', { 'auth.phoneOtp': true, 'auth.wechatWeb': true }));
+    expect([ids(go.primary), ids(go.secondary)]).toEqual([['email_password', 'phone_otp', 'wechat'], []]);
+    const bare = layoutAuthMethods('goapply', authMethodsFor('goapply', {}));
+    expect([ids(bare.primary), ids(bare.secondary)]).toEqual([['email_password'], []]);
     const robo = layoutAuthMethods('roboapply', [R.email_password, R.google]);
     expect([ids(robo.primary), ids(robo.secondary)]).toEqual([['email_password', 'google'], []]);
+    expect(layoutAuthMethods('goapply', [])).toEqual({ primary: [], secondary: [] });
   });
 
-  it('a secondary method moves up when nothing else is available', () => {
-    const alone = layoutAuthMethods('goapply', [R.email_password]);
-    expect([ids(alone.primary), ids(alone.secondary)]).toEqual([['email_password'], []]);
-    expect(layoutAuthMethods('goapply', [])).toEqual({ primary: [], secondary: [] });
+  it('forms keep the brand order (email first); provider buttons go above them, WeChat below', () => {
+    const go = placeAuthMethods(authMethodsFor('goapply', { 'auth.phoneOtp': true, 'auth.wechatInApp': true }));
+    expect([ids(go.forms), ids(go.before), ids(go.after)]).toEqual([['email_password', 'phone_otp'], [], ['wechat']]);
+    // SMS_DEV_CONSOLE turns only `auth.phoneOtp` on: the phone tab appears next to email.
+    expect(ids(placeAuthMethods(authMethodsFor('goapply', { 'auth.phoneOtp': true })).forms)).toEqual(['email_password', 'phone_otp']);
+    const robo = placeAuthMethods(authMethodsFor('roboapply', { 'auth.google': true, 'auth.line': true }));
+    expect([ids(robo.forms), ids(robo.before), ids(robo.after)]).toEqual([['email_password'], ['google', 'line'], []]);
+    // Google and LINE stay RoboApply's; phone and WeChat stay GoApply's.
+    expect(ids(authMethodsFor('goapply', { 'auth.google': true, 'auth.line': true }))).toEqual(['email_password']);
+    expect(ids(authMethodsFor('roboapply', { 'auth.phoneOtp': true, 'auth.wechatWeb': true }))).toEqual(['email_password']);
   });
 });
 
