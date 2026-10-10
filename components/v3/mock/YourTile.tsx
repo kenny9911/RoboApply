@@ -5,9 +5,85 @@
 // states (proto `YourVideoTile`). Voice mode shows the avatar + mic-viz
 // (proto `.iv-you`). `active` = mic open (interviewer is listening).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { MicViz } from './MicViz';
+import { classifyMediaError, isDeviceFailure, mediaUnavailableReason, type DeviceState } from './deviceState';
+
+function stopTracks(stream: MediaStream | null) {
+  if (!stream) return;
+  for (const track of stream.getTracks()) {
+    try { track.stop(); } catch { /* already stopped */ }
+  }
+}
+
+export interface LocalCameraPreview {
+  /** The local camera stream while the preview is on. Never published. */
+  stream: MediaStream | null;
+  state: DeviceState;
+  /** The preview is showing. */
+  on: boolean;
+  /** The candidate (or the initial state) asked for the preview at least once. */
+  tried: boolean;
+  start: () => void;
+  stop: () => void;
+}
+
+/**
+ * The candidate's camera as a LOCAL self-view only (WP-63a, CN L-11): the
+ * stream comes straight from getUserMedia and is never handed to the room, so
+ * no video track is published, recorded or analysed. GoApply's live room uses
+ * this in video mode. A getUserMedia that answers after it was superseded
+ * (toggle, unmount) stops its own stream so the camera light never sticks.
+ * `offState` is shown while it starts off (e.g. why the device check failed).
+ */
+export function useLocalCameraPreview(initiallyOn: boolean, offState: DeviceState = 'off'): LocalCameraPreview {
+  const [wanted, setWanted] = useState(initiallyOn);
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<DeviceState>(initiallyOn ? 'checking' : offState);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const genRef = useRef(0);
+
+  useEffect(() => {
+    const gen = ++genRef.current;
+    if (!wanted) {
+      setState((s) => (isDeviceFailure(s) ? s : 'off'));
+      return undefined;
+    }
+    const unavailable = mediaUnavailableReason();
+    if (unavailable) {
+      setState(unavailable);
+      return undefined;
+    }
+    let current: MediaStream | null = null;
+    setState('checking');
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then((s) => {
+        if (gen !== genRef.current) { stopTracks(s); return; }
+        current = s;
+        setStream(s);
+        setState('ok');
+      })
+      .catch((err: unknown) => {
+        if (gen !== genRef.current) return;
+        setState(classifyMediaError(err));
+      });
+    return () => {
+      genRef.current += 1;
+      stopTracks(current);
+      setStream(null);
+    };
+  }, [wanted, attempt]);
+
+  const start = useCallback(() => {
+    setWanted(true);
+    setAttempt((a) => a + 1);
+  }, []);
+  const stop = useCallback(() => setWanted(false), []);
+
+  return { stream, state, on: wanted && state === 'ok' && stream !== null, tried: initiallyOn || attempt > 0, start, stop };
+}
 
 type PermState = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable';
 

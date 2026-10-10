@@ -64,3 +64,73 @@ export function qualityLevel(quality: ConnectionQuality): QualityLevel | null {
       return null;
   }
 }
+
+// ─── Camera plan per brand (WP-63a, CN L-11) ──────────────────────────────
+
+export interface CameraPlanInput {
+  mode: 'voice' | 'video';
+  /** From the connection: false = the brand keeps the camera local (absent on older APIs). */
+  cameraPublish?: boolean;
+  /** The brand's market; GoApply ('cn') never publishes a camera. */
+  market: 'intl' | 'cn';
+  /** The camera worked in the device check (or there was no check: a rejoin). */
+  deviceOk: boolean;
+}
+
+export interface CameraPlan {
+  /** Publish a camera track to the room (the interviewer side can receive it). */
+  publish: boolean;
+  /** The camera, if shown at all, is a local self-view from a stream that is
+   *  never sent. Decided by the brand alone, so a later "Start camera" can
+   *  never fall through to publishing. */
+  localPreview: boolean;
+  /** The local preview starts on when the room opens (it worked in the check). */
+  previewStartsOn: boolean;
+}
+
+/** Where the candidate's camera goes. On GoApply — or whenever the server
+ *  says so — it is a local self-view only: no video track is ever published,
+ *  even when the camera failed the device check and is turned on later. */
+export function cameraPlan({ mode, cameraPublish, market, deviceOk }: CameraPlanInput): CameraPlan {
+  if (mode !== 'video') return { publish: false, localPreview: false, previewStartsOn: false };
+  const localOnly = cameraPublish === false || market === 'cn';
+  if (localOnly) return { publish: false, localPreview: true, previewStartsOn: deviceOk };
+  return { publish: deviceOk, localPreview: false, previewStartsOn: false };
+}
+
+// ─── Copy the practice namespace does not carry yet ──────────────────────────
+//
+// The live-room copy for the network check and the GoApply local-only camera
+// note is requested from the `practice` namespace owner (WP-43). Until those
+// keys exist, `t.has` is false and the caller shows existing copy or nothing —
+// never the literal key path (next-intl renders a missing key as its path).
+// Once the keys land, the requested wording shows with no code change.
+
+export const PENDING_LIVE_COPY = Object.freeze({
+  camLocalOnly: 'live.cam.localOnly',
+  camLocalOnlyShort: 'live.cam.localOnlyShort',
+  networkLabel: 'live.network.label',
+  networkChecking: 'live.network.checking',
+  networkGood: 'live.network.good',
+  networkFair: 'live.network.fair',
+  networkPoor: 'live.network.poor',
+  networkFairBody: 'live.network.fairBody',
+  networkPoorBody: 'live.network.poorBody',
+  networkSwitchToText: 'live.network.switchToText',
+  networkSwitching: 'live.network.switching',
+  networkRetry: 'live.network.retry',
+});
+
+export type PendingLiveCopy = keyof typeof PENDING_LIVE_COPY;
+
+/** The translator of `useTranslations('practice')`, as far as this needs it. */
+export interface LiveCopyTranslator {
+  (key: string): string;
+  has(key: string): boolean;
+}
+
+/** A requested `practice.*` string when it exists, else null. */
+export function pendingLiveCopy(t: LiveCopyTranslator, id: PendingLiveCopy): string | null {
+  const key = PENDING_LIVE_COPY[id];
+  return t.has(key) ? t(key) : null;
+}

@@ -20,18 +20,25 @@ import { EncodedFileOutput, EncodedFileType, S3Upload, type EgressInfo } from '@
 import { getLiveKitCreds, getLiveKitHttpUrl, getR2Creds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
-let egressClient: EgressClient | null = null;
+// Per brand (WP-63a): the LiveKit project and the bucket are those of the
+// current unit of work's brand — GoApply recordings go to CN_S3_* only, and
+// the provider (../providers/) forces them audio-only.
+const egressClients = new Map<string, EgressClient>();
 
 function getEgressClient(): EgressClient {
-  if (!egressClient) {
-    const { apiKey, apiSecret } = getLiveKitCreds();
-    egressClient = new EgressClient(getLiveKitHttpUrl(), apiKey, apiSecret);
+  const { apiKey, apiSecret } = getLiveKitCreds();
+  const url = getLiveKitHttpUrl();
+  const key = `${url}|${apiKey}`;
+  let client = egressClients.get(key);
+  if (!client) {
+    client = new EgressClient(url, apiKey, apiSecret);
+    egressClients.set(key, client);
   }
-  return egressClient;
+  return client;
 }
 
 export function __resetEgressClientForTest(): void {
-  egressClient = null;
+  egressClients.clear();
 }
 
 /**

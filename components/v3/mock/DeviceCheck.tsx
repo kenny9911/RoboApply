@@ -15,6 +15,11 @@
 //
 // Every stream opened here is stopped before onJoin fires, so LiveKit can open
 // the same devices without a "device in use" race on Windows/Firefox.
+//
+// WP-63a: with `networkProbe` the check also rates the connection
+// (NetworkPrecheck) and, on a weak one, offers the written practice. With
+// `cameraLocalOnly` (GoApply) it says the camera is shown to the candidate
+// alone — it is never sent or recorded.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -22,6 +27,8 @@ import { useTranslations } from 'next-intl';
 import { Btn } from '../primitives/Btn';
 import { IconCamera, IconMic } from '../primitives/Iconset';
 import type { InterviewMode } from '../../../lib/api/interviewEngine';
+import { NetworkPrecheck, type NetworkAssessment } from '../../features/practice/NetworkPrecheck';
+import { pendingLiveCopy, type LiveCopyTranslator } from './liveConnection';
 import {
   classifyMediaError,
   isDeviceFailure,
@@ -44,6 +51,14 @@ interface Props {
   busy?: boolean;
   onJoin: (result: DeviceCheckResult) => void;
   onBack: () => void;
+  /** One small request to our server; enables the connection check. */
+  networkProbe?: () => Promise<unknown>;
+  /** Offered when the connection is weak: do this practice in writing. */
+  onSwitchToText?: () => void;
+  switchingToText?: boolean;
+  onNetworkResult?: (result: NetworkAssessment) => void;
+  /** The camera stays a local preview (GoApply): say so under the preview. */
+  cameraLocalOnly?: boolean;
 }
 
 type Kind = 'mic' | 'camera';
@@ -55,9 +70,22 @@ function stopStream(stream: MediaStream | null) {
   }
 }
 
-export function DeviceCheck({ mode, rejoin = false, busy = false, onJoin, onBack }: Props) {
+export function DeviceCheck({
+  mode,
+  rejoin = false,
+  busy = false,
+  onJoin,
+  onBack,
+  networkProbe,
+  onSwitchToText,
+  switchingToText = false,
+  onNetworkResult,
+  cameraLocalOnly = false,
+}: Props) {
   const t = useTranslations('practice');
   const video = mode === 'video';
+  // Requested copy (practice.live.cam.localOnly); nothing until it exists.
+  const localOnlyNote = cameraLocalOnly ? pendingLiveCopy(t as unknown as LiveCopyTranslator, 'camLocalOnly') : null;
 
   const [mic, setMic] = useState<DeviceState>('idle');
   const [camera, setCamera] = useState<DeviceState>(video ? 'idle' : 'off');
@@ -225,6 +253,7 @@ export function DeviceCheck({ mode, rejoin = false, busy = false, onJoin, onBack
             ) : null}
           </div>
         ) : null}
+        {video && localOnlyNote ? <p className={styles.localOnly}>{localOnlyNote}</p> : null}
 
         <ul className={styles.devices}>
           <DeviceRow
@@ -240,6 +269,14 @@ export function DeviceCheck({ mode, rejoin = false, busy = false, onJoin, onBack
               onRetry={() => void open('camera')}
             />
           ) : null}
+          {networkProbe ? (
+            <NetworkPrecheck
+              probe={networkProbe}
+              onSwitchToText={onSwitchToText}
+              switching={switchingToText}
+              onResult={onNetworkResult}
+            />
+          ) : null}
         </ul>
 
         {!micReady && !stillChecking ? (
@@ -247,11 +284,11 @@ export function DeviceCheck({ mode, rejoin = false, busy = false, onJoin, onBack
         ) : null}
 
         <div className={styles.actions}>
-          <Btn onClick={onBack} disabled={busy}>{t('live.backToSetup')}</Btn>
+          <Btn onClick={onBack} disabled={busy || switchingToText}>{t('live.backToSetup')}</Btn>
           <Btn
             variant="primary"
             onClick={join}
-            disabled={!micReady || busy || (video && (camera === 'checking' || camera === 'idle'))}
+            disabled={!micReady || busy || switchingToText || (video && (camera === 'checking' || camera === 'idle'))}
           >
             {joinLabel}
           </Btn>
