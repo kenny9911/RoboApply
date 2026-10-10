@@ -12,6 +12,11 @@
 // in-app browser banner on downloads; `trackerEntryId` records the exact file
 // on an application.
 //
+// WP-65: `photo` (a data URL kept on this device) travels in the POST body and
+// the renderer places it; it is never stored. A file recorded on an
+// application (`trackerEntryId`) is stored, so the server makes it without
+// the photo on every brand (X-Photo-Omitted).
+//
 // Modal panel uses a LITERAL solid background (CLAUDE.md rule).
 
 import { useState } from 'react';
@@ -36,6 +41,8 @@ interface Props {
   aiAssisted?: boolean;
   /** Record the exact file on this application. */
   trackerEntryId?: string | null;
+  /** WP-65: a photo kept on this device, placed in the PDF/DOCX (never stored on the server). */
+  photo?: string | null;
   onClose: () => void;
 }
 
@@ -56,6 +63,7 @@ export function DownloadModal({
   unverifiedClaims = 0,
   aiAssisted = false,
   trackerEntryId = null,
+  photo = null,
   onClose,
 }: Props) {
   const t = useTranslations('resume');
@@ -73,7 +81,7 @@ export function DownloadModal({
       setBusy(format);
       setError(false);
       try {
-        await downloadResumeExport(resumeId, { format, nameStyle, trackerEntryId }, resumeName);
+        await downloadResumeExport(resumeId, { format, nameStyle, trackerEntryId, ...(photo ? { photo } : {}) }, resumeName);
         onClose();
       } catch (err) {
         if (apiErrorCode(err) === 'unverified_claims') {

@@ -14,12 +14,16 @@
 // font, accent, spacing and date format, mirroring the server export
 // (server/src/roboapply/v2/lib/resumeExport.ts). Document styling only — this
 // file is résumé typography (ruling C25), not app chrome.
+//
+// WP-65: sections follow the resume's own order and titles (实习经历, 自我评价…;
+// `StructuredResume.order` / `headings`), and the header shows the personal
+// details line and the device photo the export will place.
 
 import type { CSSProperties, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Markdown } from '../primitives';
-import type { StructuredResume } from '../../../lib/resumeStructure';
+import { knownOrder, type KnownSectionKind, type StructuredResume } from '../../../lib/resumeStructure';
 import {
   SPACING_PRESETS,
   formatDatesIn,
@@ -44,7 +48,21 @@ const DOC_FONTS = {
   serif: '"Times New Roman", Times, serif',
 } as const;
 
-export function ResumePaper({ resume, layout }: { resume: StructuredResume; layout?: ResolvedLayout | null }) {
+export function ResumePaper({
+  resume,
+  layout,
+  personalLine,
+  photo,
+  photoAlt,
+}: {
+  resume: StructuredResume;
+  layout?: ResolvedLayout | null;
+  /** The personal details line the export prints (GoApply 籍贯 / 政治面貌), or null. */
+  personalLine?: string | null;
+  /** The device photo the download will place (data URL), or null. */
+  photo?: string | null;
+  photoAlt?: string;
+}) {
   const t = useTranslations('resume');
   const {
     contact,
@@ -56,6 +74,10 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
     extraSections,
   } = resume;
   const dateFormat: DateFormat = layout?.dateFormat ?? 'as_written';
+  // WP-65: the saved bullet mark, justify, skills layout and education order,
+  // drawn the way the export draws them.
+  const bulletStyle: CSSProperties | undefined =
+    layout?.bullet === 'hollow' ? { listStyleType: 'circle' } : layout?.bullet === 'dash' ? { listStyleType: '"– "' } : undefined;
 
   const contactBits = [contact.email, contact.phone, contact.location].filter(
     Boolean,
@@ -78,11 +100,12 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
     }
   };
 
-  pushExtras(null);
+  const blocks: Record<KnownSectionKind, () => void> = {} as Record<KnownSectionKind, () => void>;
+  blocks.summary = () => {
   if (summary) {
     sections.push({
       key: 'summary',
-      title: t('section.summary'),
+      title: resume.headings?.summary ?? t('section.summary'),
       node: (
         <div className="rb-paper-text">
           <Markdown>{summary}</Markdown>
@@ -90,11 +113,12 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
       ),
     });
   }
-  pushExtras('summary');
+  };
+  blocks.experiences = () => {
   if (experiences.length) {
     sections.push({
       key: 'experience',
-      title: t('section.experience'),
+      title: resume.headings?.experiences ?? t('section.experience'),
       node: experiences.map((e) => (
         <div key={e.id} className="rb-paper-exp">
           <div className="rb-paper-exp-head">
@@ -107,7 +131,7 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
           </div>
           {e.location ? <div className="rb-paper-exp-loc">{e.location}</div> : null}
           {e.bullets.length ? (
-            <ul className="rb-paper-bullets">
+            <ul className="rb-paper-bullets" style={bulletStyle}>
               {e.bullets.map((b, i) => (
                 <li key={i}>
                   <Markdown>{b}</Markdown>
@@ -119,11 +143,12 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
       )),
     });
   }
-  pushExtras('experiences');
+  };
+  blocks.education = () => {
   if (education.length) {
     sections.push({
       key: 'education',
-      title: t('section.education'),
+      title: resume.headings?.education ?? t('section.education'),
       node: education.map((ed) => (
         <div key={ed.id} className="rb-paper-edu">
           <div className="rb-paper-exp-head">
@@ -135,7 +160,7 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
             <div className="rb-paper-exp-when">{dateRange(ed.startDate, ed.endDate, dateFormat)}</div>
           </div>
           {ed.bullets.length ? (
-            <ul className="rb-paper-bullets">
+            <ul className="rb-paper-bullets" style={bulletStyle}>
               {ed.bullets.map((b, i) => (
                 <li key={i}>
                   <Markdown>{b}</Markdown>
@@ -147,15 +172,31 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
       )),
     });
   }
-  pushExtras('education');
+  };
+  blocks.skills = () => {
   if (skills.length) {
     sections.push({
       key: 'skills',
-      title: t('section.skills'),
-      node: <div className="rb-paper-text">{skills.join(' · ')}</div>,
+      title: resume.headings?.skills ?? t('section.skills'),
+      node:
+        layout?.skillsLayout === 'columns' ? (
+          <ul className="rb-paper-text" data-skills="columns" style={{ columns: 3, columnGap: 16, listStyle: 'none', margin: 0, padding: 0 }}>
+            {skills.map((sk, i) => (
+              <li key={i}>{sk}</li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rb-paper-text">{skills.join(' · ')}</div>
+        ),
     });
   }
-  pushExtras('skills');
+  };
+
+  pushExtras(null);
+  for (const kind of withEduOrder(knownOrder(resume), layout?.eduOrder)) {
+    blocks[kind]();
+    pushExtras(kind);
+  }
 
   // ── Layout → inline document styles ──
   const template = layout?.template ?? null;
@@ -189,7 +230,9 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
         fontSize: template === 'structured' ? 10.5 : 12.5,
       }
     : undefined;
-  const secStyle: CSSProperties | undefined = layout ? { marginBottom: Math.round(spacing!.section * 1.4) } : undefined;
+  const secStyle: CSSProperties | undefined = layout
+    ? { marginBottom: Math.round(spacing!.section * 1.4), ...(layout.justify ? { textAlign: 'justify' as const } : null) }
+    : undefined;
 
   const renderSection = (s: { key: string; title: string; node: ReactNode }) => (
     <PaperSection key={s.key} title={s.title} style={secStyle} titleStyle={titleStyle}>
@@ -203,7 +246,12 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
 
   return (
     <div className="rb-paper" style={paperStyle} data-template={template ?? undefined} data-page={layout?.page}>
-      <div className="rb-paper-head" style={headStyle}>
+      <div className="rb-paper-head" style={photo ? { ...headStyle, position: 'relative', paddingRight: 84, minHeight: 104 } : headStyle}>
+        {photo ? (
+          // A data: URL from this device (never uploaded); next/image adds nothing.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo} alt={photoAlt ?? ''} style={{ position: 'absolute', top: 0, right: 0, width: 64, height: 90, objectFit: 'cover' }} />
+        ) : null}
         <h1 className="rb-paper-name" style={nameStyle}>{contact.fullName || t('paper.your_name')}</h1>
         {targetTitle ? <div className="rb-paper-title">{targetTitle}</div> : null}
         {contactBits.length ? (
@@ -212,6 +260,7 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
         {contact.links.length ? (
           <div className="rb-paper-links">{contact.links.join(' · ')}</div>
         ) : null}
+        {personalLine ? <div className="rb-paper-contact" data-testid="paper-personal">{personalLine}</div> : null}
       </div>
 
       {twoColumn ? (
@@ -224,6 +273,20 @@ export function ResumePaper({ resume, layout }: { resume: StructuredResume; layo
       )}
     </div>
   );
+}
+
+/** Education before / after experience when the layout says so (the export's rule). */
+export function withEduOrder(kinds: KnownSectionKind[], eduOrder: ResolvedLayout['eduOrder'] | undefined): KnownSectionKind[] {
+  if (!eduOrder || eduOrder === 'as_written') return kinds;
+  const edu = kinds.indexOf('education');
+  const exp = kinds.indexOf('experiences');
+  if (edu < 0 || exp < 0) return kinds;
+  const wantBefore = eduOrder === 'before_experience';
+  if ((wantBefore && edu < exp) || (!wantBefore && edu > exp)) return kinds;
+  const rest: KnownSectionKind[] = kinds.filter((k) => k !== 'education');
+  const at = rest.indexOf('experiences');
+  rest.splice(wantBefore ? at : at + 1, 0, 'education');
+  return rest;
 }
 
 function PaperSection({

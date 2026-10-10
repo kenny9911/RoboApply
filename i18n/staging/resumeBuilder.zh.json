@@ -1,0 +1,274 @@
+{
+  "resumeBuilder": {
+    "header": {
+      "eyebrow": "简历",
+      "title": "一步步写一份简历",
+      "sub": "回答几个简短的问题。标为可选的步骤可以跳过，之后都能在编辑器里修改。"
+    },
+    "loading": "正在加载…",
+    "loadError": "加载失败。请检查网络后重试。",
+    "retry": "重试",
+    "stepsLabel": "填写步骤",
+    "progress": "第 {current} 步，共 {total} 步",
+    "step": {
+      "basics": { "title": "基本信息", "hint": "你的姓名和联系方式。" },
+      "intent": { "title": "求职意向", "hint": "你想应聘的职位，会写在简历最上方。" },
+      "summary": { "title": "个人简介", "hint": "用两三句话说明你做什么、想找什么工作。" },
+      "education": { "title": "教育经历", "hint": "学校、学历和起止时间。成绩或排名可选填。" },
+      "experience": { "title": "工作经历", "hint": "按时间倒序填写。" },
+      "internship": { "title": "实习经历", "hint": "按时间倒序填写。" },
+      "projects": { "title": "项目经历", "hint": "课程、个人或工作项目，能体现你的能力即可。" },
+      "campus": { "title": "校园经历", "hint": "社团、学生会、志愿服务和担任的职务。" },
+      "skills": { "title": "专业技能", "hint": "你熟悉、也愿意被问到的工具和技能。" },
+      "certificates": { "title": "技能证书", "hint": "证书、语言考试和资格证。需要的话可以写上分数。" },
+      "awards": { "title": "获奖情况", "hint": "奖学金、竞赛和荣誉，每行一项。" },
+      "selfEvaluation": { "title": "自我评价", "hint": "用自己的话写一小段，说明你的优势。" },
+      "autobiography": { "title": "自传", "hint": "你的背景、成长经历，以及为什么想做这类工作。" },
+      "personal": { "title": "照片和个人信息", "hint": "都是可选项，不想填的可以留空。" },
+      "review": { "title": "检查", "hint": "逐项确认后创建简历，创建后会在编辑器中打开。" }
+    },
+    "docLanguage": {
+      "label": "简历语言",
+      "hint": "简历正文使用的语言。之后下载时可以把栏目标题换成另一种语言。",
+      "en": "英文",
+      "zh": "简体中文",
+      "zhTW": "繁体中文"
+    },
+    "field": {
+      "fullName": "姓名",
+      "email": "邮箱",
+      "phone": "手机号",
+      "city": "所在城市",
+      "links": "链接",
+      "linksHint": "作品集、GitHub 等，用逗号分隔。",
+      "targetTitle": "意向职位",
+      "cities": "意向城市",
+      "availableFrom": "到岗时间",
+      "salary": "期望薪资",
+      "salaryKind": {
+        "none": "不写",
+        "company_policy": "依公司规定",
+        "negotiable": "面议",
+        "amount": "写明金额"
+      },
+      "salaryAmount": "金额",
+      "salaryAmountHint": "按你平时的说法写，例如月薪范围。",
+      "school": "学校",
+      "degree": "学历",
+      "major": "专业",
+      "gpa": "成绩或排名（可选）",
+      "start": "开始时间",
+      "end": "结束时间",
+      "endHint": "如果仍在进行，请留空。",
+      "details": "主修课程、毕业论文等",
+      "detailsHint": "每行一项，可选。",
+      "title": "职位",
+      "organization": "公司或单位",
+      "campusTitle": "职务",
+      "campusOrganization": "社团或组织",
+      "location": "地点",
+      "notes": "你在这里做了什么？",
+      "notesHint": "随手记下就行：做了什么、怎么做的、有什么结果。只会使用你在这里写的内容。",
+      "bullets": "要点",
+      "moreBullets": "补充要点",
+      "projectName": "项目名称",
+      "role": "你的角色",
+      "link": "链接（可选）",
+      "star": {
+        "situation": "背景（S）",
+        "situationHint": "当时的情况或要解决的问题是什么？",
+        "task": "任务（T）",
+        "taskHint": "你负责什么？",
+        "action": "行动（A）",
+        "actionHint": "你具体做了哪些事？",
+        "result": "结果（R）",
+        "resultHint": "你的工作带来了什么变化？只写真实的数字。"
+      },
+      "skills": "技能",
+      "certificates": "证书",
+      "certificatesHint": "点一下即可添加，需要的话再补上分数。",
+      "awards": "获奖",
+      "awardsHint": "每行一项，写上年份。",
+      "summary": "个人简介",
+      "summaryHint": "简短说明你做什么、擅长什么、想找什么工作。",
+      "selfEvaluation": "自我评价",
+      "selfEvaluationHint": "三四句话即可，每提到一个优点就举一个例子。",
+      "autobiography": "自传",
+      "autobiographyHint": "分几段写：你的背景、学到了什么、为什么想做这类工作。",
+      "nativePlace": "籍贯",
+      "politicalStatus": "政治面貌",
+      "add": "添加",
+      "addBullet": "添加一条要点",
+      "bulletN": "第 {n} 条要点",
+      "removeBullet": "删除第 {n} 条要点",
+      "removeTag": "删除 {tag}",
+      "quickAdd": "快速添加"
+    },
+    "prompts": {
+      "bullets": "每条要点先写做了什么，再写怎么做，最后写结果。数字必须真实。",
+      "star": "每个项目分四部分简短描述：背景、任务、行动、结果。"
+    },
+    "entry": {
+      "label": "第 {n} 项",
+      "remove": "删除",
+      "add": {
+        "education": "再添加一段教育经历",
+        "experience": "再添加一段工作经历",
+        "internship": "再添加一段实习",
+        "projects": "再添加一个项目",
+        "campus": "再添加一段校园经历"
+      }
+    },
+    "ai": {
+      "off": "你的账号未开启写作帮助，这里的内容不会发送给 AI 模型。每一部分都可以自己填写。",
+      "suggestBullets": "根据我的记录给出要点建议",
+      "suggestSummary": "给出个人简介建议",
+      "suggestSelfEvaluation": "给出自我评价建议",
+      "busy": "正在生成建议…",
+      "notesFirst": "请先写几句记录。建议只会使用你写的内容。",
+      "note": "由 AI 根据你的记录生成。请逐条阅读，只添加属实的内容。",
+      "add": "添加",
+      "use": "使用这段",
+      "blocked": "{count, plural, other {有 # 条建议加入了你没写过的数字，已被去掉。}}",
+      "errors": {
+        "unavailable": "写作帮助暂时不可用，你可以继续自己填写。",
+        "credits": "改写次数已用完，你可以继续自己填写。",
+        "blocked": "这段内容无法使用，请换个说法再试。",
+        "citationGuard": "所有建议都加入了你记录中没有的数字，因此没有显示。未扣除改写次数。",
+        "noSuggestion": "没有生成建议，未扣除改写次数。请重试，或在记录里多写一些细节。",
+        "generic": "出了点问题，未扣除改写次数。请重试。"
+      }
+    },
+    "personal": {
+      "intro": "以下信息都是可选的，只会印在下载的文件上，不会发送给 AI 模型，也不会用于职位排序。"
+    },
+    "photo": {
+      "label": "在下载的文件中加入我的照片",
+      "hint": "照片只保存在这个浏览器里，下载时才会加入，不会保存到我们的服务器。",
+      "alt": "简历照片",
+      "choose": "选择照片",
+      "replace": "更换照片",
+      "remove": "删除照片",
+      "errors": {
+        "unsupported": "请使用 JPEG 或 PNG 格式的照片。",
+        "tooLarge": "照片太大了，请换一张小一点的。"
+      }
+    },
+    "review": {
+      "filled": "已填写",
+      "empty": "未填写",
+      "edit": "修改",
+      "editStep": "修改{step}",
+      "after": "接下来简历会在编辑器中打开，你可以在那里修改措辞、栏目顺序和版式。"
+    },
+    "nav": {
+      "back": "上一步",
+      "next": "下一步",
+      "skip": "跳过",
+      "review": "检查",
+      "create": "创建简历",
+      "creating": "正在创建…"
+    },
+    "links": {
+      "backToResumes": "返回简历列表"
+    },
+    "errors": {
+      "name_required": "请填写姓名后继续。",
+      "title_required": "请填写意向职位后继续。",
+      "limit": "你已有 {limit} 份简历，删除一份后才能新建。",
+      "generic": "简历创建失败，你填写的内容还在，请重试。"
+    },
+    "fit": {
+      "one": "压缩到一页",
+      "two": "压缩到两页",
+      "busy": "正在调整…",
+      "undo": "撤销",
+      "fitted": "{pages, plural, other {现在正好 # 页。}}只调整了间距、页边距和字号。",
+      "already": "{pages, plural, other {已经在 # 页以内，}}没有改动。",
+      "tooLong": "{target, plural, other {不删内容就无法压缩到 # 页，}}没有改动。可以试着精简几条要点。",
+      "undone": "间距、页边距和字号已恢复原样。",
+      "error": "调整失败，没有改动。请重试。"
+    },
+    "assistant": {
+      "ask": "就这份简历问问助手",
+      "prompt": "我正在修改简历，请帮我改得更好。"
+    },
+    "order": {
+      "hint": "上下移动栏目，栏目内的文字不会改变。",
+      "tooFew": "再添加一个栏目后才能调整顺序。",
+      "untitled": "未命名栏目",
+      "up": "上移{section}",
+      "down": "下移{section}",
+      "known": {
+        "summary": "个人简介",
+        "experience": "经历",
+        "education": "教育经历",
+        "skills": "技能"
+      }
+    },
+    "editor": {
+      "order": "栏目顺序",
+      "details": "照片和个人信息",
+      "photoAlt": "简历照片"
+    },
+    "layout": {
+      "campus": {
+        "name": "校招",
+        "desc": "A4 纸，一到两页，教育经历在前，适合在校生和应届毕业生。"
+      },
+      "bullet": {
+        "label": "项目符号",
+        "solid": "实心圆点",
+        "hollow": "空心圆圈",
+        "dash": "短横线"
+      },
+      "justify": "文字两端对齐",
+      "eduOrder": {
+        "label": "教育经历",
+        "as_written": "保持现在的位置",
+        "before_experience": "放在经历之前",
+        "after_experience": "放在经历之后"
+      },
+      "skillsLayout": {
+        "label": "技能",
+        "grouped": "按原样",
+        "inline": "写成一行",
+        "columns": "分栏显示"
+      },
+      "headingLanguage": {
+        "label": "下载文件中的栏目标题",
+        "hint": "只改变栏目标题，你写的内容保持不变。",
+        "as_written": "按原样",
+        "en": "英文",
+        "zh": "简体中文",
+        "zhTW": "繁体中文"
+      }
+    },
+    "tour": {
+      "replay": "带我看看",
+      "progress": "{current} / {total}",
+      "next": "下一步",
+      "back": "上一步",
+      "done": "完成",
+      "end": "结束引导",
+      "steps": {
+        "grade": {
+          "title": "你的评级",
+          "body": "这是简历在我们检查清单上的结果，并不代表能否获得面试。"
+        },
+        "filters": {
+          "title": "按优先级查看问题",
+          "body": "先处理最需要修改的问题。点一组即可只看这类问题。"
+        },
+        "issues": {
+          "title": "修改问题",
+          "body": "每个问题都会说明发现了什么、为什么重要。打开即可查看修改方法，再到编辑器里修改。"
+        },
+        "recheck": {
+          "title": "再检查一次",
+          "body": "修改后再检查一次，我们会显示与上次相比有哪些变化。"
+        }
+      }
+    }
+  }
+}

@@ -149,8 +149,5 @@ describe('resume check routes', () => {
     expect(neither.status).toBe(422);
   });
 
-  it('keeps the WP-36 routes as stubs', async () => {
-    const res = await h.request<Env<unknown>>('PATCH', `${BASE}/rv_1/layout`, { body: { layout: { template: 'standard' } } });
-    expect(res.status).toBe(501);
-  });
+  // PATCH /:id/layout and the WP-65 routes: routes.wp65.test.ts.
 });

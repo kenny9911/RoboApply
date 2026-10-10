@@ -27,16 +27,42 @@
 // marks, and `footerLine` (GoApply with CN_AI_EXPORT_EXPLICIT_LABEL=on) prints
 // the visible line on every page. No user text goes into the label.
 //
-// Sensitive fields (photo, 籍贯, 政治面貌, …) are never sent to a model; when a
-// template places them it does so here, after any model call (TASK_PLAN.md
-// §2.2). Today's templates place only what the resume markdown already holds.
+// Sensitive fields (photo, 籍贯, 政治面貌, …) are never sent to a model; the
+// renderer places them here, after any model call (TASK_PLAN.md §2.2; WP-65):
+// `layout.personal` (籍贯 / 政治面貌 the user entered) prints as one header
+// line, and a photo the user keeps on their device prints top-right when the
+// download request carries it (`options.photo`, or `withExportPhoto()` around
+// an export). The photo is never stored on the server.
+//
+// WP-65 also renders the saved `justify`, `bullet`, `eduOrder` and
+// `skillsLayout`, the `campus` template (A4 new-grad layout), the zh/en section
+// titles (`headingLanguage`; the user's own text stays as written), and counts
+// pages for fit-to-page (`renderResumePdfWithMeta`, `countResumePages`).
 
 import PDFDocument from 'pdfkit';
-import { AlignmentType, Document, Footer, HeadingLevel, Packer, Paragraph, TextRun, BorderStyle } from 'docx';
+import {
+  AlignmentType,
+  Document,
+  Footer,
+  HeadingLevel,
+  HorizontalPositionAlign,
+  HorizontalPositionRelativeFrom,
+  ImageRun,
+  Packer,
+  Paragraph,
+  TextRun,
+  TextWrappingType,
+  BorderStyle,
+  VerticalPositionAlign,
+  VerticalPositionRelativeFrom,
+} from 'docx';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ImplicitAiLabel } from '../../../features/compliance/index.js';
+import type { BuilderDocLanguage, BuilderSection, HeadingLanguage, ResumePersonal } from '../../../features/resume/contract.js';
+import { FIELD_LABELS, SECTION_HEADINGS } from '../../../features/resume/builder/sections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // lib/ is server/src/roboapply/v2/lib → up 4 to server/, then assets/fonts.
@@ -267,7 +293,7 @@ export function splitFontRuns(text: string, chain: readonly FontFaces[]): FontRu
 
 // ── Layout ────────────────────────────────────────────────────────────────
 
-export const RESUME_TEMPLATE_KEYS = ['standard', 'compact', 'centered', 'structured', 'two_column'] as const;
+export const RESUME_TEMPLATE_KEYS = ['standard', 'compact', 'centered', 'structured', 'two_column', 'campus'] as const;
 export type ResumeTemplateKey = (typeof RESUME_TEMPLATE_KEYS)[number];
 export const DATE_FORMATS = ['as_written', 'MM/YYYY', 'Mon YYYY', 'YYYY'] as const;
 export type DateFormatKey = (typeof DATE_FORMATS)[number];
@@ -286,6 +312,21 @@ export interface ResumeRenderLayout {
   hideDivider: boolean;
   /** Point sizes. */
   sizes: { name: number; section: number; sub: number; body: number };
+  // ── WP-65 ──
+  /** Justify paragraphs and bullets. */
+  justify: boolean;
+  /** The bullet mark drawn before each bullet. */
+  bullet: string;
+  /** Education before / after experience; null = as written. */
+  eduOrder: 'before_experience' | 'after_experience' | null;
+  /** Skills as written, on one line, or in two columns (PDF). */
+  skillsLayout: 'inline' | 'grouped' | 'columns';
+  /** Section titles in this language; 'as_written' leaves them alone. */
+  headingLanguage: HeadingLanguage;
+  /** 籍贯 / 政治面貌 the user entered (printed in the header), or null. */
+  personal: ResumePersonal | null;
+  /** Print the photo the download request carries. */
+  photo: boolean;
   /**
    * Points: `section` before a section title, `entry` before a role/school
    * line, `line` extra leading between lines, `marginX`/`marginY` page margins.
@@ -299,7 +340,29 @@ const TEMPLATE_DEFAULTS: Record<ResumeTemplateKey, Pick<ResumeRenderLayout, 'siz
   centered: { sizes: { name: 22, section: 12, sub: 10.8, body: 9.8 }, spacing: { section: 10, entry: 5, line: 2, marginX: 54, marginY: 54 }, headerAlign: 'center' },
   structured: { sizes: { name: 21, section: 11.5, sub: 10.6, body: 9.8 }, spacing: { section: 11, entry: 5, line: 2, marginX: 50, marginY: 50 }, headerAlign: 'left' },
   two_column: { sizes: { name: 21, section: 11.5, sub: 10.4, body: 9.4 }, spacing: { section: 9, entry: 4, line: 1.5, marginX: 42, marginY: 44 }, headerAlign: 'left' },
+  campus: { sizes: { name: 20, section: 11.5, sub: 10.4, body: 9.6 }, spacing: { section: 8, entry: 4, line: 1.5, marginX: 46, marginY: 42 }, headerAlign: 'left' },
 };
+
+/** Named bullet styles → the mark drawn. */
+const BULLET_MARKS: Record<string, string> = { solid: '•', hollow: '◦', dash: '–' };
+
+/** The bullet mark for a stored `layout.bullet` (a style name or one character). */
+export function bulletMarkOf(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return '•';
+  const v = value.trim();
+  if (BULLET_MARKS[v]) return BULLET_MARKS[v]!;
+  return [...v].length === 1 ? v : '•';
+}
+
+function personalOf(value: unknown): ResumePersonal | null {
+  if (!value || typeof value !== 'object') return null;
+  const p = value as Record<string, unknown>;
+  const clean = (x: unknown) => (typeof x === 'string' ? x.replace(/\s+/g, ' ').trim().slice(0, 40) : '');
+  const nativePlace = clean(p.nativePlace);
+  const politicalStatus = clean(p.politicalStatus);
+  if (!nativePlace && !politicalStatus) return null;
+  return { ...(nativePlace ? { nativePlace } : {}), ...(politicalStatus ? { politicalStatus } : {}) };
+}
 
 export const DEFAULT_ACCENT = '#1a1a1a';
 
@@ -334,6 +397,13 @@ export function resolveLayout(raw: unknown, defaults: { page?: PageSize } = {}):
     headerAlign: l.headerAlign === 'center' || l.headerAlign === 'left' ? l.headerAlign : t.headerAlign,
     dateFormat: (DATE_FORMATS as readonly string[]).includes(l.dateFormat) ? l.dateFormat : 'as_written',
     hideDivider: l.hideDivider === true,
+    justify: l.justify === true,
+    bullet: bulletMarkOf(l.bullet),
+    eduOrder: l.eduOrder === 'before_experience' || l.eduOrder === 'after_experience' ? l.eduOrder : null,
+    skillsLayout: l.skillsLayout === 'inline' || l.skillsLayout === 'columns' ? l.skillsLayout : 'grouped',
+    headingLanguage: l.headingLanguage === 'en' || l.headingLanguage === 'zh' || l.headingLanguage === 'zh-TW' ? l.headingLanguage : 'as_written',
+    personal: personalOf(l.personal),
+    photo: l.photo !== false,
     sizes: {
       name: clamp(sizes.name, 14, 30, t.sizes.name),
       section: clamp(sizes.section, 9, 16, t.sizes.section),
@@ -454,6 +524,45 @@ interface ResumeDoc {
   sections: ResumeSection[];
 }
 
+// ── Section titles (zh/en bilingual export; WP-65) ───────────────────────
+
+type HeadingKey = BuilderSection | 'skillsCertificates';
+
+/** Most specific first: internship before experience, 技能证书 before skills. */
+const HEADING_RULES: Array<[HeadingKey, RegExp]> = [
+  ['intent', /求职意向|求職意向|求职条件|求職條件|job objective|career objective|^objective$/i],
+  ['selfEvaluation', /自我评价|自我評價|个人评价|個人評價|about me|self[- ]?evaluation/i],
+  ['autobiography', /自傳|自传|个人陈述|個人陳述|autobiograph/i],
+  ['summary', /^(professional )?summary$|^profile$|个人总结|個人摘要|个人简介|個人簡介|個人總結/i],
+  ['internship', /intern|实习|實習/i],
+  ['campus', /campus|extracurricular|社团|社團|校园经历|校園經歷|学生工作|學生工作/i],
+  ['experience', /^(work |professional )?experience$|employment|work history|工作经历|工作經歷|工作经验|工作經驗/i],
+  ['projects', /project|项目经历|項目經歷|專案/i],
+  ['education', /education|教育|学历|學歷/i],
+  ['skillsCertificates', /技能证书|技能證書|skills (?:&|and) certificates|專長與證照/i],
+  ['certificates', /certif|证书|證書|證照|资格|資格/i],
+  ['skills', /skill|专业技能|專業技能|專長|技能/i],
+  ['awards', /award|honou?r|获奖|獲獎|荣誉|榮譽/i],
+];
+
+/** The builder section a heading names, or null. */
+export function headingKeyOf(title: string): HeadingKey | null {
+  const t = title.trim();
+  for (const [key, re] of HEADING_RULES) if (re.test(t)) return key;
+  return null;
+}
+
+const SKILLS_CERTIFICATES: Record<BuilderDocLanguage, string> = { en: 'Skills & certificates', zh: '技能证书', 'zh-TW': '專長與證照' };
+
+/** A section title in the chosen language; unknown titles stay as written. */
+export function translateHeading(title: string, language: HeadingLanguage): string {
+  if (language === 'as_written') return title;
+  const key = headingKeyOf(title);
+  if (!key) return title;
+  if (key === 'skillsCertificates') return SKILLS_CERTIFICATES[language];
+  return SECTION_HEADINGS[language][key] ?? title;
+}
+
 function structure(blocks: ResumeBlock[], layout: ResumeRenderLayout): ResumeDoc {
   const doc: ResumeDoc = { name: null, header: [], sections: [] };
   let current: ResumeSection | null = null;
@@ -471,7 +580,121 @@ function structure(blocks: ResumeBlock[], layout: ResumeRenderLayout): ResumeDoc
     if (!current) doc.header.push(b);
     else current.blocks.push(b);
   }
+  // Education before / after experience (F-RES-13 "Education order").
+  if (layout.eduOrder) {
+    const isEdu = (s: ResumeSection) => headingKeyOf(s.title) === 'education';
+    // Work or internship experience, whichever comes first (new-grad resumes).
+    const isExp = (s: ResumeSection) => {
+      const key = headingKeyOf(s.title);
+      return key === 'experience' || key === 'internship';
+    };
+    const edu = doc.sections.findIndex(isEdu);
+    const exp = doc.sections.findIndex(isExp);
+    if (edu >= 0 && exp >= 0) {
+      const wantBefore = layout.eduOrder === 'before_experience';
+      if ((wantBefore && edu > exp) || (!wantBefore && edu < exp)) {
+        const [section] = doc.sections.splice(edu, 1);
+        const at = doc.sections.findIndex(isExp);
+        doc.sections.splice(wantBefore ? at : at + 1, 0, section!);
+      }
+    }
+  }
+  for (const s of doc.sections) s.title = translateHeading(s.title, layout.headingLanguage);
   return doc;
+}
+
+/** True for a skills section (the `skillsLayout` applies to it). */
+function isSkillsSection(title: string): boolean {
+  const key = headingKeyOf(title);
+  return key === 'skills';
+}
+
+/** The labels' language for the personal-details line. */
+function personalLanguage(layout: ResumeRenderLayout, text: string, locale?: string | null): BuilderDocLanguage {
+  if (layout.headingLanguage !== 'as_written') return layout.headingLanguage;
+  if (!containsCjk(text)) return 'en';
+  return /^zh-(tw|hk|mo|hant)/i.test(locale ?? '') || /[個學實經專證歷]/.test(text) ? 'zh-TW' : 'zh';
+}
+
+/** "籍贯：浙江杭州 ｜ 政治面貌：中共党员" (only the details the user entered). */
+export function personalLine(personal: ResumePersonal | null, language: BuilderDocLanguage): string | null {
+  if (!personal) return null;
+  const L = FIELD_LABELS[language];
+  const colon = language === 'en' ? ': ' : '：';
+  const parts: string[] = [];
+  if (personal.nativePlace) parts.push(`${L.nativePlace}${colon}${personal.nativePlace}`);
+  if (personal.politicalStatus) parts.push(`${L.politicalStatus}${colon}${personal.politicalStatus}`);
+  return parts.length ? parts.join(language === 'en' ? ' · ' : ' ｜ ') : null;
+}
+
+// ── Photo (WP-65): carried by the download request, never stored ─────────
+
+const exportPhoto = new AsyncLocalStorage<Buffer>();
+
+/** Run an export with a photo the user sent from their device (placed when the layout allows). */
+export function withExportPhoto<T>(photo: Buffer | null | undefined, fn: () => Promise<T>): Promise<T> {
+  return photo && photo.length ? exportPhoto.run(photo, fn) : fn();
+}
+
+/** 'jpg' | 'png' from the file's magic bytes, or null. */
+export function photoTypeOf(photo: Buffer | null | undefined): 'jpg' | 'png' | null {
+  if (!photo || photo.length < 8) return null;
+  if (photo[0] === 0xff && photo[1] === 0xd8 && photo[2] === 0xff) return 'jpg';
+  if (photo.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  return null;
+}
+
+/** The photo this render places, or null. */
+function photoFor(layout: ResumeRenderLayout, options: { photo?: Buffer | null }): Buffer | null {
+  if (!layout.photo) return null;
+  const photo = options.photo ?? exportPhoto.getStore() ?? null;
+  return photoTypeOf(photo) ? photo : null;
+}
+
+/** Photo box in points (a one-inch ID photo, 25 × 35 mm). */
+export const PHOTO_BOX = { width: 64, height: 90 } as const;
+
+/** Pixel size from a PNG IHDR or a JPEG SOFn header, or null when unreadable. */
+export function photoPixelSize(photo: Buffer | null | undefined): { width: number; height: number } | null {
+  const type = photoTypeOf(photo);
+  if (!photo || !type) return null;
+  if (type === 'png') {
+    if (photo.length < 24 || photo.toString('latin1', 12, 16) !== 'IHDR') return null;
+    const width = photo.readUInt32BE(16);
+    const height = photo.readUInt32BE(20);
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+  // JPEG: walk the markers to the first start-of-frame (SOF0–SOF15 except DHT/JPG/DAC).
+  let i = 2;
+  while (i + 9 < photo.length) {
+    if (photo[i] !== 0xff) return null;
+    const marker = photo[i + 1]!;
+    if (marker === 0xff) {
+      i += 1;
+      continue;
+    }
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      i += 2;
+      continue;
+    }
+    const len = photo.readUInt16BE(i + 2);
+    if (len < 2) return null;
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      const height = photo.readUInt16BE(i + 5);
+      const width = photo.readUInt16BE(i + 7);
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+
+/** The photo's size inside PHOTO_BOX with its aspect ratio kept (the box when unreadable). */
+export function fitPhotoBox(photo: Buffer | null | undefined): { width: number; height: number } {
+  const size = photoPixelSize(photo);
+  if (!size) return { width: PHOTO_BOX.width, height: PHOTO_BOX.height };
+  const scale = Math.min(PHOTO_BOX.width / size.width, PHOTO_BOX.height / size.height);
+  return { width: size.width * scale, height: size.height * scale };
 }
 
 /** Sections that go to the sidebar of the two-column template. */
@@ -496,6 +719,26 @@ export interface RenderOptions {
   footerLine?: string | null;
   /** Document title (PDF Info / DOCX core property). */
   title?: string | null;
+  /** A JPEG/PNG photo from the user's device (WP-65; never stored). Defaults to `withExportPhoto()`'s. */
+  photo?: Buffer | null;
+}
+
+/**
+ * The skills layout applied to the parsed sections: `inline` puts every skill
+ * on one line (bullets joined with " · "). `columns` is drawn by the PDF.
+ */
+function applySkillsLayout(doc: ResumeDoc, layout: ResumeRenderLayout): ResumeDoc {
+  if (layout.skillsLayout !== 'inline') return doc;
+  return {
+    ...doc,
+    sections: doc.sections.map((s) => {
+      if (!isSkillsSection(s.title)) return s;
+      const items = s.blocks.filter((b) => b.kind === 'bullet' || b.kind === 'para').map((b) => b.text);
+      if (items.length < 2) return s;
+      const rest = s.blocks.filter((b) => b.kind !== 'bullet' && b.kind !== 'para');
+      return { ...s, blocks: [...rest, { kind: 'para', text: items.join(' · ') }] };
+    }),
+  };
 }
 
 function pdfToBuffer(doc: InstanceType<typeof PDFDocument>): Promise<Buffer> {
@@ -520,8 +763,21 @@ function allText(doc: ResumeDoc, footerLine?: string | null): string {
  * never editor chrome.
  */
 export async function renderResumePdf(markdown: string, options: RenderOptions = {}): Promise<Buffer> {
+  return (await renderResumePdfWithMeta(markdown, options)).buffer;
+}
+
+/** Pages the PDF export of this markdown has with these options (fit-to-page, WP-65). */
+export async function countResumePages(markdown: string, options: RenderOptions = {}): Promise<number> {
+  return (await renderResumePdfWithMeta(markdown, options)).pages;
+}
+
+/** The PDF plus its page count. */
+export async function renderResumePdfWithMeta(markdown: string, options: RenderOptions = {}): Promise<{ buffer: Buffer; pages: number }> {
   const layout = resolveLayout(options.layout, { page: options.defaultPage });
-  const parsed = structure(parseResumeMarkdown(markdown), layout);
+  const parsed0 = structure(parseResumeMarkdown(markdown), layout);
+  const photo = photoFor(layout, options);
+  const personal = personalLine(layout.personal, personalLanguage(layout, allText(parsed0), options.locale));
+  const parsed = applySkillsLayout(personal ? { ...parsed0, header: [...parsed0.header, { kind: 'para', text: personal }] } : parsed0, layout);
   const text = allText(parsed, options.footerLine);
   const chain = needsUnicodeFont(text) ? fontChainFor(options.locale, text) : [];
 
@@ -569,7 +825,8 @@ export async function renderResumePdf(markdown: string, options: RenderOptions =
       doc.font(fontName(runs[0]?.face ?? 'std', weight)).fontSize(size).text(runs[0]?.text ?? t, x, y, opts);
       return;
     }
-    let o: TextOpts = opts;
+    // pdfkit cannot justify a line made of several fonts' fragments.
+    let o: TextOpts = opts.align === 'justify' ? { ...opts, align: 'left' } : opts;
     let startX = x;
     if (opts.align === 'center' || opts.align === 'right') {
       // pdfkit aligns each continued fragment on its own, so a mixed-font
@@ -614,16 +871,24 @@ export async function renderResumePdf(markdown: string, options: RenderOptions =
   const centered = layout.headerAlign === 'center';
   const sectionAlign = layout.template === 'centered' ? 'center' : 'left';
 
-  // Header (name + contact lines) across the full width.
+  // Header (name + contact lines + personal details) across the full width,
+  // or beside the photo (top-right) when the request carries one.
+  const photoGap = photo ? PHOTO_BOX.width + 12 : 0;
+  const headerWidth = contentWidth - (centered ? photoGap * 2 : photoGap);
+  const headerX = left + (centered ? photoGap : 0);
+  if (photo) {
+    doc.image(photo, left + contentWidth - PHOTO_BOX.width, marginY, { fit: [PHOTO_BOX.width, PHOTO_BOX.height], align: 'center', valign: 'top' });
+  }
   if (parsed.name) {
     doc.fillColor('#111111');
-    draw(parsed.name, 'bold', layout.sizes.name, left, doc.y, { width: contentWidth, align: centered ? 'center' : 'left' });
+    draw(parsed.name, 'bold', layout.sizes.name, headerX, doc.y, { width: headerWidth, align: centered ? 'center' : 'left' });
     doc.moveDown(0.2);
   }
   for (const b of parsed.header) {
     doc.fillColor(sub);
-    draw(b.text, 'reg', layout.sizes.body, left, doc.y, { width: contentWidth, align: centered ? 'center' : 'left', lineGap });
+    draw(b.text, 'reg', layout.sizes.body, headerX, doc.y, { width: headerWidth, align: centered ? 'center' : 'left', lineGap });
   }
+  if (photo && doc.y < marginY + PHOTO_BOX.height + 4) doc.y = marginY + PHOTO_BOX.height + 4;
   if (layout.template === 'structured' && !layout.hideDivider) {
     doc.moveTo(left, doc.y + 4).lineTo(left + contentWidth, doc.y + 4).strokeColor(layout.accent).lineWidth(1.2).stroke();
     doc.moveDown(0.4);
@@ -643,11 +908,41 @@ export async function renderResumePdf(markdown: string, options: RenderOptions =
     // Keep the title with the first line of its first block.
     guard(measure(title, 'bold', layout.sizes.section, width, titleOpts) + 7 + Math.min(firstBody, layout.sizes.body * 1.6));
     doc.fillColor(layout.accent);
-    draw(title, 'bold', layout.sizes.section, x, doc.y, titleOpts);
+    if (layout.template === 'campus') {
+      // Campus: a short accent bar before the title.
+      const barH = layout.sizes.section;
+      doc.rect(x, doc.y + 1, 3, barH).fill(layout.accent);
+      doc.fillColor(layout.accent);
+      draw(title, 'bold', layout.sizes.section, x + 8, doc.y, { ...titleOpts, width: width - 8 });
+    } else {
+      draw(title, 'bold', layout.sizes.section, x, doc.y, titleOpts);
+    }
     if (!layout.hideDivider && layout.template !== 'structured') {
       doc.moveTo(x, doc.y + 2).lineTo(x + width, doc.y + 2).strokeColor(layout.accent === DEFAULT_ACCENT ? '#cccccc' : layout.accent).lineWidth(0.6).stroke();
     }
     doc.y += 5;
+    const bodyAlign: TextOpts['align'] = layout.justify ? 'justify' : 'left';
+    if (layout.skillsLayout === 'columns' && isSkillsSection(s.title)) {
+      // Two columns of skills: left half, then right half, from the same top.
+      const items = s.blocks.filter((b) => b.kind === 'bullet' || b.kind === 'para');
+      if (items.length >= 4) {
+        const colW = (width - 12) / 2;
+        const half = Math.ceil(items.length / 2);
+        const rows = items.slice(0, half).map((b, i) => [b, items[half + i]] as const);
+        for (const [a, b] of rows) {
+          const ta = `${layout.bullet}  ${a.text}`;
+          const tb = b ? `${layout.bullet}  ${b.text}` : '';
+          const h = Math.max(measure(ta, 'reg', layout.sizes.body, colW, { lineGap }), tb ? measure(tb, 'reg', layout.sizes.body, colW, { lineGap }) : 0);
+          guard(h);
+          const top = doc.y;
+          doc.fillColor(sub);
+          draw(ta, 'reg', layout.sizes.body, x, top, { width: colW, lineGap });
+          if (tb) draw(tb, 'reg', layout.sizes.body, x + colW + 12, top, { width: colW, lineGap });
+          doc.y = top + h + 1;
+        }
+        return;
+      }
+    }
     for (const b of s.blocks) {
       if (b.kind === 'h3' || b.kind === 'h1' || b.kind === 'h2') {
         doc.y += layout.spacing.entry;
@@ -656,10 +951,10 @@ export async function renderResumePdf(markdown: string, options: RenderOptions =
         draw(b.text, 'bold', layout.sizes.sub, x, doc.y, { width, lineGap });
         doc.y += 1;
       } else {
-        const t = b.kind === 'bullet' ? `•  ${b.text}` : b.text;
+        const t = b.kind === 'bullet' ? `${layout.bullet}  ${b.text}` : b.text;
         guard(measure(t, 'reg', layout.sizes.body, width, { lineGap }));
         doc.fillColor(sub);
-        draw(t, 'reg', layout.sizes.body, x, doc.y, { width, lineGap });
+        draw(t, 'reg', layout.sizes.body, x, doc.y, { width, lineGap, align: bodyAlign });
         doc.y += b.kind === 'bullet' ? 1 : 2;
       }
     }
@@ -742,7 +1037,8 @@ export async function renderResumePdf(markdown: string, options: RenderOptions =
     }
   }
 
-  return pdfToBuffer(doc);
+  const pages = doc.bufferedPageRange().count;
+  return { buffer: await pdfToBuffer(doc), pages };
 }
 
 const HEX = (c: string) => c.replace('#', '').toUpperCase();
@@ -753,7 +1049,13 @@ const HEX = (c: string) => c.replace('#', '').toUpperCase();
  */
 export async function renderResumeDocx(markdown: string, options: RenderOptions = {}): Promise<Buffer> {
   const layout = resolveLayout(options.layout, { page: options.defaultPage });
-  const parsed = structure(parseResumeMarkdown(markdown), layout);
+  const parsed0 = structure(parseResumeMarkdown(markdown), layout);
+  const personal = personalLine(layout.personal, personalLanguage(layout, allText(parsed0), options.locale));
+  const parsed = applySkillsLayout(personal ? { ...parsed0, header: [...parsed0.header, { kind: 'para', text: personal }] } : parsed0, layout);
+  const photo = photoFor(layout, options);
+  const photoType = photoTypeOf(photo);
+  const bodyAlign = layout.justify ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
+  const wordBullet = layout.bullet === '•';
   const centered = layout.headerAlign === 'center';
   const halfPt = (pt: number) => Math.round(pt * 2);
   const latinFont = layout.font === 'serif' ? 'Times New Roman' : 'Arial';
@@ -761,6 +1063,27 @@ export async function renderResumeDocx(markdown: string, options: RenderOptions 
     new TextRun({ text, bold: opts.bold, size: halfPt(opts.size), color: opts.color, allCaps: opts.caps, font: latinFont });
 
   const children: Paragraph[] = [];
+  if (photo && photoType) {
+    // Top-right of the first page, text wraps around it (96 px per inch).
+    const px = (pt: number) => Math.max(1, Math.round((pt / 72) * 96));
+    const box = fitPhotoBox(photo);
+    children.push(
+      new Paragraph({
+        children: [
+          new ImageRun({
+            type: photoType,
+            data: photo,
+            transformation: { width: px(box.width), height: px(box.height) },
+            floating: {
+              horizontalPosition: { relative: HorizontalPositionRelativeFrom.MARGIN, align: HorizontalPositionAlign.RIGHT },
+              verticalPosition: { relative: VerticalPositionRelativeFrom.MARGIN, align: VerticalPositionAlign.TOP },
+              wrap: { type: TextWrappingType.SQUARE },
+            },
+          }),
+        ],
+      }),
+    );
+  }
   if (parsed.name) {
     children.push(new Paragraph({ heading: HeadingLevel.TITLE, alignment: centered ? AlignmentType.CENTER : AlignmentType.LEFT, children: [run(parsed.name, { bold: true, size: layout.sizes.name, color: '111111' })] }));
   }
@@ -786,9 +1109,13 @@ export async function renderResumeDocx(markdown: string, options: RenderOptions 
     );
     for (const b of s.blocks) {
       if (b.kind === 'bullet') {
-        children.push(new Paragraph({ bullet: { level: 0 }, spacing: { after: twip(layout.spacing.line) }, children: [run(b.text, { size: layout.sizes.body, color: '333333' })] }));
+        children.push(
+          wordBullet
+            ? new Paragraph({ bullet: { level: 0 }, alignment: bodyAlign, spacing: { after: twip(layout.spacing.line) }, children: [run(b.text, { size: layout.sizes.body, color: '333333' })] })
+            : new Paragraph({ alignment: bodyAlign, spacing: { after: twip(layout.spacing.line) }, children: [run(`${layout.bullet}  ${b.text}`, { size: layout.sizes.body, color: '333333' })] }),
+        );
       } else if (b.kind === 'para') {
-        children.push(new Paragraph({ spacing: { after: twip(layout.spacing.line + 2) }, children: [run(b.text, { size: layout.sizes.body, color: '333333' })] }));
+        children.push(new Paragraph({ alignment: bodyAlign, spacing: { after: twip(layout.spacing.line + 2) }, children: [run(b.text, { size: layout.sizes.body, color: '333333' })] }));
       } else {
         children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: twip(layout.spacing.entry + 2), after: twip(2) }, children: [run(b.text, { bold: true, size: layout.sizes.sub, color: '222222' })] }));
       }

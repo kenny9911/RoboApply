@@ -14,6 +14,9 @@
 // (GoApply without the AI consent, or no model) the fix panel is hidden and
 // the method line says spelling was not checked. With no resume check credit
 // left the checklist still runs and the method line says so.
+//
+// WP-65: the 4-step tour (ResumeTour, F-RES-07) points at the parts marked
+// `data-tour` (grade, filters, issues, recheck).
 
 import { useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -24,6 +27,7 @@ import { useIssueFix, useResumeCheck } from '../../../hooks/resume/useResumeChec
 import type { GradeIssue, GradeView, IssueSeverity, LatestGradeResponse } from '../../../lib/api/contracts/resume';
 import { IssueCard } from './IssueCard';
 import { issueTypeName } from './issueText';
+import { ResumeTour } from './ResumeTour';
 import styles from './ResumeCheck.module.css';
 
 const SEVERITIES: IssueSeverity[] = ['urgent', 'critical', 'optional'];
@@ -54,6 +58,8 @@ export function ResumeCheckReport({ resumeId }: ResumeCheckReportProps) {
         <a className={styles.linkBtn} href={`/resume/${encodeURIComponent(resumeId)}`}>
           ← {t('back')}
         </a>
+        {/* WP-65: the 4-step tour (F-RES-07), once the report is on screen. */}
+        <ResumeTour enabled={Boolean(showReport) && !check.running} />
       </div>
 
       {check.latest.isLoading ? (
@@ -202,7 +208,7 @@ function Report({
     <>
       <section className={styles.card} aria-labelledby="resume-check-grade">
         <div className={styles.summary}>
-          <div>
+          <div data-tour="grade">
             <span className={styles.gradeBadge}>{t('title')}</span>
             <h2 id="resume-check-grade" className={`${styles.gradeLabel} ${styles.mt2}`}>
               {grade.label ? t(`label.${grade.label}`) : '—'}
@@ -220,10 +226,12 @@ function Report({
               </p>
             </div>
           </div>
-          <Btn onClick={onRecheck}>{t('stale.cta')}</Btn>
+          <span data-tour="recheck">
+            <Btn onClick={onRecheck}>{t('stale.cta')}</Btn>
+          </span>
         </div>
 
-        <div className={styles.counts} role="group" aria-label={t('filter.label')}>
+        <div className={styles.counts} role="group" aria-label={t('filter.label')} data-tour="filters">
           <button type="button" className={styles.countBtn} aria-pressed={filter === null} onClick={() => setFilter(null)}>
             {t('filter.all', { count: total })}
           </button>
@@ -255,10 +263,12 @@ function Report({
       {data.previous ? <Comparison current={grade} previous={data.previous} /> : null}
 
       {total === 0 ? (
-        <p className={styles.body}>{t('noIssues')}</p>
+        <p className={styles.body} data-tour="issues">
+          {t('noIssues')}
+        </p>
       ) : (
-        groups.map((g) => (
-          <section key={g.section} className={styles.group} aria-labelledby={`rc-section-${g.section}`}>
+        groups.map((g, gi) => (
+          <section key={g.section} className={styles.group} aria-labelledby={`rc-section-${g.section}`} data-tour={gi === 0 ? 'issues' : undefined}>
             <h3 id={`rc-section-${g.section}`} className={styles.groupTitle}>
               {t(`section.${g.section}`)}
             </h3>

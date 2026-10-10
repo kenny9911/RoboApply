@@ -1,8 +1,9 @@
-// /resume/new — route shell (FND-6b). Guided resume builder.
-//
-// STUB. Owner: WP-65, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /resume/new — the guided resume builder (WP-65; PRODUCT_PLAN.md F-RES-17).
+// Renders inside the (auth) app shell. The builder is a client component that
+// loads its steps for this brand and locale from GET /v2/resumes/builder/config.
+
+import { ResumeBuilder } from '../../../../components/features/resume/builder/ResumeBuilder';
 
 export default function ResumeNewPage() {
-  return <div hidden data-route-stub="/resume/new" data-owner="WP-65" />;
+  return <ResumeBuilder />;
 }

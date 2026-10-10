@@ -9,7 +9,7 @@
 import type { ResumeLayout, ResumePage, ResumeTemplate } from '../../../lib/api/resumes';
 
 /** Templates in picker order; Standard is recommended. */
-export const TEMPLATES: readonly ResumeTemplate[] = ['standard', 'compact', 'centered', 'structured', 'two_column'];
+export const TEMPLATES: readonly ResumeTemplate[] = ['standard', 'compact', 'centered', 'structured', 'two_column', 'campus'];
 export const RECOMMENDED_TEMPLATE: ResumeTemplate = 'standard';
 /** Company software may read a sidebar out of order: the picker warns. */
 export const WARN_TEMPLATES: readonly ResumeTemplate[] = ['two_column'];
@@ -33,6 +33,16 @@ export const SPACING_KEYS = Object.keys(SPACING_PRESETS) as SpacingPreset[];
 export const ACCENTS = ['#1a1a1a', '#1f3a68', '#0f5e5a', '#5b2a86', '#8a2b2b'] as const;
 export const DEFAULT_ACCENT = ACCENTS[0];
 
+// ── WP-65 options (rendered by the export; see resumeExport.ts) ──────────
+export const BULLETS = ['solid', 'hollow', 'dash'] as const;
+export type BulletStyle = (typeof BULLETS)[number];
+export const EDU_ORDERS = ['as_written', 'before_experience', 'after_experience'] as const;
+export type EduOrder = (typeof EDU_ORDERS)[number];
+export const SKILLS_LAYOUTS = ['grouped', 'inline', 'columns'] as const;
+export type SkillsLayout = (typeof SKILLS_LAYOUTS)[number];
+export const HEADING_LANGUAGES = ['as_written', 'en', 'zh', 'zh-TW'] as const;
+export type HeadingLanguage = (typeof HEADING_LANGUAGES)[number];
+
 export interface ResolvedLayout {
   template: ResumeTemplate;
   page: ResumePage;
@@ -41,6 +51,13 @@ export interface ResolvedLayout {
   headerAlign: 'left' | 'center';
   dateFormat: DateFormat;
   spacing: SpacingPreset;
+  justify: boolean;
+  bullet: BulletStyle;
+  eduOrder: EduOrder;
+  skillsLayout: SkillsLayout;
+  headingLanguage: HeadingLanguage;
+  /** Place the device photo when downloading (default on once a photo is kept). */
+  photo: boolean;
 }
 
 export function normalizeTemplate(value: unknown): ResumeTemplate {
@@ -70,7 +87,18 @@ export function resolveLayout(layout: ResumeLayout | null | undefined, defaultPa
     headerAlign: l.headerAlign ?? (template === 'centered' ? 'center' : 'left'),
     dateFormat: (DATE_FORMATS as readonly string[]).includes(l.dateFormat ?? '') ? (l.dateFormat as DateFormat) : 'as_written',
     spacing: spacingPresetOf(l.spacing),
+    justify: l.justify === true,
+    bullet: (BULLETS as readonly string[]).includes(l.bullet ?? '') ? (l.bullet as BulletStyle) : 'solid',
+    eduOrder: l.eduOrder === 'before_experience' || l.eduOrder === 'after_experience' ? l.eduOrder : 'as_written',
+    skillsLayout: l.skillsLayout === 'inline' || l.skillsLayout === 'columns' ? l.skillsLayout : 'grouped',
+    headingLanguage: (HEADING_LANGUAGES as readonly string[]).includes(l.headingLanguage ?? '') ? (l.headingLanguage as HeadingLanguage) : 'as_written',
+    photo: l.photo !== false,
   };
+}
+
+/** The bullet mark the export draws. */
+export function bulletMark(style: BulletStyle): string {
+  return style === 'hollow' ? '◦' : style === 'dash' ? '–' : '•';
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -116,5 +144,12 @@ export function layoutPatch(change: Partial<ResolvedLayout>): Partial<ResumeLayo
   if (change.headerAlign) patch.headerAlign = change.headerAlign;
   if (change.dateFormat) patch.dateFormat = change.dateFormat;
   if (change.spacing) patch.spacing = { ...SPACING_PRESETS[change.spacing] };
+  if (typeof change.justify === 'boolean') patch.justify = change.justify;
+  if (change.bullet) patch.bullet = change.bullet;
+  // 'as_written' is "no saved order": the eduOrder key is cleared with null.
+  if (change.eduOrder) patch.eduOrder = change.eduOrder === 'as_written' ? null : change.eduOrder;
+  if (change.skillsLayout) patch.skillsLayout = change.skillsLayout;
+  if (change.headingLanguage) patch.headingLanguage = change.headingLanguage;
+  if (typeof change.photo === 'boolean') patch.photo = change.photo;
   return patch;
 }

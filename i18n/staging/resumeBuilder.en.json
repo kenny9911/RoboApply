@@ -1,3 +1,274 @@
 {
-  "resumeBuilder": {}
+  "resumeBuilder": {
+    "header": {
+      "eyebrow": "Resumes",
+      "title": "Build a resume step by step",
+      "sub": "Answer a few short questions. You can skip any step marked optional and change everything later in the editor."
+    },
+    "loading": "Loading the builder…",
+    "loadError": "We couldn't load the builder. Check your connection and try again.",
+    "retry": "Try again",
+    "stepsLabel": "Builder steps",
+    "progress": "Step {current} of {total}",
+    "step": {
+      "basics": { "title": "Contact details", "hint": "Your name and how employers can reach you." },
+      "intent": { "title": "The job you want", "hint": "The job title you're aiming for. It goes at the top of your resume." },
+      "summary": { "title": "Summary", "hint": "Two or three sentences about what you do and what you're looking for." },
+      "education": { "title": "Education", "hint": "Schools, degrees and dates. Add your grades only if you want them on the page." },
+      "experience": { "title": "Work experience", "hint": "Jobs you've had, newest first." },
+      "internship": { "title": "Internships", "hint": "Internships, newest first." },
+      "projects": { "title": "Projects", "hint": "Class, personal or work projects that show what you can do." },
+      "campus": { "title": "Campus activities", "hint": "Clubs, student groups, volunteering and leadership roles." },
+      "skills": { "title": "Skills", "hint": "Tools, languages and other skills you'd be glad to be asked about." },
+      "certificates": { "title": "Certificates and skills", "hint": "Certificates, language tests and licenses. Add your score if you'd like it shown." },
+      "awards": { "title": "Awards", "hint": "Scholarships, prizes and competitions, one per line." },
+      "selfEvaluation": { "title": "About me", "hint": "A short paragraph about your strengths, written in your own words." },
+      "autobiography": { "title": "Personal statement", "hint": "Your background, what shaped you and why you want this kind of job." },
+      "personal": { "title": "Photo and personal details", "hint": "All optional. Leave anything blank that you'd rather not share." },
+      "review": { "title": "Review", "hint": "Check each step, then create your resume. It opens in the editor." }
+    },
+    "docLanguage": {
+      "label": "Resume language",
+      "hint": "The language your resume is written in. You can download it with section titles in another language later.",
+      "en": "English",
+      "zh": "Simplified Chinese",
+      "zhTW": "Traditional Chinese"
+    },
+    "field": {
+      "fullName": "Full name",
+      "email": "Email",
+      "phone": "Phone",
+      "city": "City",
+      "links": "Links",
+      "linksHint": "LinkedIn, portfolio or GitHub. Separate them with commas.",
+      "targetTitle": "Job title you want",
+      "cities": "Cities you'd work in",
+      "availableFrom": "When you can start",
+      "salary": "Expected pay",
+      "salaryKind": {
+        "none": "Leave it off",
+        "company_policy": "As per company policy",
+        "negotiable": "Negotiable",
+        "amount": "A specific amount"
+      },
+      "salaryAmount": "Amount",
+      "salaryAmountHint": "Write it the way you'd say it, for example a monthly range.",
+      "school": "School",
+      "degree": "Degree",
+      "major": "Major",
+      "gpa": "Grades or ranking (optional)",
+      "start": "Start",
+      "end": "End",
+      "endHint": "Leave blank if you're still there.",
+      "details": "Courses, thesis or other details",
+      "detailsHint": "One per line. Optional.",
+      "title": "Job title",
+      "organization": "Company or organization",
+      "campusTitle": "Role",
+      "campusOrganization": "Club or group",
+      "location": "Location",
+      "notes": "What did you do here?",
+      "notesHint": "Plain notes are fine: what you worked on, how, and what came of it. Only what you write here can be used.",
+      "bullets": "Bullet points",
+      "moreBullets": "More bullet points",
+      "projectName": "Project name",
+      "role": "Your role",
+      "link": "Link (optional)",
+      "star": {
+        "situation": "Situation",
+        "situationHint": "What was the setting or the problem?",
+        "task": "Task",
+        "taskHint": "What were you responsible for?",
+        "action": "Action",
+        "actionHint": "What did you do, step by step?",
+        "result": "Result",
+        "resultHint": "What changed because of your work? Use real numbers only if you have them."
+      },
+      "skills": "Skills",
+      "certificates": "Certificates",
+      "certificatesHint": "Tap one to add it, then add your score if you'd like it shown.",
+      "awards": "Awards",
+      "awardsHint": "One per line, with the year.",
+      "summary": "Summary",
+      "summaryHint": "Keep it short. Say what you do, what you're good at and what you're looking for.",
+      "selfEvaluation": "About me",
+      "selfEvaluationHint": "Three or four sentences. Give an example for each strength you mention.",
+      "autobiography": "Personal statement",
+      "autobiographyHint": "A few paragraphs: your background, what you've learned and why this kind of job.",
+      "nativePlace": "Native place",
+      "politicalStatus": "Political status",
+      "add": "Add",
+      "addBullet": "Add a bullet point",
+      "bulletN": "Bullet point {n}",
+      "removeBullet": "Remove bullet point {n}",
+      "removeTag": "Remove {tag}",
+      "quickAdd": "Quick add"
+    },
+    "prompts": {
+      "bullets": "Start each bullet point with what you did, then how, then what came of it. Use numbers only when they're real.",
+      "star": "Describe each project in four short parts: the situation, your task, what you did and the result."
+    },
+    "entry": {
+      "label": "Entry {n}",
+      "remove": "Remove",
+      "add": {
+        "education": "Add another school",
+        "experience": "Add another job",
+        "internship": "Add another internship",
+        "projects": "Add another project",
+        "campus": "Add another activity"
+      }
+    },
+    "ai": {
+      "off": "Writing help is off for your account, so nothing here is sent to an AI model. You can write every part yourself.",
+      "suggestBullets": "Suggest bullet points from my notes",
+      "suggestSummary": "Suggest a summary",
+      "suggestSelfEvaluation": "Suggest an About me paragraph",
+      "busy": "Writing suggestions…",
+      "notesFirst": "Write a few notes first. Suggestions only use what you write.",
+      "note": "Written by AI from your notes. Read each one and add it only if it's true.",
+      "add": "Add",
+      "use": "Use this",
+      "blocked": "{count, plural, one {# suggestion was left out because it added a number you didn't write.} other {# suggestions were left out because they added numbers you didn't write.}}",
+      "errors": {
+        "unavailable": "Writing help isn't available right now. You can keep writing on your own.",
+        "credits": "You've used all your rewrites for now. You can keep writing on your own.",
+        "blocked": "We couldn't use that text. Try rewording your notes.",
+        "citationGuard": "Every suggestion added numbers that aren't in your notes, so none are shown. No rewrite was used.",
+        "noSuggestion": "No suggestion came back. No rewrite was used. Try again or add more detail to your notes.",
+        "generic": "Something went wrong. No rewrite was used. Try again."
+      }
+    },
+    "personal": {
+      "intro": "These details are optional. They're printed on the downloaded file only. They're never sent to an AI model or used to rank you for jobs."
+    },
+    "photo": {
+      "label": "Add my photo to the downloaded file",
+      "hint": "Your photo stays in this browser. It's added when you download and is never saved on our servers.",
+      "alt": "Your resume photo",
+      "choose": "Choose a photo",
+      "replace": "Replace photo",
+      "remove": "Remove photo",
+      "errors": {
+        "unsupported": "Use a JPEG or PNG photo.",
+        "tooLarge": "That photo is too large. Try a smaller one."
+      }
+    },
+    "review": {
+      "filled": "filled in",
+      "empty": "empty",
+      "edit": "Edit",
+      "editStep": "Edit {step}",
+      "after": "Your resume opens in the editor next. You can change the wording, the order of sections and the layout there."
+    },
+    "nav": {
+      "back": "Back",
+      "next": "Next",
+      "skip": "Skip",
+      "review": "Review",
+      "create": "Create resume",
+      "creating": "Creating…"
+    },
+    "links": {
+      "backToResumes": "Back to resumes"
+    },
+    "errors": {
+      "name_required": "Add your full name to continue.",
+      "title_required": "Add the job title you want to continue.",
+      "limit": "You already have {limit} resumes. Delete one to add another.",
+      "generic": "We couldn't create your resume. Your answers are still here. Try again."
+    },
+    "fit": {
+      "one": "Fit on one page",
+      "two": "Fit on two pages",
+      "busy": "Fitting…",
+      "undo": "Undo",
+      "fitted": "{pages, plural, one {Now fits on # page.} other {Now fits on # pages.}} Only spacing, margins and text size changed.",
+      "already": "{pages, plural, one {Already fits on # page.} other {Already fits on # pages.}} Nothing changed.",
+      "tooLong": "{target, plural, one {Too long to fit on # page without removing text.} other {Too long to fit on # pages without removing text.}} Nothing changed. Try shortening a few bullet points.",
+      "undone": "Spacing, margins and text size are back to how they were.",
+      "error": "We couldn't fit the resume. Nothing changed. Try again."
+    },
+    "assistant": {
+      "ask": "Ask the Assistant about this resume",
+      "prompt": "I'm editing my resume. Help me improve it."
+    },
+    "order": {
+      "hint": "Move sections up or down. The text inside doesn't change.",
+      "tooFew": "Add another section to change the order.",
+      "untitled": "Untitled section",
+      "up": "Move {section} up",
+      "down": "Move {section} down",
+      "known": {
+        "summary": "Summary",
+        "experience": "Experience",
+        "education": "Education",
+        "skills": "Skills"
+      }
+    },
+    "editor": {
+      "order": "Section order",
+      "details": "Photo and personal details",
+      "photoAlt": "Your resume photo"
+    },
+    "layout": {
+      "campus": {
+        "name": "Campus",
+        "desc": "A4, one or two pages, education first. Made for students and recent graduates."
+      },
+      "bullet": {
+        "label": "Bullet mark",
+        "solid": "Solid dot",
+        "hollow": "Open circle",
+        "dash": "Dash"
+      },
+      "justify": "Line up text on both sides",
+      "eduOrder": {
+        "label": "Education",
+        "as_written": "Where it is now",
+        "before_experience": "Before experience",
+        "after_experience": "After experience"
+      },
+      "skillsLayout": {
+        "label": "Skills",
+        "grouped": "As written",
+        "inline": "On one line",
+        "columns": "In columns"
+      },
+      "headingLanguage": {
+        "label": "Section titles in the downloaded file",
+        "hint": "Changes the section titles only. Your own text stays as you wrote it.",
+        "as_written": "As written",
+        "en": "English",
+        "zh": "Simplified Chinese",
+        "zhTW": "Traditional Chinese"
+      }
+    },
+    "tour": {
+      "replay": "Show me around",
+      "progress": "{current} of {total}",
+      "next": "Next",
+      "back": "Back",
+      "done": "Done",
+      "end": "End tour",
+      "steps": {
+        "grade": {
+          "title": "Your grade",
+          "body": "This is how your resume did on our checklist. It isn't a prediction of whether you'll get an interview."
+        },
+        "filters": {
+          "title": "Issues by priority",
+          "body": "Start with the issues to fix first. Tap a group to see only those issues."
+        },
+        "issues": {
+          "title": "Fix an issue",
+          "body": "Each issue says what we found and why it matters. Open it to see how to fix it, then make the change in the editor."
+        },
+        "recheck": {
+          "title": "Check again",
+          "body": "After you edit, check again. We'll show what changed since the last check."
+        }
+      }
+    }
+  }
 }

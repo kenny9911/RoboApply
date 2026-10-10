@@ -7,6 +7,8 @@
 //   `unverifiedClaimsCount(variantId)`                WP-36b export guard, WP-55a — WP-36a, filled
 //   `createTailorSession(...)`                        Assistant / Ready to apply — WP-36a, filled
 //   `getTailorService()`                              the tailor session service (routes, other areas)
+//   `getBuilderService()`                             guided builder (WP-65)
+//   `getLayoutService()`                              layout save + fit to one page (WP-65; also the legacy PATCH /:id/layout)
 
 import { creditService } from '../../platform/credits/index.js';
 import { aiAllowed } from '../../platform/consent/aiAllowed.js';
@@ -18,6 +20,10 @@ import { ResumeCheckService, type ResumeCheckDeps } from './ResumeCheckService.j
 import { createPrismaResumeCheckStore } from './store.js';
 import { TailorService, type TailorServiceDeps } from './tailor/TailorService.js';
 import { createPrismaTailorStore } from './tailor/store.js';
+import { BuilderService, type BuilderServiceDeps } from './builder/BuilderService.js';
+import { LayoutService, type LayoutServiceDeps } from './layout/LayoutService.js';
+import { createPrismaLayoutStore } from './layout/store.js';
+import { HttpError } from '../../platform/http.js';
 
 export * from './contract.js';
 export { createResumeSuiteRouter } from './routes.js';
@@ -31,6 +37,17 @@ export type { TailorServiceDeps, FitScoreResult, CreateTailorBody } from './tail
 export type { TailorStore } from './tailor/store.js';
 export { extractClaims, applyClaimDecision, pendingCount } from './tailor/claims.js';
 export { mergeTailored, diffChanges } from './tailor/blocks.js';
+// WP-65: guided builder, layout, fit to page.
+export { BuilderService } from './builder/BuilderService.js';
+export type { BuilderServiceDeps } from './builder/BuilderService.js';
+export { builderConfigFor, builderVariantFor, SECTION_HEADINGS, FIELD_LABELS } from './builder/sections.js';
+export { composeBuilderResume } from './builder/compose.js';
+export { builderPromptInput, draftContextLines, formatBuilderPrompt, isPromptSensitive, sanitizePromptText } from './builder/prompt.js';
+export { LayoutService } from './layout/LayoutService.js';
+export type { LayoutServiceDeps } from './layout/LayoutService.js';
+export { LAYOUT_KEYS, mergeLayout } from './layout/merge.js';
+export { fitToPage, compressAt, FIT_FLOORS } from './layout/fitToPage.js';
+export type { LayoutStore } from './layout/store.js';
 
 /** AI for resume features: the user's AI consent AND the brand's text model (R-13). */
 export async function resumeAiAvailable(userId: string): Promise<boolean> {
@@ -158,3 +175,78 @@ export const resumeSuiteService: ResumeSuiteService = {
 };
 
 export const unverifiedClaimsCount = (variantId: string) => resumeSuiteService.unverifiedClaimsCount(variantId);
+
+// ── WP-65: layout + guided builder ───────────────────────────────────────
+
+export function defaultLayoutDeps(): LayoutServiceDeps {
+  return {
+    store: createPrismaLayoutStore(),
+    countPages: async (markdown, options) => {
+      const { countResumePages } = await import('../../roboapply/v2/lib/resumeExport.js');
+      return countResumePages(markdown, options);
+    },
+    market: brandMarket,
+  };
+}
+
+let layoutSingleton: LayoutService | null = null;
+
+/** The process-wide layout service (Prisma store, the PDF renderer's page count). */
+export function getLayoutService(): LayoutService {
+  layoutSingleton ??= new LayoutService(defaultLayoutDeps());
+  return layoutSingleton;
+}
+
+export function defaultBuilderDeps(): BuilderServiceDeps {
+  const resumeService = async () => (await import('./legacyResumeService.js')).loadLegacyResumeModule();
+  return {
+    credits: creditService,
+    aiAvailable: resumeAiAvailable,
+    market: brandMarket,
+    suggest: async (input) => {
+      const { BuilderSuggestAgent } = await import('./builder/BuilderSuggestAgent.js');
+      return new BuilderSuggestAgent().run(input, { requestId: getCurrentRequestId() ?? undefined });
+    },
+    logAiLabel: async ({ userId, contentId, kind }) => {
+      const { complianceService } = await import('../compliance/index.js');
+      await complianceService.logAiContentLabel({ userId, contentId, kind, provider: 'llm' });
+    },
+    createResume: async (userId, input, locale) => {
+      const { raResumeService, ResumeLimitError, BASE_RESUME_LIMIT } = await resumeService();
+      try {
+        const view = await raResumeService.create(userId, { kind: 'base', name: input.name, resumeMarkdown: input.markdown }, locale);
+        return { id: view.id };
+      } catch (err) {
+        if (err instanceof ResumeLimitError) {
+          throw new HttpError('conflict', 'Every resume slot is in use. Delete one to add another.', { reason: 'resume_limit_reached', limit: BASE_RESUME_LIMIT });
+        }
+        throw err;
+      }
+    },
+    saveLayout: async (userId, id, layout) => {
+      await getLayoutService().patch(userId, id, layout);
+    },
+    patchMeta: async (userId, id, meta) => {
+      const { raResumeService } = await resumeService();
+      await raResumeService.patch(userId, id, meta);
+    },
+    deleteResume: async (userId, id) => {
+      const { raResumeService } = await resumeService();
+      await raResumeService.delete(userId, id);
+    },
+    builderAiUsedSince: async (userId, since) => {
+      // Read only: the rows BuilderService.suggest logs on GoApply (kind → artifactType).
+      const { default: prisma } = await import('../../lib/prisma.js');
+      const n = await prisma.rAAiContentLabelLog.count({ where: { userId, artifactType: 'resume_builder', createdAt: { gte: since } } });
+      return n > 0;
+    },
+  };
+}
+
+let builderSingleton: BuilderService | null = null;
+
+/** The process-wide guided builder service. */
+export function getBuilderService(): BuilderService {
+  builderSingleton ??= new BuilderService(defaultBuilderDeps());
+  return builderSingleton;
+}

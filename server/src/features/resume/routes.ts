@@ -22,18 +22,31 @@
 //   GET   /tailor-sessions/:id                  → TailorSessionView
 //   PATCH /tailor-sessions/:id/claims/:claimId  { status, text? } → TailorSessionView (Verify details)
 //   POST  /tailor-sessions/:id/finalize         → TailorSessionView; 409 unverified_claims { pending }
+// WP-36b / WP-65 layout (the legacy router answers PATCH /:id/layout first; this
+// twin uses the same LayoutService and response shape):
+//   PATCH /:id/layout                   { layout } → { resume }
+//   POST  /:id/fit-to-page              { pages: 1|2, photo? } → FitToPageResponse (spacing, margins, sizes only)
+// WP-65 guided builder (declared before the :id patterns):
+//   GET   /builder/config               → BuilderConfigView
+//   POST  /builder/suggest              BuilderSuggestBody → BuilderSuggestResponse (credit rewrite;
+//                                       503 ai_unavailable without AI consent; GoApply phone gate)
+//   POST  /builder                      BuilderDraft → BuilderCreateResponse (409 resume_limit_reached)
 // Credit-spending routes read the client's `Idempotency-Key` header.
 
 import { Router, type Request, type RequestHandler, type Response } from 'express';
-import type { ZodType } from 'zod';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
 import { getRequestLocale } from '../../roboapply/v2/lib/raLocale.js';
-import { markStub, NotImplementedError, parseBody, parseParams, parseQuery, requireUserId, route } from '../../platform/http.js';
+import { parseBody, parseParams, requireUserId, route } from '../../platform/http.js';
 import { AuthCnError, requirePhoneBound } from '../auth-cn/index.js';
 import type { FeatureRouterDeps } from '../index.js';
+import { defaultPageFor } from '../../roboapply/v2/lib/resumeExport.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import {
   ApplyFixBodySchema,
+  BuilderDraftSchema,
+  BuilderSuggestBodySchema,
   ClaimParamsSchema,
+  FitToPageBodySchema,
   CreateTailorSessionBodySchema,
   FixIssueBodySchema,
   GradeBodySchema,
@@ -47,16 +60,19 @@ import {
 } from './contract.js';
 import type { ResumeCheckService } from './ResumeCheckService.js';
 import { UnverifiedClaimsError, type TailorService } from './tailor/TailorService.js';
+import type { BuilderService } from './builder/BuilderService.js';
+import type { LayoutService } from './layout/LayoutService.js';
 
-function stub(what: string, s: { params?: ZodType; query?: ZodType; body?: ZodType } = {}): RequestHandler {
-  return markStub(
-    route(async (req) => {
-      if (s.params) parseParams(req, s.params);
-      if (s.query) parseQuery(req, s.query);
-      if (s.body) parseBody(req, s.body);
-      throw new NotImplementedError(what);
-    }),
-  );
+/** The visitor's country from the edge (Vercel), when present. */
+function requestCountry(req: Request): string | null {
+  const raw = req.headers['x-vercel-ip-country'];
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return typeof v === 'string' && /^[A-Za-z]{2}$/.test(v) ? v.toUpperCase() : null;
+}
+
+/** Letter or A4 for this request when the resume sets none (same rule as the legacy router). */
+export function requestDefaultPage(req: Request): 'letter' | 'a4' {
+  return defaultPageFor({ market: getCurrentBrandOrDefault().market, country: requestCountry(req), locale: getRequestLocale(req) });
 }
 
 export interface ResumeSuiteRouterOptions {
@@ -66,6 +82,12 @@ export interface ResumeSuiteRouterOptions {
   tailor?: TailorService;
   /** Test seam for the GoApply phone-binding gate (defaults to auth-cn `requirePhoneBound()`). */
   phoneGate?: RequestHandler;
+  /** Test seam; defaults to the process-wide builder service (WP-65). */
+  builder?: BuilderService;
+  /** Test seam; defaults to the process-wide layout service (WP-65). */
+  layout?: LayoutService;
+  /** Test seam: the hub view of a variant after a layout save (defaults to RAResumeService.getById). */
+  loadView?: (userId: string, id: string) => Promise<Record<string, unknown>>;
 }
 
 /**
@@ -99,11 +121,47 @@ function idempotencyKey(req: Request): string | null {
 export function createResumeSuiteRouter(deps: FeatureRouterDeps = {}, options: ResumeSuiteRouterOptions = {}): Router {
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
-  const rid = { params: ResumeIdParamsSchema };
   const svc = async (): Promise<ResumeCheckService> => options.service ?? (await import('./index.js')).getResumeCheckService();
 
   const tailor = async (): Promise<TailorService> => options.tailor ?? (await import('./index.js')).getTailorService();
   const phoneGate = options.phoneGate ?? requirePhoneBound();
+  const builder = async (): Promise<BuilderService> => options.builder ?? (await import('./index.js')).getBuilderService();
+  const layouts = async (): Promise<LayoutService> => options.layout ?? (await import('./index.js')).getLayoutService();
+  const loadView =
+    options.loadView ??
+    (async (userId: string, id: string) => {
+      const { loadLegacyResumeModule } = await import('./legacyResumeService.js');
+      return (await loadLegacyResumeModule()).raResumeService.getById(userId, id);
+    });
+
+  // Guided builder first (literal segments before the :id patterns). WP-65.
+  router.get(
+    '/builder/config',
+    ...auth,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      return (await builder()).config(userId, { locale: getRequestLocale(req), page: requestDefaultPage(req) });
+    }),
+  );
+  router.post(
+    '/builder/suggest',
+    ...auth,
+    phoneGate,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      const body = parseBody(req, BuilderSuggestBodySchema);
+      return (await builder()).suggest(userId, body, { idempotencyKey: idempotencyKey(req) });
+    }),
+  );
+  router.post(
+    '/builder',
+    ...auth,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      const body = parseBody(req, BuilderDraftSchema);
+      return (await builder()).create(userId, body, { locale: getRequestLocale(req) });
+    }),
+  );
 
   // Tailor sessions first (literal segment before the :id patterns). WP-36a.
   router.post(
@@ -214,8 +272,36 @@ export function createResumeSuiteRouter(deps: FeatureRouterDeps = {}, options: R
     }),
   );
 
-  // WP-36b.
-  router.patch('/:id/layout', ...auth, stub('resume.layout', { ...rid, body: PatchLayoutBodySchema }));
+  // WP-36b layout, WP-65 keys (the legacy router answers first; same service).
+  router.patch(
+    '/:id/layout',
+    ...auth,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      const { id } = parseParams(req, ResumeIdParamsSchema);
+      const body = parseBody(req, PatchLayoutBodySchema);
+      await (await layouts()).patch(userId, id, body.layout as Record<string, unknown>);
+      const resume = await loadView(userId, id);
+      return { resume: { ...resume, defaultPage: requestDefaultPage(req) } };
+    }),
+  );
+
+  // WP-65: fit to one page (GoApply: up to 2). Spacing, margins and sizes only.
+  router.post(
+    '/:id/fit-to-page',
+    ...auth,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      const { id } = parseParams(req, ResumeIdParamsSchema);
+      const body = parseBody(req, FitToPageBodySchema);
+      return (await layouts()).fit(userId, id, {
+        pages: body.pages,
+        photo: body.photo === true,
+        defaultPage: requestDefaultPage(req),
+        locale: getRequestLocale(req),
+      });
+    }),
+  );
 
   return router;
 }
