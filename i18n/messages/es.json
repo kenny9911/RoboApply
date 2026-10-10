@@ -933,7 +933,7 @@
       "written_test": "Prueba escrita"
     },
     "column": {
-      "aria": "{name}, {count} empleos"
+      "aria": "{name}, {count, plural, one {# empleo} other {# empleos}}"
     },
     "outcome": {
       "label": "Cómo terminó",
@@ -3244,7 +3244,7 @@
   },
   "errors": {
     "not_found_title": "Esta página no existe",
-    "not_found_body": "Puede que la dirección esté mal o que la página se haya movido. Ve a tus empleos y empieza desde ahí.",
+    "not_found_body": "Puede que la dirección esté mal o que la página se haya movido.",
     "error_title": "Algo de esta página no se cargó",
     "error_body": "No se perdió nada de lo que guardaste. Inténtalo otra vez y, si sigue fallando, recarga la página.",
     "try_again": "Reintentar",

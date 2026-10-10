@@ -933,7 +933,7 @@
       "written_test": "Test écrit"
     },
     "column": {
-      "aria": "{name}, {count} offres"
+      "aria": "{name}, {count, plural, one {# offre} other {# offres}}"
     },
     "outcome": {
       "label": "Comment ça s’est terminé",
@@ -3244,7 +3244,7 @@
   },
   "errors": {
     "not_found_title": "Cette page n’existe pas",
-    "not_found_body": "L’adresse est peut-être fausse, ou la page a été déplacée. Va à tes offres et repars de là.",
+    "not_found_body": "L’adresse est peut-être fausse, ou la page a été déplacée.",
     "error_title": "Un élément de cette page n’a pas pu se charger",
     "error_body": "Rien de ce que tu as enregistré n’est perdu. Réessaie, et si ça continue, recharge la page.",
     "try_again": "Réessayer",

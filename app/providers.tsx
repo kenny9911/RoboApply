@@ -8,7 +8,9 @@
 //      by app/layout.tsx from the proxy's x-ra-brand) and the shared state
 //      behind useFlag()/useCapabilities().
 //   3. NextIntlClientProvider — locale + translation messages (brand tokens
-//      already substituted by loadMessages(locale, brandId)).
+//      already substituted by loadMessages(locale, brandId)) and the time
+//      zone every `format.dateTime` call inherits: the VIEWER's (see
+//      useViewerTimeZone below), with the brand default for the server render.
 //   4. AuthProvider — exposes session state to all (auth) descendants.
 //
 // We deliberately resolve the locale + load messages at the server layer
@@ -21,7 +23,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 
 import { AuthProvider } from '../lib/auth/AuthProvider';
 import { BrandProvider, type SeedCapabilities } from '../lib/brand/BrandProvider';
@@ -64,6 +66,69 @@ function onIntlError(error: unknown): void {
   console.error('[i18n]', error);
 }
 
+// ── The viewer's time zone ───────────────────────────────────────────────
+//
+// Times are shown in the zone of the person reading them. The provider used to
+// pass `brand.defaultTimezone` (UTC on RoboApply), so in UTC+8 a daily credit
+// refill read "More on Oct 11" when it already was Oct 11 and a check run at
+// 02:08 read "Oct 10, 6:08 PM", while surfaces that call Intl directly showed
+// local time. Credits themselves refill at the user's local midnight
+// (PRODUCT_PLAN.md §6.2), so the brand zone was wrong for the copy as well.
+//
+// The server cannot know the browser's zone. So the server render and the
+// hydration pass use the brand default (same markup on both sides, no
+// mismatch), and React re-renders with the browser's zone straight after —
+// that is exactly the contract of useSyncExternalStore's server snapshot.
+// Signed-in screens load their data after hydration, so their times never
+// paint in the brand zone at all.
+
+let cachedViewerZone: string | null | undefined;
+
+/** The browser's IANA time zone, or null when it reports none that Intl can format with. */
+export function viewerTimeZone(): string | null {
+  if (cachedViewerZone !== undefined) return cachedViewerZone;
+  let zone: string | null = null;
+  try {
+    const reported = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (reported && reported !== 'Etc/Unknown') {
+      // Throws RangeError for a name this engine cannot format with.
+      new Intl.DateTimeFormat('en', { timeZone: reported });
+      zone = reported;
+    }
+  } catch {
+    zone = null;
+  }
+  cachedViewerZone = zone;
+  return zone;
+}
+
+/** Test seam: forget the cached zone. */
+export function resetViewerTimeZoneForTests(): void {
+  cachedViewerZone = undefined;
+}
+
+// A device changes zone while the tab sleeps (travel, a laptop reopened
+// elsewhere). There is no event for it, so look again when the tab is shown.
+function subscribeToViewerTimeZone(onChange: () => void): () => void {
+  if (typeof document === 'undefined') return () => undefined;
+  const recheck = () => {
+    if (document.visibilityState !== 'visible') return;
+    cachedViewerZone = undefined;
+    onChange();
+  };
+  document.addEventListener('visibilitychange', recheck);
+  return () => document.removeEventListener('visibilitychange', recheck);
+}
+
+/** The viewer's zone on the client; `fallback` on the server, during hydration, and when the browser reports none. */
+export function useViewerTimeZone(fallback: string): string {
+  return useSyncExternalStore(
+    subscribeToViewerTimeZone,
+    () => viewerTimeZone() ?? fallback,
+    () => fallback,
+  );
+}
+
 export function Providers({
   children,
   locale,
@@ -99,14 +164,17 @@ export function Providers({
     }
   }, [messages]);
 
+  // RoboApply's default is UTC, GoApply's Asia/Shanghai; both are only the
+  // server-render value and the fallback.
+  const timeZone = useViewerTimeZone(brand.defaultTimezone);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrandProvider brand={brand} initialCapabilities={initialCapabilities}>
         <NextIntlClientProvider
           locale={locale}
           messages={safeMessages as any}
-          // RoboApply: UTC (unchanged); GoApply: Asia/Shanghai.
-          timeZone={brand.defaultTimezone}
+          timeZone={timeZone}
           onError={onIntlError}
         >
           <AuthProvider>

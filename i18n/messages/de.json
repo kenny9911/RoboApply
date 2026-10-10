@@ -933,7 +933,7 @@
       "written_test": "Schriftlicher Test"
     },
     "column": {
-      "aria": "{name}, {count} Jobs"
+      "aria": "{name}, {count, plural, one {# Job} other {# Jobs}}"
     },
     "outcome": {
       "label": "Wie es ausgegangen ist",
@@ -3244,7 +3244,7 @@
   },
   "errors": {
     "not_found_title": "Diese Seite gibt es nicht",
-    "not_found_body": "Die Adresse stimmt vielleicht nicht, oder die Seite ist umgezogen. Geh zu deinen Jobs und fang dort an.",
+    "not_found_body": "Die Adresse stimmt vielleicht nicht, oder die Seite ist umgezogen.",
     "error_title": "Etwas auf dieser Seite konnte nicht geladen werden",
     "error_body": "Nichts von dem, was du gespeichert hast, ist verloren. Versuch es erneut, und wenn es weiter scheitert, lade die Seite neu.",
     "try_again": "Erneut versuchen",

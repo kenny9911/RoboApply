@@ -35,15 +35,41 @@ import {
 } from 'react';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { logout } from '../../../lib/api/auth';
+import { IconPerson } from '../primitives/Iconset';
 import { cleanUpDeviceOnSignOut, leaveSignedOut } from './signOutCleanup';
 
-/** Initials for the trigger. Two letters from a name, else from the address. */
-export function monogramFor(source: string | null | undefined): string {
+/**
+ * A placeholder address, not a mailbox: `.invalid` is reserved (RFC 6761) and
+ * is what a GoApply phone account carries in place of an email
+ * (`u-<random>@users.goapply.invalid`, server/src/features/auth-cn/accounts.ts).
+ */
+function isPlaceholderAddress(source: string): boolean {
+  return source.toLowerCase().endsWith('.invalid');
+}
+
+/**
+ * Initials for the trigger: two letters from a name, else from the address.
+ * Empty when there is nothing real to abbreviate — no session yet, or a phone
+ * account with no name. The trigger then shows a person icon. It never falls
+ * back to made-up letters: the old 'RA' was RoboApply's initials on GoApply
+ * too, and a placeholder address abbreviated to "UU".
+ */
+export function initialsFor(source: string | null | undefined): string {
   const src = source?.trim() ?? '';
-  if (!src) return 'RA';
+  if (!src || isPlaceholderAddress(src)) return '';
   const bits = src.split(/[\s@.]+/).filter(Boolean);
   if (bits.length >= 2) return (bits[0][0] + bits[1][0]).toUpperCase();
   return src.slice(0, 2).toUpperCase();
+}
+
+/**
+ * @deprecated Use `initialsFor`. Nothing renders this: it is `initialsFor`
+ * with the old 'RA' fallback, kept only because
+ * __tests__/components/AvatarMenu.test.tsx still pins that fallback. Delete it
+ * together with those two assertions.
+ */
+export function monogramFor(source: string | null | undefined): string {
+  return initialsFor(source) || 'RA';
 }
 
 const MENU_STYLE: CSSProperties = {
@@ -91,7 +117,8 @@ export function AvatarMenu() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
-  const monogram = monogramFor(user?.name || user?.email);
+  // A name that is only spaces is no name; fall through to the address.
+  const initials = initialsFor(user?.name?.trim() || user?.email);
 
   const focusItem = useCallback((index: number) => {
     const items = itemRefs.current.filter(Boolean) as HTMLElement[];
@@ -226,7 +253,7 @@ export function AvatarMenu() {
         }}
         onKeyDown={onTriggerKeyDown}
       >
-        {monogram}
+        {initials || <IconPerson size={18} aria-hidden="true" />}
       </button>
 
       {open ? (

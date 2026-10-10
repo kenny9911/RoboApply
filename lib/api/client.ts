@@ -299,6 +299,30 @@ export function devBrandHeader(cookieStr?: string): string | null {
   return value === 'roboapply' || value === 'goapply' ? value : null;
 }
 
+/**
+ * Take the payload out of the server's `{ success, data }` envelope.
+ *
+ * `data: null` is an answer — "no report yet", "no active plan" — and the
+ * caller must receive `null`. The unwrap used to be `body?.data ?? body`, and
+ * `??` cannot tell "this body has no data key" from "the data is null", so a
+ * null payload came back as the whole envelope and pages rendered
+ * `{ success, data }` as if it were the resource (/jobs/report crashed on it).
+ *
+ *   { success, data: X }     → X, whatever X is (null, 0, false, '' included)
+ *   { data: X }, X not null  → X (a bare wrapper some older routes send)
+ *   anything else            → the body unchanged (no data key, an array, a
+ *                              resource that merely has a nullable `data` field)
+ */
+export function unwrapEnvelope(body: unknown): unknown {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return body;
+  const record = body as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(record, 'data')) return body;
+  const payload = record.data;
+  if (payload !== null && payload !== undefined) return payload;
+  // A null payload only counts when the body really is an envelope.
+  return typeof record.success === 'boolean' ? null : body;
+}
+
 export async function request<T>(
   method: Method,
   path: string,
@@ -382,7 +406,7 @@ export async function request<T>(
     }
     throw error;
   }
-  return (data?.data ?? data) as T;
+  return unwrapEnvelope(data) as T;
 }
 
 export const roboApi = {

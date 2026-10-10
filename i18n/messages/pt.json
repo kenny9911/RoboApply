@@ -933,7 +933,7 @@
       "written_test": "Prova escrita"
     },
     "column": {
-      "aria": "{name}, {count} vagas"
+      "aria": "{name}, {count, plural, one {# vaga} other {# vagas}}"
     },
     "outcome": {
       "label": "Como terminou",
@@ -3244,7 +3244,7 @@
   },
   "errors": {
     "not_found_title": "Esta página não existe",
-    "not_found_body": "O endereço pode estar errado ou a página pode ter mudado de lugar. Vá para suas vagas e comece por lá.",
+    "not_found_body": "O endereço pode estar errado ou a página pode ter mudado de lugar.",
     "error_title": "Algo desta página não carregou",
     "error_body": "Nada do que você salvou foi perdido. Tente de novo e, se continuar falhando, recarregue a página.",
     "try_again": "Tentar de novo",
