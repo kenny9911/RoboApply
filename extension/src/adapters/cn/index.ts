@@ -2,8 +2,9 @@
 //
 // Moka, Beisen, Feishu and Dayee are matched by host + form markup; the
 // label-heuristic generic adapter comes last and has no host permission of its
-// own (see generic.ts). The manifest's host permissions and content scripts
-// follow the hostPatterns of this list (src/manifest.ts).
+// own (see generic.ts). The GoApply build ships these plus the international
+// adapters (adapters/registry.ts `adaptersFor('cn')`); the manifest's host
+// permissions and content scripts follow that whole list (src/manifest.ts).
 //
 // None of these adapters has a submit() or next(): the user presses the
 // portal's own buttons. After a fill the panel outlines the portal's submit

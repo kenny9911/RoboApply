@@ -16,7 +16,9 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { Markdown } from '../../v3/primitives';
 import { JobFit, JobKeywordCheck } from '../match';
 import { WhyThisJob } from '../compliance';
-import { AiGeneratedBadge, MarketJobMeta, withOwnImport } from '../market';
+import { AiGeneratedBadge, MarketJobMeta, withListing, withOwnImport } from '../market';
+import { jobListing } from '../../../lib/api/jobs';
+import { CAMPUS_TIME_ZONE } from '../campus/format';
 import { useBrand } from '../../../lib/brand';
 import type { JobDetailResponse, JobCampusInfo } from '../../../lib/api/contracts/jobs/detail';
 import { validDate } from './format';
@@ -31,7 +33,8 @@ export interface JobOverviewProps {
 export function CampusWindow({ campus, company }: { campus: JobCampusInfo; company: string }) {
   const t = useTranslations('jobDetail.campus');
   const format = useFormatter();
-  const fmt = (d: Date) => format.dateTime(d, { dateStyle: 'medium' });
+  // The window is stated in the campus calendar's zone: every viewer sees the day the calendar card shows.
+  const fmt = (d: Date) => format.dateTime(d, { dateStyle: 'medium', timeZone: CAMPUS_TIME_ZONE });
   const opens = validDate(campus.applyOpensAt);
   const closes = validDate(campus.applyClosesAt);
   const window =
@@ -76,7 +79,7 @@ export function JobOverview({ detail, marketMeta = true }: JobOverviewProps) {
   return (
     <div className={styles.main} data-testid="job-overview">
       {job.campus ? <CampusWindow campus={job.campus} company={job.companyName} /> : null}
-      {marketMeta ? <MarketJobMeta jobId={job.id} meta={withOwnImport(detail.marketMeta, job.source.kind === 'user_import')} variant="detail" /> : null}
+      {marketMeta ? <MarketJobMeta jobId={job.id} meta={withListing(withOwnImport(detail.marketMeta, job.source.kind === 'user_import'), jobListing(detail))} variant="detail" /> : null}
 
       {job.summary ? (
         <section className={styles.summary} data-testid="job-summary">

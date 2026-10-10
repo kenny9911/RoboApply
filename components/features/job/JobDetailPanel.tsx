@@ -14,7 +14,8 @@
 // (`alreadyApplied` false). When no resume is tailored for the job, the
 // first click offers "Tailor first" once per job (until "Don't ask again"),
 // and only while the brand's text model is usable (`ai.text`). Similar jobs
-// show only while `jobs.recommendations` is on (R-14).
+// show only while `jobs.recommendations` is on (on by default on both brands;
+// GoApply's off switch is CN_RECRUITMENT_INFO_MODE=off).
 //
 // A job with no application link (one the user typed in) has no "Apply on
 // company site"; the header offers "I applied" instead, which only records
@@ -38,7 +39,8 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 
 import { Btn, Tabs, tabPanelProps, toast, type TabItem } from '../../v3/primitives';
 import { CompanyTab } from '../company';
-import { MarketJobMeta, marketMetaCoversBasics, readCnMeta, withOwnImport } from '../market';
+import { MarketJobMeta, cnApplyCopy, marketMetaCoversBasics, marketPayLineText, marketPayWords, readCnMeta, withListing, withOwnImport } from '../market';
+import { jobListing } from '../../../lib/api/jobs';
 import { WechatShareCard } from '../notify-cn';
 import { useJob, useApplyIntercept } from '../../../hooks/job';
 import { useJobFit } from '../../../hooks/match';
@@ -120,8 +122,13 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   const recommendations = useFlag('jobs.recommendations');
   const hiring = useHiringContactsMode();
   const { flags } = useCapabilities();
-  const showNews = brand.market === 'intl' && flags?.[COMPANY_NEWS_FLAG] === true;
-  const actions = useJobActions(job.id, { applyUrl: job.applyUrl, source: 'job_detail' });
+  // Company news follows its flag only, on both brands (D5).
+  const showNews = flags?.[COMPANY_NEWS_FLAG] === true;
+  const tCn = useTranslations('jobsCn');
+  // Who published the posting and where the apply button leads (the contract's `source` / `apply`).
+  const listing = jobListing(detail);
+  const applyCopy = brand.market === 'cn' ? cnApplyCopy(listing) : null;
+  const actions = useJobActions(job.id, { applyUrl: job.applyUrl ?? listing.apply.url, source: 'job_detail' });
   const intercept = useApplyIntercept(job.id, !!checklist.tailoredResumeId);
   const openJob = useOpenJob(mode);
   const [tab, setTab] = useState<TabId>('overview');
@@ -144,7 +151,9 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   }, [fitQ.data, detail.fit, refetch]);
 
   const open = job.status === 'open';
-  const peopleTab = brand.market === 'intl' ? hiring !== 'off' && detail.people.mode !== 'off' : referralCodes;
+  // One rule for both brands (D5): hiring contacts and people you know when the
+  // contacts mode is on for this user and this job, or GoApply's 内推码.
+  const peopleTab = (hiring !== 'off' && detail.people.mode !== 'off') || referralCodes;
   // `?tab=people|company` (the Assistant's People link, F-NET) opens that tab
   // once per job. Read after mount, not during render, so SSR and hydration
   // agree. People waits until the tab exists for this user (the contacts mode
@@ -225,10 +234,11 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   // text, else the post's own pay text, else its listed figures. None → left out.
   const cnPay = readCnMeta(detail.marketMeta)?.salary;
   const listedPay = payLine(job.pay, locale);
+  // Words go through the market's rule, so the share card never says 面议 on GoApply.
   const payAsListed =
     (cnPay?.disclosed ? cnPay.text : null) ??
-    (job.payText?.trim() || null) ??
-    (job.pay?.text?.trim() || null) ??
+    (marketPayWords(brand.market, job)?.trim() || null) ??
+    (marketPayLineText(brand.market, job.pay?.text) || null) ??
     (listedPay
       ? listedPay.kind === 'exact'
         ? t('header.payExact', { amount: listedPay.amount, period: t(`header.period.${listedPay.period}`) })
@@ -248,7 +258,7 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
       <JobHeaderActions>
         {open && job.applyUrl && !applied ? (
           <Btn variant="primary" onClick={apply} disabled={actions.pending === 'apply'} data-testid="apply-button">
-            {t('actions.apply')}
+            {applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
           </Btn>
         ) : null}
         {noApplyLink && !applied ? (
@@ -276,7 +286,11 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
           </Btn>
         ) : null}
       </JobHeaderActions>
-      {open && job.applyUrl && !applied ? <p className={styles.hint}>{t('actions.applyHint')}</p> : null}
+      {open && job.applyUrl && !applied ? (
+        <p className={styles.hint} data-testid="apply-hint">
+          {applyCopy ? tCn(applyCopy.hintKey, { name: applyCopy.name }) : t('actions.applyHint')}
+        </p>
+      ) : null}
       {noApplyLink && !(ownImport && applied) ? (
         <p className={styles.hint} data-testid="no-apply-link">
           {ownImport ? t('actions.noApplyLinkYours') : t('actions.noApplyLink')}
@@ -327,7 +341,7 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
 
       <div className={styles.layout}>
         <div className={styles.main}>
-          {metaAboveTabs ? <MarketJobMeta jobId={job.id} meta={withOwnImport(detail.marketMeta, ownImport)} variant="detail" /> : null}
+          {metaAboveTabs ? <MarketJobMeta jobId={job.id} meta={withListing(withOwnImport(detail.marketMeta, ownImport), listing)} variant="detail" /> : null}
           <Tabs ariaLabel={t('tabs.label')} idBase={idBase} tabs={tabs} value={tab} onChange={setTab} />
           <div {...tabPanelProps(idBase, 'overview')} hidden={tab !== 'overview'}>
             {tab === 'overview' ? <JobOverview detail={detail} marketMeta={!metaAboveTabs} /> : null}
@@ -344,7 +358,7 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
         <aside className={styles.rail}>
           <GetReadyChecklist
             detail={detail}
-            flags={{ interviewBank, extension, agent, people: peopleTab && brand.market === 'intl', ai: aiText }}
+            flags={{ interviewBank, extension, agent, people: peopleTab, ai: aiText }}
             pending={actions.pending}
             onSave={() => void actions.save()}
             onTailor={() => actions.tailor()}

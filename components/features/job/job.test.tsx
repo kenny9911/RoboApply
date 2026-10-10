@@ -36,7 +36,9 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/jobs',
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('../../../lib/api/jobs', () => ({
+vi.mock('../../../lib/api/jobs', async (orig) => ({
+  // The pure readers (jobListing) are the real ones; only the requests are stubbed.
+  ...(await orig<Record<string, unknown>>()),
   getJob: api.getJob,
   getSimilarJobs: api.getSimilarJobs,
   getCompanyJobs: api.getCompanyJobs,
@@ -333,7 +335,7 @@ describe('states', () => {
     expect(campus).toHaveTextContent('For the class of 2027');
     expect(within(campus).getByRole('link')).toHaveAttribute('href', 'https://campus.example.cn/2027');
     expect(screen.getByTestId('job-summary').querySelector('[data-ai-label="text"]')).not.toBeNull();
-    // No LinkedIn People tab on GoApply without the 内推 hub.
+    // No People tab without the contacts mode or the 内推 hub (flags: {}).
     expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
   });
 });
@@ -455,6 +457,51 @@ describe('GoApply: one pay line, one set of dates (the market block has them)', 
     expect(screen.getByTestId('job-source')).toBeInTheDocument();
   });
 
+  it('a GoApply job with no market block and a pay line that only says 面议 reads "Pay not listed", never 面议', async () => {
+    for (const job of [{ pay: null, payText: '面议' }, { pay: null, payText: '薪资面议', salary: null }, { pay: null, payText: '月薪 8K 起', salary: null }]) {
+      api.getJob.mockResolvedValue(detail({ marketMeta: {} }, { companyName: '示例科技', location: '上海', ...job } as never));
+      const view = render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+      await screen.findByTestId('job-detail');
+      expect(screen.getByTestId('job-pay'), JSON.stringify(job)).toHaveTextContent(/^Pay not listed$/);
+      expect(screen.getByTestId('job-header')).not.toHaveTextContent(/面议|Pay as stated/);
+      view.unmount();
+    }
+    // Words that state a pay are still shown as stated.
+    api.getJob.mockResolvedValue(detail({ marketMeta: {} }, { pay: null, payText: '15-25K·14薪' }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toHaveTextContent('Pay as stated: 15-25K·14薪');
+  });
+
+  it('RoboApply still prints pay words as the posting states them, 面議 included (Taiwan)', async () => {
+    api.getJob.mockResolvedValue(detail({}, { pay: null, payText: '待遇面議' }));
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toHaveTextContent('Pay as stated: 待遇面議');
+  });
+
+  it('similar jobs: 面议 reads "Pay not listed" on GoApply and is printed as stated on RoboApply', async () => {
+    const closed = () => detail({}, { status: 'closed', closedAt: NOW });
+    const items = [
+      similarItem({ jobId: 's1', title: '数据分析师', payText: '面议' }),
+      similarItem({ jobId: 's2', title: '产品经理', payText: '薪资面议', salary: null }),
+      similarItem({ jobId: 's3', title: '后端工程师', payText: '15-25K·14薪' }),
+    ];
+    api.getJob.mockResolvedValue(closed());
+    api.getSimilarJobs.mockResolvedValue({ items });
+    const cn = render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { 'jobs.recommendations': true } });
+    const list = await screen.findByTestId('similar-jobs');
+    expect((await within(list).findByText('数据分析师')).closest('a')!.querySelector('[data-similar-pay]')).toHaveTextContent(/^Pay not listed$/);
+    expect(within(list).getByText('产品经理').closest('a')!.querySelector('[data-similar-pay]')).toHaveTextContent(/^Pay not listed$/);
+    expect(within(list).getByText('后端工程师').closest('a')).toHaveTextContent('Pay as stated: 15-25K·14薪');
+    expect(list).not.toHaveTextContent('面议');
+    cn.unmount();
+    api.getJob.mockResolvedValue(closed());
+    render();
+    const intl = await screen.findByTestId('similar-jobs');
+    expect((await within(intl).findByText('数据分析师')).closest('a')).toHaveTextContent('Pay as stated: 面议');
+  });
+
   it('RoboApply is unchanged even when a job carries cn meta', async () => {
     api.getJob.mockResolvedValue(detail({ marketMeta: CN_META }));
     render();
@@ -494,7 +541,7 @@ describe('GoApply: one pay line, one set of dates (the market block has them)', 
     expect(block).toHaveTextContent('15-25K·14薪');
     expect(block).toHaveTextContent('Source: GoHire');
     expect(block).toHaveTextContent(/Updated /);
-    expect(block).toHaveTextContent(/Last checked /);
+    expect(block).toHaveTextContent(/Last verified /);
     expect(screen.getAllByText('15-25K·14薪')).toHaveLength(1);
   });
 
@@ -540,6 +587,21 @@ describe('WeChat share card (GoApply only)', () => {
     render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
     const card = await screen.findByTestId('wechat-share');
     expect(card.getAttribute('data-description')).toMatch(/^Shanghai · .*15,000.*25,000.* a month$/);
+  });
+
+  it('a pay line that only says 面议 never reaches the share card: not from the market block, not from the job\'s own pay words', async () => {
+    const negotiable = { cn: { sourceLine: { kind: 'source', sourceName: 'GoHire', originalSourceName: null, licence: null }, salary: { text: '面议', disclosed: true }, updatedAt: null, lastCheckedAt: NOW, expiresAt: null, tags: [], classYears: [], warnings: [] } };
+    for (const job of [
+      { location: '上海', pay: null, payText: '面议' },
+      { location: '上海', pay: null, payText: '薪资面议', salary: null },
+      { location: '上海', pay: { min: 0, max: 0, currency: 'CNY', period: 'month' as const, text: '待遇面议' }, payText: null },
+    ]) {
+      api.getJob.mockResolvedValue(detail({ marketMeta: negotiable }, job as never));
+      const view = render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+      const card = await screen.findByTestId('wechat-share');
+      expect(card, JSON.stringify(job)).toHaveAttribute('data-description', '上海');
+      view.unmount();
+    }
   });
 
   it('RoboApply: no share card', async () => {
@@ -691,6 +753,118 @@ describe('checklist, People, Company', () => {
     // No news block while the V2 flag is off.
     expect(screen.queryByTestId('company-news')).toBeNull();
     expect(api.getCompanyNews).not.toHaveBeenCalled();
+  });
+});
+
+// D5 parity: the People tab, company news and the apply button follow one rule on both brands.
+describe('GoApply parity on the job page', () => {
+  const CN_BOARD_META = {
+    cn: {
+      sourceLine: { kind: 'source', sourceName: 'SmartRecruiters', originalSourceName: null, licence: null },
+      salary: { text: null, disclosed: false },
+      updatedAt: '2026-10-08T00:00:00.000Z',
+      lastCheckedAt: NOW,
+      expiresAt: null,
+      tags: [],
+      classYears: [],
+      warnings: [],
+    },
+  };
+  /** A mainland posting read from an employer's careers board, with the contract's `apply` and `source`. */
+  const boardJob = {
+    companyName: '示例科技',
+    location: '上海',
+    pay: null,
+    payText: null,
+    applyUrl: 'https://careers.example-tech.cn/jobs/1',
+    source: { name: 'SmartRecruiters', kind: 'ats_public' as const, originalName: null, original: '示例科技', url: 'https://jobs.smartrecruiters.com/ExampleTech/1', lastVerifiedAt: NOW, via: 'ats' },
+    apply: { url: 'https://careers.example-tech.cn/jobs/1', target: 'employer' },
+  } as unknown as Partial<JobDetailResponse['job']>;
+  const noPeople = { mode: 'off' as const, searchLinks: [] };
+
+  it('People tab: shown when the contacts mode is on for the user and the job, with no 内推码 flag needed', async () => {
+    api.getJob.mockResolvedValue(detail({ people: { mode: 'on', searchLinks: [] }, marketMeta: CN_BOARD_META }, boardJob));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS, hiringContacts: 'on' } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByRole('tab', { name: 'People' })).toBeInTheDocument();
+    // The checklist links to it too, as on RoboApply.
+    expect(within(screen.getByTestId('job-checklist')).getByRole('button', { name: 'People at Acme' })).toBeInTheDocument();
+  });
+
+  it('People tab: shown for 内推码 alone, and absent with neither', async () => {
+    api.getJob.mockResolvedValue(detail({ people: noPeople, marketMeta: CN_BOARD_META }, boardJob));
+    const codes = render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS, 'cn.referralCodes': true } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByRole('tab', { name: 'People' })).toBeInTheDocument();
+    codes.unmount();
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS } });
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
+  });
+
+  it('RoboApply keeps its rule: the tab needs the contacts mode (the 内推码 flag is GoApply’s)', async () => {
+    api.getJob.mockResolvedValue(detail({ people: noPeople }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS, hiringContacts: 'off' } });
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
+  });
+
+  it('company news follows its flag only: on GoApply with the flag on the Company tab asks for it', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_BOARD_META }, boardJob));
+    api.getCompanyNews.mockResolvedValue({ items: [], kind: 'search_results', fetchedAt: NOW });
+    const on = render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS, companyNews: true } as never });
+    await screen.findByTestId('job-detail');
+    fireEvent.click(screen.getByRole('tab', { name: 'Company' }));
+    await screen.findByTestId('company-tab');
+    await waitFor(() => expect(api.getCompanyNews).toHaveBeenCalledWith('j1', expect.anything()));
+    expect(await screen.findByTestId('company-news')).toBeInTheDocument();
+    on.unmount();
+    api.getCompanyNews.mockClear();
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS } });
+    await screen.findByTestId('job-detail');
+    fireEvent.click(screen.getByRole('tab', { name: 'Company' }));
+    await screen.findByTestId('company-tab');
+    expect(screen.queryByTestId('company-news')).toBeNull();
+    expect(api.getCompanyNews).not.toHaveBeenCalled();
+  });
+
+  it('the apply button says where it leads and the market block names the publisher, links the original posting and says when it was verified', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_BOARD_META }, boardJob));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('apply-button')).toHaveTextContent("Apply on the employer's careers site");
+    expect(screen.getByTestId('apply-hint')).toHaveTextContent("Opens the employer's careers site in a new tab. You send the application there.");
+    const block = screen.getByTestId('job-meta-cn');
+    expect(within(block).getByTestId('cn-source')).toHaveTextContent('Source: 示例科技');
+    expect(within(block).getByTestId('cn-original-link')).toHaveAttribute('href', 'https://jobs.smartrecruiters.com/ExampleTech/1');
+    expect(block).toHaveTextContent(/Last verified /);
+    expect(block).toHaveTextContent('Pay not listed');
+    // Nothing on the page claims the product applies for the user.
+    expect(screen.getByTestId('job-detail')).not.toHaveTextContent(/we apply|apply for you|auto-?apply/i);
+  });
+
+  it('a recruiter-bank row says the bank’s page; a job with no contract fields keeps the shared wording', async () => {
+    const bankJob = { ...boardJob, fromRecruiterBank: true, source: { name: 'GoHire', kind: 'bank', originalName: null, original: 'GoHire', url: 'https://www.gohire.top/postings/9', lastVerifiedAt: NOW, via: 'bank' }, apply: { url: 'https://www.gohire.top/postings/9', target: 'gohire' } } as unknown as Partial<JobDetailResponse['job']>;
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_BOARD_META }, bankJob));
+    const bank = render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('apply-button')).toHaveTextContent('Apply on GoHire');
+    expect(screen.getByTestId('apply-hint')).toHaveTextContent("Opens this job's page on GoHire in a new tab.");
+    bank.unmount();
+    // A provider row (no `apply`, kind `provider`): the target is not known, so nothing is claimed about it.
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_BOARD_META }, { companyName: '示例科技' }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('apply-button')).toHaveTextContent('Apply on company site');
+  });
+
+  it('RoboApply is unchanged: the same button and hint, with or without the contract fields', async () => {
+    api.getJob.mockResolvedValue(detail({}, boardJob));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS } });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('apply-button')).toHaveTextContent('Apply on company site');
+    expect(screen.getByTestId('apply-hint')).toHaveTextContent("Opens the employer's page in a new tab. You send the application there.");
+    expect(screen.queryByTestId('cn-original-link')).toBeNull();
   });
 });
 

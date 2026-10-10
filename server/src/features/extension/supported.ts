@@ -1,7 +1,8 @@
 // server/src/features/extension/supported.ts — the ATS types the extension
 // can fill today, per market (WP-55b: Greenhouse, Lever, Ashby; WP-70:
 // Workday, SmartRecruiters, iCIMS, Workable, Taleo, SuccessFactors; WP-71:
-// Moka, Beisen, Feishu, Dayee on GoApply). Job detail answers
+// Moka, Beisen, Feishu, Dayee on GoApply, whose list is those four plus the
+// whole RoboApply list: D5, the portal list is a superset). Job detail answers
 // `autofill.supported` / `extensionSupported` from WP-34's registry, so a
 // job page offers "Fill this form" only where an adapter exists.
 //
@@ -29,5 +30,5 @@ let registered = false;
 export function registerSupportedAtsTypes(): void {
   if (registered) return;
   registered = true;
-  registerExtensionAtsTypes([...EXTENSION_ATS_TYPES_BY_MARKET.intl, ...EXTENSION_ATS_TYPES_BY_MARKET.cn], extensionOffersFill);
+  registerExtensionAtsTypes([...new Set<string>([...EXTENSION_ATS_TYPES_BY_MARKET.intl, ...EXTENSION_ATS_TYPES_BY_MARKET.cn])], extensionOffersFill);
 }

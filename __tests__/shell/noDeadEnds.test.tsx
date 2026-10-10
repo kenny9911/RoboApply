@@ -134,8 +134,8 @@ describe('nav entries (destinations.ts → Sidebar, bottom bar, More sheet, ⌘K
       const route = routeFor(e.href)!;
       expect(isProtectedPath(e.href), e.id).toBe(route.signedIn);
     }
-    // /campus (GoApply) and /extension (RoboApply) are public pages signed-in users also use (R-23).
-    expect(NAV_ENTRIES.filter((e) => !isProtectedPath(e.href)).map((e) => e.href).sort()).toEqual(['/campus', '/extension']);
+    // /campus (GoApply) and /extension (both brands) are public pages signed-in users also use (R-23).
+    expect(NAV_ENTRIES.filter((e) => !isProtectedPath(e.href)).map((e) => `${e.id} ${e.href}`).sort()).toEqual(['cn.campus /campus', 'cn.extension /extension', 'extension /extension']);
   });
 
   it('both brands have a full IA and no entry of one brand leaks into the other', () => {
@@ -289,6 +289,7 @@ describe('what the shell actually renders (every flag on, admin, both brands)', 
   it.each(BRANDS)('%s: the rail, the bottom bar, the More sheet, the avatar menu and the palette only link to real pages', async (brand) => {
     mockAuthState.value = buildAuthValue({ user: buildFakeUser({ role: 'admin' }) });
     vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id'); // the extension is published
+    vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id'); // and GoApply's
     renderWithBrand(
       <CommandPaletteProvider>
         <Sidebar />
@@ -298,8 +299,8 @@ describe('what the shell actually renders (every flag on, admin, both brands)', 
       { brand, flags: EVERYTHING },
     );
 
-    // The roster arrives → Coaching joins the RoboApply rail.
-    if (brand === 'roboapply') expect(await screen.findByRole('link', { name: 'Coaching' })).toHaveAttribute('href', '/coaching');
+    // The roster arrives → Coaching joins the rail, on both brands (D5).
+    expect(await screen.findByRole('link', { name: 'Coaching' })).toHaveAttribute('href', '/coaching');
 
     const seen = new Set(hrefsIn());
 

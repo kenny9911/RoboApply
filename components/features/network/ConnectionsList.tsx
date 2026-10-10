@@ -47,7 +47,7 @@ export function ConnectionsList() {
               </p>
               <p className={styles.muted} data-testid="contact-source">
                 {tPanel(person.source === 'user_added' ? 'sourceAdded' : 'sourceImported')}
-                {person.connectedOn ? ` · ${tPanel('connectedOn', { date: format.dateTime(new Date(person.connectedOn), { year: 'numeric', month: 'short' }) })}` : ''}
+                {person.connectedOn ? ` · ${tPanel('connectedOn', { date: format.dateTime(new Date(person.connectedOn), { year: 'numeric', month: 'short', timeZone: 'UTC' }) })}` : ''}
               </p>
             </div>
           </li>

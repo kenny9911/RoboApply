@@ -1,8 +1,11 @@
 // extension/src/brands/goapply/index.ts — GoApply build values (mainland China, 一键填表).
 //
 // Names, hosts and the API origin come from the brand registry (brands/index.ts);
-// the form hosts come from adapters/cn (Moka, Beisen, Feishu, Dayee) through
-// src/manifest.ts. This file holds what only the GoApply build needs:
+// the form hosts come from the `cn` adapter set through src/manifest.ts. That
+// set is a superset of RoboApply's (D5): the mainland portals (Moka, Beisen,
+// Feishu, Dayee) plus every international adapter (Greenhouse, Lever, Ashby,
+// Workday, SmartRecruiters, …), because mainland roles are also posted on
+// those boards. This file holds what only the GoApply build needs:
 //   - the adapter set and dev origins (ExtBrandValues);
 //   - distribution: Microsoft Edge Add-ons first (reachable in the mainland),
 //     the Chrome Web Store second, and a self-hosted signed CRX with an update
@@ -19,6 +22,7 @@
 // test/cn/manifest.test.ts cover both.
 
 import { CN_PORTAL_ADAPTERS } from '../../adapters/cn/index';
+import { INTL_FILLABLE_ATS_TYPES } from '../../adapters/intl/index';
 import type { ExtBrandValues } from '../types';
 
 export const GOAPPLY_EXT: ExtBrandValues = {
@@ -59,4 +63,12 @@ export const GOAPPLY_DISTRIBUTION: GoApplyDistribution = {
 /** Ids of the portal adapters the GoApply build ships (for the server's supported list and the store listing). */
 export function goapplyPortalIds(): string[] {
   return CN_PORTAL_ADAPTERS.map((a) => a.id);
+}
+
+/**
+ * Every ATS type the GoApply build fills: its portals, then the international
+ * ones (the server's `EXTENSION_ATS_TYPES_BY_MARKET.cn`; a test keeps them equal).
+ */
+export function goapplyFillableAtsTypes(): string[] {
+  return [...new Set([...goapplyPortalIds(), ...INTL_FILLABLE_ATS_TYPES])];
 }

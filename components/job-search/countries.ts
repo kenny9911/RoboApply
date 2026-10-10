@@ -6,3 +6,42 @@ export function countryOptions(locale: string): { code: string; name: string }[]
   const collator = new Intl.Collator(locale);
   return COUNTRY_CODES.map((code) => ({ code, name: names.of(code) ?? code })).sort((a, b) => collator.compare(a.name, b.name));
 }
+
+/**
+ * What the developer guide shows for a brand: the country a search runs in
+ * when the request names none, and the two request examples. The capability
+ * is the same on both brands; the market is what differs (D5), so GoApply's
+ * examples are mainland ones and never name a source it does not have.
+ */
+export interface JobSearchBrandExamples {
+  /** ISO 3166-1 alpha-2, upper case: the brand's default search country. */
+  defaultCountry: string;
+  envPrefix: string;
+  search: Record<string, unknown>;
+  agent: Record<string, unknown>;
+}
+
+export function jobSearchBrandExamples(brand: { id: string; market: string; defaultCountry: string }): JobSearchBrandExamples {
+  const envPrefix = brand.id.toUpperCase();
+  if (brand.market === 'cn') {
+    return {
+      defaultCountry: brand.defaultCountry,
+      envPrefix,
+      search: { query: '数据分析师', country: brand.defaultCountry, location: '上海', datePosted: 'week', limit: 20 },
+      agent: { request: '找上海的数据分析师职位，最近一周发布。', limit: 20 },
+    };
+  }
+  return {
+    defaultCountry: brand.defaultCountry,
+    envPrefix,
+    search: { query: 'software engineer', country: 'US', remote: true, datePosted: 'week', limit: 20 },
+    agent: { request: 'Find remote backend engineering jobs in Taiwan posted this week.', linkedinOnly: true, limit: 20 },
+  };
+}
+
+/** Country options with the brand's default country first. */
+export function countryOptionsFor(locale: string, brand: { defaultCountry: string }): { code: string; name: string }[] {
+  const all = countryOptions(locale);
+  const first = all.find((option) => option.code === brand.defaultCountry);
+  return first ? [first, ...all.filter((option) => option !== first)] : all;
+}

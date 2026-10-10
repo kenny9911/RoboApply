@@ -28,7 +28,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Btn, FitTierLabel, HonestyLine, toast } from '../../v3/primitives';
 import { normalizeScore, type FitTierKey } from '../common';
-import { MarketJobMeta, marketMetaCoversBasics, withOwnImport } from '../market';
+import { MarketJobMeta, cnApplyCopy, marketMetaCoversBasics, withListing, withOwnImport } from '../market';
+import { listingApply, listingSource } from '../../../lib/api/feed';
 import { TailorButton } from '../tailor';
 import { WhyThisJob } from '../compliance';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
@@ -109,8 +110,15 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
   const tScore = useTranslations('jobs.score');
   const tOpt = useTranslations('filters.options');
   const locale = useLocale();
+  const tCn = useTranslations('jobsCn');
   const copilotOn = useFlag('copilot');
-  const actions = useJobActions(item.jobId, { source: 'job_card' });
+  // The posting's own source and apply link (the contract's `source` / `apply`;
+  // null where the server sent none, and the card then behaves as before).
+  const listing = { source: listingSource(item), apply: listingApply(item) };
+  // With the link in hand the new tab opens inside the click itself.
+  const actions = useJobActions(item.jobId, { source: 'job_card', applyUrl: listing.apply.url });
+  // GoApply: the button says where it leads (the employer's careers site, or the bank's page).
+  const applyCopy = market === 'cn' ? cnApplyCopy(listing) : null;
   const status = item.tracker?.status ?? null;
   const [saved, setSaved] = useState(status ? SAVED_STATUSES.has(status) : false);
   const [appliedNote, setAppliedNote] = useState<'apply' | 'mark' | null>(null);
@@ -278,14 +286,13 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
           <div className={styles.lead}>
             {item.fit.topGap ? (
               <p className={styles.gap}>
-                <span className={styles.leadLabel}>{t('whatsMissing')}: </span>
-                {item.fit.topGap}
+                {/* The colon is in the message, so each language uses its own (full-width in zh and ja). */}
+                <span className={styles.leadLabel}>{t('leadLabel', { label: t('whatsMissing') })}</span> {item.fit.topGap}
               </p>
             ) : null}
             {item.fit.topOverlap ? (
               <p className={styles.overlap}>
-                <span className={styles.leadLabel}>{t('whatLinesUp')}: </span>
-                {item.fit.topOverlap}
+                <span className={styles.leadLabel}>{t('leadLabel', { label: t('whatLinesUp') })}</span> {item.fit.topOverlap}
               </p>
             ) : null}
           </div>
@@ -362,7 +369,7 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
         </ul>
       ) : null}
 
-      <MarketJobMeta jobId={item.jobId} meta={withOwnImport(extras.cardMeta, source?.key === 'user_import')} variant="card" />
+      <MarketJobMeta jobId={item.jobId} meta={withListing(withOwnImport(extras.cardMeta, source?.key === 'user_import'), listing)} variant="card" />
 
       {extras.explanation && item.fit ? (
         <details className={styles.why}>
@@ -386,7 +393,7 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
         </Btn>
         {!showApplied && !alreadyApplied ? (
           <Btn variant="primary" className={styles.actionBtn} onClick={() => void apply()} disabled={actions.pending === 'apply'}>
-            {actions.pending === 'apply' ? t('actions.applyPending') : t('actions.apply')}
+            {actions.pending === 'apply' ? t('actions.applyPending') : applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
           </Btn>
         ) : null}
         <TailorButton jobId={item.jobId} from="feed" jobTitle={item.title} variant="ghost" className={styles.actionBtn} />

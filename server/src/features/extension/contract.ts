@@ -366,16 +366,22 @@ export const UninstallSurveyBodySchema = z
 /** `RASurveyResponse.answers` (documented JSON column). */
 export const SurveyAnswersSchema = z.object({ reasons: z.array(z.string()), note: z.string().optional() }).strict();
 
+const INTL_EXTENSION_ATS_TYPES = ['greenhouse', 'lever', 'ashby', 'workday', 'smartrecruiters', 'icims', 'workable', 'taleo', 'successfactors'] as const;
+const CN_PORTAL_ATS_TYPES = ['moka', 'beisen', 'feishu', 'dayee'] as const;
+
 /**
  * ATS types each market's extension build can fill (ARCHITECTURE.md §6.2).
  * intl: WP-55b's three plus WP-70's adapters (extension
- * `INTL_FILLABLE_ATS_TYPES`); cn: WP-71's mainland portals. The label-based
- * `generic` adapters are never listed. The web mirror is
+ * `INTL_FILLABLE_ATS_TYPES`). cn: a superset (D5; parity plan §3.12), WP-71's
+ * mainland portals plus the whole intl list, because mainland roles are also
+ * posted on Workday, Greenhouse and the other international boards and the
+ * GoApply build ships those adapters too (extension `goapplyFillableAtsTypes`).
+ * The label-based `generic` adapters are never listed. The web mirror is
  * `hooks/extension/bridge.ts#EXTENSION_ATS_BY_BRAND`; a test keeps them equal.
  */
 export const EXTENSION_ATS_TYPES_BY_MARKET = {
-  intl: ['greenhouse', 'lever', 'ashby', 'workday', 'smartrecruiters', 'icims', 'workable', 'taleo', 'successfactors'],
-  cn: ['moka', 'beisen', 'feishu', 'dayee'],
+  intl: INTL_EXTENSION_ATS_TYPES,
+  cn: [...CN_PORTAL_ATS_TYPES, ...INTL_EXTENSION_ATS_TYPES],
 } as const satisfies Record<'intl' | 'cn', readonly string[]>;
 
 /**

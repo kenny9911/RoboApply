@@ -3,7 +3,7 @@
 // own files: LegalFooter + AiGeneratedBadge (WP-13), PriceReference (WP-21b),
 // cn/ (WP-41), tw/ (WP-42).
 
-export { MarketJobMeta, marketMetaCoversBasics } from './MarketJobMeta';
+export { MarketJobMeta, marketMetaCoversBasics, marketPayLineText, marketPayWords } from './MarketJobMeta';
 export type { MarketCardMeta, MarketJobMetaProps, MarketJobMetaSlotProps } from './types';
 export { LegalFooter, type LegalFooterProps } from './LegalFooter';
 export { AiGeneratedBadge, type AiGeneratedBadgeProps } from './AiGeneratedBadge';
@@ -16,3 +16,7 @@ export { NegotiablePayNote, TW_PAY_LAW_URL, type NegotiablePayNoteProps, CareerS
 // the reader of `meta.cn` (the pay text for the WeChat share card), and the
 // marker for a job the user added (its source line reads "Added by you").
 export { ExternalSearchPanel, type ExternalSearchPanelProps, ExternalSearchLinks, readCnMeta, withOwnImport } from './cn';
+// Parity wave (PAR-8): the listing facts of the contract handed to the slot
+// (original publisher, original link, last verified), the list header that
+// says where the postings come from, and where the apply button leads.
+export { CnFeedSources, CN_RECRUITER_BANK_NAME, type CnFeedSourcesProps, cnApplyCopy, type CnApplyCopy, withListing } from './cn';

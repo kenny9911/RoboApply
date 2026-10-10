@@ -479,6 +479,59 @@ describe('PeoplePanel (GoApply)', () => {
     expect(api.listReferralCodes).toHaveBeenCalledWith(expect.objectContaining({ company: '示例科技' }), expect.anything());
     expect(screen.queryByTestId('people-you-know')).toBeNull();
   });
+
+  // D5: hiring contacts and people you know are not a RoboApply-only feature.
+  it('mode on: an opted-in GoHire recruiter and the people you know show above the 内推码 block', async () => {
+    api.getConnectionsForJob.mockResolvedValue(
+      people({
+        recruiters: [contact({ id: 'rec_cn', source: 'bank_recruiter', sourceName: 'GoHire', fullName: '王招聘', companyName: '示例科技', connectedOn: null, optedInAt: '2026-09-01T00:00:00.000Z' })],
+        fromYourCompanies: [contact({ id: 'ct_cn', fullName: '李同学', companyName: '示例科技' })],
+      }),
+    );
+    api.listReferralCodes.mockResolvedValue({ items: [code()], cursor: null, mine: [] });
+    renderWithBrand(<PeoplePanel jobId="job_1" companyId={null} companyName="示例科技" />, { brand: 'goapply', flags: { hiringContacts: 'on', 'cn.referralCodes': true } });
+    const recruiters = await screen.findByTestId('hiring-contacts');
+    expect(within(recruiters).getByText('王招聘')).toBeTruthy();
+    expect(within(recruiters).getByTestId('recruiter-source').textContent).toMatch(/GoHire recruiter who chose to be contactable by candidates/);
+    const known = screen.getByTestId('people-you-know');
+    expect(within(known).getByText('李同学')).toBeTruthy();
+    const codes = await screen.findByTestId('referrals-for-company');
+    // Order on the page: hiring contact, people you know, then the referral codes.
+    const before = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(before(recruiters, known)).toBe(true);
+    expect(before(known, codes)).toBe(true);
+    expect(screen.getByTestId('outreach-composer')).toBeTruthy();
+  });
+
+  it('mode on with nobody to show: no empty people section and no LinkedIn import prompt, only what exists', async () => {
+    api.getConnectionsForJob.mockResolvedValue(people({ fromYourCompanies: [], importedCount: 0 }));
+    api.listReferralCodes.mockResolvedValue({ items: [code()], cursor: null, mine: [] });
+    renderWithBrand(<PeoplePanel jobId="job_1" companyId={null} companyName="示例科技" />, { brand: 'goapply', flags: { hiringContacts: 'on', 'cn.referralCodes': true } });
+    expect(await screen.findByTestId('referrals-for-company')).toBeTruthy();
+    expect(screen.queryByTestId('people-you-know')).toBeNull();
+    expect(screen.queryByTestId('hiring-contacts')).toBeNull();
+    expect(screen.queryByTestId('import-cta')).toBeNull();
+  });
+
+  it('mode off and no referral codes renders nothing, as on RoboApply; with the codes on it shows the codes', async () => {
+    api.getConnectionsForJob.mockResolvedValue(people({ mode: 'off', fromYourCompanies: [] }));
+    const none = renderWithBrand(<PeoplePanel jobId="job_1" companyId={null} companyName="示例科技" />, { brand: 'goapply', flags: {} });
+    await waitFor(() => expect(api.getConnectionsForJob).toHaveBeenCalled());
+    await waitFor(() => expect(none.container.querySelector('[data-testid="people-panel"]')).toBeNull());
+    expect(screen.queryByTestId('outreach-composer')).toBeNull();
+    none.unmount();
+    api.listReferralCodes.mockResolvedValue({ items: [code()], cursor: null, mine: [] });
+    renderWithBrand(<PeoplePanel jobId="job_1" companyId={null} companyName="示例科技" />, { brand: 'goapply', flags: { 'cn.referralCodes': true } });
+    expect(await screen.findByTestId('referrals-for-company')).toBeTruthy();
+  });
+
+  // `connectedOn` is a date-only value stored at UTC midnight: it is formatted in UTC, so the
+  // first of a month never reads as the month before west of UTC (run with TZ=America/Los_Angeles to see it).
+  it('a connected-on date on the first of a month shows that month', async () => {
+    api.getConnectionsForJob.mockResolvedValue(people({ fromYourCompanies: [contact({ connectedOn: '2021-03-01T00:00:00.000Z' })] }));
+    renderWithBrand(<PeoplePanel jobId="job_1" companyId={null} companyName="Acme" />, { flags: { hiringContacts: 'on' } });
+    expect(await screen.findByText(/Connected Mar 2021/)).toBeTruthy();
+  });
 });
 
 describe('FollowUpDraftButton', () => {

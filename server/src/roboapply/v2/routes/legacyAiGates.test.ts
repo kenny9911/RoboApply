@@ -126,8 +126,29 @@ describe('POST /v2/discover/run (cross-bank search)', () => {
     expect(m.discoverRun).toHaveBeenCalledTimes(1);
   });
 
-  it('GoApply, recruitment-info mode off: 404 feature_disabled, no bank read and no model call (R-14)', async () => {
-    const off = await discoverOn({});
+  it('GoApply with no mode set (the default): the route is open, and the phone and AI consent gates still come first', async () => {
+    const def = await discoverOn({});
+    try {
+      m.aiAvailable = false;
+      const noConsent = await def.request<{ code?: string }>('POST', '/v2/discover/run', { host: GA, body: {} });
+      expect(noConsent.status).toBe(503);
+      expect(noConsent.body?.code).toBe('ai_unavailable');
+      m.aiAvailable = true;
+      m.phoneBound = false;
+      const noPhone = await def.request<{ code?: string }>('POST', '/v2/discover/run', { host: GA, body: {} });
+      expect(noPhone.status).toBe(403);
+      expect(noPhone.body?.code).toBe('phone_binding_required');
+      expect(m.discoverRun).not.toHaveBeenCalled();
+      m.phoneBound = true;
+      expect((await def.request('POST', '/v2/discover/run', { host: GA, body: {} })).status).toBe(200);
+      expect(m.discoverRun).toHaveBeenCalledTimes(1);
+    } finally {
+      await def.close();
+    }
+  });
+
+  it('GoApply, CN_RECRUITMENT_INFO_MODE=off: 404 feature_disabled, no bank read and no model call', async () => {
+    const off = await discoverOn({ CN_RECRUITMENT_INFO_MODE: 'off' });
     try {
       const res = await off.request<{ code?: string }>('POST', '/v2/discover/run', { host: GA, body: {} });
       expect(res.status).toBe(404);

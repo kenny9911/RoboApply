@@ -20,14 +20,17 @@ import { createCoachingAdminRouter } from './adminRoutes.js';
 import { createCoachingService, type CoachingDb, type CoachingService } from './service.js';
 import type { AdminCoachView, CoachView } from './contract.js';
 
+import { getBrand } from '../../platform/brand/registry.js';
+
 const BASE = '/api/v1/roboapply/coaching';
 const ADMIN_BASE = '/api/v1/roboapply/admin/coaching';
 const RA = 'localhost:3621';
 const GA = 'goapply.localhost:3621';
 type Env<T> = { success: boolean; data: T; code?: string; details?: Record<string, unknown> };
 
-// GoApply's registry default is off; turn it on so brand scoping can be tested on both hosts.
-const ENV_ON = { NODE_ENV: 'development', [flagEnvName('goapply', 'coaching')]: 'true', RESEND_API_KEY: 're_test', CN_EMAIL_TRANSPORT: 'resend', CN_EMAIL_FROM: 'noreply@example.test' };
+// Coaching is on for both brands by default (D5). The shared email transport is the only setting:
+// no FLAG_GOAPPLY_COACHING, no CN_EMAIL_TRANSPORT and no CN_EMAIL_FROM.
+const ENV_ON = { NODE_ENV: 'development', RESEND_API_KEY: 're_test' };
 const ENV_OFF = { NODE_ENV: 'development', [flagEnvName('roboapply', 'coaching')]: 'false', [flagEnvName('goapply', 'coaching')]: 'false' };
 
 const NOW = new Date('2026-10-10T00:00:00.000Z');
@@ -148,8 +151,24 @@ describe('seeker routes', () => {
     expect(cross.body.details).toMatchObject({ reason: 'coach_not_found' });
   });
 
-  it('GoApply coaching is off by default (registry), so its routes 404', async () => {
-    const h = await startRouteHarness({ env: { NODE_ENV: 'development' }, mounts: [[BASE, createCoachingRouter({ seekerAuth: [seeker], env: { NODE_ENV: 'development' } }, { service })]] });
+  it('GoApply coaching is on by default, with no CN_ value at all (D5)', async () => {
+    expect(Object.keys(ENV_ON).some((name) => name.startsWith('CN_') || name.startsWith('FLAG_'))).toBe(false);
+    const bare = { NODE_ENV: 'development' };
+    const h = await startRouteHarness({ env: bare, mounts: [[BASE, createCoachingRouter({ seekerAuth: [seeker], env: bare }, { service })]] });
+    try {
+      const ga = await h.request<Env<{ items: CoachView[] }>>('GET', `${BASE}/coaches`, { host: GA });
+      expect(ga.status).toBe(200);
+      expect(ga.body.data.items.map((c) => c.id)).toEqual(['ga1']);
+      const ra = await h.request<Env<unknown>>('GET', `${BASE}/coaches`, { host: RA });
+      expect(ra.status).toBe(200);
+    } finally {
+      await h.close();
+    }
+  });
+
+  it('FLAG_GOAPPLY_COACHING=false is the off switch: GoApply 404s, RoboApply is untouched', async () => {
+    const env = { NODE_ENV: 'development', [flagEnvName('goapply', 'coaching')]: 'false' };
+    const h = await startRouteHarness({ env, mounts: [[BASE, createCoachingRouter({ seekerAuth: [seeker], env }, { service })]] });
     try {
       const ga = await h.request<Env<unknown>>('GET', `${BASE}/coaches`, { host: GA });
       expect(ga.status).toBe(404);
@@ -178,6 +197,13 @@ describe('seeker routes', () => {
     const ok = await on.request<Env<unknown>>('POST', `${BASE}/coaches/ga1/request`, { host: GA, body: { ...reqBody, shareConsent: true } });
     expect(ok.status).toBe(200);
     expect(sent).toHaveLength(2);
+    // Both messages are GoApply's, and the staff copy goes to a GoApply mailbox, never a RoboApply one.
+    const messages = sent as Array<{ to: string; brand?: { id: string }; params: { audience: string } }>;
+    expect(messages.map((m) => m.params.audience)).toEqual(['coach', 'admin']);
+    const staff = messages.find((m) => m.params.audience === 'admin')!;
+    expect(staff.to).toBe(getBrand('goapply').email.replyTo);
+    expect(staff.to).not.toBe(getBrand('roboapply').email.replyTo);
+    expect(staff.to).not.toMatch(/roboapply/i);
   });
 
   it('/coaching/bookings 404s (no bookings data in V2)', async () => {

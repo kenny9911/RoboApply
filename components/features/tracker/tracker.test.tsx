@@ -229,16 +229,14 @@ describe('TrackerDrawer: next steps from other areas (WP-93)', () => {
     expect((await steps()).queryByTestId('follow-up-draft')).toBeNull();
   });
 
-  it('GoApply hides the follow-up draft unless hiring-contact drafts are allowed', async () => {
+  it('GoApply offers the follow-up draft under the same rule as RoboApply: AI on and the consent given, whatever the contacts mode (D5)', async () => {
     seams.consents = aiConsent(true);
-    const off = renderWithBrand(<TrackerDrawer entry={entry()} onClose={() => {}} />, { brand: 'goapply', flags: { ...AI, hiringContacts: 'off' } });
-    await waitFor(() => expect(seams.getConsents).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 10));
-    expect((await steps()).queryByTestId('follow-up-draft')).toBeNull();
-    off.unmount();
-
-    renderWithBrand(<TrackerDrawer entry={entry()} onClose={() => {}} />, { brand: 'goapply', flags: { ...AI, hiringContacts: 'deeplinks_only' } });
-    expect(await screen.findByTestId('follow-up-draft')).toHaveAttribute('data-entry', 'e1');
+    for (const hiringContacts of ['off', 'deeplinks_only', 'on'] as const) {
+      const view = renderWithBrand(<TrackerDrawer entry={entry()} onClose={() => {}} />, { brand: 'goapply', flags: { ...AI, hiringContacts } });
+      expect(await screen.findByTestId('follow-up-draft')).toHaveAttribute('data-entry', 'e1');
+      view.unmount();
+    }
+    expect(seams.getConsents).toHaveBeenCalled();
   });
 
   it('GoApply hides the follow-up draft while the AI consent is unknown, and when it is off', async () => {

@@ -13,15 +13,19 @@
 // Gates, in order (INT gate; the route has no web caller and stays mounted
 // until the owner retires or keeps it, wave5 WP-93 #52):
 //   1. `requireAuth`;
-//   2. `RA_V2_DISCOVER_DISABLED=true` → 404 feature_disabled (this route only.
+//   2. `RA_V2_DISCOVER_DISABLED=true` → 404 feature_disabled (this route only;
+//      an operator off switch for both brands, never set by default.
 //      `RA_CROSSBANK_DISABLED` is NOT that switch: it also turns the bank
 //      ingest adapters off, see raBankClients.isBankEnabled);
 //   3. GoApply with CN_RECRUITMENT_INFO_MODE=off → 404 feature_disabled: the
-//      run returns recruiter-bank postings and writes them to RAJob (R-14);
+//      run returns recruiter-bank postings and writes them to RAJob. The mode
+//      defaults to `licensed` (D5), so with no value set the route is open on
+//      GoApply as it is on RoboApply; `off` is the only value that closes it;
 //   4. `legacyAiGates()`: GoApply phone binding (403), then the user's AI
 //      consent and the brand's text model (503 ai_unavailable). The service
 //      sends the user's resume to the explorer, scorer and insight agents, so
-//      no model call happens before these pass (TASK_PLAN §2.2, H4).
+//      no model call happens before these pass (TASK_PLAN §2.2, H4). These
+//      gates stay on both brands whatever the mode.
 
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { EnvSource } from '../../../platform/brand/brandEnv.js';

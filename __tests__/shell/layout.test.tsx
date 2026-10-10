@@ -537,10 +537,11 @@ describe('⌘K palette searches jobs through the feed wrapper', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(feed.queryFeed).not.toHaveBeenCalled();
     expect(within(dialog()).getByText('No page with that name.')).toBeInTheDocument();
-    // Its quick-nav lists GoApply's own pages (never 职位 while the feed is off).
+    // Its quick-nav lists GoApply's own pages. 职位 is one of them (D5: the entry carries no flag;
+    // with the feed off the page says so and still lists the jobs the user added).
     type('');
     await waitFor(() => expect(within(dialog()).getByText('Interview practice')).toBeInTheDocument());
-    expect(within(dialog()).queryByText('Jobs')).toBeNull();
+    expect(within(dialog()).getByText('Jobs')).toBeInTheDocument();
   });
 
   it('the palette source: the feed wrapper only, and no request tied to typing', async () => {

@@ -30,7 +30,9 @@
 // `/job-search` stays although its page is gone (INT-12 deleted the old
 // search workspace): `next.config.mjs` redirects the bare path to
 // /jobs/explore before the gate sees it, but /job-search/developers (the API
-// key page) is still a signed-in page under this prefix.
+// key page) is still a signed-in page under this prefix, on both brands (the
+// Job Search API is offered on RoboApply and GoApply; D5). The public
+// reference, /developers/job-search, is not behind the gate on either.
 //
 // The old V1/V2 entries (/mission, /apps, /home, /resumes, /tracker, /search,
 // /insights, /queue, /preferences, /mock-interview, /activity, /choose-plan,

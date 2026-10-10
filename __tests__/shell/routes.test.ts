@@ -98,11 +98,13 @@ describe('sign-in methods registry', () => {
       'google',
       'line',
     ]);
+    // GoApply's order is email first, as RoboApply's (D5; PAR-1 registry), then its two extra methods.
     expect(authMethodsFor('goapply', flagsWith({ 'auth.phoneOtp': true, 'auth.wechatInApp': true })).map((m) => m.id)).toEqual([
+      'email_password',
       'phone_otp',
       'wechat',
-      'email_password',
     ]);
+    expect(authMethodsFor('goapply', flagsWith()).map((m) => m.id)).toEqual(['email_password']);
     // Fail closed before the flags arrive: only the flagless method.
     expect(authMethodsFor('goapply', null).map((m) => m.id)).toEqual(['email_password']);
   });

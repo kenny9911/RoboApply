@@ -151,8 +151,11 @@ app.use('/api/v1/roboapply/billing', roboapplyBillingRouter);
 app.use('/api/v1/roboapply/account', roboapplyAccountRouter);
 app.use('/api/v1/roboapply/v2', roboapplyV2Router);
 
-// The job-search API is a RoboApply product: on a GoApply host both routers
-// answer 404 feature_disabled before any key or session lookup (routes.ts).
+// The job-search API serves both brands, each with its own sources (D5):
+// RoboApply searches its providers, GoApply searches its own market cn index.
+// Both routers answer 404 feature_disabled when the brand's `jobs.feed`
+// capability is off (CN_RECRUITMENT_INFO_MODE=off), before any key or session
+// lookup. A key works only on its owner's brand host (job-search/routes.ts).
 const jobSearchRouters = createJobSearchRouters();
 app.use('/api/v1/job-search', jobSearchRouters.api);
 app.use('/api/v1/roboapply/v2/job-search', jobSearchRouters.website);

@@ -5,9 +5,10 @@ import { logger } from '../services/LoggerService.js';
 import { jobSearchService, parseSearchInput, JobSearchValidationError } from './service.js';
 import { JobSearchAccessError, jobSearchKeys } from './keys.js';
 import { SearchQuotaError, jobSearchQuota } from './quota.js';
-import { jobSearchOpenApi } from './openapi.js';
+import { jobSearchOpenApiFor } from './openapi.js';
 import { createJobSearchAgent, type jobSearchAgent } from './agent.js';
 import { getCurrentBrandOrDefault, type ProductBrand } from '../platform/brand/index.js';
+import { isEnabledForBrand } from '../platform/flags.js';
 
 type Dependencies = {
   service: typeof jobSearchService;
@@ -17,26 +18,30 @@ type Dependencies = {
   agent: typeof jobSearchAgent;
   /** The brand a request is for (default: the one the brand middleware resolved from the host). */
   brand: (req: Request) => ProductBrand;
+  /** Read per request, so an off switch takes effect without a restart. */
+  env: () => NodeJS.ProcessEnv;
 };
 
 const requestBrand = (req: Request): ProductBrand => (req as Request & { brand?: ProductBrand }).brand ?? getCurrentBrandOrDefault();
 
 /**
  * The job-search API (keyword search, the planner agent, integration keys and
- * the OpenAPI document) is a RoboApply product. On GoApply every route of both
- * routers answers 404 feature_disabled before any key or session lookup:
- *   - R-14: it returns third-party postings from the RapidAPI providers and
- *     the hiring index, whatever CN_RECRUITMENT_INFO_MODE says;
- *   - TASK_PLAN §2.2 / H4: the planner sends the user's text to a model with
- *     no `aiAllowed` check (RoboApply: always allowed; GoApply: consent);
- *   - residency (platform/residency/egressPolicy.ts): GoApply does not call
- *     the RapidAPI job sources.
- * Opening it for GoApply later means the `jobs.feed` capability here and
- * `aiAllowed(userId)` before `agent.search`, not removing this gate.
+ * the OpenAPI document) is offered on both brands (D5; GOAPPLY_PARITY_PLAN
+ * §3.10). What differs is the sources (service.ts `providersForBrand`):
+ * RoboApply searches its RapidAPI providers and the hiring index, GoApply
+ * searches its own market `cn` index and calls no outside provider.
+ *
+ * The gate is the brand's `jobs.feed` capability, checked before the OpenAPI
+ * document, the key lookup and the session lookup. It is on by default on
+ * both brands; `CN_RECRUITMENT_INFO_MODE=off` (or `FLAG_<BRAND>_JOBS_FEED=false`)
+ * closes both routers with 404 feature_disabled. The planner's gate (GoApply
+ * phone binding, the AI consent, the brand's AI text capability) is in
+ * agent.ts `createPlannerGate`. Usage is reserved against the brand's own
+ * budget (quota.ts).
  */
-function roboApplyOnly(brandOf: (req: Request) => ProductBrand): RequestHandler {
+function requireJobsFeed(brandOf: (req: Request) => ProductBrand, env: () => NodeJS.ProcessEnv): RequestHandler {
   return (req, res, next) => {
-    if (brandOf(req).market === 'cn') {
+    if (!isEnabledForBrand('jobs.feed', brandOf(req), env())) {
       res.status(404).json({ error: 'This feature is not available.', code: 'feature_disabled', requestId: req.requestId });
       return;
     }
@@ -66,20 +71,21 @@ function fail(err: unknown, req: Request, res: Response) {
 }
 
 export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
-  const d = { service: jobSearchService, keys: jobSearchKeys, quota: jobSearchQuota, sessionAuth: requireAuth, brand: requestBrand, ...overrides };
+  const d = { service: jobSearchService, keys: jobSearchKeys, quota: jobSearchQuota, sessionAuth: requireAuth, brand: requestBrand, env: () => process.env, ...overrides };
   const agent = overrides.agent ?? createJobSearchAgent({ service: d.service, quota: d.quota });
   const api = Router();
   const website = Router();
   api.use(requestId);
   website.use(requestId);
   // Before the OpenAPI document, the key lookup and the session lookup.
-  api.use(roboApplyOnly(d.brand));
-  website.use(roboApplyOnly(d.brand));
+  api.use(requireJobsFeed(d.brand, d.env));
+  website.use(requireJobsFeed(d.brand, d.env));
 
-  api.get('/openapi.json', (_req, res) => res.json(jobSearchOpenApi));
+  api.get('/openapi.json', (req, res) => res.json(jobSearchOpenApiFor(d.brand(req))));
   api.use(async (req, res, next) => {
     try {
-      res.locals.searchIdentity = await d.keys.authenticate(req.get('authorization'));
+      // A key is valid only on its owner's brand host.
+      res.locals.searchIdentity = await d.keys.authenticate(req.get('authorization'), d.brand(req).id);
       next();
     } catch (err) { fail(err, req, res); }
   });
@@ -96,7 +102,7 @@ export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
   });
 
   for (const [router, audience] of [[api, 'api'], [website, 'website']] as const) {
-    router.get('/providers', (_req, res) => res.json({ providers: d.service.providers(audience) }));
+    router.get('/providers', (req, res) => res.json({ providers: d.service.providers(audience, d.brand(req)) }));
     router.post('/agent/search', async (req, res) => {
       const controller = new AbortController();
       const close = () => { if (!res.writableEnded) controller.abort(); };
@@ -105,7 +111,7 @@ export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
         const identity = res.locals.searchIdentity as { userId: string; apiKeyId?: string };
         // The agent reserves each query, including planning before query one.
         const result = await agent.search(req.body, {
-          ...identity, audience, requestId: req.requestId, signal: controller.signal,
+          ...identity, audience, requestId: req.requestId, signal: controller.signal, brand: d.brand(req),
         });
         if (controller.signal.aborted) return;
         const succeeded = result.meta.providers.some(p => p.status === 'ok' || p.status === 'empty');
@@ -127,10 +133,11 @@ export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
       const close = () => { if (!res.writableEnded) controller.abort(); };
       res.on('close', close);
       try {
-        const input = parseSearchInput(req.body);
+        const brand = d.brand(req);
+        const input = parseSearchInput(req.body, { country: brand.defaultCountry });
         const identity = res.locals.searchIdentity as { userId: string; apiKeyId?: string };
         apiKeyId = identity.apiKeyId;
-        const candidates = d.service.providers(audience).filter(p => !input.providers || input.providers.includes(p.id));
+        const candidates = d.service.providers(audience, brand).filter(p => !input.providers || input.providers.includes(p.id));
         if (!candidates.some(p => p.enabled)) {
           // Do not re-enter the service without a reservation. A circuit can
           // recover between readiness checks and otherwise start unpaid work.
@@ -143,8 +150,8 @@ export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
             } },
           });
         }
-        reservation = await d.quota.reserve(identity.userId, identity.apiKeyId, req.requestId);
-        const result = await d.service.search(input, { audience, requestId: req.requestId, signal: controller.signal });
+        reservation = await d.quota.reserve(identity.userId, identity.apiKeyId, req.requestId, brand);
+        const result = await d.service.search(input, { audience, requestId: req.requestId, signal: controller.signal, brand, userId: identity.userId });
         const succeeded = result.meta.providers.some(p => p.status === 'ok' || p.status === 'empty');
         status = succeeded ? 200 : 503;
         if (!succeeded) return res.status(status).json({
@@ -166,7 +173,10 @@ export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
   }
 
   website.get('/keys', async (req, res) => {
-    try { res.json(await d.keys.list(req.user!.id)); }
+    // `sources` is what a key of this brand can read right now (the answer of
+    // GET /providers with a key), so the key page can say so before a first
+    // call fails: a source is open to keys only when the operator grants it.
+    try { res.json({ ...(await d.keys.list(req.user!.id)), sources: d.service.providers('api', d.brand(req)) }); }
     catch (err) { fail(err, req, res); }
   });
   website.post('/keys', async (req, res) => {

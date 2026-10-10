@@ -480,3 +480,36 @@
     flex: 1 1 auto;
   }
 }
+
+/* Inline link on the source line: "查看原帖". Underlined, so it is not colour alone. */
+.link {
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  /* A 44 px touch target without changing the height of the line. */
+  padding-block: 12px;
+  margin-block: -12px;
+}
+
+.link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The list header: where the postings on this page come from. */
+.sources {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.sourcesLead {
+  color: var(--text);
+  font-weight: 600;
+}

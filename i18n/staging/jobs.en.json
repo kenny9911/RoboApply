@@ -1,7 +1,14 @@
 {
   "jobs": {
     "card": {
-      "firstSeen": "First seen {date}"
+      "firstSeen": "First seen {date}",
+      "leadLabel": "{label}:"
+    },
+    "workspace": {
+      "introByDate": "Jobs are listed by date posted, newest first. Open one to see the details."
+    },
+    "searchApi": {
+      "keySourcesOff": "No job source is open to API keys on this site right now, so a request made with a key returns an error and no jobs. The site operator decides which sources keys can read."
     }
   }
 }

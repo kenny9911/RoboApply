@@ -18,7 +18,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 
 import { cn } from '../../../lib/utils';
 import { useBrand } from '../../../lib/brand';
-import { marketMetaCoversBasics } from '../market';
+import { marketMetaCoversBasics, marketPayWords } from '../market';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import { initialOf, jobDetailHref, payLine, validDate } from './format';
 import styles from './job.module.css';
@@ -43,6 +43,8 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
   const slotHasBasics = marketMetaCoversBasics(brand.market, detail.marketMeta);
   const ownImport = job.source.kind === 'user_import';
   const pay = payLine(job.pay, locale);
+  // Pay in words by the market's rule: GoApply never prints 面议 (it reads "Pay not listed").
+  const payWords = marketPayWords(brand.market, job);
   const posted = validDate(job.postedAt);
   const checked = validDate(job.lastSeenAt);
   const fmt = (d: Date) => format.dateTime(d, { dateStyle: 'medium' });
@@ -109,9 +111,9 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
                 ? t('header.payFrom', { min: pay.min, period: t(`header.period.${pay.period}`) })
                 : t('header.payUpTo', { max: pay.max, period: t(`header.period.${pay.period}`) })}
         </p>
-      ) : job.payText ? (
+      ) : payWords ? (
         <p className={styles.pay} data-testid="job-pay">
-          {t('header.payAsStated', { text: job.payText })}
+          {t('header.payAsStated', { text: payWords })}
         </p>
       ) : (
         <p className={styles.payMissing} data-testid="job-pay">

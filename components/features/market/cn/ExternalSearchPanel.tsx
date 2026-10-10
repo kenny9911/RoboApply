@@ -3,8 +3,10 @@
 // ExternalSearchPanel — "search other job sites" with the user's own words
 // (CN L-5; wave3 WP-93 #8). GoApply only; renders nothing on RoboApply.
 //
-// Shown where GoApply has no third-party postings to list (recruitment-info
-// mode off, R-14): the jobs page's empty state and "Added by you". The user
+// Shown where GoApply has no third-party postings to list (the job listings
+// are switched off): the jobs page's empty state and "Added by you". Also
+// shown under the list when the result set is thin (`variant="thin"`), so a
+// search with few results always leads somewhere (MARKET_STRATEGY §1.4). The user
 // types what they are looking for; we show links that open that search on
 // BOSS直聘 / 智联招聘 / 猎聘 in a new tab (ExternalSearchLinks; the links are
 // built server-side and carry only the query). We never fetch, sign in, fill
@@ -24,11 +26,16 @@ export interface ExternalSearchPanelProps {
   initialQuery?: string | null;
   city?: string | null;
   className?: string;
+  /**
+   * `empty` (default): nothing is listed here. `thin`: the list above has few
+   * results, and the intro says so instead of saying nothing is listed.
+   */
+  variant?: 'empty' | 'thin';
 }
 
 const MAX_QUERY = 80;
 
-export function ExternalSearchPanel({ initialQuery, city, className }: ExternalSearchPanelProps) {
+export function ExternalSearchPanel({ initialQuery, city, className, variant = 'empty' }: ExternalSearchPanelProps) {
   const brand = useBrand();
   const t = useTranslations('jobsCn.external');
   const id = useId();
@@ -54,11 +61,11 @@ export function ExternalSearchPanel({ initialQuery, city, className }: ExternalS
   }
 
   return (
-    <section className={[styles.searchPanel, className].filter(Boolean).join(' ')} aria-labelledby={`${id}-h`} data-testid="cn-external-search">
+    <section className={[styles.searchPanel, className].filter(Boolean).join(' ')} aria-labelledby={`${id}-h`} data-testid="cn-external-search" data-variant={variant}>
       <h2 className={styles.h2} id={`${id}-h`}>
         {t('panel.title')}
       </h2>
-      <p className={styles.muted}>{t('panel.intro')}</p>
+      <p className={styles.muted}>{t(variant === 'thin' ? 'panel.thinIntro' : 'panel.intro')}</p>
       <form className={styles.searchRow} onSubmit={submit} role="search" aria-labelledby={`${id}-h`}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={`${id}-q`}>

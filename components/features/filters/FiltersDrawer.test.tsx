@@ -153,8 +153,29 @@ describe('FiltersDrawer — "Why is pay not listed?" for Taiwan', () => {
   });
 });
 
+describe('FiltersDrawer — GoApply company size (D5)', () => {
+  it('filters by company size and by employer tags in one save, and a saved size comes back selected', async () => {
+    const { net, onClose } = setup({ brand: 'goapply' });
+    fireEvent.click(await screen.findByRole('button', { name: '51–200 people' }));
+    fireEvent.click(screen.getByRole('button', { name: 'State-owned enterprise' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Show/ }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(net.to('PATCH', `${P}/sp_main`)[0].body).toEqual({ baseVersion: 3, filters: { companySizes: ['51-200'], employerTags: ['soe'] } });
+  });
+
+  it('round-trips: a search saved with sizes opens with them pressed, on both brands', async () => {
+    const go = setup({ brand: 'goapply', filters: { companySizes: ['1001-5000', '5000+'], employerTags: ['foreign'] } });
+    expect(await screen.findByRole('button', { name: '1,001–5,000 people' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '5,000+ people' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '51–200 people' })).toHaveAttribute('aria-pressed', 'false');
+    go.unmount();
+    setup({ filters: { companySizes: ['1001-5000'] } });
+    expect(await screen.findByRole('button', { name: '1,001–5,000 people' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 describe('FiltersDrawer — GoApply', () => {
-  it('shows 届别 / 学历 / 工作性质 / 实习天数 / K·N薪 / 元/天 / employer tags / 户口 / school tier and hides sponsorship and company size', async () => {
+  it('shows 届别 / 学历 / 工作性质 / 实习天数 / K·N薪 / 元/天 / employer tags / 户口 / school tier and company size, and hides sponsorship', async () => {
     setup({ brand: 'goapply' });
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: 'Campus and internships' })).toBeInTheDocument();
@@ -164,7 +185,9 @@ describe('FiltersDrawer — GoApply', () => {
     expect(screen.getByLabelText(/Only posts that offer hukou/)).toBeInTheDocument();
     expect(screen.getByText('Minimum monthly pay (K)')).toBeInTheDocument();
     expect(screen.queryByText(/visa sponsorship/i)).toBeNull();
-    expect(screen.queryByText('Company size')).toBeNull();
+    // Company size sits beside employer type (D5: the same filter as RoboApply).
+    expect(within(dialog).getByText('Company size')).toBeInTheDocument();
+    expect(Boolean(within(dialog).getByText('Company size').compareDocumentPosition(within(dialog).getAllByText('Employer type')[0]!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.queryByText('Leave out jobs that require')).toBeNull();
     expect(screen.getByText(/recruiters posted on GoHire/)).toBeInTheDocument();
   });

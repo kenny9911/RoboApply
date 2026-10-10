@@ -22,44 +22,56 @@ export function extensionIdFor(brand: BrandId): string | null {
   return id && id.trim() ? id.trim() : null;
 }
 
+/** The store a brand's extension id belongs to: where its listing is when no URL is configured. */
+const STORE_LISTING: Record<BrandId, (id: string) => string> = {
+  roboapply: (id) => `https://chromewebstore.google.com/detail/${encodeURIComponent(id)}`,
+  // GoApply publishes on Microsoft Edge Add-ons first (ARCH §6.8): it opens in
+  // mainland China, where the Chrome Web Store does not.
+  goapply: (id) => `https://microsoftedge.microsoft.com/addons/detail/${encodeURIComponent(id)}`,
+};
+
 /**
- * Where to install it, or null (no install button).
- *   RoboApply  `NEXT_PUBLIC_EXT_STORE_URL`, else the Chrome Web Store listing of the id.
- *   GoApply    `NEXT_PUBLIC_CN_EXT_STORE_URL` only (Microsoft Edge Add-ons first,
- *              ARCH §6.8): the Chrome Web Store does not open in mainland China,
- *              so there is no default.
+ * Where to install it, or null (no install button). One rule for both brands
+ * (D5): the configured store URL (`NEXT_PUBLIC_EXT_STORE_URL` /
+ * `NEXT_PUBLIC_CN_EXT_STORE_URL`), else the listing of the brand's published
+ * id on the brand's store. With no id nothing is advertised: null, never a
+ * broken link.
  */
 export function extensionStoreUrl(brand: BrandId): string | null {
   const override = brand === 'goapply' ? process.env.NEXT_PUBLIC_CN_EXT_STORE_URL : process.env.NEXT_PUBLIC_EXT_STORE_URL;
   if (override && /^https:\/\//.test(override.trim())) return override.trim();
-  if (brand === 'goapply') return null;
   const id = extensionIdFor(brand);
-  return id ? `https://chromewebstore.google.com/detail/${encodeURIComponent(id)}` : null;
+  return id ? STORE_LISTING[brand](id) : null;
 }
+
+const INTL_ATS: ReadonlyArray<{ type: string; name: string }> = [
+  { type: 'greenhouse', name: 'Greenhouse' },
+  { type: 'lever', name: 'Lever' },
+  { type: 'ashby', name: 'Ashby' },
+  { type: 'workday', name: 'Workday' },
+  { type: 'smartrecruiters', name: 'SmartRecruiters' },
+  { type: 'icims', name: 'iCIMS' },
+  { type: 'workable', name: 'Workable' },
+  { type: 'taleo', name: 'Taleo' },
+  { type: 'successfactors', name: 'SuccessFactors' },
+];
 
 /**
  * ATS types the brand's extension build can fill, with their display names.
  * Mirrors the server's `EXTENSION_ATS_TYPES_BY_MARKET` (RoboApply = intl,
- * GoApply = cn; a test keeps them equal). Job detail's `autofill.supported`
+ * GoApply = cn; a test keeps them equal). GoApply's list is a superset (D5):
+ * its mainland portals plus RoboApply's whole list, because mainland roles are
+ * also posted on the international boards. Job detail's `autofill.supported`
  * comes from one brand-agnostic registry, so the web checks this list too.
  */
 export const EXTENSION_ATS_BY_BRAND: Record<BrandId, ReadonlyArray<{ type: string; name: string }>> = {
-  roboapply: [
-    { type: 'greenhouse', name: 'Greenhouse' },
-    { type: 'lever', name: 'Lever' },
-    { type: 'ashby', name: 'Ashby' },
-    { type: 'workday', name: 'Workday' },
-    { type: 'smartrecruiters', name: 'SmartRecruiters' },
-    { type: 'icims', name: 'iCIMS' },
-    { type: 'workable', name: 'Workable' },
-    { type: 'taleo', name: 'Taleo' },
-    { type: 'successfactors', name: 'SuccessFactors' },
-  ],
+  roboapply: INTL_ATS,
   goapply: [
     { type: 'moka', name: 'Moka' },
     { type: 'beisen', name: 'Beisen' },
     { type: 'feishu', name: 'Feishu' },
     { type: 'dayee', name: 'Dayee' },
+    ...INTL_ATS,
   ],
 };
 

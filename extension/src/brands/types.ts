@@ -5,7 +5,7 @@ import type { BrandId, Market, RoboLocale } from '../../../server/src/platform/b
 export type { BrandId, Market, RoboLocale };
 
 export interface ExtBrandValues {
-  /** Which adapter set the build ships (`adapters/intl` or `adapters/cn`). */
+  /** Which adapter set the build ships: `intl`, or `cn` (the mainland portals plus the `intl` set). */
   adapterSet: 'intl' | 'cn';
   /**
    * Origins of the brand's web app that may message the extension in a dev

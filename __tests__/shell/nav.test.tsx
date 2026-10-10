@@ -136,12 +136,17 @@ describe('registry (pure)', () => {
     expect(ga.some((id) => ra.includes(id))).toBe(false);
   });
 
-  it('a flagged-off entry is absent (GoApply 职位 without jobs.feed; 校招日历 without the calendar)', () => {
-    const off = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith() }));
-    expect(off.all.map((e) => e.href)).not.toContain('/jobs');
-    expect(off.all.map((e) => e.href)).not.toContain('/campus');
+  it('GoApply 职位 carries no flag, as RoboApply Jobs (D5); a flagged-off entry is absent (校招日历 without the calendar)', () => {
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.jobs')).toMatchObject({ href: '/jobs', flag: null, brands: ['goapply'] });
+    expect(NAV_ENTRIES.find((e) => e.id === 'jobs')).toMatchObject({ href: '/jobs', flag: null, brands: ['roboapply'] });
+    // Every flag off, and before the flags arrive: 职位 is there.
+    for (const flags of [flagsWith(), null]) {
+      const off = buildNav(ctx({ brandId: 'goapply', showAll: true, flags }));
+      expect(off.top[0].href).toBe('/jobs');
+      expect(off.all.map((e) => e.href)).not.toContain('/campus');
+    }
     const on = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
-    expect(on.top[0].href).toBe('/campus');
+    expect(on.top.map((e) => e.href).slice(0, 2)).toEqual(['/jobs', '/campus']);
   });
 
   it('flags fail closed: nothing flagged shows before the flags arrive', () => {
@@ -197,6 +202,9 @@ describe('registry (pure)', () => {
     { id: 'extension', brand: 'roboapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_EXT_ID', 'ext-store-id'] },
     { id: 'invite', brand: 'roboapply', href: '/invite', flag: 'invites' },
     { id: 'coaching', brand: 'roboapply', href: '/coaching', flag: 'coaching', needs: { coachRoster: true } },
+    // Parity (D5): the same two entries on GoApply, under the same gates.
+    { id: 'cn.coaching', brand: 'goapply', href: '/coaching', flag: 'coaching', needs: { coachRoster: true } },
+    { id: 'cn.extension', brand: 'goapply', href: '/extension', flag: 'extension', env: ['NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id'] },
   ];
 
   it('every destination is ready (INT-12 flipped the last eight) and the Ask surface is on', () => {
@@ -204,8 +212,31 @@ describe('registry (pure)', () => {
     expect(SURFACES_READY).toEqual({ assistant: true, jobDetail: true });
     // cn.invite is flipped too; it shows with the invites programme (previous test).
     expect(NAV_ENTRIES.find((e) => e.id === 'cn.invite')).toMatchObject({ ready: true, flag: 'invites', gate: 'invitesLive', brands: ['goapply'] });
-    // GoApply has no coaching entry (its coaching flag is off; add one only if that changes).
-    expect(entriesForBrand('goapply').some((e) => e.href === '/coaching')).toBe(false);
+    // GoApply has the coaching and extension entries under RoboApply's gates (D5).
+    const twin = (id: string) => {
+      const { id: _id, brands: _brands, match, ...rest } = NAV_ENTRIES.find((e) => e.id === id)!;
+      return { ...rest, lights: ['/coaching', '/coaching/x', '/extension', '/extension/uninstalled', '/jobs'].map((p) => match(p)) };
+    };
+    expect(twin('cn.coaching')).toEqual(twin('coaching'));
+    expect(twin('cn.extension')).toEqual(twin('extension'));
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.coaching')).toMatchObject({ group: 'lower', flag: 'coaching', gate: 'coachRoster', mobile: 'more', brands: ['goapply'] });
+    expect(NAV_ENTRIES.find((e) => e.id === 'cn.extension')).toMatchObject({ group: 'lower', flag: 'extension', gate: 'extensionPublished', mobile: null, brands: ['goapply'] });
+  });
+
+  it('GoApply 求职辅导 waits for a coach in the roster; the extension entry waits for GoApply’s own store id', () => {
+    const flags = flagsWith({ coaching: true, extension: true });
+    const ids = (over: Partial<NavVisibilityContext>) => buildNav(ctx({ brandId: 'goapply', flags, ...over })).all.map((e) => e.id);
+    expect(ids({})).not.toContain('cn.coaching');
+    expect(ids({ coachRoster: true })).toContain('cn.coaching');
+    expect(ids({ coachRoster: true })).not.toContain('cn.extension');
+    // RoboApply's id does not publish GoApply's extension.
+    vi.stubEnv('NEXT_PUBLIC_EXT_ID', 'ext-store-id');
+    expect(ids({})).not.toContain('cn.extension');
+    vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cn-ext-store-id');
+    expect(ids({})).toContain('cn.extension');
+    // In the lower group, before Settings.
+    const lower = buildNav(ctx({ brandId: 'goapply', flags, coachRoster: true })).lower.map((e) => e.id);
+    expect(lower).toEqual(['cn.coaching', 'cn.extension', 'cn.settings']);
   });
 
   it.each(FLIPPED)('$id ($brand): shown with $flag on, absent with it off, and never on the other brand', ({ id, brand, href, flag, needs, env }) => {
@@ -243,11 +274,14 @@ describe('registry (pure)', () => {
     expect(crumbKeyFor('/nowhere', 'roboapply')).toBeNull();
   });
 
-  it('home is the first visible top entry (GoApply falls back to the calendar when the feed is off)', () => {
+  it('home is the first visible top entry: Jobs on both brands, whatever the flags', () => {
     expect(homeHref(buildNav(ctx()))).toBe('/jobs');
-    const cnOff = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
-    expect(homeHref(cnOff)).toBe('/campus');
-    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: flagsWith() })))).toBe('/applications');
+    const cnCalendar = buildNav(ctx({ brandId: 'goapply', showAll: true, flags: flagsWith({ 'jobs.campusCalendar': true }) }));
+    expect(homeHref(cnCalendar)).toBe('/jobs');
+    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: flagsWith() })))).toBe('/jobs');
+    expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: null })))).toBe('/jobs');
+    // The fallback when a registry has no top entry at all.
+    expect(homeHref({ top: [] })).toBe('/settings');
   });
 
   it('palette job hits go to /jobs/[id] now that the detail page shipped (WP-34; Wave 3 gate)', () => {
@@ -278,14 +312,14 @@ describe('Sidebar per brand', () => {
     expect(screen.queryByRole('link', { name: 'Interview prep' })).not.toBeInTheDocument();
   });
 
-  it('GoApply hides 职位 when the job feed is off', () => {
+  it('GoApply always shows 职位, with the job feed capability off too', () => {
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: {} });
-    expect(railHrefs()).toEqual(['/applications', '/resume', '/practice', '/profile', '/settings']);
+    expect(railHrefs()).toEqual(['/jobs', '/applications', '/resume', '/practice', '/profile', '/settings']);
   });
 
   it('GoApply shows 校招日历, 待投递 and 内推 with their flags on (no dev override)', () => {
     renderWithBrand(<Sidebar />, { brand: 'goapply', flags: { 'jobs.campusCalendar': true, agent: true, 'cn.referralCodes': true } });
-    expect(railHrefs()).toEqual(['/campus', '/ready', '/applications', '/resume', '/practice', '/profile', '/referrals', '/settings']);
+    expect(railHrefs()).toEqual(['/jobs', '/campus', '/ready', '/applications', '/resume', '/practice', '/profile', '/referrals', '/settings']);
     expect(screen.getByRole('link', { name: 'Campus calendar' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'To apply' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Referral codes' })).toBeInTheDocument();
