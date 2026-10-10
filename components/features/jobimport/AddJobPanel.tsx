@@ -7,10 +7,16 @@
 //   Type it in    → the same form, blank.
 // Saving spends one `job_import` credit unless the job already exists (the
 // user's earlier import, or our own listing); the server decides. After
-// saving: View job (fit score, once the job page ships) / Save to tracker /
+// saving: View job (the fit score is on the job page) / Save to tracker /
 // Tailor resume / Practice interview.
+//
+// `resumeImportId` (/jobs/added?import=<id>, the Assistant's "Finish adding
+// this job") reopens an unfinished add: its status, the fields still missing
+// and any warnings come from GET /jobs/import/:importId. We never store a
+// draft's values, so the form opens empty and says so; saving sends the same
+// id, so the add is counted once.
 
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Btn, Tabs, tabPanelProps } from '../../v3/primitives';
@@ -45,6 +51,9 @@ function ErrorNotice({ error }: { error: ImportErrorView }) {
       break;
     case 'invalid':
       text = t('invalid');
+      break;
+    case 'draft_gone':
+      text = t('draftGone');
       break;
     default:
       text = t('generic');
@@ -88,9 +97,11 @@ function DoneCard({ result, onAnother }: { result: ImportJobResponse; onAnother:
 export interface AddJobPanelProps {
   /** Start on this tab (default: From a link). */
   initialMode?: Mode;
+  /** An unfinished add to reopen (`/jobs/added?import=<id>`). */
+  resumeImportId?: string | null;
 }
 
-export function AddJobPanel({ initialMode = 'link' }: AddJobPanelProps) {
+export function AddJobPanel({ initialMode = 'link', resumeImportId = null }: AddJobPanelProps) {
   const t = useTranslations('jobImport');
   const id = useId();
   const flow = useJobImport();
@@ -101,6 +112,16 @@ export function AddJobPanel({ initialMode = 'link' }: AddJobPanelProps) {
   const [formKey, setFormKey] = useState(0);
 
   const result = flow.result;
+
+  // Reopen the unfinished add the link names, once per id.
+  const resumedId = useRef<string | null>(null);
+  const resume = flow.resume;
+  useEffect(() => {
+    if (!resumeImportId || resumedId.current === resumeImportId) return;
+    resumedId.current = resumeImportId;
+    setMode('link');
+    void resume(resumeImportId).then(() => setFormKey((k) => k + 1));
+  }, [resumeImportId, resume]);
 
   async function read(e: FormEvent) {
     e.preventDefault();
@@ -170,6 +191,16 @@ export function AddJobPanel({ initialMode = 'link' }: AddJobPanelProps) {
         <p id={`${id}-url-help`} className={urlError ? styles.fieldError : styles.hint} role={urlError ? 'alert' : undefined}>
           {urlError ? t('add.invalidLink') : t('add.linkHelp')}
         </p>
+        {flow.pending === 'resume' ? (
+          <p className={styles.meta} role="status">
+            {t('add.resuming')}
+          </p>
+        ) : null}
+        {draftShown && flow.resumed ? (
+          <p className={styles.notice} role="status" data-testid="import-resumed">
+            {t('add.resumed')}
+          </p>
+        ) : null}
         {draftShown && result.reason ? (
           <p className={result.status === 'failed' ? `${styles.notice} ${styles.noticeError}` : styles.notice} role="status" data-testid="import-reason">
             {t(`reason.${result.reason}`)}
@@ -180,8 +211,8 @@ export function AddJobPanel({ initialMode = 'link' }: AddJobPanelProps) {
           <ImportFieldsForm
             key={`draft-${formKey}`}
             draft={result.draft}
-            missingFields={result.status === 'needs_fields' ? result.missingFields : []}
-            mode={result.status === 'needs_fields' ? 'check' : 'manual'}
+            missingFields={result.status === 'needs_fields' && result.draft ? result.missingFields : []}
+            mode={result.status === 'needs_fields' && result.draft ? 'check' : 'manual'}
             saving={flow.pending === 'save'}
             onSave={save}
           />

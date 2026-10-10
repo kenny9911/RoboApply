@@ -50,6 +50,25 @@ export function readCnMeta(meta: MarketCardMeta | null | undefined): CnCardMeta 
   };
 }
 
+/**
+ * Marks `meta.cn` as a job the user added themselves, so the slot's source
+ * line reads "Added by you" (such a job has no source name) instead of
+ * "Source not listed". The server's CnCardMeta has no field for this; the feed
+ * card and the job page know it from the job's source and say so here, which
+ * keeps the slot's props (jobId, meta, variant) as they are. Returns `meta`
+ * untouched when `own` is false or there is no `cn` block.
+ */
+export function withOwnImport(meta: MarketCardMeta | null | undefined, own: boolean): MarketCardMeta | null | undefined {
+  const m = obj(meta?.cn);
+  if (!own || !meta || !m) return meta;
+  return { ...meta, cn: { ...m, ownImport: true } };
+}
+
+/** True when `meta.cn` is marked as the user's own job (see withOwnImport). */
+export function isOwnImport(meta: MarketCardMeta | null | undefined): boolean {
+  return obj(meta?.cn)?.ownImport === true;
+}
+
 /** A parseable ISO date, or null. */
 export function parseDate(iso: string | null): Date | null {
   if (!iso) return null;

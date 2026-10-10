@@ -9,13 +9,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { FiltersDrawer } from './FiltersDrawer';
+import { showsTaiwanPayNote } from './FilterEditors';
 import { TAXONOMY_TREE, fail, installFetch, ok, profile, renderWith, type RecordedCall } from './filters.testkit';
 
 const P = '/api/v1/roboapply/search-profiles';
 
 afterEach(() => vi.unstubAllGlobals());
 
-function setup(opts: { brand?: 'roboapply' | 'goapply'; filters?: Record<string, unknown>; count?: number | null; patch?: (c: RecordedCall) => Response } = {}) {
+function setup(opts: { brand?: 'roboapply' | 'goapply'; locale?: string; filters?: Record<string, unknown>; count?: number | null; patch?: (c: RecordedCall) => Response } = {}) {
   const sp = profile({ filters: opts.filters ?? {} });
   const net = installFetch({
     'GET /api/v1/roboapply/taxonomy': () => ok(TAXONOMY_TREE),
@@ -25,7 +26,7 @@ function setup(opts: { brand?: 'roboapply' | 'goapply'; filters?: Record<string,
     'PATCH /api/v1/roboapply/profile': () => ok({}),
   });
   const onClose = vi.fn();
-  const view = renderWith(<FiltersDrawer open onClose={onClose} profile={sp} />, { brand: opts.brand });
+  const view = renderWith(<FiltersDrawer open onClose={onClose} profile={sp} />, { brand: opts.brand, locale: opts.locale });
   return { net, onClose, sp, ...view };
 }
 
@@ -102,6 +103,53 @@ describe('FiltersDrawer — RoboApply', () => {
     const radii = await screen.findAllByLabelText('Distance');
     expect((radii[0] as HTMLSelectElement).selectedOptions[0].textContent).toBe('Within 25 mi');
     expect((radii[1] as HTMLSelectElement).selectedOptions[0].textContent).toBe('Within 40 km');
+  });
+});
+
+// INT-06 (wave3 WP-93 #16): the Taiwan 面議 note beside "Only jobs that list pay".
+describe('FiltersDrawer — "Why is pay not listed?" for Taiwan', () => {
+  const NOTE = 'Why is pay not listed?';
+
+  it('shows under the pay toggle for a zh-TW reader, with the filter hint and the law link', async () => {
+    setup({ locale: 'zh-TW' });
+    const toggle = await screen.findByLabelText(/Only jobs that list pay/);
+    const note = screen.getByText(NOTE).closest('details') as HTMLElement;
+    expect(toggle.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note).toHaveTextContent('Turn on “Only jobs that list pay” to hide them.');
+    expect(note).toHaveTextContent('pay that a posting does not list is never estimated here');
+    expect(within(note).getByRole('link')).toHaveAttribute('href', expect.stringContaining('law.moj.gov.tw'));
+  });
+
+  it('shows for a search set to Taiwan in any language (a place in TW, or country TW)', async () => {
+    const first = setup({ filters: { locations: [{ label: 'Taipei', country: 'TW', radiusKm: 40 }] } });
+    await screen.findByLabelText(/Only jobs that list pay/);
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+    first.unmount();
+    setup({ filters: { country: 'tw' } });
+    await screen.findByLabelText(/Only jobs that list pay/);
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+  });
+
+  it('is absent for everyone else on RoboApply', async () => {
+    setup({ filters: { locations: [{ label: 'Austin', country: 'US', radiusKm: 40 }] } });
+    await screen.findByLabelText(/Only jobs that list pay/);
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
+  it('is absent on GoApply, zh-TW or not', async () => {
+    setup({ brand: 'goapply', locale: 'zh-TW', filters: { locations: [{ label: '台北', country: 'TW', radiusKm: 40 }] } });
+    await screen.findByLabelText(/Only jobs that list pay/);
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
+  it('showsTaiwanPayNote: the rule itself', () => {
+    expect(showsTaiwanPayNote('intl', 'zh-TW', {})).toBe(true);
+    expect(showsTaiwanPayNote('intl', 'en', {})).toBe(false);
+    expect(showsTaiwanPayNote('intl', 'zh', {})).toBe(false);
+    expect(showsTaiwanPayNote('intl', 'en', { country: 'TW' })).toBe(true);
+    expect(showsTaiwanPayNote('intl', 'en', { locations: [{ label: 'Berlin', country: 'DE', radiusKm: 40 }, { label: 'Hsinchu', country: 'TW', radiusKm: 40 }] })).toBe(true);
+    expect(showsTaiwanPayNote('intl', 'en', { locations: [{ label: 'Remote', radiusKm: 0 }] })).toBe(false);
+    expect(showsTaiwanPayNote('cn', 'zh-TW', { country: 'TW' })).toBe(false);
   });
 });
 

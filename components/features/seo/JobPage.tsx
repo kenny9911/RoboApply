@@ -9,11 +9,23 @@
 // D1: signed out, "Apply on company site" opens the employer's page and the
 // page says the user applies there; signed in, the job opens in the app
 // (`/jobs/<id>`), where applying is tracked with Undo (R-19).
+//
+// GoApply: <WechatShareCard> sets the card WeChat shows when the page is
+// shared from inside WeChat — "{title} · {company}", the place and the pay as
+// the post lists it (left out when it lists none; never 0), linking the job
+// in the app. It renders nothing and is inert outside WeChat.
+//
+// RoboApply, signed out, flag `visitorAssistant`: the visitor assistant's
+// launcher (page-scoped public questions; nothing typed is stored).
 
 import Link from 'next/link';
 
 import { useAuth } from '../../../lib/auth/useAuth';
+import { useBrand } from '../../../lib/brand/BrandProvider';
+import { useFlag } from '../../../lib/flags';
 import type { PublicJobDetail } from '../../../lib/api/contracts/seo';
+import { WechatShareCard } from '../notify-cn';
+import { VisitorAssistant } from '../visitor';
 import { useSeoFormat } from './labels';
 import styles from './seo.module.css';
 
@@ -34,9 +46,14 @@ export function JobPage({ job, signupHref }: JobPageProps) {
   const { t, date, pay, workModel, employment } = useSeoFormat();
   const { status } = useAuth();
   const signedIn = status === 'authenticated';
+  const brand = useBrand();
+  const assistantOn = useFlag('visitorAssistant');
   const posted = date(job.postedAt);
   const closes = date(job.expiresAt);
-  const payLine = pay(job.pay) ?? job.salaryText ?? t('job.notListed');
+  // Pay only as the posting lists it: its figures, else its own words. Null = it lists none.
+  const payAsListed = pay(job.pay) ?? (job.salaryText?.trim() || null);
+  const payLine = payAsListed ?? t('job.notListed');
+  const shareDescription = [job.location, payAsListed].map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean).join(' · ') || null;
   const sections: Array<[string, string | null]> = [
     ['job.about', job.descriptionPlain],
     ['job.responsibilities', job.responsibilities],
@@ -46,6 +63,9 @@ export function JobPage({ job, signupHref }: JobPageProps) {
 
   return (
     <div className={styles.page} data-job-id={job.id}>
+      {brand.market === 'cn' ? (
+        <WechatShareCard title={`${job.title} · ${job.company.name}`} description={shareDescription} path={`/jobs/${encodeURIComponent(job.id)}`} />
+      ) : null}
       <nav aria-label={t('breadcrumb.browse')}>
         <ol className={styles.crumbs}>
           <li>
@@ -146,6 +166,18 @@ export function JobPage({ job, signupHref }: JobPageProps) {
           </dl>
         </aside>
       </div>
+
+      {assistantOn && status === 'unauthenticated' && brand.market === 'intl' ? (
+        <VisitorAssistant
+          from="job"
+          pageContext={{
+            path: job.canonicalPath.slice(0, 512),
+            role: job.title.slice(0, 80),
+            ...(job.city ? { city: job.city.slice(0, 80) } : {}),
+            ...(job.country && /^[A-Za-z]{2}$/.test(job.country) ? { country: job.country.toUpperCase() } : {}),
+          }}
+        />
+      ) : null}
     </div>
   );
 }

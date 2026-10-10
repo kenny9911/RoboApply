@@ -256,6 +256,39 @@ describe('/help/ranking', () => {
     renderMarketing(<RankingPage />, { brand: 'goapply' });
     expect(screen.getByText(/On GoApply, if personalised recommendations are off/)).toBeInTheDocument();
   });
+
+  // INT-06 (wave3 WP-93 #17): the rules and goal points the ranking code applies.
+  it('shows the two ordering rules and the points each career goal adds (the contract numbers)', () => {
+    const { container } = renderMarketing(<RankingPage />);
+    const rule = (key: string) => container.querySelector(`[data-rule="${key}"]`) as HTMLElement;
+    expect(within(rule('sponsorship_first')).getByRole('heading', { name: 'Visa sponsorship first' })).toBeInTheDocument();
+    expect(rule('sponsorship_first')).not.toHaveTextContent(/points/);
+    expect(within(rule('skills_boost')).getByText('Up to 10 points')).toBeInTheDocument();
+    const goal = (key: string) => container.querySelector(`[data-goal="${key}"]`) as HTMLElement;
+    for (const [key, points] of [['more_senior', 6], ['management', 6], ['higher_pay', 6], ['flexibility', 4]] as const) {
+      expect(within(goal(key)).getByText(`+${points} points`)).toBeInTheDocument();
+    }
+    expect(container.querySelectorAll('[data-goal]')).toHaveLength(4);
+    expect(screen.getByText('Other goals do not change the order.')).toBeInTheDocument();
+    // The heading and the note match what is on the page: two rules, and goals.
+    expect(container.querySelectorAll('[data-rule]')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'More rules' })).toBeInTheDocument();
+    expect(screen.getByText(/The rules and goals below add points/)).toBeInTheDocument();
+  });
+
+  it('GoApply: no sponsorship rule and no career-goal block (neither is asked there); the skills rule stays', () => {
+    const { container } = renderMarketing(<RankingPage />, { brand: 'goapply' });
+    expect(container.querySelector('[data-rule="sponsorship_first"]')).toBeNull();
+    expect(container.querySelector('[data-rule="skills_boost"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-goal]')).toHaveLength(0);
+    expect(screen.queryByText(/career goal/)).toBeNull();
+    // One rule on the page: the heading says one, and the note mentions no goals.
+    expect(container.querySelectorAll('[data-rule]')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'One more rule' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Two more rules|More rules/ })).toBeNull();
+    expect(screen.getByText('Each job gets a ranking score out of 100 from the four factors. The rule below adds points to that score.')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/goals? below/);
+  });
 });
 
 describe('/about and /security', () => {

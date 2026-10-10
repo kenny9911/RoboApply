@@ -6,18 +6,17 @@
 // path classification, JobPosting / BreadcrumbList JSON-LD, host-aware
 // robots rules, sitemap XML and llms.txt.
 //
-// Two layers:
-//   - Brand-aware helpers used by every marketing page since WP-40:
-//     `homeMetadata(brandId, locale)`, `marketingMetadata(...)`,
-//     `brandLanguageAlternates(brandId)`, `marketingJsonLd(...)`,
-//     `faqPageNode(...)`, `messageAt(...)`. Canonical and hreflang follow the
-//     request's brand (ARCHITECTURE.md §1.6: RoboApply's cluster points zh-CN
-//     at GoApply; GoApply points en and zh-Hant at RoboApply).
-//   - The pre-brand `landingJsonLd` (+ `landingMetaStrings`, `SITE_URL`)
-//     kept for components/landing/LandingJsonLd.tsx and an existing test.
-//     @deprecated for new pages; WP-75 deletes them. (`languageAlternates`
-//     and `landingMetadata` were removed by WP-56 with app/sitemap.ts, their
-//     last importer.)
+// Brand-aware helpers used by every marketing page since WP-40:
+// `homeMetadata(brandId, locale)`, `marketingMetadata(...)`,
+// `brandLanguageAlternates(brandId)`, `marketingJsonLd(...)`,
+// `faqPageNode(...)`, `messageAt(...)`. Canonical and hreflang follow the
+// request's brand (ARCHITECTURE.md §1.6: RoboApply's cluster points zh-CN at
+// GoApply; GoApply points en and zh-Hant at RoboApply). Nothing here names a
+// product: the name, origin and assets come from the brand registry.
+//
+// The pre-brand landing helpers (a fixed product name and origin, and plan
+// prices in structured data) were deleted in INT-06 together with the legacy
+// landing component, after a zero-importer check.
 //
 // URL scheme: `/` is the brand's default locale AND the x-default; every
 // other locale lives at `/{locale}` so crawlers get stable, indexable
@@ -33,15 +32,11 @@ import {
   localePath,
   type RoboLocale,
 } from './localeConfig';
-import { MARKET_CURRENCY, PLAN_PRICES_MINOR, type BillingMarket } from './pricing';
 import { getBrand, type BrandId, type ProductBrand } from './brand/registry.generated';
 import { PROTECTED_PREFIXES } from './proxyPaths';
 import type { PublicJobDetail } from './api/contracts/seo';
 
 export { localePath };
-
-export const SITE_URL = 'https://www.roboapply.io';
-export const SITE_NAME = 'RoboApply';
 
 /** Open Graph locale tags per RoboLocale. */
 const OG_LOCALE: Record<RoboLocale, string> = {
@@ -55,112 +50,6 @@ const OG_LOCALE: Record<RoboLocale, string> = {
   pt: 'pt_BR',
   de: 'de_DE',
 };
-
-interface LandingMetaStrings {
-  title: string;
-  description: string;
-  ogTitle: string;
-  ogDescription: string;
-  keywords?: string;
-}
-
-/** Pull the localized meta strings, with hard EN defaults so the landing
- *  never ships metadata-less even before a bundle has `landing.meta`. */
-export function landingMetaStrings(locale: RoboLocale): LandingMetaStrings {
-  const landing = (loadMessages(locale) as Record<string, unknown>).landing as
-    | Record<string, unknown>
-    | undefined;
-  const meta = (landing?.meta ?? {}) as Partial<LandingMetaStrings>;
-  return {
-    // Fallbacks only matter before a bundle has `landing.meta`. The retired
-    // auto-apply tagline is gone (ruling R1, WP-40): the product never applies.
-    title: meta.title ?? `Find out why you're not getting interviews | ${SITE_NAME}`,
-    description:
-      meta.description ??
-      `${SITE_NAME} shows the jobs that fit your resume, names what each one is missing, and lets you practice the interview. You send every application yourself.`,
-    ogTitle: meta.ogTitle ?? meta.title ?? `${SITE_NAME}: find out why you're not getting interviews`,
-    ogDescription: meta.ogDescription ?? meta.description ?? `${SITE_NAME} shows the jobs that fit your resume and what each one is missing.`,
-    keywords: meta.keywords,
-  };
-}
-
-/**
- * JSON-LD @graph for the landing pages: Organization + WebSite + WebPage +
- * SoftwareApplication with an AggregateOffer. Entity hygiene only — no
- * aggregateRating/review (we have no collected ratings; faking them is a
- * manual-action trigger) and no FAQPage (Google removed FAQ rich results
- * May 2026; the visible FAQ text is what AI engines actually extract).
- * Prices come from lib/pricing.ts — the table the visible pricing section
- * renders from — in the currency this visitor's market pays in, so the
- * structured data never disagrees with the page beside it.
- */
-/** @deprecated legacy practice-plan offers; new pages use marketingJsonLd (no prices in structured data). */
-export function landingJsonLd(locale: RoboLocale, market: BillingMarket = 'other'): string {
-  const { title, description } = landingMetaStrings(locale);
-  const url = `${SITE_URL}${localePath(locale)}`;
-  const lang = HREFLANG[locale];
-  const currency = MARKET_CURRENCY[market];
-  // schema.org wants a decimal string in major units.
-  const price = (plan: keyof typeof PLAN_PRICES_MINOR) =>
-    String(PLAN_PRICES_MINOR[plan][currency] / 100);
-  const graph = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'Organization',
-        '@id': `${SITE_URL}/#organization`,
-        name: SITE_NAME,
-        url: SITE_URL,
-        logo: {
-          '@type': 'ImageObject',
-          url: `${SITE_URL}/roboapply-logo.png`,
-        },
-      },
-      {
-        '@type': 'WebSite',
-        '@id': `${SITE_URL}/#website`,
-        url: SITE_URL,
-        name: SITE_NAME,
-        publisher: { '@id': `${SITE_URL}/#organization` },
-        inLanguage: lang,
-      },
-      {
-        '@type': 'WebPage',
-        '@id': `${url}#webpage`,
-        url,
-        name: title,
-        description,
-        inLanguage: lang,
-        isPartOf: { '@id': `${SITE_URL}/#website` },
-        about: { '@id': `${SITE_URL}/#app` },
-      },
-      {
-        '@type': 'SoftwareApplication',
-        '@id': `${SITE_URL}/#app`,
-        name: SITE_NAME,
-        url: SITE_URL,
-        applicationCategory: 'BusinessApplication',
-        operatingSystem: 'Web',
-        description,
-        offers: {
-          '@type': 'AggregateOffer',
-          priceCurrency: currency,
-          lowPrice: price('free'),
-          highPrice: price('growth'),
-          offerCount: 3,
-          offers: [
-            { '@type': 'Offer', name: 'Free', price: price('free'), priceCurrency: currency },
-            { '@type': 'Offer', name: 'Starter', price: price('starter'), priceCurrency: currency },
-            { '@type': 'Offer', name: 'Growth', price: price('growth'), priceCurrency: currency },
-          ],
-        },
-      },
-    ],
-  };
-  // Escape `<` so a malicious translation string can't break out of the
-  // <script> element.
-  return JSON.stringify(graph).replace(/</g, '\\u003c');
-}
 
 // ── Brand-aware marketing helpers (WP-40) ───────────────────────────────
 
@@ -531,15 +420,33 @@ export function appDisallowPaths(): string[] {
   return ['/api/', ...PROTECTED_PREFIXES];
 }
 
-/** Host-aware robots rules (ARCH §9.5). */
+/**
+ * Public utility routes no crawler should fetch: each is reached only from a
+ * private link (an email or an invite) and carries a one-time token or a
+ * personal code in its path. Same list on both hosts.
+ *   /alerts/confirm/   confirm a signed-out job alert (double opt-in token)
+ *   /unsubscribe/      one-click unsubscribe (token)
+ *   /r/                invite short links (a personal code; redirects to signup)
+ * Free-tool results and "keep this result" have no page URL at all: they are
+ * API calls under /api/ (already disallowed) and a result id never appears in
+ * a link, so there is nothing more to list for them.
+ */
+export const UTILITY_DISALLOW_PATHS: readonly string[] = ['/alerts/confirm/', '/unsubscribe/', '/r/'];
+
+/**
+ * Host-aware robots rules (ARCH §9.5). Every group disallows the app, the API
+ * and the utility routes. AI crawlers are also kept off /job/* until
+ * recruiter-bank syndication consent exists (OPS-A4); a host Baidu indexes
+ * (GoApply) gets a Baiduspider group.
+ */
 export function robotsFor(brandId: BrandId): MetadataRoute.Robots {
   const brand = getBrand(brandId);
-  const app = appDisallowPaths();
+  const closed = [...appDisallowPaths(), ...UTILITY_DISALLOW_PATHS];
   const rules: MetadataRoute.Robots['rules'] = [
-    { userAgent: '*', allow: '/', disallow: app },
-    { userAgent: [...AI_CRAWLERS], allow: '/', disallow: [...app, '/job/'] },
+    { userAgent: '*', allow: '/', disallow: closed },
+    { userAgent: [...AI_CRAWLERS], allow: '/', disallow: [...closed, '/job/'] },
   ];
-  if (brand.seo.searchEngines.includes('baidu')) rules.push({ userAgent: 'Baiduspider', allow: '/', disallow: app });
+  if (brand.seo.searchEngines.includes('baidu')) rules.push({ userAgent: 'Baiduspider', allow: '/', disallow: closed });
   return { rules, sitemap: brandUrl(brand.id, '/sitemap.xml'), host: brand.canonicalOrigin };
 }
 
@@ -588,23 +495,42 @@ export function sitemapIndexXml(sitemaps: ReadonlyArray<{ loc: string; lastmod?:
 }
 
 /**
+ * The free-tool pages a brand's static sitemap lists (WP-57, WP-78):
+ *   /tools                 the hub, on both brands;
+ *   /tools/<tool>          each tool page, only where the tools run
+ *                          (`toolsOpen`: false on GoApply while CN-0, where
+ *                          those pages answer 404);
+ *   /tools/job-alerts      signed-out job alerts — RoboApply only (the page
+ *                          is `noindex` on GoApply).
+ * `toolPaths` are the tool pages' own paths (components/features/tools
+ * catalog), passed in so this module stays free of component imports. Pure.
+ */
+export function toolSitemapPaths(brandId: BrandId, opts: { toolsOpen: boolean; toolPaths: readonly string[] }): string[] {
+  const out = ['/tools'];
+  if (opts.toolsOpen) out.push(...opts.toolPaths);
+  if (getBrand(brandId).market !== 'cn') out.push('/tools/job-alerts');
+  return out;
+}
+
+/**
  * The static sitemap of a brand: the home cluster (each home URL with the
  * brand's hreflang set — only `brand.seoLocales` plus the cross-domain
- * alternates), the marketing subpages, indexable feature pages, signup, and
- * the surfaces that are live (`/browse`, `/campus`).
+ * alternates), the marketing subpages (with "How ranking works"), indexable
+ * feature pages, the free tools (`toolPaths`, from `toolSitemapPaths`),
+ * signup, and the surfaces that are live (`/browse`, `/campus`).
  */
 export function staticSitemapEntries(
   brandId: BrandId,
-  opts: { featurePaths: readonly string[]; surfaces: { browse: boolean; campus: boolean } },
+  opts: { featurePaths: readonly string[]; surfaces: { browse: boolean; campus: boolean }; toolPaths?: readonly string[] },
 ): SitemapEntry[] {
   const brand = getBrand(brandId);
   const languages = brandLanguageAlternates(brand.id);
   const homes = SEO_READY_LOCALES.filter((l) => brand.seoLocales.includes(l)).map((l) => homePath(brand, l));
   const out: SitemapEntry[] = [...new Set(homes)].map((p) => ({ loc: brandUrl(brand.id, p), alternates: languages }));
-  const pages = ['/pricing', '/about', '/security', '/help', ...opts.featurePaths, '/signup'];
+  const pages = ['/pricing', '/about', '/security', '/help', '/help/ranking', ...opts.featurePaths, ...(opts.toolPaths ?? []), '/signup'];
   if (opts.surfaces.browse && brand.market !== 'cn') pages.push('/browse');
   if (opts.surfaces.campus && brand.market === 'cn') pages.push('/campus');
-  for (const p of pages) out.push({ loc: brandUrl(brand.id, p) });
+  for (const p of [...new Set(pages)]) out.push({ loc: brandUrl(brand.id, p) });
   return out;
 }
 

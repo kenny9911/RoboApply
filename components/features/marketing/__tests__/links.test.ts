@@ -8,7 +8,13 @@ import { HERO_COUNT_MIN as SERVER_HERO_MIN, PUBLIC_CAP_BUCKETS } from '../../../
 import { supportAddress } from '../../../../server/src/features/support/service';
 import { getBrand } from '../../../../lib/brand/registry.generated';
 import { legalEntityFor, supportEmailFor } from '../brandEnv';
-import { FEATURES, FIT_PARTS, FIT_TIER_FLOORS, RANKING_FACTORS, featuresFor, findFeature } from '../catalog';
+import {
+  FEED_LIMITS,
+  GOAL_ADJUSTMENTS as SERVER_GOALS,
+  ORDERING_RULES as SERVER_RULES,
+  RANKING_FACTORS as SERVER_FACTORS,
+} from '../../../../server/src/features/feed/contract';
+import { COMPANY_SPREAD, FEATURES, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, featuresFor, findFeature } from '../catalog';
 import { HERO_COUNT_MIN, browseHref, buildSignupHref, fromSlug, heroCount, popularListHref, slugify } from '../links';
 
 describe('buildSignupHref (PRODUCT §3.2 CTA rule)', () => {
@@ -97,6 +103,32 @@ describe('published ranking factors', () => {
   it('weights add up to 100 (WP-32 formula)', () => {
     expect(RANKING_FACTORS.reduce((s, f) => s + f.pct, 0)).toBe(100);
     expect(Object.fromEntries(RANKING_FACTORS.map((f) => [f.key, f.pct]))).toEqual({ fit: 55, freshness: 20, affinity: 15, source: 10 });
+  });
+
+  // INT-06 (wave3 WP-93 #17): /help/ranking prints catalog.ts; the ranking code
+  // reads server/src/features/feed/contract.ts. These fail when they differ.
+  it('the four factors are the feed contract ones, key for key and weight for weight', () => {
+    expect(RANKING_FACTORS.map((f) => [f.server, f.pct])).toEqual(SERVER_FACTORS.map((f) => [f.key, Math.round(f.weight * 100)]));
+    expect(SERVER_FACTORS.reduce((sum, f) => sum + f.weight, 0)).toBeCloseTo(1, 10);
+  });
+
+  it('the ordering rules are the feed contract ones (same rules, same points)', () => {
+    expect(ORDERING_RULES.map((r) => [r.server, r.points])).toEqual(SERVER_RULES.map((r) => [r.key, r.points]));
+    // Sponsorship is asked on RoboApply only; every rule is shown on at least one brand.
+    expect(ORDERING_RULES.find((r) => r.server === 'sponsorship_first')?.markets).toEqual(['intl']);
+    for (const r of ORDERING_RULES) expect(r.markets.length).toBeGreaterThan(0);
+  });
+
+  it('every goal that adds points on the server is listed with those points, and no other', () => {
+    const serverNonZero = Object.entries(SERVER_GOALS)
+      .filter(([, g]) => g.points !== 0)
+      .map(([key, g]) => [key, g.points]);
+    expect(GOAL_ADJUSTMENTS.map((g) => [g.server, g.points])).toEqual(serverNonZero);
+    for (const g of GOAL_ADJUSTMENTS) expect(g.points).toBeGreaterThan(0);
+  });
+
+  it('the company spread is the feed limit', () => {
+    expect(COMPANY_SPREAD).toEqual({ max: FEED_LIMITS.companyMaxPerWindow, window: FEED_LIMITS.companyWindow });
   });
 
   it('fit parts and tiers match the scoring defaults', () => {

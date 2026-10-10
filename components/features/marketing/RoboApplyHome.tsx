@@ -4,13 +4,19 @@
 //
 //   hero (gap first, ruling R2; the "{count}+ open roles" clause only when the
 //   public index holds ≥ 1,000 jobs) → labelled interactive Example → the four
-//   verbs → feature links → real counters → quick search → pricing summary →
-//   FAQ (FAQPage JSON-LD is rendered by the page) → final CTA.
+//   verbs → feature links → real counters → the job ticker slot → quick
+//   search → pricing summary → FAQ (FAQPage JSON-LD is rendered by the page) →
+//   final CTA.
+//
+// `ticker` is a server-rendered slot: the route passes <JobTicker /> (the
+// newest jobs we may show publicly, each a real posting with the time we found
+// it). It renders nothing when there are none — never a placeholder row.
 //
 // No testimonials, no user counts, no static stats, no competitor names or
 // prices. Every CTA → /signup?from=home… preserving job/ref/utm_*.
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { useBrand } from '../../../lib/brand';
@@ -48,7 +54,12 @@ function FeatureCard({ def }: { def: FeatureDef }) {
   );
 }
 
-export function RoboApplyHome() {
+export interface RoboApplyHomeProps {
+  /** The live job ticker, rendered on the server by the route (components/features/seo/server). */
+  ticker?: ReactNode;
+}
+
+export function RoboApplyHome({ ticker = null }: RoboApplyHomeProps = {}) {
   const t = useTranslations('landing.home');
   const tc = useTranslations('landing.cta');
   const tf = useTranslations('landing.features.common');
@@ -109,6 +120,7 @@ export function RoboApplyHome() {
       </section>
 
       <IndexCounters />
+      {ticker}
       <QuickSearch countries={brand.countries} />
       <PricingSummary from="home:pricing" />
       <Faq id="faq" title={t('faq.title')} items={HOME_FAQ_KEYS.map((k) => ({ q: t(`faq.${k}.q`), a: t(`faq.${k}.a`) }))} />

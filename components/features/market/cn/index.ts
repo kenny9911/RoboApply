@@ -8,5 +8,6 @@
 export { JobMetaCn } from './JobMetaCn';
 export { SalaryCn, type SalaryCnProps } from './SalaryCn';
 export { ExternalSearchLinks, type ExternalSearchLinksProps } from './ExternalSearchLinks';
+export { ExternalSearchPanel, type ExternalSearchPanelProps } from './ExternalSearchPanel';
 export { FraudQueue } from './FraudQueue';
-export { readCnMeta } from './meta';
+export { isOwnImport, readCnMeta, withOwnImport } from './meta';

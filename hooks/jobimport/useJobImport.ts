@@ -6,7 +6,13 @@
 //   const flow = useJobImport();
 //   await flow.readLink(url)                 → a draft to confirm (nothing saved, no credit)
 //   await flow.save(fields)                  → the saved job (`job_import` credit, charged by the server)
-//   flow.result / flow.error / flow.pending
+//   await flow.resume(importId)              → an unfinished add reopened from a link
+//                                              (/jobs/added?import=<id>, the Assistant's
+//                                              "Finish adding this job"): its status,
+//                                              missing fields and warnings. A draft's
+//                                              values are never stored, so the form
+//                                              opens empty.
+//   flow.result / flow.error / flow.pending / flow.resumed
 //   flow.reset()
 //   const remove = useRemoveAddedJob();      remove(jobId)
 //
@@ -23,9 +29,9 @@
 import { useCallback, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { importJob, listAddedJobs, removeAddedJob } from '../../lib/api/jobImport';
+import { getImportStatus, importJob, listAddedJobs, removeAddedJob } from '../../lib/api/jobImport';
 import { apiErrorCode, apiErrorDetails, newIdempotencyKey } from '../../lib/api/contracts/wire';
-import type { AddedJobsResponse, ImportJobResponse, ManualJob } from '../../lib/api/contracts/jobs/import';
+import type { AddedJobsResponse, ImportField, ImportJobResponse, ImportStatusResponse, ManualJob } from '../../lib/api/contracts/jobs/import';
 import { creditsExhaustedFrom, reportCreditsExhausted } from '../shared/useCreditGate';
 import { useInvalidateCredits } from '../shared/useCredits';
 
@@ -54,6 +60,8 @@ export type ImportErrorView =
   | { kind: 'credits_exhausted' }
   | { kind: 'feature_disabled' }
   | { kind: 'invalid' }
+  /** The unfinished add a link named is gone (expired, removed, or someone else's). */
+  | { kind: 'draft_gone' }
   | { kind: 'failed' };
 
 export function importErrorView(err: unknown): ImportErrorView {
@@ -69,12 +77,36 @@ export function importErrorView(err: unknown): ImportErrorView {
   return { kind: 'failed' };
 }
 
+const IMPORT_FIELD_NAMES: readonly ImportField[] = ['title', 'company', 'description', 'location', 'applyUrl'];
+
+/**
+ * A status answer (GET /jobs/import/:importId) in the shape the add panel
+ * renders. The values of a draft are not stored anywhere, so `draft` is null:
+ * the form opens empty and never shows a value we do not have. Pure.
+ */
+export function statusAsImportResult(importId: string, status: ImportStatusResponse): ImportJobResponse {
+  return {
+    importId,
+    status: status.status,
+    jobId: status.jobId,
+    missingFields: status.missingFields.filter((f): f is ImportField => (IMPORT_FIELD_NAMES as readonly string[]).includes(f)),
+    warnings: status.warnings,
+    reason: status.reason,
+    draft: null,
+    matched: null,
+  };
+}
+
 export interface JobImportFlow {
   /** The last answer from the server (draft, needs-text, failure or saved job). */
   result: ImportJobResponse | null;
   error: ImportErrorView | null;
-  pending: 'read' | 'save' | null;
+  pending: 'read' | 'save' | 'resume' | null;
+  /** True while `result` is an unfinished add reopened by `resume` (no values were kept). */
+  resumed: boolean;
   readLink(url: string): Promise<ImportJobResponse | null>;
+  /** Reopen an unfinished add by its id. */
+  resume(importId: string): Promise<ImportJobResponse | null>;
   /** Save confirmed fields; `importId` names the draft they confirm. */
   save(fields: ManualJob, importId?: string | null): Promise<ImportJobResponse | null>;
   reset(): void;
@@ -86,10 +118,28 @@ export function useJobImport(): JobImportFlow {
   const [result, setResult] = useState<ImportJobResponse | null>(null);
   const [error, setError] = useState<ImportErrorView | null>(null);
   const [pending, setPending] = useState<JobImportFlow['pending']>(null);
+  const [resumed, setResumed] = useState(false);
+
+  const resume = useCallback(async (importId: string) => {
+    setPending('resume');
+    setError(null);
+    try {
+      const r = statusAsImportResult(importId, await getImportStatus(importId));
+      setResult(r);
+      setResumed(r.status !== 'done');
+      return r;
+    } catch (err) {
+      setError(apiErrorCode(err) === 'not_found' ? { kind: 'draft_gone' } : importErrorView(err));
+      return null;
+    } finally {
+      setPending(null);
+    }
+  }, []);
 
   const readLink = useCallback(async (url: string) => {
     setPending('read');
     setError(null);
+    setResumed(false);
     try {
       const r = await importJob({ url: url.trim() });
       setResult(r);
@@ -110,6 +160,7 @@ export function useJobImport(): JobImportFlow {
         // One key per save, so a network retry inside the call never charges twice.
         const saved = await importJob(importId ? { manual: fields, importId } : { manual: fields }, { idempotencyKey: newIdempotencyKey() });
         setResult(saved);
+        setResumed(false);
         void queryClient.invalidateQueries({ queryKey: jobImportKeys.all });
         void queryClient.invalidateQueries({ queryKey: ['feed'] });
         return saved;
@@ -129,9 +180,10 @@ export function useJobImport(): JobImportFlow {
   const reset = useCallback(() => {
     setResult(null);
     setError(null);
+    setResumed(false);
   }, []);
 
-  return { result, error, pending, readLink, save, reset };
+  return { result, error, pending, resumed, readLink, resume, save, reset };
 }
 
 export function useRemoveAddedJob() {

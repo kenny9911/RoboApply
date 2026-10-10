@@ -88,12 +88,12 @@ export const TAXONOMY_TREE = {
   sources: [],
 };
 
-export function renderWith(ui: ReactElement, opts: { brand?: BrandId; client?: QueryClient } = {}) {
+export function renderWith(ui: ReactElement, opts: { brand?: BrandId; client?: QueryClient; locale?: string } = {}) {
   const client = opts.client ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={client}>
-        <IntlWrapper>
+        <IntlWrapper locale={opts.locale}>
           <BrandProvider brand={clientBrandFor(opts.brand ?? 'roboapply')}>{children}</BrandProvider>
         </IntlWrapper>
       </QueryClientProvider>

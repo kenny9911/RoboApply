@@ -14,6 +14,21 @@ vi.mock('../../../../lib/auth/AuthProvider', () => ({
   useAuth: () => mockAuthState.value,
 }));
 
+// Stand-ins that show what each mount is given (the share card renders nothing by design).
+vi.mock('../../notify-cn', () => ({
+  WechatShareCard: (p: { title: string; description?: string | null; path?: string | null }) => (
+    <span data-testid="wechat-share" data-title={p.title} data-description={p.description ?? ''} data-path={p.path ?? ''} />
+  ),
+}));
+vi.mock('../../visitor', () => ({
+  VisitorAssistant: (p: { from: string; pageContext: Record<string, string> }) => <span data-testid="visitor-assistant" data-from={p.from} data-context={JSON.stringify(p.pageContext)} />,
+}));
+
+import type { ReactElement } from 'react';
+
+import { capsFor } from '../../../../__tests__/shell/helpers';
+import { BrandProvider, clientBrandFor, type BrandId } from '../../../../lib/brand';
+import type { ResolvedFlags } from '../../../../server/src/platform/flags';
 import { BrowsePage } from '../BrowsePage';
 import { BrowseHub, BrowseUnknown } from '../BrowseHub';
 import { JobPage } from '../JobPage';
@@ -140,6 +155,79 @@ describe('JobPage', () => {
     mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
     renderWithProviders(<JobPage job={job({ pay: null, salaryText: '面議' })} signupHref="/signup" />);
     expect(screen.getByText('面議')).toBeInTheDocument();
+  });
+});
+
+// INT-06 (wave5 WP-93 #24 and #30): the WeChat share card and the visitor assistant on the public job page.
+function renderOn(brand: BrandId, ui: ReactElement, flags: Partial<ResolvedFlags> = {}) {
+  return renderWithProviders(
+    <BrandProvider brand={clientBrandFor(brand)} initialCapabilities={capsFor(brand, flags)}>
+      {ui}
+    </BrandProvider>,
+  );
+}
+
+describe('JobPage — WeChat share card (GoApply only)', () => {
+  it('GoApply: "{title} · {company}", the place and the pay as listed, linking the job in the app', () => {
+    mockAuthState.value = buildAuthValue();
+    renderOn('goapply', <JobPage job={job()} signupHref="/signup" />);
+    const card = screen.getByTestId('wechat-share');
+    expect(card).toHaveAttribute('data-title', 'Backend Engineer · Acme');
+    expect(card.getAttribute('data-description')).toMatch(/^Taipei, Taiwan · .*1,200,000 – .*1,600,000 a year$/);
+    expect(card).toHaveAttribute('data-path', '/jobs/cmjob1');
+  });
+
+  it('pay stated only in words is shared as stated', () => {
+    mockAuthState.value = buildAuthValue();
+    renderOn('goapply', <JobPage job={job({ pay: null, salaryText: '面議' })} signupHref="/signup" />);
+    expect(screen.getByTestId('wechat-share')).toHaveAttribute('data-description', 'Taipei, Taiwan · 面議');
+  });
+
+  it('no listed pay (or a zero figure): the place alone, never 0; the page itself says "Not listed"', () => {
+    mockAuthState.value = buildAuthValue();
+    for (const pay of [null, { min: 0, max: 0, currency: 'TWD', period: 'year' }, { min: null, max: null, currency: 'TWD', period: 'year' }]) {
+      const view = renderOn('goapply', <JobPage job={job({ pay: pay as never, salaryText: null })} signupHref="/signup" />);
+      const card = screen.getByTestId('wechat-share');
+      expect(card).toHaveAttribute('data-description', 'Taipei, Taiwan');
+      expect(card.getAttribute('data-description')).not.toMatch(/\d/);
+      expect(within(screen.getByText('Pay').closest('div')!).getByText('Not listed')).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it('neither place nor pay: no description (the card uses its own default line)', () => {
+    mockAuthState.value = buildAuthValue();
+    renderOn('goapply', <JobPage job={job({ location: null, pay: null, salaryText: '  ' })} signupHref="/signup" />);
+    expect(screen.getByTestId('wechat-share')).toHaveAttribute('data-description', '');
+  });
+
+  it('RoboApply: no share card', () => {
+    mockAuthState.value = buildAuthValue();
+    renderOn('roboapply', <JobPage job={job()} signupHref="/signup" />);
+    expect(screen.queryByTestId('wechat-share')).toBeNull();
+  });
+});
+
+describe('JobPage — visitor assistant (flag `visitorAssistant`)', () => {
+  it('RoboApply, signed out, flag on: mounted with the job as its page context', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    renderOn('roboapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
+    const el = screen.getByTestId('visitor-assistant');
+    expect(el).toHaveAttribute('data-from', 'job');
+    expect(JSON.parse(el.getAttribute('data-context')!)).toEqual({ path: '/job/cmjob1-backend-engineer-acme', role: 'Backend Engineer', city: 'Taipei', country: 'TW' });
+  });
+
+  it('absent with the flag off, for a signed-in user, and on GoApply', () => {
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    const off = renderOn('roboapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: false });
+    expect(screen.queryByTestId('visitor-assistant')).toBeNull();
+    off.unmount();
+    const cn = renderOn('goapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
+    expect(screen.queryByTestId('visitor-assistant')).toBeNull();
+    cn.unmount();
+    mockAuthState.value = buildAuthValue();
+    renderOn('roboapply', <JobPage job={job()} signupHref="/signup" />, { visitorAssistant: true });
+    expect(screen.queryByTestId('visitor-assistant')).toBeNull();
   });
 });
 

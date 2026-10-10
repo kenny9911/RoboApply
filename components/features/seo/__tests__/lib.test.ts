@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AI_CRAWLERS,
+  UTILITY_DISALLOW_PATHS,
   appDisallowPaths,
   breadcrumbNode,
   browseUnknownQuery,
@@ -18,6 +19,7 @@ import {
   seoCacheTag,
   sitemapIndexXml,
   staticSitemapEntries,
+  toolSitemapPaths,
   urlsetXml,
 } from '../../../../lib/seo';
 import { PROTECTED_PREFIXES } from '../../../../lib/proxyPaths';
@@ -129,7 +131,15 @@ describe('robots per host', () => {
     expect(ai.disallow).toContain('/job/');
     expect(ai.userAgent).toEqual([...AI_CRAWLERS]);
     // Other crawlers may crawl job pages.
-    expect(rules.find((x) => x.userAgent === '*')!.disallow).toEqual(appDisallowPaths());
+    expect(rules.find((x) => x.userAgent === '*')!.disallow).toEqual([...appDisallowPaths(), ...UTILITY_DISALLOW_PATHS]);
+    expect(rules.find((x) => x.userAgent === '*')!.disallow).not.toContain('/job/');
+    // INT-06: every group on every host also keeps crawlers off the token-bearing utility routes.
+    expect(UTILITY_DISALLOW_PATHS).toEqual(['/alerts/confirm/', '/unsubscribe/', '/r/']);
+    for (const rule of rules) expect(rule.disallow).toEqual(expect.arrayContaining(['/alerts/confirm/', '/unsubscribe/', '/r/']));
+    // …without closing a public page: tools, browse, help, pricing and the campus calendar stay open.
+    for (const rule of rules) {
+      for (const open of ['/tools', '/tools/', '/browse', '/help', '/pricing', '/campus', '/alerts']) expect(rule.disallow).not.toContain(open);
+    }
     expect(r.sitemap).toBe(brand === 'goapply' ? 'https://www.goapply.top/sitemap.xml' : 'https://www.roboapply.io/sitemap.xml');
     expect(rules.some((x) => x.userAgent === 'Baiduspider')).toBe(brand === 'goapply');
   });
@@ -158,6 +168,37 @@ describe('static sitemap per host', () => {
     expect(locs).toContain('https://www.goapply.top/campus');
     expect(locs).not.toContain('https://www.goapply.top/browse');
     expect(staticSitemapEntries('goapply', { featurePaths: [], surfaces: { browse: false, campus: false } }).map((e) => e.loc)).not.toContain('https://www.goapply.top/campus');
+  });
+
+  // INT-06 (wave4 WP-93 #13, wave5 WP-93 #30): the free tools in the static sitemap.
+  const TOOL_PATHS = ['/tools/resume-check', '/tools/resume-job-match'];
+  const locs = (brand: 'roboapply' | 'goapply', toolsOpen: boolean) =>
+    staticSitemapEntries(brand, { featurePaths: [], surfaces, toolPaths: toolSitemapPaths(brand, { toolsOpen, toolPaths: TOOL_PATHS }) }).map((e) => e.loc);
+
+  it('RoboApply lists /tools, both tool pages and /tools/job-alerts', () => {
+    expect(toolSitemapPaths('roboapply', { toolsOpen: true, toolPaths: TOOL_PATHS })).toEqual(['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']);
+    const all = locs('roboapply', true);
+    for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']) expect(all).toContain(`https://www.roboapply.io${p}`);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('GoApply while CN-0 lists /tools only: the two tool pages 404 there, and job alerts are never in its sitemap', () => {
+    expect(toolSitemapPaths('goapply', { toolsOpen: false, toolPaths: TOOL_PATHS })).toEqual(['/tools']);
+    const cn0 = locs('goapply', false);
+    expect(cn0).toContain('https://www.goapply.top/tools');
+    for (const p of ['/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']) expect(cn0).not.toContain(`https://www.goapply.top${p}`);
+    // Once the tools run on the mainland stack (CN-1) the two pages are listed; job alerts still are not.
+    const cn1 = locs('goapply', true);
+    expect(cn1).toEqual(expect.arrayContaining(['https://www.goapply.top/tools/resume-check', 'https://www.goapply.top/tools/resume-job-match']));
+    expect(cn1).not.toContain('https://www.goapply.top/tools/job-alerts');
+  });
+
+  it('both brands list "How ranking works"; without toolPaths no tool URL is invented', () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const base = staticSitemapEntries(brand, { featurePaths: [], surfaces }).map((e) => e.loc);
+      expect(base.some((l) => l.endsWith('/help/ranking'))).toBe(true);
+      expect(base.some((l) => l.includes('/tools'))).toBe(false);
+    }
   });
 
   it('XML is escaped and well formed', () => {

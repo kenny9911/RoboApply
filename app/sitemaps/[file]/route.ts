@@ -1,15 +1,21 @@
 // /sitemaps/<file>.xml — one sitemap of the index (ARCHITECTURE.md §9.5):
 //   static.xml   home cluster (hreflang: brand.seoLocales + the cross-domain
 //                alternates), marketing subpages, indexable feature pages,
-//                signup, and /browse or /campus when live;
+//                the free tools (/tools on both brands; the tool pages only
+//                where the tools run, so not on GoApply while CN-0;
+//                /tools/job-alerts on RoboApply only), signup, and /browse
+//                or /campus when live;
 //   roles-<n>.xml, jobs-<n>.xml   from GET /api/v1/public/seo/sitemap/:part.
-// Anything else → 404.
+// Anything else → 404. (There is no campus-<n> partition: the public campus
+// API lists programmes page by page, not URLs — see the INT-06 handoff.)
 
 import { featuresFor } from '../../../components/features/marketing/catalog';
+import { TOOLS, toolHref } from '../../../components/features/tools/catalog';
 import { getBrand } from '../../../lib/brand/registry.generated';
-import { brandUrl, staticSitemapEntries, urlsetXml } from '../../../lib/seo';
+import { brandUrl, staticSitemapEntries, toolSitemapPaths, urlsetXml } from '../../../lib/seo';
 import { getServerBrandId } from '../../../lib/server/brand';
 import { loadSitemapIndex, loadSitemapPart } from '../../../lib/server/publicApi';
+import { freeToolsOpen } from '../../tools/meta';
 
 const HEADERS = { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, s-maxage=3600, stale-while-revalidate=86400' };
 
@@ -23,7 +29,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ file: s
     const featurePaths = featuresFor(brand.id)
       .filter((f) => f.gate === null)
       .map((f) => `/features/${f.slug}`);
-    return new Response(urlsetXml(staticSitemapEntries(brand.id, { featurePaths, surfaces })), { headers: HEADERS });
+    const toolPaths = toolSitemapPaths(brand.id, { toolsOpen: freeToolsOpen(brand.id), toolPaths: TOOLS.map(toolHref) });
+    return new Response(urlsetXml(staticSitemapEntries(brand.id, { featurePaths, surfaces, toolPaths })), { headers: HEADERS });
   }
   const m = /^((?:roles|jobs)-\d{1,4})\.xml$/.exec(file);
   if (!m) return new Response('Not found', { status: 404 });

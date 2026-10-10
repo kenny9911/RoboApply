@@ -19,6 +19,8 @@
       "getDetails": "Get job details",
       "reading": "Reading the page…",
       "invalidLink": "Enter a full web address that starts with http:// or https://.",
+      "resuming": "Opening the job you started adding…",
+      "resumed": "Finish adding this job. We don't keep a job's details until you save it, so enter them below.",
       "addAnother": "Add another job",
       "startOver": "Start over"
     },
@@ -127,6 +129,7 @@
       "hourlyNoTime": "You've added a lot of jobs in the last hour. Try again later.",
       "creditsExhausted": "You've used all your job adds for today.",
       "invalid": "Some details aren't valid. Check the form and try again.",
+      "draftGone": "That unfinished job is no longer available. Add it again from its link, or type it in.",
       "generic": "Something went wrong. Try again."
     }
   }

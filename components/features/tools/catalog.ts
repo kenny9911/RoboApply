@@ -1,6 +1,11 @@
 // components/features/tools/catalog.ts — the free tools and their pages (WP-57;
 // PRODUCT_PLAN.md F-TOOL-01). Only tools that actually work are listed: no
-// lander-only "tools", no /tools/cover-letter. /tools/job-alerts is WP-78's.
+// lander-only "tools", no /tools/cover-letter.
+//
+// TOOLS are the two upload tools this area runs. JOB_ALERTS_ENTRY is the
+// hub's card for signed-out job alerts (/tools/job-alerts, WP-78's page and
+// form): it is not an upload tool, so it is not in TOOLS (no ToolKind, no
+// /tools/[tool] page) and it shows only where alerts can actually be sent.
 
 import type { ToolKind } from '../../../lib/api/contracts/tools';
 
@@ -18,6 +23,21 @@ export const TOOLS: readonly ToolEntry[] = [
   { kind: 'resume_check', slug: 'resume-check', key: 'resumeCheck', from: 'resume-check' },
   { kind: 'resume_job_match', slug: 'resume-job-match', key: 'resumeJobMatch', from: 'resume-job-match' },
 ];
+
+/**
+ * The hub card for signed-out job alerts (F-TOOL-04). `flags`: every one must
+ * be on for the card to show — `jobs.alerts` (off on GoApply while it lists no
+ * third-party posts) and `notify.email` (a working mail transport). They are
+ * the same two the form itself checks, so the card never leads to "not
+ * available here".
+ */
+export const JOB_ALERTS_ENTRY = {
+  id: 'job-alerts',
+  href: '/tools/job-alerts',
+  /** `tools.hub.<key>.*` */
+  key: 'jobAlerts',
+  flags: ['jobs.alerts', 'notify.email'],
+} as const;
 
 export function toolBySlug(slug: string | null | undefined): ToolEntry | null {
   return TOOLS.find((t) => t.slug === slug) ?? null;

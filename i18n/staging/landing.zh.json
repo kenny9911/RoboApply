@@ -4,6 +4,7 @@
       "nav": {
         "label": "主导航",
         "features": "功能",
+        "tools": "免费工具",
         "pricing": "价格",
         "help": "帮助",
         "signIn": "登录",
@@ -17,6 +18,7 @@
         "helpTitle": "帮助",
         "popularTitle": "热门职位列表",
         "langTitle": "%BRAND% 的其他语言版本",
+        "tools": "免费工具",
         "pricing": "价格",
         "about": "关于",
         "security": "安全",
@@ -475,9 +477,30 @@
         "notChance": "这不是你被录用的概率。",
         "weight": "占匹配度的 {pct}%"
       },
+      "rulesTitle": "{count, plural, one {另外一条规则} other {其他规则}}",
+      "pointsNote": "每个职位会根据上面四个因素得到一个满分 100 的排序分。下面的规则和目标会在这个分数上加分，或调整职位在列表中的位置。",
+      "pointsNoteRules": "每个职位会根据上面四个因素得到一个满分 100 的排序分。下面这条规则会在这个分数上加分。",
+      "upToPoints": "最多加 {points} 分",
+      "addsPoints": "加 {points} 分",
+      "rules": {
+        "sponsorshipFirst": {
+          "title": "优先显示提供签证担保的职位",
+          "body": "如果你表示需要签证担保，职位描述中提到担保的职位会排在前面，并保持你选择的排序；明确写明不提供担保的职位会被隐藏。这条规则对所有排序方式都生效。"
+        },
+        "skillsBoost": {
+          "title": "你选择的技能",
+          "body": "当技能是唯一缩小列表范围的筛选条件时，要求你所选技能越多的职位，在“推荐”排序中越靠前，加分与职位要求的技能数量成正比。"
+        }
+      },
       "goalTitle": "你的目标",
-      "goal1": "如果你说想做管理，管理岗会靠前。",
-      "goal2": "如果你说想要更高薪资，标明薪资高于你最低要求的职位会靠前。",
+      "goalIntro": "你在设置账号时选择的职业目标，会给符合该目标的职位加分。",
+      "goals": {
+        "moreSenior": "更高级别：高于你所选最低级别的职位",
+        "management": "带团队：需要管理他人的职位",
+        "higherPay": "更高薪资：标明薪资高于你最低要求（同一币种）的职位",
+        "flexibility": "更灵活：远程或混合办公的职位"
+      },
+      "goalOthers": "其他目标不会改变排序。",
       "spreadTitle": "多样性",
       "spread": "连续 {window} 个职位中，同一家公司最多 {max} 个。",
       "neverTitle": "排序从不使用的因素",

@@ -20,6 +20,12 @@ export function sortsFor(market: 'intl' | 'cn'): readonly FeedSort[] {
   return market === 'cn' ? CN_SORTS : INTL_SORTS;
 }
 
+/** The sort a `/jobs?sort=<key>` link asks for, or null when the key is missing or not offered on this market. Pure. */
+export function sortFromQuery(raw: string | null | undefined, market: 'intl' | 'cn'): FeedSort | null {
+  const options = sortsFor(market);
+  return raw && (options as readonly string[]).includes(raw) ? (raw as FeedSort) : null;
+}
+
 export interface SortMenuProps {
   value: FeedSort;
   market: 'intl' | 'cn';

@@ -32,6 +32,10 @@
         "title": "Campus recruiting calendar",
         "body": "Application dates for graduate programmes, taken from each company's official page."
       },
+      "jobAlerts": {
+        "title": "Job alerts by email",
+        "body": "Get new jobs that match one search by email, daily or weekly. No account needed."
+      },
       "honesty": "These checks are automated. They show what your resume says. They do not predict whether you will hear back.",
       "subNoLimit": "No account needed."
     },

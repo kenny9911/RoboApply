@@ -11,7 +11,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
 import { RoboApiError } from '../../../lib/api/client';
 import { __outOfCreditsStore } from '../../../hooks/shared/useCreditGate';
-import type { AddedJobItem, AddedJobsResponse, ImportJobResponse } from '../../../lib/api/contracts/jobs/import';
+import type { AddedJobItem, AddedJobsResponse, ImportJobResponse, ImportStatusResponse } from '../../../lib/api/contracts/jobs/import';
 
 const api = vi.hoisted(() => ({
   importJob: vi.fn(),
@@ -24,10 +24,11 @@ vi.mock('../../../lib/api/jobImport', () => api);
 const jobsApi = vi.hoisted(() => ({ saveJob: vi.fn(), unsaveJob: vi.fn(), applyClick: vi.fn(), markApplied: vi.fn(), shareJob: vi.fn(), undoApplied: vi.fn() }));
 vi.mock('../../../lib/api/jobs', () => jobsApi);
 vi.mock('../../../lib/api/feed', () => ({ hideJob: vi.fn(), reportJob: vi.fn() }));
+const nav = vi.hoisted(() => ({ search: '', push: [] as string[] }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: (href: string) => nav.push.push(href), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
   usePathname: () => '/jobs/added',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nav.search),
 }));
 vi.mock('../../../lib/api/contracts/wire', async (orig) => ({ ...(await orig<object>()), newIdempotencyKey: () => 'idem-key' }));
 
@@ -95,6 +96,8 @@ const list = (items: AddedJobItem[], cursor: string | null = null): AddedJobsRes
 
 beforeEach(() => {
   vi.clearAllMocks();
+  nav.search = '';
+  nav.push = [];
   credits.remaining = 3;
   credits.invalidations = 0;
   __outOfCreditsStore.set(null);
@@ -121,6 +124,124 @@ describe('JobsAddedPage', () => {
     expect(screen.getByRole('heading', { name: 'Add a job' })).toBeInTheDocument();
     expect(await screen.findByText('No jobs added yet')).toBeInTheDocument();
     expect(api.listAddedJobs).toHaveBeenCalledWith({ limit: 20 }, expect.anything());
+  });
+});
+
+// INT-06 (wave3 WP-93 #15, wave4 WP-93 #1): the tab strip and `?import=`.
+const JOBS_TABS = 'Job lists';
+describe('JobsAddedPage — the third Jobs tab', () => {
+  it('shows For you · Explore · Added by you with this tab selected, and the tabs go to their routes', async () => {
+    renderWithBrand(<JobsAddedPage />, { flags: { 'jobs.import': true, 'jobs.feed': true } });
+    const strip = screen.getByRole('tablist', { name: JOBS_TABS });
+    expect(within(strip).getAllByRole('tab').map((el) => el.textContent)).toEqual(['For you', 'Explore', 'Added by you']);
+    expect(screen.getByRole('tab', { name: 'Added by you' })).toHaveAttribute('aria-selected', 'true');
+    const panel = screen.getAllByRole('tabpanel')[0];
+    expect(panel).toHaveAttribute('aria-labelledby', screen.getByRole('tab', { name: 'Added by you' }).id);
+    expect(within(panel).getByRole('heading', { name: 'Add a job' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'For you' }));
+    expect(nav.push).toEqual(['/jobs']);
+    await screen.findByText('No jobs added yet');
+  });
+
+  it('with no job feed (GoApply before a licence) only this tab shows', async () => {
+    renderWithBrand(<JobsAddedPage />, { brand: 'goapply', flags: { 'jobs.import': true, 'jobs.feed': false } });
+    const strip = screen.getByRole('tablist', { name: JOBS_TABS });
+    expect(within(strip).getAllByRole('tab')).toHaveLength(1);
+    expect(within(strip).getByRole('tab', { name: 'Added by you' })).toHaveAttribute('aria-selected', 'true');
+    await screen.findByText('No jobs added yet');
+  });
+});
+
+// INT-06 (wave3 WP-93 #8): GoApply's "Search other job sites" on the import page.
+describe('JobsAddedPage — search other job sites', () => {
+  it('GoApply with no job feed: the panel sits with the add panel', async () => {
+    renderWithBrand(<JobsAddedPage />, { brand: 'goapply', flags: { 'jobs.import': true, 'jobs.feed': false } });
+    const panel = screen.getByTestId('cn-external-search');
+    expect(within(panel).getByLabelText('What job are you looking for?')).toBeInTheDocument();
+    await screen.findByText('No jobs added yet');
+  });
+
+  it('absent on GoApply once it has a feed, on RoboApply, and when adding jobs is off', async () => {
+    const cnFeed = renderWithBrand(<JobsAddedPage />, { brand: 'goapply', flags: { 'jobs.import': true, 'jobs.feed': true } });
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
+    await screen.findByText('No jobs added yet');
+    cnFeed.unmount();
+    const intl = renderWithBrand(<JobsAddedPage />, { flags: { 'jobs.import': true, 'jobs.feed': false } });
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
+    await screen.findByText('No jobs added yet');
+    intl.unmount();
+    renderWithBrand(<JobsAddedPage />, { brand: 'goapply', flags: { 'jobs.feed': false } });
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
+  });
+});
+
+describe('/jobs/added?import=<importId> — an unfinished add reopened', () => {
+  const status = (over: Partial<ImportStatusResponse> = {}): ImportStatusResponse => ({ status: 'needs_fields', jobId: null, missingFields: ['company'], warnings: [], reason: null, ...over });
+
+  it('opens the form for that draft, empty (no values are kept), and saves with the same id', async () => {
+    nav.search = 'import=draft_abc.sig';
+    api.getImportStatus.mockResolvedValueOnce(status());
+    api.importJob.mockResolvedValueOnce(done());
+    renderWithBrand(<JobsAddedPage />, { flags: { 'jobs.import': true } });
+
+    expect(await screen.findByTestId('import-resumed')).toHaveTextContent("We don't keep a job's details until you save it");
+    expect(api.getImportStatus).toHaveBeenCalledTimes(1);
+    expect(api.getImportStatus).toHaveBeenCalledWith('draft_abc.sig');
+    // An empty form never claims its (missing) values were copied from a page.
+    expect(screen.getByRole('heading', { name: 'Job details' })).toBeInTheDocument();
+    expect(screen.queryByText(/We copied these from the page/)).toBeNull();
+    expect(screen.getByLabelText('Job title')).toHaveValue('');
+
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Senior Data Engineer' } });
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: 'Acme' } });
+    fireEvent.change(screen.getByLabelText('Job description'), { target: { value: LONG } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save job' }));
+    await screen.findByTestId('import-done');
+    expect(api.importJob).toHaveBeenCalledWith(
+      { manual: { title: 'Senior Data Engineer', company: 'Acme', description: LONG }, importId: 'draft_abc.sig' },
+      { idempotencyKey: 'idem-key' },
+    );
+    expect(screen.queryByTestId('import-resumed')).toBeNull();
+  });
+
+  it('shows the warnings the status carries (ImportStatusResponse.warnings), GoApply rules by name', async () => {
+    nav.search = 'import=job_j9';
+    api.getImportStatus.mockResolvedValueOnce(
+      status({ status: 'done', jobId: 'j9', missingFields: [], warnings: [{ rule: 'training_loan', evidence: '入职需办理培训贷' }, { rule: 'intl_fee_required', evidence: 'A $40 kit fee applies.' }] }),
+    );
+    renderWithBrand(<JobsAddedPage />, { brand: 'goapply', flags: { 'jobs.import': true } });
+    const card = await screen.findByTestId('import-done');
+    const box = within(card).getByTestId('import-warnings');
+    expect(within(box).getByText('Training paid with a loan')).toBeInTheDocument();
+    expect(within(box).getByText('入职需办理培训贷')).toBeInTheDocument();
+    expect(within(box).getByText('Asks you to pay a fee')).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'View job' })).toHaveAttribute('href', '/jobs/j9');
+    expect(screen.queryByTestId('import-resumed')).toBeNull();
+  });
+
+  it('a link we could not read reopens with its reason and the paste form', async () => {
+    nav.search = 'import=draft_blocked.sig';
+    api.getImportStatus.mockResolvedValueOnce(status({ status: 'needs_text', missingFields: [], reason: 'blocked_site' }));
+    renderWithBrand(<JobsAddedPage />, { flags: { 'jobs.import': true } });
+    expect(await screen.findByTestId('import-reason')).toHaveTextContent("doesn't allow us to copy its job posts");
+    expect(screen.getByRole('heading', { name: 'Job details' })).toBeInTheDocument();
+  });
+
+  it('an expired or unknown id says so and leaves the normal add panel', async () => {
+    nav.search = 'import=draft_old.sig';
+    api.getImportStatus.mockRejectedValueOnce(new RoboApiError('x', { status: 404, payload: { code: 'not_found', details: { reason: 'import_not_found' } } }));
+    renderWithBrand(<JobsAddedPage />, { flags: { 'jobs.import': true } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('That unfinished job is no longer available');
+    expect(screen.getByLabelText('Link to the job post')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save job' })).toBeNull();
+  });
+
+  it('without ?import= nothing is looked up; with jobs.import off nothing is either', () => {
+    renderWithBrand(<JobsAddedPage />, { flags: { 'jobs.import': true } });
+    expect(api.getImportStatus).not.toHaveBeenCalled();
+    nav.search = 'import=draft_abc.sig';
+    renderWithBrand(<JobsAddedPage />, { flags: {} });
+    expect(api.getImportStatus).not.toHaveBeenCalled();
   });
 });
 
@@ -193,7 +314,7 @@ describe('AddJobPanel — from a link', () => {
   });
 
   it('shows warnings quoted from the post before saving', async () => {
-    api.importJob.mockResolvedValueOnce(draftResponse({ warnings: [{ rule: 'intl_pay_to_apply', evidence: 'Pay a $50 fee to apply.' }, { rule: 'cn_training_loan', evidence: '入职需办理培训贷' }] }));
+    api.importJob.mockResolvedValueOnce(draftResponse({ warnings: [{ rule: 'intl_pay_to_apply', evidence: 'Pay a $50 fee to apply.' }, { rule: 'some_future_rule', evidence: 'Reply only on our chat app.' }] }));
     renderWithBrand(<AddJobPanel />);
     typeLink(LINK);
     const box = await screen.findByTestId('import-warnings');

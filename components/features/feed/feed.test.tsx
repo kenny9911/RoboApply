@@ -563,6 +563,38 @@ describe('/jobs workspace', () => {
     expect(net.to('POST', `${FEED}/query`)).toHaveLength(0);
   });
 
+  // INT-06 (wave3 WP-93 #8): "Search other job sites" in GoApply's mode-off state.
+  it('feed off on GoApply: "Search other job sites" starts from the saved search words', async () => {
+    const LINKS = '/api/v1/roboapply/cn/jobs/external-links';
+    const net = installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ filters: { titles: ['数据分析师'] } })])),
+        [`GET ${LINKS}`]: () => ok({ links: [{ board: 'boss', label: 'BOSS直聘', url: 'https://www.zhipin.com/web/geek/job?query=x' }] }),
+      }),
+    );
+    renderFeed(<JobsWorkspace />, { brand: 'goapply', flags: { 'jobs.feed': false } });
+    const panel = screen.getByTestId('cn-external-search');
+    const link = await within(panel).findByRole('link', { name: /Search on BOSS直聘/ });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(new URLSearchParams(net.to('GET', LINKS)[0].search).get('q')).toBe('数据分析师');
+    expect(net.to('POST', `${FEED}/query`)).toHaveLength(0);
+  });
+
+  it('"Search other job sites" never shows on RoboApply (feed off or on) or on GoApply with a feed', async () => {
+    installFetch(baseRoutes());
+    const off = renderFeed(<JobsWorkspace />, { flags: { 'jobs.feed': false } });
+    expect(screen.getByText(/Job listings are not available here yet/)).toBeInTheDocument();
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
+    off.unmount();
+    const on = renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
+    on.unmount();
+    renderFeed(<JobsWorkspace />, { brand: 'goapply' });
+    await screen.findAllByTestId('job-card');
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
+  });
+
   it('header links the report only with the competitiveness flag; sort offers the ranking page', async () => {
     installFetch(baseRoutes());
     const { unmount } = renderFeed(<JobsWorkspace />);

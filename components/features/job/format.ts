@@ -44,3 +44,14 @@ export function initialOf(name: string): string {
   const t = name.trim();
   return t ? Array.from(t)[0]!.toUpperCase() : '·';
 }
+
+/**
+ * The line under a shared job's title: the place, then the pay exactly as the
+ * posting lists it ("上海 · 15-25K·14薪"). A part we do not have is left out
+ * (never "0", never a guess); with neither, null and the caller's default
+ * line is used.
+ */
+export function shareDescription(parts: { location: string | null | undefined; payAsListed: string | null | undefined }): string | null {
+  const out = [parts.location, parts.payAsListed].map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean);
+  return out.length ? out.join(' · ') : null;
+}

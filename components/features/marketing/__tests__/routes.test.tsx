@@ -3,6 +3,7 @@
 // per brand (cross-brand slug → 404, gated → noindex), and the subpages'
 // canonical on the brand origin.
 
+import { Suspense } from 'react';
 import type React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,12 +22,13 @@ import LocalePage, { generateMetadata as localeMetadata } from '../../../../app/
 import FeatureRoute, { generateMetadata as featureMetadata } from '../../../../app/features/[slug]/page';
 import PricingRoute, { generateMetadata as pricingMetadata } from '../../../../app/pricing/page';
 import { generateMetadata as rankingMetadata } from '../../../../app/help/ranking/page';
-import { brandLanguageAlternates, homeMetadata, landingMetaStrings } from '../../../../lib/seo';
+import { brandLanguageAlternates, homeMetadata } from '../../../../lib/seo';
+import { JobTicker } from '../../seo/server';
 import { GoApplyHome } from '../GoApplyHome';
 import { JsonLd } from '../JsonLd';
 import { RoboApplyHome } from '../RoboApplyHome';
 
-type El = React.ReactElement<{ children?: unknown; json?: string; locale?: string }>;
+type El = React.ReactElement<{ children?: unknown; json?: string; locale?: string; ticker?: React.ReactElement }>;
 const params = (locale: string) => ({ params: Promise.resolve({ locale }) });
 const slug = (s: string) => ({ params: Promise.resolve({ slug: s }) });
 const kids = (el: El) => (Array.isArray(el.props.children) ? (el.props.children as El[]) : [el.props.children as El]).filter(Boolean);
@@ -47,6 +49,19 @@ describe('home routes', () => {
     const meta = await rootMetadata();
     expect(meta.alternates?.canonical).toBe('https://www.roboapply.io/');
     expect(meta.title).toBe("Find out why you're not getting interviews | RoboApply");
+  });
+
+  // INT-06 (wave4 WP-93 #13): the live job ticker on the RoboApply home only.
+  // The slot is its own Suspense boundary: the page is sent without waiting for the job read.
+  it('RoboApply / hands the home a streamed <JobTicker /> (Suspense, no fallback); GoApply / has none', async () => {
+    const home = kids((await RootPage()) as El).find((c) => c.type === RoboApplyHome)!;
+    const slot = home.props.ticker as React.ReactElement<{ fallback?: unknown; children?: React.ReactElement }>;
+    expect(slot.type).toBe(Suspense);
+    expect(slot.props.fallback).toBeNull();
+    expect(slot.props.children?.type).toBe(JobTicker);
+    brand.id = 'goapply';
+    const cnHome = kids((await RootPage()) as El).find((c) => c.type === GoApplyHome)!;
+    expect(cnHome.props.ticker).toBeUndefined();
   });
 
   it('GoApply / renders the GoApply home (no redirect) with GoApply canonical and cross-domain hreflang', async () => {
@@ -96,9 +111,25 @@ describe('home routes', () => {
     expect(homeMetadata('roboapply', 'ja').robots).toMatchObject({ index: true });
   });
 
-  it('the retired auto-apply tagline is gone from the metadata fallbacks', () => {
-    const strings = landingMetaStrings('en');
-    expect(JSON.stringify(strings)).not.toMatch(/We apply|applies for you|while you sleep/i);
+  it('no home metadata, on either brand, carries the retired auto-apply tagline', () => {
+    for (const [id, locale] of [['roboapply', 'en'], ['roboapply', 'zh-TW'], ['goapply', 'zh'], ['goapply', 'en']] as const) {
+      expect(JSON.stringify(homeMetadata(id, locale))).not.toMatch(/We apply|applies for you|while you sleep|auto[- ]?apply|自动投递|自動投遞/i);
+    }
+  });
+
+  // INT-06 (wave5 WP-93 #54): the legacy landing and its pre-brand helpers are gone.
+  // Names are assembled here so a repo-wide search for them finds no file at all.
+  it('the legacy landing is deleted: its two components, its page test and its seo helpers', async () => {
+    const { existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const legacy = 'Landing';
+    for (const f of [`components/landing/${legacy}Content.tsx`, `components/landing/${legacy}JsonLd.tsx`, '__tests__/pages/landing.test.tsx']) {
+      expect(existsSync(join(process.cwd(), f))).toBe(false);
+    }
+    const seo = (await import('../../../../lib/seo')) as Record<string, unknown>;
+    for (const name of ['landing' + 'JsonLd', 'landing' + 'MetaStrings', 'language' + 'Alternates', 'landing' + 'Metadata', 'SITE_' + 'URL', 'SITE_' + 'NAME']) {
+      expect(seo[name]).toBeUndefined();
+    }
   });
 });
 

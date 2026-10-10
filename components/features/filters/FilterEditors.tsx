@@ -13,7 +13,7 @@
 // country (stored in km).
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   CN_DEGREES,
@@ -39,6 +39,7 @@ import {
 } from '../../../hooks/search/filterModel';
 import { useCompanySuggestions, useSkillSuggestions, useTaxonomyLabels, useTitleSuggestions } from '../../../hooks/search/useFilterQueries';
 import { IconX } from '../../v3/primitives/Iconset';
+import { NegotiablePayNote } from '../market';
 import { CheckRow, FieldShell, NumberRange, OptionToggles, SegmentedChoice, TagField, type Suggestion } from './FilterControls';
 import { useFilterLabels } from './useFilterLabels';
 import styles from './filters.module.css';
@@ -331,16 +332,36 @@ export function PayEditor({ draft, set, ctx }: EditorProps) {
   );
 }
 
-/** "Only jobs that list pay": off by default (includeUndisclosedPay defaults to true). */
-export function ListedPayEditor({ draft, set }: EditorProps) {
+/**
+ * Whether the Taiwan 面議 note belongs beside the pay toggle: RoboApply only,
+ * for a reader in Traditional Chinese (Taiwan) or a search set to Taiwan
+ * (its country, or one of its places). Pure.
+ */
+export function showsTaiwanPayNote(market: Market, locale: string, draft: Pick<FilterSet, 'country' | 'locations'>): boolean {
+  if (market !== 'intl') return false;
+  if (locale === 'zh-TW') return true;
+  const isTw = (c: string | null | undefined) => typeof c === 'string' && c.toUpperCase() === 'TW';
+  return isTw(draft.country) || (draft.locations ?? []).some((l) => isTw(l.country));
+}
+
+/**
+ * "Only jobs that list pay": off by default (includeUndisclosedPay defaults to
+ * true). For Taiwan readers and searches, "Why is pay not listed?" sits under
+ * it (Employment Services Act Art. 5; the note never estimates a job's pay).
+ */
+export function ListedPayEditor({ draft, set, ctx }: EditorProps) {
   const t = useTranslations('filters');
+  const locale = useLocale();
   return (
-    <CheckRow
-      label={t('controls.listedPayToggle')}
-      help={t('help.includeUndisclosedPay')}
-      checked={draft.includeUndisclosedPay === false}
-      onChange={(on) => set({ includeUndisclosedPay: on ? false : null })}
-    />
+    <>
+      <CheckRow
+        label={t('controls.listedPayToggle')}
+        help={t('help.includeUndisclosedPay')}
+        checked={draft.includeUndisclosedPay === false}
+        onChange={(on) => set({ includeUndisclosedPay: on ? false : null })}
+      />
+      {showsTaiwanPayNote(ctx.market, locale, draft) ? <NegotiablePayNote context="filter" /> : null}
+    </>
   );
 }
 

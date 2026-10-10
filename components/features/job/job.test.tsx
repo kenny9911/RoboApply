@@ -53,6 +53,12 @@ vi.mock('../../../lib/api/match', () => ({ getKeywordCheck: api.getKeywordCheck,
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 vi.mock('../../../lib/api/uiState', () => ({ getUiState: api.getUiState, dismiss: api.dismiss, setUiValues: api.setUiValues }));
 vi.mock('../../../lib/api/agent', () => ({ addToQueue: api.addToQueue }));
+// The share card renders nothing by design; a marker stands in so the tests can read what it is given.
+vi.mock('../notify-cn', () => ({
+  WechatShareCard: (p: { title: string; description?: string | null; path?: string | null }) => (
+    <span data-testid="wechat-share" data-title={p.title} data-description={p.description ?? ''} data-path={p.path ?? ''} />
+  ),
+}));
 
 import { RoboApiError } from '../../../lib/api/client';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
@@ -329,6 +335,191 @@ describe('states', () => {
     expect(screen.getByTestId('job-summary').querySelector('[data-ai-label="text"]')).not.toBeNull();
     // No LinkedIn People tab on GoApply without the 内推 hub.
     expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
+  });
+});
+
+// INT-06 (wave3 WP-93 #15 and #7, wave5 WP-93 #24).
+describe('a job the user added', () => {
+  const imported = (job: Partial<JobDetailResponse['job']> = {}) =>
+    detail({}, { source: { name: '', kind: 'user_import', originalName: null }, visibility: 'private', applyUrl: '', ...job });
+
+  it('the source line reads "Added by you" and says only the user can see it', async () => {
+    api.getJob.mockResolvedValue(imported({ applyUrl: 'https://careers.acme.example/jobs/42' }));
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-source')).toHaveTextContent('Added by you');
+    expect(screen.getByTestId('job-header')).toHaveTextContent('Only you can see this job');
+    // With a link it applies like any other job.
+    expect(screen.getByTestId('apply-button')).toHaveTextContent('Apply on company site');
+    expect(screen.queryByTestId('i-applied-button')).toBeNull();
+  });
+
+  it('with no link: no "Apply on company site" anywhere; "I applied" records what the user says, with Undo', async () => {
+    api.getJob.mockResolvedValue(imported());
+    api.markApplied.mockResolvedValue({ tracker: { id: 't1', status: 'applied', dateApplied: NOW } });
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByTestId('apply-button')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Apply on company site' })).toBeNull();
+    expect(screen.getByTestId('no-apply-link')).toHaveTextContent('You added this job without a link.');
+    fireEvent.click(screen.getByTestId('i-applied-button'));
+    await waitFor(() => expect(api.markApplied).toHaveBeenCalledWith('j1', {}));
+    expect(api.applyClick).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+    // Once it is marked applied the button is gone, and so is the line that points at it.
+    await waitFor(() => expect(screen.queryByTestId('i-applied-button')).toBeNull());
+    expect(screen.queryByTestId('no-apply-link')).toBeNull();
+    expect(screen.getByTestId('job-header')).not.toHaveTextContent('choose “I applied”');
+  });
+
+  it('already applied when the page opens: no "I applied" button and no line pointing at it', async () => {
+    const d = imported();
+    api.getJob.mockResolvedValue({ ...d, checklist: { ...d.checklist, applied: true } });
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByTestId('i-applied-button')).toBeNull();
+    expect(screen.queryByTestId('no-apply-link')).toBeNull();
+  });
+
+  it('a listed job with no link keeps the plain "no application link" line', async () => {
+    api.getJob.mockResolvedValue(detail({}, { applyUrl: '' }));
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('no-apply-link')).toHaveTextContent('This post has no application link.');
+    expect(screen.getByTestId('i-applied-button')).toBeInTheDocument();
+  });
+});
+
+describe('GoApply: one pay line, one set of dates (the market block has them)', () => {
+  const CN_META = {
+    cn: {
+      sourceLine: { kind: 'source', sourceName: 'GoHire', originalSourceName: null, licence: null },
+      salary: { text: '15-25K·14薪', disclosed: true },
+      updatedAt: '2026-10-08T00:00:00.000Z',
+      lastCheckedAt: NOW,
+      expiresAt: null,
+      tags: [],
+      classYears: [],
+      warnings: [],
+    },
+  };
+  const cnJob = { companyName: '示例科技', location: '上海', pay: { min: 15000, max: 25000, currency: 'CNY', period: 'month' as const, text: '15-25K·14薪' }, payText: '15-25K·14薪' };
+
+  it('the header drops its pay, posted, last-checked and source lines; JobMetaCn shows each once', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_META }, cnJob));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    await screen.findByTestId('job-detail');
+    const header = screen.getByTestId('job-header');
+    expect(within(header).queryByTestId('job-pay')).toBeNull();
+    expect(within(header).queryByTestId('job-source')).toBeNull();
+    expect(header).not.toHaveTextContent('Posted');
+    expect(header).not.toHaveTextContent('Last checked');
+    const block = screen.getByTestId('job-meta-cn');
+    expect(within(block).getAllByText('15-25K·14薪')).toHaveLength(1);
+    expect(screen.getAllByText('15-25K·14薪')).toHaveLength(1);
+    expect(block.querySelectorAll('dd')[2]).toHaveTextContent(/^Updated /);
+    expect(block).toHaveTextContent('Source: GoHire');
+  });
+
+  it('a GoApply job with no market block keeps the header lines (nothing is dropped without its replacement)', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: {} }, cnJob));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toBeInTheDocument();
+    expect(screen.getByTestId('job-source')).toBeInTheDocument();
+  });
+
+  it('RoboApply is unchanged even when a job carries cn meta', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_META }));
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('job-pay')).toHaveTextContent('Pay not listed');
+    expect(screen.getByTestId('job-source')).toBeInTheDocument();
+    expect(screen.getByTestId('job-header')).toHaveTextContent('Posted');
+  });
+
+  it('a GoApply job the user added says "Added by you" once (never "Source not listed") and "Only you can see this job"', async () => {
+    const own = { cn: { ...CN_META.cn, sourceLine: { kind: 'source', sourceName: null, originalSourceName: null, licence: null } } };
+    api.getJob.mockResolvedValue(detail({ marketMeta: own }, { ...cnJob, source: { name: '', kind: 'user_import', originalName: null }, visibility: 'private' }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    const panel = await screen.findByTestId('job-detail');
+    // One visible source line, in the market block (its screen-reader term repeats the same words).
+    expect(within(panel).getAllByTestId('cn-source')).toHaveLength(1);
+    expect(screen.getByTestId('cn-source')).toHaveTextContent('Added by you');
+    expect(panel).not.toHaveTextContent('Source not listed');
+    const header = screen.getByTestId('job-header');
+    expect(header).not.toHaveTextContent('Added by you');
+    expect(header).toHaveTextContent('Only you can see this job');
+    expect(within(header).queryByTestId('job-source')).toBeNull();
+    expect(within(header).queryByTestId('job-pay')).toBeNull();
+  });
+
+  it('the pay, dates and source stay on screen on the Company tab (the market block sits above the tabs)', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_META }, cnJob));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    await screen.findByTestId('job-detail');
+    // On Overview the block is there once, outside the tab's own content.
+    expect(screen.getAllByTestId('job-meta-cn')).toHaveLength(1);
+    expect(within(screen.getByTestId('job-overview')).queryByTestId('job-meta-cn')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Company' }));
+    await screen.findByTestId('company-tab');
+    expect(screen.queryByTestId('job-overview')).toBeNull();
+    const block = screen.getByTestId('job-meta-cn');
+    expect(block).toHaveTextContent('15-25K·14薪');
+    expect(block).toHaveTextContent('Source: GoHire');
+    expect(block).toHaveTextContent(/Updated /);
+    expect(block).toHaveTextContent(/Last checked /);
+    expect(screen.getAllByText('15-25K·14薪')).toHaveLength(1);
+  });
+
+  it('RoboApply keeps its market block inside the Overview tab', async () => {
+    api.getJob.mockResolvedValue(detail({ marketMeta: CN_META }));
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByTestId('job-meta-cn')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Company' }));
+    await screen.findByTestId('company-tab');
+    // The header still carries the facts there.
+    expect(screen.getByTestId('job-pay')).toBeInTheDocument();
+    expect(screen.getByTestId('job-source')).toBeInTheDocument();
+  });
+});
+
+describe('WeChat share card (GoApply only)', () => {
+  it('GoApply: "{title} · {company}", the place and the pay as listed, sharing /jobs/{id}', async () => {
+    api.getJob.mockResolvedValue({ ...detail({}, { title: '数据分析师', location: '上海', payText: '15-25K·14薪' }), company: { ...detail().company, name: '示例科技' } });
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    const card = await screen.findByTestId('wechat-share');
+    expect(card).toHaveAttribute('data-title', '数据分析师 · 示例科技');
+    expect(card).toHaveAttribute('data-description', '上海 · 15-25K·14薪');
+    expect(card).toHaveAttribute('data-path', '/jobs/j1');
+  });
+
+  it('no listed pay: the description is the place alone, never a 0 or a guess', async () => {
+    api.getJob.mockResolvedValue(detail({}, { location: '上海', pay: { min: 0, max: 0, currency: 'CNY', period: 'month', text: null }, payText: null }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    const card = await screen.findByTestId('wechat-share');
+    expect(card).toHaveAttribute('data-description', '上海');
+    expect(card.getAttribute('data-description')).not.toMatch(/0/);
+  });
+
+  it('neither place nor pay: no description (the card falls back to its own default line)', async () => {
+    api.getJob.mockResolvedValue(detail({}, { location: null, pay: null, payText: null }));
+    render(<JobDetailPanel jobId="j1" mode="split" />, { brand: 'goapply', flags: {} });
+    expect(await screen.findByTestId('wechat-share')).toHaveAttribute('data-description', '');
+  });
+
+  it('listed figures with no pay text are written out as listed', async () => {
+    api.getJob.mockResolvedValue(detail({}, { location: 'Shanghai', pay: { min: 15000, max: 25000, currency: 'CNY', period: 'month', text: null }, payText: null }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: {} });
+    const card = await screen.findByTestId('wechat-share');
+    expect(card.getAttribute('data-description')).toMatch(/^Shanghai · .*15,000.*25,000.* a month$/);
+  });
+
+  it('RoboApply: no share card', async () => {
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.queryByTestId('wechat-share')).toBeNull();
   });
 });
 

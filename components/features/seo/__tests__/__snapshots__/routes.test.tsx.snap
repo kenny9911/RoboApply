@@ -46,6 +46,9 @@ exports[`crawl files on the goapply host > robots.txt 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
       ],
       "userAgent": "*",
     },
@@ -68,6 +71,9 @@ exports[`crawl files on the goapply host > robots.txt 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
         "/job/",
       ],
       "userAgent": [
@@ -106,6 +112,9 @@ exports[`crawl files on the goapply host > robots.txt 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
       ],
       "userAgent": "Baiduspider",
     },
@@ -147,7 +156,13 @@ exports[`crawl files on the goapply host > sitemaps/static.xml 1`] = `
     <loc>https://www.goapply.top/help</loc>
   </url>
   <url>
+    <loc>https://www.goapply.top/help/ranking</loc>
+  </url>
+  <url>
     <loc>https://www.goapply.top/features/resume</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/tools</loc>
   </url>
   <url>
     <loc>https://www.goapply.top/signup</loc>
@@ -208,6 +223,9 @@ exports[`crawl files on the roboapply host > robots.txt 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
       ],
       "userAgent": "*",
     },
@@ -230,6 +248,9 @@ exports[`crawl files on the roboapply host > robots.txt 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
         "/job/",
       ],
       "userAgent": [
@@ -421,6 +442,9 @@ exports[`crawl files on the roboapply host > sitemaps/static.xml 1`] = `
     <loc>https://www.roboapply.io/help</loc>
   </url>
   <url>
+    <loc>https://www.roboapply.io/help/ranking</loc>
+  </url>
+  <url>
     <loc>https://www.roboapply.io/features/job-matches</loc>
   </url>
   <url>
@@ -431,6 +455,18 @@ exports[`crawl files on the roboapply host > sitemaps/static.xml 1`] = `
   </url>
   <url>
     <loc>https://www.roboapply.io/features/visa-sponsorship</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/tools</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/tools/resume-check</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/tools/resume-job-match</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/tools/job-alerts</loc>
   </url>
   <url>
     <loc>https://www.roboapply.io/signup</loc>

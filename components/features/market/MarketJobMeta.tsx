@@ -7,19 +7,33 @@
 //   brand.market 'cn'   → market/cn  JobMetaCn  (WP-41)
 //   brand.market 'intl' → market/tw  JobMetaTw  (WP-42; nothing for non-TW jobs)
 //
-// The dispatch is final (FND-6b); both targets are stubs that render nothing
-// until their owners fill them.
+// The dispatch is final (FND-6b).
+//
+// `marketMetaCoversBasics` tells the shared card and job page when the slot
+// already prints the pay, the posting's date, "Last checked" and the source
+// (GoApply's JobMetaCn does, in its own words), so they do not print those
+// lines a second time.
 
 import { useBrand } from '../../../lib/brand/BrandProvider';
-import { JobMetaCn } from './cn';
+import { JobMetaCn, readCnMeta } from './cn';
 import { JobMetaTw } from './tw';
-import type { MarketJobMetaProps } from './types';
+import type { MarketCardMeta, MarketJobMetaProps } from './types';
 
 export type { MarketJobMetaProps } from './types';
 
 export function MarketJobMeta(props: MarketJobMetaProps) {
   const brand = useBrand();
   return brand.market === 'cn' ? <JobMetaCn {...props} /> : <JobMetaTw {...props} />;
+}
+
+/**
+ * True when the market slot for this job prints pay, dates and source itself:
+ * GoApply (market 'cn') with a readable `meta.cn`. False everywhere else,
+ * including GoApply jobs the server sent no `cn` meta for, so nothing is ever
+ * dropped without its replacement on screen. Pure.
+ */
+export function marketMetaCoversBasics(market: 'intl' | 'cn', meta: MarketCardMeta | null | undefined): boolean {
+  return market === 'cn' && readCnMeta(meta) !== null;
 }
 
 export default MarketJobMeta;

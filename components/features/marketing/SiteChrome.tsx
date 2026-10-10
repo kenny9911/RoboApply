@@ -3,9 +3,12 @@
 // The marketing chrome of the home pages (WP-40): header with the brand
 // wordmark (never a literal product name; carry-over WP-12 R4), primary nav,
 // language + theme, Sign in and the signup CTA; and the site footer every
-// marketing page carries (feature links, company, help, the /cancel link
-// (WP-21b), popular job lists when browse pages are live, the per-brand legal
-// footer with the ICP line on GoApply (WP-13), and the locale links).
+// marketing page carries (feature links, the free tools, company, help, the
+// /cancel link (WP-21b), popular job lists when browse pages are live, the
+// per-brand legal footer with the ICP line on GoApply (WP-13), and the locale
+// links). "Free tools" (/tools) is in both the header and the footer (the
+// header nav is hidden on a phone); it shows where the tools run
+// (useFreeToolsLinked: always on RoboApply, on GoApply once they are open).
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -19,13 +22,14 @@ import { BrandWordmark } from '../brand';
 import { CancelFooterLink } from '../credits';
 import { LegalFooter } from '../market';
 import { featuresFor, extensionStoreId, type FeatureDef } from './catalog';
-import { useBrowseEnabled, useIndexStats, useMarketingFlag } from './hooks';
+import { useBrowseEnabled, useFreeToolsLinked, useIndexStats, useMarketingFlag } from './hooks';
 import { popularListHref } from './links';
 import { SignupLink } from './SignupLink';
 import styles from './marketing.module.css';
 
 export function SiteHeader({ from }: { from: string }) {
   const t = useTranslations('landing.site.nav');
+  const tools = useFreeToolsLinked();
   return (
     <header className={styles.header}>
       <div className={`${styles.wrap} ${styles.headerRow}`}>
@@ -34,6 +38,11 @@ export function SiteHeader({ from }: { from: string }) {
           <a className={styles.navLink} href="/#features">
             {t('features')}
           </a>
+          {tools ? (
+            <Link className={styles.navLink} href="/tools" data-nav="tools">
+              {t('tools')}
+            </Link>
+          ) : null}
           <Link className={styles.navLink} href="/pricing">
             {t('pricing')}
           </Link>
@@ -112,6 +121,7 @@ export function MarketingFooter({ localeLinks = false }: MarketingFooterProps) {
   const t = useTranslations('landing.site.footer');
   const brand = useBrand();
   const features = featuresFor(brand.id);
+  const tools = useFreeToolsLinked();
   const locales = brand.seoLocales.filter((l) => isLocaleIn(l, SEO_READY_LOCALES));
   return (
     <div className={styles.footer} data-marketing-footer="">
@@ -129,6 +139,13 @@ export function MarketingFooter({ localeLinks = false }: MarketingFooterProps) {
               {features.map((def) => (
                 <FeatureFooterLink key={def.slug} def={def} />
               ))}
+              {tools ? (
+                <li>
+                  <Link className={styles.footerLink} href="/tools" data-footer-link="tools">
+                    {t('tools')}
+                  </Link>
+                </li>
+              ) : null}
               <li>
                 <Link className={styles.footerLink} href="/pricing">
                   {t('pricing')}

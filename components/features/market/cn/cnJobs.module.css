@@ -48,6 +48,35 @@
   overflow-wrap: anywhere;
 }
 
+/* ── Search other job sites (jobs pages, mode off) ────────────────────── */
+
+.searchPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.searchRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: flex-end;
+}
+
+.searchRow .field {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.searchRow :global(.btn) {
+  min-height: 44px;
+}
+
 /* ── Job meta (card + detail) ─────────────────────────────────────────── */
 
 .card {
@@ -232,6 +261,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+}
+
+/* Inside the search panel the links sit in the panel's own box. */
+.external.externalBare {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0;
 }
 
 .linkList {

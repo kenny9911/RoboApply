@@ -67,6 +67,7 @@
       "apply": "Apply on company site",
       "applyHint": "Opens the employer's page in a new tab. You send the application there.",
       "noApplyLink": "This post has no application link.",
+      "noApplyLinkYours": "You added this job without a link. Apply where you found it, then choose “I applied” to keep track of it.",
       "save": "Save for later",
       "saved": "Saved",
       "unsave": "Remove from saved",

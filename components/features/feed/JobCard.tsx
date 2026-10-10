@@ -10,7 +10,13 @@
 //   one past-tense line about the work done (C38)
 //   logo · company · title (link) · location · work model · type · level · pay
 //   posted · last checked · source line · ≤3 badges · market slot
-//   Save for later · Apply on company site · Ask about this job · …
+//   Save for later · Apply on company site · Tailor resume · Ask about this job · …
+//
+// GoApply: the market slot (JobMetaCn) prints the pay as the post states it,
+// the post's own date, "Last checked" and the source. When it does, the card
+// leaves its own pay and posted / last checked / source lines out, so each
+// fact is on the card once. "Tailor resume" hides itself when AI tailoring is
+// off for this user or brand.
 //
 // D1: "Apply on company site" opens the employer's page; the user submits
 // there. The job moves to Applied at once with an inline Undo (R-19).
@@ -22,7 +28,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Btn, FitTierLabel, HonestyLine, toast } from '../../v3/primitives';
 import { normalizeScore, type FitTierKey } from '../common';
-import { MarketJobMeta } from '../market';
+import { MarketJobMeta, marketMetaCoversBasics, withOwnImport } from '../market';
+import { TailorButton } from '../tailor';
 import { WhyThisJob } from '../compliance';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
 import { useFlag } from '../../../lib/flags';
@@ -117,6 +124,9 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
   const badges = cardBadges(item);
   const source = sourceLine(item);
   const extras = itemExtras(item);
+  // The market slot prints pay, dates and source itself (GoApply): do not repeat them.
+  // It is told when the job is the user's own, so its source line says "Added by you".
+  const slotHasBasics = marketMetaCoversBasics(market, extras.cardMeta);
   const pay = payText(item.pay, {
     locale,
     market,
@@ -318,24 +328,28 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
         {facts.map((f) => (
           <li key={f}>{f}</li>
         ))}
-        <li className={pay ? styles.pay : styles.payUnknown} data-testid="pay">
-          {pay ? (pay.period ? t(`payPeriod.${pay.period}`, { amount: pay.amount }) : pay.amount) : t('payNotListed')}
-        </li>
+        {slotHasBasics ? null : (
+          <li className={pay ? styles.pay : styles.payUnknown} data-testid="pay">
+            {pay ? (pay.period ? t(`payPeriod.${pay.period}`, { amount: pay.amount }) : pay.amount) : t('payNotListed')}
+          </li>
+        )}
       </ul>
 
-      <div className={styles.meta}>
-        <span>{posted ? t('posted', { date: posted }) : t('postedUnknown')}</span>
-        {checked ? <span>{t('lastChecked', { date: checked })}</span> : null}
-        {source ? (
-          <span data-testid="source-line">
-            {source.key === 'bank'
-              ? t('source.bank', { sourceName: source.sourceName })
-              : source.key === 'user_import'
-                ? t('source.user_import')
-                : t(`source.${source.key}`, { name: source.name })}
-          </span>
-        ) : null}
-      </div>
+      {slotHasBasics ? null : (
+        <div className={styles.meta} data-testid="card-meta">
+          <span>{posted ? t('posted', { date: posted }) : t('postedUnknown')}</span>
+          {checked ? <span>{t('lastChecked', { date: checked })}</span> : null}
+          {source ? (
+            <span data-testid="source-line">
+              {source.key === 'bank'
+                ? t('source.bank', { sourceName: source.sourceName })
+                : source.key === 'user_import'
+                  ? t('source.user_import')
+                  : t(`source.${source.key}`, { name: source.name })}
+            </span>
+          ) : null}
+        </div>
+      )}
 
       {badges.length > 0 ? (
         <ul className={styles.badges} aria-label={t('badges')}>
@@ -347,7 +361,7 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
         </ul>
       ) : null}
 
-      <MarketJobMeta jobId={item.jobId} meta={extras.cardMeta} variant="card" />
+      <MarketJobMeta jobId={item.jobId} meta={withOwnImport(extras.cardMeta, source?.key === 'user_import')} variant="card" />
 
       {extras.explanation && item.fit ? (
         <details className={styles.why}>
@@ -374,6 +388,7 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
             {actions.pending === 'apply' ? t('actions.applyPending') : t('actions.apply')}
           </Btn>
         ) : null}
+        <TailorButton jobId={item.jobId} from="feed" jobTitle={item.title} variant="ghost" className={styles.actionBtn} />
         {copilotOn ? (
           <Btn variant="ghost" className={styles.actionBtn} onClick={() => actions.askAboutJob()}>
             {t('actions.ask')}
