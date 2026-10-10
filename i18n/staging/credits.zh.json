@@ -1,0 +1,28 @@
+{
+  "credits": {
+    "busy": "暂时无法开始，请稍后再试。",
+    "plans": {
+      "goapply": {
+        "student_monthly": "学生月卡",
+        "student_quarterly": "学生季卡"
+      }
+    },
+    "planSheet": {
+      "notOpen": "以下为价格。支付暂未开通，目前无法购买。",
+      "railGroup": "支付方式",
+      "rails": {
+        "alipay": "支付宝",
+        "wechatpay": "微信支付",
+        "stripe": "银行卡"
+      },
+      "railHint": {
+        "alipay": "跳转到支付宝页面付款。",
+        "wechatpay": "扫码支付，或在微信内付款。",
+        "stripe": "跳转到银行卡支付页面付款。"
+      }
+    },
+    "usage": {
+      "usedPractice": "已用 {n} 个练习额度"
+    }
+  }
+}

@@ -6,6 +6,13 @@
       "ends": "会员卡在最后一天自动到期。到期后想继续使用，再买一张即可。",
       "pricingLink": "查看价格",
       "settingsLink": "打开套餐和账单设置"
+    },
+    "plans": {
+      "student_monthly": "学生月卡",
+      "student_quarterly": "学生季卡"
+    },
+    "errors": {
+      "studentRequired": "请先验证学校邮箱，才能享受学生价。未扣款。"
     }
   }
 }

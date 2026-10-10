@@ -5,7 +5,7 @@
 // overrides (audited) / FX / TW revenue / refund-quote routes. Fake Prisma,
 // fake Stripe, fake email.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/prisma.js', () => ({ default: {} }));
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
@@ -15,6 +15,7 @@ import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/route
 import { setCreditCatalogConfigLoader, invalidateCreditCatalog } from '../../platform/credits/index.js';
 import { setFlagOverrideLoader } from '../../platform/flags.js';
 import { getBrand } from '../../platform/brand/registry.js';
+import { registerRail, unregisterRail } from '../../platform/billing/index.js';
 import {
   CANCEL_SURVEY_LIMIT,
   CancelSurveyStoreUnavailableError,
@@ -70,6 +71,9 @@ const auditOverride = vi.fn(async (entry: OverrideAuditEntry) => {
   auditRows.push(entry);
 });
 
+/** Users holding a live school-email verification. */
+const verifiedStudents = new Set<string>();
+
 function service(): CreditsAreaService {
   const deps: Partial<CreditsAreaDeps> = {
     db: async () => db as unknown as CreditsDb,
@@ -92,6 +96,7 @@ function service(): CreditsAreaService {
       },
     },
     auditOverride,
+    isStudentVerified: async (u) => verifiedStudents.has(u),
   };
   return new CreditsAreaService(deps);
 }
@@ -439,11 +444,158 @@ describe('GET /billing/plans', () => {
     expect(fr.plans.every((p) => p.localPrice === null)).toBe(true);
   });
 
-  it('GoApply: CNY passes, nothing purchasable until payments open, no TWD line', async () => {
-    const res = await h.request<any>('GET', '/anon/plans', GO);
-    expect(res.body.data).toMatchObject({ currency: 'CNY', paymentsOpen: false, fxReference: null });
-    expect(res.body.data.checkout.rails).toEqual([]);
-    expect(res.body.data.plans.every((p: any) => !p.sellable && !p.autoRenews)).toBe(true);
+  describe('GoApply (D5, D6): CNY passes on sale by default through Alipay', () => {
+    const go = getBrand('goapply');
+    const plansFor = (env: Record<string, string>, userId: string | null = null) =>
+      new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => env, now: () => NOW }).plans(go, { userId, country: null });
+    const WECHAT = {
+      WECHATPAY_MCH_ID: 'm',
+      WECHATPAY_APP_ID: 'a',
+      WECHATPAY_API_V3_KEY: '0123456789abcdef0123456789abcdef',
+      WECHATPAY_MCH_CERT_SERIAL: 's',
+      WECHATPAY_MCH_PRIVATE_KEY: 'p',
+      WECHATPAY_PUBLIC_KEY: 'pub',
+      WECHATPAY_PUBLIC_KEY_ID: 'PUB_KEY_ID_1',
+      WECHATPAY_MERCHANT_ENTITY: 'Example Collecting Co.',
+      CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.',
+    };
+    const PAID = [
+      ['pro_week_pass', 1200],
+      ['pro_monthly', 3900],
+      ['pro_quarterly', 9900],
+      ['practice_pack_5', 2900],
+      ['practice_pack_15', 7900],
+    ];
+    const amounts = (plans: Array<{ key: string; kind: string; amountMinor: number | null; requiresFlag?: string }>) =>
+      plans.filter((p) => p.kind !== 'free' && !p.requiresFlag).map((p) => [p.key, p.amountMinor]);
+
+    afterEach(() => {
+      unregisterRail('wechatpay');
+    });
+
+    it('no rail credential: the plans list with their CNY prices and are on sale, but payments are not open and no rail is offered', async () => {
+      // The harness env carries no ALIPAY_CALLBACK_SECRET and no CN_PAYMENTS_ENABLED.
+      const res = await h.request<any>('GET', '/anon/plans', GO);
+      const data = res.body.data;
+      expect(data).toMatchObject({ currency: 'CNY', paymentsOpen: false, fxReference: null, defaultSelection: 'pro_monthly' });
+      expect(data.checkout.rails).toEqual([]);
+      expect(amounts(data.plans)).toEqual(PAID);
+      expect(data.plans.every((p: any) => !p.autoRenews && p.unsellableReason !== 'price_unset')).toBe(true);
+      expect(data.plans.filter((p: any) => p.kind !== 'free').every((p: any) => p.sellable && p.amountMinor > 0)).toBe(true);
+    });
+
+    it('with ALIPAY_CALLBACK_SECRET (pay.alipay on): paymentsOpen true and checkout.rails is [alipay]', async () => {
+      const data = await plansFor({ ALIPAY_CALLBACK_SECRET: 's3cret' });
+      expect(data.paymentsOpen).toBe(true);
+      expect(data.checkout.rails).toEqual(['alipay']);
+      expect(data.currency).toBe('CNY');
+      expect(amounts(data.plans)).toEqual(PAID);
+      expect(data.plans.find((p) => p.key === 'pro_quarterly')?.savingsPercent).toBe(15);
+      // A whole-yuan override reaches the response; a ¥39.90 one does not.
+      expect((await plansFor({ ALIPAY_CALLBACK_SECRET: 's', CN_PRICE_PRO_MONTHLY_FEN: '4900' })).plans.find((p) => p.key === 'pro_monthly')?.amountMinor).toBe(4900);
+      expect((await plansFor({ ALIPAY_CALLBACK_SECRET: 's', CN_PRICE_PRO_MONTHLY_FEN: '3990' })).plans.find((p) => p.key === 'pro_monthly')?.amountMinor).toBe(3900);
+    });
+
+    it('with WeChat Pay configured and its entity matching, both rails are offered, Alipay first; WeChat Pay alone also opens payments', async () => {
+      registerRail('wechatpay', { id: 'wechatpay', isConfigured: () => true, createCheckout: vi.fn() });
+      const both = await plansFor({ ALIPAY_CALLBACK_SECRET: 's3cret', ...WECHAT });
+      expect(both.checkout.rails).toEqual(['alipay', 'wechatpay']);
+      expect(both.paymentsOpen).toBe(true);
+      const wechatOnly = await plansFor({ ...WECHAT });
+      expect(wechatOnly.checkout.rails).toEqual(['wechatpay']);
+      expect(wechatOnly.paymentsOpen).toBe(true);
+      // The entity does not match the merchant: WeChat Pay stays out, Alipay still sells.
+      const mismatch = await plansFor({ ALIPAY_CALLBACK_SECRET: 's3cret', ...WECHAT, WECHATPAY_MERCHANT_ENTITY: 'Another Co.' });
+      expect(mismatch.checkout.rails).toEqual(['alipay']);
+      expect(mismatch.paymentsOpen).toBe(true);
+    });
+
+    it('the kill switch (CN_PAYMENTS_ENABLED=false): prices stay, nothing is sellable, no rail, payments not open', async () => {
+      registerRail('wechatpay', { id: 'wechatpay', isConfigured: () => true, createCheckout: vi.fn() });
+      const data = await plansFor({ ALIPAY_CALLBACK_SECRET: 's3cret', ...WECHAT, CN_PAYMENTS_ENABLED: 'false' });
+      expect(data.paymentsOpen).toBe(false);
+      expect(data.checkout.rails).toEqual([]);
+      expect(amounts(data.plans)).toEqual(PAID);
+      expect(data.plans.filter((p) => p.kind !== 'free').every((p) => !p.sellable && p.unsellableReason === 'payments_disabled')).toBe(true);
+      expect(data.defaultSelection).toBeNull();
+    });
+
+    it('Stripe credentials never open a rail on GoApply, and Alipay credentials never open one on RoboApply', async () => {
+      const data = await plansFor({ STRIPE_SECRET_KEY: 'sk_test_x' });
+      expect(data.checkout.rails).toEqual([]);
+      expect(data.paymentsOpen).toBe(false);
+      const robo = await new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => ({ ...ENV, ALIPAY_CALLBACK_SECRET: 's3cret' }), now: () => NOW }).plans(getBrand('roboapply'), { userId: null, country: null });
+      expect(robo.checkout.rails).toEqual(['stripe']);
+    });
+
+    describe('student passes are listed only for a verified student (plan §7 step 6)', () => {
+      const SECRET = { ALIPAY_CALLBACK_SECRET: 's3cret' };
+      const lookups: string[] = [];
+      const studentPlansFor = (env: Record<string, string>, userId: string | null, verified: boolean | 'lookup_fails', brand = go) =>
+        new CreditsAreaService({
+          db: async () => db as unknown as CreditsDb,
+          env: () => env,
+          now: () => NOW,
+          isStudentVerified: async (u) => {
+            lookups.push(u);
+            if (verified === 'lookup_fails') throw new Error('student table down');
+            return verified;
+          },
+        }).plans(brand, { userId, country: null });
+      const students = (data: { plans: Array<{ key: string; requiresFlag?: string }> }) => data.plans.filter((p) => p.requiresFlag === 'student').map((p) => p.key);
+
+      beforeEach(() => {
+        lookups.length = 0;
+      });
+
+      it('a visitor with no session gets the five paid plans and no verification lookup is made', async () => {
+        const data = await studentPlansFor(SECRET, null, true);
+        expect(students(data)).toEqual([]);
+        expect(data.plans.filter((p) => p.kind !== 'free').map((p) => [p.key, p.amountMinor])).toEqual(PAID);
+        expect(lookups).toEqual([]);
+        // The public route, signed out, on the GoApply host.
+        const res = await h.request<any>('GET', '/anon/plans', GO);
+        expect(res.body.data.plans.filter((p: any) => p.kind !== 'free')).toHaveLength(5);
+        expect(students(res.body.data)).toEqual([]);
+      });
+
+      it('a signed-in user who is not verified gets the five paid plans', async () => {
+        const data = await studentPlansFor(SECRET, 'u_1', false);
+        expect(students(data)).toEqual([]);
+        expect(data.plans.filter((p) => p.kind !== 'free')).toHaveLength(5);
+        expect(lookups).toEqual(['u_1']);
+        expect(data.defaultSelection).toBe('pro_monthly');
+      });
+
+      it('a verified student gets seven: 学生月卡 ¥29 (25% below) and 学生季卡 ¥69 (30% below), on sale, never preselected', async () => {
+        const data = await studentPlansFor(SECRET, 'u_1', true);
+        expect(data.plans.filter((p) => p.kind !== 'free')).toHaveLength(7);
+        expect(amounts(data.plans)).toEqual(PAID);
+        expect(data.plans.filter((p) => p.requiresFlag === 'student').map((p) => [p.key, p.defaultLabel, p.amountMinor, p.passDays, p.studentDiscountPercent, p.sellable, p.kind])).toEqual([
+          ['student_monthly', '学生月卡', 2900, 30, 25, true, 'pass'],
+          ['student_quarterly', '学生季卡', 6900, 90, 30, true, 'pass'],
+        ]);
+        expect(data.defaultSelection).toBe('pro_monthly');
+      });
+
+      it('fails closed: a verification lookup that throws lists no student plan', async () => {
+        expect(students(await studentPlansFor(SECRET, 'u_1', 'lookup_fails'))).toEqual([]);
+      });
+
+      it('the capability switched off: no student plan even for a verified student, and verification is not looked up', async () => {
+        const off = await studentPlansFor({ ...SECRET, FLAG_GOAPPLY_STUDENT: 'false' }, 'u_1', true);
+        expect(students(off)).toEqual([]);
+        expect(amounts(off.plans)).toEqual(PAID);
+        expect(lookups).toEqual([]);
+      });
+
+      it('one rule for both brands: RoboApply lists its student plans to a verified student only', async () => {
+        const robo = getBrand('roboapply');
+        expect(students(await studentPlansFor(ENV, null, true, robo))).toEqual([]);
+        expect(students(await studentPlansFor(ENV, 'u_1', false, robo))).toEqual([]);
+        expect(students(await studentPlansFor(ENV, 'u_1', true, robo))).toEqual(['student_monthly', 'student_quarterly']);
+      });
+    });
   });
 });
 

@@ -196,7 +196,11 @@ export interface CancelPlanResponse {
 // Switching is one server endpoint, adapted below.
 // ─────────────────────────────────────────────────────────────────────
 
-/** POST /billing/checkout (RoboApply, Stripe) and /billing/alipay (GoApply) with a clone plan key. */
+/**
+ * POST /billing/checkout (the brand's default rail: Stripe on RoboApply) and
+ * /billing/alipay (GoApply's Alipay rail) with a clone plan key. Which rails
+ * can take a payment now is `checkout.rails` of GET /billing/plans.
+ */
 export interface PlanCheckoutBody {
   /** A `PLAN_KEYS` value from GET /billing/plans. */
   planKey: string;
@@ -329,7 +333,12 @@ export const accountApi = {
   /** Clone plan checkout (Stripe, RoboApply). */
   checkoutPlan: (body: PlanCheckoutBody) =>
     roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/checkout`, body),
-  /** Clone plan checkout on a CN rail (GoApply; off until CN_PAYMENTS_ENABLED). */
+  /**
+   * Clone plan checkout through Alipay (GoApply). The rail is open whenever
+   * `GET /billing/plans` lists `alipay` in `checkout.rails`; there is no
+   * payments switch to turn on. Answers `rail_not_configured` (503) when the
+   * rail cannot charge and `plan_not_sellable` (409) under the kill switch.
+   */
   alipayCheckoutPlan: (body: PlanCheckoutBody) =>
     roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/alipay`, body),
   /** Legacy practice plan → Pro: a quote first; nothing is charged (POST /billing/switch without `confirm`). */

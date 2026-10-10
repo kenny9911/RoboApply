@@ -9,7 +9,8 @@
 //
 // Honesty: caps print as "Up to N a day" — never "unlimited"; no offers at
 // launch, no struck-through anchors, weekly never preselected; plan prices
-// only from `getPlanCatalog` (env-configured), never from copy.
+// only from `getPlanCatalog` (GoApply: catalog defaults in fen with optional
+// overrides; RoboApply: env-configured), never from copy.
 
 import { z } from 'zod';
 import type { EntitlementSummary } from '../../platform/credits/summary.js';
@@ -87,15 +88,33 @@ export type CheckoutResponse = CheckoutResult & { rail: PaymentRail };
 
 /** GET /billing/plans (public; signed-in users also get `current`). */
 export interface PlansResponse {
-  /** The brand's plans with configured prices; `sellable` false → shown, not purchasable. */
+  /**
+   * The brand's plans with their prices; `sellable` false → shown, not
+   * purchasable. A GoApply plan always carries an amount and is sellable
+   * unless the kill switch is thrown (`unsellableReason: 'payments_disabled'`).
+   * Student plans (`requiresFlag: 'student'`) are in the list only for a
+   * signed-in, verified student while the `student` capability is on; a
+   * visitor and an unverified user never receive them.
+   */
   plans: PlanView[];
-  /** Never a weekly plan or the pass. */
+  /** Never a weekly plan or the 7-day pass. */
   defaultSelection: string | null;
   currency: 'USD' | 'CNY';
-  /** At least one plan can be bought now (GoApply: false until payments open — "暂未开放"). */
+  /**
+   * A payment can be opened now: at least one plan is sellable AND at least
+   * one rail can charge (`checkout.rails` is not empty). False on a brand
+   * whose rail credential is missing (plans and prices still list) and under
+   * the GoApply kill switch. The web shows its "not open yet" note only when
+   * this is false. (Cross-bundle contract: the pricing page reads it too.)
+   */
   paymentsOpen: boolean;
   checkout: {
-    /** Rails that can take a payment now. */
+    /**
+     * Rails that can take a payment now, in the order to offer them: the
+     * first is the default. GoApply: `alipay` first (with
+     * ALIPAY_CALLBACK_SECRET), then `wechatpay` when its merchant is set up;
+     * RoboApply: `stripe`. Empty when no rail can charge.
+     */
     rails: Array<'stripe' | 'alipay' | 'wechatpay'>;
     /** Show the EU/UK/TW withdrawal-waiver box (edge country of this request). */
     showWithdrawalWaiver: boolean;

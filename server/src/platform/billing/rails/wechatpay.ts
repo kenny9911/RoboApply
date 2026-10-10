@@ -18,14 +18,22 @@
 //   Orders     `AlipayOrder` rows (channel 'wechatpay'); fulfilment goes through
 //              `fulfilPass()` (the caller does that, idempotently).
 //
-// Charging stays off (the rail reports itself unconfigured) until:
+// WeChat Pay is GoApply's additional rail beside Alipay (D6): optional, and
+// offered second. It keeps its own checks; the rail reports itself
+// unconfigured until:
 //   - CN_PAYMENT_COLLECTING_ENTITY names who collects the money, AND
 //   - WECHATPAY_MERCHANT_ENTITY (the legal name the merchant account is
 //     registered to, entered by the owner) matches it — collecting for
 //     another seller risks 二清 (OPS C-13), AND
 //   - the public key + id needed to verify notifies are set.
-// `pay.wechatpay` (platform/flags.ts) already requires CN_PAYMENTS_ENABLED and
-// the merchant credentials; resolveRail/railAvailable combine both.
+// (The Alipay rail has no entity gate; this one does because WeChat Pay
+// shows the merchant's name to the payer.)
+// `pay.wechatpay` (platform/flags.ts) requires the merchant credentials and
+// that payments are not switched off: CN_PAYMENTS_ENABLED=false is the kill
+// switch, and nothing has to be switched on (D5). resolveRail/railAvailable
+// combine the capability with this readiness. The readiness itself does not
+// read the kill switch, so a notify or a status query for an order that
+// already exists still works when new orders are stopped.
 
 import { createCipheriv, createDecipheriv, createPrivateKey, createPublicKey, createSign, createVerify, randomBytes, type KeyObject } from 'node:crypto';
 import { brandEnv, type EnvSource } from '../../brand/brandEnv.js';
@@ -34,6 +42,7 @@ import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
 import { BillingError } from '../errors.js';
 import { appOrigin, callbackOrigin, withQueryParam } from '../origins.js';
+import { assertStudentOrder } from '../studentPlans.js';
 import { getRegisteredRail, registerRail } from './registry.js';
 import {
   CallbackRejectedError,
@@ -126,9 +135,10 @@ export interface WechatPayReadiness {
 }
 
 /**
- * Whether WeChat Pay may take money on this brand. The capability flag checks
- * CN_PAYMENTS_ENABLED and the merchant credentials; this adds what charging
- * needs on top (OPS C-13: the collecting entity is the merchant).
+ * Whether WeChat Pay is set up to take money on this brand. The capability
+ * flag checks the merchant credentials and the kill switch
+ * (CN_PAYMENTS_ENABLED=false); this is what charging needs on top (OPS C-13:
+ * the collecting entity is the merchant). It does not read the kill switch.
  */
 export function wechatPayReadiness(brand: ProductBrand, env: EnvSource = process.env): WechatPayReadiness {
   const entity = brandEnv(brand, 'PAYMENT_COLLECTING_ENTITY', env)?.trim() || null;
@@ -488,6 +498,9 @@ export function createWechatPayRail(deps: WechatRailDeps = {}): WechatPayRail {
       if (plan.autoRenews || (plan.kind !== 'pass' && plan.kind !== 'pack')) {
         throw new BillingError('plan_not_sellable', 'This plan cannot be bought with WeChat Pay', { planKey: plan.key });
       }
+      // 学生月卡 / 学生季卡: only for a buyer the caller found verified. The
+      // rail's own check, behind the caller's (platform/billing/studentPlans).
+      assertStudentOrder(order);
       const ctx = (order.context ?? {}) as WechatCheckoutContext;
       const tradeType: WechatTradeType = ctx.tradeType ?? 'native';
       if (tradeType === 'h5' && !ctx.payerClientIp) {

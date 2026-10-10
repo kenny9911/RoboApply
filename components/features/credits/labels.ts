@@ -46,7 +46,8 @@ export function bucketLabelKey(bucket: string): string {
 
 const PLAN_KEYS_BY_BRAND: Record<BrandId, readonly string[]> = {
   roboapply: ['free', 'pro_weekly', 'pro_monthly', 'pro_quarterly', 'pro_week_pass', 'practice_pack_5', 'practice_pack_15', 'student_monthly', 'student_quarterly'],
-  goapply: ['free', 'pro_week_pass', 'pro_monthly', 'pro_quarterly', 'practice_pack_5', 'practice_pack_15'],
+  // GoApply's student plans are passes too (学生月卡 30 days, 学生季卡 90 days).
+  goapply: ['free', 'pro_week_pass', 'pro_monthly', 'pro_quarterly', 'practice_pack_5', 'practice_pack_15', 'student_monthly', 'student_quarterly'],
 };
 
 export const LEGACY_PLAN_KEYS = ['starter', 'growth'] as const;

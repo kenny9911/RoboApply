@@ -30,19 +30,27 @@ vi.mock('../../middleware/auth.js', () => ({
 import { startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import billingRouter from '../routes/billing.js';
 import { setBillingServiceDepsForTests } from './RoboApplyBillingService.js';
-import { createAlipayWorkerRail, getRegisteredRail, registerRail, unregisterRail, type CheckoutOrder, type PaymentRailImpl } from '../../platform/billing/index.js';
+import { availableRails, createAlipayWorkerRail, getRegisteredRail, registerRail, registeredRailIds, resolveRail, unregisterRail, type CheckoutOrder, type PaymentRailImpl } from '../../platform/billing/index.js';
+import { ensureWechatPayRail } from '../../platform/billing/rails/wechatpay.js';
+import { getBrand } from '../../platform/brand/registry.js';
 import { BillingCnService, cnPayTermsStatement } from '../../features/billing-cn/service.js';
 import { CN_PAY_TERMS_CONSENT_TYPE } from '../../features/billing-cn/contract.js';
+import { rateLimitKey } from '../../platform/ratelimit/index.js';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+// What a GoApply deployment needs to sell through Alipay: the rail's callback
+// secret, nothing else (D5, D6). Prices are the catalog defaults; there is no
+// master switch, no worker URL and no collecting entity to set. The other
+// names are blanked so a developer's own environment cannot leak in.
 const ENV_KEYS = {
-  CN_PAYMENTS_ENABLED: 'true',
-  CN_PRICE_PRO_MONTHLY_FEN: '3900',
-  CN_PRICE_PRACTICE_PACK_5_FEN: '2900',
-  CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.',
-  ALIPAY_API_URL: 'https://payments.example.com/create',
   ALIPAY_CALLBACK_SECRET: 'test-secret',
+  CN_PAYMENTS_ENABLED: '',
+  CN_PAYMENT_COLLECTING_ENTITY: '',
+  CN_PAYMENT_REQUIRE_ENTITY: '',
+  CN_PRICE_PRO_MONTHLY_FEN: '',
+  CN_PRICE_PRO_WEEK_PASS_FEN: '',
+  ALIPAY_API_URL: '',
   STRIPE_SECRET_KEY: '',
   BACKEND_URL: '',
   CN_BACKEND_URL: '',
@@ -79,6 +87,8 @@ beforeEach(() => {
     getBalance: async () => ({ credits: 0, tier: 'free', periodAllotment: 1, renewedAt: null, currentPeriodEnd: null, ephemeral: false }),
     sendEmail: vi.fn(async () => ({ status: 'sent' as const })),
     invalidate: () => {},
+    // The DB-backed limiter is stood in (the fake database has no raw SQL); it allows everything here.
+    consumeRateLimit: async () => ({ allowed: true, retryAfterSec: 0 }),
   });
 });
 
@@ -105,12 +115,95 @@ describe('GoApply checkout through the Alipay worker', () => {
     expect(order).toMatchObject({ tier: 'ra_pro_monthly', planKey: 'pro_monthly', brand: 'goapply', amountMinor: 3900, status: 'pending' });
   });
 
-  it('GoApply checkout stays closed while CN payments are off', async () => {
+  it('with the callback secret alone: a 月卡 checkout creates one AlipayOrder at the catalog price and answers the pay URL', async () => {
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'pro_monthly' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ kind: 'redirect', url: 'https://payments.example.com/pay', rail: 'alipay' });
+    // The default worker endpoint: ALIPAY_API_URL is not required.
+    expect(fetchMock.mock.calls[0][0]).toBe('https://worker.gohire.top/payment/payment/create');
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload).toMatchObject({ total_amount: 39, subject: 'GoApply 会员月卡', body: 'GoApply 会员月卡', pay_channel: 'alipay' });
+    expect(payload.notify_url).toBe('https://www.goapply.top/api/v1/roboapply/billing/alipay/callback?cb=test-secret');
+    expect(res.body.data.orderId).toBe(payload.out_trade_no);
+    const orders = await fake.db.alipayOrder.findMany({});
+    expect(orders).toHaveLength(1);
+    expect(orders[0]).toMatchObject({ outTradeNo: payload.out_trade_no, userId: 'cn_user', tier: 'ra_pro_monthly', planKey: 'pro_monthly', brand: 'goapply', amount: 39, amountMinor: 3900, status: 'pending', channel: 'alipay' });
+  });
+
+  it('that order is fulfilled exactly once by a callback that carries the secret, and refused without it', async () => {
+    const checkout = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'pro_monthly' } });
+    const no = checkout.body.data.orderId as string;
+    const base = `/api/v1/roboapply/billing/alipay/callback?pay_status=TRADE_SUCCESS&out_trade_no=${no}&total_amount=39.00`;
+
+    const noSecret = await h.request<any>('POST', base);
+    expect([noSecret.status, noSecret.body.code]).toEqual([403, 40003]);
+    const wrongSecret = await h.request<any>('POST', `${base}&cb=guess`);
+    expect([wrongSecret.status, wrongSecret.body.code]).toEqual([403, 40003]);
+    expect((await fake.db.alipayOrder.findUnique({ where: { outTradeNo: no } })).status).toBe('pending');
+    expect(await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } })).toBeNull();
+
+    // The notify URL the worker was given, as the worker would call it.
+    const notify = new URL(JSON.parse(fetchMock.mock.calls[0][1].body).notify_url);
+    const first = await h.request<any>('POST', `${base}&cb=${encodeURIComponent(notify.searchParams.get('cb')!)}`);
+    expect([first.status, first.body]).toEqual([200, { code: 0, message: 'success' }]);
+    const sub = await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } });
+    expect(sub).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'pass', rail: 'alipay', brand: 'goapply', currency: 'CNY', amountMinor: 3900 });
+    const end = (sub.currentPeriodEnd as Date).getTime();
+    expect(Math.round((end - Date.now()) / 86_400_000)).toBe(30);
+    for (let i = 0; i < 2; i += 1) {
+      const replay = await h.request<any>('GET', `${base}&cb=test-secret`);
+      expect([replay.status, replay.body.code]).toEqual([200, 0]);
+    }
+    expect(((await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } })).currentPeriodEnd as Date).getTime()).toBe(end);
+    expect((await fake.db.alipayOrder.findMany({ where: { status: 'completed' } })).map((o: { outTradeNo: string }) => o.outTradeNo)).toEqual([no]);
+  });
+
+  it('without the callback secret: checkout answers 503 rail_not_configured and no order exists', async () => {
+    vi.stubEnv('ALIPAY_CALLBACK_SECRET', '');
+    for (const path of ['/api/v1/roboapply/billing/checkout', '/api/v1/roboapply/billing/alipay']) {
+      const res = await h.request<any>('POST', path, { ...GO, body: { planKey: 'pro_monthly' } });
+      expect([res.status, res.body.code], path).toEqual([503, 'rail_not_configured']);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await fake.db.alipayOrder.findMany({})).toEqual([]);
+    // The plans and their prices are still listed (GET /billing/plan carries the catalog).
+    const plan = await h.request<any>('GET', '/api/v1/roboapply/billing/plan', GO);
+    expect(plan.status).toBe(200);
+    expect(plan.body.data.rails).toEqual([]);
+    expect(plan.body.data.alipayConfigured).toBe(false);
+    const paid = plan.body.data.catalog.filter((p: { kind: string }) => p.kind !== 'free');
+    expect(paid.map((p: { key: string; amountMinor: number }) => [p.key, p.amountMinor])).toEqual([
+      ['pro_week_pass', 1200],
+      ['pro_monthly', 3900],
+      ['pro_quarterly', 9900],
+      ['practice_pack_5', 2900],
+      ['practice_pack_15', 7900],
+    ]);
+  });
+
+  it('with the secret, GET /billing/plan lists Alipay as the rail that can charge', async () => {
+    const plan = await h.request<any>('GET', '/api/v1/roboapply/billing/plan', GO);
+    expect(plan.body.data).toMatchObject({ brand: 'goapply', rails: ['alipay'], alipayConfigured: true, stripeConfigured: false, defaultSelection: 'pro_monthly' });
+  });
+
+  it('the kill switch (CN_PAYMENTS_ENABLED=false) closes checkout: 409 plan_not_sellable, nothing sent to the worker', async () => {
     vi.stubEnv('CN_PAYMENTS_ENABLED', 'false');
     const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'pro_monthly' } });
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('plan_not_sellable');
+    expect(res.body.details).toMatchObject({ reason: 'payments_disabled' });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('the entity hard gate (CN_PAYMENT_REQUIRE_ENTITY=true) refuses until the entity is named, then prints it', async () => {
+    vi.stubEnv('CN_PAYMENT_REQUIRE_ENTITY', 'true');
+    const refused = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'pro_monthly' } });
+    expect([refused.status, refused.body.code]).toEqual([503, 'rail_not_configured']);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.stubEnv('CN_PAYMENT_COLLECTING_ENTITY', 'Example Collecting Co.');
+    const ok = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'pro_monthly' } });
+    expect(ok.status).toBe(200);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).body).toBe('GoApply 会员月卡 · Example Collecting Co.');
   });
 
   it('RoboApply never sells through Alipay, and legacy practice plans are no longer sold', async () => {
@@ -121,6 +214,149 @@ describe('GoApply checkout through the Alipay worker', () => {
     expect(legacy.status).toBe(409);
     expect(legacy.body.code).toBe('plan_not_sellable');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('a new Alipay order is limited per user (the limit WeChat Pay orders have)', () => {
+  /** A counting limiter with the real windows' first limit. */
+  function limiterOf(limit: number) {
+    const hits = new Map<string, number>();
+    const calls: Array<{ key: string; windows: ReadonlyArray<{ limit: number; windowSec: number }> }> = [];
+    const consume = async (key: string, windows: ReadonlyArray<{ limit: number; windowSec: number }>) => {
+      calls.push({ key, windows });
+      const n = (hits.get(key) ?? 0) + 1;
+      hits.set(key, n);
+      return { allowed: n <= limit, retryAfterSec: n <= limit ? 0 : 37 };
+    };
+    return { calls, consume };
+  }
+  const useLimiter = (consumeRateLimit: (key: string, windows: ReadonlyArray<{ limit: number; windowSec: number }>) => Promise<{ allowed: boolean; retryAfterSec: number }>) =>
+    setBillingServiceDepsForTests({
+      db: fake.db as never,
+      grantIfNewPeriod,
+      getBalance: async () => ({ credits: 0, tier: 'free', periodAllotment: 1, renewedAt: null, currentPeriodEnd: null, ephemeral: false }),
+      sendEmail: vi.fn(async () => ({ status: 'sent' as const })),
+      invalidate: () => {},
+      consumeRateLimit,
+    });
+
+  it('the order after the limit answers 429 rate_limited with Retry-After: no worker call, no order row, no acknowledgement', async () => {
+    const limiter = limiterOf(10);
+    useLimiter(limiter.consume);
+    for (let i = 0; i < 10; i += 1) {
+      const ok = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'pro_monthly' } });
+      expect(ok.status).toBe(200);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(await fake.db.alipayOrder.findMany({})).toHaveLength(10);
+    const consentsBefore = (await fake.db.seekerConsentRecord.findMany({})).length;
+
+    for (const path of ['/api/v1/roboapply/billing/alipay', '/api/v1/roboapply/billing/checkout']) {
+      const res = await h.request<any>('POST', path, { ...GO, body: { planKey: 'pro_monthly' } });
+      expect([res.status, res.body.code]).toEqual([429, 'rate_limited']);
+      expect(res.body.details).toEqual({ retryAfterSec: 37 });
+      expect(res.headers.get('retry-after')).toBe('37');
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(await fake.db.alipayOrder.findMany({})).toHaveLength(10);
+    expect(await fake.db.seekerConsentRecord.findMany({})).toHaveLength(consentsBefore);
+
+    // One budget per user and brand, on the windows WeChat Pay orders use: 10 a minute, 60 a day.
+    expect(new Set(limiter.calls.map((c) => c.key))).toEqual(new Set([rateLimitKey('billingCnCreate', 'user', 'cn_user', 'goapply')]));
+    expect(limiter.calls[0]!.windows).toEqual([
+      { limit: 10, windowSec: 60 },
+      { limit: 60, windowSec: 86_400 },
+    ]);
+  });
+
+  it('a request that is refused for another reason does not reach the limiter, and RoboApply checkout is never counted', async () => {
+    const limiter = limiterOf(10);
+    useLimiter(limiter.consume);
+    const unknownPlan = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'pro_weekly' } });
+    expect(unknownPlan.status).toBe(409);
+    const robo = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...RA, body: { planKey: 'pro_monthly' } });
+    expect(robo.status).toBe(409);
+    expect(limiter.calls).toEqual([]);
+  });
+
+  it('fails open: a limiter that cannot answer never blocks an Alipay payment', async () => {
+    useLimiter(async () => {
+      throw new Error('rate counter table unreachable');
+    });
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'pro_monthly' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ kind: 'redirect', rail: 'alipay' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await fake.db.alipayOrder.findMany({})).toHaveLength(1);
+  });
+});
+
+describe('GoApply student passes through Alipay (学生月卡 ¥29, 学生季卡 ¥69)', () => {
+  const student = { enabled: true, verified: false };
+  beforeEach(() => {
+    student.enabled = true;
+    student.verified = false;
+    setBillingServiceDepsForTests({
+      db: fake.db as never,
+      grantIfNewPeriod,
+      getBalance: async () => ({ credits: 0, tier: 'free', periodAllotment: 1, renewedAt: null, currentPeriodEnd: null, ephemeral: false }),
+      sendEmail: vi.fn(async () => ({ status: 'sent' as const })),
+      invalidate: () => {},
+      studentEnabled: async () => student.enabled,
+      isStudentVerified: async () => student.verified,
+      consumeRateLimit: async () => ({ allowed: true, retryAfterSec: 0 }),
+    });
+  });
+
+  it('a buyer who is not a verified student is refused before anything is sent or stored', async () => {
+    for (const planKey of ['student_monthly', 'student_quarterly']) {
+      const res = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey } });
+      expect([res.status, res.body.code], planKey).toEqual([409, 'student_verification_required']);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await fake.db.alipayOrder.findMany({})).toEqual([]);
+  });
+
+  it('with the student capability off the passes are not on sale, even for a verified student', async () => {
+    student.enabled = false;
+    student.verified = true;
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'student_monthly' } });
+    expect([res.status, res.body.code]).toEqual([409, 'plan_not_sellable']);
+    expect(res.body.details).toMatchObject({ reason: 'student_off' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['student_monthly', 29, 30, '学生月卡'],
+    ['student_quarterly', 69, 90, '学生季卡'],
+  ] as const)('a verified student buys %s for ¥%i and the paid order activates %i days', async (planKey, yuan, days, label) => {
+    student.verified = true;
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey } });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ kind: 'redirect', rail: 'alipay' });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload).toMatchObject({ total_amount: yuan, subject: `GoApply ${label}`, package_data: { package_id: planKey, package_name: planKey, package_type: '1', package_price: String(yuan) } });
+    const no = payload.out_trade_no as string;
+    expect(await fake.db.alipayOrder.findUnique({ where: { outTradeNo: no } })).toMatchObject({ tier: `ra_${planKey}`, planKey, brand: 'goapply', amount: yuan, amountMinor: yuan * 100, status: 'pending', purpose: 'subscription' });
+
+    const paid = await h.request<any>('POST', `/api/v1/roboapply/billing/alipay/callback?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=${no}&total_amount=${yuan}.00`);
+    expect([paid.status, paid.body]).toEqual([200, { code: 0, message: 'success' }]);
+    const sub = await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } });
+    expect(sub).toMatchObject({ tier: 'pro', planKey, interval: 'pass', rail: 'alipay', brand: 'goapply', currency: 'CNY', amountMinor: yuan * 100 });
+    expect(Math.round(((sub.currentPeriodEnd as Date).getTime() - Date.now()) / 86_400_000)).toBe(days);
+    // A replay does not add another period.
+    const end = (sub.currentPeriodEnd as Date).getTime();
+    await h.request<any>('POST', `/api/v1/roboapply/billing/alipay/callback?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=${no}`);
+    expect(((await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } })).currentPeriodEnd as Date).getTime()).toBe(end);
+  });
+
+  it('a callback that pays the regular price for a student order is refused (40004) and the order stays pending', async () => {
+    student.verified = true;
+    await h.request<any>('POST', '/api/v1/roboapply/billing/alipay', { ...GO, body: { planKey: 'student_monthly' } });
+    const no = JSON.parse(fetchMock.mock.calls[0][1].body).out_trade_no as string;
+    const res = await h.request<any>('POST', `/api/v1/roboapply/billing/alipay/callback?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=${no}&total_amount=39.00`);
+    expect([res.status, res.body.code]).toEqual([400, 40004]);
+    expect((await fake.db.alipayOrder.findUnique({ where: { outTradeNo: no } })).status).toBe('pending');
   });
 });
 
@@ -135,7 +371,8 @@ describe('GoApply WeChat Pay through the legacy /billing/checkout', () => {
     WECHATPAY_PUBLIC_KEY: 'test-public-key',
     WECHATPAY_PUBLIC_KEY_ID: 'PUB_KEY_ID_TEST_0001',
     WECHATPAY_MERCHANT_ENTITY: 'Example Collecting Co.',
-    CN_PRICE_PRO_WEEK_PASS_FEN: '1200',
+    // WeChat Pay keeps its entity check: the collecting entity must be named and match the merchant.
+    CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.',
     // The published 用户协议 version (what GET /public/legal/terms answers on GoApply).
     CN_LEGAL_DOCS_VERSION: 'cn-terms-2026-10',
     // Join J5: the gate asks compliance for the PUBLISHED version; the repository's own
@@ -165,6 +402,8 @@ describe('GoApply WeChat Pay through the legacy /billing/checkout', () => {
       invalidate: () => {},
       acknowledgeCnPayTerms: (i) =>
         cn.acknowledgeTerms(i.userId, i.brand, { seekerProfileId: i.seekerProfileId, plan: i.plan, termsVersion: i.termsVersion }, { ip: i.ip, userAgent: i.userAgent }),
+      // The Alipay order limit (the WeChat Pay path counts through the gate above).
+      consumeRateLimit: async () => ({ allowed: true, retryAfterSec: 0 }),
     });
     before = getRegisteredRail('wechatpay');
     // A stand-in rail: what matters here is what the route hands it.
@@ -241,6 +480,8 @@ describe('GoApply WeChat Pay through the legacy /billing/checkout', () => {
     const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'pro_monthly', rail: 'wechatpay', tradeType: 'native', termsVersion: TERMS } });
     expect([res.status, res.body.code]).toEqual([429, 'rate_limited']);
     expect(res.body.details).toEqual({ retryAfterSec: 42 });
+    // The wait is in the header too, for clients that read only that.
+    expect(res.headers.get('retry-after')).toBe('42');
     expect(orders).toHaveLength(0);
     expect(await consents()).toEqual([]);
   });
@@ -259,8 +500,8 @@ describe('GoApply WeChat Pay through the legacy /billing/checkout', () => {
     expect(orders[0]!.context).toMatchObject({ tradeType: 'native', termsVersion: TERMS });
   });
 
-  it('stays unpurchasable while CN_PAYMENTS_ENABLED is unset: no order reaches the rail on any trade type', async () => {
-    vi.stubEnv('CN_PAYMENTS_ENABLED', '');
+  it('the kill switch (CN_PAYMENTS_ENABLED=false): no order reaches the rail on any trade type', async () => {
+    vi.stubEnv('CN_PAYMENTS_ENABLED', 'false');
     for (const tradeType of ['native', 'h5', 'jsapi']) {
       const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'pro_monthly', rail: 'wechatpay', tradeType, termsVersion: TERMS } });
       expect(res.status, tradeType).toBe(409);
@@ -269,6 +510,23 @@ describe('GoApply WeChat Pay through the legacy /billing/checkout', () => {
     expect(orders).toHaveLength(0);
     expect(await consents()).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('CN_PAYMENTS_ENABLED unset is not a gate: a WeChat Pay order goes through', async () => {
+    vi.stubEnv('CN_PAYMENTS_ENABLED', '');
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'pro_monthly', rail: 'wechatpay', tradeType: 'native', termsVersion: TERMS } });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ kind: 'qr', rail: 'wechatpay' });
+    expect(orders).toHaveLength(1);
+  });
+
+  it('a purchase that names no rail goes to Alipay even with WeChat Pay ready (Alipay first)', async () => {
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...GO, body: { planKey: 'pro_monthly' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ kind: 'redirect', rail: 'alipay' });
+    expect(orders).toHaveLength(0);
+    // No agreement record: that gate belongs to WeChat Pay orders.
+    expect(await consents()).toEqual([]);
   });
 
   it('RoboApply never reaches WeChat Pay', async () => {
@@ -325,5 +583,68 @@ describe('Alipay callback → fulfilPass', () => {
     expect((await fake.db.alipayOrder.findUnique({ where: { outTradeNo: 'GAORDER_X' } })).status).toBe('closed');
     const unknown = await h.request<any>('GET', '/api/v1/roboapply/billing/alipay/callback?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=NOPE');
     expect(unknown.status).toBe(400);
+  });
+});
+
+// ── The Alipay "do not break" contract (MARKET_STRATEGY.md §5.2; AL-1; D6) ──
+// Characterisation tests; the rest of the contract is pinned in
+// routes/billing.test.ts, platform/billing/rails/rails.test.ts and
+// platform/billing/fulfilPass.test.ts.
+describe('Alipay contract A11 and A12: the rails stay apart', () => {
+  let wechatBefore: PaymentRailImpl | null = null;
+  beforeEach(() => {
+    wechatBefore = getRegisteredRail('wechatpay');
+    // A frozen contract test must not move when a gate default moves: every
+    // value that has ever gated a GoApply checkout is set explicitly here (as
+    // routes/billing.test.ts does), so these pass on any gate default.
+    vi.stubEnv('CN_PAYMENTS_ENABLED', 'true');
+    vi.stubEnv('CN_PRICE_PRO_MONTHLY_FEN', '3900');
+    vi.stubEnv('CN_PAYMENT_COLLECTING_ENTITY', 'Example Collecting Co.');
+  });
+  afterEach(() => {
+    if (wechatBefore) registerRail('wechatpay', wechatBefore);
+    else unregisterRail('wechatpay');
+  });
+
+  it('A11 Stripe is not one of GoApply\'s rails, with or without a Stripe key, and the Stripe webhook guard names the brand', async () => {
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_x');
+    const go = getBrand('goapply');
+    expect(go.paymentRails).not.toContain('stripe');
+    expect(availableRails(go)).not.toContain('stripe');
+    expect(() => resolveRail(go, 'stripe')).toThrow(expect.objectContaining({ code: 'rail_not_allowed' }));
+    for (const path of ['/api/v1/roboapply/billing/checkout', '/api/v1/roboapply/billing/alipay']) {
+      const res = await h.request<any>('POST', path, { ...GO, body: { planKey: 'pro_monthly', rail: 'stripe' } });
+      // /billing/alipay forces the Alipay rail whatever the body says; /checkout refuses Stripe.
+      if (path.endsWith('/alipay')) expect(res.body.data).toMatchObject({ rail: 'alipay' });
+      else expect([res.status, res.body.code]).toEqual([409, 'rail_not_allowed']);
+    }
+    // (The webhook half of A11 is 'A11 never activates anything for a GoApply-branded Stripe session'
+    // in platform/billing/integration/RoboApplyBillingService.stripe.test.ts.)
+  });
+
+  it('A12 registering WeChat Pay does not replace, wrap or reorder the Alipay rail', () => {
+    const alipay = getRegisteredRail('alipay');
+    expect(alipay?.id).toBe('alipay');
+    expect(typeof alipay?.verifyCallback).toBe('function');
+    unregisterRail('wechatpay');
+    // What features/billing-cn/routes.ts does on import.
+    const wechat = ensureWechatPayRail();
+    expect(wechat.id).toBe('wechatpay');
+    expect(getRegisteredRail('alipay')).toBe(alipay);
+    expect(registeredRailIds()).toEqual(expect.arrayContaining(['stripe', 'alipay', 'wechatpay']));
+    // The brand lists Alipay before WeChat Pay, so Alipay is the rail a purchase gets when none is named.
+    expect(getBrand('goapply').paymentRails).toEqual(['alipay', 'wechatpay']);
+    expect(resolveRail(getBrand('goapply'), null).id).toBe('alipay');
+  });
+
+  it('A12 an Alipay notify fulfils the same way with the WeChat Pay rail registered', async () => {
+    unregisterRail('wechatpay');
+    ensureWechatPayRail();
+    await fake.db.alipayOrder.create({
+      data: { id: 'o_12', userId: 'cn_user', outTradeNo: 'GAORDER_12', tier: 'ra_pro_monthly', planKey: 'pro_monthly', brand: 'goapply', channel: 'alipay', amount: 39, amountMinor: 3900, status: 'pending' },
+    });
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay/callback?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=GAORDER_12&total_amount=39.00');
+    expect([res.status, res.body]).toEqual([200, { code: 0, message: 'success' }]);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } })).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'pass', rail: 'alipay', brand: 'goapply' });
   });
 });

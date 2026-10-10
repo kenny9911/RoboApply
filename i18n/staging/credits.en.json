@@ -1,3 +1,28 @@
 {
-  "credits": {}
+  "credits": {
+    "busy": "We could not start this right now. Try again in a moment.",
+    "plans": {
+      "goapply": {
+        "student_monthly": "Student 30-day pass",
+        "student_quarterly": "Student 90-day pass"
+      }
+    },
+    "planSheet": {
+      "notOpen": "These are the prices. Payment is not open yet, so nothing can be bought right now.",
+      "railGroup": "Pay with",
+      "rails": {
+        "alipay": "Alipay",
+        "wechatpay": "WeChat Pay",
+        "stripe": "Card"
+      },
+      "railHint": {
+        "alipay": "You pay on the Alipay page.",
+        "wechatpay": "You scan a code, or pay inside WeChat.",
+        "stripe": "You pay on the card payment page."
+      }
+    },
+    "usage": {
+      "usedPractice": "{n, plural, one {# practice credit used} other {# practice credits used}}"
+    }
+  }
 }

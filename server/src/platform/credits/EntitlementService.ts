@@ -16,7 +16,8 @@ import type { ExtendedPrismaClient } from '../../lib/prisma.js';
 import { getCurrentRequestId } from '../../lib/requestContext.js';
 import { getCurrentBrandOrDefault } from '../brand/brandContext.js';
 import { BRANDS, parseBrandId, type BrandId, type Market } from '../brand/registry.js';
-import { entitlementProfileFor, hasSellableProPlan, isLegacyPlanKey, isPlanKey, type PlanProfile } from '../billing/planCatalog.js';
+import { entitlementProfileFor, isLegacyPlanKey, isPlanKey, type PlanProfile } from '../billing/planCatalog.js';
+import { canBuyPro } from '../billing/proPurchase.js';
 import {
   ENTITLEMENT_KEYS,
   WINDOW_BUCKETS,
@@ -101,7 +102,7 @@ export interface ResolvedEntitlements {
   entitlements: EntitlementValues;
   /** Override keys that changed the result (for admin tooling and logs). */
   appliedOverrides: string[];
-  /** A sellable Pro plan exists on this brand. */
+  /** Pro can be bought on this brand now: a Pro plan is on sale and a rail can charge. */
   proSellable: boolean;
 }
 
@@ -276,7 +277,11 @@ export interface EntitlementServiceDeps {
   /** Effective catalog per brand (defaults to the AppConfig-backed loader). */
   loadCatalog?: (brand: BrandId) => Promise<CreditCatalog>;
   now?: () => Date;
-  /** Whether the brand sells a Pro plan (defaults to the plan catalog over process.env). */
+  /**
+   * Whether the brand can take a payment for Pro now (drives `upgradable`).
+   * Default: `canBuyPro` over process.env: a Pro plan is on sale AND one of
+   * the brand's rails can charge, the rule behind `paymentsOpen`.
+   */
   proSellable?: (brand: BrandId) => boolean;
   /** Memo lifetime per request; 0 disables the memo. */
   memoTtlMs?: number;
@@ -294,7 +299,7 @@ export function createEntitlementService(deps: EntitlementServiceDeps = {}): Ent
   const source = deps.source ?? createPrismaEntitlementSource(defaultGetDb);
   const loadCatalog = deps.loadCatalog ?? getCreditCatalog;
   const now = deps.now ?? (() => new Date());
-  const proSellable = deps.proSellable ?? ((brand: BrandId) => hasSellableProPlan(brand));
+  const proSellable = deps.proSellable ?? ((brand: BrandId) => canBuyPro(brand));
   const ttl = deps.memoTtlMs ?? 10_000;
   const memo = new Map<string, { at: number; value: Promise<ResolvedEntitlements> }>();
 

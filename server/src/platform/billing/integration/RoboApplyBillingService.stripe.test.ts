@@ -628,7 +628,8 @@ describe('Stripe webhook idempotency', () => {
     expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).tier).toBe('pro');
   });
 
-  it('never activates anything for a GoApply-branded Stripe session', async () => {
+  // Alipay contract rule A11 (MARKET_STRATEGY.md §5.2): characterisation, do not relax.
+  it('A11 never activates anything for a GoApply-branded Stripe session', async () => {
     const event = { ...subscriptionCheckout, data: { object: { ...subscriptionCheckout.data.object, metadata: { ...subscriptionCheckout.data.object.metadata, brand: 'goapply' } } } };
     expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: true });
     expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();

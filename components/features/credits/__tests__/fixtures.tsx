@@ -28,14 +28,19 @@ export const RA_ENV = {
   STRIPE_PRICE_PRACTICE_PACK_15_CENTS: '2499',
 };
 
-export const GA_ENV = {
-  CN_PRICE_PRO_WEEK_PASS_FEN: '1200',
-  CN_PRICE_PRO_MONTHLY_FEN: '3900',
-  CN_PRICE_PRO_QUARTERLY_FEN: '9900',
-  CN_PRICE_PRACTICE_PACK_5_FEN: '2900',
-  CN_PRICE_PRACTICE_PACK_15_FEN: '7900',
-};
+/**
+ * GoApply needs no price or payments variable: the catalog carries the CNY
+ * amounts (¥12 / ¥39 / ¥99, packs ¥29 / ¥79, student passes ¥29 / ¥69) and
+ * plans are on sale by default (D5, D6).
+ */
+export const GA_ENV: Record<string, string> = {};
 
+/**
+ * `plansView('goapply')` is a GoApply deployment with NO rail credential: the
+ * plans list with prices and are on sale, but no rail can charge, so payments
+ * are not open (`paymentsOpen: false`, `checkout.rails: []`). Pass `extras`
+ * (or use a test's own helper) for a deployment whose rails can charge.
+ */
 export function plansView(brand: BrandId = 'roboapply', env: Record<string, string> = brand === 'goapply' ? GA_ENV : RA_ENV, extras: Partial<PlansView> = {}): PlansView {
   // The full WP-21a `PlansResponse` (planViews.ts builds the plans the server sends).
   const { plans, defaultSelection } = buildPlanViews(brand, { env });

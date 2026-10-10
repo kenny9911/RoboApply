@@ -4,14 +4,28 @@
 // ARCHITECTURE.md §7.1 "Plans"). One list of plan keys per brand; the brand
 // decides currency and rail.
 //
-// Prices are owner decisions (OPS-B1). Nothing here hard-codes an amount:
-//   - RoboApply (USD, Stripe):  STRIPE_PRICE_<PLANKEY>        the Stripe price id
-//                               STRIPE_PRICE_<PLANKEY>_CENTS  the display amount (must equal the Stripe price)
-//   - GoApply  (CNY, Alipay / WeChat Pay):
-//                               CN_PRICE_<PLANKEY>_FEN        charge and display amount
-//                               CN_PAYMENTS_ENABLED=true      (R-15; off until the EDI licence)
-// A plan whose price is unset is listed but not sellable, so `/pricing` can
-// show the schedule (GoApply: "暂未开放") and nothing is purchasable.
+// Where a price comes from (owner rulings D5 and D6, 2026-10-11; they
+// supersede R-15 "GoApply payments off until a switch is set"; amounts per
+// docs/jobright-clone/market/MARKET_STRATEGY.md §4):
+//   - GoApply (CNY; Alipay, optionally WeChat Pay): every paid plan has a
+//     catalog default in fen (`GOAPPLY_DEFAULT_PRICE_FEN`, whole yuan), so a
+//     GoApply plan is never "price not set" and is on sale by default.
+//       CN_PRICE_<PLANKEY>_FEN   optional override; used only when it is a
+//                                positive multiple of 100 (the payment worker
+//                                bills whole yuan). Anything else is ignored
+//                                and logged, and the default stands.
+//       CN_PAYMENTS_ENABLED      the kill switch: a false value ('false', '0',
+//                                'off', 'no') marks every plan unsellable
+//                                ('payments_disabled'). Unset means on.
+//   - RoboApply (USD, Stripe): unchanged in the parity wave.
+//       STRIPE_PRICE_<PLANKEY>        the Stripe price id
+//       STRIPE_PRICE_<PLANKEY>_CENTS  the display amount (must equal the Stripe price)
+//     A RoboApply plan whose price is unset is listed but not sellable. (USD
+//     catalog defaults and the Stripe catalog sync are the market wave's.)
+// "Sellable" is about the price and the kill switch only. Whether a payment
+// can open right now also needs a rail that is configured
+// (`availableRails`, e.g. ALIPAY_CALLBACK_SECRET): `GET /billing/plans` puts
+// the two together as `paymentsOpen`.
 //
 // V2 additions (WP-79; PRODUCT_PLAN.md §6.3, TW-06, R-25):
 //   - Taiwan prices: STRIPE_PRICE_<PLANKEY>_TWD (a Stripe TWD price id) and
@@ -19,20 +33,26 @@
 //     NT$749 = 74900). Both set → `twdPrice`; otherwise Taiwan keeps the USD
 //     price with the reference line. Hidden until configured.
 //   - Student plans (`student_monthly`, `student_quarterly`) are priced like
-//     any plan; their discount is computed from the two configured prices
-//     (`studentDiscountPercent`, rounded down), never from copy.
+//     any plan; their discount is computed from the two catalog prices
+//     (`studentDiscountPercent`, rounded down), never from copy. On GoApply
+//     they are passes (学生月卡 30 days, 学生季卡 90 days), like every GoApply plan.
 //
 // Rules carried here so every caller gets them right:
 //   - weekly plans are never the default selection (H24);
 //   - auto-renewing plans need the unticked acknowledgement (consent
 //     `auto_renew_ack`, kept 3 years);
+//   - GoApply sells one-time products only (the mainland rails have no
+//     stored agreement and no auto-debit): no GoApply plan renews, and there
+//     is no `pro_weekly` there (the weekly product is `pro_week_pass`);
 //   - "Save N%" is computed from our own monthly price and rounded DOWN so
 //     the claim is never larger than the real saving (PRODUCT §6.1 rule 2);
 //   - legacy `starter` / `growth` are grandfathered: never sold, Free-tier
 //     limits for everything but their practice credits (PRODUCT §6.3).
 
+import { logger } from '../../services/LoggerService.js';
 import { BRANDS, type BrandId, type ProductBrand } from '../brand/registry.js';
-import { parseBoolEnv, type EnvSource } from '../brand/brandEnv.js';
+import type { EnvSource } from '../brand/brandEnv.js';
+import { cnPaymentsKilled } from '../flags.js';
 
 export const PLAN_KEYS = [
   'free',
@@ -89,6 +109,11 @@ export interface PlanDefinition {
   neverPreselected: boolean;
 }
 
+/**
+ * Why a plan cannot be bought. `price_unset`: RoboApply only (no Stripe price
+ * configured). `payments_disabled`: GoApply only, and only under the kill
+ * switch (`CN_PAYMENTS_ENABLED` set to a false value).
+ */
 export type UnsellableReason = 'free' | 'price_unset' | 'payments_disabled';
 
 /** A real price in a second currency (Taiwan, V2). */
@@ -101,7 +126,7 @@ export interface LocalPrice {
 
 export interface CatalogPlan extends PlanDefinition {
   currency: ProductBrand['currency'];
-  /** Display amount in minor units (cents / fen); null when not configured. */
+  /** Display amount in minor units (cents / fen); null when not configured (RoboApply only: GoApply always has one). */
   amountMinor: number | null;
   /** Stripe price id (RoboApply); null on GoApply (amount-priced passes) and when unset. */
   stripePriceId: string | null;
@@ -128,7 +153,9 @@ const ROBOAPPLY_PLANS: Def[] = [
   { key: 'student_quarterly', kind: 'subscription', interval: 'quarter', passDays: null, autoRenews: true, entitlementProfile: 'pro', practice: { credits: 3, per: 'month' }, defaultLabel: 'Student Quarterly', phase: 'v2', requiresFlag: 'student', neverPreselected: true },
 ];
 
-// GoApply: one-time passes only, no auto-renew (PRODUCT §6.3, CN plan WP-PAY).
+// GoApply: one-time passes and packs only, no auto-renew (PRODUCT §6.3;
+// MARKET_STRATEGY §4.2 and rule A9). The student passes carry the practice
+// allowance of the pass they discount.
 const GOAPPLY_PLANS: Def[] = [
   { key: 'free', kind: 'free', interval: null, passDays: null, autoRenews: false, entitlementProfile: 'free', practice: null, defaultLabel: '免费版', phase: 'mvp', neverPreselected: true },
   { key: 'pro_week_pass', kind: 'pass', interval: 'pass', passDays: 7, autoRenews: false, entitlementProfile: 'pro', practice: { credits: 1, per: 'once' }, defaultLabel: '会员周卡', phase: 'mvp', neverPreselected: true },
@@ -136,7 +163,24 @@ const GOAPPLY_PLANS: Def[] = [
   { key: 'pro_quarterly', kind: 'pass', interval: 'pass', passDays: 90, autoRenews: false, entitlementProfile: 'pro', practice: { credits: 3, per: 'month' }, defaultLabel: '会员季卡', phase: 'mvp', neverPreselected: false },
   { key: 'practice_pack_5', kind: 'pack', interval: null, passDays: null, autoRenews: false, entitlementProfile: null, practice: { credits: 5, per: 'once', validMonths: 12 }, defaultLabel: '面试练习包 5 次', phase: 'mvp', neverPreselected: true },
   { key: 'practice_pack_15', kind: 'pack', interval: null, passDays: null, autoRenews: false, entitlementProfile: null, practice: { credits: 15, per: 'once', validMonths: 12 }, defaultLabel: '面试练习包 15 次', phase: 'mvp', neverPreselected: true },
+  { key: 'student_monthly', kind: 'pass', interval: 'pass', passDays: 30, autoRenews: false, entitlementProfile: 'pro', practice: { credits: 3, per: 'once' }, defaultLabel: '学生月卡', phase: 'v2', requiresFlag: 'student', neverPreselected: true },
+  { key: 'student_quarterly', kind: 'pass', interval: 'pass', passDays: 90, autoRenews: false, entitlementProfile: 'pro', practice: { credits: 3, per: 'month' }, defaultLabel: '学生季卡', phase: 'v2', requiresFlag: 'student', neverPreselected: true },
 ];
+
+/**
+ * GoApply catalog default prices in fen (MARKET_STRATEGY.md §4.2: whole yuan,
+ * tax-inclusive, paid once, 到期不自动续费). Every paid GoApply plan has one,
+ * so none is ever "price not set". `CN_PRICE_<PLANKEY>_FEN` overrides a row.
+ */
+export const GOAPPLY_DEFAULT_PRICE_FEN: Readonly<Partial<Record<PlanKey, number>>> = {
+  pro_week_pass: 1200,
+  pro_monthly: 3900,
+  pro_quarterly: 9900,
+  practice_pack_5: 2900,
+  practice_pack_15: 7900,
+  student_monthly: 2900,
+  student_quarterly: 6900,
+};
 
 /** Static plan definitions per brand (no env). */
 export const PLAN_DEFINITIONS: Record<BrandId, readonly PlanDefinition[]> = {
@@ -159,10 +203,14 @@ function envKeySegment(key: PlanKey): string {
   return key.toUpperCase();
 }
 
-/** The env variables that price a plan on a brand (for docs, admin and errors). */
+/**
+ * The env variables that price a plan on a brand (for docs, admin and
+ * errors). GoApply: the optional override of the catalog default.
+ * `CN_PAYMENTS_ENABLED` is not a price variable: it is the kill switch.
+ */
 export function priceEnvNames(brand: BrandId, key: PlanKey): string[] {
   const seg = envKeySegment(key);
-  return brand === 'goapply' ? [`CN_PRICE_${seg}_FEN`, 'CN_PAYMENTS_ENABLED'] : [`STRIPE_PRICE_${seg}`, `STRIPE_PRICE_${seg}_CENTS`];
+  return brand === 'goapply' ? [`CN_PRICE_${seg}_FEN`] : [`STRIPE_PRICE_${seg}`, `STRIPE_PRICE_${seg}_CENTS`];
 }
 
 /** The optional Taiwan price variables of a RoboApply plan. */
@@ -178,6 +226,28 @@ function readMinor(env: EnvSource, name: string): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
+/** Ignored overrides already reported, so a bad value is logged once, not on every catalog read. */
+const reportedBadOverrides = new Set<string>();
+
+/**
+ * A GoApply price override in fen: a positive multiple of 100 (the payment
+ * worker bills whole yuan, and ¥x.9 prices are not ours). Unset or blank →
+ * null without a word. Any other value is ignored and logged once; the
+ * catalog default stands.
+ */
+function readFenOverride(env: EnvSource, name: string): number | null {
+  const raw = env[name]?.trim();
+  if (!raw) return null;
+  const n = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (Number.isSafeInteger(n) && n > 0 && n % 100 === 0) return n;
+  const seen = `${name}=${raw}`;
+  if (!reportedBadOverrides.has(seen)) {
+    reportedBadOverrides.add(seen);
+    logger.warn('RA_BILLING', 'ignored price override: not a whole-yuan amount in fen; the catalog default is used', { variable: name, value: raw.slice(0, 20) });
+  }
+  return null;
+}
+
 function readString(env: EnvSource, name: string): string | null {
   const raw = env[name]?.trim();
   return raw ? raw : null;
@@ -190,9 +260,13 @@ function priceFor(
   if (def.kind === 'free') return { amountMinor: 0, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'free' };
   const seg = envKeySegment(def.key);
   if (def.brand === 'goapply') {
-    const amountMinor = readMinor(env, `CN_PRICE_${seg}_FEN`);
+    // The catalog default, unless a whole-yuan override is set. Every paid
+    // GoApply plan has a default (planCatalog.test.ts holds that), so the
+    // 'price_unset' branch below is a guard for a plan added without one.
+    const amountMinor = readFenOverride(env, `CN_PRICE_${seg}_FEN`) ?? GOAPPLY_DEFAULT_PRICE_FEN[def.key] ?? null;
     if (amountMinor === null) return { amountMinor: null, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'price_unset' };
-    if (!parseBoolEnv(env.CN_PAYMENTS_ENABLED)) {
+    // On sale by default (D5). CN_PAYMENTS_ENABLED=false is the kill switch.
+    if (cnPaymentsKilled(env)) {
       return { amountMinor, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'payments_disabled' };
     }
     return { amountMinor, stripePriceId: null, twdPrice: null, sellable: true, unsellableReason: null };

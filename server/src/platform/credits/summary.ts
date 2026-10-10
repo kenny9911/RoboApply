@@ -57,7 +57,7 @@ export interface EntitlementSummary {
    */
   cancelAtPeriodEnd: boolean;
   timezone: string;
-  /** A sellable Pro plan exists on this brand (drives "See Pro" links). */
+  /** Pro can be bought now: a Pro plan is on sale and a rail can charge (drives "See Pro" links). */
   upgradable: boolean;
   buckets: Record<WindowBucket, BucketSummary>;
   entitlements: EntitlementValues;

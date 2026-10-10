@@ -13,7 +13,8 @@ import {
 import { plansExtras } from '../../../../lib/api/credits';
 import { initialSelection, monthlyPlan, visiblePlans } from '../../../../hooks/credits/usePlans';
 import { deriveSubscriptionState, summaryCancelAtPeriodEnd } from '../../../../hooks/credits/useSubscriptionState';
-import { checkoutReturnPath } from '../PlanPicker';
+import { checkoutReturnPath, offeredRails } from '../PlanPicker';
+import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
 import { isPackKey } from '../CheckoutReturn';
 import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions';
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
@@ -92,12 +93,56 @@ describe('plan selection rules', () => {
     expect(visiblePlans(plansView('roboapply', {}).plans)).toEqual([]);
   });
 
-  it('GoApply passes stay listed (priced) but unsellable before CN payments', () => {
+  it('GoApply passes are listed at their catalog prices and on sale with an empty env; the 30-day pass is preselected', () => {
+    expect(GA_ENV).toEqual({});
     const plans = visiblePlans(plansView('goapply').plans);
+    expect(plans.map((p) => [p.key, p.amountMinor])).toEqual([
+      ['pro_week_pass', 1200],
+      ['pro_monthly', 3900],
+      ['pro_quarterly', 9900],
+      ['practice_pack_5', 2900],
+      ['practice_pack_15', 7900],
+    ]);
+    expect(plans.every((p) => p.sellable && p.unsellableReason === null)).toBe(true);
+    expect(initialSelection(plansView('goapply'))).toBe('pro_monthly');
+    // An override the server ignored never reaches the sheet as a price.
+    expect(visiblePlans(plansView('goapply', { CN_PRICE_PRO_MONTHLY_FEN: '3990' }).plans).find((p) => p.key === 'pro_monthly')?.amountMinor).toBe(3900);
+  });
+
+  it('GoApply kill switch (CN_PAYMENTS_ENABLED=false): passes stay listed with prices, none sellable, nothing preselected', () => {
+    const killed = plansView('goapply', { CN_PAYMENTS_ENABLED: 'false' });
+    const plans = visiblePlans(killed.plans);
     expect(plans.map((p) => p.key)).toEqual(['pro_week_pass', 'pro_monthly', 'pro_quarterly', 'practice_pack_5', 'practice_pack_15']);
-    expect(plans.every((p) => !p.sellable && p.unsellableReason === 'payments_disabled')).toBe(true);
-    expect(initialSelection(plansView('goapply'))).toBeNull();
-    expect(initialSelection(plansView('goapply', { ...GA_ENV, CN_PAYMENTS_ENABLED: 'true' }))).toBe('pro_monthly');
+    expect(plans.every((p) => !p.sellable && p.unsellableReason === 'payments_disabled' && p.amountMinor !== null)).toBe(true);
+    expect(initialSelection(killed)).toBeNull();
+  });
+
+  it('GoApply student passes are hidden unless the buyer is a verified student, and are never preselected', () => {
+    const { plans, defaultSelection } = buildPlanViews('goapply', { env: GA_ENV, studentEnabled: true });
+    expect(visiblePlans(plans).some((p) => p.requiresFlag === 'student')).toBe(false);
+    const shown = visiblePlans(plans, { studentEnabled: true }).filter((p) => p.requiresFlag === 'student');
+    expect(shown.map((p) => [p.key, p.amountMinor, p.passDays, p.studentDiscountPercent])).toEqual([
+      ['student_monthly', 2900, 30, 25],
+      ['student_quarterly', 6900, 90, 30],
+    ]);
+    expect(initialSelection({ plans, defaultSelection: 'student_monthly' })).toBeNull();
+    expect(planNameKey('goapply', 'student_monthly')).toBe('plans.goapply.student_monthly');
+    expect(planNameKey('goapply', 'student_quarterly')).toBe('plans.goapply.student_quarterly');
+    // RoboApply has a renewing weekly plan; GoApply does not.
+    expect(planNameKey('goapply', 'pro_weekly')).toBeNull();
+  });
+
+  it('offeredRails: the server order, the first is the default; WeChat Pay only while its sheet can open', () => {
+    expect(offeredRails(['alipay', 'wechatpay'], true)).toEqual(['alipay', 'wechatpay']);
+    expect(offeredRails(['alipay', 'wechatpay'], false)).toEqual(['alipay']);
+    expect(offeredRails(['wechatpay'], true)).toEqual(['wechatpay']);
+    expect(offeredRails(['wechatpay'], false)).toEqual([]);
+    expect(offeredRails(['stripe'], false)).toEqual(['stripe']);
+    expect(offeredRails([], true)).toEqual([]);
+    expect(offeredRails(null, true)).toEqual([]);
+    expect(offeredRails(undefined, false)).toEqual([]);
+    // Unknown values and repeats are dropped; nothing is invented from the brand.
+    expect(offeredRails(['paypal', 'alipay', 'alipay'], true)).toEqual(['alipay']);
   });
 
   it('monthlyPlan finds the priced monthly plan', () => {

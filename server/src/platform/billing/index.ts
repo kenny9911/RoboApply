@@ -76,6 +76,9 @@ export type { StripeClient } from './stripeClient.js';
 export { appOrigin, callbackOrigin, safeReturnPath } from './origins.js';
 export { acceptsPromotionCode, buildPlanViews, promotionCodesEnabled, usesTwdPrice } from './planViews.js';
 export { buyerCountryFromRequest } from './buyerCountry.js';
+export { assertStudentOrder, studentPlansListedFor, studentVerifiedForPlan } from './studentPlans.js';
+export { canBuyPro } from './proPurchase.js';
+export type { StudentGateDeps } from './studentPlans.js';
 export type { LocalPriceView, PlanView, PlanViewOptions } from './planViews.js';
 export {
   WINBACK_AFTER_DAYS,

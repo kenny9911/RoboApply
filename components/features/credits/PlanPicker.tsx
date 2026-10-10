@@ -3,9 +3,16 @@
 // PlanPicker — the in-app plan sheet (PRODUCT_PLAN.md §6.3, F-BILL-02;
 // TASK_PLAN.md WP-21b). Rules it enforces:
 //
-//   - Prices come only from `GET /billing/plans` (D3); unpriced plans are
-//     hidden, unsellable ones (GoApply before CN_PAYMENTS_ENABLED) show
-//     "Not available yet" and cannot be bought.
+//   - Prices and labels come only from `GET /billing/plans` (D3). Unpriced
+//     plans are hidden; a plan that is not on sale shows "Not available yet"
+//     and cannot be bought.
+//   - What can be paid with also comes from that response, never from the
+//     brand: `checkout.rails` lists the rails that can charge now, in the
+//     order to offer them. One rail: "Continue" uses it. Two: the buyer picks,
+//     and the first one listed is the default (GoApply: Alipay first, WeChat
+//     Pay second and only when it is set up). `paymentsOpen: false` (no rail
+//     can charge, or payments are switched off) keeps the prices on the page
+//     and shows one "payment is not open yet" note; nothing can be bought.
 //   - Monthly is preselected; weekly plans and passes are NEVER preselected
 //     (server `defaultSelection`, re-checked here).
 //   - The weekly price shows its monthly equivalent ("about $43 a month");
@@ -25,14 +32,18 @@
 //   - A Pro subscriber manages renewal in the payment portal; once they have
 //     cancelled (or asked for one by link) the one-time passes are offered.
 //     A pass they hold can be bought again; only a subscription is "Your plan".
-//   - GoApply: when WeChat Pay can take the payment now (`checkout.rails`
-//     lists it), "Continue" opens the WeChat Pay sheet for the chosen pass or
-//     pack — that sheet owns the agreement box, the code and the result. A
+//   - WeChat Pay chosen: "Continue" opens the WeChat Pay sheet for the pass
+//     or pack — that sheet owns the agreement box, the code and the result. A
 //     payment code is only ever drawn there, as a QR code: a `weixin://` link
-//     is never used as an image address. Otherwise the brand's other rail
-//     answers a payment page to open.
+//     is never used as an image address. Every other rail answers a payment
+//     page to open.
+//   - A one-time pass says so on its row, with its day count ("30 days of
+//     Pro. One payment; it doesn't renew."). Student plans are listed only
+//     for a verified student, on either brand: the server sends them to
+//     nobody else, so the list is asked for again once the buyer verifies
+//     on this page.
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
@@ -53,6 +64,25 @@ import { cn } from '../../../lib/utils';
 import { SwitchQuoteSheet } from './SwitchQuoteSheet';
 import { money, planNameKey, pricePeriod } from './labels';
 import styles from './credits.module.css';
+
+/** A rail `GET /billing/plans` may list in `checkout.rails`. */
+export type CheckoutRail = 'stripe' | 'alipay' | 'wechatpay';
+
+/**
+ * The rails to offer, in the server's order (the first is the default).
+ * WeChat Pay needs its own sheet, so it is offered only while this browser
+ * can open it (`wechatPayAvailable`); every other listed rail is offered as
+ * the server sent it. Unknown values are dropped.
+ */
+export function offeredRails(rails: readonly string[] | null | undefined, wechatPayAvailable: boolean): CheckoutRail[] {
+  const out: CheckoutRail[] = [];
+  for (const r of rails ?? []) {
+    if (r !== 'stripe' && r !== 'alipay' && r !== 'wechatpay') continue;
+    if (r === 'wechatpay' && !wechatPayAvailable) continue;
+    if (!out.includes(r)) out.push(r);
+  }
+  return out;
+}
 
 export const CHECKOUT_RETURN_PATH = '/settings/billing/return';
 export const CHECKOUT_CANCEL_PATH = '/settings/billing';
@@ -95,6 +125,8 @@ export function checkoutReturnPath(plan: Pick<CatalogPlan, 'key' | 'kind'>, prac
 export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNavigate }: PlanPickerProps) {
   const t = useTranslations('credits');
   const tv = useTranslations('accountV2');
+  // The CN rails' own refusals (the per-user order limit) are worded once, there.
+  const tc = useTranslations('billingCn');
   const locale = useLocale();
   const brand = useBrand();
   const studentFlag = useFlag('student');
@@ -121,9 +153,25 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const [autoRenewAck, setAutoRenewAck] = useState(false);
   const [waiver, setWaiver] = useState(false);
   const [quoteFor, setQuoteFor] = useState<CatalogPlan | null>(null);
-  /** GoApply: the plan being bought in the WeChat Pay sheet. */
+  /** The plan being bought in the WeChat Pay sheet. */
   const [wechatFor, setWechatFor] = useState<CatalogPlan | null>(null);
   const wechatPay = useWechatPayAvailable();
+  /** The rail the buyer picked; null = the first one the server lists. */
+  const [railChoice, setRailChoice] = useState<CheckoutRail | null>(null);
+
+  // The server lists student plans only for a verified student. A buyer who
+  // verifies while this sheet is open still holds the list from before, so
+  // it is asked for once more (once: a server with the capability off keeps
+  // answering without them).
+  const listsStudentPlans = plansQ.data?.plans?.some((p) => p.requiresFlag === 'student') ?? false;
+  const askedForStudentPlans = useRef(false);
+  const havePlans = !!plansQ.data;
+  const refetchPlans = plansQ.refetch;
+  useEffect(() => {
+    if (!studentEnabled || !havePlans || listsStudentPlans || askedForStudentPlans.current) return;
+    askedForStudentPlans.current = true;
+    void refetchPlans();
+  }, [studentEnabled, havePlans, listsStudentPlans, refetchPlans]);
 
   useEffect(() => {
     if (initialised || !plansQ.data) return;
@@ -165,8 +213,14 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const packs = plans.filter((p) => p.kind === 'pack');
   const offered = [...proPlans, ...packs];
   if (offered.length === 0) {
-    return <p className={styles.body}>{brand.market === 'cn' ? t('planSheet.emptyCn') : t('planSheet.empty')}</p>;
+    return <p className={styles.body}>{t('planSheet.empty')}</p>;
   }
+
+  // How this purchase can be paid: what the server says can charge now.
+  const rails = offeredRails(plansQ.data.checkout?.rails, wechatPay.available);
+  const rail: CheckoutRail | null = railChoice && rails.includes(railChoice) ? railChoice : (rails[0] ?? null);
+  // No rail that can charge, or the server says payments are closed: prices stay, nothing is bought.
+  const paymentsOpen = rails.length > 0 && plansQ.data.paymentsOpen !== false;
 
   // Only a rendered option can be the plan being bought.
   const plan = offered.find((p) => p.key === selected) ?? null;
@@ -177,24 +231,27 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const period = plan ? pricePeriod(plan) : 'once';
   const shown = plan ? displayPrice(plan, monthly) : null;
   const price = shown ? money(locale, shown.amountMinor, shown.currency) : '—';
+  // WeChat Pay sells one-time passes and packs only.
+  const viaWechat = rail === 'wechatpay';
+  const wechatCanSell = !viaWechat || (!!plan && sellableCnPlan(plans, plan.key) !== null);
   const canContinue =
     !!plan &&
     plan.sellable &&
+    paymentsOpen &&
+    rail !== null &&
+    wechatCanSell &&
     !isCurrent(plan) &&
     (!needsAck || autoRenewAck) &&
     (brand.market !== 'intl' || countryResolved) &&
     !checkout.isPending;
-  const rail: 'stripe' | 'alipay' = brand.market === 'cn' ? 'alipay' : 'stripe';
-  // WeChat Pay sells one-time passes and packs only (every GoApply plan is one).
-  const viaWechat = brand.market === 'cn' && wechatPay.available && !!plan && sellableCnPlan(plans, plan.key) !== null;
 
   function onContinue() {
-    if (!plan || !canContinue) return;
+    if (!plan || !canContinue || rail === null) return;
     if (legacySwitch) {
       setQuoteFor(plan);
       return;
     }
-    if (viaWechat) {
+    if (rail === 'wechatpay') {
       setWechatFor(plan);
       return;
     }
@@ -255,7 +312,8 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
           {d.local ? <span className={styles.muted}>{tv('plans.localPrice')}</span> : null}
           {!d.local && p.currency === 'USD' && p.amountMinor !== null ? <PriceReference amountMinor={p.amountMinor} currency="USD" /> : null}
           {current ? <span className={styles.tag}>{t('planSheet.yourPlan')}</span> : null}
-          {!p.sellable && !current ? <span className={styles.muted}>{t('planSheet.notAvailable')}</span> : null}
+          {/* One plan off sale while others can be bought. When payments are closed altogether the sheet says so once, below. */}
+          {!p.sellable && !current && paymentsOpen ? <span className={styles.muted}>{t('planSheet.notAvailable')}</span> : null}
         </span>
       </label>
     );
@@ -278,6 +336,29 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
           </fieldset>
         ) : null}
 
+        {paymentsOpen && rails.length > 1 ? (
+          <fieldset className={styles.fieldset} data-testid="rail-chooser">
+            <legend className={styles.legend}>{t('planSheet.railGroup')}</legend>
+            <div className={styles.options}>
+              {rails.map((r) => (
+                <label key={r} className={cn(styles.option, rail === r && styles.optionSelected)} data-rail={r}>
+                  <input type="radio" name={`${groupId}-rail`} value={r} checked={rail === r} onChange={() => setRailChoice(r)} />
+                  <span className={styles.optionBody}>
+                    <span className={styles.h3}>{t(`planSheet.rails.${r}`)}</span>
+                    <span className={styles.muted}>{t(`planSheet.railHint.${r}`)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
+
+        {!paymentsOpen ? (
+          <p className={styles.notice} role="status" data-testid="payments-not-open">
+            {t('planSheet.notOpen')}
+          </p>
+        ) : null}
+
         {plan && needsAck ? (
           <label className={styles.check}>
             <input type="checkbox" checked={autoRenewAck} onChange={(e) => setAutoRenewAck(e.target.checked)} />
@@ -296,7 +377,11 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
 
         {checkout.isError ? (
           <p className={styles.error} role="alert">
-            {apiErrorCode(checkout.error) === 'student_verification_required' ? tv('plans.studentRequired') : t('planSheet.error')}
+            {apiErrorCode(checkout.error) === 'student_verification_required'
+              ? tv('plans.studentRequired')
+              : apiErrorCode(checkout.error) === 'rate_limited'
+                ? tc('errors.tooMany')
+                : t('planSheet.error')}
           </p>
         ) : null}
         {/* An answer with no page to open (a payment code or in-app cashier

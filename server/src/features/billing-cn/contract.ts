@@ -1,7 +1,9 @@
 // server/src/features/billing-cn/contract.ts
 //
-// GoApply WeChat Pay v3 (TASK_PLAN.md WP-62; R-15; capability
-// `pay.wechatpay`, which also needs CN_PAYMENTS_ENABLED=true). Mounts:
+// GoApply WeChat Pay v3 (TASK_PLAN.md WP-62; capability `pay.wechatpay`:
+// the merchant credentials and the entity match; no switch has to be turned
+// on, and CN_PAYMENTS_ENABLED=false is the kill switch for new orders, D5).
+// WeChat Pay is the second, optional rail beside Alipay (D6). Mounts:
 //   /api/v1/roboapply/billing-cn/wechatpay  (seeker)
 //   /api/v1/webhooks/wechatpay              (WeChat Pay notify; raw body)
 //
@@ -112,6 +114,12 @@ export interface WechatNotifyAck {
 }
 
 export const BILLING_CN_ERROR_CODES = {
+  /**
+   * 503 on POST /billing-cn/wechatpay, and only under the kill switch
+   * (CN_PAYMENTS_ENABLED=false) on a deployment where WeChat Pay is set up.
+   * New orders are refused; the notify and the order status stay open so a
+   * payment already in flight is still fulfilled. Never the default state.
+   */
   paymentsDisabled: 'payments_disabled',
   planNotSellable: 'plan_not_sellable',
   notifySignatureInvalid: 'notify_signature_invalid',

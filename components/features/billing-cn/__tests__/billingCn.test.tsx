@@ -57,17 +57,13 @@ const ENTITY = '测试科技（上海）有限公司';
 /** Always in the future, so polling never stops for expiry in these tests. */
 const EXPIRES = new Date(Date.now() + 15 * 60_000).toISOString();
 
-const GA_ENV = {
-  CN_PAYMENTS_ENABLED: 'true',
-  CN_PRICE_PRO_WEEK_PASS_FEN: '1200',
-  CN_PRICE_PRO_MONTHLY_FEN: '3900',
-  CN_PRICE_PRO_QUARTERLY_FEN: '9900',
-  CN_PRICE_PRACTICE_PACK_5_FEN: '2900',
-  CN_PRICE_PRACTICE_PACK_15_FEN: '7900',
-};
+// No payments switch and no price variable: GoApply's plans are on sale at
+// the catalog prices by default (D5, D6). What makes WeChat Pay available is
+// the server listing it in `checkout.rails`.
+const GA_ENV: Record<string, string> = {};
 
-function plansView(rails: string[] = ['wechatpay']): PlansView {
-  const { plans, defaultSelection } = buildPlanViews('goapply', { env: GA_ENV });
+function plansView(rails: string[] = ['wechatpay'], opts: { studentEnabled?: boolean; env?: Record<string, string> } = {}): PlansView {
+  const { plans, defaultSelection } = buildPlanViews('goapply', { env: opts.env ?? GA_ENV, studentEnabled: opts.studentEnabled });
   return {
     plans,
     defaultSelection,
@@ -158,6 +154,19 @@ describe('visibility (no UI entry when off)', () => {
     await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
     await waitFor(() => expect(noRail.container).toBeEmptyDOMElement());
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('renders nothing under the kill switch: the server lists no rail and no plan is on sale', async () => {
+    credits.getPlans.mockResolvedValue(plansView([], { env: { CN_PAYMENTS_ENABLED: 'false' } }));
+    const { container } = renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={DESKTOP} />);
+    await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  it('is available beside Alipay: both rails listed, the WeChat Pay sheet still opens', async () => {
+    credits.getPlans.mockResolvedValue(plansView(['alipay', 'wechatpay']));
+    renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={DESKTOP} />);
+    expect(await screen.findByRole('button', { name: 'Pay ¥39 with WeChat Pay' })).toBeInTheDocument();
   });
 
   it('renders nothing for a plan CN rails do not sell', async () => {
@@ -352,6 +361,29 @@ describe('WechatPayCheckout', () => {
     expect(result).not.toHaveTextContent(/Nothing was charged/);
     expect(screen.getByRole('link', { name: 'Contact support' })).toHaveAttribute('href', '/help');
     expect(screen.queryByRole('button', { name: 'Get a new code' })).toBeNull();
+  });
+
+  it('payments switched off after the page loaded (503 payments_disabled): "not open yet", nothing charged, no code', async () => {
+    api.createWechatPayOrder.mockRejectedValueOnce(apiError('payments_disabled', 503));
+    renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={DESKTOP} />);
+    await screen.findByText('30-day pass');
+    tickTerms();
+    fireEvent.click(screen.getByRole('button', { name: /Pay ¥39 / }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('WeChat Pay is not open yet.');
+    expect(screen.queryByTestId('wechatpay-qr')).toBeNull();
+  });
+
+  it('a student pass: its own name, the student price and the day count; an unverified buyer is told to confirm the school email', async () => {
+    credits.getPlans.mockResolvedValue(plansView(['alipay', 'wechatpay'], { studentEnabled: true }));
+    api.createWechatPayOrder.mockRejectedValueOnce(apiError('student_verification_required', 409));
+    renderUi(<WechatPayCheckout planKey="student_quarterly" userAgent={DESKTOP} />);
+    expect(await screen.findByText('Student 90-day pass')).toBeInTheDocument();
+    expect(screen.getByText('¥69')).toBeInTheDocument();
+    expect(screen.getByText(/Pro for 90 days\. It does not renew, and nothing is charged automatically\./)).toBeInTheDocument();
+    tickTerms();
+    fireEvent.click(screen.getByRole('button', { name: 'Pay ¥69 with WeChat Pay' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Confirm your school email first to get the student price. Nothing was charged.');
+    expect(api.createWechatPayOrder).toHaveBeenCalledWith({ planKey: 'student_quarterly', tradeType: 'native', termsVersion: expect.any(String) });
   });
 
   it('plain errors: not open yet / not on sale / generic retry', async () => {

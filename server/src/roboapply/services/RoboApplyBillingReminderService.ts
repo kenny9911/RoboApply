@@ -9,15 +9,21 @@
 //     - auto-renewing plans: 5 days before a monthly/quarterly renewal,
 //       2 days before a weekly one (cancelled plans get nothing — they won't
 //       renew);
-//     - passes that end without renewing: GoApply 30/90-day passes 3 days
-//       before they end ("续费" reminder), the old RoboApply Alipay monthly
-//       passes 5 days before; 7-day passes get none (nothing renews and a
-//       reminder would only be a sales nudge);
+//     - passes that end without renewing: GoApply 30/90-day passes (the
+//       student passes included) 3 days before they end ("续费" reminder),
+//       the old RoboApply Alipay monthly passes 5 days before; 7-day passes
+//       get none (nothing renews and a reminder would only be a sales nudge);
 //     - an annual reminder for subscriptions that have run over 12 months,
 //       once per year of the subscription.
 //   Each send is claimed once through Notification.dedupKey (unique); a send
 //   that fails releases its claim so the next daily run retries while the
 //   plan is still inside its reminder window.
+//
+//   Nothing here reads a payment or a mail switch. A reminder is about a plan
+//   somebody already holds, so the GoApply kill switch (CN_PAYMENTS_ENABLED=
+//   false, which stops NEW orders) does not stop it. Which transport carries
+//   GoApply mail is the email service's decision (the shared transport unless
+//   CN_EMAIL_TRANSPORT names another; D5).
 //
 //   The weekly practice nudge that used to live here is gone: it was
 //   promotional, so its successor is sent by the lifecycle mail under "Tips

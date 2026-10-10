@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import { GA_ENV, atPhoneWidth, creditsResponse, plansView, renderUi, withBrand } from './fixtures';
+import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
 import { RoboApiError } from '../../../../lib/api/client';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
 import type { PlansView } from '../../../../lib/api/credits';
@@ -71,12 +72,18 @@ const IN_10_DAYS = new Date(Date.now() + 10 * 86_400_000).toISOString();
 const YESTERDAY = new Date(Date.now() - 86_400_000).toISOString();
 const WECHAT_ON = { 'pay.wechatpay': true };
 
-/** GoApply's plans with payments open on the given rails. */
-function goPlans(rails: Array<'alipay' | 'wechatpay'> = ['wechatpay']): PlansView {
-  return plansView('goapply', { ...GA_ENV, CN_PAYMENTS_ENABLED: 'true' }, {
+/** GoApply's plans (catalog prices, no payments switch) with the given rails able to charge. */
+function goPlans(rails: Array<'alipay' | 'wechatpay'> = ['wechatpay'], env: Record<string, string> = GA_ENV): PlansView {
+  return plansView('goapply', env, {
     paymentsOpen: rails.length > 0,
     checkout: { rails, showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test' },
   });
+}
+
+/** The same, as the server answers a signed-in, verified student (nobody else is sent the student passes). */
+function goPlansWithStudent(rails: Array<'alipay' | 'wechatpay'> = ['alipay']): PlansView {
+  const { plans, defaultSelection } = buildPlanViews('goapply', { env: GA_ENV, studentEnabled: true });
+  return { ...goPlans(rails), plans, defaultSelection };
 }
 
 function legacyPlan(over: Partial<BillingPlanResponse['current']> = {}): BillingPlanResponse {
@@ -336,27 +343,186 @@ describe('PlanPicker on GoApply', () => {
     expect(document.querySelectorAll('img')).toHaveLength(0);
   });
 
-  it('with the pay.wechatpay capability off the sheet never opens, even if the plans list the rail', async () => {
+  it('with the pay.wechatpay capability off the sheet never opens, even if the plans list only that rail: no rail is left, so nothing is bought', async () => {
     api.getPlans.mockResolvedValue(goPlans(['wechatpay']));
-    account.alipayCheckoutPlan.mockRejectedValue(apiError({ code: 'rail_not_configured' }, 503));
     renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: { 'pay.wechatpay': false } });
-    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    // The page never falls back to a rail the server did not list.
+    expect(await screen.findByTestId('payments-not-open')).toBeInTheDocument();
+    expect(continueBtn()).toBeDisabled();
     fireEvent.click(continueBtn());
-    expect(await screen.findByRole('alert')).toHaveTextContent('Nothing was charged');
     expect(screen.queryByTestId('wechatpay-checkout')).toBeNull();
+    expect(account.alipayCheckoutPlan).not.toHaveBeenCalled();
+    expect(account.checkoutPlan).not.toHaveBeenCalled();
   });
 
-  it('payments not open (CN_PAYMENTS_ENABLED unset): every plan reads "Not available yet" and nothing can be bought', async () => {
+  it('only Alipay can charge: a working Alipay button, no chooser, no "not open yet" note', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay']));
+    account.alipayCheckoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://payments.example.com/pay', orderId: null, rail: 'alipay' });
+    const navigate = vi.fn();
+    // Alipay does not depend on the WeChat Pay capability.
+    renderUi(<PlanPicker navigate={navigate} />, { brand: 'goapply', flags: { 'pay.wechatpay': false } });
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    expect(screen.queryByTestId('rail-chooser')).toBeNull();
+    expect(screen.queryByTestId('payments-not-open')).toBeNull();
+    expect(screen.queryByText('Not available yet')).toBeNull();
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_monthly', next: '/settings/billing/return?plan=pro_monthly' }));
+    expect(account.checkoutPlan).not.toHaveBeenCalled();
+  });
+
+  it('too many Alipay orders in a short time (429 rate_limited): says so, and that nothing was charged', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay']));
+    account.alipayCheckoutPlan.mockRejectedValue(apiError({ code: 'rate_limited', details: { retryAfterSec: 37 } }, 429));
+    const navigate = vi.fn();
+    renderUi(<PlanPicker navigate={navigate} />, { brand: 'goapply', flags: { 'pay.wechatpay': false } });
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many payment attempts. Wait a minute and try again. Nothing was charged.');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('both rails can charge: the chooser lists Alipay first and selected, WeChat Pay second; Continue pays with Alipay', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay', 'wechatpay']));
+    account.alipayCheckoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://payments.example.com/pay', orderId: null, rail: 'alipay' });
+    const navigate = vi.fn();
+    renderUi(<PlanPicker navigate={navigate} />, { brand: 'goapply', flags: WECHAT_ON });
+    const chooser = await screen.findByTestId('rail-chooser');
+    expect(within(chooser).getByText('Pay with')).toBeInTheDocument();
+    const options = Array.from(chooser.querySelectorAll('[data-rail]'));
+    expect(options.map((o) => o.getAttribute('data-rail'))).toEqual(['alipay', 'wechatpay']);
+    expect(options.map((o) => o.querySelector('span')!.firstElementChild!.textContent)).toEqual(['Alipay', 'WeChat Pay']);
+    expect(within(chooser).getByRole('radio', { name: /Alipay/ })).toBeChecked();
+    expect(within(chooser).getByRole('radio', { name: /WeChat Pay/ })).not.toBeChecked();
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('wechatpay-checkout')).toBeNull();
+    expect(cn.createWechatPayOrder).not.toHaveBeenCalled();
+  });
+
+  it('both rails can charge: choosing WeChat Pay opens its sheet for the chosen pass, and Alipay is not called', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay', 'wechatpay']));
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: WECHAT_ON });
+    const chooser = await screen.findByTestId('rail-chooser');
+    fireEvent.click(within(chooser).getByRole('radio', { name: /WeChat Pay/ }));
+    expect(within(chooser).getByRole('radio', { name: /WeChat Pay/ })).toBeChecked();
+    fireEvent.click(radio('pro_quarterly'));
+    // Picking another plan keeps the chosen way to pay.
+    expect(within(chooser).getByRole('radio', { name: /WeChat Pay/ })).toBeChecked();
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    expect(await screen.findByTestId('wechatpay-checkout')).toHaveTextContent('¥99');
+    expect(account.alipayCheckoutPlan).not.toHaveBeenCalled();
+  });
+
+  it('both rails listed but WeChat Pay cannot open here (capability off): only Alipay, no chooser', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay', 'wechatpay']));
+    account.alipayCheckoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://payments.example.com/pay', orderId: null, rail: 'alipay' });
+    const navigate = vi.fn();
+    renderUi(<PlanPicker navigate={navigate} />, { brand: 'goapply', flags: { 'pay.wechatpay': false } });
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    expect(screen.queryByTestId('rail-chooser')).toBeNull();
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
+  });
+
+  it('no rail credential: prices are shown with the "not open yet" note and nothing can be bought', async () => {
     api.getPlans.mockResolvedValue(plansView('goapply'));
     renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: WECHAT_ON });
-    await screen.findByTestId('plan-picker');
-    expect(document.querySelectorAll('input[type="radio"]:not(:disabled)')).toHaveLength(0);
-    expect(screen.getAllByText('Not available yet').length).toBeGreaterThan(0);
+    const picker = await screen.findByTestId('plan-picker');
+    expect(picker.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('¥39');
+    expect(screen.getByTestId('payments-not-open')).toHaveTextContent('These are the prices. Payment is not open yet, so nothing can be bought right now.');
+    expect(screen.queryByText('Not available yet')).toBeNull();
     expect(continueBtn()).toBeDisabled();
     fireEvent.click(continueBtn());
     expect(screen.queryByTestId('wechatpay-checkout')).toBeNull();
     expect(account.alipayCheckoutPlan).not.toHaveBeenCalled();
     expect(cn.createWechatPayOrder).not.toHaveBeenCalled();
+  });
+
+  it('the kill switch (server: every plan payments_disabled, no rail): the same note, every row disabled, nothing can be bought', async () => {
+    api.getPlans.mockResolvedValue(plansView('goapply', { CN_PAYMENTS_ENABLED: 'false' }));
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: WECHAT_ON });
+    const picker = await screen.findByTestId('plan-picker');
+    expect(picker.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('¥39');
+    expect(document.querySelectorAll('[data-plan] input[type="radio"]:not(:disabled)')).toHaveLength(0);
+    expect(screen.getByTestId('payments-not-open')).toBeInTheDocument();
+    // Said once for the sheet, not on every row.
+    expect(screen.queryByText('Not available yet')).toBeNull();
+    expect(continueBtn()).toBeDisabled();
+  });
+
+  it('a verified GoApply student sees 学生月卡 ¥29 and 学生季卡 ¥69 with the computed saving, and buys one through Alipay', async () => {
+    api.getPlans.mockResolvedValue(goPlansWithStudent(['alipay']));
+    v2.getStudentStatus.mockResolvedValue({ verified: true, schoolDomain: 'pku.edu.cn', verifiedAt: null, expiresAt: '2027-10-10T00:00:00Z', pendingDomain: null, available: true });
+    account.alipayCheckoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://payments.example.com/pay', orderId: null, rail: 'alipay' });
+    const navigate = vi.fn();
+    renderUi(<PlanPicker navigate={navigate} />, { brand: 'goapply', flags: { student: true } });
+    await waitFor(() => expect(document.querySelector('[data-plan="student_monthly"]')).not.toBeNull());
+    const monthly = document.querySelector<HTMLElement>('[data-plan="student_monthly"]')!;
+    const quarterly = document.querySelector<HTMLElement>('[data-plan="student_quarterly"]')!;
+    expect(monthly).toHaveTextContent('Student 30-day pass');
+    expect(monthly).toHaveTextContent('¥29, paid once');
+    expect(monthly).toHaveTextContent('25% below the regular price');
+    expect(monthly).toHaveTextContent("30 days of Pro. One payment; it doesn't renew.");
+    expect(quarterly).toHaveTextContent('Student 90-day pass');
+    expect(quarterly).toHaveTextContent('¥69, paid once');
+    expect(quarterly).toHaveTextContent('30% below the regular price');
+    expect(quarterly).toHaveTextContent("90 days of Pro. One payment; it doesn't renew.");
+    // Never preselected: the regular 30-day pass is.
+    expect(radio('pro_monthly')).toBeChecked();
+    expect(radio('student_monthly')).not.toBeChecked();
+    fireEvent.click(radio('student_monthly'));
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    // A pass: no auto-renewal box to tick.
+    expect(screen.queryByRole('checkbox', { name: /renews automatically/i })).toBeNull();
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'student_monthly' }));
+  });
+
+  it('a buyer who verifies while the sheet holds the earlier list: the plans are asked for once more and the student passes appear', async () => {
+    // First answer: what the server sends anyone who is not a verified student (five paid plans).
+    api.getPlans.mockResolvedValueOnce(goPlans(['alipay']));
+    api.getPlans.mockResolvedValue(goPlansWithStudent(['alipay']));
+    v2.getStudentStatus.mockResolvedValue({ verified: true, schoolDomain: 'pku.edu.cn', verifiedAt: null, expiresAt: '2027-10-10T00:00:00Z', pendingDomain: null, available: true });
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: { student: true } });
+    await waitFor(() => expect(document.querySelector('[data-plan="student_monthly"]')).not.toBeNull());
+    expect(document.querySelector('[data-plan="student_quarterly"]')).not.toBeNull();
+    expect(api.getPlans).toHaveBeenCalledTimes(2);
+    // The choice already made is kept; a student pass is never preselected.
+    expect(radio('pro_monthly')).toBeChecked();
+  });
+
+  it('a server that keeps answering without student passes is asked once more, not in a loop', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay']));
+    v2.getStudentStatus.mockResolvedValue({ verified: true, schoolDomain: 'pku.edu.cn', verifiedAt: null, expiresAt: null, pendingDomain: null, available: true });
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: { student: true } });
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(api.getPlans).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[data-plan="student_monthly"]')).toBeNull();
+  });
+
+  it('a GoApply user who is not a verified student never sees the student passes, even if a response carried them', async () => {
+    api.getPlans.mockResolvedValue(goPlansWithStudent(['alipay']));
+    const { unmount } = renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: { student: true } });
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    await waitFor(() => expect(v2.getStudentStatus).toHaveBeenCalled());
+    expect(document.querySelector('[data-plan="student_monthly"]')).toBeNull();
+    expect(document.querySelector('[data-plan="student_quarterly"]')).toBeNull();
+    expect(screen.queryByText(/below the regular price/)).toBeNull();
+    unmount();
+    // The capability off: not shown to a verified student either, and the student API is not asked.
+    v2.getStudentStatus.mockClear();
+    v2.getStudentStatus.mockResolvedValue({ verified: true, schoolDomain: 'pku.edu.cn', verifiedAt: null, expiresAt: null, pendingDomain: null, available: true });
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: { student: false } });
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    expect(document.querySelector('[data-plan="student_monthly"]')).toBeNull();
   });
 
   it('RoboApply is unchanged: Stripe checkout, no WeChat Pay', async () => {
@@ -387,6 +553,29 @@ describe('BillingView on GoApply: 续费 for a pass that is still running', () =
     expect(await screen.findByText('Renew your 30-day pass')).toBeInTheDocument();
     expect(screen.getByText(/The new days start after your current access ends/)).toBeInTheDocument();
     expect(await screen.findByTestId('wechatpay-checkout')).toHaveTextContent('¥39');
+  });
+
+  it('both rails can charge: no straight-to-WeChat Renew; the link opens the plan sheet, where Alipay is the default', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay', 'wechatpay']));
+    api.getCredits.mockResolvedValue(pass(IN_10_DAYS));
+    renderUi(<BillingView navigate={vi.fn()} requestedPlan="pro_monthly" />, { brand: 'goapply', flags: WECHAT_ON });
+    const card = await screen.findByTestId('current-plan');
+    expect(await within(card).findByRole('link', { name: 'Buy another pass' })).toHaveAttribute('href', '/settings/billing?plan=pro_monthly#plans');
+    expect(within(card).queryByRole('button', { name: 'Renew' })).toBeNull();
+    expect(screen.queryByTestId('wechatpay-checkout')).toBeNull();
+    // The plan sheet on the same page: both rails, Alipay first and selected.
+    const options = await screen.findAllByRole('radio', { name: /Alipay|WeChat Pay/ });
+    expect(options.map((o) => (o as HTMLInputElement).value)).toEqual(['alipay', 'wechatpay']);
+    expect(options[0]).toBeChecked();
+  });
+
+  it('Alipay alone can charge: the plain link, no Renew button', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay']));
+    api.getCredits.mockResolvedValue(pass(IN_10_DAYS));
+    renderUi(<BillingView navigate={vi.fn()} />, { brand: 'goapply', flags: WECHAT_ON });
+    const card = await screen.findByTestId('current-plan');
+    expect(await within(card).findByRole('link', { name: 'Buy another pass' })).toHaveAttribute('href', '/settings/billing?plan=pro_monthly#plans');
+    expect(within(card).queryByRole('button', { name: 'Renew' })).toBeNull();
   });
 
   it('an expired pass gets no Renew button (the plan sheet is the way back in)', async () => {
