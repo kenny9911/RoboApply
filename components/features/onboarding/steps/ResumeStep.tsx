@@ -19,6 +19,13 @@
 //     parser for PDFs (WP-36b request in the WP-30 handoff). The user can
 //     also paste the text or skip and fill the profile by hand later.
 //
+//   - A PDF is judged against the consent answer as it IS, never against a
+//     guess: when the answer has not arrived yet the upload waits for it;
+//     when it cannot be loaded, or the question is still unanswered, the
+//     message says that. "The reading option you turned off" is said only to
+//     a user who did decline (it used to be said to anyone whose PDF arrived
+//     before the consent request finished).
+//
 // The per-day limit (10, persisted server-side) comes back as a 429 from
 // POST /onboarding/resume and is explained in plain words.
 
@@ -40,7 +47,7 @@ import styles from '../onboarding.module.css';
 
 export const CN_PARSE_CONSENT = 'intl_cross_border_cn_parse';
 
-type ErrorKey = 'unreadable' | 'tooLarge' | 'wrongType' | 'dailyLimit' | 'failed' | 'pdfNeedsConsent';
+type ErrorKey = 'unreadable' | 'tooLarge' | 'wrongType' | 'dailyLimit' | 'failed' | 'pdfNeedsConsent' | 'consentUnknown' | 'consentUnanswered';
 
 /** Extensions read locally whatever the consent answer (the GoHire parser takes PDFs only). */
 export const LOCAL_ONLY_EXTENSIONS = ['.doc', '.docx', '.txt'] as const;
@@ -74,16 +81,19 @@ function localFileProblem(file: File): ErrorKey | null {
   return null;
 }
 
+/** The in-context parse consent of this user: the item when the API offers it, null when it does not. */
+const PARSE_CONSENT_QUERY = {
+  queryKey: ['compliance', 'consents', 'onboarding'] as const,
+  queryFn: async ({ signal }: { signal?: AbortSignal }) => {
+    const res = await getConsents(undefined, { signal });
+    return res.items.find((i) => i.type === CN_PARSE_CONSENT) ?? null;
+  },
+  staleTime: 5 * 60_000,
+  retry: false as const,
+};
+
 function useParseConsent() {
-  return useQuery({
-    queryKey: ['compliance', 'consents', 'onboarding'],
-    queryFn: async ({ signal }) => {
-      const res = await getConsents(undefined, { signal });
-      return res.items.find((i) => i.type === CN_PARSE_CONSENT) ?? null;
-    },
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
+  return useQuery(PARSE_CONSENT_QUERY);
 }
 
 export function ResumeStep({ state, save, onBack, onLeave, busy, error, position }: StepScreenProps) {
@@ -143,10 +153,28 @@ export function ResumeStep({ state, save, onBack, onLeave, busy, error, position
     }
   }
 
+  /** The consent answer as of now; waits for a request that has not finished. 'unknown' when it cannot be loaded. */
+  async function parseConsentNow() {
+    if (consent.isSuccess) return consent.data ?? null;
+    try {
+      // Joins the request already in flight (or tries again after a failure).
+      return (await qc.fetchQuery(PARSE_CONSENT_QUERY)) ?? null;
+    } catch {
+      return 'unknown' as const;
+    }
+  }
+
   async function uploadFile(file: File) {
     const local = localFileProblem(file);
     if (local) return setProblem(local);
-    if (isPdfFile(file) && !pdfOpen) return setProblem('pdfNeedsConsent');
+    if (isPdfFile(file)) {
+      // A PDF may be read by the outside parser: decide on the real answer, and say which case it is.
+      setProblem(null);
+      const answer = await parseConsentNow();
+      if (answer === 'unknown') return setProblem('consentUnknown');
+      if (answer && answer.granted === null) return setProblem('consentUnanswered');
+      if (answer && answer.granted === false) return setProblem('pdfNeedsConsent');
+    }
     setProblem(null);
     setUploadingName(file.name);
     try {
@@ -335,7 +363,7 @@ export function ResumeStep({ state, save, onBack, onLeave, busy, error, position
       ) : null}
       {problem ? (
         <p className={styles.fieldError} role="alert">
-          {problem === 'pasteShort' ? t('paste.tooShort') : t(`errors.${problem}`)}
+          {problem === 'pasteShort' ? t('paste.tooShort') : problem === 'consentUnknown' ? t('consent.loadError') : t(`errors.${problem}`)}
         </p>
       ) : null}
       <p className={styles.privacy}>

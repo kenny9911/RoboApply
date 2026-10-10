@@ -23,7 +23,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { PrefHeader, PrefGroup, PrefRow, ChipInput } from '../controls';
+import { PrefHeader, PrefGroup, PrefRow, ChipInput, joinTitle } from '../controls';
 import type { RAPreferences } from '../../../../lib/api/v2';
 
 /** The section header: the one setup sentence (C21) and the pointer to the saved searches. */
@@ -34,7 +34,7 @@ export function SearchIntro() {
     <>
       <PrefHeader
         eyebrow={t('hunt.eyebrow')}
-        title={`${t('hunt.title_before')} ${t('hunt.title_em')} ${t('hunt.title_after')}`}
+        title={joinTitle(t('hunt.title_before'), t('hunt.title_em'), t('hunt.title_after'))}
         sub={t('hunt.sub')}
       />
       <p className="pref-sub">{tf('hunt.moved')}</p>

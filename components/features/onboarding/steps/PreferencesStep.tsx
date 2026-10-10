@@ -38,11 +38,14 @@ export function PreferencesStep({ state, save, onBack, onLeave, busy, error, pos
   const [currency, setCurrency] = useState<string>(prev.minPay?.currency ?? (firstCountry ? (COUNTRY_CURRENCY[firstCountry] ?? 'USD') : 'USD'));
   const [period, setPeriod] = useState<Period>(prev.minPay?.period ?? 'year');
   const [models, setModels] = useState<Model[]>(prev.workModels ?? [...WORK_MODELS]);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Which message was raised. Whether it still SHOWS is read from the fields
+  // as they are now (`problem` below), so it goes away when the field is fixed
+  // instead of waiting for the next press of Next.
+  const [raised, setProblem] = useState<'pay' | 'industries' | 'skills' | null>(null);
 
   const toggleIndustry = (id: string) => {
     if (industries.includes(id)) return setIndustries(industries.filter((x) => x !== id));
-    if (industries.length >= LIMITS.industries) return setProblem(t('tooManyIndustries'));
+    if (industries.length >= LIMITS.industries) return setProblem('industries');
     setProblem(null);
     setIndustries([...industries, id]);
   };
@@ -54,11 +57,34 @@ export function PreferencesStep({ state, save, onBack, onLeave, busy, error, pos
   const addSkill = () => {
     const v = skillDraft.trim();
     if (!v) return;
-    if (skills.length >= LIMITS.skills) return setProblem(t('tooManySkills'));
+    if (skills.length >= LIMITS.skills) return setProblem('skills');
     if (!skills.some((s) => s.toLowerCase() === v.toLowerCase())) setSkills([...skills, v]);
     setSkillDraft('');
     setProblem(null);
   };
+
+  /** The typed pay as a number: null when empty (pay is optional), NaN when it is not an amount above 0. */
+  const payAmount = ((): number | null => {
+    if (!amount.trim()) return null;
+    const n = Number(amount.replace(/[,\s]/g, ''));
+    return Number.isFinite(n) && n > 0 ? n : Number.NaN;
+  })();
+  const payInvalid = payAmount !== null && Number.isNaN(payAmount);
+
+  const problem =
+    raised === 'pay'
+      ? payInvalid
+        ? t('payInvalid')
+        : null
+      : raised === 'industries'
+        ? industries.length >= LIMITS.industries
+          ? t('tooManyIndustries')
+          : null
+        : raised === 'skills'
+          ? skills.length >= LIMITS.skills
+            ? t('tooManySkills')
+            : null
+          : null;
 
   function body(): Record<string, unknown> | null {
     const out: Record<string, unknown> = {};
@@ -66,11 +92,8 @@ export function PreferencesStep({ state, save, onBack, onLeave, busy, error, pos
     if (skills.length) out.skills = skills;
     if (sizes.length) out.companySizes = sizes;
     if (models.length) out.workModels = models;
-    if (amount.trim()) {
-      const n = Number(amount.replace(/[,\s]/g, ''));
-      if (!Number.isFinite(n) || n <= 0) return null;
-      out.minPay = { amount: n, currency, period };
-    }
+    if (payInvalid) return null;
+    if (payAmount !== null) out.minPay = { amount: payAmount, currency, period };
     return out;
   }
 
@@ -85,7 +108,7 @@ export function PreferencesStep({ state, save, onBack, onLeave, busy, error, pos
       onSkip={() => save(body() ?? {}, { skip: true })}
       onNext={() => {
         const b = body();
-        if (!b) return setProblem(t('payInvalid'));
+        if (!b) return setProblem('pay');
         save(b);
       }}
     >

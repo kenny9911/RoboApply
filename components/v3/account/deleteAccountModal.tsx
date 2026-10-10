@@ -6,8 +6,13 @@
 // deleteAccount → soft-delete now, nightly hard-purge via the GDPR sweep).
 // Extracted from app/(auth)/account/page.tsx so the /preferences Danger zone
 // can open the identical flow instead of a stub. Owns the whole handshake:
-// type-your-email confirm + required reason → forget this device's push
+// type-your-email confirm → forget this device's push
 // subscription → mutate → clear this browser → /login.
+//
+// No "Reason" field. It used to be required without saying so, and what the
+// user typed was never sent anywhere (POST /account/delete takes only the
+// confirmation). A box that collects an answer and drops it is removed, not
+// made optional; it can return when the API stores the reason.
 //
 // What this browser forgets (INT-12; components/v3/shell/signOutCleanup.ts):
 //   • the push subscription BEFORE the request, while the session can still
@@ -21,9 +26,14 @@
 // An account without an email (GoApply phone or WeChat sign-up; its stored
 // address is a generated `…@users.goapply.invalid`, see format.ts
 // `isPlaceholderEmail`) is never asked to type that address: it confirms with
-// the same fixed word as "Delete job data", the modal sends the stored address
+// the same fixed word as "Delete job data" (`accountV2.prefs.danger.confirmKeyword`,
+// a word in the user's own language: a Chinese user is not asked to type
+// "DELETE"), the modal sends the stored address
 // itself (the server still compares it), and the line about a confirmation
-// email is left out because there is no address to send one to.
+// email is left out because there is no address to send one to. The same line
+// is left out when this brand sends no email at all (`notify.email` off, e.g.
+// GoApply today): the modal then only says what is true, that every device is
+// signed out right away.
 //
 // Copy lives under the `settings.danger.*` namespace in all four locales.
 
@@ -35,6 +45,7 @@ import { Modal } from '../primitives/Modal';
 import { useDeleteAccount } from '../../../hooks/useAccount';
 import { RoboApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/auth/AuthProvider';
+import { useFlag } from '../../../lib/flags';
 import { clearDraftsOnSignOut, forgetPushOnSignOut, leaveSignedOut } from '../shell/signOutCleanup';
 import { isPlaceholderEmail } from './format';
 
@@ -50,7 +61,10 @@ export function DeleteAccountModal({
 }) {
   const t = useTranslations('settings');
   const ta = useTranslations('auth');
+  const tp = useTranslations('accountV2.prefs.danger');
   const auth = useAuth();
+  // A confirmation email is promised only when one can be sent (fails closed while the flags load).
+  const emailOn = useFlag('notify.email');
   const deleteAccount = useDeleteAccount();
   // True from the click until the request fails (on success the page leaves).
   // It covers the push step, which runs before the mutation is pending.
@@ -59,9 +73,9 @@ export function DeleteAccountModal({
   const busy = working || deleteAccount.isPending;
 
   const noRealEmail = isPlaceholderEmail(email);
-  const keyword = t('danger.delete_data_confirm_keyword');
+  // One word for both danger dialogs, in the user's language (删除 on GoApply), compared without case.
+  const keyword = tp('confirmKeyword');
   const [confirmEmail, setConfirmEmail] = useState('');
-  const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const onConfirm = async () => {
@@ -76,10 +90,6 @@ export function DeleteAccountModal({
       }
     } else if (!email || confirmEmail.trim().toLowerCase() !== email.trim().toLowerCase()) {
       setError(t('danger.error.mismatch'));
-      return;
-    }
-    if (!reason.trim()) {
-      setError(t('danger.error.reasonRequired'));
       return;
     }
     inFlight.current = true;
@@ -130,6 +140,7 @@ export function DeleteAccountModal({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <label
+            htmlFor="ra-delete-confirm"
             style={{
               fontSize: 'var(--fs-label)',
               color: 'var(--text-muted)',
@@ -142,6 +153,7 @@ export function DeleteAccountModal({
             {noRealEmail ? t('danger.delete_data_confirm_hint', { keyword }) : t('danger.confirmEmailHint', { email })}
           </p>
           <input
+            id="ra-delete-confirm"
             value={confirmEmail}
             onChange={(e) => setConfirmEmail(e.target.value)}
             autoComplete="off"
@@ -158,40 +170,12 @@ export function DeleteAccountModal({
           />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <label
-            style={{
-              fontSize: 'var(--fs-label)',
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-            }}
-          >
-            {t('danger.reasonLabel')}
-          </label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            className="ra-account-input"
-            placeholder={t('danger.reasonPlaceholder')}
-            style={{
-              background: 'var(--bg)',
-              border: '1px solid var(--rule)',
-              borderRadius: 9,
-              padding: '10px 12px',
-              color: 'var(--text)',
-              fontFamily: 'var(--font-ui)',
-              fontSize: 'var(--fs-meta)',
-              resize: 'vertical',
-            }}
-          />
-        </div>
-
-        {/* WP-10 (F-ACCT-06): what happens next — a confirmation email states
-            when the deletion is final (30 days; 15 on the mainland site). */}
-        {noRealEmail ? null : (
-          <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', margin: 0 }}>{ta('danger.confirmationEmail')}</p>
-        )}
+        {/* WP-10 (F-ACCT-06): what happens next. The confirmation email (it
+            states when the deletion is final: 30 days; 15 on the mainland
+            site) is promised only when there is an address and email is on. */}
+        <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', margin: 0 }}>
+          {!noRealEmail && emailOn ? ta('danger.confirmationEmail') : tp('signedOutNow')}
+        </p>
 
         {error ? (
           <p role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)', margin: 0 }}>

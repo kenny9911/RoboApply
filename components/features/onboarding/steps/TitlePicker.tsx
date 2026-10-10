@@ -3,6 +3,15 @@
 // O2 job-title typeahead over the role taxonomy (GET /onboarding/title-suggest).
 // 1–3 titles; Enter adds the typed text as a custom title; a broad (level-1)
 // title shows "This is broad…" and offers its more specific children as chips.
+//
+// Names in the reader's language: the taxonomy has English and Simplified
+// Chinese labels only, so for every other locale the server answers in
+// English. Categories and role groups are in the web bundle in all nine
+// locales (`taxonomy.categories.<id>` / `taxonomy.groups.<id>`), so those
+// names, and the "role group · category" line under a role, are read from the
+// bundle by id. A role's own name stays as the server sent it until the
+// taxonomy carries it in that language. The "too many titles" message goes
+// away as soon as a title is removed or the field is edited.
 
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -24,14 +33,23 @@ interface BroadHint {
 
 export function TitlePicker({ value, onChange, error }: { value: PickedTitle[]; onChange: (v: PickedTitle[]) => void; error?: string | null }) {
   const t = useTranslations('onboarding.basics');
+  const tt = useTranslations('taxonomy');
   const locale = useLocale();
+  /** A category (level 1) or role group (level 2) in the reader's language; anything else as given. */
+  const nameOf = (nodeId: string, level: number | null, fallback: string): string => {
+    const keys = level === 1 ? ['categories'] : level === 2 ? ['groups'] : level === null ? ['groups', 'categories'] : [];
+    for (const k of keys) if (tt.has(`${k}.${nodeId}`)) return tt(`${k}.${nodeId}`);
+    return fallback;
+  };
   const id = useId();
   const [text, setText] = useState('');
   const [debounced, setDebounced] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [broad, setBroad] = useState<BroadHint | null>(null);
-  const [limitHit, setLimitHit] = useState(false);
+  // "Pick up to 3 titles" was raised; it shows only while the list is still full.
+  const [limitRaised, setLimitHit] = useState(false);
+  const limitHit = limitRaised && value.length >= LIMITS.titles;
 
   useEffect(() => {
     const h = setTimeout(() => setDebounced(text), 200);
@@ -39,19 +57,29 @@ export function TitlePicker({ value, onChange, error }: { value: PickedTitle[]; 
   }, [text]);
 
   const suggest = useTitleSuggest(debounced, locale);
-  const items = (suggest.data?.items ?? []).filter((s) => !value.some((v) => v.taxonomyId === s.taxonomyId));
+  // Suggestions belong to the text they were fetched for. While the box holds
+  // something newer (the 200 ms before the next fetch), none are offered:
+  // Enter on a freshly typed title used to pick the first suggestion of the
+  // previous query instead of adding what was typed.
+  const current = debounced.trim() === text.trim();
+  const items = (current ? (suggest.data?.items ?? []) : []).filter((s) => !value.some((v) => v.taxonomyId === s.taxonomyId));
   const custom = text.trim();
   const options: Array<{ key: string; label: string; context?: string | null; pick: () => void }> = [
-    ...items.map((s) => ({
-      key: s.taxonomyId,
-      label: s.label,
-      context: s.context,
-      pick: () => {
-        add({ taxonomyId: s.taxonomyId, label: s.label });
-        setBroad(s.tooGeneral ? { label: s.label, children: s.children } : null);
-      },
-    })),
-    ...(custom.length >= 2 && !items.some((s) => s.label.toLowerCase() === custom.toLowerCase())
+    ...items.map((s) => {
+      const label = nameOf(s.taxonomyId, s.level, s.label);
+      // The line under a role: its role group and category, by id when the server sent them.
+      const context = s.contextIds?.length ? s.contextIds.map((cid) => nameOf(cid, null, '')).filter(Boolean).join(' · ') || s.context : s.context;
+      return {
+        key: s.taxonomyId,
+        label,
+        context,
+        pick: () => {
+          add({ taxonomyId: s.taxonomyId, label });
+          setBroad(s.tooGeneral ? { label, children: s.children.map((c) => ({ taxonomyId: c.taxonomyId, label: nameOf(c.taxonomyId, c.level, c.label) })) } : null);
+        },
+      };
+    }),
+    ...(custom.length >= 2 && !items.some((s) => s.label.toLowerCase() === custom.toLowerCase() || nameOf(s.taxonomyId, s.level, s.label).toLowerCase() === custom.toLowerCase())
       ? [{ key: '__custom', label: t('addCustom', { title: custom }), pick: () => add({ label: custom }) }]
       : []),
   ];
@@ -126,6 +154,8 @@ export function TitlePicker({ value, onChange, error }: { value: PickedTitle[]; 
             setText(e.target.value);
             setOpen(true);
             setActive(0);
+            // Clearing the box after a refused fourth title also clears the message.
+            if (!e.target.value.trim()) setLimitHit(false);
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 120)}

@@ -23,6 +23,24 @@
 // Hard cap 120 s (p50 target 45 s): when a phase ends past the cap, or the
 // client goes away, the rest is queued as one `onboarding.match` item that
 // queue-drain finishes (Vercel offers no work after the response).
+//
+// Who may write the saved search: only the O6 screen itself, i.e. a live
+// request while the user is at `matching` or `confirm`. A queued run finishes
+// minutes later, when the user may have completed setup and edited the search
+// in the product; it reads the current search and never writes it (each step
+// already wrote its answers when it was saved, so nothing is lost). The same
+// holds for a re-run from the tour.
+//
+// What the stored count means (D3): `jobCount` is the number of compared jobs
+// at Good fit or better; `compared` is how many open jobs the search found
+// (at most the candidate cap, `comparedCapped`). `resumeCompared` says whether
+// a resume was read for the comparison: without one the screens never call a
+// number a fit. They show `searchCount` instead: the size of the SAVED SEARCH
+// (the feed's own count for the default search's filters, the number /jobs
+// lists). `compared` cannot stand in for it: the comparison's query uses the
+// titles and countries only, stops at the cap and finds nothing without a
+// title, so a user who skipped every step was told "no jobs for your search"
+// while their unfiltered search listed the whole index.
 
 import type { PreScoreResult } from '../match/index.js';
 import {
@@ -54,6 +72,12 @@ export interface MatchPipelineDeps {
   now?: () => number;
   /** Write the answers to the search profile (service.applyAnswers). */
   applyAnswers(userId: string): Promise<SearchProfileRef>;
+  /**
+   * The user's default search profile as it is now (read only). Used by a run
+   * that may not write the saved search (queued runs, a re-run from the tour).
+   * Absent = such a run has no profile to search for and only ranks the index.
+   */
+  currentProfile?(userId: string): Promise<SearchProfileRef>;
   ingest(searchProfileId: string, budgetMs: number): Promise<unknown>;
   preScore(userId: string, jobIds: string[]): Promise<PreScoreResult[]>;
   aiAllowed(userId: string): Promise<boolean>;
@@ -65,6 +89,12 @@ export interface MatchPipelineDeps {
   personalized?(userId: string): Promise<boolean>;
   /** May this brand search and list jobs right now? (jobs/ingest `ingestAllowed`; GoApply: false in mode `off`.) Absent = true. */
   searchAllowed?(): boolean | Promise<boolean>;
+  /**
+   * How many open jobs the user's default saved search lists now (the feed's
+   * count for its filters; `count: null` = the feed cannot say). Asked only
+   * when no resume was compared. Absent = not counted.
+   */
+  searchCount?(userId: string): Promise<{ count: number | null; capped: boolean }>;
   enqueue(kind: string, payload: unknown, options: { userId: string; dedupeKey?: string; priority?: number }): Promise<unknown>;
   log?: (msg: string, meta: Record<string, unknown>) => void;
 }
@@ -141,6 +171,9 @@ export function candidateQueryFor(answers: OnboardingAnswers, market: 'intl' | '
   };
 }
 
+/** Stages at which a live run writes the answers to the saved search. */
+const WRITE_STAGES: readonly string[] = ['matching', 'confirm'];
+
 const TIER_RANK: Record<string, number> = { great: 3, good: 2, possible: 1, unlikely: 0 };
 
 /** Sort pre-scores best first (unknown scores last; stable on job id). */
@@ -165,11 +198,32 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
 
   let ranked: PreScoreResult[] = [];
   let compared = 0;
+  let comparedCapped = false;
   let profile: SearchProfileRef | null = null;
+  // Only the O6 screen writes the saved search (see the header).
+  const mayWrite = !opts.background && WRITE_STAGES.includes(effectiveStage(deps.brand.id, rec));
+  const searchProfile = (): Promise<SearchProfileRef | null> =>
+    mayWrite ? deps.applyAnswers(userId) : deps.currentProfile ? deps.currentProfile(userId) : Promise.resolve(null);
+  // Was a resume read for this comparison? (Looked up once; a queued run starts after `reading`.)
+  const variantId = (answers.resume as { resumeVariantId?: string } | undefined)?.resumeVariantId;
+  let resumeFound: boolean | null = null;
+  const hasResume = async (): Promise<boolean> => (resumeFound ??= variantId ? (await deps.repo.getResume(userId, variantId)) !== null : false);
   // Read once per run: may the jobs be compared with the profile at all?
   let personalized: boolean | null = null;
   const mayRank = async (): Promise<boolean> => (personalized ??= deps.personalized ? await deps.personalized(userId) : true);
   const searchOn = deps.searchAllowed ? await deps.searchAllowed() : true;
+
+  /** The saved search's size for a result with no resume compared; {} when it was not counted (never a guess, D3). */
+  async function searchSize(): Promise<Pick<OnboardingMatchResult, 'searchCount' | 'searchCountCapped'>> {
+    if (!searchOn || !deps.searchCount) return {};
+    try {
+      const res = await deps.searchCount(userId);
+      return typeof res.count === 'number' ? { searchCount: res.count, searchCountCapped: res.capped === true } : {};
+    } catch (err) {
+      deps.log?.('onboarding search count failed; the heading shows no number', { userId, error: err instanceof Error ? err.message : String(err) });
+      return {};
+    }
+  }
 
   async function queueRest(next: OnboardingMatchPhase, reason: string): Promise<void> {
     await deps.enqueue(ONBOARDING_MATCH_KIND, { userId, fromPhase: next } satisfies OnboardingMatchPayload, {
@@ -202,18 +256,17 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
       }
     }
     switch (phase) {
-      case 'reading': {
-        const variantId = (answers.resume as { resumeVariantId?: string } | undefined)?.resumeVariantId;
-        if (!variantId) {
+      case 'reading':
+        // No resume, or a deleted or foreign one, was not read: say so (the search uses the answers only).
+        emit({ event: 'phase', data: (await hasResume()) ? { phase } : { phase, skipped: true } });
+        break;
+      case 'saving':
+        if (!mayWrite) {
+          // Not this run's to write: the saved search stays as the user has it now.
+          profile = await searchProfile().catch(() => null);
           emit({ event: 'phase', data: { phase, skipped: true } });
           break;
         }
-        // A deleted or foreign resume was not read: say so (the search uses the answers only).
-        const row = await deps.repo.getResume(userId, variantId);
-        emit({ event: 'phase', data: row ? { phase } : { phase, skipped: true } });
-        break;
-      }
-      case 'saving':
         profile = await deps.applyAnswers(userId);
         emit({ event: 'phase', data: { phase } });
         break;
@@ -222,7 +275,7 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
           emit({ event: 'phase', data: { phase, skipped: true } });
           break;
         }
-        profile ??= await deps.applyAnswers(userId).catch(() => null);
+        profile ??= await searchProfile().catch(() => null);
         const remaining = Number.isFinite(cap) ? cap - (now() - started) - 30_000 : ONBOARDING_INGEST_BUDGET_MS;
         const budget = Math.max(5_000, Math.min(ONBOARDING_INGEST_BUDGET_MS, remaining));
         if (profile) {
@@ -241,8 +294,11 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
           emit({ event: 'phase', data: { phase, skipped: true } });
           break;
         }
-        const ids = await deps.repo.findCandidates(candidateQueryFor(answers, deps.brand.market));
+        const query = candidateQueryFor(answers, deps.brand.market);
+        const ids = await deps.repo.findCandidates(query);
         compared = ids.length;
+        // At the cap there may be more open jobs than were looked at: every count from this run is a floor.
+        comparedCapped = ids.length >= query.limit;
         // Without the user's say-so the profile is not used: the jobs are found, not compared.
         ranked = ids.length && (await mayRank()) ? rankPreScores(await deps.preScore(userId, ids)) : [];
         emit({ event: 'phase', data: (await mayRank()) ? { phase } : { phase, skipped: true } });
@@ -250,7 +306,17 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
       }
       case 'ranking': {
         if (!searchOn || !(await mayRank())) {
-          const result: OnboardingMatchResult = { jobCount: compared, compared, topJobIds: [], continuedInBackground: false, finishedAt: new Date(now()).toISOString(), ranked: false };
+          const result: OnboardingMatchResult = {
+            jobCount: compared,
+            compared,
+            topJobIds: [],
+            continuedInBackground: false,
+            finishedAt: new Date(now()).toISOString(),
+            ranked: false,
+            resumeCompared: false,
+            comparedCapped,
+            ...(await searchSize()),
+          };
           await store(result, !opts.background);
           emit({ event: 'phase', data: { phase, skipped: true } });
           emit({ event: 'done', data: { jobCount: result.jobCount, topJobIds: [], continuedInBackground: false } });
@@ -263,6 +329,7 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
             await deps.enqueue('job.score', { userId, jobId: r.jobId }, { userId, dedupeKey: `job.score:onboarding:${userId}:${r.jobId}`, priority: 50 });
           }
         }
+        const resumeCompared = await hasResume();
         const result: OnboardingMatchResult = {
           jobCount: good.length,
           compared,
@@ -270,6 +337,10 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
           continuedInBackground: false,
           finishedAt: new Date(now()).toISOString(),
           ranked: true,
+          resumeCompared,
+          comparedCapped,
+          // No resume: the heading counts the saved search, so that number is stored with the result.
+          ...(resumeCompared ? {} : await searchSize()),
         };
         await store(result, !opts.background);
         emit({ event: 'phase', data: { phase } });

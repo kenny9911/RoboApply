@@ -15,13 +15,16 @@ vi.mock('../../../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: unknown }) => children,
   useAuth: () => auth.value,
 }));
-const gate = vi.hoisted(() => ({ granted: true, keys: [] as string[] }));
+const gate = vi.hoisted(() => ({ granted: true, keys: [] as string[], asked: [] as Array<{ key: string; priority: string; essential: boolean }> }));
 vi.mock('../../../lib/ui/popupGate', async (orig) => {
   const real = await orig<typeof import('../../../lib/ui/popupGate')>();
   return {
     ...real,
-    usePopupGate: (key: string, _p: string, o: { enabled?: boolean } = {}) => {
-      if (o.enabled !== false) gate.keys.push(key);
+    usePopupGate: (key: string, priority: string, o: { enabled?: boolean; essential?: boolean } = {}) => {
+      if (o.enabled !== false) {
+        gate.keys.push(key);
+        gate.asked.push({ key, priority, essential: o.essential === true });
+      }
       return { granted: gate.granted && o.enabled !== false };
     },
   };
@@ -52,6 +55,7 @@ beforeEach(() => {
   page.pathname = '/jobs';
   gate.granted = true;
   gate.keys = [];
+  gate.asked = [];
   auth.value = { status: 'authenticated', refresh: vi.fn(async () => null), me: null };
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
 });
@@ -116,6 +120,31 @@ describe('leaving early: the finish banner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide for now' }));
     await waitFor(() => expect(net.to('PATCH', '/api/v1/roboapply/ui-state')[0].body).toEqual({ dismiss: ['onboarding.finishBanner'] }));
     expect(screen.queryByTestId('finish-banner')).toBeNull();
+  });
+
+  // Verification finding: the banner rendered outside the popup gate, so the
+  // Assistant nudge (which does use it) appeared underneath it.
+  it('takes the page view\'s one slot at the popup gate (essential: no 24 h stamp), so no other prompt can sit under it', async () => {
+    auth.value.me = me('done', true);
+    installFetch({ [`GET ${P}/state`]: () => ok(left), 'GET /api/v1/roboapply/ui-state': () => ok(ui()) });
+    renderWith(<TourOverlay />);
+    expect(await screen.findByTestId('finish-banner')).toBeInTheDocument();
+    expect(gate.asked).toContainEqual({ key: 'onboarding:finishBanner', priority: 'offer', essential: true });
+    // While the banner is due, no tip asks for a slot.
+    expect(gate.keys.filter((k) => k !== 'onboarding:finishBanner')).toEqual([]);
+  });
+
+  it('does not show while another prompt holds this page view', async () => {
+    auth.value.me = me('done', true);
+    gate.granted = false;
+    try {
+      installFetch({ [`GET ${P}/state`]: () => ok(left), 'GET /api/v1/roboapply/ui-state': () => ok(ui()) });
+      renderWith(<TourOverlay />);
+      await waitFor(() => expect(gate.keys).toContain('onboarding:finishBanner'));
+      expect(screen.queryByTestId('finish-banner')).toBeNull();
+    } finally {
+      gate.granted = true;
+    }
   });
 
   it('after two dismissals the banner moves to Settings', async () => {

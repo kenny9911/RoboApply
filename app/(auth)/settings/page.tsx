@@ -8,6 +8,7 @@
 // What each section renders (INT-12 / WP-93 wiring):
 //
 //   Account               this route: IdentitySection       preferences (draft)
+//                                                           + the account name
 //                         + FinishSetupSettingsLine          frame (SECTION_EXTRAS)
 //   Sign-in and security  this route: SecurityCard           account API
 //                         + TwoFactorSettings                frame (SECTION_EXTRAS)
@@ -43,6 +44,13 @@
 // This page no longer writes `goal`: level and pay are filters now, so there
 // is nothing here that could change it.
 //
+// THE NAME. "Full name" is the sign-in account's display name (PATCH
+// /account), edited in the same form and saved by the same Save bar as the
+// preferences, in its own request. It is never the email address: an account
+// without a name shows an empty field (the page used to put the email there,
+// read-only). A LinkedIn link that is not a linkedin.com/in/ profile link is
+// not saved: the field says so and Save waits for it to be fixed or cleared.
+//
 // Sections that do not need the preferences never wait for them: the section
 // row always renders, and only the draft-backed pieces show a loading line or,
 // when the blob failed to load, what happened and a retry.
@@ -73,17 +81,18 @@ import {
   BlocklistSection,
   DangerSection,
 } from '../../../components/v3/preferences';
+import { linkedinInvalid } from '../../../components/v3/preferences/sections/IdentitySection';
 import { Panel, SecurityCard } from '../../../components/v3/account';
-import { isPlaceholderEmail } from '../../../components/v3/account/format';
 import { clearDraftsOnSignOut, forgetPushOnSignOut, leaveSignedOut } from '../../../components/v3/shell/signOutCleanup';
 import { Btn } from '../../../components/v3/primitives/Btn';
 import { toast } from '../../../components/v3/primitives/Toast';
-import { useAccountProfile, useChangePassword, useSignOutAll } from '../../../hooks/useAccount';
+import { useAccountProfile, useChangePassword, useSignOutAll, useUpdateName } from '../../../hooks/useAccount';
 import type { RAPreferences, PreferencesUpdateBody } from '../../../lib/api/v2';
 
 export default function SettingsRoute() {
   const t = useTranslations('settings');
   const tn = useTranslations('nav.settingsNotes');
+  const ta = useTranslations('accountV2.prefs.identity');
   const auth = useAuth();
   const { user, profile } = auth;
 
@@ -134,15 +143,49 @@ export default function SettingsRoute() {
     () => (draft && baseline ? (changedPreferenceKeys(draft, baseline) as PreferencesUpdateBody) : {}),
     [draft, baseline],
   );
-  const dirty = Object.keys(changed).length > 0;
-  const saving = updatePrefs.isPending;
+  const prefsDirty = Object.keys(changed).length > 0;
+
+  // ── The account name (its own request, the same Save bar) ─────────────
+  const updateName = useUpdateName();
+  // `email` may be the generated address of an account without one (GoApply
+  // phone or WeChat sign-up). It still goes to the sections, which need it to
+  // tell (IdentitySection hides it, the delete modal sends it), but it never
+  // stands in for the name: no name is an empty field, not an address.
+  const email = (profile?.email as string) || user?.email || '';
+  const storedName = ((profile?.name as string) || user?.name || '').trim();
+  const savedName = storedName && storedName.toLowerCase() === email.trim().toLowerCase() ? '' : storedName;
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const name = nameDraft ?? savedName;
+  const nameDirty = nameDraft !== null && nameDraft.trim() !== savedName;
+
+  const dirty = prefsDirty || nameDirty;
+  const saving = updatePrefs.isPending || updateName.isPending;
 
   const discard = useCallback(() => {
     setPrefs((cur) => (cur ? { draft: structuredClone(cur.baseline), baseline: cur.baseline } : cur));
+    setNameDraft(null);
   }, []);
 
   const save = async () => {
-    if (!draft || !dirty) return;
+    if (!dirty || saving) return;
+    // A link that is not a LinkedIn profile link is never stored (the field says what to change).
+    if (draft && prefsDirty && 'links' in changed && linkedinInvalid(draft.links.linkedin)) {
+      toast({ message: ta('linkedin_invalid'), tone: 'danger' });
+      return;
+    }
+    if (nameDirty) {
+      try {
+        await updateName.mutateAsync((nameDraft ?? '').trim());
+        setNameDraft(null);
+        // The header and the avatar read the name from /auth/me.
+        await auth.refresh?.().catch(() => null);
+      } catch {
+        // Not saved: the typed name stays in the field and the bar stays up.
+        toast({ message: ta('name_save_failed'), tone: 'danger' });
+        return;
+      }
+    }
+    if (!draft || !prefsDirty) return;
     const sent = changed;
     try {
       const res = await updatePrefs.mutateAsync(sent);
@@ -219,13 +262,6 @@ export default function SettingsRoute() {
     });
   };
 
-  // `email` may be the generated address of an account without one (GoApply
-  // phone or WeChat sign-up). It still goes to the sections, which need it to
-  // tell (IdentitySection hides it, the delete modal sends it), but it never
-  // stands in for the name.
-  const email = (profile?.email as string) || user?.email || '';
-  const name = (profile?.name as string) || user?.name || (isPlaceholderEmail(email) ? '' : email);
-
   /**
    * A draft-backed piece: its content once the preferences are here, a
    * loading line while they load, and the failure with a retry when they did
@@ -238,7 +274,7 @@ export default function SettingsRoute() {
   };
 
   const renderers: SettingsRenderers = {
-    account: withDraft((p) => <IdentitySection p={p} set={set} name={name} email={email} />),
+    account: withDraft((p) => <IdentitySection p={p} set={set} name={name} onNameChange={setNameDraft} email={email} />),
     security: () =>
       profileQ.data ? (
         <SecurityCard

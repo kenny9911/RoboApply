@@ -4,8 +4,12 @@
 // /jobs once the tour is over, ONE thing at a time:
 //
 //   1. "Finish setting up — {n} steps left" when the user left onboarding
-//      early. A persistent banner (not a popup); after two dismissals it
-//      moves to Settings (`FinishSetupSettingsLine`).
+//      early. It comes back on every visit until it is dismissed twice (then
+//      it moves to Settings, `FinishSetupSettingsLine`), so it does not spend
+//      the 24 h popup budget; but it floats in the same corner as every other
+//      prompt, so it takes the page view's one slot through the popup gate
+//      (`essential`): the Assistant nudge, an announcement or a tip can never
+//      sit under it (PRODUCT O8, never two prompts at once).
 //   2. Otherwise, inline tips in order, each through lib/ui/popupGate.ts (one
 //      per page view, 24 h budget; the checklist too) and each shown once:
 //        score tip → resume-check banner (only with a finished check) →
@@ -104,6 +108,9 @@ function TipCard({ title, children, onClose, testId }: { title?: string; childre
 
 type TipKind = 'score' | 'resume' | 'skills' | 'checklist';
 
+/** The finish banner's key at the popup gate. */
+export const FINISH_BANNER_POPUP_KEY = 'onboarding:finishBanner';
+
 /** The dock on /jobs: the finish banner, else the next unseen tip. */
 export function OnboardingPromptDock() {
   const t = useTranslations('onboarding.tips');
@@ -134,7 +141,11 @@ export function OnboardingPromptDock() {
 
   const leftEarly = state?.progress.leftEarly ?? null;
   const bannerCount = dismissals[UI_KEYS.finishBanner]?.count ?? 0;
-  const showBanner = !!leftEarly && state!.progress.stepsLeft > 0 && bannerCount < FINISH_BANNER_MAX_DISMISSALS && !closed.has('banner');
+  // Decided only once the dismissal count is known (or cannot be read): the
+  // banner must not take the page view's popup slot and then turn out to have
+  // been dismissed twice already.
+  const uiSettled = !!ui.data || ui.isError;
+  const showBanner = uiSettled && !!leftEarly && state!.progress.stepsLeft > 0 && bannerCount < FINISH_BANNER_MAX_DISMISSALS && !closed.has('banner');
 
   const doneGrade = grade.data?.grade && grade.data.grade.status === 'done' ? grade.data.grade : null;
   const skillRows = skills.data?.skills ?? [];
@@ -147,10 +158,14 @@ export function OnboardingPromptDock() {
   }
   if (tip && closed.has(tip)) tip = null;
 
+  // The banner holds the page view's slot while it shows (no 24 h stamp: it is a standing reminder, not a new prompt).
+  const bannerGate = usePopupGate(FINISH_BANNER_POPUP_KEY, 'offer', { enabled: showBanner, essential: true });
   // Every inline prompt, the checklist included, goes through the shared popup budget (PRODUCT O8).
   const gate = usePopupGate(`onboarding:${tip ?? 'none'}`, 'survey', { enabled: !showBanner && !!tip });
 
   if (showBanner) {
+    // Another prompt already has this page view: the banner waits for the next one.
+    if (!bannerGate.granted) return null;
     return (
       <FinishSetupBanner
         stepsLeft={state!.progress.stepsLeft}

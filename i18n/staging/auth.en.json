@@ -1,3 +1,10 @@
 {
-  "auth": {}
+  "auth": {
+    "verify": {
+      "requestNew": "Send a new link from Settings"
+    },
+    "brand": {
+      "feature_interview_written": "Practice interviews for the job you want"
+    }
+  }
 }

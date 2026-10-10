@@ -111,6 +111,49 @@ function clearSessionCookieOptions() {
   return buildClearCookieOptions();
 }
 
+/**
+ * The account fields a response of this router may carry.
+ *
+ * `req.user` and the sign-in results are the whole `User` row minus the
+ * password hash (AuthService.buildPublicUser). That row also holds the reset
+ * and verification token hashes and their expiries, the provider subject id,
+ * the payment-customer and subscription ids, staff assignments and internal
+ * quota counters. None of that is the browser's business, and a token column
+ * must never be serialized, even hashed and even when null. So the response is
+ * built from this list, never from the row: a column added to `User` later is
+ * not sent until it is named here.
+ */
+export const PUBLIC_USER_FIELDS = [
+  'id',
+  'email',
+  'name',
+  'avatar',
+  'role',
+  'roles',
+  'brand',
+  'market',
+  // The sign-in result carries the profile's language (not a User column).
+  'locale',
+  'provider',
+  'emailVerified',
+  'emailVerifiedAt',
+  'emailIsPlaceholder',
+  'phoneVerifiedAt',
+  'createdAt',
+  'subscriptionTier',
+  'subscriptionStatus',
+  'currentPeriodEnd',
+] as const;
+
+/** `user` reduced to PUBLIC_USER_FIELDS (absent fields stay absent); null for no user. */
+export function publicUserOf(user: unknown): Record<string, unknown> | null {
+  if (!user || typeof user !== 'object') return null;
+  const row = user as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of PUBLIC_USER_FIELDS) if (row[key] !== undefined) out[key] = row[key];
+  return out;
+}
+
 const signupRateLimit = rateLimit({ name: 'signupPerIp' });
 const loginRateLimit = rateLimit({ name: 'loginPerIp' });
 
@@ -282,7 +325,7 @@ router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
     return res.status(201).json({
       success: true,
       data: {
-        user: result.user,
+        user: publicUserOf(result.user),
         seekerProfile: result.seekerProfile,
         token: result.token,
         // The first onboarding screen (situation on RoboApply, consent on GoApply).
@@ -392,7 +435,7 @@ router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
     return res.json({
       success: true,
       data: {
-        user: result.user,
+        user: publicUserOf(result.user),
         seekerProfile: result.seekerProfile,
         token: result.token,
       },
@@ -490,7 +533,7 @@ router.post('/login/2fa', loginRateLimit, async (req: Request, res: Response) =>
     return res.json({
       success: true,
       data: {
-        user,
+        user: publicUserOf(user),
         seekerProfile: login.seekerProfile ?? null,
         token: user?.email ? generateJwt({ id: done.userId, email: user.email }) : undefined,
         twoFactor: { method: done.method, recoveryCodesLeft: done.recoveryCodesLeft },
@@ -562,7 +605,8 @@ router.get(
       return res.json({
         success: true,
         data: {
-          user: req.user,
+          // Public fields only: never the row (it carries token hashes and internal ids).
+          user: publicUserOf(req.user),
           profile,
           onboardingState,
           ...(additions ?? {}),

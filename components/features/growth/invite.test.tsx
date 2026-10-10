@@ -203,6 +203,35 @@ describe('/settings#referrals', () => {
     expect(screen.queryByText('Email')).toBeNull();
   });
 
+  // Verification finding: a slow /invites call left the section blank, and the
+  // Settings frame then said "This section did not load" with no retry.
+  it('says it is loading while the invites load (never a blank section)', async () => {
+    let answer!: (v: ReturnType<typeof view>) => void;
+    getInvites.mockReturnValue(new Promise((r) => (answer = r)));
+    const { container } = renderWithBrand(<SettingsSection section="referrals" />, { flags: { invites: true } });
+    expect(await screen.findByTestId('invite-settings-loading')).toHaveTextContent('Loading…');
+    expect(container.textContent).not.toBe('');
+    answer(view({ rewards: { granted: 0, capPerYear: 10, year: 2026 } }));
+    expect(await screen.findByTestId('invite-settings')).toBeTruthy();
+    expect(screen.queryByTestId('invite-settings-loading')).toBeNull();
+  });
+
+  it('a failed load says so and offers "Try again", which loads the section', async () => {
+    getInvites.mockRejectedValue(new Error('offline'));
+    renderWithBrand(<SettingsSection section="referrals" />, { flags: { invites: true } });
+    expect(await screen.findByRole('alert', {}, { timeout: 5000 })).toHaveTextContent("We couldn't load your invites.");
+    getInvites.mockResolvedValue(view({ rewards: { granted: 1, capPerYear: 10, year: 2026 } }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByTestId('invite-settings', {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('where the programme does not run for this account it says so instead of staying blank', async () => {
+    getInvites.mockResolvedValue(view({ eligibility: 'not_available' }));
+    renderWithBrand(<SettingsSection section="referrals" />, { flags: { invites: true } });
+    expect(await screen.findByText("Invites aren't available here right now.")).toBeTruthy();
+  });
+
   it('renders nothing with the capability off, on either brand', () => {
     const { container } = renderWithBrand(<SettingsSection section="referrals" />, { flags: { invites: false } });
     expect(container.textContent).toBe('');

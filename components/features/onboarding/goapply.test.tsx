@@ -227,6 +227,9 @@ describe('G7 confirm on GoApply', () => {
     expect(matchSummaryOf({ answers: { matching: { jobCount: 0, continuedInBackground: true } } })).toBeNull();
     expect(matchSummaryOf({ answers: { matching: { jobCount: 12, continuedInBackground: false, ranked: false } } })).toBeNull();
     expect(matchSummaryOf({ answers: { matching: { jobCount: '12' } } })).toBeNull();
+    // No resume was compared: the screen's "Good fit or better" line would be untrue (D3).
+    expect(matchSummaryOf({ answers: { matching: { jobCount: 12, continuedInBackground: false, ranked: true, resumeCompared: false } } })).toBeNull();
+    expect(matchSummaryOf({ answers: { matching: { jobCount: 12, continuedInBackground: false, ranked: true, resumeCompared: true } } })).toEqual({ jobCount: 12 });
   });
 
   it('saving confirm opens the first-value screen in place; Start completes onboarding and goes to the first-value route', async () => {

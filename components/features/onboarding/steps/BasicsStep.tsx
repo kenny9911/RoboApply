@@ -53,10 +53,20 @@ export function BasicsStep({ state, save, onBack, onLeave, busy, error, position
   const [cityDraft, setCityDraft] = useState<Record<string, string>>({});
   const [remoteOk, setRemoteOk] = useState<boolean>(prev.remoteOk ?? true);
   const [sponsorship, setSponsorship] = useState<Record<string, Sponsorship>>(prev.needsSponsorship ?? {});
-  const [errors, setErrors] = useState<Record<string, string | null>>({});
-  const [cityLimit, setCityLimit] = useState(false);
+  // Messages are derived from the fields as they are now, so each one goes
+  // away the moment its field is valid (they used to stay until the next
+  // press of Next). `attempted`: Next was pressed with something missing.
+  const [attempted, setAttempted] = useState(false);
+  const [cityLimitHit, setCityLimit] = useState(false);
+  const errors = {
+    titles: attempted && !titles.length ? t('functionsRequired') : null,
+    jobTypes: attempted && !jobTypes.length ? t('jobTypesRequired') : null,
+    countries: attempted && !countries.length ? t('countriesRequired') : null,
+  };
 
   const real = countries.filter((c) => c !== 'REMOTE');
+  // "Up to N cities" only while the list is still full (a removed city, or a removed country's cities, clears it).
+  const cityLimit = cityLimitHit && cities.filter((c) => countries.includes(c.country)).length >= LIMITS.cities;
   const snapshotTitle = titles.find((x) => !!x.taxonomyId) ?? null;
   const snapshotCountry = real[0] ?? null;
   const snapshotCity = useMemo(() => cities.find((c) => c.country === snapshotCountry)?.city ?? null, [cities, snapshotCountry]);
@@ -94,13 +104,8 @@ export function BasicsStep({ state, save, onBack, onLeave, busy, error, position
   }
 
   function next() {
-    const e = {
-      titles: titles.length ? null : t('functionsRequired'),
-      jobTypes: jobTypes.length ? null : t('jobTypesRequired'),
-      countries: countries.length ? null : t('countriesRequired'),
-    };
-    setErrors(e);
-    if (e.titles || e.jobTypes || e.countries) return;
+    setAttempted(true);
+    if (!titles.length || !jobTypes.length || !countries.length) return;
     save(body());
   }
 

@@ -115,6 +115,24 @@ describe('verify email page', () => {
     renderWithBrand(<VerifyEmailView token="tok" />, { flags: {} });
     expect(await screen.findByText(/has expired/)).toBeInTheDocument();
   });
+
+  // Verification finding: /verify-email/bogus-token-123 said "Check your connection and try again."
+  it('a cut-off or mistyped link is "not valid", with where to get a new one (not a connection error)', async () => {
+    api.verifyEmail.mockRejectedValue(
+      new RoboApiError('x', { code: 'invalid_request', status: 422, payload: { code: 'invalid_request', details: { where: 'query', issues: [{ path: ['token'] }] } } }),
+    );
+    renderWithBrand(<VerifyEmailView token="bogus-token-123" />, { flags: {} });
+    expect(await screen.findByText('The link is not valid or was already used.')).toBeInTheDocument();
+    expect(screen.queryByText(/Check your connection/)).toBeNull();
+    expect(screen.getByRole('link', { name: 'Send a new link from Settings' })).toHaveAttribute('href', '/settings#account');
+  });
+
+  it('a real connection failure still says so, with no "new link" action', async () => {
+    api.verifyEmail.mockRejectedValue(new Error('Failed to fetch'));
+    renderWithBrand(<VerifyEmailView token="a-real-looking-token-0001" />, { flags: {} });
+    expect(await screen.findByText(/Check your connection/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Send a new link from Settings' })).toBeNull();
+  });
 });
 
 describe('RoboApplyAccessGate (localized)', () => {

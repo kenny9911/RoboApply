@@ -186,15 +186,20 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
   const [submitting, setSubmitting] = useState(false);
   const [checkEmail, setCheckEmail] = useState<string | null>(null);
   const [touchedEmail, setTouchedEmail] = useState(false);
+  // Submit was pressed with a bad (or empty) email: the message under the field shows even for an empty box.
+  const [emailAsked, setEmailAsked] = useState(false);
 
   const emailValid = EMAIL_RE.test(email.trim());
+  // One message, under the field, for as long as the address is not valid.
+  // (It used to appear there AND in the form's error box after Submit.)
+  const emailProblem = touchedEmail && !emailValid && (email !== '' || emailAsked);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     if (!emailValid) {
       setTouchedEmail(true);
-      setError({ key: 'signupForm.emailInvalid' });
+      setEmailAsked(true);
       return;
     }
     if (!passwordOk(password)) {
@@ -278,11 +283,16 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
         required
         autoComplete="email"
         value={email}
-        aria-invalid={touchedEmail && !emailValid}
+        aria-invalid={emailProblem}
+        aria-describedby={emailProblem ? 'signup-email-error' : undefined}
         onBlur={() => setTouchedEmail(true)}
         onChange={(e) => setEmail(e.target.value)}
       />
-      {touchedEmail && email && !emailValid ? <p className={styles.error}>{t('signupForm.emailInvalid')}</p> : null}
+      {emailProblem ? (
+        <p className={styles.error} id="signup-email-error" role="alert">
+          {t('signupForm.emailInvalid')}
+        </p>
+      ) : null}
       <div>
         <AuthField
           label={t('signup.password')}

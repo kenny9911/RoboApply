@@ -67,6 +67,13 @@ export interface OnboardingRepo {
   setProfileFields(userId: string, data: { seekerType?: string | null; careerGoal?: string | null }): Promise<void>;
   getResume(userId: string, variantId: string): Promise<ResumeVariantRow | null>;
   /**
+   * Give the sign-in account a display name when it has none (email sign-up
+   * has no name field; phone sign-up has no name at all). Never replaces a
+   * name. Resolves true when it was set. Optional: a repo without it leaves
+   * the account as it is.
+   */
+  setAccountNameIfEmpty?(userId: string, name: string): Promise<boolean>;
+  /**
    * Candidate job ids for O6: public, canonical rows of the market that are
    * still open (not archived, not closed — a job closed after reports keeps
    * `archivedAt` null). On GoApply a fraud-flagged posting is left out too
@@ -153,6 +160,14 @@ export function createPrismaOnboardingRepo(getDb: () => Promise<Db> = async () =
       if (data.careerGoal !== undefined) fields.careerGoal = data.careerGoal;
       if (!Object.keys(fields).length) return;
       await db.rAProfile.upsert({ where: { userId }, create: { userId, ...fields }, update: fields });
+    },
+
+    async setAccountNameIfEmpty(userId, name) {
+      const clean = name.replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!clean) return false;
+      const db = await getDb();
+      const res = await db.user.updateMany({ where: { id: userId, OR: [{ name: null }, { name: '' }] }, data: { name: clean } });
+      return res.count > 0;
     },
 
     async getResume(userId, variantId) {

@@ -31,6 +31,7 @@ vi.mock('../../../lib/auth/AuthProvider', () => ({
 
 import { fail, installFetch, ok, renderWith, type RecordedCall } from '../filters/filters.testkit';
 import { OnboardingStepPage } from './OnboardingStepPage';
+import { confirmCountOf } from './steps/ConfirmStep';
 import { resumeErrorKeyOf } from './steps/ResumeStep';
 
 const P = '/api/v1/roboapply/onboarding';
@@ -132,9 +133,20 @@ describe('O2 basics', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(await screen.findByText('Add at least one job title.')).toBeInTheDocument();
 
+    // Each message goes away when its field is fixed, without pressing Next again.
+    fireEvent.click(screen.getByRole('button', { name: 'United States' }));
+    expect(screen.getByText('Pick at least one place.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'United States' }));
+    expect(screen.queryByText('Pick at least one place.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Full-time' }));
+    expect(screen.getByText('Pick at least one job type.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Full-time' }));
+    expect(screen.queryByText('Pick at least one job type.')).toBeNull();
+
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'backend' } });
     fireEvent.mouseDown(await screen.findByRole('option', { name: /Backend engineer/ }));
     expect(screen.getByText('Backend engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Add at least one job title.')).toBeNull();
     expect(await screen.findByText('No open roles yet for this title here. Try a broader title or another city.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'Not sure' }));
@@ -177,7 +189,8 @@ describe('O2 basics', () => {
     fireEvent.change(input, { target: { value: 'software' } });
     fireEvent.mouseDown(await screen.findByRole('option', { name: /Software engineering/ }));
     expect(screen.getByText('This is broad. Pick a more specific title for better results.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Backend' }));
+    // The role group is named from the bundle by its id (the server's label is English or Simplified Chinese only).
+    fireEvent.click(screen.getByRole('button', { name: 'Backend and platform' }));
     expect(screen.queryByText('This is broad. Pick a more specific title for better results.')).toBeNull();
     for (const title of ['Ops wrangler', 'Data tinkerer']) {
       fireEvent.change(input, { target: { value: title } });
@@ -186,6 +199,32 @@ describe('O2 basics', () => {
     fireEvent.change(input, { target: { value: 'One too many' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(screen.getByText('Pick up to 3 titles.')).toBeInTheDocument();
+    // What was typed is what Enter added (never a leftover suggestion of the earlier search).
+    expect(screen.queryByRole('button', { name: 'Remove Software engineering' })).toBeNull();
+    // Removing a title makes room: the message goes away at once.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ops wrangler' }));
+    expect(screen.queryByText('Pick up to 3 titles.')).toBeNull();
+  });
+
+  it('names categories and role groups from the bundle by id, and the line under a role too', async () => {
+    installFetch({
+      [`GET ${P}/state`]: () => ok(basicsState),
+      [`GET ${P}/title-suggest`]: () =>
+        ok({
+          items: [
+            { taxonomyId: 'swe_backend', label: 'SERVER GROUP LABEL', level: 2, tooGeneral: false, context: 'SERVER CATEGORY', contextIds: ['software_engineering'], children: [] },
+            { taxonomyId: 'backend_engineer', label: 'Backend engineer', level: 3, tooGeneral: false, context: 'SERVER GROUP · SERVER CATEGORY', contextIds: ['swe_backend', 'software_engineering'], children: [] },
+          ],
+        }),
+      [`GET ${P}/market-snapshot`]: () => ok({ jobCount: { value: 0, source: 'index', sampleSize: 0, asOf: '2026-10-10T00:00:00.000Z' }, windowDays: 30, pay: null, topSkills: [] }),
+    });
+    renderWith(<OnboardingStepPage step="basics" />);
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'backend' } });
+    const group = await screen.findByRole('option', { name: /^Backend and platform/ });
+    expect(group).toHaveTextContent('Software engineering');
+    const role = screen.getByRole('option', { name: /Backend engineer/ });
+    expect(role).toHaveTextContent('Backend and platform · Software engineering');
+    expect(document.body.textContent).not.toMatch(/SERVER/);
   });
 
   it('shows pay only when the server published it, with N and the source footnote', async () => {
@@ -235,7 +274,13 @@ describe('O3 goal and O4 preferences (explore)', () => {
     fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '-5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByText('Enter an amount above 0, or leave it empty.')).toBeInTheDocument();
+    // Still wrong: still said. Fixed (or emptied): gone at once, without pressing Next again.
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: 'abc' } });
+    expect(screen.getByText('Enter an amount above 0, or leave it empty.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '' } });
+    expect(screen.queryByText('Enter an amount above 0, or leave it empty.')).toBeNull();
     fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '60,000' } });
+    expect(screen.queryByText('Enter an amount above 0, or leave it empty.')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Fintech' }));
     fireEvent.click(screen.getByRole('button', { name: '51–200' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
@@ -317,6 +362,60 @@ describe('O5 resume', () => {
     expect(screen.getByRole('button', { name: 'Upload the LinkedIn PDF' })).toBeDisabled();
     expect(screen.getByTestId('resume-file')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Use this text' })).toBeEnabled();
+  });
+
+  // Verification finding: a PDF chosen before the consent request finished was
+  // refused with "the reading option you turned off", though nothing was declined.
+  it('a PDF that arrives before the consent answer waits for it, and never blames a setting the user did not change', async () => {
+    let answer!: (r: Response) => void;
+    installFetch({
+      [`GET ${P}/state`]: () => ok(resumeState),
+      'GET /api/v1/roboapply/compliance/consents': () => new Promise<Response>((r) => (answer = r)),
+    });
+    resumes.upload.mockResolvedValue({ id: 'rv9', name: 'resume.pdf' });
+    renderWith(<OnboardingStepPage step="resume" />);
+    await screen.findByText('Checking how we can read your file…');
+    const pdf = new File(['%PDF-1.4'], 'resume.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByTestId('resume-file'), { target: { files: [pdf] } });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByText(/turned off/)).toBeNull();
+    expect(resumes.upload).not.toHaveBeenCalled();
+    // The answer arrives: the consent is not offered here, so the PDF is uploaded.
+    answer(ok({ items: [] }) as Response);
+    await waitFor(() => expect(resumes.upload).toHaveBeenCalledWith({ file: pdf }));
+    expect(await screen.findByText(/resume\.pdf/)).toBeInTheDocument();
+    expect(screen.queryByText(/turned off/)).toBeNull();
+  });
+
+  it('says which case it is: unanswered question, answer not loadable, or really declined', async () => {
+    const consentItem = (granted: boolean | null) => ok({ items: [{ type: 'intl_cross_border_cn_parse', granted, proseVersion: 'v1', prose: 'How the file is read.' }] });
+    const pdf = new File(['%PDF-1.4'], 'resume.pdf', { type: 'application/pdf' });
+
+    // Unanswered.
+    installFetch({ [`GET ${P}/state`]: () => ok(resumeState), 'GET /api/v1/roboapply/compliance/consents': () => consentItem(null) });
+    const a = renderWith(<OnboardingStepPage step="resume" />);
+    await screen.findByText('How the file is read.');
+    fireEvent.change(screen.getByTestId('resume-file'), { target: { files: [pdf] } });
+    expect(await screen.findByText('Answer the question above first. Then choose your PDF again.')).toBeInTheDocument();
+    expect(screen.queryByText(/turned off/)).toBeNull();
+    a.unmount();
+
+    // Not loadable.
+    installFetch({ [`GET ${P}/state`]: () => ok(resumeState), 'GET /api/v1/roboapply/compliance/consents': () => fail(503, 'service_unavailable') });
+    const b = renderWith(<OnboardingStepPage step="resume" />);
+    await screen.findByText(/uploads are paused/);
+    fireEvent.change(screen.getByTestId('resume-file'), { target: { files: [pdf] } });
+    await waitFor(() => expect(screen.getAllByText(/uploads are paused/).length).toBe(2));
+    expect(screen.queryByText(/turned off/)).toBeNull();
+    b.unmount();
+
+    // Declined: only now is the declined option named.
+    installFetch({ [`GET ${P}/state`]: () => ok(resumeState), 'GET /api/v1/roboapply/compliance/consents': () => consentItem(false) });
+    renderWith(<OnboardingStepPage step="resume" />);
+    await screen.findByText(/Your file won't be sent there/);
+    fireEvent.change(screen.getByTestId('resume-file'), { target: { files: [pdf] } });
+    expect(await screen.findByText(/the reading option you turned off/)).toBeInTheDocument();
+    expect(resumes.upload).not.toHaveBeenCalled();
   });
 
   it('privacy fails closed: when the consent cannot be loaded, file doors stay closed with a retry', async () => {
@@ -436,22 +535,28 @@ describe('O6 matching', () => {
 });
 
 describe('O7 confirm', () => {
-  const profiles = (count: number | null) => ({
-    'GET /api/v1/roboapply/search-profiles': () =>
-      ok({ profiles: [{ id: 'sp1', name: '', isDefault: true, isActive: true, version: 2, schemaVersion: 1, filters: { taxonomyIds: ['backend_engineer'] }, alertInstantMax: 0, alertDigest: 'daily', createdAt: 'x', updatedAt: 'x' }], maxProfiles: 1, maxInstantAlerts: 1, proMaxProfiles: null, upgradable: false }),
-    'POST /api/v1/roboapply/search-profiles/count': () => ok({ count, capped: false }),
-  });
+  // The feed's live count must not be asked: `fitTier` does not filter it, so it
+  // returned the size of the whole search (1,586 "jobs that fit you" with no resume).
+  const noFeedCount = {
+    'GET /api/v1/roboapply/search-profiles': () => fail(500, 'internal_error'),
+    'POST /api/v1/roboapply/search-profiles/count': () => ok({ count: 1586, capped: false }),
+  };
+  const confirmState = (matching: Record<string, unknown> | undefined, answers: Record<string, unknown> = {}) =>
+    ok(state({ stage: 'confirm', branch: 'urgent', answers: { ...(matching ? { matching } : {}), ...answers } }));
 
-  it('uses the real feed count (Good fit or better) and defaults the email to Daily', async () => {
+  it('shows the count "Finding jobs" stored (Good fit or better, of those compared) and defaults the email to Daily', async () => {
     const net = installFetch({
       [`GET ${P}/state`]: () =>
-        ok(state({ stage: 'confirm', branch: 'urgent', answers: { matching: { jobCount: 9 }, resumeSuggestions: { suggestedSeniority: ['mid'], suggestedTaxonomyIds: [], profileDraft: {} } } })),
-      ...profiles(14),
+        confirmState(
+          { jobCount: 9, compared: 62, ranked: true, resumeCompared: true, comparedCapped: false },
+          { resume: { resumeVariantId: 'rv1' }, resumeSuggestions: { suggestedSeniority: ['mid'], suggestedTaxonomyIds: [], profileDraft: {} } },
+        ),
+      ...noFeedCount,
       [`POST ${P}/confirm`]: () => ok({ stage: 'tour', nextRoute: '/jobs' }),
     });
     renderWith(<OnboardingStepPage step="confirm" />);
-    expect(await screen.findByRole('heading', { name: 'We found 14 jobs that fit you. Check these details.' }, { timeout: 2000 })).toBeInTheDocument();
-    await waitFor(() => expect(net.to('POST', '/api/v1/roboapply/search-profiles/count')[0].body).toMatchObject({ filters: { fitTier: 'good' } }));
+    expect(await screen.findByRole('heading', { name: 'We found 9 jobs that fit you. Check these details.' })).toBeInTheDocument();
+    expect(screen.getByText('Counts jobs at Good fit or better, out of the 62 jobs we compared with your resume.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mid level (2–5 yrs)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Suggested from your resume')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Daily' })).toHaveAttribute('aria-checked', 'true');
@@ -459,17 +564,86 @@ describe('O7 confirm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show my jobs' }));
     expect(screen.getByText(/Use your LinkedIn profile link/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('LinkedIn profile (optional)'), { target: { value: '' } });
+    // Fixed fields lose their message at once.
+    expect(screen.queryByText(/Use your LinkedIn profile link/)).toBeNull();
     fireEvent.change(screen.getByLabelText(/How did you hear about RoboApply/), { target: { value: 'friend' } });
     fireEvent.click(screen.getByRole('button', { name: 'Show my jobs' }));
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/jobs'));
     expect(net.to('POST', `${P}/confirm`)[0].body).toEqual({ experienceLevels: ['mid'], alertFrequency: 'daily', heardFrom: 'friend' });
+    // One stable number: the heading never asks the feed for another count.
+    expect(net.to('POST', '/api/v1/roboapply/search-profiles/count')).toEqual([]);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('We found 9 jobs that fit you.');
+  });
+
+  it('with no resume compared it never says "fit": it shows the saved search\'s own size (D3)', async () => {
+    const net = installFetch({
+      // `compared` (the comparison's own query) is not the number: `searchCount` is.
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 31, compared: 54, ranked: true, resumeCompared: false, comparedCapped: false, searchCount: 37, searchCountCapped: false }),
+      ...noFeedCount,
+    });
+    renderWith(<OnboardingStepPage step="confirm" />);
+    expect(await screen.findByRole('heading', { name: 'We found 37 jobs for your search. Check these details.' })).toBeInTheDocument();
+    expect(screen.getByText('These are open jobs that match your search. No resume was compared, so this is not a fit count.')).toBeInTheDocument();
+    expect(screen.queryByText(/that fit you/)).toBeNull();
+    expect(screen.queryByText(/Good fit or better/)).toBeNull();
+    expect(screen.queryByText(/54/)).toBeNull();
+    // Still one stored number: the screen asks the feed for nothing.
+    await new Promise((r) => setTimeout(r, 600));
+    expect(net.to('POST', '/api/v1/roboapply/search-profiles/count')).toEqual([]);
+  });
+
+  // Review finding: with every step skipped nothing can be compared (no
+  // title), so `compared` is 0, while the saved search has no filter and /jobs
+  // lists the whole index. The heading said "We didn't find jobs for your search".
+  it('every step skipped: the unfiltered search has its real size, and it is never called a fit', async () => {
+    installFetch({
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 0, compared: 0, ranked: true, resumeCompared: false, comparedCapped: false, searchCount: 1586, searchCountCapped: false }),
+      ...noFeedCount,
+    });
+    renderWith(<OnboardingStepPage step="confirm" />);
+    expect(await screen.findByRole('heading', { name: 'We found 1,586 jobs for your search. Check these details.' })).toBeInTheDocument();
+    expect(screen.getByText('These are open jobs that match your search. No resume was compared, so this is not a fit count.')).toBeInTheDocument();
+    expect(screen.queryByText(/that fit you/)).toBeNull();
+    expect(screen.queryByText(/didn't find/)).toBeNull();
+    // Not the zero-results help either.
+    expect(screen.queryByRole('link', { name: "Change what you're looking for" })).toBeNull();
+  });
+
+  it('a saved search at the feed cap reads "N+"', async () => {
+    installFetch({
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 0, compared: 200, ranked: true, resumeCompared: false, comparedCapped: true, searchCount: 5000, searchCountCapped: true }),
+      ...noFeedCount,
+    });
+    renderWith(<OnboardingStepPage step="confirm" />);
+    expect(await screen.findByRole('heading', { name: 'We found 5,000+ jobs for your search. Check these details.' })).toBeInTheDocument();
+  });
+
+  it('a saved search with no jobs opens the help, without the "these are open jobs" note', async () => {
+    installFetch({
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 0, compared: 0, ranked: true, resumeCompared: false, comparedCapped: false, searchCount: 0, searchCountCapped: false }),
+      ...noFeedCount,
+    });
+    renderWith(<OnboardingStepPage step="confirm" />);
+    expect(await screen.findByRole('heading', { name: "We didn't find jobs for your search yet. Adjust your search below." })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: "Change what you're looking for" })).toHaveAttribute('href', '/onboarding/basics');
+    expect(screen.queryByText(/These are open jobs that match your search/)).toBeNull();
+  });
+
+  it('no resume and the search was not counted: no number at all (never the comparison\'s, never the whole index)', async () => {
+    installFetch({
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 12, compared: 54, ranked: true, resumeCompared: false, comparedCapped: false }),
+      ...noFeedCount,
+    });
+    renderWith(<OnboardingStepPage step="confirm" />);
+    expect(await screen.findByRole('heading', { name: 'Your search is saved. Check these details.' })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Your search is saved. Check these details.');
+    expect(document.body.textContent).not.toMatch(/54|12 jobs|1,586|that fit you|didn't find/);
+    expect(screen.queryByRole('link', { name: "Change what you're looking for" })).toBeNull();
   });
 
   it('Back goes to the resume screen, never to "Finding jobs" (which would run again and come back)', async () => {
-    installFetch({
-      [`GET ${P}/state`]: () => ok(state({ stage: 'confirm', branch: 'urgent', answers: { matching: { jobCount: 2 } } })),
-      ...profiles(null),
-    });
+    installFetch({ [`GET ${P}/state`]: () => confirmState({ jobCount: 2 }), ...noFeedCount });
     renderWith(<OnboardingStepPage step="confirm" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
     expect(nav.push).toHaveBeenCalledWith('/onboarding/resume');
@@ -480,45 +654,56 @@ describe('O7 confirm', () => {
     ['student', 'Internship'],
     ['recent_graduate', 'Entry level'],
   ])('a %s with no resume suggestion starts with %s selected', async (seekerType, label) => {
-    installFetch({
-      [`GET ${P}/state`]: () => ok(state({ stage: 'confirm', branch: 'urgent', answers: { situation: { timing: 'asap', seekerType }, matching: { jobCount: 2 } } })),
-      ...profiles(null),
-    });
+    installFetch({ [`GET ${P}/state`]: () => confirmState({ jobCount: 2 }, { situation: { timing: 'asap', seekerType } }), ...noFeedCount });
     renderWith(<OnboardingStepPage step="confirm" />);
     const chip = await screen.findByRole('button', { name: new RegExp(`^${label}`) });
     expect(chip).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Suggested from your resume')).toBeNull();
   });
 
-  it('a capped feed count is shown as "N+", never as an exact number', async () => {
+  it('a run that stopped at its cap is shown as "N+", never as an exact number', async () => {
     installFetch({
-      [`GET ${P}/state`]: () => ok(state({ stage: 'confirm', branch: 'urgent', answers: { matching: { jobCount: 9 } } })),
-      'GET /api/v1/roboapply/search-profiles': profiles(null)['GET /api/v1/roboapply/search-profiles'],
-      'POST /api/v1/roboapply/search-profiles/count': () => ok({ count: 500, capped: true }),
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 120, compared: 200, ranked: true, resumeCompared: true, comparedCapped: true }),
+      ...noFeedCount,
     });
     renderWith(<OnboardingStepPage step="confirm" />);
-    expect(await screen.findByRole('heading', { name: 'We found 500+ jobs that fit you. Check these details.' }, { timeout: 2000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'We found 120+ jobs that fit you. Check these details.' })).toBeInTheDocument();
   });
 
-  it('falls back to what O6 ranked while the feed cannot count; 0 opens the help', async () => {
+  it('0 at Good fit or better opens the help', async () => {
     installFetch({
-      [`GET ${P}/state`]: () => ok(state({ stage: 'confirm', branch: 'urgent', answers: { matching: { jobCount: 0 } } })),
-      ...profiles(null),
+      [`GET ${P}/state`]: () => confirmState({ jobCount: 0, compared: 12, ranked: true, resumeCompared: true }, { resume: { resumeVariantId: 'rv1' } }),
+      ...noFeedCount,
     });
     renderWith(<OnboardingStepPage step="confirm" />);
     expect(await screen.findByRole('heading', { name: "We didn't find strong fits yet. Adjust your search below." })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: "Change what you're looking for" })).toHaveAttribute('href', '/onboarding/basics');
     fireEvent.click(screen.getByRole('button', { name: 'Show my jobs' }));
     expect(screen.getByText('Pick at least one level.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Mid level/ }));
+    expect(screen.queryByText('Pick at least one level.')).toBeNull();
   });
 
   it('never claims a number while O6 is still running in the background', async () => {
-    installFetch({
-      [`GET ${P}/state`]: () => ok(state({ stage: 'confirm', branch: 'urgent', answers: { matching: { jobCount: 0, continuedInBackground: true } } })),
-      ...profiles(null),
-    });
+    installFetch({ [`GET ${P}/state`]: () => confirmState({ jobCount: 0, continuedInBackground: true }), ...noFeedCount });
     renderWith(<OnboardingStepPage step="confirm" />);
     expect(await screen.findByRole('heading', { name: "We're still checking jobs for you. Check these details." })).toBeInTheDocument();
+  });
+
+  it('confirmCountOf: results stored before `resumeCompared` existed follow the resume answer', () => {
+    expect(confirmCountOf(undefined, true)).toEqual({ kind: 'pending' });
+    expect(confirmCountOf({ jobCount: 30, compared: 62 }, true)).toEqual({ kind: 'fit', count: 30, capped: false, compared: 62 });
+    // No resume and no stored search size: no number (the comparison's 62 is not the search's size).
+    expect(confirmCountOf({ jobCount: 30, compared: 62 }, false)).toEqual({ kind: 'uncounted' });
+    expect(confirmCountOf({ jobCount: 3 }, false)).toEqual({ kind: 'uncounted' });
+    expect(confirmCountOf({ jobCount: 30, compared: 62, searchCount: 410 }, false)).toEqual({ kind: 'search', count: 410, capped: false });
+    // 个性化推荐 off: the jobs were found, not compared.
+    expect(confirmCountOf({ jobCount: 40, compared: 40, ranked: false, resumeCompared: false }, true)).toEqual({ kind: 'uncounted' });
+    expect(confirmCountOf({ jobCount: 40, compared: 40, ranked: false, resumeCompared: false, searchCount: 44, searchCountCapped: true }, true)).toEqual({ kind: 'search', count: 44, capped: true });
+    // With a resume the fit count stays, whatever else was stored.
+    expect(confirmCountOf({ jobCount: 9, compared: 62, resumeCompared: true, searchCount: 1586 }, true)).toEqual({ kind: 'fit', count: 9, capped: false, compared: 62 });
+    // Still running: no number yet.
+    expect(confirmCountOf({ jobCount: 0, continuedInBackground: true, searchCount: 5 }, false)).toEqual({ kind: 'pending' });
   });
 });
 

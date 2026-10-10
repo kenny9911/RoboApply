@@ -67,7 +67,7 @@ export function validFieldsOf(schema: z.ZodObject, body: unknown): Record<string
 
 
 /**
- * O2 → filters. Countries other than REMOTE become location rows; cities refine them.
+ * O2 → filters. One country sets `country`; picked cities become location rows.
  *
  * Takes the full answers or the valid subset a skipped O2 kept: a field the
  * user did not answer is left out of the patch (the filter keeps its value),
@@ -86,12 +86,16 @@ export function basicsToFilters(b: Partial<Basics>): FilterSetPatch {
   if (b.countries) {
     const countries = uniq(b.countries.filter((c) => c !== 'REMOTE'));
     const cityRows = (b.locations ?? []).filter((l) => l.city && l.country !== 'REMOTE');
+    // "Anywhere in {country}" is the country itself, never a location row:
+    // a row with no city and radius 0 reads as "same city" and matched no
+    // on-site job. With ONE country `country` already says it, so no row is
+    // written. With several, `country` cannot hold them (it is one code), so
+    // each city-less country stays a whole-country row (no city, no radius to
+    // search); the feed reads such a row as "anywhere in that country".
+    const single = countries.length === 1;
     const locations = [
       ...cityRows.map((l) => ({ label: l.label || l.city!, city: l.city!, country: l.country, radiusKm: 40 as const })),
-      // "Anywhere in {country}" for a country with no city picked.
-      ...countries
-        .filter((c) => !cityRows.some((l) => l.country === c))
-        .map((c) => ({ label: c, country: c, radiusKm: 0 as const })),
+      ...(single ? [] : countries.filter((c) => !cityRows.some((l) => l.country === c)).map((c) => ({ label: c, country: c, radiusKm: 0 as const }))),
     ];
     patch.country = countries.length === 1 ? countries[0] : null;
     patch.locations = locations.length ? locations : null;
