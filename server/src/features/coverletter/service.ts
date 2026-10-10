@@ -111,7 +111,7 @@ export interface CoverLetterDeps {
     footerEnabled: (brand: BrandId) => boolean;
     log: (input: { userId: string; contentId: string; kind: string; provider: string; artifactId: string; brand: BrandId }) => Promise<void>;
   };
-  /** SR-37-1 adapter: pasted job posts (until the column exists, the Prisma twin keeps nothing). */
+  /** Pasted job posts, kept on the letter (`RACoverLetter.postingSnapshot`, SR-37-1) so rewrites can read them again. */
   postings: {
     read: (letterId: string) => Promise<PostingSnapshot | null>;
     write: (letterId: string, snapshot: PostingSnapshot) => Promise<void>;

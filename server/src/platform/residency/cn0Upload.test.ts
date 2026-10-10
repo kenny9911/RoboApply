@@ -6,10 +6,10 @@
 // with the real GoHire parse and storage services; only the network and the
 // local parse/summary helpers are faked.
 //
-// STATUS: met on the GoHire path only. The local-parse fallback (DOCX, TXT,
-// images, LinkedIn text, or a PDF when GoHire fails) does not run the upload
-// policy yet: candidateResumeIngest.ts is outside WP-15's paths, so the
-// redaction call there is request REQ-WP15-03 and those cases are it.todo.
+// REQ-WP15-03 (INT-10): the ingest runs applyResumeUploadPolicy after parse and
+// summary on every path — GoHire, the local PDF fallback after a GoHire 500,
+// Word/text files and the LinkedIn text path — and a GoApply image goes to
+// GoHire only (the upload fails when GoHire cannot read it; no local OCR).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,6 +30,7 @@ vi.mock('../../services/ResumeParserService.js', () => ({ normalizeExtractedText
 import { runWithBrand } from '../../lib/requestContext.js';
 import { ingestCandidateResume } from '../../lib/candidateResumeIngest.js';
 import { pdfService } from '../../services/PDFService.js';
+import { documentParsingService } from '../../services/DocumentParsingService.js';
 import { resumeParseAgent } from '../../agents/ResumeParseAgent.js';
 import {
   ResumeOriginalFileStorageService,
@@ -67,6 +68,20 @@ const LOCAL_PARSED = {
   projects: [],
   rawText: LOCAL_TEXT,
 } as unknown as ParsedResume;
+
+/** A valid 1×1 PNG (so the image → PDF wrapper has something real to embed). */
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/** Nothing the ingest hands back for storage carries the ID number, the health detail or a photo. */
+function expectNothingSensitive(result: { rawText: string; markdown: string; parsed: unknown; summary: string; highlight: string }): void {
+  const stored = JSON.stringify([result.rawText, result.markdown, result.parsed, result.summary, result.highlight]);
+  expect(stored).not.toContain(PRC_ID);
+  expect(stored).not.toContain('良好');
+  expect(stored).not.toContain('data:image');
+}
 
 /**
  * Route the ingest's storage calls through a real storage service whose S3
@@ -155,13 +170,131 @@ describe('CN-0 GoApply upload', () => {
     expect(sent).toHaveLength(0);
   });
 
-  // REQ-WP15-03 (INT, or WP-22/WP-36b if granted): ingestCandidateResume must
-  // call applyResumeUploadPolicy(brand, {rawText, markdown, parsed, summary,
-  // highlight}) after parse + summary on EVERY path. Until then the
-  // local-parse fallback stores the PRC ID offshore.
-  it.todo('REQ-WP15-03: GoHire 500 → local parse of a PDF: stored text has no PRC ID or health detail');
-  it.todo('REQ-WP15-03: a .docx upload (local parse only): stored text has no PRC ID or health detail');
-  it.todo('REQ-WP15-03: LinkedIn text import (textTransform path): stored text has no PRC ID');
+  it('REQ-WP15-03: GoHire 500 → local parse of a PDF: stored text has no PRC ID or health detail', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream error', { status: 500 })));
+    vi.mocked(pdfService.extractText).mockResolvedValueOnce(LOCAL_TEXT);
+    vi.mocked(resumeParseAgent.parse).mockResolvedValueOnce(LOCAL_PARSED);
+    const sent = fakeBucketCalls();
+    const result = await runWithBrand('goapply', () =>
+      ingestCandidateResume({ buffer: Buffer.from('%PDF-1.4'), fileName: 'resume.pdf', mimeType: 'application/pdf', userId: 'user_cn' }),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expectNothingSensitive(result);
+    expect(result.markdown).toContain('负责支付系统');
+    expect(result.original).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('REQ-WP15-03: a .docx upload (local parse only): stored text has no PRC ID or health detail', async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    vi.mocked(documentParsingService.extractText).mockResolvedValueOnce(LOCAL_TEXT);
+    vi.mocked(resumeParseAgent.parse).mockResolvedValueOnce(LOCAL_PARSED);
+    const sent = fakeBucketCalls();
+    const result = await runWithBrand('goapply', () =>
+      ingestCandidateResume({
+        buffer: Buffer.from('PK docx bytes'),
+        fileName: 'resume.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        userId: 'user_cn',
+      }),
+    );
+    // The parse service takes PDFs only: a Word file never leaves this server.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expectNothingSensitive(result);
+    expect(result.rawText).toContain('后端工程师');
+    expect(result.original).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('REQ-WP15-03: LinkedIn text import (textTransform path): stored text has no PRC ID', async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    vi.mocked(pdfService.extractText).mockResolvedValueOnce(`${LOCAL_TEXT}\nPage 1 of 2`);
+    vi.mocked(resumeParseAgent.parse).mockResolvedValueOnce(LOCAL_PARSED);
+    const sent = fakeBucketCalls();
+    const result = await runWithBrand('goapply', () =>
+      ingestCandidateResume({
+        buffer: Buffer.from('%PDF-1.4'),
+        fileName: 'linkedin.pdf',
+        mimeType: 'application/pdf',
+        userId: 'user_cn',
+        textTransform: (raw) => raw.replace(/\nPage \d+ of \d+/g, ''),
+      }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expectNothingSensitive(result);
+    expect(result.rawText).not.toContain('Page 1 of 2');
+    expect(result.original).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('forceLocalParser is ignored on GoApply: the PDF still goes to GoHire, never to the local pipeline', async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const result = await runWithBrand('goapply', () =>
+      ingestCandidateResume({ buffer: Buffer.from('%PDF-1.4'), fileName: 'resume.pdf', mimeType: 'application/pdf', userId: 'user_cn', forceLocalParser: true }),
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(pdfService.extractText).not.toHaveBeenCalled();
+    expect(resumeParseAgent.parse).not.toHaveBeenCalled();
+    expectNothingSensitive(result);
+  });
+});
+
+describe('GoApply image uploads', () => {
+  it('go to GoHire as a one-page PDF and come back redacted; the image is not kept', async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const sent = fakeBucketCalls();
+    const result = await runWithBrand('goapply', () =>
+      ingestCandidateResume({ buffer: PNG_1X1, fileName: 'resume.png', mimeType: 'image/png', userId: 'user_cn' }),
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = (fetchSpy.mock.calls[0]![1] as { body: FormData }).body;
+    const file = body.get('file') as File;
+    expect(file.name).toBe('resume.pdf');
+    expect(Buffer.from(await file.arrayBuffer()).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(pdfService.extractText).not.toHaveBeenCalled();
+    expect(documentParsingService.extractText).not.toHaveBeenCalled();
+    expectNothingSensitive(result);
+    expect(result.original).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('fail closed when GoHire is down: no local OCR, nothing parsed, nothing stored', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream error', { status: 500 })));
+    const sent = fakeBucketCalls();
+    await expect(
+      runWithBrand('goapply', () =>
+        ingestCandidateResume({ buffer: PNG_1X1, fileName: 'resume.png', mimeType: 'image/png', userId: 'user_cn' }),
+      ),
+    ).rejects.toMatchObject({ name: 'CandidateResumeIngestError', code: 'image_parse_unavailable' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(pdfService.extractText).not.toHaveBeenCalled();
+    expect(documentParsingService.extractText).not.toHaveBeenCalled();
+    expect(resumeParseAgent.parse).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
+  });
+
+  it('fail closed for a format GoHire cannot take (WebP), even with forceLocalParser', async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    await expect(
+      runWithBrand('goapply', () =>
+        ingestCandidateResume({ buffer: Buffer.from('RIFF....WEBP'), fileName: 'resume.webp', mimeType: 'image/webp', userId: 'user_cn', forceLocalParser: true }),
+      ),
+    ).rejects.toMatchObject({ code: 'image_parse_unavailable' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(documentParsingService.extractText).not.toHaveBeenCalled();
+  });
+
+  it('fail closed when GoHire parsing is switched off for GoApply', async () => {
+    process.env.GOHIRE_PARSE_ENABLED = 'false';
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    await expect(
+      runWithBrand('goapply', () =>
+        ingestCandidateResume({ buffer: PNG_1X1, fileName: 'resume.png', mimeType: 'image/png', userId: 'user_cn' }),
+      ),
+    ).rejects.toMatchObject({ code: 'image_parse_unavailable' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(documentParsingService.extractText).not.toHaveBeenCalled();
+  });
 });
 
 describe('RoboApply in the same deployment', () => {
@@ -183,5 +316,38 @@ describe('RoboApply in the same deployment', () => {
     expect(result.original?.key.startsWith('roboapply-resumes/user_intl/')).toBe(true);
     // RoboApply text is stored as parsed (no CN-0 rule).
     expect(result.rawText).toContain(PRC_ID);
+  });
+
+  it('reads an image with the local pipeline as before (no GoHire, original kept)', async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    vi.mocked(documentParsingService.extractText).mockResolvedValueOnce(LOCAL_TEXT);
+    vi.mocked(resumeParseAgent.parse).mockResolvedValueOnce(LOCAL_PARSED);
+    const sent = fakeBucketCalls();
+    const result = await runWithBrand('roboapply', () =>
+      ingestCandidateResume({ buffer: PNG_1X1, fileName: 'resume.png', mimeType: 'image/png', userId: 'user_intl' }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(documentParsingService.extractText).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveLength(1);
+    expect(result.rawText).toContain(PRC_ID);
+  });
+
+  it('with GoHire opted in for RoboApply, forceLocalParser keeps the PDF on this server', async () => {
+    process.env.GOHIRE_PARSE_BRANDS = 'goapply,roboapply';
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    vi.mocked(pdfService.extractText).mockResolvedValueOnce(LOCAL_TEXT);
+    vi.mocked(resumeParseAgent.parse).mockResolvedValueOnce(LOCAL_PARSED);
+    fakeBucketCalls();
+    await runWithBrand('roboapply', () =>
+      ingestCandidateResume({ buffer: Buffer.from('%PDF-1.4'), fileName: 'resume.pdf', mimeType: 'application/pdf', userId: 'user_intl', forceLocalParser: true }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    vi.mocked(pdfService.extractText).mockClear();
+    await runWithBrand('roboapply', () =>
+      ingestCandidateResume({ buffer: Buffer.from('%PDF-1.4'), fileName: 'resume.pdf', mimeType: 'application/pdf', userId: 'user_intl' }),
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(pdfService.extractText).not.toHaveBeenCalled();
   });
 });

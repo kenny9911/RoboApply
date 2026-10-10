@@ -18,12 +18,13 @@
 // WP-65: the 4-step tour (ResumeTour, F-RES-07) points at the parts marked
 // `data-tour` (grade, filters, issues, recheck).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Btn, EmptyState, PageHeader } from '../../v3/primitives';
 import { useResume } from '../../../hooks/useResumes';
 import { useIssueFix, useResumeCheck } from '../../../hooks/resume/useResumeCheck';
+import { markResumeCheckOpened } from '../../../lib/api/resumes';
 import type { GradeIssue, GradeView, IssueSeverity, LatestGradeResponse } from '../../../lib/api/contracts/resume';
 import { IssueCard } from './IssueCard';
 import { issueTypeName } from './issueText';
@@ -35,6 +36,11 @@ const SECTION_ORDER = ['layout', 'contact', 'summary', 'experience', 'projects',
 
 export interface ResumeCheckReportProps {
   resumeId: string;
+  /**
+   * The issue a link pointed at (`/resume/<id>/check?issue=<issueId>`, used by
+   * the Assistant's fix cards). The report opens on it.
+   */
+  focusIssueId?: string | null;
 }
 
 export function editorHrefFor(resumeId: string, anchor: string | null | undefined): string {
@@ -42,7 +48,7 @@ export function editorHrefFor(resumeId: string, anchor: string | null | undefine
   return anchor ? `${base}?focus=${encodeURIComponent(anchor)}` : base;
 }
 
-export function ResumeCheckReport({ resumeId }: ResumeCheckReportProps) {
+export function ResumeCheckReport({ resumeId, focusIssueId = null }: ResumeCheckReportProps) {
   const t = useTranslations('resumeCheck');
   const resume = useResume(resumeId);
   const check = useResumeCheck(resumeId);
@@ -50,6 +56,19 @@ export function ResumeCheckReport({ resumeId }: ResumeCheckReportProps) {
   const data = check.latest.data;
   const grade = data?.grade ?? null;
   const showReport = grade && grade.status === 'done';
+
+  // The finished report is on screen: tell the server once per check, so the
+  // "you have not opened your check" reminder is never sent to someone who
+  // has. This is its own call because the latest-check query is shared with
+  // the editor, tailoring and the onboarding dock, which only read it.
+  const shownGradeId = showReport && !check.running ? grade.id : null;
+  const openedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shownGradeId || openedRef.current === shownGradeId) return;
+    openedRef.current = shownGradeId;
+    // Best effort: a failed stamp changes nothing on this page.
+    void markResumeCheckOpened(resumeId).catch(() => undefined);
+  }, [resumeId, shownGradeId]);
 
   return (
     <div className={styles.page}>
@@ -77,6 +96,7 @@ export function ResumeCheckReport({ resumeId }: ResumeCheckReportProps) {
           data={data}
           grade={grade}
           fix={data.aiAvailable ? fix : null}
+          focusIssueId={focusIssueId}
           onRecheck={() => void check.run(grade.targetTitle ?? undefined)}
           error={check.error}
         />
@@ -173,6 +193,7 @@ function Report({
   data,
   grade,
   fix,
+  focusIssueId,
   onRecheck,
   error,
 }: {
@@ -180,6 +201,7 @@ function Report({
   data: LatestGradeResponse;
   grade: GradeView;
   fix: ReturnType<typeof useIssueFix> | null;
+  focusIssueId: string | null;
   onRecheck: () => void;
   error: string | null;
 }) {
@@ -189,6 +211,8 @@ function Report({
   const counts = grade.counts ?? { urgent: 0, critical: 0, optional: 0 };
   const total = counts.urgent + counts.critical + counts.optional;
   const skippedNote = aiSkippedNote(grade, data.aiAvailable);
+  // A linked issue that this check no longer lists (fixed, or the resume was checked again).
+  const focusMissing = Boolean(focusIssueId) && !grade.issues.some((i) => i.id === focusIssueId);
 
   const groups = useMemo(() => {
     const visible = grade.issues.filter((i) => !filter || i.severity === filter);
@@ -260,6 +284,12 @@ function Report({
         </div>
       ) : null}
 
+      {focusMissing ? (
+        <p className={styles.muted} role="status" data-focus-missing="true">
+          {t('focus.gone')}
+        </p>
+      ) : null}
+
       {data.previous ? <Comparison current={grade} previous={data.previous} /> : null}
 
       {total === 0 ? (
@@ -273,7 +303,7 @@ function Report({
               {t(`section.${g.section}`)}
             </h3>
             {g.issues.map((issue) => (
-              <IssueCard key={issue.id} issue={issue} fix={fix} editorHref={editorHrefFor(resumeId, issue.anchor)} />
+              <IssueCard key={issue.id} issue={issue} fix={fix} editorHref={editorHrefFor(resumeId, issue.anchor)} focused={issue.id === focusIssueId} />
             ))}
           </section>
         ))

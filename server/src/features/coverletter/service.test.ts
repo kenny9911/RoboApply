@@ -15,6 +15,7 @@ import { CLEAN_LETTER, FIXTURE_USER as U, POSTING_AS_EXPERIENCE_LETTER, createFi
 import type { WriterOutput } from './CoverLetterAgent.js';
 import { providerOf, restoreUserTokens, tokenizeUserSentences } from './service.js';
 import { cjkFontsFor } from './letterExport.js';
+import { createPrismaPostingStore, parseStoredPosting, type PostingDb } from './store.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
 const now = () => NOW;
@@ -344,7 +345,7 @@ describe('edit, versions, rewrite, restore', () => {
     expect(f.writerInputs.at(-1)!.job.company).toBe('Initech');
 
     const { f: g, kit: gKit } = await setup({ keepPostings: false, write: jdLetter as never });
-    // Production today (SR-37-1 not landed): the post is not kept, so the view says rewriting is not possible.
+    // A letter whose post was not kept (written before the column existed): the view says rewriting is not possible.
     const other = await g.service.create(U, { jd, resumeVariantId: 'rv_1' });
     expect(other.postingAvailable).toBe(false);
     expect((await g.service.get(U, other.id)).postingAvailable).toBe(false);
@@ -355,7 +356,70 @@ describe('edit, versions, rewrite, restore', () => {
     await expectHttp(g.service.regenerate(U, other.id, {}), 'conflict', 'posting_unavailable');
     expect(g.rewritesUsed.get(other.id) ?? 0).toBe(0);
   });
-  it.todo('SR-37-1: the Prisma store persists RACoverLetter.postingSnapshot (after SCHEMA-3)');
+  it('SR-37-1: the Prisma store persists RACoverLetter.postingSnapshot, so a pasted-post letter can be rewritten', async () => {
+    const jd = { title: 'Data Analyst', company: 'Initech', text: 'We need SQL reports for the finance team every week, and you will own the dashboards.' };
+    const jdLetter = async (input: { job: { company: string; text: string } }): Promise<WriterOutput> =>
+      input.job.company !== 'Initech'
+        ? structuredClone(CLEAN_LETTER)
+        : {
+            greeting: 'Dear Hiring Manager,',
+            paragraphs: [
+              [
+                { text: 'Your team needs weekly SQL reports for finance.', kind: 'company', cites: [{ source: 'posting', quote: 'We need SQL reports for the finance team every week' }] },
+                { text: 'I wrote billing jobs in Go and Python.', kind: 'experience', cites: [{ source: 'resume', quote: 'Wrote billing jobs in Go and Python.' }] },
+              ],
+            ],
+            closing: 'Sincerely,',
+          };
+    // The Prisma posting adapter over a table that records what it is asked.
+    const column = new Map<string, unknown>();
+    const calls: Array<{ op: string; args: unknown }> = [];
+    const db: PostingDb = {
+      rACoverLetter: {
+        findFirst: async (args) => {
+          calls.push({ op: 'findFirst', args });
+          return column.has(args.where.id) ? { postingSnapshot: column.get(args.where.id) } : { postingSnapshot: null };
+        },
+        updateMany: async (args) => {
+          calls.push({ op: 'updateMany', args });
+          column.set(args.where.id, args.data.postingSnapshot);
+          return { count: 1 };
+        },
+      },
+    };
+    const kit = createCreditTestKit({ now: NOW });
+    const f = createFixture({ credits: kit.credits, now, write: jdLetter as never, postings: createPrismaPostingStore(async () => db) });
+
+    const letter = await f.service.create(U, { jd, resumeVariantId: 'rv_1' });
+    // Written to the column of that letter, as { title, company, text }.
+    expect(calls.find((c) => c.op === 'updateMany')!.args).toEqual({ where: { id: letter.id, deletedAt: null }, data: { postingSnapshot: jd } });
+    expect(column.get(letter.id)).toEqual(jd);
+    expect(letter.postingAvailable).toBe(true);
+
+    // Read back for a rewrite and a regenerate: the model gets the same post again.
+    expect((await f.service.get(U, letter.id)).postingAvailable).toBe(true);
+    await f.service.rewrite(U, letter.id, 'Shorter');
+    expect(f.writerInputs.at(-1)!.job).toMatchObject({ title: 'Data Analyst', company: 'Initech' });
+    expect(f.writerInputs.at(-1)!.job.text).toContain('SQL reports for the finance team');
+    await f.service.regenerate(U, letter.id, {});
+    expect(f.writerInputs.at(-1)!.job.company).toBe('Initech');
+
+    // A letter written from a job id stores no snapshot (the post is re-read from the job).
+    kit.setNow(new Date('2026-10-11T12:00:00Z'));
+    const fromJob = await f.service.create(U, { jobId: 'job_1', resumeVariantId: 'rv_1' });
+    expect(column.has(fromJob.id)).toBe(false);
+    expect(fromJob.postingAvailable).toBe(true);
+  });
+
+  it('SR-37-1: an empty or malformed column reads as "post not kept"', async () => {
+    expect(parseStoredPosting(null)).toBeNull();
+    expect(parseStoredPosting('text')).toBeNull();
+    expect(parseStoredPosting([])).toBeNull();
+    expect(parseStoredPosting({ title: 'A', text: '   ' })).toBeNull();
+    expect(parseStoredPosting({ title: 'A', text: 'Posting text' })).toEqual({ title: 'A', company: '', text: 'Posting text' });
+    const db: PostingDb = { rACoverLetter: { findFirst: async () => null, updateMany: async () => ({ count: 0 }) } };
+    await expect(createPrismaPostingStore(async () => db).read('missing')).resolves.toBeNull();
+  });
 
   it('lists newest first with a cursor', async () => {
     const { f } = await setup();

@@ -322,6 +322,9 @@
       "cn_english_cert_missing": "English certificate",
       "cn_personal_details_optional": "Optional personal details",
       "cn_photo_optional": "Photo"
+    },
+    "focus": {
+      "gone": "The issue you opened is not in the latest check. It may already be fixed."
     }
   }
 }

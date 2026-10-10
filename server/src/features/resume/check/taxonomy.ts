@@ -163,16 +163,21 @@ export const ISSUE_DEFINITIONS: Record<IssueType, IssueDefinition> = {
 };
 
 /**
- * Rules that can only fire on data the product does not store yet, so they are
- * left out of the "checked against N rules" line: `layout_columns` needs
- * `RAResumeVariant.layout.template`, which nothing writes until WP-36b ships
- * `PATCH /:id/layout`.
+ * Rules that read the resume's saved template (`RAResumeVariant.layout.template`,
+ * written by `PATCH /:id/layout`; a resume with none uses the default
+ * single-column template). They are part of the checklist of every stored
+ * resume. Text checked with no template at all (the signed-out free tool)
+ * cannot be judged on them, so that caller leaves them out of its count.
  */
-export const UNCOUNTED_RULES: readonly IssueType[] = ['layout_columns'];
+export const TEMPLATE_RULES: readonly IssueType[] = ['layout_columns'];
 
-/** How many rules a profile is graded against (the "checklist of N rules" line). */
-export function rulesCountFor(profile: GradeProfile, withAi: boolean): number {
+/**
+ * How many rules a profile is graded against (the "checked against N rules"
+ * line). `template: false` = the text has no template to check (free tool).
+ */
+export function rulesCountFor(profile: GradeProfile, withAi: boolean, opts: { template?: boolean } = {}): number {
+  const withTemplate = opts.template !== false;
   return Object.values(ISSUE_DEFINITIONS).filter(
-    (d) => d.profiles.includes(profile) && (withAi || d.source === 'rules') && !UNCOUNTED_RULES.includes(d.type),
+    (d) => d.profiles.includes(profile) && (withAi || d.source === 'rules') && (withTemplate || !TEMPLATE_RULES.includes(d.type)),
   ).length;
 }

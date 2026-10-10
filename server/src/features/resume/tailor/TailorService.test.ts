@@ -354,3 +354,45 @@ describe('Verify details and finalize', () => {
     await expect(svc.updateClaim(USER, view.id, 'nope', { status: 'kept' })).rejects.toMatchObject({ code: 'not_found', details: { reason: 'tailor_claim_not_found' } });
   });
 });
+
+describe('reviewSessionIds (the hub\'s "Verify details" links, INT-10)', () => {
+  it('maps a tailored version to its session while it is in review, and drops it once finalized', async () => {
+    const svc = service();
+    const view = await svc.create(USER, BODY, { idempotencyKey: 'hub-1' });
+    const variantId = view.resultVariantId!;
+    expect(view.pendingClaims).toBeGreaterThan(0);
+    await expect(svc.reviewSessionIds(USER, [variantId, 'rv_base', 'unknown'])).resolves.toEqual({ [variantId]: view.id });
+
+    for (const c of view.claims) await svc.updateClaim(USER, view.id, c.id, { status: 'kept' });
+    await svc.finalize(USER, view.id);
+    await expect(svc.reviewSessionIds(USER, [variantId])).resolves.toEqual({});
+  });
+
+  it('is scoped to the user and asks nothing for an empty list', async () => {
+    const svc = service();
+    const view = await svc.create(USER, BODY, { idempotencyKey: 'hub-2' });
+    await expect(svc.reviewSessionIds('intruder', [view.resultVariantId!])).resolves.toEqual({});
+    const spy = vi.spyOn(store, 'findReviewSessions');
+    await expect(svc.reviewSessionIds(USER, [])).resolves.toEqual({});
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('pasted posting (jd) sessions — the editor\'s target step (INT-10)', () => {
+  it('tailors from { title, company, text } with no job: one credit, claims checked, target named from the posting', async () => {
+    const svc = service();
+    const jd = { title: 'Sales Analyst', company: 'Globex', text: 'We need an analyst who builds Tableau dashboards and SQL reports for the sales team every week.' };
+    const view = await svc.create(USER, { baseVariantId: 'rv_base', jd, mode: 'guided', sections: ['experience', 'skills'], keywords: [], experienceDepth: 'quick' }, { idempotencyKey: 'jd-1' });
+    expect(view.jobId).toBeNull();
+    expect(view.target).toEqual({ title: 'Sales Analyst', company: 'Globex' });
+    expect(view.status).toBe('review');
+    expect(view.pendingClaims).toBeGreaterThan(0);
+    expect(used()).toBe(1);
+    // The model got the pasted text; no fit score is invented for a posting with no job record.
+    expect(tailor.mock.calls[0]![0]).toMatchObject({ jobTitle: 'Sales Analyst', companyName: 'Globex' });
+    expect(tailor.mock.calls[0]![0].jobDescription).toContain('Tableau dashboards');
+    expect(score).not.toHaveBeenCalled();
+    expect(view.fit).toEqual({ before: null, after: null });
+    expect(store.variants.get(view.resultVariantId!)!.unverifiedClaims).toBe(view.pendingClaims);
+  });
+});

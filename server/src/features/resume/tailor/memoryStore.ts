@@ -163,5 +163,11 @@ export function createMemoryTailorStore(options: { now?: () => Date } = {}): Mem
     async unverifiedClaims(variantId) {
       return variants.get(variantId)?.unverifiedClaims ?? 0;
     },
+    async findReviewSessions(userId, variantIds) {
+      return [...sessions.values()]
+        .filter((s) => s.userId === userId && s.status === 'review' && s.resultVariantId !== null && variantIds.includes(s.resultVariantId))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map((s) => ({ id: s.id, resultVariantId: s.resultVariantId as string }));
+    },
   };
 }

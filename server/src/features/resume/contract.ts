@@ -147,7 +147,7 @@ export interface GradeSummaryView {
   createdAt: string;
 }
 
-/** GET /v2/resumes/:id/grade/latest */
+/** GET /v2/resumes/:id/grade/latest (`?opened=1` from the report page marks the finished check as opened) */
 export interface LatestGradeResponse {
   /** The newest check that is not cancelled, or null. */
   grade: GradeView | null;

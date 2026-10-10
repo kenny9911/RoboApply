@@ -19,8 +19,6 @@
 //   POST   /api/v1/roboapply/v2/resumes/:id/primary
 //   GET    /api/v1/roboapply/v2/resumes/:id/export             (binary PDF/DOCX)
 //   POST   /api/v1/roboapply/v2/resumes/:id/rewrite
-//   POST   /api/v1/roboapply/v2/resumes/:id/tailor-diff
-//   POST   /api/v1/roboapply/v2/resumes/:id/tailor-apply
 //   GET    /api/v1/roboapply/v2/resumes/:id/coach-tips
 //   POST   /api/v1/roboapply/v2/resumes/tailor-sessions
 //   GET    /api/v1/roboapply/v2/resumes/tailor-sessions/:id
@@ -28,7 +26,7 @@
 //   POST   /api/v1/roboapply/v2/resumes/tailor-sessions/:id/finalize
 //   POST   /api/v1/roboapply/v2/resumes/grades/:gradeId/cancel
 //   POST   /api/v1/roboapply/v2/resumes/:id/grade
-//   GET    /api/v1/roboapply/v2/resumes/:id/grade/latest
+//   GET    /api/v1/roboapply/v2/resumes/:id/grade/latest      (?opened=1 from the report page: markResumeCheckOpened)
 //   POST   /api/v1/roboapply/v2/resumes/:id/issues/:issueId/fix
 //   POST   /api/v1/roboapply/v2/resumes/:id/issues/:issueId/apply
 //   POST   /api/v1/roboapply/v2/resumes/:id/keyword-report
@@ -52,10 +50,6 @@ import type {
   ResumePatchBody,
   ResumeRewriteBody,
   ResumeRewriteResponse,
-  ResumeTailorApplyBody,
-  ResumeTailorApplyResponse,
-  ResumeTailorDiffBody,
-  ResumeTailorDiffResponse,
 } from './v2/types';
 
 const BASE = '/api/v1/roboapply/v2/resumes';
@@ -83,6 +77,11 @@ export interface ResumeSummary extends RAResumeVariantSummary {
   targetTitle?: string | null;
   basedOnVariantId?: string | null;
   unverifiedClaims?: number;
+  /**
+   * The tailor session still in review that made this version (set only while
+   * `unverifiedClaims > 0`): `/resume?tailorSession=<id>` re-opens Verify details.
+   */
+  tailorSessionId?: string | null;
 }
 
 export interface ResumeListResult {
@@ -176,12 +175,33 @@ async function fileKey(file: File): Promise<string> {
   }
 }
 
-/** `POST /v2/resumes/upload` (multipart) — parse a file into a new base resume. */
-export async function uploadResume(file: File, opts?: { name?: string; signal?: AbortSignal }): Promise<ResumeVariant> {
+export interface UploadResumeOptions {
+  name?: string;
+  signal?: AbortSignal;
+  /**
+   * Read the file on our own servers only (no outside parsing service). The
+   * server does this by itself for a user who has not agreed to
+   * `intl_cross_border_cn_parse`; pass it to ask for it explicitly. RoboApply
+   * only: GoApply ignores it (its parsing service is in-country).
+   */
+  localParser?: boolean;
+}
+
+/** Resume files a user may upload in a day; past it the server answers 429 `rate_limited` (`details.reason: resume_upload_daily_limit`). */
+export const RESUME_UPLOADS_PER_DAY = 10;
+
+/**
+ * `POST /v2/resumes/upload` (multipart) — parse a file into a new base resume.
+ * 409 `resume_limit_reached` when every base slot is taken; 429 `rate_limited`
+ * with `Retry-After` past RESUME_UPLOADS_PER_DAY; 422 `image_parse_unavailable`
+ * when an image cannot be read right now (GoApply).
+ */
+export async function uploadResume(file: File, opts?: UploadResumeOptions): Promise<ResumeVariant> {
   const fd = new FormData();
   fd.append('idempotencyKey', await fileKey(file));
   fd.append('file', file);
   if (opts?.name) fd.append('name', opts.name);
+  if (opts?.localParser) fd.append('localParser', '1');
   const r = await request<{ resume: ResumeVariant }>('POST', `${BASE}/upload`, { body: fd, multipart: true, signal: opts?.signal });
   return r.resume;
 }
@@ -199,16 +219,6 @@ export async function importLinkedInPdf(file: File, opts?: { name?: string; sign
 /** `POST /v2/resumes/:id/rewrite` (inline AI; 503 ai_unavailable without consent). */
 export function rewriteResumeText(id: string, body: ResumeRewriteBody, opts?: CallOptions): Promise<ResumeRewriteResponse> {
   return call<ResumeRewriteResponse>('POST', `${BASE}/${seg(id)}/rewrite`, { ...opts, body });
-}
-
-/** `POST /v2/resumes/:id/tailor-diff` */
-export function tailorDiff(id: string, body: ResumeTailorDiffBody, opts?: CallOptions): Promise<ResumeTailorDiffResponse> {
-  return call<ResumeTailorDiffResponse>('POST', `${BASE}/${seg(id)}/tailor-diff`, { ...opts, body });
-}
-
-/** `POST /v2/resumes/:id/tailor-apply` */
-export function tailorApply(id: string, body: ResumeTailorApplyBody, opts?: CallOptions): Promise<ResumeTailorApplyResponse> {
-  return call<ResumeTailorApplyResponse>('POST', `${BASE}/${seg(id)}/tailor-apply`, { ...opts, body });
 }
 
 /** `GET /v2/resumes/:id/coach-tips` (free, deterministic). */
@@ -363,6 +373,16 @@ export function getLatestGrade(id: string, opts?: CallOptions): Promise<R.Latest
   return call<R.LatestGradeResponse>('GET', `/api/v1/roboapply/v2/resumes/${seg(id)}/grade/latest`, opts);
 }
 
+/**
+ * `resume.latestGrade` with `?opened=1` — the owner has the finished check on
+ * screen. The server stamps the check as opened the first time; nothing else
+ * changes. Only the report page calls this: the editor summary, tailoring and
+ * the onboarding dock read `getLatestGrade` and must not count as opening it.
+ */
+export async function markResumeCheckOpened(id: string, opts?: CallOptions): Promise<void> {
+  await call<R.LatestGradeResponse>('GET', withQuery(`/api/v1/roboapply/v2/resumes/${seg(id)}/grade/latest`, { opened: 1 }), opts);
+}
+
 /** `resume.fixIssue` — POST /api/v1/roboapply/v2/resumes/:id/issues/:issueId/fix */
 export function fixIssue(id: string, issueId: string, body: In<typeof R.FixIssueBodySchema>, opts?: CallOptions): Promise<R.FixIssueResponse> {
   return call<R.FixIssueResponse>('POST', `/api/v1/roboapply/v2/resumes/${seg(id)}/issues/${seg(issueId)}/fix`, { ...opts, body });
@@ -428,8 +448,6 @@ export const resumesApi = {
   uploadResume,
   importLinkedInPdf,
   rewriteResumeText,
-  tailorDiff,
-  tailorApply,
   getCoachTips,
   downloadResumeExport,
   createTailorSession,
@@ -439,6 +457,7 @@ export const resumesApi = {
   cancelGrade,
   startGrade,
   getLatestGrade,
+  markResumeCheckOpened,
   fixIssue,
   applyIssueFix,
   getKeywordReport,

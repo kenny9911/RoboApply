@@ -1,38 +1,30 @@
-// backend/src/roboapply/v2/services/RAResumeAIService.ts
+// server/src/roboapply/v2/services/RAResumeAIService.ts
 //
-// RoboApply V3 — inline resume-AI service. Backs the three editor surfaces:
+// RoboApply V3 — inline resume-AI service. Backs two editor surfaces:
 //
 //   rewrite(userId, id, body)    → ResumeRewriteResponse  (bullet | summary | skills)
-//   tailorDiff(userId, id, body) → ResumeTailorDiffResponse
 //   coachTips(userId, id)        → ResumeCoachTipsResponse
 //
-// Shapes match `roboapply/lib/api/v2/types.ts` exactly (and the stub in
-// `roboapply/lib/stub/raV2.stub.ts`). The frontend + `_real.ts` need no
-// change once the route swaps from stub-delegation to a real fetch.
+// Shapes match `lib/api/v2/types.ts`.
 //
 // LLM ops:
-//   - rewrite + tailorDiff are LLM-backed → write `ra_resume_tailor` SKU on
-//     SUCCESS only (audit-only debit, mirroring RAResumeService). Failures /
-//     graceful-fallbacks pay zero.
+//   - rewrite is LLM-backed → writes the `ra_resume_tailor` SKU on SUCCESS only
+//     (audit-only debit). Failures / graceful fallbacks pay zero.
 //   - coachTips is FREE — a deterministic heuristic pass over the resume
-//     markdown (no LLM call, no debit). The contract allows free/cheap here
-//     and a deterministic pass is the most robust + cheapest option.
+//     markdown (no LLM call, no debit).
 //
 // Graceful degradation: when the LLM is not configured / errors / returns an
-// unparseable shape, every method still returns a VALID response shape via a
-// deterministic fallback, so the swap-path + smoke test never see a 500 for
-// a missing key. The fallback path does NOT write a deduction log.
+// unparseable shape, rewrite still returns a VALID response shape via a
+// deterministic fallback. The fallback path does NOT write a deduction log.
 //
 // Ownership: every method loads the variant scoped to `{ id, userId }` and
 // 404s otherwise (single-user product — no team scope; see raVisibility.ts).
 //
-// WP-36a: `tailorDiff` is @deprecated — tailoring moved to tailor sessions
-// (server/src/features/resume/tailor, POST /v2/resumes/tailor-sessions: a
-// `tailor` credit, claim verification, finalize). Until the editor's
-// TailorModal moves over (WP-36b), the legacy path is kept honest: the prompt
-// carries `resumeForLlm(base)` (no name, contact block or sensitive lines),
-// the header is put back after the model ran, and the two scores are real
-// fit scores or null — never a pseudo-score or a heuristic uplift (D3).
+// Tailoring is not here. `tailorDiff` (and the tailor-apply selection helpers)
+// were deleted with the editor's TailorModal (INT-10): every tailored version
+// now comes from a tailor session (server/src/features/resume/tailor, POST
+// /v2/resumes/tailor-sessions — a `tailor` credit, claim verification,
+// finalize).
 
 import prisma from '../../../lib/prisma.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
@@ -44,40 +36,11 @@ import {
   type RAResumeRewriteAction,
   type RAResumeRewriteMode,
 } from '../agents/RAResumeRewriteAgent.js';
-import { RAResumeTailorAgent } from '../agents/RAResumeTailorAgent.js';
-import { RAJobMatchScorerAgent } from '../agents/RAJobMatchScorerAgent.js';
-import { getResumeAIMessages, format } from '../lib/raResumeAIMessages.js';
+import { getResumeAIMessages } from '../lib/raResumeAIMessages.js';
 import { loadLegacyVisibleJob } from '../lib/legacyJobScope.js';
-import { mergeTailored, resumeAiAvailable, resumeForLlm, TAILOR_SECTIONS } from '../../../features/resume/index.js';
+import { resumeAiAvailable, resumeForLlm } from '../../../features/resume/index.js';
 
 // ─── Public wire types (mirror lib/api/v2/types.ts) ───────────────────────
-
-export type RATailorChangeKind = 'rewrite' | 'add' | 'reorder' | 'trim';
-
-export interface RATailorChange {
-  id: string;
-  section: string;
-  kind: RATailorChangeKind;
-  label: string;
-  before?: string;
-  after?: string;
-  added?: string[];
-  detail?: string;
-}
-
-export interface RATailorDiff {
-  jobId: string | null;
-  companyName: string;
-  roleTitle: string;
-  /** Real fit score of the base resume for this job, or null when none exists
-   *  (D3: never a made-up number). */
-  matchBefore: number | null;
-  /** Real re-score of the tailored resume, or null. */
-  matchAfter: number | null;
-  /** Always false since WP-36a: no estimate is ever sent (kept for the wire shape). */
-  estimated: boolean;
-  changes: RATailorChange[];
-}
 
 export interface RAResumeCoachTip {
   kind: 'good' | 'careful';
@@ -96,18 +59,6 @@ export interface ResumeRewriteResult {
   skills?: string[];
 }
 
-export interface ResumeTailorDiffResult {
-  diff: RATailorDiff;
-  /** The agent's tailored resume markdown the diff was computed from. Returned
-   *  so "Apply" persists exactly this (per the user's selections) without a
-   *  second LLM re-tailor. */
-  tailoredResumeMarkdown: string;
-  /** The tailor agent's CitationGuard verdict — false when a number in the
-   *  draft couldn't be traced back to the base resume. The UI warns (does not
-   *  block apply). True on the deterministic fallback path (base unchanged). */
-  citationGuardPassed: boolean;
-}
-
 export interface ResumeCoachTipsResult {
   tips: RAResumeCoachTip[];
 }
@@ -117,15 +68,6 @@ export interface RewriteInput {
   text?: string;
   action?: RAResumeRewriteAction;
   targetJobId?: string;
-}
-
-export interface TailorDiffInput {
-  targetJobId?: string;
-  jdText?: string;
-  /** Manual target lane — company/title context when tailoring without a
-   *  saved job. Company alone is enough to drive the tailor (no JD). */
-  targetCompany?: string;
-  targetTitle?: string;
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────
@@ -294,282 +236,7 @@ function fallbackSkills(resumeMarkdown: string, locale?: string): string[] {
   return out.slice(0, 8);
 }
 
-// ─── Tailor-diff derivation (deterministic from base→tailored markdown) ────
-
-/** Identity of the synthetic pre-heading section. Deliberately NOT the
- *  localized display name: `sectionHeaderName` is a string a real résumé
- *  plausibly uses as an ACTUAL heading (ja '基本情報', zh '个人信息', zh-TW
- *  '個人資料' are standard section titles), so keying off it made a user's own
- *  section collide with ours in deriveChanges and made the "did we open a real
- *  section?" sentinel below drop a genuine empty user section. */
-const HEADER_SECTION_ID = '__header__';
-
-interface MdSection {
-  /** Stable, non-localized identity — `HEADER_SECTION_ID` for the synthetic
-   *  pre-heading section, the raw heading text for every real one. Used for
-   *  base↔tailored pairing and the sentinel; never shipped to the client. */
-  id: string;
-  /** Display name — localized for the synthetic section. Ships to the client
-   *  as `RATailorChange.section`. */
-  heading: string;
-  lines: string[];
-}
-
-/** Split markdown into `## heading` sections. Lines before the first heading
- *  go into a synthetic header section whose NAME is localized: it is not a
- *  heading the user wrote, it is ours, and it ships to the client verbatim as
- *  `RATailorChange.section`. Only the DISPLAY is localized — the section's
- *  identity (`id`) is locale-independent, so base + tailored pair up the same
- *  way in every language. */
-function splitSections(md: string, locale?: string): MdSection[] {
-  const headerName = getResumeAIMessages(locale).sectionHeaderName;
-  const lines = (md || '').split('\n');
-  const sections: MdSection[] = [];
-  let current: MdSection = { id: HEADER_SECTION_ID, heading: headerName, lines: [] };
-  for (const line of lines) {
-    const h = line.match(/^#{1,3}\s+(.+?)\s*$/);
-    if (h) {
-      if (current.lines.length > 0 || current.id !== HEADER_SECTION_ID) sections.push(current);
-      const heading = h[1].trim();
-      current = { id: heading, heading, lines: [] };
-    } else {
-      current.lines.push(line);
-    }
-  }
-  sections.push(current);
-  return sections.filter((s) => s.heading || s.lines.some((l) => l.trim()));
-}
-
-function bulletsOf(section: MdSection): string[] {
-  return section.lines
-    .filter((l) => /^\s*[-*•]\s+/.test(l))
-    .map((l) => l.replace(/^\s*[-*•]\s+/, '').trim())
-    .filter(Boolean);
-}
-
-/** Normalize a line for loose equality (ignore case + whitespace + trailing punctuation). */
-function norm(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, ' ').replace(/[.,;:]+$/, '').trim();
-}
-
-/**
- * Build a structured list of changes by comparing the base and tailored
- * markdown section-by-section. This is intentionally heuristic — the goal is
- * a readable, toggleable changelog, not a byte-perfect diff. The tailor
- * agent's prose `changeSummary` is used as a fallback "rationale" detail when
- * the structural diff is thin.
- */
-function deriveChanges(
-  baseMd: string,
-  tailoredMd: string,
-  changeSummary: string,
-  locale?: string,
-): RATailorChange[] {
-  // Localized label/detail templates — these strings ship to the client
-  // pre-rendered inside RATailorDiff.changes[], so the frontend bundles cannot
-  // translate them; they must come back in the request locale. See
-  // raResumeAIMessages.ts (every RA_LOCALES entry has a block).
-  const m = getResumeAIMessages(locale);
-  const baseSections = splitSections(baseMd, locale);
-  const tailoredSections = splitSections(tailoredMd, locale);
-  // Key on the locale-independent `id`, never the display heading — otherwise
-  // a user's own '基本情報' section and OUR synthetic header section share a key
-  // and one of them diffs against the wrong content.
-  const baseByHeading = new Map<string, MdSection>();
-  for (const s of baseSections) baseByHeading.set(norm(s.id), s);
-
-  const changes: RATailorChange[] = [];
-  let counter = 0;
-  const nextId = () => `c${++counter}`;
-
-  for (const tSec of tailoredSections) {
-    const bSec = baseByHeading.get(norm(tSec.id));
-    const tBullets = bulletsOf(tSec);
-    const bBullets = bSec ? bulletsOf(bSec) : [];
-
-    if (!bSec) {
-      // Whole section is new in the tailored resume → an "add".
-      if (tBullets.length > 0 || tSec.lines.some((l) => l.trim())) {
-        changes.push({
-          id: nextId(),
-          section: tSec.heading,
-          kind: 'add',
-          label: format(m.tailorChangeAddSection, { heading: tSec.heading }),
-          added: tBullets.slice(0, 6),
-        });
-      }
-      continue;
-    }
-
-    // Rewrites: a base bullet whose normalized text changed but a near-match
-    // exists (same leading words) is a 'rewrite'; we pair by index for the
-    // first N changed bullets.
-    const bNorm = bBullets.map(norm);
-    const tNorm = tBullets.map(norm);
-    const pairCount = Math.min(bBullets.length, tBullets.length);
-    let sectionRewrites = 0;
-    for (let i = 0; i < pairCount && sectionRewrites < 2; i++) {
-      if (bNorm[i] !== tNorm[i] && bBullets[i] && tBullets[i]) {
-        changes.push({
-          id: nextId(),
-          section: tSec.heading,
-          kind: 'rewrite',
-          label: format(m.tailorChangeReword, { heading: tSec.heading }),
-          before: bBullets[i],
-          after: tBullets[i],
-        });
-        sectionRewrites++;
-      }
-    }
-
-    // Added bullets (tailored has more, and they're not in base).
-    if (tBullets.length > bBullets.length) {
-      const addedBullets = tBullets.filter((tb) => !bNorm.includes(norm(tb))).slice(0, 5);
-      if (addedBullets.length > 0) {
-        changes.push({
-          id: nextId(),
-          section: tSec.heading,
-          kind: 'add',
-          label: format(m.tailorChangeSurface, { n: addedBullets.length }),
-          added: addedBullets,
-        });
-      }
-    }
-
-    // Trimmed bullets (base has more).
-    if (bBullets.length > tBullets.length) {
-      const droppedCount = bBullets.length - tBullets.length;
-      changes.push({
-        id: nextId(),
-        section: tSec.heading,
-        kind: 'trim',
-        label: format(m.tailorChangeTrim, { n: droppedCount, heading: tSec.heading }),
-        detail: m.tailorChangeTrimDetail,
-      });
-    }
-
-    // Reorder: same set of bullets, different order.
-    if (
-      bBullets.length === tBullets.length &&
-      bBullets.length > 1 &&
-      sectionRewrites === 0 &&
-      [...bNorm].sort().join('|') === [...tNorm].sort().join('|') &&
-      bNorm.join('|') !== tNorm.join('|')
-    ) {
-      changes.push({
-        id: nextId(),
-        section: tSec.heading,
-        kind: 'reorder',
-        label: format(m.tailorChangeReorder, { heading: tSec.heading }),
-        detail: m.tailorChangeReorderDetail,
-      });
-    }
-  }
-
-  // If the structural diff found nothing (e.g. the tailor agent rewrote
-  // prose without changing bullet structure), synthesize a single rewrite
-  // entry from the agent's change summary so the panel is never empty.
-  if (changes.length === 0) {
-    const summary = (changeSummary || '').trim();
-    changes.push({
-      id: nextId(),
-      section: m.tailorChangeFallbackSection,
-      kind: 'rewrite',
-      label: m.tailorChangeFallback,
-      // `summary` is the tailor agent's own prose, already produced in the
-      // request locale via its getLocaleDirective — keep it when present.
-      detail: summary || m.tailorChangeFallbackDetail,
-    });
-  }
-
-  return changes.slice(0, 12);
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Apply the user's per-change selections to the tailored markdown produced by
- * the tailor preview, so "Apply" persists exactly what the user accepted —
- * deterministically, with NO second LLM call (the old apply re-ran the agent,
- * double-charging and producing a different resume than the one previewed).
- *
- * `acceptedIds === null` means accept-all (the default → return unchanged).
- * Otherwise each DESELECTED change is reverted in the tailored markdown:
- *   - rewrite → swap the `after` text back to `before`
- *   - add     → remove the added bullet line(s)
- *   - trim / reorder → kept (the heuristic diff carries no before-state to
- *     reverse them; documented limitation, surfaced in the UI as non-toggleable)
- * Pure + exported for the acceptance oracle.
- */
-export function applyTailorSelections(
-  tailoredMarkdown: string,
-  changes: RATailorChange[],
-  acceptedIds: string[] | null,
-): string {
-  if (!acceptedIds) return tailoredMarkdown;
-  const accepted = new Set(acceptedIds);
-  let md = tailoredMarkdown;
-  for (const c of changes) {
-    if (accepted.has(c.id)) continue; // change kept — already in tailoredMarkdown
-    if (c.kind === 'rewrite' && c.before && c.after && md.includes(c.after)) {
-      md = md.replace(c.after, c.before);
-    } else if (c.kind === 'add' && Array.isArray(c.added)) {
-      for (const line of c.added) {
-        const re = new RegExp(`^[ \\t]*[-*•][ \\t]*${escapeRegExp(line)}[ \\t]*\\r?\\n?`, 'm');
-        md = md.replace(re, '');
-      }
-    }
-  }
-  return md.replace(/\n{3,}/g, '\n\n');
-}
-
-// ─── Fit scores for the diff (matchBefore / matchAfter) ────────────────────
-//
-// D3: both numbers are real or both are null. The base score is the cached
-// AI fit score of this (resume, job) pair (the job-detail score panel writes
-// it); the tailored score is one re-score of the tailored text through the
-// match scorer. Without a cached base score, a job, or a successful tailor,
-// the diff carries null and the client shows "—". The old hash-seeded
-// pseudo-score and the "+3 per change" uplift are gone.
-
-export interface TailorScoreResult {
-  matchBefore: number | null;
-  matchAfter: number | null;
-  /** Always false: an estimate is never sent. */
-  estimated: false;
-}
-
-/**
- * Resolve the tailor-diff's matchBefore / matchAfter. `rescoreTailored` is
- * injected so the decision logic is unit-testable without an LLM; it runs only
- * when a real cached base score exists.
- */
-export async function resolveTailorScores(opts: {
-  cachedBase: number | null;
-  agentSucceeded: boolean;
-  hasJobContext: boolean;
-  rescoreTailored: () => Promise<number>;
-}): Promise<TailorScoreResult> {
-  const { cachedBase, agentSucceeded, hasJobContext, rescoreTailored } = opts;
-  const haveRealBase = typeof cachedBase === 'number' && cachedBase >= 0 && cachedBase <= 100;
-  if (agentSucceeded && hasJobContext && haveRealBase) {
-    try {
-      const matchAfter = await rescoreTailored();
-      if (typeof matchAfter === 'number' && Number.isFinite(matchAfter)) {
-        return {
-          matchBefore: Math.round(cachedBase as number),
-          matchAfter: Math.max(0, Math.min(100, Math.round(matchAfter))),
-          estimated: false,
-        };
-      }
-    } catch {
-      /* fall through: no numbers */
-    }
-  }
-  return { matchBefore: null, matchAfter: null, estimated: false };
-}
+// ─── Number guard for rewrites ────────────────────────────────────────────
 
 /** Fold full-width digits (U+FF10–U+FF19) onto ASCII so the numeric comparison
  *  below reads a CJK resume the same way it reads a Latin one. Without this a
@@ -755,187 +422,6 @@ export class RAResumeAIService {
     return result;
   }
 
-  // ── tailorDiff ──
-  /** @deprecated WP-36a: use tailor sessions (`getTailorService()` in features/resume). */
-  async tailorDiff(userId: string, id: string, body: TailorDiffInput, locale?: string): Promise<ResumeTailorDiffResult> {
-    const manualCompany = (body?.targetCompany ?? '').trim();
-    const manualTitle = (body?.targetTitle ?? '').trim();
-    if (!body || (!body.targetJobId && !body.jdText && !manualCompany)) {
-      throw new RewriteValidationError('targetJobId, jdText or targetCompany is required');
-    }
-
-    const variant = await this.loadOwnedVariant(userId, id);
-    if (!(await resumeAiAvailable(userId))) throw new AiUnavailableError();
-    const baseMd = variant.resumeMarkdown ?? '';
-
-    // Resolve job context + cached base score. The manual lane (company +
-    // optional title, JD optional) mirrors the jdText path — company/title
-    // become the agent's target context and the diff's display names.
-    //
-    // Two DIFFERENT fallbacks on purpose:
-    //  - companyName / roleTitle are DISPLAY strings rendered in the diff
-    //    header, so they come from the locale catalog (they used to be the
-    //    English literals 'Pasted JD' / 'Target role' — English text in a zh
-    //    user's panel).
-    //  - jobTitle is fed INTO the tailor prompt. When the user named no title
-    //    we send NOTHING rather than a placeholder: a placeholder is worse job
-    //    context than no context in any language, and an English seed string
-    //    sitting in the prompt beside the resume nudges the model into
-    //    answering in English (the exact failure mode this pass exists to fix).
-    const m = getResumeAIMessages(locale);
-    let companyName = manualCompany || m.tailorTargetPastedJD;
-    let roleTitle = manualTitle || m.tailorTargetRoleFallback;
-    let jobId: string | null = null;
-    let jobTitle = manualTitle;
-    let jobDescription = body.jdText ?? '';
-    let targetCompanyName: string | undefined = manualCompany || undefined;
-    let parsedJD: { qualifications?: string; responsibilities?: string; benefits?: string } | undefined;
-    let cachedBase: number | null = null;
-
-    if (body.targetJobId) {
-      const job = await this.loadJob(userId, body.targetJobId);
-      if (job) {
-        jobId = job.id;
-        companyName = job.companyName ?? companyName;
-        targetCompanyName = job.companyName ?? targetCompanyName;
-        roleTitle = job.title ?? roleTitle;
-        jobTitle = job.title ?? jobTitle;
-        jobDescription = job.descriptionPlain ?? job.description ?? '';
-        parsedJD = {
-          qualifications: job.qualifications ?? undefined,
-          responsibilities: job.responsibilities ?? undefined,
-          benefits: job.benefits ?? undefined,
-        };
-        // Read a cached match score for matchBefore (if present).
-        try {
-          const p = prisma as any;
-          const scoreRow = await p.rAJobMatchScore.findUnique({
-            where: {
-              userId_jobId_resumeVariantId: {
-                userId,
-                jobId: job.id,
-                resumeVariantId: id,
-              },
-            },
-          });
-          // Only a real AI fit score of THIS version of the resume counts (D3).
-          const fresh =
-            !scoreRow?.resumeContentHashAtScore || scoreRow.resumeContentHashAtScore === variant.resumeContentHash;
-          const isAi = !scoreRow?.scoreKind || scoreRow.scoreKind === 'ai';
-          if (scoreRow && typeof scoreRow.score === 'number' && fresh && isAi) cachedBase = scoreRow.score;
-        } catch {
-          /* no cached score — estimate below */
-        }
-      }
-    }
-
-    const requestId = getCurrentRequestId() ?? undefined;
-    let agentSucceeded = false;
-    let tailoredMd = baseMd;
-    let changeSummary = '';
-    // Fallback path returns the base unchanged — trivially guard-clean.
-    let citationGuardPassed = true;
-
-    try {
-      const agent = new RAResumeTailorAgent();
-      const out = await agent.run(
-        {
-          // Prompt hygiene: no name, contact block, photo, 籍贯, birth date or family lines.
-          baseResumeMarkdown: resumeForLlm(baseMd),
-          jobTitle,
-          companyName: targetCompanyName,
-          jobDescription,
-          parsedJD,
-          complexity: 'standard',
-        },
-        { requestId, locale },
-      );
-      if (out && out.tailoredResumeMarkdown && out.tailoredResumeMarkdown.trim()) {
-        // Put the header and sensitive lines back (the model never saw them).
-        tailoredMd = mergeTailored(baseMd, out.tailoredResumeMarkdown, TAILOR_SECTIONS);
-        changeSummary = out.changeSummary ?? '';
-        citationGuardPassed = out.citationGuardPassed;
-        agentSucceeded = true;
-      }
-    } catch (err) {
-      logger.warn('RA_V2_RESUME_AI', 'tailor agent failed; deterministic diff fallback', {
-        userId,
-        resumeId: id,
-        targetJobId: body.targetJobId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      // Fall through to deterministic diff against the unchanged base.
-    }
-
-    const changes = deriveChanges(baseMd, tailoredMd, changeSummary, locale);
-
-    // Real matchAfter: re-score the tailored resume through the match scorer
-    // when we already hold a real cached base score (cost-capped to +1 call);
-    // otherwise both are null (D3). The scorer shares requestId so its tokens
-    // roll into the single ra_resume_tailor cost — no extra debit.
-    const { matchBefore, matchAfter, estimated } = await resolveTailorScores({
-      cachedBase,
-      agentSucceeded,
-      hasJobContext: jobDescription.trim().length > 0,
-      rescoreTailored: async () => {
-        const scorer = new RAJobMatchScorerAgent();
-        const out = await scorer.run(
-          {
-            resumeMarkdown: resumeForLlm(tailoredMd),
-            jobTitle,
-            jobDescription,
-            jobQualifications: parsedJD?.qualifications ?? '',
-            jobBenefits: parsedJD?.benefits,
-          },
-          { requestId, locale },
-        );
-        return out.score;
-      },
-    });
-
-    const diff: RATailorDiff = {
-      jobId,
-      companyName,
-      roleTitle,
-      matchBefore,
-      matchAfter,
-      estimated,
-      changes,
-    };
-
-    if (agentSucceeded) {
-      const cost = costPatchFromTally(requestId);
-      await writeDeductionLog({
-        userId,
-        sku: 'ra_resume_tailor',
-        source: 'plan',
-        platformCostUsd: cost.platformCostUsd,
-        units: 1,
-        requestId: requestId ?? null,
-        relatedEntityType: 'ra_resume_variant',
-        relatedEntityId: id,
-        metadata: {
-          ...cost.metadata,
-          source: 'roboapply_v2',
-          agent: 'RAResumeTailorAgent',
-          op: 'tailor_diff',
-          targetJobId: body.targetJobId ?? null,
-          changeCount: changes.length,
-        },
-      });
-    }
-
-    logger.info('RA_V2_RESUME_AI', 'tailorDiff complete', {
-      userId,
-      resumeId: id,
-      jobId,
-      agentSucceeded,
-      citationGuardPassed,
-      changeCount: changes.length,
-    });
-    return { diff, tailoredResumeMarkdown: tailoredMd, citationGuardPassed };
-  }
-
   // ── coachTips ──  (FREE — deterministic, no LLM, no debit)
   async coachTips(userId: string, id: string): Promise<ResumeCoachTipsResult> {
     const variant = await this.loadOwnedVariant(userId, id);
@@ -1032,14 +518,9 @@ export const raResumeAIService = new RAResumeAIService();
 export default raResumeAIService;
 
 export const __test = {
-  splitSections,
-  bulletsOf,
-  deriveChanges,
   hasFabricatedNumber,
   fallbackBulletRewrite,
   fallbackSummaryOptions,
   fallbackSkills,
   summaryLabelsFor,
-  resolveTailorScores,
-  applyTailorSelections,
 };

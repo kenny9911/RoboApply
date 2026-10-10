@@ -4,7 +4,7 @@
 // (WP-36b; PRODUCT_PLAN.md F-RES-13/F-RES-15, CN-E-07, TW-04).
 //
 // Pure entry points (no DB, no LLM; deterministic and unit-tested in
-// components/features/resume/server/resumeExport.test.ts). The cover-letter exporter (WP-37) imports them
+// resumeExport.test.ts next to this file). The cover-letter exporter (WP-37) imports them
 // read-only:
 //   parseResumeMarkdown(md)          → ResumeBlock[]
 //   resolveLayout(raw, defaults)     → ResumeRenderLayout (sanitized `RAResumeVariant.layout`)
@@ -13,6 +13,8 @@
 //   defaultPageFor({ market, country, locale }) → 'letter' | 'a4'
 //   formatDatesIn(text, format)      → dates rewritten to the chosen format
 //   fontChainFor / splitFontRuns     → the per-run font fallback
+//   createRunDrawer(doc, { chain })  → the same fallback as a pdfkit drawer; the
+//                                      cover-letter and receipt PDFs draw with it
 //
 // Templates: standard (recommended) · compact · centered · structured ·
 // two_column (a sidebar; company software may read it out of order, so the
@@ -289,6 +291,112 @@ export function splitFontRuns(text: string, chain: readonly FontFaces[]): FontRu
     else runs.push({ text: ch, face });
   }
   return runs;
+}
+
+// ── Per-run drawing (shared by the resume, cover-letter and receipt PDFs) ───
+
+/** The fallback chain a text needs: none when the PDF standard faces draw all of it. */
+export function fontChainForText(locale: string | null | undefined, text: string): FontFaces[] {
+  return needsUnicodeFont(text) ? fontChainFor(locale, text) : [];
+}
+
+export type FontWeight = 'reg' | 'bold';
+
+export interface RunTextOptions {
+  width?: number;
+  align?: 'left' | 'center' | 'right' | 'justify';
+  lineGap?: number;
+  characterSpacing?: number;
+  lineBreak?: boolean;
+  continued?: boolean;
+  baseline?: number;
+}
+
+export interface RunDrawer {
+  /** The text split by font (one `std` run when no chain is needed). */
+  runsOf(text: string): FontRun[];
+  /** The registered pdfkit font name for a face and weight. */
+  fontName(face: FontRun['face'], weight: FontWeight): string;
+  /** Draw text run by run, each in the font that has its glyphs. */
+  draw(text: string, weight: FontWeight, size: number, x: number, y: number, opts?: RunTextOptions): void;
+  /** Approximate height of a block, measured in the font of its longest run. */
+  measure(text: string, weight: FontWeight, size: number, width: number, opts?: RunTextOptions): number;
+}
+
+/**
+ * The per-run font fallback over one pdfkit document. Registers the chain's
+ * faces (pdfkit embeds only the ones a run uses) and draws each run of text in
+ * the first font that has its glyphs: the PDF standard face for WinAnsi text,
+ * then the bundled faces in chain order (Latin Extended, then Han/Hangul/kana
+ * by export locale). One implementation for every PDF we make, so a Korean
+ * letter gets the KR face and a Traditional-only character on a receipt gets
+ * the TC face instead of a box.
+ */
+export function createRunDrawer(
+  doc: InstanceType<typeof PDFDocument>,
+  config: {
+    chain: readonly FontFaces[];
+    /** PDF standard faces for WinAnsi text (default Helvetica). */
+    stdRegular?: string;
+    stdBold?: string;
+    /** Width available from `x` when a call gives none (centre/right alignment of mixed-font lines). */
+    widthFrom: (x: number) => number;
+  },
+): RunDrawer {
+  const { chain } = config;
+  const stdReg = config.stdRegular ?? 'Helvetica';
+  const stdBold = config.stdBold ?? 'Helvetica-Bold';
+  // Fonts are registered lazily by pdfkit: only faces a run uses get embedded.
+  for (const face of chain) {
+    doc.registerFont(`${face.key}-reg`, face.regular);
+    doc.registerFont(`${face.key}-bold`, face.bold);
+  }
+  const fontName = (face: FontRun['face'], weight: FontWeight) => (face === 'std' ? (weight === 'bold' ? stdBold : stdReg) : `${face}-${weight}`);
+  const runsOf = (t: string): FontRun[] => (chain.length ? splitFontRuns(t, chain) : [{ text: t, face: 'std' }]);
+
+  const draw = (t: string, weight: FontWeight, size: number, x: number, y: number, opts: RunTextOptions = {}) => {
+    const runs = runsOf(t);
+    if (runs.length <= 1) {
+      doc.font(fontName(runs[0]?.face ?? 'std', weight)).fontSize(size).text(runs[0]?.text ?? t, x, y, opts);
+      return;
+    }
+    // pdfkit cannot justify a line made of several fonts' fragments.
+    let o: RunTextOptions = opts.align === 'justify' ? { ...opts, align: 'left' } : opts;
+    let startX = x;
+    if (opts.align === 'center' || opts.align === 'right') {
+      // pdfkit aligns each continued fragment on its own, so a mixed-font
+      // line is placed by hand when it fits on one line.
+      const total = runs.reduce(
+        (w, r) => w + doc.font(fontName(r.face, weight)).fontSize(size).widthOfString(r.text, { characterSpacing: opts.characterSpacing }),
+        0,
+      );
+      const width = opts.width ?? config.widthFrom(x);
+      if (total <= width) {
+        startX = opts.align === 'center' ? x + (width - total) / 2 : x + width - total;
+        o = { ...opts, align: 'left', width: total + 2 };
+      } else {
+        o = { ...opts, align: 'left' };
+      }
+    }
+    // Every run sits on the first run's baseline (pdfkit otherwise offsets
+    // each fragment by its own font's ascender, so mixed fonts would bob).
+    // A numeric baseline is in points; the ascender is in 1/1000 em.
+    const ascender = (doc.font(fontName(runs[0]!.face, weight)) as unknown as { _font: { ascender: number } })._font.ascender;
+    runs.forEach((r, i) => {
+      const last = i === runs.length - 1;
+      doc.font(fontName(r.face, weight)).fontSize(size);
+      if (i === 0) doc.text(r.text, startX, y, { ...o, baseline: -(ascender / 1000) * size, continued: !last });
+      else doc.text(r.text, { continued: !last });
+    });
+  };
+
+  const measure = (t: string, weight: FontWeight, size: number, width: number, opts: RunTextOptions = {}) => {
+    const runs = runsOf(t);
+    const main = runs.reduce((a, r) => (r.text.length > a.text.length ? r : a), runs[0] ?? { text: t, face: 'std' as const });
+    return doc.font(fontName(main.face, weight)).fontSize(size).heightOfString(t, { ...opts, width });
+  };
+
+  return { runsOf, fontName, draw, measure };
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────
@@ -779,7 +887,7 @@ export async function renderResumePdfWithMeta(markdown: string, options: RenderO
   const personal = personalLine(layout.personal, personalLanguage(layout, allText(parsed0), options.locale));
   const parsed = applySkillsLayout(personal ? { ...parsed0, header: [...parsed0.header, { kind: 'para', text: personal }] } : parsed0, layout);
   const text = allText(parsed, options.footerLine);
-  const chain = needsUnicodeFont(text) ? fontChainFor(options.locale, text) : [];
+  const chain = fontChainForText(options.locale, text);
 
   const info: Record<string, string> = { Title: (options.title || parsed.name || 'Resume').slice(0, 200) };
   if (options.aiLabel) Object.assign(info, options.aiLabel.pdfInfo);
@@ -797,69 +905,14 @@ export async function renderResumePdfWithMeta(markdown: string, options: RenderO
   });
   if (options.aiLabel?.xmp) doc.appendXML(options.aiLabel.xmp);
 
-  // Fonts are registered lazily by pdfkit: only faces a run uses get embedded.
-  for (const face of chain) {
-    doc.registerFont(`${face.key}-reg`, face.regular);
-    doc.registerFont(`${face.key}-bold`, face.bold);
-  }
-  const stdReg = layout.font === 'serif' ? 'Times-Roman' : 'Helvetica';
-  const stdBold = layout.font === 'serif' ? 'Times-Bold' : 'Helvetica-Bold';
-  type Weight = 'reg' | 'bold';
-  const fontName = (face: FontRun['face'], weight: Weight) =>
-    face === 'std' ? (weight === 'bold' ? stdBold : stdReg) : `${face}-${weight}`;
-  const runsOf = (t: string): FontRun[] => (chain.length ? splitFontRuns(t, chain) : [{ text: t, face: 'std' }]);
-
-  interface TextOpts {
-    width?: number;
-    align?: 'left' | 'center' | 'right' | 'justify';
-    lineGap?: number;
-    characterSpacing?: number;
-    lineBreak?: boolean;
-    continued?: boolean;
-    baseline?: number;
-  }
-  /** Draw text run by run, each in the font that has its glyphs. */
-  const draw = (t: string, weight: Weight, size: number, x: number, y: number, opts: TextOpts) => {
-    const runs = runsOf(t);
-    if (runs.length <= 1) {
-      doc.font(fontName(runs[0]?.face ?? 'std', weight)).fontSize(size).text(runs[0]?.text ?? t, x, y, opts);
-      return;
-    }
-    // pdfkit cannot justify a line made of several fonts' fragments.
-    let o: TextOpts = opts.align === 'justify' ? { ...opts, align: 'left' } : opts;
-    let startX = x;
-    if (opts.align === 'center' || opts.align === 'right') {
-      // pdfkit aligns each continued fragment on its own, so a mixed-font
-      // line is placed by hand when it fits on one line.
-      const total = runs.reduce(
-        (w, r) => w + doc.font(fontName(r.face, weight)).fontSize(size).widthOfString(r.text, { characterSpacing: opts.characterSpacing }),
-        0,
-      );
-      const width = opts.width ?? pw - x - marginX;
-      if (total <= width) {
-        startX = opts.align === 'center' ? x + (width - total) / 2 : x + width - total;
-        o = { ...opts, align: 'left', width: total + 2 };
-      } else {
-        o = { ...opts, align: 'left' };
-      }
-    }
-    // Every run sits on the first run's baseline (pdfkit otherwise offsets
-    // each fragment by its own font's ascender, so mixed fonts would bob).
-    // A numeric baseline is in points; the ascender is in 1/1000 em.
-    const ascender = (doc.font(fontName(runs[0]!.face, weight)) as unknown as { _font: { ascender: number } })._font.ascender;
-    runs.forEach((r, i) => {
-      const last = i === runs.length - 1;
-      doc.font(fontName(r.face, weight)).fontSize(size);
-      if (i === 0) doc.text(r.text, startX, y, { ...o, baseline: -(ascender / 1000) * size, continued: !last });
-      else doc.text(r.text, { continued: !last });
-    });
-  };
-  /** Approximate height of a block, measured in the font of its longest run. */
-  const measure = (t: string, weight: Weight, size: number, width: number, opts: TextOpts = {}) => {
-    const runs = runsOf(t);
-    const main = runs.reduce((a, r) => (r.text.length > a.text.length ? r : a), runs[0] ?? { text: t, face: 'std' as const });
-    return doc.font(fontName(main.face, weight)).fontSize(size).heightOfString(t, { ...opts, width });
-  };
+  type Weight = FontWeight;
+  type TextOpts = RunTextOptions;
+  const { draw, measure, fontName } = createRunDrawer(doc, {
+    chain,
+    stdRegular: layout.font === 'serif' ? 'Times-Roman' : 'Helvetica',
+    stdBold: layout.font === 'serif' ? 'Times-Bold' : 'Helvetica-Bold',
+    widthFrom: (x) => pw - x - marginX,
+  });
 
   const left = marginX;
   const contentWidth = pw - marginX * 2;
@@ -1021,7 +1074,7 @@ export async function renderResumePdfWithMeta(markdown: string, options: RenderO
   }
 
   if (!parsed.name && parsed.sections.length === 0 && parsed.header.length === 0) {
-    doc.font(stdReg).fontSize(10).fillColor('#999999').text('(empty resume)', left, marginY);
+    doc.font(fontName('std', 'reg')).fontSize(10).fillColor('#999999').text('(empty resume)', left, marginY);
   }
 
   if (options.footerLine) {

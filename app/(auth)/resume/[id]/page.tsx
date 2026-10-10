@@ -7,9 +7,9 @@
 //           Skills), with inline per-bullet AI + a 3-option summary rewrite +
 //           AI skill suggestions
 //   right = live "paper" preview that re-renders as you type
-// Plus a floating Coach rail (cycling tips), a Tailor-for-a-job modal
-// (pick → analyze → review diff → apply → tailored variant), and a Download
-// modal.
+// Plus a floating Coach rail (cycling tips), the Tailor sheet (tailor
+// sessions: pick a saved job or paste the posting → setup → Verify details →
+// Use this resume), and a Download modal.
 //
 // Data + state model:
 //   • `useResume(id)` (existing) → seeds local `structured` parsed from
@@ -20,7 +20,7 @@
 //   • A 1.2s debounce re-serializes `structured` → markdown and PATCHes
 //     (`usePatchResumeMutation`) only when the markdown actually changed.
 //   • Inline AI: `useResumeRewrite` (bullet / summary / skills).
-//   • Tailor: `useResumeTailorDiff` + `useCreateResumeMutation`.
+//   • Tailor: `<TailorSheet>` (components/features/tailor; one `tailor` credit per run).
 //   • Coach: `useResumeCoachTips`.
 //
 // Sections: Identity / Summary / Experience / Education / Skills are fully
@@ -78,7 +78,7 @@ import {
 } from '../../../../components/features/resume';
 import { useBuilderConfig } from '../../../../hooks/resume/useResumeBuilder';
 import { useResumePhoto } from '../../../../hooks/resume/useResumePhoto';
-import { TailorLaunchHost } from '../../../../components/features/tailor';
+import { TailorLaunchHost, TailorSheet } from '../../../../components/features/tailor';
 import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
 import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
 import {
@@ -101,7 +101,6 @@ import {
   SkillsEditor,
   ResumePaper,
   CoachPanel,
-  TailorModal,
   DownloadModal,
   YOUNG_HELPERS,
 } from '../../../../components/v3/resume-editor';
@@ -989,13 +988,14 @@ export default function ResumeEditorPage({
         />
       ) : null}
 
-      {/* Tailor modal */}
+      {/* Tailor (toolbar): the tailor-session flow. With no job in the URL the
+          user first picks a saved job or pastes the posting (INT-10). */}
       {tailorOpen ? (
-        <TailorModal
+        <TailorSheet
+          open
           resumeId={id}
-          resumeName={resumeName}
           onClose={() => setTailorOpen(false)}
-          onCreated={(variantId) => {
+          onOpenResume={(variantId) => {
             setTailorOpen(false);
             router.push(`/resume/${variantId}`);
           }}

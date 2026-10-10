@@ -2,16 +2,18 @@
 // WP-36b: resume hub routes (server/src/roboapply/v2/routes/resumes.ts) —
 // auth, base-resume limit, primary, target title, layout, export guard (ruling
 // C12), file record, AI marks per brand and AI provenance, upload residency,
-// and the removed LinkedIn URL import. Prisma, storage and ingest are faked; no
-// network beyond 127.0.0.1, no database.
+// and the removed LinkedIn URL import. INT-10: the "Verify details" session
+// link on tailored versions, file names scoped to jobs the user may read
+// (GoApply recruitment-info mode), the retired tailor-diff / tailor-apply
+// routes and the legacy tailored create handed to a tailor session. Prisma,
+// storage and ingest are faked; no network beyond 127.0.0.1, no database.
 //
-// Lives in the WP's own folder (TASK_PLAN.md §2 ownership); INT may move it
-// next to the route. The router is loaded by path so the web type-check does
-// not pull the server's untyped modules (pdfkit) in.
+// Sits next to the route (moved from components/features/resume/server by INT-10).
 
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Row = Record<string, any>;
@@ -27,6 +29,12 @@ const mocks = vi.hoisted(() => ({
   setPurge: vi.fn(),
   putObjects: 0,
   putBodies: [] as Buffer[],
+  /** Variant id → tailor session in review (what TailorService.reviewSessionIds answers). */
+  reviewSessions: {} as Record<string, string>,
+  reviewSessionsFail: false,
+  createTailorSession: vi.fn(),
+  /** What `resumeAiAvailable` answers (off by default: no AI consent in this suite). */
+  aiAvailable: false,
 }));
 
 // ── tiny in-memory Prisma ─────────────────────────────────────────────────
@@ -66,7 +74,7 @@ function table(rows: () => Row[], prefix: string) {
   };
 }
 
-vi.mock('../../../../server/src/lib/prisma.js', () => {
+vi.mock('../../../lib/prisma.js', () => {
   const client: Row = {
     rAResumeVariant: table(() => mocks.db.variants, 'v'),
     rATrackerEntry: table(() => mocks.db.trackers, 't'),
@@ -78,7 +86,7 @@ vi.mock('../../../../server/src/lib/prisma.js', () => {
   return { default: client };
 });
 
-vi.mock('../../../../server/src/roboapply/v2/lib/raAuth.js', () => ({
+vi.mock('../lib/raAuth.js', () => ({
   // Signed out when the test sends `x-test-anon` (the real guard answers 401).
   requireAuth: (req: Row, res: { status(n: number): { json(b: unknown): void } }, next: () => void) => {
     if (req.headers['x-test-anon']) return res.status(401).json({ error: 'unauthorized' });
@@ -86,43 +94,49 @@ vi.mock('../../../../server/src/roboapply/v2/lib/raAuth.js', () => ({
     next();
   },
 }));
-vi.mock('../../../../server/src/roboapply/v2/lib/raLocale.js', () => ({ RA_DEFAULT_LOCALE: 'en', getRequestLocale: (req: Row) => req.headers['x-test-locale'] ?? 'en' }));
-vi.mock('../../../../server/src/services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
-vi.mock('../../../../server/src/lib/candidateResumeIngest.js', () => ({
+vi.mock('../lib/raLocale.js', () => ({ RA_DEFAULT_LOCALE: 'en', getRequestLocale: (req: Row) => req.headers['x-test-locale'] ?? 'en' }));
+vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
+vi.mock('../../../lib/candidateResumeIngest.js', () => ({
   isAcceptedResumeUpload: () => true,
   readCandidateResumeOriginal: vi.fn(),
   ingestCandidateResume: (...args: unknown[]) => mocks.ingest(...args),
   CandidateResumeIngestError: class extends Error {},
 }));
-vi.mock('../../../../server/src/roboapply/v2/services/RAResumeAIService.js', () => ({
+vi.mock('../services/RAResumeAIService.js', () => ({
   raResumeAIService: {},
-  applyTailorSelections: (md: string) => md,
   AiUnavailableError: class extends Error {},
   ResumeNotFoundError: class extends Error {},
   RewriteValidationError: class extends Error {},
 }));
-vi.mock('../../../../server/src/features/resume/index.js', async () => {
-  const contract = await import('../../../../server/src/features/resume/contract.js');
-  const { NotImplementedError } = await import('../../../../server/src/platform/http.js');
+vi.mock('../../../features/resume/index.js', async () => {
+  const contract = await import('../../../features/resume/contract.js');
+  const { NotImplementedError } = await import('../../../platform/http.js');
   return {
     ...contract,
     unverifiedClaimsCount: (id: string) => (mocks.unverified ? mocks.unverified(id) : Promise.reject(new NotImplementedError('resume.unverifiedClaimsCount'))),
-    resumeAiAvailable: async () => false,
+    resumeAiAvailable: async () => mocks.aiAvailable,
     // WP-65: the legacy PATCH /:id/layout saves through the RES layout service (real, over the fake Prisma).
     getLayoutService: () => layoutService,
+    getTailorService: () => ({
+      reviewSessionIds: async (_userId: string, ids: string[]) => {
+        if (mocks.reviewSessionsFail) throw new Error('tailor store down');
+        return Object.fromEntries(ids.filter((id) => mocks.reviewSessions[id]).map((id) => [id, mocks.reviewSessions[id]]));
+      },
+    }),
+    resumeSuiteService: { createTailorSession: (...args: unknown[]) => mocks.createTailorSession(...args) },
   };
 });
 let layoutService: unknown;
 beforeAll(async () => {
   // Loaded by path (like the router) so the web type-check does not pull server modules in.
-  const LAYOUT_SERVICE = '../../../../server/src/features/resume/layout/LayoutService.js';
-  const LAYOUT_STORE = '../../../../server/src/features/resume/layout/store.js';
+  const LAYOUT_SERVICE = '../../../features/resume/layout/LayoutService.js';
+  const LAYOUT_STORE = '../../../features/resume/layout/store.js';
   const { LayoutService } = (await import(/* @vite-ignore */ LAYOUT_SERVICE)) as { LayoutService: new (deps: unknown) => unknown };
   const { createPrismaLayoutStore } = (await import(/* @vite-ignore */ LAYOUT_STORE)) as { createPrismaLayoutStore: () => unknown };
   layoutService = new LayoutService({ store: createPrismaLayoutStore(), countPages: async () => 1, market: () => 'intl' });
 });
-vi.mock('../../../../server/src/features/compliance/index.js', async () => {
-  const a = await import('../../../../server/src/features/compliance/aiLabel.js');
+vi.mock('../../../features/compliance/index.js', async () => {
+  const a = await import('../../../features/compliance/aiLabel.js');
   return {
     ...a,
     complianceService: {
@@ -133,9 +147,14 @@ vi.mock('../../../../server/src/features/compliance/index.js', async () => {
     registerArtifactStorageDeleter: (fn: unknown) => mocks.registerCompliance(fn),
   };
 });
-vi.mock('../../../../server/src/roboapply/services/SeekerAccountPurgeService.js', () => ({ setArtifactStorageDeleter: (fn: unknown) => mocks.setPurge(fn) }));
-vi.mock('../../../../server/src/services/ResumeOriginalFileStorageService.js', async () => {
-  const actual = await vi.importActual<typeof import('../../../../server/src/services/ResumeOriginalFileStorageService.js')>('../../../../server/src/services/ResumeOriginalFileStorageService.js');
+// The GoApply phone gate is auth-cn's (tested there); here it lets everyone through.
+vi.mock('../../../features/auth-cn/index.js', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  requirePhoneBound: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+vi.mock('../../../roboapply/services/SeekerAccountPurgeService.js', () => ({ setArtifactStorageDeleter: (fn: unknown) => mocks.setPurge(fn) }));
+vi.mock('../../../services/ResumeOriginalFileStorageService.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../services/ResumeOriginalFileStorageService.js')>('../../../services/ResumeOriginalFileStorageService.js');
   return {
     ...actual,
     resumeOriginalFileStorageService: new Proxy({}, { get: (_t, prop) => {
@@ -146,8 +165,8 @@ vi.mock('../../../../server/src/services/ResumeOriginalFileStorageService.js', a
   };
 });
 
-import { runWithBrand } from '../../../../server/src/lib/requestContext.js';
-import { ResumeOriginalFileStorageService } from '../../../../server/src/services/ResumeOriginalFileStorageService.js';
+import { runWithBrand } from '../../../lib/requestContext.js';
+import { ResumeOriginalFileStorageService } from '../../../services/ResumeOriginalFileStorageService.js';
 
 /** A storage service over a fake S3 that counts PutObject calls. */
 function realStorage(env: Record<string, string | undefined>) {
@@ -167,7 +186,26 @@ function realStorage(env: Record<string, string | undefined>) {
 }
 const INTL_S3 = { S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com', S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'i', S3_SECRET_ACCESS_KEY: 's', NODE_ENV: 'production' };
 
-const ROUTER = '../../../../server/src/roboapply/v2/routes/resumes.js';
+const ROUTER = './resumes.js';
+
+/** Read one entry of a zip (docx) archive with node's zlib (no extra deps). */
+function zipEntry(buf: Buffer, name: string): string | null {
+  let i = 0;
+  while ((i = buf.indexOf(Buffer.from([0x50, 0x4b, 0x03, 0x04]), i)) !== -1) {
+    const method = buf.readUInt16LE(i + 8);
+    const compSize = buf.readUInt32LE(i + 18);
+    const nameLen = buf.readUInt16LE(i + 26);
+    const extraLen = buf.readUInt16LE(i + 28);
+    const entry = buf.subarray(i + 30, i + 30 + nameLen).toString('utf8');
+    const start = i + 30 + nameLen + extraLen;
+    if (entry === name) {
+      const data = buf.subarray(start, start + compSize);
+      return (method === 8 ? zlib.inflateRawSync(data) : data).toString('utf8');
+    }
+    i = start + Math.max(compSize, 1);
+  }
+  return null;
+}
 
 const MD = '# Ada Lovelace\n\nada@example.com\n\n## Experience\n\n**Acme** — Engineer · 2021-03 – Present\n- Built things\n';
 
@@ -224,7 +262,12 @@ describe('resume hub routes (WP-36b)', () => {
     mocks.putBodies = [];
     mocks.storage = realStorage({ ...INTL_S3, ALLOWED_BRANDS: 'roboapply,goapply' });
     mocks.ingest.mockReset();
+    mocks.reviewSessions = {};
+    mocks.reviewSessionsFail = false;
+    mocks.aiAvailable = false;
+    mocks.createTailorSession.mockReset();
     delete process.env.CN_AI_EXPORT_EXPLICIT_LABEL;
+    delete process.env.CN_RECRUITMENT_INFO_MODE;
   });
 
   const json = async (path: string, init: RequestInit = {}) => {
@@ -280,6 +323,86 @@ describe('resume hub routes (WP-36b)', () => {
       expect(tailored).toMatchObject({ basedOnVariantId: v.id, unverifiedClaims: 2 });
       const cleared = await json(`/${v.id}`, { method: 'PATCH', body: JSON.stringify({ targetTitle: '' }) });
       expect(cleared.body.resume.targetTitle).toBeNull();
+    });
+  });
+
+  describe('tailored versions: the "Verify details" session (INT-10)', () => {
+    it('a version with details to check carries the tailor session in review; others carry none', async () => {
+      const baseRow = variant({ isPrimary: true });
+      const pending = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', basedOnVariantId: baseRow.id, unverifiedClaims: 2 });
+      const done = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', basedOnVariantId: baseRow.id, unverifiedClaims: 0 });
+      const orphan = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', basedOnVariantId: baseRow.id, unverifiedClaims: 1 });
+      // A stale mapping for a finished version must not surface.
+      mocks.reviewSessions = { [pending.id]: 'ts_9', [done.id]: 'ts_old' };
+      const list = (await json('')).body.resumes as Row[];
+      const by = (id: string) => list.find((r) => r.id === id)!;
+      expect(by(pending.id)).toMatchObject({ unverifiedClaims: 2, tailorSessionId: 'ts_9' });
+      expect(by(done.id)).toMatchObject({ unverifiedClaims: 0, tailorSessionId: null });
+      expect(by(orphan.id)).toMatchObject({ unverifiedClaims: 1, tailorSessionId: null });
+      expect(by(baseRow.id).tailorSessionId).toBeNull();
+    });
+
+    it('the list still loads when the tailor sessions cannot be read', async () => {
+      variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', unverifiedClaims: 3 });
+      mocks.reviewSessionsFail = true;
+      const res = await json('');
+      expect(res.status).toBe(200);
+      expect(res.body.resumes[0]).toMatchObject({ unverifiedClaims: 3, tailorSessionId: null });
+    });
+  });
+
+  describe('legacy tailoring endpoints (INT-10)', () => {
+    it('POST /:id/tailor-diff and /tailor-apply answer 410 gone and point at tailor sessions; nothing is written', async () => {
+      const v = variant();
+      mocks.aiAvailable = true;
+      for (const path of ['tailor-diff', 'tailor-apply']) {
+        const res = await json(`/${v.id}/${path}`, { method: 'POST', body: JSON.stringify({ tailoredResumeMarkdown: MD, targetJobId: 'job1' }) });
+        expect(res.status).toBe(410);
+        expect(res.body).toMatchObject({ success: false, code: 'gone', details: { reason: 'legacy_tailor_retired', replacement: 'POST /api/v1/roboapply/v2/resumes/tailor-sessions' } });
+      }
+      expect(mocks.db.variants).toHaveLength(1);
+      expect(mocks.createTailorSession).not.toHaveBeenCalled();
+    });
+
+    it('the retired routes keep the AI-consent gate in front (503, as before)', async () => {
+      const v = variant();
+      const res = await json(`/${v.id}/tailor-apply`, { method: 'POST', body: JSON.stringify({ tailoredResumeMarkdown: MD }) });
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('ai_unavailable');
+      expect(mocks.db.variants).toHaveLength(1);
+    });
+
+    it('POST / kind=tailored_for_jd hands the request to a tailor session (fast mode) with the caller\'s Idempotency-Key', async () => {
+      const baseRow = variant({ isPrimary: true });
+      const made = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', basedOnVariantId: baseRow.id, unverifiedClaims: 2, name: 'Main · Acme · Engineer' });
+      mocks.createTailorSession.mockResolvedValue({ id: 'ts_1', resultVariantId: made.id, pendingClaims: 2 });
+      const res = await json('', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': 'legacy-1' },
+        body: JSON.stringify({ kind: 'tailored_for_jd', name: 'For Acme', basedOnVariantId: baseRow.id, targetJobId: 'job1' }),
+      });
+      expect(res.status).toBe(201);
+      expect(mocks.createTailorSession).toHaveBeenCalledWith('user1', { baseVariantId: baseRow.id, jobId: 'job1', idempotencyKey: 'legacy-1', mode: 'fast', locale: 'en' });
+      expect(res.body).toMatchObject({ tailorSessionId: 'ts_1', pendingClaims: 2, resume: { id: made.id, kind: 'tailored_for_jd', name: 'For Acme', unverifiedClaims: 2, aiAssisted: true } });
+    });
+
+    it('without an Idempotency-Key the route makes one per request', async () => {
+      const baseRow = variant();
+      const made = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored' });
+      mocks.createTailorSession.mockResolvedValue({ id: 'ts_1', resultVariantId: made.id, pendingClaims: 0 });
+      const body = JSON.stringify({ kind: 'tailored_for_jd', name: 'For Acme', basedOnVariantId: baseRow.id, targetJobId: 'job1' });
+      await json('', { method: 'POST', body });
+      await json('', { method: 'POST', body });
+      const keys = mocks.createTailorSession.mock.calls.map((c) => (c[1] as { idempotencyKey: string }).idempotencyKey);
+      expect(keys[0]).toMatch(/^legacy-tailor:[0-9a-f-]{36}$/);
+      expect(keys[1]).not.toBe(keys[0]);
+    });
+
+    it('still validates the body before anything runs', async () => {
+      const res = await json('', { method: 'POST', body: JSON.stringify({ kind: 'tailored_for_jd', name: 'x', basedOnVariantId: 'v1' }) });
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('invalid_tailored_input');
+      expect(mocks.createTailorSession).not.toHaveBeenCalled();
     });
   });
 
@@ -354,30 +477,50 @@ describe('resume hub routes (WP-36b)', () => {
       expect(mocks.db.variants[0]!.aiAssistedAt).toBe(first);
     });
 
-    it.todo('SR-36b-1: after an aiAssisted PATCH the export carries the AI marks (PDF Info / XMP / DOCX properties)');
+    it('SR-36b-1: after an aiAssisted PATCH the export carries the AI marks (PDF Info / XMP / DOCX properties)', async () => {
+      const v = variant();
+      // Before: the user's own text, no AI marks.
+      const before = Buffer.from(await (await fetch(`${base}/${v.id}/export?format=pdf`)).arrayBuffer()).toString('latin1');
+      expect(before).not.toContain('/AIContentID');
+
+      expect((await json(`/${v.id}`, { method: 'PATCH', body: JSON.stringify({ resumeMarkdown: MD, aiAssisted: true }) })).status).toBe(200);
+      expect((await json(`/${v.id}`)).body.resume.aiAssisted).toBe(true);
+
+      const pdf = Buffer.from(await (await fetch(`${base}/${v.id}/export?format=pdf`)).arrayBuffer()).toString('latin1');
+      expect(pdf.startsWith('%PDF')).toBe(true);
+      expect(pdf).toContain('/AIContentID'); // PDF Info
+      expect(pdf).toMatch(/\(RA-[0-9a-f]{24}\)/);
+      // XMP packet: AI text the user then edited is a composite (compositeWithTrainedAlgorithmicMedia).
+      expect(pdf).toMatch(/trainedAlgorithmicMedia/i);
+      const docx = await fetch(`${base}/${v.id}/export?format=docx`);
+      expect(docx.status).toBe(200);
+      const custom = zipEntry(Buffer.from(await docx.arrayBuffer()), 'docProps/custom.xml') ?? '';
+      expect(custom).toContain('AIContentID'); // DOCX custom properties
+      expect(custom).toMatch(/RA-[0-9a-f]{24}/);
+    });
+
+    it('a PATCH without aiAssisted never stamps the resume', async () => {
+      const v = variant();
+      expect((await json(`/${v.id}`, { method: 'PATCH', body: JSON.stringify({ resumeMarkdown: `${MD}- More\n` }) })).status).toBe(200);
+      expect(mocks.db.variants[0]!.aiAssistedAt).toBeUndefined();
+      expect((await json(`/${v.id}`)).body.resume.aiAssisted).toBe(false);
+    });
 
     it.each(['roboapply', 'goapply'] as const)(
-      '%s: a tailored copy made without AI is stored as a plain copy and exports with no AI marks and no label log',
+      '%s: a tailored copy made without AI (an older row) exports with no AI marks and no label log',
       async (brand) => {
         mocks.brand = brand;
         process.env.CN_AI_EXPORT_EXPLICIT_LABEL = 'on';
-        // The user's own import in the brand's market (readable in every GoApply recruitment-info mode).
-        mocks.db.jobs.push({ id: 'job1', title: 'Engineer', companyName: 'Acme', market: brand === 'goapply' ? 'cn' : 'intl', visibility: 'private', ownerUserId: 'user1', sourceBoard: 'user_import', provider: 'user_import' });
         const baseRow = variant({ isPrimary: true });
-        // resumeAiAvailable() is false in this suite (no AI consent), so the
-        // tailor agent never runs and the copy is the base resume.
-        const created = await json('', {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'tailored_for_jd', name: 'For Acme', basedOnVariantId: baseRow.id, targetJobId: 'job1' }),
-        });
-        expect(created.status).toBe(201);
-        expect(created.body.resume).toMatchObject({ kind: 'tailored_for_jd', sourceKind: 'tailored_copy', aiAssisted: false });
+        // Rows the retired no-AI fallback wrote: a plain copy of the base, not AI content.
+        const copy = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored_copy', basedOnVariantId: baseRow.id });
+        expect((await json(`/${copy.id}`)).body.resume).toMatchObject({ kind: 'tailored_for_jd', sourceKind: 'tailored_copy', aiAssisted: false });
 
-        const pdf = Buffer.from(await (await fetch(`${base}/${created.body.resume.id}/export?format=pdf`)).arrayBuffer()).toString('latin1');
+        const pdf = Buffer.from(await (await fetch(`${base}/${copy.id}/export?format=pdf`)).arrayBuffer()).toString('latin1');
         expect(pdf.startsWith('%PDF')).toBe(true);
         expect(pdf).not.toContain('/AIContentID');
         expect(pdf).not.toContain('trainedAlgorithmicMedia');
-        const docx = await fetch(`${base}/${created.body.resume.id}/export?format=docx`);
+        const docx = await fetch(`${base}/${copy.id}/export?format=docx`);
         expect(docx.status).toBe(200);
         expect(Buffer.from(await docx.arrayBuffer()).toString('latin1')).not.toContain('AIContentID');
         expect(mocks.db.labelLogs).toHaveLength(0);
@@ -449,11 +592,65 @@ describe('resume hub routes (WP-36b)', () => {
     });
 
     it('names the file from a preset with data we hold', async () => {
-      mocks.db.jobs.push({ id: 'job1', title: 'Engineer', companyName: 'Acme' });
+      mocks.db.jobs.push({ id: 'job1', title: 'Engineer', companyName: 'Acme', market: 'intl', visibility: 'public' });
       const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'job1' });
       const res = await exportOf(v.id, 'format=docx&nameStyle=name_company_role');
       expect(res.status).toBe(200);
       expect(res.headers.get('content-disposition')).toContain("filename*=UTF-8''Ada%20Lovelace%20-%20Acme%20-%20Engineer.docx");
+    });
+
+    describe('file names only use jobs this user may read (legacy job scope)', () => {
+      const nameOf = async (id: string, qs = 'format=docx&nameStyle=name_company_role') => decodeURIComponent((await exportOf(id, qs)).headers.get('content-disposition') ?? '');
+
+      it('GoApply, recruitment-info mode off: a third-party posting is never named, in the file name or on the resume card', async () => {
+        mocks.brand = 'goapply';
+        // A GoHire posting the variant was tailored for while postings were shown.
+        mocks.db.jobs.push({ id: 'gh1', title: '后端工程师', companyName: '某某科技', market: 'cn', visibility: 'public', provider: 'gohire', sourceBoard: 'gohire' });
+        const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'gh1' });
+        const name = await nameOf(v.id);
+        expect(name).not.toContain('某某科技');
+        expect(name).not.toContain('后端工程师');
+        expect(name).toContain('Ada Lovelace.docx');
+
+        const row = (await json('')).body.resumes.find((r: Row) => r.id === v.id);
+        expect(row).toMatchObject({ targetJobId: 'gh1', targetJobTitle: null, targetJobCompany: null });
+
+        // The same posting reached through an application record is not named either.
+        mocks.db.trackers.push({ id: 'trm', userId: 'user1', jobId: 'gh1', deletedAt: null, externalSnapshot: null });
+        const plain = variant();
+        expect(await nameOf(plain.id, 'format=pdf&nameStyle=company_role_name&trackerEntryId=trm')).not.toContain('某某科技');
+      });
+
+      it('GoApply, mode off: the user\'s own imported job is named', async () => {
+        mocks.brand = 'goapply';
+        mocks.db.jobs.push({ id: 'own1', title: '产品经理', companyName: '我的公司', market: 'cn', visibility: 'private', ownerUserId: 'user1', provider: 'user_import', sourceBoard: 'user_import' });
+        const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'own1' });
+        const name = await nameOf(v.id);
+        expect(name).toContain('我的公司');
+        expect(name).toContain('产品经理');
+      });
+
+      it('GoApply with postings allowed: the posting is named', async () => {
+        mocks.brand = 'goapply';
+        process.env.CN_RECRUITMENT_INFO_MODE = 'licensed';
+        mocks.db.jobs.push({ id: 'gh2', title: '后端工程师', companyName: '某某科技', market: 'cn', visibility: 'public', provider: 'gohire', sourceBoard: 'gohire' });
+        const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'gh2' });
+        expect(await nameOf(v.id)).toContain('某某科技');
+      });
+
+      it('never names a job from the other market, another user\'s import or a seed row', async () => {
+        mocks.db.jobs.push(
+          { id: 'cn1', title: 'CN Role', companyName: 'CN Co', market: 'cn', visibility: 'public' },
+          { id: 'theirs', title: 'Their Role', companyName: 'Their Co', market: 'intl', visibility: 'private', ownerUserId: 'someone-else', provider: 'user_import' },
+          { id: 'seed1', title: 'Seed Role', companyName: 'Seed Co', market: 'intl', visibility: 'public', sourceBoard: 'seed' },
+        );
+        for (const jobId of ['cn1', 'theirs', 'seed1']) {
+          const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: jobId });
+          const name = await nameOf(v.id);
+          expect(name).toContain('Ada Lovelace.docx');
+          expect(name).not.toMatch(/CN Co|Their Co|Seed Co/);
+        }
+      });
     });
 
     it('records the exact file on an application: sha256 + storage key, X-Artifact-Id', async () => {
@@ -623,6 +820,8 @@ describe('resume hub routes (WP-36b)', () => {
       const res = await fetch(`${base}/upload`, { method: 'POST', body: fd });
       expect(res.status).toBe(201);
       expect(mocks.ingest).toHaveBeenCalledTimes(1);
+      // GoHire parsing is not switched on for RoboApply here: the file is read locally.
+      expect(mocks.ingest.mock.calls[0]![0]).toMatchObject({ forceLocalParser: true });
     });
   });
 

@@ -11,6 +11,5 @@ export { SkillsEditor } from './SkillsEditor';
 export { ResumePaper } from './ResumePaper';
 export { CoachPanel } from './CoachPanel';
 export { AnalyzerPanel } from './AnalyzerPanel';
-export { TailorModal } from './TailorModal';
 export { DownloadModal } from './DownloadModal';
 export { AI_ACTIONS, YOUNG_HELPERS, type AiAction } from './constants';

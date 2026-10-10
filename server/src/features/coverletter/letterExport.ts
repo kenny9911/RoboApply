@@ -2,11 +2,15 @@
 //
 // PDF / DOCX export of a cover letter (WP-37; ARCH §3.6; CN-E-07).
 //
-// Same libraries (pdfkit, docx) and the same bundled CJK faces
-// (server/assets/fonts, Noto Sans SC and — when WP-36b ships it — TC) as the
-// resume exporter in roboapply/v2/lib/resumeExport.ts. That module's
-// renderers take only markdown, so they cannot carry the AI label; this one
-// adds what a letter export needs:
+// Same libraries (pdfkit, docx) as the resume exporter, and — since INT-10 —
+// the same per-run font chain (roboapply/v2/lib/resumeExport.ts
+// `fontChainForText` + `createRunDrawer`): each run of a line is drawn in the
+// first face that has its glyphs. The PDF standard face draws Latin text; the
+// bundled faces follow in the order of the letter's locale, so a Korean
+// letter prints in Noto Sans KR, a zh-TW letter in the Traditional face (Han
+// Sans TC, or Noto Sans TC when present) and a zh letter in Noto Sans SC,
+// with the other faces behind for characters the first one lacks.
+// What a letter export adds to that:
 //   - the machine-readable AI label from compliance `implicitLabelMetadata()`
 //     on both brands: PDF Info keys + an XMP packet, DOCX custom properties;
 //   - the visible footer line from `explicitFooterLine()` when the brand
@@ -17,50 +21,83 @@
 /// <reference path="./pdfkit.d.ts" />
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, TextRun } from 'docx';
-import { CJK_RE } from './claimCheck.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// features/coverletter → up 3 to server/, then assets/fonts.
-const FONT_DIR = path.resolve(__dirname, '..', '..', '..', 'assets', 'fonts');
+import {
+  bundledFace,
+  createRunDrawer,
+  faceHasGlyph,
+  fontChainForText,
+  hanOrderFor,
+  splitFontRuns,
+  type FaceKey,
+  type FontFaces,
+  type FontRun,
+} from '../../roboapply/v2/lib/resumeExport.js';
 
 interface FontPair {
   regular: string;
   bold: string;
 }
 
-function filePair(base: string, ext: string): FontPair | null {
-  const regular = path.join(FONT_DIR, `${base}-Regular.${ext}`);
-  const bold = path.join(FONT_DIR, `${base}-Bold.${ext}`);
-  return fs.existsSync(regular) && fs.existsSync(bold) ? { regular, bold } : null;
-}
-
-function fontPair(family: 'SC' | 'TC'): FontPair | null {
-  // WP-36b bundles the Traditional face as `HanSansTC-*.otf` (Source Han Sans
-  // TW, renamed under its licence); Google's NotoSansTC-*.ttf wins when present
-  // (server/assets/fonts/README.md). Wave 3 gate integration fix.
-  return filePair(`NotoSans${family}`, 'ttf') ?? (family === 'TC' ? filePair('HanSansTC', 'otf') : null);
-}
-
-/** The bundled CJK faces for a locale (zh-TW prefers TC, falls back to SC), or null (Latin-only Helvetica). */
+/**
+ * The primary bundled Han/Hangul/kana face for a locale (zh-TW → TC, ko → KR,
+ * ja → JP, otherwise SC), falling back along the locale's order; null when
+ * none is bundled (the PDF standard face then draws Latin-only letters).
+ */
 export function cjkFontsFor(locale: string): FontPair | null {
-  if (locale === 'zh-TW') return fontPair('TC') ?? fontPair('SC');
-  return fontPair('SC') ?? fontPair('TC');
+  for (const key of hanOrderFor(locale)) {
+    const face = bundledFace(key);
+    if (face) return { regular: face.regular, bold: face.bold };
+  }
+  return null;
 }
+
+/** The fallback chain a letter's text needs (empty for text the PDF standard face draws). */
+export function letterFontChain(texts: ReadonlyArray<string | null | undefined>, locale: string): FontFaces[] {
+  return fontChainForText(locale, texts.filter(Boolean).join('\n'));
+}
+
+/** The text of a letter split by the font each run prints in (`std` = the PDF standard face). */
+export function letterFontRuns(text: string, locale: string): FontRun[] {
+  const chain = letterFontChain([text], locale);
+  return chain.length ? splitFontRuns(text, chain) : [{ text, face: 'std' }];
+}
+
+/** Scripts a PDF must have a bundled face for: without one the whole text is boxes. */
+const SCRIPTS: ReadonlyArray<readonly [name: string, re: RegExp]> = [
+  ['han', /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u],
+  ['hangul', /[\uac00-\ud7a3\u1100-\u11ff\u3130-\u318f]/u],
+  ['kana', /[\u3040-\u30ff\u31f0-\u31ff]/u],
+];
 
 /**
- * True when a PDF of this text would print correctly: Latin-only text, or
- * CJK text with the bundled CJK faces present. Helvetica has no CJK glyphs,
- * so without the fonts a Chinese letter would download as an unreadable file;
- * the exporter refuses it instead (Word is unaffected).
+ * True when a PDF of this text would print correctly: text the standard face
+ * draws, or text whose scripts each have a bundled face that draws them
+ * (Hangul needs the KR face, kana the JP face, Han any Han face). Without the
+ * face a Chinese or Korean letter would download as an unreadable file; the
+ * exporter refuses it instead (Word is unaffected). A single rare character
+ * no face has never blocks the PDF.
  */
 export function pdfFontsAvailable(texts: ReadonlyArray<string | null | undefined>, locale: string): boolean {
-  if (!texts.some((t) => t && CJK_RE.test(t))) return true;
-  return cjkFontsFor(locale) !== null;
+  const text = texts.filter(Boolean).join('\n');
+  const chain = letterFontChain(texts, locale);
+  for (const [, re] of SCRIPTS) {
+    const chars = [...text].filter((ch) => re.test(ch));
+    if (chars.length === 0) continue;
+    if (!chars.some((ch) => chain.some((face) => faceHasGlyph(face, ch.codePointAt(0)!)))) return false;
+  }
+  return true;
+}
+
+/** The bundled faces a letter PDF embeds, in the order they were first used. */
+export function letterFacesUsed(texts: ReadonlyArray<string | null | undefined>, locale: string): FaceKey[] {
+  const used: FaceKey[] = [];
+  for (const t of texts) {
+    if (!t) continue;
+    for (const run of letterFontRuns(t, locale)) if (run.face !== 'std' && !used.includes(run.face)) used.push(run.face);
+  }
+  return used;
 }
 
 /** The label fields compliance hands to exporters (subset of ImplicitAiLabel). */
@@ -113,31 +150,34 @@ export class PdfFontUnavailableError extends Error {
 
 export async function renderLetterPdf(input: LetterExportInput): Promise<Buffer> {
   if (!pdfFontsAvailable([input.body, input.footerLine], input.locale)) throw new PdfFontUnavailableError();
-  const fonts = cjkFontsFor(input.locale);
+  const margin = 64;
   const doc = new PDFDocument({
     size: paperFor(input.locale),
-    margin: 64,
+    margin,
     // ≥1.4 so pdfkit writes the XMP metadata stream.
     pdfVersion: '1.7',
     lang: input.locale,
     info: { Title: input.title, ...input.label.pdfInfo },
   });
   doc.appendXML(input.label.xmp);
-  const regular = fonts ? 'CLReg' : 'Helvetica';
-  if (fonts) {
-    doc.registerFont('CLReg', fonts.regular);
-    doc.registerFont('CLBold', fonts.bold);
-  }
-  const width = doc.page.width - 128;
+  const width = doc.page.width - margin * 2;
+  // The resume exporter's per-run chain: every line is drawn run by run, each
+  // run in the first face that has its glyphs.
+  const { draw, fontName } = createRunDrawer(doc, {
+    chain: letterFontChain([input.body, input.footerLine], input.locale),
+    widthFrom: (x) => doc.page.width - x - margin,
+  });
   const paragraphs = letterParagraphs(input.body);
   for (const lines of paragraphs) {
-    doc.font(regular).fontSize(11).fillColor('#222222').text(lines.join('\n'), { width, lineGap: 3 });
+    doc.fillColor('#222222');
+    for (const line of lines) draw(line, 'reg', 11, margin, doc.y, { width, lineGap: 3 });
     doc.moveDown(0.9);
   }
-  if (paragraphs.length === 0) doc.font(regular).fontSize(11).fillColor('#999999').text(' ');
+  if (paragraphs.length === 0) doc.font(fontName('std', 'reg')).fontSize(11).fillColor('#999999').text(' ');
   if (input.footerLine) {
     doc.moveDown(1.2);
-    doc.font(regular).fontSize(8.5).fillColor('#666666').text(input.footerLine, { width });
+    doc.fillColor('#666666');
+    draw(input.footerLine, 'reg', 8.5, margin, doc.y, { width });
   }
   return pdfToBuffer(doc);
 }

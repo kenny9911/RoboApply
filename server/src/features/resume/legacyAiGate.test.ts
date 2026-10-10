@@ -1,10 +1,11 @@
 // @vitest-environment node
 //
-// WP-22: the legacy inline-AI endpoints (/v2/resumes/:id/rewrite and
-// /tailor-diff, RAResumeAIService) honour the GoApply AI consent too: with
-// aiAllowed(user)=false they throw before any agent runs (zero LLMService
-// calls) and the route answers 503 ai_unavailable. Also covers the
-// `resume.grade` worker payload rules.
+// WP-22: the legacy inline-AI endpoint (/v2/resumes/:id/rewrite,
+// RAResumeAIService) honours the GoApply AI consent too: with
+// aiAllowed(user)=false it throws before any agent runs (zero LLMService
+// calls) and the route answers 503 ai_unavailable. (The legacy tailor-diff
+// path is gone: INT-10, routes answer 410.) Also covers the `resume.grade`
+// worker payload rules.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,9 +41,8 @@ describe('legacy inline AI gate', () => {
     expect(chat).not.toHaveBeenCalled();
   });
 
-  it('tailorDiff: no consent → AiUnavailableError, zero LLM calls', async () => {
-    await expect(raResumeAIService.tailorDiff('u1', 'rv_1', { jdText: 'Build things in Python.' })).rejects.toBeInstanceOf(AiUnavailableError);
-    expect(chat).not.toHaveBeenCalled();
+  it('has no tailor path left: tailoring is a tailor session', () => {
+    expect((raResumeAIService as unknown as Record<string, unknown>).tailorDiff).toBeUndefined();
   });
 });
 

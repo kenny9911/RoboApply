@@ -3,8 +3,7 @@
 // WP-36a: the tailor agent's prompt carries the session's sections, the
 // user's instruction, only the confirmed keywords and the profile snapshot,
 // and states the honesty rules (posting facts are never the candidate's own;
-// headings and entry lines stay). Also the legacy tailor-diff score rule (D3:
-// real fit scores or null, never an estimate). No model is called.
+// headings and entry lines stay). No model is called.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +12,6 @@ vi.mock('../../../services/llm/LLMService.js', () => ({ llmService: { chat, getM
 vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 
 import { RAResumeTailorAgent } from '../../../roboapply/v2/agents/RAResumeTailorAgent.js';
-import { resolveTailorScores } from '../../../roboapply/v2/services/RAResumeAIService.js';
 import { createCreditTestKit } from '../../../platform/credits/testkit.js';
 import { TailorService } from './TailorService.js';
 import { createMemoryTailorStore, memoryTailorJob, memoryTailorVariant } from './memoryStore.js';
@@ -56,36 +54,6 @@ describe('RAResumeTailorAgent prompt (tailor sessions)', () => {
     expect(prompt).toContain("Facts from the job posting are never the candidate's own");
     expect(prompt).toContain('Keywords the candidate confirmed');
     expect(prompt).toMatch(/Keep every `##` heading/);
-  });
-});
-
-describe('legacy tailor-diff scores (D3)', () => {
-  const rescore = vi.fn(async () => 81);
-
-  it('a real cached base score and a re-score → both numbers, never estimated', async () => {
-    await expect(resolveTailorScores({ cachedBase: 64, agentSucceeded: true, hasJobContext: true, rescoreTailored: rescore })).resolves.toEqual({
-      matchBefore: 64,
-      matchAfter: 81,
-      estimated: false,
-    });
-  });
-
-  it('no cached base, no job or a failed tailor → null, not a made-up number', async () => {
-    rescore.mockClear();
-    for (const opts of [
-      { cachedBase: null, agentSucceeded: true, hasJobContext: true },
-      { cachedBase: 70, agentSucceeded: false, hasJobContext: true },
-      { cachedBase: 70, agentSucceeded: true, hasJobContext: false },
-    ]) {
-      await expect(resolveTailorScores({ ...opts, rescoreTailored: rescore })).resolves.toEqual({ matchBefore: null, matchAfter: null, estimated: false });
-    }
-    expect(rescore).not.toHaveBeenCalled();
-  });
-
-  it('a failed re-score → null', async () => {
-    await expect(
-      resolveTailorScores({ cachedBase: 70, agentSucceeded: true, hasJobContext: true, rescoreTailored: async () => Promise.reject(new Error('x')) }),
-    ).resolves.toMatchObject({ matchBefore: null, matchAfter: null });
   });
 });
 

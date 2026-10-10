@@ -19,13 +19,13 @@ import { resumeForLlm } from '../resume/index.js';
 import { explicitFooterLine, explicitLabelEnabled, implicitLabelMetadata, logAiContentLabel, newAiContentId } from '../compliance/index.js';
 import { REWRITES_PER_LETTER_PER_DAY, type CoverLetterView, type LetterLength, type LetterLocale, type LetterTone } from './contract.js';
 import { CoverLetterService, type CoverLetterDeps } from './service.js';
-import { createPrismaCoverLetterStore } from './store.js';
+import { createPrismaCoverLetterStore, createPrismaPostingStore } from './store.js';
 
 export * from './contract.js';
 export { createCoverLetterRouter } from './routes.js';
 export { CoverLetterService } from './service.js';
 export type { CoverLetterDeps, CreateLetterInput, PostingSnapshot, RewriteBudget } from './service.js';
-export type { CoverLetterStore } from './store.js';
+export type { CoverLetterStore, PostingStore, StoredPosting } from './store.js';
 
 /** AI for cover letters: the user's AI consent AND the brand's text model (R-13). */
 export async function coverLetterAiAvailable(userId: string): Promise<boolean> {
@@ -33,24 +33,11 @@ export async function coverLetterAiAvailable(userId: string): Promise<boolean> {
   return isEnabled('ai.text', { userId });
 }
 
-/**
- * SR-37-1: `RACoverLetter.postingSnapshot Json?` (the pasted job post a letter
- * was written from) is not in the schema yet. Until SCHEMA-3 adds it, a letter
- * written from a pasted post cannot be rewritten or regenerated (409
- * posting_unavailable); letters written from a job id are unaffected.
- */
-const prismaPostings: CoverLetterDeps['postings'] = {
-  async read() {
-    return null;
-  },
-  async write() {
-    /* SR-37-1: nothing to write to until the column exists */
-  },
-};
-
 export function defaultCoverLetterDeps(): CoverLetterDeps {
   return {
     store: createPrismaCoverLetterStore(),
+    // SR-37-1: the pasted job post is kept on the letter (RACoverLetter.postingSnapshot).
+    postings: createPrismaPostingStore(),
     credits: creditService,
     aiAvailable: coverLetterAiAvailable,
     brandId: () => getCurrentBrandOrDefault().id,
@@ -114,7 +101,6 @@ export function defaultCoverLetterDeps(): CoverLetterDeps {
         });
       },
     },
-    postings: prismaPostings,
   };
 }
 

@@ -9,7 +9,7 @@
 // which renders on GoApply (the badge decides; no market branch here).
 // Nothing is written to the resume until the user picks Use or Save.
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives';
@@ -27,15 +27,35 @@ export interface IssueCardProps {
   editorHref: string;
   /** Called after the resume text was replaced. */
   onApplied?: () => void;
+  /**
+   * A link pointed at this issue (`/resume/<id>/check?issue=<id>`): it opens
+   * with its details shown, scrolls into view once and takes focus.
+   */
+  focused?: boolean;
+}
+
+/** The element id of an issue card, for links and focus. */
+export function issueElementId(issueId: string): string {
+  return `issue-${issueId}`;
 }
 
 const VARIANTS: Array<Exclude<FixVariant, 'ai'>> = ['shorter', 'longer', 'stronger'];
 
-export function IssueCard({ issue, fix, editorHref, onApplied }: IssueCardProps) {
+export function IssueCard({ issue, fix, editorHref, onApplied, focused = false }: IssueCardProps) {
   const t = useTranslations('resumeCheck');
   const text = issueText(t, issue);
   const detailsId = useId();
-  const [open, setOpen] = useState(issue.severity === 'urgent');
+  const cardRef = useRef<HTMLElement | null>(null);
+  const [open, setOpen] = useState(issue.severity === 'urgent' || focused);
+
+  useEffect(() => {
+    if (!focused) return;
+    const el = cardRef.current;
+    if (!el) return;
+    setOpen(true);
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
+    el.focus({ preventScroll: true });
+  }, [focused]);
   const [instruction, setInstruction] = useState('');
   const [busy, setBusy] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -75,7 +95,15 @@ export function IssueCard({ issue, fix, editorHref, onApplied }: IssueCardProps)
   }
 
   return (
-    <article className={styles.issue} data-issue-type={issue.type} data-severity={issue.severity}>
+    <article
+      ref={cardRef}
+      id={issueElementId(issue.id)}
+      tabIndex={-1}
+      className={focused ? `${styles.issue} ${styles.issueFocused}` : styles.issue}
+      data-issue-type={issue.type}
+      data-severity={issue.severity}
+      data-focused={focused ? 'true' : undefined}
+    >
       <div className={styles.issueHead}>
         <span className={`${styles.dot} ${styles[`sev-${issue.severity}`]}`} aria-hidden="true" />
         <div className={styles.grow}>
