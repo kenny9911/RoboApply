@@ -47,6 +47,27 @@ export function featuresFor(brand: BrandId): FeatureDef[] {
   return FEATURES.filter((f) => f.brand === brand);
 }
 
+/**
+ * May search engines index this feature page? Only a page with no gate.
+ * A gated page (a capability, a published extension, opted-in people data)
+ * prints its body in the browser once the capability is known to be on; the
+ * HTML a crawler receives has no body, and the capability can be switched off
+ * per brand at any time. So it is `noindex` (app/features/[slug]/page.tsx) and
+ * is left out of /sitemaps/static.xml (app/sitemaps/[file]/route.ts) — a
+ * sitemap must never list a URL its own page marks noindex — even while the
+ * footer links it for visitors. Both places read this one rule.
+ */
+export function isFeatureIndexable(def: Pick<FeatureDef, 'gate'>): boolean {
+  return def.gate === null;
+}
+
+/** `/features/<slug>` of the brand's indexable feature pages: what the static sitemap lists. */
+export function indexableFeaturePaths(brand: BrandId): string[] {
+  return featuresFor(brand)
+    .filter(isFeatureIndexable)
+    .map((f) => `/features/${f.slug}`);
+}
+
 /** The feature page for a slug on this brand, or null (→ 404). */
 export function findFeature(brand: BrandId, slug: string): FeatureDef | null {
   return FEATURES.find((f) => f.brand === brand && f.slug === slug) ?? null;
@@ -100,6 +121,25 @@ export const GOAL_ADJUSTMENTS = [
   { key: 'management', server: 'management', points: 6 },
   { key: 'higherPay', server: 'higher_pay', points: 6 },
   { key: 'flexibility', server: 'flexibility', points: 4 },
+] as const;
+
+/**
+ * The feed's sorts besides Recommended, as "How ranking works" names them.
+ * `sort` is the key of `jobs.workspace.sort.*` — the label the sort menu
+ * itself prints — and `param` its placeholder in `landing.ranking.otherSorts`.
+ * The page reads the menu's labels instead of repeating them, so a renamed
+ * sort cannot leave the page behind (it said "Best fit" while the menu said
+ * "Your best fits"). The key keeps its name on purpose: a locale whose
+ * sentence still spells the labels out keeps showing that translated sentence
+ * (the extra values are ignored) until it is translated again, instead of
+ * falling back to English.
+ * components/features/feed/SortMenu.tsx owns the list of sorts;
+ * __tests__/pages.test.tsx compares the two.
+ */
+export const OTHER_SORTS = [
+  { sort: 'newest', param: 'newest' },
+  { sort: 'best_fit', param: 'bestFit' },
+  { sort: 'highest_pay', param: 'highestPay' },
 ] as const;
 
 /** Fit score parts (server `DEFAULT_MATCH_WEIGHTS`, R-09 35/30/15/10/10; parity-tested). */

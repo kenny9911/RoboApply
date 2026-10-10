@@ -726,6 +726,33 @@
   gap: 0 var(--sp-3);
 }
 
+/* The light/dark switch of the home pages on a phone: the header's icon
+ * button is hidden below 760 px (.hideSmall), so the switch is here. */
+.footerTheme {
+  display: none;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  cursor: pointer;
+}
+.footerTheme:hover {
+  border-color: var(--rule-strong);
+  color: var(--text);
+}
+.footerTheme:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 
 @media (max-width: 1024px) {
@@ -770,6 +797,9 @@
   }
   .headerActions .hideSmall {
     display: none;
+  }
+  .footerTheme {
+    display: inline-flex;
   }
 }
 

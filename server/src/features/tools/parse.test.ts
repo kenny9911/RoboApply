@@ -27,7 +27,7 @@ import { getBrand } from '../../platform/brand/registry.js';
 import { HttpError } from '../../platform/http.js';
 import { bySeverity, runChecklist, runRequirementRows } from './checks.js';
 import { CN_RESUME_MD, FILES, POSTING, WEAK_RESUME_MD } from './fixtures.js';
-import { defaultParseUpload, nameFromFile, stripControl, textToMarkdown } from './parse.js';
+import { defaultParseUpload, nameFromFile, stripControl, textToMarkdown, withReadableDates } from './parse.js';
 
 afterEach(() => vi.resetAllMocks());
 
@@ -85,6 +85,52 @@ describe('defaultParseUpload', () => {
     expect(out.via).toBe('local_ai');
     expect(out.markdown).toContain('# Sam Rivera');
     expect(out.name).toBe('cv');
+  });
+
+  it('a structured parse that gives a computed length as the duration still yields dated roles', async () => {
+    m.pdf.mockResolvedValue(PLAIN_TEXT);
+    m.isEnabled.mockResolvedValue(true);
+    m.agent.mockResolvedValue({
+      name: 'Sam Rivera',
+      experience: [
+        { role: 'Senior Product Designer', company: 'Shop Co', duration: '4 years 8 months', startDate: 'March 2022', endDate: 'Present', location: 'Portland, OR', achievements: ['Designed the returns flow'] },
+        { role: 'Product Designer', company: 'Beta', duration: '2 yrs', startDate: '2020-03', endDate: '2022-02', achievements: [] },
+        { role: 'Designer', company: 'Gamma', duration: 'Jan 2018 – Feb 2020 (2 yrs 2 mos)', startDate: '2018', endDate: '2020', achievements: [] },
+      ],
+      education: [],
+      skills: ['Figma'],
+    });
+    const out = await defaultParseUpload(input('roboapply'));
+    expect(out.via).toBe('local_ai');
+    expect(out.markdown).toContain('**Senior Product Designer — Shop Co** · March 2022 – Present · Portland, OR');
+    expect(out.markdown).toContain('**Product Designer — Beta** · 2020-03 – 2022-02');
+    expect(out.markdown).toContain('**Designer — Gamma** · Jan 2018 – Feb 2020 (2 yrs 2 mos)');
+    expect(out.markdown).not.toContain('4 years 8 months');
+    const k = await runRequirementRows(out.markdown, { title: 'Senior Product Designer', text: 'Requirements:\n- 5+ years of product design experience' }, 'intl', () => new Date('2026-10-11T12:00:00Z'));
+    const years = k.rows.find((r) => r.key === 'years');
+    // Jan 2018 – Feb 2020, Mar 2020 – Feb 2022 and Mar 2022 – Oct 2026: 8.6, not the 2.1 the one readable role gave.
+    expect(years?.params).toEqual({ required: 5, found: 8.6 });
+    expect(years?.status).toBe('pass');
+  });
+
+  it('withReadableDates changes only a duration that holds no dates, and never the input', () => {
+    const parsed = {
+      name: 'Sam',
+      experience: [
+        { role: 'A', duration: '4 years 8 months', startDate: 'March 2022', endDate: 'Present' },
+        { role: 'B', duration: '', startDate: 'June 2019', endDate: 'February 2022' },
+        { role: 'C', duration: 'June 2017 – May 2019', startDate: '2017', endDate: '2019' },
+        { role: 'D', duration: '3 years', startDate: '', endDate: '' },
+        { role: 'E', duration: '1 yr', startDate: '2016', endDate: null },
+        null,
+      ],
+    };
+    const before = JSON.stringify(parsed);
+    const out = withReadableDates(parsed) as typeof parsed;
+    expect(out.experience.map((e) => e?.duration)).toEqual(['March 2022 – Present', 'June 2019 – February 2022', 'June 2017 – May 2019', '3 years', '2016', undefined]);
+    expect(JSON.stringify(parsed)).toBe(before);
+    expect(withReadableDates(null)).toBeNull();
+    expect(withReadableDates({ name: 'Sam' })).toEqual({ name: 'Sam' });
   });
 
   it('with the brand text model off: no structured parse, the deterministic text pass', async () => {

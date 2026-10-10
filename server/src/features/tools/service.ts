@@ -376,7 +376,10 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
       const ipHash = hashIdentifier(input.ip);
       const visitorHash = hashVisitor(input.visitor);
       const postingHash = posting ? sha256Hex(`${posting.title}\n${posting.text}`) : '-';
-      const cacheKey = sha256Hex(`v2|${brand.id}|${kind}|${sha256Hex(file.buffer)}|${postingHash}|${ipHash}|${visitorHash}`);
+      // The leading version changes whenever a report for the same file would
+      // read differently, so no visitor is handed a stored answer from the
+      // older reading (v3: roles and dates of an uploaded file reach the rows).
+      const cacheKey = sha256Hex(`v3|${brand.id}|${kind}|${sha256Hex(file.buffer)}|${postingHash}|${ipHash}|${visitorHash}`);
 
       const cached = await deps.store.findByCacheKey(brand.id, cacheKey, at);
       if (cached && cached.payload.tool === kind && sameHash(cached.payload.visitorHash, visitorHash)) {

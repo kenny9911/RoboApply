@@ -37,7 +37,16 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({}),
 }));
 
-import { renderMarketing as renderWithBrand } from './render';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { capsFor } from '../../../../__tests__/shell/helpers';
+import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
+import { BrandProvider } from '../../../../lib/brand/BrandProvider';
+import { clientBrandFor } from '../../../../lib/brand/client';
+import { ThemeProvider } from '../../../../lib/theme';
+import { MarketingFooter } from '../SiteChrome';
+import { messagesFor, renderMarketing as renderWithBrand } from './render';
 import { plansView } from '../../credits/__tests__/fixtures';
 import { GoApplyHome } from '../GoApplyHome';
 import { RoboApplyHome } from '../RoboApplyHome';
@@ -185,6 +194,52 @@ describe('RoboApply home', () => {
     expect(container.querySelector('[data-feature-link="chrome-extension"]')).toBeNull();
     // Spoken practice needs the voice stack; off → no link.
     expect(container.querySelector('[data-feature-link="interview-practice"]')).toBeNull();
+  });
+
+  // FIX-7: the language button was announced as "Main" (the nav landmark's label).
+  it('the header language button says what it does; the nav keeps its own label', () => {
+    renderWithBrand(<RoboApplyHome />);
+    const header = screen.getByRole('banner');
+    expect(within(header).getByRole('button', { name: 'Change language' })).toHaveAttribute('aria-haspopup', 'menu');
+    expect(within(header).queryByRole('button', { name: 'Main' })).toBeNull();
+    expect(within(header).getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+  });
+
+  // FIX-7: a phone had no way to switch light/dark on the home page (the header button is hidden below 760 px).
+  it('the footer carries the light/dark switch for phones, wired to the same theme state as the header', () => {
+    document.documentElement.removeAttribute('data-theme');
+    const { container } = renderWithProviders(
+      <ThemeProvider>
+        <BrandProvider brand={clientBrandFor('roboapply')} initialCapabilities={capsFor('roboapply', {})}>
+          <RoboApplyHome />
+        </BrandProvider>
+      </ThemeProvider>,
+      { intlMessages: messagesFor('roboapply') },
+    );
+    const footer = container.querySelector('[data-marketing-footer]') as HTMLElement;
+    const inFooter = within(footer).getByRole('button', { name: 'Switch to dark' });
+    expect(inFooter).toHaveAttribute('data-footer-theme');
+    expect(inFooter).toHaveTextContent('Switch to dark');
+    fireEvent.click(inFooter);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(within(footer).getByRole('button', { name: 'Switch to light' })).toBeInTheDocument();
+    // The header button follows: one state, two controls.
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Switch to light' })).toBeInTheDocument();
+    fireEvent.click(within(footer).getByRole('button', { name: 'Switch to light' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('only the home pages put the switch in the footer (other public pages keep it in their header)', () => {
+    const { container } = renderWithBrand(<MarketingFooter />);
+    expect(container.querySelector('[data-footer-theme]')).toBeNull();
+  });
+
+  it('the phone switch is hidden above 760 px and shown below, where the header button is hidden', () => {
+    const css = readFileSync(join(process.cwd(), 'components/features/marketing/marketing.module.css'), 'utf8');
+    expect(css).toMatch(/\.footerTheme \{\s*display: none;/);
+    const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
+    expect(phone).toMatch(/\.headerActions \.hideSmall \{\s*display: none;/);
+    expect(phone).toMatch(/\.footerTheme \{\s*display: inline-flex;/);
   });
 
   // INT-06 (wave4 WP-93 #14): /tools in the site navigation and the footer.
