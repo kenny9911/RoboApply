@@ -1,5 +1,11 @@
 'use client';
 
+// @deprecated (WP-33). The /jobs feed reads `POST /feed/query` through
+// hooks/feed/useFeed.ts (one batch with fit scores, no per-card score
+// requests). Nothing on /jobs imports this hook any more; hooks/useSetup.ts
+// (todayKeys) and two tests (preferencesToFilters) still do, so it stays until
+// WP-75 deletes it after a zero-importer grep.
+
 // hooks/useTodayMatches.ts
 //
 // Data layer for /jobs (destination 1 of 4). Composes existing RaV2Api

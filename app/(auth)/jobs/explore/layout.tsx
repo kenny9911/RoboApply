@@ -2,7 +2,7 @@
 // /job-search (next.config.mjs redirects the bare /job-search to this path;
 // /job-search/developers stays where it is). Same title and noindex as before.
 //
-// Owner: WP-33 (Explore: categories with live counts and the search box).
+// Owner: WP-33. The page renders Explore (components/features/feed/Explore.tsx).
 
 import type { ReactNode } from 'react';
 

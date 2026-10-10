@@ -1,5 +1,12 @@
 'use client';
 
+// @deprecated (WP-33). /jobs/explore (components/features/feed/Explore.tsx)
+// replaced this live provider search: jobs are ingested into our index on a
+// schedule (WP-16b) and Explore lists them by kind of work, with a sentence →
+// filters search. No route renders this workspace any more; only
+// __tests__/pages/job-search.test.tsx imports it. WP-75 deletes it, its
+// JobResultCard and that test after a zero-importer grep.
+
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
