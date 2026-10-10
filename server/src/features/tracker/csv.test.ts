@@ -1,11 +1,13 @@
 // @vitest-environment node
 //
 // WP-93 (wave 3 i18n, WP-38): the tracker CSV takes its header and its stage
-// and outcome words from the server i18n loader (namespace `tracker`, English
-// source server/src/i18n/email/staging/tracker.en.json), not from csv.ts.
+// and outcome words from the server i18n loader (namespace `tracker` of the
+// email bundles, server/src/i18n/email), not from csv.ts.
 //   - English for every RoboApply locale until WP-92 translates `tracker.csv`
 //     (zh-TW included: Traditional labels then appear with no code change);
 //   - GoApply in Simplified Chinese keeps its own ladder words (`tracker.csvCn`).
+//     WP-91 routed them to zh.json at the merge; en.json keeps an English
+//     source for the same keys (every translated key has one).
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,15 +16,21 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { BRANDS } from '../../platform/brand/registry.js';
-import { emailI18nDir, isValidMessage, resetEmailI18nCache, setEmailI18nDirForTests } from '../../platform/email/i18n.js';
+import { emailI18nDir, isValidMessage, loadEnglishWithStaging, resetEmailI18nCache, setEmailI18nDirForTests } from '../../platform/email/i18n.js';
 import { CN_TRACKER_LADDER } from '../cn/tracker/index.js';
 import { ALL_TRACKER_STATUSES, OUTCOME_STATUS, type TrackerEntryView } from './contract.js';
 import { CSV_COLUMNS, CSV_GROUP, csvGroupFor, csvWords, isSimplifiedChinese, trackerCsv } from './csv.js';
 import { INTL_TRACKER_LADDER } from './stages.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const STAGING = path.join(emailI18nDir(), 'staging', 'tracker.en.json');
-const bundle = () => JSON.parse(fs.readFileSync(STAGING, 'utf8')) as { tracker: Record<'csv' | 'csvCn', Record<'header' | 'stage' | 'outcome', Record<string, string>>> };
+const EMAIL_DIR = emailI18nDir();
+type Group = Record<'header' | 'stage' | 'outcome', Record<string, string>>;
+/** English as the loader reads it: en.json with anything staged since on top. */
+const english = () => loadEnglishWithStaging(EMAIL_DIR) as unknown as { tracker: Record<'csv' | 'csvCn', Group> };
+/** The zh bundle, which holds GoApply's own words. */
+const chinese = () => JSON.parse(fs.readFileSync(path.join(EMAIL_DIR, 'zh.json'), 'utf8')) as { tracker: { csvCn: Group } };
+/** The words each group is exported with: `tracker.csv` in English, `tracker.csvCn` in Simplified Chinese. */
+const bundle = () => ({ tracker: { csv: english().tracker.csv, csvCn: chinese().tracker.csvCn } });
 
 const entry = (over: Partial<TrackerEntryView> = {}): TrackerEntryView => ({
   id: 'e1',
@@ -64,7 +72,6 @@ afterEach(() => {
 describe('the `tracker` bundle', () => {
   it('names every column, every tracker status and every outcome in both groups', () => {
     const b = bundle();
-    expect(Object.keys(b)).toEqual(['tracker']);
     for (const group of ['csv', 'csvCn'] as const) {
       expect(Object.keys(b.tracker[group].header)).toEqual([...CSV_COLUMNS]);
       expect(Object.keys(b.tracker[group].stage).sort()).toEqual([...ALL_TRACKER_STATUSES].sort());
@@ -74,8 +81,13 @@ describe('the `tracker` bundle', () => {
         expect(isValidMessage(v)).toBe(true);
       }
     }
-    // No brand name is written into the bundle.
-    expect(fs.readFileSync(STAGING, 'utf8')).not.toMatch(/RoboApply|GoApply/);
+    // GoApply's words are Simplified Chinese and live in zh.json; English has a source for every one of those keys and no Chinese.
+    const source = english().tracker;
+    for (const kind of ['header', 'stage', 'outcome'] as const) expect(Object.keys(source.csvCn[kind]).sort()).toEqual(Object.keys(b.tracker.csvCn[kind]).sort());
+    expect(Object.values(b.tracker.csvCn.header).every((v) => /[一-鿿]/.test(v))).toBe(true);
+    expect(JSON.stringify(source)).not.toMatch(/[一-鿿]/);
+    // No brand name is written into the bundles.
+    expect(JSON.stringify([source, chinese().tracker])).not.toMatch(/RoboApply|GoApply/);
   });
 
   it('csv.ts holds no header or stage word of its own', () => {
@@ -140,9 +152,9 @@ describe('which words an export uses', () => {
 
   it('once zh-TW.json translates `tracker.csv`, the export uses it with no code change', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tracker-csv-'));
-    fs.mkdirSync(path.join(dir, 'staging'));
-    fs.writeFileSync(path.join(dir, 'en.json'), '{}');
-    fs.copyFileSync(STAGING, path.join(dir, 'staging', 'tracker.en.json'));
+    // The shipped English and GoApply's zh words, plus a zh-TW bundle written here.
+    fs.writeFileSync(path.join(dir, 'en.json'), JSON.stringify({ tracker: english().tracker }));
+    fs.writeFileSync(path.join(dir, 'zh.json'), JSON.stringify({ tracker: chinese().tracker }));
     fs.writeFileSync(
       path.join(dir, 'zh-TW.json'),
       JSON.stringify({ tracker: { csv: { header: { company: '公司', title: '職稱' }, stage: { applied: '已投遞', bookmarked: '已收藏' }, outcome: { they_said_no: '未錄取' } } } }),

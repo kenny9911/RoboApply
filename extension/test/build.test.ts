@@ -23,8 +23,11 @@ function goapplyLocales(target: 'edge' | 'chrome'): Locales {
 }
 
 describe('GoApply build: both distributions', () => {
-  it('reads the staged extension-cn strings in English and Chinese', () => {
+  it('reads the extension-cn strings in English and Chinese', () => {
+    // WP-91 merged them into src/i18n/{en,zh}.json; the staging files stay as scratch space for later strings.
     expect(Object.keys(staged).sort()).toEqual(['en', 'zh']);
+    expect(en).toHaveProperty(['extension-cn', 'manifest', 'nameEdge']);
+    expect(others.zh).toHaveProperty(['extension-cn', 'manifest', 'nameEdge']);
     expect(GOAPPLY_DISTRIBUTION.manifestStringsKey).toBe('extension-cn.manifest');
   });
 
@@ -76,7 +79,9 @@ describe('GoApply build: both distributions', () => {
 
   it('a translated bundle wins over the staged strings of the same locale', () => {
     const translated = { zh: { 'extension-cn': { manifest: { nameEdge: '%BRAND% 填表助手' } } } };
-    const locales = localeMessagesFor({ brandName: 'GoApply', target: 'edge', stringsKey: 'extension-cn.manifest', en, others: translated, staged }) as Locales;
+    // The authored zh strings as the staged layer (where they sat until WP-91 merged them into src/i18n/zh.json).
+    const stagedZh = { zh: others.zh };
+    const locales = localeMessagesFor({ brandName: 'GoApply', target: 'edge', stringsKey: 'extension-cn.manifest', en, others: translated, staged: stagedZh }) as Locales;
     expect(locales.zh_CN.extName.message).toBe('GoApply 填表助手');
     // Keys the translation does not carry still come from the staged zh strings.
     expect(locales.zh_CN.actionTitle.message).toBe('一键填表');

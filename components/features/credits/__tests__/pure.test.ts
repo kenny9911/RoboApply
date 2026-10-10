@@ -18,7 +18,7 @@ import { isPackKey } from '../CheckoutReturn';
 import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions';
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
 import { bucketLabelKey, planMonths, planNameKey, pricePeriod } from '../labels';
-import en from '../../../../i18n/staging/credits.en.json';
+import en from '../../../../i18n/messages/en.json';
 import { creditsResponse, GA_ENV, plansView, RA_ENV } from './fixtures';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
 
@@ -107,7 +107,7 @@ describe('plan selection rules', () => {
 });
 
 describe('labels', () => {
-  it('every plan/bucket key the UI can ask for exists in the staging bundle', () => {
+  it('every plan/bucket key the UI can ask for exists in the English bundle', () => {
     const credits = (en as { credits: Record<string, unknown> }).credits;
     const has = (path: string) => path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], credits) !== undefined;
     for (const brand of ['roboapply', 'goapply'] as const) {

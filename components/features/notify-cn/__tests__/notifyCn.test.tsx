@@ -17,8 +17,12 @@ import type { ReactElement } from 'react';
 
 import { renderWithBrand } from '../../../../__tests__/shell/helpers';
 import { buildAuthValue, mockAuthState } from '../../../../__tests__/utils/mockAuth';
-import enStaging from '../../../../i18n/staging/notifyCn.en.json';
-import zhStaging from '../../../../i18n/staging/notifyCn.zh.json';
+import enMessages from '../../../../i18n/messages/en.json';
+import zhMessages from '../../../../i18n/messages/zh.json';
+
+// The `notifyCn` strings as the en and zh bundles carry them (WP-91 merged them out of i18n/staging).
+const enCopy = { notifyCn: enMessages.notifyCn };
+const zhCopy = { notifyCn: zhMessages.notifyCn };
 
 vi.mock('../../../../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: unknown }) => children,
@@ -225,7 +229,7 @@ describe('SubscribeOnTap inside WeChat', () => {
     });
     await act(async () => undefined);
     expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.queryByRole('link', { name: enStaging.notifyCn.subscribe.settingsLink })).toBeNull();
+    expect(screen.queryByRole('link', { name: enCopy.notifyCn.subscribe.settingsLink })).toBeNull();
   });
 
   it('only someone who turned WeChat off in settings is told the reminder stays in the inbox', async () => {
@@ -236,8 +240,8 @@ describe('SubscribeOnTap inside WeChat', () => {
       openTag(container)!.dispatchEvent(successEvent({ [TPL]: JSON.stringify({ status: 'accept' }) }));
     });
     const note = await screen.findByRole('status');
-    expect(note).toHaveTextContent(enStaging.notifyCn.subscribe.channelOff);
-    expect(screen.getByRole('link', { name: enStaging.notifyCn.subscribe.settingsLink })).toHaveAttribute('href', SETTINGS_HREF);
+    expect(note).toHaveTextContent(enCopy.notifyCn.subscribe.channelOff);
+    expect(screen.getByRole('link', { name: enCopy.notifyCn.subscribe.settingsLink })).toHaveAttribute('href', SETTINGS_HREF);
   });
 });
 
@@ -347,7 +351,7 @@ describe('WechatShareCard', () => {
     await waitFor(() => expect(wx.updateAppMessageShareData).toHaveBeenCalled());
     const arg = wx.updateAppMessageShareData.mock.calls[0]![0] as { desc: string; link: string };
     // The test intl wrapper fills %BRAND% itself; the bundle text is what matters.
-    expect(arg.desc).toMatch(new RegExp(`^${enStaging.notifyCn.share.defaultDescription.replace('%BRAND%', '\\w+')}$`));
+    expect(arg.desc).toMatch(new RegExp(`^${enCopy.notifyCn.share.defaultDescription.replace('%BRAND%', '\\w+')}$`));
     expect(arg.link).toBe(signedPageUrl(window.location.href));
   });
 
@@ -391,6 +395,6 @@ describe('helpers', () => {
   it('zh copy exists for every English key', () => {
     const keys = (o: Record<string, unknown>, p = ''): string[] =>
       Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v as Record<string, unknown>, `${p}${k}.`) : [`${p}${k}`]));
-    expect(keys(zhStaging).sort()).toEqual(keys(enStaging).sort());
+    expect(keys(zhCopy).sort()).toEqual(keys(enCopy).sort());
   });
 });

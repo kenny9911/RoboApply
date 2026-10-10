@@ -6,7 +6,7 @@ import type { AbstractIntlMessages } from 'next-intl';
 
 import enMessages from '../../../../i18n/messages/en.json';
 import { STAGING_EN } from '../../../../i18n/staging/index';
-import toolsZh from '../../../../i18n/staging/tools.zh.json';
+import zhMessages from '../../../../i18n/messages/zh.json';
 import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
 import type { BrandId } from '../../../../lib/brand/registry.generated';
@@ -25,9 +25,9 @@ function mergeOver(base: Tree, over: Tree): Tree {
 
 const EN = mergeOver(JSON.parse(JSON.stringify(enMessages)), JSON.parse(JSON.stringify(STAGING_EN)));
 
-/** English, or (for `zh`) English with this WP's GoApply-authored Chinese staging over it. */
+/** English, or (for `zh`) English with the zh bundle over it, as lib/i18n does (WP-91 merged the GoApply-authored Chinese into it). */
 export function messagesFor(brand: BrandId, locale: 'en' | 'zh' = 'en'): AbstractIntlMessages {
-  const tree = locale === 'zh' ? mergeOver(EN, JSON.parse(JSON.stringify(toolsZh)) as Tree) : EN;
+  const tree = locale === 'zh' ? mergeOver(EN, JSON.parse(JSON.stringify(zhMessages)) as Tree) : EN;
   return substituteBrandTokens(tree, brand) as AbstractIntlMessages;
 }
 

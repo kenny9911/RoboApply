@@ -9,27 +9,460 @@
     "sentBy": "Sent by {entity}"
   },
   "billing": {
-    "renewal": {
-      "subjectAuto": "Your %BRAND% {plan} plan renews in 5 days",
-      "subjectManual": "Your %BRAND% {plan} plan expires in 5 days",
-      "headingAuto": "Your plan renews soon",
-      "headingManual": "Your plan expires soon",
-      "bodyAuto": "Your {plan} plan renews automatically on {date}. No action needed — your mock-interview credits will refresh.",
-      "bodyManual": "Your {plan} monthly pass expires on {date}. Renew now to keep your mock-interview credits without interruption.",
-      "credits": "You currently have {credits, plural, one {# mock-interview credit} other {# mock-interview credits}} remaining.",
-      "ctaAuto": "Manage subscription",
-      "ctaManual": "Renew now",
-      "footer": "You receive billing reminders because you have an active %BRAND% plan."
+    "footer": "You get this email because it is about your %BRAND% plan and payments.",
+    "planNames": {
+      "pro": "Pro",
+      "legacy": "Practice plan (legacy)",
+      "pro_weekly": "Pro, billed weekly",
+      "pro_monthly": "Pro Monthly",
+      "pro_quarterly": "Pro Quarterly",
+      "pro_week_pass": "7-day pass",
+      "pro_week_passCn": "Pro week pass",
+      "pro_monthlyCn": "Pro month pass",
+      "pro_quarterlyCn": "Pro quarter pass",
+      "practice_pack_5": "Practice pack (5)",
+      "practice_pack_15": "Practice pack (15)",
+      "student_monthly": "Student Monthly",
+      "student_quarterly": "Student Quarterly"
     },
-    "fridayNudge": {
-      "subject": "Ready for next week? Practice an interview",
-      "greetingNamed": "Hi {name},",
-      "greeting": "Hi there,",
-      "body": "The weekend is a great time to sharpen up. Run a quick mock interview and walk into next week ready to impress.",
-      "credits": "You have {credits, plural, one {# mock-interview credit} other {# mock-interview credits}} ready to use.",
-      "cta": "Start a mock interview",
-      "footer": "You receive weekly prep nudges because you have %BRAND% credits. Manage email preferences in your account.",
-      "preferences": "Preferences"
+    "periods": {
+      "week": "week",
+      "month": "month",
+      "quarter": "3 months",
+      "period": "billing period"
+    },
+    "renewalReminder": {
+      "subjectAuto": "Your %BRAND% plan renews on {date}",
+      "headingAuto": "Your plan renews soon",
+      "bodyAuto": "{plan} renews automatically on {date} for {price} every {period}.",
+      "cancelLine": "Don't want it to renew? Cancel any time before then in one click. Your paid features stay on until the end of the period you paid for.",
+      "ctaAuto": "Manage or cancel",
+      "subjectManual": "Your %BRAND% pass ends on {date}",
+      "headingManual": "Your pass ends soon",
+      "bodyManual": "{plan} ends on {date}. It does not renew and nothing will be charged. Buy another pass if you want to keep Pro.",
+      "ctaManual": "See passes",
+      "bodyManualLegacy": "{plan} ends on {date}. It does not renew and nothing will be charged. See the current plans if you want to keep practicing.",
+      "ctaManualLegacy": "See plans"
+    },
+    "annualReminder": {
+      "subject": "Your %BRAND% subscription is still active",
+      "heading": "A yearly check on your subscription",
+      "body": "You have had {plan} since {since}. It renews every {period} for {price}. The next renewal is on {date}."
+    },
+    "cancelLink": {
+      "subject": "Your link to cancel your %BRAND% plan",
+      "heading": "Confirm your cancellation",
+      "body": "Someone asked to cancel the %BRAND% plan for this email address. Use the button below within {minutes} minutes to confirm. The link works once.",
+      "cta": "Cancel my plan",
+      "ignore": "If you didn't ask for this, ignore this email. Nothing changes."
+    },
+    "cancelNone": {
+      "subject": "No %BRAND% plan to cancel",
+      "heading": "There is nothing to cancel",
+      "body": "Someone asked to cancel a %BRAND% plan for this email address, but this account has no plan that renews. Nothing will be charged.",
+      "cta": "See your plan"
+    },
+    "cancelConfirmed": {
+      "subject": "Your %BRAND% plan is cancelled",
+      "heading": "Your plan is cancelled",
+      "body": "We cancelled {plan}. It will not renew and you will not be charged again for it.",
+      "accessUntil": "Your paid features stay on until {date}. After that your account moves to Free.",
+      "accessEnded": "Your account is on Free now.",
+      "received": "We received your cancellation on {at}.",
+      "cta": "See your plan"
+    },
+    "paymentFailed": {
+      "subject": "Your %BRAND% payment didn't go through",
+      "heading": "We couldn't charge your card",
+      "body": "The payment of {price} for {plan} failed. We will try again over the next few days.",
+      "keep": "Update your payment method to keep your plan. If the last try fails, your account moves to Free. Credits you already have stay yours.",
+      "cta": "Update payment method"
+    }
+  },
+  "accountV2": {
+    "studentCode": {
+      "subject": "Your %BRAND% student code: {code}",
+      "preheader": "Enter this code to confirm your school email.",
+      "heading": "Confirm your school email",
+      "body": "Enter this code in %BRAND% to confirm that you can read this inbox. It works for {minutes} minutes.",
+      "codeLine": "Your code: {code}",
+      "ignore": "If you didn't ask for this, ignore this email. Nothing changes."
+    },
+    "winback": {
+      "subject": "Your %BRAND% paid plan ended a month ago",
+      "preheader": "Your account and your work are still there.",
+      "heading": "Your account is still here",
+      "body": "Your paid plan ended on {date}. Your resumes, saved jobs and applications are still in your account, and the free plan keeps working.",
+      "price": "If you want Pro, it costs {price} every {period}. You can cancel any time.",
+      "cta": "See plans",
+      "once": "This is the only email we send about it."
+    }
+  },
+  "auth": {
+    "passwordReset": {
+      "subject": "Reset your %BRAND% password",
+      "preheader": "This link works for 30 minutes.",
+      "heading": "Reset your password",
+      "body": "Someone asked to reset the password for this %BRAND% account. Use the button below to choose a new one. The link works once and expires in 30 minutes.",
+      "cta": "Choose a new password",
+      "ignore": "If you did not ask for this, ignore this email. Your password stays the same.",
+      "sessions": "Resetting your password signs you out on every other device."
+    },
+    "emailVerify": {
+      "subject": "Confirm your email for %BRAND%",
+      "preheader": "One click confirms this address.",
+      "heading": "Confirm your email",
+      "body": "Confirm that this is your email address. You can keep using %BRAND% while you decide; confirming unlocks your free practice interview.",
+      "cta": "Confirm my email",
+      "expiry": "The link expires in 24 hours. You can send a new one from Settings."
+    },
+    "oauthEmail": {
+      "subject": "Finish creating your %BRAND% account",
+      "preheader": "Confirm this email to finish signing up with LINE.",
+      "heading": "Finish signing up",
+      "body": "You started creating a %BRAND% account with LINE. Confirm this email address to finish. The account is created only after you click the button.",
+      "cta": "Confirm and create my account",
+      "ignore": "If this was not you, ignore this email. No account is created."
+    },
+    "newDevice": {
+      "subject": "New sign-in to your %BRAND% account",
+      "preheader": "{browser} on {os}",
+      "heading": "New sign-in",
+      "body": "Your account was just signed in to from {browser} on {os} at {time} (UTC).",
+      "ifYou": "If this was you, you do not need to do anything.",
+      "ifNot": "If this was not you, reset your password now. Resetting signs you out everywhere else.",
+      "cta": "Reset my password"
+    },
+    "otherBrand": {
+      "subject": "Someone tried to sign up with your email",
+      "heading": "You already have an account",
+      "body": "Someone tried to create a %BRAND% account with this email address. This email already belongs to a %OTHER_BRAND% account, and one email can hold only one of the two.",
+      "useOther": "To keep using your account, sign in to %OTHER_BRAND%:",
+      "cta": "Sign in to %OTHER_BRAND%",
+      "ignore": "If this was not you, ignore this email. Nothing changed."
+    },
+    "accountDeleted": {
+      "subject": "Your %BRAND% account is scheduled for deletion",
+      "heading": "Your account is scheduled for deletion",
+      "body": "You asked us to delete your %BRAND% account. You have been signed out everywhere and can no longer sign in.",
+      "when": "We delete your account and its data within {days} days. Backups are cleared within 90 days after that.",
+      "notYou": "If you did not ask for this, reply to this email or contact support right away."
+    }
+  },
+  "coaching": {
+    "bookingRequest": {
+      "subject": "Coaching request from {name}: {topic}",
+      "subjectAdmin": "Coaching request for {coach}: {topic}",
+      "heading": "New coaching request",
+      "intro": "{name} would like a session with you, {coach}. They found you on the %BRAND% coach list.",
+      "introAdmin": "A user sent this request to {coach} from the %BRAND% coach list. This is your copy.",
+      "fieldFrom": "From",
+      "fieldTopic": "Topic",
+      "fieldLength": "Session length",
+      "fieldTimes": "Times that suit them",
+      "fieldCoach": "Coach",
+      "fieldAccount": "Account",
+      "fieldAddress": "Reply address",
+      "addressUnverified": "Typed by the user in the request form. %BRAND% has not checked that it is theirs.",
+      "minutes": "{minutes} minutes",
+      "notGiven": "Not given",
+      "next": "To accept, reply to this email or write to {email} to agree on a time and price.",
+      "nextAdmin": "The coach answers the user directly. Follow up if the coach asks for help.",
+      "payment": "The user pays the coach directly. %BRAND% takes no payment for coaching.",
+      "reason": "You get this email because you agreed to be listed as a coach on %BRAND% and a user asked for a session.",
+      "reasonAdmin": "You get this email because you look after the %BRAND% coach list."
+    }
+  },
+  "compliance": {
+    "dataExport": {
+      "subject": "Your %BRAND% data export is ready",
+      "heading": "Your data export is ready",
+      "body": "We put together a copy of your %BRAND% data. Sign in and open Settings → Privacy to download it. The file is deleted after {days, plural, one {# day} other {# days}}.",
+      "cta": "Open Settings"
+    }
+  },
+  "growth": {
+    "footer": "You get this email because it is about credits on your %BRAND% account.",
+    "referralReward": {
+      "inviter": {
+        "subject": "A friend you invited finished setting up",
+        "heading": "You got {credits, plural, one {# practice interview credit} other {# practice interview credits}}",
+        "body": "A friend who signed up with your invite link has verified their account and finished setting up, so we added {credits, plural, one {# practice interview credit} other {# practice interview credits}} to your account."
+      },
+      "invitee": {
+        "subject": "Your invite credit is ready",
+        "heading": "You got {credits, plural, one {# practice interview credit} other {# practice interview credits}}",
+        "body": "You joined with a friend's invite link and finished setting up, so we added {credits, plural, one {# practice interview credit} other {# practice interview credits}} to your account."
+      },
+      "note": "Credits are for practice interviews on %BRAND%. They have no cash value.",
+      "cta": "Start a practice interview"
+    }
+  },
+  "notify": {
+    "reasons": {
+      "alerts": "You get this email because job alerts are on for your saved search \"{search}\" in %BRAND%.",
+      "digestDaily": "You get this email because you chose a daily job summary for your saved search \"{search}\" in %BRAND%.",
+      "digestWeekly": "You get this email because you chose a weekly job summary for your saved search \"{search}\" in %BRAND%.",
+      "reminders": "You get this email because it is about your %BRAND% account and the jobs you track. You can turn these reminders off.",
+      "campusFollow": "You get this email because you follow {company} on the %BRAND% campus calendar."
+    },
+    "common": {
+      "payNotListed": "Pay not listed",
+      "remote": "Remote",
+      "placeNotListed": "Place not listed",
+      "tierGreat": "Great fit",
+      "tierGood": "Good fit",
+      "tierPossible": "Possible",
+      "gapLine": "Not on your resume yet: {skill}",
+      "fitNote": "Fit compares the job post with your resume. This is not your chance of getting hired.",
+      "viewJob": "View job",
+      "payPerYear": "{amount} a year",
+      "payPerMonth": "{amount} a month",
+      "payPerWeek": "{amount} a week",
+      "payPerDay": "{amount} a day",
+      "payPerHour": "{amount} an hour"
+    },
+    "jobAlertInstant": {
+      "subject": "{count, plural, one {# new job} other {# new jobs}} for \"{search}\"",
+      "heading": "{count, plural, one {# new job for your search} other {# new jobs for your search}}",
+      "intro": "{count, plural, one {This job was posted recently and fits your saved search \"{search}\".} other {These jobs were posted recently and fit your saved search \"{search}\".}}",
+      "cta": "See all your jobs"
+    },
+    "jobAlertDigest": {
+      "subjectDaily": "{count, plural, one {# new job fits your search} other {# new jobs fit your search}} since yesterday",
+      "subjectWeekly": "{count, plural, one {# new job fits your search} other {# new jobs fit your search}} this week",
+      "subjectDailyNoTotal": "New jobs fit your search since yesterday",
+      "subjectWeeklyNoTotal": "New jobs fit your search this week",
+      "headingDaily": "Your daily job summary",
+      "headingWeekly": "Your weekly job summary",
+      "introDaily": "{count, plural, one {# new job fits your saved search \"{search}\" since yesterday.} other {# new jobs fit your saved search \"{search}\" since yesterday.}}",
+      "introWeekly": "{count, plural, one {# new job fits your saved search \"{search}\" this week.} other {# new jobs fit your saved search \"{search}\" this week.}}",
+      "introDailyNoTotal": "{count, plural, one {Here is # new job that fits your saved search \"{search}\" since yesterday.} other {Here are # new jobs that fit your saved search \"{search}\" since yesterday.}} You can see every new job in %BRAND%.",
+      "introWeeklyNoTotal": "{count, plural, one {Here is # new job that fits your saved search \"{search}\" this week.} other {Here are # new jobs that fit your saved search \"{search}\" this week.}} You can see every new job in %BRAND%.",
+      "more": "{count, plural, one {# more new job also fits. See it in %BRAND%.} other {# more new jobs also fit. See them in %BRAND%.}}",
+      "trackerLine": "{count, plural, one {# application has had no reply for 10 days.} other {# applications have had no reply for 10 days.}}",
+      "trackerCta": "Open your applications",
+      "cta": "See all new jobs"
+    },
+    "welcome": {
+      "subject": "Welcome to %BRAND%: three things to do first",
+      "heading": "Welcome to %BRAND%",
+      "intro": "Here are three things to do first. Each one takes you straight there.",
+      "stepJobs": "See jobs for your search",
+      "stepCampus": "See campus hiring dates",
+      "stepResume": "Check your resume",
+      "stepPractice": "Practice an interview",
+      "stepTracker": "Keep track of your applications",
+      "preheader": "Three things to do first in %BRAND%."
+    },
+    "finishSetup": {
+      "subject": "Finish setting up %BRAND%",
+      "heading": "Pick up where you left off",
+      "body": "Your answers so far are saved. Finish setup to see jobs for your search and what to fix on your resume.",
+      "cta": "Continue setup",
+      "preheader": "Your answers are saved. Finish setup when you are ready."
+    },
+    "resumeCheck": {
+      "subject": "Your resume check is ready",
+      "heading": "Your resume check is ready",
+      "bodyCount": "{count, plural, =0 {We read your resume and found nothing urgent to fix.} one {We read your resume and found # thing to fix first.} other {We read your resume and found # things to fix first.}}",
+      "body": "We read your resume and listed what to fix first.",
+      "cta": "See your resume check",
+      "preheader": "See what to fix first on your resume."
+    },
+    "tipsTailor": {
+      "subjectJob": "Tailor your resume for {title}",
+      "subject": "Tailor your resume for a job you like",
+      "heading": "Show employers the skills they asked for",
+      "bodyJob": "{title} at {company} is one of your best fits so far. A version of your resume for this job puts the skills the post asks for first. You review every change before you use it.",
+      "body": "A version of your resume for one job puts the skills the post asks for first. You review every change before you use it.",
+      "cta": "Tailor my resume",
+      "preheader": "A resume version for one job, with every change reviewed by you."
+    },
+    "tipsPractice": {
+      "subject": "Your free practice interview is ready to use",
+      "subjectCredit": "Your practice interview is ready to use",
+      "heading": "Try a practice interview",
+      "body": "You have a free practice interview. Answer interview questions out loud and get notes on what to improve. Nothing is shared with employers.",
+      "bodyCredit": "You have a practice interview ready. Answer interview questions out loud and get notes on what to improve. Nothing is shared with employers.",
+      "cta": "Start practice",
+      "preheader": "Answer interview questions out loud and get notes."
+    },
+    "tipsReEngagement": {
+      "subject": "{count, plural, one {# new job fits your search} other {# new jobs fit your search}} since {date}",
+      "heading": "New jobs since your last visit",
+      "body": "{count, plural, one {# new job fits your saved search \"{search}\" since {date}.} other {# new jobs fit your saved search \"{search}\" since {date}.}}",
+      "cta": "See the new jobs",
+      "preheader": "New jobs fit your saved search."
+    },
+    "followUp": {
+      "subject": "No reply from {company} for {days} days",
+      "heading": "Time to follow up?",
+      "body": "You applied for {title} at {company} on {date}. There has been no reply for {days} days. A short, polite follow-up is normal.",
+      "cta": "Open this application",
+      "preheader": "No reply for {days} days."
+    },
+    "interview": {
+      "subject": "Interview with {company} on {date}",
+      "heading": "Your interview is coming up",
+      "body": "Your interview for {title} at {company} is on {date}. A short practice run can help you get ready.",
+      "cta": "Practice for this job",
+      "preheader": "Interview for {title} on {date}."
+    },
+    "readyList": {
+      "subject": "This week's Ready to apply list is ready",
+      "heading": "Your list for this week",
+      "body": "{count, plural, one {# job is ready for you to review.} other {# jobs are ready for you to review.}} You decide which to open, and you submit each application yourself.",
+      "cta": "Review the list",
+      "preheader": "Jobs ready for you to review."
+    },
+    "kitReady": {
+      "subject": "Your application kit for {title} is ready",
+      "heading": "Your kit is ready to review",
+      "body": "Your tailored resume and answers for {title} at {company} are ready. Review them, then apply on the company site yourself.",
+      "cta": "Review the kit",
+      "preheader": "Review your kit for {title}."
+    },
+    "campusDeadline": {
+      "subject": "{company}: applications for {program} close on {date}",
+      "heading": "Application deadline coming up",
+      "body": "Applications for {program} at {company} close on {date}. Apply on the official page.",
+      "cta": "Open the official page",
+      "preheader": "{program} closes on {date}."
+    },
+    "campusFollowed": {
+      "subjectYear": "{company} posted its class of {year} campus programme",
+      "subject": "{company} posted a new campus programme",
+      "heading": "A company you follow posted a programme",
+      "body": "{program} at {company} is now on the campus calendar, with the link to its official page. Check the dates there before you apply.",
+      "cta": "See the programme",
+      "preheader": "{program} is on the campus calendar."
+    }
+  },
+  "tracker": {
+    "csv": {
+      "header": {
+        "company": "Company",
+        "title": "Job title",
+        "stage": "Stage",
+        "outcome": "How it ended",
+        "savedOn": "Saved on",
+        "appliedOn": "Applied on",
+        "interview": "Interview",
+        "followUpOn": "Follow up on",
+        "deadline": "Deadline",
+        "salary": "Salary",
+        "currency": "Currency",
+        "source": "Added from",
+        "link": "Link",
+        "notes": "Notes"
+      },
+      "stage": {
+        "bookmarked": "Saved",
+        "applying": "Applied",
+        "applied": "Applied",
+        "first_call": "First call",
+        "assessment": "Assessment",
+        "written_test": "Written test",
+        "ai_interview": "AI interview",
+        "interviewing": "Interviewing",
+        "final_round": "Final round",
+        "offer": "Offer",
+        "negotiating": "Offer",
+        "accepted": "Offer",
+        "signed": "Signed",
+        "rejected": "Rejected",
+        "withdrawn": "Withdrawn",
+        "closed": "Job was pulled"
+      },
+      "outcome": {
+        "they_said_no": "They said no",
+        "i_withdrew": "I withdrew",
+        "job_pulled": "Job was pulled"
+      }
+    },
+    "csvCn": {
+      "header": {
+        "company": "Company",
+        "title": "Job title",
+        "stage": "Stage",
+        "outcome": "How it ended",
+        "savedOn": "Saved on",
+        "appliedOn": "Applied on",
+        "interview": "Interview",
+        "followUpOn": "Follow up on",
+        "deadline": "Deadline",
+        "salary": "Salary",
+        "currency": "Currency",
+        "source": "Added from",
+        "link": "Link",
+        "notes": "Notes"
+      },
+      "stage": {
+        "bookmarked": "Saved",
+        "applying": "Applied",
+        "applied": "Applied",
+        "first_call": "First call",
+        "assessment": "Assessment",
+        "written_test": "Written test",
+        "ai_interview": "AI interview",
+        "interviewing": "Interviewing",
+        "final_round": "Final round",
+        "offer": "Offer",
+        "negotiating": "Offer",
+        "accepted": "Offer",
+        "signed": "Signed",
+        "rejected": "Rejected",
+        "withdrawn": "Withdrawn",
+        "closed": "Job was pulled"
+      },
+      "outcome": {
+        "they_said_no": "They said no",
+        "i_withdrew": "I withdrew",
+        "job_pulled": "Job was pulled"
+      }
+    },
+    "inbox": {
+      "unnamed": "this application",
+      "noReply": "No reply from {name} for {days, plural, one {# day} other {# days}}.",
+      "followUpDue": "Your follow-up date for {name} is today.",
+      "interview": "Interview with {name} within 24 hours.",
+      "deadline": "{days, plural, =0 {Applications for {name} close today.} =1 {Applications for {name} close tomorrow.} other {Applications for {name} close in # days.}}"
+    },
+    "inboxCn": {
+      "unnamed": "this application",
+      "noReply": "No reply from {name} for {days, plural, one {# day} other {# days}}.",
+      "followUpDue": "Your follow-up date for {name} is today.",
+      "interview": "Interview with {name} within 24 hours.",
+      "deadline": "{days, plural, =0 {Applications for {name} close today.} =1 {Applications for {name} close tomorrow.} other {Applications for {name} close in # days.}}"
+    }
+  },
+  "visitor": {
+    "email": {
+      "confirm": {
+        "subject": "Confirm your job alerts from %BRAND%",
+        "heading": "Confirm your job alerts",
+        "body": "Someone, hopefully you, asked %BRAND% to email new jobs for \"{search}\" to this address {cadence, select, daily {once a day} other {once a week}}.",
+        "cta": "Confirm job alerts",
+        "ignore": "If this was not you, ignore this email. Nothing will be sent unless the link is pressed, and it stops working after {hours} hours.",
+        "preheader": "Press the button to start your job alerts."
+      },
+      "digest": {
+        "subject": "{count, plural, one {# new job} other {# new jobs}} for \"{search}\"",
+        "heading": "{count, plural, one {# new job for your alert} other {# new jobs for your alert}}",
+        "intro": "New since your last email, for \"{search}\".",
+        "more": "{count, plural, one {# more job also matches.} other {# more jobs also match.}}",
+        "payNotListed": "Pay not listed",
+        "pay": "{amount} {period, select, year {a year} month {a month} week {a week} day {a day} hour {an hour} other {}}",
+        "placeNotListed": "Place not listed",
+        "remote": "Remote",
+        "viewJob": "View job",
+        "signup": "Create a free account to see how well each job fits your resume.",
+        "signupCta": "Create a free account",
+        "reason": "You get this email because you confirmed job alerts for \"{search}\" on %BRAND%. You do not have an account.",
+        "preheader": "New jobs for your alert."
+      },
+      "searchAny": "any job"
     }
   }
 }

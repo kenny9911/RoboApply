@@ -155,7 +155,8 @@ describe('feature and subpage routes', () => {
     expect((await pricingMetadata()).alternates?.canonical).toBe('https://www.roboapply.io/pricing');
     brand.id = 'goapply';
     expect((await pricingMetadata()).alternates?.canonical).toBe('https://www.goapply.top/pricing');
-    expect((await rankingMetadata()).title).toBe('How ranking works | GoApply');
+    // GoApply's default locale is zh: the title is its own Chinese (in zh.json since WP-91 merged the staged strings).
+    expect((await rankingMetadata()).title).toBe('排序规则说明 | GoApply');
     expect(await PricingRoute()).toBeTruthy();
   });
 });

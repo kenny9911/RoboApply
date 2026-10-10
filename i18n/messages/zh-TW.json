@@ -47,20 +47,11 @@
     "guide_note": "探索。準備。向前。"
   },
   "jobs": {
-    "page_title": "職缺",
-    "headline": "{count, plural, =0 {還沒有適合你的職缺。} other {有 # 個職缺適合你。}}",
-    "headlineLoading": "適合你的職缺。",
-    "sub": "更新於 {time}。",
-    "read_count": "自 {since} 起讀了 {scanned} 則新職缺，其中 {worth} 則值得你花時間。",
-    "matchesTitle": "適合你的職缺，最適合的排在前面",
     "fit": {
       "great": "很適合",
       "good": "還算適合",
       "possible": "可能適合",
       "unlikely": "不太適合"
-    },
-    "tag": {
-      "possible": "可能適合"
     },
     "score": {
       "label": "適合度分數",
@@ -75,221 +66,6 @@
         "industry": "這個產業裡的經驗 —— 15",
         "location_pay_visa": "地點、薪資與簽證 —— 10",
         "career_moves": "你的職涯走到了哪一步 —— 10"
-      }
-    },
-    "gap": {
-      "missing_label": "他們要求這些，而你的履歷沒有提到：",
-      "overlap_label": "對得上的地方：",
-      "none_missing": "他們要求的內容，你的履歷都寫到了。",
-      "fix_cta": "在履歷裡補上這一點"
-    },
-    "whyFits": "你為什麼適合",
-    "thinking": "正在讀這則職缺說明…",
-    "noReasoning": "還沒有這個職缺的詳細分析。",
-    "explanationLanguage": {
-      "regenerate": "以繁體中文重新產生",
-      "regenerating": "正在重新產生…"
-    },
-    "evidence": "讀完了整則職缺說明，並和你的履歷做了比對。",
-    "trail": {
-      "label": "你在這個職缺上做過的事",
-      "saved": "已儲存",
-      "tailored": "已調整履歷",
-      "practiced": "已練習",
-      "applied": "已應徵"
-    },
-    "filter": {
-      "title": "顯示",
-      "great_only": "只看很適合的",
-      "good_and_better": "還算適合以上",
-      "everything": "全部",
-      "hidden_count": "已隱藏 {count} 個不太適合的職缺。",
-      "show_them": "顯示出來。",
-      "search_everywhere": "搜尋所有來源",
-      "search_everywhere_sub": "同時讀取 %BRAND% 以外的求職網站。",
-      "setup_cta": "告訴我們你在找什麼"
-    },
-    "posted": {
-      "justNow": "剛剛",
-      "hoursAgo": "{count} 小時前",
-      "daysAgo": "{count} 天前"
-    },
-    "work": {
-      "remote": "遠端",
-      "hybrid": "混合辦公",
-      "onsite": "在辦公室"
-    },
-    "status": {
-      "applied": "已應徵",
-      "notInterested": "沒有興趣",
-      "saved": "已儲存"
-    },
-    "facet": {
-      "salaryFit": "薪資",
-      "salaryWithinBand": "在你要求的範圍內",
-      "salaryBelowBand": "低於你要求的範圍",
-      "skillOverlap": "對得上的技能",
-      "skillValue": "他們列出的技能中的 {pct}%",
-      "riskFlag": "值得留意",
-      "riskNone": "沒有需要留意的地方"
-    },
-    "detail": {
-      "description": "職缺說明",
-      "responsibilities": "你要做的事",
-      "qualifications": "他們的要求",
-      "benefits": "福利",
-      "viewOriginal": "到他們網站上看這個職缺"
-    },
-    "actions": {
-      "applyOnSite": "到公司網站應徵",
-      "applying": "正在開啟公司網站…",
-      "saveForLater": "儲存，稍後再看",
-      "notInterested": "沒有興趣",
-      "didntApply": "我沒有應徵",
-      "markApplied": "標記為已應徵",
-      "undo": "復原",
-      "viewDetail": "查看職缺",
-      "refresh": "查看新職缺",
-      "filters": "篩選",
-      "practice": "為這個職缺練習面試",
-      "tailorResume": "為這個職缺調整履歷"
-    },
-    "appliedOnSiteBanner": "已移到「已應徵」。我們沒有替你送出任何東西 —— 應徵要在公司自己的網站上完成。",
-    "notInterestedBanner": "已從你的清單中移除。",
-    "empty": {
-      "title": "還沒有適合你的職缺。",
-      "accent": "",
-      "sub": "告訴我們你在找什麼，或者上傳履歷，適合的職缺就會出現在這裡。"
-    },
-    "error": {
-      "title": "職缺清單沒有載入出來。",
-      "accent": "",
-      "sub": "沒有遺失任何東西。請重試；如果一直失敗，請重新整理頁面。",
-      "retry": "重試"
-    },
-    "setup": {
-      "title": "告訴我們你在找什麼",
-      "close": "關閉",
-      "skip": "先略過",
-      "skip_note": "略過之後，你會看到所有開放中的職缺，最新的排在前面。",
-      "restore_notice": "已經從你上次停下的地方繼續。",
-      "resume_title": "新增你的履歷",
-      "resume_lead": "讀一次就夠了，之後不會再給你看你根本不會去的職缺。",
-      "resume_drop": "把履歷拖到這裡，或點一下選擇檔案",
-      "resume_formats": "PDF、DOC、DOCX、TXT 或 MD — 最大 15 MB",
-      "resume_or": "或者",
-      "resume_paste": "改成貼上文字",
-      "resume_paste_placeholder": "把履歷內容貼到這裡。純文字就可以。",
-      "resume_paste_submit": "用這段文字",
-      "resume_paste_name": "貼上的履歷",
-      "resume_linkedin": "從 LinkedIn 匯入",
-      "resume_linkedin_placeholder": "https://www.linkedin.com/in/your-profile",
-      "resume_pick_existing": "用一份你已經有的履歷",
-      "resume_primary_badge": "主要履歷",
-      "resume_last_edited": "最後編輯於 {date}",
-      "resume_received": "{name} · {size}",
-      "resume_privacy": "你的履歷只留在你的帳號裡，不會給任何雇主看。",
-      "reading_title": "正在讀你的履歷",
-      "reading_sub": "需要幾秒鐘。",
-      "upload_ingest_title": "你的履歷寫了什麼",
-      "error_empty_text": "這個檔案裡沒有取到文字，可能是掃描檔。",
-      "error_empty_action": "改成貼上文字",
-      "error_unsupported_format": "這個格式讀不了。PDF、DOC、DOCX、TXT 和 MD 都可以。",
-      "error_file_too_large": "這個檔案超過 15 MB。試試匯出一個小一點的。",
-      "error_parse_failed": "這份履歷讀不了。換一個檔案，或者把文字貼進來。",
-      "error_retry": "換一個檔案",
-      "error_save_failed": "沒有存成功。再試一次。",
-      "error_load_failed": "設定沒能載入。再試一次。",
-      "confirm_title": "你的履歷是這麼寫的",
-      "confirm_lead": "哪裡不對就改哪裡。這裡沒有必填欄位。",
-      "confirm_lead_returning": "這些決定你看到哪些職缺。改完馬上生效。",
-      "thin_title": "這份履歷寫得不多",
-      "thin_lead": "挑幾個最接近的職稱。有這些就夠開始了。",
-      "source_resume": "來自你的履歷",
-      "uncertain": "這條請確認",
-      "why_roles": "你最近的職位是 {roles}。",
-      "why_years": "履歷上大約有 {years} 年工作經歷。",
-      "why_locations": "你的履歷上寫了 {city}。",
-      "chip_add": "新增",
-      "chip_remove": "移除 {value}",
-      "chip_input_placeholder": "輸入後按 Enter",
-      "chip_suggested": "或者選一個",
-      "chip_none": "沒有設定。所有選項都還在。",
-      "where_city_suggest": "還在 {city} 嗎？",
-      "where_add_place": "新增一個地點",
-      "notes_label": "還有什麼重要的",
-      "notes_placeholder": "需要簽證支援、不接受仲介、離家一小時內、想離開顧問業……",
-      "notes_hint": "寫一行就夠。它會變成上面那樣的條件。",
-      "notes_added": "從你寫的內容裡加上了：{fields}",
-      "submit": "查看職缺",
-      "submitting": "正在找適合你的職缺……",
-      "fields": {
-        "targetRoles": "你想要的職稱",
-        "where": "你想在哪裡、以什麼方式工作",
-        "locations": "地點",
-        "workModes": "遠端還是進辦公室",
-        "seniority": "層級",
-        "salary": "薪資",
-        "employmentTypes": "工作型態",
-        "industriesTarget": "你想去的產業",
-        "industriesAvoid": "你想避開的產業",
-        "companyStages": "公司階段",
-        "companySizes": "公司規模",
-        "targetCompanies": "你想去的公司",
-        "mustHaves": "一定要有",
-        "dealbreakers": "不接受"
-      },
-      "empty": {
-        "targetRoles": "新增一個職稱",
-        "where": "新增一個城市，或者先不填",
-        "employmentTypes": "沒有設定。所有型態都還在。",
-        "industriesTarget": "沒有設定。所有產業都還在。",
-        "targetCompanies": "寫幾家。它們的職缺會排在最前面。"
-      },
-      "values": {
-        "remote": "遠端",
-        "hybrid": "混合辦公",
-        "onsite": "在辦公室",
-        "full_time": "全職",
-        "contract": "約聘",
-        "part_time": "兼職",
-        "internship": "實習"
-      }
-    },
-    "discovery": {
-      "eyebrow": "你的下一個篇章",
-      "title": "找到讓你看見自己未來的工作。",
-      "intro": "認識工作機會、看清取捨，再決定下一步。",
-      "search": "搜尋這些職缺",
-      "searchPlaceholder": "職稱、公司或地點",
-      "allModes": "所有工作模式",
-      "salaryOnly": "已揭露薪資",
-      "results": "已載入 {total} 個職缺，目前顯示 {visible} 個",
-      "localHint": "篩選條件僅套用至已載入的職缺。",
-      "clear": "清除篩選",
-      "emptyTitle": "沒有符合這些篩選條件的職缺。",
-      "emptyBody": "試試其他關鍵字，或清除篩選以查看完整列表。",
-      "salaryUnknown": "未揭露薪資",
-      "locationUnknown": "未揭露地點",
-      "essentials": "職缺重點",
-      "company": "公司",
-      "workMode": "工作模式",
-      "match": "履歷契合度",
-      "review": "查看比對依據",
-      "loaded": "可探索的職缺",
-      "companies": "公司",
-      "disclosed": "已揭露薪資的職缺",
-      "strengths": "履歷中的佐證",
-      "gaps": "有待釐清的問題",
-      "listTitle": "你的工作機會",
-      "allReviewed": "都看完了",
-      "noResume": "新增履歷，看看你的經驗與職缺有多契合。",
-      "currencyUnknown": "未揭露幣別",
-      "salaryPeriod": {
-        "hour": "每小時",
-        "week": "每週",
-        "month": "每月",
-        "year": "每年"
       }
     }
   },
@@ -326,8 +102,7 @@
       }
     },
     "library": {
-      "title": "你的履歷",
-      "count": "{count} 個版本"
+      "title": "你的履歷"
     },
     "card": {
       "base": "主履歷 —— 沒有針對某個職缺調整",
@@ -405,11 +180,7 @@
         "step3": "把那個 PDF 上傳到下面",
         "upload_title": "把 LinkedIn PDF 拖到這裡",
         "upload_sub": "你從個人檔案存下來的那個 PDF",
-        "ready": "可以匯入了",
-        "or": "或者",
-        "url_label": "個人檔案是公開的？直接貼上網址",
-        "placeholder": "linkedin.com/in/your-handle",
-        "hint": "貼上你公開的 LinkedIn 網址。工作經歷、學歷、技能和連結都會匯入。"
+        "ready": "可以匯入了"
       },
       "ingest_title": {
         "scratch": "正在準備你的草稿",
@@ -605,60 +376,6 @@
       "remove_line": "刪掉這一行",
       "warning": "這份草稿裡有些數字不在你的履歷上。使用這個版本前請核對。"
     },
-    "tailor": {
-      "eyebrow": "調整",
-      "title_pick": "選一個要調整的職缺",
-      "title_analyzing_lead": "正在讀職缺說明",
-      "title_analyzing_accent": "和",
-      "title_analyzing_after": "你的履歷…",
-      "title_review_lead": "會改動什麼，針對",
-      "title_done": "調整後的版本已產生",
-      "source_label": "從你的職缺裡選一個",
-      "loading_jobs": "正在載入你的職缺…",
-      "no_jobs": "還沒有職缺。可以在下面貼上一則職缺說明。",
-      "fit": "適合度",
-      "or": "或者",
-      "paste_toggle": "貼上另一則職缺說明",
-      "paste_placeholder": "把職缺說明貼到這裡 —— 職稱、公司、全文",
-      "analyze_paste": "讀取這則職缺說明",
-      "pasted_company": "貼上的職缺說明",
-      "pasted_role": "自訂",
-      "analyzing": {
-        "read_jd": "正在讀完整的職缺說明",
-        "cross_check": "正在和你的重點逐條對照",
-        "find_gaps": "正在找出他們用了而你沒寫的字",
-        "draft": "正在寫改動內容",
-        "rescore": "正在重新計算適合度"
-      },
-      "before": "改前",
-      "after": "改後",
-      "note": "共 {count} 處改動。不想要的取消勾選 —— 只有勾選的才會套用。",
-      "kind": {
-        "rewrite": "改寫",
-        "add": "新增",
-        "reorder": "調整順序",
-        "trim": "刪減"
-      },
-      "pick_hint": "選一個職缺繼續",
-      "pick_different": "換一個職缺",
-      "apply": "套用 {count} 處改動",
-      "back_to_editor": "回到編輯器",
-      "open_copy": "開啟調整後的版本",
-      "done_title": "調整後的版本已儲存",
-      "done_body": "新版本《{name}》已在你的履歷庫裡。你的主履歷沒有改動。",
-      "done_body_paste": "調整後的版本已就緒。你的主履歷沒有改動。",
-      "error": "這份履歷沒有調整成功。請重試。",
-      "manual_toggle": "改成針對某家公司和職稱",
-      "company_label": "公司",
-      "company_placeholder": "公司名稱",
-      "role_label": "職稱",
-      "role_placeholder": "職稱（可不填）",
-      "analyze_manual": "針對這家公司和職稱調整",
-      "manual_hint": "沒有職缺說明時，調整只會用到公司、職稱和你的履歷。",
-      "version_name_label": "另存為",
-      "estimated": "估算",
-      "citation_warning": "這份草稿裡有些數字不在你的履歷上。套用改動前請核對。"
-    },
     "download": {
       "eyebrow": "下載",
       "title": "下載格式…",
@@ -747,12 +464,7 @@
     "page_title": "應徵紀錄",
     "eyebrow": "{count} 個進行中",
     "headline": "你應徵了哪些，後來怎麼樣了？",
-    "sub": "拖曳卡片，或者用它的階段選單，把它移到 {columns} 個階段之間。收到回覆和行事曆邀請時會自動移動。",
     "loading": "正在載入你的應徵紀錄…",
-    "view": {
-      "by_stage": "依階段",
-      "by_date": "依時間"
-    },
     "columns": {
       "saved": "已儲存",
       "applied": "已應徵",
@@ -776,22 +488,6 @@
       "write_cta": "寫一封後續信",
       "grounding": "根據職缺說明和你的履歷寫成。",
       "open_mail": "在你的郵件軟體裡開啟"
-    },
-    "insight": {
-      "title": "你這一週",
-      "sub": "發生了什麼，接下來做什麼。",
-      "empty": "投遞滿一週之後，這裡就會有內容。",
-      "refresh": "更新",
-      "refreshing": "更新中…",
-      "refresh_recent": "剛剛更新過。請稍後再試。",
-      "metrics": {
-        "applications": "應徵",
-        "interviews": "面試",
-        "offers": "錄取",
-        "weeks_to_offer": "已過週數",
-        "unknown": "—",
-        "skills_observed": "出現最多的技能"
-      }
     },
     "card": {
       "drag_hint": "把這張卡片拖到另一個階段，或者用它的階段選單",
@@ -847,31 +543,6 @@
       "error_title_required": "請先填寫職稱。",
       "error_company_required": "請先填寫公司。",
       "error_generic": "這個職缺沒有新增成功。請重試。"
-    },
-    "activity": {
-      "eyebrow": "最近 7 天",
-      "title": "發生過的",
-      "titleAccent": "每一件事",
-      "titleAfter": "。",
-      "sub": "每一次應徵、每一份草稿、每一處改動，都帶著發生的日期。",
-      "loading": "正在載入你的歷史紀錄…",
-      "stats": {
-        "appsSent": "應徵",
-        "replies": "回覆",
-        "replyRate": "{percent}%",
-        "draftsWritten": "已寫草稿",
-        "thisWeek": "本週"
-      },
-      "empty": {
-        "title": "還沒有",
-        "titleAccent": "任何紀錄",
-        "sub": "儲存、調整、應徵之後，每一步都會帶著日期出現在這裡。"
-      },
-      "error": {
-        "title": "你的歷史紀錄沒有載入出來。",
-        "body": "沒有遺失任何東西。請重試；如果一直失敗，請重新整理頁面。",
-        "retry": "重試"
-      }
     }
   },
   "practice": {
@@ -1027,19 +698,11 @@
         "sub": "視訊更接近真實面試。語音適合暖身。",
         "video": {
           "title": "視訊面試",
-          "tag": "建議",
-          "desc": "開鏡頭，面對面。眼神接觸、狀態，以及你怎麼處理停頓，都會被記下來。",
-          "b1": "你會在角落看到自己",
-          "b2": "眼神接觸和狀態會被記錄",
-          "b3": "會錄下來，方便你回看"
+          "tag": "建議"
         },
         "voice": {
           "title": "只用語音",
-          "tag": "壓力較小",
-          "desc": "只有聲音，像講電話。適合在開鏡頭之前先把結構理順。",
-          "b1": "不需要鏡頭",
-          "b2": "專注在你說的內容上",
-          "b3": "只有逐字稿"
+          "tag": "壓力較小"
         }
       },
       "launch": {
@@ -1530,7 +1193,6 @@
     },
     "report": {
       "title": "面試報告",
-      "sub": "照真實面試小組的標準來評。",
       "evidence": "這份報告背後的依據",
       "loading": "正在載入你的報告…",
       "error": "這份報告沒有載入出來。請重試；如果一直失敗，請重新整理頁面。",
@@ -1656,8 +1318,6 @@
       "title_after": "。",
       "sub": "每一次應徵、每一份調整過的履歷，都是從這裡出發的。",
       "group_profile": "個人資料",
-      "upload_photo": "上傳照片",
-      "photo_hint": "PNG 或 JPG · 正方形效果最好",
       "full_name": "姓名",
       "pronouns": "稱謂",
       "pronouns_sub": "可不填 —— 用來讓求職信前後一致",
@@ -1685,168 +1345,31 @@
       "title_em": "你在找什麼",
       "title_after": "。",
       "sub": "你說得越具體，需要看的職缺就越少。想看更多時把條件放寬。",
-      "plain_label": "用白話說",
-      "plain_l1": "{stages}公司的 {roles} 職務",
-      "plain_l2": "在 {cities}，{modes}",
-      "plain_l3": "本薪 ${min}k–{max}k · {count} 個產業",
-      "plain_l4": "必須有：{items}",
-      "plain_l5": "不接受：{items}",
-      "any_stage": "任何階段",
-      "none": "無",
-      "mode_remote_word": "遠端",
-      "mode_hybrid_word": "混合辦公",
-      "mode_onsite_word": "在辦公室",
       "group_intent": "用你自己的話",
       "intent_label": "你下一步想要什麼",
-      "intent_sub": "自由填寫 —— 兩個職缺看起來一樣時，用它來決定先後",
-      "group_role": "職務",
-      "titles_label": "你想要的職稱",
-      "titles_sub": "把你願意接受的說法都加進來",
-      "titles_ph": "輸入一個職稱，然後打逗號",
-      "seniority_label": "層級",
-      "seniority_sub": "只看{level}以上",
-      "group_location": "地點",
-      "work_mode_label": "遠端還是進辦公室",
-      "mode_remote": "遠端",
-      "mode_remote_desc": "任何地方、任何時區",
-      "mode_hybrid": "混合辦公",
-      "mode_hybrid_desc": "每週進辦公室 2 到 3 天",
-      "mode_onsite": "在辦公室",
-      "mode_onsite_desc": "每週進辦公室 5 天",
-      "cities_label": "城市或地區",
-      "cities_sub": "以及願意招遠端的地方",
-      "cities_ph": "新增一個城市",
-      "group_comp": "薪資",
-      "salary_label": "本薪範圍",
-      "salary_sub": "${min}k–${max}k · 低於 {min}k 的會被隱藏",
-      "salary_min": "最低本薪",
-      "salary_max": "最高本薪",
-      "salary_median": "{level}的市場中位數：$215k",
-      "group_company": "公司",
-      "stage_label": "階段",
-      "stage_sub": "你想加入發展到哪一步的公司",
-      "headcount_label": "公司規模",
-      "group_industry": "產業",
-      "industries_target_label": "想去的產業",
-      "industries_target_sub": "這些會排在前面",
-      "industries_avoid_label": "想避開的產業",
-      "industries_avoid_sub": "永遠不顯示",
-      "industries_avoid_ph": "新增一個產業",
-      "group_hard_rules": "硬性條件",
       "musthaves_label": "必須有",
-      "musthaves_sub": "沒有這些的職缺會被隱藏",
       "musthaves_ph": "新增一個必要條件",
       "dealbreakers_label": "不接受",
-      "dealbreakers_sub": "職缺說明裡提到這些就會被隱藏",
-      "dealbreakers_ph": "新增一條",
-      "work_auth_label": "你需要公司幫你辦工作簽證嗎？",
-      "auth_citizen": "不需要 —— 我已經可以在這裡工作",
-      "auth_pr": "不需要 —— 我是永久居民",
-      "auth_h1b": "需要 —— 我需要 H-1B 擔保",
-      "auth_opt": "需要 —— 我需要 OPT 延期",
-      "auth_eu": "不需要 —— 我是歐盟或英國公民",
-      "auth_other": "其他情況"
-    },
-    "notif": {
-      "eyebrow": "通知",
-      "title_before": "什麼時候",
-      "title_em": "聯絡你",
-      "title_after": "。",
-      "sub": "預設全部關閉。想要哪些就打開哪些。",
-      "group_channels": "送到哪裡",
-      "channel_email": "電子郵件",
-      "channel_email_sub": "送到你帳戶綁定的信箱",
-      "channel_push": "推播",
-      "channel_push_sub": "瀏覽器和手機應用",
-      "channel_sms": "簡訊",
-      "group_matrix": "送什麼",
-      "col_email": "郵件",
-      "col_push": "推播",
-      "col_sms": "簡訊",
-      "event_newMatch90_label": "出現一個很適合的職缺",
-      "event_newMatch90_sub": "一個和你很合的新職缺",
-      "event_appSent_label": "你把職缺標記為已應徵",
-      "event_appSent_sub": "一則簡短的確認",
-      "event_response_label": "公司回覆了",
-      "event_response_sub": "招募人員或用人主管回信了",
-      "event_interview_label": "約到了面試",
-      "event_interview_sub": "時間已經定下來了",
-      "group_digest": "彙整",
-      "digest_label": "多久一次",
-      "digest_sub": "一次彙整，取代一則則單獨的訊息",
-      "digest_off": "關閉",
-      "digest_daily": "每天早上 7 點",
-      "digest_weekly": "每週一"
+      "dealbreakers_ph": "新增一條"
     },
     "privacy": {
-      "eyebrow": "隱私",
-      "title_before": "你的資料和",
-      "title_em": "封鎖名單",
-      "title_after": "。",
-      "sub": "被你封鎖的公司不會出現在你的職缺裡。你的資料是你的，可以帶走，也可以刪除。",
       "group_blocklist": "你不想看到其職缺的公司",
       "blocked_label": "已封鎖",
       "blocked_sub": "這些公司的職缺不會出現",
-      "reason_employer": "你現在的雇主",
       "reason_byyou": "你自己加的",
       "remove": "移除",
       "add_company": "新增要封鎖的公司",
       "add_ph": "公司名稱",
-      "add_confirm": "新增",
-      "blocked_recruiters_label": "已封鎖的招募人員",
-      "blocked_recruiters_sub": "{count} 位招募人員無法聯絡你",
-      "manage_list": "管理名單",
-      "group_data": "你的資料",
-      "export_label": "下載全部資料",
-      "export_sub": "應徵紀錄、草稿、逐字稿和履歷",
-      "download_archive": "下載",
-      "retention_label": "保留多久",
-      "retention_sub": "面試逐字稿和草稿保留多久",
-      "retention_30": "30 天",
-      "retention_90": "90 天",
-      "retention_365": "1 年",
-      "retention_forever": "一直保留"
+      "add_confirm": "新增"
     },
     "profile": {
-      "title": "帳戶資訊",
       "displayName": "顯示名稱",
-      "memberSince": "{date} 註冊",
       "verified": "已驗證",
       "edit": "編輯",
       "save": "儲存",
       "cancel": "取消"
     },
-    "credits": {
-      "title": "練習面試點數",
-      "unit": "點",
-      "note": "1 點等於一場 20 分鐘的練習面試。更短或更長的照比例計算。"
-    },
     "billing": {
-      "title": "方案與帳單",
-      "sub": "你現在用的是什麼、還能換成什麼，以及你的帳單在哪裡。",
-      "checkout_failed": "付款頁面沒有開啟。請重試，或者換一張卡。",
-      "payments_unavailable": "付款還沒有開通。你目前的方案照常使用。",
-      "currency": {
-        "usd": "價格以美元計，以信用卡付款。",
-        "cny": "價格以人民幣計，以支付寶付款。",
-        "switchToCny": "在中國大陸？切換為人民幣和支付寶。",
-        "switchToUsd": "不在中國大陸？切換為美元和信用卡。"
-      },
-      "manage": "管理帳單",
-      "invoices": "查看帳單",
-      "cancel": "取消方案",
-      "viewHistory": "查看帳單紀錄",
-      "summaryNote": "你的付款方式、帳單和收據都保存在金流服務商的安全頁面裡。",
-      "current": {
-        "renews": "{date} 續訂 · 按月計費",
-        "cancelsAt": "{date} 到期",
-        "expiresAt": "已於 {date} 到期 —— 續訂即可繼續使用",
-        "status": {
-          "active": "生效中",
-          "pastDue": "逾期未付",
-          "canceled": "已取消"
-        }
-      },
       "history": {
         "heading": "帳單紀錄",
         "subtitle": "你的帳單和收據。",
@@ -1860,11 +1383,6 @@
         "pending": "處理中",
         "failed": "失敗",
         "card": "信用卡"
-      },
-      "checkout": {
-        "success": "你的方案已生效。",
-        "cancel": "付款已取消。你的方案沒有變動。",
-        "dismiss": "關閉"
       }
     },
     "plan": {
@@ -1872,42 +1390,7 @@
       "premium": "進階版",
       "premiumPlus": "進階版+",
       "starter": "入門版",
-      "growth": "成長版",
-      "perMonth": "/月",
-      "dailyCap": "每天 {n} 次操作",
-      "mostPopular": "最多人選",
-      "current": "你的方案",
-      "upgrade": "升級",
-      "downgrade": "降一級方案",
-      "comingSoon": "還沒有開放",
-      "freeForever": "免費",
-      "freePrice": "免費",
-      "subscribe": "訂閱",
-      "subscribeAlipay": "用支付寶付款",
-      "creditsCap": "每月 {n} 點",
-      "select_free": "免費開始",
-      "select_paid": "選擇{plan}",
-      "cta": {
-        "upgradeTo": "升級到{plan}",
-        "switchTo": "切換到{plan}",
-        "yourFreePlan": "你的方案",
-        "alipaySwitchNote": "要更換方案，請先取消，然後在結帳頁重新訂閱。"
-      },
-      "credits_explainer": "1 點等於一場 20 分鐘的練習面試。更短或更長的照比例計算，點數會在每個計費月開始時補滿。",
-      "feature": {
-        "mockInterviews": "練習面試",
-        "resumeTailors": "履歷調整",
-        "coverLetters": "求職信",
-        "priorityMatching": "更快的職缺評分",
-        "everythingFree": "免費版的全部內容",
-        "everythingPremium": "進階版的全部內容",
-        "prioritySupport": "更快的客服回應",
-        "creditsMonthly": "每月 {n} 點練習面試點數",
-        "fullReports": "完整的面試報告",
-        "allInterviewTypes": "全部形式和全部面試官",
-        "everythingStarter": "入門版的全部內容",
-        "toneSteering": "自選面試官的語氣"
-      }
+      "growth": "成長版"
     },
     "usage": {
       "title": "使用狀況",
@@ -1919,11 +1402,9 @@
       "resetNote": "每天 UTC 零點重設 · {tier}每天可用 {cap}",
       "heatLess": "較少",
       "heatMore": "較多",
-      "recent": "最近的使用",
-      "recentItem": "{count} 次 {feature}"
+      "recent": "最近的使用"
     },
     "security": {
-      "title": "安全性",
       "changePassword": "變更密碼",
       "changeSuccess": "你的密碼已變更。",
       "currentPassword": "目前的密碼",
@@ -1955,9 +1436,6 @@
       "title_em": "無法復原",
       "title_after": "的按鈕。",
       "sub": "每一項都會要你確認一次。確認之後就無法復原。",
-      "reset_title": "重設你的設定",
-      "reset_desc": "清空這個頁面上的所有內容。你的履歷和應徵紀錄會保留。",
-      "reset_btn": "重設設定",
       "delete_data_title": "刪除你的求職資料",
       "delete_data_desc": "清空你的職缺清單和應徵紀錄。你的帳戶和履歷會保留。",
       "delete_data_btn": "刪除求職資料",
@@ -1974,7 +1452,6 @@
       "delete_account_title": "刪除你的帳戶",
       "delete_account_desc": "會刪掉所有東西：履歷、應徵紀錄、逐字稿和錄音。無法復原。",
       "delete_account_btn": "刪除帳戶",
-      "title": "危險操作",
       "deleteAccount": "刪除帳戶",
       "deleteDescription": "會刪掉你的帳戶、履歷、面試錄音和訂閱。無法復原。",
       "confirmEmailLabel": "確認你的電子郵件",
@@ -2003,13 +1480,8 @@
       "error_generic": "電子郵件和密碼對不上。請檢查後重試。"
     },
     "signup": {
-      "title": "建立你的帳戶",
-      "subtitle": "上傳履歷，看看哪些職缺你真的拿得到。",
       "email": "電子郵件",
       "password": "密碼",
-      "name": "你的姓名",
-      "submit": "註冊",
-      "submitting": "正在建立你的帳戶…",
       "has_account": "已經有帳戶了？",
       "login_cta": "登入",
       "error_generic": "帳戶沒有建立成功。請重試；如果一直失敗，換一個電子郵件。"
@@ -2042,307 +1514,6 @@
       "theme_to_light": "切換成淺色",
       "theme_to_dark": "切換成深色",
       "lang_label": "切換語言"
-    },
-    "hero": {
-      "eyebrow": "讀你的履歷 · 讀整個市場 · 指出差在哪裡",
-      "headline": "找到適合的工作。看清自己的優勢與落差。",
-      "subheadline": "探索與你的經驗相符的職缺，了解還缺少什麼，更有把握地踏出下一步。",
-      "sub_emphasis": "應徵前的一切，我們都自動化。最後那顆按鈕，由你親手按下。",
-      "cta_primary": "免費開始",
-      "cta_secondary": "看看它怎麼讀一個職缺",
-      "reassure": "免費方案 · 不用綁卡 · 絕不會替你向雇主送出任何東西",
-      "log": {
-        "aria": "一份範例落差報告。它讀了一份有六年支付產業經驗的履歷，讀了 1284 則招募中的職缺，把其中 41 則判為相符，然後指出落差：Kubernetes 出現在其中十二則職缺裡，而履歷上沒有；九則職缺要求帶過團隊，而履歷寫的是「協助」；六則職缺需要安全許可，因此被排除。它顯示最適合的職缺為 87 分（滿分 100），指出三條重點缺少數字，並列出面試官最可能問的六個問題。",
-        "title": "%BRAND% —— 落差報告",
-        "live": "範例",
-        "lines": {
-          "l1": {
-            "time": "01",
-            "tag": "讀取",
-            "msg": "你的履歷 · 6 年，支付基礎架構"
-          },
-          "l2": {
-            "time": "02",
-            "tag": "讀取",
-            "msg": "已讀 1284 則招募中的職缺"
-          },
-          "l3": {
-            "time": "03",
-            "tag": "排序",
-            "msg": "41 則與你的經驗相符 · 6 則很適合"
-          },
-          "l4": {
-            "time": "04",
-            "tag": "落差",
-            "msg": "Kubernetes：出現在其中 12 則裡，你的履歷沒有"
-          },
-          "l5": {
-            "time": "05",
-            "tag": "落差",
-            "msg": "9 則要求帶過團隊；你的履歷寫的是「協助」"
-          },
-          "l6": {
-            "time": "06",
-            "tag": "排除",
-            "msg": "6 則需要你沒有的安全許可 · 已移除"
-          },
-          "l7": {
-            "time": "07",
-            "tag": "最佳",
-            "msg": "最適合的 87 / 100 · 這不是你被錄取的機率"
-          },
-          "l8": {
-            "time": "08",
-            "tag": "修正",
-            "msg": "3 條重點沒有數字 · 逐條指出"
-          },
-          "l9": {
-            "time": "09",
-            "tag": "準備",
-            "msg": "這組面試官最可能問的 6 個問題"
-          }
-        }
-      },
-      "strip_summary": "讀了 1284 則職缺 · 41 則相符 · 6 則很適合 · 每個落差都點名",
-      "strip_scroll": "它怎麼運作"
-    },
-    "problem": {
-      "eyebrow": "為什麼多投履歷不再管用",
-      "title": "投得更多不是答案。",
-      "sub": "AI 讓招募被履歷淹沒，招募方看得出來。在 Business Insider 的一次測試裡，一個大量投遞的機器人只拿到 6% 的回覆率。把同一份履歷更多地丟向同一道牆，結果不會變。弄清楚每則職缺說明要什麼、你的履歷有沒有寫到，才會變。",
-      "stats": {
-        "s1": {
-          "value": "242",
-          "label": "人現在會應徵同一個企業職缺"
-        },
-        "s2": {
-          "value": "+400%",
-          "label": "大量投遞工具興起後，招募方收到的應徵增幅"
-        },
-        "s3": {
-          "value": "41%",
-          "label": "的求職者認為，自己的應徵裡被人看過的不到四分之一"
-        }
-      },
-      "source": "資料來源：The Interview Guys（242）· Greenhouse，經 Fortune 報導（+400%）· 求職者調查，2025–2026（41%）"
-    },
-    "how": {
-      "eyebrow": "它怎麼運作",
-      "title": "找到。看懂。修正。練習。",
-      "sub": "上傳一次履歷。之後的一切都圍繞一個問題：這則職缺說明要的是什麼，而你沒有寫出來？",
-      "steps": {
-        "s1": {
-          "time": "01",
-          "tag": "找到",
-          "title": "它讀整個市場",
-          "body": "成千上萬則招募中的職缺會被讀取，並和你的履歷做比對。不符合你要求的職缺不會進入你的清單。"
-        },
-        "s2": {
-          "time": "02",
-          "tag": "看懂",
-          "title": "它指出差在哪裡",
-          "body": "每個職缺都以最要緊的那句白話開頭：他們兩次要求 Kubernetes，而你的履歷完全沒提。下面是適合度分數，滿分 100，並附一句話說明這個數字是什麼、不是什麼。"
-        },
-        "s3": {
-          "time": "03",
-          "tag": "修正",
-          "title": "你來改履歷",
-          "body": "為某一個職缺調整出一份，改動左右對照顯示。草稿裡的每個數字都必須能回溯到履歷上的某一行，否則下載會被擋住，直到你改好。"
-        },
-        "s4": {
-          "time": "04",
-          "tag": "練習",
-          "title": "然後練習面試",
-          "body": "一位即時語音面試官，事先讀過那則職缺說明和你的履歷，問那組面試官最可能問的問題。結束後有報告、逐字稿和錄音。"
-        }
-      }
-    },
-    "loop": {
-      "eyebrow": "完整的循環",
-      "title": "從履歷到錄取，都在同一處。",
-      "sub": "你找到的職缺帶出了落差。落差帶出了履歷改動。履歷改動帶出了練習題。每一步都接著上一步。",
-      "cards": {
-        "match": {
-          "tag": "找到",
-          "title": "照適合程度排序的職缺",
-          "body": "每個職缺都會對著你真實的履歷讀一遍，落到四個級別之一：很適合、還算適合、可能適合、不太適合。理由用白話寫出來，不是關鍵字計數。"
-        },
-        "resume": {
-          "tag": "修正",
-          "title": "一份你真的改得動的履歷",
-          "body": "從 LinkedIn 或 PDF 匯入，改寫寫得弱的行，為某一個職缺調整出一份並左右對照，最後匯出掃描軟體讀得懂的 PDF。"
-        },
-        "apply": {
-          "tag": "追蹤",
-          "title": "每一次應徵，以及後來怎麼樣了",
-          "body": "你在公司自己的網站上應徵。職缺會自動移到「已應徵」，頁面上清楚顯示每一個停在了哪裡：第一次通話、面試中、最後一關、錄取，還是未錄取。"
-        },
-        "studio": {
-          "tag": "練習",
-          "title": "一位可以對練的面試官",
-          "body": "即時語音面試官，帶 18 套產業方法和 28 種形式 —— 電話溝通、系統設計、商業個案 —— 照真實面試小組的標準給你評分。"
-        }
-      }
-    },
-    "studio": {
-      "eyebrow": "後半段",
-      "title_machine": "拿到面試只是一半",
-      "title_human": "這是另一半",
-      "sub": "63% 的求職者在真實招募中已經面對過 AI 面試官（Greenhouse，2026）。你可以對著我們的練幾次都行，沒有人在旁邊看。",
-      "features": {
-        "f1": {
-          "title": "它像真人一樣說話，也會打斷你",
-          "body": "即時語音：面試官會追問、會反駁、會插話，支援 9 種語言的母語人聲。"
-        },
-        "f2": {
-          "title": "18 套產業方法，不是題庫",
-          "body": "法律、金融、醫療、硬體、AI 等等。它問的是這個產業裡真正會問的問題，評分也用同一套眼光。"
-        },
-        "f3": {
-          "title": "見面之前它先讀職缺",
-          "body": "面試官會讀你這個職務目前招募中的職缺，再加上你貼上的職缺說明，然後圍繞你的履歷出題。"
-        },
-        "f4": {
-          "title": "一份能改變你下次回答的報告",
-          "body": "用五個白話問題評價你的表現，逐題給出修正和更好的回答，外加完整逐字稿和錄音。"
-        },
-        "f5": {
-          "title": "回答時的提示，需要才開",
-          "body": "在你離題、繞開問題或把重點埋起來時給出簡短提示。開鏡頭還能加上真實視訊面試的壓力。"
-        }
-      },
-      "report": {
-        "header": "session-042 —— 報告",
-        "overall_label": "總分",
-        "overall": "82",
-        "rows": {
-          "r1": {
-            "k": "按順序講清楚了",
-            "v": "86"
-          },
-          "r2": {
-            "k": "給出了真實的數字",
-            "v": "78"
-          },
-          "r3": {
-            "k": "完整回答了問題",
-            "v": "84"
-          }
-        },
-        "quote": "「先說數字。40% 的成本下降被你放在了回答的最後。」",
-        "quote_label": "一個問題，一處修正"
-      },
-      "cta": "免費練一場面試"
-    },
-    "rules": {
-      "eyebrow": "這個產品不會做的事",
-      "title": "四件我們不做的事。",
-      "sub": "這些不是可以打開的開關，而是產品本身的做法。",
-      "file": "limits.txt —— 唯讀",
-      "badge": "固定",
-      "ok": "確認",
-      "items": {
-        "r1_head": "不會替你送出任何東西",
-        "r1_body": "任何應徵、訊息或回覆都不會以你的名義送出去。應徵由你在公司網站上完成；職缺會自動移到「已應徵」。",
-        "r2_head": "不會編造經歷",
-        "r2_body": "調整後的草稿裡每個數字都必須能回溯到履歷上的某一行。如果有一個回溯不到，下載會被擋住，直到你改掉或刪掉它。",
-        "r3_head": "分數不是預測",
-        "r3_body": "適合度分數說的是你的履歷和一則職缺說明有多吻合。它不是你被錄取的機率，產品會在每個分數旁邊說明這一點。",
-        "r4_head": "你可以乾淨地離開",
-        "r4_body": "刪除帳戶就是真的刪掉：履歷、應徵紀錄、逐字稿和錄音。"
-      }
-    },
-    "pricing": {
-      "eyebrow": "方案",
-      "title": "免費開始。有效果了再付費。",
-      "sub": "每個方案都包含完整產品：職缺配對、落差報告、履歷編輯器和應徵紀錄。付費方案買的是更多練習面試。",
-      "unit": "場面試 / 月",
-      "credit_note": "1 點等於一場 20 分鐘的練習面試，按秒計費。點數每月補滿。可用信用卡付款，在中國也可用支付寶。",
-      "tiers": {
-        "free": {
-          "code": "TIER-0",
-          "name": "免費版",
-          "rate": "1",
-          "per": "",
-          "note": "完整產品，外加每月一場有評分的練習面試。",
-          "cta": "免費開始",
-          "unit": "場面試 / 月"
-        },
-        "starter": {
-          "code": "TIER-1",
-          "name": "入門版",
-          "rate": "10",
-          "per": "/月",
-          "badge": "最多人選",
-          "note": "足夠在每一場真實面試前先練一遍。",
-          "cta": "開始入門版",
-          "unit": "場面試 / 月"
-        },
-        "growth": {
-          "code": "TIER-2",
-          "name": "成長版",
-          "rate": "28",
-          "per": "/月",
-          "note": "每天都能練，直到簽下工作。",
-          "cta": "開始成長版",
-          "unit": "場面試 / 月"
-        }
-      }
-    },
-    "faq": {
-      "eyebrow": "常見問題",
-      "title": "求職者最常問的。",
-      "items": {
-        "q1": {
-          "q": "%BRAND% 是什麼？",
-          "a": "%BRAND% 讀你的履歷，讀招募中的職缺，然後就每個職缺告訴你兩件事：你的履歷和它有多吻合，以及它要求的哪些內容你的履歷沒有寫。接著幫你改履歷，並和即時 AI 面試官練習面試。"
-        },
-        "q2": {
-          "q": "%BRAND% 會替我投履歷嗎？",
-          "a": "不會。絕不會以你的名義向雇主送出任何東西。你打開公司自己的網站去應徵；職缺會自動移到「已應徵」，如果你改變主意，一下就能復原。"
-        },
-        "q3": {
-          "q": "100 分制的分數是什麼意思？",
-          "a": "它說的是你的履歷和那則職缺說明有多吻合：職稱與層級、他們要求的技能、這個產業裡的經驗、地點薪資與簽證，以及你的職涯走到了哪一步。它不是你被錄取的機率，也從不這樣宣稱。"
-        },
-        "q4": {
-          "q": "真的可以和 AI 練習求職面試嗎？",
-          "a": "可以，面試官是即時語音的，會說話、會追問，也會像真人一樣打斷你。可選 28 種形式和 18 套產業方法（軟體、法律、金融、醫療等），可用 9 種語言面試，結束後有逐題修正的報告、逐字稿和錄音。"
-        },
-        "q5": {
-          "q": "這和替我大量投遞的工具有什麼不同？",
-          "a": "那些工具只是把同一份履歷投得更多。在 Business Insider 的一次測試裡，一個大量投遞的機器人只拿到 6% 的回覆率。%BRAND% 反過來做：職缺更少，每一個都認真讀過，缺的字逐個點名，讓你在應徵之前先補上。而且同一個產品接著幫你準備面試。"
-        },
-        "q6": {
-          "q": "要多少錢？",
-          "a": "核心產品永久免費，外加每月一場練習面試。入門版每月 15 美元，含 10 場練習面試；成長版每月 29 美元，含 28 場。1 點是一場 20 分鐘的面試，按秒計費，每月補滿。可用信用卡付款，在中國也可用支付寶。"
-        },
-        "q7": {
-          "q": "%BRAND% 支援哪些語言？",
-          "a": "九種：英文、西班牙文、葡萄牙文、法文、德文、日文、韓文，以及簡體中文和繁體中文。練習面試目前九種全部可用，報告也一樣。介面已完整翻譯成英文、日文和簡繁兩種中文，其餘正在陸續上線。"
-        },
-        "q8": {
-          "q": "我的資料安全嗎？可以刪掉嗎？",
-          "a": "你的履歷、逐字稿和錄音都是你的，不會分享給雇主。刪除帳戶是真的刪掉，而不是藏起來。"
-        }
-      }
-    },
-    "final": {
-      "chip": "搶先體驗 · 免費開始",
-      "title_machine": "看看到底缺了什麼。",
-      "title_human": "只需要上傳一次",
-      "sub": "上傳履歷，說說你在找什麼，然後看第一份落差報告。練習面試官現在就能用，第一場免費。",
-      "cta": "免費開始"
-    },
-    "sticky": {
-      "cta": "免費開始",
-      "note": "不用綁卡"
-    },
-    "footer": {
-      "status": "絕不會替你向雇主送出任何東西",
-      "note": "© %BRAND%。由求職者做給求職者。",
-      "tagline": "弄清楚你為什麼拿不到面試。",
-      "lang_title": "用你的語言使用 %BRAND%"
     }
   },
   "errors": {

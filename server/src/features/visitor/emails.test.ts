@@ -119,11 +119,12 @@ describe('through EmailService', () => {
   });
 });
 
-describe('email strings in the staging bundle (Wave 5 gate)', () => {
-  it('server/src/i18n/email/staging/visitor.en.json equals VISITOR_EMAIL_EN', async () => {
-    const { readFileSync } = await import('node:fs');
+describe('email strings in the English bundle (merged from staging by WP-91)', () => {
+  it('the `visitor` strings of server/src/i18n/email/en.json equal VISITOR_EMAIL_EN, the English fallback', async () => {
     const { join } = await import('node:path');
-    const staged = JSON.parse(readFileSync(join(process.cwd(), 'server/src/i18n/email/staging/visitor.en.json'), 'utf8'));
-    expect(staged).toEqual(VISITOR_EMAIL_EN);
+    const { loadEnglishWithStaging } = await import('../../platform/email/i18n.js');
+    // en.json with anything staged since on top: what the loader calls English.
+    const english = loadEnglishWithStaging(join(process.cwd(), 'server/src/i18n/email'));
+    expect({ visitor: english.visitor }).toEqual(VISITOR_EMAIL_EN);
   });
 });

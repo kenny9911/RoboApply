@@ -1,30 +1,3 @@
 {
-  "visitor": {
-    "email": {
-      "confirm": {
-        "subject": "Confirm your job alerts from %BRAND%",
-        "heading": "Confirm your job alerts",
-        "body": "Someone, hopefully you, asked %BRAND% to email new jobs for \"{search}\" to this address {cadence, select, daily {once a day} other {once a week}}.",
-        "cta": "Confirm job alerts",
-        "ignore": "If this was not you, ignore this email. Nothing will be sent unless the link is pressed, and it stops working after {hours} hours.",
-        "preheader": "Press the button to start your job alerts."
-      },
-      "digest": {
-        "subject": "{count, plural, one {# new job} other {# new jobs}} for \"{search}\"",
-        "heading": "{count, plural, one {# new job for your alert} other {# new jobs for your alert}}",
-        "intro": "New since your last email, for \"{search}\".",
-        "more": "{count, plural, one {# more job also matches.} other {# more jobs also match.}}",
-        "payNotListed": "Pay not listed",
-        "pay": "{amount} {period, select, year {a year} month {a month} week {a week} day {a day} hour {an hour} other {}}",
-        "placeNotListed": "Place not listed",
-        "remote": "Remote",
-        "viewJob": "View job",
-        "signup": "Create a free account to see how well each job fits your resume.",
-        "signupCta": "Create a free account",
-        "reason": "You get this email because you confirmed job alerts for \"{search}\" on %BRAND%. You do not have an account.",
-        "preheader": "New jobs for your alert."
-      },
-      "searchAny": "any job"
-    }
-  }
+  "visitor": {}
 }

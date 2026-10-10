@@ -770,8 +770,10 @@ describe('zh bundle', () => {
     Object.entries(t).flatMap(([k, v]) => (typeof v === 'string' ? [`${pre}${k}`] : leaves(v, `${pre}${k}.`)));
 
   it('has every English key, and the same %BRAND% count per key', async () => {
-    const en = (await import('../../../../i18n/staging/onboardingCn.en.json')).default as unknown as { onboardingCn: Tree };
-    const zh = (await import('../../../../i18n/staging/onboardingCn.zh.json')).default as unknown as { onboardingCn: Tree };
+    // WP-91 merged the staged onboardingCn strings into the en and zh bundles.
+    const en = (await import('../../../../i18n/messages/en.json')).default as unknown as { onboardingCn: Tree };
+    const zh = (await import('../../../../i18n/messages/zh.json')).default as unknown as { onboardingCn: Tree };
+    expect(leaves(en.onboardingCn).length).toBeGreaterThan(100);
     expect(leaves(zh.onboardingCn).sort()).toEqual(leaves(en.onboardingCn).sort());
     const get = (t: Tree, path: string) => path.split('.').reduce<Tree | string>((n, k) => (n as Tree)[k]!, t) as string;
     for (const key of leaves(en.onboardingCn)) {
@@ -781,8 +783,8 @@ describe('zh bundle', () => {
   });
 
   it('renders G2 in Chinese with 届别 options', async () => {
-    const en = (await import('../../../../i18n/staging/onboardingCn.en.json')).default;
-    const zh = (await import('../../../../i18n/staging/onboardingCn.zh.json')).default;
+    const en = { onboardingCn: (await import('../../../../i18n/messages/en.json')).default.onboardingCn };
+    const zh = { onboardingCn: (await import('../../../../i18n/messages/zh.json')).default.onboardingCn };
     const { renderWithProviders } = await import('../../../../__tests__/utils/renderWithProviders');
     const { BrandProvider } = await import('../../../../lib/brand/BrandProvider');
     const { clientBrandFor } = await import('../../../../lib/brand/client');

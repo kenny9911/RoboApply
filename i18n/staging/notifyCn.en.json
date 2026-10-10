@@ -1,11 +1,3 @@
 {
-  "notifyCn": {
-    "subscribe": {
-      "channelOff": "WeChat reminders are off in your notification settings, so this reminder stays in your inbox.",
-      "settingsLink": "Notification settings"
-    },
-    "share": {
-      "defaultDescription": "Job details on %BRAND%"
-    }
-  }
+  "notifyCn": {}
 }

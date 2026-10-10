@@ -47,20 +47,11 @@
     "guide_note": "Descubre. Prepárate. Avanza."
   },
   "jobs": {
-    "page_title": "Empleos",
-    "headline": "{count, plural, =0 {Todavía no encaja ningún empleo contigo.} one {1 empleo encaja contigo.} other {# empleos encajan contigo.}}",
-    "headlineLoading": "Empleos que encajan contigo.",
-    "sub": "Actualizado {time}.",
-    "read_count": "Se leyeron {scanned} anuncios nuevos desde {since}. {worth} valen tu tiempo.",
-    "matchesTitle": "Empleos que encajan contigo, los mejores primero",
     "fit": {
       "great": "Encaja muy bien",
       "good": "Encaja bien",
       "possible": "Posible",
       "unlikely": "Poco probable"
-    },
-    "tag": {
-      "possible": "Encaje posible"
     },
     "score": {
       "label": "Nivel de encaje",
@@ -75,221 +66,6 @@
         "industry": "Experiencia en este sector — 15",
         "location_pay_visa": "Ubicación, sueldo y visado — 10",
         "career_moves": "Cómo ha avanzado tu carrera hasta ahora — 10"
-      }
-    },
-    "gap": {
-      "missing_label": "Piden esto y tu currículum no lo menciona:",
-      "overlap_label": "Lo que sí coincide:",
-      "none_missing": "No falta en tu currículum nada de lo que piden.",
-      "fix_cta": "Arreglar esto en tu currículum"
-    },
-    "whyFits": "Por qué encajas",
-    "thinking": "Leyendo el anuncio…",
-    "noReasoning": "Todavía no hay una lectura detallada de este empleo.",
-    "explanationLanguage": {
-      "regenerate": "Reescribir esto en español",
-      "regenerating": "Reescribiendo…"
-    },
-    "evidence": "Se leyó el anuncio completo. Se comparó con tu currículum.",
-    "trail": {
-      "label": "Lo que has hecho con este empleo",
-      "saved": "Guardado",
-      "tailored": "Currículum adaptado",
-      "practiced": "Practicado",
-      "applied": "Enviada"
-    },
-    "filter": {
-      "title": "Mostrar",
-      "great_only": "Solo los que encajan muy bien",
-      "good_and_better": "Los que encajan bien y mejor",
-      "everything": "Todo",
-      "hidden_count": "Se ocultan {count} empleos que encajan peor.",
-      "show_them": "Mostrarlos.",
-      "search_everywhere": "Buscar en todas partes",
-      "search_everywhere_sub": "Leer también portales de empleo fuera de %BRAND%.",
-      "setup_cta": "Cuéntanos qué buscas"
-    },
-    "posted": {
-      "justNow": "ahora mismo",
-      "hoursAgo": "hace {count} h",
-      "daysAgo": "hace {count} d"
-    },
-    "work": {
-      "remote": "En remoto",
-      "hybrid": "Híbrido",
-      "onsite": "En la oficina"
-    },
-    "status": {
-      "applied": "Enviada",
-      "notInterested": "No me interesa",
-      "saved": "Guardado para después"
-    },
-    "facet": {
-      "salaryFit": "Sueldo",
-      "salaryWithinBand": "Dentro del rango que pediste",
-      "salaryBelowBand": "Por debajo del rango que pediste",
-      "skillOverlap": "Habilidades que coinciden",
-      "skillValue": "{pct} % de las habilidades que piden",
-      "riskFlag": "Conviene mirarlo",
-      "riskNone": "Nada que señalar"
-    },
-    "detail": {
-      "description": "El anuncio",
-      "responsibilities": "Lo que harías",
-      "qualifications": "Lo que piden",
-      "benefits": "Beneficios",
-      "viewOriginal": "Leer el anuncio en su web"
-    },
-    "actions": {
-      "applyOnSite": "Postular en la web de la empresa",
-      "applying": "Abriendo la web de la empresa…",
-      "saveForLater": "Guardar para después",
-      "notInterested": "No me interesa",
-      "didntApply": "No me postulé",
-      "markApplied": "Marcar como enviada",
-      "undo": "Deshacer",
-      "viewDetail": "Ver el empleo",
-      "refresh": "Buscar empleos nuevos",
-      "filters": "Filtrar",
-      "practice": "Practicar para este empleo",
-      "tailorResume": "Adaptar tu currículum a este empleo"
-    },
-    "appliedOnSiteBanner": "Movido a Enviadas. No se envió nada por ti: te postulas en la web de la empresa.",
-    "notInterestedBanner": "Quitado de tu lista.",
-    "empty": {
-      "title": "Todavía no encaja ningún empleo contigo.",
-      "accent": "",
-      "sub": "Cuéntanos qué buscas o sube tu currículum, y aquí aparecerán los empleos que encajen."
-    },
-    "error": {
-      "title": "La lista de empleos no se cargó.",
-      "accent": "",
-      "sub": "No se perdió nada. Inténtalo otra vez y, si sigue fallando, recarga la página.",
-      "retry": "Reintentar"
-    },
-    "setup": {
-      "title": "Cuéntanos qué buscas",
-      "close": "Cerrar",
-      "skip": "Saltar por ahora",
-      "skip_note": "Si lo saltas, verás todos los empleos abiertos, los más nuevos primero.",
-      "restore_notice": "Continúa donde lo dejaste.",
-      "resume_title": "Añade tu currículum",
-      "resume_lead": "Con una lectura basta para dejar de mostrarte empleos que nunca aceptarías.",
-      "resume_drop": "Suelta aquí tu currículum o haz clic para buscarlo",
-      "resume_formats": "PDF, DOC, DOCX, TXT o MD — hasta 15 MB",
-      "resume_or": "o",
-      "resume_paste": "Pegar el texto en su lugar",
-      "resume_paste_placeholder": "Pega aquí el texto de tu currículum. Con texto simple basta.",
-      "resume_paste_submit": "Usar este texto",
-      "resume_paste_name": "Currículum pegado",
-      "resume_linkedin": "Importar desde LinkedIn",
-      "resume_linkedin_placeholder": "https://www.linkedin.com/in/tu-perfil",
-      "resume_pick_existing": "Usar un currículum que ya tienes",
-      "resume_primary_badge": "Currículum principal",
-      "resume_last_edited": "Última edición: {date}",
-      "resume_received": "{name} · {size}",
-      "resume_privacy": "Tu currículum se queda en tu cuenta. Ninguna empresa lo ve.",
-      "reading_title": "Leyendo tu currículum",
-      "reading_sub": "Esto tarda unos segundos.",
-      "upload_ingest_title": "Lo que dice tu currículum",
-      "error_empty_text": "De ese archivo no salió texto. Puede ser un escaneo.",
-      "error_empty_action": "Pegar el texto en su lugar",
-      "error_unsupported_format": "Ese formato no se puede leer. PDF, DOC, DOCX, TXT y MD sí funcionan.",
-      "error_file_too_large": "Ese archivo pasa de 15 MB. Prueba con una exportación más pequeña.",
-      "error_parse_failed": "No se pudo leer ese currículum. Prueba con otro archivo o pega el texto.",
-      "error_retry": "Probar con otro archivo",
-      "error_save_failed": "Eso no se guardó. Inténtalo otra vez.",
-      "error_load_failed": "La configuración no cargó. Inténtalo otra vez.",
-      "confirm_title": "Esto es lo que dice tu currículum",
-      "confirm_lead": "Corrige lo que esté mal. Aquí nada es obligatorio.",
-      "confirm_lead_returning": "Esto decide qué empleos ves. Los cambios se aplican al momento.",
-      "thin_title": "Ese currículum decía poco",
-      "thin_lead": "Elige los puestos más cercanos. Con eso basta para empezar.",
-      "source_resume": "De tu currículum",
-      "uncertain": "Revisa esto",
-      "why_roles": "Tus últimos puestos fueron {roles}.",
-      "why_years": "Unos {years} años de trabajo en el currículum.",
-      "why_locations": "{city} aparece en tu currículum.",
-      "chip_add": "Añadir",
-      "chip_remove": "Quitar {value}",
-      "chip_input_placeholder": "Escribe y pulsa Intro",
-      "chip_suggested": "O elige uno",
-      "chip_none": "Sin nada marcado. Todas las opciones siguen dentro.",
-      "where_city_suggest": "¿Sigues en {city}?",
-      "where_add_place": "Añadir un lugar",
-      "notes_label": "Cualquier otra cosa que importe",
-      "notes_placeholder": "Necesito visado, sin agencias, a menos de una hora de casa, quiero salir de la consultoría…",
-      "notes_hint": "Con una línea basta. Se convierte en filtros como los de arriba.",
-      "notes_added": "Añadido de lo que escribiste: {fields}",
-      "submit": "Enséñame los empleos",
-      "submitting": "Buscando empleos para ti…",
-      "fields": {
-        "targetRoles": "Puestos que quieres",
-        "where": "Dónde y cómo quieres trabajar",
-        "locations": "Lugares",
-        "workModes": "En remoto o en oficina",
-        "seniority": "Nivel",
-        "salary": "Sueldo",
-        "employmentTypes": "Tipo de trabajo",
-        "industriesTarget": "Sectores que quieres",
-        "industriesAvoid": "Sectores que quieres evitar",
-        "companyStages": "Etapa de la empresa",
-        "companySizes": "Tamaño de la empresa",
-        "targetCompanies": "Empresas donde te gustaría trabajar",
-        "mustHaves": "Imprescindible",
-        "dealbreakers": "No lo aceptas"
-      },
-      "empty": {
-        "targetRoles": "Añade un puesto",
-        "where": "Añade una ciudad o déjalo abierto",
-        "employmentTypes": "Sin nada marcado. Todos los tipos siguen dentro.",
-        "industriesTarget": "Sin nada marcado. Todos los sectores siguen dentro.",
-        "targetCompanies": "Nombra unas cuantas. Sus empleos salen arriba."
-      },
-      "values": {
-        "remote": "En remoto",
-        "hybrid": "Híbrido",
-        "onsite": "En la oficina",
-        "full_time": "Jornada completa",
-        "contract": "Por contrato",
-        "part_time": "Media jornada",
-        "internship": "Prácticas"
-      }
-    },
-    "discovery": {
-      "eyebrow": "Tu próximo capítulo",
-      "title": "Encuentra un puesto en el que te veas trabajando.",
-      "intro": "Explora la oportunidad, evalúa los pros y los contras, y elige tu próximo paso.",
-      "search": "Buscar en estos puestos",
-      "searchPlaceholder": "Puesto, empresa o ubicación",
-      "allModes": "Todas las modalidades",
-      "salaryOnly": "Salario publicado",
-      "results": "Mostrando {visible} de {total} puestos cargados",
-      "localHint": "Los filtros se aplican a los puestos ya cargados.",
-      "clear": "Limpiar filtros",
-      "emptyTitle": "No hay puestos que coincidan con estos filtros.",
-      "emptyBody": "Prueba otra palabra clave o limpia los filtros para ver la lista completa.",
-      "salaryUnknown": "Salario no publicado",
-      "locationUnknown": "Ubicación no publicada",
-      "essentials": "Datos clave del puesto",
-      "company": "Empresa",
-      "workMode": "Modalidad de trabajo",
-      "match": "Compatibilidad del CV",
-      "review": "Revisar la evidencia",
-      "loaded": "Puestos por explorar",
-      "companies": "Empresas",
-      "disclosed": "Con salario publicado",
-      "strengths": "Evidencia en tu CV",
-      "gaps": "Preguntas por resolver",
-      "listTitle": "Tus oportunidades",
-      "allReviewed": "Ya revisaste todo",
-      "noResume": "Agrega tu CV para ver cómo encaja tu experiencia.",
-      "currencyUnknown": "Moneda no publicada",
-      "salaryPeriod": {
-        "hour": "por hora",
-        "week": "por semana",
-        "month": "por mes",
-        "year": "por año"
       }
     }
   },
@@ -326,8 +102,7 @@
       }
     },
     "library": {
-      "title": "Tus currículums",
-      "count": "{count} versiones"
+      "title": "Tus currículums"
     },
     "card": {
       "base": "Currículum principal — sin adaptar a ningún empleo",
@@ -405,11 +180,7 @@
         "step3": "Sube ese PDF aquí abajo",
         "upload_title": "Suelta aquí tu PDF de LinkedIn",
         "upload_sub": "El PDF que guardaste desde tu perfil",
-        "ready": "listo para importar",
-        "or": "o",
-        "url_label": "¿Perfil público? Pega su dirección en su lugar",
-        "placeholder": "linkedin.com/in/tu-usuario",
-        "hint": "Pega la dirección pública de tu LinkedIn. Se importan experiencia, formación, habilidades y enlaces."
+        "ready": "listo para importar"
       },
       "ingest_title": {
         "scratch": "Preparando tu borrador",
@@ -605,60 +376,6 @@
       "remove_line": "Quitar la línea",
       "warning": "Algunos números de este borrador no están en tu currículum. Revísalos antes de usar esta versión."
     },
-    "tailor": {
-      "eyebrow": "Adaptar",
-      "title_pick": "Elige el empleo para el que adaptarlo",
-      "title_analyzing_lead": "Leyendo el anuncio",
-      "title_analyzing_accent": "y",
-      "title_analyzing_after": "tu currículum…",
-      "title_review_lead": "Qué cambia para",
-      "title_done": "Copia adaptada creada",
-      "source_label": "Elige uno de tus empleos",
-      "loading_jobs": "Cargando tus empleos…",
-      "no_jobs": "Todavía no hay empleos. Pega abajo un anuncio en su lugar.",
-      "fit": "Encaje",
-      "or": "o",
-      "paste_toggle": "Pegar otro anuncio",
-      "paste_placeholder": "Pega aquí el anuncio: puesto, empresa y texto completo",
-      "analyze_paste": "Leer este anuncio",
-      "pasted_company": "Anuncio pegado",
-      "pasted_role": "Personalizado",
-      "analyzing": {
-        "read_jd": "Leyendo el anuncio completo",
-        "cross_check": "Comparándolo con tus líneas",
-        "find_gaps": "Buscando las palabras que ellos usan y tú no",
-        "draft": "Escribiendo los cambios",
-        "rescore": "Puntuando el encaje otra vez"
-      },
-      "before": "Antes",
-      "after": "Después",
-      "note": "{count} cambios. Desmarca los que no quieras: solo se aplican los marcados.",
-      "kind": {
-        "rewrite": "Reescribir",
-        "add": "Añadir",
-        "reorder": "Reordenar",
-        "trim": "Recortar"
-      },
-      "pick_hint": "Elige un empleo para continuar",
-      "pick_different": "Elegir otro empleo",
-      "apply": "Aplicar {count} cambios",
-      "back_to_editor": "Volver al editor",
-      "open_copy": "Abrir la copia adaptada",
-      "done_title": "Copia adaptada guardada",
-      "done_body": "Hay una versión nueva, {name}, en tu biblioteca. Tu currículum principal no cambió.",
-      "done_body_paste": "Tu versión adaptada está lista. Tu currículum principal no cambió.",
-      "error": "Ese currículum no se pudo adaptar. Inténtalo otra vez.",
-      "manual_toggle": "Apuntar a una empresa y un puesto en su lugar",
-      "company_label": "Empresa",
-      "company_placeholder": "Nombre de la empresa",
-      "role_label": "Puesto",
-      "role_placeholder": "Puesto (opcional)",
-      "analyze_manual": "Adaptar a esta empresa y este puesto",
-      "manual_hint": "Sin anuncio, la adaptación usa solo la empresa, el puesto y tu currículum.",
-      "version_name_label": "Guardar como",
-      "estimated": "estimado",
-      "citation_warning": "Algunos números de este borrador no están en tu currículum. Revísalos antes de aplicar los cambios."
-    },
     "download": {
       "eyebrow": "Descarga",
       "title": "Descargar como…",
@@ -747,12 +464,7 @@
     "page_title": "Candidaturas",
     "eyebrow": "{count} en marcha",
     "headline": "¿Dónde te postulaste y qué pasó?",
-    "sub": "Arrastra una tarjeta, o usa su menú de etapa, para moverla por las {columns} etapas. Las respuestas y las invitaciones de calendario la mueven solas.",
     "loading": "Cargando tus candidaturas…",
-    "view": {
-      "by_stage": "Por etapa",
-      "by_date": "Por fecha"
-    },
     "columns": {
       "saved": "Guardadas",
       "applied": "Enviadas",
@@ -776,22 +488,6 @@
       "write_cta": "Escribir un recordatorio",
       "grounding": "Escrito a partir del anuncio y de tu currículum.",
       "open_mail": "Abrir en tu aplicación de correo"
-    },
-    "insight": {
-      "title": "Tu semana",
-      "sub": "Qué pasó y qué hacer ahora.",
-      "empty": "Después de una semana postulándote, aquí habrá algo que contar.",
-      "refresh": "Actualizar esto",
-      "refreshing": "Actualizando…",
-      "refresh_recent": "Esto se actualizó hace poco. Inténtalo más tarde.",
-      "metrics": {
-        "applications": "Candidaturas",
-        "interviews": "Entrevistas",
-        "offers": "Ofertas",
-        "weeks_to_offer": "Semanas hasta ahora",
-        "unknown": "—",
-        "skills_observed": "Habilidades que más aparecieron"
-      }
     },
     "card": {
       "drag_hint": "Arrastra esta tarjeta a otra etapa, o usa su menú de etapa",
@@ -847,31 +543,6 @@
       "error_title_required": "Añade primero un puesto.",
       "error_company_required": "Añade primero una empresa.",
       "error_generic": "Ese empleo no se pudo añadir. Inténtalo otra vez."
-    },
-    "activity": {
-      "eyebrow": "Últimos 7 días",
-      "title": "Todo lo ",
-      "titleAccent": "que pasó",
-      "titleAfter": ".",
-      "sub": "Cada candidatura, cada borrador y cada cambio, con la fecha en que ocurrió.",
-      "loading": "Cargando tu historial…",
-      "stats": {
-        "appsSent": "Candidaturas",
-        "replies": "Respuestas",
-        "replyRate": "{percent} %",
-        "draftsWritten": "Borradores escritos",
-        "thisWeek": "esta semana"
-      },
-      "empty": {
-        "title": "Todavía no hay nada",
-        "titleAccent": "registrado",
-        "sub": "En cuanto guardes, adaptes y te postules, cada paso aparecerá aquí con su fecha."
-      },
-      "error": {
-        "title": "Tu historial no se cargó.",
-        "body": "No se perdió nada. Inténtalo otra vez y, si sigue fallando, recarga la página.",
-        "retry": "Reintentar"
-      }
     }
   },
   "practice": {
@@ -1027,19 +698,11 @@
         "sub": "El vídeo se parece más a la realidad. La voz basta para calentar.",
         "video": {
           "title": "Videollamada",
-          "tag": "Sugerido",
-          "desc": "Cámara encendida, cara a cara. Se anotan el contacto visual, la presencia y cómo llevas las pausas.",
-          "b1": "Te ves a ti mismo en la esquina",
-          "b2": "Se anotan el contacto visual y la presencia",
-          "b3": "Se graba para que puedas verlo después"
+          "tag": "Sugerido"
         },
         "voice": {
           "title": "Solo voz",
-          "tag": "Menos presión",
-          "desc": "Solo audio, como una llamada. Va bien para trabajar la estructura antes de encender la cámara.",
-          "b1": "No hace falta cámara",
-          "b2": "Te centras en lo que dices",
-          "b3": "Solo transcripción"
+          "tag": "Menos presión"
         }
       },
       "launch": {
@@ -1530,7 +1193,6 @@
     },
     "report": {
       "title": "Informe de la entrevista",
-      "sub": "Puntuado como lo puntuaría el panel real.",
       "evidence": "Las pruebas detrás de este informe",
       "loading": "Cargando tu informe…",
       "error": "Ese informe no se cargó. Inténtalo otra vez y, si sigue fallando, recarga la página.",
@@ -1656,8 +1318,6 @@
       "title_after": ".",
       "sub": "Con esto se construye cada candidatura y cada currículum adaptado.",
       "group_profile": "Perfil",
-      "upload_photo": "Subir una foto",
-      "photo_hint": "PNG o JPG · cuadrada queda mejor",
       "full_name": "Nombre completo",
       "pronouns": "Pronombres",
       "pronouns_sub": "Opcional: sirve para que las cartas de presentación sean coherentes",
@@ -1685,168 +1345,31 @@
       "title_em": "estás buscando",
       "title_after": ".",
       "sub": "Cuanto más cuentes, menos empleos tendrás que leer. Aflójalo cuando quieras ver más.",
-      "plain_label": "En palabras claras",
-      "plain_l1": "Puestos de {roles} en empresas {stages}",
-      "plain_l2": "{modes} en {cities}",
-      "plain_l3": "{min} mil–{max} mil $ de base · {count} sectores",
-      "plain_l4": "Imprescindible: {items}",
-      "plain_l5": "No aceptaría: {items}",
-      "any_stage": "de cualquier etapa",
-      "none": "ninguno",
-      "mode_remote_word": "en remoto",
-      "mode_hybrid_word": "híbrido",
-      "mode_onsite_word": "en la oficina",
       "group_intent": "En tus propias palabras",
       "intent_label": "Qué quieres ahora",
-      "intent_sub": "Texto libre: sirve para desempatar cuando dos empleos se parecen",
-      "group_role": "Puesto",
-      "titles_label": "Puestos que quieres",
-      "titles_sub": "Añade las variantes que aceptarías",
-      "titles_ph": "Escribe un puesto y una coma",
-      "seniority_label": "Nivel",
-      "seniority_sub": "Se muestra {level} y por encima",
-      "group_location": "Ubicación",
-      "work_mode_label": "Remoto u oficina",
-      "mode_remote": "En remoto",
-      "mode_remote_desc": "Desde cualquier sitio y huso horario",
-      "mode_hybrid": "Híbrido",
-      "mode_hybrid_desc": "2 o 3 días en la oficina",
-      "mode_onsite": "En la oficina",
-      "mode_onsite_desc": "5 días en la oficina",
-      "cities_label": "Ciudades o regiones",
-      "cities_sub": "Más los sitios que contratan en remoto",
-      "cities_ph": "Añadir una ciudad",
-      "group_comp": "Sueldo",
-      "salary_label": "Rango de sueldo base",
-      "salary_sub": "{min} mil–{max} mil $ · se oculta todo lo que baje de {min} mil",
-      "salary_min": "Sueldo base mínimo",
-      "salary_max": "Sueldo base máximo",
-      "salary_median": "Media del mercado para {level}: 215 mil $",
-      "group_company": "Empresa",
-      "stage_label": "Etapa",
-      "stage_sub": "Cuánto recorrido quieres que tenga la empresa",
-      "headcount_label": "Tamaño de la empresa",
-      "group_industry": "Sector",
-      "industries_target_label": "Sectores que quieres",
-      "industries_target_sub": "Estos van primero",
-      "industries_avoid_label": "Sectores que descartas",
-      "industries_avoid_sub": "No se muestran nunca",
-      "industries_avoid_ph": "Añadir un sector",
-      "group_hard_rules": "Reglas fijas",
       "musthaves_label": "Imprescindible",
-      "musthaves_sub": "Los empleos que no lo tengan se ocultan",
       "musthaves_ph": "Añadir un imprescindible",
       "dealbreakers_label": "No lo aceptaría",
-      "dealbreakers_sub": "Si el anuncio lo menciona, se oculta",
-      "dealbreakers_ph": "Añadir uno",
-      "work_auth_label": "¿Necesitas que una empresa te patrocine el visado?",
-      "auth_citizen": "No, ya puedo trabajar aquí",
-      "auth_pr": "No, tengo residencia permanente",
-      "auth_h1b": "Sí, necesito patrocinio H-1B",
-      "auth_opt": "Sí, necesito una prórroga OPT",
-      "auth_eu": "No, tengo nacionalidad de la UE o del Reino Unido",
-      "auth_other": "Otra cosa"
-    },
-    "notif": {
-      "eyebrow": "Avisos",
-      "title_before": "Cuándo",
-      "title_em": "escribirte",
-      "title_after": ".",
-      "sub": "Todo viene apagado. Enciende lo que quieras.",
-      "group_channels": "Dónde",
-      "channel_email": "Correo",
-      "channel_email_sub": "Al correo de tu cuenta",
-      "channel_push": "Notificación",
-      "channel_push_sub": "Navegador y aplicación móvil",
-      "channel_sms": "Mensaje de texto",
-      "group_matrix": "Qué enviar",
-      "col_email": "Correo",
-      "col_push": "Notificación",
-      "col_sms": "Texto",
-      "event_newMatch90_label": "Aparece un empleo que encaja muy bien",
-      "event_newMatch90_sub": "Un empleo nuevo que te encaja bien",
-      "event_appSent_label": "Marcas un empleo como enviado",
-      "event_appSent_sub": "Una confirmación corta",
-      "event_response_label": "Una empresa responde",
-      "event_response_sub": "Alguien de selección o de contratación escribió",
-      "event_interview_label": "Se agenda una entrevista",
-      "event_interview_sub": "Hay hora fijada",
-      "group_digest": "Resumen",
-      "digest_label": "Cada cuánto",
-      "digest_sub": "Un resumen en vez de mensajes sueltos",
-      "digest_off": "Apagado",
-      "digest_daily": "Cada día a las 7:00",
-      "digest_weekly": "Cada semana el lunes"
+      "dealbreakers_ph": "Añadir uno"
     },
     "privacy": {
-      "eyebrow": "Privacidad",
-      "title_before": "Tus datos y",
-      "title_em": "tu lista de bloqueo",
-      "title_after": ".",
-      "sub": "Las empresas que bloquees nunca aparecen en tus empleos. Tus datos son tuyos: puedes llevártelos o borrarlos.",
       "group_blocklist": "Empresas de las que no quieres ver empleos",
       "blocked_label": "Bloqueadas",
       "blocked_sub": "Los empleos de estas empresas no aparecen nunca",
-      "reason_employer": "Tu empresa actual",
       "reason_byyou": "Añadida por ti",
       "remove": "Quitar",
       "add_company": "Bloquear una empresa",
       "add_ph": "Nombre de la empresa",
-      "add_confirm": "Añadir",
-      "blocked_recruiters_label": "Reclutadores bloqueados",
-      "blocked_recruiters_sub": "{count} reclutadores no pueden contactarte",
-      "manage_list": "Gestionar la lista",
-      "group_data": "Tus datos",
-      "export_label": "Descargarlo todo",
-      "export_sub": "Candidaturas, borradores, transcripciones y currículums",
-      "download_archive": "Descargar",
-      "retention_label": "Cuánto tiempo se guarda",
-      "retention_sub": "Cuánto se guardan las transcripciones de entrevistas y los borradores",
-      "retention_30": "30 días",
-      "retention_90": "90 días",
-      "retention_365": "1 año",
-      "retention_forever": "Guardarlos siempre"
+      "add_confirm": "Añadir"
     },
     "profile": {
-      "title": "Datos de la cuenta",
       "displayName": "Nombre visible",
-      "memberSince": "Te uniste el {date}",
       "verified": "verificado",
       "edit": "Editar",
       "save": "Guardar",
       "cancel": "Cancelar"
     },
-    "credits": {
-      "title": "Créditos de entrevistas de práctica",
-      "unit": "créditos",
-      "note": "1 crédito es una entrevista de práctica de 20 minutos. Las sesiones más cortas o más largas cuestan en proporción."
-    },
     "billing": {
-      "title": "Plan y facturación",
-      "sub": "Qué tienes ahora, a qué más puedes pasarte y dónde están tus recibos.",
-      "checkout_failed": "La página de pago no se abrió. Inténtalo otra vez o usa otra tarjeta.",
-      "payments_unavailable": "Los pagos todavía no están configurados. Tu plan actual sigue funcionando.",
-      "currency": {
-        "usd": "Los precios están en dólares estadounidenses y se cobran con tarjeta.",
-        "cny": "Los precios están en RMB y se pagan con Alipay.",
-        "switchToCny": "¿Estás en China continental? Cambia a RMB y Alipay.",
-        "switchToUsd": "¿Estás fuera de China continental? Cambia a dólares y tarjeta."
-      },
-      "manage": "Gestionar la facturación",
-      "invoices": "Ver facturas",
-      "cancel": "Cancelar el plan",
-      "viewHistory": "Ver el historial de facturación",
-      "summaryNote": "Tu método de pago, tus facturas y tus recibos están en el portal seguro del proveedor de pagos.",
-      "current": {
-        "renews": "Se renueva el {date} · facturación mensual",
-        "cancelsAt": "Termina el {date}",
-        "expiresAt": "Terminó el {date}: renuévalo para continuar",
-        "status": {
-          "active": "Activo",
-          "pastDue": "Pago pendiente",
-          "canceled": "Cancelado"
-        }
-      },
       "history": {
         "heading": "Historial de facturación",
         "subtitle": "Tus facturas y recibos.",
@@ -1860,11 +1383,6 @@
         "pending": "Pendiente",
         "failed": "Fallida",
         "card": "Tarjeta"
-      },
-      "checkout": {
-        "success": "Tu plan está activo.",
-        "cancel": "Se canceló el pago. Tu plan no cambió.",
-        "dismiss": "Ocultar"
       }
     },
     "plan": {
@@ -1872,42 +1390,7 @@
       "premium": "Premium",
       "premiumPlus": "Premium+",
       "starter": "Starter",
-      "growth": "Growth",
-      "perMonth": "/mes",
-      "dailyCap": "{n} acciones al día",
-      "mostPopular": "El más elegido",
-      "current": "Tu plan",
-      "upgrade": "Subir de plan",
-      "downgrade": "Bajar un plan",
-      "comingSoon": "Todavía no está disponible",
-      "freeForever": "Gratis",
-      "freePrice": "Gratis",
-      "subscribe": "Suscribirme",
-      "subscribeAlipay": "Pagar con Alipay",
-      "creditsCap": "{n} créditos / mes",
-      "select_free": "Empezar gratis",
-      "select_paid": "Elegir {plan}",
-      "cta": {
-        "upgradeTo": "Pasar a {plan}",
-        "switchTo": "Cambiar a {plan}",
-        "yourFreePlan": "Tu plan",
-        "alipaySwitchNote": "Para cambiar de plan, cancela y vuelve a suscribirte al pagar."
-      },
-      "credits_explainer": "1 crédito es una entrevista de práctica de 20 minutos. Las sesiones más cortas o más largas cuestan en proporción, y tus créditos se reponen al empezar cada mes de facturación.",
-      "feature": {
-        "mockInterviews": "Entrevistas de práctica",
-        "resumeTailors": "Adaptación del currículum",
-        "coverLetters": "Cartas de presentación",
-        "priorityMatching": "Puntuación de empleos más rápida",
-        "everythingFree": "Todo lo de Gratis",
-        "everythingPremium": "Todo lo de Premium",
-        "prioritySupport": "Soporte más rápido",
-        "creditsMonthly": "{n} créditos de entrevistas de práctica / mes",
-        "fullReports": "Informes completos de la entrevista",
-        "allInterviewTypes": "Todos los formatos y todas las personas que entrevistan",
-        "everythingStarter": "Todo lo de Starter",
-        "toneSteering": "Elegir el tono de quien entrevista"
-      }
+      "growth": "Growth"
     },
     "usage": {
       "title": "Uso",
@@ -1919,11 +1402,9 @@
       "resetNote": "Se reinicia cada día a medianoche UTC · {tier} permite {cap}/día",
       "heatLess": "Menos",
       "heatMore": "Más",
-      "recent": "Actividad reciente",
-      "recentItem": "{count}× {feature}"
+      "recent": "Actividad reciente"
     },
     "security": {
-      "title": "Seguridad",
       "changePassword": "Cambiar la contraseña",
       "changeSuccess": "Se cambió tu contraseña.",
       "currentPassword": "Contraseña actual",
@@ -1955,9 +1436,6 @@
       "title_em": "sin vuelta atrás",
       "title_after": ".",
       "sub": "Cada uno te pide confirmación. Después de eso, no se puede deshacer.",
-      "reset_title": "Restablecer tus ajustes",
-      "reset_desc": "Borra todo lo de esta página. Tus currículums y candidaturas se quedan.",
-      "reset_btn": "Restablecer ajustes",
       "delete_data_title": "Borrar tus datos de empleo",
       "delete_data_desc": "Borra tu lista de empleos y tus candidaturas. Tu cuenta y tus currículums se quedan.",
       "delete_data_btn": "Borrar datos de empleo",
@@ -1974,7 +1452,6 @@
       "delete_account_title": "Eliminar tu cuenta",
       "delete_account_desc": "Borra todo: currículums, candidaturas, transcripciones y grabaciones. Esto no se puede deshacer.",
       "delete_account_btn": "Eliminar la cuenta",
-      "title": "Zona delicada",
       "deleteAccount": "Eliminar la cuenta",
       "deleteDescription": "Borra tu cuenta, tus currículums, tus grabaciones de entrevistas y tu suscripción. Esto no se puede deshacer.",
       "confirmEmailLabel": "Confirma tu correo",
@@ -2003,13 +1480,8 @@
       "error_generic": "Ese correo y esa contraseña no coinciden. Revisa los dos e inténtalo otra vez."
     },
     "signup": {
-      "title": "Crea tu cuenta",
-      "subtitle": "Sube tu currículum y mira qué empleos puedes conseguir de verdad.",
       "email": "Correo electrónico",
       "password": "Contraseña",
-      "name": "Tu nombre",
-      "submit": "Registrarme",
-      "submitting": "Creando tu cuenta…",
       "has_account": "¿Ya tienes cuenta?",
       "login_cta": "Iniciar sesión",
       "error_generic": "No se creó tu cuenta. Inténtalo otra vez y, si sigue fallando, usa otro correo."
@@ -2042,307 +1514,6 @@
       "theme_to_light": "Cambiar a claro",
       "theme_to_dark": "Cambiar a oscuro",
       "lang_label": "Cambiar de idioma"
-    },
-    "hero": {
-      "eyebrow": "Leer tu currículum · leer el mercado · nombrar lo que falta",
-      "headline": "Encuentra un trabajo que encaje contigo. Ten claro dónde estás.",
-      "subheadline": "Explora puestos que coincidan con tu experiencia, entiende qué falta y da tu próximo paso con confianza.",
-      "sub_emphasis": "Automatizamos todo hasta el botón de postular. El último clic lo das tú.",
-      "cta_primary": "Empezar gratis",
-      "cta_secondary": "Mira cómo lee un anuncio",
-      "reassure": "Plan gratis · Sin tarjeta · Nunca se envía nada a una empresa por ti",
-      "log": {
-        "aria": "Un informe de carencias de ejemplo. Lee un currículum con seis años de experiencia en pagos, lee 1.284 anuncios abiertos, clasifica 41 como encaje y luego nombra las carencias: Kubernetes aparece en doce de esos anuncios y no en el currículum; nueve anuncios piden haber dirigido un equipo mientras el currículum dice «ayudé con»; seis anuncios piden una habilitación de seguridad, así que se descartan. Muestra el mejor empleo con 87 sobre 100, señala tres líneas que necesitan un número y enumera las seis preguntas que es más probable que haga quien entreviste.",
-        "title": "%BRAND% — informe de carencias",
-        "live": "Ejemplo",
-        "lines": {
-          "l1": {
-            "time": "01",
-            "tag": "LEER",
-            "msg": "tu currículum · 6 años, infraestructura de pagos"
-          },
-          "l2": {
-            "time": "02",
-            "tag": "LEER",
-            "msg": "1.284 anuncios abiertos leídos"
-          },
-          "l3": {
-            "time": "03",
-            "tag": "ORDEN",
-            "msg": "41 encajan con tu experiencia · 6 encajan muy bien"
-          },
-          "l4": {
-            "time": "04",
-            "tag": "FALTA",
-            "msg": "Kubernetes: en 12 de ellos, no en tu currículum"
-          },
-          "l5": {
-            "time": "05",
-            "tag": "FALTA",
-            "msg": "9 piden haber dirigido un equipo; tu currículum dice «ayudé»"
-          },
-          "l6": {
-            "time": "06",
-            "tag": "FUERA",
-            "msg": "6 exigen una habilitación que no tienes · descartados"
-          },
-          "l7": {
-            "time": "07",
-            "tag": "TOP",
-            "msg": "mejor encaje 87 / 100 · no es tu probabilidad de que te contraten"
-          },
-          "l8": {
-            "time": "08",
-            "tag": "ARREGLAR",
-            "msg": "3 líneas sin ningún número · cada una señalada"
-          },
-          "l9": {
-            "time": "09",
-            "tag": "PREPARAR",
-            "msg": "6 preguntas que este panel hará con más probabilidad"
-          }
-        }
-      },
-      "strip_summary": "1.284 anuncios leídos · 41 encajan · 6 encajan muy bien · cada carencia nombrada",
-      "strip_scroll": "cómo funciona"
-    },
-    "problem": {
-      "eyebrow": "Por qué postularse más dejó de funcionar",
-      "title": "Postularse más no es la respuesta.",
-      "sub": "La IA inundó la contratación, y quienes seleccionan lo notan. En una prueba de Business Insider, un bot de postulación masiva obtuvo un 6 % de respuesta. Mandar más veces el mismo currículum contra el mismo muro no cambia el resultado. Saber qué pide cada anuncio, y si tu currículum lo dice, sí.",
-      "stats": {
-        "s1": {
-          "value": "242",
-          "label": "personas se postulan hoy a una vacante corporativa media"
-        },
-        "s2": {
-          "value": "+400 %",
-          "label": "más candidaturas llegan a quienes seleccionan desde que se extendieron las herramientas de postulación masiva"
-        },
-        "s3": {
-          "value": "41 %",
-          "label": "de quienes buscan empleo cree que menos de una cuarta parte de sus candidaturas llega a leerla una persona"
-        }
-      },
-      "source": "Fuentes: The Interview Guys (242) · Greenhouse vía Fortune (+400 %) · encuestas a candidatos, 2025–2026 (41 %)"
-    },
-    "how": {
-      "eyebrow": "Cómo funciona",
-      "title": "Buscar. Entender. Arreglar. Practicar.",
-      "sub": "Sube tu currículum una vez. Todo lo demás gira en torno a una pregunta: ¿qué pide este anuncio que tú no estás diciendo?",
-      "steps": {
-        "s1": {
-          "time": "01",
-          "tag": "BUSCAR",
-          "title": "Lee el mercado",
-          "body": "Se leen miles de anuncios reales y se comparan con tu currículum. Los empleos que se salen de lo que pediste nunca llegan a tu lista."
-        },
-        "s2": {
-          "time": "02",
-          "tag": "ENTENDER",
-          "title": "Nombra lo que falta",
-          "body": "Cada empleo abre con la frase que importa: piden Kubernetes dos veces y tu currículum no lo menciona. Debajo está la puntuación sobre 100, con una línea que dice qué es ese número y qué no es."
-        },
-        "s3": {
-          "time": "03",
-          "tag": "ARREGLAR",
-          "title": "Arreglas el currículum",
-          "body": "Adapta una copia a un empleo, con los cambios uno al lado del otro. Cada número del borrador tiene que remontarse a una línea de tu currículum, o la descarga se bloquea hasta que lo arregles."
-        },
-        "s4": {
-          "time": "04",
-          "tag": "PRACTICAR",
-          "title": "Y luego practicas la entrevista",
-          "body": "Una entrevistadora por voz, preparada sobre ese anuncio y tu currículum, pregunta lo que probablemente pregunte ese panel. Recibes un informe, una transcripción y una grabación."
-        }
-      }
-    },
-    "loop": {
-      "eyebrow": "El ciclo completo",
-      "title": "Un solo sitio, del currículum a la oferta.",
-      "sub": "El empleo que encontraste destapó la carencia. La carencia produjo el cambio en el currículum. El cambio produjo la pregunta de práctica. Cada paso alimenta al siguiente.",
-      "cards": {
-        "match": {
-          "tag": "BUSCAR",
-          "title": "Empleos ordenados por lo bien que encajas",
-          "body": "Cada empleo se lee contra tu currículum real y cae en uno de cuatro peldaños: encaja muy bien, encaja bien, posible o poco probable. El motivo está escrito en palabras claras, no en conteos de palabras clave."
-        },
-        "resume": {
-          "tag": "ARREGLAR",
-          "title": "Un currículum que puedes arreglar de verdad",
-          "body": "Impórtalo de LinkedIn o de un PDF, reescribe las líneas flojas, adapta una copia a un empleo con los cambios uno al lado del otro y exporta un PDF que los escáneres puedan leer."
-        },
-        "apply": {
-          "tag": "SEGUIR",
-          "title": "Cada candidatura, y qué pasó con ella",
-          "body": "Te postulas en la web de la empresa. El empleo pasa solo a Enviadas, y el tablero muestra exactamente dónde se quedó cada uno: primera llamada, en entrevistas, ronda final, oferta o rechazo."
-        },
-        "studio": {
-          "tag": "PRACTICAR",
-          "title": "Alguien con quien practicar la entrevista",
-          "body": "Una entrevistadora por voz con 18 guías por sector y 28 formatos —llamadas telefónicas, diseño de sistemas, casos de negocio— que te puntúa como lo hará el panel real."
-        }
-      }
-    },
-    "studio": {
-      "eyebrow": "La segunda mitad",
-      "title_machine": "Conseguir la entrevista es la mitad",
-      "title_human": "Esta es la otra mitad",
-      "sub": "El 63 % de quienes buscan empleo ya se ha enfrentado a una IA entrevistadora en procesos reales (Greenhouse, 2026). Practica contra la nuestra las veces que quieras, sin nadie mirando.",
-      "features": {
-        "f1": {
-          "title": "Habla e interrumpe como una persona",
-          "body": "Voz en directo: repregunta, te rebate y te corta, en 9 idiomas con voces nativas."
-        },
-        "f2": {
-          "title": "18 guías por sector, no listas de trivialidades",
-          "body": "Derecho, finanzas, salud, hardware, IA y más. Pregunta lo que de verdad se pregunta dentro de ese sector, y puntúa con esa misma mirada."
-        },
-        "f3": {
-          "title": "Lee el empleo antes de veros",
-          "body": "Lee anuncios actuales de tu puesto exacto, más el anuncio que pegues, y luego construye las preguntas alrededor de tu currículum."
-        },
-        "f4": {
-          "title": "Un informe que cambia tu próxima respuesta",
-          "body": "Cinco preguntas claras respondidas sobre tu desempeño, correcciones pregunta a pregunta con una respuesta más fuerte, una transcripción completa y una grabación."
-        },
-        "f5": {
-          "title": "Notas mientras respondes, si las quieres",
-          "body": "Notas cortas cuando te enrollas, esquivas la pregunta o entierras el mensaje. Con la cámara encendida se añade la presión de una videollamada real."
-        }
-      },
-      "report": {
-        "header": "session-042 — informe",
-        "overall_label": "Total",
-        "overall": "82",
-        "rows": {
-          "r1": {
-            "k": "Contó la historia en orden",
-            "v": "86"
-          },
-          "r2": {
-            "k": "Dio números reales",
-            "v": "78"
-          },
-          "r3": {
-            "k": "Respondió a toda la pregunta",
-            "v": "84"
-          }
-        },
-        "quote": "«Empieza por el número. El recorte de costes del 40 % llegó al final de tu respuesta.»",
-        "quote_label": "una pregunta, una corrección"
-      },
-      "cta": "Hacer una entrevista de práctica gratis"
-    },
-    "rules": {
-      "eyebrow": "Lo que este producto no hace",
-      "title": "Cuatro cosas que no hacemos.",
-      "sub": "No son ajustes que puedas encender. Es cómo está construido el producto.",
-      "file": "limits.txt — solo lectura",
-      "badge": "Fijo",
-      "ok": "OK",
-      "items": {
-        "r1_head": "No se envía nada por ti",
-        "r1_body": "ninguna candidatura, mensaje ni respuesta sale nunca a tu nombre. Tú te postulas en la web de la empresa; el empleo pasa solo a Enviadas.",
-        "r2_head": "Nada de experiencia inventada",
-        "r2_body": "cada número de un borrador adaptado tiene que remontarse a una línea de tu currículum. Si alguno no lo hace, la descarga se bloquea hasta que lo corrijas o lo quites.",
-        "r3_head": "La puntuación no es una predicción",
-        "r3_body": "la puntuación dice qué tan bien encaja tu currículum con un anuncio. No es tu probabilidad de que te contraten, y el producto lo dice en cada puntuación.",
-        "r4_head": "Puedes irte limpiamente",
-        "r4_body": "borrar tu cuenta la borra de verdad: currículums, candidaturas, transcripciones y grabaciones."
-      }
-    },
-    "pricing": {
-      "eyebrow": "Planes",
-      "title": "Empieza gratis. Paga cuando funcione.",
-      "sub": "Todos los planes incluyen el producto entero: empleos que encajan, el informe de carencias, el editor de currículum y el tablero de candidaturas. Los planes de pago compran más entrevistas de práctica.",
-      "unit": "Entrevistas / mes",
-      "credit_note": "1 crédito es una entrevista de práctica de 20 minutos, cobrada por segundos. Los créditos se reponen cada mes. Paga con tarjeta, o con Alipay en China.",
-      "tiers": {
-        "free": {
-          "code": "TIER-0",
-          "name": "Gratis",
-          "rate": "1",
-          "per": "",
-          "note": "El producto entero, más una entrevista de práctica puntuada al mes.",
-          "cta": "Empezar gratis",
-          "unit": "Entrevista / mes"
-        },
-        "starter": {
-          "code": "TIER-1",
-          "name": "Starter",
-          "rate": "10",
-          "per": "/mes",
-          "badge": "El más elegido",
-          "note": "Suficiente para practicar antes de cada entrevista real.",
-          "cta": "Empezar con Starter",
-          "unit": "Entrevistas / mes"
-        },
-        "growth": {
-          "code": "TIER-2",
-          "name": "Growth",
-          "rate": "28",
-          "per": "/mes",
-          "note": "Practica cada día hasta que firmes algo.",
-          "cta": "Empezar con Growth",
-          "unit": "Entrevistas / mes"
-        }
-      }
-    },
-    "faq": {
-      "eyebrow": "Preguntas, respondidas",
-      "title": "Lo que nos pregunta quien busca empleo.",
-      "items": {
-        "q1": {
-          "q": "¿Qué es %BRAND%?",
-          "a": "%BRAND% lee tu currículum, lee anuncios de empleo reales y te dice dos cosas de cada empleo: qué tan bien encaja tu currículum con él y qué pide exactamente que tu currículum no dice. Después te ayuda a arreglar el currículum y a practicar la entrevista con una IA por voz."
-        },
-        "q2": {
-          "q": "¿%BRAND% se postula a los empleos por mí?",
-          "a": "No. Nunca se envía nada a una empresa a tu nombre. Tú abres la web de la empresa y te postulas allí; el empleo pasa solo a Enviadas en tu tablero, y puedes deshacerlo con un toque si cambias de idea."
-        },
-        "q3": {
-          "q": "¿Qué significa la puntuación sobre 100?",
-          "a": "Dice qué tan bien encaja tu currículum con ese anuncio: el puesto y el nivel, las habilidades que piden, la experiencia en ese sector, la ubicación, el sueldo y el visado, y cómo ha avanzado tu carrera. No es tu probabilidad de que te contraten, y nunca dice serlo."
-        },
-        "q4": {
-          "q": "¿De verdad puedo practicar una entrevista de trabajo con una IA?",
-          "a": "Sí, con una entrevistadora por voz que habla, repregunta e interrumpe como una persona. Elige entre 28 formatos y 18 guías por sector (software, derecho, finanzas, salud y más), haz la entrevista en cualquiera de los 9 idiomas y recibe un informe con correcciones pregunta a pregunta, una transcripción y una grabación."
-        },
-        "q5": {
-          "q": "¿En qué se diferencia de las herramientas que se postulan en masa por ti?",
-          "a": "Esas herramientas mandan más veces el mismo currículum. En una prueba de Business Insider, un bot de postulación masiva obtuvo un 6 % de respuesta. %BRAND% hace lo contrario: menos empleos, cada uno leído en serio, con las palabras que faltan nombradas para que las arregles antes de postularte. Y el mismo producto te prepara después para la entrevista."
-        },
-        "q6": {
-          "q": "¿Cuánto cuesta?",
-          "a": "El producto básico es gratis para siempre, más una entrevista de práctica al mes. Starter cuesta 15 $ al mes con 10 entrevistas de práctica; Growth cuesta 29 $ al mes con 28. Un crédito es una sesión de 20 minutos cobrada por segundos y repuesta cada mes. Paga con tarjeta, o con Alipay en China."
-        },
-        "q7": {
-          "q": "¿Qué idiomas habla %BRAND%?",
-          "a": "Nueve: inglés, español, portugués, francés, alemán, japonés, coreano y chino simplificado y tradicional. Las entrevistas de práctica ya funcionan en los nueve, informe incluido. La interfaz está traducida por completo al inglés, al japonés y a las dos variantes del chino, y el resto está llegando ahora."
-        },
-        "q8": {
-          "q": "¿Mis datos están seguros y puedo borrarlos?",
-          "a": "Tu currículum, tus transcripciones y tus grabaciones son tuyos, y no se comparte nada con las empresas. Borrar tu cuenta la borra de verdad, no la esconde."
-        }
-      }
-    },
-    "final": {
-      "chip": "Acceso anticipado · gratis para empezar",
-      "title_machine": "Descubre qué falta.",
-      "title_human": "Basta con una subida",
-      "sub": "Sube tu currículum, cuenta qué buscas y lee el primer informe de carencias. La entrevistadora de práctica está abierta ahora mismo, y tu primera sesión es gratis.",
-      "cta": "Empezar gratis"
-    },
-    "sticky": {
-      "cta": "Empezar gratis",
-      "note": "Sin tarjeta"
-    },
-    "footer": {
-      "status": "No se envía nada a una empresa por ti",
-      "note": "© %BRAND%. Hecho por candidatos, para candidatos.",
-      "tagline": "Descubre por qué no te llaman a entrevistas.",
-      "lang_title": "%BRAND% en tu idioma"
     }
   },
   "errors": {

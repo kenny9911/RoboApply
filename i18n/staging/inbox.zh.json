@@ -1,16 +1,3 @@
 {
-  "inbox": {
-    "templates": {
-      "campus": {
-        "deadline": {
-          "title": "{company}：网申将于 {closesDay} 截止",
-          "body": "{program} 网申将于 {closes}（北京时间）截止，以官网为准。"
-        },
-        "followed": {
-          "title": "你关注的{company}发布了 {classYear} 届项目",
-          "body": "{program} 已加入校招日历，附官网链接。"
-        }
-      }
-    }
-  }
+  "inbox": {}
 }

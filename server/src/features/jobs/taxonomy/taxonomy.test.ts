@@ -86,12 +86,14 @@ describe('navigation helpers', () => {
   });
 });
 
-describe('i18n staging bundle', () => {
+describe('i18n bundle', () => {
   it('has one English label per category and group, equal to the data', () => {
-    const bundle = JSON.parse(readFileSync(path.join(repoRoot, 'i18n/staging/taxonomy.en.json'), 'utf8')) as {
+    // The `taxonomy` namespace of the English web bundle (WP-91 merged it out of i18n/staging/taxonomy.en.json).
+    const english = JSON.parse(readFileSync(path.join(repoRoot, 'i18n/messages/en.json'), 'utf8')) as {
       taxonomy: { categories: Record<string, string>; groups: Record<string, string> };
     };
-    expect(Object.keys(bundle)).toEqual(['taxonomy']);
+    const bundle = { taxonomy: english.taxonomy };
+    expect(Object.keys(bundle.taxonomy).sort()).toEqual(['categories', 'groups']);
     const l1 = Object.fromEntries(TAXONOMY_NODES.filter((n) => n.level === 1).map((n) => [n.id, n.en]));
     const l2 = Object.fromEntries(TAXONOMY_NODES.filter((n) => n.level === 2).map((n) => [n.id, n.en]));
     expect(bundle.taxonomy.categories).toEqual(l1);

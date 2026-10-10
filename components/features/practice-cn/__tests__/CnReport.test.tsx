@@ -10,8 +10,12 @@ import { act, render, screen, within } from '@testing-library/react';
 import { IntlWrapper } from '../../../../__tests__/utils/mockTranslations';
 import { BrandProvider } from '../../../../lib/brand/BrandProvider';
 import { clientBrandFor } from '../../../../lib/brand/client';
-import zhBundle from '../../../../i18n/staging/practiceCn.zh.json';
-import enBundle from '../../../../i18n/staging/practiceCn.en.json';
+import zhMessages from '../../../../i18n/messages/zh.json';
+import enMessages from '../../../../i18n/messages/en.json';
+
+// The `practiceCn` strings as the zh and en bundles carry them (WP-91 merged them out of i18n/staging).
+const zhBundle = { practiceCn: zhMessages.practiceCn };
+const enBundle = { practiceCn: enMessages.practiceCn };
 import { ZH_BREAKDOWN, ZH_ENGINE_TRANSCRIPT, ZH_EXPECTED } from '../../../../server/src/features/cn/interview/__tests__/fixtures';
 
 const m = vi.hoisted(() => ({ report: vi.fn() }));

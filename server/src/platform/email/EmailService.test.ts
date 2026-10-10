@@ -51,7 +51,7 @@ defineEmailTemplate<{ url: string; name?: string }>({
   key: 'test.reset',
   category: 'transactional',
   render: ({ t, params }) => ({
-    subject: t('billing.renewal.headingAuto'),
+    subject: t('billing.renewalReminder.headingAuto'),
     bodyHtml: heading(`Hi ${params.name ?? ''}`) + paragraph('<script>x</script>') + button('Go', params.url),
     bodyText: `Go: ${params.url}`,
   }),

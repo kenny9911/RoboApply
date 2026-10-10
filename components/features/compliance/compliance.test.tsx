@@ -430,7 +430,9 @@ describe('facts rendered from the server response (no hard-coded vendor list)', 
     const sources = ['DisclosureTables.tsx', 'LegalIndex.tsx', 'LegalDocument.tsx', 'LegalFooterView.tsx'].map((f) =>
       readFileSync(path.join(root, 'components/features/compliance', f), 'utf8'),
     );
-    const bundles = ['legal.en.json', 'legal.zh.json'].map((f) => readFileSync(path.join(root, 'i18n/staging', f), 'utf8'));
+    // The `legal` namespace of the en and zh bundles (WP-91 merged it out of i18n/staging).
+    const bundles = ['en.json', 'zh.json'].map((f) => JSON.stringify((JSON.parse(readFileSync(path.join(root, 'i18n/messages', f), 'utf8')) as { legal: unknown }).legal));
+    for (const text of bundles) expect(text.length).toBeGreaterThan(2000);
     const hosts = Object.values(PROVIDER_DEFAULT_BASE_URLS)
       .map((u) => hostOf(u))
       .filter((h): h is string => Boolean(h) && h !== 'localhost');
@@ -465,9 +467,9 @@ describe('RetentionTable: the rows added in WP-93', () => {
     expect(cell('inactive_accounts')).toHaveTextContent('Not automated yet');
   });
 
-  it('both staged bundles label every rule and every way a row ends', () => {
-    for (const file of ['legal.en.json', 'legal.zh.json']) {
-      const legal = (JSON.parse(readFileSync(path.join(process.cwd(), 'i18n/staging', file), 'utf8')) as { legal: { retention: { rows: Record<string, string>; enforced: Record<string, string> } } }).legal;
+  it('the en and zh bundles label every rule and every way a row ends', () => {
+    for (const file of ['en.json', 'zh.json']) {
+      const legal = (JSON.parse(readFileSync(path.join(process.cwd(), 'i18n/messages', file), 'utf8')) as { legal: { retention: { rows: Record<string, string>; enforced: Record<string, string> } } }).legal;
       expect(Object.keys(legal.retention.rows).sort(), file).toEqual(RETENTION.map((r) => r.id).sort());
       expect(Object.keys(legal.retention.enforced).sort(), file).toEqual(['auto', 'manual', 'minimum', 'provider']);
     }

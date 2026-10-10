@@ -1,24 +1,3 @@
 {
-  "brand": {
-    "nudge": {
-      "region_label": "Suggested site",
-      "to_cn": {
-        "title": "In mainland China?",
-        "body": "%OTHER_BRAND% is our service for job seekers in mainland China."
-      },
-      "to_intl": {
-        "title": "Outside mainland China?",
-        "body": "%OTHER_BRAND% is our service for job seekers everywhere else."
-      },
-      "to_traditional": {
-        "title": "Prefer Traditional Chinese?",
-        "body": "%OTHER_BRAND% is our service for Taiwan, Hong Kong and Macau, in Traditional Chinese."
-      },
-      "cta": "Go to %OTHER_BRAND%",
-      "dismiss": "Stay here"
-    },
-    "wordmark": {
-      "home": "%BRAND% home"
-    }
-  }
+  "brand": {}
 }

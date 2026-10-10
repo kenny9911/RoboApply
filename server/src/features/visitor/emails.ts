@@ -10,10 +10,9 @@
 // the subscription status ourselves before sending.
 //
 // Strings: `visitor.email.*` in the email bundles
-// (server/src/i18n/email/staging/visitor.en.json, copied from
-// `VISITOR_EMAIL_EN` at the Wave 5 gate; keep the two equal until INT merges
-// staging). The English below stays the fallback, formatted with the same ICU
-// formatter and %BRAND% substitution.
+// (server/src/i18n/email/en.json since INT merged the staged copy; a test
+// keeps it equal to `VISITOR_EMAIL_EN`). The English below stays the
+// fallback, formatted with the same ICU formatter and %BRAND% substitution.
 //
 // Honesty: counts are real counts of matching jobs; pay only as the posting
 // lists it; no fit (there is no profile); never a zero-job email.

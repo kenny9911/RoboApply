@@ -129,15 +129,27 @@ describe('the shipped bundles (server/src/i18n/email)', () => {
     for (const [k, v] of Object.entries(en)) expect(isValidMessage(v), `en:${k}`).toBe(true);
   });
 
-  it('renders the seeded billing strings per brand and locale', () => {
+  it('renders the shipped strings per brand and locale', () => {
+    // `billing.renewal.*` and `billing.fridayNudge.*` were retired at the WP-91
+    // merge (no template reads them); these are keys the templates read today.
     const tEn = createEmailTranslator(BRANDS.roboapply, 'en');
-    expect(tEn('billing.renewal.subjectAuto', { plan: 'Pro' })).toBe('Your RoboApply Pro plan renews in 5 days');
-    expect(tEn('billing.renewal.credits', { credits: 1 })).toBe('You currently have 1 mock-interview credit remaining.');
-    expect(tEn('billing.renewal.credits', { credits: 3 })).toBe('You currently have 3 mock-interview credits remaining.');
+    expect(tEn('billing.renewalReminder.subjectAuto', { date: 'October 14, 2026' })).toBe('Your RoboApply plan renews on October 14, 2026');
+    expect(tEn('tracker.inbox.noReply', { name: 'Acme', days: 1 })).toBe('No reply from Acme for 1 day.');
+    expect(tEn('tracker.inbox.noReply', { name: 'Acme', days: 12 })).toBe('No reply from Acme for 12 days.');
+    // GoApply in Simplified Chinese: its own words come from zh.json, and the brand is substituted in any language.
     const tZh = createEmailTranslator(BRANDS.goapply, 'zh');
-    expect(tZh('billing.renewal.subjectManual', { plan: 'Pro' })).toBe('您的 GoApply Pro 套餐将在 5 天后到期');
-    // ko has no billing strings yet: English fallback.
-    expect(createEmailTranslator(BRANDS.roboapply, 'ko')('billing.fridayNudge.cta')).toBe('Start a mock interview');
+    expect(tZh('tracker.inboxCn.followUpDue', { name: 'Acme' })).toBe('今天是你为 Acme 设定的跟进日期。');
+    const zhSubject = tZh('billing.renewalReminder.subjectManual', { date: '2026-10-14' });
+    expect(zhSubject).toContain('GoApply');
+    expect(zhSubject).not.toMatch(/%BRAND%|RoboApply/);
+    // A locale without a string falls back to English (ko has none until it is translated).
+    const ko = flatten(read('ko.json'));
+    expect(createEmailTranslator(BRANDS.roboapply, 'ko')('billing.renewalReminder.ctaAuto')).toBe(ko['billing.renewalReminder.ctaAuto'] ?? 'Manage or cancel');
     expect(loadEmailMessages('ja')).toHaveProperty('shell.unsubscribe');
+    // The retired keys are gone from every bundle.
+    for (const l of EMAIL_LOCALES) {
+      const keys = Object.keys(flatten(read(`${l}.json`)));
+      expect(keys.filter((k) => k.startsWith('billing.renewal.') || k.startsWith('billing.fridayNudge.')), l).toEqual([]);
+    }
   });
 });

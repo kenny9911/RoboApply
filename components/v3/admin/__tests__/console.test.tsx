@@ -49,7 +49,7 @@ import { AdminNav, ADMIN_AREAS, adminAreasFor, currentAdminArea } from '../Admin
 import { HOLD_REASONS, InviteRewardsConsole, reviewOutcome } from '../InviteRewardsConsole';
 import { RoboApiError } from '../../../../lib/api/client';
 import type { HeldReferralView } from '../../../../lib/api/contracts/growth';
-import adminCopy from '../../../../i18n/staging/admin.en.json';
+import adminCopy from '../../../../i18n/messages/en.json';
 import { ADMIN_AUDIT_EVENTS } from '../../../../server/src/features/admin/contract';
 import { RISK_WEIGHTS } from '../../../../server/src/features/growth/referralRisk';
 import { AUDIT_ACTIONS } from '../SystemConsole';

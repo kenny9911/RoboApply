@@ -6,9 +6,12 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { setBuildEnvForTests } from '../src/env';
-import { englishKeys, pickLocale, translate } from '../src/i18n/index';
+import { deepMerge, englishKeys, pickLocale, translate, type Messages } from '../src/i18n/index';
 
 const SRC = resolve(__dirname, '../src');
+// English lives in src/i18n/en.json (WP-91 merged the staged strings into it);
+// anything staged since is read on top, exactly as i18n/index.ts does.
+const BUNDLE = resolve(__dirname, '../src/i18n/en.json');
 const STAGING = resolve(__dirname, '../../i18n/staging/extension.en.json');
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -44,10 +47,14 @@ describe('extension strings', () => {
     for (const [prefix, list] of Object.entries(families)) for (const k of list) expect(keys.has(`extension.${prefix}.${k}`), `${prefix}.${k}`).toBe(true);
   });
 
-  it('the staged bundle never names a brand and carries the D1 lines', () => {
-    const raw = readFileSync(STAGING, 'utf8');
-    expect(raw).not.toMatch(/RoboApply|GoApply/i);
-    const en = JSON.parse(raw).extension;
+  it('the English bundle never names a brand and carries the D1 lines', () => {
+    const files = [BUNDLE, STAGING].map((f) => readFileSync(f, 'utf8'));
+    for (const text of files) expect(text).not.toMatch(/RoboApply|GoApply/i);
+    const groups = files.map((text) => ((JSON.parse(text) as Messages).extension ?? {}) as Messages);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const en = deepMerge(deepMerge({}, groups[0]!), groups[1]!) as any;
+    const raw = JSON.stringify(en);
+    expect(Object.keys(en).length).toBeGreaterThan(5);
     expect(en.panel.submitYourself).toBe('Check the form, then submit it yourself.');
     expect(en.submitted.question).toBe('Did you submit this application?');
     expect(en.draft.use).toBe('Use this answer');

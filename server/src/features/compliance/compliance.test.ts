@@ -209,7 +209,8 @@ describe('explainMatch', () => {
   });
 
   it('emits only known keys (all present in the legal bundle)', async () => {
-    const { default: bundle } = await import('../../../../i18n/staging/legal.en.json', { with: { type: 'json' } });
+    // The `legal` strings are in the English web bundle (WP-91 merged them out of i18n/staging).
+    const { default: bundle } = await import('../../../../i18n/messages/en.json', { with: { type: 'json' } });
     const get = (path: string) => path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], bundle);
     for (const key of EXPLAIN_KEYS) expect(typeof get(key), key).toBe('string');
     const e = explainMatch({ market: 'cn', personalized: true, score: 50, kind: 'ai', dimensions: dims, skills: { aligned: ['a'], missing: ['b'] } });

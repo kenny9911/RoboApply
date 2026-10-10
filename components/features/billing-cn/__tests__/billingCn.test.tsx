@@ -23,8 +23,12 @@ import { RoboApiError } from '../../../../lib/api/client';
 import { capsFor } from '../../../../__tests__/shell/helpers';
 import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
 import { buildAuthValue, mockAuthState } from '../../../../__tests__/utils/mockAuth';
-import enStaging from '../../../../i18n/staging/billingCn.en.json';
-import zhStaging from '../../../../i18n/staging/billingCn.zh.json';
+import enMessages from '../../../../i18n/messages/en.json';
+import zhMessages from '../../../../i18n/messages/zh.json';
+
+// The `billingCn` strings as the en and zh bundles carry them (WP-91 merged them out of i18n/staging).
+const enCopy = { billingCn: enMessages.billingCn };
+const zhCopy = { billingCn: zhMessages.billingCn };
 
 const api = vi.hoisted(() => ({ createWechatPayOrder: vi.fn(), getWechatPayOrder: vi.fn() }));
 const credits = vi.hoisted(() => ({ getPlans: vi.fn() }));
@@ -81,7 +85,7 @@ function renderUi(ui: ReactElement, opts: { brand?: BrandId; flagOn?: boolean; z
     <BrandProvider brand={clientBrandFor(brand)} initialCapabilities={capsFor(brand, { 'pay.wechatpay': opts.flagOn ?? true, 'notify.wechat': opts.notifyOn ?? false })}>
       {ui}
     </BrandProvider>,
-    opts.zh ? { intlLocale: 'zh', intlMessages: zhStaging } : {},
+    opts.zh ? { intlLocale: 'zh', intlMessages: zhCopy } : {},
   );
 }
 
@@ -615,9 +619,9 @@ describe('copy bundles', () => {
     return Object.entries(o as Record<string, unknown>).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}`]));
   }
   it('zh has exactly the English keys', () => {
-    expect(keys(zhStaging).sort()).toEqual(keys(enStaging).sort());
+    expect(keys(zhCopy).sort()).toEqual(keys(enCopy).sort());
   });
   it('never names a brand literally', () => {
-    expect(JSON.stringify([enStaging, zhStaging])).not.toMatch(/RoboApply|GoApply/);
+    expect(JSON.stringify([enCopy, zhCopy])).not.toMatch(/RoboApply|GoApply/);
   });
 });

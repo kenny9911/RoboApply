@@ -84,7 +84,9 @@ describe('GoApply distribution values (scripts/build.mjs reads them; test/build.
   it('the manifest strings it points at exist in en and zh and fit the store limits', () => {
     const [ns, group] = GOAPPLY_DISTRIBUTION.manifestStringsKey.split('.');
     for (const lang of ['en', 'zh'] as const) {
-      const raw = JSON.parse(readFileSync(resolve(__dirname, `../../../i18n/staging/${ns}.${lang}.json`), 'utf8'))[ns][group] as Record<string, string>;
+      // extension/src/i18n/<lang>.json since WP-91 merged the staged strings; a string staged since wins.
+      const read = (file: string) => (JSON.parse(readFileSync(resolve(__dirname, file), 'utf8'))[ns!]?.[group!] ?? {}) as Record<string, string>;
+      const raw = { ...read(`../../src/i18n/${lang}.json`), ...read(`../../../i18n/staging/${ns}.${lang}.json`) };
       const sub = (v: string) => v.replace(/%BRAND%/g, 'GoApply');
       expect(Object.keys(raw).sort()).toEqual(['actionTitle', 'description', 'nameChrome', 'nameEdge', 'shortName']);
       // Edge Add-ons: name ≤ 45; Chrome: name ≤ 75, short_name ≤ 12, description ≤ 132.

@@ -10,7 +10,9 @@ import enMessages from '../../../i18n/messages/en.json';
 import staging from '../../../i18n/staging/applications.en.json';
 import { CN_COLUMNS, INTL_COLUMNS, columnIndexForStatus, columnsFor, isInProgress, stageLabelKey } from './columns';
 
-const labels: Record<string, string> = { ...(enMessages as { applications: { columns: Record<string, string> } }).applications.columns, ...staging.applications.columns };
+type ColumnsBundle = { applications: { columns?: Record<string, string> } };
+// en.json carries the column labels (WP-91 merged the staged ones); a label staged since is read on top.
+const labels: Record<string, string> = { ...(enMessages as ColumnsBundle).applications.columns, ...(staging as ColumnsBundle).applications.columns };
 
 describe('pipeline columns', () => {
   it('match the server ladders (RoboApply C1, GoApply cn)', () => {
