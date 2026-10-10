@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Workday</title>
+  <meta property="og:site_name" content="Example Co Careers">
+</head>
+<body>
+  <div data-automation-id="applyFlowPage">
+    <div data-automation-id="progressBar">
+      <ol>
+        <li data-automation-id="progressBarCompletedStep">My Experience</li>
+        <li data-automation-id="progressBarActiveStep">Application Questions</li>
+        <li data-automation-id="progressBarInactiveStep">Review</li>
+      </ol>
+    </div>
+    <div data-automation-id="applicationQuestionsPage">
+      <fieldset data-automation-id="formField-q1">
+        <legend><label>Are you legally authorized to work in the United States?<abbr title="required">*</abbr></label></legend>
+        <div><input type="radio" id="q1-yes" name="q1" value="1"><label for="q1-yes">Yes</label></div>
+        <div><input type="radio" id="q1-no" name="q1" value="0"><label for="q1-no">No</label></div>
+      </fieldset>
+      <fieldset data-automation-id="formField-q2">
+        <legend><label>Will you now or in the future require sponsorship for employment visa status?<abbr title="required">*</abbr></label></legend>
+        <div><input type="radio" id="q2-yes" name="q2" value="1"><label for="q2-yes">Yes</label></div>
+        <div><input type="radio" id="q2-no" name="q2" value="0"><label for="q2-no">No</label></div>
+      </fieldset>
+      <div data-automation-id="formField-q3">
+        <label for="q3">How many years of experience do you have with SQL?<abbr title="required">*</abbr></label>
+        <button type="button" id="q3" aria-haspopup="listbox">Select One</button>
+      </div>
+      <div data-automation-id="formField-q4">
+        <label for="q4">Why are you interested in this role?</label>
+        <textarea id="q4" data-automation-id="q4"></textarea>
+      </div>
+      <div data-automation-id="formField-q5">
+        <input type="checkbox" id="q5"><label for="q5">I confirm the information I gave is accurate.</label>
+      </div>
+    </div>
+    <div data-automation-id="pageFooter">
+      <button type="button" data-automation-id="backButton">Back</button>
+      <button type="button" data-automation-id="bottom-navigation-next-button">Save and Continue</button>
+    </div>
+  </div>
+</body>
+</html>

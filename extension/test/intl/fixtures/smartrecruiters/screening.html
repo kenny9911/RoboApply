@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Werkstudent Marketing</title>
+  <meta property="og:title" content="Werkstudent Marketing at Demo Studio GmbH">
+</head>
+<body>
+  <h1 class="job-title">Werkstudent Marketing (m/w/d)</h1>
+  <p class="job-location">Berlin, Germany</p>
+  <div class="application-form">
+    <h2>Screening questions</h2>
+    <div class="field"><label for="first-name-input">First name *</label><input id="first-name-input" type="text" required></div>
+    <div class="field"><label for="last-name-input">Last name *</label><input id="last-name-input" type="text" required></div>
+    <div class="field"><label for="email-input">Email *</label><input id="email-input" type="email" required></div>
+    <fieldset>
+      <legend>Are you legally authorized to work in Germany? *</legend>
+      <input type="radio" id="auth-yes" name="q_auth" value="yes"><label for="auth-yes">Yes</label>
+      <input type="radio" id="auth-no" name="q_auth" value="no"><label for="auth-no">No</label>
+    </fieldset>
+    <div class="field">
+      <label for="q_hours">How many hours per week can you work?</label>
+      <select id="q_hours" name="q_hours"><option value="">Please select</option><option>Up to 15</option><option>16 to 20</option></select>
+    </div>
+    <div class="field"><label for="q_tools">Which marketing tools have you used?</label><textarea id="q_tools" name="q_tools"></textarea></div>
+    <div class="field"><input type="checkbox" id="q_keep" name="q_keep"><label for="q_keep">Keep my details for future openings</label></div>
+    <section class="resume-upload"><h3>Resume</h3><input type="file" id="resume-upload-input"></section>
+    <button type="button" class="btn">Back</button>
+    <button type="submit" class="btn primary">Send application</button>
+  </div>
+</body>
+</html>

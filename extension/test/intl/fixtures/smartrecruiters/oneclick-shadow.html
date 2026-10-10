@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Store Supervisor at Sample Labs</title>
+  <meta property="og:title" content="Store Supervisor at Sample Labs">
+</head>
+<body>
+  <header>
+    <h1 data-test="job-title">Store Supervisor</h1>
+    <p data-test="job-location">Manchester, United Kingdom</p>
+  </header>
+  <!-- The form component renders its controls directly in its own shadow root. -->
+  <oc-oneclick-form>
+    <template shadowrootmode="open">
+      <form name="oneclick">
+        <label for="first-name-input">First name<span aria-hidden="true">*</span></label>
+        <input id="first-name-input" type="text" required>
+        <label for="last-name-input">Last name<span aria-hidden="true">*</span></label>
+        <input id="last-name-input" type="text" required>
+        <label for="email-input">Email<span aria-hidden="true">*</span></label>
+        <input id="email-input" type="email" required>
+        <spl-phone-field name="phoneNumber" label="Phone number">
+          <template shadowrootmode="open">
+            <label for="phone-number-input">Phone number</label>
+            <input id="phone-number-input" type="tel">
+          </template>
+        </spl-phone-field>
+        <label for="resume-input">Resume</label>
+        <input id="resume-input" type="file" accept=".pdf,.doc,.docx">
+        <label for="notice-input">Notice period</label>
+        <select id="notice-input">
+          <option value="">Choose</option>
+          <option>Immediately</option>
+          <option>1 month</option>
+        </select>
+        <button type="submit">Submit</button>
+      </form>
+    </template>
+  </oc-oneclick-form>
+</body>
+</html>

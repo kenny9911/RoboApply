@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Workday</title></head>
+<body>
+  <div data-automation-id="applyFlowPage">
+    <div data-automation-id="progressBar">
+      <ol>
+        <li data-automation-id="progressBarCompletedStep">My Information</li>
+        <li data-automation-id="progressBarActiveStep">My Experience</li>
+        <li data-automation-id="progressBarInactiveStep">Review</li>
+      </ol>
+    </div>
+    <div data-automation-id="myExperiencePage">
+      <section role="group" aria-labelledby="we-h">
+        <h3 id="we-h">Work Experience 1</h3>
+        <div data-automation-id="formField-jobTitle">
+          <label for="input-20">Job Title<abbr title="required">*</abbr></label>
+          <input type="text" id="input-20" data-automation-id="jobTitle">
+        </div>
+        <div data-automation-id="formField-company">
+          <label for="input-21">Company</label>
+          <input type="text" id="input-21" data-automation-id="company">
+        </div>
+        <div data-automation-id="formField-location">
+          <label for="input-22">Location</label>
+          <input type="text" id="input-22" data-automation-id="location">
+        </div>
+        <div data-automation-id="formField-currentlyWorkHere">
+          <input type="checkbox" id="input-23" data-automation-id="currentlyWorkHere"><label for="input-23">I currently work here</label>
+        </div>
+        <div data-automation-id="formField-startDate">
+          <label>From<abbr title="required">*</abbr></label>
+          <input type="text" role="spinbutton" aria-label="Month" data-automation-id="dateSectionMonth-input">
+          <input type="text" role="spinbutton" aria-label="Year" data-automation-id="dateSectionYear-input">
+        </div>
+        <div data-automation-id="formField-roleDescription">
+          <label for="input-26">Role Description</label>
+          <textarea id="input-26" data-automation-id="description"></textarea>
+        </div>
+        <button type="button" data-automation-id="Add Another">Add Another</button>
+      </section>
+      <section role="group" aria-labelledby="ed-h">
+        <h3 id="ed-h">Education 1</h3>
+        <div data-automation-id="formField-school">
+          <label for="input-30">School or University</label>
+          <input type="text" id="input-30" data-automation-id="school">
+        </div>
+        <div data-automation-id="formField-degree">
+          <label for="input-31">Degree</label>
+          <button type="button" id="input-31" aria-haspopup="listbox" data-automation-id="degree">Select One</button>
+        </div>
+        <div data-automation-id="formField-field-of-study">
+          <label for="input-32">Field of Study</label>
+          <div data-automation-id="multiselectInputContainer"><input type="text" id="input-32" data-automation-id="searchBox"></div>
+        </div>
+      </section>
+      <section data-automation-id="resumeSection">
+        <h3>Resume/CV</h3>
+        <div data-automation-id="attachments-FileUpload">
+          <input type="file" data-automation-id="file-upload-input-ref" id="input-40">
+          <button type="button" data-automation-id="select-files">Select files</button>
+        </div>
+      </section>
+      <section role="group" aria-labelledby="ws-h">
+        <h3 id="ws-h">Websites</h3>
+        <div data-automation-id="formField-url">
+          <label for="input-41">URL</label>
+          <input type="text" id="input-41" data-automation-id="website">
+        </div>
+      </section>
+      <section role="group" aria-labelledby="sn-h">
+        <h3 id="sn-h">Social Network URLs</h3>
+        <div data-automation-id="formField-linkedinQuestion">
+          <label for="input-42">LinkedIn</label>
+          <input type="text" id="input-42" data-automation-id="linkedinQuestion">
+        </div>
+      </section>
+    </div>
+    <div data-automation-id="pageFooter">
+      <button type="button" data-automation-id="backButton">Back</button>
+      <button type="button" data-automation-id="bottom-navigation-next-button">Save and Continue</button>
+    </div>
+  </div>
+</body>
+</html>
