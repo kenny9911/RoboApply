@@ -80,6 +80,7 @@ import {
 export type CreditsDb = Pick<
   ExtendedPrismaClient,
   | 'rACreditLedger'
+  | 'mockInterviewCreditLedger'
   | 'rACreditGrant'
   | 'rAEntitlementOverride'
   | 'appConfig'
@@ -272,17 +273,18 @@ export function hashToken(raw: string): string {
   return createHash('sha256').update(raw, 'utf8').digest('hex');
 }
 
-function encodeCursor(at: Date, id: string): string {
-  return Buffer.from(`${at.toISOString()}|${id}`, 'utf8').toString('base64url');
+/** `practice` marks a "Recent use" cursor that stopped on a practice-interview row (see `historyCursorWhere`). */
+function encodeCursor(at: Date, id: string, practice = false): string {
+  return Buffer.from(`${at.toISOString()}|${id}${practice ? '|p' : ''}`, 'utf8').toString('base64url');
 }
 
-function decodeCursor(cursor: string | undefined): { at: Date; id: string } | null {
+function decodeCursor(cursor: string | undefined): { at: Date; id: string; practice: boolean } | null {
   if (!cursor) return null;
   try {
-    const [iso, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+    const [iso, id, source] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
     const at = new Date(iso ?? '');
     if (!id || Number.isNaN(at.getTime())) return null;
-    return { at, id };
+    return { at, id, practice: source === 'p' };
   } catch {
     return null;
   }
@@ -293,8 +295,45 @@ function cursorWhere(c: { at: Date; id: string } | null): Record<string, unknown
   return { OR: [{ createdAt: { lt: c.at } }, { createdAt: c.at, id: { lt: c.id } }] };
 }
 
-/** Buckets shown in the user's credit history (billing claims and internal rows are hidden). */
-const HISTORY_BUCKETS = [...WINDOW_BUCKETS, 'practice'];
+/**
+ * Buckets of RACreditLedger shown in the user's credit history ("Recent
+ * use"): the metered actions. Billing claims and internal rows are hidden,
+ * and so is 'practice': in that ledger a 'practice' row is never a use. It is
+ * the idempotency claim of a practice-credit GRANT (platform/credits/
+ * practice.ts: sign-up, verification, checklist, referral, pack purchase), so
+ * listing it showed "Practice interviews: 1 used" on an account that had not
+ * practised yet.
+ */
+const HISTORY_BUCKETS: string[] = [...WINDOW_BUCKETS];
+
+/**
+ * A practice interview IS a use, and it is recorded somewhere else: the
+ * practice-credit ledger (MockInterviewCreditLedger, written by
+ * mockCreditService.debitForSession when a session ends). Only its
+ * `debit_interview` rows that took something are uses; grants, expiries and
+ * admin adjustments are balance changes. Without them an account whose only
+ * use was a practice interview read "Nothing used yet." under a practice
+ * balance of 0.
+ */
+const PRACTICE_USE_REASON = 'debit_interview';
+
+/**
+ * "Recent use" reads two tables as one list, newest first; where both have a
+ * row at the same instant the metered action comes first. The page cursor is
+ * the last row shown, so each table continues strictly after it in that
+ * order: its own table by (createdAt, id), the other by time alone. Ids are
+ * never compared across tables.
+ */
+function historyCursorWhere(c: { at: Date; id: string; practice: boolean } | null, table: 'ledger' | 'practice'): Record<string, unknown> {
+  if (!c) return {};
+  if ((table === 'practice') === c.practice) return cursorWhere(c);
+  return table === 'practice' ? { createdAt: { lte: c.at } } : { createdAt: { lt: c.at } };
+}
+
+/** Practice credits are pro-rated to hundredths (mockInterviewPlans.roundCreditsUp); show what was taken, not a rounded-up 1. */
+function practiceCreditsUsed(delta: number): number {
+  return Math.round(Math.abs(delta) * 100) / 100;
+}
 
 export class CreditsAreaService {
   private readonly d: CreditsAreaDeps;
@@ -316,24 +355,51 @@ export class CreditsAreaService {
   async history(userId: string, query: { cursor?: string; limit?: number }): Promise<{ items: CreditLedgerView[]; cursor: string | null }> {
     const db = await this.d.db();
     const limit = query.limit ?? 30;
-    const rows = await db.rACreditLedger.findMany({
-      where: { userId, status: 'committed', bucket: { in: HISTORY_BUCKETS }, ...cursorWhere(decodeCursor(query.cursor)) },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit + 1,
-      select: { id: true, bucket: true, amount: true, sku: true, fromSource: true, createdAt: true, settledAt: true },
-    });
-    const page = rows.slice(0, limit);
+    const after = decodeCursor(query.cursor);
+    const orderBy = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
+    // limit + 1 from each table: the first `limit` of the two together are then the page.
+    const [ledger, practice] = await Promise.all([
+      db.rACreditLedger.findMany({
+        where: { userId, status: 'committed', bucket: { in: HISTORY_BUCKETS }, ...historyCursorWhere(after, 'ledger') },
+        orderBy,
+        take: limit + 1,
+        select: { id: true, bucket: true, amount: true, sku: true, fromSource: true, createdAt: true, settledAt: true },
+      }),
+      db.mockInterviewCreditLedger.findMany({
+        where: { userId, reason: PRACTICE_USE_REASON, delta: { lt: 0 }, ...historyCursorWhere(after, 'practice') },
+        orderBy,
+        take: limit + 1,
+        select: { id: true, delta: true, createdAt: true },
+      }),
+    ]);
+
+    type Entry = { view: CreditLedgerView; createdAt: Date; practice: boolean };
+    const merged: Entry[] = [];
+    let l = 0;
+    let p = 0;
+    while (merged.length <= limit && (l < ledger.length || p < practice.length)) {
+      const ledgerNext = p >= practice.length || (l < ledger.length && ledger[l].createdAt.getTime() >= practice[p].createdAt.getTime());
+      if (ledgerNext) {
+        const r = ledger[l++];
+        merged.push({
+          view: { id: r.id, bucket: r.bucket, amount: r.amount, sku: r.sku ?? null, fromSource: r.fromSource, at: (r.settledAt ?? r.createdAt).toISOString() },
+          createdAt: r.createdAt,
+          practice: false,
+        });
+      } else {
+        const r = practice[p++];
+        merged.push({
+          view: { id: r.id, bucket: 'practice', amount: practiceCreditsUsed(Number(r.delta)), sku: null, fromSource: 'mock_credit', at: r.createdAt.toISOString() },
+          createdAt: r.createdAt,
+          practice: true,
+        });
+      }
+    }
+    const page = merged.slice(0, limit);
     const last = page[page.length - 1];
     return {
-      items: page.map((r) => ({
-        id: r.id,
-        bucket: r.bucket,
-        amount: r.amount,
-        sku: r.sku ?? null,
-        fromSource: r.fromSource,
-        at: (r.settledAt ?? r.createdAt).toISOString(),
-      })),
-      cursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
+      items: page.map((e) => e.view),
+      cursor: merged.length > limit && last ? encodeCursor(last.createdAt, last.view.id, last.practice) : null,
     };
   }
 

@@ -17,7 +17,7 @@ import { checkoutReturnPath } from '../PlanPicker';
 import { isPackKey } from '../CheckoutReturn';
 import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions';
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
-import { bucketLabelKey, planMonths, planNameKey, pricePeriod } from '../labels';
+import { bucketLabelKey, calendarDaysUntil, knownTimeZone, planMonths, planNameKey, pricePeriod, refillLabel } from '../labels';
 import en from '../../../../i18n/messages/en.json';
 import { creditsResponse, GA_ENV, plansView, RA_ENV } from './fixtures';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
@@ -301,5 +301,46 @@ describe('admin caps document', () => {
     expect(parseOverrideValue('-1')).toBeNull();
     expect(revenueShare(420000, 600000)).toBe(70);
     expect(revenueShare(null, 600000)).toBeNull();
+  });
+});
+
+describe('refill times say which day they mean (FIX-9)', () => {
+  const SUNDAY_MORNING = new Date('2026-10-11T02:00:00.000Z'); // Sunday 10:00 in Shanghai
+  const MONDAY_MIDNIGHT = new Date('2026-10-11T16:00:00.000Z'); // Monday 00:00 in Shanghai
+
+  it('counts calendar days on the wall clock of the given zone', () => {
+    expect(calendarDaysUntil(MONDAY_MIDNIGHT, SUNDAY_MORNING, 'Asia/Shanghai')).toBe(1);
+    // The same two instants are the same calendar day in UTC.
+    expect(calendarDaysUntil(MONDAY_MIDNIGHT, SUNDAY_MORNING, 'UTC')).toBe(0);
+    expect(calendarDaysUntil(new Date('2026-11-01T00:00:00Z'), new Date('2026-10-31T23:59:00Z'), 'UTC')).toBe(1);
+    expect(calendarDaysUntil(new Date('2027-01-01T00:00:00Z'), new Date('2026-12-25T12:00:00Z'), 'UTC')).toBe(7);
+  });
+
+  it('the next day reads "tomorrow" with the time; a daily refill is midnight in the account zone', () => {
+    const base = { at: MONDAY_MIDNIGHT, now: SUNDAY_MORNING, timeZone: 'Asia/Shanghai' };
+    expect(refillLabel({ ...base, locale: 'en' })).toBe('tomorrow 12:00 AM');
+    expect(refillLabel({ ...base, locale: 'zh' })).toMatch(/^明天 0?0:00$/);
+    expect(refillLabel({ ...base, locale: 'ja' })).toMatch(/^明日 0:00$/);
+    // New York: local midnight is 04:00 UTC; shown as midnight, not "4:00 AM".
+    expect(refillLabel({ at: new Date('2026-10-12T04:00:00Z'), now: new Date('2026-10-11T15:00:00Z'), locale: 'en', timeZone: 'America/New_York' })).toBe(
+      'tomorrow 12:00 AM',
+    );
+  });
+
+  it('a later refill carries the weekday WITH its date; later the same day is a bare time', () => {
+    expect(refillLabel({ at: new Date('2026-10-18T16:00:00Z'), now: SUNDAY_MORNING, locale: 'en', timeZone: 'Asia/Shanghai' })).toBe('Mon, Oct 19, 12:00 AM');
+    expect(refillLabel({ at: new Date('2026-10-18T16:00:00Z'), now: SUNDAY_MORNING, locale: 'zh', timeZone: 'Asia/Shanghai' })).toMatch(/10月19日周一/);
+    expect(refillLabel({ at: new Date('2026-10-11T15:30:00Z'), now: SUNDAY_MORNING, locale: 'en', timeZone: 'Asia/Shanghai' })).toBe('11:30 PM');
+  });
+
+  it('a time that has already passed never reads "tomorrow": it is shown with its date', () => {
+    expect(refillLabel({ at: new Date('2026-10-10T16:00:00Z'), now: SUNDAY_MORNING, locale: 'en', timeZone: 'Asia/Shanghai' })).toBe('Sun, Oct 11, 12:00 AM');
+  });
+
+  it('an unknown zone falls back instead of throwing', () => {
+    expect(knownTimeZone('Asia/Shanghai', 'UTC')).toBe('Asia/Shanghai');
+    expect(knownTimeZone('Not/AZone', 'UTC')).toBe('UTC');
+    expect(knownTimeZone(null, undefined)).toBeUndefined();
+    expect(() => refillLabel({ at: MONDAY_MIDNIGHT, now: SUNDAY_MORNING, locale: 'en', timeZone: 'Not/AZone' })).not.toThrow();
   });
 });

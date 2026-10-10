@@ -17,7 +17,7 @@
 
 import { logger } from '../../services/LoggerService.js';
 import type { CreditStore } from './store.js';
-import { createPrismaCreditStore } from './store.js';
+import { SETTLE_BUDGET_MS, SETTLE_TX_LIMITS, createPrismaCreditStore, retryWhenBusy } from './store.js';
 
 export type PracticeGrantReason =
   | 'email_verified'
@@ -131,7 +131,26 @@ export function createPracticeCredits(deps: PracticeDeps = {}): PracticeCredits 
         logger.warn('CREDITS', 'practice grant failed', { userId, reason, error: err instanceof Error ? err.message : String(err) });
         result = null;
       }
-      await store.transaction((tx) => tx.settleLedger(claim.id, result ? 'committed' : 'released', now()));
+      try {
+        // Safe to repeat: only a `reserved` row is settled. The grant itself
+        // is already decided, so this gets short limits and a time budget.
+        await retryWhenBusy(
+          () => store.transaction((tx) => tx.settleLedger(claim.id, result ? 'committed' : 'released', now()), SETTLE_TX_LIMITS),
+          undefined,
+          { budgetMs: SETTLE_BUDGET_MS },
+        );
+      } catch (err) {
+        // The claim row stays `reserved` (never auto-released), so the key
+        // cannot grant twice. A credit that was added is still reported as
+        // granted; a failed grant is reported as failed.
+        logger.error('CREDITS', 'practice grant: could not settle the claim', {
+          userId,
+          reason,
+          ledgerId: claim.id,
+          granted: !!result,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       if (!result) return { status: 'failed', ledgerId: claim.id, balanceAfter: null };
       logger.info('CREDITS', 'practice credit granted', { userId, reason, credits });
       return { status: 'granted', ledgerId: claim.id, balanceAfter: result.balanceAfter };

@@ -5,7 +5,8 @@
 //
 //   Get Pro            only when the server says a sellable plan raises the
 //                      cap (`upgradable`)
-//   Wait until {time}  the server's reset time in the viewer's local time
+//   Wait until {time}  the server's reset time in the account's time zone,
+//                      with the day it means ("tomorrow 12:00 AM")
 //   Continue without it  closes the sheet; everything else keeps working
 //
 // Practice interview credits are a balance, not a daily window: they do not
@@ -26,7 +27,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useLocale, useTimeZone, useTranslations } from 'next-intl';
 
 import { Sheet } from '../../v3/primitives/Sheet';
 import { useOutOfCredits } from '../../../hooks/shared/useCreditGate';
@@ -34,7 +35,7 @@ import { bucketSummary, useCredits } from '../../../hooks/shared/useCredits';
 import { usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
 import { useFlag } from '../../../lib/flags';
 import { track } from '../../../lib/analytics';
-import { bucketLabelKey, parseDate } from './labels';
+import { bucketLabelKey, knownTimeZone, parseDate, refillLabel } from './labels';
 import styles from './credits.module.css';
 
 export type OutOfCreditsSheetProps = Record<string, never>;
@@ -50,7 +51,8 @@ export function OutOfCreditsSheet(_props: OutOfCreditsSheetProps = {}) {
   const { info, dismiss } = useOutOfCredits();
   const t = useTranslations('credits.outOfCredits');
   const tc = useTranslations('credits');
-  const format = useFormatter();
+  const locale = useLocale();
+  const appTimeZone = useTimeZone();
   const studentEnabled = useFlag('student');
   const isPractice = info?.bucket === 'practice';
   const { data } = useCredits({ enabled: info !== null && !isPractice });
@@ -74,12 +76,8 @@ export function OutOfCreditsSheet(_props: OutOfCreditsSheetProps = {}) {
 
   const window = bucketSummary(data?.summary, info.bucket)?.window ?? null;
   const resets = parseDate(info.resetsAt);
-  const now = new Date();
-  const sameDay = resets ? resets.toDateString() === now.toDateString() : false;
   const when = resets
-    ? sameDay
-      ? format.dateTime(resets, { hour: 'numeric', minute: '2-digit' })
-      : format.dateTime(resets, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+    ? refillLabel({ at: resets, now: new Date(), locale, timeZone: knownTimeZone(data?.summary?.timezone, appTimeZone) })
     : null;
   // Practice: a pack that is on sale right now (GoApply sells none before
   // CN_PAYMENTS_ENABLED), else Pro only when the server says it helps.

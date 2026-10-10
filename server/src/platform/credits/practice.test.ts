@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryCreditStore } from './memoryStore.js';
 import { createPracticeCredits } from './practice.js';
+import { SETTLE_TX_LIMITS, type CreditStore, type CreditTxLimits } from './store.js';
 
 function setup(opts: { profile?: boolean; failFirst?: boolean } = {}) {
   const store = createMemoryCreditStore();
@@ -61,5 +62,27 @@ describe('grantPracticeCredit', () => {
     const s = setup();
     await expect(s.practice.grantPracticeCredit('u1', 'admin', ' ')).rejects.toThrow();
     expect(await s.practice.grantPracticeCredit('u1', 'compensation', 'c', { credits: 3 })).toMatchObject({ balanceAfter: 3 });
+  });
+
+  it('settles its claim with the short settle limits (the grant is already decided)', async () => {
+    const memory = createMemoryCreditStore();
+    const limits: (CreditTxLimits | undefined)[] = [];
+    const store: CreditStore = {
+      ...memory,
+      transaction: (fn, txLimits) => {
+        limits.push(txLimits);
+        return memory.transaction(fn);
+      },
+    };
+    const practice = createPracticeCredits({
+      store,
+      hasSeekerProfile: async () => true,
+      adjust: async ({ delta }) => ({ balanceAfter: delta }),
+      getBalance: async () => ({ credits: 1, tier: 'free', periodAllotment: null, renewedAt: null }),
+      now: () => new Date('2026-10-10T12:00:00Z'),
+    });
+    expect((await practice.grantPracticeCredit('u1', 'email_verified', 'k')).status).toBe('granted');
+    // claim, then settle
+    expect(limits).toEqual([undefined, SETTLE_TX_LIMITS]);
   });
 });

@@ -57,6 +57,7 @@ export { STALE_RESERVATION_MS, createCreditService, creditService, ledgerIdempot
 export type { BucketUsage, CreditService, Reservation, ReserveOptions } from './CreditService.js';
 export {
   CreditReplayError,
+  CreditStoreBusyError,
   CreditsExhaustedError,
   InvalidIdempotencyKeyError,
   ReservationNotFoundError,
@@ -69,8 +70,8 @@ export { createPracticeCredits, getPracticeBalance, grantPracticeCredit } from '
 export type { PracticeBalance, PracticeGrantReason, PracticeGrantResult, PracticeGrantStatus } from './practice.js';
 export { summarizeEntitlementsForMe } from './summary.js';
 export type { BucketSummary, EntitlementSummary } from './summary.js';
-export { createPrismaCreditStore } from './store.js';
-export type { CreditStore, CreditTx, LedgerRow, LedgerStatus } from './store.js';
+export { createPrismaCreditStore, isDbBusyError } from './store.js';
+export type { CreditStore, CreditTx, CreditTxLimits, LedgerRow, LedgerStatus } from './store.js';
 export { createMemoryCreditStore } from './memoryStore.js';
 export type { MemoryCreditStore } from './memoryStore.js';
 export { CREDIT_WINDOWS, currentWindow, isValidTimeZone, resetsAtFor, safeTimeZone, windowKeyFor } from './windows.js';

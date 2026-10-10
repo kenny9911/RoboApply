@@ -5,13 +5,21 @@
 // §6.1–§6.2; TASK_PLAN.md WP-21b). Caps print as "10 a day" (Free) or
 // "Up to 50 a day" (Pro) — never "unlimited". Unknown values render "—",
 // never 0; nothing is computed on the client beyond reading the summary.
+//
+// Refill times are shown in the account's time zone (`summary.timezone`, the
+// zone the server used to place the windows) and say which day they mean:
+// "Refills tomorrow 12:00 AM", or the weekday with its date for a later
+// refill — never a bare weekday, which read like a weekly reset on a daily
+// row. "Recent use" is timed in that same zone, so one card never shows two
+// clocks; it lists credit uses only (the server leaves grants out) and
+// includes practice interviews.
 
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTimeZone, useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
 import { useCredits, type BucketSummary } from '../../../hooks/shared/useCredits';
 import { useCreditHistory } from '../../../hooks/credits/useCreditHistory';
-import { BUCKET_ORDER, bucketLabelKey, parseDate } from './labels';
+import { BUCKET_ORDER, bucketLabelKey, knownTimeZone, parseDate, refillLabel } from './labels';
 import styles from './credits.module.css';
 
 export interface CreditsUsageProps {
@@ -21,7 +29,8 @@ export interface CreditsUsageProps {
 
 export function CreditsUsage({ hideHistory = false }: CreditsUsageProps) {
   const t = useTranslations('credits');
-  const format = useFormatter();
+  const locale = useLocale();
+  const appTimeZone = useTimeZone();
   const creditsQ = useCredits();
   const summary = creditsQ.data?.summary;
   const practice = creditsQ.data?.practice ?? null;
@@ -43,9 +52,11 @@ export function CreditsUsage({ hideHistory = false }: CreditsUsageProps) {
     ? BUCKET_ORDER.filter((b) => buckets[b] && buckets[b]!.cap > 0).map((b) => [b, buckets[b]!] as const)
     : [];
 
+  const now = new Date();
+  const timeZone = knownTimeZone(summary?.timezone, appTimeZone);
   const refill = (b: BucketSummary) => {
-    const d = parseDate(b.resetsAt);
-    return d ? format.dateTime(d, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
+    const at = parseDate(b.resetsAt);
+    return at ? refillLabel({ at, now, locale, timeZone }) : '—';
   };
 
   return (
@@ -89,24 +100,31 @@ export function CreditsUsage({ hideHistory = false }: CreditsUsageProps) {
           </ul>
         )}
       </section>
-      {hideHistory ? null : <CreditHistory />}
+      {hideHistory ? null : <CreditHistory timeZone={timeZone} zoneKnown={Boolean(summary)} />}
     </div>
   );
 }
 
-function CreditHistory() {
+/**
+ * `timeZone` is the account's zone (the one the refill times use). Rows wait
+ * for it (`zoneKnown`), so a time is never shown in one zone and then moved
+ * to another when the summary arrives.
+ */
+function CreditHistory({ timeZone, zoneKnown }: { timeZone: string | undefined; zoneKnown: boolean }) {
   const t = useTranslations('credits');
   const format = useFormatter();
   const q = useCreditHistory(20);
+  const hasRows = Boolean(q.data && q.data.items.length > 0);
+  const waitingForZone = hasRows && !zoneKnown;
   return (
     <section className={styles.card} aria-labelledby="credits-history">
       <h2 className={styles.h2} id="credits-history">
         {t('usage.historyTitle')}
       </h2>
-      {q.isLoading ? <p className={styles.muted} aria-busy="true">{t('usage.loading')}</p> : null}
+      {q.isLoading || waitingForZone ? <p className={styles.muted} aria-busy="true">{t('usage.loading')}</p> : null}
       {q.isError ? <p className={styles.muted}>{t('usage.historyUnavailable')}</p> : null}
       {q.data && q.data.items.length === 0 ? <p className={styles.muted}>{t('usage.historyEmpty')}</p> : null}
-      {q.data && q.data.items.length > 0 ? (
+      {q.data && hasRows && zoneKnown ? (
         <ul className={styles.list}>
           {q.data.items.map((row) => {
             const at = parseDate(row.at);
@@ -114,7 +132,7 @@ function CreditHistory() {
               <li key={row.id} className={styles.row}>
                 <span className={styles.rowLabel}>{t(bucketLabelKey(row.bucket))}</span>
                 <span className={styles.rowValue}>{t('usage.used', { n: row.amount })}</span>
-                <span className={styles.rowMeta}>{at ? format.dateTime(at, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>
+                <span className={styles.rowMeta}>{at ? format.dateTime(at, { dateStyle: 'medium', timeStyle: 'short', ...(timeZone ? { timeZone } : {}) }) : '—'}</span>
               </li>
             );
           })}

@@ -31,7 +31,12 @@ export interface CreditsResponse {
   } | null;
 }
 
-/** GET /credits/history?cursor — committed ledger rows. */
+/**
+ * GET /credits/history?cursor — credit uses, newest first: committed metered
+ * actions, and practice interviews (`bucket: 'practice'`, `fromSource:
+ * 'mock_credit'`). A practice interview's `amount` is the credits it took and
+ * can be a fraction (they are pro-rated by minutes).
+ */
 export const CreditHistoryQuerySchema = z.object({ cursor: z.string().max(256).optional(), limit: z.coerce.number().int().min(1).max(100).optional() });
 export interface CreditLedgerView {
   id: string;

@@ -3,7 +3,8 @@
 // Mounted by features/index.ts:
 //   createCreditsRouter()      at /api/v1/roboapply/credits
 //     GET  /            → CreditsResponse (caps, usage, reset times, plan; practice balance)
-//     GET  /history     → { items: CreditLedgerView[], cursor }   committed ledger rows
+//     GET  /history     → { items: CreditLedgerView[], cursor }   credit uses, newest first: metered actions and
+//                         practice interviews (grants are not uses)
 //     POST /cancel      → CancelResponse   one click; survey optional; confirmation email
 //     POST /cancel/survey {reason?, note?} → 204   stores the answer only (no cancel, email or event)
 //   createBillingPlansRouter() at /api/v1/roboapply/billing/plans (after the legacy
