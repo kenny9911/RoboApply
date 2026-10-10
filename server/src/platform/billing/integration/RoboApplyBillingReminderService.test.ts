@@ -15,8 +15,20 @@ vi.mock('../../../lib/prisma.js', async () => {
 });
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
-import { registerEmailTransport, resetEmailTransportsForTests } from '../../email/index.js';
+import { registerEmailTransport, resetEmailTransportsForTests, transportNameFor } from '../../email/index.js';
+import { getBrand } from '../../brand/registry.js';
 import { reminderFor, runAnnualReminderSweep, runRenewalReminderSweep } from '../../../roboapply/services/RoboApplyBillingReminderService.js';
+
+/**
+ * GoApply mail goes out through the shared transport (D5; parity plan §3.4):
+ * with no CN_EMAIL_* value it is Resend with the shared key. That fallback is
+ * the email service's (`transportNameFor`, bundle PAR-3). Where it is in
+ * place this file sets no CN_EMAIL_* value at all; on a tree that still has
+ * the old rule (no transport for GoApply unless CN_EMAIL_TRANSPORT is set)
+ * the setup below names the same transport explicitly, so the reminders are
+ * tested either way. Delete the fallback branch once PAR-3 is merged.
+ */
+const SHARED_EMAIL_IS_DEFAULT = transportNameFor(getBrand('goapply'), { RESEND_API_KEY: 're_test' }) === 'resend';
 
 const NOW = new Date('2026-10-10T06:00:00.000Z');
 const inDays = (d: number) => new Date(NOW.getTime() + d * 86_400_000);
@@ -37,9 +49,12 @@ function seed(subs: Record<string, unknown>[]) {
 beforeEach(() => {
   sent.length = 0;
   failNext = false;
+  // The 'on' setup: the shared mail credential, and nothing GoApply-specific.
+  // No CN_PAYMENTS_ENABLED (there is no master switch) and no CN_EMAIL_* value.
   vi.stubEnv('RESEND_API_KEY', 're_test');
-  vi.stubEnv('CN_EMAIL_TRANSPORT', 'resend');
-  vi.stubEnv('CN_EMAIL_FROM', 'noreply@mail.goapply.example');
+  vi.stubEnv('CN_PAYMENTS_ENABLED', '');
+  vi.stubEnv('CN_EMAIL_TRANSPORT', SHARED_EMAIL_IS_DEFAULT ? '' : 'resend');
+  vi.stubEnv('CN_EMAIL_FROM', SHARED_EMAIL_IS_DEFAULT ? '' : 'noreply@mail.goapply.example');
   registerEmailTransport('resend', {
     name: 'resend',
     isConfigured: () => true,
@@ -68,6 +83,14 @@ describe('reminderFor', () => {
     expect(reminderFor({ tier: 'pro', planKey: 'pro_week_pass', interval: 'pass', brand: 'roboapply', currency: 'USD', stripeSubscriptionId: null })).toBeNull();
     expect(reminderFor({ tier: 'starter', planKey: null, interval: null, brand: null, currency: 'CNY', stripeSubscriptionId: null })).toEqual({ kind: 'pass', leadDays: 5 });
   });
+
+  it('GoApply student passes (30 and 90 days) get the same 3-day pass reminder as the regular passes', () => {
+    for (const planKey of ['student_monthly', 'student_quarterly', 'pro_quarterly']) {
+      expect(reminderFor({ tier: 'pro', planKey, interval: 'pass', brand: 'goapply', currency: 'CNY', stripeSubscriptionId: null }), planKey).toEqual({ kind: 'pass', leadDays: 3 });
+    }
+    // RoboApply's student plans renew through Stripe: the auto-renewal reminder, not the pass one.
+    expect(reminderFor({ tier: 'pro', planKey: 'student_monthly', interval: 'month', brand: 'roboapply', currency: 'USD', stripeSubscriptionId: 's' })).toEqual({ kind: 'auto', leadDays: 5 });
+  });
 });
 
 describe('runRenewalReminderSweep', () => {
@@ -95,6 +118,46 @@ describe('runRenewalReminderSweep', () => {
     expect(logs).toHaveLength(3);
     expect(logs.every((l: any) => l.template === 'billing.renewal_reminder' && l.status === 'sent')).toBe(true);
     expect(logs.map((l: any) => l.brand).sort()).toEqual(['goapply', 'roboapply', 'roboapply']);
+  });
+
+  it('the kill switch (CN_PAYMENTS_ENABLED=false) stops new orders, not the reminder for a pass already bought', async () => {
+    vi.stubEnv('CN_PAYMENTS_ENABLED', 'false');
+    seed([
+      { tier: 'pro', planKey: 'pro_monthly', interval: 'pass', brand: 'goapply', currency: 'CNY', amountMinor: 3900, currentPeriodEnd: inDays(2.5) },
+      { tier: 'pro', planKey: 'student_quarterly', interval: 'pass', brand: 'goapply', currency: 'CNY', amountMinor: 6900, currentPeriodEnd: inDays(1) },
+      { tier: 'pro', planKey: 'pro_monthly', interval: 'month', stripeSubscriptionId: 'st_a', currentPeriodEnd: inDays(4.5) },
+    ]);
+    const res = await runRenewalReminderSweep({ now: NOW });
+    expect(res).toMatchObject({ scanned: 3, sent: 3, skipped: 0, failed: 0 });
+    expect(sent.map((s) => s.to[0]).sort()).toEqual(['u0@example.test', 'u1@example.test', 'u2@example.test']);
+    // The pass reminder says the true thing: it ends, it does not renew, nothing is charged.
+    expect(sent.find((s) => s.to[0] === 'u0@example.test')!.text).toContain('不会续费');
+    const logs = await fake.db.rAEmailLog.findMany({});
+    expect(logs.map((l: any) => [l.brand, l.status]).sort()).toEqual([
+      ['goapply', 'sent'],
+      ['goapply', 'sent'],
+      ['roboapply', 'sent'],
+    ]);
+    // Once per pass period, switch or no switch.
+    expect(await runRenewalReminderSweep({ now: NOW })).toMatchObject({ sent: 0, skipped: 3 });
+  });
+
+  it('the reminder service itself reads no payment or mail switch: a GoApply pass reminder is handed to the mailer with an empty CN environment', async () => {
+    vi.stubEnv('CN_EMAIL_TRANSPORT', '');
+    vi.stubEnv('CN_EMAIL_FROM', '');
+    seed([{ tier: 'pro', planKey: 'pro_quarterly', interval: 'pass', brand: 'goapply', currency: 'CNY', amountMinor: 9900, currentPeriodEnd: inDays(2) }]);
+    const sendEmail = vi.fn(async () => ({ status: 'sent' as const }));
+    const res = await runRenewalReminderSweep({ now: NOW, sendEmail: sendEmail as never });
+    expect(res).toMatchObject({ scanned: 1, sent: 1, failed: 0 });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith({
+      template: 'billing.renewal_reminder',
+      to: 'u0@example.test',
+      userId: 'u_0',
+      locale: 'zh',
+      brand: 'goapply',
+      params: { planKey: 'pro_quarterly', date: inDays(2).toISOString(), amountMinor: 9900, currency: 'CNY', interval: 'pass', manual: true },
+    });
   });
 
   it('quarterly reminders say "every 3 months"; a legacy pass reminder points to the current plans, not Pro', async () => {

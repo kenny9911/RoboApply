@@ -4,10 +4,17 @@
 //
 //   registerRail(id, impl)        extension point (WP-62 adds 'wechatpay')
 //   resolveRail(brand, requested) the rail for a NEW purchase:
-//     - only rails in `brand.paymentRails` (GoApply: alipay/wechatpay, never
-//       Stripe; RoboApply: Stripe only, so no new intl Alipay purchase);
+//     - only rails in `brand.paymentRails` (GoApply: alipay then wechatpay,
+//       never Stripe; RoboApply: Stripe only, so no new intl Alipay purchase);
 //     - only rails whose `pay.<rail>` capability requirements are met AND
-//       whose implementation reports itself configured;
+//       whose implementation reports itself configured. For Alipay that is the
+//       callback secret alone (and not the kill switch); WeChat Pay keeps its
+//       merchant set and the entity match;
+//     - a purchase that names no rail gets the first available rail in the
+//       brand's order. GoApply lists Alipay first, so Alipay takes it whether
+//       or not WeChat Pay is ready; WeChat Pay takes it only when Alipay
+//       cannot charge. A rail the buyer named is never swapped for another:
+//       it is refused when it cannot charge;
 //     - `?region=` / country never chooses a rail (R-08, §6.1 rule 6).
 // Existing RoboApply Alipay passes keep working until they expire: their
 // callback and fulfilment paths do not go through resolveRail.
@@ -62,7 +69,8 @@ export function isPaymentRail(value: unknown): value is PaymentRail {
 
 /**
  * The rail for a new purchase. `requested` may only pick among the brand's
- * rails; without it the first available rail wins.
+ * rails; without it the first available rail in the brand's order wins
+ * (GoApply: Alipay, then WeChat Pay when Alipay cannot charge).
  */
 export function resolveRail(brand: ProductBrand, requested?: PaymentRail | null, env: EnvSource = process.env): PaymentRailImpl {
   if (requested) {

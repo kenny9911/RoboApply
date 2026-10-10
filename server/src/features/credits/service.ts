@@ -44,6 +44,7 @@ import {
   readFxReference,
   saveFxReference,
   showsWithdrawalWaiver,
+  studentPlansListedFor,
   twdReferenceWhole,
   type BillingAccount,
   type CancelOutcome,
@@ -186,6 +187,8 @@ export interface CreditsAreaDeps {
   surveys: CancelSurveyStore;
   /** Writes the admin audit row for an override change (features/admin `writeAdminAudit`). */
   auditOverride: (entry: OverrideAuditEntry) => Promise<unknown>;
+  /** A live school-email verification (features/account-v2 `studentService.isVerified`). */
+  isStudentVerified: (userId: string) => Promise<boolean>;
 }
 
 const defaultDb = async (): Promise<CreditsDb> => (await import('../../lib/prisma.js')).default;
@@ -253,6 +256,10 @@ function defaultDeps(): CreditsAreaDeps {
           via: 'admin_credits',
         },
       });
+    },
+    isStudentVerified: async (userId) => {
+      const { studentService } = await import('../account-v2/index.js');
+      return studentService.isVerified(userId);
     },
   };
 }
@@ -474,7 +481,12 @@ export class CreditsAreaService {
         currentPlanKey = status.live ? status.planKey : 'free';
       }
     }
-    const studentEnabled = await isEnabled('student', { userId: input.userId, brand, env }).catch(() => false);
+    // Student plans are listed only for a signed-in, verified student: the
+    // rule that decides who may buy one (platform/billing/studentPlans).
+    const studentEnabled = await studentPlansListedFor(input.userId, brand, {
+      studentEnabled: (userId, b) => isEnabled('student', { userId, brand: b, env }),
+      isStudentVerified: this.d.isStudentVerified,
+    });
     // The buyer's country picks the Taiwan price where one is configured
     // (`localPrice`); checkout applies the same rule to the same header.
     const { plans, defaultSelection } = buildPlanViews(brand.id, { env, currentPlanKey, studentEnabled, country: input.country });

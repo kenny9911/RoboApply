@@ -7,7 +7,13 @@ import { getRegisteredRail, registerRail } from './registry.js';
 import { createAlipayWorkerRail } from './alipayWorker.js';
 import { createStripeRail } from './stripe.js';
 
-/** Register the built-in rails unless a test (or a later wave) already registered its own. */
+/**
+ * Register the built-in rails unless a test (or a later wave) already
+ * registered its own. This runs at module import, which can be BEFORE the
+ * entry point has loaded `.env`, so nothing here reads the environment: the
+ * notice about a missing GoApply collecting entity is logged by the Alipay
+ * rail on first use (`warnIfAlipayEntityUnset`).
+ */
 export function ensureDefaultRails(): void {
   if (!getRegisteredRail('stripe')) registerRail('stripe', createStripeRail());
   if (!getRegisteredRail('alipay')) registerRail('alipay', createAlipayWorkerRail());
@@ -32,9 +38,12 @@ export {
   ALIPAY_DEFAULT_WORKER_URL,
   alipayCallbackSecretConfigured,
   alipayCallbackSecretOk,
+  alipayEntityNotice,
+  alipayEntityRequired,
   collectingEntity,
   createAlipayWorkerRail,
   newOutTradeNo,
+  warnIfAlipayEntityUnset,
 } from './alipayWorker.js';
 export type { AlipayRailDeps } from './alipayWorker.js';
 export { CallbackRejectedError } from './types.js';

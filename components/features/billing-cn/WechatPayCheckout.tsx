@@ -17,7 +17,9 @@
 //     H5 in a mobile browser, Native QR on desktop. The order is polled; the
 //     server is the source of truth.
 //   - Renders nothing while availability is unknown or WeChat Pay is not
-//     available (no UI entry, R-04).
+//     available (no UI entry, R-04). Available means what the plans response
+//     says: `checkout.rails` lists `wechatpay`. There is no payments switch
+//     to wait for; the server stops listing the rail under the kill switch.
 //   - Inside WeChat, on GoApply, the pay tap is also where WeChat asks for
 //     the one-time permission to send the "payment received" notice
 //     (`<SubscribeOnTap template="payment_success">`). The payment goes on
@@ -47,7 +49,7 @@ import styles from './billingCn.module.css';
 
 export const BILLING_PATH = '/settings/billing';
 export const HELP_PATH = '/help';
-const PLAN_NAME_KEYS = ['pro_week_pass', 'pro_monthly', 'pro_quarterly', 'practice_pack_5', 'practice_pack_15'] as const;
+const PLAN_NAME_KEYS = ['pro_week_pass', 'pro_monthly', 'pro_quarterly', 'practice_pack_5', 'practice_pack_15', 'student_monthly', 'student_quarterly'] as const;
 
 export interface WechatPayCheckoutProps {
   planKey: string;
@@ -61,11 +63,19 @@ export interface WechatPayCheckoutProps {
   userAgent?: string;
 }
 
-type ErrorKind = 'notOpen' | 'notSellable' | 'termsOutdated' | 'tooMany' | 'generic' | 'jsapiCancelled';
+type ErrorKind = 'notOpen' | 'notSellable' | 'studentRequired' | 'termsOutdated' | 'tooMany' | 'generic' | 'jsapiCancelled';
 
+/**
+ * What a refused order means for the buyer. WeChat Pay is on whenever its
+ * merchant is set up, so "not open" is never the normal state: it is what the
+ * server answers when the rail is not set up on this deployment
+ * (`rail_not_configured`, `rail_not_registered`, `feature_disabled`) or when
+ * the operator switched payments off (`payments_disabled`, the kill switch).
+ */
 function errorKind(err: unknown): ErrorKind {
   const code = apiErrorCode(err);
   if (code === 'rail_not_configured' || code === 'rail_not_registered' || code === 'feature_disabled' || code === 'payments_disabled') return 'notOpen';
+  if (code === 'student_verification_required') return 'studentRequired';
   if (code === 'plan_not_sellable') return 'notSellable';
   if (code === 'terms_outdated') return 'termsOutdated';
   if (code === 'rate_limited') return 'tooMany';

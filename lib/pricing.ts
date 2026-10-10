@@ -92,7 +92,11 @@ export function formatMoney(locale: string, amountMinor: number, currency: strin
 // Clone plan catalog helpers (WP-21b; PRODUCT_PLAN.md §6.1–§6.4, TASK_PLAN.md
 // R-08, R-25). The plan sheet, /settings#billing and PriceReference read the
 // server catalog (`GET /billing/plans`); these helpers only DERIVE display
-// numbers from those server prices — no amount is hard-coded here.
+// numbers from those server prices — no amount is hard-coded here. A GoApply
+// plan always arrives with its CNY amount (the catalog default or a
+// whole-yuan override), so on GoApply `amountMinor` is never null; whether a
+// payment can open is the response's `paymentsOpen` and `checkout.rails`,
+// never something derived here or from the brand.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

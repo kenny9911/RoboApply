@@ -29,10 +29,13 @@ export const ENTITY = '测试科技（上海）有限公司';
  */
 export const PUBLISHED_LEGAL_DIR = fileURLToPath(new URL('./fixtures/legal', import.meta.url));
 
-/** GoApply with WeChat Pay fully configured (entity matches the merchant). */
+/**
+ * GoApply with WeChat Pay fully configured (entity matches the merchant).
+ * There is no master switch (D5): CN_PAYMENTS_ENABLED is the kill switch and
+ * is left unset here. Prices are the catalog defaults (no CN_PRICE_* value).
+ */
 export const GA_ENV: Record<string, string> = {
   NODE_ENV: 'development',
-  CN_PAYMENTS_ENABLED: 'true',
   WECHATPAY_MCH_ID: '1900000001',
   WECHATPAY_APP_ID: 'wxtestappid000001',
   WECHATPAY_API_V3_KEY: NOTIFY_VECTOR.apiV3Key,
@@ -43,11 +46,6 @@ export const GA_ENV: Record<string, string> = {
   CN_PAYMENT_COLLECTING_ENTITY: ENTITY,
   WECHATPAY_MERCHANT_ENTITY: '测试科技(上海)有限公司',
   CN_BACKEND_URL: 'https://api.goapply.test',
-  CN_PRICE_PRO_WEEK_PASS_FEN: '1200',
-  CN_PRICE_PRO_MONTHLY_FEN: '3900',
-  CN_PRICE_PRO_QUARTERLY_FEN: '9900',
-  CN_PRICE_PRACTICE_PACK_5_FEN: '2900',
-  CN_PRICE_PRACTICE_PACK_15_FEN: '7900',
   /** The published GoApply 用户协议 version (what GET /public/legal/terms returns). */
   CN_LEGAL_DOCS_VERSION: 'cn-terms-2026-10',
   LEGAL_CONTENT_DIR: PUBLISHED_LEGAL_DIR,

@@ -6,7 +6,10 @@
 //   useWechatPayAvailable()   capability on AND the server lists the rail as
 //                             live for new purchases (GET /billing/plans
 //                             `checkout.rails`, which already checks the
-//                             collecting entity) — otherwise no UI entry.
+//                             merchant set-up, the collecting entity and the
+//                             kill switch) — otherwise no UI entry. WeChat
+//                             Pay is GoApply's second rail: the plan sheet
+//                             offers it beside Alipay, which stays the default.
 //   detectTradeType(ua)       JSAPI inside WeChat, H5 in a mobile browser,
 //                             Native QR on desktop.
 //   useWechatPayOrder(id)     polls the order while it is pending (stops on
@@ -41,6 +44,12 @@ export interface WechatPayAvailability {
   /** Still loading the capability or the plan list. */
   loading: boolean;
   plans: readonly CatalogPlan[];
+  /**
+   * Every rail the server lists for a new purchase, in its order (the first
+   * is the default; Alipay comes before WeChat Pay). Empty while this hook is
+   * off or loading.
+   */
+  rails: readonly string[];
 }
 
 export function useWechatPayAvailable(): WechatPayAvailability {
@@ -53,6 +62,7 @@ export function useWechatPayAvailable(): WechatPayAvailability {
     available: enabled && rails.includes('wechatpay'),
     loading: enabled && plansQ.isLoading,
     plans: plansQ.data?.plans ?? [],
+    rails,
   };
 }
 

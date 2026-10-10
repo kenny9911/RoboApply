@@ -1,11 +1,15 @@
 // server/src/platform/billing/planViews.ts
 //
 // What the plan sheet and /pricing receive (PRODUCT_PLAN.md §6.1, §6.3;
-// F-BILL-02): every plan of the brand with its configured price, whether it
-// can be bought now, the "Save N%" computed from our own monthly price
-// (rounded down), the weekly plan's monthly equivalent ("about $43 a month"),
-// and the preselected plan (never weekly, never a pass). Student plans (V2)
-// appear only when the `student` capability is on.
+// F-BILL-02): every plan of the brand with its price (GoApply: the catalog
+// default in fen or its whole-yuan override; RoboApply: the configured
+// Stripe price), whether it is on sale, the "Save N%" computed from our own
+// monthly price (rounded down), the weekly plan's monthly equivalent ("about
+// $43 a month"), and the preselected plan (never weekly, never the 7-day
+// pass). Student plans appear only for a caller who may buy them
+// (`studentEnabled`: the `student` capability is on AND the caller is a
+// signed-in, verified student; see studentPlans.ts), on both brands (GoApply:
+// 学生月卡 / 学生季卡, one-time passes).
 //
 // V2 (WP-79):
 //   - `localPrice`: the real Taiwan price (Stripe TWD) when the buyer's country
@@ -15,7 +19,8 @@
 //     the currency shown (`localPrice.studentDiscountPercent` for TWD).
 //   - `promotionCodes`: the payment page accepts a promotion code
 //     (STRIPE_PROMOTION_CODES=true; never on student plans, so discounts do
-//     not stack by accident).
+//     not stack by accident). A feature of the Stripe rail, so RoboApply
+//     only: the mainland rails have no promotion-code field.
 
 import { parseBoolEnv, type EnvSource } from '../brand/brandEnv.js';
 import type { BrandId } from '../brand/registry.js';
@@ -60,7 +65,7 @@ export interface PlanView extends CatalogPlan {
 export interface PlanViewOptions {
   env?: EnvSource;
   currentPlanKey?: string | null;
-  /** The `student` capability (V2 plans). */
+  /** List the student plans: the caller may buy them (`studentPlansListedFor`). */
   studentEnabled?: boolean;
   /** Buyer's country (edge header); 'TW' selects configured TWD prices. */
   country?: string | null;

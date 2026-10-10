@@ -159,13 +159,39 @@ describe('plan views (F-BILL-02 honesty)', () => {
     expect(defaultSelection).toBeNull();
   });
 
-  it('GoApply: passes only, unsellable until CN payments open, 省 15 % on the quarter pass', () => {
-    const closed = buildPlanViews('goapply', { env: PRICES });
-    expect(closed.plans.every((p) => !p.sellable)).toBe(true);
-    expect(closed.plans.every((p) => !p.autoRenews)).toBe(true);
-    const open = buildPlanViews('goapply', { env: { ...PRICES, CN_PAYMENTS_ENABLED: 'true' } });
+  it('GoApply: passes only, on sale at the catalog prices with an empty env, 省 15 % on the quarter pass', () => {
+    const open = buildPlanViews('goapply', { env: {} });
+    expect(open.plans.every((p) => !p.autoRenews)).toBe(true);
+    expect(open.plans.filter((p) => p.kind !== 'free').map((p) => [p.key, p.amountMinor, p.sellable])).toEqual([
+      ['pro_week_pass', 1200, true],
+      ['pro_monthly', 3900, true],
+      ['pro_quarterly', 9900, true],
+      ['practice_pack_5', 2900, true],
+      ['practice_pack_15', 7900, true],
+    ]);
     expect(open.plans.find((p) => p.key === 'pro_quarterly')?.savingsPercent).toBe(15);
+    expect(open.plans.find((p) => p.key === 'pro_week_pass')?.monthlyEquivalentMinor).toBeNull();
     expect(open.defaultSelection).toBe('pro_monthly');
+    // No promotion codes on GoApply (they belong to the Stripe rail), whatever the switch says.
+    expect(buildPlanViews('goapply', { env: { STRIPE_PROMOTION_CODES: 'true' } }).plans.every((p) => !p.promotionCodes)).toBe(true);
+  });
+
+  it('GoApply kill switch: prices stay listed, nothing is sellable and nothing is preselected', () => {
+    const closed = buildPlanViews('goapply', { env: { CN_PAYMENTS_ENABLED: 'false' } });
+    expect(closed.plans.every((p) => !p.sellable)).toBe(true);
+    expect(closed.plans.filter((p) => p.kind !== 'free').every((p) => p.unsellableReason === 'payments_disabled' && p.amountMinor !== null)).toBe(true);
+    expect(closed.plans.find((p) => p.key === 'pro_quarterly')?.savingsPercent).toBe(15);
+    expect(closed.defaultSelection).toBeNull();
+  });
+
+  it('GoApply student passes: listed with the student capability, 25 % and 30 % from the catalog amounts', () => {
+    expect(buildPlanViews('goapply', { env: {} }).plans.some((p) => p.key.startsWith('student_'))).toBe(false);
+    const { plans, defaultSelection } = buildPlanViews('goapply', { env: {}, studentEnabled: true });
+    expect(plans.filter((p) => p.key.startsWith('student_')).map((p) => [p.key, p.amountMinor, p.passDays, p.studentDiscountPercent, p.sellable])).toEqual([
+      ['student_monthly', 2900, 30, 25, true],
+      ['student_quarterly', 6900, 90, 30, true],
+    ]);
+    expect(defaultSelection).toBe('pro_monthly');
   });
 
   it('shows student plans only with the student capability', () => {

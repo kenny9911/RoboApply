@@ -22,7 +22,9 @@ import {
   getPlan,
   getRegisteredRail,
   isPlanKey,
+  isStudentPlan,
   loadBillingAccount,
+  studentVerifiedForPlan,
   type BillingDb,
   type CatalogPlan,
   type FulfilResult,
@@ -46,7 +48,7 @@ import {
   type WechatCheckoutResult,
   type WechatPayRail,
 } from '../../platform/billing/rails/wechatpay.js';
-import { requirementsMet } from '../../platform/flags.js';
+import { isEnabled, requirementsMet } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
 import { rateLimitKey, rateLimitWindows, type RateWindow } from '../../platform/ratelimit/index.js';
 import { CN_PAY_TERMS_CONSENT_TYPE } from './contract.js';
@@ -90,6 +92,10 @@ export interface BillingCnDeps {
   termsVersion?: (brand: ProductBrand, env: EnvSource) => string | null | Promise<string | null>;
   /** Fixed-window limiter (default: the platform's DB-backed consumeRateLimit). */
   consumeRateLimit?: (key: string, windows: readonly RateWindow[]) => Promise<{ allowed: boolean; retryAfterSec: number }>;
+  /** The `student` capability for this user on this brand (default: the capability resolver against this service's env). */
+  studentEnabled?: (userId: string, brand: ProductBrand) => Promise<boolean>;
+  /** A live school-email verification (default: features/account-v2 `studentService.isVerified`). */
+  isStudentVerified?: (userId: string) => Promise<boolean>;
 }
 
 export interface RequestMeta {
@@ -150,6 +156,11 @@ async function defaultConsumeRateLimit(key: string, windows: readonly RateWindow
   return consumeRateLimit({ key, windows });
 }
 
+async function defaultIsStudentVerified(userId: string): Promise<boolean> {
+  const { studentService } = await import('../account-v2/index.js');
+  return studentService.isVerified(userId);
+}
+
 /** The exact terms a WeChat Pay buyer agreed to (hashed into the consent record). */
 export function cnPayTermsStatement(input: { termsVersion: string; planKey: string; amountMinor: number; collectingEntity: string | null }): string {
   return [
@@ -195,7 +206,11 @@ export class BillingCnService {
     return (this.deps.closeOrder ?? ((no: string) => closePendingOrder(no, { getDb: this.deps.getDb as (() => Promise<FulfilDb>) | undefined })))(outTradeNo);
   }
 
-  /** Charging allowed on this brand now (capability requirements + entity match). */
+  /**
+   * A new order may be taken on this brand now: the capability requirements
+   * (merchant credentials, entity match, and the kill switch not thrown;
+   * nothing has to be switched on) plus the rail's own readiness.
+   */
   available(brand: ProductBrand): boolean {
     const env = this.env();
     // Same rule as the registry's railAvailable(), evaluated against this env.
@@ -289,12 +304,20 @@ export class BillingCnService {
     }
     if (!input.planKey) throw new HttpError('invalid_request', 'Send planKey.', [{ path: 'planKey', message: 'Required' }]);
     const plan = isPlanKey(input.planKey) ? getPlan(brand.id, input.planKey, env) : null;
-    if (!plan || !plan.sellable || plan.phase !== 'mvp' || (plan.kind !== 'pass' && plan.kind !== 'pack') || plan.autoRenews) {
+    // Later-phase plans stay off the shelf, except the student passes (their own gate below).
+    if (!plan || !plan.sellable || (plan.phase !== 'mvp' && !isStudentPlan(plan)) || (plan.kind !== 'pass' && plan.kind !== 'pack') || plan.autoRenews) {
       throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey, reason: plan?.unsellableReason ?? 'unknown' });
     }
     if (input.purpose && input.purpose !== purposeFor(plan)) {
       throw new BillingCnError('purpose_mismatch', 422, 'The purpose does not match the plan.');
     }
+    // 学生月卡 / 学生季卡: the capability on and a live school-email verification,
+    // checked before the agreement is recorded or an order exists (the same
+    // rule as every other checkout, platform/billing/studentPlans.ts).
+    const studentVerified = await studentVerifiedForPlan(userId, brand, plan, {
+      studentEnabled: this.deps.studentEnabled ?? ((u, b) => isEnabled('student', { userId: u, brand: b, env })),
+      isStudentVerified: this.deps.isStudentVerified ?? defaultIsStudentVerified,
+    });
     const termsVersion = await this.requireCurrentTerms(brand, input.termsVersion);
 
     const db = await this.db();
@@ -320,6 +343,7 @@ export class BillingCnService {
       acknowledgements: { autoRenewAck: false, withdrawalWaiver: false },
       successPath: `/settings/billing/return?plan=${encodeURIComponent(plan.key)}`,
       context,
+      ...(studentVerified !== undefined ? { studentVerified } : {}),
     });
     logger.info('RA_BILLING', 'wechatpay checkout terms acknowledged', {
       userId,

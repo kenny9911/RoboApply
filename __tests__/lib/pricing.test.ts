@@ -15,13 +15,16 @@ import { describe, it, expect } from 'vitest';
 import {
   MARKET_CURRENCY,
   PLAN_PRICES_MINOR,
+  displayPrice,
   formatMoney,
   marketFromCountry,
   marketFromLocale,
   planPriceMinor,
+  quarterlySuggestion,
   resolveMarket,
 } from '../../lib/pricing';
 import { marketingJsonLd } from '../../lib/seo';
+import { buildPlanViews } from '../../server/src/platform/billing/planViews';
 
 describe('lib/pricing', () => {
   it('matches the owner-locked defaults in server/src/lib/mockInterviewPlans.ts', () => {
@@ -103,6 +106,65 @@ describe('lib/pricing', () => {
       const prices = (['free', 'starter', 'growth'] as const).map((plan) => planPriceMinor(plan, market));
       expect(Math.max(...prices)).toBe(planPriceMinor('growth', market));
     }
+  });
+
+  // The plan sheet and /pricing derive every display number from the plans the
+  // server sends (`displayPrice`); nothing in lib/pricing knows an amount.
+  describe('GoApply plans as the server sends them (catalog defaults in fen; D5, D6)', () => {
+    const view = (env: Record<string, string> = {}) => buildPlanViews('goapply', { env, studentEnabled: true }).plans;
+    const shown = (plans: ReturnType<typeof view>, key: string) => {
+      const plan = plans.find((p) => p.key === key)!;
+      const d = displayPrice(plan, plans.find((p) => p.key === 'pro_monthly'));
+      return { ...d, text: d.amountMinor === null ? null : formatMoney('zh', d.amountMinor, d.currency) };
+    };
+
+    it('with an empty env every paid plan has a price to show: none is "price not set" and none is off sale', () => {
+      const plans = view();
+      const paid = plans.filter((p) => p.kind !== 'free');
+      expect(paid.map((p) => [p.key, shown(plans, p.key).text])).toEqual([
+        ['pro_week_pass', '¥12'],
+        ['pro_monthly', '¥39'],
+        ['pro_quarterly', '¥99'],
+        ['practice_pack_5', '¥29'],
+        ['practice_pack_15', '¥79'],
+        ['student_monthly', '¥29'],
+        ['student_quarterly', '¥69'],
+      ]);
+      expect(paid.every((p) => p.sellable && p.unsellableReason === null && p.currency === 'CNY')).toBe(true);
+      expect(plans.some((p) => p.unsellableReason === 'price_unset' || p.unsellableReason === 'payments_disabled')).toBe(false);
+    });
+
+    it('the labels are computed from those amounts: 省 15% on the 90-day pass, 25% and 30% for students, no weekly equivalent', () => {
+      const plans = view();
+      expect(shown(plans, 'pro_quarterly')).toMatchObject({ savingsPercent: 15, monthlyEquivalentMinor: null, local: false, studentDiscountPercent: null });
+      expect(shown(plans, 'pro_monthly')).toMatchObject({ savingsPercent: null, studentDiscountPercent: null });
+      expect(shown(plans, 'pro_week_pass')).toMatchObject({ savingsPercent: null, monthlyEquivalentMinor: null });
+      expect(shown(plans, 'student_monthly').studentDiscountPercent).toBe(25);
+      expect(shown(plans, 'student_quarterly').studentDiscountPercent).toBe(30);
+      // An override moves the label with the amount.
+      const dearer = view({ CN_PRICE_PRO_QUARTERLY_FEN: '10900' });
+      expect(shown(dearer, 'pro_quarterly')).toMatchObject({ amountMinor: 10900, savingsPercent: 6 });
+    });
+
+    it('payments_disabled exists only under the kill switch, and the prices are still there to show', () => {
+      const killed = view({ CN_PAYMENTS_ENABLED: 'false' });
+      const paid = killed.filter((p) => p.kind !== 'free');
+      expect(paid.every((p) => !p.sellable && p.unsellableReason === 'payments_disabled')).toBe(true);
+      expect(shown(killed, 'pro_monthly').text).toBe('¥39');
+      expect(shown(killed, 'pro_quarterly').savingsPercent).toBe(15);
+      // Not a default: unset, blank and true all leave the plans on sale.
+      for (const value of [undefined, '', 'true']) {
+        const env: Record<string, string> = value === undefined ? {} : { CN_PAYMENTS_ENABLED: value };
+        expect(view(env).filter((p) => p.kind !== 'free').every((p) => p.sellable), String(value)).toBe(true);
+      }
+    });
+
+    it('a GoApply pass never gets the "switch to quarterly" suggestion: nothing renews, so there is nothing to switch', () => {
+      const plans = view();
+      expect(
+        quarterlySuggestion({ planKey: 'pro_monthly', willRenew: false, legacy: false, monthlySeenAt: '2026-01-01T00:00:00Z', shownAt: null, dismissed: false, now: new Date('2026-10-10T00:00:00Z'), subscriptionCurrency: 'CNY', plans }),
+      ).toBeNull();
+    });
   });
 
   it('the marketing JSON-LD of both brands carries no price, offer, rating or review (D3)', () => {

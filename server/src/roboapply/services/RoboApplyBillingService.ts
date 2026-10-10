@@ -5,7 +5,11 @@
 // §7.4). Brand-aware since the Jobright clone:
 //
 //   • the brand picks the rail (`resolveRail`): RoboApply → Stripe (USD),
-//     GoApply → Alipay (CNY passes; WeChat Pay via WP-62). No `?region=`.
+//     GoApply → Alipay first (CNY passes; the existing worker rail, kept as
+//     it is, D6), WeChat Pay as the optional second rail. No `?region=`.
+//     GoApply plans are on sale by default at their catalog prices; the
+//     Alipay rail opens with ALIPAY_CALLBACK_SECRET alone and
+//     CN_PAYMENTS_ENABLED=false is the kill switch (D5).
 //   • plans are the R-08 catalog (`platform/billing/planCatalog.ts`): Pro
 //     weekly/monthly/quarterly subscriptions, the 7-day pass and practice
 //     packs as one-time payments. Legacy `starter`/`growth` are no longer
@@ -24,7 +28,9 @@
 //   • CN orders are fulfilled through `fulfilPass()`.
 //   • V2 (WP-79): student plans are sold only while the `student` capability
 //     is on and only to an account with a live school-email verification
-//     (`studentService.isVerified`); a Taiwan buyer (edge country TW) is
+//     (`studentService.isVerified`), on both brands (GoApply: 学生月卡 /
+//     学生季卡 passes; one rule, platform/billing/studentPlans.ts); a Taiwan
+//     buyer (edge country TW) is
 //     charged the plan's Stripe TWD price when one is configured, and the
 //     webhook stores that currency and amount.
 //   • the recorded auto-renewal acknowledgement names the price that is
@@ -32,6 +38,12 @@
 //   • a WeChat Pay order created here holds the same agreement gate as
 //     features/billing-cn (`acknowledgeTerms`): the ticked 用户协议 version
 //     must be the published one, and the consent record is written first.
+//   • a new Alipay order is counted against the same per-user limit as a
+//     WeChat Pay order (`billingCnCreate`: 10 a minute, 60 a day, both CN
+//     rails together): each one is a database row plus a call to the payment
+//     worker, and GoApply's Alipay rail is open by default. The check sits in
+//     FRONT of the rail (the frozen request and callback path is untouched)
+//     and fails open: a limiter that cannot answer never blocks a payment.
 //
 // Revenue state lives on SeekerSubscription (keyed by seekerProfileId);
 // practice credits stay in lib/mockCreditService.ts.
@@ -68,6 +80,7 @@ import {
   resolveRail,
   safeReturnPath,
   stripePeriod,
+  studentVerifiedForPlan,
   usesTwdPrice,
   CallbackRejectedError,
   alipayCallbackSecretOk as platformAlipaySecretOk,
@@ -86,6 +99,7 @@ import '../../platform/email/templates/billing/index.js';
 import { entitlementService } from '../../platform/credits/index.js';
 import { isEnabled } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
+import { consumeRateLimit as platformConsumeRateLimit, rateLimitKey, rateLimitWindows, type RateWindow } from '../../platform/ratelimit/index.js';
 import type { CheckoutResponse } from '../../features/credits/contract.js';
 
 // ── Dependencies (tests replace them) ─────────────────────────────────────
@@ -113,6 +127,8 @@ export interface BillingServiceDeps {
    * per-user limit, "ticked the published 用户协议", then the consent record.
    */
   acknowledgeCnPayTerms: (input: CnPayTermsInput) => Promise<void>;
+  /** Counts one hit against a rate limit (platform/ratelimit `consumeRateLimit`). */
+  consumeRateLimit: (key: string, windows: readonly RateWindow[]) => Promise<{ allowed: boolean; retryAfterSec: number }>;
 }
 
 export interface CnPayTermsInput {
@@ -150,6 +166,7 @@ function defaultDeps(): BillingServiceDeps {
         { ip: input.ip ?? null, userAgent: input.userAgent ?? null },
       );
     },
+    consumeRateLimit: (key, windows) => platformConsumeRateLimit({ key, windows }),
   };
 }
 
@@ -212,6 +229,26 @@ async function holdCnPayTermsGate(input: CnPayTermsInput): Promise<void> {
       throw new RoboApplyBillingError(e.code, String(e.message ?? ''), e.status, e.details as Record<string, unknown> | undefined);
     }
     throw err;
+  }
+}
+
+/**
+ * Abuse guard for a new Alipay order: the per-user limit WeChat Pay orders
+ * already have (`billingCnCreate`, one budget for both CN rails). Refused
+ * with 429 `rate_limited` and `details.retryAfterSec` before anything is
+ * recorded or sent. Fails open: when the limiter itself cannot answer, the
+ * payment goes ahead (the existing Alipay path must keep working, D6).
+ */
+async function holdCnOrderRateLimit(userId: string, brand: ProductBrand): Promise<void> {
+  let result: { allowed: boolean; retryAfterSec: number };
+  try {
+    result = await deps.consumeRateLimit(rateLimitKey('billingCnCreate', 'user', userId, brand.id), rateLimitWindows('billingCnCreate'));
+  } catch (err) {
+    logger.warn('RA_BILLING', 'order rate limit check failed; allowing', { userId, error: err instanceof Error ? err.message : String(err) });
+    return;
+  }
+  if (!result.allowed) {
+    throw new RoboApplyBillingError('rate_limited', 'Too many payment attempts. Try again later.', 429, { retryAfterSec: result.retryAfterSec });
   }
 }
 
@@ -331,18 +368,8 @@ export type CheckoutView = CheckoutResponse;
  * errors counts as "not verified".
  */
 async function studentVerifiedFor(userId: string, brand: ProductBrand, plan: Pick<PlanView, 'key' | 'requiresFlag'>): Promise<boolean | undefined> {
-  if (!isStudentPlan(plan)) return undefined;
-  if (!(await deps.studentEnabled(userId, brand).catch(() => false))) {
-    throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: plan.key, reason: 'student_off' });
-  }
-  const verified = await deps.isStudentVerified(userId).catch((err: unknown) => {
-    logger.warn('RA_BILLING', 'student verification lookup failed; treating as not verified', { userId, error: err instanceof Error ? err.message : String(err) });
-    return false;
-  });
-  if (verified !== true) {
-    throw new BillingError('student_verification_required', 'Verify your school email to get the student price', { planKey: plan.key });
-  }
-  return true;
+  // One rule for every rail and route (platform/billing/studentPlans.ts).
+  return studentVerifiedForPlan(userId, brand, plan, deps);
 }
 
 export async function createCheckout(input: CheckoutInput): Promise<CheckoutView> {
@@ -400,6 +427,10 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutView
         ip: input.ip,
         userAgent: input.userAgent,
       });
+    } else if (rail.id === 'alipay') {
+      // The same per-user order limit (the WeChat Pay gate above counts its
+      // own hit): refused here before any record or order exists.
+      await holdCnOrderRateLimit(input.userId, input.brand);
     }
 
     // The acknowledgement names the price that is charged: a Taiwan buyer on a

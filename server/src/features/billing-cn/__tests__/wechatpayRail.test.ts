@@ -58,7 +58,7 @@ function verifyRsa(publicKey: string, message: string, sig: string): boolean {
   return v.verify(publicKey, sig, 'base64');
 }
 
-function order(planKey: 'pro_monthly' | 'practice_pack_5' | 'pro_week_pass', context: CheckoutOrder['context'] & Record<string, unknown> = { tradeType: 'native' }, env = GA_ENV): CheckoutOrder {
+function order(planKey: 'pro_monthly' | 'practice_pack_5' | 'pro_week_pass' | 'student_monthly', context: CheckoutOrder['context'] & Record<string, unknown> = { tradeType: 'native' }, env = GA_ENV): CheckoutOrder {
   const plan = getPlan('goapply', planKey, env)!;
   return {
     brand: goapply,
@@ -374,15 +374,35 @@ describe('checkout', () => {
     expect((await db.alipayOrder.findMany({}))[0]).toMatchObject({ status: 'failed' });
   });
 
-  it('refuses unpriced plans, plans with payments disabled and auto-renewing plans (no auto-debit)', async () => {
+  it('refuses plans with no amount, plans under the kill switch and auto-renewing plans (no auto-debit)', async () => {
     const { rail, f } = railWith(() => [200, { code_url: 'x' }]);
-    const unpriced = order('pro_monthly', { tradeType: 'native' }, { ...GA_ENV, CN_PRICE_PRO_MONTHLY_FEN: '' });
-    await expect(rail.createCheckout(unpriced)).rejects.toMatchObject({ code: 'plan_not_sellable' });
+    // A GoApply plan always has a catalog amount, so "no amount" can only be a hand-built plan.
+    const priced = order('pro_monthly', { tradeType: 'native' }, { ...GA_ENV, CN_PRICE_PRO_MONTHLY_FEN: '' });
+    expect(priced.plan).toMatchObject({ amountMinor: 3900, sellable: true });
+    await expect(rail.createCheckout({ ...priced, plan: { ...priced.plan, amountMinor: null } })).rejects.toMatchObject({ code: 'plan_not_sellable' });
     const disabled = order('pro_monthly', { tradeType: 'native' }, { ...GA_ENV, CN_PAYMENTS_ENABLED: 'false' });
+    expect(disabled.plan).toMatchObject({ sellable: false, unsellableReason: 'payments_disabled' });
     await expect(rail.createCheckout(disabled)).rejects.toMatchObject({ code: 'plan_not_sellable' });
     const renewing = order('pro_monthly');
     await expect(rail.createCheckout({ ...renewing, plan: { ...renewing.plan, autoRenews: true, kind: 'subscription' } })).rejects.toMatchObject({ code: 'plan_not_sellable' });
     expect(f.calls).toHaveLength(0);
+  });
+
+  it('a student pass is charged only for an order that says the buyer is verified (the rail\'s own check)', async () => {
+    const { db, f, rail } = railWith(() => [200, { code_url: 'weixin://wxpay/bizpayurl?pr=student' }]);
+    const base = order('student_monthly');
+    expect(base.plan).toMatchObject({ kind: 'pass', passDays: 30, amountMinor: 2900, sellable: true, requiresFlag: 'student' });
+    for (const studentVerified of [undefined, false]) {
+      await expect(rail.createCheckout({ ...base, studentVerified })).rejects.toMatchObject({ code: 'student_verification_required' });
+    }
+    // Refused before the order row and before any WeChat Pay request.
+    expect(f.calls).toHaveLength(0);
+    expect(await db.alipayOrder.findMany({})).toEqual([]);
+
+    const res = await rail.createCheckout({ ...base, studentVerified: true });
+    expect(res).toMatchObject({ kind: 'qr', qrCodeUrl: 'weixin://wxpay/bizpayurl?pr=student' });
+    expect(JSON.parse(f.calls[0]!.body)).toMatchObject({ amount: { total: 2900, currency: 'CNY' }, attach: 'plan=student_monthly' });
+    expect(await db.alipayOrder.findUnique({ where: { outTradeNo: res.orderId! } })).toMatchObject({ planKey: 'student_monthly', tier: 'ra_student_monthly', amountMinor: 2900, status: 'pending' });
   });
 });
 

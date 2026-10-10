@@ -5,8 +5,12 @@
 //   appOrigin:      where the user returns after paying (the brand's web app).
 //   callbackOrigin: where a payment worker posts its notify (the brand's API).
 // RoboApply keeps the env names it already uses (NEXT_PUBLIC_ROBOAPPLY_URL /
-// ROBOAPPLY_URL, BACKEND_URL); GoApply reads only `CN_` names (R-03, no
-// fallback to the international ones).
+// ROBOAPPLY_URL, BACKEND_URL); GoApply reads only its own `CN_` names here.
+// Both names are brand-own identity (`BRAND_OWN_ENV`, parity plan §3.1): an
+// origin never crosses brands, so there is no fallback to the international
+// value. A GoApply payment notify therefore goes to CN_BACKEND_URL, else to
+// GoApply's canonical origin, never to another brand's host (MARKET_STRATEGY
+// §5.3 G8).
 
 import { brandEnv, type EnvSource } from '../brand/brandEnv.js';
 import type { ProductBrand } from '../brand/registry.js';

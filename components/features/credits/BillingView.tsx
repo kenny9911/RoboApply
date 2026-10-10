@@ -5,9 +5,13 @@
 // plan (renewal or end date, practice interviews left), Manage payment
 // (Stripe portal), one-click Cancel with the once-only 7-day-pass link,
 // "Buy another pass" for passes, the plan sheet, and the invoice history link.
-// GoApply: a pass that is still running gets 续费 (`CnRenewButton`) when
-// WeChat Pay can take the payment now — the same pass bought again, its days
-// starting when the current ones end. Nothing renews by itself.
+// GoApply: a pass that is still running gets 续费 (`CnRenewButton`, the
+// WeChat Pay sheet) only when WeChat Pay is the rail a purchase gets by
+// default, i.e. the first rail the server lists (Alipay cannot charge).
+// While Alipay can charge it comes first, so the link to the plan sheet
+// stays and the buyer picks the rail there, Alipay preselected. The same
+// pass bought again, its days starting when the current ones end. Nothing
+// renews by itself.
 // V2 (WP-79): the one quarterly suggestion (inline, once, dismissible) under
 // the current plan, and student verification above the plan sheet (only
 // when the `student` capability is on).
@@ -22,7 +26,7 @@ import { usePaymentPortal } from '../../../hooks/credits/useBillingActions';
 import { useSubscriptionState, type SubscriptionState } from '../../../hooks/credits/useSubscriptionState';
 import { CancelSubscription } from './CancelSubscription';
 import { PaymentFailedBanner } from './PaymentFailedBanner';
-import { PlanPicker } from './PlanPicker';
+import { PlanPicker, offeredRails } from './PlanPicker';
 import { QuarterlySuggestion } from './QuarterlySuggestion';
 import { StudentVerification } from '../account-v2';
 import { CnRenewButton, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
@@ -104,11 +108,15 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
   }
   const canCancel = sub.autoRenews && !sub.cancelAtPeriodEnd;
   const canRenewPass = sub.isPass && !sub.autoRenews;
-  // 续费 with WeChat Pay: GoApply only, for a pass that is still running and
-  // still on sale. Otherwise the plain link to the plan sheet stays.
+  // 续费 straight into the WeChat Pay sheet: GoApply only, for a pass that is
+  // still running and still on sale, and only when WeChat Pay is the default
+  // rail in the server's order (the rule the plan sheet follows). With Alipay
+  // able to charge, the plain link to the plan sheet stays: the chooser there
+  // offers both, Alipay first.
   const passLive = !!end && end.getTime() > Date.now();
+  const wechatIsDefaultRail = offeredRails(wechatPay.rails, wechatPay.available)[0] === 'wechatpay';
   const renewWithWechat =
-    brand.market === 'cn' && canRenewPass && passLive && wechatPay.available && !!sub.planKey && sellableCnPlan(wechatPay.plans, sub.planKey)?.kind === 'pass';
+    brand.market === 'cn' && canRenewPass && passLive && wechatIsDefaultRail && !!sub.planKey && sellableCnPlan(wechatPay.plans, sub.planKey)?.kind === 'pass';
 
   return (
     <section className={styles.card} aria-labelledby="billing-current" data-testid="current-plan">

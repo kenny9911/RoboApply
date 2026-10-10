@@ -13,7 +13,10 @@
 //                                   Rail `wechatpay` also needs `termsVersion` = the published 用户协议 version
 //                                   (409 terms_outdated otherwise; same gate and consent record as /billing-cn/wechatpay).
 //   POST /alipay                    { planKey } → CheckoutResponse (GoApply passes; same as checkout with rail 'alipay')
-//   GET/POST /alipay/callback       GoHire Alipay worker notify_url → fulfilPass
+//   GET/POST /alipay/callback       GoHire Alipay worker notify_url → fulfilPass. PUBLIC and frozen: no auth, no
+//                                   CSRF, no capability flag in front of it; it reads query and JSON body and its
+//                                   answer codes are a contract with the worker (MARKET_STRATEGY §5.2 rules A1, A2;
+//                                   pinned by routes/billing.test.ts). Do not gate it, e.g. on the payments kill switch.
 //   POST /portal                    Stripe Billing Portal url
 //   POST /cancel                    turn auto-renewal off (one click; confirmation email)
 //   POST /switch                    { planKey } → quote; { planKey, confirm: true, prorationDate, autoRenewAck } → switched
@@ -57,6 +60,12 @@ function handleErr(err: unknown, req: Request, res: Response, code: string) {
   if (err instanceof RoboApplyBillingError) {
     const body: Record<string, unknown> = { success: false, code: err.code, error: err.message };
     if (err.details) body.details = err.details;
+    // A refusal that says when to come back (429 rate_limited from the WeChat
+    // Pay agreement gate) says so in the header too, as platform/http.ts does.
+    const retryAfterSec = err.details?.retryAfterSec;
+    if (typeof retryAfterSec === 'number' && Number.isFinite(retryAfterSec) && retryAfterSec > 0) {
+      res.setHeader('Retry-After', String(Math.ceil(retryAfterSec)));
+    }
     return res.status(err.status).json(body);
   }
   logger.error('RA_BILLING', `${code} failed`, { error: err instanceof Error ? err.message : String(err) }, req.requestId);

@@ -159,14 +159,42 @@ describe('PlanPicker (375 px)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Nothing was charged');
   });
 
-  it('GoApply before CN payments: passes listed as not available, nothing purchasable', async () => {
+  it('GoApply with no rail that can charge: the passes list with their CNY prices, one "not open yet" note, nothing purchasable', async () => {
+    // plansView('goapply'): prices from the catalog, on sale, but `paymentsOpen: false` and no rail.
     api.getPlans.mockResolvedValue(plansView('goapply'));
     renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply' });
-    await screen.findByTestId('plan-picker');
-    expect(radio('pro_monthly')).toBeDisabled();
-    expect(screen.getAllByText('Not available yet').length).toBeGreaterThan(0);
+    const picker = await screen.findByTestId('plan-picker');
+    expect(picker.querySelector('[data-plan="pro_week_pass"]')).toHaveTextContent('¥12');
+    expect(picker.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('¥39');
+    expect(picker.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('¥99');
+    expect(picker.querySelector('[data-plan="practice_pack_5"]')).toHaveTextContent('¥29');
+    expect(picker.querySelector('[data-plan="practice_pack_15"]')).toHaveTextContent('¥79');
+    // One note for the sheet, not a tag on every row.
+    expect(screen.getByTestId('payments-not-open')).toHaveTextContent('Payment is not open yet');
+    expect(screen.queryByText('Not available yet')).toBeNull();
+    expect(screen.queryByTestId('rail-chooser')).toBeNull();
     expect(continueBtn()).toBeDisabled();
     expect(screen.queryByRole('checkbox', { name: /renews automatically/i })).toBeNull();
+  });
+
+  it('GoApply rows say what a pass is: paid once, the day count, no renewal', async () => {
+    api.getPlans.mockResolvedValue(plansView('goapply'));
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply' });
+    const picker = await screen.findByTestId('plan-picker');
+    const row = (key: string) => picker.querySelector(`[data-plan="${key}"]`)!;
+    expect(row('pro_week_pass')).toHaveTextContent("7 days of Pro. One payment; it doesn't renew.");
+    expect(row('pro_monthly')).toHaveTextContent('¥39, paid once');
+    expect(row('pro_monthly')).toHaveTextContent("30 days of Pro. One payment; it doesn't renew.");
+    expect(row('pro_quarterly')).toHaveTextContent("90 days of Pro. One payment; it doesn't renew.");
+    expect(row('pro_quarterly')).toHaveTextContent('Save 15% compared with paying monthly');
+    expect(picker).not.toHaveTextContent(/Renews every/);
+  });
+
+  it('RoboApply shows no "not open yet" note and no rail chooser when its one rail can charge', async () => {
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    expect(screen.queryByTestId('payments-not-open')).toBeNull();
+    expect(screen.queryByTestId('rail-chooser')).toBeNull();
   });
 
   it('no priced plans → an honest empty line, not a fake price', async () => {

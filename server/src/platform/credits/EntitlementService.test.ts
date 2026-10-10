@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { withRequestContext } from '../../lib/requestContext.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
+import { hasSellableProPlan } from '../billing/planCatalog.js';
 import { DEFAULT_CREDIT_CATALOG } from './catalog.js';
 import {
   createEntitlementService,
@@ -168,6 +169,63 @@ describe('createEntitlementService', () => {
     const r = await svc.resolve('u1', { brand: 'goapply' });
     expect(loads).toBe(2);
     expect(r.brand).toBe('goapply');
+  });
+});
+
+describe('`upgradable` follows what can be paid for now, not the catalog alone (default proSellable)', () => {
+  const PAY_ENV = [
+    'ALIPAY_CALLBACK_SECRET',
+    'CN_PAYMENTS_ENABLED',
+    'CN_PAYMENT_REQUIRE_ENTITY',
+    'CN_PAYMENT_COLLECTING_ENTITY',
+    'CN_PRICE_PRO_MONTHLY_FEN',
+    'STRIPE_SECRET_KEY',
+    'STRIPE_PRICE_PRO_MONTHLY',
+    'STRIPE_PRICE_PRO_MONTHLY_CENTS',
+    'STRIPE_PRICE_PRO_WEEKLY',
+    'STRIPE_PRICE_PRO_QUARTERLY',
+    'STRIPE_PRICE_PRO_WEEK_PASS',
+    'ALLOWED_BRANDS',
+    'BRAND_LOCK',
+  ];
+  const upgradableOn = async (brand: 'goapply' | 'roboapply', env: Record<string, string>) => {
+    for (const k of PAY_ENV) vi.stubEnv(k, '');
+    for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
+    const svc = createEntitlementService({
+      source: { loadAccount: async () => ({ brand, timezone: null, subscription: null }), loadOverrides: async () => [] },
+      loadCatalog: async (b) => DEFAULT_CREDIT_CATALOG[b],
+      now: () => NOW,
+    });
+    const ent = await svc.resolve('u1', { brand });
+    // What summary.ts and the 402 body call `upgradable`.
+    return ent.planProfile === 'free' && ent.proSellable;
+  };
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('GoApply: plans are on sale by default, but there is no "Get Pro" until a rail can charge', async () => {
+    expect(hasSellableProPlan('goapply', {})).toBe(true);
+    // No rail credential: a credit wall must not offer a purchase that cannot be made.
+    expect(await upgradableOn('goapply', {})).toBe(false);
+    expect(await upgradableOn('goapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret' })).toBe(true);
+    // The kill switch and the opt-in entity gate both close it again.
+    expect(await upgradableOn('goapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret', CN_PAYMENTS_ENABLED: 'false' })).toBe(false);
+    expect(await upgradableOn('goapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret', CN_PAYMENT_REQUIRE_ENTITY: 'true' })).toBe(false);
+    expect(await upgradableOn('goapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret', CN_PAYMENT_REQUIRE_ENTITY: 'true', CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.' })).toBe(true);
+    // Stripe credentials never open GoApply.
+    expect(await upgradableOn('goapply', { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(false);
+  });
+
+  it('RoboApply with a configured price and a Stripe key is unchanged (upgradable); without a price or without the key it is not', async () => {
+    const PRICE = { STRIPE_PRICE_PRO_MONTHLY: 'price_monthly_x', STRIPE_PRICE_PRO_MONTHLY_CENTS: '2499' };
+    expect(hasSellableProPlan('roboapply', PRICE)).toBe(true);
+    expect(await upgradableOn('roboapply', { STRIPE_SECRET_KEY: 'sk_test_x', ...PRICE })).toBe(true);
+    expect(await upgradableOn('roboapply', { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(false);
+    expect(await upgradableOn('roboapply', PRICE)).toBe(false);
+    // Alipay credentials never open RoboApply.
+    expect(await upgradableOn('roboapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret', ...PRICE })).toBe(false);
   });
 });
 

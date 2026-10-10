@@ -101,7 +101,17 @@ describe('OutOfCreditsSheet', () => {
     expect(api.getCredits).not.toHaveBeenCalled();
   });
 
-  it('practice on GoApply before CN payments: no pack link (none is sellable), just Continue', async () => {
+  it('practice on GoApply with Alipay able to charge: the pack link is offered, as on RoboApply', async () => {
+    api.getPlans.mockResolvedValue(
+      plansView('goapply', {}, { paymentsOpen: true, checkout: { rails: ['alipay'], showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test' } }),
+    );
+    renderUi(<OutOfCreditsSheet />, { brand: 'goapply' });
+    act(() => reportCreditsExhausted({ bucket: 'practice', resetsAt: null, upgradable: false }));
+    const link = (await screen.findByText('Get practice credits')).closest('a')!;
+    expect(link.getAttribute('href')).toBe('/settings/billing?plan=practice_pack_5#plans');
+  });
+
+  it('practice when payments are not open (no rail can charge, either brand): no pack link, just Continue', async () => {
     api.getPlans.mockResolvedValue(plansView('goapply'));
     renderUi(
       <>
@@ -287,7 +297,8 @@ describe('CreditsUsage', () => {
     renderUi(<CreditsUsage />);
     const history = (await screen.findByText('Recent use')).closest('section')!;
     await waitFor(() => expect(history).toHaveTextContent('Practice interviews'));
-    expect(history).toHaveTextContent('0.75 used');
+    // Part of a credit, said as what it counts (not "0.75 used").
+    expect(history).toHaveTextContent('0.75 practice credits used');
     expect(history).not.toHaveTextContent('Nothing used yet.');
   });
 

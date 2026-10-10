@@ -10,6 +10,8 @@ import {
   parseCreditCatalogOverride,
   setCreditCatalogConfigLoader,
 } from './catalog.js';
+import { PLAN_DEFINITIONS, entitlementProfileFor } from '../billing/planCatalog.js';
+import { resolveEntitlementsFrom } from './EntitlementService.js';
 
 afterEach(() => setCreditCatalogConfigLoader(null));
 
@@ -137,5 +139,54 @@ describe('credits.catalog.v1 override', () => {
       throw new Error('db down');
     });
     expect((await getCreditCatalog('roboapply')).buckets.rewrite.caps.free.cap).toBe(20);
+  });
+});
+
+// Plans map to a catalog COLUMN, never to a row of their own: every pass a
+// brand sells unlocks the same Pro column (MARKET_STRATEGY §3; D5). The
+// GoApply student passes are passes like the others.
+describe('plan → catalog column', () => {
+  it('every pass and subscription of either brand unlocks the Pro column; packs and Free keep the Free column', () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      for (const def of PLAN_DEFINITIONS[brand]) {
+        const expected = def.kind === 'pass' || def.kind === 'subscription' ? 'pro' : 'free';
+        expect(entitlementProfileFor({ planKey: def.key }), `${brand}.${def.key}`).toBe(expected);
+        // The plan row and the resolver agree.
+        expect(def.entitlementProfile ?? 'free', `${brand}.${def.key}`).toBe(expected);
+      }
+    }
+  });
+
+  it.each(['pro_week_pass', 'pro_monthly', 'pro_quarterly', 'student_monthly', 'student_quarterly'])('a live GoApply %s gets exactly the GoApply Pro caps', (planKey) => {
+    const now = new Date('2026-10-10T12:00:00Z');
+    const r = resolveEntitlementsFrom({
+      userId: 'u1',
+      account: { brand: 'goapply', timezone: null, subscription: { tier: 'pro', planKey, status: 'active', interval: 'pass', currentPeriodEnd: new Date('2026-11-01T00:00:00Z') } },
+      overrides: [],
+      catalogFor: (brand) => DEFAULT_CREDIT_CATALOG[brand],
+      now,
+      fallbackBrand: 'goapply',
+      proSellable: () => true,
+    });
+    expect(r.planProfile).toBe('pro');
+    expect(r.planKey).toBe(planKey);
+    const pro = DEFAULT_CREDIT_CATALOG.goapply;
+    for (const bucket of WINDOW_BUCKETS) expect(r.buckets[bucket], bucket).toMatchObject(pro.buckets[bucket].caps.pro);
+    expect(r.entitlements).toEqual(pro.entitlements.pro);
+    // The same column a RoboApply subscriber gets, bucket for bucket.
+    for (const bucket of WINDOW_BUCKETS) expect(pro.buckets[bucket].caps.pro, bucket).toEqual(DEFAULT_CREDIT_CATALOG.roboapply.buckets[bucket].caps.pro);
+  });
+
+  it('an ended student pass drops back to the Free column', () => {
+    const r = resolveEntitlementsFrom({
+      userId: 'u1',
+      account: { brand: 'goapply', timezone: null, subscription: { tier: 'pro', planKey: 'student_monthly', status: 'active', interval: 'pass', currentPeriodEnd: new Date('2026-10-01T00:00:00Z') } },
+      overrides: [],
+      catalogFor: (brand) => DEFAULT_CREDIT_CATALOG[brand],
+      now: new Date('2026-10-10T12:00:00Z'),
+      fallbackBrand: 'goapply',
+      proSellable: () => true,
+    });
+    expect(r.planProfile).toBe('free');
   });
 });

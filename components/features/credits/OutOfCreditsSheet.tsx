@@ -12,8 +12,10 @@
 // Practice interview credits are a balance, not a daily window: they do not
 // refill on Free. So the practice sheet says "You have no practice
 // interviews left", offers "Get practice credits" only when a practice pack
-// is actually on sale (or the server says Pro helps), and offers "Wait" only
-// when the server sent a refill time. Every claim here is the server's.
+// can actually be bought now (it is on sale AND the plans response says
+// payments are open, on either brand), else "Get Pro" when the server says
+// Pro helps, and offers "Wait" only when the server sent a refill time. Every
+// claim here is the server's.
 //
 // Mounted ONCE in the app layout (no props) and fed by `useOutOfCredits()`
 // (hooks/shared/useCreditGate.ts): every credit-spending action reports a
@@ -79,11 +81,15 @@ export function OutOfCreditsSheet(_props: OutOfCreditsSheetProps = {}) {
   const when = resets
     ? refillLabel({ at: resets, now: new Date(), locale, timeZone: knownTimeZone(data?.summary?.timezone, appTimeZone) })
     : null;
-  // Practice: a pack that is on sale right now (GoApply sells none before
-  // CN_PAYMENTS_ENABLED), else Pro only when the server says it helps.
-  const pack = isPractice
-    ? (visiblePlans(plansQ.data?.plans, { studentEnabled }).find((p) => p.kind === 'pack' && p.sellable) ?? null)
-    : null;
+  // Practice: a pack that can be bought right now. A pack is "on sale" by its
+  // price alone; a payment also needs a rail that can charge, which the plans
+  // response reports as `paymentsOpen` (false without the rail's credential
+  // and under the GoApply kill switch). Else Pro, only when the server says
+  // it helps.
+  const pack =
+    isPractice && plansQ.data?.paymentsOpen !== false
+      ? (visiblePlans(plansQ.data?.plans, { studentEnabled }).find((p) => p.kind === 'pack' && p.sellable) ?? null)
+      : null;
   const title = isPractice ? t('practiceTitle') : window ? t('title', { window }) : t('titleUnknown');
   const showWait = !isPractice || when !== null;
 

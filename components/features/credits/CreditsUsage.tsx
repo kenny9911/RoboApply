@@ -131,7 +131,8 @@ function CreditHistory({ timeZone, zoneKnown }: { timeZone: string | undefined; 
             return (
               <li key={row.id} className={styles.row}>
                 <span className={styles.rowLabel}>{t(bucketLabelKey(row.bucket))}</span>
-                <span className={styles.rowValue}>{t('usage.used', { n: row.amount })}</span>
+                {/* A practice interview can take part of a credit (pro-rated by minutes): say what the number counts. */}
+                <span className={styles.rowValue}>{t(row.bucket === 'practice' ? 'usage.usedPractice' : 'usage.used', { n: row.amount })}</span>
                 <span className={styles.rowMeta}>{at ? format.dateTime(at, { dateStyle: 'medium', timeStyle: 'short', ...(timeZone ? { timeZone } : {}) }) : '—'}</span>
               </li>
             );

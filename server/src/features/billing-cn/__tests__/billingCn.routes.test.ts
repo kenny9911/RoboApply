@@ -2,14 +2,17 @@
 //
 // WP-62 acceptance — the billing-cn routes end to end (no network, no DB:
 // fetch is a stub, Prisma is the in-memory fake):
-//   - POST /billing-cn/wechatpay: Native / H5 / JSAPI by context; hidden unless
-//     CN_PAYMENTS_ENABLED + pay.wechatpay; 503 until the collecting entity
-//     matches the merchant; no coaching purpose; openid only from sign-in;
+//   - POST /billing-cn/wechatpay: Native / H5 / JSAPI by context; open with the
+//     merchant credentials and a matching collecting entity (no master switch,
+//     D5); hidden where WeChat Pay is not set up; 503 payments_disabled under
+//     the kill switch; no coaching purpose; openid only from sign-in;
 //   - GET /orders/:id: the buyer's own order; an active query completes a paid
-//     order whose notify was lost, and closes an expired one;
+//     order whose notify was lost, and closes an expired one; stays open under
+//     the kill switch;
 //   - POST /api/v1/webhooks/wechatpay: the signed fixture on the RAW body
 //     fulfils through fulfilPass(); a duplicate notify is a no-op; a tampered
-//     or parsed body is refused.
+//     or parsed body is refused; stays open under the kill switch (a payment
+//     in flight is still fulfilled, once).
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -43,6 +46,9 @@ interface World {
   respond: { fn: (c: RecordedCall) => [number, unknown] };
 }
 
+/** What the student gate sees in these tests (the capability, and the buyer's school-email verification). */
+const student = { enabled: true, verified: false };
+
 async function world(opts: { env?: Record<string, string>; now?: Date; user?: { id: string } | null; seed?: Record<string, Record<string, unknown>[]> } = {}): Promise<World> {
   const env = opts.env ?? GA_ENV;
   let now = opts.now ?? new Date('2026-10-10T08:00:00.000Z');
@@ -57,6 +63,8 @@ async function world(opts: { env?: Record<string, string>; now?: Date; user?: { 
     getDb,
     now: () => now,
     consumeRateLimit: limiter.consume,
+    studentEnabled: async () => student.enabled,
+    isStudentVerified: async () => student.verified,
     rail: createWechatPayRail({ env, fetch: f.fetch, getDb, now: () => now }),
     fulfil: (o) =>
       fulfilPass(o, {
@@ -282,14 +290,82 @@ describe('POST /billing-cn/wechatpay', () => {
     expect(await w.db.alipayOrder.findMany({})).toHaveLength(10);
   });
 
-  it('is hidden on RoboApply and when CN payments are off; 503 until the entity matches the merchant', async () => {
+  describe('student passes (学生月卡 ¥29, 学生季卡 ¥69)', () => {
+    beforeEach(() => {
+      student.enabled = true;
+      student.verified = false;
+    });
+
+    it('a buyer who is not a verified student gets 409 student_verification_required: no order, no agreement record, no WeChat call', async () => {
+      for (const planKey of ['student_monthly', 'student_quarterly']) {
+        const res = await req(w, 'POST', ORDER_PATH, { body: buy({ planKey }) });
+        expect([res.status, res.body!.code], planKey).toEqual([409, 'student_verification_required']);
+      }
+      expect(w.calls).toHaveLength(0);
+      expect(await w.db.alipayOrder.findMany({})).toHaveLength(0);
+      expect(await w.db.seekerConsentRecord.findMany({})).toHaveLength(0);
+    });
+
+    it('with the student capability off the passes are not on sale', async () => {
+      student.enabled = false;
+      student.verified = true;
+      const res = await req(w, 'POST', ORDER_PATH, { body: buy({ planKey: 'student_monthly' }) });
+      expect([res.status, res.body!.code]).toEqual([409, 'plan_not_sellable']);
+      expect(w.calls).toHaveLength(0);
+    });
+
+    it.each([
+      ['student_monthly', 2900],
+      ['student_quarterly', 6900],
+    ] as const)('a verified student gets a %s order for %i fen', async (planKey, fen) => {
+      student.verified = true;
+      const res = await req(w, 'POST', ORDER_PATH, { body: buy({ planKey }) });
+      expect(res.status).toBe(200);
+      expect(res.body!.data).toMatchObject({ tradeType: 'native', planKey, amountMinor: fen, currency: 'CNY' });
+      expect(JSON.parse(w.calls[0]!.body).amount).toEqual({ total: fen, currency: 'CNY' });
+      expect((await w.db.alipayOrder.findMany({}))[0]).toMatchObject({ tier: `ra_${planKey}`, planKey, channel: 'wechatpay', purpose: 'subscription', amountMinor: fen, status: 'pending' });
+    });
+  });
+
+  it('needs no master switch: GA_ENV sets no CN_PAYMENTS_ENABLED and no CN_PRICE_* value, and an order is taken at the catalog price', async () => {
+    expect(GA_ENV.CN_PAYMENTS_ENABLED).toBeUndefined();
+    expect(Object.keys(GA_ENV).filter((k) => k.startsWith('CN_PRICE_'))).toEqual([]);
+    const res = await req(w, 'POST', ORDER_PATH, { body: buy({ planKey: 'pro_quarterly' }) });
+    expect(res.status).toBe(200);
+    expect(res.body!.data).toMatchObject({ planKey: 'pro_quarterly', amountMinor: 9900, currency: 'CNY' });
+    expect(JSON.parse(w.calls[0]!.body).amount).toEqual({ total: 9900, currency: 'CNY' });
+  });
+
+  it('the kill switch (CN_PAYMENTS_ENABLED=false) refuses a new order with 503 payments_disabled: no order row, no consent record, no WeChat call', async () => {
+    await w.close();
+    for (const value of ['false', '0', 'off']) {
+      w = await world({ env: { ...GA_ENV, CN_PAYMENTS_ENABLED: value } });
+      const off = await req(w, 'POST', ORDER_PATH, { body: buy() });
+      expect([off.status, off.body!.code], value).toEqual([503, 'payments_disabled']);
+      expect(w.calls).toHaveLength(0);
+      expect(await w.db.alipayOrder.findMany({})).toHaveLength(0);
+      expect(await w.db.seekerConsentRecord.findMany({})).toHaveLength(0);
+      await w.close();
+    }
+    // payments_disabled is the kill switch only: without it the same request is taken.
+    w = await world({ env: { ...GA_ENV, CN_PAYMENTS_ENABLED: 'true' } });
+    expect((await req(w, 'POST', ORDER_PATH, { body: buy() })).status).toBe(200);
+  });
+
+  it('is hidden on RoboApply and where WeChat Pay is not set up (kill switch or not); hidden until the entity matches the merchant', async () => {
     const ra = await req(w, 'POST', ORDER_PATH, { body: buy(), host: ROBOAPPLY });
     expect([ra.status, ra.body!.code]).toEqual([404, 'feature_disabled']);
     await w.close();
-    w = await world({ env: { ...GA_ENV, CN_PAYMENTS_ENABLED: 'false' } });
-    const off = await req(w, 'POST', ORDER_PATH, { body: buy() });
-    expect([off.status, off.body!.code]).toEqual([404, 'feature_disabled']);
-    await w.close();
+    // No merchant credentials: there is no WeChat Pay here, so the answer is "no such feature", never payments_disabled.
+    const { WECHATPAY_MCH_ID: _mch, ...noMerchant } = GA_ENV;
+    for (const env of [noMerchant, { ...noMerchant, CN_PAYMENTS_ENABLED: 'false' }]) {
+      w = await world({ env });
+      const off = await req(w, 'POST', ORDER_PATH, { body: buy() });
+      expect([off.status, off.body!.code]).toEqual([404, 'feature_disabled']);
+      const status = await req(w, 'GET', `${ORDER_PATH}/orders/GAWX1`);
+      expect([status.status, status.body!.code]).toEqual([404, 'feature_disabled']);
+      await w.close();
+    }
     w = await world({ env: { ...GA_ENV, WECHATPAY_MERCHANT_ENTITY: '别的公司' } });
     const mismatch = await req(w, 'POST', ORDER_PATH, { body: buy() });
     // WP-93: the pay.wechatpay flag needs the entity match, so the route is hidden before the rail is asked.
@@ -515,6 +591,51 @@ describe('POST /api/v1/webhooks/wechatpay (raw body, fixture vectors)', () => {
     await w.close();
     w = await world({ env: GA_ENV_VECTOR, now: at });
     expect((await notify()).status).toBe(200);
+    expect(w.grants.plan).not.toHaveBeenCalled();
+    await w.close();
+  });
+
+  it('the kill switch stops new orders only: a notify for an order created before the switch still fulfils it, once', async () => {
+    // The order was created while payments were open; then the operator threw the switch.
+    w = await world({ env: { ...GA_ENV_VECTOR, CN_PAYMENTS_ENABLED: 'false' }, now: at, seed: { alipayOrder: [order()] } });
+    const refused = await req(w, 'POST', ORDER_PATH, { body: buy() });
+    expect([refused.status, refused.body!.code]).toEqual([503, 'payments_disabled']);
+
+    const first = await notify();
+    expect(first).toEqual({ status: 200, body: { code: 'SUCCESS', message: '成功' } });
+    expect(await w.db.alipayOrder.findUnique({ where: { outTradeNo: NOTIFY_TRANSACTION.out_trade_no } })).toMatchObject({ status: 'completed', wxTransactionId: NOTIFY_TRANSACTION.transaction_id });
+    const sub = await w.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_1' } });
+    expect(sub).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'pass', rail: 'wechatpay' });
+    expect(w.grants.plan).toHaveBeenCalledTimes(1);
+
+    // WeChat Pay retries the notify: acknowledged, nothing granted or extended twice.
+    for (let i = 0; i < 2; i += 1) expect((await notify()).status).toBe(200);
+    expect(w.grants.plan).toHaveBeenCalledTimes(1);
+    expect(w.grants.notice).toHaveBeenCalledTimes(1);
+    expect((await w.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_1' } }))!.currentPeriodEnd).toEqual(sub!.currentPeriodEnd);
+
+    // The buyer can still read the order, and it says paid.
+    const st = await req(w, 'GET', `${ORDER_PATH}/orders/${NOTIFY_TRANSACTION.out_trade_no}`);
+    expect(st.status).toBe(200);
+    expect(st.body!.data).toMatchObject({ status: 'paid', planKey: 'pro_monthly' });
+    await w.close();
+  });
+
+  it('under the kill switch the status read still completes a paid order whose notify was lost', async () => {
+    w = await world({ env: { ...GA_ENV, CN_PAYMENTS_ENABLED: 'false' }, now: at, seed: { alipayOrder: [order()] } });
+    w.respond.fn = () => [200, { mchid: '1900000001', appid: 'wxtestappid000001', out_trade_no: NOTIFY_TRANSACTION.out_trade_no, trade_state: 'SUCCESS', transaction_id: 'wx_tx_lost', amount: { total: 3900 } }];
+    const st = await req(w, 'GET', `${ORDER_PATH}/orders/${NOTIFY_TRANSACTION.out_trade_no}`);
+    expect(st.status).toBe(200);
+    expect(st.body!.data).toMatchObject({ status: 'paid' });
+    expect(w.grants.plan).toHaveBeenCalledTimes(1);
+    await w.close();
+  });
+
+  it('a tampered notify is still refused under the kill switch (the signature is the gate that matters)', async () => {
+    w = await world({ env: { ...GA_ENV_VECTOR, CN_PAYMENTS_ENABLED: 'false' }, now: at, seed: { alipayOrder: [order()] } });
+    const res = await notify(NOTIFY_BODY.replace('"summary":"', '"summary":" '));
+    expect(res.status).toBe(401);
+    expect(await w.db.alipayOrder.findUnique({ where: { outTradeNo: NOTIFY_TRANSACTION.out_trade_no } })).toMatchObject({ status: 'pending' });
     expect(w.grants.plan).not.toHaveBeenCalled();
     await w.close();
   });

@@ -6,6 +6,13 @@
       "ends": "A pass ends by itself on its last day. To keep going after that, you buy a new one.",
       "pricingLink": "See prices",
       "settingsLink": "Open plan and billing settings"
+    },
+    "plans": {
+      "student_monthly": "Student 30-day pass",
+      "student_quarterly": "Student 90-day pass"
+    },
+    "errors": {
+      "studentRequired": "Confirm your school email first to get the student price. Nothing was charged."
     }
   }
 }
