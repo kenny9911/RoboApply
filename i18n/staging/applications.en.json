@@ -124,7 +124,16 @@
       "practice": "Practice for this job",
       "close": "Close",
       "not_found": "This application could not be found.",
-      "load_error": "This part did not load."
+      "entry_load_error": "This application did not load.",
+      "entry_retry": "Try again",
+      "load_error": "This part did not load.",
+      "next_steps": "Next steps",
+      "download_resume": "Download the resume for this application",
+      "letter_attached": "Cover letter for this application",
+      "letter_open": "Open the letter",
+      "letter_none": "No cover letter yet.",
+      "letter_write": "Write a cover letter",
+      "file_letter": "Cover letter"
     },
     "events": {
       "created": "Added at {stage}",
@@ -152,12 +161,6 @@
         "excitementStars": "Rating",
         "other": "Details"
       }
-    },
-    "reminders": {
-      "no_reply": "{name} hasn't replied in {days} days.",
-      "follow_up_due": "The follow-up date you set for {name} has arrived.",
-      "interview_tomorrow": "Interview with {name} within 24 hours.",
-      "deadline_soon": "{days, plural, =0 {Applications for {name} close today.} one {Applications for {name} close tomorrow.} other {Applications for {name} close in # days.}}"
     },
     "offers_view": {
       "title": "Offers",

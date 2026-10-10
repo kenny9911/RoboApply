@@ -248,14 +248,16 @@ export async function wireCards(): Promise<Record<CardType, CopilotCard>> {
   return out as Record<CardType, CopilotCard>;
 }
 
-/** Cards that only some tool runs produce (the open_link action, the rewrite proposal, the job_import proposal). */
-export async function wireCard(name: 'outreach_link' | 'rewrite_proposal' | 'job_import_proposal'): Promise<CopilotCard> {
-  const areas = fakeAreas(WIRE_AREAS);
+/** A tool context over the wire fakes, with a proposal store behind `propose` (for the apply paths below). */
+function wireHarness(over: Partial<CopilotAreas> = {}, opts: { market?: 'intl' | 'cn' } = {}) {
+  const areas = fakeAreas({ ...WIRE_AREAS, ...over });
+  const store = memoryStore();
+  const brand = getBrand(opts.market === 'cn' ? 'goapply' : 'roboapply');
   let n = 0;
-  const ctx = {
+  const ctx: ToolContext = {
     userId: USER,
-    brand: getBrand('roboapply'),
-    market: 'intl',
+    brand,
+    market: brand.market,
     locale: 'en',
     now: NOW,
     messageId: 'msg_1',
@@ -265,16 +267,69 @@ export async function wireCard(name: 'outreach_link' | 'rewrite_proposal' | 'job
     areas,
     isEnabled: async () => true,
     hiringContactsMode: () => 'on',
-    propose: async () => ({ id: `p_${name}`, expiresAt: new Date('2099-01-01T00:00:00.000Z') }),
+    propose: async (draft) => {
+      const row = await store.createProposal({ threadId: 'thread_1', userId: USER, kind: draft.kind, payload: draft.payload, expiresAt: new Date('2099-01-01T00:00:00.000Z') });
+      return { id: row.id, expiresAt: row.expiresAt };
+    },
     creditsLeft: async () => ({ remaining: 2, resetsAt: '2026-10-11T00:00:00.000Z' }),
     hasConsent: async () => false,
-    newCardId: () => `card_${++n}`,
-  } satisfies ToolContext;
+    newCardId: () => `card_w${++n}`,
+  };
+  const service = createProposalService({ store, areas, brand: () => brand, now: () => NOW, hasConsent: async () => false, newCardId: () => `card_w${++n}` });
+  return { areas, ctx, service };
+}
+
+/** Cards that only some tool runs produce (the outreach, rewrite and job-import proposals). */
+export async function wireCard(name: 'outreach_proposal' | 'rewrite_proposal' | 'job_import_proposal'): Promise<CopilotCard> {
+  const { ctx } = wireHarness();
   const out =
-    name === 'outreach_link'
-      ? await draftOutreach.run({ jobId: 'job_1' }, ctx)
+    name === 'outreach_proposal'
+      ? await draftOutreach.run({ jobId: 'job_1', channel: 'email' }, ctx)
       : name === 'rewrite_proposal'
         ? await rewriteResumeSection.run({ issueId: 'iss_1' }, ctx)
         : await addExternalJob.run({ url: 'https://beta.example/jobs/9' }, ctx);
   return out.cards![0]!;
+}
+
+/**
+ * draft_outreach end to end: the proposal card the tool sends, and the body
+ * `POST /proposals/:id/apply` answers with once the user confirms
+ * (`{ applied, result: { card: People-tab link, draft } }`).
+ */
+export async function wireOutreach(): Promise<{ proposal: CopilotCard; applied: { applied: boolean; result: unknown } }> {
+  const { ctx, service } = wireHarness();
+  const proposal = (await draftOutreach.run({ jobId: 'job_1', channel: 'email' }, ctx)).cards![0]!;
+  const applied = await service.apply(USER, (proposal.data as { proposalId: string }).proposalId, { locale: 'en' });
+  return { proposal, applied };
+}
+
+/**
+ * A filter proposal whose saved search changed before the user applied it:
+ * the proposal card, and the `details` of the 409 version_conflict the server
+ * answers with (`{ currentVersion, card }`, `card` = a fresh filter_diff for
+ * the search as it is now). `fresh: false` → the search already has the
+ * proposed value, so no fresh card is left to offer (`card: null`).
+ */
+export async function wireFilterConflict(opts: { fresh?: boolean } = {}): Promise<{ proposal: CopilotCard; details: Record<string, unknown> }> {
+  const moved = opts.fresh === false ? { titles: ['BI Analyst'], workModels: ['remote', 'onsite'] } : { titles: ['BI Analyst'], workModels: ['remote'] };
+  const { areas, ctx, service } = wireHarness({ countForFilters: async (_u, f) => ({ count: f.workModels?.includes('onsite') ? 7 : 55, capped: false }) });
+  const proposal = (await proposeFilterChange.run({ ops: [{ op: 'add', path: 'workModels', value: 'onsite' }], reason: 'You said you can work on site.' }, ctx)).cards![0]!;
+  // The user changed the search elsewhere: version 3 → 4.
+  (areas.searchProfile as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({
+    id: 'sp_1',
+    name: '',
+    isDefault: true,
+    isActive: true,
+    version: 4,
+    schemaVersion: 1,
+    filters: moved,
+    alertInstantMax: 1,
+    alertDigest: null,
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
+  });
+  const err = (await service.apply(USER, (proposal.data as { proposalId: string }).proposalId).catch((e: unknown) => e)) as { code?: string; details?: Record<string, unknown> };
+  if (err?.code !== 'version_conflict' || !err.details) throw new Error(`expected a version_conflict, got ${String(err?.code)}`);
+  // As it travels: JSON, so Dates and undefined behave as on the wire.
+  return { proposal, details: JSON.parse(JSON.stringify(err.details)) as Record<string, unknown> };
 }

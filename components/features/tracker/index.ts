@@ -1,7 +1,8 @@
 // components/features/tracker — public surface of the applications tracker UI (WP-38).
 // Other areas import from here only (TASK_PLAN.md §2.1 rule 4).
 
-export { TrackerDrawer, buildPatch, type TrackerDrawerProps } from './TrackerDrawer';
+export { TrackerDrawer, EntryLoadErrorNote, EntryMissingNote, buildPatch, letterHrefFor, useFollowUpDraftAllowed, type TrackerDrawerProps } from './TrackerDrawer';
+export { ResumeForApplication, type ResumeForApplicationProps } from './ResumeForApplication';
 export { FollowUpBanner, type FollowUpBannerProps } from './FollowUpBanner';
 export { WeeklyInsightCard, nameCitations, type WeeklyInsightCardProps } from './WeeklyInsightCard';
 export { ByDateView, groupByWeek, weekOf, type ByDateViewProps } from './ByDateView';

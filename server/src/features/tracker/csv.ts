@@ -1,90 +1,89 @@
 // server/src/features/tracker/csv.ts — CSV export of the user's applications
 // (WP-38; ARCH §3.7 `GET /v2/tracker/export.csv`, 5/day).
 //
-// Columns are the user's own data. Header and stage words follow the brand
-// and the request locale: GoApply (mainland market) in Simplified Chinese uses
-// the GoApply ladder words (网申 / 三方 / 未通过); every other case, RoboApply
-// zh-TW / zh-CN included, is English until INT moves these strings into the
-// server i18n loader with Traditional labels (the web bundles are not loaded
-// on the server).
+// Columns are the user's own data. The header and the stage / outcome words
+// come from the server i18n loader (platform/email/i18n; English source:
+// server/src/i18n/email/staging/tracker.en.json), never from this file:
+//
+//   tracker.csv.*     the words for any brand and locale. The loader resolves
+//                     `en ← staging ← <locale>.json`, so RoboApply zh-TW (and
+//                     every other locale) reads English until WP-92 adds its
+//                     translation, and Traditional labels then appear with
+//                     no code change;
+//   tracker.csvCn.*   GoApply's own ladder words in Simplified Chinese
+//                     (网申 / 测评 / 笔试 / AI面试 / 三方 / 未通过). Used only for
+//                     GoApply (mainland market) with a Simplified Chinese
+//                     request locale, so RoboApply — Taiwan included — never
+//                     gets the mainland ladder words.
+//
 // Cells that a spreadsheet would run as a formula (= + - @, tab, CR) are
 // prefixed with an apostrophe (CSV injection).
 
+import { BRANDS, type ProductBrand } from '../../platform/brand/registry.js';
+import { createEmailTranslator, type EmailTranslator } from '../../platform/email/i18n.js';
 import type { TrackerEntryView } from './contract.js';
 import type { TrackerMarket } from './stages.js';
 
-type Lang = 'en' | 'zh';
+/** Column order of the file; each id is a key under `<group>.header`. */
+export const CSV_COLUMNS = [
+  'company',
+  'title',
+  'stage',
+  'outcome',
+  'savedOn',
+  'appliedOn',
+  'interview',
+  'followUpOn',
+  'deadline',
+  'salary',
+  'currency',
+  'source',
+  'link',
+  'notes',
+] as const;
+export type CsvColumn = (typeof CSV_COLUMNS)[number];
 
-const HEADERS: Record<Lang, string[]> = {
-  en: [
-    'Company',
-    'Job title',
-    'Stage',
-    'How it ended',
-    'Saved on',
-    'Applied on',
-    'Interview',
-    'Follow up on',
-    'Deadline',
-    'Salary',
-    'Currency',
-    'Added from',
-    'Link',
-    'Notes',
-  ],
-  zh: ['公司', '职位', '阶段', '结果', '收藏日期', '投递日期', '面试时间', '跟进日期', '截止日期', '薪资', '币种', '来源', '链接', '备注'],
-};
-
-const STAGES: Record<Lang, Record<string, string>> = {
-  en: {
-    bookmarked: 'Saved',
-    applying: 'Applied',
-    applied: 'Applied',
-    first_call: 'First call',
-    assessment: 'Assessment',
-    written_test: 'Written test',
-    ai_interview: 'AI interview',
-    interviewing: 'Interviewing',
-    final_round: 'Final round',
-    offer: 'Offer',
-    negotiating: 'Offer',
-    accepted: 'Offer',
-    signed: 'Signed',
-    rejected: 'Rejected',
-    withdrawn: 'Withdrawn',
-    closed: 'Job was pulled',
-  },
-  zh: {
-    bookmarked: '收藏',
-    applying: '网申',
-    applied: '网申',
-    first_call: '初次沟通',
-    assessment: '测评',
-    written_test: '笔试',
-    ai_interview: 'AI面试',
-    interviewing: '面试',
-    final_round: '终面',
-    offer: 'Offer',
-    negotiating: 'Offer',
-    accepted: 'Offer',
-    signed: '三方',
-    rejected: '未通过',
-    withdrawn: '放弃',
-    closed: '职位关闭',
-  },
-};
-
-const OUTCOMES: Record<Lang, Record<string, string>> = {
-  en: { they_said_no: 'They said no', i_withdrew: 'I withdrew', job_pulled: 'Job was pulled' },
-  zh: { they_said_no: '未通过', i_withdrew: '我放弃了', job_pulled: '职位关闭' },
-};
+/** The two key groups in the `tracker` email-i18n namespace. */
+export const CSV_GROUP = { shared: 'tracker.csv', goapply: 'tracker.csvCn' } as const;
+export type CsvGroup = (typeof CSV_GROUP)[keyof typeof CSV_GROUP];
 
 const TRADITIONAL_ZH = /^zh[-_](tw|hk|mo|hant)/i;
 
-/** Simplified Chinese only on the GoApply (mainland) market; English otherwise. */
-export function csvLangFor(locale: string | null | undefined, market: TrackerMarket): Lang {
-  if (market !== 'cn' || !locale) return 'en';
-  return /^zh/i.test(locale) && !TRADITIONAL_ZH.test(locale) ? 'zh' : 'en';
+/** True for a Simplified Chinese locale tag (`zh`, `zh-CN`, `zh-Hans`); Traditional variants are not. */
+export function isSimplifiedChinese(locale: string | null | undefined): boolean {
+  return Boolean(locale) && /^zh/i.test(locale!) && !TRADITIONAL_ZH.test(locale!);
+}
+
+/**
+ * Which key group the file is written from: GoApply's own ladder words only
+ * on the GoApply (mainland) market in Simplified Chinese; `tracker.csv` in
+ * every other case (rendered in the request locale, English until translated).
+ */
+export function csvGroupFor(locale: string | null | undefined, market: TrackerMarket): CsvGroup {
+  return market === 'cn' && isSimplifiedChinese(locale) ? CSV_GROUP.goapply : CSV_GROUP.shared;
+}
+
+/** The words of one export: header cells and the stage / outcome labels. */
+export interface CsvWords {
+  group: CsvGroup;
+  header: string[];
+  stage(status: string): string;
+  outcome(outcome: string): string;
+}
+
+/** Resolve the words through the i18n loader. A status the bundles do not name is written as its code. */
+export function csvWords(locale: string | null | undefined, brand: ProductBrand, t: EmailTranslator = createEmailTranslator(brand, locale)): CsvWords {
+  const group = csvGroupFor(locale, brand.market as TrackerMarket);
+  const label = (kind: 'stage' | 'outcome', code: string): string => {
+    const key = `${group}.${kind}.${code}`;
+    return /^[a-z_]+$/.test(code) && t.has(key) ? t(key) : code;
+  };
+  return {
+    group,
+    header: CSV_COLUMNS.map((c) => t(`${group}.header.${c}`)),
+    stage: (status) => label('stage', status),
+    outcome: (outcome) => label('outcome', outcome),
+  };
 }
 
 /** Quote one cell (RFC 4180) and neutralise spreadsheet formulas. */
@@ -98,10 +97,16 @@ export function csvCell(value: unknown): string {
 
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
 
-/** The whole file: UTF-8 BOM (so spreadsheet apps read Chinese), CRLF line ends. */
-export function trackerCsv(entries: readonly TrackerEntryView[], locale: string | null | undefined, market: TrackerMarket): string {
-  const lang = csvLangFor(locale, market);
-  const rows: unknown[][] = [HEADERS[lang]];
+const brandOf = (brand: ProductBrand | TrackerMarket): ProductBrand => (typeof brand === 'string' ? (brand === 'cn' ? BRANDS.goapply : BRANDS.roboapply) : brand);
+
+/**
+ * The whole file: UTF-8 BOM (so spreadsheet apps read Chinese), CRLF line
+ * ends. `brand` is the request's brand (a market is accepted for callers that
+ * only know the market).
+ */
+export function trackerCsv(entries: readonly TrackerEntryView[], locale: string | null | undefined, brand: ProductBrand | TrackerMarket): string {
+  const words = csvWords(locale, brandOf(brand));
+  const rows: unknown[][] = [words.header];
   for (const e of entries) {
     const company = e.job?.companyName ?? e.externalSnapshot?.companyName ?? '';
     const title = e.job?.title ?? e.externalSnapshot?.title ?? '';
@@ -109,8 +114,8 @@ export function trackerCsv(entries: readonly TrackerEntryView[], locale: string 
     rows.push([
       company,
       title,
-      STAGES[lang][e.status] ?? e.status,
-      e.outcome ? OUTCOMES[lang][e.outcome] : '',
+      words.stage(e.status),
+      e.outcome ? words.outcome(e.outcome) : '',
       day(e.dateSaved),
       day(e.dateApplied),
       e.interviewAt ? e.interviewAt.slice(0, 16).replace('T', ' ') : '',

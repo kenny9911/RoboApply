@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CN_TRACKER_LADDER } from '../cn/tracker/index.js';
 import type { TrackerEntryView } from './contract.js';
-import { csvCell, csvLangFor, trackerCsv } from './csv.js';
+import { csvCell, trackerCsv } from './csv.js';
 import { computeFollowUps, computeWeeklyFacts, daysBetween, weekRange, weekStartFor, type FactEntry } from './facts.js';
 import { INTL_TRACKER_LADDER, isStageDetailAllowed, isStatusAllowed, ladderFor, outcomeForStatus } from './stages.js';
 
@@ -192,22 +192,5 @@ describe('CSV', () => {
     expect(csv.startsWith('﻿Company,Job title,Stage')).toBe(true);
     const line = csv.split('\r\n')[1]!;
     expect(line).toBe(`"Acme ""Labs""","Analyst, Data",Applied,,2026-10-01,2026-10-02,,,,90000,USD,manual,https://acme.example/1,"'=HYPERLINK(""http://x"")"`);
-  });
-
-  it('writes GoApply ladder words only for GoApply in Simplified Chinese', () => {
-    expect(csvLangFor('zh-CN', 'cn')).toBe('zh');
-    expect(csvLangFor('zh', 'cn')).toBe('zh');
-    expect(csvLangFor('zh-TW', 'cn')).toBe('en');
-    expect(csvLangFor('en', 'cn')).toBe('en');
-    // RoboApply (Taiwan included) never gets the mainland ladder words.
-    expect(csvLangFor('zh-TW', 'intl')).toBe('en');
-    expect(csvLangFor('zh-CN', 'intl')).toBe('en');
-    expect(csvLangFor('ja', 'intl')).toBe('en');
-    const csv = trackerCsv([{ ...base, status: 'written_test', outcome: null }], 'zh-CN', 'cn');
-    expect(csv).toContain('公司,职位,阶段');
-    expect(csv).toContain('笔试');
-    const tw = trackerCsv([{ ...base, status: 'rejected', outcome: 'they_said_no' }], 'zh-TW', 'intl');
-    expect(tw).toContain('Company,Job title,Stage');
-    expect(tw).not.toMatch(/网申|三方|未通过/);
   });
 });

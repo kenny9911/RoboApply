@@ -22,6 +22,8 @@ export interface ContactRow {
   /** Read-only here: true when the row carries a consent basis (bank_recruiter). */
   consented: boolean;
   companyNameNormalized: string;
+  /** The company name as the source wrote it (SR-54-2); null on rows from before the column. */
+  companyName: string | null;
   companyId: string | null;
   fullName: string;
   firstName: string | null;
@@ -39,6 +41,8 @@ export interface NewOwnContact {
   source: 'user_connections_import' | 'user_added';
   sourceRef: string | null;
   companyNameNormalized: string;
+  /** As the user's file or form wrote it (shown outside job pages). */
+  companyName: string | null;
   companyId?: string | null;
   fullName: string;
   firstName: string | null;
@@ -117,6 +121,7 @@ const CONTACT_SELECT = {
   sourceRef: true,
   consentBasis: true,
   companyNameNormalized: true,
+  companyName: true,
   companyId: true,
   fullName: true,
   firstName: true,
@@ -136,6 +141,7 @@ type SelectedContact = {
   sourceRef: string | null;
   consentBasis: string | null;
   companyNameNormalized: string;
+  companyName: string | null;
   companyId: string | null;
   fullName: string;
   firstName: string | null;
@@ -245,6 +251,7 @@ export function createPrismaNetworkStore(db: typeof prisma = prisma): NetworkSto
               source: IMPORT_SOURCE,
               sourceRef: record.id,
               companyNameNormalized: c.companyNameNormalized,
+              companyName: c.companyName,
               companyId: c.companyId ?? null,
               fullName: c.fullName,
               firstName: c.firstName,
@@ -282,6 +289,7 @@ export function createPrismaNetworkStore(db: typeof prisma = prisma): NetworkSto
           source: input.source,
           sourceRef: input.sourceRef,
           companyNameNormalized: input.companyNameNormalized,
+          companyName: input.companyName,
           companyId: input.companyId ?? null,
           fullName: input.fullName,
           firstName: input.firstName,

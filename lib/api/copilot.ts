@@ -15,6 +15,7 @@
 //   POST   /api/v1/roboapply/copilot/messages/:id/feedback
 //   GET    /api/v1/roboapply/copilot/memory
 //   DELETE /api/v1/roboapply/copilot/memory/:id
+//   GET    /api/v1/roboapply/copilot/nudge
 //
 // `streamTurn()` (WP-51; ARCHITECTURE.md §5.7) is the SSE-over-fetch reader the
 // Assistant UI uses for a turn: it reads `text/event-stream` with fetch (an
@@ -22,6 +23,10 @@
 // across network chunks (including a multi-byte character cut in half), drops
 // events that do not have the contract's shape, and resolves with how the turn
 // ended — `done`, `error` (the server's `error` event) or `aborted` (Stop).
+// `done.content` is the final reply after the server's guard (what was
+// stored): the conversation replaces the streamed text with it. A turn whose
+// reply could not be saved ends with error `save_failed` and no `done`; the
+// user was not charged and may try again.
 // A non-2xx answer before the stream starts (402 credits_exhausted, 503
 // ai_unavailable, 404 feature_disabled) rejects with `RoboApiError`.
 
@@ -78,6 +83,18 @@ export function deleteMemory(id: string, opts?: CallOptions): Promise<void> {
   return call<void>('DELETE', `/api/v1/roboapply/copilot/memory/${seg(id)}`, opts);
 }
 
+/**
+ * `copilot.nudge` — GET /api/v1/roboapply/copilot/nudge. At most one nudge,
+ * decided by the server from real signals (a low feed rating, a reported job
+ * while agency posts show, no minimum pay while many posts list pay, a
+ * followed GoApply deadline). Use `nudge.kind` only: `nudge.prompt` is debug
+ * English and is never shown or sent (the chip and the composer text come
+ * from `assistant.nudge.<kind>` / `assistant.nudge.prompts.<kind>`).
+ */
+export function getNudge(opts?: CallOptions): Promise<CP.NudgeResponse> {
+  return call<CP.NudgeResponse>('GET', `/api/v1/roboapply/copilot/nudge`, opts);
+}
+
 // ─── streamTurn ──────────────────────────────────────────────────────────────
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -117,7 +134,14 @@ export function toCopilotEvent(raw: SseEvent): CP.CopilotSseEvent | null {
       const left = typeof d.creditsRemaining === 'number' && Number.isFinite(d.creditsRemaining) ? d.creditsRemaining : null;
       return {
         event: 'done',
-        data: { messageId: d.messageId, usage: { inputTokens: num(u.inputTokens), outputTokens: num(u.outputTokens) }, creditsRemaining: left },
+        data: {
+          messageId: d.messageId,
+          usage: { inputTokens: num(u.inputTokens), outputTokens: num(u.outputTokens) },
+          creditsRemaining: left,
+          // The final reply after the guard. An empty string is a real answer (cards only).
+          ...(isStr(d.content) ? { content: d.content } : {}),
+          ...(typeof d.guarded === 'boolean' ? { guarded: d.guarded } : {}),
+        },
       };
     }
     default:
@@ -127,7 +151,7 @@ export function toCopilotEvent(raw: SseEvent): CP.CopilotSseEvent | null {
 
 /** How a streamed turn ended. */
 export type TurnOutcome =
-  | { status: 'done'; messageId: string; creditsRemaining: number | null }
+  | { status: 'done'; messageId: string; creditsRemaining: number | null; content?: string }
   | { status: 'error'; code: string; message: string; retryable: boolean }
   | { status: 'aborted' }
   /** The stream closed without `done` or `error` (a dropped connection). */
@@ -160,7 +184,9 @@ export async function streamTurn(
     const ev = toCopilotEvent(raw);
     if (!ev) return;
     onEvent(ev);
-    if (ev.event === 'done') end.outcome = { status: 'done', messageId: ev.data.messageId, creditsRemaining: ev.data.creditsRemaining };
+    if (ev.event === 'done') {
+      end.outcome = { status: 'done', messageId: ev.data.messageId, creditsRemaining: ev.data.creditsRemaining, ...(ev.data.content !== undefined ? { content: ev.data.content } : {}) };
+    }
     else if (ev.event === 'error') end.outcome = { status: 'error', code: ev.data.code, message: ev.data.message, retryable: ev.data.retryable };
   };
   try {
@@ -190,4 +216,5 @@ export const copilotApi = {
   sendMessageFeedback,
   listMemory,
   deleteMemory,
+  getNudge,
 };

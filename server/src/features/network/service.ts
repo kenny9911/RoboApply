@@ -124,7 +124,12 @@ export class NetworkService {
 
   // ── Views ──────────────────────────────────────────────────────────────
 
-  contactView(row: ContactRow, companyName: string): ContactView {
+  /**
+   * `companyName` is the job's company on a job page; elsewhere pass nothing
+   * and the name the source wrote (`RAContact.companyName`, SR-54-2) is shown,
+   * falling back to the normalized name on rows from before that column.
+   */
+  contactView(row: ContactRow, companyName: string = displayCompanyName(row)): ContactView {
     const market = row.market === 'cn' ? 'cn' : 'intl';
     const sourceName = row.source === 'bank_recruiter' ? SOURCE_NAMES[market]! : null;
     const sourceLabel =
@@ -285,6 +290,7 @@ export class NetworkService {
         market,
         ownerUserId: userId,
         companyNameNormalized,
+        companyName: cleanCompanyName(c.company),
         fullName: c.fullName,
         firstName: c.firstName || null,
         title: c.position,
@@ -313,7 +319,7 @@ export class NetworkService {
     });
     const page = rows.slice(0, CONTACTS_PAGE_SIZE);
     return {
-      items: page.map((r) => this.contactView(r, r.companyNameNormalized)),
+      items: page.map((r) => this.contactView(r)),
       cursor: rows.length > CONTACTS_PAGE_SIZE ? page[page.length - 1]!.id : null,
     };
   }
@@ -328,13 +334,14 @@ export class NetworkService {
       source: 'user_added',
       sourceRef: null,
       companyNameNormalized,
+      companyName: cleanCompanyName(body.companyName),
       fullName: body.fullName,
       firstName: body.fullName.split(/\s+/)[0] ?? null,
       title: body.title?.trim() || null,
       linkedinUrl,
       connectedOn: null,
     });
-    return this.contactView(row, body.companyName);
+    return this.contactView(row);
   }
 
   async deleteContact(userId: string, id: string): Promise<{ deleted: true }> {
@@ -472,6 +479,17 @@ export class NetworkService {
     const row = await this.ownDraft(userId, id);
     return this.draftView(row.markedSentAt ? row : await this.deps.store.updateDraft(row.id, { markedSentAt: this.now() }));
   }
+}
+
+/** A company name as written, trimmed to the column's display length; null when empty. */
+export function cleanCompanyName(name: string | null | undefined): string | null {
+  const s = (name ?? '').replace(/\s+/g, ' ').trim();
+  return s ? s.slice(0, 160) : null;
+}
+
+/** The name to show for a contact's company outside a job page. */
+export function displayCompanyName(row: Pick<ContactRow, 'companyName' | 'companyNameNormalized'>): string {
+  return row.companyName?.trim() || row.companyNameNormalized;
 }
 
 function searchLabel(l: PeopleLink): string {

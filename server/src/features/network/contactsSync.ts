@@ -11,8 +11,9 @@
 //      from the bank DB through WP-16b's `bankClients` seam (read-only, kill
 //      switches, cross-tenant guard and the GoHire TLS rule apply);
 //   3. upserts one RAContact (source 'bank_recruiter') per recruiter with
-//      `consentBasis` = the record's basis and `sourceRef` =
-//      `<bank>:<recruiterId>|optin:<recordId>@<optedInAt ISO>`;
+//      `consentBasis` = the record's basis, `sourceRef` =
+//      `<bank>:<recruiterId>|optin:<recordId>@<optedInAt ISO>` and
+//      `companyName` = the company as the recruiter's bank profile writes it;
 //   4. deletes the contacts whose opt-in is withdrawn or no longer listed
 //      (only after the whole record list was read).
 //
@@ -71,6 +72,8 @@ export interface ContactsSyncPorts {
     sourceRef: string;
     consentBasis: string;
     companyNameNormalized: string;
+    /** The company as the bank profile writes it (SR-54-2). */
+    companyName: string;
     fullName: string;
     firstName: string | null;
     title: string | null;
@@ -141,6 +144,7 @@ export async function syncContacts(ports: ContactsSyncPorts, market: string, now
       sourceRef: syncSourceRef(ports.bank, record),
       consentBasis: `recruiter_opt_in:${record.id}${record.consentTextVersion ? `:v${record.consentTextVersion}` : ''}`,
       companyNameNormalized,
+      companyName: (recruiter.company ?? '').replace(/\s+/g, ' ').trim().slice(0, 160),
       fullName,
       firstName: fullName.split(/\s+/)[0] ?? null,
       title: recruiter.jobTitle?.trim() || null,
@@ -242,6 +246,7 @@ export function prismaSyncedContacts(db: typeof prisma = prisma): Pick<ContactsS
         sourceRef: input.sourceRef,
         consentBasis: input.consentBasis,
         companyNameNormalized: input.companyNameNormalized,
+        companyName: input.companyName,
         fullName: input.fullName,
         firstName: input.firstName,
         title: input.title,

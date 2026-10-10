@@ -133,6 +133,50 @@ describe('credit actions: charged only on apply', () => {
   });
 });
 
+describe('outreach draft (credit bucket `outreach`, written by NET)', () => {
+  it('nothing is written until the user applies; then NET runs with the proposal key and the People link is stored', async () => {
+    const h = withTool('draft_outreach', { jobId: 'job_1', channel: 'email' }, { hiringContacts: 'on' });
+    const p = await proposalFrom(h, 'draft_outreach', {}, 'job_1');
+    expect(h.areas.createOutreachDraft).not.toHaveBeenCalled();
+    const res = await h.service.proposals.apply(USER, p.id, { locale: 'en' });
+    expect(h.areas.createOutreachDraft).toHaveBeenCalledTimes(1);
+    expect(h.areas.createOutreachDraft).toHaveBeenCalledWith(USER, { jobId: 'job_1', channel: 'email', locale: 'en' }, `copilot:${p.id}`);
+    expect(res.result).toMatchObject({
+      card: { type: 'action', data: { kind: 'open_link', href: '/jobs/job_1?tab=people', label: 'people' } },
+      draft: { id: 'dr_1', channel: 'email', subject: 'Data Analyst at Acme', jobId: 'job_1', aiWritten: true },
+    });
+    // The stored message keeps the proposal's status and a link to where the draft lives; never the draft text.
+    expect(await storedCardStatus(h, p.messageId)).toEqual([
+      ['credit_action', 'applied'],
+      ['action', undefined],
+    ]);
+    const stored = JSON.stringify((await h.store.getMessage(p.messageId))!.cards);
+    expect(stored).not.toContain('would like to learn more');
+  });
+
+  it('out of credits or AI off: the error passes through and the proposal stays pending for a retry', async () => {
+    const h = withTool('draft_outreach', { jobId: 'job_1' }, { hiringContacts: 'on' });
+    const p = await proposalFrom(h, 'draft_outreach', {}, 'job_1');
+    h.areas.createOutreachDraft.mockRejectedValueOnce(Object.assign(new Error('none left'), { code: 'credits_exhausted', status: 402 }));
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'credits_exhausted' });
+    expect((await h.store.getProposal(p.id))!.status).toBe('pending');
+    h.areas.createOutreachDraft.mockRejectedValueOnce(Object.assign(new Error('AI is off'), { code: 'ai_unavailable', status: 503 }));
+    await expect(h.service.proposals.apply(USER, p.id)).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(await storedCardStatus(h, p.messageId)).toEqual([['credit_action', 'pending']]);
+    // The retry reuses the same key, so NET's credit call cannot charge twice.
+    await h.service.proposals.apply(USER, p.id);
+    expect(h.areas.createOutreachDraft.mock.calls.map((c) => c[2])).toEqual([`copilot:${p.id}`, `copilot:${p.id}`, `copilot:${p.id}`]);
+  });
+
+  it('with hiring contacts off there is no draft tool: the model cannot propose one', async () => {
+    const h = withTool('draft_outreach', { jobId: 'job_1' }, { hiringContacts: 'off' });
+    const t = await newThread(h, 'job_1');
+    const events = await runTurn(h, t, 'please', { contextJobId: 'job_1' });
+    expect(events.some((e) => e.event === 'card')).toBe(false);
+    expect(h.areas.createOutreachDraft).not.toHaveBeenCalled();
+  });
+});
+
 describe('memory_add', () => {
   it('RoboApply: confirming stores the fact', async () => {
     const h = withTool('remember', { fact: 'Prefers remote work' });

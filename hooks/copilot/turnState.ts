@@ -6,6 +6,12 @@
 // SSE events arrive (`meta` → ids, `delta` → text, `tool` → "Looking up jobs…",
 // `card` → cards, `done` / `error` → final status). Stop keeps the partial
 // text and marks the message `stopped`.
+//
+// `done.content` is the reply after the server's guard, i.e. what was stored:
+// it REPLACES the streamed text, so the conversation on screen is the one a
+// reload shows (a sentence the guard removed does not linger). An error ends
+// the turn; `save_failed` (the reply could not be stored, no `done` follows,
+// nothing was charged) is retryable like a dropped connection.
 
 import type { CopilotCard, CopilotSseEvent, MessageView } from '../../lib/api/contracts/copilot';
 import type { TurnOutcome } from '../../lib/api/copilot';
@@ -49,6 +55,13 @@ export interface ChatState {
 }
 
 export const INITIAL_CHAT: ChatState = { threadId: null, messages: [], streamingId: null, lastTurn: null };
+
+/**
+ * Error codes that always offer "Try again", whatever the event's flag says:
+ * the reply was not stored (`save_failed`: no `done` follows and the turn was
+ * not charged) or the stream broke before it ended.
+ */
+export const RETRYABLE_CODES: ReadonlySet<string> = new Set(['save_failed', 'stream_interrupted']);
 
 export type ChatAction =
   | { type: 'reset'; threadId?: string | null }
@@ -114,13 +127,22 @@ function applyEvent(state: ChatState, event: CopilotSseEvent): ChatState {
         ...m,
         status: 'error',
         tools: m.tools.map((t) => ({ ...t, running: false })),
-        error: { code: event.data.code, retryable: event.data.retryable },
+        error: { code: event.data.code, retryable: event.data.retryable || RETRYABLE_CODES.has(event.data.code) },
       }));
       return { ...next, streamingId: null };
     }
     case 'done': {
       const id = event.data.messageId;
-      const next = updateStreaming(state, (m) => ({ ...m, id, local: false, status: 'done', tools: m.tools.map((t) => ({ ...t, running: false })) }));
+      const final = event.data.content;
+      const next = updateStreaming(state, (m) => ({
+        ...m,
+        id,
+        local: false,
+        status: 'done',
+        // The guarded reply replaces whatever streamed (older servers send no content: keep the stream).
+        ...(typeof final === 'string' ? { content: final } : {}),
+        tools: m.tools.map((t) => ({ ...t, running: false })),
+      }));
       return { ...next, streamingId: null };
     }
     default:
@@ -165,7 +187,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         return { ...next, streamingId: null };
       }
       // done / error normally arrive as events first; this closes the turn either way.
-      if (o.status === 'done') return applyEvent(state, { event: 'done', data: { messageId: o.messageId, usage: { inputTokens: 0, outputTokens: 0 }, creditsRemaining: o.creditsRemaining } });
+      if (o.status === 'done') {
+        return applyEvent(state, {
+          event: 'done',
+          data: { messageId: o.messageId, usage: { inputTokens: 0, outputTokens: 0 }, creditsRemaining: o.creditsRemaining, ...(o.content !== undefined ? { content: o.content } : {}) },
+        });
+      }
       return applyEvent(state, { event: 'error', data: { code: o.code, message: o.message, retryable: o.retryable } });
     }
     case 'failed': {

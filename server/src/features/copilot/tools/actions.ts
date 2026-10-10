@@ -1,13 +1,16 @@
 // server/src/features/copilot/tools/actions.ts — paid actions and job help (WP-50).
 //
-// tailor_resume · write_cover_letter · add_external_job are proposals: the
-// tool stores a pending `credit_action` and returns a card with the cost line;
-// the credit is spent by the area service only when the user applies it
-// (proposals.ts). find_connections · interview_prep · draft_outreach read or
-// link only. D1: nothing here applies to a job or contacts anyone.
+// tailor_resume · write_cover_letter · add_external_job · draft_outreach are
+// proposals: the tool stores a pending `credit_action` and returns a card with
+// the cost line; the credit is spent by the area service only when the user
+// applies it (proposals.ts). find_connections · interview_prep read; a missing
+// practice set is written only when the user asked for questions.
+// D1: nothing here applies to a job or contacts anyone. A draft is text the
+// user copies and sends themselves.
 
 import { z } from 'zod';
 import { LETTER_LENGTHS, LETTER_TONES } from '../../coverletter/contract.js';
+import { OUTREACH_CHANNELS, OUTREACH_CHANNELS_BY_MARKET, type OutreachChannel } from '../../network/contract.js';
 import type { ActionCardData, CreditAction, CreditActionCardData } from '../contract.js';
 import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
 import { card, costLine, isNotFound, isNotImplemented, JobId, notAvailable, requireUser } from './util.js';
@@ -110,17 +113,34 @@ export const addExternalJob: CopilotTool<z.infer<typeof ImportArgs>> = {
   },
 };
 
-export const draftOutreach: CopilotTool<z.infer<typeof JobArgs>> = {
+const OutreachArgs = z
+  .object({
+    jobId: JobId,
+    channel: z
+      .enum(OUTREACH_CHANNELS)
+      .optional()
+      .describe('Kind of message: linkedin_note, email, referral_ask, follow_up (after applying) or wechat. Leave out when the user did not say.'),
+  })
+  .strict();
+
+/** The message kinds this market offers, most common first (no LinkedIn note on GoApply, no WeChat on RoboApply). */
+export function outreachChannelFor(market: 'intl' | 'cn', asked: OutreachChannel | undefined): OutreachChannel {
+  const allowed = OUTREACH_CHANNELS_BY_MARKET[market];
+  return asked && allowed.includes(asked) ? asked : allowed[0]!;
+}
+
+export const draftOutreach: CopilotTool<z.infer<typeof OutreachArgs>> = {
   name: 'draft_outreach',
-  description: 'Point the user to the job\'s People tab, where they can draft a message to send themselves. Never sends anything.',
-  schema: JobArgs,
+  description:
+    'Offer to write a short message about a job for the user to send themselves (uses one message-draft credit when the user confirms). Returns a card; nothing is written until the user confirms, and nothing is ever sent.',
+  schema: OutreachArgs,
   available: (ctx) => ctx.hiringContactsMode() !== 'off',
   async run(args, ctx) {
-    return {
-      data: { available: true, note: 'Drafts are written on the job page (People tab); the user sends any message themselves.' },
-      cards: [linkCard(ctx, `/jobs/${encodeURIComponent(args.jobId)}?tab=people`, 'people')],
-      jobIds: [args.jobId],
-    };
+    const userId = requireUser(ctx);
+    if (!(await jobExists(ctx, userId, args.jobId))) return notAvailable('job_not_found');
+    const channel = outreachChannelFor(ctx.market === 'cn' ? 'cn' : 'intl', args.channel);
+    const out = await creditProposal(ctx, 'outreach', { jobId: args.jobId, channel, locale: ctx.locale }, args.jobId);
+    return { ...out, data: { ...(out.data as object), channel, note: 'Nothing is written or charged until the user taps the button on the card. The user sends the message themselves.' } };
   },
 };
 
@@ -146,17 +166,30 @@ export const findConnections: CopilotTool<z.infer<typeof JobArgs>> = {
   },
 };
 
-export const interviewPrep: CopilotTool<z.infer<typeof JobArgs>> = {
+const PrepArgs = z
+  .object({
+    jobId: JobId,
+    generate: z
+      .boolean()
+      .optional()
+      .describe('true only when the user asked for interview questions for this job and none are listed yet: writes a practice set for the job (AI-written, labelled as such).'),
+  })
+  .strict();
+
+export const interviewPrep: CopilotTool<z.infer<typeof PrepArgs>> = {
   name: 'interview_prep',
-  description: 'Questions to prepare for a job (each labelled with where it comes from) and a link to practise for this job.',
-  schema: JobArgs,
+  description:
+    'Questions to prepare for a job (each labelled with where it comes from) and a link to practise for this job. Pass generate: true when the user asks for questions.',
+  schema: PrepArgs,
   async run(args, ctx) {
     const userId = requireUser(ctx);
     const practiceHref = `/practice?job=${encodeURIComponent(args.jobId)}&from=assistant`;
     let questions: Array<{ id: string; text: string; category: string; sourceKind: string; sourceLabelKey: string }> = [];
     let note: string | null = null;
     try {
-      const plan = await ctx.areas.planForJob(userId, args.jobId);
+      // Read-only unless the user asked for questions (`generate`): then prep may
+      // write a missing AI practice set for this job (its own limits and AI gate).
+      const plan = await ctx.areas.planForJob(userId, args.jobId, { write: args.generate === true, locale: ctx.locale });
       // Card vocabulary (WP-51 `parseInterviewPlan`): 'ai' | 'bank' | 'posting'.
       // An AI-written question must arrive as 'ai' so the card labels it and
       // shows AiGeneratedBadge on GoApply (D3); staff-written and moderated

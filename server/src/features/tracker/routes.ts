@@ -19,7 +19,6 @@ import { DAY, rateLimit, type RateWindow } from '../../platform/ratelimit/index.
 import type { FeatureRouterDeps } from '../index.js';
 import { AddTrackerNoteBodySchema, TRACKER_EXPORT_DAILY_LIMIT, TrackerEntryParamsSchema, type FollowUpsResponse } from './contract.js';
 import { trackerCsv } from './csv.js';
-import type { TrackerMarket } from './stages.js';
 import { trackerCore, TrackerDuplicateError, TrackerInvalidInputError, TrackerNotFoundError, type TrackerCore } from './service.js';
 
 export const TRACKER_EXPORT_LIMIT_NAME = 'trackerExportPerUser';
@@ -68,7 +67,7 @@ export function createTrackerRouter(deps: FeatureRouterDeps = {}, options: Track
     route(async (req, res) => {
       const userId = requireUserId(req);
       const entries = await core.exportEntries(userId);
-      const csv = trackerCsv(entries, getRequestLocale(req), getCurrentBrandOrDefault().market as TrackerMarket);
+      const csv = trackerCsv(entries, getRequestLocale(req), getCurrentBrandOrDefault());
       const stamp = new Date().toISOString().slice(0, 10);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="applications-${stamp}.csv"`);

@@ -13,11 +13,30 @@
 //     (RoboApply C1; GoApply 收藏 → 网申 → 测评 → 笔试 → AI面试 → 面试 → Offer → 三方 / 未通过);
 //   - an outcome ("They said no" / "I withdrew" / "Job was pulled") moves the
 //     entry to its terminal status, and leaving a terminal status clears it.
+//   - every writer that can move a job's entry to Saved or Applied (create,
+//     patch, bulk, upsertForJob, markApplied, undoApplied) runs under
+//     `pg_advisory_xact_lock(hashtext(trackerEntryLockKey(userId, jobId)))`,
+//     the same key the job page's writers take (jobs/detail), and re-reads the
+//     entry inside that transaction: a concurrent apply and undo run one after
+//     the other and can never both move it (WP-93 #5);
+//   - moves made in the tracker itself (create, patch, bulk) carry
+//     `payload.via = 'tracker'`; the apply channels keep their own `via`;
+//   - a change that puts a job at Saved or Applied tells the feed once
+//     (`feedService.recordInteraction`, 'save' | 'applied'), after the write and
+//     softly: a failure there never blocks or undoes the move, and a slow feed
+//     store holds the answer back for at most `FEED_SIGNAL_TIMEOUT_MS` (a bulk
+//     move sends its signals side by side, one per job) (WP-93 #24);
+//   - GoApply with CN_RECRUITMENT_INFO_MODE=off: an entry whose job is a
+//     third-party posting is left out of every read (the user's own imports
+//     and jobs they typed in stay), and it comes back when the mode allows
+//     postings again (R-14, R41-1b).
 // D1: nothing here applies anywhere; `applied` is only ever what the user did.
 
 import { Prisma, type RATrackerEntry } from '../../generated/prisma/client.js';
 import type { ExtendedPrismaClient } from '../../lib/prisma.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/index.js';
+import type { EnvSource } from '../../platform/brand/brandEnv.js';
+import { logger } from '../../services/LoggerService.js';
 import {
   ALL_TRACKER_STATUSES,
   OUTCOME_STATUS,
@@ -78,11 +97,50 @@ export class TrackerInvalidInputError extends Error {
 
 export type TrackerDb = Pick<ExtendedPrismaClient, '$transaction' | 'rATrackerEntry' | 'rATrackerEvent' | 'rAApplicationArtifact' | 'rAJob'>;
 
+/** What a writer uses inside its locked transaction. */
+type TrackerTx = Pick<ExtendedPrismaClient, 'rATrackerEntry' | 'rATrackerEvent' | '$executeRaw'>;
+
+/** What a tracker move teaches the feed (WP-32 affinity). */
+export type TrackerAffinityKind = 'save' | 'applied';
+
+/** The job fields the GoApply recruitment-info mode check reads (cn/jobs `CnPostingLike`). */
+export interface TrackerPostingLike {
+  market: string;
+  visibility: string;
+  ownerUserId: string | null;
+}
+
+/** The longest a tracker write waits for the feed signal: the move is already saved by then. */
+export const FEED_SIGNAL_TIMEOUT_MS = 1_500;
+/** Feed signals sent side by side after a bulk move. */
+export const FEED_SIGNAL_BATCH = 20;
+
 export interface TrackerCoreDeps {
   getDb?: () => Promise<TrackerDb>;
   now?: () => Date;
   /** Market of the current request (default: the brand context's market). */
   market?: () => TrackerMarket;
+  /**
+   * Feed affinity for a job that reached Saved or Applied. Called once per
+   * change, after the write; a failure is logged and never blocks the move.
+   * Absent → nothing is recorded (the process-wide `trackerCore` wires
+   * `feedService.recordInteraction`).
+   */
+  recordInteraction?: ((userId: string, jobId: string, kind: TrackerAffinityKind) => Promise<unknown>) | null;
+  /** How long a write waits for the feed signal before answering (default `FEED_SIGNAL_TIMEOUT_MS`). */
+  feedSignalTimeoutMs?: number;
+  /**
+   * Advisory-lock key of one user's entry for one job (default: jobs/detail
+   * `trackerEntryLockKey`, so the tracker and the job page serialize on the same key).
+   */
+  lockKey?: (userId: string, jobId: string) => string | Promise<string>;
+  /**
+   * May this viewer see this job under the GoApply recruitment-info mode
+   * (default: cn/jobs `cnPostingVisible`; non-cn jobs are always visible).
+   */
+  postingVisible?: (job: TrackerPostingLike, userId: string) => boolean | Promise<boolean>;
+  /** Env the mode is read from (tests). */
+  env?: EnvSource;
 }
 
 type EntryRow = RATrackerEntry;
@@ -98,6 +156,10 @@ interface JobRow {
   closedAt: Date | null;
   archivedAt: Date | null;
   expiresAt: Date | null;
+  // Read for the GoApply recruitment-info mode (absent on rows a test seeds without them).
+  market?: string | null;
+  visibility?: string | null;
+  ownerUserId?: string | null;
 }
 
 const JOB_SELECT = {
@@ -111,6 +173,9 @@ const JOB_SELECT = {
   closedAt: true,
   archivedAt: true,
   expiresAt: true,
+  market: true,
+  visibility: true,
+  ownerUserId: true,
 } as const;
 
 interface EventDraft {
@@ -161,6 +226,7 @@ export function toTrackerView(row: EntryRow, job: JobRow | null | undefined, now
         workType: job.workType ?? 'onsite',
         applyUrl: job.applyUrl,
         closed: jobClosed(job, now),
+        visibility: job.visibility === 'private' ? 'private' : 'public',
       }
     : null;
   return {
@@ -239,6 +305,12 @@ export interface ApplyMark {
   eventId: string | null;
 }
 
+/** What `markApplied` answers: the undo token plus `alreadyApplied`, the name every apply surface uses. */
+export interface ApplyResult extends ApplyMark {
+  /** `!changed`: the entry was already at Applied or further along, so no Undo is offered. */
+  alreadyApplied: boolean;
+}
+
 export interface UndoAppliedOptions {
   /** The token markApplied returned; the precise way to undo. */
   mark?: ApplyMark;
@@ -251,14 +323,52 @@ export const UNDO_WINDOW_MS = 10 * 60_000;
 
 const SOURCE_FOR_VIA: Record<ApplyVia, string> = { apply_click: 'feed', agent_open: 'agent', extension: 'extension', manual: 'manual' };
 
+/** `payload.via` of a move the user made in the tracker itself (drawer, board, list, Add a job). */
+export const VIA_TRACKER = 'tracker';
+
+const isApplied = (status: string): boolean => status === 'applied' || status === 'applying';
+
+/** The feed signal of an entry that just reached `status` (null: nothing to learn from this move). */
+function affinityFor(status: string): TrackerAffinityKind | null {
+  if (status === 'bookmarked') return 'save';
+  return isApplied(status) ? 'applied' : null;
+}
+
 // ── The service ───────────────────────────────────────────────────────────
 
 const defaultGetDb = async (): Promise<TrackerDb> => (await import('../../lib/prisma.js')).default;
+
+// Other areas are reached through their public index, loaded on first use so
+// importing the tracker does not pull the job, feed and GoApply routers in.
+const defaultLockKey = async (userId: string, jobId: string): Promise<string> =>
+  (await import('../jobs/detail/index.js')).trackerEntryLockKey(userId, jobId);
+/** Production feed affinity (WP-32 `feedService.recordInteraction`). */
+export const feedRecordInteraction = async (userId: string, jobId: string, kind: TrackerAffinityKind): Promise<void> => {
+  const { feedService } = await import('../feed/index.js');
+  await feedService.recordInteraction(userId, jobId, kind);
+};
 
 export function createTrackerCore(deps: TrackerCoreDeps = {}) {
   const getDb = deps.getDb ?? defaultGetDb;
   const clock = deps.now ?? (() => new Date());
   const marketOf = deps.market ?? (() => getCurrentBrandOrDefault().market as TrackerMarket);
+  const lockKeyOf = deps.lockKey ?? defaultLockKey;
+  const recordInteraction = deps.recordInteraction ?? null;
+  const feedSignalTimeoutMs = deps.feedSignalTimeoutMs ?? FEED_SIGNAL_TIMEOUT_MS;
+  const postingVisible =
+    deps.postingVisible ??
+    (async (job: TrackerPostingLike, userId: string): Promise<boolean> => (await import('../cn/jobs/index.js')).cnPostingVisible(job, userId, deps.env ?? process.env));
+
+  /**
+   * Is this entry's job hidden from the user right now? Only a GoApply (`cn`)
+   * third-party posting while CN_RECRUITMENT_INFO_MODE is `off`. The user's
+   * own import, an entry with no job (typed in by the user) and every non-cn
+   * job are never hidden.
+   */
+  async function jobHidden(job: JobRow | null | undefined, userId: string): Promise<boolean> {
+    if (!job || job.market !== 'cn') return false;
+    return !(await postingVisible({ market: 'cn', visibility: job.visibility ?? 'public', ownerUserId: job.ownerUserId ?? null }, userId));
+  }
 
   async function jobsById(db: TrackerDb, ids: (string | null)[]): Promise<Map<string, JobRow>> {
     const unique = [...new Set(ids.filter((x): x is string => Boolean(x)))];
@@ -267,16 +377,116 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
     return new Map(jobs.map((j) => [j.id, j]));
   }
 
-  async function views(db: TrackerDb, rows: EntryRow[]): Promise<TrackerEntryView[]> {
+  /** The rows the user may see, with their jobs (drops entries whose job the mode hides). */
+  async function visibleRows(db: TrackerDb, userId: string, rows: EntryRow[]): Promise<{ rows: EntryRow[]; jobs: Map<string, JobRow> }> {
     const jobs = await jobsById(db, rows.map((r) => r.jobId));
-    const now = clock();
-    return rows.map((r) => toTrackerView(r, r.jobId ? jobs.get(r.jobId) : null, now));
+    const cnJobs = [...jobs.values()].filter((j) => j.market === 'cn');
+    if (cnJobs.length === 0) return { rows, jobs };
+    const hidden = new Set<string>();
+    for (const j of cnJobs) if (await jobHidden(j, userId)) hidden.add(j.id);
+    return hidden.size === 0 ? { rows, jobs } : { rows: rows.filter((r) => !r.jobId || !hidden.has(r.jobId)), jobs };
   }
 
-  async function liveEntry(db: Pick<TrackerDb, 'rATrackerEntry'>, userId: string, id: string): Promise<EntryRow> {
+  async function views(db: TrackerDb, userId: string, rows: EntryRow[]): Promise<TrackerEntryView[]> {
+    const visible = await visibleRows(db, userId, rows);
+    const now = clock();
+    return visible.rows.map((r) => toTrackerView(r, r.jobId ? visible.jobs.get(r.jobId) : null, now));
+  }
+
+  /** One entry's view for its owner (the caller already checked it is visible). */
+  async function viewOf(db: TrackerDb, row: EntryRow): Promise<TrackerEntryView> {
+    const job = row.jobId ? (await jobsById(db, [row.jobId])).get(row.jobId) : null;
+    return toTrackerView(row, job, clock());
+  }
+
+  /** The user's live entry; 404 when it is missing, not theirs, or its job is hidden by the mode. */
+  async function liveEntry(db: Pick<TrackerDb, 'rATrackerEntry' | 'rAJob'>, userId: string, id: string): Promise<EntryRow> {
     const row = await db.rATrackerEntry.findFirst({ where: { id, userId, deletedAt: null } });
     if (!row) throw new TrackerNotFoundError();
+    if (row.jobId) {
+      const job = (await db.rAJob.findUnique({ where: { id: row.jobId }, select: { id: true, market: true, visibility: true, ownerUserId: true } })) as JobRow | null;
+      if (await jobHidden(job, userId)) throw new TrackerNotFoundError();
+    }
     return row;
+  }
+
+  /**
+   * Run a write under the advisory lock of every (user, job) entry it may
+   * move. Keys are taken in sorted order, so two bulk writes cannot deadlock.
+   * Entries with no job (typed in by the user) have no shared key: one row,
+   * one writer path, nothing to serialize against.
+   */
+  async function withEntryLocks<T>(db: TrackerDb, userId: string, jobIds: ReadonlyArray<string | null | undefined>, fn: (tx: TrackerTx) => Promise<T>): Promise<T> {
+    const ids = [...new Set(jobIds.filter((j): j is string => Boolean(j)))].sort();
+    const keys: string[] = [];
+    for (const jobId of ids) keys.push(await lockKeyOf(userId, jobId));
+    return db.$transaction(async (raw) => {
+      const tx = raw as unknown as TrackerTx;
+      for (const key of keys) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+      return fn(tx);
+    });
+  }
+
+  /**
+   * Job ids of this user's entries that the GoApply mode hides right now
+   * (empty on RoboApply and whenever third-party postings are allowed).
+   */
+  async function hiddenJobIdsFor(db: TrackerDb, userId: string): Promise<string[]> {
+    if (marketOf() !== 'cn') return [];
+    const rows = await db.rATrackerEntry.findMany({ where: { userId, deletedAt: null, jobId: { not: null } }, select: { jobId: true }, take: SCAN_CAP });
+    const jobs = await jobsById(db, rows.map((r) => r.jobId));
+    const hidden: string[] = [];
+    for (const job of jobs.values()) if (await jobHidden(job, userId)) hidden.push(job.id);
+    return hidden;
+  }
+
+  /**
+   * Tell the feed about a job that reached Saved or Applied. Never throws, and
+   * never waits longer than the timeout: the move is already saved, so a slow
+   * feed store must not hold back (or time out) the answer. A signal still
+   * running after the timeout is left to finish on its own.
+   */
+  async function learn(userId: string, jobId: string | null | undefined, kind: TrackerAffinityKind | null): Promise<void> {
+    if (!jobId || !kind || !recordInteraction) return;
+    const failed = (err: unknown) =>
+      logger.warn('TRACKER', 'feed affinity failed (the move is kept)', { userId, jobId, kind, error: err instanceof Error ? err.message : String(err) });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Started inside the try: a reader that throws at once is swallowed like one that rejects.
+      const signal = Promise.resolve(recordInteraction(userId, jobId, kind)).then(() => 'done' as const);
+      const waited = new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), feedSignalTimeoutMs);
+      });
+      if ((await Promise.race([signal, waited])) === 'timeout') {
+        logger.warn('TRACKER', 'feed affinity is slow (the move is kept; not waiting)', { userId, jobId, kind, waitedMs: feedSignalTimeoutMs });
+        signal.catch(failed);
+      }
+    } catch (err) {
+      failed(err);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * The feed signals of a bulk move: one per job and kind, sent side by side
+   * in small batches, and no new batch is started once the wait has reached
+   * twice the timeout (the rest are skipped and logged: affinity is a hint,
+   * the moves are saved).
+   */
+  async function learnMany(userId: string, moved: ReadonlyArray<{ jobId: string | null; kind: TrackerAffinityKind | null }>): Promise<void> {
+    if (!recordInteraction) return;
+    const unique = new Map<string, { jobId: string; kind: TrackerAffinityKind }>();
+    for (const m of moved) if (m.jobId && m.kind) unique.set(`${m.jobId}|${m.kind}`, { jobId: m.jobId, kind: m.kind });
+    const items = [...unique.values()];
+    const startedAt = Date.now();
+    for (let i = 0; i < items.length; i += FEED_SIGNAL_BATCH) {
+      if (i > 0 && Date.now() - startedAt >= 2 * feedSignalTimeoutMs) {
+        logger.warn('TRACKER', 'feed affinity skipped for the rest of a bulk move (the moves are kept)', { userId, skipped: items.length - i });
+        return;
+      }
+      await Promise.all(items.slice(i, i + FEED_SIGNAL_BATCH).map((m) => learn(userId, m.jobId, m.kind)));
+    }
   }
 
   function assertStatus(market: TrackerMarket, status: string): asserts status is TrackerStatus {
@@ -328,7 +538,8 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
 
     if (status !== existing.status) {
       data.status = status;
-      events.push({ kind: 'status', fromValue: existing.status, toValue: status });
+      // A stage move made in the tracker (never undone by the job page's "Undo · I didn't apply").
+      events.push({ kind: 'status', fromValue: existing.status, toValue: status, payload: { via: VIA_TRACKER } });
     }
     if (outcome !== (existing.outcome ?? null)) {
       data.outcome = outcome;
@@ -434,53 +645,50 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
     const job = (await db.rAJob.findUnique({ where: { id: jobId }, select: { ...JOB_SELECT, salaryMax: true, salaryCurrency: true } })) as
       | (JobRow & { salaryMax: number | null; salaryCurrency: string | null })
       | null;
-    if (!job) throw new TrackerNotFoundError();
-    const existing = await db.rATrackerEntry.findFirst({ where: { userId, jobId, deletedAt: null } });
+    if (!job || (await jobHidden(job, userId))) throw new TrackerNotFoundError();
     const via = args.appliedVia ?? null;
     const markPayload = args.applyMark ? { applyMark: true } : {};
+    const applyTarget = isApplied(args.status);
 
-    if (existing) {
-      const data: Prisma.RATrackerEntryUncheckedUpdateInput = {};
-      const others: EventDraft[] = [];
-      let move: EventDraft | null = null;
-      const applyTarget = args.status === 'applied' || args.status === 'applying';
-      const forward =
-        args.status !== 'bookmarked' &&
-        args.status !== existing.status &&
-        (!applyTarget || existing.status === 'bookmarked' || isTerminal(existing.status));
-      if (forward) {
-        data.status = args.status;
-        if (isTerminal(existing.status)) data.outcome = null;
-        const stamp = applyTarget && !existing.dateApplied;
-        if (stamp) data.dateApplied = now;
-        if (applyTarget && args.appliedVia !== undefined && args.appliedVia !== existing.appliedVia) data.appliedVia = args.appliedVia;
-        move = {
-          kind: 'status',
-          fromValue: existing.status,
-          toValue: args.status,
-          payload: stamp
-            ? { stampedDateApplied: true, via, ...markPayload }
-            : { via, previousAppliedVia: existing.appliedVia ?? null, ...markPayload },
-        };
-        if (isTerminal(existing.status)) others.push({ kind: 'outcome', fromValue: existing.outcome ?? null, toValue: null });
-      }
-      if (args.excitementStars !== undefined && args.excitementStars !== existing.excitementStars) {
-        data.excitementStars = args.excitementStars;
-        others.push({ kind: 'field', fromValue: String(existing.excitementStars), toValue: String(args.excitementStars), payload: { field: 'excitementStars' } });
-      }
-      if (Object.keys(data).length === 0) return { view: toTrackerView(existing, job, now), changed: false, moveEventId: null };
-      const out = await db.$transaction(async (tx) => {
+    // Read and write under the (user, job) lock: a concurrent apply, save or undo waits here.
+    const out = await withEntryLocks(db, userId, [jobId], async (tx) => {
+      const existing = await tx.rATrackerEntry.findFirst({ where: { userId, jobId, deletedAt: null } });
+      if (existing) {
+        const data: Prisma.RATrackerEntryUncheckedUpdateInput = {};
+        const others: EventDraft[] = [];
+        let move: EventDraft | null = null;
+        const forward =
+          args.status !== 'bookmarked' &&
+          args.status !== existing.status &&
+          (!applyTarget || existing.status === 'bookmarked' || isTerminal(existing.status));
+        if (forward) {
+          data.status = args.status;
+          if (isTerminal(existing.status)) data.outcome = null;
+          const stamp = applyTarget && !existing.dateApplied;
+          if (stamp) data.dateApplied = now;
+          if (applyTarget && args.appliedVia !== undefined && args.appliedVia !== existing.appliedVia) data.appliedVia = args.appliedVia;
+          move = {
+            kind: 'status',
+            fromValue: existing.status,
+            toValue: args.status,
+            payload: stamp
+              ? { stampedDateApplied: true, via, ...markPayload }
+              : { via, previousAppliedVia: existing.appliedVia ?? null, ...markPayload },
+          };
+          if (isTerminal(existing.status)) others.push({ kind: 'outcome', fromValue: existing.outcome ?? null, toValue: null });
+        }
+        if (args.excitementStars !== undefined && args.excitementStars !== existing.excitementStars) {
+          data.excitementStars = args.excitementStars;
+          others.push({ kind: 'field', fromValue: String(existing.excitementStars), toValue: String(args.excitementStars), payload: { field: 'excitementStars' } });
+        }
+        if (Object.keys(data).length === 0) return { row: existing, changed: false, moveId: null as string | null, learned: null as TrackerAffinityKind | null };
         const u = await tx.rATrackerEntry.update({ where: { id: existing.id }, data });
         const moveRow = move ? await tx.rATrackerEvent.create({ data: eventRows(userId, existing.id, [move], now)[0]! }) : null;
         if (others.length > 0) await tx.rATrackerEvent.createMany({ data: eventRows(userId, existing.id, others, now) });
-        return { u, moveId: moveRow?.id ?? null };
-      });
-      return { view: toTrackerView(out.u, job, now), changed: move !== null, moveEventId: out.moveId };
-    }
+        return { row: u, changed: move !== null, moveId: moveRow?.id ?? null, learned: move ? affinityFor(args.status) : null };
+      }
 
-    const applied = args.status === 'applied' || args.status === 'applying';
-    const source = args.source ?? 'feed';
-    const out = await db.$transaction(async (tx) => {
+      const source = args.source ?? 'feed';
       const c = await tx.rATrackerEntry.create({
         data: {
           userId,
@@ -490,17 +698,22 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
           dateSaved: now,
           maxSalary: job.salaryMax ?? null,
           maxSalaryCurrency: job.salaryCurrency ?? null,
-          dateApplied: applied ? now : null,
-          appliedVia: applied ? (args.appliedVia ?? 'manual') : null,
+          dateApplied: applyTarget ? now : null,
+          appliedVia: applyTarget ? (args.appliedVia ?? 'manual') : null,
           source,
         },
       });
       const ev = await tx.rATrackerEvent.create({
         data: eventRows(userId, c.id, [{ kind: 'created', toValue: args.status, payload: { source, via, ...markPayload } }], now)[0]!,
       });
-      return { c, moveId: ev.id };
+      return { row: c, changed: true, moveId: ev.id as string | null, learned: affinityFor(args.status) };
     });
-    return { view: toTrackerView(out.c, job, now), changed: true, moveEventId: out.moveId };
+
+    // The extension service records its own feed signal for its saves and its
+    // "I submitted" (features/extension/service.ts), so this channel is not counted twice.
+    const extension = args.source === 'extension' || via === 'extension';
+    if (!extension) await learn(userId, jobId, out.learned);
+    return { view: toTrackerView(out.row, job, now), changed: out.changed, moveEventId: out.moveId };
   }
 
   const core = {
@@ -513,13 +726,21 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
       if (statuses.length > 0) where.status = { in: statuses };
       if (query.source) where.source = query.source;
 
-      const countRows = await db.rATrackerEntry.findMany({ where: { userId, deletedAt: null }, select: { status: true } });
+      // GoApply, mode off: entries whose job is a third-party posting are left out of
+      // every number and list (one indexed id query; skipped on RoboApply).
+      const hiddenJobIds = await hiddenJobIdsFor(db, userId);
+      const base: Prisma.RATrackerEntryWhereInput = hiddenJobIds.length
+        ? { userId, deletedAt: null, OR: [{ jobId: null }, { jobId: { notIn: hiddenJobIds } }] }
+        : { userId, deletedAt: null };
+      Object.assign(where, base);
+
+      const countRows = await db.rATrackerEntry.findMany({ where: base, select: { status: true } });
       const statusCounts = emptyCounts();
       for (const r of countRows) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
 
       if (query.q || query.view === 'date') {
         const rows = await db.rATrackerEntry.findMany({ where, orderBy: { updatedAt: 'desc' }, take: SCAN_CAP });
-        let all = await views(db, rows);
+        let all = await views(db, userId, rows);
         if (query.q) all = all.filter((v) => matchesQuery(v, query.q!));
         if (query.view === 'date') all.sort(byDate);
         return { entries: all.slice(offset, offset + limit), statusCounts, total: all.length };
@@ -538,13 +759,12 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
         db.rATrackerEntry.findMany({ where, orderBy, skip: offset, take: limit }),
         db.rATrackerEntry.count({ where }),
       ]);
-      return { entries: await views(db, rows), statusCounts, total };
+      return { entries: await views(db, userId, rows), statusCounts, total };
     },
 
     async getById(userId: string, id: string): Promise<TrackerEntryView> {
       const db = await getDb();
-      const row = await liveEntry(db, userId, id);
-      return (await views(db, [row]))[0]!;
+      return viewOf(db, await liveEntry(db, userId, id));
     },
 
     async create(userId: string, body: TrackerCreateBody): Promise<TrackerEntryView> {
@@ -558,17 +778,13 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
       if (!isStageDetailAllowed(market, status, stageDetail)) {
         throw new TrackerInvalidInputError('That detail does not fit this stage.', TRACKER_ERROR_CODES.invalidStageDetail);
       }
-      let job: JobRow | null = null;
+      type PaidJob = JobRow & { salaryMax?: number | null; salaryCurrency?: string | null };
+      let job: PaidJob | null = null;
       if (body.jobId) {
-        // Only a live row blocks re-adding: a deleted entry must not 409 the same job forever.
-        const collide = await db.rATrackerEntry.findFirst({ where: { userId, jobId: body.jobId, deletedAt: null } });
-        if (collide) throw new TrackerDuplicateError();
-        job = ((await db.rAJob.findUnique({ where: { id: body.jobId }, select: { ...JOB_SELECT, salaryMax: true, salaryCurrency: true } })) ??
-          null) as (JobRow & { salaryMax: number | null; salaryCurrency: string | null }) | null;
-        if (!job) throw new TrackerNotFoundError();
+        job = ((await db.rAJob.findUnique({ where: { id: body.jobId }, select: { ...JOB_SELECT, salaryMax: true, salaryCurrency: true } })) ?? null) as PaidJob | null;
+        if (!job || (await jobHidden(job, userId))) throw new TrackerNotFoundError();
       }
-      const applied = status === 'applied' || status === 'applying';
-      const salaryJob = job as (JobRow & { salaryMax?: number | null; salaryCurrency?: string | null }) | null;
+      const applied = isApplied(status);
       const data: Prisma.RATrackerEntryUncheckedCreateInput = {
         userId,
         jobId: body.jobId ?? null,
@@ -577,8 +793,8 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
         outcome: isTerminal(status) ? outcomeForStatus(status) : null,
         stageDetail,
         excitementStars: body.excitementStars ?? 0,
-        maxSalary: body.maxSalary ?? salaryJob?.salaryMax ?? null,
-        maxSalaryCurrency: body.maxSalaryCurrency ?? salaryJob?.salaryCurrency ?? null,
+        maxSalary: body.maxSalary ?? job?.salaryMax ?? null,
+        maxSalaryCurrency: body.maxSalaryCurrency ?? job?.salaryCurrency ?? null,
         notesMarkdown: body.notesMarkdown ?? null,
         dateSaved: now,
         dateApplied: body.dateApplied ? new Date(body.dateApplied) : applied ? now : null,
@@ -588,13 +804,21 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
         appliedVia: applied ? 'manual' : null,
         source: body.source ?? (body.jobId ? 'feed' : 'manual'),
       };
-      const row = await db.$transaction(async (tx) => {
+      // Under the (user, job) lock the duplicate check and the insert are one step:
+      // two concurrent adds (or an add racing the job page's Save) leave one live entry.
+      const row = await withEntryLocks(db, userId, [body.jobId], async (tx) => {
+        if (body.jobId) {
+          // Only a live row blocks re-adding: a deleted entry must not 409 the same job forever.
+          const collide = await tx.rATrackerEntry.findFirst({ where: { userId, jobId: body.jobId, deletedAt: null } });
+          if (collide) throw new TrackerDuplicateError();
+        }
         const created = await tx.rATrackerEntry.create({ data });
         await tx.rATrackerEvent.createMany({
-          data: eventRows(userId, created.id, [{ kind: 'created', toValue: status, payload: { source: data.source ?? null } }], now),
+          data: eventRows(userId, created.id, [{ kind: 'created', toValue: status, payload: { source: data.source ?? null, via: VIA_TRACKER } }], now),
         });
         return created;
       });
+      await learn(userId, row.jobId, affinityFor(status));
       return toTrackerView(row, job, now);
     },
 
@@ -602,17 +826,19 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
       const db = await getDb();
       const market = marketOf();
       const now = clock();
-      const existing = await liveEntry(db, userId, id);
-      const { data, events } = planPatch(existing, body, market, now);
-      let row = existing;
-      if (events.length > 0) {
-        row = await db.$transaction(async (tx) => {
-          const updated = await tx.rATrackerEntry.update({ where: { id }, data });
-          await tx.rATrackerEvent.createMany({ data: eventRows(userId, id, events, now) });
-          return updated;
-        });
-      }
-      return (await views(db, [row]))[0]!;
+      const seen = await liveEntry(db, userId, id);
+      // Plan against the row as it is inside the lock (it may have moved since `seen` was read).
+      const out = await withEntryLocks(db, userId, [seen.jobId], async (tx) => {
+        const existing = seen.jobId ? await tx.rATrackerEntry.findFirst({ where: { id, userId, deletedAt: null } }) : seen;
+        if (!existing) throw new TrackerNotFoundError();
+        const { data, events } = planPatch(existing, body, market, now);
+        if (events.length === 0) return { row: existing, learned: null as TrackerAffinityKind | null };
+        const updated = await tx.rATrackerEntry.update({ where: { id }, data });
+        await tx.rATrackerEvent.createMany({ data: eventRows(userId, id, events, now) });
+        return { row: updated, learned: updated.status !== existing.status ? affinityFor(updated.status) : null };
+      });
+      await learn(userId, out.row.jobId, out.learned);
+      return viewOf(db, out.row);
     },
 
     /** Soft delete (the row stays for recovery and the 30-day purge, compliance retention). */
@@ -624,22 +850,30 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
 
     async bulk(userId: string, body: TrackerBulkBody): Promise<{ updated: number; entries: TrackerEntryView[] }> {
       const db = await getDb();
-      const existing = await db.rATrackerEntry.findMany({ where: { id: { in: body.ids }, userId, deletedAt: null } });
-      if (new Set(existing.map((e) => e.id)).size !== new Set(body.ids).size) {
+      const owned = await db.rATrackerEntry.findMany({ where: { id: { in: body.ids }, userId, deletedAt: null } });
+      // An entry whose job the GoApply mode hides is answered like one that is not the user's:
+      // nothing in the request is changed, and the answer does not say which id it was.
+      const seen = (await visibleRows(db, userId, owned)).rows;
+      if (new Set(seen.map((e) => e.id)).size !== new Set(body.ids).size) {
         throw new TrackerInvalidInputError('Some ids not owned by user', 'not_owner');
       }
       const market = marketOf();
       const now = clock();
-      const plans = existing.map((e) => ({ id: e.id, ...planPatch(e, body.patch, market, now) }));
-      await db.$transaction(async (tx) => {
-        for (const p of plans) {
+      const moved = await withEntryLocks(db, userId, seen.map((e) => e.jobId), async (tx) => {
+        const existing = await tx.rATrackerEntry.findMany({ where: { id: { in: body.ids }, userId, deletedAt: null } });
+        const learned: Array<{ jobId: string | null; kind: TrackerAffinityKind | null }> = [];
+        for (const e of existing) {
+          const p = planPatch(e, body.patch, market, now);
           if (p.events.length === 0) continue;
-          await tx.rATrackerEntry.update({ where: { id: p.id }, data: p.data });
-          await tx.rATrackerEvent.createMany({ data: eventRows(userId, p.id, p.events, now) });
+          const updated = await tx.rATrackerEntry.update({ where: { id: e.id }, data: p.data });
+          await tx.rATrackerEvent.createMany({ data: eventRows(userId, e.id, p.events, now) });
+          if (updated.status !== e.status) learned.push({ jobId: updated.jobId, kind: affinityFor(updated.status) });
         }
+        return learned;
       });
+      await learnMany(userId, moved);
       const rows = await db.rATrackerEntry.findMany({ where: { id: { in: body.ids }, userId } });
-      return { updated: rows.length, entries: await views(db, rows) };
+      return { updated: rows.length, entries: await views(db, userId, rows) };
     },
 
     /**
@@ -662,9 +896,9 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
      * `changed` is false when the click moved nothing (the entry was already
      * at Applied or further along), and `eventId` names the move to undo.
      */
-    async markApplied(userId: string, jobId: string, via: ApplyVia): Promise<ApplyMark> {
+    async markApplied(userId: string, jobId: string, via: ApplyVia): Promise<ApplyResult> {
       const out = await upsertJobEntry(userId, jobId, { status: 'applied', appliedVia: via, source: SOURCE_FOR_VIA[via], applyMark: true });
-      return { entryId: out.view.id, changed: out.changed, eventId: out.moveEventId };
+      return { entryId: out.view.id, changed: out.changed, eventId: out.moveEventId, alreadyApplied: !out.changed };
     },
 
     /**
@@ -682,67 +916,65 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
       if (opts.mark && (!opts.mark.changed || !opts.mark.eventId)) return NOOP;
       const db = await getDb();
       const now = clock();
-      const entry = await db.rATrackerEntry.findFirst({ where: { userId, jobId, deletedAt: null } });
-      if (!entry || (entry.status !== 'applied' && entry.status !== 'applying')) return NOOP;
-      if (opts.mark && opts.mark.entryId !== entry.id) return NOOP;
-      const history = await db.rATrackerEvent.findMany({
-        where: { entryId: entry.id, userId },
-        orderBy: { createdAt: 'desc' },
-        take: EVENTS_CAP,
-      });
-      // Newest move first; on a timestamp tie a status move is newer than the creation.
-      const moves = history
-        .filter((e) => e.kind === 'status' || e.kind === 'created')
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || Number(a.kind === 'created') - Number(b.kind === 'created'));
-      // With a token, the move it names must still be the newest one (nothing moved the entry since).
-      const last = opts.mark ? moves.find((e) => e.id === opts.mark!.eventId) : moves[0];
-      if (!last || last.toValue !== entry.status) return NOOP;
-      if (moves.some((e) => e.createdAt.getTime() > last.createdAt.getTime())) return NOOP;
-      const payload = (last.payload && typeof last.payload === 'object' ? last.payload : {}) as Record<string, unknown>;
-      if (!opts.mark) {
-        if (payload.applyMark !== true) return NOOP;
-        if (opts.via && payload.via !== opts.via) return NOOP;
-        if (now.getTime() - last.createdAt.getTime() > UNDO_WINDOW_MS) return NOOP;
-      }
+      // Same lock as markApplied: the entry and its history are read after any
+      // concurrent apply or stage move has finished, so one move is undone at most once.
+      return withEntryLocks(db, userId, [jobId], async (tx) => {
+        const entry = await tx.rATrackerEntry.findFirst({ where: { userId, jobId, deletedAt: null } });
+        if (!entry || !isApplied(entry.status)) return NOOP;
+        if (opts.mark && opts.mark.entryId !== entry.id) return NOOP;
+        const history = await tx.rATrackerEvent.findMany({
+          where: { entryId: entry.id, userId },
+          orderBy: { createdAt: 'desc' },
+          take: EVENTS_CAP,
+        });
+        // Newest move first; on a timestamp tie a status move is newer than the creation.
+        const moves = history
+          .filter((e) => e.kind === 'status' || e.kind === 'created')
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || Number(a.kind === 'created') - Number(b.kind === 'created'));
+        // With a token, the move it names must still be the newest one (nothing moved the entry since).
+        const last = opts.mark ? moves.find((e) => e.id === opts.mark!.eventId) : moves[0];
+        if (!last || last.toValue !== entry.status) return NOOP;
+        if (moves.some((e) => e.createdAt.getTime() > last.createdAt.getTime())) return NOOP;
+        const payload = (last.payload && typeof last.payload === 'object' ? last.payload : {}) as Record<string, unknown>;
+        if (!opts.mark) {
+          if (payload.applyMark !== true) return NOOP;
+          if (opts.via && payload.via !== opts.via) return NOOP;
+          if (now.getTime() - last.createdAt.getTime() > UNDO_WINDOW_MS) return NOOP;
+        }
 
-      if (last.kind === 'created') {
-        const touchedSince = history.some(
-          (e) => e.id !== last.id && e.kind !== 'reminder' && e.kind !== 'status' && e.kind !== 'created' && e.createdAt.getTime() >= last.createdAt.getTime(),
-        );
-        if (!touchedSince) {
-          await db.$transaction(async (tx) => {
+        if (last.kind === 'created') {
+          const touchedSince = history.some(
+            (e) => e.id !== last.id && e.kind !== 'reminder' && e.kind !== 'status' && e.kind !== 'created' && e.createdAt.getTime() >= last.createdAt.getTime(),
+          );
+          if (!touchedSince) {
             await tx.rATrackerEntry.update({ where: { id: entry.id }, data: { deletedAt: now } });
             await tx.rATrackerEvent.createMany({ data: eventRows(userId, entry.id, [{ kind: 'status', fromValue: entry.status, toValue: null, payload: { undo: true, removed: true } }], now) });
-          });
-          return { undone: true };
-        }
-        // The user has written into this entry since: keep it, as a saved job.
-        await db.$transaction(async (tx) => {
+            return { undone: true };
+          }
+          // The user has written into this entry since: keep it, as a saved job.
           await tx.rATrackerEntry.update({ where: { id: entry.id }, data: { status: 'bookmarked', dateApplied: null, appliedVia: null } });
           await tx.rATrackerEvent.createMany({ data: eventRows(userId, entry.id, [{ kind: 'status', fromValue: entry.status, toValue: 'bookmarked', payload: { undo: true } }], now) });
-        });
-        return { undone: true };
-      }
+          return { undone: true };
+        }
 
-      const previous = (last.fromValue ?? 'bookmarked') as TrackerStatus;
-      const data: Prisma.RATrackerEntryUncheckedUpdateInput = { status: previous };
-      const events: EventDraft[] = [{ kind: 'status', fromValue: entry.status, toValue: previous, payload: { undo: true } }];
-      if (payload.stampedDateApplied === true) {
-        data.dateApplied = null;
-        data.appliedVia = null;
-      } else if (typeof payload.previousAppliedVia === 'string' || payload.previousAppliedVia === null) {
-        data.appliedVia = payload.previousAppliedVia as string | null;
-      }
-      const restoredOutcome = outcomeForStatus(previous);
-      if (restoredOutcome) {
-        data.outcome = restoredOutcome;
-        events.push({ kind: 'outcome', fromValue: entry.outcome ?? null, toValue: restoredOutcome, payload: { undo: true } });
-      }
-      await db.$transaction(async (tx) => {
+        const previous = (last.fromValue ?? 'bookmarked') as TrackerStatus;
+        const data: Prisma.RATrackerEntryUncheckedUpdateInput = { status: previous };
+        const events: EventDraft[] = [{ kind: 'status', fromValue: entry.status, toValue: previous, payload: { undo: true } }];
+        if (payload.stampedDateApplied === true) {
+          data.dateApplied = null;
+          data.appliedVia = null;
+        } else if (typeof payload.previousAppliedVia === 'string' || payload.previousAppliedVia === null) {
+          data.appliedVia = payload.previousAppliedVia as string | null;
+        }
+        const restoredOutcome = outcomeForStatus(previous);
+        if (restoredOutcome) {
+          data.outcome = restoredOutcome;
+          events.push({ kind: 'outcome', fromValue: entry.outcome ?? null, toValue: restoredOutcome, payload: { undo: true } });
+        }
         await tx.rATrackerEntry.update({ where: { id: entry.id }, data });
         await tx.rATrackerEvent.createMany({ data: eventRows(userId, entry.id, events, now) });
+        return { undone: true };
       });
-      return { undone: true };
     },
 
     /** WP-64 seam: write the user's own offer numbers (an `offer` event is recorded). */
@@ -789,8 +1021,8 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
 
     async factEntries(userId: string): Promise<FactEntry[]> {
       const db = await getDb();
-      const rows = await db.rATrackerEntry.findMany({ where: { userId, deletedAt: null }, take: SCAN_CAP });
-      const jobs = await jobsById(db, rows.map((r) => r.jobId));
+      const all = await db.rATrackerEntry.findMany({ where: { userId, deletedAt: null }, take: SCAN_CAP });
+      const { rows, jobs } = await visibleRows(db, userId, all);
       return rows.map((r) => {
         const job = r.jobId ? jobs.get(r.jobId) : null;
         const snap = asSnapshot(r.externalSnapshot);
@@ -836,7 +1068,7 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
     async exportEntries(userId: string): Promise<TrackerEntryView[]> {
       const db = await getDb();
       const rows = await db.rATrackerEntry.findMany({ where: { userId, deletedAt: null }, orderBy: { updatedAt: 'desc' }, take: SCAN_CAP });
-      return views(db, rows);
+      return views(db, userId, rows);
     },
   };
   return core;
@@ -844,5 +1076,5 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
 
 export type TrackerCore = ReturnType<typeof createTrackerCore>;
 
-/** The process-wide instance (real Prisma, brand market from the request context). */
-export const trackerCore: TrackerCore = createTrackerCore();
+/** The process-wide instance (real Prisma, brand market from the request context, feed affinity on). */
+export const trackerCore: TrackerCore = createTrackerCore({ recordInteraction: feedRecordInteraction });

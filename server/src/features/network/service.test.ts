@@ -14,6 +14,7 @@ import { BRANDS } from '../../platform/brand/registry.js';
 import { createCreditTestKit } from '../../platform/credits/testkit.js';
 import { HttpError } from '../../platform/http.js';
 import { LINKEDIN_NOTE_MAX_CHARS } from './contract.js';
+import { networkService, setNetworkServiceForTests } from './index.js';
 import { NetworkService, hasOptInRecord, optedInAtOf } from './service.js';
 import { createNetworkFixture, jobRow } from './testkit.js';
 
@@ -335,6 +336,29 @@ describe('outreach drafts', () => {
   it('D1: the service has no send method', () => {
     const methods = Object.getOwnPropertyNames(NetworkService.prototype);
     expect(methods.filter((m) => /send|deliver|dispatch|submit/i.test(m))).toEqual([]);
+  });
+});
+
+describe('networkService.createOutreachDraft (the seam the Assistant\'s draft_outreach proposal calls)', () => {
+  it('runs the same path as the route: one outreach credit, replay-safe on the key, AI gate first', async () => {
+    const f = setup();
+    setNetworkServiceForTests(f.service);
+    try {
+      const a = await networkService.createOutreachDraft(U, { jobId: 'job_1', channel: 'email', locale: 'en' }, 'copilot:prop_1');
+      const b = await networkService.createOutreachDraft(U, { jobId: 'job_1', channel: 'email', locale: 'en' }, 'copilot:prop_1');
+      expect(b.id).toBe(a.id);
+      expect(f.calls).toHaveLength(1);
+      expect(f.calls[0]!.locale).toBe('en');
+      const usage = await f.kit.credits.usage(U, { brand: 'roboapply' });
+      expect(usage.find((u) => u.bucket === 'outreach')?.used).toBe(1);
+
+      f.state.ai = false;
+      expect(await code(networkService.createOutreachDraft(U, { jobId: 'job_1', channel: 'email' }, 'copilot:prop_2'))).toMatchObject({ code: 'ai_unavailable' });
+      expect(f.calls).toHaveLength(1);
+      expect((await f.kit.credits.usage(U, { brand: 'roboapply' })).find((u) => u.bucket === 'outreach')?.used).toBe(1);
+    } finally {
+      setNetworkServiceForTests(null);
+    }
   });
 });
 

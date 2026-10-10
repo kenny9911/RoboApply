@@ -14,7 +14,7 @@ import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import type { JobDetailResponse } from '../jobs/detail/index.js';
 import type { CompanyProfile } from '../jobs/companies/index.js';
 import type { MatchFitView } from '../match/index.js';
-import type { ConnectionsForJobResponse } from '../network/index.js';
+import type { ConnectionsForJobResponse, OutreachChannel, OutreachDraftView } from '../network/index.js';
 import type { QuestionView } from '../prep/index.js';
 import type { TrackerSummary } from '../tracker/index.js';
 import type { CampusEventView } from '../cn/campus/index.js';
@@ -39,7 +39,11 @@ export interface CopilotAreas {
   scoreJob(userId: string, jobId: string, options: { resumeVariantId?: string | null; locale?: string }): Promise<MatchFitView>;
   companyProfile(idOrSlug: string): Promise<CompanyProfile>;
   connectionsForJob(userId: string, jobId: string): Promise<ConnectionsForJobResponse>;
-  planForJob(userId: string, jobId: string): Promise<{ questions: QuestionView[] }>;
+  /**
+   * Questions for a job. Read-only by default; `write: true` (the user asked
+   * for questions) lets prep write a missing AI practice set for the job.
+   */
+  planForJob(userId: string, jobId: string, options?: { write?: boolean; locale?: string }): Promise<{ questions: QuestionView[] }>;
   // you
   trackerSummary(userId: string): Promise<TrackerSummary>;
   profileCompleteness(userId: string): Promise<{ completeness: number; missing: Array<{ key: string; label: string }> }>;
@@ -53,6 +57,8 @@ export interface CopilotAreas {
   // proposal applies (each spends its own credit inside the area service)
   createTailorSession(userId: string, input: { baseVariantId: string; jobId: string; idempotencyKey: string; locale?: string }): Promise<TailorSessionView>;
   createCoverLetter(userId: string, input: { jobId: string; resumeVariantId: string; tone?: LetterTone; length?: LetterLength }, idempotencyKey: string): Promise<CoverLetterView>;
+  /** NET `networkService.createOutreachDraft`: AI gate, then one `outreach` credit, then the draft. Never sends. */
+  createOutreachDraft(userId: string, body: { jobId: string; channel: OutreachChannel; locale?: string }, idempotencyKey: string): Promise<OutreachDraftView>;
   importJob(userId: string, body: { url: string }, idempotencyKey: string): Promise<ImportJobResponse>;
   saveImportedJob(userId: string, fields: ManualJob, options: { importId: string; idempotencyKey: string }): Promise<ImportJobResponse>;
   fixResumeIssue(

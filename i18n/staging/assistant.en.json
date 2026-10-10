@@ -15,7 +15,8 @@
       "hideFab": "Hide the floating button"
     },
     "context": {
-      "job": "About this job"
+      "job": "About this job",
+      "resume": "About this resume"
     },
     "composer": {
       "label": "Your question",
@@ -62,7 +63,8 @@
       "phone_binding_required": "Add a phone number to your account to use the Assistant.",
       "default": "The answer stopped early.",
       "retry": "Try again",
-      "loadFailed": "This chat could not be loaded."
+      "loadFailed": "This chat could not be loaded.",
+      "save_failed": "This answer could not be saved, so it did not use a message. Try again."
     },
     "feedback": {
       "up": "Helpful",
@@ -104,7 +106,8 @@
           "title": "Find jobs",
           "q1": "Show me remote data analyst jobs.",
           "q2": "Which new jobs fit me best this week?",
-          "q3": "Find jobs that list their pay."
+          "q3": "Find jobs that list their pay.",
+          "sort": "Show the newest jobs first."
         },
         "search": {
           "title": "Change your search",
@@ -202,7 +205,6 @@
       },
       "filterDiff": {
         "title": "Suggested change to your search",
-        "count": "Your search would show {count, plural, one {# job} other {# jobs}}.",
         "apply": "Apply changes",
         "applied": "Changes applied.",
         "show": "Show {count, plural, one {# job} other {# jobs}}",
@@ -215,7 +217,11 @@
         "notQuite": "Not quite",
         "thanks": "Thanks. The new search stays.",
         "reverted": "Your previous search is back.",
-        "revertFailed": "The previous search could not be restored."
+        "revertFailed": "The previous search could not be restored.",
+        "countNow": "Jobs your search shows now: {count}",
+        "countAfter": "Jobs it would show with this change: {count}",
+        "showCapped": "Show {count}+ jobs",
+        "conflictClosed": "Your search changed after this suggestion, so it was not applied. Ask again for a fresh one."
       },
       "fit": {
         "title": "Your fit for this job",
@@ -258,7 +264,9 @@
         },
         "outreach": {
           "title": "Draft a message about {job}",
-          "confirm": "Write the draft"
+          "confirm": "Write the draft",
+          "open": "Open it on the job’s People tab",
+          "kept": "Your draft is on the job’s People tab."
         },
         "job_import": {
           "title": "Add this job to your list",
@@ -335,7 +343,9 @@
         "consentTitle": "Memory needs your permission first",
         "allow": "Allow and remember",
         "consentLoading": "Loading the permission text…",
-        "consentFailed": "The permission text could not be loaded, so nothing was saved."
+        "consentFailed": "The permission text could not be loaded, so nothing was saved.",
+        "consentNeeded": "Memory needs your permission first. Turn it on in Settings, then try again.",
+        "full": "The Assistant already remembers as much as it can. Delete something in Settings first."
       },
       "gaps": {
         "title": "Missing from your profile",
@@ -396,7 +406,8 @@
         "none": "No rewrite could be written for this one. You can edit it yourself in the resume check.",
         "blocked": "{count, plural, one {# suggestion was left out because it added numbers that are not in your resume.} other {# suggestions were left out because they added numbers that are not in your resume.}}",
         "open": "Review and apply in the resume check"
-      }
+      },
+      "proposalClosed": "This suggestion can no longer be used. Ask again for a fresh one."
     },
     "memory": {
       "title": "What the Assistant remembers",

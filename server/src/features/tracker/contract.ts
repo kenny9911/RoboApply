@@ -94,6 +94,13 @@ export interface TrackerJobView {
   applyUrl: string;
   /** The posting is closed, archived or past its expiry (saved jobs group these apart). */
   closed: boolean;
+  /**
+   * `private` = the user's own import (always theirs to see); `public` = a
+   * posting from our index. GoApply with CN_RECRUITMENT_INFO_MODE=off never
+   * returns an entry whose job is `public` (R-14). Always sent by the server;
+   * optional so older fixtures and cached board data stay valid.
+   */
+  visibility?: 'public' | 'private';
 }
 
 /** `RATrackerEntry.externalSnapshot`: `{ title, companyName, location?, applyUrl }` captured at add time. */
@@ -368,15 +375,26 @@ export const WeeklyInsightQuerySchema = z.object({ weekStartUtc: DateOnly.option
 
 /** CSV export: 5/day. */
 export const TRACKER_EXPORT_DAILY_LIMIT = 5;
-/** Reminders: in-app message `templateKey`s (full i18n key paths in the `applications` namespace). */
-export const TRACKER_REMINDER_TEMPLATE_KEYS: Record<FollowUpReason, string> = {
-  no_reply_10d: 'applications.reminders.no_reply',
-  follow_up_due: 'applications.reminders.follow_up_due',
-  interview_tomorrow: 'applications.reminders.interview_tomorrow',
-  deadline_soon: 'applications.reminders.deadline_soon',
-};
-/** Email template the reminder producer enqueues when WP-39a has registered it. */
-export const TRACKER_REMINDER_EMAIL_TEMPLATE = 'notify.tracker_reminder';
+/**
+ * Reminders: the inbox `templateKey`s (the message center renders
+ * `inbox.templates.<key>.{title,body}` when the key exists and every argument
+ * is in `params`, else the stored title). `tracker.followUp` and
+ * `tracker.interview` are rendered today; the other two show the stored
+ * sentence, which the producer writes in the person's language from the server
+ * i18n loader (`tracker.inbox.*` / GoApply `tracker.inboxCn.*`), until their
+ * keys are added to the `inbox` namespace.
+ */
+export const TRACKER_INBOX_TEMPLATES = {
+  followUp: 'tracker.followUp',
+  interview: 'tracker.interview',
+  followUpDue: 'tracker.followUpDue',
+  deadline: 'tracker.deadline',
+} as const;
+/** Reminder emails (features/alerts `NOTIFY_TEMPLATES.followUpReminder` / `interviewReminder`; a test keeps them equal). */
+export const TRACKER_NOTIFY_TEMPLATES = {
+  followUp: 'notify.follow_up_reminder',
+  interview: 'notify.interview_reminder',
+} as const;
 
 export const TRACKER_ERROR_CODES = {
   notFound: 'tracker_entry_not_found',

@@ -7,7 +7,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 
-import { ACTION_CARD_CAPS, CREDIT_ACTIONS, CopilotCardView } from '../cards';
+import { ACTION_CARD_CAPS, CREDIT_ACTIONS, CopilotCardView, conflictCard, countText, parseCount, parseFilterDiff, sortHref } from '../cards';
 import { NUDGE_KINDS } from '../../../../hooks/copilot/nudges';
 import { countsByLabel } from '../cards/ApplicationsCard';
 import { ALL_TRACKER_STATUSES } from '../../../../server/src/features/tracker/contract';
@@ -15,7 +15,7 @@ import { CARD_TYPES, CREDIT_ACTIONS as SERVER_CREDIT_ACTIONS, NUDGE_KINDS as SER
 import { __assistantChangeStore } from '../../../../hooks/feed/useCalibration';
 import { __outOfCreditsStore } from '../../../../hooks/shared/useCreditGate';
 import { CREDITS, MEMORY_CONSENT, PROFILE, PROFILES, card, fail, installFetch, ok, renderUi, type Route } from './testkit';
-import { wireCard, wireCards } from './wireCards';
+import { wireCard, wireCards, wireFilterConflict, wireOutreach } from './wireCards';
 import type { CopilotCard } from '../../../../lib/api/contracts/copilot';
 
 vi.mock('../../../../server/src/services/LoggerService.js', () => ({
@@ -37,13 +37,15 @@ beforeAll(async () => {
   WIRE = await wireCards();
 });
 
+/** A CountView as the server's `countView()` builds it (the count is Sourced; `capped` = "N+"). */
+const count = (value: number | null, capped = false) => ({ count: value === null ? null : { value, source: 'index', sampleSize: value, asOf: AS_OF, method: 'computed' }, capped });
+
 /**
  * Scenario cards for the proposal flows below: the producers' shapes with the
- * ids, versions and counts each scenario needs. (`filter_diff` keeps a plain
- * `countAfter` number here: the CountView count is a WP-93 carry-over.)
+ * ids, versions and counts each scenario needs.
  */
 const FIXTURES: Record<string, unknown> = {
-  filter_diff: { proposalId: 'p_f', status: 'pending', searchProfileId: 'sp_main', baseVersion: 3, reason: 'You asked for hybrid jobs.', ops: [{ op: 'add', path: 'workModels', value: 'hybrid' }], changes: [], countBefore: null, countAfter: 12, expiresAt: '2099-01-01T00:00:00.000Z' },
+  filter_diff: { proposalId: 'p_f', status: 'pending', searchProfileId: 'sp_main', baseVersion: 3, reason: 'You asked for hybrid jobs.', ops: [{ op: 'add', path: 'workModels', value: 'hybrid' }], changes: [], countBefore: count(30), countAfter: count(12), expiresAt: '2099-01-01T00:00:00.000Z' },
   credit_action: { proposalId: 'p_c', status: 'pending', expiresAt: '2099-01-01T00:00:00.000Z', action: 'tailor', bucket: 'tailor', cost: 1, jobId: 'job_1', remaining: 2, resetsAt: '2026-10-11T00:00:00.000Z' },
   memory_add: { proposalId: 'p_m', status: 'pending', expiresAt: '2099-01-01T00:00:00.000Z', fact: 'Prefers remote jobs in Berlin time zones.', consentRequired: false },
 };
@@ -68,15 +70,6 @@ afterEach(() => {
 });
 
 describe('every card type renders', () => {
-  // The sort link is gated until /jobs reads ?sort= (see the action test below);
-  // here every type is rendered with its destination available.
-  beforeEach(() => {
-    ACTION_CARD_CAPS.sortLink = true;
-  });
-  afterEach(() => {
-    ACTION_CARD_CAPS.sortLink = false;
-  });
-
   it('a server tool produces every contract card type', () => {
     expect(Object.keys(WIRE).sort()).toEqual([...CARD_TYPES].sort());
   });
@@ -100,12 +93,27 @@ describe('every card type renders', () => {
 });
 
 describe('card content', () => {
-  it('action set_sort renders nothing while /jobs does not honour ?sort= (no promise the page cannot keep)', () => {
+  it('action set_sort (as the set_sort tool sends it) links to /jobs?sort=<sort>, which the feed honours', () => {
     installFetch(routes());
-    expect(ACTION_CARD_CAPS.sortLink).toBe(false);
-    const { container } = renderUi(<CopilotCardView card={card('action', wire('action'))} />);
-    expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole('link', { name: 'Show jobs sorted this way' })).not.toBeInTheDocument();
+    expect(ACTION_CARD_CAPS.sortLink).toBe(true);
+    renderUi(<CopilotCardView card={card('action', wire('action'))} />);
+    expect(screen.getByText('Sort your jobs by: Newest')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Show jobs sorted this way' })).toHaveAttribute('href', '/jobs?sort=newest');
+    expect(sortHref('highest_pay')).toBe('/jobs?sort=highest_pay');
+  });
+
+  it('action set_sort: an order the feed does not know renders nothing; with the link switched off the card promises nothing', () => {
+    installFetch(routes());
+    const unknown = renderUi(<CopilotCardView card={card('action', { kind: 'set_sort', sort: 'most_viewed' })} />);
+    expect(unknown.container).toBeEmptyDOMElement();
+    unknown.unmount();
+    ACTION_CARD_CAPS.sortLink = false;
+    try {
+      const { container } = renderUi(<CopilotCardView card={card('action', wire('action'))} />);
+      expect(container).toBeEmptyDOMElement();
+    } finally {
+      ACTION_CARD_CAPS.sortLink = true;
+    }
   });
 
   it('applications: real tracker statuses get their own labels; bookmarked is Saved; legacy statuses fold', () => {
@@ -253,11 +261,21 @@ describe('card content', () => {
 });
 
 describe('filter_diff (F-ORION-04)', () => {
-  it('shows the diff and the count, and changes nothing until Apply changes', async () => {
+  const countLine = (id: 'filter-diff-count-before' | 'filter-diff-count-after') => screen.getByTestId(id);
+
+  it('shows the diff and both counts with their source, and changes nothing until Apply changes', async () => {
     const http = installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => ok({ applied: true, result: null }) }));
     renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
     await screen.findByRole('button', { name: 'Apply changes' });
-    expect(screen.getByText('Your search would show 12 jobs.')).toBeInTheDocument();
+    expect(countLine('filter-diff-count-before')).toHaveTextContent('Jobs your search shows now: 30');
+    expect(countLine('filter-diff-count-after')).toHaveTextContent('Jobs it would show with this change: 12');
+    // Each count carries its source line (SourceNote): where it comes from and as of when.
+    for (const id of ['filter-diff-count-before', 'filter-diff-count-after'] as const) {
+      const note = countLine(id).querySelector('[data-source-note="sourced"]');
+      expect(note, id).not.toBeNull();
+      expect(note!.textContent).toMatch(/^Source: jobs listed with us/);
+      expect(note!.textContent).toMatch(/2026/);
+    }
     expect(screen.getByText('Add')).toBeInTheDocument();
     expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(0);
     expect(http.calls.some((c) => c.method === 'PATCH')).toBe(false);
@@ -267,6 +285,52 @@ describe('filter_diff (F-ORION-04)', () => {
     expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')[0].body).toEqual({ baseVersion: 3 });
     expect(screen.getByRole('link', { name: 'Show 12 jobs' })).toHaveAttribute('href', '/jobs');
     expect(__assistantChangeStore.get()).toMatchObject({ searchProfileId: 'sp_main', before: { workModels: ['remote'] } });
+  });
+
+  it('the propose_filter_change tool\'s own card: CountView counts render as numbers (120 now, 40 with the change)', async () => {
+    installFetch(routes({ 'GET /api/v1/roboapply/search-profiles': () => ok(PROFILES([PROFILE({ id: 'sp_1', version: 3 })])) }));
+    const data = parseFilterDiff(WIRE.filter_diff!.data)!;
+    expect(data.countBefore).toMatchObject({ value: 120, capped: false, sourced: { source: 'index', method: 'computed' } });
+    expect(data.countAfter).toMatchObject({ value: 40, capped: false });
+    renderUi(<CopilotCardView card={WIRE.filter_diff!} />);
+    await screen.findByRole('button', { name: 'Apply changes' });
+    expect(countLine('filter-diff-count-before')).toHaveTextContent('Jobs your search shows now: 120');
+    expect(countLine('filter-diff-count-after')).toHaveTextContent('Jobs it would show with this change: 40');
+    expect(countLine('filter-diff-count-after').querySelector('[data-source-note]')).not.toBeNull();
+  });
+
+  it('an unknown count renders "—" (never 0) with no source line; a capped count renders "N+"', async () => {
+    installFetch(routes());
+    const data = { ...(FIXTURES.filter_diff as object), countBefore: count(500, true), countAfter: null };
+    renderUi(<CopilotCardView card={card('filter_diff', data)} />);
+    await screen.findByRole('button', { name: 'Apply changes' });
+    expect(countLine('filter-diff-count-before')).toHaveTextContent('Jobs your search shows now: 500+');
+    expect(countLine('filter-diff-count-before')).toHaveAttribute('data-count', 'capped');
+    expect(countLine('filter-diff-count-after')).toHaveTextContent('Jobs it would show with this change: —');
+    expect(countLine('filter-diff-count-after')).toHaveAttribute('data-count', 'unknown');
+    expect(countLine('filter-diff-count-after').querySelector('[data-source-note]')).toBeNull();
+    expect(countLine('filter-diff-count-after').textContent).not.toMatch(/\b0\b/);
+  });
+
+  it('a small count is shown as it is (an exact count, not an aggregate held back by the sample rule)', async () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={card('filter_diff', { ...(FIXTURES.filter_diff as object), countAfter: count(3) })} />);
+    await screen.findByRole('button', { name: 'Apply changes' });
+    expect(countLine('filter-diff-count-after')).toHaveTextContent('Jobs it would show with this change: 3');
+    expect(countLine('filter-diff-count-after').textContent).not.toContain('Not enough data');
+  });
+
+  it('parseCount: a CountView only; a bare number has no source and is not shown', () => {
+    expect(parseCount(count(12))).toMatchObject({ value: 12, capped: false });
+    expect(parseCount(count(40, true))).toMatchObject({ value: 40, capped: true });
+    expect(parseCount(count(null))).toEqual({ value: null, capped: false, sourced: null });
+    expect(parseCount(null)).toEqual({ value: null, capped: false, sourced: null });
+    expect(parseCount(12)).toEqual({ value: null, capped: false, sourced: null });
+    expect(parseCount({ count: { value: 12 }, capped: false })).toEqual({ value: null, capped: false, sourced: null });
+    expect(parseCount({ count: { value: -1, source: 'index', asOf: AS_OF }, capped: false }).value).toBeNull();
+    expect(countText(parseCount(count(0)))).toBe('0');
+    expect(countText(parseCount(null))).toBe('—');
+    expect(countText(parseCount(count(200, true)))).toBe('200+');
   });
 
   it('Looks better keeps it; Not quite puts the previous filters back', async () => {
@@ -284,22 +348,148 @@ describe('filter_diff (F-ORION-04)', () => {
     expect(__assistantChangeStore.get()).toBeNull();
   });
 
-  it('a version conflict re-reads the search and shows the fresh diff', async () => {
+  /** The fresh card a 409 carries: a new proposal against the search at version 4, with its own counts. */
+  const FRESH = {
+    type: 'filter_diff',
+    id: 'card_fresh',
+    data: { ...(FIXTURES.filter_diff as object), proposalId: 'p_f2', baseVersion: 4, countBefore: count(25), countAfter: count(7) },
+  };
+  const conflict409 = (cardOrNull: unknown) => fail(409, 'version_conflict', { currentVersion: 4, card: cardOrNull });
+  const movedTo4 = () => {
+    let reads = 0;
+    return () => {
+      reads += 1;
+      return ok(PROFILES([{ ...PROFILES().profiles[0], version: reads > 1 ? 4 : 3 }]));
+    };
+  };
+
+  it('a 409 version_conflict renders the fresh card from details.card in this card\'s place (its counts, its proposal)', async () => {
+    const http = installFetch(
+      routes({
+        'GET /api/v1/roboapply/search-profiles': movedTo4(),
+        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => conflict409(FRESH),
+        'POST /api/v1/roboapply/copilot/proposals/p_f2/apply': () => ok({ applied: true, result: null }),
+      }),
+    );
+    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    await screen.findByText('Jobs it would show with this change: 12');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    await screen.findByText(/Your search changed after this suggestion/);
+    // The fresh card's counts, never the old proposal's.
+    expect(await screen.findByText('Jobs it would show with this change: 7')).toBeInTheDocument();
+    expect(screen.getByText('Jobs your search shows now: 25')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/: 12\b|: 30\b/);
+    expect(container.querySelectorAll('[data-card="filter_diff"]')).toHaveLength(1);
+
+    // Applying now applies the FRESH proposal at the version it names.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    await screen.findByText('Changes applied.');
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(1);
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f2/apply')[0].body).toEqual({ baseVersion: 4 });
+    expect(screen.getByRole('link', { name: 'Show 7 jobs' })).toHaveAttribute('href', '/jobs');
+  });
+
+  it('a count sent next to the conflict (details.countAfter) is ignored: only the fresh card counts', async () => {
+    installFetch(
+      routes({
+        'GET /api/v1/roboapply/search-profiles': movedTo4(),
+        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'version_conflict', { currentVersion: 4, countAfter: 99, card: FRESH }),
+      }),
+    );
+    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
+    await screen.findByText('Jobs it would show with this change: 7');
+    expect(container.textContent).not.toContain('99');
+  });
+
+  it('a suggestion already used or dismissed elsewhere (409 proposal_closed) does not claim the search changed or that nothing was applied', async () => {
+    const http = installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applied' }) }));
+    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
+    const closed = await screen.findByTestId('filter-diff-closed');
+    expect(closed).toHaveAttribute('data-reason', 'closed');
+    expect(closed).toHaveTextContent('This suggestion can no longer be used. Ask again for a fresh one.');
+    expect(container.textContent).not.toMatch(/Your search changed|was not applied/);
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(1);
+  });
+
+  it('a conflict with no fresh card (nothing left to change) closes the suggestion: no count, no Apply', async () => {
+    const http = installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => conflict409(null) }));
+    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
+    expect(await screen.findByTestId('filter-diff-closed')).toHaveTextContent('Your search changed after this suggestion, so it was not applied.');
+    expect(screen.getByTestId('filter-diff-closed')).toHaveAttribute('data-reason', 'conflict');
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/would show|shows now/);
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(1);
+  });
+
+  it('the server\'s real 409 (proposals.ts): details.card parses and renders as the fresh diff', async () => {
+    const { proposal, details } = await wireFilterConflict();
+    const fresh = conflictCard(details)!;
+    expect(fresh).toMatchObject({ type: 'filter_diff' });
+    expect(parseFilterDiff(fresh.data)).toMatchObject({ baseVersion: 4, status: 'pending', countAfter: { value: 7 }, countBefore: { value: 55 } });
+    expect((fresh.data as { proposalId: string }).proposalId).not.toBe((proposal.data as { proposalId: string }).proposalId);
+    const proposalId = (proposal.data as { proposalId: string }).proposalId;
     let reads = 0;
     installFetch(
       routes({
         'GET /api/v1/roboapply/search-profiles': () => {
           reads += 1;
-          return ok(PROFILES([{ ...PROFILES().profiles[0], version: reads > 1 ? 4 : 3 }]));
+          return ok(PROFILES([PROFILE({ id: 'sp_1', version: reads > 1 ? 4 : 3 })]));
         },
-        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'conflict', { reason: 'version_conflict' }),
+        [`POST /api/v1/roboapply/copilot/proposals/${proposalId}/apply`]: () => fail(409, 'version_conflict', details),
+        [`POST /api/v1/roboapply/copilot/proposals/${(fresh.data as { proposalId: string }).proposalId}/apply`]: () => ok({ applied: true, result: null }),
       }),
     );
-    renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    const view = renderUi(<CopilotCardView card={proposal} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
-    await screen.findByText(/Your search changed after this suggestion/);
-    await waitFor(() => expect(reads).toBeGreaterThan(1));
-    expect(screen.getByRole('button', { name: 'Apply changes' })).toBeEnabled();
+    expect(await screen.findByTestId('filter-diff-conflict')).toBeInTheDocument();
+    expect(screen.getByText('Jobs it would show with this change: 7')).toBeInTheDocument();
+    // The card on screen is now the fresh one.
+    expect(view.container.querySelector('[data-card="filter_diff"]')).toHaveAttribute('data-card-id', fresh.id);
+    // The next Apply goes to the fresh proposal.
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    await screen.findByText('Changes applied.');
+
+    // When the search already has the proposed value the server sends no card.
+    const none = await wireFilterConflict({ fresh: false });
+    expect(none.details.card).toBeNull();
+    expect(conflictCard(none.details)).toBeNull();
+    expect(conflictCard({ card: { type: 'job_list', id: 'x', data: {} } })).toBeNull();
+  });
+
+  it('a proposal the server already closed says so on reload (data.status: conflict)', () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={card('filter_diff', { ...(FIXTURES.filter_diff as object), status: 'conflict' })} />);
+    expect(screen.getByTestId('filter-diff-closed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
+  });
+
+  it('a search that moved past the proposal shows no proposal-time count and gets the server conflict reply first', async () => {
+    const http = installFetch(
+      routes({
+        'GET /api/v1/roboapply/search-profiles': () => ok(PROFILES([{ ...PROFILES().profiles[0], version: 4 }])),
+        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => conflict409({ ...FRESH, data: { ...FRESH.data, countAfter: count(5) } }),
+        'POST /api/v1/roboapply/copilot/proposals/p_f2/apply': () => ok({ applied: true, result: null }),
+      }),
+    );
+    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    await screen.findByRole('button', { name: 'Apply changes' });
+    expect(screen.getByTestId('filter-diff-conflict')).toHaveTextContent(/Your search changed after this suggestion/);
+    expect(container.textContent).not.toContain('12');
+    expect(screen.queryByTestId('filter-diff-count-after')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    expect(await screen.findByText('Jobs it would show with this change: 5')).toBeInTheDocument();
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')[0].body).toEqual({ baseVersion: 3 });
+    expect(container.textContent).not.toContain('12');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    await screen.findByText('Changes applied.');
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f2/apply')[0].body).toEqual({ baseVersion: 4 });
+    expect(screen.getByRole('link', { name: 'Show 5 jobs' })).toHaveAttribute('href', '/jobs');
   });
 
   it('uses only the saved search the proposal names, never the active one', async () => {
@@ -325,62 +515,6 @@ describe('filter_diff (F-ORION-04)', () => {
     await screen.findByText('Changes applied.');
     expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')[0].body).toEqual({ baseVersion: 3 });
     expect(__assistantChangeStore.get()).toMatchObject({ searchProfileId: 'sp_main', before: { workModels: ['remote'] } });
-  });
-
-  it('after a conflict the proposal-time count is not shown', async () => {
-    let applies = 0;
-    installFetch(
-      routes({
-        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => {
-          applies += 1;
-          return applies === 1 ? fail(409, 'conflict', { reason: 'version_conflict' }) : ok({ applied: true, result: null });
-        },
-      }),
-    );
-    renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
-    expect(await screen.findByText('Your search would show 12 jobs.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
-    await screen.findByText(/Your search changed after this suggestion/);
-    expect(screen.queryByText(/would show/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
-    await screen.findByText('Changes applied.');
-    expect(screen.getByRole('link', { name: 'Show jobs' })).toHaveAttribute('href', '/jobs');
-    expect(screen.queryByText(/12/)).not.toBeInTheDocument();
-  });
-
-  it('after a conflict a fresh count from the server is shown', async () => {
-    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'conflict', { reason: 'version_conflict', countAfter: 7 }) }));
-    renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
-    expect(await screen.findByText('Your search would show 7 jobs.')).toBeInTheDocument();
-  });
-
-  it('a search that moved past the proposal shows no proposal-time count and gets the server conflict reply first', async () => {
-    let applies = 0;
-    const http = installFetch(
-      routes({
-        'GET /api/v1/roboapply/search-profiles': () => ok(PROFILES([{ ...PROFILES().profiles[0], version: 4 }])),
-        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => {
-          applies += 1;
-          return applies === 1 ? fail(409, 'conflict', { reason: 'version_conflict', countAfter: 5 }) : ok({ applied: true, result: null });
-        },
-      }),
-    );
-    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
-    await screen.findByRole('button', { name: 'Apply changes' });
-    expect(screen.getByTestId('filter-diff-conflict')).toHaveTextContent(/Your search changed after this suggestion/);
-    expect(container.textContent).not.toContain('12');
-    expect(screen.queryByText(/would show/)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
-    expect(await screen.findByText('Your search would show 5 jobs.')).toBeInTheDocument();
-    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')[0].body).toEqual({ baseVersion: 3 });
-    expect(container.textContent).not.toContain('12');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
-    await screen.findByText('Changes applied.');
-    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')[1].body).toEqual({ baseVersion: 4 });
-    expect(screen.getByRole('link', { name: 'Show 5 jobs' })).toHaveAttribute('href', '/jobs');
   });
 
   it('Not quite retries once with the current profile when the revert hits a version conflict', async () => {
@@ -445,6 +579,30 @@ describe('credit_action', () => {
     await screen.findByText('Not done.');
     expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_c/apply')).toHaveLength(0);
   });
+
+  it('reads the server\'s data.status on reload: applied, dismissed, expired and closed cards offer no button', () => {
+    installFetch(routes());
+    for (const [status, text] of [
+      ['applied', 'Done.'],
+      ['dismissed', 'Not done.'],
+      ['expired', 'This suggestion expired. Ask again for a fresh one.'],
+      ['conflict', 'This suggestion can no longer be used. Ask again for a fresh one.'],
+    ] as const) {
+      const view = renderUi(<CopilotCardView card={card('credit_action', { ...(FIXTURES.credit_action as object), status })} />);
+      expect(screen.getByText(text), status).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Tailor my resume' }), status).not.toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it('a proposal that was already used elsewhere (409 proposal_closed) closes the card instead of offering it again', async () => {
+    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_c/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applied' }) }));
+    renderUi(<CopilotCardView card={card('credit_action', FIXTURES.credit_action)} />);
+    await screen.findByText('Uses 1 of your 2 left today');
+    fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
+    await screen.findByText('This suggestion can no longer be used. Ask again for a fresh one.');
+    expect(screen.queryByRole('button', { name: 'Tailor my resume' })).not.toBeInTheDocument();
+  });
 });
 
 describe('memory_add', () => {
@@ -487,6 +645,70 @@ describe('memory_add', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Allow and remember' }));
     await waitFor(() => expect(http.to('POST', '/api/v1/roboapply/compliance/consents')).toHaveLength(1));
     expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_m/apply')).toHaveLength(0);
+  });
+
+  it('GoApply: the card\'s consentRequired asks first even before the consent catalog has answered', async () => {
+    let release: (r: Response) => void = () => undefined;
+    const http = installFetch(
+      routes({
+        'GET /api/v1/roboapply/compliance/consents': () => new Promise<Response>((r) => (release = r)),
+        'POST /api/v1/roboapply/copilot/proposals/p_m/apply': () => ok({ applied: true, result: null }),
+      }),
+    );
+    renderUi(<CopilotCardView card={card('memory_add', { ...(FIXTURES.memory_add as object), consentRequired: true })} />, { brand: 'goapply' });
+    expect(screen.getByTestId('memory-consent')).toBeInTheDocument();
+    // Nothing can be saved until the exact permission text is on screen.
+    expect(screen.getByRole('button', { name: 'Allow and remember' })).toBeDisabled();
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_m/apply')).toHaveLength(0);
+    release(ok(MEMORY_CONSENT(null)));
+    await screen.findByText(/Let the Assistant remember preferences/);
+    expect(screen.getByRole('button', { name: 'Allow and remember' })).toBeEnabled();
+  });
+
+  it('GoApply: a 403 copilot_memory_consent_required keeps the proposal and asks the consent, then saves', async () => {
+    let applies = 0;
+    const http = installFetch(
+      routes({
+        // The page believes the consent is on (granted in another tab, withdrawn since).
+        'GET /api/v1/roboapply/compliance/consents': () => ok(MEMORY_CONSENT(true)),
+        'POST /api/v1/roboapply/compliance/consents': () => ok({ type: 'copilot_memory', granted: true, proseVersion: 'v1', proseHash: 'h1' }),
+        'POST /api/v1/roboapply/copilot/proposals/p_m/apply': () => {
+          applies += 1;
+          return applies === 1 ? fail(403, 'forbidden', { reason: 'copilot_memory_consent_required', consent: 'copilot_memory' }) : ok({ applied: true, result: null });
+        },
+      }),
+    );
+    renderUi(<CopilotCardView card={card('memory_add', FIXTURES.memory_add)} />, { brand: 'goapply' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Remember this' }));
+    // The server refused: nothing was saved, the card now asks for the permission with its text.
+    expect(await screen.findByTestId('memory-consent')).toBeInTheDocument();
+    expect(screen.queryByText('Saved. You can see or delete it in Settings.')).not.toBeInTheDocument();
+    expect(screen.queryByText('That did not work. Try again.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Allow and remember' }));
+    await screen.findByText('Saved. You can see or delete it in Settings.');
+    const posts = http.calls.filter((c) => c.method === 'POST').map((c) => c.path);
+    expect(posts).toEqual(['/api/v1/roboapply/copilot/proposals/p_m/apply', '/api/v1/roboapply/compliance/consents', '/api/v1/roboapply/copilot/proposals/p_m/apply']);
+  });
+
+  it('a full memory says so instead of "try again"', async () => {
+    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_m/apply': () => fail(409, 'conflict', { reason: 'memory_full', max: 50 }) }));
+    renderUi(<CopilotCardView card={card('memory_add', FIXTURES.memory_add)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remember this' }));
+    await screen.findByText('The Assistant already remembers as much as it can. Delete something in Settings first.');
+  });
+
+  it('the remember tool\'s own card on GoApply carries consentRequired; saved and dismissed cards show their status on reload', () => {
+    installFetch(routes({ 'GET /api/v1/roboapply/compliance/consents': () => ok(MEMORY_CONSENT(null)) }));
+    const wireCn = { ...(wire('memory_add') as object), consentRequired: true };
+    const a = renderUi(<CopilotCardView card={card('memory_add', wireCn)} />, { brand: 'goapply' });
+    expect(screen.getByTestId('memory-consent')).toBeInTheDocument();
+    a.unmount();
+    const b = renderUi(<CopilotCardView card={card('memory_add', { ...(wire('memory_add') as object), status: 'applied' })} />);
+    expect(screen.getByText('Saved. You can see or delete it in Settings.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remember this' })).not.toBeInTheDocument();
+    b.unmount();
+    renderUi(<CopilotCardView card={card('memory_add', { ...(wire('memory_add') as object), status: 'dismissed' })} />);
+    expect(screen.getByText('Not saved.')).toBeInTheDocument();
   });
 
   it('GoApply: with the consent already on it saves directly', async () => {
@@ -549,9 +771,38 @@ describe('WP-50 producers ↔ WP-51 cards (Wave 4 gate)', () => {
     expect(screen.getByRole('link', { name: 'Finish adding the job' })).toHaveAttribute('href', '/jobs/added?import=imp_1');
   });
 
-  it('draft_outreach: the open_link action links to the job\'s People tab', async () => {
+  it('draft_outreach: a credit proposal with its cost; confirming shows the draft to copy and where it is kept; nothing is sent', async () => {
+    const { proposal, applied } = await wireOutreach();
+    expect(proposal).toMatchObject({ type: 'credit_action', data: { action: 'outreach', bucket: 'outreach', cost: 1, status: 'pending', jobId: 'job_1' } });
+    const proposalId = (proposal.data as { proposalId: string }).proposalId;
+    const http = installFetch(routes({ [`POST /api/v1/roboapply/copilot/proposals/${proposalId}/apply`]: () => ok(applied) }));
+    renderUi(<CopilotCardView card={proposal} />);
+    expect(screen.getByText('Draft a message about this job')).toBeInTheDocument();
+    expect(screen.getByText('Uses 1 credit, only when you confirm.')).toBeInTheDocument();
+    expect(screen.getByText('Nothing is sent to anyone. You decide what to do with the draft.')).toBeInTheDocument();
+    expect(http.to('POST', `/api/v1/roboapply/copilot/proposals/${proposalId}/apply`)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write the draft' }));
+    const draft = await screen.findByTestId('outreach-draft');
+    expect(draft).toHaveTextContent('Hi, I saw the Data Analyst role at Acme and would like to learn more.');
+    expect(draft).toHaveTextContent('Data Analyst at Acme');
+    expect(screen.getByRole('button', { name: 'Copy the draft' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open it on the job’s People tab' })).toHaveAttribute('href', '/jobs/job_1?tab=people');
+    // One apply, with an idempotency key; no send control anywhere on the card (D1).
+    const calls = http.to('POST', `/api/v1/roboapply/copilot/proposals/${proposalId}/apply`);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].headers['Idempotency-Key']).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /send/i })).not.toBeInTheDocument();
+  });
+
+  it('draft_outreach: after a reload the applied card says where the draft is; the stored People link renders', async () => {
     installFetch(routes());
-    renderUi(<CopilotCardView card={await wireCard('outreach_link')} />);
+    const { proposal, applied } = await wireOutreach();
+    const stored = renderUi(<CopilotCardView card={{ ...proposal, data: { ...(proposal.data as object), status: 'applied' } }} />);
+    expect(screen.getByText('Your draft is on the job’s People tab.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Write the draft' })).not.toBeInTheDocument();
+    stored.unmount();
+    renderUi(<CopilotCardView card={(applied.result as { card: CopilotCard }).card} />);
     expect(screen.getByRole('link', { name: 'Open the People tab for this job' })).toHaveAttribute('href', '/jobs/job_1?tab=people');
   });
 
@@ -575,13 +826,27 @@ describe('WP-50 producers ↔ WP-51 cards (Wave 4 gate)', () => {
     expect(screen.getByText('Server fallback text.')).toBeInTheDocument();
   });
 
-  it('applications: counts by status and the tracker\'s follow-up facts', () => {
+  it('applications: counts by status and the tracker\'s follow-up facts, each linking to its own application', () => {
     installFetch(routes());
     const { container } = renderUi(<CopilotCardView card={WIRE.applications!} />);
     expect(container.textContent).toContain('Saved: 2');
     expect(container.textContent).toContain('Applied: 3');
-    expect(container.textContent).toContain('Acme: no reply for 12 days');
-    expect(container.textContent).toContain('BI Analyst: interview within 24 hours');
+    expect(screen.getByRole('link', { name: 'Acme: no reply for 12 days' })).toHaveAttribute('href', '/applications?entry=te_1');
+    expect(screen.getByRole('link', { name: 'BI Analyst: interview within 24 hours' })).toHaveAttribute('href', '/applications?entry=te_2');
+    expect(screen.getByRole('link', { name: 'Open Applications' })).toHaveAttribute('href', '/applications');
+  });
+
+  it('applications: an entry id is encoded into the link, never trusted as a path', () => {
+    installFetch(routes());
+    const data = { byStatus: {}, followUps: [{ entryId: 'a/b?x=1', reason: 'follow_up_due', at: '2026-10-10T00:00:00.000Z', days: null, companyName: 'Acme', title: null }] };
+    renderUi(<CopilotCardView card={card('applications', data)} />);
+    expect(screen.getByRole('link', { name: 'Acme: the follow-up date you set has arrived' })).toHaveAttribute('href', '/applications?entry=a%2Fb%3Fx%3D1');
+  });
+
+  it('rewrite_ready keeps its link to the resume check with the issue focused', () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={WIRE.rewrite_ready!} />);
+    expect(screen.getByRole('link', { name: 'Review and apply in the resume check' })).toHaveAttribute('href', '/resume/res_1/check?issue=iss_1');
   });
 
   it('profile_gaps uses the profile page\'s field labels', () => {

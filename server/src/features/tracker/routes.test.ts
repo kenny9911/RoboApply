@@ -51,6 +51,13 @@ const limiter = (name: string, windows: readonly { limit: number; windowSec: num
   next();
 };
 
+// The writers take the (user, job) advisory lock whose key lives in the job
+// detail area; that module is loaded on first use. Load it once up front so no
+// single test pays for the import.
+beforeAll(async () => {
+  await import('../jobs/detail/index.js');
+}, 60_000);
+
 let h: RouteHarness;
 type Env<T> = { success: boolean; data: T; code?: string; details?: Record<string, unknown> };
 

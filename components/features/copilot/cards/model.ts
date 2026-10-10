@@ -46,9 +46,19 @@ export function safeExternalUrl(v: unknown): string | null {
 const TIERS: readonly FitTierKey[] = ['great', 'good', 'possible', 'unlikely'];
 const tierOf = (v: unknown): FitTierKey | null => (typeof v === 'string' && (TIERS as readonly string[]).includes(v) ? (v as FitTierKey) : null);
 
-/** Proposal lifecycle as the server reports it on reload. */
-export type CardProposalStatus = 'pending' | 'applied' | 'dismissed' | 'expired';
-const statusOf = (v: unknown): CardProposalStatus => (v === 'applied' || v === 'dismissed' || v === 'expired' ? v : 'pending');
+/**
+ * Proposal lifecycle as the server reports it in `data.status` (also on
+ * reload). `conflict`: the saved search changed and the server closed this
+ * proposal (a fresh filter_diff card follows it).
+ */
+export type CardProposalStatus = 'pending' | 'applied' | 'dismissed' | 'expired' | 'conflict';
+const statusOf = (v: unknown): CardProposalStatus => (v === 'applied' || v === 'dismissed' || v === 'expired' || v === 'conflict' ? v : 'pending');
+
+/** The initial state of a proposal card's buttons from the server's `data.status` and expiry. Pure. */
+export function initialProposalStatus(status: CardProposalStatus, expired: boolean): 'pending' | 'applied' | 'dismissed' | 'expired' | 'conflict' {
+  if (status !== 'pending') return status;
+  return expired ? 'expired' : 'pending';
+}
 
 export interface SourcedWire<T = unknown> {
   value: T;
@@ -155,13 +165,41 @@ export interface FilterOpWire {
   path: string;
   value: unknown;
 }
+/**
+ * A job count as the server sends it (`CountView { count: Sourced<number> | null, capped }`).
+ * `value` null = not known (renders "—", never 0); `capped` = the real number
+ * is at least `value` (renders "N+"). `sourced` carries the source and date
+ * for the SourceNote line.
+ */
+export interface CountData {
+  value: number | null;
+  capped: boolean;
+  sourced: SourcedWire<number> | null;
+}
+const isCount = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x) && x >= 0;
+
+/**
+ * `CountView` → `CountData`. A bare number (no source, no date) is not a
+ * count we can show (D3: every number that is not the user's own is Sourced),
+ * so it parses as unknown. Pure.
+ */
+export function parseCount(v: unknown): CountData {
+  const unknown: CountData = { value: null, capped: false, sourced: null };
+  if (!isObj(v)) return unknown;
+  const count = sourced(v.count, isCount);
+  if (!count || count.value === null) return unknown;
+  return { value: count.value, capped: v.capped === true, sourced: count };
+}
+
 export interface FilterDiffData {
   proposalId: string;
   searchProfileId: string;
   baseVersion: number;
   ops: FilterOpWire[];
-  /** Jobs the saved search shows with the change (our index, the user's own search). */
-  countAfter: number | null;
+  /** Jobs the saved search shows now (our index, the user's own search). */
+  countBefore: CountData;
+  /** Jobs it would show with the change. */
+  countAfter: CountData;
   expiresAt: string | null;
   status: CardProposalStatus;
 }
@@ -177,8 +215,28 @@ export function parseFilterDiff(d: unknown): FilterDiffData | null {
     ops.push({ op: o.op, path: o.path as string, value: o.value });
   }
   if (ops.length === 0) return null;
-  const countAfter = num(d.countAfter) ?? (isObj(d.count) ? num(d.count.after) : null);
-  return { proposalId, searchProfileId, baseVersion, ops, countAfter, expiresAt: str(d.expiresAt), status: statusOf(d.status) };
+  return {
+    proposalId,
+    searchProfileId,
+    baseVersion,
+    ops,
+    countBefore: parseCount(d.countBefore),
+    countAfter: parseCount(d.countAfter),
+    expiresAt: str(d.expiresAt),
+    status: statusOf(d.status),
+  };
+}
+
+/**
+ * The fresh `filter_diff` card a 409 version_conflict carries in
+ * `details.card` (a new pending proposal against the search as it is now), or
+ * null when the server sent none (nothing is left to change). Pure.
+ */
+export function conflictCard(details: unknown): { type: 'filter_diff'; id: string; data: unknown } | null {
+  if (!isObj(details) || !isObj(details.card)) return null;
+  const c = details.card;
+  if (c.type !== 'filter_diff' || !str(c.id) || !parseFilterDiff(c.data)) return null;
+  return { type: 'filter_diff', id: c.id as string, data: c.data };
 }
 
 const SORTS: readonly FeedSort[] = ['recommended', 'newest', 'best_fit', 'highest_pay', 'deadline'];
@@ -323,6 +381,29 @@ export function parseCreditAction(d: unknown): CreditActionData | null {
   };
 }
 
+// ── outreach draft (the result of an applied `outreach` credit action) ───
+
+export interface OutreachDraftData {
+  /** The draft text, for the user to copy and send themselves. */
+  text: string;
+  subject: string | null;
+  /** The job's People tab, where the draft is kept. */
+  href: string | null;
+}
+/**
+ * `{ card: action open_link → People tab, draft: { text, subject, jobId } }`
+ * from an applied outreach proposal. Nothing is sent anywhere (D1). Pure.
+ */
+export function parseOutreachDraft(result: unknown): OutreachDraftData | null {
+  if (!isObj(result) || !isObj(result.draft)) return null;
+  const text = str(result.draft.text);
+  if (!text) return null;
+  const link = isObj(result.card) ? parseAction(result.card.data) : null;
+  const jobId = str(result.draft.jobId);
+  const href = link && link.kind === 'open_link' ? link.href : jobId ? `/jobs/${encodeURIComponent(jobId)}?tab=people` : null;
+  return { text: text.slice(0, 5000), subject: str(result.draft.subject), href };
+}
+
 // ── tailor_ready / cover_letter / job_imported / competitiveness ─────────
 
 export interface LinkData {
@@ -464,6 +545,11 @@ export interface ApplicationsData {
   /** Tracker `FollowUpView`s: a fact (`reason`, `at`, `days`) about one application entry. */
   followUps: Array<{ entryId: string; reason: FollowUpReasonKind; title: string | null; company: string | null; at: string | null; days: number | null }>;
 }
+
+/** Where a follow-up opens: that application's details on /applications (`?entry=<entryId>`). Pure. */
+export function followUpHref(entryId: string): string {
+  return `/applications?entry=${encodeURIComponent(entryId)}`;
+}
 /** `TrackerSummary { byStatus: Record<status, n>, followUps: FollowUpView[] }` from application_summary. Pure. */
 export function parseApplications(d: unknown): ApplicationsData | null {
   if (!isObj(d)) return null;
@@ -488,11 +574,22 @@ export interface MemoryAddData {
   fact: string;
   expiresAt: string | null;
   status: CardProposalStatus;
+  /** The server says the `copilot_memory` consent is missing (GoApply): ask it before saving. */
+  consentRequired: boolean;
 }
 export function parseMemoryAdd(d: unknown): MemoryAddData | null {
   if (!isObj(d) || !str(d.proposalId) || !str(d.fact)) return null;
-  return { proposalId: d.proposalId as string, fact: (d.fact as string).slice(0, 500), expiresAt: str(d.expiresAt), status: statusOf(d.status) };
+  return {
+    proposalId: d.proposalId as string,
+    fact: (d.fact as string).slice(0, 500),
+    expiresAt: str(d.expiresAt),
+    status: statusOf(d.status),
+    consentRequired: d.consentRequired === true,
+  };
 }
+
+/** The reason a 403 on a memory proposal names when the consent is missing (server COPILOT_ERROR_CODES). */
+export const MEMORY_CONSENT_REASON = 'copilot_memory_consent_required';
 
 // ── profile_gaps ─────────────────────────────────────────────────────────
 

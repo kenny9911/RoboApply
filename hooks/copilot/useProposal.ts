@@ -9,12 +9,19 @@
 // actions spend their own bucket only here, through useCreditGate (one
 // idempotency key per press, the out-of-credits sheet on 402).
 //
-// Results:
+// Results (the server keeps the platform `code` generic and names its own
+// reason in `details.reason`):
 //   applied   { result }       the server applied it
-//   conflict  { details }      filters changed since the suggestion (409 version_conflict)
-//   expired                    older than 24 h (proposal_expired)
+//   conflict  { details }      filters changed since the suggestion (409
+//                              version_conflict; `details.card` is the fresh
+//                              filter_diff card, when one is left to offer)
+//   expired                    older than 24 h (reason proposal_expired)
+//   closed                     already used or dismissed (reason proposal_closed)
+//   consent                    GoApply memory needs the `copilot_memory` consent
+//                              first (403, reason copilot_memory_consent_required);
+//                              the proposal stays pending
 //   credits                    out of credits (the sheet is already open)
-//   failed    { code }         anything else
+//   failed    { code }         anything else (e.g. memory_full)
 
 import { useCallback, useState } from 'react';
 
@@ -26,8 +33,13 @@ export type ProposalOutcome =
   | { kind: 'applied'; result: unknown }
   | { kind: 'conflict'; details: Record<string, unknown> | null }
   | { kind: 'expired' }
+  | { kind: 'closed' }
+  | { kind: 'consent' }
   | { kind: 'credits' }
   | { kind: 'failed'; code: string | null };
+
+/** The 403 reason when GoApply memory has no live `copilot_memory` consent (server COPILOT_ERROR_CODES). */
+export const MEMORY_CONSENT_REQUIRED = 'copilot_memory_consent_required';
 
 export type ProposalStatus = 'pending' | 'applying' | 'applied' | 'dismissed' | 'expired' | 'conflict' | 'failed';
 
@@ -36,9 +48,12 @@ export function proposalFailure(err: unknown): ProposalOutcome {
   const code = apiErrorCode(err);
   const reason = apiErrorReason(err);
   if (code === 'proposal_expired' || reason === 'proposal_expired' || code === 'gone') return { kind: 'expired' };
-  if (code === 'version_conflict' || reason === 'version_conflict' || code === 'conflict') return { kind: 'conflict', details: apiErrorDetails(err) };
+  if (code === 'version_conflict' || reason === 'version_conflict') return { kind: 'conflict', details: apiErrorDetails(err) };
+  if (reason === 'proposal_closed') return { kind: 'closed' };
+  if (reason === MEMORY_CONSENT_REQUIRED) return { kind: 'consent' };
   if (code === 'credits_exhausted') return { kind: 'credits' };
-  return { kind: 'failed', code: code ?? reason };
+  // Any other conflict names its own reason (e.g. memory_full); the card explains it or says "try again".
+  return { kind: 'failed', code: reason ?? code };
 }
 
 /** True when an ISO expiry is in the past. Pure. */
@@ -72,8 +87,10 @@ export function useProposal(proposalId: string, opts: { bucket?: string | null; 
         setResult(outcome.result);
         setStatus('applied');
       } else if (outcome.kind === 'expired') setStatus('expired');
-      else if (outcome.kind === 'conflict') setStatus('conflict');
-      else if (outcome.kind === 'credits') setStatus('pending');
+      // A closed proposal and a version conflict both end this card: the server will not apply it.
+      else if (outcome.kind === 'conflict' || outcome.kind === 'closed') setStatus('conflict');
+      // Out of credits, or the consent is still to be asked: nothing was used up.
+      else if (outcome.kind === 'credits' || outcome.kind === 'consent') setStatus('pending');
       else setStatus('failed');
       return outcome;
     },

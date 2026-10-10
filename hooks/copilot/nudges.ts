@@ -2,8 +2,11 @@
 
 // hooks/copilot/nudges.ts — proactive Assistant nudges (WP-51; F-ORION-08).
 //
-// At most ONE nudge per browser session, and only from a real signal another
-// area observed (PRODUCT_PLAN.md F-ORION-08):
+// At most ONE nudge per browser session, and only from a real signal
+// (PRODUCT_PLAN.md F-ORION-08). The server decides which one holds
+// (`GET /copilot/nudge`, hooks/copilot/useServerNudge.ts asks it when the rail
+// could show one); another area that just observed a signal may also offer it
+// directly:
 //   low_rating       the user rated the feed low      → "Adjust your search?"
 //   agency_report    the user reported a scam/agency  → "Hide agency posts?"
 //   pay_filter       no pay filter while many posts list pay → "Add a minimum pay?"
@@ -33,6 +36,16 @@ export const NUDGE_SESSION_KEY = 'ra_assistant_nudge_shown';
 
 const pending = createStore<AssistantNudge | null>(null);
 let shownInMemory = false;
+
+/** A kind this client knows (the server's vocabulary is the same; a test keeps them equal). */
+export function isNudgeKind(v: unknown): v is NudgeKind {
+  return typeof v === 'string' && (NUDGE_KINDS as readonly string[]).includes(v);
+}
+
+/** True once a nudge was shown in this browser session (no other one follows). */
+export function nudgeSessionShown(): boolean {
+  return sessionShown();
+}
 
 function sessionShown(): boolean {
   if (shownInMemory) return true;

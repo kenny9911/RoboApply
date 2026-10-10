@@ -7,13 +7,16 @@
 // profile-link columns are thrown away when the file is read (server parser).
 // Rows are private to the user, used only to show who they know at a
 // company, deleted with the account, and "Delete all imported connections"
-// is always here. 3 imports a day.
+// is always here. 3 imports a day. With importing on, the people the user
+// imported are listed below the count (ConnectionsList), each with their
+// company as the file wrote it.
 
 import { useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Btn, Modal, toast } from '../../v3/primitives';
 import { importErrorKind, useConnectionsImport, type ImportErrorKind } from '../../../hooks/network';
+import { ConnectionsList } from './ConnectionsList';
 import styles from './network.module.css';
 
 export function ConnectionsImport({ canImport = true }: { canImport?: boolean }) {
@@ -101,6 +104,8 @@ export function ConnectionsImport({ canImport = true }: { canImport?: boolean })
           {t(`error.${error}`)}
         </p>
       ) : null}
+
+      {canImport && s && s.importedCount > 0 ? <ConnectionsList /> : null}
 
       <div className={styles.row}>
         <Btn variant="ghost" onClick={() => setConfirming(true)} disabled={removeAll.isPending}>

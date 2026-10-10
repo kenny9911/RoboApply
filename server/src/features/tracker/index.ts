@@ -1,12 +1,13 @@
 // server/src/features/tracker/index.ts — public surface of TRK (FND-5; owner WP-38).
 //
 // Seams: `updateOffer()` (WP-64 offers), `summary()` (Assistant's
-// application_summary tool), `markApplied()` / `undoApplied()` (job detail
-// apply-click WP-34, Ready to apply `open` WP-52, extension WP-55a),
-// `produceReminders()` (reminders cron producer, ./cron.ts).
+// application_summary tool), `markApplied()` / `undoApplied()` (Ready to apply
+// `open` WP-52, extension WP-55a; the job page writes through jobs/detail under
+// the same advisory lock), `produceReminders()` (reminders cron producer,
+// ./cron.ts).
 
 import type { FollowUpView, TrackerOffer } from './contract.js';
-import { trackerCore, type ApplyMark, type ApplyVia, type UndoAppliedOptions } from './service.js';
+import { trackerCore, type ApplyResult, type ApplyVia, type UndoAppliedOptions } from './service.js';
 
 export * from './contract.js';
 export { createTrackerRouter } from './routes.js';
@@ -20,8 +21,11 @@ export {
   TrackerInvalidInputError,
   TrackerNotFoundError,
   UNDO_WINDOW_MS,
+  VIA_TRACKER,
   type ApplyMark,
+  type ApplyResult,
   type ApplyVia,
+  type TrackerAffinityKind,
   type UndoAppliedOptions,
   type TrackerCore,
   type TrackerCoreDeps,
@@ -38,10 +42,12 @@ export interface TrackerService {
   /**
    * Moves (or creates) the entry for a job to `applied`; shared by apply-click,
    * Ready to apply `open` and the extension. Never moves an entry that is
-   * already at Applied or further along (`changed: false`). Keep the returned
-   * token and pass it to `undoApplied` as `{ mark }`.
+   * already at Applied or further along (`changed: false`, `alreadyApplied:
+   * true`: offer no Undo). Keep the returned token and pass it to `undoApplied`
+   * as `{ mark }`. Runs under the (user, job) advisory lock shared with the
+   * job page, and tells the feed once when the entry moved.
    */
-  markApplied(userId: string, jobId: string, via: ApplyVia): Promise<ApplyMark>;
+  markApplied(userId: string, jobId: string, via: ApplyVia): Promise<ApplyResult>;
   /**
    * Reverts only the move the matching markApplied made: pass `{ mark }`, or,
    * when the caller cannot keep the token, `{ via }` (then only a move by that
