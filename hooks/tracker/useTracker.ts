@@ -18,6 +18,7 @@ import {
   patchTrackerEntry,
   refreshWeeklyInsight,
 } from '../../lib/api/tracker';
+import { RoboApiError } from '../../lib/api/client';
 import type { In } from '../../lib/api/contracts/wire';
 import type * as TR from '../../lib/api/contracts/tracker';
 import { pipelineKeys, upsertBoardEntry, type PipelineBoardData } from '../usePipelineBoard';
@@ -44,6 +45,15 @@ export function useTrackerEntry(id: string | null) {
     enabled: Boolean(id),
     retry: false,
   });
+}
+
+/**
+ * True only when the server answered "there is no such application of yours"
+ * (404 / `not_found`). A timeout, being offline or a server error is not that:
+ * the application may well exist.
+ */
+export function isTrackerEntryNotFound(err: unknown): boolean {
+  return err instanceof RoboApiError && (err.status === 404 || err.code === 'not_found');
 }
 
 export function useTrackerEvents(id: string | null) {
@@ -102,6 +112,15 @@ export function useRefreshTrackerEntry(id: string) {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: trackerKeys.entry(id) });
+    void qc.invalidateQueries({ queryKey: trackerKeys.events(id) });
+  };
+}
+
+/** After a file was recorded for the application (a resume download with its id): re-read the files list. */
+export function useRefreshTrackerArtifacts(id: string) {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: trackerKeys.artifacts(id) });
     void qc.invalidateQueries({ queryKey: trackerKeys.events(id) });
   };
 }

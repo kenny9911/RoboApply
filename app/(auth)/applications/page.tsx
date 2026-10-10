@@ -13,20 +13,37 @@
 //                   it is not among the loaded entries)
 //
 // URL: `?view=stage|date|list|offers`, `?status=saved` (opens the List view on
-// Saved), `?entry=<id>` (opens the details). The user-facing names avoid
+// Saved), `?entry=<id>` (opens that application's details: reminder emails,
+// the inbox, the follow-up banner and the Assistant's follow-ups link here).
+// An id that is not one of the user's applications (deleted, never theirs, a
+// typo) is ignored: no details open, the page shows the list as usual with one
+// plain line saying so, and the id is dropped from the URL. Only the server's
+// "not found" answer counts as that: when the application could not be loaded
+// for another reason (offline, a timeout, a server error) the id stays in the
+// URL and the page says it did not load, with "Try again". The user-facing names avoid
 // "board", "kanban", "pipeline" and "funnel" (ruling C15); code keeps the
 // `pipeline` prefix.
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { PageHeader, Tabs, tabPanelProps } from '../../../components/v3/primitives';
 import { MetricGrid } from '../../../components/v3/primitives/MetricGrid';
 import { PipelineBoard, columnsFor, columnIndexForStatus, isInProgress, type TrackerMarket } from '../../../components/v3/pipeline';
-import { AddJobSheet, ApplicationsToolbar, ByDateView, FollowUpBanner, ListView, OffersView, TrackerDrawer } from '../../../components/features/tracker';
+import {
+  AddJobSheet,
+  ApplicationsToolbar,
+  ByDateView,
+  EntryLoadErrorNote,
+  EntryMissingNote,
+  FollowUpBanner,
+  ListView,
+  OffersView,
+  TrackerDrawer,
+} from '../../../components/features/tracker';
 import { usePipelineBoard } from '../../../hooks/usePipelineBoard';
-import { useTrackerEntry } from '../../../hooks/tracker/useTracker';
+import { isTrackerEntryNotFound, useTrackerEntry } from '../../../hooks/tracker/useTracker';
 import { useBrand } from '../../../lib/brand';
 import { useFlag } from '../../../lib/flags';
 
@@ -79,8 +96,22 @@ function Applications() {
   // recently changed): fetch that one entry by id.
   const linked = useTrackerEntry(entryId && data && !cached ? entryId : null);
   const open = cached ?? (entryId && linked.data?.id === entryId ? linked.data : null);
-  const notFound = Boolean(entryId && !open && linked.isError);
+  const failed = Boolean(entryId && !open && linked.isError);
+  // "Not one of your applications" is the server's 404 only; any other failure may be a real application.
+  const unknownEntry = failed && isTrackerEntryNotFound(linked.error);
+  const entryLoadFailed = failed && !unknownEntry;
   const total = data?.total ?? 0;
+
+  // An unknown `?entry=` is ignored: no details open; say so once and clean the URL.
+  const [entryMissing, setEntryMissing] = useState(false);
+  useEffect(() => {
+    if (!unknownEntry) return;
+    setEntryMissing(true);
+    closeEntry();
+  }, [unknownEntry, closeEntry]);
+  useEffect(() => {
+    if (open) setEntryMissing(false);
+  }, [open]);
 
   const tabs = [
     { id: 'stage' as const, label: t('views.stage') },
@@ -107,6 +138,9 @@ function Applications() {
             value: data ? column.members.reduce((n, m) => n + (data.statusCounts[m] ?? 0), 0) : '—',
           }))}
       />
+
+      {entryMissing ? <EntryMissingNote /> : null}
+      {entryLoadFailed ? <EntryLoadErrorNote onRetry={() => void linked.refetch()} retrying={linked.isFetching} /> : null}
 
       <FollowUpBanner onOpen={openEntry} />
 
@@ -138,7 +172,7 @@ function Applications() {
         {view === 'offers' ? <OffersView entries={entries} onOpen={openEntry} /> : null}
       </div>
 
-      <TrackerDrawer entry={open} notFound={notFound} onClose={closeEntry} />
+      <TrackerDrawer entry={open} onClose={closeEntry} />
       <AddJobSheet open={adding} onClose={() => setAdding(false)} onAdded={openEntry} />
     </>
   );

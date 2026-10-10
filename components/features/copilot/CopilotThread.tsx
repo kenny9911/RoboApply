@@ -126,6 +126,12 @@ export function CopilotThread({ chat, variant, prefill, onNavigate, toolbarExtra
           {chat.contextJobId && canAsk ? (
             <ChipBar jobId={chat.contextJobId} disabled={chat.streaming} onAsk={(text, chip) => void chat.send(text, { chip })} onNavigate={onNavigate} />
           ) : null}
+          {chat.contextResumeId && !chat.contextJobId ? (
+            // F-RES-11: this chat is about one resume; every turn is scoped to it.
+            <p className={styles.chipLabel} data-testid="assistant-resume-scope">
+              {t('context.resume')}
+            </p>
+          ) : null}
           {chat.loading ? <p className={styles.muted}>{t('message.loading')}</p> : null}
           {chat.loadError ? (
             <p className={styles.alert} role="alert">

@@ -3,24 +3,38 @@
 // filter_diff — a proposed change to the saved search (F-ORION-04, F-FEED-09).
 //
 // Shows added / changed / removed per field against the search AS IT IS NOW
-// (FilterDiff, WP-20) and how many jobs it would show. Nothing changes until
-// "Apply changes": the proposal is applied server-side with the version the
-// user saw (`baseVersion`); a 409 means the search changed meanwhile, so the
-// card re-reads it and shows the fresh diff. After applying, "Looks better /
-// Not quite" asks once (also on the next /jobs view via
-// noteAssistantFilterChange); "Not quite" puts the previous filters back.
+// (FilterDiff, WP-20) and how many jobs it shows now and would show. Nothing
+// changes until "Apply changes": the proposal is applied server-side with the
+// version the user saw (`baseVersion`). After applying, "Looks better / Not
+// quite" asks once (also on the next /jobs view via noteAssistantFilterChange);
+// "Not quite" puts the previous filters back.
+//
+// Counts (D3): `countBefore` / `countAfter` arrive as CountView
+// `{ count: Sourced<number> | null, capped }`. The number is the index's count
+// for the user's own search: unknown renders "—" (never 0), a capped count
+// renders "N+", and the line under it is the SourceNote of that count (source
+// and date). A count is exact, so it is not held back by the sample rule that
+// applies to medians; the note names where it comes from without repeating N.
+//
+// Conflict: when the search changed since the suggestion, the server closes
+// this proposal and answers 409 version_conflict with `details.card`: a fresh
+// filter_diff card (a new proposal against the search as it is now, with its
+// own counts). That card REPLACES this one in place. With no fresh card there
+// is nothing left to change, and the card says so. No count is ever carried
+// over from the old proposal.
+//
+// Closed: a proposal that was already used or dismissed somewhere else (another
+// tab) answers 409 `proposal_closed`. The card then says only that the
+// suggestion was already used or dismissed: it does not claim the search
+// changed, or that nothing was applied, because it may have been applied there.
 //
 // The card only ever previews and applies against the saved search the
 // proposal names: if that search is not in the user's list (deleted, stale
 // list) it says so and offers no Apply — never another search's filters.
 //
-// Version honesty (D3): the proposal's job count describes the filters at
-// `baseVersion`. When the search on screen is at any other version (changed on
-// /jobs, in another tab, or by a conflict re-read) the card says the search
-// changed and shows no number, unless the server's 409 reply carried a fresh
-// count for the version now on screen. Apply always sends the version the user
-// last saw described: `baseVersion` first, so a stale card gets the server's
-// conflict reply (fresh diff + count); the re-read version only after that.
+// Version honesty: the proposal's counts describe the filters at `baseVersion`.
+// When the search on screen is at any other version the card says the search
+// changed and shows no number; Apply then gets the server's conflict reply.
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -31,16 +45,46 @@ import { applyPatchPreview, clearAssistantFilterChange, noteAssistantFilterChang
 import { isExpired, useProposal } from '../../../../hooks/copilot';
 import { searchKeys, useActiveSearchProfile, useApplyFilters, type FilterSet, type SearchProfile, type SearchProfileList } from '../../../../hooks/search';
 import { useBrand } from '../../../../lib/brand';
+import type { CopilotCard } from '../../../../lib/api/contracts/copilot';
 import { Btn } from '../../../v3/primitives';
+import { SourceNote } from '../../common';
 import { FilterDiff } from '../../filters';
 import { CardFrame } from './CardFrame';
-import { parseFilterDiff } from './model';
+import { conflictCard, initialProposalStatus, parseFilterDiff, type CountData } from './model';
 import type { CardProps } from './types';
 import styles from '../copilot.module.css';
 
 type After = 'ask' | 'better' | 'reverted' | 'revertFailed';
 
+/** "12", "500+" or "—" (unknown is never 0). Pure. */
+export function countText(count: CountData): string {
+  if (count.value === null) return '—';
+  return count.capped ? `${count.value}+` : String(count.value);
+}
+
+/**
+ * One count line with its source. The SourceNote names the source and date;
+ * the count is its own N, so the sample size is not repeated (and the sample
+ * rule for aggregates does not hide an exact count).
+ */
+function CountLine({ label, count, testId }: { label: string; count: CountData; testId: string }) {
+  const note = count.sourced ? { value: count.sourced.value, source: count.sourced.source, asOf: count.sourced.asOf, ...(count.sourced.method ? { method: count.sourced.method } : {}) } : null;
+  return (
+    <div data-testid={testId} data-count={count.value === null ? 'unknown' : count.capped ? 'capped' : 'exact'}>
+      <p className={styles.cardText}>{label}</p>
+      <SourceNote sourced={note} className={styles.muted} />
+    </div>
+  );
+}
+
 export function FilterDiffCard({ card, ctx }: CardProps) {
+  // A 409 carries a fresh card for the search as it is now: it takes this card's place.
+  const [fresh, setFresh] = useState<CopilotCard | null>(null);
+  if (fresh) return <FilterDiffBody key={fresh.id} card={fresh} ctx={ctx} replaced onReplace={setFresh} />;
+  return <FilterDiffBody card={card} ctx={ctx} onReplace={setFresh} />;
+}
+
+function FilterDiffBody({ card, ctx, replaced = false, onReplace }: CardProps & { replaced?: boolean; onReplace: (card: CopilotCard) => void }) {
   const t = useTranslations('assistant.cards');
   const data = parseFilterDiff(card.data);
   const brand = useBrand();
@@ -48,24 +92,26 @@ export function FilterDiffCard({ card, ctx }: CardProps) {
   const { data: list } = useActiveSearchProfile();
   const { apply: applyFilters, isPending: reverting } = useApplyFilters();
   const proposal = useProposal(data?.proposalId ?? card.id, {
-    initial: data?.status === 'applied' ? 'applied' : data?.status === 'dismissed' ? 'dismissed' : data && (data.status === 'expired' || isExpired(data.expiresAt)) ? 'expired' : 'pending',
+    initial: data ? initialProposalStatus(data.status, isExpired(data.expiresAt)) : 'pending',
   });
   const [before, setBefore] = useState<FilterSet | null>(null);
   const [after, setAfter] = useState<After | null>(null);
-  // The version the user was last shown after a conflict, with the fresh count
-  // the server sent for it (null: none came back). Null until a 409.
-  const [ack, setAck] = useState<{ version: number; count: number | null } | null>(null);
   // The count the "Show jobs" link carries, frozen at the moment of applying.
-  const [appliedCount, setAppliedCount] = useState<number | null>(null);
+  const [appliedCount, setAppliedCount] = useState<CountData | null>(null);
+  // The server said this proposal was already used or dismissed (not a version conflict).
+  const [closedElsewhere, setClosedElsewhere] = useState(false);
 
   if (!data) return null;
   const target = list?.profiles.find((p) => p.id === data.searchProfileId) ?? null;
   const preview = target ? applyPatchPreview(target.filters, opsToPatch(target.filters, data.ops)) : null;
-  // The version whose count (if any) the card knows.
-  const knownVersion = ack ? ack.version : data.baseVersion;
-  const stale = !!target && target.version !== knownVersion;
-  const count = stale ? null : ack ? ack.count : (data.countAfter ?? null);
-  const showLabel = appliedCount !== null ? t('filterDiff.show', { count: appliedCount }) : t('filterDiff.showJobs');
+  // The proposal's counts describe the search at `baseVersion` only.
+  const stale = !!target && target.version !== data.baseVersion;
+  const showLabel =
+    appliedCount && appliedCount.value !== null
+      ? appliedCount.capped
+        ? t('filterDiff.showCapped', { count: appliedCount.value })
+        : t('filterDiff.show', { count: appliedCount.value })
+      : t('filterDiff.showJobs');
 
   const readProfile = (): SearchProfile | null =>
     qc.getQueryData<SearchProfileList>(searchKeys.profiles())?.profiles.find((p) => p.id === data.searchProfileId) ?? null;
@@ -73,25 +119,28 @@ export function FilterDiffCard({ card, ctx }: CardProps) {
   const apply = async () => {
     if (!target) return;
     const shownFilters = target.filters;
-    const shownCount = count;
-    const outcome = await proposal.apply({ baseVersion: knownVersion });
+    const outcome = await proposal.apply({ baseVersion: data.baseVersion });
     if (outcome.kind === 'applied') {
       setBefore(shownFilters);
-      setAppliedCount(shownCount);
+      setAppliedCount(stale ? null : data.countAfter);
       setAfter('ask');
       noteAssistantFilterChange({ searchProfileId: target.id, before: shownFilters });
       void qc.invalidateQueries({ queryKey: searchKeys.profiles() });
       void qc.invalidateQueries({ queryKey: ['feed'] });
     } else if (outcome.kind === 'conflict') {
-      const fresh = outcome.details?.countAfter;
-      const freshCount = typeof fresh === 'number' && Number.isInteger(fresh) && fresh >= 0 ? fresh : null;
+      // The server closed this proposal. Re-read the search, then show the
+      // fresh card it sent (if any) in this card's place.
       try {
         await qc.refetchQueries({ queryKey: searchKeys.profiles() });
       } catch {
-        // The list keeps what it had; the version check below still holds.
+        // The list keeps what it had; the fresh card names its own version.
       }
-      const now = readProfile() ?? target;
-      setAck({ version: now.version, count: freshCount });
+      const next = conflictCard(outcome.details);
+      if (next) onReplace(next as CopilotCard);
+    } else if (outcome.kind === 'closed') {
+      setClosedElsewhere(true);
+      // It may have been applied in another tab: show the search as it is now.
+      void qc.invalidateQueries({ queryKey: searchKeys.profiles() });
     }
   };
 
@@ -111,29 +160,42 @@ export function FilterDiffCard({ card, ctx }: CardProps) {
     } catch {
       // Fall through with whatever is cached; the conflict retry covers it.
     }
-    const fresh = readProfile() ?? target;
-    if (!fresh) return;
-    let res = await applyFilters({ profile: fresh, replace: before, defaultCountry: brand.defaultCountry });
+    const current = readProfile() ?? target;
+    if (!current) return;
+    let res = await applyFilters({ profile: current, replace: before, defaultCountry: brand.defaultCountry });
     if (!res.ok && res.conflict) res = await applyFilters({ profile: res.conflict, replace: before, defaultCountry: brand.defaultCountry });
     clearAssistantFilterChange();
     setAfter(res.ok ? 'reverted' : 'revertFailed');
   };
 
   const { status } = proposal;
+  const open = status === 'pending' || status === 'applying' || status === 'failed';
   return (
     <CardFrame card={card} title={t('filterDiff.title')}>
       {status === 'expired' ? <p className={styles.cardText}>{t('proposalExpired')}</p> : null}
       {status === 'dismissed' ? <p className={styles.cardText}>{t('filterDiff.dismissed')}</p> : null}
-      {status === 'pending' || status === 'applying' || status === 'conflict' || status === 'failed' ? (
+      {status === 'conflict' ? (
+        // Closed by the server. Either the search changed and no fresh suggestion took this card's
+        // place, or the suggestion was already used or dismissed elsewhere (which may have applied it).
+        <p className={styles.cardText} role="status" data-testid="filter-diff-closed" data-reason={closedElsewhere ? 'closed' : 'conflict'}>
+          {closedElsewhere ? t('proposalClosed') : t('filterDiff.conflictClosed')}
+        </p>
+      ) : null}
+      {open ? (
         target && preview ? (
           <>
-            {status === 'conflict' || stale ? (
+            {replaced || stale ? (
               <p className={styles.cardText} role="status" data-testid="filter-diff-conflict">
                 {t('filterDiff.conflict')}
               </p>
             ) : null}
             <FilterDiff before={target.filters} after={preview} />
-            {count !== null ? <p className={styles.cardText}>{t('filterDiff.count', { count })}</p> : null}
+            {stale ? null : (
+              <>
+                <CountLine testId="filter-diff-count-before" count={data.countBefore} label={t('filterDiff.countNow', { count: countText(data.countBefore) })} />
+                <CountLine testId="filter-diff-count-after" count={data.countAfter} label={t('filterDiff.countAfter', { count: countText(data.countAfter) })} />
+              </>
+            )}
             {status === 'failed' ? (
               <p className={styles.alert} role="alert">
                 {t('failed')}

@@ -45,6 +45,7 @@ const ERROR_KEYS = [
   'thread_not_found',
   'content_blocked',
   'phone_binding_required',
+  'save_failed',
 ];
 
 export interface MessageListProps {

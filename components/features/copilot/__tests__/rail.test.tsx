@@ -13,7 +13,9 @@ import { join } from 'node:path';
 import { CopilotRail, isRailShortcut } from '../CopilotRail';
 import { __assistantRailStore, openAssistantRail } from '../../../../hooks/shared/useOpenAssistant';
 import { __outOfCreditsStore } from '../../../../hooks/shared/useCreditGate';
-import { RAIL_RESTORE_QUERY, __resetAssistantAvailability, __resetNudges, __resetRailRestore, offerAssistantNudge } from '../../../../hooks/copilot';
+import { NUDGE_KINDS, RAIL_RESTORE_QUERY, __resetAssistantAvailability, __resetNudges, __resetRailRestore, offerAssistantNudge } from '../../../../hooks/copilot';
+import { NUDGE_KINDS as SERVER_NUDGE_KINDS } from '../../../../server/src/features/copilot/contract';
+import { CHEATSHEET_EXTRA, cheatsheetExtra } from '../Cheatsheet';
 import { CONSENTS, CREDITS, PROFILES, UI_STATE, fail, installFetch, installPopupGate, ok, renderUi, sse, streamResponse, type Route } from './testkit';
 
 const nav = vi.hoisted(() => ({ pathname: '/jobs', push: vi.fn() }));
@@ -293,6 +295,48 @@ describe('conversation', () => {
     expect(screen.getAllByText('Why?')).toHaveLength(1);
   });
 
+  it('the guarded reply in done.content replaces what streamed', async () => {
+    const guarded =
+      sse('meta', { threadId: 'th_1', messageId: 'msg_1' }) +
+      sse('delta', { text: 'It pays $250,000 a year.' }) +
+      sse('done', { messageId: 'msg_1', usage: { inputTokens: 1, outputTokens: 1 }, creditsRemaining: 11, content: 'No source found for that number.', guarded: true });
+    installFetch(routes({ [`POST ${T}/th_1/messages`]: (c) => streamResponse([guarded], { signal: c.signal }) }));
+    renderUi(<CopilotRail />);
+    openRail();
+    await screen.findByRole('dialog');
+    await ask('What does it pay?');
+    expect(await screen.findByText('No source found for that number.')).toBeInTheDocument();
+    expect(screen.queryByText(/\$250,000/)).not.toBeInTheDocument();
+  });
+
+  it('save_failed (the reply was not stored, no done follows): says it used no message and Try again re-sends', async () => {
+    let n = 0;
+    const http = installFetch(
+      routes({
+        [`POST ${T}/th_1/messages`]: (c) => {
+          n += 1;
+          return n === 1
+            ? streamResponse([sse('delta', { text: 'Half an answer.' }), sse('error', { code: 'save_failed', message: 'The reply could not be saved. Try again.', retryable: true })], { signal: c.signal })
+            : streamResponse([ANSWER], { signal: c.signal });
+        },
+      }),
+    );
+    renderUi(<CopilotRail />);
+    openRail();
+    await screen.findByRole('dialog');
+    await ask('Why?');
+    expect(await screen.findByText('This answer could not be saved, so it did not use a message. Try again.')).toBeInTheDocument();
+    // No thumbs on an answer that was never stored.
+    expect(screen.queryByRole('button', { name: 'Helpful' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('assistant-retry'));
+    await screen.findByText('Your SQL work lines up with the post.');
+    expect(screen.queryByText('Half an answer.')).not.toBeInTheDocument();
+    expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(2);
+    // A retry is a new intent: its own Idempotency-Key.
+    const keys = http.to('POST', `${T}/th_1/messages`).map((c) => c.headers['Idempotency-Key']);
+    expect(new Set(keys).size).toBe(2);
+  });
+
   it('a 402 before streaming opens the out-of-credits sheet and says so', async () => {
     installFetch(routes({ [`POST ${T}/th_1/messages`]: () => fail(402, 'credits_exhausted', { bucket: 'assistant', resetsAt: '2026-10-11T00:00:00.000Z', upgradable: true }) }));
     renderUi(<CopilotRail />);
@@ -353,7 +397,81 @@ describe('per-job chips (F-ORION-02)', () => {
   });
 });
 
+describe('resume scope (F-RES-11)', () => {
+  it('"Ask about this resume" starts a chat scoped to that resume and sends resumeId with every turn', async () => {
+    const http = installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail({ source: 'resume', scope: 'resume', resumeId: 'res_7', prompt: 'How can I improve this resume?' });
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('assistant-resume-scope')).toHaveTextContent('About this resume');
+    // The prompt is in the box, unsent; no job chips for a resume chat.
+    await waitFor(() => expect(input().value).toBe('How can I improve this resume?'));
+    expect(within(dialog).queryByRole('group', { name: 'Quick questions about this job' })).not.toBeInTheDocument();
+    expect(http.to('POST', T)).toHaveLength(0);
+
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    await screen.findByText('Your SQL work lines up with the post.');
+    // The thread has no job context; the turn carries the resume.
+    expect(http.to('POST', T)[0].body).toEqual({});
+    expect(http.to('POST', `${T}/th_1/messages`)[0].body).toEqual({ text: 'How can I improve this resume?', resumeId: 'res_7' });
+    await ask('Shorten the summary.');
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(2));
+    expect(http.to('POST', `${T}/th_1/messages`)[1].body).toEqual({ text: 'Shorten the summary.', resumeId: 'res_7' });
+  });
+
+  it('asking about another resume starts a new chat for it; a job request then drops the resume scope', async () => {
+    const http = installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail({ scope: 'resume', resumeId: 'res_7' });
+    await screen.findByRole('dialog');
+    await ask('Tips?');
+    await screen.findByText('Your SQL work lines up with the post.');
+
+    openRail({ scope: 'resume', resumeId: 'res_8' });
+    await waitFor(() => expect(screen.queryByText('Your SQL work lines up with the post.')).not.toBeInTheDocument());
+    await ask('And this one?');
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(2));
+    expect(http.to('POST', `${T}/th_1/messages`)[1].body).toEqual({ text: 'And this one?', resumeId: 'res_8' });
+
+    openRail({ jobId: 'job_1', source: 'job_detail' });
+    await waitFor(() => expect(screen.queryByTestId('assistant-resume-scope')).not.toBeInTheDocument());
+    await ask('Why do I fit?');
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(3));
+    expect(http.to('POST', `${T}/th_1/messages`)[2].body).toEqual({ text: 'Why do I fit?', contextJobId: 'job_1' });
+  });
+
+  it('a resumeId without scope "resume" is not a resume chat (the scope is explicit)', async () => {
+    const http = installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail({ resumeId: 'res_7' });
+    await screen.findByRole('dialog');
+    expect(screen.queryByTestId('assistant-resume-scope')).not.toBeInTheDocument();
+    await ask('Hi');
+    await screen.findByText('Your SQL work lines up with the post.');
+    expect(http.to('POST', `${T}/th_1/messages`)[0].body).toEqual({ text: 'Hi' });
+  });
+});
+
 describe('cheatsheet (F-ORION-06)', () => {
+  it('offers the sort question again (the feed honours /jobs?sort=)', async () => {
+    const http = installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail();
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByTestId('assistant-cheatsheet-toggle'));
+    const sheet = screen.getByTestId('assistant-cheatsheet');
+    expect(CHEATSHEET_EXTRA.find).toEqual(['sort']);
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Show the newest jobs first.' }));
+    expect(input().value).toBe('Show the newest jobs first.');
+    expect(http.to('POST', T)).toHaveLength(0);
+  });
+
+  it('the sort question follows the one switch for the sort link: with it off the question is not offered', () => {
+    expect(cheatsheetExtra('find')).toEqual(['sort']);
+    expect(cheatsheetExtra('find', { sortLink: false })).toEqual([]);
+    expect(cheatsheetExtra('search', { sortLink: true })).toEqual([]);
+  });
+
   it('has six groups; picking a question fills the box and sends nothing', async () => {
     const http = installFetch(routes());
     renderUi(<CopilotRail />);
@@ -420,6 +538,122 @@ describe('proactive nudge (F-ORION-08)', () => {
     await waitFor(() => expect(input().value).toBe('Add a minimum pay to my search.'));
     expect(http.to('POST', T)).toHaveLength(0);
     expect(offerAssistantNudge({ kind: 'low_rating' })).toBe(false);
+  });
+
+  const NUDGE = '/api/v1/roboapply/copilot/nudge';
+  /** What GET /copilot/nudge answers: the kind, the server's debug English prompt and the facts behind it. */
+  const nudge = (kind: string) => ok({ nudge: { kind, prompt: `DEBUG ONLY: server prompt for ${kind}`, facts: { searchProfileId: 'sp_main' } } });
+
+  it('the kinds are the server\'s (one vocabulary on both sides)', () => {
+    expect([...NUDGE_KINDS].sort()).toEqual([...SERVER_NUDGE_KINDS].sort());
+  });
+
+  it('asks the server on mount and shows the nudge it derived; the server prompt is never shown or put in the box', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    const http = installFetch(routes({ [`GET ${NUDGE}`]: () => nudge('agency_report') }));
+    renderUi(<CopilotRail />);
+    const bubble = await screen.findByTestId('assistant-nudge');
+    expect(http.to('GET', NUDGE)).toHaveLength(1);
+    // The chip label is assistant.nudge.<kind>.
+    expect(bubble).toHaveTextContent('Hide posts from staffing agencies?');
+    expect(document.body.textContent).not.toContain('DEBUG ONLY');
+
+    fireEvent.click(within(bubble).getByRole('button', { name: 'Ask the Assistant' }));
+    await screen.findByRole('dialog');
+    // The composer text is assistant.nudge.prompts.<kind>; nothing is sent until the user presses Send.
+    await waitFor(() => expect(input().value).toBe('Hide posts from staffing agencies in my search.'));
+    expect(input().value).not.toContain('DEBUG ONLY');
+    expect(http.to('POST', T)).toHaveLength(0);
+    expect(http.calls.some((c) => JSON.stringify(c.body ?? '').includes('DEBUG ONLY'))).toBe(false);
+  });
+
+  it.each([...SERVER_NUDGE_KINDS])('every server kind has its label and its composer text: %s', async (kind) => {
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    installFetch(routes({ [`GET ${NUDGE}`]: () => nudge(kind) }));
+    renderUi(<CopilotRail />, kind === 'campus_deadline' ? { brand: 'goapply', flags: { 'ai.text': true } } : {});
+    if (kind === 'campus_deadline') return; // GoApply needs the AI consent before any Ask entry shows; covered below.
+    const bubble = await screen.findByTestId('assistant-nudge');
+    expect(bubble.textContent).not.toMatch(/assistant\.nudge|nudge\./);
+    fireEvent.click(within(bubble).getByRole('button', { name: 'Ask the Assistant' }));
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(input().value.length).toBeGreaterThan(10));
+    expect(input().value).not.toMatch(/nudge\.prompts|DEBUG/);
+  });
+
+  it('asks again when the route changes, while a nudge could still be shown', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    let answer: () => Response = () => ok({ nudge: null });
+    const http = installFetch(routes({ [`GET ${NUDGE}`]: () => answer() }));
+    const view = renderUi(<CopilotRail />);
+    await waitFor(() => expect(http.to('GET', NUDGE)).toHaveLength(1));
+    expect(screen.queryByTestId('assistant-nudge')).not.toBeInTheDocument();
+
+    // The user rated the feed low; on the next page the server has a signal.
+    answer = () => nudge('low_rating');
+    nav.pathname = '/applications';
+    view.rerender(<CopilotRail />);
+    const bubble = await screen.findByTestId('assistant-nudge');
+    expect(http.to('GET', NUDGE)).toHaveLength(2);
+    expect(bubble).toHaveTextContent('Recent jobs were not a good fit. Adjust your search?');
+
+    // One nudge per session: later routes do not ask again.
+    fireEvent.click(within(bubble).getByRole('button', { name: 'Not now' }));
+    nav.pathname = '/resume';
+    view.rerender(<CopilotRail />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(http.to('GET', NUDGE)).toHaveLength(2);
+    expect(screen.queryByTestId('assistant-nudge')).not.toBeInTheDocument();
+  });
+
+  it('no signal, an unknown kind or a failed call shows nothing (a nudge is never invented)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    for (const route of [() => ok({ nudge: null }), () => nudge('upgrade_now'), () => fail(500, 'server_error')]) {
+      __resetNudges();
+      const http = installFetch(routes({ [`GET ${NUDGE}`]: route }));
+      const view = renderUi(<CopilotRail />);
+      await screen.findByTestId('assistant-fab');
+      await waitFor(() => expect(http.to('GET', NUDGE)).toHaveLength(1));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(screen.queryByTestId('assistant-nudge')).not.toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it('does not ask where no nudge could be shown: before Ask is offered, or on /assistant', async () => {
+    // Before the Assistant ships (no floating button): no call.
+    const hidden = installFetch(routes({ [`GET ${NUDGE}`]: () => nudge('pay_filter') }));
+    const a = renderUi(<CopilotRail />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(hidden.to('GET', NUDGE)).toHaveLength(0);
+    a.unmount();
+
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    nav.pathname = '/assistant';
+    const page = installFetch(routes({ [`GET ${NUDGE}`]: () => nudge('pay_filter') }));
+    const b = renderUi(<CopilotRail />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(page.to('GET', NUDGE)).toHaveLength(0);
+    expect(screen.queryByTestId('assistant-nudge')).not.toBeInTheDocument();
+    b.unmount();
+  });
+
+  it('GoApply without the AI consent: no nudge call and no nudge', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    const http = installFetch(routes({ 'GET /api/v1/roboapply/compliance/consents': () => ok(CONSENTS(false)), [`GET ${NUDGE}`]: () => nudge('campus_deadline') }));
+    renderUi(<CopilotRail />, { brand: 'goapply' });
+    await waitFor(() => expect(http.to('GET', '/api/v1/roboapply/compliance/consents').length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(http.to('GET', NUDGE)).toHaveLength(0);
+    expect(screen.queryByTestId('assistant-nudge')).not.toBeInTheDocument();
+  });
+
+  it('GoApply with the AI consent: a followed campus deadline is offered in the campus words', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
+    const http = installFetch(routes({ 'GET /api/v1/roboapply/compliance/consents': () => ok(CONSENTS(true)), [`GET ${NUDGE}`]: () => nudge('campus_deadline') }));
+    renderUi(<CopilotRail />, { brand: 'goapply' });
+    const bubble = await screen.findByTestId('assistant-nudge');
+    expect(http.to('GET', NUDGE)).toHaveLength(1);
+    expect(bubble).toHaveTextContent('Some application deadlines you follow close soon. Check them?');
   });
 });
 

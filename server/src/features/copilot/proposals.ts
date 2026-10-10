@@ -10,17 +10,19 @@
 //     version_conflict with a fresh `filter_diff` card (a new proposal);
 //   - credit_action: runs the area service with the Idempotency-Key
 //     `copilot:<proposalId>`; the area spends its own credit (tailor,
-//     cover_letter, job_import, rewrite) only now;
+//     cover_letter, job_import, rewrite, outreach) only now;
 //   - memory_add: GoApply needs a live `copilot_memory` consent (403), at
 //     most 50 facts (409 memory_full; counted and stored under one lock).
 // The card in the stored message gets the new status, and a result card
-// (tailor_ready, cover_letter, job_imported, rewrite_ready) is appended, both
-// under a row lock on the message (store.updateCards).
+// (tailor_ready, cover_letter, job_imported, rewrite_ready; for an outreach
+// draft a link to the job's People tab, where the draft is kept) is appended,
+// both under a row lock on the message (store.updateCards).
 
 import { HttpError } from '../../platform/http.js';
 import type { Market, ProductBrand } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
 import type { ManualJob } from '../jobs/import/index.js';
+import { OUTREACH_CHANNELS, type OutreachChannel, type OutreachDraftView } from '../network/contract.js';
 import {
   COPILOT_ERROR_CODES,
   COPILOT_MEMORY_MAX,
@@ -33,6 +35,7 @@ import {
   type CountView,
   type JobImportedCardData,
   type MemoryFactView,
+  type OutreachDraftResult,
   type ProposalStatus,
 } from './contract.js';
 import type { CopilotStore, ProposalRow } from './store.js';
@@ -172,6 +175,7 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
     const args = payload.args as Record<string, unknown>;
     const str = (k: string): string | undefined => (typeof args[k] === 'string' && args[k] ? (args[k] as string) : undefined);
     let card: CopilotCard;
+    let extra: Record<string, unknown> = {};
     try {
       switch (payload.action) {
         case 'tailor': {
@@ -244,6 +248,19 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
           };
           break;
         }
+        case 'outreach': {
+          // NET writes the draft: AI gate first (no credit, no model call when the
+          // user's AI is off), then one `outreach` credit, replay-safe on `key`.
+          const jobId = str('jobId')!;
+          const asked = str('channel');
+          const channel = (OUTREACH_CHANNELS as readonly string[]).includes(asked ?? '') ? (asked as OutreachChannel) : 'email';
+          const draft: OutreachDraftView = await areas.createOutreachDraft(userId, { jobId, channel, ...(str('locale') ? { locale: str('locale') } : {}) }, key);
+          // The stored message keeps a link to where the draft lives (the job's People tab);
+          // the draft text itself goes back to this click only.
+          card = { type: 'action', id: deps.newCardId(), data: { kind: 'open_link', href: `/jobs/${encodeURIComponent(jobId)}?tab=people`, label: 'people' } };
+          extra = { draft: { id: draft.id, channel: draft.channel, subject: draft.subject, text: draft.body, jobId, aiWritten: true } satisfies OutreachDraftResult };
+          break;
+        }
         default:
           throw new HttpError('conflict', 'This action is not available from the Assistant.', { reason: 'action_unavailable' });
       }
@@ -252,7 +269,7 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
       throw err;
     }
     await syncCards(row, 'applied', [card]);
-    return { applied: true, result: { card } };
+    return { applied: true, result: { card, ...extra } };
   }
 
   async function applyMemory(userId: string, row: ProposalRow): Promise<ApplyProposalResponse> {

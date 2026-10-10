@@ -3,6 +3,10 @@
 // Seams:
 //   networkService.connectionsForJob(userId, jobId)   the Assistant's find_connections tool (WP-50)
 //                                                     and the job page's People tab (PeoplePanel)
+//   networkService.createOutreachDraft(userId, body, idempotencyKey)
+//                                                     the Assistant's draft_outreach proposal: the same
+//                                                     path as POST /outreach-drafts (GoApply phone gate,
+//                                                     AI gate, one `outreach` credit, replay-safe on the key)
 //   getNetworkService()                               the full service (imports, contacts, drafts)
 //   runContactsSync                                   the contacts-sync cron (cron.ts)
 
@@ -17,7 +21,7 @@ import { normalizeCompanyName } from '../jobs/normalize/index.js';
 import { peopleSearchLinks } from '../jobs/detail/index.js';
 import { cnPostingVisible } from '../cn/jobs/index.js';
 import { resumeForLlm } from '../resume/index.js';
-import type { ConnectionsForJobResponse } from './contract.js';
+import type { ConnectionsForJobResponse, OutreachChannel, OutreachDraftView } from './contract.js';
 import { NetworkService, type NetworkDeps } from './service.js';
 import { createPrismaNetworkStore } from './store.js';
 
@@ -89,12 +93,44 @@ export async function getNetworkService(): Promise<NetworkService> {
   return singleton;
 }
 
+/** Test seam: replace (or reset with null) the process-wide service. */
+export function setNetworkServiceForTests(service: NetworkService | null): void {
+  singleton = service;
+}
+
+/** What another area may ask for when it starts a draft (the Assistant's proposal). */
+export interface CreateOutreachDraftInput {
+  jobId: string;
+  channel: OutreachChannel;
+  contactId?: string;
+  trackerEntryId?: string;
+  locale?: string;
+}
+
 export interface NetworkServiceSeam {
   connectionsForJob(userId: string, jobId: string): Promise<ConnectionsForJobResponse>;
+  /**
+   * Write one outreach draft for the user to send themselves (D1: nothing is
+   * sent). Same rules as the route: GoApply needs a bound phone, the AI gate
+   * runs before any credit or model call (503 ai_unavailable), one `outreach`
+   * credit, and a replayed `idempotencyKey` returns the first draft.
+   */
+  createOutreachDraft(userId: string, body: CreateOutreachDraftInput, idempotencyKey: string): Promise<OutreachDraftView>;
+}
+
+/** GoApply: AI actions need a bound phone (the route's `requirePhoneBound`). */
+async function assertPhoneBoundOnCn(userId: string): Promise<void> {
+  if (getCurrentBrandOrDefault().market !== 'cn') return;
+  const { assertPhoneBound } = await import('../auth-cn/index.js');
+  await assertPhoneBound(userId);
 }
 
 export const networkService: NetworkServiceSeam = {
   async connectionsForJob(userId, jobId) {
     return (await getNetworkService()).connectionsForJob(userId, jobId);
+  },
+  async createOutreachDraft(userId, body, idempotencyKey) {
+    await assertPhoneBoundOnCn(userId);
+    return (await getNetworkService()).createDraft(userId, body, { idempotencyKey, requestLocale: body.locale ?? null });
   },
 };

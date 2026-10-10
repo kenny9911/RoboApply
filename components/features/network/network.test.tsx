@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   getConnectionsImportStatus: vi.fn(),
   importLinkedInConnections: vi.fn(),
   deleteImportedConnections: vi.fn(),
+  listContacts: vi.fn(),
   listOutreachDrafts: vi.fn(),
   createOutreachDraft: vi.fn(),
   patchOutreachDraft: vi.fn(),
@@ -272,6 +273,69 @@ describe('mailtoHref', () => {
 describe('ConnectionsImport', () => {
   beforeEach(() => {
     api.getConnectionsImportStatus.mockResolvedValue({ importedCount: 2, lastImportAt: NOW, importsToday: 1, limitPerDay: 3 });
+    api.listContacts.mockResolvedValue({ items: [], cursor: null });
+  });
+
+  it('lists the people you imported with the company name as the file wrote it (SR-54-2)', async () => {
+    api.listContacts.mockResolvedValue({
+      items: [
+        contact({ companyName: 'Acme Analytics, Inc.' }),
+        contact({ id: 'ct_2', fullName: 'Grace Hopper', title: null, companyName: 'Navy Labs', connectedOn: null }),
+        contact({ id: 'ct_3', source: 'user_added', sourceLabel: 'Added by you', fullName: 'Lin Example', title: 'Recruiter', companyName: 'Globex Corporation', connectedOn: null }),
+      ],
+      cursor: null,
+    });
+    renderWithBrand(<ConnectionsImport />);
+    const list = await screen.findByTestId('connections-list');
+    expect(within(list).getByText('People you imported')).toBeTruthy();
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.map((r) => [within(r).getByText(/Lovelace|Hopper|Example/).textContent, within(r).getByTestId('contact-company').textContent])).toEqual([
+      ['Ada Lovelace', 'Staff Engineer at Acme Analytics, Inc.'],
+      ['Grace Hopper', 'Navy Labs'],
+      ['Lin Example', 'Recruiter at Globex Corporation'],
+    ]);
+    // The written name, never the normalized key the matcher uses.
+    expect(list.textContent).not.toContain('acme analytics');
+    expect(within(rows[0]!).getByTestId('contact-source').textContent).toBe('From your imported LinkedIn connections · Connected Mar 2021');
+    expect(within(rows[2]!).getByTestId('contact-source').textContent).toBe('Added by you');
+    expect(api.listContacts).toHaveBeenCalledWith(undefined, expect.anything());
+    // Nothing on a row contacts the person.
+    expect(within(list).queryByRole('button')).toBeNull();
+  });
+
+  it('"Show more" loads the next page with the cursor', async () => {
+    api.listContacts.mockImplementation(async (query?: { cursor?: string }) =>
+      query?.cursor === 'ct_1'
+        ? { items: [contact({ id: 'ct_9', fullName: 'Alan Turing', companyName: 'Bletchley Park' })], cursor: null }
+        : { items: [contact({ companyName: 'Acme Analytics, Inc.' })], cursor: 'ct_1' },
+    );
+    renderWithBrand(<ConnectionsImport />);
+    const list = await screen.findByTestId('connections-list');
+    fireEvent.click(within(list).getByRole('button', { name: 'Show more' }));
+    expect(await within(list).findByText('Alan Turing')).toBeTruthy();
+    expect(within(list).getByText('Staff Engineer at Bletchley Park')).toBeTruthy();
+    expect(api.listContacts).toHaveBeenLastCalledWith({ cursor: 'ct_1' }, expect.anything());
+    expect(within(list).queryByRole('button', { name: 'Show more' })).toBeNull();
+  });
+
+  it('shows no list with nothing imported, when the list fails, or without mode on (the contacts API is gated)', async () => {
+    api.getConnectionsImportStatus.mockResolvedValue({ importedCount: 0, lastImportAt: null, importsToday: 0, limitPerDay: 3 });
+    const none = renderWithBrand(<ConnectionsImport />);
+    expect(await screen.findByText('No connections imported')).toBeTruthy();
+    expect(screen.queryByTestId('connections-list')).toBeNull();
+    expect(api.listContacts).not.toHaveBeenCalled();
+    none.unmount();
+
+    api.getConnectionsImportStatus.mockResolvedValue({ importedCount: 2, lastImportAt: NOW, importsToday: 1, limitPerDay: 3 });
+    const off = renderWithBrand(<ConnectionsImport canImport={false} />);
+    expect(await screen.findByText('2 connections imported')).toBeTruthy();
+    expect(screen.queryByTestId('connections-list')).toBeNull();
+    expect(api.listContacts).not.toHaveBeenCalled();
+    off.unmount();
+
+    api.listContacts.mockRejectedValue(apiErr(500, 'server_error'));
+    renderWithBrand(<ConnectionsImport />);
+    expect((await screen.findByTestId('connections-list-error')).textContent).toBe('Your list of people could not be loaded. Try again later.');
   });
 
   it('explains what is kept, uploads the file and shows the result', async () => {

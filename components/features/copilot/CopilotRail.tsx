@@ -21,13 +21,16 @@
 //
 // Also here: Cmd/Ctrl+J toggles it; the floating "Ask" button (hideable,
 // remembered in RAUserUiState); and at most one proactive nudge per session
-// (hooks/copilot/nudges.ts) through the popup gate.
+// (hooks/copilot/nudges.ts) through the popup gate. The rail asks the server
+// which nudge holds (GET /copilot/nudge, on mount and on a route change, only
+// while the floating button is on screen); the server derives the kind from
+// the user's real signals, and only that kind is used.
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { clearAssistantNudge, markNudgeShown, useCopilotAvailability, useCopilotChat, usePendingNudge, useRailMemory } from '../../../hooks/copilot';
+import { clearAssistantNudge, markNudgeShown, useCopilotAvailability, useCopilotChat, usePendingNudge, useRailMemory, useServerNudge } from '../../../hooks/copilot';
 import { openAssistantRail, useAssistantRail } from '../../../hooks/shared/useOpenAssistant';
 import { usePopupGate } from '../../../lib/ui/popupGate';
 import { Btn, Drawer, IconChat } from '../../v3/primitives';
@@ -82,10 +85,14 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
     handledSeq.current = rail.seq;
     const req = rail.request;
     if (!req) return;
-    if (req.threadId) chat.openThread(req.threadId, { jobId: req.jobId ?? null });
-    else if (req.jobId && req.jobId !== chat.contextJobId) chat.newChat({ jobId: req.jobId });
+    // A resume-scoped request (F-RES-11) starts a chat about that resume; every turn then carries it.
+    const resumeId = req.scope === 'resume' && req.resumeId ? req.resumeId : null;
+    if (req.threadId) chat.openThread(req.threadId, { jobId: req.jobId ?? null, resumeId });
+    else if (resumeId) {
+      if (resumeId !== chat.contextResumeId) chat.newChat({ resumeId });
+    } else if (req.jobId && req.jobId !== chat.contextJobId) chat.newChat({ jobId: req.jobId });
     if (req.prompt) setPrefill({ text: req.prompt, seq: rail.seq });
-    // chat callbacks are stable; contextJobId is read at request time on purpose.
+    // chat callbacks are stable; the contexts are read at request time on purpose.
   }, [enabled, rail.seq, rail.request]);
 
   // A request that reached the rail while the user may not ask (another
@@ -109,6 +116,9 @@ export function CopilotRail(_props: CopilotRailProps = {}) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [entryVisible, onAssistantPage, rail]);
+
+  // Which nudge holds is the server's call (real signals only); asked while one could be shown.
+  useServerNudge({ enabled: fabVisible, route: pathname });
 
   // One proactive nudge per session, through the popup gate.
   const { granted } = usePopupGate('assistant:nudge', 'survey', { enabled: !!nudge && fabVisible });

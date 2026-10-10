@@ -4,8 +4,13 @@
 // position and connected-on only. No email value (and no profile URL)
 // survives parsing.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/prisma.js', () => ({ default: {} }));
+
+import { createCreditTestKit } from '../../platform/credits/testkit.js';
 import { ConnectionsCsvError, parseConnectedOn, parseCsvRows, parseLinkedInConnections } from './connectionsCsv.js';
+import { createNetworkFixture } from './testkit.js';
 
 const EXPORT = [
   'Notes:',
@@ -97,5 +102,37 @@ describe('parseCsvRows', () => {
       ['a', 'b\nc', 'd"e'],
       ['f', 'g', 'h'],
     ]);
+  });
+});
+
+describe('import stores the company name as the file wrote it (SR-54-2)', () => {
+  it('RAContact.companyName keeps the written name next to the normalized one, and the contacts list shows it', async () => {
+    const f = createNetworkFixture({ credits: createCreditTestKit({ now: new Date('2026-10-10T12:00:00Z') }).credits });
+    const res = await f.service.importConnections('user_1', { text: EXPORT, fileName: 'Connections.csv' });
+    expect(res.importedCount).toBe(3);
+    const stored = f.store.contacts.map((c) => [c.fullName, c.companyName, c.companyNameNormalized]);
+    expect(stored).toEqual([
+      ['Ada Lovelace', 'Acme Analytics, Inc.', 'acme analytics'],
+      ['Grace Hopper', 'Navy Labs', 'navy labs'],
+      ['Linus Torvalds', 'Linux Foundation', 'linux foundation'],
+    ]);
+    // Outside a job page the view carries the written name, never the normalized key.
+    const list = await f.service.listContacts('user_1', {});
+    expect(list.items.map((c) => c.companyName)).toEqual(['Acme Analytics, Inc.', 'Navy Labs', 'Linux Foundation']);
+  });
+
+  it('a row from before the column (companyName null) falls back to the normalized name', async () => {
+    const f = createNetworkFixture({ credits: createCreditTestKit({ now: new Date('2026-10-10T12:00:00Z') }).credits });
+    await f.service.importConnections('user_1', { text: EXPORT, fileName: 'Connections.csv' });
+    f.store.contacts[0]!.companyName = null;
+    const list = await f.service.listContacts('user_1', {});
+    expect(list.items[0]!.companyName).toBe('acme analytics');
+  });
+
+  it('a contact the user adds keeps the name they typed', async () => {
+    const f = createNetworkFixture({ credits: createCreditTestKit({ now: new Date('2026-10-10T12:00:00Z') }).credits });
+    const view = await f.service.createContact('user_1', { fullName: 'Lin Example', companyName: '  Globex   Corporation ' });
+    expect(view.companyName).toBe('Globex Corporation');
+    expect(f.store.contacts[0]).toMatchObject({ companyName: 'Globex Corporation', companyNameNormalized: 'globex' });
   });
 });

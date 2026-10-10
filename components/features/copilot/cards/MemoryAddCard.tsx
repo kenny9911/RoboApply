@@ -5,14 +5,21 @@
 // consent is asked FIRST, with its exact text: nothing is saved until the
 // user allows it (PIPL; WP-51 acceptance). Saved facts are listed and
 // deletable in Settings → Assistant.
+//
+// When the consent is needed: the brand rule (GoApply) with the consent not
+// granted, OR the server said so — `data.consentRequired` on the card, or a
+// 403 with reason `copilot_memory_consent_required` on apply (the proposal
+// stays pending). The server's word wins over what this page has cached, so a
+// consent withdrawn in another tab is asked again instead of failing silently.
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { copilotKeys, isExpired, useMemoryConsent, useProposal } from '../../../../hooks/copilot';
 import { Btn } from '../../../v3/primitives';
 import { CardFrame } from './CardFrame';
-import { parseMemoryAdd } from './model';
+import { initialProposalStatus, parseMemoryAdd } from './model';
 import type { CardProps } from './types';
 import styles from '../copilot.module.css';
 
@@ -22,21 +29,31 @@ export function MemoryAddCard({ card }: CardProps) {
   const data = parseMemoryAdd(card.data);
   const consent = useMemoryConsent();
   const proposal = useProposal(data?.proposalId ?? card.id, {
-    initial: data?.status === 'applied' ? 'applied' : data?.status === 'dismissed' ? 'dismissed' : data && (data.status === 'expired' || isExpired(data.expiresAt)) ? 'expired' : 'pending',
+    initial: data ? initialProposalStatus(data.status, isExpired(data.expiresAt)) : 'pending',
   });
+  // The server refused an apply for the missing consent (403): ask it, whatever the cache says.
+  const [refused, setRefused] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
   if (!data) return null;
 
+  // Where the consent applies (GoApply) it is asked when not granted, when the card says it is
+  // missing, or after the server refused for it. Elsewhere the catalog has no such consent.
+  const needsConsent = consent.required && (consent.granted !== true || refused || (data.consentRequired && consent.granted === null));
+
   const remember = async () => {
-    if (consent.required && consent.granted !== true) {
+    setCode(null);
+    if (needsConsent) {
       const ok = await consent.set(true);
       if (!ok) return;
+      setRefused(false);
     }
     const out = await proposal.apply();
     if (out.kind === 'applied') void qc.invalidateQueries({ queryKey: copilotKeys.memory() });
+    else if (out.kind === 'consent') setRefused(true);
+    else if (out.kind === 'failed') setCode(out.code);
   };
 
   const { status } = proposal;
-  const needsConsent = consent.required && consent.granted !== true;
   const busy = status === 'applying' || consent.saving;
   return (
     <CardFrame card={card} title={t('memory.title')}>
@@ -59,9 +76,15 @@ export function MemoryAddCard({ card }: CardProps) {
               ) : null}
             </div>
           ) : null}
+          {refused && !consent.required ? (
+            // The server asks for a permission this page has no text for: nothing is saved.
+            <p className={styles.alert} role="alert" data-testid="memory-consent-refused">
+              {t('memory.consentNeeded')}
+            </p>
+          ) : null}
           {status === 'failed' ? (
             <p className={styles.alert} role="alert">
-              {t('failed')}
+              {code === 'memory_full' ? t('memory.full') : t('failed')}
             </p>
           ) : null}
           <div className={styles.cardActions}>
@@ -81,6 +104,7 @@ export function MemoryAddCard({ card }: CardProps) {
       ) : null}
       {status === 'dismissed' ? <p className={styles.cardText}>{t('memory.dismissed')}</p> : null}
       {status === 'expired' ? <p className={styles.cardText}>{t('proposalExpired')}</p> : null}
+      {status === 'conflict' ? <p className={styles.cardText}>{t('proposalClosed')}</p> : null}
     </CardFrame>
   );
 }

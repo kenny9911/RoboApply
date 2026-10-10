@@ -299,14 +299,30 @@ export interface ApplyProposalResponse {
 /**
  * `result` per kind:
  *   filter_change  { searchProfileId, version, countAfter: CountView | null }
- *   credit_action  { card }  (tailor_ready | cover_letter | job_imported | rewrite_ready)
+ *   credit_action  { card }  (tailor_ready | cover_letter | job_imported | rewrite_ready);
+ *                  outreach: { card, draft } — `card` is an `action` link to the job's
+ *                  People tab (where the draft is kept), `draft` the text to copy
  *   memory_add     { memory: MemoryFactView }
  * A filter conflict answers 409 `version_conflict` with
  * `details: { currentVersion, card }` (a fresh `filter_diff` card).
  */
 export interface ApplyProposalResult {
   card?: CopilotCard;
+  /** Applied `outreach` action only. */
+  draft?: OutreachDraftResult;
   [key: string]: unknown;
+}
+/**
+ * The draft an applied `outreach` action wrote (NET `OutreachDraftView`, as the
+ * card shows it). The user copies it and sends it themselves: there is no send path (D1).
+ */
+export interface OutreachDraftResult {
+  id: string;
+  channel: string;
+  subject: string | null;
+  text: string;
+  jobId: string;
+  aiWritten: true;
 }
 
 // ── Feedback and memory ──────────────────────────────────────────────────

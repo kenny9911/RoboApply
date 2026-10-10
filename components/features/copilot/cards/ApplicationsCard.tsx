@@ -12,15 +12,16 @@
 //
 // Follow-ups are the tracker's own facts (`FollowUpView`: no reply for N days,
 // the follow-up date the user set, an interview within 24 h, a deadline in N
-// days), worded exactly like the /applications "Needs your attention" list;
-// they open /applications, where the entry lives.
+// days), worded exactly like the /applications "Needs your attention" list.
+// Each one links to its own application: `/applications?entry=<entryId>` opens
+// that entry's details (an id that no longer exists is ignored by the page).
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import type { TrackerStatus } from '../../../../lib/api/contracts/tracker';
 import { CardFrame } from './CardFrame';
-import { parseApplications, type ApplicationsData } from './model';
+import { followUpHref, parseApplications, type ApplicationsData } from './model';
 import type { CardProps } from './types';
 import styles from '../copilot.module.css';
 
@@ -91,7 +92,9 @@ export function ApplicationsCard({ card, ctx }: CardProps) {
           <ul className={styles.cardList}>
             {data.followUps.map((f) => (
               <li key={`${f.entryId}-${f.reason}`} className={styles.jobRow}>
-                <span className={styles.cardText}>{followUp(f)}</span>
+                <Link href={followUpHref(f.entryId)} className={styles.link} onClick={ctx.onNavigate} data-entry={f.entryId}>
+                  {followUp(f)}
+                </Link>
               </li>
             ))}
           </ul>

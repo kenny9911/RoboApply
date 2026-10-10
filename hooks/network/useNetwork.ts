@@ -8,12 +8,13 @@
 //   const create = useCreateOutreachDraft();          await create.run(body) → spends an `outreach` credit
 //   const actions = useDraftActions();                save edits · copied · "I sent it"
 //   const imp = useConnectionsImport();               status · upload Connections.csv · delete all
+//   const list = useOwnContacts();                    the user's own contacts (imported + added), paged
 //
 // We never send a message: the UI copies a draft or opens the user's own
 // mail app. API calls go through lib/api/network.ts only.
 
 import { useCallback, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   createOutreachDraft,
@@ -21,6 +22,7 @@ import {
   getConnectionsForJob,
   getConnectionsImportStatus,
   importLinkedInConnections,
+  listContacts,
   listOutreachDrafts,
   markDraftCopied,
   markDraftSent,
@@ -31,6 +33,8 @@ import type {
   ConnectionsForJobResponse,
   ConnectionsImportResponse,
   ConnectionsImportStatus,
+  ContactView,
+  ListContactsResponse,
   ListOutreachDraftsResponse,
   OutreachChannel,
   OutreachDraftView,
@@ -42,6 +46,7 @@ export const networkKeys = {
   job: (jobId: string) => ['network', 'job', jobId] as const,
   drafts: (key: string) => ['network', 'drafts', key] as const,
   importStatus: ['network', 'import-status'] as const,
+  contacts: ['network', 'contacts'] as const,
 };
 
 export function useConnectionsForJob(jobId: string | null | undefined, options: { enabled?: boolean } = {}) {
@@ -201,6 +206,7 @@ export function useConnectionsImport(options: { enabled?: boolean } = {}) {
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: networkKeys.importStatus });
     void qc.invalidateQueries({ queryKey: ['network', 'job'] });
+    void qc.invalidateQueries({ queryKey: networkKeys.contacts });
   };
   const upload = useMutation<ConnectionsImportResponse, unknown, File>({
     mutationFn: (file) => {
@@ -215,4 +221,30 @@ export function useConnectionsImport(options: { enabled?: boolean } = {}) {
     onSettled: refresh,
   });
   return { status, upload, removeAll };
+}
+
+/**
+ * The user's own contacts (imported LinkedIn connections and people they
+ * added), newest first, 50 a page (`GET /network/contacts`, hiring contacts
+ * mode `on` only). Each row carries the company name as the source wrote it.
+ */
+export function useOwnContacts(options: { enabled?: boolean } = {}) {
+  const query = useInfiniteQuery<ListContactsResponse, unknown, ContactView[], typeof networkKeys.contacts, string | undefined>({
+    queryKey: networkKeys.contacts,
+    queryFn: ({ pageParam, signal }) => listContacts(pageParam ? { cursor: pageParam } : undefined, { signal }),
+    initialPageParam: undefined,
+    getNextPageParam: (last) => last.cursor ?? undefined,
+    select: (data) => data.pages.flatMap((p) => p.items),
+    enabled: options.enabled ?? true,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return {
+    contacts: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    hasMore: Boolean(query.hasNextPage),
+    loadingMore: query.isFetchingNextPage,
+    loadMore: () => void query.fetchNextPage(),
+  };
 }

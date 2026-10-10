@@ -5,18 +5,45 @@
 //   stage (brand ladder; GoApply interview rounds) · how it ended (They said
 //   no / I withdrew / Job was pulled, ruling C1) · dates (applied, interview,
 //   follow up, deadline) · the salary the user noted · notes · the offer slot
-//   (WP-64) · "Practice for this job" · files sent · history + add a note.
+//   (WP-64) · next steps · files used · history + add a note.
+//
+// Next steps (only for an application with a job; each hides itself when its
+// feature is off):
+//   Tailor resume            <TailorButton from="tracker"> (tailoring area; hidden when AI is off)
+//   Write a follow-up        <FollowUpDraftButton> (people area): an AI draft the user sends
+//                            themselves. Hidden when the brand has no AI text model or the
+//                            user's AI consent is off; on GoApply also unless hiring-contact
+//                            drafts are allowed (`hiringContacts` not `off`)
+//   Practice for this job    the practice setup for this job (useLaunchPractice)
+//   Download the resume      the download dialog with this application's id, so the exact
+//                            file is recorded under "Files you used"
+// Files you used lists what was recorded for the application, and its cover
+// letter: an application holds one letter (attaching another replaces it), and
+// each letter row opens the letter with this application attached.
 //
 // Every save is a PATCH that the server records in the history. Nothing here
-// applies anywhere (D1); the follow-up draft link arrives with WP-54.
+// applies anywhere or sends anything (D1).
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Btn, Drawer } from '../../v3/primitives';
+import { coverLetterHref, newCoverLetterHref } from '../coverletter/links';
+import { FollowUpDraftButton } from '../network';
 import { OfferSection } from '../offers';
+import { TailorButton } from '../tailor';
+import { useAiConsent } from '../../../hooks/copilot';
 import { useLaunchPractice } from '../../../hooks/shared/useLaunchPractice';
-import { useAddTrackerNote, usePatchTrackerEntry, useRefreshTrackerEntry, useTrackerArtifacts, useTrackerEvents } from '../../../hooks/tracker/useTracker';
+import { useFlag, useHiringContactsMode } from '../../../lib/flags';
+import {
+  useAddTrackerNote,
+  usePatchTrackerEntry,
+  useRefreshTrackerArtifacts,
+  useRefreshTrackerEntry,
+  useTrackerArtifacts,
+  useTrackerEvents,
+} from '../../../hooks/tracker/useTracker';
 import type { In } from '../../../lib/api/contracts/wire';
 import type * as TR from '../../../lib/api/contracts/tracker';
 import {
@@ -31,6 +58,7 @@ import {
   useStageLabel,
   useTrackerColumns,
 } from './shared';
+import { ResumeForApplication } from './ResumeForApplication';
 import styles from './tracker.module.css';
 
 const OUTCOMES = ['they_said_no', 'i_withdrew', 'job_pulled'] as const;
@@ -52,6 +80,36 @@ export function TrackerDrawer({ entry, notFound = false, onClose }: TrackerDrawe
       {entry ? <DrawerBody key={entry.id} entry={entry} /> : null}
       {!entry && notFound ? <p className={styles.muted}>{t('drawer.not_found')}</p> : null}
     </Drawer>
+  );
+}
+
+/**
+ * The one line /applications shows when `?entry=<id>` names no application of
+ * the user's (deleted, hidden or mistyped): the id is ignored, no details open.
+ */
+export function EntryMissingNote() {
+  const t = useTranslations('applications');
+  return (
+    <p role="status" className={styles.muted} data-testid="applications-entry-missing">
+      {t('drawer.not_found')}
+    </p>
+  );
+}
+
+/**
+ * The line /applications shows when the application `?entry=<id>` names could
+ * not be loaded for any reason other than "not found" (offline, a timeout, a
+ * server error). The id stays in the URL, so a refresh or "Try again" opens it.
+ */
+export function EntryLoadErrorNote({ onRetry, retrying = false }: { onRetry: () => void; retrying?: boolean }) {
+  const t = useTranslations('applications');
+  return (
+    <p role="alert" className={styles.muted} data-testid="applications-entry-load-error">
+      {t('drawer.entry_load_error')}{' '}
+      <Btn variant="ghost" disabled={retrying} onClick={onRetry}>
+        {t('drawer.entry_retry')}
+      </Btn>
+    </p>
   );
 }
 
@@ -120,6 +178,7 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
   const stageLabel = useStageLabel();
   const patch = usePatchTrackerEntry();
   const refreshEntry = useRefreshTrackerEntry(entry.id);
+  const refreshFiles = useRefreshTrackerArtifacts(entry.id);
   const launchPractice = useLaunchPractice();
   const [form, setForm] = useState<FormState>(() => formFrom(entry));
   const [notice, setNotice] = useState<'saved' | 'error' | null>(null);
@@ -239,17 +298,46 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
       <OfferSection trackerEntryId={entry.id} onChange={refreshEntry} />
 
       {entry.jobId ? (
-        <div>
-          <Btn variant="default" onClick={() => launchPractice({ jobId: entry.jobId!, resumeId: entry.tailoredVariantId, from: 'applications' })}>
-            {t('drawer.practice')}
-          </Btn>
-        </div>
+        <section className={styles.section} aria-labelledby={`next-${entry.id}`} data-testid="tracker-next-steps">
+          <h3 id={`next-${entry.id}`} className={styles.sectionTitle}>
+            {t('drawer.next_steps')}
+          </h3>
+          <div className={styles.actions}>
+            <TailorButton jobId={entry.jobId} resumeId={entry.tailoredVariantId} from="tracker" jobTitle={entryRole(entry) || null} />
+            <FollowUpDraft jobId={entry.jobId} trackerEntryId={entry.id} companyName={entryCompany(entry)} />
+            <Btn variant="default" onClick={() => launchPractice({ jobId: entry.jobId!, resumeId: entry.tailoredVariantId, from: 'applications' })}>
+              {t('drawer.practice')}
+            </Btn>
+            <ResumeForApplication trackerEntryId={entry.id} tailoredVariantId={entry.tailoredVariantId} onRecorded={refreshFiles} />
+          </div>
+        </section>
       ) : null}
 
-      <FilesSent entryId={entry.id} />
+      <FilesSent entry={entry} />
       <History entryId={entry.id} />
     </div>
   );
+}
+
+/**
+ * May this user be offered an AI follow-up draft here? The brand has an AI
+ * text model, the user's AI consent is on (GoApply; fails closed while
+ * unknown), and on GoApply hiring-contact drafts are allowed. The server
+ * checks again before any credit or model call.
+ */
+export function useFollowUpDraftAllowed(): boolean {
+  const aiText = useFlag('ai.text');
+  const consent = useAiConsent({ enabled: aiText });
+  const { market } = useTrackerColumns();
+  const hiringContacts = useHiringContactsMode();
+  if (!aiText || !consent.allowed) return false;
+  return market !== 'cn' || hiringContacts !== 'off';
+}
+
+function FollowUpDraft(props: { jobId: string; trackerEntryId: string; companyName: string }) {
+  const allowed = useFollowUpDraftAllowed();
+  if (!allowed) return null;
+  return <FollowUpDraftButton {...props} />;
 }
 
 function DateField({ label, type, value, onChange }: { label: string; type: 'date' | 'datetime-local'; value: string; onChange: (v: string) => void }) {
@@ -261,27 +349,67 @@ function DateField({ label, type, value, onChange }: { label: string; type: 'dat
   );
 }
 
-function FilesSent({ entryId }: { entryId: string }) {
+/** The letter a file row opens, with this application attached (so the editor offers "Attach to this application"). */
+export function letterHrefFor(artifact: Pick<TR.ApplicationArtifactView, 'kind' | 'coverLetterId'>, entryId: string): string | null {
+  return artifact.kind === 'cover_letter' && artifact.coverLetterId ? coverLetterHref(artifact.coverLetterId, entryId) : null;
+}
+
+function FilesSent({ entry }: { entry: TR.TrackerEntryView }) {
   const t = useTranslations('applications');
   const { day } = useDateFormat();
+  const entryId = entry.id;
   const { data, isLoading, isError } = useTrackerArtifacts(entryId);
+  // "Write a cover letter" opens an AI writer: the brand has an AI text model and the user's
+  // AI consent is on (GoApply; fails closed while unknown). The letter form checks again.
+  const aiText = useFlag('ai.text');
+  const consent = useAiConsent({ enabled: aiText });
+  const canWrite = aiText && consent.allowed;
   const via = (v: string) => (v === 'download' || v === 'extension' || v === 'agent' ? t(`drawer.via_${v}`) : t('drawer.via_other'));
+  // An application holds one cover letter: the entry names it; older letter files stay listed as files.
+  const letterId = entry.coverLetterId;
   return (
     <section className={styles.section} aria-labelledby={`files-${entryId}`}>
       <h3 id={`files-${entryId}`} className={styles.sectionTitle}>
         {t('drawer.files')}
       </h3>
+      {letterId ? (
+        <p className={styles.fileRow} data-testid="tracker-cover-letter">
+          <span className={styles.strong}>{t('drawer.letter_attached')}</span>
+          <Link className={styles.postingLink} href={coverLetterHref(letterId, entryId)}>
+            {t('drawer.letter_open')}
+          </Link>
+        </p>
+      ) : entry.jobId && canWrite ? (
+        <p className={styles.fileRow} data-testid="tracker-cover-letter-new">
+          <span className={styles.muted}>{t('drawer.letter_none')}</span>
+          <Link className={styles.postingLink} href={newCoverLetterHref(entry.jobId, entryId)}>
+            {t('drawer.letter_write')}
+          </Link>
+        </p>
+      ) : null}
       {isLoading ? <p className={styles.muted}>…</p> : null}
       {isError ? <p className={styles.muted}>{t('drawer.load_error')}</p> : null}
       {data && data.length === 0 ? <p className={styles.muted}>{t('drawer.files_empty')}</p> : null}
       {data && data.length > 0 ? (
         <ul className={styles.plainList}>
-          {data.map((a) => (
-            <li key={a.id} className={styles.fileRow}>
-              <span className={styles.strong}>{a.fileName}</span>
-              <span className={styles.muted}>{t('drawer.file_line', { format: a.format.toUpperCase(), via: via(a.via), date: day(a.createdAt) })}</span>
-            </li>
-          ))}
+          {data.map((a) => {
+            const letterHref = letterHrefFor(a, entryId);
+            return (
+              <li key={a.id} className={styles.fileRow} data-kind={a.kind}>
+                {letterHref ? (
+                  <Link className={styles.strong} href={letterHref}>
+                    {a.fileName}
+                  </Link>
+                ) : (
+                  <span className={styles.strong}>{a.fileName}</span>
+                )}
+                <span className={styles.muted}>
+                  {a.kind === 'cover_letter' ? `${t('drawer.file_letter')} · ` : ''}
+                  {t('drawer.file_line', { format: a.format.toUpperCase(), via: via(a.via), date: day(a.createdAt) })}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </section>

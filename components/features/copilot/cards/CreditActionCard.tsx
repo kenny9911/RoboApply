@@ -8,7 +8,9 @@
 // today", from the server's credit summary); the credits are spent only when
 // the user presses the confirm button (useProposal + useCreditGate: one
 // idempotency key per press, the out-of-credits sheet on 402). Nothing is
-// sent to anyone (D1): drafts come back for the user to copy.
+// sent to anyone (D1): an outreach draft comes back as text for the user to
+// copy and send themselves, with a link to the job's People tab where the
+// draft is kept. On reload the card shows the server's `data.status`.
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -19,7 +21,16 @@ import { bucketSummary, useCredits } from '../../../../hooks/shared/useCredits';
 import { Btn, CreditNotice } from '../../../v3/primitives';
 import { AiGeneratedBadge } from '../../market';
 import { CardFrame } from './CardFrame';
-import { parseCoverLetter, parseCreditAction, parseJobImported, parseRewriteReady, parseTailorReady, type CreditActionKind } from './model';
+import {
+  initialProposalStatus,
+  parseCoverLetter,
+  parseCreditAction,
+  parseJobImported,
+  parseOutreachDraft,
+  parseRewriteReady,
+  parseTailorReady,
+  type CreditActionKind,
+} from './model';
 import type { CardProps } from './types';
 import styles from '../copilot.module.css';
 
@@ -30,7 +41,7 @@ const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.i
 export function creditResult(
   action: CreditActionKind,
   result: unknown,
-): { href: string; label: 'tailor' | 'letter' | 'job' | 'jobFinish' | 'rewrite' } | { draft: string } | null {
+): { href: string; label: 'tailor' | 'letter' | 'job' | 'jobFinish' | 'rewrite' } | { draft: string; subject: string | null; peopleHref: string | null } | null {
   const data = isObj(result) && isObj(result.card) ? result.card.data : result;
   if (action === 'tailor') {
     const link = parseTailorReady(data);
@@ -48,8 +59,9 @@ export function creditResult(
     const rewrite = parseRewriteReady(data);
     return rewrite ? { href: rewrite.href, label: 'rewrite' } : null;
   }
-  const text = isObj(data) ? (typeof data.text === 'string' ? data.text : typeof data.draft === 'string' ? data.draft : null) : null;
-  return text && text.trim() ? { draft: text.trim() } : null;
+  // outreach: `{ card: People-tab link, draft: { text, subject, jobId } }` (server proposals.ts).
+  const draft = parseOutreachDraft(result);
+  return draft ? { draft: draft.text, subject: draft.subject, peopleHref: draft.href } : null;
 }
 
 /** The link text of each result kind. */
@@ -67,7 +79,7 @@ export function CreditActionCard({ card, ctx }: CardProps) {
   const credits = useCredits();
   const proposal = useProposal(data?.proposalId ?? card.id, {
     bucket: data?.bucket ?? null,
-    initial: data?.status === 'applied' ? 'applied' : data?.status === 'dismissed' ? 'dismissed' : data && (data.status === 'expired' || isExpired(data.expiresAt)) ? 'expired' : 'pending',
+    initial: data ? initialProposalStatus(data.status, isExpired(data.expiresAt)) : 'pending',
   });
   const [copied, setCopied] = useState(false);
   if (!data) return null;
@@ -109,26 +121,39 @@ export function CreditActionCard({ card, ctx }: CardProps) {
         </>
       ) : null}
       {status === 'expired' ? <p className={styles.cardText}>{t('proposalExpired')}</p> : null}
+      {status === 'conflict' ? <p className={styles.cardText}>{t('proposalClosed')}</p> : null}
       {status === 'dismissed' ? <p className={styles.cardText}>{t('credit.dismissed')}</p> : null}
       {status === 'applied' ? (
         <>
           <p className={styles.cardText} role="status">
             {t('credit.done')}
           </p>
-          {out && 'href' in out ? (
+          {out && 'label' in out ? (
             <Link href={out.href} className={styles.link} onClick={ctx.onNavigate}>
               {RESULT_LINK[out.label](t)}
             </Link>
           ) : null}
           {out && 'draft' in out ? (
-            <>
+            <div data-testid="outreach-draft">
               <AiGeneratedBadge />
-              <p className={styles.fact}>{out.draft}</p>
+              {out.subject ? <p className={styles.subTitle}>{out.subject}</p> : null}
+              <p className={styles.fact} style={{ whiteSpace: 'pre-wrap' }}>
+                {out.draft}
+              </p>
               <p className={styles.cardText}>{t('credit.youSend')}</p>
               <div className={styles.cardActions}>
-                <Btn onClick={() => void copy(out.draft)}>{copied ? t('credit.copied') : t('credit.copy')}</Btn>
+                <Btn onClick={() => void copy(out.subject ? `${out.subject}\n\n${out.draft}` : out.draft)}>{copied ? t('credit.copied') : t('credit.copy')}</Btn>
+                {out.peopleHref ? (
+                  <Link href={out.peopleHref} className={styles.link} onClick={ctx.onNavigate}>
+                    {t('credit.outreach.open')}
+                  </Link>
+                ) : null}
               </div>
-            </>
+            </div>
+          ) : null}
+          {data.action === 'outreach' && !out ? (
+            // After a reload the draft text is not in the chat; it is kept on the job's People tab.
+            <p className={styles.cardText}>{t('credit.outreach.kept')}</p>
           ) : null}
         </>
       ) : null}

@@ -112,8 +112,17 @@ describe('proposal helpers', () => {
 
   it('maps server errors', () => {
     expect(proposalFailure(err('proposal_expired'))).toEqual({ kind: 'expired' });
+    expect(proposalFailure(err('conflict', { reason: 'proposal_expired' }))).toEqual({ kind: 'expired' });
     expect(proposalFailure(err('conflict', { reason: 'version_conflict', version: 4 }))).toEqual({ kind: 'conflict', details: { reason: 'version_conflict', version: 4 } });
+    // The server's own shape: code version_conflict, details { currentVersion, card }.
+    expect(proposalFailure(err('version_conflict', { currentVersion: 4, card: null }))).toEqual({ kind: 'conflict', details: { currentVersion: 4, card: null } });
+    // Already used or dismissed: closed, not a version conflict.
+    expect(proposalFailure(err('conflict', { reason: 'proposal_closed', status: 'applied' }))).toEqual({ kind: 'closed' });
+    // GoApply memory without the consent: ask it; the proposal stays pending.
+    expect(proposalFailure(err('forbidden', { reason: 'copilot_memory_consent_required', consent: 'copilot_memory' }))).toEqual({ kind: 'consent' });
+    expect(proposalFailure(err('conflict', { reason: 'memory_full', max: 50 }))).toEqual({ kind: 'failed', code: 'memory_full' });
     expect(proposalFailure(err('credits_exhausted'))).toEqual({ kind: 'credits' });
+    expect(proposalFailure(err('ai_unavailable'))).toEqual({ kind: 'failed', code: 'ai_unavailable' });
     expect(proposalFailure(new Error('x'))).toEqual({ kind: 'failed', code: null });
   });
 

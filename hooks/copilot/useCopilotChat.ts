@@ -8,9 +8,12 @@
 //   chat.stop();            // Stop: aborts the stream, keeps the partial answer
 //   chat.retry();           // Try again after a retryable error
 //   chat.newChat({ jobId }) // New chat (optionally about a job)
+//   chat.newChat({ resumeId }) // New chat about one resume (F-RES-11)
 //   chat.openThread(id)     // continue a saved thread
 //
-// A thread is created on the first message, with the job context if any.
+// A thread is created on the first message, with the job context if any. A
+// resume-scoped chat sends `resumeId` with every turn (the server scopes the
+// resume tools and the tailoring / cover-letter proposals to that resume).
 // Credits: one `assistant` credit per user turn, charged by the server; a 402
 // before the stream opens the out-of-credits sheet (useCreditGate's store)
 // and the turn shows a plain notice. The credit summary is refetched after
@@ -40,6 +43,8 @@ export interface CopilotChat {
   threadId: string | null;
   /** The job this conversation is about (chips show for it). */
   contextJobId: string | null;
+  /** The resume this conversation is about (sent with every turn), or null. */
+  contextResumeId: string | null;
   messages: ChatMessage[];
   /** True while an answer streams. */
   streaming: boolean;
@@ -49,8 +54,8 @@ export interface CopilotChat {
   send: (text: string, opts?: SendOptions) => Promise<void>;
   stop: () => void;
   retry: () => Promise<void>;
-  newChat: (opts?: { jobId?: string | null }) => void;
-  openThread: (threadId: string, opts?: { jobId?: string | null }) => void;
+  newChat: (opts?: { jobId?: string | null; resumeId?: string | null }) => void;
+  openThread: (threadId: string, opts?: { jobId?: string | null; resumeId?: string | null }) => void;
   feedback: (messageId: string, value: 'up' | 'down', note?: string) => Promise<boolean>;
 }
 
@@ -60,9 +65,10 @@ const localId = (kind: string) => `local:${kind}:${Date.now().toString(36)}:${(l
 /** Codes that mean "nothing more can be done in this chat right now". */
 const FINAL_CODES = new Set(['credits_exhausted', 'copilot_budget_exhausted', 'ai_unavailable', 'feature_disabled', 'thread_not_found', 'phone_binding_required']);
 
-export function useCopilotChat(initial: { threadId?: string | null; jobId?: string | null } = {}): CopilotChat {
+export function useCopilotChat(initial: { threadId?: string | null; jobId?: string | null; resumeId?: string | null } = {}): CopilotChat {
   const [state, dispatch] = useReducer(chatReducer, { ...INITIAL_CHAT, threadId: initial.threadId ?? null });
   const [contextJobId, setContextJobId] = useState<string | null>(initial.jobId ?? null);
+  const [contextResumeId, setContextResumeId] = useState<string | null>(initial.resumeId ?? null);
   // A thread whose messages must be read from the server (opened, not created here).
   const [loadThreadId, setLoadThreadId] = useState<string | null>(initial.threadId ?? null);
   const abortRef = useRef<AbortController | null>(null);
@@ -102,7 +108,7 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
         }
         const outcome = await streamTurn(
           threadId,
-          { text: clean, ...(opts.chip ? { chip: opts.chip } : {}), ...(contextJobId ? { contextJobId } : {}) },
+          { text: clean, ...(opts.chip ? { chip: opts.chip } : {}), ...(contextJobId ? { contextJobId } : {}), ...(contextResumeId ? { resumeId: contextResumeId } : {}) },
           // WP-50 requires one Idempotency-Key per user turn (422 without it); a
           // retry is a new intent and gets a new key (Wave 4 gate fix).
           { signal: controller.signal, idempotencyKey: newIdempotencyKey(), onEvent: (event) => dispatch({ type: 'event', event }) },
@@ -125,7 +131,7 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
         void qc.invalidateQueries({ queryKey: copilotKeys.threads() });
       }
     },
-    [contextJobId, invalidateCredits, qc],
+    [contextJobId, contextResumeId, invalidateCredits, qc],
   );
 
   const stop = useCallback(() => {
@@ -139,16 +145,18 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
     await runTurn(last.text, last.chip ? { chip: last.chip as CopilotChip } : {});
   }, [runTurn]);
 
-  const newChat = useCallback((opts: { jobId?: string | null } = {}) => {
+  const newChat = useCallback((opts: { jobId?: string | null; resumeId?: string | null } = {}) => {
     abortRef.current?.abort();
     setLoadThreadId(null);
     setContextJobId(opts.jobId ?? null);
+    setContextResumeId(opts.resumeId ?? null);
     dispatch({ type: 'reset' });
   }, []);
 
-  const openThread = useCallback((threadId: string, opts: { jobId?: string | null } = {}) => {
+  const openThread = useCallback((threadId: string, opts: { jobId?: string | null; resumeId?: string | null } = {}) => {
     abortRef.current?.abort();
     setContextJobId(opts.jobId ?? null);
+    setContextResumeId(opts.resumeId ?? null);
     dispatch({ type: 'reset', threadId });
     setLoadThreadId(threadId);
     // Already read once: show the cached messages at once (the effect only
@@ -173,6 +181,7 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
   return {
     threadId: state.threadId,
     contextJobId,
+    contextResumeId,
     messages: state.messages,
     streaming: state.streamingId !== null,
     loading: !!loadThreadId && history.isLoading,

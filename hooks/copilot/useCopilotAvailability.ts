@@ -42,6 +42,36 @@ export function __resetAssistantAvailability(): void {
   blockedStore.reset();
 }
 
+export interface AiConsent {
+  /** The user may use AI: always on RoboApply; on GoApply the `ai_resume_parsing` grant is live. */
+  allowed: boolean;
+  /** Still waiting for the consent answer (GoApply only): not allowed yet. */
+  loading: boolean;
+  /** GoApply: the consent is known to be off (refused, withdrawn or never given). */
+  off: boolean;
+}
+
+/**
+ * The user's AI consent, mirroring the server's aiAllowed(user). Fails closed:
+ * while unknown on GoApply nothing AI is offered. Other areas that only need
+ * "may this user see an AI entry?" (the tracker's follow-up draft) use this;
+ * the server stays the final word (503 ai_unavailable before any credit).
+ */
+export function useAiConsent(options: { enabled?: boolean } = {}): AiConsent {
+  const brand = useBrand();
+  const locale = useLocale();
+  const needsConsent = brand.market === 'cn';
+  const consents = useQuery({
+    queryKey: consentsKey(locale),
+    queryFn: ({ signal }) => getConsents({ locale }, { signal }),
+    enabled: (options.enabled ?? true) && needsConsent,
+    retry: false,
+  });
+  if (!needsConsent) return { allowed: true, loading: false, off: false };
+  const granted = consents.data?.items.find((c) => c.type === AI_CONSENT_TYPE)?.granted === true;
+  return { allowed: granted, loading: consents.isLoading, off: consents.isSuccess && !granted };
+}
+
 export interface CopilotAvailability {
   /** The brand has the Assistant at all (`copilot` capability). */
   capability: boolean;
@@ -57,25 +87,9 @@ export interface CopilotAvailability {
 
 export function useCopilotAvailability(): CopilotAvailability {
   const capability = useFlag('copilot');
-  const brand = useBrand();
-  const locale = useLocale();
   const blocked = useSyncExternalStore(blockedStore.subscribe, blockedStore.get, () => false);
-  const needsConsent = brand.market === 'cn';
-
-  const consents = useQuery({
-    queryKey: consentsKey(locale),
-    queryFn: ({ signal }) => getConsents({ locale }, { signal }),
-    enabled: capability && needsConsent,
-    retry: false,
-  });
+  const consent = useAiConsent({ enabled: capability });
 
   if (!capability) return { capability, canAsk: false, loading: false, consentOff: false, blocked };
-  if (!needsConsent) return { capability, canAsk: !blocked, loading: false, consentOff: false, blocked };
-
-  const loading = consents.isLoading;
-  const item = consents.data?.items.find((c) => c.type === AI_CONSENT_TYPE) ?? null;
-  const granted = item?.granted === true;
-  // Loaded and not granted (refused, withdrawn, never answered or missing from the catalog).
-  const consentOff = consents.isSuccess && !granted;
-  return { capability, canAsk: granted && !blocked, loading, consentOff, blocked };
+  return { capability, canAsk: consent.allowed && !blocked, loading: consent.loading, consentOff: consent.off, blocked };
 }

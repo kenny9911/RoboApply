@@ -13,9 +13,13 @@ import type { CopilotAreas, ToolContext } from '../types.js';
 import { opsToPatch } from '../tools/filters.js';
 import { PUBLIC_TOOLS, SEEKER_TOOLS, availableTools, runToolCall, serializeResult, toLlmTools, wrapData, TOOL_RESULT_MAX_CHARS } from '../tools/registry.js';
 import { FEATURE_EXPLANATIONS } from '../tools/you.js';
-import { NOW, USER, fakeAreas, type FakeAreas } from './testkit.js';
+import { NOW, USER, fakeAreas, makeService, newThread, runTurn, type FakeAreas } from './testkit.js';
+import { createCreditTestKit } from '../../../platform/credits/testkit.js';
+import { createNetworkFixture, jobRow } from '../../network/testkit.js';
+import { CROSS_AREA_DEFAULTS, createDefaultAreas } from '../areas.js';
+import * as copilotIndex from '../index.js';
 
-const WRITES = ['patchFilters', 'createTailorSession', 'createCoverLetter', 'importJob', 'saveImportedJob', 'fixResumeIssue'] as const;
+const WRITES = ['patchFilters', 'createTailorSession', 'createCoverLetter', 'createOutreachDraft', 'importJob', 'saveImportedJob', 'fixResumeIssue'] as const;
 
 function ctxFor(over: Partial<ToolContext> & { areasOver?: Partial<CopilotAreas> } = {}) {
   const areas = fakeAreas(over.areasOver);
@@ -284,6 +288,17 @@ describe('you', () => {
     expect(prep.output.cards?.[0]).toMatchObject({ type: 'interview_plan', data: { questions: [], practiceHref: '/practice?job=job_1&from=assistant' } });
   });
 
+  it('interview_prep is read-only unless the user asked for questions (generate → prep may write the job set)', async () => {
+    const question = { id: 'q1', title: 'How would you size the data?', category: 'technical', sourceKind: 'ai_practice', sourceLabelKey: 'source.ai' };
+    const s = ctxFor({ areasOver: { planForJob: (async () => ({ questions: [question] })) as never } });
+    await run('interview_prep', { jobId: 'job_1' }, s);
+    expect(s.areas.planForJob).toHaveBeenLastCalledWith(USER, 'job_1', { write: false, locale: 'en' });
+    const asked = await run('interview_prep', { jobId: 'job_1', generate: true }, s);
+    expect(s.areas.planForJob).toHaveBeenLastCalledWith(USER, 'job_1', { write: true, locale: 'en' });
+    // An AI-written question is labelled as AI on the card (D3).
+    expect(asked.output.cards?.[0]).toMatchObject({ type: 'interview_plan', data: { questions: [{ text: 'How would you size the data?', sourceKind: 'ai' }] } });
+  });
+
   it('campus_deadlines answers "not available yet" while the calendar seam is a stub', async () => {
     const s = ctxFor({ brand: getBrand('goapply'), isEnabled: async (k) => k === 'jobs.campusCalendar' });
     const r = await run('campus_deadlines', {}, s);
@@ -297,5 +312,142 @@ describe('you', () => {
     const s = ctxFor({ scope: 'public', userId: null });
     const r = await runToolCall(call('explain_feature', { feature: 'ready_to_apply' }), PUBLIC_TOOLS, s.ctx, new Set());
     expect((r.output.data as { explanation: string }).explanation).toMatch(/submit it yourself/);
+  });
+});
+
+describe('draft_outreach (a credit proposal over NET networkService.createOutreachDraft)', () => {
+  const U = USER;
+
+  /** The real NetworkService (memory store, real credit stack) behind the Assistant's area seam. */
+  function withNetwork(opts: { brand?: 'roboapply' | 'goapply'; ai?: boolean } = {}) {
+    const kit = createCreditTestKit({ now: NOW, accounts: { [U]: { brand: opts.brand ?? 'roboapply', timezone: null, subscription: null } } });
+    const net = createNetworkFixture({ credits: kit.credits, ai: opts.ai ?? true, brand: getBrand(opts.brand ?? 'roboapply'), now: NOW });
+    net.store.jobs.set('job_1', jobRow({ market: opts.brand === 'goapply' ? 'cn' : 'intl' }));
+    const h = makeService({
+      rounds: [{ toolCalls: [{ name: 'draft_outreach', args: { jobId: 'job_1' } }] }, { chunks: ['Review the card.'] }],
+      brand: opts.brand,
+      hiringContacts: 'on',
+      areas: {
+        createOutreachDraft: (userId, body, key) => net.service.createDraft(userId, body, { idempotencyKey: key, requestLocale: body.locale ?? null }),
+        ...(opts.brand === 'goapply' ? { postingsAllowed: () => true } : {}),
+      },
+    });
+    const used = async () => (await kit.credits.usage(U, { brand: opts.brand ?? 'roboapply' })).find((u) => u.bucket === 'outreach')?.used ?? 0;
+    return { h, net, kit, used };
+  }
+
+  async function propose(h: ReturnType<typeof makeService>) {
+    const t = await newThread(h, 'job_1');
+    const events = await runTurn(h, t, 'write a note to the recruiter', { contextJobId: 'job_1' });
+    const card = events.find((e) => e.event === 'card')!.data as { type: string; data: { proposalId: string; action: string; bucket: string; cost: number; status: string } };
+    return { card, messageId: (events.at(-1)!.data as { messageId: string }).messageId };
+  }
+
+  it('the tool only proposes: a credit_action card for bucket `outreach`; nothing is written or charged', async () => {
+    const s = ctxFor({ hiringContactsMode: () => 'on' });
+    const r = await run('draft_outreach', { jobId: 'job_1' }, s);
+    expect(s.proposals).toEqual([{ kind: 'credit_action', payload: { action: 'outreach', args: { jobId: 'job_1', channel: 'linkedin_note', locale: 'en' }, bucket: 'outreach', cost: 1, messageId: 'msg_1' } }]);
+    expect(r.output.cards?.[0]).toMatchObject({ type: 'credit_action', data: { action: 'outreach', bucket: 'outreach', cost: 1, status: 'pending', jobId: 'job_1', remaining: 5 } });
+    expect(r.output.data).toMatchObject({ proposed: true, started: false, channel: 'linkedin_note' });
+    expectNoWrites(s.areas);
+    // The user's choice of message kind is kept when the market offers it; GoApply has no LinkedIn note.
+    expect((await run('draft_outreach', { jobId: 'job_1', channel: 'referral_ask' }, s)).output.data).toMatchObject({ channel: 'referral_ask' });
+    const cn = ctxFor({ brand: getBrand('goapply'), hiringContactsMode: () => 'on' });
+    expect((await run('draft_outreach', { jobId: 'job_1', channel: 'linkedin_note' }, cn)).output.data).toMatchObject({ channel: 'wechat' });
+    // An unknown job is refused before any proposal.
+    const missing = ctxFor({ hiringContactsMode: () => 'on' });
+    expect((await run('draft_outreach', { jobId: 'missing_1' }, missing, ['missing_1'])).output.data).toMatchObject({ available: false, reason: 'job_not_found' });
+    expect(missing.proposals).toEqual([]);
+  });
+
+  it('proposal → confirm debits one outreach credit and returns the draft; the key makes it idempotent', async () => {
+    const { h, net, used } = withNetwork();
+    const { card } = await propose(h);
+    expect(card).toMatchObject({ type: 'credit_action', data: { action: 'outreach', bucket: 'outreach', cost: 1, status: 'pending' } });
+    // Proposing costs nothing and calls no drafting model.
+    expect(await used()).toBe(0);
+    expect(net.calls).toHaveLength(0);
+
+    const res = await h.service.proposals.apply(U, card.data.proposalId, { locale: 'en' });
+    expect(res).toMatchObject({
+      applied: true,
+      result: {
+        card: { type: 'action', data: { kind: 'open_link', href: '/jobs/job_1?tab=people', label: 'people' } },
+        draft: { channel: 'linkedin_note', jobId: 'job_1', aiWritten: true },
+      },
+    });
+    expect((res.result as { draft: { text: string } }).draft.text).toMatch(/^Hi,/);
+    expect(await used()).toBe(1);
+    expect(net.calls).toHaveLength(1);
+    expect(net.store.drafts).toHaveLength(1);
+
+    // A second click is refused by the proposal claim; nothing more is written or charged.
+    await expect(h.service.proposals.apply(U, card.data.proposalId)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_closed' } });
+    // A replay of the same key at the seam (a retried request) returns the first draft and charges once.
+    const again = await h.areas.createOutreachDraft(U, { jobId: 'job_1', channel: 'linkedin_note' }, `copilot:${card.data.proposalId}`);
+    expect(again.id).toBe(net.store.drafts[0]!.id);
+    expect(await used()).toBe(1);
+    expect(net.calls).toHaveLength(1);
+    expect(net.store.drafts).toHaveLength(1);
+  });
+
+  it('GoApply with the AI consent off: confirm answers ai_unavailable with zero model calls and no credit; the proposal stays pending', async () => {
+    const { h, net, used } = withNetwork({ brand: 'goapply', ai: false });
+    const { card } = await propose(h);
+    const before = h.llm.streamChatWithTools.mock.calls.length;
+    await expect(h.service.proposals.apply(U, card.data.proposalId)).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(net.calls).toHaveLength(0);
+    expect(h.llm.streamChatWithTools.mock.calls.length).toBe(before);
+    expect(await used()).toBe(0);
+    expect(net.store.drafts).toHaveLength(0);
+    expect((await h.store.getProposal(card.data.proposalId))!.status).toBe('pending');
+  });
+
+  it('no turn runs at all when the user may not use AI (aiAllowed false): no tool, no proposal, no model call', async () => {
+    const h = makeService({ rounds: [{ toolCalls: [{ name: 'draft_outreach', args: { jobId: 'job_1' } }] }], brand: 'goapply', aiAllowed: false, hiringContacts: 'on' });
+    const t = await newThread(h, 'job_1');
+    await expect(runTurn(h, t, 'write a note', { contextJobId: 'job_1' })).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(h.llm.streamChatWithTools).not.toHaveBeenCalled();
+    expect(h.areas.createOutreachDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe('cross-area seams (joins J1, J2, J3)', () => {
+  it('salary stats and the primary resume are one injectable read each; no other area table is read here', async () => {
+    const salary = vi.fn(async () => ({ totalCount: 0 }) as never);
+    const primary = vi.fn(async () => 'res_9');
+    const store = { primaryResumeId: vi.fn(async () => 'res_store') };
+    const areas = createDefaultAreas({ store: store as never, reads: { salaryStats: salary, primaryResumeId: primary } });
+    expect(await areas.primaryResumeId('u1')).toBe('res_9');
+    await areas.salaryStats({ market: 'intl' } as never);
+    expect(salary).toHaveBeenCalledWith({ market: 'intl' });
+    expect(store.primaryResumeId).not.toHaveBeenCalled();
+    // Without an override the default goes through the store's (deprecated) reader: the one line J2 swaps.
+    expect(await createDefaultAreas({ store: store as never }).primaryResumeId('u1')).toBe('res_store');
+    expect(Object.keys(CROSS_AREA_DEFAULTS).sort()).toEqual(['nudgeSignals', 'primaryResumeId', 'salaryStats']);
+  });
+
+  it('the only direct Prisma reads of other areas are the three @deprecated readers', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const dir = path.resolve(__dirname, '..');
+    const files = (d: string): string[] =>
+      fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === '__tests__' ? [] : files(path.join(d, e.name))) : e.name.endsWith('.ts') ? [path.join(d, e.name)] : []));
+    const OWN = /^rACopilot/;
+    const SHARED = new Set(['user', 'usageDeductionLog']);
+    const found = new Set<string>();
+    for (const f of files(dir)) {
+      for (const m of fs.readFileSync(f, 'utf8').matchAll(/\b(?:p|prisma|db|tx)\.(rA[A-Za-z]+|[a-z][A-Za-z]+)\.(?:find|count|create|update|upsert|delete|aggregate|groupBy)/g)) {
+        if (!OWN.test(m[1]!) && !SHARED.has(m[1]!)) found.add(`${path.basename(f)}:${m[1]}`);
+      }
+    }
+    // J1 deletes nudges.ts readers and salaryStats.ts; J2 deletes store.primaryResumeId.
+    expect([...found].sort()).toEqual(['nudges.ts:rAFeedRating', 'nudges.ts:rAJobInteraction', 'salaryStats.ts:rAJob', 'store.ts:rAResumeVariant']);
+  });
+
+  it('exports the daily budget reader for admin limits (J3)', () => {
+    expect(copilotIndex.copilotDailyBudgetUsd('roboapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(12.5);
+    expect(copilotIndex.copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(copilotIndex.DEFAULT_COPILOT_DAILY_BUDGET_USD);
+    expect(copilotIndex.copilotDailyBudgetUsd('goapply', { CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(3);
   });
 });

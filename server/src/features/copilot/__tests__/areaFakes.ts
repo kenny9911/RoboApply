@@ -185,6 +185,20 @@ export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
     postingsAllowed: (market) => market !== 'cn',
     createTailorSession: async (_u, input) => ({ id: 'ts_1', status: 'ready', baseVariantId: input.baseVariantId, jobId: input.jobId, resultVariantId: 'res_t1' }) as never,
     createCoverLetter: async (_u, input) => ({ id: 'cl_1', title: 'Letter', jobId: input.jobId, resumeVariantId: input.resumeVariantId }) as never,
+    createOutreachDraft: async (_u, body) =>
+      ({
+        id: 'dr_1',
+        channel: body.channel,
+        contactId: null,
+        jobId: body.jobId,
+        trackerEntryId: null,
+        subject: body.channel === 'email' ? 'Data Analyst at Acme' : null,
+        body: 'Hi, I saw the Data Analyst role at Acme and would like to learn more.',
+        copiedAt: null,
+        markedSentAt: null,
+        aiWritten: true,
+        createdAt: NOW.toISOString(),
+      }) as never,
     importJob: async () => ({
       importId: 'draft_1',
       status: 'needs_fields',

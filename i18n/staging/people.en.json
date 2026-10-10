@@ -91,6 +91,14 @@
         "connections_file_missing": "Choose the Connections.csv file first.",
         "feature_disabled": "Importing connections is not available yet.",
         "failed": "The import did not work. Try again."
+      },
+      "list": {
+        "title": "People you imported",
+        "private": "Only you can see this list.",
+        "role": "{title} at {company}",
+        "more": "Show more",
+        "loadingMore": "Loading…",
+        "error": "Your list of people could not be loaded. Try again later."
       }
     },
     "referrals": {

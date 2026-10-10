@@ -5,7 +5,7 @@
 // applied stamps dateApplied, the GoApply ladder, outcomes, undo, list
 // filters, files sent and follow-up facts.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/LoggerService.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -13,6 +13,7 @@ vi.mock('../../services/LoggerService.js', () => ({
 
 import { Prisma } from '../../generated/prisma/client.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
+import { trackerEntryLockKey } from '../jobs/detail/service.js';
 import { createTrackerCore, TrackerDuplicateError, TrackerInvalidInputError, TrackerNotFoundError, type TrackerDb } from './service.js';
 import type { TrackerMarket } from './stages.js';
 
@@ -92,6 +93,13 @@ const core = createTrackerCore({
 
 const events = (entryId?: string) =>
   fake.$rows('rATrackerEvent').filter((e) => !entryId || e.entryId === entryId) as Array<Record<string, unknown>>;
+
+// The writers take the (user, job) advisory lock whose key lives in the job
+// detail area; that module is loaded on first use. Load it once up front so no
+// single test pays for the import.
+beforeAll(async () => {
+  await import('../jobs/detail/index.js');
+}, 60_000);
 
 beforeEach(() => {
   fake = makeFake();
@@ -298,7 +306,8 @@ describe('markApplied / undoApplied (ruling C11)', () => {
     await core.patch('u1', saved.id, { status });
     const before = events(saved.id).length;
     const mark = await core.markApplied('u1', 'job1', 'apply_click');
-    expect(mark).toEqual({ entryId: saved.id, changed: false, eventId: null });
+    // Nothing moved: every apply surface says so with `alreadyApplied` (no Undo is offered).
+    expect(mark).toEqual({ entryId: saved.id, changed: false, eventId: null, alreadyApplied: true });
     expect((await core.getById('u1', saved.id)).status).toBe(status);
     expect(events(saved.id)).toHaveLength(before);
     const legacy = await core.upsertForJob('u1', 'job1', { status: 'applied', appliedVia: 'manual' });
@@ -425,5 +434,283 @@ describe('updateOffer (WP-64 seam)', () => {
     const data = (update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> }).data;
     expect(data.offer).toBe(Prisma.DbNull);
     expect(events(entry.id).map((e) => [e.kind, e.toValue])).toContainEqual(['offer', 'cleared']);
+  });
+});
+
+// ── WP-93 #5 / #24: one lock for every writer, `via: 'tracker'`, feed affinity ──
+
+/**
+ * The fake database with pg_advisory_xact_lock emulated: a transaction that
+ * runs the lock statement waits until every earlier holder of that key has
+ * finished its transaction (the fake itself has no isolation, so without this
+ * two concurrent writers interleave freely — which is what the lock prevents).
+ */
+function withAdvisoryLocks(db: ReturnType<typeof createFakePrisma>) {
+  const tails = new Map<string, Promise<void>>();
+  return new Proxy(db, {
+    get(target, prop) {
+      if (prop !== '$transaction') return Reflect.get(target, prop);
+      return async (fn: (tx: unknown) => Promise<unknown>) => {
+        const releases: Array<() => void> = [];
+        const tx = new Proxy(target, {
+          get(t, p) {
+            if (p !== '$executeRaw') return Reflect.get(t, p);
+            return async (first: unknown, ...values: unknown[]) => {
+              const out = await (t.$sql.client.$executeRaw as (f: unknown, ...v: unknown[]) => Promise<unknown>)(first, ...values);
+              if (Array.isArray(first) && first.join('?').includes('pg_advisory_xact_lock')) {
+                const key = String(values[0]);
+                const prev = tails.get(key) ?? Promise.resolve();
+                let release: () => void = () => undefined;
+                const held = new Promise<void>((r) => (release = r));
+                tails.set(key, prev.then(() => held));
+                await prev;
+                releases.push(release);
+              }
+              return out;
+            };
+          },
+        });
+        try {
+          return await fn(tx);
+        } finally {
+          for (const r of releases) r();
+        }
+      };
+    },
+  });
+}
+
+/** A core over ONE locking view of the current fake database (the lock table lives in that view). */
+function lockedCore() {
+  const db = withAdvisoryLocks(fake) as unknown as TrackerDb;
+  return createTrackerCore({ getDb: async () => db, now: () => NOW, market: () => market });
+}
+
+const lockCalls = () => fake.$sql.calls.filter((c) => c.text.includes('pg_advisory_xact_lock'));
+const liveEntries = (jobId: string) => fake.$rows('rATrackerEntry').filter((r) => r.jobId === jobId && r.deletedAt == null);
+
+describe('every writer takes the (user, job) advisory lock', () => {
+  it('uses the job page\'s key, so both seams serialize on it', async () => {
+    await core.markApplied('u1', 'job1', 'manual');
+    expect(lockCalls().length).toBeGreaterThanOrEqual(1);
+    expect(lockCalls()[0]!.text).toContain('pg_advisory_xact_lock(hashtext(');
+    expect(lockCalls()[0]!.values).toEqual([trackerEntryLockKey('u1', 'job1')]);
+    expect(trackerEntryLockKey('u1', 'job1')).toBe('ra_tracker_entry:u1:job1');
+  });
+
+  it('create, patch, bulk, upsertForJob, markApplied and undoApplied each take it', async () => {
+    const count = () => lockCalls().length;
+    const saved = await core.create('u1', { jobId: 'job1' });
+    expect(count()).toBe(1);
+    const mark = await core.markApplied('u1', 'job1', 'apply_click');
+    expect(count()).toBe(2);
+    expect(await core.undoApplied('u1', 'job1', { mark })).toEqual({ undone: true });
+    expect(count()).toBe(3);
+    await core.patch('u1', saved.id, { status: 'applied' });
+    expect(count()).toBe(4);
+    const other = await core.upsertForJob('u1', 'job2', { status: 'bookmarked' });
+    expect(count()).toBe(5);
+    await core.bulk('u1', { ids: [saved.id, other.id], patch: { status: 'interviewing' } });
+    // One statement per job, in sorted key order (two bulk writes cannot deadlock).
+    expect(lockCalls().slice(5).map((c) => c.values[0])).toEqual([trackerEntryLockKey('u1', 'job1'), trackerEntryLockKey('u1', 'job2')]);
+    expect(count()).toBe(7);
+    // An entry the user typed in has no job: nothing to serialize against.
+    const manual = await core.create('u1', { externalSnapshot: { title: 'Analyst', companyName: 'Initech', applyUrl: null } });
+    await core.patch('u1', manual.id, { status: 'applied' });
+    expect(count()).toBe(7);
+  });
+
+  it('concurrent first saves and applies create one live entry', async () => {
+    const locked = lockedCore();
+    const out = await Promise.allSettled([
+      locked.markApplied('u1', 'job1', 'apply_click'),
+      locked.markApplied('u1', 'job1', 'manual'),
+      locked.upsertForJob('u1', 'job1', { status: 'bookmarked' }),
+      locked.create('u1', { jobId: 'job1' }),
+    ]);
+    expect(liveEntries('job1')).toHaveLength(1);
+    // Exactly one of the two applies moved the entry; the manual add lost to whoever came first.
+    const marks = out.slice(0, 2).map((r) => (r.status === 'fulfilled' ? (r.value as { changed: boolean }).changed : null));
+    expect(marks.filter(Boolean)).toHaveLength(1);
+    expect(out[3]!.status).toBe('rejected');
+  });
+
+  it('without the lock the same race leaves two live entries (what the lock is for)', async () => {
+    await Promise.allSettled([core.markApplied('u1', 'job1', 'apply_click'), core.markApplied('u1', 'job1', 'manual')]);
+    expect(liveEntries('job1').length).toBeGreaterThan(1);
+  });
+
+  it('concurrent markApplied + undo cannot double-move: one move is undone at most once', async () => {
+    const locked = lockedCore();
+    const saved = await locked.upsertForJob('u1', 'job1', { status: 'bookmarked' });
+    const mark = await locked.markApplied('u1', 'job1', 'apply_click');
+    expect(mark).toMatchObject({ changed: true, alreadyApplied: false });
+    // Two undo clicks, a re-apply and an undo-by-channel all at once.
+    const results = await Promise.all([
+      locked.undoApplied('u1', 'job1', { mark }),
+      locked.undoApplied('u1', 'job1', { mark }),
+      locked.markApplied('u1', 'job1', 'apply_click'),
+      locked.undoApplied('u1', 'job1', { via: 'apply_click' }),
+    ]);
+    const undoEvents = events(saved.id).filter((e) => e.kind === 'status' && (e.payload as { undo?: boolean } | null)?.undo === true);
+    const applyEvents = events(saved.id).filter((e) => e.kind === 'status' && e.toValue === 'applied');
+    // Every undo reverted a different apply: never two undos of one move, never an undo without an apply.
+    expect(undoEvents.length).toBe(applyEvents.length - (liveEntries('job1')[0]!.status === 'applied' ? 1 : 0));
+    expect(results.slice(0, 2).filter((r) => (r as { undone: boolean }).undone)).toHaveLength(1);
+    expect(liveEntries('job1')).toHaveLength(1);
+    // The row and its history agree: the stage is where the newest move says it is.
+    const newest = events(saved.id)
+      .filter((e) => e.kind === 'status')
+      .at(-1)!;
+    expect(liveEntries('job1')[0]!.status).toBe(newest.toValue);
+  });
+
+  it('a stage move in the drawer and an apply click on the job page settle in one order', async () => {
+    const locked = lockedCore();
+    const saved = await locked.upsertForJob('u1', 'job1', { status: 'bookmarked' });
+    await Promise.all([locked.patch('u1', saved.id, { status: 'interviewing' }), locked.markApplied('u1', 'job1', 'apply_click')]);
+    const moves = events(saved.id).filter((e) => e.kind === 'status');
+    // Each move starts where the one before it ended (no move planned against a stale row).
+    for (let i = 1; i < moves.length; i += 1) expect(moves[i]!.fromValue).toBe(moves[i - 1]!.toValue);
+    expect(liveEntries('job1')[0]!.status).toBe(moves.at(-1)!.toValue);
+  });
+});
+
+describe('payload.via', () => {
+  it('moves made in the tracker carry via "tracker"; the apply channels keep their own', async () => {
+    const saved = await core.create('u1', { jobId: 'job1' });
+    expect(events(saved.id)[0]).toMatchObject({ kind: 'created', payload: { via: 'tracker', source: 'feed' } });
+    await core.patch('u1', saved.id, { status: 'applied' });
+    await core.bulk('u1', { ids: [saved.id], patch: { status: 'interviewing' } });
+    const moves = events(saved.id).filter((e) => e.kind === 'status');
+    expect(moves.map((e) => (e.payload as { via: string }).via)).toEqual(['tracker', 'tracker']);
+    expect(moves[0]).toMatchObject({ payload: { via: 'tracker', stampedDateApplied: true } });
+
+    const clicked = await core.markApplied('u1', 'job2', 'apply_click');
+    expect(events(clicked.entryId)[0]).toMatchObject({ kind: 'created', payload: { via: 'apply_click', applyMark: true } });
+  });
+
+  it('"Undo · I didn\'t apply" never reverts a move made in the tracker', async () => {
+    const saved = await core.create('u1', { jobId: 'job1' });
+    await core.patch('u1', saved.id, { status: 'applied' });
+    expect(await core.undoApplied('u1', 'job1')).toEqual({ undone: false });
+    expect(await core.undoApplied('u1', 'job1', { via: 'apply_click' })).toEqual({ undone: false });
+    expect((await core.getById('u1', saved.id)).status).toBe('applied');
+  });
+});
+
+describe('feed affinity (recordInteraction)', () => {
+  function withFeed(record = vi.fn(async () => undefined)) {
+    const c = createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => NOW, market: () => market, recordInteraction: record });
+    return { c, record };
+  }
+
+  it('once per change: a new save, a move to Applied, a manual add; never for a no-op', async () => {
+    const { c, record } = withFeed();
+    const saved = await c.upsertForJob('u1', 'job1', { status: 'bookmarked' });
+    expect(record.mock.calls).toEqual([['u1', 'job1', 'save']]);
+    await c.upsertForJob('u1', 'job1', { status: 'bookmarked' }); // already saved
+    await c.patch('u1', saved.id, { notesMarkdown: 'note' }); // not a stage move
+    expect(record).toHaveBeenCalledTimes(1);
+
+    const mark = await c.markApplied('u1', 'job1', 'apply_click');
+    expect(mark.alreadyApplied).toBe(false);
+    expect(record.mock.calls.at(-1)).toEqual(['u1', 'job1', 'applied']);
+    expect((await c.markApplied('u1', 'job1', 'manual')).alreadyApplied).toBe(true); // nothing moved
+    expect(record).toHaveBeenCalledTimes(2);
+
+    await c.create('u1', { jobId: 'job2', status: 'applied' }); // "Add a job" at Applied
+    expect(record.mock.calls.at(-1)).toEqual(['u1', 'job2', 'applied']);
+    expect(record).toHaveBeenCalledTimes(3);
+  });
+
+  it('stage moves in the drawer and bulk moves count once each; later stages and jobs typed in do not', async () => {
+    const { c, record } = withFeed();
+    const a = await c.create('u1', { jobId: 'job1' });
+    const b = await c.create('u1', { jobId: 'job2' });
+    record.mockClear();
+    await c.patch('u1', a.id, { status: 'applied' });
+    expect(record.mock.calls).toEqual([['u1', 'job1', 'applied']]);
+    await c.patch('u1', a.id, { status: 'interviewing' });
+    expect(record).toHaveBeenCalledTimes(1);
+    await c.bulk('u1', { ids: [a.id, b.id], patch: { status: 'applied' } });
+    expect(record.mock.calls.slice(1).sort()).toEqual([
+      ['u1', 'job1', 'applied'],
+      ['u1', 'job2', 'applied'],
+    ]);
+    const manual = await c.create('u1', { externalSnapshot: { title: 'Analyst', companyName: 'Initech', applyUrl: null }, status: 'applied' });
+    await c.patch('u1', manual.id, { status: 'bookmarked' });
+    expect(record).toHaveBeenCalledTimes(3);
+  });
+
+  it('a failure in the feed is swallowed: the move is kept and the caller gets its answer', async () => {
+    const { c, record } = withFeed(vi.fn(async () => Promise.reject(new Error('feed is down'))));
+    const mark = await c.markApplied('u1', 'job1', 'agent_open');
+    expect(mark).toMatchObject({ changed: true, alreadyApplied: false });
+    expect(record).toHaveBeenCalledTimes(1);
+    expect((await c.getById('u1', mark.entryId)).status).toBe('applied');
+    const saved = await c.create('u1', { jobId: 'job2' });
+    expect(saved.status).toBe('bookmarked');
+    await expect(c.patch('u1', saved.id, { status: 'applied' })).resolves.toMatchObject({ status: 'applied' });
+  });
+
+  it('a slow feed never holds the answer back: the write answers after the timeout, and a late failure is still swallowed', async () => {
+    let fail: (err: Error) => void = () => undefined;
+    const record = vi.fn(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+    const c = createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => NOW, market: () => market, recordInteraction: record, feedSignalTimeoutMs: 20 });
+    const started = Date.now();
+    const mark = await c.markApplied('u1', 'job1', 'manual');
+    expect(mark).toMatchObject({ changed: true, alreadyApplied: false });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(record).toHaveBeenCalledTimes(1);
+    // The feed call fails long after the answer: no unhandled rejection.
+    fail(new Error('feed timed out'));
+    await new Promise((r) => setTimeout(r, 5));
+    expect((await c.getById('u1', mark.entryId)).status).toBe('applied');
+  });
+
+  it('a reader that throws at once is swallowed too', async () => {
+    const record = vi.fn(() => {
+      throw new Error('not wired');
+    });
+    const c = createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => NOW, market: () => market, recordInteraction: record as never });
+    await expect(c.markApplied('u1', 'job1', 'manual')).resolves.toMatchObject({ changed: true });
+  });
+
+  it('a bulk move sends its feed signals side by side, after the write, and stops waiting on a slow feed', async () => {
+    const { c, record } = withFeed();
+    const made = [];
+    for (const jobId of ['job1', 'job2']) made.push(await c.create('u1', { jobId }));
+    record.mockClear();
+    let running = 0;
+    let most = 0;
+    record.mockImplementation(async () => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((r) => setTimeout(r, 5));
+      running -= 1;
+      return undefined;
+    });
+    await c.bulk('u1', { ids: made.map((m) => m.id), patch: { status: 'applied' } });
+    expect(record).toHaveBeenCalledTimes(2);
+    expect(most).toBe(2);
+
+    // A feed that never answers: the bulk move still answers, with every entry moved.
+    const never = vi.fn(() => new Promise<void>(() => undefined));
+    const slow = createTrackerCore({ getDb: async () => fake as unknown as TrackerDb, now: () => NOW, market: () => market, recordInteraction: never, feedSignalTimeoutMs: 20 });
+    const out = await slow.bulk('u1', { ids: made.map((m) => m.id), patch: { status: 'bookmarked' } });
+    expect(out.entries.map((e) => e.status)).toEqual(['bookmarked', 'bookmarked']);
+    expect(never).toHaveBeenCalledTimes(2);
+  });
+
+  it('the extension channel is left to the extension service, which records its own signal', async () => {
+    const { c, record } = withFeed();
+    await c.upsertForJob('u1', 'job1', { status: 'bookmarked', source: 'extension' });
+    await c.markApplied('u1', 'job1', 'extension');
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('nothing is recorded when no reader is wired (the default for tests and scripts)', async () => {
+    await expect(core.markApplied('u1', 'job1', 'manual')).resolves.toMatchObject({ changed: true });
   });
 });

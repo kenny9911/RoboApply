@@ -73,6 +73,8 @@ describe('syncContacts', () => {
         sourceRef: 'robohire:u_1|optin:opt_1@2026-09-01T00:00:00.000Z',
         consentBasis: 'recruiter_opt_in:opt_1:v2',
         companyNameNormalized: 'acme analytics',
+        // SR-54-2: the company as the recruiter's profile writes it, for display outside a job page.
+        companyName: 'Acme Analytics, Inc.',
         fullName: 'Rita Recruiter',
         firstName: 'Rita',
         title: 'Talent Partner',
@@ -172,5 +174,31 @@ describe('ports', () => {
     const res = await runContactsSync({ name: 'contacts-sync', brand: BRANDS.roboapply, now: NOW, budget: {} as never });
     expect(res).toEqual({ skipped: 'optin_api_not_configured', processed: 0 });
     expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});
+
+describe('prismaSyncedContacts (the stored row)', () => {
+  it('writes companyName on create and refreshes it on update (SR-54-2)', async () => {
+    const { createFakePrisma } = await import('../../test/fakePrisma.js');
+    const { prismaSyncedContacts } = await import('./contactsSync.js');
+    const db = createFakePrisma({ timestampFields: ['createdAt', 'updatedAt'] });
+    const io = prismaSyncedContacts(db as never);
+    const input = {
+      existingId: null,
+      market: 'intl',
+      sourceRef: 'robohire:u_1|optin:opt_1@2026-09-01T00:00:00.000Z',
+      consentBasis: 'recruiter_opt_in:opt_1',
+      companyNameNormalized: 'acme analytics',
+      companyName: 'Acme Analytics, Inc.',
+      fullName: 'Rita Recruiter',
+      firstName: 'Rita',
+      title: 'Talent Partner',
+    };
+    await io.upsert(input);
+    const [row] = db.$rows('rAContact');
+    expect(row).toMatchObject({ source: 'bank_recruiter', ownerUserId: null, companyName: 'Acme Analytics, Inc.', companyNameNormalized: 'acme analytics' });
+    await io.upsert({ ...input, existingId: String(row!.id), companyName: 'Acme Analytics' });
+    expect(db.$rows('rAContact')[0]).toMatchObject({ companyName: 'Acme Analytics' });
+    expect(db.$rows('rAContact')).toHaveLength(1);
   });
 });

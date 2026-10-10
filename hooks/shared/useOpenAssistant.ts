@@ -5,6 +5,7 @@
 //
 //   const openAssistant = useOpenAssistant();
 //   <button onClick={() => openAssistant({ jobId, source: 'job_card' })}>Ask about this job</button>
+//   <button onClick={() => openAssistant({ scope: 'resume', resumeId, source: 'resume' })}>Ask about this resume</button>
 //
 // The rail (`components/features/copilot/CopilotRail.tsx`, FND-6a slot,
 // WP-51) reads `useAssistantRail()`. Rules:
@@ -31,9 +32,20 @@ export type AssistantSource =
   | 'onboarding'
   | 'other';
 
+/** What a new conversation is about: a job (chips show) or one resume (F-RES-11). */
+export type AssistantScope = 'job' | 'resume';
+
 export interface AssistantOpenRequest {
   /** Thread context: the job the user is asking about. */
   jobId?: string | null;
+  /**
+   * The resume the user is asking about (F-RES-11, the resume editor). With
+   * `scope: 'resume'` the rail starts a chat scoped to this resume and every
+   * turn carries it (`SendMessageBody.resumeId`), so "my resume" means this one.
+   */
+  resumeId?: string | null;
+  /** Default: `'job'` when `jobId` is set. `'resume'` needs `resumeId`. */
+  scope?: AssistantScope;
   /** Continue an existing thread. */
   threadId?: string | null;
   /** Text to prefill (never sent without the user pressing Send). */

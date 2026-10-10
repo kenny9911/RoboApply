@@ -17,11 +17,10 @@ import { creditService } from '../../platform/credits/index.js';
 import { hiringContactsMode, isEnabled } from '../../platform/flags.js';
 import { getCurrentRequestId } from '../../lib/requestContext.js';
 import { logger } from '../../services/LoggerService.js';
-import { createDefaultAreas } from './areas.js';
+import { createDefaultAreas, defaultNudgeSignals } from './areas.js';
 import { createCopilotBudget } from './budget.js';
 import { CopilotService, type CopilotEventStream, type CopilotServiceDeps } from './CopilotService.js';
 import type { CopilotFeedbackRow, VisitorTurnInput } from './contract.js';
-import { createPrismaNudgeSignals } from './nudges.js';
 import { createPrismaCopilotStore, newMessageId } from './store.js';
 import type { SummaryDeps } from './summary.js';
 import { COPILOT_WORK_KINDS } from './workers.js';
@@ -33,6 +32,10 @@ export { COPILOT_WORK_KINDS } from './workers.js';
 export { CopilotService } from './CopilotService.js';
 export type { CopilotEventStream, CopilotServiceDeps, TurnInput, TurnOptions } from './CopilotService.js';
 export { collect as collectCopilotEvents } from './channel.js';
+/** The brand's daily model budget for the Assistant (admin limits read it; join J3). */
+export { copilotDailyBudgetUsd, DEFAULT_COPILOT_DAILY_BUDGET_USD } from './budget.js';
+export { CROSS_AREA_DEFAULTS, createDefaultAreas, defaultNudgeSignals } from './areas.js';
+export type { CrossAreaReads, DefaultAreasOptions } from './areas.js';
 
 export interface VisitorTurnOptions {
   /** Only the page-scoped public tools (search_jobs public, salary_context, explain_feature). */
@@ -77,7 +80,7 @@ export function defaultCopilotDeps(): CopilotServiceDeps {
       const { complianceService } = await import('../compliance/index.js');
       await complianceService.logAiContentLabel({ userId, contentId, kind: 'assistant_reply', provider: 'llm' });
     },
-    nudgeSignals: createPrismaNudgeSignals(),
+    nudgeSignals: defaultNudgeSignals(),
     brand: () => getCurrentBrandOrDefault(),
     now: () => new Date(),
     requestId: () => getCurrentRequestId() ?? null,
