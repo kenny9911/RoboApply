@@ -14,6 +14,11 @@ export interface FakeSystemData {
   failedByTemplate: Array<{ template: string; count: number }>;
   copilot: { turns: number; guardHits: number; costUsd: number };
   exhaustion: Array<{ bucket: string; count: number }> | null;
+  /** Stored run status per provider (absent = the source never ran). */
+  sourceStatuses?: Record<string, Awaited<ReturnType<SystemStore['sourceStatuses']>> extends Map<string, infer D> ? D : never>;
+  /** Job counts per source board. */
+  sourceJobs?: Record<string, { open: number; held: number }>;
+  careerSources?: { total: number; enabled: number; failing: number };
 }
 
 export function fakeSystemData(over: Partial<FakeSystemData> = {}): FakeSystemData {
@@ -66,5 +71,14 @@ export function fakeSystemStore(data: FakeSystemData | ((brand: string) => FakeS
     emailFailuresByTemplate: async (brand) => of(brand).failedByTemplate,
     copilotStats: async (brand, range) => (reads.ranges.push(rangeOf('copilot', range)), of(brand).copilot),
     creditExhaustion: async (brand, range) => (reads.ranges.push(rangeOf('exhaustion', range)), of(brand).exhaustion),
+    sourceStatuses: async (market, providers) => {
+      const stored = of(marketBrand(market)).sourceStatuses ?? {};
+      return new Map(providers.filter((p) => stored[p]).map((p) => [p, stored[p]!]));
+    },
+    sourceJobCounts: async (market, boards) => {
+      const stored = of(marketBrand(market)).sourceJobs ?? {};
+      return boards.reduce((sum, b) => ({ open: sum.open + (stored[b]?.open ?? 0), held: sum.held + (stored[b]?.held ?? 0) }), { open: 0, held: 0 });
+    },
+    careerSourceCounts: async (market) => of(marketBrand(market)).careerSources ?? { total: 0, enabled: 0, failing: 0 },
   };
 }

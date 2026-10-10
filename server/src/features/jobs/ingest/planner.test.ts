@@ -23,6 +23,7 @@ import {
   planQueries,
   primaryRole,
   priorityFor,
+  retireUnrunProviders,
   retireUnusedDemand,
   runPlanner,
   seedTuples,
@@ -246,6 +247,49 @@ describe('database steps', () => {
     const fresh = createFakePrisma();
     expect(await ensureBankSyncQueries(fresh as unknown as IngestDb, 'intl', [bank])).toBe(1);
     expect(fresh.$rows('rAIngestQuery')[0]).toMatchObject({ provider: 'bank_robohire', origin: 'bank_sync', market: 'intl' });
+  });
+
+  it('switches off the queries of a provider the brand does not run, and switches a returning standing query on again', async () => {
+    // Review case: linkedin left the registry; its seed and demand rows must not stay due for good.
+    const db = createFakePrisma({ sql: { defaultResult: 3 } });
+    const adapters = [adapter('jsearch'), adapter('activejobs'), adapter('bank_robohire', { kind: 'cursor' }), adapter('bank_gohire', { kind: 'cursor', markets: ['cn'] })];
+    expect(await retireUnrunProviders(db as unknown as IngestDb, 'intl', adapters)).toBe(3);
+    const retire = db.$sql.last()!;
+    expect(retire.text).toContain('UPDATE "RAIngestQuery" SET "enabled" = false');
+    expect(retire.text).toContain('"market" = $1 AND "enabled" = true AND NOT ("provider" = ANY($2::text[]))');
+    // Only the providers registered for THIS market count as run: a cn-only adapter does not keep an intl row alive.
+    expect(retire.values).toEqual(['intl', ['jsearch', 'activejobs', 'bank_robohire']]);
+    expect(retire.values[1]).not.toContain('linkedin');
+    // Every origin is covered (seeds are never retired by the demand rule).
+    expect(retire.text).not.toContain('"origin"');
+
+    // A brand with no source at all keeps no query due.
+    await retireUnrunProviders(db as unknown as IngestDb, 'cn', [adapter('jsearch')]);
+    expect(db.$sql.last()!.values).toEqual(['cn', []]);
+
+    // The standing bank / board query of a provider that is back is enabled and made due.
+    const fresh = createFakePrisma({ sql: { defaultResult: 1 } });
+    await ensureBankSyncQueries(fresh as unknown as IngestDb, 'intl', [adapter('bank_robohire', { kind: 'cursor' }), adapter('jsearch')]);
+    const revive = fresh.$sql.last()!;
+    expect(revive.text).toContain('SET "enabled" = true, "nextRunAt" = now()');
+    expect(revive.text).toContain(`"origin" = 'bank_sync' AND "enabled" = false AND "provider" = ANY(`);
+    expect(revive.values).toEqual(['intl', ['bank_robohire']]);
+  });
+
+  it('a plan run retires after planning and before the standing queries are ensured', async () => {
+    const db = createFakePrisma({ sql: { defaultResult: 2 } });
+    const result = await runPlanner(db as unknown as IngestDb, robo, [adapter('jsearch'), adapter('bank_robohire', { kind: 'cursor' })], {
+      now: NOW,
+      env: { INGEST_SEED_ROLES: '1', INGEST_SEED_CITIES_PER_COUNTRY: '1' },
+    });
+    expect(result.retired).toBe(2);
+    const texts = db.$sql.calls.map((c) => c.text);
+    const upsert = texts.findIndex((t) => t.includes('INSERT INTO "RAIngestQuery"'));
+    const retire = texts.findIndex((t) => t.includes('NOT ("provider" = ANY('));
+    const revive = texts.findIndex((t) => t.includes('SET "enabled" = true, "nextRunAt" = now()'));
+    expect(upsert).toBeGreaterThanOrEqual(0);
+    expect(retire).toBeGreaterThan(upsert);
+    expect(revive).toBeGreaterThan(retire);
   });
 
   it('runPlanner never calls a provider', async () => {

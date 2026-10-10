@@ -12,7 +12,8 @@
 
 import { createHash } from 'node:crypto';
 import { jobFingerprint } from './raOnboardingDraft.js';
-import { normalizeCompanyName, normalizeJobTitle } from '../../../features/jobs/normalize/index.js';
+import { employmentTypeFromLabel, normalizeCompanyName, normalizeJobTitle } from '../../../features/jobs/normalize/index.js';
+import { logger } from '../../../services/LoggerService.js';
 import type {
   BankId,
   BankJobRow,
@@ -595,7 +596,8 @@ export function normalizeEmploymentType(raw: string | null | undefined): string 
   if (s.includes('part')) return 'part_time';
   if (s.includes('contract') || s.includes('contractor')) return 'contract';
   if (s.includes('intern')) return 'internship';
-  return s;
+  // Chinese labels (全职, 兼职, 实习, 合同 / 劳务 …): the one mapping in features/jobs/normalize/level.ts.
+  return employmentTypeFromLabel(raw) ?? s;
 }
 
 /**
@@ -616,6 +618,11 @@ export function normalizeSalaryPeriod(
 
 export function bankDisplayName(bank: BankId): string {
   return bank === 'robohire' ? 'RoboHire' : 'GoHire';
+}
+
+/** The product market a bank's jobs belong to (RoboHire → intl, GoHire → cn). Re-exported by raBankClients. */
+export function bankMarket(bank: BankId): 'intl' | 'cn' {
+  return bank === 'gohire' ? 'cn' : 'intl';
 }
 
 /**
@@ -642,12 +649,107 @@ export function jobScoringContentHash(job: {
   return createHash('sha256').update(parts, 'utf8').digest('hex');
 }
 
-export function synthesizeApplyUrl(bank: BankId, jobId: string): string {
-  const base =
-    bank === 'robohire'
-      ? process.env.ROBOHIRE_PUBLIC_JOB_BASE_URL?.replace(/\/$/, '') || 'https://www.robohire.io'
-      : process.env.GOHIRE_PUBLIC_JOB_BASE_URL?.replace(/\/$/, '') || 'https://www.gohire.top';
-  return `${base}/jobs/${jobId}`;
+// ─── The bank's candidate-facing posting page ──────────────────────────────
+// A recruiter-bank job is listed only when its bank has a page a candidate can
+// open (GOAPPLY_PARITY_PLAN.md §3.9, MARKET_STRATEGY C18). Neither bank has
+// one today: https://www.gohire.top/jobs/<id> and https://www.robohire.io/jobs/<id>,
+// the links this module used to build, render each site's "Page not found"
+// (both apps answer 200 with the app shell, so a status check proves nothing).
+// So there is NO default: the page is named per bank by
+//   GOHIRE_PUBLIC_JOB_URL_TEMPLATE / ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE
+// (https, containing {id}); unset means the bank's rows are synced, counted
+// and held, never listed. We build no apply page or form of our own (D1): the
+// page belongs to the bank's product.
+
+/** The variable that names each bank's posting page. */
+export const BANK_PUBLIC_JOB_URL_TEMPLATE_ENV: Readonly<Record<BankId, string>> = {
+  robohire: 'ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE',
+  gohire: 'GOHIRE_PUBLIC_JOB_URL_TEMPLATE',
+};
+
+/** Ignored since the parity wave: they pointed at the missing /jobs/<id> route. */
+const LEGACY_PUBLIC_JOB_BASE_ENV: Readonly<Record<BankId, string>> = {
+  robohire: 'ROBOHIRE_PUBLIC_JOB_BASE_URL',
+  gohire: 'GOHIRE_PUBLIC_JOB_BASE_URL',
+};
+
+type EnvLike = Record<string, string | undefined>;
+
+export type BankPublicJobUrlProblem =
+  | { bank: BankId; variable: string; problem: 'legacy_base_url_ignored'; use: string }
+  | { bank: BankId; variable: string; problem: 'not_https' | 'missing_id_placeholder' | 'not_a_url' };
+
+/** Why a template value cannot be used (null when it can). Pure. */
+function templateProblem(value: string): 'not_https' | 'missing_id_placeholder' | 'not_a_url' | null {
+  if (!value.includes('{id}')) return 'missing_id_placeholder';
+  let parsed: URL;
+  try {
+    parsed = new URL(value.split('{id}').join('x'));
+  } catch {
+    return 'not_a_url';
+  }
+  return parsed.protocol === 'https:' ? null : 'not_https';
+}
+
+/**
+ * Configuration problems of the bank posting-page variables: a template that
+ * cannot be used, and a legacy base URL that is set (it is ignored). Variable
+ * names only. Startup may log them; this module logs each once on first use.
+ */
+export function bankPublicJobUrlProblems(env: EnvLike = process.env): BankPublicJobUrlProblem[] {
+  const out: BankPublicJobUrlProblem[] = [];
+  for (const bank of ['robohire', 'gohire'] as const) {
+    const variable = BANK_PUBLIC_JOB_URL_TEMPLATE_ENV[bank];
+    const value = (env[variable] ?? '').trim();
+    const problem = value ? templateProblem(value) : null;
+    if (problem) out.push({ bank, variable, problem });
+    const legacy = LEGACY_PUBLIC_JOB_BASE_ENV[bank];
+    if ((env[legacy] ?? '').trim()) out.push({ bank, variable: legacy, problem: 'legacy_base_url_ignored', use: variable });
+  }
+  return out;
+}
+
+const publicJobUrlWarned = new Set<string>();
+
+function warnPublicJobUrlProblemsOnce(env: EnvLike): void {
+  for (const p of bankPublicJobUrlProblems(env)) {
+    const key = `${p.variable}:${p.problem}`;
+    if (publicJobUrlWarned.has(key)) continue;
+    publicJobUrlWarned.add(key);
+    if (p.problem === 'legacy_base_url_ignored') {
+      logger.warn('RA_V2_CROSSBANK', `${p.variable} is ignored: it pointed at a /jobs/<id> page that does not exist. Set ${p.use} (https, with {id}) once the bank has a candidate-facing posting page.`, { bank: p.bank });
+    } else {
+      logger.warn('RA_V2_CROSSBANK', `${p.variable} cannot be used (${p.problem}): it must be an https URL containing {id}. The bank's jobs are not listed until it is fixed.`, { bank: p.bank });
+    }
+  }
+}
+
+/** The bank's posting-page template when it is set and usable, else null. */
+export function bankPublicJobUrlTemplate(bank: BankId, env: EnvLike = process.env): string | null {
+  warnPublicJobUrlProblemsOnce(env);
+  const value = (env[BANK_PUBLIC_JOB_URL_TEMPLATE_ENV[bank]] ?? '').trim();
+  return value && !templateProblem(value) ? value : null;
+}
+
+/** The candidate-facing page of one bank job, or null when the bank has none configured. */
+export function bankPublicJobUrl(bank: BankId, jobId: string, env: EnvLike = process.env): string | null {
+  const template = bankPublicJobUrlTemplate(bank, env);
+  const id = typeof jobId === 'string' ? jobId.trim() : '';
+  if (!template || !id) return null;
+  return template.split('{id}').join(encodeURIComponent(id));
+}
+
+/**
+ * The apply link of a bank job: its page on the bank's own site, or null when
+ * the bank has no such page. A caller that gets null does not list the job.
+ */
+export function synthesizeApplyUrl(bank: BankId, jobId: string): string | null {
+  return bankPublicJobUrl(bank, jobId);
+}
+
+/** Test seam: forget which configuration warnings were logged. */
+export function resetBankPublicJobUrlWarningsForTests(): void {
+  publicJobUrlWarned.clear();
 }
 
 function stripHtml(s: string): string {
@@ -668,16 +770,23 @@ export interface RAJobUpsertVerdict {
   missingRequiredKeywords: string[];
 }
 
+/**
+ * The RAJob upsert of one matched bank job, or NULL when the job has no apply
+ * URL (its bank has no candidate-facing posting page): such a candidate is
+ * skipped, never materialised with a dead link (D3).
+ */
 export function mapRecruiterJobToRAJobUpsert(c: PreMatchedCandidate): {
   where: { externalId_sourceBoard: { externalId: string; sourceBoard: BankId } };
   create: Record<string, unknown>;
   update: Record<string, unknown>;
-} {
+} | null {
   const job = c.job;
+  const applyUrl = synthesizeApplyUrl(c.bank, job.id);
+  if (!applyUrl) return null;
   const description = job.description ?? '';
   const qualifications = [job.qualifications, job.hardRequirements].filter(Boolean).join('\n\n') || null;
   const data: Record<string, unknown> = {
-    applyUrl: synthesizeApplyUrl(c.bank, job.id),
+    applyUrl,
     title: job.title,
     companyName: c.company.companyName,
     companyLogoUrl: c.company.companyLogoUrl,
@@ -713,11 +822,13 @@ export function mapRecruiterJobToRAJobUpsert(c: PreMatchedCandidate): {
       missingRequiredKeywords: c.missingRequiredKeywords,
     },
     // Inventory honesty fields (WP-16b, ARCH §2.4): which market's feed the job
-    // belongs to and that it came from our recruiter bank. fromRecruiterBank is
+    // belongs to (its bank's market: GoHire → cn, RoboHire → intl, on create AND
+    // update, so a row never stays in the other brand's feed) and that it came
+    // from our recruiter bank. fromRecruiterBank is
     // NOT a claim the job is absent elsewhere and gives no ranking boost.
     // employerVerified / publicDisplay are left to the bank sync, which reads
     // the bank's own verified-employer and syndication-consent records.
-    market: c.bank === 'gohire' ? 'cn' : 'intl',
+    market: bankMarket(c.bank),
     fromRecruiterBank: true,
     sourceName: bankDisplayName(c.bank),
     sourcePriority: 15,

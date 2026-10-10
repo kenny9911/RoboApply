@@ -9,8 +9,13 @@
 // Update rules (honesty):
 //   - the posting's own fields are refreshed from the source;
 //   - deterministic fields that enrichment may have filled (taxonomy,
-//     seniority, years, skills, roleType) are kept when the source now says
-//     nothing, never blanked;
+//     seniority, years, skills, roleType, educationLevel) are kept when the
+//     source now says nothing, never blanked;
+//   - `educationLevel` is replaced by a level the source itself labels (a
+//     bank's education field). A level the normalizer read from the posting
+//     text fills an empty value and a row enrichment has not reached yet; it
+//     never replaces the level of an enriched row (`toUpsertRow` with
+//     `keepStoredEducation`), because enrichment read the whole posting;
 //   - `applicantCount` is never written for 'linkedin' / 'jsearch' rows (the
 //     normalizer drops it and `toUpsertRow` forces null again);
 //   - `fraudFlags` and `marketTags` a market hook raised at normalize time
@@ -25,9 +30,11 @@
 //     (a changed posting is re-enriched), never blanked here;
 //   - `visibility` and `firstSeenAt` never change; a private row (a user's own
 //     import) is never touched (`WHERE "RAJob"."visibility" = 'public'`);
-//   - a row archived because its source dropped it ('source_removed') or the
-//     bank closed it ('bank_closed') is revived when the source lists it again;
-//     'expired', 'reported' and 'duplicate' closures stand.
+//   - a row archived because its source dropped it ('source_removed'), the
+//     bank closed it ('bank_closed') or it had no page a candidate could open
+//     ('no_apply_target': a bank row while its bank had no posting page) is
+//     revived when the source lists it again; 'expired', 'reported' and
+//     'duplicate' closures stand.
 //   - `workType` (deprecated, NOT NULL) mirrors workModel; readers use workModel.
 // Dedupe: per dedupeKey the canonical row is the lowest sourcePriority, then
 // the most recent postedAt; the others point at it (`canonicalJobId`) and stay
@@ -53,6 +60,8 @@ export interface ExistingJobRow {
   firstSeenAt: Date;
   contentHash: string;
   visibility: string;
+  /** The row is enriched and holds an education level: a level read from the posting text never replaces it. */
+  enrichedEducation?: boolean;
 }
 
 /** Existing rows for a batch (one query), keyed `<sourceBoard>\u0000<externalId>`. */
@@ -63,7 +72,8 @@ export async function prefetchExisting(db: IngestDb, keys: Array<{ externalId: s
   const ids = [...new Set(keys.map((k) => k.externalId))];
   const rows = await db.$queryRaw<ExistingJobRow[]>`
     SELECT "id", "externalId", "sourceBoard", "firstSeenAt", "visibility",
-           md5(coalesce("title", '') || '|' || coalesce("descriptionPlain", '')) AS "contentHash"
+           md5(coalesce("title", '') || '|' || coalesce("descriptionPlain", '')) AS "contentHash",
+           ("enrichedAt" IS NOT NULL AND "educationLevel" IS NOT NULL) AS "enrichedEducation"
     FROM "RAJob"
     WHERE "sourceBoard" = ANY(${boards}::text[]) AND "externalId" = ANY(${ids}::text[])`;
   for (const r of rows) out.set(existingKey(r.sourceBoard, r.externalId), r);
@@ -141,6 +151,8 @@ export interface JobUpsertRow {
   fraudFlags: string | null;
   /** JSON text of `[{ tag, evidenceQuote, evidenceUrl }]` from the normalize-stage hooks, or null. */
   marketTags: string | null;
+  /** 'none' | 'associate' | 'bachelor' | 'master' | 'phd' as the source or the posting states it; null = not stated. */
+  educationLevel: string | null;
 }
 
 /** Column order of every VALUES tuple (= JobUpsertRow key order); the last three columns are now(). */
@@ -155,7 +167,7 @@ export const UPSERT_COLUMNS = [
   'salaryText', 'sourceUrl', 'sourceName', 'originalSourceName', 'originalHost', 'atsType', 'isAgency',
   'fromRecruiterBank', 'employerVerified', 'applicantCount', 'applicantCountSource',
   'applicantCountAt', 'postedAtEstimated', 'expiresAt', 'dedupeKey', 'sourcePriority',
-  'searchText', 'publicDisplay', 'fraudFlags', 'marketTags',
+  'searchText', 'publicDisplay', 'fraudFlags', 'marketTags', 'educationLevel',
 ] as const satisfies readonly (keyof JobUpsertRow)[];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -176,8 +188,19 @@ export function marketTagsJson(value: unknown): string | null {
 
 const int = (v: number | null): number | null => (v == null || !Number.isFinite(v) ? null : Math.round(v));
 
-/** NormalizedJob (+ company id) → the row written. Requires applyUrl (callers skip rows without one). */
-export function toUpsertRow(job: NormalizedJob, companyId: string | null, id: string = newId()): JobUpsertRow {
+/**
+ * NormalizedJob (+ company id) → the row written. Requires applyUrl (callers skip rows without one).
+ * `keepStoredEducation`: the stored row is enriched and holds a level, so a
+ * level that comes only from the posting text is not sent (the statement's
+ * COALESCE then keeps the stored one). A provider's own label is always sent.
+ */
+export function toUpsertRow(
+  job: NormalizedJob,
+  companyId: string | null,
+  id: string = newId(),
+  options: { keepStoredEducation?: boolean } = {},
+): JobUpsertRow {
+  const educationFromText = job.fieldSources.educationLevel === 'posting_text';
   const noCount = (NO_APPLICANT_COUNT_PROVIDERS as readonly NormalizeProvider[]).includes(job.provider) || job.provider === 'user_import';
   return {
     id,
@@ -245,6 +268,7 @@ export function toUpsertRow(job: NormalizedJob, companyId: string | null, id: st
     publicDisplay: job.publicDisplay,
     fraudFlags: fraudFlagsJson(job.fraudFlags),
     marketTags: marketTagsJson(job.marketTags),
+    educationLevel: options.keepStoredEducation && educationFromText ? null : (job.educationLevel ?? null),
   };
 }
 
@@ -260,7 +284,7 @@ function valuesTuple(r: JobUpsertRow): Prisma.Sql {
     ${r.salaryText}::text, ${r.sourceUrl}::text, ${r.sourceName}::text, ${r.originalSourceName}::text, ${r.originalHost}::text, ${r.atsType}::text, ${r.isAgency}::boolean,
     ${r.fromRecruiterBank}::boolean, ${r.employerVerified}::boolean, ${r.applicantCount}::int, ${r.applicantCountSource}::text,
     ${r.applicantCountAt}::timestamp(3), ${r.postedAtEstimated}::boolean, ${r.expiresAt}::timestamp(3), ${r.dedupeKey}, ${r.sourcePriority}::int,
-    ${r.searchText}, ${r.publicDisplay}::boolean, ${r.fraudFlags}::jsonb, ${r.marketTags}::jsonb, now(), now(), now())`;
+    ${r.searchText}, ${r.publicDisplay}::boolean, ${r.fraudFlags}::jsonb, ${r.marketTags}::jsonb, ${r.educationLevel}::text, now(), now(), now())`;
 }
 
 /**
@@ -295,7 +319,7 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "salaryText", "sourceUrl", "sourceName", "originalSourceName", "originalHost", "atsType", "isAgency",
       "fromRecruiterBank", "employerVerified", "applicantCount", "applicantCountSource",
       "applicantCountAt", "postedAtEstimated", "expiresAt", "dedupeKey", "sourcePriority",
-      "searchText", "publicDisplay", "fraudFlags", "marketTags", "firstSeenAt", "lastSeenAt", "updatedAt")
+      "searchText", "publicDisplay", "fraudFlags", "marketTags", "educationLevel", "firstSeenAt", "lastSeenAt", "updatedAt")
     VALUES ${Prisma.join(rows.map(valuesTuple))}
     ON CONFLICT ("externalId", "sourceBoard") DO UPDATE SET
       "lastSeenAt" = now(),
@@ -341,6 +365,7 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "minYears" = COALESCE(EXCLUDED."minYears", "RAJob"."minYears"),
       "maxYears" = COALESCE(EXCLUDED."maxYears", "RAJob"."maxYears"),
       "skills" = CASE WHEN cardinality(EXCLUDED."skills") > 0 THEN EXCLUDED."skills" ELSE "RAJob"."skills" END,
+      "educationLevel" = COALESCE(EXCLUDED."educationLevel", "RAJob"."educationLevel"),
       "sourceUrl" = EXCLUDED."sourceUrl",
       "sourceName" = EXCLUDED."sourceName",
       "originalSourceName" = EXCLUDED."originalSourceName",
@@ -358,9 +383,9 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "publicDisplay" = EXCLUDED."publicDisplay",
       "fraudFlags" = ${mergeJsonListSql('fraudFlags', ['rule', 'evidence'])},
       "marketTags" = ${mergeJsonListSql('marketTags', ['tag'])},
-      "archivedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL ELSE "RAJob"."archivedAt" END,
-      "closedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL ELSE "RAJob"."closedAt" END,
-      "closeReason" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL ELSE "RAJob"."closeReason" END
+      "archivedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL ELSE "RAJob"."archivedAt" END,
+      "closedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL ELSE "RAJob"."closedAt" END,
+      "closeReason" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL ELSE "RAJob"."closeReason" END
     WHERE "RAJob"."visibility" = 'public'
     RETURNING "id", "externalId", "sourceBoard", (xmax = 0) AS "inserted"`;
 }
@@ -448,9 +473,10 @@ export async function applyDedupe(db: IngestDb, market: Market, keys: string[] |
 
 /**
  * Archives the postings a source closed itself: a recruiter bank that closed,
- * unpublished or re-drafted a job ('bank_closed', the default), or a public
- * job board that stopped listing one ('source_removed'). Both reasons are
- * revived by the upsert if the source lists the posting again.
+ * unpublished or re-drafted a job ('bank_closed', the default), a public job
+ * board that stopped listing one ('source_removed'), or a posting with no page
+ * a candidate can open ('no_apply_target'). All three are revived by the
+ * upsert if the source lists the posting again.
  */
 export async function archiveClosedBankJobs(
   db: IngestDb,
@@ -460,9 +486,42 @@ export async function archiveClosedBankJobs(
   closeReason: SourceCloseReason = 'bank_closed',
 ): Promise<number> {
   if (externalIds.length === 0) return 0;
-  const { count } = await db.rAJob.updateMany({
-    where: { sourceBoard, externalId: { in: externalIds }, archivedAt: null, visibility: 'public' },
-    data: { archivedAt: now, closedAt: now, closeReason },
-  });
+  let count = 0;
+  // Chunked: a listing can close thousands of rows at once.
+  for (let i = 0; i < externalIds.length; i += 1000) {
+    const res = await db.rAJob.updateMany({
+      where: { sourceBoard, externalId: { in: externalIds.slice(i, i + 1000) }, archivedAt: null, visibility: 'public' },
+      data: { archivedAt: now, closedAt: now, closeReason },
+    });
+    count += res.count;
+  }
   return count;
+}
+
+/** Most open rows one listing diff compares (more than any source we read lists). */
+const LISTING_DIFF_LIMIT = 20_000;
+
+/**
+ * The listing diff (the rule the employer boards use, sources/atsPublic/sync.ts):
+ * archives the open public rows of `sourceBoard` in `market` whose externalId
+ * is NOT in `listedExternalIds`, the source's complete listing. Call it only
+ * with a listing read to its end: a failed or cut-short pass must close
+ * nothing. Rows already archived are left alone (their reason stands).
+ */
+export async function archiveUnlistedJobs(
+  db: IngestDb,
+  market: Market,
+  sourceBoard: string,
+  listedExternalIds: readonly string[],
+  now: Date,
+  closeReason: SourceCloseReason = 'bank_closed',
+): Promise<number> {
+  const open = await db.rAJob.findMany({
+    where: { market, sourceBoard, archivedAt: null, visibility: 'public' },
+    select: { externalId: true },
+    take: LISTING_DIFF_LIMIT,
+  });
+  const listed = new Set(listedExternalIds);
+  const gone = open.map((r) => r.externalId).filter((id) => !listed.has(id));
+  return archiveClosedBankJobs(db, sourceBoard, gone, now, closeReason);
 }

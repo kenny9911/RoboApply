@@ -7,6 +7,12 @@
 // Data access sits behind `SystemStore` (Prisma implementation below) so the
 // assembly and the alert rules are tested without a database.
 //
+// Job sources (GOAPPLY_PARITY_PLAN.md §3.9): each brand's panel lists ITS
+// sources from the job source registry (the same list ingest runs), with
+// whether each is on, how it is reached, what its last run did and why rows
+// were skipped. A recruiter bank with no candidate-facing posting page shows
+// that its synced rows are not listed, and which setting names the page.
+//
 // Two day windows (finding: a partial UTC day must not be compared with
 // full-day averages and budgets):
 //   - 'live' (the System panel): today so far. The ingest rule is prorated by
@@ -26,11 +32,21 @@ import {
   ALERT_LEVELS,
   type AlertHit,
   type BrandHealth,
+  type JobSourceRunView,
+  type JobSourceView,
   type ProviderUsageRow,
   type QueueKindRow,
   type SystemStatusResponse,
 } from './contract.js';
-import type { IngestProvider } from '../jobs/ingest/index.js';
+import {
+  bankPublicPageState,
+  readSourceStatuses,
+  sourcesForBrand,
+  type IngestProvider,
+  type JobSourceDescription,
+  type SourceRunStatus,
+  type SourceStatusDoc,
+} from '../jobs/ingest/index.js';
 import { copilotDailyBudgetUsd, dailyCallLimit, enrichCounterKey, enrichDailyLimit, scoreCounterKeys, scoreDailyBudget } from './limits.js';
 
 const DAY_MS = DAY * 1000;
@@ -57,6 +73,50 @@ export interface SystemStore {
   copilotStats(brand: string, range: TimeRange): Promise<{ turns: number; guardHits: number; costUsd: number }>;
   /** Distinct people per bucket in `range`; null when no out-of-credits event was ever recorded for the brand. */
   creditExhaustion(brand: string, range: TimeRange): Promise<Array<{ bucket: string; count: number }> | null>;
+  /** The stored run status of each provider in a market (absent = it never ran). */
+  sourceStatuses(market: string, providers: readonly string[]): Promise<Map<string, SourceStatusDoc>>;
+  /** Public rows of these source boards in a market: open, and archived as 'no_apply_target'. */
+  sourceJobCounts(market: string, sourceBoards: readonly string[]): Promise<{ open: number; held: number }>;
+  /** The market's career sources (employer boards). */
+  careerSourceCounts(market: string): Promise<{ total: number; enabled: number; failing: number }>;
+}
+
+/** Lists a brand's sources (default: the registry, with the built-in adapters registered). */
+export type SourceLister = (brand: ReturnType<typeof getBrand>, env: EnvSource) => JobSourceDescription[];
+
+function runView(run: SourceRunStatus | null | undefined): JobSourceRunView | null {
+  if (!run) return null;
+  return { at: run.at, ok: run.ok, error: run.error, received: run.received, written: run.written, inserted: run.inserted, closed: run.closed, skipped: run.skipped, notes: { ...run.notes } };
+}
+
+/** A brand's job sources with their state (the admin sources panel). */
+export async function jobSourcesHealth(store: SystemStore, brandId: BrandId, env: EnvSource = process.env, list: SourceLister = sourcesForBrand): Promise<JobSourceView[]> {
+  const brand = getBrand(brandId);
+  const sources = list(brand, env);
+  const statuses = await store.sourceStatuses(brand.market, sources.map((s) => s.provider));
+  return Promise.all(
+    sources.map(async (source): Promise<JobSourceView> => {
+      const status = source.status();
+      const doc = statuses.get(source.provider) ?? null;
+      const [counts, boards] = await Promise.all([
+        source.sourceBoards.length ? store.sourceJobCounts(brand.market, source.sourceBoards) : Promise.resolve({ open: 0, held: 0 }),
+        source.kind === 'ats' ? store.careerSourceCounts(brand.market) : Promise.resolve(null),
+      ]);
+      return {
+        provider: source.provider,
+        kind: source.kind,
+        enabled: status.enabled,
+        transport: status.transport,
+        reason: status.reason,
+        lastRun: runView(doc?.last),
+        lastCounted: runView(doc?.counted),
+        openJobs: counts.open,
+        heldJobs: counts.held,
+        publicPage: bankPublicPageState(source.provider, env),
+        boards,
+      };
+    }),
+  );
 }
 
 export type HealthMode = 'live' | 'last_complete_day';
@@ -99,6 +159,7 @@ export async function brandHealth(
   now: Date,
   env: EnvSource = process.env,
   window: HealthWindow = healthWindow(now),
+  listSources: SourceLister = sourcesForBrand,
 ): Promise<BrandHealth> {
   const brand = getBrand(brandId);
   const market = brand.market;
@@ -109,7 +170,7 @@ export async function brandHealth(
   const emailRange: TimeRange = { since: new Date(window.end.getTime() - DAY_MS), until: window.end };
   const overdueBefore = new Date(now.getTime() - ALERT_LEVELS.overdueMinutes * 60_000);
 
-  const [ingest, byDay, open, enrichUsed, scoreUsed, alerts, email, failedByTemplate, copilot, exhaustion] = await Promise.all([
+  const [ingest, byDay, open, enrichUsed, scoreUsed, alerts, email, failedByTemplate, copilot, exhaustion, sources] = await Promise.all([
     store.ingestCounts(market, now, overdueBefore),
     store.newJobsByDay(market, weekStart),
     store.openJobCounts(market),
@@ -120,6 +181,7 @@ export async function brandHealth(
     store.emailFailuresByTemplate(brandId, emailRange, 10),
     store.copilotStats(brandId, day),
     store.creditExhaustion(brandId, day),
+    jobSourcesHealth(store, brandId, env, listSources),
   ]);
 
   const today = window.dayKey;
@@ -130,6 +192,7 @@ export async function brandHealth(
   return {
     brand: brandId,
     market,
+    sources,
     ingest: {
       due: ingest.due,
       overdue: ingest.overdue,
@@ -195,14 +258,14 @@ export function evaluateAlerts(status: Pick<SystemStatusResponse, 'brands' | 'qu
 /** GET /admin/system for the given brands ('live'), or the last complete UTC day for the health email. */
 export async function buildSystemStatus(
   store: SystemStore,
-  options: { brands: BrandId[]; brandsServed: BrandId[]; now?: Date; env?: EnvSource; mode?: HealthMode },
+  options: { brands: BrandId[]; brandsServed: BrandId[]; now?: Date; env?: EnvSource; mode?: HealthMode; listSources?: SourceLister },
 ): Promise<SystemStatusResponse> {
   const now = options.now ?? new Date();
   const env = options.env ?? process.env;
   const window = healthWindow(now, options.mode ?? 'live');
   const dayKey = window.dayKey;
   const [brands, kinds, usage] = await Promise.all([
-    Promise.all(options.brands.map((b) => brandHealth(store, b, now, env, window))),
+    Promise.all(options.brands.map((b) => brandHealth(store, b, now, env, window, options.listSources))),
     store.queueByKind(),
     store.providerUsage(dayKey),
   ]);
@@ -226,7 +289,7 @@ export async function buildSystemStatus(
 
 type Db = Pick<
   typeof prisma,
-  'rAIngestQuery' | 'rAJob' | 'rARateCounter' | 'rAWorkItem' | 'rAProviderUsage' | 'rAEmailLog' | '$queryRaw'
+  'rAIngestQuery' | 'rAJob' | 'rARateCounter' | 'rAWorkItem' | 'rAProviderUsage' | 'rAEmailLog' | 'rACareerSiteSource' | 'appConfig' | '$queryRaw'
 >;
 
 export function createPrismaSystemStore(db: Db = prisma): SystemStore {
@@ -315,6 +378,25 @@ export function createPrismaSystemStore(db: Db = prisma): SystemStore {
         WHERE d."sku" = ${COPILOT_SKU} AND d."metadata"->>'kind' = 'cost' AND d."createdAt" >= ${range.since} AND d."createdAt" < ${range.until} AND u."brand" = ${brand}`;
       const r = rows[0];
       return { turns: n(r?.turns), guardHits: n(r?.guard), costUsd: n(r?.cost) };
+    },
+    async sourceStatuses(market, providers) {
+      return readSourceStatuses(db, market === 'cn' ? 'cn' : 'intl', providers);
+    },
+    async sourceJobCounts(market, sourceBoards) {
+      const where = { market, visibility: 'public', sourceBoard: { in: [...sourceBoards] } };
+      const [open, held] = await Promise.all([
+        db.rAJob.count({ where: { ...where, archivedAt: null } }),
+        db.rAJob.count({ where: { ...where, closeReason: 'no_apply_target' } }),
+      ]);
+      return { open, held };
+    },
+    async careerSourceCounts(market) {
+      const [total, enabled, failing] = await Promise.all([
+        db.rACareerSiteSource.count({ where: { market } }),
+        db.rACareerSiteSource.count({ where: { market, enabled: true } }),
+        db.rACareerSiteSource.count({ where: { market, enabled: true, lastError: { not: null } } }),
+      ]);
+      return { total, enabled, failing };
     },
     async creditExhaustion(brand, range) {
       const ever = await db.$queryRaw<Array<{ one: number }>>`

@@ -1,9 +1,11 @@
 // server/src/features/jobs/sources/index.ts — the job-source adapter registry (WP-16b).
 //
 // Ingest (features/jobs/ingest) runs every registered adapter whose markets
-// include the brand's market and whose provider the brand uses. The built-in
-// adapters (RapidAPI search, recruiter-bank cursor sync) are registered by
-// ingest itself; WP-42 registers its public ATS boards here as `ats_public`:
+// include the brand's market and whose provider the brand uses; which
+// providers a brand uses is decided in ./registry.ts (one rule for ingest and
+// the admin sources panel). The built-in adapters (RapidAPI search,
+// recruiter-bank sync) are registered by ingest itself; the public employer
+// boards register themselves here as `ats_public`:
 //
 //   import { registerSourceAdapter } from '../index.js';     // from sources/atsPublic/
 //   registerSourceAdapter(atsPublicAdapter);
@@ -21,10 +23,15 @@ export type {
   IngestQueryParams,
   JobSourceAdapter,
   SourceCloseReason,
+  SourceClosure,
   SourceFetchContext,
   SourceFetchResult,
+  SourceListing,
   SourceQuery,
+  SourceTransport,
 } from './types.js';
+export { jobProvidersEnvName, jobSourceKind, jobSourcesForBrand, resetJobSourceWarningsForTests, sourceProvidersForBrand } from './registry.js';
+export type { JobSourceDescription, JobSourceKind, JobSourceStatus } from './registry.js';
 
 const adapters = new Map<IngestProvider, JobSourceAdapter>();
 

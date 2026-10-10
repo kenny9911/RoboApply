@@ -202,7 +202,7 @@ export function planQueries(tuples: DemandTuple[], adapters: readonly JobSourceA
     const hash = paramsHash(t.market, params);
     for (const a of search) {
       if (!a.markets.includes(t.market)) continue;
-      if (t.market === 'cn' && t.country !== 'CN') continue; // GoApply testing provider: country=cn only
+      if (t.market === 'cn' && t.country !== 'CN') continue; // a market-cn search adapter (none today) may search mainland China only
       let ok = false;
       try {
         ok = a.supportsCountry(t.country);
@@ -304,7 +304,29 @@ export async function retireUnusedDemand(db: IngestDb, market: Market, runStarte
   return { zeroed, disabled };
 }
 
-/** One standing bank-sync query per cursor adapter (never resets an existing cursor). */
+/**
+ * Switches off the market's queries of a provider the brand does not run: a
+ * provider that left the registry (the `linkedin` RapidAPI source), one that
+ * never serves this market (a `jsearch` query created for market cn under the
+ * old CN_EXTERNAL_PROVIDERS switch) or one narrowed away by
+ * JOB_PROVIDERS_<BRAND>. No tick ever leases such a row, so left enabled it
+ * would stay due for good and the System panel would report a backlog that is
+ * not one. A provider that comes back is switched on again by the plan itself
+ * (`upsertPlannedQueries` for search queries, `ensureBankSyncQueries` for the
+ * standing bank and board queries).
+ */
+export async function retireUnrunProviders(db: IngestDb, market: Market, adapters: readonly JobSourceAdapter[]): Promise<number> {
+  const providers = [...new Set(adapters.filter((a) => a.markets.includes(market)).map((a) => a.provider))];
+  return db.$executeRaw`
+    UPDATE "RAIngestQuery" SET "enabled" = false
+    WHERE "market" = ${market} AND "enabled" = true AND NOT ("provider" = ANY(${providers}::text[]))`;
+}
+
+/**
+ * One standing bank-sync query per cursor adapter (never resets an existing
+ * cursor). A standing query that was switched off while its provider was not
+ * run (`retireUnrunProviders`) is switched on again and made due.
+ */
 export async function ensureBankSyncQueries(db: IngestDb, market: Market, adapters: readonly JobSourceAdapter[]): Promise<number> {
   const banks = adapters.filter((a) => a.kind === 'cursor' && a.markets.includes(market));
   if (banks.length === 0) return 0;
@@ -320,6 +342,9 @@ export async function ensureBankSyncQueries(db: IngestDb, market: Market, adapte
     })),
     skipDuplicates: true,
   });
+  await db.$executeRaw`
+    UPDATE "RAIngestQuery" SET "enabled" = true, "nextRunAt" = now()
+    WHERE "market" = ${market} AND "origin" = 'bank_sync' AND "enabled" = false AND "provider" = ANY(${banks.map((a) => a.provider)}::text[])`;
   return count;
 }
 
@@ -330,6 +355,8 @@ export interface PlannerResult {
   written: number;
   zeroed: number;
   disabled: number;
+  /** Queries switched off because the brand does not run their provider. */
+  retired: number;
   bankQueries: number;
 }
 
@@ -347,6 +374,7 @@ export async function runPlanner(
   const planned = planQueries(mergeTuples(demand, seeds), adapters);
   const written = await upsertPlannedQueries(db, planned, now);
   const { zeroed, disabled } = await retireUnusedDemand(db, brand.market, now);
+  const retired = await retireUnrunProviders(db, brand.market, adapters);
   const bankQueries = await ensureBankSyncQueries(db, brand.market, adapters);
-  return { demandTuples: demand.length, seedTuples: seeds.length, planned: planned.length, written, zeroed, disabled, bankQueries };
+  return { demandTuples: demand.length, seedTuples: seeds.length, planned: planned.length, written, zeroed, disabled, retired, bankQueries };
 }

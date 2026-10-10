@@ -7,7 +7,10 @@
 //   3. `processJobs`: normalizeProviderJob → marketHooks.afterNormalize →
 //      RACompany upsert → batched RAJob upsert (xmax = 0 counts new rows) →
 //      dedupe → enqueue `job.enrich` for new or materially changed rows;
-//   4. bank closures are archived ('bank_closed');
+//   4. the source's own closures are archived, each with its reason
+//      ('bank_closed', 'source_removed', 'no_apply_target'), and a source that
+//      reports its complete listing has the open rows missing from it archived
+//      (the listing diff). A failed fetch closes nothing;
 //   5. the query's stats, cursor and next run are written (raw SQL, so the
 //      planner's `updatedAt` "last demanded" stamp is not touched);
 //   6. with Schema request SR-16b-1 in place (`perQueryTracking`), a search
@@ -20,12 +23,12 @@ import { enqueueMany as platformEnqueueMany, type EnqueueManyItem } from '../../
 import { afterNormalize, type MarketHookJob } from '../marketHooks.js';
 import { asMarketHookJob, normalizeProviderJob, PROVIDER_META, type NormalizedJob, type ProviderJobInput } from '../normalize/index.js';
 import { companyKey, upsertCompanies } from '../companies/index.js';
-import type { IngestOrigin, IngestQueryParams, JobSourceAdapter, SourceQuery } from '../sources/index.js';
+import type { IngestOrigin, IngestQueryParams, JobSourceAdapter, SourceClosure, SourceQuery } from '../sources/index.js';
 import { publicDisplayProviders, seedBudgetShare } from './config.js';
 import { dayKey, type IngestDb } from './db.js';
 import { nextRunDelayMs, REFRESH } from './planner.js';
 import { recordCountedRun } from './tracking.js';
-import { applyDedupe, archiveClosedBankJobs, contentHash, existingKey, prefetchExisting, toUpsertRow, upsertJobRows } from './upsert.js';
+import { applyDedupe, archiveClosedBankJobs, archiveUnlistedJobs, contentHash, existingKey, prefetchExisting, toUpsertRow, upsertJobRows } from './upsert.js';
 
 export const ENRICH_KIND = 'job.enrich';
 
@@ -43,6 +46,8 @@ export interface PipelineContext {
   /** SR-16b-1 columns exist: count runs and stamp seen jobs (default false). */
   perQueryTracking?: boolean;
   signal?: AbortSignal;
+  /** Milliseconds left for the query being run (the tick's remaining budget less its reserve); handed to the source. */
+  budgetMs?: number;
 }
 
 export interface ProcessResult {
@@ -122,10 +127,13 @@ export async function processJobs(
       continue;
     }
     for (const n of job.notes) bump(notes, n.split(':')[0]!);
+    // Every market: a posting with no usable apply URL is never written (counted as 'no_apply_url').
     if (!job.applyUrl) {
       result.skipped += 1;
       continue;
     }
+    // An employer-board posting belongs to the market of its own location (the normalizer decides);
+    // a run writes only the rows of its own market.
     if (!job.title || !job.companyName || job.market !== ctx.market) {
       result.skipped += 1;
       bump(notes, job.market !== ctx.market ? 'wrong_market' : 'missing_title_or_company');
@@ -136,7 +144,12 @@ export async function processJobs(
   if (jobs.length === 0) return result;
 
   const companyIds = await upsertCompanies(ctx.db, jobs.map((j) => j.company));
-  const rows = jobs.map((j) => toUpsertRow(j, companyIds.get(companyKey(j.company.market, j.company.nameNormalized)) ?? null));
+  const rows = jobs.map((j) =>
+    toUpsertRow(j, companyIds.get(companyKey(j.company.market, j.company.nameNormalized)) ?? null, undefined, {
+      // Enrichment read the whole posting: a level the normalizer's text rule finds never replaces it.
+      keepStoredEducation: existing.get(existingKey(j.sourceBoard, j.externalId))?.enrichedEducation === true,
+    }),
+  );
   const upserted = await upsertJobRows(ctx.db, rows);
   result.written = upserted.length;
   result.jobIds = upserted.map((u) => u.id);
@@ -298,6 +311,16 @@ export interface QueryRunResult {
   closed?: number;
   /** Cursor sources with more rows waiting. */
   more?: boolean;
+  /** Skip tallies of the run: the adapter's own (bank_unpublished, bank_no_public_page …) plus the pipeline's (wrong_market, no_apply_url …). */
+  notes?: Record<string, number>;
+  /** The source's error text when status is 'error'. */
+  error?: string | null;
+}
+
+function mergeNotes(...lists: Array<Record<string, number> | undefined>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const list of lists) for (const [k, v] of Object.entries(list ?? {})) if (Number.isFinite(v) && v > 0) out[k] = (out[k] ?? 0) + v;
+  return out;
 }
 
 /** Runs one leased query end to end. Never throws for provider failures (DB errors propagate). */
@@ -321,7 +344,7 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
     }
   }
 
-  const fetched = await adapter.fetch(query, { now: ctx.now, signal: ctx.signal });
+  const fetched = await adapter.fetch(query, { now: ctx.now, signal: ctx.signal, ...(ctx.budgetMs !== undefined ? { budgetMs: ctx.budgetMs } : {}) });
   const extraCalls = limit === null ? fetched.calls : Math.max(0, fetched.calls - 1);
   if (fetched.error) {
     await recordProviderUsage(ctx.db, adapter.provider, day, { calls: extraCalls, errors: 1 });
@@ -334,15 +357,25 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
       error: fetched.error.slice(0, 300),
       params: query.params,
     });
-    return { ...base, status: 'error', calls: fetched.calls };
+    return { ...base, status: 'error', calls: fetched.calls, error: fetched.error.slice(0, 300), notes: mergeNotes(fetched.notes) };
   }
 
   const processed = await processJobs(ctx, adapter, fetched.jobs, { countryHint: query.params.country });
   let closed = 0;
-  if (fetched.closedExternalIds?.length) {
-    // The source says why (a bank closed the job / a public board stopped listing it); default: a bank.
-    const reason = fetched.closeReason ?? 'bank_closed';
-    for (const board of adapter.sourceBoards) closed += await archiveClosedBankJobs(ctx.db, board, fetched.closedExternalIds, ctx.now, reason);
+  // The source says why each group closed (a bank closed the job / a board stopped listing it /
+  // the posting has no page a candidate can open); the default reason is a bank's.
+  const groups: SourceClosure[] = [
+    ...(fetched.closedExternalIds?.length ? [{ externalIds: fetched.closedExternalIds, reason: fetched.closeReason ?? ('bank_closed' as const) }] : []),
+    ...(fetched.closures ?? []),
+  ];
+  for (const group of groups) {
+    for (const board of adapter.sourceBoards) closed += await archiveClosedBankJobs(ctx.db, board, group.externalIds, ctx.now, group.reason);
+  }
+  // The listing diff: the source read its listing to the end, so an open row of this market that is
+  // not in it is gone. Runs after the explicit closures, which keep their own reason.
+  if (fetched.listing) {
+    const reason = fetched.listing.reason ?? 'bank_closed';
+    for (const board of adapter.sourceBoards) closed += await archiveUnlistedJobs(ctx.db, ctx.market, board, fetched.listing.externalIds, ctx.now, reason);
   }
   await recordProviderUsage(ctx.db, adapter.provider, day, { calls: extraCalls, returned: fetched.jobs.length, inserted: processed.inserted });
   // SR-16b-1: only a search run that returned postings counts (an empty page is inconclusive).
@@ -359,5 +392,5 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
     ? ctx.now
     : new Date(ctx.now.getTime() + nextRunDelayMs({ origin: query.origin, demandScore: row.demandScore, consecutiveEmpty }));
   await finishQuery(ctx.db, query.id, { now: ctx.now, next, seen, inserted: processed.inserted, consecutiveEmpty, error: null, params });
-  return { ...base, calls: fetched.calls, process: processed, closed, more };
+  return { ...base, calls: fetched.calls, process: processed, closed, more, notes: mergeNotes(processed.notes, fetched.notes) };
 }

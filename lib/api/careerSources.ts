@@ -1,6 +1,9 @@
 // lib/api/careerSources.ts — Public ATS career sources (admin).
 //
 // Thin typed wrappers over the area contract (FND-7). Owner: WP-42.
+// Both brands since the parity wave: the server scopes every call to the
+// market of the brand whose host the admin is on (RoboApply → intl, GoApply →
+// cn). `market` in a query or body may only name that market.
 // Request types are the contract's zod input types; response types are the
 // contract's views. Change a signature here only together with its contract.
 //

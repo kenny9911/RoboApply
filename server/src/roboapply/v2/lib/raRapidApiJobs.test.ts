@@ -77,6 +77,22 @@ describe('normalizeJSearchJob', () => {
   });
 });
 
+describe('employment type labels (PAR-7): Chinese display strings map like the English enums', () => {
+  it.each([
+    ['FULLTIME', 'full_time'],
+    ['Contractor', 'contract'],
+    ['全职', 'full_time'],
+    ['兼职', 'part_time'],
+    ['实习', 'internship'],
+    ['合同', 'contract'],
+    ['劳务', 'contract'],
+    ['其他', null],
+  ])('%s → %s', (label, expected) => {
+    const job = normalizeJSearchJob({ job_id: 'x', job_title: '工程师', employer_name: 'Acme', job_employment_type: label }, { country: 'us', fetchedAt: new Date('2026-10-10T00:00:00Z') })!;
+    expect(job.employmentType).toBe(expected);
+  });
+});
+
 describe('searchJSearchJobs — /search-v2 (fetch mocked)', () => {
   const saved = { ...process.env };
   beforeEach(() => {

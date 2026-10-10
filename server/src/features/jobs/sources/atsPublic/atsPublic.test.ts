@@ -5,6 +5,11 @@
 // __fixtures__/record.ts), the `ats_public` ingest adapter, the Taiwan
 // market hooks (sourceName, permit tags with quotes, card meta) and the
 // RapidAPI country=tw planner seam. No network, no database.
+// Parity wave (PAR-7): the boards serve both markets. A posting belongs to the
+// market of its own location (mainland China → cn, anything else → intl); the
+// listing is filtered to the source's market BEFORE any cap; a mainland
+// SmartRecruiters source lists with country=cn and pages to the end; the
+// verified seed list of mainland boards.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -20,12 +25,15 @@ import { planQueries, tuplesFromFilters } from '../../ingest/planner.js';
 import { adaptersForBrand } from '../../ingest/providers.js';
 import { getSourceAdapter } from '../index.js';
 import { CareerSourceBodySchema, PUBLIC_ATS_NAMES, type TwCardMeta } from './contract.js';
-import { ashby, CONNECTORS, greenhouse, lever, prioritise, smartrecruiters, SR_MAX_DETAILS, type BoardSource } from './connectors.js';
-import { createAtsPublicAdapter } from './adapter.js';
+import { ashby, CONNECTORS, greenhouse, lever, prioritise, smartrecruiters, smartRecruitersListUrl, splitByMarket, SR_MAX_DETAILS, type BoardSource } from './connectors.js';
+import { ensureSeedCareerSources, parseSeedFile, SEED_MIN_MAINLAND_POSTINGS, seedBoardsToRegister, seedFileFor, seedStateKey } from './seeds.js';
+import { BACKLOG_INTERVAL_MS, MAX_LISTED_PER_BOARD_CN, MAX_POSTINGS_PER_BOARD, SYNC_INTERVAL_MS } from './shared.js';
+import { createAtsPublicAdapter, parseBacklogCursor } from './adapter.js';
 import { API_HOSTS, assertApiHost, BoardFetchError, getJson, type FetchLike } from './http.js';
 import { createAtsPublicHooks, isTaiwanJob, mergePermitTags, twCardMeta, twNegotiableCardText, withAtsSourceName } from './hooks.js';
 import { extractPermitTags, MAX_QUOTE_CHARS, quoteInPosting } from './permitTags.js';
 import { atsSourceName, decodeEntities, externalIdFor } from './shared.js';
+import { marketOfPosting } from '../../normalize/index.js';
 import { dueCareerSources, readCareerSource } from './sync.js';
 import { atsPublicAdapter } from './register.js';
 import { twOpenDataEnabled, twOpenDataStatus, TW_OPEN_DATA_ATTRIBUTION } from '../twOpenData.js';
@@ -402,14 +410,18 @@ const GH_ROUTE = { 'https://boards-api.greenhouse.io/v1/boards/formosarobotics/j
 const QUERY = { id: 'q1', provider: 'ats_public' as const, market: 'intl' as const, origin: 'bank_sync' as const, params: { q: '', country: '*', datePosted: 'all' } };
 
 describe('ats_public adapter', () => {
-  it('is registered for RoboApply only, as a cursor source, unmetered, with a kill switch', () => {
+  it('is registered for both markets, as a cursor source, unmetered, with a kill switch', () => {
     expect(getSourceAdapter('ats_public')).toBe(atsPublicAdapter);
-    expect(atsPublicAdapter).toMatchObject({ provider: 'ats_public', kind: 'cursor', markets: ['intl'], sourceBoards: ['greenhouse', 'lever', 'ashby', 'smartrecruiters'] });
+    expect(atsPublicAdapter).toMatchObject({ provider: 'ats_public', kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['greenhouse', 'lever', 'ashby', 'smartrecruiters'] });
     expect(atsPublicAdapter.dailyCallLimit()).toBeNull();
+    expect(atsPublicAdapter.transport?.()).toBe('board_api');
     expect(createAtsPublicAdapter({ env: {} }).isEnabled()).toBe(true);
-    expect(createAtsPublicAdapter({ env: { ATS_PUBLIC_SOURCES_DISABLED: 'true' } }).isEnabled()).toBe(false);
+    const off = createAtsPublicAdapter({ env: { ATS_PUBLIC_SOURCES_DISABLED: 'true' } });
+    expect(off.isEnabled()).toBe(false);
+    expect(off.disabledReason?.()).toBe('kill_switch');
     expect(adaptersForBrand(getBrand('roboapply'), {}).map((a) => a.provider)).toContain('ats_public');
-    expect(adaptersForBrand(getBrand('goapply'), {}).map((a) => a.provider)).not.toContain('ats_public');
+    // GoApply's sources: the GoHire bank and the employer boards, never a search API.
+    expect(adaptersForBrand(getBrand('goapply'), {}).map((a) => a.provider)).toEqual(['bank_gohire', 'ats_public']);
   });
 
   it('reads due boards, stamps them, and reports postings the board no longer lists', async () => {
@@ -417,10 +429,12 @@ describe('ats_public adapter', () => {
       seed: {
         rACareerSiteSource: [source(), source({ id: 'cs2', boardToken: 'fresh', lastSyncedAt: new Date('2026-10-09T23:00:00Z') }), source({ id: 'cs3', enabled: false, boardToken: 'off' })],
         rAJob: [
-          { id: 'j1', sourceBoard: 'greenhouse', externalId: 'formosarobotics:4012345', archivedAt: null, visibility: 'public' },
-          { id: 'j2', sourceBoard: 'greenhouse', externalId: 'formosarobotics:999', archivedAt: null, visibility: 'public' },
-          { id: 'j3', sourceBoard: 'greenhouse', externalId: 'otherco:999', archivedAt: null, visibility: 'public' },
-          { id: 'j4', sourceBoard: 'lever', externalId: 'formosarobotics:777', archivedAt: null, visibility: 'public' },
+          { id: 'j1', market: 'intl', sourceBoard: 'greenhouse', externalId: 'formosarobotics:4012345', archivedAt: null, visibility: 'public' },
+          { id: 'j2', market: 'intl', sourceBoard: 'greenhouse', externalId: 'formosarobotics:999', archivedAt: null, visibility: 'public' },
+          { id: 'j3', market: 'intl', sourceBoard: 'greenhouse', externalId: 'otherco:999', archivedAt: null, visibility: 'public' },
+          { id: 'j4', market: 'intl', sourceBoard: 'lever', externalId: 'formosarobotics:777', archivedAt: null, visibility: 'public' },
+          // The other market's row of the same board is not this run's to close.
+          { id: 'j5', market: 'cn', sourceBoard: 'greenhouse', externalId: 'formosarobotics:cn1', archivedAt: null, visibility: 'public' },
         ],
       },
     });
@@ -429,6 +443,8 @@ describe('ats_public adapter', () => {
     expect(res.error).toBeUndefined();
     expect(res.jobs.map((j) => j.externalId)).toEqual(['formosarobotics:4012345', 'formosarobotics:4012399']);
     expect(res.closedExternalIds).toEqual(['formosarobotics:999']);
+    expect(res.closeReason).toBe('source_removed');
+    expect(res.notes).toEqual({ boards_read: 1 });
     expect(res.exhausted).toBe(true);
     expect(res.calls).toBe(1);
     const stamped = db.$rows('rACareerSiteSource').find((r) => r.id === 'cs1')!;
@@ -451,16 +467,19 @@ describe('ats_public adapter', () => {
     expect(db.$rows('rACareerSiteSource')[0]).toMatchObject({ lastError: 'board_not_found', lastJobCount: null });
   });
 
-  it('answers exhausted:false while more boards are due, and never runs for GoApply', async () => {
-    const rows = Array.from({ length: 5 }, (_, i) => source({ id: `cs${i}`, boardToken: `b${i}` }));
+  it('answers exhausted:false while more boards are due; a run reads only the boards of its own market', async () => {
+    const rows = [...Array.from({ length: 5 }, (_, i) => source({ id: `cs${i}`, boardToken: `b${i}` })), source({ id: 'cn1', market: 'cn', boardToken: 'cnboard', countryCode: 'CN' })];
     const db = createFakePrisma({ seed: { rACareerSiteSource: rows, rAJob: [] } });
-    const fetch = vi.fn(fakeFetch({}));
-    const adapter = createAtsPublicAdapter({ db: () => db as never, fetch, env: {} });
+    const calls: string[] = [];
+    const adapter = createAtsPublicAdapter({ db: () => db as never, fetch: fakeFetch({}, calls), env: {} });
     const res = await adapter.fetch(QUERY, { now: NOW });
     expect(res.exhausted).toBe(false);
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(calls).toHaveLength(3);
+    expect(calls.some((u) => u.includes('cnboard'))).toBe(false);
+    calls.length = 0;
     const cn = await adapter.fetch({ ...QUERY, market: 'cn' }, { now: NOW });
-    expect(cn).toEqual({ jobs: [], calls: 0, exhausted: true });
+    expect(calls).toEqual(['https://boards-api.greenhouse.io/v1/boards/cnboard/jobs?content=true']);
+    expect(cn).toMatchObject({ jobs: [], exhausted: true, notes: { boards_read: 1, board_errors: 1 } });
   });
 
   it('never throws: a database failure becomes an error result', async () => {
@@ -489,6 +508,274 @@ describe('ats_public adapter', () => {
     const res = await readCareerSource(db as never, source({ ats: 'workday' }) as never, { now: NOW, fetch });
     expect(res).toMatchObject({ read: null, error: 'unsupported_job_board', calls: 0 });
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+// ── Both markets: a posting belongs to the market of its own location ─────
+
+/** A Greenhouse listing entry located where `location` says. */
+function ghJob(id: number, location: string, title = 'Software Engineer') {
+  return { id, title, absolute_url: `https://boards.greenhouse.io/globalco/jobs/${id}`, location: { name: location }, content: '&lt;p&gt;Build things.&lt;/p&gt;', first_published: '2026-10-01T00:00:00Z' };
+}
+const GLOBAL_CN: BoardSource = { ats: 'greenhouse', boardToken: 'globalco', companyName: 'Global Co', countryCode: 'CN' };
+const GLOBAL_ROUTE = (jobs: unknown[]) => ({ 'https://boards-api.greenhouse.io/v1/boards/globalco/jobs': { jobs } });
+
+describe('market by posting location (mainland China → cn, anything else → intl)', () => {
+  it('marketOfPosting reads the posting\'s own location; Hong Kong, Macau, Taiwan and a board tag alone are not mainland', () => {
+    const at = (location: string, over: Partial<ProviderJobInput> = {}) => marketOfPosting({ externalId: 'x', title: 't', company: 'c', location, ...over });
+    for (const loc of ['上海', 'Shanghai, China', 'Suzhou, Jiangsu, China', '北京市海淀区', 'Shenzhen', 'China']) expect(at(loc)).toBe('cn');
+    for (const loc of ['Singapore', 'Hong Kong SAR, China', 'Hong Kong, Hong Kong, China', '香港', 'Macau, China', 'Taipei, Taiwan', 'Taiwan, China', 'Remote', 'San Francisco, CA', '']) expect(at(loc)).toBe('intl');
+    // The board's own country tag is a weak hint: it never makes a posting mainland on its own.
+    expect(at('Remote', { locationCountry: 'CN', locationCountryEstimated: true })).toBe('intl');
+    // The provider's own country for this posting does (SmartRecruiters states it per posting)…
+    expect(at('Wuxi', { locationCountry: 'cn' })).toBe('cn');
+    // …unless the place is Hong Kong, which SmartRecruiters files under country cn.
+    expect(at('Hong Kong, Hong Kong, China', { locationCountry: 'cn', locationCity: 'Hong Kong' })).toBe('intl');
+  });
+
+  it('a 上海 posting from a cn source lands in market cn with the employer\'s own apply URL; a Singapore posting from the same source is skipped as wrong_market', async () => {
+    const db = createFakePrisma({ seed: { rACareerSiteSource: [source({ id: 'cn1', market: 'cn', boardToken: 'globalco', companyName: 'Global Co', countryCode: 'CN' })], rAJob: [] } });
+    const adapter = createAtsPublicAdapter({ db: () => db as never, fetch: fakeFetch(GLOBAL_ROUTE([ghJob(1, '上海', '数据分析师'), ghJob(2, 'Singapore')])), env: {} });
+    const res = await adapter.fetch({ ...QUERY, market: 'cn' }, { now: NOW });
+    expect(res.jobs.map((j) => j.externalId)).toEqual(['globalco:1']);
+    expect(res.notes).toMatchObject({ boards_read: 1, wrong_market: 1 });
+    const job = normalizeProviderJob(res.jobs[0]!, 'ats_public', { market: 'cn', now: NOW });
+    expect(job).toMatchObject({ market: 'cn', locationCountry: 'CN', locationCity: '上海', applyUrl: 'https://boards.greenhouse.io/globalco/jobs/1', sourceBoard: 'greenhouse', fromRecruiterBank: false });
+    // The source name is the employer and its job board, on GoApply too.
+    expect((await afterNormalize(asMarketHookJob(job), { brand: 'goapply', market: 'cn', stage: 'ingest' })).sourceName).toBe('Global Co · Greenhouse');
+    // The listing count and the closure check are the mainland postings only.
+    expect(db.$rows('rACareerSiteSource')[0]).toMatchObject({ lastJobCount: 1 });
+  });
+
+  it('the same 上海 posting read through an intl source is skipped the same way and never handed to RoboApply\'s index', async () => {
+    const db = createFakePrisma({ seed: { rACareerSiteSource: [source({ id: 'i1', market: 'intl', boardToken: 'globalco', companyName: 'Global Co', countryCode: null })], rAJob: [] } });
+    const adapter = createAtsPublicAdapter({ db: () => db as never, fetch: fakeFetch(GLOBAL_ROUTE([ghJob(1, '上海'), ghJob(2, 'Singapore')])), env: {} });
+    const res = await adapter.fetch(QUERY, { now: NOW });
+    expect(res.jobs.map((j) => j.externalId)).toEqual(['globalco:2']);
+    expect(res.notes).toMatchObject({ wrong_market: 1 });
+    // And the normalizer itself would refuse it: its market is its location, whatever market reads the board.
+    expect(normalizeProviderJob(await greenhouse.read(GLOBAL_CN, { now: NOW, fetch: fakeFetch(GLOBAL_ROUTE([ghJob(1, '上海')])) }).then((r) => r.inputs[0]!), 'ats_public', { market: 'intl', now: NOW }).market).toBe('cn');
+  });
+
+  it('the mainland filter runs before the per-board cap: a board of 800 postings with 5 mainland ones stores all 5 in one run', async () => {
+    const mainland = new Map([[120, '上海'], [333, 'Beijing, China'], [512, 'Shenzhen, Guangdong, China'], [640, '杭州'], [799, 'Chengdu, China']]);
+    const jobs = Array.from({ length: 800 }, (_, i) => ghJob(i, mainland.get(i) ?? 'Berlin, Germany'));
+    const read = await greenhouse.read(GLOBAL_CN, { now: NOW, fetch: fakeFetch(GLOBAL_ROUTE(jobs)) }, { market: 'cn' });
+    expect(read.inputs.map((i) => i.externalId)).toEqual([...mainland.keys()].map((id) => `globalco:${id}`));
+    expect(read.listedIds).toHaveLength(5);
+    expect(read).toMatchObject({ wrongMarket: 795, pending: 0, complete: true });
+    // Without the filter the cap alone would have cut the listing at the first 500 and dropped two of them every run.
+    expect((await greenhouse.read(GLOBAL_CN, { now: NOW, fetch: fakeFetch(GLOBAL_ROUTE(jobs)) })).inputs).toHaveLength(MAX_POSTINGS_PER_BOARD);
+    // The international reading of the same board never spends its cap on the mainland postings.
+    const intl = await greenhouse.read({ ...GLOBAL_CN, countryCode: null }, { now: NOW, fetch: fakeFetch(GLOBAL_ROUTE(jobs)) }, { market: 'intl' });
+    expect(intl).toMatchObject({ wrongMarket: 5, pending: 795 - MAX_POSTINGS_PER_BOARD });
+    expect(intl.inputs.some((i) => mainland.has(Number(i.externalId.split(':')[1])))).toBe(false);
+  });
+
+  it('Lever: a mainland source pages the listing past the input cap, so a posting on page 8 is found', async () => {
+    const calls: string[] = [];
+    const page = (skip: number) => Array.from({ length: skip < 700 ? 100 : 40 }, (_, i) => ({ id: `p${skip + i}`, text: 'Engineer', hostedUrl: `https://jobs.lever.co/bigco/p${skip + i}`, categories: { location: skip + i === 733 ? 'Shanghai' : 'Berlin' }, country: skip + i === 733 ? 'CN' : 'DE', createdAt: 1_760_000_000_000 }));
+    const fetch: FetchLike = async (url) => {
+      calls.push(url);
+      return { ok: true, status: 200, text: async () => JSON.stringify(page(Number(new URL(url).searchParams.get('skip')))) };
+    };
+    const big: BoardSource = { ats: 'lever', boardToken: 'bigco', companyName: 'Big Co', countryCode: 'CN' };
+    const cn = await lever.read(big, { now: NOW, fetch }, { market: 'cn' });
+    expect(cn.inputs.map((i) => i.externalId)).toEqual(['bigco:p733']);
+    expect(cn).toMatchObject({ complete: true, wrongMarket: 739, calls: 8 });
+    // RoboApply's reading keeps today's listing cap (5 pages).
+    calls.length = 0;
+    const intl = await lever.read(big, { now: NOW, fetch }, { market: 'intl' });
+    expect(calls).toHaveLength(MAX_POSTINGS_PER_BOARD / 100);
+    expect(intl.complete).toBe(false);
+  });
+
+  it('SmartRecruiters: a cn source lists with country=cn, pages to the end and reports a complete listing; the posting texts stay capped per run', async () => {
+    expect(smartRecruitersListUrl('BoschGroup', 200, 'cn')).toBe('https://api.smartrecruiters.com/v1/companies/BoschGroup/postings?limit=100&offset=200&country=cn');
+    expect(smartRecruitersListUrl('BoschGroup', 0, 'intl')).toBe('https://api.smartrecruiters.com/v1/companies/BoschGroup/postings?limit=100&offset=0');
+    const total = 1322;
+    const listCalls: string[] = [];
+    let details = 0;
+    const fetch: FetchLike = async (url) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/postings')) {
+        listCalls.push(url);
+        const offset = Number(u.searchParams.get('offset'));
+        const content = Array.from({ length: Math.min(100, total - offset) }, (_, i) => ({ id: `id${offset + i}`, name: '软件工程师', releasedDate: '2026-10-09T00:00:00.000Z', location: { city: 'Suzhou', region: 'Jiangsu', country: 'cn', fullLocation: 'Suzhou, Jiangsu, China' } }));
+        return { ok: true, status: 200, text: async () => JSON.stringify({ totalFound: total, limit: 100, offset, content }) };
+      }
+      details += 1;
+      return { ok: true, status: 200, text: async () => JSON.stringify({ jobAd: { sections: { jobDescription: { title: '职位描述', text: '<p>负责软件开发。</p>' } } }, applyUrl: `https://jobs.smartrecruiters.com/BoschGroup/${u.pathname.split('/').pop()}` }) };
+    };
+    const bosch: BoardSource = { ats: 'smartrecruiters', boardToken: 'BoschGroup', companyName: 'Bosch Group', countryCode: 'CN' };
+    const read = await smartrecruiters.read(bosch, { now: NOW, fetch }, { market: 'cn', known: new Map() });
+    expect(listCalls).toHaveLength(14);
+    expect(listCalls.every((u) => u.includes('country=cn'))).toBe(true);
+    expect(read.complete).toBe(true);
+    expect(read.listedIds).toHaveLength(total);
+    expect(details).toBe(SR_MAX_DETAILS);
+    expect(read.inputs).toHaveLength(SR_MAX_DETAILS);
+    expect(read.pending).toBe(total - SR_MAX_DETAILS);
+    expect(normalizeProviderJob(read.inputs[0]!, 'ats_public', { now: NOW })).toMatchObject({ market: 'cn', locationCountry: 'CN', applyUrl: 'https://jobs.smartrecruiters.com/BoschGroup/id0' });
+    expect(MAX_LISTED_PER_BOARD_CN).toBeGreaterThanOrEqual(3000);
+    // An international source sends no country filter and keeps today's listing cap.
+    listCalls.length = 0;
+    const intl = await smartrecruiters.read({ ...bosch, countryCode: null }, { now: NOW, fetch }, { market: 'intl', listOnly: true });
+    expect(listCalls).toHaveLength(MAX_POSTINGS_PER_BOARD / 100);
+    expect(listCalls.some((u) => u.includes('country='))).toBe(false);
+    expect(intl).toMatchObject({ complete: false, wrongMarket: MAX_POSTINGS_PER_BOARD });
+  });
+
+  it('lastSyncedAt is always the time of the read, also for a board with postings still unread (review fix)', async () => {
+    const jobs = Array.from({ length: MAX_POSTINGS_PER_BOARD + 20 }, (_, i) => ghJob(i, '上海'));
+    const row = source({ id: 'cn1', market: 'cn', boardToken: 'globalco', companyName: 'Global Co', countryCode: 'CN' });
+    const db = createFakePrisma({ seed: { rACareerSiteSource: [row], rAJob: [] } });
+    const res = await readCareerSource(db as never, row as never, { now: NOW, fetch: fakeFetch(GLOBAL_ROUTE(jobs)) });
+    expect(res.read).toMatchObject({ pending: 20 });
+    expect((db.$rows('rACareerSiteSource')[0]!.lastSyncedAt as Date).getTime()).toBe(NOW.getTime());
+    // On its own the row is due after the usual interval only.
+    expect(await dueCareerSources(db as never, 'cn', new Date(NOW.getTime() + BACKLOG_INTERVAL_MS + 1), 5)).toHaveLength(0);
+    expect(await dueCareerSources(db as never, 'cn', new Date(NOW.getTime() + SYNC_INTERVAL_MS + 1), 5)).toHaveLength(1);
+    // Named as a backlog board it is due after the backlog interval, not before, and never twice.
+    expect(await dueCareerSources(db as never, 'cn', new Date(NOW.getTime() + BACKLOG_INTERVAL_MS - 1), 5, { backlogIds: ['cn1'] })).toHaveLength(0);
+    expect(await dueCareerSources(db as never, 'cn', new Date(NOW.getTime() + BACKLOG_INTERVAL_MS + 1), 5, { backlogIds: ['cn1'] })).toHaveLength(1);
+    expect(await dueCareerSources(db as never, 'cn', new Date(NOW.getTime() + SYNC_INTERVAL_MS + 1), 5, { backlogIds: ['cn1', 'cn1'] })).toHaveLength(1);
+    // A backlog id of the other market, or of a board that is off, is never due through the list.
+    expect(await dueCareerSources(db as never, 'intl', new Date(NOW.getTime() + BACKLOG_INTERVAL_MS + 1), 5, { backlogIds: ['cn1'] })).toHaveLength(0);
+  });
+
+  it('the adapter remembers a mainland backlog board in its cursor and reads it again after 30 minutes; an international board keeps 6 hours', async () => {
+    const many = Array.from({ length: MAX_POSTINGS_PER_BOARD + 20 }, (_, i) => ghJob(i, '上海'));
+    const cnRow = source({ id: 'cn1', market: 'cn', boardToken: 'globalco', companyName: 'Global Co', countryCode: 'CN', lastSyncedAt: null });
+    const db = createFakePrisma({ seed: { rACareerSiteSource: [cnRow], rAJob: [] } });
+    const adapter = createAtsPublicAdapter({ db: () => db as never, fetch: fakeFetch(GLOBAL_ROUTE(many)), env: {} });
+    const query = (cursor?: string) => ({ id: 'q', provider: 'ats_public' as const, market: 'cn' as const, origin: 'bank_sync' as const, params: { q: '', country: '*', datePosted: 'all', ...(cursor ? { cursor } : {}) } });
+
+    const first = await adapter.fetch(query(), { now: NOW });
+    expect(first.notes).toMatchObject({ boards_read: 1, board_backlog: 20 });
+    expect(first.cursor).toBe('backlog:cn1');
+    expect(parseBacklogCursor(first.cursor)).toEqual(['cn1']);
+    expect((db.$rows('rACareerSiteSource')[0]!.lastSyncedAt as Date).getTime()).toBe(NOW.getTime());
+
+    // 10 minutes later: not due. 31 minutes later: read again. Nothing to write when the list did not change.
+    const soon = await adapter.fetch(query(first.cursor!), { now: new Date(NOW.getTime() + 10 * 60_000) });
+    expect(soon.notes).toEqual({});
+    expect(soon.cursor).toBeNull();
+    const later = new Date(NOW.getTime() + BACKLOG_INTERVAL_MS + 60_000);
+    const second = await adapter.fetch(query(first.cursor!), { now: later });
+    expect(second.notes).toMatchObject({ boards_read: 1 });
+    expect((db.$rows('rACareerSiteSource')[0]!.lastSyncedAt as Date).getTime()).toBe(later.getTime());
+    expect(second.cursor).toBeNull();
+
+    // Once a read leaves nothing unread the board leaves the list (an emptied list is written as "backlog:").
+    const few = createAtsPublicAdapter({ db: () => db as never, fetch: fakeFetch(GLOBAL_ROUTE([ghJob(1, '上海')])), env: {} });
+    const done = await few.fetch(query('backlog:cn1'), { now: new Date(later.getTime() + BACKLOG_INTERVAL_MS + 60_000) });
+    expect(done.cursor).toBe('backlog:');
+    expect(parseBacklogCursor(done.cursor)).toEqual([]);
+    // A removed or switched-off board is dropped from the list without being read.
+    const gone = await few.fetch(query('backlog:cn1,deleted-source'), { now: new Date(later.getTime() + BACKLOG_INTERVAL_MS + 120_000) });
+    expect(gone.notes).toEqual({});
+    expect(gone.cursor).toBe('backlog:cn1');
+
+    // International: a board over the per-run cap is NOT remembered and keeps the usual interval.
+    const intlRow = source({ id: 'i1', market: 'intl', boardToken: 'globalco', companyName: 'Global Co', lastSyncedAt: null });
+    const intlDb = createFakePrisma({ seed: { rACareerSiteSource: [intlRow], rAJob: [] } });
+    const intlJobs = Array.from({ length: MAX_POSTINGS_PER_BOARD + 20 }, (_, i) => ghJob(i, 'Singapore'));
+    const intlAdapter = createAtsPublicAdapter({ db: () => intlDb as never, fetch: fakeFetch(GLOBAL_ROUTE(intlJobs)), env: {} });
+    const intlQuery = (cursor?: string) => ({ ...query(cursor), market: 'intl' as const });
+    const intlFirst = await intlAdapter.fetch(intlQuery(), { now: NOW });
+    expect(intlFirst.notes).toMatchObject({ boards_read: 1, board_backlog: 20 });
+    expect(intlFirst.cursor).toBeNull();
+    const intlSoon = await intlAdapter.fetch(intlQuery('backlog:i1'), { now: new Date(NOW.getTime() + BACKLOG_INTERVAL_MS + 60_000) });
+    expect(intlSoon.notes).toEqual({});
+  });
+
+  it('splitByMarket with no market keeps every posting (callers that do not scope a read)', () => {
+    expect(splitByMarket([1, 2, 3], () => null, undefined)).toEqual({ mine: [1, 2, 3], wrongMarket: 0 });
+  });
+});
+
+// ── The verified seed list of mainland boards ─────────────────────────────
+
+describe('mainland seed boards (seeds.cn.json)', () => {
+  const file = seedFileFor('cn')!;
+
+  it('has the documented shape: unique boards, known job-board systems, a measured count and where each name comes from', () => {
+    expect(file).toMatchObject({ market: 'cn', countryCode: 'CN' });
+    expect(file.version).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    expect(file.verifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(file.boards.length).toBeGreaterThanOrEqual(10);
+    const keys = file.boards.map((b) => `${b.ats}:${b.boardToken.toLowerCase()}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const b of file.boards) {
+      expect(Object.keys(PUBLIC_ATS_NAMES)).toContain(b.ats);
+      expect(CareerSourceBodySchema.safeParse({ ats: b.ats, boardToken: b.boardToken, companyName: b.companyName, countryCode: 'CN' }).success).toBe(true);
+      expect(b.mainlandPostings).toBeGreaterThanOrEqual(1);
+      // A name is the board's own metadata, or the board token where the system publishes none.
+      if (b.nameSource === 'board_token') expect(b.companyName).toBe(b.boardToken);
+      else expect(['greenhouse', 'smartrecruiters']).toContain(b.ats);
+    }
+    expect(seedFileFor('intl')).toBeNull();
+  });
+
+  it('parseSeedFile refuses a duplicate, an unknown job-board system, a missing name and a board with no verified posting', () => {
+    const board = { ats: 'greenhouse', boardToken: 'acme', companyName: 'Acme', nameSource: 'board_metadata', mainlandPostings: 3 };
+    const base = { market: 'cn', countryCode: 'CN', version: 'v1', verifiedAt: '2026-10-11', method: 'm' };
+    expect(parseSeedFile({ ...base, boards: [board] }).boards).toHaveLength(1);
+    expect(() => parseSeedFile({ ...base, boards: [board, { ...board, boardToken: 'ACME' }] })).toThrow(/listed twice/);
+    expect(() => parseSeedFile({ ...base, boards: [{ ...board, ats: 'workday' }] })).toThrow(/unknown job-board system/);
+    expect(() => parseSeedFile({ ...base, boards: [{ ...board, companyName: ' ' }] })).toThrow(/no company name/);
+    expect(() => parseSeedFile({ ...base, boards: [{ ...board, mainlandPostings: 0 }] })).toThrow(/at least one verified posting/);
+    expect(() => parseSeedFile({ ...base, boards: [{ ...board, nameSource: 'memory' }] })).toThrow(/where its name comes from/);
+    expect(() => parseSeedFile({ ...base, market: 'tw', boards: [] })).toThrow(/market/);
+  });
+
+  it('registers only boards with at least 10 measured mainland postings: a global board with one or two stays free for the international site (review fix)', async () => {
+    expect(SEED_MIN_MAINLAND_POSTINGS).toBe(10);
+    const registered = seedBoardsToRegister(file);
+    const held = file.boards.filter((b) => !registered.includes(b));
+    expect(registered.every((b) => b.mainlandPostings >= 10)).toBe(true);
+    expect(held.every((b) => b.mainlandPostings < 10)).toBe(true);
+    // The acceptance needs at least 10 boards; the registered ones carry almost all of the measured postings.
+    expect(registered.length).toBeGreaterThanOrEqual(10);
+    const sum = (list: typeof file.boards) => list.reduce((n, b) => n + b.mainlandPostings, 0);
+    expect(sum(registered)).toBeGreaterThanOrEqual(300);
+    expect(sum(held) / sum(file.boards)).toBeLessThan(0.05);
+    // Boards RoboApply keeps the right to add (measured with 1 to 7 mainland postings).
+    expect(held.map((b) => b.boardToken)).toEqual(expect.arrayContaining(['airbnb', 'databricks', 'mongodb', 'appier', 'Canva']));
+    expect(registered.map((b) => b.boardToken)).toEqual(expect.arrayContaining(['BoschGroup', 'AbbVie', 'veeva', 'riotgames']));
+
+    const db = createFakePrisma({ seed: { rACareerSiteSource: [] } });
+    expect(await ensureSeedCareerSources(db as never, 'cn')).toMatchObject({ status: 'registered', added: registered.length });
+    const tokens = db.$rows('rACareerSiteSource').map((r) => r.boardToken);
+    for (const b of held) expect(tokens).not.toContain(b.boardToken);
+    // A held board is not remembered as offered, so a later version that registers it still can.
+    const state = JSON.parse(String(db.$rows('appConfig')[0]!.value)) as { offered: string[] };
+    expect(state.offered).toHaveLength(registered.length);
+    const later = { ...file, version: `${file.version}.jc4`, boards: file.boards.map((b) => (b.boardToken === 'airbnb' ? { ...b, mainlandPostings: 12 } : b)) };
+    expect(await ensureSeedCareerSources(db as never, 'cn', later)).toMatchObject({ status: 'registered', added: 1 });
+  });
+
+  it('registers the boards once with market cn and countryCode CN, leaves an existing board alone and never re-adds a removed one', async () => {
+    const taken = file.boards[0]!;
+    const db = createFakePrisma({ seed: { rACareerSiteSource: [source({ id: 'mine', market: 'intl', ats: taken.ats, boardToken: taken.boardToken, companyName: 'Kept as it is', countryCode: 'TW' })] } });
+    const first = await ensureSeedCareerSources(db as never, 'cn');
+    const registered = seedBoardsToRegister(file);
+    expect(first).toMatchObject({ status: 'registered', version: file.version, added: registered.length - 1, alreadyPresent: 1 });
+    const rows = db.$rows('rACareerSiteSource');
+    expect(rows.find((r) => r.id === 'mine')).toMatchObject({ market: 'intl', companyName: 'Kept as it is', countryCode: 'TW' });
+    expect(rows.filter((r) => r.id !== 'mine').every((r) => r.market === 'cn' && r.countryCode === 'CN' && r.enabled === true)).toBe(true);
+    expect(db.$rows('appConfig').map((r) => r.key)).toEqual([seedStateKey('cn')]);
+    // Same version again: nothing is added, even after an admin removed a board.
+    const removed = rows.find((r) => r.id !== 'mine')!;
+    await db.rACareerSiteSource.delete({ where: { id: removed.id } });
+    expect(await ensureSeedCareerSources(db as never, 'cn')).toMatchObject({ status: 'up_to_date', added: 0 });
+    // A later version adds only its new boards.
+    const next = { ...file, version: `${file.version}.next`, boards: [...file.boards, { ats: 'greenhouse' as const, boardToken: 'newco', companyName: 'New Co', nameSource: 'board_metadata' as const, mainlandPostings: 40 }] };
+    expect(await ensureSeedCareerSources(db as never, 'cn', next)).toMatchObject({ status: 'registered', added: 1, alreadyPresent: 0 });
+    expect(db.$rows('rACareerSiteSource').some((r) => r.boardToken === removed.boardToken && r.ats === removed.ats)).toBe(false);
+    // A market with no seed file gets none.
+    expect(await ensureSeedCareerSources(db as never, 'intl')).toMatchObject({ status: 'no_seed', added: 0 });
   });
 });
 

@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  educationFromLabel,
+  educationFromText,
   employmentTypeFromLabel,
   employmentTypeFromTitle,
   roleTypeFromTitle,
@@ -211,5 +213,99 @@ describe('review regressions: "staff" and "lead" are levels only for IC roles an
     ['Engineering Lead', 'lead_staff'],
   ])('%s → %s', (title, expected) => {
     expect(seniorityFromTitle(title)).toBe(expected);
+  });
+});
+
+describe('mainland employment types (PAR-7)', () => {
+  it.each([
+    ['全职', 'full_time'],
+    ['兼职', 'part_time'],
+    ['实习', 'internship'],
+    ['合同', 'contract'],
+    ['合同工', 'contract'],
+    ['劳务', 'contract'],
+    ['劳务派遣', 'contract'],
+    ['FULL_TIME', 'full_time'],
+    ['其他', null],
+  ])('label %s → %s', (label, expected) => {
+    expect(employmentTypeFromLabel(label)).toBe(expected);
+  });
+});
+
+describe('education (PAR-7): the lowest level a posting asks for, with its words', () => {
+  it.each([
+    ['任职要求：本科及以上学历，计算机相关专业', 'bachelor', '本科及以上学历'],
+    ['学历不限，有相关经验即可', 'none', '学历不限'],
+    ['不限学历', 'none', '不限学历'],
+    ['大专及以上学历', 'associate', '大专及以上学历'],
+    ['专科以上，三年经验', 'associate', '专科以上'],
+    ['硕士及以上学历，博士优先', 'master', '硕士及以上学历'],
+    ['任职要求：博士学位，机器学习方向', 'phd', '博士学位'],
+    ['统招本科及以上', 'bachelor', '统招本科及以上'],
+    ['全日制大专或以上学历', 'associate', '全日制大专或以上学历'],
+    ['要求本科学历，硕士优先', 'bachelor', '本科学历'],
+    ['需具备硕士学位', 'master', '硕士学位'],
+    ['学历：本科', 'bachelor', '学历:本科'],
+    // A bare level in the list under a requirement heading.
+    ['任职要求：\n1、熟悉Java\n2、本科学历，计算机相关专业', 'bachelor', '本科学历'],
+    ['【任职资格】\n- 统招本科\n- 英语流利', 'bachelor', '统招本科'],
+    ['任职资格\n全日制本科\n三年经验', 'bachelor', '全日制本科'],
+    // Several levels: the lowest stated minimum is the requirement.
+    ['研发岗硕士及以上；测试岗本科及以上', 'bachelor', '本科及以上'],
+    ['學歷要求：大專及以上', 'associate', '大專及以上'],
+  ])('%s → %s', (text, level, quote) => {
+    expect(educationFromText(text)).toEqual({ level, quote });
+  });
+
+  it.each([
+    // Review cases: the company's own staff and a benefit are not a requirement (D3).
+    '公司简介:我们团队60%成员拥有硕士学历,其中博士学位20人。岗位要求:3年经验',
+    '研发团队由多名博士毕业的科学家带领。任职要求:熟悉Java',
+    '我们为员工提供在职研究生学历教育补贴',
+    // A bare level with nothing that says it is required.
+    '博士学位，机器学习方向',
+    '本科学历，硕士优先',
+    // Under a heading that is not a requirement heading.
+    '任职要求：熟悉Java。\n福利待遇：\n提供在职研究生学历教育补贴',
+    '关于我们\n团队成员均为全日制硕士\n任职要求\n熟悉Go',
+    '加分项：\n博士学位',
+  ])('a degree the posting does not state as a requirement is not read: %s', (text) => {
+    expect(educationFromText(text)).toBeNull();
+  });
+
+  it('a degree named only as a plus, or no statement at all, is not a requirement', () => {
+    expect(educationFromText('硕士优先，有大厂经验更佳')).toBeNull();
+    expect(educationFromText('负责后端服务开发，熟悉 Java。')).toBeNull();
+    expect(educationFromText('Bachelor degree or above')).toBeNull();
+    expect(educationFromText(null)).toBeNull();
+    expect(educationFromText('')).toBeNull();
+  });
+
+  it('the quote is the posting\'s own words, at most 60 characters', () => {
+    const text = `要求：${'统招'}本科及以上学历`;
+    const out = educationFromText(text)!;
+    expect(text).toContain(out.quote);
+    expect(out.quote.length).toBeLessThanOrEqual(60);
+  });
+
+  it.each([
+    ['本科', 'bachelor'],
+    ['bachelor', 'bachelor'],
+    ['associate', 'associate'],
+    ['大专', 'associate'],
+    ['专科', 'associate'],
+    ['硕士', 'master'],
+    ['研究生', 'master'],
+    ['master', 'master'],
+    ['博士', 'phd'],
+    ['phd', 'phd'],
+    ['不限', 'none'],
+    ['none', 'none'],
+    ['high_school', null],
+    ['中专', null],
+    ['', null],
+    [null, null],
+  ])('bank label %s → %s', (label, expected) => {
+    expect(educationFromLabel(label)).toBe(expected);
   });
 });

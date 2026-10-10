@@ -7,7 +7,7 @@
 // Adapters turn raw Fantastic Jobs / JSearch / recruiter-bank rows into the
 // input shape; the existing clients' ExternalJobNormalized rows already fit it.
 
-export { asMarketHookJob, normalizeProviderJob, normalizeSkills, taxonomyIdsForTitle, MAX_SKILLS } from './normalizeProviderJob.js';
+export { asMarketHookJob, marketOfPosting, normalizeProviderJob, normalizeSkills, taxonomyIdsForTitle, MAX_SKILLS } from './normalizeProviderJob.js';
 export { inputFromBankJob, inputFromExternalJob, inputFromFantasticJob, inputFromJSearchJob } from './adapters.js';
 export type { BankJobExtras, BankJobLike } from './adapters.js';
 export { agencyFromCompanyName, resolveIsAgency } from './agency.js';
@@ -16,6 +16,8 @@ export { SIZE_BANDS, buildCompanyUpsert, sizeBandFromCount, sizeBandFromText } f
 export type { SizeBand } from './company.js';
 export { DEFAULT_EXPIRY_DAYS, buildSearchText, dedupeKey, dedupePlace, resolveExpiresAt, resolvePostedAt, toDate } from './identity.js';
 export {
+  educationFromLabel,
+  educationFromText,
   employmentTypeFromLabel,
   employmentTypeFromTitle,
   roleTypeFromTitle,
@@ -25,7 +27,7 @@ export {
   yearsFromProvider,
   yearsFromText,
 } from './level.js';
-export type { YearsRange } from './level.js';
+export type { EducationFromText, YearsRange } from './level.js';
 export { annualize, currencyFromText, normalizeSalary, parseSalaryText, payFromDescription, payPlausible, periodFromLabel, periodFromText, statesAmount, withoutPayLabel } from './salary.js';
 export type { ParsedPay, SalaryInput, SalaryResult } from './salary.js';
 export { NO_APPLICANT_COUNT_PROVIDERS, PROVIDER_META, applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, sourceFields } from './source.js';
@@ -37,6 +39,7 @@ export type {
   AtsType,
   CompanyFactsInput,
   CompanyUpsert,
+  EducationLevel,
   EmploymentType,
   FieldSource,
   NormalizeContext,

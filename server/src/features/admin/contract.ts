@@ -99,9 +99,63 @@ export interface ProviderUsageRow {
   errors: number;
 }
 
+/** What one ingest run of a job source did (counters and reason codes only). */
+export interface JobSourceRunView {
+  /** When the run finished. */
+  at: string;
+  ok: boolean;
+  /** The source's error in that run (a short code or message), else null. */
+  error: string | null;
+  /** Postings the source returned. */
+  received: number;
+  /** Rows written (new and refreshed). */
+  written: number;
+  inserted: number;
+  /** Rows archived by the source's own closures. */
+  closed: number;
+  /** Postings dropped before the write. */
+  skipped: number;
+  /**
+   * Skip tallies and counters by reason: bank_synced, bank_unpublished,
+   * bank_no_company, bank_test_posting, bank_no_public_page, wrong_market,
+   * no_apply_url, boards_read, board_errors, board_backlog …
+   */
+  notes: Record<string, number>;
+}
+
+/** One job source of a brand, from the job source registry (features/jobs/sources/registry.ts). */
+export interface JobSourceView {
+  /** 'bank_gohire' | 'bank_robohire' | 'ats_public' | 'activejobs' | 'jsearch' | 'user_import' */
+  provider: string;
+  kind: 'bank' | 'search' | 'ats' | 'import';
+  enabled: boolean;
+  /** 'db' | 'api' | 'syndication' | 'board_api' | 'rapidapi' | 'off' */
+  transport: string;
+  /** Why the source is off, as a short code; null when it is on. */
+  reason: string | null;
+  /** The latest ingest run of the source; null = it never ran. */
+  lastRun: JobSourceRunView | null;
+  /** The latest run that read something from the source (the run its skip tallies come from). */
+  lastCounted: JobSourceRunView | null;
+  /** Open public rows of the source in this brand's market (the rows the feed can list). */
+  openJobs: number;
+  /** Rows of the source archived because they have no page a candidate can open ('no_apply_target'). */
+  heldJobs: number;
+  /**
+   * Recruiter banks only: whether the bank's candidate-facing posting page is
+   * configured (`variable` names the setting). Without it the bank's rows are
+   * synced and counted but not listed. Null for every other kind.
+   */
+  publicPage: { configured: boolean; variable: string } | null;
+  /** Employer boards only: the brand's career sources. Null for every other kind. */
+  boards: { total: number; enabled: number; failing: number } | null;
+}
+
 export interface BrandHealth {
   brand: string;
   market: string;
+  /** The brand's job sources, in registry order (user_import last). */
+  sources: JobSourceView[];
   ingest: {
     /** Enabled queries whose next run time has passed. */
     due: number;

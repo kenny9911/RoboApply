@@ -10,6 +10,16 @@ export const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 export const BOARDS_PER_FETCH = 3;
 /** Postings handed to the normalizer per board and run. */
 export const MAX_POSTINGS_PER_BOARD = 500;
+/**
+ * Listing entries read per board and run for a mainland (market cn) source.
+ * A global board lists a few mainland postings among thousands, so its
+ * listing is paged to the end (up to this many entries) and filtered by
+ * location BEFORE the per-run input cap; otherwise those postings could sit
+ * outside the cap on every run and never be stored.
+ */
+export const MAX_LISTED_PER_BOARD_CN = 3000;
+/** A board that still has postings we have not stored is read again after this long instead of SYNC_INTERVAL_MS. */
+export const BACKLOG_INTERVAL_MS = 30 * 60 * 1000;
 /** Per-request timeout. */
 export const REQUEST_TIMEOUT_MS = 20_000;
 /** Largest response body read (bytes). */

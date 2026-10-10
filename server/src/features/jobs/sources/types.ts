@@ -2,10 +2,10 @@
 //
 // Every inventory source plugs into ingest through one shape:
 //   - 'search' adapters run one planned query (RAIngestQuery) against a paid
-//     or public API (Active Jobs DB, LinkedIn Job Search API, JSearch, and
-//     WP-42's public ATS boards as `ats_public`);
-//   - 'cursor' adapters sync a recruiter bank (RoboHire / GoHire) from a
-//     cursor kept in `RAIngestQuery.params.cursor`.
+//     API (Active Jobs DB, JSearch);
+//   - 'cursor' adapters sync a recruiter bank (RoboHire / GoHire) or the
+//     public employer boards (`ats_public`) from a cursor kept in
+//     `RAIngestQuery.params.cursor`.
 // An adapter only FETCHES. It never writes: normalize → upsert → dedupe →
 // enrich is ingest's job (features/jobs/ingest/pipeline.ts).
 //
@@ -51,10 +51,46 @@ export interface SourceFetchContext {
   now: Date;
   signal?: AbortSignal;
   requestId?: string;
+  /**
+   * Milliseconds the caller can still give this fetch (the ingest tick's
+   * remaining budget, less its reserve). A source that makes several requests
+   * per fetch stops within it and reports where to resume. Absent = no limit
+   * from the caller (the source's own caps apply).
+   */
+  budgetMs?: number;
 }
 
-/** RAJob.closeReason values a source's own closure may write. */
-export type SourceCloseReason = 'bank_closed' | 'source_removed';
+/**
+ * RAJob.closeReason values a source's own closure may write. All three are
+ * revived by the upsert when the source lists the posting again:
+ *   'bank_closed'      a recruiter bank closed, unpublished or re-drafted the job;
+ *   'source_removed'   a public job board stopped listing it;
+ *   'no_apply_target'  the posting has no page a candidate can open (a bank
+ *                      row whose bank has no candidate-facing posting page).
+ */
+export type SourceCloseReason = 'bank_closed' | 'source_removed' | 'no_apply_target';
+
+/** How an adapter reaches its source (shown in the admin sources panel). */
+export type SourceTransport = 'db' | 'api' | 'syndication' | 'board_api' | 'rapidapi' | 'off';
+
+/** One group of postings a source closed, with its own reason. */
+export interface SourceClosure {
+  externalIds: string[];
+  reason: SourceCloseReason;
+}
+
+/**
+ * The source's complete listing right now. Ingest archives the open public
+ * rows of the adapter's boards in the run's market whose externalId is not in
+ * `externalIds` (the listing diff the employer boards use). Only a pass that
+ * read the listing to its end may report one: a failed or cut-short pass
+ * reports none and closes nothing.
+ */
+export interface SourceListing {
+  externalIds: string[];
+  /** Why a row missing from the listing is closed (default 'bank_closed'). */
+  reason?: SourceCloseReason;
+}
 
 export interface SourceFetchResult {
   /** Postings in the normalizer's input shape. */
@@ -78,6 +114,16 @@ export interface SourceFetchResult {
    * revived if the source lists the posting again.
    */
   closeReason?: SourceCloseReason;
+  /** More closures, each with its own reason (a fetch may close for two reasons at once). */
+  closures?: SourceClosure[];
+  /** The complete listing of the source, for the listing diff (see SourceListing). */
+  listing?: SourceListing | null;
+  /**
+   * Skip tallies of this fetch, by reason ('bank_unpublished', 'bank_no_company',
+   * 'bank_test_posting', 'bank_no_public_page', 'wrong_market' …) plus
+   * informational counters ('bank_synced'). Counts only: never a posting field.
+   */
+  notes?: Record<string, number>;
   /** Set when the source was unavailable; the query is retried later and nothing is written. */
   error?: string | null;
 }
@@ -95,6 +141,10 @@ export interface JobSourceAdapter {
   supportsCountry(country: string): boolean;
   /** Daily outbound-call budget (RAProviderUsage); null = not metered (our own bank DBs). */
   dailyCallLimit(): number | null;
+  /** How the adapter reaches its source right now (default: by kind). */
+  transport?(): SourceTransport;
+  /** Why the adapter is off, as a short code ('tls_required', 'no_key', 'kill_switch' …); null when on or unknown. */
+  disabledReason?(): string | null;
   /** Never throws: failures come back as `{ jobs: [], calls, error }`. */
   fetch(query: SourceQuery, ctx: SourceFetchContext): Promise<SourceFetchResult>;
 }

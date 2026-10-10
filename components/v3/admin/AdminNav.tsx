@@ -5,10 +5,11 @@
 // `ADMIN_AREAS` is the one list of admin sub-routes, built by their owning
 // WPs: System and Reports to review (WP-74), Credits (WP-21b), Announcements
 // (WP-61, the "What's new" admin entry), Practice questions (WP-59), Coaches
-// (WP-72), Company job boards (WP-42), held invite rewards (WP-60's review
-// routes; the page is /admin/reports/invites), and GoApply's campus calendar
-// (WP-58), suspicious jobs (WP-41) and invite codes (WP-11). An area that belongs to
-// one brand shows only on that brand's host. Admins see every area of their
+// (WP-72), job sources and company job boards (WP-42; both brands since the
+// parity wave: each brand's admin sees its own sources), held invite rewards
+// (WP-60's review routes; the page is /admin/reports/invites), and GoApply's
+// campus calendar (WP-58), suspicious jobs (WP-41) and invite codes (WP-11).
+// An area that belongs to one brand shows only on that brand's host. Admins see every area of their
 // brand whether or not its feature flag is on, so they can prepare it.
 //
 //   <AdminNav variant="grid" />   the admin home: one card per area
@@ -39,7 +40,7 @@ export const ADMIN_AREAS: readonly AdminArea[] = [
   { id: 'announcements', href: '/admin/announcements', owner: 'WP-61' },
   { id: 'questions', href: '/admin/questions', owner: 'WP-59' },
   { id: 'coaches', href: '/admin/coaches', owner: 'WP-72' },
-  { id: 'sources', href: '/admin/sources', brands: ['roboapply'], owner: 'WP-42' },
+  { id: 'sources', href: '/admin/sources', owner: 'WP-42' },
   { id: 'campus', href: '/admin/campus', brands: ['goapply'], owner: 'WP-58' },
   { id: 'fraud', href: '/admin/fraud', brands: ['goapply'], owner: 'WP-41' },
   { id: 'invites', href: '/admin/invites', brands: ['goapply'], owner: 'WP-11' },

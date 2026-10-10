@@ -1,0 +1,191 @@
+{
+  "market": "cn",
+  "countryCode": "CN",
+  "version": "2026-10-11",
+  "verifiedAt": "2026-10-11",
+  "method": "Each board was read through its connector (listing only, market cn) on the date above: the documented public posting API answered 200 and at least one posting resolved to mainland China. companyName is the board's own metadata (Greenhouse board name, SmartRecruiters company name); Lever and Ashby publish no company name, so the board token is used as written (nameSource board_token) and an admin may correct it. mainlandPostings is the count measured that day, not a promise. Only boards measured with at least 10 mainland postings are registered (seeds.ts SEED_MIN_MAINLAND_POSTINGS): a board is read for one site in this wave, so a global board with a handful of mainland postings stays free for the international site. The others are kept here as measured.",
+  "boards": [
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "BoschGroup",
+      "companyName": "Bosch Group",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 1317
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "AbbVie",
+      "companyName": "AbbVie",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 149
+    },
+    {
+      "ats": "lever",
+      "boardToken": "veeva",
+      "companyName": "veeva",
+      "nameSource": "board_token",
+      "mainlandPostings": 54
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "WesternDigital",
+      "companyName": "Western Digital",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 45
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "riotgames",
+      "companyName": "Riot Games",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 39
+    },
+    {
+      "ats": "ashby",
+      "boardToken": "airwallex",
+      "companyName": "airwallex",
+      "nameSource": "board_token",
+      "mainlandPostings": 35
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "flexport",
+      "companyName": "Flexport",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 25
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "Continental",
+      "companyName": "Continental",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 24
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "NielsenIQ",
+      "companyName": "NielsenIQ",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 20
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "payoneer",
+      "companyName": "Payoneer",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 19
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "Wabtec",
+      "companyName": "Wabtec",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 16
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "coupang",
+      "companyName": "Coupang",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 13
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "Ubisoft2",
+      "companyName": "Ubisoft",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 13
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "Eurofins",
+      "companyName": "Eurofins",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 10
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "scopely",
+      "companyName": "Scopely",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 7
+    },
+    {
+      "ats": "smartrecruiters",
+      "boardToken": "Canva",
+      "companyName": "Canva",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 6
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "mongodb",
+      "companyName": "MongoDB",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 5
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "agoda",
+      "companyName": "Agoda",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 5
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "adyen",
+      "companyName": "Adyen",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 3
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "moloco",
+      "companyName": "Moloco",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 2
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "applovin",
+      "companyName": "AppLovin",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 2
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "airbnb",
+      "companyName": "Airbnb",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 2
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "databricks",
+      "companyName": "Databricks",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 2
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "epicgames",
+      "companyName": "Epic Games",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 2
+    },
+    {
+      "ats": "lever",
+      "boardToken": "weride",
+      "companyName": "weride",
+      "nameSource": "board_token",
+      "mainlandPostings": 2
+    },
+    {
+      "ats": "greenhouse",
+      "boardToken": "appier",
+      "companyName": "Appier",
+      "nameSource": "board_metadata",
+      "mainlandPostings": 1
+    }
+  ]
+}

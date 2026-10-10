@@ -287,3 +287,86 @@ describe('review regressions: no pay from benefit lines (D3)', () => {
     expect(normalizeSalary({ text: '面議，年薪 104萬以上', country: 'TW' })).toMatchObject({ salaryMin: 1_040_000, salaryMax: null, salaryAnnualMin: 1_040_000, salaryAnnualMax: null });
   });
 });
+
+describe('mainland pay as posted (PAR-7; MARKET_STRATEGY §1.5)', () => {
+  it("'1.5-2.5万' reads as 15,000-25,000 CNY a month", () => {
+    expect(parseSalaryText('1.5-2.5万', { market: 'cn' })).toMatchObject({ min: 15000, max: 25000, currency: 'CNY', period: 'month', months: null });
+    expect(normalizeSalary({ text: '1.5-2.5万', market: 'cn', country: 'CN' })).toMatchObject({
+      salaryMin: 15000,
+      salaryMax: 25000,
+      salaryCurrency: 'CNY',
+      salaryPeriod: 'month',
+      salaryAnnualMin: 180000,
+      salaryAnnualMax: 300000,
+      salaryDisclosed: true,
+      salaryText: '1.5-2.5万',
+      salarySource: 'posting_text',
+    });
+    // The same rule for a mainland posting read by its country alone, and for a K figure on a pay line.
+    expect(parseSalaryText('1.5-2.5万', { country: 'CN' })).toMatchObject({ period: 'month', currency: 'CNY' });
+    expect(normalizeSalary({ description: '薪资：15-25K', market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryPeriod: 'month', salaryCurrency: 'CNY' });
+  });
+
+  it("'K·N薪' keeps its months and is shown as posted", () => {
+    expect(normalizeSalary({ text: '18-28K·15薪', market: 'cn' })).toMatchObject({
+      salaryMin: 18000,
+      salaryMax: 28000,
+      salaryPeriod: 'month',
+      salaryMonths: 15,
+      salaryAnnualMin: 270000,
+      salaryAnnualMax: 420000,
+      salaryText: '18-28K·15薪',
+    });
+  });
+
+  it('a stated period always wins, and a large 万 figure with no period keeps none (it may be a year)', () => {
+    expect(parseSalaryText('30-50万/年', { market: 'cn' })).toMatchObject({ period: 'year' });
+    expect(parseSalaryText('30-50万', { market: 'cn' })).toMatchObject({ min: 300000, max: 500000, period: null });
+    expect(normalizeSalary({ text: '30-50万', market: 'cn' })).toMatchObject({ salaryMin: 300000, salaryMax: 500000, salaryPeriod: null, salaryAnnualMin: null, salaryAnnualMax: null });
+    expect(parseSalaryText('200-300元/天', { market: 'cn' })).toMatchObject({ period: 'day' });
+  });
+
+  it.each([
+    ['5-8万', 50000, 80000],
+    ['6万-9万', 60000, 90000],
+    ['8-10万', 80000, 100000],
+    // The boundary: a top of exactly 50,000 keeps no period.
+    ['3-5万', 30000, 50000],
+    ['30-50K', 30000, 50000],
+  ])('a figure whose top is 50,000 or more with no period keeps none (it may be a year): %s', (text, min, max) => {
+    expect(parseSalaryText(text, { market: 'cn', country: 'CN' })).toMatchObject({ min, max, currency: 'CNY', period: null });
+    expect(normalizeSalary({ text, market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: min, salaryMax: max, salaryPeriod: null, salaryAnnualMin: null, salaryAnnualMax: null, salaryText: text });
+  });
+
+  it('just under the boundary is still a month, and a stated period decides above it', () => {
+    expect(parseSalaryText('3-4.9万', { market: 'cn' })).toMatchObject({ min: 30000, max: 49000, period: 'month' });
+    expect(parseSalaryText('5-8万/月', { market: 'cn' })).toMatchObject({ min: 50000, max: 80000, period: 'month' });
+    expect(parseSalaryText('年薪5-8万', { market: 'cn' })).toMatchObject({ min: 50000, max: 80000, period: 'year' });
+  });
+
+  it("a bare '15-25K' on a mainland row is yuan a month, with no Chinese word in it", () => {
+    expect(parseSalaryText('15-25K', { market: 'cn', country: 'CN' })).toMatchObject({ min: 15000, max: 25000, currency: 'CNY', period: 'month' });
+    expect(parseSalaryText('15-25K', { market: 'cn' })).toMatchObject({ currency: 'CNY', period: 'month' });
+    expect(parseSalaryText('15-25K', { country: 'CN' })).toMatchObject({ currency: 'CNY', period: 'month' });
+    // A currency the text names always wins.
+    expect(parseSalaryText('USD 15-25K', { market: 'cn', country: 'CN' })).toMatchObject({ currency: 'USD', period: null });
+  });
+
+  it('the monthly convention is mainland-only: the same text elsewhere keeps no period', () => {
+    expect(parseSalaryText('1.5-2.5万', { market: 'intl', country: 'TW' })).toMatchObject({ currency: 'TWD', period: null });
+    expect(parseSalaryText('15-25K', { market: 'intl', country: 'US' })).toMatchObject({ period: null });
+  });
+
+  it('a bare number with no unit is not filterable: it is never stored as pay we can compare', () => {
+    expect(parseSalaryText('15000-25000', { market: 'cn', country: 'CN' })).toBeNull();
+    expect(normalizeSalary({ text: '15000-25000', market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: null, salaryAnnualMin: null, salaryAnnualMax: null, salaryDisclosed: false });
+    // Bare provider figures (an ATS field with no currency or period) keep the numbers as stated but no annual figure.
+    expect(normalizeSalary({ min: 15000, max: 25000, market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryCurrency: null, salaryPeriod: null, salaryAnnualMin: null, salaryAnnualMax: null });
+  });
+
+  it('no pay text means salary null: never 面议 unless the posting says it', () => {
+    const none = normalizeSalary({ description: '负责后端服务开发。', market: 'cn', country: 'CN' });
+    expect(none).toMatchObject({ salaryMin: null, salaryMax: null, salaryDisclosed: false, salaryText: null });
+    expect(normalizeSalary({ text: '面议', market: 'cn' })).toMatchObject({ salaryDisclosed: false, salaryText: '面议', salaryMin: null });
+  });
+});

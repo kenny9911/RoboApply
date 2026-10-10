@@ -11,7 +11,7 @@
 // "3-5年工作经验", "三年以上经验"); seniority falls back to the years band
 // when the title states no level.
 
-import type { EmploymentType, FieldSource, RoleType, Seniority } from './types.js';
+import type { EducationLevel, EmploymentType, FieldSource, RoleType, Seniority } from './types.js';
 
 export interface Sourced<T> {
   value: T;
@@ -177,7 +177,7 @@ export function employmentTypeFromLabel(raw: string | readonly string[] | null |
   if (s.startsWith('intern') || /实习|實習/.test(s)) return 'internship';
   if (s.startsWith('fulltime') || s === 'permanent' || s === 'regular' || /全职|全職|正职|正職/.test(s)) return 'full_time';
   if (s.startsWith('parttime') || /兼职|兼職|计时|計時/.test(s)) return 'part_time';
-  if (s.startsWith('contract') || s.startsWith('temporary') || s === 'temp' || s === 'freelance' || /合同|約聘|约聘|派遣|临时|臨時|外包/.test(s)) return 'contract';
+  if (s.startsWith('contract') || s.startsWith('temporary') || s === 'temp' || s === 'freelance' || /合同|劳务|勞務|約聘|约聘|派遣|临时|臨時|外包/.test(s)) return 'contract';
   return null;
 }
 
@@ -186,7 +186,144 @@ export function employmentTypeFromTitle(title: string): EmploymentType | null {
   const t = title.normalize('NFKC');
   if (/\b(intern|internship|co-?op)\b|实习|實習/i.test(t)) return 'internship';
   if (/\bpart[- ]?time\b|兼职|兼職/i.test(t)) return 'part_time';
-  if (/\b(contract|contractor|temporary|temp|freelance|fixed[- ]term)\b|约聘|約聘|派遣/i.test(t)) return 'contract';
+  if (/\b(contract|contractor|temporary|temp|freelance|fixed[- ]term)\b|约聘|約聘|派遣|劳务|勞務/i.test(t)) return 'contract';
   if (/\bfull[- ]?time\b|全职|全職/i.test(t)) return 'full_time';
   return null;
+}
+
+// ── Education ──────────────────────────────────────────────────────────────
+
+const EDUCATION_RANK: Readonly<Record<EducationLevel, number>> = { none: 0, associate: 1, bachelor: 2, master: 3, phd: 4 };
+
+/**
+ * A provider's education label → our level. Recruiter banks send their own
+ * enum or the Chinese word ("bachelor", "associate", "本科", "不限"). A value
+ * we have no level for (high school, anything unknown) is null, never a guess.
+ */
+export function educationFromLabel(label: string | null | undefined): EducationLevel | null {
+  if (typeof label !== 'string') return null;
+  const s = label.normalize('NFKC').toLowerCase().trim();
+  if (!s) return null;
+  if (s === 'none' || /^(不限|学历不限|學歷不限|不限学历|不限學歷|无要求|無要求)$/.test(s)) return 'none';
+  if (/博士|^phd$|^ph\.d\.?$|^doctor(ate|al)?$/.test(s)) return 'phd';
+  if (/硕士|碩士|研究生|^master'?s?$|^postgraduate$/.test(s)) return 'master';
+  if (/本科|学士|學士|^bachelor'?s?$|^undergraduate$/.test(s)) return 'bachelor';
+  if (/大专|大專|专科|專科|^associate'?s?$|^college$|^junior[ _]college$/.test(s)) return 'associate';
+  return null;
+}
+
+const DEGREE_WORDS: [EducationLevel, string][] = [
+  ['phd', '博士'],
+  ['master', '硕士|碩士|研究生'],
+  ['bachelor', '本科|学士|學士'],
+  ['associate', '大专|大專|专科|專科'],
+];
+const ANY_DEGREE = DEGREE_WORDS.map(([, w]) => w).join('|');
+/** "统招本科及以上", "全日制大专或以上学历", "本科以上": a stated minimum. */
+const EDUCATION_MIN_RE = new RegExp(String.raw`(?:统招|統招|全日制)?(?:${ANY_DEGREE})(?:学历|學歷|学位|學位)?\s*(?:及|或|\(含\)|含)?\s*以上(?:学历|學歷|学位|學位)?`, 'g');
+/** "学历:硕士", "学历要求：统招本科", "学历要求本科": the posting labels the level itself. */
+const EDUCATION_LABELLED_RE = new RegExp(
+  String.raw`(?:学历|學歷|学位|學位)(?:要求\s*[:：]?|\s*[:：])\s*(?:统招|統招|全日制)?(?:${ANY_DEGREE})`,
+  'g',
+);
+/**
+ * "本科学历", "统招本科", "博士学位": a bare level. Postings also use these
+ * words about the company ("团队成员拥有硕士学历") and about benefits
+ * ("在职研究生学历教育补贴"), so a bare level counts only where the posting is
+ * stating a requirement (`statesRequirement`). "博士毕业" is never read: it
+ * describes a person, not a requirement.
+ */
+const EDUCATION_BARE_RE = new RegExp(
+  String.raw`(?:统招|統招|全日制)(?:${ANY_DEGREE})(?:学历|學歷|学位|學位)?|(?:${ANY_DEGREE})(?:学历|學歷|学位|學位)`,
+  'g',
+);
+/** Words that make a clause a requirement. */
+const REQUIREMENT_WORD_RE = /要求|任职|任職|资格|資格|必须|必須|需|须|須|具备|具備/;
+/** Sentence and line ends: a clause never crosses one. */
+const CLAUSE_END_RE = /[。；;！!？?\n\r]/;
+/**
+ * Section labels: "任职要求：", "一、岗位职责：", "【公司简介】", or a known
+ * heading on a line of its own ("任职资格"). Group 1, 2 or 3 is the label. A
+ * numbered list item ("1、专业：计算机") is not a section label.
+ */
+const SECTION_LABEL_RE = /(?:^|[\n\r。；;])[ \t　]*(?:[一二三四五六七八九十]+[、.．)）][ \t]*)?(?:【([^】\n\r]{2,12})】|([^\s:：。；;，,、\d【】]{2,12})[ \t]*[:：]|((?:任职|任職|岗位|崗位|职位|職位|工作|应聘|應聘|招聘|基本|公司|企业|企業|团队|團隊|薪资|薪資|薪酬|福利|关于|關於|我们|我們|加分|优先|優先)[^\s:：。；;，,、\d【】]{0,8})[ \t]*(?=[\n\r]))/g;
+const REQUIREMENT_LABEL_RE = /要求|资格|資格|条件|條件/;
+const NOT_REQUIREMENT_LABEL_RE = /优先|優先|加分|福利|待遇/;
+/** How far below a requirement heading a bare level is still read as part of its list. */
+const REQUIREMENT_SECTION_SPAN = 400;
+
+/**
+ * True when the text at [index, end) sits where the posting states a
+ * requirement: its own clause says so ("要求本科学历", "需具备硕士学位"), or the
+ * nearest section label above it is a requirement heading ("任职要求：\n1、
+ * 本科学历"). A company introduction or a benefits list is neither.
+ */
+function statesRequirement(s: string, index: number, end: number): boolean {
+  let from = index;
+  while (from > 0 && !CLAUSE_END_RE.test(s[from - 1]!)) from -= 1;
+  let to = end;
+  while (to < s.length && !CLAUSE_END_RE.test(s[to]!)) to += 1;
+  const clause = s.slice(from, to);
+  // A label inside the clause decides it ("公司简介：…硕士学历" is not a requirement; "任职要求：本科学历" is).
+  const own = /^[ \t\u3000]*(?:[一二三四五六七八九十\d]+[、.．)）][ \t]*)?(?:【([^】]{2,12})】|([^\s:：，,、\d【】]{2,12})[ \t]*[:：])/.exec(clause);
+  const ownLabel = own ? (own[1] ?? own[2] ?? '') : '';
+  if (ownLabel) {
+    if (REQUIREMENT_LABEL_RE.test(ownLabel) && !NOT_REQUIREMENT_LABEL_RE.test(ownLabel)) return true;
+    if (!/学历|學歷|学位|學位/.test(ownLabel)) return REQUIREMENT_WORD_RE.test(clause.slice(own![0].length));
+  }
+  if (REQUIREMENT_WORD_RE.test(clause)) return true;
+  let label = '';
+  let labelEnd = -1;
+  for (const m of s.slice(0, from).matchAll(SECTION_LABEL_RE)) {
+    label = m[1] ?? m[2] ?? m[3] ?? '';
+    labelEnd = (m.index ?? 0) + m[0].length;
+  }
+  if (!label || index - labelEnd > REQUIREMENT_SECTION_SPAN) return false;
+  return REQUIREMENT_LABEL_RE.test(label) && !NOT_REQUIREMENT_LABEL_RE.test(label);
+}
+const EDUCATION_ANY_RE = /学历不限|學歷不限|不限学历|不限學歷|学历要求\s*[:：]?\s*不限|學歷要求\s*[:：]?\s*不限|无学历要求|無學歷要求/;
+/** A degree named as a plus ("硕士优先", "博士加分"), not as the requirement. */
+const EDUCATION_PREFERRED_RE = /^[^，,。；;、\s]{0,4}(?:优先|優先|加分|更佳|为佳|為佳)/;
+
+function levelOfPhrase(phrase: string): EducationLevel | null {
+  for (const [level, words] of DEGREE_WORDS) if (new RegExp(words).test(phrase)) return level;
+  return null;
+}
+
+export interface EducationFromText {
+  level: EducationLevel;
+  /** The posting's own words (≤ 60 characters). */
+  quote: string;
+}
+
+/**
+ * The lowest education a Chinese posting states it requires, with the words
+ * that say so: "不限学历" → none, "大专及以上" → associate, "统招本科及以上"
+ * → bachelor, "硕士及以上学历" → master, "要求博士学位" → phd. A degree named
+ * only as a plus ("硕士优先") is not the requirement, and neither is a degree
+ * the posting mentions about its team or its benefits. When a posting states
+ * several levels the lowest one is the requirement ("本科及以上，硕士优先").
+ * Null when the text states none (an honest unknown beats a guess, D3).
+ */
+export function educationFromText(text: string | null | undefined): EducationFromText | null {
+  if (!text) return null;
+  const s = text.normalize('NFKC');
+  const any = s.match(EDUCATION_ANY_RE);
+  const found: Array<EducationFromText & { index: number }> = [];
+  // A stated minimum ("…及以上") is the requirement; then a labelled level ("学历：本科");
+  // a bare level is read last, and only where the posting states a requirement.
+  for (const re of [EDUCATION_MIN_RE, EDUCATION_LABELLED_RE, EDUCATION_BARE_RE]) {
+    for (const m of s.matchAll(re)) {
+      const index = m.index ?? 0;
+      const end = index + m[0].length;
+      if (EDUCATION_PREFERRED_RE.test(s.slice(end, end + 10))) continue;
+      if (re === EDUCATION_BARE_RE && !statesRequirement(s, index, end)) continue;
+      const level = levelOfPhrase(m[0]);
+      if (level) found.push({ level, quote: m[0].trim().slice(0, 60), index });
+    }
+    if (found.length) break;
+  }
+  if (!found.length) return any ? { level: 'none', quote: any[0].trim().slice(0, 60) } : null;
+  found.sort((a, b) => EDUCATION_RANK[a.level] - EDUCATION_RANK[b.level] || a.index - b.index);
+  return { level: found[0]!.level, quote: found[0]!.quote };
 }

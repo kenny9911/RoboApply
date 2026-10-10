@@ -21,6 +21,7 @@
 // The RAPID_API_KEY value is never logged and never echoed anywhere.
 
 import { logger } from '../../../services/LoggerService.js';
+import { employmentTypeFromLabel } from '../../../features/jobs/normalize/level.js';
 import type { ExternalJobNormalized } from './raExternalJobTypes.js';
 
 export type { ExternalJobNormalized } from './raExternalJobTypes.js';
@@ -90,12 +91,12 @@ function deepClean<T>(value: T): T {
 function mapEmployment(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const key = raw.toUpperCase().replace(/[^A-Z]/g, '');
-  if (!key) return null;
   if (key === 'FULLTIME') return 'full_time';
   if (key === 'PARTTIME') return 'part_time';
   if (key === 'CONTRACTOR' || key === 'CONTRACT') return 'contract';
   if (key.startsWith('INTERN')) return 'internship';
-  return null;
+  // Chinese display strings (全职, 兼职, 实习, 合同 / 劳务): the one mapping in features/jobs/normalize/level.ts.
+  return employmentTypeFromLabel(raw);
 }
 
 // The /search payload has NO currency field — infer from the request country,

@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     const planned = planQueries(mergeTuples(demand, seedTuples(brand)), adapters);
     console.log(`planned ${planned.length} queries (${demand.length} demand tuples); first ${Math.min(limit, planned.length)}:`);
     for (const p of planned.slice(0, limit)) {
-      const wire = p.provider === 'activejobs' || p.provider === 'linkedin' || p.provider === 'jsearch' ? rapidApiSearchParams(p.params, p.provider) : null;
+      const wire = p.provider === 'activejobs' || p.provider === 'jsearch' ? rapidApiSearchParams(p.params, p.provider) : null;
       console.log(JSON.stringify({ provider: p.provider, origin: p.origin, priority: p.priority, params: p.params, wire }));
     }
     return;

@@ -1,8 +1,8 @@
 // server/src/features/jobs/sources/atsPublic/hooks.ts — public ATS boards and
 // Taiwan market hooks (WP-42), statically imported by features/jobs/marketHooks.ts.
 //
-//   afterNormalize  ats_public postings: sourceName = company + job board
-//                   ("Appier · Greenhouse"), no separate "original source".
+//   afterNormalize  ats_public postings (both markets): sourceName = company +
+//                   job board ("Appier · Greenhouse"), no separate "original source".
 //   afterEnrich     Taiwan jobs: work-authorization tags (可協助申請工作許可,
 //                   就業金卡) in RAJob.marketTags, each with a verbatim quote
 //                   from the posting; tags whose quote left the posting go.
@@ -157,7 +157,9 @@ export function createAtsPublicHooks(deps: AtsPublicHookDeps = {}): MarketHookSe
     id: 'ats_public',
     // Every intl enrich call: the enrich row carries no location, so whether
     // the job is in Taiwan is decided inside afterEnrich (see header).
-    appliesTo: (job, ctx) => job.market === 'intl' && (job.provider === 'ats_public' || ctx?.stage === 'enrich' || isTaiwanJob(job)),
+    // ats_public postings of either market get their source name (company + job board);
+    // the Taiwan parts below stay international-only.
+    appliesTo: (job, ctx) => job.provider === 'ats_public' || (job.market === 'intl' && (ctx?.stage === 'enrich' || isTaiwanJob(job))),
     afterNormalize: (job) => withAtsSourceName(job),
     async afterEnrich(job) {
       const id = s(job.id);

@@ -3,7 +3,11 @@
 // Unit tests for the pure heart of the cross-bank job-search agent team.
 // Run: npx vitest run server/src/roboapply/v2/lib/raCrossBankMatch.test.ts
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+
+vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
+
+import { logger } from '../../../services/LoggerService.js';
 import {
   canonicalizeTag,
   parseSeniorityBand,
@@ -21,6 +25,11 @@ import {
   mapRecruiterJobToRAJobUpsert,
   computeRaiseOddsLevers,
   synthesizeApplyUrl,
+  bankMarket,
+  bankPublicJobUrl,
+  bankPublicJobUrlProblems,
+  bankPublicJobUrlTemplate,
+  resetBankPublicJobUrlWarningsForTests,
   PRE_FLOOR,
 } from './raCrossBankMatch.js';
 import type { BankJobRow, CrossBankExplorerPlan, CandidateSignals, PreMatchedCandidate } from '../types/crossBank.js';
@@ -282,21 +291,60 @@ describe('mapWithConcurrency', () => {
 });
 
 describe('mapRecruiterJobToRAJobUpsert', () => {
-  it('maps a recruiter job to an idempotent RAJob upsert with bank sourceBoard', () => {
-    const cand: PreMatchedCandidate = {
-      bank: 'gohire', job: job({ id: 'gh42', salaryPeriod: 'monthly' }).job,
-      company: { companyName: 'Acme', companyLogoUrl: 'https://logo' },
-      retrievedVia: 'tag', preScore: 70, tier: 'core', requiredCoverage: 1, keywordCoverage: 1, preferredOverlap: 0,
-      projectedScore: 80, inviteBar: 72, barIsDefault: false, fingerprint: 'fp', alsoOnBank: 'robohire', recency01: 1,
-      missingRequiredTags: ['rust'], missingRequiredKeywords: [],
-    };
-    const args = mapRecruiterJobToRAJobUpsert(cand);
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetBankPublicJobUrlWarningsForTests();
+  });
+
+  const cand = (bank: 'gohire' | 'robohire' = 'gohire'): PreMatchedCandidate => ({
+    bank, job: job({ id: 'gh42', salaryPeriod: 'monthly' }).job,
+    company: { companyName: 'Acme', companyLogoUrl: 'https://logo' },
+    retrievedVia: 'tag', preScore: 70, tier: 'core', requiredCoverage: 1, keywordCoverage: 1, preferredOverlap: 0,
+    projectedScore: 80, inviteBar: 72, barIsDefault: false, fingerprint: 'fp', alsoOnBank: 'robohire', recency01: 1,
+    missingRequiredTags: ['rust'], missingRequiredKeywords: [],
+  });
+
+  it('maps a recruiter job to an idempotent RAJob upsert with bank sourceBoard and the bank\'s posting page as the apply URL', () => {
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://example.test/p/{id}');
+    const args = mapRecruiterJobToRAJobUpsert(cand())!;
     expect(args.where.externalId_sourceBoard).toEqual({ externalId: 'gh42', sourceBoard: 'gohire' });
     expect(args.create.sourceBoard).toBe('gohire');
     expect(args.create.salaryPeriod).toBe('month'); // monthly → month
     expect((args.create.seedTags as any).alsoOnBank).toBe('robohire');
     expect((args.create.seedTags as any).missingRequiredTags).toEqual(['rust']);
-    expect(String(args.create.applyUrl)).toContain('/jobs/gh42');
+    expect(args.create.applyUrl).toBe('https://example.test/p/gh42');
+    expect(args.update.applyUrl).toBe('https://example.test/p/gh42');
+  });
+
+  it('a row materialised from the GoHire bank has market cn on create and on update (invisible to RoboApply\'s feed); RoboHire is intl', () => {
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://example.test/p/{id}');
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.example.test/r/{id}');
+    const gh = mapRecruiterJobToRAJobUpsert(cand('gohire'))!;
+    expect(gh.create.market).toBe('cn');
+    expect(gh.update.market).toBe('cn');
+    const rh = mapRecruiterJobToRAJobUpsert(cand('robohire'))!;
+    expect(rh.create.market).toBe('intl');
+    expect(rh.update.market).toBe('intl');
+    expect(bankMarket('gohire')).toBe('cn');
+    expect(bankMarket('robohire')).toBe('intl');
+  });
+
+  it('skips a candidate with no apply URL: the bank has no candidate-facing posting page', () => {
+    expect(mapRecruiterJobToRAJobUpsert(cand('gohire'))).toBeNull();
+    expect(mapRecruiterJobToRAJobUpsert(cand('robohire'))).toBeNull();
+    // The old base-URL variables pointed at the missing /jobs/<id> route: they no longer produce a link.
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_BASE_URL', 'https://www.gohire.top');
+    expect(mapRecruiterJobToRAJobUpsert(cand('gohire'))).toBeNull();
+  });
+
+  it('maps Chinese employment labels like the English ones', () => {
+    expect(normalizeEmploymentType('全职')).toBe('full_time');
+    expect(normalizeEmploymentType('兼职')).toBe('part_time');
+    expect(normalizeEmploymentType('实习')).toBe('internship');
+    expect(normalizeEmploymentType('合同')).toBe('contract');
+    expect(normalizeEmploymentType('劳务')).toBe('contract');
+    expect(normalizeEmploymentType('full-time')).toBe('full_time');
+    expect(normalizeEmploymentType('')).toBeNull();
   });
 });
 
@@ -310,9 +358,55 @@ describe('computeRaiseOddsLevers', () => {
   });
 });
 
-describe('synthesizeApplyUrl', () => {
-  it('builds a bank-scoped job url', () => {
-    expect(synthesizeApplyUrl('robohire', 'abc')).toMatch(/\/jobs\/abc$/);
-    expect(synthesizeApplyUrl('gohire', 'xyz')).toMatch(/\/jobs\/xyz$/);
+describe('the bank posting page (no default: neither bank has a /jobs/<id> page)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetBankPublicJobUrlWarningsForTests();
+    vi.mocked(logger.warn).mockClear();
+  });
+
+  it('with no template there is no apply URL, for either bank', () => {
+    expect(synthesizeApplyUrl('robohire', 'abc')).toBeNull();
+    expect(synthesizeApplyUrl('gohire', 'xyz')).toBeNull();
+    expect(bankPublicJobUrl('gohire', 'xyz', {})).toBeNull();
+    expect(bankPublicJobUrlTemplate('robohire', {})).toBeNull();
+  });
+
+  it('builds the URL from each bank\'s own template, encoding the id into every {id}', () => {
+    const env = { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://example.test/p/{id}', ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://jobs.example.test/r/{id}?ref={id}' };
+    expect(bankPublicJobUrl('gohire', 'xyz', env)).toBe('https://example.test/p/xyz');
+    expect(bankPublicJobUrl('robohire', 'a b/c', env)).toBe('https://jobs.example.test/r/a%20b%2Fc?ref=a%20b%2Fc');
+    expect(bankPublicJobUrl('gohire', '  ', env)).toBeNull();
+    // One bank's template never serves the other.
+    expect(bankPublicJobUrl('robohire', 'abc', { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://example.test/p/{id}' })).toBeNull();
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://example.test/p/{id}');
+    expect(synthesizeApplyUrl('gohire', 'xyz')).toBe('https://example.test/p/xyz');
+    expect(synthesizeApplyUrl('robohire', 'abc')).toBeNull();
+  });
+
+  it('a template must be https and contain {id}; an unusable one gives no URL and is reported by name', () => {
+    for (const bad of ['http://example.test/p/{id}', 'https://example.test/p/', 'not a url {id}', '{id}']) {
+      const env = { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: bad };
+      expect(bankPublicJobUrl('gohire', 'x', env)).toBeNull();
+      expect(bankPublicJobUrlProblems(env)).toHaveLength(1);
+      expect(bankPublicJobUrlProblems(env)[0]).toMatchObject({ bank: 'gohire', variable: 'GOHIRE_PUBLIC_JOB_URL_TEMPLATE' });
+    }
+    expect(bankPublicJobUrlProblems({ GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://example.test/p/{id}' })).toEqual([]);
+  });
+
+  it('the old base-URL variables are ignored, with one warning that names the new variable', () => {
+    const env = { GOHIRE_PUBLIC_JOB_BASE_URL: 'https://www.gohire.top', ROBOHIRE_PUBLIC_JOB_BASE_URL: 'https://www.robohire.io' };
+    expect(bankPublicJobUrlProblems(env)).toEqual([
+      { bank: 'robohire', variable: 'ROBOHIRE_PUBLIC_JOB_BASE_URL', problem: 'legacy_base_url_ignored', use: 'ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE' },
+      { bank: 'gohire', variable: 'GOHIRE_PUBLIC_JOB_BASE_URL', problem: 'legacy_base_url_ignored', use: 'GOHIRE_PUBLIC_JOB_URL_TEMPLATE' },
+    ]);
+    const warn = vi.mocked(logger.warn);
+    warn.mockClear();
+    for (let i = 0; i < 3; i += 1) {
+      expect(bankPublicJobUrl('gohire', 'x', env)).toBeNull();
+      expect(bankPublicJobUrl('robohire', 'x', env)).toBeNull();
+    }
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.map((c) => String(c[1])).join(' ')).toMatch(/GOHIRE_PUBLIC_JOB_BASE_URL is ignored.*GOHIRE_PUBLIC_JOB_URL_TEMPLATE/s);
   });
 });

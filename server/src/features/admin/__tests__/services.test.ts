@@ -14,7 +14,7 @@ vi.mock('../../../lib/prisma.js', () => ({
 }));
 
 import { ALERT_LEVELS, type BrandHealth, type SystemStatusResponse } from '../contract.js';
-import { brandHealth, buildSystemStatus, evaluateAlerts, healthWindow } from '../system.js';
+import { brandHealth, buildSystemStatus, evaluateAlerts, healthWindow, jobSourcesHealth, type SourceLister } from '../system.js';
 import { ADMIN_REVIEW_KIND, KEEP_DECISION_HOLDS, buildItem, clearedRuleSet, createPrismaReportsStore, intlScamFlags, listReports, resolveReport, reviewedElsewhere, type ReportJobRow, type ReportsStore, type DecisionRow } from '../reports.js';
 import { costsCsv, getCosts, resolveCostRange } from '../costs.js';
 import { listAdminFeedback, type FeedbackStore } from '../feedback.js';
@@ -64,10 +64,72 @@ describe('brandHealth', () => {
   });
 });
 
+// ── Job sources per brand (PAR-7) ─────────────────────────────────────────
+
+/** A registry description for the tests (the real registry is tested in jobs/ingest/adapters). */
+function fakeSource(provider: string, kind: 'bank' | 'ats' | 'search' | 'import', status: { enabled: boolean; transport: string; reason: string | null }, sourceBoards: string[] = []) {
+  return { brand: 'goapply', market: 'cn', provider, kind, transport: status.transport, sourceBoards, adapter: null, enabled: () => status.enabled, status: () => status } as never;
+}
+const run = (over: Record<string, unknown> = {}) => ({ at: '2026-10-10T11:50:00.000Z', ok: true, error: null, transport: 'api', queries: 1, calls: 4, received: 0, written: 0, inserted: 0, closed: 0, skipped: 0, notes: {}, ...over });
+
+describe('job sources per brand (the admin sources panel)', () => {
+  const goSources: SourceLister = () => [
+    fakeSource('bank_gohire', 'bank', { enabled: true, transport: 'api', reason: null }, ['gohire']),
+    fakeSource('ats_public', 'ats', { enabled: true, transport: 'board_api', reason: null }, ['greenhouse', 'lever', 'ashby', 'smartrecruiters']),
+    fakeSource('user_import', 'import', { enabled: true, transport: 'off', reason: null }),
+  ];
+
+  it('GoApply: the GoHire bank over the API with its skip tallies and the reason its rows are not listed; the employer boards with real counters', async () => {
+    const counted = run({ notes: { bank_synced: 181, bank_no_public_page: 181, bank_unpublished: 1092 } });
+    const store = fakeSystemStore(
+      fakeSystemData({
+        sourceStatuses: {
+          bank_gohire: { last: run({ at: '2026-10-10T11:55:00.000Z' }), counted: counted as never } as never,
+          ats_public: { last: run({ transport: 'board_api', received: 412, written: 398, inserted: 398, skipped: 14, notes: { boards_read: 26, wrong_market: 9, no_apply_url: 5 } }), counted: null } as never,
+        },
+        sourceJobs: { gohire: { open: 0, held: 6 }, greenhouse: { open: 120, held: 0 }, smartrecruiters: { open: 278, held: 0 } },
+        careerSources: { total: 26, enabled: 26, failing: 1 },
+      }),
+    );
+    const sources = await jobSourcesHealth(store, 'goapply', {}, goSources);
+    expect(sources.map((s) => s.provider)).toEqual(['bank_gohire', 'ats_public', 'user_import']);
+    const bank = sources[0]!;
+    expect(bank).toMatchObject({ kind: 'bank', enabled: true, transport: 'api', reason: null, openJobs: 0, heldJobs: 6, boards: null });
+    // No GOHIRE_PUBLIC_JOB_URL_TEMPLATE: the synced rows are held, and the panel names the setting.
+    expect(bank.publicPage).toEqual({ configured: false, variable: 'GOHIRE_PUBLIC_JOB_URL_TEMPLATE' });
+    expect(bank.lastRun).toMatchObject({ at: '2026-10-10T11:55:00.000Z', ok: true });
+    expect(bank.lastCounted!.notes).toEqual({ bank_synced: 181, bank_no_public_page: 181, bank_unpublished: 1092 });
+    const boards = sources[1]!;
+    expect(boards).toMatchObject({ kind: 'ats', transport: 'board_api', openJobs: 398, heldJobs: 0, publicPage: null, boards: { total: 26, enabled: 26, failing: 1 } });
+    expect(boards.lastRun).toMatchObject({ received: 412, written: 398, skipped: 14, notes: { wrong_market: 9, no_apply_url: 5, boards_read: 26 } });
+    expect(sources[2]).toMatchObject({ kind: 'import', lastRun: null, lastCounted: null, openJobs: 0, publicPage: null, boards: null });
+  });
+
+  it('with the page template set the bank reads as configured; a source that never ran has no run, and an off source says why', async () => {
+    const list: SourceLister = () => [fakeSource('bank_gohire', 'bank', { enabled: false, transport: 'off', reason: 'tls_required_no_api_key' }, ['gohire'])];
+    const [bank] = await jobSourcesHealth(fakeSystemStore(), 'goapply', { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://example.test/p/{id}' }, list);
+    expect(bank).toMatchObject({ enabled: false, transport: 'off', reason: 'tls_required_no_api_key', lastRun: null, lastCounted: null, publicPage: { configured: true, variable: 'GOHIRE_PUBLIC_JOB_URL_TEMPLATE' } });
+  });
+
+  it('each brand gets its own sources from the registry: RoboApply never lists the GoHire bank and GoApply never lists a search API', async () => {
+    const s = await buildSystemStatus(fakeSystemStore(), { brands: ['roboapply', 'goapply'], brandsServed: ['roboapply', 'goapply'], now: NOW, env: {} });
+    const of = (brand: string) => s.brands.find((b) => b.brand === brand)!.sources.map((x) => x.provider);
+    expect(of('roboapply')).toEqual(expect.arrayContaining(['activejobs', 'bank_robohire', 'jsearch', 'user_import']));
+    expect(of('roboapply')).not.toContain('bank_gohire');
+    expect(of('roboapply')).not.toContain('linkedin');
+    expect(of('goapply')[0]).toBe('bank_gohire');
+    expect(of('goapply')).toContain('user_import');
+    for (const p of ['jsearch', 'activejobs', 'linkedin', 'bank_robohire']) expect(of('goapply')).not.toContain(p);
+    // The RoboHire bank names its own page setting.
+    expect(s.brands.find((b) => b.brand === 'roboapply')!.sources.find((x) => x.provider === 'bank_robohire')!.publicPage).toEqual({ configured: false, variable: 'ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE' });
+  });
+});
+
 function healthWith(over: Partial<BrandHealth['ingest']> & { precompute?: BrandHealth['precompute']; copilot?: Partial<BrandHealth['copilot']>; emailFailed?: number } = {}): BrandHealth {
   return {
     brand: 'roboapply',
     market: 'intl',
+    sources: [],
     ingest: {
       due: 0, overdue: 0, failing: 0, newJobsToday: 100, newJobs7dAvg: 100, openJobs: 10, enrichBacklog: 0, enrichedShare: 1,
       enrichBudget: { used: 0, limit: 8000 },

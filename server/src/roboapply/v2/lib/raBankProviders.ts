@@ -7,11 +7,18 @@
 // `search` takes an INJECTED client so it is unit-testable against a fake bank
 // client with no live DB (spec §3.4). `buildBankJobWhere` is a separately
 // unit-tested pure function.
+//
+// A bank that is read over HTTPS has no database client (GoHire while its
+// database endpoint cannot satisfy the TLS rule; raBankClients.bankTransport
+// 'api'). The live search then reads OUR synced mirror of the bank instead:
+// the open public RAJob rows the ingest adapter wrote for it (`searchBankMirror`).
+// The mirror holds only rows that are listable (published, named employer, a
+// real posting page), so it can never surface a job the feed would not show.
 
 import { logger } from '../../../services/LoggerService.js';
 import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
-import { getBankClient, isBankEnabled } from './raBankClients.js';
-import { dedupeStrings, PER_BANK_QUERY_TAKE, PER_BANK_CANDIDATE_CAP } from './raCrossBankMatch.js';
+import { bankReadsMirror, getBankClient, getMirrorClient, isBankEnabled } from './raBankClients.js';
+import { bankMarket, dedupeStrings, PER_BANK_QUERY_TAKE, PER_BANK_CANDIDATE_CAP } from './raCrossBankMatch.js';
 import { canonicalizeTag } from './raCrossBankMatch.js';
 import type { BankId, BankJobRow, BankSearchIntent } from '../types/crossBank.js';
 
@@ -179,15 +186,122 @@ export const BANK_PROVIDERS: Record<BankId, BankJobProvider> = {
   gohire: gohireBankProvider,
 };
 
-/** Convenience: resolve client + run the provider; null on missing client. */
+// ─── The synced mirror (a bank with no database client) ────────────────────
+
+/** WHERE over our RAJob mirror of a bank: open, public, in the bank's market, fresh, and an OR of the same signals. */
+export function buildMirrorJobWhere(bank: BankId, intent: BankSearchIntent): Record<string, unknown> {
+  const titles = dedupeStrings(intent.titles).slice(0, 14);
+  const keywords = dedupeStrings(intent.mustKeywords).slice(0, 15);
+  const or: Record<string, unknown>[] = [];
+  for (const t of titles) or.push({ title: { contains: t, mode: 'insensitive' } });
+  for (const k of keywords) or.push({ descriptionPlain: { contains: k, mode: 'insensitive' } });
+  // The bank's requiredKeywordSet is stored lower-cased as RAJob.skills.
+  if (keywords.length > 0) or.push({ skills: { hasSome: keywords.map((k) => k.toLowerCase()) } });
+  return {
+    sourceBoard: bank,
+    market: bankMarket(bank),
+    visibility: 'public',
+    archivedAt: null,
+    postedAt: { not: null, gte: intent.freshnessCutoff },
+    ...(or.length > 0 ? { OR: or } : {}),
+  };
+}
+
+const MIRROR_SELECT = {
+  externalId: true,
+  title: true,
+  description: true,
+  location: true,
+  locationCity: true,
+  locationCountry: true,
+  workModel: true,
+  employmentType: true,
+  salaryMin: true,
+  salaryMax: true,
+  salaryCurrency: true,
+  salaryPeriod: true,
+  skills: true,
+  postedAt: true,
+  companyName: true,
+  companyLogoUrl: true,
+} as const;
+
+/** One mirrored RAJob row → the BankJobRow the pre-matcher reads. Fields the mirror does not hold stay empty (never guessed). */
+function mirrorRowToBankJobRow(bank: BankId, raw: Record<string, unknown>): BankJobRow {
+  const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  return {
+    bank,
+    retrievedVia: 'title',
+    job: {
+      id: String(raw.externalId),
+      title: str(raw.title) ?? '',
+      description: str(raw.description),
+      qualifications: null,
+      hardRequirements: null,
+      niceToHave: null,
+      benefits: null,
+      location: str(raw.location),
+      locationCity: str(raw.locationCity),
+      locationCountry: str(raw.locationCountry),
+      workType: str(raw.workModel),
+      employmentType: str(raw.employmentType),
+      experienceLevel: null,
+      salaryMin: num(raw.salaryMin),
+      salaryMax: num(raw.salaryMax),
+      salaryCurrency: str(raw.salaryCurrency),
+      salaryPeriod: str(raw.salaryPeriod),
+      requiredTagSet: [],
+      preferredTagSet: [],
+      requiredKeywordSet: arr(raw.skills),
+      preferredKeywordSet: [],
+      matchInviteScore: null,
+      publishedAt: raw.postedAt instanceof Date ? raw.postedAt : null,
+    },
+    company: { companyName: str(raw.companyName) ?? '', companyLogoUrl: str(raw.companyLogoUrl) },
+  };
+}
+
+/**
+ * Retrieval over our synced mirror of a bank (never throws → null on failure,
+ * like every provider). `client` is injected for tests; the default is the
+ * active-brand client that holds RAJob.
+ */
+export async function searchBankMirror(
+  bank: BankId,
+  intent: BankSearchIntent,
+  ctx?: { requestId?: string; signal?: AbortSignal },
+  client: ExtendedPrismaClient = getMirrorClient(),
+): Promise<BankJobRow[] | null> {
+  try {
+    const rows: Record<string, unknown>[] = await (client as any).rAJob.findMany({
+      where: buildMirrorJobWhere(bank, intent),
+      select: MIRROR_SELECT,
+      orderBy: { postedAt: 'desc' },
+      take: Math.min(intent.take || PER_BANK_QUERY_TAKE, PER_BANK_QUERY_TAKE),
+    });
+    return rows.slice(0, PER_BANK_CANDIDATE_CAP).map((raw) => mirrorRowToBankJobRow(bank, raw));
+  } catch (err) {
+    logger.error(TAG, `bank ${bank} mirror retrieval failed`, { error: err instanceof Error ? err.message : String(err) }, ctx?.requestId);
+    return null; // degrade — never throw
+  }
+}
+
+/**
+ * Convenience: resolve the client and run the provider. A bank with no
+ * database client that is read over HTTPS is searched in our synced mirror;
+ * null when the bank has neither.
+ */
 export async function searchBank(
   bank: BankId,
   intent: BankSearchIntent,
   ctx?: { requestId?: string; signal?: AbortSignal },
 ): Promise<BankJobRow[] | null> {
   const client = getBankClient(bank);
-  if (!client) return null;
-  return BANK_PROVIDERS[bank].search(client, intent, ctx);
+  if (client) return BANK_PROVIDERS[bank].search(client, intent, ctx);
+  if (bankReadsMirror(bank)) return searchBankMirror(bank, intent, ctx);
+  return null;
 }
 
-export const __test = { buildBankJobWhere, normalizeBankJobRow, JOB_SELECT };
+export const __test = { buildBankJobWhere, buildMirrorJobWhere, mirrorRowToBankJobRow, normalizeBankJobRow, JOB_SELECT, MIRROR_SELECT };

@@ -174,13 +174,27 @@ export interface BankJobLike {
   companyName?: string | null;
   company?: { id?: string | null; name?: string | null; logoUrl?: string | null } | null;
   requiredKeywordSet?: readonly string[] | null;
+  /** The bank's 学历 field: its enum ('bachelor', 'associate' …) or the Chinese word ('本科'). */
+  education?: string | null;
+  /** 招聘人数 as the bank states it. */
+  headcount?: number | null;
 }
 
 export interface BankJobExtras {
-  /** synthesizeApplyUrl(bank, job.id) from raCrossBankMatch (WP-16b). */
+  /**
+   * The job's page on the bank's own site: bankPublicJobUrl(bank, job.id) from
+   * raCrossBankMatch. A bank with no candidate-facing page has none; the bank
+   * adapter does not call this for such a job (it is held, not listed).
+   */
   applyUrl: string;
   /** The bank's verified-employer field. */
   employerVerified?: boolean | null;
+  /**
+   * The posting is placed by a recruiter for the named employer (代招). The
+   * GoHire adapter sets it for every job whose employer the bank has not
+   * verified; only a verified employer's job may carry 企业直招.
+   */
+  agencyPosting?: boolean | null;
   /** The bank's recorded consent to syndicate (OPS-A4). */
   syndicationConsent?: boolean | null;
 }
@@ -241,6 +255,9 @@ export function inputFromBankJob(row: BankJobLike, bank: 'robohire' | 'gohire', 
     description,
     postedAt: row.publishedAt ?? null,
     skills: row.requiredKeywordSet ? [...row.requiredKeywordSet] : null,
+    educationLevel: cleanOrNull(row.education),
+    headcount: typeof row.headcount === 'number' && Number.isInteger(row.headcount) && row.headcount > 0 ? row.headcount : null,
+    agencyPosting: extras.agencyPosting ?? null,
     employerVerified: extras.employerVerified ?? null,
     syndicationConsent: extras.syndicationConsent ?? null,
     bankCompanyRef: row.company?.id ? `${bank}:${row.company.id}` : null,

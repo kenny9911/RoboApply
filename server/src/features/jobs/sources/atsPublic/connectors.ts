@@ -19,18 +19,31 @@
 // board's country tag is only a weak hint for an ambiguous city, never the
 // job's country.
 //
+// Market (GOAPPLY_PARITY_PLAN.md §3.9, MARKET_STRATEGY JC-4): a posting belongs
+// to the market of its own location (mainland China → cn, anything else →
+// intl; `marketOfPosting`, the normalizer's own rule). A board is read for the
+// market on its source row (`opts.market`): the listing is filtered to that
+// market BEFORE any cap, so a global board's few mainland postings are never
+// starved by the cap, and an international source never spends its cap on
+// mainland postings it would not write. The postings of the other market are
+// counted (`wrongMarket`), not read. A mainland SmartRecruiters source asks
+// the API for `country=cn` (a documented filter) and pages the listing to its
+// end, so the listing is complete and closures work.
+//
 // Caps: at most MAX_POSTINGS_PER_BOARD inputs per board and run, and
 // SmartRecruiters' posting texts (one request each) for SR_MAX_DETAILS
 // postings per run. Which postings fill the cap is decided by `prioritise`:
 // postings we have not saved yet first, then the ones ingest refreshed
-// longest ago, so a large board is covered in full over a few runs.
-// `listOnly` (admin "Check now") reads the listing and nothing else.
+// longest ago, so a large board is covered in full over a few runs
+// (`pending` says how many are still unread; the sync then reads the board
+// again sooner). `listOnly` (admin "Check now") reads the listing and nothing else.
 
+import type { Market } from '../../../../platform/brand/index.js';
 import { resolveCountry } from '../../geo/index.js';
-import type { ProviderJobInput } from '../../normalize/index.js';
+import { marketOfPosting, type ProviderJobInput } from '../../normalize/index.js';
 import type { PublicAts } from './contract.js';
 import { BoardFetchError, getJson, type HttpDeps } from './http.js';
-import { arr, atsSourceName, decodeEntities, externalIdFor, MAX_POSTINGS_PER_BOARD, num, obj, str } from './shared.js';
+import { arr, atsSourceName, decodeEntities, externalIdFor, MAX_LISTED_PER_BOARD_CN, MAX_POSTINGS_PER_BOARD, num, obj, str } from './shared.js';
 
 /** What a connector needs to know about one career source. */
 export interface BoardSource {
@@ -42,14 +55,18 @@ export interface BoardSource {
 }
 
 export interface BoardRead {
-  /** Postings in the normalizer's input shape (at most MAX_POSTINGS_PER_BOARD). */
+  /** Postings in the normalizer's input shape (at most MAX_POSTINGS_PER_BOARD), all of the run's market. */
   inputs: ProviderJobInput[];
-  /** externalIds of EVERY posting the board lists (closure detection). */
+  /** externalIds of EVERY posting of the run's market the board lists (closure detection). */
   listedIds: string[];
   /** False when the listing was cut short (paging cap): closures are then skipped. */
   complete: boolean;
   /** HTTP requests made. */
   calls: number;
+  /** Listed postings that belong to the other market (by their own location): counted, not read. */
+  wrongMarket: number;
+  /** Listed postings of this market we have not stored yet and did not read this run (a cap was hit). */
+  pending: number;
 }
 
 export interface ConnectorDeps extends HttpDeps {
@@ -64,7 +81,33 @@ export interface ReadOptions {
    * posting (RAJob.lastSeenAt). Decides which postings fill the per-run caps.
    */
   known?: ReadonlyMap<string, Date | null>;
+  /**
+   * The market the board is read for (the source row's). The listing is
+   * filtered to it before any cap. Absent = no filter (every posting).
+   */
+  market?: Market;
 }
+
+/** Splits a mapped listing into the run's market and a count of the rest (the normalizer's own rule). */
+export function splitByMarket<T>(items: readonly T[], inputOf: (item: T) => ProviderJobInput | null, market: Market | undefined): { mine: T[]; wrongMarket: number } {
+  if (!market) return { mine: items.slice(), wrongMarket: 0 };
+  const mine: T[] = [];
+  let wrongMarket = 0;
+  for (const item of items) {
+    const input = inputOf(item);
+    if (input && marketOfPosting(input) === market) mine.push(item);
+    else wrongMarket += 1;
+  }
+  return { mine, wrongMarket };
+}
+
+/** Listed postings we have not stored yet that this run did not read. */
+function pendingCount<T>(listed: readonly T[], read: readonly T[], idOf: (item: T) => string, known: ReadonlyMap<string, Date | null> | undefined): number {
+  const done = new Set(read.map(idOf));
+  return listed.filter((item) => !done.has(idOf(item)) && !known?.has(idOf(item))).length;
+}
+
+const self = (i: ProviderJobInput): ProviderJobInput => i;
 
 export interface AtsConnector {
   ats: PublicAts;
@@ -174,9 +217,11 @@ export const greenhouse: AtsConnector = {
     const url = opts.listOnly ? `https://boards-api.greenhouse.io/v1/boards/${enc(source.boardToken)}/jobs` : this.boardUrl(source.boardToken);
     const body = obj(await getJson(url, deps));
     if (!body || !Array.isArray(body.jobs)) throw new BoardFetchError('unexpected_shape');
-    const listed = body.jobs.map((raw) => mapGreenhouseJob(raw, source, deps.now)).filter((x): x is ProviderJobInput => !!x);
+    const all = body.jobs.map((raw) => mapGreenhouseJob(raw, source, deps.now)).filter((x): x is ProviderJobInput => !!x);
+    // The whole board comes in one listing: keep the run's market, then cap.
+    const { mine: listed, wrongMarket } = splitByMarket(all, self, opts.market);
     const inputs = opts.listOnly ? [] : prioritise(listed, byExternalId, opts.known, MAX_POSTINGS_PER_BOARD);
-    return { inputs, listedIds: listed.map(byExternalId), complete: true, calls: 1 };
+    return { inputs, listedIds: listed.map(byExternalId), complete: true, calls: 1, wrongMarket, pending: opts.listOnly ? 0 : pendingCount(listed, inputs, byExternalId, opts.known) };
   },
 };
 
@@ -228,24 +273,27 @@ export const lever: AtsConnector = {
   ats: 'lever',
   boardUrl: (token) => `https://api.lever.co/v0/postings/${enc(token)}?mode=json`,
   async read(source, deps, opts = {}) {
-    const listed: ProviderJobInput[] = [];
+    const all: ProviderJobInput[] = [];
     let calls = 0;
     let complete = false;
-    for (let skip = 0; skip < MAX_POSTINGS_PER_BOARD; skip += LEVER_PAGE) {
+    // A mainland source pages the listing further: its postings may sit anywhere in a global board.
+    const listingCap = opts.market === 'cn' ? MAX_LISTED_PER_BOARD_CN : MAX_POSTINGS_PER_BOARD;
+    for (let skip = 0; skip < listingCap; skip += LEVER_PAGE) {
       const page = await getJson(`${this.boardUrl(source.boardToken)}&skip=${skip}&limit=${LEVER_PAGE}`, deps);
       calls += 1;
       if (!Array.isArray(page)) throw new BoardFetchError('unexpected_shape');
       for (const raw of page) {
         const input = mapLeverPosting(raw, source, deps.now);
-        if (input) listed.push(input);
+        if (input) all.push(input);
       }
       if (page.length < LEVER_PAGE) {
         complete = true;
         break;
       }
     }
+    const { mine: listed, wrongMarket } = splitByMarket(all, self, opts.market);
     const inputs = opts.listOnly ? [] : prioritise(listed, byExternalId, opts.known, MAX_POSTINGS_PER_BOARD);
-    return { inputs, listedIds: listed.map(byExternalId), complete, calls };
+    return { inputs, listedIds: listed.map(byExternalId), complete, calls, wrongMarket, pending: opts.listOnly ? 0 : pendingCount(listed, inputs, byExternalId, opts.known) };
   },
 };
 
@@ -298,9 +346,10 @@ export const ashby: AtsConnector = {
   async read(source, deps, opts = {}) {
     const body = obj(await getJson(this.boardUrl(source.boardToken), deps));
     if (!body || !Array.isArray(body.jobs)) throw new BoardFetchError('unexpected_shape');
-    const listed = body.jobs.map((raw) => mapAshbyJob(raw, source, deps.now)).filter((x): x is ProviderJobInput => !!x);
+    const all = body.jobs.map((raw) => mapAshbyJob(raw, source, deps.now)).filter((x): x is ProviderJobInput => !!x);
+    const { mine: listed, wrongMarket } = splitByMarket(all, self, opts.market);
     const inputs = opts.listOnly ? [] : prioritise(listed, byExternalId, opts.known, MAX_POSTINGS_PER_BOARD);
-    return { inputs, listedIds: listed.map(byExternalId), complete: true, calls: 1 };
+    return { inputs, listedIds: listed.map(byExternalId), complete: true, calls: 1, wrongMarket, pending: opts.listOnly ? 0 : pendingCount(listed, inputs, byExternalId, opts.known) };
   },
 };
 
@@ -362,20 +411,29 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+/** The SmartRecruiters listing URL of one page; a mainland source adds the API's own `country=cn` filter. */
+export function smartRecruitersListUrl(boardToken: string, offset: number, market?: Market): string {
+  const country = market === 'cn' ? '&country=cn' : '';
+  return `https://api.smartrecruiters.com/v1/companies/${enc(boardToken)}/postings?limit=${SR_PAGE}&offset=${offset}${country}`;
+}
+
 export const smartrecruiters: AtsConnector = {
   ats: 'smartrecruiters',
   boardUrl: (token) => `https://api.smartrecruiters.com/v1/companies/${enc(token)}/postings`,
   async read(source, deps, opts = {}) {
-    const listedRaw: Record<string, unknown>[] = [];
+    const allRaw: Record<string, unknown>[] = [];
     let calls = 0;
     let complete = false;
-    for (let offset = 0; offset < MAX_POSTINGS_PER_BOARD; offset += SR_PAGE) {
-      const page = obj(await getJson(`${this.boardUrl(source.boardToken)}?limit=${SR_PAGE}&offset=${offset}`, deps));
+    // A mainland source lists with country=cn and pages to the end, so the listing is complete
+    // and closures work; the posting texts below stay capped per run and fill in over runs.
+    const listingCap = opts.market === 'cn' ? MAX_LISTED_PER_BOARD_CN : MAX_POSTINGS_PER_BOARD;
+    for (let offset = 0; offset < listingCap; offset += SR_PAGE) {
+      const page = obj(await getJson(smartRecruitersListUrl(source.boardToken, offset, opts.market), deps));
       calls += 1;
       if (!page || !Array.isArray(page.content)) throw new BoardFetchError('unexpected_shape');
       for (const raw of page.content) {
         const row = obj(raw);
-        if (row && str(row.id) && str(row.name)) listedRaw.push(row);
+        if (row && str(row.id) && str(row.name)) allRaw.push(row);
       }
       const total = num(page.totalFound);
       if (page.content.length < SR_PAGE || (total !== null && offset + SR_PAGE >= total)) {
@@ -384,13 +442,15 @@ export const smartrecruiters: AtsConnector = {
       }
     }
     const idOf = (r: Record<string, unknown>) => externalIdFor(source.boardToken, str(r.id)!);
+    // The listing row states the posting's location: the market is decided from it, before any cap.
+    const { mine: listedRaw, wrongMarket } = splitByMarket(allRaw, (row) => mapSmartRecruitersPosting(row, null, source, deps.now), opts.market);
     const listedIds = listedRaw.map(idOf);
-    if (opts.listOnly) return { inputs: [], listedIds, complete, calls };
+    if (opts.listOnly) return { inputs: [], listedIds, complete, calls, wrongMarket, pending: 0 };
     // The listing carries no posting text; read it for SR_MAX_DETAILS postings
     // per run, new ones first, then the longest-unrefreshed (see `prioritise`).
     // A failed detail skips that posting this run; it never fails the board.
     const batch = prioritise(listedRaw, idOf, opts.known, SR_MAX_DETAILS);
-    if (deps.signal?.aborted) return { inputs: [], listedIds, complete, calls };
+    if (deps.signal?.aborted) return { inputs: [], listedIds, complete, calls, wrongMarket, pending: pendingCount(listedRaw, [], idOf, opts.known) };
     const withText = await mapLimit(batch, SR_CONCURRENCY, async (row) => {
       const url = `${this.boardUrl(source.boardToken)}/${enc(str(row.id)!)}`;
       calls += 1;
@@ -401,7 +461,7 @@ export const smartrecruiters: AtsConnector = {
       }
     });
     const inputs = withText.filter((x): x is ProviderJobInput => !!x);
-    return { inputs, listedIds, complete, calls };
+    return { inputs, listedIds, complete, calls, wrongMarket, pending: pendingCount(listedRaw, batch, idOf, opts.known) };
   },
 };
 

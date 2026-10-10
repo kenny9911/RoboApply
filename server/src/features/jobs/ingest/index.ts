@@ -13,6 +13,7 @@ import {
   bankForMarket,
   bankMarket,
   bankTlsSatisfied,
+  bankTransport,
   getBankClient,
   isBankEnabled,
   listEnabledBanks,
@@ -26,16 +27,20 @@ export { runJobsIngest, runJobsMaintain, runJobsPlan, ingestAllowed } from './cr
 export { dailyCallLimit } from './config.js';
 export { JOBS_INGEST_WORK_KINDS, workers } from './workers.js';
 export { rapidApiCountry, rapidApiSearchParams } from './adapters/rapidApi.js';
-export { readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';
-export { adaptersForBrand, ingestProvidersForBrand } from './providers.js';
+export { bankPublicPageState, readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';
+export { adaptersForBrand, ingestProvidersForBrand, sourcesForBrand } from './providers.js';
+export { readSourceStatuses, sourceStatusKey } from './status.js';
+export type { SourceRunStatus, SourceStatusDoc } from './status.js';
 export { registerSourceAdapter, getSourceAdapter } from '../sources/index.js';
-export type { JobSourceAdapter, IngestProvider, IngestQueryParams, SourceQuery, SourceFetchResult } from '../sources/index.js';
+export type { JobSourceAdapter, JobSourceDescription, IngestProvider, IngestQueryParams, SourceQuery, SourceFetchResult } from '../sources/index.js';
 export type { TargetedIngestResult } from './run.js';
 
 /**
  * The recruiter-bank client seam (read-only Prisma clients for RoboHire /
  * GoHire). Honors the kill switches, the cross-tenant guard and the GoHire
- * TLS rule. WP-54 must still read consent only from the bank's opt-in records.
+ * TLS rule. A bank read over HTTPS (`bankTransport` 'api') has no client:
+ * `getBankClient` answers null for it. WP-54 must still read consent only
+ * from the bank's opt-in records.
  */
 export const bankClients = {
   getBankClient,
@@ -44,6 +49,7 @@ export const bankClients = {
   bankForMarket,
   bankMarket,
   bankTlsSatisfied,
+  bankTransport,
 } as const;
 
 /**

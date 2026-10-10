@@ -5,7 +5,7 @@
 //     (market from the bank, fromRecruiterBank) and never invents a currency;
 //     its update never revives a closed row or rewrites the normalized names
 //     the bank sync owns.
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
@@ -63,16 +63,32 @@ describe('cross-bank materialization honesty fields', () => {
       alsoOnBank: null,
     }) as unknown as PreMatchedCandidate;
 
-  it('GoHire rows are market cn, RoboHire intl; both fromRecruiterBank; no invented USD', () => {
-    const gh = mapRecruiterJobToRAJobUpsert(cand('gohire', null));
+  beforeEach(() => {
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://example.test/p/{id}');
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.example.test/r/{id}');
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('GoHire rows are market cn, RoboHire intl, on create and on update; both fromRecruiterBank; no invented USD', () => {
+    const gh = mapRecruiterJobToRAJobUpsert(cand('gohire', null))!;
     expect(gh.create).toMatchObject({ market: 'cn', fromRecruiterBank: true, sourceName: 'GoHire', sourcePriority: 15, salaryCurrency: null });
+    // The update moves a row that sits in the wrong market back to its bank's market.
+    expect(gh.update).toMatchObject({ market: 'cn' });
     expect(gh.create).not.toHaveProperty('publicDisplay');
     expect(gh.create).not.toHaveProperty('employerVerified');
-    expect(mapRecruiterJobToRAJobUpsert(cand('robohire', 'CAD')).update).toMatchObject({ market: 'intl', fromRecruiterBank: true, salaryCurrency: 'CAD' });
+    const rh = mapRecruiterJobToRAJobUpsert(cand('robohire', 'CAD'))!;
+    expect(rh.update).toMatchObject({ market: 'intl', fromRecruiterBank: true, salaryCurrency: 'CAD' });
+    expect(rh.create).toMatchObject({ market: 'intl' });
+  });
+
+  it('a candidate whose bank has no posting page is not materialised at all', () => {
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', '');
+    expect(mapRecruiterJobToRAJobUpsert(cand('gohire', null))).toBeNull();
+    expect(mapRecruiterJobToRAJobUpsert(cand('robohire', 'USD'))).not.toBeNull();
   });
 
   it('the update never revives a closed row or rewrites the normalized names the bank sync owns', () => {
-    const args = mapRecruiterJobToRAJobUpsert({ ...cand('robohire', 'USD'), company: { companyName: 'Acme, Inc.', companyLogoUrl: null } } as PreMatchedCandidate);
+    const args = mapRecruiterJobToRAJobUpsert({ ...cand('robohire', 'USD'), company: { companyName: 'Acme, Inc.', companyLogoUrl: null } } as PreMatchedCandidate)!;
     // A row closed as 'reported' / 'duplicate' stays closed; the bank sync revives only bank_closed / source_removed.
     expect(args.update).not.toHaveProperty('archivedAt');
     expect(args.update).not.toHaveProperty('titleNormalized');
