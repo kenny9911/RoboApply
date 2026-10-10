@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>演示研究院 招聘</title></head>
+<body>
+<div class="main">
+  <h1>科研助理</h1>
+  <form action="/apply" method="post">
+    <h3>个人信息</h3>
+    <table>
+      <tr><td class="lbl">姓名：</td><td><input name="name"></td><td class="lbl">性别：</td><td><select name="sex"><option value="">请选择</option><option>男</option><option>女</option></select></td></tr>
+      <tr><td class="lbl">手机号码：</td><td><input name="tel"></td><td class="lbl">电子邮箱：</td><td><input name="mail"></td></tr>
+      <tr><td class="lbl">最高学历：</td><td><input name="degree"></td><td class="lbl">毕业院校：</td><td><input name="school"></td></tr>
+      <tr><td class="lbl">简历：</td><td><input type="file" name="cv"></td><td></td><td></td></tr>
+    </table>
+    <input type="submit" value="提交">
+  </form>
+</div>
+</body>
+</html>

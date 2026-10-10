@@ -5,6 +5,10 @@
 // the user clicks "Use this answer" for that field, "Undo autofill", and the
 // closing question "Did you submit this application?". Rendered in a shadow
 // root (mount.tsx); nothing in it presses anything on the page.
+// GoApply (market cn, 一键填表): the three fill modes replace the single button,
+// a fill can be repeated for the next step of a portal form, the review line
+// "请核对后自行提交" outlines the portal's own submit control, and AI text
+// carries the AiGeneratedBadge-style label (CnControls.tsx).
 
 import { useEffect, useMemo, useState } from 'react';
 
@@ -13,7 +17,9 @@ import { useTranslations, type TFunction } from '../../i18n/index';
 import type { ExtMeResponse, FitChip } from '../../shared/contract';
 import type { ExtApi } from '../bridge';
 import { apiPageUrl } from '../pageUrl';
-import { FillSession, summarize, type ChecklistItem, type SessionState } from '../fill';
+import { FillSession, summarize, type ChecklistItem, type FillMode, type SessionState } from '../fill';
+import { CN_ERRORS, CN_NOTES, CnAiBadge, CnFillModes, CnReviewHint, type InScope } from './CnControls';
+import { cnText } from './cnStrings';
 
 export interface PanelProps {
   adapter: AtsAdapter;
@@ -59,11 +65,7 @@ function FitLine({ fit, market, t }: { fit: FitChip; market: 'intl' | 'cn'; t: T
       ) : null}
       <span className="meta">{fit.score === null ? '—' : t('fit.score', { score: Math.round(fit.score) })}</span>
       {fit.kind === 'pre' ? <span className="chip">{t('fit.quickEstimate')}</span> : null}
-      {fit.kind === 'ai' && market === 'cn' ? (
-        <span className="chip" data-kind="ai">
-          {t('draft.aiBadge')}
-        </span>
-      ) : null}
+      {fit.kind === 'ai' && market === 'cn' ? <CnAiBadge /> : null}
       <p className="meta muted" style={{ width: '100%', margin: 0 }}>
         {t('fit.note')}
       </p>
@@ -77,7 +79,7 @@ function detailFor(item: ChecklistItem, t: TFunction): string | null {
     if (item.source) return t(`source.${item.source}`);
     return null;
   }
-  if (item.note) return t(`note.${item.note}`);
+  if (item.note) return CN_NOTES.has(item.note) ? cnText(`note.${item.note}`) : t(`note.${item.note}`);
   return null;
 }
 
@@ -97,7 +99,7 @@ function ItemRow({ item, session, market, t }: { item: ChecklistItem; session: F
         </span>
       </div>
       {detail ? <p className="meta">{detail}</p> : null}
-      {item.sensitive && item.status === 'filled' ? <p className="meta">{t('item.checkSensitive')}</p> : null}
+      {item.sensitive && item.status === 'filled' ? <p className="meta">{item.cnKey ? cnText('item.checkSensitive') : t('item.checkSensitive')}</p> : null}
       {item.canDraft && !item.draft && item.status !== 'filled' ? (
         <div className="row">
           <button type="button" className="btn" disabled={item.drafting} onClick={() => void session.requestDraft(item.id)}>
@@ -110,9 +112,13 @@ function ItemRow({ item, session, market, t }: { item: ChecklistItem; session: F
         <div className="draft">
           <div className="row">
             {item.draft.source === 'ai' ? (
-              <span className="chip" data-kind="ai">
-                {t('draft.aiBadge')}
-              </span>
+              market === 'cn' ? (
+                <CnAiBadge />
+              ) : (
+                <span className="chip" data-kind="ai">
+                  {t('draft.aiBadge')}
+                </span>
+              )
             ) : null}
             <span className="meta">{item.draft.source === 'ai' ? t('draft.aiLabel') : t('draft.bankLabel')}</span>
           </div>
@@ -165,25 +171,28 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
     };
   }, [api, job, url]);
 
-  const startFill = () => {
+  const [fills, setFills] = useState(0);
+  const startFill = (mode: FillMode = 'all', inScope: InScope | null = null) => {
     const s = new FillSession({ adapter, doc, url, api, jobId: page?.jobId ?? null, aiAvailable: aiAvailableFrom(me), onChange: setState });
     setSession(s);
     setState(s.getState());
-    void s.start();
+    setFills((n) => n + 1);
+    void s.start({ mode, inScope });
   };
+  const cn = market === 'cn';
 
   const counts = state ? summarize(state.items) : null;
   const filling = state?.phase === 'filling';
   const done = state?.phase === 'done';
 
   return (
-    <section className="panel" aria-labelledby="ra-panel-title">
+    <section className="panel" aria-labelledby="ra-panel-title" data-ra-ext-panel="">
       <header className="head">
         <div>
           <h2 className="title" id="ra-panel-title">
-            {t('panel.title')}
+            {cn ? cnText('panel.title') : t('panel.title')}
           </h2>
-          <p className="meta">{t('panel.site', { site: adapter.siteName })}</p>
+          <p className="meta">{cn ? cnText('panel.site', { site: adapter.siteName }) : t('panel.site', { site: adapter.siteName })}</p>
         </div>
         <button type="button" className="btn quiet" aria-label={t('panel.collapse')} onClick={onCollapse}>
           ✕
@@ -212,11 +221,12 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
               {page?.fit ? <FitLine fit={page.fit} market={market} t={t} /> : null}
             </div>
 
-            {!state || state.phase === 'idle' || state.phase === 'error' ? (
-              <button type="button" className="btn primary" onClick={startFill}>
+            {!cn && (!state || state.phase === 'idle' || state.phase === 'error') ? (
+              <button type="button" className="btn primary" onClick={() => startFill()}>
                 {t('panel.fill')}
               </button>
             ) : null}
+            {cn && (!state || state.phase !== 'filling') && !done ? <CnFillModes doc={doc} again={false} onStart={startFill} /> : null}
             {filling ? (
               <p className="meta" role="status">
                 {t('panel.filling')}
@@ -226,7 +236,9 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
               <p className="notice" role="alert">
                 {state.error === 'credits_exhausted' && formatReset(state.resetsAt)
                   ? t('error.credits_exhaustedUntil', { time: formatReset(state.resetsAt)! })
-                  : t(`error.${state.error}`)}
+                  : CN_ERRORS.has(state.error)
+                    ? cnText(`error.${state.error}`)
+                    : t(`error.${state.error}`)}
               </p>
             ) : null}
 
@@ -258,7 +270,7 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
                     {state.undo.notRestored ? ` ${t('panel.undoPartial', { count: state.undo.notRestored })}` : ''}
                   </p>
                 ) : null}
-                <p className="strong">{t('panel.submitYourself')}</p>
+                {cn ? <CnReviewHint doc={doc} adapter={adapter} fillKey={fills} /> : <p className="strong">{t('panel.submitYourself')}</p>}
                 {state?.submitted === 'unknown' ? (
                   <div>
                     <p className="meta" id="ra-submitted-q">
@@ -294,6 +306,7 @@ export function Panel({ adapter, doc, url, api, webOrigin, market, onCollapse }:
                 ) : null}
               </div>
             ) : null}
+            {cn && done ? <CnFillModes doc={doc} again onStart={startFill} /> : null}
           </>
         ) : null}
       </div>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示范能源校园招聘</title></head>
+<body>
+<div id="app">
+  <div class="top-bar"><form class="el-form el-form--inline search-form"><div class="el-form-item"><div class="el-form-item__content"><input id="q" class="el-input__inner" placeholder="搜索职位"></div></div><button type="button" class="el-button">搜索</button></form></div>
+  <h1 class="position-name">新能源研发工程师</h1><div class="company-name">示范能源</div>
+  <div class="resume-cards">
+    <div class="el-card section-card">
+      <div class="el-card__header"><div class="module-title">个人信息</div></div>
+      <div class="el-card__body"><form class="el-form">
+        <div class="el-form-item is-required"><label for="c_name" class="el-form-item__label">姓名</label><div class="el-form-item__content"><input id="c_name" class="el-input__inner"></div></div>
+        <div class="el-form-item is-required"><label for="c_phone" class="el-form-item__label">手机号码</label><div class="el-form-item__content"><input id="c_phone" class="el-input__inner"></div></div>
+        <div class="el-form-item is-required"><label for="c_email" class="el-form-item__label">邮箱</label><div class="el-form-item__content"><input id="c_email" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="c_native" class="el-form-item__label">籍贯</label><div class="el-form-item__content"><input id="c_native" class="el-input__inner"></div></div>
+      </form></div>
+    </div>
+    <div class="el-card section-card">
+      <div class="el-card__header"><div class="module-title">学习经历</div></div>
+      <div class="el-card__body"><form class="el-form">
+        <div class="el-form-item"><label for="st0_school" class="el-form-item__label">学校名称</label><div class="el-form-item__content"><input id="st0_school" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="st0_major" class="el-form-item__label">专业</label><div class="el-form-item__content"><input id="st0_major" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="st0_gpa" class="el-form-item__label">GPA</label><div class="el-form-item__content"><input id="st0_gpa" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="st1_school" class="el-form-item__label">学校名称</label><div class="el-form-item__content"><input id="st1_school" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="st1_major" class="el-form-item__label">专业</label><div class="el-form-item__content"><input id="st1_major" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="st1_gpa" class="el-form-item__label">GPA</label><div class="el-form-item__content"><input id="st1_gpa" class="el-input__inner"></div></div>
+      </form></div>
+    </div>
+    <div class="el-card section-card">
+      <div class="el-card__header"><div class="module-title">主要社会关系</div></div>
+      <div class="el-card__body"><form class="el-form">
+        <div class="el-form-item"><label for="sr0_rel" class="el-form-item__label">称谓</label><div class="el-form-item__content"><input id="sr0_rel" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="sr0_name" class="el-form-item__label">姓名</label><div class="el-form-item__content"><input id="sr0_name" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="sr0_org" class="el-form-item__label">工作单位</label><div class="el-form-item__content"><input id="sr0_org" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="sr1_rel" class="el-form-item__label">称谓</label><div class="el-form-item__content"><input id="sr1_rel" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="sr1_name" class="el-form-item__label">姓名</label><div class="el-form-item__content"><input id="sr1_name" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="sr1_org" class="el-form-item__label">工作单位</label><div class="el-form-item__content"><input id="sr1_org" class="el-input__inner"></div></div>
+      </form></div>
+    </div>
+    <div class="el-card section-card">
+      <div class="el-card__header"><div class="module-title">紧急联系人</div></div>
+      <div class="el-card__body"><form class="el-form">
+        <div class="el-form-item"><label for="ec_name" class="el-form-item__label">姓名</label><div class="el-form-item__content"><input id="ec_name" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="ec_phone" class="el-form-item__label">联系电话</label><div class="el-form-item__content"><input id="ec_phone" class="el-input__inner"></div></div>
+        <div class="el-form-item"><label for="ec_rel" class="el-form-item__label">与本人关系</label><div class="el-form-item__content"><input id="ec_rel" class="el-input__inner"></div></div>
+      </form></div>
+    </div>
+    <div class="el-card section-card">
+      <div class="el-card__header"><div class="module-title">附件</div></div>
+      <div class="el-card__body"><form class="el-form">
+        <div class="el-form-item is-required"><label for="c_resume" class="el-form-item__label">简历</label><div class="el-form-item__content"><input id="c_resume" type="file"></div></div>
+      </form></div>
+    </div>
+  </div>
+  <div class="submit-bar"><button type="button" class="el-button">保存</button><button type="button" class="el-button el-button--primary">提交</button></div>
+  <div class="el-dialog" role="dialog" aria-label="隐私声明"><p>请阅读隐私声明</p><button type="button" class="el-button el-button--primary">确认</button></div>
+</div>
+<footer class="site-footer"><a href="/feedback">提交反馈</a> <a href="/history">投递记录</a></footer>
+</body>
+</html>

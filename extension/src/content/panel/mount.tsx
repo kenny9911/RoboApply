@@ -45,7 +45,7 @@ function App({ initialOpen, panel, register }: { initialOpen: boolean; panel: Om
           <Panel {...panel} onCollapse={() => setOpen(false)} />
         </div>
       ) : null}
-      {open ? null : <Launcher onOpen={show} />}
+      {open ? null : <Launcher onOpen={show} market={panel.market} />}
     </div>
   );
 }

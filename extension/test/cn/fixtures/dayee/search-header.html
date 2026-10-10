@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示例物流招聘</title></head>
+<body>
+<div class="page">
+  <div class="top"><form action="/search" method="get"><input type="text" name="keyword" placeholder="请输入职位关键词"><input type="submit" value="搜索"></form></div>
+  <h1 class="post-name">储运管培生</h1><span class="corp-name">示例物流</span>
+  <form id="applyForm" action="/apply/save" method="post">
+    <h3 class="module-title">个人信息</h3>
+    <table class="form-table"><tbody>
+      <tr><th>姓名</th><td><input type="text" name="name" id="dh_name"></td><th>手机</th><td><input type="text" name="mobile" id="dh_mobile"></td></tr>
+      <tr><th>邮箱</th><td><input type="text" name="email" id="dh_email"></td><th>政治面貌</th><td><input type="text" name="political" id="dh_political"></td></tr>
+    </tbody></table>
+    <h3 class="module-title">证明人</h3>
+    <table class="form-table"><tbody>
+      <tr><th>姓名</th><td><input type="text" name="ref_name" id="dh_ref_name"></td><th>联系电话</th><td><input type="text" name="ref_phone" id="dh_ref_phone"></td></tr>
+    </tbody></table>
+    <div class="btn-bar"><input type="button" class="btn btn-primary" value="提交" id="btnSubmit"></div>
+  </form>
+</div>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示例智能校园招聘</title></head>
+<body>
+<div id="root">
+  <div class="position-header"><h2 class="job-title">算法工程师-2026届</h2><div class="company-name">示例智能</div><span class="job-city">杭州</span></div>
+  <div class="job-description">参与推荐算法研发。</div>
+  <form class="ud__form apply-form">
+    <div class="apply-module">
+      <div class="apply-module__title module-title">上传简历</div>
+      <div class="ud__form__item"><div class="ud__form__item__label"><span class="required">*</span>简历</div><div class="ud__form__item__control"><input id="fs_resume" type="file"></div></div>
+    </div>
+    <div class="apply-module">
+      <div class="apply-module__title module-title">基本信息</div>
+      <div class="ud__form__item"><div class="ud__form__item__label"><span class="required">*</span>姓名</div><div class="ud__form__item__control"><input id="fs_name" class="ud__input" type="text"></div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label"><span class="required">*</span>手机号码</div><div class="ud__form__item__control"><input id="fs_mobile" class="ud__input" type="tel"></div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label"><span class="required">*</span>邮箱</div><div class="ud__form__item__control"><input id="fs_email" class="ud__input" type="email"></div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label">毕业时间</div><div class="ud__form__item__control"><input id="fs_grad" class="ud__input" type="month"></div></div>
+    </div>
+    <div class="apply-module">
+      <div class="apply-module__title module-title">教育经历</div>
+      <div class="ud__form__item"><div class="ud__form__item__label"><span class="required">*</span>学校</div><div class="ud__form__item__control"><input id="fs_school" class="ud__input"></div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label"><span class="required">*</span>学历</div><div class="ud__form__item__control">
+        <div class="ud__select"><input id="fs_degree" role="combobox" aria-controls="fs_degree_list" class="ud__select__input" readonly></div>
+        <div class="ud__select__dropdown"><ul id="fs_degree_list" role="listbox"><li role="option">本科</li><li role="option">硕士</li><li role="option">博士</li></ul></div>
+      </div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label">专业</div><div class="ud__form__item__control"><input id="fs_major" class="ud__input"></div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label">开始时间</div><div class="ud__form__item__control"><input id="fs_start" class="ud__input" type="month"></div></div>
+      <div class="ud__form__item"><div class="ud__form__item__label">结束时间</div><div class="ud__form__item__control"><input id="fs_end" class="ud__input" type="month"></div></div>
+    </div>
+    <div class="apply-footer"><button type="button" class="ud__button ud__button--filled">投递</button></div>
+  </form>
+</div>
+</body>
+</html>

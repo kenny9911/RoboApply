@@ -77,6 +77,12 @@ textarea {
   width: 100%; min-height: 96px; padding: var(--sp-2) var(--sp-3); resize: vertical;
   border: 1px solid var(--rule-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit;
 }
+.modes { display: flex; flex-direction: column; gap: var(--sp-2); }
+.mode { display: flex; flex-direction: column; gap: var(--sp-1); }
+.mode .btn { width: 100%; }
+.review { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--r-md); background: var(--action-subtle); }
+.ai-badge { gap: var(--sp-1); }
+.ai-badge svg { flex: none; }
 .notice { margin: 0; padding: var(--sp-3); border-radius: var(--r-md); background: var(--warn-subtle); color: var(--warn); font-size: var(--fs-meta); }
 .foot { display: flex; flex-direction: column; gap: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--rule); }
 .strong { font-weight: 650; margin: 0; }
