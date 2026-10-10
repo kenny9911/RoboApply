@@ -54,8 +54,15 @@ function formatAmount(amountMinor: number, currency: string): string {
   return currency === 'USD' ? `$${major}` : currency === 'CNY' ? `¥${major}` : `${major} ${currency}`;
 }
 
+/**
+ * The price the buyer is charged, as the acknowledgement names it. Usually the
+ * catalog plan itself; a Taiwan buyer on a TWD price passes that amount and
+ * currency instead (so `currency` is wider than the brand's base currency).
+ */
+export type AckPricedPlan = Pick<CatalogPlan, 'interval' | 'amountMinor'> & { currency: string };
+
 /** The canonical English sentence for the auto-renewal acknowledgement, prices filled in. */
-export function autoRenewAckSentence(plan: Pick<CatalogPlan, 'interval' | 'amountMinor' | 'currency'>): string {
+export function autoRenewAckSentence(plan: AckPricedPlan): string {
   const period = PERIOD_WORD[plan.interval ?? ''] ?? String(plan.interval ?? '');
   const price = plan.amountMinor === null ? '—' : formatAmount(plan.amountMinor, plan.currency);
   return `I agree this renews automatically every ${period} at ${price} until I cancel`;
@@ -69,7 +76,8 @@ export function proseHash(sentence: string): string {
 
 export interface CheckoutAcknowledgementInput {
   seekerProfileId: string;
-  plan: CatalogPlan;
+  /** The plan at the price that is charged (see `AckPricedPlan`). */
+  plan: Pick<CatalogPlan, 'requiresAutoRenewAck'> & AckPricedPlan;
   autoRenewAck: boolean;
   withdrawalWaiver: boolean;
   ip?: string | null;

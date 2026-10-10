@@ -25,6 +25,12 @@
 //   - A Pro subscriber manages renewal in the payment portal; once they have
 //     cancelled (or asked for one by link) the one-time passes are offered.
 //     A pass they hold can be bought again; only a subscription is "Your plan".
+//   - GoApply: when WeChat Pay can take the payment now (`checkout.rails`
+//     lists it), "Continue" opens the WeChat Pay sheet for the chosen pass or
+//     pack — that sheet owns the agreement box, the code and the result. A
+//     payment code is only ever drawn there, as a QR code: a `weixin://` link
+//     is never used as an image address. Otherwise the brand's other rail
+//     answers a payment page to open.
 
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -36,6 +42,7 @@ import { useFlag } from '../../../lib/flags';
 import { QUARTERLY_SWITCH, displayPrice, requiresWithdrawalWaiver } from '../../../lib/pricing';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useStudentStatus } from '../account-v2';
+import { WechatPaySheet, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import { initialSelection, monthlyPlan, plansExtras, usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
 import { checkoutRedirectUrl, usePlanCheckout } from '../../../hooks/credits/useBillingActions';
@@ -114,6 +121,9 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const [autoRenewAck, setAutoRenewAck] = useState(false);
   const [waiver, setWaiver] = useState(false);
   const [quoteFor, setQuoteFor] = useState<CatalogPlan | null>(null);
+  /** GoApply: the plan being bought in the WeChat Pay sheet. */
+  const [wechatFor, setWechatFor] = useState<CatalogPlan | null>(null);
+  const wechatPay = useWechatPayAvailable();
 
   useEffect(() => {
     if (initialised || !plansQ.data) return;
@@ -175,13 +185,17 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
     (brand.market !== 'intl' || countryResolved) &&
     !checkout.isPending;
   const rail: 'stripe' | 'alipay' = brand.market === 'cn' ? 'alipay' : 'stripe';
-  const checkoutResult = checkout.data;
-  const qrCodeUrl = checkoutResult && 'qrCodeUrl' in checkoutResult ? (checkoutResult.qrCodeUrl ?? null) : null;
+  // WeChat Pay sells one-time passes and packs only (every GoApply plan is one).
+  const viaWechat = brand.market === 'cn' && wechatPay.available && !!plan && sellableCnPlan(plans, plan.key) !== null;
 
   function onContinue() {
     if (!plan || !canContinue) return;
     if (legacySwitch) {
       setQuoteFor(plan);
+      return;
+    }
+    if (viaWechat) {
+      setWechatFor(plan);
       return;
     }
     checkout.mutate(
@@ -285,20 +299,34 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
             {apiErrorCode(checkout.error) === 'student_verification_required' ? tv('plans.studentRequired') : t('planSheet.error')}
           </p>
         ) : null}
-        {plan?.promotionCodes && !legacySwitch ? <p className={styles.muted}>{tv('plans.promotionCode')}</p> : null}
-        {qrCodeUrl ? (
-          <div className={styles.notice}>
-            <p className={styles.body}>{t('planSheet.scanToPay')}</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrCodeUrl} alt={t('planSheet.qrAlt')} width={200} height={200} />
-          </div>
+        {/* An answer with no page to open (a payment code or in-app cashier
+            parameters, which only the WeChat Pay sheet can use): say plainly
+            that the payment page did not open. Nothing was paid. */}
+        {checkout.isSuccess && !checkoutRedirectUrl(checkout.data) ? (
+          <p className={styles.error} role="alert">
+            {t('planSheet.error')}
+          </p>
         ) : null}
-
+        {plan?.promotionCodes && !legacySwitch ? <p className={styles.muted}>{tv('plans.promotionCode')}</p> : null}
         <div className={styles.actions}>
           <Btn variant="primary" disabled={!canContinue} onClick={onContinue} aria-busy={checkout.isPending || undefined}>
             {checkout.isPending ? t('planSheet.continuing') : legacySwitch ? t('planSheet.switchContinue') : t('planSheet.continue')}
           </Btn>
         </div>
+
+        {wechatFor ? (
+          <WechatPaySheet
+            open
+            planKey={wechatFor.key}
+            onClose={() => setWechatFor(null)}
+            onPaid={() => {
+              // The server already has the payment: show its new state.
+              sub.refetch();
+              void credits.refetch();
+            }}
+            navigate={navigate}
+          />
+        ) : null}
 
         {quoteFor ? (
           <SwitchQuoteSheet

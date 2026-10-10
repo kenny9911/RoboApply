@@ -33,8 +33,20 @@ export interface CheckoutOrder {
   /** Same-origin return paths (already sanitised). */
   successPath?: string;
   cancelPath?: string;
-  /** CN rails: how the payer pays (WeChat Pay: Native QR / H5 / JSAPI). */
-  context?: { tradeType?: 'native' | 'h5' | 'jsapi'; openId?: string };
+  /**
+   * CN rails: how the payer pays (WeChat Pay: Native QR / H5 / JSAPI).
+   *   - `payerClientIp`: the buyer's address as the server saw it (`req.ip`).
+   *     WeChat Pay H5 requires it (`scene_info.payer_client_ip`) and refuses
+   *     the order without one; it is never taken from the request body.
+   *   - `termsVersion`: the 用户协议 version the buyer ticked at this checkout;
+   *     the rail stores it on the order row (`AlipayOrder.termsVersion`). The
+   *     rail does not judge it: the caller has already checked it is the
+   *     published version and written the consent record (billing-cn
+   *     `createOrder`, and `acknowledgeTerms` for the legacy /billing/checkout).
+   *   - `openId` is ignored by the rails (JSAPI pays with the openid WeChat
+   *     sign-in recorded); it stays so older callers still type-check.
+   */
+  context?: { tradeType?: 'native' | 'h5' | 'jsapi'; openId?: string; payerClientIp?: string; termsVersion?: string };
   /**
    * Buyer's country from the edge (WP-79): 'TW' charges the plan's Taiwan
    * price when one is configured — the same rule the plan sheet showed.

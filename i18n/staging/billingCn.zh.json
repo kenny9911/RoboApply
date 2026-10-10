@@ -54,6 +54,11 @@
       "viewBilling": "查看账单",
       "done": "完成"
     },
+    "return": {
+      "checking": "正在确认支付结果…",
+      "notPaid": "本次支付未完成，未扣款。",
+      "statusTitle": "支付状态"
+    },
     "errors": {
       "notOpen": "微信支付暂未开放。",
       "notSellable": "该会员暂不可购买。",

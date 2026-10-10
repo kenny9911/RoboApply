@@ -214,6 +214,68 @@ export class BillingCnService {
     }
   }
 
+  /**
+   * The buyer must have ticked the 用户协议 that is published now (it names
+   * the collecting entity): a stale tab or a scripted client is refused.
+   */
+  private assertCurrentTerms(brand: ProductBrand, termsVersion: string | null | undefined): asserts termsVersion is string {
+    const currentTerms = (this.deps.termsVersion ?? defaultTermsVersion)(brand, this.env());
+    if (!currentTerms || termsVersion !== currentTerms) {
+      throw new BillingCnError('terms_outdated', 409, 'The agreement changed. Reload it and tick the box again.', { currentVersion: currentTerms });
+    }
+  }
+
+  /**
+   * Durable proof of what was agreed, written before WeChat Pay is called (an
+   * abandoned checkout leaves an unused record, which is harmless). The rail
+   * also stores the version on the order row (AlipayOrder.termsVersion).
+   */
+  private async recordTermsConsent(
+    db: Pick<BillingCnDb, 'seekerConsentRecord'>,
+    input: { seekerProfileId: string; brand: ProductBrand; plan: Pick<CatalogPlan, 'key' | 'amountMinor'>; termsVersion: string },
+    meta: RequestMeta,
+  ): Promise<void> {
+    await db.seekerConsentRecord.create({
+      data: {
+        seekerProfileId: input.seekerProfileId,
+        consentType: CN_PAY_TERMS_CONSENT_TYPE,
+        granted: true,
+        proseVersion: input.termsVersion,
+        proseHash: createHash('sha256')
+          .update(
+            cnPayTermsStatement({
+              termsVersion: input.termsVersion,
+              planKey: input.plan.key,
+              amountMinor: input.plan.amountMinor ?? 0,
+              collectingEntity: wechatPayReadiness(input.brand, this.env()).collectingEntity,
+            }),
+            'utf8',
+          )
+          .digest('hex'),
+        ipAddress: meta.ip ?? null,
+        userAgent: meta.userAgent ? meta.userAgent.slice(0, 500) : null,
+      },
+    });
+  }
+
+  /**
+   * The agreement gate for a WeChat Pay order created outside `createOrder`
+   * (the legacy POST /billing/checkout with rail `wechatpay`): the same
+   * per-user limit, the same "ticked the published 用户协议" check through the
+   * same injectable resolver, and the same consent record, in that order.
+   * Throws before anything is written when the version is missing or stale.
+   */
+  async acknowledgeTerms(
+    userId: string,
+    brand: ProductBrand,
+    input: { seekerProfileId: string; plan: Pick<CatalogPlan, 'key' | 'amountMinor'>; termsVersion: string | null | undefined },
+    meta: RequestMeta = {},
+  ): Promise<void> {
+    await this.assertCreateRateLimit(userId, brand);
+    this.assertCurrentTerms(brand, input.termsVersion);
+    await this.recordTermsConsent(await this.db(), { seekerProfileId: input.seekerProfileId, brand, plan: input.plan, termsVersion: input.termsVersion }, meta);
+  }
+
   async createOrder(userId: string, brand: ProductBrand, input: CreateWechatOrderInput, meta: RequestMeta = {}): Promise<CreateWechatOrderResponse> {
     const env = this.env();
     await this.assertCreateRateLimit(userId, brand);
@@ -228,19 +290,14 @@ export class BillingCnService {
     if (input.purpose && input.purpose !== purposeFor(plan)) {
       throw new BillingCnError('purpose_mismatch', 422, 'The purpose does not match the plan.');
     }
-    // The buyer must have ticked the 用户协议 that is published now (it names
-    // the collecting entity): a stale tab or a scripted client is refused.
-    const currentTerms = (this.deps.termsVersion ?? defaultTermsVersion)(brand, env);
-    if (!currentTerms || input.termsVersion !== currentTerms) {
-      throw new BillingCnError('terms_outdated', 409, 'The agreement changed. Reload it and tick the box again.', { currentVersion: currentTerms });
-    }
+    this.assertCurrentTerms(brand, input.termsVersion);
 
     const db = await this.db();
     const account = await loadBillingAccount(db, userId);
     if (!account) throw new HttpError('unauthorized');
     if (!account.seekerProfileId) throw new BillingError('no_profile', 'No seeker profile');
 
-    const context: WechatCheckoutContext = { tradeType: input.tradeType };
+    const context: WechatCheckoutContext = { tradeType: input.tradeType, termsVersion: input.termsVersion };
     // JSAPI: the rail pays with the openid WeChat sign-in recorded (never a
     // client-sent one); answer a clear 409 here when there is none.
     if (input.tradeType === 'jsapi' && !(await this.openIdFor(userId, brand))) {
@@ -248,30 +305,7 @@ export class BillingCnService {
     }
     if (input.tradeType === 'h5') context.payerClientIp = meta.ip ?? undefined;
 
-    // Durable proof of what was agreed, written before WeChat Pay is called
-    // (an abandoned checkout leaves an unused record, which is harmless).
-    // Moves to AlipayOrder.termsVersion once that column exists (schema request).
-    await db.seekerConsentRecord.create({
-      data: {
-        seekerProfileId: account.seekerProfileId,
-        consentType: CN_PAY_TERMS_CONSENT_TYPE,
-        granted: true,
-        proseVersion: input.termsVersion,
-        proseHash: createHash('sha256')
-          .update(
-            cnPayTermsStatement({
-              termsVersion: input.termsVersion,
-              planKey: plan.key,
-              amountMinor: plan.amountMinor ?? 0,
-              collectingEntity: wechatPayReadiness(brand, env).collectingEntity,
-            }),
-            'utf8',
-          )
-          .digest('hex'),
-        ipAddress: meta.ip ?? null,
-        userAgent: meta.userAgent ? meta.userAgent.slice(0, 500) : null,
-      },
-    });
+    await this.recordTermsConsent(db, { seekerProfileId: account.seekerProfileId, brand, plan, termsVersion: input.termsVersion }, meta);
 
     const result: WechatCheckoutResult = await this.rail().createCheckout({
       brand,
@@ -280,7 +314,7 @@ export class BillingCnService {
       seekerProfileId: account.seekerProfileId,
       acknowledgements: { autoRenewAck: false, withdrawalWaiver: false },
       successPath: `/settings/billing/return?plan=${encodeURIComponent(plan.key)}`,
-      context: context as CheckoutOrderContext,
+      context,
     });
     logger.info('RA_BILLING', 'wechatpay checkout terms acknowledged', {
       userId,
@@ -437,7 +471,5 @@ export class BillingCnService {
     }
   }
 }
-
-type CheckoutOrderContext = NonNullable<import('../../platform/billing/rails/types.js').CheckoutOrder['context']>;
 
 export const billingCnService = new BillingCnService();

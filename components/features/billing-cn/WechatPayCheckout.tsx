@@ -18,6 +18,10 @@
 //     server is the source of truth.
 //   - Renders nothing while availability is unknown or WeChat Pay is not
 //     available (no UI entry, R-04).
+//   - Inside WeChat, on GoApply, the pay tap is also where WeChat asks for
+//     the one-time permission to send the "payment received" notice
+//     (`<SubscribeOnTap template="payment_success">`). The payment goes on
+//     whatever the buyer answers; outside WeChat the button is unchanged.
 
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -29,6 +33,7 @@ import { getLegalDoc } from '../../../lib/api/compliance';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import type { CnOrderStatus, CreateWechatOrderResponse, WechatPayTradeType } from '../../../lib/api/contracts/billing-cn';
 import { formatMoney } from '../../../lib/pricing';
+import { SubscribeOnTap } from '../notify-cn';
 import {
   currentUserAgent,
   detectTradeType,
@@ -307,19 +312,25 @@ export function WechatPayCheckout({ planKey, onPaid, onCancel, navigate = defaul
             ? t('errors.generic')
             : null;
   const busy = create.isPending || (jsapiWaiting && !checkFailed);
-  let primary: { label: string; onClick: () => void; disabled: boolean };
+  let primary: { label: string; onClick: () => void; disabled: boolean; pays: boolean };
   if (jsapiWaiting && checkFailed) {
-    primary = { label: t('qr.checkAgain'), onClick: checkAgain, disabled: status.isFetching };
+    primary = { label: t('qr.checkAgain'), onClick: checkAgain, disabled: status.isFetching, pays: false };
   } else if (termsFailed) {
-    primary = { label: t('errors.retry'), onClick: () => void termsQ.refetch(), disabled: termsQ.isFetching };
+    primary = { label: t('errors.retry'), onClick: () => void termsQ.refetch(), disabled: termsQ.isFetching, pays: false };
   } else {
     primary = {
       label: jsapiWaiting ? t('qr.waiting') : busy ? t('pay.creating') : notice === 'generic' ? t('errors.retry') : t('pay.button', { price }),
       onClick: pay,
       // Ticked AND the agreement version known (it is recorded with the order).
       disabled: !agreed || !termsVersion || busy,
+      pays: true,
     };
   }
+  const primaryButton = (
+    <Btn variant="primary" disabled={primary.disabled} aria-busy={busy || undefined} onClick={primary.onClick}>
+      {primary.label}
+    </Btn>
+  );
 
   return (
     <div className={styles.stack} data-testid="wechatpay-checkout">
@@ -363,9 +374,9 @@ export function WechatPayCheckout({ planKey, onPaid, onCancel, navigate = defaul
       ) : null}
 
       <div className={styles.actions}>
-        <Btn variant="primary" disabled={primary.disabled} aria-busy={busy || undefined} onClick={primary.onClick}>
-          {primary.label}
-        </Btn>
+        {/* Only the button that pays asks for the notice permission; "check
+            again" and "try again" must not prompt WeChat a second time. */}
+        {primary.pays ? <SubscribeOnTap template="payment_success">{primaryButton}</SubscribeOnTap> : primaryButton}
         {onCancel ? <Btn onClick={onCancel}>{t('pay.cancel')}</Btn> : null}
       </div>
     </div>

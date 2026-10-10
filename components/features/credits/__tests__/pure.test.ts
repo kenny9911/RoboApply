@@ -179,7 +179,7 @@ describe('deriveSubscriptionState', () => {
 
   it('a cancelled subscription is still an auto-renewing plan type but will NOT renew', () => {
     const monthly = creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month' }).summary;
-    const cancelled = deriveSubscriptionState({ summary: monthly, legacyPlan: legacyPlan('active', { tier: 'free', cancelAtPeriodEnd: true }) });
+    const cancelled = deriveSubscriptionState({ summary: { ...monthly, cancelAtPeriodEnd: true }, legacyPlan: legacyPlan('active', { tier: 'free' }) });
     expect(cancelled.autoRenews).toBe(true);
     expect(cancelled.cancelAtPeriodEnd).toBe(true);
     expect(cancelled.willRenew).toBe(false);
@@ -187,11 +187,27 @@ describe('deriveSubscriptionState', () => {
     expect(running.willRenew).toBe(true);
   });
 
-  it('summary.cancelAtPeriodEnd (requested from WP-21a) wins over the legacy plan when sent', () => {
-    const summary = { ...creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month' }).summary, cancelAtPeriodEnd: true };
-    expect(summaryCancelAtPeriodEnd(summary)).toBe(true);
-    expect(summaryCancelAtPeriodEnd(creditsResponse().summary)).toBeUndefined();
-    expect(deriveSubscriptionState({ summary, legacyPlan: legacyPlan('active', { cancelAtPeriodEnd: false }) }).willRenew).toBe(false);
+  it('cancel-at-period-end is read from the summary only; the legacy plan is not a second opinion', () => {
+    const base = creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month' }).summary;
+    // The summary says cancelled, the legacy plan (stale) says renewing: cancelled.
+    const cancelled = deriveSubscriptionState({ summary: { ...base, cancelAtPeriodEnd: true }, legacyPlan: legacyPlan('active', { cancelAtPeriodEnd: false }) });
+    expect([cancelled.cancelAtPeriodEnd, cancelled.willRenew]).toEqual([true, false]);
+    // The summary says it renews, the legacy plan says cancelled: it renews.
+    const renewing = deriveSubscriptionState({ summary: { ...base, cancelAtPeriodEnd: false }, legacyPlan: legacyPlan('active', { cancelAtPeriodEnd: true }) });
+    expect([renewing.cancelAtPeriodEnd, renewing.willRenew]).toEqual([false, true]);
+    // No legacy plan at all: the summary is enough.
+    expect(deriveSubscriptionState({ summary: { ...base, cancelAtPeriodEnd: true } }).cancelAtPeriodEnd).toBe(true);
+  });
+
+  it('summaryCancelAtPeriodEnd keeps "the server did not say" apart from false', () => {
+    const summary = creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month' }).summary;
+    expect(summaryCancelAtPeriodEnd({ ...summary, cancelAtPeriodEnd: true })).toBe(true);
+    expect(summaryCancelAtPeriodEnd(summary)).toBe(false);
+    // An older server during a deploy sends no field.
+    const { cancelAtPeriodEnd: _dropped, ...older } = summary;
+    expect(summaryCancelAtPeriodEnd(older as typeof summary)).toBeUndefined();
+    expect(summaryCancelAtPeriodEnd(null)).toBeUndefined();
+    expect(deriveSubscriptionState({ summary: older as typeof summary, legacyPlan: legacyPlan('active', { cancelAtPeriodEnd: true }) }).cancelAtPeriodEnd).toBe(false);
   });
 });
 
@@ -215,12 +231,24 @@ describe('credits copy makes no claims the server does not back', () => {
   });
 });
 
-describe('checkout redirect', () => {
-  it('Stripe url, CN pay url, or nothing', () => {
-    expect(checkoutRedirectUrl({ url: 'https://checkout.stripe.com/x' })).toBe('https://checkout.stripe.com/x');
-    expect(checkoutRedirectUrl({ orderId: 'o1', payUrl: 'https://pay.example/x' })).toBe('https://pay.example/x');
-    expect(checkoutRedirectUrl({ orderId: 'o1', qrCodeUrl: 'data:x' })).toBeNull();
+describe('checkout redirect (the shared CheckoutResponse contract)', () => {
+  it('a redirect answer gives its page address, whichever rail took the order', () => {
+    expect(checkoutRedirectUrl({ kind: 'redirect', url: 'https://checkout.stripe.com/x', orderId: 'cs_1', rail: 'stripe' })).toBe('https://checkout.stripe.com/x');
+    expect(checkoutRedirectUrl({ kind: 'redirect', url: 'https://pay.example/x', orderId: null, rail: 'alipay' })).toBe('https://pay.example/x');
+    expect(checkoutRedirectUrl({ kind: 'redirect', url: 'https://wx.tenpay.com/checkmweb?prepay_id=1', orderId: 'GAWX1', rail: 'wechatpay' })).toBe('https://wx.tenpay.com/checkmweb?prepay_id=1');
+  });
+
+  it('a payment code or in-app cashier answer is never somewhere to navigate', () => {
+    expect(checkoutRedirectUrl({ kind: 'qr', qrCodeUrl: 'weixin://wxpay/bizpayurl?pr=abc', orderId: 'GAWX1', rail: 'wechatpay' })).toBeNull();
+    expect(checkoutRedirectUrl({ kind: 'jsapi', jsapiParams: { appId: 'wx' }, orderId: 'GAWX1', rail: 'wechatpay' })).toBeNull();
     expect(checkoutRedirectUrl(null)).toBeNull();
+    expect(checkoutRedirectUrl(undefined)).toBeNull();
+  });
+
+  it('only http(s) pages are opened', () => {
+    expect(checkoutRedirectUrl({ kind: 'redirect', url: 'weixin://wxpay/bizpayurl?pr=abc', orderId: 'GAWX1', rail: 'wechatpay' })).toBeNull();
+    expect(checkoutRedirectUrl({ kind: 'redirect', url: 'javascript:alert(1)', orderId: null, rail: 'stripe' })).toBeNull();
+    expect(checkoutRedirectUrl({ kind: 'redirect', url: '', orderId: null, rail: 'stripe' })).toBeNull();
   });
 });
 

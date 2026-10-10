@@ -51,13 +51,15 @@ export function plansView(brand: BrandId = 'roboapply', env: Record<string, stri
   };
 }
 
-const bucket = (cap: number, used = 0, window: 'day' | 'week' = 'day') => ({
+const bucket = (cap: number, used = 0, window: 'day' | 'week' = 'day', pro?: { proCap: number; proWindow: 'day' | 'week' }) => ({
   cap,
   window,
   used,
   remaining: cap - used,
   grantRemaining: 0,
   resetsAt: '2026-10-11T07:00:00.000Z',
+  // The server sends what Pro would give only where that is more than `cap`.
+  ...(pro && pro.proCap > cap ? pro : {}),
 });
 
 export function creditsResponse(over: Partial<CreditsResponse['summary']> = {}, practice: CreditsResponse['practice'] = { balance: 1 }): CreditsResponse {
@@ -69,6 +71,7 @@ export function creditsResponse(over: Partial<CreditsResponse['summary']> = {}, 
       legacyPlan: false,
       interval: null,
       periodEnd: null,
+      cancelAtPeriodEnd: false,
       timezone: 'UTC',
       upgradable: true,
       buckets: {
@@ -82,7 +85,7 @@ export function creditsResponse(over: Partial<CreditsResponse['summary']> = {}, 
         autofill: bucket(pro ? 100 : 5),
         ai_answer: bucket(pro ? 200 : 10),
         job_import: bucket(pro ? 50 : 10),
-        ready_kits: bucket(pro ? 30 : 3, 0, 'week'),
+        ready_kits: bucket(pro ? 30 : 3, 0, 'week', { proCap: 30, proWindow: 'week' }),
         competitiveness: bucket(pro ? 3 : 1, 0, 'week'),
         contact_lookup: bucket(0),
       },

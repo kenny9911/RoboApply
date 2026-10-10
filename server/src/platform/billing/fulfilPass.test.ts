@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/prisma.js', () => ({ default: {} }));
 
 import { createFakePrisma } from '../../test/fakePrisma.js';
-import { fulfilPass, closePendingOrder, type FulfilDb, type FulfilDeps } from './fulfilPass.js';
+import { PAID_NOTICE_HREF, fulfilPass, closePendingOrder, type FulfilDb, type FulfilDeps, type PaidNotice } from './fulfilPass.js';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const DAY = 86_400_000;
@@ -31,6 +31,7 @@ function setup(orders: Record<string, unknown>[], subs: Record<string, unknown>[
     return 'granted';
   });
   const grantPack = vi.fn(async () => ({ status: 'granted' }));
+  const notifyPaid = vi.fn(async (_notice: PaidNotice) => ({ delivered: true }));
   const deps: FulfilDeps = {
     getDb: async () => db as unknown as FulfilDb,
     now: () => NOW,
@@ -38,8 +39,9 @@ function setup(orders: Record<string, unknown>[], subs: Record<string, unknown>[
     grantPlanIfNewPeriod,
     grantPack,
     invalidate: () => {},
+    notifyPaid,
   };
-  return { db, grantPlan, grantPlanIfNewPeriod, grantPack, deps, credits };
+  return { db, grantPlan, grantPlanIfNewPeriod, grantPack, notifyPaid, deps, credits };
 }
 
 const monthPass = {
@@ -149,6 +151,66 @@ describe('fulfilPass (shared by every CN rail)', () => {
   it('refuses an order whose plan is a subscription (CN rails sell passes and packs only)', async () => {
     const c = setup([{ ...monthPass, outTradeNo: 'GAORDER_S', tier: 'ra_pro_weekly', planKey: 'pro_weekly' }]);
     expect((await fulfilPass({ outTradeNo: 'GAORDER_S', channel: 'alipay' }, c.deps)).status).toBe('unknown_plan');
+  });
+
+  describe('the WeChat "payment received" notice', () => {
+    const wxPass = { ...monthPass, outTradeNo: 'GAWX_1', channel: 'wechatpay' };
+    const wx = { outTradeNo: 'GAWX_1', channel: 'wechatpay' as const, paidAmountMinor: 3900, transactionId: 'wx_tx_1' };
+
+    it('sends one notice for a fulfilled WeChat Pay order, filled from the order itself', async () => {
+      const c = setup([wxPass]);
+      expect((await fulfilPass(wx, c.deps)).status).toBe('fulfilled');
+      expect(c.notifyPaid).toHaveBeenCalledTimes(1);
+      expect(c.notifyPaid).toHaveBeenCalledWith({
+        userId: 'u_1',
+        template: 'payment_success',
+        params: { planName: '会员月卡', amountFen: 3900, paidAt: NOW.toISOString(), orderNo: 'GAWX_1' },
+        href: PAID_NOTICE_HREF,
+        eventId: 'GAWX_1',
+      });
+    });
+
+    it('a replayed notify sends nothing more, however often it arrives', async () => {
+      const c = setup([wxPass]);
+      await fulfilPass(wx, c.deps);
+      for (let i = 0; i < 3; i += 1) expect((await fulfilPass(wx, c.deps)).status).toBe('already_fulfilled');
+      expect(c.notifyPaid).toHaveBeenCalledTimes(1);
+    });
+
+    it('two concurrent notifies send once', async () => {
+      const c = setup([wxPass]);
+      await Promise.all([fulfilPass(wx, c.deps), fulfilPass(wx, c.deps)]);
+      expect(c.notifyPaid).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failed notice never fails the fulfilment: the pass is on and the credits are granted', async () => {
+      const c = setup([wxPass]);
+      c.notifyPaid.mockRejectedValueOnce(new Error('WeChat is down'));
+      const res = await fulfilPass(wx, c.deps);
+      expect(res).toMatchObject({ status: 'fulfilled', activated: true });
+      expect((await c.db.alipayOrder.findUnique({ where: { outTradeNo: 'GAWX_1' } }))?.status).toBe('completed');
+      expect(c.grantPlan).toHaveBeenCalledTimes(1);
+      // Not retried on the replay either: the order was claimed once.
+      await fulfilPass(wx, c.deps);
+      expect(c.notifyPaid).toHaveBeenCalledTimes(1);
+    });
+
+    it('a practice pack bought with WeChat Pay is announced too', async () => {
+      const c = setup([{ ...wxPass, outTradeNo: 'GAWX_P', tier: 'ra_practice_pack_5', planKey: 'practice_pack_5', amount: 29, amountMinor: 2900 }]);
+      await fulfilPass({ outTradeNo: 'GAWX_P', channel: 'wechatpay', paidAmountMinor: 2900 }, c.deps);
+      expect(c.notifyPaid).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ planName: '面试练习包 5 次', amountFen: 2900, orderNo: 'GAWX_P' }) }));
+    });
+
+    it('sends nothing for Alipay orders, for orders that are not fulfilled, and for the old RoboApply passes', async () => {
+      await fulfilPass({ outTradeNo: 'GAORDER_1', channel: 'alipay', paidAmountMinor: 3900 }, ctx.deps);
+      expect(ctx.notifyPaid).not.toHaveBeenCalled();
+      const mismatch = setup([wxPass]);
+      expect((await fulfilPass({ ...wx, paidAmountMinor: 1 }, mismatch.deps)).status).toBe('amount_mismatch');
+      expect(mismatch.notifyPaid).not.toHaveBeenCalled();
+      const legacy = setup([{ ...monthPass, outTradeNo: 'RAWX_1', channel: 'wechatpay', tier: 'ra_starter', planKey: null, brand: null, amount: 19, amountMinor: null }]);
+      expect((await fulfilPass({ outTradeNo: 'RAWX_1', channel: 'wechatpay' }, legacy.deps)).status).toBe('fulfilled');
+      expect(legacy.notifyPaid).not.toHaveBeenCalled();
+    });
   });
 
   it('closePendingOrder closes only pending orders', async () => {

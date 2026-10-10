@@ -9,7 +9,8 @@
 //     email goes out (server), and — once, ever, as a secondary link — "Switch
 //     to the 7-day pass instead?" when the server offers that alternative.
 //     It never blocks or undoes the cancellation.
-//   - An optional "why?" survey AFTER cancelling.
+//   - An optional "why?" survey AFTER cancelling. It goes to its own
+//     endpoint (POST /credits/cancel/survey), which only stores the answer.
 //   - If the in-app call fails, the public /cancel page is offered.
 
 import Link from 'next/link';
@@ -18,13 +19,14 @@ import { useFormatter, useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
 import { useCancelSubscription, useCancelSurvey } from '../../../hooks/credits/useBillingActions';
-import type { CancelResponse } from '../../../lib/api/contracts/credits';
+import type { CancelResponse, CancelSurveyReason } from '../../../lib/api/contracts/credits';
 import { parseDate } from './labels';
 import styles from './credits.module.css';
 
 export const CANCEL_ALTERNATIVE_STORAGE_KEY = 'ra.credits.cancelAlternativeShown';
 export const WEEK_PASS_HREF = '/settings/billing?plan=pro_week_pass#plans';
-const SURVEY_REASONS = ['price', 'found_job', 'not_useful', 'pause', 'other'] as const;
+/** The contract's `CANCEL_SURVEY_REASONS` (the server refuses any other value). */
+const SURVEY_REASONS = ['price', 'found_job', 'not_useful', 'pause', 'other'] as const satisfies readonly CancelSurveyReason[];
 
 /** The plan sheet with the server's alternative selected (and shown, even to a subscriber). */
 function alternativeHref(res: CancelResponse): string {
@@ -61,7 +63,7 @@ export function CancelSubscription({ periodEnd, onCancelled }: CancelSubscriptio
   const cancel = useCancelSubscription();
   const survey = useCancelSurvey();
   const [result, setResult] = useState<{ res: CancelResponse; showAlternative: boolean } | null>(null);
-  const [reason, setReason] = useState<string | null>(null);
+  const [reason, setReason] = useState<CancelSurveyReason | null>(null);
   const [note, setNote] = useState('');
 
   const fmt = (iso: string | null | undefined) => {

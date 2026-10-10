@@ -6,8 +6,13 @@
 //
 //   GET  /plan                      current plan, practice credits, the brand's catalog
 //   GET  /credits                   practice credit balance (+ allotment)
-//   POST /checkout                  { planKey, autoRenewAck?, withdrawalWaiver?, rail? } → { url } (Stripe/Alipay) | QR | JSAPI
-//   POST /alipay                    { planKey } → { url } (GoApply passes; same as checkout with rail 'alipay')
+//   POST /checkout                  { planKey, autoRenewAck?, withdrawalWaiver?, rail?, tradeType? } → CheckoutResponse
+//                                   (features/credits/contract.ts): { kind: 'redirect', url, orderId, rail } (Stripe, Alipay,
+//                                   WeChat Pay H5) | { kind: 'qr', qrCodeUrl, … } | { kind: 'jsapi', jsapiParams, … }.
+//                                   The buyer's country (edge header) picks the Taiwan price; WeChat Pay H5 gets `req.ip`.
+//                                   Rail `wechatpay` also needs `termsVersion` = the published 用户协议 version
+//                                   (409 terms_outdated otherwise; same gate and consent record as /billing-cn/wechatpay).
+//   POST /alipay                    { planKey } → CheckoutResponse (GoApply passes; same as checkout with rail 'alipay')
 //   GET/POST /alipay/callback       GoHire Alipay worker notify_url → fulfilPass
 //   POST /portal                    Stripe Billing Portal url
 //   POST /cancel                    turn auto-renewal off (one click; confirmation email)
@@ -40,7 +45,7 @@ import { getMockPlanCatalog } from '../../lib/mockInterviewPlans.js';
 import { renderAlipayReceiptPdf } from '../lib/invoiceReceipt.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import { getBrand, type ProductBrand } from '../../platform/brand/registry.js';
-import { collectingEntity, isPaymentRail } from '../../platform/billing/index.js';
+import { buyerCountryFromRequest, collectingEntity, isPaymentRail } from '../../platform/billing/index.js';
 
 const router = Router();
 
@@ -79,6 +84,8 @@ export const CheckoutBodySchema = z
     cancelNext: z.string().max(400).optional(),
     tradeType: z.enum(['native', 'h5', 'jsapi']).optional(),
     openId: z.string().max(128).optional(),
+    /** WeChat Pay: the 用户协议 version the buyer ticked. Checked against the published one before any order exists. */
+    termsVersion: z.string().min(1).max(40).optional(),
   })
   .passthrough();
 
@@ -151,7 +158,21 @@ async function checkout(req: Request, res: Response, forcedRail?: 'alipay') {
       cancelPath: cancelNext ?? (next ? '/settings/billing' : undefined),
       ip: req.ip ?? null,
       userAgent: req.get('user-agent') ?? null,
-      context: body.tradeType ? { tradeType: body.tradeType, openId: body.openId } : undefined,
+      // Decides the price: read from the edge's own header (see buyerCountryFromRequest).
+      country: buyerCountryFromRequest(req),
+      // The payer's address is the one this server saw, never a body field
+      // (WeChat Pay H5 refuses an order without it).
+      // `termsVersion` is only what the buyer says they ticked: createCheckout
+      // refuses a WeChat Pay order unless it is the published version.
+      context:
+        body.tradeType || body.termsVersion
+          ? {
+              ...(body.tradeType ? { tradeType: body.tradeType } : {}),
+              openId: body.openId,
+              ...(req.ip ? { payerClientIp: req.ip } : {}),
+              ...(body.termsVersion ? { termsVersion: body.termsVersion } : {}),
+            }
+          : undefined,
     });
     return res.json({ success: true, data });
   } catch (err) {

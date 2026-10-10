@@ -35,8 +35,13 @@ export const BILLING_ERROR_STATUS = {
   no_profile: 409,
   /** The CN rail amount is not a whole yuan (the GoHire worker bills whole yuan). */
   price_not_whole_yuan: 503,
-  /** Student plans need a live school-email verification (WP-79; F-ACCT-02). */
-  student_verification_required: 403,
+  /**
+   * Student plans need a live school-email verification (WP-79; F-ACCT-02).
+   * 409, not 403: the buyer is allowed to buy, their account is just not in
+   * the state the plan needs yet (the web client reads a bare 403 as "out of
+   * quota").
+   */
+  student_verification_required: 409,
 } as const;
 
 export type BillingErrorCode = keyof typeof BILLING_ERROR_STATUS;

@@ -10,19 +10,32 @@
 //
 // The token is read once from the URL and stripped from the address bar so it
 // does not linger in history or get shared by copy-paste.
+//
+// A link that is unknown, already used or older than 30 minutes answers 410
+// with the envelope code `cancel_token_invalid` (top-level `code`; the server
+// puts no `details.reason` on it). `isCancelTokenInvalid` reads the code and,
+// so a later move into `details.reason` cannot silently turn "this link has
+// expired" into a generic error, the reason as well.
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
-import { apiErrorCode } from '../../../lib/api/contracts/wire';
+import { apiErrorCode, apiErrorReason } from '../../../lib/api/contracts/wire';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { useConfirmPublicCancel, useRequestCancelLink } from '../../../hooks/credits/usePublicCancel';
 import { parseDate } from './labels';
 import styles from './credits.module.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const CANCEL_TOKEN_INVALID = 'cancel_token_invalid';
+
+/** The confirm call failed because the link itself is no good (not because of a network or provider error). */
+export function isCancelTokenInvalid(err: unknown): boolean {
+  return apiErrorCode(err) === CANCEL_TOKEN_INVALID || apiErrorReason(err) === CANCEL_TOKEN_INVALID;
+}
 
 export interface PublicCancelFlowProps {
   /** The one-time token from the emailed link (`/cancel?token=…`), if any. */
@@ -63,7 +76,7 @@ export function PublicCancelFlow({ token: initialToken = null }: PublicCancelFlo
     requestLink.mutate({ email });
   };
 
-  const tokenInvalid = confirm.isError && apiErrorCode(confirm.error) === 'cancel_token_invalid';
+  const tokenInvalid = confirm.isError && isCancelTokenInvalid(confirm.error);
 
   return (
     <div className={styles.publicPage} data-testid="public-cancel">

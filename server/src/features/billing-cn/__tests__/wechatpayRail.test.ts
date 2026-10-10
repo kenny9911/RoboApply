@@ -40,6 +40,7 @@ import {
   toCstRfc3339,
   verifyWechatSignature,
   wechatPayReadiness,
+  ORDER_TERMS_VERSION_MAX,
   WECHATPAY_ORDER_TTL_MINUTES,
 } from '../../../platform/billing/rails/wechatpay.js';
 import { WECHATPAY_ORDER_TTL_MINUTES as CONTRACT_TTL } from '../contract.js';
@@ -320,6 +321,16 @@ describe('checkout', () => {
     );
     expect(f.calls[0]!.url).toMatch(/\/v3\/pay\/transactions\/h5$/);
     expect(JSON.parse(f.calls[0]!.body).scene_info).toMatchObject({ payer_client_ip: '203.0.113.9', h5_info: { type: 'Wap' } });
+  });
+
+  it('stores the 用户协议 version the buyer ticked on the order row (clipped to the column\'s limit; null when the caller has none)', async () => {
+    const { db, rail } = railWith(() => [200, { code_url: 'weixin://p' }]);
+    const withTerms = await rail.createCheckout(order('pro_monthly', { tradeType: 'native', termsVersion: ' cn-terms-2026-10 ' }));
+    expect((await db.alipayOrder.findUnique({ where: { outTradeNo: withTerms.orderId! } }))?.termsVersion).toBe('cn-terms-2026-10');
+    const long = await rail.createCheckout(order('pro_monthly', { tradeType: 'native', termsVersion: 'v'.repeat(60) }));
+    expect((await db.alipayOrder.findUnique({ where: { outTradeNo: long.orderId! } }))?.termsVersion).toBe('v'.repeat(ORDER_TERMS_VERSION_MAX));
+    const none = await rail.createCheckout(order('pro_monthly'));
+    expect((await db.alipayOrder.findUnique({ where: { outTradeNo: none.orderId! } }))?.termsVersion).toBeNull();
   });
 
   it('H5 without the payer IP is refused before any request', async () => {

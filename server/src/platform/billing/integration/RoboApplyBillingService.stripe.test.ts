@@ -1,7 +1,9 @@
 // @vitest-environment node
 //
 // RoboApply (Stripe) billing: checkout acknowledgements, the legacy switch
-// quote, and webhook idempotency (TASK_PLAN.md WP-21a acceptance).
+// quote, and webhook idempotency (TASK_PLAN.md WP-21a acceptance); Account V2
+// wiring (WP-79): student plans need the capability and a live verification,
+// Taiwan buyers are charged the configured TWD price and the webhook stores it.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +28,7 @@ vi.mock('../../../middleware/auth.js', () => ({
 import { startRouteHarness, type RouteHarness } from '../../../test/routeHarness.js';
 import billingRouter from '../../../roboapply/routes/billing.js';
 import { handleRoboApplyStripeEvent, invoiceSubscriptionId, setBillingServiceDepsForTests } from '../../../roboapply/services/RoboApplyBillingService.js';
-import { setStripeClientForTests } from '../index.js';
+import { autoRenewAckSentence, proseHash, setStripeClientForTests } from '../index.js';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const NOW_S = Math.floor(NOW.getTime() / 1000);
@@ -86,6 +88,12 @@ const grantIfNewPeriod = vi.fn(async (p: { force?: boolean; periodStart: Date | 
 });
 const grantPack = vi.fn(async () => ({}));
 const sendEmail = vi.fn(async () => ({ status: 'sent' as const }));
+const student = { enabled: true, verified: false, lookupFails: false };
+const studentEnabled = vi.fn(async () => student.enabled);
+const isStudentVerified = vi.fn(async () => {
+  if (student.lookupFails) throw new Error('verification store down');
+  return student.verified;
+});
 let h: RouteHarness;
 
 beforeAll(async () => {
@@ -114,7 +122,10 @@ beforeEach(() => {
     sendEmail,
     getBalance: async () => ({ credits: 0, tier: 'free', periodAllotment: 1, renewedAt: null, currentPeriodEnd: null, ephemeral: false }),
     invalidate: () => {},
+    studentEnabled,
+    isStudentVerified,
   });
+  Object.assign(student, { enabled: true, verified: false, lookupFails: false });
 });
 
 afterEach(() => {
@@ -140,7 +151,8 @@ describe('checkout acknowledgements', () => {
       body: { planKey: 'pro_monthly', autoRenewAck: true, withdrawalWaiver: true, next: '/jobs' },
     });
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ kind: 'redirect', url: 'https://checkout.stripe.test/cs_new', rail: 'stripe' });
+    // The shared checkout shape (features/credits/contract.ts `CheckoutResponse`), nothing else.
+    expect(res.body.data).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/cs_new', orderId: 'cs_new', rail: 'stripe' });
     const types = (await fake.db.seekerConsentRecord.findMany({})).map((r: any) => r.consentType).sort();
     expect(types).toEqual(['auto_renew_ack', 'withdrawal_waiver']);
     const params = stripe.checkout.sessions.create.mock.calls[0]![0] as any;
@@ -184,6 +196,242 @@ describe('checkout acknowledgements', () => {
   });
 });
 
+describe('Account V2: student plans (capability on + a live school-email verification)', () => {
+  const buy = (planKey = 'student_monthly') => h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body: { planKey, autoRenewAck: true } });
+
+  beforeEach(() => {
+    vi.stubEnv('STRIPE_PRICE_STUDENT_MONTHLY', 'price_sm');
+    vi.stubEnv('STRIPE_PRICE_STUDENT_MONTHLY_CENTS', '1499');
+    vi.stubEnv('STRIPE_PRICE_STUDENT_QUARTERLY', 'price_sq');
+    vi.stubEnv('STRIPE_PRICE_STUDENT_QUARTERLY_CENTS', '3599');
+  });
+
+  it('an unverified user cannot buy a student plan: 409, nothing recorded, the payment page never opens', async () => {
+    const res = await buy();
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ success: false, code: 'student_verification_required', details: { planKey: 'student_monthly' } });
+    expect(isStudentVerified).toHaveBeenCalledWith('u_1');
+    expect(await fake.db.seekerConsentRecord.findMany({})).toEqual([]);
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+  });
+
+  it('a verified student can: the student price is charged and the acknowledgement recorded', async () => {
+    student.verified = true;
+    const res = await buy();
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/cs_new', orderId: 'cs_new', rail: 'stripe' });
+    const params = stripe.checkout.sessions.create.mock.calls[0]![0] as any;
+    expect(params.line_items).toEqual([{ price: 'price_sm', quantity: 1 }]);
+    expect(params.mode).toBe('subscription');
+    expect(params.metadata).toMatchObject({ planKey: 'student_monthly', autoRenewAck: 'yes' });
+    // Student plans never take a promotion code (discounts do not stack).
+    expect(params.allow_promotion_codes).toBe(false);
+    expect((await fake.db.seekerConsentRecord.findMany({})).map((r: any) => r.consentType)).toEqual(['auto_renew_ack']);
+  });
+
+  it('still needs the unticked auto-renewal box', async () => {
+    student.verified = true;
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body: { planKey: 'student_monthly' } });
+    expect([res.status, res.body.code]).toEqual([422, 'auto_renew_ack_required']);
+  });
+
+  it('is not on sale while the student capability is off, verified or not', async () => {
+    student.enabled = false;
+    student.verified = true;
+    const res = await buy();
+    expect([res.status, res.body.code]).toEqual([409, 'plan_not_sellable']);
+    expect(res.body.details).toMatchObject({ reason: 'student_off' });
+    expect(isStudentVerified).not.toHaveBeenCalled();
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the verification cannot be read', async () => {
+    student.lookupFails = true;
+    const res = await buy();
+    expect([res.status, res.body.code]).toEqual([409, 'student_verification_required']);
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('an unpriced student plan is not on sale', async () => {
+    student.verified = true;
+    vi.stubEnv('STRIPE_PRICE_STUDENT_QUARTERLY', '');
+    expect((await buy('student_quarterly')).body.code).toBe('plan_not_sellable');
+  });
+
+  it('regular plans never ask about student status', async () => {
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body: { planKey: 'pro_monthly', autoRenewAck: true } });
+    expect(res.status).toBe(200);
+    expect(studentEnabled).not.toHaveBeenCalled();
+    expect(isStudentVerified).not.toHaveBeenCalled();
+  });
+
+  describe('switching to a student plan', () => {
+    beforeEach(async () => {
+      await fake.db.seekerSubscription.create({
+        data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'pro', status: 'active', planKey: 'pro_monthly', interval: 'month', stripeSubscriptionId: 'sub_old', stripeCustomerId: 'cus_1', currentPeriodEnd: new Date(PERIOD_END_S * 1000), cancelAtPeriodEnd: false },
+      });
+    });
+
+    it('is refused for an unverified user on the quote and on confirm; nothing is charged', async () => {
+      const quote = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: { planKey: 'student_monthly' } });
+      expect([quote.status, quote.body.code]).toEqual([409, 'student_verification_required']);
+      const confirm = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: { planKey: 'student_monthly', confirm: true, prorationDate: NOW_S, autoRenewAck: true } });
+      expect([confirm.status, confirm.body.code]).toEqual([409, 'student_verification_required']);
+      expect(stripe.invoices.createPreview).not.toHaveBeenCalled();
+      expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+    });
+
+    it('a verified student gets the quote and the switch at the student price', async () => {
+      student.verified = true;
+      const quote = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: { planKey: 'student_monthly' } });
+      expect(quote.status).toBe(200);
+      expect(quote.body.data.quote).toMatchObject({ planKey: 'student_monthly', newRenewalPriceMinor: 1499 });
+      const confirm = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: { planKey: 'student_monthly', confirm: true, prorationDate: NOW_S, autoRenewAck: true } });
+      expect(confirm.body.data).toEqual({ switched: true, planKey: 'student_monthly' });
+      expect(stripe.subscriptions.update).toHaveBeenCalledWith('sub_old', expect.objectContaining({ items: [expect.objectContaining({ price: 'price_sm' })] }));
+    });
+  });
+});
+
+describe('Account V2: Taiwan prices (the buyer\'s edge country picks the TWD price when one is configured)', () => {
+  const buyFrom = (country: string | null, planKey = 'pro_monthly') =>
+    h.request<any>('POST', '/api/v1/roboapply/billing/checkout', {
+      host: AS_USER.host,
+      headers: { ...AS_USER.headers, ...(country ? { 'cf-ipcountry': country } : {}) },
+      body: { planKey, autoRenewAck: true },
+    });
+  const charged = () => {
+    const params = stripe.checkout.sessions.create.mock.calls.at(-1)![0] as any;
+    return [params.line_items[0].price, params.metadata.currency];
+  };
+
+  it('a Taiwan buyer is charged the TWD price only for a plan whose TWD pair is set', async () => {
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD', 'price_m_twd');
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+    expect((await buyFrom('TW')).status).toBe(200);
+    expect(charged()).toEqual(['price_m_twd', 'twd']);
+    // Quarterly has no Taiwan price configured: USD, as the plan sheet showed.
+    await fake.db.seekerSubscription.deleteMany({});
+    expect((await buyFrom('tw', 'pro_quarterly')).status).toBe(200);
+    expect(charged()).toEqual(['price_q', 'usd']);
+  });
+
+  it('without the TWD pair a Taiwan buyer pays the USD price; other countries always do', async () => {
+    expect((await buyFrom('TW')).status).toBe(200);
+    expect(charged()).toEqual(['price_m', 'usd']);
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD', 'price_m_twd');
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+    for (const country of ['DE', 'US', null]) {
+      expect((await buyFrom(country)).status).toBe(200);
+      expect(charged(), String(country)).toEqual(['price_m', 'usd']);
+    }
+  });
+
+  it('the charge reads the edge\'s own country header: a client-sent cf-ipcountry cannot pick the Taiwan price', async () => {
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD', 'price_m_twd');
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+    const from = (headers: Record<string, string>) =>
+      h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { host: AS_USER.host, headers: { ...AS_USER.headers, ...headers }, body: { planKey: 'pro_monthly', autoRenewAck: true } });
+    expect((await from({ 'cf-ipcountry': 'TW', 'x-vercel-ip-country': 'US' })).status).toBe(200);
+    expect(charged()).toEqual(['price_m', 'usd']);
+    expect((await from({ 'cf-ipcountry': 'US', 'x-vercel-ip-country': 'TW' })).status).toBe(200);
+    expect(charged()).toEqual(['price_m_twd', 'twd']);
+  });
+
+  it('the recorded auto-renewal acknowledgement names the price that is charged: TWD for a Taiwan buyer on a TWD price, USD otherwise', async () => {
+    const ackHash = async () => {
+      const rows = (await fake.db.seekerConsentRecord.findMany({})).filter((r: any) => r.consentType === 'auto_renew_ack');
+      expect(rows).toHaveLength(1);
+      await fake.db.seekerConsentRecord.deleteMany({});
+      return rows[0].proseHash as string;
+    };
+    const usd = proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 2499, currency: 'USD' }));
+    const twd = proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 74900, currency: 'TWD' }));
+    expect(autoRenewAckSentence({ interval: 'month', amountMinor: 74900, currency: 'TWD' })).toBe('I agree this renews automatically every month at 749.00 TWD until I cancel');
+    expect(twd).not.toBe(usd);
+
+    // No Taiwan price configured: a Taiwan buyer ticked, and pays, the USD price.
+    expect((await buyFrom('TW')).status).toBe(200);
+    expect(await ackHash()).toBe(usd);
+
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD', 'price_m_twd');
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+    expect((await buyFrom('TW')).status).toBe(200);
+    expect(charged()).toEqual(['price_m_twd', 'twd']);
+    expect(await ackHash()).toBe(twd);
+
+    for (const country of ['US', null]) {
+      expect((await buyFrom(country)).status).toBe(200);
+      expect(await ackHash(), String(country)).toBe(usd);
+    }
+    // Quarterly has no Taiwan price: the USD quarterly sentence, even from Taiwan.
+    expect((await buyFrom('TW', 'pro_quarterly')).status).toBe(200);
+    expect(await ackHash()).toBe(proseHash(autoRenewAckSentence({ interval: 'quarter', amountMinor: 5999, currency: 'USD' })));
+  });
+
+  describe('the webhook stores what was charged', () => {
+    const twdCheckout = {
+      id: 'evt_tw',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_tw',
+          mode: 'subscription',
+          subscription: 'sub_tw',
+          client_reference_id: 'u_1',
+          customer_details: { address: { country: 'tw' } },
+          metadata: { product: 'roboapply', brand: 'roboapply', planKey: 'pro_monthly', userId: 'u_1', seekerProfileId: 'sp_1', currency: 'twd' },
+        },
+      },
+    };
+
+    beforeEach(async () => {
+      vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD', 'price_m_twd');
+      vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+      await fake.db.seekerSubscription.create({ data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'free', status: 'active', stripeCustomerId: 'cus_1', cancelAtPeriodEnd: false } });
+    });
+
+    it('a TWD subscription is stored as TWD with the charged amount, on the plan the TWD price belongs to', async () => {
+      stripe.subscriptions.retrieve.mockImplementation(async (id: string) => ({
+        ...stripeSub(id, 'price_m_twd'),
+        currency: 'twd',
+        items: { data: [{ id: 'si_1', price: { id: 'price_m_twd', currency: 'twd', unit_amount: 74900 }, current_period_start: NOW_S, current_period_end: PERIOD_END_S }] },
+      }));
+      expect(await handleRoboApplyStripeEvent(twdCheckout as never, stripe as never)).toEqual({ handled: true });
+      const row = await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } });
+      expect(row).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'month', currency: 'TWD', amountMinor: 74900, stripePriceId: 'price_m_twd', billingCountry: 'TW', stripeSubscriptionId: 'sub_tw' });
+      // Winback finds the subscription through the grant metadata, as before.
+      expect(grantIfNewPeriod).toHaveBeenLastCalledWith(expect.objectContaining({ metadata: { planKey: 'pro_monthly', stripeSubscriptionId: 'sub_tw' } }));
+    });
+
+    it('a thin event without the price fields still stores TWD and the configured Taiwan amount (matched by price id)', async () => {
+      stripe.subscriptions.retrieve.mockImplementation(async (id: string) => ({
+        ...stripeSub(id, 'price_m_twd'),
+        items: { data: [{ id: 'si_1', price: { id: 'price_m_twd' }, current_period_start: NOW_S, current_period_end: PERIOD_END_S }] },
+      }));
+      await handleRoboApplyStripeEvent(twdCheckout as never, stripe as never);
+      expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ currency: 'TWD', amountMinor: 74900 });
+    });
+
+    it('a USD subscription on the same deployment stays USD at its own amount', async () => {
+      await handleRoboApplyStripeEvent({ ...twdCheckout, data: { object: { ...twdCheckout.data.object, id: 'cs_us', subscription: 'sub_us' } } } as never, stripe as never);
+      expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ currency: 'USD', amountMinor: 2499, stripePriceId: 'price_m' });
+    });
+
+    it('a renewal paid in TWD keeps the TWD amount', async () => {
+      await fake.db.seekerSubscription.update({ where: { id: 'row_1' }, data: { tier: 'pro', planKey: 'pro_monthly', stripeSubscriptionId: 'sub_tw', currency: 'TWD', amountMinor: 74900 } });
+      stripe.subscriptions.retrieve.mockImplementation(async (id: string) => ({
+        ...stripeSub(id, 'price_m_twd'),
+        items: { data: [{ id: 'si_1', price: { id: 'price_m_twd', currency: 'twd', unit_amount: 74900 }, current_period_start: PERIOD_END_S, current_period_end: PERIOD_END_S + 30 * 86400 }] },
+      }));
+      const paid = { id: 'evt_tw_renew', type: 'invoice.paid', data: { object: { id: 'in_tw_2', billing_reason: 'subscription_cycle', currency: 'twd', amount_paid: 74900, subscription: 'sub_tw' } } };
+      expect(await handleRoboApplyStripeEvent(paid as never, stripe as never)).toEqual({ handled: true });
+      expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ currency: 'TWD', amountMinor: 74900, planKey: 'pro_monthly' });
+    });
+  });
+});
+
 describe('legacy switch never charges without confirm', () => {
   beforeEach(async () => {
     await fake.db.seekerSubscription.create({
@@ -215,7 +463,28 @@ describe('legacy switch never charges without confirm', () => {
     expect(res.body.data).toEqual({ switched: true, planKey: 'pro_monthly' });
     expect(stripe.subscriptions.update).toHaveBeenCalledWith('sub_old', expect.objectContaining({ proration_date: NOW_S, proration_behavior: 'always_invoice' }));
     const records = await fake.db.seekerConsentRecord.findMany({});
-    expect(records).toEqual([expect.objectContaining({ seekerProfileId: 'sp_1', consentType: 'auto_renew_ack', granted: true })]);
+    expect(records).toEqual([
+      expect.objectContaining({
+        seekerProfileId: 'sp_1',
+        consentType: 'auto_renew_ack',
+        granted: true,
+        proseHash: proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 2499, currency: 'USD' })),
+      }),
+    ]);
+  });
+
+  it('a switch on a Taiwan (TWD) subscription records the TWD renewal price it will charge', async () => {
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD', 'price_m_twd');
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+    stripe.subscriptions.retrieve.mockImplementation(async (id: string) => ({ ...stripeSub(id, 'price_starter_twd'), currency: 'twd' }));
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', {
+      ...AS_USER,
+      body: { planKey: 'pro_monthly', confirm: true, prorationDate: NOW_S, autoRenewAck: true },
+    });
+    expect(res.status).toBe(200);
+    expect(stripe.subscriptions.update).toHaveBeenCalledWith('sub_old', expect.objectContaining({ items: [expect.objectContaining({ price: 'price_m_twd' })] }));
+    const records = await fake.db.seekerConsentRecord.findMany({});
+    expect(records.map((r: any) => r.proseHash)).toEqual([proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 74900, currency: 'TWD' }))]);
   });
 
   it('the plan view shows the legacy plan as legacy and Pro plans as the catalog', async () => {

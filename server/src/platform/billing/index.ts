@@ -15,8 +15,8 @@
 export * from './planCatalog.js';
 export * from './errors.js';
 export * from './rails/index.js';
-export { fulfilPass, closePendingOrder } from './fulfilPass.js';
-export type { FulfilDeps, FulfilResult, FulfilStatus, PassOrderRef } from './fulfilPass.js';
+export { PAID_NOTICE_HREF, fulfilPass, closePendingOrder } from './fulfilPass.js';
+export type { FulfilDeps, FulfilResult, FulfilStatus, PaidNotice, PassOrderRef } from './fulfilPass.js';
 export { grantPracticePack, packExpiry } from './packs.js';
 export type { GrantPackInput } from './packs.js';
 export {
@@ -75,6 +75,7 @@ export { getStripe, setStripeClientForTests } from './stripeClient.js';
 export type { StripeClient } from './stripeClient.js';
 export { appOrigin, callbackOrigin, safeReturnPath } from './origins.js';
 export { acceptsPromotionCode, buildPlanViews, promotionCodesEnabled, usesTwdPrice } from './planViews.js';
+export { buyerCountryFromRequest } from './buyerCountry.js';
 export type { LocalPriceView, PlanView, PlanViewOptions } from './planViews.js';
 export {
   WINBACK_AFTER_DAYS,

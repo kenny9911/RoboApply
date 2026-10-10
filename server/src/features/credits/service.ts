@@ -1,10 +1,13 @@
 // server/src/features/credits/service.ts
 //
 // The credits HTTP area (TASK_PLAN.md WP-21a; ARCHITECTURE.md §3.9, §7):
-//   seeker   GET /credits, GET /credits/history, POST /credits/cancel
+//   seeker   GET /credits, GET /credits/history, POST /credits/cancel,
+//            POST /credits/cancel/survey (stores the optional answer only)
 //   public   GET /billing/plans, POST /api/v1/public/cancel(+/confirm)
 //   admin    caps editor (AppConfig credits.catalog.v1), entitlement
-//            overrides, TWD reference rate, TW revenue monitor, refund quote
+//            overrides (each create and delete on /admin/credits/overrides
+//            writes one admin audit row), TWD reference rate, TW revenue
+//            monitor, refund quote
 //
 // Every collaborator is injectable so route tests run on the in-memory fake
 // Prisma with fake Stripe / email / rate limits — no network, no database.
@@ -62,6 +65,7 @@ import {
 } from '../../platform/credits/index.js';
 import {
   PUBLIC_CANCEL_TOKEN_MINUTES,
+  type CancelSurveyReason,
   type CancelResponse,
   type CatalogAdminResponse,
   type CreditLedgerView,
@@ -87,6 +91,76 @@ export type CreditsDb = Pick<
   | 'alipayOrder'
 >;
 
+/** One stored cancel-survey answer (model RACancelSurvey, schema request SR-INT-1). */
+export interface CancelSurveyAnswer {
+  userId: string;
+  brand: ProductBrand['id'];
+  reason: CancelSurveyReason | null;
+  note: string | null;
+  /** The subscription the answer is about, when known (reference only). */
+  subscriptionId: string | null;
+}
+
+/**
+ * Where cancel-survey answers go. A narrow view so the area does not depend
+ * on the whole database client: `available()` is false while the client has
+ * no RACancelSurvey delegate, and `record()` throws
+ * `CancelSurveyStoreUnavailableError` when the table itself is missing.
+ */
+export interface CancelSurveyStore {
+  available(): Promise<boolean>;
+  record(answer: CancelSurveyAnswer): Promise<void>;
+}
+
+export class CancelSurveyStoreUnavailableError extends Error {
+  constructor(message = 'SR-INT-1: the cancel-survey table is not in this database yet') {
+    super(message);
+    this.name = 'CancelSurveyStoreUnavailableError';
+  }
+}
+
+interface CancelSurveyDelegate {
+  create(args: { data: { userId: string; brand: string; reason: string | null; note: string | null; subscriptionId: string | null } }): Promise<unknown>;
+}
+
+/** Prisma error codes for "the table (or a column of it) is not in the database". */
+const MISSING_TABLE_CODES = new Set(['P2021', 'P2022']);
+
+export function createPrismaCancelSurveyStore(getDb: () => Promise<object>): CancelSurveyStore {
+  const delegate = async (): Promise<CancelSurveyDelegate | null> => {
+    const view = (await getDb()) as { rACancelSurvey?: CancelSurveyDelegate };
+    return view.rACancelSurvey && typeof view.rACancelSurvey.create === 'function' ? view.rACancelSurvey : null;
+  };
+  return {
+    available: async () => (await delegate()) !== null,
+    async record(answer) {
+      const rows = await delegate();
+      if (!rows) throw new CancelSurveyStoreUnavailableError();
+      try {
+        await rows.create({
+          data: { userId: answer.userId, brand: answer.brand, reason: answer.reason, note: answer.note, subscriptionId: answer.subscriptionId },
+        });
+      } catch (err) {
+        const code = (err as { code?: unknown } | null)?.code;
+        if (typeof code === 'string' && MISSING_TABLE_CODES.has(code)) throw new CancelSurveyStoreUnavailableError();
+        throw err;
+      }
+    },
+  };
+}
+
+/** One admin audit row for an entitlement override written through /admin/credits/overrides. */
+export interface OverrideAuditEntry {
+  action: 'created' | 'deleted';
+  adminId: string | null;
+  subjectUserId: string;
+  overrideId: string;
+  key: string;
+  value: unknown;
+  expiresAt?: string | null;
+  reason?: string;
+}
+
 export interface CreditsAreaDeps {
   db: () => Promise<CreditsDb>;
   env: () => EnvSource;
@@ -107,6 +181,10 @@ export interface CreditsAreaDeps {
   invalidateEntitlements: (userId: string) => void;
   /** Practice balance unspent pack allocation (lib/mockCreditService). */
   allocatePacks: (packs: Array<{ id: string; remaining: number; expiresAt: Date | null }>, balance: number) => Map<string, number>;
+  /** Cancel-survey answers (RACancelSurvey). */
+  surveys: CancelSurveyStore;
+  /** Writes the admin audit row for an override change (features/admin `writeAdminAudit`). */
+  auditOverride: (entry: OverrideAuditEntry) => Promise<unknown>;
 }
 
 const defaultDb = async (): Promise<CreditsDb> => (await import('../../lib/prisma.js')).default;
@@ -159,11 +237,30 @@ function defaultDeps(): CreditsAreaDeps {
     getStripe: () => platformGetStripe(),
     invalidateEntitlements: (userId) => entitlementService.invalidate(userId),
     allocatePacks: (packs, balance) => allocatePackRemaining(packs, balance),
+    surveys: createPrismaCancelSurveyStore(defaultDb),
+    auditOverride: async (entry) => {
+      const { ADMIN_AUDIT_EVENTS, createPrismaAuditStore, writeAdminAudit } = await import('../admin/index.js');
+      return writeAdminAudit(createPrismaAuditStore(), {
+        adminId: entry.adminId ?? 'unknown',
+        subjectUserId: entry.subjectUserId,
+        eventType: entry.action === 'created' ? ADMIN_AUDIT_EVENTS.overrideCreated : ADMIN_AUDIT_EVENTS.overrideDeleted,
+        payload: {
+          overrideId: entry.overrideId,
+          key: entry.key,
+          value: entry.value,
+          ...(entry.action === 'created' ? { expiresAt: entry.expiresAt ?? null, reason: entry.reason ?? null } : {}),
+          via: 'admin_credits',
+        },
+      });
+    },
   };
 }
 
 /** UI-state value that records the one-time cancel alternative. */
 export const ALTERNATIVE_UI_KEY = 'billing.cancelAlternativeOfferedAt';
+
+/** Cancel-survey answers one user may send (it is one optional form after a cancel). */
+export const CANCEL_SURVEY_LIMIT = [{ limit: 5, windowSec: 3600 }] as const;
 
 /** Public cancel request limits: per IP and per email address. */
 export const PUBLIC_CANCEL_LIMITS = {
@@ -256,6 +353,33 @@ export class CreditsAreaService {
     return { status: outcome.status, accessUntil: outcome.accessUntil?.toISOString() ?? null, alternative };
   }
 
+  /**
+   * Stores the optional "why did you cancel?" answer and does nothing else:
+   * no cancel, no email, no product event (the cancel already did its own).
+   * The note is the person's own words and is never logged.
+   */
+  async recordCancelSurvey(userId: string, brand: ProductBrand, body: { reason?: CancelSurveyReason; note?: string }): Promise<void> {
+    const unavailable = () => new HttpError('storage_unavailable', 'We cannot save this answer right now.', { reason: 'storage_unavailable' });
+    if (!(await this.d.surveys.available())) throw unavailable();
+    if (!(await this.d.rateLimit(`rl:${brand.id}:cancelSurvey:user:${userId}`, CANCEL_SURVEY_LIMIT))) {
+      throw new HttpError('rate_limited', undefined, { retryAfterSec: CANCEL_SURVEY_LIMIT[0].windowSec });
+    }
+    let subscriptionId: string | null = null;
+    try {
+      subscriptionId = (await loadBillingAccount(await this.d.db(), userId))?.subscription?.id ?? null;
+    } catch (err) {
+      // The answer is still worth keeping without the reference.
+      logger.warn('CREDITS', 'cancel survey: subscription lookup failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+    const note = body.note?.trim() ? body.note.trim() : null;
+    try {
+      await this.d.surveys.record({ userId, brand: brand.id, reason: body.reason ?? null, note, subscriptionId });
+    } catch (err) {
+      if (err instanceof CancelSurveyStoreUnavailableError) throw unavailable();
+      throw err;
+    }
+  }
+
   private async runCancel(userId: string, input: { reason?: string; note?: string; source: 'in_app' | 'public_link' }) {
     try {
       return await this.d.cancel(userId, input);
@@ -285,7 +409,9 @@ export class CreditsAreaService {
       }
     }
     const studentEnabled = await isEnabled('student', { userId: input.userId, brand, env }).catch(() => false);
-    const { plans, defaultSelection } = buildPlanViews(brand.id, { env, currentPlanKey, studentEnabled });
+    // The buyer's country picks the Taiwan price where one is configured
+    // (`localPrice`); checkout applies the same rule to the same header.
+    const { plans, defaultSelection } = buildPlanViews(brand.id, { env, currentPlanKey, studentEnabled, country: input.country });
     const rails = availableRails(brand, env);
     let fx: PlansResponse['fxReference'] = null;
     if (brand.currency === 'USD' && requirementsMet('fx.reference', brand, env)) {
@@ -480,12 +606,50 @@ export class CreditsAreaService {
   }
 
   async deleteOverride(id: string, adminId: string | null): Promise<void> {
+    await this.removeOverride(id, adminId);
+  }
+
+  private async removeOverride(id: string, adminId: string | null): Promise<{ id: string; userId: string; key: string; value: unknown }> {
     const db = await this.d.db();
-    const row = await db.rAEntitlementOverride.findUnique({ where: { id }, select: { id: true, userId: true, key: true } });
+    const row = await db.rAEntitlementOverride.findUnique({ where: { id }, select: { id: true, userId: true, key: true, value: true } });
     if (!row) throw new HttpError('not_found', 'No override with this id.');
     await db.rAEntitlementOverride.delete({ where: { id } });
     this.d.invalidateEntitlements(row.userId);
     logger.info('CREDITS', 'entitlement override deleted', { adminId, userId: row.userId, key: row.key });
+    return row;
+  }
+
+  /**
+   * `createOverride` plus one admin audit row — what POST
+   * /admin/credits/overrides runs. (The admin console's own
+   * /admin/overrides routes call `createOverride` / `deleteOverride` and write
+   * the same row themselves, so neither path audits twice.)
+   */
+  async createOverrideAudited(body: Parameters<CreditsAreaService['createOverride']>[0], adminId: string | null): Promise<CreditOverrideAdminView> {
+    const row = await this.createOverride(body, adminId);
+    await this.audit({ action: 'created', adminId, subjectUserId: row.userId, overrideId: row.id, key: row.key, value: row.value, expiresAt: row.expiresAt, reason: row.reason });
+    return row;
+  }
+
+  /** `deleteOverride` plus one admin audit row — what DELETE /admin/credits/overrides/:id runs. */
+  async deleteOverrideAudited(id: string, adminId: string | null): Promise<void> {
+    const row = await this.removeOverride(id, adminId);
+    await this.audit({ action: 'deleted', adminId, subjectUserId: row.userId, overrideId: row.id, key: row.key, value: row.value });
+  }
+
+  /** The change already happened; a failed audit write is logged and never undoes or fails it. */
+  private async audit(entry: OverrideAuditEntry): Promise<void> {
+    try {
+      await this.d.auditOverride(entry);
+    } catch (err) {
+      logger.error('CREDITS', 'override audit row failed', {
+        action: entry.action,
+        adminId: entry.adminId,
+        subjectUserId: entry.subjectUserId,
+        overrideId: entry.overrideId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // ── Admin: TWD reference + TW revenue monitor ──────────────────────────

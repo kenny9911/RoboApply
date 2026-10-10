@@ -16,6 +16,10 @@
 //      pack's credits (idempotent per order). A replayed notify re-runs the
 //      grant safely (pack key / pass period guard), so a crash between the
 //      claim and the grant heals on the provider's next notify.
+//   5. tells the buyer on WeChat when a GoApply WeChat Pay order is fulfilled
+//      (`payment_success` 订阅通知 through features/notify-cn). Only on the
+//      run that claimed the order, so a replayed notify sends nothing; a
+//      failed or skipped notice never fails the fulfilment.
 // Legacy orders (`ra_starter` / `ra_growth`, RoboApply Alipay monthly
 // passes from before the clone) are honoured the old way: 30 days.
 
@@ -73,7 +77,27 @@ export interface FulfilDeps {
   }) => Promise<unknown>;
   grantPack?: (input: { userId: string; credits: number; idempotencyKey: string; purchasedAt: Date }) => Promise<unknown>;
   invalidate?: (userId: string) => void;
+  /**
+   * The "payment received" WeChat notice for a fulfilled GoApply WeChat Pay
+   * order (default: `notifyCnService().sendNotice`, which skips quietly when
+   * WeChat notices are off, the person is not linked or gave no permission).
+   */
+  notifyPaid?: (notice: PaidNotice) => Promise<unknown>;
 }
+
+/** What the `payment_success` notice is filled from: the order's own facts (D3). */
+export interface PaidNotice {
+  userId: string;
+  template: 'payment_success';
+  params: { planName: string; amountFen: number; paidAt: string; orderNo: string };
+  /** Where the message opens. */
+  href: string;
+  /** One permission per order: the notice spends the grant given for this order first. */
+  eventId: string;
+}
+
+/** Where the "payment received" notice opens. */
+export const PAID_NOTICE_HREF = '/settings/billing';
 
 const DAY_MS = 86_400_000;
 const LEGACY_PASS_DAYS = 30;
@@ -88,6 +112,11 @@ const defaultGrantPlan: NonNullable<FulfilDeps['grantPlan']> = async (input) => 
 const defaultGrantPlanIfNewPeriod: NonNullable<FulfilDeps['grantPlanIfNewPeriod']> = async (input) => {
   const { grantForPlanIfNewPeriod } = await import('../../lib/mockCreditService.js');
   return grantForPlanIfNewPeriod(input);
+};
+
+const defaultNotifyPaid: NonNullable<FulfilDeps['notifyPaid']> = async (notice) => {
+  const { notifyCnService } = await import('../../features/notify-cn/index.js');
+  return notifyCnService().sendNotice(notice);
 };
 
 const defaultInvalidate = (userId: string): void => {
@@ -106,6 +135,7 @@ export async function fulfilPass(order: PassOrderRef, deps: FulfilDeps = {}): Pr
   const grantPlanIfNewPeriod = deps.grantPlanIfNewPeriod ?? defaultGrantPlanIfNewPeriod;
   const grantPack = deps.grantPack ?? ((input) => grantPracticePack(input));
   const invalidate = deps.invalidate ?? defaultInvalidate;
+  const notifyPaid = deps.notifyPaid ?? defaultNotifyPaid;
 
   const row = await db.alipayOrder.findUnique({ where: { outTradeNo: order.outTradeNo } });
   if (!row || !row.tier.startsWith('ra_')) return { status: 'not_found' };
@@ -263,6 +293,25 @@ export async function fulfilPass(order: PassOrderRef, deps: FulfilDeps = {}): Pr
   }
   invalidate(row.userId);
   logger.info('RA_BILLING', 'pass fulfilled', { outTradeNo: order.outTradeNo, userId: row.userId, planKey, brand, channel: order.channel });
+  // WeChat notices exist on GoApply only, and only a WeChat Pay buyer was
+  // asked for the permission at checkout. This is the run that claimed the
+  // order, so each order sends at most once.
+  if (order.channel === 'wechatpay' && brand === 'goapply' && def) {
+    try {
+      await notifyPaid({
+        userId: row.userId,
+        template: 'payment_success',
+        params: { planName: def.defaultLabel, amountFen: expected, paidAt: now.toISOString(), orderNo: order.outTradeNo },
+        href: PAID_NOTICE_HREF,
+        eventId: order.outTradeNo,
+      });
+    } catch (err) {
+      logger.warn('RA_BILLING', 'fulfilPass: payment notice failed', {
+        outTradeNo: order.outTradeNo,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   return {
     status: 'fulfilled',
     orderId: row.id,

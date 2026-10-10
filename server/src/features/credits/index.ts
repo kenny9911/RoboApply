@@ -6,5 +6,15 @@
 export * from './contract.js';
 export { billingRoute, createBillingPlansRouter, createCreditsRouter, createPublicCancelRouter } from './routes.js';
 export { createCreditsAdminRouter } from './adminRoutes.js';
-export { ALTERNATIVE_UI_KEY, CreditsAreaService, PUBLIC_CANCEL_LIMITS, creditsAreaService, hashToken, overrideProblem } from './service.js';
-export type { CreditsAreaDeps, CreditsDb } from './service.js';
+export {
+  ALTERNATIVE_UI_KEY,
+  CANCEL_SURVEY_LIMIT,
+  CancelSurveyStoreUnavailableError,
+  CreditsAreaService,
+  PUBLIC_CANCEL_LIMITS,
+  createPrismaCancelSurveyStore,
+  creditsAreaService,
+  hashToken,
+  overrideProblem,
+} from './service.js';
+export type { CancelSurveyAnswer, CancelSurveyStore, CreditsAreaDeps, CreditsDb, OverrideAuditEntry } from './service.js';

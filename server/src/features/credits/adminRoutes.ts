@@ -1,8 +1,8 @@
 // server/src/features/credits/adminRoutes.ts — admin credits routes (WP-21a).
 // Mounted by features/index.ts at /api/v1/roboapply/admin/credits (admin only):
 //   GET/PUT /catalog            caps editor (AppConfig credits.catalog.v1; validated, 30 s cache dropped on save)
-//   GET/POST /overrides         entitlement overrides (bucket:<b> | entitlement:<k> | flag:<key>)
-//   DELETE /overrides/:id
+//   GET/POST /overrides         entitlement overrides (bucket:<b> | entitlement:<k> | flag:<key>);
+//   DELETE /overrides/:id       each create and delete writes one admin audit row (adminId + the user it is about)
 //   GET/PUT /fx-reference       TWD reference rate with source and as-of (hidden from users after 45 days)
 //   GET /tw-revenue             Stripe TW-card revenue YTD vs NT$600k (70 % warning)
 //   GET /refund-quote?userId    F-BILL-08 decision for the user's latest charge (quote only; refunds are issued in Stripe)
@@ -46,13 +46,13 @@ export function createCreditsAdminRouter(deps: FeatureRouterDeps & { service?: C
   router.post(
     '/overrides',
     ...admin,
-    billingRoute(async (req) => service.createOverride(parseBody(req, CreateOverrideBodySchema), adminIdOf(req)), { status: 201 }),
+    billingRoute(async (req) => service.createOverrideAudited(parseBody(req, CreateOverrideBodySchema), adminIdOf(req)), { status: 201 }),
   );
   router.delete(
     '/overrides/:id',
     ...admin,
     billingRoute(async (req, res) => {
-      await service.deleteOverride(parseParams(req, OverrideParamsSchema).id, adminIdOf(req));
+      await service.deleteOverrideAudited(parseParams(req, OverrideParamsSchema).id, adminIdOf(req));
       res.status(204).end();
     }),
   );
