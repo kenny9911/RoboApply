@@ -71,6 +71,8 @@ export function defaultResumeCheckDeps(): ResumeCheckDeps {
     market: brandMarket,
     // Stored resumes always have a template (the saved one, or the default).
     hasTemplate: () => true,
+    // Skills are offered to the user to tick: written as the posting writes them.
+    keywordCasing: 'posting',
     runAiPass: async (input, options) => {
       const { ResumeCheckAgent } = await import('./check/ResumeCheckAgent.js');
       return new ResumeCheckAgent().run(input, { ...options, requestId: getCurrentRequestId() ?? undefined });

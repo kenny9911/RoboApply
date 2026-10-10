@@ -25,6 +25,175 @@ function pngLongEdge(png: Buffer): number {
   return Math.max(png.readUInt32BE(16), png.readUInt32BE(20));
 }
 
+/**
+ * One-letter tokens that are ordinary words in the languages resumes are
+ * written in, not watermark debris: English "a" / "I", Spanish "y" / "e" /
+ * "o" / "u", Portuguese "e" / "o" / "a", Italian "e" / "o" / "i", French "y" /
+ * "a". Every vowel and "y", either case, is never glued to a neighbour.
+ */
+const ONE_LETTER_WORDS = new Set(['a', 'e', 'i', 'o', 'u', 'y', 'A', 'E', 'I', 'O', 'U', 'Y']);
+
+/**
+ * Short words that legitimately follow a single capital ("Plan B and C",
+ * "R or Python") or stand alone as a capitalised two-letter word ("We built",
+ * "In charge"). The repair never glues across them.
+ */
+const SHORT_WORDS = new Set([
+  'am', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'do', 'for', 'from', 'go', 'he', 'if', 'in', 'into', 'is', 'it',
+  'me', 'my', 'no', 'not', 'of', 'on', 'or', 'so', 'than', 'the', 'to', 'up', 'us', 'via', 'was', 'we', 'with',
+]);
+
+/** Whitespace-split parts of a line: tokens at even indexes, the gaps between them at odd ones. */
+function lineParts(line: string): string[] {
+  return line.split(/(\s+)/);
+}
+
+/** A word start or middle a lone letter can be appended to ("Produc" + "t"). */
+function isHeadFragment(t: string | undefined): boolean {
+  return !!t && /^[A-Za-z]?[a-z]+$/.test(t) && t.length >= 2 && !SHORT_WORDS.has(t.toLowerCase());
+}
+
+/** A lowercase word end a letter or prefix can be put in front of ("M" + "anager"). */
+function isTailFragment(t: string | undefined): boolean {
+  return !!t && /^[a-z]{2,}[.,;:)]*$/.test(t) && !SHORT_WORDS.has(t.replace(/[^a-z]/g, ''));
+}
+
+/**
+ * What the lone letter at `i` can be joined to across a single space (a wider
+ * gap is a layout column, never the inside of a word). A vowel or "y" is a
+ * word (or an "o" bullet) and joins nothing.
+ */
+function joinSides(parts: string[], i: number): { left: boolean; right: boolean } {
+  const t = parts[i];
+  const none = { left: false, right: false };
+  if (!/^[a-zA-Z]$/.test(t) || ONE_LETTER_WORDS.has(t)) return none;
+  const next = parts[i + 2];
+  const right = parts[i + 1] === ' ' && isTailFragment(next);
+  // Only a lowercase letter continues the fragment before it.
+  const left = t === t.toLowerCase() && i >= 2 && parts[i - 1] === ' ' && isHeadFragment(parts[i - 2]);
+  return { left, right };
+}
+
+/**
+ * Does this line carry the mark of a stripped watermark, i.e. words broken into
+ * fragments ("P rodu c t M anager", "Commer c iali z ation")?
+ *
+ * The signal is single-letter tokens that are NOT words and that sit next to a
+ * word fragment. A normal sentence such as "Automated a monthly report, saving
+ * 6 hours a month" has two one-letter words and used to be treated as damaged,
+ * which glued "Automatedamonthly" and "hoursamonth" into the stored resume;
+ * Spanish "y", Portuguese "e" / "o" and Italian "e" did the same.
+ *
+ * A line needs two joinable lone letters, and one of:
+ *   - a chain: two of them next to each other or with one fragment between
+ *     ("rodu c t", "Commer c iali z ation", "M arketing D irector"). A word
+ *     broken twice leaves that; ordinary prose does not;
+ *   - lone letters making up half the line.
+ * A letter that merely stands beside a word proves nothing without a
+ * dictionary: "k means clustering and t test analysis", "Series B startup,
+ * Type C connector" and "vitamin c for 8 weeks" stay as they are. (Nor is a
+ * line with one or two scattered breaks repaired: it is left as extracted
+ * rather than guessed at.)
+ */
+export function looksWatermarkDamaged(line: string): boolean {
+  const parts = lineParts(line.trim());
+  const joinable: Array<{ at: number; left: boolean; right: boolean }> = [];
+  let tokens = 0;
+  for (let i = 0; i < parts.length; i += 2) {
+    if (!parts[i]) continue;
+    tokens += 1;
+    const sides = joinSides(parts, i);
+    if (sides.left || sides.right) joinable.push({ at: i, ...sides });
+  }
+  if (joinable.length < 2) return false;
+  if (joinable.length / tokens >= 1 / 2) return true;
+  for (let k = 0; k + 1 < joinable.length; k++) {
+    const a = joinable[k];
+    const b = joinable[k + 1];
+    // "c t": neighbours across one space. "c iali z": one fragment between.
+    if (b.at - a.at === 2 && parts[a.at + 1] === ' ') return true;
+    if (b.at - a.at === 4 && (a.right || b.left)) return true;
+  }
+  return false;
+}
+
+/**
+ * Lines that are nothing but watermark debris: two or more tokens of one or
+ * two characters each, not all digits ("R Ux", "9 S6", "H Z7", "N  g"). The
+ * characters of a tracking string scattered over the page by pdftotext.
+ */
+export function countWatermarkDebrisLines(text: string): number {
+  let n = 0;
+  for (const line of text.split('\n')) {
+    const tokens = line.trim().split(/\s+/).filter(Boolean);
+    if (tokens.length < 2) continue;
+    // Every token holds a letter or a digit: "UI / UX" is not debris.
+    if (!tokens.every((t) => t.length <= 2 && /^[A-Za-z0-9+/=_~-]+$/.test(t) && /[A-Za-z0-9]/.test(t))) continue;
+    if (tokens.every((t) => /^\d+$/.test(t))) continue;
+    n += 1;
+  }
+  return n;
+}
+
+/** This many debris lines mean the document carried a scattered watermark. */
+export const WATERMARK_DEBRIS_LINES = 3;
+
+/**
+ * Repair watermark-broken words, but only in a document where a watermark was
+ * actually found and removed. A clean PDF has no broken words to repair, so
+ * its text is never touched: whatever language it is in, a line of ordinary
+ * prose with one-letter words is returned exactly as extracted.
+ */
+export function repairWatermarkBrokenText(text: string, watermarkFound: boolean): string {
+  if (!watermarkFound) return text;
+  return text.split('\n').map(repairWatermarkBrokenLine).join('\n');
+}
+
+/**
+ * Rejoin the fragments of watermark-broken English words on one line.
+ * After watermark characters are removed, gaps remain inside words:
+ *   "P rodu c t M anager"            → "Product Manager"
+ *   "Commer c iali z ation"          → "Commercialization"
+ * A line that does not look damaged is returned untouched, and on a damaged
+ * line the words "a" / "I" and common short words are never glued to their
+ * neighbours (nothing is invented: an unrepaired fragment stays as extracted).
+ */
+export function repairWatermarkBrokenLine(line: string): string {
+  if (!looksWatermarkDamaged(line)) return line;
+  const parts = lineParts(line);
+  const merge = (from: number, to: number) => {
+    const joined = parts.slice(from, to + 1).filter((_, k) => k % 2 === 0).join('');
+    parts.splice(from, to - from + 1, joined);
+  };
+
+  // 1. A lone lowercase letter belongs to the fragment(s) beside it:
+  //    "er c iali z ation" → "ercialization", "Produc t" → "Product",
+  //    "the c ompany" → "the company".
+  for (let pass = 0; pass < 12; pass++) {
+    let changed = false;
+    for (let i = 0; i < parts.length; i += 2) {
+      if (!/^[a-z]$/.test(parts[i])) continue;
+      const { left, right } = joinSides(parts, i);
+      if (!left && !right) continue;
+      merge(left ? i - 2 : i, right ? i + 2 : i);
+      changed = true;
+      break;
+    }
+    if (!changed) break;
+  }
+  // 2. A single capital and the rest of its word: "M arketing" → "Marketing"
+  //    (not "A monthly", "I led", "B and", "R or").
+  // 3. A two-letter capitalised prefix and its fragment: "Co mmercialization"
+  //    → "Commercialization" (not "We built", "In charge").
+  for (let i = 0; i + 2 < parts.length; i += 2) {
+    const t = parts[i];
+    const capital = /^[A-Z]$/.test(t) && joinSides(parts, i).right;
+    const prefix = /^[A-Z][a-z]$/.test(t) && !SHORT_WORDS.has(t.toLowerCase()) && parts[i + 1] === ' ' && isTailFragment(parts[i + 2]);
+    if (capital || prefix) merge(i, i + 2);
+  }
+  return parts.join('');
+}
+
 export class PDFService {
   /**
    * Set during pdftotext extraction when the raw output has a high density of
@@ -506,6 +675,11 @@ export class PDFService {
           preview: stdout.substring(0, 400).replace(/\n/g, '\\n'),
         }, requestId);
 
+        // Did this document carry a watermark at all? Words are repaired
+        // (repairWatermarkBrokenText) only when one was found: scattered
+        // fragment lines, a repeated tracking token, a hash line, debris lines.
+        let watermarkFound = false;
+
         // Detect watermark scatter: count lines that are short alnum fragments
         // (1-3 chars, purely alphanumeric). A high ratio (>25%) means the PDF has
         // a tracking/watermark string whose characters were scattered across the
@@ -517,6 +691,7 @@ export class PDFService {
             return t.length <= 3 && /^[A-Za-z0-9+/=_~-]+$/.test(t);
           }).length;
           if (nonEmptyLines.length > 20 && fragmentCount / nonEmptyLines.length > 0.25) {
+            watermarkFound = true;
             this.markWatermarkScatter();
             logger.info('PDF_PDFTOTEXT', `Watermark scatter detected: ${fragmentCount}/${nonEmptyLines.length} fragment lines (${(fragmentCount / nonEmptyLines.length * 100).toFixed(0)}%)`, {}, requestId);
           }
@@ -530,6 +705,7 @@ export class PDFService {
             PDFService.CJK_WATERMARK_TRIGGERS.test(l)
           ).length;
           if (cjkWatermarkLineCount >= 3) {
+            watermarkFound = true;
             this.markWatermarkScatter();
             logger.info('PDF_PDFTOTEXT', `CJK watermark scatter detected: ${cjkWatermarkLineCount} lines contain trigger phrases`, {}, requestId);
           }
@@ -540,6 +716,7 @@ export class PDFService {
         const cjkWatermarks = this.findCjkWatermarkPhrases(stdout, requestId);
         for (const phrase of cjkWatermarks) watermarks.add(phrase);
         let preClean = stdout;
+        if (watermarks.size > 0 || countWatermarkDebrisLines(stdout) >= WATERMARK_DEBRIS_LINES) watermarkFound = true;
         if (watermarks.size > 0) {
           preClean = this.stripWatermarks(stdout, watermarks);
           logger.info('PDF_PDFTOTEXT', `After watermark strip: ${preClean.length} chars (removed ${stdout.length - preClean.length})`, {
@@ -552,13 +729,16 @@ export class PDFService {
         // "6e72aef5715f42b81HZ709S6FFRUxYW-UfOZWOeqmP7VNxNg"
         const isAlnumToken = (s: string) => /^[A-Za-z0-9+/=_~-]+$/.test(s);
 
-        const cleaned = preClean
+        const strippedLines = preClean
           .split('\n')
           .filter(line => {
             const trimmed = line.trim();
             if (!trimmed) return true; // keep blank lines for structure
             // Remove full watermark/hash strings
-            if (this.isHashLikeGarbage(trimmed)) return false;
+            if (this.isHashLikeGarbage(trimmed)) {
+              watermarkFound = true;
+              return false;
+            }
             // Remove lines composed entirely of short alphanumeric tokens
             // e.g. "R Ux", "9 S6", "H Z7", "2 b8", "7 15", "N  g"
             const tokens = trimmed.split(/\s+/);
@@ -580,33 +760,12 @@ export class PDFService {
             cleaned = cleaned.replace(trailingRe, '').trimEnd();
             return cleaned;
           })
-          .join('\n')
-          // Repair watermark-broken English words per line.
-          // After watermark chars are removed, gaps remain inside words:
-          //   "P rodu c t M anager" → "Product Manager"
-          //   "Co mm er c iali z ation" → "Commercialization"
-          // Only apply aggressive joining on lines with 2+ single-char alpha
-          // tokens (sign of watermark damage), to avoid breaking normal text.
-          .split('\n').map(line => {
-            const tokens = line.trim().split(/\s+/);
-            const singleCharAlpha = tokens.filter(t => /^[a-zA-Z]$/.test(t)).length;
-            if (singleCharAlpha < 2) return line;
-            let fixed = line;
-            // Multiple passes to handle chains like "er c iali z ation"
-            for (let i = 0; i < 3; i++) {
-              fixed = fixed.replace(/([a-z]{2,}) ([a-z]) ([a-z]{2,})/g, '$1$2$3');
-            }
-            // Rejoin trailing single char: "Produc t" → "Product"
-            for (let i = 0; i < 3; i++) {
-              fixed = fixed.replace(/([a-z]{3,}) ([a-z])\b/g, '$1$2');
-            }
-            // Rejoin single uppercase + lowercase: "M arketing" → "Marketing"
-            fixed = fixed.replace(/\b([A-Z]) ([a-z]{2,})/g, '$1$2');
-            // Rejoin 2-char prefix + fragment: "Co mmercialization" → "Commercialization"
-            // Safe on damaged lines only (wouldn't run on "He went")
-            fixed = fixed.replace(/\b([A-Z][a-z]) ([a-z]{2,})/g, '$1$2');
-            return fixed;
-          }).join('\n')
+          .join('\n');
+
+        // Repair watermark-broken words, only in a document that carried a
+        // watermark and only on lines that look damaged (after the filter
+        // above, which also reports hash lines).
+        const cleaned = repairWatermarkBrokenText(strippedLines, watermarkFound)
           // Strip Private Use Area characters (icon font glyphs from PDF templates)
           .replace(/[\uE000-\uF8FF]/g, '')
           // Collapse excessive blank lines

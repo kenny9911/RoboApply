@@ -35,16 +35,23 @@ vi.mock('../../../hooks/shared/useCreditGate', () => ({
   }),
 }));
 
+const resumeList = vi.hoisted(() => ({ failed: false, refetch: vi.fn() }));
 vi.mock('../../../hooks/useResumes', () => ({
-  useResumeList: () => ({
-    isLoading: false,
-    data: {
-      resumes: [
-        { id: 'rv_2', name: 'Data resume', isPrimary: false },
-        { id: 'rv_1', name: 'Backend resume', isPrimary: true },
-      ],
-    },
-  }),
+  useResumeList: () =>
+    resumeList.failed
+      ? { isLoading: false, isError: true, isFetching: false, data: undefined, refetch: resumeList.refetch }
+      : {
+          isLoading: false,
+          isError: false,
+          isFetching: false,
+          refetch: resumeList.refetch,
+          data: {
+            resumes: [
+              { id: 'rv_2', name: 'Data resume', isPrimary: false },
+              { id: 'rv_1', name: 'Backend resume', isPrimary: true },
+            ],
+          },
+        },
 }));
 
 const nav = vi.hoisted(() => ({ push: vi.fn() }));
@@ -158,6 +165,21 @@ describe('CoverLetterHub', () => {
 });
 
 describe('NewLetterForm', () => {
+  it('a failed resume list shows an error with a retry, not "add a resume first"', () => {
+    resumeList.failed = true;
+    try {
+      renderWithBrand(<NewLetterForm jobId="job_1" aiAvailable onCreated={vi.fn()} />);
+      expect(screen.getByRole('alert')).toHaveTextContent('Your resumes did not load. Nothing was lost.');
+      expect(screen.queryByText(/Add a resume first/)).toBeNull();
+      expect(screen.queryByText(/Loading your resumes/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Write the letter' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(resumeList.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      resumeList.failed = false;
+    }
+  });
+
   it('pasted post: needs a title and 50+ characters before it can write', async () => {
     api.createCoverLetter.mockResolvedValue(letterView());
     const onCreated = vi.fn();

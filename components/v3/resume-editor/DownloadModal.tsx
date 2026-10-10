@@ -3,14 +3,26 @@
 // DownloadModal — the export chooser (.rb-modal). Source:
 // RoboApply_V3/resume-editor.jsx DownloadModal. PDF + DOCX are server-rendered
 // exports of the resume with its saved layout (GET /resumes/:id/export,
-// lib/api/resumes downloadResumeExport). TXT/MD are client-side blobs of the
-// current markdown.
+// lib/api/resumes downloadResumeExport). TXT/MD are client-side files of the
+// current text: Markdown as written, plain text with the markup removed
+// (plainText.ts).
 //
 // WP-36b: file-name presets; export refused while inserted details are not
 // verified (ruling C12; the server answers 409 unverified_claims too); an
 // "AI wrote part of this resume" line with the GoApply AI badge; the WeChat
 // in-app browser banner on downloads; `trackerEntryId` records the exact file
 // on an application.
+//
+// The Verify-details block covers EVERY format: plain text and Markdown are
+// the same unchecked AI text as the PDF. The message names the real reason
+// (details not checked yet) and links to Verify details.
+//
+// Unfilled placeholders ("[X]", "[n=__]" left by an accepted AI suggestion):
+// the lines are listed and nothing downloads until the user fills them in or
+// says, in so many words, to download with the blanks. The dialog finds them
+// itself in the text it is about to hand out, so every place that opens it
+// (the editor, an application in the tracker) gets the same hold; a caller
+// may pass its own list (the editor's, taken from unsaved edits).
 //
 // WP-65: `photo` (a data URL kept on this device) travels in the POST body and
 // the renderer places it; it is never stored. A file recorded on an
@@ -19,17 +31,22 @@
 //
 // Modal panel uses a LITERAL solid background (CLAUDE.md rule).
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { IconX, IconArrow } from '../primitives';
 import { apiErrorCode, apiErrorDetails, apiErrorReason } from '../../../lib/api/contracts/wire';
 import { FILE_NAME_STYLES, downloadResumeExport, type FileNameStyle } from '../../../lib/api/resumes';
+import { placeholderLinesOfMarkdown } from '../../../lib/resumeAnalyzer';
 import { WechatBrowserBanner } from '../../features/auth-cn';
 import { AiGeneratedBadge } from '../../features/market';
 import styles from '../../features/resume/ResumeHub.module.css';
+import { resumePlainText } from './plainText';
 
 type Format = 'pdf' | 'docx' | 'txt' | 'md';
+
+/** Lines listed in the placeholder warning (the rest are counted). */
+const MAX_PLACEHOLDER_LINES = 3;
 
 /**
  * How many inserted details block this download, or null when the failure is
@@ -54,8 +71,15 @@ interface Props {
   resumeId: string;
   resumeName: string;
   resumeMarkdown: string;
-  /** Inserted details still to verify (>0 blocks PDF/DOCX). */
+  /** Inserted details still to verify (>0 blocks every format). */
   unverifiedClaims?: number;
+  /** Where "Verify details" opens for this version (`/resume?tailorSession=<id>`), when known. */
+  verifyHref?: string | null;
+  /**
+   * Lines that still carry a blank like "[X]". Left out, they are read from
+   * `resumeMarkdown` (lib/resumeAnalyzer placeholderLinesOfMarkdown).
+   */
+  placeholderLines?: readonly string[];
   /** AI wrote part of this resume (the file carries the AI marks). */
   aiAssisted?: boolean;
   /** Record the exact file on this application. */
@@ -80,6 +104,8 @@ export function DownloadModal({
   resumeName,
   resumeMarkdown,
   unverifiedClaims = 0,
+  verifyHref = null,
+  placeholderLines: givenPlaceholderLines,
   aiAssisted = false,
   trackerEntryId = null,
   photo = null,
@@ -91,12 +117,20 @@ export function DownloadModal({
   const [blockedCount, setBlockedCount] = useState(unverifiedClaims);
   const [nameStyle, setNameStyle] = useState<FileNameStyle>('name_company_role');
   const blocked = blockedCount > 0;
+  // Blanks an AI suggestion left for the user: nothing downloads until they
+  // are filled in, or the user ticks "download with the blanks".
+  const [withBlanks, setWithBlanks] = useState(false);
+  const placeholderLines = useMemo(
+    () => givenPlaceholderLines ?? placeholderLinesOfMarkdown(resumeMarkdown),
+    [givenPlaceholderLines, resumeMarkdown],
+  );
+  const hasBlanks = placeholderLines.length > 0;
+  const held = blocked || (hasBlanks && !withBlanks);
 
   async function handle(format: Format) {
-    if (busy) return;
+    if (busy || held) return;
     // Server-rendered exports of the actual resume (not a print of the editor).
     if (format === 'pdf' || format === 'docx') {
-      if (blocked) return;
       setBusy(format);
       setError(false);
       try {
@@ -111,10 +145,11 @@ export function DownloadModal({
       }
       return;
     }
-    // TXT / MD — client-side blob of the current markdown.
+    // TXT / MD — client-side file of the current text. Plain text carries no
+    // markdown syntax (it is for pasting into web forms).
     if (typeof window !== 'undefined') {
-      const blob = new Blob([resumeMarkdown], {
-        type: format === 'md' ? 'text/markdown' : 'text/plain',
+      const blob = new Blob([format === 'md' ? resumeMarkdown : resumePlainText(resumeMarkdown)], {
+        type: format === 'md' ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8',
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -162,9 +197,29 @@ export function DownloadModal({
           <WechatBrowserBanner action="download" />
 
           {blocked ? (
-            <p className={styles.blocked} role="alert">
-              {t('export.blocked', { count: blockedCount })}
-            </p>
+            <div className={styles.blocked} role="alert" data-block="unverified">
+              <p style={{ margin: 0 }}>{t('export.unverified', { count: blockedCount })}</p>
+              {verifyHref ? (
+                <a className={styles.blockedLink} href={verifyHref}>
+                  {t('export.verify_cta')}
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
+          {hasBlanks ? (
+            <div className={styles.blocked} role="alert" data-block="placeholders">
+              <p style={{ margin: 0 }}>{t('export.placeholders', { count: placeholderLines.length })}</p>
+              <ul className={styles.blockedList}>
+                {placeholderLines.slice(0, MAX_PLACEHOLDER_LINES).map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+              <label className={styles.blockedCheck}>
+                <input type="checkbox" checked={withBlanks} onChange={(e) => setWithBlanks(e.target.checked)} />
+                <span>{t('export.placeholders_anyway')}</span>
+              </label>
+            </div>
           ) : null}
 
           <label className={styles.legend} htmlFor="rb-download-name">
@@ -184,7 +239,7 @@ export function DownloadModal({
           </select>
 
           {FORMATS.map((f) => {
-            const off = busy !== null || (blocked && (f.id === 'pdf' || f.id === 'docx'));
+            const off = busy !== null || held;
             return (
               <button
                 key={f.id}

@@ -1,3 +1,8 @@
 {
-  "coverLetter": {}
+  "coverLetter": {
+    "form": {
+      "resumeError": "Your resumes did not load. Nothing was lost.",
+      "resumeRetry": "Try again"
+    }
+  }
 }

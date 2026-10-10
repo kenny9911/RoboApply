@@ -216,12 +216,13 @@ describe('ResumePaper follows the layout', () => {
 });
 
 describe('DownloadModal', () => {
-  it('blocks PDF and Word while details are unverified (ruling C12) but keeps plain text', () => {
+  it('blocks every format while details are unverified (ruling C12): plain text and Markdown are the same unchecked text', () => {
     renderWithProviders(<DownloadModal resumeId="r1" resumeName="Main" resumeMarkdown="# A" unverifiedClaims={1} onClose={vi.fn()} />);
-    expect(screen.getByRole('alert')).toHaveTextContent("One line has a number we couldn't find on your resume. Fix it or remove it before you download.");
+    expect(screen.getByRole('alert')).toHaveTextContent('1 detail in this tailored resume has not been checked yet. Check it in Verify details before you download.');
     expect(screen.getByRole('button', { name: /^PDF/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /^DOCX/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^Plain text/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^Plain text/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Markdown/ })).toBeDisabled();
     expect(api.downloadResumeExport).not.toHaveBeenCalled();
   });
 
@@ -250,7 +251,7 @@ describe('DownloadModal', () => {
     );
     renderWithProviders(<DownloadModal resumeId="r1" resumeName="Main" resumeMarkdown="# A" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /^DOCX/ }));
-    expect(await screen.findByRole('alert')).toHaveTextContent("3 lines have numbers or details we couldn't find on your resume.");
+    expect(await screen.findByRole('alert')).toHaveTextContent('3 details in this tailored resume have not been checked yet.');
     expect(screen.getByRole('button', { name: /^DOCX/ })).toBeDisabled();
   });
 

@@ -7,15 +7,22 @@
 //   stage   ∈ 'input'   | 'parsing' | 'done'
 //
 //   • input   — scratch: pick a template · file: drop zone · linkedin: the user's own PDF export (no URL import, TASK_PLAN.md H9)
-//   • parsing — animated "what I picked up" ingest rows (cosmetic) WHILE the real
-//               `onCreate` mutation runs in the background
-//   • done    — success check; "Open editor" hands the created variant to the page
+//   • parsing — the real `onCreate` request is running. For a file there is
+//               one pending row ("Reading <file>…") and nothing else: no step
+//               is ticked before the server has answered (D3 — the rows used
+//               to tick "Experience ✓ Roles · titles · dates" on a timer
+//               whatever the file held). A new draft from a template shows
+//               what the template is while it is created.
+//   • done    — success check, and for a file what was ACTUALLY read
+//               (`doneFacts`, built by the page from the saved resume);
+//               "Open editor" hands the created variant to the page
 //
 // The actual resume creation is the parent's `onCreate(source, ctx)` async fn
 // (it owns the `useCreateResumeMutation` hook + the localized default name). We
-// advance to `done` only once BOTH the ingest animation finished AND the create
-// promise resolved — so a create failure surfaces as an error, never a fake
-// success. On "Open editor" the page routes to `/resumes/[id]` (Lane F).
+// advance to `done` only once the create promise resolved (and, for a draft,
+// the template rows were shown) — so a create failure surfaces as an error,
+// never a fake success. On "Open editor" the page routes to `/resumes/[id]`
+// (Lane F).
 //
 // SOLID PANEL per the CLAUDE.md modal rule: `.rb-modal-card` already paints
 // `var(--bg)` (a :root literal in V3, so it can't bleed through), and we pin a
@@ -39,8 +46,11 @@ export interface ImportCreateContext {
 }
 
 /** Accepted résumé upload types (mirrors the backend accepted-MIME list —
- *  RTF is NOT supported server-side, so it is intentionally excluded). */
+ *  RTF and Apple Pages are NOT read server-side, so they are not offered). */
 const ACCEPT_RESUME = '.pdf,.doc,.docx,.txt,.md,application/pdf';
+
+/** The same list as the user reads it (file-type names, not copy). */
+export const RESUME_UPLOAD_FORMATS = ['PDF', 'DOC', 'DOCX', 'TXT', 'MD'] as const;
 
 /** LinkedIn "Save to PDF" produces a PDF — steer the picker to it. */
 const ACCEPT_LINKEDIN = '.pdf,application/pdf';
@@ -66,6 +76,8 @@ function readApiErrorCode(err: unknown): string | null {
 interface IngestItem {
   k: string;
   v: string;
+  /** False for something the file did not have (shown without a tick). */
+  found?: boolean;
 }
 
 interface Labels {
@@ -128,8 +140,12 @@ interface Props {
   /** Recovery for a lost-response failure: refetch the library list so the user
    *  can see whether the résumé actually landed. */
   onCheckList?: () => void;
-  /** Per-source ingest rows shown during the parsing animation. */
+  /** What a new draft from a template is made of (shown while it is created). Not used for files. */
   ingestRows: (source: ImportSource, ctx: ImportCreateContext) => IngestItem[];
+  /** The pending line while a file is being read ("Reading resume.pdf…"). */
+  readingLabel?: (fileName: string) => string;
+  /** What was actually read from an uploaded file, from the saved resume (shown when done). */
+  doneFacts?: (variant: RAResumeVariant) => IngestItem[];
   /** Creates the variant for real; resolves with the new variant. */
   onCreate: (ctx: ImportCreateContext) => Promise<RAResumeVariant>;
   onClose: () => void;
@@ -152,6 +168,8 @@ export function ImportModal({
   lostResponseCodes,
   onCheckList,
   ingestRows,
+  readingLabel,
+  doneFacts,
   onCreate,
   onClose,
   onDone,
@@ -221,10 +239,11 @@ export function ImportModal({
       file: realFile,
     };
 
-    // Cosmetic ingest reveal.
-    const items = ingestRows(source, ctx);
+    // A file: nothing is revealed until the server has read it (D3). A draft
+    // from a template: what the template is, while it is created.
+    const items = source === 'scratch' ? ingestRows(source, ctx) : [];
     setParsed([]);
-    let animDone = false;
+    let animDone = items.length === 0;
     let createResult: RAResumeVariant | null = null;
     let createFailed = false;
     let createErrorCode: string | null = null;
@@ -248,15 +267,17 @@ export function ImportModal({
         setTimeout(() => setParsed((cur) => [...cur, it]), 350 + i * 350),
       );
     });
-    timers.current.push(
-      setTimeout(
-        () => {
-          animDone = true;
-          tryFinish();
-        },
-        350 + items.length * 350 + 400,
-      ),
-    );
+    if (items.length > 0) {
+      timers.current.push(
+        setTimeout(
+          () => {
+            animDone = true;
+            tryFinish();
+          },
+          350 + items.length * 350 + 400,
+        ),
+      );
+    }
 
     // Real create runs in parallel with the animation.
     onCreate(ctx)
@@ -375,8 +396,14 @@ export function ImportModal({
                     </div>
                     <h3>{labels.dropTitle}</h3>
                     <p>{labels.dropSub}</p>
+                    {/* Only the types the server reads. */}
                     <div className="formats">
-                      <span>PDF</span> · <span>DOCX</span> · <span>Pages</span> · <span>RTF</span>
+                      {RESUME_UPLOAD_FORMATS.map((f, i) => (
+                        <span key={f}>
+                          {i > 0 ? ' · ' : ''}
+                          <span>{f}</span>
+                        </span>
+                      ))}
                     </div>
                   </>
                 ) : (
@@ -511,11 +538,11 @@ export function ImportModal({
                   <div className="extracted">{it.v}</div>
                 </div>
               ))}
-              <div className="ingest-row pending">
+              <div className="ingest-row pending" role="status" aria-live="polite">
                 <div className="ic">
                   <div className="spinner" />
                 </div>
-                <div>{labels.working}</div>
+                <div>{source !== 'scratch' && file && readingLabel ? readingLabel(file.name) : labels.working}</div>
               </div>
             </div>
           </div>
@@ -557,6 +584,18 @@ export function ImportModal({
             >
               {source === 'scratch' ? labels.doneBodyScratch : labels.doneBodyImport}
             </p>
+            {/* What the saved resume really holds (never a fixed list). */}
+            {source !== 'scratch' && created && doneFacts ? (
+              <div className="ingest" style={{ textAlign: 'left', marginTop: 16 }} data-testid="import-facts">
+                {doneFacts(created).map((it, i) => (
+                  <div key={i} className={`ingest-row${it.found === false ? ' pending' : ''}`} data-found={it.found === false ? 'false' : 'true'}>
+                    <div className="ic">{it.found === false ? <span aria-hidden="true">–</span> : <IconCheck size={12} strokeWidthValue={3.5} />}</div>
+                    <div>{it.k}</div>
+                    <div className="extracted">{it.v}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
 

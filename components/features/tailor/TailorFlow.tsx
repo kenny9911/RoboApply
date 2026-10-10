@@ -147,6 +147,7 @@ export function TailorFlow({
       <TailorSetup
         resumeId={resumeId}
         jobId={jobId}
+        jd={jobId ? null : jd}
         fast={prefs && prefs.runs > 0 ? { sections: prefs.sections, experienceDepth: prefs.experienceDepth } : null}
         pending={create.pending}
         credit={create.gate.summary}

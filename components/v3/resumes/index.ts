@@ -8,3 +8,4 @@ export {
   type ImportSource,
   type ImportCreateContext,
 } from './ImportModal';
+export { joinPhrase } from './joinPhrase';

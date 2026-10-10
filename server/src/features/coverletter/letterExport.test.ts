@@ -152,4 +152,31 @@ describe('renderLetterPdf embeds the face each locale needs', () => {
     const docx = await renderLetterDocx(input(KO, 'ko'));
     expect(docx.subarray(0, 2).toString('latin1')).toBe('PK');
   });
+
+  it('the Word file never names the author "Un-named" (QA: docProps/core.xml)', async () => {
+    const zlib = await import('node:zlib');
+    /** docProps/core.xml of a docx (central directory walk; deflate or stored). */
+    const coreXml = (buf: Buffer): string => {
+      let i = 0;
+      while ((i = buf.indexOf(Buffer.from([0x50, 0x4b, 0x03, 0x04]), i)) !== -1) {
+        const method = buf.readUInt16LE(i + 8);
+        const compSize = buf.readUInt32LE(i + 18);
+        const nameLen = buf.readUInt16LE(i + 26);
+        const extraLen = buf.readUInt16LE(i + 28);
+        const name = buf.subarray(i + 30, i + 30 + nameLen).toString('utf8');
+        const start = i + 30 + nameLen + extraLen;
+        if (name === 'docProps/core.xml') {
+          const data = buf.subarray(start, start + compSize);
+          return (method === 8 ? zlib.inflateRawSync(data) : data).toString('utf8');
+        }
+        i = start + compSize;
+      }
+      return '';
+    };
+    const anonymous = coreXml(await renderLetterDocx(input(EN, 'en')));
+    expect(anonymous).toContain('dc:creator');
+    expect(anonymous).not.toContain('Un-named');
+    const named = coreXml(await renderLetterDocx({ ...input(EN, 'en'), author: 'Sam Lee' }));
+    expect(named).toContain('<dc:creator>Sam Lee</dc:creator>');
+  });
 });

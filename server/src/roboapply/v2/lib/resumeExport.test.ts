@@ -26,6 +26,9 @@ interface ExportModule {
   FONT_DIR: string;
   buildExportFileName(style: string | null, parts: Opts & { fallback: string }): string;
   bundledFace(key: FaceKey): FontFaces | null;
+  bodyLanguage(blocks: Array<{ kind: string; text: string }>): 'en' | 'zh' | 'zh-TW';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createRunDrawer(doc: any, config: { chain: readonly FontFaces[]; widthFrom: (x: number) => number }): { draw: (...a: any[]) => void; measure: (...a: any[]) => number };
   containsCjk(text: string): boolean;
   defaultPageFor(input: Opts): 'letter' | 'a4';
   faceHasGlyph(face: FontFaces, cp: number): boolean;
@@ -188,7 +191,9 @@ function zipEntry(buf: Buffer, name: string): string | null {
       const data = buf.subarray(start, start + compSize);
       return (method === 8 ? zlib.inflateRawSync(data) : data).toString('utf8');
     }
-    i = start + Math.max(compSize, 1);
+    // `start` is already past this header, so an empty entry (a folder) still
+    // moves on; adding a byte here used to skip the entry right after a folder.
+    i = start + compSize;
   }
   return null;
 }
@@ -200,6 +205,17 @@ describe('parseResumeMarkdown', () => {
     expect(blocks.find((b) => b.kind === 'h3')?.text).toBe('Analytical Engines — Engineer · March 2021 – Present');
     expect(blocks.filter((b) => b.kind === 'bullet')).toHaveLength(2);
     expect(blocks.some((b) => b.text.includes('**'))).toBe(false);
+  });
+
+  it('a labelled skills line is body text, not a role heading', () => {
+    const blocks = parseResumeMarkdown('## Skills\n**Tools:** Zendesk · Jira\n**框架：** pandas\n## Experience\n**Lead — Acme** · 2021 – Present');
+    expect(blocks.map((b) => [b.kind, b.text])).toEqual([
+      ['h2', 'Skills'],
+      ['para', 'Tools: Zendesk · Jira'],
+      ['para', '框架： pandas'],
+      ['h2', 'Experience'],
+      ['h3', 'Lead — Acme · 2021 – Present'],
+    ]);
   });
 
   it('drops images and rules', () => {
@@ -415,6 +431,93 @@ describe('font fallback per run (Latin Extended, Greek, Cyrillic, Hangul, kana)'
   });
 });
 
+/** The text runs of a docx body, each wrapped in ><, so `>Title<` matches a whole run. */
+const docxText = (docx: Buffer) => (zipEntry(docx, 'word/document.xml') ?? '').replace(/<w:t[^>]*>/g, '>').replace(/<\/w:t>/g, '<');
+
+describe('mixed-font lines (QA: a project title drawn under its first bullet)', () => {
+  it('a line that starts in a CJK face and ends in Helvetica is as tall as one that ends in the CJK face', async () => {
+    const { default: PDFDocument } = await import('pdfkit');
+    const chain = X.fontChainFor('zh', '校园');
+    const advance = (text: string) => {
+      const doc = new PDFDocument({ size: [612, 792], margin: 40 });
+      const { draw, measure } = X.createRunDrawer(doc, { chain, widthFrom: (x: number) => 612 - x - 40 });
+      const y0 = 100;
+      draw(text, 'bold', 10.5, 40, y0, { width: 532, lineGap: 2 });
+      const moved = doc.y - y0;
+      const measured = measure(text, 'bold', 10.5, 532, { lineGap: 2 });
+      doc.end();
+      return { moved, measured };
+    };
+    const cjkLast = advance('2025.03 – 2025.06 · 校园二手交易平台');
+    const latinLast = advance('校园二手交易平台 · 2025.03 – 2025.06');
+    const cjkOnly = advance('校园二手交易平台');
+    const latinOnly = advance('2025.03 - 2025.06');
+    // The CJK face is taller than Helvetica (this is what the bug needs).
+    expect(cjkOnly.moved).toBeGreaterThan(latinOnly.moved + 1);
+    // Before the fix `latinLast` advanced by Helvetica's line only.
+    expect(latinLast.moved).toBeCloseTo(cjkOnly.moved, 3);
+    expect(cjkLast.moved).toBeCloseTo(cjkOnly.moved, 3);
+    // The guard reserves the same height the draw uses.
+    expect(latinLast.measured).toBeCloseTo(cjkOnly.measured, 3);
+  });
+});
+
+describe('section titles of a Chinese resume (QA: "Summary, Skills, Experience…" on a Chinese PDF)', () => {
+  const UPLOADED_ZH = [
+    '# 林知远',
+    '',
+    'lin@example.com · 138-0000-0000 · 杭州',
+    '',
+    '## Summary',
+    '',
+    '基础扎实，喜欢把问题量化后再优化；有两段后端实习，熟悉服务开发、测试与上线流程。',
+    '',
+    '## Skills',
+    '',
+    '**Technical:** MySQL · Redis · Kafka',
+    '',
+    '## Experience',
+    '',
+    '**后端开发实习生 — 星河数据科技有限公司** · 2026.06 – 2026.09',
+    '- 使用 Go 和 gRPC 参与订单查询服务重构，将 P99 延迟从 420ms 降到 180ms。',
+    '',
+    '## Projects',
+    '',
+    '**校园二手交易平台** · 2025.03 – 2025.06',
+    '- 负责后端架构与数据库设计。',
+    '',
+    '## Education',
+    '',
+    '**浙江大学 · 2023.09 - 2027.06** — 本科, 计算机科学与技术',
+    '',
+    '## Awards',
+    '- 校级一等奖学金 (2024)',
+    '',
+    '## Languages',
+    '',
+    '英语 — CET-6',
+  ].join('\n');
+
+  it('prints the upload\u2019s default English titles in the resume\u2019s language', async () => {
+    const doc = await X.renderResumeDocx(UPLOADED_ZH);
+    const xml = docxText(doc);
+    for (const title of ['个人总结', '专业技能', '实习经历', '项目经历', '教育背景', '获奖情况', '语言能力']) expect(xml, title).toContain(title);
+    for (const title of ['Summary', 'Experience', 'Projects', 'Education', 'Awards']) expect(xml, title).not.toContain(`>${title}<`);
+  });
+
+  it('leaves an English resume, the user\u2019s own titles and an explicit choice alone', async () => {
+    expect(docxText(await X.renderResumeDocx(EN))).toContain('Experience');
+    const own = UPLOADED_ZH.replace('## Projects', '## Selected Work');
+    expect(docxText(await X.renderResumeDocx(own))).toContain('Selected Work');
+    const english = docxText(await X.renderResumeDocx(UPLOADED_ZH, { layout: { headingLanguage: 'en' } }));
+    expect(english).toContain('Education');
+    expect(english).not.toContain('教育背景');
+    expect(X.bodyLanguage(X.parseResumeMarkdown(EN))).toBe('en');
+    expect(X.bodyLanguage(X.parseResumeMarkdown(UPLOADED_ZH))).toBe('zh');
+    expect(X.bodyLanguage(X.parseResumeMarkdown(ZH_TW))).toBe('zh-TW');
+  });
+});
+
 describe('two-column paging', () => {
   it('keeps the sidebar in order across pages when it runs longer than page 1', async () => {
     const main = Array.from({ length: 40 }, (_, i) => `- Main ${i} ` + 'long words that wrap around the column several times '.repeat(3)).join('\n');
@@ -462,6 +565,18 @@ describe('AI marks (CN-E-07, WP-13)', () => {
   it('writes no AI marks when no label is passed', async () => {
     expect(latin1(await renderResumePdf(EN))).not.toContain('/AIContentID');
     expect(zipEntry(await renderResumeDocx(EN), 'docProps/custom.xml') ?? '').not.toContain('AIContentID');
+  });
+});
+
+describe('DOCX author (QA: <dc:creator>Un-named</dc:creator>)', () => {
+  it('is the candidate\u2019s name, never the library default', async () => {
+    const core = zipEntry(await renderResumeDocx(EN), 'docProps/core.xml')!;
+    expect(core).toContain('<dc:creator>Ada Lovelace</dc:creator>');
+    expect(core).not.toContain('Un-named');
+    // A resume with no name line: a blank author.
+    const noName = zipEntry(await renderResumeDocx('## Experience\n- Built things\n'), 'docProps/core.xml')!;
+    expect(noName).not.toContain('Un-named');
+    expect(/<dc:creator>([^<]*)<\/dc:creator>/.exec(noName)?.[1]?.trim() ?? '').toBe('');
   });
 });
 

@@ -18,7 +18,9 @@
 //     note below).
 //   • All edits mutate `structured`; the preview re-renders live.
 //   • A 1.2s debounce re-serializes `structured` → markdown and PATCHes
-//     (`usePatchResumeMutation`) only when the markdown actually changed.
+//     (`usePatchResumeMutation`) only when the USER changed something
+//     (hooks/resume/useEditorAutosave: compared with what the loaded resume
+//     serializes to, so opening an upload never rewrites it).
 //   • Inline AI: `useResumeRewrite` (bullet / summary / skills).
 //   • Tailor: `<TailorSheet>` (components/features/tailor; one `tailor` credit per run).
 //   • Coach: `useResumeCoachTips`.
@@ -30,10 +32,10 @@
 //
 // Autosave rehydration: `usePatchResumeMutation.onSuccess` writes the PATCH
 // response back into the detail cache, which changes `resume` identity. The
-// hydration effect therefore guards: it only re-parses server markdown when
-// it differs from what this editor last serialized (first load / external
-// change) — an autosave echo never clobbers in-flight keystrokes or remounts
-// rows.
+// hydration in useEditorAutosave therefore guards: it only re-parses server
+// markdown when it differs from what this editor last sent (first load /
+// external change) — an autosave echo never clobbers in-flight keystrokes or
+// remounts rows.
 //
 // WP-65 (preview pane): fit to one page (GoApply: 1–2 pages) with undo, the
 // section order, the GoApply personal details (籍贯 / 政治面貌) and the device
@@ -59,6 +61,7 @@ import { useTranslations } from 'next-intl';
 
 import {
   useResume,
+  useResumeList,
   usePatchResumeMutation,
   useResumeRewrite,
   useResumeCoachTips,
@@ -82,7 +85,6 @@ import { TailorLaunchHost, TailorSheet } from '../../../../components/features/t
 import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
 import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
 import {
-  parseResumeMarkdown,
   serializeResumeMarkdown,
   blankExperience,
   blankEducation,
@@ -90,8 +92,11 @@ import {
   type StructuredExperience,
   type StructuredEducation,
 } from '../../../../lib/resumeStructure';
-import { analyzeResume } from '../../../../lib/resumeAnalyzer';
+import { analyzeResume, resumePlaceholders } from '../../../../lib/resumeAnalyzer';
 import { useLatestResumeCheck } from '../../../../hooks/resume/useResumeCheck';
+import { useEditorAutosave } from '../../../../hooks/resume/useEditorAutosave';
+import { useCreditGate } from '../../../../hooks/shared/useCreditGate';
+import { CreditNotice } from '../../../../components/v3/primitives';
 import {
   EditorToolbar,
   EditorSection,
@@ -104,8 +109,6 @@ import {
   DownloadModal,
   YOUNG_HELPERS,
 } from '../../../../components/v3/resume-editor';
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 export default function ResumeEditorPage({
   params,
@@ -138,9 +141,7 @@ export default function ResumeEditorPage({
   const photo = useResumePhoto(id);
   const placedPhoto = photoOffered && layout.photo ? photo.photo : null;
 
-  const [structured, setStructured] = useState<StructuredResume | null>(null);
   const [resumeName, setResumeName] = useState('');
-  const [saveState, setSaveState] = useState<SaveState>('idle');
   const [coachOpen, setCoachOpen] = useState(true);
   const [tailorOpen, setTailorOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -148,34 +149,11 @@ export default function ResumeEditorPage({
   const [skillSuggestions, setSkillSuggestions] = useState<string[]>([]);
   const [skillsBusy, setSkillsBusy] = useState(false);
 
-  const lastSerializedRef = useRef('');
-  const skipNextAutoSaveRef = useRef(true);
-  // Which resume id the editor state was hydrated from.
-  const hydratedIdRef = useRef<string | null>(null);
-  // True while `structured` differs from the last-serialized markdown.
-  const dirtyRef = useRef(false);
   // One-shot focus request for a freshly inserted bullet (consumed by
   // BulletRow's mount — a ref, so setting it never re-renders).
   const pendingBulletFocusRef = useRef<{ expId: string; idx: number } | null>(
     null,
   );
-
-  // Hydrate from server — first load, resume switch, or a REAL external
-  // content change. Autosave echoes (the PATCH response carrying exactly what
-  // we just serialized) and refetches racing local edits are ignored so
-  // typing is never interrupted and row ids/focus survive.
-  useEffect(() => {
-    if (!resume) return;
-    const sameDoc = hydratedIdRef.current === resume.id;
-    if (sameDoc && resume.resumeMarkdown === lastSerializedRef.current) return;
-    if (sameDoc && dirtyRef.current) return;
-    hydratedIdRef.current = resume.id;
-    setStructured(parseResumeMarkdown(resume.resumeMarkdown));
-    setResumeName(resume.name);
-    lastSerializedRef.current = resume.resumeMarkdown;
-    dirtyRef.current = false;
-    skipNextAutoSaveRef.current = true;
-  }, [resume]);
 
   // AI provenance (WP-36b): remember every AI-written text the editor was
   // offered; once one of them lands in the saved resume, the next save tells
@@ -183,49 +161,44 @@ export default function ResumeEditorPage({
   // 4 characters are too common to attribute.
   const aiTextsRef = useRef<Set<string>>(new Set());
   const aiReportedRef = useRef(false);
+  // Every inline AI edit (a bullet action, a summary rewrite, skill
+  // suggestions) spends one `rewrite` credit on the server. The gate keeps
+  // "N left" true, does not send a request that is known to have no credit,
+  // and opens the out-of-credits sheet on a 402.
+  const { run: spendRewrite, summary: rewriteCredits } = useCreditGate('rewrite');
   const runAiRewrite = useCallback(
     async (body: Parameters<typeof rewrite.mutateAsync>[0]) => {
-      const res = await rewrite.mutateAsync(body);
+      const spent = await spendRewrite(() => rewrite.mutateAsync(body));
+      // The sheet explains; callers show their own "did not work" state.
+      if (!spent.ok) throw new Error(spent.reason);
+      const res = spent.value;
       const texts = [res.rewrite, ...(res.options ?? []).map((o) => o.text), ...(res.skills ?? [])];
       for (const text of texts) if (text && text.trim().length >= 4) aiTextsRef.current.add(text.trim());
       return res;
     },
-    [rewrite],
+    [rewrite, spendRewrite],
   );
 
-  // Debounced auto-save of structured edits.
-  useEffect(() => {
-    if (!structured || !resume) return;
-    if (skipNextAutoSaveRef.current) {
-      skipNextAutoSaveRef.current = false;
-      return;
-    }
-    const serialized = serializeResumeMarkdown(structured);
-    dirtyRef.current = serialized !== lastSerializedRef.current;
-    if (!dirtyRef.current) return;
+  // Document state + debounced autosave (hooks/resume/useEditorAutosave): the
+  // resume is saved only after the user changed it — opening an uploaded
+  // resume never rewrites it.
+  const saveMarkdown = useCallback(
+    async (serialized: string) => {
+      const aiLanded =
+        !aiReportedRef.current && [...aiTextsRef.current].some((text) => serialized.includes(text));
+      await patch.mutateAsync(aiLanded ? { resumeMarkdown: serialized, aiAssisted: true } : { resumeMarkdown: serialized });
+      if (aiLanded) aiReportedRef.current = true;
+    },
+    [patch],
+  );
+  const { structured, setStructured, saveState, hydrations } = useEditorAutosave(resume, saveMarkdown);
 
-    setSaveState('saving');
-    const handle = setTimeout(async () => {
-      // Pre-commit before the PATCH resolves: the mutation's onSuccess writes
-      // the response into the query cache, and the hydration effect compares
-      // against this ref — committing after the await would race that effect.
-      const prev = lastSerializedRef.current;
-      lastSerializedRef.current = serialized;
-      dirtyRef.current = false;
-      try {
-        const aiLanded =
-          !aiReportedRef.current && [...aiTextsRef.current].some((text) => serialized.includes(text));
-        await patch.mutateAsync(aiLanded ? { resumeMarkdown: serialized, aiAssisted: true } : { resumeMarkdown: serialized });
-        if (aiLanded) aiReportedRef.current = true;
-        setSaveState('saved');
-      } catch {
-        lastSerializedRef.current = prev;
-        dirtyRef.current = true;
-        setSaveState('error');
-      }
-    }, 1200);
-    return () => clearTimeout(handle);
-  }, [structured, resume, patch]);
+  // The name follows the server on each hydration (first load, resume switch,
+  // external change) — never on an autosave echo, which would undo typing.
+  useEffect(() => {
+    if (resume) setResumeName(resume.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on hydration, not on every refetch
+  }, [hydrations]);
 
   // Debounced rename.
   useEffect(() => {
@@ -253,6 +226,17 @@ export default function ResumeEditorPage({
     }
   }, [structured]);
   const strength = analysis?.score ?? resume?.matchScoreCached ?? 72;
+
+  // Lines that still carry a blank an AI suggestion left ("[X]", "[n=__]").
+  const placeholderLines = useMemo(() => (structured ? resumePlaceholders(structured) : []), [structured]);
+
+  // A tailored version with details still to check: where "Verify details"
+  // opens for it. The hub list carries the session id (the detail view does
+  // not); without it the link goes to the hub, which lists the same action.
+  const unverifiedClaims = resume?.unverifiedClaims ?? 0;
+  const hubList = useResumeList();
+  const verifySessionId = unverifiedClaims > 0 ? (hubList.data?.resumes.find((r) => r.id === id)?.tailorSessionId ?? null) : null;
+  const verifyHref = unverifiedClaims > 0 ? (verifySessionId ? `/resume?tailorSession=${encodeURIComponent(verifySessionId)}` : '/resume') : null;
 
   // Analyzer anchors → editor section DOM ids (exp-<id> passes through: the
   // experience cards carry that id directly).
@@ -525,8 +509,11 @@ export default function ResumeEditorPage({
 
   return (
     // Break out of .main-inner padding so the split pane is full-bleed like the
-    // prototype. The (auth) main column is the positioning context.
-    <div style={{ margin: '-28px -32px -80px' }}>
+    // prototype. The (auth) main column is the positioning context. The inset
+    // follows the shell's padding per width (styles/v3-resume.css
+    // .rb-editor-bleed): a fixed -32px was wider than the phone's 14px gutter
+    // and scrolled the whole page sideways.
+    <div className="rb-editor-bleed">
       {/* Runs the tailor flow for this resume from `?tailor=<jobId>` (WP-36a; mounted at the Wave 3 gate). */}
       <Suspense fallback={null}>
         <TailorLaunchHost resumeId={id} />
@@ -549,9 +536,34 @@ export default function ResumeEditorPage({
           aiEnabled={aiEnabled}
         />
 
+        {/* Not ready to send yet: unchecked details of a tailored version, and blanks left by an AI suggestion. */}
+        {verifyHref ? (
+          <p className={layoutStyles.editorNotice} role="status" data-notice="unverified">
+            <span>{t('export.unverified', { count: unverifiedClaims })}</span>
+            <a className={layoutStyles.editorNoticeAction} href={verifyHref}>
+              {t('export.verify_cta')}
+            </a>
+          </p>
+        ) : null}
+        {placeholderLines.length > 0 ? (
+          <p className={layoutStyles.editorNotice} role="status" data-notice="placeholders">
+            <span>{t('export.placeholders', { count: placeholderLines.length })}</span>
+            <button type="button" className={layoutStyles.editorNoticeAction} onClick={() => jumpToIssue(placeholderLines[0]!.anchor)}>
+              {t('export.placeholders_show')}
+            </button>
+          </p>
+        ) : null}
+
         <div className="rb-split">
           {/* LEFT — structured editor */}
           <div className="rb-edit-pane">
+            {/* The cost of an AI edit, before the click. */}
+            {aiEnabled ? (
+              <div className={layoutStyles.creditLine} data-credit="rewrite">
+                <span>{t('ai_edit_cost')}</span>
+                <CreditNotice bucket={rewriteCredits} />
+              </div>
+            ) : null}
             {/* Identity */}
             <EditorSection eyebrow="01" title={t('section.identity')} anchorId="identity">
               <div className="rb-field-grid">
@@ -1008,7 +1020,9 @@ export default function ResumeEditorPage({
           resumeId={id}
           resumeName={resumeName}
           resumeMarkdown={serializeResumeMarkdown(structured)}
-          unverifiedClaims={resume.unverifiedClaims ?? 0}
+          unverifiedClaims={unverifiedClaims}
+          verifyHref={verifyHref}
+          placeholderLines={placeholderLines.map((l) => l.text)}
           aiAssisted={resume.aiAssisted ?? false}
           photo={placedPhoto}
           onClose={() => setDownloadOpen(false)}

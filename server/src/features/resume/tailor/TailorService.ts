@@ -45,6 +45,7 @@ import {
 import type { z } from 'zod';
 import { diffChanges, MAX_CHANGES, mergeTailored } from './blocks.js';
 import { applyClaimDecision, ClaimDecisionError, extractClaims, pendingCount } from './claims.js';
+import { plausibleSkill } from '../keywords/keywordReport.js';
 import type { TailorJobRow, TailorSessionRow, TailorStore } from './store.js';
 
 export type CreateTailorBody = z.output<typeof CreateTailorSessionBodySchema>;
@@ -301,7 +302,11 @@ export class TailorService {
       if (!out?.tailoredResumeMarkdown?.trim()) throw new Error('empty tailor output');
 
       const resultMd = mergeTailored(base.resumeMarkdown, out.tailoredResumeMarkdown, sections);
-      const jobTerms = job ? [...(await store.findKeywordTerms(job.id)), ...job.skills] : [];
+      // The job's own skills only. The stored keyword rows also hold plain
+      // frequent words of the posting ("了解", "协作", "paid"); used as terms
+      // they titled Verify-details cards with words that are not skills.
+      // (claims.ts adds the hard-skill vocabulary and the confirmed keywords.)
+      const jobTerms = job ? job.skills.filter(plausibleSkill) : [];
       const claims = extractClaims({
         baseMarkdown: base.resumeMarkdown,
         resultMarkdown: resultMd,
@@ -366,6 +371,19 @@ export class TailorService {
 
   async get(userId: string, sessionId: string): Promise<TailorSessionView> {
     return this.view(await this.sessionOrThrow(userId, sessionId));
+  }
+
+  /**
+   * The posting one of the user's sessions was tailored for, as a keyword
+   * report target: the job, or the pasted posting kept on the session.
+   * 404 for another user's session or one with neither.
+   */
+  async postingOf(userId: string, sessionId: string): Promise<{ jobId: string } | { jd: { title: string; company: string; text: string } }> {
+    const session = await this.sessionOrThrow(userId, sessionId);
+    if (session.jobId) return { jobId: session.jobId };
+    const jd = JdSnapshotSchema.safeParse(session.jdSnapshot);
+    if (!jd.success) throw new HttpError('not_found', 'The job post of this tailoring was not kept.', { reason: RESUME_ERROR_CODES.sessionNotFound });
+    return { jd: jd.data };
   }
 
   // ── Verify details ──

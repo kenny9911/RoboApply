@@ -12,6 +12,8 @@
 // Clicking the card routes to the editor (`/resumes/[id]`) — the page owns the
 // push so Lane F's route stays the only coupling point.
 
+import { useTranslations } from 'next-intl';
+
 import type { RAResumeVariantSummary } from '../../../lib/api/v2/types';
 import { IconTrash } from '../primitives';
 
@@ -48,6 +50,7 @@ export function ResumeCard({
   onDelete,
   deleteLabel,
 }: Props) {
+  const t = useTranslations('resume');
   const tailored = Boolean(resume.targetJobTitle || resume.targetJobCompany);
   const score = resume.matchScoreCached;
 
@@ -60,15 +63,16 @@ export function ResumeCard({
           <div className="rb-mini-name">{resume.name}</div>
           <div className="rb-mini-line" style={{ width: '60%' }} />
           <div className="rb-mini-spacer" />
-          <div className="rb-mini-section">EXPERIENCE</div>
+          {/* Section names in the interface language (they were fixed English words). */}
+          <div className="rb-mini-section">{t('section.experience')}</div>
           <div className="rb-mini-line" style={{ width: '85%' }} />
           <div className="rb-mini-line" style={{ width: '95%' }} />
           <div className="rb-mini-line" style={{ width: '70%' }} />
           <div className="rb-mini-spacer" />
-          <div className="rb-mini-section">EDUCATION</div>
+          <div className="rb-mini-section">{t('section.education')}</div>
           <div className="rb-mini-line" style={{ width: '75%' }} />
         </div>
-        {tailored ? <div className="rb-mini-stamp">TAILORED</div> : null}
+        {tailored ? <div className="rb-mini-stamp">{t('card.tailored_stamp')}</div> : null}
       </div>
 
       <div className="rb-card-body">

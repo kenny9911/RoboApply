@@ -18,12 +18,17 @@ import styles from './ResumeCheck.module.css';
 
 export interface KeywordReportProps {
   resumeId: string;
-  jobId: string;
+  /** The job to check against… */
+  jobId?: string | null;
+  /** …or a tailor session (its own job, or the posting pasted for it). */
+  tailorSession?: { id: string; version?: string } | null;
+  /** Leave the fit score out (the tailored result shows its own before / after scores). */
+  hideFit?: boolean;
 }
 
-export function KeywordReport({ resumeId, jobId }: KeywordReportProps) {
+export function KeywordReport({ resumeId, jobId = null, tailorSession = null, hideFit = false }: KeywordReportProps) {
   const t = useTranslations('resumeCheck');
-  const q = useKeywordReport(resumeId, jobId);
+  const q = useKeywordReport(resumeId, tailorSession ? { tailorSessionId: tailorSession.id, version: tailorSession.version } : jobId);
   if (q.isLoading) {
     return (
       <p className={styles.muted} role="status">
@@ -38,10 +43,10 @@ export function KeywordReport({ resumeId, jobId }: KeywordReportProps) {
       </p>
     );
   }
-  return <KeywordReportView report={q.data} />;
+  return <KeywordReportView report={q.data} hideFit={hideFit} />;
 }
 
-export function KeywordReportView({ report }: { report: KeywordReportResponse }) {
+export function KeywordReportView({ report, hideFit = false }: { report: KeywordReportResponse; hideFit?: boolean }) {
   const t = useTranslations('resumeCheck');
   return (
     <section className={styles.card} aria-labelledby="rc-keywords">
@@ -50,17 +55,19 @@ export function KeywordReportView({ report }: { report: KeywordReportResponse })
       </h3>
       <p className={styles.muted}>{t('keywords.sub')}</p>
 
-      <div className={styles.mt4}>
-        <p className={styles.detailLabel}>{t('keywords.fit')}</p>
-        {report.fit ? (
-          <>
-            <FitMeter score={report.fit.value} tier={(report.fitTier as FitTierKey | null) ?? null} compact />
-            <SourceNote sourced={report.fit} />
-          </>
-        ) : (
-          <p className={styles.muted}>{t('keywords.fitNone')}</p>
-        )}
-      </div>
+      {hideFit ? null : (
+        <div className={styles.mt4}>
+          <p className={styles.detailLabel}>{t('keywords.fit')}</p>
+          {report.fit ? (
+            <>
+              <FitMeter score={report.fit.value} tier={(report.fitTier as FitTierKey | null) ?? null} compact />
+              <SourceNote sourced={report.fit} />
+            </>
+          ) : (
+            <p className={styles.muted}>{t('keywords.fitNone')}</p>
+          )}
+        </div>
+      )}
 
       <ul className={styles.rows}>
         {report.rows.map((row) => (

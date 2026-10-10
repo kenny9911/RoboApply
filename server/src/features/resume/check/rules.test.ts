@@ -9,6 +9,7 @@ import { aiIssues, parseAiPassOutput } from './aiPass.js';
 import { hasInventedNumber, inventedNumbers, quotedIn } from './citationGuard.js';
 import { parseResume, resumeForLlm, textUnits } from './resumeText.js';
 import { runRules } from './rules.js';
+import { findPlaceholders } from './placeholders.js';
 import { countBySeverity, gradeIssues, labelFor, scoreIssues } from './score.js';
 import { ISSUE_DEFINITIONS, TEMPLATE_RULES, rulesCountFor } from './taxonomy.js';
 import { GOOD_INTL } from './fixtures.js';
@@ -117,6 +118,34 @@ describe('issue taxonomy table', () => {
     expect(types(rules(longResume))).toContain('length_too_long');
   });
 
+  it('an unfilled placeholder ("[X]", "[n=__]") is listed first, with its line; a link or a real bracket is not one', () => {
+    // QA: "Add numbers" → "Use this" left "[X] products across [n=__] planning periods" and no check listed it.
+    const md = GOOD_INTL.replace(/- Shipped 12 internal tools[^\n]*/, '- Contributed to inventory forecasting for [X] products across [n=__] planning periods.');
+    expect(md).toContain('[n=__]');
+    const issues = rules(md);
+    const blank = issues.filter((i) => i.type === 'placeholder_unfilled');
+    expect(blank).toHaveLength(1);
+    expect(blank[0]).toMatchObject({
+      severity: 'urgent',
+      section: 'experience',
+      anchor: 'section-experience',
+      target: 'Contributed to inventory forecasting for [X] products across [n=__] planning periods.',
+      evidence: '[X] [n=__]',
+      fixable: false,
+      params: { placeholder: '[X]', count: 2 },
+    });
+    // A "Fix first" issue caps the grade at Fair: it can never read Excellent.
+    expect(gradeIssues(issues).label).not.toBe('excellent');
+    expect(gradeIssues(issues).label).not.toBe('good');
+
+    expect(findPlaceholders('Cut latency from [before → after] with [XX] engineers and [TBD].')).toEqual(['[before → after]', '[XX]', '[TBD]']);
+    expect(findPlaceholders('节省 [数量] 小时，覆盖 [n=__] 个团队')).toEqual(['[数量]', '[n=__]']);
+    for (const fine of ['See [my portfolio](https://example.test).', 'Led the [Redacted] program for 12 months.', 'Array access a[0] and b[i] in C.', 'Grade [A] student.']) {
+      expect(findPlaceholders(fine), fine).toEqual([]);
+    }
+    expect(types(rules(GOOD_INTL))).not.toContain('placeholder_unfilled');
+  });
+
   it('weak openers carry the bullet as the fix target; missing-contact issues are not fixable', () => {
     const issues = rules(WEAK_INTL);
     const weak = issues.filter((i) => i.type === 'weak_verb');
@@ -149,6 +178,35 @@ describe('issue taxonomy table', () => {
     expect(ct).not.toContain('cn_english_cert_missing');
     expect(ct).not.toContain('cn_self_evaluation_missing');
     expect(ct).not.toContain('cn_personal_details_optional');
+  });
+
+  it('cn: an uploaded resume with two internships under "Experience" is not told it has none', () => {
+    // The stored form of an upload before headings followed the resume language:
+    // an English "Experience" title and bold role lines (no `###`). The roles
+    // were read as body text, so the check saw no internship (QA: 没有实习经历).
+    const uploaded = [
+      '# 林知远',
+      '',
+      'lin@example.test · 138 0000 0000 · 上海',
+      '',
+      '## Experience',
+      '',
+      '**数据分析实习生 — 星河科技** · 2025.06 - 2025.09 · 上海',
+      '- 负责用户增长周报的数据提取与分析，覆盖 12 个业务团队。',
+      '',
+      '**产品运营实习生 — 云帆网络** · 2024.07 - 2024.09',
+      '- 整理 300 份用户反馈，输出 3 份改进建议。',
+      '',
+      '## Education',
+      '',
+      '**华东理工大学 · 2023.09 - 2027.06** — 本科, 计算机科学与技术',
+    ].join('\n');
+    const r = parseResume(uploaded);
+    expect(r.sections.find((x) => x.key === 'experience')!.entries).toHaveLength(2);
+    expect(types(rules(uploaded, 'cn'))).not.toContain('cn_internship_missing');
+    // Control: the same student with no internship role still gets the finding.
+    const none = uploaded.replace(/实习生/g, '志愿者');
+    expect(types(rules(none, 'cn'))).toContain('cn_internship_missing');
   });
 
   it('cn: a graduate (no student marker, old graduation year) is not asked for internships', () => {

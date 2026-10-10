@@ -26,6 +26,7 @@ import { Document, Packer, Paragraph, TextRun } from 'docx';
 import {
   bundledFace,
   createRunDrawer,
+  docxAuthor,
   faceHasGlyph,
   fontChainForText,
   hanOrderFor,
@@ -114,6 +115,8 @@ export interface LetterExportInput {
   label: ExportAiLabel;
   /** Visible AI line printed under the letter, or null. */
   footerLine: string | null;
+  /** The person the letter is from, for the Word file's author property (blank when not known). */
+  author?: string | null;
 }
 
 /** Paragraphs of the body (blank-line separated; single newlines kept as line breaks). */
@@ -192,6 +195,9 @@ export async function renderLetterDocx(input: LetterExportInput): Promise<Buffer
   if (input.footerLine) children.push(new Paragraph({ children: [new TextRun({ text: input.footerLine, size: 16, color: '666666' })], spacing: { before: 240 } }));
   const doc = new Document({
     title: input.title,
+    // No author is known here; a blank, never the library's default "Un-named".
+    creator: docxAuthor(input.author),
+    lastModifiedBy: docxAuthor(input.author),
     customProperties: Object.entries(input.label.docxCustomProperties).map(([name, value]) => ({ name, value })),
     sections: [{ children }],
   });

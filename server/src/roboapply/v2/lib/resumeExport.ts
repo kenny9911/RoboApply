@@ -378,22 +378,40 @@ export function createRunDrawer(
         o = { ...opts, align: 'left' };
       }
     }
-    // Every run sits on the first run's baseline (pdfkit otherwise offsets
-    // each fragment by its own font's ascender, so mixed fonts would bob).
-    // A numeric baseline is in points; the ascender is in 1/1000 em.
-    const ascender = (doc.font(fontName(runs[0]!.face, weight)) as unknown as { _font: { ascender: number } })._font.ascender;
+    // Every run sits on ONE baseline: that of the tallest font in the line
+    // (pdfkit otherwise offsets each fragment by its own font's ascender, so
+    // mixed fonts would bob). A numeric baseline is in points; the ascender
+    // is in 1/1000 em.
+    //
+    // The line is also as tall as its tallest font. pdfkit advances by the
+    // LAST fragment's line height only, so a line that starts in a CJK face
+    // and ends in Helvetica ("校园二手交易平台 · 2025.03 – 2025.06") advanced
+    // by Helvetica's shorter line while its glyphs sat on the CJK baseline:
+    // the next line was drawn over it (QA: a project title under its first
+    // bullet). The difference is added after the last fragment.
+    const faces = [...new Set(runs.map((r) => fontName(r.face, weight)))];
+    const metrics = faces.map((name) => {
+      const f = doc.font(name).fontSize(size);
+      return { name, ascender: (f as unknown as { _font: { ascender: number } })._font.ascender, lineHeight: f.currentLineHeight(true) };
+    });
+    const ascender = Math.max(...metrics.map((m) => m.ascender));
+    const tallest = Math.max(...metrics.map((m) => m.lineHeight));
     runs.forEach((r, i) => {
       const last = i === runs.length - 1;
       doc.font(fontName(r.face, weight)).fontSize(size);
       if (i === 0) doc.text(r.text, startX, y, { ...o, baseline: -(ascender / 1000) * size, continued: !last });
       else doc.text(r.text, { continued: !last });
     });
+    if (opts.continued) return;
+    const lastLine = metrics.find((m) => m.name === fontName(runs[runs.length - 1]!.face, weight))!.lineHeight;
+    if (tallest > lastLine) doc.y += tallest - lastLine;
   };
 
+  /** Height of a block: the tallest of its fonts decides (a mixed line is as tall as its tallest font). */
   const measure = (t: string, weight: FontWeight, size: number, width: number, opts: RunTextOptions = {}) => {
-    const runs = runsOf(t);
-    const main = runs.reduce((a, r) => (r.text.length > a.text.length ? r : a), runs[0] ?? { text: t, face: 'std' as const });
-    return doc.font(fontName(main.face, weight)).fontSize(size).heightOfString(t, { ...opts, width });
+    const faces = [...new Set(runsOf(t).map((r) => fontName(r.face, weight)))];
+    if (faces.length === 0) faces.push(fontName('std', weight));
+    return Math.max(...faces.map((name) => doc.font(name).fontSize(size).heightOfString(t, { ...opts, width })));
   };
 
   return { runsOf, fontName, draw, measure };
@@ -614,7 +632,8 @@ export function parseResumeMarkdown(markdown: string): ResumeBlock[] {
     else if ((m = t.match(/^>\s*(.*)$/))) blocks.push({ kind: 'para', text: stripInline(m[1]!) });
     else {
       // A role line written as **Company** — Title reads like a sub-heading.
-      const isRoleLine = /^\*\*[^*]+\*\*/.test(t) && t.length <= 160;
+      // A labelled skills line ("**Tools:** Zendesk · Jira") is body text.
+      const isRoleLine = /^\*\*[^*]+\*\*/.test(t) && !/^\*\*[^*]*[:：]\s*\*\*/.test(t) && t.length <= 160;
       blocks.push({ kind: isRoleLine ? 'h3' : 'para', text: stripInline(t) });
     }
   }
@@ -671,6 +690,49 @@ export function translateHeading(title: string, language: HeadingLanguage): stri
   return SECTION_HEADINGS[language][key] ?? title;
 }
 
+/**
+ * The default English titles the upload step used to write for every resume,
+ * whatever its language (it now writes them in the resume's language — see
+ * `parsedResumeToMarkdown`). On a Chinese resume they were never the user's
+ * words, so "as written" prints them in the resume's language instead.
+ */
+const UPLOAD_DEFAULT_TITLES: Record<string, Record<'zh' | 'zh-TW', string>> = {
+  summary: { zh: '个人总结', 'zh-TW': '個人摘要' },
+  skills: { zh: '专业技能', 'zh-TW': '專長' },
+  experience: { zh: '工作经历', 'zh-TW': '工作經歷' },
+  projects: { zh: '项目经历', 'zh-TW': '專案經歷' },
+  education: { zh: '教育背景', 'zh-TW': '學歷' },
+  certifications: { zh: '证书', 'zh-TW': '證照' },
+  awards: { zh: '获奖情况', 'zh-TW': '獲獎紀錄' },
+  languages: { zh: '语言能力', 'zh-TW': '語言能力' },
+};
+const INTERNSHIP_TITLE: Record<'zh' | 'zh-TW', string> = { zh: '实习经历', 'zh-TW': '實習經歷' };
+
+/** 'zh' / 'zh-TW' when the body of the resume is written in Chinese, else 'en'. */
+export function bodyLanguage(blocks: readonly ResumeBlock[]): BuilderDocLanguage {
+  const text = blocks.filter((b) => b.kind !== 'h1' && b.kind !== 'h2').map((b) => b.text).join('\n');
+  const letters = (text.match(/\p{L}/gu) ?? []).length;
+  const han = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
+  if (letters === 0 || han < letters * 0.2 || /[\u3040-\u30ff\uac00-\ud7af]/.test(text)) return 'en';
+  const traditional = (text.match(/[個學實經專證歷與為這國從來時們說對開關點數據業務責體發現應網絡資訊軟設計畫團隊優勢領導項驗語執環維護測試動態產銷運營]/g) ?? []).length;
+  const simplified = (text.match(/[个学实经专证历与为这国从来时们说对开关点数据业务责体发现应网络资讯软设计划团队优势领导项验语执环维护测试动态产销运营]/g) ?? []).length;
+  return traditional > simplified ? 'zh-TW' : 'zh';
+}
+
+/** A section title for the export: the chosen language, or as written (see UPLOAD_DEFAULT_TITLES). */
+function exportTitle(section: ResumeSection, layout: ResumeRenderLayout, language: BuilderDocLanguage): string {
+  if (layout.headingLanguage !== 'as_written') return translateHeading(section.title, layout.headingLanguage);
+  if (language === 'en') return section.title;
+  const key = section.title.trim().toLowerCase();
+  const local = UPLOAD_DEFAULT_TITLES[key];
+  if (!local) return section.title;
+  if (key === 'experience') {
+    const roles = section.blocks.filter((b) => b.kind === 'h3');
+    if (roles.length > 0 && roles.every((b) => /实习|實習/.test(b.text))) return INTERNSHIP_TITLE[language];
+  }
+  return local[language];
+}
+
 function structure(blocks: ResumeBlock[], layout: ResumeRenderLayout): ResumeDoc {
   const doc: ResumeDoc = { name: null, header: [], sections: [] };
   let current: ResumeSection | null = null;
@@ -707,7 +769,8 @@ function structure(blocks: ResumeBlock[], layout: ResumeRenderLayout): ResumeDoc
       }
     }
   }
-  for (const s of doc.sections) s.title = translateHeading(s.title, layout.headingLanguage);
+  const language = layout.headingLanguage === 'as_written' ? bodyLanguage(blocks) : layout.headingLanguage;
+  for (const s of doc.sections) s.title = exportTitle(s, layout, language);
   return doc;
 }
 
@@ -1097,6 +1160,16 @@ export async function renderResumePdfWithMeta(markdown: string, options: RenderO
 const HEX = (c: string) => c.replace('#', '').toUpperCase();
 
 /**
+ * The author written into a .docx: the given name, or a blank. Never the
+ * docx library's default ("Un-named"). A single space, because the library
+ * falls back to its default for an empty string.
+ */
+export function docxAuthor(name: string | null | undefined): string {
+  const clean = (name ?? '').replace(/[\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return clean || ' ';
+}
+
+/**
  * Render resume markdown to a Word .docx (Buffer). Word supplies its own CJK
  * fonts, so nothing is embedded; the AI marks go into custom properties.
  */
@@ -1182,6 +1255,10 @@ export async function renderResumeDocx(markdown: string, options: RenderOptions 
     : undefined;
   const doc = new Document({
     title: (options.title || parsed.name || 'Resume').slice(0, 200),
+    // The author is the person whose resume it is (the library's default is
+    // the literal "Un-named", which showed in Word's file properties).
+    creator: docxAuthor(parsed.name),
+    lastModifiedBy: docxAuthor(parsed.name),
     customProperties: options.aiLabel
       ? Object.entries(options.aiLabel.docxCustomProperties).map(([name, value]) => ({ name, value }))
       : undefined,

@@ -4,7 +4,8 @@
 //   1. sections to change;
 //   2. an optional instruction (≤ 1000 characters);
 //   3. the posting's skills the resume does not show — the user ticks only
-//      the ones they really have (nothing else is added);
+//      the ones they really have (nothing else is added); the same step for
+//      a job and for a pasted posting;
 //   4. Generate (one `tailor` credit, spent only when it finishes).
 // Repeat users get "Fast tailor" with their last sections.
 
@@ -29,8 +30,10 @@ export interface TailorSetupValue {
 
 export interface TailorSetupProps {
   resumeId: string;
-  /** Null for a pasted posting (no skill list to offer). */
+  /** The job, or null for a pasted posting (then `jd` carries it). */
   jobId: string | null;
+  /** The pasted posting: its skills are read from the text. */
+  jd?: { title: string; company: string; text: string } | null;
   /** The last settings used on this device (Fast tailor), or null. */
   fast: { sections: TailorSectionKey[]; experienceDepth: 'quick' | 'full' } | null;
   pending: boolean;
@@ -42,7 +45,7 @@ function dedupe(list: string[]): string[] {
   return [...new Map(list.filter(Boolean).map((x) => [x.toLowerCase(), x])).values()];
 }
 
-export function TailorSetup({ resumeId, jobId, fast, pending, credit, onGenerate }: TailorSetupProps) {
+export function TailorSetup({ resumeId, jobId, jd = null, fast, pending, credit, onGenerate }: TailorSetupProps) {
   const t = useTranslations('tailor.setup');
   const [sections, setSections] = useState<TailorSectionKey[]>([...(fast?.sections ?? DEFAULT_TAILOR_SECTIONS)]);
   const [depth, setDepth] = useState<'quick' | 'full'>(fast?.experienceDepth ?? 'quick');
@@ -50,9 +53,12 @@ export function TailorSetup({ resumeId, jobId, fast, pending, credit, onGenerate
   const [instruction, setInstruction] = useState('');
   const [confirmed, setConfirmed] = useState<string[]>([]);
   const instructionId = useId();
-  const report = useKeywordReport(resumeId, jobId);
+  const hasPosting = Boolean(jobId || jd);
+  const report = useKeywordReport(resumeId, jobId ? jobId : jd ? { jd } : null);
+  // The server's own list of skills the posting asks for (extracted skills and
+  // vocabulary terms only — never plain frequent words of the posting).
   const missing = useMemo(
-    () => (report.data ? dedupe([...report.data.hardSkills.missing, ...report.data.keywords.missing]).slice(0, 20) : []),
+    () => (report.data ? (report.data.skillGaps ?? dedupe([...report.data.hardSkills.missing, ...report.data.keywords.missing])).slice(0, 20) : []),
     [report.data],
   );
 
@@ -127,8 +133,8 @@ export function TailorSetup({ resumeId, jobId, fast, pending, credit, onGenerate
         </span>
       </div>
 
-      {jobId ? (
-        <fieldset className={`${styles.section} ${styles.fieldset}`}>
+      {hasPosting ? (
+        <fieldset className={`${styles.section} ${styles.fieldset}`} data-testid="tailor-keywords">
           <legend className={styles.heading}>{t('keywordsTitle')}</legend>
           <p className={styles.sub}>{t('keywordsSub')}</p>
           {report.isLoading ? (

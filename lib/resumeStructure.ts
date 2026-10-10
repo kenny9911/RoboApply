@@ -24,6 +24,18 @@
 // with the email or phone has no target title: what is left is the location.
 // `sectionSequence` / `applySectionSequence` reorder sections (F-RES-12).
 //
+// Upload format (server/src/lib/candidateResumeIngest.ts `parsedResumeToMarkdown`):
+// an uploaded resume is stored as
+//   **Role — Company** · When · Location        (experience head)
+//   **School · When** — Degree, Field           (education head)
+//   **Tools:** Zendesk · Jira                   (one labelled skills line per group)
+// The parser reads all three without loss, skill groups keep their labels
+// (`skillGroups`), and serialize(parse(x)) is a fixed point: opening an upload
+// in the editor and saving it once never moves a field into the wrong slot.
+// Lines an earlier build already rewrote into the wrong slots
+// ("### 2021 – Present · Lead — Acme · Austin", "### School · 2019** — B.A.")
+// are read back into the right ones.
+//
 // All pure. No React, no I/O. Test from vitest.
 
 // ─────────────────────────────────────────────────────────────────────
@@ -76,13 +88,26 @@ export interface StructuredExtraSection {
   anchor: KnownSectionKind | null;
 }
 
+/** One labelled line of the skills section ("Tools: Zendesk · Jira"); label '' = no label. */
+export interface StructuredSkillGroup {
+  label: string;
+  skills: string[];
+}
+
 export interface StructuredResume {
   contact: StructuredContact;
   targetTitle: string;
   summary: string;
   experiences: StructuredExperience[];
   education: StructuredEducation[];
+  /** Every skill once, in document order — what the chip editor shows and edits. */
   skills: string[];
+  /**
+   * The skills section as written, when it has labelled lines. The serializer
+   * writes these lines back with the skills still in `skills`; a skill added
+   * in the editor goes on the unlabelled line. Absent = one plain line.
+   */
+  skillGroups?: StructuredSkillGroup[];
   extraSections: StructuredExtraSection[];
   /** Original titles of the known blocks (e.g. 实习经历); default English titles otherwise. */
   headings?: Partial<Record<KnownSectionKind, string>>;
@@ -123,11 +148,61 @@ function stripWrappers(s: string): string {
     .trim();
 }
 
+/** A part of an entry head that is a date or a date range ("2021 – Present", "2023.09 - 2027.06", "至今"). */
+export function looksLikeDate(s: string): boolean {
+  return /(?:19|20)\d{2}|\b(?:present|current|now|ongoing)\b|至今|现在|現在|目前/i.test(s);
+}
+
 function splitDateRange(s: string): { startDate: string; endDate: string } {
-  const norm = s.replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
+  const norm = s.replace(/\s+/g, ' ').trim();
+  // "2021.03至今" ends in a word, not in a separator plus "今".
+  const open = norm.match(/^(.+?)\s*[-–—~～]?\s*(至今|现在|現在|目前)$/);
+  if (open) return { startDate: open[1].trim(), endDate: open[2] };
+  // A spaced separator first: "2021-07 - 2023-05" is two dates, not four.
+  const spaced = norm.match(/^(.+?)\s+(?:[-–—~～至]|to)\s+(.+)$/i);
+  if (spaced) return { startDate: spaced[1].trim(), endDate: spaced[2].trim() };
+  const dashed = norm.match(/^(.+?)\s*[–—~～至]\s*(.+)$/);
+  if (dashed) return { startDate: dashed[1].trim(), endDate: dashed[2].trim() };
+  // One date written with hyphens ("2021-07") is not a range.
+  if (/^\d{4}-\d{1,2}(?:-\d{1,2})?$/.test(norm)) return { startDate: norm, endDate: '' };
   const m = norm.match(/^(.+?)\s*-\s*(.+)$/);
   if (m) return { startDate: m[1].trim(), endDate: m[2].trim() };
   return { startDate: norm, endDate: '' };
+}
+
+const DATE_WORD = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?|spring|summer|fall|autumn|winter|q[1-4]';
+const DATE_TOKEN = `(?:(?:${DATE_WORD})\\s+)?(?:(?:19|20)\\d{2}(?:\\s*[./-]\\s*\\d{1,2}){0,2}(?:\\s*年(?:\\s*\\d{1,2}\\s*月)?)?|\\d{1,2}\\s*[./]\\s*(?:19|20)\\d{2})`;
+const DATE_OPEN_END = '(?:present|current|now|ongoing|today|至今|现在|現在|目前|今)';
+const DATE_PART_RE = new RegExp(`^${DATE_TOKEN}(\\s*(?:[-–—~～至]|to)\\s*(?:${DATE_TOKEN}|${DATE_OPEN_END}))?$`, 'i');
+
+/**
+ * A head part that is nothing but a date or a date range: "2021 – Present",
+ * "June 2022 – Present", "2023.09 - 2027.06", "2021年3月 至今". Anchored on both
+ * ends, unlike `looksLikeDate`: a name that merely contains a year or the word
+ * "Current" ("Expo 2020 Dubai", "Current Health") is not a date.
+ */
+export function datePart(s: string): 'date' | 'range' | null {
+  const m = s.replace(/\s+/g, ' ').trim().match(DATE_PART_RE);
+  if (!m) return null;
+  return m[1] ? 'range' : 'date';
+}
+
+/**
+ * Split "Role — Company" at the last spaced em dash, the separator the upload
+ * writes. An en dash is left alone: "Senior Engineer – Payments" is one title.
+ */
+function splitRoleCompany(s: string): { title: string; company: string } {
+  const at = s.lastIndexOf(' — ');
+  if (at < 0) return { title: s.trim(), company: '' };
+  return { title: s.slice(0, at).trim(), company: s.slice(at + 3).trim() };
+}
+
+/** Parts after an entry's name: the first date-like one is the dates, the rest is the place. */
+function splitWhenWhere(parts: string[]): { dateRange: string; location: string } {
+  const clean = parts.map((p) => p.trim()).filter(Boolean);
+  const at = clean.findIndex(looksLikeDate);
+  if (at < 0) return { dateRange: '', location: clean.join(' · ') };
+  return { dateRange: clean[at]!, location: clean.filter((_, i) => i !== at).join(' · ') };
 }
 
 /** The serializer writes entry locations as a lone italic line under the
@@ -317,20 +392,26 @@ export function classifySection(heading: string): KnownSectionKind | null {
   return null;
 }
 
+/**
+ * The lines under an entry head as bullets, in order. A line with no bullet
+ * mark (a description paragraph, "GPA: 3.8") is kept as a bullet too: the
+ * editor has nowhere else to hold it, and dropping it would delete the
+ * user's text on the next save.
+ */
 function parseBulletsAndHeading(body: string[]): {
   bullets: string[];
-  inlineLines: string[];
 } {
   const bullets: string[] = [];
-  const inlineLines: string[] = [];
   for (const line of body) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     const m = trimmed.match(/^[-*•]\s+(.+)$/);
-    if (m) bullets.push(m[1].trim());
-    else inlineLines.push(trimmed);
+    // A bullet glyph kept from the source file ("- · 负责…") is not text:
+    // left in, the export prints two marks ("• ·").
+    const text = (m ? m[1] : trimmed).replace(/^[·•▪◦●○■□◆▶➢]\s*/, '').trim();
+    if (text) bullets.push(text);
   }
-  return { bullets, inlineLines };
+  return { bullets };
 }
 
 function parseExperienceBlock(body: string[]): StructuredExperience[] {
@@ -340,9 +421,12 @@ function parseExperienceBlock(body: string[]): StructuredExperience[] {
   const groups: string[][] = [];
 
   for (const raw of body) {
+    // `###`, "**Title** · Company · Dates", or a line that is bold from end
+    // to end ("**Role — Company**": an upload head with no dates).
     const isHeader =
       /^###\s+/.test(raw.trim()) ||
-      /^\*\*[^*]+\*\*\s*[·|·]\s*/.test(raw.trim());
+      /^\*\*[^*]+\*\*\s*[·|·]\s*/.test(raw.trim()) ||
+      /^\*\*[^*]+\*\*$/.test(raw.trim());
     if (isHeader && group.length > 0) {
       groups.push(group);
       group = [];
@@ -360,18 +444,40 @@ function parseExperienceBlock(body: string[]): StructuredExperience[] {
     let company = '';
     let title = '';
     let dateRange = '';
+    let headLocation = '';
 
     // ### Notion · Senior Software Engineer, AI · 2023 – present
     const h3 = headLine.match(/^###\s+(.+)$/);
-    // **Senior Software Engineer, AI** · Notion · 2023 – Present
+    // **Senior Software Engineer, AI** · Notion · 2023 – Present   (pasted)
+    // **Support Team Lead — Acme** · 2021 – Present · Austin, TX   (upload)
     const boldHead = headLine.match(/^\*\*([^*]+)\*\*\s*(.*)$/);
 
     if (h3) {
       const parts = h3[1].split(/\s+[·|]\s+/);
-      if (parts.length >= 3) {
+      // An upload head an earlier build rewrote with the dates first:
+      // "### 2021 – Present · Support Team Lead — Acme · Austin, TX".
+      // The editor itself writes "### Company · Title · Dates", so this
+      // reading is taken only when the first part is nothing but a date
+      // (never a company that has a year or "Current" in its name) and the
+      // rest still looks like the upload: a "Role — Company" part, or a
+      // date range with no dates after it.
+      const firstIsDate = parts.length >= 2 ? datePart(parts[0]) : null;
+      const datesFirst =
+        firstIsDate !== null &&
+        !looksLikeDate(parts[1]) &&
+        (parts[1].includes(' — ') || (firstIsDate === 'range' && !parts.slice(2).some(looksLikeDate)));
+      if (datesFirst) {
+        dateRange = parts[0];
+        ({ title, company } = splitRoleCompany(parts[1]));
+        headLocation = parts.slice(2).join(' · ');
+      } else if (parts.length >= 3) {
         company = parts[0];
         title = parts[1];
         dateRange = parts.slice(2).join(' · ');
+      } else if (parts.length === 2 && looksLikeDate(parts[1])) {
+        // Written by the serializer for an entry with one name: keep it the title.
+        title = parts[0];
+        dateRange = parts[1];
       } else if (parts.length === 2) {
         company = parts[0];
         title = parts[1];
@@ -379,17 +485,37 @@ function parseExperienceBlock(body: string[]): StructuredExperience[] {
         title = parts[0];
       }
     } else if (boldHead) {
-      title = boldHead[1].trim();
       const after = boldHead[2].replace(/^[·|\s]+/, '');
-      const parts = after.split(/\s+[·|]\s+/);
-      company = parts[0] ?? '';
-      dateRange = parts.slice(1).join(' · ');
+      const parts = after ? after.split(/\s+[·|]\s+/) : [];
+      const named = splitRoleCompany(boldHead[1]);
+      // Upload shape: the bold part names the role (and company); what follows
+      // is the dates and the place. Pasted shape: the bold part is the whole
+      // title and the company comes next, then the dates. A date straight
+      // after the bold means upload; a date further along means the part in
+      // between is the company ("**Nurse** · Current Health · 2020 – 2022",
+      // "**Senior Engineer – Payments** · Stripe · 2021 – Present").
+      const laterDate = parts.slice(1).some(looksLikeDate);
+      const uploadShape =
+        parts.length === 0 ||
+        datePart(parts[0]) !== null ||
+        (!laterDate && (Boolean(named.company) || looksLikeDate(parts[0])));
+      if (uploadShape) {
+        title = named.title;
+        company = named.company;
+        ({ dateRange, location: headLocation } = splitWhenWhere(parts));
+      } else {
+        title = boldHead[1].trim();
+        company = parts[0] ?? '';
+        ({ dateRange, location: headLocation } = splitWhenWhere(parts.slice(1)));
+      }
     } else {
       // Best-effort: treat the line as a title only.
       title = headLine;
     }
 
-    const { location, rest: restNoLoc } = extractLocationLine(rest);
+    const italic = extractLocationLine(rest);
+    const location = italic.location || headLocation.trim();
+    const restNoLoc = italic.rest;
     const { bullets } = parseBulletsAndHeading(restNoLoc);
     const { startDate, endDate } = splitDateRange(dateRange);
 
@@ -404,6 +530,14 @@ function parseExperienceBlock(body: string[]): StructuredExperience[] {
     });
   }
   return out;
+}
+
+function looksLikeSchool(s: string): boolean {
+  return /universit|college|school|institut|academy|polytechnic|大学|大學|学院|學院|学校|學校|中学|中學/i.test(s);
+}
+
+function looksLikeDegree(s: string): boolean {
+  return /\b(?:b\.?\s?[as]c?|m\.?\s?[as]c?|ph\.?\s?d|mba|bachelor|master|doctor|associate|diploma|degree|certificate)\b|本科|硕士|碩士|博士|学士|學士|大专|大專|专科|專科/i.test(s);
 }
 
 function parseEducationBlock(body: string[]): StructuredEducation[] {
@@ -427,26 +561,43 @@ function parseEducationBlock(body: string[]): StructuredEducation[] {
 
   for (const blk of blocks) {
     const lines = blk.split('\n');
-    const headLine = lines[0]
-      .replace(/^###\s+/, '')
-      .replace(/^\*+/, '')
-      .replace(/\*+$/, '')
-      .trim();
+    const isH3 = /^###\s+/.test(lines[0]);
+    const rawHead = lines[0].replace(/^###\s+/, '').trim();
+    const headLine = rawHead.replace(/^\*+/, '').replace(/\*+$/, '').trim();
     const parts = headLine.split(/\s+[·|]\s+/);
 
     let degree = '';
     let school = '';
     let dateRange = '';
 
-    if (parts.length === 1) {
-      // Try comma-split: "Degree, School · Year"
-      const commaSplit = parts[0].split(/,\s*/);
+    // Upload shape: "**School · When** — Degree, Field" (also after an earlier
+    // build turned it into "### School · When** — Degree, Field"), or a head
+    // that is bold from end to end: "**School · When**".
+    const upload = rawHead.match(/^(?:\*\*)?([^*]+)\*\*\s*[—–-]\s*(.+)$/);
+    const allBold = rawHead.match(/^\*\*([^*]+)\*\*$/);
+    if (upload || allBold) {
+      const inner = (upload ? upload[1] : allBold![1]).split(/\s+[·|]\s+/).map((p) => p.trim()).filter(Boolean);
+      const at = inner.length > 1 ? inner.findIndex(looksLikeDate) : -1;
+      if (at >= 0) dateRange = inner[at]!;
+      school = inner.filter((_, i) => i !== at).join(' · ');
+      degree = upload ? upload[2].trim() : '';
+    } else if (parts.length === 1) {
+      // Try comma-split: "Degree, School · Year". Never on a `###` head: the
+      // serializer writes "### B.S., Statistics" for an entry with no school.
+      const commaSplit = isH3 ? [parts[0]] : parts[0].split(/,\s*/);
       if (commaSplit.length >= 2) {
         degree = commaSplit[0];
         school = commaSplit.slice(1).join(', ');
+      } else if (isH3 && looksLikeSchool(parts[0])) {
+        school = parts[0];
       } else {
         degree = parts[0];
       }
+    } else if (parts.length === 2 && isH3 && looksLikeDate(parts[1])) {
+      // "### Oregon State University · 2020" / "### B.S., Statistics · 2020".
+      if (looksLikeSchool(parts[0]) || !looksLikeDegree(parts[0])) school = parts[0];
+      else degree = parts[0];
+      dateRange = parts[1];
     } else if (parts.length === 2) {
       degree = parts[0];
       school = parts[1];
@@ -482,34 +633,108 @@ function parseEducationBlock(body: string[]): StructuredEducation[] {
   return out;
 }
 
-function parseSkillsBlock(body: string[]): string[] {
-  const flat = body
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-    .join(' \n ');
-  // Skill separators: ·, |, comma, newline.
-  const out = flat
-    .split(/[·|,\n]+/)
-    .map((s) =>
-      s
-        .replace(/^\*+/, '')
-        .replace(/\*+$/, '')
-        .replace(/^[-•]\s*/, '')
-        .replace(/^\w+:\s*/i, '') // "Languages:" prefix
-        .trim(),
-    )
-    .filter((s) => s.length > 0 && s.length < 60);
-  // De-dup while preserving order.
+/** Split a run of skills. A line that uses "·" is split on "·" only, so "Python (pandas, numpy)" stays one skill. */
+function splitSkillItems(text: string): string[] {
+  const sep = text.includes('·') ? /[·\n]+/ : /[|｜,，、;；\n]+/;
+  return text
+    .split(sep)
+    .map((x) => x.replace(/^[-•]\s*/, '').replace(/^\*+/, '').replace(/\*+$/, '').trim())
+    .filter((x) => x.length > 0);
+}
+
+/** "**Tools:**" / "**框架：**" anywhere in a line, or a plain "Languages:" at its start. */
+const SKILL_LABEL_RE = /\*\*\s*([^*\n]{1,40}?)\s*[:：]\s*\*\*|\*\*\s*([^*\n]{1,40}?)\s*\*\*\s*[:：]/g;
+
+/**
+ * The skills section as labelled lines. Each "**Label:** a · b" (the upload
+ * format, one per line — or several on one line after an earlier build joined
+ * them) is one group; text with no label is a group with label ''.
+ */
+function parseSkillGroups(body: string[]): StructuredSkillGroup[] {
+  const groups: StructuredSkillGroup[] = [];
+  const add = (label: string, text: string) => {
+    const skills = splitSkillItems(text);
+    if (!skills.length) return;
+    const prev = groups.find((g) => g.label === label);
+    // One unlabelled group at most; a repeated label keeps its own line.
+    if (prev && label === '') prev.skills.push(...skills);
+    else groups.push({ label, skills });
+  };
+  for (const raw of body) {
+    const line = raw.trim().replace(/^[-*•]\s+(?=\*\*|\S)/, '');
+    if (!line) continue;
+    const marks = Array.from(line.matchAll(SKILL_LABEL_RE));
+    if (!marks.length) {
+      // "Languages: SQL, Python" — a short plain label at the start of the line.
+      const plain = line.match(/^([\p{L}][\p{L} &/+-]{0,30})[:：]\s*(.+)$/u);
+      if (plain) add(plain[1].trim(), plain[2]);
+      else add('', line);
+      continue;
+    }
+    add('', line.slice(0, marks[0]!.index));
+    marks.forEach((m, i) => {
+      const from = m.index! + m[0].length;
+      const to = i + 1 < marks.length ? marks[i + 1]!.index! : line.length;
+      add((m[1] ?? m[2] ?? '').trim(), line.slice(from, to));
+    });
+  }
+  return groups;
+}
+
+/** Every skill once, in order. */
+function flattenSkillGroups(groups: StructuredSkillGroup[]): string[] {
   const seen = new Set<string>();
-  const dedup: string[] = [];
-  for (const s of out) {
-    const k = s.toLowerCase();
-    if (!seen.has(k)) {
+  const out: string[] = [];
+  for (const g of groups) {
+    for (const sk of g.skills) {
+      const k = sk.toLowerCase();
+      if (seen.has(k)) continue;
       seen.add(k);
-      dedup.push(s);
+      out.push(sk);
     }
   }
-  return dedup;
+  return out;
+}
+
+/**
+ * The skills lines to write: each group with the skills still in `skills`
+ * (a removed chip leaves every group), and chips added in the editor on the
+ * unlabelled line. With no labelled group it is the one plain line.
+ */
+export function skillLines(s: Pick<StructuredResume, 'skills' | 'skillGroups'>): string[] {
+  const skills = s.skills.map((sk) => sk.trim()).filter(Boolean);
+  const groups = s.skillGroups ?? [];
+  if (!groups.some((g) => g.label)) return skills.length ? [skills.join(' · ')] : [];
+  const kept = new Set(skills.map((sk) => sk.toLowerCase()));
+  const grouped = new Set<string>();
+  for (const g of groups) for (const sk of g.skills) grouped.add(sk.toLowerCase());
+  const added = skills.filter((sk) => !grouped.has(sk.toLowerCase()));
+  const lines: string[] = [];
+  let wroteAdded = false;
+  for (const g of groups) {
+    const items = g.skills.filter((sk) => kept.has(sk.toLowerCase()));
+    if (!g.label) {
+      items.push(...added);
+      wroteAdded = true;
+    }
+    if (!items.length) continue;
+    // A CJK label keeps its full-width colon ("**框架：**").
+    const colon = /[\u3400-\u9fff]/.test(g.label) ? '：' : ':';
+    lines.push(g.label ? `**${g.label}${colon}** ${items.join(' · ')}` : items.join(' · '));
+  }
+  if (!wroteAdded && added.length) lines.push(added.join(' · '));
+  return lines;
+}
+
+/** Summary lines as one paragraph; no space is put between two CJK lines. */
+function joinSummaryLines(body: string[]): string {
+  const CJK = /[\u3000-\u303f\u3400-\u9fff\uff00-\uffef]/;
+  let out = '';
+  for (const line of body.map((l) => l.trim()).filter((l) => l.length > 0)) {
+    if (!out) out = line;
+    else out += (CJK.test(out.slice(-1)) && CJK.test(line[0]!) ? '' : ' ') + line;
+  }
+  return out.trim();
 }
 
 export function parseResumeMarkdown(md: string): StructuredResume {
@@ -520,6 +745,7 @@ export function parseResumeMarkdown(md: string): StructuredResume {
   let experiences: StructuredExperience[] = [];
   let education: StructuredEducation[] = [];
   let skills: string[] = [];
+  let skillGroups: StructuredSkillGroup[] = [];
   const extraSections: StructuredExtraSection[] = [];
 
   // Anchor extras to the last KNOWN section seen, so serialize can put them
@@ -539,17 +765,14 @@ export function parseResumeMarkdown(md: string): StructuredResume {
       if (heading && heading !== DEFAULT_SECTION_HEADINGS[kind]) headings[kind] = heading;
     }
     if (kind === 'summary') {
-      summary = sec.body
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0)
-        .join(' ')
-        .trim();
+      summary = joinSummaryLines(sec.body);
     } else if (kind === 'experiences') {
       experiences = parseExperienceBlock(sec.body);
     } else if (kind === 'education') {
       education = parseEducationBlock(sec.body);
     } else if (kind === 'skills') {
-      skills = parseSkillsBlock(sec.body);
+      skillGroups = parseSkillGroups(sec.body);
+      skills = flattenSkillGroups(skillGroups);
     } else {
       // Unknown section — preserve verbatim rather than dropping it.
       extraSections.push({
@@ -573,6 +796,7 @@ export function parseResumeMarkdown(md: string): StructuredResume {
     skills,
     extraSections,
   };
+  if (skillGroups.some((g) => g.label)) out.skillGroups = skillGroups;
   if (Object.keys(headings).length) out.headings = headings;
   if (order.length && order.some((k, i) => k !== KNOWN_SECTION_ORDER.filter((x) => order.includes(x))[i])) out.order = order;
   return out;
@@ -661,7 +885,7 @@ export function serializeResumeMarkdown(s: StructuredResume): string {
     if (kind === 'skills' && s.skills.length) {
       lines.push(`## ${title('skills')}`);
       lines.push('');
-      lines.push(s.skills.filter((sk) => sk.trim()).join(' · '));
+      lines.push(...skillLines(s));
       lines.push('');
     }
     emitExtras(kind);

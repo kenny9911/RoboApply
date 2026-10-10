@@ -26,6 +26,7 @@
 import { BaseAgent } from '../../../agents/BaseAgent.js';
 import { logger } from '../../../services/LoggerService.js';
 import { llmService } from '../../../services/llm/LLMService.js';
+import { languageService } from '../../../services/LanguageService.js';
 import { currentBrandPersona } from '../../../platform/brand/persona.js';
 
 // ─── Public types ───────────────────────────────────────────────────────
@@ -206,23 +207,32 @@ export class RAResumeTailorAgent extends BaseAgent<
   }
 
   /**
-   * Honor the user's selected UI language. Scope is 'content', NOT the default
-   * 'analysis': `tailoredResumeMarkdown` IS the artifact — this agent authors
-   * the document rather than commenting on it. The 'analysis' clause enumerates
-   * commentary fields and calls the resume an *input*, so a model can satisfy it
-   * and still hand back an English resume (the production failure observed on
-   * RAResumeRewriteAgent, same shape).
+   * The output language is the RESUME'S OWN language, not the interface
+   * language. `run()` passes the base resume's detected language here (the UI
+   * locale only when the resume is too short to tell).
    *
-   * Before this override the agent had none, so a zh user tailoring an English
-   * base resume got BaseAgent's one-line hint against a fully English base
-   * resume + JD in the user message — auto-detection's language always won.
-   * Falls back to that hint for locales with no language mapping.
+   * Every other content agent follows "the selected locale always wins"
+   * (BaseAgent.outputLanguageReminder). Tailoring is the exception: the
+   * artifact is the candidate's existing document, sent to an employer. With
+   * the interface in zh-TW, an English resume tailored for an English post
+   * came back fully in Traditional Chinese, and every line was then reported
+   * as a new statement. Like the 'content' scope of
+   * getStrictOutputLanguageDirective, this states that the document text
+   * itself is the output, so the model cannot satisfy it with commentary.
    */
   protected getLocaleDirective(locale: string): string | null {
-    return (
-      this.language.getStrictOutputLanguageDirective(locale, 'content') ??
-      super.getLocaleDirective(locale)
-    );
+    const language = this.language.getLanguageFromLocale(locale);
+    if (!language) return super.getLocaleDirective(locale);
+    return [
+      "# OUTPUT LANGUAGE (THE RESUME'S OWN LANGUAGE — HIGHEST PRIORITY)",
+      `The base resume is written in ${language}. ${this.language.getLanguageInstructionForLanguage(language)}`,
+      `Write the tailored resume, every bullet, summary and skill line of it, and the change summary in ${language}.`,
+      `A tailored resume is the SAME document in the SAME language. Never translate it: not into the language of the job posting, and not into the language of the app the candidate uses.`,
+      'Keep every heading, skill label, proper noun (people, companies, schools, products) and technical term (e.g. Python, Kubernetes, RAG) exactly as the base resume writes it.',
+      'This prompt and its examples are written in English for authoring convenience ONLY — that is NOT a signal about your output language.',
+      'JSON keys and any other schema-defined token stay EXACTLY as this prompt specifies — never translated.',
+      'This directive OVERRIDES any other language instruction elsewhere in this prompt.',
+    ].join('\n');
   }
 
   protected getAgentPrompt(): string {
@@ -251,7 +261,7 @@ export class RAResumeTailorAgent extends BaseAgent<
 
 5. **Facts from the job posting are never the candidate's own.** Do not write the employer's name, products, team or tools into the candidate's experience, and do not copy sentences from the posting. Add a keyword the base resume does not show ONLY when it is listed under "Keywords the candidate confirmed".
 
-6. **Sections and structure.** When a "Sections you may change" list is given, change only those sections and copy every other section exactly. Keep every \`##\` heading and every \`###\` entry line (employer · title · dates) exactly as written. Do not add a name, contact line, photo or personal details: they are added back after you answer.
+6. **Sections and structure.** When a "Sections you may change" list is given, change only those sections and copy every other section exactly. Keep every \`##\` heading and every entry line (employer · title · dates: a \`###\` line, or a role line written in bold such as \`**Title — Employer** · dates\`) exactly as written. Keep the label of a skills line (\`**Tools:**\`) as written; only the skills after it may change. Do not add a name, contact line, photo or personal details: they are added back after you answer.
 
 7. **Every change is checked.** Anything you add that the base resume does not show (a number, a skill, a new sentence) is shown to the candidate, who must confirm it is true before the resume can be used. Prefer reframing what is already there.
 
@@ -417,11 +427,14 @@ Output ONLY the JSON object.`;
     options: { requestId?: string; locale?: string; signal?: AbortSignal } = {},
   ): Promise<RAResumeTailorOutput> {
     const model = pickTailorModel(input.complexity);
+    // The resume's own language decides the output language. `options.locale`
+    // (the interface language) is only the fallback for a resume too short to tell.
+    const locale = resumeDocumentLocale(input.baseResumeMarkdown) ?? options.locale;
     const result = await this.execute(
       input,
       input.jobDescription,
       options.requestId,
-      options.locale,
+      locale,
       model,
       options.signal,
     );
@@ -450,6 +463,59 @@ Output ONLY the JSON object.`;
 
     return result;
   }
+}
+
+const LANGUAGE_LOCALE: Record<string, string> = {
+  English: 'en',
+  Chinese: 'zh',
+  Japanese: 'ja',
+  Korean: 'ko',
+  German: 'de',
+  French: 'fr',
+  Spanish: 'es',
+  Portuguese: 'pt',
+  Russian: 'ru',
+  Arabic: 'ar',
+  Thai: 'th',
+};
+
+/** Common characters that exist only in Traditional / only in Simplified Chinese. */
+const TRADITIONAL_ONLY = '個學實經專證歷與為這國會從來時們說對開關點數據業務責體發現應網絡資訊軟設計畫團隊優勢領導項驗語執環維護測試動態產銷運營';
+const SIMPLIFIED_ONLY = '个学实经专证历与为这国会从来时们说对开关点数据业务责体发现应网络资讯软设计划团队优势领导项验语执环维护测试动态产销运营';
+
+/**
+ * The locale of the language a resume is written in ('en', 'zh', 'zh-TW',
+ * 'ja', …), or null when there is too little text to tell. Headings, markdown
+ * marks, emails and links are ignored, so an uploaded Chinese resume that
+ * still carries English section titles reads as Chinese.
+ */
+export function resumeDocumentLocale(markdown: string | null | undefined): string | null {
+  const text = (markdown ?? '')
+    .split('\n')
+    .filter((line) => !/^\s*#{1,6}\s/.test(line))
+    .join('\n')
+    .replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+/g, ' ')
+    .replace(/[*_`#>|]/g, ' ');
+  const letters = (text.match(/\p{L}/gu) ?? []).length;
+  if (letters < 40) return null;
+  const han = (text.match(/[\u3400-\u9fff]/g) ?? []).length;
+  const kana = (text.match(/[\u3040-\u30ff]/g) ?? []).length;
+  const hangul = (text.match(/[\uac00-\ud7af]/g) ?? []).length;
+  // CJK text packs a word into a character or two: a fifth of the letters is a CJK document.
+  if (hangul > 0 && hangul >= letters * 0.2) return 'ko';
+  if (kana > 0 && han + kana >= letters * 0.2 && kana >= han * 0.1) return 'ja';
+  if (han >= letters * 0.2) {
+    let traditional = 0;
+    let simplified = 0;
+    for (const ch of text) {
+      if (TRADITIONAL_ONLY.includes(ch)) traditional += 1;
+      else if (SIMPLIFIED_ONLY.includes(ch)) simplified += 1;
+    }
+    return traditional > simplified ? 'zh-TW' : 'zh';
+  }
+  // Mostly Latin text with a few CJK names or terms is not a CJK resume.
+  const latinOnly = text.replace(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g, ' ');
+  return LANGUAGE_LOCALE[languageService.detectLanguage(latinOnly)] ?? null;
 }
 
 export const raResumeTailorAgent = new RAResumeTailorAgent();

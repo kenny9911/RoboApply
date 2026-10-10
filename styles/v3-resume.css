@@ -177,6 +177,9 @@
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.18em;
+  /* The label is a translated word now: capitals are styling, not source text. */
+  text-transform: uppercase;
+  white-space: nowrap;
   padding: 3px 30px;
   transform: rotate(28deg);
   box-shadow: var(--e1);
@@ -206,6 +209,10 @@
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: rgba(0,0,0,0.7);
   margin: 6px 0 4px;
   border-bottom: 1px solid rgba(0,0,0,0.2);
@@ -1529,4 +1536,76 @@
   letter-spacing: var(--ls-label);
   color: var(--text-muted);
   font-weight: 500;
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   EDITOR — toolbar that wraps, and the phone layout (375px)
+   (Appended; token-based colors only.)
+═════════════════════════════════════════════════════════════════ */
+
+/* The editor breaks out of the shell's padding to run edge to edge. The inset
+   may never be larger than that padding at any width (styles/workspace.css:
+   44px wide → 26px ≤1100 → 20px ≤760 → 14px ≤380), or the page scrolls
+   sideways. On a phone it does not reach under the bottom tab bar. */
+.rb-editor-bleed { margin: -28px -32px -80px; }
+@media (max-width: 1100px) { .rb-editor-bleed { margin: -28px -20px -72px; } }
+@media (max-width: 760px) { .rb-editor-bleed { margin: -16px -14px 0; } }
+
+/* Toolbar: when the name, the score and the five actions do not fit in one
+   row, the actions move to a second row. Before, the row could not wrap: the
+   title block was squeezed to nothing and "Resume check" sat on top of the
+   score meter (1280px), and on a phone the row was 664px wide. */
+.rb-toolbar { flex-wrap: wrap; row-gap: var(--sp-2); }
+.rb-title-wrap { flex: 1 1 300px; }
+.rb-title { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.rb-title-meta { flex-wrap: wrap; row-gap: var(--sp-1); }
+.rb-strength { flex-shrink: 0; white-space: nowrap; }
+.rb-toolbar-actions { flex-wrap: wrap; margin-left: auto; }
+
+@media (max-width: 760px) {
+  .rb-editor { min-height: 0; }
+  .rb-toolbar { padding: var(--sp-3) var(--sp-4); gap: var(--sp-2) var(--sp-3); }
+  .rb-title-wrap { flex: 1 1 100%; order: 2; }
+  .rb-toolbar-actions { flex: 1 1 100%; order: 3; margin-left: 0; }
+  .rb-toolbar-actions > * { flex: 1 1 auto; justify-content: center; min-height: 44px; }
+
+  /* One field per row: Title / Phone / Links were cut in two columns. */
+  .rb-field-grid { grid-template-columns: minmax(0, 1fr); }
+  .rb-field .rb-input { min-width: 0; width: 100%; }
+  .rb-edit-pane { padding: var(--sp-4) var(--sp-4) var(--sp-6); overflow-y: visible; }
+  .rb-preview-pane { overflow-y: visible; }
+  .rb-preview-bar { flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); position: static; }
+  .rb-paper-wrap { padding: var(--sp-3); overflow-x: auto; place-items: start; }
+  .rb-section-bar { flex-wrap: wrap; }
+
+  /* Role and school heads: the inline fields wrap instead of running off the card. */
+  .rb-exp-head, .rb-edu-head { flex-wrap: wrap; gap: var(--sp-2); }
+  .rb-exp-co { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+  .rb-exp-co input { flex: 1 1 120px; min-width: 0; }
+  .rb-exp-when input, .rb-edu-when input { flex: 0 0 auto; }
+  .rb-young-grid { grid-template-columns: minmax(0, 1fr); }
+
+  /* Bullet actions sit UNDER the bullet (in the flow), only for the bullet
+     being edited or flagged. Floating over the text they covered it, and a
+     touch screen has no hover to bring them up. */
+  .rb-bullet-row { flex-wrap: wrap; }
+  .rb-bullet-actions {
+    position: static;
+    display: none;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    margin: var(--sp-1) 0 0 var(--sp-5);
+    box-shadow: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+  .rb-bullet.weak .rb-bullet-actions,
+  .rb-bullet:focus-within .rb-bullet-actions { display: flex; }
+  .rb-bact { min-width: 44px; min-height: 44px; width: auto; height: auto; }
+
+  /* The line-check card joins the page under the editor; fixed in the corner
+     it covered the Summary box on a 375px screen. */
+  .rb-coach { position: static; width: auto; margin: var(--sp-4) 0 0; box-shadow: var(--e1); }
+  .rb-analyzer-pop { width: min(340px, calc(100vw - 2 * var(--sp-4))); }
 }

@@ -20,6 +20,7 @@ const PARAM_DEFAULTS: Record<string, string | number> = {
   units: '—',
   max: '—',
   template: '',
+  placeholder: '',
 };
 
 export function issueParams(issue: Pick<GradeIssue, 'params'>): Record<string, string | number> {

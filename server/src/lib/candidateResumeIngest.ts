@@ -367,7 +367,96 @@ export async function readCandidateResumeOriginal(
 
 // ── Serialization ──────────────────────────────────────────────────────────
 
-function skillsToLines(skills: ParsedResume['skills']): string[] {
+/** The language the stored markdown's section titles and skill labels are written in. */
+export type ResumeDocLanguage = 'en' | 'zh' | 'zh-TW';
+
+type DocHeading = 'summary' | 'skills' | 'experience' | 'internship' | 'projects' | 'education' | 'certifications' | 'awards' | 'languages';
+type SkillGroupKey = 'technical' | 'frameworks' | 'tools' | 'languages' | 'soft' | 'other';
+
+/**
+ * Section titles by resume language. The zh / zh-TW titles are the ones the
+ * guided builder writes (features/resume/builder/sections.ts) and the editor,
+ * the export and Resume check all recognise.
+ */
+const DOC_HEADINGS: Record<ResumeDocLanguage, Record<DocHeading, string>> = {
+  en: {
+    summary: 'Summary',
+    skills: 'Skills',
+    experience: 'Experience',
+    internship: 'Experience',
+    projects: 'Projects',
+    education: 'Education',
+    certifications: 'Certifications',
+    awards: 'Awards',
+    languages: 'Languages',
+  },
+  zh: {
+    summary: '个人总结',
+    skills: '专业技能',
+    experience: '工作经历',
+    internship: '实习经历',
+    projects: '项目经历',
+    education: '教育背景',
+    certifications: '证书',
+    awards: '获奖情况',
+    languages: '语言能力',
+  },
+  'zh-TW': {
+    summary: '個人摘要',
+    skills: '專長',
+    experience: '工作經歷',
+    internship: '實習經歷',
+    projects: '專案經歷',
+    education: '學歷',
+    certifications: '證照',
+    awards: '獲獎紀錄',
+    languages: '語言能力',
+  },
+};
+
+const SKILL_GROUP_LABELS: Record<ResumeDocLanguage, Record<SkillGroupKey, string>> = {
+  en: { technical: 'Technical', frameworks: 'Frameworks', tools: 'Tools', languages: 'Languages', soft: 'Soft skills', other: 'Other' },
+  zh: { technical: '技术', frameworks: '框架', tools: '工具', languages: '语言', soft: '软技能', other: '其他' },
+  'zh-TW': { technical: '技術', frameworks: '框架', tools: '工具', languages: '語言', soft: '軟實力', other: '其他' },
+};
+
+const HAN_RE = /[㐀-鿿]/g;
+const TRADITIONAL_RE = /[個學實經專證歷與為這國從來時們說對開關點數據業務責體發現應網絡資訊軟設計畫團隊優勢領導項驗語執環維護測試動態產銷運營]/g;
+const SIMPLIFIED_RE = /[个学实经专证历与为这国从来时们说对开关点数据业务责体发现应网络资讯软设计划团队优势领导项验语执环维护测试动态产销运营]/g;
+
+/**
+ * The language a parsed resume is written in, from its own text (summary,
+ * roles, bullets, schools): a Chinese resume gets Chinese section titles.
+ * Japanese and Korean resumes keep the English titles (no title set for them).
+ */
+export function resumeDocLanguage(parsed: ParsedResume, fallbackText = ''): ResumeDocLanguage {
+  const parts: string[] = [str(parsed.summary)];
+  for (const e of Array.isArray(parsed.experience) ? parsed.experience : []) {
+    parts.push(str(e.role), str(e.description), ...(Array.isArray(e.achievements) ? e.achievements.map(str) : []));
+  }
+  for (const p of Array.isArray(parsed.projects) ? parsed.projects : []) parts.push(str(p.name), str(p.description));
+  for (const ed of Array.isArray(parsed.education) ? parsed.education : []) parts.push(str(ed.institution), str(ed.degree), str(ed.field));
+  let text = parts.join(' ');
+  if (text.replace(/\s/g, '').length < 20) text = fallbackText;
+  const letters = (text.match(/\p{L}/gu) ?? []).length;
+  const han = (text.match(HAN_RE) ?? []).length;
+  if (letters === 0 || han < letters * 0.2) return 'en';
+  if (/[぀-ヿ]/.test(text) || /[가-힯]/.test(text)) return 'en';
+  const traditional = (text.match(TRADITIONAL_RE) ?? []).length;
+  const simplified = (text.match(SIMPLIFIED_RE) ?? []).length;
+  return traditional > simplified ? 'zh-TW' : 'zh';
+}
+
+/**
+ * One bullet's text. A bullet glyph the parser kept from the source file
+ * ("· 负责…", "• Built…") is dropped: the markdown already marks the line
+ * with "- ", and the export would print two marks ("• ·").
+ */
+function bulletText(v: unknown): string {
+  return str(v).trim().replace(/^(?:[·•▪◦●○■□◆▶➢]|[-–—*]\s)\s*/, '').trim();
+}
+
+function skillsToLines(skills: ParsedResume['skills'], lang: ResumeDocLanguage = 'en'): string[] {
   if (!skills) return [];
   if (Array.isArray(skills)) {
     const flat = skills.map((s) => String(s).trim()).filter(Boolean);
@@ -375,28 +464,44 @@ function skillsToLines(skills: ParsedResume['skills']): string[] {
   }
   const detailed = skills as SkillsDetailed;
   const out: string[] = [];
+  const L = SKILL_GROUP_LABELS[lang];
+  const colon = lang === 'en' ? ':' : '：';
   const groups: Array<[string, string[] | undefined]> = [
-    ['Technical', detailed.technical],
-    ['Frameworks', detailed.frameworks],
-    ['Tools', detailed.tools],
-    ['Languages', detailed.languages],
-    ['Soft skills', detailed.soft],
-    ['Other', detailed.other],
+    [L.technical, detailed.technical],
+    [L.frameworks, detailed.frameworks],
+    [L.tools, detailed.tools],
+    [L.languages, detailed.languages],
+    [L.soft, detailed.soft],
+    [L.other, detailed.other],
   ];
   for (const [label, arr] of groups) {
     const vals = (Array.isArray(arr) ? arr : []).map((s) => str(s).trim()).filter(Boolean);
-    if (vals.length) out.push(`**${label}:** ${vals.join(' · ')}`);
+    if (vals.length) out.push(`**${label}${colon}** ${vals.join(' · ')}`);
   }
   return out;
 }
 
+/** True when every role is an internship (a student resume: the section is 实习经历). */
+function allInternships(experience: ParsedResume['experience']): boolean {
+  const list = Array.isArray(experience) ? experience : [];
+  return list.length > 0 && list.every((e) => e.employmentType === 'internship' || /实习|實習|\bintern(?:ship)?\b/i.test(str(e.role)));
+}
+
 /**
- * Deterministically render a ParsedResume to markdown so an uploaded résumé
- * works immediately with the rest of the V2 surface (editor / tailor / match,
- * all of which key off `resumeMarkdown`). No LLM call.
+ * The stored resume markdown for a parsed upload.
+ *
+ * Format contract (lib/resumeStructure.ts reads exactly this, and a test
+ * round-trips it through the editor's parser and serializer):
+ *   **Role — Company** · When · Location     experience head
+ *   **School · When** — Degree, Field        education head
+ *   **Label:** a · b                         one skills line per group
+ * Section titles and skill labels follow the resume's own language
+ * (`resumeDocLanguage`): a Chinese resume is not given English headings.
  */
 export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: string): string {
   const lines: string[] = [];
+  const lang = resumeDocLanguage(parsed, fallbackText);
+  const H = DOC_HEADINGS[lang];
   const name = str(parsed.name).trim();
   if (name) lines.push(`# ${name}`);
 
@@ -407,14 +512,14 @@ export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: stri
 
   const summaryText = str(parsed.summary).trim();
   if (summaryText) {
-    lines.push('', '## Summary', '', summaryText);
+    lines.push('', `## ${H.summary}`, '', summaryText);
   }
 
-  const skillLines = skillsToLines(parsed.skills);
-  if (skillLines.length) lines.push('', '## Skills', '', ...skillLines);
+  const skillLines = skillsToLines(parsed.skills, lang);
+  if (skillLines.length) lines.push('', `## ${H.skills}`, '', ...skillLines);
 
   if (Array.isArray(parsed.experience) && parsed.experience.length) {
-    lines.push('', '## Experience');
+    lines.push('', `## ${allInternships(parsed.experience) ? H.internship : H.experience}`);
     for (const e of parsed.experience) {
       const header = [e.role, e.company].filter(Boolean).join(' — ');
       const when = e.duration || [e.startDate, e.endDate].filter(Boolean).join(' – ');
@@ -424,18 +529,18 @@ export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: stri
         ? e.achievements
         : e.description ? [e.description] : [];
       for (const b of bullets) {
-        const t = str(b).trim();
+        const t = bulletText(b);
         if (t) lines.push(`- ${t}`);
       }
     }
   }
 
   if (Array.isArray(parsed.projects) && parsed.projects.length) {
-    lines.push('', '## Projects');
+    lines.push('', `## ${H.projects}`);
     for (const p of parsed.projects) {
       const meta = [p.role, p.date].filter(Boolean).join(' · ');
       lines.push('', `**${p.name || 'Project'}**${meta ? ` · ${meta}` : ''}`);
-      if (p.description) lines.push(`- ${str(p.description).trim()}`);
+      if (bulletText(p.description)) lines.push(`- ${bulletText(p.description)}`);
       if (Array.isArray(p.technologies) && p.technologies.length) {
         lines.push(`- _${p.technologies.map((x) => str(x)).join(', ')}_`);
       }
@@ -443,21 +548,21 @@ export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: stri
   }
 
   if (Array.isArray(parsed.education) && parsed.education.length) {
-    lines.push('', '## Education');
+    lines.push('', `## ${H.education}`);
     for (const ed of parsed.education) {
       const degree = [ed.degree, ed.field].filter(Boolean).join(', ');
       const when = ed.year || [ed.startDate, ed.endDate].filter(Boolean).join(' – ');
       const inst = [ed.institution, when].filter(Boolean).join(' · ');
       lines.push('', `**${inst || ed.institution || 'Education'}**${degree ? ` — ${degree}` : ''}`);
       for (const a of Array.isArray(ed.achievements) ? ed.achievements : []) {
-        const t = str(a).trim();
+        const t = bulletText(a);
         if (t) lines.push(`- ${t}`);
       }
     }
   }
 
   if (Array.isArray(parsed.certifications) && parsed.certifications.length) {
-    lines.push('', '## Certifications');
+    lines.push('', `## ${H.certifications}`);
     for (const c of parsed.certifications) {
       const meta = [c.issuer, c.date].filter(Boolean).join(' · ');
       lines.push(`- ${c.name}${meta ? ` (${meta})` : ''}`);
@@ -465,7 +570,7 @@ export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: stri
   }
 
   if (Array.isArray(parsed.awards) && parsed.awards.length) {
-    lines.push('', '## Awards');
+    lines.push('', `## ${H.awards}`);
     for (const a of parsed.awards) {
       const meta = [a.issuer, a.date].filter(Boolean).join(' · ');
       lines.push(`- ${a.name}${meta ? ` (${meta})` : ''}`);
@@ -476,7 +581,7 @@ export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: stri
     const langs = parsed.languages
       .map((l) => [l.language, l.proficiency].filter(Boolean).join(' — '))
       .filter(Boolean);
-    if (langs.length) lines.push('', '## Languages', '', langs.join(' · '));
+    if (langs.length) lines.push('', `## ${H.languages}`, '', langs.join(' · '));
   }
 
   const md = lines.join('\n').trim();

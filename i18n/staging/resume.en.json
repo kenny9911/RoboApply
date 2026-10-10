@@ -1,3 +1,39 @@
 {
-  "resume": {}
+  "resume": {
+    "card": {
+      "tailored_stamp": "Tailored"
+    },
+    "bullet": {
+      "placeholder_flag": "Fill in {placeholders} with your real number, or rewrite the line without it. This line is not ready to send."
+    },
+    "export": {
+      "unverified": "{count, plural, one {1 detail in this tailored resume has not been checked yet. Check it in Verify details before you download.} other {# details in this tailored resume have not been checked yet. Check them in Verify details before you download.}}",
+      "verify_cta": "Verify details",
+      "placeholders": "{count, plural, one {1 line still has a blank like [X] where your own number goes. Fill it in, or rewrite the line without the number.} other {# lines still have a blank like [X] where your own number goes. Fill them in, or rewrite those lines without the numbers.}}",
+      "placeholders_show": "Show the first one",
+      "placeholders_anyway": "Download with these blanks left in"
+    },
+    "ai_edit_cost": "Each AI edit of a bullet, your summary or your skills uses 1 credit.",
+    "import": {
+      "drop": {
+        "formats": "PDF, Word (DOC or DOCX), plain text or Markdown"
+      },
+      "done": {
+        "body_read": "Your resume was read. Open the editor to check what was picked up."
+      },
+      "reading": "Reading {file}…"
+    },
+    "ingest": {
+      "found": {
+        "roles": "{count, plural, one {1 role} other {# roles}}",
+        "schools": "{count, plural, one {1 entry} other {# entries}}",
+        "skills": "{count, plural, one {1 skill} other {# skills}}",
+        "none": "Not found. Add it in the editor."
+      }
+    },
+    "toolbar": {
+      "quick_score": "Quick score",
+      "quick_score_hint": "The editor's own quick score. It changes as you type and is not your Resume check result."
+    }
+  }
 }

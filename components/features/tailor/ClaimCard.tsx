@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives';
 import type { TailorClaim } from '../../../lib/api/contracts/resume';
+import { plainInline } from './text';
 import styles from './Tailor.module.css';
 
 export interface ClaimCardProps {
@@ -24,7 +25,7 @@ const EDIT_MAX = 1000;
 export function ClaimCard({ claim, busy = false, onDecide }: ClaimCardProps) {
   const t = useTranslations('tailor.verify');
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(claim.text);
+  const [draft, setDraft] = useState(() => plainInline(claim.text));
   const fieldId = useId();
   const removed = claim.status === 'removed';
   const terms = (claim.terms ?? []).filter(Boolean);
@@ -48,9 +49,10 @@ export function ClaimCard({ claim, busy = false, onDecide }: ClaimCardProps) {
         ))}
         {claim.status !== 'pending' ? <span className={styles.statusTag}>{t(`status.${claim.status}`)}</span> : null}
       </div>
-      <p className={styles.claimText}>{claim.text}</p>
+      {/* Resume text carries markdown marks ("**框架：** pandas"); they are markup, not words to read. */}
+      <p className={styles.claimText}>{plainInline(claim.text)}</p>
       {terms.length > 0 ? <p className={styles.sub}>{t('terms', { terms: terms.join(', ') })}</p> : null}
-      {claim.original ? <p className={styles.sub}>{t('was', { text: claim.original })}</p> : null}
+      {claim.original ? <p className={styles.sub}>{t('was', { text: plainInline(claim.original) })}</p> : null}
       {copies > 1 ? (
         <p className={styles.sub} data-testid="claim-copies">
           {t('copies', { count: copies })}
@@ -76,7 +78,7 @@ export function ClaimCard({ claim, busy = false, onDecide }: ClaimCardProps) {
             <Btn
               variant="ghost"
               onClick={() => {
-                setDraft(claim.text);
+                setDraft(plainInline(claim.text));
                 setEditing(false);
               }}
               disabled={busy}
@@ -86,7 +88,7 @@ export function ClaimCard({ claim, busy = false, onDecide }: ClaimCardProps) {
           </div>
         </div>
       ) : removed ? null : (
-        <div className={styles.claimActions} role="group" aria-label={claim.text}>
+        <div className={styles.claimActions} role="group" aria-label={plainInline(claim.text)}>
           {claim.status !== 'kept' ? (
             <Btn variant="primary" onClick={() => void onDecide({ status: 'kept' })} disabled={busy}>
               {t('keep')}

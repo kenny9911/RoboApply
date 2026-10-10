@@ -63,6 +63,7 @@ import { resumeOriginalFileStorageService } from '../../../services/ResumeOrigin
 import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import { PatchLayoutBodySchema, getLayoutService } from '../../../features/resume/index.js';
 import { HttpError, fail, mapError } from '../../../platform/http.js';
+import { CreditReplayError, CreditsExhaustedError, creditService } from '../../../platform/credits/index.js';
 import { AuthCnError } from '../../../features/auth-cn/index.js';
 import {
   BASE_RESUME_LIMIT,
@@ -86,6 +87,8 @@ import {
   raResumeAIService,
   ResumeNotFoundError as ResumeAINotFoundError,
   RewriteValidationError,
+  __test as rewriteFallbacks,
+  type ResumeRewriteResult,
   type RewriteInput,
 } from '../services/RAResumeAIService.js';
 
@@ -538,7 +541,10 @@ function requestDefaultPage(req: Request): 'letter' | 'a4' {
 // variant's CURRENT markdown with its layout (owner-only). 409
 // unverified_claims while any inserted claim is unverified (ruling C12). With
 // trackerEntryId the exact bytes are kept and an RAApplicationArtifact row
-// records sha256 + storage key; its id comes back in X-Artifact-Id.
+// records sha256 + storage key; its id comes back in X-Artifact-Id. Without
+// one, a version tailored for a job is recorded on the user's application for
+// that job when there is one (a file with a device photo: the record only,
+// no kept copy).
 /** Largest photo a download may carry (decoded bytes). */
 export const MAX_EXPORT_PHOTO_BYTES = 512 * 1024;
 
@@ -592,6 +598,10 @@ async function sendExport(req: Request<{ id: string }>, res: Response, input: Ex
         format: format as ExportFormat,
         nameStyle: (nameStyleRaw || null) as FileNameStyleKey | null,
         trackerEntryId: trackerRaw || null,
+        // No application named (the editor, the hub): a version tailored for a
+        // job is recorded on the user's application for that job, if any.
+        autoTrack: !trackerRaw,
+        photoInFile: Boolean(photo),
         channel: 'download',
         locale: getRequestLocale(req),
         brand: brand.id,
@@ -645,14 +655,68 @@ router.post('/:id/export', requireAuth, (req: Request<{ id: string }>, res: Resp
 // ── V3 inline AI ──────────────────────────────────────────────────────────
 
 // POST /:id/rewrite — bullet | summary | skills inline rewrite.
+//
+// One `rewrite` credit per call (PRODUCT_PLAN.md §6: rewrite = inline AI edits
+// of a bullet, the summary or the skills; 20 a day). The credit is reserved
+// before the model runs and committed only when the model wrote what comes
+// back. It is released, so the call costs nothing, on any failure (not found,
+// validation, AI off) AND when the answer is the service's canned text: the
+// rewrite service never throws on a model error, a rejected made-up number or
+// an empty answer; it returns a fixed fallback instead (see
+// `isCannedRewrite`). This route used to call the model with no credit at
+// all: only the Resume check fix panel and the builder spent the bucket.
+// `Idempotency-Key` is honoured when the client sends one.
+
+/** Carries the canned answer out of `withCredit`, which releases the reservation on a throw. */
+class CannedRewrite extends Error {
+  constructor(readonly result: ResumeRewriteResult) {
+    super('rewrite_fallback');
+  }
+}
+
+const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/**
+ * Is this result the rewrite service's fixed fallback, i.e. text no model
+ * wrote? `RAResumeAIService.rewrite` gives no sign of which path it took, so
+ * the route builds the fallback for the same input with the service's own
+ * functions and compares. (A model answer identical to the fallback changes
+ * nothing for the user and is not charged either.)
+ */
+async function isCannedRewrite(userId: string, resumeId: string, body: RewriteInput, locale: string | undefined, result: ResumeRewriteResult): Promise<boolean> {
+  if (body.mode === 'bullet') {
+    return result.rewrite === rewriteFallbacks.fallbackBulletRewrite(body.text, body.action ?? 'improve', locale);
+  }
+  if (body.mode === 'summary') {
+    return sameList((result.options ?? []).map((o) => o.text), rewriteFallbacks.fallbackSummaryOptions(body.text, locale));
+  }
+  const resume = await raResumeService.getById(userId, resumeId);
+  return sameList(result.skills ?? [], rewriteFallbacks.fallbackSkills(resume.resumeMarkdown ?? '', locale));
+}
+
 router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as RewriteInput;
-    const result = await raResumeAIService.rewrite(userId, req.params.id, body, getRequestLocale(req));
+    const locale = getRequestLocale(req);
+    const header = req.get('Idempotency-Key')?.trim();
+    const idempotencyKey = header && header.length <= 120 ? header : `rewrite:${crypto.randomUUID()}`;
+    const result = await creditService.withCredit(
+      { userId, bucket: 'rewrite', idempotencyKey, refType: 'resume_inline_rewrite', refId: req.params.id },
+      async () => {
+        const out = await raResumeAIService.rewrite(userId, req.params.id, body, locale);
+        if (await isCannedRewrite(userId, req.params.id, body, locale, out)) throw new CannedRewrite(out);
+        return out;
+      },
+    );
     return res.json(result);
   } catch (err) {
-    if (err instanceof ResumeAINotFoundError) {
+    // The model wrote nothing: the user still gets the fallback text, and the
+    // credit reserved for this call has been released.
+    if (err instanceof CannedRewrite) {
+      return res.json(err.result);
+    }
+    if (err instanceof ResumeAINotFoundError || err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });
     }
     if (err instanceof AiUnavailableError) {
@@ -660,6 +724,16 @@ router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, re
     }
     if (err instanceof RewriteValidationError) {
       return res.status(422).json({ error: err.message });
+    }
+    // 402 credits_exhausted { bucket, resetsAt, upgradable } in the platform
+    // envelope the web's credit gate reads; 409 for a replayed key.
+    if (err instanceof CreditsExhaustedError) {
+      const mapped = mapError(err);
+      for (const [k, v] of Object.entries(mapped.headers)) res.setHeader(k, v);
+      return res.status(mapped.status).json(mapped.body);
+    }
+    if (err instanceof CreditReplayError) {
+      return fail(res, 'conflict', err.message, { reason: err.code });
     }
     logger.error('RA_V2_RESUMES', 'rewrite failed', {
       userId: req.user?.id,

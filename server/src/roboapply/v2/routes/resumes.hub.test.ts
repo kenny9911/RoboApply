@@ -19,7 +19,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 type Row = Record<string, any>;
 
 const mocks = vi.hoisted(() => ({
-  db: { variants: [] as Row[], trackers: [] as Row[], jobs: [] as Row[], artifacts: [] as Row[], labelLogs: [] as Row[] },
+  db: { variants: [] as Row[], trackers: [] as Row[], jobs: [] as Row[], artifacts: [] as Row[], labelLogs: [] as Row[], sessions: [] as Row[] },
   userId: 'user1',
   brand: 'roboapply' as 'roboapply' | 'goapply',
   unverified: null as null | ((id: string) => Promise<number>),
@@ -81,6 +81,7 @@ vi.mock('../../../lib/prisma.js', () => {
     rAJob: table(() => mocks.db.jobs, 'j'),
     rAApplicationArtifact: table(() => mocks.db.artifacts, 'art'),
     rAAiContentLabelLog: table(() => mocks.db.labelLogs, 'log'),
+    rATailorSession: table(() => mocks.db.sessions, 'ts'),
   };
   client.$transaction = async (arg: any) => (typeof arg === 'function' ? arg(client) : Promise.all(arg));
   return { default: client };
@@ -254,7 +255,7 @@ describe('resume hub routes (WP-36b)', () => {
   });
 
   beforeEach(() => {
-    mocks.db = { variants: [], trackers: [], jobs: [], artifacts: [], labelLogs: [] };
+    mocks.db = { variants: [], trackers: [], jobs: [], artifacts: [], labelLogs: [], sessions: [] };
     mocks.userId = 'user1';
     mocks.brand = 'roboapply';
     mocks.unverified = null;
@@ -599,6 +600,19 @@ describe('resume hub routes (WP-36b)', () => {
       expect(res.headers.get('content-disposition')).toContain("filename*=UTF-8''Ada%20Lovelace%20-%20Acme%20-%20Engineer.docx");
     });
 
+    it('a version tailored from a pasted posting is named from the posting kept on its tailor session', async () => {
+      // QA: "Maya Lindqvist.pdf" with the default name style, for a version tailored from a pasted post.
+      const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: null });
+      mocks.db.sessions.push({ id: 'ts1', userId: 'user1', resultVariantId: v.id, jobId: null, jdSnapshot: { title: 'Senior Analyst', company: 'Cedar Ridge', text: 'x'.repeat(60) } });
+      mocks.db.sessions.push({ id: 'ts2', userId: 'other', resultVariantId: v.id, jobId: null, jdSnapshot: { title: 'Not mine', company: 'Nope', text: 'x'.repeat(60) } });
+      const res = await exportOf(v.id, 'format=pdf&nameStyle=name_company_role');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-disposition')).toContain("filename*=UTF-8''Ada%20Lovelace%20-%20Cedar%20Ridge%20-%20Senior%20Analyst.pdf");
+      // A base resume never reads a session; a tailored one with no session falls back to the name.
+      const plain = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored' });
+      expect((await exportOf(plain.id, 'format=pdf&nameStyle=name_company_role')).headers.get('content-disposition')).toContain("filename*=UTF-8''Ada%20Lovelace.pdf");
+    });
+
     describe('file names only use jobs this user may read (legacy job scope)', () => {
       const nameOf = async (id: string, qs = 'format=docx&nameStyle=name_company_role') => decodeURIComponent((await exportOf(id, qs)).headers.get('content-disposition') ?? '');
 
@@ -675,6 +689,55 @@ describe('resume hub routes (WP-36b)', () => {
       });
       expect(art.storageKey).toMatch(/^roboapply-artifacts\/user1\//);
       expect(mocks.putObjects).toBe(1);
+    });
+
+    describe('a download that names no application (the editor, the hub): WP-95', () => {
+      it('a version tailored for a job is recorded on the user\u2019s application for that job', async () => {
+        // QA: PDF/DOCX from /resume/<id> answered 200 without X-Artifact-Id; only the Ready kit recorded files.
+        mocks.db.jobs.push({ id: 'job7', title: 'Engineer', companyName: 'Acme', market: 'intl', visibility: 'public' });
+        mocks.db.trackers.push({ id: 'tr7', userId: 'user1', jobId: 'job7', deletedAt: null });
+        const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'job7' });
+        const res = await exportOf(v.id, 'format=pdf&nameStyle=name_company_role');
+        expect(res.status).toBe(200);
+        const bytes = Buffer.from(await res.arrayBuffer());
+        const art = mocks.db.artifacts[0]!;
+        expect(res.headers.get('x-artifact-id')).toBe(art.id);
+        expect(art).toMatchObject({ userId: 'user1', trackerEntryId: 'tr7', kind: 'resume', variantId: v.id, format: 'pdf', channel: 'download', fileName: 'Ada Lovelace - Acme - Engineer.pdf' });
+        expect(art.fileSha256).toBe(crypto.createHash('sha256').update(bytes).digest('hex'));
+        expect(art.storageKey).toMatch(/^roboapply-artifacts\/user1\//);
+        expect(mocks.putObjects).toBe(1);
+      });
+
+      it('no application for the job, another user\u2019s application, a deleted one, or a base resume: nothing is recorded', async () => {
+        mocks.db.jobs.push({ id: 'job8', title: 'Engineer', companyName: 'Acme', market: 'intl', visibility: 'public' });
+        const tailored = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'job8' });
+        expect((await exportOf(tailored.id)).headers.get('x-artifact-id')).toBeNull();
+        mocks.db.trackers.push({ id: 'tr8', userId: 'other', jobId: 'job8', deletedAt: null });
+        mocks.db.trackers.push({ id: 'tr9', userId: 'user1', jobId: 'job8', deletedAt: new Date() });
+        expect((await exportOf(tailored.id)).headers.get('x-artifact-id')).toBeNull();
+        mocks.db.trackers.push({ id: 'tr10', userId: 'user1', jobId: 'job8', deletedAt: null });
+        const base = variant();
+        expect((await exportOf(base.id)).headers.get('x-artifact-id')).toBeNull();
+        expect(mocks.db.artifacts).toHaveLength(0);
+        expect(mocks.putObjects).toBe(0);
+      });
+
+      it('a file with a device photo keeps the photo, is recorded, and no copy is stored', async () => {
+        const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        mocks.db.jobs.push({ id: 'job9', title: 'Engineer', companyName: 'Acme', market: 'intl', visibility: 'public' });
+        mocks.db.trackers.push({ id: 'tr11', userId: 'user1', jobId: 'job9', deletedAt: null });
+        const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'job9', layout: { photo: true } });
+        const res = await fetch(`${base}/${v.id}/export`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format: 'pdf', photo: `data:image/png;base64,${PNG}` }) });
+        expect(res.status).toBe(200);
+        // The user's own file is as they made it.
+        expect(res.headers.get('x-photo-omitted')).toBeNull();
+        expect(Buffer.from(await res.arrayBuffer()).toString('latin1')).toMatch(/\/Subtype \/Image/);
+        // Recorded (name + hash), and nothing with the photo is kept on our side.
+        expect(mocks.db.artifacts).toHaveLength(1);
+        expect(mocks.db.artifacts[0]).toMatchObject({ trackerEntryId: 'tr11', storageKey: null });
+        expect(mocks.putObjects).toBe(0);
+        expect(mocks.putBodies).toHaveLength(0);
+      });
     });
 
     it('404s on a tracker entry that is not the user’s and records nothing', async () => {
