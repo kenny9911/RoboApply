@@ -33,6 +33,8 @@ import { createComplianceAdminRouter, createComplianceRouter, createLegalPublicR
 const GO = 'goapply.localhost:3611';
 const RA = 'localhost:3611';
 const ENV = { NODE_ENV: 'test', DEPLOY_REGION: '' };
+/** The deployment the browser check ran on: Neon in us-west-2 and a mainland AI model; no voice, no email, not on Vercel. */
+const QA_ENV = { ...ENV, DATABASE_URL: 'postgresql://u:p@ep-quiet.us-west-2.aws.neon.tech/db', CN_LLM_MODEL: 'deepseek/deepseek-v4-flash' };
 
 let harness: RouteHarness;
 let user: HarnessUser | null = { id: 'u1', brand: 'goapply' };
@@ -45,6 +47,7 @@ beforeAll(async () => {
     mounts: [
       ['/c', createComplianceRouter({ seekerAuth: auth, env: ENV })],
       ['/p', createLegalPublicRouter({ env: ENV })],
+      ['/q', createLegalPublicRouter({ env: QA_ENV })],
       // The real admin gate behind a fake session (the production chain is requireAuth + requireAdmin).
       ['/a', createComplianceAdminRouter({ adminAuth: [fakeAuth(() => admin), requireAdmin], env: ENV })],
     ],
@@ -189,6 +192,28 @@ describe('public legal router (no session)', () => {
       headers: { 'x-vercel-ip-country': 'TW' },
     });
     expect(res.body.data.items.filter((i) => i.required).map((i) => i.type)).toEqual(['age_16_plus', 'tw_pdpa_notice']);
+  });
+
+  it('the sign-up consent text and the /legal disclosures name the same processors, regions and AI destination (D3)', async () => {
+    type Consents = { data: { items: Array<{ type: string; prose: string; proseLocale: string }> } };
+    type Disclosures = { data: { processors: Array<{ name: string; purpose: string; country: string | null; region: string | null }>; llmEndpoints: { rule: string } } };
+    const consents = (await harness.request<Consents>('GET', '/q/consents?locale=zh', { host: GO })).body.data.items;
+    const legal = (await harness.request<Disclosures>('GET', '/q/disclosures', { host: GO })).body.data;
+    const cross = consents.find((i) => i.type === 'pipl_cross_border')!.prose;
+    const ai = consents.find((i) => i.type === 'ai_resume_parsing')!.prose;
+    // /legal: Neon · database · US / us-west-2, and deepseek · AI models · CN.
+    expect(legal.processors).toEqual([
+      { name: 'Neon', purpose: 'database', country: 'US', region: 'us-west-2' },
+      { name: 'deepseek', purpose: 'ai_models', country: 'CN', region: null },
+    ]);
+    // The consent names the one offshore processor with that same region — not "美国东部", and nothing that is switched off.
+    expect(cross).toContain('境外处理方：数据库 Neon（美国，us-west-2）。');
+    expect(cross).not.toMatch(/美国东部|Vercel|LiveKit|Deepgram|Cartesia|Resend|deepseek/);
+    // /legal says only mainland AI services are used; the AI consent says the same.
+    expect(legal.llmEndpoints.rule).toBe('mainland_only');
+    expect(ai).toContain('AI 请求只发送到中国大陆境内的 AI 服务。');
+    expect(ai).not.toMatch(/境外/);
+    for (const item of consents) expect(item.prose, item.type).not.toMatch(/%[A-Z_]+%/);
   });
 
   it('documents: served as drafts outside production, aliases resolve, unknown → 404', async () => {

@@ -36,6 +36,7 @@ export function TagsStep({ onDone, onBack }: CnOnboardingStepProps) {
 
   return (
     <StepFrame
+      step="tags"
       title={t('tags.title')}
       subtitle={t('tags.subtitle')}
       onBack={onBack}

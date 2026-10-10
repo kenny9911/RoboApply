@@ -221,6 +221,16 @@ export interface ConsentCatalogItem {
   /** Current state: null = never answered. */
   granted: boolean | null;
   answeredAt: string | null;
+  /** The prose version the stored answer was given under (null: never answered, or a record without one). Set by the signed-in catalog only. */
+  answeredProseVersion?: string | null;
+  /**
+   * Whether the stored answer was given to the text served now (in any
+   * language it is written in): true = the same words, false = the text has
+   * changed since (or the record carries no hash to prove otherwise), null =
+   * never answered. A screen may present `prose` as "what you agreed to" only
+   * when this is not false. Set by the signed-in catalog only.
+   */
+  answeredTextCurrent?: boolean | null;
 }
 export interface ConsentsResponse {
   items: ConsentCatalogItem[];

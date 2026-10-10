@@ -4,6 +4,11 @@
 // with its exact text and current state and can be changed on its own
 // (PIPL: separate consents). Withdrawing the CN-0 cross-border consent asks
 // first, because it closes the account and deletes its data.
+//
+// The text shown is the one served NOW. When a consent is on but was given to
+// an earlier text (`answeredTextCurrent: false`), the row says so and offers
+// "Agree to this text", which records the grant under the current text — the
+// current words are never passed off as the ones the user agreed to.
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -87,6 +92,8 @@ export function ConsentsPanel() {
           {consents.data.items.map((item) => {
             const state = item.granted === true ? 'on' : item.granted === false ? 'off' : 'notChosen';
             const busy = save.isPending && save.variables?.item.type === item.type;
+            // On, but given to an earlier text.
+            const earlierText = item.granted === true && item.answeredTextCurrent === false;
             return (
               <li key={item.type} className={styles.item} data-consent={item.type} data-state={state}>
                 <div className={styles.itemMain}>
@@ -95,20 +102,30 @@ export function ConsentsPanel() {
                     <span className={`${styles.pill} ${state === 'on' ? styles.pillOn : ''}`}>{t(`consents.${state}`)}</span>
                     {item.answeredAt ? t('consents.changed', { date: fmt.dateTime(new Date(item.answeredAt), { dateStyle: 'medium' }) }) : null}
                   </p>
-                  <p className={styles.prosePara} lang={item.proseLocale === 'zh' ? 'zh-CN' : 'en'}>
+                  <p className={styles.prosePara} lang={item.proseLocale === 'zh' ? 'zh-CN' : item.proseLocale}>
                     {item.prose}
                   </p>
                   {item.proseLocale === 'en' && locale !== 'en' ? <p className={styles.itemMeta}>{t('consents.englishOnly')}</p> : null}
+                  {earlierText ? (
+                    <p className={styles.itemMeta} data-consent-note="text-changed">
+                      {t('consents.textChanged')}
+                    </p>
+                  ) : null}
                   {!item.withdrawable ? <p className={styles.itemMeta}>{t('consents.notWithdrawable')}</p> : null}
                 </div>
-                {item.withdrawable ? (
+                {item.withdrawable || earlierText ? (
                   <div className={styles.actions}>
-                    {item.granted !== true ? (
+                    {item.withdrawable && item.granted !== true ? (
                       <Btn variant="primary" disabled={busy} onClick={() => change(item, true)}>
                         {t('consents.turnOn')}
                       </Btn>
                     ) : null}
-                    {item.granted !== false ? (
+                    {earlierText ? (
+                      <Btn variant="primary" disabled={busy} onClick={() => change(item, true)}>
+                        {t('consents.agreeCurrent')}
+                      </Btn>
+                    ) : null}
+                    {item.withdrawable && item.granted !== false ? (
                       <Btn disabled={busy} onClick={() => change(item, false)}>
                         {t('consents.turnOff')}
                       </Btn>

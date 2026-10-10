@@ -4,8 +4,11 @@ import { getBrand } from '../../platform/brand/registry.js';
 import { SEEKER_CONSENT_TYPES } from '../../roboapply/engine/lib/seekerConsentTypes.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
 import { RecordConsentBodySchema } from './contract.js';
+import { buildDisclosures, configuredProcessors, storageCountry } from './disclosures.js';
+import { describeProcessor, offshoreProcessors, unplacedProcessors } from './processingStatement.js';
 import {
   CONSENT_CATALOG,
+  CONSENT_PROSE_LOCALES,
   CONSENT_PROSE_VERSION,
   consentDefinitionsFor,
   consentProseHash,
@@ -24,6 +27,20 @@ const goapply = getBrand('goapply');
 const roboapply = getBrand('roboapply');
 const OFFSHORE = { DEPLOY_REGION: '' };
 const MAINLAND = { DEPLOY_REGION: 'cn-mainland' };
+/** The deployment the browser check ran on: a Neon database in us-west-2 and a mainland AI model; no voice, no email, not on Vercel. */
+const QA_ENV = { DEPLOY_REGION: '', DATABASE_URL: 'postgresql://u:p@ep-quiet.us-west-2.aws.neon.tech/db', CN_LLM_MODEL: 'deepseek/deepseek-v4-flash' };
+/** A deployment with every offshore service on. */
+const FULL_ENV = {
+  DEPLOY_REGION: '',
+  DATABASE_URL: 'postgresql://u:p@ep-quiet.us-east-1.aws.neon.tech/db',
+  VERCEL: '1',
+  RESEND_API_KEY: 'k',
+  CN_EMAIL_TRANSPORT: 'resend',
+  CN_LIVEKIT_URL: 'wss://lk.example',
+  DEEPGRAM_API_KEY: 'k',
+  CARTESIA_API_KEY: 'k',
+  CN_LLM_MODEL: 'deepseek/deepseek-v4-flash',
+};
 
 function db(seed: Record<string, unknown[]> = {}) {
   return createFakePrisma({
@@ -57,13 +74,12 @@ describe('consent catalog (no optional consent pre-checked)', () => {
     }
   });
 
-  it('the cross-border prose names every offshore processor and the US region', () => {
+  it('the cross-border prose carries no processor or region of its own: they come from configuration', () => {
     const def = findConsentDefinition('goapply', 'pipl_cross_border')!;
-    for (const name of ['Neon', 'Vercel', 'LiveKit Cloud', 'Deepgram', 'Cartesia', 'Resend']) {
-      expect(def.prose.zh).toContain(name);
-      expect(def.prose.en).toContain(name);
+    for (const text of [def.prose.zh!, def.prose.en]) {
+      expect(text).toContain('%OFFSHORE_PROCESSORS%');
+      expect(text).not.toMatch(/Neon|Vercel|LiveKit|Deepgram|Cartesia|Resend|美国|United States|US East/);
     }
-    expect(def.prose.zh).toContain('美国');
     expect(def.prose.zh).not.toMatch(/境内存储|数据不出境/);
   });
 
@@ -76,6 +92,150 @@ describe('consent catalog (no optional consent pre-checked)', () => {
     expect(isConsentRequired(tw, { locale: 'zh-TW' })).toBe(true);
     expect(isConsentRequired(tw, { country: 'US', locale: 'en' })).toBe(false);
     expect(isConsentRequired(findConsentDefinition('roboapply', 'marketing_email')!, {})).toBe(false);
+  });
+});
+
+describe('consent prose and the legal disclosures state the same processors and AI destination (D3)', () => {
+  const cross = findConsentDefinition('goapply', 'pipl_cross_border')!;
+  const ai = findConsentDefinition('goapply', 'ai_resume_parsing')!;
+
+  it('names exactly the configured offshore processors, with the region /legal shows — nothing that is switched off', () => {
+    const zh = resolveConsentProse(cross, goapply, 'zh', QA_ENV).text;
+    const en = resolveConsentProse(cross, goapply, 'en', QA_ENV).text;
+    // /legal on this deployment: "Neon · 数据库 · US / us-west-2" and "deepseek · AI 模型 · CN".
+    expect(buildDisclosures(goapply, QA_ENV).processors).toEqual([
+      { name: 'Neon', purpose: 'database', country: 'US', region: 'us-west-2' },
+      { name: 'deepseek', purpose: 'ai_models', country: 'CN', region: null },
+    ]);
+    expect(zh).toContain('境外处理方：数据库 Neon（美国，us-west-2）。');
+    expect(en).toContain('Processors outside mainland China: Neon (database, United States, us-west-2). ');
+    for (const text of [zh, en]) {
+      expect(text).not.toMatch(/美国东部|US East/);
+      expect(text).not.toMatch(/Vercel|LiveKit|Deepgram|Cartesia|Resend/);
+      // A mainland AI provider is not an offshore processor.
+      expect(text).not.toContain('deepseek');
+      expect(text).not.toContain('%');
+    }
+  });
+
+  it('every /legal processor row outside mainland China is in the consent, and no mainland one is', () => {
+    for (const env of [QA_ENV, FULL_ENV]) {
+      const rows = buildDisclosures(goapply, env).processors;
+      for (const locale of ['zh', 'en'] as const) {
+        const text = resolveConsentProse(cross, goapply, locale, env).text;
+        for (const row of rows) {
+          // GoApply's AI is mainland-only by routing, so no AI model row is a processor of this consent.
+          if (row.country === 'CN' || row.purpose === 'ai_models') expect(text, row.name).not.toContain(row.name);
+          else expect(text, row.name).toContain(describeProcessor(row, locale));
+        }
+      }
+      expect(offshoreProcessors(goapply, env).map((p) => p.name)).toEqual(rows.filter((r) => r.country !== null && r.country !== 'CN').map((r) => r.name));
+      expect(unplacedProcessors(goapply, env).map((p) => p.name)).toEqual(rows.filter((r) => r.country === null && r.purpose !== 'ai_models').map((r) => r.name));
+    }
+    const full = resolveConsentProse(cross, goapply, 'zh', FULL_ENV).text;
+    const offshoreSentence = /境外处理方：([^。]*)。/.exec(full)![1]!;
+    for (const name of ['Neon（美国，us-east-1）', 'Vercel（美国）', 'Resend（美国）', 'Deepgram（美国）', 'Cartesia（美国）']) expect(offshoreSentence).toContain(name);
+    // A processor whose country the configuration does not establish is disclosed, in its own sentence — not called offshore.
+    expect(offshoreSentence).not.toContain('LiveKit');
+    expect(full).toContain('以下处理方的所在国家/地区未披露：语音练习 LiveKit Cloud。我同意');
+    expect(resolveConsentProse(cross, goapply, 'en', FULL_ENV).text).toContain('Processors whose country is not listed: LiveKit Cloud (voice practice). I agree');
+  });
+
+  // Review finding: with a mainland bucket and a model vendor that has no known country, the
+  // consent read "境外处理方：数据库 Neon（美国，us-west-2）、文件存储 Object storage (CN)（国家/地区未披露）、
+  // AI 模型 siliconflow（国家/地区未披露）。" — a mainland bucket and a mainland-only AI route stated as offshore.
+  it('a mainland bucket and a mainland-only AI route are never named as processors outside mainland China', () => {
+    const env = {
+      DEPLOY_REGION: '',
+      DATABASE_URL: 'postgresql://u:p@ep-quiet.us-west-2.aws.neon.tech/db',
+      CN_S3_BUCKET: 'goapply-files',
+      CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+      CN_LLM_PROVIDER: 'siliconflow',
+      CN_LLM_MODEL: 'Qwen/Qwen3-32B',
+    };
+    // /legal shows the bucket in mainland China; the unlisted vendor stays "Not listed" there.
+    expect(configuredProcessors(goapply, env)).toEqual([
+      { name: 'Neon', purpose: 'database', country: 'US', region: 'us-west-2' },
+      { name: 'Object storage (CN)', purpose: 'storage', country: 'CN', region: null },
+      { name: 'qwen', purpose: 'ai_models', country: 'CN', region: null },
+    ]);
+    const unlisted = { ...env, CN_LLM_MODEL: 'some-model' };
+    expect(configuredProcessors(goapply, unlisted).at(-1)).toEqual({ name: 'siliconflow', purpose: 'ai_models', country: null, region: null });
+    for (const e of [env, unlisted]) {
+      expect(resolveConsentProse(cross, goapply, 'zh', e).text).toBe(
+        '在当前内测阶段，你的个人信息在中国大陆境外处理和存储。境外处理方：数据库 Neon（美国，us-west-2）。我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。',
+      );
+      const en = resolveConsentProse(cross, goapply, 'en', e).text;
+      expect(en).toContain('Processors outside mainland China: Neon (database, United States, us-west-2). I agree');
+      expect(en).not.toMatch(/Object storage|siliconflow|qwen|not listed/i);
+      // The AI consent that follows says the same thing about AI.
+      expect(resolveConsentProse(ai, goapply, 'zh', e).text).toContain('AI 请求只发送到中国大陆境内的 AI 服务。');
+    }
+  });
+
+  it('the bucket is in mainland China only when its endpoint establishes it', () => {
+    const at = (endpoint: string | undefined, more: Record<string, string> = {}) => storageCountry(goapply, { CN_S3_BUCKET: 'b', ...(endpoint ? { CN_S3_ENDPOINT: endpoint } : {}), ...more });
+    expect(at('https://oss-cn-shanghai.aliyuncs.com')).toBe('CN');
+    expect(at('https://cos.ap-guangzhou.myqcloud.com')).toBe('CN');
+    expect(at('https://obs.cn-north-4.myhuaweicloud.com')).toBe('CN');
+    expect(at('https://files.example.cn', { CN_ALLOWED_STORAGE_HOST_SUFFIXES: 'example.cn' })).toBe('CN');
+    // Not established: no endpoint, an offshore one, Aliyun Hong Kong, an in-cluster address on the offshore stack.
+    expect(at(undefined)).toBeNull();
+    expect(at('https://s3.us-east-1.amazonaws.com')).toBeNull();
+    expect(at('https://oss-ap-southeast-1.aliyuncs.com')).toBeNull();
+    expect(at('https://oss-cn-hongkong.aliyuncs.com')).toBeNull();
+    expect(at('http://10.0.0.8:9000')).toBeNull();
+    expect(at('http://10.0.0.8:9000', { DEPLOY_REGION: 'cn-mainland' })).toBe('CN');
+    // The international bucket has no country we can read, whatever host it names.
+    expect(storageCountry(roboapply, { S3_BUCKET: 'b', S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com' })).toBeNull();
+    // A bucket with no established country is disclosed in its own sentence, not as offshore.
+    const text = resolveConsentProse(cross, goapply, 'zh', { CN_S3_BUCKET: 'b', CN_S3_ENDPOINT: 'https://oss-cn-hongkong.aliyuncs.com' }).text;
+    expect(text).toContain('以下处理方的所在国家/地区未披露：文件存储 Object storage (CN)。');
+    expect(text).not.toContain('境外处理方：');
+  });
+
+  it('with no processor configured it names none and points at the Legal information page', () => {
+    const zh = resolveConsentProse(cross, goapply, 'zh', {}).text;
+    expect(buildDisclosures(goapply, {}).processors).toEqual([]);
+    expect(zh).toContain('境外处理方的清单见“法律信息”页面。');
+    expect(zh).not.toMatch(/Neon|Vercel|美国/);
+    expect(resolveConsentProse(cross, goapply, 'en', {}).text).toContain('The processors are listed on the Legal information page. I agree');
+  });
+
+  it('the AI consent says where AI requests go, from the routing rule /legal prints', () => {
+    expect(buildDisclosures(goapply, QA_ENV).llmEndpoints.rule).toBe('mainland_only');
+    const zh = resolveConsentProse(ai, goapply, 'zh', QA_ENV).text;
+    const en = resolveConsentProse(ai, goapply, 'en', QA_ENV).text;
+    expect(zh).toContain('AI 请求只发送到中国大陆境内的 AI 服务。关闭时');
+    expect(en).toContain('AI requests are sent only to AI services in mainland China. When this is off');
+    // The old onboarding note claimed the opposite.
+    expect(zh).not.toMatch(/境外/);
+    expect(en).not.toMatch(/outside mainland China/);
+  });
+
+  it('a changed deployment changes the text and therefore the hash the record stores', () => {
+    const a = resolveConsentProse(cross, goapply, 'zh', QA_ENV);
+    const b = resolveConsentProse(cross, goapply, 'zh', FULL_ENV);
+    expect(a.hash).not.toBe(b.hash);
+    expect(a.hash).toBe(consentProseHash({ brand: 'goapply', type: 'pipl_cross_border', version: CONSENT_PROSE_VERSION, locale: 'zh', text: a.text }));
+  });
+
+  it('recordConsent and listConsents hash the text of the deployment they run on', async () => {
+    const fake = db();
+    const deps = { db: fake as unknown as ConsentDb, env: QA_ENV, enqueue: vi.fn(), kick: vi.fn() };
+    const shown = (await listConsents('u1', goapply, { env: QA_ENV, locale: 'zh' }, deps)).find((i) => i.type === 'pipl_cross_border')!;
+    expect(shown.prose).toContain('Neon（美国，us-west-2）');
+    const res = await recordConsent({ userId: 'u1', brand: goapply, type: 'pipl_cross_border', granted: true, proseVersion: shown.proseVersion, locale: 'zh' }, deps);
+    expect(res.proseHash).toBe(shown.proseHash);
+    expect(fake.$rows('seekerConsentRecord')[0]).toMatchObject({ consentType: 'pipl_cross_border', proseHash: shown.proseHash });
+  });
+
+  it('no served text leaves a placeholder behind (both brands, every locale)', () => {
+    for (const d of CONSENT_CATALOG) {
+      for (const locale of CONSENT_PROSE_LOCALES) {
+        expect(resolveConsentProse(d, getBrand(d.brand), locale, QA_ENV).text, `${d.brand}:${d.type}:${locale}`).not.toMatch(/%[A-Z_]+%/);
+      }
+    }
   });
 });
 
@@ -120,6 +280,51 @@ describe('prose version and hash', () => {
   it('serves English (and says so) where no translation exists', () => {
     const def = findConsentDefinition('roboapply', 'age_16_plus')!;
     expect(resolveConsentProse(def, roboapply, 'ja').locale).toBe('en');
+    expect(resolveConsentProse(def, roboapply, 'ja').proseLocale).toBe('en');
+  });
+
+  it('"Tips and reminders" is written in every locale of the brand (never English among translated text)', () => {
+    const robo = findConsentDefinition('roboapply', 'tips_reminders')!;
+    const english = robo.prose.en;
+    const seen = new Set<string>();
+    for (const locale of roboapply.locales) {
+      const p = resolveConsentProse(robo, roboapply, locale);
+      expect(p.proseLocale, locale).toBe(locale);
+      expect(p.locale, locale).toBe(locale);
+      if (locale !== 'en') expect(p.text, locale).not.toBe(english);
+      expect(p.hash).toBe(consentProseHash({ brand: 'roboapply', type: 'tips_reminders', version: CONSENT_PROSE_VERSION, locale, text: p.text }));
+      seen.add(p.text);
+    }
+    expect(seen.size).toBe(roboapply.locales.length);
+    expect(resolveConsentProse(robo, roboapply, 'zh-TW').text).toMatch(/職缺/);
+    expect(resolveConsentProse(robo, roboapply, 'ja').text).toMatch(/リマインダー/);
+    const go = findConsentDefinition('goapply', 'tips_reminders')!;
+    for (const locale of goapply.locales) expect(resolveConsentProse(go, goapply, locale).proseLocale).toBe(locale);
+  });
+
+  it('the notification settings show the translated text (the path the English sentence was seen on)', async () => {
+    // GET /notifications/preferences builds the switch's text with `tipsConsentProse(brand, locale)`.
+    const { tipsConsentProse } = await import('../notifications/index.js');
+    const robo = findConsentDefinition('roboapply', 'tips_reminders')!;
+    expect(tipsConsentProse(roboapply, 'ja').text).toBe(robo.prose.ja);
+    expect(tipsConsentProse(roboapply, 'zh-TW').text).toBe(robo.prose['zh-TW']);
+    expect(tipsConsentProse(roboapply, 'zh').text).toBe(robo.prose.zh);
+    expect(tipsConsentProse(roboapply, 'ja').locale).toBe('ja');
+    // GoApply's first visit has no locale cookie yet: Chinese, not English.
+    expect(tipsConsentProse(goapply, null).text).toBe('向我发送与我收藏的职位和已开始的练习有关的小贴士和提醒。');
+    for (const locale of ['zh', 'zh-TW', 'ja'] as const) expect(tipsConsentProse(roboapply, locale).text).not.toMatch(/^Send me tips/);
+  });
+
+  it('with no locale given the text is in the brand default language: GoApply Chinese, RoboApply English', () => {
+    // The notification settings ask without a locale on a first visit (no locale cookie yet).
+    const go = findConsentDefinition('goapply', 'tips_reminders')!;
+    expect(resolveConsentProse(go, goapply, null).proseLocale).toBe('zh');
+    expect(resolveConsentProse(go, goapply, undefined).text).toBe(go.prose.zh);
+    expect(resolveConsentProse(go, goapply, 'en').text).toBe(go.prose.en);
+    const robo = findConsentDefinition('roboapply', 'tips_reminders')!;
+    expect(resolveConsentProse(robo, roboapply, null).proseLocale).toBe('en');
+    // A locale the product does not have is English.
+    expect(resolveConsentProse(robo, roboapply, 'xx').proseLocale).toBe('en');
   });
 
   it('the version fits the record column and the wire schema', () => {
@@ -248,6 +453,44 @@ describe('listConsents', () => {
     expect(mainland.some((i) => i.type === 'pipl_cross_border')).toBe(false);
   });
 
+  // Review finding: a grant given under the old cross-border text (v1: "Neon（美国东部）、Vercel、LiveKit Cloud、
+  // Deepgram / Cartesia、Resend") was shown next to today's text as "you agreed to this".
+  it('says which text an answer was given to: same words (even across a version bump) or a text that has since changed', async () => {
+    const V1 = '2026-10-10.wp13.v1';
+    const crossV1 =
+      '在当前内测阶段，你的个人信息在中国大陆境外处理和存储，处理地区为美国。境外处理方：数据库 Neon（美国东部）、网站托管 Vercel（美国）、语音练习 LiveKit Cloud、语音识别与合成 Deepgram / Cartesia、邮件发送 Resend。' +
+      '我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。';
+    const agreement = resolveConsentProse(findConsentDefinition('goapply', 'pipl_basic_processing')!, goapply, 'zh', QA_ENV);
+    const at = new Date('2026-10-10T08:00:00Z');
+    const fake = db({
+      seekerConsentRecord: [
+        // Signed up under v1. The agreement's words did not change in v2; the cross-border text did.
+        { id: 'c1', seekerProfileId: 'sp1', consentType: 'pipl_basic_processing', granted: true, createdAt: at, proseVersion: V1, proseHash: consentProseHash({ brand: 'goapply', type: 'pipl_basic_processing', version: V1, locale: 'zh', text: agreement.text }) },
+        { id: 'c2', seekerProfileId: 'sp1', consentType: 'pipl_cross_border', granted: true, createdAt: at, proseVersion: V1, proseHash: consentProseHash({ brand: 'goapply', type: 'pipl_cross_border', version: V1, locale: 'zh', text: crossV1 }) },
+        // A record from before hashes were stored: nothing shows it was this text.
+        { id: 'c3', seekerProfileId: 'sp1', consentType: 'age_16_plus', granted: true, createdAt: at, proseVersion: null, proseHash: null },
+      ],
+    });
+    const deps = { db: fake as unknown as ConsentDb, env: QA_ENV, enqueue: vi.fn(), kick: vi.fn() };
+    const item = async (type: string, locale = 'zh') => (await listConsents('u1', goapply, { env: QA_ENV, locale }, deps)).find((i) => i.type === type)!;
+
+    expect(await item('pipl_basic_processing')).toMatchObject({ granted: true, answeredProseVersion: V1, answeredTextCurrent: true });
+    // Reading in another language does not make the agreed text "changed".
+    expect(await item('pipl_basic_processing', 'en')).toMatchObject({ granted: true, answeredTextCurrent: true });
+    expect(await item('pipl_cross_border')).toMatchObject({ granted: true, answeredProseVersion: V1, answeredTextCurrent: false, proseVersion: CONSENT_PROSE_VERSION });
+    expect(await item('age_16_plus')).toMatchObject({ granted: true, answeredProseVersion: null, answeredTextCurrent: false });
+    expect(await item('marketing_email')).toMatchObject({ granted: null, answeredProseVersion: null, answeredTextCurrent: null });
+
+    // Agreeing again records today's text; the answer is then current.
+    await recordConsent({ userId: 'u1', brand: goapply, type: 'pipl_cross_border', granted: true, proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' }, deps);
+    expect(await item('pipl_cross_border')).toMatchObject({ granted: true, answeredProseVersion: CONSENT_PROSE_VERSION, answeredTextCurrent: true });
+    // The processor list is part of the text: when the deployment's processors change, the same record no longer matches.
+    const moved = { ...QA_ENV, DATABASE_URL: 'postgresql://u:p@ep-quiet.ap-southeast-1.aws.neon.tech/db' };
+    const after = (await listConsents('u1', goapply, { env: moved, locale: 'zh' }, { ...deps, env: moved })).find((i) => i.type === 'pipl_cross_border')!;
+    expect(after.prose).toContain('Neon（新加坡，ap-southeast-1）');
+    expect(after).toMatchObject({ granted: true, answeredTextCurrent: false });
+  });
+
   it('404 without a seeker profile', async () => {
     await expect(listConsents('nobody', roboapply, {}, { db: db() as unknown as ConsentDb })).rejects.toMatchObject({ code: 'not_found' });
   });
@@ -357,12 +600,14 @@ describe('new consent entries: listed for the right brand, unticked, hashed', ()
     expect((await listConsents('u1', roboapply, { env: OFFSHORE }, deps)).map((i) => i.type)).toContain('interview_video');
   });
 
-  it("GoApply tips and reminders: its own entry, with RoboApply's English text; RoboApply's entry is untouched", () => {
+  it("GoApply tips and reminders: its own entry, with RoboApply's English and Chinese text", () => {
     const go = findConsentDefinition('goapply', 'tips_reminders')!;
     const robo = findConsentDefinition('roboapply', 'tips_reminders')!;
     expect(go.prose.en).toBe(robo.prose.en);
+    expect(go.prose.zh).toBe(robo.prose.zh);
     expect(go.prose.zh).toContain('提醒');
-    // A GoApply record written before the entry existed (RoboApply English text, GoApply brand) hashes the same.
+    // GoApply serves Chinese and English only.
+    expect(Object.keys(go.prose).sort()).toEqual(['en', 'zh']);
     expect(resolveConsentProse(go, goapply, 'en').hash).toBe(
       consentProseHash({ brand: 'goapply', type: 'tips_reminders', version: CONSENT_PROSE_VERSION, locale: 'en', text: robo.prose.en }),
     );
@@ -384,9 +629,9 @@ describe('new consent entries: listed for the right brand, unticked, hashed', ()
   });
 });
 
-describe('adding entries changed no existing hash', () => {
-  // sha256 prefix per brand:type:locale, taken before the WP-93 entries were added.
-  const BEFORE: Record<string, string> = {
+describe('prose versions: a text changes only with a version bump, and a bump changes only what it says', () => {
+  // sha256 prefix per brand:type:locale under version 2026-10-10.wp13.v1 (taken before the WP-93 entries were added).
+  const V1: Record<string, string> = {
     'goapply:pipl_basic_processing:en': '1358a310e81e6fe2',
     'goapply:pipl_basic_processing:zh': '4a3a2d471461e4c0',
     'goapply:age_16_plus:en': '97b4c5279b6683db',
@@ -419,26 +664,85 @@ describe('adding entries changed no existing hash', () => {
     'roboapply:tips_reminders:en': 'fa47d6c620da1dcc',
   };
 
-  it('every earlier entry still hashes to the same value under the same prose version', () => {
-    expect(CONSENT_PROSE_VERSION).toBe('2026-10-10.wp13.v1');
-    const now: Record<string, string> = {};
+  /** Texts v2 rewrote: processors and the AI destination now come from configuration. */
+  const REWRITTEN_IN_V2 = ['goapply:pipl_cross_border:en', 'goapply:pipl_cross_border:zh', 'goapply:ai_resume_parsing:en', 'goapply:ai_resume_parsing:zh'];
+
+  // sha256 prefix per brand:type:locale under the current version, with nothing configured (env {}).
+  const V2: Record<string, string> = {
+    'goapply:pipl_basic_processing:en': '520789b8392a7cf9',
+    'goapply:pipl_basic_processing:zh': 'bc9c1c6a359efe55',
+    'goapply:age_16_plus:en': '235205d46c8b3a9e',
+    'goapply:age_16_plus:zh': '052b27b977c8e832',
+    'goapply:pipl_cross_border:en': '5b90dbaf7973bfe4',
+    'goapply:pipl_cross_border:zh': 'ec75b61f2764e7b2',
+    'goapply:ai_resume_parsing:en': '2d49bacc298e2b15',
+    'goapply:ai_resume_parsing:zh': '8484633134ad37a2',
+    'goapply:personalized_recommendation:en': 'f8d5d5d25bc6348f',
+    'goapply:personalized_recommendation:zh': '3e414c9b2362f091',
+    'goapply:marketing_email:en': '582311003969b3a6',
+    'goapply:marketing_email:zh': '4d9416cc5d4e4d27',
+    'goapply:pipl_sensitive_pi:en': '82feff7b98a0ddee',
+    'goapply:pipl_sensitive_pi:zh': 'd5aca4f9e4fa5b6b',
+    'goapply:autofill_sensitive:en': 'be54097ba0072f5c',
+    'goapply:autofill_sensitive:zh': 'f752dbcc1fb37b45',
+    'goapply:share_with_gohire:en': 'e32910cfc5afcd07',
+    'goapply:share_with_gohire:zh': 'd8b6fa28701213bb',
+    'goapply:interview_recording:en': '526dbae169d8e948',
+    'goapply:interview_recording:zh': 'dde8bfe73d2fac19',
+    'goapply:interview_video:en': '6c738e848857addb',
+    'goapply:interview_video:zh': '8589338b3e7f306c',
+    'goapply:copilot_memory:en': 'f39a6245df764e75',
+    'goapply:copilot_memory:zh': 'a8bd05b5effd5fcc',
+    'goapply:tips_reminders:en': 'bf9aa23bffe62f52',
+    'goapply:tips_reminders:zh': 'ccebbe7a123b8298',
+    'goapply:coaching_share_with_coach:en': 'c11bd815a46b3b36',
+    'goapply:coaching_share_with_coach:zh': '70415c45e35dce55',
+    'roboapply:age_16_plus:en': 'b093ab321dfb006f',
+    'roboapply:tw_pdpa_notice:en': '872c42cfee8666d1',
+    'roboapply:marketing_email:en': '7132496df319938b',
+    'roboapply:intl_cross_border_cn_parse:en': '2190186fd797eb06',
+    'roboapply:interview_recording:en': '8edaa37d2368f655',
+    'roboapply:interview_video:en': '2f6afbfd5ba14ce5',
+    'roboapply:copilot_memory:en': '0766eaa608584af4',
+    'roboapply:autofill_sensitive:en': 'd9d61f49030ce8ae',
+    'roboapply:tips_reminders:en': '4459a8ef7004acac',
+    'roboapply:tips_reminders:zh': '1f4fe85afa867702',
+    'roboapply:tips_reminders:zh-TW': 'f98cd5418ec20ef9',
+    'roboapply:tips_reminders:ja': '1035f6f39966db9a',
+    'roboapply:tips_reminders:ko': 'ce2839af3d663f15',
+    'roboapply:tips_reminders:es': '03f102a062949132',
+    'roboapply:tips_reminders:fr': '43f61af437fbaa69',
+    'roboapply:tips_reminders:pt': '57a9ad83e972afdb',
+    'roboapply:tips_reminders:de': '63b4e4404bf7de39',
+  };
+
+  /** Every text the catalog can serve, resolved with nothing configured. */
+  function served(): Array<{ key: string; brand: 'roboapply' | 'goapply'; type: string; locale: string; text: string; hash: string }> {
+    const out = [];
     for (const d of CONSENT_CATALOG) {
-      for (const locale of ['en', 'zh'] as const) {
-        if (locale === 'zh' && !d.prose.zh) continue;
-        now[`${d.brand}:${d.type}:${locale}`] = resolveConsentProse(d, getBrand(d.brand), locale).hash.slice(0, 16);
+      for (const locale of CONSENT_PROSE_LOCALES) {
+        if (!d.prose[locale]) continue;
+        const p = resolveConsentProse(d, getBrand(d.brand), locale, {});
+        out.push({ key: `${d.brand}:${d.type}:${locale}`, brand: d.brand, type: d.type, locale, text: p.text, hash: p.hash });
       }
     }
-    for (const [key, hash] of Object.entries(BEFORE)) expect(now[key], key).toBe(hash);
-    expect(Object.keys(BEFORE)).toHaveLength(30);
-    // Exactly the new entries were added, nothing else.
-    expect(Object.keys(now).filter((k) => !(k in BEFORE)).sort()).toEqual([
-      'goapply:coaching_share_with_coach:en',
-      'goapply:coaching_share_with_coach:zh',
-      'goapply:interview_video:en',
-      'goapply:interview_video:zh',
-      'goapply:tips_reminders:en',
-      'goapply:tips_reminders:zh',
-      'roboapply:interview_video:en',
-    ]);
+    return out;
+  }
+
+  it('every text hashes to its pinned value under the current version (a changed text needs a new version)', () => {
+    expect(CONSENT_PROSE_VERSION).toBe('2026-10-11.fix8.v2');
+    const now = Object.fromEntries(served().map((p) => [p.key, p.hash.slice(0, 16)]));
+    expect(now).toEqual(V2);
+  });
+
+  it('the v2 bump rewrote only the cross-border and AI-processing texts: every other v1 text is word for word the same', () => {
+    expect(Object.keys(V1)).toHaveLength(30);
+    const byKey = new Map(served().map((p) => [p.key, p]));
+    for (const [key, hash] of Object.entries(V1)) {
+      const p = byKey.get(key)!;
+      const underV1 = consentProseHash({ brand: p.brand, type: p.type, version: '2026-10-10.wp13.v1', locale: p.locale, text: p.text }).slice(0, 16);
+      if (REWRITTEN_IN_V2.includes(key)) expect(underV1, key).not.toBe(hash);
+      else expect(underV1, key).toBe(hash);
+    }
   });
 });

@@ -1,0 +1,105 @@
+{
+  "auth": {
+    "brand": {
+      "feature_interview": "Interview practice in the format employers use"
+    }
+  },
+  "authCn": {
+    "change": {
+      "noOtherWay": "Without the current number, you need another sign-in method on this account to confirm it is you. If you have none, contact support from the Help page."
+    }
+  },
+  "credits": {
+    "planSheet": {
+      "sub": "Pro raises your daily limits. A pass is paid once and never renews."
+    },
+    "cancel": {
+      "help": "A pass is paid once and never renews, so there is nothing to cancel. You keep Pro until {date}.",
+      "helpNoDate": "A pass is paid once and never renews, so there is nothing to cancel. You keep Pro until it ends."
+    },
+    "cancelPage": {
+      "footerLink": "About renewal and cancelling"
+    }
+  },
+  "extensionWeb": {
+    "page": {
+      "facts": "Salary, years of experience, degrees and similar questions are filled only from answers you saved. AI never writes them."
+    }
+  },
+  "fit": {
+    "compared": {
+      "keys": {
+        "logistics": "Location and pay"
+      }
+    }
+  },
+  "inbox": {
+    "settings": {
+      "sub": "Your inbox keeps every alert, reminder and notice."
+    }
+  },
+  "invite": {
+    "how": {
+      "step2": "Your friend creates a new %BRAND% account with the link, confirms it and finishes setting up.",
+      "step3": "You each get {credits, plural, one {# practice interview credit} other {# practice interview credits}}."
+    }
+  },
+  "jobs": {
+    "score": {
+      "rubric": {
+        "location_pay_visa": "Location and pay — 10"
+      }
+    },
+    "workspace": {
+      "intro": "Open a job to see what fits and what's missing. With ranking by your profile on, jobs are ordered by how well they line up with it; with it off, by date posted."
+    }
+  },
+  "landing": {
+    "help": {
+      "cancelLink": "About renewal and cancelling"
+    },
+    "home": {
+      "faq": {
+        "q3": {
+          "a": "It says how well your resume lines up with the job post: title and level, skills, industry, location and pay, and how your career has moved. It is not your chance of getting hired."
+        }
+      }
+    },
+    "pricingPage": {
+      "sub": "Every price and usage limit is on this page.",
+      "instantAlerts": "Instant job alerts",
+      "cancelLink": "About renewal and cancelling"
+    },
+    "ranking": {
+      "fitParts": {
+        "logistics": "Location and pay"
+      }
+    }
+  },
+  "onboarding": {
+    "matching": {
+      "phases": {
+        "reading": "Reading your profile",
+        "comparing": "Comparing jobs with your profile"
+      }
+    },
+    "resume": {
+      "linkedin": {
+        "title": "Bring in a resume you already have",
+        "body": "If you keep a resume on another job site or in a document, export it as a PDF and upload that file here.",
+        "choose": "Upload the resume PDF"
+      }
+    }
+  },
+  "resume": {
+    "subtitle": "Start from a blank page or upload the one you have. Then tailor a copy for each job you want.",
+    "empty": {
+      "sub": "Create your first one — from scratch or from an upload — and every line gets checked."
+    },
+    "analyzer": {
+      "issue": {
+        "contact_links": "Add a portfolio or personal page link to give recruiters somewhere to dig deeper."
+      }
+    }
+  }
+}

@@ -66,7 +66,7 @@ describe('onboarding-cn routes', () => {
 
   it('places and 届别 defaults', async () => {
     const places = await h.request<Env<{ items: unknown[] }>>('GET', `${P}/provinces`, { host: GO });
-    expect(places.body.data.items).toHaveLength(33);
+    expect(places.body.data.items).toHaveLength(34);
     const defaults = await h.request<Env<unknown>>('GET', `${P}/defaults`, { host: GO });
     expect(defaults.body.data).toEqual({ graduationClass: { yingjie: 2027, zaixiao: 2028 }, graduationMonth: 6 });
   });

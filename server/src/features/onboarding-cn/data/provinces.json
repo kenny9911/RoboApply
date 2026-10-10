@@ -3,7 +3,7 @@
   "verified": false,
   "asOf": null,
   "compiledAt": "2026-10-10",
-  "coverage": "The 31 mainland provincial-level divisions with their 333 prefecture-level divisions (municipalities listed as one city), plus the Hong Kong and Macao SARs. `extra` lists county-level cities administered directly by a province or region; other places are entered as free text.",
+  "coverage": "The 34 provincial-level divisions of GB/T 2260: the 31 mainland divisions with their 333 prefecture-level divisions (municipalities listed as one city), Taiwan Province (listed as one place: GB/T 2260 gives no sub-divisions for it), and the Hong Kong and Macao SARs. `extra` lists county-level cities administered directly by a province or region; other places are entered as free text.",
   "note": "Grouped by province only. No 一线/新一线 tiers: those come from a commercial ranking with no official source.",
   "provinces": [
     {"code":"11","name":"北京","type":"municipality","cities":["北京"]},
@@ -37,6 +37,7 @@
     {"code":"63","name":"青海","type":"province","cities":["西宁","海东","海北藏族自治州","黄南藏族自治州","海南藏族自治州","果洛藏族自治州","玉树藏族自治州","海西蒙古族藏族自治州"]},
     {"code":"64","name":"宁夏","type":"autonomous_region","cities":["银川","石嘴山","吴忠","固原","中卫"]},
     {"code":"65","name":"新疆","type":"autonomous_region","cities":["乌鲁木齐","克拉玛依","吐鲁番","哈密","昌吉回族自治州","博尔塔拉蒙古自治州","巴音郭楞蒙古自治州","克孜勒苏柯尔克孜自治州","伊犁哈萨克自治州","阿克苏地区","喀什地区","和田地区","塔城地区","阿勒泰地区"],"extra":["石河子"]},
+    {"code":"71","name":"台湾","type":"province","cities":["台湾"]},
     {"code":"81","name":"香港","type":"sar","cities":["香港"]},
     {"code":"82","name":"澳门","type":"sar","cities":["澳门"]}
   ]

@@ -13,9 +13,31 @@ import type { StepResponse } from '../../../lib/api/contracts/onboarding';
 import { Btn } from '../../v3/primitives/Btn';
 import { useCnOnboardingApi } from './api';
 import { ISSUE_CODES } from './logic';
+import { cnStepPosition } from './types';
 import styles from './OnboardingCn.module.css';
 
+/**
+ * "Step N of 8" with its bar — the same line, in the same words
+ * (`onboarding.frame.progress`), as the shared resume and matching screens
+ * show, so every GoApply screen carries it (not only steps 6 and 7).
+ */
+export function StepProgress({ step }: { step: string }) {
+  const t = useTranslations('onboarding.frame');
+  const position = cnStepPosition(step);
+  if (!position) return null;
+  const pct = Math.round((position.current / position.total) * 100);
+  return (
+    <div className={styles.progressWrap} data-testid="cn-step-progress">
+      <p className={styles.progress}>{t('progress', position)}</p>
+      <div className={styles.progressBar} aria-hidden="true">
+        <div className={styles.progressFill} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function StepFrame({
+  step,
   title,
   subtitle,
   children,
@@ -28,6 +50,8 @@ export function StepFrame({
   onSubmit,
   disabledHint,
 }: {
+  /** The screen's stage code: shows its place in the eight screens. */
+  step?: string;
   title: string;
   subtitle?: ReactNode;
   children: ReactNode;
@@ -50,6 +74,7 @@ export function StepFrame({
   return (
     <form className={styles.step} onSubmit={submit} noValidate>
       <header className={styles.head}>
+        {step ? <StepProgress step={step} /> : null}
         <h1 className={styles.title}>{title}</h1>
         {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
       </header>
@@ -155,6 +180,45 @@ export function MultiChips<T extends string>({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * An optional yes / no question with NO preselection (nothing is assumed
+ * about the user). Pressing the chosen chip again clears the answer.
+ */
+export function YesNoChips({
+  label,
+  value,
+  onChange,
+  yes,
+  no,
+  hint,
+}: {
+  label: string;
+  value: boolean | null;
+  onChange: (v: boolean | null) => void;
+  yes: string;
+  no: string;
+  hint?: string;
+}) {
+  const t = useTranslations('onboardingCn');
+  const id = useId();
+  return (
+    <div className={styles.section} role="group" aria-labelledby={id}>
+      <span id={id} className={styles.label}>
+        {label}
+        <span className={styles.required}>{t('common.optional')}</span>
+      </span>
+      <div className={styles.chips}>
+        {([true, false] as const).map((v) => (
+          <button key={String(v)} type="button" aria-pressed={value === v} className={styles.chip} onClick={() => onChange(value === v ? null : v)}>
+            {v ? yes : no}
+          </button>
+        ))}
+      </div>
+      {hint ? <p className={styles.note}>{hint}</p> : null}
     </div>
   );
 }

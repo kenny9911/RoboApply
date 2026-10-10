@@ -337,6 +337,7 @@ export function IntentStep({ onDone, onBack }: CnOnboardingStepProps) {
 
   return (
     <StepFrame
+      step="intent"
       title={t('intent.title')}
       onBack={onBack}
       nextDisabled={problems.length > 0}

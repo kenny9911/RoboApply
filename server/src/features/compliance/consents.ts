@@ -13,9 +13,23 @@
 //     `proseVersion` + `proseHash` (sha256 over brand, type, version, locale
 //     and text). A client that sends an older version gets 409 and reloads.
 //   - Prose exists in English for both brands and in Simplified Chinese for
-//     GoApply (its primary language). Other locales are served the English
-//     text and say so (`proseLocale`), so the hash always matches what was
-//     shown. Counsel-approved translations are added here as new versions.
+//     GoApply (its primary language). A locale an entry has no text for is
+//     served the English text and says so (`proseLocale`), so the hash always
+//     matches what was shown. `tips_reminders` (a notification choice, not a
+//     legal notice) is translated into every locale; counsel-approved
+//     translations of the other entries are added here as new versions.
+//   - With no locale given, the prose is served in the brand's default
+//     language (GoApply: Chinese), never English by accident.
+//   - WHO processes data offshore and WHERE AI requests go are not typed into
+//     the prose: `%OFFSHORE_PROCESSORS%` and `%AI_PLACE%` are filled from the
+//     configuration the /legal disclosures render (processingStatement.ts),
+//     so the consent and the legal page cannot disagree (D3). The hash covers
+//     the text as served.
+//   - The catalog says which text a stored answer was given to
+//     (`answeredProseVersion`, `answeredTextCurrent`): a screen may call the
+//     text it shows "what you agreed to" only when the record's hash matches
+//     that text. A grant of an earlier text is asked again where it is
+//     required (G1) and can be renewed in Settings.
 //   - Withdrawing `pipl_cross_border` on GoApply while data is processed
 //     offshore (CN-0) closes and purges the account: a personal-information
 //     request is opened and a `compliance.purge` work item is enqueued.
@@ -42,9 +56,25 @@ import {
 } from './contract.js';
 import { piRequestDueAt } from './piRequests.js';
 import { COMPLIANCE_WORK_KINDS } from './kinds.js';
+import { isOffshore } from './deployment.js';
+import { aiPlaceSentence, offshoreProcessorsSentence } from './processingStatement.js';
 
-/** Bump when any prose below changes (≤ 40 chars; stored on every record). */
-export const CONSENT_PROSE_VERSION = '2026-10-10.wp13.v1';
+export { isOffshore } from './deployment.js';
+
+/**
+ * Bump when any prose below changes (≤ 40 chars; stored on every record).
+ * v2 (2026-10-11): the cross-border and AI-processing texts state processors
+ * and AI destinations from configuration; `tips_reminders` is translated.
+ */
+export const CONSENT_PROSE_VERSION = '2026-10-11.fix8.v2';
+
+/** Languages a consent text may be written in (the product's locales). */
+export const CONSENT_PROSE_LOCALES = ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'] as const;
+export type ConsentProseLocale = (typeof CONSENT_PROSE_LOCALES)[number];
+
+/** Filled per request from configuration (processingStatement.ts); never typed into a prose. */
+export const OFFSHORE_PROCESSORS_TOKEN = '%OFFSHORE_PROCESSORS%';
+export const AI_PLACE_TOKEN = '%AI_PLACE%';
 
 export type ConsentRequirement = 'always' | 'offshore' | 'tw' | 'never';
 /**
@@ -65,16 +95,27 @@ export interface ConsentDefinition {
   withdrawable: boolean;
   onWithdraw: 'none' | 'close_and_purge_account';
   defaultGranted: false;
-  /** Prose per locale; `en` is required. `%BRAND%` is substituted per brand. */
-  prose: { en: string; zh?: string };
+  /**
+   * Prose per locale; `en` is required. `%BRAND%` is substituted per brand,
+   * `%OFFSHORE_PROCESSORS%` and `%AI_PLACE%` from the deployment's configuration.
+   */
+  prose: { en: string } & Partial<Record<Exclude<ConsentProseLocale, 'en'>, string>>;
   /** 'draft' = counsel has not approved this wording yet (the final text becomes a new prose version). */
   proseStatus?: 'draft';
 }
 
-const OFFSHORE_PROCESSORS_ZH =
-  '数据库 Neon（美国东部）、网站托管 Vercel（美国）、语音练习 LiveKit Cloud、语音识别与合成 Deepgram / Cartesia、邮件发送 Resend';
-const OFFSHORE_PROCESSORS_EN =
-  'the database at Neon (US East), hosting at Vercel (United States), voice practice at LiveKit Cloud, speech recognition and synthesis at Deepgram / Cartesia, and email delivery at Resend';
+/** Every locale's text of the "Tips and reminders" choice (the switch label's own words per locale). */
+const TIPS_REMINDERS_PROSE = {
+  en: 'Send me tips and reminders about jobs I saved and practice I started.',
+  zh: '向我发送与我收藏的职位和已开始的练习有关的小贴士和提醒。',
+  'zh-TW': '傳送與我收藏的職缺和已開始的練習有關的小提示與提醒給我。',
+  ja: '保存した求人や始めた練習に関するヒントとリマインダーを受け取る。',
+  ko: '저장한 채용공고와 시작한 연습에 관한 팁과 리마인더를 받을게요.',
+  es: 'Quiero recibir consejos y recordatorios sobre los empleos que guardé y las prácticas que empecé.',
+  fr: 'Envoyez-moi des conseils et des rappels sur les offres que j’ai enregistrées et les entraînements que j’ai commencés.',
+  pt: 'Quero receber dicas e lembretes sobre as vagas que salvei e os treinos que comecei.',
+  de: 'Schickt mir Tipps und Erinnerungen zu Jobs, die ich gespeichert habe, und zu Übungen, die ich begonnen habe.',
+} as const satisfies ConsentDefinition['prose'];
 
 /** The catalog, in display order per brand. */
 export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
@@ -117,11 +158,13 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     onWithdraw: 'close_and_purge_account',
     defaultGranted: false,
     prose: {
+      // %OFFSHORE_PROCESSORS% = the /legal processor rows outside mainland China, in words
+      // (each with its country and region). No processor or region is written here.
       zh:
-        `在当前内测阶段，你的个人信息在中国大陆境外处理和存储，处理地区为美国。境外处理方：${OFFSHORE_PROCESSORS_ZH}。` +
+        '在当前内测阶段，你的个人信息在中国大陆境外处理和存储。%OFFSHORE_PROCESSORS%' +
         '我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。',
       en:
-        `During this closed beta your personal information is processed and stored outside mainland China, in the United States. Processors outside mainland China: ${OFFSHORE_PROCESSORS_EN}. ` +
+        'During this closed beta your personal information is processed and stored outside mainland China. %OFFSHORE_PROCESSORS%' +
         'I agree to this processing. I understand that withdrawing this consent closes my account and deletes my data.',
     },
   },
@@ -137,10 +180,10 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     defaultGranted: false,
     prose: {
       zh:
-        '使用 AI 读取我的简历并准备求职材料。处理的内容：你的简历、个人资料和你选择的职位信息；处理方：“AI 模型说明”中列出的模型。' +
+        '使用 AI 读取我的简历并准备求职材料。处理的内容：你的简历、个人资料和你选择的职位信息；处理方：“AI 模型说明”中列出的模型。%AI_PLACE%' +
         '关闭时，你可以手动填写资料；简历解析、简历改写、求职信和求职助手将不可用，匹配度改为不使用 AI 的快速估算。',
       en:
-        'Use AI to read my resume and prepare application materials. What is processed: your resume, your profile and the jobs you choose; by: the models listed in the AI disclosure. ' +
+        'Use AI to read my resume and prepare application materials. What is processed: your resume, your profile and the jobs you choose; by: the models listed in the AI disclosure. %AI_PLACE%' +
         'When this is off you can fill in your profile by hand; resume reading, rewriting, cover letters and the Assistant are unavailable, and fit uses a quick estimate without AI.',
     },
   },
@@ -276,8 +319,7 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
   },
   {
     // Optional and off until the user turns it on (no regional default on
-    // GoApply). The English text is RoboApply's, so the record a GoApply user
-    // wrote before this entry existed hashes to the same value.
+    // GoApply). GoApply serves Chinese and English only.
     type: 'tips_reminders',
     brand: 'goapply',
     requiredWhen: 'never',
@@ -287,10 +329,7 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     withdrawable: true,
     onWithdraw: 'none',
     defaultGranted: false,
-    prose: {
-      zh: '向我发送与我收藏的职位和已开始的练习有关的提示和提醒。',
-      en: 'Send me tips and reminders about jobs I saved and practice I started.',
-    },
+    prose: { en: TIPS_REMINDERS_PROSE.en, zh: TIPS_REMINDERS_PROSE.zh },
   },
   {
     // PIPL Art. 23: a separate consent before personal information goes to
@@ -437,7 +476,9 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     withdrawable: true,
     onWithdraw: 'none',
     defaultGranted: false,
-    prose: { en: 'Send me tips and reminders about jobs I saved and practice I started.' },
+    // A notification choice shown in the notification settings, among translated
+    // text: written in every locale (other entries stay English until counsel approves a translation).
+    prose: TIPS_REMINDERS_PROSE,
   },
 ];
 
@@ -448,11 +489,6 @@ export interface ConsentContext {
   /** Visitor/user country (ISO alpha-2), for the Taiwan notice. */
   country?: string | null;
   locale?: string | null;
-}
-
-/** GoApply data is processed outside the mainland unless the deployment says otherwise (CN-0). */
-export function isOffshore(env: EnvSource = process.env): boolean {
-  return (env.DEPLOY_REGION ?? '').trim().toLowerCase() !== 'cn-mainland';
 }
 
 /** RoboApply resumes go to the mainland GoHire parser only when the owner opted in (R-16, OD-3). */
@@ -503,14 +539,29 @@ export function isConsentRequired(def: ConsentDefinition, ctx: ConsentContext): 
 
 export interface ResolvedProse {
   text: string;
+  /**
+   * The language of `text` (the value hashed). At run time this is any
+   * ConsentProseLocale — the same value as `proseLocale`. The declared type is
+   * still the original 'en' | 'zh' because two callers outside this area
+   * annotate it so (notifications `tipsConsentProse`, auth-cn
+   * `SignupPolicyConsent.prose`); it widens to ConsentProseLocale together
+   * with them. New code reads `proseLocale`.
+   */
   locale: 'en' | 'zh';
+  /** The language of `text`, truthfully typed: the locale asked for when the entry has that text, else English. */
+  proseLocale: ConsentProseLocale;
   version: string;
   hash: string;
 }
 
-/** The locale whose prose is served: zh (GoApply only, when asked for zh) or English. */
-export function proseLocaleFor(def: ConsentDefinition, locale: string | null | undefined): 'en' | 'zh' {
-  return locale === 'zh' && def.prose.zh ? 'zh' : 'en';
+/**
+ * The locale whose prose is served: the one asked for when the entry is
+ * written in it, else English. No locale given = the brand's default language.
+ */
+export function proseLocaleFor(def: ConsentDefinition, locale: string | null | undefined, brand?: Pick<ProductBrand, 'defaultLocale'>): ConsentProseLocale {
+  const asked = locale ?? brand?.defaultLocale ?? 'en';
+  const hit = CONSENT_PROSE_LOCALES.find((l) => l === asked);
+  return hit && def.prose[hit] ? hit : 'en';
 }
 
 export function consentProseHash(input: { brand: BrandId; type: string; version: string; locale: string; text: string }): string {
@@ -520,13 +571,53 @@ export function consentProseHash(input: { brand: BrandId; type: string; version:
     .digest('hex');
 }
 
-export function resolveConsentProse(def: ConsentDefinition, brand: ProductBrand, locale: string | null | undefined): ResolvedProse {
-  const lang = proseLocaleFor(def, locale);
-  const raw = (lang === 'zh' ? def.prose.zh : def.prose.en) ?? def.prose.en;
-  const text = raw.split('%BRAND%').join(brand.name);
+/**
+ * The text served for an entry: brand name, and — where the prose asks for
+ * them — the offshore processors and the AI destination of THIS deployment
+ * (`env`), the same facts the /legal disclosures render.
+ */
+/** The text of an entry in one of the languages it is written in, as this deployment serves it. */
+function consentProseText(def: ConsentDefinition, brand: ProductBrand, lang: ConsentProseLocale, env: EnvSource): string {
+  let text = (def.prose[lang] ?? def.prose.en).split('%BRAND%').join(brand.name);
+  if (text.includes(OFFSHORE_PROCESSORS_TOKEN)) text = text.split(OFFSHORE_PROCESSORS_TOKEN).join(offshoreProcessorsSentence(brand, env, lang));
+  if (text.includes(AI_PLACE_TOKEN)) text = text.split(AI_PLACE_TOKEN).join(aiPlaceSentence(brand, env, lang));
+  return text;
+}
+
+/**
+ * Whether a stored answer was given to the text this deployment serves now.
+ * The record's hash covers brand, type, version, locale and text, so it is
+ * recomputed with the record's OWN version over today's text in each language
+ * the entry is written in: a version bump that left this entry's words alone
+ * still matches, a reworded entry (or a changed processor list) does not. A
+ * record without a hash or version cannot be shown to match, so it does not.
+ */
+export function answeredCurrentText(
+  def: ConsentDefinition,
+  brand: ProductBrand,
+  record: { proseHash?: string | null; proseVersion?: string | null },
+  env: EnvSource = process.env,
+): boolean {
+  if (!record.proseHash || !record.proseVersion) return false;
+  return CONSENT_PROSE_LOCALES.some(
+    (lang) =>
+      typeof def.prose[lang] === 'string' &&
+      consentProseHash({ brand: brand.id, type: def.type, version: record.proseVersion!, locale: lang, text: consentProseText(def, brand, lang, env) }) === record.proseHash,
+  );
+}
+
+export function resolveConsentProse(
+  def: ConsentDefinition,
+  brand: ProductBrand,
+  locale: string | null | undefined,
+  env: EnvSource = process.env,
+): ResolvedProse {
+  const lang = proseLocaleFor(def, locale, brand);
+  const text = consentProseText(def, brand, lang, env);
   return {
     text,
-    locale: lang,
+    locale: lang as 'en' | 'zh',
+    proseLocale: lang,
     version: CONSENT_PROSE_VERSION,
     hash: consentProseHash({ brand: brand.id, type: def.type, version: CONSENT_PROSE_VERSION, locale: lang, text }),
   };
@@ -606,16 +697,17 @@ export async function listConsents(
   const records = await db.seekerConsentRecord.findMany({
     where: { seekerProfileId: profileId, consentType: { in: defs.map((d) => d.type) } },
     orderBy: { createdAt: 'desc' },
-    select: { consentType: true, granted: true, createdAt: true },
+    select: { consentType: true, granted: true, createdAt: true, proseVersion: true, proseHash: true },
   });
-  const latest = new Map<string, { granted: boolean; createdAt: Date }>();
+  const latest = new Map<string, { granted: boolean; createdAt: Date; proseVersion: string | null; proseHash: string | null }>();
   for (const r of records) if (!latest.has(r.consentType)) latest.set(r.consentType, r);
 
   const fullCtx = { ...ctx, env: ctx.env ?? deps.env };
+  const env = fullCtx.env ?? process.env;
   return defs
     .filter((d) => isConsentApplicable(d, fullCtx) || latest.has(d.type))
     .map((d) => {
-      const prose = resolveConsentProse(d, brand, ctx.locale);
+      const prose = resolveConsentProse(d, brand, ctx.locale, env);
       const rec = latest.get(d.type);
       return {
         type: d.type,
@@ -623,14 +715,17 @@ export async function listConsents(
         stage: d.stage,
         control: d.control,
         withdrawable: d.withdrawable,
-        onWithdraw: d.onWithdraw === 'close_and_purge_account' && isOffshore(fullCtx.env ?? process.env) ? d.onWithdraw : 'none',
+        onWithdraw: d.onWithdraw === 'close_and_purge_account' && isOffshore(env) ? d.onWithdraw : 'none',
         defaultGranted: false as const,
         prose: prose.text,
         proseVersion: prose.version,
         proseHash: prose.hash,
-        proseLocale: prose.locale,
+        proseLocale: prose.proseLocale,
         granted: rec ? rec.granted : null,
         answeredAt: rec ? rec.createdAt.toISOString() : null,
+        // Which text the answer was given to: a screen must not show today's words as "what you agreed to" when they differ.
+        answeredProseVersion: rec ? (rec.proseVersion ?? null) : null,
+        answeredTextCurrent: rec ? answeredCurrentText(d, brand, rec, env) : null,
       };
     });
 }
@@ -670,7 +765,7 @@ export async function recordConsent(input: RecordConsentInput, deps: ConsentServ
     });
   }
 
-  const prose = resolveConsentProse(def, input.brand, input.locale);
+  const prose = resolveConsentProse(def, input.brand, input.locale, env);
   const profileId = await profileIdFor(db, input.userId);
   const closing = !input.granted && def.onWithdraw === 'close_and_purge_account' && isOffshore(env);
 

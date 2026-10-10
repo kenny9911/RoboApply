@@ -1,3 +1,77 @@
 {
-  "onboardingCn": {}
+  "onboardingCn": {
+    "common": {
+      "optional": "Optional"
+    },
+    "consent": {
+      "given": "You agreed to this when you signed up.",
+      "givenOn": "You agreed to this on {date}.",
+      "requiredGiven": "You agreed to these when you signed up, so we don't ask again.",
+      "changedSinceOn": "You agreed to an earlier version of this text on {date}. The text has changed, so please read it and tick the box again.",
+      "changedSince": "You agreed to an earlier version of this text. The text has changed, so please read it and tick the box again."
+    },
+    "education": {
+      "fullTimeYes": "Yes",
+      "fullTimeNo": "No"
+    },
+    "confirm": {
+      "summaryTitle": "Your choices",
+      "edit": "Change",
+      "editRow": "Change {row}",
+      "notSet": "Not filled in",
+      "skipped": "Skipped",
+      "notChosen": "Not chosen",
+      "fullTime": "{answer, select, yes {Full-time program: yes} other {Full-time program: no}}",
+      "resumeAdded": "Added",
+      "resumeNone": "Not added. You can fill in your profile by hand.",
+      "rows": {
+        "identity": "You are",
+        "education": "Education",
+        "roles": "Roles",
+        "cities": "Cities",
+        "workType": "Work type",
+        "pay": "Pay",
+        "employer": "What matters to you",
+        "resume": "Resume",
+        "ai": "AI processing",
+        "ranking": "Ranking with my profile"
+      }
+    },
+    "manual": {
+      "title": "Fill in your profile by hand",
+      "subtitle": "No file is read and no AI is used. Everything here is optional, and you can add more later in My profile.",
+      "nameGroup": "Name",
+      "lastName": "Family name",
+      "firstName": "Given name",
+      "educationGroup": "Education",
+      "educationNote": "From what you entered earlier. Change it if you need to.",
+      "experienceGroup": "One experience (optional)",
+      "experienceHint": "An internship or a job. You can add more later.",
+      "kindLabel": "Type",
+      "kind": {
+        "internship": "Internship",
+        "work": "Job"
+      },
+      "company": "Company",
+      "jobTitle": "Job title",
+      "start": "Start month",
+      "end": "End month",
+      "current": "I still work here",
+      "description": "What you did",
+      "descriptionPlaceholder": "A few lines about your work and what came of it",
+      "skillsLabel": "Skills",
+      "skillsHint": "Separate skills with commas",
+      "skillsPlaceholder": "e.g. Python, SQL, Excel",
+      "save": "Save and continue",
+      "later": "Fill in later",
+      "saveError": "Some of this wasn't saved. Try again. What was already saved won't be added twice.",
+      "problem": {
+        "empty": "Fill in at least one item, or choose Fill in later.",
+        "experience": "Add the company, the job title and the type for this experience.",
+        "dateFormat": "Write each month as year and month, like 2024-03.",
+        "dates": "The end month can't be before the start month."
+      },
+      "monthPlaceholder": "YYYY-MM"
+    }
+  }
 }

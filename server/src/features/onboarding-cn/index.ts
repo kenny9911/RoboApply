@@ -34,7 +34,7 @@ import { identityFrom, validateCnStep as validateCnStepPure } from './validate.j
 
 export * from './contract.js';
 export { createOnboardingCnRouter, type OnboardingCnRouterDeps } from './routes.js';
-export { applyCnStep, type ApplyCnStepDeps, type ApplyCnStepOptions, type ApplyCnStepResult } from './apply.js';
+export { applyCnStep, CN_ONCE_ONLY_CONSENTS, consentsGivenToCurrentText, type ApplyCnStepDeps, type ApplyCnStepOptions, type ApplyCnStepResult } from './apply.js';
 export { CN_ISSUE, identityFrom } from './validate.js';
 export { CAMPUS_SEASON_ROLLOVER_MONTH, CN_DEFAULT_GRADUATION_MONTH, classYearOptions, clampClassYear, currentCampusClass } from './classYear.js';
 export { formatMonthlyK, median, monthlyMidpointYuan, parseMonthlyKSalary, quantile, type MonthlyKSalary } from './salary.js';
@@ -128,7 +128,23 @@ export const onboardingCnService: OnboardingCnService = createOnboardingCnServic
 /** WP-30 calls this for GoApply steps (FND seam; the optional `ctx` enables cross-step rules). */
 export const validateCnStep = (step: string, body: unknown, ctx?: CnStepContext) => onboardingCnService.validateCnStep(step, body, ctx);
 
-/** First-value context for `firstValueRoute` (R-14: `/campus` → `/jobs` → `/resume`; 社招 → `/jobs`). */
-export function cnFirstValueContext(answers: CnStepContext['answers'], caps: { campusCalendar: boolean; jobsFeed: boolean }): FirstValueContext {
-  return { campusCalendar: caps.campusCalendar, jobsFeed: caps.jobsFeed, cnIdentity: identityFrom(answers) };
+/** The 届别 stored by the identity step (应届 / 在校 only), else null. */
+export function classYearFrom(answers: CnStepContext['answers']): number | null {
+  const a = answers as Record<string, unknown> | null | undefined;
+  const identity = a && typeof a === 'object' ? (a.identity as Record<string, unknown> | undefined) : undefined;
+  const y = identity && typeof identity === 'object' ? identity.graduationClass : null;
+  return identityFrom(answers) !== 'shezhao' && typeof y === 'number' && Number.isInteger(y) ? y : null;
+}
+
+/**
+ * First-value context for `firstValueRoute` (R-14: `/campus` → `/jobs` → `/resume`; 社招 → `/jobs`).
+ * `cnClassYear` is the user's 届别, so the campus calendar can open filtered
+ * to it (PRODUCT G7: "/campus filtered to their 届别"); the onboarding area's
+ * `firstValueRoute` reads it once its `FirstValueContext` has the field.
+ */
+export function cnFirstValueContext(
+  answers: CnStepContext['answers'],
+  caps: { campusCalendar: boolean; jobsFeed: boolean },
+): FirstValueContext & { cnClassYear: number | null } {
+  return { campusCalendar: caps.campusCalendar, jobsFeed: caps.jobsFeed, cnIdentity: identityFrom(answers), cnClassYear: classYearFrom(answers) };
 }

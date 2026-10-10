@@ -27,6 +27,7 @@ import { buildMatchUser, getMatchTiers, getMatchWeights, preScore, toMatchJob, t
 import {
   applyCnStep,
   classYearOptions,
+  consentsGivenToCurrentText,
   cnCampusWhere,
   cnFirstValueContext,
   cnJobWhere,
@@ -189,9 +190,17 @@ describe('data files (D3: every file states its source and whether it was checke
     expect(searchSchools('', 5)).toEqual([]);
   });
 
-  it('provinces: 31 mainland divisions + 2 SARs, 333 prefecture-level divisions, no city tiers', () => {
-    expect(PROVINCES).toHaveLength(33);
-    const prefecture = PROVINCES.filter((p) => p.type !== 'municipality' && p.type !== 'sar').reduce((n, p) => n + p.cities.length, 0);
+  it('provinces: all 34 provincial-level divisions (31 mainland + 台湾 + 2 SARs), 333 mainland prefecture-level divisions, no city tiers', () => {
+    expect(PROVINCES).toHaveLength(34);
+    // GB/T 2260 order: 台湾 (71) comes after the mainland divisions and before 香港 (81) and 澳门 (82).
+    expect(PROVINCES.slice(-3).map((p) => `${p.code}:${p.name}`)).toEqual(['71:台湾', '81:香港', '82:澳门']);
+    expect(new Set(PROVINCES.map((p) => p.code)).size).toBe(34);
+    // GB/T 2260 gives no sub-divisions for 台湾: it is one place here, like the SARs; nothing is invented.
+    expect(PROVINCES.find((p) => p.name === '台湾')).toEqual({ code: '71', name: '台湾', type: 'province', cities: ['台湾'] });
+    expect(provinceOfCity('台湾')?.code).toBe('71');
+    const mainland = PROVINCES.filter((p) => !['71', '81', '82'].includes(p.code));
+    expect(mainland).toHaveLength(31);
+    const prefecture = mainland.filter((p) => p.type !== 'municipality').reduce((n, p) => n + p.cities.length, 0);
     expect(prefecture).toBe(333);
     expect(JSON.stringify(PROVINCES)).not.toMatch(/一线|新一线|tier/i);
     expect(provinceOfCity('苏州')?.name).toBe('江苏');
@@ -300,11 +309,23 @@ describe('G3 教育背景', () => {
     expect(skipped.effects).toEqual({ consents: [], cnFields: null, filterPatch: null });
   });
 
-  it('a listed school carries its official marks; 统招 defaults on; no filter is set', async () => {
-    const v = ok(await validateCnStep('education', { degree: 'bachelor', school: '浙江大学', major: ' 计算机科学 ' }, { answers: answersFor('yingjie') }));
+  it('a listed school carries its official marks; no filter is set', async () => {
+    const v = ok(await validateCnStep('education', { degree: 'bachelor', fullTime: true, school: '浙江大学', major: ' 计算机科学 ' }, { answers: answersFor('yingjie') }));
     expect(v.answers).toEqual({ degree: 'bachelor', fullTime: true, school: '浙江大学', schoolId: '浙江大学', major: '计算机科学', overseas: false });
     expect(v.effects!.cnFields).toMatchObject({ schoolTags: ['985', '211', 'double_first_class'], isFullTimeProgram: true, overseasSchool: false });
     expect(v.effects!.filterPatch).toBeNull();
+  });
+
+  it('统招 is never assumed: unanswered stores no answer and clears the profile field; yes and no are stored as given', async () => {
+    const ctx = { answers: answersFor('yingjie') };
+    const unanswered = ok(await validateCnStep('education', { degree: 'bachelor', school: '浙江大学' }, ctx));
+    expect(unanswered.answers).not.toHaveProperty('fullTime');
+    expect(unanswered.effects!.cnFields).toHaveProperty('isFullTimeProgram', null);
+    const no = ok(await validateCnStep('education', { degree: 'bachelor', school: '浙江大学', fullTime: false }, ctx));
+    expect(no.answers).toMatchObject({ fullTime: false });
+    expect(no.effects!.cnFields).toMatchObject({ isFullTimeProgram: false });
+    const yes = ok(await validateCnStep('education', { degree: 'bachelor', school: '浙江大学', fullTime: true }, ctx));
+    expect(yes.effects!.cnFields).toMatchObject({ isFullTimeProgram: true });
   });
 
   it('an unlisted or overseas school carries no marks (free text allowed)', async () => {
@@ -430,6 +451,14 @@ describe('first-value routing', () => {
     expect(firstValueRoute('goapply', cnFirstValueContext(answersFor('shezhao'), { campusCalendar: true, jobsFeed: false }))).toBe('/campus');
     expect(firstValueRoute('goapply', cnFirstValueContext(null, { campusCalendar: false, jobsFeed: false }))).toBe('/resume');
   });
+
+  it('the context carries the 届别 of 应届 / 在校 users (the campus calendar opens on it); 社招 has none', () => {
+    const all = { campusCalendar: true, jobsFeed: true };
+    expect(cnFirstValueContext({ identity: { cnIdentity: 'yingjie', graduationClass: 2027 } }, all).cnClassYear).toBe(2027);
+    expect(cnFirstValueContext({ identity: { cnIdentity: 'zaixiao', graduationClass: 2028 } }, all).cnClassYear).toBe(2028);
+    expect(cnFirstValueContext({ identity: { cnIdentity: 'shezhao', graduationClass: 2027 } }, all).cnClassYear).toBeNull();
+    expect(cnFirstValueContext(null, all).cnClassYear).toBeNull();
+  });
 });
 
 // ── 个性化推荐 feed seam (PIPL Art. 24) ───────────────────────────────────
@@ -499,10 +528,49 @@ describe('applyCnStep', () => {
     const d = deps();
     const v = ok(await validateCnStep('consent', consentBody(), { env: OFFSHORE }));
     const res = await applyCnStep('u1', GO, v, { locale: 'zh' }, d);
-    expect(res).toEqual({ consentsRecorded: 6, cnFieldsWritten: false, filtersWritten: false });
+    expect(res).toEqual({ consentsRecorded: 6, consentsAlreadyGiven: 0, cnFieldsWritten: false, filtersWritten: false });
     expect(d.recordConsent).toHaveBeenCalledWith({ userId: 'u1', brand: GO, type: 'ai_resume_parsing', granted: false, proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' });
     expect(d.patchCnFields).not.toHaveBeenCalled();
     expect(llm.calls).toBe(0);
+  });
+
+  it('the three required consents given at sign-up are not recorded a second time; the optional choices always are', async () => {
+    const d = { ...deps(), grantedConsents: vi.fn(async () => new Set(['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border', 'marketing_email'])) };
+    const v = ok(await validateCnStep('consent', consentBody(), { env: OFFSHORE }));
+    const res = await applyCnStep('u1', GO, v, { locale: 'zh' }, d);
+    expect(d.grantedConsents).toHaveBeenCalledWith('u1', GO);
+    expect(res).toMatchObject({ consentsRecorded: 3, consentsAlreadyGiven: 3 });
+    // G1 put only the optional choices to the user, so only those get a record with G1's prose hash.
+    expect(d.recordConsent.mock.calls.map((c) => (c as unknown as [{ type: string }])[0].type)).toEqual(['ai_resume_parsing', 'personalized_recommendation', 'marketing_email']);
+  });
+
+  it('a grant of an earlier text does not count as given: G1 asks again and the answer is recorded under the current text', async () => {
+    const ledger = [
+      { type: 'pipl_basic_processing', granted: true, answeredTextCurrent: true },
+      { type: 'age_16_plus', granted: true }, // a reader that does not say: treated as before
+      { type: 'pipl_cross_border', granted: true, answeredTextCurrent: false },
+      { type: 'marketing_email', granted: false, answeredTextCurrent: true },
+    ];
+    expect([...consentsGivenToCurrentText(ledger)]).toEqual(['pipl_basic_processing', 'age_16_plus']);
+    const d = { ...deps(), grantedConsents: vi.fn(async () => consentsGivenToCurrentText(ledger)) };
+    const v = ok(await validateCnStep('consent', consentBody(), { env: OFFSHORE }));
+    const res = await applyCnStep('u1', GO, v, { locale: 'zh' }, d);
+    expect(res).toMatchObject({ consentsRecorded: 4, consentsAlreadyGiven: 2 });
+    expect(d.recordConsent).toHaveBeenCalledWith({ userId: 'u1', brand: GO, type: 'pipl_cross_border', granted: true, proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' });
+  });
+
+  it('a required consent the ledger does not hold is still recorded (email sign-up, or a ledger that could not be read)', async () => {
+    const d = { ...deps(), grantedConsents: vi.fn(async () => new Set(['pipl_basic_processing'])) };
+    const v = ok(await validateCnStep('consent', consentBody(), { env: OFFSHORE }));
+    const res = await applyCnStep('u1', GO, v, { locale: 'zh' }, d);
+    expect(res).toMatchObject({ consentsRecorded: 5, consentsAlreadyGiven: 1 });
+    expect(d.recordConsent.mock.calls.map((c) => (c as unknown as [{ type: string }])[0].type)).toEqual([
+      'age_16_plus',
+      'pipl_cross_border',
+      'ai_resume_parsing',
+      'personalized_recommendation',
+      'marketing_email',
+    ]);
   });
 
   it('manual mode end to end: every step saves with zero LLM calls and no parse', async () => {
@@ -531,7 +599,7 @@ describe('applyCnStep', () => {
   it('writes nothing for a failed validation', async () => {
     const d = deps();
     const res = await applyCnStep('u1', GO, { ok: false, issues: [] }, {}, d);
-    expect(res).toEqual({ consentsRecorded: 0, cnFieldsWritten: false, filtersWritten: false });
+    expect(res).toEqual({ consentsRecorded: 0, consentsAlreadyGiven: 0, cnFieldsWritten: false, filtersWritten: false });
     expect(d.recordConsent).not.toHaveBeenCalled();
   });
 });

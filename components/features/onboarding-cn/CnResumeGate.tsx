@@ -10,16 +10,17 @@
 // The optional-field reminder is always shown. Images are parsed by the
 // GoHire parse API only (server routing, WP-15); there is no local OCR.
 //
-// The onboarding page wraps the shared resume screen in it (INT-08); 手动填写
-// there skips the resume step, so setup goes on and the profile is filled in
-// by hand afterwards:
+// 手动填写资料 opens the manual form (`ManualProfileForm`: name, education,
+// one experience, skills — typed by the user, saved through the profile
+// routes). Only when that form is saved, or the user chooses 稍后填写 on it,
+// does the gate call `onManual`; the onboarding page then saves the resume
+// step as skipped, because there is no resume:
 //
 //   <CnResumeGate onManual={() => save({}, { skip: true })} busy={busy} error={error}><ResumeStep …/></CnResumeGate>
 //
-// `busy` and `error` belong to the caller's save (手动填写 is the caller's
-// request): while it runs both buttons are off, and when it fails the message
-// shows here — the upload screen, which would otherwise show it, is not on the
-// page in manual mode.
+// `busy` and `error` belong to the caller's save: while it runs the buttons
+// are off, and when it fails the message shows here — the upload screen,
+// which would otherwise show it, is not on the page in manual mode.
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -28,12 +29,14 @@ import type { ConsentCatalogItem } from '../../../lib/api/contracts/compliance';
 import { Btn } from '../../v3/primitives/Btn';
 import { useCnOnboardingApi } from './api';
 import { proseLocale } from './ConsentStep';
+import { ManualProfileForm } from './ManualProfileForm';
+import { StepProgress } from './parts';
 import styles from './OnboardingCn.module.css';
 
 export interface CnResumeGateProps {
   /** The upload screen, rendered only with AI consent. */
   children: ReactNode;
-  /** Manual mode: fill the profile by hand (and skip the upload). */
+  /** Manual mode is finished (the form was saved, or left for later): continue without a resume. */
   onManual: () => void;
   /** The caller is saving (手动填写 was pressed): both buttons are off. */
   busy?: boolean;
@@ -48,6 +51,8 @@ export function CnResumeGate({ children, onManual, busy: saving = false, error =
   const [item, setItem] = useState<ConsentCatalogItem | null | 'loading'>('loading');
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // 手动填写资料 was pressed: the manual form is open.
+  const [manual, setManual] = useState(false);
 
   const load = useCallback(() => {
     api
@@ -68,6 +73,10 @@ export function CnResumeGate({ children, onManual, busy: saving = false, error =
     );
   }
 
+  if (manual) {
+    return <ManualProfileForm onContinue={onManual} onBack={() => setManual(false)} busy={saving} error={error} />;
+  }
+
   async function enable() {
     if (!item || item === 'loading') return;
     setBusy(true);
@@ -85,6 +94,7 @@ export function CnResumeGate({ children, onManual, busy: saving = false, error =
 
   return (
     <section className={styles.step} aria-labelledby="cn-resume-gate">
+      <StepProgress step="resume" />
       <div className={styles.notice}>
         <h2 id="cn-resume-gate" className={styles.panelTitle}>
           {t('resume.offTitle')}
@@ -96,7 +106,7 @@ export function CnResumeGate({ children, onManual, busy: saving = false, error =
           <li>{t('resume.unavailable.assistant')}</li>
         </ul>
         <div className={styles.chips}>
-          <Btn variant="primary" onClick={onManual} disabled={saving || busy}>
+          <Btn variant="primary" onClick={() => setManual(true)} disabled={saving || busy}>
             {t('resume.manual')}
           </Btn>
           {item ? (
