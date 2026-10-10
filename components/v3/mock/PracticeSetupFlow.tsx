@@ -120,6 +120,8 @@ interface Props {
   webSources: Array<{ title: string; url: string }>;
   sampleQuestions: string[];
   groundedOn?: 'jd' | 'market' | 'role';
+  /** False hides the market-requirements preview entirely (GoApply, WP-43). Default true. */
+  showPreview?: boolean;
   canPreview: boolean;
   onPreview: () => void;
   onRetryPreview: () => void;
@@ -135,6 +137,16 @@ interface Props {
   canLaunch: boolean;
   starting: boolean;
   onStart: () => void;
+
+  // ── WP-43 slots (practice from a job, notices, recording) ──
+  /** Under the intro: the job banner and one-line notices. */
+  topSlot?: ReactNode;
+  /** Next to the intro copy: e.g. the "Practice questions" link. */
+  introAside?: ReactNode;
+  /** In the launch dock, above Start: the recording row. */
+  dockSlot?: ReactNode;
+  /** Replaces the Start label (e.g. the written practice). */
+  startLabel?: string;
 }
 
 /** Roving-tabindex arrow handling shared by every radiogroup on this screen. */
@@ -258,6 +270,7 @@ export function PracticeSetupFlow({
   webSources,
   sampleQuestions,
   groundedOn,
+  showPreview = true,
   canPreview,
   onPreview,
   onRetryPreview,
@@ -270,6 +283,10 @@ export function PracticeSetupFlow({
   canLaunch,
   starting,
   onStart,
+  topSlot,
+  introAside,
+  dockSlot,
+  startLabel,
 }: Props) {
   const t = useTranslations('practice');
   const { localizeCategory, localizeRole, localizeType } = useMockRoleLabels();
@@ -464,7 +481,10 @@ export function PracticeSetupFlow({
       <header className={styles.intro}>
         <h1>{t('setup.flow.title')}</h1>
         <p>{t('setup.flow.sub')}</p>
+        {introAside ? <div className={styles.introAside}>{introAside}</div> : null}
       </header>
+
+      {topSlot}
 
       {recentSessions.length > 0 ? (
         <section className={styles.lane} aria-labelledby="practice-recent-heading">
@@ -743,7 +763,9 @@ export function PracticeSetupFlow({
                     options={(['video', 'voice'] as const).map((value) => ({
                       id: value,
                       title: t(`setup.format.${value}.title`),
-                      sub: t(`setup.format.${value}.desc`),
+                      // WP-43: honest format lines (no "eye contact noted":
+                      // only the answers are scored, never the face).
+                      sub: t(`mode.${value}.desc`),
                       badge: value === 'video' ? t('setup.format.video.tag') : undefined,
                     }))}
                   />
@@ -785,6 +807,8 @@ export function PracticeSetupFlow({
             ) : null}
           </>
         ) : null}
+
+        {dockSlot}
 
         {startError ? (
           <p role="alert" className={styles.alert}>
@@ -831,39 +855,41 @@ export function PracticeSetupFlow({
             disabled={!canLaunch || !canAfford || starting}
             onClick={onStart}
           >
-            {starting ? t('setup.launch.starting') : t('setup.launch.start')}
+            {starting ? t('setup.launch.starting') : (startLabel ?? t('setup.launch.start'))}
           </button>
         </div>
       </div>
 
-      <div className={styles.previewShell}>
-        <button
-          type="button"
-          className={styles.previewToggle}
-          aria-expanded={previewOpen}
-          aria-controls="practice-preview"
-          onClick={() => setPreviewOpen((value) => !value)}
-        >
-          <IconChevron size={14} aria-hidden className={previewOpen ? styles.chevronUp : undefined} />
-          {t('setup.flow.previewToggle')}
-        </button>
+      {showPreview ? (
+        <div className={styles.previewShell}>
+          <button
+            type="button"
+            className={styles.previewToggle}
+            aria-expanded={previewOpen}
+            aria-controls="practice-preview"
+            onClick={() => setPreviewOpen((value) => !value)}
+          >
+            <IconChevron size={14} aria-hidden className={previewOpen ? styles.chevronUp : undefined} />
+            {t('setup.flow.previewToggle')}
+          </button>
 
-        {previewOpen ? (
-          <div id="practice-preview" className={styles.previewBody}>
-            <MarketRequirementsPanel
-              compact
-              state={previewState}
-              requirements={requirements}
-              webSources={webSources}
-              sampleQuestions={sampleQuestions}
-              groundedOn={groundedOn}
-              canPreview={canPreview}
-              onPreview={onPreview}
-              onRetry={onRetryPreview}
-            />
-          </div>
-        ) : null}
-      </div>
+          {previewOpen ? (
+            <div id="practice-preview" className={styles.previewBody}>
+              <MarketRequirementsPanel
+                compact
+                state={previewState}
+                requirements={requirements}
+                webSources={webSources}
+                sampleQuestions={sampleQuestions}
+                groundedOn={groundedOn}
+                canPreview={canPreview}
+                onPreview={onPreview}
+                onRetry={onRetryPreview}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -13,15 +13,30 @@
 //   GET  /sessions/:id/report      — scored report + presigned media URLs
 //
 // All sessions are scoped to the API key owner (req.user) so one tenant can
-// never read another's.
+// never read another's. An external session records only when the tenant
+// sends `recording: true` (their attestation that the candidate agreed, H8).
+//
+// FIRST-PARTY practice routes (WP-43) live here too, under /practice. They are
+// the opposite: cookie/JWT only, an API key is refused. See the section below.
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { getCurrentRequestId } from '../../lib/requestContext.js';
-import { interviewSessionService } from '../sessions/InterviewSessionService.js';
+import {
+  interviewSessionService,
+  InterviewInsufficientCreditsError,
+  ensureFirstPracticeGrant,
+  loadPracticeJob,
+  loadPracticeResume,
+  readPracticeMeta,
+  type FirstPracticeState,
+} from '../sessions/InterviewSessionService.js';
 import { toSessionSummary, toSessionDetail } from './serialize.js';
 import { handleEngineError } from './errors.js';
-import { resolveSessionCallbackBaseUrl } from '../config.js';
+import { isRecordingEnabled, resolveSessionCallbackBaseUrl } from '../config.js';
+import { shouldUseParley } from '../parley/parleyConfig.js';
+import type { InterviewSource } from '../types.js';
+import type { ProductBrand } from '../../platform/brand/registry.js';
 
 const router = Router();
 
@@ -51,6 +66,7 @@ router.post('/sessions', requireAuth, requireApiKey, async (req: Request, res: R
       candidateName: typeof b.candidateName === 'string' ? b.candidateName : undefined,
       resumeContext: typeof b.resumeContext === 'string' ? b.resumeContext : undefined,
       callbackBaseUrl: resolveSessionCallbackBaseUrl(req.headers),
+      recording: b.recording === true ? { audio: true, video: b.recordVideo === true } : undefined,
       requestId: getCurrentRequestId() ?? undefined,
     });
     // External callers keep their synchronous contract: the session comes back
@@ -122,6 +138,338 @@ router.get('/sessions/:id/report', requireAuth, requireApiKey, async (req: Reque
     });
   } catch (err) {
     return handleEngineError(res, 'external_report', err, { userId: req.user?.id, sessionId: req.params.id });
+  }
+});
+
+// ─── First-party practice (WP-43) ─────────────────────────────────────────
+//
+// Cookie/JWT routes for the practice setup and report (an API key → 403):
+//
+//   GET  /practice/setup?job=&resume=  — prefill (job + resume to use), first
+//                                        free practice state, voice and
+//                                        recording availability, AI consent
+//   POST /practice/sessions            — create a candidate session: `jobId`
+//                                        (loaded server-side, market-checked →
+//                                        404 job_not_found), `resumeId`, and
+//                                        `recording: {audio, video}` honoured
+//                                        only with the matching consents (H8)
+//   GET  /practice/sessions/:id        — report extras: the job it was for,
+//                                        whether recording was consented
+//   GET  /practice/jobs?ids=a,b        — the job checklist's "Practiced" step
+//   POST /practice/text/start          — written practice (GoApply without
+//                                        voice): `jobId` loaded server-side
+//                                        (404 job_not_found), metered like a
+//                                        live practice (402 + bucket)
+//   POST /practice/text/next-turn      — one answer → the interviewer's reply
+//   POST /practice/text/:id/score      — score; an answered practice ticks the
+//                                        checklist and the job's "Practiced"
+//                                        step once
+//
+// Every practice route that reaches an LLM checks the brand gate first, so a
+// GoApply user without a bound phone or the AI consent never gets an LLM call
+// (aiAllowed, TASK_PLAN §2.2), whichever client calls it.
+//
+// GoApply (market cn): AI routes need a bound phone (403
+// phone_binding_required) and a live `ai_resume_parsing` consent (aiAllowed →
+// 503 ai_unavailable/ai_consent_required); without the voice capability
+// (`ai.interviewVoice`) a session answers 503 ai_unavailable/voice_unavailable
+// and the setup offers text practice instead.
+
+/** Admins are exempt from practice credits, on the roboapply source (mirrors internalRoutes). */
+function isAdmin(user: { role?: string | null; roles?: string[] | null } | undefined): boolean {
+  if (!user) return false;
+  return user.role === 'admin' || (Array.isArray(user.roles) && user.roles.includes('admin'));
+}
+
+function requireFirstParty(req: Request, res: Response, next: NextFunction) {
+  if (req.apiKeyId) {
+    return res.status(403).json({ error: 'cookie_session_required', message: 'Practice routes are for signed-in users, not API keys.' });
+  }
+  next();
+}
+
+function str(value: unknown, max = 64): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
+async function currentBrand(): Promise<ProductBrand> {
+  const { getCurrentBrandOrDefault } = await import('../../platform/brand/brandContext.js');
+  return getCurrentBrandOrDefault();
+}
+
+function marketOf(brand: ProductBrand): 'intl' | 'cn' {
+  return brand.market === 'cn' ? 'cn' : 'intl';
+}
+
+export type PracticeGateReason = 'phone_binding_required' | 'ai_consent_required' | 'voice_unavailable';
+
+export interface PracticeGate {
+  /** Live (voice/video) practice can start. */
+  voice: { available: boolean; reason: PracticeGateReason | null };
+  /** AI practice of any kind (voice or text) is allowed for this user. */
+  ai: { allowed: boolean; reason: PracticeGateReason | null };
+}
+
+/** The brand rules for practice (RoboApply: always open; GoApply: phone, AI consent, voice capability). */
+export async function practiceGate(userId: string, brand: ProductBrand): Promise<PracticeGate> {
+  if (brand.market !== 'cn') {
+    return { voice: { available: true, reason: null }, ai: { allowed: true, reason: null } };
+  }
+  const [{ phoneBindingRequired }, { aiAllowed }, { isEnabledForBrand }] = await Promise.all([
+    import('../../features/auth-cn/index.js'),
+    import('../../platform/consent/index.js'),
+    import('../../platform/flags.js'),
+  ]);
+  let reason: PracticeGateReason | null = null;
+  if (await phoneBindingRequired(userId).catch(() => true)) reason = 'phone_binding_required';
+  else if (!(await aiAllowed({ id: userId, brand: brand.id }).catch(() => false))) reason = 'ai_consent_required';
+  const voiceOn = isEnabledForBrand('ai.interviewVoice', brand, process.env);
+  return {
+    ai: { allowed: reason === null, reason },
+    voice: { available: reason === null && voiceOn, reason: reason ?? (voiceOn ? null : 'voice_unavailable') },
+  };
+}
+
+function gateStatus(reason: PracticeGateReason): number {
+  return reason === 'phone_binding_required' ? 403 : 503;
+}
+
+function gateBody(reason: PracticeGateReason) {
+  return reason === 'phone_binding_required'
+    ? { error: 'phone_binding_required', bindRoute: '/bind-phone' }
+    : { error: 'ai_unavailable', reason };
+}
+
+async function recordingAvailable(): Promise<boolean> {
+  if (!isRecordingEnabled()) return false;
+  try {
+    const { interviewR2Storage } = await import('../storage/r2Storage.js');
+    return interviewR2Storage.isConfigured();
+  } catch {
+    return false;
+  }
+}
+
+async function recordingConsents(userId: string): Promise<{ audio: boolean; video: boolean }> {
+  try {
+    const { hasLiveConsent } = await import('../../platform/consent/index.js');
+    const [audio, video] = await Promise.all([
+      hasLiveConsent(userId, 'interview_recording'),
+      hasLiveConsent(userId, 'interview_video'),
+    ]);
+    return { audio, video: audio && video };
+  } catch {
+    return { audio: false, video: false };
+  }
+}
+
+/** 402 + what the out-of-credits sheet needs: the bucket, and whether the free first practice still waits on verification. */
+function insufficientCredits(res: Response, err: InterviewInsufficientCreditsError, firstPractice: FirstPracticeState | null) {
+  return res.status(402).json({
+    error: 'insufficient_credits',
+    message: err.message,
+    balance: err.balance,
+    required: err.required,
+    tier: err.tier,
+    bucket: 'practice',
+    firstPractice,
+  });
+}
+
+/** GoApply: no AI practice (voice or written) without a bound phone and the AI consent. Sends the refusal; false = stop. */
+async function aiGateOpen(req: Request, res: Response, brand: ProductBrand): Promise<boolean> {
+  const gate = await practiceGate(req.user!.id, brand);
+  if (gate.ai.allowed || !gate.ai.reason) return true;
+  res.status(gateStatus(gate.ai.reason)).json(gateBody(gate.ai.reason));
+  return false;
+}
+
+async function requestLocale(req: Request): Promise<string | undefined> {
+  try {
+    const { getRequestLocale } = await import('../../roboapply/v2/lib/raLocale.js');
+    return getRequestLocale(req);
+  } catch {
+    return undefined;
+  }
+}
+
+function isJobNotFound(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { code?: unknown }).code === 'job_not_found';
+}
+
+router.get('/practice/setup', requireAuth, requireFirstParty, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    const brand = await currentBrand();
+    const jobId = str(req.query.job);
+    const resumeId = str(req.query.resume);
+    const job = jobId ? await loadPracticeJob(userId, jobId, marketOf(brand)) : null;
+    if (jobId && !job) return res.status(404).json({ error: 'job_not_found' });
+    const [resume, firstPractice, gate, available, consent] = await Promise.all([
+      loadPracticeResume(userId, { resumeId, jobId: job?.id ?? null, knownValues: [req.user!.name ?? ''] }).catch(() => null),
+      ensureFirstPracticeGrant(userId),
+      practiceGate(userId, brand),
+      recordingAvailable(),
+      recordingConsents(userId),
+    ]);
+    return res.json({
+      market: marketOf(brand),
+      job: job
+        ? { id: job.id, title: job.title, companyName: job.companyName, location: job.location, jdText: job.jdText, closed: job.closed }
+        : null,
+      resume: resume ? { id: resume.id, name: resume.name, kind: resume.kind } : null,
+      firstPractice,
+      voice: gate.voice,
+      ai: gate.ai,
+      recording: { available, consent },
+    });
+  } catch (err) {
+    return handleEngineError(res, 'practice_setup', err, { userId });
+  }
+});
+
+router.post('/practice/sessions', requireAuth, requireFirstParty, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  let firstPractice: FirstPracticeState | null = null;
+  try {
+    const b = req.body ?? {};
+    const brand = await currentBrand();
+    const gate = await practiceGate(userId, brand);
+    if (!gate.voice.available && gate.voice.reason) {
+      return res.status(gateStatus(gate.voice.reason)).json(gateBody(gate.voice.reason));
+    }
+
+    const admin = isAdmin(req.user as { role?: string; roles?: string[] });
+    // Same source rule as the internal create: legacy role-'user' accounts
+    // stay on the ungated recruiter source.
+    const source: InterviewSource = !admin && req.user!.role === 'user' ? 'recruiter' : 'roboapply';
+    const jobId = str(b.jobId);
+    // C42: top up the first free practice before the credit gate runs.
+    firstPractice = source === 'roboapply' && !admin ? await ensureFirstPracticeGrant(userId) : null;
+    const resume = await loadPracticeResume(userId, {
+      resumeId: str(b.resumeId),
+      jobId,
+      knownValues: [req.user!.name ?? ''],
+    }).catch(() => null);
+    const rec = b.recording && typeof b.recording === 'object' ? (b.recording as Record<string, unknown>) : {};
+
+    const session = await interviewSessionService.createSession({
+      userId,
+      source,
+      creditExempt: admin,
+      callbackBaseUrl: resolveSessionCallbackBaseUrl(req.headers),
+      transport: source === 'roboapply' && shouldUseParley(req.user!) ? 'parley' : undefined,
+      role: typeof b.role === 'string' ? b.role : '',
+      interviewType: typeof b.interviewType === 'string' ? b.interviewType : undefined,
+      personaId: typeof b.personaId === 'string' ? b.personaId : undefined,
+      mode: b.mode === 'video' ? 'video' : b.mode === 'voice' ? 'voice' : undefined,
+      language: typeof b.language === 'string' ? b.language : undefined,
+      durationMinutes: typeof b.durationMinutes === 'number' ? b.durationMinutes : undefined,
+      characteristics: b.characteristics,
+      candidateName: typeof b.candidateName === 'string' ? b.candidateName : req.user!.name ?? undefined,
+      // Server-chosen resume, PII-redacted; the client never sends the text.
+      resumeContext: resume?.context || undefined,
+      jdText: typeof b.jdText === 'string' ? b.jdText : undefined,
+      jobId,
+      market: marketOf(brand),
+      recording: { audio: rec.audio === true, video: rec.video === true },
+      requestId: getCurrentRequestId() ?? undefined,
+    });
+    const meta = readPracticeMeta(session.liveMetrics);
+    return res.json({
+      session: toSessionDetail(session),
+      practice: {
+        jobId: meta?.jobId ?? null,
+        resumeId: resume?.id ?? null,
+        recording: meta?.recording ?? { audio: false, video: false },
+      },
+    });
+  } catch (err) {
+    if (isJobNotFound(err)) return res.status(404).json({ error: 'job_not_found' });
+    if (err instanceof InterviewInsufficientCreditsError) return insufficientCredits(res, err, firstPractice);
+    return handleEngineError(res, 'practice_create', err, { userId });
+  }
+});
+
+router.get('/practice/sessions/:id', requireAuth, requireFirstParty, async (req: Request<{ id: string }>, res: Response) => {
+  try {
+    const info = await interviewSessionService.getPracticeInfo({ sessionId: req.params.id, userId: req.user!.id });
+    return res.json({ practice: info });
+  } catch (err) {
+    return handleEngineError(res, 'practice_info', err, { userId: req.user?.id, sessionId: req.params.id });
+  }
+});
+
+router.get('/practice/jobs', requireAuth, requireFirstParty, async (req: Request, res: Response) => {
+  try {
+    const raw = typeof req.query.ids === 'string' ? req.query.ids : '';
+    const ids = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0 && s.length <= 64).slice(0, 100);
+    const practiced = await interviewSessionService.practicedJobs(req.user!.id, ids);
+    return res.json({ practiced });
+  } catch (err) {
+    return handleEngineError(res, 'practice_jobs', err, { userId: req.user?.id });
+  }
+});
+
+// ─── Written practice ─────────────────────────────────────────────────────
+
+router.post('/practice/text/start', requireAuth, requireFirstParty, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  let firstPractice: FirstPracticeState | null = null;
+  try {
+    const b = req.body ?? {};
+    const brand = await currentBrand();
+    if (!(await aiGateOpen(req, res, brand))) return res;
+    const jobId = str(b.jobId);
+    const job = jobId ? await loadPracticeJob(userId, jobId, marketOf(brand)) : null;
+    if (jobId && !job) return res.status(404).json({ error: 'job_not_found' });
+    const admin = isAdmin(req.user as { role?: string; roles?: string[] });
+    // C42: top up the first free practice before the credit gate runs.
+    firstPractice = admin ? null : await ensureFirstPracticeGrant(userId);
+    const started = await interviewSessionService.startTextPractice({
+      userId,
+      role: typeof b.role === 'string' ? b.role : '',
+      interviewerId: typeof b.interviewerId === 'string' ? b.interviewerId : '',
+      typeId: typeof b.typeId === 'string' ? b.typeId : '',
+      language: typeof b.language === 'string' ? b.language : undefined,
+      durationMinutes: typeof b.durationMinutes === 'number' ? b.durationMinutes : undefined,
+      job,
+      creditExempt: admin,
+      locale: await requestLocale(req),
+    });
+    return res.json(started);
+  } catch (err) {
+    if (err instanceof InterviewInsufficientCreditsError) return insufficientCredits(res, err, firstPractice);
+    return handleEngineError(res, 'practice_text_start', err, { userId });
+  }
+});
+
+router.post('/practice/text/next-turn', requireAuth, requireFirstParty, async (req: Request, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    const b = req.body ?? {};
+    if (!(await aiGateOpen(req, res, await currentBrand()))) return res;
+    const result = await interviewSessionService.textPracticeTurn({
+      userId,
+      sessionId: typeof b.sessionId === 'string' ? b.sessionId : '',
+      answer: typeof b.answer === 'string' ? b.answer.slice(0, 8000) : '',
+      questionIndex: Number.isInteger(b.questionIndex) ? b.questionIndex : 0,
+      locale: await requestLocale(req),
+    });
+    return res.json(result);
+  } catch (err) {
+    return handleEngineError(res, 'practice_text_turn', err, { userId });
+  }
+});
+
+router.post('/practice/text/:id/score', requireAuth, requireFirstParty, async (req: Request<{ id: string }>, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    if (!(await aiGateOpen(req, res, await currentBrand()))) return res;
+    const result = await interviewSessionService.scoreTextPractice({ userId, sessionId: req.params.id });
+    return res.json(result);
+  } catch (err) {
+    return handleEngineError(res, 'practice_text_score', err, { userId, sessionId: req.params.id });
   }
 });
 

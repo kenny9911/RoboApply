@@ -1,0 +1,320 @@
+/* components/features/practice — practice entry pieces (WP-43): the job
+ * banner on /practice, setup notices, the recording row and consent sheet,
+ * the written practice room and the one-line report end. Clarity tokens only. */
+
+/* ─── Job banner ─────────────────────────────────────────────────────────── */
+
+.jobBanner {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--grad-soft);
+  padding: var(--sp-4);
+}
+
+.jobEyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+}
+
+.jobTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: var(--lh-subtitle);
+  overflow-wrap: anywhere;
+}
+
+.jobMeta {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.jobActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+/* ─── Notices (one line each) ────────────────────────────────────────────── */
+
+.notices {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.noticeWarn {
+  border-color: var(--warn);
+  background: var(--warn-subtle);
+}
+
+/* ─── Links and buttons ──────────────────────────────────────────────────── */
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-lg);
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--action);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--action-hover);
+}
+
+.link:focus-visible,
+.check input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ─── Recording row ──────────────────────────────────────────────────────── */
+
+.recordingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  margin: var(--sp-3) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.recordingRow strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ─── Consent sheet ──────────────────────────────────────────────────────── */
+
+.sheetBody {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: var(--sp-3);
+  min-height: var(--control-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: var(--sp-3);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  cursor: pointer;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--action);
+}
+
+.checkDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-meta);
+}
+
+/* ─── Report end ─────────────────────────────────────────────────────────── */
+
+.reportEnd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  margin-top: var(--sp-5);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--sp-4);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.reportNote {
+  margin: var(--sp-3) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ─── Written practice ───────────────────────────────────────────────────── */
+
+.room {
+  display: grid;
+  gap: var(--sp-4);
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+.roomHead h1 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 600;
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+}
+
+.roomHead p {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.card {
+  display: grid;
+  gap: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-4);
+}
+
+.cardLabel {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: var(--ls-label);
+}
+
+.question {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  line-height: var(--lh-subtitle);
+}
+
+.turns {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn {
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.turnYou {
+  background: var(--action-subtle);
+}
+
+.turn strong {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 160px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+
+.score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  margin: 0;
+  color: var(--text);
+}
+
+.score strong {
+  font-size: var(--fs-stat);
+  font-weight: 600;
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+@media (max-width: 760px) {
+  .notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}

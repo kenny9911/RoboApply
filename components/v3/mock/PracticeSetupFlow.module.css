@@ -1189,3 +1189,28 @@
     background: var(--surface-2);
   }
 }
+
+/* ─── WP-43: intro aside (Practice questions link) ─────────────────────── */
+
+.introAside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-2);
+  font-size: var(--fs-meta);
+}
+
+.introAside a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-lg);
+  color: var(--action);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.introAside a:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}

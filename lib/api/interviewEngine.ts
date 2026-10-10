@@ -264,6 +264,166 @@ export interface IECreateBody {
   resumeContext?: string;
 }
 
+// ─── Practice from a job (WP-43) ───────────────────────────────────────────
+//
+// First-party practice routes on the engine router (cookie only):
+//   GET  /api/v1/interview-engine/v1/practice/setup?job=&resume=
+//   POST /api/v1/interview-engine/v1/practice/sessions
+//   GET  /api/v1/interview-engine/v1/practice/sessions/:id
+//   GET  /api/v1/interview-engine/v1/practice/jobs?ids=
+// Written practice (GoApply without voice) — first-party wrappers over the
+// text interview that check the brand gate (phone, AI consent), load the job
+// server-side, meter credits and tick the checklist when scored:
+//   POST /api/v1/interview-engine/v1/practice/text/start | /next-turn | /:id/score
+
+/** What the user asked to record for one session; the server honours it only with consent. */
+export interface PracticeRecordingRequest {
+  audio: boolean;
+  video: boolean;
+}
+
+/** POST /practice/sessions body: the engine create body plus the job, resume and recording choice. */
+export interface PracticeCreateBody extends Omit<IECreateBody, 'resumeContext'> {
+  jobId?: string | null;
+  /** Resume (variant) to practise with; omitted → the job's tailored one, else the primary. */
+  resumeId?: string | null;
+  recording?: PracticeRecordingRequest;
+}
+
+export interface PracticeCreateResponse {
+  session: IESessionDetail;
+  practice: { jobId: string | null; resumeId: string | null; recording: PracticeRecordingRequest };
+}
+
+export type PracticeGateReason = 'phone_binding_required' | 'ai_consent_required' | 'voice_unavailable';
+export type FirstPracticeGrant = 'granted' | 'already_granted' | 'in_progress' | 'no_profile' | 'failed';
+
+export interface PracticeFirstState {
+  /** Email verification (RoboApply) or a verified phone (GoApply) unlocks the free first practice. */
+  method: 'email' | 'phone';
+  verified: boolean;
+  grant: FirstPracticeGrant | null;
+}
+
+export interface PracticeSetupJob {
+  id: string;
+  title: string;
+  companyName: string;
+  location: string | null;
+  jdText: string;
+  closed: boolean;
+}
+
+export interface PracticeSetup {
+  market: 'intl' | 'cn';
+  job: PracticeSetupJob | null;
+  resume: { id: string; name: string; kind: 'chosen' | 'tailored' | 'primary' | 'latest' } | null;
+  firstPractice: PracticeFirstState;
+  voice: { available: boolean; reason: PracticeGateReason | null };
+  ai: { allowed: boolean; reason: PracticeGateReason | null };
+  /** `available` = recording can happen at all here; `consent` = the user's standing grants. */
+  recording: { available: boolean; consent: PracticeRecordingRequest };
+}
+
+export interface PracticeSessionInfo {
+  sessionId: string;
+  status: InterviewStatus;
+  job: { id: string; title: string | null; companyName: string | null } | null;
+  recording: { consented: boolean; video: boolean; available: boolean };
+  completedAt: string | null;
+}
+
+const PRACTICE = `${BASE}/v1/practice`;
+
+export const practiceApi = {
+  setup: (query: { job?: string | null; resume?: string | null } = {}) => {
+    const params = new URLSearchParams();
+    if (query.job) params.set('job', query.job);
+    if (query.resume) params.set('resume', query.resume);
+    const qs = params.toString();
+    return roboApi.get<PracticeSetup>(`${PRACTICE}/setup${qs ? `?${qs}` : ''}`);
+  },
+  create: (body: PracticeCreateBody) => roboApi.post<PracticeCreateResponse>(`${PRACTICE}/sessions`, body),
+  info: (sessionId: string) =>
+    roboApi.get<{ practice: PracticeSessionInfo }>(`${PRACTICE}/sessions/${encodeURIComponent(sessionId)}`),
+  /** The job checklist's "Practiced" step: jobId → ISO time of the latest completed practice. */
+  practicedJobs: (jobIds: string[]) =>
+    roboApi.get<{ practiced: Record<string, string> }>(
+      `${PRACTICE}/jobs?ids=${jobIds.map(encodeURIComponent).join(',')}`,
+    ),
+};
+
+// Written practice (no voice).
+const TEXT = `${PRACTICE}/text`;
+
+export interface TextPracticeStartBody {
+  /** Used when there is no job; with a job the server uses the job's title. */
+  role: string;
+  interviewerId: string;
+  typeId: string;
+  language?: string;
+  durationMinutes?: number;
+  /** Loaded and market-checked on the server (404 job_not_found). */
+  jobId?: string | null;
+}
+
+export interface TextPracticeQuestion {
+  q: string;
+  hint: string;
+  coachTip: { kind: 'good' | 'careful'; text: string } | null;
+}
+
+export interface TextPracticeTurn {
+  who: 'them' | 'you';
+  text: string;
+}
+
+export interface TextPracticeScore {
+  overall: number;
+  delta: number | null;
+  breakdown: Array<{ key: string; value: number; note: string }>;
+  strengths: string[];
+  gaps: string[];
+  durationMinutes: number;
+}
+
+export interface TextPracticeScoreResult extends TextPracticeScore {
+  /** The practice was answered: it counted for the checklist and the job's "Practiced" step. */
+  practiceCounted: boolean;
+  jobId: string | null;
+}
+
+export const textPracticeApi = {
+  start: (body: TextPracticeStartBody) =>
+    roboApi.post<{ sessionId: string; questions: TextPracticeQuestion[]; jobId: string | null }>(`${TEXT}/start`, body),
+  nextTurn: (body: { sessionId: string; answer: string; questionIndex: number }) =>
+    roboApi.post<{ nextIndex: number | null; turns: TextPracticeTurn[]; coachTip: TextPracticeQuestion['coachTip'] }>(
+      `${TEXT}/next-turn`,
+      body,
+    ),
+  score: (sessionId: string) =>
+    roboApi.post<TextPracticeScoreResult>(`${TEXT}/${encodeURIComponent(sessionId)}/score`, {}),
+};
+
+/** Machine fields of a practice create/setup error (beyond IEErrorInfo). */
+export interface PracticeErrorInfo {
+  code: 'job_not_found' | 'phone_binding_required' | 'ai_unavailable' | 'insufficient_credits' | null;
+  reason: string | null;
+  firstPractice: PracticeFirstState | null;
+}
+
+export function practiceErrorInfo(err: unknown): PracticeErrorInfo {
+  if (!(err instanceof RoboApiError)) return { code: null, reason: null, firstPractice: null };
+  const p = (err.payload ?? {}) as Record<string, unknown>;
+  const raw = typeof p.error === 'string' ? p.error : null;
+  const code =
+    raw === 'job_not_found' || raw === 'phone_binding_required' || raw === 'ai_unavailable' || raw === 'insufficient_credits'
+      ? raw
+      : null;
+  const fp = p.firstPractice && typeof p.firstPractice === 'object' ? (p.firstPractice as PracticeFirstState) : null;
+  return { code, reason: typeof p.reason === 'string' ? p.reason : null, firstPractice: fp };
+}
+
 /** Pre-launch "Market Job Requirements" preview — no session/room created. */
 export interface IEPreviewBody {
   role?: string;
@@ -359,6 +519,8 @@ export const interviewEngineApi = {
   catalog: () => roboApi.get<IECatalog>(`${BASE}/catalog`),
   preview: (body: IEPreviewBody) => roboApi.post<IEPreviewResponse>(`${BASE}/requirements/preview`, body),
   recent: () => roboApi.get<{ sessions: IESessionSummary[] }>(`${BASE}/sessions/recent`),
+  /** @deprecated WP-43: the practice setup creates through `practiceApi.create` (job, resume and
+   *  recording consent are resolved server-side). Kept for older callers; WP-75 removes it. */
   create: (body: IECreateBody) => roboApi.post<{ session: IESessionDetail }>(`${BASE}/sessions`, body),
   get: (id: string) => roboApi.get<{ session: IESessionDetail }>(`${BASE}/sessions/${encodeURIComponent(id)}`),
   connection: (id: string) =>
