@@ -1,3 +1,6 @@
+// @deprecated since WP-40: no route renders it (the home pages build their
+// graph with lib/seo.ts marketingJsonLd, without plan prices). WP-75 deletes it.
+//
 // Server component: renders the landing structured-data graph. Kept out of
 // LandingContent (client) so the message bundles' server-only path (lib/seo →
 // lib/i18n) never enters the browser bundle. `market` picks the currency of

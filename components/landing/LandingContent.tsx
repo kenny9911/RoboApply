@@ -1,10 +1,19 @@
 'use client';
 
+// @deprecated since WP-40. The brand home pages are
+// components/features/marketing/{RoboApplyHome,GoApplyHome}.tsx; no route
+// renders this component any more. It is kept only because
+// __tests__/pages/landing.test.tsx (not owned by WP-40) imports it; it still
+// shows the grandfathered starter/growth practice plans and the static
+// "problem" stats, which the new home removed (D3, H20). WP-75 deletes it
+// together with that test after a zero-importer grep.
+
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { PageContainer } from '../ui/PageContainer';
 import { BrandSymbol } from '../chrome/BrandSymbol';
+import { useBrand } from '../../lib/brand';
 import {
   LOCALE_LABELS,
   SEO_READY_LOCALES,
@@ -52,12 +61,14 @@ function Arrow({ down = false }: { down?: boolean }) {
 }
 
 function BrandWordmark() {
+  // The name follows the request's brand, like the symbol (carry-over WP-12 R4).
+  const brand = useBrand();
   return (
     <span className="landing-wordmark">
       <span className="landing-brand-symbol" aria-hidden="true">
         <BrandSymbol size={23} />
       </span>
-      RoboApply
+      {brand.name}
       <span className="landing-wordmark-period" aria-hidden="true">
         .
       </span>
@@ -321,13 +332,14 @@ export function LandingContent({ market = 'other' }: LandingContentProps) {
   const locale = useLocale();
   const t = useTranslations('landing');
   const tCommon = useTranslations('common');
+  const brand = useBrand();
   return (
     <div className="landing-root">
       <header className="landing-header">
         <PageContainer maxWidth="wide" className="landing-header-inner">
           <a
             href={localePath(isLocale(locale) ? locale : 'en')}
-            aria-label="RoboApply"
+            aria-label={brand.name}
           >
             <BrandWordmark />
           </a>

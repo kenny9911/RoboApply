@@ -1,20 +1,26 @@
-// /about — route shell (FND-6b). About.
-//
-// STUB. Owner: WP-40, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /about — what the brand is, what it will not do, who runs it (TASK_PLAN.md
+// WP-40; F-MKT-04). The operating entity shows only when configured
+// (LEGAL_ENTITY_NAME / CN_LEGAL_ENTITY_NAME); never invented (D3).
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../components/v3/shell/HybridShell';
-import { LegalFooter } from '../../components/features/market';
+import { AboutPage, JsonLd, MarketingFooter } from '../../components/features/marketing';
+import { legalEntityFor, supportEmailFor } from '../../components/features/marketing/brandEnv';
+import { marketingRequest, subpageJsonLd, subpageMetadata } from '../../components/features/marketing/serverPage';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+const NS = 'landing.about';
 
-export default function AboutPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  return subpageMetadata(await marketingRequest(), NS, '/about');
+}
+
+export default async function AboutRoute() {
+  const req = await marketingRequest();
   return (
-    <HybridShell from="about" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/about" data-owner="WP-40" />
+    <HybridShell from="about" footer={<MarketingFooter />}>
+      <JsonLd json={subpageJsonLd(req, NS, '/about')} />
+      <AboutPage entity={legalEntityFor(req.brand, process.env)} supportEmail={supportEmailFor(req.brand, process.env)} />
     </HybridShell>
   );
 }

@@ -1,0 +1,262 @@
+// WP-40 home pages per brand: gap-first hero with the real-count clause
+// (dropped below 1,000), labelled Example, real counters with their source,
+// quick search routing, CTA parameter preservation, the footer's /cancel
+// link, no testimonials / user counts / competitor names, and the GoApply
+// home (pillars, campus preview behind its capability, no literal brand).
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+
+const api = vi.hoisted(() => ({
+  getIndexStats: vi.fn(),
+  getCreditCaps: vi.fn(),
+  sendSupportMessage: vi.fn(),
+  getPlans: vi.fn(),
+  listPublicCampusEvents: vi.fn(),
+  push: vi.fn(),
+  search: { value: '' },
+}));
+
+vi.mock('../../../../lib/api/support', () => ({
+  getIndexStats: api.getIndexStats,
+  getCreditCaps: api.getCreditCaps,
+  sendSupportMessage: api.sendSupportMessage,
+}));
+vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), getPlans: api.getPlans }));
+vi.mock('../../../../lib/api/campus', () => ({ listPublicCampusEvents: api.listPublicCampusEvents }));
+vi.mock('../../market', () => ({
+  LegalFooter: () => <footer data-testid="legal-footer" />,
+  PriceReference: () => null,
+}));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: api.push, replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(api.search.value),
+  useParams: () => ({}),
+}));
+
+import { renderMarketing as renderWithBrand } from './render';
+import { plansView } from '../../credits/__tests__/fixtures';
+import { GoApplyHome } from '../GoApplyHome';
+import { RoboApplyHome } from '../RoboApplyHome';
+
+const AS_OF = '2026-10-10T12:00:00.000Z';
+function stats(open: number | null, week: number | null = null) {
+  const s = (v: number | null) => (v === null ? null : { value: v, source: 'index', method: 'rounded_down_2_significant_figures', asOf: AS_OF });
+  return { openRoles: s(open), addedThisWeek: s(week), popularLists: [{ taxonomyId: 'backend_engineer', label: 'Backend engineer', labelZh: '后端工程师' }], asOf: AS_OF };
+}
+
+beforeEach(() => {
+  api.search.value = '';
+  api.getPlans.mockImplementation(async () => plansView('roboapply'));
+  api.getIndexStats.mockResolvedValue(stats(12_000, 1_300));
+  api.listPublicCampusEvents.mockResolvedValue({ items: [] });
+});
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('RoboApply home', () => {
+  it('leads with the gap and adds the real open-roles count when ≥ 1,000', async () => {
+    renderWithBrand(<RoboApplyHome />);
+    expect(screen.getByRole('heading', { level: 1, name: "Find out why you're not getting interviews." })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/We read 12,000\+ open roles/)).toBeInTheDocument());
+  });
+
+  it('drops the count clause when the index holds 950 jobs (H20 test)', async () => {
+    api.getIndexStats.mockResolvedValue(stats(950, 40));
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(api.getIndexStats).toHaveBeenCalled());
+    await waitFor(() => expect(container.querySelector('[data-hero-count]')?.getAttribute('data-hero-count')).toBe(''));
+    expect(screen.getByText(/We show you the open roles you can actually get/)).toBeInTheDocument();
+    expect(screen.queryByText(/950/)).toBeNull();
+    // Counters are hidden below the floor too.
+    expect(container.querySelector('[data-index-counters]')).toBeNull();
+  });
+
+  it('shows counters only from the API, rounded, with the index source and hourly note', async () => {
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(container.querySelector('[data-index-counters]')).not.toBeNull());
+    const counters = within(container.querySelector('[data-index-counters]') as HTMLElement);
+    expect(counters.getByText('12,000+ open roles')).toBeInTheDocument();
+    expect(counters.getByText('1,300+ added in the last 7 days')).toBeInTheDocument();
+    expect(counters.getByText(/Counted from the RoboApply index, updated hourly/)).toBeInTheDocument();
+    expect(counters.getByText(/Source: jobs listed with us/)).toBeInTheDocument();
+  });
+
+  it('renders no counters while the count is unknown', async () => {
+    api.getIndexStats.mockRejectedValue(new Error('down'));
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(api.getIndexStats).toHaveBeenCalled());
+    expect(container.querySelector('[data-index-counters]')).toBeNull();
+    expect(screen.getByText(/We show you the open roles/)).toBeInTheDocument();
+  });
+
+  it('labels the interactive sample "Example" and steps through the four verbs', () => {
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    const sample = container.querySelector('[data-example]') as HTMLElement;
+    expect(within(sample).getByText('Example')).toBeInTheDocument();
+    expect(within(sample).getByText(/Made-up resume and jobs/)).toBeInTheDocument();
+    expect(within(sample).getByText("They ask for Kubernetes twice. Your resume never mentions it.")).toBeInTheDocument();
+    expect(within(sample).getByText('This is not your chance of getting hired.')).toBeInTheDocument();
+    fireEvent.click(within(sample).getByRole('tab', { name: 'Practice' }));
+    expect(within(sample).getByRole('tab', { name: 'Practice' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(sample).getByText(/A practice interview built from this job post/)).toBeInTheDocument();
+    for (const verb of ['Find jobs that fit', 'See the gap first', 'Fix your resume for that job', 'Practice the interview']) {
+      expect(screen.getByRole('heading', { name: verb })).toBeInTheDocument();
+    }
+  });
+
+  it('every CTA goes to /signup?from=… and keeps job, ref and utm_*', () => {
+    api.search.value = '?job=cm9&ref=FRIEND12&utm_source=newsletter&email=a@b.test&q=x';
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    const ctas = Array.from(container.querySelectorAll('a[href^="/signup"]'));
+    expect(ctas.length).toBeGreaterThanOrEqual(4);
+    for (const a of ctas) {
+      const url = new URL(a.getAttribute('href')!, 'https://x.test');
+      expect(url.searchParams.get('from')).toMatch(/^home/);
+      expect(url.searchParams.get('job')).toBe('cm9');
+      expect(url.searchParams.get('ref')).toBe('FRIEND12');
+      expect(url.searchParams.get('utm_source')).toBe('newsletter');
+      expect(url.searchParams.has('email')).toBe(false);
+      expect(url.searchParams.has('q')).toBe(false);
+    }
+  });
+
+  it('quick search goes to signup while browse pages are off', () => {
+    renderWithBrand(<RoboApplyHome />);
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Product designer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search jobs' }));
+    expect(api.push).toHaveBeenCalledWith('/signup?from=home%3Asearch');
+  });
+
+  it('quick search goes to /browse when seo.browse is on', () => {
+    renderWithBrand(<RoboApplyHome />, { flags: { 'seo.browse': true } });
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Product designer' } });
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Toronto' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search jobs' }));
+    expect(api.push).toHaveBeenCalledWith('/browse/product-designer/toronto');
+  });
+
+  it('the footer links popular job lists only when browse pages are live', async () => {
+    const off = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(api.getIndexStats).toHaveBeenCalled());
+    expect(screen.queryByText('Popular job lists')).toBeNull();
+    off.unmount();
+    renderWithBrand(<RoboApplyHome />, { flags: { 'seo.browse': true } });
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Backend engineer' })).toHaveAttribute('href', '/browse/backend-engineer'));
+  });
+
+  it('prices the summary from /billing/plans', async () => {
+    renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(screen.getByText('$24.99 / month')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Pro Monthly' })).toBeInTheDocument();
+  });
+
+  it('the footer carries /cancel, the legal footer and pages; gated features stay hidden', () => {
+    const { container } = renderWithBrand(<RoboApplyHome />, { flags: { agent: false, copilot: false } });
+    expect(screen.getByTestId('cancel-footer-link')).toHaveAttribute('href', '/cancel');
+    expect(screen.getByTestId('legal-footer')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'How ranking works' })[0]).toHaveAttribute('href', '/help/ranking');
+    expect(container.querySelector('[data-feature-link="job-matches"]')).not.toBeNull();
+    expect(container.querySelector('[data-feature-link="ready-to-apply"]')).toBeNull();
+    expect(container.querySelector('[data-feature-link="chrome-extension"]')).toBeNull();
+    // Spoken practice needs the voice stack; off → no link.
+    expect(container.querySelector('[data-feature-link="interview-practice"]')).toBeNull();
+  });
+
+  it('links interview practice only while voice practice works', () => {
+    const { container } = renderWithBrand(<RoboApplyHome />, { flags: { 'ai.interviewVoice': true } });
+    expect(container.querySelector('[data-feature-link="interview-practice"]')).not.toBeNull();
+  });
+
+  it('shows no testimonials, user counts, competitor names or auto-apply claims', async () => {
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    const text = container.textContent ?? '';
+    for (const banned of [/jobright/i, /linkedin premium/i, /\busers\b/i, /testimonial/i, /★/, /auto-?appl/i, /apply for you/i, /\$15\b/, /Starter/]) {
+      expect(text).not.toMatch(banned);
+    }
+  });
+});
+
+describe('GoApply home', () => {
+  beforeEach(() => {
+    api.getPlans.mockImplementation(async () => plansView('goapply'));
+  });
+
+  it('renders the three pillars and never the RoboApply name', () => {
+    const { container } = renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: { 'ai.text': true } });
+    expect(screen.getByRole('heading', { level: 1, name: 'Fewer forms. No missed deadlines. Calmer interviews.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'AI interview practice' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The core is free' })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/RoboApply/);
+    expect(container.textContent).toMatch(/GoApply/);
+    expect(container.textContent).not.toMatch(/北森|牛客|voice/i);
+  });
+
+  it('hides AI practice (pillar, hero clause, section, link) while ai.text is off (R-13)', () => {
+    const { container } = renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: { 'ai.text': false } });
+    expect(screen.getByRole('heading', { level: 1, name: 'Fewer forms. No missed deadlines. Calmer interviews.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Fewer forms' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Calmer interviews' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'AI interview practice' })).toBeNull();
+    expect(container.querySelector('[data-cn-practice]')).toBeNull();
+    expect(container.querySelector('a[href*="home%3Apractice"]')).toBeNull();
+    expect(container.querySelector('a[href="/features/interview-practice"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/practice the AI interview|AI interview formats/i);
+  });
+
+  it('says paid plans are not open only while /billing/plans says so (R-15)', async () => {
+    renderWithBrand(<GoApplyHome />, { brand: 'goapply' });
+    await waitFor(() => expect(screen.getByText('Paid plans are not open yet.')).toBeInTheDocument());
+    cleanup();
+    api.getPlans.mockImplementation(async () => ({ ...plansView('goapply'), paymentsOpen: true }));
+    renderWithBrand(<GoApplyHome />, { brand: 'goapply' });
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Paid plans are not open yet.')).toBeNull();
+  });
+
+  it('the English GoApply page carries no Chinese text (footer tagline included)', () => {
+    const { container } = renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: { 'ai.text': true } });
+    expect(screen.getByText('Fewer forms. No missed deadlines. Calmer interviews. You submit every application yourself.')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/[\u4e00-\u9fff]/);
+  });
+
+  it('hides the campus preview while jobs.campusCalendar is off', () => {
+    const { container } = renderWithBrand(<GoApplyHome />, { brand: 'goapply' });
+    expect(container.querySelector('[data-campus-preview]')).toBeNull();
+    expect(api.listPublicCampusEvents).not.toHaveBeenCalled();
+  });
+
+  it('previews open programmes with closing date, source and last check when on', async () => {
+    api.listPublicCampusEvents.mockResolvedValue({
+      items: [
+        {
+          id: 'ev1',
+          companyName: 'Example Bank',
+          title: '2027 campus programme',
+          graduationClass: '2027',
+          kind: 'campus',
+          applyOpensAt: null,
+          applyClosesAt: '2026-10-31T15:59:59.000Z',
+          stages: [],
+          cities: [],
+          roles: [],
+          officialUrl: 'https://careers.example.cn/campus',
+          sourceName: null,
+          verifiedAt: '2026-10-08T00:00:00.000Z',
+          needsReverify: false,
+          subscribed: false,
+        },
+      ],
+    });
+    renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: { 'jobs.campusCalendar': true } });
+    await waitFor(() => expect(screen.getByText(/Example Bank · 2027 campus programme/)).toBeInTheDocument());
+    expect(screen.getByText(/Applications close/)).toBeInTheDocument();
+    expect(screen.getByText(/Source: careers.example.cn/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the campus calendar' })).toHaveAttribute('href', '/campus');
+  });
+});

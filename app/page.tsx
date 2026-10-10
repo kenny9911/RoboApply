@@ -1,52 +1,57 @@
-// Landing — public marketing, server shell.
+// `/` — the brand home page (TASK_PLAN.md WP-40; PRODUCT §3.2).
 //
-// `/` is the x-default of the landing cluster: first-time visitors get the
-// language their browser asks for (Accept-Language → lib/serverLocale), and
-// the 8 non-EN locales live at stable `/{locale}` URLs (app/[locale]/page.tsx)
-// for hreflang/SEO. The actual page UI is the client component
-// components/landing/LandingContent.tsx; JSON-LD structured data is rendered
-// inside it (SSR'd, one i18n source of truth).
-//
-// RoboApply only, until WP-40 ships the GoApply home (D3 honesty): this
-// landing claims a job feed, a live AI interviewer and 9 languages, which are
-// false for GoApply (R-14 feed off by default, no voice, zh/en). On a GoApply
-// host `/` goes to sign-in instead and the metadata is noindex.
+// RoboApply (roboapply.io): the gap-first home. GoApply (goapply.top): the
+// 少填表、不错过截止、面试不慌 home. `/` is the x-default of each brand's
+// cluster: first-time visitors get the language their browser asks for
+// (Accept-Language → lib/serverLocale), the other locales live at `/{locale}`
+// (app/[locale]/page.tsx). Canonical and hreflang follow the request's brand
+// (lib/seo.ts homeMetadata); the JSON-LD carries a FAQPage for the FAQ the
+// page renders, and never prices, ratings or reviews (D3).
 
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 
-import { LandingContent } from '../components/landing/LandingContent';
-import { LandingJsonLd } from '../components/landing/LandingJsonLd';
-import { resolveLocale } from '../lib/serverLocale';
-import { resolveVisitorMarket } from '../lib/serverMarket';
-import { landingMetadata } from '../lib/seo';
+import { GoApplyHome, JsonLd, RoboApplyHome } from '../components/features/marketing';
+import { CN_HOME_FAQ_KEYS, HOME_FAQ_KEYS } from '../components/features/marketing/catalog';
+import { getBrand } from '../lib/brand/registry.generated';
 import { getServerBrandId } from '../lib/server/brand';
+import { resolveLocale } from '../lib/serverLocale';
+import { brandUrl, faqFromMessages, homeMetadata, marketingJsonLd, messageAt } from '../lib/seo';
 
-/** The brand whose landing this is; any other brand is sent to sign-in. */
-const LANDING_BRAND = 'roboapply';
+async function requestBrandAndLocale() {
+  const brand = getBrand(await getServerBrandId());
+  const locale = await resolveLocale(brand);
+  return { brand, locale };
+}
 
 export async function generateMetadata(): Promise<Metadata> {
-  if ((await getServerBrandId()) !== LANDING_BRAND) return { robots: { index: false, follow: false } };
-  const locale = await resolveLocale();
-  const metadata = landingMetadata(locale);
+  const { brand, locale } = await requestBrandAndLocale();
+  const metadata = homeMetadata(brand.id, locale);
   // `/` is the x-default document: whatever language it renders in, its
-  // canonical stays the bare root so the hreflang cluster has one stable hub.
+  // canonical stays the bare root so the hreflang cluster has one stable hub,
+  // and it is always indexable (a crawler's Accept-Language must not noindex it).
   return {
     ...metadata,
-    alternates: { ...metadata.alternates, canonical: 'https://www.roboapply.io/' },
+    alternates: { ...metadata.alternates, canonical: brandUrl(brand.id, '/') },
+    robots: { index: true, follow: true, 'max-image-preview': 'large' },
   };
 }
 
 export default async function LandingPage() {
-  if ((await getServerBrandId()) !== LANDING_BRAND) redirect('/login');
-  const locale = await resolveLocale();
-  // Mainland China sees RMB, everyone else US dollars — decided per request
-  // from the visitor's country, not from the language they read in.
-  const market = await resolveVisitorMarket(locale);
+  const { brand, locale } = await requestBrandAndLocale();
+  const cn = brand.market === 'cn';
+  const ns = cn ? 'landing.cnHome' : 'landing.home';
+  const json = marketingJsonLd({
+    brandId: brand.id,
+    locale,
+    path: '/',
+    name: messageAt(locale, brand.id, `${ns}.meta.title`, brand.name),
+    description: messageAt(locale, brand.id, `${ns}.meta.description`),
+    faq: faqFromMessages(locale, brand.id, `${ns}.faq`, cn ? CN_HOME_FAQ_KEYS : HOME_FAQ_KEYS),
+  });
   return (
     <>
-      <LandingJsonLd locale={locale} market={market} />
-      <LandingContent market={market} />
+      <JsonLd json={json} />
+      {cn ? <GoApplyHome /> : <RoboApplyHome />}
     </>
   );
 }

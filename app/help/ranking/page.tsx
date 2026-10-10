@@ -1,20 +1,25 @@
-// /help/ranking — route shell (FND-6b). How ranking works.
-//
-// STUB. Owner: WP-40, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /help/ranking — "How ranking works" (TASK_PLAN.md WP-40, WP-32, H14): every
+// factor of the Recommended order with its weight, and what it never uses.
+// Linked from the feed's sort menu (WP-33) and the marketing footer.
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../../components/v3/shell/HybridShell';
-import { LegalFooter } from '../../../components/features/market';
+import { JsonLd, MarketingFooter, RankingPage } from '../../../components/features/marketing';
+import { marketingRequest, subpageJsonLd, subpageMetadata } from '../../../components/features/marketing/serverPage';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+const NS = 'landing.ranking';
 
-export default function HelpRankingPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  return subpageMetadata(await marketingRequest(), NS, '/help/ranking');
+}
+
+export default async function HelpRankingRoute() {
+  const req = await marketingRequest();
   return (
-    <HybridShell from="help" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/help/ranking" data-owner="WP-40" />
+    <HybridShell from="help" footer={<MarketingFooter />}>
+      <JsonLd json={subpageJsonLd(req, NS, '/help/ranking')} />
+      <RankingPage />
     </HybridShell>
   );
 }

@@ -1,20 +1,25 @@
-// /security — route shell (FND-6b). Security practices.
-//
-// STUB. Owner: WP-40, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /security — the security practices the code actually has (TASK_PLAN.md
+// WP-40; F-TRUST-01). Per brand: AI routing and data location differ.
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../components/v3/shell/HybridShell';
-import { LegalFooter } from '../../components/features/market';
+import { JsonLd, MarketingFooter, SecurityPage } from '../../components/features/marketing';
+import { supportEmailFor } from '../../components/features/marketing/brandEnv';
+import { marketingRequest, subpageJsonLd, subpageMetadata } from '../../components/features/marketing/serverPage';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+const NS = 'landing.security';
 
-export default function SecurityPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  return subpageMetadata(await marketingRequest(), NS, '/security');
+}
+
+export default async function SecurityRoute() {
+  const req = await marketingRequest();
   return (
-    <HybridShell from="security" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/security" data-owner="WP-40" />
+    <HybridShell from="security" footer={<MarketingFooter />}>
+      <JsonLd json={subpageJsonLd(req, NS, '/security')} />
+      <SecurityPage supportEmail={supportEmailFor(req.brand, process.env)} />
     </HybridShell>
   );
 }
