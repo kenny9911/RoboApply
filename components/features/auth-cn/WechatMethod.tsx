@@ -26,7 +26,9 @@ import { InviteCodeField, SignupConsents } from './SignupConsents';
 import {
   agreementSatisfied,
   consentsFromPolicy,
+  currentSignupLinkCodes,
   errorMessage,
+  prefillAccessCode,
   safeNextPath,
   signupInputs,
   useIsWechatBrowser,
@@ -64,6 +66,7 @@ export function WechatMethod({ mode, next }: AuthMethodProps) {
     if (phoneOn) return undefined;
     if (signupInputs.get().host === null) {
       signupInputs.set({ host: 'wechat' });
+      prefillAccessCode();
       setHostsConsents(true);
       return () => signupInputs.reset();
     }
@@ -82,11 +85,15 @@ export function WechatMethod({ mode, next }: AuthMethodProps) {
     try {
       const safe = safeNextPath(next);
       const invite = inputs.invite.trim();
+      // The invite-friends code from the link (`?ref=`) rides in the POST
+      // body with the consents; it is used only if the WeChat account is new.
+      const { ref } = currentSignupLinkCodes();
       const { url } = await startWechatSignIn({
         flow: inWechat ? 'mp' : 'web',
         consents: consentsFromPolicy(policy),
         ...(safe ? { next: safe } : {}),
         ...(invite ? { inviteCode: invite } : {}),
+        ...(ref ? { ref } : {}),
       });
       window.location.assign(url);
     } catch (err) {

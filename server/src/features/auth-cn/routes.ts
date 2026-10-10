@@ -24,6 +24,15 @@
 // Every WeChat start sets WECHAT_NONCE_COOKIE (httpOnly, SameSite=Lax, 10 min,
 // path /api/v1/roboapply/auth/wechat); the callback passes it to the service,
 // which refuses a state started in another browser, and clears it.
+//
+// Two-step sign-in: every session here is minted by `issueSessionCookie`,
+// which runs the second-factor gate. With two-step sign-in on, the JSON
+// routes answer 401 `two_factor_required` with the challenge cookie and the
+// WeChat callbacks redirect to /login/2fa; no session cookie is sent.
+//
+// Invite friends: `ref` (the code from an invite link) rides in the verify /
+// start / mini-login bodies and is attached when the account is new, with
+// this request's risk signals (growth.recordAttribution; hooks.ts).
 
 import { Router, type Request, type Response } from 'express';
 import { buildClearCookieOptions, buildCookieOptions } from '../../lib/cookieOptions.js';
@@ -34,6 +43,15 @@ import type { ProductBrand } from '../../platform/brand/registry.js';
 import { requireFlag } from '../../platform/flags.js';
 import { HttpError, parseBody, parseQuery, requireUserId } from '../../platform/http.js';
 import { clientIp } from '../../platform/ratelimit/index.js';
+import {
+  redirectToTwoFactor,
+  sendTwoFactorRequired,
+  sendTwoFactorUnavailable,
+  TWO_FACTOR_UNAVAILABLE_CODE,
+  TwoFactorChallengeError,
+  TwoFactorUnavailableError,
+} from '../account-v2/index.js';
+import type { RawSignals } from '../growth/index.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
   BindPhoneBodySchema,
@@ -60,6 +78,9 @@ import { cnRoute } from './errors.js';
 import { createAuthCnServices, type AuthCnServices } from './services.js';
 import { buildSignupPolicy } from './signupPolicy.js';
 import { OAUTH_STATE_TTL_MS, returnLocation } from './wechatAuthService.js';
+
+/** The first-party visitor id cookie (growth `ANON_ID_COOKIE`; lib/analytics.ts sets it). */
+const ANON_ID_COOKIE = 'ra_anon';
 
 /** Binds a WeChat OAuth state to the browser that started it (login-CSRF guard). */
 export const WECHAT_NONCE_COOKIE = 'ra_wx_oauth_nonce';
@@ -98,6 +119,40 @@ function userIdOf(req: Request): string | null {
   return typeof id === 'string' && id ? id : null;
 }
 
+/**
+ * Mints the session for a JSON route. Returns null after answering the
+ * request itself: 401 `two_factor_required` (challenge cookie set, no
+ * session) when the account has two-step sign-in on, 503 when that check
+ * could not run.
+ */
+async function startSession(req: Request, res: Response, s: AuthCnServices, userId: string, next: string | null): Promise<string | null> {
+  try {
+    return await issueSessionCookie(req, res, userId, s.issueSession, s.signInGate);
+  } catch (err) {
+    if (err instanceof TwoFactorChallengeError) {
+      sendTwoFactorRequired(req, res, err.challenge, next);
+      return null;
+    }
+    if (err instanceof TwoFactorUnavailableError) {
+      sendTwoFactorUnavailable(res);
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * What this request says about the browser and network, for the invite risk
+ * check (hashed before storage, kept 30 days): the same shape as growth's
+ * `requestSignals(req)`. Read here so the sign-in routes do not load the
+ * growth area at start-up; the growth seams are imported only when used.
+ */
+function requestSignals(req: Request): RawSignals {
+  const ua = req.headers['user-agent'];
+  const anon = (req.cookies as Record<string, unknown> | undefined)?.[ANON_ID_COOKIE];
+  return { ip: clientIp(req), userAgent: typeof ua === 'string' ? ua : null, deviceId: typeof anon === 'string' ? anon : null };
+}
+
 function services(deps: FeatureRouterDeps, overrides?: Partial<AuthCnServices>): AuthCnServices {
   return { ...createAuthCnServices({ env: deps.env, ...(overrides?.db ? { db: overrides.db } : {}) }), ...overrides };
 }
@@ -115,7 +170,9 @@ export function createPhoneAuthRouter(deps: FeatureRouterDeps = {}, overrides?: 
     cnRoute(async (req): Promise<SignupPolicyResponse> => {
       const brand = brandOf(req);
       if (brand.market !== 'cn') throw new HttpError('feature_disabled');
-      return buildSignupPolicy(brand, deps.env ?? process.env);
+      // The language the form is read in decides which consent text is served (and later hashed).
+      const locale = typeof req.query.locale === 'string' ? req.query.locale.slice(0, 16) : null;
+      return buildSignupPolicy(brand, deps.env ?? process.env, locale);
     }),
   );
 
@@ -154,8 +211,10 @@ export function createPhoneAuthRouter(deps: FeatureRouterDeps = {}, overrides?: 
         next: body.next,
         locale: localeOf(req),
         ip: clientIp(req),
+        ref: body.ref,
+        signals: requestSignals(req),
       });
-      await issueSessionCookie(req, res, result.userId, s().issueSession);
+      if ((await startSession(req, res, s(), result.userId, result.nextRoute)) === null) return undefined as never;
       return result;
     }),
   );
@@ -170,7 +229,7 @@ export function createPhoneAuthRouter(deps: FeatureRouterDeps = {}, overrides?: 
       const phoneE164 = phoneOf(body.phone);
       const result = await s().phone.bind({ brand, userId: requireUserId(req), phoneE164, code: body.code, next: body.next, ip: clientIp(req) });
       // A merge moved the sign-in onto the number's account: the old session went with the removed account.
-      if (result.merged) await issueSessionCookie(req, res, result.userId, s().issueSession);
+      if (result.merged && (await startSession(req, res, s(), result.userId, result.nextRoute)) === null) return undefined as never;
       return { userId: result.userId, merged: result.merged, nextRoute: result.nextRoute, phoneMasked: maskCnPhone(phoneE164) ?? '' };
     }),
   );
@@ -226,7 +285,15 @@ export function createWechatAuthRouter(deps: FeatureRouterDeps = {}, overrides?:
     cnRoute(async (req, res) => {
       const q = parseQuery(req, WechatCallbackQuerySchema);
       const nonce = takeNonceCookie(req, res);
-      const outcome = await s().wechat.callback({ brand: brandOf(req), flow, code: q.code, state: q.state, nonce, locale: localeOf(req) });
+      const outcome = await s().wechat.callback({
+        brand: brandOf(req),
+        flow,
+        code: q.code,
+        state: q.state,
+        nonce,
+        locale: localeOf(req),
+        signals: requestSignals(req),
+      });
       if (outcome.kind === 'error') {
         res.redirect(302, returnLocation({ result: 'error', code: outcome.code }));
         return;
@@ -235,7 +302,19 @@ export function createWechatAuthRouter(deps: FeatureRouterDeps = {}, overrides?:
         res.redirect(302, returnLocation({ result: 'ok', reverify: outcome.token, next: '/settings#security' }));
         return;
       }
-      await issueSessionCookie(req, res, outcome.userId, s().issueSession);
+      try {
+        await issueSessionCookie(req, res, outcome.userId, s().issueSession, s().signInGate);
+      } catch (err) {
+        if (err instanceof TwoFactorChallengeError) {
+          redirectToTwoFactor(req, res, err.challenge, outcome.nextRoute);
+          return;
+        }
+        if (err instanceof TwoFactorUnavailableError) {
+          res.redirect(302, returnLocation({ result: 'error', code: TWO_FACTOR_UNAVAILABLE_CODE }));
+          return;
+        }
+        throw err;
+      }
       res.redirect(
         302,
         returnLocation({
@@ -259,6 +338,7 @@ export function createWechatAuthRouter(deps: FeatureRouterDeps = {}, overrides?:
         next: body.next,
         consents: body.consents,
         invite: body.inviteCode,
+        ref: body.ref,
         purpose: 'signin',
       });
       setNonceCookie(req, res, nonce);
@@ -281,8 +361,11 @@ export function createWechatAuthRouter(deps: FeatureRouterDeps = {}, overrides?:
         consents: body.consents,
         inviteCode: body.inviteCode,
         locale: localeOf(req),
+        ref: body.ref,
+        signals: requestSignals(req),
       });
-      const sessionToken = await issueSessionCookie(req, res, result.userId, s().issueSession);
+      const sessionToken = await startSession(req, res, s(), result.userId, result.nextRoute);
+      if (sessionToken === null) return undefined as never;
       return { userId: result.userId, isNewUser: result.isNewUser, nextRoute: result.nextRoute, phoneBound: result.phoneBound, sessionToken };
     }),
   );

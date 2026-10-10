@@ -30,7 +30,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '../../lib/prisma.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { logger } from '../../services/LoggerService.js';
-import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
+import { clampLocaleToBrand, getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { HttpError } from '../../platform/http.js';
 import { isEnabledForBrand, resolveFlagsForUser, type ResolvedFlags } from '../../platform/flags.js';
@@ -40,16 +40,12 @@ import { grantPracticeCredit as platformGrantPracticeCredit, type PracticeGrantR
 import { summarizeEntitlementsForMe, type EntitlementSummary } from '../../platform/credits/summary.js';
 import { createSeekerSession } from '../../roboapply/engine/lib/seekerSession.js';
 import { retentionDaysFor } from '../../roboapply/services/accountPurgeHelpers.js';
-import {
-  canonicalConsentType,
-  isSeekerConsentType,
-  SEEKER_CONSENT_TYPES,
-  type SeekerConsentType,
-} from '../../roboapply/engine/lib/seekerConsentTypes.js';
+import { SEEKER_CONSENT_TYPES } from '../../roboapply/engine/lib/seekerConsentTypes.js';
 import { buildOnboardingMe, firstValueRoute, nextStage, routeForStage, type OnboardingMe } from '../onboarding/contract.js';
-import { growthService } from '../growth/index.js';
+import { growthService, normalizeReferralCode, touchesFromClient, type RawSignals, type Touch } from '../growth/index.js';
+import type { ConsentCatalogItem, RecordConsentResponse } from '../compliance/contract.js';
 import {
-  REQUIRED_SIGNUP_CONSENTS,
+  isPriorityNext,
   type AuthMeAdditions,
   type AuthMethodsResponse,
   type AuthMethodView,
@@ -106,6 +102,66 @@ export interface AuthServiceDeps {
   summarizeEntitlements?: (userId: string, brand: BrandId) => Promise<EntitlementSummary>;
   resolveFlags?: (userId: string, brand: ProductBrand) => Promise<ResolvedFlags>;
   recordAttribution?: typeof growthService.recordAttribution;
+  /**
+   * Invite friends: attach a new account to an invite code that is not in
+   * its first touch (default: growth `referralServiceImpl.attachFromSignup`).
+   */
+  attachReferral?: (userId: string, code: string, options: { signals?: RawSignals }) => Promise<unknown>;
+  /**
+   * Invite friends: check the user's invite now (after the email is verified
+   * or a provider is linked). Default: growth `checkReferralFor`. Soft.
+   */
+  checkReferral?: (userId: string) => Promise<unknown>;
+  /** `/auth/me.unreadCount` (default: `notificationCenterService.unreadCount`). */
+  unreadCount?: (userId: string, brand: ProductBrand) => Promise<number>;
+  /** Stores the edge country for the tips default (default: `notificationCenterService.rememberRegion`). */
+  rememberRegion?: (userId: string, country: string | null) => Promise<unknown>;
+  /** The consent ledger (default: features/compliance `listConsents` / `recordConsent` on this service's database). */
+  compliance?: {
+    listConsents(userId: string, brand: ProductBrand, ctx: { locale?: string | null; country?: string | null }): Promise<ConsentCatalogItem[]>;
+    recordConsent(input: {
+      userId: string;
+      brand: ProductBrand;
+      type: string;
+      granted: boolean;
+      proseVersion: string;
+      locale?: string | null;
+      country?: string | null;
+    }): Promise<RecordConsentResponse>;
+  };
+}
+
+/**
+ * What the request that creates an account says about the visitor (built by
+ * `signupRequestContext(req, brand)` in routes.ts). Feeds the attribution and
+ * invite seams: marketing fields are stored and the `ra_anon` id linked only
+ * when `linkAllowed` is true (WP-23); `ip`, `userAgent` and `deviceId` are the
+ * invite risk signals (hashed before storage, kept 30 days; WP-60).
+ */
+export interface SignupRequestContext {
+  userAgent: string | null;
+  /** `clientIp(req)`. */
+  ip?: string | null;
+  /** The `ra_anon` cookie as sent (risk signal only). */
+  deviceId?: string | null;
+  /** `analyticsIdentity(req, market).anonId`: present only where linking is allowed. */
+  anonId?: string | null;
+  /** `analyticsIdentity(req, market).linkAllowed`. */
+  linkAllowed?: boolean;
+  /** `req.body.attribution` as the client sent it (`{ firstTouch, lastTouch }` from lib/analytics `getAttribution()`). */
+  clientTouches?: unknown;
+  /** Edge country, for the tips-and-reminders default. */
+  country?: string | null;
+}
+
+/** Per-process memory of users whose region was already offered to the notification centre (`/auth/me` runs on every page load). */
+const REGION_REMEMBERED = new Set<string>();
+const REGION_REMEMBERED_MAX = 20_000;
+
+/** The first value of a touch that reads as an invite code (`ref`, then `inviteCode`). */
+function inviteCodeIn(touch: Pick<Touch, 'ref' | 'inviteCode'> | null | undefined): string | null {
+  if (!touch) return null;
+  return [touch.ref, touch.inviteCode].find((c) => normalizeReferralCode(c) !== null) ?? null;
 }
 
 /** Signup context carried through an OAuth round trip (from the signup page) or collected on the callback page. */
@@ -118,10 +174,24 @@ export interface OAuthSignupContext {
   attribution?: SignupAttributionInput;
 }
 
+/**
+ * The visitor's stored first and last touch (lib/analytics `getAttribution()`),
+ * sanitized, as carried through a provider round trip: the browser hands them
+ * to `/oauth/:provider/start`, they ride the state row, and the callback (a
+ * GET with no body) reads them back. An invite code or an earlier campaign
+ * held only in the stored touch is then recorded for a Google / LINE sign-up
+ * exactly as for the email form.
+ */
+export interface CarriedTouches {
+  firstTouch: Touch | null;
+  lastTouch: Touch | null;
+}
+
 interface PendingPayload {
   identity: VerifiedIdentity;
   next: string | null;
   signup?: OAuthSignupContext | null;
+  touches?: CarriedTouches | null;
 }
 
 /** Quiet log that never throws (some test doubles of the logger omit levels). */
@@ -176,11 +246,24 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
 
   /** Where a signed-in user goes: their onboarding screen when unfinished, else `next` or the first-value route. */
   async function signInRoute(brand: ProductBrand, userId: string, next: string | null): Promise<string> {
+    // A free-tool page the visitor asked to come back to wins over onboarding
+    // (it is public; onboarding resumes when they enter the app).
+    if (next && isSafeNext(next) && isPriorityNext(next)) return next;
     const profile = await profileOf(userId);
     const onboarding = onboardingFor(brand, profile, flagContext(brand));
     if (!onboarding.completed && onboarding.nextRoute) return onboarding.nextRoute;
     if (next && isSafeNext(next)) return next;
     return firstValueRoute(brand.id, flagContext(brand));
+  }
+
+  /** Soft: never fails the auth action that triggered it. */
+  async function checkReferral(userId: string, trigger: string): Promise<void> {
+    try {
+      const run = deps.checkReferral ?? (async (id: string) => (await import('../growth/index.js')).checkReferralFor(id));
+      await run(userId);
+    } catch (err) {
+      note('info', 'invite check skipped', { userId, trigger, error: errText(err) });
+    }
   }
 
   function flagContext(brand: ProductBrand) {
@@ -204,6 +287,8 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     const at = now();
     await db().user.updateMany({ where: { id: userId, emailVerified: false }, data: { emailVerified: true, emailVerifiedAt: at } });
     await grantVerificationCredit(userId);
+    // Invite friends: a verified email may complete the friend's invite.
+    await checkReferral(userId, 'email_verified');
   }
 
   function ensureCanSignIn(user: { isActive: boolean }, profile: { deletedAt: Date | null } | null): void {
@@ -366,6 +451,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     token: string;
     brand: ProductBrand;
     userAgent?: string | null;
+    request?: SignupRequestContext | null;
   }): Promise<VerifyEmailResult & { signIn?: SignInTarget }> {
     const consumed = await consumeToken(db(), input.token, AUTH_TOKEN_KINDS.emailVerify, input.brand.id, now());
     const payload = (consumed.payload ?? {}) as { email?: string; pending?: PendingPayload };
@@ -387,12 +473,35 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       return { status: 'account_exists', next: '/login' };
     }
     const identity: VerifiedIdentity = { ...payload.pending.identity, email: payload.email, emailVerified: true };
-    const result = await resolveIdentity(identity, input.brand, payload.pending.signup ?? null, payload.pending.next, input.userAgent ?? null);
+    const result = await resolveIdentity(
+      identity,
+      input.brand,
+      payload.pending.signup ?? null,
+      payload.pending.next,
+      // The link may be opened on another device: the touches are the ones the sign-up started with.
+      withCarriedTouches(input.request ?? { userAgent: input.userAgent ?? null }, payload.pending.touches),
+    );
     if (result.status !== 'signed_in' || !result.signIn) throw authErrors.tokenInvalid();
     return { status: 'signed_in', next: result.next, isNewUser: result.isNewUser, signIn: result.signIn };
   }
 
   // ── OAuth ───────────────────────────────────────────────────────────────
+
+  /** Sanitized touches worth carrying, or null when there is nothing to record. */
+  function carriedTouches(raw: unknown): CarriedTouches | null {
+    const touches = touchesFromClient(raw, now());
+    return touches.firstTouch || touches.lastTouch ? touches : null;
+  }
+
+  /**
+   * The request context with the touches a round trip carried, unless the
+   * request itself brought some (a POST body's `attribution` wins).
+   */
+  function withCarriedTouches(request: SignupRequestContext, carried: unknown): SignupRequestContext {
+    if (carriedTouches(request.clientTouches)) return request;
+    const touches = carriedTouches(carried);
+    return touches ? { ...request, clientTouches: touches } : request;
+  }
 
   async function startOAuth(input: {
     provider: OAuthProviderId;
@@ -400,6 +509,8 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     redirectUri: string;
     next?: string | null;
     signup?: OAuthSignupContext | null;
+    /** `{ firstTouch, lastTouch }` as the browser sent them; sanitized before they are stored in the state. */
+    touches?: unknown;
   }): Promise<{ url: string; binder: string }> {
     const { verifier, challenge } = pkcePair();
     const nonce = newNonce();
@@ -417,6 +528,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
         redirectUri: input.redirectUri,
         next: isSafeNext(input.next) ? input.next : null,
         signup: (input.signup ?? null) as unknown as Prisma.InputJsonValue,
+        touches: carriedTouches(input.touches) as unknown as Prisma.InputJsonValue,
       },
       now: now(),
     });
@@ -438,11 +550,12 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     brand: ProductBrand,
     next: string | null,
     signup: OAuthSignupContext | null,
+    touches: CarriedTouches | null,
   ): Promise<ResolveResult> {
     const { raw } = await issueToken(db(), {
       kind: 'oauth_pending',
       brand: brand.id,
-      payload: { identity, next, signup } as unknown as Prisma.InputJsonValue,
+      payload: { identity, next, signup, touches } as unknown as Prisma.InputJsonValue,
       now: now(),
     });
     const base = { pendingToken: raw, next: next ?? '/jobs', name: identity.name };
@@ -455,8 +568,9 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     brand: ProductBrand,
     signup: OAuthSignupContext | null,
     next: string | null,
-    userAgent: string | null,
+    request: SignupRequestContext,
   ): Promise<ResolveResult> {
+    const userAgent = request.userAgent;
     const d = db();
     const linked = await d.rAAuthIdentity.findFirst({
       where: { brand: brand.id, provider: identity.provider, appId: '', subject: identity.subject },
@@ -475,7 +589,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     }
 
     if (!identity.email || !identity.emailVerified) {
-      return pending('email_required', identity, brand, next, signup);
+      return pending('email_required', identity, brand, next, signup, carriedTouches(request.clientTouches));
     }
 
     const existing = await d.user.findUnique({
@@ -524,6 +638,8 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
         note('info', 'provider linked to an unverified account: password and sessions revoked', { userId: existing.id, provider: identity.provider });
         await grantVerificationCredit(existing.id);
       }
+      // Invite friends: a linked provider verifies the account.
+      await checkReferral(existing.id, `linked_${identity.provider}`);
       const session = await createSession(existing.id);
       await notifyIfNewDevice({ userId: existing.id, email: existing.email, brand, userAgent });
       return {
@@ -533,6 +649,11 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
         signIn: { userId: existing.id, sessionToken: session.token },
       };
     }
+
+    // GoApply accounts are created by phone, WeChat or the email form, which
+    // apply its signup rules (invite in invite mode, the CN-0 consents). A
+    // provider sign-in never creates one.
+    if (brand.market === 'cn') throw authErrors.signupClosed();
 
     // A brand-new account needs the signup agreements first (H29).
     let consentRows: ConsentRow[];
@@ -546,7 +667,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
         country: signup.country,
       });
     } catch {
-      return pending('consent_required', identity, brand, next, signup ? { ...signup, consents: [] } : null);
+      return pending('consent_required', identity, brand, next, signup ? { ...signup, consents: [] } : null, carriedTouches(request.clientTouches));
     }
 
     const locale = signup!.locale && (brand.locales as string[]).includes(signup!.locale) ? signup!.locale : brand.defaultLocale;
@@ -580,12 +701,13 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       });
       return account;
     });
-    await afterAccountCreated(created.user.id, signup!, userAgent);
+    await afterAccountCreated(created.user.id, signup!, request);
     await grantVerificationCredit(created.user.id);
+    await rememberRegion(created.user.id, request.country ?? signup!.country ?? null);
     const session = await createSession(created.user.id);
     return {
       status: 'signed_in',
-      next: firstOnboardingRoute(brand),
+      next: next && isSafeNext(next) && isPriorityNext(next) ? next : firstOnboardingRoute(brand),
       isNewUser: true,
       signIn: { userId: created.user.id, sessionToken: session.token },
     };
@@ -600,6 +722,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     userAgent?: string | null;
     /** The value of the browser-binding cookie set by /start (null when absent). */
     binder?: string | null;
+    request?: SignupRequestContext | null;
   }): Promise<ResolveResult> {
     if (input.error) throw authErrors.oauthFailed(input.error);
     if (!input.state || !input.code) throw authErrors.oauthStateInvalid();
@@ -617,6 +740,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       redirectUri?: string;
       next?: string | null;
       signup?: OAuthSignupContext | null;
+      touches?: CarriedTouches | null;
     };
     if (payload.provider !== input.provider || !payload.verifier || !payload.nonce || !payload.redirectUri) {
       throw authErrors.oauthStateInvalid();
@@ -637,7 +761,9 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       if (err instanceof OAuthProviderError) throw authErrors.oauthFailed(err.reason);
       throw err;
     }
-    return resolveIdentity(identity, input.brand, payload.signup ?? null, payload.next ?? null, input.userAgent ?? null);
+    // The callback is a GET: the stored touches come from the state row.
+    const request = withCarriedTouches(input.request ?? { userAgent: input.userAgent ?? null }, payload.touches);
+    return resolveIdentity(identity, input.brand, payload.signup ?? null, payload.next ?? null, request);
   }
 
   async function consumePending(token: string, brand: ProductBrand): Promise<PendingPayload> {
@@ -657,6 +783,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     timezone?: string | null;
     country?: string | null;
     userAgent?: string | null;
+    request?: SignupRequestContext | null;
   }): Promise<ResolveResult> {
     // Validate before burning the pending token, so a missed box can be fixed.
     validateSignupConsents({
@@ -676,7 +803,8 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       country: input.country ?? null,
       attribution: payload.signup?.attribution,
     };
-    return resolveIdentity(payload.identity, input.brand, signup, payload.next, input.userAgent ?? null);
+    const request = withCarriedTouches(input.request ?? { userAgent: input.userAgent ?? null }, payload.touches);
+    return resolveIdentity(payload.identity, input.brand, signup, payload.next, request);
   }
 
   /**
@@ -717,7 +845,10 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       kind: 'email_verify',
       brand: input.brand.id,
       userId: null,
-      payload: { email, pending: { identity: payload.identity, next: payload.next, signup } } as unknown as Prisma.InputJsonValue,
+      payload: {
+        email,
+        pending: { identity: payload.identity, next: payload.next, signup, touches: payload.touches ?? null },
+      } as unknown as Prisma.InputJsonValue,
       now: now(),
     });
     await sendSafe({
@@ -734,17 +865,77 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     return routeForStage(brand.id, nextStage(brand.id, 'account', null), flagContext(brand)) ?? '/jobs';
   }
 
-  /** Attribution seam (WP-23) + first device mark. Never throws. */
-  async function afterAccountCreated(userId: string, signup: { attribution?: SignupAttributionInput }, userAgent: string | null) {
-    const touch = touchFrom(signup.attribution, now());
-    if (touch) {
+  /**
+   * Attribution seam (WP-23) + invite attach (WP-60) + first device mark.
+   * Never throws.
+   *
+   * WP-23's recipe: the client sends its stored touches as
+   * `{ firstTouch, lastTouch }` (`request.clientTouches`, read with
+   * `touchesFromClient`); the signup link's own parameters
+   * (`signup.attribution`) are the fallback first touch, or the last touch
+   * when an earlier one exists. Marketing fields are kept and the `ra_anon`
+   * id linked only when `request.linkAllowed` is true; the referral and the
+   * job are functional and always kept. `request` also carries the invite
+   * risk signals (ip, user agent, device id; hashed before storage).
+   * A bare user-agent string is accepted for callers without a request.
+   */
+  async function afterAccountCreated(
+    userId: string,
+    signup: { attribution?: SignupAttributionInput },
+    request: SignupRequestContext | string | null,
+  ) {
+    const ctx: SignupRequestContext = typeof request === 'string' || request === null ? { userAgent: request } : request;
+    const at = now();
+    const client = touchesFromClient(ctx.clientTouches, at);
+    const fromLink = touchFrom(signup.attribution, at);
+    const first = client.firstTouch ?? fromLink;
+    const last = client.lastTouch ?? (client.firstTouch ? fromLink : null);
+    const signals: RawSignals = { ip: ctx.ip ?? null, userAgent: ctx.userAgent, deviceId: ctx.deviceId ?? null };
+    const options = { anonId: ctx.anonId ?? undefined, linkAllowed: ctx.linkAllowed === true, signals };
+    const record = deps.recordAttribution ?? growthService.recordAttribution;
+    try {
+      if (first) await record(userId, first, options);
+      if (first && last) await record(userId, last, { ...options, lastTouchOnly: true });
+    } catch (err) {
+      note('info', 'attribution not recorded (growth seam)', { userId, error: errText(err) });
+    }
+    // recordAttribution attaches the invite code of the FIRST touch. A friend
+    // who first came some other way and then opened an invite link has the
+    // code only in the later touch: attach that one here (idempotent).
+    const laterCode = inviteCodeIn(first) ? null : (inviteCodeIn(last) ?? inviteCodeIn(fromLink));
+    if (laterCode) {
       try {
-        await (deps.recordAttribution ?? growthService.recordAttribution)(userId, touch, { anonId: signup.attribution?.anonId });
+        const attach =
+          deps.attachReferral ??
+          (async (id: string, code: string, o: { signals?: RawSignals }) =>
+            (await import('../growth/index.js')).referralServiceImpl.attachFromSignup(id, code, o));
+        await attach(userId, laterCode, { signals });
       } catch (err) {
-        note('info', 'attribution not recorded (growth seam)', { userId, error: errText(err) });
+        note('info', 'invite code not attached', { userId, error: errText(err) });
       }
     }
-    await registerDevice(userId, userAgent);
+    await registerDevice(userId, ctx.userAgent);
+  }
+
+  /**
+   * Stores the edge country for the tips-and-reminders default (WP-39b seam).
+   * Called at signup, login and `/auth/me`; offered to the notification
+   * centre at most once per user per process. Never throws.
+   */
+  async function rememberRegion(userId: string, country: string | null | undefined): Promise<void> {
+    const c = typeof country === 'string' && /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : null;
+    if (!c || REGION_REMEMBERED.has(userId)) return;
+    if (REGION_REMEMBERED.size >= REGION_REMEMBERED_MAX) REGION_REMEMBERED.clear();
+    REGION_REMEMBERED.add(userId);
+    try {
+      const run =
+        deps.rememberRegion ??
+        (async (id: string, value: string | null) => (await import('../notifications/index.js')).notificationCenterService.rememberRegion(id, value));
+      await run(userId, c);
+    } catch (err) {
+      REGION_REMEMBERED.delete(userId);
+      note('info', 'region not stored for the tips default', { userId, error: errText(err) });
+    }
   }
 
   // ── New-device email (F-TRUST-01) ──────────────────────────────────────
@@ -837,7 +1028,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
 
   // ── /auth/me additions ─────────────────────────────────────────────────
 
-  async function meAdditions(userId: string, brand: ProductBrand): Promise<AuthMeAdditions> {
+  async function meAdditions(userId: string, brand: ProductBrand, request: { country?: string | null } = {}): Promise<AuthMeAdditions> {
     const [user, profile] = await Promise.all([
       db().user.findUnique({ where: { id: userId }, select: { emailVerified: true } }),
       profileOf(userId),
@@ -850,12 +1041,18 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     } catch (err) {
       note('info', 'entitlement summary unavailable for /auth/me', { userId, error: errText(err) });
     }
+    // The message centre owns the count (this brand's rows, live ones only);
+    // null when it cannot answer, never a guessed 0.
     let unreadCount: number | null = null;
     try {
-      unreadCount = await db().seekerNotification.count({ where: { userId, readAt: null } });
+      const count =
+        deps.unreadCount ??
+        (async (u: string, b: ProductBrand) => (await import('../notifications/index.js')).notificationCenterService.unreadCount(u, b));
+      unreadCount = await count(userId, brand);
     } catch (err) {
       note('info', 'unread count unavailable for /auth/me', { userId, error: errText(err) });
     }
+    await rememberRegion(userId, request.country ?? null);
     return {
       brand: { id: brand.id, name: brand.name, market: brand.market },
       onboarding: onboardingFor(brand, profile, ctx),
@@ -917,44 +1114,66 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
 
   // ── Consents ───────────────────────────────────────────────────────────
 
-  async function listConsents(userId: string): Promise<ConsentView[]> {
-    const profile = await profileOf(userId);
-    if (!profile) return [];
-    const rows = await db().seekerConsentRecord.findMany({
-      where: { seekerProfileId: profile.id },
-      select: { consentType: true, granted: true, proseVersion: true, createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    });
-    const latest = new Map<string, ConsentView>();
-    for (const r of rows) {
-      const type = isSeekerConsentType(r.consentType) ? canonicalConsentType(r.consentType) : r.consentType;
-      latest.set(type, { type, granted: r.granted, proseVersion: r.proseVersion ?? null, at: r.createdAt.toISOString() });
-    }
-    return [...latest.values()].sort((a, b) => a.type.localeCompare(b.type));
+  /** The compliance ledger on this service's database (the catalog decides what is offered and required). */
+  async function complianceLedger() {
+    if (deps.compliance) return deps.compliance;
+    const mod = await import('../compliance/index.js');
+    type LedgerDeps = NonNullable<Parameters<typeof mod.recordConsent>[1]>;
+    // The ledger runs on this service's client (the shared one in production, which has every delegate it needs).
+    const ledgerDeps: LedgerDeps = { db: db() as unknown as NonNullable<LedgerDeps['db']>, env: env(), now };
+    return {
+      listConsents: (userId: string, brand: ProductBrand, ctx: { locale?: string | null; country?: string | null }) =>
+        mod.listConsents(userId, brand, { ...ctx, env: env() }, ledgerDeps),
+      recordConsent: (input: Parameters<typeof mod.recordConsent>[0]) => mod.recordConsent(input, ledgerDeps),
+    };
   }
 
+  /**
+   * GET /account/consents: the user's answers to the consents this brand
+   * offers (features/compliance catalog). `proseVersion` is the version of
+   * the record itself, not today's text. Settings uses /compliance/consents,
+   * which also returns the prose; this path stays for older clients.
+   */
+  async function listConsents(userId: string, brand: ProductBrand, ctx: { locale?: string | null; country?: string | null } = {}): Promise<ConsentView[]> {
+    const profile = await profileOf(userId);
+    if (!profile) return [];
+    const items = await (await complianceLedger()).listConsents(userId, brand, { ...ctx, locale: clampLocaleToBrand(brand, ctx.locale) });
+    const answered = items.filter((i) => i.granted !== null && i.answeredAt);
+    if (!answered.length) return [];
+    const rows = await db().seekerConsentRecord.findMany({
+      where: { seekerProfileId: profile.id, consentType: { in: answered.map((i) => i.type) } },
+      select: { consentType: true, proseVersion: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const version = new Map<string, string | null>();
+    for (const r of rows) version.set(r.consentType, r.proseVersion ?? null);
+    return answered
+      .map((i) => ({ type: i.type, granted: i.granted === true, proseVersion: version.get(i.type) ?? null, at: i.answeredAt as string }))
+      .sort((a, b) => a.type.localeCompare(b.type));
+  }
+
+  /**
+   * POST /account/consents: one answer, written by the compliance ledger so
+   * the record carries the prose hash and a withdrawal has its effect
+   * (withdrawing GoApply's cross-border consent while offshore closes and
+   * purges the account). 409 `version_conflict` when the text changed; a
+   * consent that ends only with the account cannot be withdrawn here.
+   */
   async function recordConsent(
     userId: string,
+    brand: ProductBrand,
     input: { type: string; granted: boolean; proseVersion: string },
-    meta: { ip?: string | null; userAgent?: string | null } = {},
-  ): Promise<ConsentView> {
-    if (!isSeekerConsentType(input.type)) throw authErrors.unknownConsent(input.type);
-    const type: SeekerConsentType = canonicalConsentType(input.type);
-    if ((REQUIRED_SIGNUP_CONSENTS as readonly string[]).includes(type) && !input.granted) throw authErrors.consentLocked(type);
-    const profile = await profileOf(userId);
-    if (!profile) throw new HttpError('not_found', 'No seeker profile.');
-    const row = await db().seekerConsentRecord.create({
-      data: {
-        seekerProfileId: profile.id,
-        consentType: type,
-        granted: input.granted,
-        proseVersion: input.proseVersion,
-        ipAddress: meta.ip ?? null,
-        userAgent: meta.userAgent ? meta.userAgent.slice(0, 400) : null,
-      },
-      select: { consentType: true, granted: true, proseVersion: true, createdAt: true },
+    ctx: { locale?: string | null; country?: string | null } = {},
+  ): Promise<RecordConsentResponse> {
+    return (await complianceLedger()).recordConsent({
+      userId,
+      brand,
+      type: input.type,
+      granted: input.granted,
+      proseVersion: input.proseVersion,
+      locale: clampLocaleToBrand(brand, ctx.locale),
+      country: ctx.country ?? null,
     });
-    return { type: row.consentType, granted: row.granted, proseVersion: row.proseVersion ?? null, at: row.createdAt.toISOString() };
   }
 
   // ── Sessions ───────────────────────────────────────────────────────────
@@ -992,6 +1211,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     completeOAuth,
     oauthEmail,
     afterAccountCreated,
+    rememberRegion,
     registerDevice,
     notifyIfNewDevice,
     sendOtherBrandNotice,

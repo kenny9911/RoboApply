@@ -27,6 +27,8 @@ import {
   createDelegateSignalStore,
   inviteOrigin,
   INVITE_SIGNUP_WIRED_BRANDS,
+  REFERRAL_WORK_KIND,
+  inviteSignupWired,
   MAX_ROWS_PER_USER_PER_DAY,
   generateReferralCode,
   hashSignals,
@@ -42,6 +44,8 @@ import {
   type SignalRow,
 } from './index.js';
 import type { ReferralSignalDelegate } from './referralSignalStore.js';
+import { createPhoneAuthService } from '../auth-cn/phoneAuthService.js';
+import type { AuthCnDb } from '../auth-cn/db.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { GrowthDb } from './service.js';
 import { loadLegalDoc } from '../compliance/legalDocs.js';
@@ -352,20 +356,94 @@ describe('getInvites', () => {
     expect(inviteOrigin('goapply', {})).toBe('https://www.goapply.top');
   });
 
-  it('GoApply answers not_available until every GoApply sign-up path attaches invites (R-60-3)', async () => {
-    expect(INVITE_SIGNUP_WIRED_BRANDS).toEqual(['roboapply']);
-    const go = setup({ user: [user('g', { brand: 'goapply' })] });
-    expect(await go.service.getInvites('g', { brand: 'goapply' })).toMatchObject({ eligibility: 'not_available', code: null, link: null });
-    expect(await go.fake.rAReferralCode.count({})).toBe(0);
-    // A GoApply code made earlier attaches nothing.
-    const h = setup({
-      user: [user('ga', { brand: 'goapply' }), user('gb', { brand: 'goapply' })],
-      rAReferralCode: [{ userId: 'ga', brand: 'goapply', code: 'GGGGGGGG', createdAt: NOW }],
-    });
-    expect(await h.service.attachFromSignup('gb', 'GGGGGGGG')).toEqual({ status: 'skipped', reason: 'disabled' });
+  it('both brands run the programme: every sign-up path of each attaches invites (R-60-3 wired in INT-01)', async () => {
+    expect([...INVITE_SIGNUP_WIRED_BRANDS].sort()).toEqual(['goapply', 'roboapply']);
+    expect(inviteSignupWired('goapply')).toBe(true);
+    expect(inviteSignupWired('someone-else')).toBe(false);
+    // A verified GoApply account (a verified phone, placeholder email) gets a link on GoApply's origin.
+    const go = setup({ user: [user('g', { brand: 'goapply', email: 'u-g@users.goapply.invalid', emailIsPlaceholder: true, emailVerified: false, phoneVerifiedAt: NOW })] });
+    const res = await go.service.getInvites('g', { brand: 'goapply' });
+    expect(res).toMatchObject({ eligibility: 'ok', reward: { bucket: 'practice', credits: 1 } });
+    expect(res.link).toBe(`https://www.goapply.top/r/${res.code}`);
+    // With the capability off the brand still attaches nothing.
+    const off = setup(
+      {
+        user: [user('ga', { brand: 'goapply' }), user('gb', { brand: 'goapply' })],
+        rAReferralCode: [{ userId: 'ga', brand: 'goapply', code: 'GGGGGGGG', createdAt: NOW }],
+      },
+      { enabled: false },
+    );
+    expect(await off.service.attachFromSignup('gb', 'GGGGGGGG')).toEqual({ status: 'skipped', reason: 'disabled' });
   });
 
-  it.todo('R-60-3: a GoApply phone OTP / WeChat sign-up carrying ref creates an RAReferral (auth-cn seam, after INT wires it)');
+  it('R-60-3 seam: a GoApply phone sign-up carrying `ref` creates an RAReferral, with the friend’s hashed signals', async () => {
+    // The real phone sign-up service, the real growth attribution and the real
+    // invite service on one in-memory database: auth-cn → hooks.ts →
+    // growth.recordAttribution → referrals.attachFromSignup.
+    const h = setup({
+      user: [user('ga', { brand: 'goapply', email: 'u-ga@users.goapply.invalid', emailIsPlaceholder: true, emailVerified: false, phoneVerifiedAt: NOW })],
+      seekerProfile: [profile('ga')],
+      rAReferralCode: [{ userId: 'ga', brand: 'goapply', code: 'GGGGGGGG', createdAt: new Date(NOW.getTime() - 48 * HOUR) }],
+    });
+    // New rows get the machine's time in the in-memory database: use the same clock for "is this account new".
+    h.setNow(new Date());
+    const growth = createGrowthService({ db: h.fake as unknown as GrowthDb, attachReferral: h.service.attachFromSignup, now: () => new Date() });
+    const checks: string[] = [];
+    const phone = createPhoneAuthService({
+      db: h.fake as unknown as AuthCnDb,
+      otp: { verifyCode: async () => ({ otpId: 'otp1' }), spend: async () => undefined } as never,
+      env: { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' },
+      now: () => new Date(),
+      consume: async () => ({ allowed: true, retryAfterSec: 0, remaining: 1, windows: [] }),
+      hooks: {
+        recordAttribution: (userId, touch, options) => growth.recordAttribution(userId, touch, options),
+        checkReferral: async (userId) => {
+          checks.push(userId);
+          return h.service.checkReferralFor(userId);
+        },
+        grantPhoneCredit: async () => undefined,
+      },
+    });
+    const consents = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map((type) => ({ type, granted: true, proseVersion: 'v1' }));
+    const signedUp = await phone.verifyAndSignIn({
+      brand: getBrand('goapply'),
+      phoneE164: '+8613812345678',
+      code: '111111',
+      consents,
+      ip: '203.0.113.50',
+      ref: 'gggg-gggg',
+      signals: FRIEND_BROWSER,
+    });
+    expect(signedUp.isNewUser).toBe(true);
+    expect(await referralOf(h, signedUp.userId)).toMatchObject({ inviterUserId: 'ga', inviteeUserId: signedUp.userId, brand: 'goapply', status: 'pending' });
+    // The functional touch is stored (the referral only), and the friend's signals are hashed.
+    const attribution = (await h.fake.rAAttribution.findFirst({ where: { userId: signedUp.userId } })) as Row;
+    expect(Object.keys(attribution.firstTouch as object).sort()).toEqual(['at', 'ref']);
+    const signal = (await h.fake.rAReferralSignal.findFirst({ where: { userId: signedUp.userId } })) as Row;
+    expect(signal).toMatchObject({ brand: 'goapply' });
+    expect(JSON.stringify(signal)).not.toContain(FRIEND_BROWSER.ip);
+    expect(h.enqueued.some((e) => e.kind === REFERRAL_WORK_KIND)).toBe(true);
+
+    // The same number signing in again is not a sign-up: no second referral, nothing attached.
+    const again = await phone.verifyAndSignIn({ brand: getBrand('goapply'), phoneE164: '+8613812345678', code: '111111', ip: '203.0.113.50', ref: 'GGGGGGGG', signals: FRIEND_BROWSER });
+    expect(again).toMatchObject({ isNewUser: false, userId: signedUp.userId });
+    expect(await h.fake.rAReferral.count({})).toBe(1);
+
+    // A RoboApply code attaches nothing on GoApply (other brand).
+    const other = setup(inviteSeed());
+    other.setNow(new Date());
+    const crossGrowth = createGrowthService({ db: other.fake as unknown as GrowthDb, attachReferral: other.service.attachFromSignup, now: () => new Date() });
+    const crossPhone = createPhoneAuthService({
+      db: other.fake as unknown as AuthCnDb,
+      otp: { verifyCode: async () => ({ otpId: 'otp2' }), spend: async () => undefined } as never,
+      env: { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' },
+      now: () => new Date(),
+      consume: async () => ({ allowed: true, retryAfterSec: 0, remaining: 1, windows: [] }),
+      hooks: { recordAttribution: (u, t, o) => crossGrowth.recordAttribution(u, t, o), checkReferral: async () => undefined, grantPhoneCredit: async () => undefined },
+    });
+    const cross = await crossPhone.verifyAndSignIn({ brand: getBrand('goapply'), phoneE164: '+8613912345678', code: '111111', consents, ip: '203.0.113.51', ref: 'ABCDEFGH' });
+    expect(await other.fake.rAReferral.count({ where: { inviteeUserId: cross.userId } })).toBe(0);
+  });
 });
 
 // ── Signup ───────────────────────────────────────────────────────────────

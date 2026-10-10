@@ -2,12 +2,18 @@
 //
 // Mounted at /api/v1/roboapply/auth/* in backend/src/index.ts.
 //
-//   POST /signup    — seeker signup (WP-10; GoApply hosts answer 403
-//                     `signup_closed` until WP-93 adds invite + CN-0
-//                     consents): agreements (`age_16_plus`
+//   POST /signup    — seeker signup (WP-10): agreements (`age_16_plus`
 //                     required; PDPA notice for zh-TW/TW), unchecked
 //                     marketing opt-in, entry attribution, brand + market
 //                     stamping, onboardingStep 'account', verification email.
+//                     GoApply hosts apply GoApply's rules instead
+//                     (features/auth/goapplySignup.ts): 403 `signup_closed`
+//                     in production without the approved documents; 422
+//                     `consent_required` without the agreement, the age
+//                     confirmation and (while data is processed outside the
+//                     mainland) the cross-border consent; in invite mode 422
+//                     `invite_invalid` without a redeemable `inviteCode`,
+//                     which is spent in the account-creation transaction.
 //                     An email that belongs to the OTHER brand gets a
 //                     "check your email" answer (200, no session) and a
 //                     notice in that inbox (H34; never a 409). Open: that
@@ -24,13 +30,14 @@
 //                     recovery code → the normal login response.
 //   GET  /me        — user + profile + the WP-10 additions (brand,
 //                     onboarding, entitlements, flags, unreadCount,
-//                     emailVerified). `mission` is no longer returned.
+//                     emailVerified). `mission` is no longer returned and the
+//                     V1 mission is no longer read.
 //   POST /logout    — logout.
 // Rate limits are DB-backed (platform/ratelimit): signup 5/min + 20/day per
 // IP, login 10/min per IP.
 //
-// RoboApply users ARE seeker users (one User row, one SeekerProfile row,
-// plus a RoboApplyMission row). The proxy keeps the auth surface unified
+// RoboApply users ARE seeker users (one User row, one SeekerProfile row).
+// The proxy keeps the auth surface unified
 // while letting the RoboApply frontend hit a single /api/v1/roboapply/auth/*
 // namespace and not need to know about /seeker/* legacy routes.
 
@@ -56,7 +63,6 @@ import seekerAuthService, {
 import seekerProfileService from '../engine/services/SeekerProfileService.js';
 import { invalidateSeekerSession } from '../engine/lib/seekerSession.js';
 import { requireSeekerProfile } from '../engine/middleware/seekerAuth.js';
-import { getMissionForUser } from '../services/RoboApplyMissionService.js';
 import prisma from '../../lib/prisma.js';
 import { recordUserActivity } from '../../lib/userActivity.js';
 import { getCurrentBrandId } from '../../lib/requestContext.js';
@@ -65,12 +71,16 @@ import {
   ACCOUNT_V2_ERROR_CODES,
   CHALLENGE_COOKIE,
   LoginTwoFactorBodySchema,
+  clearChallengeCookie,
   completeLoginChallenge,
   loginChallengeDeps,
+  sendTwoFactorRequired,
+  sendTwoFactorUnavailable,
   startLoginChallenge,
   type LoginChallengeDeps,
-  type TwoFactorRequiredDetails,
 } from '../../features/account-v2/index.js';
+import { AuthCnError } from '../../features/auth-cn/index.js';
+import { signupRequestContext } from '../../features/auth/requestContext.js';
 import { HttpError } from '../../platform/http.js';
 import { generateJwt } from '../engine/lib/seekerSession.js';
 
@@ -115,16 +125,6 @@ export function setLoginChallengeDepsForTests(factory: (() => LoginChallengeDeps
   challengeDepsFactory = factory ?? loginChallengeDeps;
 }
 
-const CHALLENGE_COOKIE_PATH = '/api/v1/roboapply/auth';
-
-function challengeCookieOptions(req: Request, maxAgeSec: number) {
-  return buildCookieOptions(req, { sameSite: 'lax', maxAge: maxAgeSec * 1000, path: CHALLENGE_COOKIE_PATH });
-}
-
-function clearChallengeCookie(req: Request, res: Response): void {
-  res.clearCookie(CHALLENGE_COOKIE, buildClearCookieOptions(req, { path: CHALLENGE_COOKIE_PATH }));
-}
-
 function requestBrand(req: Request): ProductBrand {
   return getBrand(requestBrandId(req) ?? 'roboapply');
 }
@@ -144,7 +144,7 @@ async function quietly(task: () => Promise<unknown>): Promise<void> {
   }
 }
 
-function asConsents(value: unknown): Array<{ type: string; granted: boolean; proseVersion: string }> | undefined {
+function asConsents(value: unknown): Array<{ type: string; granted: boolean; proseVersion: string; proseHash?: string }> | undefined {
   if (!Array.isArray(value)) return undefined;
   return value
     .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
@@ -153,6 +153,8 @@ function asConsents(value: unknown): Array<{ type: string; granted: boolean; pro
       type: String(c.type ?? ''),
       granted: c.granted === true,
       proseVersion: typeof c.proseVersion === 'string' ? c.proseVersion.slice(0, 40) : 'unknown',
+      // GoApply: the sha256 of the consent text the form showed (64 hex characters); anything else is ignored.
+      ...(typeof c.proseHash === 'string' && /^[0-9a-f]{64}$/.test(c.proseHash) ? { proseHash: c.proseHash } : {}),
     }));
 }
 
@@ -169,7 +171,6 @@ function asAttribution(value: unknown) {
     utmMedium: s('utmMedium'),
     utmCampaign: s('utmCampaign'),
     alert: s('alert'),
-    anonId: s('anonId'),
     landingPath: s('landingPath'),
   };
 }
@@ -188,29 +189,14 @@ function isPlausibleEmail(email: unknown): email is string {
 /**
  * POST /api/v1/roboapply/auth/signup
  *
- * Body: { email, password, name?, locale? }
+ * Body: { email, password, name?, locale?, consents, marketingOptIn?,
+ * attribution?, timezone?, inviteCode? (GoApply) }
  *
- * Creates the User + SeekerProfile via seekerAuthService.signup, then
- * creates an EMPTY RoboApplyMission shell so the new user can hit the
- * onboarding flow at /onboarding to flesh it out with intent + resume.
+ * Creates the User + SeekerProfile via seekerAuthService.signup at the
+ * onboarding stage `account`. GoApply hosts go through GoApply's signup
+ * rules (invite, CN-0 consents) inside the same service call.
  */
 router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
-  // Interim GoApply gate (Wave 2 integration; WP-93 replaces it). Email
-  // signup on GoApply does not yet redeem an invite inside the
-  // account-creation transaction (CN_SIGNUP_MODE=invite is the default),
-  // check `goapplySignupOpen(env)`, or record the CN-0 `pipl_cross_border`
-  // and `pipl_basic_processing` consents that WP-13's withdrawal/purge flow
-  // assumes every GoApply account gave. Until it does, a GoApply host cannot
-  // create an account here: 403 `signup_closed`, the code WP-11's phone and
-  // WeChat flows use. Checked before anything else so the answer does not
-  // depend on whether the email exists on either brand.
-  if (requestBrandId(req) === 'goapply') {
-    return res.status(403).json({
-      success: false,
-      code: 'signup_closed',
-      error: 'Sign-up is not open yet.',
-    });
-  }
   try {
     const { email, password, name, locale } = req.body ?? {};
     if (!isPlausibleEmail(email)) {
@@ -268,15 +254,19 @@ router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
       attribution: asAttribution(req.body?.attribution),
       timezone: typeof req.body?.timezone === 'string' ? req.body.timezone : null,
       country: requestCountry(req),
+      inviteCode: typeof req.body?.inviteCode === 'string' ? req.body.inviteCode.slice(0, 64) : null,
     });
 
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
 
     // No V1 RoboApplyMission shell any more (WP-10): onboarding is the
     // server stage machine (SeekerProfile.onboardingStep = 'account').
+    // Attribution (WP-23 recipe) and the invite attach (WP-60): the request's
+    // analytics identity decides whether marketing fields are kept; its IP,
+    // user agent and `ra_anon` id are the invite risk signals.
     const attribution = asAttribution(req.body?.attribution);
-    const userAgent = req.get('user-agent') ?? null;
-    await quietly(() => authService.afterAccountCreated(result.user.id, { attribution }, userAgent));
+    await quietly(() => authService.afterAccountCreated(result.user.id, { attribution }, signupRequestContext(req, brand)));
+    await quietly(() => authService.rememberRegion(result.user.id, requestCountry(req)));
     // Verification is not blocking (PRODUCT O0); it unlocks the free practice credit.
     await quietly(() => authService.sendVerificationEmail({ userId: result.user.id, brand }));
 
@@ -315,7 +305,10 @@ router.post('/signup', signupRateLimit, async (req: Request, res: Response) => {
       );
       return res.status(200).json({ success: true, data: { status: 'check_email' } });
     }
-    if (isAuthError(err)) {
+    if (isAuthError(err) || err instanceof AuthCnError) {
+      // AuthCnError: GoApply's signup rules (signup_closed 403,
+      // consent_required 422, invite_invalid 422), the same envelope the
+      // phone and WeChat routes write.
       return res.status(err.status).json({
         success: false,
         code: err.code,
@@ -369,22 +362,9 @@ router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
       logger.error('ROBOAPPLY_AUTH', 'two-step sign-in check failed; refusing sign-in', {
         error: gateErr instanceof Error ? gateErr.message : String(gateErr),
       }, req.requestId);
-      return res.status(503).json({
-        success: false,
-        code: 'two_factor_unavailable',
-        error: 'Sign-in is not available right now. Try again in a minute.',
-      });
+      return sendTwoFactorUnavailable(res);
     }
-    if (gate.kind === 'challenge') {
-      res.cookie(CHALLENGE_COOKIE, gate.token, challengeCookieOptions(req, gate.expiresInSec));
-      const details: TwoFactorRequiredDetails = { next: '/login/2fa', methods: ['totp', 'recovery'], expiresInSec: gate.expiresInSec };
-      return res.status(401).json({
-        success: false,
-        code: ACCOUNT_V2_ERROR_CODES.twoFactorRequired,
-        error: 'Enter the code from your authenticator app to finish signing in.',
-        details,
-      });
-    }
+    if (gate.kind === 'challenge') return sendTwoFactorRequired(req, res, gate);
 
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, sessionCookieOptions());
 
@@ -407,6 +387,7 @@ router.post('/login', loginRateLimit, async (req: Request, res: Response) => {
         locale: result.user.locale ?? null,
       }),
     );
+    await quietly(() => authService.rememberRegion(result.user.id, requestCountry(req)));
 
     return res.json({
       success: true,
@@ -524,23 +505,17 @@ router.post('/login/2fa', loginRateLimit, async (req: Request, res: Response) =>
       return res.status(err.status).json({ success: false, code, error: err.message, details: err.details });
     }
     logger.error('ROBOAPPLY_AUTH', 'two-step sign-in failed', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
-    return res.status(503).json({
-      success: false,
-      code: 'two_factor_unavailable',
-      error: 'Sign-in is not available right now. Try again in a minute.',
-    });
+    return sendTwoFactorUnavailable(res);
   }
 });
 
 /**
  * GET /api/v1/roboapply/auth/me
  *
- * Returns user + profile + the legacy `onboardingState` (read by the old
- * setup panel until WP-30 replaces it) + the WP-10 additions: brand,
- * onboarding {step, path, completed, nextRoute}, entitlements, flags,
- * unreadCount, emailVerified. The V1 `mission` snapshot is no longer
- * returned (it is still READ below for the legacy onboardingState
- * heuristic; WP-75 removes that read with the V1 engine).
+ * Returns user + profile + the legacy `onboardingState` (kept for clients
+ * that still read it) + the WP-10 additions: brand, onboarding {step, path,
+ * completed, nextRoute}, entitlements, flags, unreadCount, emailVerified.
+ * The V1 `mission` snapshot is neither returned nor read any more.
  */
 router.get(
   '/me',
@@ -550,9 +525,8 @@ router.get(
     try {
       const userId = req.user!.id;
       const p = prisma as any;
-      const [profile, mission, variantCount, goal] = await Promise.all([
+      const [profile, variantCount, goal] = await Promise.all([
         seekerProfileService.getByUserId(userId),
-        getMissionForUser(userId),
         p.rAResumeVariant.count({ where: { userId, deletedAt: null } }),
         p.rACareerGoal.findUnique({
           where: { userId },
@@ -560,28 +534,17 @@ router.get(
         }),
       ]);
 
-      // Derive an onboardingState so the frontend's post-login redirect
-      // (skip onboarding when the user already onboarded) works. V3+ truth
-      // sources, in addition to the legacy V1 mission heuristics:
-      //   - resume:      any live RAResumeVariant counts (V3 onboarding never
-      //                  set mission.resumeId — the old derivation bounced
-      //                  every V3 user back to /onboarding on each login)
-      //   - preferences: the chat-onboarding stamp preferencesBlob.onboarding
-      //                  .completedAt, or the legacy intentText heuristic
-      //
-      // The setup panel on /jobs reads all four fields:
-      //   - completedSteps drives WHICH step opens (no 'resume' → step 1,
-      //     resume but no 'preferences' → step 2, both → closed);
-      //   - skippedAt suppresses the auto-open for 7 days, except for the
-      //     no-resume state, which always opens because the scorer has
-      //     nothing to compare without a parsed resume;
-      //   - autoOpens is the hard cap (2). It is incremented by
-      //     POST /v2/onboarding/seen, NOT by bootstrap — bootstrap needs a
-      //     resumeVariantId the no-resume user does not have.
+      // The legacy `onboardingState` (the server stage machine in
+      // `onboarding` below is the source of truth for routing). Derived from:
+      //   - resume:      any live RAResumeVariant;
+      //   - preferences: the onboarding stamp preferencesBlob.onboarding
+      //                  .completedAt.
+      // `skippedAt` and `autoOpens` are read back from the same blob as
+      // stored. Nothing writes them any more (the old setup panel and its
+      // /v2/onboarding/seen route are gone), so they stay at their last value.
       const ob = (goal?.preferencesBlob as any)?.onboarding ?? null;
-      const hasResume = !!mission?.resumeId || variantCount > 0;
-      const hasIntent =
-        (mission?.intentText?.trim()?.length ?? 0) >= 5 || Boolean(ob?.completedAt);
+      const hasResume = variantCount > 0;
+      const hasIntent = Boolean(ob?.completedAt);
       const completedSteps: string[] = [];
       if (hasResume) completedSteps.push('resume');
       if (hasIntent) completedSteps.push('preferences');
@@ -594,7 +557,7 @@ router.get(
 
       // Additive fields; a failure here never breaks /me (each part degrades
       // to null inside, and a total failure omits them).
-      const additions = await authService.meAdditions(userId, requestBrand(req)).catch(() => null);
+      const additions = await authService.meAdditions(userId, requestBrand(req), { country: requestCountry(req) }).catch(() => null);
 
       return res.json({
         success: true,

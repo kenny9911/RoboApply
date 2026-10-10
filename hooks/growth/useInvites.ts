@@ -23,10 +23,10 @@ export const INVITES_QUERY_KEY = ['growth', 'invites'] as const;
 
 /**
  * Web twin of the server's INVITE_SIGNUP_WIRED_BRANDS (features/growth/contract.ts;
- * a test keeps them equal). GoApply joins once its phone and WeChat sign-ups
- * pass the invite code (request R-60-3).
+ * a test keeps them equal). Both brands: every sign-up path (email, Google,
+ * LINE; GoApply's phone, WeChat and email) hands the invite code to the server.
  */
-export const INVITE_REWARD_BRANDS: readonly string[] = ['roboapply'];
+export const INVITE_REWARD_BRANDS: readonly string[] = ['roboapply', 'goapply'];
 
 /** The invite programme runs here: capability on and every sign-up path attaches invites. */
 export function useInvitesLive(): boolean {

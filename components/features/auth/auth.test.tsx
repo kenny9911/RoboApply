@@ -33,6 +33,9 @@ vi.mock('../../../lib/auth/AuthProvider', async () => {
   return { AuthProvider: ({ children }: { children: unknown }) => children, useAuth: () => mockAuthState.value };
 });
 vi.mock('../../../lib/api/auth', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../lib/api/auth')>()), ...api }));
+// GoApply's sign-up policy (invite mode, required consents) for the email form (INT-01).
+const cnApi = vi.hoisted(() => ({ getSignupPolicy: vi.fn() }));
+vi.mock('../../../lib/api/authCn', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../lib/api/authCn')>()), ...cnApi }));
 
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
 import { buildAuthValue, mockAuthState } from '../../../__tests__/utils/mockAuth';
@@ -40,7 +43,8 @@ import { RoboApiError } from '../../../lib/api/client';
 import { AuthEntryView, filterAndOrder } from './AuthEntryView';
 import { ForgotPasswordView, ResetPasswordView } from './PasswordResetViews';
 import { SignedInSessions, SignInMethods } from './SecuritySettings';
-import { AUTH_METHOD_REGISTRY } from '../../auth/methods/registry';
+import { AUTH_METHOD_REGISTRY, SECONDARY_AUTH_METHODS, layoutAuthMethods } from '../../auth/methods/registry';
+import { signupInputs } from '../auth-cn/shared';
 import { SecurityCard } from '../../v3/account/security';
 
 const assign = vi.fn();
@@ -50,6 +54,8 @@ beforeEach(() => {
   nav.search = '';
   api.getAuthMethods.mockResolvedValue({ methods: [], country: null, pdpaNoticeRequired: false });
   api.getEntryJob.mockResolvedValue(null);
+  cnApi.getSignupPolicy.mockResolvedValue(CN0_INVITE_POLICY);
+  signupInputs.reset();
   mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null, refresh: vi.fn(async () => null) as never });
   Object.defineProperty(window, 'location', {
     configurable: true,
@@ -59,6 +65,29 @@ beforeEach(() => {
 });
 
 const ON = { 'auth.google': true, 'auth.line': true, 'auth.passwordReset': true };
+
+/** GoApply while invite-only and processed outside the mainland (the defaults). */
+const CN0_INVITE_POLICY = {
+  signupOpen: true,
+  inviteRequired: true,
+  // Each required consent with the text the form shows beside its box (the
+  // compliance catalog prose), its version and its hash.
+  requiredConsents: [
+    { type: 'pipl_basic_processing', proseVersion: 'v1', prose: { text: 'I have read and agree to the User Agreement and the Privacy Policy.', locale: 'en', version: 'catalog.v1', hash: 'a'.repeat(64) } },
+    { type: 'age_16_plus', proseVersion: 'v1', prose: { text: 'I am 16 or older.', locale: 'en', version: 'catalog.v1', hash: 'b'.repeat(64) } },
+    {
+      type: 'pipl_cross_border',
+      proseVersion: 'v1',
+      prose: { text: 'Your personal information is processed and stored outside mainland China. I agree to this processing.', locale: 'en', version: 'catalog.v1', hash: 'c'.repeat(64) },
+    },
+  ],
+  methods: { phoneOtp: false, wechatWeb: false, wechatInApp: false },
+  legal: { termsPath: '/legal/terms', privacyPath: '/legal/privacy' },
+};
+
+function wireError(status: number, code: string, details?: Record<string, unknown>) {
+  return new RoboApiError('x', { status, code, payload: { success: false, code, error: 'x', ...(details ? { details } : {}) } });
+}
 
 function fill(label: RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -222,11 +251,250 @@ describe('login', () => {
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
   });
 
-  it('GoApply keeps email behind "Use email instead" when another method exists', () => {
+  it('GoApply keeps email behind "其他方式" (Other ways to sign in) when another method exists', () => {
     renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: { 'auth.wechatWeb': true } });
     expect(screen.queryByLabelText(/^Email$/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Use email instead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
+    // The email form opens in place and takes focus.
     expect(screen.getByLabelText(/^Email$/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Email$/)).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Other ways to sign in' })).toBeNull();
+  });
+
+  it('GoApply with no other method available shows the email form at once (never an empty card)', () => {
+    renderWithBrand(<AuthEntryView mode="login" />, { brand: 'goapply', flags: {} });
+    expect(screen.getByLabelText(/^Email$/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Other ways to sign in' })).toBeNull();
+  });
+
+  it('RoboApply never hides the email form', () => {
+    renderWithBrand(<AuthEntryView mode="login" />, { flags: { 'auth.google': true } });
+    expect(screen.getByLabelText(/^Email$/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Other ways to sign in' })).toBeNull();
+  });
+
+  it('two-step sign-in: the password was right → the code page, carrying `next`; nothing else happens', async () => {
+    const refresh = vi.fn(async () => null);
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null, refresh: refresh as never });
+    api.login.mockRejectedValue(wireError(401, 'two_factor_required', { next: '/login/2fa', methods: ['totp', 'recovery'], expiresInSec: 300 }));
+    nav.search = 'next=/jobs/cm1';
+    renderWithBrand(<AuthEntryView mode="login" />, { flags: {} });
+    fill(/^Email$/, 'ana@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/login/2fa?next=%2Fjobs%2Fcm1'));
+    // No session exists yet: the form does not ask for /auth/me and shows no error.
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a `next` to a free tool page is honoured after sign-in even while onboarding is unfinished', async () => {
+    const me = { onboarding: { step: 'account', path: null, completed: false, nextRoute: '/onboarding/situation' } };
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null, refresh: vi.fn(async () => me) as never });
+    api.login.mockResolvedValue({ user: { id: 'u1' }, token: 'j' });
+    nav.search = 'from=resume-check&next=/tools/resume-check';
+    renderWithBrand(<AuthEntryView mode="login" />, { flags: {} });
+    fill(/^Email$/, 'ana@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/tools/resume-check'));
+  });
+});
+
+describe('signup: `next` and the contextual title for the free tools', () => {
+  it('returns to the tool page instead of the first onboarding screen; any other next goes to onboarding', async () => {
+    api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/situation' });
+    nav.search = 'from=resume-job-match&next=/tools/resume-job-match';
+    const tool = renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
+    expect(screen.getByRole('heading', { name: 'Create a free account to keep your resume and job match' })).toBeInTheDocument();
+    fill(/^Email$/, 'new@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByLabelText("I'm 16 or older"));
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/tools/resume-job-match'));
+    tool.unmount();
+
+    nav.replace.mockClear();
+    nav.search = 'next=/jobs/cm1';
+    renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
+    fill(/^Email$/, 'two@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByLabelText("I'm 16 or older"));
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/situation'));
+  });
+});
+
+describe('GoApply email sign-up (invite mode, CN-0 consents)', () => {
+  const openEmail = () => fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
+
+  it('with no other method on the page the email form shows GoApply’s own boxes and the invite field, all unticked', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    // Once the sign-up policy has loaded: the invite field and one box per
+    // required consent (the agreement, the age confirmation and the separate
+    // cross-border consent), each with the text the policy serves.
+    expect(await screen.findByLabelText('Invite code')).toHaveValue('');
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes).toHaveLength(3);
+    for (const box of boxes) expect(box).not.toBeChecked();
+    for (const c of CN0_INVITE_POLICY.requiredConsents) expect(screen.getByRole('checkbox', { name: c.prose.text })).toBeInTheDocument();
+    expect(cnApi.getSignupPolicy).toHaveBeenCalledWith('en');
+    // Not RoboApply's boxes.
+    expect(screen.queryByLabelText("I'm 16 or older")).toBeNull();
+    expect(screen.queryByLabelText('Send me product news and tips')).toBeNull();
+  });
+
+  it('refuses to submit until the boxes are ticked, then sends each consent with the hash of the text shown, and the invite code', async () => {
+    api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/consent' });
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    await screen.findByLabelText('Invite code');
+    fill(/^Email$/, 'xin@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByText('Tick every box above to continue.')).toBeInTheDocument();
+    expect(api.signup).not.toHaveBeenCalled();
+
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+    fill(/^Invite code$/, 'abcde-fghjk');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/consent'));
+    expect(api.signup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'xin@example.test',
+        inviteCode: 'ABCDE-FGHJK',
+        marketingOptIn: false,
+        // The version and hash of the text beside each box, as the policy served it.
+        consents: [
+          { type: 'pipl_basic_processing', granted: true, proseVersion: 'catalog.v1', proseHash: 'a'.repeat(64) },
+          { type: 'age_16_plus', granted: true, proseVersion: 'catalog.v1', proseHash: 'b'.repeat(64) },
+          { type: 'pipl_cross_border', granted: true, proseVersion: 'catalog.v1', proseHash: 'c'.repeat(64) },
+        ],
+      }),
+    );
+  });
+
+  it('one unticked box is enough to refuse: the cross-border consent is its own box', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    await screen.findByLabelText('Invite code');
+    fill(/^Email$/, 'xin@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I have read and agree to the User Agreement and the Privacy Policy.' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I am 16 or older.' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByText('Tick every box above to continue.')).toBeInTheDocument();
+    expect(api.signup).not.toHaveBeenCalled();
+  });
+
+  it('the consent text changed while the form was open: the new text is loaded, the boxes are asked again, and the next try sends the new hash', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    await screen.findByLabelText('Invite code');
+    fill(/^Email$/, 'xin@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fill(/^Invite code$/, 'ABCDE-FGHJK');
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+
+    const reworded = {
+      ...CN0_INVITE_POLICY,
+      requiredConsents: CN0_INVITE_POLICY.requiredConsents.map((c) =>
+        c.type === 'pipl_cross_border' ? { ...c, prose: { ...c.prose, text: 'New wording of the cross-border consent.', version: 'catalog.v2', hash: 'd'.repeat(64) } } : c,
+      ),
+    };
+    cnApi.getSignupPolicy.mockResolvedValue(reworded);
+    api.signup.mockRejectedValueOnce(wireError(422, 'consent_required', { outdated: ['pipl_cross_border'], proseVersion: 'catalog.v2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByText('The agreement text was updated. Read it again and tick the boxes to continue.')).toBeInTheDocument();
+    const fresh = await screen.findByRole('checkbox', { name: 'New wording of the cross-border consent.' });
+    for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
+    expect(nav.replace).not.toHaveBeenCalled();
+
+    api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/consent' });
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+    expect(fresh).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/onboarding/consent'));
+    const sent = (api.signup.mock.calls.at(-1)![0] as { consents: Array<{ type: string; proseHash: string; proseVersion: string }> }).consents;
+    expect(sent.find((c) => c.type === 'pipl_cross_border')).toMatchObject({ proseHash: 'd'.repeat(64), proseVersion: 'catalog.v2' });
+  });
+
+  it('shows the server’s answers in the real wire shape: a bad invite, a missing invite, a missing consent', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: {} });
+    await screen.findByLabelText('Invite code');
+    fill(/^Email$/, 'xin@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+    const submit = () => fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    api.signup.mockRejectedValueOnce(wireError(422, 'invite_invalid'));
+    submit();
+    expect(await screen.findByText('That invite code is not valid or has been used.')).toBeInTheDocument();
+    api.signup.mockRejectedValueOnce(wireError(422, 'invite_invalid', { missing: true }));
+    submit();
+    expect(await screen.findByText('Enter an invite code to create a new account.')).toBeInTheDocument();
+    api.signup.mockRejectedValueOnce(wireError(422, 'consent_required', { missing: ['pipl_cross_border'] }));
+    submit();
+    expect(await screen.findByText('Accept the required agreements to create an account.')).toBeInTheDocument();
+    // "Sign-up is not open" appears only when the server says so.
+    expect(screen.queryByText('Sign-up with email is not open yet. Existing accounts can still sign in.')).toBeNull();
+    api.signup.mockRejectedValueOnce(wireError(403, 'signup_closed'));
+    submit();
+    expect(await screen.findByText('Sign-up with email is not open yet. Existing accounts can still sign in.')).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it('next to the phone form it shares that form’s boxes instead of showing a second set', async () => {
+    cnApi.getSignupPolicy.mockResolvedValue({ ...CN0_INVITE_POLICY, methods: { phoneOtp: true, wechatWeb: false, wechatInApp: false } });
+    api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/consent' });
+    renderWithBrand(<AuthEntryView mode="signup" />, { brand: 'goapply', flags: { 'auth.phoneOtp': true } });
+    await screen.findByLabelText('Invite code');
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    openEmail();
+    // Still one set of boxes and one invite field.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+    expect(screen.getAllByLabelText('Invite code')).toHaveLength(1);
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
+    fill(/^Invite code$/, 'ABCDE-FGHJK');
+    fill(/^Email$/, 'xin@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(api.signup).toHaveBeenCalledWith(expect.objectContaining({ inviteCode: 'ABCDE-FGHJK', consents: expect.any(Array) })));
+    // The shared boxes carry the same texts, so the email form still sends their hashes.
+    const sent = (api.signup.mock.calls.at(-1)![0] as { consents: Array<{ proseHash?: string }> }).consents;
+    expect(sent.map((c) => c.proseHash)).toEqual(['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)]);
+  });
+
+  it('RoboApply sign-up sends no invite code and RoboApply’s agreements only', async () => {
+    api.signup.mockResolvedValue({ user: { id: 'u1' }, token: 'j', next: '/onboarding/situation' });
+    renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
+    fill(/^Email$/, 'new@example.test');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByLabelText("I'm 16 or older"));
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(api.signup).toHaveBeenCalled());
+    const sent = api.signup.mock.calls[0]![0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('inviteCode');
+    expect(sent.consents).toEqual([{ type: 'age_16_plus', granted: true, proseVersion: expect.any(String) }]);
+    expect(cnApi.getSignupPolicy).not.toHaveBeenCalled();
+  });
+});
+
+describe('which methods sit behind "Other ways to sign in"', () => {
+  const R = AUTH_METHOD_REGISTRY;
+  const ids = (list: Array<{ id: string }>) => list.map((m) => m.id);
+
+  it('GoApply: email is secondary while phone or WeChat is available; RoboApply has none', () => {
+    expect(SECONDARY_AUTH_METHODS).toEqual({ roboapply: [], goapply: ['email_password'] });
+    const go = layoutAuthMethods('goapply', [R.phone_otp, R.wechat, R.email_password]);
+    expect([ids(go.primary), ids(go.secondary)]).toEqual([['phone_otp', 'wechat'], ['email_password']]);
+    const wechatOnly = layoutAuthMethods('goapply', [R.wechat, R.email_password]);
+    expect([ids(wechatOnly.primary), ids(wechatOnly.secondary)]).toEqual([['wechat'], ['email_password']]);
+    const robo = layoutAuthMethods('roboapply', [R.email_password, R.google]);
+    expect([ids(robo.primary), ids(robo.secondary)]).toEqual([['email_password', 'google'], []]);
+  });
+
+  it('a secondary method moves up when nothing else is available', () => {
+    const alone = layoutAuthMethods('goapply', [R.email_password]);
+    expect([ids(alone.primary), ids(alone.secondary)]).toEqual([['email_password'], []]);
+    expect(layoutAuthMethods('goapply', [])).toEqual({ primary: [], secondary: [] });
   });
 });
 
@@ -277,6 +545,20 @@ describe('password reset pages', () => {
     });
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/jobs'));
     expect(api.resetPassword).toHaveBeenCalledWith('tok', 'abcdefg1');
+  });
+
+  it('reset on an account with two-step sign-in: the password is saved, then the code page (no session yet)', async () => {
+    const refresh = vi.fn(async () => null);
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null, refresh: refresh as never });
+    api.resetPassword.mockRejectedValue(wireError(401, 'two_factor_required', { next: '/login/2fa?next=%2Fjobs', methods: ['totp', 'recovery'], expiresInSec: 300 }));
+    renderWithBrand(<ResetPasswordView token="tok" />, { flags: {} });
+    fill(/^New password$/, 'abcdefg1');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save new password' }));
+    });
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/login/2fa?next=%2Fjobs'));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
 

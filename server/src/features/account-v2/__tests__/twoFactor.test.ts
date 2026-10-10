@@ -5,7 +5,9 @@
 // minted session, only a valid second factor mints a new one, codes cannot be
 // replayed, challenges are single-use, bound to their brand, limited to 5
 // wrong tries and fail closed when the check itself breaks; enrolment stays
-// closed while any sign-in path skips the check.
+// closed while any sign-in path skips the check. Since INT-01 every listed
+// path is gated (one marker and one gate call per session call), so enrolment
+// is open on the real list; turning it on or off ends older bearer JWTs.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,6 +30,8 @@ const ROBO = getBrand('roboapply');
 const GO = getBrand('goapply');
 const ENV = { TOTP_ENCRYPTION_KEY: 'b'.repeat(64) };
 const ALL_GATED: SignInPath[] = SIGN_IN_PATHS.map((p) => ({ ...p, gated: true }));
+/** The list as it was before a path is wired: used to show enrolment closes again. */
+const ungate = (...ids: string[]): SignInPath[] => SIGN_IN_PATHS.map((p) => ({ ...p, gated: !ids.includes(p.id) }));
 const START = new Date('2026-10-10T12:00:05Z');
 
 function reason(err: unknown): string | undefined {
@@ -48,11 +52,13 @@ function setup(overrides: Partial<TwoFactorDeps> = {}) {
   let now = START;
   const store = createMemoryTwoFactorStore();
   const revokeOtherSessions = vi.fn(async () => undefined);
+  const cutOffBearerTokens = vi.fn(async (_userId: string, _at: Date) => undefined);
   const svc = new TwoFactorService({
     store,
     env: () => ENV,
     now: () => now,
     revokeOtherSessions,
+    cutOffBearerTokens,
     qrDataUrl: async () => 'data:image/png;base64,QR',
     signInPaths: ALL_GATED,
     ...overrides,
@@ -61,6 +67,7 @@ function setup(overrides: Partial<TwoFactorDeps> = {}) {
     svc,
     store,
     revokeOtherSessions,
+    cutOffBearerTokens,
     setNow: (d: Date) => {
       now = d;
     },
@@ -80,12 +87,49 @@ async function enrolled(t: ReturnType<typeof setup>, userId = 'u1') {
 
 describe('readiness', () => {
   it('keeps enrolment closed while any sign-in path skips the check', () => {
-    const r = totpAvailability(ROBO, { env: ENV, storeAvailable: true });
+    const r = totpAvailability(ROBO, { env: ENV, storeAvailable: true, paths: ungate('auth.passwordReset', 'authCn.sessions') });
     expect(r.available).toBe(false);
     expect(r.reason).toBe('sign_in_paths_ungated');
     expect(r.ungated).toContain('auth.passwordReset');
     expect(r.ungated).not.toContain('authCn.sessions'); // cn-only path
-    expect(totpAvailability(GO, { env: ENV, storeAvailable: true }).ungated).toContain('authCn.sessions');
+    expect(totpAvailability(GO, { env: ENV, storeAvailable: true, paths: ungate('authCn.sessions') }).ungated).toEqual(['authCn.sessions']);
+    // A cn-only path that is ungated does not close RoboApply.
+    expect(totpAvailability(ROBO, { env: ENV, storeAvailable: true, paths: ungate('authCn.sessions') })).toMatchObject({ available: true, ungated: [] });
+  });
+
+  it('every listed sign-in path is gated (INT-01), each with its own marker in its file', () => {
+    expect(SIGN_IN_PATHS.filter((p) => !p.gated).map((p) => p.id)).toEqual([]);
+    expect(SIGN_IN_PATHS.map((p) => p.id).sort()).toEqual(
+      [
+        'auth.bearerJwt',
+        'auth.emailVerifyJson',
+        'auth.emailVerifyLink',
+        'auth.login',
+        'auth.oauthCallbackJson',
+        'auth.oauthCallbackRedirect',
+        'auth.oauthComplete',
+        'auth.passwordReset',
+        'authCn.sessions',
+        'web.emailLoginForm',
+      ].sort(),
+    );
+    for (const p of SIGN_IN_PATHS) {
+      const src = readFileSync(join(process.cwd(), p.file), 'utf8');
+      // The marker appears exactly once: one gate per call site, never shared.
+      expect(src.split(p.marker).length - 1, `${p.id}: "${p.marker}" in ${p.file}`).toBeGreaterThanOrEqual(1);
+      if (p.marker.startsWith('2fa-gate:')) expect(src.split(`// ${p.marker}`).length - 1, `${p.id} marker comment`).toBe(1);
+    }
+  });
+
+  it('one gate call per session call in each file (no session call without its own gate)', () => {
+    for (const rule of GATE_COVERAGE) {
+      const src = readFileSync(join(process.cwd(), rule.file), 'utf8');
+      const c = gateCoverage(src, rule);
+      expect(c.issuers, `${rule.file} session calls`).toBeGreaterThan(0);
+      expect(c.gates, `${rule.file}: ${c.issuers} session calls, ${c.gates} gate calls`).toBe(c.issuers);
+      const markers = SIGN_IN_PATHS.filter((p) => p.file === rule.file).length;
+      expect(markers, `${rule.file}: one readiness entry per session call`).toBe(c.issuers);
+    }
   });
 
   it('needs the storage and the brand key', () => {
@@ -144,10 +188,20 @@ describe('readiness', () => {
     });
   });
 
-  it('closes enrolment on the real path list today', async () => {
+  it('opens enrolment on the real path list: the status reports available and enrolling works', async () => {
     const t = setup({ signInPaths: undefined });
+    expect(totpAvailability(ROBO, { env: ENV, storeAvailable: true })).toEqual({ available: true, reason: null, ungated: [] });
     const status = await t.svc.status('u1', ROBO);
-    expect(status.available).toBe(false);
+    expect(status.available).toBe(true);
+    await expect(t.svc.enrol('u1', ROBO, 'u@example.test')).resolves.toMatchObject({ secret: expect.any(String) });
+    // GoApply needs its own sealing key; the paths no longer hold it back.
+    expect(totpAvailability(GO, { env: ENV, storeAvailable: true })).toMatchObject({ available: false, reason: 'key_missing', ungated: [] });
+    expect(totpAvailability(GO, { env: { CN_TOTP_ENCRYPTION_KEY: 'c'.repeat(64) }, storeAvailable: true }).ungated).toEqual([]);
+  });
+
+  it('closes again as soon as a path is listed ungated (a new way to sign in starts ungated)', async () => {
+    const t = setup({ signInPaths: [...SIGN_IN_PATHS, { id: 'auth.newPath', file: 'server/src/features/auth/routes.ts', marker: '2fa-gate:new-path', gated: false }] });
+    expect((await t.svc.status('u1', ROBO)).available).toBe(false);
     await rejectsWith(t.svc.enrol('u1', ROBO, 'u@example.test'), 'provider_not_configured', 'totp_not_available');
   });
 });
@@ -219,6 +273,58 @@ describe('TwoFactorService', () => {
     expect(await t.svc.requiresChallenge('u1')).toBe(false);
     expect(t.revokeOtherSessions).toHaveBeenCalledWith('u1', 'sess_keep');
     await rejectsWith(t.svc.disable('u1', ROBO, { code: totpAt(secret, t.now()) }, null), 'conflict', 'totp_not_enrolled');
+  });
+
+  it('turning it on or off ends bearer JWTs issued before that moment (User.tokensValidAfter), before the sessions go', async () => {
+    const t = setup();
+    const order: string[] = [];
+    t.cutOffBearerTokens.mockImplementation(async () => {
+      order.push('jwt');
+    });
+    t.revokeOtherSessions.mockImplementation(async () => {
+      order.push('sessions');
+    });
+    const { secret } = await t.svc.enrol('u1', ROBO, 'u@example.test');
+    // Starting enrolment changes nothing yet.
+    expect(t.cutOffBearerTokens).not.toHaveBeenCalled();
+    const enabledAt = t.now();
+    const { recoveryCodes } = await t.svc.verify('u1', ROBO, totpAt(secret, t.now()), 'sess_current');
+    expect(t.cutOffBearerTokens).toHaveBeenCalledTimes(1);
+    expect(t.cutOffBearerTokens).toHaveBeenLastCalledWith('u1', enabledAt);
+    expect(order).toEqual(['jwt', 'sessions']);
+    expect(await t.svc.requiresChallenge('u1')).toBe(true);
+
+    // A wrong code changes nothing.
+    await rejectsWith(t.svc.disable('u1', ROBO, { code: '000000' }, 'sess_current'), 'invalid_request', 'totp_invalid');
+    expect(t.cutOffBearerTokens).toHaveBeenCalledTimes(1);
+
+    t.tick(120);
+    const disabledAt = t.now();
+    await t.svc.disable('u1', ROBO, { recoveryCode: recoveryCodes[0]! }, 'sess_current');
+    expect(t.cutOffBearerTokens).toHaveBeenCalledTimes(2);
+    expect(t.cutOffBearerTokens).toHaveBeenLastCalledWith('u1', disabledAt);
+    expect(t.revokeOtherSessions).toHaveBeenLastCalledWith('u1', 'sess_current');
+  });
+
+  it('a failed cut-off write fails the change loudly and leaves everything as it was', async () => {
+    let fail = true;
+    const t = setup({
+      cutOffBearerTokens: async () => {
+        if (fail) throw new Error('db down');
+      },
+    });
+    const { secret } = await t.svc.enrol('u1', ROBO, 'u@example.test');
+    await expect(t.svc.verify('u1', ROBO, totpAt(secret, t.now()), 'sess')).rejects.toThrow('db down');
+    // Not turned on, nobody signed out: the same code can be tried again.
+    expect(await t.svc.requiresChallenge('u1')).toBe(false);
+    expect(t.revokeOtherSessions).not.toHaveBeenCalled();
+    fail = false;
+    const { recoveryCodes } = await t.svc.verify('u1', ROBO, totpAt(secret, t.now()), 'sess');
+    expect(await t.svc.requiresChallenge('u1')).toBe(true);
+    // Turning it off fails the same way: it stays on.
+    fail = true;
+    await expect(t.svc.disable('u1', ROBO, { recoveryCode: recoveryCodes[0]! }, 'sess')).rejects.toThrow('db down');
+    expect(await t.svc.requiresChallenge('u1')).toBe(true);
   });
 
   it('regenerates recovery codes with a current code; the old ones stop working', async () => {

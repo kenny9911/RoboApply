@@ -48,7 +48,6 @@ vi.mock('../../../roboapply/engine/middleware/seekerAuth.js', () => ({
   requireSeekerProfile: (_req: unknown, _res: unknown, next: () => void) => next(),
   seekerAuth: [],
 }));
-vi.mock('../../../roboapply/services/RoboApplyMissionService.js', () => ({ getMissionForUser: vi.fn(async () => null) }));
 
 import { startRouteHarness, type RouteHarness } from '../../../test/routeHarness.js';
 import { getBrand } from '../../../platform/brand/registry.js';

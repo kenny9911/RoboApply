@@ -23,14 +23,31 @@ export {
   startLoginChallenge,
 } from './loginChallenge.js';
 export type { ChallengeStore, CompletedSignIn, GateOutcome, LoginChallengeDeps } from './loginChallenge.js';
+export {
+  CHALLENGE_COOKIE_PATH,
+  TWO_FACTOR_PAGE,
+  TWO_FACTOR_UNAVAILABLE_CODE,
+  TwoFactorChallengeError,
+  TwoFactorUnavailableError,
+  clearChallengeCookie,
+  redirectToTwoFactor,
+  sendTwoFactorRequired,
+  sendTwoFactorUnavailable,
+  setChallengeCookie,
+  twoFactorPagePath,
+  twoFactorRequiredBody,
+} from './challengeResponse.js';
+export type { IssuedChallenge, TwoFactorRequiredBody } from './challengeResponse.js';
 export { TwoFactorService } from './twoFactor.js';
 export type { SecondFactor, SecondFactorResult, TwoFactorDeps } from './twoFactor.js';
 export { StudentService, eligibleSchoolDomain } from './student.js';
 export type { StudentDeps } from './student.js';
 
 import type { ProductBrand } from '../../platform/brand/registry.js';
-import { createPrismaChallengeStore, type LoginChallengeDeps } from './loginChallenge.js';
+import { createPrismaChallengeStore, type ChallengeDb, type LoginChallengeDeps } from './loginChallenge.js';
 import { studentServiceInstance, twoFactorServiceInstance } from './routes.js';
+import { createPrismaTwoFactorStore } from './store.js';
+import { TwoFactorService, defaultTwoFactorDeps } from './twoFactor.js';
 import type { SecondFactor, SecondFactorResult } from './twoFactor.js';
 
 export interface TwoFactorSeam {
@@ -47,18 +64,42 @@ export const studentService = {
   isVerified: (userId: string): Promise<boolean> => studentServiceInstance().isVerified(userId),
 };
 
+/** The delegates the sign-in gate touches when it runs on a caller's client. */
+export type LoginChallengeDb = ChallengeDb & {
+  session: { deleteMany(args: { where: { token: string } }): Promise<unknown> };
+  user: { findUnique(args: object): Promise<{ isActive?: boolean | null; seekerProfile?: { deletedAt?: Date | null } | null } | null> };
+};
+
+export interface LoginChallengeOverrides {
+  /**
+   * Run the gate on this database client instead of the shared one (areas
+   * whose services take an injected client, e.g. auth-cn; their tests pass
+   * the in-memory fake). The two-factor table is read through it too.
+   */
+  db?: LoginChallengeDb;
+  /** Mint the session after the second step (default: `createSeekerSession`). */
+  createSession?: (userId: string) => Promise<{ token: string }>;
+  now?: () => Date;
+}
+
 /** Production collaborators for the sign-in gate (lazy imports keep tests free of the database). */
-export function loginChallengeDeps(): LoginChallengeDeps {
-  const db = async () => (await import('../../lib/prisma.js')).default;
+export function loginChallengeDeps(overrides: LoginChallengeOverrides = {}): LoginChallengeDeps {
+  const own = overrides.db;
+  const db = async (): Promise<LoginChallengeDb> => own ?? ((await import('../../lib/prisma.js')).default as unknown as LoginChallengeDb);
   return {
-    twoFactor: twoFactorServiceInstance(),
+    twoFactor: own ? new TwoFactorService({ ...defaultTwoFactorDeps(), store: createPrismaTwoFactorStore(own) }) : twoFactorServiceInstance(),
     challenges: createPrismaChallengeStore(db),
-    now: () => new Date(),
+    now: overrides.now ?? (() => new Date()),
     invalidateSession: async (token) => {
+      if (own) {
+        await own.session.deleteMany({ where: { token } });
+        return;
+      }
       const { invalidateSeekerSession } = await import('../../roboapply/engine/lib/seekerSession.js');
       await invalidateSeekerSession(token);
     },
     createSession: async (userId) => {
+      if (overrides.createSession) return overrides.createSession(userId);
       const { createSeekerSession } = await import('../../roboapply/engine/lib/seekerSession.js');
       return createSeekerSession(userId);
     },

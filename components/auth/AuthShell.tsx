@@ -118,6 +118,7 @@ function ContextLead() {
   const ctx = entryContext(params);
   const job = useEntryJob(ctx.jobId);
   if (ctx.kind === 'resume_check') return <p className="auth-lead">{t('panel.resumeCheck')}</p>;
+  if (ctx.kind === 'resume_job_match') return <p className="auth-lead">{t('panel.resumeJobMatch')}</p>;
   if ((ctx.kind === 'apply' || ctx.kind === 'job') && job) {
     return (
       <p className="auth-lead">

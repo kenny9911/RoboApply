@@ -1,9 +1,7 @@
 {
   "authCn": {
     "consent": {
-      "agreement": "I am 16 or older and I agree to the <terms>User Agreement</terms> and the <privacy>Privacy Policy</privacy>.",
-      "crossBorder": "I agree that my information is stored and processed outside mainland China, in the United States, by these providers: Neon (database), Vercel (hosting), LiveKit Cloud (voice practice), Deepgram and Cartesia (speech), and Resend (email). I can withdraw this later; withdrawing closes and deletes the account.",
-      "agreeFirst": "Tick the box above to continue."
+      "agreeFirst": "Tick every box above to continue."
     },
     "phone": {
       "label": "Phone number",
@@ -28,6 +26,8 @@
     "submit": "Sign in or create account",
     "submitting": "Signing in…",
     "signupClosed": "Sign-up is not open yet. Existing accounts can still sign in.",
+    "otherMethods": "Other ways to sign in",
+    "otherMethodsEmail": "Email and password",
     "wechat": {
       "button": "Continue with WeChat",
       "inWechat": "Continue with WeChat",
@@ -47,6 +47,7 @@
       "invite_missing": "Enter an invite code to create a new account.",
       "signup_closed": "Sign-up is not open yet.",
       "consent_required": "Accept the required agreements to create an account.",
+      "consent_outdated": "The agreement text was updated. Read it again and tick the boxes to continue.",
       "phone_taken": "This number is already used by another account.",
       "phone_mismatch": "This is not the number on your account.",
       "identity_proof_invalid": "That check did not pass. Try again.",

@@ -28,7 +28,9 @@ import { MINUTE, type RateWindow } from '../../platform/ratelimit/defaults.js';
 import { maskCnPhone, type ConsentInput, type OtpPurpose } from './contract.js';
 import { createGoApplyAccount, routeAfterSignIn, safeNext } from './accounts.js';
 import { isUniqueViolation, type AuthCnDb } from './db.js';
+import type { RawSignals } from '../growth/index.js';
 import { AuthCnError } from './errors.js';
+import { afterAccountCreated, afterPhoneBound, afterWechatLinked, type AccountHooks } from './hooks.js';
 import { assertInviteRedeemable, redeemInviteIn } from './inviteService.js';
 import type { ConsumeFn, OtpService } from './otpService.js';
 import { assertSignupOpen, checkSignupConsents, cnSignupMode } from './signupPolicy.js';
@@ -47,6 +49,8 @@ export interface PhoneAuthDeps {
   now: () => Date;
   /** DB-backed limiter (platform consumeRateLimit). */
   consume: ConsumeFn;
+  /** Invite attribution, invite check and the phone practice credit (hooks.ts). Absent = none run. */
+  hooks?: AccountHooks;
 }
 
 export interface SignInResult {
@@ -109,6 +113,10 @@ export function createPhoneAuthService(deps: PhoneAuthDeps) {
       next?: string;
       locale?: string | null;
       ip: string;
+      /** The invite-friends code from the signup link (`?ref=`); read only when the account is new. */
+      ref?: string | null;
+      /** Risk signals of this request for the invite check (hashed before storage). */
+      signals?: RawSignals;
     }): Promise<SignInResult> {
       const { brand, phoneE164 } = input;
       // Check the code first (wrong codes count toward the lock), but spend it
@@ -143,6 +151,7 @@ export function createPhoneAuthService(deps: PhoneAuthDeps) {
             now: deps.now(),
           });
         });
+        await afterAccountCreated(deps.hooks, userId, { ref: input.ref, signals: input.signals, phoneVerified: true, now: deps.now() });
         return { userId, isNewUser: true, nextRoute: await routeAfterSignIn(brand, deps.env, 'account', input.next) };
       } catch (err) {
         // Two first sign-ins with the same number at once: the loser signs in.
@@ -189,6 +198,9 @@ export function createPhoneAuthService(deps: PhoneAuthDeps) {
           await tx.session.deleteMany({ where: { userId: me.id } });
           await tx.user.delete({ where: { id: me.id } });
         });
+        // The caller's WeChat identity now belongs to the number's account: a
+        // WeChat link to an existing account, so the invite check runs (soft).
+        await afterWechatLinked(deps.hooks, owner.id);
         const signedIn = await signInExisting(brand, owner, input.next);
         return { userId: owner.id, merged: true, nextRoute: signedIn.nextRoute };
       }
@@ -199,6 +211,7 @@ export function createPhoneAuthService(deps: PhoneAuthDeps) {
         if (isUniqueViolation(err)) throw new AuthCnError('phone_taken');
         throw err;
       }
+      await afterPhoneBound(deps.hooks, me.id);
       const profile = await profileOf(me.id);
       return {
         userId: me.id,
@@ -290,6 +303,8 @@ export function createPhoneAuthService(deps: PhoneAuthDeps) {
         if (isUniqueViolation(err)) throw new AuthCnError('phone_taken');
         throw err;
       }
+      // An account bound before the credit existed gets it now; the ledger key makes a repeat a no-op.
+      await afterPhoneBound(deps.hooks, me.id);
       // 4. Sign out everywhere else.
       const revoked = await db.session.deleteMany({
         where: { userId: me.id, ...(input.keepSessionToken ? { token: { not: input.keepSessionToken } } : {}) },

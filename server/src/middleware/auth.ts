@@ -148,6 +148,78 @@ export function resetLastActiveTouchesForTests(): void {
   lastActiveTouchedAt.clear();
 }
 
+// ─── Bearer JWT cut-off (two-step sign-in; F-TRUST-07) ───────────────────
+//
+// A JWT is stateless: signing out the user's sessions does not end it. When
+// two-step sign-in is turned on or off, `User.tokensValidAfter` is set to
+// that moment (features/account-v2 TwoFactorService), and a JWT issued before
+// it is treated like an expired one. Null = no cut-off. The column is read
+// fresh on every JWT request (the 30-second user cache would otherwise keep
+// an old token alive on other instances), and a failed read rejects the
+// token: this check fails closed.
+
+export type TokenCutoffReader = (userId: string) => Promise<Date | null>;
+
+const defaultTokenCutoffReader: TokenCutoffReader = async (userId) => {
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { tokensValidAfter: true } });
+  return row?.tokensValidAfter ?? null;
+};
+
+let tokenCutoffReader: TokenCutoffReader = defaultTokenCutoffReader;
+
+/** Tests only: replace the `User.tokensValidAfter` read (null restores the database read). */
+export function setTokenCutoffReaderForTests(reader: TokenCutoffReader | null): void {
+  tokenCutoffReader = reader ?? defaultTokenCutoffReader;
+}
+
+/**
+ * Pure: was this JWT issued before the user's cut-off? `iat` is in seconds
+ * (JWT), the cut-off a timestamp. No cut-off → never. A token without `iat`
+ * cannot be placed in time, so it is refused once a cut-off exists. A token
+ * issued in the same second as the cut-off is refused too (strict).
+ */
+export function isJwtBeforeCutoff(iat: number | null | undefined, cutoff: Date | string | null | undefined): boolean {
+  if (!cutoff) return false;
+  const cutoffMs = new Date(cutoff).getTime();
+  if (!Number.isFinite(cutoffMs)) return false;
+  if (typeof iat !== 'number' || !Number.isFinite(iat)) return true;
+  return iat * 1000 < cutoffMs;
+}
+
+type JwtUserResult =
+  | { status: 'ok'; user: AuthUser }
+  /** Bad signature or expired. */
+  | { status: 'invalid' }
+  /** Issued before `User.tokensValidAfter` (or the cut-off could not be read). */
+  | { status: 'cut_off' }
+  /** A valid token for a user that no longer exists. */
+  | { status: 'no_user' };
+
+/** Verify a bearer JWT and apply the cut-off. Shared by requireAuth, optionalAuth and the WS upgrade path. */
+async function resolveJwtUser(token: string): Promise<JwtUserResult> {
+  const payload = authService.verifyToken(token);
+  if (!payload) return { status: 'invalid' };
+  const user = await authService.getUserById(payload.userId);
+  if (!user) return { status: 'no_user' };
+  let cutoff: Date | null;
+  try {
+    cutoff = await tokenCutoffReader(payload.userId);
+  } catch (err) {
+    logger.warn?.('AUTH', 'token cut-off could not be read; bearer JWT refused', {
+      userId: payload.userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { status: 'cut_off' };
+  }
+  if (isJwtBeforeCutoff(payload.iat, cutoff)) return { status: 'cut_off' };
+  return { status: 'ok', user };
+}
+
+/** A refused bearer JWT may fall back to the session cookie / header the request also carries. */
+function jwtFallbackAllowed(result: JwtUserResult): boolean {
+  return result.status === 'invalid' || result.status === 'cut_off';
+}
+
 /**
  * Validate an API key and return the associated user
  */
@@ -316,10 +388,10 @@ export async function resolveUserFromTokens(
         resolvedSessionToken = token;
       }
     } else {
-      const payload = authService.verifyToken(token);
-      if (payload) {
-        user = await authService.getUserById(payload.userId);
-      } else if (tokenSource === 'authorization') {
+      const jwt = await resolveJwtUser(token);
+      if (jwt.status === 'ok') {
+        user = jwt.user;
+      } else if (jwtFallbackAllowed(jwt) && tokenSource === 'authorization') {
         const fallback = tokens.cookieSessionToken || tokens.headerSessionToken;
         if (fallback) {
           const sessionUser = await authService.validateSession(fallback);
@@ -444,12 +516,14 @@ export async function requireAuth(
         req.sessionToken = token;
       }
     } else {
-      // Validate JWT
-      const payload = authService.verifyToken(token);
-      if (payload) {
-        user = await authService.getUserById(payload.userId);
-      } else if (tokenSource === 'authorization') {
-        // If local JWT is stale, fall back to session tokens (cookie/header) when available.
+      // Validate JWT.
+      // 2fa-gate:bearer-jwt — a JWT issued before the user's last two-step
+      // sign-in change (`User.tokensValidAfter`) is refused like an expired one.
+      const jwt = await resolveJwtUser(token);
+      if (jwt.status === 'ok') {
+        user = jwt.user;
+      } else if (jwtFallbackAllowed(jwt) && tokenSource === 'authorization') {
+        // If the JWT is stale or cut off, fall back to session tokens (cookie/header) when available.
         const fallbackSessionToken = cookieSessionToken || headerSessionToken;
         if (fallbackSessionToken) {
           const sessionUser = await authService.validateSession(fallbackSessionToken);
@@ -592,10 +666,10 @@ export async function optionalAuth(
           req.sessionToken = token;
         }
       } else {
-        const payload = authService.verifyToken(token);
-        if (payload) {
-          user = await authService.getUserById(payload.userId);
-        } else if (tokenSource === 'authorization') {
+        const jwt = await resolveJwtUser(token);
+        if (jwt.status === 'ok') {
+          user = jwt.user;
+        } else if (jwtFallbackAllowed(jwt) && tokenSource === 'authorization') {
           const fallbackSessionToken = cookieSessionToken || headerSessionToken;
           if (fallbackSessionToken) {
             const sessionUser = await authService.validateSession(fallbackSessionToken);

@@ -17,7 +17,17 @@ import { clampLocaleToBrand, type BrandId, type ProductBrand } from '../../platf
 import { isEnabled } from '../../platform/flags.js';
 import { buildCookieOptions, SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import { createSeekerSession } from '../../roboapply/engine/lib/seekerSession.js';
+import { getCurrentBrandOrDefault, type BrandedRequest } from '../../platform/brand/brandContext.js';
+import {
+  gateSessionForSignIn,
+  loginChallengeDeps,
+  TwoFactorChallengeError,
+  TwoFactorUnavailableError,
+  type GateOutcome,
+  type LoginChallengeDeps,
+} from '../account-v2/index.js';
 import { firstValueRoute, nextStage, routeForStage, isStageOfBrand } from '../onboarding/index.js';
+import { isPriorityNext } from '../auth/contract.js';
 import type { ConsentInput } from './contract.js';
 import type { AuthCnTx } from './db.js';
 
@@ -96,9 +106,37 @@ export type SessionIssuer = (userId: string) => Promise<{ token: string }>;
 
 export const defaultSessionIssuer: SessionIssuer = (userId) => createSeekerSession(userId);
 
-/** Creates a DB session and sets the `ra_session_token` cookie (same constant as the legacy login). */
-export async function issueSessionCookie(req: Request, res: Response, userId: string, issue: SessionIssuer): Promise<string> {
+/** The second-factor gate's collaborators (account-v2); a service passes its own (same database). */
+export type SignInGate = () => LoginChallengeDeps | Promise<LoginChallengeDeps>;
+
+export const defaultSignInGate: SignInGate = () => loginChallengeDeps();
+
+/**
+ * Creates a DB session and sets the `ra_session_token` cookie (same constant
+ * as the legacy login) — unless the account has two-step sign-in on. Then
+ * the session just created is revoked, no cookie is set and
+ * `TwoFactorChallengeError` is thrown: the route answers 401
+ * `two_factor_required` (or redirects to /login/2fa) with the challenge
+ * cookie, exactly as POST /auth/login does. When the check itself cannot run
+ * the sign-in fails closed (`TwoFactorUnavailableError`, 503).
+ */
+export async function issueSessionCookie(
+  req: Request,
+  res: Response,
+  userId: string,
+  issue: SessionIssuer,
+  gate: SignInGate = defaultSignInGate,
+): Promise<string> {
   const { token } = await issue(userId);
+  const brand = (req as Partial<BrandedRequest>).brand ?? getCurrentBrandOrDefault();
+  let outcome: GateOutcome;
+  try {
+    // 2fa-gate:issue-session-cookie — phone code, WeChat (web, in-app, mini program) and the bind merge.
+    outcome = await gateSessionForSignIn(await gate(), { userId, brand, sessionToken: token });
+  } catch (err) {
+    throw new TwoFactorUnavailableError(err);
+  }
+  if (outcome.kind === 'challenge') throw new TwoFactorChallengeError(outcome);
   res.cookie(SESSION_COOKIE_NAME, token, buildCookieOptions(req, { sameSite: sameSite(), maxAge: SESSION_COOKIE_MAX_AGE_MS }));
   return token;
 }
@@ -121,8 +159,11 @@ export async function firstValueFor(brand: ProductBrand, env: EnvSource): Promis
 }
 
 /**
- * Where a sign-in lands: the unfinished onboarding stage (stage `account` →
- * the stage after it), else the requested `next`, else the first-value route.
+ * Where a sign-in lands: a `next` to a free-tool page first (the visitor asked
+ * to keep a result there, so it wins over unfinished onboarding, as on the
+ * email and Google / LINE paths: `isPriorityNext`, features/auth/contract.ts),
+ * else the unfinished onboarding stage (stage `account` → the stage after
+ * it), else the requested `next`, else the first-value route.
  */
 export async function routeAfterSignIn(
   brand: ProductBrand,
@@ -131,6 +172,8 @@ export async function routeAfterSignIn(
   next: string | null | undefined,
 ): Promise<string> {
   const id: BrandId = brand.id;
+  const wanted = safeNext(next);
+  if (wanted && isPriorityNext(wanted)) return wanted;
   const step = onboardingStep && isStageOfBrand(id, onboardingStep) ? onboardingStep : 'done';
   if (step !== 'done') {
     const stage = step === 'account' ? nextStage(id, 'account', null) : step;
@@ -138,5 +181,5 @@ export async function routeAfterSignIn(
     const route = stage === 'done' ? null : routeForStage(id, stage, {});
     if (route) return route;
   }
-  return safeNext(next) ?? (await firstValueFor(brand, env));
+  return wanted ?? (await firstValueFor(brand, env));
 }

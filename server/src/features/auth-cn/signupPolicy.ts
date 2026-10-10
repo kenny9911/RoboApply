@@ -14,13 +14,14 @@
 
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { brandEnv } from '../../platform/brand/brandEnv.js';
-import type { ProductBrand } from '../../platform/brand/registry.js';
+import { clampLocaleToBrand, type ProductBrand } from '../../platform/brand/registry.js';
 import { isEnabled } from '../../platform/flags.js';
 import { isSeekerConsentType } from '../../roboapply/engine/lib/seekerConsentTypes.js';
 import {
   AUTH_CN_CONSENT_PROSE_VERSION,
   requiredSignupConsentTypes,
   type ConsentInput,
+  type SignupPolicyConsent,
   type SignupPolicyResponse,
 } from './contract.js';
 import { AuthCnError } from './errors.js';
@@ -72,7 +73,29 @@ export function assertSignupOpen(env: EnvSource = process.env): void {
   if (!goapplySignupOpen(env)) throw new AuthCnError('signup_closed');
 }
 
-export async function buildSignupPolicy(brand: ProductBrand, env: EnvSource = process.env): Promise<SignupPolicyResponse> {
+/**
+ * The required signup consents with the text the form shows for each: the
+ * compliance catalog prose in `locale` (clamped to the brand; English where
+ * the catalog has no text in that language), its version and its hash. The
+ * form renders `prose.text` verbatim, so the hash names what was on screen.
+ */
+export async function requiredSignupConsentsWithProse(
+  brand: ProductBrand,
+  env: EnvSource = process.env,
+  locale?: string | null,
+): Promise<SignupPolicyConsent[]> {
+  // Lazy: the compliance area is loaded only when a signup form asks for its text.
+  const { findConsentDefinition, resolveConsentProse } = await import('../compliance/index.js');
+  const lang = clampLocaleToBrand(brand, locale ?? brand.defaultLocale);
+  return requiredSignupConsents(env).map((required) => {
+    const def = findConsentDefinition(brand.id, required.type);
+    if (!def) return required;
+    const { text, locale: proseLocale, version, hash } = resolveConsentProse(def, brand, lang);
+    return { ...required, prose: { text, locale: proseLocale, version, hash } };
+  });
+}
+
+export async function buildSignupPolicy(brand: ProductBrand, env: EnvSource = process.env, locale?: string | null): Promise<SignupPolicyResponse> {
   const [phoneOtp, wechatWeb, wechatInApp] = await Promise.all([
     isEnabled('auth.phoneOtp', { brand, env }),
     isEnabled('auth.wechatWeb', { brand, env }),
@@ -82,7 +105,7 @@ export async function buildSignupPolicy(brand: ProductBrand, env: EnvSource = pr
     // CN §2.3 rule 4: documents approved AND phone OTP or WeChat web live (production).
     signupOpen: goapplySignupOpen(env) && (env.NODE_ENV !== 'production' || phoneOtp || wechatWeb),
     inviteRequired: cnSignupMode(env) === 'invite',
-    requiredConsents: requiredSignupConsents(env),
+    requiredConsents: await requiredSignupConsentsWithProse(brand, env, locale),
     methods: { phoneOtp, wechatWeb, wechatInApp },
     legal: { termsPath: brand.legal.termsPath, privacyPath: brand.legal.privacyPath },
   };

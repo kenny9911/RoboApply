@@ -24,12 +24,20 @@ export interface SignupConsentInput {
   type: string;
   granted: boolean;
   proseVersion: string;
+  /**
+   * GoApply email signup: the hash of the consent text the form showed
+   * (`prose.hash` from GET /auth/phone/policy). The server stores a hash only
+   * when it equals the hash of a text it serves (features/auth/goapplySignup.ts).
+   */
+  proseHash?: string;
 }
 
 export interface ConsentRow {
   consentType: SeekerConsentType;
   granted: boolean;
   proseVersion: string;
+  /** sha256 of the prose the server was serving (compliance catalog); absent for rows without catalog prose. */
+  proseHash?: string | null;
 }
 
 export interface SignupAttributionInput {

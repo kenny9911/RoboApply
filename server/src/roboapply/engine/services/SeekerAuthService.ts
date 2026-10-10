@@ -23,7 +23,8 @@ import {
   type SeekerLocale,
   type SeekerMarket,
 } from '../lib/seekerLocale.js';
-import { parseBrandId, type BrandId } from '../../../platform/brand/registry.js';
+import { clampLocaleToBrand, getBrand, parseBrandId, type BrandId } from '../../../platform/brand/registry.js';
+import type { EnvSource } from '../../../platform/brand/brandEnv.js';
 import { createSeekerAccount } from '../../../features/auth/accounts.js';
 import {
   assertPassword,
@@ -31,9 +32,11 @@ import {
   onboardingEntryFrom,
   safeTimezone,
   validateSignupConsents,
+  type ConsentRow,
   type SignupAttributionInput,
   type SignupConsentInput,
 } from '../../../features/auth/signupPolicy.js';
+import type { GoApplySignupPlan } from '../../../features/auth/goapplySignup.js';
 
 const SALT_ROUNDS = 12;
 
@@ -63,6 +66,13 @@ export interface SeekerSignupInput {
   timezone?: string | null;
   /** Edge country (`x-vercel-ip-country`); only decides whether the PDPA notice applies. */
   country?: string | null;
+  /**
+   * GoApply only: the invite code. Required while `CN_SIGNUP_MODE=invite`
+   * (the default); spent inside the account-creation transaction.
+   */
+  inviteCode?: string | null;
+  /** Test seam for the GoApply signup rules (default `process.env`). */
+  env?: EnvSource;
 }
 
 export interface SeekerLoginInput {
@@ -187,19 +197,37 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
   // reads as English for every requestless background job. Callers now pass a
   // header/cookie-derived locale (roboapply/routes/auth.ts), so an unrecognised
   // value is a realistic input, not a programmer error.
-  const resolvedLocale = normalizeLocale(locale) ?? normalizeLocale(acceptLanguage);
+  let resolvedLocale = normalizeLocale(locale) ?? normalizeLocale(acceptLanguage);
   const brandForPolicy: BrandId = input.brand ?? 'roboapply';
 
-  // Agreements first (422 before anything is looked up or written): the
-  // required `age_16_plus` on both brands, the PDPA notice for zh-TW/TW on
-  // RoboApply, and the marketing choice (unchecked by default).
-  const consentRows = validateSignupConsents({
-    brand: brandForPolicy,
-    consents: input.consents,
-    marketingOptIn: input.marketingOptIn,
-    locale: resolvedLocale,
-    country: input.country ?? null,
-  });
+  // Agreements first (422 before anything is looked up or written).
+  //   RoboApply: the required `age_16_plus`, the PDPA notice for zh-TW/TW and
+  //   the marketing choice (unchecked by default).
+  //   GoApply: features/auth/goapplySignup.ts — signup open (production needs
+  //   the approved documents), the required consents incl. the CN-0
+  //   cross-border one (each stored with the version and hash of the text the
+  //   form showed, which the form sends back as `proseHash`) and,
+  //   in invite mode, a redeemable invite code. The invite is spent inside
+  //   the account-creation transaction below.
+  let consentRows: ConsentRow[];
+  let goapplyPlan: GoApplySignupPlan | null = null;
+  if (input.brand === 'goapply') {
+    resolvedLocale = clampLocaleToBrand(getBrand('goapply'), resolvedLocale) as SeekerLocale;
+    const { planGoApplyEmailSignup } = await import('../../../features/auth/goapplySignup.js');
+    goapplyPlan = await planGoApplyEmailSignup(
+      { consents: input.consents, inviteCode: input.inviteCode },
+      { env: input.env },
+    );
+    consentRows = goapplyPlan.consentRows;
+  } else {
+    consentRows = validateSignupConsents({
+      brand: brandForPolicy,
+      consents: input.consents,
+      marketingOptIn: input.marketingOptIn,
+      locale: resolvedLocale,
+      country: input.country ?? null,
+    });
+  }
 
   const existing = await prisma.user.findUnique({
     where: { email: normalizedEmail },
@@ -225,8 +253,12 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
   // timezone) + the consent rows. The role invariant guard in lib/prisma.ts
   // enforces roles[0] === role on the User create; createSeekerAccount sets
   // both together.
-  const created = await prisma.$transaction((tx) =>
-    createSeekerAccount(tx, {
+  const plan = goapplyPlan;
+  const created = await prisma.$transaction(async (tx) => {
+    // GoApply invite mode: a failed redemption (AuthCnError invite_invalid)
+    // rolls the whole signup back; nothing is created.
+    if (plan) await plan.redeemInvite(tx);
+    return createSeekerAccount(tx, {
       email: normalizedEmail,
       passwordHash,
       name: name ?? null,
@@ -239,8 +271,8 @@ async function signup(input: SeekerSignupInput): Promise<SeekerAuthResult> {
       consentRows,
       entry: onboardingEntryFrom(input.attribution),
       timezone: safeTimezone(input.timezone),
-    }),
-  );
+    });
+  });
 
   const session = await createSeekerSession(created.user.id);
   const token = generateJwt({ id: created.user.id, email: created.user.email });

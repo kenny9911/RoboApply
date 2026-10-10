@@ -9,11 +9,13 @@
       "signupApply": "Create a free account to see how you fit {jobTitle}",
       "signupJob": "Create a free account to save {jobTitle}",
       "signupResumeCheck": "Create a free account to keep your resume check",
+      "signupResumeJobMatch": "Create a free account to keep your resume and job match",
       "signupSubtitle": "See which jobs fit you and what to fix first.",
       "loginApply": "Sign in to see how you fit {jobTitle}"
     },
     "panel": {
       "resumeCheck": "Keep your resume check, then tailor your resume for each job you choose.",
+      "resumeJobMatch": "Keep your match result, then tailor your resume for that job.",
       "job": "You were looking at {jobTitle}. Sign up to see how your resume fits it.",
       "jobAtCompany": "You were looking at {jobTitle} at {company}. Sign up to see how your resume fits it."
     },
@@ -51,6 +53,7 @@
       "disabled": "This account is suspended. Contact support if you think this is a mistake.",
       "deleted": "This account was deleted.",
       "oauthError": "Sign-in with that provider did not finish. Try again, or use your email.",
+      "twoFactorUnavailable": "Sign-in is not available right now. Try again in a minute.",
       "notSeeker": "This email belongs to an account that is not a job-seeker account. Use a different email to sign in."
     },
     "otherBrand": {

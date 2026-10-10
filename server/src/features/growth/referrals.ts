@@ -31,8 +31,10 @@
 //      concurrent reject cannot land after credits were given.
 //
 // Brands: only brands in INVITE_SIGNUP_WIRED_BRANDS run the programme (every
-// sign-up path there passes the code). GoApply's phone/WeChat sign-ups do not
-// yet (request R-60-3), so GoApply answers `not_available` and attaches nothing.
+// sign-up path there passes the code). Both brands are listed: RoboApply's
+// email / Google / LINE sign-ups and GoApply's phone / WeChat / email
+// sign-ups all hand the code to growth.recordAttribution. A brand outside
+// the list answers `not_available` and attaches nothing.
 //
 // Rewards are practice credits (R-07: the practice bucket lives in
 // mockCreditService, granted through platform/credits `grantPracticeCredit`),

@@ -8,13 +8,28 @@
 //           unfinished, else `next`, else /jobs (sign-in only, never on every
 //           page view). A 409 account_other_brand (password matched an
 //           account of the other brand) shows the "continue there" notice.
+//           A 401 two_factor_required (the password matched an account with
+//           two-step sign-in on; no session exists yet) goes to /login/2fa,
+//           carrying `next`.
 //   signup  email · password with its rule checklist · the agreements
 //           (marketing unchecked, required age, PDPA for zh-TW/TW) →
 //           /auth/signup → the first onboarding screen. An email that belongs
 //           to the other brand gets the same "check your email" screen.
+//           GoApply: its own agreement boxes (the user agreement, the age
+//           confirmation and, while data is processed outside the mainland,
+//           the separate cross-border consent) and, while sign-up is
+//           invite-only, the invite code. They are the same boxes the phone
+//           form shows (one shared set); this form renders them only when no
+//           other method on the page does. Each box shows the text the
+//           sign-up policy serves, and the form sends that text's hash, so
+//           the stored consent record names what was on screen. If the text
+//           changed meanwhile (422 consent_required, `outdated`), the new
+//           text is loaded and the boxes are asked again.
+//           A `next` to a free-tool page wins over the first onboarding
+//           screen (the visitor asked to keep a result there).
 // No partial-signup capture: nothing is sent before the visitor submits.
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -23,7 +38,9 @@ import { login, signup } from '../../../lib/api/auth';
 import { RoboApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import { signInRoute } from '../../../lib/auth/signInRoute';
-import { browserTimeZone } from '../../../lib/auth/entry';
+import { browserTimeZone, priorityNext } from '../../../lib/auth/entry';
+import { isTwoFactorRequired, twoFactorHref } from '../../../lib/auth/twoFactor';
+import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { Btn } from '../../v3/primitives/Btn';
 import { AuthError, AuthField } from '../AuthShell';
@@ -31,6 +48,18 @@ import { agreementsComplete, consentsFrom, useAuthEntry } from '../agreements';
 import { AgreementsFields } from '../../features/auth/AgreementsFields';
 import { OtherBrandNotice, otherBrandUrlOf } from '../../features/auth/OtherBrandNotice';
 import { PasswordRules, passwordOk } from '../../features/auth/PasswordRules';
+import {
+  InviteCodeField,
+  SignupConsents,
+  agreementSatisfied,
+  authCnErrorMessage,
+  isConsentOutdated,
+  prefillAccessCode,
+  shownConsentsFromPolicy,
+  signupInputs,
+  useSignupInputs,
+  useSignupPolicy,
+} from '../../features/auth-cn';
 import styles from '../../features/auth/auth.module.css';
 import type { AuthMethodProps } from './registry';
 
@@ -75,6 +104,11 @@ function LoginForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucces
       onSuccess?.();
       router.replace(signInRoute(me, next ?? entry?.next ?? null));
     } catch (err) {
+      // Two-step sign-in: the password was right; the authenticator code is next.
+      if (isTwoFactorRequired(err)) {
+        router.replace(twoFactorHref(err, next ?? entry?.next ?? null));
+        return;
+      }
       const code = rawCode(err);
       if (code === 'account_other_brand') setOtherBrandUrl(otherBrandUrlOf((err as RoboApiError).payload));
       else if (code === 'account_disabled') setError(t('loginForm.disabled'));
@@ -123,14 +157,32 @@ function LoginForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucces
 
 function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSuccess'>) {
   const t = useTranslations('auth');
+  const tCn = useTranslations('authCn');
   const router = useRouter();
   const { refresh } = useAuth();
   const entry = useAuthEntry();
+  const brand = useBrand();
+  const cn = brand.market === 'cn';
   const agreements = entry?.agreements ?? { age: false, pdpa: false, marketing: false, pdpaRequired: false };
+
+  // GoApply: the agreement boxes and the invite code live in the store the
+  // phone form and the WeChat button share. This form shows them only when
+  // neither of those is on the page.
+  const policyQuery = useSignupPolicy(cn);
+  const policy = policyQuery.data;
+  const [cnInputs] = useSignupInputs();
+  const [hostsCnInputs, setHostsCnInputs] = useState(false);
+  useEffect(() => {
+    if (!cn || signupInputs.get().host !== null) return undefined;
+    signupInputs.set({ host: 'email' });
+    prefillAccessCode();
+    setHostsCnInputs(true);
+    return () => signupInputs.reset();
+  }, [cn]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<{ key: string; signIn?: boolean } | null>(null);
+  const [error, setError] = useState<{ key: string; signIn?: boolean; text?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checkEmail, setCheckEmail] = useState<string | null>(null);
   const [touchedEmail, setTouchedEmail] = useState(false);
@@ -149,20 +201,30 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
       setError({ key: 'signupForm.weakPassword' });
       return;
     }
-    if (!agreementsComplete(agreements)) {
+    if (cn) {
+      if (!agreementSatisfied(cnInputs, policy)) {
+        setError({ key: 'cn', text: tCn('consent.agreeFirst') });
+        return;
+      }
+    } else if (!agreementsComplete(agreements)) {
       setError({ key: agreements.age ? 'signupForm.pdpaRequired' : 'signupForm.ageRequired' });
       return;
     }
     setSubmitting(true);
     try {
+      const invite = cnInputs.invite.trim();
       const res = await signup({
         email: email.trim().toLowerCase(),
         password,
         locale: entry?.locale,
-        consents: consentsFrom(agreements),
-        marketingOptIn: agreements.marketing,
+        // GoApply: the required consents of the sign-up policy, each with the
+        // hash of the text shown beside its box. The server records a consent
+        // only for a text it serves, under that text's own version and hash.
+        consents: cn ? shownConsentsFromPolicy(policy) : consentsFrom(agreements),
+        marketingOptIn: cn ? false : agreements.marketing,
         attribution: entry?.attribution,
         timezone: browserTimeZone(),
+        ...(cn && invite ? { inviteCode: invite } : {}),
       });
       if (res.status === 'check_email') {
         setCheckEmail(email.trim().toLowerCase());
@@ -170,16 +232,27 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
       }
       const me = await refresh();
       onSuccess?.();
-      router.replace(('next' in res && res.next) || signInRoute(me, next ?? entry?.next ?? null));
+      const wanted = next ?? entry?.next ?? null;
+      router.replace(priorityNext(wanted) ?? (('next' in res && res.next) || signInRoute(me, wanted)));
     } catch (err) {
       const code = rawCode(err);
-      if (code === 'email_taken') setError({ key: 'signupForm.emailTaken', signIn: true });
+      // GoApply's sign-up rules answer with the same codes as the phone form.
+      if (cn && (code === 'invite_invalid' || code === 'consent_required')) {
+        setError({ key: 'cn', text: authCnErrorMessage(err, tCn) });
+        // The consent text changed while the form was open: show the new text
+        // and ask again (a tick is kept per text, so the boxes come back unticked).
+        if (isConsentOutdated(err)) {
+          signupInputs.set({ granted: {} });
+          void policyQuery.refetch();
+        }
+      }
+      else if (code === 'email_taken') setError({ key: 'signupForm.emailTaken', signIn: true });
       else if (code === 'age_consent_required') setError({ key: 'signupForm.ageRequired' });
       else if (code === 'pdpa_consent_required') setError({ key: 'signupForm.pdpaRequired' });
       else if (code === 'weak_password' || code === 'invalid_password') setError({ key: 'signupForm.weakPassword' });
       else if (code === 'invalid_email') setError({ key: 'signupForm.emailInvalid' });
       else if (code === 'rate_limited') setError({ key: 'errors.rateLimited' });
-      // GoApply email signup is closed server-side until WP-93 (invite + CN-0 consents).
+      // Shown only when the server says sign-up is closed (GoApply in production before its documents are approved).
       else if (code === 'signup_closed') setError({ key: 'signupForm.closed' });
       else setError({ key: 'signup.error_generic' });
     } finally {
@@ -223,9 +296,20 @@ function SignupForm({ next, onSuccess }: Pick<AuthMethodProps, 'next' | 'onSucce
         />
         <PasswordRules password={password} id="signup-password-rules" />
       </div>
-      {entry?.setAgreements ? <AgreementsFields value={agreements} onChange={entry.setAgreements} /> : null}
+      {cn ? (
+        hostsCnInputs ? (
+          <>
+            {policy?.inviteRequired ? <InviteCodeField id="auth-email-invite" /> : null}
+            <SignupConsents policy={policy} />
+          </>
+        ) : null
+      ) : entry?.setAgreements ? (
+        <AgreementsFields value={agreements} onChange={entry.setAgreements} />
+      ) : null}
       {error ? (
-        error.signIn ? (
+        error.text ? (
+          <AuthError message={error.text} />
+        ) : error.signIn ? (
           <div className="auth-error" role="alert">
             <span>
               {t.rich(error.key, {

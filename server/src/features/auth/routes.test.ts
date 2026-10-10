@@ -21,7 +21,9 @@ import { FLAG_KEYS, setFlagOverrideLoader } from '../../platform/flags.js';
 import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import { createAuthFeatureService, type AuthDb } from './service.js';
 import { createAccountRouter, createAuthRouter, OAUTH_BINDER_COOKIE, oauthRedirectUri } from './routes.js';
+import { OAUTH_TOUCH_PARAM_MAX } from './contract.js';
 import { getBrand } from '../../platform/brand/registry.js';
+import { CONSENT_PROSE_VERSION } from '../compliance/consents.js';
 
 const ENV_ON = {
   NODE_ENV: 'development',
@@ -227,6 +229,21 @@ describe('OAuth', () => {
     expect(cookieOf(cb.headers)).toMatch(new RegExp(`${OAUTH_BINDER_COOKIE}=;`));
   });
 
+  it('start carries the stored touches (ft / lt) into the state; a malformed or over-long one is dropped and the start still works', async () => {
+    finish.mockResolvedValue({ provider: 'google', subject: 'g-touch', email: 'touch@example.test', emailVerified: true, name: null, avatarUrl: null });
+    const ft = encodeURIComponent(JSON.stringify({ ref: 'ABCDEFGH', utmSource: 'newsletter', at: '2026-10-01T00:00:00.000Z' }));
+    const before = db.$rows('rAAuthToken').length;
+    await startJson(`${A}/oauth/google/start?age=1&ft=${ft}&lt=not-json`);
+    const state = db.$rows('rAAuthToken').slice(before).find((t) => t.kind === 'oauth_state')!.payload as { touches: { firstTouch: Record<string, unknown>; lastTouch: unknown } };
+    expect(state.touches.firstTouch).toMatchObject({ ref: 'ABCDEFGH', utmSource: 'newsletter' });
+    expect(state.touches.lastTouch).toBeNull();
+
+    const tooLong = encodeURIComponent(JSON.stringify({ utmCampaign: 'x'.repeat(OAUTH_TOUCH_PARAM_MAX), at: '2026-10-01T00:00:00.000Z' }));
+    const res = await fetch(`${on.baseUrl}${A}/oauth/google/start?age=1&ft=${tooLong}`, { redirect: 'manual', headers: { 'x-forwarded-host': ROBO } });
+    expect(res.status).toBe(302);
+    expect((db.$rows('rAAuthToken').filter((t) => t.kind === 'oauth_state').at(-1)!.payload as { touches: unknown }).touches).toBeNull();
+  });
+
   it('callback without the binding cookie of the browser that started it → 400 oauth_state_invalid (login CSRF)', async () => {
     finish.mockResolvedValue({ provider: 'google', subject: 'g-att', email: 'attacker@example.test', emailVerified: true, name: null, avatarUrl: null });
     const { state } = await startJson(`${A}/oauth/google/start?age=1`);
@@ -345,18 +362,28 @@ describe('/account identities, consents, sessions', () => {
     expect([del.status, del.body.code]).toEqual([409, 'last_identity']);
   });
 
-  it('consents: record, 422 on unknown or locked, list', async () => {
+  it('consents go through the compliance ledger: record with the prose hash, refuse unknown / locked / outdated, list', async () => {
     signedIn = { id: 'u1' };
-    const ok = await on.request<{ data: { type: string } }>('POST', `${ACC}/consents`, { host: ROBO, body: { type: 'analytics', granted: true, proseVersion: 'v1' } });
+    const V = CONSENT_PROSE_VERSION;
+    const post = (body: Record<string, unknown>) =>
+      on.request<{ code: string; data: { type: string; proseHash: string }; details?: { reason?: string } }>('POST', `${ACC}/consents`, { host: ROBO, body });
+    const ok = await post({ type: 'marketing_email', granted: true, proseVersion: V });
     expect(ok.status).toBe(200);
-    expect(ok.body.data.type).toBe('analytics');
-    expect((await on.request<{ code: string }>('POST', `${ACC}/consents`, { host: ROBO, body: { type: 'x', granted: true, proseVersion: 'v1' } })).body.code).toBe('unknown_consent');
-    expect(
-      (await on.request<{ code: string }>('POST', `${ACC}/consents`, { host: ROBO, body: { type: 'age_16_plus', granted: false, proseVersion: 'v1' } })).body.code,
-    ).toBe('consent_locked');
-    expect((await on.request('POST', `${ACC}/consents`, { host: ROBO, body: { type: 'analytics' } })).status).toBe(422);
-    const list = await on.request<{ data: { consents: unknown[] } }>('GET', `${ACC}/consents`, { host: ROBO });
-    expect(list.body.data.consents).toHaveLength(1);
+    expect(ok.body.data).toMatchObject({ type: 'marketing_email', granted: true, proseVersion: V, accountClosing: false });
+    expect(db.$rows('seekerConsentRecord')[0]).toMatchObject({ consentType: 'marketing_email', proseHash: ok.body.data.proseHash });
+    expect(ok.body.data.proseHash).toMatch(/^[0-9a-f]{64}$/);
+
+    const unknown = await post({ type: 'x', granted: true, proseVersion: V });
+    expect([unknown.status, unknown.body.details?.reason]).toEqual([422, 'consent_unknown']);
+    const locked = await post({ type: 'age_16_plus', granted: false, proseVersion: V });
+    expect([locked.status, locked.body.details?.reason]).toEqual([422, 'consent_not_withdrawable']);
+    const outdated = await post({ type: 'marketing_email', granted: false, proseVersion: 'v1' });
+    expect([outdated.status, outdated.body.code]).toEqual([409, 'version_conflict']);
+    expect((await post({ type: 'marketing_email' })).status).toBe(422);
+    expect(db.$rows('seekerConsentRecord')).toHaveLength(1);
+
+    const list = await on.request<{ data: { consents: Array<{ type: string; granted: boolean }> } }>('GET', `${ACC}/consents`, { host: ROBO });
+    expect(list.body.data.consents).toEqual([expect.objectContaining({ type: 'marketing_email', granted: true, proseVersion: V })]);
   });
 
   it('sessions: current flagged; revoke', async () => {

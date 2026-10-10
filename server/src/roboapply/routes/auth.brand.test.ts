@@ -51,10 +51,11 @@ vi.mock('../../middleware/auth.js', () => ({
 }));
 vi.mock('../engine/services/SeekerProfileService.js', () => ({ default: { getByUserId: vi.fn() } }));
 vi.mock('../engine/middleware/seekerAuth.js', () => ({ requireSeekerProfile: (_req: unknown, _res: unknown, next: () => void) => next() }));
-vi.mock('../services/RoboApplyMissionService.js', () => ({ getMissionForUser: vi.fn(async () => null) }));
 
 import seekerAuthService, { SeekerAccountOtherBrandError } from '../engine/services/SeekerAuthService.js';
 import { startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
+import { getBrand } from '../../platform/brand/registry.js';
+import { findConsentDefinition, resolveConsentProse } from '../../features/compliance/consents.js';
 
 const ENV = { NODE_ENV: 'development' };
 const GOAPPLY = 'goapply.localhost:3621';
@@ -90,12 +91,22 @@ beforeEach(() => {
 
 // WP-10 signup rules: the age agreement is required and the password needs a digit.
 const AGE = [{ type: 'age_16_plus', granted: true, proseVersion: 'v1' }];
+/** GoApply's required signup consents while data is processed outside the mainland (CN-0). */
+const CN0 = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map((type) => ({
+  type,
+  granted: true,
+  proseVersion: 'v1',
+  // The hash of the text the form shows beside the box (the compliance catalog prose in Chinese).
+  proseHash: resolveConsentProse(findConsentDefinition('goapply', type)!, getBrand('goapply'), 'zh').hash,
+}));
+const OPEN_ENV = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' };
 
 describe('SeekerAuthService brand stamping and gate', () => {
   it('signup writes User.brand from the request brand; no brand → column default', async () => {
     m.findUnique.mockResolvedValue(null);
-    await seekerAuthService.signup({ email: 'new@example.test', password: 'long-password1', brand: 'goapply', consents: AGE });
-    expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'goapply' });
+    // GoApply's own signup rules apply (features/auth/goapplySignup.ts); here in open mode.
+    await seekerAuthService.signup({ email: 'new@example.test', password: 'long-password1', brand: 'goapply', consents: CN0, env: OPEN_ENV });
+    expect(m.userCreate.mock.calls[0]![0].data).toMatchObject({ brand: 'goapply', market: 'cn' });
     await seekerAuthService.signup({ email: 'new2@example.test', password: 'long-password1', consents: AGE });
     expect(m.userCreate.mock.calls[1]![0].data).not.toHaveProperty('brand');
   });
@@ -133,18 +144,24 @@ describe('legacy /auth routes pass the host brand', () => {
 
   const body = { email: 'u@example.test', password: 'right-password' };
 
-  it('email signup on the GoApply host is closed until WP-93 (403 signup_closed, nothing created)', async () => {
-    // Interim gate: no invite redemption and no CN-0 pipl_cross_border consent
-    // on this path yet. Brand stamping itself is covered at the service level
-    // above (seekerAuthService.signup with brand 'goapply').
+  it('email signup on the GoApply host goes through GoApply’s rules: no invite → 422, RoboApply’s agreement alone → 422, nothing created', async () => {
+    // Invite mode is the default; the full flow (invite spent in the
+    // transaction, consent rows with the prose hash) is covered on an
+    // in-memory database in features/auth/legacyAuth.test.ts.
     m.findUnique.mockResolvedValue(null);
-    const res = await h.request<{ code: string }>('POST', '/api/v1/roboapply/auth/signup', {
+    const noInvite = await h.request<{ code: string; details?: { missing?: boolean } }>('POST', '/api/v1/roboapply/auth/signup', {
       host: GOAPPLY,
-      body: { ...body, password: 'long-password1', consents: AGE },
+      body: { ...body, password: 'long-password1', consents: CN0 },
     });
-    expect([res.status, res.body.code]).toEqual([403, 'signup_closed']);
+    expect([noInvite.status, noInvite.body.code, noInvite.body.details?.missing]).toEqual([422, 'invite_invalid', true]);
+    const ageOnly = await h.request<{ code: string }>('POST', '/api/v1/roboapply/auth/signup', {
+      host: GOAPPLY,
+      body: { ...body, password: 'long-password1', consents: AGE, inviteCode: 'ABCDE-FGHJK' },
+    });
+    expect([ageOnly.status, ageOnly.body.code]).toEqual([422, 'consent_required']);
     expect(m.userCreate).not.toHaveBeenCalled();
-    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(noInvite.headers.get('set-cookie')).toBeNull();
+    expect(ageOnly.headers.get('set-cookie')).toBeNull();
   });
 
   it('email signup on the RoboApply host still creates a RoboApply account', async () => {

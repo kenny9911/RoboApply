@@ -15,6 +15,7 @@ import { requestPasswordReset, resetPassword } from '../../../lib/api/auth';
 import { RoboApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import { signInRoute } from '../../../lib/auth/signInRoute';
+import { isTwoFactorRequired, twoFactorHref } from '../../../lib/auth/twoFactor';
 import { useCapabilities } from '../../../lib/flags';
 import { Btn } from '../../v3/primitives/Btn';
 import { AuthBrandMark, AuthError, AuthField } from '../../auth/AuthShell';
@@ -106,6 +107,12 @@ export function ResetPasswordView({ token }: { token: string }) {
       const me = await refresh();
       router.replace(res.next || signInRoute(me, null));
     } catch (err) {
+      // The password was changed, but the account has two-step sign-in on:
+      // a new password alone does not sign in. The code page is next.
+      if (isTwoFactorRequired(err)) {
+        router.replace(twoFactorHref(err));
+        return;
+      }
       const code = err instanceof RoboApiError ? ((err.payload as { code?: string } | undefined)?.code ?? err.code) : undefined;
       if (code === 'token_expired') setError({ key: 'reset.expired', requestNew: true });
       else if (code === 'token_invalid') setError({ key: 'reset.invalid', requestNew: true });

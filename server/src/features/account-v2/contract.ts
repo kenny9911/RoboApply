@@ -7,6 +7,9 @@
 // The login challenge step lives in the legacy auth router (WP-79 hook):
 //   POST /api/v1/roboapply/auth/login      → 401 `two_factor_required` (challenge cookie set)
 //   POST /api/v1/roboapply/auth/login/2fa  → the normal login response
+// Every other route that signs a browser in (password reset, email link,
+// Google / LINE, phone code, WeChat) answers the same 401 (or redirects to
+// /login/2fa) through challengeResponse.ts.
 //
 // Area error reasons travel in `details.reason` (read with `apiErrorReason`).
 
@@ -62,10 +65,16 @@ export const LoginTwoFactorBodySchema = z
   .strict()
   .refine((v) => Boolean(v.code) !== Boolean(v.recoveryCode), { message: 'Send either code or recoveryCode.' });
 
-/** 401 body `details` of POST /auth/login when a second factor is needed. */
+/**
+ * 401 body `details` of any sign-in route (password, reset, email link,
+ * Google / LINE, phone code, WeChat) when a second factor is needed.
+ */
 export interface TwoFactorRequiredDetails {
-  /** The web page that asks for the code. */
-  next: '/login/2fa';
+  /**
+   * The web page that asks for the code: `/login/2fa`, with `?next=<path>`
+   * when the route knows where the person continues afterwards.
+   */
+  next: string;
   methods: Array<'totp' | 'recovery'>;
   /** Seconds the challenge stays valid. */
   expiresInSec: number;
