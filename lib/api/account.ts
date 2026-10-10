@@ -13,6 +13,7 @@
 
 import { roboApi } from './client';
 import { API_BASE } from '../config';
+import type { CheckoutResponse } from './contracts/credits';
 
 // ─────────────────────────────────────────────────────────────────────
 // Enums / shared
@@ -190,10 +191,9 @@ export interface CancelPlanResponse {
 // Clone plans (WP-21b UI over WP-21a's server; PRODUCT_PLAN.md §6.3)
 //
 // The `/billing` checkout endpoints take a `planKey` body (WP-21a; the old
-// `{ tier }` body now answers 409). Switching is one server endpoint, adapted
-// below. Fields the WP-21b handoff still requests from the server (cancel
-// survey, `cancelAtPeriodEnd` on the summary) fail with the server's error and
-// the UI says so (no client fallback, nothing charged).
+// `{ tier }` body now answers 409) and answer the contract's `CheckoutResponse`
+// (server/src/features/credits/contract.ts): one type for both sides.
+// Switching is one server endpoint, adapted below.
 // ─────────────────────────────────────────────────────────────────────
 
 /** POST /billing/checkout (RoboApply, Stripe) and /billing/alipay (GoApply) with a clone plan key. */
@@ -210,10 +210,13 @@ export interface PlanCheckoutBody {
   cancelNext?: string;
 }
 
-/** Stripe answers `{ url }`; a CN rail answers an order with a pay URL or QR code. */
-export type PlanCheckoutResponse =
-  | { url: string }
-  | { orderId: string; payUrl?: string | null; qrCodeUrl?: string | null };
+/**
+ * What checkout answers, by `kind`: `redirect` (open `url`: Stripe, the Alipay
+ * cashier, WeChat Pay H5), `qr` (`qrCodeUrl` is the content of a payment code,
+ * e.g. a `weixin://` link — draw a QR code from it, never load it as an
+ * image) or `jsapi` (parameters for the WeChat in-app cashier).
+ */
+export type PlanCheckoutResponse = CheckoutResponse;
 
 /** POST /billing/switch/quote — what a legacy practice-plan subscriber pays to switch to Pro. Nothing is charged. */
 export interface SwitchQuote {

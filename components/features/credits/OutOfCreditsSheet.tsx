@@ -19,8 +19,13 @@
 // `402 credits_exhausted` there. It never blocks a non-metered action: it is
 // a dismissible sheet, the options are equal buttons (no preselected upsell),
 // and nothing waits on it.
+//
+// Each time it opens it records one `upgrade_viewed` product event
+// (`from: 'out_of_credits'`, with the bucket): the admin System panel's "Ran
+// out of credits" row counts those. Only the bucket name is sent.
 
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Sheet } from '../../v3/primitives/Sheet';
@@ -28,6 +33,7 @@ import { useOutOfCredits } from '../../../hooks/shared/useCreditGate';
 import { bucketSummary, useCredits } from '../../../hooks/shared/useCredits';
 import { usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
 import { useFlag } from '../../../lib/flags';
+import { track } from '../../../lib/analytics';
 import { bucketLabelKey, parseDate } from './labels';
 import styles from './credits.module.css';
 
@@ -49,6 +55,21 @@ export function OutOfCreditsSheet(_props: OutOfCreditsSheetProps = {}) {
   const isPractice = info?.bucket === 'practice';
   const { data } = useCredits({ enabled: info !== null && !isPractice });
   const plansQ = usePlans({ enabled: isPractice });
+  // Once per open: recorded when the sheet goes from closed to open. A
+  // re-render, a refetch or a second report while it is still open records
+  // nothing more; closing and opening again is a new view.
+  const open = info !== null;
+  const openBucket = info?.bucket ?? null;
+  const tracked = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      tracked.current = false;
+      return;
+    }
+    if (tracked.current || !openBucket) return;
+    tracked.current = true;
+    track('upgrade_viewed', { from: 'out_of_credits', bucket: openBucket });
+  }, [open, openBucket]);
   if (!info) return null;
 
   const window = bucketSummary(data?.summary, info.bucket)?.window ?? null;

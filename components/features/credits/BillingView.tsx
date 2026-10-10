@@ -5,6 +5,9 @@
 // plan (renewal or end date, practice interviews left), Manage payment
 // (Stripe portal), one-click Cancel with the once-only 7-day-pass link,
 // "Buy another pass" for passes, the plan sheet, and the invoice history link.
+// GoApply: a pass that is still running gets 续费 (`CnRenewButton`) when
+// WeChat Pay can take the payment now — the same pass bought again, its days
+// starting when the current ones end. Nothing renews by itself.
 // V2 (WP-79): the one quarterly suggestion (inline, once, dismissible) under
 // the current plan, and student verification above the plan sheet (only
 // when the `student` capability is on).
@@ -22,6 +25,7 @@ import { PaymentFailedBanner } from './PaymentFailedBanner';
 import { PlanPicker } from './PlanPicker';
 import { QuarterlySuggestion } from './QuarterlySuggestion';
 import { StudentVerification } from '../account-v2';
+import { CnRenewButton, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
 import { parseDate, planNameKey } from './labels';
 import styles from './credits.module.css';
 
@@ -63,6 +67,7 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
   const format = useFormatter();
   const brand = useBrand();
   const portal = usePaymentPortal();
+  const wechatPay = useWechatPayAvailable();
   // Set once the user cancels here, so the confirmation, the once-only pass
   // link and the optional survey stay on screen after the plan refetch
   // reports the cancellation (which hides the Cancel button itself).
@@ -99,6 +104,11 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
   }
   const canCancel = sub.autoRenews && !sub.cancelAtPeriodEnd;
   const canRenewPass = sub.isPass && !sub.autoRenews;
+  // 续费 with WeChat Pay: GoApply only, for a pass that is still running and
+  // still on sale. Otherwise the plain link to the plan sheet stays.
+  const passLive = !!end && end.getTime() > Date.now();
+  const renewWithWechat =
+    brand.market === 'cn' && canRenewPass && passLive && wechatPay.available && !!sub.planKey && sellableCnPlan(wechatPay.plans, sub.planKey)?.kind === 'pass';
 
   return (
     <section className={styles.card} aria-labelledby="billing-current" data-testid="current-plan">
@@ -118,7 +128,9 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
             {t('current.manage')}
           </Btn>
         ) : null}
-        {canRenewPass ? (
+        {renewWithWechat && sub.planKey ? (
+          <CnRenewButton planKey={sub.planKey} accessUntil={sub.periodEnd} onPaid={sub.refetch} navigate={navigate} />
+        ) : canRenewPass ? (
           <Btn as="a" href={sub.planKey ? `/settings/billing?plan=${encodeURIComponent(sub.planKey)}#plans` : '/settings/billing#plans'}>
             {t('current.renew')}
           </Btn>

@@ -19,10 +19,9 @@
 //   that fails releases its claim so the next daily run retries while the
 //   plan is still inside its reminder window.
 //
-//   runFridayNudgeSweep: RETIRED. The weekly practice nudge is promotional;
-//   WP-39a sends its successor under "Tips and reminders" (default off for
-//   EEA/UK/CH/CA visitors and GoApply). Kept as a no-op only because the cron
-//   handler still imports it; WP-75 deletes the cron entry and this export.
+//   The weekly practice nudge that used to live here is gone: it was
+//   promotional, so its successor is sent by the lifecycle mail under "Tips
+//   and reminders" (default off for EEA/UK/CH/CA visitors and GoApply).
 
 import prisma, { type ExtendedPrismaClient } from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
@@ -315,17 +314,4 @@ export async function runAnnualReminderSweep(opts: ReminderDeps = {}): Promise<S
     );
   }
   return result;
-}
-
-// ─── Retired: Friday "prep for next week" nudge ───────────────────────────────
-
-/**
- * @deprecated Retired by WP-21a. The weekly practice nudge is promotional and
- * moves to WP-39a's lifecycle sequence under "Tips and reminders". This no-op
- * stays only while `server/src/cron/handlers.ts` and RoboApplyCronService
- * import it; WP-75 deletes the `billing-friday-nudge` cron and this export.
- */
-export async function runFridayNudgeSweep(_opts: { now?: Date } = {}): Promise<SweepResult & { retired: true }> {
-  logger.info('RA_BILLING_REMINDER', 'friday nudge retired (WP-21a); nothing sent');
-  return { scanned: 0, sent: 0, skipped: 0, failed: 0, retired: true };
 }

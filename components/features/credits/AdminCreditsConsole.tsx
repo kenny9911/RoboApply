@@ -364,8 +364,10 @@ function TwRevenuePanel() {
   const q = useTwRevenue();
   const d = q.data;
   const share = d ? revenueShare(d.revenueTwd, d.thresholdTwd) : null;
-  const warnPct = d ? (d.warnAt <= 1 ? Math.round(d.warnAt * 100) : Math.round((d.warnAt / d.thresholdTwd) * 100)) : 70;
-  const warn = share !== null && share >= warnPct;
+  // `warnAt` is whole NT$ (the contract's one unit); the percentage in the
+  // copy is derived from it, and whether to warn is the server's own answer.
+  const warnPct = d && d.thresholdTwd > 0 ? Math.round((d.warnAt / d.thresholdTwd) * 100) : null;
+  const warn = d?.warning === true && warnPct !== null;
   const twd = (n: number) => format.number(n, { style: 'currency', currency: 'TWD', maximumFractionDigits: 0, minimumFractionDigits: 0 });
   const asOf = parseDate(d?.asOf);
   return (
@@ -396,7 +398,7 @@ function TwRevenuePanel() {
       ) : null}
       {warn ? (
         <div className={styles.banner} role="alert">
-          <p className={styles.body}>{t('warn', { pct: warnPct })}</p>
+          <p className={styles.body}>{t('warn', { pct: warnPct ?? 0 })}</p>
         </div>
       ) : null}
     </section>

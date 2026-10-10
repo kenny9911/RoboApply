@@ -8,7 +8,7 @@
 //   GET    /api/v1/roboapply/credits
 //   GET    /api/v1/roboapply/credits/history
 //   POST   /api/v1/roboapply/credits/cancel
-//   POST   /api/v1/roboapply/credits/cancel/survey   (requested from WP-21a)
+//   POST   /api/v1/roboapply/credits/cancel/survey
 //   GET    /api/v1/roboapply/billing/plans
 //   POST   /api/v1/public/cancel
 //   POST   /api/v1/public/cancel/confirm
@@ -72,13 +72,11 @@ export function cancelSubscription(body: In<typeof C.CancelSubscriptionBodySchem
   return call<C.CancelResponse>('POST', `/api/v1/roboapply/credits/cancel`, { ...opts, body });
 }
 
-/**
- * `credits.cancelSurvey` — POST /api/v1/roboapply/credits/cancel/survey
- * (requested from WP-21a). The optional "why did you cancel?" answer, sent
- * AFTER a cancel. Its own endpoint so it can never re-run the cancel's side
- * effects (a second confirmation email or cancel event). Records only.
- */
-export function sendCancelSurvey(body: In<typeof C.CancelSubscriptionBodySchema>, opts?: CallOptions): Promise<void> {
+// The optional "why did you cancel?" answer, sent AFTER a cancel. Its own
+// endpoint, which only stores the answer: it can never re-run the cancel's
+// side effects (a second confirmation email or cancel event). Answers 204.
+/** `credits.cancelSurvey` — POST /api/v1/roboapply/credits/cancel/survey */
+export function sendCancelSurvey(body: In<typeof C.CancelSurveyBodySchema>, opts?: CallOptions): Promise<void> {
   return call<void>('POST', `/api/v1/roboapply/credits/cancel/survey`, { ...opts, body });
 }
 

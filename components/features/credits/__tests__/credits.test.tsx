@@ -174,9 +174,9 @@ describe('PlanBadge', () => {
     api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: '2026-11-01T00:00:00Z', upgradable: false }));
     const { unmount } = renderUi(<PlanBadge />);
     const link = await screen.findByRole('link', { name: /Your plan: Pro/ });
-    // "Renews" waits until the subscription is known not to be cancelled.
+    // "Renews" is printed because the summary says the plan is not cancelled.
     await waitFor(() => expect(link).toHaveTextContent(/Renews Nov 1/));
-    expect(account.plan).toHaveBeenCalledTimes(1);
+    expect(account.plan).not.toHaveBeenCalled();
     expect(link).not.toHaveTextContent('See Pro');
     unmount();
     api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'pass', periodEnd: '2026-11-01T00:00:00Z', upgradable: false }));
@@ -184,21 +184,24 @@ describe('PlanBadge', () => {
     expect(await screen.findByRole('link', { name: /Your plan: Member/ })).toHaveTextContent(/Until Nov 1/);
   });
 
-  it('after a cancel it says "Until {date}", never "Renews"', async () => {
-    api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: '2026-11-01T00:00:00Z', upgradable: false }));
-    account.plan.mockResolvedValue({ ...(await account.plan()), current: { ...(await account.plan()).current, cancelAtPeriodEnd: true } });
+  it('after a cancel it says "Until {date}", never "Renews" (from the summary, with no extra request)', async () => {
+    api.getCredits.mockResolvedValue(
+      creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: '2026-11-01T00:00:00Z', upgradable: false, cancelAtPeriodEnd: true }),
+    );
     renderUi(<PlanBadge />);
     const link = await screen.findByRole('link', { name: /Your plan: Pro/ });
     await waitFor(() => expect(link).toHaveTextContent(/Until Nov 1/));
     expect(link).not.toHaveTextContent('Renews');
+    expect(account.plan).not.toHaveBeenCalled();
   });
 
-  it('summary.cancelAtPeriodEnd (when the server sends it) wins, with no extra request', async () => {
-    api.getCredits.mockResolvedValue(
-      creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: '2026-11-01T00:00:00Z', upgradable: false, cancelAtPeriodEnd: true } as never),
-    );
+  it('when the summary does not say (an older server), no date is claimed and nothing else is asked', async () => {
+    const res = creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: '2026-11-01T00:00:00Z', upgradable: false });
+    delete (res.summary as { cancelAtPeriodEnd?: boolean }).cancelAtPeriodEnd;
+    api.getCredits.mockResolvedValue(res);
     renderUi(<PlanBadge />);
-    expect(await screen.findByRole('link', { name: /Your plan: Pro/ })).toHaveTextContent(/Until Nov 1/);
+    const link = await screen.findByRole('link', { name: /Your plan: Pro/ });
+    expect(link).not.toHaveTextContent(/Renews|Until/);
     expect(account.plan).not.toHaveBeenCalled();
   });
 

@@ -7,8 +7,9 @@
 //   useCancelSurvey()        POST /credits/cancel/survey — the optional reason, after
 //                            the cancel; never the cancel endpoint again
 //   usePlanCheckout()        POST /billing/checkout | /billing/alipay {planKey, acks}
-//   useSwitchQuote()         POST /billing/switch/quote  (nothing charged)
-//   useConfirmSwitch()       POST /billing/switch/confirm (charges now)
+//                            → the contract's CheckoutResponse (`kind`: redirect | qr | jsapi)
+//   useSwitchQuote()         POST /billing/switch without `confirm` (nothing charged)
+//   useConfirmSwitch()       POST /billing/switch with `confirm` (charges now)
 //
 // Every success invalidates the credit summary and the legacy plan so the
 // page shows the server's new state (never an optimistic plan change).
@@ -25,7 +26,7 @@ import {
   type SwitchQuoteBody,
 } from '../../lib/api/account';
 import { cancelSubscription, sendCancelSurvey } from '../../lib/api/credits';
-import type { CancelResponse } from '../../lib/api/contracts/credits';
+import type { CancelResponse, CancelSurveyReason } from '../../lib/api/contracts/credits';
 import { CREDITS_QUERY_KEY } from '../shared/useCredits';
 import { PLANS_QUERY_KEY } from './usePlans';
 
@@ -48,7 +49,7 @@ export function useCancelSubscription(): UseMutationResult<CancelResponse, Error
 }
 
 export interface CancelSurveyVars {
-  reason?: string;
+  reason?: CancelSurveyReason;
   note?: string;
 }
 
@@ -73,12 +74,15 @@ export function usePlanCheckout(): UseMutationResult<PlanCheckoutResponse, Error
   });
 }
 
-/** The URL to send the browser to after checkout, or null when the server sent none. */
+/**
+ * The page to send the browser to after checkout, or null when this answer
+ * is not a redirect. Only `kind: 'redirect'` carries a page address; a `qr`
+ * answer's `qrCodeUrl` is the content of a payment code (a `weixin://` link),
+ * never somewhere to navigate or an image to load.
+ */
 export function checkoutRedirectUrl(res: PlanCheckoutResponse | null | undefined): string | null {
-  if (!res) return null;
-  if ('url' in res && typeof res.url === 'string' && res.url) return res.url;
-  if ('payUrl' in res && typeof res.payUrl === 'string' && res.payUrl) return res.payUrl;
-  return null;
+  if (!res || res.kind !== 'redirect') return null;
+  return typeof res.url === 'string' && /^https?:\/\//i.test(res.url) ? res.url : null;
 }
 
 export function useSwitchQuote(): UseMutationResult<SwitchQuote, Error, SwitchQuoteBody> {

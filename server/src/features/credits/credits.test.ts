@@ -1,8 +1,9 @@
 // @vitest-environment node
 //
 // Credits area routes (WP-21a): /credits, /credits/history, /credits/cancel,
-// /billing/plans, public /cancel, and the admin caps / overrides / FX / TW
-// revenue / refund-quote routes. Fake Prisma, fake Stripe, fake email.
+// /credits/cancel/survey, /billing/plans, public /cancel, and the admin caps /
+// overrides (audited) / FX / TW revenue / refund-quote routes. Fake Prisma,
+// fake Stripe, fake email.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,16 +14,22 @@ import { createFakePrisma } from '../../test/fakePrisma.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { setCreditCatalogConfigLoader, invalidateCreditCatalog } from '../../platform/credits/index.js';
 import { setFlagOverrideLoader } from '../../platform/flags.js';
+import { getBrand } from '../../platform/brand/registry.js';
 import {
+  CANCEL_SURVEY_LIMIT,
+  CancelSurveyStoreUnavailableError,
   CreditsAreaService,
   createBillingPlansRouter,
   createCreditsAdminRouter,
   createCreditsRouter,
+  createPrismaCancelSurveyStore,
   createPublicCancelRouter,
   hashToken,
   overrideProblem,
+  type CancelSurveyAnswer,
   type CreditsAreaDeps,
   type CreditsDb,
+  type OverrideAuditEntry,
 } from './index.js';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
@@ -53,6 +60,15 @@ const stripe = {
 };
 const invalidated: string[] = [];
 let stripeOn = true;
+/** The cancel-survey table: 'ok' stores, 'no_delegate' = not in the client, 'no_table' = Prisma P2021 on write. */
+let surveyTable: 'ok' | 'no_delegate' | 'no_table' = 'ok';
+const surveyRows: CancelSurveyAnswer[] = [];
+const auditRows: OverrideAuditEntry[] = [];
+let auditFails = false;
+const auditOverride = vi.fn(async (entry: OverrideAuditEntry) => {
+  if (auditFails) throw new Error('audit store down');
+  auditRows.push(entry);
+});
 
 function service(): CreditsAreaService {
   const deps: Partial<CreditsAreaDeps> = {
@@ -68,6 +84,14 @@ function service(): CreditsAreaService {
     getStripe: () => (stripeOn ? (stripe as never) : null),
     invalidateEntitlements: (u) => void invalidated.push(u),
     allocatePacks: (packs, balance) => new Map(packs.map((p) => [p.id, Math.min(p.remaining, balance)])),
+    surveys: {
+      available: async () => surveyTable !== 'no_delegate',
+      record: async (answer) => {
+        if (surveyTable !== 'ok') throw new CancelSurveyStoreUnavailableError();
+        surveyRows.push(answer);
+      },
+    },
+    auditOverride,
   };
   return new CreditsAreaService(deps);
 }
@@ -108,6 +132,10 @@ beforeEach(() => {
   invalidated.length = 0;
   limited = false;
   stripeOn = true;
+  surveyTable = 'ok';
+  surveyRows.length = 0;
+  auditRows.length = 0;
+  auditFails = false;
   invalidateCreditCatalog();
   db = createFakePrisma({
     uniqueFields: { appConfig: ['key'], rAAuthToken: ['tokenHash'] },
@@ -179,6 +207,98 @@ describe('POST /credits/cancel (one click)', () => {
   it('rejects unknown body fields', async () => {
     expect((await h.request<any>('POST', '/api/v1/roboapply/credits/cancel', { ...RA, body: { force: true } })).status).toBe(422);
   });
+
+  it('the 7-day pass is offered once per user, ever: a later cancellation of a new subscription offers nothing', async () => {
+    expect((await h.request<any>('POST', '/api/v1/roboapply/credits/cancel', { ...RA, body: {} })).body.data.alternative).toEqual({ planKey: 'pro_week_pass' });
+    // Months later: the user subscribed again and cancels again (`changed: true` again).
+    for (let i = 0; i < 2; i += 1) {
+      expect((await h.request<any>('POST', '/api/v1/roboapply/credits/cancel', { ...RA, body: {} })).body.data).toMatchObject({ status: 'cancelled', alternative: null });
+    }
+    expect([...offered]).toEqual(['u_1']);
+  });
+
+  it('offers nothing when the cancel changed nothing (already cancelled)', async () => {
+    cancel.mockResolvedValueOnce({ status: 'already_cancelled', accessUntil: LATER, planKey: 'pro_monthly', changed: false, account: {} });
+    const res = await h.request<any>('POST', '/api/v1/roboapply/credits/cancel', { ...RA, body: {} });
+    expect(res.body.data).toEqual({ status: 'already_cancelled', accessUntil: LATER.toISOString(), alternative: null });
+    expect(offered.size).toBe(0);
+  });
+});
+
+describe('POST /credits/cancel/survey (records the answer, nothing else)', () => {
+  const SURVEY = '/api/v1/roboapply/credits/cancel/survey';
+
+  it('stores the reason and the note with the subscription it is about; no cancel, no email', async () => {
+    const res = await h.request<any>('POST', SURVEY, { ...RA, body: { reason: 'found_job', note: '  Got an offer.  ' } });
+    expect(res.status).toBe(204);
+    expect(surveyRows).toEqual([{ userId: 'u_1', brand: 'roboapply', reason: 'found_job', note: 'Got an offer.', subscriptionId: 'row_1' }]);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('takes a reason alone or a note alone, and stores the brand of the request', async () => {
+    expect((await h.request<any>('POST', SURVEY, { ...RA, body: { reason: 'price' } })).status).toBe(204);
+    expect((await h.request<any>('POST', SURVEY, { ...GO, body: { note: 'Too many emails' } })).status).toBe(204);
+    expect(surveyRows.map((r) => [r.brand, r.reason, r.note])).toEqual([
+      ['roboapply', 'price', null],
+      ['goapply', null, 'Too many emails'],
+    ]);
+  });
+
+  it('refuses an empty answer, an unknown reason, an over-long note and unknown fields with 422', async () => {
+    for (const body of [{}, { note: '   ' }, { reason: 'because' }, { note: 'x'.repeat(1001) }, { reason: 'price', confirm: true }]) {
+      expect((await h.request<any>('POST', SURVEY, { ...RA, body })).status, JSON.stringify(body).slice(0, 40)).toBe(422);
+    }
+    expect(surveyRows).toEqual([]);
+  });
+
+  it('answers 503 storage_unavailable while the table is not in the client or not in the database', async () => {
+    for (const state of ['no_delegate', 'no_table'] as const) {
+      surveyTable = state;
+      const res = await h.request<any>('POST', SURVEY, { ...RA, body: { reason: 'pause' } });
+      expect(res.status, state).toBe(503);
+      expect(res.body).toMatchObject({ success: false, code: 'storage_unavailable', details: { reason: 'storage_unavailable' } });
+    }
+    expect(surveyRows).toEqual([]);
+  });
+
+  it('is limited per user (429)', async () => {
+    limited = true;
+    const res = await h.request<any>('POST', SURVEY, { ...RA, body: { reason: 'other' } });
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe(String(CANCEL_SURVEY_LIMIT[0].windowSec));
+    expect(surveyRows).toEqual([]);
+  });
+
+  describe('the Prisma adapter (no ScalarFieldEnum shim: it looks for the delegate)', () => {
+    const answer: CancelSurveyAnswer = { userId: 'u_1', brand: 'roboapply', reason: 'price', note: null, subscriptionId: 'row_1' };
+
+    it('is unavailable while the client has no rACancelSurvey delegate', async () => {
+      const store = createPrismaCancelSurveyStore(async () => ({}));
+      expect(await store.available()).toBe(false);
+      await expect(store.record(answer)).rejects.toBeInstanceOf(CancelSurveyStoreUnavailableError);
+    });
+
+    it('writes exactly the model fields through the delegate', async () => {
+      const create = vi.fn(async () => ({ id: 'cs_1' }));
+      const store = createPrismaCancelSurveyStore(async () => ({ rACancelSurvey: { create } }));
+      expect(await store.available()).toBe(true);
+      await store.record({ ...answer, note: 'n' });
+      expect(create).toHaveBeenCalledWith({ data: { userId: 'u_1', brand: 'roboapply', reason: 'price', note: 'n', subscriptionId: 'row_1' } });
+    });
+
+    it('maps a missing table or column (P2021 / P2022) to unavailable and passes other errors through', async () => {
+      for (const code of ['P2021', 'P2022']) {
+        const store = createPrismaCancelSurveyStore(async () => ({ rACancelSurvey: { create: async () => Promise.reject(Object.assign(new Error('missing'), { code })) } }));
+        await expect(store.record(answer)).rejects.toBeInstanceOf(CancelSurveyStoreUnavailableError);
+      }
+      const boom = createPrismaCancelSurveyStore(async () => ({ rACancelSurvey: { create: async () => Promise.reject(Object.assign(new Error('connection lost'), { code: 'P1001' })) } }));
+      await expect(boom.record(answer)).rejects.toThrow('connection lost');
+    });
+
+    // Needs a real database with the SCHEMA-6 diff applied (join J9 flips this).
+    it.todo('SR-INT-1 — Prisma round-trip: a posted answer is one RACancelSurvey row (userId, brand, reason, note, subscriptionId) and deleting the user removes it');
+  });
 });
 
 describe('GET /billing/plans', () => {
@@ -203,6 +323,27 @@ describe('GET /billing/plans', () => {
     expect(fresh.body.data.fxReference).toMatchObject({ currency: 'TWD', ratePerUsd: 32, source: 'Central Bank of the ROC', asOf: '2026-10-01', amounts: { pro_monthly: 800, pro_weekly: 320 } });
     await db.appConfig.update({ where: { key: 'fx.reference' }, data: { value: JSON.stringify({ TWD: { ratePerUsd: 32, source: 'CBC', asOf: '2026-08-01' } }) } });
     expect((await h.request<any>('GET', '/anon/plans', RA)).body.data.fxReference).toBeNull();
+  });
+
+  it('a Taiwan visitor sees TWD prices only for plans whose STRIPE_PRICE_<PLANKEY>_TWD pair is set', async () => {
+    const TW = { ...RA, headers: { 'cf-ipcountry': 'TW' } };
+    // No Taiwan price configured: USD only (the reference line, when fresh, is the only NT$ shown).
+    const usd = await h.request<any>('GET', '/anon/plans', TW);
+    expect(usd.body.data.checkout.country).toBe('TW');
+    expect(usd.body.data.plans.every((p: any) => p.localPrice === null)).toBe(true);
+    // The sheet reads the country the way checkout does: the edge's own header wins over one a client can send.
+    const spoofed = await h.request<any>('GET', '/anon/plans', { ...RA, headers: { 'cf-ipcountry': 'TW', 'x-vercel-ip-country': 'US' } });
+    expect(spoofed.body.data.checkout.country).toBe('US');
+
+    const twEnv = { ...ENV, STRIPE_PRICE_PRO_MONTHLY_TWD: 'price_m_twd', STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS: '74900' };
+    const svc = new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => twEnv, now: () => NOW });
+    const tw = await svc.plans(getBrand('roboapply'), { userId: null, country: 'TW' });
+    expect(tw.plans.find((p) => p.key === 'pro_monthly')?.localPrice).toMatchObject({ currency: 'TWD', amountMinor: 74900 });
+    // Only the configured plan; the others keep their USD price.
+    expect(tw.plans.filter((p) => p.localPrice !== null).map((p) => p.key)).toEqual(['pro_monthly']);
+    // The same deployment, a visitor elsewhere: no TWD.
+    const fr = await svc.plans(getBrand('roboapply'), { userId: null, country: 'FR' });
+    expect(fr.plans.every((p) => p.localPrice === null)).toBe(true);
   });
 
   it('GoApply: CNY passes, nothing purchasable until payments open, no TWD line', async () => {
@@ -265,6 +406,18 @@ describe('public /cancel (no sign-in)', () => {
     expect(cancel).toHaveBeenCalledTimes(2);
   });
 
+  it('an unusable link answers 410 with the code cancel_token_invalid at the top of the envelope', async () => {
+    const res = await h.request<any>('POST', '/api/v1/public/cancel/confirm', { ...RA, body: { token: 'x'.repeat(40) } });
+    expect(res.status).toBe(410);
+    // `code`, not `details.reason`: the web reads it with apiErrorCode().
+    expect(res.body).toMatchObject({ success: false, code: 'cancel_token_invalid' });
+    expect(res.body.details).toBeUndefined();
+    const token = await requestLink();
+    await h.request<any>('POST', '/api/v1/public/cancel/confirm', { ...RA, body: { token } });
+    const used = await h.request<any>('POST', '/api/v1/public/cancel/confirm', { ...RA, body: { token } });
+    expect(used.body).toMatchObject({ code: 'cancel_token_invalid' });
+  });
+
   it('refuses an expired link and a link used on the other brand', async () => {
     const token = await requestLink();
     await db.rAAuthToken.updateMany({ where: {}, data: { expiresAt: new Date(NOW.getTime() - 1) } });
@@ -316,6 +469,51 @@ describe('admin: entitlement overrides', () => {
     expect((await h.request<any>('DELETE', `/api/v1/roboapply/admin/credits/overrides/${created.body.data.id}`, RA)).status).toBe(404);
   });
 
+  it('writes one audit row per create and per delete, naming the admin and the person it is about', async () => {
+    const created = await h.request<any>('POST', '/api/v1/roboapply/admin/credits/overrides', {
+      ...RA,
+      body: { userId: 'u_go', key: 'bucket:tailor', value: 9, reason: 'Support case', expiresAt: '2026-11-01T00:00:00.000Z' },
+    });
+    expect(auditRows).toEqual([
+      {
+        action: 'created',
+        adminId: 'admin_1',
+        subjectUserId: 'u_go',
+        overrideId: created.body.data.id,
+        key: 'bucket:tailor',
+        value: 9,
+        expiresAt: '2026-11-01T00:00:00.000Z',
+        reason: 'Support case',
+      },
+    ]);
+    await h.request<any>('DELETE', `/api/v1/roboapply/admin/credits/overrides/${created.body.data.id}`, RA);
+    expect(auditRows).toHaveLength(2);
+    expect(auditRows[1]).toEqual({ action: 'deleted', adminId: 'admin_1', subjectUserId: 'u_go', overrideId: created.body.data.id, key: 'bucket:tailor', value: 9 });
+    // Refused writes change nothing, so they leave no row.
+    await h.request<any>('POST', '/api/v1/roboapply/admin/credits/overrides', { ...RA, body: { userId: 'ghost', key: 'flag:coaching', value: true, reason: 'x' } });
+    await h.request<any>('DELETE', '/api/v1/roboapply/admin/credits/overrides/missing', RA);
+    expect(auditOverride).toHaveBeenCalledTimes(2);
+  });
+
+  it('an audit failure never fails or undoes the override', async () => {
+    auditFails = true;
+    const created = await h.request<any>('POST', '/api/v1/roboapply/admin/credits/overrides', { ...RA, body: { userId: 'u_1', key: 'flag:coaching', value: true, reason: 'Beta' } });
+    expect(created.status).toBe(201);
+    expect(await db.rAEntitlementOverride.findMany({})).toHaveLength(1);
+    const del = await h.request<any>('DELETE', `/api/v1/roboapply/admin/credits/overrides/${created.body.data.id}`, RA);
+    expect(del.status).toBe(204);
+    expect(await db.rAEntitlementOverride.findMany({})).toHaveLength(0);
+    expect(auditOverride).toHaveBeenCalledTimes(2);
+    expect(auditRows).toEqual([]);
+  });
+
+  it('the console\'s own entry points stay unaudited here, so its /admin/overrides routes do not write the row twice', async () => {
+    const svc = service();
+    const row = await svc.createOverride({ userId: 'u_1', key: 'bucket:tailor', value: 4, reason: 'Console' }, 'admin_1');
+    await svc.deleteOverride(row.id, 'admin_1');
+    expect(auditOverride).not.toHaveBeenCalled();
+  });
+
   it('pages overrides with a cursor built from a cuid-length id', async () => {
     for (let i = 0; i < 51; i++) {
       await db.rAEntitlementOverride.create({
@@ -359,6 +557,10 @@ describe('admin: FX reference and TW revenue monitor', () => {
     await db.appConfig.create({ data: { key: 'fx.reference', value: JSON.stringify({ TWD: { ratePerUsd: 32, source: 'CBC', asOf: '2026-10-01' } }) } });
     const res = await h.request<any>('GET', '/api/v1/roboapply/admin/credits/tw-revenue', RA);
     expect(res.body.data).toMatchObject({ revenueUsdMinor: 100_000, revenueTwd: 32_000, thresholdTwd: 600000, warnAt: 420000, warning: false, source: 'stripe' });
+    // One unit: `warnAt` is whole NT$ like `revenueTwd` and `thresholdTwd`, never the 0.7 ratio.
+    expect(Number.isInteger(res.body.data.warnAt)).toBe(true);
+    expect(res.body.data.warnAt).toBeGreaterThan(1);
+    expect(res.body.data.warnAt / res.body.data.thresholdTwd).toBeCloseTo(0.7);
     stripeOn = false;
     expect((await h.request<any>('GET', '/api/v1/roboapply/admin/credits/tw-revenue', RA)).status).toBe(501);
   });

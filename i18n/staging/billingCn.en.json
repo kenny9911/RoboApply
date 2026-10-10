@@ -54,6 +54,11 @@
       "viewBilling": "View billing",
       "done": "Done"
     },
+    "return": {
+      "checking": "Checking your payment…",
+      "notPaid": "This payment was not completed. Nothing was charged.",
+      "statusTitle": "Payment status"
+    },
     "errors": {
       "notOpen": "WeChat Pay is not open yet.",
       "notSellable": "This plan is not on sale right now.",

@@ -5,9 +5,12 @@
 //   - the agreement box starts unticked and gates the pay button;
 //   - Native QR on desktop (payee = the collecting entity), H5 on mobile,
 //     JSAPI inside WeChat with a QR fallback; the order is polled to "paid";
-//   - 续费 renews a pass by buying it again.
+//   - 续费 renews a pass by buying it again;
+//   - the pay button is also the "payment received" notice prompt point, only
+//     on GoApply inside WeChat (INT-02);
+//   - the H5 return page checks the order until the server settles it.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
@@ -19,6 +22,7 @@ import { clientBrandFor } from '../../../../lib/brand/client';
 import { RoboApiError } from '../../../../lib/api/client';
 import { capsFor } from '../../../../__tests__/shell/helpers';
 import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
+import { buildAuthValue, mockAuthState } from '../../../../__tests__/utils/mockAuth';
 import enStaging from '../../../../i18n/staging/billingCn.en.json';
 import zhStaging from '../../../../i18n/staging/billingCn.zh.json';
 
@@ -28,8 +32,18 @@ const compliance = vi.hoisted(() => ({ getLegalDoc: vi.fn() }));
 vi.mock('../../../../lib/api/billingCn', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...api }));
 vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...credits }));
 vi.mock('../../../../lib/api/compliance', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...compliance }));
+// The notice prompt (SubscribeOnTap) reads the session and, inside WeChat, the JS-SDK signature.
+const notify = vi.hoisted(() => ({ getJsSdkSignature: vi.fn(), subscribeWechatMessages: vi.fn() }));
+vi.mock('../../../../lib/api/notifyCn', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...notify }));
+vi.mock('../../../../lib/auth/AuthProvider', () => ({
+  AuthProvider: ({ children }: { children: unknown }) => children,
+  useAuth: () => mockAuthState.value,
+}));
 
-import { CnRenewButton, WechatPayCheckout, detectTradeType } from '..';
+import { CnRenewButton, WechatPayCheckout, WechatPayReturn, detectTradeType, isOrderNumber } from '..';
+
+/** The part of WeChat's JS-SDK global the notice prompt touches (a fake: no script is loaded). */
+type WxSdk = { config: (c: unknown) => void; ready: (cb: () => void) => void; error: (cb: (res: unknown) => void) => void };
 import { ORDER_POLL_GRACE_MS, ORDER_POLL_MS, invokeWechatJsapi, orderPollInterval } from '../useWechatPay';
 
 const DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/128.0 Safari/537.36';
@@ -61,10 +75,10 @@ function plansView(rails: string[] = ['wechatpay']): PlansView {
   } as unknown as PlansView;
 }
 
-function renderUi(ui: ReactElement, opts: { brand?: BrandId; flagOn?: boolean; zh?: boolean } = {}) {
+function renderUi(ui: ReactElement, opts: { brand?: BrandId; flagOn?: boolean; zh?: boolean; notifyOn?: boolean } = {}) {
   const brand = opts.brand ?? 'goapply';
   return renderWithProviders(
-    <BrandProvider brand={clientBrandFor(brand)} initialCapabilities={capsFor(brand, { 'pay.wechatpay': opts.flagOn ?? true })}>
+    <BrandProvider brand={clientBrandFor(brand)} initialCapabilities={capsFor(brand, { 'pay.wechatpay': opts.flagOn ?? true, 'notify.wechat': opts.notifyOn ?? false })}>
       {ui}
     </BrandProvider>,
     opts.zh ? { intlLocale: 'zh', intlMessages: zhStaging } : {},
@@ -108,7 +122,10 @@ function tickTerms() {
 
 beforeEach(() => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
-  for (const fn of [...Object.values(api), ...Object.values(credits), ...Object.values(compliance)]) fn.mockReset();
+  for (const fn of [...Object.values(api), ...Object.values(credits), ...Object.values(compliance), ...Object.values(notify)]) fn.mockReset();
+  mockAuthState.value = buildAuthValue();
+  notify.getJsSdkSignature.mockResolvedValue({ appId: 'wx_mp_app', timestamp: 1, nonceStr: 'n', signature: 's', templates: { payment_success: 'Tpl_Pay_000001' }, canDeliver: true });
+  notify.subscribeWechatMessages.mockResolvedValue({ recorded: ['payment_success'], canDeliver: true, wechatChannelOn: true });
   credits.getPlans.mockResolvedValue(plansView());
   compliance.getLegalDoc.mockResolvedValue({ doc: 'terms', locale: 'zh', version: 'cn-terms-2026-10', draft: false, markdown: '', updatedAt: null });
   api.getWechatPayOrder.mockResolvedValue(status());
@@ -432,6 +449,164 @@ describe('CnRenewButton (续费)', () => {
     credits.getPlans.mockResolvedValue(plansView([]));
     const off = renderUi(<CnRenewButton planKey="pro_monthly" userAgent={DESKTOP} />);
     await waitFor(() => expect(off.container).toBeEmptyDOMElement());
+  });
+});
+
+describe('the "payment received" notice prompt at checkout (SubscribeOnTap, payment_success)', () => {
+  const WECHAT_FULL = `${WECHAT} NetType/WIFI`;
+  /** The wrapper SubscribeOnTap adds around the control it prompts on. */
+  const prompt = () => document.querySelector('[data-wechat-subscribe]');
+  /** WeChat's own open tag, laid over the pay button once the control can be used. */
+  const openTag = () => document.querySelector('wx-open-subscribe');
+
+  function fakeWx(): WxSdk {
+    let readyCb: (() => void) | null = null;
+    return {
+      config: vi.fn(() => queueMicrotask(() => readyCb?.())),
+      ready: (cb: () => void) => {
+        readyCb = cb;
+      },
+      error: () => undefined,
+    };
+  }
+
+  function inBrowser(ua: string) {
+    vi.spyOn(navigator, 'userAgent', 'get').mockImplementation(() => ua);
+    (window as unknown as { wx?: WxSdk }).wx = fakeWx();
+  }
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (window as unknown as { wx?: WxSdk }).wx;
+  });
+
+  it('on GoApply inside WeChat the pay button is the prompt point; WeChat asks once the agreement is ticked', async () => {
+    inBrowser(WECHAT_FULL);
+    renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={WECHAT_FULL} />, { notifyOn: true });
+    await screen.findByRole('button', { name: /Pay ¥39 / });
+    await waitFor(() => expect(prompt()).not.toBeNull());
+    const pay = screen.getByRole('button', { name: /Pay ¥39 / });
+    expect(prompt()!.contains(pay)).toBe(true);
+    // The Cancel button next to it is not part of the prompt.
+    // (No onCancel here; the prompt wraps exactly one control.)
+    expect(prompt()!.querySelectorAll('button')).toHaveLength(1);
+    // Disabled until the agreement is ticked: no tag over a button that does nothing.
+    expect(pay).toBeDisabled();
+    expect(openTag()).toBeNull();
+    tickTerms();
+    await waitFor(() => expect(openTag()).not.toBeNull());
+    expect(openTag()!.getAttribute('template')).toBe('Tpl_Pay_000001');
+    expect(prompt()).toHaveAttribute('data-wechat-subscribe', 'on');
+  });
+
+  it('whatever the buyer answers, the payment goes on (the answer is recorded, then the pay button runs)', async () => {
+    inBrowser(WECHAT_FULL);
+    api.createWechatPayOrder.mockResolvedValue(native());
+    renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={DESKTOP} />, { notifyOn: true });
+    await screen.findByRole('button', { name: /Pay ¥39 / });
+    tickTerms();
+    await waitFor(() => expect(openTag()).not.toBeNull());
+    openTag()!.dispatchEvent(new CustomEvent('success', { detail: { subscribeDetails: JSON.stringify({ Tpl_Pay_000001: JSON.stringify({ status: 'reject' }) }) } }));
+    await waitFor(() => expect(api.createWechatPayOrder).toHaveBeenCalledTimes(1));
+    expect(notify.subscribeWechatMessages).toHaveBeenCalledWith({ templateKeys: ['payment_success'], scene: 'payment', results: { payment_success: 'reject' } });
+  });
+
+  it('no prompt outside WeChat, on RoboApply, with WeChat notices off, or signed out', async () => {
+    // GoApply in an ordinary mobile browser.
+    inBrowser(MOBILE);
+    const mobile = renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={MOBILE} />, { notifyOn: true });
+    await screen.findByRole('button', { name: /Pay ¥39 / });
+    expect(prompt()).toBeNull();
+    mobile.unmount();
+
+    // GoApply inside WeChat, but WeChat notices are not configured.
+    inBrowser(WECHAT_FULL);
+    const off = renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={WECHAT_FULL} />, { notifyOn: false });
+    await screen.findByRole('button', { name: /Pay ¥39 / });
+    expect(prompt()).toBeNull();
+    off.unmount();
+
+    // Signed out (no session to record a permission for).
+    mockAuthState.value = buildAuthValue({ status: 'unauthenticated', user: null });
+    const out = renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={WECHAT_FULL} />, { notifyOn: true });
+    await screen.findByRole('button', { name: /Pay ¥39 / });
+    expect(prompt()).toBeNull();
+    out.unmount();
+    mockAuthState.value = buildAuthValue();
+
+    // RoboApply never renders the WeChat Pay checkout at all.
+    const ra = renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={WECHAT_FULL} />, { brand: 'roboapply', notifyOn: true });
+    await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
+    expect(ra.container).toBeEmptyDOMElement();
+    expect(prompt()).toBeNull();
+    expect(openTag()).toBeNull();
+    expect(notify.getJsSdkSignature).not.toHaveBeenCalled();
+  });
+
+  it('"Try again" for the agreement is not a prompt point (only the button that pays asks)', async () => {
+    inBrowser(WECHAT_FULL);
+    compliance.getLegalDoc.mockRejectedValue(apiError('internal_error', 500));
+    renderUi(<WechatPayCheckout planKey="pro_monthly" userAgent={WECHAT_FULL} />, { notifyOn: true });
+    const retry = await screen.findByRole('button', { name: 'Try again' }, { timeout: 4000 });
+    expect(prompt()).toBeNull();
+    expect(retry.closest('[data-wechat-subscribe]')).toBeNull();
+  });
+});
+
+describe('WechatPayReturn (the H5 return page)', () => {
+  const ORDER = 'GAWX20261010080000aaaaaaaaaaaa';
+
+  it('accepts only something shaped like an order number', () => {
+    expect(isOrderNumber(ORDER)).toBe(true);
+    for (const bad of [null, undefined, '', 'abc', '<script>', 'a b c d e f', 'x'.repeat(65), '../../etc']) expect(isOrderNumber(bad), String(bad)).toBe(false);
+  });
+
+  it('asks about that order, says it is checking, and reports paid only when the server does', async () => {
+    api.getWechatPayOrder.mockResolvedValueOnce(status({ tradeType: 'h5' })).mockResolvedValue(status({ status: 'paid', tradeType: 'h5', accessUntil: '2026-11-09T08:01:00.000Z' }));
+    const onPaid = vi.fn();
+    const onStatus = vi.fn();
+    renderUi(<WechatPayReturn orderId={ORDER} onPaid={onPaid} onStatus={onStatus} />);
+    const box = await screen.findByTestId('wechatpay-return');
+    expect(box).toHaveTextContent('Checking your payment');
+    expect(box.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(onPaid).not.toHaveBeenCalled();
+    await waitFor(() => expect(box).toHaveAttribute('data-state', 'paid'), { timeout: 6000 });
+    expect(box).toHaveTextContent(/Payment received\. Pro is on until/);
+    expect(onPaid).toHaveBeenCalledTimes(1);
+    // Each state is reported once, in order, and "paid" only after the server said so.
+    const reported = onStatus.mock.calls.map((c) => c[0]);
+    expect(reported.at(-1)).toBe('paid');
+    expect(reported.filter((s) => s === 'paid')).toHaveLength(1);
+    expect(reported.slice(0, -1).every((s) => s === 'checking' || s === 'pending')).toBe(true);
+    expect(api.getWechatPayOrder).toHaveBeenCalledWith(ORDER, expect.anything());
+  }, 10_000);
+
+  it('a paid practice pack says the sessions are added', async () => {
+    api.getWechatPayOrder.mockResolvedValue(status({ status: 'paid', planKey: 'practice_pack_5', purpose: 'interview_pack' }));
+    renderUi(<WechatPayReturn orderId={ORDER} />);
+    const box = await screen.findByTestId('wechatpay-return');
+    await waitFor(() => expect(box).toHaveTextContent('Payment received. Your practice sessions are added.'));
+  });
+
+  it('renders nothing without an order, off GoApply, or while WeChat Pay is not live', async () => {
+    const none = renderUi(<WechatPayReturn orderId={null} />);
+    await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
+    expect(none.container).toBeEmptyDOMElement();
+    none.unmount();
+    const ra = renderUi(<WechatPayReturn orderId={ORDER} />, { brand: 'roboapply' });
+    expect(ra.container).toBeEmptyDOMElement();
+    ra.unmount();
+    credits.getPlans.mockResolvedValue(plansView([]));
+    const off = renderUi(<WechatPayReturn orderId={ORDER} />);
+    await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
+    expect(off.container).toBeEmptyDOMElement();
+    expect(api.getWechatPayOrder).not.toHaveBeenCalled();
+  });
+
+  it('is in Chinese on GoApply', async () => {
+    api.getWechatPayOrder.mockResolvedValue(status({ status: 'closed' }));
+    renderUi(<WechatPayReturn orderId={ORDER} />, { zh: true });
+    expect(await screen.findByText('本次支付未完成，未扣款。')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看账单' })).toHaveAttribute('href', '/settings/billing');
   });
 });
 

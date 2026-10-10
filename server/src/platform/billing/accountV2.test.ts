@@ -17,6 +17,7 @@ import { getBrand } from '../brand/registry.js';
 import { createEmailTranslator, resetEmailI18nCache, setEmailI18nDirForTests } from '../email/i18n.js';
 import { createBudget } from '../queue/runForBudget.js';
 import { getPlan, getPlanCatalog, planKeyForStripePrice, studentDiscountPercent, twdPriceFor } from './planCatalog.js';
+import { buyerCountryFromRequest } from './buyerCountry.js';
 import { acceptsPromotionCode, buildPlanViews, usesTwdPrice } from './planViews.js';
 import { createStripeRail } from './rails/stripe.js';
 import type { CheckoutOrder } from './rails/types.js';
@@ -150,7 +151,7 @@ describe('Stripe checkout (V2 rules)', () => {
   it('refuses a student plan unless the buyer is a verified student', async () => {
     const s = stripe();
     const rail = createStripeRail({ getStripe: () => s as never, env: ENV });
-    await expect(rail.createCheckout(order('student_monthly', ENV))).rejects.toMatchObject({ code: 'student_verification_required', status: 403 });
+    await expect(rail.createCheckout(order('student_monthly', ENV))).rejects.toMatchObject({ code: 'student_verification_required', status: 409 });
     await expect(rail.createCheckout(order('student_monthly', ENV, { studentVerified: false }))).rejects.toMatchObject({ code: 'student_verification_required' });
     expect(s.checkout.sessions.create).not.toHaveBeenCalled();
     await rail.createCheckout(order('student_monthly', ENV, { studentVerified: true }));
@@ -225,6 +226,26 @@ describe('switching plans (V2 rules)', () => {
     expect(s.invoices.createPreview.mock.calls[0]![0]).toMatchObject({ subscription_details: { items: [{ id: 'si_1', price: 'price_q_twd' }] } });
     expect(() => switchPrice({ currency: 'twd' }, getPlan('roboapply', 'pro_weekly', ENV)!)).toThrow(/Taiwan price/);
     expect(switchPrice({ currency: 'usd' }, getPlan('roboapply', 'pro_quarterly', ENV)!)).toEqual({ priceId: 'price_q', amountMinor: 5999 });
+  });
+});
+
+describe('buyerCountryFromRequest (the country that decides a price)', () => {
+  const from = (headers: Record<string, string | string[]>) => buyerCountryFromRequest({ headers });
+
+  it('the edge\'s own header wins over headers a client can send', () => {
+    expect(from({ 'x-vercel-ip-country': 'US', 'cf-ipcountry': 'TW', 'x-country': 'TW', 'x-geo-country': 'TW' })).toBe('US');
+    expect(from({ 'x-vercel-ip-country': ' tw ', 'cf-ipcountry': 'US' })).toBe('TW');
+    expect(from({ 'x-vercel-ip-country': ['DE', 'TW'] })).toBe('DE');
+  });
+
+  it('an unknown edge country is no signal, not a fallback to the client headers', () => {
+    expect(from({ 'x-vercel-ip-country': 'XX', 'cf-ipcountry': 'TW' })).toBeNull();
+  });
+
+  it('without the edge header it reads the older headers (hosts that do not set it)', () => {
+    expect(from({ 'cf-ipcountry': 'TW' })).toBe('TW');
+    expect(from({ 'x-vercel-ip-country': '', 'x-country': 'jp' })).toBe('JP');
+    expect(from({})).toBeNull();
   });
 });
 

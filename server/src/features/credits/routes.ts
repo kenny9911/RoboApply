@@ -5,6 +5,7 @@
 //     GET  /            → CreditsResponse (caps, usage, reset times, plan; practice balance)
 //     GET  /history     → { items: CreditLedgerView[], cursor }   committed ledger rows
 //     POST /cancel      → CancelResponse   one click; survey optional; confirmation email
+//     POST /cancel/survey {reason?, note?} → 204   stores the answer only (no cancel, email or event)
 //   createBillingPlansRouter() at /api/v1/roboapply/billing/plans (after the legacy
 //                              /billing router, which has no /plans path)
 //     GET  /            → PlansResponse    public; signed-in users also get `current`
@@ -22,10 +23,11 @@ import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { BillingError, billingErrorBody } from '../../platform/billing/errors.js';
 import { clientIp } from '../../platform/ratelimit/index.js';
-import { countryHeaderFromRequest } from '../../lib/billingRegion.js';
+import { buyerCountryFromRequest } from '../../platform/billing/buyerCountry.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
   CancelSubscriptionBodySchema,
+  CancelSurveyBodySchema,
   CreditHistoryQuerySchema,
   PublicCancelConfirmBodySchema,
   PublicCancelRequestBodySchema,
@@ -76,6 +78,14 @@ export function createCreditsRouter(deps: FeatureRouterDeps & { service?: Credit
     ...auth,
     billingRoute(async (req) => service.cancel(requireUserId(req), brandOf(req), parseBody(req, CancelSubscriptionBodySchema))),
   );
+  router.post(
+    '/cancel/survey',
+    ...auth,
+    billingRoute(async (req, res) => {
+      await service.recordCancelSurvey(requireUserId(req), brandOf(req), parseBody(req, CancelSurveyBodySchema));
+      res.status(204).end();
+    }),
+  );
   return router;
 }
 
@@ -88,7 +98,7 @@ export function createBillingPlansRouter(deps: FeatureRouterDeps & { service?: C
     ...maybeAuth,
     billingRoute(async (req) => {
       const userId = (req as Request & { user?: { id?: string } }).user?.id ?? null;
-      return service.plans(brandOf(req), { userId, country: countryHeaderFromRequest(req) });
+      return service.plans(brandOf(req), { userId, country: buyerCountryFromRequest(req) });
     }),
   );
   return router;

@@ -4,4 +4,5 @@
 export { WechatPayCheckout, BILLING_PATH, planNameKey, type WechatPayCheckoutProps } from './WechatPayCheckout';
 export { WechatPaySheet, type WechatPaySheetProps } from './WechatPaySheet';
 export { CnRenewButton, type CnRenewButtonProps } from './CnRenewButton';
+export { WechatPayReturn, isOrderNumber, type WechatPayReturnProps, type WechatPayReturnState } from './WechatPayReturn';
 export { detectTradeType, sellableCnPlan, useWechatPayAvailable, useWechatPayOrder, type WechatPayAvailability } from './useWechatPay';

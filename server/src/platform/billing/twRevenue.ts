@@ -46,6 +46,7 @@ export interface TwRevenueReport {
   /** TWD-denominated charges (Stripe TWD prices, V2), in whole NT$. */
   revenueTwdChargesWhole: number;
   thresholdTwd: typeof TW_VAT_THRESHOLD_TWD;
+  /** Where the warning starts, whole NT$ (TW_WARN_RATIO × the threshold = 420000). Same unit as `revenueTwd`; never a ratio. */
   warnAt: number;
   /** revenueTwd ≥ 70 % of the threshold. */
   warning: boolean;

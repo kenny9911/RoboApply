@@ -16,6 +16,7 @@ import type { EntitlementSummary } from '../../platform/credits/summary.js';
 import type { CreditCatalog, CreditCatalogOverride } from '../../platform/credits/catalog.js';
 import type { PlanView } from '../../platform/billing/planViews.js';
 import type { RefundDecision } from '../../platform/billing/refunds.js';
+import type { CheckoutResult, PaymentRail } from '../../platform/billing/rails/types.js';
 
 /** GET /credits → the same summary `/auth/me.entitlements` carries (caps, usage, reset times, plan). */
 export interface CreditsResponse {
@@ -52,6 +53,32 @@ export interface CancelResponse {
   /** One-time, non-blocking alternative ("Switch to the 7-day pass instead?"). */
   alternative: { planKey: 'pro_week_pass' } | null;
 }
+
+/**
+ * POST /credits/cancel/survey — the optional "why did you cancel?" answer,
+ * sent after the cancel. It only stores the answer (model RACancelSurvey): it
+ * never cancels anything, sends no email and records no product event, so
+ * sending it twice cannot repeat a side effect of the cancel. Answers 204;
+ * 503 `storage_unavailable` while the table is not in the database.
+ */
+export const CANCEL_SURVEY_REASONS = ['price', 'found_job', 'not_useful', 'pause', 'other'] as const;
+export type CancelSurveyReason = (typeof CANCEL_SURVEY_REASONS)[number];
+export const CancelSurveyBodySchema = z
+  .object({ reason: z.enum(CANCEL_SURVEY_REASONS).optional(), note: z.string().trim().max(1000).optional() })
+  .strict()
+  .refine((v) => Boolean(v.reason) || Boolean(v.note), { message: 'Send a reason or a note.' });
+
+/**
+ * POST /billing/checkout and /billing/alipay (legacy mount; this is the one
+ * shape both sides use). `kind` says what the buyer does next:
+ *   - `redirect`: open `url` (Stripe Checkout, the Alipay cashier, WeChat Pay H5);
+ *   - `qr`: `qrCodeUrl` is the CONTENT of a payment code (WeChat Pay sends a
+ *     `weixin://` link). Draw a QR code from it; it is never an image address;
+ *   - `jsapi`: hand `jsapiParams` to the WeChat in-app cashier.
+ * `orderId` is our order number (null for Stripe sessions that have none
+ * yet); `rail` is the rail that took the order.
+ */
+export type CheckoutResponse = CheckoutResult & { rail: PaymentRail };
 
 /** GET /billing/plans (public; signed-in users also get `current`). */
 export interface PlansResponse {
@@ -164,8 +191,15 @@ export interface TwRevenueResponse {
   /** Year-to-date USD from TW cards, cents. */
   revenueUsdMinor: number;
   revenueTwdChargesWhole: number;
+  /** The VAT registration level, whole NT$. */
   thresholdTwd: 600000;
+  /**
+   * The revenue at which the warning starts, in whole NT$ — the same unit as
+   * `revenueTwd` and `thresholdTwd` (420000 = 70 % of NT$600,000). Never a
+   * ratio: a reader that wants the percentage divides by `thresholdTwd`.
+   */
   warnAt: number;
+  /** `revenueTwd` has reached `warnAt`. */
   warning: boolean;
   chargeCount: number;
   skippedOtherCurrency: number;
@@ -191,9 +225,16 @@ export interface RefundQuoteResponse {
   decision: RefundDecision | null;
 }
 
+/**
+ * Wire codes of this area. All of them are the envelope's top-level `code`
+ * (never `details.reason`), so the web reads them with `apiErrorCode()`.
+ */
 export const CREDITS_ERROR_CODES = {
   noSubscription: 'no_subscription',
+  /** 410: the public cancel link is unknown, already used, for the other brand or older than 30 minutes. */
   cancelTokenInvalid: 'cancel_token_invalid',
+  /** 503: the cancel-survey table is not in this database yet. */
+  storageUnavailable: 'storage_unavailable',
 } as const;
 
 /** Minutes a public cancel link stays valid (single use). */

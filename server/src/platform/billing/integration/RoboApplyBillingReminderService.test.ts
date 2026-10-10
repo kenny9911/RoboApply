@@ -2,8 +2,7 @@
 //
 // Renewal reminders: 5 days before monthly/quarterly, 2 days before weekly,
 // GoApply passes 3 days before they end, annual reminder after 12 months —
-// sent through the platform email service and logged in RAEmailLog. The
-// Friday nudge is retired.
+// sent through the platform email service and logged in RAEmailLog.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +16,7 @@ vi.mock('../../../lib/prisma.js', async () => {
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { registerEmailTransport, resetEmailTransportsForTests } from '../../email/index.js';
-import { reminderFor, runAnnualReminderSweep, runFridayNudgeSweep, runRenewalReminderSweep } from '../../../roboapply/services/RoboApplyBillingReminderService.js';
+import { reminderFor, runAnnualReminderSweep, runRenewalReminderSweep } from '../../../roboapply/services/RoboApplyBillingReminderService.js';
 
 const NOW = new Date('2026-10-10T06:00:00.000Z');
 const inDays = (d: number) => new Date(NOW.getTime() + d * 86_400_000);
@@ -130,13 +129,5 @@ describe('annual reminder', () => {
     expect(await runAnnualReminderSweep({ now: NOW })).toMatchObject({ scanned: 1, sent: 1 });
     expect(await runAnnualReminderSweep({ now: NOW })).toMatchObject({ sent: 0, skipped: 1 });
     expect(sent[0]!.text).toContain('You have had Pro Quarterly since September 1, 2025. It renews every 3 months for $59.99.');
-  });
-});
-
-describe('Friday nudge', () => {
-  it('is retired: sends nothing', async () => {
-    seed([{ tier: 'pro', planKey: 'pro_monthly', interval: 'month', stripeSubscriptionId: 'st_a', currentPeriodEnd: inDays(20), mockCredits: 3 }]);
-    expect(await runFridayNudgeSweep({ now: NOW })).toEqual({ scanned: 0, sent: 0, skipped: 0, failed: 0, retired: true });
-    expect(sent).toHaveLength(0);
   });
 });

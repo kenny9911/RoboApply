@@ -47,6 +47,8 @@ export interface AccountSnapshot {
     status: string | null;
     interval: string | null;
     currentPeriodEnd: Date | null;
+    /** The user turned auto-renewal off; the plan stays live to the period end. */
+    cancelAtPeriodEnd?: boolean | null;
   } | null;
 }
 
@@ -72,6 +74,8 @@ export interface ResolvedBucket {
   sku: string | null;
   /** The Pro column's cap (for `upgradable`). */
   proCap: number;
+  /** The Pro column's window (it can differ from the Free one, e.g. weekly → daily). */
+  proWindow: CreditWindow;
   source: CapSource;
 }
 
@@ -86,6 +90,12 @@ export interface ResolvedEntitlements {
   legacyPlan: boolean;
   interval: string | null;
   periodEnd: Date | null;
+  /**
+   * The live plan was cancelled and ends at `periodEnd` (Stripe
+   * cancel_at_period_end, written by the one-click cancel and the webhook).
+   * Always false without a live paid plan.
+   */
+  cancelAtPeriodEnd: boolean;
   timezone: string;
   buckets: Record<WindowBucket, ResolvedBucket>;
   entitlements: EntitlementValues;
@@ -157,6 +167,7 @@ export function resolveEntitlementsFrom(input: ResolveInput): ResolvedEntitlemen
       grantable: def.grantable,
       sku: def.sku,
       proCap: def.caps.pro.cap,
+      proWindow: def.caps.pro.window,
       source: 'catalog',
     };
   }
@@ -199,6 +210,7 @@ export function resolveEntitlementsFrom(input: ResolveInput): ResolvedEntitlemen
     legacyPlan: live && isLegacyPlanKey(rawPlan),
     interval: live ? (sub?.interval ?? null) : null,
     periodEnd: live ? asDate(sub?.currentPeriodEnd) : null,
+    cancelAtPeriodEnd: live && sub?.cancelAtPeriodEnd === true,
     timezone: safeTimeZone(input.account?.timezone, brandDef.defaultTimezone),
     buckets,
     entitlements,
@@ -222,7 +234,7 @@ export function createPrismaEntitlementSource(getDb: () => Promise<Db>): Entitle
           seekerProfile: {
             select: {
               timezone: true,
-              subscription: { select: { tier: true, planKey: true, status: true, interval: true, currentPeriodEnd: true } },
+              subscription: { select: { tier: true, planKey: true, status: true, interval: true, currentPeriodEnd: true, cancelAtPeriodEnd: true } },
             },
           },
         },
@@ -239,6 +251,7 @@ export function createPrismaEntitlementSource(getDb: () => Promise<Db>): Entitle
               status: sub.status ?? null,
               interval: sub.interval ?? null,
               currentPeriodEnd: sub.currentPeriodEnd ?? null,
+              cancelAtPeriodEnd: sub.cancelAtPeriodEnd === true,
             }
           : null,
       };

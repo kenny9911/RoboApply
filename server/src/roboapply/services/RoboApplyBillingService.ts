@@ -22,6 +22,16 @@
 //   • a plan switch needs the auto-renewal acknowledgement for the new terms,
 //     recorded before Stripe charges.
 //   • CN orders are fulfilled through `fulfilPass()`.
+//   • V2 (WP-79): student plans are sold only while the `student` capability
+//     is on and only to an account with a live school-email verification
+//     (`studentService.isVerified`); a Taiwan buyer (edge country TW) is
+//     charged the plan's Stripe TWD price when one is configured, and the
+//     webhook stores that currency and amount.
+//   • the recorded auto-renewal acknowledgement names the price that is
+//     charged (the TWD amount for a Taiwan buyer on a TWD price).
+//   • a WeChat Pay order created here holds the same agreement gate as
+//     features/billing-cn (`acknowledgeTerms`): the ticked 用户协议 version
+//     must be the published one, and the consent record is written first.
 //
 // Revenue state lives on SeekerSubscription (keyed by seekerProfileId);
 // practice credits stay in lib/mockCreditService.ts.
@@ -48,6 +58,7 @@ import {
   getStripe as platformGetStripe,
   grantPracticePack,
   isPlanKey,
+  isStudentPlan,
   loadBillingAccount,
   planDefinitionFor,
   planKeyForStripePrice,
@@ -57,13 +68,15 @@ import {
   resolveRail,
   safeReturnPath,
   stripePeriod,
+  usesTwdPrice,
   CallbackRejectedError,
   alipayCallbackSecretOk as platformAlipaySecretOk,
   appOrigin,
   type BillingAccount,
   type CallbackInput,
   type CancelOutcome,
-  type CheckoutResult,
+  type CatalogPlan,
+  type CheckoutOrder,
   type PlanStatus,
   type PlanView,
   type SwitchQuote,
@@ -71,6 +84,9 @@ import {
 import { sendEmail as platformSendEmail } from '../../platform/email/index.js';
 import '../../platform/email/templates/billing/index.js';
 import { entitlementService } from '../../platform/credits/index.js';
+import { isEnabled } from '../../platform/flags.js';
+import { HttpError } from '../../platform/http.js';
+import type { CheckoutResponse } from '../../features/credits/contract.js';
 
 // ── Dependencies (tests replace them) ─────────────────────────────────────
 
@@ -88,6 +104,25 @@ export interface BillingServiceDeps {
   getBalance: typeof defaultGetBalance;
   sendEmail: typeof platformSendEmail;
   invalidate: (userId: string) => void;
+  /** The `student` capability for this user on this brand (student plans are V2, off by default). */
+  studentEnabled: (userId: string, brand: ProductBrand) => Promise<boolean>;
+  /** A live school-email verification (features/account-v2 `studentService.isVerified`). */
+  isStudentVerified: (userId: string) => Promise<boolean>;
+  /**
+   * The WeChat Pay agreement gate (features/billing-cn `billingCnService.acknowledgeTerms`):
+   * per-user limit, "ticked the published 用户协议", then the consent record.
+   */
+  acknowledgeCnPayTerms: (input: CnPayTermsInput) => Promise<void>;
+}
+
+export interface CnPayTermsInput {
+  userId: string;
+  brand: ProductBrand;
+  seekerProfileId: string;
+  plan: Pick<CatalogPlan, 'key' | 'amountMinor'>;
+  termsVersion: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
 }
 
 function defaultDeps(): BillingServiceDeps {
@@ -100,6 +135,21 @@ function defaultDeps(): BillingServiceDeps {
     getBalance: defaultGetBalance,
     sendEmail: platformSendEmail,
     invalidate: (userId) => entitlementService.invalidate(userId),
+    studentEnabled: (userId, brand) => isEnabled('student', { userId, brand }),
+    isStudentVerified: async (userId) => {
+      const { studentService } = await import('../../features/account-v2/index.js');
+      return studentService.isVerified(userId);
+    },
+    acknowledgeCnPayTerms: async (input) => {
+      // Loaded on first use: the service module registers nothing on import.
+      const { billingCnService } = await import('../../features/billing-cn/service.js');
+      await billingCnService.acknowledgeTerms(
+        input.userId,
+        input.brand,
+        { seekerProfileId: input.seekerProfileId, plan: input.plan, termsVersion: input.termsVersion },
+        { ip: input.ip ?? null, userAgent: input.userAgent ?? null },
+      );
+    },
   };
 }
 
@@ -141,6 +191,28 @@ export class RoboApplyBillingError extends Error {
 function fromBillingError(err: unknown): never {
   if (err instanceof BillingError) throw new RoboApplyBillingError(err.code, err.message, err.status, err.details);
   throw err;
+}
+
+/**
+ * Hold the WeChat Pay agreement gate and answer its refusals in this route's
+ * envelope: 409 `terms_outdated` (missing or stale version; `details.currentVersion`)
+ * and 429 `rate_limited` keep their codes instead of becoming a 500.
+ */
+async function holdCnPayTermsGate(input: CnPayTermsInput): Promise<void> {
+  try {
+    await deps.acknowledgeCnPayTerms(input);
+  } catch (err) {
+    if (err instanceof HttpError) {
+      const details = err.details && typeof err.details === 'object' && !Array.isArray(err.details) ? (err.details as Record<string, unknown>) : undefined;
+      throw new RoboApplyBillingError(err.code, err.message, err.status, details);
+    }
+    // BillingCnError, matched by shape so this module does not load billing-cn up front.
+    const e = err as { name?: unknown; code?: unknown; status?: unknown; message?: unknown; details?: unknown };
+    if (e && e.name === 'BillingCnError' && typeof e.code === 'string' && typeof e.status === 'number') {
+      throw new RoboApplyBillingError(e.code, String(e.message ?? ''), e.status, e.details as Record<string, unknown> | undefined);
+    }
+    throw err;
+  }
 }
 
 async function requireAccount(userId: string): Promise<BillingAccount> {
@@ -244,10 +316,34 @@ export interface CheckoutInput {
   cancelPath?: string;
   ip?: string | null;
   userAgent?: string | null;
-  context?: { tradeType?: 'native' | 'h5' | 'jsapi'; openId?: string };
+  /** Buyer's country from the edge header; 'TW' charges the plan's Taiwan price when one is configured. */
+  country?: string | null;
+  context?: CheckoutOrder['context'];
 }
 
-export type CheckoutView = CheckoutResult & { url?: string; rail: PaymentRail };
+/** What POST /billing/checkout answers: the shared contract type (features/credits/contract.ts). */
+export type CheckoutView = CheckoutResponse;
+
+/**
+ * A student plan may be bought only while the capability is on and the buyer
+ * holds a live verification. Returns that verification for the rail, or
+ * `undefined` for every other plan. Fails closed: a verification lookup that
+ * errors counts as "not verified".
+ */
+async function studentVerifiedFor(userId: string, brand: ProductBrand, plan: Pick<PlanView, 'key' | 'requiresFlag'>): Promise<boolean | undefined> {
+  if (!isStudentPlan(plan)) return undefined;
+  if (!(await deps.studentEnabled(userId, brand).catch(() => false))) {
+    throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: plan.key, reason: 'student_off' });
+  }
+  const verified = await deps.isStudentVerified(userId).catch((err: unknown) => {
+    logger.warn('RA_BILLING', 'student verification lookup failed; treating as not verified', { userId, error: err instanceof Error ? err.message : String(err) });
+    return false;
+  });
+  if (verified !== true) {
+    throw new BillingError('student_verification_required', 'Verify your school email to get the student price', { planKey: plan.key });
+  }
+  return true;
+}
 
 export async function createCheckout(input: CheckoutInput): Promise<CheckoutView> {
   try {
@@ -255,7 +351,8 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutView
       throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey });
     }
     const plan = getCatalogPlan(input.brand.id, input.planKey);
-    if (!plan || !plan.sellable || plan.kind === 'free' || plan.phase !== 'mvp') {
+    // V2 plans stay off the shelf, except the student plans (their own gate below).
+    if (!plan || !plan.sellable || plan.kind === 'free' || (plan.phase !== 'mvp' && !isStudentPlan(plan))) {
       throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey, reason: plan?.unsellableReason ?? 'unknown' });
     }
     if (plan.requiresAutoRenewAck && input.autoRenewAck !== true) {
@@ -288,9 +385,29 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutView
       });
     }
 
+    // Before anything is recorded: an unverified buyer leaves no acknowledgement behind.
+    const studentVerified = await studentVerifiedFor(input.userId, input.brand, plan);
+
+    // A WeChat Pay order needs the published 用户协议 ticked, whichever route
+    // creates it: refused here before any record or order exists.
+    if (rail.id === 'wechatpay') {
+      await holdCnPayTermsGate({
+        userId: input.userId,
+        brand: input.brand,
+        seekerProfileId: account.seekerProfileId,
+        plan,
+        termsVersion: input.context?.termsVersion ?? null,
+        ip: input.ip,
+        userAgent: input.userAgent,
+      });
+    }
+
+    // The acknowledgement names the price that is charged: a Taiwan buyer on a
+    // TWD price ticked (and pays) the TWD amount, not the catalog USD one.
+    const ackPlan = usesTwdPrice(plan, input.country) ? { ...plan, amountMinor: plan.twdPrice!.amountMinor, currency: plan.twdPrice!.currency } : plan;
     await recordCheckoutAcknowledgements(deps.db, {
       seekerProfileId: account.seekerProfileId,
-      plan,
+      plan: ackPlan,
       autoRenewAck: input.autoRenewAck === true,
       withdrawalWaiver: input.withdrawalWaiver === true,
       ip: input.ip,
@@ -307,9 +424,11 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutView
       successPath: input.successPath,
       cancelPath: input.cancelPath,
       context: input.context,
+      country: input.country ?? null,
+      ...(studentVerified !== undefined ? { studentVerified } : {}),
     });
     logger.info('RA_BILLING', 'checkout created', { userId: input.userId, planKey: plan.key, rail: rail.id, brand: input.brand.id });
-    return { ...result, rail: rail.id, ...(result.kind === 'redirect' ? { url: result.url } : {}) };
+    return { ...result, rail: rail.id };
   } catch (err) {
     return fromBillingError(err);
   }
@@ -391,17 +510,19 @@ export async function switchPlan(
     if (account.brand !== brand.id) throw new BillingError('switch_not_available', 'Switch plans on the site you signed up on');
     const target = getCatalogPlan(brand.id, input.planKey);
     if (!target) throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: input.planKey });
-    const stripeDeps = { getStripe: deps.getStripe, db: deps.db, now: deps.now };
+    // A switch TO a student plan needs the same capability and verification as buying one.
+    const studentVerified = await studentVerifiedFor(userId, brand, target);
+    const stripeDeps = { getStripe: deps.getStripe, db: deps.db, now: deps.now, ...(studentVerified !== undefined ? { studentVerified } : {}) };
     if (!input.confirm) return { quote: await quoteSwitch(account, target, stripeDeps) };
     if (input.prorationDate === undefined) throw new BillingError('quote_expired', 'Review the quote first');
     const seekerProfileId = account.seekerProfileId;
     if (!seekerProfileId) throw new BillingError('no_profile', 'No seeker profile');
     const res = await confirmSwitch(account, target, input.prorationDate, stripeDeps, {
       autoRenewAck: input.autoRenewAck === true,
-      record: () =>
+      record: (charged) =>
         recordCheckoutAcknowledgements(deps.db, {
           seekerProfileId,
-          plan: target,
+          plan: { ...target, amountMinor: charged.amountMinor, currency: charged.currency },
           autoRenewAck: input.autoRenewAck === true,
           withdrawalWaiver: input.withdrawalWaiver === true,
           ip: input.ip,
@@ -655,6 +776,13 @@ async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints,
   const item = sub.items?.data?.[0];
   const def = plan.legacy ? null : planDefinitionFor('roboapply', plan.planKey);
   const tier = ended ? 'free' : plan.tier;
+  // What is actually charged. A Taiwan subscription runs on the plan's TWD
+  // price: Stripe says so on the price; when a thin event leaves the price
+  // fields out, the configured TWD price (matched by price id) answers.
+  const twd = plan.legacy || !isPlanKey(plan.planKey) ? null : (getCatalogPlan('roboapply', plan.planKey)?.twdPrice ?? null);
+  const onTwdPrice = Boolean(twd && plan.priceId && twd.stripePriceId === plan.priceId);
+  const chargedCurrency = item?.price?.currency?.toUpperCase() ?? (onTwdPrice ? 'TWD' : undefined);
+  const chargedAmountMinor = typeof item?.price?.unit_amount === 'number' ? item.price.unit_amount : onTwdPrice ? twd!.amountMinor : undefined;
 
   await db.seekerSubscription.update({
     where: { id: row.id },
@@ -666,11 +794,11 @@ async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints,
       planKey: ended ? 'free' : plan.planKey,
       interval: ended ? null : (def?.interval ?? 'month'),
       market: 'other',
-      currency: item?.price?.currency?.toUpperCase() ?? undefined,
+      currency: chargedCurrency,
       stripeSubscriptionId: sub.id,
       stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : undefined,
       stripePriceId: plan.priceId ?? undefined,
-      amountMinor: typeof item?.price?.unit_amount === 'number' ? item.price.unit_amount : undefined,
+      amountMinor: chargedAmountMinor,
       currentPeriodEnd: end,
       cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
       canceledAt: ended ? deps.now() : null,

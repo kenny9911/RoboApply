@@ -31,7 +31,8 @@ beforeEach(() => {
   api.adminPutCreditCatalog.mockImplementation(async (b: unknown) => b);
   api.adminListOverrides.mockResolvedValue({ items: [] });
   api.adminGetFxReference.mockResolvedValue(null);
-  api.adminGetTwRevenue.mockResolvedValue({ periodStart: '2026-01-01', revenueTwd: 450000, thresholdTwd: 600000, warnAt: 0.7, source: 'stripe', asOf: '2026-10-10T00:00:00Z' });
+  // `warnAt` is whole NT$ (the contract's one unit), never the 0.7 ratio.
+  api.adminGetTwRevenue.mockResolvedValue({ periodStart: '2026-01-01', revenueTwd: 450000, thresholdTwd: 600000, warnAt: 420000, warning: true, source: 'stripe', asOf: '2026-10-10T00:00:00Z' });
 });
 
 describe('AdminCreditsConsole', () => {
@@ -81,6 +82,29 @@ describe('AdminCreditsConsole', () => {
     const section = (await screen.findByText('Taiwan card revenue')).closest('section')!;
     await waitFor(() => expect(within(section).getByRole('alert')).toHaveTextContent('above 70%'));
     expect(section).toHaveTextContent('75% of the level');
+  });
+
+  it('TW revenue: the warning is the server\'s answer and the percentage comes from warnAt in NT$', async () => {
+    // Below the level the server warns at: no banner, whatever the share reads.
+    api.adminGetTwRevenue.mockResolvedValue({ periodStart: '2026-01-01', revenueTwd: 300000, thresholdTwd: 600000, warnAt: 420000, warning: false, source: 'stripe', asOf: '2026-10-10T00:00:00Z' });
+    const { unmount } = renderUi(<AdminCreditsConsole />);
+    const quiet = (await screen.findByText('Taiwan card revenue')).closest('section')!;
+    await waitFor(() => expect(quiet).toHaveTextContent('50% of the level'));
+    expect(within(quiet).queryByRole('alert')).toBeNull();
+    unmount();
+    // A different warning level is printed from the NT$ figure (480,000 of 600,000 = 80%).
+    api.adminGetTwRevenue.mockResolvedValue({ periodStart: '2026-01-01', revenueTwd: 500000, thresholdTwd: 600000, warnAt: 480000, warning: true, source: 'stripe', asOf: '2026-10-10T00:00:00Z' });
+    renderUi(<AdminCreditsConsole />);
+    const loud = (await screen.findByText('Taiwan card revenue')).closest('section')!;
+    await waitFor(() => expect(within(loud).getByRole('alert')).toHaveTextContent('above 80%'));
+  });
+
+  it('TW revenue without a fresh rate shows "—" and no warning', async () => {
+    api.adminGetTwRevenue.mockResolvedValue({ periodStart: '2026-01-01', revenueTwd: null, thresholdTwd: 600000, warnAt: 420000, warning: false, source: 'stripe', asOf: '2026-10-10T00:00:00Z' });
+    renderUi(<AdminCreditsConsole />);
+    const section = (await screen.findByText('Taiwan card revenue')).closest('section')!;
+    await waitFor(() => expect(section).toHaveTextContent('Revenue this year—'));
+    expect(within(section).queryByRole('alert')).toBeNull();
   });
 
   it('per-user change: validates, then creates with a reason', async () => {

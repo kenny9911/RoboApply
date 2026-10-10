@@ -72,8 +72,6 @@
       "withdrawalAck": "Start now: I understand I lose my right of withdrawal once I use paid features.",
       "withdrawalHelp": "Leave this unticked and you can get a full refund within 14 days.",
       "error": "We couldn't open the payment page. Nothing was charged. Try again.",
-      "scanToPay": "Scan the code to pay.",
-      "qrAlt": "Payment code",
       "continue": "Continue to payment",
       "continuing": "Opening the payment page…",
       "switchContinue": "See what switching costs"

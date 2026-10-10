@@ -19,6 +19,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createBrandContext } from '../../../platform/brand/brandContext.js';
+import { getBrand } from '../../../platform/brand/registry.js';
 import { setFlagOverrideLoader } from '../../../platform/flags.js';
 import { fulfilPass, type FulfilDb } from '../../../platform/billing/fulfilPass.js';
 import { createWechatPayRail } from '../../../platform/billing/rails/wechatpay.js';
@@ -35,7 +36,7 @@ const DAY = 86_400_000;
 interface World {
   db: ReturnType<typeof seedDb>;
   calls: RecordedCall[];
-  grants: { plan: ReturnType<typeof vi.fn>; pack: ReturnType<typeof vi.fn> };
+  grants: { plan: ReturnType<typeof vi.fn>; pack: ReturnType<typeof vi.fn>; notice: ReturnType<typeof vi.fn> };
   base: string;
   close: () => Promise<void>;
   setNow: (d: Date) => void;
@@ -49,7 +50,7 @@ async function world(opts: { env?: Record<string, string>; now?: Date; user?: { 
   const respond = { fn: (_c: RecordedCall): [number, unknown] => [200, { code_url: 'weixin://wxpay/bizpayurl?pr=abc' }] };
   const f = wechatFetch((c) => respond.fn(c), { nowSec: () => Math.floor(now.getTime() / 1000) });
   const getDb = async () => db as unknown as BillingCnDb;
-  const grants = { plan: vi.fn(async () => undefined), pack: vi.fn(async () => ({ status: 'granted' })) };
+  const grants = { plan: vi.fn(async () => undefined), pack: vi.fn(async () => ({ status: 'granted' })), notice: vi.fn(async () => ({ delivered: true })) };
   const limiter = memoryRateLimit(() => now);
   const service = new BillingCnService({
     env,
@@ -65,6 +66,7 @@ async function world(opts: { env?: Record<string, string>; now?: Date; user?: { 
         grantPlanIfNewPeriod: vi.fn(async () => 'skipped'),
         grantPack: grants.pack,
         invalidate: () => {},
+        notifyPaid: grants.notice,
       }),
   });
   const user = opts.user === undefined ? { id: 'u_1', email: 'u1@example.test', role: 'seeker' } : opts.user;
@@ -143,6 +145,22 @@ describe('POST /billing-cn/wechatpay', () => {
     const rows = await w.db.alipayOrder.findMany({});
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ channel: 'wechatpay', purpose: 'subscription', status: 'pending', userId: 'u_1' });
+    // The agreement the buyer ticked is on the order row itself.
+    expect(rows[0]!.termsVersion).toBe('cn-terms-2026-10');
+  });
+
+  it('every trade type writes the ticked 用户协议 version on its order row', async () => {
+    w.respond.fn = (c) =>
+      c.url.endsWith('/h5') ? [200, { h5_url: 'https://wx.tenpay.com/checkmweb?prepay_id=1' }] : c.url.endsWith('/jsapi') ? [200, { prepay_id: 'wx_prepay_1' }] : [200, { code_url: 'weixin://wxpay/bizpayurl?pr=abc' }];
+    for (const tradeType of ['native', 'h5', 'jsapi']) {
+      expect((await req(w, 'POST', ORDER_PATH, { body: buy({ tradeType }), headers: { 'x-forwarded-for': '203.0.113.7' } })).status, tradeType).toBe(200);
+    }
+    const rows = await w.db.alipayOrder.findMany({});
+    expect(rows.map((r) => [r.tradeType, r.termsVersion])).toEqual([
+      ['NATIVE', 'cn-terms-2026-10'],
+      ['H5', 'cn-terms-2026-10'],
+      ['JSAPI', 'cn-terms-2026-10'],
+    ]);
   });
 
   it('JSAPI uses the openid from WeChat sign-in, never the one the client sends', async () => {
@@ -215,6 +233,26 @@ describe('POST /billing-cn/wechatpay', () => {
     expect(res.body!.details).toEqual({ currentVersion: null });
     expect(w.calls).toHaveLength(0);
     expect(await w.db.alipayOrder.findMany({})).toHaveLength(0);
+  });
+
+  it('acknowledgeTerms (the gate the legacy /billing/checkout holds) uses the injected version resolver and the same limit and record', async () => {
+    const db = seedDb();
+    const limiter = memoryRateLimit(() => new Date('2026-10-10T08:00:00.000Z'));
+    // Join J5 swaps this resolver; both order paths must follow it.
+    const svc = new BillingCnService({ env: GA_ENV, getDb: async () => db as unknown as BillingCnDb, consumeRateLimit: limiter.consume, termsVersion: () => 'published-v7' });
+    const brand = getBrand('goapply');
+    const input = { seekerProfileId: 'sp_1', plan: { key: 'pro_monthly' as const, amountMinor: 3900 } };
+    for (const termsVersion of [undefined, null, 'cn-terms-2026-10']) {
+      await expect(svc.acknowledgeTerms('u_1', brand, { ...input, termsVersion })).rejects.toMatchObject({ code: 'terms_outdated', status: 409, details: { currentVersion: 'published-v7' } });
+    }
+    expect(await db.seekerConsentRecord.findMany({})).toHaveLength(0);
+    await svc.acknowledgeTerms('u_1', brand, { ...input, termsVersion: 'published-v7' }, { ip: '203.0.113.7', userAgent: 'UA' });
+    const acks = await db.seekerConsentRecord.findMany({});
+    expect(acks).toHaveLength(1);
+    expect(acks[0]).toMatchObject({ seekerProfileId: 'sp_1', consentType: 'cn_pay_terms_ack', granted: true, proseVersion: 'published-v7', ipAddress: '203.0.113.7' });
+    // Four attempts so far; the per-user limit is 10 a minute.
+    for (let i = 0; i < 6; i++) await svc.acknowledgeTerms('u_1', brand, { ...input, termsVersion: 'published-v7' });
+    await expect(svc.acknowledgeTerms('u_1', brand, { ...input, termsVersion: 'published-v7' })).rejects.toMatchObject({ code: 'rate_limited' });
   });
 
   it('rate-limits order creation per user: the 11th order within a minute is 429 rate_limited', async () => {
@@ -404,9 +442,20 @@ describe('POST /api/v1/webhooks/wechatpay (raw body, fixture vectors)', () => {
     expect(sub).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'pass', rail: 'wechatpay', currency: 'CNY', amountMinor: 3900, cancelAtPeriodEnd: false });
     expect(w.grants.plan).toHaveBeenCalledTimes(1);
 
+    // The buyer is told on WeChat once, with the order's own facts.
+    expect(w.grants.notice).toHaveBeenCalledTimes(1);
+    expect(w.grants.notice).toHaveBeenCalledWith({
+      userId: 'u_1',
+      template: 'payment_success',
+      params: { planName: '会员月卡', amountFen: 3900, paidAt: at.toISOString(), orderNo: NOTIFY_TRANSACTION.out_trade_no },
+      href: '/settings/billing',
+      eventId: NOTIFY_TRANSACTION.out_trade_no,
+    });
+
     const again = await notify();
     expect(again.status).toBe(200);
     expect(w.grants.plan).toHaveBeenCalledTimes(1);
+    expect(w.grants.notice).toHaveBeenCalledTimes(1);
     const subAfter = await w.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_1' } });
     expect(subAfter!.currentPeriodEnd).toEqual(sub!.currentPeriodEnd);
     expect(w.calls).toHaveLength(0);

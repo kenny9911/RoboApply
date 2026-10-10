@@ -104,7 +104,7 @@ describe('PlanPicker (375 px)', () => {
 
   it('the auto-renew box starts unticked and gates the payment button', async () => {
     const navigate = vi.fn();
-    account.checkoutPlan.mockResolvedValue({ url: 'https://checkout.stripe.test/s' });
+    account.checkoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://checkout.stripe.test/s', orderId: 'cs_1', rail: 'stripe' });
     renderUi(<PlanPicker navigate={navigate} />);
     await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
     const ack = screen.getByRole('checkbox', { name: /renews automatically every month at \$24\.99 until I cancel/i });
@@ -128,7 +128,7 @@ describe('PlanPicker (375 px)', () => {
   });
 
   it('one-time plans need no renewal box', async () => {
-    account.checkoutPlan.mockResolvedValue({ url: 'https://checkout.stripe.test/p' });
+    account.checkoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://checkout.stripe.test/p', orderId: 'cs_p', rail: 'stripe' });
     renderUi(<PlanPicker navigate={vi.fn()} />);
     await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
     fireEvent.click(radio('pro_week_pass'));
@@ -177,7 +177,7 @@ describe('PlanPicker (375 px)', () => {
 
   it('a pack purchase carries the plan and the practice balance before checkout to the return page', async () => {
     api.getCredits.mockResolvedValue(creditsResponse({}, { balance: 2 }));
-    account.checkoutPlan.mockResolvedValue({ url: 'https://checkout.stripe.test/k' });
+    account.checkoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://checkout.stripe.test/k', orderId: 'cs_k', rail: 'stripe' });
     renderUi(<PlanPicker requestedPlan="practice_pack_5" navigate={vi.fn()} />);
     await waitFor(() => expect(radio('practice_pack_5')).toBeChecked());
     await waitFor(() => expect(continueBtn()).toBeEnabled());
@@ -219,7 +219,7 @@ describe('PlanPicker (375 px)', () => {
 
   it('a pass the user holds can be bought again (it is not "Your plan")', async () => {
     api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_week_pass', planProfile: 'pro', interval: 'pass', periodEnd: '2026-10-15T00:00:00Z', upgradable: false }));
-    account.checkoutPlan.mockResolvedValue({ url: 'https://checkout.stripe.test/again' });
+    account.checkoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://checkout.stripe.test/again', orderId: 'cs_2', rail: 'stripe' });
     const navigate = vi.fn();
     renderUi(<PlanPicker requestedPlan="pro_week_pass" navigate={navigate} />);
     await waitFor(() => expect(radio('pro_week_pass')).toBeChecked());
@@ -232,8 +232,8 @@ describe('PlanPicker (375 px)', () => {
   });
 
   it('a running subscription is still "Your plan" and cannot be bought twice', async () => {
-    api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', upgradable: false }));
-    account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true, cancelAtPeriodEnd: true }));
+    api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', upgradable: false, cancelAtPeriodEnd: true }));
+    account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true }));
     renderUi(<PlanPicker navigate={vi.fn()} />);
     // Cancelled: only the passes are offered; the monthly plan is not re-sold here.
     await waitFor(() => expect(document.querySelector('[data-plan="pro_week_pass"]')).not.toBeNull());
@@ -414,8 +414,10 @@ describe('BillingView', () => {
     // Before the cancel, a renewing subscriber sees no Pro plans on the sheet.
     await screen.findByTestId('plan-picker');
     expect(document.querySelector('[data-plan="pro_week_pass"]')).toBeNull();
-    // The server now reports the cancellation.
-    account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true, cancelAtPeriodEnd: true, currentPeriodEnd: '2026-11-01T00:00:00Z' }));
+    // The server now reports the cancellation on the summary (the only source the view reads).
+    api.getCredits.mockResolvedValue(
+      creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: '2026-11-01T00:00:00Z', upgradable: false, cancelAtPeriodEnd: true }),
+    );
     fireEvent.click(cancel);
     await screen.findByTestId('cancel-done');
     await waitFor(() => expect(card).toHaveTextContent('Cancelled. Pro stays on until'));

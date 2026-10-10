@@ -5,14 +5,15 @@
 //
 // Two server sources, nothing computed beyond reading them:
 //   - the entitlement summary (`/credits`, same as `/auth/me.entitlements`):
-//     plan key, Pro/Free column, interval, period end, legacy flag;
+//     plan key, Pro/Free column, interval, period end, legacy flag and
+//     whether the plan was cancelled (`cancelAtPeriodEnd`);
 //   - the legacy billing plan (`/billing/plan`): payment status (past due),
-//     cancel-at-period-end, Stripe customer (portal), manual renewal.
+//     Stripe customer (portal), manual renewal.
 // Unknown stays null (rendered "—"), never 0 or "Free".
 //
-// Cancel-at-period-end: the summary does not carry it yet (requested from
-// WP-21a as `summary.cancelAtPeriodEnd`); `summaryCancelAtPeriodEnd()` is the
-// one adapter that reads it, and the legacy plan answers until it ships.
+// Cancel-at-period-end comes from the summary only. The legacy plan is not a
+// second opinion: with two sources a stale one could show "Renews on …" for a
+// plan the user has already cancelled.
 
 import { useBillingPlan } from '../useAccount';
 import { useCredits, type EntitlementSummary } from '../shared/useCredits';
@@ -48,8 +49,10 @@ export interface SubscriptionState {
 const RENEWING = new Set(['week', 'month', 'quarter']);
 
 /**
- * `summary.cancelAtPeriodEnd` (requested from WP-21a), or undefined while the
- * server does not send it. The narrow adapter every reader goes through.
+ * `summary.cancelAtPeriodEnd`, or undefined when the summary is missing or
+ * came from a server that does not send the field yet (a rolling deploy).
+ * Readers that print "Renews on {date}" need the three states: they make the
+ * claim only on a known `false`.
  */
 export function summaryCancelAtPeriodEnd(summary: EntitlementSummary | null | undefined): boolean | undefined {
   const v = (summary as { cancelAtPeriodEnd?: unknown } | null | undefined)?.cancelAtPeriodEnd;
@@ -70,7 +73,7 @@ export function deriveSubscriptionState(input: {
   const legacyRenews = !!s?.legacyPlan && legacyTierPaid && !!cur?.hasStripeCustomer && !cur?.manualRenewal;
   const status: SubscriptionStatus = s ? 'ready' : input.summaryError ? 'error' : 'loading';
   const autoRenews = intervalRenews || legacyRenews;
-  const cancelAtPeriodEnd = summaryCancelAtPeriodEnd(s) ?? cur?.cancelAtPeriodEnd === true;
+  const cancelAtPeriodEnd = summaryCancelAtPeriodEnd(s) === true;
   return {
     status,
     planKey: s?.planKey ?? null,

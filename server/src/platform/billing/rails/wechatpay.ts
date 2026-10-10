@@ -337,14 +337,19 @@ export interface WechatRailDeps {
   random?: (n: number) => Buffer;
 }
 
-/** What a CN checkout may carry beyond the shared `CheckoutOrder.context`. */
+/** The part of `CheckoutOrder.context` the WeChat Pay rail reads. */
 export interface WechatCheckoutContext {
   tradeType?: WechatTradeType;
   // No openId here on purpose: JSAPI looks the payer's openid up server-side
   // (`wechatOpenIdFor`), so an `openId` a caller puts in the context is ignored.
   /** Required for H5 (`scene_info.payer_client_ip`). */
   payerClientIp?: string;
+  /** The 用户协议 version the buyer ticked; stored on the order row. */
+  termsVersion?: string;
 }
+
+/** Longest agreement version kept on an order row (the checkout body allows the same). */
+export const ORDER_TERMS_VERSION_MAX = 40;
 
 export type WechatCheckoutResult = CheckoutResult & { expiresAt: string; collectingEntity: string };
 
@@ -516,6 +521,9 @@ export function createWechatPayRail(deps: WechatRailDeps = {}): WechatPayRail {
           planKey: plan.key,
           purpose,
           tradeType: TRADE_TYPE_COLUMN[tradeType],
+          // What the buyer agreed to, next to the order itself (the consent
+          // record written by the caller carries the hash of the full terms).
+          termsVersion: ctx.termsVersion?.trim() ? ctx.termsVersion.trim().slice(0, ORDER_TERMS_VERSION_MAX) : null,
           createdAt,
         },
       });

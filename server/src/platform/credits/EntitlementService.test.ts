@@ -170,3 +170,54 @@ describe('createEntitlementService', () => {
     expect(r.brand).toBe('goapply');
   });
 });
+
+describe('cancel at period end (INT-02: the summary carries it)', () => {
+  it('is true only for a live plan the user cancelled', () => {
+    const live = (over: Partial<NonNullable<AccountSnapshot['subscription']>> = {}) =>
+      resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: sub({ tier: 'pro', planKey: 'pro_monthly', interval: 'month', currentPeriodEnd: FUTURE, ...over }) }));
+    expect(live({ cancelAtPeriodEnd: true })).toMatchObject({ planProfile: 'pro', cancelAtPeriodEnd: true, periodEnd: FUTURE });
+    expect(live({ cancelAtPeriodEnd: false }).cancelAtPeriodEnd).toBe(false);
+    expect(live().cancelAtPeriodEnd).toBe(false);
+    expect(live({ cancelAtPeriodEnd: null }).cancelAtPeriodEnd).toBe(false);
+    // Ended, or never paid: the flag on the row says nothing about a running plan.
+    expect(live({ cancelAtPeriodEnd: true, currentPeriodEnd: PAST })).toMatchObject({ planProfile: 'free', cancelAtPeriodEnd: false });
+    expect(live({ cancelAtPeriodEnd: true, status: 'canceled' }).cancelAtPeriodEnd).toBe(false);
+    expect(resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: null })).cancelAtPeriodEnd).toBe(false);
+  });
+
+  it('a legacy practice plan that was cancelled reads the same way', () => {
+    const r = resolveEntitlementsFrom(
+      input({ brand: 'roboapply', timezone: null, subscription: sub({ tier: 'starter', planKey: null, interval: 'month', currentPeriodEnd: FUTURE, cancelAtPeriodEnd: true }) }),
+    );
+    expect(r).toMatchObject({ legacyPlan: true, cancelAtPeriodEnd: true });
+  });
+
+  it('the Prisma source selects the column and passes it on', async () => {
+    const selects: unknown[] = [];
+    const row = (cancelAtPeriodEnd: boolean) => ({
+      brand: 'roboapply',
+      seekerProfile: { timezone: 'UTC', subscription: { tier: 'pro', planKey: 'pro_monthly', status: 'active', interval: 'month', currentPeriodEnd: FUTURE, cancelAtPeriodEnd } },
+    });
+    let cancelled = true;
+    const db = {
+      user: {
+        findUnique: async (args: { select: unknown }) => {
+          selects.push(args.select);
+          return row(cancelled);
+        },
+      },
+      rAEntitlementOverride: { findMany: async () => [] },
+    };
+    const source = createPrismaEntitlementSource(async () => db as never);
+    expect((await source.loadAccount('u1'))?.subscription).toMatchObject({ planKey: 'pro_monthly', cancelAtPeriodEnd: true });
+    cancelled = false;
+    expect((await source.loadAccount('u1'))?.subscription?.cancelAtPeriodEnd).toBe(false);
+    expect(JSON.stringify(selects[0])).toContain('"cancelAtPeriodEnd":true');
+  });
+
+  it('every bucket knows the Pro column\'s cap and window', () => {
+    const r = resolveEntitlementsFrom(input({ brand: 'roboapply', timezone: null, subscription: null }));
+    expect(r.buckets.ready_kits).toMatchObject({ cap: 3, window: 'week', proCap: 30, proWindow: 'week' });
+    expect(r.buckets.competitiveness).toMatchObject({ cap: 1, window: 'week', proCap: 3, proWindow: 'day' });
+  });
+});

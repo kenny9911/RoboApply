@@ -347,8 +347,12 @@ export async function quoteSwitch(account: BillingAccount, target: CatalogPlan, 
 export interface ConfirmSwitchAck {
   /** The user ticked "I agree this renews automatically every {period} at {price} until I cancel". */
   autoRenewAck: boolean;
-  /** Writes the consent record(s); runs after every check and before Stripe is asked to charge. */
-  record: () => Promise<unknown>;
+  /**
+   * Writes the consent record(s); runs after every check and before Stripe is
+   * asked to charge. Gets the renewal price that will be charged (the TWD
+   * amount on a Taiwan subscription), so the record names that price.
+   */
+  record: (charged: { amountMinor: number; currency: string }) => Promise<unknown>;
 }
 
 export async function confirmSwitch(
@@ -374,7 +378,7 @@ export async function confirmSwitch(
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
   const item = itemOf(stripeSub);
   const price = switchPrice(stripeSub, target);
-  await ack.record();
+  await ack.record({ amountMinor: price.amountMinor, currency: (stripeSub.currency ?? '').toLowerCase() === 'twd' ? 'TWD' : target.currency });
   await stripe.subscriptions.update(stripeSub.id, {
     items: [{ id: item.id, price: price.priceId }],
     proration_behavior: 'always_invoice',
