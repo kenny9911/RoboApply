@@ -1,8 +1,10 @@
 'use client';
 
 // fit_analysis — the structured fit for one job (F-ORION-03): the tier word,
-// what lines up, what the post asks for that the resume does not show, and
-// the permanent line "This is not your chance of getting hired." (C5).
+// what lines up and what the post asks for that the resume does not show
+// (MATCH's deterministic `skills.aligned` / `skills.missing`), the AI read's
+// strengths and gaps when there is one (AiGeneratedBadge on GoApply), and the
+// permanent line "This is not your chance of getting hired." (C5).
 
 import { useTranslations } from 'next-intl';
 
@@ -35,11 +37,12 @@ export function FitAnalysisCard({ card }: CardProps) {
     <CardFrame card={card} title={t('title')}>
       <div className={styles.row}>
         <FitTierLabel tier={data.tier} score={data.score} />
-        <AiGeneratedBadge />
+        {data.aiWritten ? <AiGeneratedBadge /> : null}
       </div>
       <Section title={t('aligned')} items={data.aligned} />
       <Section title={t('missing')} items={data.missing} />
       <Section title={t('highlights')} items={data.highlights} />
+      <Section title={t('gaps')} items={data.gaps} />
       <HonestyLine kind="fit" />
     </CardFrame>
   );

@@ -221,7 +221,8 @@
         "title": "Your fit for this job",
         "aligned": "What lines up",
         "missing": "What the post asks for that your resume does not show",
-        "highlights": "Worth mentioning"
+        "highlights": "Worth mentioning",
+        "gaps": "What could be stronger"
       },
       "company": {
         "title": "About {name}",
@@ -238,7 +239,12 @@
         "title": "People at {company}",
         "titleGeneric": "People at this company",
         "from": "From {source}",
-        "search": "Search for people (opens a new tab)"
+        "search": "Search for people (opens a new tab)",
+        "sources": {
+          "user_connections_import": "your imported connections",
+          "user_added": "people you added"
+        },
+        "recruiter": "Recruiter for this job"
       },
       "credit": {
         "jobFallback": "this job",
@@ -263,7 +269,11 @@
         "dismissed": "Not done.",
         "youSend": "Nothing is sent to anyone. You decide what to do with the draft.",
         "copy": "Copy the draft",
-        "copied": "Copied"
+        "copied": "Copied",
+        "rewrite": {
+          "title": "Rewrite this part of your resume",
+          "confirm": "Write the rewrites"
+        }
       },
       "tailorReady": {
         "title": "Your tailored resume is ready",
@@ -284,12 +294,13 @@
       },
       "salary": {
         "title": "Posted pay",
-        "for": "For {what}"
+        "for": "For {what}",
+        "posted": "In this post",
+        "across": "Similar posts (middle half of listed pay)"
       },
       "applications": {
         "title": "Your applications",
         "followUps": "To follow up",
-        "due": "Follow up by {date}",
         "open": "Open Applications",
         "status": {
           "saved": "Saved",
@@ -310,7 +321,10 @@
       },
       "jobImported": {
         "title": "Added to your jobs",
-        "open": "Open the job"
+        "open": "Open the job",
+        "unfinishedTitle": "This job is not added yet",
+        "unfinished": "Some details could not be read from the link. Add them yourself to finish.",
+        "finish": "Finish adding the job"
       },
       "memory": {
         "title": "Remember this for later chats?",
@@ -340,7 +354,16 @@
       },
       "action": {
         "sort": "Sort your jobs by: {sort}",
-        "apply": "Show jobs sorted this way"
+        "apply": "Show jobs sorted this way",
+        "open": {
+          "people": "Open the People tab for this job",
+          "resume": "Open your resumes",
+          "resume_check": "Open the resume check",
+          "added_jobs": "Open jobs you added",
+          "report": "See the report",
+          "practice": "Practice for this job",
+          "job": "Open the job"
+        }
       },
       "notice": {
         "credits_exhausted": "No Assistant messages left today.",
@@ -354,11 +377,25 @@
         "title": "Application deadlines",
         "closes": "Closes {date}",
         "noDate": "Closing date not listed",
-        "source": "Official page ({source})"
+        "source": "Official page ({source})",
+        "official": "Official page",
+        "reverify": "Not checked again recently"
       },
       "competitiveness": {
         "title": "How you compare for this job",
         "open": "See the report"
+      },
+      "resumeTips": {
+        "title": "Resume tips",
+        "stale": "Your resume changed after this check. Run the check again for current tips.",
+        "none": "The last check found nothing to fix.",
+        "open": "Open the resume check"
+      },
+      "rewriteReady": {
+        "title": "Suggested rewrites",
+        "none": "No rewrite could be written for this one. You can edit it yourself in the resume check.",
+        "blocked": "{count, plural, one {# suggestion was left out because it added numbers that are not in your resume.} other {# suggestions were left out because they added numbers that are not in your resume.}}",
+        "open": "Review and apply in the resume check"
       }
     },
     "memory": {

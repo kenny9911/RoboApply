@@ -175,10 +175,13 @@ describe('cron routes over HTTP', () => {
   });
 
   it('reminders run the registered producers per brand through the WP-39a runner; campus only on the cn market', async () => {
-    type Run = { reminders: { producers?: Record<string, { skipped?: string }> } };
+    type Run = { reminders: { producers?: Record<string, { skipped?: string }> }; toolsPurge?: { skipped?: string } };
     const res = await h.request<{ ok: boolean; skipped?: string; results: Record<string, Run> }>('GET', '/api/v1/cron/reminders', auth);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, skipped: 'no_work' });
+    expect(res.body).toMatchObject({ ok: true });
+    // WP-57's 24 h free-tool purge also runs hourly here (Wave 4 gate), per brand.
+    expect(res.body.results.roboapply!.toolsPurge).toEqual({ skipped: 'not_implemented' });
+    expect(res.body.results.goapply!.toolsPurge).toEqual({ skipped: 'not_implemented' });
     expect(Object.keys(res.body.results.roboapply!.reminders.producers ?? {})).toEqual(['tracker', 'agent']);
     expect(res.body.results.goapply!.reminders.producers).toEqual({
       tracker: { skipped: 'not_implemented' },

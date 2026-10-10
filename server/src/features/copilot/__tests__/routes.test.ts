@@ -194,9 +194,9 @@ describe('proposals, feedback, memory, nudge', () => {
 
   it('nudge: one nudge from real signals (a low rating wins over the pay hint)', async () => {
     const pay = await on.request<Env<{ nudge: { kind: string } }>>('GET', `${BASE}/nudge`, { host: RA });
-    expect(pay.body.data.nudge).toMatchObject({ kind: 'add_min_pay', facts: { jobsListingPay: { value: 120, source: 'index', sampleSize: 120 } } });
+    expect(pay.body.data.nudge).toMatchObject({ kind: 'pay_filter', facts: { jobsListingPay: { value: 120, source: 'index', sampleSize: 120 } } });
     (holder.h!.deps.nudgeSignals.latestRating as ReturnType<typeof vi.fn>).mockResolvedValue({ score: 3, createdAt: new Date('2026-10-09T00:00:00.000Z') });
     const res = await on.request<Env<{ nudge: { kind: string } }>>('GET', `${BASE}/nudge`, { host: RA });
-    expect(res.body.data.nudge).toMatchObject({ kind: 'adjust_search', facts: { rating: 3 } });
+    expect(res.body.data.nudge).toMatchObject({ kind: 'low_rating', facts: { rating: 3 } });
   });
 });

@@ -72,6 +72,8 @@ describe('/assistant', () => {
     await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(1));
     expect(http.to('POST', T)[0].body).toEqual({ contextJobId: 'job_7' });
     expect(http.to('POST', `${T}/th_1/messages`)[0].body).toMatchObject({ chip: 'similar_jobs', contextJobId: 'job_7' });
+    // WP-50 answers 422 without one Idempotency-Key per turn (Wave 4 gate).
+    expect(http.to('POST', `${T}/th_1/messages`)[0].headers['Idempotency-Key']).toEqual(expect.any(String));
   });
 
   it('with the capability off it says the Assistant is not available and calls nothing', () => {

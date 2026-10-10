@@ -9,15 +9,18 @@
 // `applying` counts as Applied and `negotiating`/`accepted` as Offer. Rows
 // that share a label are summed, in ladder order; a status the tracker does
 // not know is counted under "Other".
+//
+// Follow-ups are the tracker's own facts (`FollowUpView`: no reply for N days,
+// the follow-up date the user set, an interview within 24 h, a deadline in N
+// days), worded exactly like the /applications "Needs your attention" list;
+// they open /applications, where the entry lives.
 
 import Link from 'next/link';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import type { TrackerStatus } from '../../../../lib/api/contracts/tracker';
-import { shortDate } from '../../feed';
-import { jobDetailHref } from '../../job';
 import { CardFrame } from './CardFrame';
-import { parseApplications } from './model';
+import { parseApplications, type ApplicationsData } from './model';
 import type { CardProps } from './types';
 import styles from '../copilot.module.css';
 
@@ -54,10 +57,23 @@ export function countsByLabel(counts: Array<{ status: string; count: number }>):
 
 export function ApplicationsCard({ card, ctx }: CardProps) {
   const t = useTranslations('assistant.cards.applications');
-  const locale = useLocale();
+  const tApps = useTranslations('applications.follow_ups');
   const data = parseApplications(card.data);
   if (!data) return null;
   const rows = countsByLabel(data.counts);
+  const followUp = (f: ApplicationsData['followUps'][number]) => {
+    const name = f.company || f.title || tApps('unnamed');
+    switch (f.reason) {
+      case 'no_reply_10d':
+        return tApps('no_reply_item', { name, days: f.days ?? 10 });
+      case 'follow_up_due':
+        return tApps('follow_up_due_item', { name });
+      case 'interview_tomorrow':
+        return tApps('interview_item', { name });
+      case 'deadline_soon':
+        return tApps('deadline_item', { name, days: f.days ?? 0 });
+    }
+  };
   return (
     <CardFrame card={card} title={t('title')}>
       {rows.length ? (
@@ -73,20 +89,11 @@ export function ApplicationsCard({ card, ctx }: CardProps) {
         <>
           <h4 className={styles.subTitle}>{t('followUps')}</h4>
           <ul className={styles.cardList}>
-            {data.followUps.map((f) => {
-              const due = shortDate(f.dueAt, locale);
-              return (
-                <li key={f.jobId} className={styles.jobRow}>
-                  <Link href={jobDetailHref(f.jobId)} className={styles.jobLink} onClick={ctx.onNavigate}>
-                    {f.title}
-                  </Link>
-                  <span className={styles.jobMeta}>
-                    {f.company ? <span>{f.company}</span> : null}
-                    {due ? <span>{t('due', { date: due })}</span> : null}
-                  </span>
-                </li>
-              );
-            })}
+            {data.followUps.map((f) => (
+              <li key={`${f.entryId}-${f.reason}`} className={styles.jobRow}>
+                <span className={styles.cardText}>{followUp(f)}</span>
+              </li>
+            ))}
           </ul>
         </>
       ) : null}

@@ -54,7 +54,8 @@ model RAAuthToken {
   brand      String
   /// 'password_reset' | 'email_verify' | 'magic_prefs' | 'oauth_state' | 'ext_pair' |
   /// 'email_unsub' | 'anon_alert_confirm' | 'oauth_pending' | 'known_device' (WP-10) |
-  /// 'wechat_reverify' (WP-11) | 'billing_cancel' (WP-21a, public /cancel link).
+  /// 'wechat_reverify' (WP-11) | 'billing_cancel' (WP-21a, public /cancel link) |
+  /// 'tool_result' | 'tool_result_alias' (WP-57, anonymous free-tool results, 24 h).
   /// 'oauth_state' payload (WP-10/11) holds `nonceHash` (sha256 of the browser-bound
   /// nonce cookie) and, for WeChat sign-up, the server-versioned `consents`.
   kind       String

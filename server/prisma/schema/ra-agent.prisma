@@ -25,6 +25,13 @@ model RAAgentSettings {
   /// `[{ jobId, verdict: 'up'|'down', reason?, note? }]`
   calibration      Json      @default("[]")
   setupCompletedAt DateTime?
+  // ── SCHEMA-4 (SR-52-1) ──
+  /// The saved search the weekly list draws from; null = the user's active
+  /// (default) search profile. Not read by WP-52 yet (on-demand lists only).
+  searchProfileId  String?
+  /// Ready-to-apply-only filter overrides on top of that search (a partial
+  /// FilterSet v1, `features/search/filterSet.ts`); null = none.
+  filterOverrides  Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -62,6 +69,10 @@ model RAAgentQueueItem {
   @@unique([userId, jobId])
   @@index([userId, state, updatedAt(sort: Desc)])
   @@index([userId, weekKey])
+  /// SCHEMA-4 (SR-52-2): cross-user scans by the reminder producer and the
+  /// stale-`preparing` sweep, and the weekly list's per-source reads.
+  @@index([state, updatedAt])
+  @@index([addedVia, createdAt])
 }
 
 /// Audit row per kit state transition (F-AGENT-11): what was generated, what
@@ -76,6 +87,10 @@ model RAAgentKitEvent {
   toState     String
   /// 'user' | 'system' | 'extension'
   actor       String
+  /// SCHEMA-4 (SR-52-3): 'transition' | 'decision' | 'notice'. Nullable with
+  /// no default: null = written before the writer sets it; readers then derive
+  /// it (decision and notice rows are the ones with `fromState = toState`).
+  kind        String?
   /// e.g. `{ tailorSessionId?, coverLetterId?, artifactId?, fileName?, creditLedgerId? }`
   detail      Json?
   createdAt   DateTime         @default(now())

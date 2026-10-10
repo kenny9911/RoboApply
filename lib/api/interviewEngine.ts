@@ -225,6 +225,9 @@ export interface IEConnection {
    *  page joins Parley with `parley` instead of a LiveKit room. */
   transport?: 'parley';
   parley?: IEParleyJoin;
+  /** False when the server's join token cannot publish a camera (GoApply: local
+   *  preview only; WP-63a). Absent = legacy server, treat as allowed. */
+  cameraPublish?: boolean;
 }
 
 /** What the browser needs to join a Parley session (WebRTC straight to the node). */

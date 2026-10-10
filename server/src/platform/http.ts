@@ -60,6 +60,8 @@ export const ERROR_STATUS = {
   storage_unavailable: 503,
   /** A residency-critical write ran with no brand context (WP-15 writeBrand; a server bug, logged). */
   brand_context_missing: 500,
+  /** The resource existed and is gone for good, e.g. a closed public job page (WP-56; Wave 4 gate). */
+  gone: 410,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_STATUS;
@@ -90,6 +92,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   brand_unavailable: 'This site is not served by this deployment.',
   storage_unavailable: 'File storage is not available right now.',
   brand_context_missing: 'Something went wrong.',
+  gone: 'This is no longer available.',
 };
 
 export class HttpError extends Error {

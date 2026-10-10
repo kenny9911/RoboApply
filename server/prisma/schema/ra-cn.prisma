@@ -130,3 +130,50 @@ model RACnFraudReview {
   @@index([sourceKey])
   @@index([decision, at])
 }
+
+/// GoApply 内推码 hub (WP-54, flag `cn.referralCodes`; SCHEMA-4, SR-54-1).
+/// User-contributed referral codes. D3: shown only after moderation, labelled
+/// "Shared by a %BRAND% user, {month year}"; never generated, never scraped.
+model RACnReferralCode {
+  id                String               @id @default(cuid())
+  brand             String
+  userId            String
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company           String
+  companyNormalized String
+  code              String
+  programme         String?
+  expiresAt         DateTime?
+  note              String?
+  /// 'pending' | 'approved' | 'rejected' | 'expired' | 'deleted'
+  /// 'deleted' = the sharer deleted it: soft delete, so it still counts toward
+  /// the 10-a-day share cap; never listed, reported or moderated again.
+  status            String               @default("pending")
+  rejectReason      String?
+  reportCount       Int                  @default(0)
+  /// Set when reports take an approved code off the hub until re-review.
+  hiddenAt          DateTime?
+  moderatedAt       DateTime?
+  /// Admin user id.
+  moderatedById     String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  reports           RACnReferralReport[]
+
+  @@index([brand, status, companyNormalized])
+  @@index([userId, createdAt])
+}
+
+/// A user's report of a 内推码 (one per user per code; SCHEMA-4, SR-54-1).
+model RACnReferralReport {
+  id        String           @id @default(cuid())
+  codeId    String
+  code      RACnReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    String
+  note      String?
+  createdAt DateTime         @default(now())
+
+  @@unique([codeId, userId])
+}

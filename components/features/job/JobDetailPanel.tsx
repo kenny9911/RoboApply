@@ -125,6 +125,18 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
 
   const open = job.status === 'open';
   const peopleTab = brand.market === 'intl' ? hiring !== 'off' && detail.people.mode !== 'off' : referralCodes;
+  // `?tab=people|company` (the Assistant's People link, F-NET) opens that tab
+  // once per job. Read after mount, not during render, so SSR and hydration
+  // agree. People waits until the tab exists for this user (the contacts mode
+  // may resolve after mount); without it the panel stays on Overview.
+  const queryTab = useRef<string | null>(null);
+  useEffect(() => {
+    if (queryTab.current === job.id || typeof window === 'undefined') return;
+    const want = new URLSearchParams(window.location.search).get('tab');
+    if (want === 'people' && !peopleTab) return;
+    queryTab.current = job.id;
+    if (want === 'company' || want === 'people') setTab(want);
+  }, [job.id, peopleTab]);
   const tabs: TabItem<TabId>[] = [
     { id: 'overview', label: t('tabs.overview') },
     { id: 'company', label: t('tabs.company') },

@@ -1,7 +1,9 @@
 'use client';
 
 // company — sourced company facts only (F-ORION-07, F-JOB-04). Every value
-// renders through SourcedValue + SourceNote; an unknown value is "—" (D3).
+// renders through SourcedValue + its own SourceNote; an unknown value is "—"
+// (D3). The card-level `sources` repeat the same facts, so they are not
+// rendered a second time.
 
 import { useTranslations } from 'next-intl';
 
@@ -16,7 +18,7 @@ export function CompanyCard({ card }: CardProps) {
   const data = parseCompany(card.data);
   if (!data || data.facts.length === 0) return null;
   return (
-    <CardFrame card={card} title={t('title', { name: data.name })}>
+    <CardFrame card={card} title={t('title', { name: data.name })} showSources={false}>
       <dl className={styles.facts}>
         {data.facts.map((f) => (
           <div key={f.key} style={{ display: 'contents' }}>

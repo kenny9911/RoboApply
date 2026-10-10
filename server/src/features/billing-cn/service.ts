@@ -48,8 +48,8 @@ import {
 } from '../../platform/billing/rails/wechatpay.js';
 import { requirementsMet } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
-import { rateLimitKey, type RateWindow } from '../../platform/ratelimit/index.js';
-import { BILLING_CN_CREATE_RATE_LIMIT, CN_PAY_TERMS_CONSENT_TYPE } from './contract.js';
+import { rateLimitKey, rateLimitWindows, type RateWindow } from '../../platform/ratelimit/index.js';
+import { CN_PAY_TERMS_CONSENT_TYPE } from './contract.js';
 import type { CnOrderState, CnOrderStatus, CnPurpose, CreateWechatOrderResponse, WechatNotifyAck, WechatPayTradeType } from './contract.js';
 import type { CreateWechatOrderBodySchema } from './contract.js';
 import type { z } from 'zod';
@@ -206,7 +206,7 @@ export class BillingCnService {
   /** Abuse guard: each order is a DB row plus a signed WeChat Pay call. */
   private async assertCreateRateLimit(userId: string, brand: ProductBrand): Promise<void> {
     const consume = this.deps.consumeRateLimit ?? defaultConsumeRateLimit;
-    const result = await consume(rateLimitKey('billingCnCreate', 'user', userId, brand.id), BILLING_CN_CREATE_RATE_LIMIT);
+    const result = await consume(rateLimitKey('billingCnCreate', 'user', userId, brand.id), rateLimitWindows('billingCnCreate'));
     if (!result.allowed) {
       throw new HttpError('rate_limited', 'Too many payment attempts. Try again later.', { retryAfterSec: result.retryAfterSec }, {
         'Retry-After': String(result.retryAfterSec),

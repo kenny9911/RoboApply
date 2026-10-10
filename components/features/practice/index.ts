@@ -1,7 +1,7 @@
 // components/features/practice — public surface of the practice entry area (WP-43).
 // Other areas import from here only (TASK_PLAN.md §2.1 rule 4).
 //
-// WP-63a adds NetworkPrecheck.tsx to this folder in Wave 4.
+// WP-63a added NetworkPrecheck.tsx (Wave 4); exported here at the Wave 4 gate (R3).
 
 export { RecordingConsentSheet, type RecordingConsentSheetProps } from './RecordingConsentSheet';
 export { RecordingRow, type RecordingRowProps } from './RecordingRow';
@@ -10,3 +10,4 @@ export { PracticeNotices, PRACTICE_NOTICE_LINKS, type PracticeNoticeKind } from 
 export { PracticeReportEnd, PRACTICE_PLANS_HREF, type PracticeReportEndProps } from './PracticeReportEnd';
 export { TextPracticeRoom, type TextPracticeRoomProps } from './TextPracticeRoom';
 export { setupNotices, type SetupNoticeInput } from './setupNotices';
+export { NetworkPrecheck, NETWORK_PROBES, NETWORK_THRESHOLDS, type NetworkLevel, type NetworkPrecheckProps } from './NetworkPrecheck';

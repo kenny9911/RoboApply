@@ -7,7 +7,8 @@ model RASeoPage {
   id          String   @id @default(cuid())
   brand       String
   locale      String
-  /// 'role' | 'role_city' | 'remote_role' | 'company' | 'segment' | 'sponsorship_role' | 'compare' | 'campus'
+  /// 'role' | 'role_city' | 'remote_role' | 'graduate_role' | 'company' | 'segment' |
+  /// 'sponsorship_role' | 'compare' | 'campus'
   type        String
   slug        String
   /// `{ taxonomyId?, city?, country?, companyId?, segment? }`
@@ -15,8 +16,9 @@ model RASeoPage {
   title       String
   h1          String
   intro       String   @db.Text
-  /// `{ jobCount, newLast7d, medianSalary?: { value, currency, period, sampleSize },
-  ///    topCompanies: […], asOf }` — medians only when sampleSize ≥ MIN_SAMPLE (20).
+  /// `{ jobCount, newLast7d, payListed, medianSalary?: { value, currency, period, sampleSize },
+  ///    topCompanies: […], asOf }` — medians only when sampleSize ≥ MIN_SAMPLE (20);
+  ///    `payListed` = posts in jobCount that list pay ("Pay listed on X of N posts").
   stats       Json
   jobCount    Int
   indexable   Boolean  @default(false)

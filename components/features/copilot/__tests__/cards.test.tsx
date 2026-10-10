@@ -1,18 +1,26 @@
-// Assistant cards (WP-51; F-ORION-12): every card type renders from fixture
-// data; an unknown type or data that does not parse renders nothing; the
+// Assistant cards (WP-51; F-ORION-12): every card type renders from what the
+// WP-50 tools really send (wireCards.ts runs them over the server's area
+// fakes); an unknown type or data that does not parse renders nothing; the
 // proposal cards change nothing until confirmed; GoApply asks the memory
 // consent before anything is saved.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 
-import { ACTION_CARD_CAPS, CopilotCardView } from '../cards';
+import { ACTION_CARD_CAPS, CREDIT_ACTIONS, CopilotCardView } from '../cards';
+import { NUDGE_KINDS } from '../../../../hooks/copilot/nudges';
 import { countsByLabel } from '../cards/ApplicationsCard';
 import { ALL_TRACKER_STATUSES } from '../../../../server/src/features/tracker/contract';
-import { CARD_TYPES } from '../../../../server/src/features/copilot/contract';
+import { CARD_TYPES, CREDIT_ACTIONS as SERVER_CREDIT_ACTIONS, NUDGE_KINDS as SERVER_NUDGE_KINDS } from '../../../../server/src/features/copilot/contract';
 import { __assistantChangeStore } from '../../../../hooks/feed/useCalibration';
 import { __outOfCreditsStore } from '../../../../hooks/shared/useCreditGate';
-import { CREDITS, MEMORY_CONSENT, PROFILES, card, fail, installFetch, ok, renderUi, type Route } from './testkit';
+import { CREDITS, MEMORY_CONSENT, PROFILE, PROFILES, card, fail, installFetch, ok, renderUi, type Route } from './testkit';
+import { wireCard, wireCards } from './wireCards';
+import type { CopilotCard } from '../../../../lib/api/contracts/copilot';
+
+vi.mock('../../../../server/src/services/LoggerService.js', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 const push = vi.fn();
 vi.mock('next/navigation', async (orig) => {
@@ -22,32 +30,22 @@ vi.mock('next/navigation', async (orig) => {
 
 const AS_OF = '2026-10-01T00:00:00.000Z';
 
-/** One valid fixture per card type (fictional data). */
+/** One card per contract type, as the server's tools produce it (filled in beforeAll). */
+let WIRE: Record<string, CopilotCard> = {};
+const wire = (type: string): unknown => WIRE[type]!.data;
+beforeAll(async () => {
+  WIRE = await wireCards();
+});
+
+/**
+ * Scenario cards for the proposal flows below: the producers' shapes with the
+ * ids, versions and counts each scenario needs. (`filter_diff` keeps a plain
+ * `countAfter` number here: the CountView count is a WP-93 carry-over.)
+ */
 const FIXTURES: Record<string, unknown> = {
-  job_list: {
-    items: [
-      { jobId: 'job_1', title: 'Data analyst', company: { name: 'Example Co' }, location: 'Berlin', pay: { min: 60000, max: 70000, currency: 'EUR', period: 'year', text: null }, fit: { tier: 'good', score: 70 } },
-      { jobId: 'job_2', title: 'BI analyst', company: 'Sample GmbH', location: null, pay: null },
-    ],
-  },
-  filters: { filters: { workModels: ['remote'] }, searchProfileId: 'sp_main' },
-  filter_diff: { proposalId: 'p_f', searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'add', path: 'workModels', value: 'hybrid' }], countAfter: 12, expiresAt: '2099-01-01T00:00:00.000Z' },
-  fit_analysis: { jobId: 'job_1', tier: 'possible', aligned: ['SQL in two roles'], missing: ['Kubernetes'], highlights: [] },
-  company: { name: 'Example Co', facts: [{ key: 'size', value: { value: '51–200', source: 'company_website', asOf: AS_OF } }] },
-  contacts: { company: 'Example Co', people: [{ id: 'c1', name: 'Alex Sample', title: 'Recruiter', sourceName: 'RoboHire' }], searchLinks: [{ url: 'https://www.linkedin.com/search/results/people/?keywords=Example%20Co' }] },
-  credit_action: { proposalId: 'p_c', action: 'tailor', bucket: 'tailor', cost: 1, jobId: 'job_1', jobTitle: 'Data analyst', company: 'Example Co' },
-  tailor_ready: { resumeId: 'res_9', jobTitle: 'Data analyst' },
-  cover_letter: { letterId: 'cl_1', preview: 'Dear team, …' },
-  interview_plan: { jobId: 'job_1', questions: [{ text: 'Walk us through a dashboard you built.', sourceKind: 'bank' }, { text: 'How would you size the data?', sourceKind: 'ai' }] },
-  salary: { title: 'Data analyst', location: 'Berlin', range: { value: { min: 55000, max: 72000, currency: 'EUR', period: 'year' }, source: 'index', sampleSize: 40, asOf: AS_OF } },
-  applications: { counts: [{ status: 'applied', count: 4 }, { status: 'interviewing', count: 1 }], followUps: [{ jobId: 'job_3', title: 'Analyst', company: 'Example Co', dueAt: '2026-10-14' }] },
-  job_imported: { jobId: 'job_4', title: 'Analyst', company: 'Example Co' },
-  memory_add: { proposalId: 'p_m', fact: 'Prefers remote jobs in Berlin time zones.' },
-  profile_gaps: { gaps: [{ key: 'skills' }, { key: 'workAuth', href: '/profile#work' }] },
-  action: { kind: 'set_sort', sort: 'newest' },
-  notice: { code: 'copilot_budget_exhausted' },
-  campus_deadlines: { items: [{ company: '示例公司', programme: '2027 校招', closesAt: '2026-10-20', sourceUrl: 'https://campus.example.com', sourceName: '示例公司官网' }] },
-  competitiveness: { jobId: 'job_1' },
+  filter_diff: { proposalId: 'p_f', status: 'pending', searchProfileId: 'sp_main', baseVersion: 3, reason: 'You asked for hybrid jobs.', ops: [{ op: 'add', path: 'workModels', value: 'hybrid' }], changes: [], countBefore: null, countAfter: 12, expiresAt: '2099-01-01T00:00:00.000Z' },
+  credit_action: { proposalId: 'p_c', status: 'pending', expiresAt: '2099-01-01T00:00:00.000Z', action: 'tailor', bucket: 'tailor', cost: 1, jobId: 'job_1', remaining: 2, resetsAt: '2026-10-11T00:00:00.000Z' },
+  memory_add: { proposalId: 'p_m', status: 'pending', expiresAt: '2099-01-01T00:00:00.000Z', fact: 'Prefers remote jobs in Berlin time zones.', consentRequired: false },
 };
 
 const FLAGS = { competitiveness: true, campusCalendar: true };
@@ -79,13 +77,13 @@ describe('every card type renders', () => {
     ACTION_CARD_CAPS.sortLink = false;
   });
 
-  it('has a fixture for every contract card type', () => {
-    expect(Object.keys(FIXTURES).sort()).toEqual([...CARD_TYPES].sort());
+  it('a server tool produces every contract card type', () => {
+    expect(Object.keys(WIRE).sort()).toEqual([...CARD_TYPES].sort());
   });
 
-  it.each([...CARD_TYPES])('%s', async (type) => {
-    installFetch(routes());
-    const { container } = renderUi(<CopilotCardView card={card(type, FIXTURES[type])} />, { flags: FLAGS });
+  it.each([...CARD_TYPES])('%s (as the server sends it)', async (type) => {
+    installFetch(routes({ 'GET /api/v1/roboapply/search-profiles': () => ok(PROFILES([PROFILE({ id: 'sp_1', version: 3 })])) }));
+    const { container } = renderUi(<CopilotCardView card={WIRE[type]!} />, { flags: FLAGS });
     await waitFor(() => expect(container.querySelector(`[data-card="${type}"]`)).not.toBeNull());
   });
 
@@ -105,25 +103,14 @@ describe('card content', () => {
   it('action set_sort renders nothing while /jobs does not honour ?sort= (no promise the page cannot keep)', () => {
     installFetch(routes());
     expect(ACTION_CARD_CAPS.sortLink).toBe(false);
-    const { container } = renderUi(<CopilotCardView card={card('action', FIXTURES.action)} />);
+    const { container } = renderUi(<CopilotCardView card={card('action', wire('action'))} />);
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole('link', { name: 'Show jobs sorted this way' })).not.toBeInTheDocument();
   });
 
   it('applications: real tracker statuses get their own labels; bookmarked is Saved; legacy statuses fold', () => {
     installFetch(routes());
-    const data = {
-      counts: [
-        { status: 'bookmarked', count: 5 },
-        { status: 'first_call', count: 2 },
-        { status: 'final_round', count: 1 },
-        { status: 'applying', count: 1 },
-        { status: 'applied', count: 3 },
-        { status: 'withdrawn', count: 1 },
-        { status: 'mystery_stage', count: 2 },
-      ],
-      followUps: [],
-    };
+    const data = { byStatus: { bookmarked: 5, first_call: 2, final_round: 1, applying: 1, applied: 3, withdrawn: 1, mystery_stage: 2, offer: 0 }, followUps: [] };
     const { container } = renderUi(<CopilotCardView card={card('applications', data)} />);
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toEqual(['Saved: 5', 'Applied: 4', 'First call: 2', 'Final round: 1', 'Withdrawn: 1', 'Other: 2']);
@@ -136,7 +123,7 @@ describe('card content', () => {
   it('a malformed entry in card.sources is dropped instead of crashing the conversation', () => {
     installFetch(routes());
     const bad = {
-      ...card('applications', FIXTURES.applications),
+      ...card('applications', wire('applications')),
       sources: [{ value: 1, asOf: AS_OF }, { value: 2, source: 'index', asOf: AS_OF, url: 'ftp://example.com/x' }, null],
     } as never;
     const { container } = renderUi(<CopilotCardView card={bad} />);
@@ -144,31 +131,56 @@ describe('card content', () => {
     expect(container.querySelector('a[href^="ftp:"]')).toBeNull();
   });
 
-  it('job_list: links, pay or "Pay not listed", tier word and the fit line', () => {
+  it('job_list: links, tier word and the fit line', () => {
     installFetch(routes());
-    renderUi(<CopilotCardView card={card('job_list', FIXTURES.job_list)} />);
-    expect(screen.getByRole('link', { name: 'Data analyst' })).toHaveAttribute('href', expect.stringContaining('job_1'));
-    expect(screen.getByText('Pay not listed')).toBeInTheDocument();
-    expect(screen.getByText('Good fit')).toBeInTheDocument();
+    renderUi(<CopilotCardView card={card('job_list', wire('job_list'))} />);
+    expect(screen.getAllByRole('link', { name: 'Data Analyst' })[0]).toHaveAttribute('href', expect.stringContaining('job_1'));
+    expect(screen.getAllByText('Good fit').length).toBeGreaterThan(0);
     expect(screen.getByText('This is not your chance of getting hired.')).toBeInTheDocument();
   });
 
   it('fit_analysis shows the AI badge on GoApply only', () => {
     installFetch(routes());
-    const { container, unmount } = renderUi(<CopilotCardView card={card('fit_analysis', FIXTURES.fit_analysis)} />, { brand: 'goapply' });
+    const { container, unmount } = renderUi(<CopilotCardView card={card('fit_analysis', wire('fit_analysis'))} />, { brand: 'goapply' });
     expect(container.querySelector('[data-ai-label]')).not.toBeNull();
     unmount();
-    const ra = renderUi(<CopilotCardView card={card('fit_analysis', FIXTURES.fit_analysis)} />);
+    const ra = renderUi(<CopilotCardView card={card('fit_analysis', wire('fit_analysis'))} />);
     expect(ra.container.querySelector('[data-ai-label]')).toBeNull();
-    expect(screen.getByText('Kubernetes')).toBeInTheDocument();
   });
+
+  it('fit_analysis: the deterministic skills under their own headings, the AI gaps apart from missing skills', () => {
+    installFetch(routes());
+    const { container } = renderUi(<CopilotCardView card={card('fit_analysis', wire('fit_analysis'))} />);
+    const section = (title: string) => {
+      const h = [...container.querySelectorAll('h4')].find((x) => x.textContent === title);
+      return h?.nextElementSibling?.textContent ?? '';
+    };
+    expect(section('What lines up')).toBe('SQL');
+    expect(section('What the post asks for that your resume does not show')).toBe('GraphQL');
+    expect(section('Worth mentioning')).toBe('Four years of SQL reporting');
+    expect(section('What could be stronger')).toBe('No dashboard work described');
+  });
+
+  it('fit_analysis for a quick estimate has no AI badge', () => {
+    installFetch(routes());
+    const pre = { ...(wire('fit_analysis') as object), kind: 'pre', aiWritten: false, strengths: [], gaps: [] };
+    const { container } = renderUi(<CopilotCardView card={card('fit_analysis', pre)} />, { brand: 'goapply' });
+    expect(container.querySelector('[data-card="fit_analysis"]')).not.toBeNull();
+    expect(container.querySelector('[data-ai-label]')).toBeNull();
+  });
+
+  /** The salary card's data with `stats` replaced (posted pay dropped unless given). */
+  const salaryWith = (stats: Record<string, unknown>, posted: unknown = null) => {
+    const real = wire('salary') as { stats: Record<string, unknown> };
+    return { ...real, posted, stats: { ...real.stats, ...stats } };
+  };
 
   it('salary below 20 posts renders "—" and says there is not enough data', () => {
     installFetch(routes());
-    const small = { ...(FIXTURES.salary as object), range: { value: { min: 1, max: 2, currency: 'EUR', period: 'year' }, source: 'index', sampleSize: 12, asOf: AS_OF } };
+    const small = salaryWith({ median: null, p25: null, p75: null, listedCount: { value: 12, source: 'index', sampleSize: 12, asOf: AS_OF, method: 'computed' } });
     const { container } = renderUi(<CopilotCardView card={card('salary', small)} />);
     expect(container.textContent).toContain('—');
-    expect(container.textContent).not.toContain('€1');
+    expect(container.textContent).not.toMatch(/\$\d/);
     expect(container.textContent).toContain('Not enough data yet');
   });
 
@@ -192,22 +204,25 @@ describe('card content', () => {
 
   it('salary without a sample size renders nothing (the one-sample rule cannot be checked)', () => {
     installFetch(routes());
-    const noN = { ...(FIXTURES.salary as object), range: { value: { min: 55000, max: 72000, currency: 'EUR', period: 'year' }, source: 'index', asOf: AS_OF } };
+    const noN = salaryWith({ median: { value: 105000, source: 'index', asOf: AS_OF, method: 'computed' }, listedCount: null });
     const { container } = renderUi(<CopilotCardView card={card('salary', noN)} />);
     expect(container).toBeEmptyDOMElement();
-    expect(container.textContent).not.toMatch(/55,000/);
+    expect(container.textContent).not.toMatch(/105,000/);
   });
 
-  it('salary at 40 posts shows the range and N', () => {
+  it('salary: the post\'s own pay and the middle half across N similar posts, each with its source', () => {
     installFetch(routes());
-    const { container } = renderUi(<CopilotCardView card={card('salary', FIXTURES.salary)} />);
-    expect(container.textContent).toMatch(/55,000/);
-    expect(container.textContent).toMatch(/40/);
+    const { container } = renderUi(<CopilotCardView card={card('salary', wire('salary'))} />);
+    expect(container.textContent).toContain('In this post');
+    expect(container.textContent).toMatch(/\$90,000.*\$120,000/);
+    expect(container.textContent).toMatch(/\$95,000.*\$118,000/);
+    expect(container.textContent).toMatch(/32/);
+    expect(container.querySelectorAll('[data-source-note]').length).toBe(2);
   });
 
   it('contacts never shows a person without a named source', () => {
     installFetch(routes());
-    const data = { company: 'Example Co', people: [{ id: 'x', name: 'No Source' }], searchLinks: [] };
+    const data = { fromYourCompanies: [{ id: 'x', fullName: 'No Source', source: 'mystery' }], fromYourSchools: [], recruiters: [{ id: 'y', fullName: 'Unnamed Bank', source: 'bank_recruiter', sourceName: null }], searchLinks: [] };
     const { container } = renderUi(<CopilotCardView card={card('contacts', data)} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -220,7 +235,7 @@ describe('card content', () => {
 
   it('interview_plan: source labels and Practice for this job', () => {
     installFetch(routes());
-    renderUi(<CopilotCardView card={card('interview_plan', FIXTURES.interview_plan)} />);
+    renderUi(<CopilotCardView card={card('interview_plan', wire('interview_plan'))} />);
     expect(screen.getByText('From our question bank')).toBeInTheDocument();
     expect(screen.getByText('Written by AI')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Practice for this job' }));
@@ -229,10 +244,10 @@ describe('card content', () => {
 
   it('competitiveness and campus_deadlines hide when their flags are off', () => {
     installFetch(routes());
-    const a = renderUi(<CopilotCardView card={card('competitiveness', FIXTURES.competitiveness)} />);
+    const a = renderUi(<CopilotCardView card={card('competitiveness', wire('competitiveness'))} />);
     expect(a.container).toBeEmptyDOMElement();
     a.unmount();
-    const b = renderUi(<CopilotCardView card={card('campus_deadlines', FIXTURES.campus_deadlines)} />);
+    const b = renderUi(<CopilotCardView card={card('campus_deadlines', wire('campus_deadlines'))} />);
     expect(b.container).toBeEmptyDOMElement();
   });
 });
@@ -485,5 +500,119 @@ describe('memory_add', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Remember this' }));
     await screen.findByText('Saved. You can see or delete it in Settings.');
     expect(http.to('POST', '/api/v1/roboapply/compliance/consents')).toHaveLength(0);
+  });
+});
+
+describe('WP-50 producers ↔ WP-51 cards (Wave 4 gate)', () => {
+  it('client and server share one credit-action and one nudge vocabulary', () => {
+    expect([...CREDIT_ACTIONS].sort()).toEqual([...SERVER_CREDIT_ACTIONS].sort());
+    expect([...NUDGE_KINDS].sort()).toEqual([...SERVER_NUDGE_KINDS].sort());
+  });
+
+  it('propose_filter_change: the card previews the ops and offers Apply changes', async () => {
+    installFetch(routes({ 'GET /api/v1/roboapply/search-profiles': () => ok(PROFILES([PROFILE({ id: 'sp_1', version: 3 })])) }));
+    renderUi(<CopilotCardView card={WIRE.filter_diff!} />);
+    await screen.findByRole('button', { name: 'Apply changes' });
+    expect(screen.getByText('Add')).toBeInTheDocument();
+  });
+
+  it('rewrite_resume_section: the rewrite proposal shows its cost, and applying links to the suggestions', async () => {
+    const proposal = await wireCard('rewrite_proposal');
+    const proposalId = (proposal.data as { proposalId: string }).proposalId;
+    const http = installFetch(routes({ [`POST /api/v1/roboapply/copilot/proposals/${proposalId}/apply`]: () => ok({ applied: true, result: { card: WIRE.rewrite_ready } }) }));
+    renderUi(<CopilotCardView card={proposal} />);
+    expect(screen.getByText('Rewrite this part of your resume')).toBeInTheDocument();
+    expect(screen.getByText('Uses 1 credit, only when you confirm.')).toBeInTheDocument();
+    expect(http.to('POST', `/api/v1/roboapply/copilot/proposals/${proposalId}/apply`)).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Write the rewrites' }));
+    const link = await screen.findByRole('link', { name: 'Review and apply in the resume check' });
+    expect(link).toHaveAttribute('href', '/resume/res_1/check?issue=iss_1');
+  });
+
+  it('add_external_job: after applying, the card links to the added job', async () => {
+    const proposal = await wireCard('job_import_proposal');
+    const proposalId = (proposal.data as { proposalId: string }).proposalId;
+    installFetch(routes({ [`POST /api/v1/roboapply/copilot/proposals/${proposalId}/apply`]: () => ok({ applied: true, result: { card: WIRE.job_imported } }) }));
+    renderUi(<CopilotCardView card={proposal} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add the job' }));
+    expect(await screen.findByRole('link', { name: 'Open the job' })).toHaveAttribute('href', '/jobs/job_new');
+  });
+
+  it('job_imported names the job from the import draft; an unfinished import links to Added jobs', () => {
+    installFetch(routes());
+    const done = renderUi(<CopilotCardView card={WIRE.job_imported!} />);
+    expect(screen.getByText('Analyst · Beta')).toBeInTheDocument();
+    done.unmount();
+    const unfinished = { status: 'needs_fields', jobId: null, importId: 'imp_1', title: null, company: null, href: '/jobs/added?import=imp_1' };
+    renderUi(<CopilotCardView card={card('job_imported', unfinished)} />);
+    expect(screen.getByText('This job is not added yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Finish adding the job' })).toHaveAttribute('href', '/jobs/added?import=imp_1');
+  });
+
+  it('draft_outreach: the open_link action links to the job\'s People tab', async () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={await wireCard('outreach_link')} />);
+    expect(screen.getByRole('link', { name: 'Open the People tab for this job' })).toHaveAttribute('href', '/jobs/job_1?tab=people');
+  });
+
+  it('an open_link to anything but an app path renders nothing', () => {
+    installFetch(routes());
+    const { container } = renderUi(<CopilotCardView card={card('action', { kind: 'open_link', href: 'https://evil.example', label: 'people' })} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('resume_tips renders the localized check text for the issue type, not the stored English', () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={WIRE.resume_tips!} />);
+    expect(screen.getByText('Weak opener: "Helped with"')).toBeInTheDocument();
+    expect(screen.queryByText('Weak verb')).not.toBeInTheDocument();
+  });
+
+  it('resume_tips falls back to the stored text for a type this build does not know', () => {
+    installFetch(routes());
+    const data = { ...(wire('resume_tips') as object), issues: [{ id: 'i9', type: 'brand_new_rule', why: 'Server fallback text.', how: '', section: 'summary' }] };
+    renderUi(<CopilotCardView card={card('resume_tips', data)} />);
+    expect(screen.getByText('Server fallback text.')).toBeInTheDocument();
+  });
+
+  it('applications: counts by status and the tracker\'s follow-up facts', () => {
+    installFetch(routes());
+    const { container } = renderUi(<CopilotCardView card={WIRE.applications!} />);
+    expect(container.textContent).toContain('Saved: 2');
+    expect(container.textContent).toContain('Applied: 3');
+    expect(container.textContent).toContain('Acme: no reply for 12 days');
+    expect(container.textContent).toContain('BI Analyst: interview within 24 hours');
+  });
+
+  it('profile_gaps uses the profile page\'s field labels', () => {
+    installFetch(routes());
+    const { container } = renderUi(<CopilotCardView card={WIRE.profile_gaps!} />);
+    expect(container.textContent).toContain('At least one skill');
+    expect(container.textContent).toContain('Where you can work');
+  });
+
+  it('campus_deadlines links the official page and says when no other source was used', () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={WIRE.campus_deadlines!} />, { flags: FLAGS });
+    expect(screen.getByRole('link', { name: '示例公司 · 2027 校园招聘' })).toHaveAttribute('href', 'https://campus.example.com/2027');
+    expect(screen.getByText('Official page')).toBeInTheDocument();
+  });
+
+  it('contacts: the opted-in recruiter with its bank and the user\'s own contact with its source', () => {
+    installFetch(routes());
+    const { container } = renderUi(<CopilotCardView card={WIRE.contacts!} />);
+    expect(screen.getByText('People at Acme')).toBeInTheDocument();
+    expect(container.textContent).toContain('Sam Example');
+    expect(container.textContent).toContain('From RoboHire');
+    expect(container.textContent).toContain('Alex Sample');
+    expect(container.textContent).toContain('From your imported connections');
+  });
+
+  it('company: each sourced fact once, with its own source line', () => {
+    installFetch(routes());
+    const { container } = renderUi(<CopilotCardView card={WIRE.company!} />);
+    expect(screen.getByText('About Acme')).toBeInTheDocument();
+    expect(container.textContent).toContain('Software');
+    expect(container.querySelectorAll('[data-source-note]').length).toBe(1);
   });
 });

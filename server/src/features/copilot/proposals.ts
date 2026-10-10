@@ -31,6 +31,7 @@ import {
   type ApplyProposalResponse,
   type CopilotCard,
   type CountView,
+  type JobImportedCardData,
   type MemoryFactView,
   type ProposalStatus,
 } from './contract.js';
@@ -132,7 +133,7 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
           payload: { ...payload, baseVersion: fresh.version },
           expiresAt,
         });
-        card = { type: 'filter_diff', id: deps.newCardId(), data: filterDiffCard({ proposalId: next.id, expiresAt, profile: fresh, diff: res.diff, reason: payload.reason ?? null, now: deps.now() }) };
+        card = { type: 'filter_diff', id: deps.newCardId(), data: filterDiffCard({ proposalId: next.id, expiresAt, profile: fresh, diff: res.diff, ops: payload.ops as FilterOp[], reason: payload.reason ?? null, now: deps.now() }) };
         const messageId = messageIdOf(row.payload);
         if (messageId) await store.appendCard(messageId, card).catch(() => undefined);
       }
@@ -219,12 +220,15 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
               status: res.status,
               jobId: res.jobId,
               importId: res.importId,
+              // The read draft's title/company (what was saved); null when the import did not read them.
+              title: d?.title ?? res.draft?.title ?? null,
+              company: d?.company ?? res.draft?.company ?? null,
               matched: res.matched,
               reason: res.reason,
               missingFields: res.missingFields,
               warnings: res.warnings,
               href: res.jobId ? `/jobs/${encodeURIComponent(res.jobId)}` : `/jobs/added?import=${encodeURIComponent(res.importId)}`,
-            },
+            } satisfies JobImportedCardData,
           };
           break;
         }

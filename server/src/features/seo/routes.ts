@@ -24,7 +24,7 @@ import { Router, type Request, type RequestHandler, type Response } from 'expres
 import { getCurrentBrandOrDefault, parseBrandId, type EnvSource, type ProductBrand } from '../../platform/brand/index.js';
 import { requireFlag } from '../../platform/flags.js';
 import { HttpError, httpError, parseParams, parseQuery, route } from '../../platform/http.js';
-import { clientIp, consumeRateLimit, rateLimitKey, type ConsumeOptions, type RateLimitResult } from '../../platform/ratelimit/index.js';
+import { clientIp, consumeRateLimit, rateLimitKey, rateLimitWindows, type ConsumeOptions, type RateLimitResult } from '../../platform/ratelimit/index.js';
 import { requireCnRecruitmentInfo } from '../cn/jobs/index.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
@@ -32,7 +32,6 @@ import {
   SEO_GONE_CACHE_CONTROL,
   SEO_MISSING_CACHE_CONTROL,
   SEO_NO_STORE,
-  SEO_PUBLIC_RATE,
   SEO_SITEMAP_CACHE_CONTROL,
   SeoBrandQuerySchema,
   SeoJobParamsSchema,
@@ -93,7 +92,7 @@ export function seoRateLimiter(env: EnvSource = process.env, deps: SeoRateLimite
     if (!ip) return;
     let result: RateLimitResult;
     try {
-      result = await consume({ key: rateLimitKey(SEO_RATE_LIMIT_NAME, 'ip', ip), windows: [SEO_PUBLIC_RATE] });
+      result = await consume({ key: rateLimitKey(SEO_RATE_LIMIT_NAME, 'ip', ip), windows: rateLimitWindows(SEO_RATE_LIMIT_NAME, env) });
     } catch {
       return;
     }

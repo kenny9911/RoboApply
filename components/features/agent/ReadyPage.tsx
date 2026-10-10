@@ -77,15 +77,16 @@ function Ready() {
   const setup = useAgentSetup({ enabled: on });
   const queue = useReadyQueue({ enabled: on });
 
-  const fromUrl = params.get('tab');
+  const fromUrl = params?.get('tab') ?? null;
   const tab: ReadyTab = (READY_TABS as readonly string[]).includes(fromUrl ?? '') ? (fromUrl as ReadyTab) : 'prepare';
   const setTab = useCallback(
     (next: ReadyTab) => {
-      const p = new URLSearchParams(params.toString());
+      const p = new URLSearchParams(params?.toString() ?? '');
       if (next === 'prepare') p.delete('tab');
       else p.set('tab', next);
       const qs = p.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      const path = pathname ?? '/ready';
+      router.replace(qs ? `${path}?${qs}` : path, { scroll: false });
     },
     [params, pathname, router],
   );

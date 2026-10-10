@@ -81,7 +81,7 @@ describe('retention schedule (published values)', () => {
       ai_label_logs: '180 days · compliance-daily',
       content_safety_events: '180 days · compliance-daily',
       // WP-63a's job is still a stub: not claimed as automatic.
-      interview_recordings: '90 days · not_automated',
+      interview_recordings: '90 days · interview-retention',
       data_exports: '7 days · compliance-daily',
       // The provider's window is not assumed: "Not listed" until ops sets it.
       backups: 'Not listed · provider',
@@ -93,7 +93,7 @@ describe('retention schedule (published values)', () => {
       if (r.enforcedBy === 'compliance-daily' && r.id !== 'data_exports') expect(r.run, r.id).toBeTypeOf('function');
       if (r.enforcedBy !== 'compliance-daily') expect(r.run, r.id).toBeUndefined();
     }
-    expect(RETENTION_RULES.some((r) => r.enforcedBy === 'interview-retention')).toBe(false);
+    expect(RETENTION_RULES.filter((r) => r.enforcedBy === 'interview-retention').map((r) => r.id)).toEqual(['interview_recordings']);
   });
 
   it('backups: BACKUP_RETENTION_DAYS when set and valid, else null', () => {
@@ -288,8 +288,8 @@ describe('retention rows', () => {
     expect(firstWhere(calls, 'rAContentSafetyEvent')).toEqual({ brand: 'goapply', createdAt: { lt: new Date('2026-04-13T05:00:00.000Z') } });
   });
 
-  it('interview_recordings: not automated until WP-63a replaces its stub', () => {
-    expect(rule('interview_recordings').enforcedBy).toBe('not_automated');
+  it('interview_recordings: enforced by WP-63a interview retention (run from compliance-daily, not a row run here)', () => {
+    expect(rule('interview_recordings').enforcedBy).toBe('interview-retention');
     expect(rule('interview_recordings').run).toBeUndefined();
   });
 

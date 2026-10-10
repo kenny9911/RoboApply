@@ -11,9 +11,9 @@
 // settings (database backups — the period comes from BACKUP_RETENTION_DAYS and
 // renders "Not listed" until ops sets it); `not_automated` rows are published
 // commitments whose automation is not built yet — they are listed honestly,
-// never claimed as automatic. Practice interview recordings stay
-// `not_automated` until WP-63a replaces its `runInterviewRetention` stub; WP-63a
-// then flips that row to 'interview-retention' (Request in the WP-13 handoff).
+// never claimed as automatic. Practice interview recordings are
+// 'interview-retention': WP-63a's `runInterviewRetention`, run by compliance-daily
+// (flipped at the Wave 4 gate).
 //
 // Deletions are brand-scoped (each cron run is inside one brand), batched,
 // and return quickly when nothing is due (cost guard, FND-3).
@@ -366,9 +366,10 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
       return { deleted };
     },
   },
-  // WP-63a's runInterviewRetention is still a not-implemented stub: published
-  // as not automated until WP-63a ships it and flips this to 'interview-retention'.
-  { id: 'interview_recordings', covers: 'Practice interview recordings and transcripts', keep: keep(90, 'days'), enforcedBy: 'not_automated' },
+  // Enforced by WP-63a's runInterviewRetention (features/interview/cron.ts),
+  // which compliance-daily runs per brand (INTERVIEW_RETENTION_DAYS, default
+  // and cap 90). Flipped from 'not_automated' at the Wave 4 gate (WP-63a R4).
+  { id: 'interview_recordings', covers: 'Practice interview recordings and transcripts', keep: keep(90, 'days'), enforcedBy: 'interview-retention' },
   // Data export files: deleted by compliance-daily's export sweep (dataExport.ts).
   { id: 'data_exports', covers: 'Data export files', keep: keep(DATA_EXPORT_TTL_DAYS, 'days'), enforcedBy: 'compliance-daily' },
   // The database provider's history window, as ops configured it (not assumed).

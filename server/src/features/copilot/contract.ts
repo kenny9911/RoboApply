@@ -109,6 +109,13 @@ export const PROPOSAL_TTL_MS = 24 * 60 * 60 * 1000;
 
 // ── Card payloads (`card.data`) for the proposal and action cards ────────
 
+/** One filter edit as the model proposed it (validated against the FilterSet schema before it is stored). */
+export interface FilterOpWire {
+  op: 'add' | 'remove' | 'set';
+  path: string;
+  value?: unknown;
+}
+
 /** `filter_diff`: what changes, the job counts before and after, and the proposal to apply. */
 export interface FilterDiffCardData {
   proposalId: string;
@@ -117,6 +124,8 @@ export interface FilterDiffCardData {
   searchProfileId: string;
   baseVersion: number;
   reason: string | null;
+  /** The proposal's ops: the client previews them against the saved search as it is now (FilterDiff). */
+  ops: FilterOpWire[];
   /** One row per changed field (search.diffFilterSets). */
   changes: Array<{ field: string; kind: 'added' | 'removed' | 'changed'; addedItems?: unknown[]; removedItems?: unknown[]; from?: unknown; to?: unknown }>;
   /** Feed counts (null = not known; never 0 for unknown). `capped` = "N+". */
@@ -159,6 +168,63 @@ export interface MemoryAddCardData {
 export type ActionCardData =
   | { kind: 'set_sort'; sort: string }
   | { kind: 'open_link'; href: string; label: 'people' | 'resume' | 'resume_check' | 'added_jobs' | 'report' | 'practice' | 'job' };
+
+/** `campus_deadlines` (GoApply): official 网申 windows the user follows. Dates only as the official page states them. */
+export interface CampusDeadlinesCardData {
+  items: Array<{
+    company: string;
+    programme: string | null;
+    /** null = not stated on the official page. */
+    closesAt: string | null;
+    /** The official page (always present). */
+    officialUrl: string;
+    /** Where the details were read when not the official page itself; null = the official page. */
+    sourceUrl: string | null;
+    sourceName: string | null;
+    verifiedAt: string;
+    needsReverify: boolean;
+  }>;
+}
+
+/** `job_imported`: the result of an applied `job_import` credit action. */
+export interface JobImportedCardData {
+  status: string;
+  /** Set when the job is in the user's list (`status: 'done'`). */
+  jobId: string | null;
+  importId: string;
+  /** From the import draft the user's link produced; null when the import did not read it. */
+  title: string | null;
+  company: string | null;
+  matched: 'public' | 'yours' | null;
+  reason: string | null;
+  missingFields: string[];
+  warnings: unknown[];
+  /** The job page, or Added jobs when the user still has to finish the import. */
+  href: string;
+}
+
+/**
+ * `resume_tips`: issues from the latest resume check. `why`/`how` are the
+ * English fallback; the client renders `resumeCheck.issue.<type>.*` with
+ * `params` (components/features/resume `issueText`).
+ */
+export interface ResumeTipsCardData {
+  resumeId: string;
+  stale: boolean;
+  href: string;
+  issues: Array<{
+    id: string;
+    type: string;
+    params?: Record<string, string | number>;
+    source?: 'rules' | 'ai';
+    severity: string;
+    section: string;
+    why: string;
+    how: string;
+    evidence: string | null;
+    fixable: boolean;
+  }>;
+}
 
 /** `competitiveness`: links to the report page (flag `competitiveness`). */
 export interface CompetitivenessCardData {
@@ -261,21 +327,22 @@ export const MemoryParamsSchema = z.object({ id: Id });
 // ── Proactive nudge (F-ORION-08; at most one per session, client-side) ───
 
 /**
- * GET /copilot/nudge — at most one nudge, from real signals only:
- *   adjust_search    the latest feed rating (last 7 days) was below 6
- *   hide_agencies    the user reported a job in the last 14 days and agency posts are shown
- *   add_min_pay      no minimum pay set and ≥ MIN_SAMPLE jobs in the search list pay
+ * GET /copilot/nudge — at most one nudge, from real signals only. The kinds
+ * are the client's vocabulary (hooks/copilot/nudges.ts `NUDGE_KINDS`):
+ *   low_rating       the latest feed rating (last 7 days) was below 6
+ *   agency_report    the user reported a job in the last 14 days and agency posts are shown
+ *   pay_filter       no minimum pay set and ≥ MIN_SAMPLE jobs in the search list pay
  *   campus_deadline  (GoApply) an official 网申 window the user follows closes within 7 days
  */
-export const NUDGE_KINDS = ['adjust_search', 'hide_agencies', 'add_min_pay', 'campus_deadline'] as const;
+export const NUDGE_KINDS = ['low_rating', 'agency_report', 'pay_filter', 'campus_deadline'] as const;
 export type NudgeKind = (typeof NUDGE_KINDS)[number];
 export interface NudgeView {
   kind: NudgeKind;
   /**
    * Debug-only English text (logs, tests). The client never sends or shows it:
-   * the chip label AND the message it sends come from the i18n keys
-   * `assistant.nudge.<kind>.label` / `assistant.nudge.<kind>.prompt`, so zh and
-   * GoApply users send text in their own language.
+   * the chip label is `assistant.nudge.<kind>` and the message it puts in the
+   * composer is `assistant.nudge.prompts.<kind>`, so zh and GoApply users see
+   * and send text in their own language.
    */
   prompt: string;
   /** Facts behind the nudge (counts carry their source). */

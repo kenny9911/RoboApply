@@ -7,7 +7,8 @@ model RAInterviewQuestion {
   companyId             String?
   companyNameNormalized String?
   taxonomyId            String?
-  /// 'coding' | 'system_design' | 'domain_design' | 'behavioral'
+  /// 'coding' | 'system_design' | 'domain_design' | 'behavioral' |
+  /// 'role_specific' | 'hr' (GoApply HR面; WP-59)
   category              String
   /// 'easy' | 'medium' | 'hard'
   difficulty            String?
@@ -33,27 +34,38 @@ model RAInterviewQuestion {
   reportsCount          Int                @default(0)
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
+  /// SCHEMA-4 (SR-59-1): the RAJob an `ai_practice` set was written from.
+  /// Plain scalar, no FK. D3: links the set to the post it was written FROM; it
+  /// never attributes the question to the company as "asked" (only
+  /// sourceKind='user_report' may carry companyId / companyNameNormalized).
+  jobId                 String?
   reports               RAQuestionReport[]
 
   @@index([market, companyNameNormalized, category, status])
   @@index([market, taxonomyId, category])
+  @@index([jobId, status])
 }
 
 model RAQuestionContribution {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  market      String
-  companyName String
-  role        String
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market       String
+  companyName  String
+  role         String
   /// 'YYYY-MM'
-  interviewYm String
-  body        String    @db.Text
+  interviewYm  String
+  body         String    @db.Text
   /// 'pending' | 'approved' | 'rejected'
-  status      String    @default("pending")
-  moderatorId String?
-  moderatedAt DateTime?
-  createdAt   DateTime  @default(now())
+  status       String    @default("pending")
+  moderatorId  String?
+  moderatedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  /// SCHEMA-4 (SR-59-2): the category the contributor suggested (staff may
+  /// change it when publishing).
+  category     String?
+  /// SCHEMA-4 (SR-59-2): why staff rejected it, shown to the contributor.
+  rejectReason String?
 
   @@index([status, createdAt])
   @@index([userId])
@@ -69,6 +81,8 @@ model RAQuestionReport {
   note       String?
   createdAt  DateTime            @default(now())
 
+  /// SCHEMA-4 (SR-59-3): one report per user per question.
+  @@unique([questionId, userId])
   @@index([questionId])
   @@index([userId])
 }

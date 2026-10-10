@@ -11,7 +11,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { logger } from '../../services/LoggerService.js';
-import { receiveWebhook } from '../livekit/webhookReceiver.js';
+import { receiveBrandWebhook } from '../livekit/webhookReceiver.js';
 import { interviewSessionService } from '../sessions/InterviewSessionService.js';
 
 const router = Router();
@@ -28,9 +28,12 @@ router.post('/livekit', async (req: Request, res: Response) => {
   else if (typeof req.body === 'string') rawBody = req.body;
   else rawBody = JSON.stringify(req.body ?? {});
 
+  // The brand whose LiveKit key signed the event (WP-63a R5, wired at the Wave 4
+  // gate): the handlers ignore an event for the other brand's session.
   let event;
+  let signerBrand;
   try {
-    event = await receiveWebhook(rawBody, req.headers.authorization);
+    ({ event, brand: signerBrand } = await receiveBrandWebhook(rawBody, req.headers.authorization));
   } catch (err) {
     logger.warn('INTERVIEW_ENGINE_WEBHOOK', 'signature verification failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -56,11 +59,12 @@ router.post('/livekit', async (req: Request, res: Response) => {
           sizeBytes,
           durationSec,
           location: fr?.location,
+          signerBrand,
         });
       }
     } else if (name === 'room_finished') {
       const roomName = (event as any).room?.name;
-      if (roomName) await interviewSessionService.handleRoomFinished(roomName);
+      if (roomName) await interviewSessionService.handleRoomFinished(roomName, signerBrand);
     }
   } catch (err) {
     logger.error('INTERVIEW_ENGINE_WEBHOOK', 'processing failed', {

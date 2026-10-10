@@ -65,6 +65,13 @@ export const RATE_LIMITS = {
   oauthStartPerIp: [{ limit: 30, windowSec: HOUR }],
   /** Global guard for any authenticated route: 600/min per user. */
   authenticatedPerUser: [{ limit: 600, windowSec: MINUTE }],
+  /** Public SEO API cache misses per visitor IP: 120/min (WP-56, F-TRUST-02; Wave 4 gate). */
+  seoPublicPerIp: [{ limit: 120, windowSec: MINUTE }],
+  /** GoApply WeChat Pay order creation per user: 10/min, 60/day (WP-62; Wave 4 gate). */
+  billingCnCreate: [
+    { limit: 10, windowSec: MINUTE },
+    { limit: 60, windowSec: DAY },
+  ],
 } as const satisfies Record<string, readonly RateWindow[]>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

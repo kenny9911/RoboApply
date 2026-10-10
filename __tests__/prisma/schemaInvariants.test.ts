@@ -133,6 +133,8 @@ const PLACEMENT: Record<string, string> = {
   RACampusSubscription: 'ra-cn.prisma',
   RACnEmployerBlacklist: 'ra-cn.prisma', // SCHEMA-3 (SR-41-1)
   RACnFraudReview: 'ra-cn.prisma', // SCHEMA-3 (SR-41-2)
+  RACnReferralCode: 'ra-cn.prisma', // SCHEMA-4 (SR-54-1)
+  RACnReferralReport: 'ra-cn.prisma', // SCHEMA-4 (SR-54-1)
   // ra-compliance (R-17)
   RAAiContentLabelLog: 'ra-compliance.prisma',
   RAContentSafetyEvent: 'ra-compliance.prisma',
@@ -255,6 +257,8 @@ const SCOPE: Record<string, Scope> = {
   RACampusSubscription: 'user',
   RACnEmployerBlacklist: 'brand', // SCHEMA-3 (SR-41-1): market
   RACnFraudReview: 'global', // SCHEMA-3 (SR-41-2): child of RAJob (brand)
+  RACnReferralCode: 'brand', // SCHEMA-4 (SR-54-1)
+  RACnReferralReport: 'user', // SCHEMA-4 (SR-54-1)
   RAAiContentLabelLog: 'brand',
   RAContentSafetyEvent: 'brand',
   RAPersonalInfoRequest: 'brand',

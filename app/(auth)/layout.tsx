@@ -18,6 +18,8 @@
 //   AnnouncementModal  WP-61   "What's new"      — through lib/ui/popupGate.ts
 //   InstallPrompt      WP-55a  extension prompt  — through lib/ui/popupGate.ts
 //   TourOverlay        WP-30   first-visit tour on /jobs (stage `tour`)
+//   ToolResultClaimHost WP-57  keeps a free-tool result run before signup
+//                              (sessionStorage; renders nothing). Wave 4 gate.
 //   OutOfCreditsSheet  WP-21b  opens on a 402 credits_exhausted reported
 //                              through hooks/shared/useCreditGate.ts. Mounted
 //                              in the fullscreen practice room too, so an
@@ -43,6 +45,7 @@ import { AnnouncementModal } from '../../components/features/notifications/Annou
 import { OutOfCreditsSheet } from '../../components/features/credits';
 import { InstallPrompt } from '../../components/features/extension/InstallPrompt';
 import { TourOverlay } from '../../components/features/onboarding/TourOverlay';
+import { ToolResultClaimHost } from '../../components/features/tools';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notePageView, usePopupGateSync } from '../../lib/ui/popupGate';
 
@@ -65,6 +68,7 @@ function AuthLayoutSlots() {
       <InstallPrompt mode="popup" />
       <TourOverlay />
       <OutOfCreditsSheet />
+      <ToolResultClaimHost />
     </>
   );
 }

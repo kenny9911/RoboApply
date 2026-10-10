@@ -157,7 +157,17 @@ export const interviewPrep: CopilotTool<z.infer<typeof JobArgs>> = {
     let note: string | null = null;
     try {
       const plan = await ctx.areas.planForJob(userId, args.jobId);
-      questions = plan.questions.slice(0, 8).map((q) => ({ id: q.id, text: q.text, category: q.category, sourceKind: q.sourceKind, sourceLabelKey: q.sourceLabelKey }));
+      // Card vocabulary (WP-51 `parseInterviewPlan`): 'ai' | 'bank' | 'posting'.
+      // An AI-written question must arrive as 'ai' so the card labels it and
+      // shows AiGeneratedBadge on GoApply (D3); staff-written and moderated
+      // user reports are both question-bank items. (Wave 4 gate fix.)
+      questions = plan.questions.slice(0, 8).map((q) => ({
+        id: q.id,
+        text: q.title,
+        category: q.category,
+        sourceKind: q.sourceKind === 'ai_practice' ? 'ai' : 'bank',
+        sourceLabelKey: q.sourceLabelKey,
+      }));
     } catch (err) {
       if (isNotFound(err)) return notAvailable('job_not_found');
       if (!isNotImplemented(err)) throw err;

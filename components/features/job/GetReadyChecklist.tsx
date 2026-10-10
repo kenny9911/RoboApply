@@ -49,8 +49,10 @@ function Step({ name, state, children }: { name: string; state: StepState; child
   );
 }
 
-export function practiceQuestionsHref(company: { slug: string | null; name: string }): string {
-  return `/practice/questions/${encodeURIComponent(company.slug ?? company.name)}`;
+/** The company's practice-question page; with `jobId` it opens that job's AI set first (WP-59; Wave 4 gate). */
+export function practiceQuestionsHref(company: { slug: string | null; name: string }, jobId?: string): string {
+  const base = `/practice/questions/${encodeURIComponent(company.slug ?? company.name)}`;
+  return jobId ? `${base}?job=${encodeURIComponent(jobId)}` : base;
 }
 
 export function GetReadyChecklist({ detail, flags, pending, onSave, onTailor, onPractice, onApply, onIApplied, onPeople }: GetReadyChecklistProps) {
@@ -115,7 +117,7 @@ export function GetReadyChecklist({ detail, flags, pending, onSave, onTailor, on
             </>
           ) : null}
           {flags.interviewBank ? (
-            <Link className={styles.stepAction} href={practiceQuestionsHref({ slug: company.slug, name: companyName })}>
+            <Link className={styles.stepAction} href={practiceQuestionsHref({ slug: company.slug, name: companyName }, job.id)}>
               {t('practiceQuestions', { company: companyName })}
             </Link>
           ) : null}

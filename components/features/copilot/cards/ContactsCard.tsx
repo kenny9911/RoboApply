@@ -1,8 +1,10 @@
 'use client';
 
-// contacts — real people from a named source, plus search links that open a
-// new tab (F-NET; honesty: no person without a source, no email finder, no
-// generated people). Nothing here sends a message.
+// contacts — real people from a named source (find_connections:
+// the job's opted-in recruiter, the user's imported or added contacts at the
+// company), plus search links that open a new tab (F-NET; honesty: no person
+// without a source, no email finder, no generated people). Nothing here sends
+// a message.
 
 import { useTranslations } from 'next-intl';
 
@@ -23,8 +25,11 @@ export function ContactsCard({ card }: CardProps) {
             <li key={p.id} className={styles.jobRow}>
               <span className={styles.cardTitle}>{p.name}</span>
               <span className={styles.jobMeta}>
+                {p.recruiter ? <span>{t('recruiter')}</span> : null}
                 {p.title ? <span>{p.title}</span> : null}
-                <span className={styles.label}>{t('from', { source: p.sourceName })}</span>
+                <span className={styles.label}>
+                  {t('from', { source: p.source === 'bank_recruiter' ? (p.sourceName ?? '') : t(`sources.${p.source}`) })}
+                </span>
               </span>
             </li>
           ))}

@@ -411,6 +411,8 @@ model User {
   raCoach                RACoach?
   raCoachBookings        RACoachBooking[]
   raCampusSubscriptions  RACampusSubscription[]
+  raCnReferralCodes      RACnReferralCode[] // SCHEMA-4 (SR-54-1)
+  raCnReferralReports    RACnReferralReport[] // SCHEMA-4 (SR-54-1)
   raPersonalInfoRequests RAPersonalInfoRequest[]
   raJobsOwned            RAJob[]                  @relation("RAJobOwner")
 
@@ -788,6 +790,9 @@ model AlipayOrder {
   wxCodeUrl       String? // WeChat Pay NATIVE code_url (QR)
   wxTransactionId String? // WeChat Pay transaction_id from the notify
   tradeType       String? // WeChat Pay: 'NATIVE' | 'H5' | 'JSAPI'
+  // SCHEMA-4 (WP-62): the 用户协议 (CN_LEGAL_DOCS_VERSION) version accepted for
+  // this order. Older orders: the `cn_pay_terms_ack` SeekerConsentRecord.
+  termsVersion    String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -5343,11 +5348,25 @@ model InterviewSession {
   /// page's "Practiced" step). Null = not completed.
   practiceCompletedAt DateTime?
 
+  // ── Jobright clone: per-brand voice seam (SCHEMA-4, WP-63a-S1) ──
+  /// The product brand the session was created under: 'roboapply' | 'goapply'.
+  /// Nullable with NO default on purpose: null = not written by the create
+  /// path (every row before WP-63a-S1's writer), and readers then derive the
+  /// brand from `liveMetrics.voiceSeam.brand`, else the owner's `User.brand`.
+  /// A default would label historic GoApply sessions 'roboapply' and route them
+  /// down the RoboApply LLM / storage / LiveKit path (R-13).
+  brand         String?
+  /// 'livekit_cloud' | 'livekit_selfhosted' (| reserved 'volcano' | 'trtc').
+  /// Null = legacy row (LiveKit Cloud).
+  voiceProvider String?
+
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, status])
   @@index([apiKeyId])
   @@index([status])
   @@index([userId, jobId, status])
+  /// SCHEMA-4 (WP-63a-S2): the retention scan (sessions older than the window).
+  @@index([createdAt])
 }
 
 // ════════════════════════════════════════════════════════════════════════

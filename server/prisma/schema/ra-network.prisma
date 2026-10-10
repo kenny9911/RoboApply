@@ -19,6 +19,9 @@ model RAContact {
   /// never backfilled, never assumed.
   consentBasis            String?
   companyNameNormalized   String
+  /// SCHEMA-4 (SR-54-2): the company name as the source wrote it, for display
+  /// outside a job page. Null on older rows: show companyNameNormalized.
+  companyName             String?
   companyId               String?
   fullName                String
   firstName               String?
@@ -71,4 +74,7 @@ model RAOutreachDraft {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([contactId])
+  /// SCHEMA-4 (SR-54-3): drafts per job and per tracker entry (drawer).
+  @@index([userId, jobId])
+  @@index([trackerEntryId])
 }

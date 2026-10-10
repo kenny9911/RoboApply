@@ -42,6 +42,8 @@ export const SEEKER_CONSENT_TYPES = [
   'auto_renew_ack',
   'withdrawal_waiver',
   'analytics',
+  /** GoApply: the 用户协议 version accepted before a WeChat Pay order (WP-62 billing-cn writes it; Wave 4 gate). */
+  'cn_pay_terms_ack',
 ] as const;
 
 export type SeekerConsentType = (typeof SEEKER_CONSENT_TYPES)[number];

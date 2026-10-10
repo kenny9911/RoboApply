@@ -51,8 +51,16 @@ model RAAnnouncement {
   startsAt  DateTime
   endsAt    DateTime
   createdAt DateTime @default(now())
+  /// SCHEMA-4 (SR-61-1): the publish switch. Nullable with no default: null =
+  /// a row written before the column (its switch is `cohort.active`), so
+  /// readers use the column when non-null, else `cohort.active`. Do not filter
+  /// on `{ active: true }` alone until an owner-approved backfill has run.
+  active    Boolean?
+  /// SCHEMA-4 (SR-61-1). `@default(now())` so the column adds to existing rows.
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([brand, startsAt, endsAt])
+  @@index([brand, active, startsAt, endsAt])
 }
 
 /// Server-side UI state that follows the user across devices.

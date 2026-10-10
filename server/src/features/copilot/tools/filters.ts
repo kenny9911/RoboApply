@@ -137,6 +137,8 @@ export function filterDiffCard(input: {
   expiresAt: Date;
   profile: SearchProfileWire;
   diff: FilterDiff;
+  /** The proposal's ops (stored in its payload); the card previews and applies exactly these. */
+  ops: readonly FilterOp[];
   reason: string | null;
   /** When the counts were taken (the turn's or the apply's clock). */
   now: Date;
@@ -148,6 +150,7 @@ export function filterDiffCard(input: {
     searchProfileId: input.profile.id,
     baseVersion: input.profile.version,
     reason: input.reason,
+    ops: input.ops.map((o) => ({ op: o.op, path: o.path, ...(o.value === undefined ? {} : { value: o.value }) })),
     changes: input.diff.changes,
     countBefore: countView(input.diff.countBefore, input.now),
     countAfter: countView(input.diff.countAfter, input.now),
@@ -190,7 +193,7 @@ export const proposeFilterChange: CopilotTool<z.infer<typeof ProposeArgs>> = {
       kind: 'filter_change',
       payload: { searchProfileId: profile.id, baseVersion: profile.version, ops: args.ops, reason: args.reason, messageId: ctx.messageId },
     });
-    const data = filterDiffCard({ proposalId: proposal.id, expiresAt: proposal.expiresAt, profile, diff: res.diff, reason: args.reason, now: ctx.now });
+    const data = filterDiffCard({ proposalId: proposal.id, expiresAt: proposal.expiresAt, profile, diff: res.diff, ops: args.ops as FilterOp[], reason: args.reason, now: ctx.now });
     return {
       data: {
         proposed: true,

@@ -3,9 +3,9 @@
 // GET /copilot/nudge returns at most one nudge; the UI shows at most one per
 // session (WP-51) through the popup gate. Signals, in order:
 //   campus_deadline (GoApply, calendar on): an official window the user follows closes within 7 days
-//   adjust_search:  the latest feed rating in the last 7 days is below 6
-//   hide_agencies:  a job report in the last 14 days while agency posts are shown
-//   add_min_pay:    no minimum pay set and at least MIN_SAMPLE jobs in the search list pay
+//   low_rating:     the latest feed rating in the last 7 days is below 6
+//   agency_report:  a job report in the last 14 days while agency posts are shown
+//   pay_filter:     no minimum pay set and at least MIN_SAMPLE jobs in the search list pay
 // Nothing is guessed: no signal → null. Read-only.
 
 import { MIN_SAMPLE } from '../../platform/http.js';
@@ -81,7 +81,7 @@ export async function nextNudge(userId: string, deps: NudgeDeps): Promise<NudgeV
 
   const rating = await deps.signals.latestRating(userId, new Date(now.getTime() - RATING_LOOKBACK_DAYS * DAY)).catch(() => null);
   if (rating && rating.score < LOW_RATING_BELOW) {
-    return { kind: 'adjust_search', prompt: 'Help me adjust my search.', facts: { rating: rating.score, ratedAt: rating.createdAt.toISOString() } };
+    return { kind: 'low_rating', prompt: 'Help me adjust my search.', facts: { rating: rating.score, ratedAt: rating.createdAt.toISOString() } };
   }
 
   if (!deps.areas.postingsAllowed(market)) return null;
@@ -93,7 +93,7 @@ export async function nextNudge(userId: string, deps: NudgeDeps): Promise<NudgeV
   }
 
   if (!profile.filters.excludeAgencies && (await deps.signals.reportedSince(userId, new Date(now.getTime() - REPORT_LOOKBACK_DAYS * DAY)).catch(() => false))) {
-    return { kind: 'hide_agencies', prompt: 'Hide posts from staffing agencies.', facts: { searchProfileId: profile.id } };
+    return { kind: 'agency_report', prompt: 'Hide posts from staffing agencies.', facts: { searchProfileId: profile.id } };
   }
 
   if (!profile.filters.salaryMin && profile.filters.includeUndisclosedPay !== false) {
@@ -101,7 +101,7 @@ export async function nextNudge(userId: string, deps: NudgeDeps): Promise<NudgeV
       const listed = await deps.areas.countForFilters(userId, { ...profile.filters, includeUndisclosedPay: false });
       if (listed.count !== null && listed.count >= MIN_SAMPLE) {
         const count = indexCount(listed.count, now);
-        return { kind: 'add_min_pay', prompt: 'Add a minimum pay to my search.', facts: { searchProfileId: profile.id, jobsListingPay: count, capped: listed.capped } };
+        return { kind: 'pay_filter', prompt: 'Add a minimum pay to my search.', facts: { searchProfileId: profile.id, jobsListingPay: count, capped: listed.capped } };
       }
     } catch {
       return null;

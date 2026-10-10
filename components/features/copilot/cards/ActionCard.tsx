@@ -1,7 +1,9 @@
 'use client';
 
-// action — something the page applies on the user's click (F-ORION-05). Today:
-// `set_sort` → "Show jobs sorted this way" opens /jobs?sort=<sort>.
+// action — something the page applies on the user's click (F-ORION-05):
+//   set_sort  → "Show jobs sorted this way" opens /jobs?sort=<sort> (gated, below);
+//   open_link → a link to an app page the tool named (People tab, resume check,
+//               resumes, Added jobs, …); the label comes from a fixed list.
 //
 // Honesty gate: /jobs keeps its sort in local state and does not read
 // `?sort=` yet (WP-33 / INT request), so a link promising a sorted list would
@@ -25,7 +27,16 @@ export function ActionCard({ card, ctx }: CardProps) {
   const tSort = useTranslations('jobs.workspace');
   const data = parseAction(card.data);
   if (!data) return null;
-  if (data.kind === 'set_sort' && !ACTION_CARD_CAPS.sortLink) return null;
+  if (data.kind === 'open_link') {
+    return (
+      <CardFrame card={card}>
+        <Link href={data.href} className={styles.link} onClick={ctx.onNavigate}>
+          {t(`open.${data.label}`)}
+        </Link>
+      </CardFrame>
+    );
+  }
+  if (!ACTION_CARD_CAPS.sortLink) return null;
   return (
     <CardFrame card={card}>
       <p className={styles.cardText}>{t('sort', { sort: tSort(`sort.${data.sort}`) })}</p>

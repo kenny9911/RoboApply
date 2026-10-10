@@ -176,9 +176,11 @@ describe('LegalDocument', () => {
     expect(await screen.findByText('google/gemini')).toBeInTheDocument();
     expect(screen.getByText('us-east-2', { exact: false })).toBeInTheDocument();
     expect(await screen.findByText('Assistant conversations')).toBeInTheDocument();
-    // Inactive accounts and practice recordings: published, not claimed as automatic.
-    expect(screen.getAllByText('Not automated yet')).toHaveLength(2);
-    expect(document.querySelector('[data-rule="interview_recordings"]')).toHaveTextContent('Not automated yet');
+    // Inactive accounts: published, not claimed as automatic. Practice recordings
+    // are purged by WP-63a's interview retention since the Wave 4 gate.
+    expect(screen.getAllByText('Not automated yet')).toHaveLength(1);
+    expect(document.querySelector('[data-rule="inactive_accounts"]')).toHaveTextContent('Not automated yet');
+    expect(document.querySelector('[data-rule="interview_recordings"]')).toHaveTextContent('90 daysDeleted automatically');
     expect(document.querySelector('[data-rule="soft_deleted_rows"]')).toHaveTextContent('30 daysDeleted automatically');
     // The backup window is not assumed.
     expect(document.querySelector('[data-rule="backups"]')).toHaveTextContent('Not listedSet by our database provider');

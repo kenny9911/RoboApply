@@ -3,10 +3,13 @@
 // ARCHITECTURE.md §5.4; F-ORION-12).
 //
 // The wire contract (`CopilotCard { type, id, data, sources? }`) leaves `data`
-// open. These shapes are what the cards render; WP-50 produces them (handoff
-// request). A card whose data does not parse renders NOTHING, exactly like an
-// unknown card type, so a server change can never crash the conversation or
-// render a half-filled card with invented values (D3).
+// open. Each parser reads what the WP-50 tool that produces the card sends
+// (server/src/features/copilot/tools/*.ts, proposals.ts; typed card payloads
+// in server/src/features/copilot/contract.ts) and maps it to what the card
+// renders. cards.test.tsx renders the real tools' output, so a server shape
+// change shows up as a failing test. A card whose data does not parse renders
+// NOTHING, exactly like an unknown card type, so a server change can never
+// crash the conversation or render a half-filled card with invented values (D3).
 //
 // Safety: links inside cards are either app paths ("/…", never "//…") or
 // http(s) URLs; anything else is dropped.
@@ -179,14 +182,19 @@ export function parseFilterDiff(d: unknown): FilterDiffData | null {
 }
 
 const SORTS: readonly FeedSort[] = ['recommended', 'newest', 'best_fit', 'highest_pay', 'deadline'];
-export interface ActionData {
-  kind: 'set_sort';
-  sort: FeedSort;
-}
+/** Where an `open_link` action card may point (server `ActionCardData` labels). */
+export const OPEN_LINK_LABELS = ['people', 'resume', 'resume_check', 'added_jobs', 'report', 'practice', 'job'] as const;
+export type OpenLinkLabel = (typeof OPEN_LINK_LABELS)[number];
+export type ActionData = { kind: 'set_sort'; sort: FeedSort } | { kind: 'open_link'; href: string; label: OpenLinkLabel };
 export function parseAction(d: unknown): ActionData | null {
   if (!isObj(d)) return null;
   const kind = d.kind ?? d.action;
   if (kind === 'set_sort' && typeof d.sort === 'string' && (SORTS as readonly string[]).includes(d.sort)) return { kind: 'set_sort', sort: d.sort as FeedSort };
+  if (kind === 'open_link') {
+    const href = safeAppPath(d.href);
+    const label = (OPEN_LINK_LABELS as readonly string[]).includes(d.label as string) ? (d.label as OpenLinkLabel) : null;
+    return href && label ? { kind: 'open_link', href, label } : null;
+  }
   return null;
 }
 
@@ -196,17 +204,27 @@ export interface FitAnalysisData {
   jobId: string;
   tier: FitTierKey | null;
   score: number | null;
+  /** Deterministic: the post's skills the resume or profile shows (`skills.aligned`). */
   aligned: string[];
+  /** Deterministic: the post's skills it does not show (`skills.missing`). */
   missing: string[];
+  /** AI-written strengths (empty for a quick estimate). */
   highlights: string[];
+  /** AI-written observations about the resume (empty for a quick estimate). */
+  gaps: string[];
+  /** The text above came from the AI read (`kind: 'ai'`), not a quick estimate. */
+  aiWritten: boolean;
 }
+/** `MatchFitView` (+ `aiWritten`) from the analyze_fit tool. Pure. */
 export function parseFitAnalysis(d: unknown): FitAnalysisData | null {
   if (!isObj(d) || !str(d.jobId)) return null;
-  const aligned = strList(d.aligned ?? d.overlap);
-  const missing = strList(d.missing ?? d.gaps);
-  const highlights = strList(d.highlights);
-  if (aligned.length + missing.length + highlights.length === 0 && !tierOf(d.tier) && num(d.score) === null) return null;
-  return { jobId: d.jobId as string, tier: tierOf(d.tier), score: num(d.score), aligned, missing, highlights };
+  const skills = isObj(d.skills) ? d.skills : {};
+  const aligned = strList(skills.aligned);
+  const missing = strList(skills.missing);
+  const highlights = strList(d.strengths);
+  const gaps = strList(d.gaps);
+  if (aligned.length + missing.length + highlights.length + gaps.length === 0 && !tierOf(d.tier) && num(d.score) === null) return null;
+  return { jobId: d.jobId as string, tier: tierOf(d.tier), score: num(d.score), aligned, missing, highlights, gaps, aiWritten: d.kind === 'ai' || d.aiWritten === true };
 }
 
 // ── company ──────────────────────────────────────────────────────────────
@@ -218,31 +236,49 @@ export interface CompanyData {
   facts: Array<{ key: CompanyFactKey; value: SourcedWire<string | number> }>;
 }
 const isStrOrNum = (x: unknown): x is string | number => typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x));
+/** `CompanyProfile` from company_insights: `facts` is a record `{ industry: SourcedFact, … }`; unsourced fields are absent. Pure. */
 export function parseCompany(d: unknown): CompanyData | null {
-  if (!isObj(d) || !str(d.name) || !Array.isArray(d.facts)) return null;
+  if (!isObj(d) || !str(d.name) || !isObj(d.facts)) return null;
   const facts: CompanyData['facts'] = [];
-  for (const f of d.facts) {
-    if (!isObj(f) || !(COMPANY_FACT_KEYS as readonly string[]).includes(f.key as string)) continue;
-    const value = sourced(f.value, isStrOrNum);
-    if (value) facts.push({ key: f.key as CompanyFactKey, value });
+  for (const key of COMPANY_FACT_KEYS) {
+    const value = sourced(d.facts[key], isStrOrNum);
+    if (value && value.value !== null) facts.push({ key, value });
   }
   return { name: d.name as string, facts };
 }
 
 // ── contacts ─────────────────────────────────────────────────────────────
 
+export const CONTACT_SOURCES = ['user_connections_import', 'user_added', 'bank_recruiter'] as const;
+export type ContactSourceKind = (typeof CONTACT_SOURCES)[number];
 export interface ContactsData {
   company: string | null;
-  people: Array<{ id: string; name: string; title: string | null; sourceName: string }>;
+  /** `source` names where the person comes from; a recruiter also needs its bank's `sourceName`. */
+  people: Array<{ id: string; name: string; title: string | null; source: ContactSourceKind; sourceName: string | null; recruiter: boolean }>;
   searchLinks: Array<{ url: string }>;
 }
+/** `ConnectionsForJobResponse` (+ jobId) from find_connections. Pure. */
 export function parseContacts(d: unknown): ContactsData | null {
   if (!isObj(d)) return null;
   const people: ContactsData['people'] = [];
-  for (const p of Array.isArray(d.people) ? d.people : []) {
-    // No named source → not shown (honesty: never a person without a source).
-    if (!isObj(p) || !str(p.id) || !str(p.name) || !str(p.sourceName)) continue;
-    people.push({ id: p.id as string, name: p.name as string, title: str(p.title), sourceName: p.sourceName as string });
+  const seen = new Set<string>();
+  let company: string | null = null;
+  const groups: Array<[unknown, boolean]> = [
+    [d.recruiters, true],
+    [d.fromYourCompanies, false],
+    [d.fromYourSchools, false],
+  ];
+  for (const [list, recruiter] of groups) {
+    for (const p of Array.isArray(list) ? list.slice(0, 10) : []) {
+      if (!isObj(p) || !str(p.id) || !str(p.fullName) || seen.has(p.id as string)) continue;
+      const source = (CONTACT_SOURCES as readonly string[]).includes(p.source as string) ? (p.source as ContactSourceKind) : null;
+      const sourceName = str(p.sourceName);
+      // No named source → not shown (honesty: never a person without a source).
+      if (!source || (source === 'bank_recruiter' && !sourceName)) continue;
+      seen.add(p.id as string);
+      company = company ?? str(p.companyName);
+      people.push({ id: p.id as string, name: p.fullName as string, title: str(p.title), source, sourceName, recruiter });
+    }
   }
   const searchLinks: ContactsData['searchLinks'] = [];
   for (const l of Array.isArray(d.searchLinks) ? d.searchLinks : []) {
@@ -250,12 +286,12 @@ export function parseContacts(d: unknown): ContactsData | null {
     if (url) searchLinks.push({ url });
   }
   if (people.length === 0 && searchLinks.length === 0) return null;
-  return { company: str(d.company), people, searchLinks };
+  return { company: str(d.company) ?? company, people, searchLinks };
 }
 
 // ── credit_action ────────────────────────────────────────────────────────
 
-export const CREDIT_ACTIONS = ['tailor', 'cover_letter', 'outreach', 'job_import'] as const;
+export const CREDIT_ACTIONS = ['tailor', 'cover_letter', 'outreach', 'job_import', 'rewrite'] as const;
 export type CreditActionKind = (typeof CREDIT_ACTIONS)[number];
 export interface CreditActionData {
   proposalId: string;
@@ -312,13 +348,20 @@ export function parseCoverLetter(d: unknown): CoverLetterData | null {
 }
 
 export interface JobImportedData {
-  jobId: string;
-  title: string;
+  /** Set when the job is in the user's list; null = the user still has to finish the import. */
+  jobId: string | null;
+  /** The job page, or Added jobs to finish the import. */
+  href: string;
+  title: string | null;
   company: string | null;
 }
+/** `JobImportedCardData` (server contract) after an applied job_import. Pure. */
 export function parseJobImported(d: unknown): JobImportedData | null {
-  if (!isObj(d) || !str(d.jobId) || !str(d.title)) return null;
-  return { jobId: d.jobId as string, title: d.title as string, company: isObj(d.company) ? str(d.company.name) : str(d.company) };
+  if (!isObj(d)) return null;
+  const jobId = str(d.jobId);
+  const href = jobId ? `/jobs/${encodeURIComponent(jobId)}` : safeAppPath(d.href);
+  if (!href) return null;
+  return { jobId, href, title: str(d.title), company: isObj(d.company) ? str(d.company.name) : str(d.company) };
 }
 
 export interface CompetitivenessData {
@@ -357,37 +400,82 @@ export interface PayRange {
   currency: string;
   period: 'year' | 'month' | 'week' | 'day' | 'hour';
 }
+/** The job's own pay as its post states it: a range with a unit, or only the post's text. */
+export interface PostedPay {
+  range: PayRange | null;
+  text: string | null;
+}
 export interface SalaryData {
   title: string | null;
   location: string | null;
-  range: SourcedWire<PayRange | null>;
+  /** This job's post (source `posting`), when the tool was asked about one job and it lists pay. */
+  posted: SourcedWire<PostedPay> | null;
+  /** The middle half (p25–p75) of listed pay across matching posts in our index; value null below MIN_SAMPLE. */
+  range: SourcedWire<PayRange | null> | null;
 }
+const PERIODS = ['year', 'month', 'week', 'day', 'hour'];
 const isRange = (x: unknown): x is PayRange =>
-  isObj(x) && !!str(x.currency) && (num(x.min) !== null || num(x.max) !== null) && ['year', 'month', 'week', 'day', 'hour'].includes(x.period as string);
+  isObj(x) && !!str(x.currency) && (num(x.min) !== null || num(x.max) !== null) && PERIODS.includes(x.period as string);
+const isPostedPay = (x: unknown): x is Obj => isObj(x) && (isRange(x) || !!str(x.text));
+
+/**
+ * `{ posted, stats, jobId }` from salary_context: `posted` is the job's own
+ * listed pay (Sourced, `posting`), `stats` the SalaryStatsResult (percentiles
+ * Sourced with their sample size; counts as Sourced). Pure.
+ */
 export function parseSalary(d: unknown): SalaryData | null {
   if (!isObj(d)) return null;
-  const range = sourced(d.range, isRange);
-  // An aggregate of posted ranges: without its sample size N the one-sample
-  // rule (D3: N ≥ MIN_SAMPLE, and N is shown) cannot be checked, so nothing renders.
-  if (!range || typeof range.sampleSize !== 'number') return null;
-  return { title: str(d.title), location: str(d.location), range };
+  let posted: SalaryData['posted'] = null;
+  const postedWire = sourced(d.posted, isPostedPay);
+  if (postedWire && isObj(postedWire.value)) {
+    const v = postedWire.value;
+    const range = isRange(v) ? { min: num(v.min), max: num(v.max), currency: str(v.currency) as string, period: v.period as PayRange['period'] } : null;
+    posted = { ...postedWire, value: { range, text: str(v.text) } };
+  }
+  let range: SalaryData['range'] = null;
+  const stats = isObj(d.stats) ? d.stats : null;
+  const isNum = (x: unknown): x is number => num(x) !== null;
+  if (stats) {
+    const median = sourced(stats.median, isNum);
+    const p25 = sourced(stats.p25, isNum);
+    const p75 = sourced(stats.p75, isNum);
+    const listed = sourced(stats.listedCount, isNum);
+    if (median && median.value !== null) {
+      const value = { min: p25?.value ?? median.value, max: p75?.value ?? median.value, currency: str(stats.currency) ?? '', period: stats.period as PayRange['period'] };
+      // An aggregate without its sample size N cannot pass the one-sample rule (D3), so it is not shown.
+      if (isRange(value) && typeof median.sampleSize === 'number') range = { ...median, value };
+    } else if (listed && listed.value !== null) {
+      // Below MIN_SAMPLE: no figure, only "not enough data" with N.
+      range = { value: null, source: listed.source, asOf: listed.asOf, sampleSize: listed.value, ...(listed.method ? { method: listed.method } : {}) };
+    }
+  }
+  if (!posted && !range) return null;
+  const scope = stats && isObj(stats.scope) ? stats.scope : {};
+  const location = [str(scope.city), str(scope.country)].filter(Boolean).join(', ') || null;
+  return { title: str(scope.title), location, posted, range };
 }
 
 // ── applications ─────────────────────────────────────────────────────────
 
+export const FOLLOW_UP_REASONS = ['no_reply_10d', 'follow_up_due', 'interview_tomorrow', 'deadline_soon'] as const;
+export type FollowUpReasonKind = (typeof FOLLOW_UP_REASONS)[number];
 export interface ApplicationsData {
   counts: Array<{ status: string; count: number }>;
-  followUps: Array<{ jobId: string; title: string; company: string | null; dueAt: string | null }>;
+  /** Tracker `FollowUpView`s: a fact (`reason`, `at`, `days`) about one application entry. */
+  followUps: Array<{ entryId: string; reason: FollowUpReasonKind; title: string | null; company: string | null; at: string | null; days: number | null }>;
 }
+/** `TrackerSummary { byStatus: Record<status, n>, followUps: FollowUpView[] }` from application_summary. Pure. */
 export function parseApplications(d: unknown): ApplicationsData | null {
   if (!isObj(d)) return null;
   const counts: ApplicationsData['counts'] = [];
-  for (const c of Array.isArray(d.counts) ? d.counts : []) {
-    if (isObj(c) && str(c.status) && num(c.count) !== null) counts.push({ status: c.status as string, count: num(c.count) as number });
+  for (const [status, n] of Object.entries(isObj(d.byStatus) ? d.byStatus : {})) {
+    const count = num(n);
+    if (str(status) && count !== null && count > 0) counts.push({ status, count });
   }
   const followUps: ApplicationsData['followUps'] = [];
   for (const f of Array.isArray(d.followUps) ? d.followUps.slice(0, 8) : []) {
-    if (isObj(f) && str(f.jobId) && str(f.title)) followUps.push({ jobId: f.jobId as string, title: f.title as string, company: isObj(f.company) ? str(f.company.name) : str(f.company), dueAt: str(f.dueAt) });
+    if (!isObj(f) || !str(f.entryId) || !(FOLLOW_UP_REASONS as readonly string[]).includes(f.reason as string)) continue;
+    followUps.push({ entryId: f.entryId as string, reason: f.reason as FollowUpReasonKind, title: str(f.title), company: str(f.companyName), at: str(f.at), days: num(f.days) });
   }
   if (counts.length === 0 && followUps.length === 0) return null;
   return { counts, followUps };
@@ -409,17 +497,19 @@ export function parseMemoryAdd(d: unknown): MemoryAddData | null {
 // ── profile_gaps ─────────────────────────────────────────────────────────
 
 export interface ProfileGapsData {
-  gaps: Array<{ key: string; href: string }>;
+  /** Profile completeness rule keys (`profile.missing.<key>` labels). */
+  gaps: Array<{ key: string }>;
+  href: string;
 }
+/** `{ completeness, missing: [{ key, label, section }], href }` from get_profile_gaps. Pure. */
 export function parseProfileGaps(d: unknown): ProfileGapsData | null {
-  if (!isObj(d) || !Array.isArray(d.gaps)) return null;
+  if (!isObj(d) || !Array.isArray(d.missing)) return null;
   const gaps: ProfileGapsData['gaps'] = [];
-  for (const g of d.gaps.slice(0, 10)) {
+  for (const g of d.missing.slice(0, 10)) {
     const key = isObj(g) ? str(g.key) : str(g);
-    if (!key) continue;
-    gaps.push({ key, href: (isObj(g) ? safeAppPath(g.href) : null) ?? '/profile' });
+    if (key && !gaps.some((x) => x.key === key)) gaps.push({ key });
   }
-  return gaps.length ? { gaps } : null;
+  return gaps.length ? { gaps, href: safeAppPath(d.href) ?? '/profile' } : null;
 }
 
 // ── notice ───────────────────────────────────────────────────────────────
@@ -438,19 +528,67 @@ export function parseNotice(d: unknown): NoticeData | null {
 // ── campus_deadlines (GoApply) ───────────────────────────────────────────
 
 export interface CampusDeadlinesData {
-  items: Array<{ company: string; programme: string | null; closesAt: string | null; sourceUrl: string; sourceName: string }>;
+  items: Array<{ company: string; programme: string | null; closesAt: string | null; officialUrl: string; sourceName: string | null; needsReverify: boolean }>;
 }
+/** `CampusDeadlinesCardData` (server contract) from campus_deadlines. Pure. */
 export function parseCampusDeadlines(d: unknown): CampusDeadlinesData | null {
   if (!isObj(d) || !Array.isArray(d.items)) return null;
   const items: CampusDeadlinesData['items'] = [];
   for (const i of d.items.slice(0, 10)) {
     if (!isObj(i)) continue;
     const company = str(i.company);
-    const sourceUrl = safeExternalUrl(i.sourceUrl);
-    const sourceName = str(i.sourceName);
-    // Official link + named source are required (CN plan: official-link-only listings).
-    if (!company || !sourceUrl || !sourceName) continue;
-    items.push({ company, programme: str(i.programme), closesAt: str(i.closesAt), sourceUrl, sourceName });
+    const officialUrl = safeExternalUrl(i.officialUrl);
+    // The official link is required (CN plan: official-link-only listings).
+    if (!company || !officialUrl) continue;
+    items.push({ company, programme: str(i.programme), closesAt: str(i.closesAt), officialUrl, sourceName: str(i.sourceName), needsReverify: i.needsReverify === true });
   }
   return items.length ? { items } : null;
+}
+
+// ── resume_tips / rewrite_ready (WP-50 card types; added at the Wave 4 gate) ──
+
+export interface ResumeTipsData {
+  href: string;
+  stale: boolean;
+  /** `type` + `params` give the localized `resumeCheck.issue.<type>.*`; `why`/`how` are the English fallback. */
+  issues: Array<{ id: string; type: string; params?: Record<string, string | number>; why: string; how: string; section: string | null }>;
+}
+const isParams = (v: unknown): v is Record<string, string | number> =>
+  isObj(v) && Object.values(v).every((x) => typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x)));
+/** `ResumeTipsCardData` (server contract) from the resume_issues tool. Pure. */
+export function parseResumeTips(d: unknown): ResumeTipsData | null {
+  if (!isObj(d) || !str(d.resumeId) || !Array.isArray(d.issues)) return null;
+  const href = safeAppPath(d.href) ?? `/resume/${encodeURIComponent(d.resumeId as string)}/check`;
+  const issues: ResumeTipsData['issues'] = [];
+  for (const i of d.issues.slice(0, 12)) {
+    if (!isObj(i) || !str(i.id) || !str(i.why)) continue;
+    issues.push({
+      id: i.id as string,
+      type: str(i.type) ?? 'unknown',
+      ...(isParams(i.params) ? { params: i.params } : {}),
+      why: str(i.why)!,
+      how: str(i.how) ?? '',
+      section: str(i.section),
+    });
+  }
+  return { href, stale: d.stale === true, issues };
+}
+
+export interface RewriteReadyData {
+  href: string;
+  suggestions: string[];
+  blocked: number;
+}
+/** `{ resumeId, issueId, suggestions: [{ text }], blocked, href, aiWritten }` after a confirmed rewrite. Pure. */
+export function parseRewriteReady(d: unknown): RewriteReadyData | null {
+  if (!isObj(d) || !str(d.resumeId) || !str(d.issueId)) return null;
+  const href =
+    safeAppPath(d.href) ?? `/resume/${encodeURIComponent(d.resumeId as string)}/check?issue=${encodeURIComponent(d.issueId as string)}`;
+  const suggestions = Array.isArray(d.suggestions)
+    ? d.suggestions
+        .map((s) => (isObj(s) ? str(s.text) : str(s)))
+        .filter((s): s is string => !!s)
+        .slice(0, 5)
+    : [];
+  return { href, suggestions, blocked: Math.max(0, num(d.blocked) ?? 0) };
 }

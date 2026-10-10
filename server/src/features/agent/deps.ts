@@ -51,9 +51,9 @@ export interface AgentDeps {
   visibleJobs<T extends { market: string; visibility: string; ownerUserId: string | null }>(jobs: T[], userId: string): Promise<T[]>;
 
   /**
-   * The user has a connected (not revoked) extension device on this brand. Until
-   * WP-55a exposes `hasConnectedDevice(userId, brand)` on extension/index.ts the
-   * default counts RAExtensionDevice rows here — the one place INT swaps.
+   * The user has a connected (not revoked) extension device on this brand.
+   * Default: `hasConnectedDevice(userId, brand)` from extension/index.ts
+   * (swapped in at the Wave 4 gate).
    */
   extensionConnected(userId: string, brand: string): Promise<boolean>;
 
@@ -128,9 +128,8 @@ export function defaultAgentDeps(): AgentDeps {
       return filterCnPostings(jobs, userId);
     },
     async extensionConnected(userId, brand) {
-      // TODO(WP-55a/INT): `(await import('../extension/index.js')).hasConnectedDevice(userId, brand)`.
-      const prisma = await db();
-      return (await prisma.rAExtensionDevice.count({ where: { userId, brand, revokedAt: null } })) > 0;
+      const { hasConnectedDevice } = await import('../extension/index.js');
+      return hasConnectedDevice(userId, brand);
     },
     async profileMissing(userId) {
       const { profileService } = await import('../profile/index.js');

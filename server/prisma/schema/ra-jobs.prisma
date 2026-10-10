@@ -219,7 +219,7 @@ model RAJob {
   /// The provider licence allows public redisplay (ARCH §9.4). Default off.
   publicDisplay Boolean   @default(false)
 
-  userStates RAJobUserState[]
+  userStates     RAJobUserState[]
   /// GoApply admin fraud reviews of this job (SCHEMA-3, SR-41-2).
   cnFraudReviews RACnFraudReview[]
 

@@ -22,12 +22,10 @@
 //   GET    /api/v1/roboapply/agent/answers
 //   PUT    /api/v1/roboapply/agent/answers
 //
-// WP-52 routes the FND contract does not describe yet (typed by the mirror
-// types below until the WP-52 contract merges; INT then swaps them for A.*).
-// They are not mounted in this package's base, so their doc lines use the
-// "WP-52 <stub>: METHOD path" form, which __tests__/contracts/fixtures.test.ts
-// does not check yet; after WP-52 merges, INT turns each into the strict
-// "<stub> — METHOD path" line (stub id in backticks) so the mount-table check covers them:
+// WP-52 routes added after the FND contract (still typed by the mirror types
+// below; INT swaps them for A.*). Their doc lines were switched to the strict
+// "<stub> — METHOD path" form at the Wave 4 gate, so
+// __tests__/contracts/fixtures.test.ts checks them against the mount table:
 //   POST   /api/v1/roboapply/agent/setup/step
 //   POST   /api/v1/roboapply/agent/list/generate
 //   GET    /api/v1/roboapply/agent/queue/:id
@@ -250,37 +248,39 @@ export interface QuestionKeyView {
   perCurrency: boolean;
 }
 
-/** WP-52 `agent.completeStep`: POST /api/v1/roboapply/agent/setup/step */
+/** `agent.completeStep` — POST /api/v1/roboapply/agent/setup/step */
 export function completeSetupStep(body: SetupStepBody, opts?: CallOptions): Promise<SetupStepResponse> {
   return call<SetupStepResponse>('POST', `/api/v1/roboapply/agent/setup/step`, { ...opts, body });
 }
 
-/** WP-52 `agent.generateList`: POST /api/v1/roboapply/agent/list/generate */
+/** `agent.generateList` — POST /api/v1/roboapply/agent/list/generate */
 export function generateList(body: GenerateListBody = {}, opts?: CallOptions): Promise<GenerateListResponse> {
   return call<GenerateListResponse>('POST', `/api/v1/roboapply/agent/list/generate`, { ...opts, body });
 }
 
-/** WP-52 `agent.detail`: GET /api/v1/roboapply/agent/queue/:id */
+/** `agent.detail` — GET /api/v1/roboapply/agent/queue/:id */
 export function getKitDetail(id: string, opts?: CallOptions): Promise<QueueItemDetail> {
   return call<QueueItemDetail>('GET', `/api/v1/roboapply/agent/queue/${seg(id)}`, opts);
 }
 
-/** WP-52 `agent.history`: GET /api/v1/roboapply/agent/queue/:id/history */
+/** `agent.history` — GET /api/v1/roboapply/agent/queue/:id/history */
 export function getKitHistory(id: string, opts?: CallOptions): Promise<KitHistoryResponse> {
   return call<KitHistoryResponse>('GET', `/api/v1/roboapply/agent/queue/${seg(id)}/history`, opts);
 }
 
-/** WP-52 `agent.questions`: GET /api/v1/roboapply/agent/answers/questions */
+/** `agent.questions` — GET /api/v1/roboapply/agent/answers/questions */
 export function getQuestionKeys(opts?: CallOptions): Promise<Items<QuestionKeyView>> {
   return call<Items<QuestionKeyView>>('GET', `/api/v1/roboapply/agent/answers/questions`, opts);
 }
 
-/** WP-52 `agent.badge`: GET /api/v1/roboapply/agent/badge (the nav badge; one count query). */
+// The nav badge (one count query).
+/** `agent.badge` — GET /api/v1/roboapply/agent/badge */
 export function getReadyBadge(opts?: CallOptions): Promise<ReadyBadgeResponse> {
   return call<ReadyBadgeResponse>('GET', `/api/v1/roboapply/agent/badge`, opts);
 }
 
-/** WP-52 `agent.restore`: POST /api/v1/roboapply/agent/queue/:id/restore (skipped → back on the list). */
+// Skipped → back on the list.
+/** `agent.restore` — POST /api/v1/roboapply/agent/queue/:id/restore */
 export function restoreQueueItem(id: string, opts?: CallOptions): Promise<A.QueueItemView> {
   return call<A.QueueItemView>('POST', `/api/v1/roboapply/agent/queue/${seg(id)}/restore`, opts);
 }

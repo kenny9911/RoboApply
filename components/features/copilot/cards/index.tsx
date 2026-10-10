@@ -27,6 +27,8 @@ import { JobListCard } from './JobListCard';
 import { MemoryAddCard } from './MemoryAddCard';
 import { NoticeCard } from './NoticeCard';
 import { ProfileGapsCard } from './ProfileGapsCard';
+import { ResumeTipsCard } from './ResumeTipsCard';
+import { RewriteReadyCard } from './RewriteReadyCard';
 import { SalaryCard } from './SalaryCard';
 import { TailorReadyCard } from './TailorReadyCard';
 import type { CardContext, CardProps } from './types';
@@ -51,6 +53,8 @@ export const CARD_COMPONENTS: Record<CardType, ComponentType<CardProps>> = {
   notice: NoticeCard,
   campus_deadlines: CampusDeadlinesCard,
   competitiveness: CompetitivenessCard,
+  resume_tips: ResumeTipsCard,
+  rewrite_ready: RewriteReadyCard,
 };
 
 /** Renders nothing in place of a card that threw while rendering. */

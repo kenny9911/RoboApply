@@ -439,7 +439,7 @@ describe('checklist, People, Company', () => {
     for (const step of ['Saved', 'Resume tailored', 'Practiced', 'Applied']) expect(within(list).getByText(step)).toBeInTheDocument();
     expect(within(list).getByText("We can't tell yet")).toBeInTheDocument();
     expect(await within(list).findByText('2 practice credits left')).toBeInTheDocument();
-    expect(within(list).getByRole('link', { name: 'Practice questions for Acme' })).toHaveAttribute('href', '/practice/questions/acme');
+    expect(within(list).getByRole('link', { name: 'Practice questions for Acme' })).toHaveAttribute('href', '/practice/questions/acme?job=j1');
     fireEvent.click(within(list).getByRole('button', { name: 'Practice for this job' }));
     expect(api.push).toHaveBeenCalledWith('/practice?job=j1&from=job_detail');
   });
@@ -486,6 +486,29 @@ describe('split mode and deep links', () => {
     expect(screen.getByRole('link', { name: 'Open full page' })).toHaveAttribute('href', '/jobs/j1');
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('?tab=people (the Assistant\'s People link) opens the People tab', async () => {
+    window.history.replaceState(null, '', '/jobs/j1?tab=people');
+    try {
+      render();
+      expect(await screen.findByTestId('job-people')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true');
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
+  it('?tab=people stays on Overview when this user has no People tab', async () => {
+    window.history.replaceState(null, '', '/jobs/j1?tab=people');
+    try {
+      render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS, hiringContacts: 'off' } });
+      await screen.findByTestId('job-detail');
+      expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
+      expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
   });
 
   it('CommandPalette job hits land on /jobs/[id], which renders the panel in page mode', async () => {

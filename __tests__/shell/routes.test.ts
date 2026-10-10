@@ -28,12 +28,12 @@ const BRAND_TOKENS: string[] = (() => {
 })();
 
 describe('robots ↔ PROTECTED_PREFIXES', () => {
-  it('disallows exactly /api/ plus every protected prefix, for every crawler group', () => {
-    const rules = robots().rules;
+  // WP-56 (REQ-56-1, Wave 4 gate): robots is per host (async) and AI crawlers
+  // are also disallowed on /job/*, so every group contains — not equals — the list.
+  it('disallows /api/ plus every protected prefix for every crawler group (AI crawlers also /job/*, WP-56)', async () => {
+    const rules = (await robots()).rules;
     const list = Array.isArray(rules) ? rules : [rules];
-    for (const rule of list) {
-      expect(rule.disallow).toEqual(['/api/', ...PROTECTED_PREFIXES]);
-    }
+    for (const rule of list) expect(rule.disallow).toEqual(expect.arrayContaining(['/api/', ...PROTECTED_PREFIXES]));
     for (const p of ['/onboarding', '/profile', '/assistant', '/ready', '/inbox', '/invite', '/coaching', '/referrals']) {
       expect(PROTECTED_PREFIXES).toContain(p);
     }

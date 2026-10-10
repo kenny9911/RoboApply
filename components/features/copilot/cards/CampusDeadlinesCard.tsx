@@ -1,8 +1,10 @@
 'use client';
 
 // campus_deadlines — GoApply 网申 deadlines (campus_deadlines tool; flag
-// `campusCalendar`). Each row links to the official page and names its
-// source; a missing date says so instead of guessing.
+// `campusCalendar`). Each row links to the official page (and names the
+// source the details were read from, when that is not the official page); a
+// missing date says so instead of guessing, and a programme not re-checked
+// recently says that too.
 
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -26,12 +28,13 @@ export function CampusDeadlinesCard({ card }: CardProps) {
           const date = shortDate(i.closesAt, locale);
           return (
             <li key={`${i.company}-${n}`} className={styles.jobRow}>
-              <a href={i.sourceUrl} target="_blank" rel="noopener noreferrer" className={styles.jobLink}>
+              <a href={i.officialUrl} target="_blank" rel="noopener noreferrer" className={styles.jobLink}>
                 {i.programme ? `${i.company} · ${i.programme}` : i.company}
               </a>
               <span className={styles.jobMeta}>
                 <span>{date ? t('closes', { date }) : t('noDate')}</span>
-                <span className={styles.label}>{t('source', { source: i.sourceName })}</span>
+                <span className={styles.label}>{i.sourceName ? t('source', { source: i.sourceName }) : t('official')}</span>
+                {i.needsReverify ? <span className={styles.label}>{t('reverify')}</span> : null}
               </span>
             </li>
           );

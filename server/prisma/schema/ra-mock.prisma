@@ -85,4 +85,6 @@ model RAMockSession {
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, status])
   @@index([userId, jobId])
+  /// SCHEMA-4 (WP-63a-S2): the retention scan (sessions older than the window).
+  @@index([createdAt])
 }

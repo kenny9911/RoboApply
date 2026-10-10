@@ -53,6 +53,8 @@ export function buildRootMetadata(brand: ProductBrand, env: MetadataEnv = proces
       shortcut: brand.assets.favicon,
       apple: brand.assets.appleTouch,
     },
+    // Host-aware manifest route (WP-61, app/manifest.webmanifest; Wave 4 gate).
+    manifest: '/manifest.webmanifest',
     ...(baidu ? { verification: { other: { 'baidu-site-verification': baidu } } } : {}),
   };
 }

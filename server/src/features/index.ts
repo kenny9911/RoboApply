@@ -43,7 +43,7 @@ import { createCoverLetterRouter } from './coverletter/routes.js';
 import { createTrackerRouter } from './tracker/routes.js';
 import { createOffersRouter } from './offers/routes.js';
 import { createNetworkRouter } from './network/routes.js';
-import { createCnReferralsRouter } from './cn/referrals/routes.js';
+import { createCnReferralsAdminRouter, createCnReferralsRouter } from './cn/referrals/routes.js';
 import { createAgentRouter } from './agent/routes.js';
 import { createExtensionPublicRouter, createExtensionRouter } from './extension/routes.js';
 import { createBillingPlansRouter, createCreditsRouter, createPublicCancelRouter } from './credits/routes.js';
@@ -182,6 +182,8 @@ export const FEATURE_MOUNTS: readonly FeatureMount[] = [
   { id: 'cn.campus', area: 'cn/campus', path: s('/cn/campus-events'), kind: 'seeker', owner: 'WP-58', build: createCampusEventsRouter },
   { id: 'cn.campus.public', area: 'cn/campus', path: pub('/campus'), kind: 'public', owner: 'WP-58', build: createCampusPublicRouter },
   { id: 'cn.campus.admin', area: 'cn/campus', path: a('/cn/campus'), kind: 'admin', owner: 'WP-58', build: createCampusAdminRouter },
+  // 内推码 moderation queue (WP-54 request, mounted at the Wave 4 gate; console UI is WP-74).
+  { id: 'cn.referrals.admin', area: 'cn/referrals', path: a('/cn/referrals'), kind: 'admin', owner: 'WP-54', build: createCnReferralsAdminRouter },
   { id: 'notify-cn', area: 'notify-cn', path: s('/notify-cn'), kind: 'seeker', owner: 'WP-73', build: createNotifyCnRouter },
   { id: 'notify-cn.webhook', area: 'notify-cn', path: hook('/wechat-mp'), kind: 'webhook', owner: 'WP-73', build: createWechatMpWebhookRouter },
 

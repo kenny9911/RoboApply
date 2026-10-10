@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { redactPii, LLM_PII_KINDS } from '../../../platform/pii/index.js';
-import { COPILOT_MEMORY_FACT_MAX, type ActionCardData, type MemoryAddCardData } from '../contract.js';
+import { COPILOT_MEMORY_FACT_MAX, type ActionCardData, type CampusDeadlinesCardData, type MemoryAddCardData, type ResumeTipsCardData } from '../contract.js';
 import type { CopilotTool, ToolContext } from '../types.js';
 import { creditProposal } from './actions.js';
 import { card, clip, isNotFound, isNotImplemented, notAvailable, requireUser } from './util.js';
@@ -95,9 +95,22 @@ export const resumeIssues: CopilotTool<z.infer<typeof ResumeArgs>> = {
         evidence: clip(i.evidence, 300),
         fixable: Boolean(i.fixable) && latest.aiAvailable,
       }));
+      // The card carries `type` + `params` so the client renders the localized
+      // `resumeCheck.issue.<type>.*` text; `why`/`how` are the English fallback.
+      const tips: ResumeTipsCardData = {
+        resumeId,
+        stale: latest.stale,
+        href: `/resume/${encodeURIComponent(resumeId)}/check`,
+        issues: grade.issues.slice(0, 12).map((i, n) => ({
+          ...issues[n]!,
+          type: i.type,
+          ...(i.params ? { params: i.params } : {}),
+          ...(i.source ? { source: i.source } : {}),
+        })),
+      };
       return {
         data: { resumeId, stale: latest.stale, issues },
-        cards: [card(ctx, 'resume_tips', { resumeId, stale: latest.stale, issues, href: `/resume/${encodeURIComponent(resumeId)}/check` })],
+        cards: [card(ctx, 'resume_tips', tips)],
       };
     } catch (err) {
       if (isNotFound(err)) return notAvailable('resume_not_found');
@@ -144,11 +157,23 @@ export const campusDeadlines: CopilotTool<z.infer<typeof CampusArgs>> = {
     const userId = requireUser(ctx);
     try {
       const items = await ctx.areas.campusUpcoming(userId, { limit: args.limit ?? 5 });
+      const data: CampusDeadlinesCardData = {
+        items: items.map((e) => ({
+          company: e.companyName,
+          programme: e.title || null,
+          closesAt: e.applyClosesAt,
+          officialUrl: e.officialUrl,
+          sourceUrl: e.sourceUrl,
+          sourceName: e.sourceName,
+          verifiedAt: e.verifiedAt,
+          needsReverify: e.needsReverify,
+        })),
+      };
       return {
         data: {
           items: items.map((e) => ({ company: e.companyName, title: e.title, applyClosesAt: e.applyClosesAt, officialUrl: e.officialUrl, verifiedAt: e.verifiedAt, needsReverify: e.needsReverify })),
         },
-        cards: [card(ctx, 'campus_deadlines', { items })],
+        cards: [card(ctx, 'campus_deadlines', data)],
       };
     } catch (err) {
       if (isNotImplemented(err)) return notAvailable('not_available_yet');

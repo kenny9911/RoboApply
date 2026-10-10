@@ -22,7 +22,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { createThread, listMessages, sendMessageFeedback, streamTurn } from '../../lib/api/copilot';
-import { apiErrorCode, type Items } from '../../lib/api/contracts/wire';
+import { apiErrorCode, newIdempotencyKey, type Items } from '../../lib/api/contracts/wire';
 import type { COPILOT_CHIPS, MessageView } from '../../lib/api/contracts/copilot';
 import { creditsExhaustedFrom, reportCreditsExhausted } from '../shared/useCreditGate';
 import { useInvalidateCredits } from '../shared/useCredits';
@@ -103,7 +103,9 @@ export function useCopilotChat(initial: { threadId?: string | null; jobId?: stri
         const outcome = await streamTurn(
           threadId,
           { text: clean, ...(opts.chip ? { chip: opts.chip } : {}), ...(contextJobId ? { contextJobId } : {}) },
-          { signal: controller.signal, onEvent: (event) => dispatch({ type: 'event', event }) },
+          // WP-50 requires one Idempotency-Key per user turn (422 without it); a
+          // retry is a new intent and gets a new key (Wave 4 gate fix).
+          { signal: controller.signal, idempotencyKey: newIdempotencyKey(), onEvent: (event) => dispatch({ type: 'event', event }) },
         );
         dispatch({ type: 'outcome', outcome });
         if (outcome.status === 'error' && outcome.code === 'ai_unavailable') markAssistantAiUnavailable();

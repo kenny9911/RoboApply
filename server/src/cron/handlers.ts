@@ -370,7 +370,12 @@ export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
   ),
   brandCronJob('score-precompute', '*/15 * * * *', 'WP-18', [{ name: 'precompute', task: runScorePrecompute }]),
   brandCronJob('job-alerts', '*/15 * * * *', 'WP-39a', [{ name: 'alerts', task: runJobAlerts }]),
-  brandCronJob('reminders', '0 * * * *', 'WP-39a', [{ name: 'reminders', task: runReminders }]),
+  // toolsPurge also runs hourly here (WP-57 request, Wave 4 gate) so a free-tool
+  // result never outlives its published 24 h by more than an hour.
+  brandCronJob('reminders', '0 * * * *', 'WP-39a', [
+    { name: 'reminders', task: runReminders },
+    { name: 'toolsPurge', task: runToolsPurge },
+  ]),
   brandCronJob('lifecycle-emails', '15 * * * *', 'WP-39a', [{ name: 'lifecycle', task: runLifecycleEmails }]),
   brandCronJob('ready-weekly', '5 * * * *', 'WP-52', [{ name: 'readyWeekly', task: runReadyWeekly }]),
   brandCronJob('seo-rebuild', '0 4 * * *', 'WP-56', [{ name: 'seo', task: runSeoRebuild }]),

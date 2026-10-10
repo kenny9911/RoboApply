@@ -62,16 +62,16 @@ describe('nudges', () => {
     ...over,
   });
 
-  it('hide_agencies after a recent report while agencies are shown', async () => {
+  it('agency_report after a recent report while agencies are shown', async () => {
     const n = await nextNudge(USER, deps({ signals: signals({ reportedSince: async () => true }) }));
-    expect(n).toMatchObject({ kind: 'hide_agencies' });
+    expect(n).toMatchObject({ kind: 'agency_report' });
   });
 
-  it('add_min_pay only when ≥ 20 jobs list pay, with the count sourced', async () => {
+  it('pay_filter only when ≥ 20 jobs list pay, with the count sourced', async () => {
     const few = fakeAreas({ countForFilters: async () => ({ count: 12, capped: false }) });
     expect(await nextNudge(USER, deps({ areas: few }))).toBeNull();
     const n = await nextNudge(USER, deps());
-    expect(n).toMatchObject({ kind: 'add_min_pay', facts: { jobsListingPay: { value: 120, source: 'index', sampleSize: 120 } } });
+    expect(n).toMatchObject({ kind: 'pay_filter', facts: { jobsListingPay: { value: 120, source: 'index', sampleSize: 120 } } });
   });
 
   it('nothing when a minimum pay is already set', async () => {

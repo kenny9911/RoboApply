@@ -933,354 +933,2543 @@ Additional rules for the orchestrator parsing this block:
 
 ```json
 [
-  {"id": "FND-1a", "wave": 1, "title": "Pure schema move into server/prisma/schema/ (no DDL change)",
-   "owns": ["server/prisma/schema.prisma","server/prisma/schema/","prisma.config.ts","server/src/generated/prisma/","__tests__/prisma/schemaMove.test.ts"],
-   "dependsOn": [], "namespace": null,
-   "catalogIds": []},
-  {"id": "FND-1b", "wave": 1, "title": "Every planned model, field, index and back-relation (additive, db push #1)",
-   "owns": ["server/prisma/schema/","server/prisma/sql/000_extensions.sql","server/src/generated/prisma/","__tests__/prisma/"],
-   "dependsOn": ["FND-1a"], "namespace": null,
-   "catalogIds": []},
-  {"id": "FND-2a", "wave": 1, "title": "Brand core (server): registry, request context, capabilities, consent helper, test harness, dependencies",
-   "owns": ["server/src/platform/brand/","server/src/platform/flags.ts","server/src/platform/consent/","server/src/features/brand/","server/src/test/","server/src/lib/requestContext.ts","server/src/app.ts","server/src/middleware/auth.ts","server/src/lib/cookieOptions.ts","server/src/roboapply/engine/lib/seekerConsentTypes.ts","server/src/services/llm/OpenRouterProvider.ts","server/src/roboapply/v2/agents/","server/src/roboapply/engine/agents/","package.json","package-lock.json"],
-   "dependsOn": ["FND-1b"], "namespace": null,
-   "catalogIds": ["TW-01", "CN-E-02"]},
-  {"id": "FND-2b", "wave": 1, "title": "Brand core (web): mirror, proxy, root layout, provider, %BRAND% bundles",
-   "owns": ["lib/brand/","lib/server/brand.ts","lib/flags.ts","scripts/gen-brand-mirror.mjs","__tests__/lib/brandParity.test.ts","__tests__/lib/brandFromHost.test.ts","__tests__/lib/brandInvariants.test.ts","__tests__/lib/brandMetadata.test.tsx","components/features/brand/WrongBrandNudge.tsx","components/features/growth/AnalyticsConsent.tsx","proxy.ts","app/layout.tsx","app/providers.tsx","lib/i18n.ts","lib/serverLocale.ts","lib/localeConfig.ts","lib/api/client.ts","i18n/messages/","components/job-search/messages.en.json"],
-   "dependsOn": ["FND-2a"], "namespace": null,
-   "catalogIds": ["TW-01", "F-MKT-01"]},
-  {"id": "FND-3", "wave": 1, "title": "Server platform plumbing: queue, rate limits, SSE, HTTP envelope, email core, crons, UI state",
-   "owns": ["server/src/platform/queue/enqueue.ts","server/src/platform/queue/drain.ts","server/src/platform/queue/runForBudget.ts","server/src/platform/queue/index.ts","server/src/platform/ratelimit/","server/src/platform/sse.ts","server/src/platform/http.ts","server/src/platform/llm/brandPolicy.ts","server/src/platform/email/EmailService.ts","server/src/platform/email/i18n.ts","server/src/platform/email/unsubscribe.ts","server/src/platform/email/index.ts","server/src/platform/email/transports/resend.ts","server/src/platform/email/templates/_shell.ts","server/src/platform/email/templates/registry.ts","server/src/i18n/email/","server/src/features/uistate/","server/src/features/jobs/ingest/cron.ts","server/src/features/jobs/ingest/workers.ts","server/src/features/jobs/enrich/workers.ts","server/src/features/match/cron.ts","server/src/features/match/workers.ts","server/src/features/alerts/cron.ts","server/src/features/lifecycle/cron.ts","server/src/features/tracker/cron.ts","server/src/features/agent/cron.ts","server/src/features/agent/workers.ts","server/src/features/seo/cron.ts","server/src/features/seo/workers.ts","server/src/features/compliance/cron.ts","server/src/features/cn/campus/cron.ts","server/src/features/resume/workers.ts","server/src/features/notifications/workers.ts","server/src/cron/handlers.ts","vercel.json","server/src/roboapply/schedulers/RoboApplyCronService.ts","server/src/roboapply/v2/lib/raFeatureCatalog.ts","server/src/services/EmailService.ts","server/src/features/compliance/workers.ts","server/src/features/cn/jobs/workers.ts","server/src/features/onboarding/workers.ts","server/src/features/tools/cron.ts","server/src/features/push/workers.ts","server/src/features/extension/workers.ts","server/src/features/copilot/workers.ts","server/src/features/growth/workers.ts","server/src/features/network/cron.ts","server/src/features/interview/cron.ts"],
-   "dependsOn": ["FND-2a"], "namespace": null,
-   "catalogIds": ["F-TRUST-03", "F-NOTIF-05", "F-NOTIF-06"]},
-  {"id": "FND-4", "wave": 1, "title": "Credits + entitlements, plan catalog, preference store (FilterSet), taxonomy v1",
-   "owns": ["server/src/platform/credits/","server/src/platform/billing/planCatalog.ts","server/src/features/search/contract.ts","server/src/features/search/filterSet.ts","server/src/features/search/SearchProfileService.ts","server/src/features/search/legacyMigration.ts","server/src/features/search/index.ts","server/src/features/jobs/taxonomy/","i18n/staging/taxonomy.en.json"],
-   "dependsOn": ["FND-2a"], "namespace": "taxonomy",
-   "catalogIds": ["F-BILL-01", "F-BILL-09", "F-FEED-03", "F-FEED-13", "F-FILT-01"]},
-  {"id": "FND-5", "wave": 1, "title": "Server area scaffolding: contracts, stub routers, mounts, public surfaces",
-   "owns": ["server/src/features/index.ts","server/src/features/jobs/marketHooks.ts","server/src/features/jobs/sources/atsPublic/hooks.ts","server/src/platform/queue/registry.ts","server/src/app.ts","server/src/features/auth/routes.ts","server/src/features/auth/contract.ts","server/src/features/auth/index.ts","server/src/features/auth-cn/routes.ts","server/src/features/auth-cn/contract.ts","server/src/features/auth-cn/index.ts","server/src/features/compliance/routes.ts","server/src/features/compliance/contract.ts","server/src/features/compliance/index.ts","server/src/features/onboarding/","server/src/features/onboarding-cn/","server/src/features/profile/","server/src/features/search/routes.ts","server/src/features/feed/","server/src/features/jobs/import/","server/src/features/jobs/detail/","server/src/features/jobs/companies/","server/src/features/match/routes.ts","server/src/features/match/contract.ts","server/src/features/match/index.ts","server/src/features/copilot/","server/src/features/resume/routes.ts","server/src/features/resume/contract.ts","server/src/features/resume/index.ts","server/src/features/coverletter/","server/src/features/tracker/routes.ts","server/src/features/tracker/contract.ts","server/src/features/tracker/index.ts","server/src/features/offers/","server/src/features/network/","server/src/features/cn/referrals/","server/src/features/agent/routes.ts","server/src/features/agent/contract.ts","server/src/features/agent/index.ts","server/src/features/extension/","server/src/features/credits/","server/src/features/billing-cn/","server/src/features/notifications/routes.ts","server/src/features/notifications/contract.ts","server/src/features/notifications/index.ts","server/src/features/alerts/routes.ts","server/src/features/alerts/contract.ts","server/src/features/alerts/index.ts","server/src/features/lifecycle/index.ts","server/src/features/push/","server/src/features/announcements/","server/src/features/growth/","server/src/features/prep/","server/src/features/coaching/","server/src/features/seo/routes.ts","server/src/features/seo/contract.ts","server/src/features/seo/index.ts","server/src/features/tools/","server/src/features/cn/jobs/","server/src/features/cn/campus/routes.ts","server/src/features/cn/campus/contract.ts","server/src/features/cn/campus/index.ts","server/src/features/notify-cn/","server/src/features/support/","server/src/features/visitor/","server/src/features/account-v2/","server/src/features/admin/","server/src/platform/llm/contentSafety/index.ts"],
-   "dependsOn": ["FND-2b", "FND-3", "FND-4"], "namespace": null,
-   "catalogIds": []},
-  {"id": "FND-7", "wave": 1, "title": "Web plumbing: lib/api wrappers, shared hooks, i18n staging + merge script, gates, env",
-   "owns": ["lib/api/onboarding.ts","lib/api/profile.ts","lib/api/search.ts","lib/api/feed.ts","lib/api/jobs.ts","lib/api/jobImport.ts","lib/api/match.ts","lib/api/copilot.ts","lib/api/resumes.ts","lib/api/coverLetters.ts","lib/api/tracker.ts","lib/api/network.ts","lib/api/agent.ts","lib/api/extension.ts","lib/api/credits.ts","lib/api/notifications.ts","lib/api/push.ts","lib/api/growth.ts","lib/api/prep.ts","lib/api/coaching.ts","lib/api/tools.ts","lib/api/campus.ts","lib/api/offers.ts","lib/api/compliance.ts","lib/api/brand.ts","lib/api/authCn.ts","lib/api/billingCn.ts","lib/api/notifyCn.ts","lib/api/cnJobs.ts","lib/api/careerSources.ts","lib/api/visitor.ts","lib/api/accountV2.ts","lib/api/support.ts","lib/api/announcements.ts","lib/api/uiState.ts","lib/api/contracts/","hooks/shared/","i18n/staging/","scripts/i18n-merge-staging.mjs","scripts/check-api-boundary.mjs","scripts/check-extension-no-submit.mjs","scripts/check-zh-variants.mjs","scripts/check-copy.mjs","scripts/check-design.mjs","__tests__/fixtures/","__tests__/contracts/","lib/i18n.ts","package.json","vitest.config.mts",".env.example","scripts/api-boundary-baseline.json","tsconfig.json"],
-   "dependsOn": ["FND-5"], "namespace": null,
-   "catalogIds": []},
-  {"id": "FND-6a", "wave": 1, "title": "Web shell, IA, primitives, settings and layout-slot stubs (per brand)",
-   "owns": ["components/v3/shell/Sidebar.tsx","components/v3/shell/MobileNav.tsx","components/v3/shell/Topbar.tsx","components/v3/shell/CommandPalette.tsx","components/v3/shell/AvatarMenu.tsx","components/v3/shell/destinations.ts","components/v3/shell/HybridShell.tsx","components/v3/shell/MoreSheet.tsx","app/(auth)/layout.tsx","app/(onboarding)/layout.tsx","app/globals.css","styles/brands/goapply.css","components/v3/primitives/","components/features/common/","components/features/settings/","app/(auth)/settings/page.tsx","lib/ui/popupGate.ts","lib/proxyPaths.ts","app/robots.ts","next.config.mjs","components/auth/methods/registry.ts","hooks/shared/navBadges.ts","hooks/feed/useJobsBadge.ts","hooks/agent/useReadyBadge.ts","hooks/tracker/useApplicationsBadge.ts","hooks/profile/useProfileBadge.ts","i18n/staging/nav.en.json","components/features/copilot/CopilotRail.tsx","components/features/notifications/MessageCenterButton.tsx","components/features/notifications/AnnouncementModal.tsx","components/features/credits/PlanBadge.tsx","components/features/extension/InstallPrompt.tsx","components/features/onboarding/TourOverlay.tsx"],
-   "dependsOn": ["FND-7"], "namespace": "nav",
-   "catalogIds": ["F-MOB-03", "F-ACCT-05", "F-NOTIF-06", "F-TRUST-05", "F-ORION-01"]},
-  {"id": "FND-6b", "wave": 1, "title": "Route shells and seam stubs",
-   "owns": ["app/(auth)/jobs/[id]/","app/(auth)/jobs/added/","app/(auth)/jobs/explore/","app/(auth)/jobs/report/","app/(auth)/ready/","app/(auth)/resume/[id]/check/","app/(auth)/resume/letters/","app/(auth)/resume/new/","app/(auth)/practice/questions/","app/(auth)/profile/","app/(auth)/assistant/","app/(auth)/inbox/","app/(auth)/coaching/","app/(auth)/referrals/","app/(auth)/invite/","app/(auth)/settings/billing/return/","app/(auth)/admin/credits/","app/(auth)/admin/campus/","app/(auth)/admin/fraud/","app/(auth)/admin/sources/","app/(auth)/admin/invites/","app/(auth)/admin/questions/","app/(auth)/admin/announcements/","app/(auth)/admin/coaches/","app/(auth)/admin/system/","app/(auth)/admin/reports/","app/(onboarding)/onboarding/","app/(public)/forgot-password/","app/(public)/reset-password/","app/(public)/verify-email/","app/(public)/bind-phone/","app/auth/callback/","app/unsubscribe/","app/r/","app/alerts/confirm/","app/extension/","app/campus/","app/job/","app/browse/","app/features/","app/pricing/","app/tools/","app/legal/","app/about/","app/security/","app/help/","app/cancel/","components/features/credits/OutOfCreditsSheet.tsx","components/features/onboarding-cn/index.ts","components/features/network/PeoplePanel.tsx","components/features/offers/OfferSection.tsx","components/features/visitor/VisitorFeed.tsx","components/features/growth/GettingStartedChecklist.tsx","components/features/market/","components/features/auth-cn/PhoneMethod.tsx","components/features/auth-cn/WechatMethod.tsx","components/features/job/JobDetailPanel.tsx","components/features/job/index.ts","components/features/offers/OfferComparison.tsx","components/features/extension/FillWithExtensionButton.tsx","components/features/coaching/PracticeReportCoachLine.tsx","components/features/notify-cn/SubscribeOnTap.tsx","components/features/practice-cn/CnReport.tsx"],
-   "dependsOn": ["FND-6a"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-10", "wave": 2, "title": "Auth core: email/password, Google, LINE seam, reset, verification, account safety",
-   "owns": ["server/src/roboapply/routes/auth.ts","server/src/roboapply/routes/account.ts","server/src/roboapply/engine/services/SeekerAuthService.ts","server/src/roboapply/services/SeekerAccountDataWipeService.ts","server/src/roboapply/services/SeekerAccountPurgeService.ts","server/src/roboapply/services/accountPurgeHelpers.ts","server/src/features/auth/","server/src/platform/email/templates/auth/","app/(public)/layout.tsx","app/(public)/login/","app/(public)/signup/","app/(public)/forgot-password/","app/(public)/reset-password/","app/(public)/verify-email/","app/auth/callback/google/","app/auth/callback/line/","components/auth/","components/RoboApplyAccessGate.tsx","components/v3/account/security.tsx","components/v3/account/deleteAccountModal.tsx","components/v3/preferences/sections/IdentitySection.tsx","components/v3/preferences/sections/DangerSection.tsx","components/v3/preferences/WipeDataModal.tsx","components/features/auth/","lib/api/auth.ts","lib/auth/","hooks/auth/","i18n/staging/auth.en.json","server/src/i18n/email/staging/auth.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "auth",
-   "catalogIds": ["F-ACCT-01", "F-ACCT-02", "F-ACCT-06", "F-ONB-11", "F-ONB-02", "F-TRUST-01", "F-NOTIF-05", "TW-05", "F-ONB-12"]},
-  {"id": "WP-11", "wave": 2, "title": "GoApply auth: phone OTP, WeChat seams, bind-phone, phone change, invite codes",
-   "owns": ["server/src/features/auth-cn/","server/src/platform/sms/","components/features/auth-cn/","app/auth/callback/wechat/","app/(public)/bind-phone/","app/(auth)/admin/invites/","i18n/staging/authCn.en.json","i18n/staging/authCn.zh.json","lib/api/authCn.ts"],
-   "dependsOn": ["FND-6b"], "namespace": "authCn",
-   "catalogIds": ["F-ACCT-01", "F-ACCT-02", "F-NOTIF-10", "F-ONB-11", "F-MOB-06", "CN-L-07", "CN-L-08"]},
-  {"id": "WP-12", "wave": 2, "title": "Brand presentation + Taiwan copy guard",
-   "owns": ["styles/brands/","public/brands/","components/chrome/BrandSymbol.tsx","components/chrome/Logo.tsx","components/v3/shell/BrandLogo.tsx","components/v3/shell/LanguageSwitcher.tsx","components/landing/LanguageMenu.tsx","components/features/brand/","components/v3/preferences/sections/AppearanceSection.tsx","scripts/check-zh-variants.mjs","i18n/glossary/","__tests__/brand/","i18n/staging/brand.en.json","lib/api/brand.ts"],
-   "dependsOn": ["FND-6b"], "namespace": "brand",
-   "catalogIds": ["F-MKT-01", "CN-E-02", "CN-E-04", "TW-01", "TW-08"]},
-  {"id": "WP-13", "wave": 2, "title": "Compliance: consents, legal documents, PI requests, AI labelling, legal footer",
-   "owns": ["server/src/features/compliance/","app/legal/","content/legal/intl/terms.md","content/legal/intl/privacy.md","content/legal/intl/cookies.md","content/legal/intl/refunds.md","content/legal/intl/subscription-terms.md","content/legal/intl/ai-disclosure.md","content/legal/intl/tw-pdpa-notice.md","content/legal/cn/user-agreement.md","content/legal/cn/privacy.md","content/legal/cn/pi-collection-list.md","content/legal/cn/third-party-sharing.md","content/legal/cn/ai-content-labels.md","content/legal/cn/complaints.md","components/features/compliance/","components/features/market/LegalFooter.tsx","components/features/market/AiGeneratedBadge.tsx","components/v3/preferences/sections/PrivacySection.tsx","i18n/staging/legal.en.json","i18n/staging/legal.zh.json","lib/api/compliance.ts"],
-   "dependsOn": ["FND-6b"], "namespace": "legal",
-   "catalogIds": ["F-MKT-04", "F-TRUST-06", "F-TRUST-08", "F-ACCT-06", "CN-E-04", "CN-E-07", "CN-L-09", "TW-07"]},
-  {"id": "WP-14", "wave": 2, "title": "LLM: per-brand routing, domestic adapters, egress guards (both directions), streaming with tools, cost table",
-   "owns": ["server/src/services/llm/","server/src/lib/llm/","server/src/lib/byokService.ts","scripts/verify-llm-brand.ts","server/src/platform/llm/brandPolicy.ts","server/src/platform/llm/egressPolicy.ts","server/src/platform/llm/index.ts","server/src/lib/modelCostTable.ts","server/src/lib/modelPricing.ts","server/src/lib/modelCostTable.test.ts"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["CN-E-03", "F-ORION-01", "F-ORION-04"]},
-  {"id": "WP-15", "wave": 2, "title": "Residency: per-brand storage, parse routing, PII redaction, deploy assertions, CN email transport",
-   "owns": ["server/src/platform/residency/","server/src/platform/pii/","server/src/platform/email/transports/aliyunDirectMail.ts","server/src/services/ResumeOriginalFileStorageService.ts","server/src/services/GoHireResumeParseService.ts"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["CN-E-01", "CN-E-02", "F-TRUST-06", "TW-07"]},
-  {"id": "WP-16a", "wave": 2, "title": "Inventory normalizers: title/company, geo, pay, seniority, dedupe keys (pure functions)",
-   "owns": ["server/src/features/jobs/normalize/","server/src/features/jobs/geo/","server/src/features/jobs/data/","server/src/features/jobs/taxonomy/"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["F-SAL-01", "TW-03", "F-FEED-15"]},
-  {"id": "WP-16b", "wave": 2, "title": "Inventory pipeline: planner, ingest, upsert, dedupe, companies, bank sync, maintenance",
-   "owns": ["server/src/features/jobs/ingest/","server/src/features/jobs/companies/","server/src/features/jobs/sources/index.ts","server/src/features/jobs/sources/types.ts","server/src/roboapply/v2/lib/raRapidApiJobs.ts","server/src/roboapply/v2/lib/raFantasticJobs.ts","server/src/roboapply/v2/lib/raJobProviders.ts","server/src/roboapply/v2/lib/raBankClients.ts","server/src/roboapply/v2/lib/raBankProviders.ts","server/src/roboapply/v2/lib/raExternalJobTypes.ts","server/src/roboapply/v2/lib/raCrossBankMatch.ts","server/src/roboapply/v2/services/RACrossBankSearchService.ts","server/src/roboapply/v2/agents/RACrossBankExplorerAgent.ts","server/src/roboapply/v2/agents/RACrossBankInsightAgent.ts","server/src/job-search/validation.ts","server/src/job-search/agent.ts"],
-   "dependsOn": ["WP-16a"], "namespace": null,
-   "catalogIds": ["F-FEED-15", "F-FEED-04", "F-JOB-04", "CN-E-05", "F-FILT-04"]},
-  {"id": "WP-17", "wave": 2, "title": "Enrichment: one structured LLM call per job, keywords, sponsorship quotes",
-   "owns": ["server/src/features/jobs/enrich/"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["F-FEED-15", "F-MATCH-03", "F-FEED-07", "F-FILT-02", "TW-09", "F-TRUST-04"]},
-  {"id": "WP-18", "wave": 2, "title": "Fit scoring: pre-score, scorer v3, tiers, precompute, fit analysis, keyword rows",
-   "owns": ["server/src/features/match/","server/src/roboapply/v2/agents/RAJobMatchScorerAgent.ts","server/src/roboapply/v2/routes/jobs.ts","components/features/match/","hooks/match/","lib/api/match.ts","i18n/staging/fit.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "fit",
-   "catalogIds": ["F-MATCH-01", "F-MATCH-02", "F-MATCH-03", "F-MATCH-05", "F-ORION-03", "F-RES-08", "F-FEED-06", "TW-09"]},
-  {"id": "WP-19", "wave": 2, "title": "Profile: page, education/experience/skills, work authorization, sensitive answers, resume sync, TW/CN fields",
-   "owns": ["server/src/features/profile/","server/src/features/tw/","app/(auth)/profile/","components/features/profile/","hooks/profile/","lib/api/profile.ts","i18n/staging/profile.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "profile",
-   "catalogIds": ["F-ACCT-03", "F-ACCT-04", "F-RES-01", "F-NET-01", "TW-04", "TW-09"]},
-  {"id": "WP-20", "wave": 2, "title": "Filters and saved searches (preference store UI + API)",
-   "owns": ["server/src/features/search/","server/src/roboapply/v2/routes/preferences.ts","server/src/roboapply/v2/routes/goal.ts","server/src/roboapply/v2/services/RAPreferencesService.ts","server/src/roboapply/v2/services/RACareerGoalService.ts","components/features/filters/","components/features/search/","components/v3/preferences/sections/HuntSection.tsx","hooks/search/","hooks/usePreferences.ts","hooks/useGoal.ts","lib/api/search.ts","i18n/staging/filters.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "filters",
-   "catalogIds": ["F-FILT-01", "F-FILT-02", "F-FILT-03", "F-FILT-04", "F-FILT-05", "F-FILT-06", "F-FEED-03", "F-FEED-04", "F-FEED-11", "TW-09"]},
-  {"id": "WP-21a", "wave": 2, "title": "Billing server: rails (registerRail, fulfilPass), credits API, plans, renewals, refunds, cancel, admin caps, TW reference price",
-   "owns": ["server/src/platform/credits/","server/src/platform/billing/","server/src/features/credits/","server/src/roboapply/routes/billing.ts","server/src/roboapply/routes/stripeWebhook.ts","server/src/roboapply/services/RoboApplyBillingService.ts","server/src/roboapply/services/RoboApplyBillingReminderService.ts","server/src/roboapply/lib/billingEmails.ts","server/src/roboapply/lib/invoiceReceipt.ts","server/src/lib/billingRegion.ts","server/src/lib/mockCreditService.ts","server/src/lib/mockInterviewPlans.ts","server/src/lib/rateCard.ts","server/src/platform/email/templates/billing/","server/src/i18n/email/staging/billing.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["F-BILL-01", "F-BILL-03", "F-BILL-05", "F-BILL-07", "F-BILL-08", "F-BILL-09", "F-BILL-11", "TW-06"]},
-  {"id": "WP-21b", "wave": 2, "title": "Billing UI: plan sheet, credits views, out-of-credits sheet, cancel page, price reference",
-   "owns": ["components/v3/account/billing.tsx","components/v3/account/billingHistory.tsx","components/v3/account/planCatalog.tsx","components/v3/account/sections.tsx","components/v3/account/usage.tsx","components/v3/account/format.ts","components/v3/account/index.ts","components/features/credits/","components/features/market/PriceReference.tsx","hooks/useAccount.ts","hooks/credits/","lib/pricing.ts","lib/serverMarket.ts","lib/api/account.ts","lib/api/credits.ts","app/(auth)/settings/billing/","app/(auth)/admin/credits/","app/cancel/","i18n/staging/credits.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "credits",
-   "catalogIds": ["F-BILL-02", "F-BILL-03", "F-BILL-04", "F-BILL-06"]},
-  {"id": "WP-22", "wave": 2, "title": "Resume check: grade, issues, fix panel, re-check, keyword report endpoint",
-   "owns": ["server/src/roboapply/v2/routes/resumes.ts","server/src/features/resume/","server/src/roboapply/v2/services/RAResumeService.ts","server/src/roboapply/v2/services/RAResumeAIService.ts","server/src/roboapply/v2/agents/RAResumeRewriteAgent.ts","server/src/roboapply/v2/lib/raResumeAIMessages.ts","app/(auth)/resume/","components/v3/resume-editor/","components/features/resume/","components/v3/preferences/sections/ResumeSection.tsx","hooks/resume/","lib/resumeAnalyzer.ts","lib/api/resumes.ts","i18n/staging/resumeCheck.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "resumeCheck",
-   "catalogIds": ["F-RES-02", "F-RES-03", "F-RES-04", "F-RES-05", "F-RES-06", "F-RES-08"]},
-  {"id": "WP-23", "wave": 2, "title": "First-party events, attribution, getting-started checklist",
-   "owns": ["server/src/features/growth/","lib/analytics.ts","components/features/growth/","hooks/growth/","lib/api/growth.ts","i18n/staging/growth.en.json"],
-   "dependsOn": ["FND-6b"], "namespace": "growth",
-   "catalogIds": ["F-GROW-03", "F-GROW-05", "F-ONB-02", "F-GROW-07"]},
-  {"id": "WP-24", "wave": 2, "title": "GoApply generative-AI content safety (keyword list + Aliyun Green, fail-closed)",
-   "owns": ["server/src/platform/llm/contentSafety/"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["CN-L-05"]},
-  {"id": "WP-30", "wave": 3, "title": "Onboarding: server stage machine + RoboApply screens O1-O8",
-   "owns": ["server/src/features/onboarding/","server/src/roboapply/v2/routes/onboarding.ts","server/src/roboapply/v2/services/RAOnboardingService.ts","server/src/roboapply/v2/services/RAOnboardingRecommendService.ts","server/src/roboapply/v2/agents/RAOnboardingResumeSeedAgent.ts","server/src/roboapply/v2/agents/RAOnboardingPrefExtractAgent.ts","app/(onboarding)/","components/features/onboarding/","hooks/onboarding/","lib/api/onboarding.ts","i18n/staging/onboarding.en.json"],
-   "dependsOn": ["WP-16b", "WP-18", "WP-19", "WP-20", "WP-22", "WP-23"], "namespace": "onboarding",
-   "catalogIds": ["F-ONB-01", "F-ONB-02", "F-ONB-03", "F-ONB-04", "F-ONB-05", "F-ONB-06", "F-ONB-07", "F-ONB-08", "F-ONB-09", "F-ONB-10", "F-SAL-02", "F-NET-01", "F-FEED-09", "F-RES-03"]},
-  {"id": "WP-31", "wave": 3, "title": "GoApply onboarding: G1-G7 and campus-first landing",
-   "owns": ["server/src/features/onboarding-cn/","components/features/onboarding-cn/","i18n/staging/onboardingCn.en.json","i18n/staging/onboardingCn.zh.json"],
-   "dependsOn": ["WP-11", "WP-13", "WP-16b", "WP-19", "WP-20"], "namespace": "onboardingCn",
-   "catalogIds": ["F-ONB-03", "F-ONB-04", "F-ONB-06", "F-ONB-07", "F-ONB-09", "F-ONB-10", "F-SAL-02", "F-ACCT-03"]},
-  {"id": "WP-32", "wave": 3, "title": "Feed API: indexed retrieval, ranking, sessions, counts, diagnostics, feedback loop",
-   "owns": ["server/src/features/feed/","server/src/roboapply/v2/routes/search.ts","server/src/roboapply/v2/services/RAJobIndexService.ts"],
-   "dependsOn": ["WP-16b", "WP-17", "WP-18", "WP-20"], "namespace": null,
-   "catalogIds": ["F-FEED-01", "F-FEED-02", "F-FEED-04", "F-FEED-07", "F-FEED-09", "F-FEED-10", "F-FEED-11", "F-FEED-12", "F-FEED-13", "F-FEED-14", "F-FEED-17", "F-TRUST-04", "F-FILT-01", "F-FILT-02", "F-FILT-03", "F-FILT-04", "F-FILT-05"]},
-  {"id": "WP-33", "wave": 3, "title": "Feed UI: /jobs workspace, cards, split detail, Explore, calibration",
-   "owns": ["app/(auth)/jobs/page.tsx","app/(auth)/jobs/explore/","app/(auth)/job-search/page.tsx","components/v3/today/","components/features/feed/","components/job-search/JobSearchWorkspace.tsx","components/job-search/JobResultCard.tsx","hooks/feed/","hooks/useTodayMatches.ts","lib/api/feed.ts","i18n/staging/jobs.en.json"],
-   "dependsOn": ["WP-18", "WP-20", "WP-21b", "WP-23"], "namespace": "jobs",
-   "catalogIds": ["F-FEED-01", "F-FEED-02", "F-FEED-05", "F-FEED-06", "F-FEED-07", "F-FEED-09", "F-FEED-10", "F-FEED-11", "F-FEED-12", "F-FEED-13", "F-FEED-17", "F-MATCH-05", "F-GROW-07", "F-SAL-01", "F-TRK-01", "F-TRK-03"]},
-  {"id": "WP-34", "wave": 3, "title": "Job detail, company tab, similar jobs, apply flow, People deep links",
-   "owns": ["server/src/features/jobs/detail/","server/src/roboapply/v2/routes/jobs.ts","app/(auth)/jobs/[id]/","components/features/job/","components/features/company/","hooks/job/","hooks/useJobDetail.ts","lib/api/jobs.ts","i18n/staging/jobDetail.en.json"],
-   "dependsOn": ["WP-16b", "WP-18", "WP-21b", "WP-22"], "namespace": "jobDetail",
-   "catalogIds": ["F-JOB-01", "F-JOB-02", "F-JOB-03", "F-JOB-04", "F-JOB-05", "F-JOB-06", "F-JOB-07", "F-JOB-08", "F-NET-02", "F-NET-03", "F-RES-08", "F-TRK-03", "F-MATCH-02", "F-MATCH-03"]},
-  {"id": "WP-35", "wave": 3, "title": "Added by you: external job import",
-   "owns": ["server/src/features/jobs/import/","app/(auth)/jobs/added/","components/features/jobimport/","hooks/jobimport/","lib/api/jobImport.ts","i18n/staging/jobImport.en.json"],
-   "dependsOn": ["WP-16b", "WP-17", "WP-21a"], "namespace": "jobImport",
-   "catalogIds": ["F-TRK-04", "F-EXT-09", "F-JOB-04"]},
-  {"id": "WP-36a", "wave": 3, "title": "Tailoring v2: tailor sessions, claim verification, tailor flow UI",
-   "owns": ["server/src/features/resume/","server/src/roboapply/v2/services/RAResumeAIService.ts","server/src/roboapply/v2/agents/RAResumeTailorAgent.ts","server/src/roboapply/v2/agents/RAResumeRewriteAgent.ts","server/src/roboapply/v2/lib/raResumeSeed.ts","server/src/roboapply/v2/lib/raResumeAIMessages.ts","components/features/tailor/","hooks/tailor/","i18n/staging/tailor.en.json"],
-   "dependsOn": ["WP-13", "WP-18", "WP-22"], "namespace": "tailor",
-   "catalogIds": ["F-RES-09", "F-RES-10", "F-RES-15", "CN-E-07"]},
-  {"id": "WP-36b", "wave": 3, "title": "Resume hub, templates/layout, export with file record, CJK fonts",
-   "owns": ["server/src/roboapply/v2/routes/resumes.ts","server/src/roboapply/v2/services/RAResumeService.ts","server/src/roboapply/v2/lib/resumeExport.ts","server/assets/fonts/","app/(auth)/resume/page.tsx","app/(auth)/resume/[id]/","components/v3/resume-editor/","components/v3/resumes/","components/resumes/","components/features/resume/","hooks/useResumes.ts","hooks/resume/","lib/resumeStructure.ts","lib/resumeDownload.ts","lib/resumeAnalyzer.ts","lib/api/resumes.ts","i18n/staging/resume.en.json"],
-   "dependsOn": ["WP-13", "WP-22"], "namespace": "resume",
-   "catalogIds": ["F-RES-02", "F-RES-12", "F-RES-13", "CN-E-07", "TW-04"]},
-  {"id": "WP-37", "wave": 3, "title": "Cover letters",
-   "owns": ["server/src/features/coverletter/","app/(auth)/resume/letters/","components/features/coverletter/","hooks/coverletter/","lib/api/coverLetters.ts","i18n/staging/coverLetter.en.json"],
-   "dependsOn": ["WP-14", "WP-21a"], "namespace": "coverLetter",
-   "catalogIds": ["F-CL-01", "F-CL-02"]},
-  {"id": "WP-38", "wave": 3, "title": "Applications tracker: views, drawer, events, files sent, reminders data, GoApply stages",
-   "owns": ["server/src/features/tracker/","server/src/features/cn/tracker/","server/src/roboapply/v2/routes/tracker.ts","server/src/roboapply/v2/routes/insights.ts","server/src/roboapply/v2/services/RATrackerService.ts","server/src/roboapply/v2/services/RAInsightService.ts","server/src/roboapply/v2/agents/RACareerInsightAgent.ts","app/(auth)/applications/","components/v3/pipeline/","components/features/tracker/","hooks/usePipelineBoard.ts","hooks/tracker/","lib/api/tracker.ts","i18n/staging/applications.en.json"],
-   "dependsOn": ["WP-10"], "namespace": "applications",
-   "catalogIds": ["F-TRK-01", "F-TRK-02", "F-TRK-03", "F-NOTIF-08", "F-JOB-07"]},
-  {"id": "WP-39a", "wave": 3, "title": "Notification delivery: alerts, reminders runner, lifecycle (incl. Tips and reminders), email templates, delivery channels",
-   "owns": ["server/src/features/alerts/","server/src/features/lifecycle/","server/src/features/notifications/workers.ts","server/src/platform/email/templates/notify/","server/src/services/EmailService.ts","server/src/i18n/email/staging/notify.en.json"],
-   "dependsOn": ["WP-20", "WP-21a"], "namespace": null,
-   "catalogIds": ["F-NOTIF-01", "F-NOTIF-02", "F-NOTIF-04", "F-NOTIF-05", "F-NOTIF-08"]},
-  {"id": "WP-39b", "wave": 3, "title": "Message center, unsubscribe and notification settings",
-   "owns": ["server/src/features/notifications/routes.ts","server/src/features/notifications/service.ts","server/src/features/notifications/unsubscribe.ts","server/src/features/notifications/contract.ts","server/src/features/notifications/index.ts","server/src/features/notifications/__tests__/","app/(auth)/inbox/","app/unsubscribe/","components/features/notifications/","components/v3/preferences/sections/NotifSection.tsx","hooks/notifications/","lib/api/notifications.ts","i18n/staging/inbox.en.json"],
-   "dependsOn": ["WP-20"], "namespace": "inbox",
-   "catalogIds": ["F-NOTIF-01", "F-NOTIF-06", "F-NET-09"]},
-  {"id": "WP-40", "wave": 3, "title": "Marketing site per brand: home, feature pages, pricing page, about/security/help, support form",
-   "owns": ["components/landing/","app/page.tsx","app/[locale]/page.tsx","app/features/","app/pricing/","app/about/","app/security/","app/help/","lib/seo.ts","components/features/marketing/","server/src/features/support/","i18n/staging/landing.en.json","i18n/staging/landing.zh.json","lib/api/support.ts"],
-   "dependsOn": ["WP-12", "WP-21b"], "namespace": "landing",
-   "catalogIds": ["F-MKT-01", "F-MKT-02", "F-MKT-03", "F-MKT-04", "F-BILL-02", "F-TRUST-01", "F-TRUST-07", "F-TOOL-05"]},
-  {"id": "WP-41", "wave": 3, "title": "GoApply jobs: recruitment-info mode, GoHire honesty fields, anti-fraud, market tags, deep links",
-   "owns": ["server/src/features/cn/jobs/","components/features/market/cn/","app/(auth)/admin/fraud/","i18n/staging/jobsCn.en.json","i18n/staging/jobsCn.zh.json","lib/api/cnJobs.ts"],
-   "dependsOn": ["WP-16b", "WP-17"], "namespace": "jobsCn",
-   "catalogIds": ["CN-E-05", "CN-E-08", "F-FEED-07", "F-FEED-12", "F-FEED-15", "F-SAL-01", "CN-L-04"]},
-  {"id": "WP-42", "wave": 3, "title": "Taiwan inventory: public ATS job-board connectors, TW open-data spike, TW card meta",
-   "owns": ["server/src/features/jobs/sources/atsPublic/","server/src/features/jobs/sources/twOpenData.ts","components/features/market/tw/","app/(auth)/admin/sources/","i18n/staging/jobsTw.en.json","lib/api/careerSources.ts"],
-   "dependsOn": ["WP-16b"], "namespace": "jobsTw",
-   "catalogIds": ["TW-02", "TW-03", "F-FEED-15", "TW-09"]},
-  {"id": "WP-43", "wave": 3, "title": "Practice from any job, first practice free, report-end next step, text-only on GoApply",
-   "owns": ["app/(auth)/practice/page.tsx","app/(auth)/practice/[id]/report/","components/v3/mock/PracticeSetupFlow.tsx","components/v3/mock/PracticeSetupFlow.module.css","components/v3/mock/MarketRequirementsPanel.tsx","server/src/interview-engine/routes/externalRoutes.ts","server/src/interview-engine/sessions/InterviewSessionService.ts","lib/api/interviewEngine.ts","i18n/staging/practice.en.json","components/features/practice/"],
-   "dependsOn": ["WP-10", "WP-21a"], "namespace": "practice",
-   "catalogIds": ["F-INT-06", "F-COACH-05"]},
-  {"id": "WP-50", "wave": 4, "title": "Assistant API: threads, streaming turns, tools, proposals, guardrails, memory",
-   "owns": ["server/src/features/copilot/"],
-   "dependsOn": ["WP-14", "WP-18", "WP-20", "WP-32", "WP-34", "WP-35", "WP-36a", "WP-37", "WP-38"], "namespace": null,
-   "catalogIds": ["F-ORION-01", "F-ORION-02", "F-ORION-03", "F-ORION-04", "F-ORION-05", "F-ORION-07", "F-ORION-08", "F-ORION-09", "F-ORION-10", "F-ORION-12", "F-RES-11", "F-ORION-11"]},
-  {"id": "WP-51", "wave": 4, "title": "Assistant UI: rail, full page, cards, chips, cheatsheet, memory settings",
-   "owns": ["app/(auth)/assistant/","components/features/copilot/","components/chat/","components/ui/StreamingText.tsx","hooks/copilot/","lib/api/copilot.ts","i18n/staging/assistant.en.json"],
-   "dependsOn": ["WP-33", "WP-34"], "namespace": "assistant",
-   "catalogIds": ["F-ORION-01", "F-ORION-02", "F-ORION-04", "F-ORION-05", "F-ORION-06", "F-ORION-10", "F-ORION-12", "F-FEED-09"]},
-  {"id": "WP-52", "wave": 4, "title": "Ready to apply API: settings, setup, weekly list, kit preparation, state machine, answer bank",
-   "owns": ["server/src/features/agent/"],
-   "dependsOn": ["WP-19", "WP-32", "WP-36a", "WP-37", "WP-38"], "namespace": null,
-   "catalogIds": ["F-AGENT-01", "F-AGENT-02", "F-AGENT-03", "F-AGENT-04", "F-AGENT-05", "F-AGENT-06", "F-AGENT-08", "F-AGENT-10", "F-AGENT-11", "F-FILT-07", "F-AGENT-07", "F-AGENT-09"]},
-  {"id": "WP-53", "wave": 4, "title": "Ready to apply UI: /ready, setup wizard, kit review",
-   "owns": ["app/(auth)/ready/","components/features/agent/","hooks/agent/","lib/api/agent.ts","i18n/staging/ready.en.json"],
-   "dependsOn": ["WP-36a"], "namespace": "ready",
-   "catalogIds": ["F-AGENT-01", "F-AGENT-02", "F-AGENT-03", "F-AGENT-04", "F-AGENT-05", "F-AGENT-06", "F-AGENT-08", "F-AGENT-10", "F-AGENT-11", "F-FILT-07"]},
-  {"id": "WP-54", "wave": 4, "title": "People at {company}: outreach drafts, connections import, hiring contacts, GoApply referral-code hub",
-   "owns": ["server/src/features/network/","server/src/features/cn/referrals/","app/(auth)/referrals/","components/features/network/","hooks/network/","lib/api/network.ts","i18n/staging/people.en.json"],
-   "dependsOn": ["WP-16b", "WP-34", "WP-38"], "namespace": "people",
-   "catalogIds": ["F-NET-02", "F-NET-04", "F-NET-05", "F-NET-06", "F-NET-07", "F-NET-08"]},
-  {"id": "WP-55a", "wave": 4, "title": "Extension web side: /ext API, pairing, /extension pages, install prompt, fill button",
-   "owns": ["server/src/features/extension/","app/extension/","components/features/extension/","hooks/extension/","lib/api/extension.ts","i18n/staging/extensionWeb.en.json"],
-   "dependsOn": ["WP-18", "WP-19", "WP-36a", "WP-36b"], "namespace": "extensionWeb",
-   "catalogIds": ["F-EXT-02", "F-EXT-04", "F-EXT-05", "F-EXT-07", "F-EXT-08", "F-TRK-03", "F-ACCT-03"]},
-  {"id": "WP-55b", "wave": 4, "title": "Extension package: MV3, side panel, Greenhouse/Lever/Ashby, no-submit gate, Playwright e2e",
-   "owns": ["extension/","scripts/check-extension-no-submit.mjs","i18n/staging/extension.en.json"],
-   "dependsOn": ["WP-19", "WP-36b"], "namespace": "extension",
-   "catalogIds": ["F-EXT-01", "F-EXT-03", "F-EXT-04"]},
-  {"id": "WP-56", "wave": 4, "title": "SEO: programmatic browse pages, public job pages, sitemaps, robots, llms.txt, job ticker",
-   "owns": ["server/src/features/seo/","app/browse/","app/job/","app/sitemap.xml/","app/sitemaps/","app/llms.txt/","app/api/revalidate/","app/robots.ts","app/sitemap.ts","public/llms.txt","lib/seo.ts","lib/server/publicApi.ts","components/features/seo/","i18n/staging/seo.en.json"],
-   "dependsOn": ["WP-16b", "WP-32", "WP-34", "WP-40"], "namespace": "seo",
-   "catalogIds": ["F-SEO-01", "F-SEO-02", "F-SEO-04", "F-SEO-05", "F-SEO-06", "F-SEO-07", "F-SEO-10", "F-JOB-09", "F-MKT-02", "F-TOOL-05", "F-TRUST-02"]},
-  {"id": "WP-57", "wave": 4, "title": "Free tools: resume check without an account, resume-job matcher, tools hub",
-   "owns": ["server/src/features/tools/","app/tools/","components/features/tools/","i18n/staging/tools.en.json","lib/api/tools.ts"],
-   "dependsOn": ["WP-15", "WP-22"], "namespace": "tools",
-   "catalogIds": ["F-TOOL-01", "F-TOOL-02", "F-TOOL-03"]},
-  {"id": "WP-58", "wave": 4, "title": "GoApply campus calendar + admin curation + deadline reminders",
-   "owns": ["server/src/features/cn/campus/","app/campus/","components/features/campus/","app/(auth)/admin/campus/","i18n/staging/campus.en.json","i18n/staging/campus.zh.json","lib/api/campus.ts"],
-   "dependsOn": ["WP-13", "WP-31", "WP-39a"], "namespace": "campus",
-   "catalogIds": ["F-TOOL-05", "F-SEO-07", "F-NOTIF-08", "F-ORION-12", "CN-L-04"]},
-  {"id": "WP-59", "wave": 4, "title": "Practice questions (question bank), contributions, moderation",
-   "owns": ["server/src/features/prep/","app/(auth)/practice/questions/","app/(auth)/admin/questions/","components/features/prep/","hooks/prep/","lib/api/prep.ts","i18n/staging/practiceQuestions.en.json"],
-   "dependsOn": ["WP-34", "WP-43"], "namespace": "practiceQuestions",
-   "catalogIds": ["F-INT-01", "F-INT-03", "F-INT-02", "F-INT-04", "F-INT-05"]},
-  {"id": "WP-61", "wave": 4, "title": "PWA, web push (RoboApply), announcements",
-   "owns": ["app/manifest.webmanifest/","public/sw.js","server/src/features/push/","server/src/features/announcements/","components/features/pwa/","components/features/notifications/AnnouncementModal.tsx","app/(auth)/admin/announcements/","hooks/pwa/","lib/api/push.ts","i18n/staging/pwa.en.json","lib/api/announcements.ts"],
-   "dependsOn": ["WP-39a"], "namespace": "pwa",
-   "catalogIds": ["F-MOB-03", "F-NOTIF-07", "F-NOTIF-09"]},
-  {"id": "WP-62", "wave": 4, "title": "GoApply payments: WeChat Pay v3 + CNY passes",
-   "owns": ["server/src/platform/billing/rails/wechatpay.ts","server/src/features/billing-cn/","components/features/billing-cn/","i18n/staging/billingCn.en.json","i18n/staging/billingCn.zh.json","lib/api/billingCn.ts"],
-   "dependsOn": ["WP-21a"], "namespace": "billingCn",
-   "catalogIds": ["F-BILL-02", "F-BILL-03", "F-BILL-11", "CN-L-08"]},
-  {"id": "WP-63a", "wave": 4, "title": "Interview per-brand seam (server + live room), recording retention for both brands",
-   "owns": ["server/src/interview-engine/providers/","server/src/interview-engine/config.ts","server/src/interview-engine/livekit/","server/src/interview-engine/sessions/InterviewSessionService.ts","server/src/features/interview/","app/(auth)/practice/[id]/page.tsx","app/(auth)/practice/[id]/live.module.css","components/v3/mock/liveConnection.ts","components/v3/mock/DeviceCheck.tsx","components/v3/mock/DeviceCheck.module.css","components/v3/mock/deviceState.ts","components/v3/mock/YourTile.tsx","components/features/practice/NetworkPrecheck.tsx"],
-   "dependsOn": ["WP-14", "WP-43"], "namespace": null,
-   "catalogIds": ["CN-E-06"]},
-  {"id": "WP-65", "wave": 4, "title": "Resume builder and polish: from-scratch builder, Chinese/TW sections and templates, fit to one page, tour",
-   "owns": ["server/src/features/resume/","server/src/roboapply/v2/routes/resumes.ts","server/src/roboapply/v2/lib/resumeExport.ts","app/(auth)/resume/page.tsx","app/(auth)/resume/[id]/","app/(auth)/resume/new/","components/v3/resume-editor/","components/v3/resumes/","components/features/resume/","hooks/resume/","lib/resumeStructure.ts","lib/api/resumes.ts","i18n/staging/resumeBuilder.en.json"],
-   "dependsOn": ["WP-36b"], "namespace": "resumeBuilder",
-   "catalogIds": ["F-RES-07", "F-RES-12", "F-RES-13", "F-RES-14", "F-RES-17", "TW-04", "F-RES-11"]},
-  {"id": "WP-66", "wave": 4, "title": "GoApply AI-interview practice format: zh question sets, rubric, report",
-   "owns": ["server/src/features/cn/interview/","server/src/interview-engine/catalog/interviewFormats.ts","server/src/interview-engine/scoring/","server/src/roboapply/v2/services/RAInterviewPromptService.ts","components/features/practice-cn/","i18n/staging/practiceCn.en.json","i18n/staging/practiceCn.zh.json"],
-   "dependsOn": ["WP-43"], "namespace": "practiceCn",
-   "catalogIds": ["F-INT-06"]},
-  {"id": "WP-70", "wave": 5, "title": "Extension: remaining international ATS adapters + job-board fit chips",
-   "owns": ["extension/src/adapters/intl/","extension/src/content/boards/","extension/test/intl/"],
-   "dependsOn": ["WP-55b"], "namespace": null,
-   "catalogIds": ["F-EXT-03", "F-EXT-06", "F-EXT-09"]},
-  {"id": "WP-71", "wave": 5, "title": "Extension: GoApply form filling (一键填表) for mainland portals",
-   "owns": ["extension/src/adapters/cn/","extension/src/brands/goapply/","extension/test/cn/","docs/runbooks/edge-addons-publish.md","i18n/staging/extension-cn.en.json","i18n/staging/extension-cn.zh.json"],
-   "dependsOn": ["WP-55b"], "namespace": "extension-cn",
-   "catalogIds": ["F-EXT-01", "F-EXT-02", "F-EXT-03"]},
-  {"id": "WP-72", "wave": 5, "title": "Coaching (roster + booking links), coaching policy",
-   "owns": ["server/src/features/coaching/","app/(auth)/coaching/","app/(auth)/admin/coaches/","components/features/coaching/","hooks/coaching/","lib/api/coaching.ts","content/legal/intl/coaching.md","content/legal/cn/coaching.md","server/src/platform/email/templates/coaching/","i18n/staging/coaching.en.json","server/src/i18n/email/staging/coaching.en.json"],
-   "dependsOn": ["WP-21a", "WP-43"], "namespace": "coaching",
-   "catalogIds": ["F-COACH-01", "F-COACH-02", "F-COACH-05", "F-COACH-03", "F-COACH-04", "F-COACH-06"]},
-  {"id": "WP-73", "wave": 5, "title": "WeChat official-account notices + WeChat share card (GoApply)",
-   "owns": ["server/src/features/notify-cn/","components/features/notify-cn/","i18n/staging/notifyCn.en.json","i18n/staging/notifyCn.zh.json","lib/api/notifyCn.ts"],
-   "dependsOn": ["WP-11", "WP-39a", "WP-58"], "namespace": "notifyCn",
-   "catalogIds": ["F-NOTIF-07", "F-NOTIF-01", "F-JOB-08", "CN-L-08"]},
-  {"id": "WP-74", "wave": 5, "title": "Admin console additions",
-   "owns": ["app/(auth)/admin/page.tsx","app/(auth)/admin/users/","app/(auth)/admin/sessions/","app/(auth)/admin/system/","app/(auth)/admin/reports/","components/v3/admin/","server/src/roboapply/v2/routes/admin.ts","server/src/roboapply/v2/services/RAAdminAnalyticsService.ts","server/src/roboapply/v2/services/RAAdminOperationsService.ts","server/src/features/admin/","hooks/useAdmin.ts","hooks/useAdminOperations.ts","lib/api/admin.ts","lib/api/adminOperations.ts","i18n/staging/admin.en.json"],
-   "dependsOn": ["WP-21a", "WP-41", "WP-42", "WP-50", "WP-58", "WP-59", "WP-61"], "namespace": "admin",
-   "catalogIds": ["F-TRUST-04", "F-NOTIF-09", "F-BILL-01"]},
-  {"id": "WP-75", "wave": 5, "title": "Cleanup: dead V1 engine, dead V2 surfaces, dead frontend, V1 crons",
-   "owns": ["server/src/app.ts","vercel.json","server/src/cron/handlers.ts","server/src/roboapply/schedulers/RoboApplyCronService.ts","server/src/roboapply/v2/routes/index.ts","server/src/roboapply/routes/missions.ts","server/src/roboapply/routes/runs.ts","server/src/roboapply/routes/digest.ts","server/src/roboapply/routes/settings.ts","server/src/roboapply/services/RoboApplyMissionService.ts","server/src/roboapply/services/RoboApplyDailyMatcherService.ts","server/src/roboapply/services/RoboApplyAuthorService.ts","server/src/roboapply/services/RoboApplySubmitterService.ts","server/src/roboapply/services/RoboApplyDigestService.ts","server/src/roboapply/engine/agents/","server/src/roboapply/engine/services/boards/","server/src/roboapply/v2/routes/queue.ts","server/src/roboapply/v2/routes/activity.ts","server/src/roboapply/v2/routes/integrations.ts","server/src/roboapply/v2/services/RAQueueService.ts","server/src/roboapply/v2/services/RAActivityService.ts","server/src/roboapply/v2/services/RAIntegrationsService.ts","server/src/roboapply/v2/lib/v1Bridge.ts","server/src/roboapply/v2/lib/raMockCatalog.ts","server/src/lib/anthropicClientFactory.ts","lib/api/missions.ts","lib/api/runs.ts","lib/api/digest.ts","lib/api/settings.ts","lib/api/types.ts","components/mock-interview/","components/v3/activity/","components/v3/mock/CoachNudge.tsx","components/v3/mock/LiveControls.tsx","components/v3/mock/QuestionCard.tsx","components/v3/mock/ResultsGrid.tsx","components/v3/mock/ResultsTop.tsx","components/v3/mock/sessionStore.ts","hooks/useActivity.ts","hooks/useIntegrations.ts","hooks/useCrossBankDiscover.ts","hooks/useHomeJobs.ts","hooks/useMockInterviews.ts","hooks/usePipeline.ts","lib/hooks/useTracker.ts","lib/hooks/useStatusFunnel.ts","lib/resumeTheme.ts","components/ui/Card.tsx","components/ui/OptionPill.tsx","components/resumes/MenuDropdown.tsx","i18n/staging/clean.remove.json","lib/api/v2/","lib/stub/raV2.stub.ts","server/src/roboapply/v2/routes/onboarding.ts","server/src/roboapply/v2/routes/search.ts","server/src/roboapply/v2/routes/jobs.ts","server/src/roboapply/v2/services/RAOnboardingService.ts","server/src/roboapply/v2/services/RAOnboardingRecommendService.ts","server/src/roboapply/v2/services/RAJobIndexService.ts","components/v3/setup/","hooks/useSetup.ts","hooks/useSetupTrigger.ts","hooks/useJobDetail.ts","hooks/useTodayMatches.ts","server/src/lib/linkedin/"],
-   "dependsOn": ["WP-10", "WP-30", "WP-32", "WP-33", "WP-34", "WP-37", "WP-51"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-76", "wave": 5, "title": "Mainland deployment kit (CN-1 readiness, no deploy)",
-   "owns": ["deploy/cn/","scripts/gen-cn-cronjobs.mjs","__tests__/deploy/",".github/workflows/deploy-cn.yml","docs/runbooks/cn-deploy.md"],
-   "dependsOn": ["FND-6b"], "namespace": null,
-   "catalogIds": ["CN-E-01", "CN-E-02"]},
-  {"id": "WP-77", "wave": 5, "title": "\"You and what employers ask\" (competitiveness report)",
-   "owns": ["server/src/features/match/","components/features/match/","app/(auth)/jobs/report/","hooks/match/","lib/api/match.ts","i18n/staging/competitiveness.en.json"],
-   "dependsOn": ["WP-18", "WP-32"], "namespace": "competitiveness",
-   "catalogIds": ["F-MATCH-04"]},
-  {"id": "WP-78", "wave": 5, "title": "Visitor surfaces: public feed, visitor assistant, logged-out job alerts",
-   "owns": ["server/src/features/visitor/","components/features/visitor/","app/alerts/confirm/","i18n/staging/visitor.en.json","server/src/features/feed/publicRoutes.ts","app/tools/job-alerts/","lib/api/visitor.ts"],
-   "dependsOn": ["WP-39a", "WP-50", "WP-56"], "namespace": "visitor",
-   "catalogIds": ["F-FEED-16", "F-ORION-13", "F-NOTIF-03", "F-TOOL-04"]},
-  {"id": "WP-79", "wave": 5, "title": "Account V2: TOTP 2FA, student pricing, coupons, TWD prices, winback, quarterly suggestion",
-   "owns": ["server/src/features/account-v2/","app/(public)/login/","server/src/roboapply/routes/auth.ts","server/src/platform/billing/","components/features/credits/","components/features/account-v2/","lib/pricing.ts","i18n/staging/accountV2.en.json","lib/api/accountV2.ts"],
-   "dependsOn": ["WP-10", "WP-21a"], "namespace": "accountV2",
-   "catalogIds": ["F-TRUST-07", "F-ACCT-02", "F-BILL-06", "F-BILL-11", "TW-06"]},
-  {"id": "WP-60", "wave": 5, "title": "Invite friends (moved to Wave 5)",
-   "owns": ["server/src/features/growth/","server/src/platform/email/templates/growth/","app/(auth)/invite/","app/r/","components/features/growth/","hooks/growth/","lib/api/growth.ts","i18n/staging/invite.en.json","server/src/i18n/email/staging/growth.en.json","content/legal/intl/referral-terms.md","content/legal/cn/referral-terms.md"],
-   "dependsOn": ["WP-10", "WP-21a", "WP-23"], "namespace": "invite",
-   "catalogIds": ["F-GROW-01", "F-GROW-02"]},
-  {"id": "WP-64", "wave": 5, "title": "Offer comparison (moved to Wave 5)",
-   "owns": ["server/src/features/offers/","components/features/offers/","hooks/offers/","lib/api/offers.ts","i18n/staging/offers.en.json"],
-   "dependsOn": ["WP-38"], "namespace": "offers",
-   "catalogIds": []},
-  {"id": "WP-63b", "wave": 5, "title": "interview-agent: OpenAI-compatible LLM backend + DashScope STT/TTS (GoApply CN-1)",
-   "owns": ["interview-agent/src/agent.ts","interview-agent/src/backends/","interview-agent/src/plugins/dashscope/","interview-agent/deploy/cn/"],
-   "dependsOn": ["WP-63a"], "namespace": null,
-   "catalogIds": ["CN-E-06"]},
-  {"id": "WP-90", "wave": 6, "title": "INT: schema reconciliation + db push #2 (owner confirms)",
-   "owns": ["server/prisma/schema/","server/src/generated/prisma/"],
-   "dependsOn": ["WP-70", "WP-71", "WP-72", "WP-73", "WP-74", "WP-75", "WP-76", "WP-77", "WP-78", "WP-79", "WP-60", "WP-64", "WP-63b"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-91", "wave": 6, "title": "INT: i18n merge + copy-gate finalization",
-   "owns": ["i18n/staging/","i18n/messages/en.json","i18n/brands/","server/src/i18n/email/en.json","extension/src/i18n/en.json","scripts/check-copy.mjs","server/src/i18n/email/staging/"],
-   "dependsOn": ["WP-90"], "namespace": null,
-   "catalogIds": ["TW-08"]},
-  {"id": "WP-92-zh", "wave": 6, "title": "INT: translate zh",
-   "owns": ["i18n/messages/zh.json","server/src/i18n/email/zh.json","extension/src/i18n/zh.json","i18n/brands/goapply/zh.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-92-zh-TW", "wave": 6, "title": "INT: translate zh-TW",
-   "owns": ["i18n/messages/zh-TW.json","server/src/i18n/email/zh-TW.json","extension/src/i18n/zh-TW.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": ["TW-08"]},
-  {"id": "WP-92-ja", "wave": 6, "title": "INT: translate ja",
-   "owns": ["i18n/messages/ja.json","server/src/i18n/email/ja.json","extension/src/i18n/ja.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-92-ko", "wave": 6, "title": "INT: translate ko",
-   "owns": ["i18n/messages/ko.json","server/src/i18n/email/ko.json","extension/src/i18n/ko.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-92-es", "wave": 6, "title": "INT: translate es",
-   "owns": ["i18n/messages/es.json","server/src/i18n/email/es.json","extension/src/i18n/es.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-92-fr", "wave": 6, "title": "INT: translate fr",
-   "owns": ["i18n/messages/fr.json","server/src/i18n/email/fr.json","extension/src/i18n/fr.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-92-pt", "wave": 6, "title": "INT: translate pt",
-   "owns": ["i18n/messages/pt.json","server/src/i18n/email/pt.json","extension/src/i18n/pt.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-92-de", "wave": 6, "title": "INT: translate de",
-   "owns": ["i18n/messages/de.json","server/src/i18n/email/de.json","extension/src/i18n/de.json"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-93", "wave": 6, "title": "INT: final wiring (nav ready flags, prefixes, mounts, crons, registries, env)",
-   "owns": ["components/v3/shell/destinations.ts","lib/proxyPaths.ts","app/robots.ts","next.config.mjs","server/src/features/index.ts","server/src/app.ts","vercel.json","server/src/cron/handlers.ts","components/features/settings/registry.ts","components/features/settings/sectionComponents.ts","components/auth/methods/registry.ts","package.json",".env.example","docs/jobright-clone/TASK_PLAN.md"],
-   "dependsOn": ["WP-91"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-94", "wave": 6, "title": "INT: gates + production build (fixes dispatched as fix WPs)",
-   "owns": [],
-   "dependsOn": ["WP-92-zh", "WP-92-zh-TW", "WP-92-ja", "WP-92-ko", "WP-92-es", "WP-92-fr", "WP-92-pt", "WP-92-de", "WP-93"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-95", "wave": 6, "title": "INT: browser verification - RoboApply",
-   "owns": [],
-   "dependsOn": ["WP-94"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-96", "wave": 6, "title": "INT: browser verification - GoApply",
-   "owns": [],
-   "dependsOn": ["WP-94"], "namespace": null,
-   "catalogIds": []},
-  {"id": "WP-97", "wave": 6, "title": "INT: cleanup of verification data + PR description",
-   "owns": [],
-   "dependsOn": ["WP-95", "WP-96"], "namespace": null,
-   "catalogIds": []}
+ {
+  "id": "FND-1a",
+  "wave": 1,
+  "title": "Pure schema move into server/prisma/schema/ (no DDL change)",
+  "owns": [
+   "server/prisma/schema.prisma",
+   "server/prisma/schema/",
+   "prisma.config.ts",
+   "server/src/generated/prisma/",
+   "__tests__/prisma/schemaMove.test.ts"
+  ],
+  "dependsOn": [],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "FND-1b",
+  "wave": 1,
+  "title": "Every planned model, field, index and back-relation (additive, db push #1)",
+  "owns": [
+   "server/prisma/schema/",
+   "server/prisma/sql/000_extensions.sql",
+   "server/src/generated/prisma/",
+   "__tests__/prisma/"
+  ],
+  "dependsOn": [
+   "FND-1a"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "FND-2a",
+  "wave": 1,
+  "title": "Brand core (server): registry, request context, capabilities, consent helper, test harness, dependencies",
+  "owns": [
+   "server/src/platform/brand/",
+   "server/src/platform/flags.ts",
+   "server/src/platform/consent/",
+   "server/src/features/brand/",
+   "server/src/test/",
+   "server/src/lib/requestContext.ts",
+   "server/src/app.ts",
+   "server/src/middleware/auth.ts",
+   "server/src/lib/cookieOptions.ts",
+   "server/src/roboapply/engine/lib/seekerConsentTypes.ts",
+   "server/src/services/llm/OpenRouterProvider.ts",
+   "server/src/roboapply/v2/agents/",
+   "server/src/roboapply/engine/agents/",
+   "package.json",
+   "package-lock.json"
+  ],
+  "dependsOn": [
+   "FND-1b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "TW-01",
+   "CN-E-02"
+  ]
+ },
+ {
+  "id": "FND-2b",
+  "wave": 1,
+  "title": "Brand core (web): mirror, proxy, root layout, provider, %BRAND% bundles",
+  "owns": [
+   "lib/brand/",
+   "lib/server/brand.ts",
+   "lib/flags.ts",
+   "scripts/gen-brand-mirror.mjs",
+   "__tests__/lib/brandParity.test.ts",
+   "__tests__/lib/brandFromHost.test.ts",
+   "__tests__/lib/brandInvariants.test.ts",
+   "__tests__/lib/brandMetadata.test.tsx",
+   "components/features/brand/WrongBrandNudge.tsx",
+   "components/features/growth/AnalyticsConsent.tsx",
+   "proxy.ts",
+   "app/layout.tsx",
+   "app/providers.tsx",
+   "lib/i18n.ts",
+   "lib/serverLocale.ts",
+   "lib/localeConfig.ts",
+   "lib/api/client.ts",
+   "i18n/messages/",
+   "components/job-search/messages.en.json"
+  ],
+  "dependsOn": [
+   "FND-2a"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "TW-01",
+   "F-MKT-01"
+  ]
+ },
+ {
+  "id": "FND-3",
+  "wave": 1,
+  "title": "Server platform plumbing: queue, rate limits, SSE, HTTP envelope, email core, crons, UI state",
+  "owns": [
+   "server/src/platform/queue/enqueue.ts",
+   "server/src/platform/queue/drain.ts",
+   "server/src/platform/queue/runForBudget.ts",
+   "server/src/platform/queue/index.ts",
+   "server/src/platform/ratelimit/",
+   "server/src/platform/sse.ts",
+   "server/src/platform/http.ts",
+   "server/src/platform/llm/brandPolicy.ts",
+   "server/src/platform/email/EmailService.ts",
+   "server/src/platform/email/i18n.ts",
+   "server/src/platform/email/unsubscribe.ts",
+   "server/src/platform/email/index.ts",
+   "server/src/platform/email/transports/resend.ts",
+   "server/src/platform/email/templates/_shell.ts",
+   "server/src/platform/email/templates/registry.ts",
+   "server/src/i18n/email/",
+   "server/src/features/uistate/",
+   "server/src/features/jobs/ingest/cron.ts",
+   "server/src/features/jobs/ingest/workers.ts",
+   "server/src/features/jobs/enrich/workers.ts",
+   "server/src/features/match/cron.ts",
+   "server/src/features/match/workers.ts",
+   "server/src/features/alerts/cron.ts",
+   "server/src/features/lifecycle/cron.ts",
+   "server/src/features/tracker/cron.ts",
+   "server/src/features/agent/cron.ts",
+   "server/src/features/agent/workers.ts",
+   "server/src/features/seo/cron.ts",
+   "server/src/features/seo/workers.ts",
+   "server/src/features/compliance/cron.ts",
+   "server/src/features/cn/campus/cron.ts",
+   "server/src/features/resume/workers.ts",
+   "server/src/features/notifications/workers.ts",
+   "server/src/cron/handlers.ts",
+   "vercel.json",
+   "server/src/roboapply/schedulers/RoboApplyCronService.ts",
+   "server/src/roboapply/v2/lib/raFeatureCatalog.ts",
+   "server/src/services/EmailService.ts",
+   "server/src/features/compliance/workers.ts",
+   "server/src/features/cn/jobs/workers.ts",
+   "server/src/features/onboarding/workers.ts",
+   "server/src/features/tools/cron.ts",
+   "server/src/features/push/workers.ts",
+   "server/src/features/extension/workers.ts",
+   "server/src/features/copilot/workers.ts",
+   "server/src/features/growth/workers.ts",
+   "server/src/features/network/cron.ts",
+   "server/src/features/interview/cron.ts"
+  ],
+  "dependsOn": [
+   "FND-2a"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-TRUST-03",
+   "F-NOTIF-05",
+   "F-NOTIF-06"
+  ]
+ },
+ {
+  "id": "FND-4",
+  "wave": 1,
+  "title": "Credits + entitlements, plan catalog, preference store (FilterSet), taxonomy v1",
+  "owns": [
+   "server/src/platform/credits/",
+   "server/src/platform/billing/planCatalog.ts",
+   "server/src/features/search/contract.ts",
+   "server/src/features/search/filterSet.ts",
+   "server/src/features/search/SearchProfileService.ts",
+   "server/src/features/search/legacyMigration.ts",
+   "server/src/features/search/index.ts",
+   "server/src/features/jobs/taxonomy/",
+   "i18n/staging/taxonomy.en.json"
+  ],
+  "dependsOn": [
+   "FND-2a"
+  ],
+  "namespace": "taxonomy",
+  "catalogIds": [
+   "F-BILL-01",
+   "F-BILL-09",
+   "F-FEED-03",
+   "F-FEED-13",
+   "F-FILT-01"
+  ]
+ },
+ {
+  "id": "FND-5",
+  "wave": 1,
+  "title": "Server area scaffolding: contracts, stub routers, mounts, public surfaces",
+  "owns": [
+   "server/src/features/index.ts",
+   "server/src/features/jobs/marketHooks.ts",
+   "server/src/features/jobs/sources/atsPublic/hooks.ts",
+   "server/src/platform/queue/registry.ts",
+   "server/src/app.ts",
+   "server/src/features/auth/routes.ts",
+   "server/src/features/auth/contract.ts",
+   "server/src/features/auth/index.ts",
+   "server/src/features/auth-cn/routes.ts",
+   "server/src/features/auth-cn/contract.ts",
+   "server/src/features/auth-cn/index.ts",
+   "server/src/features/compliance/routes.ts",
+   "server/src/features/compliance/contract.ts",
+   "server/src/features/compliance/index.ts",
+   "server/src/features/onboarding/",
+   "server/src/features/onboarding-cn/",
+   "server/src/features/profile/",
+   "server/src/features/search/routes.ts",
+   "server/src/features/feed/",
+   "server/src/features/jobs/import/",
+   "server/src/features/jobs/detail/",
+   "server/src/features/jobs/companies/",
+   "server/src/features/match/routes.ts",
+   "server/src/features/match/contract.ts",
+   "server/src/features/match/index.ts",
+   "server/src/features/copilot/",
+   "server/src/features/resume/routes.ts",
+   "server/src/features/resume/contract.ts",
+   "server/src/features/resume/index.ts",
+   "server/src/features/coverletter/",
+   "server/src/features/tracker/routes.ts",
+   "server/src/features/tracker/contract.ts",
+   "server/src/features/tracker/index.ts",
+   "server/src/features/offers/",
+   "server/src/features/network/",
+   "server/src/features/cn/referrals/",
+   "server/src/features/agent/routes.ts",
+   "server/src/features/agent/contract.ts",
+   "server/src/features/agent/index.ts",
+   "server/src/features/extension/",
+   "server/src/features/credits/",
+   "server/src/features/billing-cn/",
+   "server/src/features/notifications/routes.ts",
+   "server/src/features/notifications/contract.ts",
+   "server/src/features/notifications/index.ts",
+   "server/src/features/alerts/routes.ts",
+   "server/src/features/alerts/contract.ts",
+   "server/src/features/alerts/index.ts",
+   "server/src/features/lifecycle/index.ts",
+   "server/src/features/push/",
+   "server/src/features/announcements/",
+   "server/src/features/growth/",
+   "server/src/features/prep/",
+   "server/src/features/coaching/",
+   "server/src/features/seo/routes.ts",
+   "server/src/features/seo/contract.ts",
+   "server/src/features/seo/index.ts",
+   "server/src/features/tools/",
+   "server/src/features/cn/jobs/",
+   "server/src/features/cn/campus/routes.ts",
+   "server/src/features/cn/campus/contract.ts",
+   "server/src/features/cn/campus/index.ts",
+   "server/src/features/notify-cn/",
+   "server/src/features/support/",
+   "server/src/features/visitor/",
+   "server/src/features/account-v2/",
+   "server/src/features/admin/",
+   "server/src/platform/llm/contentSafety/index.ts"
+  ],
+  "dependsOn": [
+   "FND-2b",
+   "FND-3",
+   "FND-4"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "FND-7",
+  "wave": 1,
+  "title": "Web plumbing: lib/api wrappers, shared hooks, i18n staging + merge script, gates, env",
+  "owns": [
+   "lib/api/onboarding.ts",
+   "lib/api/profile.ts",
+   "lib/api/search.ts",
+   "lib/api/feed.ts",
+   "lib/api/jobs.ts",
+   "lib/api/jobImport.ts",
+   "lib/api/match.ts",
+   "lib/api/copilot.ts",
+   "lib/api/resumes.ts",
+   "lib/api/coverLetters.ts",
+   "lib/api/tracker.ts",
+   "lib/api/network.ts",
+   "lib/api/agent.ts",
+   "lib/api/extension.ts",
+   "lib/api/credits.ts",
+   "lib/api/notifications.ts",
+   "lib/api/push.ts",
+   "lib/api/growth.ts",
+   "lib/api/prep.ts",
+   "lib/api/coaching.ts",
+   "lib/api/tools.ts",
+   "lib/api/campus.ts",
+   "lib/api/offers.ts",
+   "lib/api/compliance.ts",
+   "lib/api/brand.ts",
+   "lib/api/authCn.ts",
+   "lib/api/billingCn.ts",
+   "lib/api/notifyCn.ts",
+   "lib/api/cnJobs.ts",
+   "lib/api/careerSources.ts",
+   "lib/api/visitor.ts",
+   "lib/api/accountV2.ts",
+   "lib/api/support.ts",
+   "lib/api/announcements.ts",
+   "lib/api/uiState.ts",
+   "lib/api/contracts/",
+   "hooks/shared/",
+   "i18n/staging/",
+   "scripts/i18n-merge-staging.mjs",
+   "scripts/check-api-boundary.mjs",
+   "scripts/check-extension-no-submit.mjs",
+   "scripts/check-zh-variants.mjs",
+   "scripts/check-copy.mjs",
+   "scripts/check-design.mjs",
+   "__tests__/fixtures/",
+   "__tests__/contracts/",
+   "lib/i18n.ts",
+   "package.json",
+   "vitest.config.mts",
+   ".env.example",
+   "scripts/api-boundary-baseline.json",
+   "tsconfig.json"
+  ],
+  "dependsOn": [
+   "FND-5"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "FND-6a",
+  "wave": 1,
+  "title": "Web shell, IA, primitives, settings and layout-slot stubs (per brand)",
+  "owns": [
+   "components/v3/shell/Sidebar.tsx",
+   "components/v3/shell/MobileNav.tsx",
+   "components/v3/shell/Topbar.tsx",
+   "components/v3/shell/CommandPalette.tsx",
+   "components/v3/shell/AvatarMenu.tsx",
+   "components/v3/shell/destinations.ts",
+   "components/v3/shell/HybridShell.tsx",
+   "components/v3/shell/MoreSheet.tsx",
+   "app/(auth)/layout.tsx",
+   "app/(onboarding)/layout.tsx",
+   "app/globals.css",
+   "styles/brands/goapply.css",
+   "components/v3/primitives/",
+   "components/features/common/",
+   "components/features/settings/",
+   "app/(auth)/settings/page.tsx",
+   "lib/ui/popupGate.ts",
+   "lib/proxyPaths.ts",
+   "app/robots.ts",
+   "next.config.mjs",
+   "components/auth/methods/registry.ts",
+   "hooks/shared/navBadges.ts",
+   "hooks/feed/useJobsBadge.ts",
+   "hooks/agent/useReadyBadge.ts",
+   "hooks/tracker/useApplicationsBadge.ts",
+   "hooks/profile/useProfileBadge.ts",
+   "i18n/staging/nav.en.json",
+   "components/features/copilot/CopilotRail.tsx",
+   "components/features/notifications/MessageCenterButton.tsx",
+   "components/features/notifications/AnnouncementModal.tsx",
+   "components/features/credits/PlanBadge.tsx",
+   "components/features/extension/InstallPrompt.tsx",
+   "components/features/onboarding/TourOverlay.tsx"
+  ],
+  "dependsOn": [
+   "FND-7"
+  ],
+  "namespace": "nav",
+  "catalogIds": [
+   "F-MOB-03",
+   "F-ACCT-05",
+   "F-NOTIF-06",
+   "F-TRUST-05",
+   "F-ORION-01"
+  ]
+ },
+ {
+  "id": "FND-6b",
+  "wave": 1,
+  "title": "Route shells and seam stubs",
+  "owns": [
+   "app/(auth)/jobs/[id]/",
+   "app/(auth)/jobs/added/",
+   "app/(auth)/jobs/explore/",
+   "app/(auth)/jobs/report/",
+   "app/(auth)/ready/",
+   "app/(auth)/resume/[id]/check/",
+   "app/(auth)/resume/letters/",
+   "app/(auth)/resume/new/",
+   "app/(auth)/practice/questions/",
+   "app/(auth)/profile/",
+   "app/(auth)/assistant/",
+   "app/(auth)/inbox/",
+   "app/(auth)/coaching/",
+   "app/(auth)/referrals/",
+   "app/(auth)/invite/",
+   "app/(auth)/settings/billing/return/",
+   "app/(auth)/admin/credits/",
+   "app/(auth)/admin/campus/",
+   "app/(auth)/admin/fraud/",
+   "app/(auth)/admin/sources/",
+   "app/(auth)/admin/invites/",
+   "app/(auth)/admin/questions/",
+   "app/(auth)/admin/announcements/",
+   "app/(auth)/admin/coaches/",
+   "app/(auth)/admin/system/",
+   "app/(auth)/admin/reports/",
+   "app/(onboarding)/onboarding/",
+   "app/(public)/forgot-password/",
+   "app/(public)/reset-password/",
+   "app/(public)/verify-email/",
+   "app/(public)/bind-phone/",
+   "app/auth/callback/",
+   "app/unsubscribe/",
+   "app/r/",
+   "app/alerts/confirm/",
+   "app/extension/",
+   "app/campus/",
+   "app/job/",
+   "app/browse/",
+   "app/features/",
+   "app/pricing/",
+   "app/tools/",
+   "app/legal/",
+   "app/about/",
+   "app/security/",
+   "app/help/",
+   "app/cancel/",
+   "components/features/credits/OutOfCreditsSheet.tsx",
+   "components/features/onboarding-cn/index.ts",
+   "components/features/network/PeoplePanel.tsx",
+   "components/features/offers/OfferSection.tsx",
+   "components/features/visitor/VisitorFeed.tsx",
+   "components/features/growth/GettingStartedChecklist.tsx",
+   "components/features/market/",
+   "components/features/auth-cn/PhoneMethod.tsx",
+   "components/features/auth-cn/WechatMethod.tsx",
+   "components/features/job/JobDetailPanel.tsx",
+   "components/features/job/index.ts",
+   "components/features/offers/OfferComparison.tsx",
+   "components/features/extension/FillWithExtensionButton.tsx",
+   "components/features/coaching/PracticeReportCoachLine.tsx",
+   "components/features/notify-cn/SubscribeOnTap.tsx",
+   "components/features/practice-cn/CnReport.tsx"
+  ],
+  "dependsOn": [
+   "FND-6a"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-10",
+  "wave": 2,
+  "title": "Auth core: email/password, Google, LINE seam, reset, verification, account safety",
+  "owns": [
+   "server/src/roboapply/routes/auth.ts",
+   "server/src/roboapply/routes/account.ts",
+   "server/src/roboapply/engine/services/SeekerAuthService.ts",
+   "server/src/roboapply/services/SeekerAccountDataWipeService.ts",
+   "server/src/roboapply/services/SeekerAccountPurgeService.ts",
+   "server/src/roboapply/services/accountPurgeHelpers.ts",
+   "server/src/features/auth/",
+   "server/src/platform/email/templates/auth/",
+   "app/(public)/layout.tsx",
+   "app/(public)/login/",
+   "app/(public)/signup/",
+   "app/(public)/forgot-password/",
+   "app/(public)/reset-password/",
+   "app/(public)/verify-email/",
+   "app/auth/callback/google/",
+   "app/auth/callback/line/",
+   "components/auth/",
+   "components/RoboApplyAccessGate.tsx",
+   "components/v3/account/security.tsx",
+   "components/v3/account/deleteAccountModal.tsx",
+   "components/v3/preferences/sections/IdentitySection.tsx",
+   "components/v3/preferences/sections/DangerSection.tsx",
+   "components/v3/preferences/WipeDataModal.tsx",
+   "components/features/auth/",
+   "lib/api/auth.ts",
+   "lib/auth/",
+   "hooks/auth/",
+   "i18n/staging/auth.en.json",
+   "server/src/i18n/email/staging/auth.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "auth",
+  "catalogIds": [
+   "F-ACCT-01",
+   "F-ACCT-02",
+   "F-ACCT-06",
+   "F-ONB-11",
+   "F-ONB-02",
+   "F-TRUST-01",
+   "F-NOTIF-05",
+   "TW-05",
+   "F-ONB-12"
+  ]
+ },
+ {
+  "id": "WP-11",
+  "wave": 2,
+  "title": "GoApply auth: phone OTP, WeChat seams, bind-phone, phone change, invite codes",
+  "owns": [
+   "server/src/features/auth-cn/",
+   "server/src/platform/sms/",
+   "components/features/auth-cn/",
+   "app/auth/callback/wechat/",
+   "app/(public)/bind-phone/",
+   "app/(auth)/admin/invites/",
+   "i18n/staging/authCn.en.json",
+   "i18n/staging/authCn.zh.json",
+   "lib/api/authCn.ts"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "authCn",
+  "catalogIds": [
+   "F-ACCT-01",
+   "F-ACCT-02",
+   "F-NOTIF-10",
+   "F-ONB-11",
+   "F-MOB-06",
+   "CN-L-07",
+   "CN-L-08"
+  ]
+ },
+ {
+  "id": "WP-12",
+  "wave": 2,
+  "title": "Brand presentation + Taiwan copy guard",
+  "owns": [
+   "styles/brands/",
+   "public/brands/",
+   "components/chrome/BrandSymbol.tsx",
+   "components/chrome/Logo.tsx",
+   "components/v3/shell/BrandLogo.tsx",
+   "components/v3/shell/LanguageSwitcher.tsx",
+   "components/landing/LanguageMenu.tsx",
+   "components/features/brand/",
+   "components/v3/preferences/sections/AppearanceSection.tsx",
+   "scripts/check-zh-variants.mjs",
+   "i18n/glossary/",
+   "__tests__/brand/",
+   "i18n/staging/brand.en.json",
+   "lib/api/brand.ts"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "brand",
+  "catalogIds": [
+   "F-MKT-01",
+   "CN-E-02",
+   "CN-E-04",
+   "TW-01",
+   "TW-08"
+  ]
+ },
+ {
+  "id": "WP-13",
+  "wave": 2,
+  "title": "Compliance: consents, legal documents, PI requests, AI labelling, legal footer",
+  "owns": [
+   "server/src/features/compliance/",
+   "app/legal/",
+   "content/legal/intl/terms.md",
+   "content/legal/intl/privacy.md",
+   "content/legal/intl/cookies.md",
+   "content/legal/intl/refunds.md",
+   "content/legal/intl/subscription-terms.md",
+   "content/legal/intl/ai-disclosure.md",
+   "content/legal/intl/tw-pdpa-notice.md",
+   "content/legal/cn/user-agreement.md",
+   "content/legal/cn/privacy.md",
+   "content/legal/cn/pi-collection-list.md",
+   "content/legal/cn/third-party-sharing.md",
+   "content/legal/cn/ai-content-labels.md",
+   "content/legal/cn/complaints.md",
+   "components/features/compliance/",
+   "components/features/market/LegalFooter.tsx",
+   "components/features/market/AiGeneratedBadge.tsx",
+   "components/v3/preferences/sections/PrivacySection.tsx",
+   "i18n/staging/legal.en.json",
+   "i18n/staging/legal.zh.json",
+   "lib/api/compliance.ts"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "legal",
+  "catalogIds": [
+   "F-MKT-04",
+   "F-TRUST-06",
+   "F-TRUST-08",
+   "F-ACCT-06",
+   "CN-E-04",
+   "CN-E-07",
+   "CN-L-09",
+   "TW-07"
+  ]
+ },
+ {
+  "id": "WP-14",
+  "wave": 2,
+  "title": "LLM: per-brand routing, domestic adapters, egress guards (both directions), streaming with tools, cost table",
+  "owns": [
+   "server/src/services/llm/",
+   "server/src/lib/llm/",
+   "server/src/lib/byokService.ts",
+   "scripts/verify-llm-brand.ts",
+   "server/src/platform/llm/brandPolicy.ts",
+   "server/src/platform/llm/egressPolicy.ts",
+   "server/src/platform/llm/index.ts",
+   "server/src/lib/modelCostTable.ts",
+   "server/src/lib/modelPricing.ts",
+   "server/src/lib/modelCostTable.test.ts"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "CN-E-03",
+   "F-ORION-01",
+   "F-ORION-04"
+  ]
+ },
+ {
+  "id": "WP-15",
+  "wave": 2,
+  "title": "Residency: per-brand storage, parse routing, PII redaction, deploy assertions, CN email transport",
+  "owns": [
+   "server/src/platform/residency/",
+   "server/src/platform/pii/",
+   "server/src/platform/email/transports/aliyunDirectMail.ts",
+   "server/src/services/ResumeOriginalFileStorageService.ts",
+   "server/src/services/GoHireResumeParseService.ts"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "CN-E-01",
+   "CN-E-02",
+   "F-TRUST-06",
+   "TW-07"
+  ]
+ },
+ {
+  "id": "WP-16a",
+  "wave": 2,
+  "title": "Inventory normalizers: title/company, geo, pay, seniority, dedupe keys (pure functions)",
+  "owns": [
+   "server/src/features/jobs/normalize/",
+   "server/src/features/jobs/geo/",
+   "server/src/features/jobs/data/",
+   "server/src/features/jobs/taxonomy/"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-SAL-01",
+   "TW-03",
+   "F-FEED-15"
+  ]
+ },
+ {
+  "id": "WP-16b",
+  "wave": 2,
+  "title": "Inventory pipeline: planner, ingest, upsert, dedupe, companies, bank sync, maintenance",
+  "owns": [
+   "server/src/features/jobs/ingest/",
+   "server/src/features/jobs/companies/",
+   "server/src/features/jobs/sources/index.ts",
+   "server/src/features/jobs/sources/types.ts",
+   "server/src/roboapply/v2/lib/raRapidApiJobs.ts",
+   "server/src/roboapply/v2/lib/raFantasticJobs.ts",
+   "server/src/roboapply/v2/lib/raJobProviders.ts",
+   "server/src/roboapply/v2/lib/raBankClients.ts",
+   "server/src/roboapply/v2/lib/raBankProviders.ts",
+   "server/src/roboapply/v2/lib/raExternalJobTypes.ts",
+   "server/src/roboapply/v2/lib/raCrossBankMatch.ts",
+   "server/src/roboapply/v2/services/RACrossBankSearchService.ts",
+   "server/src/roboapply/v2/agents/RACrossBankExplorerAgent.ts",
+   "server/src/roboapply/v2/agents/RACrossBankInsightAgent.ts",
+   "server/src/job-search/validation.ts",
+   "server/src/job-search/agent.ts"
+  ],
+  "dependsOn": [
+   "WP-16a"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-FEED-15",
+   "F-FEED-04",
+   "F-JOB-04",
+   "CN-E-05",
+   "F-FILT-04"
+  ]
+ },
+ {
+  "id": "WP-17",
+  "wave": 2,
+  "title": "Enrichment: one structured LLM call per job, keywords, sponsorship quotes",
+  "owns": [
+   "server/src/features/jobs/enrich/"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-FEED-15",
+   "F-MATCH-03",
+   "F-FEED-07",
+   "F-FILT-02",
+   "TW-09",
+   "F-TRUST-04"
+  ]
+ },
+ {
+  "id": "WP-18",
+  "wave": 2,
+  "title": "Fit scoring: pre-score, scorer v3, tiers, precompute, fit analysis, keyword rows",
+  "owns": [
+   "server/src/features/match/",
+   "server/src/roboapply/v2/agents/RAJobMatchScorerAgent.ts",
+   "server/src/roboapply/v2/routes/jobs.ts",
+   "components/features/match/",
+   "hooks/match/",
+   "lib/api/match.ts",
+   "i18n/staging/fit.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "fit",
+  "catalogIds": [
+   "F-MATCH-01",
+   "F-MATCH-02",
+   "F-MATCH-03",
+   "F-MATCH-05",
+   "F-ORION-03",
+   "F-RES-08",
+   "F-FEED-06",
+   "TW-09"
+  ]
+ },
+ {
+  "id": "WP-19",
+  "wave": 2,
+  "title": "Profile: page, education/experience/skills, work authorization, sensitive answers, resume sync, TW/CN fields",
+  "owns": [
+   "server/src/features/profile/",
+   "server/src/features/tw/",
+   "app/(auth)/profile/",
+   "components/features/profile/",
+   "hooks/profile/",
+   "lib/api/profile.ts",
+   "i18n/staging/profile.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "profile",
+  "catalogIds": [
+   "F-ACCT-03",
+   "F-ACCT-04",
+   "F-RES-01",
+   "F-NET-01",
+   "TW-04",
+   "TW-09"
+  ]
+ },
+ {
+  "id": "WP-20",
+  "wave": 2,
+  "title": "Filters and saved searches (preference store UI + API)",
+  "owns": [
+   "server/src/features/search/",
+   "server/src/roboapply/v2/routes/preferences.ts",
+   "server/src/roboapply/v2/routes/goal.ts",
+   "server/src/roboapply/v2/services/RAPreferencesService.ts",
+   "server/src/roboapply/v2/services/RACareerGoalService.ts",
+   "components/features/filters/",
+   "components/features/search/",
+   "components/v3/preferences/sections/HuntSection.tsx",
+   "hooks/search/",
+   "hooks/usePreferences.ts",
+   "hooks/useGoal.ts",
+   "lib/api/search.ts",
+   "i18n/staging/filters.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "filters",
+  "catalogIds": [
+   "F-FILT-01",
+   "F-FILT-02",
+   "F-FILT-03",
+   "F-FILT-04",
+   "F-FILT-05",
+   "F-FILT-06",
+   "F-FEED-03",
+   "F-FEED-04",
+   "F-FEED-11",
+   "TW-09"
+  ]
+ },
+ {
+  "id": "WP-21a",
+  "wave": 2,
+  "title": "Billing server: rails (registerRail, fulfilPass), credits API, plans, renewals, refunds, cancel, admin caps, TW reference price",
+  "owns": [
+   "server/src/platform/credits/",
+   "server/src/platform/billing/",
+   "server/src/features/credits/",
+   "server/src/roboapply/routes/billing.ts",
+   "server/src/roboapply/routes/stripeWebhook.ts",
+   "server/src/roboapply/services/RoboApplyBillingService.ts",
+   "server/src/roboapply/services/RoboApplyBillingReminderService.ts",
+   "server/src/roboapply/lib/billingEmails.ts",
+   "server/src/roboapply/lib/invoiceReceipt.ts",
+   "server/src/lib/billingRegion.ts",
+   "server/src/lib/mockCreditService.ts",
+   "server/src/lib/mockInterviewPlans.ts",
+   "server/src/lib/rateCard.ts",
+   "server/src/platform/email/templates/billing/",
+   "server/src/i18n/email/staging/billing.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-BILL-01",
+   "F-BILL-03",
+   "F-BILL-05",
+   "F-BILL-07",
+   "F-BILL-08",
+   "F-BILL-09",
+   "F-BILL-11",
+   "TW-06"
+  ]
+ },
+ {
+  "id": "WP-21b",
+  "wave": 2,
+  "title": "Billing UI: plan sheet, credits views, out-of-credits sheet, cancel page, price reference",
+  "owns": [
+   "components/v3/account/billing.tsx",
+   "components/v3/account/billingHistory.tsx",
+   "components/v3/account/planCatalog.tsx",
+   "components/v3/account/sections.tsx",
+   "components/v3/account/usage.tsx",
+   "components/v3/account/format.ts",
+   "components/v3/account/index.ts",
+   "components/features/credits/",
+   "components/features/market/PriceReference.tsx",
+   "hooks/useAccount.ts",
+   "hooks/credits/",
+   "lib/pricing.ts",
+   "lib/serverMarket.ts",
+   "lib/api/account.ts",
+   "lib/api/credits.ts",
+   "app/(auth)/settings/billing/",
+   "app/(auth)/admin/credits/",
+   "app/cancel/",
+   "i18n/staging/credits.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "credits",
+  "catalogIds": [
+   "F-BILL-02",
+   "F-BILL-03",
+   "F-BILL-04",
+   "F-BILL-06"
+  ]
+ },
+ {
+  "id": "WP-22",
+  "wave": 2,
+  "title": "Resume check: grade, issues, fix panel, re-check, keyword report endpoint",
+  "owns": [
+   "server/src/roboapply/v2/routes/resumes.ts",
+   "server/src/features/resume/",
+   "server/src/roboapply/v2/services/RAResumeService.ts",
+   "server/src/roboapply/v2/services/RAResumeAIService.ts",
+   "server/src/roboapply/v2/agents/RAResumeRewriteAgent.ts",
+   "server/src/roboapply/v2/lib/raResumeAIMessages.ts",
+   "app/(auth)/resume/",
+   "components/v3/resume-editor/",
+   "components/features/resume/",
+   "components/v3/preferences/sections/ResumeSection.tsx",
+   "hooks/resume/",
+   "lib/resumeAnalyzer.ts",
+   "lib/api/resumes.ts",
+   "i18n/staging/resumeCheck.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "resumeCheck",
+  "catalogIds": [
+   "F-RES-02",
+   "F-RES-03",
+   "F-RES-04",
+   "F-RES-05",
+   "F-RES-06",
+   "F-RES-08"
+  ]
+ },
+ {
+  "id": "WP-23",
+  "wave": 2,
+  "title": "First-party events, attribution, getting-started checklist",
+  "owns": [
+   "server/src/features/growth/",
+   "lib/analytics.ts",
+   "components/features/growth/",
+   "hooks/growth/",
+   "lib/api/growth.ts",
+   "i18n/staging/growth.en.json"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": "growth",
+  "catalogIds": [
+   "F-GROW-03",
+   "F-GROW-05",
+   "F-ONB-02",
+   "F-GROW-07"
+  ]
+ },
+ {
+  "id": "WP-24",
+  "wave": 2,
+  "title": "GoApply generative-AI content safety (keyword list + Aliyun Green, fail-closed)",
+  "owns": [
+   "server/src/platform/llm/contentSafety/"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "CN-L-05"
+  ]
+ },
+ {
+  "id": "WP-30",
+  "wave": 3,
+  "title": "Onboarding: server stage machine + RoboApply screens O1-O8",
+  "owns": [
+   "server/src/features/onboarding/",
+   "server/src/roboapply/v2/routes/onboarding.ts",
+   "server/src/roboapply/v2/services/RAOnboardingService.ts",
+   "server/src/roboapply/v2/services/RAOnboardingRecommendService.ts",
+   "server/src/roboapply/v2/agents/RAOnboardingResumeSeedAgent.ts",
+   "server/src/roboapply/v2/agents/RAOnboardingPrefExtractAgent.ts",
+   "app/(onboarding)/",
+   "components/features/onboarding/",
+   "hooks/onboarding/",
+   "lib/api/onboarding.ts",
+   "i18n/staging/onboarding.en.json"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-18",
+   "WP-19",
+   "WP-20",
+   "WP-22",
+   "WP-23"
+  ],
+  "namespace": "onboarding",
+  "catalogIds": [
+   "F-ONB-01",
+   "F-ONB-02",
+   "F-ONB-03",
+   "F-ONB-04",
+   "F-ONB-05",
+   "F-ONB-06",
+   "F-ONB-07",
+   "F-ONB-08",
+   "F-ONB-09",
+   "F-ONB-10",
+   "F-SAL-02",
+   "F-NET-01",
+   "F-FEED-09",
+   "F-RES-03"
+  ]
+ },
+ {
+  "id": "WP-31",
+  "wave": 3,
+  "title": "GoApply onboarding: G1-G7 and campus-first landing",
+  "owns": [
+   "server/src/features/onboarding-cn/",
+   "components/features/onboarding-cn/",
+   "i18n/staging/onboardingCn.en.json",
+   "i18n/staging/onboardingCn.zh.json"
+  ],
+  "dependsOn": [
+   "WP-11",
+   "WP-13",
+   "WP-16b",
+   "WP-19",
+   "WP-20"
+  ],
+  "namespace": "onboardingCn",
+  "catalogIds": [
+   "F-ONB-03",
+   "F-ONB-04",
+   "F-ONB-06",
+   "F-ONB-07",
+   "F-ONB-09",
+   "F-ONB-10",
+   "F-SAL-02",
+   "F-ACCT-03"
+  ]
+ },
+ {
+  "id": "WP-32",
+  "wave": 3,
+  "title": "Feed API: indexed retrieval, ranking, sessions, counts, diagnostics, feedback loop",
+  "owns": [
+   "server/src/features/feed/",
+   "server/src/roboapply/v2/routes/search.ts",
+   "server/src/roboapply/v2/services/RAJobIndexService.ts"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-17",
+   "WP-18",
+   "WP-20"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-FEED-01",
+   "F-FEED-02",
+   "F-FEED-04",
+   "F-FEED-07",
+   "F-FEED-09",
+   "F-FEED-10",
+   "F-FEED-11",
+   "F-FEED-12",
+   "F-FEED-13",
+   "F-FEED-14",
+   "F-FEED-17",
+   "F-TRUST-04",
+   "F-FILT-01",
+   "F-FILT-02",
+   "F-FILT-03",
+   "F-FILT-04",
+   "F-FILT-05"
+  ]
+ },
+ {
+  "id": "WP-33",
+  "wave": 3,
+  "title": "Feed UI: /jobs workspace, cards, split detail, Explore, calibration",
+  "owns": [
+   "app/(auth)/jobs/page.tsx",
+   "app/(auth)/jobs/explore/",
+   "app/(auth)/job-search/page.tsx",
+   "components/v3/today/",
+   "components/features/feed/",
+   "components/job-search/JobSearchWorkspace.tsx",
+   "components/job-search/JobResultCard.tsx",
+   "hooks/feed/",
+   "hooks/useTodayMatches.ts",
+   "lib/api/feed.ts",
+   "i18n/staging/jobs.en.json"
+  ],
+  "dependsOn": [
+   "WP-18",
+   "WP-20",
+   "WP-21b",
+   "WP-23"
+  ],
+  "namespace": "jobs",
+  "catalogIds": [
+   "F-FEED-01",
+   "F-FEED-02",
+   "F-FEED-05",
+   "F-FEED-06",
+   "F-FEED-07",
+   "F-FEED-09",
+   "F-FEED-10",
+   "F-FEED-11",
+   "F-FEED-12",
+   "F-FEED-13",
+   "F-FEED-17",
+   "F-MATCH-05",
+   "F-GROW-07",
+   "F-SAL-01",
+   "F-TRK-01",
+   "F-TRK-03"
+  ]
+ },
+ {
+  "id": "WP-34",
+  "wave": 3,
+  "title": "Job detail, company tab, similar jobs, apply flow, People deep links",
+  "owns": [
+   "server/src/features/jobs/detail/",
+   "server/src/roboapply/v2/routes/jobs.ts",
+   "app/(auth)/jobs/[id]/",
+   "components/features/job/",
+   "components/features/company/",
+   "hooks/job/",
+   "hooks/useJobDetail.ts",
+   "lib/api/jobs.ts",
+   "i18n/staging/jobDetail.en.json"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-18",
+   "WP-21b",
+   "WP-22"
+  ],
+  "namespace": "jobDetail",
+  "catalogIds": [
+   "F-JOB-01",
+   "F-JOB-02",
+   "F-JOB-03",
+   "F-JOB-04",
+   "F-JOB-05",
+   "F-JOB-06",
+   "F-JOB-07",
+   "F-JOB-08",
+   "F-NET-02",
+   "F-NET-03",
+   "F-RES-08",
+   "F-TRK-03",
+   "F-MATCH-02",
+   "F-MATCH-03"
+  ]
+ },
+ {
+  "id": "WP-35",
+  "wave": 3,
+  "title": "Added by you: external job import",
+  "owns": [
+   "server/src/features/jobs/import/",
+   "app/(auth)/jobs/added/",
+   "components/features/jobimport/",
+   "hooks/jobimport/",
+   "lib/api/jobImport.ts",
+   "i18n/staging/jobImport.en.json"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-17",
+   "WP-21a"
+  ],
+  "namespace": "jobImport",
+  "catalogIds": [
+   "F-TRK-04",
+   "F-EXT-09",
+   "F-JOB-04"
+  ]
+ },
+ {
+  "id": "WP-36a",
+  "wave": 3,
+  "title": "Tailoring v2: tailor sessions, claim verification, tailor flow UI",
+  "owns": [
+   "server/src/features/resume/",
+   "server/src/roboapply/v2/services/RAResumeAIService.ts",
+   "server/src/roboapply/v2/agents/RAResumeTailorAgent.ts",
+   "server/src/roboapply/v2/agents/RAResumeRewriteAgent.ts",
+   "server/src/roboapply/v2/lib/raResumeSeed.ts",
+   "server/src/roboapply/v2/lib/raResumeAIMessages.ts",
+   "components/features/tailor/",
+   "hooks/tailor/",
+   "i18n/staging/tailor.en.json"
+  ],
+  "dependsOn": [
+   "WP-13",
+   "WP-18",
+   "WP-22"
+  ],
+  "namespace": "tailor",
+  "catalogIds": [
+   "F-RES-09",
+   "F-RES-10",
+   "F-RES-15",
+   "CN-E-07"
+  ]
+ },
+ {
+  "id": "WP-36b",
+  "wave": 3,
+  "title": "Resume hub, templates/layout, export with file record, CJK fonts",
+  "owns": [
+   "server/src/roboapply/v2/routes/resumes.ts",
+   "server/src/roboapply/v2/services/RAResumeService.ts",
+   "server/src/roboapply/v2/lib/resumeExport.ts",
+   "server/assets/fonts/",
+   "app/(auth)/resume/page.tsx",
+   "app/(auth)/resume/[id]/",
+   "components/v3/resume-editor/",
+   "components/v3/resumes/",
+   "components/resumes/",
+   "components/features/resume/",
+   "hooks/useResumes.ts",
+   "hooks/resume/",
+   "lib/resumeStructure.ts",
+   "lib/resumeDownload.ts",
+   "lib/resumeAnalyzer.ts",
+   "lib/api/resumes.ts",
+   "i18n/staging/resume.en.json"
+  ],
+  "dependsOn": [
+   "WP-13",
+   "WP-22"
+  ],
+  "namespace": "resume",
+  "catalogIds": [
+   "F-RES-02",
+   "F-RES-12",
+   "F-RES-13",
+   "CN-E-07",
+   "TW-04"
+  ]
+ },
+ {
+  "id": "WP-37",
+  "wave": 3,
+  "title": "Cover letters",
+  "owns": [
+   "server/src/features/coverletter/",
+   "app/(auth)/resume/letters/",
+   "components/features/coverletter/",
+   "hooks/coverletter/",
+   "lib/api/coverLetters.ts",
+   "i18n/staging/coverLetter.en.json"
+  ],
+  "dependsOn": [
+   "WP-14",
+   "WP-21a"
+  ],
+  "namespace": "coverLetter",
+  "catalogIds": [
+   "F-CL-01",
+   "F-CL-02"
+  ]
+ },
+ {
+  "id": "WP-38",
+  "wave": 3,
+  "title": "Applications tracker: views, drawer, events, files sent, reminders data, GoApply stages",
+  "owns": [
+   "server/src/features/tracker/",
+   "server/src/features/cn/tracker/",
+   "server/src/roboapply/v2/routes/tracker.ts",
+   "server/src/roboapply/v2/routes/insights.ts",
+   "server/src/roboapply/v2/services/RATrackerService.ts",
+   "server/src/roboapply/v2/services/RAInsightService.ts",
+   "server/src/roboapply/v2/agents/RACareerInsightAgent.ts",
+   "app/(auth)/applications/",
+   "components/v3/pipeline/",
+   "components/features/tracker/",
+   "hooks/usePipelineBoard.ts",
+   "hooks/tracker/",
+   "lib/api/tracker.ts",
+   "i18n/staging/applications.en.json"
+  ],
+  "dependsOn": [
+   "WP-10"
+  ],
+  "namespace": "applications",
+  "catalogIds": [
+   "F-TRK-01",
+   "F-TRK-02",
+   "F-TRK-03",
+   "F-NOTIF-08",
+   "F-JOB-07"
+  ]
+ },
+ {
+  "id": "WP-39a",
+  "wave": 3,
+  "title": "Notification delivery: alerts, reminders runner, lifecycle (incl. Tips and reminders), email templates, delivery channels",
+  "owns": [
+   "server/src/features/alerts/",
+   "server/src/features/lifecycle/",
+   "server/src/features/notifications/workers.ts",
+   "server/src/platform/email/templates/notify/",
+   "server/src/services/EmailService.ts",
+   "server/src/i18n/email/staging/notify.en.json"
+  ],
+  "dependsOn": [
+   "WP-20",
+   "WP-21a"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-NOTIF-01",
+   "F-NOTIF-02",
+   "F-NOTIF-04",
+   "F-NOTIF-05",
+   "F-NOTIF-08"
+  ]
+ },
+ {
+  "id": "WP-39b",
+  "wave": 3,
+  "title": "Message center, unsubscribe and notification settings",
+  "owns": [
+   "server/src/features/notifications/routes.ts",
+   "server/src/features/notifications/service.ts",
+   "server/src/features/notifications/unsubscribe.ts",
+   "server/src/features/notifications/contract.ts",
+   "server/src/features/notifications/index.ts",
+   "server/src/features/notifications/__tests__/",
+   "app/(auth)/inbox/",
+   "app/unsubscribe/",
+   "components/features/notifications/",
+   "components/v3/preferences/sections/NotifSection.tsx",
+   "hooks/notifications/",
+   "lib/api/notifications.ts",
+   "i18n/staging/inbox.en.json"
+  ],
+  "dependsOn": [
+   "WP-20"
+  ],
+  "namespace": "inbox",
+  "catalogIds": [
+   "F-NOTIF-01",
+   "F-NOTIF-06",
+   "F-NET-09"
+  ]
+ },
+ {
+  "id": "WP-40",
+  "wave": 3,
+  "title": "Marketing site per brand: home, feature pages, pricing page, about/security/help, support form",
+  "owns": [
+   "components/landing/",
+   "app/page.tsx",
+   "app/[locale]/page.tsx",
+   "app/features/",
+   "app/pricing/",
+   "app/about/",
+   "app/security/",
+   "app/help/",
+   "lib/seo.ts",
+   "components/features/marketing/",
+   "server/src/features/support/",
+   "i18n/staging/landing.en.json",
+   "i18n/staging/landing.zh.json",
+   "lib/api/support.ts"
+  ],
+  "dependsOn": [
+   "WP-12",
+   "WP-21b"
+  ],
+  "namespace": "landing",
+  "catalogIds": [
+   "F-MKT-01",
+   "F-MKT-02",
+   "F-MKT-03",
+   "F-MKT-04",
+   "F-BILL-02",
+   "F-TRUST-01",
+   "F-TRUST-07",
+   "F-TOOL-05"
+  ]
+ },
+ {
+  "id": "WP-41",
+  "wave": 3,
+  "title": "GoApply jobs: recruitment-info mode, GoHire honesty fields, anti-fraud, market tags, deep links",
+  "owns": [
+   "server/src/features/cn/jobs/",
+   "components/features/market/cn/",
+   "app/(auth)/admin/fraud/",
+   "i18n/staging/jobsCn.en.json",
+   "i18n/staging/jobsCn.zh.json",
+   "lib/api/cnJobs.ts"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-17"
+  ],
+  "namespace": "jobsCn",
+  "catalogIds": [
+   "CN-E-05",
+   "CN-E-08",
+   "F-FEED-07",
+   "F-FEED-12",
+   "F-FEED-15",
+   "F-SAL-01",
+   "CN-L-04"
+  ]
+ },
+ {
+  "id": "WP-42",
+  "wave": 3,
+  "title": "Taiwan inventory: public ATS job-board connectors, TW open-data spike, TW card meta",
+  "owns": [
+   "server/src/features/jobs/sources/atsPublic/",
+   "server/src/features/jobs/sources/twOpenData.ts",
+   "components/features/market/tw/",
+   "app/(auth)/admin/sources/",
+   "i18n/staging/jobsTw.en.json",
+   "lib/api/careerSources.ts"
+  ],
+  "dependsOn": [
+   "WP-16b"
+  ],
+  "namespace": "jobsTw",
+  "catalogIds": [
+   "TW-02",
+   "TW-03",
+   "F-FEED-15",
+   "TW-09"
+  ]
+ },
+ {
+  "id": "WP-43",
+  "wave": 3,
+  "title": "Practice from any job, first practice free, report-end next step, text-only on GoApply",
+  "owns": [
+   "app/(auth)/practice/page.tsx",
+   "app/(auth)/practice/[id]/report/",
+   "components/v3/mock/PracticeSetupFlow.tsx",
+   "components/v3/mock/PracticeSetupFlow.module.css",
+   "components/v3/mock/MarketRequirementsPanel.tsx",
+   "server/src/interview-engine/routes/externalRoutes.ts",
+   "server/src/interview-engine/sessions/InterviewSessionService.ts",
+   "lib/api/interviewEngine.ts",
+   "i18n/staging/practice.en.json",
+   "components/features/practice/"
+  ],
+  "dependsOn": [
+   "WP-10",
+   "WP-21a"
+  ],
+  "namespace": "practice",
+  "catalogIds": [
+   "F-INT-06",
+   "F-COACH-05"
+  ]
+ },
+ {
+  "id": "WP-50",
+  "wave": 4,
+  "title": "Assistant API: threads, streaming turns, tools, proposals, guardrails, memory",
+  "owns": [
+   "server/src/features/copilot/"
+  ],
+  "dependsOn": [
+   "WP-14",
+   "WP-18",
+   "WP-20",
+   "WP-32",
+   "WP-34",
+   "WP-35",
+   "WP-36a",
+   "WP-37",
+   "WP-38"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-ORION-01",
+   "F-ORION-02",
+   "F-ORION-03",
+   "F-ORION-04",
+   "F-ORION-05",
+   "F-ORION-07",
+   "F-ORION-08",
+   "F-ORION-09",
+   "F-ORION-10",
+   "F-ORION-12",
+   "F-RES-11",
+   "F-ORION-11"
+  ]
+ },
+ {
+  "id": "WP-51",
+  "wave": 4,
+  "title": "Assistant UI: rail, full page, cards, chips, cheatsheet, memory settings",
+  "owns": [
+   "app/(auth)/assistant/",
+   "components/features/copilot/",
+   "components/chat/",
+   "components/ui/StreamingText.tsx",
+   "hooks/copilot/",
+   "lib/api/copilot.ts",
+   "i18n/staging/assistant.en.json"
+  ],
+  "dependsOn": [
+   "WP-33",
+   "WP-34"
+  ],
+  "namespace": "assistant",
+  "catalogIds": [
+   "F-ORION-01",
+   "F-ORION-02",
+   "F-ORION-04",
+   "F-ORION-05",
+   "F-ORION-06",
+   "F-ORION-10",
+   "F-ORION-12",
+   "F-FEED-09"
+  ]
+ },
+ {
+  "id": "WP-52",
+  "wave": 4,
+  "title": "Ready to apply API: settings, setup, weekly list, kit preparation, state machine, answer bank",
+  "owns": [
+   "server/src/features/agent/"
+  ],
+  "dependsOn": [
+   "WP-19",
+   "WP-32",
+   "WP-36a",
+   "WP-37",
+   "WP-38"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-AGENT-01",
+   "F-AGENT-02",
+   "F-AGENT-03",
+   "F-AGENT-04",
+   "F-AGENT-05",
+   "F-AGENT-06",
+   "F-AGENT-08",
+   "F-AGENT-10",
+   "F-AGENT-11",
+   "F-FILT-07",
+   "F-AGENT-07",
+   "F-AGENT-09"
+  ]
+ },
+ {
+  "id": "WP-53",
+  "wave": 4,
+  "title": "Ready to apply UI: /ready, setup wizard, kit review",
+  "owns": [
+   "app/(auth)/ready/",
+   "components/features/agent/",
+   "hooks/agent/",
+   "lib/api/agent.ts",
+   "i18n/staging/ready.en.json"
+  ],
+  "dependsOn": [
+   "WP-36a"
+  ],
+  "namespace": "ready",
+  "catalogIds": [
+   "F-AGENT-01",
+   "F-AGENT-02",
+   "F-AGENT-03",
+   "F-AGENT-04",
+   "F-AGENT-05",
+   "F-AGENT-06",
+   "F-AGENT-08",
+   "F-AGENT-10",
+   "F-AGENT-11",
+   "F-FILT-07"
+  ]
+ },
+ {
+  "id": "WP-54",
+  "wave": 4,
+  "title": "People at {company}: outreach drafts, connections import, hiring contacts, GoApply referral-code hub",
+  "owns": [
+   "server/src/features/network/",
+   "server/src/features/cn/referrals/",
+   "app/(auth)/referrals/",
+   "components/features/network/",
+   "hooks/network/",
+   "lib/api/network.ts",
+   "i18n/staging/people.en.json"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-34",
+   "WP-38"
+  ],
+  "namespace": "people",
+  "catalogIds": [
+   "F-NET-02",
+   "F-NET-04",
+   "F-NET-05",
+   "F-NET-06",
+   "F-NET-07",
+   "F-NET-08"
+  ]
+ },
+ {
+  "id": "WP-55a",
+  "wave": 4,
+  "title": "Extension web side: /ext API, pairing, /extension pages, install prompt, fill button",
+  "owns": [
+   "server/src/features/extension/",
+   "app/extension/",
+   "components/features/extension/",
+   "hooks/extension/",
+   "lib/api/extension.ts",
+   "i18n/staging/extensionWeb.en.json"
+  ],
+  "dependsOn": [
+   "WP-18",
+   "WP-19",
+   "WP-36a",
+   "WP-36b"
+  ],
+  "namespace": "extensionWeb",
+  "catalogIds": [
+   "F-EXT-02",
+   "F-EXT-04",
+   "F-EXT-05",
+   "F-EXT-07",
+   "F-EXT-08",
+   "F-TRK-03",
+   "F-ACCT-03"
+  ]
+ },
+ {
+  "id": "WP-55b",
+  "wave": 4,
+  "title": "Extension package: MV3, side panel, Greenhouse/Lever/Ashby, no-submit gate, Playwright e2e",
+  "owns": [
+   "extension/",
+   "scripts/check-extension-no-submit.mjs",
+   "i18n/staging/extension.en.json"
+  ],
+  "dependsOn": [
+   "WP-19",
+   "WP-36b"
+  ],
+  "namespace": "extension",
+  "catalogIds": [
+   "F-EXT-01",
+   "F-EXT-03",
+   "F-EXT-04"
+  ]
+ },
+ {
+  "id": "WP-56",
+  "wave": 4,
+  "title": "SEO: programmatic browse pages, public job pages, sitemaps, robots, llms.txt, job ticker",
+  "owns": [
+   "server/src/features/seo/",
+   "app/browse/",
+   "app/job/",
+   "app/sitemap.xml/",
+   "app/sitemaps/",
+   "app/llms.txt/",
+   "app/api/revalidate/",
+   "app/robots.ts",
+   "app/sitemap.ts",
+   "public/llms.txt",
+   "lib/seo.ts",
+   "lib/server/publicApi.ts",
+   "components/features/seo/",
+   "i18n/staging/seo.en.json"
+  ],
+  "dependsOn": [
+   "WP-16b",
+   "WP-32",
+   "WP-34",
+   "WP-40"
+  ],
+  "namespace": "seo",
+  "catalogIds": [
+   "F-SEO-01",
+   "F-SEO-02",
+   "F-SEO-04",
+   "F-SEO-05",
+   "F-SEO-06",
+   "F-SEO-07",
+   "F-SEO-10",
+   "F-JOB-09",
+   "F-MKT-02",
+   "F-TOOL-05",
+   "F-TRUST-02"
+  ]
+ },
+ {
+  "id": "WP-57",
+  "wave": 4,
+  "title": "Free tools: resume check without an account, resume-job matcher, tools hub",
+  "owns": [
+   "server/src/features/tools/",
+   "app/tools/",
+   "components/features/tools/",
+   "i18n/staging/tools.en.json",
+   "lib/api/tools.ts"
+  ],
+  "dependsOn": [
+   "WP-15",
+   "WP-22"
+  ],
+  "namespace": "tools",
+  "catalogIds": [
+   "F-TOOL-01",
+   "F-TOOL-02",
+   "F-TOOL-03"
+  ]
+ },
+ {
+  "id": "WP-58",
+  "wave": 4,
+  "title": "GoApply campus calendar + admin curation + deadline reminders",
+  "owns": [
+   "server/src/features/cn/campus/",
+   "app/campus/",
+   "components/features/campus/",
+   "app/(auth)/admin/campus/",
+   "i18n/staging/campus.en.json",
+   "i18n/staging/campus.zh.json",
+   "lib/api/campus.ts"
+  ],
+  "dependsOn": [
+   "WP-13",
+   "WP-31",
+   "WP-39a"
+  ],
+  "namespace": "campus",
+  "catalogIds": [
+   "F-TOOL-05",
+   "F-SEO-07",
+   "F-NOTIF-08",
+   "F-ORION-12",
+   "CN-L-04"
+  ]
+ },
+ {
+  "id": "WP-59",
+  "wave": 4,
+  "title": "Practice questions (question bank), contributions, moderation",
+  "owns": [
+   "server/src/features/prep/",
+   "app/(auth)/practice/questions/",
+   "app/(auth)/admin/questions/",
+   "components/features/prep/",
+   "hooks/prep/",
+   "lib/api/prep.ts",
+   "i18n/staging/practiceQuestions.en.json"
+  ],
+  "dependsOn": [
+   "WP-34",
+   "WP-43"
+  ],
+  "namespace": "practiceQuestions",
+  "catalogIds": [
+   "F-INT-01",
+   "F-INT-03",
+   "F-INT-02",
+   "F-INT-04",
+   "F-INT-05"
+  ]
+ },
+ {
+  "id": "WP-61",
+  "wave": 4,
+  "title": "PWA, web push (RoboApply), announcements",
+  "owns": [
+   "app/manifest.webmanifest/",
+   "public/sw.js",
+   "server/src/features/push/",
+   "server/src/features/announcements/",
+   "components/features/pwa/",
+   "components/features/notifications/AnnouncementModal.tsx",
+   "app/(auth)/admin/announcements/",
+   "hooks/pwa/",
+   "lib/api/push.ts",
+   "i18n/staging/pwa.en.json",
+   "lib/api/announcements.ts"
+  ],
+  "dependsOn": [
+   "WP-39a"
+  ],
+  "namespace": "pwa",
+  "catalogIds": [
+   "F-MOB-03",
+   "F-NOTIF-07",
+   "F-NOTIF-09"
+  ]
+ },
+ {
+  "id": "WP-62",
+  "wave": 4,
+  "title": "GoApply payments: WeChat Pay v3 + CNY passes",
+  "owns": [
+   "server/src/platform/billing/rails/wechatpay.ts",
+   "server/src/features/billing-cn/",
+   "components/features/billing-cn/",
+   "i18n/staging/billingCn.en.json",
+   "i18n/staging/billingCn.zh.json",
+   "lib/api/billingCn.ts"
+  ],
+  "dependsOn": [
+   "WP-21a"
+  ],
+  "namespace": "billingCn",
+  "catalogIds": [
+   "F-BILL-02",
+   "F-BILL-03",
+   "F-BILL-11",
+   "CN-L-08"
+  ]
+ },
+ {
+  "id": "WP-63a",
+  "wave": 4,
+  "title": "Interview per-brand seam (server + live room), recording retention for both brands",
+  "owns": [
+   "server/src/interview-engine/providers/",
+   "server/src/interview-engine/config.ts",
+   "server/src/interview-engine/livekit/",
+   "server/src/interview-engine/sessions/InterviewSessionService.ts",
+   "server/src/features/interview/",
+   "app/(auth)/practice/[id]/page.tsx",
+   "app/(auth)/practice/[id]/live.module.css",
+   "components/v3/mock/liveConnection.ts",
+   "components/v3/mock/DeviceCheck.tsx",
+   "components/v3/mock/DeviceCheck.module.css",
+   "components/v3/mock/deviceState.ts",
+   "components/v3/mock/YourTile.tsx",
+   "components/features/practice/NetworkPrecheck.tsx"
+  ],
+  "dependsOn": [
+   "WP-14",
+   "WP-43"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "CN-E-06"
+  ]
+ },
+ {
+  "id": "WP-65",
+  "wave": 4,
+  "title": "Resume builder and polish: from-scratch builder, Chinese/TW sections and templates, fit to one page, tour",
+  "owns": [
+   "server/src/features/resume/",
+   "server/src/roboapply/v2/routes/resumes.ts",
+   "server/src/roboapply/v2/lib/resumeExport.ts",
+   "app/(auth)/resume/page.tsx",
+   "app/(auth)/resume/[id]/",
+   "app/(auth)/resume/new/",
+   "components/v3/resume-editor/",
+   "components/v3/resumes/",
+   "components/features/resume/",
+   "hooks/resume/",
+   "lib/resumeStructure.ts",
+   "lib/api/resumes.ts",
+   "i18n/staging/resumeBuilder.en.json"
+  ],
+  "dependsOn": [
+   "WP-36b"
+  ],
+  "namespace": "resumeBuilder",
+  "catalogIds": [
+   "F-RES-07",
+   "F-RES-12",
+   "F-RES-13",
+   "F-RES-14",
+   "F-RES-17",
+   "TW-04",
+   "F-RES-11"
+  ]
+ },
+ {
+  "id": "WP-66",
+  "wave": 4,
+  "title": "GoApply AI-interview practice format: zh question sets, rubric, report",
+  "owns": [
+   "server/src/features/cn/interview/",
+   "server/src/interview-engine/catalog/interviewFormats.ts",
+   "server/src/interview-engine/scoring/",
+   "server/src/roboapply/v2/services/RAInterviewPromptService.ts",
+   "components/features/practice-cn/",
+   "i18n/staging/practiceCn.en.json",
+   "i18n/staging/practiceCn.zh.json"
+  ],
+  "dependsOn": [
+   "WP-43"
+  ],
+  "namespace": "practiceCn",
+  "catalogIds": [
+   "F-INT-06"
+  ]
+ },
+ {
+  "id": "WP-70",
+  "wave": 5,
+  "title": "Extension: remaining international ATS adapters + job-board fit chips",
+  "owns": [
+   "extension/src/adapters/intl/",
+   "extension/src/content/boards/",
+   "extension/test/intl/"
+  ],
+  "dependsOn": [
+   "WP-55b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "F-EXT-03",
+   "F-EXT-06",
+   "F-EXT-09"
+  ]
+ },
+ {
+  "id": "WP-71",
+  "wave": 5,
+  "title": "Extension: GoApply form filling (一键填表) for mainland portals",
+  "owns": [
+   "extension/src/adapters/cn/",
+   "extension/src/brands/goapply/",
+   "extension/test/cn/",
+   "docs/runbooks/edge-addons-publish.md",
+   "i18n/staging/extension-cn.en.json",
+   "i18n/staging/extension-cn.zh.json",
+   "extension/src/content/fill.ts",
+   "extension/src/content/panel/"
+  ],
+  "dependsOn": [
+   "WP-55b"
+  ],
+  "namespace": "extension-cn",
+  "catalogIds": [
+   "F-EXT-01",
+   "F-EXT-02",
+   "F-EXT-03"
+  ]
+ },
+ {
+  "id": "WP-72",
+  "wave": 5,
+  "title": "Coaching (roster + booking links), coaching policy",
+  "owns": [
+   "server/src/features/coaching/",
+   "app/(auth)/coaching/",
+   "app/(auth)/admin/coaches/",
+   "components/features/coaching/",
+   "hooks/coaching/",
+   "lib/api/coaching.ts",
+   "content/legal/intl/coaching.md",
+   "content/legal/cn/coaching.md",
+   "server/src/platform/email/templates/coaching/",
+   "i18n/staging/coaching.en.json",
+   "server/src/i18n/email/staging/coaching.en.json"
+  ],
+  "dependsOn": [
+   "WP-21a",
+   "WP-43"
+  ],
+  "namespace": "coaching",
+  "catalogIds": [
+   "F-COACH-01",
+   "F-COACH-02",
+   "F-COACH-05",
+   "F-COACH-03",
+   "F-COACH-04",
+   "F-COACH-06"
+  ]
+ },
+ {
+  "id": "WP-73",
+  "wave": 5,
+  "title": "WeChat official-account notices + WeChat share card (GoApply)",
+  "owns": [
+   "server/src/features/notify-cn/",
+   "components/features/notify-cn/",
+   "i18n/staging/notifyCn.en.json",
+   "i18n/staging/notifyCn.zh.json",
+   "lib/api/notifyCn.ts"
+  ],
+  "dependsOn": [
+   "WP-11",
+   "WP-39a",
+   "WP-58"
+  ],
+  "namespace": "notifyCn",
+  "catalogIds": [
+   "F-NOTIF-07",
+   "F-NOTIF-01",
+   "F-JOB-08",
+   "CN-L-08"
+  ]
+ },
+ {
+  "id": "WP-74",
+  "wave": 5,
+  "title": "Admin console additions",
+  "owns": [
+   "app/(auth)/admin/page.tsx",
+   "app/(auth)/admin/users/",
+   "app/(auth)/admin/sessions/",
+   "app/(auth)/admin/system/",
+   "app/(auth)/admin/reports/",
+   "components/v3/admin/",
+   "server/src/roboapply/v2/routes/admin.ts",
+   "server/src/roboapply/v2/services/RAAdminAnalyticsService.ts",
+   "server/src/roboapply/v2/services/RAAdminOperationsService.ts",
+   "server/src/features/admin/",
+   "hooks/useAdmin.ts",
+   "hooks/useAdminOperations.ts",
+   "lib/api/admin.ts",
+   "lib/api/adminOperations.ts",
+   "i18n/staging/admin.en.json"
+  ],
+  "dependsOn": [
+   "WP-21a",
+   "WP-41",
+   "WP-42",
+   "WP-50",
+   "WP-58",
+   "WP-59",
+   "WP-61"
+  ],
+  "namespace": "admin",
+  "catalogIds": [
+   "F-TRUST-04",
+   "F-NOTIF-09",
+   "F-BILL-01"
+  ]
+ },
+ {
+  "id": "WP-75",
+  "wave": 5,
+  "title": "Cleanup: dead V1 engine, dead V2 surfaces, dead frontend, V1 crons",
+  "owns": [
+   "server/src/app.ts",
+   "vercel.json",
+   "server/src/cron/handlers.ts",
+   "server/src/roboapply/schedulers/RoboApplyCronService.ts",
+   "server/src/roboapply/v2/routes/index.ts",
+   "server/src/roboapply/routes/missions.ts",
+   "server/src/roboapply/routes/runs.ts",
+   "server/src/roboapply/routes/digest.ts",
+   "server/src/roboapply/routes/settings.ts",
+   "server/src/roboapply/services/RoboApplyMissionService.ts",
+   "server/src/roboapply/services/RoboApplyDailyMatcherService.ts",
+   "server/src/roboapply/services/RoboApplyAuthorService.ts",
+   "server/src/roboapply/services/RoboApplySubmitterService.ts",
+   "server/src/roboapply/services/RoboApplyDigestService.ts",
+   "server/src/roboapply/engine/agents/",
+   "server/src/roboapply/engine/services/boards/",
+   "server/src/roboapply/v2/routes/queue.ts",
+   "server/src/roboapply/v2/routes/activity.ts",
+   "server/src/roboapply/v2/routes/integrations.ts",
+   "server/src/roboapply/v2/services/RAQueueService.ts",
+   "server/src/roboapply/v2/services/RAActivityService.ts",
+   "server/src/roboapply/v2/services/RAIntegrationsService.ts",
+   "server/src/roboapply/v2/lib/v1Bridge.ts",
+   "server/src/roboapply/v2/lib/raMockCatalog.ts",
+   "server/src/lib/anthropicClientFactory.ts",
+   "lib/api/missions.ts",
+   "lib/api/runs.ts",
+   "lib/api/digest.ts",
+   "lib/api/settings.ts",
+   "lib/api/types.ts",
+   "components/mock-interview/",
+   "components/v3/activity/",
+   "components/v3/mock/CoachNudge.tsx",
+   "components/v3/mock/LiveControls.tsx",
+   "components/v3/mock/QuestionCard.tsx",
+   "components/v3/mock/ResultsGrid.tsx",
+   "components/v3/mock/ResultsTop.tsx",
+   "components/v3/mock/sessionStore.ts",
+   "hooks/useActivity.ts",
+   "hooks/useIntegrations.ts",
+   "hooks/useCrossBankDiscover.ts",
+   "hooks/useHomeJobs.ts",
+   "hooks/useMockInterviews.ts",
+   "hooks/usePipeline.ts",
+   "lib/hooks/useTracker.ts",
+   "lib/hooks/useStatusFunnel.ts",
+   "lib/resumeTheme.ts",
+   "components/ui/Card.tsx",
+   "components/ui/OptionPill.tsx",
+   "components/resumes/MenuDropdown.tsx",
+   "i18n/staging/clean.remove.json",
+   "lib/api/v2/",
+   "lib/stub/raV2.stub.ts",
+   "server/src/roboapply/v2/routes/onboarding.ts",
+   "server/src/roboapply/v2/routes/search.ts",
+   "server/src/roboapply/v2/routes/jobs.ts",
+   "server/src/roboapply/v2/services/RAOnboardingService.ts",
+   "server/src/roboapply/v2/services/RAOnboardingRecommendService.ts",
+   "server/src/roboapply/v2/services/RAJobIndexService.ts",
+   "components/v3/setup/",
+   "hooks/useSetup.ts",
+   "hooks/useSetupTrigger.ts",
+   "hooks/useJobDetail.ts",
+   "hooks/useTodayMatches.ts",
+   "server/src/lib/linkedin/"
+  ],
+  "dependsOn": [
+   "WP-10",
+   "WP-30",
+   "WP-32",
+   "WP-33",
+   "WP-34",
+   "WP-37",
+   "WP-51"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-76",
+  "wave": 5,
+  "title": "Mainland deployment kit (CN-1 readiness, no deploy)",
+  "owns": [
+   "deploy/cn/",
+   "scripts/gen-cn-cronjobs.mjs",
+   "__tests__/deploy/",
+   ".github/workflows/deploy-cn.yml",
+   "docs/runbooks/cn-deploy.md"
+  ],
+  "dependsOn": [
+   "FND-6b"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "CN-E-01",
+   "CN-E-02"
+  ]
+ },
+ {
+  "id": "WP-77",
+  "wave": 5,
+  "title": "\"You and what employers ask\" (competitiveness report)",
+  "owns": [
+   "server/src/features/match/",
+   "components/features/match/",
+   "app/(auth)/jobs/report/",
+   "hooks/match/",
+   "lib/api/match.ts",
+   "i18n/staging/competitiveness.en.json"
+  ],
+  "dependsOn": [
+   "WP-18",
+   "WP-32"
+  ],
+  "namespace": "competitiveness",
+  "catalogIds": [
+   "F-MATCH-04"
+  ]
+ },
+ {
+  "id": "WP-78",
+  "wave": 5,
+  "title": "Visitor surfaces: public feed, visitor assistant, logged-out job alerts",
+  "owns": [
+   "server/src/features/visitor/",
+   "components/features/visitor/",
+   "app/alerts/confirm/",
+   "i18n/staging/visitor.en.json",
+   "server/src/features/feed/publicRoutes.ts",
+   "app/tools/job-alerts/",
+   "lib/api/visitor.ts"
+  ],
+  "dependsOn": [
+   "WP-39a",
+   "WP-50",
+   "WP-56"
+  ],
+  "namespace": "visitor",
+  "catalogIds": [
+   "F-FEED-16",
+   "F-ORION-13",
+   "F-NOTIF-03",
+   "F-TOOL-04"
+  ]
+ },
+ {
+  "id": "WP-79",
+  "wave": 5,
+  "title": "Account V2: TOTP 2FA, student pricing, coupons, TWD prices, winback, quarterly suggestion",
+  "owns": [
+   "server/src/features/account-v2/",
+   "app/(public)/login/",
+   "server/src/roboapply/routes/auth.ts",
+   "server/src/platform/billing/",
+   "components/features/credits/",
+   "components/features/account-v2/",
+   "lib/pricing.ts",
+   "i18n/staging/accountV2.en.json",
+   "lib/api/accountV2.ts"
+  ],
+  "dependsOn": [
+   "WP-10",
+   "WP-21a"
+  ],
+  "namespace": "accountV2",
+  "catalogIds": [
+   "F-TRUST-07",
+   "F-ACCT-02",
+   "F-BILL-06",
+   "F-BILL-11",
+   "TW-06"
+  ]
+ },
+ {
+  "id": "WP-60",
+  "wave": 5,
+  "title": "Invite friends (moved to Wave 5)",
+  "owns": [
+   "server/src/features/growth/",
+   "server/src/platform/email/templates/growth/",
+   "app/(auth)/invite/",
+   "app/r/",
+   "components/features/growth/",
+   "hooks/growth/",
+   "lib/api/growth.ts",
+   "i18n/staging/invite.en.json",
+   "server/src/i18n/email/staging/growth.en.json",
+   "content/legal/intl/referral-terms.md",
+   "content/legal/cn/referral-terms.md"
+  ],
+  "dependsOn": [
+   "WP-10",
+   "WP-21a",
+   "WP-23"
+  ],
+  "namespace": "invite",
+  "catalogIds": [
+   "F-GROW-01",
+   "F-GROW-02"
+  ]
+ },
+ {
+  "id": "WP-64",
+  "wave": 5,
+  "title": "Offer comparison (moved to Wave 5)",
+  "owns": [
+   "server/src/features/offers/",
+   "components/features/offers/",
+   "hooks/offers/",
+   "lib/api/offers.ts",
+   "i18n/staging/offers.en.json"
+  ],
+  "dependsOn": [
+   "WP-38"
+  ],
+  "namespace": "offers",
+  "catalogIds": []
+ },
+ {
+  "id": "WP-63b",
+  "wave": 5,
+  "title": "interview-agent: OpenAI-compatible LLM backend + DashScope STT/TTS (GoApply CN-1)",
+  "owns": [
+   "interview-agent/src/agent.ts",
+   "interview-agent/src/backends/",
+   "interview-agent/src/plugins/dashscope/",
+   "interview-agent/deploy/cn/"
+  ],
+  "dependsOn": [
+   "WP-63a"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "CN-E-06"
+  ]
+ },
+ {
+  "id": "WP-90",
+  "wave": 6,
+  "title": "INT: schema reconciliation + db push #2 (owner confirms)",
+  "owns": [
+   "server/prisma/schema/",
+   "server/src/generated/prisma/"
+  ],
+  "dependsOn": [
+   "WP-70",
+   "WP-71",
+   "WP-72",
+   "WP-73",
+   "WP-74",
+   "WP-75",
+   "WP-76",
+   "WP-77",
+   "WP-78",
+   "WP-79",
+   "WP-60",
+   "WP-64",
+   "WP-63b"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-91",
+  "wave": 6,
+  "title": "INT: i18n merge + copy-gate finalization",
+  "owns": [
+   "i18n/staging/",
+   "i18n/messages/en.json",
+   "i18n/brands/",
+   "server/src/i18n/email/en.json",
+   "extension/src/i18n/en.json",
+   "scripts/check-copy.mjs",
+   "server/src/i18n/email/staging/"
+  ],
+  "dependsOn": [
+   "WP-90"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "TW-08"
+  ]
+ },
+ {
+  "id": "WP-92-zh",
+  "wave": 6,
+  "title": "INT: translate zh",
+  "owns": [
+   "i18n/messages/zh.json",
+   "server/src/i18n/email/zh.json",
+   "extension/src/i18n/zh.json",
+   "i18n/brands/goapply/zh.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-92-zh-TW",
+  "wave": 6,
+  "title": "INT: translate zh-TW",
+  "owns": [
+   "i18n/messages/zh-TW.json",
+   "server/src/i18n/email/zh-TW.json",
+   "extension/src/i18n/zh-TW.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": [
+   "TW-08"
+  ]
+ },
+ {
+  "id": "WP-92-ja",
+  "wave": 6,
+  "title": "INT: translate ja",
+  "owns": [
+   "i18n/messages/ja.json",
+   "server/src/i18n/email/ja.json",
+   "extension/src/i18n/ja.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-92-ko",
+  "wave": 6,
+  "title": "INT: translate ko",
+  "owns": [
+   "i18n/messages/ko.json",
+   "server/src/i18n/email/ko.json",
+   "extension/src/i18n/ko.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-92-es",
+  "wave": 6,
+  "title": "INT: translate es",
+  "owns": [
+   "i18n/messages/es.json",
+   "server/src/i18n/email/es.json",
+   "extension/src/i18n/es.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-92-fr",
+  "wave": 6,
+  "title": "INT: translate fr",
+  "owns": [
+   "i18n/messages/fr.json",
+   "server/src/i18n/email/fr.json",
+   "extension/src/i18n/fr.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-92-pt",
+  "wave": 6,
+  "title": "INT: translate pt",
+  "owns": [
+   "i18n/messages/pt.json",
+   "server/src/i18n/email/pt.json",
+   "extension/src/i18n/pt.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-92-de",
+  "wave": 6,
+  "title": "INT: translate de",
+  "owns": [
+   "i18n/messages/de.json",
+   "server/src/i18n/email/de.json",
+   "extension/src/i18n/de.json"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-93",
+  "wave": 6,
+  "title": "INT: final wiring (nav ready flags, prefixes, mounts, crons, registries, env)",
+  "owns": [
+   "components/v3/shell/destinations.ts",
+   "lib/proxyPaths.ts",
+   "app/robots.ts",
+   "next.config.mjs",
+   "server/src/features/index.ts",
+   "server/src/app.ts",
+   "vercel.json",
+   "server/src/cron/handlers.ts",
+   "components/features/settings/registry.ts",
+   "components/features/settings/sectionComponents.ts",
+   "components/auth/methods/registry.ts",
+   "package.json",
+   ".env.example",
+   "docs/jobright-clone/TASK_PLAN.md"
+  ],
+  "dependsOn": [
+   "WP-91"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-94",
+  "wave": 6,
+  "title": "INT: gates + production build (fixes dispatched as fix WPs)",
+  "owns": [],
+  "dependsOn": [
+   "WP-92-zh",
+   "WP-92-zh-TW",
+   "WP-92-ja",
+   "WP-92-ko",
+   "WP-92-es",
+   "WP-92-fr",
+   "WP-92-pt",
+   "WP-92-de",
+   "WP-93"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-95",
+  "wave": 6,
+  "title": "INT: browser verification - RoboApply",
+  "owns": [],
+  "dependsOn": [
+   "WP-94"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-96",
+  "wave": 6,
+  "title": "INT: browser verification - GoApply",
+  "owns": [],
+  "dependsOn": [
+   "WP-94"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ },
+ {
+  "id": "WP-97",
+  "wave": 6,
+  "title": "INT: cleanup of verification data + PR description",
+  "owns": [],
+  "dependsOn": [
+   "WP-95",
+   "WP-96"
+  ],
+  "namespace": null,
+  "catalogIds": []
+ }
 ]
 ```
 

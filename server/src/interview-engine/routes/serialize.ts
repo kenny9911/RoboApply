@@ -78,6 +78,10 @@ export function toSessionDetail(s: InterviewSession) {
     reportTooShort: isRich ? Boolean(report.tooShort) : false,
     // True while LLM enrichment hasn't landed yet (or this is a legacy session).
     reportPending: s.status === 'completed' && !isRich,
+    // GoApply AI面试 practice block (WP-66 `report.cn`, scoring/cnRubricBranch);
+    // null elsewhere. Passed through at the Wave 4 gate; the client validates it
+    // (components/features/practice-cn/fromSession.ts) and rebuilds it otherwise.
+    cnReport: report.cn && typeof report.cn === 'object' ? report.cn : null,
     recordingAvailable: !!s.recordingKey,
     transcriptAvailable: !!s.transcriptKey || (Array.isArray(s.transcript) && s.transcript.length > 0),
   };
