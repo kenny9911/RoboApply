@@ -15,8 +15,8 @@ import { call, type CallOptions, type In, withQuery } from './contracts/wire';
 import type * as NC from './contracts/notify-cn';
 
 /** `notifyCn.subscribe` — POST /api/v1/roboapply/notify-cn/subscribe-messages */
-export function subscribeWechatMessages(body: In<typeof NC.SubscribeMessagesBodySchema>, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/notify-cn/subscribe-messages`, { ...opts, body });
+export function subscribeWechatMessages(body: In<typeof NC.SubscribeMessagesBodySchema>, opts?: CallOptions): Promise<NC.SubscribeMessagesResponse> {
+  return call<NC.SubscribeMessagesResponse>('POST', `/api/v1/roboapply/notify-cn/subscribe-messages`, { ...opts, body });
 }
 
 /** `notifyCn.jsSdkSignature` — GET /api/v1/roboapply/notify-cn/js-sdk-signature */
