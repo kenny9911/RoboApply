@@ -1,3 +1,132 @@
 {
-  "tailor": {}
+  "tailor": {
+    "entry": {
+      "button": "Tailor resume",
+      "aria": "Tailor your resume for {title}"
+    },
+    "sheet": {
+      "title": "Tailor your resume",
+      "titleFor": "Tailor your resume for {title}",
+      "loading": "Opening your tailored resume…"
+    },
+    "picker": {
+      "title": "Which resume should we start from?",
+      "sub": "We copy it. Your original stays as it is.",
+      "primary": "Main resume",
+      "empty": "Add a resume first, then tailor it for this job.",
+      "loading": "Loading your resumes…",
+      "error": "Your resumes did not load. Try again."
+    },
+    "setup": {
+      "sectionsTitle": "What should change?",
+      "sectionsSub": "Only these sections are rewritten. Everything else stays as you wrote it.",
+      "section": {
+        "summary": "Summary",
+        "experience": "Experience",
+        "skills": "Skills",
+        "projects": "Projects",
+        "education": "Education"
+      },
+      "sectionsNone": "Pick at least one section.",
+      "depthLabel": "How much may Experience change?",
+      "depth": {
+        "quick": "Quick: reword and reorder what is there",
+        "full": "Full: bullets may be rewritten, merged or dropped"
+      },
+      "instructionLabel": "Anything to keep in mind? (optional)",
+      "instructionHint": "For example: lead with my reporting work, keep it to one page.",
+      "instructionCount": "{count} of {max} characters",
+      "keywordsTitle": "Skills this job asks for that your resume does not show",
+      "keywordsSub": "Tick only the ones you really have. We add those and nothing else.",
+      "keywordsNone": "Your resume already shows the skills this posting lists.",
+      "keywordsLoading": "Reading the posting…",
+      "keywordsUnavailable": "The skill list for this job is not available. You can still tailor.",
+      "fastTitle": "Fast tailor",
+      "fastSub": "Uses your last settings: {sections}.",
+      "fastAction": "Fast tailor",
+      "generate": "Tailor my resume",
+      "generating": "Tailoring…",
+      "cost": "Uses 1 tailoring credit. No credit is used if it does not finish."
+    },
+    "running": {
+      "title": "Tailoring your resume",
+      "sub": "This takes up to a minute. Keep this window open."
+    },
+    "result": {
+      "title": "Your tailored resume",
+      "titleFor": "Tailored for {title}",
+      "scoreBefore": "Before",
+      "scoreAfter": "After",
+      "scoreNone": "Fit score not available for this version.",
+      "scoreHeading": "Fit score",
+      "tabs": {
+        "label": "Tailored resume views",
+        "changes": "Changes ({count})",
+        "compare": "Compare"
+      },
+      "noChanges": "Nothing needed changing in the sections you picked.",
+      "change": {
+        "rewrite": "Rewritten",
+        "add": "Added",
+        "remove": "Removed",
+        "before": "Before",
+        "after": "After"
+      },
+      "compare": {
+        "before": "Your resume",
+        "after": "Tailored version",
+        "loading": "Loading both versions…",
+        "error": "This version did not load. Try again."
+      },
+      "finalize": "Use this resume",
+      "finalizing": "Saving…",
+      "pendingBlock": "{count, plural, one {Check 1 detail before you use this resume.} other {Check # details before you use this resume.}}",
+      "done": "Saved. This version is in your resumes.",
+      "open": "Open this resume",
+      "close": "Done",
+      "scoreValue": "{score} / 100",
+      "scoreAfterPending": "You'll see this after you check every detail and use this resume."
+    },
+    "verify": {
+      "title": "Verify details",
+      "sub": "These lines say something your resume did not say before. Keep a line only if it is true.",
+      "allDone": "Every detail is checked.",
+      "reason": {
+        "new_number": "A number your resume did not have",
+        "new_keyword": "A skill your resume did not show",
+        "new_statement": "A new statement about your work",
+        "posting_text": "Words taken from the job post, not from your resume"
+      },
+      "terms": "New here: {terms}",
+      "was": "Your resume said: {text}",
+      "keep": "Yes, keep",
+      "remove": "Remove",
+      "similar": "I did something similar",
+      "editLabel": "Write what you actually did",
+      "save": "Save",
+      "cancel": "Cancel",
+      "status": {
+        "kept": "Kept",
+        "removed": "Removed",
+        "edited": "Edited by you"
+      },
+      "copies": "This line appears {count} times. Your choice applies to each one."
+    },
+    "error": {
+      "generic": "Something went wrong. Try again.",
+      "aiFailed": "Tailoring did not finish. No credit was used. Try again.",
+      "aiUnavailable": "AI tailoring is not available for your account right now.",
+      "contentBlocked": "This request could not be processed. Change the instruction and try again.",
+      "safetyUnavailable": "AI tailoring is paused for a moment. Try again later.",
+      "creditsExhausted": "You have used your tailoring credits for now.",
+      "inProgress": "This tailoring is still running. Wait a moment.",
+      "notReviewable": "This tailored version can no longer be changed here.",
+      "conflict": "This line changed. Reload to see the latest version.",
+      "stopped": "This tailoring stopped before it finished. No credit was used. Start again.",
+      "notFound": "This tailoring was not found.",
+      "reload": "Reload",
+      "retry": "Try again"
+    },
+    "checking": "Checking what is available for your account…"
+  }
 }
