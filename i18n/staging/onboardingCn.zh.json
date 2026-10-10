@@ -1,3 +1,295 @@
 {
-  "onboardingCn": {}
+  "onboardingCn": {
+    "common": {
+      "next": "下一步",
+      "back": "上一步",
+      "skip": "跳过",
+      "retry": "重试",
+      "saving": "正在保存…",
+      "loading": "加载中…",
+      "required": "必填",
+      "needRequired": "请先填写必填项。",
+      "remove": "移除{label}"
+    },
+    "errors": {
+      "save": "这一步没有保存成功，请检查网络后重试。",
+      "required": "请填写必填项。",
+      "not_an_option": "请从给出的选项中选择。",
+      "any_with_others": "“不限”不能和其他选项同时选择。",
+      "invalid_date": "请输入有效的日期。",
+      "skip_not_allowed": "在校生和应届生需要填写这一步。",
+      "onboarding_cn_prose_outdated": "授权说明已更新，请阅读新内容后重新选择。"
+    },
+    "consent": {
+      "title": "授权说明",
+      "subtitle": "以下每一项都是单独的选择。在你选择之前，没有任何一项会被开启。",
+      "loadError": "授权说明没有加载出来。",
+      "requiredGroup": "协议",
+      "terms": "《用户协议》",
+      "privacy": "《隐私政策》",
+      "aiTitle": "AI 处理",
+      "aiToggle": "使用 AI 读取我的简历并准备求职材料",
+      "aiOffshore": "内测阶段，AI 处理也会在中国大陆境外进行，处理方见上方列表。",
+      "aiModels": "我们使用的 AI 模型",
+      "rankTitle": "根据我的资料为职位排序（个性化推荐）",
+      "chooseOne": "请选择一项",
+      "rankOn": "开启",
+      "rankOff": "关闭",
+      "marketingTitle": "产品动态",
+      "changeLater": "以上选择都可以之后在设置中更改。",
+      "needRequired": "请勾选必填项后继续。",
+      "needChoice": "请为个性化推荐选择“开启”或“关闭”后继续。",
+      "restoreError": "暂时无法读取你当前的选择，请重试后再保存。"
+    },
+    "identity": {
+      "title": "你的身份",
+      "needIdentity": "请选择符合你的一项。",
+      "option": {
+        "yingjie": {
+          "title": "应届生",
+          "body": "毕业后找正式工作"
+        },
+        "zaixiao": {
+          "title": "在校生",
+          "body": "找实习"
+        },
+        "shezhao": {
+          "title": "社招",
+          "body": "有全职工作经验"
+        }
+      },
+      "classLabel": "届别",
+      "classOption": "{year}届",
+      "yearsLabel": "工作年限",
+      "years": {
+        "lt1": "1年以内",
+        "y1to3": "1–3年",
+        "y3to5": "3–5年",
+        "y5to10": "5–10年",
+        "y10plus": "10年以上"
+      },
+      "statusLabel": "求职状态",
+      "status": {
+        "left_available": "离职，随时到岗",
+        "employed_within_month": "在职，月内到岗",
+        "employed_open": "在职，考虑机会",
+        "employed_not_looking": "在职，暂不考虑"
+      },
+      "monthLabel": "毕业月份"
+    },
+    "education": {
+      "title": "教育背景",
+      "subtitleOptional": "社招可以跳过这一步。",
+      "degreeLabel": "学历",
+      "degree": {
+        "dazhuan": "大专",
+        "bachelor": "本科",
+        "master": "硕士",
+        "phd": "博士",
+        "other": "其他"
+      },
+      "fullTime": "统招",
+      "fullTimeHint": "很多校招职位会要求统招学历。",
+      "schoolLabel": "学校",
+      "schoolPlaceholder": "输入学校名称",
+      "schoolOverseasPlaceholder": "学校全称",
+      "freeTextHint": "列表里没有？请输入学校全称。",
+      "overseasHint": "海外院校请直接输入名称。",
+      "overseas": "海外院校",
+      "tag": {
+        "t985": "985",
+        "t211": "211",
+        "doubleFirstClass": "双一流"
+      },
+      "tagNote": "来自教育部公布的官方名单，仅供参考，不会影响职位排序。",
+      "source": "学校名单：{source}，截至 {date}。",
+      "majorLabel": "专业",
+      "majorPlaceholder": "例如：计算机科学与技术",
+      "sourceUnverified": "院校标签仅来自985、211和“双一流”名单，这份名单尚未与官方文件核对。"
+    },
+    "intent": {
+      "title": "求职期望",
+      "rolesLabel": "期望职位",
+      "rolesHint": "最多 {max} 个",
+      "rolesPlaceholder": "输入职位，例如：产品经理",
+      "rolesFull": "已选满职位。",
+      "rolesAddCustom": "添加“{label}”",
+      "citiesLabel": "期望城市",
+      "citiesHint": "最多 {max} 个",
+      "anyCity": "不限",
+      "provinceLabel": "先选省份，再选城市",
+      "otherCity": "其他城市",
+      "addCity": "添加",
+      "industriesLabel": "期望行业",
+      "industriesHint": "选填，最多 {max} 个。行业按国家标准《国民经济行业分类》（GB/T 4754）划分。",
+      "workTypeLabel": "工作性质",
+      "workType": {
+        "full_time": "全职",
+        "internship": "实习",
+        "part_time": "兼职"
+      },
+      "salaryLabel": "期望薪资（月薪）",
+      "salaryMin": "最低",
+      "salaryMax": "最高",
+      "salaryMonthsLabel": "每年发几个月（选填）",
+      "salaryMonthsOption": "{n}薪",
+      "negotiable": "面议",
+      "salaryPreview": "显示为 {value}",
+      "dailyLabel": "实习薪资（元/天）",
+      "dailyOption": "{n}元",
+      "dailyAny": "不限",
+      "daysLabel": "每周实习天数",
+      "daysOption": "{n}天/周",
+      "monthsLabel": "实习时长",
+      "months": {
+        "m12": "1–2个月",
+        "m3": "3个月",
+        "m6": "6个月及以上"
+      },
+      "startLabel": "到岗时间",
+      "start": {
+        "anytime": "随时",
+        "within_month": "一个月内",
+        "date": "指定日期"
+      },
+      "startDateLabel": "到岗日期",
+      "reassign": "接受调剂",
+      "reassignHint": "部分校招项目在第一志愿满员时，会安排相近的岗位。",
+      "problem": {
+        "roles": "请至少添加一个职位。",
+        "cities": "请至少选择一个城市，或选择“不限”。",
+        "salaryBoth": "请把薪资范围的两端都选上。",
+        "salaryOrder": "最低薪资不能高于最高薪资。",
+        "date": "请选择到岗日期。"
+      },
+      "panel": {
+        "title": "现在开放的机会",
+        "pickRole": "添加职位后，这里会显示在招职位数。",
+        "unavailable": "暂时无法获取数量。",
+        "jobs": "{count, plural, =0 {收录中暂时没有在招职位} other {收录中有 # 个在招职位}}",
+        "campus": "{count, plural, =0 {目前没有正在网申的校招项目} other {# 个校招项目正在网申}}",
+        "campusMore": "{count}+ 个校招项目正在网申",
+        "campusUnknown": "校招项目数量暂时无法获取。",
+        "payMedian": "月薪中位数：{amount}。",
+        "payRange": "中间一半职位的月薪：{low}–{high}。",
+        "payN": "{total} 个职位中有 {listed} 个写明了薪资。",
+        "payNotEnough": "写明薪资的职位还不够多，暂不显示薪资参考。",
+        "source": "来自 %BRAND% 收录的职位，按发布薪资统计。截至 {date}。",
+        "allCities": "全部城市。",
+        "jobsFor": "{count, plural, =0 {收录中暂时没有{city}的「{role}」在招职位} other {收录中{city}有 # 个「{role}」在招职位}}",
+        "jobsForAllCities": "{count, plural, =0 {收录中暂时没有「{role}」在招职位（全部城市）} other {收录中有 # 个「{role}」在招职位（全部城市）}}",
+        "partial": "这个数量只统计了你的其中一项选择，其他选择的数量暂时无法在这里显示。",
+        "payPosted": "这些职位写明的月薪：{low}–{high}。"
+      }
+    },
+    "industry": {
+      "A": "农、林、牧、渔业",
+      "B": "采矿业",
+      "C": "制造业",
+      "D": "电力、热力、燃气及水生产和供应业",
+      "E": "建筑业",
+      "F": "批发和零售业",
+      "G": "交通运输、仓储和邮政业",
+      "H": "住宿和餐饮业",
+      "I": "信息传输、软件和信息技术服务业",
+      "J": "金融业",
+      "K": "房地产业",
+      "L": "租赁和商务服务业",
+      "M": "科学研究和技术服务业",
+      "N": "水利、环境和公共设施管理业",
+      "O": "居民服务、修理和其他服务业",
+      "P": "教育",
+      "Q": "卫生和社会工作",
+      "R": "文化、体育和娱乐业",
+      "S": "公共管理、社会保障和社会组织",
+      "T": "国际组织"
+    },
+    "tags": {
+      "title": "更看重什么",
+      "subtitle": "选填。这些选择用来给职位加标签，不会隐藏任何职位。",
+      "employerLabel": "单位类型",
+      "employer": {
+        "soe": "央国企",
+        "foreign": "外企",
+        "big_private": "民企大厂",
+        "startup": "创业公司",
+        "public_institution": "事业单位",
+        "any": "都可以"
+      },
+      "hukou": "希望能解决户口",
+      "hukouHint": "只在官方信息注明可落户时显示该标签。",
+      "note": "“央国企”等标签只在有官方信息依据时才会显示在职位上。"
+    },
+    "confirm": {
+      "title": "确认你的设置",
+      "foundJobs": "{count, plural, =0 {暂时没有找到合适的职位} other {找到 # 个合适的职位}}",
+      "indexJobs": "{count, plural, =0 {收录中暂时没有符合条件的在招职位} other {收录中有 # 个符合条件的在招职位}}",
+      "programs": "{count, plural, =0 {目前没有正在网申的校招项目} other {# 个校招项目正在网申}}",
+      "source": "数量来自 %BRAND% 收录的职位和校招项目。",
+      "byDate": "你关闭了个性化推荐，职位将按发布时间排序。可以随时在设置中开启。",
+      "programsFor": "{year}届可报的项目",
+      "programsTitle": "正在网申的项目",
+      "eligible": "要求 {year}届，与你一致",
+      "forClass": "要求 {year}届",
+      "closes": "{date} 截止",
+      "verified": "最后核实 {date}",
+      "official": "官方页面",
+      "relatedTitle": "可以一起看看的相近职位",
+      "heardFromLabel": "你从哪里知道我们（选填）",
+      "heardFromNone": "不填",
+      "heardFromOther": "请告诉我们渠道",
+      "heardFrom": {
+        "xiaohongshu": "小红书",
+        "douyin": "抖音",
+        "wechat": "微信",
+        "zhihu": "知乎",
+        "bilibili": "B站",
+        "friend": "朋友推荐",
+        "school": "学校就业指导",
+        "other": "其他"
+      },
+      "cta": "开始"
+    },
+    "resume": {
+      "offTitle": "简历读取未开启",
+      "offBody": "你没有开启 AI 处理，所以不会读取简历文件。你可以手动填写资料。",
+      "unavailable": {
+        "parse": "读取简历文件",
+        "tailor": "定制简历和求职信",
+        "assistant": "求职助手"
+      },
+      "manual": "手动填写资料",
+      "enable": "开启 AI 处理",
+      "optionalFields": "照片、籍贯、政治面貌都不是必填项，我们不会用它们来推荐职位。"
+    },
+    "tour": {
+      "remindersTitle": "开启网申截止提醒",
+      "remindersBody": "选出你关心的项目，截止前我们会在消息中心提醒你。",
+      "remindersNone": "你的届别目前没有正在网申的项目，之后可以在校招日历里添加提醒。",
+      "remind": "提醒我",
+      "notNow": "暂不需要",
+      "remindersDone": "{count, plural, other {已为 # 个项目开启提醒。}}",
+      "remindersFailed": "{count, plural, =0 {提醒没有设置成功，请稍后在校招日历里重试。} other {已开启 # 个提醒，其余没有成功，请在校招日历里重试。}}",
+      "title": "你可以这样开始",
+      "card": {
+        "calendar": {
+          "title": "校招日历",
+          "body": "正在网申的项目，附官方链接和截止日期。"
+        },
+        "tailor": {
+          "title": "定制简历",
+          "body": "针对你选的每个职位调整简历。"
+        },
+        "practice": {
+          "title": "AI面试练习",
+          "body": "模拟企业常用的 AI 面试形式进行练习。"
+        },
+        "manual": {
+          "title": "手动填写资料",
+          "body": "手动填写你的信息。如需使用 AI 功能，可在设置中开启 AI 处理。"
+        }
+      },
+      "start": "开始"
+    }
+  }
 }

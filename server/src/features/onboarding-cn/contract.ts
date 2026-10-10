@@ -108,30 +108,27 @@ export const CnTagsStepSchema = z
   })
   .strict();
 
-export const GOAPPLY_STEP_BODY_SCHEMAS = {
-  consent: CnConsentStepSchema,
-  identity: CnIdentityStepSchema,
-  education: CnEducationStepSchema,
-  intent: CnIntentStepSchema,
-  tags: CnTagsStepSchema,
-} as const;
-
-export type CnStep = keyof typeof GOAPPLY_STEP_BODY_SCHEMAS;
-
 /**
  * `RAProfile.cnFields` (documented JSON column, ra-profile.prisma):
- * `{ identity, graduationClass, degree, isFullTimeProgram, schoolName, schoolTags,
- *    major, jobSearchStatus, internshipDaysPerWeek, internshipMonths, availableFrom,
+ * `{ identity, graduationClass, graduationMonth, yearsExperience, degree,
+ *    isFullTimeProgram, schoolName, schoolId, schoolTags, overseasSchool, major,
+ *    jobSearchStatus, internshipDaysPerWeek, internshipMonths, availableFrom,
  *    acceptReassignment }` — schoolTags are display/user-filter only.
+ * WP-31 added graduationMonth, yearsExperience, schoolId and overseasSchool
+ * (the profile service stores exactly these keys; WP-19 spreads this shape).
  */
 export const CnProfileFieldsSchema = z
   .object({
     identity: z.enum(CN_IDENTITIES).optional(),
     graduationClass: z.number().int().optional(),
+    graduationMonth: z.number().int().min(1).max(12).optional(),
+    yearsExperience: z.enum(CN_YEARS_EXPERIENCE).optional(),
     degree: z.enum(CN_DEGREE_OPTIONS).optional(),
     isFullTimeProgram: z.boolean().optional(),
     schoolName: z.string().optional(),
+    schoolId: z.string().max(40).optional(),
     schoolTags: z.array(z.string()).optional(),
+    overseasSchool: z.boolean().optional(),
     major: z.string().optional(),
     jobSearchStatus: z.enum(CN_JOB_SEARCH_STATUS).optional(),
     internshipDaysPerWeek: z.number().int().optional(),
@@ -142,9 +139,199 @@ export const CnProfileFieldsSchema = z
   .passthrough();
 export type CnProfileFields = z.infer<typeof CnProfileFieldsSchema>;
 
+// ── Option grids (PRODUCT G4) ──────────────────────────────────────────────
+
+/** 期望薪资 K/月: 1–30K in 1K steps, then 35–100K in 5K steps. */
+export const CN_SALARY_K_OPTIONS: readonly number[] = [
+  ...Array.from({ length: 30 }, (_, i) => i + 1),
+  ...Array.from({ length: 14 }, (_, i) => 35 + i * 5),
+];
+/** ·N薪: 12–20. */
+export const CN_SALARY_MONTHS_OPTIONS: readonly number[] = Array.from({ length: 9 }, (_, i) => 12 + i);
+/** 实习 元/天: 100–1000 in 50-yuan steps. */
+export const CN_INTERN_DAILY_OPTIONS: readonly number[] = Array.from({ length: 19 }, (_, i) => 100 + i * 50);
+/** 实习 天/周. */
+export const CN_INTERN_DAYS_OPTIONS = [2, 3, 4, 5] as const;
+export const CN_MAX_ROLES = 3;
+export const CN_MAX_CITIES = 5;
+export const CN_MAX_INDUSTRIES = 3;
+/** 期望城市 "不限". */
+export const CN_ANY_CITY = 'any';
+
+/** G7 "你从哪里知道我们" (optional). */
+export const CN_HEARD_FROM = ['xiaohongshu', 'douyin', 'wechat', 'zhihu', 'bilibili', 'friend', 'school', 'other'] as const;
+
+/** G7 确认 (PUT /onboarding/steps/confirm on GoApply): suggested extra roles and the optional source. */
+export const CnConfirmStepSchema = z
+  .object({
+    extraRoles: z
+      .array(z.object({ taxonomyId: z.string().max(80).optional(), label: z.string().trim().min(1).max(80) }).strict())
+      .max(3)
+      .optional(),
+    heardFrom: z.enum(CN_HEARD_FROM).optional(),
+    heardFromNote: z.string().trim().max(200).optional(),
+  })
+  .strict();
+
+/** GoApply step bodies validated by this area (WP-30 dispatches `PUT /onboarding/steps/:step`). */
+export const GOAPPLY_STEP_BODY_SCHEMAS = {
+  consent: CnConsentStepSchema,
+  identity: CnIdentityStepSchema,
+  education: CnEducationStepSchema,
+  intent: CnIntentStepSchema,
+  tags: CnTagsStepSchema,
+  confirm: CnConfirmStepSchema,
+} as const;
+
+export type CnStep = keyof typeof GOAPPLY_STEP_BODY_SCHEMAS;
+
+export function isCnStep(step: string): step is CnStep {
+  return Object.prototype.hasOwnProperty.call(GOAPPLY_STEP_BODY_SCHEMAS, step);
+}
+
+// ── Step results and their effects ─────────────────────────────────────────
+
+/** A consent answer the consent step records (compliance `recordConsent`, with the prose version shown). */
+export interface CnConsentEffect {
+  type: 'pipl_basic_processing' | 'age_16_plus' | 'pipl_cross_border' | 'ai_resume_parsing' | 'personalized_recommendation' | 'marketing_email';
+  granted: boolean;
+}
+
+/**
+ * What saving a step changes besides `onboardingAnswers[step]` (applied by
+ * `applyCnStep`): consent records, `RAProfile.cnFields` keys (`null` removes a
+ * key) and a patch of the default search profile's filters (`null` clears).
+ */
+export interface CnStepEffects {
+  consents: CnConsentEffect[];
+  cnFields: Record<string, unknown> | null;
+  filterPatch: Record<string, unknown> | null;
+}
+
 export interface CnStepValidation {
   ok: boolean;
   /** Normalized answers to store under `onboardingAnswers[step]`. */
   answers?: Record<string, unknown>;
   issues?: Array<{ path: (string | number)[]; message: string }>;
+  /** Present when ok: what `applyCnStep` writes. */
+  effects?: CnStepEffects;
 }
+
+/** What validation may read: earlier answers (G3/G4 depend on the G2 identity) and the env (CN-0). */
+export interface CnStepContext {
+  /** `SeekerProfile.onboardingAnswers` as stored (keyed by stage code). */
+  answers?: Record<string, unknown> | null;
+  env?: Record<string, string | undefined>;
+  now?: Date;
+}
+
+// ── Market snapshot (G4 "现在开放的机会") ───────────────────────────────────
+
+const csv = (max: number, itemMax: number) =>
+  z
+    .string()
+    .max(max * (itemMax + 1))
+    .transform((v) => [...new Set(v.split(',').map((s) => s.trim()).filter(Boolean))])
+    .pipe(z.array(z.string().max(itemMax)).max(max));
+
+/** GET …/onboarding/cn/market-snapshot?roles=&taxonomyIds=&cities=&class= */
+export const CnMarketSnapshotQuerySchema = z.object({
+  roles: csv(CN_MAX_ROLES, 80).optional(),
+  taxonomyIds: csv(CN_MAX_ROLES, 80).optional(),
+  cities: csv(CN_MAX_CITIES, 60).optional(),
+  class: z.coerce.number().int().min(CN_CLASS_YEAR_RANGE.min).max(CN_CLASS_YEAR_RANGE.max).optional(),
+});
+export type CnMarketSnapshotQuery = z.output<typeof CnMarketSnapshotQuerySchema>;
+
+/** A count from our own index (D3: source and as-of date; never estimated). */
+export interface CnSourcedCount {
+  value: number;
+  source: 'index' | 'campus_calendar';
+  asOf: string;
+}
+
+/**
+ * Counts only public, canonical, live rows of the GoApply market (users'
+ * imported jobs never count). Pay only with ≥ MIN_SAMPLE (20) postings that
+ * list monthly CNY pay, shown as "Pay listed on {listedCount} of {jobCount}".
+ */
+export interface CnMarketSnapshotResponse {
+  jobCount: CnSourcedCount;
+  /** Published 校招 programmes whose 网申 window is open now. */
+  campusOpenCount: CnSourcedCount;
+  pay: {
+    /** Median of each posting's stated monthly range midpoint, in yuan. */
+    medianMonthly: number;
+    /** Middle half of the same midpoints (25th–75th percentile), in yuan. */
+    p25Monthly: number;
+    p75Monthly: number;
+    listedCount: number;
+    sampleSize: number;
+    currency: 'CNY';
+    period: 'month';
+    source: 'index';
+    asOf: string;
+  } | null;
+  windowDays: number;
+}
+
+// ── Schools and places (data/*.json, each file states its source) ─────────
+
+/**
+ * Where a bundled data file comes from (D3). `verified` = checked against
+ * the official publication, and `asOf` is then that publication's date; until
+ * then `asOf` is null and the UI shows the coverage, never an "as of" date.
+ * `compiledAt` is when the file was put together.
+ */
+export interface CnDataSource {
+  name: string;
+  asOf: string | null;
+  verified: boolean;
+  compiledAt: string;
+  coverage: string;
+}
+
+export const CN_SCHOOL_TAGS = ['985', '211', 'double_first_class'] as const;
+export type CnSchoolTag = (typeof CN_SCHOOL_TAGS)[number];
+
+export interface CnSchool {
+  id: string;
+  name: string;
+  province: string;
+  /** Information only; never a ranking input. */
+  tags: CnSchoolTag[];
+  aliases?: string[];
+}
+
+/** GET …/onboarding/cn/schools?q= */
+export const CnSchoolSearchQuerySchema = z.object({ q: z.string().trim().min(1).max(40), limit: z.coerce.number().int().min(1).max(20).optional() });
+export interface CnSchoolSearchResponse {
+  items: CnSchool[];
+  source: CnDataSource;
+}
+
+export interface CnProvince {
+  code: string;
+  name: string;
+  type: 'municipality' | 'province' | 'autonomous_region' | 'sar';
+  cities: string[];
+  extra?: string[];
+}
+export interface CnProvincesResponse {
+  items: CnProvince[];
+  source: CnDataSource;
+}
+
+/** GB/T 4754-2017 国民经济行业分类, sections A–T (期望行业 options). */
+export const CN_INDUSTRY_CODES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'] as const;
+export type CnIndustryCode = (typeof CN_INDUSTRY_CODES)[number];
+
+/** How the feed may rank for this user (PIPL Art. 24; GoApply 个性化推荐). */
+export type CnRankingMode = 'personalized' | 'non_personalized';
+
+export const ONBOARDING_CN_ERROR_CODES = {
+  /** The consent prose changed since the screen loaded. */
+  proseOutdated: 'onboarding_cn_prose_outdated',
+  /** A step body failed the GoApply rules. */
+  invalidStep: 'onboarding_cn_invalid_step',
+} as const;

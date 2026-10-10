@@ -1,3 +1,295 @@
 {
-  "onboardingCn": {}
+  "onboardingCn": {
+    "common": {
+      "next": "Next",
+      "back": "Back",
+      "skip": "Skip",
+      "retry": "Try again",
+      "saving": "Saving…",
+      "loading": "Loading…",
+      "required": "Required",
+      "needRequired": "Fill in the required fields to continue.",
+      "remove": "Remove {label}"
+    },
+    "errors": {
+      "save": "We couldn't save this step. Check your connection and try again.",
+      "required": "Fill in the required fields.",
+      "not_an_option": "Pick one of the options shown.",
+      "any_with_others": "\"Any\" can't be combined with other choices.",
+      "invalid_date": "Enter a valid date.",
+      "skip_not_allowed": "Students need to fill in this step.",
+      "onboarding_cn_prose_outdated": "The consent text was updated. Read the new text and choose again."
+    },
+    "consent": {
+      "title": "Before you start",
+      "subtitle": "Each choice below is separate. Nothing is switched on until you choose it.",
+      "loadError": "We couldn't load the consent text.",
+      "requiredGroup": "Agreement",
+      "terms": "User Agreement",
+      "privacy": "Privacy Policy",
+      "aiTitle": "AI processing",
+      "aiToggle": "Use AI to read my resume and prepare materials",
+      "aiOffshore": "During this beta, AI processing also happens outside mainland China, with the providers listed above.",
+      "aiModels": "Which AI models we use",
+      "rankTitle": "Rank jobs using my profile",
+      "chooseOne": "Choose one",
+      "rankOn": "On",
+      "rankOff": "Off",
+      "marketingTitle": "Product news",
+      "changeLater": "You can change any of these later in Settings.",
+      "needRequired": "Tick the required boxes to continue.",
+      "needChoice": "Choose On or Off for ranking to continue.",
+      "restoreError": "We couldn't load your current choices. Try again before saving."
+    },
+    "identity": {
+      "title": "Which describes you?",
+      "needIdentity": "Pick the one that describes you.",
+      "option": {
+        "yingjie": {
+          "title": "Graduating soon",
+          "body": "Looking for a full-time job after graduation"
+        },
+        "zaixiao": {
+          "title": "Still in school",
+          "body": "Looking for an internship"
+        },
+        "shezhao": {
+          "title": "Experienced",
+          "body": "I have full-time work experience"
+        }
+      },
+      "classLabel": "Graduation class",
+      "classOption": "Class of {year}",
+      "monthLabel": "Graduation month",
+      "yearsLabel": "Years of work experience",
+      "years": {
+        "lt1": "Under 1 year",
+        "y1to3": "1–3 years",
+        "y3to5": "3–5 years",
+        "y5to10": "5–10 years",
+        "y10plus": "10 years or more"
+      },
+      "statusLabel": "Where you are now",
+      "status": {
+        "left_available": "Not working, can start any time",
+        "employed_within_month": "Working, can start within a month",
+        "employed_open": "Working, open to offers",
+        "employed_not_looking": "Working, not looking right now"
+      }
+    },
+    "education": {
+      "title": "Your education",
+      "subtitleOptional": "Optional for experienced candidates.",
+      "degreeLabel": "Highest degree",
+      "degree": {
+        "dazhuan": "Associate (dazhuan)",
+        "bachelor": "Bachelor's",
+        "master": "Master's",
+        "phd": "PhD",
+        "other": "Other"
+      },
+      "fullTime": "Full-time program (admitted through the national entrance exam)",
+      "fullTimeHint": "Many campus job posts ask for this.",
+      "schoolLabel": "School",
+      "schoolPlaceholder": "Start typing your school's name",
+      "schoolOverseasPlaceholder": "Your school's full name",
+      "freeTextHint": "Not in the list? Type your school's full name.",
+      "overseasHint": "Overseas schools are entered as text.",
+      "overseas": "School outside mainland China",
+      "tag": {
+        "t985": "985",
+        "t211": "211",
+        "doubleFirstClass": "Double First-Class"
+      },
+      "tagNote": "From the Ministry of Education's official lists. Shown for your information only: it never changes how jobs are ranked for you.",
+      "source": "School list: {source}, as of {date}.",
+      "majorLabel": "Major",
+      "majorPlaceholder": "e.g. Computer Science",
+      "sourceUnverified": "School marks come only from the 985, 211 and Double First-Class lists. This copy hasn't been checked against the official files yet."
+    },
+    "intent": {
+      "title": "What are you looking for?",
+      "rolesLabel": "Roles",
+      "rolesHint": "Up to {max}",
+      "rolesPlaceholder": "Type a role, e.g. Product Manager",
+      "rolesFull": "You've picked the most roles.",
+      "rolesAddCustom": "Add \"{label}\"",
+      "citiesLabel": "Cities",
+      "citiesHint": "Up to {max}",
+      "anyCity": "Anywhere",
+      "provinceLabel": "Pick a province, then cities",
+      "otherCity": "Another city",
+      "addCity": "Add",
+      "industriesLabel": "Industries",
+      "industriesHint": "Optional, up to {max}. Sections of the national industry classification (GB/T 4754).",
+      "workTypeLabel": "Type of work",
+      "workType": {
+        "full_time": "Full-time",
+        "internship": "Internship",
+        "part_time": "Part-time"
+      },
+      "salaryLabel": "Expected monthly pay",
+      "salaryMin": "From",
+      "salaryMax": "To",
+      "salaryMonthsLabel": "Months of pay per year (optional)",
+      "salaryMonthsOption": "{n} months",
+      "negotiable": "Negotiable",
+      "salaryPreview": "Shown as {value}",
+      "dailyLabel": "Internship pay (yuan per day)",
+      "dailyOption": "{n} yuan",
+      "dailyAny": "Any",
+      "daysLabel": "Days a week",
+      "daysOption": "{n} days",
+      "monthsLabel": "How long",
+      "months": {
+        "m12": "1–2 months",
+        "m3": "3 months",
+        "m6": "6 months or more"
+      },
+      "startLabel": "When can you start?",
+      "start": {
+        "anytime": "Any time",
+        "within_month": "Within a month",
+        "date": "On a date"
+      },
+      "startDateLabel": "Start date",
+      "reassign": "Open to another role the employer offers",
+      "reassignHint": "Some campus programs place you in a related role if your first choice is full.",
+      "problem": {
+        "roles": "Add at least one role.",
+        "cities": "Pick at least one city, or Anywhere.",
+        "salaryBoth": "Pick both ends of the pay range.",
+        "salaryOrder": "The lower pay can't be above the higher pay.",
+        "date": "Pick a start date."
+      },
+      "panel": {
+        "title": "Open now",
+        "pickRole": "Add a role to see how many jobs are open.",
+        "unavailable": "Counts aren't available right now.",
+        "jobs": "{count, plural, =0 {No open jobs in our index yet} one {# open job in our index} other {# open jobs in our index}}",
+        "campus": "{count, plural, =0 {No campus programs taking applications right now} one {# campus program taking applications} other {# campus programs taking applications}}",
+        "campusMore": "{count}+ campus programs taking applications",
+        "campusUnknown": "Campus program counts aren't available yet.",
+        "payMedian": "Typical monthly pay: {amount}.",
+        "payRange": "Middle half of monthly pay: {low}–{high}.",
+        "payN": "Pay listed on {listed} of {total} posts.",
+        "payNotEnough": "Not enough posts list pay yet to show a typical figure.",
+        "source": "From job posts in %BRAND%'s index, using the pay each post states. As of {date}.",
+        "allCities": "All cities.",
+        "jobsFor": "{count, plural, =0 {No open {role} jobs in {city} in our index yet} one {# open {role} job in {city} in our index} other {# open {role} jobs in {city} in our index}}",
+        "jobsForAllCities": "{count, plural, =0 {No open {role} jobs in our index yet, all cities} one {# open {role} job in our index, all cities} other {# open {role} jobs in our index, all cities}}",
+        "partial": "This count covers one of your choices. Counts for the others aren't available here yet.",
+        "payPosted": "Monthly pay on these posts: {low}–{high}."
+      }
+    },
+    "industry": {
+      "A": "Agriculture, forestry, livestock and fishing",
+      "B": "Mining",
+      "C": "Manufacturing",
+      "D": "Electricity, heat, gas and water",
+      "E": "Construction",
+      "F": "Wholesale and retail",
+      "G": "Transport, storage and post",
+      "H": "Hotels and catering",
+      "I": "Information technology and software",
+      "J": "Finance",
+      "K": "Real estate",
+      "L": "Leasing and business services",
+      "M": "Research and technical services",
+      "N": "Water, environment and public facilities",
+      "O": "Household and repair services",
+      "P": "Education",
+      "Q": "Health and social work",
+      "R": "Culture, sports and entertainment",
+      "S": "Public administration and social organizations",
+      "T": "International organizations"
+    },
+    "tags": {
+      "title": "What matters to you?",
+      "subtitle": "Optional. These help us label jobs; they don't hide any.",
+      "employerLabel": "Kind of employer",
+      "employer": {
+        "soe": "State-owned",
+        "foreign": "Foreign company",
+        "big_private": "Large private company",
+        "startup": "Startup",
+        "public_institution": "Public institution",
+        "any": "Any"
+      },
+      "hukou": "I'd like help getting a hukou (residence registration)",
+      "hukouHint": "We show this label only when the employer's official information says so.",
+      "note": "Labels like \"State-owned\" appear on a job only when an official source says so."
+    },
+    "confirm": {
+      "title": "Check your setup",
+      "foundJobs": "{count, plural, =0 {We didn't find jobs for your search yet} one {We found # job for your search} other {We found # jobs for your search}}",
+      "indexJobs": "{count, plural, =0 {No open jobs in our index for your search yet} one {# open job in our index for your search} other {# open jobs in our index for your search}}",
+      "programs": "{count, plural, =0 {No campus programs taking applications right now} one {# campus program taking applications} other {# campus programs taking applications}}",
+      "source": "Counts come from jobs and campus programs in %BRAND%'s index.",
+      "byDate": "Jobs are sorted by date posted because ranking with your profile is off. You can turn it on in Settings.",
+      "programsFor": "Programs for the class of {year}",
+      "programsTitle": "Programs taking applications",
+      "eligible": "For the class of {year}, same as you",
+      "forClass": "For the class of {year}",
+      "closes": "Closes {date}",
+      "verified": "Last checked {date}",
+      "official": "Official page",
+      "relatedTitle": "Related roles you could add",
+      "heardFromLabel": "How did you hear about us? (optional)",
+      "heardFromNone": "Prefer not to say",
+      "heardFromOther": "Tell us where",
+      "heardFrom": {
+        "xiaohongshu": "Xiaohongshu",
+        "douyin": "Douyin",
+        "wechat": "WeChat",
+        "zhihu": "Zhihu",
+        "bilibili": "Bilibili",
+        "friend": "A friend",
+        "school": "School career office",
+        "other": "Other"
+      },
+      "cta": "Start"
+    },
+    "resume": {
+      "offTitle": "Resume reading is off",
+      "offBody": "You chose not to let AI read your resume. You can fill in your profile by hand instead.",
+      "unavailable": {
+        "parse": "Reading your resume file",
+        "tailor": "Tailored resumes and cover letters",
+        "assistant": "The Assistant"
+      },
+      "manual": "Fill in my profile by hand",
+      "enable": "Turn on AI processing",
+      "optionalFields": "Photo, native place and political status are optional. We never use them to recommend jobs."
+    },
+    "tour": {
+      "remindersTitle": "Get application deadline reminders",
+      "remindersBody": "Pick the programs you care about. We'll remind you in your inbox before they close.",
+      "remindersNone": "No programs for your class are taking applications right now. You can add reminders from the campus calendar later.",
+      "remind": "Remind me",
+      "notNow": "Not now",
+      "remindersDone": "{count, plural, one {Reminder set for # program.} other {Reminders set for # programs.}}",
+      "remindersFailed": "{count, plural, =0 {We couldn't set the reminders. Try again from the campus calendar.} other {Set # reminders; some failed. Try the rest from the campus calendar.}}",
+      "title": "Here's what you can do",
+      "card": {
+        "calendar": {
+          "title": "Campus calendar",
+          "body": "Programs taking applications now, with official links and deadlines."
+        },
+        "tailor": {
+          "title": "Tailored resume",
+          "body": "Adjust your resume for each job you choose."
+        },
+        "practice": {
+          "title": "Interview practice",
+          "body": "Practice an AI interview in the format employers commonly use."
+        },
+        "manual": {
+          "title": "Fill in your profile",
+          "body": "Add your details by hand. To use AI features, turn on AI processing in Settings."
+        }
+      },
+      "start": "Start"
+    }
+  }
 }
