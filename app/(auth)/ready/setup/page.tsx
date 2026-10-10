@@ -1,8 +1,9 @@
-// /ready/setup — route shell (FND-6b). Ready to apply setup: profile, calibration, answers, weekly target, extension.
-//
-// STUB. Owner: WP-53, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /ready/setup — Ready to apply setup (WP-53; PRODUCT F-AGENT-02): profile,
+// check your search, application answers, weekly settings, extension.
+// Steps are addressable by hash (#answers is linked from /profile).
+
+import { SetupWizard } from '../../../../components/features/agent';
 
 export default function ReadySetupPage() {
-  return <div hidden data-route-stub="/ready/setup" data-owner="WP-53" />;
+  return <SetupWizard />;
 }
