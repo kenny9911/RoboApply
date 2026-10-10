@@ -190,10 +190,32 @@ describe('/campus calendar', () => {
     await waitFor(() => expect(api.listPublicCampusEvents).toHaveBeenCalledWith({ class: 2027, city: '上海', openNow: 'true' }, expect.anything()));
   });
 
-  it('empty and error states', async () => {
+  it('an empty, unfiltered calendar says it is being put together, never that nobody is hiring', async () => {
     api.listPublicCampusEvents.mockResolvedValueOnce({ items: [], cursor: null, asOf: '' });
-    renderWithBrand(<CampusCalendar />, { brand: 'goapply' });
+    const { container } = renderWithBrand(<CampusCalendar />, { brand: 'goapply' });
+    expect(await screen.findByText('The calendar is being put together')).toBeInTheDocument();
+    expect(screen.getByText(/each is checked against the employer's official page first/)).toBeInTheDocument();
+    expect(screen.getByText(/an empty calendar does not mean that no employer is hiring/)).toBeInTheDocument();
+    expect(container.querySelector('[data-campus-empty="compiling"]')).not.toBeNull();
+    expect(screen.queryByText('No programmes match these filters.')).toBeNull();
+    // Nothing is invented to fill the page (D3): no programme card, no official link.
+    expect(screen.queryByRole('listitem')).toBeNull();
+    expect(container.querySelector('a[href^="http"]')).toBeNull();
+  });
+
+  it('a filter that matches nothing says so (the calendar itself may hold programmes)', async () => {
+    api.listPublicCampusEvents.mockResolvedValue({ items: [], cursor: null, asOf: '' });
+    const { container } = renderWithBrand(<CampusCalendar filter={{ class: 2027 }} initial={{ items: [], cursor: null, asOf: '' }} />, { brand: 'goapply' });
     expect(await screen.findByText('No programmes match these filters.')).toBeInTheDocument();
+    expect(container.querySelector('[data-campus-empty="filtered"]')).not.toBeNull();
+    expect(screen.queryByText('The calendar is being put together')).toBeNull();
+  });
+
+  it('a calendar that could not be loaded shows the error, not the compiling message', async () => {
+    api.listPublicCampusEvents.mockRejectedValue(new Error('down'));
+    renderWithBrand(<CampusCalendar />, { brand: 'goapply' });
+    expect(await screen.findByText("We couldn't load the calendar.", {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByText('The calendar is being put together')).toBeNull();
   });
 });
 

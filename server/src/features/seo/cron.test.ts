@@ -35,11 +35,39 @@ function okFetch() {
 }
 
 describe('seo-rebuild', () => {
-  it('skips at once on GoApply (browse deferred) and when seo.browse is off', async () => {
+  it('skips at once when seo.browse is off (either brand) and on GoApply with the recruitment-info mode off', async () => {
     const repo = inventory();
-    expect(await createSeoRebuild({ repo, env: ENV, isEnabled: async () => true })(ctx(BRANDS.goapply))).toEqual({ skipped: 'not_for_market' });
     expect(await createSeoRebuild({ repo, env: ENV, isEnabled: async () => false })(ctx())).toEqual({ skipped: 'disabled' });
+    expect(await createSeoRebuild({ repo, env: ENV, isEnabled: async () => false })(ctx(BRANDS.goapply))).toEqual({ skipped: 'disabled' });
+    const off = { ...ENV, CN_RECRUITMENT_INFO_MODE: 'off' };
+    expect(await createSeoRebuild({ repo, env: off, isEnabled: async () => true })(ctx(BRANDS.goapply))).toEqual({ skipped: 'postings_off' });
+    // The switch is GoApply's own: RoboApply still rebuilds with it set.
+    expect(await createSeoRebuild({ repo: inventory(), env: off, fetch: okFetch(), isEnabled: async () => true })(ctx())).toMatchObject({ stoppedBy: 'done' });
     expect(repo.pages).toEqual([]);
+  });
+
+  it('GoApply rebuilds its own market with no CN_ switch set, stores zh pages, revalidates its own origin and pushes new pages to Baidu', async () => {
+    const cnBackend = { ...backend, market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', locationCountry: 'CN', locationCity: '上海', location: '上海' };
+    const repo = createMemorySeoRepo([...seoJobs(22, cnBackend), ...seoJobs(30, backend)]);
+    const fetch = okFetch();
+    const env = { ...ENV, CN_BAIDU_PUSH_TOKEN: 'tok' };
+    const result = await createSeoRebuild({ repo, env, fetch, isEnabled: async () => true })(ctx(BRANDS.goapply));
+    const role = repo.pages.find((p) => p.type === 'role' && p.slug === 'backend-engineer')!;
+    // Only the 22 cn rows count; the 30 intl rows belong to RoboApply.
+    expect(role).toMatchObject({ brand: 'goapply', locale: 'zh', jobCount: 22, indexable: true });
+    expect(repo.pages.every((p) => p.brand === 'goapply')).toBe(true);
+    expect(result).toMatchObject({ stoppedBy: 'done', baiduPushed: expect.any(Number) });
+    expect(Number(result.baiduPushed)).toBeGreaterThan(0);
+    const urls = fetch.mock.calls.map(([url]) => url);
+    expect(urls[0]).toBe('https://www.goapply.top/api/revalidate');
+    expect(JSON.parse(fetch.mock.calls[0]![1].body).tags).toContain('seo:goapply:role:backend-engineer');
+    const baidu = fetch.mock.calls.find(([url]) => url.startsWith('http://data.zz.baidu.com/'))!;
+    expect(baidu[1].body).toContain('https://www.goapply.top/browse/backend-engineer');
+    // RoboApply over the same repository still sees only its 30 rows and never calls Baidu.
+    const fetchRa = okFetch();
+    await createSeoRebuild({ repo, env, fetch: fetchRa, isEnabled: async () => true })(ctx());
+    expect(repo.pages.find((p) => p.brand === 'roboapply' && p.type === 'role' && p.slug === 'backend-engineer')).toMatchObject({ jobCount: 30, locale: 'en' });
+    expect(fetchRa.mock.calls.some(([url]) => url.includes('baidu'))).toBe(false);
   });
 
   it('builds pages from inventory with floors; private rows never count', async () => {
@@ -103,6 +131,29 @@ describe('seo-rebuild', () => {
     const repo = createMemorySeoRepo(seoJobs(50, { ...backend, visibility: 'private' }));
     const c = await collectCandidates(repo, { market: 'intl', now: NOW, publicBoards: [] });
     expect(c.map((x) => x.target.type)).toEqual(['segment', 'segment']);
+  });
+
+  it('visa-sponsorship pages are built for RoboApply only: GoApply builds none, even for postings that quote sponsorship', async () => {
+    const quoted = { ...backend, sponsorship: 'offered', sponsorshipEvidence: 'Visa sponsorship is available.' };
+    const cnQuoted = { ...quoted, market: 'cn', fromRecruiterBank: false, sourceBoard: 'greenhouse', sourceName: 'Example careers', locationCountry: 'CN', locationCity: 'Shanghai', location: 'Shanghai' };
+    const intlQuoted = { ...quoted, locationCountry: 'US', locationCity: 'Austin', location: 'Austin' };
+    const repo = createMemorySeoRepo([...seoJobs(6, cnQuoted), ...seoJobs(6, intlQuoted)]);
+    const boards = ['greenhouse'];
+    const cn = await collectCandidates(repo, { market: 'cn', now: NOW, publicBoards: boards });
+    // The six cn rows still make their role pages; only the sponsorship page is left out.
+    expect(cn.some((x) => x.target.type === 'role' && x.target.slug === 'backend-engineer')).toBe(true);
+    expect(cn.filter((x) => x.target.type === 'sponsorship_role')).toEqual([]);
+    const intl = await collectCandidates(repo, { market: 'intl', now: NOW, publicBoards: boards });
+    expect(intl.filter((x) => x.target.type === 'sponsorship_role').map((x) => x.target.slug)).toEqual(['us/backend-engineer']);
+
+    // A full GoApply run stores no sponsorship page, and does not refresh one that was stored by mistake.
+    const env = { ...ENV, PUBLIC_DISPLAY_PROVIDERS: 'ats_public' };
+    repo.pages.push({ brand: 'goapply', locale: 'zh', type: 'sponsorship_role', slug: 'cn/backend-engineer', params: { taxonomyId: 'backend_engineer', country: 'CN', segment: 'visa-sponsorship' }, title: 'x', h1: 'x', intro: '', stats: {}, jobCount: 6, indexable: true, lastBuiltAt: new Date('2026-10-01T00:00:00Z') });
+    await createSeoRebuild({ repo, env, fetch: okFetch(), isEnabled: async () => true })(ctx(BRANDS.goapply));
+    const stored = repo.pages.filter((p) => p.brand === 'goapply' && p.type === 'sponsorship_role');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.lastBuiltAt.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+    expect(repo.pages.some((p) => p.brand === 'goapply' && p.type === 'role' && p.slug === 'backend-engineer')).toBe(true);
   });
 });
 

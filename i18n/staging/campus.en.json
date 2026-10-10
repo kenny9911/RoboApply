@@ -1,3 +1,8 @@
 {
-  "campus": {}
+  "campus": {
+    "list": {
+      "compiling": "The calendar is being put together",
+      "compilingSub": "We add campus programmes one at a time, and each is checked against the employer's official page first. Nothing shows here before that check, so an empty calendar does not mean that no employer is hiring."
+    }
+  }
 }

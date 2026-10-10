@@ -1,0 +1,14 @@
+{
+  "visitor": {
+    "assistant": {
+      "consent": {
+        "label": "我同意 %BRAND% 把我的提问交给 AI 模型来回答。",
+        "detail": "回答问题的 AI 服务可能在中国大陆以外处理你的提问。你在这里输入的内容不会被保存。",
+        "privacyLink": "隐私政策"
+      },
+      "errors": {
+        "consent": "请先勾选上面的同意项。你同意后，%BRAND% 才会用 AI 回答。"
+      }
+    }
+  }
+}

@@ -1,11 +1,11 @@
 'use client';
 
 // /tools — the free tools hub (WP-57; PRODUCT_PLAN.md F-TOOL-01). Only tools
-// that work are listed. GoApply leads with the resume check (简历体检) and
-// links the campus recruiting calendar when that capability is on (R-14; a
-// disabled feature has no entry). Where the tools are off (GoApply CN-0: the
-// page passes `toolsOpen={false}`, and /config says `available: false`) the
-// tool entries are absent.
+// that work are listed, and both brands list both tools (D5). GoApply leads
+// with the resume check (简历体检) and links the campus recruiting calendar
+// when that capability is on (a disabled feature has no entry). Should the
+// server ever say the tools are off (/config `available: false`), the tool
+// entries are absent.
 //
 // "Job alerts by email" (/tools/job-alerts, WP-78) is listed last, only while
 // job alerts and email are both on for this brand — the two capabilities the
@@ -29,7 +29,7 @@ interface Card {
 }
 
 export interface ToolsHubProps {
-  /** Whether the tools run for this brand and stage (server-side decision of the page). */
+  /** Whether the tools run here (default: yes, on both brands; /config can still say no). */
   toolsOpen?: boolean;
 }
 

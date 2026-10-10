@@ -36,6 +36,7 @@ export function seoJob(over: Partial<SeoJobDetailRow> = {}): SeoJobDetailRow {
     postedAt: at,
     postedAtEstimated: false,
     firstSeenAt: at,
+    lastSeenAt: at,
     updatedAt: at,
     expiresAt: null,
     closedAt: null,

@@ -1,15 +1,14 @@
 // /sitemaps/<file>.xml — one sitemap of the index (ARCHITECTURE.md §9.5):
 //   static.xml   home cluster (hreflang: brand.seoLocales + the cross-domain
 //                alternates), marketing subpages, indexable feature pages
-//                (the ungated ones only: a gated feature page — on RoboApply
+//                (the ungated ones only: a gated feature page, such as
 //                /features/ready-to-apply, /interview-practice, /assistant,
-//                /referrals, /chrome-extension — is noindex, so it is not
+//                /referrals or the extension page, is noindex, so it is not
 //                listed here even though the footer links it; the rule is
 //                `isFeatureIndexable` in the marketing catalog),
-//                the free tools (/tools on both brands; the tool pages only
-//                where the tools run, so not on GoApply while CN-0;
-//                /tools/job-alerts on RoboApply only), signup, and /browse
-//                or /campus when live;
+//                the free tools on both brands (/tools and the tool pages;
+//                /tools/job-alerts while the brand's `jobs.alerts`
+//                capability is on), signup, and /browse or /campus when live;
 //   roles-<n>.xml, jobs-<n>.xml   from GET /api/v1/public/seo/sitemap/:part.
 // Anything else → 404. (There is no campus-<n> partition: the public campus
 // API lists programmes page by page, not URLs — see the INT-06 handoff.)
@@ -17,7 +16,7 @@
 import { indexableFeaturePaths } from '../../../components/features/marketing/catalog';
 import { TOOLS, toolHref } from '../../../components/features/tools/catalog';
 import { getBrand } from '../../../lib/brand/registry.generated';
-import { brandUrl, staticSitemapEntries, toolSitemapPaths, urlsetXml } from '../../../lib/seo';
+import { alertsSurfaceOn, brandUrl, staticSitemapEntries, toolSitemapPaths, urlsetXml } from '../../../lib/seo';
 import { getServerBrandId } from '../../../lib/server/brand';
 import { loadSitemapIndex, loadSitemapPart } from '../../../lib/server/publicApi';
 import { freeToolsOpen } from '../../tools/meta';
@@ -28,11 +27,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ file: s
   const { file } = await params;
   const brand = getBrand(await getServerBrandId());
   if (file === 'static.xml') {
+    const unknown: { browse: boolean; campus: boolean; alerts?: boolean } = { browse: false, campus: false };
     const surfaces = await loadSitemapIndex(brand.id)
-      .then((r) => (r.status === 'ok' ? r.data.surfaces : { browse: false, campus: false }))
-      .catch(() => ({ browse: false, campus: false }));
+      .then((r) => (r.status === 'ok' ? r.data.surfaces : unknown))
+      .catch(() => unknown);
     const featurePaths = indexableFeaturePaths(brand.id);
-    const toolPaths = toolSitemapPaths(brand.id, { toolsOpen: freeToolsOpen(brand.id), toolPaths: TOOLS.map(toolHref) });
+    const toolPaths = toolSitemapPaths({ toolsOpen: freeToolsOpen(brand.id), toolPaths: TOOLS.map(toolHref), alerts: alertsSurfaceOn(surfaces) });
     return new Response(urlsetXml(staticSitemapEntries(brand.id, { featurePaths, surfaces, toolPaths })), { headers: HEADERS });
   }
   const m = /^((?:roles|jobs)-\d{1,4})\.xml$/.exec(file);

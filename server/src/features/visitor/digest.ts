@@ -47,9 +47,11 @@ export interface AnonDigestDeps {
   origin(brand: ProductBrand): string;
 }
 
-/** Absolute link for one job: its public page, or (no public pages on the brand) signup that then opens the job. */
-export function digestJobHref(job: Pick<AlertJobRow, 'id' | 'title' | 'companyName'>, brand: ProductBrand, origin: string): string {
-  if (brand.market === 'cn') return `${origin}/signup?from=alert&next=${encodeURIComponent(`/jobs/${job.id}`)}`;
+/**
+ * Absolute link for one job: its public page, on both brands (D5). The digest
+ * lists only jobs that pass the public-page predicate, so the page exists.
+ */
+export function digestJobHref(job: Pick<AlertJobRow, 'id' | 'title' | 'companyName'>, _brand: ProductBrand, origin: string): string {
   return `${origin}${jobPath(job.id, job.title, job.companyName)}?from=alert`;
 }
 

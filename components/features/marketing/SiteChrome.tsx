@@ -7,8 +7,7 @@
 // /cancel link (WP-21b), popular job lists when browse pages are live, the
 // per-brand legal footer with the ICP line on GoApply (WP-13), and the locale
 // links). "Free tools" (/tools) is in both the header and the footer (the
-// header nav is hidden on a phone); it shows where the tools run
-// (useFreeToolsLinked: always on RoboApply, on GoApply once they are open).
+// header nav is hidden on a phone) on both brands (useFreeToolsLinked).
 //
 // Appearance: the header's light/dark button needs room a phone header does
 // not have in every language (brand, language, "Iniciar sesión"), so below
@@ -27,8 +26,8 @@ import { ThemeToggle } from '../../v3/shell/ThemeToggle';
 import { BrandWordmark } from '../brand';
 import { CancelFooterLink } from '../credits';
 import { LegalFooter } from '../market';
-import { featuresFor, extensionStoreId, type FeatureDef } from './catalog';
-import { useBrowseEnabled, useFreeToolsLinked, useIndexStats, useMarketingFlag } from './hooks';
+import { brandPlansRenew, featuresFor, extensionStoreId, type FeatureDef } from './catalog';
+import { useBrowseEnabled, useFreeToolsLinked, useIndexStats, useMarketingFlag, useMarketingFlagOff } from './hooks';
 import { popularListHref } from './links';
 import { SignupLink } from './SignupLink';
 import styles from './marketing.module.css';
@@ -73,10 +72,16 @@ export function SiteHeader({ from }: { from: string }) {
   );
 }
 
-/** Whether a gated feature may be linked/shown right now (fail closed). */
-export function useFeatureVisible(def: Pick<FeatureDef, 'gate' | 'brand'>): boolean {
+/**
+ * Whether a feature may be linked/shown right now. A gated feature fails
+ * closed; a feature that `needs` a default-on capability is hidden only once
+ * that capability is known to be off (catalog.ts).
+ */
+export function useFeatureVisible(def: Pick<FeatureDef, 'gate' | 'brand' | 'needs'>): boolean {
   const flagKey = def.gate === 'extensionPublished' ? 'extension' : def.gate;
   const flagOn = useMarketingFlag((flagKey ?? 'extension') as never);
+  const neededOff = useMarketingFlagOff(def.needs ?? 'extension');
+  if (def.needs && neededOff) return false;
   if (def.gate === null) return true;
   if (def.gate === 'extensionPublished') return flagOn && extensionStoreId(def.brand) !== null;
   return flagOn;
@@ -209,9 +214,12 @@ export function MarketingFooter({ localeLinks = false, themeSwitch = false }: Ma
                   {t('ranking')}
                 </Link>
               </li>
-              <li>
-                <CancelFooterLink className={styles.footerLink} />
-              </li>
+              {/* Only where plans renew: GoApply's passes end by themselves, so there is nothing to cancel. */}
+              {brandPlansRenew(brand) ? (
+                <li>
+                  <CancelFooterLink className={styles.footerLink} />
+                </li>
+              ) : null}
             </ul>
           </div>
           <PopularLists />

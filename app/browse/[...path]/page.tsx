@@ -6,8 +6,8 @@
 // Data: lib/server/publicApi.ts (unstable_cache per brand × type × slug,
 // tag `seo:<brand>:<type>:<slug>`). A non-canonical path (free-text role,
 // `_` slug) 301s to the canonical one. Below the indexability floor, and on
-// `?country=` views, the page is noindex. GoApply: deferred → 404. Feature
-// flag `seo.browse` off → 404. An unknown role (or a known role in an
+// `?country=` views, the page is noindex. Both brands (D5); feature flag
+// `seo.browse` off → 404. An unknown role (or a known role in an
 // unknown city) renders a noindex page that names what we could not find and
 // points at the real lists. Public page in HybridShell (R-23); the
 // VisitorFeed (WP-78) renders under the server list. Reads forward the
@@ -40,7 +40,6 @@ async function load({ params, searchParams }: BrowseProps): Promise<Loaded> {
   const { path } = await params;
   const sp = (await searchParams) ?? {};
   const req = await seoRequest();
-  if (req.brand.market === 'cn') return { kind: 'missing' };
   const country = typeof sp.country === 'string' ? sp.country : null;
   const pending = loadBrowsePage(req.brand.id, path ?? [], country, { clientIp: req.clientIp });
   if (!pending) return { kind: 'missing' };

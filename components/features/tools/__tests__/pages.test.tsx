@@ -1,14 +1,14 @@
 // WP-57 routes: /tools and /tools/[tool] render inside HybridShell with the
 // site footer; only the two working tools exist (no /tools/cover-letter);
-// no result id is read from the URL; GoApply on the offshore stack (CN-0)
-// has no tool pages and a hub without tools; metadata comes from
-// `tools.meta.*` per brand and the pages are indexable.
+// no result id is read from the URL; GoApply has the same tool pages and hub
+// on every stack (D5); metadata comes from `tools.meta.*` per brand and the
+// pages are indexable.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-const brand = vi.hoisted(() => ({ id: 'roboapply' as 'roboapply' | 'goapply' }));
+const brand = vi.hoisted(() => ({ id: 'roboapply' as 'roboapply' | 'goapply', locale: 'en' as 'en' | 'zh' }));
 
 vi.mock('../../../v3/shell/HybridShell', () => ({
   HybridShell: ({ children, footer, from }: { children: ReactNode; footer: ReactNode; from: string }) => (
@@ -31,7 +31,7 @@ vi.mock('next/navigation', () => ({
   },
 }));
 vi.mock('../../../../lib/server/brand', () => ({ getServerBrandId: async () => brand.id }));
-vi.mock('../../../../lib/serverLocale', () => ({ resolveLocale: async () => 'en' }));
+vi.mock('../../../../lib/serverLocale', () => ({ resolveLocale: async () => brand.locale }));
 
 import ToolsPage, { generateMetadata as hubMeta } from '../../../../app/tools/page';
 import ToolsToolPage, { generateMetadata as toolMeta } from '../../../../app/tools/[tool]/page';
@@ -47,12 +47,14 @@ afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
   brand.id = 'roboapply';
+  brand.locale = 'en';
 });
 
 describe('/tools pages', () => {
   it('/tools renders the hub in HybridShell with the footer', async () => {
     const { getByTestId, container } = render(await ToolsPage());
-    expect(getByTestId('hub').getAttribute('data-open')).toBe('true');
+    // The page passes no switch: the hub's default is open.
+    expect(getByTestId('hub').getAttribute('data-open')).toBe('undefined');
     expect(getByTestId('footer')).toBeTruthy();
     expect(container.querySelector('[data-hybrid="tools"]')).not.toBeNull();
   });
@@ -66,17 +68,24 @@ describe('/tools pages', () => {
     expect(b.getByTestId('runner').getAttribute('data-kind')).toBe('resume_job_match');
   });
 
-  it('GoApply on the offshore stack (CN-0): tool pages 404 (noindex) and the hub gets no tools; on the mainland stack they work', async () => {
+  it.each(['', 'cn-mainland', 'us'])('GoApply with DEPLOY_REGION=%j: both tool pages render and are indexable, and the hub is open', async (region) => {
     brand.id = 'goapply';
-    await expect(ToolsToolPage(props('resume-check'))).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(await toolMeta(props('resume-check'))).toEqual({ robots: { index: false, follow: false } });
-    expect(render(await ToolsPage()).getByTestId('hub').getAttribute('data-open')).toBe('false');
-    cleanup();
-    vi.stubEnv('DEPLOY_REGION', 'cn-mainland');
-    expect(render(await ToolsToolPage(props('resume-check'))).getByTestId('runner')).toBeTruthy();
-    expect(freeToolsOpen('goapply', { DEPLOY_REGION: 'cn-mainland' })).toBe(true);
-    expect(freeToolsOpen('goapply', {})).toBe(false);
-    expect(freeToolsOpen('roboapply', {})).toBe(true);
+    // GoApply's own language (an English view of a zh-only brand is noindex on every page).
+    brand.locale = 'zh';
+    vi.stubEnv('DEPLOY_REGION', region);
+    for (const [slug, kind] of [['resume-check', 'resume_check'], ['resume-job-match', 'resume_job_match']] as const) {
+      const page = render(await ToolsToolPage(props(slug)));
+      expect(page.getByTestId('runner').getAttribute('data-kind')).toBe(kind);
+      cleanup();
+      const meta = await toolMeta(props(slug));
+      expect(meta.robots).toMatchObject({ index: true });
+      expect(String(meta.alternates?.canonical)).toBe(`https://www.goapply.top/tools/${slug}`);
+    }
+    expect(render(await ToolsPage()).getByTestId('hub').getAttribute('data-open')).not.toBe('false');
+    expect(freeToolsOpen('goapply')).toBe(true);
+    expect(freeToolsOpen('roboapply')).toBe(true);
+    // An unknown tool is still 404 on GoApply.
+    await expect(ToolsToolPage(props('cover-letter'))).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
   it('any other tool is 404 (no cover-letter lander)', async () => {
@@ -94,7 +103,6 @@ describe('/tools pages', () => {
     expect(String(check.alternates?.canonical)).toMatch(/\/tools\/resume-check$/);
     expect(String(check.description)).not.toMatch(/\bATS\b/);
     brand.id = 'goapply';
-    vi.stubEnv('DEPLOY_REGION', 'cn-mainland');
     expect((await toolMeta(props('resume-check'))).title).toMatch(/\| GoApply$/);
   });
 });

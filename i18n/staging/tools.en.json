@@ -1,3 +1,8 @@
 {
-  "tools": {}
+  "tools": {
+    "consent": {
+      "labelAi": "I agree that %BRAND% reads this resume with automated software, including an AI model, to make this report. It is deleted after {hours} hours unless I create an account.",
+      "outsideMainland": "It is processed outside mainland China by the service providers named in the privacy notice."
+    }
+  }
 }

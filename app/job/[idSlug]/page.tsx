@@ -6,8 +6,10 @@
 // canonical path. Unknown, not public or closed → the not-found page. An App
 // Router page cannot answer 410; the HTML 410 for a closed job is the proxy's
 // (REQ-56-2: proxy.ts calls `publicJobHtmlStatus` from lib/server/publicApi).
-// GoApply: public job pages are deferred → 404. JobPosting JSON-LD per ARCH
-// §9.3 (lib/seo.ts). Reads forward the visitor's IP on cache misses (F-TRUST-02).
+// Both brands (D5): a brand reads only its own market's jobs, and the API
+// answers 404 on GoApply while CN_RECRUITMENT_INFO_MODE is off. JobPosting
+// JSON-LD per ARCH §9.3 (lib/seo.ts). Reads forward the visitor's IP on cache
+// misses (F-TRUST-02).
 
 import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -28,7 +30,6 @@ interface JobProps {
 async function load({ params }: JobProps): Promise<{ job: PublicJobDetail; requested: string } | null> {
   const { idSlug } = await params;
   const req = await seoRequest();
-  if (req.brand.market === 'cn') return null;
   const id = parseJobIdSlug(idSlug);
   if (!id) return null;
   const res = await loadPublicJob(req.brand.id, id, { clientIp: req.clientIp });

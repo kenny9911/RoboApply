@@ -1,3 +1,14 @@
 {
-  "visitor": {}
+  "visitor": {
+    "assistant": {
+      "consent": {
+        "label": "I agree that %BRAND% sends my questions to an AI model to answer them.",
+        "detail": "The AI service that answers may process your question outside mainland China. Nothing you type here is saved.",
+        "privacyLink": "Privacy notice"
+      },
+      "errors": {
+        "consent": "Tick the box above first. %BRAND% answers with AI only after you agree."
+      }
+    }
+  }
 }

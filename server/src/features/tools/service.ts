@@ -1,10 +1,12 @@
 // server/src/features/tools/service.ts
 //
 // Free tools without an account (WP-57; PRODUCT_PLAN.md F-TOOL-02, F-TOOL-03).
-// See ./contract.ts for the rules. Order of a run:
-//   0. GoApply in CN-0: the tools are off (404 feature_disabled);
+// See ./contract.ts for the rules. The tools are open on both brands (D5);
+// GoApply adds a processing notice the visitor ticks first. Order of a run:
 //   1. validate the file (size, type, first bytes) and the fields — free;
 //   2. GoApply: the processing notice must be ticked (TOOLS_CONSENT_VERSION);
+//      it names the automated and AI read and, when the brand runs on the
+//      shared stack or offshore, that the file is processed outside the mainland;
 //   3. the per-IP attempts guard (20 a day across both tools, fail closed) —
 //      bounds the parses and rows one IP can cause;
 //   4. the 24 h hash cache: the same file (and posting) from the same browser
@@ -23,13 +25,15 @@
 // Reads and the claim need the visitor cookie of the browser that ran the
 // check (`visitorHash`). `claim` turns a result into a resume in the
 // signed-in user's account and answers the full report. Nothing here calls a model directly; the parser
-// path may (structured parse) on RoboApply when its text model is on —
-// never for a GoApply visitor (./parse.ts, `anonymousAiAllowed`).
+// path may (structured parse) when the brand's text model is on — for a
+// GoApply visitor only on a run that carried the ticked notice
+// (./parse.ts, `anonymousAiAllowed`).
 
 import crypto from 'node:crypto';
 
 import { HttpError } from '../../platform/http.js';
 import { applyResumeUploadPolicy, goHireParseActive, isCn0 } from '../../platform/residency/index.js';
+import { brandUsesSharedStack } from '../../platform/brand/index.js';
 import {
   DAY,
   consumeRateLimit,
@@ -161,18 +165,24 @@ function sameHash(a: string, b: string): boolean {
 }
 
 /**
- * Whether the free tools are open for this brand and stage. GoApply in CN-0
- * (offshore, invite-only closed beta) is closed: an open anonymous upload
- * would send mainland visitors' resumes offshore outside the beta and its
- * separate cross-border consent (CN_TW_LAUNCH_PLAN §3, L-2). Opening it needs
- * counsel's sign-off and processor-naming copy (OPS-C).
+ * Whether the free tools are open for this brand. They are, on both brands and
+ * on every stack (owner ruling D5): GoApply no longer waits for a mainland
+ * deployment. What GoApply adds is the processing notice (`consentRequired`)
+ * and, where it applies, the line that the file is processed outside the
+ * mainland (`processedOutsideMainland`).
  */
-export function toolsOpen(brand: ProductBrand, env: EnvSource = process.env): boolean {
-  return !(brand.market === 'cn' && isCn0(brand, env));
+export function toolsOpen(_brand: ProductBrand, _env: EnvSource = process.env): boolean {
+  return true;
 }
 
-function disabled(): HttpError {
-  return new HttpError('feature_disabled', 'These tools are not available here yet.');
+/**
+ * Does a GoApply visitor's file leave the mainland on this deployment? Yes
+ * when the deployment itself is offshore, or when GoApply runs on the shared
+ * stack (no China-specific provider set), whose processors are offshore.
+ * Never true for RoboApply: its notice does not carry the line.
+ */
+export function processedOutsideMainland(brand: ProductBrand, env: EnvSource = process.env): boolean {
+  return brand.market === 'cn' && (isCn0(brand, env) || brandUsesSharedStack(brand, env));
 }
 
 function rateLimited(message: string, details: Record<string, unknown>, retryAfterSec: number): HttpError {
@@ -338,20 +348,20 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
         shortReportIssues: TOOLS_LIMITS.shortReportIssues,
         consentRequired: cn,
         consentVersion: cn ? TOOLS_CONSENT_VERSION : null,
-        processedOutsideMainland: cn && isCn0(brand, env),
+        processedOutsideMainland: processedOutsideMainland(brand, env),
         parserName: cn && goHireParseActive(brand, env) ? GOHIRE_PARSER_NAME : null,
       };
     },
 
     async run(kind, input) {
       const brand = deps.brand();
-      if (!toolsOpen(brand, env)) throw disabled();
       const problem = fileProblem(input.file);
       if (problem) throw problem;
       const file = input.file!;
       const posting = kind === 'resume_job_match' ? postingFrom(input.fields) : null;
       const cn = brand.market === 'cn';
-      if (cn && input.fields.consent !== TOOLS_CONSENT_VERSION) {
+      const consented = input.fields.consent === TOOLS_CONSENT_VERSION;
+      if (cn && !consented) {
         throw invalid(TOOLS_ERROR_REASONS.consentRequired, 'Tick the box to let us read this resume.');
       }
       if (!isVisitorId(input.visitor)) throw new HttpError('invalid_request', 'Reload the page and try again.');
@@ -378,8 +388,8 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
       const postingHash = posting ? sha256Hex(`${posting.title}\n${posting.text}`) : '-';
       // The leading version changes whenever a report for the same file would
       // read differently, so no visitor is handed a stored answer from the
-      // older reading (v3: roles and dates of an uploaded file reach the rows).
-      const cacheKey = sha256Hex(`v3|${brand.id}|${kind}|${sha256Hex(file.buffer)}|${postingHash}|${ipHash}|${visitorHash}`);
+      // older reading (v4: skills are spelled as the posting spells them).
+      const cacheKey = sha256Hex(`v4|${brand.id}|${kind}|${sha256Hex(file.buffer)}|${postingHash}|${ipHash}|${visitorHash}`);
 
       const cached = await deps.store.findByCacheKey(brand.id, cacheKey, at);
       if (cached && cached.payload.tool === kind && sameHash(cached.payload.visitorHash, visitorHash)) {
@@ -418,6 +428,7 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
           fileName: file.originalname,
           mimeType: file.mimetype,
           brand,
+          consented,
           requestId: input.requestId,
           signal: input.signal,
         });
@@ -440,7 +451,7 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
           report = { kind, postingTitle: posting!.title, rows: k.rows, keywords: k.keywords, hardSkills: k.hardSkills };
         }
 
-        // Brand storage rule before anything is kept (CN-0 GoApply: redact IDs and health details).
+        // Brand storage rule before anything is kept (GoApply under CN_STORAGE_MODE=redact: IDs and health details are redacted).
         const applied = applyResumeUploadPolicy(brand, { rawText: '', markdown: parsed.markdown, parsed: report }, env);
         const payload: ToolResultPayload = {
           v: 1,
@@ -464,7 +475,6 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
 
     async getResult(rawId, visitor) {
       const brand = deps.brand();
-      if (!toolsOpen(brand, env)) throw disabled();
       const at = now();
       const row = await liveRow(rawId, visitor, brand, at);
       if (row.consumedAt) {
@@ -475,7 +485,6 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
 
     async claim(user, rawId, visitor) {
       const brand = deps.brand();
-      if (!toolsOpen(brand, env)) throw disabled();
       if (user.brand && user.brand !== brand.id) throw new HttpError('not_found', 'This result was not found.');
       const at = now();
       const row = await liveRow(rawId, visitor, brand, at);

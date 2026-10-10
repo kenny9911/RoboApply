@@ -60,17 +60,38 @@ describe('home routes', () => {
     expect(meta.title).toBe("Find out why you're not getting interviews | RoboApply");
   });
 
-  // INT-06 (wave4 WP-93 #13): the live job ticker on the RoboApply home only.
+  // INT-06 (wave4 WP-93 #13) and D5: the live job ticker on both homes, `/` and `/{locale}`.
   // The slot is its own Suspense boundary: the page is sent without waiting for the job read.
-  it('RoboApply / hands the home a streamed <JobTicker /> (Suspense, no fallback); GoApply / has none', async () => {
-    const home = kids((await RootPage()) as El).find((c) => c.type === RoboApplyHome)!;
-    const slot = home.props.ticker as React.ReactElement<{ fallback?: unknown; children?: React.ReactElement }>;
-    expect(slot.type).toBe(Suspense);
-    expect(slot.props.fallback).toBeNull();
-    expect(slot.props.children?.type).toBe(JobTicker);
+  it('both homes get a streamed <JobTicker /> (Suspense, no fallback), on / and on /{locale}', async () => {
+    const isTicker = (slot: unknown) => {
+      const s = slot as React.ReactElement<{ fallback?: unknown; children?: React.ReactElement }>;
+      expect(s.type).toBe(Suspense);
+      expect(s.props.fallback).toBeNull();
+      expect(s.props.children?.type).toBe(JobTicker);
+    };
+    isTicker(kids((await RootPage()) as El).find((c) => c.type === RoboApplyHome)!.props.ticker);
+    isTicker(kids((await LocalePage(params('zh'))) as El).find((c) => c.type === RoboApplyHome)!.props.ticker);
     brand.id = 'goapply';
-    const cnHome = kids((await RootPage()) as El).find((c) => c.type === GoApplyHome)!;
-    expect(cnHome.props.ticker).toBeUndefined();
+    isTicker(kids((await RootPage()) as El).find((c) => c.type === GoApplyHome)!.props.ticker);
+    isTicker(kids((await LocalePage(params('en'))) as El).find((c) => c.type === GoApplyHome)!.props.ticker);
+  });
+
+  // The server cannot read the capabilities, so the structured data lists only the questions that hold
+  // whatever the operator switched off: the one about listed jobs is on the page (while jobs.feed is on)
+  // but never in the JSON-LD, which therefore never says more than the page.
+  it('GoApply / and /en carry a FAQPage with the five questions the page always renders (not the jobs question)', async () => {
+    brand.id = 'goapply';
+    const json = JSON.parse(kids((await RootPage()) as El).find((c) => c.type === JsonLd)!.props.json!);
+    const faq = json['@graph'].find((n: { '@type': string }) => n['@type'] === 'FAQPage');
+    expect(faq.mainEntity).toHaveLength(5);
+    const names = faq.mainEntity.map((q: { name: string }) => q.name);
+    expect(names).toContain('What does it cost?');
+    expect(names).not.toContain('Where do the jobs come from?');
+    expect(JSON.stringify(faq)).not.toMatch(/Every job shows its source/);
+    const localized = JSON.parse(kids((await LocalePage(params('en'))) as El).find((c) => c.type === JsonLd)!.props.json!);
+    expect(localized['@graph'].find((n: { '@type': string }) => n['@type'] === 'FAQPage').mainEntity).toHaveLength(5);
+    expect(JSON.stringify(faq)).not.toMatch(/RoboApply|%BRAND%/);
+    expect(JSON.stringify(json)).not.toMatch(/"@type":"(Offer|AggregateOffer|AggregateRating|Review)"|"price"/);
   });
 
   it('GoApply / renders the GoApply home (no redirect) with GoApply canonical and cross-domain hreflang', async () => {
@@ -146,9 +167,37 @@ describe('feature and subpage routes', () => {
   it('a feature page of this brand renders; the other brand’s slug 404s', async () => {
     expect(await FeatureRoute(slug('job-matches'))).toBeTruthy();
     await expect(FeatureRoute(slug('form-filler'))).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(FeatureRoute(slug('referral-codes'))).rejects.toThrow('NEXT_NOT_FOUND');
     brand.id = 'goapply';
     expect(await FeatureRoute(slug('form-filler'))).toBeTruthy();
     await expect(FeatureRoute(slug('chrome-extension'))).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(FeatureRoute(slug('visa-sponsorship'))).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  // D5 (G118): the pages for the capabilities both brands share, plus 内推码.
+  it('GoApply answers /features/job-matches, resume-tailoring, cover-letters, ready-to-apply and referral-codes with its own Chinese metadata', async () => {
+    brand.id = 'goapply';
+    const titles: Record<string, string> = {
+      'job-matches': '与你的简历匹配的职位，每个都注明来源 | GoApply',
+      'resume-tailoring': '为每个职位定制简历 | GoApply',
+      'cover-letters': '根据职位描述和你的简历写求职信 | GoApply',
+      'ready-to-apply': '每周备好申请材料，由你自己提交 | GoApply',
+      'referral-codes': '其他求职者分享的内推码 | GoApply',
+    };
+    const zh = (await import('../../../../i18n/staging/landing.zh.json')).default.landing.features.goapply as Record<string, { metaTitle: string }>;
+    for (const [s, title] of Object.entries(titles)) {
+      expect(await FeatureRoute(slug(s)), s).toBeTruthy();
+      const meta = await featureMetadata(slug(s));
+      expect(meta.alternates?.canonical, s).toBe(`https://www.goapply.top/features/${s}`);
+      // The page title is the staged copy: English until the locale merge, the staged Chinese after it.
+      const def = featuresFor('goapply').find((f) => f.slug === s)!;
+      expect(`${zh[def.key]!.metaTitle} | GoApply`, s).toBe(title);
+      expect(String(meta.title), s).toMatch(/\| GoApply$/);
+      expect(String(meta.title), s).not.toMatch(/landing\.features|RoboApply/);
+    }
+    // Ungated pages are indexable; the two gated ones are noindex, as their RoboApply twins are.
+    for (const s of ['job-matches', 'resume-tailoring', 'cover-letters']) expect((await featureMetadata(slug(s))).robots, s).toMatchObject({ index: true });
+    for (const s of ['ready-to-apply', 'referral-codes']) expect((await featureMetadata(slug(s))).robots, s).toMatchObject({ index: false });
   });
 
   it('feature metadata: brand canonical, gated pages noindex', async () => {
@@ -176,6 +225,7 @@ describe('feature and subpage routes', () => {
       }
     }
     expect(indexableFeaturePaths('roboapply')).toEqual(['/features/job-matches', '/features/resume-tailoring', '/features/cover-letters', '/features/visa-sponsorship']);
+    expect(indexableFeaturePaths('goapply')).toEqual(['/features/job-matches', '/features/resume-tailoring', '/features/cover-letters', '/features/resume']);
     for (const gated of ['ready-to-apply', 'interview-practice', 'assistant']) expect(indexableFeaturePaths('roboapply')).not.toContain(`/features/${gated}`);
   });
 

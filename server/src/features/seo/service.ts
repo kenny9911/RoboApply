@@ -3,11 +3,15 @@
 // The SEO reads behind /api/v1/public/seo (contract.ts). Every list and
 // number goes through `publicJobWhere` (scope.ts) for the brand's market;
 // nothing here is cached (the CDN and the web's unstable_cache are).
+//
+// Both brands are served by the same rules (D5). The one market rule lives in
+// `publicListingsOpen`: GoApply with CN_RECRUITMENT_INFO_MODE=off shows no
+// third-party posting, so every list here is empty and every page is missing.
 
 import type { EnvSource, ProductBrand } from '../../platform/brand/index.js';
 import { isEnabled as platformIsEnabled, type FlagKey } from '../../platform/flags.js';
 import { HttpError, httpError, type Sourced } from '../../platform/http.js';
-import { cnPostingVisible } from '../cn/jobs/index.js';
+import { buildCnCardMeta, cnJobCapabilities, cnPostingVisible } from '../cn/jobs/index.js';
 import { findCity } from '../jobs/geo/index.js';
 import { getTaxonomyNode } from '../jobs/taxonomy/index.js';
 import {
@@ -30,7 +34,7 @@ import {
   type SitemapPartResponse,
   type TickerResponse,
 } from './contract.js';
-import { browseTarget, jobIdSlug, jobPath, resolveBrowsePath, targetFromParams, type BrowseTarget } from './paths.js';
+import { browseTarget, jobIdSlug, jobPath, pageTypeOpen, resolveBrowsePath, targetFromParams, type BrowseTarget } from './paths.js';
 import { defaultSeoRepo, type SeoJobDetailRow, type SeoJobRow, type SeoRepo } from './repo.js';
 import { allowedPublicBoards, isPubliclyListable, type JobScope, type ScopeContext } from './scope.js';
 import { floorFor, indexCount, introFor, isIndexable, medianPay, statsView } from './stats.js';
@@ -38,6 +42,15 @@ import { floorFor, indexCount, introFor, isIndexable, medianPay, statsView } fro
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Pay rows read for the median (more than enough for MIN_SAMPLE; bounded for cost). */
 const PAY_ROWS_MAX = 5000;
+
+/**
+ * May this brand show public postings at all? Always on RoboApply. On GoApply
+ * the operator's off switch (`CN_RECRUITMENT_INFO_MODE=off`) closes every
+ * public list, page, ticker and sitemap partition; unset means open.
+ */
+export function publicListingsOpen(brand: Pick<ProductBrand, 'market'>, env: EnvSource = process.env): boolean {
+  return brand.market !== 'cn' || cnJobCapabilities(env).postings;
+}
 
 /** A closed (or expired / archived) job: the route answers 410. */
 export class SeoGoneError extends Error {
@@ -86,6 +99,7 @@ export function toPublicCard(row: SeoJobRow): PublicJobCard {
     pay,
     postedAt: row.postedAtEstimated ? null : iso(row.postedAt),
     firstSeenAt: row.firstSeenAt.toISOString(),
+    lastVerifiedAt: iso(row.lastSeenAt),
     sourceName: row.sourceName,
     originalSourceName: row.originalSourceName,
     sponsorshipQuote: row.sponsorship === 'offered' && row.sponsorshipEvidence ? row.sponsorshipEvidence : null,
@@ -120,7 +134,19 @@ export function toPublicDetail(row: SeoJobDetailRow): PublicJobDetail {
       logoUrl: company && company.logoUrl && hasFact(company.facts, 'logoUrl') ? company.logoUrl : null,
     },
     canonicalPath: card.path,
+    // Set by the service for a GoHire bank posting on GoApply (`cnLicenceFor`).
+    licence: null,
   };
+}
+
+/**
+ * The licence line of a GoApply job page: GoHire's HR-service licence on a
+ * GoHire bank posting, when both env values are set. The same rule as the
+ * signed-in card (`buildCnCardMeta`), so the two never disagree.
+ */
+export function cnLicenceFor(row: SeoJobRow, env: EnvSource = process.env): PublicJobDetail['licence'] {
+  if (row.market !== 'cn') return null;
+  return buildCnCardMeta(row as unknown as Record<string, unknown>, cnJobCapabilities(env)).sourceLine.licence;
 }
 
 const HUB_LINK: SeoLink = { kind: 'hub', path: '/browse', jobCount: null };
@@ -227,10 +253,13 @@ export function createSeoService(deps: SeoServiceDeps = {}): SeoService {
     stats,
 
     async page(brand, query) {
+      if (!publicListingsOpen(brand, env)) throw new HttpError('not_found');
       const country = query.country ? query.country.toUpperCase() : null;
       const resolved = resolveBrowsePath(query.path, { country });
       if (!resolved.ok) throw httpError('not_found', undefined, { reason: resolved.reason });
       const target = resolved.target;
+      // A page type the market does not have (visa sponsorship on GoApply) is missing, like an unknown path.
+      if (!pageTypeOpen(target.type, brand.market)) throw new HttpError('not_found');
       // `?country=` narrows role, remote, graduate and segment lists (a city already implies its country).
       const filtered = !!country && target.type !== 'role_city' && target.type !== 'sponsorship_role';
       const scope: JobScope = filtered ? { ...target.scope, country: country! } : target.scope;
@@ -260,12 +289,13 @@ export function createSeoService(deps: SeoServiceDeps = {}): SeoService {
     },
 
     async hub(brand) {
-      if (brand.market === 'cn') return { pages: [], asOf: now().toISOString() };
+      if (!publicListingsOpen(brand, env)) return { pages: [], asOf: now().toISOString() };
       const repo = await getRepo();
       const rows = await repo.listSeoPages(brand.id, { indexableOnly: true });
       const pages: SeoLink[] = [];
       for (const row of [...rows].sort((a, b) => b.jobCount - a.jobCount)) {
         if (pages.length >= SEO_HUB_LIMIT) break;
+        if (!pageTypeOpen(row.type, brand.market)) continue;
         const params = SeoPageParamsSchema.safeParse(row.params);
         const target = params.success ? targetFromParams(row.type, params.data) : null;
         if (target) pages.push(linkFor(target, indexCount(row.jobCount, row.lastBuiltAt)));
@@ -283,13 +313,12 @@ export function createSeoService(deps: SeoServiceDeps = {}): SeoService {
       // Never public: a user's import, a duplicate, a job whose provider may not be shown, a flagged job.
       if (!isPubliclyListable({ ...row, closedAt: null, archivedAt: null, expiresAt: null }, ctx)) throw new HttpError('not_found');
       if (closed) throw new SeoGoneError();
-      return toPublicDetail(row);
+      return { ...toPublicDetail(row), licence: cnLicenceFor(row, env) };
     },
 
     async ticker(brand) {
       const asOf = now().toISOString();
-      // GoApply's home shows the campus calendar strip instead (PRODUCT F-MKT-02).
-      if (brand.market === 'cn') return { items: [], asOf };
+      if (!publicListingsOpen(brand, env)) return { items: [], asOf };
       const repo = await getRepo();
       const rows = await repo.listJobs({}, ctxFor(brand), { limit: TICKER_LIMIT, order: 'firstSeen' });
       return {
@@ -303,8 +332,9 @@ export function createSeoService(deps: SeoServiceDeps = {}): SeoService {
 
     async sitemapIndex(brand) {
       const campus = await flag('jobs.campusCalendar', brand);
-      // GoApply: browse and public job pages are deferred (PRODUCT F-SEO-*, cn column).
-      if (brand.market === 'cn') return { parts: [], surfaces: { browse: false, campus } };
+      // Signed-out job alerts (/tools/job-alerts) follow the brand's `jobs.alerts` capability.
+      const alerts = await flag('jobs.alerts', brand);
+      if (!publicListingsOpen(brand, env)) return { parts: [], surfaces: { browse: false, campus, alerts } };
       const browse = await flag('seo.browse', brand);
       const repo = await getRepo();
       const parts: SitemapIndexResponse['parts'] = [];
@@ -318,12 +348,12 @@ export function createSeoService(deps: SeoServiceDeps = {}): SeoService {
       for (let i = 0; i < Math.ceil(jobs / SITEMAP_PARTITION_MAX); i += 1) {
         parts.push({ name: `jobs-${i + 1}`, count: Math.min(SITEMAP_PARTITION_MAX, jobs - i * SITEMAP_PARTITION_MAX), lastmod: null });
       }
-      return { parts, surfaces: { browse, campus } };
+      return { parts, surfaces: { browse, campus, alerts } };
     },
 
     async sitemapPart(brand, part) {
       const m = /^(roles|jobs)-(\d{1,4})$/.exec(part);
-      if (!m || brand.market === 'cn') throw new HttpError('not_found');
+      if (!m || !publicListingsOpen(brand, env)) throw new HttpError('not_found');
       const n = Number(m[2]);
       if (n < 1) throw new HttpError('not_found');
       const skip = (n - 1) * SITEMAP_PARTITION_MAX;
@@ -334,6 +364,7 @@ export function createSeoService(deps: SeoServiceDeps = {}): SeoService {
         if (!rows.length) throw new HttpError('not_found');
         const urls: SitemapPartResponse['urls'] = [];
         for (const row of rows) {
+          if (!pageTypeOpen(row.type, brand.market)) continue;
           const params = SeoPageParamsSchema.safeParse(row.params);
           const target = params.success ? targetFromParams(row.type, params.data) : null;
           if (target) urls.push({ path: target.path, lastmod: row.lastBuiltAt.toISOString() });

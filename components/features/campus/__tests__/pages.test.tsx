@@ -45,6 +45,14 @@ describe('/campus page', () => {
     expect(el).toBeTruthy();
     expect(nav.notFound).not.toHaveBeenCalled();
   });
+  it('GoApply default (no CN_ switch): an empty calendar answers the page, with the server-read empty list handed to the client', async () => {
+    reads.list.mockResolvedValue({ status: 'ok', data: LIST });
+    const el = (await CampusPage({ searchParams: Promise.resolve({}) })) as { props: { children: { props: { initial: unknown; filter: unknown } } } };
+    expect(nav.notFound).not.toHaveBeenCalled();
+    expect(reads.list).toHaveBeenCalledWith('');
+    // The calendar gets the empty list and no filter: it renders the "being put together" state.
+    expect(el.props.children.props).toMatchObject({ initial: LIST, filter: {} });
+  });
   it('a failed read still renders (the client shows the error), never a 404', async () => {
     reads.list.mockResolvedValue({ status: 'error' });
     await expect(CampusPage({ searchParams: Promise.resolve({}) })).resolves.toBeTruthy();

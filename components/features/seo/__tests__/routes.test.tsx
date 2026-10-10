@@ -1,8 +1,9 @@
 // @vitest-environment node
 // WP-56 route files: robots / sitemap index / sitemaps / llms.txt per host
 // (snapshots for both hosts), the secret-gated revalidate route, and the
-// browse and job pages (GoApply deferred → 404, canonical 301, noindex below
-// the floor, unknown role, JobPosting JSON-LD).
+// browse and job pages on both brands (canonical 301, noindex below the
+// floor, unknown role, JobPosting JSON-LD; 404 when the API says the feature
+// is off).
 
 import type React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +44,7 @@ import { GET as sitemapFile } from '../../../../app/sitemaps/[file]/route';
 import { GET as llms } from '../../../../app/llms.txt/route';
 import { POST as revalidate } from '../../../../app/api/revalidate/route';
 import BrowseRoute, { generateMetadata as browseMetadata } from '../../../../app/browse/[...path]/page';
+import BrowseHubRoute, { generateMetadata as browseHubMetadata } from '../../../../app/browse/page';
 import JobRoute, { generateMetadata as jobMetadata } from '../../../../app/job/[idSlug]/page';
 import { JsonLd } from '../../../features/marketing';
 import { VisitorFeed } from '../../../features/visitor';
@@ -72,7 +74,8 @@ afterEach(() => {
 describe.each(['roboapply', 'goapply'] as const)('crawl files on the %s host', (brand) => {
   beforeEach(() => {
     h.brand.id = brand;
-    if (brand === 'goapply') h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true } }));
+    // GoApply with seo.browse off (the registry default on both brands) and the campus calendar on.
+    if (brand === 'goapply') h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [{ name: 'jobs-1', count: 4, lastmod: null }], surfaces: { browse: false, campus: true, alerts: true } }));
   });
 
   it('robots.txt', async () => {
@@ -118,21 +121,38 @@ describe('sitemaps/static.xml — free tools', () => {
     for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts', '/help/ranking']) expect(locs).toContain(`https://www.roboapply.io${p}`);
   });
 
-  it('GoApply while CN-0 (offshore stack): /tools only', async () => {
+  it.each([undefined, 'cn-mainland', 'us'])('GoApply (DEPLOY_REGION=%s): /tools, both tool pages and /tools/job-alerts, like RoboApply', async (region) => {
     h.brand.id = 'goapply';
-    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true } }));
+    if (region) process.env.DEPLOY_REGION = region;
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true, alerts: true } }));
     const locs = await staticLocs();
-    expect(locs).toContain('https://www.goapply.top/tools');
-    for (const p of ['/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']) expect(locs).not.toContain(`https://www.goapply.top${p}`);
+    for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts', '/help/ranking']) expect(locs).toContain(`https://www.goapply.top${p}`);
   });
 
-  it('GoApply on the mainland stack (CN-1): the two tool pages are listed, job alerts still are not', async () => {
+  it.each(['roboapply', 'goapply'] as const)('%s: job alerts leave the sitemap only when the API says the capability is off', async (brand) => {
+    h.brand.id = brand;
+    const origin = brand === 'goapply' ? 'https://www.goapply.top' : 'https://www.roboapply.io';
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: false, alerts: false } }));
+    const off = await staticLocs();
+    expect(off).not.toContain(`${origin}/tools/job-alerts`);
+    expect(off).toContain(`${origin}/tools/resume-check`);
+    // An older API build (no field) and a failed read keep it listed: the capability's default is on.
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: false } }));
+    expect(await staticLocs()).toContain(`${origin}/tools/job-alerts`);
+    h.api.loadSitemapIndex.mockRejectedValue(new Error('down'));
+    expect(await staticLocs()).toContain(`${origin}/tools/job-alerts`);
+  });
+
+  it('GoApply lists /browse when its seo.browse surface is live, and its indexable feature pages', async () => {
     h.brand.id = 'goapply';
-    process.env.DEPLOY_REGION = 'cn-mainland';
-    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true } }));
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: true, campus: true, alerts: true } }));
     const locs = await staticLocs();
-    for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match']) expect(locs).toContain(`https://www.goapply.top${p}`);
-    expect(locs).not.toContain('https://www.goapply.top/tools/job-alerts');
+    for (const p of ['/browse', '/campus', '/features/job-matches', '/features/resume-tailoring', '/features/cover-letters', '/features/resume']) {
+      expect(locs).toContain(`https://www.goapply.top${p}`);
+    }
+    for (const p of ['/features/ready-to-apply', '/features/referral-codes', '/features/assistant']) expect(locs).not.toContain(`https://www.goapply.top${p}`);
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true, alerts: true } }));
+    expect(await staticLocs()).not.toContain('https://www.goapply.top/browse');
   });
 
   it('there is no campus-<n> partition (the campus API lists programmes, not URLs)', async () => {
@@ -260,13 +280,31 @@ describe('/browse/[...path]', () => {
     expect(kids(el2).find((c) => c.type === BrowseUnknown)?.props).toMatchObject({ query: { kind: 'role', role: 'zzqx' } });
   });
 
-  it('GoApply (deferred), flag off and other misses → 404', async () => {
+  it('GoApply renders the same page over its own data (canonical on goapply.top)', async () => {
     h.brand.id = 'goapply';
-    await expect(BrowseRoute(props(['backend-engineer']))).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(h.api.loadBrowsePage).not.toHaveBeenCalled();
-    h.brand.id = 'roboapply';
+    h.api.loadBrowsePage.mockResolvedValue(ok(page()));
+    const el = (await BrowseRoute(props(['backend-engineer', 'taipei']))) as El;
+    expect(h.api.loadBrowsePage).toHaveBeenCalledWith('goapply', ['backend-engineer', 'taipei'], null, { clientIp: '198.51.100.7' });
+    expect(kids(el).find((c) => c.type === BrowsePage)?.props.data).toMatchObject({ path: '/browse/backend-engineer/taipei' });
+    expect(kids(el).find((c) => c.type === VisitorFeed)).toBeTruthy();
+    const meta = await browseMetadata(props(['backend-engineer', 'taipei']));
+    expect(meta.alternates?.canonical).toBe('https://www.goapply.top/browse/backend-engineer/taipei');
+    expect(String(meta.title)).toMatch(/\| GoApply$/);
+  });
+
+  it.each(['roboapply', 'goapply'] as const)('%s: flag off (the API answers feature_disabled) and other misses → 404', async (brand) => {
+    h.brand.id = brand;
     h.api.loadBrowsePage.mockResolvedValue({ status: 'disabled' });
     await expect(BrowseRoute(props(['backend-engineer']))).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(h.api.loadBrowsePage).toHaveBeenCalledWith(brand, ['backend-engineer'], null, expect.anything());
+    expect((await browseMetadata(props(['backend-engineer']))).robots).toMatchObject({ index: false });
+    // /browse itself follows the same answer.
+    h.api.loadBrowseHub.mockResolvedValue({ status: 'disabled' });
+    await expect(BrowseHubRoute()).rejects.toThrow('NEXT_NOT_FOUND');
+    h.api.loadBrowseHub.mockResolvedValue(ok({ pages: [], asOf: '' }));
+    expect(await BrowseHubRoute()).toBeTruthy();
+    expect(h.api.loadBrowseHub).toHaveBeenLastCalledWith(brand, { clientIp: '198.51.100.7' });
+    expect((await browseHubMetadata()).robots).toMatchObject({ index: true });
   });
 });
 
@@ -291,16 +329,35 @@ describe('/job/[idSlug]', () => {
     await expect(JobRoute(props('cmjob1-old-title'))).rejects.toThrow('NEXT_REDIRECT /job/cmjob1-backend-engineer-acme');
   });
 
-  it('closed (410 from the API), not public, bad id, GoApply → not found', async () => {
+  it.each(['roboapply', 'goapply'] as const)('%s: closed (410 from the API), not public, feature off, bad id → not found', async (brand) => {
+    h.brand.id = brand;
     h.api.loadPublicJob.mockResolvedValue({ status: 'gone' });
     await expect(JobRoute(props('cmjob1-x'))).rejects.toThrow('NEXT_NOT_FOUND');
     h.api.loadPublicJob.mockResolvedValue({ status: 'not_found', reason: null });
     await expect(JobRoute(props('cmjob1-x'))).rejects.toThrow('NEXT_NOT_FOUND');
-    await expect(JobRoute(props('%3Cscript%3E'))).rejects.toThrow('NEXT_NOT_FOUND');
-    h.brand.id = 'goapply';
-    h.api.loadPublicJob.mockClear();
+    // GoApply with CN_RECRUITMENT_INFO_MODE=off: the API answers feature_disabled.
+    h.api.loadPublicJob.mockResolvedValue({ status: 'disabled' });
     await expect(JobRoute(props('cmjob1-x'))).rejects.toThrow('NEXT_NOT_FOUND');
-    expect(h.api.loadPublicJob).not.toHaveBeenCalled();
     expect((await jobMetadata(props('cmjob1-x'))).robots).toMatchObject({ index: false });
+    h.api.loadPublicJob.mockClear();
+    await expect(JobRoute(props('%3Cscript%3E'))).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(h.api.loadPublicJob).not.toHaveBeenCalled();
+  });
+
+  it('GoApply renders a public job page: the API is asked for the goapply brand, canonical on goapply.top, a bare-id path for a Chinese title', async () => {
+    h.brand.id = 'goapply';
+    const cnJob = job({ id: 'cmcn1', idSlug: 'cmcn1', path: '/job/cmcn1', canonicalPath: '/job/cmcn1', title: '数据分析师', companyName: '示例科技', company: { name: '示例科技', website: null, logoUrl: null }, location: '上海', city: '上海', country: 'CN' });
+    h.api.loadPublicJob.mockResolvedValue(ok({ job: cnJob }));
+    const el = (await JobRoute(props('cmcn1'))) as El;
+    expect(h.api.loadPublicJob).toHaveBeenCalledWith('goapply', 'cmcn1', { clientIp: '198.51.100.7' });
+    expect(kids(el).find((c) => c.type === JobPage)?.props.job).toMatchObject({ id: 'cmcn1', title: '数据分析师' });
+    const json = JSON.parse(kids(el).find((c) => c.type === JsonLd)!.props.json!);
+    expect(json['@graph'].map((n: { '@type': string }) => n['@type'])).toEqual(['JobPosting', 'BreadcrumbList']);
+    const meta = await jobMetadata(props('cmcn1'));
+    expect(meta.alternates?.canonical).toBe('https://www.goapply.top/job/cmcn1');
+    expect(String(meta.title)).toMatch(/GoApply$/);
+    expect(JSON.stringify(json)).not.toContain('roboapply.io');
+    // A slugged request for the same job 301s to the canonical bare-id path.
+    await expect(JobRoute(props('cmcn1-old-slug'))).rejects.toThrow('NEXT_REDIRECT /job/cmcn1');
   });
 });

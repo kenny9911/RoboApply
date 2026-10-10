@@ -7,15 +7,18 @@
 //                            every `job_list` card is re-checked against the public-page
 //                            predicate (as the visitor feed) before it is sent;
 //                            nothing is stored; 10/h + 30/day per IP (`visitorCopilotPerIp`).
-//                            GoApply: 503 ai_unavailable — an anonymous visitor cannot give
-//                            the AI-processing consent every GoApply AI call needs (aiAllowed).
+//                            Both brands when the flag is on (default off on both).
+//                            GoApply: the body carries `consent`, the version of the
+//                            consent line the visitor ticked in the widget; without it
+//                            422 consent_required, before the limiter and before any model.
 //   createVisitorAlertsRouter() at /api/v1/public/alerts (capability `jobs.alerts`)
 //     POST /                 sign up (double opt-in) → 202 pending_confirmation;
 //                            501 provider_not_configured without an email transport
 //     GET  /confirm?token=   what the link confirms (no change)
 //     POST /confirm          confirm
 //     POST /unsubscribe      one click. Behind the capability like every route here
-//                            (R-14: mode off → the whole router is off); the shared
+//                            (on by default on both brands; GoApply with
+//                            CN_RECRUITMENT_INFO_MODE=off → the whole router is off); the shared
 //                            /unsubscribe/<token> page (WP-39b, /api/v1/public/email)
 //                            takes the same token and is never switched off.
 
@@ -25,7 +28,7 @@ import { clampLocaleToBrand } from '../../platform/brand/registry.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import { emailOrigin, sendEmail } from '../../platform/email/EmailService.js';
 import { isEnabled, requireFlag } from '../../platform/flags.js';
-import { HttpError, mapError, parseBody, parseQuery, route } from '../../platform/http.js';
+import { HttpError, fail, mapError, parseBody, parseQuery, route } from '../../platform/http.js';
 import { clientIp, consumeRateLimit, rateLimit, rateLimitKey, type RateLimitDb } from '../../platform/ratelimit/index.js';
 import { openSse } from '../../platform/sse.js';
 import { getRequestLocale } from '../../roboapply/v2/lib/raLocale.js';
@@ -36,6 +39,7 @@ import {
   AnonAlertUnsubscribeBodySchema,
   ConfirmAnonAlertBodySchema,
   CreateAnonAlertBodySchema,
+  VISITOR_CONSENT_VERSION,
   VISITOR_ERROR_CODES,
   VisitorTurnBodySchema,
   type VisitorTurnInput,
@@ -70,14 +74,20 @@ export interface VisitorCopilotOptions {
   rateDb?: RateLimitDb;
 }
 
-/** GoApply AI needs a consent record (aiAllowed); a visitor has none, so the visitor assistant never runs there. */
-const visitorConsentGate: RequestHandler = (req, res, next) => {
-  if (brandOf(req).market === 'cn') {
-    res.status(503).json({
-      success: false,
-      code: 'ai_unavailable',
-      error: 'This AI feature is not available right now.',
-      details: { reason: VISITOR_ERROR_CODES.visitorNoConsent },
+/**
+ * GoApply AI needs the person's consent. A visitor has no account to hold a
+ * grant, so the consent is the line ticked in the widget, sent with every
+ * turn as its version (the pattern of the free tools, tools/service.ts). A
+ * turn without the current version is refused here: it uses none of the
+ * visitor's allowance and reaches no model. RoboApply passes through.
+ */
+export const requireVisitorConsent: RequestHandler = (req, res, next) => {
+  if (brandOf(req).market !== 'cn') return next();
+  const consent = (req.body as { consent?: unknown } | undefined)?.consent;
+  if (consent !== VISITOR_CONSENT_VERSION) {
+    fail(res, 'invalid_request', 'Tick the box to let the assistant answer with AI.', {
+      reason: VISITOR_ERROR_CODES.consentRequired,
+      consentVersion: VISITOR_CONSENT_VERSION,
     });
     return;
   }
@@ -124,10 +134,11 @@ export function createVisitorCopilotRouter(deps: FeatureRouterDeps & { visitorCo
   router.post(
     '/',
     requireFlag('visitorAssistant', { env: deps.env }),
-    visitorConsentGate,
+    requireVisitorConsent,
     limiter,
     route(async (req, res) => {
-      const body = parseBody(req, VisitorTurnBodySchema);
+      // `consent` was checked above; the Assistant gets the turn only.
+      const { consent: _consent, ...body } = parseBody(req, VisitorTurnBodySchema);
       const brand = brandOf(req);
       const locale = clampLocaleToBrand(brand, getRequestLocale(req));
       const controller = new AbortController();

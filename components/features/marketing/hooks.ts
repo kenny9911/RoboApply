@@ -7,9 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
-import { useBrand } from '../../../lib/brand';
 import { useCapabilities, type FlagKey } from '../../../lib/flags';
-import { useToolsConfig } from '../tools';
 import { getCreditCaps, getIndexStats } from '../../../lib/api/support';
 import type { CreditCapsResponse, IndexStatsResponse } from '../../../lib/api/contracts/support';
 import { buildSignupHref } from './links';
@@ -64,13 +62,22 @@ export function useMarketingFlag(key: FlagKey | 'hiringContacts:on'): boolean {
 }
 
 /**
- * Whether the site chrome links the free tools hub (/tools). RoboApply: always
- * (the tools run there). GoApply: only once the tools config says they run on
- * this stack (they do not in CN-0, where the hub has nothing to open), and
- * not before that answer arrives — a link to an empty page is a dead end.
+ * True only when the flags are resolved and the flag is not on: the capability
+ * is KNOWN to be off. For content about a capability that is on by default
+ * and that should stay in the server HTML (which is rendered before the flags
+ * arrive): it is printed while the flags are unknown and removed once the
+ * capability is known to be off. Anything that must never show while a
+ * capability is off (a gated feature, a number) uses `useMarketingFlag`.
+ */
+export function useMarketingFlagOff(key: FlagKey): boolean {
+  const { flags } = useCapabilities();
+  return flags ? flags[key] !== true : false;
+}
+
+/**
+ * Whether the site chrome links the free tools hub (/tools): always, on both
+ * brands. The tools run on every stack (D5), so the link is never a dead end.
  */
 export function useFreeToolsLinked(): boolean {
-  const cn = useBrand().market === 'cn';
-  const config = useToolsConfig({ enabled: cn });
-  return cn ? config.data?.available === true : true;
+  return true;
 }

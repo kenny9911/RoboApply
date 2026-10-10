@@ -8,7 +8,8 @@ import { INDEX_FLOORS, type SeoPageStats } from './contract.js';
 import { citySlug, classifyBrowsePath, jobIdSlug, jobPath, parseIdSlug, resolveBrowsePath, resolveCity, seoCacheTag, targetFromParams } from './paths.js';
 import { allowedPublicBoards, basePublicWhere, matchesScope, publicJobWhere, type ScopeContext } from './scope.js';
 import { introFor, introNumbersMatch, introText, isIndexable, median, medianPay, statsView } from './stats.js';
-import { seoJob } from './testkit.js';
+import { createSeoService, publicListingsOpen } from './service.js';
+import { createMemorySeoRepo, seoJob } from './testkit.js';
 import { findCity } from '../jobs/geo/index.js';
 
 const NOW = new Date('2026-10-10T00:00:00.000Z');
@@ -210,5 +211,74 @@ describe('intros never add facts', () => {
     const intro = introFor(target, stats);
     expect(intro).toEqual({ template: 'role_city', params: { count: 42, newLast7d: 6, payListed: 21, median: 130000, currency: 'USD', sampleSize: 21 } });
     expect(introFor(target, { ...stats, jobCount: 0 }).template).toBe('empty');
+  });
+});
+
+describe('one predicate for both markets (D5)', () => {
+  const CN: ScopeContext = { market: 'cn', now: NOW, publicBoards: [] };
+
+  it('a cn row is judged by the same clauses as an intl row, each in its own market only', () => {
+    const cn = seoJob({ market: 'cn', sourceBoard: 'gohire' });
+    expect(matchesScope(cn, {}, CN)).toBe(true);
+    expect(matchesScope(cn, {}, CTX)).toBe(false);
+    expect(matchesScope(seoJob(), {}, CN)).toBe(false);
+    for (const row of [
+      seoJob({ market: 'cn', visibility: 'private' }),
+      seoJob({ market: 'cn', publicDisplay: false }),
+      seoJob({ market: 'cn', fraudFlags: [{ rule: 'cn_fee' }] }),
+      seoJob({ market: 'cn', closedAt: NOW }),
+      seoJob({ market: 'cn', fromRecruiterBank: false, sourceBoard: 'greenhouse' }),
+    ]) {
+      expect(matchesScope(row, {}, CN)).toBe(false);
+    }
+    // A cn board row is public only while its provider is listed, like an intl one.
+    const board = seoJob({ market: 'cn', fromRecruiterBank: false, sourceBoard: 'greenhouse' });
+    expect(matchesScope(board, {}, { ...CN, publicBoards: allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: 'ats_public' }) })).toBe(true);
+    expect(basePublicWhere(CN)).toMatchObject({ market: 'cn', visibility: 'public', publicDisplay: true });
+  });
+
+  it('publicListingsOpen: always for intl; for cn unless CN_RECRUITMENT_INFO_MODE is literally off', () => {
+    expect(publicListingsOpen({ market: 'intl' }, { CN_RECRUITMENT_INFO_MODE: 'off' })).toBe(true);
+    expect(publicListingsOpen({ market: 'cn' }, {})).toBe(true);
+    expect(publicListingsOpen({ market: 'cn' }, { CN_RECRUITMENT_INFO_MODE: 'licensed' })).toBe(true);
+    expect(publicListingsOpen({ market: 'cn' }, { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' })).toBe(true);
+    expect(publicListingsOpen({ market: 'cn' }, { CN_RECRUITMENT_INFO_MODE: 'off' })).toBe(false);
+  });
+
+  it('the service reads the hub and sitemap for GoApply from its own stored pages and rows', async () => {
+    const { BRANDS } = await import('../../platform/brand/registry.js');
+    const at = new Date('2026-10-09T04:00:00.000Z');
+    const page = (brand: string) => ({
+      brand,
+      locale: brand === 'goapply' ? 'zh' : 'en',
+      type: 'role',
+      slug: 'backend-engineer',
+      params: { taxonomyId: 'backend_engineer' },
+      title: 'Backend engineer jobs',
+      h1: 'Backend engineer jobs',
+      intro: '',
+      stats: {},
+      jobCount: brand === 'goapply' ? 31 : 44,
+      indexable: true,
+      lastBuiltAt: at,
+    });
+    const repo = createMemorySeoRepo([seoJob({ id: 'cn1', market: 'cn', sourceBoard: 'gohire', title: '后端工程师', companyName: '示例' }), seoJob({ id: 'us1' })], [page('goapply'), page('roboapply')] as never);
+    const svc = createSeoService({ repo, env: {}, now: () => NOW, isEnabled: async () => true });
+    const hub = await svc.hub(BRANDS.goapply);
+    expect(hub.pages).toEqual([expect.objectContaining({ kind: 'role', path: '/browse/backend-engineer', jobCount: expect.objectContaining({ value: 31 }) })]);
+    expect((await svc.hub(BRANDS.roboapply)).pages[0]!.jobCount).toMatchObject({ value: 44 });
+    const idx = await svc.sitemapIndex(BRANDS.goapply);
+    expect(idx.parts.map((p) => p.name)).toEqual(['roles-1', 'jobs-1']);
+    expect((await svc.sitemapPart(BRANDS.goapply, 'roles-1')).urls.map((u) => u.path)).toEqual(['/browse/backend-engineer']);
+    expect((await svc.sitemapPart(BRANDS.goapply, 'jobs-1')).urls.map((u) => u.path)).toEqual(['/job/cn1']);
+    // Mode off: every list is empty and every part is missing.
+    const off = createSeoService({ repo, env: { CN_RECRUITMENT_INFO_MODE: 'off' }, now: () => NOW, isEnabled: async () => true });
+    expect((await off.hub(BRANDS.goapply)).pages).toEqual([]);
+    expect((await off.ticker(BRANDS.goapply)).items).toEqual([]);
+    expect((await off.sitemapIndex(BRANDS.goapply)).parts).toEqual([]);
+    await expect(off.sitemapPart(BRANDS.goapply, 'jobs-1')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(off.page(BRANDS.goapply, { path: 'backend-engineer' })).rejects.toMatchObject({ code: 'not_found' });
+    await expect(off.job(BRANDS.goapply, 'cn1')).rejects.toMatchObject({ code: 'not_found' });
+    expect((await off.hub(BRANDS.roboapply)).pages).toHaveLength(1);
   });
 });

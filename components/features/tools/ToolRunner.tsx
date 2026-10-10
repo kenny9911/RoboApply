@@ -88,7 +88,7 @@ export function ToolRunner({ kind }: ToolRunnerProps) {
       : existingReason === 'result_expired'
         ? 'expired'
         : 'missing';
-  // The server says the tools are off for this brand and stage (GoApply CN-0): no form.
+  // Should the server say the tools are off here (`available: false`): no form.
   const unavailable = cfg?.available === false;
 
   const submit = (e: FormEvent) => {

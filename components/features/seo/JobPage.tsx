@@ -12,11 +12,19 @@
 //
 // GoApply: <WechatShareCard> sets the card WeChat shows when the page is
 // shared from inside WeChat — "{title} · {company}", the place and the pay as
-// the post lists it (left out when it lists none; never 0), linking the job
-// in the app. It renders nothing and is inert outside WeChat.
+// the post lists it (left out when it lists none; never 0), linking this
+// public page (anyone can open it; the app's /jobs/<id> needs an account).
+// It renders nothing and is inert outside WeChat.
 //
-// RoboApply, signed out, flag `visitorAssistant`: the visitor assistant's
-// launcher (page-scoped public questions; nothing typed is stored).
+// GoApply display rules (MARKET_STRATEGY 1.4): under the source, the date we
+// last found the posting at its source ("Last checked {date}") and, on a
+// GoHire bank posting, GoHire's HR-service licence when the API sends one
+// (it does only when both licence values are configured). Both come from the
+// API and are read with a null default, so an older response shows neither.
+//
+// Signed out, flag `visitorAssistant` (either brand): the visitor assistant's
+// launcher (page-scoped public questions; nothing typed is stored). On
+// GoApply the widget asks for the AI consent tick before the first question.
 
 import Link from 'next/link';
 
@@ -53,6 +61,9 @@ export function JobPage({ job, signupHref }: JobPageProps) {
   // Pay only as the posting lists it: its figures, else its own words. Null = it lists none.
   const payAsListed = pay(job.pay) ?? (job.salaryText?.trim() || null);
   const payLine = payAsListed ?? t('job.notListed');
+  const cn = brand.market === 'cn';
+  const lastChecked = cn ? date(job.lastVerifiedAt ?? null) : null;
+  const licence = cn ? (job.licence ?? null) : null;
   const shareDescription = [job.location, payAsListed].map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean).join(' · ') || null;
   const sections: Array<[string, string | null]> = [
     ['job.about', job.descriptionPlain],
@@ -63,9 +74,7 @@ export function JobPage({ job, signupHref }: JobPageProps) {
 
   return (
     <div className={styles.page} data-job-id={job.id}>
-      {brand.market === 'cn' ? (
-        <WechatShareCard title={`${job.title} · ${job.company.name}`} description={shareDescription} path={`/jobs/${encodeURIComponent(job.id)}`} />
-      ) : null}
+      {cn ? <WechatShareCard title={`${job.title} · ${job.company.name}`} description={shareDescription} path={job.canonicalPath} /> : null}
       <nav aria-label={t('breadcrumb.browse')}>
         <ol className={styles.crumbs}>
           <li>
@@ -161,13 +170,25 @@ export function JobPage({ job, signupHref }: JobPageProps) {
                     </a>
                   </>
                 ) : null}
+                {lastChecked ? (
+                  <>
+                    <br />
+                    <span data-last-checked="">{t('job.lastChecked', { date: lastChecked })}</span>
+                  </>
+                ) : null}
+                {licence ? (
+                  <>
+                    <br />
+                    <span data-licence="">{t('job.licence', { holder: licence.holder, number: licence.number })}</span>
+                  </>
+                ) : null}
               </dd>
             </div>
           </dl>
         </aside>
       </div>
 
-      {assistantOn && status === 'unauthenticated' && brand.market === 'intl' ? (
+      {assistantOn && status === 'unauthenticated' ? (
         <VisitorAssistant
           from="job"
           pageContext={{

@@ -22,7 +22,11 @@ export function getPublicFeed(query?: In<typeof F.PublicFeedQuerySchema>, opts?:
   return call<V.VisitorFeedResponse>('GET', withQuery(`/api/v1/public/feed`, query), opts);
 }
 
-/** `visitor.copilot` — POST /api/v1/public/copilot (SSE) */
+/**
+ * `visitor.copilot` — POST /api/v1/public/copilot (SSE). On GoApply the body
+ * carries `consent`, the version of the consent line the visitor ticked
+ * (VISITOR_CONSENT_VERSION); without it the server answers 422 consent_required.
+ */
 export function sendVisitorTurn(body: In<typeof V.VisitorTurnBodySchema>, opts: StreamOptions<CP.CopilotSseEvent>): Promise<void> {
   return postStream<CP.CopilotSseEvent>(`/api/v1/public/copilot`, body, opts);
 }

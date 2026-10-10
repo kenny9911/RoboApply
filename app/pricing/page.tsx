@@ -1,8 +1,8 @@
 // /pricing — public pricing for both brands (TASK_PLAN.md WP-40; F-BILL-02;
 // PRODUCT §6). In HybridShell (R-23): the app shell with a session, marketing
 // chrome without one. Prices come from GET /billing/plans and caps from the
-// credit catalog; GoApply shows the fee schedule as "Not open yet" until CN
-// payments open (R-15).
+// credit catalog on both brands (D5, D6): GoApply lists its CNY passes and
+// packs. "Not open yet" shows only while that API says no plan can be bought.
 
 import type { Metadata } from 'next';
 

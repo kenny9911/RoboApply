@@ -1,4 +1,7 @@
-// /campus — GoApply 校招日历 (WP-58; F-TOOL-05 cn, F-SEO-07 cn; flag `jobs.campusCalendar`, R-14).
+// /campus — GoApply 校招日历 (WP-58; F-TOOL-05 cn, F-SEO-07 cn; flag `jobs.campusCalendar`).
+// On by default on GoApply (D5): no CN_ switch is needed, and
+// CN_CAMPUS_CALENDAR_ENABLED=false turns it off. It starts empty, and the
+// page then says the calendar is being put together (no event is invented).
 //
 // Public page in HybridShell (R-23): the app shell with a session, marketing
 // chrome and the legal footer without one. The first page of programmes is

@@ -21,6 +21,14 @@ export interface FeatureDef {
   /** Key under `landing.features.<brand>.<key>`. */
   key: string;
   gate: FeatureGate;
+  /**
+   * A capability the page is about, on by default, that an operator can
+   * switch off for the brand. Once it is known to be off the page has no
+   * card and no footer link and says the feature is not available (R-04).
+   * Unlike `gate` it does not fail closed: the page keeps its body in the
+   * server HTML, so it stays indexable and in the sitemap.
+   */
+  needs?: FlagKey;
 }
 
 export const FEATURES: readonly FeatureDef[] = [
@@ -35,11 +43,27 @@ export const FEATURES: readonly FeatureDef[] = [
   { slug: 'visa-sponsorship', brand: 'roboapply', key: 'visaSponsorship', gate: null },
   { slug: 'referrals', brand: 'roboapply', key: 'referrals', gate: 'hiringContacts:on' },
   { slug: 'chrome-extension', brand: 'roboapply', key: 'chromeExtension', gate: 'extensionPublished' },
+  // GoApply (owner ruling D5): a page for every capability the two brands
+  // share, under the same gates as RoboApply's page, plus GoApply's own
+  // (campus calendar, 内推码, the form filler). What stays RoboApply-only is
+  // market-specific: visa sponsorship. `chrome-extension` and `form-filler`
+  // are the two brands' pages for the same extension.
+  // The page says where listed jobs come from. GoApply's operator can close
+  // every third-party posting (CN_RECRUITMENT_INFO_MODE=off turns `jobs.feed`
+  // off): the page and its links then go away.
+  { slug: 'job-matches', brand: 'goapply', key: 'jobMatches', gate: null, needs: 'jobs.feed' },
+  { slug: 'resume-tailoring', brand: 'goapply', key: 'resumeTailoring', gate: null },
+  { slug: 'cover-letters', brand: 'goapply', key: 'coverLetters', gate: null },
+  { slug: 'ready-to-apply', brand: 'goapply', key: 'readyToApply', gate: 'agent' },
   { slug: 'campus-calendar', brand: 'goapply', key: 'campusCalendar', gate: 'jobs.campusCalendar' },
   { slug: 'resume', brand: 'goapply', key: 'resume', gate: null },
-  // GoApply's AI is off until a domestic model + content safety are set (R-13).
+  // GoApply practice has a written mode, so the page needs AI text only (on
+  // by default; it no longer waits for a domestic model). The voice line on
+  // the home page follows `ai.interviewVoice`.
   { slug: 'interview-practice', brand: 'goapply', key: 'interviewPractice', gate: 'ai.text' },
   { slug: 'assistant', brand: 'goapply', key: 'assistant', gate: 'copilot' },
+  // 内推码: referral codes other users shared, each checked by a moderator.
+  { slug: 'referral-codes', brand: 'goapply', key: 'referralCodes', gate: 'cn.referralCodes' },
   { slug: 'form-filler', brand: 'goapply', key: 'formFiller', gate: 'extensionPublished' },
 ];
 
@@ -71,6 +95,17 @@ export function indexableFeaturePaths(brand: BrandId): string[] {
 /** The feature page for a slug on this brand, or null (→ 404). */
 export function findFeature(brand: BrandId, slug: string): FeatureDef | null {
   return FEATURES.find((f) => f.brand === brand && f.slug === slug) ?? null;
+}
+
+/**
+ * Does this brand sell plans that renew? RoboApply does (Stripe
+ * subscriptions). GoApply does not: the mainland rails sell one-time passes
+ * only (MARKET_STRATEGY M-19), so there is nothing to cancel there. A
+ * consequence of the payment rail, not a missing feature: the "cancel a
+ * subscription" entries and the renewal rules read this one rule.
+ */
+export function brandPlansRenew(brand: { market: 'intl' | 'cn' }): boolean {
+  return brand.market !== 'cn';
 }
 
 /** The brand's published extension id (inlined at build), or null. */
@@ -160,7 +195,19 @@ export const COMPANY_SPREAD = { max: 2, window: 20 } as const;
 // ── FAQ keys per page (shared by the client pages and the server JSON-LD) ──
 
 export const HOME_FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;
-export const CN_HOME_FAQ_KEYS = ['q1', 'q2', 'q3'] as const;
+export const CN_HOME_FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;
+/** GoApply home questions about listed jobs ("Where do the jobs come from?"): true only while `jobs.feed` is on. */
+export const CN_HOME_FAQ_FEED_KEYS: readonly (typeof CN_HOME_FAQ_KEYS)[number][] = ['q4'];
+/**
+ * The GoApply home questions to print. `feed` false leaves out the questions
+ * about listed jobs. The page passes what it knows; the route's FAQ JSON-LD
+ * is built on the server, which has no capability reader, so it passes
+ * `false` and lists only the questions that are true whatever the operator
+ * has switched off (structured data never says more than the page).
+ */
+export function cnHomeFaqKeys(feed: boolean): (typeof CN_HOME_FAQ_KEYS)[number][] {
+  return CN_HOME_FAQ_KEYS.filter((k) => feed || !CN_HOME_FAQ_FEED_KEYS.includes(k));
+}
 export const FEATURE_FAQ_KEYS = ['q1', 'q2'] as const;
 export const PRICING_FAQ_KEYS = ['q1', 'q2', 'q3'] as const;
 export const HELP_FAQ_KEYS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'] as const;

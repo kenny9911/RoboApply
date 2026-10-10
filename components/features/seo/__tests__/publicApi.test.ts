@@ -100,7 +100,7 @@ describe('loaders forward the visitor IP on a miss (never part of the cache key)
 });
 
 describe('publicJobHtmlStatus (for proxy.ts, REQ-56-2)', () => {
-  it('410 only for a closed public job page on RoboApply; anything else → null, never throws', async () => {
+  it('410 only for a closed public job page, on either brand; anything else → null, never throws', async () => {
     expect(await publicJobHtmlStatus('roboapply', '/job/cm1-backend-engineer', { fetch: reply(410, { success: false, code: 'gone' }) })).toBe(410);
     expect(await publicJobHtmlStatus('roboapply', '/job/cm1-backend-engineer', { fetch: reply(200, { success: true, data: { job: {} } }) })).toBeNull();
     expect(await publicJobHtmlStatus('roboapply', '/job/cm1-x', { fetch: reply(404, { success: false, code: 'not_found' }) })).toBeNull();
@@ -108,8 +108,15 @@ describe('publicJobHtmlStatus (for proxy.ts, REQ-56-2)', () => {
     expect(await publicJobHtmlStatus('roboapply', '/job/cm1-x', { fetch: async () => { throw new Error('down'); } })).toBeNull();
     const never: FetchImpl = async () => { throw new Error('must not fetch'); };
     expect(await publicJobHtmlStatus('roboapply', '/browse/backend-engineer', { fetch: never })).toBeNull();
+    // GoApply job pages exist too (D5): a closed GoApply job answers 410, read with the goapply brand.
+    const seen: string[] = [];
+    const gone: FetchImpl = async (url) => (seen.push(url), { status: 410, json: async () => ({ success: false, code: 'gone' }) });
+    expect(await publicJobHtmlStatus('goapply', '/job/cmcn1', { fetch: gone })).toBe(410);
+    expect(seen[0]).toContain('/api/v1/public/seo/jobs/cmcn1?brand=goapply');
+    // Mode off on GoApply (404 feature_disabled): let the page answer its 404.
+    expect(await publicJobHtmlStatus('goapply', '/job/cmcn1', { fetch: reply(404, { success: false, code: 'feature_disabled' }) })).toBeNull();
     expect(await publicJobHtmlStatus('roboapply', '/job/%3Cscript%3E', { fetch: never })).toBeNull();
-    expect(await publicJobHtmlStatus('goapply', '/job/cm1-x', { fetch: never })).toBeNull();
+    expect(await publicJobHtmlStatus('goapply', '/job/%3Cscript%3E', { fetch: never })).toBeNull();
   });
 });
 

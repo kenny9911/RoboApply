@@ -13,10 +13,11 @@
 //     never sees a score: fit needs a resume.
 //   - "Get new jobs like these by email" links to /tools/job-alerts with the
 //     same search when logged-out alerts are on (`jobs.alerts` + `notify.email`).
-//   - The visitor assistant launcher (flag `visitorAssistant`) answers about
-//     this page only; it is not shown to signed-in people (they have the
-//     Assistant) nor on GoApply (no AI consent for anonymous visitors).
-//   - Capability `jobs.feed` off (GoApply recruitment-info mode off) →
+//   - The visitor assistant launcher (flag `visitorAssistant`, off by default
+//     on both brands) answers about this page only; it is not shown to
+//     signed-in people (they have the Assistant). On GoApply the widget asks
+//     for the AI consent tick before the first question.
+//   - Capability `jobs.feed` off (GoApply with CN_RECRUITMENT_INFO_MODE=off) →
 //     nothing renders (R-04: a disabled feature has no UI entry).
 
 import Link from 'next/link';
@@ -127,7 +128,7 @@ export function VisitorFeed({ query, from, initialItems }: VisitorFeedProps) {
           <ul className={styles.list} aria-label={t('feed.listLabel')}>
             {items.map((item) => (
               <li key={item.jobId}>
-                <VisitorJobCard item={item} market={brand.market} from={from} />
+                <VisitorJobCard item={item} market={brand.market} />
               </li>
             ))}
           </ul>
@@ -162,7 +163,7 @@ export function VisitorFeed({ query, from, initialItems }: VisitorFeedProps) {
         </Link>
       ) : null}
 
-      {assistantOn && status === 'unauthenticated' && brand.market === 'intl' ? <VisitorAssistant pageContext={{ path: pathname.slice(0, 512), ...q }} from={from} /> : null}
+      {assistantOn && status === 'unauthenticated' ? <VisitorAssistant pageContext={{ path: pathname.slice(0, 512), ...q }} from={from} /> : null}
     </section>
   );
 }

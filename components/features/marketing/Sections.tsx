@@ -1,13 +1,17 @@
 'use client';
 
 // Shared marketing sections (WP-40): FAQ list, the labelled Example sample,
-// the index counters, quick search and the pricing summary.
+// the feature-card grid, the index counters, quick search and the pricing
+// summary. Both brands' home pages render the same sections over their own
+// data (owner ruling D5); a brand passes its own copy namespace where the
+// words differ (plan names, example cities).
 //
 // Honesty (D3, PRODUCT §9.3): samples always carry the "Example" label and a
 // note that the data is made up; counters render only real counts from the
 // API (rounded down, source + "updated hourly"), and nothing when unknown;
 // prices come only from GET /billing/plans.
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
@@ -16,9 +20,11 @@ import { usePlans } from '../../../hooks/credits/usePlans';
 import { useBrand } from '../../../lib/brand';
 import { formatMoney } from '../../../lib/pricing';
 import { SourceNote } from '../common';
+import { featuresFor, type FeatureDef } from './catalog';
 import { useBrowseEnabled, useIndexStats, useSignupHref } from './hooks';
 import { HERO_COUNT_MIN, browseHref } from './links';
 import { SignupLink } from './SignupLink';
+import { useFeatureVisible } from './SiteChrome';
 import styles from './marketing.module.css';
 
 // ── FAQ ─────────────────────────────────────────────────────────────────
@@ -131,6 +137,43 @@ export function HomeExample() {
   );
 }
 
+// ── Feature cards ────────────────────────────────────────────────────────
+
+function FeatureCard({ def }: { def: FeatureDef }) {
+  const t = useTranslations(`landing.features.${def.brand}.${def.key}`);
+  const visible = useFeatureVisible(def);
+  if (!visible) return null;
+  return (
+    <Link href={`/features/${def.slug}`} className={styles.card} data-feature-link={def.slug}>
+      <span className={styles.stepNumber}>{t('eyebrow')}</span>
+      <span className={styles.h3}>{t('title')}</span>
+    </Link>
+  );
+}
+
+/**
+ * One card per feature page of the brand (marketing catalog). A gated
+ * feature shows only while its capability is known to be on (fail closed).
+ */
+export function FeatureGrid() {
+  const tf = useTranslations('landing.features.common');
+  const brand = useBrand();
+  return (
+    <section className={styles.sectionAlt} id="features" aria-labelledby="home-features-title">
+      <div className={styles.wrap}>
+        <h2 className={styles.h2} id="home-features-title">
+          {tf('allFeatures')}
+        </h2>
+        <div className={styles.grid3}>
+          {featuresFor(brand.id).map((def) => (
+            <FeatureCard key={def.slug} def={def} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── Index counters ──────────────────────────────────────────────────────
 
 /**
@@ -163,12 +206,19 @@ export function IndexCounters() {
 
 // ── Quick search ─────────────────────────────────────────────────────────
 
+export interface QuickSearchProps {
+  /** The brand's countries. One country (GoApply: mainland China) needs no picker. */
+  countries: readonly string[];
+  /** Example text for the two inputs when the shared examples do not fit the market. */
+  examples?: { role: string; city: string };
+}
+
 /**
  * Title, country, city, remote. Routes to the public browse page when browse
  * pages are live (`seo.browse`), to signup otherwise (PRODUCT F-MKT-02).
  * Nothing typed here goes into the signup URL.
  */
-export function QuickSearch({ countries }: { countries: readonly string[] }) {
+export function QuickSearch({ countries, examples }: QuickSearchProps) {
   const t = useTranslations('landing.search');
   const router = useRouter();
   const locale = useLocale();
@@ -217,25 +267,27 @@ export function QuickSearch({ countries }: { countries: readonly string[] }) {
               name="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder={t('rolePlaceholder')}
+              placeholder={examples?.role ?? t('rolePlaceholder')}
               autoComplete="off"
               maxLength={80}
               aria-invalid={error || undefined}
             />
           </label>
-          <label className={styles.field}>
-            <span className={styles.label}>{t('country')}</span>
-            <select className={styles.select} name="country" value={country} onChange={(e) => setCountry(e.target.value)}>
-              <option value="">{t('anyCountry')}</option>
-              {countries.map((c) => (
-                // Region names come from the runtime's own locale data, which differs between
-                // Node and browsers ("Hong Kong SAR China" vs "Hong Kong"): keep the server text.
-                <option key={c} value={c} suppressHydrationWarning>
-                  {names?.of(c) ?? c}
-                </option>
-              ))}
-            </select>
-          </label>
+          {countries.length > 1 ? (
+            <label className={styles.field}>
+              <span className={styles.label}>{t('country')}</span>
+              <select className={styles.select} name="country" value={country} onChange={(e) => setCountry(e.target.value)}>
+                <option value="">{t('anyCountry')}</option>
+                {countries.map((c) => (
+                  // Region names come from the runtime's own locale data, which differs between
+                  // Node and browsers ("Hong Kong SAR China" vs "Hong Kong"): keep the server text.
+                  <option key={c} value={c} suppressHydrationWarning>
+                    {names?.of(c) ?? c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className={styles.field}>
             <span className={styles.label}>{t('city')}</span>
             <input
@@ -243,7 +295,7 @@ export function QuickSearch({ countries }: { countries: readonly string[] }) {
               name="city"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder={t('cityPlaceholder')}
+              placeholder={examples?.city ?? t('cityPlaceholder')}
               autoComplete="off"
               maxLength={60}
               disabled={remote}
@@ -270,9 +322,22 @@ export function QuickSearch({ countries }: { countries: readonly string[] }) {
 
 // ── Pricing summary (home) ───────────────────────────────────────────────
 
-/** Free + the preselected Pro plan, priced from GET /billing/plans. */
-export function PricingSummary({ from }: { from: string }) {
-  const t = useTranslations('landing.home.pricing');
+export interface PricingSummaryProps {
+  from: string;
+  /** Copy namespace (same keys in each): the home's own words for its plans. */
+  ns?: 'landing.home.pricing' | 'landing.cnHome.pricing';
+  /** Anchor id of the section. */
+  id?: string;
+  /** A line under the heading (e.g. "Paid plans are not open yet", only while the plans API says so). */
+  note?: ReactNode;
+}
+
+/**
+ * Free + the preselected paid plan, priced from GET /billing/plans. A plan
+ * name with no translation yet falls back to the catalog's own label.
+ */
+export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricing', note = null }: PricingSummaryProps) {
+  const t = useTranslations(ns);
   const tc = useTranslations('credits');
   const tnav = useTranslations('landing.cta');
   const locale = useLocale();
@@ -286,7 +351,7 @@ export function PricingSummary({ from }: { from: string }) {
         })
       : null;
   return (
-    <section className={styles.sectionAlt} id="pricing" aria-labelledby="home-pricing-title">
+    <section className={styles.sectionAlt} id={id} aria-labelledby="home-pricing-title" data-pricing-summary="">
       <div className={styles.wrap}>
         <div className={styles.sectionHead}>
           <p className={styles.eyebrow}>{t('eyebrow')}</p>
@@ -294,6 +359,7 @@ export function PricingSummary({ from }: { from: string }) {
             {t('title')}
           </h2>
           <p className={styles.body}>{t('sub')}</p>
+          {note ? <p className={styles.body}>{note}</p> : null}
         </div>
         <div className={styles.grid2}>
           <article className={styles.card}>
@@ -305,7 +371,7 @@ export function PricingSummary({ from }: { from: string }) {
             </SignupLink>
           </article>
           <article className={`${styles.card} ${styles.cardFeatured}`}>
-            <h3 className={styles.h3}>{pro ? tc(`plans.${brand.id}.${pro.key}`) : '—'}</h3>
+            <h3 className={styles.h3}>{pro ? (tc.has(`plans.${brand.id}.${pro.key}`) ? tc(`plans.${brand.id}.${pro.key}`) : pro.defaultLabel) : '—'}</h3>
             <p className={styles.price}>{proPrice ?? t('notSet')}</p>
             <p className={styles.body}>{t('proNote')}</p>
             <a className={styles.inlineLink} href="/pricing">

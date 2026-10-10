@@ -86,8 +86,16 @@ export interface ConsentFieldProps {
 
 /**
  * GoApply: the visitor's go-ahead to read this file (unticked by default).
- * Says who reads it (the outside resume-reading service, when one is active)
- * and where (outside mainland China during the offshore beta).
+ * The label names the automated and AI read. The details say who else reads
+ * it (the outside resume-reading service, when one is active) and where
+ * (outside mainland China, when the server says the file leaves the mainland).
+ *
+ * The two sentences whose meaning changed with consent version v3 have their
+ * own keys (`consent.labelAi`, `consent.outsideMainland`) instead of reusing
+ * `consent.label` / `consent.offshore`: a locale that still holds a
+ * translation of the old sentence ("automated software" without the AI read;
+ * "during the beta, in the United States") must never print it under the new
+ * version. Until a locale has the new keys it shows the new English text.
  */
 export function ConsentField({ checked, onChange, config, hours, disabled }: ConsentFieldProps) {
   const t = useTranslations('tools');
@@ -97,7 +105,7 @@ export function ConsentField({ checked, onChange, config, hours, disabled }: Con
   const details: string[] = [];
   if (config) {
     if (config.parserName) details.push(t('consent.readingService', { service: config.parserName }));
-    if (config.processedOutsideMainland) details.push(t('consent.offshore'));
+    if (config.processedOutsideMainland) details.push(t('consent.outsideMainland'));
   } else {
     details.push(t('consent.whereUnknown'));
   }
@@ -105,7 +113,7 @@ export function ConsentField({ checked, onChange, config, hours, disabled }: Con
     <div className={styles.field} data-consent="tools">
       <label className={styles.consent}>
         <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} aria-describedby={detailsId} />
-        <span>{t('consent.label', { hours })}</span>
+        <span>{t('consent.labelAi', { hours })}</span>
       </label>
       <p className={styles.muted} id={detailsId}>
         {details.length ? `${details.join(' ')} ` : ''}

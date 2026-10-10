@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AI_CRAWLERS,
   UTILITY_DISALLOW_PATHS,
+  alertsSurfaceOn,
   appDisallowPaths,
   breadcrumbNode,
   browseUnknownQuery,
@@ -23,6 +24,7 @@ import {
   urlsetXml,
 } from '../../../../lib/seo';
 import { PROTECTED_PREFIXES } from '../../../../lib/proxyPaths';
+import { indexableFeaturePaths } from '../../marketing/catalog';
 import { roleLabel } from '../names';
 import { job, ROLE } from './fixtures';
 
@@ -159,38 +161,68 @@ describe('static sitemap per host', () => {
     expect(entries.every((e) => e.loc.startsWith('https://www.roboapply.io/'))).toBe(true);
   });
 
-  it('GoApply: zh-CN home with the cross-domain en / zh-Hant alternates; /campus when live, never /browse', () => {
+  it('GoApply: zh-CN home with the cross-domain en / zh-Hant alternates; /campus and /browse when live', () => {
     const entries = staticSitemapEntries('goapply', { featurePaths: [], surfaces });
     expect(entries).toMatchSnapshot();
     expect(entries[0]!.alternates).toMatchObject({ 'zh-CN': 'https://www.goapply.top/', en: 'https://www.roboapply.io/' });
     expect(Object.keys(entries[0]!.alternates!)).not.toContain('zh-Hans');
     const locs = entries.map((e) => e.loc);
     expect(locs).toContain('https://www.goapply.top/campus');
-    expect(locs).not.toContain('https://www.goapply.top/browse');
-    expect(staticSitemapEntries('goapply', { featurePaths: [], surfaces: { browse: false, campus: false } }).map((e) => e.loc)).not.toContain('https://www.goapply.top/campus');
+    // Browse pages follow `seo.browse` on GoApply exactly as on RoboApply (D5).
+    expect(locs).toContain('https://www.goapply.top/browse');
+    expect(locs.every((l) => l.startsWith('https://www.goapply.top/'))).toBe(true);
+    const off = staticSitemapEntries('goapply', { featurePaths: [], surfaces: { browse: false, campus: false } }).map((e) => e.loc);
+    expect(off).not.toContain('https://www.goapply.top/campus');
+    expect(off).not.toContain('https://www.goapply.top/browse');
+    // With seo.browse off RoboApply does not list it either.
+    expect(staticSitemapEntries('roboapply', { featurePaths: [], surfaces: { browse: false, campus: false } }).map((e) => e.loc)).not.toContain('https://www.roboapply.io/browse');
+  });
+
+  it('GoApply lists the feature pages its catalog marks indexable', () => {
+    const paths = indexableFeaturePaths('goapply');
+    expect(paths).toEqual(expect.arrayContaining(['/features/job-matches', '/features/resume-tailoring', '/features/cover-letters', '/features/resume']));
+    const locs = staticSitemapEntries('goapply', { featurePaths: paths, surfaces }).map((e) => e.loc);
+    for (const p of ['/features/job-matches', '/features/resume-tailoring', '/features/cover-letters']) expect(locs).toContain(`https://www.goapply.top${p}`);
+    // A gated page is noindex, so it is never listed (one rule: isFeatureIndexable).
+    for (const p of ['/features/ready-to-apply', '/features/assistant', '/features/interview-practice', '/features/referral-codes']) {
+      expect(locs).not.toContain(`https://www.goapply.top${p}`);
+    }
   });
 
   // INT-06 (wave4 WP-93 #13, wave5 WP-93 #30): the free tools in the static sitemap.
   const TOOL_PATHS = ['/tools/resume-check', '/tools/resume-job-match'];
-  const locs = (brand: 'roboapply' | 'goapply', toolsOpen: boolean) =>
-    staticSitemapEntries(brand, { featurePaths: [], surfaces, toolPaths: toolSitemapPaths(brand, { toolsOpen, toolPaths: TOOL_PATHS }) }).map((e) => e.loc);
+  const locs = (brand: 'roboapply' | 'goapply', opts: { toolsOpen?: boolean; alerts?: boolean } = {}) =>
+    staticSitemapEntries(brand, {
+      featurePaths: [],
+      surfaces,
+      toolPaths: toolSitemapPaths({ toolsOpen: opts.toolsOpen ?? true, toolPaths: TOOL_PATHS, alerts: opts.alerts ?? true }),
+    }).map((e) => e.loc);
+  const ALL_TOOLS = ['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts'];
 
-  it('RoboApply lists /tools, both tool pages and /tools/job-alerts', () => {
-    expect(toolSitemapPaths('roboapply', { toolsOpen: true, toolPaths: TOOL_PATHS })).toEqual(['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']);
-    const all = locs('roboapply', true);
-    for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']) expect(all).toContain(`https://www.roboapply.io${p}`);
-    expect(new Set(all).size).toBe(all.length);
+  it('one rule for both brands: /tools, both tool pages and /tools/job-alerts', () => {
+    expect(toolSitemapPaths({ toolsOpen: true, toolPaths: TOOL_PATHS, alerts: true })).toEqual(ALL_TOOLS);
+    for (const [brand, origin] of [['roboapply', 'https://www.roboapply.io'], ['goapply', 'https://www.goapply.top']] as const) {
+      const all = locs(brand);
+      for (const p of ALL_TOOLS) expect(all, `${brand} ${p}`).toContain(`${origin}${p}`);
+      expect(new Set(all).size).toBe(all.length);
+    }
   });
 
-  it('GoApply while CN-0 lists /tools only: the two tool pages 404 there, and job alerts are never in its sitemap', () => {
-    expect(toolSitemapPaths('goapply', { toolsOpen: false, toolPaths: TOOL_PATHS })).toEqual(['/tools']);
-    const cn0 = locs('goapply', false);
-    expect(cn0).toContain('https://www.goapply.top/tools');
-    for (const p of ['/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']) expect(cn0).not.toContain(`https://www.goapply.top${p}`);
-    // Once the tools run on the mainland stack (CN-1) the two pages are listed; job alerts still are not.
-    const cn1 = locs('goapply', true);
-    expect(cn1).toEqual(expect.arrayContaining(['https://www.goapply.top/tools/resume-check', 'https://www.goapply.top/tools/resume-job-match']));
-    expect(cn1).not.toContain('https://www.goapply.top/tools/job-alerts');
+  it('job alerts leave the sitemap only when the brand has them switched off; the tool pages only when the tools do not run', () => {
+    expect(toolSitemapPaths({ toolsOpen: true, toolPaths: TOOL_PATHS, alerts: false })).toEqual(['/tools', '/tools/resume-check', '/tools/resume-job-match']);
+    expect(toolSitemapPaths({ toolsOpen: false, toolPaths: TOOL_PATHS, alerts: true })).toEqual(['/tools', '/tools/job-alerts']);
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      expect(locs(brand, { alerts: false }).some((l) => l.endsWith('/tools/job-alerts'))).toBe(false);
+      expect(locs(brand, { alerts: false }).some((l) => l.endsWith('/tools/resume-check'))).toBe(true);
+    }
+  });
+
+  it('alertsSurfaceOn: only an explicit false from the API is off', () => {
+    expect(alertsSurfaceOn({ alerts: true })).toBe(true);
+    expect(alertsSurfaceOn({ alerts: false })).toBe(false);
+    expect(alertsSurfaceOn({})).toBe(true);
+    expect(alertsSurfaceOn(null)).toBe(true);
+    expect(alertsSurfaceOn(undefined)).toBe(true);
   });
 
   it('both brands list "How ranking works"; without toolPaths no tool URL is invented', () => {

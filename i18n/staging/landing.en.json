@@ -1,7 +1,215 @@
 {
   "landing": {
     "ranking": {
-      "otherSorts": "{newest}, {bestFit} and {highestPay} each sort by that one thing only."
+      "otherSorts": "{newest}, {bestFit} and {highestPay} each sort by that one thing only.",
+      "deadlineSort": "{deadline} lists jobs by the date their applications close, soonest first."
+    },
+    "cnHome": {
+      "search": {
+        "rolePlaceholder": "e.g. Data analyst",
+        "cityPlaceholder": "e.g. Shanghai"
+      },
+      "practice": {
+        "voice": "You can answer out loud to an AI interviewer, or type your answers."
+      },
+      "pricing": {
+        "eyebrow": "Pricing",
+        "title": "The core is free",
+        "sub": "Your resume, the applications board and reminders are free. A paid pass raises the daily limits on AI actions for a set number of days, and it never renews by itself.",
+        "freeNote": "Daily limits on AI actions",
+        "proNote": "Higher daily limits on every AI action while the pass lasts",
+        "notSet": "Price not set yet",
+        "seeAll": "See every pass, pack and limit",
+        "notOpen": "Paid passes can't be bought yet."
+      },
+      "faq": {
+        "q4": {
+          "q": "Where do the jobs come from?",
+          "a": "From public posts on employers' own hiring pages and from the source named on each job. Every job shows its source, a link to the original post and the date we last checked it. %BRAND% does not list every job on the market."
+        },
+        "q5": {
+          "q": "What does it cost?",
+          "a": "Your resume, the applications board and reminders are free, with daily limits on AI actions. A paid pass raises those limits for a set number of days and never renews by itself. Every price and limit is on the pricing page."
+        },
+        "q6": {
+          "q": "What does the fit score mean?",
+          "a": "It says how well your resume lines up with the job post: title and level, skills, industry, location and pay, and how your career has moved. It is not your chance of getting hired."
+        }
+      },
+      "campus": {
+        "empty": "The calendar is being put together. A programme shows here once it has been checked against the employer's official page."
+      }
+    },
+    "features": {
+      "goapply": {
+        "jobMatches": {
+          "metaTitle": "Jobs that fit your resume, each with its source",
+          "metaDescription": "%BRAND% ranks open jobs by how well your resume fits. Every job leads with what's missing and names where the post came from.",
+          "eyebrow": "Job matches",
+          "title": "Jobs ranked by fit, with the reason in plain words",
+          "sub": "Every job gets a fit tier and leads with the gap: what the employer asks for that your resume doesn't show. Each job names its source and links to the original post.",
+          "sample": {
+            "line1": "Good fit · 78 / 100",
+            "line2": "They ask for SQL and Tableau. Your resume shows SQL only.",
+            "line3": "Source: the employer's hiring page · checked 2 days ago"
+          },
+          "s1": {
+            "title": "Add your resume and search",
+            "body": "Tell us the roles, cities and pay you want. Your resume does the rest."
+          },
+          "s2": {
+            "title": "Read the gap first",
+            "body": "Each job shows what overlaps and what's missing before it shows a number."
+          },
+          "s3": {
+            "title": "Apply on the employer's site",
+            "body": "Open the original post and apply there yourself. The job then moves to Applied on your board."
+          },
+          "q1": {
+            "q": "Where do the jobs come from?",
+            "a": "From public posts on employers' own hiring pages and from the source named on each job. %BRAND% does not list every job on the market."
+          },
+          "q2": {
+            "q": "How is the list ordered?",
+            "a": "By fit, freshness, what you've shown interest in and the listing source. The How ranking works page lists every factor."
+          }
+        },
+        "resumeTailoring": {
+          "metaTitle": "Tailor your resume for each job",
+          "metaDescription": "Make a version of your resume for one job, see every change, and confirm anything new before you download.",
+          "eyebrow": "Resume tailoring",
+          "title": "A version of your resume for each job",
+          "sub": "See every change side by side. Anything the draft adds that isn't on your resume waits for you to confirm it.",
+          "sample": {
+            "line1": "Changed: the summary now names your data analysis projects.",
+            "line2": "One line has a number we couldn't find on your resume. Fix it or remove it before you download.",
+            "line3": "Fit after changes: Good fit · 84 / 100"
+          },
+          "s1": {
+            "title": "Pick a job",
+            "body": "Start from any job in your list or one you added yourself."
+          },
+          "s2": {
+            "title": "Review the changes",
+            "body": "Keep, edit or remove each change. Nothing new is added without your say."
+          },
+          "s3": {
+            "title": "Download",
+            "body": "Export a PDF or Word file once every new detail is confirmed."
+          },
+          "q1": {
+            "q": "Can it invent experience?",
+            "a": "It can suggest wording, but a claim, number or skill that isn't on your resume can't be downloaded until you confirm, edit or remove it."
+          },
+          "q2": {
+            "q": "Does it change my main resume?",
+            "a": "No. Each tailored copy is separate, and your main resume stays as it is."
+          }
+        },
+        "coverLetters": {
+          "metaTitle": "Cover letters from the job post and your resume",
+          "metaDescription": "Write a cover letter for one job from the post and your own resume, then edit it.",
+          "eyebrow": "Cover letters",
+          "title": "A cover letter for this job, from your own resume",
+          "sub": "The letter uses what the post asks for and what your resume shows. You edit it before you use it.",
+          "sample": {
+            "line1": "Opening names the role and the team from the post.",
+            "line2": "Middle paragraph uses two results from your resume.",
+            "line3": "Written by AI. Read it before you send it."
+          },
+          "s1": {
+            "title": "Choose the job",
+            "body": "Start from the job page."
+          },
+          "s2": {
+            "title": "Read the draft",
+            "body": "Every fact comes from your resume or the post."
+          },
+          "s3": {
+            "title": "Edit and download",
+            "body": "Change anything, then copy it or download it."
+          },
+          "q1": {
+            "q": "Is it sent to the employer?",
+            "a": "No. You decide where and whether to use it."
+          },
+          "q2": {
+            "q": "Is there a limit?",
+            "a": "Yes, a daily limit. The pricing page lists it."
+          }
+        },
+        "readyToApply": {
+          "metaTitle": "Applications prepared each week; you submit them",
+          "metaDescription": "Each week %BRAND% prepares materials for jobs that fit. You review them and submit each application yourself.",
+          "eyebrow": "Ready to apply",
+          "title": "Each week, applications prepared for you to review",
+          "sub": "For jobs that fit, %BRAND% prepares a tailored resume, a cover letter and answers to common questions. You open each application and submit it yourself.",
+          "sample": {
+            "line1": "5 jobs this week · Good fit or better",
+            "line2": "Kit ready: tailored resume, cover letter, 4 answers",
+            "line3": "Open application → you check it and submit"
+          },
+          "s1": {
+            "title": "Set how many a week",
+            "body": "Choose 5, 10, 20 or 30 jobs and the lowest fit you'll accept."
+          },
+          "s2": {
+            "title": "Review each kit",
+            "body": "Change anything before you use it."
+          },
+          "s3": {
+            "title": "Submit it yourself",
+            "body": "Open the employer's page and submit. The job moves to Applied."
+          },
+          "q1": {
+            "q": "Does it submit anything?",
+            "a": "No. It never submits an application or contacts an employer."
+          },
+          "q2": {
+            "q": "What if I didn't apply after opening a job?",
+            "a": "Undo it in one tap and the job goes back where it was."
+          }
+        },
+        "referralCodes": {
+          "metaTitle": "Referral codes shared by other job seekers",
+          "metaDescription": "See the referral codes other %BRAND% users shared for a company. A moderator checks each one before it appears.",
+          "eyebrow": "Referral codes",
+          "title": "Referral codes for the company you're applying to",
+          "sub": "Other %BRAND% users share the referral codes they have. A moderator checks each one before it appears, and codes that cost money are not allowed.",
+          "sample": {
+            "line1": "Example company · 2027 campus programme",
+            "line2": "Referral code: EXAMPLE2027 · checked by a moderator",
+            "line3": "A code helps your application reach the company. It does not decide the outcome."
+          },
+          "s1": {
+            "title": "Open a job or a company",
+            "body": "Codes shared for that company show on the job page and under Referral codes."
+          },
+          "s2": {
+            "title": "Copy the code",
+            "body": "Enter it in the employer's own application form when you apply."
+          },
+          "s3": {
+            "title": "Share one you have",
+            "body": "Add a code of your own. It appears after a moderator checks it."
+          },
+          "q1": {
+            "q": "Do the codes cost anything?",
+            "a": "No. Codes that are sold or traded are refused, and so are codes that carry a phone number, a WeChat ID, an email or a link."
+          },
+          "q2": {
+            "q": "Does a code get me the job?",
+            "a": "No. It helps your application reach the company. It does not decide the outcome."
+          }
+        }
+      }
+    },
+    "pricingPage": {
+      "choosePlan": "Choose this plan",
+      "signupToBuy": "Create a free account to buy",
+      "passRefund1": "Your first pass can be refunded within 7 days (48 hours for the week pass) if you used fewer than 5 actions that need a paid pass.",
+      "passRefund2": "A practice pack can be refunded while none of its practice interviews has been used.",
+      "passRefundHow": "Ask for a refund from the Help page"
     }
   }
 }

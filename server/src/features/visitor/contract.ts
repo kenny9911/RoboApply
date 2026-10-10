@@ -7,8 +7,10 @@
 //                             jobs only, 60/min/IP, cached 15 min;
 //                             capability `jobs.feed`.
 //   /api/v1/public/copilot  — visitor assistant (capability `visitorAssistant`,
-//                             default off); 10/h + 30/day per IP; page-scoped
-//                             public tools only; nothing stored; SSE.
+//                             default off on both brands); 10/h + 30/day per
+//                             IP; page-scoped public tools only; nothing
+//                             stored; SSE. GoApply: the body carries the
+//                             visitor consent version (VISITOR_CONSENT_VERSION).
 //   /api/v1/public/alerts   — logged-out job alerts with double opt-in
 //                             (capability `jobs.alerts`); one-click unsubscribe.
 //
@@ -18,11 +20,34 @@
 
 import { z } from 'zod';
 import { AnonAlertFiltersSchema } from '../alerts/contract.js';
+import { VisitorTurnBodySchema as CopilotVisitorTurnSchema } from '../copilot/contract.js';
 import type { PublicFeedItem } from '../feed/contract.js';
 
-export { VisitorTurnBodySchema } from '../copilot/contract.js';
 export type { VisitorTurnInput } from '../copilot/contract.js';
 export { AnonAlertFiltersSchema };
+
+// ── POST /api/v1/public/copilot ──────────────────────────────────────────
+
+/**
+ * GoApply answers a visitor's question with AI only after the visitor ticks
+ * the assistant's consent line (there is no account to hold an AI-processing
+ * grant, so the tick of this browser session is the consent). The widget
+ * sends this version back with every turn; anything else answers 422
+ * `consent_required` before a model is called. The text behind the version is
+ * `visitor.assistant.consent.*` in the web bundle: change the text, change
+ * the version.
+ */
+export const VISITOR_CONSENT_VERSION = 'visitor-assistant.2026-10-11.v1';
+
+/**
+ * POST /api/v1/public/copilot body: the Assistant's visitor turn (text + page
+ * context) plus `consent`, the consent version a GoApply visitor ticked.
+ * RoboApply sends none and none is needed there.
+ */
+export const VisitorTurnBodySchema = CopilotVisitorTurnSchema.extend({
+  consent: z.string().max(64).optional(),
+}).strict();
+export type VisitorTurnBody = z.infer<typeof VisitorTurnBodySchema>;
 export type AnonAlertFilters = z.infer<typeof AnonAlertFiltersSchema>;
 
 // ── GET /api/v1/public/feed ──────────────────────────────────────────────
@@ -32,7 +57,7 @@ export const VISITOR_FEED_LIMIT = 20;
 /** In-process cache of one list (per brand × query); the CDN keeps it as long on RoboApply, 60 s on market `cn`. */
 export const VISITOR_FEED_CACHE_SEC = 15 * 60;
 
-/** A public feed item plus its public job page (null where the brand has no public job pages, e.g. GoApply). */
+/** A public feed item plus its public job page (`/job/<id>-<slug>`; a null from an older server is read as `/job/<id>`). */
 export type VisitorFeedItem = PublicFeedItem & { path: string | null };
 export interface VisitorFeedResponse {
   items: VisitorFeedItem[];
@@ -148,8 +173,8 @@ export const ANON_ALERT_JOBS_PER_EMAIL = 10;
 export const VISITOR_ERROR_CODES = {
   /** 404 not_found: the confirm link is unknown, expired or for the other brand. */
   alertTokenInvalid: 'alert_token_invalid',
-  /** 503 ai_unavailable: GoApply cannot ask an anonymous visitor for AI consent (PIPL). */
-  visitorNoConsent: 'visitor_ai_consent_unavailable',
+  /** 422 invalid_request: a GoApply visitor turn without the ticked consent version (VISITOR_CONSENT_VERSION). */
+  consentRequired: 'consent_required',
 } as const;
 
 /** `RAAuthToken.kind` of confirm links. */

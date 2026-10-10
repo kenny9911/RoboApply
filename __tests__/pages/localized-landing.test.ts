@@ -4,6 +4,7 @@
 // Its canonical stays `/`, so search engines still see one EN document.
 
 import type React from 'react';
+import { Suspense } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 
 const { notFound, redirect, brand } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ import LocalizedLandingPage, { generateMetadata } from '../../app/[locale]/page'
 import RootLandingPage, { generateMetadata as rootMetadata } from '../../app/page';
 import { RememberLocale } from '../../components/landing/RememberLocale';
 import { GoApplyHome, RoboApplyHome } from '../../components/features/marketing';
+import { JobTicker } from '../../components/features/seo/server';
 
 const params = (locale: string) => ({ params: Promise.resolve({ locale }) });
 
@@ -55,11 +57,12 @@ describe('localized landing route', () => {
     expect(await generateMetadata(params('xx'))).toEqual({});
   });
 
-  // D3: the RoboApply landing claims a job feed, a live AI interviewer and 9
-  // languages — none true for GoApply — so a GoApply host never renders it.
-  // Since WP-40 a GoApply host renders its own home (GoApplyHome) instead of
-  // redirecting to /login (Wave 3 gate update; WP-40 routes.test.tsx covers
-  // the page itself).
+  // Each brand renders its own home: GoApply's copy, prices, sources and
+  // languages are its own (D3), so a GoApply host never renders the RoboApply
+  // landing. Since WP-40 a GoApply host renders GoApplyHome instead of
+  // redirecting to /login; since the D5 parity wave that home offers the same
+  // visitor functions over GoApply data (components/features/marketing
+  // home.test.tsx covers the page itself).
   it('never serves the RoboApply landing on the GoApply brand', async () => {
     brand.id = 'goapply';
     const kids = (page: unknown) =>
@@ -69,6 +72,12 @@ describe('localized landing route', () => {
         const types = kids(page).map((child) => child?.type);
         expect(types).toContain(GoApplyHome);
         expect(types).not.toContain(RoboApplyHome);
+      }
+      // D5: the GoApply home gets the same server-rendered job ticker slot as RoboApply's, on `/` and `/{locale}`.
+      for (const page of [await LocalizedLandingPage(params('zh')), await RootLandingPage()]) {
+        const home = kids(page).find((child) => child?.type === GoApplyHome) as React.ReactElement<{ ticker?: React.ReactElement<{ children?: React.ReactElement }> }>;
+        expect(home.props.ticker?.type).toBe(Suspense);
+        expect(home.props.ticker?.props.children?.type).toBe(JobTicker);
       }
       const zh = await generateMetadata(params('zh'));
       expect(String(zh.alternates?.canonical ?? '')).not.toContain('roboapply.io');
