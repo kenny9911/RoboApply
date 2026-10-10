@@ -1,0 +1,68 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hide proposals (one per reason) > covers every reason deterministically 1`] = `
+{
+  "already_applied": {
+    "after": null,
+    "editor": null,
+  },
+  "company": {
+    "after": {
+      "excludedCompanies": [
+        "Acme Inc.",
+      ],
+      "seniority": [
+        "mid",
+        "senior",
+      ],
+    },
+    "editor": null,
+  },
+  "not_interested": {
+    "after": null,
+    "editor": null,
+  },
+  "other": {
+    "after": null,
+    "editor": null,
+  },
+  "pay_too_low": {
+    "after": {
+      "salaryMin": {
+        "amount": 111000,
+        "currency": "USD",
+        "period": "year",
+      },
+      "seniority": [
+        "mid",
+        "senior",
+      ],
+    },
+    "editor": null,
+  },
+  "wrong_level": {
+    "after": {
+      "seniority": [
+        "mid",
+      ],
+    },
+    "editor": null,
+  },
+  "wrong_location": {
+    "after": null,
+    "editor": "location",
+  },
+  "wrong_title": {
+    "after": {
+      "excludedTitles": [
+        "Sales Engineer",
+      ],
+      "seniority": [
+        "mid",
+        "senior",
+      ],
+    },
+    "editor": null,
+  },
+}
+`;

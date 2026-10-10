@@ -1,5 +1,9 @@
 // backend/src/roboapply/v2/routes/search.ts
 //
+// @deprecated (WP-32) — `/v2/search/run` is replaced by `POST /api/v1/roboapply/feed/query`
+// (`q` + sorts; `lib/api/feed.ts`), and saved searches by `/search-profiles`
+// (WP-20). WP-75 unmounts this router (hot file routes/index.ts) and deletes it.
+//
 // Mounted at /api/v1/roboapply/v2/search.
 //
 //   POST   /run         — run the search (filters + paging + facets). Body
@@ -17,6 +21,7 @@ import { requireAuth } from '../lib/raAuth.js';
 import { logger } from '../../../services/LoggerService.js';
 import { raJobIndexService } from '../services/RAJobIndexService.js';
 
+/** @deprecated See the header: use the feed area (WP-32) and search profiles (WP-20). */
 const router = Router();
 
 router.post('/run', requireAuth, async (req: Request, res: Response) => {

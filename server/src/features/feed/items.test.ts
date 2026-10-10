@@ -1,0 +1,131 @@
+// @vitest-environment node
+// WP-32: FeedItem shape and the honesty rules for badges, pay, source and dates (D3).
+
+import { describe, expect, it } from 'vitest';
+import { badgesFor, needsSponsorshipFor, publicItem, toFeedItem } from './items.js';
+import { feedRow } from './testkit.js';
+
+const needs = { needsSponsorship: true, workAuth: [] };
+const noNeed = { needsSponsorship: false, workAuth: [] };
+
+describe('FeedItem', () => {
+  it('carries salaryPeriod, employmentType, workModel, fit{tier,score,kind,topGap,topOverlap}, lastSeenAt', () => {
+    const fit = { tier: 'good' as const, score: 72, kind: 'pre' as const, topGap: 'Go', topOverlap: 'Python' };
+    const item = toFeedItem(
+      feedRow({ id: 'j1', salaryDisclosed: true, salaryMin: 40, salaryMax: 55, salaryCurrency: 'USD', salaryPeriod: 'hour', employmentType: 'contract', workModel: 'hybrid' }),
+      { user: null, fit, tracker: { status: 'bookmarked' }, position: 3 },
+    );
+    expect(item).toMatchObject({
+      jobId: 'j1',
+      pay: { min: 40, max: 55, currency: 'USD', period: 'hour', text: null },
+      employmentType: 'contract',
+      workModel: 'hybrid',
+      fit,
+      tracker: { status: 'bookmarked' },
+      position: 3,
+      lastSeenAt: '2026-10-10T06:00:00.000Z',
+    });
+  });
+
+  it('pay is null ("Pay not listed") when undisclosed — never 0; 面議 text alone does not count as disclosed', () => {
+    expect(publicItem(feedRow({ id: 'a', salaryDisclosed: false, salaryMin: 40000, salaryText: '面議' })).pay).toBeNull();
+    expect(publicItem(feedRow({ id: 'b', salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: null })).pay).toBeNull();
+  });
+
+  it('GoApply: N薪 and the 届别 / 网申 close date only as the posting states them', () => {
+    const now = new Date('2026-10-10T12:00:00Z');
+    const item = publicItem(
+      feedRow({
+        id: 'c',
+        market: 'cn',
+        salaryMonths: 14,
+        expiresAt: new Date('2026-11-01T00:00:00Z'),
+        marketTags: [
+          { tag: 'class_year:2027', evidenceQuote: '面向2027届' },
+          { tag: 'apply_closes:2026-10-31', evidenceQuote: '网申截止时间：2026年10月31日' },
+          { tag: 'apply_closes:2026-12-01' },
+        ],
+      }),
+      null,
+      now,
+    );
+    expect(item.payMonths).toBe(14);
+    expect(item.campus).toEqual({ applyClosesAt: '2026-10-31', applyClosesQuote: '网申截止时间：2026年10月31日', classYears: [2027] });
+    // RAJob.expiresAt (often postedAt + 45 days) is never shown as a deadline.
+    const estimated = publicItem(feedRow({ id: 'e', market: 'cn', expiresAt: new Date('2026-11-01T00:00:00Z'), marketTags: [{ tag: 'class_year:2027', evidenceQuote: '2027届' }] }), null, now);
+    expect(estimated.campus).toEqual({ applyClosesAt: null, applyClosesQuote: null, classYears: [2027] });
+    // A close date without a quote does not count; a stated date alone opens the campus block.
+    expect(publicItem(feedRow({ id: 'f', market: 'cn', marketTags: [{ tag: 'apply_closes:2026-10-31' }] }), null, now).campus).toBeNull();
+    expect(publicItem(feedRow({ id: 'g', market: 'cn', marketTags: [{ tag: 'apply_closes:2026-10-31', evidenceQuote: '10月31日截止' }] }), null, now).campus).toEqual({
+      applyClosesAt: '2026-10-31',
+      applyClosesQuote: '10月31日截止',
+      classYears: [],
+    });
+    expect(publicItem(feedRow({ id: 'd' })).campus).toBeNull();
+  });
+
+  it('source kind and name from real fields', () => {
+    expect(publicItem(feedRow({ id: 'e', fromRecruiterBank: true, sourceBoard: 'robohire', sourceName: 'RoboHire' })).source).toEqual({ name: 'RoboHire', kind: 'bank' });
+    expect(publicItem(feedRow({ id: 'f', sourceBoard: 'user_import', visibility: 'private', sourceName: null })).source).toEqual({ name: 'user_import', kind: 'user_import' });
+    expect(publicItem(feedRow({ id: 'g', sourceBoard: 'greenhouse', sourceName: 'Greenhouse' })).source.kind).toBe('ats_public');
+  });
+
+  it('company size only with a provenance entry', () => {
+    expect(publicItem(feedRow({ id: 'h', companySizeBand: '51-200', companyFacts: {} })).company.sizeBand).toBeNull();
+    expect(
+      publicItem(feedRow({ id: 'i', companySizeBand: '51-200', companyFacts: { sizeBand: { source: 'provider:linkedin', fetchedAt: '2026-10-01T00:00:00Z' } } })).company.sizeBand,
+    ).toEqual({ value: '51-200', source: 'provider:linkedin', asOf: '2026-10-01T00:00:00Z' });
+  });
+});
+
+describe('badges', () => {
+  it('"Direct from employer" only when fromRecruiterBank && employerVerified && !isAgency', () => {
+    const kinds = (o: object) => badgesFor(feedRow({ id: 'x', workModel: 'onsite', ...o }), null).map((b) => b.kind);
+    expect(kinds({ fromRecruiterBank: true, employerVerified: true, isAgency: false })).toContain('direct_from_employer');
+    expect(kinds({ fromRecruiterBank: true, employerVerified: false })).not.toContain('direct_from_employer');
+    expect(kinds({ fromRecruiterBank: true, employerVerified: true, isAgency: true })).not.toContain('direct_from_employer');
+    expect(kinds({ fromRecruiterBank: false, employerVerified: true })).not.toContain('direct_from_employer');
+  });
+
+  it('sponsorship badges only for users who need it, only with the quote; "says no" needs a negation', () => {
+    const offered = feedRow({ id: 's', sponsorship: 'offered', sponsorshipEvidence: 'We sponsor H-1B visas.' });
+    expect(badgesFor(offered, needs)[0]).toEqual({ kind: 'sponsorship', label: 'sponsorship', quote: 'We sponsor H-1B visas.' });
+    expect(badgesFor(offered, noNeed).map((b) => b.kind)).not.toContain('sponsorship');
+    expect(badgesFor({ ...offered, sponsorshipEvidence: null }, needs).map((b) => b.kind)).not.toContain('sponsorship');
+    const no = feedRow({ id: 'n', sponsorship: 'not_offered', sponsorshipEvidence: 'We are unable to sponsor visas.' });
+    expect(badgesFor(no, needs)[0]?.kind).toBe('no_sponsorship');
+    expect(badgesFor({ ...no, sponsorshipEvidence: 'Sponsorship: see FAQ' }, needs).map((b) => b.kind)).not.toContain('no_sponsorship');
+  });
+
+  it('per-country work auth decides who needs sponsorship', () => {
+    expect(needsSponsorshipFor({ needsSponsorship: false, workAuth: [{ country: 'US', authorized: false, sponsorship: 'now' }] }, 'US')).toBe(true);
+    expect(needsSponsorshipFor({ needsSponsorship: true, workAuth: [{ country: 'US', authorized: true, sponsorship: 'no' }] }, 'US')).toBe(false);
+    expect(needsSponsorshipFor(null, 'US')).toBe(false);
+  });
+
+  it('citizens-only / clearance and CN market tags render only with their evidence quote', () => {
+    const quoted = feedRow({ id: 'q', workModel: 'onsite', clearanceRequired: true, marketTags: [{ tag: 'clearance_required', evidenceQuote: 'Active TS/SCI required.' }] });
+    expect(badgesFor(quoted, null)[0]).toEqual({ kind: 'clearance_required', label: 'clearance_required', quote: 'Active TS/SCI required.' });
+    expect(badgesFor({ ...quoted, marketTags: null }, null).map((b) => b.kind)).not.toContain('clearance_required');
+    const cn = feedRow({ id: 'c', market: 'cn', workModel: 'onsite', employerTags: ['soe', 'hukou'], marketTags: [{ tag: 'soe', evidenceQuote: '国务院国资委监管企业' }] });
+    expect(badgesFor(cn, null)).toEqual([{ kind: 'market_tag', label: 'soe', quote: '国务院国资委监管企业' }]);
+  });
+
+  it('at most three, fixed priority; never "new" or "closing soon"', () => {
+    const row = feedRow({
+      id: 'm',
+      fromRecruiterBank: true,
+      employerVerified: true,
+      isAgency: false,
+      workModel: 'remote',
+      salaryDisclosed: true,
+      salaryMin: 100,
+      hasBenefits: true,
+      postedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+    const b = badgesFor(row, null);
+    expect(b.map((x) => x.kind)).toEqual(['direct_from_employer', 'remote', 'pay_listed']);
+    expect(b.some((x) => x.kind === 'new' || x.kind === 'closing_soon')).toBe(false);
+  });
+});
