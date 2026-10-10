@@ -1,8 +1,9 @@
-// /admin/reports — route shell (FND-6b). Admin: user reports to review.
-//
-// STUB. Owner: WP-74, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/reports — "Reports to review": job reports and scam signals, GoApply
+// referral codes, personal-data requests (WP-74; PRODUCT F-TRUST-04).
+// Admin only: the console checks the role and every API route enforces it.
+
+import { ReportsConsole } from '../../../../components/v3/admin';
 
 export default function AdminReportsPage() {
-  return <div hidden data-route-stub="/admin/reports" data-owner="WP-74" />;
+  return <ReportsConsole />;
 }

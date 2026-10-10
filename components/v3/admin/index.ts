@@ -37,3 +37,9 @@ export {
 } from './table';
 export { ProfitabilitySummary, SetPlanModal, RateCardPanel } from './panels';
 export * from './format';
+// Admin console additions (WP-74).
+export { AdminNav, ADMIN_AREAS, adminAreasFor, type AdminArea } from './AdminNav';
+export { AdminGate } from './AdminGate';
+export { SystemConsole, SYSTEM_VIEWS, fmtUsd, type SystemView } from './SystemConsole';
+export { ReportsConsole } from './ReportsConsole';
+export { UserOverridesPanel, RefundQuotePanel, parseOverrideValue } from './UserAdminPanels';

@@ -15,6 +15,18 @@
 //   - useAdminSession(id)             GET /sessions/:id
 //   - useAdminRateCard()             GET /rate-card
 //   - useSetPlan(userId)             POST /users/:userId/plan (mutation)
+//
+// Admin console additions (WP-74; /api/v1/roboapply/admin/*, `adminConsoleApi`):
+//   - useSystemStatus(brand?)         GET /system (refreshes every minute)
+//   - useWorkItems / useRetryWorkItem GET /system/queue · POST …/:id/retry
+//   - useAdminCosts(query)            GET /costs
+//   - useSafety(query)                GET /safety
+//   - useReports / useResolveReport   GET /reports · POST /reports/:id/resolve
+//   - useUserOverrides / useCreateOverride / useDeleteOverride
+//   - useCopilotFeedback(query)       GET /copilot-feedback
+//   - useReferralQueue / useModerateReferral   GoApply referral codes (WP-54)
+//   - usePiRequests / useUpdatePiRequest       personal-data requests (WP-13)
+//   - useRefundQuote(userId)          credits refund quote (WP-21a)
 
 import {
   useMutation,
@@ -24,7 +36,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { adminApi } from '../lib/api/admin';
+import { adminApi, adminConsoleApi } from '../lib/api/admin';
+import { adminListPiRequests, adminUpdatePiRequest } from '../lib/api/compliance';
 import type {
   AdminOverviewResponse,
   AdminRange,
@@ -138,5 +151,115 @@ export function useSetPlan(
       qc.invalidateQueries({ queryKey: ['admin', 'users'] });
       qc.invalidateQueries({ queryKey: ['admin', 'overview'] });
     },
+  });
+}
+
+// ── Admin console additions (WP-74) ──────────────────────────────────────
+
+type ConsoleArg<F extends (...a: never[]) => unknown> = Parameters<F>[0];
+
+export function useSystemStatus(brand?: 'roboapply' | 'goapply', enabled = true) {
+  return useQuery({
+    queryKey: ['admin', 'console', 'system', brand ?? 'all'],
+    queryFn: () => adminConsoleApi.getSystemStatus(brand ? { brand } : undefined),
+    enabled,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useWorkItems(query: ConsoleArg<typeof adminConsoleApi.listWorkItems>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'queue', query ?? {}], queryFn: () => adminConsoleApi.listWorkItems(query), enabled });
+}
+
+export function useRetryWorkItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminConsoleApi.retryWorkItem(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'console', 'queue'] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'console', 'system'] });
+    },
+  });
+}
+
+export function useAdminCosts(query: ConsoleArg<typeof adminConsoleApi.getCosts>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'costs', query ?? {}], queryFn: () => adminConsoleApi.getCosts(query), enabled });
+}
+
+export function useSafety(query: ConsoleArg<typeof adminConsoleApi.getSafety>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'safety', query ?? {}], queryFn: () => adminConsoleApi.getSafety(query), enabled });
+}
+
+export function useReports(query: ConsoleArg<typeof adminConsoleApi.listReports>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'reports', query ?? {}], queryFn: () => adminConsoleApi.listReports(query), enabled });
+}
+
+export function useResolveReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: 'close' | 'restore'; note?: string }) => adminConsoleApi.resolveReport(v.id, { decision: v.decision, note: v.note }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'console', 'reports'] }),
+  });
+}
+
+export function useUserOverrides(userId: string | null) {
+  return useQuery({
+    queryKey: ['admin', 'console', 'overrides', userId],
+    queryFn: () => adminConsoleApi.listOverrides({ userId: userId! }),
+    enabled: !!userId,
+  });
+}
+
+export function useCreateOverride(userId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Omit<NonNullable<Parameters<typeof adminConsoleApi.createOverride>[0]>, 'userId'>) => adminConsoleApi.createOverride({ ...body, userId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'console', 'overrides', userId] }),
+  });
+}
+
+export function useDeleteOverride(userId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminConsoleApi.deleteOverride(id, { userId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'console', 'overrides', userId] }),
+  });
+}
+
+export function useCopilotFeedback(query: ConsoleArg<typeof adminConsoleApi.listCopilotFeedback>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'feedback', query ?? {}], queryFn: () => adminConsoleApi.listCopilotFeedback(query), enabled });
+}
+
+export function useReferralQueue(enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'referrals'], queryFn: () => adminConsoleApi.listReferralQueue(), enabled });
+}
+
+export function useModerateReferral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: 'approve' | 'reject'; reason?: Parameters<typeof adminConsoleApi.moderateReferralCode>[1]['reason'] }) =>
+      adminConsoleApi.moderateReferralCode(v.id, { decision: v.decision, ...(v.reason ? { reason: v.reason } : {}) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'console', 'referrals'] }),
+  });
+}
+
+export function usePiRequests(query: Parameters<typeof adminListPiRequests>[0], enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'piRequests', query ?? {}], queryFn: () => adminListPiRequests(query), enabled });
+}
+
+export function useUpdatePiRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; body: Parameters<typeof adminUpdatePiRequest>[1] }) => adminUpdatePiRequest(v.id, v.body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'console', 'piRequests'] }),
+  });
+}
+
+export function useRefundQuote(userId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['admin', 'console', 'refundQuote', userId],
+    queryFn: () => adminConsoleApi.getRefundQuote(userId!),
+    enabled: enabled && !!userId,
+    retry: false,
   });
 }
