@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate translator chunk files and deep-merge them into locale bundles.
 //
-//   node apply-translations.mjs <repoRoot> <chunksDir> [--dry-run]
+//   node apply-translations.mjs <repoRoot> <chunksDir> [--dry-run] [--only <target>/<locale>/<file.json>]
 //
 // chunksDir layout: <chunksDir>/<target>/<locale>/<chunk>.json
 //   target = web | email | extension
@@ -20,6 +20,7 @@ import { createRequire } from 'node:module';
 
 const [root, chunksDir, ...rest] = process.argv.slice(2);
 const dry = rest.includes('--dry-run');
+const only = rest.includes('--only') ? rest[rest.indexOf('--only') + 1].split('/') : null;
 const require = createRequire(join(root, 'package.json'));
 const { parse } = require('@formatjs/icu-messageformat-parser');
 
@@ -62,14 +63,16 @@ let rejectedTotal = 0;
 for (const target of Object.keys(TARGETS)) {
   const tdir = join(chunksDir, target);
   if (!existsSync(tdir)) continue;
+  if (only && only[0] !== target) continue;
   const en = JSON.parse(readFileSync(join(root, TARGETS[target].en), 'utf8'));
   for (const locale of readdirSync(tdir)) {
     const ldir = join(tdir, locale);
     if (!statSync(ldir).isDirectory()) continue;
+    if (only && only[1] !== locale) continue;
     const outPath = join(root, TARGETS[target].out(locale));
     const bundle = existsSync(outPath) ? JSON.parse(readFileSync(outPath, 'utf8')) : {};
     const r = (report[`${target}/${locale}`] = { accepted: 0, rejected: [] });
-    for (const f of readdirSync(ldir).filter((x) => x.endsWith('.json')).sort()) {
+    for (const f of readdirSync(ldir).filter((x) => x.endsWith('.json') && (!only || only[2] === x)).sort()) {
       let chunk;
       try {
         chunk = JSON.parse(readFileSync(join(ldir, f), 'utf8'));
@@ -99,7 +102,7 @@ for (const target of Object.keys(TARGETS)) {
       }
     }
     rejectedTotal += r.rejected.length;
-    if (!dry) writeFileSync(outPath, JSON.stringify(bundle, null, 2) + '\n');
+    if (!dry && !only) writeFileSync(outPath, JSON.stringify(bundle, null, 2) + '\n');
   }
 }
 for (const [k, v] of Object.entries(report)) {

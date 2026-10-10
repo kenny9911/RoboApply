@@ -37,6 +37,13 @@ import { join, relative, extname, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const LOCALES = ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'];
+/** The locales GoApply serves (server/src/platform/brand/registry.ts, goapply.locales). */
+export const GOAPPLY_LOCALES = ['en', 'zh'];
+/** Key prefixes that render on GoApply only; parity is required in GOAPPLY_LOCALES alone. */
+export const GOAPPLY_ONLY_PREFIXES = ['authCn', 'billingCn', 'jobsCn', 'onboardingCn', 'practiceCn', 'notifyCn', 'campus', 'landing.cnHome'];
+export function isGoApplyOnlyPath(path) {
+  return GOAPPLY_ONLY_PREFIXES.some((p) => path === p || path.startsWith(`${p}.`));
+}
 const ALL = '*';
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -323,6 +330,11 @@ export function runCopyCheck(root) {
   //
   // One tier: all nine bundles carry every namespace at exact leaf parity. To
   // add a tenth locale, run the i18n-locale-sync skill.
+  //
+  // One scoped exception: GoApply serves zh and en only (brand registry
+  // `locales`), so the namespaces that render on GoApply alone are required in
+  // zh.json and nowhere else. A translation of them into ja/ko/es/… is text no
+  // visitor can reach. They may still be present (orphan rule unchanged).
   const messages = bundles.filter((b) => b.kind === 'messages');
   const enBundle = messages.find((b) => b.locale === 'en');
   const enLeaves = leaves(enBundle?.data ?? {});
@@ -330,6 +342,7 @@ export function runCopyCheck(root) {
     if (b === enBundle) continue;
     const keys = leaves(b.data);
     for (const path of enLeaves.keys()) {
+      if (isGoApplyOnlyPath(path) && !GOAPPLY_LOCALES.includes(b.locale)) continue;
       if (!keys.has(path)) fail(b.file, path, 'missing-key', 'present in en.json, absent here');
     }
     // An orphan is always a bug: it is a string nobody can ever reach, and it is
