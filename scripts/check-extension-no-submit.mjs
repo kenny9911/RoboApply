@@ -6,15 +6,22 @@
 // The extension fills forms; the user presses the employer's Submit. The gate
 // fails when, under extension/src:
 //   1. any file other than src/adapters/_kit/interact.ts contains `.click(`,
-//      `.submit(`, `requestSubmit(`, `dispatchEvent(new MouseEvent('click'`,
-//      `dispatchEvent(new SubmitEvent`, or a KeyboardEvent carrying `Enter`;
+//      `.submit(`, `requestSubmit(`, or the same press spelled another way:
+//      a `.click` / `.submit` / `.requestSubmit` reference (`.call`, `.apply`,
+//      `.bind`, aliasing), bracket access (`el['click']`), a synthetic
+//      click / mouse-up / pointer-up event, a synthetic `submit` Event /
+//      CustomEvent / SubmitEvent, or any `new KeyboardEvent(`;
+//      or listens for submits (`addEventListener('submit'`, `.onsubmit =`):
+//      the extension never watches employer forms, "submitted" is only what
+//      the user tells the panel (R-19);
 //   2. interact.ts exports anything other than `openListbox` and `chooseOption`;
 //   3. either of those functions does not call the submit-like guard
 //      (`assertNotSubmitLike(...)`), which refuses buttons, submit inputs,
 //      role=button, and elements named submit/apply/next/continue/review/
 //      提交/投递/下一步 (ancestors up to 3 levels).
 // Comments are ignored. While extension/ does not exist the check passes
-// vacuously (Wave 1–3).
+// vacuously (Wave 1–3). The extension package (WP-55b) runs it in its own
+// `npm --prefix extension test` and before every build (extension/scripts/build.mjs).
 //
 //   npm run check:extension             (`--root <dir>` checks another tree)
 
@@ -30,9 +37,19 @@ export const FORBIDDEN = [
   { name: '.click(', re: /\.click\s*\(/ },
   { name: '.submit(', re: /\.submit\s*\(/ },
   { name: 'requestSubmit(', re: /requestSubmit\s*\(/ },
+  // The same press spelled another way: a reference (prototype.click.call(el),
+  // const press = el.click), bracket access (el['click']()), or a synthetic event.
+  { name: '.click / .submit / .requestSubmit reference', re: /\.(click|submit|requestSubmit)\b(?!\s*\()/ },
+  { name: "['click'] / ['submit'] / ['requestSubmit']", re: /\[\s*['"`](click|submit|requestSubmit)['"`]\s*\]/ },
   { name: "dispatchEvent(new MouseEvent('click'", re: /dispatchEvent\s*\(\s*new\s+MouseEvent\s*\(\s*['"`]click/ },
+  { name: "new MouseEvent / PointerEvent('click' | 'mouseup' | 'pointerup' …)", re: /new\s+(Pointer|Mouse)Event\s*\(\s*['"`](click|dblclick|auxclick|mouseup|mousedown|pointerup|pointerdown)/ },
+  { name: "new Event / CustomEvent / SubmitEvent('submit'", re: /new\s+(Event|CustomEvent|SubmitEvent)\s*\(\s*['"`]submit/ },
   { name: 'dispatchEvent(new SubmitEvent', re: /dispatchEvent\s*\(\s*new\s+SubmitEvent/ },
-  { name: "KeyboardEvent with 'Enter'", re: /new\s+KeyboardEvent\s*\([^)]*['"`]Enter['"`]/s },
+  { name: 'new SubmitEvent', re: /new\s+SubmitEvent\b/ },
+  // Any synthetic key press (its { key: 'Enter' } may sit in a variable).
+  { name: 'new KeyboardEvent( (Enter or any other key press)', re: /new\s+KeyboardEvent\b/ },
+  { name: "addEventListener('submit'", re: /addEventListener\s*\(\s*['"`]submit['"`]/ },
+  { name: '.onsubmit =', re: /\.onsubmit\s*=/ },
 ];
 
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
