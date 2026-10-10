@@ -1,0 +1,477 @@
+/* components/features/campus — GoApply 校招日历 (WP-58): the public
+   calendar, company pages and the admin editor. Clarity tokens only; light and
+   dark come from app/globals.css, brand identity from styles/brands/<brand>.css.
+   Interactive controls are at least 44 px tall. Layout works from 375 px. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.body {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.error {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--danger);
+}
+
+.h2 {
+  margin: 0;
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.h3 {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.honesty {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--grad-soft);
+  border: 1px solid var(--rule-soft);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────── */
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.input,
+.select,
+.textarea {
+  min-height: 44px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--sp-2) var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-body);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible,
+.check input:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  font-size: var(--fs-body);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--action);
+}
+
+.filterActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  grid-column: 1 / -1;
+}
+
+/* ── Event cards ─────────────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.card {
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.cardHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.company {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--action);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.company:hover {
+  text-decoration: underline;
+}
+
+.company:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.window {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.tz {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: var(--fs-meta);
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-meta);
+}
+
+.facts dt {
+  color: var(--text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+
+.stageName {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.provenance {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.link {
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.reverify {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--warn-subtle);
+  color: var(--warn);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: auto;
+}
+
+.actions > * {
+  min-height: 44px;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Company page ────────────────────────────────────────────────────── */
+
+.followBox {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--grad-panel);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+.followText {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.followForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+.back {
+  align-self: flex-start;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back:hover {
+  text-decoration: underline;
+}
+
+/* ── Admin ───────────────────────────────────────────────────────────── */
+
+.box {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: flex-end;
+}
+
+.row > .field {
+  flex: 1 1 260px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.evidence {
+  margin: 0;
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.aiNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+
+.stageRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: var(--sp-2);
+  align-items: end;
+}
+
+.adminItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.adminItem {
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Archive / delete asks once more, inline. */
+.confirm {
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-subtle);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+@media (max-width: 900px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stageRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  }
+
+  .filters,
+  .formGrid,
+  .stageRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card,
+  .box {
+    padding: var(--sp-4);
+  }
+
+  .actions > * {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}

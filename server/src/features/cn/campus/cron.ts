@@ -1,12 +1,12 @@
-// server/src/features/cn/campus/cron.ts — STUB (FND-3). Owner: WP-58.
+// server/src/features/cn/campus/cron.ts — cron tasks of the campus calendar (WP-58).
 //
-// Cron tasks for this area, called by server/src/cron/handlers.ts (Vercel Cron)
-// and by RoboApplyCronService (node-cron) inside `runWithBrand(brand, …)` with a
-// 240 s budget. Until the owner fills them they return `{ skipped: 'not_implemented' }`
-// at once and never throw. A real task must return in under 2 s when nothing is due
-// and report the work it did (`processed`, counts) so the runner can log it.
+// Called by server/src/cron/handlers.ts (`reminders`, hourly; registered as the
+// `campus` producer for the cn market) and by RoboApplyCronService inside
+// `runWithBrand(brand, …)` with a 240 s budget. Idle runs return
+// `{ skipped: 'no_work' }` after one indexed query.
 
-import { notImplementedCron, type CronTask } from '../../../platform/queue/index.js';
+import type { CronTask } from '../../../platform/queue/index.js';
+import { produceCampusReminders } from './notify.js';
 
-/** reminders producer (hourly, GoApply only): 网申截止 reminders 3 days and 1 day before a saved programme closes. Writes SeekerNotification rows and enqueues `email.send`. */
-export const produceReminders: CronTask = notImplementedCron('WP-58');
+/** reminders producer (hourly, GoApply only): 网申截止 reminders 3 days and 1 day before a saved programme closes, plus follow-a-company notices. Writes SeekerNotification rows and enqueues `email.send`. */
+export const produceReminders: CronTask = (ctx) => produceCampusReminders(ctx);

@@ -1,20 +1,36 @@
-// /campus — route shell (FND-6b). GoApply 校招日历 (flag `jobs.campusCalendar`).
+// /campus — GoApply 校招日历 (WP-58; F-TOOL-05 cn, F-SEO-07 cn; flag `jobs.campusCalendar`, R-14).
 //
-// STUB. Owner: WP-58, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// Public page in HybridShell (R-23): the app shell with a session, marketing
+// chrome and the legal footer without one. The first page of programmes is
+// rendered on the server from the public API (crawlers see every entry with
+// its official link and last check). Capability off ⇒ the API answers 404
+// feature_disabled and so does this page (R-04). Filters live in the URL.
 
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 import { HybridShell } from '../../components/v3/shell/HybridShell';
 import { LegalFooter } from '../../components/features/market';
+import { CampusCalendar } from '../../components/features/campus';
+import { campusListQuery, campusMetadata, campusSearch, readCampusList } from '../../components/features/campus/serverData';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default function CampusPage() {
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+  const filter = campusSearch(await searchParams);
+  const read = await readCampusList(campusListQuery(filter));
+  // Only the unfiltered calendar is indexed; filtered views are for people.
+  const indexable = read.status === 'ok' && campusListQuery(filter) === '';
+  return campusMetadata({ path: '/campus', titleKey: 'campus.meta.title', descriptionKey: 'campus.meta.description', indexable });
+}
+
+export default async function CampusPage({ searchParams }: { searchParams: SearchParams }) {
+  const filter = campusSearch(await searchParams);
+  const read = await readCampusList(campusListQuery(filter));
+  if (read.status === 'disabled') notFound();
   return (
     <HybridShell from="campus" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/campus" data-owner="WP-58" />
+      <CampusCalendar initial={read.status === 'ok' ? read.data : null} filter={filter} />
     </HybridShell>
   );
 }
