@@ -4,8 +4,8 @@
 import { HttpError } from '../../platform/http.js';
 import type { QuestionGuide } from './contract.js';
 import type { GeneratedQuestion, GuideInput, QuestionSetInput } from './agents.js';
-import { createMemoryJobSetIndex } from './jobSetIndex.js';
-import { createMemoryPrepStore, type MemoryPrepStore } from './memoryStore.js';
+import { createPrismaJobSetIndex, type JobSetIndex } from './jobSetIndex.js';
+import { createMemoryJobSetDelegate, createMemoryPrepStore, type MemoryPrepStore } from './memoryStore.js';
 import { PrepService, type BudgetKind, type PrepJob } from './service.js';
 
 export const FIXTURE_USER = 'user_prep_1';
@@ -31,19 +31,25 @@ export interface PrepFixture {
   calls: { set: QuestionSetInput[]; guide: GuideInput[]; budget: Array<{ kind: BudgetKind; userId: string }> };
   state: { ai: boolean; market: 'intl' | 'cn'; budgetLeft: Partial<Record<BudgetKind, number>>; now: Date };
   jobs: Map<string, PrepJob>;
+  /** The fake `prisma.rAInterviewQuestion` behind the job-set index (its recorded calls). */
+  jobSetDb: ReturnType<typeof createMemoryJobSetDelegate>;
+  /** A second service over the SAME stored rows with a new index: what a cold start sees. */
+  coldStart(): PrepService;
 }
 
-export function createPrepFixture(options: { set?: GeneratedQuestion[]; guide?: QuestionGuide | null } = {}): PrepFixture {
+export function createPrepFixture(options: { set?: GeneratedQuestion[]; guide?: QuestionGuide | null; store?: MemoryPrepStore; jobSets?: JobSetIndex } = {}): PrepFixture {
   const state: PrepFixture['state'] = { ai: true, market: 'intl', budgetLeft: {}, now: new Date('2026-10-10T12:00:00Z') };
-  const store = createMemoryPrepStore(() => state.now);
+  const store = options.store ?? createMemoryPrepStore(() => state.now);
+  // The production index (Prisma-backed, SR-59-1) over a fake of the one model it uses.
+  const jobSetDb = createMemoryJobSetDelegate(store);
   const calls: PrepFixture['calls'] = { set: [], guide: [], budget: [] };
   const jobs = new Map<string, PrepJob>([
     ['job_1', { id: 'job_1', title: 'Backend Engineer', companyName: 'Acme', companyId: 'co_acme', companySlug: 'acme', text: 'You will own database performance for our feed.' }],
     ['job_2', { id: 'job_2', title: 'Analyst', companyName: 'Nameless Ltd', companyId: null, companySlug: null, text: 'Build weekly reports.' }],
   ]);
-  const service = new PrepService({
+  const build = (jobSets: JobSetIndex) => new PrepService({
     store,
-    jobSets: createMemoryJobSetIndex(),
+    jobSets,
     market: () => state.market,
     now: () => state.now,
     aiAvailable: async () => state.ai,
@@ -70,5 +76,6 @@ export function createPrepFixture(options: { set?: GeneratedQuestion[]; guide?: 
     },
     modelId: () => 'test-model',
   });
-  return { service, store, calls, state, jobs };
+  const service = build(options.jobSets ?? createPrismaJobSetIndex({ rAInterviewQuestion: jobSetDb }));
+  return { service, store, calls, state, jobs, jobSetDb, coldStart: () => build(createPrismaJobSetIndex({ rAInterviewQuestion: jobSetDb })) };
 }

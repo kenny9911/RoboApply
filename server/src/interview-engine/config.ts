@@ -192,38 +192,43 @@ export function getR2Creds(brand?: InterviewBrandRef): R2Creds | null {
   const accessKeyId = brandEnv(b, 'S3_ACCESS_KEY_ID') || brandEnv(b, 'AWS_ACCESS_KEY_ID') || '';
   const secretAccessKey = brandEnv(b, 'S3_SECRET_ACCESS_KEY') || brandEnv(b, 'AWS_SECRET_ACCESS_KEY') || '';
   if (!bucket || !accessKeyId || !secretAccessKey) return null;
-  if (b.market === 'cn' && sharesIntlBucketName(bucket)) return null;
+  const endpoint = brandEnv(b, 'S3_ENDPOINT') || undefined;
+  if (b.market === 'cn' && sharesIntlStore(bucket, endpoint)) return null;
   return {
     bucket,
     region: brandEnv(b, 'S3_REGION') || brandEnv(b, 'AWS_REGION') || 'auto',
-    endpoint: brandEnv(b, 'S3_ENDPOINT') || undefined,
+    endpoint,
     accessKeyId,
     secretAccessKey,
     forcePathStyle: ['true', '1', 'yes'].includes((brandEnv(b, 'S3_FORCE_PATH_STYLE') || '').toLowerCase()),
   };
 }
 
-let warnedSharedBucket = false;
+let warnedSharedStore = false;
+
+function storeEndpoint(value: string | undefined): string {
+  return (value || '').trim().toLowerCase().replace(/\/+$/, '');
+}
 
 /**
- * GoApply storage counts as NOT configured when CN_S3_BUCKET has the same name
- * as RoboApply's S3_BUCKET. The interview storage client
- * (storage/r2Storage.ts) caches its S3 client by bucket name only, so two
- * brands with one bucket name — say an "interviews" bucket on R2 and another
- * on a mainland OSS — would share one client: GoApply objects could land in the
- * international store and retention could delete from the wrong one. Same
- * name and same store would put mainland data in the international bucket,
- * which CN L-11 forbids too. Either way GoApply recording and transcript
- * upload stay off (and retention leaves the pointers for a later run) until
- * the buckets have different names. Remove once the storage cache is keyed by
- * endpoint + bucket + access key (request to the storage owner).
+ * GoApply storage counts as NOT configured when CN_S3_BUCKET is the SAME
+ * bucket as RoboApply's: the same name on the same endpoint (or both with no
+ * endpoint). That would put mainland recordings and transcripts in the
+ * international bucket, which CN L-11 forbids, so GoApply recording and
+ * transcript upload stay off (and retention leaves the pointers for a later
+ * run) until GoApply has its own bucket.
+ *
+ * The same bucket NAME on a different endpoint is fine: the storage client
+ * (storage/r2Storage.ts) is cached per endpoint + bucket + access key id, so
+ * each brand talks to its own store.
  */
-function sharesIntlBucketName(cnBucket: string): boolean {
+function sharesIntlStore(cnBucket: string, cnEndpoint: string | undefined): boolean {
   const intlBucket = (process.env.S3_BUCKET || '').trim();
   if (!intlBucket || intlBucket !== cnBucket) return false;
-  if (!warnedSharedBucket) {
-    warnedSharedBucket = true;
-    console.warn('[interview-engine] CN_S3_BUCKET has the same name as S3_BUCKET; GoApply interview storage stays off until it has its own bucket name.');
+  if (storeEndpoint(process.env.S3_ENDPOINT) !== storeEndpoint(cnEndpoint)) return false;
+  if (!warnedSharedStore) {
+    warnedSharedStore = true;
+    console.warn('[interview-engine] CN_S3_BUCKET is the same bucket as S3_BUCKET (same name, same endpoint); GoApply interview storage stays off until it has its own bucket.');
   }
   return true;
 }

@@ -11,25 +11,43 @@
 //        → { requirements, webSources, sampleQuestions, inferredRole?, groundedOn, domain }
 //
 // NOT mounted on the external /v1 (X-API-Key) surface — internal UI only.
+//
+// Brand gate (INT-09, R7): the preview calls a model, so it checks the same
+// gate as every other AI practice route FIRST. A GoApply user without a bound
+// phone (403 phone_binding_required) or without the AI consent (503
+// ai_unavailable) gets the refusal with zero model calls and zero searches.
+// With consent, a GoApply preview is written from the role and the job post
+// alone: the web search is an offshore service and is never called for GoApply
+// (webSearch.ts). RoboApply's search query is checked for personal
+// information before it is sent.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
 import { getCurrentRequestId } from '../../lib/requestContext.js';
-import { findPersona, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
+import { findPersona, findSessionType, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
+import { CN_AI_INTERVIEW_FORMAT_ID, usesCnFormat } from '../../features/cn/interview/index.js';
 import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { normalizeLocale } from '../voice/voiceCatalog.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
 import { handleEngineError } from './errors.js';
+import { aiGateOpen, currentBrand, marketOf } from './practiceGate.js';
 
 const router = Router();
 
 router.post('/requirements/preview', requireAuth, async (req: Request, res: Response) => {
   try {
+    // Before anything else: no model call and no search for a user the brand's AI gate refuses.
+    const brand = await currentBrand();
+    if (!(await aiGateOpen(req, res, brand))) return res;
+    const market = marketOf(brand);
     const b = req.body ?? {};
     const role = typeof b.role === 'string' ? b.role.trim() : '';
     const jdText = typeof b.jdText === 'string' ? b.jdText.trim().slice(0, 8000) : '';
     const persona = (typeof b.personaId === 'string' && findPersona(b.personaId)) || DEFAULT_PERSONA;
-    const type = (typeof b.interviewType === 'string' && findType(b.interviewType)) || DEFAULT_TYPE;
+    let type = (typeof b.interviewType === 'string' && findType(b.interviewType, market)) || DEFAULT_TYPE;
+    // Keep the preview on the format the session will run (GoApply: a general
+    // type at its default length runs the AI-interview practice format).
+    if (usesCnFormat({ market, typeId: type.id, minutes: type.minutes })) type = findSessionType(CN_AI_INTERVIEW_FORMAT_ID) ?? type;
     const language = normalizeLocale(typeof b.language === 'string' ? b.language : undefined);
     const characteristics = normalizeCharacteristics(undefined, persona.difficulty);
 
@@ -47,6 +65,8 @@ router.post('/requirements/preview', requireAuth, async (req: Request, res: Resp
       durationMinutes: type.minutes,
       characteristics,
       jdText: jdText || undefined,
+      // The account name must never reach the web search (no-PI vendor).
+      knownValues: [req.user!.name ?? null],
       requestId: getCurrentRequestId() ?? undefined,
     });
 

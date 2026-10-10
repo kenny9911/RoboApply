@@ -84,7 +84,7 @@ export function DeviceCheck({
 }: Props) {
   const t = useTranslations('practice');
   const video = mode === 'video';
-  // Requested copy (practice.live.cam.localOnly); nothing until it exists.
+  // practice.live.cam.localOnly: where the camera picture goes on a local-only brand.
   const localOnlyNote = cameraLocalOnly ? pendingLiveCopy(t as unknown as LiveCopyTranslator, 'camLocalOnly') : null;
 
   const [mic, setMic] = useState<DeviceState>('idle');

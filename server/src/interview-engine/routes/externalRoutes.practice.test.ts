@@ -5,7 +5,7 @@
 // market check, 402 → practice upsell payload, GoApply gates (phone, AI
 // consent, voice capability), recording consent forwarded to the service, and
 // the written practice wrappers (gate on every call, job, metering).
-// Run: npx vitest run components/features/practice/__tests__/server/externalRoutes.practice.test.ts
+// Run: npx vitest run server/src/interview-engine/routes/externalRoutes.practice.test.ts
 
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
@@ -43,22 +43,22 @@ const m = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../../../../server/src/middleware/auth.js', () => ({
+vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req: any, _res: any, next: any) => {
     req.user = { ...m.user, email: 'u@example.test' };
     req.apiKeyId = m.apiKeyId;
     next();
   },
 }));
-vi.mock('../../../../../server/src/lib/requestContext.js', () => ({ getCurrentRequestId: () => 'req-1' }));
-vi.mock('../../../../../server/src/services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock('../../../../../server/src/interview-engine/parley/parleyConfig.js', () => ({ shouldUseParley: () => false }));
-vi.mock('../../../../../server/src/platform/brand/brandContext.js', () => ({ getCurrentBrandOrDefault: () => m.brand }));
-vi.mock('../../../../../server/src/features/auth-cn/index.js', () => ({ phoneBindingRequired: m.phoneRequired }));
-vi.mock('../../../../../server/src/platform/consent/index.js', () => ({ aiAllowed: m.aiAllowed, hasLiveConsent: m.hasLiveConsent }));
-vi.mock('../../../../../server/src/platform/flags.js', () => ({ isEnabledForBrand: m.voiceOn }));
-vi.mock('../../../../../server/src/interview-engine/storage/r2Storage.js', () => ({ interviewR2Storage: { isConfigured: () => true } }));
-vi.mock('../../../../../server/src/interview-engine/sessions/InterviewSessionService.js', () => ({
+vi.mock('../../lib/requestContext.js', () => ({ getCurrentRequestId: () => 'req-1' }));
+vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock('../parley/parleyConfig.js', () => ({ shouldUseParley: () => false }));
+vi.mock('../../platform/brand/brandContext.js', () => ({ getCurrentBrandOrDefault: () => m.brand }));
+vi.mock('../../features/auth-cn/index.js', () => ({ phoneBindingRequired: m.phoneRequired }));
+vi.mock('../../platform/consent/index.js', () => ({ aiAllowed: m.aiAllowed, hasLiveConsent: m.hasLiveConsent }));
+vi.mock('../../platform/flags.js', () => ({ isEnabledForBrand: m.voiceOn }));
+vi.mock('../storage/r2Storage.js', () => ({ interviewR2Storage: { isConfigured: () => true } }));
+vi.mock('../sessions/InterviewSessionService.js', () => ({
   interviewSessionService: {
     createSession: m.create,
     prepareSession: m.prepare,
@@ -93,7 +93,7 @@ const savedRec = process.env.INTERVIEW_ENGINE_RECORDING_ENABLED;
 beforeAll(async () => {
   process.env.INTERVIEW_ENGINE_RECORDING_ENABLED = 'true';
   const express = (await import('express')).default;
-  const external = (await import('../../../../../server/src/interview-engine/routes/externalRoutes.js')).default;
+  const external = (await import('./externalRoutes.js')).default;
   const app = express();
   app.use(express.json());
   app.use('/ie/v1', external);

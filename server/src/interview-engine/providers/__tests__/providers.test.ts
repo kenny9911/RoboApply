@@ -41,9 +41,13 @@ vi.mock('../../livekit/egress.js', async () => {
 import {
   createVoiceProvider,
   getVoiceProvider,
+  readRowSeam,
+  readStoredVoiceSeam,
   readVoiceSeam,
+  resolveSessionSeam,
   voiceAvailable,
   voiceProviderFor,
+  voiceSeamColumns,
   voiceSeamForBrand,
   voiceSeamMetrics,
   VoiceProviderNotImplementedError,
@@ -143,10 +147,51 @@ describe('reserved providers', () => {
 });
 
 describe('session seam', () => {
-  it('reads every Wave 0 row as RoboApply on LiveKit Cloud', () => {
+  it('liveMetrics alone: no seam reads as the default (legacy reader), and as "says nothing" for the row reader', () => {
     expect(readVoiceSeam(null)).toEqual(DEFAULT_VOICE_SEAM);
     expect(readVoiceSeam({ control: { creditExempt: true } })).toEqual(DEFAULT_VOICE_SEAM);
     expect(readVoiceSeam({ voiceSeam: { brand: 'nope', provider: 'x' } })).toEqual(DEFAULT_VOICE_SEAM);
+    expect(readStoredVoiceSeam(null)).toBeNull();
+    expect(readStoredVoiceSeam({ control: {} })).toBeNull();
+    expect(readStoredVoiceSeam({ voiceSeam: { brand: 'nope', provider: 'x' } })).toBeNull();
+    expect(readStoredVoiceSeam({ voiceSeam: { brand: 'goapply', provider: 'x' } })).toEqual({ brand: 'goapply', provider: 'livekit_cloud' });
+  });
+
+  it('the row reader takes the columns first, then liveMetrics, and never invents a brand (INT-09)', () => {
+    const json = { voiceSeam: { v: 1, brand: 'goapply', provider: 'livekit_selfhosted' } };
+    expect(readRowSeam({ brand: 'goapply', voiceProvider: 'livekit_selfhosted', liveMetrics: null })).toEqual({ brand: 'goapply', provider: 'livekit_selfhosted' });
+    // The column wins over a JSON seam that disagrees.
+    expect(readRowSeam({ brand: 'roboapply', voiceProvider: 'livekit_cloud', liveMetrics: json })).toEqual({ brand: 'roboapply', provider: 'livekit_cloud' });
+    // A column brand with no provider: the JSON seam of the same brand supplies it, else LiveKit Cloud.
+    expect(readRowSeam({ brand: 'goapply', voiceProvider: null, liveMetrics: json })).toEqual({ brand: 'goapply', provider: 'livekit_selfhosted' });
+    expect(readRowSeam({ brand: 'goapply', voiceProvider: 'bogus', liveMetrics: null })).toEqual({ brand: 'goapply', provider: 'livekit_cloud' });
+    // No column: the JSON seam.
+    expect(readRowSeam({ brand: null, voiceProvider: null, liveMetrics: json })).toEqual({ brand: 'goapply', provider: 'livekit_selfhosted' });
+    // Neither (and an unknown column value): the row says nothing — null, not 'roboapply'.
+    expect(readRowSeam({ brand: null, voiceProvider: null, liveMetrics: { control: {} } })).toBeNull();
+    expect(readRowSeam({ brand: 'someone-else', liveMetrics: null })).toBeNull();
+    expect(readRowSeam({})).toBeNull();
+  });
+
+  it('resolveSessionSeam: column → liveMetrics → the owner’s brand; null is never read as RoboApply', async () => {
+    const lookup = vi.fn(async (userId: string) => (userId === 'cn-user' ? ('goapply' as const) : userId === 'ghost' ? null : ('roboapply' as const)));
+    // The row answers by itself: no lookup.
+    expect(await resolveSessionSeam({ userId: 'cn-user', brand: 'goapply', voiceProvider: 'livekit_cloud' }, lookup)).toEqual({ brand: 'goapply', provider: 'livekit_cloud' });
+    expect(await resolveSessionSeam({ userId: 'u', brand: null, liveMetrics: { voiceSeam: { brand: 'goapply', provider: 'livekit_cloud' } } }, lookup)).toEqual({ brand: 'goapply', provider: 'livekit_cloud' });
+    expect(lookup).not.toHaveBeenCalled();
+    // A legacy row: the owner decides.
+    expect(await resolveSessionSeam({ userId: 'cn-user', brand: null, voiceProvider: null, liveMetrics: null }, lookup)).toEqual({ brand: 'goapply', provider: 'livekit_cloud' });
+    expect(await resolveSessionSeam({ userId: 'intl-user', brand: null, liveMetrics: {} }, lookup)).toEqual({ brand: 'roboapply', provider: 'livekit_cloud' });
+    expect(lookup).toHaveBeenCalledTimes(2);
+    // The owner is gone (rows cascade with the user, so this is a leftover): the default seam.
+    expect(await resolveSessionSeam({ userId: 'ghost' }, lookup)).toEqual(DEFAULT_VOICE_SEAM);
+    // A failed lookup is never a guess.
+    await expect(resolveSessionSeam({ userId: 'x' }, async () => { throw new Error('db down'); })).rejects.toThrow('db down');
+  });
+
+  it('every create writes both columns, for the default seam too', () => {
+    expect(voiceSeamColumns(voiceSeamForBrand('roboapply'))).toEqual({ brand: 'roboapply', voiceProvider: 'livekit_cloud' });
+    expect(voiceSeamColumns({ brand: 'goapply', provider: 'livekit_selfhosted' })).toEqual({ brand: 'goapply', voiceProvider: 'livekit_selfhosted' });
   });
 
   it('writes nothing for the default seam and round-trips any other', () => {

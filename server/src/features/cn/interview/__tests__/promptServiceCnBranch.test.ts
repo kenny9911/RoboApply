@@ -96,6 +96,17 @@ describe('RoboApply / intl (regression)', () => {
     expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('Web evidence');
   });
 
+  it('a role text carrying personal information is never sent to the web search (INT-09)', async () => {
+    for (const role of ['Product Manager jane.doe@example.com', 'Product Manager +1 415 555 0134']) {
+      const out = await service.generate(input({ market: 'intl', role }));
+      expect(out.webSources).toEqual([]);
+    }
+    expect(m.search).not.toHaveBeenCalled();
+    // The pipeline still runs on the role alone.
+    expect(m.requirements).toHaveBeenCalledTimes(2);
+    expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('');
+  });
+
   it('defaults to the request brand: RoboApply runs the intl pipeline', async () => {
     await runWithBrand('roboapply', () => service.generate(input()));
     expect(m.search).toHaveBeenCalledOnce();

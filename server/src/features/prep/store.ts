@@ -3,20 +3,16 @@
 // A narrow typed store so the service is testable without a database
 // (memoryStore.ts is the in-process twin used by the tests). Typed Prisma only.
 //
-// Schema requests (handoff; until SCHEMA-4 applies them the store degrades as noted):
-//   SR-59-1  RAInterviewQuestion.jobId String? + @@index([jobId, status]) — links an
-//            AI set to the job post it was written from. Until then the job → set
-//            link is kept per server process (jobSetIndex.ts), so a cold start
-//            writes a new set (counted against the daily limit).
-//   SR-59-2  RAQuestionContribution.category String? and .rejectReason String? — the
-//            category a user suggested and why staff rejected it. Until then the
-//            suggested category is not kept (staff pick one on approval) and the
-//            reject reason goes to the contributor's SeekerActivityLog audit row.
-//   SR-59-3  RAQuestionReport @@unique([questionId, userId]) — one report per user per
-//            question, enforced by the database. Until then addReport runs its
-//            check-then-insert at SERIALIZABLE isolation (a concurrent double submit
-//            fails one transaction, which is retried and then sees the first report);
-//            a P2002 from the future constraint is read as "already reported".
+// SCHEMA-4 columns this store uses:
+//   SR-59-1  RAInterviewQuestion.jobId + @@index([jobId, status]) — links an AI
+//            set to the job post it was written from (read and written by the
+//            Prisma job-set index, jobSetIndex.ts).
+//   SR-59-2  RAQuestionContribution.category and .rejectReason — the category
+//            the contributor suggested (staff may change it when publishing)
+//            and why staff rejected it.
+//   SR-59-3  RAQuestionReport @@unique([questionId, userId]) — one report per
+//            user per question, enforced by the database: addReport inserts and
+//            reads a duplicate-key error (P2002) as "already reported".
 
 import type { Prisma } from '../../generated/prisma/client.js';
 
@@ -41,6 +37,8 @@ export interface QuestionRow {
   reportsCount: number;
   createdAt: Date;
   updatedAt: Date;
+  /** The job post an `ai_practice` set was written from (SR-59-1); null otherwise. */
+  jobId: string | null;
 }
 
 export type NewQuestion = Pick<
@@ -60,6 +58,10 @@ export interface ContributionRow {
   moderatorId: string | null;
   moderatedAt: Date | null;
   createdAt: Date;
+  /** The category the contributor suggested (SR-59-2); null when they picked none. */
+  category: string | null;
+  /** Why staff rejected it (SR-59-2); null unless rejected. */
+  rejectReason: string | null;
 }
 
 export interface ReportRow {
@@ -129,11 +131,11 @@ export interface PrepStore {
   /** One report per user per question; returns whether it was new and the new count. */
   addReport(questionId: string, userId: string, reason: string, note: string | null): Promise<{ created: boolean; reportsCount: number }>;
   recentReports(questionId: string, take: number): Promise<ReportRow[]>;
-  createContribution(row: Omit<ContributionRow, 'id' | 'status' | 'moderatorId' | 'moderatedAt' | 'createdAt'>): Promise<ContributionRow>;
+  createContribution(row: Omit<ContributionRow, 'id' | 'status' | 'moderatorId' | 'moderatedAt' | 'createdAt' | 'rejectReason'>): Promise<ContributionRow>;
   getContribution(id: string): Promise<ContributionRow | null>;
   listContributions(market: string, status: string, page: Page): Promise<Paged<ContributionRow>>;
   /** Moves a pending contribution; false when it was no longer pending (another moderator). */
-  moderateContribution(id: string, data: { status: 'approved' | 'rejected'; moderatorId: string; moderatedAt: Date }): Promise<boolean>;
+  moderateContribution(id: string, data: { status: 'approved' | 'rejected'; moderatorId: string; moderatedAt: Date; rejectReason?: string | null }): Promise<boolean>;
   /**
    * Approves a pending contribution and creates its question in ONE transaction:
    * either both are stored or neither is. null when it was no longer pending.
@@ -170,12 +172,10 @@ const QUESTION_SELECT = {
   reportsCount: true,
   createdAt: true,
   updatedAt: true,
+  jobId: true,
 } as const satisfies Prisma.RAInterviewQuestionSelect;
 
 const COMPANY_SELECT = { id: true, slug: true, displayName: true, nameNormalized: true } as const satisfies Prisma.RACompanySelect;
-
-/** Attempts for a report transaction that lost a serialization race (P2034). */
-const REPORT_TX_ATTEMPTS = 3;
 
 function prismaCode(err: unknown): string | null {
   const code = err && typeof err === 'object' ? (err as { code?: unknown }).code : undefined;
@@ -315,33 +315,19 @@ export async function createPrismaPrepStore(): Promise<PrepStore> {
     },
 
     async addReport(questionId, userId, reason, note) {
-      const current = async () => {
+      // SR-59-3: @@unique([questionId, userId]) decides. The insert and the
+      // count move together; a second report by the same user fails the insert
+      // (P2002), rolls the transaction back and reads as "already reported".
+      try {
+        return await prisma.$transaction(async (tx) => {
+          await tx.rAQuestionReport.create({ data: { questionId, userId, reason, note } });
+          const q = await tx.rAInterviewQuestion.update({ where: { id: questionId }, data: { reportsCount: { increment: 1 } }, select: { reportsCount: true } });
+          return { created: true, reportsCount: q.reportsCount };
+        });
+      } catch (err) {
+        if (prismaCode(err) !== 'P2002') throw err;
         const q = await prisma.rAInterviewQuestion.findUniqueOrThrow({ where: { id: questionId }, select: { reportsCount: true } });
         return { created: false, reportsCount: q.reportsCount };
-      };
-      // SR-59-3: SERIALIZABLE until @@unique([questionId, userId]) exists, so two
-      // concurrent reports by one user cannot both pass the check and count twice.
-      for (let attempt = 1; ; attempt += 1) {
-        try {
-          return await prisma.$transaction(
-            async (tx) => {
-              const existing = await tx.rAQuestionReport.findFirst({ where: { questionId, userId }, select: { id: true } });
-              if (existing) {
-                const q = await tx.rAInterviewQuestion.findUniqueOrThrow({ where: { id: questionId }, select: { reportsCount: true } });
-                return { created: false, reportsCount: q.reportsCount };
-              }
-              await tx.rAQuestionReport.create({ data: { questionId, userId, reason, note } });
-              const q = await tx.rAInterviewQuestion.update({ where: { id: questionId }, data: { reportsCount: { increment: 1 } }, select: { reportsCount: true } });
-              return { created: true, reportsCount: q.reportsCount };
-            },
-            { isolationLevel: 'Serializable' },
-          );
-        } catch (err) {
-          const code = prismaCode(err);
-          if (code === 'P2002') return current();
-          if (code === 'P2034' && attempt < REPORT_TX_ATTEMPTS) continue;
-          throw err;
-        }
       }
     },
 

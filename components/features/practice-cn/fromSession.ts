@@ -1,12 +1,13 @@
 // components/features/practice-cn/fromSession.ts — the GoApply report block
 // for an interview-engine session (WP-66).
 //
-// Prefers the block the server stored (`report.cn`, exposed as
-// `session.cnReport` once the serializer passes it through — see the WP-66
-// handoff). Until then it builds the same block here from the transcript and
-// the session's breakdown with the client mirror of the rubric.
+// Prefers the block the server stored (`report.cn`, sent as
+// `session.cnReport`). For a session that carries none (scored before the
+// block existed) it builds the same block here from the transcript and the
+// session's breakdown with the client mirror of the rubric.
 
 import type { IEReport } from '../../../lib/api/interviewEngine';
+import { asCnPracticeReport } from './format';
 import {
   buildCnPracticeReport,
   normalizeCnTurns,
@@ -18,12 +19,6 @@ type SessionExtras = {
   cnReport?: unknown;
   reportTooShort?: boolean;
 };
-
-function isStoredReport(value: unknown): value is CnPracticeReport {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as Partial<CnPracticeReport>;
-  return v.version === 1 && Array.isArray(v.areas) && Array.isArray(v.answers) && !!v.star && !!v.fillers;
-}
 
 /** Where the session's breakdown came from, as far as the client can tell. */
 export function sessionBasis(session: IEReport['session'] & SessionExtras): Exclude<CnAreaBasis, 'star_check'> {
@@ -40,7 +35,8 @@ export function reviewPending(report: IEReport): boolean {
 
 export function cnReportFromEngine(report: IEReport): CnPracticeReport {
   const session = report.session as IEReport['session'] & SessionExtras;
-  if (isStoredReport(session.cnReport)) return session.cnReport;
+  const stored = asCnPracticeReport(session.cnReport);
+  if (stored) return stored;
   return buildCnPracticeReport({
     turns: normalizeCnTurns(report.transcript),
     breakdown: Array.isArray(session.breakdown) ? session.breakdown : null,

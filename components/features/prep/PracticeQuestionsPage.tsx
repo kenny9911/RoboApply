@@ -8,16 +8,18 @@
 //   Share       "Share a question you were asked" (moderated)
 //
 // Hidden (no entry, plain notice) while the `interviewBank` capability is off.
-// Counts are counts of moderated rows; nothing is estimated or scraped.
+// Counts are counts of moderated rows; nothing is estimated or scraped. Each
+// count carries the shared source line (<SourceNote>, D3).
 
 import { useState, type FormEvent } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
 import { EmptyState } from '../../v3/primitives/EmptyState';
 import { PageHeader } from '../../v3/primitives/PageHeader';
 import { useBrand } from '../../../lib/brand';
 import { useFlag } from '../../../lib/flags';
+import { SourceNote, isPublishable } from '../common/SourceNote';
 import type { QuestionCategory } from '../../../lib/api/contracts/prep';
 import { useCuratedQuestions, usePrepCompanies } from '../../../hooks/prep/usePrep';
 import { ContributeQuestion } from './ContributeQuestion';
@@ -43,7 +45,6 @@ export function CategoryChips({ value, onChange, groups }: { value: QuestionCate
 
 function Companies() {
   const t = useTranslations('practiceQuestions.companies');
-  const format = useFormatter();
   const periodLabel = usePeriodLabel();
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
@@ -90,18 +91,16 @@ function Companies() {
         <ul className={styles.list}>
           {items.map((c) => {
             const latest = periodLabel(c.latestPeriod);
-            const asOf = new Date(c.questionCount.asOf);
             return (
               <li key={c.slug}>
                 <a className={styles.companyRow} href={companyHref(c.slug)}>
                   <span className={styles.companyName}>{c.name}</span>
                   <span className={styles.muted}>
-                    {t('count', { count: c.questionCount.value })}
+                    {/* Unknown is "—", never 0 (D3). */}
+                    {isPublishable(c.questionCount) ? t('count', { count: c.questionCount.value }) : '—'}
                     {latest ? ` · ${t('latest', { period: latest })}` : ''}
                   </span>
-                  <span className={styles.muted} data-source-note="sourced">
-                    {t('source', { date: Number.isNaN(asOf.getTime()) ? '—' : format.dateTime(asOf, { dateStyle: 'medium' }) })}
-                  </span>
+                  <SourceNote sourced={c.questionCount} className={styles.muted} />
                 </a>
               </li>
             );

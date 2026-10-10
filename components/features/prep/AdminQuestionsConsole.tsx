@@ -131,6 +131,7 @@ function ContributionList({ status }: { status: ContributionStatusFilter }) {
 
 function ContributionHead({ item, headingId }: { item: ContributionView; headingId: string }) {
   const t = useTranslations('practiceQuestions.admin.contribution');
+  const tCat = useTranslations('practiceQuestions.categories');
   const period = usePeriodLabel()(item.period) ?? item.period;
   const date = useDate();
   return (
@@ -139,6 +140,8 @@ function ContributionHead({ item, headingId }: { item: ContributionView; heading
         {item.role ? t('meta', { company: item.companyName, role: item.role, period }) : t('metaNoRole', { company: item.companyName, period })}
       </h3>
       <p className={styles.muted}>{t('received', { date: date(item.createdAt) })}</p>
+      {/* SR-59-2: the group the contributor picked (staff may publish it under another). */}
+      {item.suggestedCategory ? <p className={styles.muted}>{t('suggestedGroup', { group: tCat(item.suggestedCategory) })}</p> : null}
       <p className={styles.text}>{item.body}</p>
     </header>
   );
@@ -152,6 +155,8 @@ function DecidedItem({ item }: { item: ContributionView }) {
     <article className={styles.card} aria-labelledby={headingId}>
       <ContributionHead item={item} headingId={headingId} />
       <p className={styles.muted}>{t('decided', { date: date(item.moderatedAt) })}</p>
+      {/* SR-59-2: why it was turned down (stored on the contribution). */}
+      {item.status === 'rejected' && item.rejectReason ? <p className={styles.muted}>{t('rejectedFor', { reason: t(`reasons.${item.rejectReason}`) })}</p> : null}
     </article>
   );
 }
@@ -167,7 +172,8 @@ function PendingItem({ item }: { item: ContributionView }) {
   const [title, setTitle] = useState(item.body.split('\n')[0]?.slice(0, 160) ?? '');
   const [body, setBody] = useState(item.body);
   const [companyName, setCompanyName] = useState(item.companyName);
-  const [category, setCategory] = useState<QuestionCategory | ''>('');
+  // Starts at the contributor's suggestion when they made one (SR-59-2).
+  const [category, setCategory] = useState<QuestionCategory | ''>(item.suggestedCategory ?? '');
   // Prefilled with the server's guess from the script; the guide is written in it.
   const [locale, setLocale] = useState<QuestionLocale>(item.locale);
   const [confirmed, setConfirmed] = useState(false);

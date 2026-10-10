@@ -114,6 +114,19 @@
   width: min(100%, 780px, calc((100dvh - 360px) * 16 / 9));
 }
 
+/* GoApply: the "AI voice" label on the interviewer's tile. The badge renders
+ * only on GoApply; on RoboApply this holder is empty and takes no space. */
+.aiMark {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 1;
+}
+
+.aiMark:empty {
+  display: none;
+}
+
 .frame[data-mode='video'] > :global(.iv-video-tile) {
   width: 100%;
 }

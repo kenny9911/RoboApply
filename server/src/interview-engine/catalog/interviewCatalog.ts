@@ -8,7 +8,7 @@
 import type { InterviewArchetype } from './interviewArchetypes.js';
 import { getArchetypeCatalog } from './interviewArchetypes.js';
 import { getDomainCatalog } from './domainExperts.js';
-import { formatsAsTypes } from './interviewFormats.js';
+import { formatsAsTypes, getFormat, type FormatMarket } from './interviewFormats.js';
 
 export interface InterviewPersona {
   id: string;
@@ -62,14 +62,39 @@ export const INTERVIEW_PERSONAS: InterviewPersona[] = [
 
 // The 28 researched interview FORMATS (thin projection; the rich blueprint
 // directives live in interviewFormats.ts and thread into the question agent).
+// This is the international list. A market may list its own formats first
+// (`typesForMarket('cn')` adds the GoApply AI-interview practice, WP-66).
 export const INTERVIEW_TYPES: InterviewTypeDef[] = formatsAsTypes();
+
+/** The types a market lists: its own formats first, then the shared list. `intl` is INTERVIEW_TYPES itself. */
+export function typesForMarket(market: FormatMarket = 'intl'): InterviewTypeDef[] {
+  return market === 'intl' ? INTERVIEW_TYPES : formatsAsTypes(market);
+}
 
 export function findPersona(id: string): InterviewPersona | undefined {
   return INTERVIEW_PERSONAS.find((p) => p.id === id);
 }
 
-export function findType(id: string): InterviewTypeDef | undefined {
-  return INTERVIEW_TYPES.find((t) => t.id === id);
+/**
+ * A type by id. Without a market only the international list is searched, as
+ * before (an external API caller cannot ask for a market format); with one,
+ * that market's own formats are found too (a GoApply create).
+ */
+export function findType(id: string, market?: FormatMarket): InterviewTypeDef | undefined {
+  return (market ? typesForMarket(market) : INTERVIEW_TYPES).find((t) => t.id === id);
+}
+
+/**
+ * The type a STORED session ran, on whichever market: the international list,
+ * else a market format (a GoApply session created as `cn_ai_interview`).
+ * For reads of existing rows only; never for validating a caller's choice.
+ */
+export function findSessionType(id: string | null | undefined): InterviewTypeDef | undefined {
+  if (!id) return undefined;
+  const known = findType(id);
+  if (known) return known;
+  const format = getFormat(id);
+  return format ? { id: format.id, label: format.labelEn, sub: format.subEn, minutes: format.minutes, suitedRoleCategories: format.suitedRoleCategories } : undefined;
 }
 
 /** A neutral default persona for external callers who don't pick one. */
@@ -77,6 +102,7 @@ export const DEFAULT_PERSONA: InterviewPersona =
   INTERVIEW_PERSONAS.find((p) => p.id === 'priya') ?? INTERVIEW_PERSONAS[0]; // balanced behavioral
 export const DEFAULT_TYPE: InterviewTypeDef = findType('behavioral') ?? INTERVIEW_TYPES[0];
 
-export function getCatalog() {
-  return { personas: INTERVIEW_PERSONAS, types: INTERVIEW_TYPES, archetypes: getArchetypeCatalog(), domains: getDomainCatalog() };
+/** The setup catalog. `market` defaults to the international list (unchanged). */
+export function getCatalog(market: FormatMarket = 'intl') {
+  return { personas: INTERVIEW_PERSONAS, types: typesForMarket(market), archetypes: getArchetypeCatalog(), domains: getDomainCatalog() };
 }

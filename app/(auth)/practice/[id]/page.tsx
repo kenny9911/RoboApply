@@ -75,6 +75,8 @@ import { TextPracticeRoom } from '../../../../components/features/practice';
 import type { NetworkAssessment } from '../../../../components/features/practice/NetworkPrecheck';
 import { useLocalCameraPreview } from '../../../../components/v3/mock/YourTile';
 import { useMockRoleLabels } from '../../../../lib/mockRoleLabels';
+import { useLocalizeType } from '../../../../components/features/practice-cn';
+import { AiGeneratedBadge } from '../../../../components/features/market';
 import { Btn } from '../../../../components/v3/primitives/Btn';
 import {
   IconCamera,
@@ -1190,7 +1192,8 @@ function RoomStage({
   onEvent: (type: string, data?: Record<string, unknown>) => void;
 }) {
   const t = useTranslations('practice');
-  const { localizeRole, localizeType } = useMockRoleLabels();
+  const { localizeRole } = useMockRoleLabels();
+  const localizeType = useLocalizeType();
   const { user } = useAuth();
   const room = useRoomContext();
   const { state, agent, videoTrack: agentVideo } = useVoiceAssistant();
@@ -1531,7 +1534,7 @@ function RoomStage({
     isCameraEnabled && localCamera?.publication?.track && !localCamera.publication.isMuted,
   );
   const shownCamState: DeviceState = localPreview ? preview.state : camState;
-  // Requested copy (practice.live.cam.localOnlyShort); nothing until it exists.
+  // practice.live.cam.localOnlyShort: the self-view is never sent.
   const localOnlyShort = localPreview ? pendingLiveCopy(t as unknown as LiveCopyTranslator, 'camLocalOnlyShort') : null;
   const camOn = localPreview ? preview.on : isCameraEnabled;
   const cameraReason = isDeviceFailure(shownCamState) ? deviceStateLabel(t, shownCamState) : null;
@@ -1618,6 +1621,8 @@ function RoomStage({
                 <VideoTrack trackRef={agentVideo} className={styles.agentFeed} />
               ) : undefined}
             />
+            {/* GoApply: the interviewer is an AI voice, and the room says so (the badge renders on GoApply only). */}
+            <span className={styles.aiMark}><AiGeneratedBadge kind="audio" /></span>
 
             {/* The candidate's own tile is PINNED, not tucked behind a
                 disclosure: seeing yourself is half of what video practice is
@@ -1677,6 +1682,8 @@ function RoomStage({
             </p>
           )}
 
+          {/* GoApply: the question card, its hint and the coach's nudges are AI text. */}
+          {coachOn && agentJoined ? <AiGeneratedBadge /> : null}
           {coachOn && agentJoined && (
             <LiveQuestionCard
               question={coach.question}
@@ -1726,6 +1733,8 @@ function RoomStage({
               aria-labelledby={`practice-rail-tab-${railTab}`}
               tabIndex={0}
             >
+              {/* GoApply: the coach's notes and the interviewer's lines in the transcript are AI output. */}
+              <AiGeneratedBadge />
               {railTab === 'coach'
                 ? <CoachMeters metrics={coach.metrics} listeningFor={coach.listeningFor} />
                 : <LiveTranscript turns={transcript} interviewerName={interviewer.name} typing={state === 'thinking'} />}
@@ -1817,7 +1826,8 @@ function ParleyStage({
   onEvent: (type: string, data?: Record<string, unknown>) => void;
 }) {
   const t = useTranslations('practice');
-  const { localizeRole, localizeType } = useMockRoleLabels();
+  const { localizeRole } = useMockRoleLabels();
+  const localizeType = useLocalizeType();
   const { user } = useAuth();
   const video = connection.mode === 'video';
 

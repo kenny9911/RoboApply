@@ -5,11 +5,22 @@
 // never carry a company; GoApply AI items render AiGeneratedBadge; the job set
 // has "Practice for this job"; company pages show only user reports with month
 // and count; nothing calls a model on page load; the capability hides the page.
+//
+// INT-09: the two count lines render the shared <SourceNote> (source
+// 'user_reports'). Its label key `nav.source.label.user_reports` is added by
+// INT-12 (i18n/staging/nav.en.json), so the SourceNote tests below supply it
+// through the messages override; the other tests use the real bundle.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
-import { renderWithBrand } from '../../../../__tests__/shell/helpers';
+import type { AbstractIntlMessages } from 'next-intl';
+
+import { capsFor, renderWithBrand } from '../../../../__tests__/shell/helpers';
+import { renderWithProviders } from '../../../../__tests__/utils/renderWithProviders';
+import { defaultMessages } from '../../../../__tests__/utils/mockTranslations';
+import { BrandProvider } from '../../../../lib/brand/BrandProvider';
+import { clientBrandFor } from '../../../../lib/brand/client';
 import { RoboApiError } from '../../../../lib/api/client';
 import type { CompaniesResponse, CompanyQuestionsResponse, JobQuestionSetResponse, QuestionDetail, QuestionView } from '../../../../lib/api/contracts/prep';
 
@@ -59,6 +70,22 @@ const COMPANIES: CompaniesResponse = {
 const SET_EMPTY: JobQuestionSetResponse = { jobId: 'job_1', jobTitle: 'Backend Engineer', companyName: 'Acme', companySlug: 'acme', status: 'not_generated', generatedAt: null, aiQuestions: [], companyReports: [REPORT] };
 const SET_READY: JobQuestionSetResponse = { ...SET_EMPTY, status: 'ready', generatedAt: '2026-10-10T12:00:00.000Z', aiQuestions: [AI_1, AI_2] };
 
+/** The real English bundle plus the label INT-12 adds for source 'user_reports'. */
+function messagesWithUserReports(): AbstractIntlMessages {
+  const all = JSON.parse(JSON.stringify(defaultMessages)) as { nav: { source: { label: Record<string, string> } } };
+  all.nav.source.label.user_reports = 'users who shared questions';
+  return all as unknown as AbstractIntlMessages;
+}
+
+function renderSourced(el: React.ReactElement) {
+  return renderWithProviders(
+    <BrandProvider brand={clientBrandFor('roboapply')} initialCapabilities={capsFor('roboapply', { interviewBank: true })}>
+      {el}
+    </BrandProvider>,
+    { intlMessages: messagesWithUserReports() },
+  );
+}
+
 async function renderIndex(search: Record<string, string> = {}, brand: 'roboapply' | 'goapply' = 'roboapply', flags = { interviewBank: true }) {
   const el = await PracticeQuestionsRoute({ searchParams: Promise.resolve(search) });
   return renderWithBrand(el, { brand, flags });
@@ -81,7 +108,8 @@ describe('/practice/questions', () => {
     const company = await screen.findByRole('link', { name: /Acme/ });
     expect(company).toHaveAttribute('href', '/practice/questions/acme');
     expect(within(company).getByText(/3 shared questions · most recent from September 2026/)).toBeInTheDocument();
-    expect(within(company).getByText(/Count of questions shared with us, as of/)).toBeInTheDocument();
+    // The source line is the shared <SourceNote> (its label is asserted below).
+    expect(company.querySelector('[data-source-note="sourced"]')?.textContent).toMatch(/as of Oct 10, 2026$/);
     expect(api.getJobQuestions).not.toHaveBeenCalled();
   });
 
@@ -155,6 +183,35 @@ describe('/practice/questions', () => {
     expect(within(card).getByRole('button', { name: 'Hide how to answer' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('each company row shows its count (N) and the shared source line', async () => {
+    renderSourced(await PracticeQuestionsRoute({ searchParams: Promise.resolve({}) }));
+    const row = (await screen.findByText('Acme')).closest('a') as HTMLElement;
+    expect(within(row).getByText('3 shared questions · most recent from September 2026')).toBeInTheDocument();
+    const note = row.querySelector('[data-source-note="sourced"]') as HTMLElement;
+    expect(note.textContent).toMatch(/^Source: users who shared questions · as of .*2026$/);
+    // A count is not an aggregate with a sample rule: it is never suppressed.
+    expect(row.querySelector('[data-source-note="suppressed"]')).toBeNull();
+  });
+
+  it('a bundle without the label (before INT-12’s key lands) reads "another source", never a key path', async () => {
+    await renderIndex();
+    const row = (await screen.findByText('Acme')).closest('a') as HTMLElement;
+    const note = row.querySelector('[data-source-note="sourced"]') as HTMLElement;
+    expect(note.textContent).toMatch(/^Source: another source · as of /);
+    expect(document.body.textContent).not.toContain('label.user_reports');
+  });
+
+  it('an unknown count renders "—", never 0', async () => {
+    api.listPrepCompanies.mockResolvedValue({
+      items: [{ ...COMPANIES.items[0], questionCount: { value: null as unknown as number, source: 'user_reports', asOf: '2026-10-10T12:00:00.000Z' }, latestPeriod: null }],
+      cursor: null,
+    });
+    renderSourced(await PracticeQuestionsRoute({ searchParams: Promise.resolve({}) }));
+    const row = (await screen.findByText('Acme')).closest('a') as HTMLElement;
+    expect(within(row).getByText('—')).toBeInTheDocument();
+    expect(row.textContent).not.toMatch(/\b0 shared/);
+  });
+
   it('a guide is never written when AI is off', async () => {
     api.getQuestion.mockResolvedValue({ ...CURATED, guide: null, guideStatus: 'ai_unavailable' });
     await renderIndex();
@@ -187,6 +244,24 @@ describe('/practice/questions', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Send for checking' }));
     expect(await within(dialog).findByText('Thanks. Our staff will check it before it shows.')).toBeInTheDocument();
     expect(api.contributeQuestion).toHaveBeenCalledWith({ company: 'Acme', question: 'Why do you want to work on payments?', period: '2026-09' });
+  });
+
+  it('share a question: the optional group is sent when picked (SR-59-2); GoApply offers the HR round', async () => {
+    api.contributeQuestion.mockResolvedValue({ id: 'c2', status: 'pending' });
+    await renderIndex({}, 'goapply');
+    fireEvent.click(screen.getByRole('button', { name: 'Share a question you were asked' }));
+    const dialog = await screen.findByRole('dialog');
+    const group = within(dialog).getByLabelText('Question group (optional)');
+    expect(group).toHaveValue('');
+    expect(within(group as HTMLElement).getByRole('option', { name: 'HR round' })).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Company'), { target: { value: 'Acme' } });
+    fireEvent.change(within(dialog).getByLabelText('When were you asked?'), { target: { value: '2026-09' } });
+    fireEvent.change(within(dialog).getByLabelText('The question'), { target: { value: 'How would you shard this table?' } });
+    fireEvent.change(group, { target: { value: 'system_design' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send for checking' }));
+    await waitFor(() =>
+      expect(api.contributeQuestion).toHaveBeenCalledWith({ company: 'Acme', question: 'How would you shard this table?', period: '2026-09', category: 'system_design' }),
+    );
   });
 
   it('share a question: a month the server refuses gets its own message', async () => {
@@ -230,11 +305,27 @@ describe('/practice/questions/[company]', () => {
     const el = await PracticeQuestionsCompanyRoute({ params: Promise.resolve({ company: 'acme' }), searchParams: Promise.resolve({}) });
     renderWithBrand(el, { flags: { interviewBank: true } });
     expect(await screen.findByRole('heading', { name: 'Questions about Acme' })).toBeInTheDocument();
-    expect(await screen.findByText(/1 question shared by RoboApply users · most recent from August 2026 · as of/)).toBeInTheDocument();
+    expect(await screen.findByText('1 question shared by RoboApply users · most recent from August 2026')).toBeInTheDocument();
     const card = screen.getByRole('article', { name: 'Changing your mind' });
     expect(within(card).getByText('Shared by a RoboApply user, August 2026')).toBeInTheDocument();
     expect(api.listCompanyQuestions).toHaveBeenCalledWith('acme', {}, expect.anything());
     expect(api.getJobQuestions).not.toHaveBeenCalled();
+  });
+
+  it('the count line carries the shared source line (N shown; nothing when the count is unknown)', async () => {
+    api.listCompanyQuestions.mockResolvedValue(PAGE);
+    const view = renderSourced(await PracticeQuestionsCompanyRoute({ params: Promise.resolve({ company: 'acme' }), searchParams: Promise.resolve({}) }));
+    expect((await screen.findByTestId('prep-company-count')).textContent).toBe('1 question shared by RoboApply users · most recent from August 2026');
+    const note = document.querySelector('section[aria-labelledby="prep-company-list"] [data-source-note="sourced"]') as HTMLElement;
+    expect(note.textContent).toMatch(/^Source: users who shared questions · as of .*2026$/);
+    view.unmount();
+
+    api.listCompanyQuestions.mockResolvedValue({ ...PAGE, count: null, latestPeriod: null, items: [] });
+    renderSourced(await PracticeQuestionsCompanyRoute({ params: Promise.resolve({ company: 'acme' }), searchParams: Promise.resolve({}) }));
+    await screen.findByText('No one has shared questions about Acme yet.', { selector: 'section[aria-labelledby="prep-company-list"] p' });
+    expect(screen.queryByTestId('prep-company-count')).toBeNull();
+    expect(document.querySelector('[data-source-note]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\b0 questions?/);
   });
 
   it('"Share a question" is prefilled with the resolved company name, not the route slug', async () => {
@@ -270,6 +361,6 @@ describe('/practice/questions/[company]', () => {
     expect(await screen.findByText('No one has shared questions about Tiny Startup yet.', { selector: 'section[aria-labelledby="prep-company-list"] p' })).toBeInTheDocument();
     expect(api.listCompanyQuestions).toHaveBeenCalledWith('Tiny Startup', {}, expect.anything());
     await waitFor(() => expect(api.getJobQuestions).toHaveBeenCalledWith('job_2', expect.anything()));
-    expect(screen.queryByText(/shared by RoboApply users ·/)).toBeNull();
+    expect(screen.queryByText(/question(s)? shared by RoboApply users/)).toBeNull();
   });
 });

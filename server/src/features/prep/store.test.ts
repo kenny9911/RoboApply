@@ -62,27 +62,57 @@ describe('Prisma prep store', () => {
     ]);
   });
 
-  it('a second report by the same user does not count again', async () => {
-    db.rAQuestionReport.findFirst.mockResolvedValue({ id: 'r1' });
+  it('a first report inserts and counts in one transaction, with no pre-check and no SERIALIZABLE retry (SR-59-3)', async () => {
+    db.rAQuestionReport.create.mockResolvedValue({ id: 'r1' });
+    db.rAInterviewQuestion.update.mockResolvedValue({ reportsCount: 2 });
+    const store = await createPrismaPrepStore();
+    expect(await store.addReport('q1', 'u1', 'wrong', null)).toEqual({ created: true, reportsCount: 2 });
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    // Default isolation: the unique index decides, not the transaction level.
+    expect(db.$transaction.mock.calls[0]?.[1]).toBeUndefined();
+    expect(db.rAQuestionReport.findFirst).not.toHaveBeenCalled();
+    expect(db.rAQuestionReport.create).toHaveBeenCalledWith({ data: { questionId: 'q1', userId: 'u1', reason: 'wrong', note: null } });
+    expect(db.rAInterviewQuestion.update).toHaveBeenCalledWith({ where: { id: 'q1' }, data: { reportsCount: { increment: 1 } }, select: { reportsCount: true } });
+  });
+
+  it('a second report by the same user hits the unique index (P2002): already reported, not counted again', async () => {
+    db.rAQuestionReport.create.mockRejectedValue(Object.assign(new Error('Unique constraint failed on (questionId, userId)'), { code: 'P2002' }));
     db.rAInterviewQuestion.findUniqueOrThrow.mockResolvedValue({ reportsCount: 1 });
     const store = await createPrismaPrepStore();
     expect(await store.addReport('q1', 'u1', 'wrong', null)).toEqual({ created: false, reportsCount: 1 });
-    expect(db.rAQuestionReport.create).not.toHaveBeenCalled();
     expect(db.rAInterviewQuestion.update).not.toHaveBeenCalled();
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('reports run at SERIALIZABLE; a lost race is retried and a duplicate-key error reads as "already reported"', async () => {
-    const store = await createPrismaPrepStore();
-    db.rAQuestionReport.findFirst.mockResolvedValue(null);
-    db.rAInterviewQuestion.update.mockResolvedValue({ reportsCount: 2 });
+  it('any other report error is not swallowed and is not retried', async () => {
     db.$transaction.mockRejectedValueOnce(Object.assign(new Error('serialization failure'), { code: 'P2034' }));
-    expect(await store.addReport('q1', 'u1', 'wrong', null)).toEqual({ created: true, reportsCount: 2 });
-    expect(db.$transaction).toHaveBeenCalledTimes(2);
-    expect(db.$transaction.mock.calls[1]?.[1]).toEqual({ isolationLevel: 'Serializable' });
+    const store = await createPrismaPrepStore();
+    await expect(store.addReport('q1', 'u1', 'wrong', null)).rejects.toThrow('serialization failure');
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.rAInterviewQuestion.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
 
-    db.$transaction.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }));
-    db.rAInterviewQuestion.findUniqueOrThrow.mockResolvedValue({ reportsCount: 2 });
-    expect(await store.addReport('q1', 'u1', 'wrong', null)).toEqual({ created: false, reportsCount: 2 });
+  it("a contribution stores the contributor's category; a rejection stores the staff reason (SR-59-2)", async () => {
+    const store = await createPrismaPrepStore();
+    db.rAQuestionContribution.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'c1', status: 'pending', moderatorId: null, moderatedAt: null, createdAt: new Date(), rejectReason: null, ...data }));
+    const row = await store.createContribution({ userId: 'u1', market: 'intl', companyName: 'Acme', role: '', interviewYm: '2026-09', body: 'Why payments?', category: 'role_specific' });
+    expect(db.rAQuestionContribution.create).toHaveBeenCalledWith({ data: expect.objectContaining({ category: 'role_specific' }) });
+    expect(row.category).toBe('role_specific');
+
+    const at = new Date('2026-10-10T00:00:00Z');
+    db.rAQuestionContribution.updateMany.mockResolvedValue({ count: 1 });
+    expect(await store.moderateContribution('c1', { status: 'rejected', moderatorId: 'a1', moderatedAt: at, rejectReason: 'duplicate' })).toBe(true);
+    expect(db.rAQuestionContribution.updateMany).toHaveBeenCalledWith({
+      where: { id: 'c1', status: 'pending' },
+      data: { status: 'rejected', moderatorId: 'a1', moderatedAt: at, rejectReason: 'duplicate' },
+    });
+  });
+
+  it('question rows carry jobId (SR-59-1)', async () => {
+    db.rAInterviewQuestion.findUnique.mockResolvedValue(null);
+    const store = await createPrismaPrepStore();
+    await store.getQuestion('q1');
+    expect(db.rAInterviewQuestion.findUnique.mock.calls[0]?.[0]?.select).toMatchObject({ jobId: true });
   });
 
   it('approving a contribution and creating its question share one transaction; the approved company name is stored', async () => {

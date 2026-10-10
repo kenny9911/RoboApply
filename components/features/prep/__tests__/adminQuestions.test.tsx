@@ -35,6 +35,8 @@ const CLEAN: ContributionView = {
   status: 'pending',
   createdAt: '2026-10-01T00:00:00.000Z',
   moderatedAt: null,
+  suggestedCategory: null,
+  rejectReason: null,
   flags: [],
   locale: 'en',
 };
@@ -89,6 +91,34 @@ describe('/admin/questions', () => {
     await waitFor(() =>
       expect(api.adminApproveContribution).toHaveBeenCalledWith('c1', { category: 'behavioral', title: 'Why payments', body: 'Why do you want to work on payments?', locale: 'en' }),
     );
+  });
+
+  it("the group field starts at the contributor's suggestion, which staff can change (SR-59-2)", async () => {
+    api.adminListContributions.mockImplementation(async (q: { status: string }) =>
+      q.status === 'pending' ? { items: [{ ...CLEAN, suggestedCategory: 'system_design' }], cursor: null } : { items: [], cursor: null },
+    );
+    renderWithBrand(<AdminQuestionsPage />);
+    const item = await screen.findByRole('article', { name: 'Acme · Analyst · asked in September 2026' });
+    expect(within(item).getByText('Group the user picked: System design')).toBeInTheDocument();
+    const group = within(item).getByLabelText('Group');
+    expect(group).toHaveValue('system_design');
+    expect(within(item).getByRole('button', { name: 'Publish' })).not.toBeDisabled();
+    fireEvent.change(group, { target: { value: 'coding' } });
+    fireEvent.click(within(item).getByRole('button', { name: 'Publish' }));
+    await waitFor(() => expect(api.adminApproveContribution).toHaveBeenCalledWith('c1', expect.objectContaining({ category: 'coding' })));
+  });
+
+  it('a turned-down question shows the stored reason (SR-59-2)', async () => {
+    api.adminListContributions.mockImplementation(async (q: { status: string }) =>
+      q.status === 'rejected'
+        ? { items: [{ ...CLEAN, status: 'rejected', moderatedAt: '2026-10-05T00:00:00.000Z', rejectReason: 'duplicate' }], cursor: null }
+        : { items: [], cursor: null },
+    );
+    renderWithBrand(<AdminQuestionsPage />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Turned down' }));
+    const item = await screen.findByRole('article', { name: 'Acme · Analyst · asked in September 2026' });
+    expect(within(item).getByText('Turned down: Already published')).toBeInTheDocument();
+    expect(within(item).queryByText(/Group the user picked/)).toBeNull();
   });
 
   it("the language field starts at the server's guess and staff can change it", async () => {

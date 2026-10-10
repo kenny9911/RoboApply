@@ -245,6 +245,10 @@ export interface ContributionView {
   status: ContributionStatus;
   createdAt: string;
   moderatedAt: string | null;
+  /** The group the contributor suggested (SR-59-2); the console prefills its group field with it. */
+  suggestedCategory: QuestionCategory | null;
+  /** Why staff rejected it (SR-59-2); null unless rejected. */
+  rejectReason: RejectReason | null;
   /** Automatic screen (wording only; staff decide). */
   flags: ScreenFlag[];
   /** The language guessed from the text; the console prefills its language field with it. */

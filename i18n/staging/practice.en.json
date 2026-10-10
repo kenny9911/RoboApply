@@ -94,6 +94,24 @@
       "error": "Something went wrong. Try again.",
       "retry": "Try again",
       "scoreNote": "Scores come from your answers in this practice. They don't predict a real interview."
+    },
+    "live": {
+      "cam": {
+        "localOnly": "Only you can see your camera. It isn't sent to the interviewer or recorded.",
+        "localOnlyShort": "Only you see this"
+      },
+      "network": {
+        "label": "Connection",
+        "checking": "Checking…",
+        "good": "Good",
+        "fair": "Fair",
+        "poor": "Weak",
+        "fairBody": "Your connection is a little slow. The interview should still work.",
+        "poorBody": "Your connection looks weak, so the voice interview may cut out. You can practice in writing instead.",
+        "switchToText": "Practice in writing instead",
+        "switching": "Switching…",
+        "retry": "Check again"
+      }
     }
   }
 }

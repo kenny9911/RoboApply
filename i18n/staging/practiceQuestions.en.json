@@ -103,7 +103,6 @@
       "emptySearch": "No shared questions for “{q}”.",
       "count": "{count, plural, one {# shared question} other {# shared questions}}",
       "latest": "most recent from {period}",
-      "source": "Count of questions shared with us, as of {date}",
       "more": "Show more companies"
     },
     "company": {
@@ -113,7 +112,6 @@
       "heading": "Shared by %BRAND% users",
       "count": "{count, plural, one {# question} other {# questions}} shared by %BRAND% users",
       "latest": "most recent from {period}",
-      "asOf": "as of {date}",
       "loading": "Loading questions…",
       "loadError": "Questions didn't load. Try again.",
       "notFound": "We couldn't find this company.",
@@ -137,6 +135,8 @@
       "company": "Company",
       "role": "Role (optional)",
       "period": "When were you asked?",
+      "group": "Question group (optional)",
+      "groupNone": "Not sure",
       "question": "The question",
       "questionHint": "Write it in your own words, as you remember it.",
       "submit": "Send for checking",
@@ -176,6 +176,8 @@
         "metaNoRole": "{company} · asked in {period}",
         "received": "Received {date}",
         "decided": "Decided {date}",
+        "suggestedGroup": "Group the user picked: {group}",
+        "rejectedFor": "Turned down: {reason}",
         "flagsTitle": "Check this before publishing",
         "flags": {
           "nda_or_test_content": "It may be test or assessment content under a non-disclosure agreement",

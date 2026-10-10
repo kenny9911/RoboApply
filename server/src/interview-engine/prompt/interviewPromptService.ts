@@ -56,6 +56,11 @@ export interface PromptGenerationInput {
   resumeContext?: string;
   /** Pasted job description — AUTHORITATIVE for requirements when present. */
   jdText?: string;
+  /**
+   * Strings that identify the user besides `candidateName` (the account name).
+   * Never sent anywhere: the web search refuses a query that contains one.
+   */
+  knownValues?: ReadonlyArray<string | null | undefined>;
   /** Explicit domain-expert key (law/finance/hardware/…). When absent the
    *  domain is classified from role + JD; unclassifiable roles get no domain
    *  lens (pre-domain-layer behavior). */
@@ -259,7 +264,9 @@ export class InterviewPromptService {
 
   // ─── Shared stages ────────────────────────────────────────────────────────
 
-  /** Stage 1: market research. When an authoritative JD is pasted we skip the
+  /** Stage 1: market research (RoboApply only: webSearch.ts never searches for
+   *  GoApply, whose practices are planned from the role and job post alone).
+   *  When an authoritative JD is pasted we skip the
    *  board search (the JD already IS the requirements, and skipping saves a
    *  Tavily call + latency at launch). Otherwise we target real job boards and
    *  fall back to the open web inside searchJobRequirements. Never throws. */
@@ -285,6 +292,8 @@ export class InterviewPromptService {
         includeDomains: JOB_BOARD_DOMAINS,
         requestId: input.requestId,
         signal,
+        // GoApply never searches; RoboApply never sends the candidate's name.
+        knownValues: [input.candidateName, ...(input.knownValues ?? [])],
       });
       const timedOut = new Promise<null>((resolve) => {
         timer = setTimeout(() => resolve(null), budgetMs + 250);

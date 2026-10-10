@@ -36,7 +36,10 @@ import { handleEngineError } from './errors.js';
 import { isRecordingEnabled, resolveSessionCallbackBaseUrl } from '../config.js';
 import { shouldUseParley } from '../parley/parleyConfig.js';
 import type { InterviewSource } from '../types.js';
-import type { ProductBrand } from '../../platform/brand/registry.js';
+import { aiGateOpen, currentBrand, gateBody, gateStatus, loadConsent, marketOf, practiceGate } from './practiceGate.js';
+
+export { practiceGate } from './practiceGate.js';
+export type { PracticeGate, PracticeGateReason } from './practiceGate.js';
 
 const router = Router();
 
@@ -192,54 +195,6 @@ function str(value: unknown, max = 64): string | null {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
 }
 
-async function currentBrand(): Promise<ProductBrand> {
-  const { getCurrentBrandOrDefault } = await import('../../platform/brand/brandContext.js');
-  return getCurrentBrandOrDefault();
-}
-
-function marketOf(brand: ProductBrand): 'intl' | 'cn' {
-  return brand.market === 'cn' ? 'cn' : 'intl';
-}
-
-export type PracticeGateReason = 'phone_binding_required' | 'ai_consent_required' | 'voice_unavailable';
-
-export interface PracticeGate {
-  /** Live (voice/video) practice can start. */
-  voice: { available: boolean; reason: PracticeGateReason | null };
-  /** AI practice of any kind (voice or text) is allowed for this user. */
-  ai: { allowed: boolean; reason: PracticeGateReason | null };
-}
-
-/** The brand rules for practice (RoboApply: always open; GoApply: phone, AI consent, voice capability). */
-export async function practiceGate(userId: string, brand: ProductBrand): Promise<PracticeGate> {
-  if (brand.market !== 'cn') {
-    return { voice: { available: true, reason: null }, ai: { allowed: true, reason: null } };
-  }
-  const [{ phoneBindingRequired }, { aiAllowed }, { isEnabledForBrand }] = await Promise.all([
-    import('../../features/auth-cn/index.js'),
-    import('../../platform/consent/index.js'),
-    import('../../platform/flags.js'),
-  ]);
-  let reason: PracticeGateReason | null = null;
-  if (await phoneBindingRequired(userId).catch(() => true)) reason = 'phone_binding_required';
-  else if (!(await aiAllowed({ id: userId, brand: brand.id }).catch(() => false))) reason = 'ai_consent_required';
-  const voiceOn = isEnabledForBrand('ai.interviewVoice', brand, process.env);
-  return {
-    ai: { allowed: reason === null, reason },
-    voice: { available: reason === null && voiceOn, reason: reason ?? (voiceOn ? null : 'voice_unavailable') },
-  };
-}
-
-function gateStatus(reason: PracticeGateReason): number {
-  return reason === 'phone_binding_required' ? 403 : 503;
-}
-
-function gateBody(reason: PracticeGateReason) {
-  return reason === 'phone_binding_required'
-    ? { error: 'phone_binding_required', bindRoute: '/bind-phone' }
-    : { error: 'ai_unavailable', reason };
-}
-
 async function recordingAvailable(): Promise<boolean> {
   if (!isRecordingEnabled()) return false;
   try {
@@ -252,7 +207,7 @@ async function recordingAvailable(): Promise<boolean> {
 
 async function recordingConsents(userId: string): Promise<{ audio: boolean; video: boolean }> {
   try {
-    const { hasLiveConsent } = await import('../../platform/consent/index.js');
+    const { hasLiveConsent } = await loadConsent();
     const [audio, video] = await Promise.all([
       hasLiveConsent(userId, 'interview_recording'),
       hasLiveConsent(userId, 'interview_video'),
@@ -274,14 +229,6 @@ function insufficientCredits(res: Response, err: InterviewInsufficientCreditsErr
     bucket: 'practice',
     firstPractice,
   });
-}
-
-/** GoApply: no AI practice (voice or written) without a bound phone and the AI consent. Sends the refusal; false = stop. */
-async function aiGateOpen(req: Request, res: Response, brand: ProductBrand): Promise<boolean> {
-  const gate = await practiceGate(req.user!.id, brand);
-  if (gate.ai.allowed || !gate.ai.reason) return true;
-  res.status(gateStatus(gate.ai.reason)).json(gateBody(gate.ai.reason));
-  return false;
 }
 
 async function requestLocale(req: Request): Promise<string | undefined> {
