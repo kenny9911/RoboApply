@@ -3,6 +3,11 @@
 // WP-76: invariants of the mainland deploy kit (deploy/cn, the deploy-cn
 // workflow). Text checks on purpose: the files are small and their shape is
 // owned here, and the tests must not need docker, kubectl or the network.
+//
+// PAR-10 (owner ruling D5, docs/jobright-clone/GOAPPLY_PARITY_PLAN.md): the
+// env examples and the dev script describe a GoApply that works on the shared
+// credentials alone. A China-specific value is an optional override, and no
+// example file ships an off switch or half of a credential group.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -13,6 +18,14 @@ import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error — plain .mjs script, no type declarations
 import * as overlay from '../../deploy/cn/render-overlay.mjs';
+// @ts-expect-error — plain .mjs script, no type declarations
+import * as preflight from '../../deploy/cn/preflight.mjs';
+import { brandEnvGroupProblems, BRAND_ENV_GROUPS } from '../../server/src/platform/brand/brandEnv';
+import { getBrand } from '../../server/src/platform/brand/registry';
+import { allowedBrands, allowedBrandsProblem } from '../../server/src/platform/brand/runtime';
+import { cnPaymentsKilled, cnRecruitmentInfoMode, cnRecruitmentInfoModeProblem, resolveFlags } from '../../server/src/platform/flags';
+import { contentSafetyReadiness } from '../../server/src/platform/llm/contentSafety/config';
+import { checkResidency } from '../../server/src/platform/residency/startupAssertions';
 // @ts-expect-error — plain .mjs config, no type declarations
 import * as nextConfigModule from '../../next.config.mjs';
 
@@ -537,7 +550,7 @@ describe('next/image remote patterns (CN_PUBLIC_ASSET_BASE_URL)', () => {
     }
   });
 
-  it('reads only the CN_ name (R-03: no unprefixed twin, no fallback)', () => {
+  it('reads only the CN_ name (a GoApply-only build value: it has no unprefixed twin)', () => {
     expect(imageRemotePatterns({ PUBLIC_ASSET_BASE_URL: 'https://assets.example.com' }).map((p) => p.hostname)).toEqual(INTL_HOSTS);
   });
 
@@ -600,7 +613,7 @@ describe('env catalogue (.env.example and the mainland examples)', () => {
     for (const name of ['TRUST_PROXY', 'SHUTDOWN_DRAIN_TIMEOUT_MS', 'CN_PUBLIC_ASSET_BASE_URL', 'NEXT_DEPLOYMENT_ID']) expect(mentions(name), name).toBe(true);
   });
 
-  it('pairs the per-brand names with their CN_ twin (R-03) and keeps removed names out', () => {
+  it('lists the optional CN_ override beside each shared name and keeps removed names out', () => {
     for (const name of ['EMAIL_FROM', 'LIVEKIT_AGENT_NAME', 'CANONICAL_ORIGIN', 'SUPPORT_EMAIL', 'TOTP_ENCRYPTION_KEY', 'MIN_EXT_VERSION', 'SCORE_DAILY_BUDGET', 'COPILOT_DAILY_BUDGET_USD']) {
       expect(catalogue.has(name), name).toBe(true);
       expect(catalogue.has(`CN_${name}`), `CN_${name}`).toBe(true);
@@ -621,6 +634,436 @@ describe('env catalogue (.env.example and the mainland examples)', () => {
     }
     expect(catalogue.has('RA_CROSSBANK_DAILY_CALL_CAP')).toBe(true);
     expect(read('server/src/roboapply/v2/routes/discover.ts')).toContain('process.env.RA_CROSSBANK_DAILY_CALL_CAP');
+  });
+});
+
+describe('GoApply works by default (D5): env examples, mainland kit and dev script', () => {
+  type Env = Record<string, string | undefined>;
+  const root = read('.env.example');
+  const kit = read(`${CN}/cn.env.example`);
+  const kitWeb = read(`${CN}/cn.web.env.example`);
+  const kitReadme = read(`${CN}/README.md`);
+  const devScript = read('scripts/dev-clone.sh');
+
+  /** `NAME=value` lines that are not commented out, with a trailing `# note` dropped. */
+  const activeValues = (text: string): Env =>
+    Object.fromEntries(
+      [...text.matchAll(/^([A-Z][A-Z0-9_]+)=(.*)$/gm)].map((m) => [m[1]!, m[2]!.replace(/\s+#.*$/, '').trim()] as const).filter(([, v]) => v !== ''),
+    );
+  /** Every documented name, active (`NAME=`) or commented out (`# NAME=`). */
+  const documented = (text: string) => new Set([...text.matchAll(/^#? ?([A-Z][A-Z0-9_]+)=/gm)].map((m) => m[1]!));
+  /** The names listed under one `# ── title ──` heading of an env example. */
+  const section = (text: string, title: RegExp): string[] => {
+    const lines = text.split('\n');
+    const start = lines.findIndex((l) => l.startsWith('# ──') && title.test(l));
+    expect(start, String(title)).toBeGreaterThanOrEqual(0);
+    const names: string[] = [];
+    for (const line of lines.slice(start + 1)) {
+      if (line.startsWith('# ──') && !line.includes('domestic providers above')) break;
+      const m = /^([A-Z][A-Z0-9_]+)=/.exec(line);
+      if (m) names.push(m[1]!);
+    }
+    return names;
+  };
+
+  /** Wording of the superseded rules (TASK_PLAN R-03 / R-13 / R-14 / R-15, "ships dark"). */
+  const STALE: Array<[string, RegExp]> = [
+    ['no fallback', /no fallback/i],
+    ['ships dark', /ships? (it |them )?dark/i],
+    ['never falls back', /never falls? back/i],
+    ['R-03', /\bR-03\b/],
+    ['R-13', /\bR-13\b/],
+    ['R-14', /\bR-14\b/],
+    ['R-15', /\bR-15\b/],
+    ['nothing offshore', /nothing offshore/i],
+    ['resend is refused', /resend is refused/i],
+    ['AI features hidden', /AI features hidden/i],
+    ['Stage switches', /stage switches/i],
+    ['invite-only default', /invite \(CN-0/i],
+  ];
+
+  describe('root .env.example', () => {
+    const active = activeValues(root);
+    const names = documented(root);
+
+    it('carries none of the superseded "GoApply is off until configured" wording', () => {
+      for (const [label, re] of STALE) expect(re.test(root), label).toBe(false);
+    });
+
+    it('states the rule: CN_ values are optional overrides, by class of name', () => {
+      expect(root).toMatch(/CN_NAME\s+→ OPTIONAL override for GoApply/);
+      expect(root).toMatch(/GoApply\s+#? ?needs NO variable of its own/);
+      // The three classes of GOAPPLY_PARITY_PLAN §3.1, with every group anchor named.
+      for (const phrase of ['Per key', 'Grouped', 'Brand-own']) expect(root, phrase).toContain(phrase);
+      const rule = root.slice(root.indexOf('# Naming rule (server/src/platform/brand/brandEnv.ts)'), root.indexOf('# Vendor-only keys stay unprefixed'));
+      expect(rule.length).toBeGreaterThan(500);
+      for (const anchor of Object.values(BRAND_ENV_GROUPS).flatMap((g) => g.anchors)) {
+        expect(new RegExp(`anchors? (CN_[A-Z_]+ and\\s+#\\s+)?CN_${anchor}\\b`).test(rule), `anchor CN_${anchor}`).toBe(true);
+      }
+      // Every member of every group is named in the rule, so a reader can tell which values travel together.
+      for (const group of Object.values(BRAND_ENV_GROUPS)) {
+        for (const member of group.members) expect(new RegExp(`(?<![A-Z0-9_])${member}(?![A-Z0-9_])`).test(rule), member).toBe(true);
+      }
+      // Every member of every group has its CN_ twin documented.
+      for (const group of Object.values(BRAND_ENV_GROUPS)) {
+        for (const member of group.members) expect(names.has(`CN_${member}`), `CN_${member}`).toBe(true);
+      }
+      // Sections of China-specific providers are labelled as overrides.
+      expect((root.match(/OPTIONAL overrides?; unset = (the )?shared stack/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    });
+
+    it('documents every variable the parity plan introduces or redefines, each once', () => {
+      // GOAPPLY_PARITY_PLAN §4.
+      const PLAN_VARIABLES = [
+        'CN_LLM_DOMESTIC_ONLY',
+        'CN_RESIDENCY_STRICT',
+        'CN_STORAGE_MODE',
+        'CN_INTERVIEW_CAMERA_PUBLISH',
+        'CN_RECRUITMENT_INFO_MODE',
+        'CN_CAMPUS_CALENDAR_ENABLED',
+        'CN_SIGNUP_MODE',
+        'CN_PAYMENTS_ENABLED',
+        'CN_PAYMENT_REQUIRE_ENTITY',
+        'CN_EMAIL_TRANSPORT',
+        'GOHIRE_BANK_TRANSPORT',
+        'GOHIRE_SYNDICATION_URL',
+        'GOHIRE_PUBLIC_JOB_URL_TEMPLATE',
+        'ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE',
+        'JOB_PROVIDERS_ROBOAPPLY',
+        'JOB_PROVIDERS_GOAPPLY',
+        'ALLOWED_BRANDS',
+        'CN_PRICE_PRO_WEEK_PASS_FEN',
+        'CN_PRICE_PRO_MONTHLY_FEN',
+        'CN_PRICE_PRO_QUARTERLY_FEN',
+        'CN_PRICE_PRACTICE_PACK_5_FEN',
+        'CN_PRICE_PRACTICE_PACK_15_FEN',
+        'CN_PRICE_STUDENT_MONTHLY_FEN',
+        'CN_PRICE_STUDENT_QUARTERLY_FEN',
+        'CN_VAPID_PUBLIC_KEY',
+        'CN_VAPID_PRIVATE_KEY',
+        'CN_VAPID_SUBJECT',
+        // Shared names GoApply reads since the per-key rule (brandEnv('goapply', 'LLM_CAMPUS_MODEL' | 'LLM_FRAUD_MODEL')).
+        'LLM_CAMPUS_MODEL',
+        'LLM_FRAUD_MODEL',
+        'CN_LLM_CAMPUS_MODEL',
+        'CN_LLM_FRAUD_MODEL',
+      ];
+      for (const name of PLAN_VARIABLES) {
+        const entries = root.match(new RegExp(`^#? ?${name}=`, 'gm')) ?? [];
+        expect(entries, name).toHaveLength(1);
+      }
+      // Defaults are written next to the switch, as the commented-out value.
+      for (const line of [
+        '# CN_SIGNUP_MODE=open',
+        '# CN_RECRUITMENT_INFO_MODE=licensed',
+        '# CN_CAMPUS_CALENDAR_ENABLED=true',
+        '# CN_PAYMENTS_ENABLED=true',
+        '# CN_EMAIL_TRANSPORT=resend',
+        '# CN_STORAGE_MODE=store',
+        '# CN_INTERVIEW_CAMERA_PUBLISH=true',
+        '# CN_RESIDENCY_STRICT=false',
+        '# CN_LLM_DOMESTIC_ONLY=false',
+        '# CN_PAYMENT_REQUIRE_ENTITY=false',
+      ]) {
+        expect(root, line).toMatch(new RegExp(`^${line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+      }
+      expect(root).toMatch(/open \| invite \| closed/);
+      expect(root).toMatch(/aliyun_dm \| resend \| none/);
+      expect(root).toMatch(/store \| redact \| discard/);
+      expect(root).toMatch(/db \| api \| off/);
+      // The bank page templates have no default: commented out, no value.
+      expect(root).toMatch(/^# GOHIRE_PUBLIC_JOB_URL_TEMPLATE=$/m);
+      expect(root).toMatch(/^# ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE=$/m);
+      // Each CN_ task model names the shared name it falls back to.
+      expect(root).toMatch(/unset = LLM_FRAUD_MODEL, then the\s+# enrichment model/);
+      expect(root).toMatch(/unset =\s+# LLM_CAMPUS_MODEL, then the enrichment model/);
+      // The command that shows which stack each GoApply task resolves to exists.
+      expect(root).toContain('`npm run verify:llm`');
+      expect((JSON.parse(read('package.json')) as { scripts: Record<string, string> }).scripts['verify:llm']).toBeTruthy();
+    });
+
+    it('every FLAG_GOAPPLY_ example does what the text says: an off switch switches something off, an on switch on', () => {
+      // The shared credentials, so that a capability is on unless its switch says otherwise.
+      const shared: Env = {
+        LLM_PROVIDER: 'openrouter',
+        LLM_MODEL: 'openrouter/google/gemini-3-flash-preview',
+        OPENROUTER_API_KEY: 'llm-key-for-tests',
+        RESEND_API_KEY: 'resend-key-for-tests',
+        LIVEKIT_URL: 'wss://shared.livekit.example',
+        LIVEKIT_API_KEY: 'lk-key-for-tests',
+        LIVEKIT_API_SECRET: 'lk-secret-for-tests',
+        VAPID_PUBLIC_KEY: 'vapid-public-for-tests',
+        VAPID_PRIVATE_KEY: 'vapid-private-for-tests',
+        VAPID_SUBJECT: 'mailto:support@goapply.top',
+        SMS_DEV_CONSOLE: 'true', // the phone demo, so the phone sign-in switch has something to switch off
+      };
+      const goapply = getBrand('goapply');
+      const before = resolveFlags(goapply, shared) as Record<string, unknown>;
+      const changedBy = (name: string, value: string) => {
+        const after = resolveFlags(goapply, { ...shared, [name]: value }) as Record<string, unknown>;
+        return Object.keys(before).filter((k) => before[k] !== after[k]);
+      };
+      const block = root.slice(root.indexOf('# Per-brand capability overrides'), root.indexOf('# System user for system-owned records'));
+      expect(block.length).toBeGreaterThan(300);
+      // Off switches: written as FLAG_GOAPPLY_<KEY>=false.
+      const offExamples = [...block.matchAll(/\b(FLAG_GOAPPLY_[A-Z_]+)=false\b/g)].map((m) => m[1]!);
+      expect(offExamples.length).toBeGreaterThanOrEqual(5);
+      for (const name of offExamples) expect(changedBy(name, 'false'), `${name}=false`).not.toEqual([]);
+      // Off by default on both brands: named without a value, turned on with =true.
+      const onNames = [...block.slice(block.indexOf('Off by default on both brands')).matchAll(/\b(FLAG_GOAPPLY_[A-Z_]+)\b(?!=)/g)].map((m) => m[1]!);
+      expect(onNames).toEqual(expect.arrayContaining(['FLAG_GOAPPLY_VISITOR_ASSISTANT', 'FLAG_GOAPPLY_COMPANY_NEWS', 'FLAG_GOAPPLY_SEO_BROWSE']));
+      for (const name of onNames) {
+        expect(changedBy(name, 'true'), `${name}=true`).not.toEqual([]);
+        expect(changedBy(name, 'false'), `${name}=false`).toEqual([]);
+      }
+    });
+
+    it('no longer lists the removed names as settings, and says why they went', () => {
+      for (const gone of ['CN_EXTERNAL_PROVIDERS', 'GOHIRE_PUBLIC_JOB_BASE_URL', 'ROBOHIRE_PUBLIC_JOB_BASE_URL', 'GOAPPLY_PREVIEW']) {
+        expect(names.has(gone), gone).toBe(false);
+        expect(root, gone).toContain(gone); // named once, in the "no longer read" note
+      }
+      expect(root).toMatch(/does not\s+#? ?exist on either site/);
+    });
+
+    it('says a deployment serves both brands unless narrowed, and that a mistyped scope fails closed', () => {
+      expect(root).toMatch(/Unset: BOTH brands, in every environment/);
+      expect(root).toContain('ALLOWED_BRANDS=roboapply');
+      expect(root).toMatch(/serves RoboApply only/);
+      expect(active.ALLOWED_BRANDS).toBeUndefined();
+      expect(active.BRAND_LOCK).toBeUndefined();
+      // The behaviour the text describes (PAR-1's seam).
+      expect(allowedBrands({})).toEqual(['roboapply', 'goapply']);
+      expect(allowedBrands({ NODE_ENV: 'production' })).toEqual(['roboapply', 'goapply']);
+      expect(allowedBrands({ ALLOWED_BRANDS: 'roboaply' })).toEqual(['roboapply']);
+      expect(allowedBrandsProblem({ ALLOWED_BRANDS: 'roboaply' })?.failedClosed).toBe(true);
+    });
+
+    it('copied as it is, switches no GoApply capability off and sets no half of a credential group', () => {
+      // An off switch is a deliberate operator choice: the example never ships one.
+      for (const name of ['CN_SIGNUP_MODE', 'CN_RECRUITMENT_INFO_MODE', 'CN_PAYMENTS_ENABLED', 'CN_CAMPUS_CALENDAR_ENABLED', 'CN_EMAIL_TRANSPORT', 'CN_INTERVIEW_CAMERA_PUBLISH', 'CN_STORAGE_MODE', 'CN_RESIDENCY_STRICT', 'CN_LLM_DOMESTIC_ONLY', 'CN_PAYMENT_REQUIRE_ENTITY', 'CN_CONTENT_SAFETY_PROVIDER', 'RA_ONBOARDING_EXTERNAL_JOBS_DISABLED', 'ATS_PUBLIC_SOURCES_DISABLED']) {
+        expect(active[name], name).toBeUndefined();
+      }
+      expect(Object.keys(active).filter((n) => /^FLAG_GOAPPLY_/.test(n))).toEqual([]);
+      expect(cnRecruitmentInfoMode(active)).toBe('licensed');
+      expect(cnRecruitmentInfoModeProblem(active)).toBeNull();
+      expect(cnPaymentsKilled(active)).toBe(false);
+      expect(allowedBrandsProblem(active)).toBeNull();
+      // No CN_ member of a group carries a value while its anchor is empty.
+      expect(brandEnvGroupProblems('goapply', active)).toEqual([]);
+      // No CN_ name carries a value at all, except GoApply's own origin.
+      expect(Object.keys(active).filter((n) => n.startsWith('CN_'))).toEqual(['CN_CANONICAL_ORIGIN']);
+    });
+  });
+
+  describe('mainland kit (deploy/cn)', () => {
+    const active = activeValues(kit);
+    /** What the manifests pin on the API container (asserted in "Kubernetes manifests" above). */
+    const MANIFEST: Env = { NODE_ENV: 'production', PORT: '4607', DEPLOY_REGION: 'cn-mainland', ALLOWED_BRANDS: 'goapply', ROBOAPPLY_CRON_DISABLED: 'true', FILE_LOGGING: 'false' };
+    /** Test values for the names the example calls required or shared. Never real credentials. */
+    const FILL: Env = {
+      DATABASE_URL: 'postgresql://goapply@172.16.3.4:5432/goapply',
+      JWT_SECRET: 'jwt-secret-value-for-tests',
+      CRON_SECRET: 'cron-secret-value-for-tests',
+      INTERNAL_API_SECRET: 'internal-secret-value-for-tests',
+      LLM_PROVIDER: 'openrouter',
+      LLM_MODEL: 'openrouter/google/gemini-3-flash-preview',
+      OPENROUTER_API_KEY: 'llm-key-for-tests',
+      RESEND_API_KEY: 'resend-key-for-tests',
+      ROBOAPPLY_EMAIL_FROM: 'Shared Sender <noreply@mail.example>',
+      LIVEKIT_URL: 'wss://shared.livekit.example',
+      LIVEKIT_API_KEY: 'lk-key-for-tests',
+      LIVEKIT_API_SECRET: 'lk-secret-for-tests',
+      LIVEKIT_AGENT_CALLBACK_SECRET: 'lk-callback-secret-for-tests',
+      INTERVIEW_ENGINE_AGENT_NAME: 'Shared-Interview',
+      INTERVIEW_ENGINE_CALLBACK_BASE_URL: 'https://www.goapply.top',
+      S3_ENDPOINT: 'https://objects.example',
+      S3_REGION: 'auto',
+      S3_BUCKET: 'shared-bucket',
+      S3_ACCESS_KEY_ID: 's3-id-for-tests',
+      S3_SECRET_ACCESS_KEY: 's3-secret-for-tests',
+      VAPID_PUBLIC_KEY: 'vapid-public-for-tests',
+      VAPID_PRIVATE_KEY: 'vapid-private-for-tests',
+      VAPID_SUBJECT: 'mailto:support@goapply.top',
+      ALIPAY_CALLBACK_SECRET: 'alipay-callback-secret-for-tests',
+    };
+    const shared = section(kit, /Shared stack/);
+    /** The example as an operator would fill it: required topology + the shared credentials, no CN_ provider. */
+    const env: Env = { ...MANIFEST, ...active, ...FILL };
+
+    /**
+     * Problems that concern a China-specific provider or filing, not topology.
+     * They are warnings on a default mainland deployment and failures only
+     * under CN_RESIDENCY_STRICT (GOAPPLY_PARITY_PLAN §3.6; the preflight and
+     * the boot check are PAR-5's). Listed here so this test holds both before
+     * and after that change: none of them may be a topology code.
+     */
+    const STRICT_ONLY = new Set([
+      'icp_missing',
+      'cn_llm_off_allowlist',
+      'cn_storage_missing',
+      'cn_storage_offshore',
+      'content_safety_not_aliyun_green',
+      'content_safety_not_ready',
+      'content_safety_not_cn1_ready',
+      'cn_email_offshore',
+    ]);
+    const TOPOLOGY = ['deploy_region_not_mainland', 'deploy_region_unknown', 'db_url_missing', 'db_host_not_allowed', 'intl_brand_on_mainland', 'cron_secret_missing', 'node_cron_enabled', 'vercel_env_set'];
+    const runKitPreflight = (e: Env) =>
+      preflight.runPreflight({ env: e, checkResidency, contentSafetyReadiness }) as { ok: boolean; failures: Array<{ code: string }>; warnings: string[] };
+    const failureCodes = (e: Env) => runKitPreflight(e).failures.map((f) => f.code);
+    /**
+     * True once the boot check and the preflight read CN_RESIDENCY_STRICT
+     * (PAR-5, GOAPPLY_PARITY_PLAN §3.6). Decided from the source, not from
+     * what the preflight reports, so a provider code that starts failing by
+     * default again cannot switch the strict assertions below off.
+     */
+    const STRICT_POSTURE_BUILT = ['server/src/platform/residency/startupAssertions.ts', `${CN}/preflight.mjs`].every((f) => /CN_RESIDENCY_STRICT|cnResidencyStrict/.test(read(f)));
+
+    it('carries none of the superseded prerequisites or their wording', () => {
+      for (const text of [kit, kitWeb, kitReadme]) {
+        for (const [label, re] of STALE) expect(re.test(text), label).toBe(false);
+        expect(text).not.toMatch(/no fallback to S3_|startup refuses without CN_ICP_NUMBER|preflight requires aliyun_green/i);
+      }
+      // The former "Stage switches" block is gone: no off switch, no closed route.
+      for (const name of ['CN_RECRUITMENT_INFO_MODE', 'CN_PAYMENTS_ENABLED', 'RA_V2_DISCOVER_DISABLED', 'CN_SIGNUP_MODE', 'CN_CAMPUS_CALENDAR_ENABLED']) {
+        expect(kit, name).not.toMatch(new RegExp(`^#? ?${name}=`, 'm'));
+      }
+      // A provider is never selected by the example while its keys are blank.
+      for (const name of ['CN_EMAIL_TRANSPORT', 'CN_CONTENT_SAFETY_PROVIDER', 'CN_SMS_PROVIDER', 'CN_INTERVIEW_ENGINE_AGENT_NAME']) {
+        expect(active[name], name).toBeUndefined();
+        expect(kit, name).toMatch(new RegExp(`^# ${name}=`, 'm')); // still shown, as an opt-in
+      }
+    });
+
+    it('labels every China-specific provider section an optional override', () => {
+      const headings = kit.split('\n').filter((l) => l.startsWith('# ──'));
+      for (const topic of [/object storage/i, /domestic LLMs/i, /content safety/i, /email/i, /media plane/i]) {
+        const heading = headings.find((h) => topic.test(h));
+        expect(heading, String(topic)).toBeDefined();
+        expect(heading, String(topic)).toMatch(/Optional override/);
+      }
+      expect(headings.find((h) => /sign-in methods/i.test(h))).toMatch(/Optional additional/);
+      expect(kit).toMatch(/Every CN_<NAME> value below is an OPTIONAL override of <NAME>/);
+      expect(kit).toMatch(/No China-specific provider, licence number or stage switch is a prerequisite/);
+    });
+
+    it('lists the shared stack GoApply runs on, and keeps the deployment scope', () => {
+      expect(shared).toEqual(
+        expect.arrayContaining(['LLM_PROVIDER', 'LLM_MODEL', 'RESEND_API_KEY', 'ROBOAPPLY_EMAIL_FROM', 'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']),
+      );
+      expect(shared.filter((n) => n.startsWith('CN_'))).toEqual([]);
+      // Every shared name a test value is given for is one the example lists.
+      const listed = new Set(envNames(`${CN}/cn.env.example`).map(([n]) => n));
+      for (const name of Object.keys(FILL)) expect(listed.has(name), name).toBe(true);
+      // The scope stays pinned by the manifests, and the examples say so.
+      for (const text of [kit, kitWeb]) expect(text).toMatch(/ALLOWED_BRANDS=goapply/);
+      expect(active.ALLOWED_BRANDS).toBeUndefined();
+      expect(active.DEPLOY_REGION).toBeUndefined();
+      expect(kit).toContain('intl_brand_on_mainland');
+    });
+
+    it('names the shared verified sender beside the Resend key (mail from an unverified goapply.top address is refused)', () => {
+      // GoApply on Resend sends from CN_EMAIL_FROM, else the shared verified
+      // sender, else noreply@goapply.top (GOAPPLY_PARITY_PLAN §3.4). The last
+      // one is not a verified domain on the shared account, so a kit that
+      // lists only the key describes a GoApply whose mail is not delivered.
+      const lines = kit.split('\n');
+      const key = lines.indexOf('RESEND_API_KEY=');
+      expect(key).toBeGreaterThan(0);
+      expect(lines[key + 1]).toBe('ROBOAPPLY_EMAIL_FROM=');
+      expect(lines.slice(key - 6, key).join('\n')).toMatch(/verified sender/);
+      expect(kit).toContain(getBrand('goapply').email.fromAddress); // the address that is refused while unverified
+      expect(kitReadme).toContain('ROBOAPPLY_EMAIL_FROM');
+      // The root example ships the shared sender as an active line, so GoApply mail has a verified address by default.
+      expect(activeValues(root).ROBOAPPLY_EMAIL_FROM).toBeTruthy();
+      expect(activeValues(root).CN_EMAIL_FROM).toBeUndefined();
+    });
+
+    it('offers the strict mainland posture as a commented-out block, never as a default', () => {
+      const strict = kit.slice(kit.indexOf('Strict mainland posture'));
+      expect(strict.length).toBeGreaterThan(100);
+      for (const line of ['# CN_RESIDENCY_STRICT=true', '# CN_LLM_DOMESTIC_ONLY=true', '# CN_STORAGE_MODE=redact']) expect(strict, line).toContain(`\n${line}\n`);
+      for (const name of ['CN_RESIDENCY_STRICT', 'CN_LLM_DOMESTIC_ONLY', 'CN_STORAGE_MODE']) expect(active[name], name).toBeUndefined();
+      expect(strict).toMatch(/never implied by a missing value/);
+    });
+
+    it('with a database, the secrets and the shared credentials, the preflight passes (with warnings) and refuses only topology', () => {
+      const report = runKitPreflight(env);
+      const codes = report.failures.map((f) => f.code);
+      expect(codes.filter((c) => TOPOLOGY.includes(c))).toEqual([]);
+      // A code outside these two lists would be a new kind of refusal the example runs into.
+      expect(codes.filter((c) => !STRICT_ONLY.has(c))).toEqual([]);
+      if (STRICT_POSTURE_BUILT) {
+        // The item's ACCEPT line: no failure at all, the provider and filing problems are warnings.
+        expect(codes).toEqual([]);
+        expect(report.ok).toBe(true);
+        expect(report.warnings.length).toBeGreaterThan(0);
+        // The same environment under the strict posture is refused again, and only for provider or filing reasons.
+        const strictCodes = failureCodes({ ...env, CN_RESIDENCY_STRICT: 'true' });
+        expect(strictCodes).toEqual(expect.arrayContaining(['icp_missing', 'cn_storage_missing']));
+        expect(strictCodes.filter((c) => !STRICT_ONLY.has(c))).toEqual([]);
+      }
+      // Before the strict posture is built (this bundle's base) the provider
+      // codes above still fail by default; the two assertions before the
+      // branch are all that can hold on both sides of the merge.
+      // Topology is still refused.
+      expect(failureCodes({ ...env, DATABASE_URL: undefined })).toContain('db_url_missing');
+      expect(failureCodes({ ...env, ALLOWED_BRANDS: 'goapply,roboapply' })).toContain('intl_brand_on_mainland');
+      // A mistyped scope leaves RoboApply as the only brand, which the mainland stack refuses.
+      expect(failureCodes({ ...env, ALLOWED_BRANDS: 'gopply' })).toContain('intl_brand_on_mainland');
+      expect(failureCodes({ ...env, CRON_SECRET: undefined })).toContain('cron_secret_missing');
+    });
+
+    it('that same environment describes a working GoApply: every shared capability is on', () => {
+      const flags = resolveFlags(getBrand('goapply'), env);
+      for (const key of ['ai.text', 'ai.vision', 'copilot', 'notify.email', 'auth.passwordReset', 'jobs.feed', 'jobs.recommendations', 'jobs.alerts', 'campusCalendar', 'interviewVoice', 'ai.interviewVoice', 'webPush', 'coaching', 'student', 'pay.alipay'] as const) {
+        expect(flags[key], key).toBe(true);
+      }
+      // Market differences stay different (D5): no Stripe, Google or LINE on GoApply.
+      for (const key of ['pay.stripe', 'auth.google', 'auth.line'] as const) expect(flags[key], key).toBe(false);
+      expect(brandEnvGroupProblems('goapply', env)).toEqual([]);
+      expect(cnRecruitmentInfoMode(env)).toBe('licensed');
+      expect(cnPaymentsKilled(env)).toBe(false);
+    });
+
+    it('the README names what the preflight refuses (topology) and what it only warns about', () => {
+      expect(kitReadme).toMatch(/exits 1 only on topology/);
+      expect(kitReadme).toMatch(/CN_RESIDENCY_STRICT=true/);
+      expect(kitReadme).toMatch(/optional override, never a prerequisite/);
+      expect(kitReadme).toContain('GOAPPLY_PARITY_PLAN.md');
+      for (const anchor of ['CN_S3_BUCKET', 'CN_LIVEKIT_URL', 'CN_VAPID_PUBLIC_KEY']) expect(kitReadme, anchor).toContain(anchor);
+    });
+  });
+
+  describe('clone dev script (scripts/dev-clone.sh)', () => {
+    it('is valid bash', () => {
+      expect(() => execFileSync('bash', ['-n', join(ROOT, 'scripts/dev-clone.sh')], { encoding: 'utf8' })).not.toThrow();
+    });
+
+    it('sets no GoApply preview profile: no CN_ export, and SMS_DEV_CONSOLE is the one optional line', () => {
+      const body = code(devScript);
+      const exported = [...body.matchAll(/^\s*export ([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]!);
+      expect(exported.filter((n) => n.startsWith('CN_'))).toEqual([]);
+      expect(exported.sort()).toEqual(['INTERVIEW_ENGINE_AGENT_NAME', 'NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SHOW_ALL_NAV', 'PORT', 'SMS_DEV_CONSOLE']);
+      expect(body).toMatch(/export SMS_DEV_CONSOLE="\$\{SMS_DEV_CONSOLE:-true\}"/);
+      // GOAPPLY_PREVIEW gates nothing any more: it is only acknowledged.
+      expect(body).not.toMatch(/GOAPPLY_PREVIEW:-1/);
+      expect(body).not.toMatch(/if \[ "\$\{GOAPPLY_PREVIEW/);
+      for (const [label, re] of STALE) expect(re.test(devScript), label).toBe(false);
+      expect(devScript).not.toMatch(/ships with them off|stay off|never falls/i);
+    });
+
+    it('keeps the ports, the worker agent name and the three processes', () => {
+      const body = code(devScript);
+      expect(body).toMatch(/export PORT=4621/);
+      expect(body).toMatch(/NEXT_PUBLIC_API_URL=http:\/\/localhost:4621/);
+      expect(body).toMatch(/next dev -p 3621/);
+      expect(body).toMatch(/INTERVIEW_ENGINE_AGENT_NAME="\$\{INTERVIEW_ENGINE_AGENT_NAME_CLONE:-RoboApply-Interview-Clone\}"/);
+      expect(body).toMatch(/--names api,web,agent/);
+      expect(body).toMatch(/npx tsx watch server\/src\/app\.ts/);
+      expect(body).toMatch(/\.\/scripts\/dev-interview-agent\.sh/);
+    });
   });
 });
 

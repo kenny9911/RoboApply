@@ -2,7 +2,9 @@
 
 **Status:** binding engineering plan for branch `feat/jobright-clone`. **Author role:** Principal Engineer. **Date:** 2026-10-09, revised 2026-10-10 after three critic reviews. Where this document and `TASK_PLAN.md` §1–§2 disagree, `TASK_PLAN.md` wins (it records the reconciliation and the Revision log).
 **Grounded in:** `main` @ 3b70322 (read-only inspection), `docs/jobright-clone/FEATURE_CATALOG.md` (feature IDs `F-*`, screens `S0`–`S12`, `CN-*`, `TW-*`), the eight research notes, the five codebase maps, `docs/roboapply/OVERHAUL_RULINGS.md`, `docs/design-system.md` ("Clarity"), and `AGENTS.md`.
-**Audience:** the foundation, feature and integration agents. Every section is written to be executed, not discussed. When this document and older RoboApply specs disagree, this document wins, except where it defers to the owner decisions D1–D4 below.
+**Audience:** the foundation, feature and integration agents. Every section is written to be executed, not discussed. When this document and older RoboApply specs disagree, this document wins, except where it defers to the owner decisions D1–D6 below.
+
+> **Revised 2026-10-11 for owner rulings D5 (brand parity) and D6 (per-market sources, prices and rails).** GoApply and RoboApply have the same functions. A capability that is on for RoboApply is on for GoApply by default; a China-specific provider is an optional override, and unset means the shared stack. The specifications are [`GOAPPLY_PARITY_PLAN.md`](GOAPPLY_PARITY_PLAN.md) (D5) and [`market/MARKET_STRATEGY.md`](market/MARKET_STRATEGY.md) (D6); both rank above this document. The sections they change are rewritten or marked in place: §0.1, §0.2 (16), §1.2, §1.6 (with the new §1.6.1), §1.8, §1.9, §1.11, §3.9 and §3.11 (web push), §4.2, §7.4, §8.1, §8.4, §10.5, Appendix A and B. Anywhere else, a sentence that makes a GoApply feature depend on a `CN_` credential, a licence mode or a payments switch is no longer the rule: §1.6.1 is.
 
 ---
 
@@ -15,6 +17,8 @@
 | D1 | The product never submits an application. The Agent is **supervised**: it finds, prepares and pre-fills; the user clicks Submit. | No server-side "Easy Apply". No extension code path that clicks a submit control. A CI static check enforces it (§6.6). Copy never claims auto-apply; `scripts/check-copy.mjs` gains new bans (§10.1.4). |
 | D2 | Overwrite where the clone conflicts; keep the good parts. | Kept: resume editor/tailor/export, tracker, mock interview, Stripe + Alipay billing, provider seam, cross-bank search, Clarity tokens, 9-locale i18n, copy/design gates. Replaced: the 8-card feed, the setup panel, the load-everything search, the fake score signals, the fake integrations, the V1 auto-apply engine. |
 | D3 | Honesty. Never fabricate data. Every number has a source. | Every derived number carries `{value, source, sampleSize?, asOf}` on the wire (§2.14 provenance convention). Features without a real data source ship **gated** behind a brand flag (insider email finder, funding data, coaching marketplace until coaches exist). |
+| D5 | (2026-10-11) GoApply and RoboApply have the same robust functionality; only the job board, job sources and job-search APIs differ, plus what follows from the market. | One env rule (`brandEnv`: `CN_X` is an optional override of `X`) and capability requirements that never test a China-specific credential (§1.6.1). Provider seams fall back to the shared stack: models (§1.8), voice (§1.9), email (§8.1), storage, web push (§8.4). The strict mainland posture is an explicit operator switch. Disclosures and consents are generated from the stack really in use. |
+| D6 | (2026-10-11) Job sources, prices and payment rails are per market. Mainland China pays with Alipay, the existing implementation, which keeps working exactly as it does; the international brand pays with Stripe. | A per-brand job source registry (§4.2). The plan catalog carries real default amounts per market. The Alipay request, callback and verification path is frozen by characterisation tests and changed additively only (§7.4). |
 | D4 | Live interview fixes are a separate urgent track (Track A). | That track is **Wave 0**. Clone agents do not edit `server/src/interview-engine/**`, `interview-agent/**`, `app/(auth)/practice/[id]/**`, `components/v3/mock/**` or the interview reconciler until Wave 0 merges. The per-brand interview seam (§1.9) is applied **after** Wave 0. |
 
 ### 0.2 The twenty decisions this document makes
@@ -34,7 +38,7 @@
 13. **The copilot is a tool-calling agent over our own services.** It streams over SSE from Express. Any mutation, and any credit spend, becomes a **proposal card** that the user confirms. Nothing changes silently.
 14. **The extension is an in-repo MV3 package, `extension/`,** built per brand. It authenticates with a device token exchanged from the web session. It never uses the `cookies` permission and never clicks a submit control.
 15. **Credits are typed buckets with windowed caps.** Consumption is atomic SQL, uses idempotency keys, and follows reserve, then commit or release. Billing stays success-only. Interview minutes keep the existing `mockCreditService`.
-16. **Notifications use a per-brand email transport** (Resend now; an Aliyun DirectMail seam for GoApply). The in-app message center reuses `SeekerNotification`. Web push is RoboApply-only.
+16. **Notifications use a per-brand email transport** (Resend for both brands by default; Aliyun DirectMail is GoApply's optional override). The in-app message center reuses `SeekerNotification`. Web push runs on both brands (D5; it was RoboApply-only before 2026-10-11).
 17. **SEO programmatic pages are rendered dynamically over a cached public API.** Express sends `s-maxage`; because the root layout is `force-dynamic`, Next caches SSR data with `unstable_cache` keyed by brand × slug plus tags (§9.2). Sitemaps are host-aware route handlers partitioned at 45k URLs. A page is indexable only above a real-inventory floor. True static ISR needs a root-layout split, which is a recorded follow-on (§9.7).
 18. **i18n staging:** feature agents write `i18n/staging/<namespace>.en.json`. The runtime merges staging English over `en.json`, so English renders everywhere before translation. The integration wave merges and translates. Bundles carry the token `%BRAND%`, never a literal brand name.
 19. **No new runtime dependency outside the foundation wave.** The foundation wave adds `zod@4`, `@vercel/functions` and `web-push` to the root `package.json` in one commit. The extension has its own `package.json` and lockfile, like `interview-agent/`.
@@ -102,6 +106,7 @@ export type RoboLocale = 'en' | 'zh' | 'zh-TW' | 'ja' | 'ko' | 'es' | 'fr' | 'pt
 export type AuthMethod = 'email_password' | 'google' | 'line' | 'phone_otp' | 'wechat';
 export type PaymentRail = 'stripe' | 'alipay' | 'wechatpay';
 export type JobProvider = 'activejobs' | 'linkedin' | 'jsearch' | 'bank_robohire' | 'bank_gohire' | 'user_import';
+// 'linkedin' stays in the union only so existing adapter code compiles; it is in no brand's list (D6, MARKET_STRATEGY M-4).
 export type LlmProfile = 'global' | 'domestic_cn';
 
 export interface BrandFlags {
@@ -133,13 +138,13 @@ export interface ProductBrand {
   countries: string[];              // pickers: roboapply ['US','CA','GB','AU','IE','NZ','SG','HK','TW','JP','KR','DE','FR','ES','PT'] ; goapply ['CN']
   currency: 'USD' | 'CNY';
   paymentRails: PaymentRail[];      // ['stripe'] | ['alipay','wechatpay']
-  authMethods: AuthMethod[];        // ['email_password','google','line'] | ['phone_otp','wechat','email_password']
+  authMethods: AuthMethod[];        // ['email_password','google','line'] | ['email_password','phone_otp','wechat'] (email first on both, D5)
   marketingOptInDefault: boolean;   // false for both (EU/TW/CN prudence; catalog §3.6)
-  jobProviders: JobProvider[];      // §4.2
-  llmProfile: LlmProfile;           // 'global' | 'domestic_cn'
-  llmEnvPrefix: '' | 'CN_';
-  interview: { agentName: string; envPrefix: '' | 'CN_' };   // 'RoboApply-Interview' | 'GoApply-Interview'
-  email: { fromName: string; fromAddress: string; replyTo: string; transport: 'resend' | 'aliyun_dm' };
+  jobProviders: JobProvider[];      // §4.2: ['activejobs','bank_robohire','jsearch','user_import'] | ['bank_gohire','user_import'] (+ the market-registered ats_public adapter)
+  llmProfile: LlmProfile;           // 'global' | 'domestic_cn': the profile used WHEN the brand has its own provider; with no CN_LLM_* value GoApply's effective profile is 'global' (§1.8)
+  llmEnvPrefix: '' | 'CN_';         // the prefix of the optional override names
+  interview: { agentName: string; envPrefix: '' | 'CN_' };   // 'RoboApply-Interview' | 'GoApply-Interview' (dispatched only on GoApply's own media plane, §1.9)
+  email: { fromName: string; fromAddress: string; replyTo: string; transport: 'resend' | 'aliyun_dm' };   // the PREFERRED transport; GoApply falls back to resend (§8.1)
   assets: { mark: string; logo: string; og: string; favicon: string; appleTouch: string };
   theme: { themeColorLight: string; themeColorDark: string };
   seo: { titleSuffix: string; sameAs: string[]; searchEngines: ('google'|'bing'|'baidu')[] };
@@ -161,7 +166,9 @@ export function isDevOrPreviewHost(host: string): boolean;   // localhost, *.loc
 
 **Why not import across the boundary?** Type-only imports already cross (`lib/api/job-search-types.ts`). A runtime import into `proxy.ts` and client bundles from `server/src` is untested with Turbopack. The copy is 0 risk and the parity test removes the drift risk.
 
-**Env overrides** (read only in the `runtime.ts` files): `BRAND_HOST_MAP` (comma list `host=brandId`, for staging domains), `BRAND_FORCE` (dev only; ignored when `NODE_ENV=production` and the host is not a preview host), `COOKIE_DOMAIN_ROBOAPPLY`, `COOKIE_DOMAIN_GOAPPLY`, `EMAIL_FROM_ROBOAPPLY`, `EMAIL_FROM_GOAPPLY`, `GOAPPLY_ICP_NUMBER`, `GOAPPLY_PSB_NUMBER`, `FLAG_<BRAND>_<FLAG>` (e.g. `FLAG_GOAPPLY_COACHING=true`).
+**Registry defaults after D5** (`GOAPPLY_PARITY_PLAN.md` §3.2): `goapply.flags.coaching`, `interviewVoice`, `webPush` and `student` are `true`; `goapply.authMethods` starts with `email_password`. `allowedBrands()` returns both brands in every environment when neither `ALLOWED_BRANDS` nor `BRAND_LOCK` is set; a scope variable that is set but names no valid brand resolves to RoboApply only and is reported by `allowedBrandsProblem(env)`.
+
+**Env overrides** (read only in the `runtime.ts` files; the names below are the design-time ones, renamed to `NAME` / `CN_NAME` as built, see Appendix A): `BRAND_HOST_MAP` (comma list `host=brandId`, for staging domains), `BRAND_FORCE` (dev only; ignored when `NODE_ENV=production` and the host is not a preview host), `COOKIE_DOMAIN_ROBOAPPLY`, `COOKIE_DOMAIN_GOAPPLY`, `EMAIL_FROM_ROBOAPPLY`, `EMAIL_FROM_GOAPPLY`, `GOAPPLY_ICP_NUMBER`, `GOAPPLY_PSB_NUMBER`, `FLAG_<BRAND>_<FLAG>` (e.g. `FLAG_GOAPPLY_COACHING=true`).
 
 ### 1.3 Host resolution rules (identical on both tiers)
 
@@ -247,7 +254,38 @@ Consequences, all applied by FND:
 | `llmProfile`, `llmEnvPrefix` | §1.8 |
 | `interview` | §1.9 (after Wave 0) |
 | `legal` | Footer: ICP, PSB, HR licence placeholder and AI-model disclosure on GoApply (BRAND); `/legal/*` pages (SEO) |
-| `flags` | Server `server/src/platform/flags.ts` `isEnabled(flag)` (brand flag, then `FLAG_*` env, then `RAEntitlementOverride` for per-user beta). `/auth/me` returns the resolved flags. `lib/flags.ts` `useFlag()` on the client. Nav entries, routes and API routers check the flag. A disabled router returns `404 feature_disabled`. |
+| `flags` | Server `server/src/platform/flags.ts` `isEnabled(flag)`: `requirementsMet(key) AND (userOverride ?? FLAG_<BRAND>_<KEY> ?? registryDefault)`. `/auth/me` and `GET /api/v1/public/brand` return the resolved flags. `lib/flags.ts` `useFlag()` on the client. Nav entries, routes and API routers check the flag. A disabled router returns `404 feature_disabled`. The requirements and defaults per key are in §1.6.1. |
+
+#### 1.6.1 Per-brand env resolution and capability defaults (D5; `GOAPPLY_PARITY_PLAN.md` §3.1, §3.2)
+
+**The one env rule.** `brandEnv(brand, NAME)` (`server/src/platform/brand/brandEnv.ts`) is the only place a per-brand value is resolved; no module invents its own fallback. RoboApply reads `NAME`, always, and never a `CN_` value. For GoApply `CN_NAME` is an **optional override**:
+
+| Class | Rule | Names |
+|---|---|---|
+| Per key (the default) | `CN_NAME ?? NAME` | `LLM_*`, `TOTP_ENCRYPTION_KEY`, `COPILOT_DAILY_BUDGET_USD`, `SCORE_DAILY_BUDGET`, `RA_SYSTEM_USER_ID`, `INTERVIEW_RETENTION_DAYS`, `INTERVIEW_ENGINE_RECORDING_ENABLED`, … |
+| Grouped (`BRAND_ENV_GROUPS`) | the whole group from `CN_*` when the group's anchor is set, else the whole group from the shared names; never mixed, so a URL of one account is never paired with a key of another | `voice` (anchor `LIVEKIT_URL`): the LiveKit URL, key and secret, agent names, callback secret and base URL, `VOICE_PROVIDER` · `speech` (anchors: both the STT and the TTS model): those two, the two TTS voices, the STT fallbacks · `storage` (anchor `S3_BUCKET`): the `S3_*` set and its `AWS_*` aliases · `push` (anchor `VAPID_PUBLIC_KEY`): the VAPID pair and subject |
+| Brand-own (`BRAND_OWN_ENV`) | `CN_NAME` only; identity never crosses brands | `CANONICAL_ORIGIN`, `COOKIE_DOMAIN`, `BACKEND_URL`, `EMAIL_FROM`, `SUPPORT_EMAIL`, `COACHING_ADMIN_EMAIL`, `TAKEDOWN_CONTACT`, `LEGAL_ENTITY_NAME`, `LEGAL_POSTAL_ADDRESS`, `LEGAL_DOCS_VERSION`, `PAYMENT_COLLECTING_ENTITY`, `MIN_EXT_VERSION`, `BAIDU_PUSH_TOKEN`, `CONTACT_OPTIN_API_URL`, `CONTACT_OPTIN_API_KEY`, `CONTENT_SAFETY_PROVIDER`, `CONTENT_SAFETY_TIMEOUT_MS`, `SAFETY_KEYWORDS_URL` |
+
+Seam exports other modules may import (and nothing else is added to that file): `brandOwnEnv`, `brandEnvSource` (`'own' | 'shared' | 'none'`), `brandStack(brand, 'llm' | 'voice' | 'speech' | 'storage' | 'push')` (`'own' | 'shared'`), `brandUsesSharedStack`, `brandEnvGroupProblems` (a group with `CN_` members set but no anchor: the read rule stays "shared", and startup names it), `cnResidencyStrict` (`CN_RESIDENCY_STRICT=true`), `cnLlmDomesticOnly` (`CN_LLM_DOMESTIC_ONLY=true` or the strict switch), `BRAND_OWN_ENV`, `BRAND_ENV_GROUPS`. From `flags.ts`: `cnPaymentsKilled`, `cnRecruitmentInfoModeProblem`. From `runtime.ts`: `allowedBrandsProblem`.
+
+**Capability requirements.** A requirement never tests a China-specific credential, a licence mode or a payments switch. What each key needs for GoApply:
+
+| Key | Requirement (GoApply) | Off switch |
+|---|---|---|
+| `ai.text`, `ai.vision`, `copilot`, `agent`, `visitorAssistant`, `competitiveness` | the content-safety filter is usable (its default configuration is); never a CN model | `FLAG_GOAPPLY_<KEY>=false` |
+| `interviewVoice`, `ai.interviewVoice` | LiveKit through the `voice` group (shared project when `CN_LIVEKIT_URL` is unset) | `FLAG_GOAPPLY_INTERVIEW_VOICE=false` |
+| `notify.email`, `auth.passwordReset` | `CN_EMAIL_TRANSPORT`: `aliyun_dm` needs the Aliyun keys; `none` is off; anything else (unset included) needs `RESEND_API_KEY` | `CN_EMAIL_TRANSPORT=none` |
+| `jobs.feed`, `jobs.recommendations`, `jobs.alerts` | on; `CN_RECRUITMENT_INFO_MODE` unset or unknown reads as `licensed` | the literal `CN_RECRUITMENT_INFO_MODE=off` |
+| `campusCalendar` / `jobs.campusCalendar` | the registry value | `CN_CAMPUS_CALENDAR_ENABLED=false` |
+| `webPush` | the VAPID pair through the `push` group | `FLAG_GOAPPLY_WEB_PUSH=false` |
+| `coaching`, `student` | the registry value (`true`) | `FLAG_GOAPPLY_COACHING=false`, `FLAG_GOAPPLY_STUDENT=false` |
+| `pay.alipay` | the rail is listed, `ALIPAY_CALLBACK_SECRET` is set (the rail's own credential, the equal of `STRIPE_SECRET_KEY`), not killed | `CN_PAYMENTS_ENABLED=false` |
+| `pay.wechatpay` | the merchant set and a matching entity, not killed | `CN_PAYMENTS_ENABLED=false` |
+| market-specific, unchanged | RoboApply: `auth.google`, `auth.line`, `pay.stripe`, `fx.reference`, `h1bHistory`, `eeoAnswers`. GoApply, each only when its own value is set: `auth.phoneOtp`, `auth.wechat*`, `notify.wechat`, `cn.referralCodes`, `legal.footer.*` | — |
+
+**Acceptance.** With only the shared credentials, `GET /api/v1/public/brand` for a GoApply host shows `true` for every flag that is `true` for a RoboApply host except `h1bHistory`, `eeoAnswers`, `fx.reference`, `pay.stripe`, `auth.google`, `auth.line` (the matrix test in `flags.test.ts`).
+
+**Principles for any new per-brand code.** Optional override, else shared (this one rule). Never mix credential sets. Identity never crosses brands. The strict mainland posture is an explicit operator choice, never implied by a missing value. Every former prerequisite that made sense as a kill switch still works as one. Disclosures, the processor list, the cross-border consent and the AI-model footer are generated from the stack GoApply really resolves (D3). RoboApply does not regress.
 
 ### 1.7 i18n brand-name substitution
 
@@ -259,6 +297,16 @@ Consequences, all applied by FND:
 
 ### 1.8 LLM routing profile per brand
 
+> **D5 (2026-10-11; `GOAPPLY_PARITY_PLAN.md` §3.3, PAR-2). The GoApply rules of this section are superseded as follows.**
+> - **Per key, not per stack.** Each model setting resolves `llm_stack.goapply` blob → `CN_<NAME>` → `llm_stack.roboapply` blob → `<NAME>`. The provider mode resolves the same way.
+> - **Effective profile.** `effectiveLlmProfile(brand, env)` (`server/src/lib/llm/llmBrand.ts`) is `'domestic_cn'` only when GoApply has its own provider (`brandStack(brand, 'llm') === 'own'`, or a provider in the GoApply blob). Otherwise `'global'`: the same default provider, models and fallback chain as RoboApply.
+> - **Mixed case.** When GoApply has its own provider and one setting still comes from the shared stack, the shared selector is qualified to a full route, so it goes where it goes for RoboApply and never to the CN provider.
+> - **The domestic-only wall is opt-in** (`cnLlmDomesticOnly`). It covers primary and fallback routes, a user's own key, and the enrich, campus and fraud models. By default GoApply may use every route RoboApply may use, plus its domestic vendors.
+> - **Calls without a brand context** are refused only where a wrong guess could cross a wall an operator chose (GoApply has its own model stack, or the wall is on); otherwise the call routes as the default brand with a warning. A call that carries a user id runs in that user's brand.
+> - **Unchanged:** the RoboApply egress policy below (never a mainland endpoint), and content safety on every GoApply call, on the shared route too. An invalid `CN_CONTENT_SAFETY_*` value degrades to the built-in keyword list with a warning; it fails closed only under `CN_RESIDENCY_STRICT`.
+>
+> The bullets "GoApply policy guard" and "Note (2026-10-10)" below describe the wall, which now applies only when `CN_LLM_DOMESTIC_ONLY=true`. `getModelSetting` no longer stops at the `CN_` name.
+
 - `server/src/lib/llm/llmTaskSettings.ts`: `LlmTask` becomes `'matching' | 'extract' | 'onboarding' | 'rewrite' | 'interview' | 'copilot' | 'enrich' | 'writing'`. The three new tasks map to `LLM_COPILOT_MODEL`, `LLM_ENRICH_MODEL` and `LLM_WRITING_MODEL` in `llmStackConfigSchema.ts` `MODEL_ENV`.
 - `getModelSetting(key)` / `getProviderSetting()` (`server/src/lib/llm/llmModels.ts`) read `${brand.llmEnvPrefix}${MODEL_ENV[key]}` first, then the unprefixed key. The DB stack override is looked up under `llm.stack.<brandId>` first, then the existing global key. All brand reads use `getCurrentBrandId()`.
 - **GoApply policy guard** (`server/src/platform/llm/brandPolicy.ts`, wired into `LLMService.resolveDefaults` by FND). When `brand.llmProfile === 'domestic_cn'`, the resolved provider must be one of `deepseek`, `kimi`, `minimax` or `newapi` (an OpenAI-compatible gateway for Qwen, GLM and Doubao). Anything else throws `LlmBrandPolicyError`. `CN_LLM_ALLOW_OFFSHORE=true` is honoured only outside production. There is no GLM adapter; GLM runs through `newapi`.
@@ -269,10 +317,11 @@ Consequences, all applied by FND:
 
 ### 1.9 Interview voice infrastructure per brand (post–Wave 0)
 
-- `brand.flags.interviewVoice`: `true` for RoboApply. For GoApply it is `false` until a mainland media plane exists (CN-E-06). When it is false, `/practice` offers the text mock only, and the setup page says why.
+- **D5 (2026-10-11; `GOAPPLY_PARITY_PLAN.md` §3.5, PAR-4):** `brand.flags.interviewVoice` is `true` for both brands. With no `CN_LIVEKIT_URL`, GoApply voice and video practice runs on the shared LiveKit project, the shared worker and its agent name (`INTERVIEW_ENGINE_AGENT_NAME`, else RoboApply's registry name), with the shared voice catalog (zh voices), STT and interview routing. `GoApply-Interview` is dispatched only on GoApply's own plane. A session stores `stack: 'own' | 'shared'` and keeps its plane for its lifetime. A webhook is accepted for a session when the signing key is the key of the plane that session runs on. Camera and video recording follow the same policy on both brands behind the per-session `interview_recording` and `interview_video` consents; `CN_INTERVIEW_CAMERA_PUBLISH=false` restores audio only. The original text of this bullet read: "`true` for RoboApply. For GoApply it is `false` until a mainland media plane exists (CN-E-06)."
+- When the flag is false for a brand (its off switch, or no LiveKit at all), `/practice` offers the text mock only, and the setup page says why.
 - After Wave 0 merges, a small follow-up (owned by the Track A team, not a clone area) applies the seam:
-  - `getLiveKitCreds(brand)` reads `${brand.interview.envPrefix}LIVEKIT_*`.
-  - `getInterviewAgentName(brand)` uses `brand.interview.agentName`.
+  - `getLiveKitCreds(brand)` reads the `voice` group through `brandEnv` (§1.6.1): `CN_LIVEKIT_*` as one set when `CN_LIVEKIT_URL` is set, else the shared `LIVEKIT_*`.
+  - `getInterviewAgentName(brand)` uses `brand.interview.agentName` on the brand's own plane and the shared agent name on the shared plane.
   - The voice catalog is profiled per brand.
   - The client already receives the LiveKit URL per session (`liveKitClient.ts:164`), so the frontend needs no change.
 
@@ -285,7 +334,7 @@ Consequences, all applied by FND:
 
 ### 1.11 Hosting note (ops track, not code)
 
-Both brands deploy from one Vercel project (add the `goapply.top` domains). `next.config.mjs` already sets `output: 'standalone'`, so a mainland deployment can run the same build with `BRAND_LOCK=goapply` (proxy and Express then refuse other brands) and its own `DATABASE_URL`, once ICP and licensing (CN-L-*) are in place. Nothing in this design assumes Vercel-only APIs, except `@vercel/functions` `waitUntil`, which degrades to a no-op elsewhere (§4.6).
+Both brands deploy from one Vercel project (add the `goapply.top` domains). **Since D5 every deployment serves both brands unless narrowed:** with neither `ALLOWED_BRANDS` nor `BRAND_LOCK` set, a production deployment serves `goapply.top` as soon as its DNS points there. `ALLOWED_BRANDS=roboapply` keeps GoApply closed until the owner decides to launch it. `next.config.mjs` already sets `output: 'standalone'`, so a mainland deployment can run the same build with `ALLOWED_BRANDS=goapply` (proxy and Express then refuse other brands), `DEPLOY_REGION=cn-mainland` and its own `DATABASE_URL`. On that deployment only topology refuses the boot (unknown region, no database, a database host outside the mainland allowlist, RoboApply being served); a missing ICP number, a model route outside the mainland, no mainland bucket, content safety other than Aliyun Green and an offshore email transport are warnings, and failures only under `CN_RESIDENCY_STRICT=true` (`deploy/cn/README.md`). The filings and licences (CN-L-*) are the owner's legal track; the code does not wait for them. Nothing in this design assumes Vercel-only APIs, except `@vercel/functions` `waitUntil`, which degrades to a no-op elsewhere (§4.6).
 
 ---
 
@@ -1883,7 +1932,7 @@ As built (INT-13, from `server/src/features/agent/{routes,contract}.ts`): every 
 | GET `/notifications?cursor` · GET `/notifications/unread-count` | S | message center | — |
 | POST `/notifications/:id/read` · POST `/notifications/read-all` | S | — | — |
 | POST `/notifications/:id/respond` | S | invitation reply `{ interested, form? }` (flag `invitations`) | — |
-| GET `/push/vapid-public-key` · POST `/push/subscriptions` · DELETE `/push/subscriptions/:id` | S | web push (RoboApply only) | — |
+| GET `/push/vapid-public-key` · POST `/push/subscriptions` · DELETE `/push/subscriptions/:id` | S | web push (both brands since D5; shared VAPID pair unless `CN_VAPID_PUBLIC_KEY` starts GoApply's own) | — |
 | GET `/announcements/next` · POST `/announcements/:id/seen` | S | one announcement at most, popup-throttled | — |
 | GET/PATCH `/ui-state` | S | tours, dismissals, popup timestamps | — |
 | GET/POST `/api/v1/public/email/unsubscribe?token=` | P | one-click unsubscribe (RFC 8058 `List-Unsubscribe-Post`) + optional survey | — |
@@ -1966,7 +2015,7 @@ Recorded from the INT-01 … INT-13 handoffs; the tables above keep their origin
 - GoApply catalog lists `cn_ai_interview` first; such a session is stored with `interviewType: 'cn_ai_interview'` (20–30 minutes).
 
 **Platform (INT-11, INT-13)**
-- CORS has no built-in preview pattern (`CORS_PREVIEW_HOSTS` is an explicit opt-in). `webPush` needs both VAPID keys and a `mailto:` / `https:` `VAPID_SUBJECT`, and is never on for GoApply.
+- CORS has no built-in preview pattern (`CORS_PREVIEW_HOSTS` is an explicit opt-in). `webPush` needs both VAPID keys and a `mailto:` / `https:` `VAPID_SUBJECT`; since D5 it is on for GoApply under the same requirement (the `push` group of §1.6.1).
 - `/public/legal/disclosures` and the `/legal` index page; `publishedLegalDocVersion(brand, doc, env)`.
 - The API drains on SIGTERM / SIGINT (`SHUTDOWN_DRAIN_TIMEOUT_MS`); `TRUST_PROXY` sets how many proxies are trusted.
 
@@ -1987,10 +2036,32 @@ Recorded from the INT-01 … INT-13 handoffs; the tables above keep their origin
 
 | Brand | Providers (priority) | Countries | Notes |
 |---|---|---|---|
-| RoboApply | `activejobs` (10, ATS-direct) → `bank_robohire` (15, exclusive) → `linkedin` (20) → `jsearch` (30, `/search-v2`) | Demand-driven over `brand.countries`; TW included | One `RAPID_API_KEY`; each API must be subscribed on app 8974502. The existing clients `raRapidApiJobs.ts` and `raFantasticJobs.ts` are reused as fetchers. When the subscribed Active Jobs DB plan returns its AI-enrichment fields (experience level, key skills, work arrangement, visa sponsorship), INGEST maps them first and skips the LLM for those fields. TW salary rule TW-03 applies in normalization. |
-| GoApply | `bank_gohire` (15, exclusive) → `user_import` (private) | CN | No external provider by default (CN-L-04 licensing). `CN_EXTERNAL_PROVIDERS=jsearch` can enable JSearch with `country=cn` for testing only. Never scrape BOSS/智联/猎聘/51job. `bank_gohire` must use TLS (CN-E-05). `GOHIRE_PUBLIC_JOB_BASE_URL` is corrected to `https://www.gohire.top`. |
+| RoboApply | `activejobs` (10, ATS-direct) → `bank_robohire` (15) → `jsearch` (30, `/search-v2`); `ats_public` (public employer boards) through its market-registered adapter | Demand-driven over `brand.countries`; TW included | One `RAPID_API_KEY`; each API must be subscribed on app 8974502. `linkedin` is removed from the list (not subscribed, not to be: `market/MARKET_STRATEGY.md` M-4). The existing clients `raRapidApiJobs.ts` and `raFantasticJobs.ts` are reused as fetchers. When the subscribed Active Jobs DB plan returns its AI-enrichment fields (experience level, key skills, work arrangement, visa sponsorship), INGEST maps them first and skips the LLM for those fields. TW salary rule TW-03 applies in normalization. `ats_public` keeps every posting **not** located in mainland China. |
+| GoApply | `ats_public` (public employer boards, postings located in mainland China) → `bank_gohire` (15) → `user_import` (private); the campus calendar and search deep links beside them | CN | See "The per-brand source registry" below. No RapidAPI adapter serves `market = 'cn'`: `jsearch` with `country=cn` is **not** a GoApply source (its rows carry no apply link and are third-hand copies of a mainland board's postings; `market/MARKET_STRATEGY.md` M-6). `CN_EXTERNAL_PROVIDERS` is removed (ignored with one warning). Never scrape BOSS/智联/猎聘/51job/拉勾, and never call a Chinese ATS vendor's internal endpoint. |
 
-Bank ingestion reuses `raBankProviders.searchBank` but **without** the LLM explorer. It is a cursor sync over the recruiter `Job` rows (`status='open' AND publishedAt IS NOT NULL`, `updatedAt > cursor` — drafts and private jobs never sync), stored as one `RAIngestQuery` per bank (`origin='bank_sync'`, `params.cursor`). The cross-tenant guard `RA_CROSSBANK_CROSS_TENANT_CONFIRMED` still applies. Bank jobs get `fromRecruiterBank = true`, `employerVerified` from the bank's verified-employer field, `market` from the bank, and `applyUrl` from `synthesizeApplyUrl`. A bank job gets `publicDisplay = true` only when the bank records the employer's consent to syndicate (OPS-A4).
+**The per-brand source registry (D5 and D6; `GOAPPLY_PARITY_PLAN.md` §3.9; PAR-7, PAR-11).** One registry (`server/src/features/jobs/sources/registry.ts`) answers "which sources feed this brand, how, and are they healthy". The capability (feed, search, alerts, similar jobs, market stats) is identical on both brands; only the rows differ. No mainland source offers lawful keyword search over the market, so GoApply ingests into its own index and searches that.
+
+| Brand | Source | Kind | Transport | State |
+|---|---|---|---|---|
+| RoboApply | `activejobs`, `jsearch` | search API | RapidAPI | as before |
+| RoboApply | `bank_robohire` | recruiter bank | Postgres | synced; **listed only with `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE`** (its rows link to a missing page today) |
+| RoboApply | `ats_public` | public ATS boards | documented job-board APIs | every posting not located in mainland China |
+| GoApply | `ats_public` | public ATS boards | the same connectors | **on, and the source that fills the feed**: 27 boards answered on 2026-10-11 with 1,828 mainland postings; each seed is re-verified through the connector |
+| GoApply | `bank_gohire` | recruiter bank | Postgres when its URL satisfies the TLS rule (CN-E-05), otherwise HTTPS (`api.gohire.top` list endpoint, published rows first, strict field whitelist; the syndication endpoint when `GOHIRE_SYNDICATION_URL` is set). `GOHIRE_BANK_TRANSPORT` = `db` \| `api` \| `off` | synced; published rows with a named employer only; **listed only with `GOHIRE_PUBLIC_JOB_URL_TEMPLATE`**. Today GoHire has no candidate-facing posting page, so its rows are held and counted (`bank_no_public_page`), not shown |
+| both | `user_import` | user import | — | unchanged, private to the user |
+| GoApply | campus calendar; search deep links built from the user's own query | curated events; links | admin flow; — | on; the calendar is empty until staff publish events (never invented) |
+
+Rules of the layer:
+
+- **Provider list** = `brand.jobProviders` plus the adapters registered for the market, optionally narrowed by `JOB_PROVIDERS_<BRAND>` (a subset only).
+- **A posting with no usable apply URL is never listed** (both markets). Nothing is submitted for the user (D1).
+- **A recruiter-bank row needs a real posting page.** `https://www.gohire.top/jobs/<id>` and `https://www.robohire.io/jobs/<id>`, the links the code used to build, render each site's "Page not found" (opened in a browser on 2026-10-11). `synthesizeApplyUrl` therefore returns null unless the bank's template (`GOHIRE_PUBLIC_JOB_URL_TEMPLATE`, `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE`; https, contains `{id}`, no default) is set. `GOHIRE_PUBLIC_JOB_BASE_URL` and `ROBOHIRE_PUBLIC_JOB_BASE_URL` are no longer read. We build no apply page for a bank row; the page belongs to the bank's product.
+- **Every card names its source (D3).** GoHire bank rows carry the licence line only when `CN_HR_LICENCE_*` is set. Every other mainland posting shows `来源：{original publisher}`, the original link and `最后核验 {date}`. The feed response carries `sources: { gohire: boolean, employerBoards: number }` for a header that says where postings come from and never implies full-market coverage. Feed items and job detail expose `apply: { url, target: 'gohire' | 'employer' }` and `source: { name, original, url, lastVerifiedAt, via: 'bank' | 'ats' | 'import' }`; `salary` is null when the posting states no pay.
+- **Market by posting location; one reading market per board for now.** A posting's market comes from its own resolved location (country CN → `cn`, anything else → `intl`), each row in exactly one market. A board is read by the market on its `RACareerSiteSource` row (unique on ats and board token, one market column; no schema change in the parity wave). The mainland filter runs before the per-board input cap, and SmartRecruiters is listed with `country=cn`, so a global board's few mainland postings are not starved. One board feeding several countries or both brands is the market wave's part (it needs `RACareerSiteSource.countries`).
+- **GoHire bank quality gates stay.** Unpublished, unattributed or test requisitions are skipped and counted (`bank_unpublished`, `bank_no_company`, `bank_test_posting`), never inferred. Only this source may carry 企业直招, and only when the bank says the employer is verified. A closed job is detected by its absence from a complete listing pass, never guessed from a failed one.
+- **No posting-age cut-off for board or bank rows.** They close by listing diff, tombstone or stated deadline.
+
+Bank ingestion reuses `raBankProviders.searchBank` but **without** the LLM explorer. It is a cursor sync over the recruiter `Job` rows (`status='open' AND publishedAt IS NOT NULL`, `updatedAt > cursor` — drafts and private jobs never sync), stored as one `RAIngestQuery` per bank (`origin='bank_sync'`, `params.cursor`). The cross-tenant guard `RA_CROSSBANK_CROSS_TENANT_CONFIRMED` still applies. Bank jobs get `fromRecruiterBank = true`, `employerVerified` from the bank's verified-employer field, `market` from the bank, and `applyUrl` from `synthesizeApplyUrl` (null, and the row held, while the bank's posting-page template is unset; see the registry rules above). A bank job gets `publicDisplay = true` only when the bank records the employer's consent to syndicate (OPS-A4).
 
 ### 4.3 Query planner (demand-driven)
 
@@ -2401,7 +2472,7 @@ Inside one READ COMMITTED transaction:
 - **Rail interface:** `PaymentRail` (`server/src/platform/billing/rails/*`) exposes `createCheckout(order) → { url } | { qrCodeUrl } | { jsapiParams }` and `verifyCallback(req) → { orderId, paid, amountMinor }`.
 - **Implementations:**
   - `StripeRail`: existing, subscriptions; metadata gains `brand` and `planKey`.
-  - `AlipayWorkerRail`: existing GoHire worker. `platform` stays `'gohire'` until the worker supports a GoApply platform; the subject, receipts and the 用户协议 name the **actual collecting entity**, and GoApply charging stays off until that entity matches the merchant (no 二清; OPS C-13). No coaching payments on CN rails.
+  - `AlipayWorkerRail`: existing GoHire worker. `platform` stays `'gohire'` until the worker supports a GoApply platform; the subject, receipts and the 用户协议 name the **actual collecting entity** when `CN_PAYMENT_COLLECTING_ENTITY` is set (no 二清; OPS C-13). **D5 / D6 (2026-10-11):** the entity is no longer a gate on the Alipay rail (one startup warning when it is unset; `CN_PAYMENT_REQUIRE_ENTITY=true` restores the refusal), and `ALIPAY_API_URL` is no longer required (the rail defaults the worker URL). The rail opens with `ALIPAY_CALLBACK_SECRET` alone; `CN_PAYMENTS_ENABLED=false` is the kill switch (unset = on). GoApply plans carry catalog default amounts in CNY (¥12, ¥39, ¥99, packs ¥29 / ¥79, student passes ¥29 / ¥69), overridable by `CN_PRICE_<KEY>_FEN` in whole yuan, and are never `price_unset`. The request, callback and verification path of this rail is frozen by characterisation tests for the twelve rules of `market/MARKET_STRATEGY.md` §5.2 and is changed additively only. Stripe is never added to GoApply. No coaching payments on CN rails.
   - Extension points: `registerRail(id, impl)` and an exported `fulfilPass(order)` (WP-21a) so a later wave can add WeChat Pay without editing billing files.
   - `WechatPayRail`: new. If the GoHire worker supports `pay_channel:'wxpay'` (CRED verifies the worker contract first), use it. Otherwise call WeChat Pay API v3 directly (Native QR on desktop, JSAPI inside the WeChat browser) with env `WECHATPAY_MCH_ID`, `WECHATPAY_APP_ID`, `WECHATPAY_API_V3_KEY`, `WECHATPAY_CERT_SERIAL`, `WECHATPAY_PRIVATE_KEY`, signed with node `crypto`. Behind `WECHATPAY_ENABLED`.
 - **GoApply renewals** stay manual passes (no auto-debit); the existing T-5 day reminder covers them. Renewal reminder emails must be **sent and logged** (`RAEmailLog`), per X-31.
@@ -2423,7 +2494,7 @@ Inside one READ COMMITTED transaction:
 - **Module:** `server/src/platform/email/`:
   - `EmailService.send({ template, to, userId?, locale, params })` reads the current brand (or takes `brand` explicitly in workers) and picks the transport by `brand.email.transport`.
   - `ResendTransport` refactors the existing `services/EmailService.ts` HTTP call.
-  - `AliyunDirectMailTransport` is behind `CN_EMAIL_TRANSPORT=aliyun_dm` with `ALIYUN_DM_*` env. Until then GoApply sends through Resend from `noreply@mail.goapply.top`.
+  - `AliyunDirectMailTransport` is behind `CN_EMAIL_TRANSPORT=aliyun_dm` with `ALIYUN_DM_*` env. **D5 (`GOAPPLY_PARITY_PLAN.md` §3.4):** `CN_EMAIL_TRANSPORT` is `aliyun_dm` \| `resend` \| `none`; unset means `resend` through the shared `RESEND_API_KEY`, so GoApply email (verification, password reset, alerts) works with no China-specific value. The display name is always GoApply. The address is `CN_EMAIL_FROM`, else (Resend only) the shared verified sender (`ROBOAPPLY_EMAIL_FROM`, then `EMAIL_FROM`), last the registry address, because `noreply@goapply.top` is not a verified domain on the shared Resend account. Reply-To and the legal lines stay brand-own.
 - **From:** `brand.email.fromName <EMAIL_FROM_<BRAND>>`. The RoboHire fallbacks at `EmailService.ts:22`, `RoboApplyDigestService.ts:130-137` and `RoboApplyBillingReminderService.ts:27,30` are deleted.
 - **Templates:** `server/src/platform/email/templates/<template>.ts` returns `{ subject, html, text }` from strings in `server/src/i18n/email/<locale>.json` (9 locales for RoboApply; GoApply needs zh and en, but all 9 are kept for parity), with `%BRAND%` substituted. Layout: one shared HTML shell with brand logo, footer, legal address and an unsubscribe link (marketing and alerts only). CRED owns `templates/billing/*` and moves `server/src/roboapply/lib/billingEmails.ts` (4 locales today) into it, expanded to 9.
 - **Template list:** `welcome`, `verify_email`, `password_reset`, `job_alert_instant`, `job_alert_digest`, `followup_reminder`, `interview_reminder`, `referral_qualified`, `coaching_booking_*`, `prefs_magic_link`, and the existing billing set (`renewal_reminder`, `friday_nudge`, `receipt`, `account_deletion`).
@@ -2446,7 +2517,7 @@ Inside one READ COMMITTED transaction:
 
 ### 8.4 Web push and PWA
 
-- RoboApply only (`flags.webPush`). FCM and Mozilla push endpoints are unreliable from the mainland, so GoApply uses WeChat service-account messages later (gated; not in this branch).
+- Both brands (`flags.webPush`; D5, it was RoboApply-only before 2026-10-11). GoApply uses the shared VAPID pair unless `CN_VAPID_PUBLIC_KEY` starts its own group. FCM and Mozilla push endpoints are unreliable from the mainland, so WeChat service-account messages remain an additional GoApply channel; they add to web push, they do not replace it.
 - `web-push` with `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`. `public/sw.js` handles only push and notification clicks; no offline caching.
 - `app/manifest.webmanifest/route.ts` is host-aware (name, icons and theme color from the brand).
 - Permission is asked only after a user action ("Get alerts on this device" in alert settings). Never on load.
@@ -2641,7 +2712,7 @@ Each work package runs the smallest affected tests first, then `npm test`, `npm 
 | OTP abuse / SMS pumping | per-phone and per-IP limits; mainland numbers only on GoApply (`+86`); a daily SMS spend counter (`SMS_DAILY_MAX`) that fails closed |
 | Prompt injection via job text or imported pages | data-wrapping, no autonomous mutations, proposals, guard post-pass (§5.5) |
 | SSRF via job import | only http(s) URLs; fetched by Firecrawl (`FIRECRAWL_API_KEY`), never by our server directly; response size cap |
-| PII to LLMs | resume text is PII-stripped (name, email, phone, address) before scoring, copilot, outreach and cover letters; sensitive answers never reach any model; GoApply prompts run on domestic providers only (§1.8) |
+| PII to LLMs | resume text is PII-stripped (name, email, phone, address) before scoring, copilot, outreach and cover letters; sensitive answers never reach any model; RoboApply prompts never reach a mainland-China endpoint; GoApply prompts run on the shared stack by default and on domestic providers only under `CN_LLM_DOMESTIC_ONLY` (§1.8), and always pass the content-safety filter |
 | Sensitive data at rest | `RASensitiveAnswers` AES-GCM (`server/src/lib/crypto.ts`, key `SENSITIVE_DATA_KEY`, versioned); OAuth/LINE/WeChat tokens are not stored; extension tokens and auth tokens are stored as hashes only |
 | Extension | minimal permissions; no `cookies`; per-device revocable tokens scoped to `/ext/*`; signed 5-minute file URLs; the no-submit CI gate |
 | Fake or scam jobs | agency detection; reports with a 3-user threshold auto-close; admin review queue; GoApply anti-fraud keyword classifier for 培训贷/招转培 (CN-E-08) at enrichment, setting `closedAt` + `closeReason='reported'` pending review |
@@ -2772,7 +2843,7 @@ i18n/staging/<namespace>.en.json
 
 ## Appendix A. Environment variables introduced (FND adds names to `.env.example`; values are owner-supplied)
 
-> **As built (INT-13 audit).** The catalogue of record is the repository-root `.env.example`: every name the API or the web app reads, each with its purpose, per-brand names as `NAME` / `CN_NAME` (TASK_PLAN R-03, which replaced the `*_ROBOAPPLY` / `*_GOAPPLY` suffixes used in the table below). The table is kept as the design-time list; several of its names were renamed under R-03, and two groups name seams no code reads yet, so they are not in `.env.example`: `CONTACT_EMAIL_PROVIDER` / `CONTACT_EMAIL_PROVIDER_KEY` (no lookup adapter) and `ROBOHIRE_INVITE_SECRET` (no invitation webhook route).
+> **As built (INT-13 audit; revised for D5 on 2026-10-11).** The catalogue of record is the repository-root `.env.example`: every name the API or the web app reads, each with its purpose and default, per-brand names as `NAME` / `CN_NAME` (which replaced the `*_ROBOAPPLY` / `*_GOAPPLY` suffixes used in the table below). Since D5 `CN_NAME` is an optional override of `NAME` (§1.6.1), not a separate setting with no fallback. The variables D5 introduced or redefined are listed in `GOAPPLY_PARITY_PLAN.md` §4: `CN_LLM_DOMESTIC_ONLY`, `CN_RESIDENCY_STRICT`, `CN_STORAGE_MODE`, `CN_INTERVIEW_CAMERA_PUBLISH`, `CN_PAYMENT_REQUIRE_ENTITY`, `GOHIRE_BANK_TRANSPORT`, `GOHIRE_SYNDICATION_URL`, `GOHIRE_PUBLIC_JOB_URL_TEMPLATE`, `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE`, `JOB_PROVIDERS_<BRAND>`, and the new defaults of `CN_RECRUITMENT_INFO_MODE` (`licensed`), `CN_SIGNUP_MODE` (`open`), `CN_PAYMENTS_ENABLED` (on), `CN_EMAIL_TRANSPORT` (`resend`), `CN_CAMPUS_CALENDAR_ENABLED` (on) and `ALLOWED_BRANDS` (both brands). Removed: `CN_EXTERNAL_PROVIDERS`, `GOHIRE_PUBLIC_JOB_BASE_URL`, `ROBOHIRE_PUBLIC_JOB_BASE_URL`, and `CN_LLM_ALLOW_OFFSHORE` (never built; the shared stack is the default now). The table is kept as the design-time list; several of its names were renamed under R-03, and two groups name seams no code reads yet, so they are not in `.env.example`: `CONTACT_EMAIL_PROVIDER` / `CONTACT_EMAIL_PROVIDER_KEY` (no lookup adapter) and `ROBOHIRE_INVITE_SECRET` (no invitation webhook route).
 
 | Group | Names |
 |---|---|
@@ -2786,7 +2857,7 @@ i18n/staging/<namespace>.en.json
 | Extension | `NEXT_PUBLIC_EXT_ID_ROBOAPPLY`, `NEXT_PUBLIC_EXT_ID_GOAPPLY`, `MIN_EXT_VERSION_ROBOAPPLY`, `MIN_EXT_VERSION_GOAPPLY` |
 | Integrations | `ROBOHIRE_INVITE_SECRET` |
 
-Fix in the same commit: `GOHIRE_PUBLIC_JOB_BASE_URL=https://www.gohire.top` (it currently says gohire.io, which is dead).
+Superseded (2026-10-11): the fix once asked for here, `GOHIRE_PUBLIC_JOB_BASE_URL=https://www.gohire.top`, pointed at a route that does not exist (`/jobs/<id>` renders "Page not found" on gohire.top and on robohire.io). The variable is no longer read; the explicit templates of §4.2 replace it.
 
 ## Appendix B. Owner confirmations this plan needs (nothing proceeds silently)
 
@@ -2796,4 +2867,4 @@ Fix in the same commit: `GOHIRE_PUBLIC_JOB_BASE_URL=https://www.gohire.top` (it 
 4. Resend sending domains `mail.roboapply.io` and `mail.goapply.top`; Google OAuth client; LINE channel; WeChat Open Platform apps; Aliyun SMS signature; WeChat Pay merchant (or GoHire worker WeChat channel).
 5. DOL LCA disclosure files to import (US public data; ADMIN runs `server/scripts/import-dol-lca.ts`).
 6. Chrome Web Store and Edge Add-ons publisher accounts per brand.
-7. GoApply hosting and licensing track (CN-L-01..09, CN-E-01): this branch ships GoApply on the shared stack with domestic LLM routing and the `BRAND_LOCK` seam, not mainland hosting.
+7. GoApply hosting and licensing track (CN-L-01..09, CN-E-01): this branch ships GoApply on the shared stack (the same model routing, email, voice and storage as RoboApply, with the China-specific providers as optional overrides) and the `ALLOWED_BRANDS` / `BRAND_LOCK` scope, not mainland hosting. What GoApply still needs from the owner is `GOAPPLY_PARITY_PLAN.md` §8.

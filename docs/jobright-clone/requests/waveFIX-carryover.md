@@ -91,10 +91,10 @@ Rules added at the FIX gate that apply to every later change:
 6. **Free matcher known gaps** [FIX-7]: season dates ("Summer 2017"), roles written as bullets and unrecognised experience headings stay "Not listed"; a certificate or degree line directly above a job's lines keeps that job out; a dated line under an unknown heading that matches no guard pattern still counts as a role. Hard-skill count stays 3 of 4 on the QA files until the vocabulary is extended ("Unowned follow-ups", resume keywords).
 
 ### PAR-10 · Docs, env examples, deploy kit
-1. **`.env.example`** now documents `PRISMA_TX_MAX_WAIT_MS`, `PRISMA_TX_TIMEOUT_MS`, `PRISMA_POOL_MAX` (gate). Mirror them in `deploy/cn/cn.env.example` if the mainland kit lists database tuning.
-2. **`PRODUCT_PLAN.md` G3**: `fullTime` (统招) is documented as a toggle defaulting **On**; FIX-8 shipped an optional 是/否 with no preselection. Update the table once the owner rules (Owner).
-3. **`ARCHITECTURE.md` §7.3** was updated at the gate (single-statement window reserve, settle limits, `credits_busy`, practice rows in `/credits/history`). `PRODUCT_PLAN.md` G1 was updated (processor list comes from configuration; earlier-text grants are asked again).
-4. **Post-merge verification list**: add the browser retests under Owner.
+1. **`.env.example`** now documents `PRISMA_TX_MAX_WAIT_MS`, `PRISMA_TX_TIMEOUT_MS`, `PRISMA_POOL_MAX` (gate). Mirror them in `deploy/cn/cn.env.example` if the mainland kit lists database tuning. **Done (PAR-10):** listed in the kit's Database section as commented-out optional tuning.
+2. **`PRODUCT_PLAN.md` G3**: `fullTime` (统招) is documented as a toggle defaulting **On**; FIX-8 shipped an optional 是/否 with no preselection. Update the table once the owner rules (Owner). **Open (PAR-10):** the owner has not ruled; the G3 row now states what was built and that the default is an open decision.
+3. **`ARCHITECTURE.md` §7.3** was updated at the gate (single-statement window reserve, settle limits, `credits_busy`, practice rows in `/credits/history`). `PRODUCT_PLAN.md` G1 was updated (processor list comes from configuration; earlier-text grants are asked again). Nothing to do.
+4. **Post-merge verification list**: add the browser retests under Owner. **Done (PAR-10):** `orch/parity-verify.md` §8.
 
 ---
 
