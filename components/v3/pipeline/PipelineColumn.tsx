@@ -7,23 +7,28 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { RATrackerEntryView, RATrackerStatus } from '../../../lib/api/v2';
+import type { TrackerEntryView, TrackerStatus } from '../../../lib/api/contracts/tracker';
 import type { PipelineColumnDef } from './columns';
 import { PipelineCard, PIPELINE_DND_MIME } from './PipelineCard';
 import { cn } from '../../../lib/utils';
 
 interface Props {
   column: PipelineColumnDef;
-  entries: RATrackerEntryView[];
+  /** Every column of the brand's ladder (the card's stage menu lists them). */
+  columns: PipelineColumnDef[];
+  entries: TrackerEntryView[];
   count: number;
   draggingId: string | null;
-  onMove: (id: string, status: RATrackerStatus) => void;
+  onMove: (id: string, status: TrackerStatus) => void;
+  onOpen?: (id: string) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }
 
 export function PipelineColumn({
   column,
+  columns,
+  onOpen,
   entries,
   count,
   draggingId,
@@ -81,6 +86,8 @@ export function PipelineColumn({
           <PipelineCard
             key={entry.id}
             entry={entry}
+            columns={columns}
+            onOpen={onOpen}
             onMove={onMove}
             dragging={draggingId === entry.id}
             onDragStart={onDragStart}
