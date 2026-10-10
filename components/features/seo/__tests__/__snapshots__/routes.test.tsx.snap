@@ -1,0 +1,443 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`crawl files on the goapply host > llms.txt 1`] = `
+"# GoApply
+
+> GoApply (https://www.goapply.top/) is a job-search toolkit for students and job seekers in mainland China: resume writing and checks, a record of the applications you send, interview practice, and a campus recruiting calendar built from official sources. You submit every application yourself on the employer's site; GoApply never applies for you.
+
+GoApply（https://www.goapply.top/）是面向中国大陆学生和求职者的求职工具：简历撰写与检查、投递记录、面试练习，以及根据官方来源整理的校招日历。所有申请都由你本人在招聘方网站提交，GoApply 不会代你投递。
+
+## Facts
+- Languages: 简体中文, English.
+- AI-written text is labelled as AI-generated.
+- Prices: see https://www.goapply.top/pricing (prices change; do not quote them from memory).
+- International users (including Taiwan) are served by RoboApply: https://www.roboapply.io/
+
+## Pages
+- [首页 Home](https://www.goapply.top/)
+- [价格 Pricing](https://www.goapply.top/pricing)
+- [关于 About](https://www.goapply.top/about)
+- [安全 Security](https://www.goapply.top/security)
+- [帮助 Help](https://www.goapply.top/help)
+- [校招日历 Campus calendar](https://www.goapply.top/campus)
+"
+`;
+
+exports[`crawl files on the goapply host > robots.txt 1`] = `
+{
+  "host": "https://www.goapply.top",
+  "rules": [
+    {
+      "allow": "/",
+      "disallow": [
+        "/api/",
+        "/jobs",
+        "/job-search",
+        "/resume",
+        "/applications",
+        "/practice",
+        "/settings",
+        "/admin",
+        "/onboarding",
+        "/profile",
+        "/assistant",
+        "/ready",
+        "/inbox",
+        "/invite",
+        "/coaching",
+        "/referrals",
+      ],
+      "userAgent": "*",
+    },
+    {
+      "allow": "/",
+      "disallow": [
+        "/api/",
+        "/jobs",
+        "/job-search",
+        "/resume",
+        "/applications",
+        "/practice",
+        "/settings",
+        "/admin",
+        "/onboarding",
+        "/profile",
+        "/assistant",
+        "/ready",
+        "/inbox",
+        "/invite",
+        "/coaching",
+        "/referrals",
+        "/job/",
+      ],
+      "userAgent": [
+        "GPTBot",
+        "OAI-SearchBot",
+        "ChatGPT-User",
+        "ClaudeBot",
+        "Claude-User",
+        "Claude-SearchBot",
+        "anthropic-ai",
+        "PerplexityBot",
+        "Perplexity-User",
+        "Google-Extended",
+        "Applebot-Extended",
+        "CCBot",
+        "Bytespider",
+        "meta-externalagent",
+      ],
+    },
+    {
+      "allow": "/",
+      "disallow": [
+        "/api/",
+        "/jobs",
+        "/job-search",
+        "/resume",
+        "/applications",
+        "/practice",
+        "/settings",
+        "/admin",
+        "/onboarding",
+        "/profile",
+        "/assistant",
+        "/ready",
+        "/inbox",
+        "/invite",
+        "/coaching",
+        "/referrals",
+      ],
+      "userAgent": "Baiduspider",
+    },
+  ],
+  "sitemap": "https://www.goapply.top/sitemap.xml",
+}
+`;
+
+exports[`crawl files on the goapply host > sitemap.xml 1`] = `
+"<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://www.goapply.top/sitemaps/static.xml</loc>
+  </sitemap>
+</sitemapindex>
+"
+`;
+
+exports[`crawl files on the goapply host > sitemaps/static.xml 1`] = `
+"<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://www.goapply.top/</loc>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.goapply.top/"/>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/pricing</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/about</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/security</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/help</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/features/resume</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/signup</loc>
+  </url>
+  <url>
+    <loc>https://www.goapply.top/campus</loc>
+  </url>
+</urlset>
+"
+`;
+
+exports[`crawl files on the roboapply host > llms.txt 1`] = `
+"# RoboApply
+
+> RoboApply (https://www.roboapply.io/) helps job seekers find openings that fit their resume, see what each posting asks for that the resume does not show yet, tailor the resume and write a cover letter from their own experience, practice the interview with an AI interviewer, and keep track of their applications. You apply on the employer's site yourself; RoboApply never submits an application for you.
+
+## Facts
+- The fit score shows how a resume lines up with a posting. It is not a chance of being hired.
+- Resume edits and cover letters are suggestions the user reviews before using them; claims must come from the user's own experience.
+- Numbers about jobs (pay, counts) come from the postings or our job index and are shown with their source; unknown values are shown as not listed.
+- Languages: English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Português, Deutsch.
+- Prices: see https://www.roboapply.io/pricing (prices change; do not quote them from memory).
+- Users in mainland China are served by GoApply: https://www.goapply.top/
+
+## Pages
+- [Home](https://www.roboapply.io/): what the product does and how it works.
+- [Pricing](https://www.roboapply.io/pricing)
+- [About](https://www.roboapply.io/about)
+- [Security](https://www.roboapply.io/security): how data is stored and which AI providers process it.
+- [Help](https://www.roboapply.io/help)
+- Home page in other languages: https://www.roboapply.io/zh (简体中文), https://www.roboapply.io/zh-TW (繁體中文), https://www.roboapply.io/ja (日本語), https://www.roboapply.io/ko (한국어), https://www.roboapply.io/es (Español), https://www.roboapply.io/fr (Français), https://www.roboapply.io/pt (Português), https://www.roboapply.io/de (Deutsch).
+
+## Crawling
+- Public job pages (/job/...) are not open to AI crawlers; see robots.txt.
+"
+`;
+
+exports[`crawl files on the roboapply host > robots.txt 1`] = `
+{
+  "host": "https://www.roboapply.io",
+  "rules": [
+    {
+      "allow": "/",
+      "disallow": [
+        "/api/",
+        "/jobs",
+        "/job-search",
+        "/resume",
+        "/applications",
+        "/practice",
+        "/settings",
+        "/admin",
+        "/onboarding",
+        "/profile",
+        "/assistant",
+        "/ready",
+        "/inbox",
+        "/invite",
+        "/coaching",
+        "/referrals",
+      ],
+      "userAgent": "*",
+    },
+    {
+      "allow": "/",
+      "disallow": [
+        "/api/",
+        "/jobs",
+        "/job-search",
+        "/resume",
+        "/applications",
+        "/practice",
+        "/settings",
+        "/admin",
+        "/onboarding",
+        "/profile",
+        "/assistant",
+        "/ready",
+        "/inbox",
+        "/invite",
+        "/coaching",
+        "/referrals",
+        "/job/",
+      ],
+      "userAgent": [
+        "GPTBot",
+        "OAI-SearchBot",
+        "ChatGPT-User",
+        "ClaudeBot",
+        "Claude-User",
+        "Claude-SearchBot",
+        "anthropic-ai",
+        "PerplexityBot",
+        "Perplexity-User",
+        "Google-Extended",
+        "Applebot-Extended",
+        "CCBot",
+        "Bytespider",
+        "meta-externalagent",
+      ],
+    },
+  ],
+  "sitemap": "https://www.roboapply.io/sitemap.xml",
+}
+`;
+
+exports[`crawl files on the roboapply host > sitemap.xml 1`] = `
+"<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://www.roboapply.io/sitemaps/static.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.roboapply.io/sitemaps/roles-1.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.roboapply.io/sitemaps/jobs-1.xml</loc>
+  </sitemap>
+</sitemapindex>
+"
+`;
+
+exports[`crawl files on the roboapply host > sitemaps/static.xml 1`] = `
+"<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://www.roboapply.io/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/zh</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/zh-TW</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/ja</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/ko</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/es</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/fr</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/pt</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/de</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.roboapply.io/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://www.roboapply.io/zh"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://www.roboapply.io/ja"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://www.roboapply.io/ko"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://www.roboapply.io/es"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://www.roboapply.io/fr"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://www.roboapply.io/pt"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://www.roboapply.io/de"/>
+    <xhtml:link rel="alternate" hreflang="zh-HK" href="https://www.roboapply.io/zh-TW"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://www.goapply.top/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.roboapply.io/"/>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/pricing</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/about</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/security</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/help</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/features/job-matches</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/features/resume-tailoring</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/features/cover-letters</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/features/visa-sponsorship</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/signup</loc>
+  </url>
+  <url>
+    <loc>https://www.roboapply.io/browse</loc>
+  </url>
+</urlset>
+"
+`;

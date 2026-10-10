@@ -1,10 +1,10 @@
-// server/src/features/seo/workers.ts — STUB (FND-3). Owner: WP-56.
+// server/src/features/seo/workers.ts — queue workers of the SEO area (WP-56).
 //
-// Queue workers for this area. server/src/platform/queue/registry.ts (FND-5) imports
-// `workers` from every area and registers them. The list is empty until the owner
-// adds handlers, so items of these kinds stay `queued` (never leased) until then.
-// Kinds this area will handle:
-//   - 'seo.rebuild': rebuild one RASeoPage.
+// server/src/platform/queue/registry.ts imports `workers` from every area.
+// The SEO area has none: `seo-rebuild` (cron.ts) rebuilds every page inside
+// its own 240 s budget, most jobs first, and picks up where the inventory
+// changed on the next daily run. The kind stays reserved for a per-page
+// rebuild should a later package need one.
 
 import type { WorkerDefinition } from '../../platform/queue/index.js';
 
