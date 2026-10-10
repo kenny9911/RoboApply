@@ -109,6 +109,7 @@ const PLACEMENT: Record<string, string> = {
   RACreditLedger: 'ra-credits.prisma',
   RACreditGrant: 'ra-credits.prisma',
   RAEntitlementOverride: 'ra-credits.prisma',
+  RACancelSurvey: 'ra-credits.prisma', // SCHEMA-6 (SR-INT-1)
   // ra-notify
   RAAlertDelivery: 'ra-notify.prisma',
   RAPushSubscription: 'ra-notify.prisma',
@@ -243,6 +244,7 @@ const SCOPE: Record<string, Scope> = {
   RACreditLedger: 'user',
   RACreditGrant: 'user',
   RAEntitlementOverride: 'user',
+  RACancelSurvey: 'brand', // SCHEMA-6 (SR-INT-1)
   RAAlertDelivery: 'user',
   RAPushSubscription: 'brand',
   RAAnnouncement: 'brand',

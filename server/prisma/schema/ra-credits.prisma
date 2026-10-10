@@ -81,3 +81,24 @@ model RAEntitlementOverride {
 
   @@index([userId, key])
 }
+
+/// Optional answer to the "Why are you cancelling?" survey shown after a
+/// cancellation (WP-79; SCHEMA-6, SR-INT-1). POST /credits/cancel/survey only
+/// records the answer here: it cancels nothing, sends no email and emits no
+/// product event. Deleted with the account.
+model RACancelSurvey {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand          String
+  /// Reason code picked in the survey (e.g. 'found_job'); null = skipped.
+  reason         String?
+  /// Free text the person typed (optional, bounded by the route; never logged).
+  note           String?  @db.Text
+  /// The subscription the answer is about, when known (no FK; reference only).
+  subscriptionId String?
+  createdAt      DateTime @default(now())
+
+  @@index([brand, createdAt])
+  @@index([userId])
+}

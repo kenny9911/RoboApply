@@ -33,6 +33,10 @@ model RAAutofillRun {
   jobId               String?
   trackerEntryId      String?
   host                String
+  /// The page URL without its query string (SCHEMA-6, SR-INT-2). Used to reuse
+  /// one run per application within ~2 hours when there is no jobId.
+  /// Null = not recorded.
+  pageUrl             String?
   atsType             String
   fieldsTotal         Int               @default(0)
   fieldsFilled        Int               @default(0)
@@ -47,6 +51,8 @@ model RAAutofillRun {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([deviceId])
+  // SCHEMA-6 (SR-INT-2): the run-reuse lookup (same user, device and host, last ~2 hours).
+  @@index([userId, deviceId, host, createdAt])
 }
 
 /// "Support this site" requests from the extension.

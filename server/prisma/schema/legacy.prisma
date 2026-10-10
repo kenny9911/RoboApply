@@ -422,6 +422,7 @@ model User {
   raReferralSignals      RAReferralSignal[] // SCHEMA-5 (SR-60-1)
   raTwoFactor            RATwoFactor? // SCHEMA-5 (SR-79-1)
   raStudentVerification  RAStudentVerification? // SCHEMA-5 (SR-79-2)
+  raCancelSurveys        RACancelSurvey[] // SCHEMA-6 (SR-INT-1)
   raJobsOwned            RAJob[]                  @relation("RAJobOwner")
 
   @@unique([brand, phoneE164])
