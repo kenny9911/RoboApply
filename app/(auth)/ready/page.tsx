@@ -1,8 +1,9 @@
-// /ready — route shell (FND-6b). Ready to apply: this week's prepared applications (flag `agent`).
-//
-// STUB. Owner: WP-53, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /ready — Ready to apply: this week's list and its kits (WP-53; PRODUCT
+// §5.8, flag `agent`). Renders inside the (auth) app shell. The body is the
+// client component in components/features/agent.
 
-export default function ReadyPage() {
-  return <div hidden data-route-stub="/ready" data-owner="WP-53" />;
+import { ReadyPage } from '../../../components/features/agent';
+
+export default function Page() {
+  return <ReadyPage />;
 }
